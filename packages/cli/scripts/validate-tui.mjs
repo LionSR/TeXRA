@@ -428,6 +428,33 @@ const SCENARIOS = [
     unexpect: ['coder —', 'Resume aaaaaaaaaaaa'],
   },
   {
+    name: 'orchestrate-independent-subscription-preferences',
+    frame: 'scrollback',
+    env: {
+      HARNESS_ORCHESTRATION: '1',
+      HARNESS_BOTH_SUBSCRIPTION_PREFERENCES: '1',
+      HARNESS_VISIBLE_TOOL_USE_AGENTS: '',
+      HARNESS_VISIBLE_WORKFLOW_AGENTS: '',
+    },
+    bootExpect: 'Model access — ChatGPT On · Kimi On',
+    keys: ['3'],
+    exitKeys: [ESC, ESC],
+    expectExit: true,
+    expect: [
+      'Model access',
+      'Toggle subscription preferences or choose the API fallback.',
+      'Prefer ChatGPT subscrip',
+      'On · harness@example.edu',
+      'Prefer Kimi Code subscr',
+      'On · key configured',
+      'Included TeXRA access',
+      'Personal API keys',
+      '✓ 4. Personal API keys',
+      'Esc back',
+    ],
+    unexpect: ['✓ 1. Prefer ChatGPT', '✓ 2. Prefer Kimi Code'],
+  },
+  {
     name: 'orchestrate-delegated-history',
     frame: 'scrollback',
     env: {
@@ -514,7 +541,7 @@ const SCENARIOS = [
     exitKeys: [ESC, ESC],
     expectExit: true,
     expect: [
-      'Model · Included TeXRA access',
+      'Model',
       'Model for the first message.',
       'Sonnet 4.6 (Thinking) — included: available',
       'GPT-5.4 — included: available',
@@ -536,7 +563,7 @@ const SCENARIOS = [
     exitKeys: [ESC, ESC],
     expectExit: true,
     expect: [
-      'Model · Personal API keys',
+      'Model',
       'Model for the first message.',
       'DeepSeek V4 Flash — api: api key set',
       'Esc back',
@@ -546,6 +573,30 @@ const SCENARIOS = [
       'GPT-5.4',
       'relay: included',
       'included relay',
+    ],
+  },
+  {
+    name: 'orchestrate-kimi-code-model-pick',
+    frame: 'scrollback',
+    env: {
+      HARNESS_ORCHESTRATION: '1',
+      HARNESS_API_MODE: 'personal',
+      HARNESS_KIMI_CODE_SUBSCRIPTION: '1',
+    },
+    bootExpect: 'Start a session or configure model access.',
+    keys: ['\r'],
+    exitKeys: [ESC, ESC],
+    expectExit: true,
+    expect: [
+      'Model',
+      'DeepSeek V4 Flash — api: api key set',
+      'Kimi K3 — api: Kimi Code subscription',
+      'Esc back',
+    ],
+    unexpect: [
+      'Model · Personal API keys',
+      'Model · Kimi Code subscription',
+      'Kimi K3 — api: api key set',
     ],
   },
   {
@@ -561,7 +612,7 @@ const SCENARIOS = [
     exitKeys: [ESC, ESC],
     expectExit: true,
     expect: [
-      'Model · Personal API keys',
+      'Model',
       'Model for the first message.',
       'DeepSeek V4 Flash — api: api key set',
       'Esc back',
@@ -1034,8 +1085,9 @@ const SCENARIOS = [
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/api',
-      'model access:',
-      'ChatGPT:',
+      'ChatGPT preference:',
+      'Kimi Code preference:',
+      'API fallback:',
       'TeXRA:',
       'Personal API keys',
       'Included TeXRA access',
@@ -1267,7 +1319,7 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/api', '\r', '31'],
     frame: 'viewport',
-    expect: ['API mode set to included.'],
+    expect: ['API fallback set to included.'],
     unexpect: ['ServerSideKeyService not initialized'],
   },
   {
@@ -1277,7 +1329,7 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/api', '\r', '1'],
     frame: 'viewport',
-    expect: ['Model access set to ChatGPT subscription.'],
+    expect: ['chatgpt preference set to on.'],
     unexpect: ['ServerSideKeyService not initialized'],
   },
   {
@@ -1291,7 +1343,7 @@ const SCENARIOS = [
     keys: ['/api', '\r', '2'],
     frame: 'viewport',
     expect: ['Prefer Kimi Code subscription enabled'],
-    expectCollapsed: ['fallback: personal API keys'],
+    expectCollapsed: ['API fallback remains Personal API keys'],
     unexpect: [
       'No Kimi Code API key configured',
       'ServerSideKeyService not initialized',

@@ -8,7 +8,9 @@ import {
 } from '@cli/runtime/apiStatus';
 import {
   buildCliModelAccessItems,
-  type CliModelAccessRoute,
+  cliApiFallbackSelection,
+  CLI_MODEL_ACCESS_DESCRIPTION,
+  type CliModelAccessSelection,
 } from '@cli/runtime/modelAccessRoute';
 
 import { useCancellableEffect } from '../state/useCancellableEffect';
@@ -18,7 +20,7 @@ import { ListForm } from './_shared/ListForm';
 interface ModelAccessFormProps {
   readonly apiMode: CliApiMode;
   readonly availableRows?: number;
-  readonly onSelect: (value: CliModelAccessRoute) => void;
+  readonly onSelect: (value: CliModelAccessSelection) => void;
   readonly onCancel: () => void;
 }
 
@@ -50,15 +52,16 @@ export function ModelAccessForm(
     [props.apiMode],
   );
 
-  const items = buildCliModelAccessItems(
+  const items =
     status?.state === 'loaded'
-      ? status.overview.access
-      : {
-          active: props.apiMode,
-          chatGptSignedIn: false,
-          texraSignedIn: false,
-        },
-  );
+      ? buildCliModelAccessItems({
+          kind: 'loaded',
+          access: status.overview.access,
+        })
+      : buildCliModelAccessItems({
+          kind: 'pending',
+          state: status?.state ?? 'loading',
+        });
   let detailLines: readonly string[] | undefined;
   if (status?.state === 'loaded') detailLines = status.overview.lines;
   if (status?.state === 'failed') detailLines = [status.message];
@@ -69,12 +72,8 @@ export function ModelAccessForm(
       availableRows={props.availableRows}
       items={items}
       compactVisibleItems={items.length}
-      activeValue={
-        status?.state === 'loaded' ? status.overview.access.active : undefined
-      }
-      description={
-        <Text dimColor>Choose how model calls are authenticated.</Text>
-      }
+      activeValue={cliApiFallbackSelection(props.apiMode)}
+      description={<Text dimColor>{CLI_MODEL_ACCESS_DESCRIPTION}</Text>}
       detail={
         <Box marginTop={1} flexDirection="column">
           {detailLines === undefined ? (

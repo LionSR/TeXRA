@@ -33,6 +33,7 @@ import {
 import { registerBuiltinSlashCommands } from '@cli/chat/tui/commands/registerBuiltins';
 import { openCliSlashCommandForm } from '@cli/chat/tui/commands/slashForms';
 import { ConfigApp } from '@cli/config/runConfigTui';
+import type { CliModelAccessSelection } from '@cli/runtime/modelAccessRoute';
 import {
   activeForm,
   resetCliState,
@@ -799,15 +800,15 @@ describe('/config slash command wiring', () => {
       version: 'test',
     });
     const { stores } = makeFakeSettingsStores();
-    const selectedAccessRoutes: string[] = [];
+    const selectedAccessRoutes: CliModelAccessSelection[] = [];
     registerBuiltinSlashCommands({
       getConfigStores: () => stores,
-      onModelAccessSelect: (route) => {
-        selectedAccessRoutes.push(route);
-        if (route === 'chatgpt') return;
+      onModelAccessSelect: (selection) => {
+        selectedAccessRoutes.push(selection);
+        if (selection.kind === 'subscription-preference') return;
         sessionMeta.set({
           ...sessionMeta.get(),
-          apiMode: route === 'kimi-code' ? 'personal' : route,
+          apiMode: selection.apiMode,
         });
       },
     });
@@ -818,7 +819,9 @@ describe('/config slash command wiring', () => {
 
     await props.writeValue?.(openRouter, true);
 
-    expect(selectedAccessRoutes).toEqual(['personal']);
+    expect(selectedAccessRoutes).toEqual([
+      { kind: 'api-fallback', apiMode: 'personal' },
+    ]);
     expect(sessionMeta.get().apiMode).toBe('personal');
     expect(invalidateModelOptionsCache).toHaveBeenCalledOnce();
   });
