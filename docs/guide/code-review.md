@@ -268,7 +268,7 @@ The built-in defaults:
 | Provider   | Default model  |
 | ---------- | -------------- |
 | DeepSeek   | `deepseekproT` |
-| Anthropic  | `opus5T`       |
+| Anthropic  | `opus48T`      |
 | OpenAI     | `gpt55`        |
 | Google     | `gemini31p`    |
 | OpenRouter | `gptoss`       |
@@ -282,7 +282,8 @@ To override, add a repo **variable** — same place as secrets, but the
   provider.
 - `TEXRA_REVIEW_MODEL_DEFAULTS` — JSON map from provider id to default model
   id, used when you want provider-specific defaults. Example:
-  `{"deepseek":"deepseekproT","anthropic":"opus5T"}`.
+  `{"deepseek":"deepseekproT","anthropic":"opus5T"}`. This explicitly opts
+  Anthropic reviews into Opus 5; the action's built-in default remains `opus48T`.
 
 The workflow above already passes both variables through, so adding the
 variable is all it takes.
