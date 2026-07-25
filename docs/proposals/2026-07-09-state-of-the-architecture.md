@@ -271,10 +271,37 @@ it costs more than it keeps.
 consumer must wire **both** arms: 10 production apply-sites for one fact
 (ProgressFactApplier ×2, desktop bridge ×2, CLI subscription ×3, plus the
 sanctioned in-process rail ×3). The split rule (trace-attached in-run vs not)
-is invisible in types. Corrected reader-set: the trace `'status'` arm has
-**zero persistence/replay consumers** — `TexraTranscriptRecorder.ts:301-302`
-explicitly drops it, `replayTrace.ts:94-121` derives status elsewhere; after
-deleting the three projector trace-arms the arm is consumer-less.
+is invisible in types. Corrected reader-set **as measured at the pinned
+`4b402d75a`**: the trace `'status'` arm had **zero persistence/replay
+consumers** — the recorder's arm was a bare `case 'status': return;`,
+`replayTrace.ts:94-121` derives status elsewhere; after deleting the three
+projector trace-arms the arm would have been consumer-less.
+
+> **Amended 2026-07-25 — the zero-persistence-consumer premise no longer holds
+> at HEAD, and option (i)(b) is withdrawn.** #9127 (`d93885e6e4`, 2026-07-24)
+> replaced the recorder's no-op arm with a load-bearing persistence consumer:
+> `src/transcript/TexraTranscriptRecorder.ts:389-426` reads the trace
+> `'status'` arm and, on `WAITING` or any terminal outcome phase, closes the
+> transcript boundary, flushes every open stream, and settles still-open tool
+> rows as failed ("The stream ended before this tool completed."); `RUNNING`
+> reopens the boundary. Covered by
+> `src/test-kernel/transcript/TexraTranscriptRecorder.vitest.ts:284` ("assigns
+> source settlement order before terminal status projection"). Deleting the
+> trace arm now silently drops those durable settlements, so retaining it is
+> forced rather than the documented bet the recommendation argued for.
+>
+> The rest of the measurement still holds at HEAD, with line drift only:
+> `publishStatus` is `StreamStatusService.ts:291-324`, and its two
+> cross-process arms are mutually exclusive — `options.trace?.emit(event)`
+> (`:309`) whenever a trace is attached, the `updateStreamStatus` session fact
+> only under `!options.trace && options.events` (`:312-320`) — while
+> in-process listeners are notified either way (`:321-323`). That asymmetry is
+> the "D4 status dual rail" the trackers reference and it is real. The three
+> projector trace-arms are `ProgressFactApplier.ts:124-130`,
+> `sessionProgressSubscription.ts:76-87`, and `runProgressRenderer.ts:197-199`;
+> the recorder is a **fourth** reader and is not a projector — a diff that
+> deletes "the three consumer trace-arms" must leave it alone. Re-measure
+> before acting on D4.
 
 **Verdict.** Stage 5 landed the emitter but left every shared projector
 dual-wired; the design doc's "make updateStreamStatus a projection"
@@ -283,13 +310,18 @@ dual-wired; the design doc's "make updateStreamStatus a projection"
 **Options.** (i) Delete the three consumer trace-arms + the emitter guard so
 the session fact is the sole cross-process status channel (net −30..−40 LoC),
 **and** rule explicitly on the then-consumer-less trace arm: (a) retain as the
-per-run SDK contract (a documented bet, tolerating an unconsumed arm) or (b)
-delete the arm too. (ii) Status quo — rejected: silent-miss class with
+per-run SDK contract (a documented bet, tolerating an unconsumed arm) or ~~(b)
+delete the arm too~~ (withdrawn 2026-07-25 — the recorder consumes it).
+(ii) Status quo — rejected: silent-miss class with
 works-in-extension-broken-elsewhere lineage.
 
 **Recommendation.** (i)+(a) — the per-run trace is the natural SDK
 subscription shape (§7), but the retention must be argued as that bet, not on
-false replay grounds. **Constraint:** guard-drop + projector-arm deletion in
+false replay grounds. **Amended 2026-07-25:** (a) is now the only surviving
+option and needs no bet — the trace arm has a persistence consumer, so
+retention is forced. The atomic-PR constraint below still binds, and the diff
+must not touch `TexraTranscriptRecorder`'s arm.
+**Constraint:** guard-drop + projector-arm deletion in
 ONE atomic PR (both arms currently project onto the same public CLI event —
 any dual window duplicates headless NDJSON output, a parity invariant).
 **Unblocks:** the "new consumer wires one channel" rule; removes the last
@@ -950,8 +982,11 @@ D4's atomic status completion; v0.41 prefix retirement. D2 option B lands the
 consumer-contract suite as the **executable** surface definition (one suite,
 shared with NS-1's embedder smoke). _Existing trackers:_ #6968 (Stage-5
 close-out), #6890 (toolEdit channel), #6982/#6984 (sweeps), micro A2/A5/A6
-rows in #7636's follow-up set. _New decision needed:_ the D4 trace-arm ruling
-(one paragraph, this week).
+rows in #7636's follow-up set. _New decision needed:_ ~~the D4 trace-arm
+ruling (one paragraph, this week)~~ — settled by fact 2026-07-25: #9127 gave
+the trace `'status'` arm a persistence consumer
+(`TexraTranscriptRecorder.ts:389-426`), so it is retained. See the D4
+amendment.
 
 **Step 2 — CLI as the canonical example (gate: Step 1's port shape frozen).**
 NS-1's nodeHost consolidation (agent-dir bootstrap folded; skill-sources fold
