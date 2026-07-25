@@ -164,24 +164,13 @@ function projectCliRunFact(
   }
 
   if (event.type === 'child.activity') {
-    if (event.kind === 'subagents') {
-      return {
-        event: 'updateActiveSubagents',
-        payload: {
-          parentStreamId: event.parentStreamId,
-          children: [...event.items],
-        },
-      };
-    }
-    if (event.kind === 'processes') {
-      return {
-        event: 'updateActiveProcesses',
-        payload: {
-          parentStreamId: event.parentStreamId,
-          processes: [...event.items],
-        },
-      };
-    }
+    return {
+      event: 'updateActiveSubagents',
+      payload: {
+        parentStreamId: event.parentStreamId,
+        children: [...event.items],
+      },
+    };
   }
 
   return undefined;

@@ -41,7 +41,6 @@ function trace(overrides: Partial<TraceDocument> = {}): TraceDocument {
       status: 'ready',
       conversationProgress: { toolCallCount: 0 },
       subagents: [],
-      processes: [],
     },
     terminalStatus: null,
     ...overrides,

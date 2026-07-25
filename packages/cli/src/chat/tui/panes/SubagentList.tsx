@@ -1,11 +1,11 @@
-// Persistent heterogeneous child-session and process list.
+// Persistent child-session list.
 
 // Third-party imports
 import { Box, Text, useInput, useWindowSize } from 'ink';
 import { useMemo } from 'react';
 
 // Local imports - shared stream state
-import type { ActiveChildInfo, StreamTabId } from '@shared/schemas';
+import type { StreamTabId } from '@shared/schemas';
 import {
   formatRoundStageLabel,
   formatStreamStatusLabel,
@@ -16,16 +16,9 @@ import { formatResultCount } from '@utils/text/stringUtils';
 import { truncateSummaryToWidth } from '../render/terminalText';
 
 // Local imports - TUI state and controls
+import { childElapsed } from '../state/childControls';
 import {
-  childElapsed,
-  liveChildExecutionElapsedKey,
-  processTailLines,
-} from '../state/childControls';
-import { childExecutionLabel } from '../state/childExecutions';
-import {
-  childListProcessId,
   childListStreamId,
-  childProcessListValue,
   childStreamListValue,
   type ChildListValue,
 } from '../state/childListSelection';
@@ -41,42 +34,7 @@ import {
   pendingApprovalRowSuffix,
 } from './SubagentListDisplay';
 import type { PendingApprovalKind } from '../state/approvalQueue';
-import type { ProcessOutputTail } from '../state/cliState';
 import type { StreamView } from '../state/streamViews';
-
-type ProcessChildInfo = Extract<ActiveChildInfo, { kind: 'process' }>;
-
-function childStatusLabel(status: string | undefined): string | undefined {
-  return formatStreamStatusLabel(status, {
-    style: 'cli',
-    isChildStream: true,
-  });
-}
-
-export function compactChildRowText({
-  child,
-  nowMs,
-  tail,
-  omitElapsed = false,
-}: {
-  readonly child: ActiveChildInfo;
-  readonly nowMs: number;
-  readonly tail?: ProcessOutputTail;
-  /** When the row shows elapsed in a trailing metadata column instead. */
-  readonly omitElapsed?: boolean;
-}): string {
-  const tailSummary = processTailLines(tail).at(-1);
-  const elapsed = omitElapsed ? undefined : childElapsed(child, nowMs);
-  const label = childExecutionLabel(child);
-  const statusLabel = childStatusLabel(child.status);
-  return [
-    `${label}${statusLabel ? ` ${statusLabel}` : ''}`,
-    elapsed,
-    tailSummary,
-  ]
-    .filter(Boolean)
-    .join(' · ');
-}
 
 function HiddenRowSummary({
   text,
@@ -206,59 +164,6 @@ function SessionRow({
   );
 }
 
-function ProcessRow({
-  child,
-  focused,
-  hiddenRowSummary,
-  metadataColumn,
-  nowMs,
-  tail,
-}: {
-  readonly child: ProcessChildInfo;
-  readonly focused: boolean;
-  readonly hiddenRowSummary: string | undefined;
-  readonly metadataColumn: boolean;
-  readonly nowMs: number;
-  readonly tail?: ProcessOutputTail;
-}): React.JSX.Element {
-  // Raw processes report no token usage, so their metadata column is elapsed
-  // only. Adding usage would need the runtime to stamp it onto the roster
-  // entry (`ActiveChildInfo`).
-  const metadata = metadataColumn
-    ? childRowMetadataText({
-        elapsed: childElapsed(child, nowMs),
-        outputTokens: undefined,
-      })
-    : undefined;
-  return (
-    <Box
-      flexDirection="row"
-      flexGrow={1}
-      height={1}
-      minWidth={0}
-      overflowY="hidden"
-    >
-      <Text color={focused ? COLOR_HINT : undefined}>
-        {focused ? POINTER : ' '}
-      </Text>
-      <Text>{'   '}</Text>
-      <Text color={childStatusColor(child.status)}>{CHILD_STATUS_MARKER}</Text>
-      <Box minWidth={0} flexShrink={1}>
-        <Text wrap="truncate-end">
-          {compactChildRowText({
-            child,
-            nowMs,
-            tail,
-            omitElapsed: metadataColumn,
-          })}
-        </Text>
-      </Box>
-      {focused ? <HiddenRowSummary text={hiddenRowSummary} /> : null}
-      <RowMetadata text={metadata} />
-    </Box>
-  );
-}
-
 export interface SubagentListProps {
   readonly keyboardActive?: boolean;
   readonly maxRows?: number;
@@ -269,7 +174,6 @@ export interface SubagentListProps {
   readonly onSkipExecution?: (executionId: string) => void;
   /** Retry the focused, in-flight workflow-script grandchild `agent()` call. */
   readonly onRetryExecution?: (executionId: string) => void;
-  readonly onOpenProcessDetail?: (executionId: string) => void;
   readonly onSelectionChange?: (value: ChildListValue) => void;
   readonly onPrintStream?: (streamId: StreamTabId) => void;
   /** Pending approval kinds per stream id (see `pendingApprovalSummaries`,
@@ -282,45 +186,28 @@ export interface SubagentListProps {
   readonly sessions?: readonly StreamView[];
   /** Stream the list is rooted on — its row never shows a summary. */
   readonly listRootStreamId?: StreamTabId;
-  readonly activeProcesses?: readonly ActiveChildInfo[];
   readonly activeSubagentExecutionIds?: ReadonlyMap<StreamTabId, string>;
-  readonly processOutput?: ReadonlyMap<string, ProcessOutputTail>;
 }
 
 export function SubagentList(
   props: SubagentListProps = {},
 ): React.JSX.Element | null {
   const sessions = props.sessions ?? [];
-  const activeProcesses = useMemo(
+  const liveElapsedKey = useMemo(
     () =>
-      (props.activeProcesses ?? []).filter(
-        (child): child is ProcessChildInfo => child.kind === 'process',
-      ),
-    [props.activeProcesses],
+      sessions
+        .map((session) => session.slice?.runStartedAt)
+        .filter((startedAt): startedAt is number => startedAt !== undefined)
+        .join(':') || undefined,
+    [sessions],
   );
-  const processOutput = props.processOutput;
-  const liveElapsedKey = useMemo(() => {
-    const liveSessionStarts = sessions
-      .map((session) => session.slice?.runStartedAt)
-      .filter((startedAt): startedAt is number => startedAt !== undefined);
-    return (
-      [liveChildExecutionElapsedKey([], activeProcesses), ...liveSessionStarts]
-        .filter((key) => key !== undefined)
-        .join(':') || undefined
-    );
-  }, [activeProcesses, sessions]);
   const items = useMemo(
-    () => [
-      ...sessions.map((session) => ({
+    () =>
+      sessions.map((session) => ({
         label: session.label,
         value: childStreamListValue(session.id),
       })),
-      ...activeProcesses.map((process) => ({
-        label: childExecutionLabel(process),
-        value: childProcessListValue(process.executionId),
-      })),
-    ],
-    [activeProcesses, sessions],
+    [sessions],
   );
   const sessionsByValue = useMemo(
     () =>
@@ -328,16 +215,6 @@ export function SubagentList(
         sessions.map((session) => [childStreamListValue(session.id), session]),
       ),
     [sessions],
-  );
-  const processesByValue = useMemo(
-    () =>
-      new Map(
-        activeProcesses.map((process) => [
-          childProcessListValue(process.executionId),
-          process,
-        ]),
-      ),
-    [activeProcesses],
   );
   const nowMs = useLiveNowMs(liveElapsedKey !== undefined, liveElapsedKey);
   const { columns } = useWindowSize();
@@ -359,20 +236,10 @@ export function SubagentList(
   const hiddenSessionCount = sessions.filter(
     (session) => !visibleValues.has(childStreamListValue(session.id)),
   ).length;
-  const hiddenProcessCount = activeProcesses.filter(
-    (process) => !visibleValues.has(childProcessListValue(process.executionId)),
-  ).length;
   const hiddenRowSummary =
-    [
-      hiddenSessionCount > 0
-        ? `+${formatResultCount(hiddenSessionCount, 'session')}`
-        : undefined,
-      hiddenProcessCount > 0
-        ? `+${formatResultCount(hiddenProcessCount, 'process')}`
-        : undefined,
-    ]
-      .filter((part): part is string => part !== undefined)
-      .join(', ') || undefined;
+    hiddenSessionCount > 0
+      ? `+${formatResultCount(hiddenSessionCount, 'session')}`
+      : undefined;
 
   useInput(
     (input, key) => {
@@ -394,13 +261,9 @@ export function SubagentList(
         return;
       }
       if (pressed !== 'k') return;
-      const processId = childListProcessId(props.selectedValue);
-      let executionId: string | undefined;
-      if (processId && props.selectedValue) {
-        executionId = processesByValue.get(props.selectedValue)?.executionId;
-      } else if (streamId) {
-        executionId = props.activeSubagentExecutionIds?.get(streamId);
-      }
+      const executionId = streamId
+        ? props.activeSubagentExecutionIds?.get(streamId)
+        : undefined;
       if (executionId) props.onKillExecution?.(executionId);
     },
     { isActive: props.keyboardActive ?? false },
@@ -443,38 +306,20 @@ export function SubagentList(
         onHighlightChange={(value) => props.onSelectionChange?.(value)}
         onSelect={(value) => {
           const streamId = childListStreamId(value);
-          if (streamId) {
-            props.onFocusStream?.(streamId);
-            return;
-          }
-          const executionId = childListProcessId(value);
-          if (executionId) props.onOpenProcessDetail?.(executionId);
+          if (streamId) props.onFocusStream?.(streamId);
         }}
         renderItem={(item, state) => {
           const session = sessionsByValue.get(item.value);
-          if (session) {
-            return (
-              <SessionRow
-                isListRoot={session.id === props.listRootStreamId}
-                active={state.active}
-                focused={state.focused}
-                hiddenRowSummary={hiddenRowSummary}
-                metadataColumn={metadataColumn}
-                nowMs={nowMs}
-                pendingKinds={props.pendingApprovals?.get(session.id)}
-                session={session}
-              />
-            );
-          }
-          const process = processesByValue.get(item.value);
-          return process ? (
-            <ProcessRow
-              child={process}
+          return session ? (
+            <SessionRow
+              isListRoot={session.id === props.listRootStreamId}
+              active={state.active}
               focused={state.focused}
               hiddenRowSummary={hiddenRowSummary}
               metadataColumn={metadataColumn}
               nowMs={nowMs}
-              tail={processOutput?.get(process.executionId)}
+              pendingKinds={props.pendingApprovals?.get(session.id)}
+              session={session}
             />
           ) : null;
         }}

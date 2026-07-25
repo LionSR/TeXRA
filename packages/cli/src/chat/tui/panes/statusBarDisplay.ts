@@ -91,7 +91,6 @@ export interface StatusBarDisplayInput {
   readonly roundStage: RoundStage | undefined;
   /** Retained and active direct subagents owned by the displayed stream. */
   readonly subagents: number;
-  readonly activeProcesses: number;
   readonly approvalDepth: number;
   readonly approvalKind?: ApprovalQueueStatusKind;
   readonly model: string;
@@ -130,7 +129,7 @@ interface StatusBarForegroundInput {
 interface StatusBarChildListInput {
   /** True while the persistent child list, rather than the input, owns keys. */
   readonly focused?: boolean;
-  readonly selectionKind?: 'stream' | 'process';
+  readonly selectionKind?: 'stream';
   readonly selectionKillable?: boolean;
   /** True while the focused row is an in-flight workflow-script grandchild
    *  that can be skipped or retried. */
@@ -139,7 +138,7 @@ interface StatusBarChildListInput {
 
 interface StatusBarShortcutsInput {
   readonly agentSelectionAvailable?: boolean;
-  /** True when the persistent child list has a session or process row. */
+  /** True when the persistent child list has a session row. */
   readonly childNavigationAvailable?: boolean;
   /** True when Alt/Esc-1..9 has at least one stream target. */
   readonly streamFocusAvailable?: boolean;
@@ -241,7 +240,6 @@ function roundSegment(
 
 // Lower values are removed first when the left status group exceeds the row.
 const STATUS_BAR_COMPACT_PRIORITY = {
-  activeProcess: 10,
   activeSubagent: 20,
   round: 30,
   usage: 40,
@@ -591,16 +589,13 @@ function foregroundBindingsText(
 
 function childListBindingsText(
   ctrlCAction: CtrlCAction,
-  selectionKind: 'stream' | 'process' | undefined,
+  selectionKind: 'stream' | undefined,
   selectionKillable: boolean,
   selectionWorkflowControllable: boolean,
   maxColumns?: number,
 ): string {
   const ctrlCBinding = keyHintText({ key: 'Ctrl-C', action: ctrlCAction });
-  const enterBinding = keyHintText({
-    key: 'Enter',
-    action: selectionKind === 'process' ? 'details' : 'focus',
-  });
+  const enterBinding = keyHintText({ key: 'Enter', action: 'focus' });
   const fullOutputBinding =
     selectionKind === 'stream'
       ? keyHintText({ key: 'v', action: 'full output' })
@@ -946,13 +941,6 @@ export function buildStatusBarDisplay(
       compactText: `${input.subagents} sub`,
       color: 'dim',
       compactPriority: STATUS_BAR_COMPACT_PRIORITY.activeSubagent,
-    });
-  }
-  if (input.activeProcesses > 0) {
-    left.push({
-      text: `${input.activeProcesses} proc`,
-      color: 'dim',
-      compactPriority: STATUS_BAR_COMPACT_PRIORITY.activeProcess,
     });
   }
   const pendingInteraction = pendingInteractionSegment({

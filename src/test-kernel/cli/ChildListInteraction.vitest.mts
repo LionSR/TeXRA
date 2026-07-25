@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { SubagentList } from '@cli/chat/tui/panes/SubagentList';
 import {
-  childProcessListValue,
   childStreamListValue,
   type ChildListValue,
 } from '@cli/chat/tui/state/childListSelection';
@@ -21,18 +20,11 @@ function session(id: StreamTabId, active = false): StreamView {
 }
 
 describe('CLI child list interaction', () => {
-  it('renders no process highlight before the list receives a selection', async () => {
+  it('renders no row highlight before the list receives a selection', async () => {
     const { ink, React } = await loadInk();
     const output = ink.renderToString(
       React.createElement(SubagentList, {
-        activeProcesses: [
-          {
-            kind: 'process',
-            executionId: 'process-exec',
-            agentName: 'latexmk',
-            status: 'running',
-          },
-        ],
+        sessions: [session('latexmk' as StreamTabId)],
         keyboardActive: false,
         maxRows: 3,
       }),
@@ -220,59 +212,6 @@ describe('CLI child list interaction', () => {
 
       expect(onCancel).not.toHaveBeenCalled();
       expect(onSelectionChange).not.toHaveBeenCalled();
-    } finally {
-      instance.unmount();
-    }
-  });
-
-  it('opens and kills a selected process without printing stream output', async () => {
-    const { ink, React } = await loadInk();
-    const processValue = childProcessListValue('process-exec');
-    const onKillExecution = vi.fn();
-    const onOpenProcessDetail = vi.fn();
-    const onPrintStream = vi.fn();
-
-    const stdin = new FakeStdin();
-    const instance = ink.render(
-      React.createElement(SubagentList, {
-        activeProcesses: [
-          {
-            kind: 'process',
-            executionId: 'process-exec',
-            agentName: 'latexmk',
-            status: 'running',
-          },
-        ],
-        keyboardActive: true,
-        maxRows: 3,
-        onCancel: vi.fn(),
-        onKillExecution,
-        onOpenProcessDetail,
-        onSelectionChange: vi.fn(),
-        onPrintStream,
-        selectedValue: processValue,
-      }),
-      {
-        stdin,
-        stdout: new FakeStdout(100),
-        interactive: true,
-        exitOnCtrlC: false,
-        patchConsole: false,
-      },
-    );
-
-    try {
-      await waitFor(() => stdin.listenerCount('readable') > 0);
-      stdin.write('i');
-      stdin.write('v');
-      stdin.write('k');
-      await waitFor(() => onKillExecution.mock.calls.length === 1);
-      stdin.write('\r');
-      await waitFor(() => onOpenProcessDetail.mock.calls.length === 1);
-
-      expect(onPrintStream).not.toHaveBeenCalled();
-      expect(onKillExecution).toHaveBeenCalledWith('process-exec');
-      expect(onOpenProcessDetail).toHaveBeenCalledWith('process-exec');
     } finally {
       instance.unmount();
     }

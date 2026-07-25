@@ -46,7 +46,6 @@ interface RenderState {
   agent?: string;
   inputLabel?: string;
   phase?: string;
-  activeProcesses?: string;
   activeSubagents?: string;
 }
 
@@ -221,11 +220,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
         return true;
       case 'child.activity':
         if (this.rootStreamTerminal) return true;
-        if (event.kind === 'processes') {
-          this.applyActiveProcesses(event.parentStreamId, event.items);
-        } else {
-          this.applyActiveSubagents(event.parentStreamId, event.items);
-        }
+        this.applyActiveSubagents(event.parentStreamId, event.items);
         this.updateHeartbeat();
         this.render(true);
         return true;
@@ -272,20 +267,6 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     return true;
   }
 
-  private applyActiveProcesses(
-    parentStreamId: StreamTabId,
-    processes: readonly ActiveChildInfo[],
-  ): void {
-    if (!this.claimRootStream(parentStreamId)) return;
-
-    this.state.activeProcesses = formatActiveChildren(
-      'tool',
-      processes.map(
-        (activeProcess) => activeProcess.toolName ?? activeProcess.agentName,
-      ),
-    );
-  }
-
   private applyActiveSubagents(
     parentStreamId: StreamTabId,
     children: readonly ActiveChildInfo[],
@@ -293,7 +274,6 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     if (!this.claimRootStream(parentStreamId)) return;
 
     this.state.activeSubagents = formatActiveChildren(
-      'subagent',
       children.map((child) => child.agentName),
     );
   }
@@ -306,7 +286,6 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     this.state.phase = formatRunProgressStatus(status);
     this.rootStreamTerminal = isTerminalOutcomePhase(status);
     if (this.rootStreamTerminal) {
-      this.state.activeProcesses = undefined;
       this.state.activeSubagents = undefined;
     }
     this.updateHeartbeat();
@@ -388,12 +367,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     }
 
     if (this.state.activeSubagents) parts.push(this.state.activeSubagents);
-    if (this.state.activeProcesses) parts.push(this.state.activeProcesses);
-    if (
-      this.state.toolCallCount != null &&
-      !this.state.activeSubagents &&
-      !this.state.activeProcesses
-    ) {
+    if (this.state.toolCallCount != null && !this.state.activeSubagents) {
       parts.push(`tools: ${this.state.toolCallCount}`);
     }
     parts.push(formatElapsed(now - this.startedAt));
@@ -417,14 +391,13 @@ function formatInputLabel(files: readonly string[]): string | undefined {
 }
 
 function formatActiveChildren(
-  kind: 'subagent' | 'tool',
   names: readonly (string | undefined)[],
 ): string | undefined {
   const namedChildren = names.filter((name): name is string => Boolean(name));
   const first = namedChildren[0];
   if (!first) return undefined;
 
-  const label = pluralize(namedChildren.length, kind);
+  const label = pluralize(namedChildren.length, 'subagent');
   const suffix =
     namedChildren.length > 1 ? ` +${namedChildren.length - 1}` : '';
   return `${label}: ${first}${suffix}`;

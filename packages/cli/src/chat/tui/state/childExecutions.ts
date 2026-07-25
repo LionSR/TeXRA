@@ -7,9 +7,7 @@
 //
 // See docs/proposals/2026-07-10-cli-child-stream-state-consolidation.md for the
 // accepted design, the load-bearing event-ordering census, and the
-// transition/selector semantics this module implements. `activeProcesses`
-// is explicitly out of scope: a process has no `childStreamId` and no
-// independent `StreamSlice`, so it stays a plain `StreamSlice` field.
+// transition/selector semantics this module implements.
 
 import { computed, signal, type Signal } from '@lit-labs/signals';
 import type {
@@ -225,7 +223,7 @@ function subagentEntryUnchanged(
 }
 
 /**
- * `child.activity(kind: 'subagents')` roster snapshot for one parent: the
+ * `child.activity` roster snapshot for one parent: the
  * accepted children become the complete active-membership snapshot for that
  * parent at this hub position. A late roster from an incompatible (explicitly
  * edged-elsewhere, or promoted) child cannot resurrect active membership or
@@ -491,7 +489,7 @@ export function focusOrderDescendants(
 }
 
 // ---------------------------------------------------------------------------
-// generic child-execution helpers (subagents and processes)
+// generic child-execution helpers
 // ---------------------------------------------------------------------------
 
 export function childExecutionKey(child: ActiveChildInfo): string {

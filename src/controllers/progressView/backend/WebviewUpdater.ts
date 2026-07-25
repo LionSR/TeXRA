@@ -439,9 +439,9 @@ export class WebviewUpdater {
   ): StreamMetadata {
     const current = state.getStreamState(streamInfo.name);
     const streamState = streamStates?.get(streamInfo.name);
-    // Rosters go through `projectChildRosters` here too, not just on the badge
-    // path: this structural rebuild is the frontend's other writer of
-    // `subagents`/`processes` (`mergeBackendOwnedState` overlays every
+    // The roster goes through `projectChildRosters` here too, not just on the
+    // badge path: this structural rebuild is the frontend's other writer of
+    // `subagents` (`mergeBackendOwnedState` overlays every
     // backend-owned field), so shipping the raw roster would let a later
     // UPDATE_STREAMS overwrite a resolved terminal status with the stale value
     // stamped at roster-drop time.
@@ -454,7 +454,6 @@ export class WebviewUpdater {
       conversationProgress: current?.conversationProgress,
       roundStage: current?.roundStage,
       subagents: rosters?.subagents,
-      processes: rosters?.processes,
     });
   }
 }

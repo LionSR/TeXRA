@@ -145,14 +145,12 @@ export function allocateSidePanelRows({
 
 export function allocateConversationBottomPanelRows({
   maxRows,
-  processCount = 0,
   sessionCount,
   childListFocused,
   todosPlanContentRows,
   transcriptRows,
 }: {
   readonly maxRows: number;
-  readonly processCount?: number;
   readonly sessionCount: number;
   readonly childListFocused: boolean;
   readonly todosPlanContentRows: number;
@@ -162,7 +160,7 @@ export function allocateConversationBottomPanelRows({
   readonly sessionPanelRows: number;
   readonly todosPlanRows: number;
 } {
-  const childListRowCount = sessionCount + processCount;
+  const childListRowCount = sessionCount;
   // The persistent child list owns one blank separator row above its Select.
   const sessionPanelContentRows =
     childListRowCount > 0 ? childListRowCount + 1 : 0;

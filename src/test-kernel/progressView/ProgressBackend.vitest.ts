@@ -1780,15 +1780,6 @@ describe('ProgressBackend', () => {
       startedAt: 1,
       elapsed: null,
     };
-    const process: ActiveChildInfo = {
-      kind: 'process',
-      executionId,
-      agentName: 'bash',
-      status: 'running',
-      startedAt: 2,
-      elapsed: '1s',
-      toolName: 'bash',
-    };
     const inquiryThread = {
       threadId: 'ei_123456789abc',
       parentStreamId,
@@ -1849,20 +1840,8 @@ describe('ProgressBackend', () => {
         streamId: parentStreamId,
         event: {
           type: 'child.activity',
-          kind: 'subagents',
           parentStreamId,
           items: [child],
-        },
-      });
-
-      target.session.events.emit({
-        scope: 'run',
-        streamId: parentStreamId,
-        event: {
-          type: 'child.activity',
-          kind: 'processes',
-          parentStreamId,
-          items: [process],
         },
       });
 
@@ -1906,7 +1885,6 @@ describe('ProgressBackend', () => {
         {
           roundStage: { index: 2, total: 4 },
           subagents: [child],
-          processes: [process],
         },
       );
       expect(
@@ -1995,14 +1973,6 @@ describe('ProgressBackend', () => {
             finishedAt: 1,
           },
         ],
-        processes: [
-          {
-            kind: 'process',
-            executionId: 'finished-process',
-            agentName: 'bash',
-            finishedAt: 1,
-          },
-        ],
       }));
 
       await backend.factApplier.setStreamStatus(
@@ -2033,7 +2003,6 @@ describe('ProgressBackend', () => {
         conversationProgress: { toolCallCount: 0 },
         roundStage: null,
         subagents: [],
-        processes: [],
       });
       expect(
         JSON.parse(JSON.stringify(patch)).streamState.roundStage,
@@ -3344,13 +3313,11 @@ describe('retained finished children', () => {
     try {
       seedParent(backend);
 
-      backend.factApplier.updateChildRoster(PARENT, 'subagents', [
+      backend.factApplier.updateChildRoster(PARENT, [
         subagent('a'),
         subagent('b'),
       ]);
-      backend.factApplier.updateChildRoster(PARENT, 'subagents', [
-        subagent('a'),
-      ]);
+      backend.factApplier.updateChildRoster(PARENT, [subagent('a')]);
 
       const roster = backend.state.getStreamState(PARENT)?.subagents ?? [];
       expect(roster).toHaveLength(2);
@@ -3371,22 +3338,22 @@ describe('retained finished children', () => {
       seedParent(backend);
       const child = subagent('resumed');
 
-      backend.factApplier.updateChildRoster(PARENT, 'subagents', [child]);
+      backend.factApplier.updateChildRoster(PARENT, [child]);
       let roster = backend.state.getStreamState(PARENT)?.subagents ?? [];
       expect(roster).toHaveLength(1);
       expect(roster[0]?.finishedAt).toBeUndefined();
 
-      backend.factApplier.updateChildRoster(PARENT, 'subagents', []);
+      backend.factApplier.updateChildRoster(PARENT, []);
       roster = backend.state.getStreamState(PARENT)?.subagents ?? [];
       expect(roster).toHaveLength(1);
       expect(roster[0]?.finishedAt).toBeGreaterThan(0);
 
-      backend.factApplier.updateChildRoster(PARENT, 'subagents', [child]);
+      backend.factApplier.updateChildRoster(PARENT, [child]);
       roster = backend.state.getStreamState(PARENT)?.subagents ?? [];
       expect(roster).toHaveLength(1);
       expect(roster[0]?.finishedAt).toBeUndefined();
 
-      backend.factApplier.updateChildRoster(PARENT, 'subagents', []);
+      backend.factApplier.updateChildRoster(PARENT, []);
       roster = backend.state.getStreamState(PARENT)?.subagents ?? [];
       expect(roster).toHaveLength(1);
       expect(roster[0]?.finishedAt).toBeGreaterThan(0);
@@ -3401,9 +3368,7 @@ describe('retained finished children', () => {
     try {
       seedParent(backend);
 
-      backend.factApplier.updateChildRoster(PARENT, 'subagents', [
-        subagent('a'),
-      ]);
+      backend.factApplier.updateChildRoster(PARENT, [subagent('a')]);
 
       const roster = backend.state.getStreamState(PARENT)?.subagents ?? [];
       expect(roster.map((c) => c.executionId)).toEqual(['a']);
@@ -3422,8 +3387,8 @@ describe('retained finished children', () => {
       backend.state.snapshots.setParentStream(childStreamId, PARENT);
 
       // Roster drop first — the child is still `running` at this point.
-      backend.factApplier.updateChildRoster(PARENT, 'subagents', [child]);
-      backend.factApplier.updateChildRoster(PARENT, 'subagents', []);
+      backend.factApplier.updateChildRoster(PARENT, [child]);
+      backend.factApplier.updateChildRoster(PARENT, []);
       messages.length = 0;
 
       // Terminal status arrives afterwards.
@@ -3462,10 +3427,10 @@ describe('retained finished children', () => {
       backend.state.snapshots.setParentStream(childStreamId, PARENT);
 
       // Roster drop first, so the retained row is stamped `running` forever.
-      backend.factApplier.updateChildRoster(PARENT, 'subagents', [
+      backend.factApplier.updateChildRoster(PARENT, [
         subagent('doomed', { childStreamId }),
       ]);
-      backend.factApplier.updateChildRoster(PARENT, 'subagents', []);
+      backend.factApplier.updateChildRoster(PARENT, []);
       backend.state.streamStatus.transitionToTerminal(
         childStreamId,
         STREAM_PHASE.FAILED,
@@ -3527,11 +3492,11 @@ describe('retained finished children', () => {
 
       for (let i = 0; i < cap + overflow; i += 1) {
         vi.spyOn(Date, 'now').mockReturnValue(1_000 + i);
-        backend.factApplier.updateChildRoster(PARENT, 'subagents', [
+        backend.factApplier.updateChildRoster(PARENT, [
           live,
           subagent(`child-${i}`),
         ]);
-        backend.factApplier.updateChildRoster(PARENT, 'subagents', [live]);
+        backend.factApplier.updateChildRoster(PARENT, [live]);
       }
       vi.restoreAllMocks();
 
@@ -3556,11 +3521,8 @@ describe('retained finished children', () => {
       seedParent(backend);
       const live = subagent('live');
 
-      backend.factApplier.updateChildRoster(PARENT, 'subagents', [
-        live,
-        subagent('done'),
-      ]);
-      backend.factApplier.updateChildRoster(PARENT, 'subagents', [live]);
+      backend.factApplier.updateChildRoster(PARENT, [live, subagent('done')]);
+      backend.factApplier.updateChildRoster(PARENT, [live]);
       expect(backend.state.getStreamState(PARENT)?.subagents).toHaveLength(2);
 
       await backend.factApplier.setStreamStatus(

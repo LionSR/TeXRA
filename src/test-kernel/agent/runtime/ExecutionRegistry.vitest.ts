@@ -1441,7 +1441,6 @@ describe('executionRegistry', () => {
 
       const childActivity = runEventsOfType(recorded.events, 'child.activity');
       expect(childActivity[0]).toMatchObject({
-        kind: 'subagents',
         parentStreamId,
         items: [
           {
@@ -1458,7 +1457,6 @@ describe('executionRegistry', () => {
         parentStreamId,
       });
       expect(childActivity.at(-1)).toMatchObject({
-        kind: 'subagents',
         parentStreamId,
         items: [],
       });
@@ -1753,7 +1751,6 @@ describe('executionRegistry', () => {
       expect(
         runEventsOfType(recorded.events, 'child.activity').at(-1),
       ).toMatchObject({
-        kind: 'subagents',
         parentStreamId,
         items: [],
       });

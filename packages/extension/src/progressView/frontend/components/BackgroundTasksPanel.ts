@@ -1,5 +1,5 @@
 /**
- * Collapsible panel for displaying background tasks (processes and subagents).
+ * Collapsible panel for displaying background tasks (subagents and inquiries).
  *
  * Uses `<wa-details>` for the outer panel and for each nested section
  * (Processes, Subagents, Inquiries) and per-task output, for consistent
@@ -207,7 +207,6 @@ export class BackgroundTasksPanel extends LitElement {
   ];
 
   /** Live children plus the finished ones retained for display (`finishedAt`). */
-  @property({ attribute: false }) processes: ActiveChildInfo[] = [];
   @property({ attribute: false }) subagents: ActiveChildInfo[] = [];
 
   /** Open state — auto-expands when active tasks appear, auto-collapses when all finish. */
@@ -227,7 +226,6 @@ export class BackgroundTasksPanel extends LitElement {
   protected override willUpdate(changed: PropertyValues): void {
     super.willUpdate(changed);
     const active =
-      this.processes.filter((child) => child.finishedAt === undefined).length +
       this.subagents.filter((child) => child.finishedAt === undefined).length +
       this.inquiries.filter((thread) => thread.status === 'open').length;
     // Auto-open when tasks appear (0 → N), auto-close when all finish (N → 0)
@@ -240,10 +238,7 @@ export class BackgroundTasksPanel extends LitElement {
   }
 
   override render(): TemplateResult | typeof nothing {
-    if (
-      this.processes.length + this.subagents.length + this.inquiries.length ===
-      0
-    ) {
+    if (this.subagents.length + this.inquiries.length === 0) {
       return nothing;
     }
 
@@ -256,9 +251,7 @@ export class BackgroundTasksPanel extends LitElement {
         @wa-hide=${this.handleHide}
       >
         <div class="task-list">
-          ${this.renderSection(this.processes, 'process')}
-          ${this.renderSection(this.subagents, 'subagent')}
-          ${this.renderInquirySection()}
+          ${this.renderSection(this.subagents)} ${this.renderInquirySection()}
         </div>
       </wa-details>
     `;
@@ -342,7 +335,6 @@ export class BackgroundTasksPanel extends LitElement {
 
   private renderSection(
     children: ActiveChildInfo[],
-    kind: 'process' | 'subagent',
   ): TemplateResult | typeof nothing {
     if (children.length === 0) return nothing;
 
@@ -350,19 +342,17 @@ export class BackgroundTasksPanel extends LitElement {
       (child) => child.finishedAt === undefined,
     ).length;
     const finishedCount = children.length - activeCount;
-    const icon = kind === 'process' ? 'terminal' : 'server-process';
-    const label = kind === 'process' ? 'Processes' : 'Subagents';
 
     return html`
       <wa-details class="collapsible-quiet">
         <div slot="summary" class="section-label">
           <wa-icon
             library=${TEXRA_ICON_LIBRARY}
-            name=${icon}
+            name="server-process"
             aria-hidden="true"
           ></wa-icon>
           <span
-            >${label}${
+            >Subagents${
               activeCount ? html` &middot; ${activeCount} active` : nothing
             }${
               finishedCount ? html` &middot; ${finishedCount} done` : nothing
