@@ -73,7 +73,7 @@ vi.mock('@tools/childRunDelivery', () => ({
 }));
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { createTestSession } from '@test/support/sessionTestUtils';
-import { createNativeToolUseStrategy } from '@tools/delegation/nativeToolUseStrategy';
+import { createNativeSubagentStrategy } from '@tools/delegation/nativeSubagentStrategy';
 
 const ownedSessions = new Set<SessionHandle>();
 
@@ -81,13 +81,16 @@ function fakePorts() {
   return { notify: vi.fn(), recordCost: vi.fn() };
 }
 
-function baseParams(parentSession = createTestSession()) {
+function baseParams(
+  parentSession = createTestSession(),
+  agentCategory: 'toolUse' | 'workflow' = 'toolUse',
+) {
   if (parentSession !== defaultSession()) ownedSessions.add(parentSession);
   return {
     config: AgentConfigSchema.parse({
       agent: 'review',
       model: 'gpt5',
-      agentCategory: 'toolUse',
+      agentCategory,
     }),
     agentCategoryExplicit: true,
     executionId: 'exec-1' as ExecutionId,
@@ -100,7 +103,7 @@ function baseParams(parentSession = createTestSession()) {
   };
 }
 
-describe('NativeToolUseStrategy', () => {
+describe('NativeSubagentStrategy', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     mocks.enqueueChildRunFollowUp.mockResolvedValue({
@@ -125,7 +128,7 @@ describe('NativeToolUseStrategy', () => {
 
   it('resolveDeliveryTarget follows the live run handle, including after detach', async () => {
     const params = baseParams();
-    const strategy = createNativeToolUseStrategy(params);
+    const strategy = createNativeSubagentStrategy(params);
 
     // Before any turn ran, falls back to the static orchestrator stream.
     expect(strategy.resolveDeliveryTarget?.()).toBe(
@@ -184,7 +187,7 @@ describe('NativeToolUseStrategy', () => {
 
   it('formatDelivery folds a WAITING turn into a completed-shaped delivery', async () => {
     const params = baseParams();
-    const strategy = createNativeToolUseStrategy(params);
+    const strategy = createNativeSubagentStrategy(params);
 
     const waitingTurn = {
       category: 'toolUse' as const,
@@ -203,7 +206,7 @@ describe('NativeToolUseStrategy', () => {
 
   it('reports a non-throwing subagent failure via isTurnError, captured from onRunError', async () => {
     const params = baseParams();
-    const strategy = createNativeToolUseStrategy(params);
+    const strategy = createNativeSubagentStrategy(params);
     const failure = new Error('model overloaded');
 
     mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
@@ -224,7 +227,7 @@ describe('NativeToolUseStrategy', () => {
   });
 
   it('persists a typed tool-use failure when no flow result exists', async () => {
-    const strategy = createNativeToolUseStrategy(baseParams());
+    const strategy = createNativeSubagentStrategy(baseParams());
 
     await expect(
       strategy.buildResultMeta?.(null, true, 10),
@@ -247,7 +250,7 @@ describe('NativeToolUseStrategy', () => {
       approvalPromptsUnavailable: true,
       runtimeUnavailableTools: ['ask_user'],
     };
-    const strategy = createNativeToolUseStrategy(params);
+    const strategy = createNativeSubagentStrategy(params);
     const childStreamId = 'child-stream' as StreamTabId;
 
     mocks.executeAgent.mockResolvedValueOnce({
@@ -313,7 +316,7 @@ describe('NativeToolUseStrategy', () => {
 
   it('preserves #7491: a failed direct resume throws for child-loop error delivery', async () => {
     const params = baseParams();
-    const strategy = createNativeToolUseStrategy(params);
+    const strategy = createNativeSubagentStrategy(params);
     const childStreamId = 'child-stream' as StreamTabId;
 
     mocks.executeAgent.mockResolvedValueOnce({
@@ -407,7 +410,7 @@ describe('NativeToolUseStrategy', () => {
       },
     );
 
-    const strategy = createNativeToolUseStrategy(params);
+    const strategy = createNativeSubagentStrategy(params);
     try {
       startChildRunLoop({
         childStreamId,
@@ -473,7 +476,7 @@ describe('NativeToolUseStrategy', () => {
 
   it('records the run cumulative cost via ports.recordCost on every turn', async () => {
     const params = baseParams();
-    const strategy = createNativeToolUseStrategy(params);
+    const strategy = createNativeSubagentStrategy(params);
     const ports = fakePorts();
 
     mocks.executeAgent.mockResolvedValueOnce({
@@ -486,5 +489,88 @@ describe('NativeToolUseStrategy', () => {
 
     await strategy.launch(ports, new AbortController());
     expect(ports.recordCost).toHaveBeenCalledWith(0.42);
+  });
+
+  it('derives stageLabel/isTerminal/buildResultMeta from a workflow-category config', async () => {
+    const params = baseParams(createTestSession(), 'workflow');
+    const strategy = createNativeSubagentStrategy(params);
+
+    expect(strategy.stageLabel).toBe('Native workflow subagent');
+
+    const completedWorkflowTurn = {
+      category: 'workflow' as const,
+      outcome: 'completed' as const,
+      outputs: [],
+      compileFailures: [],
+      executionId: params.executionId,
+      streamId: 'child-stream' as StreamTabId,
+    };
+    // A workflow flow never produces a WAITING result, so every turn is
+    // terminal — `isWaitingFlowResult` requires `category === 'toolUse'`.
+    expect(strategy.isTerminal(completedWorkflowTurn)).toBe(true);
+
+    await expect(
+      strategy.buildResultMeta?.(null, true, 10),
+    ).resolves.toMatchObject({
+      producer: 'subagent',
+      agentName: 'review',
+      result: {
+        category: 'workflow',
+        outcome: 'failed',
+      },
+    });
+  });
+
+  it('never reaches runTurn for a workflow child — the loop breaks on the first terminal turn', async () => {
+    const session = defaultSession();
+    const childStreamId = 'native-workflow-loop-child' as StreamTabId;
+    const parentStreamId = 'native-workflow-loop-parent' as StreamTabId;
+    const executionId = 'native-workflow-loop-exec' as ExecutionId;
+    const runtimeHost = { emit: vi.fn() } as never;
+    const params = {
+      ...baseParams(session, 'workflow'),
+      executionId,
+      orchestratorStreamId: parentStreamId,
+      runtimeHost,
+    };
+
+    mocks.executeAgent.mockResolvedValueOnce({
+      category: 'workflow',
+      outcome: 'completed',
+      outputs: [],
+      compileFailures: [],
+      executionId,
+      streamId: childStreamId,
+    });
+
+    const strategy = createNativeSubagentStrategy(params);
+    // `runTurn` is present on the merged strategy (unlike workflow-script's
+    // strategy), but the loop must never call it for a workflow child: the
+    // first turn is always terminal, and `childRunLoop.ts` breaks on a
+    // terminal turn before ever consulting `runTurn`.
+    expect(strategy.runTurn).toBeDefined();
+
+    try {
+      startChildRunLoop({
+        childStreamId,
+        parentStreamId,
+        executionId,
+        agentName: params.agentName,
+        strategy,
+      });
+
+      await vi.waitFor(() =>
+        expect(mocks.enqueueChildRunFollowUp).toHaveBeenCalledTimes(1),
+      );
+      await vi.waitFor(() =>
+        expect(isChildRunLoopActive(childStreamId)).toBe(false),
+      );
+
+      expect(mocks.resumeToolUseFromResumeData).not.toHaveBeenCalled();
+      expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
+    } finally {
+      session.followUps.release(childStreamId);
+      session.status.clearStream(childStreamId);
+    }
   });
 });
