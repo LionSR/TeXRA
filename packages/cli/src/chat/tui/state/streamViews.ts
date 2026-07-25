@@ -174,21 +174,31 @@ interface StreamTreeViewInput {
 }
 
 /** Stable group-by for phase-tagged rows. Each phase occupies its first-seen
- *  position, untagged rows remain standalone, and row order within a phase is
- *  unchanged. Return the original list when grouping is inapplicable. */
+ *  position and row order within a phase is unchanged.
+ *
+ *  Untagged rows are partitioned *ahead* of every group rather than left at
+ *  their own position, keeping their relative order. They cannot sit between or
+ *  after groups: the list only ever *opens* a group with a `◆ {phase}` header
+ *  and paints no closing boundary, so an untagged row trailing a group would
+ *  render directly under that group's rows and read as part of a phase it does
+ *  not belong to — which is what an `agent()` call issued outside any `phase()`,
+ *  or a roster row from before the field existed, is not. Ahead of the first
+ *  header they belong to the run itself, which is also where the tree puts them,
+ *  and it costs no terminal row (a closing divider would cost one per boundary).
+ *
+ *  Return the original list when grouping is inapplicable. */
 export function groupWorkflowPhaseEntries<
   T extends { readonly workflowPhase?: string },
 >(entries: readonly T[]): readonly T[] {
+  const untagged: T[] = [];
   const groups: T[][] = [];
   const phaseGroups = new Map<string, T[]>();
-  let hasWorkflowPhase = false;
   for (const entry of entries) {
     const phase = entry.workflowPhase;
     if (phase === undefined) {
-      groups.push([entry]);
+      untagged.push(entry);
       continue;
     }
-    hasWorkflowPhase = true;
     let group = phaseGroups.get(phase);
     if (!group) {
       group = [];
@@ -197,7 +207,7 @@ export function groupWorkflowPhaseEntries<
     }
     group.push(entry);
   }
-  return hasWorkflowPhase ? groups.flat() : entries;
+  return groups.length > 0 ? [...untagged, ...groups.flat()] : entries;
 }
 
 export function streamTreeEntries(
