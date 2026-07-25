@@ -169,6 +169,45 @@ describe('cross-process execution leases', () => {
     expect(maintenanceEntered).toBe(true);
   });
 
+  it('timestamps a resumed lease after asynchronous admission completes', async () => {
+    vi.useFakeTimers({ now: new Date('2026-07-25T12:00:00.000Z') });
+    const executionId = 'd86450' as ExecutionId;
+    const expectedHeartbeat = Date.now() + EXECUTION_LEASE_STALE_MS + 1_000;
+
+    try {
+      await expect(
+        acquireResumedExecutionLease(executionId, async () => {
+          await vi.advanceTimersByTimeAsync(EXECUTION_LEASE_STALE_MS + 1_000);
+          return true;
+        }),
+      ).resolves.toBe('acquired');
+      ownedExecutionIds.add(executionId);
+
+      const persisted = JSON.parse(
+        await StorageFS.read(leasePath(executionId)),
+      ) as { acquiredAt: number; heartbeatAt: number };
+      expect(persisted).toMatchObject({
+        acquiredAt: expectedHeartbeat,
+        heartbeatAt: expectedHeartbeat,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('retains existing ownership through a transient resume heartbeat failure', async () => {
+    const executionId = 'd86451' as ExecutionId;
+    await acquire(executionId);
+    vi.spyOn(platform().fileLocks, 'runExclusive').mockRejectedValueOnce(
+      new Error('temporary filesystem failure'),
+    );
+
+    await expect(
+      acquireResumedExecutionLease(executionId, () => true),
+    ).resolves.toBe('existing');
+    expect(ownsExecutionLease(executionId)).toBe(true);
+  });
+
   it('keeps resumed ownership live until terminal lifecycle release', async () => {
     const executionId = 'd86440' as ExecutionId;
     await writeExecution(executionId);

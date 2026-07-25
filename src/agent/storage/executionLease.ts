@@ -512,8 +512,18 @@ async function acquireExecutionLease(
       try {
         heartbeatResult = await performHeartbeat(existingOwnership, canAcquire);
       } catch (error) {
-        handleHeartbeatFailure(existingOwnership, error);
-        throw error;
+        if (handleHeartbeatFailure(existingOwnership, error)) throw error;
+        if (
+          ownedLeases.get(key) === existingOwnership &&
+          !existingOwnership.releasing
+        ) {
+          const admitted = await withLeaseLock(
+            executionId,
+            async () => (await canAcquire?.()) !== false,
+            root,
+          );
+          return admitted ? 'existing' : 'cancelled';
+        }
       }
     }
     if (heartbeatResult === 'cancelled') return 'cancelled';
@@ -533,6 +543,7 @@ async function acquireExecutionLease(
         throw new ExecutionLeaseActiveError(executionId, liveness.heartbeatAt);
       }
       if ((await canAcquire?.()) === false) return 'cancelled' as const;
+      const acquiredAt = Date.now();
       const ownerToken = randomUUID();
       if (existingOwnership) forgetOwnedLease(existingOwnership);
       await writeLease(
@@ -540,8 +551,8 @@ async function acquireExecutionLease(
           version: 1,
           executionId,
           ownerToken,
-          acquiredAt: now,
-          heartbeatAt: now,
+          acquiredAt,
+          heartbeatAt: acquiredAt,
         },
         root,
       );
