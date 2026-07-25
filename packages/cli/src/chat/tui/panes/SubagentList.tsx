@@ -5,7 +5,12 @@ import { Box, Text, useInput, useWindowSize } from 'ink';
 import { useMemo } from 'react';
 
 // Local imports - shared stream state
-import type { StreamTabId } from '@shared/schemas';
+import {
+  AgentCategory,
+  type StreamTabId,
+  type WorkflowTaskProgress,
+} from '@shared/schemas';
+import { workflowPhaseTaskProgress } from '@shared/copy/workflowTask';
 import {
   formatPhaseStageLabel,
   formatRoundStageLabel,
@@ -20,13 +25,14 @@ import { truncateSummaryToWidth } from '../render/terminalText';
 import { childElapsed } from '../state/childControls';
 import {
   childListStreamId,
+  childPhaseListValue,
   childStreamListValue,
   type ChildListValue,
 } from '../state/childListSelection';
 import { useLiveNowMs } from '../state/useLiveNowMs';
 import { COLOR_HINT } from '../ui/colors';
-import { POINTER, TICK } from '../ui/glyphs';
-import { Select, visibleSelectRange } from '../ui/Select';
+import { POINTER, STATUS_DIAMOND, TICK } from '../ui/glyphs';
+import { Select, visibleSelectRange, type SelectItem } from '../ui/Select';
 import {
   CHILD_ROW_METADATA_MIN_COLUMNS,
   CHILD_STATUS_MARKER,
@@ -69,6 +75,45 @@ function RowMetadata({
 }
 
 const SUBAGENT_SUMMARY_MAX_COLUMNS = 100;
+
+interface PhaseHeaderDetails {
+  readonly label: string;
+  readonly index?: number;
+  readonly total?: number;
+  readonly progress?: string;
+}
+
+function PhaseHeader({
+  details,
+  metadataColumn,
+}: {
+  readonly details: PhaseHeaderDetails;
+  readonly metadataColumn: boolean;
+}): React.JSX.Element {
+  const position =
+    details.index !== undefined && details.total !== undefined
+      ? ` (${details.index + 1}/${details.total})`
+      : '';
+  const inlineProgress =
+    !metadataColumn && details.progress ? ` · ${details.progress}` : '';
+  return (
+    <Box flexDirection="row" flexGrow={1} minWidth={0}>
+      <Box minWidth={0} flexShrink={1}>
+        <Text dimColor wrap="truncate-end">
+          {`    ${STATUS_DIAMOND} ${details.label}${position}${inlineProgress}`}
+        </Text>
+      </Box>
+      {metadataColumn && details.progress ? (
+        <>
+          <Box flexGrow={1} />
+          <Box flexShrink={0}>
+            <Text dimColor>{`  ${details.progress}`}</Text>
+          </Box>
+        </>
+      ) : null}
+    </Box>
+  );
+}
 
 function SessionRow({
   active,
@@ -206,14 +251,70 @@ export function SubagentList(
         .join(':') || undefined,
     [sessions],
   );
-  const items = useMemo(
-    () =>
-      sessions.map((session) => ({
+  const { items, phaseHeadersByValue } = useMemo(() => {
+    const rootSession = sessions.find(
+      (session) => session.id === props.listRootStreamId,
+    );
+    const entries =
+      rootSession?.slice?.category === AgentCategory.Workflow
+        ? rootSession.slice.entries
+        : [];
+    const phasePositions = new Map<
+      string,
+      { readonly index?: number; readonly total?: number }
+    >();
+    const tasksByPhase = new Map<string, WorkflowTaskProgress[]>();
+    for (const entry of entries) {
+      if (entry.role === 'phase') {
+        phasePositions.set(entry.phaseLabel, {
+          index: entry.phaseIndex,
+          total: entry.phaseTotal,
+        });
+      } else if (
+        entry.role === 'workflowTask' &&
+        entry.task.phase !== undefined
+      ) {
+        const tasks = tasksByPhase.get(entry.task.phase);
+        if (tasks) tasks.push(entry.task);
+        else tasksByPhase.set(entry.task.phase, [entry.task]);
+      }
+    }
+
+    const nextItems: SelectItem<ChildListValue>[] = [];
+    const nextHeaders = new Map<ChildListValue, PhaseHeaderDetails>();
+    let previousPhase: string | undefined;
+    let headerOrdinal = 0;
+    for (const session of sessions) {
+      const item = {
         label: session.label,
         value: childStreamListValue(session.id),
-      })),
-    [sessions],
-  );
+      };
+      // The list root is context, not a grouped attempt. Every other row
+      // already belongs to this root's visible current/retained descendant
+      // set, including historical children promoted away from the root.
+      if (session.id === props.listRootStreamId) {
+        nextItems.push(item);
+        continue;
+      }
+      const phase = session.workflowPhase;
+      if (phase !== undefined && phase !== previousPhase) {
+        const value = childPhaseListValue(headerOrdinal++);
+        const tasks = tasksByPhase.get(phase) ?? [];
+        const { done, total } = workflowPhaseTaskProgress(tasks);
+        const position = phasePositions.get(phase);
+        nextItems.push({ label: phase, value, disabled: true });
+        nextHeaders.set(value, {
+          label: phase,
+          index: position?.index,
+          total: position?.total,
+          ...(total > 0 ? { progress: `${done}/${total}` } : {}),
+        });
+      }
+      nextItems.push(item);
+      previousPhase = phase;
+    }
+    return { items: nextItems, phaseHeadersByValue: nextHeaders };
+  }, [props.listRootStreamId, sessions]);
   const sessionsByValue = useMemo(
     () =>
       new Map(
@@ -314,6 +415,15 @@ export function SubagentList(
           if (streamId) props.onFocusStream?.(streamId);
         }}
         renderItem={(item, state) => {
+          const phaseHeader = phaseHeadersByValue.get(item.value);
+          if (phaseHeader) {
+            return (
+              <PhaseHeader
+                details={phaseHeader}
+                metadataColumn={metadataColumn}
+              />
+            );
+          }
           const session = sessionsByValue.get(item.value);
           return session ? (
             <SessionRow

@@ -173,6 +173,33 @@ interface StreamTreeViewInput {
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
 }
 
+/** Stable group-by for phase-tagged rows. Each phase occupies its first-seen
+ *  position, untagged rows remain standalone, and row order within a phase is
+ *  unchanged. Return the original list when grouping is inapplicable. */
+export function groupWorkflowPhaseEntries<
+  T extends { readonly workflowPhase?: string },
+>(entries: readonly T[]): readonly T[] {
+  const groups: T[][] = [];
+  const phaseGroups = new Map<string, T[]>();
+  let hasWorkflowPhase = false;
+  for (const entry of entries) {
+    const phase = entry.workflowPhase;
+    if (phase === undefined) {
+      groups.push([entry]);
+      continue;
+    }
+    hasWorkflowPhase = true;
+    let group = phaseGroups.get(phase);
+    if (!group) {
+      group = [];
+      phaseGroups.set(phase, group);
+      groups.push(group);
+    }
+    group.push(entry);
+  }
+  return hasWorkflowPhase ? groups.flat() : entries;
+}
+
 export function streamTreeEntries(
   init: StreamTreeViewInput,
 ): readonly ActiveStreamTreeEntry[] {
@@ -182,11 +209,18 @@ export function streamTreeEntries(
   // then creation order), so the child list and its
   // Alt+1..9 shortcuts read top-to-bottom from most to least recently
   // started, keeping the row a user is most likely watching near the top.
-  const ordered = focusOrderDescendants(
-    root,
-    init.childStreamEntries,
-    init.streams,
-  ).toReversed();
+  const ordered = groupWorkflowPhaseEntries(
+    focusOrderDescendants(root, init.childStreamEntries, init.streams)
+      .toReversed()
+      .map((id) => {
+        const entry = init.childStreamEntries.get(id);
+        return {
+          id,
+          workflowPhase:
+            entry?.kind === 'live' ? entry.summary?.workflowPhase : undefined,
+        };
+      }),
+  ).map((entry) => entry.id);
   const out: ActiveStreamTreeEntry[] = [];
   if (init.streams.has(root)) out.push({ id: root });
   for (const [index, id] of ordered.entries()) {
