@@ -342,6 +342,26 @@ describe('StreamLogStore load', () => {
     expect(storage.fullLogReads()).toBe(2);
   });
 
+  it('distinguishes another process deletion from a stale local summary', async () => {
+    const logs: Record<string, unknown> = { alpha: [] };
+    mockStorage({ logs, summaries: {} });
+
+    const staleProcessStore = await StreamLogStore.open();
+    expect(staleProcessStore.has('alpha')).toBe(true);
+    await expect(
+      staleProcessStore.hasAuthoritativeStream('alpha'),
+    ).resolves.toBe(true);
+
+    // A different process commits deletion while this store retains the
+    // summary it loaded at startup.
+    delete logs.alpha;
+
+    expect(staleProcessStore.has('alpha')).toBe(true);
+    await expect(
+      staleProcessStore.hasAuthoritativeStream('alpha'),
+    ).resolves.toBe(false);
+  });
+
   it('opens a read-only store without creating directories or writing caches', async () => {
     const storage = mockStorage({
       logs: { alpha: [logEntry('alpha', 1, 200)] },

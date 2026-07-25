@@ -15,6 +15,7 @@ import type {
 } from '@shared/schemas';
 import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
 import type {
+  AgentRuntimeEmitOptions,
   AgentRuntimeEvent,
   AgentRuntimeEventPayloads,
   AgentRuntimeHost,
@@ -63,12 +64,6 @@ export interface HostRetryInteractionOptions extends HostInteractionOptions {
     selection: ModelCredentialSelection,
     signal?: AbortSignal,
   ) => Promise<void>;
-}
-
-/** Delivery policy for a notification owned by a process session. */
-interface SessionPresentationOptions {
-  /** Retain the notice for the next attachment instead of dropping it now. */
-  readonly replayWhenAttached?: boolean;
 }
 
 export type PlanApprovalResult =
@@ -415,7 +410,7 @@ export class SessionHostInteractions
   emit<K extends AgentRuntimeEvent>(
     event: K,
     payload: AgentRuntimeEventPayloads[K],
-    options: SessionPresentationOptions = {},
+    options: AgentRuntimeEmitOptions = {},
   ): void {
     const active = this.activeAttachment;
     if (active) {
@@ -441,7 +436,7 @@ export class SessionHostInteractions
 
   showInfoMessage(
     message: string,
-    options: SessionPresentationOptions = {},
+    options: AgentRuntimeEmitOptions = {},
   ): Promise<void> | void {
     const active = this.activeAttachment;
     if (active) return active.interactions.showInfoMessage?.(message);

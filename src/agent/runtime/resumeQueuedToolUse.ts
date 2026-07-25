@@ -21,7 +21,7 @@ import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
 export interface ResumeQueuedToolUseOptions extends SubagentRunOptions {
   /** Recheck canonical admission atomically while acquiring the resumed lease. */
-  readonly canAcquireResumeLease?: () => boolean;
+  readonly canAcquireResumeLease?: () => boolean | Promise<boolean>;
   /** Query a caller-owned stop request at the resumed flow attachment boundary. */
   readonly isCancellationRequested?: () => boolean;
   /**
