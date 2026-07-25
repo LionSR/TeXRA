@@ -7,6 +7,7 @@ import { when } from 'lit/directives/when.js';
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/progress-bar/progress-bar.js';
+import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared schemas
 import type { TokenUsageStats, UsageRoute } from '@shared/schemas';
@@ -240,57 +241,72 @@ export class UsagePanel extends LitElement {
       <span class="run-summary__label">Total usage:</span>
       <span class="run-summary__value">
         <wa-icon
+          id="usage-input-icon"
           library=${TEXRA_ICON_LIBRARY}
           name="arrow-up"
-          title="Input tokens"
           aria-hidden="true"
         ></wa-icon
-        >${formatCompactTokenCount(inputTokens)}
+        >${formatCompactTokenCount(inputTokens)}<wa-tooltip
+          for="usage-input-icon"
+          >Input tokens</wa-tooltip
+        >
         ${when(
           cacheRead > 0,
           () =>
             html` ·
               <wa-icon
+                id="usage-cache-read-icon"
                 library=${TEXRA_ICON_LIBRARY}
                 name="cloud-download"
-                title="Cache read tokens (discounted)"
                 aria-hidden="true"
-              ></wa-icon>
-              ${formatCompactTokenCount(cacheRead)}`,
+              ></wa-icon
+              >${formatCompactTokenCount(cacheRead)}<wa-tooltip
+                for="usage-cache-read-icon"
+                >Cache read tokens (discounted)</wa-tooltip
+              >`,
         )}
         ${when(
           cacheMiss > 0,
           () =>
             html` ·
               <wa-icon
+                id="usage-cache-miss-icon"
                 library=${TEXRA_ICON_LIBRARY}
                 name="cloud-upload"
-                title="Cache miss tokens (full price)"
                 aria-hidden="true"
-              ></wa-icon>
-              ${formatCompactTokenCount(cacheMiss)}`,
+              ></wa-icon
+              >${formatCompactTokenCount(cacheMiss)}<wa-tooltip
+                for="usage-cache-miss-icon"
+                >Cache miss tokens (full price)</wa-tooltip
+              >`,
         )}
         ${when(
           cacheWrite > 0,
           () =>
             html` ·
               <wa-icon
+                id="usage-cache-write-icon"
                 library=${TEXRA_ICON_LIBRARY}
                 name="database"
-                title="Cache creation tokens (1.25x cost)"
                 aria-hidden="true"
-              ></wa-icon>
-              ${formatCompactTokenCount(cacheWrite)}`,
+              ></wa-icon
+              >${formatCompactTokenCount(cacheWrite)}<wa-tooltip
+                for="usage-cache-write-icon"
+                >Cache creation tokens (1.25x cost)</wa-tooltip
+              >`,
         )}
         ·
         <wa-icon
+          id="usage-output-icon"
           library=${TEXRA_ICON_LIBRARY}
           name="arrow-down"
-          title="Output tokens"
           aria-hidden="true"
         ></wa-icon
-        >${formatCompactTokenCount(outputTokens)} ·
-        ${this.renderCostRoute(cost)}
+        >${formatCompactTokenCount(outputTokens)}<wa-tooltip
+          for="usage-output-icon"
+          >Output tokens</wa-tooltip
+        >
+        · ${this.renderCostRoute(cost)}
       </span>
     `;
   }
@@ -302,16 +318,17 @@ export class UsagePanel extends LitElement {
 
     if (badge.subscription && cost === 0) {
       return html`<span
-        class="run-summary__route run-summary__route--free"
-        title=${badge.title}
-        >Free · ${badge.label}</span
-      >`;
+          id="usage-route-badge"
+          class="run-summary__route run-summary__route--free"
+          >Free · ${badge.label}</span
+        ><wa-tooltip for="usage-route-badge">${badge.title}</wa-tooltip>`;
     }
 
     return html`${formatCostUsd(cost)} ·
-      <span class="run-summary__route" title=${badge.title}>
+      <span id="usage-route-badge" class="run-summary__route">
         ${badge.label}
-      </span>`;
+      </span>
+      <wa-tooltip for="usage-route-badge">${badge.title}</wa-tooltip>`;
   }
 
   private renderContext(): TemplateResult | typeof nothing {
@@ -321,7 +338,7 @@ export class UsagePanel extends LitElement {
     const clamped = clamp(utilizationPercent, 0, 100);
 
     return html`
-      <span class="context-gauge" title="${clamped.toFixed(0)}% context used">
+      <span id="usage-context-gauge" class="context-gauge">
         <wa-icon
           library=${TEXRA_ICON_LIBRARY}
           name="window"
@@ -335,16 +352,22 @@ export class UsagePanel extends LitElement {
             style=${styleMap({ '--indicator-color': fillColor(clamped) })}
           ></wa-progress-bar>
           <span
+            id="usage-compaction-tick"
             class="context-gauge__tick"
             style=${styleMap({ left: `${COMPACTION_THRESHOLD}%` })}
-            title="Compaction at ${COMPACTION_THRESHOLD}%"
           ></span>
+          <wa-tooltip for="usage-compaction-tick"
+            >Compaction at ${COMPACTION_THRESHOLD}%</wa-tooltip
+          >
         </span>
         <span class="context-state__value">
           ${formatCompactTokenCount(inputTokens)} /
           ${formatCompactTokenCount(contextWindow)}
         </span>
       </span>
+      <wa-tooltip for="usage-context-gauge"
+        >${clamped.toFixed(0)}% context used</wa-tooltip
+      >
     `;
   }
 

@@ -19,9 +19,10 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { keyed } from 'lit/directives/keyed.js';
 import { repeat } from 'lit/directives/repeat.js';
 
-// Side-effect imports - register WA icon and button components
+// Side-effect imports - register WA icon, button, and tooltip components
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/button/button.js';
+import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
 import {
@@ -253,9 +254,9 @@ export class RequestPanels extends LitElement {
     const nav = html`
       <div class="external-inquiry-requests__nav">
         <wa-button
+          id="ei-prev-btn"
           appearance="plain"
           size="small"
-          title="Previous inquiry"
           ?disabled=${index === 0}
           @click=${this._eiPrev}
         >
@@ -265,13 +266,14 @@ export class RequestPanels extends LitElement {
             aria-hidden="true"
           ></wa-icon>
         </wa-button>
+        <wa-tooltip for="ei-prev-btn">Previous inquiry</wa-tooltip>
         <span class="external-inquiry-requests__counter">
           ${index + 1} / ${perms.length}
         </span>
         <wa-button
+          id="ei-next-btn"
           appearance="plain"
           size="small"
-          title="Next inquiry"
           ?disabled=${index === perms.length - 1}
           @click=${this._eiNext}
         >
@@ -281,6 +283,7 @@ export class RequestPanels extends LitElement {
             aria-hidden="true"
           ></wa-icon>
         </wa-button>
+        <wa-tooltip for="ei-next-btn">Next inquiry</wa-tooltip>
       </div>
     `;
 
