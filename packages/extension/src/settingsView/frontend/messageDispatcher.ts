@@ -12,6 +12,7 @@
 import type { SettingsViewOutboundHandlerRegistry } from '@shared/schemas';
 
 import { agentSelectionHandlers } from './slices/agentSelectionSlice';
+import { agentSkillsSettingsHandlers } from './slices/agentSkillsSettingsSlice';
 import { agentTeamsHandlers } from './slices/agentTeamsSlice';
 import { approvalSettingsHandlers } from './slices/approvalSettingsSlice';
 import { gitHandlers } from './slices/gitSlice';
@@ -33,6 +34,7 @@ export const settingsViewHandlers: SettingsViewOutboundHandlerRegistry = {
   ...profileHandlers,
   ...modelSelectionHandlers,
   ...agentSelectionHandlers,
+  ...agentSkillsSettingsHandlers,
   ...agentTeamsHandlers,
   ...multiAgentHandlers,
   ...approvalSettingsHandlers,

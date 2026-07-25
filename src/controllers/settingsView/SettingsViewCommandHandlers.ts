@@ -159,6 +159,9 @@ export interface SettingsViewCommandActions {
   readonly approval: {
     readonly setBashApprovalEnabled: EnabledAction;
   };
+  readonly agentSkills: {
+    readonly setEnabled: EnabledAction;
+  };
   /**
    * Generic catalog-driven scalar-setting write. One action replaces the former
    * per-setting `gitAuthor.*` and `approval.setCodex*`/`setClaude*` handlers: the
@@ -400,6 +403,9 @@ export function createSettingsViewCommandHandlers(
       actions.approval.setBashApprovalEnabled,
       (data) => [data.enabled],
     ),
+    setAgentSkillsEnabled: mapAction(actions.agentSkills.setEnabled, (data) => [
+      data.enabled,
+    ]),
     updateStateSetting: mapAction(actions.stateSettings.update, (data) => [
       data.key,
       data.value,

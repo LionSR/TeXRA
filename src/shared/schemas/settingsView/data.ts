@@ -26,6 +26,7 @@ import {
   AgentSourceSchema,
 } from '../agent';
 import { AgentModePresetSchema } from '../agentPresets';
+import { AgentSkillsEnabledSchema } from '../agentSkills';
 import { ModelAvailabilityFieldsSchema } from '../mainView';
 import {
   NumberVscodeSettingSchema,
@@ -328,6 +329,15 @@ export type UpdateApprovalSettingsMessage = z.infer<
   typeof UpdateApprovalSettingsMessageSchema
 >;
 
+/** Outbound: backend → frontend agent skill-catalog setting. */
+const UpdateAgentSkillsSettingsMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SKILLS_SETTINGS),
+  enabled: AgentSkillsEnabledSchema,
+});
+export type UpdateAgentSkillsSettingsMessage = z.infer<
+  typeof UpdateAgentSkillsSettingsMessageSchema
+>;
+
 // ============================================================
 // Git author settings data schema
 // ============================================================
@@ -529,6 +539,7 @@ const SettingsViewOutboundMessageSchema = z.discriminatedUnion('command', [
   UpdateSuperYoloEnabledMessageSchema,
   UpdateAgentModePresetsMessageSchema,
   UpdateApprovalSettingsMessageSchema,
+  UpdateAgentSkillsSettingsMessageSchema,
   UpdateToolDashboardMessageSchema,
   UpdateGitAuthorSettingsMessageSchema,
   UpdateGitHubTokenStatusMessageSchema,

@@ -1,8 +1,17 @@
 // Third-party imports
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const mocks = vi.hoisted(() => ({
+  postMessage: vi.fn(),
+}));
+
+vi.mock('@shared/hostBridge', () => ({
+  postMessage: mocks.postMessage,
+}));
 
 // Local imports - component and schema types
 import type { ToolsTab } from '@settingsView/frontend/tabs/ToolsTab';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ToolDashboardItem } from '@shared/schemas/settingsViewMessages';
 
 // Local imports - test utilities
@@ -25,16 +34,24 @@ function tool(
   };
 }
 
-async function mount(items: ToolDashboardItem[]): Promise<ToolsTab> {
+async function mount(
+  items: ToolDashboardItem[],
+  configure: (element: ToolsTab) => void = () => undefined,
+): Promise<ToolsTab> {
   const element = document.createElement('tools-tab') as ToolsTab;
   element.loaded = true;
   element.items = items;
+  configure(element);
   document.body.append(element);
   await element.updateComplete;
   return element;
 }
 
 describe('tools-tab availability summary', () => {
+  beforeEach(() => {
+    mocks.postMessage.mockClear();
+  });
+
   it('uses an accessible Web Awesome progress ring', async () => {
     const element = await mount([
       tool('ready', 'available'),
@@ -62,5 +79,38 @@ describe('tools-tab availability summary', () => {
     expect((ring as { value?: number }).value).toBe(100);
     expect((ring as { label?: string }).label).toBe('2 of 2 tools available');
     expect(element.shadowRoot?.textContent).not.toContain('need setup');
+  });
+
+  it('leaves the VS Code setting as the extension editable surface', async () => {
+    const element = await mount([]);
+
+    expect(element.shadowRoot?.textContent).not.toContain('Agent Skills');
+  });
+
+  it('renders and updates the shared agent-skills switch', async () => {
+    const element = await mount([], (toolsTab) => {
+      toolsTab.showAgentSkillsSettings = true;
+    });
+    const skillSwitch = [
+      ...(element.shadowRoot?.querySelectorAll('wa-switch') ?? []),
+    ].find((candidate) =>
+      candidate.textContent?.includes(
+        'TeXRA and imported skills are available to tool-use agents',
+      ),
+    ) as (HTMLElement & { checked?: boolean }) | undefined;
+
+    expect(skillSwitch).toBeDefined();
+    expect(skillSwitch?.checked).toBe(true);
+
+    if (!skillSwitch) return;
+    skillSwitch.checked = false;
+    skillSwitch.dispatchEvent(
+      new Event('change', { bubbles: true, composed: true }),
+    );
+
+    expect(mocks.postMessage).toHaveBeenCalledWith(
+      SETTINGS_VIEW_COMMANDS.SET_AGENT_SKILLS_ENABLED,
+      { enabled: false },
+    );
   });
 });

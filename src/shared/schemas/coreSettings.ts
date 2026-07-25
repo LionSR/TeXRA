@@ -1,6 +1,11 @@
 // Third-party imports
 import { z } from 'zod';
 
+import {
+  AGENT_SKILLS_ENABLED_DEFAULT,
+  AgentSkillsSettingsSchema,
+} from './agentSkills';
+
 export const CHATGPT_TOOL_USE_ONLY_DESCRIPTION =
   'Use your ChatGPT subscription for tool-use agents while workflow agents continue through your OpenAI API key or relay.';
 
@@ -258,7 +263,7 @@ export const DEFAULT_CORE_SETTINGS = {
     saveInputPrompt: false,
   },
   skills: {
-    enabled: true,
+    enabled: AGENT_SKILLS_ENABLED_DEFAULT,
   },
   toolUse: {
     requireEditApproval: true,
@@ -627,14 +632,7 @@ export const CoreSettingsShape = {
       ),
     })
     .prefault(DEFAULT_CORE_SETTINGS.debug),
-  skills: z
-    .strictObject({
-      enabled: boolField(
-        DEFAULT_CORE_SETTINGS.skills.enabled,
-        'Discover imported skills and expose them to tool-use agent prompts',
-      ),
-    })
-    .prefault(DEFAULT_CORE_SETTINGS.skills),
+  skills: AgentSkillsSettingsSchema.prefault(DEFAULT_CORE_SETTINGS.skills),
   toolUse: z
     .strictObject({
       requireEditApproval: boolField(
