@@ -163,6 +163,27 @@ describe('CLI child list display model', () => {
     );
   });
 
+  it('does not invent a phase fold for phase-less tasks', () => {
+    const slice = workflowAgentSlice('phase-less-only', {
+      entries: [
+        {
+          id: 'task-loose',
+          role: 'workflowTask',
+          text: 'Finished: Loose task',
+          finalized: true,
+          task: {
+            id: 'loose',
+            label: 'Loose task',
+            status: 'completed',
+            durationMs: 1_000,
+          },
+        },
+      ],
+    });
+
+    expect(workflowRunStatusSummary(slice)).toBeUndefined();
+  });
+
   it('leaves a phase-less task out of the active phase fold', () => {
     // A declared task may carry no phase even while a phase is running. Its
     // card is grouped at the run stage rather than in the phase, so the phase

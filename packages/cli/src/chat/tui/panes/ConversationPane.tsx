@@ -133,11 +133,13 @@ export function workflowRunStatusSummary(
       ? ` (${phase.phaseIndex + 1}/${phase.phaseTotal})`
       : '';
   const { done, total } = workflowPhaseTaskProgress(
-    slice.entries.flatMap((entry) =>
-      entry.role === 'workflowTask' && entry.task.phase === phase?.phaseLabel
-        ? [entry.task]
-        : [],
-    ),
+    phase
+      ? slice.entries.flatMap((entry) =>
+          entry.role === 'workflowTask' && entry.task.phase === phase.phaseLabel
+            ? [entry.task]
+            : [],
+        )
+      : [],
   );
   const input = slice.files?.input.length ?? 0;
   const context = slice.files?.context.length ?? 0;
