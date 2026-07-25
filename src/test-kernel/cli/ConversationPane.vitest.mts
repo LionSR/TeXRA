@@ -460,14 +460,49 @@ describe('CLI conversation transcript splitting', () => {
       { id: 'a', label: 'Task', status: 'skipped', reason: 'user' },
       { id: 'a', label: 'Task', status: 'failed', error: 'Runner stopped.' },
     ];
-    const markers = tasks.map((task) =>
-      transcriptEntryLayout(
-        { id: 'a', role: 'workflowTask', text: 'Task', finalized: true, task },
-        { width: 80 },
-      ).lines[0]?.slice(0, 2),
+    const firstLines = tasks.map(
+      (task) =>
+        transcriptEntryLayout(
+          {
+            id: 'a',
+            role: 'workflowTask',
+            text: 'Task',
+            finalized: true,
+            task,
+          },
+          { width: 80 },
+        ).lines[0] ?? '',
     );
 
-    expect(markers).toEqual(['□ ', '☐ ', '☑ ', '✓ ', '⊘ ', '✗ ']);
+    // Every task row nests two columns under the `◆` phase divider heading it.
+    expect(firstLines.every((line) => line.startsWith('  '))).toBe(true);
+    expect(firstLines.map((line) => line.slice(2, 4))).toEqual([
+      '□ ',
+      '☐ ',
+      '☑ ',
+      '✓ ',
+      '⊘ ',
+      '✗ ',
+    ]);
+  });
+
+  it('aligns a wrapped task row under its own marker', () => {
+    const layout = transcriptEntryLayout(
+      {
+        id: 'a',
+        role: 'workflowTask',
+        text: `Finished: ${'w'.repeat(40)} ${'x'.repeat(40)}`,
+        finalized: true,
+        task: { id: 'a', label: 'Task', status: 'completed', durationMs: 1 },
+      },
+      { width: 40 },
+    );
+
+    expect(layout.lines[0]?.startsWith('  ☑ ')).toBe(true);
+    expect(layout.lines.slice(1).every((line) => line.startsWith('    '))).toBe(
+      true,
+    );
+    expect(layout.lines.length).toBeGreaterThan(1);
   });
 
   it('budgets live rich tool rows without reflowing their display lines', () => {

@@ -528,6 +528,15 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
       ?.textContent?.trim();
     expect(title).toBe('Review (2/3)');
 
+    // The header also folds its own cards into a completion count. All four
+    // are terminal here (completed / failed / skipped x2).
+    const progress = list.shadowRoot
+      ?.querySelector(
+        `#${GROUP_DOM_IDS.HEADER_PREFIX}phase-review .group-progress`,
+      )
+      ?.textContent?.trim();
+    expect(progress).toBe('4/4');
+
     // Each task is one structured card with its status and terminal metadata.
     const content = list.shadowRoot?.querySelector(
       `#${GROUP_DOM_IDS.CONTENT_PREFIX}phase-review`,
@@ -575,9 +584,88 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
 
     const list = await renderList([run, phase], []);
 
-    const title = list.shadowRoot
-      ?.querySelector(`#${GROUP_DOM_IDS.HEADER_PREFIX}phase-solo .group-title`)
-      ?.textContent?.trim();
-    expect(title).toBe('Solo phase');
+    const header = list.shadowRoot?.querySelector(
+      `#${GROUP_DOM_IDS.HEADER_PREFIX}phase-solo`,
+    );
+    expect(header?.querySelector('.group-title')?.textContent?.trim()).toBe(
+      'Solo phase',
+    );
+    // A phase holding no task cards has nothing to fold.
+    expect(header?.querySelector('.group-progress')).toBeNull();
+  });
+
+  it('tracks an in-flight phase fold and drops the redundant phase chip', async () => {
+    const run: TaskGroup = {
+      id: 'run',
+      name: 'Run: workflow',
+      startTime: 1,
+      status: STREAM_PHASE.RUNNING,
+    };
+    const phase: TaskGroup = {
+      id: 'phase-map',
+      name: 'Map',
+      startTime: 2,
+      status: STREAM_PHASE.RUNNING,
+      parentGroupId: 'run',
+      kind: 'phase',
+      index: 0,
+      total: 3,
+    };
+    const messages: LogMessageData[] = [
+      {
+        id: 'task-a',
+        text: 'seams',
+        timestamp: 3,
+        level: LOG_LEVELS.INFO,
+        groupId: 'phase-map',
+        messageType: MESSAGE_TYPES.WORKFLOW_TASK,
+        data: {
+          id: 'seams',
+          label: 'Map the seams',
+          phase: 'Map',
+          status: 'completed',
+          durationMs: 72_000,
+        },
+      },
+      {
+        id: 'task-b',
+        text: 'contracts',
+        timestamp: 4,
+        level: LOG_LEVELS.INFO,
+        groupId: 'phase-map',
+        messageType: MESSAGE_TYPES.WORKFLOW_TASK,
+        data: {
+          id: 'contracts',
+          label: 'Read the contracts',
+          phase: 'Map',
+          status: 'running',
+        },
+      },
+      // A malformed row must drop out of the fold rather than throw.
+      {
+        id: 'task-bad',
+        text: 'broken',
+        timestamp: 5,
+        level: LOG_LEVELS.INFO,
+        groupId: 'phase-map',
+        messageType: MESSAGE_TYPES.WORKFLOW_TASK,
+        data: { id: 'broken' },
+      },
+    ];
+
+    const list = await renderList([run, phase], messages);
+
+    const header = list.shadowRoot?.querySelector(
+      `#${GROUP_DOM_IDS.HEADER_PREFIX}phase-map`,
+    );
+    expect(header?.querySelector('.group-progress')?.textContent?.trim()).toBe(
+      '1/2',
+    );
+    // The enclosing header is the card's one home for its phase.
+    const content = list.shadowRoot?.querySelector(
+      `#${GROUP_DOM_IDS.CONTENT_PREFIX}phase-map`,
+    );
+    expect(content?.querySelector('.workflow-task-phase')).toBeNull();
+    expect(content?.querySelector('.workflow-task-details')).toBeNull();
   });
 });

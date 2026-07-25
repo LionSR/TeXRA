@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   formatWorkflowTaskMetadataParts,
   formatWorkflowTaskLine,
+  workflowPhaseTaskProgress,
 } from '@shared/copy/workflowTask';
 
 describe('workflow task copy', () => {
@@ -56,6 +57,31 @@ describe('workflow task copy', () => {
     ).toBe(
       'Skipped: Audit later — The workflow ended before this task was reached.',
     );
+  });
+
+  it('counts an empty phase as no work rather than complete', () => {
+    expect(workflowPhaseTaskProgress([])).toEqual({ done: 0, total: 0 });
+  });
+
+  it('counts every terminal status as done, not just completions', () => {
+    expect(
+      workflowPhaseTaskProgress([
+        { id: 'a', label: 'A', status: 'completed', durationMs: 1 },
+        { id: 'b', label: 'B', status: 'cached' },
+        { id: 'c', label: 'C', status: 'skipped', reason: 'not-reached' },
+        { id: 'd', label: 'D', status: 'failed', error: 'nope' },
+      ]),
+    ).toEqual({ done: 4, total: 4 });
+  });
+
+  it('leaves planned and running tasks outstanding', () => {
+    expect(
+      workflowPhaseTaskProgress([
+        { id: 'a', label: 'A', status: 'completed', durationMs: 1 },
+        { id: 'b', label: 'B', status: 'running' },
+        { id: 'c', label: 'C', status: 'planned' },
+      ]),
+    ).toEqual({ done: 1, total: 3 });
   });
 
   it('leaves a user skip without an explanatory clause', () => {

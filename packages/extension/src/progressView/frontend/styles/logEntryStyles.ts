@@ -104,16 +104,11 @@ export const logEntryStyles = css`
     font-weight: var(--wa-font-weight-semibold);
   }
 
-  .workflow-task-details {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--wa-space-xs);
+  /* The card's phase is the group header it sits under, so the sub-label row
+     carries terminal metadata only. */
+  .workflow-task-meta {
     color: var(--color-text-secondary);
     font-size: var(--font-size-sm);
-  }
-
-  .workflow-task-phase::before {
-    content: 'Phase: ';
   }
 
   .workflow-task-detail {
