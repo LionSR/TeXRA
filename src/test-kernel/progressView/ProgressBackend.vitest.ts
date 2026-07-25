@@ -3377,6 +3377,37 @@ describe('retained finished children', () => {
     }
   });
 
+  it('promotes a retained child back to one live row when it reappears', () => {
+    const { backend } = createRecordingBackend();
+    try {
+      seedParent(backend);
+      const child = subagent('resumed');
+
+      backend.factApplier.updateChildRoster(PARENT, 'subagents', [child]);
+      let roster = backend.state.getStreamState(PARENT)?.subagents ?? [];
+      expect(roster).toHaveLength(1);
+      expect(roster[0]?.finishedAt).toBeUndefined();
+
+      backend.factApplier.updateChildRoster(PARENT, 'subagents', []);
+      roster = backend.state.getStreamState(PARENT)?.subagents ?? [];
+      expect(roster).toHaveLength(1);
+      expect(roster[0]?.finishedAt).toBeGreaterThan(0);
+
+      backend.factApplier.updateChildRoster(PARENT, 'subagents', [child]);
+      roster = backend.state.getStreamState(PARENT)?.subagents ?? [];
+      expect(roster).toHaveLength(1);
+      expect(roster[0]?.finishedAt).toBeUndefined();
+
+      backend.factApplier.updateChildRoster(PARENT, 'subagents', []);
+      roster = backend.state.getStreamState(PARENT)?.subagents ?? [];
+      expect(roster).toHaveLength(1);
+      expect(roster[0]?.finishedAt).toBeGreaterThan(0);
+      expect(new Set(roster.map((entry) => entry.executionId)).size).toBe(1);
+    } finally {
+      backend.dispose();
+    }
+  });
+
   it('never marks anything finished from a first roster', () => {
     const { backend } = createRecordingBackend();
     try {

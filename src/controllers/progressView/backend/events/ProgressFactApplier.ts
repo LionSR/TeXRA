@@ -653,11 +653,16 @@ export class ProgressFactApplier {
         next,
       );
       const finishedAt = Date.now();
+      const nextIds = new Set(next.map((child) => child.executionId));
       // Previously-retained rows first (already in ascending `finishedAt`
       // order), then the newly-vanished ones — so the list stays chronological
-      // by construction and the cap evicts the oldest without a sort.
+      // by construction and the cap evicts the oldest without a sort. A child
+      // that reappears in `next` is live again, so drop its retained copy.
       const retained = [
-        ...previous.filter((child) => child.finishedAt !== undefined),
+        ...previous.filter(
+          (child) =>
+            child.finishedAt !== undefined && !nextIds.has(child.executionId),
+        ),
         ...previous
           .filter((child) => vanishedIds.has(child.executionId))
           .map((child) => ({ ...child, finishedAt })),
