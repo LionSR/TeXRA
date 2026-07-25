@@ -179,6 +179,8 @@ interface UploadGoogleMediaEntriesOptions<T> {
   onInsertedEntry?: (entry: MediaEntry) => void;
 }
 
+type GoogleMediaUploadSummary = Pick<MediaFileResult, 'path' | 'ok'>;
+
 /**
  * Shared media-attachment pipeline for the two Google handlers. Entries are
  * sent inline when small enough, otherwise uploaded through the File API.
@@ -201,7 +203,7 @@ export async function uploadGoogleMediaEntries<T>(
   } = options;
   const client = await getClient();
   const parts: T[] = [];
-  const summaries: MediaFileResult[] = [];
+  const summaries: GoogleMediaUploadSummary[] = [];
   const failures: string[] = [];
 
   for (const entry of entries) {

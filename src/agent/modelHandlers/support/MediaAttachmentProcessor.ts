@@ -9,11 +9,11 @@ import pMap from 'p-map';
 import { logFilesLoaded, type AgentTrace } from '@agent/trace';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 import { getSdkErrorMessage } from '@common/errors';
-import type { FileLocation } from '@shared/schemas';
+import type { FileLocation, LoadedMediaMetadata } from '@shared/schemas';
 
 // Local imports - utils
 import { ensureArray } from '@utils/core';
-import { AbsoluteFS, getMimeType, getShortDisplayPath } from '@utils/files';
+import { AbsoluteFS, getComparablePath, getMimeType } from '@utils/files';
 import { getExtensionLowercase } from '@utils/core/pathCore';
 import {
   countPdfPages,
@@ -25,10 +25,19 @@ import type { ModelCapabilities } from 'llm-zoo';
 /**
  * Result of loading a media file.
  * @property path - Display path for logging/UI (workspace-relative for workspace files,
- *   basename for external files). NOT the absolute path used for file operations.
+ *   absolute for external files). This is not used for file operations.
  * @property ok - Whether the file was successfully loaded
  */
-export type MediaFileResult = { path: string; ok: boolean };
+export type MediaFileResult =
+  | {
+      path: string;
+      ok: true;
+      media: LoadedMediaMetadata;
+    }
+  | {
+      path: string;
+      ok: false;
+    };
 
 type ProcessImageResult = {
   kind: 'image';
@@ -186,7 +195,7 @@ export class MediaAttachmentProcessor {
         }
       } else {
         const { location, reason } = loadResult;
-        const displayPath = getShortDisplayPath(location);
+        const displayPath = getComparablePath(location);
         this.logger.error(
           `Failed to load media entry for ${displayPath}: ${getSdkErrorMessage(reason)}`,
           {
@@ -216,7 +225,9 @@ export class MediaAttachmentProcessor {
     location: FileLocation,
   ): Promise<{ entry?: MediaEntry | MediaEntry[]; result: MediaFileResult }> {
     const absolutePath = location.absolutePath;
-    const displayPath = getShortDisplayPath(location);
+    // Workspace/run-storage paths remain concise and relative; external media
+    // keeps its absolute path so a terminal row identifies the actual file.
+    const displayPath = getComparablePath(location);
     const fileExistsResult = await AbsoluteFS.exists(absolutePath);
 
     if (!fileExistsResult) {
@@ -265,7 +276,15 @@ export class MediaAttachmentProcessor {
 
       return {
         entry,
-        result: { path: displayPath, ok: true },
+        result: {
+          path: displayPath,
+          ok: true,
+          media: {
+            kind: processed.kind,
+            mimeType: processed.mediaType,
+            sizeBytes: fileSize,
+          },
+        },
       };
     } catch (err) {
       this.logger.error(
