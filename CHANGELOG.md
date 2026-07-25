@@ -179,6 +179,9 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Kimi Code access is labeled as a subscription** — model pickers and
+  running-session status no longer describe Kimi Code membership usage as
+  personal API-key access.
 - **Model failures show their reason** — failed model requests now include a
   concise provider message and are no longer labeled as tool failures.
 - **Large multi-agent runs use substantially less memory** — inactive subagent

@@ -19,6 +19,7 @@ import {
   cliApiFallbackSelection,
   CLI_MODEL_ACCESS_DESCRIPTION,
   formatCliModelAccessRoute,
+  resolveCliModelAccessRoute,
   type CliModelAccessStatus,
 } from '../runtime/modelAccessRoute';
 import type { CliApiMode } from '../runtime/apiAccessMode';
@@ -307,6 +308,15 @@ export function OrchestrationApp(
   const modelStepSubtitle = isPendingTeam
     ? 'Runs the orchestrator agent and is the model it can choose for delegation.'
     : 'Model for the first message.';
+  const modelStepAccessRoute = resolveCliModelAccessRoute({
+    apiMode: props.apiMode,
+    subscriptionActive:
+      props.modelAccess?.preferences.chatGpt === 'on' &&
+      props.modelAccess.chatGptSignedIn,
+    kimiCodeActive:
+      props.modelAccess?.preferences.kimiCode === 'on' &&
+      props.modelAccess.kimiCodeKeySet === true,
+  });
   let headerLines: readonly string[];
   if (modelAccessOpen) {
     headerLines = ['Model access', CLI_MODEL_ACCESS_DESCRIPTION];
@@ -320,7 +330,7 @@ export function OrchestrationApp(
     headerLines = ['Account', 'Log in or log out.'];
   } else if (pending) {
     headerLines = [
-      `${modelStepTitle} · ${formatCliModelAccessRoute(props.apiMode)}`,
+      `${modelStepTitle} · ${formatCliModelAccessRoute(modelStepAccessRoute)}`,
       modelStepSubtitle,
     ];
   } else {
@@ -528,7 +538,9 @@ export function OrchestrationApp(
         <Text bold color="cyan">
           {modelStepTitle}
           {' · '}
-          <Text dimColor>{formatCliModelAccessRoute(props.apiMode)}</Text>
+          <Text dimColor>
+            {formatCliModelAccessRoute(modelStepAccessRoute)}
+          </Text>
         </Text>
         <Text dimColor>{modelStepSubtitle}</Text>
         <Box marginTop={1}>

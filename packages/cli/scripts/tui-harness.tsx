@@ -208,6 +208,8 @@ const SHOW_ORCHESTRATION_STATUS_LINES =
   process.env.HARNESS_ORCHESTRATION_STATUS_LINES !== '0';
 const SHOW_BOTH_SUBSCRIPTION_PREFERENCES =
   process.env.HARNESS_BOTH_SUBSCRIPTION_PREFERENCES === '1';
+const SHOW_KIMI_CODE_SUBSCRIPTION =
+  process.env.HARNESS_KIMI_CODE_SUBSCRIPTION === '1';
 const SHOW_DELEGATED_ORCHESTRATION_HISTORY =
   process.env.HARNESS_DELEGATED_ORCHESTRATION_HISTORY === '1';
 const SHOW_NO_RUNNABLE_ORCHESTRATION_MODELS =
@@ -500,15 +502,23 @@ const HARNESS_PRESET_PLANS = planCliMultiAgentPresets(
     toolUseAgents: HARNESS_ALL_TOOL_USE_AGENTS,
   },
 );
-const HARNESS_MODEL_ACCESS = SHOW_BOTH_SUBSCRIPTION_PREFERENCES
-  ? {
-      apiFallback: HARNESS_API_MODE,
-      preferences: { chatGpt: 'on' as const, kimiCode: 'on' as const },
-      chatGptSignedIn: true,
-      chatGptAccountLabel: 'harness@example.edu',
-      kimiCodeKeySet: true,
-    }
-  : undefined;
+const HARNESS_MODEL_ACCESS =
+  SHOW_BOTH_SUBSCRIPTION_PREFERENCES || SHOW_KIMI_CODE_SUBSCRIPTION
+    ? {
+        apiFallback: HARNESS_API_MODE,
+        preferences: {
+          chatGpt: SHOW_BOTH_SUBSCRIPTION_PREFERENCES
+            ? ('on' as const)
+            : ('off' as const),
+          kimiCode: 'on' as const,
+        },
+        chatGptSignedIn: SHOW_BOTH_SUBSCRIPTION_PREFERENCES,
+        ...(SHOW_BOTH_SUBSCRIPTION_PREFERENCES
+          ? { chatGptAccountLabel: 'harness@example.edu' }
+          : {}),
+        kimiCodeKeySet: true,
+      }
+    : undefined;
 const HARNESS_ORCHESTRATION_ITEMS = buildCliOrchestrationItems({
   presetPlans: HARNESS_PRESET_PLANS,
   history: HARNESS_ORCHESTRATION_HISTORY,
@@ -533,6 +543,7 @@ type HarnessModelFixture = Readonly<{
   value: string;
   label: string;
   availability: NonNullable<CliModelAccess['model']['availability']>;
+  provider?: string;
 }>;
 
 const HARNESS_ORCHESTRATION_MODEL_FIXTURES: readonly HarnessModelFixture[] = [
@@ -547,6 +558,16 @@ const HARNESS_ORCHESTRATION_MODEL_FIXTURES: readonly HarnessModelFixture[] = [
     label: 'DeepSeek V4 Flash',
     availability: 'provider-key',
   },
+  ...(SHOW_KIMI_CODE_SUBSCRIPTION
+    ? [
+        {
+          value: 'kimi3',
+          label: 'Kimi K3',
+          availability: 'provider-key' as const,
+          provider: 'kimiCode',
+        },
+      ]
+    : []),
 ];
 
 function isHarnessModelAvailable(

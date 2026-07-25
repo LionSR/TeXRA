@@ -952,6 +952,35 @@ describe('CLI orchestration items', () => {
     ]);
   });
 
+  it('names Kimi Code subscription access in model rows', () => {
+    const kimi = modelAccess('kimi3', 'provider-key', true, 'api key set');
+    const view = orchestrationModelAccessView(
+      buildCliOrchestrationItems({
+        presetPlans: [readyPresetPlan()],
+        history: [],
+        toolUseAgents: [],
+      }),
+      [
+        {
+          ...kimi,
+          model: {
+            ...kimi.model,
+            provider: 'kimiCode',
+            routeLabel: 'Via Kimi Code',
+          },
+        },
+      ],
+      'personal',
+    );
+
+    expect(view.modelItems).toMatchObject([
+      {
+        value: 'kimi3',
+        description: 'api: Kimi Code subscription',
+      },
+    ]);
+  });
+
   it('keeps launcher rows active when model registry state is unknown', () => {
     const view = orchestrationModelAccessView(
       buildCliOrchestrationItems({

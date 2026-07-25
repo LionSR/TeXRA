@@ -551,6 +551,26 @@ const SCENARIOS = [
     ],
   },
   {
+    name: 'orchestrate-kimi-code-model-pick',
+    frame: 'scrollback',
+    env: {
+      HARNESS_ORCHESTRATION: '1',
+      HARNESS_API_MODE: 'personal',
+      HARNESS_KIMI_CODE_SUBSCRIPTION: '1',
+    },
+    bootExpect: 'Start a session or configure model access.',
+    keys: ['\r'],
+    exitKeys: [ESC, ESC],
+    expectExit: true,
+    expect: [
+      'Model · Kimi Code subscription',
+      'DeepSeek V4 Flash — api: api key set',
+      'Kimi K3 — api: Kimi Code subscription',
+      'Esc back',
+    ],
+    unexpect: ['Model · Personal API keys', 'Kimi K3 — api: api key set'],
+  },
+  {
     name: 'orchestrate-model-pick-esc-back-reselect',
     frame: 'scrollback',
     env: {
