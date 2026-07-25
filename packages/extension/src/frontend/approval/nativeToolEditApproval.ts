@@ -378,12 +378,6 @@ export async function nativeRequestApproval(
 
       pendingApprovals.set(requestId, entry);
       initializingApprovals.delete(requestId);
-      // Register with the owning session's registry for rejection tracking
-      options.session.approvals.toolEdit.registerPending(requestId, {
-        streamId: streamId ?? undefined,
-        isSettled: () => approvalSettled,
-        settle,
-      });
 
       // Closing the proposed diff tab (e.g. Ctrl+W) must resolve the approval
       // as a rejection. Without this the approval Promise would never settle
@@ -465,7 +459,6 @@ export async function nativeRequestApproval(
     // Get entry before deleting to access workspace temp cleanup functions
     const entry = pendingApprovals.get(requestId);
     pendingApprovals.delete(requestId);
-    options.session.approvals.toolEdit.unregisterPending(requestId);
     const currentDiffSession = entry?.diffSession ?? diffSession;
     if (currentDiffSession) {
       await diffViewHost.closeDiff(currentDiffSession);
