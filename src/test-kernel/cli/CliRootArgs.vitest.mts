@@ -1455,6 +1455,17 @@ describe('runCli usage output stream routing', () => {
     expect(stderr).toBe('');
   });
 
+  it('recommends the exact opus5T model id in latexdiff help examples', async () => {
+    const result = await runCli(['latexdiff', '--help']);
+    expect(result.exitCode).toBe(0);
+    expect(stdout).toContain('texra latexdiff revise -m opus5T -i paper.tex');
+    expect(stdout).toContain(
+      'texra latexdiff revise -m opus5T -i paper.tex --between-rounds',
+    );
+    expect(stdout).not.toContain('claude-opus-5');
+    expect(stderr).toBe('');
+  });
+
   it('shows EXAMPLES and a docs link in root --help', async () => {
     const result = await runCli(['--help']);
     expect(result.exitCode).toBe(0);
