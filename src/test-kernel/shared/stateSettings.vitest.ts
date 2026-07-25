@@ -305,7 +305,7 @@ describe('state settings catalog', () => {
     assert.deepEqual(labelsFor(WorkspaceStateKey.CLAUDE_AGENT_MODEL), [
       'claude-sonnet-5 — Sonnet 5',
       'claude-fable-5 — Fable 5',
-      'claude-opus-4-8 — Opus 4.8',
+      'claude-opus-5 — Opus 5',
       'claude-haiku-4-5-20251001 — Haiku 4.5',
     ]);
     assert.deepEqual(
@@ -468,6 +468,16 @@ describe('settingsAccess', () => {
       readSetting(entry, stores, 'extension'),
       DEFAULT_GIT_MARK_COMMITS,
     );
+  });
+
+  it('migrates retired Claude Agent models through the generic catalog read path', () => {
+    const entry = entryByKey(WorkspaceStateKey.CLAUDE_AGENT_MODEL);
+
+    for (const retiredModel of ['claude-opus-4-7', 'claude-opus-4-8']) {
+      const { stores, workspaceState } = makeFakeSettingsStores();
+      void workspaceState.update(entry.key, retiredModel);
+      assert.equal(readSetting(entry, stores, 'cli'), 'claude-opus-5');
+    }
   });
 
   it('routes extension writes to the canonical store', async () => {
