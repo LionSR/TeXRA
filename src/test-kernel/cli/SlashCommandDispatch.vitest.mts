@@ -73,7 +73,11 @@ function createSession(): TuiSession {
 
 function mockModelAccessOverview(): void {
   vi.spyOn(apiStatus, 'loadCliModelAccessOverview').mockResolvedValue({
-    access: { active: 'personal', chatGptSignedIn: false },
+    access: {
+      apiFallback: 'personal',
+      preferences: { chatGpt: 'off', kimiCode: 'off' },
+      chatGptSignedIn: false,
+    },
     lines: ['model access: Personal API keys'],
   });
 }
@@ -433,13 +437,15 @@ describe('handleTuiSlashCommand', () => {
       .spyOn(apiStatus, 'loadCliModelAccessOverview')
       .mockResolvedValue({
         access: {
-          active: 'chatgpt',
+          apiFallback: 'personal',
+          preferences: { chatGpt: 'on', kimiCode: 'off' },
           chatGptSignedIn: true,
           texraSignedIn: true,
         },
         lines: [
-          'model access: ChatGPT subscription',
-          'ChatGPT: signed in',
+          'ChatGPT preference: On · your account',
+          'Kimi Code preference: Off · key required to enable',
+          'API fallback: Personal API keys',
           'TeXRA: signed in',
         ],
       });
@@ -457,7 +463,9 @@ describe('handleTuiSlashCommand', () => {
 
     await handleTuiSlashCommand('/auth', context);
     const authStatusText = lastEntryText();
-    expect(authStatusText).toContain('model access: ChatGPT subscription');
+    expect(authStatusText).toContain('ChatGPT preference: On');
+    expect(authStatusText).toContain('Kimi Code preference: Off');
+    expect(authStatusText).toContain('API fallback: Personal API keys');
     expect(authStatusText).toContain('tier: researcher');
     expect(authStatusText).toContain(
       'included usage this month: 25% used, 75% remaining',
@@ -465,7 +473,9 @@ describe('handleTuiSlashCommand', () => {
 
     await handleTuiSlashCommand('/api status', context);
     const apiStatusText = lastEntryText();
-    expect(apiStatusText).toContain('model access: ChatGPT subscription');
+    expect(apiStatusText).toContain('ChatGPT preference: On');
+    expect(apiStatusText).toContain('Kimi Code preference: Off');
+    expect(apiStatusText).toContain('API fallback: Personal API keys');
     expect(apiStatusText).toContain('tier: researcher');
     expect(apiStatusText).toContain(
       'included usage this month: 25% used, 75% remaining',
@@ -478,7 +488,7 @@ describe('handleTuiSlashCommand', () => {
     registerBuiltinSlashCommands();
     patchSessionMeta({ apiMode: 'personal' });
     const selection = vi
-      .spyOn(modelAccessSelection, 'selectCliModelAccessRoute')
+      .spyOn(modelAccessSelection, 'updateCliModelAccess')
       .mockResolvedValue({
         apiMode: 'personal',
         message: 'Model access: ChatGPT subscription.',
@@ -494,7 +504,11 @@ describe('handleTuiSlashCommand', () => {
 
     expect(selection).toHaveBeenCalledWith(
       expect.objectContaining({ apiMode: 'personal' }),
-      'chatgpt',
+      {
+        kind: 'subscription-preference',
+        provider: 'chatgpt',
+        state: 'on',
+      },
       expect.any(Object),
     );
     expect(lastEntryText()).toBe(
@@ -505,26 +519,30 @@ describe('handleTuiSlashCommand', () => {
 
   it('exposes cancellation while model access is signing in to ChatGPT', async () => {
     let receivedSignal: AbortSignal | undefined;
-    vi.spyOn(
-      modelAccessSelection,
-      'selectCliModelAccessRoute',
-    ).mockImplementation((_context, _route, options) => {
-      receivedSignal = options.signal;
-      return new Promise((_resolve, reject) => {
-        options.signal?.addEventListener(
-          'abort',
-          () => reject(options.signal?.reason),
-          { once: true },
-        );
-      });
-    });
+    vi.spyOn(modelAccessSelection, 'updateCliModelAccess').mockImplementation(
+      (_context, _selection, options) => {
+        if (!options) throw new Error('Expected selection options');
+        receivedSignal = options.signal;
+        return new Promise((_resolve, reject) => {
+          options.signal?.addEventListener(
+            'abort',
+            () => reject(options.signal?.reason),
+            { once: true },
+          );
+        });
+      },
+    );
     const output: SlashCommandOutput = {
       appendOutcome: vi.fn(),
       setNotice: vi.fn(),
       writeProgress: vi.fn(),
     };
     const completion = applyCliModelAccessSelection(
-      'chatgpt',
+      {
+        kind: 'subscription-preference',
+        provider: 'chatgpt',
+        state: 'on',
+      },
       createContext(createSession()),
       output,
     );

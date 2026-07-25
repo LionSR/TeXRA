@@ -77,17 +77,26 @@ export async function signInCliChatGpt(
   return loginWithLoopback({
     coordinator,
     openBrowser: async (url) => {
-      if (!init.noBrowser && (await tryOpenBrowser(url))) {
-        // Always print the link even after a successful launch: the
-        // loopback callback accepts the redirect from any browser, so a
-        // user whose ChatGPT session lives elsewhere can just copy it from
-        // the terminal instead of needing `--no-browser` ahead of time.
+      if (init.noBrowser) {
+        options.writeProgress(`ChatGPT sign-in URL:\n${url}`);
+        return;
+      }
+
+      // Publish the usable URL before awaiting the browser process. Some
+      // launchers remain open until the browser exits; the sign-in panel must
+      // not hide the only manual route behind that wait.
+      options.writeProgress(
+        `ChatGPT sign-in URL:\n${url}\nBrowser launch in progress...`,
+      );
+      if (await tryOpenBrowser(url)) {
         options.writeProgress(
-          `Opening your browser to sign in with ChatGPT. Using a different browser? Open this URL there instead:\n${url}`,
+          `ChatGPT sign-in URL:\n${url}\nBrowser opened; the same URL works in another browser.`,
         );
         return;
       }
-      options.writeProgress(`Open this URL to sign in with ChatGPT:\n${url}`);
+      options.writeProgress(
+        `ChatGPT sign-in URL:\n${url}\nAutomatic browser launch failed; the URL remains available above.`,
+      );
     },
     signal: options.signal,
   });
