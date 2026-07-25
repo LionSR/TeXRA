@@ -10,10 +10,15 @@ be drawn into a stable SDK surface (the eventual `@texra/core`). Scope: the agen
 handler** layer (`src/agent/modelHandlers/`), the **logger** (`src/logger/`), and
 the **platform ports / export surface**.
 
+This is the current follow-up to the
+[May 2026 Agent SDK readiness audit](2026-05-29-agent-sdk-readiness-audit.md),
+which records the earlier package and architecture state. Read that document as
+historical context and this one as the post-retirement snapshot.
+
 > **Relation to the retired PRDs.** The three heavyweight runtime-boundary
-> proposals — [Runtime/host decoupling](../prds/2026-06-27-prd-runtime-host-decoupling.md),
-> [Agent SDK boundary](../prds/2026-06-29-prd-agent-sdk-boundary.md),
-> [Runtime gold-standard](../prds/2026-06-29-prd-runtime-gold-standard.md) — were
+> proposals — [Runtime/host decoupling](../../prds/2026-06-27-prd-runtime-host-decoupling.md),
+> [Agent SDK boundary](../../prds/2026-06-29-prd-agent-sdk-boundary.md),
+> [Runtime gold-standard](../../prds/2026-06-29-prd-runtime-gold-standard.md) — were
 > **retired 2026-07-18**. `main` deliberately took the lighter path: a small
 > `AgentRuntimeHost` event sink with a no-op headless implementation, run/session
 > facts split across `AgentEvent` (trace) and `SessionFact`, and host→agent import
