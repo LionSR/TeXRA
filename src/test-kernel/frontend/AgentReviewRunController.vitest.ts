@@ -26,7 +26,6 @@ function createRunHarness() {
     const handle = {
       executionId,
       childStreamId: `review#${executionId}`,
-      runtimeHost: {},
     } as AgentRunHandle;
     currentHandle = handle;
     controller.bind(run, handle);

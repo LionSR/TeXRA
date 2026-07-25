@@ -89,7 +89,7 @@ describe('ExecutionSubscriptionBinder session routing', () => {
 
     try {
       registry.track(handle);
-      binder.bind(streamId, executionId, explicit.host);
+      binder.bind(streamId, executionId);
 
       registry.untrack(executionId);
       await settleDelivery();
@@ -143,7 +143,7 @@ describe('ExecutionSubscriptionBinder session routing', () => {
 
       try {
         registry.track(handle);
-        binder.bind(streamId, executionId, explicit.host);
+        binder.bind(streamId, executionId);
 
         registry.untrack(executionId);
         await settleDelivery();
@@ -191,7 +191,7 @@ describe('ExecutionSubscriptionBinder session routing', () => {
           session,
         }),
         () => {
-          binder.bind(streamId, executionId, explicit.host);
+          binder.bind(streamId, executionId);
           registry.untrack(executionId);
         },
       );
@@ -234,7 +234,7 @@ describe('ExecutionSubscriptionBinder session routing', () => {
     try {
       process.once('unhandledRejection', unhandledRejection);
       registry.track(handle);
-      binder.bind(streamId, executionId, explicit.host);
+      binder.bind(streamId, executionId);
 
       registry.untrack(executionId);
       await settleDelivery();
