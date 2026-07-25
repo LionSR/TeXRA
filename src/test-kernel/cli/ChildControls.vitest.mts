@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import {
   childElapsed,
-  liveChildExecutionElapsedKey,
   numericFocusTargetForActiveStream,
   resolveChildListTarget,
 } from '@cli/chat/tui/state/childControls';
@@ -55,18 +54,6 @@ describe('CLI child controls', () => {
         elapsed: '9s',
       }),
     ).toBe('9s');
-    expect(
-      liveChildExecutionElapsedKey([
-        {
-          kind: 'subagent',
-          executionId: 'child-1',
-          childStreamId: 'child-stream',
-          agentName: 'critic',
-          startedAt: 1_000,
-          status: STREAM_PHASE.RUNNING,
-        },
-      ]),
-    ).toBe('child-1:1000');
   });
 
   it('resolves one child-list target and falls back to its immediate ancestor', () => {
