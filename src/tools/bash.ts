@@ -35,6 +35,7 @@ import { tryPlatform } from '@platform/platform';
 import {
   BASH_BACKGROUND_LOG_CAP_CHARS,
   BASH_TOOL_DEFAULT_TIMEOUT_MS,
+  backgroundBashOutputData,
 } from '@shared/toolUse';
 import { type StreamTabId, type ExecutionId } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
@@ -428,7 +429,9 @@ export class BashTool extends defineTool({
         );
         return;
       }
-      logger[level](chunk);
+      logger[level](chunk, {
+        data: backgroundBashOutputData(level === 'warn' ? 'stderr' : 'stdout'),
+      });
     };
 
     const startedAt = Date.now();
