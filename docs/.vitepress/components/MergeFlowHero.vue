@@ -74,7 +74,7 @@ import StatusPill from './StatusPill.vue';
     <div class="mf-agent">
       <wa-icon class="mf-agent-ic" library="texra" name="robot"></wa-icon>
       <span class="mf-agent-name">merge</span>
-      <StatusPill variant="accent" shape="chip">Claude Opus 4.8</StatusPill>
+      <StatusPill variant="accent" shape="chip">Claude Opus 5</StatusPill>
       <span class="mf-agent-sub">synthesizes a complete document</span>
     </div>
 

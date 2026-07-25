@@ -29,7 +29,7 @@ Access the merge functionality via the "LaTeXdiffs" section (<wa-icon library="t
 
 1.  **Select Base File**: Choose the original document you want to merge changes _into_ using the "Base File" dropdown (<wa-icon library="texra" name="file"></wa-icon> Base).
 2.  **Select Edited File**: Choose the document containing the suggested changes using the "Edited File" dropdown (<wa-icon library="texra" name="edit"></wa-icon> Edited).
-3.  **Choose Merge Model**: Select an appropriate language model from the main Model dropdown (<wa-icon library="texra" name="robot"></wa-icon> Model) below the instruction box. Models capable of strong reasoning (like Claude Opus 4.8, GPT-5.5, or Gemini 3.1 Pro) are recommended for complex merges.
+3.  **Choose Merge Model**: Select an appropriate language model from the main Model dropdown (<wa-icon library="texra" name="robot"></wa-icon> Model) below the instruction box. Models capable of strong reasoning (like Claude Opus 5, GPT-5.5, or Gemini 3.1 Pro) are recommended for complex merges.
 4.  **Click Merge**: Press the "Merge" button (<wa-icon library="texra" name="merge"></wa-icon>) located in the "Edited File" row.
 
 ::: info VS Code feature
