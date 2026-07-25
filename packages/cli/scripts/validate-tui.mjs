@@ -1270,7 +1270,7 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/api', '\r', '31'],
     frame: 'viewport',
-    expect: ['kimi-code preference set to on.'],
+    expect: ['API fallback set to included.'],
     unexpect: ['ServerSideKeyService not initialized'],
   },
   {
@@ -1294,7 +1294,7 @@ const SCENARIOS = [
     keys: ['/api', '\r', '2'],
     frame: 'viewport',
     expect: ['Prefer Kimi Code subscription enabled'],
-    expectCollapsed: ['fallback: personal API keys'],
+    expectCollapsed: ['API fallback remains Personal API keys'],
     unexpect: [
       'No Kimi Code API key configured',
       'ServerSideKeyService not initialized',
