@@ -51,7 +51,7 @@ import { resolveChatDefaults } from '../runtime/chatDefaults';
 import {
   contextForCliModelAccess,
   readCliModelAccessStatus,
-  selectCliModelAccessRoute,
+  updateCliModelAccess,
 } from '../runtime/modelAccessSelection';
 import {
   chatGptSignOutPreferenceMessage,
@@ -342,9 +342,13 @@ async function runOrchestration(context: CliContext): Promise<number> {
                 `Signed out of ChatGPT.\n${chatGptSignOutPreferenceMessage(update)}`,
               );
             } else {
-              const result = await selectCliModelAccessRoute(
+              const result = await updateCliModelAccess(
                 launchContext,
-                'chatgpt',
+                {
+                  kind: 'subscription-preference',
+                  provider: 'chatgpt',
+                  state: 'on',
+                },
                 { writeProgress: writeTextStdout },
               );
               launcherApiModeOverride = result.apiMode;
@@ -364,7 +368,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
       }
       case 'set-model-access': {
         try {
-          const result = await selectCliModelAccessRoute(
+          const result = await updateCliModelAccess(
             launchContext,
             action.access,
             { writeProgress: writeTextStdout },

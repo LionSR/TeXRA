@@ -370,7 +370,8 @@ describe('CLI orchestration items', () => {
 
   it('keeps model access directly below new chat and presents every access route', () => {
     const status = {
-      active: 'included' as const,
+      apiFallback: 'included' as const,
+      preferences: { chatGpt: 'off', kimiCode: 'off' } as const,
       chatGptSignedIn: true,
       chatGptAccountLabel: 'researcher@example.com',
     };
@@ -383,27 +384,35 @@ describe('CLI orchestration items', () => {
 
     expect(items[1]).toEqual({
       label: 'Model access',
-      description: 'Included TeXRA access',
+      description: 'ChatGPT Off · Kimi Off · fallback: included TeXRA access',
       value: { kind: 'configure-model-access' },
     });
     expect(buildCliModelAccessItems(status)).toEqual([
       {
-        value: 'chatgpt',
+        value: {
+          kind: 'subscription-preference',
+          provider: 'chatgpt',
+          state: 'on',
+        },
         label: 'Prefer ChatGPT subscription',
         description: 'Off · researcher@example.com',
       },
       {
-        value: 'kimi-code',
+        value: {
+          kind: 'subscription-preference',
+          provider: 'kimi-code',
+          state: 'on',
+        },
         label: 'Prefer Kimi Code subscription',
-        description: 'Add a key with /key (kimi.com/code/console)',
+        description: 'Off · key required to enable',
       },
       {
-        value: 'included',
+        value: { kind: 'api-fallback', apiMode: 'included' },
         label: 'Included TeXRA access',
         description: 'Use your TeXRA account',
       },
       {
-        value: 'personal',
+        value: { kind: 'api-fallback', apiMode: 'personal' },
         label: 'Personal API keys',
         description: 'Use keys configured on this computer',
       },
@@ -413,18 +422,24 @@ describe('CLI orchestration items', () => {
   it('describes the Kimi Code route by key state and activity', () => {
     expect(
       buildCliModelAccessItems({
-        active: 'personal',
+        apiFallback: 'personal',
+        preferences: { chatGpt: 'off', kimiCode: 'off' },
         chatGptSignedIn: false,
         kimiCodeKeySet: true,
       })[1],
     ).toEqual({
-      value: 'kimi-code',
+      value: {
+        kind: 'subscription-preference',
+        provider: 'kimi-code',
+        state: 'on',
+      },
       label: 'Prefer Kimi Code subscription',
       description: 'Off · key configured',
     });
     expect(
       buildCliModelAccessItems({
-        active: 'kimi-code',
+        apiFallback: 'personal',
+        preferences: { chatGpt: 'off', kimiCode: 'on' },
         chatGptSignedIn: false,
         kimiCodeKeySet: true,
       })[1].description,
@@ -435,16 +450,32 @@ describe('CLI orchestration items', () => {
       history: [],
       toolUseAgents: [],
       modelAccess: {
-        active: 'kimi-code',
+        apiFallback: 'personal',
+        preferences: { chatGpt: 'off', kimiCode: 'on' },
         chatGptSignedIn: false,
         kimiCodeKeySet: true,
       },
     });
     expect(items[1]).toEqual({
       label: 'Model access',
-      description: 'Kimi Code subscription · key configured',
+      description: 'ChatGPT Off · Kimi On · fallback: personal API keys',
       value: { kind: 'configure-model-access' },
     });
+  });
+
+  it('shows both subscription preferences as on simultaneously', () => {
+    const items = buildCliModelAccessItems({
+      apiFallback: 'personal',
+      preferences: { chatGpt: 'on', kimiCode: 'on' },
+      chatGptSignedIn: true,
+      chatGptAccountLabel: 'researcher@example.com',
+      kimiCodeKeySet: true,
+    });
+
+    expect(items.slice(0, 2).map(({ description }) => description)).toEqual([
+      'On · researcher@example.com',
+      'On · key configured',
+    ]);
   });
 
   it('offers account management as one startup row with provider actions', () => {
@@ -496,10 +527,15 @@ describe('CLI orchestration items', () => {
     ]);
     expect(
       buildCliModelAccessItems({
-        active: 'personal',
+        apiFallback: 'personal',
+        preferences: { chatGpt: 'off', kimiCode: 'off' },
         chatGptSignedIn: false,
         texraSignedIn: false,
-      }).find((item) => item.value === 'included')?.description,
+      }).find(
+        (item) =>
+          item.value.kind === 'api-fallback' &&
+          item.value.apiMode === 'included',
+      )?.description,
     ).toBe('Sign in through Account to use included models');
   });
 

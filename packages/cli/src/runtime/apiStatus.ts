@@ -6,6 +6,8 @@ import { formatPercent } from '@utils/text/stringUtils';
 
 import { getCliApiMode, type CliApiMode } from './apiAccessMode';
 import {
+  formatCliChatGptPreference,
+  formatCliKimiCodePreference,
   formatCliModelAccessRoute,
   formatCliModelAccessRouteInline,
   type CliModelAccessStatus,
@@ -64,26 +66,15 @@ export async function loadCliModelAccessOverview(
     getCliAuthProfile(),
   ]);
   const lines = [
-    `model access: ${formatCliModelAccessRoute(access.active)}`,
-    formatAccountStatusLine(
-      'ChatGPT',
-      access.chatGptSignedIn,
-      access.chatGptAccountLabel,
-    ),
-    `Kimi Code: ${
-      access.kimiCodeKeySet === true
-        ? 'key configured'
-        : 'no key (add with /key)'
-    }`,
+    `ChatGPT preference: ${formatCliChatGptPreference(access)}`,
+    `Kimi Code preference: ${formatCliKimiCodePreference(access)}`,
+    `API fallback: ${formatCliModelAccessRoute(access.apiFallback)}`,
     formatAccountStatusLine(
       'TeXRA',
       profile.authenticated,
       profile.accountLabel,
     ),
   ];
-  if (access.active === 'chatgpt' || access.active === 'kimi-code') {
-    lines.push(`API fallback: ${formatCliModelAccessRoute(apiMode)}`);
-  }
   if (profile.note) lines.push(profile.note);
   return {
     access: { ...access, texraSignedIn: profile.authenticated },

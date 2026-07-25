@@ -403,6 +403,33 @@ const SCENARIOS = [
     unexpect: ['coder —', 'Resume aaaaaaaaaaaa'],
   },
   {
+    name: 'orchestrate-independent-subscription-preferences',
+    frame: 'scrollback',
+    env: {
+      HARNESS_ORCHESTRATION: '1',
+      HARNESS_BOTH_SUBSCRIPTION_PREFERENCES: '1',
+      HARNESS_VISIBLE_TOOL_USE_AGENTS: '',
+      HARNESS_VISIBLE_WORKFLOW_AGENTS: '',
+    },
+    bootExpect: 'Model access — ChatGPT On · Kimi On',
+    keys: ['3'],
+    exitKeys: [ESC, ESC],
+    expectExit: true,
+    expect: [
+      'Model access',
+      'Toggle subscription preferences or choose the API fallback.',
+      'Prefer ChatGPT subscrip',
+      'On · harness@example.edu',
+      'Prefer Kimi Code subscr',
+      'On · key configured',
+      'Included TeXRA access',
+      'Personal API keys',
+      '✓ 4. Personal API keys',
+      'Esc back',
+    ],
+    unexpect: ['✓ 1. Prefer ChatGPT', '✓ 2. Prefer Kimi Code'],
+  },
+  {
     name: 'orchestrate-delegated-history',
     frame: 'scrollback',
     env: {
@@ -1009,8 +1036,9 @@ const SCENARIOS = [
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/api',
-      'model access:',
-      'ChatGPT:',
+      'ChatGPT preference:',
+      'Kimi Code preference:',
+      'API fallback:',
       'TeXRA:',
       'Personal API keys',
       'Included TeXRA access',
@@ -1242,7 +1270,7 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/api', '\r', '31'],
     frame: 'viewport',
-    expect: ['API mode set to included.'],
+    expect: ['kimi-code preference set to on.'],
     unexpect: ['ServerSideKeyService not initialized'],
   },
   {
@@ -1252,7 +1280,7 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/api', '\r', '1'],
     frame: 'viewport',
-    expect: ['Model access set to ChatGPT subscription.'],
+    expect: ['chatgpt preference set to on.'],
     unexpect: ['ServerSideKeyService not initialized'],
   },
   {

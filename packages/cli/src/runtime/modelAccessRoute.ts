@@ -2,11 +2,40 @@ import type { UsageRoute } from '@shared/schemas';
 
 import { parseCliApiMode, type CliApiMode } from './apiAccessMode';
 
+export const CLI_MODEL_ACCESS_DESCRIPTION =
+  'Toggle subscription preferences or choose the API fallback.';
+
 export type CliModelAccessRoute =
   'chatgpt' | 'kimi-code' | 'included' | 'personal';
 
+export type CliSubscriptionPreferenceState = 'off' | 'on';
+export type CliSubscriptionProvider = 'chatgpt' | 'kimi-code';
+
+export interface CliSubscriptionPreferences {
+  readonly chatGpt: CliSubscriptionPreferenceState;
+  readonly kimiCode: CliSubscriptionPreferenceState;
+}
+
+export type CliModelAccessSelection =
+  | {
+      readonly kind: 'subscription-preference';
+      readonly provider: CliSubscriptionProvider;
+      readonly state: CliSubscriptionPreferenceState;
+    }
+  | {
+      readonly kind: 'api-fallback';
+      readonly apiMode: CliApiMode;
+    };
+
+const cliApiFallbackSelections = {
+  included: { kind: 'api-fallback', apiMode: 'included' },
+  personal: { kind: 'api-fallback', apiMode: 'personal' },
+} as const satisfies Record<CliApiMode, CliModelAccessSelection>;
+
 export interface CliModelAccessStatus {
-  readonly active: CliModelAccessRoute;
+  readonly apiFallback: CliApiMode;
+  /** Independent provider preferences; either, both, or neither may be on. */
+  readonly preferences: CliSubscriptionPreferences;
   readonly chatGptSignedIn: boolean;
   readonly chatGptAccountLabel?: string;
   readonly kimiCodeKeySet?: boolean;
@@ -14,25 +43,40 @@ export interface CliModelAccessStatus {
 }
 
 interface CliModelAccessItem {
-  readonly value: CliModelAccessRoute;
+  readonly value: CliModelAccessSelection;
   readonly label: string;
   readonly description: string;
 }
 
-export function parseCliModelAccessRoute(
+/** Return the stable selection object for one API fallback. */
+export function cliApiFallbackSelection(
+  apiMode: CliApiMode,
+): CliModelAccessSelection {
+  return cliApiFallbackSelections[apiMode];
+}
+
+export function parseCliModelAccessSelection(
   input: string,
-): CliModelAccessRoute | undefined {
+): CliModelAccessSelection | undefined {
   const apiMode = parseCliApiMode(input);
-  if (apiMode) return apiMode;
+  if (apiMode) return cliApiFallbackSelection(apiMode);
 
   switch (input.trim().toLowerCase()) {
     case 'chatgpt':
     case 'subscription':
-      return 'chatgpt';
+      return {
+        kind: 'subscription-preference',
+        provider: 'chatgpt',
+        state: 'on',
+      };
     case 'kimi':
     case 'kimicode':
     case 'kimi-code':
-      return 'kimi-code';
+      return {
+        kind: 'subscription-preference',
+        provider: 'kimi-code',
+        state: 'on',
+      };
     default:
       return undefined;
   }
@@ -104,41 +148,59 @@ export function formatCliModelAccessRouteInline(
     : label.charAt(0).toLowerCase() + label.slice(1);
 }
 
+/** Format the ChatGPT preference independently of credential availability. */
+export function formatCliChatGptPreference(
+  status: CliModelAccessStatus,
+): string {
+  if (status.preferences.chatGpt === 'on' && status.chatGptSignedIn) {
+    return `On · ${status.chatGptAccountLabel ?? 'your account'}`;
+  }
+  if (status.chatGptSignedIn) {
+    return `Off · ${status.chatGptAccountLabel ?? 'your account'}`;
+  }
+  return status.preferences.chatGpt === 'on'
+    ? 'On · sign in required'
+    : 'Off · sign in required to enable';
+}
+
+/** Format the Kimi preference independently of key availability. */
+export function formatCliKimiCodePreference(
+  status: CliModelAccessStatus,
+): string {
+  if (status.preferences.kimiCode === 'on' && status.kimiCodeKeySet !== true) {
+    return 'On · key required';
+  }
+  if (status.preferences.kimiCode === 'on') return 'On · key configured';
+  return status.kimiCodeKeySet === true
+    ? 'Off · key configured'
+    : 'Off · key required to enable';
+}
+
 /** Build the canonical choices shown by every model-access picker. */
 export function buildCliModelAccessItems(
   status: CliModelAccessStatus,
 ): CliModelAccessItem[] {
-  let chatGptDescription: string;
-  if (status.active === 'chatgpt') {
-    chatGptDescription = `On · ${status.chatGptAccountLabel ?? 'your account'}`;
-  } else if (status.chatGptSignedIn) {
-    chatGptDescription = `Off · ${status.chatGptAccountLabel ?? 'your account'}`;
-  } else {
-    chatGptDescription = 'Sign in with ChatGPT Plus/Pro/Team';
-  }
-
-  let kimiCodeDescription: string;
-  if (status.kimiCodeKeySet !== true) {
-    kimiCodeDescription = 'Add a key with /key (kimi.com/code/console)';
-  } else if (status.active === 'kimi-code') {
-    kimiCodeDescription = 'On · key configured';
-  } else {
-    kimiCodeDescription = 'Off · key configured';
-  }
-
   return [
     {
-      value: 'chatgpt',
+      value: {
+        kind: 'subscription-preference',
+        provider: 'chatgpt',
+        state: status.preferences.chatGpt === 'on' ? 'off' : 'on',
+      },
       label: 'Prefer ChatGPT subscription',
-      description: chatGptDescription,
+      description: formatCliChatGptPreference(status),
     },
     {
-      value: 'kimi-code',
+      value: {
+        kind: 'subscription-preference',
+        provider: 'kimi-code',
+        state: status.preferences.kimiCode === 'on' ? 'off' : 'on',
+      },
       label: 'Prefer Kimi Code subscription',
-      description: kimiCodeDescription,
+      description: formatCliKimiCodePreference(status),
     },
     {
-      value: 'included',
+      value: cliApiFallbackSelection('included'),
       label: formatCliModelAccessRoute('included'),
       description:
         status.texraSignedIn === false
@@ -146,9 +208,18 @@ export function buildCliModelAccessItems(
           : 'Use your TeXRA account',
     },
     {
-      value: 'personal',
+      value: cliApiFallbackSelection('personal'),
       label: formatCliModelAccessRoute('personal'),
       description: 'Use keys configured on this computer',
     },
   ];
+}
+
+/** Compact configuration summary; observed per-request routes use UsageRoute. */
+export function formatCliModelAccessSummary(
+  status: CliModelAccessStatus,
+): string {
+  const chatGpt = status.preferences.chatGpt === 'on' ? 'On' : 'Off';
+  const kimiCode = status.preferences.kimiCode === 'on' ? 'On' : 'Off';
+  return `ChatGPT ${chatGpt} · Kimi ${kimiCode} · fallback: ${formatCliModelAccessRouteInline(status.apiFallback)}`;
 }

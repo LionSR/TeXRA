@@ -32,7 +32,10 @@ import {
   type SessionMeta,
 } from '@cli/chat/tui/state/cliState';
 import { CLI_LOCAL_STREAM_ID } from '@cli/chat/tui/state/transcript';
-import type { CliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
+import {
+  cliApiFallbackSelection,
+  type CliModelAccessSelection,
+} from '@cli/runtime/modelAccessRoute';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import { AgentCategory } from '@shared/schemas/agent';
 import {
@@ -454,9 +457,9 @@ describe('slashRegistry', () => {
     expect(openRegisteredCliSlashForm(api, '')).toBe(true);
 
     const apiNode = renderOpenForm<{
-      onSelect?: (value: CliModelAccessRoute) => void;
+      onSelect?: (value: CliModelAccessSelection) => void;
     }>();
-    apiNode.props?.onSelect?.('personal');
+    apiNode.props?.onSelect?.(cliApiFallbackSelection('personal'));
     await settleFormSelection();
 
     expect(errors).toEqual(['api mode failed']);
@@ -476,9 +479,9 @@ describe('slashRegistry', () => {
     expect(openRegisteredCliSlashForm(api, '')).toBe(true);
 
     const apiNode = renderOpenForm<{
-      onSelect?: (value: CliModelAccessRoute) => void;
+      onSelect?: (value: CliModelAccessSelection) => void;
     }>();
-    apiNode.props?.onSelect?.('personal');
+    apiNode.props?.onSelect?.(cliApiFallbackSelection('personal'));
     await settleFormSelection();
 
     expect(apiNode.isClosed()).toBe(false);
@@ -714,9 +717,9 @@ describe('slashRegistry', () => {
 
     expect(openRegisteredCliSlashForm(api, '')).toBe(true);
     const apiNode = renderOpenForm<{
-      onSelect?: (value: CliModelAccessRoute) => void;
+      onSelect?: (value: CliModelAccessSelection) => void;
     }>();
-    apiNode.props?.onSelect?.('personal');
+    apiNode.props?.onSelect?.(cliApiFallbackSelection('personal'));
     resetCliState(INCLUDED_CHAT_SESSION);
     selection.resolve();
     await settleFormSelection();

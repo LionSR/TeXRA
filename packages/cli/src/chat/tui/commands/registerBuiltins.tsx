@@ -2,20 +2,19 @@
 
 import type { GetModelSwitchDisabledReason } from '@cli/runtime/modelAccess';
 import { parseCliHistoryId } from '@cli/runtime/history';
-import type { CliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
+import {
+  cliApiFallbackSelection,
+  type CliModelAccessSelection,
+} from '@cli/runtime/modelAccessRoute';
 import {
   type CliLogoutTarget,
   parseChatLoginSlashArgs,
 } from '@cli/runtime/loginOptions';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import type { ApiProvider } from '@model/apiProviders';
-import { invalidateModelOptionsCache } from '@model/computeModelOptions';
-import { platform } from '@platform/platform';
 import { AgentCategory, type ExecutionId } from '@shared/schemas';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { GlobalStateKey } from '@shared/state/stateKeys';
-import { setPreferKimiCode } from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { collapseWhitespace } from '@utils/text/stringUtils';
 
@@ -46,6 +45,7 @@ import {
   applyInitialCliAgentSelection,
 } from './handlers/agentModelCommands';
 import {
+  applyCliModelAccessInput,
   applyCliModelAccessSelection,
   applyCliProviderApiKey,
 } from './handlers/apiModeCommands';
@@ -74,7 +74,7 @@ type ModelSelectHandler = (value: string) => void | Promise<void>;
 type FormActionResult =
   void | (Promise<void> & { readonly abort?: () => void });
 type ModelAccessSelectHandler = (
-  value: CliModelAccessRoute,
+  value: CliModelAccessSelection,
   output: SlashCommandOutput,
 ) => FormActionResult;
 type ApiKeySaveHandler = (
@@ -284,23 +284,8 @@ export function registerBuiltinSlashCommands(options?: {
     options?.onModelSelect ?? setCliSessionModelOverride;
   const onModelAccessSelect: ModelAccessSelectHandler =
     options?.onModelAccessSelect ??
-    (async (route, output) => {
-      if (route === 'kimi-code') {
-        // Fallback for hosts without full wiring (the TUI harness, tests):
-        // mirror the state transition `selectCliModelAccessRoute` performs —
-        // production chat always supplies its own handler that routes there.
-        patchSessionMeta({ apiMode: 'personal' });
-        await setPreferKimiCode(true);
-        await platform().globalState.update(
-          GlobalStateKey.USE_OPENROUTER,
-          false,
-        );
-        invalidateModelOptionsCache();
-      } else if (route !== 'chatgpt') {
-        patchSessionMeta({ apiMode: route });
-      }
-      output.appendOutcome(`Model access set to ${route}.`);
-    });
+    ((selection, output) =>
+      applyCliModelAccessSelection(selection, undefined, output));
   const onApiKeySave: ApiKeySaveHandler =
     options?.onApiKeySave ?? applyCliProviderApiKey;
   const onLoginSelect: LoginSelectHandler =
@@ -358,7 +343,7 @@ export function registerBuiltinSlashCommands(options?: {
       <ModelAccessForm
         apiMode={current}
         availableRows={props.availableRows}
-        onSelect={formSelectionHandler<CliModelAccessRoute>({
+        onSelect={formSelectionHandler<CliModelAccessSelection>({
           action: onModelAccessSelect,
           onDone: props.onDone,
           onError: options?.onError,
@@ -575,7 +560,7 @@ export function registerBuiltinSlashCommands(options?: {
       'Choose ChatGPT, Kimi Code, included TeXRA, or personal model access',
     category: 'configuration',
     echo: 'ifPersists',
-    argHandler: applyCliModelAccessSelection,
+    argHandler: applyCliModelAccessInput,
     formName: 'api',
     formComponent: ModelAccessFormAdapter,
   });
@@ -709,7 +694,10 @@ export function registerBuiltinSlashCommands(options?: {
             // Code route) must not be treated as an explicit "Personal API
             // keys" picker choice, which would clear the Kimi preference.
             if (sessionMeta.get().apiMode === 'personal') return;
-            await onModelAccessSelect('personal', transcriptSlashCommandOutput);
+            await onModelAccessSelect(
+              cliApiFallbackSelection('personal'),
+              transcriptSlashCommandOutput,
+            );
           }}
         />
       );
