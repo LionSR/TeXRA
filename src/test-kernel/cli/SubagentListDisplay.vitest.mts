@@ -1,3 +1,4 @@
+import stripAnsi from 'strip-ansi';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -12,6 +13,7 @@ import {
 } from '@cli/chat/tui/panes/ConversationPane';
 import { SubagentList } from '@cli/chat/tui/panes/SubagentList';
 import { textDisplayWidth } from '@cli/chat/tui/render/terminalText';
+import { childStreamListValue } from '@cli/chat/tui/state/childListSelection';
 import {
   activeStreamId,
   streams as streamsSignal,
@@ -28,8 +30,13 @@ import {
   type SelectItem,
 } from '@cli/chat/tui/ui/Select';
 import { AgentCategory, STREAM_PHASE, type StreamTabId } from '@shared/schemas';
+import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
 import { buildChildStreamEntries } from '@test/support/childStreamEntries';
-import { loadInk } from '@test/support/inkTestHarness.mts';
+import {
+  FakeStdin,
+  FakeStdout,
+  loadInk,
+} from '@test/support/inkTestHarness.mts';
 
 function session(id: string, active = false): StreamView {
   return {
@@ -650,6 +657,213 @@ describe('CLI child list display model', () => {
       expect(output).not.toContain('r2/3 · Reduce 2/3');
     },
   );
+
+  it('does not group a list root by its inherited workflow phase', async () => {
+    const { ink, React } = await loadInk();
+    const run = 'nested-workflow' as StreamTabId;
+    const child = 'ordinary-child' as StreamTabId;
+    const output: string = ink.renderToString(
+      React.createElement(SubagentList, {
+        listRootStreamId: run,
+        maxRows: 5,
+        sessions: [
+          {
+            id: run,
+            label: 'nested-workflow',
+            active: true,
+            workflowPhase: 'Inherited',
+            slice: workflowAgentSlice(run, {}),
+          },
+          { ...session(child), parentId: run },
+        ],
+      }),
+      { columns: 100 },
+    );
+
+    expect(output).toContain('nested-workflow');
+    expect(output).toContain('ordinary-child');
+    expect(output).not.toContain('◆ Inherited');
+  });
+
+  it('keeps the selected stream visible when headers consume row slots', async () => {
+    const { ink, React } = await loadInk();
+    const run = 'windowed-run' as StreamTabId;
+    const map = 'map-agent' as StreamTabId;
+    const reduce = 'reduce-agent' as StreamTabId;
+    const output: string = ink.renderToString(
+      React.createElement(SubagentList, {
+        listRootStreamId: run,
+        maxRows: 3,
+        selectedValue: childStreamListValue(reduce),
+        sessions: [
+          {
+            id: run,
+            label: 'windowed-run',
+            active: false,
+            slice: workflowAgentSlice(run, {}),
+          },
+          {
+            ...session(map),
+            parentId: run,
+            workflowPhase: 'Map',
+          },
+          {
+            ...session(reduce, true),
+            parentId: run,
+            workflowPhase: 'Reduce',
+          },
+        ],
+      }),
+      { columns: 100 },
+    );
+
+    expect(output).toContain('◆ Reduce');
+    expect(output).toContain('reduce-agent');
+    expect(output).not.toContain('windowed-run');
+    expect(output).not.toContain('map-agent');
+  });
+
+  it('switches phase progress layout at the exact width boundary', async () => {
+    const { ink, React } = await loadInk();
+    const run = 'run' as StreamTabId;
+    const mapRetry = 'map-retry' as StreamTabId;
+    const mapAttempt = 'map-attempt' as StreamTabId;
+    const loose = 'loose' as StreamTabId;
+    const reduce = 'reduce' as StreamTabId;
+    const freeFormPhase = 'Map:review|draft';
+    const sessions: StreamView[] = [
+      {
+        id: run,
+        label: 'workflow-script',
+        active: true,
+        slice: workflowAgentSlice('run', {
+          status: STREAM_PHASE.RUNNING,
+          entries: [
+            {
+              id: 'phase-map',
+              role: 'phase',
+              text: freeFormPhase,
+              finalized: true,
+              phaseLabel: freeFormPhase,
+              phaseIndex: 0,
+              phaseTotal: 2,
+            },
+            {
+              id: 'task-map',
+              role: 'workflowTask',
+              text: 'Finished: Review map',
+              finalized: true,
+              task: {
+                id: 'review-map',
+                label: 'Review map',
+                phase: freeFormPhase,
+                status: 'completed',
+                durationMs: 1_000,
+              },
+            },
+            {
+              id: 'phase-reduce',
+              role: 'phase',
+              text: 'Reduce',
+              finalized: true,
+              phaseLabel: 'Reduce',
+              phaseIndex: 1,
+              phaseTotal: 2,
+            },
+            {
+              id: 'task-reduce',
+              role: 'workflowTask',
+              text: 'Running: Merge map',
+              finalized: false,
+              task: {
+                id: 'merge-map',
+                label: 'Merge map',
+                phase: 'Reduce',
+                status: 'running',
+              },
+            },
+          ],
+        }),
+      },
+      {
+        ...session(mapRetry),
+        label: 'writer-retry',
+        // Retained under the run, but promoted out of its current topology,
+        // so the projected view has no current parentId.
+        workflowPhase: freeFormPhase,
+      },
+      {
+        ...session(mapAttempt),
+        label: 'writer-attempt',
+        parentId: run,
+        workflowPhase: freeFormPhase,
+      },
+      { ...session(loose), label: 'unphased', parentId: run },
+      {
+        ...session(reduce),
+        label: 'editor',
+        parentId: run,
+        workflowPhase: 'Reduce',
+      },
+    ];
+
+    async function renderAtColumns(columns: number): Promise<string> {
+      const stdout = new FakeStdout(columns);
+      const instance = ink.render(
+        React.createElement(SubagentList, {
+          listRootStreamId: run,
+          maxRows: 10,
+          sessions,
+        }),
+        {
+          stdin: new FakeStdin(false),
+          stdout,
+          interactive: true,
+          exitOnCtrlC: false,
+          patchConsole: false,
+        },
+      );
+      try {
+        await waitFor(() => stdout.output.includes(freeFormPhase));
+        return stripAnsi(stdout.output);
+      } finally {
+        instance.unmount();
+      }
+    }
+
+    const wideOutput = await renderAtColumns(60);
+    const narrowOutput = await renderAtColumns(59);
+    const wideLines = wideOutput.split('\n');
+    const wideMapHeader = wideLines.find((line) =>
+      line.includes(`${freeFormPhase} (1/2)`),
+    );
+    const wideMapRow = wideLines.find((line) => line.includes('writer-retry'));
+
+    expect(wideMapHeader).toBeDefined();
+    expect(wideMapRow).toBeDefined();
+    expect(wideMapHeader?.indexOf('◆')).toBe(wideMapRow?.indexOf('●'));
+    expect(wideMapHeader?.trimEnd().endsWith('1/1')).toBe(true);
+    expect(wideMapHeader).not.toContain('(1/2) · 1/1');
+    expect(narrowOutput).toContain(`${freeFormPhase} (1/2) · 1/1`);
+    expect(narrowOutput).toContain('Reduce (2/2) · 0/1');
+    // Two attempt rows remain visible, but progress counts the one logical
+    // workflow task from the transcript rather than the retry rows.
+    expect(wideOutput.split(freeFormPhase)).toHaveLength(2);
+    expect(wideOutput).toContain('writer-retry');
+    expect(wideOutput).toContain('writer-attempt');
+    expect(wideOutput.indexOf(`${freeFormPhase} (1/2)`)).toBeLessThan(
+      wideOutput.indexOf('writer-retry'),
+    );
+    expect(wideOutput.indexOf('writer-retry')).toBeLessThan(
+      wideOutput.indexOf('writer-attempt'),
+    );
+    expect(wideOutput.indexOf('writer-attempt')).toBeLessThan(
+      wideOutput.indexOf('unphased'),
+    );
+    expect(wideOutput.indexOf('unphased')).toBeLessThan(
+      wideOutput.indexOf('Reduce (2/2)'),
+    );
+  });
 
   it('never shows both a phase and a round on one row', async () => {
     const { ink, React } = await loadInk();
