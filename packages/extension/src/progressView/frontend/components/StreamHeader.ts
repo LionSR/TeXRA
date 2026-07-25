@@ -527,8 +527,8 @@ export class StreamHeader extends LitElement {
 
     return html`
       <span
+        id=${ELEMENT_IDS.PARENT_LINK}
         class="parent-link"
-        title="Go to parent: ${displayName}"
         role="button"
         tabindex="0"
         @click=${this.navigateToParent}
@@ -536,6 +536,9 @@ export class StreamHeader extends LitElement {
       >
         ${waIcon('arrow-left')} ${displayName}
       </span>
+      <wa-tooltip for=${ELEMENT_IDS.PARENT_LINK}
+        >Go to parent: ${displayName}</wa-tooltip
+      >
     `;
   }
 

@@ -11,6 +11,7 @@ export const ELEMENT_IDS = {
   GENERATED_FILES_COLLAPSIBLE: 'generatedFilesCollapsible',
   STREAM_TABS: 'streamTabs',
   ACTIVE_STREAM_NAME: 'activeStreamName',
+  PARENT_LINK: 'parentLink',
   STATUS_INDICATOR: 'statusIndicator',
   GOAL_CHIP: 'goalChip',
   PROGRESS_BADGE: 'progressBadge',
