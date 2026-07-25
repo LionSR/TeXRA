@@ -17,7 +17,7 @@ describe('workflow task copy', () => {
         durationMs: 7_320,
         totalCostUsd: 0.04,
       }),
-    ).toEqual(['gpt56', '7s', '$0.040 total']);
+    ).toEqual(['gpt56', '7s', '$0.040']);
   });
 
   it('does not attach terminal metadata to an active task', () => {
@@ -41,9 +41,7 @@ describe('workflow task copy', () => {
         durationMs: 7_320,
         totalCostUsd: 0.04,
       }),
-    ).toBe(
-      'Failed: Audit source · kimiK2 · 7s · $0.040 total — Runner stopped.',
-    );
+    ).toBe('Failed: Audit source · kimiK2 · 7s · $0.040 — Runner stopped.');
   });
 
   it('explains a task the run never reached on every textual host', () => {
@@ -95,6 +93,6 @@ describe('workflow task copy', () => {
         durationMs: 7_320,
         totalCostUsd: 0.04,
       }),
-    ).toBe('Skipped: Stopped review · kimiK2 · 7s · $0.040 total');
+    ).toBe('Skipped: Stopped review · kimiK2 · 7s · $0.040');
   });
 });

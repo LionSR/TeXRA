@@ -1034,7 +1034,7 @@ describe('CLI workflow-script child-stream transcript', () => {
       // The phase group row and the task's current state both surface.
       expect(texts).toContain('Draft sections');
       expect(texts).toContain(
-        'Finished: Draft introduction · deepseekT · 12s · $0.002 total',
+        'Finished: Draft introduction · deepseekT · 12s · $0.002',
       );
       expect(
         entries.filter((entry) => entry.id === 'introduction-task'),
@@ -1100,7 +1100,7 @@ describe('CLI workflow-script child-stream transcript', () => {
       // the task row carries its own per-status marker.
       expect(output).toContain('◆ Draft sections');
       expect(output).toContain('☑ Finished: Draft introduction');
-      expect(output).toContain('deepseekT · 12s · $0.002 total');
+      expect(output).toContain('deepseekT · 12s · $0.002');
     } finally {
       runTrace.dispose();
     }
