@@ -8,10 +8,10 @@ export const CLI_MODEL_ACCESS_DESCRIPTION =
 export type CliModelAccessRoute =
   'chatgpt' | 'kimi-code' | 'included' | 'personal';
 
-export type CliSubscriptionPreferenceState = 'off' | 'on';
-export type CliSubscriptionProvider = 'chatgpt' | 'kimi-code';
+type CliSubscriptionPreferenceState = 'off' | 'on';
+type CliSubscriptionProvider = 'chatgpt' | 'kimi-code';
 
-export interface CliSubscriptionPreferences {
+interface CliSubscriptionPreferences {
   readonly chatGpt: CliSubscriptionPreferenceState;
   readonly kimiCode: CliSubscriptionPreferenceState;
 }
@@ -27,10 +27,21 @@ export type CliModelAccessSelection =
       readonly apiMode: CliApiMode;
     };
 
-const cliApiFallbackSelections = {
-  included: { kind: 'api-fallback', apiMode: 'included' },
-  personal: { kind: 'api-fallback', apiMode: 'personal' },
-} as const satisfies Record<CliApiMode, CliModelAccessSelection>;
+type CliApiFallbackSelection = Extract<
+  CliModelAccessSelection,
+  { readonly kind: 'api-fallback' }
+>;
+
+const cliApiFallbackSelections = Object.freeze({
+  included: Object.freeze({
+    kind: 'api-fallback',
+    apiMode: 'included',
+  }),
+  personal: Object.freeze({
+    kind: 'api-fallback',
+    apiMode: 'personal',
+  }),
+} as const satisfies Record<CliApiMode, CliApiFallbackSelection>);
 
 export interface CliModelAccessStatus {
   readonly apiFallback: CliApiMode;
@@ -46,12 +57,23 @@ interface CliModelAccessItem {
   readonly value: CliModelAccessSelection;
   readonly label: string;
   readonly description: string;
+  readonly disabled?: boolean;
 }
+
+type CliModelAccessItemsInput =
+  | {
+      readonly kind: 'loaded';
+      readonly access: CliModelAccessStatus;
+    }
+  | {
+      readonly kind: 'pending';
+      readonly state: 'failed' | 'loading';
+    };
 
 /** Return the stable selection object for one API fallback. */
 export function cliApiFallbackSelection(
   apiMode: CliApiMode,
-): CliModelAccessSelection {
+): CliApiFallbackSelection {
   return cliApiFallbackSelections[apiMode];
 }
 
@@ -176,34 +198,61 @@ export function formatCliKimiCodePreference(
     : 'Off · key required to enable';
 }
 
+const cliSubscriptionAccessItems = [
+  {
+    provider: 'chatgpt',
+    preference: 'chatGpt',
+    label: 'Prefer ChatGPT subscription',
+    formatDescription: formatCliChatGptPreference,
+  },
+  {
+    provider: 'kimi-code',
+    preference: 'kimiCode',
+    label: 'Prefer Kimi Code subscription',
+    formatDescription: formatCliKimiCodePreference,
+  },
+] as const satisfies ReadonlyArray<{
+  readonly provider: CliSubscriptionProvider;
+  readonly preference: keyof CliSubscriptionPreferences;
+  readonly label: string;
+  readonly formatDescription: (status: CliModelAccessStatus) => string;
+}>;
+
 /** Build the canonical choices shown by every model-access picker. */
 export function buildCliModelAccessItems(
-  status: CliModelAccessStatus,
+  input: CliModelAccessItemsInput,
 ): CliModelAccessItem[] {
+  const status = input.kind === 'loaded' ? input.access : undefined;
+  let pendingDescription = '';
+  if (input.kind === 'pending') {
+    pendingDescription =
+      input.state === 'loading'
+        ? 'Loading current preference'
+        : 'Current preference unavailable';
+  }
+  const preferenceItems = cliSubscriptionAccessItems.map(
+    ({ formatDescription, label, preference, provider }) => {
+      const state: CliSubscriptionPreferenceState =
+        status?.preferences[preference] === 'on' ? 'off' : 'on';
+      return {
+        value: {
+          kind: 'subscription-preference' as const,
+          provider,
+          state,
+        },
+        label,
+        description: status ? formatDescription(status) : pendingDescription,
+        ...(status === undefined ? { disabled: true } : {}),
+      };
+    },
+  ) satisfies CliModelAccessItem[];
   return [
-    {
-      value: {
-        kind: 'subscription-preference',
-        provider: 'chatgpt',
-        state: status.preferences.chatGpt === 'on' ? 'off' : 'on',
-      },
-      label: 'Prefer ChatGPT subscription',
-      description: formatCliChatGptPreference(status),
-    },
-    {
-      value: {
-        kind: 'subscription-preference',
-        provider: 'kimi-code',
-        state: status.preferences.kimiCode === 'on' ? 'off' : 'on',
-      },
-      label: 'Prefer Kimi Code subscription',
-      description: formatCliKimiCodePreference(status),
-    },
+    ...preferenceItems,
     {
       value: cliApiFallbackSelection('included'),
       label: formatCliModelAccessRoute('included'),
       description:
-        status.texraSignedIn === false
+        status?.texraSignedIn === false
           ? 'Sign in through Account to use included models'
           : 'Use your TeXRA account',
     },

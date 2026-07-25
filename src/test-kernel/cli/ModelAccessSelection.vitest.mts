@@ -133,6 +133,16 @@ describe('CLI model access routes', () => {
     expect(parseCliModelAccessSelection('direct')).toBeUndefined();
   });
 
+  it('keeps canonical API fallback selections stable and immutable', () => {
+    const included = cliApiFallbackSelection('included');
+    const personal = cliApiFallbackSelection('personal');
+
+    expect(cliApiFallbackSelection('included')).toBe(included);
+    expect(cliApiFallbackSelection('personal')).toBe(personal);
+    expect(Object.isFrozen(included)).toBe(true);
+    expect(Object.isFrozen(personal)).toBe(true);
+  });
+
   it('uses observed access before prospective access preferences', () => {
     expect(
       resolveCliModelAccessRoute({
@@ -481,7 +491,7 @@ describe('CLI model access routes', () => {
     const status = await readCliModelAccessStatus('personal');
     expect(status.preferences).toEqual({ chatGpt: 'on', kimiCode: 'on' });
     expect(
-      buildCliModelAccessItems(status)
+      buildCliModelAccessItems({ kind: 'loaded', access: status })
         .slice(0, 2)
         .map((item) => item.description),
     ).toEqual(['On · user@example.com', 'On · key configured']);
@@ -529,7 +539,10 @@ describe('CLI model access routes', () => {
     });
 
     const status = await readCliModelAccessStatus('personal');
-    const [selection] = buildCliModelAccessItems(status);
+    const [selection] = buildCliModelAccessItems({
+      kind: 'loaded',
+      access: status,
+    });
     expect(selection?.description).toBe('On · sign in required');
     if (!selection) throw new Error('Expected ChatGPT preference item');
     await updateCliModelAccess(context, selection.value, {
@@ -543,7 +556,10 @@ describe('CLI model access routes', () => {
   it('turns off a stale Kimi preference without requiring a key', async () => {
     mocks.getPreferKimiCode.mockReturnValue(true);
     const status = await readCliModelAccessStatus('personal');
-    const selection = buildCliModelAccessItems(status)[1];
+    const selection = buildCliModelAccessItems({
+      kind: 'loaded',
+      access: status,
+    })[1];
     expect(selection?.description).toBe('On · key required');
     if (!selection) throw new Error('Expected Kimi preference item');
 

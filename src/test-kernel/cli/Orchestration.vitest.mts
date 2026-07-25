@@ -387,7 +387,9 @@ describe('CLI orchestration items', () => {
       description: 'ChatGPT Off · Kimi Off · fallback: included TeXRA access',
       value: { kind: 'configure-model-access' },
     });
-    expect(buildCliModelAccessItems(status)).toEqual([
+    expect(
+      buildCliModelAccessItems({ kind: 'loaded', access: status }),
+    ).toEqual([
       {
         value: {
           kind: 'subscription-preference',
@@ -422,10 +424,13 @@ describe('CLI orchestration items', () => {
   it('describes the Kimi Code route by key state and activity', () => {
     expect(
       buildCliModelAccessItems({
-        apiFallback: 'personal',
-        preferences: { chatGpt: 'off', kimiCode: 'off' },
-        chatGptSignedIn: false,
-        kimiCodeKeySet: true,
+        kind: 'loaded',
+        access: {
+          apiFallback: 'personal',
+          preferences: { chatGpt: 'off', kimiCode: 'off' },
+          chatGptSignedIn: false,
+          kimiCodeKeySet: true,
+        },
       })[1],
     ).toEqual({
       value: {
@@ -438,10 +443,13 @@ describe('CLI orchestration items', () => {
     });
     expect(
       buildCliModelAccessItems({
-        apiFallback: 'personal',
-        preferences: { chatGpt: 'off', kimiCode: 'on' },
-        chatGptSignedIn: false,
-        kimiCodeKeySet: true,
+        kind: 'loaded',
+        access: {
+          apiFallback: 'personal',
+          preferences: { chatGpt: 'off', kimiCode: 'on' },
+          chatGptSignedIn: false,
+          kimiCodeKeySet: true,
+        },
       })[1].description,
     ).toBe('On · key configured');
 
@@ -465,11 +473,14 @@ describe('CLI orchestration items', () => {
 
   it('shows both subscription preferences as on simultaneously', () => {
     const items = buildCliModelAccessItems({
-      apiFallback: 'personal',
-      preferences: { chatGpt: 'on', kimiCode: 'on' },
-      chatGptSignedIn: true,
-      chatGptAccountLabel: 'researcher@example.com',
-      kimiCodeKeySet: true,
+      kind: 'loaded',
+      access: {
+        apiFallback: 'personal',
+        preferences: { chatGpt: 'on', kimiCode: 'on' },
+        chatGptSignedIn: true,
+        chatGptAccountLabel: 'researcher@example.com',
+        kimiCodeKeySet: true,
+      },
     });
 
     expect(items.slice(0, 2).map(({ description }) => description)).toEqual([
@@ -527,10 +538,13 @@ describe('CLI orchestration items', () => {
     ]);
     expect(
       buildCliModelAccessItems({
-        apiFallback: 'personal',
-        preferences: { chatGpt: 'off', kimiCode: 'off' },
-        chatGptSignedIn: false,
-        texraSignedIn: false,
+        kind: 'loaded',
+        access: {
+          apiFallback: 'personal',
+          preferences: { chatGpt: 'off', kimiCode: 'off' },
+          chatGptSignedIn: false,
+          texraSignedIn: false,
+        },
       }).find(
         (item) =>
           item.value.kind === 'api-fallback' &&

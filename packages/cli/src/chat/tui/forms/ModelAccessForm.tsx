@@ -52,16 +52,16 @@ export function ModelAccessForm(
     [props.apiMode],
   );
 
-  const items = buildCliModelAccessItems(
+  const items =
     status?.state === 'loaded'
-      ? status.overview.access
-      : {
-          apiFallback: props.apiMode,
-          preferences: { chatGpt: 'off', kimiCode: 'off' },
-          chatGptSignedIn: false,
-          texraSignedIn: false,
-        },
-  );
+      ? buildCliModelAccessItems({
+          kind: 'loaded',
+          access: status.overview.access,
+        })
+      : buildCliModelAccessItems({
+          kind: 'pending',
+          state: status?.state ?? 'loading',
+        });
   let detailLines: readonly string[] | undefined;
   if (status?.state === 'loaded') detailLines = status.overview.lines;
   if (status?.state === 'failed') detailLines = [status.message];

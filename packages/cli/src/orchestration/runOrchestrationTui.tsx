@@ -295,7 +295,10 @@ export function OrchestrationApp(
   const teamOpen = step.kind === 'team';
   const accountOpen = step.kind === 'account';
   const modelAccessItems = props.modelAccess
-    ? buildCliModelAccessItems(props.modelAccess)
+    ? buildCliModelAccessItems({
+        kind: 'loaded',
+        access: props.modelAccess,
+      })
     : [];
   const isPendingTeam = pending?.kind === 'preset';
   // Model-step header text, shared between the wrapped-row measurement in
