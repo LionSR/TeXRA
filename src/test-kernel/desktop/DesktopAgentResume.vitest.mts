@@ -11,6 +11,7 @@ import * as AgentExecution from '@agent/runtime/executeAgent';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import * as SessionResumeRetrieval from '@agent/runtime/SessionResumeRetrieval';
 import * as AgentRunner from '@agent/runtime/runAgent';
+import { ResumeAdmissionCancelledError } from '@agent/runtime/resumeAdmission';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { DesktopProcessResumeOwner } from '@desktop/main/desktopAgentResume';
 import {
@@ -62,13 +63,9 @@ function attachResultPresenter(
   emit = vi.fn(),
 ): { emit: ReturnType<typeof vi.fn>; detach(): void } {
   const detachHost = session.useHostInteractions({ emit, cancel: vi.fn() });
-  const detachToast = attachTerminalResultToast(session, session.interactions, {
-    replayWhenAttached: true,
-  });
   return {
     emit,
     detach() {
-      detachToast();
       detachHost();
     },
   };
@@ -89,11 +86,17 @@ function createResumeHarness(): {
   session.transcripts.ensureStream(stream);
   const owner = new DesktopProcessResumeOwner();
   const detach = owner.attach({ session, snapshots: createSnapshots() });
+  const detachTerminalResultToast = attachTerminalResultToast(
+    session,
+    session.interactions,
+    { replayWhenAttached: true },
+  );
   return {
     owner,
     session,
     dispose() {
       detach();
+      detachTerminalResultToast();
       session.dispose();
     },
   };
@@ -137,7 +140,7 @@ describe('desktop process resume owner', () => {
     });
     runAgent.mockRejectedValue(new Error('launch failed'));
     const harness = createResumeHarness();
-    const presenter = attachResultPresenter(harness.session);
+    let presenter = attachResultPresenter(harness.session);
 
     try {
       await expect(harness.owner.tryResumeStream(stream)).resolves.toBe(false);
@@ -145,6 +148,11 @@ describe('desktop process resume owner', () => {
       expect(presenter.emit).toHaveBeenCalledWith('requestShowError', {
         message: 'Resume failed: launch failed',
       });
+      expect(runAgent.mock.calls[0]?.[1].suppressErrorNotification).toBe(true);
+
+      presenter.detach();
+      presenter = attachResultPresenter(harness.session);
+      expect(presenter.emit).not.toHaveBeenCalled();
     } finally {
       presenter.detach();
       harness.dispose();
@@ -250,6 +258,77 @@ describe('desktop process resume owner', () => {
     }
   });
 
+  it('does not duplicate a terminal resume failure presentation', async () => {
+    retrieveSessionResumeData.mockResolvedValue({
+      type: 'workflow',
+      agentConfig: config,
+      executionId,
+    });
+    const harness = createResumeHarness();
+    runAgent.mockImplementation(async (_request, options) => {
+      await options.onRun?.({} as never);
+      options.session?.publishRunEvent(stream, {
+        type: 'result',
+        outcome: RUN_OUTCOME.FAILED,
+        executionId,
+        streamId: stream,
+        agentName: 'proofreader',
+        category: 'workflow',
+        isSubagent: false,
+        error: { kind: 'unexpected', message: 'terminal resume failed' },
+      });
+      throw new Error('terminal resume failed');
+    });
+
+    try {
+      await expect(harness.owner.tryResumeStream(stream)).resolves.toBe(false);
+      const emit = vi.fn();
+      harness.session.useHostInteractions({ emit, cancel: vi.fn() });
+      await Promise.resolve();
+      expect(emit).toHaveBeenCalledOnce();
+      expect(emit).toHaveBeenCalledWith('requestShowError', {
+        message: 'terminal resume failed',
+      });
+    } finally {
+      harness.dispose();
+    }
+  });
+
+  it('reports a resume failure that follows a completed terminal result', async () => {
+    retrieveSessionResumeData.mockResolvedValue({
+      type: 'workflow',
+      agentConfig: config,
+      executionId,
+    });
+    const harness = createResumeHarness();
+    runAgent.mockImplementation(async (_request, options) => {
+      await options.onRun?.({} as never);
+      options.session?.publishRunEvent(stream, {
+        type: 'result',
+        outcome: RUN_OUTCOME.COMPLETED,
+        executionId,
+        streamId: stream,
+        agentName: 'proofreader',
+        category: 'workflow',
+        isSubagent: false,
+      });
+      throw new Error('final artifact flush failed');
+    });
+
+    try {
+      await expect(harness.owner.tryResumeStream(stream)).resolves.toBe(false);
+      const emit = vi.fn();
+      harness.session.useHostInteractions({ emit, cancel: vi.fn() });
+      await Promise.resolve();
+      expect(emit).toHaveBeenCalledOnce();
+      expect(emit).toHaveBeenCalledWith('requestShowError', {
+        message: 'Resume failed: final artifact flush failed',
+      });
+    } finally {
+      harness.dispose();
+    }
+  });
+
   it('rejects a termination-triggered wake after shutdown disables resume', async () => {
     const harness = createResumeHarness();
 
@@ -308,6 +387,43 @@ describe('desktop process resume owner', () => {
       await expect(resume).resolves.toBe(false);
       expect(runAgent).not.toHaveBeenCalled();
       expect(harness.session.transcripts.has(stream)).toBe(false);
+    } finally {
+      harness.dispose();
+    }
+  });
+
+  it('rejects a stale process store after another process deletes the stream', async () => {
+    retrieveSessionResumeData.mockResolvedValue({
+      type: 'workflow',
+      agentConfig: config,
+      executionId,
+    });
+    const harness = createResumeHarness();
+    vi.spyOn(
+      harness.session.transcripts,
+      'hasAuthoritativeStream',
+    ).mockResolvedValue(false);
+    runAgent.mockImplementation(async (_request, options) => {
+      if ((await options.canAcquireResumeLease?.()) === false) {
+        throw new ResumeAdmissionCancelledError(executionId);
+      }
+      return {
+        executionId,
+        streamId: stream,
+        category: 'workflow',
+        outcome: RUN_OUTCOME.COMPLETED,
+        outputs: [],
+        compileFailures: [],
+      };
+    });
+
+    try {
+      await expect(harness.owner.tryResumeStream(stream)).resolves.toBe(false);
+      expect(harness.session.transcripts.has(stream)).toBe(true);
+
+      const emit = vi.fn();
+      harness.session.useHostInteractions({ emit, cancel: vi.fn() });
+      expect(emit).not.toHaveBeenCalled();
     } finally {
       harness.dispose();
     }

@@ -334,8 +334,8 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
         }
       }
 
-      async exists(): Promise<boolean> {
-        return false;
+      async exists(key: string): Promise<boolean> {
+        return kvStoreBacking.has(this.key(key));
       }
 
       async modifiedAt(): Promise<number | undefined> {
@@ -476,6 +476,13 @@ async function createBridge(
     await progressSnapshotStore.flush();
   }
   const session = createSession(transcripts);
+  const { attachTerminalResultToast } =
+    await import('@agent/runtime/terminalResultToast');
+  const detachTerminalResultToast = attachTerminalResultToast(
+    session,
+    session.interactions,
+    { replayWhenAttached: true },
+  );
   const { SessionStores } =
     await import('@controllers/progressView/backend/state/SessionStores');
   const { releaseStreamResources } = await import('@tools/approval');
@@ -530,6 +537,7 @@ async function createBridge(
     dispose: () => {
       bridge.dispose();
       disposeResumeHandler();
+      detachTerminalResultToast();
       detachSnapshotEvents();
       session.dispose();
     },
@@ -1387,9 +1395,14 @@ describe('DesktopProgressBridge', () => {
 
   it('presents a merge failure that occurs before lifecycle startup', async () => {
     const failure = new Error('model setup failed');
-    const runAgent = vi.fn(async () => {
-      throw failure;
-    });
+    const runAgent = vi.fn(
+      async (
+        _request: unknown,
+        _options: Parameters<RunExecutionRequest>[1],
+      ) => {
+        throw failure;
+      },
+    );
     const showErrorMessage = vi.fn(async () => undefined);
     const bridge = await createBridge([], { runAgent, showErrorMessage });
 
@@ -1402,15 +1415,31 @@ describe('DesktopProgressBridge', () => {
         'Merge failed: model setup failed',
       ),
     );
+    expect(runAgent.mock.calls[0]?.[1].suppressErrorNotification).toBe(true);
   });
 
-  it('leaves a terminal merge failure to the session result presenter', async () => {
+  it('presents a terminal merge failure exactly once from its result', async () => {
+    const mergeExecutionId = 'merge-terminal-failure';
+    const mergeStreamId = 'merge-terminal-stream';
     const runAgent = vi.fn(
       async (
         _request: unknown,
         options: Parameters<RunExecutionRequest>[1],
       ) => {
-        await options.onRun?.({});
+        await options.onRun?.({ executionId: mergeExecutionId });
+        options.session.publishRunEvent(mergeStreamId, {
+          type: 'result',
+          outcome: RUN_OUTCOME.FAILED,
+          executionId: mergeExecutionId,
+          streamId: mergeStreamId,
+          agentName: 'proofreader',
+          category: 'workflow',
+          isSubagent: false,
+          error: {
+            kind: 'unexpected',
+            message: 'merge execution failed',
+          },
+        });
         throw new Error('merge execution failed');
       },
     );
@@ -1421,9 +1450,46 @@ describe('DesktopProgressBridge', () => {
       config: workflowTaskState().agentConfig,
     });
 
-    await vi.waitFor(() => expect(runAgent).toHaveBeenCalledOnce());
-    await settleProgressEvents();
-    expect(showErrorMessage).not.toHaveBeenCalled();
+    await vi.waitFor(() =>
+      expect(showErrorMessage).toHaveBeenCalledWith('merge execution failed'),
+    );
+    expect(showErrorMessage).toHaveBeenCalledOnce();
+  });
+
+  it('presents a post-result merge failure when the result completed', async () => {
+    const mergeExecutionId = 'merge-post-result-failure';
+    const mergeStreamId = 'merge-post-result-stream';
+    const runAgent = vi.fn(
+      async (
+        _request: unknown,
+        options: Parameters<RunExecutionRequest>[1],
+      ) => {
+        await options.onRun?.({ executionId: mergeExecutionId });
+        options.session.publishRunEvent(mergeStreamId, {
+          type: 'result',
+          outcome: RUN_OUTCOME.COMPLETED,
+          executionId: mergeExecutionId,
+          streamId: mergeStreamId,
+          agentName: 'proofreader',
+          category: 'workflow',
+          isSubagent: false,
+        });
+        throw new Error('artifact flush failed');
+      },
+    );
+    const showErrorMessage = vi.fn(async () => undefined);
+    const bridge = await createBridge([], { runAgent, showErrorMessage });
+
+    bridge.fileActions.host.startExecution({
+      config: workflowTaskState().agentConfig,
+    });
+
+    await vi.waitFor(() =>
+      expect(showErrorMessage).toHaveBeenCalledWith(
+        'Merge failed: artifact flush failed',
+      ),
+    );
+    expect(showErrorMessage).toHaveBeenCalledOnce();
   });
 
   it('does not expose the desktop bridge before transcript opening settles', async () => {
@@ -2742,6 +2808,13 @@ describe('DesktopProgressBridge', () => {
       transcripts.ensureStream(streamId);
       await transcripts.flush();
       const processSession = createSession(transcripts);
+      const { attachTerminalResultToast } =
+        await import('@agent/runtime/terminalResultToast');
+      const detachTerminalResultToast = attachTerminalResultToast(
+        processSession,
+        processSession.interactions,
+        { replayWhenAttached: true },
+      );
       const { initializeDesktopProcessStores } =
         await import('@desktop/main/desktopProcessStores');
       const progressSnapshotStore = createProgressSnapshotStore();
@@ -2873,6 +2946,7 @@ describe('DesktopProgressBridge', () => {
         dispose: () => {
           for (const bridge of presentationBridges) bridge.dispose();
           disposeResumeHandler();
+          detachTerminalResultToast();
           processStores.dispose();
           processSession.dispose();
         },
