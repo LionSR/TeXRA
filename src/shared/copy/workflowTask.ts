@@ -44,6 +44,32 @@ export function workflowPhaseTaskProgress(
   };
 }
 
+/** One workflow phase as its emitter names and orders it. */
+export interface WorkflowPhaseHeading {
+  readonly phaseLabel: string;
+  /** 0-based phase order within the run, when the emitter provides it. */
+  readonly phaseIndex?: number;
+  /** Total phase count for the run, when the emitter provides it. */
+  readonly phaseTotal?: number;
+}
+
+/**
+ * Canonical heading copy for one workflow phase (`Reduce (2/3)`), shared by
+ * every surface that names a phase: the transcript's `◆` divider, the live
+ * run-status band, and the focused run's child-list group headers. The leading
+ * glyph is left to the caller — the band deliberately carries none. The index
+ * is 0-based on the wire and 1-based in the copy.
+ */
+export function formatWorkflowPhaseHeading(
+  phase: WorkflowPhaseHeading,
+): string {
+  const counts =
+    phase.phaseIndex !== undefined && phase.phaseTotal !== undefined
+      ? ` (${phase.phaseIndex + 1}/${phase.phaseTotal})`
+      : '';
+  return `${phase.phaseLabel}${counts}`;
+}
+
 /**
  * The one explanatory-clause rule for a workflow task, shared by every host: a
  * failure reports its error, and a task the run never reached says so. A user
