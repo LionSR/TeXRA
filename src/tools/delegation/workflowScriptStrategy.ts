@@ -4,8 +4,9 @@
  * Terminal-only: a workflow-script run executes once to completion inside
  * `launch` and delivers its result through the same follow-up-queue path every
  * detached child uses. No `runTurn` — the loop never calls it for a strategy
- * whose first (and only) turn is always terminal (the same shape
- * `createNativeWorkflowStrategy` uses).
+ * whose first (and only) turn is always terminal. This is the only strategy
+ * that omits `runTurn`; `nativeSubagentStrategy.ts` declares one unconditionally
+ * (it is merely unreachable for a workflow-category child).
  *
  * Host-agnostic, VS Code-free.
  */
