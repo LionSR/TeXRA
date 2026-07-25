@@ -672,7 +672,7 @@ const SCENARIOS = [
     frame: 'viewport',
     expect: [
       '/api',
-      'Choose ChatGPT, Kimi Code',
+      'Choose ChatGPT, Kimi Code, included T...',
       '/auth',
       'Show both accounts and active',
       '/login',
@@ -682,7 +682,7 @@ const SCENARIOS = [
     unexpect: [
       '/ap  Switch',
       '/log  Sign',
-      'personal API keys',
+      'personal model access',
       'automatically',
     ],
     maxLineColumns: 52,
@@ -1339,7 +1339,7 @@ const SCENARIOS = [
       'Esc close',
     ],
     unexpect: [
-      'Choose a memory to preview in the transcript.',
+      'Choose a memory to preview. Press Esc to close.',
       'No memory files found.',
       '/memory - error',
     ],
