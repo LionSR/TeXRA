@@ -5,13 +5,11 @@ import * as vscode from 'vscode';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { notifyFollowUpSent } from '@agent/followUp/ToolUseFollowUp';
-import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import type { StreamTabId } from '@shared/schemas';
 
 export function stopAgent(streamId: StreamTabId): void {
   defaultSession().executions.stopAgentStream(streamId, {
     detachActiveChildren: detachSubagentsOnStop(),
-    runtimeHost: extensionAgentRuntimeHost,
   });
 }
 

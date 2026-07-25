@@ -15,7 +15,6 @@ import {
   ExecutionLeaseLostError,
   markOwnedExecutionLeaseUndurable,
 } from '@agent/storage/executionLease';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionApprovals } from '@agent/runtime/streamApprovalQueue';
 import {
@@ -52,36 +51,8 @@ import { SessionEventHub } from './SessionEventHub';
 
 const logger = createChannelTrace('executionRegistry');
 
-export interface StopAgentStreamOptions {
-  readonly detachActiveChildren?: boolean;
-  readonly runtimeHost?: AgentRuntimeHost;
-}
-
-type StopAgentChildPolicy = 'cascade' | 'detach';
-
-export type StopAgentStreamResult =
-  | {
-      readonly kind: 'interrupted';
-      readonly streamId: StreamTabId;
-      readonly childPolicy: StopAgentChildPolicy;
-    }
-  | {
-      readonly kind: 'marked_stopped';
-      readonly streamId: StreamTabId;
-      readonly childPolicy: StopAgentChildPolicy;
-    }
-  | {
-      readonly kind: 'no_target';
-      readonly streamId: StreamTabId;
-      readonly childPolicy: StopAgentChildPolicy;
-    }
-  | {
-      readonly kind: 'missing_runtime_host';
-      readonly streamId: StreamTabId;
-      readonly childPolicy: 'detach';
-    };
-
-export interface KillExecutionOptions {
+/** Child policy shared by `kill()` and `stopAgentStream()`. */
+export interface ExecutionStopOptions {
   readonly detachActiveChildren?: boolean;
 }
 
@@ -510,7 +481,7 @@ export class ExecutionRegistry {
   }
 
   /** Terminate an execution via its handle. Returns true on success. */
-  kill(executionId: string, options: KillExecutionOptions = {}): boolean {
+  kill(executionId: string, options: ExecutionStopOptions = {}): boolean {
     const handle = this.handles.get(executionId);
     if (!handle) return false;
     const visited = new Set<string>();
@@ -518,11 +489,7 @@ export class ExecutionRegistry {
       options.detachActiveChildren === true &&
       handle instanceof AgentExecutionHandle
     ) {
-      this.detachActiveChildren(
-        handle.childStreamId,
-        handle.runtimeHost,
-        visited,
-      );
+      this.detachActiveChildren(handle.childStreamId, visited);
     }
     const result = this.terminate(handle, visited, {
       cascadeChildren: options.detachActiveChildren !== true,
@@ -649,7 +616,6 @@ export class ExecutionRegistry {
    */
   detachActiveChildren(
     parentStreamId: StreamTabId,
-    _runtimeHost: AgentRuntimeHost,
     visited: Set<string> = new Set(),
   ): void {
     for (const handle of this.handles.values()) {
@@ -676,25 +642,15 @@ export class ExecutionRegistry {
    */
   stopAgentStream(
     streamId: StreamTabId,
-    options: StopAgentStreamOptions = {},
-  ): StopAgentStreamResult {
+    options: ExecutionStopOptions = {},
+  ): void {
     const rootHandle = this.getAgentHandleByStream(streamId);
-    const runtimeHost = options.runtimeHost ?? rootHandle?.runtimeHost;
-    const childPolicy =
-      options.detachActiveChildren === true ? 'detach' : 'cascade';
     // Shared across the child sweep and the root cascade so each execution in
     // the chain is interrupted exactly once.
     const visited = new Set<string>();
 
     if (options.detachActiveChildren === true) {
-      if (!runtimeHost) {
-        return {
-          kind: 'missing_runtime_host',
-          streamId,
-          childPolicy: 'detach',
-        };
-      }
-      this.detachActiveChildren(streamId, runtimeHost, visited);
+      this.detachActiveChildren(streamId, visited);
     } else {
       this.interruptActiveChildren(streamId, visited, {
         cascadeChildren: true,
@@ -706,14 +662,12 @@ export class ExecutionRegistry {
           cascadeChildren: options.detachActiveChildren !== true,
         })
       : false;
-    if (stopped) {
-      return { kind: 'interrupted', streamId, childPolicy };
-    }
-    if (!runtimeHost) {
-      return { kind: 'no_target', streamId, childPolicy };
-    }
+    // `terminate()` already publishes CANCELLED for a stream it owned; an
+    // ownerless (or already-untracked) stream still needs the write. The
+    // stream-status machine rejects the transition out of a terminal phase,
+    // so a finished stream keeps its outcome.
+    if (stopped) return;
     this.cancelStreamStatus(streamId);
-    return { kind: 'marked_stopped', streamId, childPolicy };
   }
 
   /** Get active subagent and process children for a parent stream. */
@@ -753,19 +707,6 @@ export class ExecutionRegistry {
       s.delete(cb);
       if (s.size === 0) this.persistentListeners.delete(executionId);
     };
-  }
-
-  /**
-   * Observe the current handle immediately, then every replacement or removal.
-   * Registering before the initial read closes the usual get/listen race.
-   */
-  observeHandle(
-    executionId: string,
-    cb: (handle: ExecutionHandle | undefined) => void,
-  ): () => void {
-    const detach = this.addListener(executionId, cb);
-    cb(this.handles.get(executionId));
-    return detach;
   }
 
   /** Observe handle registrations, replacements, and removals across all ids. */
