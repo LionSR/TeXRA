@@ -1176,6 +1176,14 @@ describe('ModelHandlerAnthropic message guards', () => {
     const handler = createAnthropicHandler({
       supportsReasoning: true,
       supportsReasoningEffort: true,
+      supportsAdaptiveThinking: true,
+      supportedReasoningEfforts: [
+        ReasoningEffort.LOW,
+        ReasoningEffort.MEDIUM,
+        ReasoningEffort.HIGH,
+        ReasoningEffort.XHIGH,
+        ReasoningEffort.MAX,
+      ],
       reasoningEffort: ReasoningEffort.XHIGH,
     });
     handler.config.fullName = 'claude-opus-4-8';
@@ -1205,6 +1213,14 @@ describe('ModelHandlerAnthropic message guards', () => {
     const handler = createAnthropicHandler({
       supportsReasoning: true,
       supportsReasoningEffort: true,
+      supportsAdaptiveThinking: true,
+      supportedReasoningEfforts: [
+        ReasoningEffort.LOW,
+        ReasoningEffort.MEDIUM,
+        ReasoningEffort.HIGH,
+        ReasoningEffort.XHIGH,
+        ReasoningEffort.MAX,
+      ],
       reasoningEffort: ReasoningEffort.MAX,
     });
     handler.config.fullName = 'claude-opus-4-8';
@@ -1225,7 +1241,27 @@ describe('ModelHandlerAnthropic message guards', () => {
     );
   });
 
-  it('sends the llm-zoo opus5T model with native Opus 5 thinking traits', async () => {
+  it('uses paired Opus 5 entry capabilities instead of their shared fullName', async () => {
+    const baseHandler = new ModelHandlerAnthropic(
+      buildTestModelConfig(MODEL_CONFIGS.opus5, {
+        capabilities: { supportsTokenCounting: false },
+      }),
+    );
+    stubHandlerForTest(baseHandler);
+
+    const baseCapture = createCapturingAnthropicClient('claude-opus-5');
+    await baseHandler.createResponse({
+      client: baseCapture.client,
+      messages: helloMessages(),
+      temperature: 0.7,
+    });
+
+    const baseOptions = baseCapture.messageOptions[0] ?? {};
+    assert.equal(MODEL_CONFIGS.opus5.fullName, MODEL_CONFIGS.opus5T.fullName);
+    assert.equal(baseOptions.thinking, undefined);
+    assert.equal(baseOptions.output_config, undefined);
+    assert.equal(baseOptions.temperature, 0.7);
+
     const handler = new ModelHandlerAnthropic(
       buildTestModelConfig(MODEL_CONFIGS.opus5T, {
         capabilities: {

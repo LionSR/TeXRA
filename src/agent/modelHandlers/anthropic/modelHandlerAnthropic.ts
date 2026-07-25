@@ -106,7 +106,6 @@ import {
 import {
   buildThinkingConfig,
   isCompactionEligibleModel,
-  supportsAdaptiveThinking,
 } from './anthropicThinking';
 import {
   buildAnthropicAssistantContent,
@@ -720,7 +719,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       // Only add the beta header for older models that need it explicitly.
       if (
         this.capabilities.supportsInterleavedThinking &&
-        !supportsAdaptiveThinking(this.config.fullName)
+        !this.capabilities.supportsAdaptiveThinking
       ) {
         ensureBeta(options, INTERLEAVED_THINKING_BETA);
       }
@@ -737,6 +736,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
       const thinkingConfig = buildThinkingConfig({
         fullName: this.config.fullName,
+        capabilities: this.capabilities,
         reasoningEffort: this.getEffectiveReasoningEffort(),
         maxTokens: options.max_tokens,
         useStreaming,

@@ -26,6 +26,9 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Claude effort controls now match each model's supported tiers** — Opus
+  4.7 accepts Extra High, while Opus 4.6 and Sonnet 4.6 map Extra High to
+  their supported Max tier instead of using stale local limits.
 - **Workflow task costs now reflect each task's own spend** — task rows and
   cards no longer show the workflow run's cumulative cost when each task
   finishes.
