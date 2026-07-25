@@ -18,7 +18,7 @@ import {
 } from '@agent/runtime/ExecutionHandle';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
-import { formatResultCount, formatTimestamp } from '@utils/text/stringUtils';
+import { formatTimestamp } from '@utils/text/stringUtils';
 import {
   formatStatusInfo,
   formatTodoSection,
@@ -66,13 +66,8 @@ export function formatListingHeader(
   start: number,
   end: number,
   total: number,
-  bgCount: number,
 ): string {
-  const bgSuffix =
-    bgCount > 0
-      ? `, ${formatResultCount(bgCount, 'background process', 'background processes')} running`
-      : '';
-  return `Executions (showing ${start}–${end} of ${total}${bgSuffix}, most recent first):`;
+  return `Executions (showing ${start}–${end} of ${total}, most recent first):`;
 }
 
 /** Format a single child execution as a summary line. */

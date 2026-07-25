@@ -11,12 +11,10 @@ import type { AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   AgentExecutionHandle,
-  ProcessExecutionHandle,
   type LiveToolUseFlowContext,
 } from '@agent/runtime/ExecutionHandle';
 import { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { ProcessOutputPoller } from '@agent/runtime/ProcessOutputPoller';
 import {
   SessionEventHub,
   type SessionEvent,
@@ -206,37 +204,16 @@ describe('executionRegistry', () => {
     registry.dispose();
   });
 
-  it('owns process-output poller teardown', () => {
-    const explicit = createRecordingHost();
-    const processOutput = new ProcessOutputPoller();
-    const dispose = vi.spyOn(processOutput, 'dispose');
-    const flush = vi.spyOn(processOutput, 'flush');
-    const registry = new ExecutionRegistry({ processOutput });
-    const handle = new ProcessExecutionHandle(
-      'exec-process-output-dispose-test',
-      'stream-process-output-dispose-test' as StreamTabId,
-      'bash',
-      () => true,
-      explicit.host,
-    );
-
-    registry.track(handle);
-    registry.dispose();
-
-    expect(dispose).toHaveBeenCalledOnce();
-    expect(flush).not.toHaveBeenCalled();
-  });
-
   it('drains a background-bash AgentExecutionHandle on shutdown without disturbing a resumable agent execution (issue #8155)', () => {
     // Regression for #8155: killBackgroundProcesses() previously only walked
-    // ProcessExecutionHandles, missing a background `bash` run — which is
-    // registered as an AgentExecutionHandle (see createChildStream in
-    // tools/bash.ts) with its OS-process kill reachable only via the
-    // interrupt handler BashBackgroundSession attaches. The two AgentExecutionHandles
-    // below are tracked concurrently, mirroring the real interleaving at
-    // shutdown: a background bash child stream alongside an ordinary
-    // resumable agent execution (e.g. a native subagent loop, whose own
-    // loop-level interrupt handler must stay untouched so restart recovery
+    // the (now deleted) ProcessExecutionHandles, missing a background `bash`
+    // run — which is registered as an AgentExecutionHandle (see
+    // createChildStream in tools/bash.ts) with its OS-process kill reachable
+    // only via the interrupt handler BashBackgroundSession attaches. The two
+    // AgentExecutionHandles below are tracked concurrently, mirroring the real
+    // interleaving at shutdown: a background bash child stream alongside an
+    // ordinary resumable agent execution (e.g. a native subagent loop, whose
+    // own loop-level interrupt handler must stay untouched so restart recovery
     // can resume it). Drain must reach only the former.
     const explicit = createRecordingHost();
     const streamStatus = new StreamStatusMachine();
@@ -252,7 +229,6 @@ describe('executionRegistry', () => {
       'child-resumable-agent-drain-test' as StreamTabId;
     const bashInterrupt = vi.fn();
     const agentInterrupt = vi.fn();
-    const processKillFn = vi.fn(() => true);
 
     try {
       // Background bash: an AgentExecutionHandle whose attached interrupt
@@ -286,20 +262,9 @@ describe('executionRegistry', () => {
         status: STREAM_PHASE.RUNNING,
       });
 
-      // A genuine background process handle keeps working exactly as before.
-      const processHandle = new ProcessExecutionHandle(
-        'exec-process-drain-test',
-        bashParentStreamId,
-        'bash',
-        processKillFn,
-        explicit.host,
-      );
-      registry.track(processHandle);
-
       registry.killBackgroundProcesses();
 
       expect(bashInterrupt).toHaveBeenCalledOnce();
-      expect(processKillFn).toHaveBeenCalledOnce();
       expect(agentInterrupt).not.toHaveBeenCalled();
       // Neither AgentExecutionHandle's tracked status changes: killing a
       // background OS process bypasses the generic terminate()/kill() path
@@ -1166,16 +1131,14 @@ describe('executionRegistry', () => {
       expect(rootInterrupt).toHaveBeenCalledOnce();
       expect(childInterrupt).not.toHaveBeenCalled();
       expect(grandchildInterrupt).not.toHaveBeenCalled();
-      expect(registry.getActiveChildren(rootStreamId).subagents).toHaveLength(
-        0,
-      );
+      expect(registry.getActiveChildren(rootStreamId)).toHaveLength(0);
       expect(
         registry.getAgentHandleByStream(childStreamId)?.parentStreamId,
       ).toBe(childStreamId);
       expect(
         registry.getAgentHandleByStream(grandchildStreamId)?.parentStreamId,
       ).toBe(childStreamId);
-      expect(registry.getActiveChildren(childStreamId).subagents).toEqual([
+      expect(registry.getActiveChildren(childStreamId)).toEqual([
         expect.objectContaining({ childStreamId: grandchildStreamId }),
       ]);
       expect(streamStatus.get(rootStreamId)).toBe(STREAM_PHASE.CANCELLED);
@@ -1323,7 +1286,7 @@ describe('executionRegistry', () => {
         createHandle(executionId, parentStreamId, childStreamId, explicit.host),
       );
 
-      expect(registry.getActiveChildren(parentStreamId).subagents).toEqual([
+      expect(registry.getActiveChildren(parentStreamId)).toEqual([
         expect.objectContaining({
           executionId,
           status: STREAM_STATUS.WAITING,
@@ -1349,7 +1312,7 @@ describe('executionRegistry', () => {
       );
 
       expect(streamStatus.get(childStreamId)).toBe(STREAM_STATUS.RUNNING);
-      expect(registry.getActiveChildren(parentStreamId).subagents).toEqual([
+      expect(registry.getActiveChildren(parentStreamId)).toEqual([
         expect.objectContaining({
           executionId,
           status: STREAM_STATUS.RUNNING,
@@ -1387,7 +1350,7 @@ describe('executionRegistry', () => {
         childStreamId,
         STREAM_PHASE.CANCELLED,
       );
-      expect(registry.getActiveChildren(parentStreamId).subagents).toEqual([
+      expect(registry.getActiveChildren(parentStreamId)).toEqual([
         expect.objectContaining({
           executionId,
           status: STREAM_PHASE.CANCELLED,

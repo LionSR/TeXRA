@@ -137,7 +137,6 @@ describe('agent workspace work-plan state', () => {
 
     const context = formatPostCompactionContext(
       [],
-      [],
       state.workPlan.toSnapshot(),
     );
 
@@ -148,7 +147,7 @@ describe('agent workspace work-plan state', () => {
 
     expect(state.workPlan.planSummary).toBeNull();
     expect(
-      formatPostCompactionContext([], [], state.workPlan.toSnapshot()) ?? '',
+      formatPostCompactionContext([], state.workPlan.toSnapshot()) ?? '',
     ).not.toContain('<current-plan');
   });
 
