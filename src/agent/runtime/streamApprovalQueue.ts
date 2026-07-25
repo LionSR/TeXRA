@@ -3,12 +3,7 @@
  *
  * Encapsulates the shared concerns of bash and tool-edit approvals:
  *   - serialized request queues (one prompt at a time per stream)
- *   - registry of in-flight pending approvals keyed by request id
  *   - per-stream bypass state announced over a bound progress event
- *   - rejection on stream cleanup
- *
- * Parameterized by the approval result type so each controller can carry
- * domain-specific result fields (e.g. tool-edit appliedContent / userPatch).
  *
  * Controller instances live on {@link SessionApprovals}, one per
  * `SessionHandle` (#8144) — there is no process-global controller, so two
@@ -17,11 +12,9 @@
 
 import PQueue from 'p-queue';
 
-import type { ToolEditApprovalResult } from '@platform/interfaces';
 import type { StreamTabId } from '@shared/schemas';
 
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
-import type { HostBashApprovalResult } from './HostInteractions';
 
 /** Progress events that announce per-stream approval-bypass changes. */
 type ApprovalBypassEvent =
@@ -42,8 +35,8 @@ const ALL_BYPASS_ANCESTRY_KINDS: readonly BypassAncestryKind[] = [
  * Per-stream bypass state bound to the progress event that announces it.
  *
  * Single implementation behind the tool-edit, bash, and proposal (super-YOLO)
- * bypass toggles, so set/toggle/clear semantics and UI notification stay
- * uniform across approval kinds.
+ * bypass values, so set/clear semantics and UI notification stay uniform
+ * across approval kinds.
  *
  * A stream with no explicit bypass value of its own defers to its ancestor
  * chain (see `resolveParent`) rather than defaulting straight to `false` —
@@ -64,8 +57,6 @@ export interface StreamApprovalBypass {
     runtimeHost?: AgentRuntimeHost,
     options?: { silent?: boolean },
   ): void;
-  /** Toggle per-stream bypass, announce it, and return the new state. */
-  toggleBypass(streamId: StreamTabId, runtimeHost: AgentRuntimeHost): boolean;
   clearForStream(streamId: StreamTabId): void;
   clearAll(): void;
 }
@@ -118,15 +109,6 @@ function createStreamApprovalBypass(
   return {
     isBypassed: resolve,
     setBypass,
-    toggleBypass(streamId, runtimeHost) {
-      // Flip the *resolved* (ancestry-aware) state, not just this stream's
-      // own explicit entry — otherwise a stream inheriting `true` from a
-      // parent would toggle to an explicit `true` on the first press (no
-      // visible change) instead of turning bypass off.
-      const next = !resolve(streamId);
-      setBypass(streamId, next, runtimeHost);
-      return next;
-    },
     clearForStream(streamId) {
       byStream.delete(streamId);
     },
@@ -136,60 +118,26 @@ function createStreamApprovalBypass(
   };
 }
 
-interface PendingApproval<R extends { accepted: boolean }> {
-  streamId?: StreamTabId;
-  isSettled: () => boolean;
-  settle: (result: R) => void;
-}
-
-interface StreamApprovalController<R extends { accepted: boolean }> {
-  registerPending(id: string, entry: PendingApproval<R>): void;
-  unregisterPending(id: string): void;
+interface StreamApprovalController {
   bypass: StreamApprovalBypass;
   enqueue<T>(
     streamId: StreamTabId | undefined,
     run: () => Promise<T>,
   ): Promise<T>;
-  rejectPendingForStream(streamId: StreamTabId): void;
-  /**
-   * Reject pending entries with no concrete stream context (streamId is
-   * undefined or empty). The controller is session-owned, so this never
-   * reaches another session's streamless approvals.
-   */
-  rejectUnscopedPending(): void;
-  rejectAllPending(): void;
 }
 
-interface StreamApprovalControllerOptions<R extends { accepted: boolean }> {
-  rejectionResult: () => R;
+interface StreamApprovalControllerOptions {
   bypassEvent: ApprovalBypassEvent;
   resolveParent: (streamId: StreamTabId) => StreamTabId | undefined;
   resolveDescendants: (streamId: StreamTabId) => readonly StreamTabId[];
 }
 
-function createStreamApprovalController<R extends { accepted: boolean }>(
-  options: StreamApprovalControllerOptions<R>,
-): StreamApprovalController<R> {
-  const pending = new Map<string, PendingApproval<R>>();
+function createStreamApprovalController(
+  options: StreamApprovalControllerOptions,
+): StreamApprovalController {
   const queues = new Map<StreamTabId | undefined, PQueue>();
 
-  function rejectWhere(
-    predicate: (entry: PendingApproval<R>) => boolean,
-  ): void {
-    for (const entry of pending.values()) {
-      if (!entry.isSettled() && predicate(entry)) {
-        entry.settle(options.rejectionResult());
-      }
-    }
-  }
-
   return {
-    registerPending(id, entry) {
-      pending.set(id, entry);
-    },
-    unregisterPending(id) {
-      pending.delete(id);
-    },
     bypass: createStreamApprovalBypass(
       options.bypassEvent,
       options.resolveParent,
@@ -218,15 +166,6 @@ function createStreamApprovalController<R extends { accepted: boolean }>(
         }
       });
     },
-    rejectPendingForStream(streamId) {
-      rejectWhere((entry) => entry.streamId === streamId);
-    },
-    rejectUnscopedPending() {
-      rejectWhere((entry) => !entry.streamId);
-    },
-    rejectAllPending() {
-      rejectWhere(() => true);
-    },
   };
 }
 
@@ -237,8 +176,8 @@ function createStreamApprovalController<R extends { accepted: boolean }>(
  * `currentSession()`, host code passes its own session explicitly.
  */
 export interface SessionApprovals {
-  readonly toolEdit: StreamApprovalController<ToolEditApprovalResult>;
-  readonly bash: StreamApprovalController<HostBashApprovalResult>;
+  readonly toolEdit: StreamApprovalController;
+  readonly bash: StreamApprovalController;
   /**
    * Per-stream bypass for agent delegation proposals (super-YOLO). Proposals
    * settle through the run coordinators rather than a stream approval queue,
@@ -279,11 +218,9 @@ export interface SessionApprovals {
    */
   forgetStreamAncestry(streamId: StreamTabId): void;
   /**
-   * Reject every pending approval and clear all bypass + proposal state for
-   * this session. Used by session teardown and the session-wide
-   * `cleanupAllApprovals` sweep.
+   * Clear all bypass + proposal + ancestry state for this session.
    */
-  rejectAndClearAll(): void;
+  clearAll(): void;
 }
 
 export function createSessionApprovals(): SessionApprovals {
@@ -318,14 +255,12 @@ export function createSessionApprovals(): SessionApprovals {
       return descendants;
     };
 
-  const toolEdit = createStreamApprovalController<ToolEditApprovalResult>({
-    rejectionResult: () => ({ accepted: false }),
+  const toolEdit = createStreamApprovalController({
     bypassEvent: 'updateToolEditApprovalBypassState',
     resolveParent: resolveParentFor('toolEdit'),
     resolveDescendants: resolveDescendantsFor('toolEdit'),
   });
-  const bash = createStreamApprovalController<HostBashApprovalResult>({
-    rejectionResult: () => ({ accepted: false }),
+  const bash = createStreamApprovalController({
     bypassEvent: 'updateBashApprovalBypassState',
     resolveParent: resolveParentFor('bash'),
     resolveDescendants: resolveDescendantsFor('bash'),
@@ -383,9 +318,7 @@ export function createSessionApprovals(): SessionApprovals {
         graph.delete(streamId);
       }
     },
-    rejectAndClearAll() {
-      toolEdit.rejectAllPending();
-      bash.rejectAllPending();
+    clearAll() {
       toolEdit.bypass.clearAll();
       bash.bypass.clearAll();
       proposal.clearAll();

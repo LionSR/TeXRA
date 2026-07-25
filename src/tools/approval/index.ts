@@ -55,22 +55,17 @@ export function configureDelegatedChildApprovals(
 
 /**
  * Clean up all approval state for a deleted stream in the owning session.
- * Handles pending approvals (tool edits + bash), plan approvals, and YOLO mode state.
+ * Cancels pending host interactions and clears stream-scoped bypass state.
  */
 export function cleanupApprovalsForStream(
   streamId: StreamTabId,
   session: SessionHandle = defaultSession(),
 ): void {
   const { toolEdit, bash, proposal } = session.approvals;
-  // Cancel the host interaction first so its cause-carrying settlement wins;
-  // the registry sweep below is then a no-op via the idempotent
-  // `approvalSettled` guard instead of the one that determines the result.
   session.interactions.cancel({
     streamId,
     cause: 'Stream resources released.',
   });
-  toolEdit.rejectPendingForStream(streamId);
-  bash.rejectPendingForStream(streamId);
   session.approvals.forgetStreamAncestry(streamId);
   toolEdit.bypass.clearForStream(streamId);
   bash.bypass.clearForStream(streamId);
@@ -79,9 +74,9 @@ export function cleanupApprovalsForStream(
 
 /**
  * Release all agent resources held for a deleted stream: approval state
- * (pending approvals, bypass flags, pending host interactions) AND the
- * follow-up queue. These two always need to be cleared together when a stream is
- * removed, so this is the single function hosts should call instead of
+ * (bypass flags and pending host interactions) AND the follow-up queue. These
+ * two always need to be cleared together when a stream is removed, so this is
+ * the single function hosts should call instead of
  * combining {@link cleanupApprovalsForStream} + `session.followUps.release`
  * manually.
  *
@@ -97,29 +92,24 @@ export function releaseStreamResources(
 }
 
 /**
- * Reject pending tool-edit, bash, and user-question approvals in `session`
- * that have no concrete stream context (streamId is undefined or empty).
- * These would otherwise survive a per-stream
- * {@link cleanupApprovalsForStream} loop because they do not equal any
- * concrete StreamTabId. Bypass and proposal state are always streamId-keyed
- * and are not affected here.
+ * Cancel pending host interactions in `session` that have no concrete stream
+ * context (streamId is undefined or empty). These would otherwise survive a
+ * per-stream {@link cleanupApprovalsForStream} loop because they do not equal
+ * any concrete StreamTabId. Bypass and proposal state are always
+ * streamId-keyed and are not affected here.
  *
  * Desktop `deleteAllStreams` calls this after the per-stream sweep so that
  * an approval emitted without a concrete stream is rejected rather than left
- * pending with no UI prompt to answer. Approval registries are session-owned,
- * so sibling windows' streamless approvals stay intact.
+ * pending with no UI prompt to answer. Interaction state is session-owned, so
+ * sibling windows' streamless approvals stay intact.
  */
 export function cleanupUnscopedApprovals(
   session: SessionHandle = defaultSession(),
 ): void {
-  // Cancel first so its cause-carrying settlement wins over the registry
-  // sweep below (see `cleanupApprovalsForStream`).
   session.interactions.cancel({
     streamId: null,
     cause: 'Streamless approval cleanup.',
   });
-  session.approvals.toolEdit.rejectUnscopedPending();
-  session.approvals.bash.rejectUnscopedPending();
 }
 
 /**
@@ -135,7 +125,7 @@ export function cleanupUnscopedApprovals(
 export function cleanupAllApprovals(
   session: SessionHandle = defaultSession(),
 ): void {
-  session.approvals.rejectAndClearAll();
+  session.approvals.clearAll();
   session.interactions.cancel({ cause: 'All approvals cleared.' });
 }
 
