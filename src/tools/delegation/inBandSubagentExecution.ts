@@ -252,6 +252,7 @@ function logPersistenceFailure(
   executionId: ExecutionId,
   error: unknown,
 ): void {
+  markOwnedExecutionLeaseUndurable(executionId);
   logger.warn(
     LOG_CHANNEL,
     `Failed to persist subagent ${kind} for ${executionId}: ${toErrorMessage(error)}`,
