@@ -748,7 +748,7 @@ const SCENARIOS = [
     frame: 'viewport',
     expect: [
       '/api',
-      'Choose ChatGPT, Kimi Code, included T...',
+      'Choose ChatGPT, Kimi Code, included T…',
       '/auth',
       'Show both accounts and active',
       '/login',
