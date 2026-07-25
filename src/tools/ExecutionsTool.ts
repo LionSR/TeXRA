@@ -592,11 +592,7 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
   }
 
   private handleSubscribe(executionId: ExecutionId): ToolResult {
-    const {
-      streamId,
-      runtimeHost,
-      context: ctx,
-    } = requireRunStream('subscribe');
+    const { streamId, context: ctx } = requireRunStream('subscribe');
     // Subscribing to your own execution would feed every status transition
     // back into the same session, creating a self-sustaining loop of
     // <execution-activity> follow-ups.
@@ -606,7 +602,7 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
       );
     }
     try {
-      currentSession().subscriptions.bind(streamId, executionId, runtimeHost);
+      currentSession().subscriptions.bind(streamId, executionId);
     } catch (err) {
       throw new ToolError(toErrorMessage(err));
     }
