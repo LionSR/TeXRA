@@ -19,6 +19,7 @@ import {
   proposalApprovals,
   setDelegatedWorkApprovalBypasses,
   setBashApprovalSessionBypass,
+  type ToolEditApprovalResult,
 } from '@tools/approval';
 
 const sid = (s: string): StreamTabId => s as StreamTabId;
@@ -55,6 +56,48 @@ describe('approval cleanup scope (SDK Step 7d residue #5)', () => {
       expect(isBashApprovalBypassedForStream(b)).toBe(true);
     } finally {
       cleanupApprovalsForStream(b);
+    }
+  });
+
+  it('lets the cancellation cause win over the tool-edit registry sweep (#9142)', () => {
+    // Mirrors nativeToolEditApproval.ts / desktopToolEditApproval.ts: a host
+    // adapter's own `cancel` and the session's tool-edit registry both settle
+    // the *same* entry through a shared, idempotent `settle` closure. Whoever
+    // calls it first determines the user-visible result.
+    const session = createTestSession();
+    const streamId = sid('s:cause-swallow');
+    let settled: ToolEditApprovalResult | undefined;
+    let isSettled = false;
+    const settle = (result: ToolEditApprovalResult): void => {
+      if (isSettled) return;
+      isSettled = true;
+      settled = result;
+    };
+
+    session.approvals.toolEdit.registerPending(streamId, {
+      streamId,
+      isSettled: () => isSettled,
+      settle,
+    });
+    session.useHostInteractions({
+      cancel: (selector = {}) => {
+        if (selector.streamId !== streamId) return;
+        settle({ accepted: false, userMessage: selector.cause });
+      },
+    });
+
+    try {
+      cleanupApprovalsForStream(streamId, session);
+      // Before #9142's reorder, the registry sweep ran first and settled a
+      // bare `{ accepted: false }`; the later `cancel` call then found the
+      // entry already settled and became a no-op.
+      expect(settled).toEqual({
+        accepted: false,
+        userMessage: 'Stream resources released.',
+      });
+    } finally {
+      session.approvals.toolEdit.unregisterPending(streamId);
+      session.dispose();
     }
   });
 
