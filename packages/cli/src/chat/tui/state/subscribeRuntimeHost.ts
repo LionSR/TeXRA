@@ -14,10 +14,7 @@ import {
   type UpdateRoundStagePayload,
   type UpdateStreamUsagePayload,
 } from '@shared/schemas';
-import {
-  reduceStreamMeta,
-  type StreamMetaCommand,
-} from '@shared/streams/streamMetaReducer';
+import { reduceStreamMeta } from '@shared/streams/streamMetaReducer';
 import { diffActiveChildren } from '@shared/streams/childActivityReducer';
 import { assertNever } from '@utils/core';
 
@@ -27,7 +24,6 @@ import {
   removeStream,
   patchStream,
   registerCliStateResetHook,
-  type StreamSlice,
 } from './cliState';
 import {
   applySubagentRoster,
@@ -177,10 +173,10 @@ function applyActiveProcesses(payload: UpdateActiveProcessesPayload): void {
       s,
       vanishedIds,
     );
-    const meta = applyStreamMeta(s, {
-      kind: 'activeProcesses',
-      processes: payload.processes,
-    });
+    const meta = reduceStreamMeta(
+      { activeProcesses: s.activeProcesses, processOutput: s.processOutput },
+      { kind: 'activeProcesses', processes: payload.processes },
+    );
     return {
       ...s,
       activeProcesses: meta.activeProcesses,
@@ -278,23 +274,6 @@ function refreshQueuedFollowUps(
       queuedFollowUpMessages: messages,
     };
   });
-}
-
-/**
- * Run one stream-meta command against a CLI slice. The shared reducer owns
- * only the active-process roster and pruning tails for vanished processes.
- */
-function applyStreamMeta(
-  s: StreamSlice,
-  command: StreamMetaCommand,
-): Pick<StreamSlice, 'activeProcesses' | 'processOutput'> {
-  return reduceStreamMeta(
-    {
-      activeProcesses: s.activeProcesses,
-      processOutput: s.processOutput,
-    },
-    command,
-  );
 }
 
 export function attachTuiRunFactSubscription(
