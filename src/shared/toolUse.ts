@@ -132,6 +132,25 @@ export const BASH_TOOL_DEFAULT_TIMEOUT_MS = 120_000;
  */
 export const BASH_BACKGROUND_LOG_CAP_CHARS = 200_000;
 
+const BASH_BACKGROUND_OUTPUT_SOURCE_KEY = 'backgroundBashOutputSource';
+export type BackgroundBashOutputSource = 'stdout' | 'stderr';
+
+/** Metadata attached only to stdout/stderr chunks from background `bash`. */
+export function backgroundBashOutputData(
+  source: BackgroundBashOutputSource,
+): Record<string, BackgroundBashOutputSource> {
+  return { [BASH_BACKGROUND_OUTPUT_SOURCE_KEY]: source };
+}
+
+/** Identify persisted LOG rows written from background command output chunks. */
+export function getBackgroundBashOutputSource(
+  data: unknown,
+): BackgroundBashOutputSource | undefined {
+  if (!isObject(data)) return undefined;
+  const source = data[BASH_BACKGROUND_OUTPUT_SOURCE_KEY];
+  return source === 'stdout' || source === 'stderr' ? source : undefined;
+}
+
 /** Default `executions wait` timeout (seconds) when the model omits `timeout`. */
 export const EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS = 300;
 
