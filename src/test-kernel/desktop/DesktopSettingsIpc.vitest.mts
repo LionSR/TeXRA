@@ -8,6 +8,7 @@ import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { DEFAULT_GIT_MARK_COMMITS } from '@shared/schemas/stateSettings';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { createDeferred } from '@test/support/asyncTestUtils';
 import {
   isWorktreeSupportEnabled,
   setWorktreeSupportEnabled,
@@ -183,17 +184,6 @@ function flushAsyncWork(): Promise<void> {
   return new Promise((resolve) =>
     setImmediate(() => setImmediate(() => resolve())),
   );
-}
-
-function createDeferred(): {
-  promise: Promise<void>;
-  resolve(): void;
-} {
-  let resolve!: () => void;
-  const promise = new Promise<void>((done) => {
-    resolve = done;
-  });
-  return { promise, resolve };
 }
 
 function commandOf(message: unknown): string | undefined {

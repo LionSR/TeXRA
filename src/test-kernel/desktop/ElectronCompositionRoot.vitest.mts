@@ -1,20 +1,14 @@
 // Node imports
 import { execFileSync } from 'node:child_process';
-import {
-  mkdir,
-  mkdtemp,
-  readFile,
-  readdir,
-  rm,
-  writeFile,
-} from 'node:fs/promises';
-import { homedir, tmpdir } from 'node:os';
+import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import { join, relative, resolve } from 'node:path';
 
 // Third-party imports
 import { afterEach, describe, expect, it } from 'vitest';
 
 // Local imports - test support
+import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 import {
   DESKTOP_SRC_DIR,
   REPO_ROOT,
@@ -98,18 +92,11 @@ function trackedTypeScriptConsumers(identifier: string): string[] {
 }
 
 describe('desktop composition root and launch environment', () => {
-  let tempDir: string | undefined;
+  const tempDirs: string[] = [];
 
   afterEach(async () => {
-    if (tempDir == null) return;
-    await rm(tempDir, { recursive: true, force: true });
-    tempDir = undefined;
+    await cleanupTempDirs(tempDirs);
   });
-
-  async function makeTempDir(): Promise<string> {
-    tempDir = await mkdtemp(join(tmpdir(), 'texra-electron-root-'));
-    return tempDir;
-  }
 
   async function createResourceTree(resourcesPath: string): Promise<void> {
     await Promise.all([
@@ -381,7 +368,7 @@ describe('desktop composition root and launch environment', () => {
   it('finds resources in configured, packaged, and monorepo development layouts', async () => {
     const { resolveResourcesPath } =
       await loadDesktopPlatformModule<PathsModule>('paths.ts');
-    const root = await makeTempDir();
+    const root = await makeTempDir('texra-electron-root-', tempDirs);
     const configuredResources = join(root, 'configured-resources');
     const appResources = join(root, 'app', 'resources');
     const packagedResources = join(root, 'electron-resources', 'resources');
@@ -430,7 +417,7 @@ describe('desktop composition root and launch environment', () => {
   it('requires bundled agent sources to be directories', async () => {
     const { resolveResourcesPath } =
       await loadDesktopPlatformModule<PathsModule>('paths.ts');
-    const root = await makeTempDir();
+    const root = await makeTempDir('texra-electron-root-', tempDirs);
     const incompleteResources = join(root, 'configured-resources');
     const fileBackedResources = join(root, 'file-backed-resources');
     const monorepoResources = join(root, 'packages', 'extension', 'resources');
@@ -462,7 +449,7 @@ describe('desktop composition root and launch environment', () => {
   it('throws with every checked resource candidate when resources are missing', async () => {
     const { resolveResourcesPath } =
       await loadDesktopPlatformModule<PathsModule>('paths.ts');
-    const root = await makeTempDir();
+    const root = await makeTempDir('texra-electron-root-', tempDirs);
     const mainDirname = join(root, 'packages', 'desktop', 'dist', 'main');
 
     expect(() =>

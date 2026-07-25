@@ -20,6 +20,7 @@ import {
   type DesktopSupabaseAuthHost,
 } from '@desktop/main/desktopSupabaseAuth';
 import type { StateStore } from '@platform/interfaces';
+import { createDeferred } from '@test/support/asyncTestUtils';
 
 function createCoordinator() {
   const storedSession: { current: SupabaseSession | null } = { current: null };
@@ -153,14 +154,6 @@ function nonceFor(oauthClient: ReturnType<typeof createOAuthClient>): string {
   const redirectTo = call?.options?.redirectTo ?? '';
   const callback = parseDesktopProtocolCallback(redirectTo);
   return new URLSearchParams(callback?.query).get('app_nonce') ?? '';
-}
-
-function createDeferred<T>() {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((res) => {
-    resolve = res;
-  });
-  return { promise, resolve };
 }
 
 function installAuthenticatedSupabaseProvider() {
