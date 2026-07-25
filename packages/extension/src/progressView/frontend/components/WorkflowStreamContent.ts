@@ -49,10 +49,8 @@ export class WorkflowStreamContent extends BaseStreamContent {
       <request-panels .permissions=${this.filteredPermissions}></request-panels>
 
       <background-tasks-panel
-        .activeProcesses=${state.activeProcesses}
-        .finishedProcessCount=${state.finishedProcessCount}
-        .activeSubagents=${state.activeSubagents}
-        .finishedSubagentCount=${state.finishedSubagentCount}
+        .processes=${state.processes}
+        .subagents=${state.subagents}
       ></background-tasks-panel>
 
       <log-list></log-list>

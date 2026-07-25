@@ -16,8 +16,8 @@ import { ContextStateDataSchema } from './contextManagement';
 import { RunUsageMapSchema, TokenUsageStatsSchema } from './usage';
 
 // Active Child Info — discriminated by `kind` rather than by which array the
-// entry came from (`activeSubagents` vs `activeProcesses`) or by guessing from
-// which optional field happens to be set. Only `childStreamId` is genuinely
+// entry came from (`subagents` vs `processes`) or by guessing from which
+// optional field happens to be set. Only `childStreamId` is genuinely
 // exclusive to one kind (only subagents own a stream tab); `toolName` can
 // appear on either kind — e.g. a subagent launched via a specific CLI tool
 // (`options.toolName` in `createChildStream`), or a background process running
@@ -30,6 +30,13 @@ const ActiveChildInfoBaseSchema = z.object({
   status: z.string().optional(),
   /** Epoch milliseconds when the child execution began. */
   startedAt: z.int().positive().optional(),
+  /**
+   * Epoch milliseconds when the child left its parent's active roster.
+   * Presence — and ONLY presence — means this row is a finished child retained
+   * for display. The `status` string is display-only and can lag the roster
+   * drop, so it must never be used to decide list membership.
+   */
+  finishedAt: z.int().positive().optional(),
   /** Formatted elapsed time (e.g. "1m 23s"). */
   elapsed: z.string().nullish(),
   /** Tool that spawned this child (e.g. "bash", "codex"). Used for icon/label
@@ -40,7 +47,7 @@ const ActiveChildInfoBaseSchema = z.object({
 /**
  * Persisted/replayed ActiveChildInfo entries predate the `kind` discriminant,
  * when subagent vs. process was inferred from array membership
- * (`activeSubagents` vs. `activeProcesses`) or from whether `childStreamId`
+ * (`subagents` vs. `processes`) or from whether `childStreamId`
  * happened to be set. `childStreamId` was — and still is — exclusive to
  * subagents, so backfill `kind` from that same signal on read, matching the
  * legacy inference, instead of failing to parse.
@@ -102,7 +109,6 @@ export const DEFAULT_CONVERSATION_PROGRESS: ConversationProgress = {
 };
 
 export const DEFAULT_STREAM_METADATA_STATUS = STREAM_STATUS.READY;
-export const DEFAULT_FINISHED_CHILD_COUNT = 0;
 
 // Stream Metadata — the lightweight subset sent over postMessage in UPDATE_STREAMS.
 // Contains only backend-owned fields that mergeBackendOwnedState() actually reads.
@@ -115,10 +121,10 @@ export const BackendOwnedFieldsSchema = z.object({
     DEFAULT_CONVERSATION_PROGRESS,
   ),
   roundStage: RoundStageSchema.optional(),
-  activeSubagents: z.array(ActiveChildInfoSchema).prefault([]),
-  finishedSubagentCount: z.number().prefault(DEFAULT_FINISHED_CHILD_COUNT),
-  activeProcesses: z.array(ActiveChildInfoSchema).prefault([]),
-  finishedProcessCount: z.number().prefault(DEFAULT_FINISHED_CHILD_COUNT),
+  /** Child rosters — live entries plus the finished ones retained for display
+   *  (`finishedAt` set). Field names match the `child.activity` event `kind`. */
+  subagents: z.array(ActiveChildInfoSchema).prefault([]),
+  processes: z.array(ActiveChildInfoSchema).prefault([]),
 });
 
 const BackendOwnedMetadataFieldsSchema = BackendOwnedFieldsSchema.extend({

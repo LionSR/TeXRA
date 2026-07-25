@@ -39,7 +39,7 @@ function createProcessState(streamId: StreamTabId): ProgressState {
   state.streamStates.set(
     streamId,
     createStreamState(AgentCategory.Workflow, {
-      activeProcesses: [
+      processes: [
         {
           kind: 'process',
           executionId: 'active-process',
@@ -105,7 +105,7 @@ describe('process output frontend state', () => {
       siblingId,
       createStreamState(AgentCategory.ToolUse, {
         status: STREAM_PHASE.RUNNING,
-        activeSubagents: [
+        subagents: [
           {
             kind: 'subagent',
             childStreamId: 'old-child-stream',
@@ -136,16 +136,14 @@ describe('process output frontend state', () => {
           toolCallCount: 3,
         },
         roundStage: { index: 1 },
-        activeSubagents: [],
-        finishedSubagentCount: 1,
-        activeProcesses: [
+        subagents: [],
+        processes: [
           {
             kind: 'process',
             executionId: 'process-a',
             agentName: 'bash',
           },
         ],
-        finishedProcessCount: 0,
       },
       activeStream: siblingId,
       agentFilter: 'toolUse',
@@ -163,8 +161,8 @@ describe('process output frontend state', () => {
         toolCallCount: 3,
       },
       roundStage: { index: 1 },
-      finishedSubagentCount: 1,
-      activeProcesses: [
+      subagents: [],
+      processes: [
         {
           kind: 'process',
           executionId: 'process-a',
@@ -207,9 +205,8 @@ describe('process output frontend state', () => {
     dispatch(streamMetaHandlers, {
       command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES,
       stream: streamId,
-      activeSubagents: [],
-      finishedSubagentCount: 0,
-      activeProcesses: [
+      subagents: [],
+      processes: [
         {
           kind: 'process',
           executionId: 'active-process',
@@ -217,12 +214,44 @@ describe('process output frontend state', () => {
           status: STREAM_STATUS.RUNNING,
         },
       ],
-      finishedProcessCount: 0,
     });
 
     const outputs = getState().processOutputs.get(streamId);
     expect(outputs?.has('active-process')).toBe(true);
     expect(outputs?.has('stale-process')).toBe(false);
+  });
+
+  it('still prunes when the roster carries retained finished processes', () => {
+    const streamId = 'stream-a' as StreamTabId;
+    const getState = seedState(createProcessState(streamId));
+
+    // The retained finished row must not keep `stale-process` output alive:
+    // only the live subset feeds the prune.
+    dispatch(streamMetaHandlers, {
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES,
+      stream: streamId,
+      subagents: [],
+      processes: [
+        {
+          kind: 'process',
+          executionId: 'active-process',
+          agentName: 'bash',
+          status: STREAM_STATUS.RUNNING,
+        },
+        {
+          kind: 'process',
+          executionId: 'stale-process',
+          agentName: 'bash',
+          status: STREAM_PHASE.COMPLETED,
+          finishedAt: 1,
+        },
+      ],
+    });
+
+    const outputs = getState().processOutputs.get(streamId);
+    expect(outputs?.has('active-process')).toBe(true);
+    expect(outputs?.has('stale-process')).toBe(false);
+    expect(getState().streamStates.get(streamId)?.processes).toHaveLength(2);
   });
 
   it('updates and clears stream substate with status changes', () => {
@@ -295,10 +324,8 @@ describe('process output frontend state', () => {
           conversationProgress: {
             toolCallCount: 0,
           },
-          activeSubagents: [],
-          finishedSubagentCount: 0,
-          activeProcesses: [],
-          finishedProcessCount: 0,
+          subagents: [],
+          processes: [],
         },
       },
     });
@@ -338,10 +365,8 @@ describe('process output frontend state', () => {
             toolCallCount: 0,
           },
           roundStage: null,
-          activeSubagents: [],
-          finishedSubagentCount: 0,
-          activeProcesses: [],
-          finishedProcessCount: 0,
+          subagents: [],
+          processes: [],
         },
       } satisfies ProgressViewOutboundMessage),
     ) as ProgressViewOutboundMessage;
@@ -375,10 +400,8 @@ describe('process output frontend state', () => {
           conversationProgress: { toolCallCount: 0 },
           roundStage: null,
           badges: {
-            activeSubagents: [],
-            finishedSubagentCount: 0,
-            activeProcesses: [],
-            finishedProcessCount: 0,
+            subagents: [],
+            processes: [],
           },
           parentStreamId: null,
         },

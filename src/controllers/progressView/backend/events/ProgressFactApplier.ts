@@ -51,6 +51,13 @@ import { withEventErrorHandling } from './errorHandling';
 /** Throttle interval for conversation progress webview pushes (ms). */
 const PROGRESS_THROTTLE_MS = 500;
 
+/**
+ * Memory bound on retained finished children, per stream per kind. A long
+ * session can finish thousands; the oldest `finishedAt` is evicted first and
+ * live entries are never evicted. Mirrors `RESOLVED_PROPOSAL_IDS_CAP`.
+ */
+const RETAINED_FINISHED_CHILDREN_CAP = 200;
+
 export type ProgressEventSubscription = {
   dispose(): void;
 };
@@ -151,15 +158,9 @@ export class ProgressFactApplier {
       });
     },
     'child.activity': (_streamId, event) =>
-      this.updateActiveChildren(event.parentStreamId, {
-        activeField:
-          event.kind === 'subagents' ? 'activeSubagents' : 'activeProcesses',
-        countField:
-          event.kind === 'subagents'
-            ? 'finishedSubagentCount'
-            : 'finishedProcessCount',
-        next: [...event.items],
-      }),
+      this.updateChildRoster(event.parentStreamId, event.kind, [
+        ...event.items,
+      ]),
     'process.output': (_streamId, event) =>
       this.handleUpdateProcessOutput({
         parentStreamId: event.parentStreamId,
@@ -203,7 +204,7 @@ export class ProgressFactApplier {
       this.getStreamCategory(streamId) ?? provisionalCategory;
     const category = knownCategory ?? AgentCategory.Workflow;
     this.state.getOrCreateStreamState(streamId, category);
-    this.state.resetFinishedChildCounters(streamId);
+    this.state.resetPerRunChildState(streamId);
     this.pendingProgressUpdates.delete(streamId);
 
     if (this.state.activeStream === streamId) {
@@ -630,24 +631,44 @@ export class ProgressFactApplier {
     this.pendingProgressUpdates.clear();
   }
 
-  public updateActiveChildren(
+  /**
+   * Replace a parent stream's live child roster, retaining every child that
+   * just left it instead of folding it into a counter — a finished subagent
+   * keeps its executionId, agentName, status, startedAt, elapsed and toolName
+   * so hosts can list it. A retained row is only ever created from an entry
+   * that was already in OUR roster and is absent from `next`, so a first
+   * roster can never mark anything finished.
+   */
+  public updateChildRoster(
     parentStreamId: StreamTabId,
-    opts: {
-      activeField: 'activeSubagents' | 'activeProcesses';
-      countField: 'finishedSubagentCount' | 'finishedProcessCount';
-      next: StreamExecutionState['activeSubagents'];
-    },
+    field: 'subagents' | 'processes',
+    next: StreamExecutionState['subagents'],
   ): void {
     let nextBadges: StreamBadgeSnapshot | null = null;
 
     this.state.updateStreamState(parentStreamId, (prev) => {
-      const vanishedIds = diffActiveChildren(prev[opts.activeField], opts.next);
-      const updatedState = {
-        ...prev,
-        [opts.activeField]: opts.next,
-        [opts.countField]: (prev[opts.countField] ?? 0) + vanishedIds.size,
-      };
-      nextBadges = this.toBadgeSnapshot(updatedState);
+      const previous = prev[field];
+      const vanishedIds = diffActiveChildren(
+        previous.filter((child) => child.finishedAt === undefined),
+        next,
+      );
+      const finishedAt = Date.now();
+      const nextIds = new Set(next.map((child) => child.executionId));
+      // Previously-retained rows first (already in ascending `finishedAt`
+      // order), then the newly-vanished ones — so the list stays chronological
+      // by construction and the cap evicts the oldest without a sort. A child
+      // that reappears in `next` is live again, so drop its retained copy.
+      const retained = [
+        ...previous.filter(
+          (child) =>
+            child.finishedAt !== undefined && !nextIds.has(child.executionId),
+        ),
+        ...previous
+          .filter((child) => vanishedIds.has(child.executionId))
+          .map((child) => ({ ...child, finishedAt })),
+      ].slice(-RETAINED_FINISHED_CHILDREN_CAP);
+      const updatedState = { ...prev, [field]: [...next, ...retained] };
+      nextBadges = this.state.projectChildRosters(updatedState);
       return updatedState;
     });
 
@@ -658,15 +679,6 @@ export class ProgressFactApplier {
     ) {
       this.webviewUpdater.updateStreamBadges(parentStreamId, nextBadges);
     }
-  }
-
-  private toBadgeSnapshot(state: StreamExecutionState): StreamBadgeSnapshot {
-    return {
-      activeSubagents: state.activeSubagents,
-      finishedSubagentCount: state.finishedSubagentCount,
-      activeProcesses: state.activeProcesses,
-      finishedProcessCount: state.finishedProcessCount,
-    };
   }
 
   public markAllRunningTasksAsCancelled(): void {
@@ -764,7 +776,7 @@ export class ProgressFactApplier {
     return {
       conversationProgress: state.conversationProgress,
       roundStage: state.roundStage ?? null,
-      badges: this.toBadgeSnapshot(state),
+      badges: this.state.projectChildRosters(state),
       parentStreamId: this.state.snapshots.getParentStreamId(stream) ?? null,
     };
   }
@@ -797,7 +809,47 @@ export class ProgressFactApplier {
       ? this.handleRunningTransition(streamId)
       : undefined;
 
+    // Keep the roster's fallback status current before the status-machine
+    // entry can be cleared by child cleanup. Projection still overlays from
+    // the machine while it exists; this cached value preserves the terminal
+    // outcome for later structural syncs after cleanup.
+    const parentStreamId = this.state.snapshots.getParentStreamId(streamId);
+    let parentState = parentStreamId
+      ? this.state.getStreamState(parentStreamId)
+      : undefined;
+    if (
+      parentStreamId &&
+      parentState?.subagents.some(
+        (child) =>
+          child.kind === 'subagent' && child.childStreamId === streamId,
+      )
+    ) {
+      parentState = {
+        ...parentState,
+        subagents: parentState.subagents.map((child) =>
+          child.kind === 'subagent' && child.childStreamId === streamId
+            ? { ...child, status }
+            : child,
+        ),
+      };
+      const updatedParentState = parentState;
+      this.state.updateStreamState(parentStreamId, () => updatedParentState);
+    }
+
     if (!this.webviewUpdater.isAvailable()) return;
+
+    // A child's roster drop can land BEFORE its terminal status. Re-push the
+    // active parent's badges from the canonical projection when it catches up.
+    if (
+      parentStreamId &&
+      parentStreamId === this.state.activeStream &&
+      parentState
+    ) {
+      this.webviewUpdater.updateStreamBadges(
+        parentStreamId,
+        this.state.projectChildRosters(parentState),
+      );
+    }
 
     const isNewStream = !this.state.streamLogs.has(streamId);
     this.state.streamLogs.ensureStream(streamId);

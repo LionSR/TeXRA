@@ -347,7 +347,7 @@ function progressMessages() {
             toolCallCount: 5,
           },
           roundStage: { index: 1 },
-          activeSubagents: [
+          subagents: [
             {
               executionId: 'exec-polish',
               agentName: 'polish',
@@ -355,10 +355,16 @@ function progressMessages() {
               status: 'running',
               elapsed: '42s',
             },
+            {
+              executionId: 'exec-outline',
+              agentName: 'outline',
+              childStreamId: 'toolUse:outline',
+              status: 'completed',
+              elapsed: '1m 12s',
+              finishedAt: timestamp + 60_000,
+            },
           ],
-          finishedSubagentCount: 1,
-          activeProcesses: [],
-          finishedProcessCount: 1,
+          processes: [],
         },
       },
     },
