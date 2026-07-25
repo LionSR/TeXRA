@@ -344,18 +344,10 @@ export type SyncStreamContentPayload = WithoutCommand<
   z.infer<typeof SyncStreamContentMessageSchema>
 >;
 
-export type WorkflowStreamContentPayload = Extract<
+export type StreamContentRenderPayload = Extract<
   SyncStreamContentPayload,
-  { action: 'render'; kind: typeof AgentCategory.Workflow }
+  { action: 'render' }
 >;
-
-export type ToolUseStreamContentPayload = Extract<
-  SyncStreamContentPayload,
-  { action: 'render'; kind: typeof AgentCategory.ToolUse }
->;
-
-export type StreamContentRenderPayload =
-  WorkflowStreamContentPayload | ToolUseStreamContentPayload;
 
 const GoalActiveUpdatedMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.GOAL_ACTIVE_UPDATED),
