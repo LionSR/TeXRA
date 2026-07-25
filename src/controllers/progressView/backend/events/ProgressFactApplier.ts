@@ -804,20 +804,46 @@ export class ProgressFactApplier {
       ? this.handleRunningTransition(streamId)
       : undefined;
 
+    // Keep the roster's fallback status current before the status-machine
+    // entry can be cleared by child cleanup. Projection still overlays from
+    // the machine while it exists; this cached value preserves the terminal
+    // outcome for later structural syncs after cleanup.
+    const parentStreamId = this.state.snapshots.getParentStreamId(streamId);
+    let parentState = parentStreamId
+      ? this.state.getStreamState(parentStreamId)
+      : undefined;
+    if (
+      parentStreamId &&
+      parentState?.subagents.some(
+        (child) =>
+          child.kind === 'subagent' && child.childStreamId === streamId,
+      )
+    ) {
+      parentState = {
+        ...parentState,
+        subagents: parentState.subagents.map((child) =>
+          child.kind === 'subagent' && child.childStreamId === streamId
+            ? { ...child, status }
+            : child,
+        ),
+      };
+      const updatedParentState = parentState;
+      this.state.updateStreamState(parentStreamId, () => updatedParentState);
+    }
+
     if (!this.webviewUpdater.isAvailable()) return;
 
-    // A child's roster drop can land BEFORE its terminal status, so a retained
-    // row's status is only correct once re-projected here. Re-push the
-    // parent's badges whenever a child of the active stream changes phase.
-    const parentStreamId = this.state.snapshots.getParentStreamId(streamId);
-    if (parentStreamId && parentStreamId === this.state.activeStream) {
-      const parentState = this.state.getStreamState(parentStreamId);
-      if (parentState) {
-        this.webviewUpdater.updateStreamBadges(
-          parentStreamId,
-          this.state.projectChildRosters(parentState),
-        );
-      }
+    // A child's roster drop can land BEFORE its terminal status. Re-push the
+    // active parent's badges from the canonical projection when it catches up.
+    if (
+      parentStreamId &&
+      parentStreamId === this.state.activeStream &&
+      parentState
+    ) {
+      this.webviewUpdater.updateStreamBadges(
+        parentStreamId,
+        this.state.projectChildRosters(parentState),
+      );
     }
 
     const isNewStream = !this.state.streamLogs.has(streamId);

@@ -3455,6 +3455,9 @@ describe('retained finished children', () => {
         childStreamId,
         STREAM_PHASE.FAILED,
       );
+      // Auto-close/deletion can clear the child's status-machine entry before
+      // a later structural rebuild. The retained row must keep the outcome.
+      backend.state.streamStatus.clearStream(childStreamId);
       messages.length = 0;
 
       // A structural rebuild (view reopen, theme change, filter switch) is the
