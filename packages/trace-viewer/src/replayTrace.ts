@@ -8,10 +8,10 @@ import {
   streamStatusToLifecycleStatus,
   type StreamLifecycleStatus,
   type StreamTabInfo,
+  type SyncStreamContentPayload,
 } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ProgressViewOutboundMessage } from '@shared/schemas/progressView';
-import { buildStreamContentSync } from '@shared/streams/streamContentSync';
 import { isProcessAgent } from '@shared/streams/agentKind';
 import { isObject } from '@utils/core';
 import type { TraceDocument } from '@transcript';
@@ -193,28 +193,38 @@ export function replayTrace(trace: TraceDocument): void {
   dispatchMessage(logDelta);
 
   const syncSnapshot = {
+    action: 'render' as const,
     stream: trace.streamId,
     runUsage: snapshot.runUsage,
   };
-  const syncPayload =
+  // The annotation is load-bearing, not stylistic: without a contextual type
+  // `goal: { active: false }` widens `false` to `boolean` and stops matching
+  // `GoalStateSchema`'s discriminated union.
+  const syncPayload: SyncStreamContentPayload =
     trace.config.agentCategory === AgentCategory.Workflow
-      ? buildStreamContentSync({
+      ? {
           ...syncSnapshot,
           kind: AgentCategory.Workflow,
-          files: snapshot.outputFilesByRound,
-          missingOutputs: snapshot.missingOutputsByRound,
-          compileFailures: snapshot.compileFailuresByRound,
-        })
-      : buildStreamContentSync({
+          outputs: {
+            files: snapshot.outputFilesByRound,
+            missing: snapshot.missingOutputsByRound,
+            compileFailures: snapshot.compileFailuresByRound,
+          },
+        }
+      : {
           ...syncSnapshot,
           kind: AgentCategory.ToolUse,
-          todos: snapshot.todos,
-          plan: snapshot.plan,
-          queuedFollowUps: [],
-          toolEditBypass: false,
-          superYoloBypass: false,
-          goal: { active: false },
-        });
+          workPlan: {
+            todos: snapshot.todos,
+            plan: snapshot.plan,
+            queuedFollowUps: [],
+          },
+          controls: {
+            toolEditBypass: false,
+            superYoloBypass: false,
+            goal: { active: false },
+          },
+        };
   const syncContent: SyncStreamContentMessage = {
     command: PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
     ...syncPayload,

@@ -39,7 +39,6 @@ import {
   type UpdateTodosPayload,
 } from '@shared/schemas';
 import { isGoalInFlight } from '@shared/schemas/goal';
-import { buildStreamContentSync } from '@shared/streams/streamContentSync';
 import { diffActiveChildren } from '@shared/streams/childActivityReducer';
 import { isActivePhase } from '@shared/streams/streamStatus';
 import { GoalStore } from '@tools/goal';
@@ -671,9 +670,7 @@ export class ProgressFactApplier {
 
     if (!stream) {
       // Clear the stream surface when no stream is active.
-      this.webviewUpdater.sendSyncStreamContent(
-        buildStreamContentSync({ action: 'clear' }),
-      );
+      this.webviewUpdater.sendSyncStreamContent({ action: 'clear' });
       return;
     }
 
@@ -693,33 +690,39 @@ export class ProgressFactApplier {
       : undefined;
 
     const shared = {
+      action: 'render' as const,
       stream,
       runUsage: mapToRecord(this.state.snapshots.getRunUsage(stream)),
-      activeState,
+      // Omit the key entirely rather than sending `activeState: undefined`:
+      // the desktop revalidates outbound messages against the strict schema
+      // over a structured clone, which preserves `undefined`.
+      ...(activeState ? { activeState } : {}),
     };
 
     if (kind === AgentCategory.Workflow) {
-      this.webviewUpdater.sendSyncStreamContent(
-        buildStreamContentSync({
-          ...shared,
-          kind,
+      this.webviewUpdater.sendSyncStreamContent({
+        ...shared,
+        kind,
+        outputs: {
           files: this.state.snapshots.getOutputFiles(stream),
-          missingOutputs: this.state.snapshots.getMissingOutputs(stream),
+          missing: this.state.snapshots.getMissingOutputs(stream),
           compileFailures: this.state.snapshots.getCompileFailures(stream),
-        }),
-      );
+        },
+      });
       return;
     }
 
     const { todos, plan } = this.state.snapshots.getWorkPlan(stream);
     const controls = this.getStreamControls(stream);
-    this.webviewUpdater.sendSyncStreamContent(
-      buildStreamContentSync({
-        ...shared,
-        kind,
+    this.webviewUpdater.sendSyncStreamContent({
+      ...shared,
+      kind,
+      workPlan: {
         todos,
         plan,
         queuedFollowUps: this.state.followUps.getAll(stream),
+      },
+      controls: {
         toolEditBypass: controls.toolEditBypass,
         superYoloBypass: controls.superYoloBypass,
         goal: controls.goalActive
@@ -729,8 +732,8 @@ export class ProgressFactApplier {
               objective: controls.goalObjective,
             }
           : { active: false },
-      }),
-    );
+      },
+    });
   }
 
   private toActiveStreamContentSync(
