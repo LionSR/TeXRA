@@ -1,16 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import {
-  DEFAULT_MODEL_CAPABILITIES,
-  type ModelConfig,
-  ModelProvider,
-  ReasoningEffort,
-} from 'llm-zoo';
+import { type ModelConfig, ModelProvider, ReasoningEffort } from 'llm-zoo';
 
 import type { AgentTrace } from '@agent/trace';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { ModelHandlerCodex } from '@agent/modelHandlers/openai/modelHandlerCodex';
 import { AgentCategory } from '@shared/schemas/agent';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import type { Response } from 'openai/resources/responses/responses';
 
 function loggerStub(): AgentTrace {
@@ -25,7 +21,7 @@ function loggerStub(): AgentTrace {
 }
 
 function config(): ModelConfig {
-  return {
+  return buildTestModelConfig({
     name: 'gpt-5.5',
     fullName: 'gpt-5.5',
     shortName: 'gpt-5.5',
@@ -38,13 +34,12 @@ function config(): ModelConfig {
     // Codex eligibility comes from the registry's codexSubscription flag
     // (see providerCapabilities.ts), not from tier/naming heuristics.
     capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
       supportsReasoning: true,
       reasoningEffort: ReasoningEffort.XHIGH,
     },
     openRouterOnly: false,
     codexSubscription: true,
-  };
+  });
 }
 
 function baseHandler(): ModelHandlerOpenAIResponse {

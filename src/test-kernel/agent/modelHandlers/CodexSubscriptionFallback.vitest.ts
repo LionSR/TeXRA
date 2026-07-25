@@ -1,11 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import pDefer from 'p-defer';
-import {
-  DEFAULT_MODEL_CAPABILITIES,
-  ModelProvider,
-  ReasoningEffort,
-  type ModelConfig,
-} from 'llm-zoo';
+import { ModelProvider, ReasoningEffort, type ModelConfig } from 'llm-zoo';
 
 import { ModelHandlerCodex } from '@agent/modelHandlers/openai/modelHandlerCodex';
 import type { ModelCredentialRoute } from '@agent/types/ModelHandlerContracts';
@@ -23,6 +18,7 @@ import {
 } from '@model/providerCapabilities';
 import { AgentCategory } from '@shared/schemas/agent';
 import { installPlatform } from '@test/support/setupPlatform';
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 import type OpenAI from 'openai';
 import type { ResponseUsage } from 'openai/resources/responses/responses';
@@ -39,7 +35,7 @@ function initFakePlatformWithSubscription(
   });
 }
 
-const config: ModelConfig = {
+const config: ModelConfig = buildTestModelConfig({
   name: 'gpt55-test',
   label: 'GPT-5.5',
   fullName: 'gpt-5.5',
@@ -52,12 +48,11 @@ const config: ModelConfig = {
   // Codex eligibility comes from the registry's codexSubscription flag
   // (see providerCapabilities.ts), not from tier/naming heuristics.
   capabilities: {
-    ...DEFAULT_MODEL_CAPABILITIES,
     reasoningEffort: ReasoningEffort.XHIGH,
   },
   openRouterOnly: false,
   codexSubscription: true,
-};
+});
 
 // gpt-5.5 declares a 1,050,000-token window over the OpenAI API, but the Codex
 // subscription backend enforces a far smaller ceiling — the override must clamp

@@ -4,7 +4,6 @@ import * as path from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  DEFAULT_MODEL_CAPABILITIES,
   MODEL_CONFIGS,
   ModelProvider,
   ReasoningEffort,
@@ -42,12 +41,13 @@ import {
 import { AgentCategory } from '@shared/schemas/agent';
 import { installPlatform } from '@test/support/setupPlatform';
 import type { FakePlatformOptions } from '@test/support/FakePlatform';
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 function modelConfig(
   provider: ModelProvider,
   caps: Partial<ModelConfig['capabilities']> = {},
 ): ModelConfig {
-  return {
+  return buildTestModelConfig({
     name: `test-${provider}`,
     label: `Test ${provider}`,
     fullName: `${provider}-test`,
@@ -57,9 +57,9 @@ function modelConfig(
     inputPrice: 0,
     outputPrice: 0,
     contextWindow: 128000,
-    capabilities: { ...DEFAULT_MODEL_CAPABILITIES, ...caps },
+    capabilities: caps,
     openRouterOnly: false,
-  };
+  });
 }
 
 // installPlatform dynamically imports @platform/platform at call time, so

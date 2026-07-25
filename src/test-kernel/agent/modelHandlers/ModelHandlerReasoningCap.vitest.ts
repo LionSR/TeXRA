@@ -1,42 +1,39 @@
 // Third-party imports
 import { strict as assert } from 'node:assert';
 import { describe, it, afterEach, vi } from 'vitest';
-import {
-  DEFAULT_MODEL_CAPABILITIES,
-  type ModelConfig,
-  ModelProvider,
-  ReasoningEffort,
-} from 'llm-zoo';
+import { type ModelConfig, ModelProvider, ReasoningEffort } from 'llm-zoo';
 
 // Local imports - handler under test (concrete subclass exercising base-class
 // `getEffectiveReasoningEffort` — OpenRouterNative does not override it)
 import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative';
 import { FREE_TIER, MAX_TIER, ULTRA_TIER } from '@auth/config';
+import * as serverKeysModule from '@auth/serverKeys';
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 // Modules to stub via vi.spyOn
-import * as serverKeysModule from '@auth/serverKeys';
 import * as providerConfigModule from '@utils/config/providerConfig';
 
 function buildGpt5Config(overrides: Partial<ModelConfig> = {}): ModelConfig {
-  return {
-    name: 'gpt5-mini',
-    label: 'GPT-5 Mini',
-    fullName: 'gpt-5-mini-2025-08-15',
-    shortName: 'gpt5-mini',
-    provider: ModelProvider.OPENAI,
-    maxOutputTokens: 16384,
-    inputPrice: 0,
-    outputPrice: 0,
-    contextWindow: 200000,
-    capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
-      supportsReasoningEffort: true,
-      reasoningEffort: ReasoningEffort.XHIGH,
+  return buildTestModelConfig(
+    {
+      name: 'gpt5-mini',
+      label: 'GPT-5 Mini',
+      fullName: 'gpt-5-mini-2025-08-15',
+      shortName: 'gpt5-mini',
+      provider: ModelProvider.OPENAI,
+      maxOutputTokens: 16384,
+      inputPrice: 0,
+      outputPrice: 0,
+      contextWindow: 200000,
+      capabilities: {
+        supportsReasoningEffort: true,
+        reasoningEffort: ReasoningEffort.XHIGH,
+      },
+      openRouterOnly: false,
+      openrouterFullName: 'openai/gpt-5-mini',
     },
-    openRouterOnly: false,
-    openrouterFullName: 'openai/gpt-5-mini',
-    ...overrides,
-  };
+    overrides,
+  );
 }
 
 describe('ModelHandler.getEffectiveReasoningEffort tier caps', () => {

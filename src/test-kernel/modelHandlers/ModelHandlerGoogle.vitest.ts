@@ -9,26 +9,28 @@ import {
   createPartFromText,
   type Content,
 } from '@google/genai';
-import { DEFAULT_MODEL_CAPABILITIES, ModelProvider } from 'llm-zoo';
+import { ModelProvider } from 'llm-zoo';
 
 // Local imports - agent
 import type { AgentSetting } from '@agent/core/definition/AgentDataclass';
 import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/google/modelHandlerGoogleGenAI';
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 function createGoogleHandler(): ModelHandlerGoogleGenAI {
-  return new ModelHandlerGoogleGenAI({
-    name: 'test-google-model',
-    label: 'Test Google Model',
-    fullName: 'google/test',
-    shortName: 'google/test',
-    provider: ModelProvider.GOOGLE,
-    maxOutputTokens: 1024,
-    inputPrice: 0,
-    outputPrice: 0,
-    contextWindow: 4096,
-    capabilities: { ...DEFAULT_MODEL_CAPABILITIES },
-    openRouterOnly: false,
-  });
+  return new ModelHandlerGoogleGenAI(
+    buildTestModelConfig({
+      name: 'test-google-model',
+      label: 'Test Google Model',
+      fullName: 'google/test',
+      shortName: 'google/test',
+      provider: ModelProvider.GOOGLE,
+      maxOutputTokens: 1024,
+      inputPrice: 0,
+      outputPrice: 0,
+      contextWindow: 4096,
+      openRouterOnly: false,
+    }),
+  );
 }
 
 describe('ModelHandlerGoogleGenAI.shouldContinue', () => {

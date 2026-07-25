@@ -1,16 +1,13 @@
 // Third-party imports
 import { strict as assert } from 'node:assert';
 import { describe, it, afterEach, vi } from 'vitest';
-import {
-  DEFAULT_MODEL_CAPABILITIES,
-  type ModelConfig,
-  ModelProvider,
-} from 'llm-zoo';
+import { type ModelConfig, ModelProvider } from 'llm-zoo';
 
 // Local imports - agent
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { ModelHandlerCodex } from '@agent/modelHandlers/openai/modelHandlerCodex';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import * as configModule from '@utils/config/configUtils';
 
 class UnsupportedBackgroundHandler extends ModelHandlerOpenAIResponse {
@@ -18,7 +15,7 @@ class UnsupportedBackgroundHandler extends ModelHandlerOpenAIResponse {
 }
 
 function createOpenAIConfig(name: string): ModelConfig {
-  return {
+  return buildTestModelConfig({
     name,
     label: name,
     fullName: name,
@@ -28,9 +25,8 @@ function createOpenAIConfig(name: string): ModelConfig {
     inputPrice: 0,
     outputPrice: 0,
     contextWindow: 1000,
-    capabilities: { ...DEFAULT_MODEL_CAPABILITIES },
     openRouterOnly: false,
-  };
+  });
 }
 
 describe('ModelHandlerOpenAIResponse background mode', () => {

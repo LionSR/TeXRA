@@ -1,14 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  DEFAULT_MODEL_CAPABILITIES,
-  ModelProvider,
-  type ModelConfig,
-} from 'llm-zoo';
+import { ModelProvider, type ModelConfig } from 'llm-zoo';
 import { GoogleGenAI } from '@google/genai';
 
 import type { AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import * as configModule from '@utils/config/configUtils';
 import * as providerConfigModule from '@utils/config/providerConfig';
 import type { Interactions } from '@google/genai';
@@ -82,7 +79,7 @@ function recordingClient(real: GoogleGenAI): {
 }
 
 function liveConfig(): ModelConfig {
-  return {
+  return buildTestModelConfig({
     name: 'live-google-interactions',
     label: 'Live Google Interactions',
     fullName: MODEL,
@@ -93,12 +90,11 @@ function liveConfig(): ModelConfig {
     outputPrice: 0,
     contextWindow: 32768,
     capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
       supportsReasoning: false,
       supportsTokenCounting: false, // skip the extra countTokens round-trip
     },
     openRouterOnly: false,
-  };
+  });
 }
 
 function logger(): AgentTrace {

@@ -1,6 +1,6 @@
 // Third-party imports
 import { APIUserAbortError } from 'openai';
-import { DEFAULT_MODEL_CAPABILITIES, ModelProvider } from 'llm-zoo';
+import { ModelProvider } from 'llm-zoo';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
@@ -9,24 +9,26 @@ import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHan
 import { tagOpenAISdkError } from '@agent/modelHandlers/openai/openAISdkError';
 import { BackgroundPoller } from '@agent/modelHandlers/support/BackgroundPoller';
 import { isUserAbort } from '@common/errors/sdkErrorUtils';
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 // Third-party imports
 import type OpenAI from 'openai';
 
 function createHandler(): ModelHandlerOpenAIResponse {
-  const handler = new ModelHandlerOpenAIResponse({
-    name: 'test-gpt',
-    label: 'Test GPT',
-    fullName: 'gpt-test',
-    shortName: 'gpt-test',
-    provider: ModelProvider.OPENAI,
-    maxOutputTokens: 1024,
-    inputPrice: 0,
-    outputPrice: 0,
-    contextWindow: 200000,
-    capabilities: { ...DEFAULT_MODEL_CAPABILITIES },
-    openRouterOnly: false,
-  });
+  const handler = new ModelHandlerOpenAIResponse(
+    buildTestModelConfig({
+      name: 'test-gpt',
+      label: 'Test GPT',
+      fullName: 'gpt-test',
+      shortName: 'gpt-test',
+      provider: ModelProvider.OPENAI,
+      maxOutputTokens: 1024,
+      inputPrice: 0,
+      outputPrice: 0,
+      contextWindow: 200000,
+      openRouterOnly: false,
+    }),
+  );
   handler.setLogger({
     streamId: 'test',
     debug: vi.fn(),
