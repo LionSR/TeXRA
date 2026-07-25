@@ -4,6 +4,7 @@
 import { Box, Text } from 'ink';
 
 import { AgentCategory } from '@shared/schemas';
+import { workflowPhaseTaskProgress } from '@shared/copy/workflowTask';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { formatResultCount } from '@utils/text/stringUtils';
 
@@ -116,19 +117,43 @@ function renderConversationPaneEntry({
   );
 }
 
-export function workflowInputContextSummary(
+/**
+ * One-line workflow status band. Phase progress leads so it survives
+ * `truncate-end` on a narrow terminal. The running `done/total` lives here
+ * rather than on the `◆` divider because that divider prints once into
+ * scrollback and can never be rewritten.
+ */
+export function workflowRunStatusSummary(
   slice: StreamSlice | undefined,
 ): string | undefined {
-  if (slice?.category !== AgentCategory.Workflow || !slice.files) {
-    return undefined;
-  }
-  const inputCount = slice.files.input.length;
-  const contextCount = slice.files.context.length;
-  if (inputCount === 0 && contextCount === 0) return undefined;
-  return [
-    `Input: ${formatResultCount(inputCount, 'file')}`,
-    `Context: ${formatResultCount(contextCount, 'file')}`,
-  ].join(' · ');
+  if (slice?.category !== AgentCategory.Workflow) return undefined;
+  const phase = slice.entries.findLast((entry) => entry.role === 'phase');
+  const phaseCounts =
+    phase?.phaseIndex !== undefined && phase.phaseTotal !== undefined
+      ? ` (${phase.phaseIndex + 1}/${phase.phaseTotal})`
+      : '';
+  const { done, total } = workflowPhaseTaskProgress(
+    phase
+      ? slice.entries.flatMap((entry) =>
+          entry.role === 'workflowTask' && entry.task.phase === phase.phaseLabel
+            ? [entry.task]
+            : [],
+        )
+      : [],
+  );
+  const input = slice.files?.input.length ?? 0;
+  const context = slice.files?.context.length ?? 0;
+  const segments = [
+    ...(phase ? [`${phase.phaseLabel}${phaseCounts}`] : []),
+    ...(total > 0 ? [`${done}/${total} done`] : []),
+    ...(input > 0 || context > 0
+      ? [
+          `Input: ${formatResultCount(input, 'file')}`,
+          `Context: ${formatResultCount(context, 'file')}`,
+        ]
+      : []),
+  ];
+  return segments.length > 0 ? segments.join(' · ') : undefined;
 }
 
 export function ConversationPane(
@@ -145,7 +170,7 @@ export function ConversationPane(
     props.availableWidth !== undefined && props.width !== undefined
       ? Math.min(props.availableWidth, props.width)
       : (props.availableWidth ?? props.width);
-  const workflowMetadata = workflowInputContextSummary(slice);
+  const workflowMetadata = workflowRunStatusSummary(slice);
   const metadataRows =
     workflowMetadata &&
     maxRows > 0 &&

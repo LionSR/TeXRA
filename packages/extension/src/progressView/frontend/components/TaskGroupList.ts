@@ -11,13 +11,16 @@ import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared schemas
 import {
+  MESSAGE_TYPES,
   STREAM_PHASE,
   StreamPhaseSchema,
+  WorkflowTaskProgressSchema,
   type GettingStartedAction,
   type LogMessageData,
   type TaskGroup,
 } from '@shared/schemas';
 import { designTokens } from '@shared/styles';
+import { workflowPhaseTaskProgress } from '@shared/copy/workflowTask';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 
 // Side-effect imports - register WA icon and spinner components
@@ -478,8 +481,32 @@ export class TaskGroupList extends LitElement {
     this.requestUpdate();
   }
 
+  /**
+   * `done/total` for a phase header, folded from the workflow-task cards the
+   * group already holds. A malformed row drops out (safeParse), matching how
+   * the card formatter guards itself. Nothing renders for a group with no
+   * task cards, so round and run headers are unaffected.
+   */
+  private renderGroupProgress(
+    group: TaskGroup,
+    messages: readonly LogMessageData[],
+  ): TemplateResult | typeof nothing {
+    if (group.kind !== 'phase') return nothing;
+    const tasks = messages.flatMap((message) => {
+      if (message.messageType !== MESSAGE_TYPES.WORKFLOW_TASK) return [];
+      const parsed = WorkflowTaskProgressSchema.safeParse(message.data);
+      return parsed.success ? [parsed.data] : [];
+    });
+    const { done, total } = workflowPhaseTaskProgress(tasks);
+    if (total === 0) return nothing;
+    return html`<span class="group-progress">${done}/${total}</span>`;
+  }
+
   /** Render child group header inline (only called for non-root groups) */
-  private renderGroupHeader(group: TaskGroup): TemplateResult {
+  private renderGroupHeader(
+    group: TaskGroup,
+    messages: readonly LogMessageData[],
+  ): TemplateResult {
     const formattedStartTime = getTimeFormatter().format(
       new Date(group.startTime),
     );
@@ -509,6 +536,7 @@ export class TaskGroupList extends LitElement {
         }
       </span>
       <span class="group-title">${group.name}${positionText}</span>
+      ${this.renderGroupProgress(group, messages)}
       <span class="group-time">
         <span class="group-start-time" data-start=${String(group.startTime)}>
           <wa-icon
@@ -579,7 +607,7 @@ export class TaskGroupList extends LitElement {
             [`is-${group.status}`]: true,
           })}
         >
-          ${this.renderGroupHeader(group)}
+          ${this.renderGroupHeader(group, messages)}
         </div>
         <div id=${contentId} class="log-group-content">
           ${

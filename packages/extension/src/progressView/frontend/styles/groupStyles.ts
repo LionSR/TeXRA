@@ -52,6 +52,15 @@ export const groupStyles = css`
     flex-grow: 1;
   }
 
+  /* Completed/declared task count for a phase header, right-aligned beside
+     the timestamps. */
+  .group-progress {
+    font-size: var(--font-size-sm);
+    font-variant-numeric: tabular-nums;
+    opacity: var(--opacity-subtle);
+    margin-left: var(--wa-space-2xs);
+  }
+
   .group-time {
     font-size: var(--font-size-sm);
     opacity: var(--opacity-subtle);
