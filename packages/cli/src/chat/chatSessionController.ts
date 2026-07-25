@@ -193,7 +193,9 @@ export function createChatSessionController(
   // projecting status, output, and approval-related facts after the root
   // promise settles. Installing this once also avoids duplicate projections
   // when another root starts while an earlier detached child is still alive.
-  disposers.push(attachTuiRunFactSubscription(defaultSession().events));
+  disposers.push(
+    attachTuiRunFactSubscription(defaultSession().events, snapshotStore),
+  );
 
   const activateAgentConfig = (
     config: Pick<

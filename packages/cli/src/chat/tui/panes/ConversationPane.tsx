@@ -27,9 +27,14 @@ import {
 import { ToolUseRow } from './ToolUseRow';
 import { splitTranscriptEntries } from './transcriptEntries';
 import {
+  estimateLiveTranscriptEntryRows,
   estimateTranscriptEntryRows,
   selectTranscriptEntriesForViewport,
 } from './transcriptViewport';
+import {
+  selectWorkflowRunDetailLines,
+  WorkflowRunDetails,
+} from './WorkflowRunDetails';
 
 const DEFAULT_TRANSCRIPT_ROWS = 24;
 const MIN_PENDING_ROWS = 1;
@@ -176,14 +181,38 @@ export function ConversationPane(
     (displayEntries.length === 0 || maxRows > 1)
       ? 1
       : 0;
+  const newestPendingEntry = displayEntries.at(-1);
+  const pendingRowReserve = newestPendingEntry
+    ? Math.min(
+        Math.max(0, maxRows - metadataRows),
+        Math.max(
+          MIN_PENDING_ROWS,
+          estimateLiveTranscriptEntryRows(
+            newestPendingEntry,
+            props.width,
+            props.subagentExecutionLabels,
+          ),
+        ),
+      )
+    : 0;
+  const detailCapacity = Math.max(
+    0,
+    maxRows - metadataRows - pendingRowReserve,
+  );
+  const visibleWorkflowDetails =
+    slice?.category === AgentCategory.Workflow
+      ? selectWorkflowRunDetailLines(slice, detailCapacity)
+      : [];
+  const detailRows = visibleWorkflowDetails.length;
   const visibleEntries = selectTranscriptEntriesForViewport(
     displayEntries,
-    Math.max(0, maxRows - metadataRows),
+    Math.max(0, maxRows - metadataRows - detailRows),
     props.width,
     props.subagentExecutionLabels,
   );
   const visibleRows =
     metadataRows +
+    detailRows +
     (visibleEntries.entries.length > 0
       ? Math.max(MIN_PENDING_ROWS, visibleEntries.usedRows)
       : 0);
@@ -200,6 +229,10 @@ export function ConversationPane(
           </Text>
         </Box>
       ) : null}
+      <WorkflowRunDetails
+        lines={visibleWorkflowDetails}
+        width={metadataWidth}
+      />
       {visibleEntries.entries.map((entry) =>
         renderConversationPaneEntry({
           colorEnabled: props.colorEnabled,

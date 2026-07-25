@@ -1891,7 +1891,7 @@ describe('CLI transcript state', () => {
     expect(slice?.description).toBe('synthetic workflow error');
   });
 
-  it('derives workflow descriptions from operational rows without exposing prose', () => {
+  it('admits ordinary workflow logs without exposing unsafe terminal text', () => {
     patchStream(child1, (slice) => ({
       ...slice,
       category: AgentCategory.Workflow,
@@ -1917,7 +1917,16 @@ describe('CLI transcript state', () => {
     expect(slice?.description).not.toContain(secret);
     expect(slice?.description).not.toContain('\u001b');
     expect(slice?.description).not.toContain('\u0007');
-    expect(slice?.entries).toEqual([]);
+    expect(slice?.entries).toMatchObject([
+      {
+        role: 'assistant',
+        messageType: MESSAGE_TYPES.DEFAULT,
+        text: 'Preparing proof audit API_KEY=[redacted]',
+      },
+    ]);
+    expect(JSON.stringify(slice?.entries)).not.toContain(
+      'raw workflow model response',
+    );
 
     logger.info('tool activity', {
       messageType: MESSAGE_TYPES.TOOL_USE,
@@ -1966,13 +1975,17 @@ describe('CLI transcript state', () => {
     slice = streams.get().get(child1);
     expect(slice?.description).toBe('Proof audit failed');
     expect(slice?.entries.map(({ role }) => role)).toEqual([
+      'assistant',
       'tool',
       'tool',
       'phase',
       'error',
     ]);
     expect(JSON.stringify(slice)).not.toContain('workflow prompt');
-    expect(JSON.stringify(slice)).not.toContain('Preparing proof audit');
+    expect(JSON.stringify(slice)).toContain(
+      'Preparing proof audit API_KEY=[redacted]',
+    );
+    expect(JSON.stringify(slice)).not.toContain(secret);
     expect(JSON.stringify(slice)).not.toContain('raw workflow model response');
   });
 
@@ -3064,6 +3077,96 @@ describe('subscribeRuntimeHost run facts', () => {
           }),
         ],
       });
+    } finally {
+      detach();
+    }
+  });
+
+  it('projects missing-output and compile facts and clears matching warnings', () => {
+    const hub = new SessionEventHub();
+    const detach = attachTuiRunFactSubscription(hub, {
+      findWorkflowStreamsMatching: () => [root],
+    });
+
+    try {
+      hub.emit({
+        scope: 'run',
+        streamId: root,
+        event: {
+          type: 'updateMissingOutputs',
+          streamId: root,
+          filesByRound: { 0: ['missing.tex'] },
+        },
+      });
+      hub.emit({
+        scope: 'run',
+        streamId: root,
+        event: {
+          type: 'updateCompileFailures',
+          streamId: root,
+          filesByRound: {
+            0: [
+              {
+                round: 0,
+                displayName: 'paper.pdf',
+                output: {
+                  kind: 'external',
+                  absolutePath: '/tmp/paper.pdf',
+                },
+                log: {
+                  kind: 'external',
+                  absolutePath: '/tmp/paper.log',
+                },
+                logRelativePath: 'paper.log',
+              },
+            ],
+          },
+        },
+      });
+
+      expect(streams.get().get(root)).toMatchObject({
+        missingOutputsByRound: { 0: ['missing.tex'] },
+        compileFailuresByRound: {
+          0: [expect.objectContaining({ displayName: 'paper.pdf' })],
+        },
+      });
+
+      hub.emit({
+        scope: 'session',
+        event: {
+          type: 'clearMissingOutputs',
+          payload: { streamId: root },
+        },
+      });
+      expect(streams.get().get(root)?.missingOutputsByRound).toEqual({});
+
+      hub.emit({
+        scope: 'run',
+        streamId: root,
+        event: {
+          type: 'updateMissingOutputs',
+          streamId: root,
+          filesByRound: { 1: ['again.tex'] },
+        },
+      });
+      hub.emit({
+        scope: 'session',
+        event: {
+          type: 'clearMissingOutputs',
+          payload: {
+            streamConfig: {
+              agent: 'correct',
+              model: 'deepseekT',
+              inputFile: 'paper.tex',
+            },
+          },
+        },
+      });
+
+      expect(streams.get().get(root)?.missingOutputsByRound).toEqual({});
+      expect(streams.get().get(root)?.compileFailuresByRound[0]).toHaveLength(
+        1,
+      );
     } finally {
       detach();
     }

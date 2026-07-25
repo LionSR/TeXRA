@@ -30,7 +30,7 @@ export function estimateTranscriptEntryRows(
   );
 }
 
-function estimateLiveTranscriptEntryRows(
+export function estimateLiveTranscriptEntryRows(
   entry: ConversationEntry,
   width?: number,
   executionLabels?: ExecutionLabels,

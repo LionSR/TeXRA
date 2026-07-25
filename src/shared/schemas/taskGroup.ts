@@ -27,10 +27,10 @@ export type TaskGroup = z.infer<typeof TaskGroupSchema>;
 /**
  * Shape of `StreamLogEntry.data` on `group-start`/`group-end` entries: a
  * partial `TaskGroup` (only the fields the producer chose to send this
- * update). Single source of truth for the frontend's group-tracking reducer
- * (`logSlice.ts`), which previously re-derived `status`/`kind` membership
- * with hand-rolled type guards duplicating `TaskGroupStatusSchema`/
- * `StageKindSchema`.
+ * update). Single source of truth for the host-neutral task-group projection
+ * (`shared/streams/taskGroupProjection.ts`), which otherwise would re-derive
+ * `status`/`kind` membership with hand-rolled type guards duplicating
+ * `TaskGroupStatusSchema`/`StageKindSchema`.
  *
  * Each field validates (and recovers via `.catch(undefined)`) independently
  * so one invalid field — e.g. an unrecognized `status` from an older/newer
@@ -48,10 +48,10 @@ export type TaskGroup = z.infer<typeof TaskGroupSchema>;
  * (docs/proposals/2026-07-03-session-scoped-runtime-architecture.md §8.3). Now that
  * `TaskGroupStatus` is itself retyped to the native vocabulary, `RunOutcome`
  * is a strict subset of it and needs no separate union member; only the
- * still-disjoint legacy `EndGroupStatus` vocabulary does. `logSlice.ts`'s
- * `taskGroupEndStatus` maps a legacy value UP to the native value it
- * corresponds to; a value in neither vocabulary still falls back to
- * `undefined` here, same as any other field.
+ * still-disjoint legacy `EndGroupStatus` vocabulary does. The shared
+ * projection maps a legacy value UP to the native value it corresponds to;
+ * a value in neither vocabulary still falls back to `undefined` here, same
+ * as any other field.
  */
 export const GroupLogPayloadSchema = z.looseObject({
   status: z
