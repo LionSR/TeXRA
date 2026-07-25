@@ -28,7 +28,9 @@ export async function loadInk(): Promise<{
 /** Minimal writable TTY used by interactive Ink tests. */
 export class FakeStdout extends EventEmitter {
   readonly isTTY = true;
+  /** Append-only transcript. It does not model terminal erase/cursor controls. */
   output = '';
+  readonly writes: string[] = [];
 
   constructor(
     public columns = 80,
@@ -39,6 +41,7 @@ export class FakeStdout extends EventEmitter {
 
   write(chunk: string): boolean {
     this.output += chunk;
+    this.writes.push(chunk);
     return true;
   }
 
@@ -56,11 +59,14 @@ export function renderWithTerminalSize(
   node: any,
   columns: number,
   rows = 24,
+  options: { readonly debug?: boolean } = {},
 ): { readonly instance: any; readonly stdout: FakeStdout } {
   const stdout = new FakeStdout(columns, rows);
   const instance = ink.render(node, {
-    stdin: new FakeStdin(false),
+    // Debug renders may still mount useInput; let its raw-mode setup succeed.
+    stdin: new FakeStdin(options.debug ?? false),
     stdout,
+    debug: options.debug ?? false,
     interactive: true,
     exitOnCtrlC: false,
     patchConsole: false,
@@ -69,27 +75,38 @@ export function renderWithTerminalSize(
 }
 
 /** Render at an explicit terminal size, wait for the frame under test, and
- *  return what Ink wrote with ANSI stripped — the shape every test that only
+ *  return the current frame with ANSI stripped — the shape every test that only
  *  reads output wants, so the render / wait / unmount dance has one owner.
  *  Tests that drive keystrokes or their own clock keep the handles from
  *  `renderWithTerminalSize` instead.
  *
- *  `until` receives the same stripped output that is returned; it defaults to
- *  "Ink has painted something". */
+ *  This uses Ink's debug mode, where Ink 7.1.0 writes each render as a complete
+ *  frame instead of terminal cursor/erase updates. `until` receives the latest
+ *  painted frame, which is also returned; it defaults to "Ink has painted
+ *  something". */
 export async function renderOutputAtTerminalSize(
   ink: any,
   node: any,
   columns: number,
   options: { readonly until?: (output: string) => boolean } = {},
 ): Promise<string> {
-  const { instance, stdout } = renderWithTerminalSize(ink, node, columns);
+  const { instance, stdout } = renderWithTerminalSize(ink, node, columns, 24, {
+    debug: true,
+  });
   const settled =
     options.until ?? ((output: string) => output.trim().length > 0);
+  const currentFrame = (): string => {
+    for (let index = stdout.writes.length - 1; index >= 0; index -= 1) {
+      const frame = stripAnsi(stdout.writes[index] ?? '');
+      if (frame.trim().length > 0) return frame;
+    }
+    return '';
+  };
   try {
-    await waitForCondition(() => settled(stripAnsi(stdout.output)), {
+    await waitForCondition(() => settled(currentFrame()), {
       timeoutMessage: `Ink rendered no matching frame at ${columns} columns`,
     });
-    return stripAnsi(stdout.output);
+    return currentFrame();
   } finally {
     instance.unmount();
   }
