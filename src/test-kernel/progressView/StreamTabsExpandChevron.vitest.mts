@@ -53,6 +53,84 @@ describe('stream-tab expand chevron', () => {
     expect(expandButton?.getAttribute('data-stream')).toBe('parent');
     expect(expandButton?.getAttribute('data-action')).toBe('toggle-children');
     expect(expandButton?.hasAttribute('aria-expanded')).toBe(true);
+    const expectedLabel =
+      expandButton?.getAttribute('aria-expanded') === 'true'
+        ? 'Collapse child streams'
+        : '1 child stream';
+    expect(expandButton?.getAttribute('aria-label')).toBe(expectedLabel);
+    expect(
+      parentTab?.shadowRoot
+        ?.querySelector('wa-tooltip[for="stream-tab-expand-button"]')
+        ?.textContent?.trim(),
+    ).toBe(expectedLabel);
+  });
+
+  it('identifies an unlabeled stream by name in the select aria-label', async () => {
+    const tabs = document.createElement('stream-tabs') as StreamTabs;
+    tabs.streams = [{ ...makeStream('unlabeled-stream'), label: '' }];
+    document.body.append(tabs);
+    await tabs.updateComplete;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const ariaLabel = tabs.shadowRoot
+      ?.querySelector('stream-tab')
+      ?.shadowRoot?.querySelector('#stream-tab-select-button')
+      ?.getAttribute('aria-label');
+    expect(ariaLabel).toContain('unlabeled-stream');
+  });
+
+  it('anchors the general hint to the title, not an ancestor of specific hints', async () => {
+    const tabs = document.createElement('stream-tabs') as StreamTabs;
+    tabs.streams = [
+      {
+        ...makeStream('remote'),
+        isRemote: true,
+        worktree: {
+          workingDirectory: '/tmp/texra/remote',
+          branch: 'remote',
+        },
+      },
+    ];
+    document.body.append(tabs);
+    await tabs.updateComplete;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const tab = tabs.shadowRoot?.querySelector('stream-tab');
+    const shadow = tab?.shadowRoot;
+    const title = shadow?.querySelector('#stream-tab-title');
+    const select = shadow?.querySelector('#stream-tab-select-button');
+
+    expect(
+      shadow?.querySelector('wa-tooltip[for="stream-tab-select-button"]'),
+    ).toBeNull();
+    expect(
+      shadow?.querySelector('wa-tooltip[for="stream-tab-title"]'),
+    ).toBeTruthy();
+    expect(select?.getAttribute('aria-label')).toContain('Status:');
+    expect(
+      title?.contains(shadow?.querySelector('#stream-tab-kind') ?? null),
+    ).toBe(false);
+    expect(
+      title?.contains(shadow?.querySelector('#stream-tab-remote') ?? null),
+    ).toBe(false);
+    expect(
+      title?.contains(shadow?.querySelector('worktree-chip') ?? null),
+    ).toBe(false);
+
+    tabs.compact = true;
+    tabs.childStreamsByParent = new Map([
+      ['remote', [makeStream('remote-child')]],
+    ]);
+    await tabs.updateComplete;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const compactShadow =
+      tabs.shadowRoot?.querySelector('stream-tab')?.shadowRoot;
+    expect(
+      compactShadow
+        ?.querySelector('#stream-tab-title')
+        ?.contains(compactShadow.querySelector('#stream-tab-compact-children')),
+    ).toBe(false);
   });
 
   it('renders workflow scripts as orchestration streams without a model', async () => {
@@ -78,6 +156,11 @@ describe('stream-tab expand chevron', () => {
 
     expect(model?.textContent?.trim()).toBe('');
     expect(kindIcon?.name).toBe('list-tree');
-    expect(kindIcon?.getAttribute('title')).toBe('Workflow Script');
+    expect(kindIcon?.hasAttribute('title')).toBe(false);
+    expect(
+      tab?.shadowRoot
+        ?.querySelector('wa-tooltip[for="stream-tab-kind"]')
+        ?.textContent?.trim(),
+    ).toBe('Workflow Script');
   });
 });

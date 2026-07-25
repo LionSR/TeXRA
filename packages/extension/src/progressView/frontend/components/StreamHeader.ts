@@ -4,7 +4,6 @@ import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { consume } from '@lit/context';
 import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
-import { ifDefined } from 'lit/directives/if-defined.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared styles
@@ -371,7 +370,8 @@ export class StreamHeader extends LitElement {
             ? this.superYoloActive
             : this.yoloActive),
         );
-        const title = isActive && btn.titleActive ? btn.titleActive : btn.title;
+        const tooltipText =
+          isActive && btn.titleActive ? btn.titleActive : btn.title;
         const className = [
           btn.className,
           hidden ? 'toolbar-button--hidden' : undefined,
@@ -382,8 +382,8 @@ export class StreamHeader extends LitElement {
         const { button, tooltip } = renderIconActionButtonParts({
           id: btn.id,
           icon: btn.icon as TeXRAIconName,
-          label: title,
-          tooltip: title,
+          label: tooltipText,
+          tooltip: tooltipText,
           className,
           disabled,
           ariaHidden: hidden,
@@ -407,10 +407,16 @@ export class StreamHeader extends LitElement {
               <span
                 id=${ELEMENT_IDS.ACTIVE_STREAM_NAME}
                 data-stream=${this.stream.name}
-                title=${ifDefined(this.stream.label || undefined)}
               >
                 ${this.stream.label || this.stream.name}
               </span>
+              ${
+                this.stream.label
+                  ? html`<wa-tooltip for=${ELEMENT_IDS.ACTIVE_STREAM_NAME}
+                      >${this.stream.label}</wa-tooltip
+                    >`
+                  : nothing
+              }
             </div>
             <span
               id=${ELEMENT_IDS.STATUS_INDICATOR}
