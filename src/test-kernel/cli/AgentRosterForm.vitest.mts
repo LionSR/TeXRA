@@ -1,5 +1,5 @@
 import stripAnsi from 'strip-ansi';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { AgentEntry } from '@agent/index';
 import {
@@ -36,6 +36,7 @@ const agents: AgentEntry[] = [
 describe('AgentRosterForm', () => {
   it('renders loading through the shared Ink indicator', async () => {
     const { ink, React } = await loadInk();
+    vi.useFakeTimers();
     const { instance, stdout } = renderWithTerminalSize(
       ink,
       React.createElement(AgentRosterForm, { onClose: () => undefined }),
@@ -43,7 +44,7 @@ describe('AgentRosterForm', () => {
     );
 
     try {
-      await waitFor(() => stdout.output.includes('Loading agent roster...'));
+      await vi.advanceTimersByTimeAsync(100);
       const loadingLines = stripAnsi(stdout.output)
         .split('\n')
         .filter((line) => line.includes('Loading agent roster...'));
@@ -55,6 +56,7 @@ describe('AgentRosterForm', () => {
       expect(loadingCopy).toMatch(/^[|/\\-] Loading agent roster\.\.\.$/);
     } finally {
       instance.unmount();
+      vi.useRealTimers();
     }
   });
 

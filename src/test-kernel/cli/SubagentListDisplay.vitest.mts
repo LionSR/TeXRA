@@ -502,7 +502,7 @@ describe('CLI child list display model', () => {
     ).toBe('45s');
   });
 
-  it('uses the explicit terminal width for agent row metadata', async () => {
+  it('renders agent row metadata correctly at an explicit terminal width', async () => {
     const { ink, React } = await loadInk();
     const run = 'run' as StreamTabId;
     const bash = 'bash-1' as StreamTabId;
