@@ -99,15 +99,15 @@ not urgent work.
 > the base class of the four OpenAI-compatible reasoning handlers, so the dead
 > code was only the _direct instantiation route_, never the class.
 
-`'ModelHandlerOpenAIReasoning'` is declared in the persisted compatibility-key enum
-(`modelHandlerCompatibilityKey.ts:10`) and has a live `switch` case constructing
-`new ReasoningModelHandlerOpenAI(config)` (`ModelFactory.ts:615-623`). **Nothing
-ever produces this key:** `modelHandlerCompatibilityKey()` never returns it
-(DeepSeek/GLM/Kimi/MiniMax map to their own concrete keys),
-`inferPersistedModelHandlerCompatibilityKey()` never returns it, and there are zero
-references outside the enum declaration + switch case (grep across `src/` +
-`packages/`, tests included — confirmed: exactly 3 references, all inside those two
-sites).
+`'ModelHandlerOpenAIReasoning'` was declared in the persisted compatibility-key
+enum (`modelHandlerCompatibilityKey.ts:10`) and had a live `switch` case
+constructing `new ReasoningModelHandlerOpenAI(config)`
+(`ModelFactory.ts:615-623`). **Nothing ever produced this key:**
+`modelHandlerCompatibilityKey()` never returned it (DeepSeek/GLM/Kimi/MiniMax map
+to their own concrete keys), `inferPersistedModelHandlerCompatibilityKey()` never
+returned it, and there were zero references outside the enum declaration and
+switch case (grep across `src/` and `packages/`, tests included: three textual
+occurrences across those two source locations).
 
 **Verification performed before deleting** (the enum is load-bearing for resume
 routing, so this was checked on every axis):
@@ -152,16 +152,17 @@ The result-envelope chain is **not** redundant re-wrapping — `AgentFlowResult`
 sites) → `AgentFinalResult` (post-artifact envelope adding `diffs`, coerced `cost`,
 default-filled arrays; 3 real callers) are distinct lifecycle stages. Keep them.
 
-The nit is narrow: `AgentFinalResult` renames `lastResponse`→`response` and
-`touchedFiles`→`files` (`AgentFinalResult.ts:66-102`). That rename is the _sole_
-reason `projectToolUseFinalTextFields` + `firstDefinedArray` exist, and it forces
+The apparent nit is narrow: `AgentFinalResult` renames
+`lastResponse`→`response` and `touchedFiles`→`files`
+(`AgentFinalResult.ts:49-52`). That rename is why
+`projectToolUseFinalTextFields` and `firstDefinedArray` exist, and it forces
 dual-name branching downstream (`storage/resultMeta.ts:201-202` branches on
-`record.response || record.lastResponse`; `nativeSubagentStrategy.ts:90` still emits
-`lastResponse`).
+`record.response || record.lastResponse`; `nativeSubagentStrategy.ts:90` still
+emits `lastResponse`).
 
-**Recommendation:** aligning the field names on `lastResponse`/`touchedFiles` would
-delete `projectToolUseFinalTextFields`, `firstDefinedArray`, and the downstream
-branching. Low-risk, low-urgency.
+**Do not align these field names without a versioned persisted-data migration.**
+The helpers and downstream branching must remain while historical records use
+both vocabularies.
 
 ## Surface simplification / SDK boundary formalization
 
