@@ -27,6 +27,7 @@ import {
 import { ToolUseRow } from './ToolUseRow';
 import { splitTranscriptEntries } from './transcriptEntries';
 import {
+  estimateLiveTranscriptEntryRows,
   estimateTranscriptEntryRows,
   selectTranscriptEntriesForViewport,
 } from './transcriptViewport';
@@ -186,7 +187,7 @@ export function ConversationPane(
         Math.max(0, maxRows - metadataRows),
         Math.max(
           MIN_PENDING_ROWS,
-          estimateTranscriptEntryRows(
+          estimateLiveTranscriptEntryRows(
             newestPendingEntry,
             props.width,
             props.subagentExecutionLabels,

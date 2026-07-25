@@ -30,6 +30,7 @@ import {
   type TuiRepaintOptions,
 } from '@cli/chat/tui/render/tuiViewportController';
 import {
+  estimateLiveTranscriptEntryRows,
   estimateTranscriptEntryRows,
   selectTranscriptEntriesForViewport,
 } from '@cli/chat/tui/panes/transcriptViewport';
@@ -399,6 +400,7 @@ describe('CLI conversation transcript splitting', () => {
       width,
     );
 
+    expect(estimateLiveTranscriptEntryRows(assistant, width)).toBe(liveRows);
     expect(selected.usedRows).toBe(liveRows);
     expect(selected.rowLimits.has('a1')).toBe(false);
   });
@@ -503,6 +505,9 @@ describe('CLI conversation transcript splitting', () => {
     });
 
     expect(liveLayout.lines).toHaveLength(2);
+    expect(estimateTranscriptEntryRows(tool, 20)).toBeGreaterThan(
+      estimateLiveTranscriptEntryRows(tool, 20),
+    );
     expect(selectTranscriptEntriesForViewport([tool], 20, 20).usedRows).toBe(
       transcriptEntryLayoutRows(liveLayout),
     );
