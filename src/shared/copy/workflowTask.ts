@@ -1,4 +1,5 @@
 import {
+  isTerminalWorkflowTaskProgress,
   WORKFLOW_TASK_STATUS_LABEL,
   type WorkflowTaskProgress,
 } from '@shared/schemas';
@@ -26,6 +27,21 @@ export function formatWorkflowTaskMetadataParts(
       ? undefined
       : `${formatCostUsd(task.totalCostUsd)} total`,
   ].filter((part): part is string => part !== undefined);
+}
+
+/**
+ * Completion fold for one phase's tasks, shared by every host so the terminal
+ * and the progress view can never disagree on what "done" counts. The caller
+ * selects the phase's tasks — each host already holds them in its own
+ * container, and matching them here would duplicate that ownership.
+ */
+export function workflowPhaseTaskProgress(
+  tasks: readonly WorkflowTaskProgress[],
+): { readonly done: number; readonly total: number } {
+  return {
+    done: tasks.filter((task) => isTerminalWorkflowTaskProgress(task)).length,
+    total: tasks.length,
+  };
 }
 
 /**

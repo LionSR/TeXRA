@@ -66,14 +66,7 @@ export function formatWorkflowTaskTemplate(
       <span class="workflow-task-icon">${statusIcon(task)}</span>
       <span class="workflow-task-body">
         <span class="workflow-task-title">${task.label}</span>
-        <span class="workflow-task-details">
-          ${
-            task.phase
-              ? html`<span class="workflow-task-phase">${task.phase}</span>`
-              : nothing
-          }
-          ${terminalMetadata(task)}
-        </span>
+        ${terminalMetadata(task)}
         ${
           detail
             ? html`<span
