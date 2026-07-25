@@ -139,7 +139,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
 
     assert.equal(result.status, 'executed');
     const output = result.output ?? '';
-    assert.match(output, /^Output for \S+ \(bash, running/);
+    assert.match(output, /^Output for \S+ \(process, running/);
     assert.ok(output.includes('of 200,000 logged chars'));
     assert.ok(output.includes('[ 42%] Building CXX object src/foo.cc.o'));
     assert.ok(output.includes("err: warning: unused variable 'x'"));
@@ -182,6 +182,24 @@ describe('ExecutionsTool /executions/{id}/output', () => {
     const past = await readOutput(run.executionId, [900, 950]);
     assert.equal(past.status, 'executed');
     assert.ok((past.output ?? '').includes('No lines in the requested range'));
+
+    await run.finish();
+  });
+
+  it('treats a carriage-return progress redraw as separate lines', async () => {
+    // curl/pip/docker redraw with `\r` and no newline. Splitting on LF alone
+    // would make the whole progress bar one enormous line, so the bounded
+    // window would still hand back the entire log.
+    const run = await launchBackgroundRun((sink) => {
+      sink.onStdout?.('  0%\r 50%\r100%\r\ndownload complete\n');
+    });
+
+    const result = await readOutput(run.executionId);
+    const output = result.output ?? '';
+
+    assert.ok(output.includes('Showing lines 1-4 of 4.'));
+    assert.ok(output.includes('  0%'));
+    assert.ok(output.includes('download complete'));
 
     await run.finish();
   });

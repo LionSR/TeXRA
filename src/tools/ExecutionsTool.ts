@@ -110,6 +110,14 @@ const OUTPUT_MAX_LINES = 1_000;
 /** Marks a projected line that the command wrote to stderr. */
 const OUTPUT_STDERR_PREFIX = 'err: ';
 
+/**
+ * Line break in captured terminal output. A bare CR counts: progress bars
+ * (curl, pip, docker) redraw with `\r` and no newline, so splitting on LF
+ * alone would collapse a whole build's progress into one enormous "line" and
+ * hand the caller the entire log however small the requested window was.
+ */
+const OUTPUT_LINE_BREAK = /\r\n|\r|\n/;
+
 interface ProcessOutputProjection {
   readonly lines: readonly string[];
   readonly chars: number;
@@ -149,10 +157,10 @@ function projectProcessOutput(
 
   const lines: string[] = [];
   for (const run of runs) {
-    // A chunk's trailing newline terminates its last line rather than opening
-    // an empty one; blank lines inside the chunk still survive the split.
-    const text = run.text.endsWith('\n') ? run.text.slice(0, -1) : run.text;
-    for (const line of text.split('\n')) {
+    // A trailing break terminates the last line rather than opening an empty
+    // one; blank lines inside the text still survive the split.
+    const text = run.text.replace(/\r\n$|[\r\n]$/, '');
+    for (const line of text.split(OUTPUT_LINE_BREAK)) {
       lines.push(run.stderr ? `${OUTPUT_STDERR_PREFIX}${line}` : line);
     }
   }
@@ -863,7 +871,10 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
       ? `[still running — re-read for more output, or use action='wait' on /executions/${executionId} to block until it finishes]`
       : `[finished — this is the retained log; /executions/${executionId}/report has the result summary]`;
     const out: string[] = [
-      `Output for ${executionId} (bash, ${formatStatusInfo(info)}) — ${chars.toLocaleString()} of ${BASH_BACKGROUND_LOG_CAP_CHARS.toLocaleString()} logged chars, ${lines.length.toLocaleString()} lines.`,
+      // `process` rather than a hardcoded `bash`: the category is what the
+      // guard above actually verified, and it stays true if another tool ever
+      // registers a process-kind execution.
+      `Output for ${executionId} (process, ${formatStatusInfo(info)}) — ${chars.toLocaleString()} of ${BASH_BACKGROUND_LOG_CAP_CHARS.toLocaleString()} logged chars, ${lines.length.toLocaleString()} lines.`,
     ];
 
     if (lines.length === 0) {
