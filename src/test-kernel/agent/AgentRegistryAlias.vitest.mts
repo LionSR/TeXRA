@@ -27,6 +27,7 @@ import type { AgentDirectoriesPort } from '@platform/interfaces';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { createFakePlatform } from '@test/support/FakePlatform';
+import { createDeferred } from '@test/support/asyncTestUtils';
 
 const listRemoteAgents = vi.hoisted(() =>
   vi.fn(async () => [
@@ -78,17 +79,6 @@ const mutableAgentDirectories: AgentDirectoriesPort = {
   builtIn: () => activeAgentDirectories.builtIn(),
   builtInToolUse: () => activeAgentDirectories.builtInToolUse(),
 };
-
-function createDeferred<T = void>(): {
-  promise: Promise<T>;
-  resolve(value: T): void;
-} {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => {
-    resolve = done;
-  });
-  return { promise, resolve };
-}
 
 /** Point the platform at the real bundled agent YAMLs, overriding any dir. */
 function useAgentDirectories(

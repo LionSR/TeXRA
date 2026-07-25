@@ -13,14 +13,7 @@ import {
 } from '@auth/relayToken';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import type { AuthTokenProvider } from '@auth/TokenProvider';
-
-function createDeferred(): { promise: Promise<void>; resolve: () => void } {
-  let resolve!: () => void;
-  const promise = new Promise<void>((resolvePromise) => {
-    resolve = resolvePromise;
-  });
-  return { promise, resolve };
-}
+import { createDeferred } from '@test/support/asyncTestUtils';
 
 async function withRelayTokenEnv(
   token: string,

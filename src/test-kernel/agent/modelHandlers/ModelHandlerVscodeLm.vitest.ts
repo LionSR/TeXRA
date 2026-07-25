@@ -2,11 +2,7 @@
 import { Buffer } from 'node:buffer';
 
 // Third-party imports
-import {
-  DEFAULT_MODEL_CAPABILITIES,
-  ModelProvider,
-  type ModelConfig,
-} from 'llm-zoo';
+import { ModelProvider, type ModelConfig } from 'llm-zoo';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
@@ -29,12 +25,13 @@ import {
   type LanguageModelResponsePart,
 } from '@platform/languageModel';
 import { isCredentialExhausted, type FileLocation } from '@shared/schemas';
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 function modelConfig(
   supportsFunctionCalling = true,
   supportsVision = true,
 ): ModelConfig {
-  return {
+  return buildTestModelConfig({
     name: 'copilot-test',
     label: 'Copilot Test',
     fullName: 'copilot-model-id',
@@ -45,13 +42,12 @@ function modelConfig(
     outputPrice: 0,
     contextWindow: 128_000,
     capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
       supportsFunctionCalling,
       supportsVision,
       supportsNativeAudio: true,
     },
     openRouterOnly: false,
-  };
+  });
 }
 
 const IMAGE_LOCATION: FileLocation = {

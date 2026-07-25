@@ -1,15 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-  DEFAULT_MODEL_CAPABILITIES,
-  ModelProvider,
-  ReasoningEffort,
-  type ModelConfig,
-} from 'llm-zoo';
+import { ModelProvider, ReasoningEffort, type ModelConfig } from 'llm-zoo';
 
 import { ModelHandlerCodex } from '@agent/modelHandlers/openai/modelHandlerCodex';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { resetCodexCoordinator } from '@auth/codex';
 import { installPlatform } from '@test/support/setupPlatform';
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 // Protected/private surface exercised by these tests via a narrow cast.
 interface CodexInternals {
@@ -24,7 +20,7 @@ interface CodexInternals {
 }
 
 function config(): ModelConfig {
-  return {
+  return buildTestModelConfig({
     name: 'gpt-5.5',
     fullName: 'gpt-5.5',
     shortName: 'gpt-5.5',
@@ -37,13 +33,12 @@ function config(): ModelConfig {
     // Codex eligibility comes from the registry's codexSubscription flag
     // (see providerCapabilities.ts), not from tier/naming heuristics.
     capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
       supportsReasoning: true,
       reasoningEffort: ReasoningEffort.XHIGH,
     },
     openRouterOnly: false,
     codexSubscription: true,
-  };
+  });
 }
 
 function initPlatformWith(opts: {
