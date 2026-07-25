@@ -2030,6 +2030,32 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * WebSocket transport path: a persistent connection for lower-latency
    * tool-use loops. Polls to completion if the response comes back pending.
    */
+  /**
+   * Poll a still-pending response through to completion.
+   *
+   * All three transport paths can land on a pending response — background mode
+   * by design, the streaming and WebSocket paths when the stream ends before
+   * the response finishes (e.g. a relay timeout on a slow request). The
+   * retrieve-and-wait handling is identical; only the diagnostic differs, so
+   * the caller supplies that via `onPending`.
+   */
+  private async awaitPendingResponse(
+    response: Response,
+    client: OpenAI,
+    signal: AbortSignal | undefined,
+    retrieveParams: ResponseRetrieveParamsNonStreaming | undefined,
+    onPending: () => void,
+  ): Promise<Response> {
+    if (!this.backgroundLifecycle.isPending(response)) return response;
+    onPending();
+    return this.backgroundLifecycle.waitForCompletion(
+      client,
+      response,
+      signal,
+      retrieveParams,
+    );
+  }
+
   private async executeWebSocketPath(
     params: ResponseCreateParamsBase,
     client: OpenAI,
@@ -2045,20 +2071,20 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     const processor = wsResult.processor;
 
     // Safety net: handle unexpected pending status (shouldn't happen without background mode)
-    if (this.backgroundLifecycle.isPending(response)) {
-      this.logger.debug(
-        'WebSocket response ended with pending status — polling for completion',
-        {
-          data: { responseId: response.id, status: response.status },
-        },
-      );
-      response = await this.backgroundLifecycle.waitForCompletion(
-        client,
-        response,
-        signal,
-        responseRetrieveParamsFor(params),
-      );
-    }
+    response = await this.awaitPendingResponse(
+      response,
+      client,
+      signal,
+      responseRetrieveParamsFor(params),
+      () => {
+        this.logger.debug(
+          'WebSocket response ended with pending status — polling for completion',
+          {
+            data: { responseId: response.id, status: response.status },
+          },
+        );
+      },
+    );
 
     // The Codex backend leaves the completed response's output empty; rebuild
     // it from the streamed items/text, mirroring the HTTP streaming path, so
@@ -2187,20 +2213,21 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       // If the stream ended before the response completed (e.g., relay timeout
       // during slow GPT-5 requests), poll until it finishes instead of silently
       // returning an incomplete response.
-      if (this.backgroundLifecycle.isPending(response)) {
-        this.logger.debug(
-          'Streaming response ended with pending status - polling for completion',
-          {
-            data: { responseId: response.id, status: response.status },
-          },
-        );
-        response = await this.backgroundLifecycle.waitForCompletion(
-          client,
-          response,
-          signal,
-          retrieveParams,
-        );
-      }
+      const streamed = response;
+      response = await this.awaitPendingResponse(
+        streamed,
+        client,
+        signal,
+        retrieveParams,
+        () => {
+          this.logger.debug(
+            'Streaming response ended with pending status - polling for completion',
+            {
+              data: { responseId: streamed.id, status: streamed.status },
+            },
+          );
+        },
+      );
 
       this.rebuildSparseResponseOutput(response, streamedItems, streamedText);
 
@@ -2256,13 +2283,19 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // This can happen in two cases:
     // 1. Background mode explicitly enabled (expected)
     // 2. Server-side latency when using previous_response_id (unexpected but handled)
-    if (this.backgroundLifecycle.isPending(response)) {
-      if (useBackgroundResponses) {
-        logProgressStatus(
-          this.logger,
-          'Running OpenAI in background mode; polling for completion (this may take longer than usual).',
-        );
-      } else {
+    response = await this.awaitPendingResponse(
+      response,
+      client,
+      signal,
+      responseRetrieveParamsFor(params),
+      () => {
+        if (useBackgroundResponses) {
+          logProgressStatus(
+            this.logger,
+            'Running OpenAI in background mode; polling for completion (this may take longer than usual).',
+          );
+          return;
+        }
         this.logger.debug(
           'Response returned with pending status despite non-background mode; polling for completion',
           {
@@ -2273,14 +2306,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
             },
           },
         );
-      }
-      response = await this.backgroundLifecycle.waitForCompletion(
-        client,
-        response,
-        signal,
-        responseRetrieveParamsFor(params),
-      );
-    }
+      },
+    );
 
     this.finalizeResponse(
       response,
