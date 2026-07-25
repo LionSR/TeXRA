@@ -8,7 +8,7 @@ import {
   resolveAndResumeStream,
 } from '@agent/runtime/resolveAndResumeStream';
 import { resumeQueuedToolUseFromResumeData } from '@agent/runtime/resumeQueuedToolUse';
-import { terminalResultToast } from '@agent/runtime/terminalResultToast';
+import { trackTerminalResultPresentation } from '@agent/runtime/terminalResultToast';
 
 // Shared imports
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
@@ -124,12 +124,10 @@ function resumeDesktopStream(
   context: DesktopResumeContext,
 ): Promise<boolean> {
   if (!context.session.transcripts.has(streamId)) return Promise.resolve(false);
-  let terminalRejectionHandled = false;
-  const unsubscribeResult = context.session.onResult((event) => {
-    if (event.streamId !== streamId) return;
-    terminalRejectionHandled =
-      terminalResultToast(event) !== null || event.error?.kind === 'abort';
-  });
+  const terminalResult = trackTerminalResultPresentation(
+    context.session,
+    (event) => event.streamId === streamId,
+  );
   let authoritativeStreamMissing = false;
   const isResumeInvalidated = (): boolean =>
     context.isCancellationRequested() ||
@@ -144,7 +142,7 @@ function resumeDesktopStream(
     return !isResumeInvalidated();
   };
   const reportUnhandledFailure = (id: StreamTabId, error: unknown): void => {
-    if (!terminalRejectionHandled) reportResumeFailure(id, error, context);
+    if (!terminalResult.isHandled()) reportResumeFailure(id, error, context);
   };
   const runtimeHost = context.session.interactions;
   return resolveAndResumeStream(streamId, {
@@ -208,5 +206,5 @@ function resumeDesktopStream(
       ),
     reportFailure: reportUnhandledFailure,
     isCancellationRequested: isResumeInvalidated,
-  }).finally(unsubscribeResult);
+  }).finally(terminalResult.dispose);
 }

@@ -16,7 +16,7 @@ import type {
   AgentRuntimeEventPayloads,
   AgentRuntimeHost,
 } from '@agent/runtime/AgentRuntimeHost';
-import { terminalResultToast } from '@agent/runtime/terminalResultToast';
+import { trackTerminalResultPresentation } from '@agent/runtime/terminalResultToast';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   presentFollowUpWakeResult,
@@ -312,13 +312,10 @@ export class DesktopProgressBridge {
         const logger = this.logger;
         const runtimeHost = this.runtimeHost;
         let executionId: string | undefined;
-        let terminalRejectionHandled = false;
-        const unsubscribeResult = this.session.onResult((event) => {
-          if (event.executionId !== executionId) return;
-          terminalRejectionHandled =
-            terminalResultToast(event) !== null ||
-            event.error?.kind === 'abort';
-        });
+        const terminalResult = trackTerminalResultPresentation(
+          this.session,
+          (event) => event.executionId === executionId,
+        );
         void this.runExecution(request, {
           suppressErrorNotification: true,
           onRun: (handle) => {
@@ -329,13 +326,13 @@ export class DesktopProgressBridge {
             logger.error('Desktop merge execution failed', {
               data: toLogData(error),
             });
-            if (!terminalRejectionHandled) {
+            if (!terminalResult.isHandled()) {
               runtimeHost.emit('requestShowError', {
                 message: `Merge failed: ${toErrorMessage(error)}`,
               });
             }
           })
-          .finally(unsubscribeResult);
+          .finally(terminalResult.dispose);
       },
       listWorkspaceCandidateFiles: () => this.listWorkspaceCandidateFiles(),
     });

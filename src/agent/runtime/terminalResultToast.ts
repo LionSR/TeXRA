@@ -98,6 +98,26 @@ export function terminalResultToast(
   }
 }
 
+/**
+ * Track whether a matching terminal result has already claimed failure
+ * presentation for a caller that otherwise needs a direct fallback.
+ */
+export function trackTerminalResultPresentation(
+  session: SessionHandle,
+  matches: (event: ResultEvent) => boolean,
+): { isHandled(): boolean; dispose(): void } {
+  let handled = false;
+  const dispose = session.onResult((event) => {
+    if (!matches(event)) return;
+    handled =
+      terminalResultToast(event) !== null || event.error?.kind === 'abort';
+  });
+  return {
+    isHandled: () => handled,
+    dispose,
+  };
+}
+
 /** Returns a detach disposer; callers detach when the run/host tears down. */
 export function attachTerminalResultToast(
   session: SessionHandle,
