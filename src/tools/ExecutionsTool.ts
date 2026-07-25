@@ -39,7 +39,9 @@ import {
 } from '@shared/schemas';
 import {
   BASH_BACKGROUND_LOG_CAP_CHARS,
+  type BackgroundBashOutputSource,
   EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS,
+  getBackgroundBashOutputSource,
   EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS,
   EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS,
 } from '@shared/toolUse';
@@ -126,19 +128,36 @@ interface ProcessOutputProjection {
 /**
  * Flatten a background command's transcript rows into display lines.
  *
- * Rows stay in append order — the only surviving record of how stdout and
- * stderr actually interleaved. Consecutive rows on the same channel are
- * concatenated before the split so a line straddling two chunk boundaries
- * stays one line; `warn`/`error` rows are the stderr channel and every line
- * they contribute is marked. Structured rows (usage, context state, tool
- * frames) carry a non-default `messageType` and are dropped: this endpoint
- * projects command output, not the run's own bookkeeping.
+ * Tagged stdout/stderr chunks stay in append order and concatenate only while
+ * their source remains compatible, so chunk-split lines are reconstructed
+ * without crossing a stream switch. Untagged lifecycle and legacy rows flush
+ * any pending command fragment and render standalone. Structured rows (usage,
+ * context state, tool frames) carry a non-default `messageType` and are
+ * dropped: this endpoint projects command output, not run bookkeeping.
  */
 function projectProcessOutput(
   entries: readonly StreamLogEntry[],
 ): ProcessOutputProjection {
-  const runs: { stderr: boolean; text: string }[] = [];
+  const lines: string[] = [];
   let chars = 0;
+  let pendingText = '';
+  let pendingSource: BackgroundBashOutputSource | undefined;
+
+  const emitText = (text: string, stderr: boolean): void => {
+    // A trailing break terminates the last line rather than opening an empty
+    // one; blank lines inside the text still survive the split.
+    const normalized = text.replace(/\r\n$|[\r\n]$/, '');
+    for (const line of normalized.split(OUTPUT_LINE_BREAK)) {
+      lines.push(stderr ? `${OUTPUT_STDERR_PREFIX}${line}` : line);
+    }
+  };
+  const flushPending = (): void => {
+    if (pendingText && pendingSource) {
+      emitText(pendingText, pendingSource === 'stderr');
+    }
+    pendingText = '';
+    pendingSource = undefined;
+  };
 
   for (const entry of entries) {
     if (entry.type !== STREAM_LOG_ENTRY_TYPES.LOG) continue;
@@ -148,22 +167,21 @@ function projectProcessOutput(
     if (!text) continue;
 
     chars += text.length;
-    const stderr =
-      entry.level === LOG_LEVELS.WARN || entry.level === LOG_LEVELS.ERROR;
-    const open = runs.at(-1);
-    if (open && open.stderr === stderr) open.text += text;
-    else runs.push({ stderr, text });
-  }
-
-  const lines: string[] = [];
-  for (const run of runs) {
-    // A trailing break terminates the last line rather than opening an empty
-    // one; blank lines inside the text still survive the split.
-    const text = run.text.replace(/\r\n$|[\r\n]$/, '');
-    for (const line of text.split(OUTPUT_LINE_BREAK)) {
-      lines.push(run.stderr ? `${OUTPUT_STDERR_PREFIX}${line}` : line);
+    const source = getBackgroundBashOutputSource(entry.data);
+    if (!source) {
+      flushPending();
+      emitText(
+        text,
+        entry.level === LOG_LEVELS.WARN || entry.level === LOG_LEVELS.ERROR,
+      );
+      continue;
     }
+
+    if (pendingSource && pendingSource !== source) flushPending();
+    pendingSource = source;
+    pendingText += text;
   }
+  flushPending();
 
   return { lines, chars };
 }
@@ -874,7 +892,7 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
       // `process` rather than a hardcoded `bash`: the category is what the
       // guard above actually verified, and it stays true if another tool ever
       // registers a process-kind execution.
-      `Output for ${executionId} (process, ${formatStatusInfo(info)}) — ${chars.toLocaleString()} of ${BASH_BACKGROUND_LOG_CAP_CHARS.toLocaleString()} logged chars, ${lines.length.toLocaleString()} lines.`,
+      `Output for ${executionId} (process, ${formatStatusInfo(info)}) — ${chars.toLocaleString()} retained transcript chars; command-output cap ${BASH_BACKGROUND_LOG_CAP_CHARS.toLocaleString()} chars, ${lines.length.toLocaleString()} lines.`,
     ];
 
     if (lines.length === 0) {
