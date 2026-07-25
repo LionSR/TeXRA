@@ -331,7 +331,9 @@ export const instructionPanelStyles: CSSResult = css`
      the textarea becomes a quiet, borderless writing surface inside it. */
   :host([desktop-host]) {
     width: 100%;
-    --agent-select-max-width: clamp(7.5rem, 18vw, 10.5rem);
+    container-name: desktop-composer;
+    container-type: inline-size;
+    --desktop-send-size: 36px;
     --agent-model-listbox-max-width: min(24rem, calc(100vw - 3rem));
   }
 
@@ -445,27 +447,45 @@ export const instructionPanelStyles: CSSResult = css`
     line-height: var(--line-height-tight);
   }
 
-  :host([desktop-host]) .instruction-session-toggle {
-    margin-left: auto;
-  }
-
   :host([desktop-host]) .instruction-header-actions {
     flex: 0 0 auto;
   }
 
   :host([desktop-host]) .instruction-controls {
     order: 3;
-    flex-wrap: nowrap;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--desktop-send-size);
+    align-items: end;
     gap: var(--wa-space-2xs);
-    min-height: 36px;
+    min-height: var(--desktop-send-size);
   }
 
   :host([desktop-host]) .model-selection-footer {
-    display: flex;
+    display: grid;
+    grid-template-columns:
+      max-content minmax(7.5rem, 1fr)
+      minmax(7.5rem, 1fr);
     align-items: center;
-    flex: 1 1 auto;
     gap: var(--wa-space-2xs);
     min-width: 0;
+  }
+
+  :host([desktop-host]) .desktop-mode-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--wa-space-xs);
+    min-width: max-content;
+  }
+
+  :host([desktop-host]) .desktop-mode-controls .instruction-session-toggle {
+    padding-right: var(--wa-space-xs);
+    border-right: var(--border-thin) solid
+      color-mix(in srgb, var(--wa-color-text-normal) 9%, transparent);
+  }
+
+  :host([desktop-host]) .instruction-session-toggle,
+  :host([desktop-host]) .launch-target-group {
+    min-height: var(--control-size-m);
   }
 
   :host([desktop-host]) .model-selection-footer .select-group {
@@ -474,8 +494,7 @@ export const instructionPanelStyles: CSSResult = css`
 
   :host([desktop-host]) .model-selection-footer .agent-select-group,
   :host([desktop-host]) .model-selection-footer .model-select-group {
-    flex: 1 1 9rem;
-    max-width: 12rem;
+    max-width: none;
   }
 
   :host([desktop-host])
@@ -495,19 +514,28 @@ export const instructionPanelStyles: CSSResult = css`
   }
 
   :host([desktop-host]) wa-button.execute-button {
-    width: 36px;
-    height: 36px;
-    margin-left: auto;
+    width: var(--desktop-send-size);
+    height: var(--desktop-send-size);
+    align-self: end;
+    justify-self: end;
+    margin: 0;
   }
 
   :host([desktop-host]) wa-button.execute-button::part(base) {
-    width: 36px;
-    min-width: 36px;
-    height: 36px;
-    min-height: 36px;
+    width: var(--desktop-send-size);
+    min-width: var(--desktop-send-size);
+    height: var(--desktop-send-size);
+    min-height: var(--desktop-send-size);
     padding: 0;
     border: 0;
     border-radius: var(--wa-border-radius-circle);
+  }
+
+  :host([desktop-host]) wa-button.execute-button::part(label) {
+    display: grid;
+    width: 100%;
+    height: 100%;
+    place-items: center;
   }
 
   :host([desktop-host]) .execute-button__label {
@@ -537,21 +565,46 @@ export const instructionPanelStyles: CSSResult = css`
     }
   }
 
-  @media (max-width: 720px) {
+  /* The conversation can be narrower than the window when a workbench is
+     open, so responsive composition follows this component's own width. */
+  @container desktop-composer (max-width: 720px) {
+    :host([desktop-host]) .model-selection-footer {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    :host([desktop-host]) .desktop-mode-controls {
+      grid-column: 1 / -1;
+    }
+  }
+
+  @container desktop-composer (max-width: 520px) {
     :host([desktop-host]) .desktop-drop-affordance span {
       display: none;
     }
 
-    :host([desktop-host]) .instruction-controls {
-      flex-wrap: wrap;
-    }
-
     :host([desktop-host]) .model-selection-footer {
-      flex-wrap: wrap;
+      grid-template-columns: minmax(0, 1fr);
     }
 
-    :host([desktop-host]) wa-button.execute-button {
-      align-self: flex-end;
+    :host([desktop-host]) .desktop-mode-controls {
+      flex-wrap: wrap;
+      min-width: 0;
+    }
+  }
+
+  @container desktop-composer (max-width: 360px) {
+    :host([desktop-host]) .desktop-mode-controls {
+      align-items: flex-start;
+      flex-direction: column;
+      gap: var(--wa-space-2xs);
+    }
+
+    :host([desktop-host]) .desktop-mode-controls .instruction-session-toggle {
+      padding-right: 0;
+      padding-bottom: var(--wa-space-2xs);
+      border-right: 0;
+      border-bottom: var(--border-thin) solid
+        color-mix(in srgb, var(--wa-color-text-normal) 9%, transparent);
     }
   }
 

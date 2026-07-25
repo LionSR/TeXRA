@@ -69,6 +69,11 @@ describe('desktop control system', () => {
     expect(renderer).toContain('task-header-button icon-button is-size-l');
     expect(renderer).toContain('task-environment-button btn-secondary');
     expect(renderer).toContain('task-environment-action btn-ghost');
+    expect(renderer).toContain('Open panels:');
+    expect(renderer).not.toContain('open workbench items');
+    expect(shellCss).toContain('.task-workbench-tab-activate::part(base)');
+    expect(shellCss).toContain('background: transparent');
+    expect(shellCss).toContain('border-radius: var(--wa-border-radius-m)');
     expect(shellCss).not.toMatch(/font-size:\s*\d+px/);
     expect(shellCss).not.toContain('.task-header-button::part(base)');
     expect(shellCss).not.toContain(
@@ -102,8 +107,25 @@ describe('desktop control system', () => {
     expect(panel).toContain("Don't show this at startup");
     expect(panel).not.toContain('<wa-dialog');
     expect(renderer).toContain('startupTeamPanel.template()');
+    expect(renderer).toContain('?hidden=${startupPanelVisible}');
+    expect(renderer).toContain('if (hasWorkspace) void editorPane.refresh();');
     expect(renderer).not.toContain('appRoot.append(startupTeamPanel');
     expect(messages).toContain('texra.desktop.hideStartupTeamChooser');
+  });
+
+  it('reserves macOS traffic-light space without pinning the window across Spaces', () => {
+    const shellCss = read('packages/desktop/src/renderer/taskShell.css');
+    const renderer = read('packages/desktop/src/renderer/main.ts');
+    const electronMain = read('packages/desktop/src/main/index.ts');
+
+    expect(renderer).toContain(
+      'document.body.dataset.desktopPlatform = rendererPlatform',
+    );
+    expect(shellCss).toContain('height: var(--task-shell-header-height)');
+    expect(shellCss).toContain(
+      "body[data-desktop-platform='darwin'] .task-shell-collapsed .task-header",
+    );
+    expect(electronMain).not.toContain('setVisibleOnAllWorkspaces');
   });
 
   it('normalizes onboarding icons and button slots through shared controls', () => {

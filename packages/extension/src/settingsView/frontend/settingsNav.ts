@@ -42,7 +42,9 @@ const SETTINGS_TAB_METADATA: Record<
   AGENTS: { icon: 'robot', label: 'Agents' },
   MULTI_AGENT: { icon: 'users', label: 'Teams' },
   TOOLS: { icon: 'screwdriver-wrench', label: 'Tools' },
-  AI_AGENTS: { icon: 'robot', label: 'External Agents' },
+  // Not 'robot': that is AGENTS, and once the nav collapses to icons two rows
+  // sharing a glyph are indistinguishable. External agents are the CLI ones.
+  AI_AGENTS: { icon: 'terminal', label: 'External Agents' },
   GIT: { icon: 'code-branch', label: 'Git' },
   LATEX: { icon: 'file-code', label: 'LaTeX' },
   GOAL: { icon: 'compass', label: 'Goals' },

@@ -11,10 +11,9 @@
  *    the other's stylesheet. Since both copies are pure `var()` consumers they
  *    cannot drift in appearance — only in existence. Add a declaration to one,
  *    add it to the other.
- * 2. There is no `--desktop-type-*` ramp and no `--desktop-transition-*` here
- *    any more. Those were a second, parallel type and motion system that
- *    disagreed with the shared one; both now resolve through the shared names
- *    that `themeTokens.css` overrides.
+ * 2. Type and motion resolve through the shared token names (`--font-size-*`,
+ *    `--transition-*`) that `themeTokens.css` overrides. A desktop-private ramp
+ *    beside them is how the two trees end up at different sizes.
  */
 
 :root {
@@ -51,10 +50,9 @@ wa-button[hidden] {
    Same class names, same tokens, different tree. See the file header.
    --------------------------------------------------------------------- */
 
-/* One focus ring for the whole renderer. This replaces a
-   `.desktop-shell button:focus-visible` rule that had been dead since the
-   shell root stopped emitting that class — the desktop had no focus ring at
-   all, which is the a11y bug this fixes, not just a consolidation. */
+/* One focus ring for the whole renderer, unscoped on purpose: a ring scoped to
+   a shell class silently disappears the moment that class stops being
+   emitted. */
 :focus-visible {
   outline: var(--focus-ring-width) solid var(--wa-color-focus);
   outline-offset: var(--focus-ring-offset);

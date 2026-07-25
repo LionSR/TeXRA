@@ -8,14 +8,13 @@
 // otherwise read or overwrite anything the user can reach.
 
 import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
-import {
-  getFileListConfig,
-  loadFileListSettings,
-} from '@common/files/fileListingRules';
+import { loadFileListSettings } from '@common/files/fileListingRules';
+import { getIncludedExtensions } from '@common/files/fileTypeUtils';
 import { platform } from '@platform/platform';
 import { WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { OFFICE_EXTENSIONS } from '@utils/files/mimeUtils';
 
 import {
   DESKTOP_WORKSPACE_COMMANDS,
@@ -74,23 +73,32 @@ export function createDesktopWorkspaceIpc(
   async function listFiles(): Promise<void> {
     try {
       const root = WorkspaceFS.getPath();
-      // Reuses the same listing rules (ignore globs, extension filters) the
-      // agent file picker uses, so the tree shows the project rather than
-      // node_modules. 'input' is the broadest category, which is what an
-      // editor should offer.
-      const config = getFileListConfig(
-        'input',
-        loadFileListSettings(getConfig),
-      );
-      const files =
-        root && config
-          ? await listWorkspaceFiles({
-              root,
-              config,
-              readDirectory: (directory) =>
-                platform().fs.readDirectory(directory),
-            })
-          : [];
+      const settings = loadFileListSettings(getConfig);
+      // The project tree is a code editor, not the agent input picker. Reuse
+      // the shared traversal and ignore-directory policy, but do not inherit
+      // the input picker's `.ts`/`.js`/`.json` exclusions. Only known binary
+      // media and office formats are hidden from this text editor.
+      const config = {
+        extensions: [],
+        ignoredExtensions: [
+          ...new Set([
+            ...getIncludedExtensions('media'),
+            ...OFFICE_EXTENSIONS,
+            '.vsix',
+          ]),
+        ],
+        ignoredDirs: settings.ignoredDirectories,
+        ignoredKeywords: [],
+        ignoredFiles: [],
+      };
+      const files = root
+        ? await listWorkspaceFiles({
+            root,
+            config,
+            readDirectory: (directory) =>
+              platform().fs.readDirectory(directory),
+          })
+        : [];
       renderer.postToRenderer({
         command: DESKTOP_WORKSPACE_COMMANDS.FILES_LISTED,
         files: files.map((path) => ({ path, isDirectory: false })),

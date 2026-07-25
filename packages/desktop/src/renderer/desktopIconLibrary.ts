@@ -40,7 +40,7 @@ const LUCIDE_NAME_BY_TEXRA_NAME: Readonly<Record<string, string>> = {
   xmark: 'x',
   'circle-xmark': 'circle-x',
   'circle-exclamation': 'circle-alert',
-  'circle-question': 'circle-help',
+  'circle-question': 'circle-question-mark',
   'circle-info': 'info',
   'circle-dot': 'circle-dot',
   'circle-stop': 'circle-stop',
@@ -232,10 +232,10 @@ function svgDataUri(svg: string): string {
 }
 
 const missingIconUri = svgDataUri(
-  // lucide-static includes circle-help in every supported release. Retain a
-  // minimal inline fallback so even package drift cannot turn a typo or an
-  // unexpected Web Awesome internal icon into invisible chrome.
-  lucideSvg('circle-help') ??
+  // Lucide renamed this glyph across releases (circle-help -> circle-question-
+  // mark), so the inline fallback is not decoration: it is what keeps an
+  // unknown-icon marker visible after a package bump moves the name again.
+  lucideSvg('circle-question-mark') ??
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" fill="none"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 2-2.5 2-2.5 4" fill="none"/><circle cx="12" cy="17" r="1" fill="currentColor"/></svg>',
 );
 

@@ -95,8 +95,8 @@
   display: flex;
   align-items: center;
   gap: 9px;
-  min-height: 54px;
-  padding: 14px 12px 4px 72px;
+  height: var(--task-shell-header-height);
+  padding: 0 12px 0 72px;
   box-sizing: border-box;
   -webkit-app-region: drag;
 }
@@ -474,6 +474,7 @@
   width: 100%;
   min-height: 54px;
   padding: 7px 4px;
+  border-radius: var(--wa-border-radius-m);
 }
 
 .task-environment-action::part(label) {
@@ -603,6 +604,7 @@
   min-height: var(--task-shell-header-height);
   padding: 0 4px 0 11px;
   border-radius: 0;
+  background: transparent;
 }
 
 .task-workbench-tab-activate::part(label) {
@@ -650,6 +652,10 @@
   align-self: center;
   margin: 0 8px;
   -webkit-app-region: no-drag;
+}
+
+body[data-desktop-platform='darwin'] .task-shell-collapsed .task-header {
+  padding-left: 76px;
 }
 
 .task-workbench-body,

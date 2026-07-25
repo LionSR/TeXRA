@@ -486,6 +486,58 @@ export class InstructionPanel extends LitElement {
     if (!session) {
       return nothing;
     }
+    const sessionTypeToggle = html`
+      <div class="instruction-session-toggle">
+        <wa-radio-group
+          id="sessionTypeToggle"
+          aria-label="Choose the session type"
+          orientation="horizontal"
+          .value=${session.sessionType}
+          @change=${this.handleSessionTypeChange}
+        >
+          <wa-radio
+            id="sessionTypeToolUse"
+            value="toolUse"
+            data-session-type="toolUse"
+          >
+            Interactive
+          </wa-radio>
+          <wa-radio
+            id="sessionTypeWorkflow"
+            value="workflow"
+            data-session-type="workflow"
+          >
+            Workflow
+          </wa-radio>
+        </wa-radio-group>
+        <wa-tooltip for="sessionTypeToolUse">
+          ${getSessionTitle(SESSION_TYPES.TOOL_USE)}
+        </wa-tooltip>
+        <wa-tooltip for="sessionTypeWorkflow">
+          ${getSessionTitle(SESSION_TYPES.WORKFLOW)}
+        </wa-tooltip>
+      </div>
+    `;
+    const launchTargetToggle =
+      session.sessionType === SESSION_TYPES.TOOL_USE
+        ? html`
+            <div class="select-group launch-target-group">
+              <wa-radio-group
+                id="launchTargetToggle"
+                aria-label="Choose who runs this request"
+                orientation="horizontal"
+                .value=${session.launchTarget}
+                @change=${this.handleLaunchTargetChange}
+              >
+                <wa-radio id="launchTargetAgent" value="agent">
+                  Agent
+                </wa-radio>
+                <wa-radio id="launchTargetTeam" value="team"> Team </wa-radio>
+              </wa-radio-group>
+            </div>
+          `
+        : nothing;
+
     return html`
       <div
         class=${classMap({
@@ -508,38 +560,8 @@ export class InstructionPanel extends LitElement {
                       <span>Drop files to attach</span>
                     </span>
                   `
-                : nothing
+                : sessionTypeToggle
             }
-            <div class="instruction-session-toggle">
-              <wa-radio-group
-                id="sessionTypeToggle"
-                aria-label="Choose the session type"
-                orientation="horizontal"
-                .value=${session.sessionType}
-                @change=${this.handleSessionTypeChange}
-              >
-                <wa-radio
-                  id="sessionTypeToolUse"
-                  value="toolUse"
-                  data-session-type="toolUse"
-                >
-                  Interactive
-                </wa-radio>
-                <wa-radio
-                  id="sessionTypeWorkflow"
-                  value="workflow"
-                  data-session-type="workflow"
-                >
-                  Workflow
-                </wa-radio>
-              </wa-radio-group>
-              <wa-tooltip for="sessionTypeToolUse">
-                ${getSessionTitle(SESSION_TYPES.TOOL_USE)}
-              </wa-tooltip>
-              <wa-tooltip for="sessionTypeWorkflow">
-                ${getSessionTitle(SESSION_TYPES.WORKFLOW)}
-              </wa-tooltip>
-            </div>
           </div>
           <div
             class="instruction-header-actions"
@@ -608,26 +630,13 @@ export class InstructionPanel extends LitElement {
         <div class="instruction-controls">
           <div class="model-selection-footer">
             ${
-              session.sessionType === SESSION_TYPES.TOOL_USE
+              this.desktopHost
                 ? html`
-                    <div class="select-group launch-target-group">
-                      <wa-radio-group
-                        id="launchTargetToggle"
-                        aria-label="Choose who runs this request"
-                        orientation="horizontal"
-                        .value=${session.launchTarget}
-                        @change=${this.handleLaunchTargetChange}
-                      >
-                        <wa-radio id="launchTargetAgent" value="agent">
-                          Agent
-                        </wa-radio>
-                        <wa-radio id="launchTargetTeam" value="team">
-                          Team
-                        </wa-radio>
-                      </wa-radio-group>
+                    <div class="desktop-mode-controls">
+                      ${sessionTypeToggle} ${launchTargetToggle}
                     </div>
                   `
-                : nothing
+                : launchTargetToggle
             }
             ${this.renderLauncherPicker(session)}
             <div
@@ -668,7 +677,11 @@ export class InstructionPanel extends LitElement {
             aria-label=${this.desktopHost ? 'Send request' : 'Run agent'}
             @click=${this.handleExecute}
           >
-            ${waIcon(this.desktopHost ? 'arrow-up' : 'play', { slot: 'start' })}
+            ${
+              this.desktopHost
+                ? waIcon('arrow-up')
+                : waIcon('play', { slot: 'start' })
+            }
             <span class="execute-button__label">
               ${this.desktopHost ? 'Send' : 'Run'}
             </span>

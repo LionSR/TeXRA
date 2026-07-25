@@ -305,6 +305,11 @@
      shared sheet's `:host` block covers shadow DOM. Keep the two in sync — a
      token added there and missing here silently resolves to nothing in the
      desktop's light DOM.
+
+     The geometry values below are also the shared sheet's `--wa-*` fallbacks,
+     so shadow DOM lands on this density without the desktop overriding
+     anything. The extension is the host that overrides, via `--wa-row-height`
+     and friends in packages/extension/src/common/styles/common.css.
      ========================================================================== */
 
   /* State overlays. Alpha, never hue and never geometry, so one token is
@@ -359,6 +364,10 @@
   --font-size-icon: var(--font-size-lg);
   --font-size-icon-sm: var(--font-size);
   --font-size-prose: 16px;
+  --line-height-tight: 1;
+  --line-height-heading: 1.25;
+  --line-height-normal: 1.4;
+  --line-height-relaxed: 1.5;
   --line-height-prose: 1.625;
   --letter-spacing-tight: -0.005em;
   --width-content-max: 1000px;

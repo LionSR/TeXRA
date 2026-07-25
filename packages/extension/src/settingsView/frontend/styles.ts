@@ -122,19 +122,18 @@ const settingsContainerStyles: CSSResult = css`
   }
 
   wa-tab-group.settings-tabs wa-tab {
-    letter-spacing: var(--letter-spacing-tight, -0.005em);
+    letter-spacing: var(--letter-spacing-tight);
   }
 
-  /* State overlays and row geometry come from the shared token layer. The
-     fallbacks derive from the host's own text colour so hover/selected stay
-     correct in both themes on a host that hasn't adopted the tokens yet. */
+  /* A nav row is the shared row primitive: alpha overlays for state, geometry
+     off --row-*, no hover border and no accent edge. */
   wa-tab-group.settings-tabs wa-tab::part(base) {
     display: flex;
     align-items: center;
     justify-content: flex-start;
-    min-height: var(--row-height, 36px);
-    padding: var(--row-padding, 6px 10px);
-    border-radius: var(--row-radius, var(--wa-border-radius-m));
+    min-height: var(--row-height);
+    padding: var(--row-padding);
+    border-radius: var(--row-radius);
     font-size: var(--font-size);
     font-weight: var(--font-weight);
     color: var(--wa-color-text-quiet);
@@ -142,17 +141,11 @@ const settingsContainerStyles: CSSResult = css`
   }
 
   wa-tab-group.settings-tabs wa-tab:hover::part(base) {
-    background: var(
-      --surface-hover,
-      color-mix(in srgb, var(--wa-color-text-normal) 7%, transparent)
-    );
+    background: var(--surface-hover);
   }
 
   wa-tab-group.settings-tabs wa-tab[active]::part(base) {
-    background: var(
-      --surface-selected,
-      color-mix(in srgb, var(--wa-color-text-normal) 9%, transparent)
-    );
+    background: var(--surface-selected);
     color: var(--wa-color-text-normal);
     font-weight: var(--font-weight-medium);
   }
@@ -171,7 +164,9 @@ const settingsContainerStyles: CSSResult = css`
   }
 
   /* Icon-only nav: a quarter-pane is too narrow for labels, and truncating
-     them loses the distinction between adjacent rows. */
+     them loses the distinction between adjacent rows. Every row carries its own
+     aria-label (group plus label) so hiding the text costs no accessible name,
+     and no two rows share an icon. */
   @container settings (max-width: 620px) {
     wa-tab-group.settings-tabs::part(nav) {
       width: 52px;

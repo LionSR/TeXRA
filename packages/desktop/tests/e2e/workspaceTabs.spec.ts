@@ -1,4 +1,5 @@
-import { writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { test, expect } from '@playwright/test';
@@ -17,20 +18,27 @@ import {
 // panes, Monaco loads a real file from disk, and a pty produces output.
 
 let launched: LaunchedApp;
+let workspacePath: string;
 
 test.beforeAll(async () => {
-  launched = await launchTexraApp();
-  await dismissOnboarding(launched.page);
-  // A known file so the editor tree has something deterministic to open.
+  workspacePath = mkdtempSync(join(tmpdir(), 'texra-shell-e2e-'));
   writeFileSync(
-    join(launched.workspacePath, 'sample.tex'),
+    join(workspacePath, 'sample.tex'),
     '\\documentclass{article}\n\\begin{document}\nhello\n\\end{document}\n',
     'utf8',
   );
+  writeFileSync(
+    join(workspacePath, 'sample.ts'),
+    'export const projectTreeLoaded = true;\n',
+    'utf8',
+  );
+  launched = await launchTexraApp({ workspacePath });
+  await dismissOnboarding(launched.page);
 });
 
 test.afterAll(async () => {
   if (launched) await closeTexraApp(launched);
+  if (workspacePath) rmSync(workspacePath, { recursive: true, force: true });
 });
 
 /** Opens one of the workbench actions permanently exposed in the sidebar. */
@@ -69,7 +77,31 @@ test('opens with a permanent task conversation and no workbench', async () => {
   await expect(
     page.locator('main-app[data-desktop-view="main"]'),
   ).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          document
+            .querySelector('main-app')
+            ?.shadowRoot?.querySelector('.launcher-loading') != null,
+      ),
+    )
+    .toBe(false);
   await expect(page.locator('.task-workbench')).toHaveCount(0);
+});
+
+test('loads the project tree before an editor panel is opened', async () => {
+  const { page } = launched;
+
+  await expect(
+    page.locator('.desktop-editor-tree-row:has-text("sample.tex")'),
+  ).toBeVisible({ timeout: 15_000 });
+  await expect(
+    page.locator('.desktop-editor-tree-row:has-text("sample.ts")'),
+  ).toBeVisible();
+  await expect(
+    page.locator('.desktop-editor-tree-empty:has-text("No files found")'),
+  ).toHaveCount(0);
 });
 
 test('resizes the window canvas and project sidebar', async () => {
@@ -108,6 +140,135 @@ test('resizes the window canvas and project sidebar', async () => {
   await expect
     .poll(async () => (await sidebar.boundingBox())?.width ?? 0)
     .toBeGreaterThan(initialSidebarWidth + 40);
+});
+
+test('aligns titlebar content and keeps the collapsed toggle clear of macOS controls', async () => {
+  const { app, page } = launched;
+  const brand = await page.locator('.task-sidebar-brand').boundingBox();
+  const taskHeader = await page.locator('.task-header').boundingBox();
+  expect(brand).not.toBeNull();
+  expect(taskHeader).not.toBeNull();
+  expect(brand?.height).toBe(taskHeader?.height);
+  expect(brand?.y).toBe(taskHeader?.y);
+
+  const toggle = page.locator('.task-header-button[aria-label$="sidebar"]');
+  await toggle.click();
+  await expect(page.locator('.task-shell-collapsed')).toBeVisible();
+
+  const platform = await app.evaluate(() => process.platform);
+  const toggleBounds = await toggle.boundingBox();
+  expect(toggleBounds).not.toBeNull();
+  if (platform === 'darwin') {
+    expect(toggleBounds?.x).toBeGreaterThanOrEqual(76);
+  }
+
+  await toggle.click();
+  await expect(page.locator('.task-sidebar')).toBeVisible();
+});
+
+test('uses normal macOS workspace and stacking behavior', async () => {
+  const flags = await launched.app.evaluate(({ BrowserWindow }) => {
+    const window = BrowserWindow.getAllWindows().at(0);
+    if (!window) throw new Error('TeXRA window was not found.');
+    return {
+      alwaysOnTop: window.isAlwaysOnTop(),
+      visibleOnAllWorkspaces: window.isVisibleOnAllWorkspaces(),
+    };
+  });
+
+  expect(flags).toEqual({
+    alwaysOnTop: false,
+    visibleOnAllWorkspaces: false,
+  });
+});
+
+test('keeps the composer grouped and centered at compact widths', async () => {
+  const { app, page } = launched;
+
+  const contentBounds = await app.evaluate(({ BrowserWindow }) => {
+    const window = BrowserWindow.getAllWindows().at(0);
+    if (!window) throw new Error('TeXRA window was not found.');
+    window.setContentSize(1000, 760);
+    return window.getContentBounds();
+  });
+  await expect
+    .poll(() => page.evaluate(() => window.innerWidth))
+    .toBe(contentBounds.width);
+
+  const layout = await page.evaluate(() => {
+    const mainApp = document.querySelector('main-app');
+    const panel =
+      mainApp?.shadowRoot?.querySelector<HTMLElement>('instruction-panel');
+    const root = panel?.shadowRoot;
+    const box = root?.querySelector<HTMLElement>('.instruction-box');
+    const mode = root?.querySelector<HTMLElement>('.desktop-mode-controls');
+    const agent = root?.querySelector<HTMLElement>('.agent-select-group');
+    const model = root?.querySelector<HTMLElement>('.model-select-group');
+    const execute = root?.querySelector<HTMLElement>('#executeButton');
+    const executeBase =
+      execute?.shadowRoot?.querySelector<HTMLElement>('[part~="base"]');
+    const arrow = execute?.querySelector<HTMLElement>('wa-icon');
+    if (!box || !mode || !agent || !model || !executeBase || !arrow) {
+      throw new Error('Desktop composer controls were not mounted.');
+    }
+
+    const modeRect = mode.getBoundingClientRect();
+    const agentRect = agent.getBoundingClientRect();
+    const modelRect = model.getBoundingClientRect();
+    const buttonRect = executeBase.getBoundingClientRect();
+    const arrowRect = arrow.getBoundingClientRect();
+    return {
+      overflow: box.scrollWidth - box.clientWidth,
+      modeBottom: modeRect.bottom,
+      pickerTop: Math.min(agentRect.top, modelRect.top),
+      pickerCenter: (agentRect.top + agentRect.bottom) / 2,
+      modelCenter: (modelRect.top + modelRect.bottom) / 2,
+      modelBottom: modelRect.bottom,
+      buttonBottom: buttonRect.bottom,
+      horizontalArrowOffset:
+        (arrowRect.left + arrowRect.right) / 2 -
+        (buttonRect.left + buttonRect.right) / 2,
+      verticalArrowOffset:
+        (arrowRect.top + arrowRect.bottom) / 2 -
+        (buttonRect.top + buttonRect.bottom) / 2,
+    };
+  });
+
+  expect(layout.overflow).toBe(0);
+  expect(layout.modeBottom).toBeLessThanOrEqual(layout.pickerTop);
+  expect(Math.abs(layout.pickerCenter - layout.modelCenter)).toBeLessThan(1);
+  expect(Math.abs(layout.buttonBottom - layout.modelBottom)).toBeLessThan(1);
+  expect(Math.abs(layout.horizontalArrowOffset)).toBeLessThan(1);
+  expect(Math.abs(layout.verticalArrowOffset)).toBeLessThan(1);
+
+  await app.evaluate(({ BrowserWindow }) => {
+    BrowserWindow.getAllWindows().at(0)?.setContentSize(1500, 900);
+  });
+});
+
+test('uses one rectangular hover surface for workbench tabs', async () => {
+  const { page } = launched;
+
+  await openSidebarWorkbench('Browser');
+  const browserTab = page.locator(activeWorkbenchTab('browser'));
+  await expect(browserTab).toBeVisible();
+  await browserTab.hover();
+
+  const colors = await browserTab.evaluate((tab) => {
+    const button = tab.querySelector<HTMLElement>(
+      '.task-workbench-tab-activate',
+    );
+    const base =
+      button?.shadowRoot?.querySelector<HTMLElement>('[part~="base"]');
+    if (!base) throw new Error('Workbench tab button base was not found.');
+    return {
+      button: getComputedStyle(base).backgroundColor,
+      tab: getComputedStyle(tab).backgroundColor,
+    };
+  });
+
+  expect(colors.button).toBe('rgba(0, 0, 0, 0)');
+  expect(colors.tab).not.toBe('rgba(0, 0, 0, 0)');
 });
 
 test('opens settings beside the permanent conversation', async () => {

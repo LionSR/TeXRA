@@ -93,6 +93,8 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
   let openPath: string | undefined;
   let theme: DesktopThemeKind = 'dark';
   let treeError: string | undefined;
+  let treeLoading = true;
+  let refreshPromise: Promise<void> | undefined;
   // One model per opened file so switching tabs preserves each file's undo
   // history and cursor — recreating a model on every switch would lose both.
   const models = new Map<string, TextModel>();
@@ -119,6 +121,13 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
         <wa-callout class="desktop-editor-tree-empty" variant="danger">
           ${waIcon('triangle-exclamation', { slot: 'icon' })} ${treeError}
         </wa-callout>
+      `;
+    }
+    if (treeLoading) {
+      return html`
+        <div class="desktop-editor-tree-empty" role="status">
+          <p>Loading project files…</p>
+        </div>
       `;
     }
     if (files.length === 0) {
@@ -262,15 +271,26 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     }
   }
 
-  async function refresh(): Promise<void> {
-    try {
-      files = await callbacks.listFiles();
-      treeError = undefined;
-    } catch (error) {
-      callbacks.onError(error);
-      treeError = 'Could not list workspace files.';
-    }
+  function refresh(): Promise<void> {
+    if (refreshPromise) return refreshPromise;
+    treeLoading = true;
     renderTree();
+    refreshPromise = callbacks
+      .listFiles()
+      .then((listedFiles) => {
+        files = listedFiles;
+        treeError = undefined;
+      })
+      .catch((error: unknown) => {
+        callbacks.onError(error);
+        treeError = 'Could not list workspace files.';
+      })
+      .finally(() => {
+        treeLoading = false;
+        refreshPromise = undefined;
+        renderTree();
+      });
+    return refreshPromise;
   }
 
   async function save(): Promise<void> {

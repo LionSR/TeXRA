@@ -1,14 +1,27 @@
 // Third-party imports
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// `hostBridge` is part of the mock because <history-tab> constructs a
+// PersistedState over it. jsdom swallows throws inside a custom-element upgrade
+// reaction, so omitting it doesn't fail the test — it just silently leaves one
+// panel's element unconstructed.
 vi.mock('@shared/hostBridge', () => ({
   postMessage: vi.fn(),
   getState: () => ({}),
   setState: () => {},
+  hostBridge: {
+    postMessage: vi.fn(),
+    getState: () => undefined,
+    setState: () => undefined,
+  },
 }));
 
 // Local imports - tab wire format (schema-only; safe to import before jsdom)
-import { SETTINGS_TAB, SETTINGS_TAB_ORDER } from '@shared/schemas';
+import {
+  SETTINGS_TAB,
+  SETTINGS_TAB_ORDER,
+  SETTINGS_TAB_PANEL_BY_NAME,
+} from '@shared/schemas';
 
 // Local imports - test utilities
 import { useLitComponentTestDom } from './litComponentTestUtils';
@@ -18,6 +31,7 @@ type LitElementLike = HTMLElement & { updateComplete: Promise<unknown> };
 interface NavEntry {
   readonly name: keyof typeof SETTINGS_TAB;
   readonly panel: string;
+  readonly label: string;
 }
 
 // Loaded inside the DOM setup, not at module scope: lit captures `document`
@@ -133,13 +147,35 @@ describe('settings nav navigation', () => {
     const heading = app.shadowRoot?.querySelector<HTMLElement>(
       '.settings-nav-group',
     );
-    const activeBefore = activePanelName(app);
+    // A row has to be activated first: nothing is active at mount here (WA's
+    // initial activation runs from an IntersectionObserver the test DOM does not
+    // provide), so asserting "unchanged" against no active panel would pass for
+    // a heading that does steal activation.
+    navRow(app, SETTINGS_TAB_PANEL_BY_NAME.LATEX).click();
+    await app.updateComplete;
+    expect(activePanelName(app)).toBe(SETTINGS_TAB_PANEL_BY_NAME.LATEX);
 
     heading?.click();
     await app.updateComplete;
 
     expect(heading?.getAttribute('role')).toBe('presentation');
     expect(heading?.matches('wa-tab')).toBe(false);
-    expect(activePanelName(app)).toBe(activeBefore);
+    expect(activePanelName(app)).toBe(SETTINGS_TAB_PANEL_BY_NAME.LATEX);
+  });
+
+  it('names every nav row for the icon-only collapsed layout', async () => {
+    // The container query at 620px hides the label span, and waIcon() emits
+    // aria-hidden, so the aria-label is the row's only accessible name in a
+    // quarter-pane. The group name is folded in because it is the heading text
+    // that aria-hidden removes from the tablist.
+    const app = await mountSettingsApp();
+
+    for (const group of navGroups) {
+      for (const entry of group.entries) {
+        expect(navRow(app, entry.panel).getAttribute('aria-label')).toBe(
+          `${group.label}: ${entry.label}`,
+        );
+      }
+    }
   });
 });

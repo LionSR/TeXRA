@@ -20,6 +20,7 @@ import { commonViewStyles, designTokens } from '@shared/styles';
 import {
   dispatchSettingsViewOutbound,
   SETTINGS_TAB,
+  SETTINGS_TAB_PANEL_BY_NAME,
   SETTINGS_TAB_PANEL_NAMES,
   type SettingsViewOutboundHandlerRegistry,
 } from '@shared/schemas';
@@ -192,12 +193,20 @@ export class SettingsApp extends SettingsAppBase {
     // Each panel keeps its own scroll offset across activations. With a left
     // nav the row stays visible while the panel swaps, so a retained offset
     // reads as the new panel opening mid-page.
-    const panel = this.shadowRoot?.querySelector(
-      `wa-tab-panel[name="${event.detail.name}"]`,
-    );
-    if (panel != null) {
-      panel.scrollTop = 0;
-    }
+    //
+    // Deferred a frame on purpose: WA sets `active` as a Lit reactive property
+    // and dispatches this event synchronously in the same call, so at dispatch
+    // time the panel is still `display: none`. An element with no box ignores
+    // the scrollTop setter, which made the reset silently do nothing.
+    const { name } = event.detail;
+    requestAnimationFrame(() => {
+      const panel = this.shadowRoot?.querySelector(
+        `wa-tab-panel[name="${name}"]`,
+      );
+      if (panel != null) {
+        panel.scrollTop = 0;
+      }
+    });
   }
 
   // Header auth actions (SettingsApp's own header buttons)
@@ -391,25 +400,37 @@ export class SettingsApp extends SettingsAppBase {
    * One nav group: a heading plus its rows. The heading is slotted into `nav`
    * but is not a `wa-tab`, so WA's `getAllTabs()` filter leaves it out of tab
    * logic and arrow-key navigation while still rendering it in the column.
+   *
+   * It is also `aria-hidden`: `role="presentation"` drops the div's own
+   * semantics but not its text, which would otherwise sit inside the
+   * `role="tablist"` as a bare string labelling nothing. The group name reaches
+   * assistive tech through each row's `aria-label` instead, which is also the
+   * row's only accessible name once the container query collapses the nav to
+   * icons.
    */
   private renderNavGroup(
     group: SettingsNavGroup,
     goalSupported: boolean,
-  ): TemplateResult | typeof nothing {
+  ): TemplateResult {
     const entries = group.entries.filter(
-      (entry) => entry.panel !== 'goal' || goalSupported,
+      (entry) =>
+        entry.panel !== SETTINGS_TAB_PANEL_BY_NAME.GOAL || goalSupported,
     );
-    if (entries.length === 0) {
-      return nothing;
-    }
 
     return html`
-      <div slot="nav" class="settings-nav-group" role="presentation">
+      <div
+        slot="nav"
+        class="settings-nav-group"
+        role="presentation"
+        aria-hidden="true"
+      >
         ${group.label}
       </div>
       ${entries.map(
         (entry) =>
-          html`<wa-tab panel=${entry.panel}
+          html`<wa-tab
+            panel=${entry.panel}
+            aria-label=${`${group.label}: ${entry.label}`}
             >${waIcon(entry.icon, { className: 'settings-tab-icon' })}
             <span class="settings-tab-label">${entry.label}</span></wa-tab
           >`,

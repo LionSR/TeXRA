@@ -91,9 +91,6 @@ export const designTokens: CSSResult = css`
     --height-small: 100px;
     --height-large: 300px;
     --height-xlarge: 400px;
-    /* Dropdown/select option row. Declared once here and overridden per host,
-       replacing three separate wa-option rules at three different heights. */
-    --wa-height-option: 24px;
 
     /* Widths */
     --width-icon: 16px;
@@ -124,16 +121,26 @@ export const designTokens: CSSResult = css`
       rgb(255 255 255 / 20%)
     );
 
-    /* Control geometry, consumed by controlStyles.ts. */
-    --control-size-s: 24px;
-    --control-size-m: 28px;
-    --control-size-l: 32px;
+    /* Control geometry, consumed by controlStyles.ts.
+
+       The host-varying steps read a --wa-* bridge token with the desktop
+       value as the fallback, the same shape as --height-control above. A bare
+       value here would be unreachable by a host: :host beats an inherited
+       :root declaration for the whole shadow subtree, and these webviews are
+       a single Lit root, so a host that wants tighter chrome has to be able to
+       reach in. Only the steps that actually differ per host take the
+       indirection. */
+    --control-size-s: var(--wa-control-size-s, 24px);
+    --control-size-m: var(--wa-control-size-m, 28px);
+    --control-size-l: var(--wa-control-size-l, 32px);
     --control-padding-inline: 6px;
     --control-fill: light-dark(rgb(0 0 0 / 5%), rgb(255 255 255 / 5%));
     --control-fill-hover: light-dark(rgb(0 0 0 / 8%), rgb(255 255 255 / 9%));
-    --row-height: 36px;
+    --row-height: var(--wa-row-height, 36px);
     --row-radius: var(--border-radius-medium);
-    --row-padding: 6px 10px;
+    --row-padding: var(--wa-row-padding, 6px 10px);
+    /* Not host-varying, deliberately: one ring width everywhere. A 1px ring is
+       the kind of thing that reads as tidy and fails a low-vision user. */
     --focus-ring-width: 2px;
     --focus-ring-offset: 2px;
     --textarea-h-s: 2.75rem;
@@ -155,8 +162,10 @@ export const designTokens: CSSResult = css`
     --transition-normal: 0.2s ease;
     --transition-slow: 0.3s ease;
 
-    /* Letter spacing for uppercase labels/badges (em scales with font-size). */
+    /* Letter spacing. Caps for uppercase labels/badges, tight for display type
+       (em scales with font-size). */
     --letter-spacing-caps: 0.06em;
+    --letter-spacing-tight: -0.005em;
   }
 
   /* Match text selection to the host editor theme instead of the browser

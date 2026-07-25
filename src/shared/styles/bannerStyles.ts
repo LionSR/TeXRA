@@ -66,20 +66,27 @@ export const bannerStyles: CSSResult = css`
     flex-shrink: 0;
   }
 
-  /* Banner action buttons are bare <wa-button>s (no skin class), so the ghost
-     skin is applied by descendant selector here. A banner is a tight band, so
-     it takes the small step off the control scale. */
+  /* Banner action buttons are bare <wa-button>s (no skin class), so their skin
+     is applied by descendant selector here. A banner is a tight band, so it
+     takes the small step off the control scale. */
   .actions wa-button::part(base) {
     min-height: var(--control-size-s);
     padding-inline: var(--control-padding-inline);
-    border: 0;
     border-radius: var(--border-radius-medium);
-    background: transparent;
     font-size: var(--font-size-sm);
     transition: background-color var(--transition-fast);
   }
 
-  .actions wa-button::part(base):hover {
+  /* Ghost skin for the secondary actions only. An outer ::part() rule beats
+     wa-button's own :host([appearance='filled']) fill regardless of
+     specificity, so a banner's one primary CTA has to be excluded by selector
+     or it silently loses its fill and reads as another dismiss link. */
+  .actions wa-button:not([appearance~='filled'])::part(base) {
+    border: 0;
+    background: transparent;
+  }
+
+  .actions wa-button:not([appearance~='filled'])::part(base):hover {
     background: var(--surface-hover);
   }
 `;

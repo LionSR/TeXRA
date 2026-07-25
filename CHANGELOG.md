@@ -77,6 +77,20 @@ All notable changes to this project will be documented in this file.
 - **Switching project folders no longer opens a blank desktop window** — the
   current app window restarts into the selected workspace while the development
   renderer remains available.
+- **The startup chooser now hands off to a ready launcher** — skipping setup
+  no longer leaves the task canvas on an empty loading state.
+- **Project files appear as soon as a workspace opens** — the sidebar now loads
+  text source files at startup instead of reporting an empty project until the
+  editor is opened.
+- **Desktop chrome behaves consistently on macOS** — the brand and task header
+  align with the traffic-light controls, the collapsed-sidebar button stays
+  clear of them, and development windows no longer follow every Space.
+- **Workbench controls use one consistent hover shape** — panel shortcuts and
+  editor, terminal, and browser tabs no longer show nested or mismatched hover
+  backgrounds.
+- **The task composer stays organized as its panel narrows** — session and
+  runner choices, agent and model selectors, tools, and the centered send
+  button now form clear responsive groups instead of colliding or drifting.
 
 ### CLI
 

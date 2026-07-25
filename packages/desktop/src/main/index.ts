@@ -1336,14 +1336,6 @@ function createWindow(options: {
     if (windowPresented || window.isDestroyed()) return;
     windowPresented = true;
     window.center();
-    // A development launch commonly starts from a full-screen terminal or
-    // browser. macOS otherwise assigns the new window to that Space but keeps
-    // it underneath the full-screen app, making the running UI look blank.
-    // Keep local preview windows reachable across Spaces; packaged windows
-    // retain normal macOS workspace behavior.
-    if (process.platform === 'darwin' && process.env.ELECTRON_RENDERER_URL) {
-      window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-    }
     window.show();
     if (process.platform === 'darwin') app.focus({ steal: true });
     window.focus();

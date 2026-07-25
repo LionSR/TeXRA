@@ -95,6 +95,15 @@ describe('instruction-panel desktop composer', () => {
 
     expect(desktop.hasAttribute('desktop-host')).toBe(true);
     expect(query(desktop, '.desktop-drop-affordance')).toBeTruthy();
+    expect(query(desktop, '.desktop-mode-controls')).toBeTruthy();
+    expect(
+      query(desktop, '.desktop-mode-controls #sessionTypeToggle'),
+    ).toBeTruthy();
+    expect(
+      desktop.shadowRoot?.querySelector(
+        '.instruction-header #sessionTypeToggle',
+      ),
+    ).toBeNull();
     expect(query(desktop, '#instruction').getAttribute('rows')).toBe('4');
     expect(query(desktop, '#instruction').getAttribute('enterkeyhint')).toBe(
       'send',
@@ -105,6 +114,9 @@ describe('instruction-panel desktop composer', () => {
     expect(query(desktop, '.execute-button__label').textContent?.trim()).toBe(
       'Send',
     );
+    expect(
+      query(desktop, '#executeButton wa-icon').getAttribute('slot'),
+    ).toBeNull();
 
     expect(extension.hasAttribute('desktop-host')).toBe(false);
     expect(
@@ -114,6 +126,12 @@ describe('instruction-panel desktop composer', () => {
     expect(query(extension, '#instruction').hasAttribute('enterkeyhint')).toBe(
       false,
     );
+    expect(
+      query(extension, '.instruction-header #sessionTypeToggle'),
+    ).toBeTruthy();
+    expect(
+      query(extension, '#executeButton wa-icon').getAttribute('slot'),
+    ).toBe('start');
     expect(query(extension, '.execute-button__label').textContent?.trim()).toBe(
       'Run',
     );

@@ -178,6 +178,7 @@ const startupTeamPanel = createStartupTeamPanel({
 
 const hasWorkspace = window.texraDesktop?.hasWorkspace ?? true;
 const rendererPlatform = getRendererPlatform(document.defaultView);
+document.body.dataset.desktopPlatform = rendererPlatform;
 const desktopCommandEntriesById = new Map(
   getDesktopCommandMenuEntries(undefined, rendererPlatform).map((entry) => [
     entry.id,
@@ -500,6 +501,14 @@ function openKind(kind: WorkbenchKind): void {
   updateShell(openWorkbenchTab(shellState, { kind }));
 }
 
+/**
+ * Lets Web Awesome finish the current button interaction before a workbench
+ * transition replaces the header or tab that owns that button.
+ */
+function openKindAfterInteraction(kind: WorkbenchKind): void {
+  requestAnimationFrame(() => openKind(kind));
+}
+
 // =============================================================================
 // Pane content
 // =============================================================================
@@ -617,8 +626,8 @@ function environmentPopoverTemplate(
         <span>Local workspace</span>
       </div>
       <div class="task-environment-row">
-        <span class="icon-surface is-size-s">${waIcon('file-code')}</span>
-        <span>${shellState.workbenchTabs.length} open workbench items</span>
+        <span class="icon-surface is-size-s">${waIcon('window-maximize')}</span>
+        <span>Open panels: ${shellState.workbenchTabs.length}</span>
       </div>
       <div class="task-environment-actions">
         <wa-button
@@ -628,7 +637,7 @@ function environmentPopoverTemplate(
           size="s"
           data-popover="close"
           @click=${() => {
-            openKind('editor');
+            openKindAfterInteraction('editor');
           }}
         >
           <span class="icon-surface is-size-s">${waIcon('file-code')}</span>
@@ -641,7 +650,7 @@ function environmentPopoverTemplate(
           size="s"
           data-popover="close"
           @click=${() => {
-            openKind('terminal');
+            openKindAfterInteraction('terminal');
           }}
         >
           <span class="icon-surface is-size-s">${waIcon('terminal')}</span>
@@ -654,7 +663,7 @@ function environmentPopoverTemplate(
           size="s"
           data-popover="close"
           @click=${() => {
-            openKind('browser');
+            openKindAfterInteraction('browser');
           }}
         >
           <span class="icon-surface is-size-s">${waIcon('globe')}</span>
@@ -668,12 +677,7 @@ function environmentPopoverTemplate(
 function taskConversationTemplate(): TemplateResult {
   const activeId = activeStreamId$.get();
   const showConversation = activeId != null && hasAnyStreams$.get();
-  const defaultLauncherContent = hasWorkspace
-    ? html`<section class="task-launcher-surface">${mainView}</section>`
-    : noWorkspacePlaceholder;
-  const launcherContent = startupTeamPanel.isVisible()
-    ? startupTeamPanel.template()
-    : defaultLauncherContent;
+  const startupPanelVisible = startupTeamPanel.isVisible();
   return html`
     <main class="task-conversation" aria-label="Task conversation">
       <header class="task-header">
@@ -724,7 +728,19 @@ function taskConversationTemplate(): TemplateResult {
           data-pane="launcher"
           ?hidden=${showConversation}
         >
-          ${launcherContent}
+          ${
+            hasWorkspace
+              ? html`
+                  <section
+                    class="task-launcher-surface"
+                    ?hidden=${startupPanelVisible}
+                  >
+                    ${mainView}
+                  </section>
+                `
+              : noWorkspacePlaceholder
+          }
+          ${startupTeamPanel.template()}
         </section>
         <section
           class="task-conversation-pane"
@@ -813,7 +829,11 @@ function shellTemplate(): TemplateResult {
           {
             onNewTask: returnToLauncher,
             onSearch: openCommandPalette,
-            onToggleFiles: () => updateShell(toggleFiles(shellState)),
+            onToggleFiles: () => {
+              const next = toggleFiles(shellState);
+              updateShell(next);
+              if (next.filesExpanded) void editorPane.refresh();
+            },
             onOpenFolder: () =>
               postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER),
             onOpenTerminal: () => openKind('terminal'),
@@ -1314,6 +1334,7 @@ if (!bootstrapFailed) {
   wireConversation();
   postMessage(DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE);
   postWebviewReady();
+  if (hasWorkspace) void editorPane.refresh();
   document.body.dataset.desktopReady = 'true';
 }
 

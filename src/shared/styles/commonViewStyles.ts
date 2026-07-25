@@ -226,6 +226,10 @@ export const commonViewStyles: CSSResult = css`
 
   .clickable-link {
     cursor: pointer;
+    /* No fill or border to round — this is here so the shared focus ring,
+       which follows the element's own radius, doesn't draw a hard rectangle
+       around a text link. */
+    border-radius: var(--border-radius);
     color: var(--color-text-link);
     text-decoration: none;
     transition: color var(--transition-fast);
@@ -252,6 +256,7 @@ export const commonViewStyles: CSSResult = css`
     align-items: center;
     gap: var(--wa-space-2xs);
     padding: var(--wa-space-3xs) 0;
+    border-radius: var(--border-radius);
     cursor: pointer;
     list-style: none;
     user-select: none;

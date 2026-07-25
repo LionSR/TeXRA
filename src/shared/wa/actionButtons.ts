@@ -12,9 +12,9 @@ import { type TeXRAIconName, waIcon } from './webAwesomeIcons';
 type ActionButtonAppearance = 'filled' | 'outlined' | 'plain';
 type ActionButtonVariant = 'brand' | 'neutral';
 /**
- * Step on the shared `--control-size` scale (24 / 28 / 32px). Replaces the
- * six one-off `min-height`/`width` overrides call sites used to write to
- * resize an icon button.
+ * Step on the shared `--control-size` scale (24 / 28 / 32px). Use this instead
+ * of a local `width`/`height` override: the skin derives the icon size and
+ * radius from the same token, so a hand-written geometry desynchronizes them.
  */
 type ActionButtonSize = 's' | 'm' | 'l';
 

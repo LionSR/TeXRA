@@ -221,12 +221,10 @@ export class StreamHeader extends LitElement {
         background: var(--wa-color-neutral-fill-quiet);
       }
 
+      /* Geometry comes from the shared icon-button skin via size="m"; the
+         circular radius is the one local departure, so the toolbar reads as a
+         segmented pill rather than a row of squares. */
       .header-actions .action-icon-button::part(base) {
-        width: 28px;
-        min-width: 28px;
-        height: 28px;
-        padding: 0;
-        border: 0;
         border-radius: var(--wa-border-radius-circle, 50%);
       }
 
@@ -414,6 +412,7 @@ export class StreamHeader extends LitElement {
           label: tooltipText,
           tooltip: tooltipText,
           className,
+          size: 'm',
           disabled,
           ariaHidden: hidden,
           onClick: () => {

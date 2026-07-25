@@ -2,12 +2,11 @@
  * Canonical control skins — the single definition of what a button, an input,
  * a focus ring, and a settings row look like in every TeXRA host.
  *
- * Before this file each surface rolled its own: 18 distinct `wa-button` skins
- * across the extension and the desktop renderer, three competing hover
- * languages (opacity / fill / both), 21 hand-written focus rings at four
- * different widths, and six textareas that each hardcoded their own height.
- * The skins below collapse that to four button skins, two modifiers, and two
- * input skins.
+ * Four button skins (`.btn-primary` / `.btn-secondary` / `.btn-ghost` /
+ * `.icon-button`), two modifiers (`.is-link` / `.is-danger`), two input skins
+ * (`formControlStyles` / `.input-plain`). A surface that needs something else
+ * belongs in this file, not in a local override — a per-component skin is how
+ * hover ends up meaning three different things on one screen.
  *
  * Every value is a `var()`, so the desktop's light-DOM mirror in
  * `packages/desktop/src/renderer/styles.css` cannot drift in appearance from
@@ -15,10 +14,9 @@
  * stylesheet, and light DOM can't adopt a Lit `CSSResult`, which is why the
  * class names exist in both places.
  *
- * Legacy class names (`.action-button`, `.action-icon-button`, `.header-action`)
- * are kept as selector aliases rather than renamed at ~40 call sites: the skin
- * has one definition either way, and per-component overrides that target the
- * legacy names keep resolving.
+ * `.action-button` / `.action-icon-button` / `.header-action` are selector
+ * aliases for the same skins, kept because `renderIconActionButton` emits them
+ * and per-component overrides target them.
  */
 
 import { css, type CSSResult } from 'lit';
@@ -28,7 +26,8 @@ import { compactFormControlStyles } from './selectStyles';
 /**
  * One focus ring for every interactive element in the shadow root.
  *
- * Replaces 21 hand-written rings (17 at 1px, two at 2px, two inset at -1px).
+ * An `outline` follows the element's own `border-radius`, so a primitive that
+ * carries no fill still needs a radius or its ring draws a hard rectangle.
  * `.focus-ring-inset` is for controls whose ring would be clipped by an
  * `overflow: hidden` ancestor (rows inside a scroller, tabs inside a strip).
  */
@@ -203,8 +202,10 @@ export const buttonStyles: CSSResult = css`
     font-size: var(--font-size-icon-sm);
   }
 
-  /* Size steps for the icon button. Six former hardcoded geometries (20/22/24/
-     28/32/40px) collapse onto these three. */
+  /* The three size steps. A caller picks one via the size option on
+     renderIconActionButton (or the class directly); anything needing a fourth
+     sets --control-size on the host rather than a width/height pair, so the
+     radius and icon size stay in proportion. */
   .icon-button.is-size-s,
   .action-icon-button.is-size-s {
     --control-size: var(--control-size-s);
@@ -353,20 +354,22 @@ export const formControlStyles: CSSResult = css`
     line-height: var(--line-height-normal);
   }
 
-  /* One option-row definition. It was declared three times at three heights
-     (the extension bridge, the desktop bridge, and this sheet); each host now
-     sets --wa-height-option once instead. */
+  /* One option-row definition, sized by the host's own bridge token. The
+     fallback is the desktop's roomier row; the extension overrides it at
+     :root, which reaches here because the token is not re-declared on
+     :host. */
   wa-option::part(base),
   wa-dropdown-item::part(base) {
-    min-height: var(--wa-height-option);
+    min-height: var(--wa-height-option, 32px);
     padding: var(--wa-space-3xs) var(--wa-space-xs);
     border-radius: var(--border-radius);
     font-size: var(--font-size-sm);
     line-height: var(--line-height-normal);
   }
 
-  /* Replaces five width-only rules that each re-declared the same three
-     declarations to make a control fill its row. */
+  /* Makes a form control fill its row. The min-width reset is the load-bearing
+     part — a wa-input's intrinsic min-width otherwise overflows a flex row
+     instead of shrinking. */
   .form-control-fill {
     flex: 1;
     width: 100%;

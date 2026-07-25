@@ -1,9 +1,15 @@
+// Node imports
+import { readFileSync } from 'node:fs';
+
 // Third-party imports
 import { getIconLibrary } from '@awesome.me/webawesome/dist/components/icon/library.js';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 // Local imports - shared icon contract
-import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
+import {
+  CODICON_ALIASES,
+  TEXRA_ICON_LIBRARY,
+} from '@shared/wa/webAwesomeIcons';
 
 // Local imports - desktop test paths
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
@@ -35,6 +41,26 @@ function decodeSvg(uri: string): string {
   return decodeURIComponent(uri.slice(uri.indexOf(',') + 1));
 }
 
+/**
+ * The TeXRA names that carry an explicit Lucide rename, read from the source
+ * table. Read rather than exported: the table is module-private data with one
+ * consumer (its own resolver), and exporting it only for a test would make a
+ * contract out of an implementation detail.
+ */
+function readRenamedIconNames(): readonly string[] {
+  const source = readFileSync(
+    desktopSourcePath('renderer', 'desktopIconLibrary.ts'),
+    'utf8',
+  );
+  const table = source.slice(
+    source.indexOf('const LUCIDE_NAME_BY_TEXRA_NAME'),
+    source.indexOf('const LUCIDE_ICON_NODES'),
+  );
+  return [...table.matchAll(/^\s*'?([a-z0-9-]+)'?:\s*'[a-z0-9-]+',/gm)].map(
+    (match) => match[1]!,
+  );
+}
+
 describe('desktop icon library', () => {
   it('renders mapped icons with the Lucide stroke treatment', async () => {
     const svg = decodeSvg(await resolve(texraResolver, 'file-lines'));
@@ -60,5 +86,38 @@ describe('desktop icon library', () => {
 
     expect(aliasSvg).toContain('<path fill="currentColor"');
     expect(unknownSvg).toContain('stroke-width="1.75"');
+  });
+
+  it('maps every renamed icon to a Lucide name the pinned release actually has', async () => {
+    // A mapping whose target Lucide dropped or renamed does not fail loudly: it
+    // silently falls through to the solid Font Awesome glyph, so one filled icon
+    // appears amid stroke icons. `circle-question` shipped broken exactly this
+    // way (Lucide moved circle-help to circle-question-mark).
+    const fellBackToFontAwesome: string[] = [];
+    const renamedIconNames = readRenamedIconNames();
+
+    for (const name of renamedIconNames) {
+      const svg = decodeSvg(await resolve(texraResolver, name));
+      if (!svg.includes('stroke-width="1.75"')) {
+        fellBackToFontAwesome.push(name);
+      }
+    }
+
+    expect(fellBackToFontAwesome).toEqual([]);
+    // Guards the parse itself: an empty list would make the loop above vacuous.
+    expect(renamedIconNames.length).toBeGreaterThan(50);
+  });
+
+  it('resolves every codicon alias through to a stroke glyph', async () => {
+    // Aliases take an extra hop (alias -> canonical -> Lucide). Skipping that
+    // hop previously blanked 22 icons, so the whole table is walked.
+    const unresolved: string[] = [];
+
+    for (const alias of Object.keys(CODICON_ALIASES)) {
+      const svg = decodeSvg(await resolve(texraResolver, alias));
+      if (!svg.includes('<svg')) unresolved.push(alias);
+    }
+
+    expect(unresolved).toEqual([]);
   });
 });
