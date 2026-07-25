@@ -14,6 +14,7 @@ import {
   visibleSubagentRows,
   type ChildStreamEntries,
 } from './childExecutions';
+import { orderChildIdsByPhase } from './childPhaseGroups';
 import type { StreamSlice } from './cliState';
 
 export interface StreamView {
@@ -131,6 +132,15 @@ export function streamDisplayLabel(init: {
   );
 }
 
+/** Workflow-script phase owning a child stream, per the retained roster entry. */
+function streamWorkflowPhase(
+  childStreamEntries: ChildStreamEntries,
+  streamId: StreamTabId,
+): string | undefined {
+  const entry = childStreamEntries.get(streamId);
+  return entry?.kind === 'live' ? entry.summary?.workflowPhase : undefined;
+}
+
 export function streamViewForId(init: {
   readonly activeStreamId: StreamTabId | undefined;
   readonly childStreamEntries: ChildStreamEntries;
@@ -146,10 +156,7 @@ export function streamViewForId(init: {
     label: streamDisplayLabel(init),
     toolName:
       childEntry?.kind === 'live' ? childEntry.summary?.toolName : undefined,
-    workflowPhase:
-      childEntry?.kind === 'live'
-        ? childEntry.summary?.workflowPhase
-        : undefined,
+    workflowPhase: streamWorkflowPhase(init.childStreamEntries, init.streamId),
     parentId,
     parentLabel: parentId
       ? streamDisplayLabel({
@@ -182,11 +189,18 @@ export function streamTreeEntries(
   // then creation order), so the child list and its
   // Alt+1..9 shortcuts read top-to-bottom from most to least recently
   // started, keeping the row a user is most likely watching near the top.
-  const ordered = focusOrderDescendants(
-    root,
-    init.childStreamEntries,
-    init.streams,
-  ).toReversed();
+  // Grouping belongs here, not in the renderer: this loop also assigns the
+  // Alt+1..9 shortcut numbers, so one owner produces order, shortcuts and
+  // rendering and they cannot drift apart. A list where nothing carries a
+  // workflow phase groups to itself, leaving the root viewport untouched.
+  const ordered = orderChildIdsByPhase(
+    focusOrderDescendants(
+      root,
+      init.childStreamEntries,
+      init.streams,
+    ).toReversed(),
+    (id) => streamWorkflowPhase(init.childStreamEntries, id),
+  );
   const out: ActiveStreamTreeEntry[] = [];
   if (init.streams.has(root)) out.push({ id: root });
   for (const [index, id] of ordered.entries()) {

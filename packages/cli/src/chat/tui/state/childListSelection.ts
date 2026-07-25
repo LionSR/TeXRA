@@ -1,10 +1,22 @@
 // Local imports - shared stream identity
 import type { StreamTabId } from '@shared/schemas';
 
-export type ChildListValue = `stream:${string}`;
+/**
+ * A row identity in the child list. `stream:` rows are the selectable ones;
+ * `phase:` rows are the workflow-phase dividers the focused-run list inserts,
+ * which are `disabled` `Select` items and therefore never selected, never
+ * highlighted and never navigated onto. They exist only inside `SubagentList`'s
+ * own item list — the caller's `values` stay stream-only, so selection
+ * reconciliation can never fall back onto a divider.
+ */
+export type ChildListValue = `stream:${string}` | `phase:${string}`;
 
 export function childStreamListValue(streamId: StreamTabId): ChildListValue {
   return `stream:${streamId}`;
+}
+
+export function childPhaseListValue(phase: string): ChildListValue {
+  return `phase:${phase}`;
 }
 
 export function childListStreamId(

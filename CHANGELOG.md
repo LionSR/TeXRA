@@ -65,6 +65,11 @@ All notable changes to this project will be documented in this file.
   running, finished, saved-result, skipped, and failed, instead of every row
   looking alike. A task the run never reached now also explains itself the way
   the progress view already did.
+- **Focusing a workflow-script run groups its agents by phase** — the child
+  list now heads each group with `◆ Reduce (2/3)` and that phase's finished
+  task count, instead of listing every agent flat. Headers are dividers only:
+  arrow keys step over them, and the agent rows keep their existing elapsed,
+  tool-call, and token figures.
 
 ## [0.39.8] - 2026-07-24
 

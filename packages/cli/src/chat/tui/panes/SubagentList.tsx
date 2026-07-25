@@ -20,9 +20,15 @@ import { truncateSummaryToWidth } from '../render/terminalText';
 import { childElapsed } from '../state/childControls';
 import {
   childListStreamId,
+  childPhaseListValue,
   childStreamListValue,
   type ChildListValue,
 } from '../state/childListSelection';
+import {
+  childPhaseGroupRows,
+  type ChildPhaseGroupRow,
+  type ChildPhaseHeader,
+} from '../state/childPhaseGroups';
 import { useLiveNowMs } from '../state/useLiveNowMs';
 import { COLOR_HINT } from '../ui/colors';
 import { POINTER, TICK } from '../ui/glyphs';
@@ -69,6 +75,41 @@ function RowMetadata({
 }
 
 const SUBAGENT_SUMMARY_MAX_COLUMNS = 100;
+
+/** Indent that lands the `◆` on the same column as a row's status marker
+ *  (`SessionRow` prints a 1-column pointer slot then a 3-column tick slot). */
+const PHASE_HEADER_INDENT = '    ';
+
+/** Non-selectable divider above one phase's rows. `done/total` right-aligns
+ *  into the metadata column when the panel is pinned to the terminal width,
+ *  and falls back inline below `CHILD_ROW_METADATA_MIN_COLUMNS` — the same
+ *  width gate the rows use to shed their own metadata column. */
+function PhaseHeaderRow({
+  header,
+  metadataColumn,
+}: {
+  readonly header: ChildPhaseHeader;
+  readonly metadataColumn: boolean;
+}): React.JSX.Element {
+  const progress = header.progress;
+  return (
+    <Box
+      flexDirection="row"
+      flexGrow={1}
+      height={1}
+      minWidth={0}
+      overflowY="hidden"
+    >
+      <Box minWidth={0} flexShrink={1}>
+        <Text dimColor wrap="truncate-end">
+          {`${PHASE_HEADER_INDENT}${header.label}`}
+          {!metadataColumn && progress ? ` · ${progress}` : ''}
+        </Text>
+      </Box>
+      {metadataColumn ? <RowMetadata text={progress} /> : null}
+    </Box>
+  );
+}
 
 function SessionRow({
   active,
@@ -169,6 +210,14 @@ function SessionRow({
   );
 }
 
+function childListRowValue(
+  row: ChildPhaseGroupRow<StreamView>,
+): ChildListValue {
+  return row.kind === 'header'
+    ? childPhaseListValue(row.header.phase)
+    : childStreamListValue(row.row.id);
+}
+
 export interface SubagentListProps {
   readonly keyboardActive?: boolean;
   readonly maxRows?: number;
@@ -206,20 +255,45 @@ export function SubagentList(
         .join(':') || undefined,
     [sessions],
   );
+  // The run's own transcript owns the phase outline and the task cards; it is
+  // the active stream whenever this list is rooted on it, so its entries are
+  // fully projected. `streamTreeEntries` already made same-phase rows
+  // contiguous, so this only inserts the dividers.
+  const listRootEntries = useMemo(
+    () =>
+      sessions.find((session) => session.id === props.listRootStreamId)?.slice
+        ?.entries,
+    [props.listRootStreamId, sessions],
+  );
+  const rows = useMemo(
+    () =>
+      childPhaseGroupRows({
+        rows: sessions,
+        phases: (listRootEntries ?? []).flatMap((entry) =>
+          entry.role === 'phase' ? [entry] : [],
+        ),
+        tasks: (listRootEntries ?? []).flatMap((entry) =>
+          entry.role === 'workflowTask' ? [entry.task] : [],
+        ),
+      }),
+    [listRootEntries, sessions],
+  );
   const items = useMemo(
     () =>
-      sessions.map((session) => ({
-        label: session.label,
-        value: childStreamListValue(session.id),
-      })),
-    [sessions],
-  );
-  const sessionsByValue = useMemo(
-    () =>
-      new Map(
-        sessions.map((session) => [childStreamListValue(session.id), session]),
+      rows.map((row) =>
+        row.kind === 'header'
+          ? {
+              label: row.header.label,
+              value: childListRowValue(row),
+              disabled: true,
+            }
+          : { label: row.row.label, value: childListRowValue(row) },
       ),
-    [sessions],
+    [rows],
+  );
+  const rowsByValue = useMemo(
+    () => new Map(rows.map((row) => [childListRowValue(row), row])),
+    [rows],
   );
   const nowMs = useLiveNowMs(liveElapsedKey !== undefined, liveElapsedKey);
   const { columns } = useWindowSize();
@@ -314,8 +388,18 @@ export function SubagentList(
           if (streamId) props.onFocusStream?.(streamId);
         }}
         renderItem={(item, state) => {
-          const session = sessionsByValue.get(item.value);
-          return session ? (
+          const row = rowsByValue.get(item.value);
+          if (!row) return null;
+          if (row.kind === 'header') {
+            return (
+              <PhaseHeaderRow
+                header={row.header}
+                metadataColumn={metadataColumn}
+              />
+            );
+          }
+          const session = row.row;
+          return (
             <SessionRow
               isListRoot={session.id === props.listRootStreamId}
               active={state.active}
@@ -326,7 +410,7 @@ export function SubagentList(
               pendingKinds={props.pendingApprovals?.get(session.id)}
               session={session}
             />
-          ) : null;
+          );
         }}
       />
     </Box>
