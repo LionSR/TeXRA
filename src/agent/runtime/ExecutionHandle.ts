@@ -93,6 +93,14 @@ export class AgentExecutionHandle implements ExecutionHandle {
   toolName?: string;
 
   /**
+   * Workflow-script phase owning this run, when it is an `agent()` grandchild
+   * of a workflow-script run. Same mutable display-field slot as
+   * {@link toolName}, and set the same way: assigned between construction and
+   * `track()`, so the first roster emission already carries it.
+   */
+  workflowPhase?: string;
+
+  /**
    * The run's terminal outcome, settled exactly once (by the run lifecycle, or
    * by `finalizeChildStream` for non-lifecycle child streams) BEFORE the
    * execution is untracked. Always resolves — never rejects — so a consumer-less
