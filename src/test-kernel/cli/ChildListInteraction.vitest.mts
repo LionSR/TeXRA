@@ -13,6 +13,7 @@ import {
   FakeStdin,
   FakeStdout,
   loadInk,
+  renderOutputAtTerminalSize,
 } from '@test/support/inkTestHarness.mts';
 import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
 
@@ -23,13 +24,15 @@ function session(id: StreamTabId, active = false): StreamView {
 describe('CLI child list interaction', () => {
   it('renders no row highlight before the list receives a selection', async () => {
     const { ink, React } = await loadInk();
-    const output = ink.renderToString(
+    const output = await renderOutputAtTerminalSize(
+      ink,
       React.createElement(SubagentList, {
         sessions: [session('latexmk' as StreamTabId)],
         keyboardActive: false,
         maxRows: 3,
       }),
-      { columns: 100 },
+      100,
+      { until: (frame) => frame.includes('latexmk') },
     );
 
     expect(output).toContain('latexmk');
