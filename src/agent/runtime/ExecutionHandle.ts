@@ -27,7 +27,7 @@ export interface ExecutionStatusInfo {
 export interface ExecutionHandle {
   readonly executionId: string;
   readonly parentStreamId: StreamTabId;
-  readonly category: AgentCategory | 'process';
+  readonly category: AgentCategory;
   readonly agentName: string;
   readonly startedAt: number;
   readonly runtimeHost: AgentRuntimeHost;
@@ -333,41 +333,11 @@ export type AgentRunHandle = Pick<
   | 'interrupt'
 >;
 
-/**
- * Handle for background bash processes.
- * No `childStreamId` — processes don't have their own stream.
- */
-export class ProcessExecutionHandle implements ExecutionHandle {
-  readonly category = 'process' as const;
-  readonly startedAt = Date.now();
-
-  /** Ephemeral temp file paths for live output (set after construction, cleared on completion). */
-  outputPaths?: { readonly stdout: string; readonly stderr: string };
-
-  /** Stable tool name for UI identification (e.g. "bash", "codex"). */
-  toolName?: string;
-
-  constructor(
-    readonly executionId: string,
-    readonly parentStreamId: StreamTabId,
-    readonly agentName: string,
-    private readonly killFn: () => boolean,
-    readonly runtimeHost: AgentRuntimeHost,
-  ) {}
-
-  terminate(): boolean {
-    return this.killFn();
-  }
-}
-
 /** True when the handle is a child of parentStreamId (not the parent itself). */
 export function isChildExecution(
   handle: ExecutionHandle,
   parentStreamId: StreamTabId,
 ): boolean {
   if (handle.parentStreamId !== parentStreamId) return false;
-  if (handle instanceof AgentExecutionHandle) {
-    return handle.isChildExecution;
-  }
-  return true;
+  return handle instanceof AgentExecutionHandle && handle.isChildExecution;
 }

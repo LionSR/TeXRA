@@ -293,7 +293,7 @@ describe('child stream progress events', () => {
         STREAM_PHASE.RUNNING,
       );
       expect(
-        defaultSession().executions.getActiveChildren(parentStreamId).subagents,
+        defaultSession().executions.getActiveChildren(parentStreamId),
       ).toContainEqual(
         expect.objectContaining({
           childStreamId: workflowRelaunchChildStreamId,
