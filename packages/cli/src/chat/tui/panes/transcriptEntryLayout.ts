@@ -91,10 +91,12 @@ const ROLE_GEOMETRY = {
     marginTopRows: USER_ENTRY_MARGIN_TOP_ROWS,
   },
   workflowTask: {
-    // The first-line marker is per-status (WORKFLOW_TASK_STATUS_STYLE), so the
-    // role carries only the alignment used by wrapped continuation lines.
-    firstPrefix: '',
-    continuationPrefix: '  ',
+    // Two spaces nest the task under the `◆` phase divider that heads it. The
+    // first-line marker is per-status (WORKFLOW_TASK_STATUS_STYLE), so
+    // `firstPrefix` carries the indent alone and continuation lines add the
+    // marker's own width on top of it.
+    firstPrefix: '  ',
+    continuationPrefix: '    ',
     inset: 0,
     marginBottomRows: 0,
     marginTopRows: 0,
@@ -261,15 +263,17 @@ function entryLines(
         geometry.continuationPrefix,
       );
     }
-    case 'workflowTask':
+    case 'workflowTask': {
       // The status marker belongs to the layout, not the Ink row: the print-once
       // scrollback snapshot is built from these lines.
+      const geometry = ROLE_GEOMETRY.workflowTask;
       return wrapWithPrefix(
         entry.text,
         columns,
-        `${WORKFLOW_TASK_STATUS_STYLE[entry.task.status].marker} `,
-        ROLE_GEOMETRY.workflowTask.continuationPrefix,
+        `${geometry.firstPrefix}${WORKFLOW_TASK_STATUS_STYLE[entry.task.status].marker} `,
+        geometry.continuationPrefix,
       );
+    }
     default: {
       const geometry = ROLE_GEOMETRY[entry.role];
       return wrapWithPrefix(

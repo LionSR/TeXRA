@@ -8,7 +8,7 @@ import {
 } from '@cli/chat/tui/panes/SubagentListDisplay';
 import {
   ConversationPane,
-  workflowInputContextSummary,
+  workflowRunStatusSummary,
 } from '@cli/chat/tui/panes/ConversationPane';
 import {
   SubagentList,
@@ -95,12 +95,72 @@ describe('CLI child list display model', () => {
       files: { input: [], context: [], media: [], output: [] },
     });
 
-    expect(workflowInputContextSummary(workflow)).toBe(
+    expect(workflowRunStatusSummary(workflow)).toBe(
       'Input: 2 files · Context: 1 file',
     );
-    expect(workflowInputContextSummary(toolUse)).toBeUndefined();
-    expect(workflowInputContextSummary(workflowWithoutInputs)).toBeUndefined();
-    expect(workflowInputContextSummary(undefined)).toBeUndefined();
+    expect(workflowRunStatusSummary(toolUse)).toBeUndefined();
+    expect(workflowRunStatusSummary(workflowWithoutInputs)).toBeUndefined();
+    expect(workflowRunStatusSummary(undefined)).toBeUndefined();
+  });
+
+  it('leads the workflow status band with the current phase and its task fold', () => {
+    const slice = workflowAgentSlice('itemized', {
+      files: { input: ['paper.tex'], context: [], media: [], output: [] },
+      entries: [
+        {
+          id: 'phase-map',
+          role: 'phase',
+          text: 'Map',
+          finalized: true,
+          phaseLabel: 'Map',
+          phaseIndex: 0,
+          phaseTotal: 3,
+        },
+        {
+          id: 'task-a',
+          role: 'workflowTask',
+          text: 'Finished: Map the seams',
+          finalized: true,
+          task: {
+            id: 'seams',
+            label: 'Map the seams',
+            phase: 'Map',
+            status: 'completed',
+            durationMs: 1_000,
+          },
+        },
+        {
+          id: 'task-b',
+          role: 'workflowTask',
+          text: 'Running: Read the contracts',
+          finalized: false,
+          task: {
+            id: 'contracts',
+            label: 'Read the contracts',
+            phase: 'Map',
+            status: 'running',
+          },
+        },
+        {
+          id: 'task-c',
+          role: 'workflowTask',
+          text: 'Planned: Draft the section',
+          finalized: false,
+          task: {
+            id: 'draft',
+            label: 'Draft the section',
+            phase: 'Write',
+            status: 'planned',
+          },
+        },
+      ],
+    });
+
+    // Only the current phase's tasks are folded, and the phase segment leads so
+    // it survives truncation on a narrow terminal.
+    expect(workflowRunStatusSummary(slice)).toBe(
+      'Map (1/3) · 1/2 done · Input: 1 file · Context: 0 files',
+    );
   });
 
   it('prioritizes live workflow activity over metadata in a one-row viewport', async () => {

@@ -58,7 +58,7 @@ function workflowTaskEvent(
 beforeEach(() => clearStoreCache());
 
 describe('workflow-script progress bridge', () => {
-  it('keeps planned task cards in one stage across incremental updates', async () => {
+  it('keeps planned task cards in their phase stage across incremental updates', async () => {
     const { trace, events } = recordingTrace();
     const parent = trace.openStage('Parent');
     const plannedMeta = `export const meta = {
@@ -92,19 +92,21 @@ return await agent('Inspect', { id: 'inspect' })`,
     const planned = workflowTaskEvent(events, 'Inspect source', 'planned');
     const running = workflowTaskEvent(events, 'Inspect source', 'running');
     const completed = workflowTaskEvent(events, 'Inspect source', 'completed');
+    // One stable, phase-derived stage across the whole lifecycle: the card is
+    // classified into its phase group when it is planned and never moves.
     expect(planned).toMatchObject({
       type: 'workflow.task',
-      stageId: parent.id,
+      stageId: phaseId,
     });
     expect(running).toMatchObject({
       type: 'workflow.task',
       logId: planned?.logId,
-      stageId: parent.id,
+      stageId: phaseId,
     });
     expect(completed).toMatchObject({
       type: 'workflow.task',
       logId: planned?.logId,
-      stageId: parent.id,
+      stageId: phaseId,
     });
     expect(events).toContainEqual(
       expect.objectContaining({
@@ -166,6 +168,72 @@ return await agent('Run one', { id: 'used' })`,
     expect(activities).toContain(
       'Skipped: Unused task — The workflow ended before this task was reached.',
     );
+  });
+
+  it('opens and closes a declared phase the run never reached', async () => {
+    const { trace, events } = recordingTrace();
+    await runPersistedWorkflowScriptWithProgress(trace, {
+      store: getExecutionStore(executionId),
+      checkpointId: 'unreached-phase',
+      script: `export const meta = {
+  name: 'unreached-phase',
+  description: 'declares a phase the run never enters',
+  phases: [{ title: 'Research' }, { title: 'Write' }],
+  tasks: [
+    { id: 'used', label: 'Used task', phase: 'Research' },
+    { id: 'later', label: 'Later task', phase: 'Write' },
+  ],
+}
+phase('Research')
+return await agent('Run one', { id: 'used' })`,
+      runAgent: async () => 'done',
+    });
+
+    // The skipped card still belongs to its own phase group, so the sweep has
+    // to open that stage even though the script never entered it.
+    const writeId = stageId(events, 'Write');
+    expect(workflowTaskEvent(events, 'Later task', 'skipped')).toMatchObject({
+      stageId: writeId,
+      task: { reason: 'not-reached' },
+    });
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'stage.start',
+        id: writeId,
+        kind: 'phase',
+      }),
+    );
+    expect(events).toContainEqual({
+      type: 'stage.end',
+      id: writeId,
+      status: RUN_OUTCOME.COMPLETED,
+    });
+  });
+
+  it('keeps a phase-less declared task out of the phase active at call time', async () => {
+    const { trace, events } = recordingTrace();
+    await runPersistedWorkflowScriptWithProgress(trace, {
+      store: getExecutionStore(executionId),
+      checkpointId: 'phase-less-declared-task',
+      script: `export const meta = {
+  name: 'phase-less-declared-task',
+  description: 'declares a task with no phase',
+  phases: [{ title: 'Research' }],
+  tasks: [{ id: 'loose', label: 'Loose task' }],
+}
+phase('Research')
+return await agent('Run loose', { id: 'loose' })`,
+      runAgent: async () => 'done',
+    });
+
+    // meta.tasks[].phase is optional, so the plan can declare a task with no
+    // phase while a phase() is active. Its card must stay where it was first
+    // classified — a progress tree cannot move a card between groups.
+    for (const status of ['planned', 'running', 'completed'] as const) {
+      expect(workflowTaskEvent(events, 'Loose task', status)).toMatchObject({
+        stageId: undefined,
+      });
+    }
   });
 
   it('marks a planned task failed when the live-call cap refuses it', async () => {

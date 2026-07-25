@@ -38,7 +38,6 @@ interface PhaseStage {
 
 interface ProjectedWorkflowTask {
   readonly logId: string;
-  readonly stageId: string | undefined;
   readonly definition: Pick<WorkflowTaskProgress, 'id' | 'label' | 'phase'>;
   status: WorkflowTaskProgress['status'];
 }
@@ -120,6 +119,7 @@ export async function runPersistedWorkflowScriptWithProgress(
   const { getLiveCostUsd, onActivity, ...runOptions } = options;
   const parentStageId = trace.activeStageId();
   const phases = new Map<string, PhaseStage>();
+  const phaseStageIds = new Map<string, string>();
   const callPhases = new Map<WorkflowScriptProgressId, string | undefined>();
   const projectedTasks = new Map<
     WorkflowScriptProgressId,
@@ -128,6 +128,21 @@ export async function runPersistedWorkflowScriptWithProgress(
   let currentPhase: string | undefined;
   let closed = false;
   let runOutcome: RunOutcome = RUN_OUTCOME.FAILED;
+
+  /**
+   * Stable stage id for a phase title, minted before the stage opens. A
+   * declared task can name the group it belongs to from the moment it is
+   * planned, while `stage.start` — which settles the divider's print order the
+   * instant it is emitted — still waits until the run actually reaches the
+   * phase, so a divider never prints above its own task rows.
+   */
+  const phaseStageIdFor = (title: string): string => {
+    const existing = phaseStageIds.get(title);
+    if (existing) return existing;
+    const id = generateShortId();
+    phaseStageIds.set(title, id);
+    return id;
+  };
 
   const phaseFor = (
     title: string,
@@ -138,6 +153,7 @@ export async function runPersistedWorkflowScriptWithProgress(
     if (existing) return existing;
     const phase = {
       handle: trace.openStage(title, {
+        id: phaseStageIdFor(title),
         kind: 'phase',
         parentId: parentStageId,
         index,
@@ -149,7 +165,12 @@ export async function runPersistedWorkflowScriptWithProgress(
     return phase;
   };
 
-  const stageIdFor = (
+  /**
+   * Open a phase stage once the run reaches it and answer the stage rows
+   * emitted from there belong to. Callers that only need the phase opened
+   * ignore the return: `emitTask` resolves a card's group itself.
+   */
+  const openPhaseStage = (
     phase: string | undefined,
     index?: number,
     total?: number,
@@ -168,15 +189,17 @@ export async function runPersistedWorkflowScriptWithProgress(
   ): void => {
     onActivity?.(formatWorkflowTaskLine(task));
   };
-  const emitTask = (
-    task: WorkflowTaskProgress,
-    stageId: string | undefined,
-  ): void => {
+  /**
+   * A task's group is derived from the phase recorded on its first emission
+   * and never from the phase active when a later update arrives, so the same
+   * card cannot land in two groups: host progress trees classify a card once
+   * and cannot move it afterwards.
+   */
+  const emitTask = (task: WorkflowTaskProgress): void => {
     let projected = projectedTasks.get(task.id);
     if (!projected) {
       projected = {
         logId: `workflow-task-${generateShortId()}`,
-        stageId,
         definition: {
           id: task.id,
           label: task.label,
@@ -188,11 +211,12 @@ export async function runPersistedWorkflowScriptWithProgress(
     } else {
       projected.status = task.status;
     }
+    const phase = projected.definition.phase;
     trace.emit({
       type: 'workflow.task',
       logId: projected.logId,
       task,
-      stageId: projected.stageId,
+      stageId: phase === undefined ? parentStageId : phaseStageIdFor(phase),
     });
   };
   const markPhaseFailed = (
@@ -210,7 +234,7 @@ export async function runPersistedWorkflowScriptWithProgress(
     switch (event.type) {
       case 'plan':
         for (const task of event.tasks) {
-          emitTask({ ...task, status: 'planned' }, parentStageId);
+          emitTask({ ...task, status: 'planned' });
         }
         break;
       case 'phase':
@@ -219,25 +243,20 @@ export async function runPersistedWorkflowScriptWithProgress(
         onActivity?.(`Phase: ${event.title}`);
         break;
       case 'log':
-        info(event.message, stageIdFor(currentPhase));
+        info(event.message, openPhaseStage(currentPhase));
         break;
       case 'agent:start': {
         const phaseTitle = event.phase ?? currentPhase;
         callPhases.set(event.progressId, phaseTitle);
-        const stageId = stageIdFor(
-          phaseTitle,
-          event.phaseIndex,
-          event.phaseTotal,
-        );
-        emitTask(
-          {
-            id: event.progressId,
-            label: event.label,
-            ...(phaseTitle !== undefined ? { phase: phaseTitle } : {}),
-            status: 'running',
-          },
-          stageId,
-        );
+        // Open the phase the moment the run reaches it; `emitTask` resolves
+        // the card's group on its own from the task's recorded phase.
+        openPhaseStage(phaseTitle, event.phaseIndex, event.phaseTotal);
+        emitTask({
+          id: event.progressId,
+          label: event.label,
+          ...(phaseTitle !== undefined ? { phase: phaseTitle } : {}),
+          status: 'running',
+        });
         onActivity?.(`Running: ${event.label}`);
         break;
       }
@@ -248,11 +267,8 @@ export async function runPersistedWorkflowScriptWithProgress(
           ? callPhases.get(event.progressId)
           : (event.phase ?? currentPhase);
         callPhases.delete(event.progressId);
-        const stageId = stageIdFor(
-          phaseTitle,
-          event.phaseIndex,
-          event.phaseTotal,
-        );
+        // A cached replay has no agent:start, so this is where its phase opens.
+        openPhaseStage(phaseTitle, event.phaseIndex, event.phaseTotal);
         // Cached replays spend nothing, so their lines stay cost-free; live
         // onCost settles before agent:end, so the total here is current.
         const spent =
@@ -278,20 +294,17 @@ export async function runPersistedWorkflowScriptWithProgress(
                 : {}),
               ...(spent !== undefined ? { totalCostUsd: spent } : {}),
             };
-            emitTask(task, stageId);
+            emitTask(task);
             recordTerminalActivity(task);
             break;
           }
           case 'cached':
-            emitTask(
-              {
-                id: event.progressId,
-                label: event.label,
-                ...(phaseTitle !== undefined ? { phase: phaseTitle } : {}),
-                status: 'cached',
-              },
-              stageId,
-            );
+            emitTask({
+              id: event.progressId,
+              label: event.label,
+              ...(phaseTitle !== undefined ? { phase: phaseTitle } : {}),
+              status: 'cached',
+            });
             onActivity?.(`Using saved result: ${event.label}`);
             break;
           case 'skipped': {
@@ -307,7 +320,7 @@ export async function runPersistedWorkflowScriptWithProgress(
                 : {}),
               ...(spent !== undefined ? { totalCostUsd: spent } : {}),
             };
-            emitTask(task, stageId);
+            emitTask(task);
             recordTerminalActivity(task);
             break;
           }
@@ -321,7 +334,7 @@ export async function runPersistedWorkflowScriptWithProgress(
               durationMs: event.durationMs,
               ...(spent !== undefined ? { totalCostUsd: spent } : {}),
             };
-            emitTask(task, stageId);
+            emitTask(task);
             recordTerminalActivity(task);
             break;
           }
@@ -342,18 +355,17 @@ export async function runPersistedWorkflowScriptWithProgress(
     return result;
   } finally {
     closed = true;
-    for (const {
-      definition: task,
-      stageId,
-      status,
-    } of projectedTasks.values()) {
+    for (const { definition: task, status } of projectedTasks.values()) {
       if (status === 'planned') {
+        // Open the declared phase the run never reached so its skipped cards
+        // still land under a header; the loop below then closes it.
+        openPhaseStage(task.phase);
         const skippedTask: WorkflowTaskProgress = {
           ...task,
           status: 'skipped',
           reason: 'not-reached',
         };
-        emitTask(skippedTask, stageId);
+        emitTask(skippedTask);
         recordTerminalActivity(skippedTask);
       } else if (status === 'running') {
         markPhaseFailed(task.phase);
@@ -365,7 +377,7 @@ export async function runPersistedWorkflowScriptWithProgress(
           error,
           ...(totalCostUsd !== undefined ? { totalCostUsd } : {}),
         };
-        emitTask(failedTask, stageId);
+        emitTask(failedTask);
         recordTerminalActivity(failedTask);
       }
     }
