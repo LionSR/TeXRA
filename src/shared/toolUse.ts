@@ -113,7 +113,7 @@ export function normalizeToolUseData(data: unknown): NormalizedToolUse | null {
 }
 
 // ============================================================================
-// Default tool timeouts
+// Shared tool limits
 // ============================================================================
 //
 // Shared between the tool implementations and the host UIs that display a
@@ -123,6 +123,14 @@ export function normalizeToolUseData(data: unknown): NormalizedToolUse | null {
 
 /** Default `bash` tool timeout (ms) when the model omits `timeout`. */
 export const BASH_TOOL_DEFAULT_TIMEOUT_MS = 120_000;
+
+/**
+ * Max chars a background `bash` run logs to its child stream before it stops
+ * logging and writes a single truncation notice. Lives here because the writer
+ * (`tools/bash.ts`) and the reader (`/executions/{id}/output`) must agree on
+ * the figure the output header reports.
+ */
+export const BASH_BACKGROUND_LOG_CAP_CHARS = 200_000;
 
 /** Default `executions wait` timeout (seconds) when the model omits `timeout`. */
 export const EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS = 300;
