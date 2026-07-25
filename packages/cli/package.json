@@ -39,7 +39,7 @@
     "access": "public"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.scripts.json",
     "check:architecture": "node scripts/check-host-imports.mjs",
     "bundle": "node scripts/build-bundle.mjs",
     "prepare:trace-viewer-assets": "corepack pnpm --filter @texra/trace-viewer run build",
