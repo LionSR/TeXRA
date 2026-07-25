@@ -20,7 +20,6 @@ import {
   formatAgentProposalApprovalSummary,
   formatRetryRequestMessage,
   formatToolEditApprovalSummary,
-  handleCliApprovalEvent,
   hasCliApprovalDenied,
   humanInputDenialFeedback,
   immediateDecisionForApproval,
@@ -210,19 +209,8 @@ describe('approval prompt hooks', () => {
 
   it('does not prompt for external inquiry in non-TUI CLI runs', async () => {
     const events: string[] = [];
-    const handled = handleCliApprovalEvent(
-      'showExternalInquiry',
-      {
-        requestId: 'ei_aabbccdd0011',
-        mode: 'followUp' as const,
-        threadId: 'ei_aabbccdd0011',
-        question: 'May I ask an external model to verify this proof?',
-        allowBypass: false,
-        streamId: 'root@deepseekT#abc',
-        sessionLinks: null,
-        draft: null,
-        transcript: null,
-      },
+
+    await createHeadlessCliHostInteractions(
       context({
         approvalPrompt: async () => {
           events.push('prompt');
@@ -234,11 +222,19 @@ describe('approval prompt hooks', () => {
           events.push('before');
         },
       },
-    );
+    ).openExternalInquiry?.({
+      requestId: 'ei_aabbccdd0011',
+      mode: 'followUp' as const,
+      threadId: 'ei_aabbccdd0011',
+      question: 'May I ask an external model to verify this proof?',
+      allowBypass: false,
+      streamId: 'root@deepseekT#abc',
+      sessionLinks: null,
+      draft: null,
+      transcript: null,
+    });
 
-    expect(handled).toBe(true);
     expect(events).toEqual([]);
-    await Promise.resolve();
     expect(handleExternalInquiryActionMock).toHaveBeenCalledWith({
       action: 'drop',
       threadId: 'ei_aabbccdd0011',

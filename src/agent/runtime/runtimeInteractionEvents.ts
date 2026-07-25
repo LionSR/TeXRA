@@ -36,28 +36,3 @@ export interface RuntimeInteractionEventPayloads {
   showPlanApproval: PlanApprovalPermission;
   showExternalInquiry: ExternalInquiryPermission;
 }
-
-export type RuntimeInteractionEvent = keyof RuntimeInteractionEventPayloads;
-
-const RUNTIME_INTERACTION_EVENTS = [
-  'showRetryRequest',
-  'showToolEditPermission',
-  'resolveToolEditPermission',
-  'updateToolEditApprovalBypassState',
-  'updateBashApprovalBypassState',
-  'updateSuperYoloBypassState',
-  'showBashPermission',
-  'showAgentProposal',
-  'showPlanApproval',
-  'showExternalInquiry',
-] as const satisfies readonly RuntimeInteractionEvent[];
-
-const RuntimeInteractionEventSet: ReadonlySet<string> = new Set(
-  RUNTIME_INTERACTION_EVENTS,
-);
-
-export function isRuntimeInteractionEvent(
-  event: string,
-): event is RuntimeInteractionEvent {
-  return RuntimeInteractionEventSet.has(event);
-}

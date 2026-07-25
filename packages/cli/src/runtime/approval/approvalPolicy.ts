@@ -8,9 +8,20 @@ import {
   type ApprovalDecision as SharedApprovalDecision,
 } from '@shared/schemas';
 
-import { type CliDecisionApprovalEvent } from '../approvalEvents';
 import { type CliContext, type CliPromptRequest } from '../cliContext';
 import { askCliQuestion } from '../logSinks';
+
+/**
+ * Approval requests the CLI can settle by policy (auto-approve / auto-deny)
+ * or by prompting, as opposed to the human-input requests (user questions,
+ * external inquiry) that always need a person. Both the headless adapter and
+ * the TUI discriminate on this set.
+ */
+export type CliDecisionApprovalEvent =
+  | 'showBashPermission'
+  | 'showPlanApproval'
+  | 'showAgentProposal'
+  | 'showRetryRequest';
 
 // The headless adapter only ever sets accepted + userMessage, but reusing the
 // host-neutral shape (which also carries optional userQuestionAnswers) keeps a
