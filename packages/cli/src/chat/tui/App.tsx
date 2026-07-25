@@ -15,11 +15,7 @@ import {
 // Local imports - shared runtime
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
-import {
-  AgentCategory,
-  type ActiveChildInfo,
-  type StreamTabId,
-} from '@shared/schemas';
+import { AgentCategory, type StreamTabId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - TUI surfaces and state
@@ -39,7 +35,6 @@ import {
   type EscapeInterruptState,
 } from './appInteractionPolicy';
 import { ApprovalModal } from './modals/ApprovalModal';
-import { TaskDetailView } from './modals/TaskDetailView';
 import { InfoPane } from './panes/InfoPane';
 import { InputBar, type InputBarHandle } from './panes/InputBar';
 import { ConversationRegion } from './panes/ConversationRegion';
@@ -76,7 +71,6 @@ import {
   reverseSearchOpen as reverseSearchOpenSignal,
   setTransientNotice,
   slashPaletteOpen as slashPaletteOpenSignal,
-  taskDetailExecutionId as taskDetailExecutionIdSignal,
   streams as streamsSignal,
   type StreamSlice,
 } from './state/cliState';
@@ -93,9 +87,7 @@ import {
   type TranscriptPrintRequest,
 } from './state/transcriptLines';
 import {
-  childListProcessId,
   childListStreamId,
-  childProcessListValue,
   childStreamListValue,
   INITIAL_CHILD_LIST_SELECTION,
   reduceChildListSelection,
@@ -114,7 +106,6 @@ interface InputEventEmitterLike {
   off(event: 'input', listener: (data: string) => void): void;
 }
 
-type ProcessChildInfo = Extract<ActiveChildInfo, { kind: 'process' }>;
 const NO_TRANSCRIPT_PRINTS: readonly TranscriptPrintRequest[] = [];
 
 function lastStaticEntryId(slice: StreamSlice | undefined): string | undefined {
@@ -174,7 +165,6 @@ export function App(props: AppProps): React.JSX.Element {
   const infoPane = useSignal(infoPaneSignal);
   const slashPaletteOpen = useSignal(slashPaletteOpenSignal);
   const reverseSearchOpen = useSignal(reverseSearchOpenSignal);
-  const taskDetailExecutionId = useSignal(taskDetailExecutionIdSignal);
   const rootRunStartAvailable = useSignal(rootRunStartAvailableSignal);
   const formBusy = formProgress?.status === 'running';
   const pendingSummaries = useSignal(pendingApprovalSummaries);
@@ -205,20 +195,10 @@ export function App(props: AppProps): React.JSX.Element {
     parentStream,
     streams,
   });
-  const activeProcesses = useMemo(
-    () =>
-      (childListTarget.slice?.activeProcesses ?? []).filter(
-        (process): process is ProcessChildInfo => process.kind === 'process',
-      ),
-    [childListTarget.slice?.activeProcesses],
-  );
 
   const stdin = useStdin();
   const foregroundOpen =
-    activeApprovalVisible ||
-    activeForm !== undefined ||
-    infoPane !== undefined ||
-    taskDetailExecutionId !== undefined;
+    activeApprovalVisible || activeForm !== undefined || infoPane !== undefined;
   const childInputDisabledMessage = focusedChildInputDisabledMessage({
     activeStreamId,
     parentStream,
@@ -342,26 +322,16 @@ export function App(props: AppProps): React.JSX.Element {
     return executionIds;
   }, [childStreamEntries, sessionViews, streams]);
   const childListValues = useMemo<readonly ChildListValue[]>(
-    () => [
-      ...sessionViews.map((session) => childStreamListValue(session.id)),
-      ...activeProcesses.map((process) =>
-        childProcessListValue(process.executionId),
-      ),
-    ],
-    [activeProcesses, sessionViews],
+    () => sessionViews.map((session) => childStreamListValue(session.id)),
+    [sessionViews],
   );
   const childListAvailable = childListValues.length > 0;
   const selectedChildStreamId = childListStreamId(selectedChildValue);
-  const selectedChildProcessId = childListProcessId(selectedChildValue);
-  let selectedChildKind: 'stream' | 'process' | undefined;
-  if (selectedChildProcessId) selectedChildKind = 'process';
-  if (selectedChildStreamId) selectedChildKind = 'stream';
-  const selectedChildKillable = selectedChildProcessId
-    ? activeProcesses.some(
-        (process) => process.executionId === selectedChildProcessId,
-      )
-    : selectedChildStreamId !== undefined &&
-      activeSubagentExecutionIds.has(selectedChildStreamId);
+  const selectedChildKind =
+    selectedChildStreamId !== undefined ? 'stream' : undefined;
+  const selectedChildKillable =
+    selectedChildStreamId !== undefined &&
+    activeSubagentExecutionIds.has(selectedChildStreamId);
   // A workflow-script grandchild `agent()` call is the only interactively
   // skip/retry-able row: it is a Workflow-category subagent whose parent
   // stream is itself the Workflow run (the run stream's parent is the
@@ -377,11 +347,6 @@ export function App(props: AppProps): React.JSX.Element {
     streams.get(selectedChildStreamId)?.category === AgentCategory.Workflow &&
     parentOfSelectedChild !== undefined &&
     streams.get(parentOfSelectedChild)?.category === AgentCategory.Workflow;
-  const taskDetailProcess = taskDetailExecutionId
-    ? activeProcesses.find(
-        (process) => process.executionId === taskDetailExecutionId,
-      )
-    : undefined;
   useEffect(() => {
     dispatchChildListSelection({
       kind: 'reconcile',
@@ -408,11 +373,6 @@ export function App(props: AppProps): React.JSX.Element {
       dispatchChildListSelection({ kind: 'blur' });
     }
   }, [childListAvailable, childListFocused]);
-  useEffect(() => {
-    if (taskDetailExecutionId && !taskDetailProcess) {
-      taskDetailExecutionIdSignal.set(undefined);
-    }
-  }, [taskDetailExecutionId, taskDetailProcess]);
   const cancelChildList = useCallback(() => {
     dispatchChildListSelection({ kind: 'blur' });
   }, []);
@@ -431,7 +391,6 @@ export function App(props: AppProps): React.JSX.Element {
     formBusy,
     infoPaneOpen: infoPane !== undefined,
     pendingApproval: activeApprovalVisible,
-    taskDetailOpen: taskDetailProcess !== undefined,
   });
   const approvalKind =
     foregroundKind === 'approval' ? pending?.payload.kind : undefined;
@@ -446,24 +405,6 @@ export function App(props: AppProps): React.JSX.Element {
   }, []);
   function renderForegroundSurface(availableRows: number): React.ReactNode {
     switch (foregroundKind) {
-      case 'taskDetail': {
-        if (!taskDetailProcess) return null;
-        return (
-          <TaskDetailView
-            availableColumns={columns}
-            availableRows={availableRows}
-            process={taskDetailProcess}
-            tail={childListTarget.slice?.processOutput.get(
-              taskDetailProcess.executionId,
-            )}
-            onBack={() => taskDetailExecutionIdSignal.set(undefined)}
-            onKill={() => {
-              props.onKillExecution(taskDetailProcess.executionId);
-              taskDetailExecutionIdSignal.set(undefined);
-            }}
-          />
-        );
-      }
       case 'form':
         return activeForm?.render(() => {
           formProgressSignal.set(undefined);
@@ -760,9 +701,6 @@ export function App(props: AppProps): React.JSX.Element {
         onKillExecution={props.onKillExecution}
         onSkipExecution={props.onSkipExecution}
         onRetryExecution={props.onRetryExecution}
-        onOpenProcessDetail={(executionId) =>
-          taskDetailExecutionIdSignal.set(executionId)
-        }
         onPrintStream={printStreamOutput}
         onChildSelectionChange={(value) =>
           dispatchChildListSelection({ kind: 'highlight', value })

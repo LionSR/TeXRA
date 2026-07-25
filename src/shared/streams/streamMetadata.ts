@@ -33,6 +33,5 @@ export function buildStreamMetadata(
     },
     roundStage: inputs.roundStage ?? null,
     subagents: inputs.subagents ?? [],
-    processes: inputs.processes ?? [],
   };
 }

@@ -45,7 +45,6 @@ import { TodoItemSchema } from '../todo';
 import { RunUsageMapSchema, TokenUsageStatsSchema } from '../usage';
 import {
   AgentCategoryFilterSchema,
-  ProcessOutputTailSchema,
   ProgressViewPlacementSchema,
   StreamScopedBaseSchema,
 } from './data';
@@ -92,14 +91,6 @@ const UpdateRoundStageMessageSchema = StreamScopedBaseSchema.extend({
 const UpdateStreamBadgesMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES),
   subagents: z.array(ActiveChildInfoSchema),
-  processes: z.array(ActiveChildInfoSchema),
-});
-
-const UpdateProcessOutputMessageSchema = StreamScopedBaseSchema.extend(
-  ProcessOutputTailSchema.shape,
-).extend({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_PROCESS_OUTPUT),
-  executionId: z.string(),
 });
 
 const UpdateParentStreamMessageSchema = StreamScopedBaseSchema.extend({
@@ -300,7 +291,6 @@ const StreamContentRenderFields = {
       roundStage: RoundStageSchema.nullable(),
       badges: z.strictObject({
         subagents: z.array(ActiveChildInfoSchema),
-        processes: z.array(ActiveChildInfoSchema),
       }),
       parentStreamId: StreamTabIdSchema.nullable(),
     })
@@ -407,7 +397,6 @@ export const ProgressViewOutboundMessageSchema = z.discriminatedUnion(
     UpdateConversationProgressMessageSchema,
     UpdateRoundStageMessageSchema,
     UpdateStreamBadgesMessageSchema,
-    UpdateProcessOutputMessageSchema,
     UpdateParentStreamMessageSchema,
     UpdateStreamDescriptionMessageSchema,
     UpdateStreamStatusMessageSchema,

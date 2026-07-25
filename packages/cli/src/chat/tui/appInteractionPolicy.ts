@@ -10,7 +10,6 @@ import {
   type PendingApproval,
 } from './state/approvalQueue';
 
-const TASK_DETAIL_FOREGROUND_MAX_ROWS = 12;
 const FORM_FOREGROUND_MAX_ROWS = 18;
 // Match form sizing for approval modals that already budget or scroll their
 // content. Natural-height approvals stay uncapped until they grow row budgets.
@@ -142,23 +141,19 @@ export function digitFromMetaShortcut(value: string): number | undefined {
   return /^[1-9]$/.test(value) ? Number.parseInt(value, 10) : undefined;
 }
 
-export type ForegroundSurfaceKind =
-  'taskDetail' | 'form' | 'infoPane' | 'approval';
+export type ForegroundSurfaceKind = 'form' | 'infoPane' | 'approval';
 
 export function foregroundSurfaceKind({
   activeFormOpen,
   formBusy,
   infoPaneOpen,
   pendingApproval,
-  taskDetailOpen,
 }: {
   readonly activeFormOpen: boolean;
   readonly formBusy: boolean;
   readonly infoPaneOpen: boolean;
   readonly pendingApproval: boolean;
-  readonly taskDetailOpen: boolean;
 }): ForegroundSurfaceKind | undefined {
-  if (taskDetailOpen) return 'taskDetail';
   if (pendingApproval && formBusy) return 'approval';
   if (activeFormOpen) return 'form';
   if (pendingApproval) return 'approval';
@@ -192,8 +187,6 @@ export function foregroundEscapeAction({
       return undefined;
     case 'form':
       return activeFormEscapeAction ?? 'close';
-    case 'taskDetail':
-      return 'back';
     case 'infoPane':
       return 'close';
     case 'approval':
@@ -232,8 +225,6 @@ export function foregroundMaxRowsForKind({
   readonly kind: ForegroundSurfaceKind | undefined;
 }): number | undefined {
   switch (kind) {
-    case 'taskDetail':
-      return TASK_DETAIL_FOREGROUND_MAX_ROWS;
     case 'form':
       return FORM_FOREGROUND_MAX_ROWS;
     case 'infoPane':

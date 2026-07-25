@@ -121,10 +121,9 @@ export const BackendOwnedFieldsSchema = z.object({
     DEFAULT_CONVERSATION_PROGRESS,
   ),
   roundStage: RoundStageSchema.optional(),
-  /** Child rosters — live entries plus the finished ones retained for display
-   *  (`finishedAt` set). Field names match the `child.activity` event `kind`. */
+  /** Child roster — live entries plus the finished ones retained for display
+   *  (`finishedAt` set). */
   subagents: z.array(ActiveChildInfoSchema).prefault([]),
-  processes: z.array(ActiveChildInfoSchema).prefault([]),
 });
 
 const BackendOwnedMetadataFieldsSchema = BackendOwnedFieldsSchema.extend({

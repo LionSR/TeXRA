@@ -10,10 +10,7 @@ import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 // Local imports - CLI TUI rendering
 import { Markdown } from '../render/Markdown';
 import { fillRows } from '../render/terminalText';
-import { completedProcessDisplayLines } from '../state/completedProcessTranscript';
 import { COLOR_ERROR, COLOR_HINT } from '../ui/colors';
-import { STATUS_DOT } from '../ui/glyphs';
-import { childStatusColor } from './SubagentListDisplay';
 import { ToolUseRow } from './ToolUseRow';
 import {
   LIVE_TAIL_ROWS,
@@ -23,10 +20,7 @@ import {
   type TranscriptEntryLayout,
 } from './transcriptEntryLayout';
 import { isInquiryContinuationText } from './transcriptEntries';
-import type {
-  CompletedProcessTranscript,
-  ConversationEntry,
-} from '../state/cliState';
+import type { ConversationEntry } from '../state/cliState';
 
 function displayLines(
   layout: TranscriptEntryLayout,
@@ -104,63 +98,6 @@ function PlainEntryRows({
   );
 }
 
-function ProcessEntryRow({
-  fillWidth,
-  layout,
-  process,
-}: {
-  readonly fillWidth?: boolean;
-  readonly layout: TranscriptEntryLayout;
-  readonly process: CompletedProcessTranscript;
-}): React.JSX.Element {
-  if (fillWidth === true) {
-    const entry: ConversationEntry = {
-      finalized: true,
-      id: process.executionId,
-      process,
-      role: 'process',
-      text: '',
-    };
-    return <PlainEntryRows entry={entry} fillWidth layout={layout} />;
-  }
-
-  // Same status-to-color owner as the live SubagentList rows, so a cancelled
-  // or stopped child finalizes with the neutral dot instead of a green one.
-  const color = childStatusColor(process.status);
-  const [, ...tailLines] = completedProcessDisplayLines(process);
-  return (
-    <Box
-      flexDirection="column"
-      marginBottom={layout.marginBottomRows}
-      marginTop={layout.marginTopRows}
-      paddingX={layout.inset / 2}
-    >
-      <Box>
-        <Text color={color}>{STATUS_DOT} </Text>
-        <Text>{process.title}</Text>
-        {process.status ? <Text dimColor>{` · ${process.status}`}</Text> : null}
-        {process.elapsed ? (
-          <Text dimColor>{` · ${process.elapsed}`}</Text>
-        ) : null}
-        {process.isError ? <Text color={COLOR_ERROR}> · error</Text> : null}
-      </Box>
-      {process.tailLines.length > 0 ? (
-        <Box marginLeft={2} flexDirection="column">
-          {tailLines.map((line, index) => (
-            <Text
-              key={index}
-              color={process.isError ? COLOR_ERROR : undefined}
-              dimColor={!process.isError}
-            >
-              {line}
-            </Text>
-          ))}
-        </Box>
-      ) : null}
-    </Box>
-  );
-}
-
 // Entry objects stay reference-identical across stream ticks, so memoization
 // limits wrapping and Markdown work to the entry that actually changed.
 export const TranscriptEntry = memo(function TranscriptEntry({
@@ -193,14 +130,6 @@ export const TranscriptEntry = memo(function TranscriptEntry({
   });
 
   switch (entry.role) {
-    case 'process':
-      return (
-        <ProcessEntryRow
-          fillWidth={fillWidth}
-          layout={layout}
-          process={entry.process}
-        />
-      );
     case 'phase':
       // A bold, colored divider that separates a workflow-script run's phases
       // from the per-agent rows beneath. Stateless props-in → JSX-out.

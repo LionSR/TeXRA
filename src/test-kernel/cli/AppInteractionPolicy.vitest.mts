@@ -103,7 +103,6 @@ function foregroundInput(
     formBusy: false,
     infoPaneOpen: false,
     pendingApproval: true,
-    taskDetailOpen: false,
     ...overrides,
   };
 }
@@ -184,7 +183,6 @@ describe('app interaction policy', () => {
 
   it('resolves exhaustive foreground row caps', () => {
     const surfaceCases = [
-      [{ kind: 'taskDetail' }, 12],
       [{ kind: 'form' }, 18],
       [{ kind: 'infoPane' }, undefined],
     ] satisfies readonly (readonly [ForegroundRowsInput, number | undefined])[];
@@ -312,7 +310,6 @@ describe('app interaction policy', () => {
 
   it('lets approvals preempt only a busy form', () => {
     const cases = [
-      [foregroundInput({ taskDetailOpen: true }), 'taskDetail'],
       [foregroundInput({ activeFormOpen: true }), 'form'],
       [foregroundInput({ activeFormOpen: true, formBusy: true }), 'approval'],
       [foregroundInput({ infoPaneOpen: true }), 'approval'],
@@ -345,7 +342,6 @@ describe('app interaction policy', () => {
 
   it('labels foreground escape actions from the owning surface', () => {
     const surfaceCases = [
-      [{ foregroundKind: 'taskDetail' }, 'back'],
       [{ foregroundKind: 'form' }, 'close'],
       [{ foregroundKind: 'infoPane' }, 'close'],
       [{ activeFormEscapeAction: 'cancel', foregroundKind: 'form' }, 'cancel'],

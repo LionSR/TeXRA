@@ -5,7 +5,6 @@ import type { WorkflowTaskProgress } from '@shared/schemas';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { renderAnsiMarkdown } from '../render/ansiMarkdown';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
-import { completedProcessDisplayLines } from '../state/completedProcessTranscript';
 import {
   COLOR_BORDER,
   COLOR_ERROR,
@@ -32,7 +31,6 @@ const DEFAULT_TRANSCRIPT_COLUMNS = 80;
 const USER_ENTRY_MARGIN_TOP_ROWS = 1;
 const USER_ENTRY_MARGIN_BOTTOM_ROWS = 1;
 const ASSISTANT_ENTRY_MARGIN_BOTTOM_ROWS = 0;
-const PROCESS_ENTRY_MARGIN_BOTTOM_ROWS = 1;
 export const LIVE_TAIL_ROWS = 24;
 
 type TranscriptEntryRole = ConversationEntry['role'];
@@ -68,13 +66,6 @@ const ROLE_GEOMETRY = {
     inset: 0,
     marginBottomRows: 0,
     marginTopRows: 1,
-  },
-  process: {
-    firstPrefix: '',
-    continuationPrefix: '',
-    inset: 2,
-    marginBottomRows: PROCESS_ENTRY_MARGIN_BOTTOM_ROWS,
-    marginTopRows: 0,
   },
   tool: {
     firstPrefix: '',
@@ -244,12 +235,6 @@ function entryLines(
       // terminal row. Other modes paint the wrapped text projection directly.
       return richProjection ? lines : wrapDisplayLines(lines, columns);
     }
-    case 'process': {
-      const lines = completedProcessDisplayLines(entry.process);
-      return mode === 'live' || mode === 'bounded'
-        ? lines
-        : wrapDisplayLines(lines, columns);
-    }
     case 'phase': {
       const suffix =
         entry.phaseIndex !== undefined && entry.phaseTotal !== undefined
@@ -375,7 +360,7 @@ export function boundedTranscriptEntryLayout(
   maxRows: number,
 ): TranscriptEntryLayout {
   const rows = Math.max(1, maxRows);
-  // Existing bounded process/tool rows omit their unbounded separators; user
+  // Existing bounded tool rows omit their unbounded separators; user
   // bands retain margins whenever one content row still fits.
   const marginRows =
     layout.role === 'user' ? layout.marginTopRows + layout.marginBottomRows : 0;
