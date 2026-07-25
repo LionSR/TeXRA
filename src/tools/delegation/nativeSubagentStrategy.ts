@@ -1,16 +1,26 @@
 /**
- * Native tool-use child-run strategy over the shared `childRunLoop`.
+ * Native child-run strategy over the shared `childRunLoop`, for both agent
+ * categories — a native (in-process TeXRA agent) subagent is launched the
+ * same way whether it is `toolUse` or `workflow`; only its result shape and
+ * whether it ever produces a WAITING turn differ, and both of those are
+ * already category-derived data rather than category-specific code paths.
  *
  * `launch` is the first turn: `executeAgent` with `allowWaitingResult`,
  * capturing the live run handle via `onRun`. `runTurn` is every following
  * turn: resolve the persisted flow-record cursor for this execution
  * (`retrieveSessionResumeData`) and drive it to the next WAITING/terminal
  * boundary via `resumeToolUseFromResumeData`, handing it the batch already
- * consumed by `childRunLoop`. Delivery choreography
- * (format/persist/manifest/deliver), duplicate-delivery prevention (there is
- * exactly one delivery site — the loop), and WAITING-cleanup registration all
- * live in the loop; this strategy owns only what is specific to a native
- * tool-use subagent: launching, resuming, and formatting its result shape.
+ * consumed by `childRunLoop`. `runTurn` is unreachable for a workflow child —
+ * a workflow flow never produces a WAITING result, so `isTerminal` is always
+ * true on its first (and only) turn, and `childRunLoop.ts`'s loop breaks on a
+ * terminal turn before ever consulting `runTurn` (see `childRunLoop.ts:642-
+ * 650`). `allowWaitingResult: true` is likewise inert for workflow —
+ * `isWaitingFlowResult` requires `category === 'toolUse'`, so a workflow
+ * result can never satisfy it. Delivery choreography (format/persist/
+ * manifest/deliver), duplicate-delivery prevention (there is exactly one
+ * delivery site — the loop), and WAITING-cleanup registration all live in the
+ * loop; this strategy owns only what is specific to a native subagent:
+ * launching, resuming (tool-use only), and formatting its result shape.
  */
 
 import type { ResultMeta } from '@agent/storage';
@@ -34,6 +44,7 @@ import type {
 } from '@agent/runtime/childRunLoop';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
+  AgentCategory,
   RUN_OUTCOME,
   STREAM_PHASE,
   STREAM_SUBSTATE,
@@ -48,7 +59,7 @@ import {
 } from '@tools/subagentResults';
 import { subagentDeliveryMessage } from './subagentDeliveryFormat';
 
-export interface NativeToolUseStrategyParams {
+export interface NativeSubagentStrategyParams {
   readonly config: AgentConfig;
   readonly agentCategoryExplicit: boolean;
   readonly executionId: ExecutionId;
@@ -85,8 +96,8 @@ function toDeliveryResult(
   };
 }
 
-export function createNativeToolUseStrategy(
-  params: NativeToolUseStrategyParams,
+export function createNativeSubagentStrategy(
+  params: NativeSubagentStrategyParams,
 ): ChildRunStrategy<AgentRuntimeFlowResult> {
   let runHandle: AgentRunHandle | undefined;
   // Captured for the turn currently in flight; read once the call resolves.
@@ -97,7 +108,7 @@ export function createNativeToolUseStrategy(
   let lastErr: unknown;
   // formatDelivery always runs before buildResultMeta for the same turn (see
   // childRunLoop's deliverTurn) — cache the one diff-computing pass here so
-  // a workflow subagent's diffs are written once per turn, not twice.
+  // the subagent's diffs are written once per turn, not twice.
   let cachedDelivery: { msg: string; resultMeta: ResultMeta } | undefined;
 
   const resolveDeliveryTarget = (): StreamTabId | undefined =>
@@ -136,7 +147,16 @@ export function createNativeToolUseStrategy(
   };
 
   return {
-    stageLabel: 'Native tool-use subagent',
+    // Not used as a trace stage for native delegation (childRunLoop.ts:535-
+    // 537 gates `logger.openStage` on `childStream`, which native delegation
+    // never passes) — its only reader is the loop's non-throwing-failure
+    // message, which becomes the persisted terminal `error.message` for the
+    // execution record. Keep it category-derived so a failed workflow
+    // subagent's record never reads "tool-use".
+    stageLabel:
+      params.config.agentCategory === AgentCategory.ToolUse
+        ? 'Native tool-use subagent'
+        : 'Native workflow subagent',
 
     launch: (ports) =>
       runNative(ports, () =>
@@ -148,6 +168,10 @@ export function createNativeToolUseStrategy(
           parentStreamId: params.orchestratorStreamId,
           approvalPromptsUnavailable: params.approvalPromptsUnavailable,
           runtimeUnavailableTools: params.runtimeUnavailableTools,
+          // Inert for a workflow child — `isWaitingFlowResult` requires
+          // `category === 'toolUse'`, so a workflow result can never satisfy
+          // it. Kept unconditional rather than gated on category: gating it
+          // would reintroduce the branch this strategy merge deletes.
           allowWaitingResult: true,
           onStreamResolved: params.onStreamResolved,
           onProgress: (update) => ports.notify(update),
@@ -259,7 +283,7 @@ export function createNativeToolUseStrategy(
           : undefined;
         return buildSubagentFailureResultMeta(
           params.agentName,
-          'toolUse',
+          params.config.agentCategory,
           result,
           Date.now() - params.startedAt,
         );

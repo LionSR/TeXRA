@@ -234,7 +234,9 @@ describe('WorkflowScriptTool', () => {
       launch: expect.any(Function),
       isTerminal: expect.any(Function),
     });
-    // Terminal-only: no runTurn (matches the native workflow strategy shape).
+    // Terminal-only: no runTurn (workflow-script is the only strategy that
+    // omits it — the native subagent strategy declares one unconditionally,
+    // even for a workflow-category child).
     expect(loopParams.strategy.runTurn).toBeUndefined();
     expect(loopParams.recordCost).toEqual(expect.any(Function));
 

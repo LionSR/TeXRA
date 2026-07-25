@@ -39,9 +39,8 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 // Local file imports
 import { executeSubagentForDeliveryInBand } from './inBandSubagentExecution';
 
-// `createNativeToolUseStrategy`/`createNativeWorkflowStrategy` are lazy-
-// imported below. Both strategy modules import
-// `@agent/runtime/executeAgent` (directly, or transitively via
+// `createNativeSubagentStrategy` is lazy-imported below. The strategy module
+// imports `@agent/runtime/executeAgent` (directly, or transitively via
 // `resumeQueuedToolUseFromResumeData`), which pulls in `runToolUseFlow.ts` ->
 // `@tools/registry`. An eager import here would close the same
 // registry -> DelegationTools -> proposalFlow -> subagentExecution cycle
@@ -191,29 +190,16 @@ export async function executeSubagent(
     };
 
     try {
-      if (isToolUse) {
-        const { createNativeToolUseStrategy } =
-          await import('./nativeToolUseStrategy');
-        startChildRunLoop({
-          childStreamId,
-          parentStreamId: orchestratorStreamId,
-          executionId,
-          agentName,
-          strategy: createNativeToolUseStrategy(strategyParams),
-          recordCost: settleSubagentCost,
-        });
-      } else {
-        const { createNativeWorkflowStrategy } =
-          await import('./nativeWorkflowStrategy');
-        startChildRunLoop({
-          childStreamId,
-          parentStreamId: orchestratorStreamId,
-          executionId,
-          agentName,
-          strategy: createNativeWorkflowStrategy(strategyParams),
-          recordCost: settleSubagentCost,
-        });
-      }
+      const { createNativeSubagentStrategy } =
+        await import('./nativeSubagentStrategy');
+      startChildRunLoop({
+        childStreamId,
+        parentStreamId: orchestratorStreamId,
+        executionId,
+        agentName,
+        strategy: createNativeSubagentStrategy(strategyParams),
+        recordCost: settleSubagentCost,
+      });
     } catch (error) {
       throw await releaseOwnedExecutionLeaseAfterFailure(executionId, error);
     }
