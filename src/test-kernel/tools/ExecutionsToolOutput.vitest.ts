@@ -1,0 +1,307 @@
+// Test composition imports
+import '@test/support/defaultSessionTestSetup';
+
+// Node imports
+import { strict as assert } from 'node:assert';
+
+// Third-party imports
+import { afterEach, describe, it, vi } from 'vitest';
+
+// Local imports
+import { registerExecution } from '@agent/storage';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
+import { withToolEnvironment } from '@agent/followUp/ToolFileInteractionContext';
+import * as toolUseFollowUp from '@agent/followUp/ToolUseFollowUp';
+import { defaultSession } from '@agent/runtime/SessionHandle';
+import type { StreamTabId } from '@shared/schemas';
+import type { ExecResult } from '@shared/schemas/opResults';
+import { setupPlatform } from '@test/support/setupPlatform';
+import { ExecutionsTool } from '@tools/ExecutionsTool';
+import { BashTool } from '@tools/bash';
+import { generateExecutionId } from '@utils/core';
+import * as execUtils from '@utils/system/execUtils';
+
+// Local file imports
+import {
+  createRecordingHost,
+  recordSessionEvents,
+} from '../agent/progressTestUtils';
+
+const PARENT_STREAM_ID = 'executions-output-parent' as StreamTabId;
+
+type ExecChunkSink = Pick<
+  Parameters<typeof execUtils.executeCommand>[1] & object,
+  'onStdout' | 'onStderr'
+>;
+
+interface BackgroundRun {
+  readonly executionId: string;
+  /** Settle the mocked process and wait for its completion follow-up. */
+  readonly finish: () => Promise<void>;
+}
+
+/**
+ * Launch a real background `bash` run whose mocked process emits `chunks`
+ * synchronously and then stays open until `finish()` — the only way to
+ * observe a mid-run read of the child stream's transcript log.
+ */
+async function launchBackgroundRun(
+  emit: (sink: ExecChunkSink) => void,
+): Promise<BackgroundRun> {
+  let release!: (result: ExecResult) => void;
+  const processExit = new Promise<ExecResult>((resolve) => {
+    release = resolve;
+  });
+
+  vi.spyOn(execUtils, 'executeCommand').mockImplementation(
+    async (_command, options = {}) => {
+      emit(options);
+      return processExit;
+    },
+  );
+  const followUp = vi
+    .spyOn(toolUseFollowUp, 'sendFollowUp')
+    .mockResolvedValue({ status: 'sent' });
+
+  const { host } = createRecordingHost();
+  const recorded = recordSessionEvents(defaultSession().events);
+  let launched;
+  try {
+    launched = await withToolEnvironment(
+      {
+        run: { runtimeHost: host, streamId: PARENT_STREAM_ID },
+        call: { tracker: new FileInteractionState() },
+      },
+      () =>
+        new BashTool().call({
+          command: 'make build',
+          run_in_background: true,
+        }),
+    );
+  } finally {
+    recorded.detach();
+  }
+
+  assert.equal(launched.status, 'executed');
+  const executionId = /Execution ID: (\S+)/.exec(launched.output ?? '')?.[1];
+  assert.ok(executionId, 'Background launch should report its execution ID');
+
+  return {
+    executionId,
+    finish: async () => {
+      release({
+        success: true,
+        stdout: null,
+        stderr: null,
+        timedOut: false,
+        exitCode: 0,
+      });
+      await vi.waitFor(() => {
+        assert.ok(
+          followUp.mock.calls.length > 0,
+          'Background run should deliver a completion follow-up',
+        );
+      });
+    },
+  };
+}
+
+function readOutput(
+  executionId: string,
+  viewRange?: [number, number],
+): Promise<{ status: string; output?: string; error?: string }> {
+  return new ExecutionsTool().call({
+    path: `/executions/${executionId}/output`,
+    ...(viewRange ? { view_range: viewRange } : {}),
+  });
+}
+
+describe('ExecutionsTool /executions/{id}/output', () => {
+  setupPlatform({
+    workspacePath: '/workspace',
+    config: { 'texra.toolUse.requireBashApproval': false },
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('returns a running background command output so far, with stderr marked', async () => {
+    const run = await launchBackgroundRun((sink) => {
+      sink.onStdout?.('[ 42%] Building CXX object src/foo.cc.o\n');
+      sink.onStderr?.("warning: unused variable 'x'\n");
+      sink.onStdout?.('[ 84%] Building CXX object src/bar.cc.o\n');
+    });
+
+    const result = await readOutput(run.executionId);
+
+    assert.equal(result.status, 'executed');
+    const output = result.output ?? '';
+    assert.match(output, /^Output for \S+ \(process, running/);
+    assert.ok(output.includes('of 200,000 logged chars'));
+    assert.ok(output.includes('[ 42%] Building CXX object src/foo.cc.o'));
+    assert.ok(output.includes("err: warning: unused variable 'x'"));
+    assert.ok(output.includes('[ 84%] Building CXX object src/bar.cc.o'));
+    assert.ok(output.includes('[still running'));
+    // stdout rows must not be marked as stderr.
+    assert.ok(!output.includes('err: [ 42%]'));
+    // Arrival order, not stdout-then-stderr sections.
+    assert.ok(
+      output.indexOf("err: warning: unused variable 'x'") <
+        output.indexOf('[ 84%] Building CXX object src/bar.cc.o'),
+      'stdout/stderr interleaving must survive the projection',
+    );
+
+    await run.finish();
+  });
+
+  it('joins chunks that split a line and pages the projection with view_range', async () => {
+    const run = await launchBackgroundRun((sink) => {
+      // A single logical line delivered across two stdout chunks.
+      sink.onStdout?.('line1\nline2\nli');
+      sink.onStdout?.('ne3\nline4\nline5\n');
+    });
+
+    const full = await readOutput(run.executionId);
+    assert.ok(
+      (full.output ?? '').includes('line3'),
+      'A line split across chunks must be rejoined, not broken in two',
+    );
+
+    const paged = await readOutput(run.executionId, [2, 3]);
+    const output = paged.output ?? '';
+    assert.equal(paged.status, 'executed');
+    assert.ok(output.includes('Showing lines 2-3 of 5.'));
+    assert.ok(output.includes('line2'));
+    assert.ok(output.includes('line3'));
+    assert.ok(!output.includes('line1'));
+    assert.ok(!output.includes('line4'));
+
+    const past = await readOutput(run.executionId, [900, 950]);
+    assert.equal(past.status, 'executed');
+    assert.ok((past.output ?? '').includes('No lines in the requested range'));
+
+    await run.finish();
+  });
+
+  it('treats a carriage-return progress redraw as separate lines', async () => {
+    // curl/pip/docker redraw with `\r` and no newline. Splitting on LF alone
+    // would make the whole progress bar one enormous line, so the bounded
+    // window would still hand back the entire log.
+    const run = await launchBackgroundRun((sink) => {
+      sink.onStdout?.('  0%\r 50%\r100%\r\ndownload complete\n');
+    });
+
+    const result = await readOutput(run.executionId);
+    const output = result.output ?? '';
+
+    assert.ok(output.includes('Showing lines 1-4 of 4.'));
+    assert.ok(output.includes('  0%'));
+    assert.ok(output.includes('download complete'));
+
+    await run.finish();
+  });
+
+  it('bounds a chatty log to its tail by default and says how to page back', async () => {
+    const lineCount = 1500;
+    const run = await launchBackgroundRun((sink) => {
+      sink.onStdout?.(
+        `${Array.from({ length: lineCount }, (_, i) => `line${i + 1}`).join('\n')}\n`,
+      );
+    });
+
+    const result = await readOutput(run.executionId);
+    const output = result.output ?? '';
+
+    assert.ok(
+      output.includes(`Showing lines 1301-${lineCount} of ${lineCount}`),
+      `Default window should be the last 200 lines, got: ${output.slice(0, 300)}`,
+    );
+    assert.ok(output.includes('the last 200 by default'));
+    assert.ok(output.includes('line1500'));
+    assert.ok(output.includes('line1301'));
+    assert.ok(!output.includes('line1300\n'));
+
+    // A wide view_range still cannot pull back an unbounded window.
+    const wide = await readOutput(run.executionId, [1, lineCount]);
+    const wideOutput = wide.output ?? '';
+    assert.ok(wideOutput.includes(`Showing lines 1-1000 of ${lineCount}`));
+    assert.ok(wideOutput.includes('capped at 1000 lines per read'));
+    assert.ok(wideOutput.includes('view_range: [1001, …]'));
+    assert.ok(wideOutput.includes('line1000'));
+    assert.ok(!wideOutput.includes('line1001'));
+
+    await run.finish();
+  });
+
+  it('still serves the retained log after the command finishes', async () => {
+    const run = await launchBackgroundRun((sink) => {
+      sink.onStdout?.('compiling\ndone\n');
+    });
+    await run.finish();
+
+    const result = await readOutput(run.executionId);
+    const output = result.output ?? '';
+
+    assert.equal(result.status, 'executed');
+    assert.ok(output.includes('compiling'));
+    assert.ok(output.includes('done'));
+    assert.ok(output.includes('[finished'));
+    assert.ok(
+      !output.includes('no longer available'),
+      'A finished-but-resident run must not claim its output was discarded',
+    );
+  });
+
+  it('points at /report when a process execution has no retained stream log', async () => {
+    const executionId = generateExecutionId();
+    await registerExecution(
+      executionId,
+      AgentConfigSchema.parse({
+        agent: 'bash',
+        instruction: 'sleep 1',
+        agentCategory: AgentCategory.ToolUse,
+      }),
+      'bash',
+      undefined,
+      'process',
+    );
+
+    const result = await readOutput(executionId);
+
+    assert.equal(result.status, 'executed');
+    assert.ok((result.output ?? '').includes('No retained output'));
+    assert.ok(
+      (result.output ?? '').includes(`/executions/${executionId}/report`),
+    );
+  });
+
+  it('points a non-process execution at /conversation instead of dumping its transcript', async () => {
+    const executionId = generateExecutionId();
+    await registerExecution(
+      executionId,
+      AgentConfigSchema.parse({
+        agent: 'chat',
+        instruction: 'Check the proof.',
+        agentCategory: AgentCategory.ToolUse,
+      }),
+      'chat',
+    );
+
+    const result = await readOutput(executionId);
+
+    assert.equal(result.status, 'executed');
+    assert.ok(
+      (result.output ?? '').includes(`/executions/${executionId}/conversation`),
+    );
+  });
+
+  it('errors on an unknown execution id', async () => {
+    const result = await readOutput(generateExecutionId());
+
+    assert.equal(result.status, 'error');
+    assert.ok((result.error ?? '').includes('Execution not found'));
+  });
+});
