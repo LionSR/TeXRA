@@ -153,6 +153,7 @@ export const detachSubagentsOnStop = trackedSignal(() => false);
 // Approval settings state
 // ---------------------------------------------------------------------------
 export const bashApprovalEnabled = trackedSignal(() => true);
+export const agentSkillsEnabled = trackedSignal(() => true);
 export const codexSandboxMode = trackedSignal<string>(() => 'workspace-write');
 export const codexReasoningEffort = trackedSignal<string>(() => 'high');
 export const codexApprovalPolicy = trackedSignal<string>(() => 'never');
