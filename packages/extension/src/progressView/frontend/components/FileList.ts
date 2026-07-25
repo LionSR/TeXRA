@@ -486,8 +486,8 @@ export class FileList extends LitElement {
         }
         <span class="file-name">
           <span
+            id="${idPrefix}-path"
             class="file-path clickable-link"
-            title=${tooltipPath}
             data-command=${PROGRESS_VIEW_COMMANDS.OPEN_FILE}
             data-file=${filePath}
             role="button"
@@ -496,6 +496,7 @@ export class FileList extends LitElement {
             <span class="file-dir">${dir}</span>
             <span class="file-basename">${basename}</span>
           </span>
+          <wa-tooltip for="${idPrefix}-path">${tooltipPath}</wa-tooltip>
         </span>
         ${diffStats}
         <div class="file-actions">

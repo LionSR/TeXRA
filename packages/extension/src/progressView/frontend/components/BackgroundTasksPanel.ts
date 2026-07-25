@@ -29,6 +29,7 @@ import { classMap } from 'lit/directives/class-map.js';
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/relative-time/relative-time.js';
+import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports
 import '@awesome.me/webawesome/dist/components/badge/badge.js';
@@ -293,15 +294,19 @@ export class BackgroundTasksPanel extends LitElement {
           ${repeat(
             this.inquiries,
             (thread) => thread.threadId,
-            (thread) => this.renderInquiryItem(thread),
+            (thread, index) => this.renderInquiryItem(thread, index),
           )}
         </div>
       </wa-details>
     `;
   }
 
-  private renderInquiryItem(thread: InquiryThreadUpdatedEvent): TemplateResult {
+  private renderInquiryItem(
+    thread: InquiryThreadUpdatedEvent,
+    index: number,
+  ): TemplateResult {
     const preview = thread.lastQuestionPreview || '(empty question)';
+    const idPrefix = `background-inquiry-${index}`;
     return html`
       <div class="task-item">
         <div class="task-header">
@@ -311,17 +316,22 @@ export class BackgroundTasksPanel extends LitElement {
             aria-hidden="true"
             class="task-icon task-icon--inquiry"
           ></wa-icon>
-          <span class="inquiry-id" title=${thread.threadId}
-            >${thread.threadId}</span
+          <span id="${idPrefix}-id" class="inquiry-id">${thread.threadId}</span>
+          <wa-tooltip for="${idPrefix}-id">${thread.threadId}</wa-tooltip>
+          <span id="${idPrefix}-description" class="task-description"
+            >${preview}</span
           >
-          <span class="task-description" title=${preview}>${preview}</span>
+          <wa-tooltip for="${idPrefix}-description">${preview}</wa-tooltip>
           <wa-relative-time
+            id="${idPrefix}-elapsed"
             class="task-elapsed"
             date=${thread.lastActivityIso}
-            title=${thread.lastActivityIso}
             format="narrow"
             sync
           ></wa-relative-time>
+          <wa-tooltip for="${idPrefix}-elapsed"
+            >${thread.lastActivityIso}</wa-tooltip
+          >
           <wa-badge
             class="task-status"
             variant=${inquiryStatusVariant(thread.status)}
@@ -363,14 +373,17 @@ export class BackgroundTasksPanel extends LitElement {
           ${repeat(
             children,
             (c) => c.executionId,
-            (c) => this.renderTaskItem(c),
+            (c, index) => this.renderTaskItem(c, index),
           )}
         </div>
       </wa-details>
     `;
   }
 
-  private renderTaskItem(child: ActiveChildInfo): TemplateResult {
+  private renderTaskItem(
+    child: ActiveChildInfo,
+    index: number,
+  ): TemplateResult {
     const icon = getTaskIcon(child);
     const childStreamId =
       child.kind === 'subagent' ? child.childStreamId : undefined;
@@ -379,6 +392,10 @@ export class BackgroundTasksPanel extends LitElement {
       ? this.streamById.get(childStreamId)?.description
       : undefined;
     const badge = taskStatusBadge(child);
+    const idPrefix = `background-subagent-${index}`;
+    const nameTooltip = isClickable
+      ? `Go to ${child.agentName}`
+      : child.agentName;
 
     return html`
       <div class="task-item">
@@ -394,11 +411,11 @@ export class BackgroundTasksPanel extends LitElement {
             })}
           ></wa-icon>
           <span
+            id="${idPrefix}-name"
             class=${classMap({
               'task-name': true,
               'task-name--clickable': isClickable,
             })}
-            title=${isClickable ? `Go to ${child.agentName}` : child.agentName}
             role=${isClickable ? 'link' : 'text'}
             tabindex=${isClickable ? '0' : '-1'}
             @click=${
@@ -418,11 +435,14 @@ export class BackgroundTasksPanel extends LitElement {
             }
             >${child.agentName}</span
           >
+          <wa-tooltip for="${idPrefix}-name">${nameTooltip}</wa-tooltip>
           ${
             description
-              ? html`<span class="task-description" title=${description}
-                  >(${description})</span
-                >`
+              ? html`<span id="${idPrefix}-description" class="task-description"
+                    >(${description})</span
+                  ><wa-tooltip for="${idPrefix}-description"
+                    >${description}</wa-tooltip
+                  >`
               : nothing
           }
           ${

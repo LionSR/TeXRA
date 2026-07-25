@@ -12,6 +12,7 @@ import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
 import { compactIconActionButtonStyles } from '@shared/styles';
@@ -236,8 +237,11 @@ export class UserMessage extends LitElement {
                 class="user-message-icon"
                 aria-hidden="true"
               ></wa-icon>
-              <span class="user-message-timestamp" title=${tooltipTimestamp}
+              <span id="user-message-timestamp" class="user-message-timestamp"
                 >${timeDisplay}</span
+              >
+              <wa-tooltip for="user-message-timestamp"
+                >${tooltipTimestamp}</wa-tooltip
               >
             </span>
             ${renderIconActionButton({

@@ -71,6 +71,37 @@ describe('tool-edit-request-panel', () => {
     () => import('@progressView/frontend/components/ToolEditRequestPanel'),
   );
 
+  it('uses a shared tooltip for the direct diff action', async () => {
+    const element = await mountPanel(
+      createPermission({ originalContent: 'before', proposedContent: 'after' }),
+    );
+    const button = element.shadowRoot?.querySelector('#tool-edit-diff-button');
+
+    expect(button).toBeTruthy();
+    expect(button?.hasAttribute('title')).toBe(false);
+    expect(
+      element.shadowRoot
+        ?.querySelector('wa-tooltip[for="tool-edit-diff-button"]')
+        ?.textContent?.trim(),
+    ).toBe('Open inline diff (d)');
+  });
+
+  it('anchors the line-change hint with wa-tooltip instead of title', async () => {
+    const element = await mountPanel(
+      createPermission({ addedLines: 2, removedLines: 1 }),
+    );
+
+    const summary = element.shadowRoot?.querySelector(
+      '#tool-edit-diff-summary',
+    );
+    expect(summary?.hasAttribute('title')).toBe(false);
+    expect(
+      element.shadowRoot
+        ?.querySelector('wa-tooltip[for="tool-edit-diff-summary"]')
+        ?.textContent?.trim(),
+    ).toBe('+2 / -1 lines changed');
+  });
+
   it('renders inline diff when only proposed content is available', async () => {
     const element = await mountPanel(
       createPermission({

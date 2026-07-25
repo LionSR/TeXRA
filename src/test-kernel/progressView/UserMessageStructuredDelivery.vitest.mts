@@ -65,5 +65,14 @@ describe('user-message structured delivery', () => {
         '.user-message-content.markdown-content',
       ),
     ).toBeFalsy();
+    const timestamp = element.shadowRoot?.querySelector(
+      '#user-message-timestamp',
+    );
+    expect(timestamp?.hasAttribute('title')).toBe(false);
+    expect(
+      element.shadowRoot?.querySelector(
+        'wa-tooltip[for="user-message-timestamp"]',
+      ),
+    ).toBeTruthy();
   });
 });
