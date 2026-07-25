@@ -317,6 +317,7 @@ function controllableRunAgent(config: {
   /** 1-based attempt that settles with finalResult; earlier attempts hang.
    *  Omit so every attempt hangs until a control action resolves it. */
   readonly succeedAtAttempt?: number;
+  readonly attemptCosts?: readonly number[];
 }): {
   readonly createRunAgent: WorkflowScriptStrategyParams['createRunAgent'];
   readonly attemptStarted: (attempt: number) => Promise<void>;
@@ -344,6 +345,8 @@ function controllableRunAgent(config: {
       reportCost = (cost) => hooks.onCost(invocation, cost);
       hooks.onChildActive(execId, invocation, true);
       gateFor(thisAttempt).resolve();
+      const attemptCost = config.attemptCosts?.[thisAttempt - 1];
+      if (attemptCost !== undefined) hooks.onCost(invocation, attemptCost);
       try {
         if (config.succeedAtAttempt !== thisAttempt) {
           // Hang until a control action aborts this attempt (skip/retry).
@@ -401,10 +404,21 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
     const fake = controllableRunAgent({
       attemptExecutionIds: [grandchildExecutionId],
       succeedAtAttempt: 2,
+      attemptCosts: [0.1, 0.5],
+    });
+    const logger = new TraceEmitter();
+    const completedTaskCosts: number[] = [];
+    logger.subscribe((event) => {
+      if (event.type === 'workflow.task' && event.task.status === 'completed') {
+        if (event.task.totalCostUsd !== undefined) {
+          completedTaskCosts.push(event.task.totalCostUsd);
+        }
+      }
     });
     const strategy = createWorkflowScriptStrategy(
       strategyParams({
         name: 'strategy-test',
+        logger,
         createRunAgent: fake.createRunAgent,
       }),
     );
@@ -417,6 +431,8 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
     // The second attempt settles with the real result, and the call ran twice.
     expect(turn.result).toMatchObject({ category: 'workflow', cost: 0.42 });
     expect(fake.attempts()).toBe(2);
+    expect(completedTaskCosts).toHaveLength(1);
+    expect(completedTaskCosts[0]).toBeCloseTo(0.6);
   });
 
   it('targets the attempt-specific execution id after a durable retry advances it', async () => {
