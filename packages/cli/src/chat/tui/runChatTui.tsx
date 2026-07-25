@@ -107,6 +107,7 @@ import {
   stoppedFocusedChildFollowUpMessage as focusedChildStoppedMessage,
   type FocusedChildFollowUpRoute,
 } from './state/focusedChildFollowUp';
+import { subscribeStreamArtifacts } from './state/subscribeStreamArtifacts';
 import { subscribeStreamLog } from './state/subscribeStreamLog';
 import { subscribeStreamStatus } from './state/subscribeStreamStatus';
 import { discoverTerminalCapabilities } from './state/terminalCapabilities';
@@ -434,6 +435,7 @@ export async function runChat(
   const terminalTitleUpdates = installTerminalTitleUpdates(context.cwd);
   disposers.push(terminalTitleUpdates.dispose);
   disposers.push(subscribeStreamLog());
+  disposers.push(subscribeStreamArtifacts(snapshotStore));
   disposers.push(subscribeStreamStatus());
 
   const session: TuiSession = {

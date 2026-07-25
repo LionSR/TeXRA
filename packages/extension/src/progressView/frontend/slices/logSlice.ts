@@ -3,53 +3,18 @@ import { create } from 'mutative';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   ContextStateDataSchema,
-  END_GROUP_STATUS,
-  GroupLogPayloadSchema,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
-  STREAM_PHASE,
-  TaskGroupStatusSchema,
   type ContextStateData,
-  type EndGroupStatus,
   type LogMessageData,
   type ProgressViewOutboundHandlerRegistry,
   type StreamLogEntry,
   type StreamLogTextDelta,
-  type TaskGroupStatus,
 } from '@shared/schemas';
+import { upsertTaskGroupFromStreamLog } from '@shared/streams/taskGroupProjection';
 
 import { appState } from '../progressState';
 import type { StreamLogs, StreamState } from '../store';
-
-/**
- * A `GROUP_END` row's `data.status` carries either the native `TaskGroupStatus`
- * (the `StreamPhase` running/completed/cancelled/failed subset) every
- * live/persisted producer writes (§8.2, #7993 step 3's reader retype), or
- * the legacy 2-value `EndGroupStatus` a pre-cutover exported trace file's
- * raw entries still carry — the standalone trace-viewer's `replayTrace()`
- * forwards `trace.entries` verbatim into this same `LOG_DELTA` pipeline, a
- * permanent second boundary (docs/proposals/session-scoped-runtime-
- * architecture.md §8.3). `GroupLogPayloadSchema.status` already validated
- * `value` against the union of both vocabularies upstream, so the native
- * arm here is a `safeParse`-based narrow rather than a hand-rolled type
- * guard; the legacy arm maps a value UP to the same native value
- * `StreamLogStore.parsePersistedEntries` produces for the same on-disk
- * string (`'stopped'` -> `completed`, the documented lossy default; `'error'`
- * -> `failed`) so a task group renders identically whether it arrived live,
- * from a rehydrated stream, or forwarded raw by the trace-viewer. A value
- * that is neither vocabulary (malformed data) falls back to the
- * caller-supplied default, as before.
- */
-function taskGroupEndStatus(
-  value: TaskGroupStatus | EndGroupStatus | undefined,
-  fallback: TaskGroupStatus,
-): TaskGroupStatus {
-  const native = TaskGroupStatusSchema.safeParse(value);
-  if (native.success) return native.data;
-  if (value === END_GROUP_STATUS.STOPPED) return STREAM_PHASE.COMPLETED;
-  if (value === END_GROUP_STATUS.ERROR) return STREAM_PHASE.FAILED;
-  return fallback;
-}
 
 function asContextStateData(data: unknown): ContextStateData | undefined {
   return ContextStateDataSchema.optional().catch(undefined).parse(data);
@@ -68,80 +33,6 @@ function toLogMessage(entry: StreamLogEntry): LogMessageData {
   };
 }
 
-function updateTaskGroups(
-  streamState: StreamState,
-  taskGroupIndex: Map<string, number>,
-  entry: StreamLogEntry,
-): boolean {
-  const payload = GroupLogPayloadSchema.catch({}).parse(entry.data);
-  const cachedIndex = taskGroupIndex.get(entry.id);
-  const groupIndex =
-    cachedIndex !== undefined &&
-    streamState.taskGroups[cachedIndex]?.id === entry.id
-      ? cachedIndex
-      : streamState.taskGroups.findIndex((g) => g.id === entry.id);
-
-  if (groupIndex >= 0 && groupIndex !== cachedIndex) {
-    taskGroupIndex.set(entry.id, groupIndex);
-  }
-
-  if (entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_START) {
-    // `GROUP_START` only ever carries the native `TaskGroupStatus`
-    // vocabulary (never the legacy `EndGroupStatus` — a run hasn't ended
-    // yet), so narrow rather than fold.
-    const startStatus = TaskGroupStatusSchema.safeParse(payload.status);
-    const nextGroup = {
-      id: entry.id,
-      name: entry.text ?? payload.name ?? entry.id,
-      startTime: entry.timestamp,
-      status: startStatus.success ? startStatus.data : STREAM_PHASE.RUNNING,
-      ...(entry.groupId ? { parentGroupId: entry.groupId } : {}),
-      ...(payload.kind ? { kind: payload.kind } : {}),
-      ...(payload.index !== undefined ? { index: payload.index } : {}),
-      ...(payload.total !== undefined ? { total: payload.total } : {}),
-    };
-
-    if (groupIndex === -1) {
-      taskGroupIndex.set(entry.id, streamState.taskGroups.length);
-      streamState.taskGroups.push(nextGroup);
-    } else {
-      streamState.taskGroups[groupIndex] = nextGroup;
-    }
-    return true;
-  }
-
-  if (entry.type !== STREAM_LOG_ENTRY_TYPES.GROUP_END) {
-    return false;
-  }
-
-  const status = taskGroupEndStatus(payload.status, STREAM_PHASE.COMPLETED);
-  const endTime = payload.endTime;
-
-  if (groupIndex === -1) {
-    taskGroupIndex.set(entry.id, streamState.taskGroups.length);
-    streamState.taskGroups.push({
-      id: entry.id,
-      name: entry.text ?? entry.id,
-      startTime: entry.timestamp,
-      status,
-      ...(entry.groupId ? { parentGroupId: entry.groupId } : {}),
-      ...(payload.kind ? { kind: payload.kind } : {}),
-      ...(payload.index !== undefined ? { index: payload.index } : {}),
-      ...(payload.total !== undefined ? { total: payload.total } : {}),
-      ...(endTime !== undefined ? { endTime } : {}),
-    });
-  } else {
-    const current = streamState.taskGroups[groupIndex];
-    streamState.taskGroups[groupIndex] = {
-      ...current,
-      status,
-      ...(endTime !== undefined ? { endTime } : {}),
-    };
-  }
-
-  return true;
-}
-
 function applyEntry(
   entry: StreamLogEntry,
   streamLogs: StreamLogs,
@@ -153,8 +44,8 @@ function applyEntry(
     return { logChanged: false, stateChanged: false };
   }
 
-  let stateChanged = updateTaskGroups(
-    streamState,
+  let stateChanged = upsertTaskGroupFromStreamLog(
+    streamState.taskGroups,
     streamLogs.taskGroupIndex,
     entry,
   );

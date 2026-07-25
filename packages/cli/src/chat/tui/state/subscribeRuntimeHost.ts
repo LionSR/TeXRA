@@ -6,6 +6,7 @@ import { defaultSession } from '@agent/runtime/SessionHandle';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import {
   type ActiveChildInfo,
+  type ClearMissingOutputsPayload,
   type GoalPausedPayload,
   type SetActiveStreamPayload,
   type StreamTabId,
@@ -14,13 +15,15 @@ import {
   type UpdateRoundStagePayload,
   type UpdateStreamUsagePayload,
 } from '@shared/schemas';
+import type { StreamSnapshotStore } from '@transcript';
 import { assertNever } from '@utils/core';
 
 import {
   activeStreamId,
   getCliStateGeneration,
-  removeStream,
   patchStream,
+  recordMissingOutputsReset,
+  removeStream,
   registerCliStateResetHook,
 } from './cliState';
 import {
@@ -165,6 +168,30 @@ function applyOutputFiles(
   });
 }
 
+function applyMissingOutputs(
+  event: Extract<AgentEvent, { type: 'updateMissingOutputs' }>,
+): void {
+  patchStream(event.streamId, (s) => ({
+    ...s,
+    missingOutputsByRound: {
+      ...s.missingOutputsByRound,
+      ...event.filesByRound,
+    },
+  }));
+}
+
+function applyCompileFailures(
+  event: Extract<AgentEvent, { type: 'updateCompileFailures' }>,
+): void {
+  patchStream(event.streamId, (s) => ({
+    ...s,
+    compileFailuresByRound: {
+      ...s.compileFailuresByRound,
+      ...event.filesByRound,
+    },
+  }));
+}
+
 function applyActiveSubagents(payload: {
   parentStreamId: StreamTabId;
   children: readonly ActiveChildInfo[];
@@ -177,6 +204,34 @@ function applyParentStream(payload: {
   parentStreamId: StreamTabId | null;
 }): void {
   setParentStream(payload.childStreamId, payload.parentStreamId);
+}
+
+type MissingOutputTargetResolver = Pick<
+  StreamSnapshotStore,
+  'findWorkflowStreamsMatching'
+>;
+
+function applyClearMissingOutputs(
+  payload: ClearMissingOutputsPayload,
+  targetResolver: MissingOutputTargetResolver | undefined,
+): void {
+  let targets: readonly StreamTabId[] = [];
+  if (payload.streamId) {
+    targets = [payload.streamId];
+  } else if (payload.streamConfig && targetResolver) {
+    targets = targetResolver.findWorkflowStreamsMatching(payload.streamConfig);
+  }
+  for (const streamId of targets) {
+    // The empty map is a destructive reset, not a round patch. Record its
+    // source revision even when the current map is already empty so a cold
+    // read that started before this fact cannot restore older disk warnings.
+    recordMissingOutputsReset(streamId);
+    patchStream(streamId, (slice) =>
+      Object.keys(slice.missingOutputsByRound).length === 0
+        ? slice
+        : { ...slice, missingOutputsByRound: {} },
+    );
+  }
 }
 
 function applyDirectTuiRunEvent(
@@ -215,8 +270,11 @@ function applyDirectTuiRunEvent(
       applyOutputFiles(event);
       return true;
     case 'updateMissingOutputs':
+      applyMissingOutputs(event);
+      return true;
     case 'updateCompileFailures':
-      return false;
+      applyCompileFailures(event);
+      return true;
     case 'stage.start':
       if (event.kind === 'phase') {
         applyPhaseStage({
@@ -270,6 +328,7 @@ function refreshQueuedFollowUps(
 
 export function attachTuiRunFactSubscription(
   events: SessionEventHub,
+  missingOutputTargets?: MissingOutputTargetResolver,
 ): () => void {
   let generation = getCliStateGeneration();
   const detachResetHook = registerCliStateResetHook(() => {
@@ -309,8 +368,10 @@ export function attachTuiRunFactSubscription(
           return;
         case 'goalStateChanged':
         case 'inquiryThreadUpdated':
-        case 'clearMissingOutputs':
         case 'updateStreamStatus':
+          return;
+        case 'clearMissingOutputs':
+          applyClearMissingOutputs(fact.payload, missingOutputTargets);
           return;
       }
       assertNever(fact, 'Unhandled TUI session fact');

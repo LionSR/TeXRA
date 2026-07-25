@@ -35,6 +35,10 @@ function makeSlice(
     bypass: NO_BYPASS,
     ...over,
     streamId: over.streamId as StreamTabId,
+    outputFilesByRound: over.outputFilesByRound ?? {},
+    missingOutputsByRound: over.missingOutputsByRound ?? {},
+    compileFailuresByRound: over.compileFailuresByRound ?? {},
+    taskGroups: over.taskGroups ?? [],
   };
 }
 

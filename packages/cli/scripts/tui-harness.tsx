@@ -57,7 +57,7 @@ import {
 } from '@shared/streams/streamStatus';
 import { GoalStore } from '@tools/goal';
 import { buildContinuationText } from '@tools/inquiry/inquiryContinuation';
-import { StreamLogStore } from '@transcript';
+import { createRunTrace, StreamLogStore } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { App } from '../src/chat/tui/App';
@@ -161,6 +161,7 @@ import type { CliModelAccess } from '../src/runtime/modelAccess';
 import type { InputHistory } from '../src/chat/tui/history/inputHistory';
 
 const STREAM_ID = 'harness-stream-1';
+const SHOW_WORKFLOW_TIMELINE = process.env.HARNESS_WORKFLOW_TIMELINE === '1';
 const HARNESS_APPROVAL_USAGE = 'Usage: /approval [ask | never | yolo]';
 const HARNESS_YOLO_USAGE = 'Usage: /yolo [ask | never | yolo]';
 const ENTRY_COUNT = Number(process.env.HARNESS_ENTRIES ?? '15');
@@ -1147,6 +1148,7 @@ function harnessInitialStreamStatus(
 }
 
 function harnessInitialEntries(): ConversationEntry[] {
+  if (SHOW_WORKFLOW_TIMELINE) return [];
   if (SHOW_REJECTED_BASH_TOOL) return makeRejectedBashToolEntries();
   if (SHOW_LONG_TOOL_OUTPUT) return makeLongToolOutputEntries();
   if (SHOW_ASSISTANT_TOOL_PREAMBLE) return makeAssistantToolPreambleEntries();
@@ -1182,6 +1184,123 @@ if (SHOW_LIVE_TOOL_ONLY) {
 
 if (SHOW_SUBAGENT_FOLLOWUPS) {
   seedSubagentFollowupTranscript();
+}
+
+function seedWorkflowTimeline(): void {
+  const executionId = 'harness-workflow-timeline' as ExecutionId;
+  const childStreamId = 'workflow#harness-workflow-timeline' as StreamTabId;
+  defaultSession().events.emit({
+    scope: 'session',
+    event: {
+      type: 'setActiveStream',
+      payload: {
+        streamId: childStreamId,
+        agentCategory: AgentCategory.Workflow,
+        suppressViewSwitch: true,
+      },
+    },
+  });
+  emitChildEventOrderRoster(STREAM_ID, [
+    {
+      kind: 'subagent',
+      executionId,
+      agentName: 'repositoryAudit',
+      childStreamId,
+      toolName: 'delegate_workflow_script',
+    },
+  ]);
+  emitChildEventOrderEdge(childStreamId, STREAM_ID);
+  transitionChildEventOrderRunning(childStreamId);
+  // Mirror a user focusing the running child before its terminal transition.
+  // `subscribeStreamStatus` must return this focus to the owner below.
+  activeStreamIdSignal.set(childStreamId);
+
+  const output = {
+    source: 'paper.tex',
+    location: {
+      kind: 'runStorage' as const,
+      executionId,
+      relativePath: 'r1/paper.tex',
+      absolutePath: '/private/tmp/texra-harness/r1/paper.tex',
+    },
+    round: 0,
+    lineage: null,
+    diff: null,
+  };
+  const runTrace = createRunTrace(childStreamId, defaultSession().transcripts);
+  const runStage = runTrace.trace.openStage('Repository audit', {
+    id: 'harness-workflow-run',
+    kind: 'run',
+  });
+  const roundStage = runTrace.trace.openStage('Round 1', {
+    id: 'harness-workflow-round-1',
+    index: 0,
+    kind: 'round',
+    parent: runStage,
+    total: 2,
+  });
+
+  roundStage.end('completed');
+  defaultSession().events.emit({
+    scope: 'run',
+    streamId: childStreamId,
+    event: {
+      type: 'addOutputFiles',
+      executionId,
+      filesByRound: { 0: [output] },
+      streamId: childStreamId,
+    },
+  });
+  defaultSession().events.emit({
+    scope: 'run',
+    streamId: childStreamId,
+    event: {
+      type: 'updateCompileFailures',
+      executionId,
+      filesByRound: {
+        0: [
+          {
+            round: 0,
+            displayName: 'paper.tex',
+            output: output.location,
+            log: {
+              kind: 'runStorage',
+              executionId,
+              relativePath: 'r1/paper.log',
+              absolutePath: '/private/tmp/texra-harness/r1/paper.log',
+            },
+            logRelativePath: 'r1/paper.log',
+          },
+        ],
+      },
+      streamId: childStreamId,
+    },
+  });
+  const secondRoundStage = runTrace.trace.openStage('Round 2', {
+    id: 'harness-workflow-round-2',
+    index: 1,
+    kind: 'round',
+    parent: runStage,
+    total: 2,
+  });
+  secondRoundStage.end('completed');
+  runStage.end('completed');
+  syncStreamLog(childStreamId);
+  transitionChildEventOrderTerminal(childStreamId);
+  emitChildEventOrderRoster(STREAM_ID, []);
+  runTrace.dispose();
+
+  if (activeStreamIdSignal.get() !== STREAM_ID) {
+    throw new Error('Completed workflow child did not return focus to owner');
+  }
+  const retained = visibleSubagentRows(
+    STREAM_ID,
+    childStreamEntries.get(),
+    streams.get(),
+  );
+  if (!retained.some((child) => child.childStreamId === childStreamId)) {
+    throw new Error('Completed workflow child was not retained for refocus');
+  }
 }
 
 // One child stream, its attachment/roster/edge/status/removal facts driven
@@ -2161,11 +2280,18 @@ inkRef.current = ink;
 
 HARNESS_DISPOSERS.push(subscribeStreamStatus());
 
-if (CHILD_EVENT_ORDER) {
+if (CHILD_EVENT_ORDER || SHOW_WORKFLOW_TIMELINE) {
   // Mirror real CLI startup: `runChatTui.tsx` installs
   // `subscribeStreamStatus()` and the run-fact subscription once per TUI
   // session.
   HARNESS_DISPOSERS.push(attachTuiRunFactSubscription(defaultSession().events));
+}
+
+if (SHOW_WORKFLOW_TIMELINE) {
+  seedWorkflowTimeline();
+}
+
+if (CHILD_EVENT_ORDER) {
   void runChildEventOrderFixture(ink, CHILD_EVENT_ORDER).catch((error) => {
     process.stderr.write(
       `[tui-harness] HARNESS_CHILD_EVENT_ORDER failed: ${toErrorMessage(error)}\n`,
