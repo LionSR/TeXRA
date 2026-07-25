@@ -129,14 +129,6 @@ export interface UpdateActiveProcessesPayload {
   processes: ActiveChildInfo[];
 }
 
-/** Incremental child-process output, projected from `process.output`. */
-export interface UpdateProcessOutputPayload {
-  parentStreamId: StreamTabId;
-  executionId: ExecutionId;
-  stdout: string;
-  stderr: string;
-}
-
 /**
  * An autonomous goal auto-paused after a failed cycle ended the autonomous
  * leg. Hosts surface this so a paused goal is distinguishable from a hang.

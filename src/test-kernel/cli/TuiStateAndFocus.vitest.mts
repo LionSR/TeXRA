@@ -54,7 +54,6 @@ import { projectStreamTranscript } from '@cli/chat/tui/state/transcriptProjectio
 import { subscribeStreamStatus } from '@cli/chat/tui/state/subscribeStreamStatus';
 import { attachTuiRunFactSubscription } from '@cli/chat/tui/state/subscribeRuntimeHost';
 import {
-  COMPLETED_PROCESS_TAIL_LINES,
   buildCompletedProcessTranscript,
   completedProcessDisplayLines,
 } from '@cli/chat/tui/state/completedProcessTranscript';
@@ -2762,33 +2761,7 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
     }
   });
 
-  it('applies direct process.output events without host emission', () => {
-    const hub = new SessionEventHub();
-    const detach = attachTuiRunFactSubscription(hub);
-
-    try {
-      hub.emit({
-        scope: 'run',
-        streamId: root,
-        event: {
-          type: 'process.output',
-          parentStreamId: root,
-          executionId: 'exec-a',
-          stdout: 'stdout chunk',
-          stderr: 'stderr chunk',
-        },
-      });
-
-      expect(streams.get().get(root)?.processOutput.get('exec-a')).toEqual({
-        stdout: 'stdout chunk',
-        stderr: 'stderr chunk',
-      });
-    } finally {
-      detach();
-    }
-  });
-
-  it('applies direct child.activity(processes) completion and prunes output once', () => {
+  it('applies direct child.activity(processes) completion once', () => {
     const hub = new SessionEventHub();
     const detach = attachTuiRunFactSubscription(hub);
 
@@ -2807,28 +2780,6 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
         scope: 'run',
         streamId: root,
         event: {
-          type: 'process.output',
-          parentStreamId: root,
-          executionId: 'exec-a',
-          stdout: 'done line',
-          stderr: '',
-        },
-      });
-      hub.emit({
-        scope: 'run',
-        streamId: root,
-        event: {
-          type: 'process.output',
-          parentStreamId: root,
-          executionId: 'exec-b',
-          stdout: 'still running',
-          stderr: '',
-        },
-      });
-      hub.emit({
-        scope: 'run',
-        streamId: root,
-        event: {
           type: 'child.activity',
           kind: 'processes',
           parentStreamId: root,
@@ -2838,11 +2789,6 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
 
       const slice = streams.get().get(root);
       expect(slice?.activeProcesses).toEqual([runningProcessB]);
-      expect(slice?.processOutput.has('exec-a')).toBe(false);
-      expect(slice?.processOutput.get('exec-b')).toEqual({
-        stdout: 'still running',
-        stderr: '',
-      });
       expect(
         slice?.entries.filter((entry) => entry.role === 'process'),
       ).toHaveLength(1);
@@ -3306,16 +3252,12 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
     }
   });
 
-  it('persists a bounded completed-process transcript before pruning processOutput', () => {
+  it('persists a completed-process transcript entry when a process finishes', () => {
     const hub = new SessionEventHub();
     const detach = attachTuiRunFactSubscription(hub);
-    const lines = Array.from(
-      { length: COMPLETED_PROCESS_TAIL_LINES + 2 },
-      (_, index) => `line ${index + 1}`,
-    ).join('\n');
 
     try {
-      // Seed: two live processes with tail output.
+      // Seed: two live processes.
       hub.emit({
         scope: 'run',
         streamId: root,
@@ -3336,32 +3278,8 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
           ],
         },
       });
-      hub.emit({
-        scope: 'run',
-        streamId: root,
-        event: {
-          type: 'process.output',
-          parentStreamId: root,
-          executionId: 'exec-a',
-          stdout: lines,
-          stderr: 'stderr tail',
-        },
-      });
-      hub.emit({
-        scope: 'run',
-        streamId: root,
-        event: {
-          type: 'process.output',
-          parentStreamId: root,
-          executionId: 'exec-b',
-          stdout: 'B',
-          stderr: '',
-        },
-      });
-      expect(streams.get().get(root)?.processOutput.size).toBe(2);
 
-      // exec-a finishes: its output buffer must be dropped on the next
-      // active-processes update, after a durable transcript entry is added.
+      // exec-a finishes: a durable transcript entry is added for it.
       hub.emit({
         scope: 'run',
         streamId: root,
@@ -3375,10 +3293,6 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
         },
       });
       const slice = streams.get().get(root);
-      const out = streams.get().get(root)?.processOutput;
-      expect(out?.size).toBe(1);
-      expect(out?.has('exec-a')).toBe(false);
-      expect(out?.has('exec-b')).toBe(true);
 
       const processEntries =
         slice?.entries.filter((entry) => entry.role === 'process') ?? [];
@@ -3396,11 +3310,6 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
           isError: true,
         },
       });
-      expect(processEntries[0]?.process?.tailLines).toHaveLength(
-        COMPLETED_PROCESS_TAIL_LINES,
-      );
-      expect(processEntries[0]?.process?.tailLines.at(0)).toBe('line 4');
-      expect(processEntries[0]?.process?.tailLines.at(-1)).toBe('stderr tail');
 
       const split = splitTranscriptEntries(
         slice?.entries ?? [],

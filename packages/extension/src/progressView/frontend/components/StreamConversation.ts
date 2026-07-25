@@ -12,7 +12,6 @@ import { SignalWatcher } from '@shared/signals';
 // Local imports - progress view
 import {
   activeInquiries$,
-  activeProcessOutputs$,
   logContext$,
   permissions$,
   streamById$,
@@ -27,7 +26,6 @@ import {
   followUpEventSinkContext,
   inquiryThreadsContext,
   permissionsContext,
-  processOutputContext,
   streamByIdContext,
   streamLogContext,
   streamStateContext,
@@ -36,7 +34,6 @@ import {
   type StreamContextValue,
   type StreamLogContextValue,
 } from '../contexts/streamContexts';
-import { EMPTY_PROCESS_OUTPUTS, type ProcessOutputMap } from '../store';
 import type { PermissionState } from '../permissionState';
 
 // Side-effect imports - body components rendered below.
@@ -76,10 +73,6 @@ export class StreamConversation extends SignalWatcher(LitElement) {
   @state()
   private permissionsContextValue: PermissionState[] = [];
 
-  @provide({ context: processOutputContext })
-  @state()
-  private processOutputContextValue: ProcessOutputMap = EMPTY_PROCESS_OUTPUTS;
-
   @provide({ context: streamByIdContext })
   @state()
   private streamByIdContextValue: StreamByIdMap = EMPTY_STREAM_BY_ID;
@@ -109,7 +102,6 @@ export class StreamConversation extends SignalWatcher(LitElement) {
     this.streamContextValue = streamContext$.get();
     this.streamLogContextValue = logContext$.get();
     this.permissionsContextValue = permissions$.get();
-    this.processOutputContextValue = activeProcessOutputs$.get();
     this.streamByIdContextValue = streamById$.get();
     this.inquiryThreadsContextValue = activeInquiries$.get();
   }
