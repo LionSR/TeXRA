@@ -59,6 +59,7 @@ import './components/profile/ProviderKeyModal';
 import { settingsViewHandlers } from './messageDispatcher';
 import {
   agentSubTab,
+  agentSkillsEnabled,
   allowOrchestratorKill,
   apiAccessMode,
   authenticated,
@@ -504,6 +505,7 @@ export class SettingsApp extends SettingsAppBase {
               .items=${toolDashboardItems.get()}
               .loaded=${toolDashboardLoaded.get()}
               .bashApprovalEnabled=${bashApprovalEnabled.get()}
+              .agentSkillsEnabled=${agentSkillsEnabled.get()}
               .showDesktopCrashReporting=${!isKnownUnsupported(
                 unsupportedCommands.get(),
                 SETTINGS_VIEW_COMMANDS.GET_DESKTOP_CRASH_REPORTING,

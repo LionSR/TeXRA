@@ -15,6 +15,10 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { FileListEntry } from '@shared/schemas';
 import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
 import {
+  AGENT_SKILLS_CONFIG_KEY,
+  AGENT_SKILLS_ENABLED_DEFAULT,
+} from '@shared/schemas/agentSkills';
+import {
   loadRuntimeSkillCatalog,
   type SkillLoadIssue,
 } from '@skills/runtimeSkills';
@@ -192,7 +196,7 @@ export async function buildUserVars(
     // work for workflow agents. The settings toggle gives users a hard off
     // switch that skips discovery and leaves AVAILABLE_SKILLS empty.
     agentSetting.agentCategory === AgentCategory.ToolUse &&
-    getConfig<boolean>('texra.skills.enabled', true)
+    getConfig<boolean>(AGENT_SKILLS_CONFIG_KEY, AGENT_SKILLS_ENABLED_DEFAULT)
       ? loadRuntimeSkillCatalog()
       : Promise.resolve({ catalog: '', issues: [] }),
   ]);

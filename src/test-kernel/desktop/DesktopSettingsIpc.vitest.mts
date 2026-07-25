@@ -4,6 +4,7 @@ import type { StateStore } from '@platform/interfaces';
 import { platform } from '@platform/platform';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { StreamTabId } from '@shared/schemas';
+import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas/agentSkills';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { DEFAULT_GIT_MARK_COMMITS } from '@shared/schemas/stateSettings';
 import { FakeStateStore } from '@test/support/FakePlatform';
@@ -806,6 +807,36 @@ describe('desktop settings IPC', () => {
     ).toMatchObject({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS,
       bashApprovalEnabled: false,
+    });
+  });
+
+  it('writes the agent-skills toggle and returns the shared setting message', async () => {
+    const config = new MemoryConfigStore();
+
+    const { settings, posted } = createCapturedSettingsFixture({
+      config,
+      ui: { onError: () => undefined },
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.SET_AGENT_SKILLS_ENABLED,
+        enabled: false,
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(config.values.get(AGENT_SKILLS_CONFIG_KEY)).toBe(false);
+    expect(config.updateTargets.get(AGENT_SKILLS_CONFIG_KEY)).toBe('workspace');
+    expect(
+      posted.find(
+        (message) =>
+          commandOf(message) ===
+          SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SKILLS_SETTINGS,
+      ),
+    ).toEqual({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SKILLS_SETTINGS,
+      enabled: false,
     });
   });
 

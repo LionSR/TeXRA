@@ -79,6 +79,10 @@ import {
   setBashApprovalEnabled as setBashApprovalEnabledShared,
   setWorkspaceAgentSetting,
 } from '@shared/settingsView/handlers/approvalHandlers';
+import {
+  buildAgentSkillsSettingsMessage,
+  setAgentSkillsEnabled,
+} from '@shared/settingsView/handlers/agentSkillsHandlers';
 import { buildSuperYoloMessage } from '@shared/settingsView/handlers/superYoloHandlers';
 import {
   PROVIDER_DISPLAY_NAMES,
@@ -551,6 +555,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         setBashApprovalEnabled: (enabled) =>
           this.handleSetApprovalEnabled(enabled),
       },
+      agentSkills: {
+        setEnabled: (enabled) => this.handleSetAgentSkillsEnabled(enabled),
+      },
       stateSettings: {
         update: (key, value) => this.updateStateSetting(key, value),
       },
@@ -689,6 +696,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       this.chatgptHandlers.sendChatGptAuthStatus(webview),
       this.githubHandlers.sendPRSubscriptions(webview),
       this.sendApprovalSettings(webview),
+      this.sendAgentSkillsSettings(webview),
       this.latexHandlers.sendLatexSettingsStatus(webview),
       this.latexHandlers.sendLatexConfigValues(webview),
       this.sendInlineCriticismEnabled(webview),
@@ -850,6 +858,27 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       BASH_APPROVAL_CONFIG_TARGET,
     );
     await this.withActiveWebview((w) => this.sendApprovalSettings(w));
+  }
+
+  private async sendAgentSkillsSettings(
+    webview: vscode.Webview,
+  ): Promise<void> {
+    await webview.postMessage(
+      buildAgentSkillsSettingsMessage(platform().config),
+    );
+  }
+
+  private async handleSetAgentSkillsEnabled(enabled: boolean): Promise<void> {
+    if (!vscode.workspace.workspaceFolders?.length) {
+      void showLoggedInfoMessage(
+        this.channel,
+        'Agent skills are a per-workspace setting. Open a workspace folder before changing them.',
+      );
+      await this.withActiveWebview((w) => this.sendAgentSkillsSettings(w));
+      return;
+    }
+    await setAgentSkillsEnabled(platform().config, enabled);
+    await this.withActiveWebview((w) => this.sendAgentSkillsSettings(w));
   }
 
   private async updateAgentSetting(
