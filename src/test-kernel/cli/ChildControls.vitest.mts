@@ -197,6 +197,7 @@ describe('CLI child controls', () => {
           childStreamId: b,
           status: STREAM_PHASE.RUNNING,
           workflowPhase: 'Map',
+          edgeParentStreamId: null,
         },
         {
           kind: 'subagent',
@@ -230,7 +231,9 @@ describe('CLI child controls', () => {
           [id, slice({ streamId: id, status: STREAM_PHASE.RUNNING })] as const,
       ),
     ]);
-    const parentStream = new Map(ids.map((id) => [id, root] as const));
+    const parentStream = new Map(
+      ids.filter((id) => id !== b).map((id) => [id, root] as const),
+    );
 
     expect(
       streamTreeEntries({
@@ -248,6 +251,19 @@ describe('CLI child controls', () => {
       { id: c, shortcutIndex: 4 },
       { id: a, shortcutIndex: 5 },
     ]);
+    const views = streamTreeViews({
+      activeStreamId: root,
+      childStreamEntries: entries,
+      parentStream,
+      rootStreamId: root,
+      streams,
+    });
+    expect(views.map(({ id }) => id)).toEqual([root, e, b, d, c, a]);
+    expect(views.find(({ id }) => id === b)).toMatchObject({
+      parentId: undefined,
+      shortcutIndex: 2,
+      workflowPhase: 'Map',
+    });
     expect(
       numericFocusTargetForActiveStream({
         activeStreamId: root,

@@ -289,12 +289,10 @@ export function SubagentList(
         label: session.label,
         value: childStreamListValue(session.id),
       };
-      // The list root is context, not a grouped attempt. Likewise, only its
-      // direct children can belong to this focused workflow run's phases.
-      if (
-        session.id === props.listRootStreamId ||
-        session.parentId !== props.listRootStreamId
-      ) {
+      // The list root is context, not a grouped attempt. Every other row
+      // already belongs to this root's visible current/retained descendant
+      // set, including historical children promoted away from the root.
+      if (session.id === props.listRootStreamId) {
         nextItems.push(item);
         continue;
       }

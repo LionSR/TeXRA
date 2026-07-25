@@ -788,7 +788,8 @@ describe('CLI child list display model', () => {
       {
         ...session(mapRetry),
         label: 'writer-retry',
-        parentId: run,
+        // Retained under the run, but promoted out of its current topology,
+        // so the projected view has no current parentId.
         workflowPhase: freeFormPhase,
       },
       {
@@ -850,6 +851,12 @@ describe('CLI child list display model', () => {
     expect(wideOutput.split(freeFormPhase)).toHaveLength(2);
     expect(wideOutput).toContain('writer-retry');
     expect(wideOutput).toContain('writer-attempt');
+    expect(wideOutput.indexOf(`${freeFormPhase} (1/2)`)).toBeLessThan(
+      wideOutput.indexOf('writer-retry'),
+    );
+    expect(wideOutput.indexOf('writer-retry')).toBeLessThan(
+      wideOutput.indexOf('writer-attempt'),
+    );
     expect(wideOutput.indexOf('writer-attempt')).toBeLessThan(
       wideOutput.indexOf('unphased'),
     );
