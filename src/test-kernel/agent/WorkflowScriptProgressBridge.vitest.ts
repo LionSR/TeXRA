@@ -12,6 +12,7 @@ import {
   type ExecutionId,
   type WorkflowTaskProgress,
 } from '@shared/schemas';
+import { workflowPhaseTaskProgress } from '@shared/copy/workflowTask';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { runPersistedWorkflowScriptWithProgress } from '@tools/delegation/workflowScriptRun';
 
@@ -55,10 +56,27 @@ function workflowTaskEvent(
   );
 }
 
+/**
+ * The current card set, one entry per `logId` — what a host progress tree
+ * holds after applying every update.
+ */
+function latestWorkflowTaskEvents(
+  events: readonly AgentEvent[],
+): Extract<AgentEvent, { type: 'workflow.task' }>[] {
+  const byLogId = new Map<
+    string,
+    Extract<AgentEvent, { type: 'workflow.task' }>
+  >();
+  for (const event of events) {
+    if (event.type === 'workflow.task') byLogId.set(event.logId, event);
+  }
+  return [...byLogId.values()];
+}
+
 beforeEach(() => clearStoreCache());
 
 describe('workflow-script progress bridge', () => {
-  it('keeps planned task cards in one stage across incremental updates', async () => {
+  it('keeps planned task cards in their phase stage across incremental updates', async () => {
     const { trace, events } = recordingTrace();
     const parent = trace.openStage('Parent');
     const plannedMeta = `export const meta = {
@@ -92,19 +110,21 @@ return await agent('Inspect', { id: 'inspect' })`,
     const planned = workflowTaskEvent(events, 'Inspect source', 'planned');
     const running = workflowTaskEvent(events, 'Inspect source', 'running');
     const completed = workflowTaskEvent(events, 'Inspect source', 'completed');
+    // One stable, phase-derived stage across the whole lifecycle: the card is
+    // classified into its phase group when it is planned and never moves.
     expect(planned).toMatchObject({
       type: 'workflow.task',
-      stageId: parent.id,
+      stageId: phaseId,
     });
     expect(running).toMatchObject({
       type: 'workflow.task',
       logId: planned?.logId,
-      stageId: parent.id,
+      stageId: phaseId,
     });
     expect(completed).toMatchObject({
       type: 'workflow.task',
       logId: planned?.logId,
-      stageId: parent.id,
+      stageId: phaseId,
     });
     expect(events).toContainEqual(
       expect.objectContaining({
@@ -166,6 +186,123 @@ return await agent('Run one', { id: 'used' })`,
     expect(activities).toContain(
       'Skipped: Unused task — The workflow ended before this task was reached.',
     );
+  });
+
+  it('opens and closes a declared phase the run never reached', async () => {
+    const { trace, events } = recordingTrace();
+    await runPersistedWorkflowScriptWithProgress(trace, {
+      store: getExecutionStore(executionId),
+      checkpointId: 'unreached-phase',
+      script: `export const meta = {
+  name: 'unreached-phase',
+  description: 'declares a phase the run never enters',
+  phases: [{ title: 'Research' }, { title: 'Write' }],
+  tasks: [
+    { id: 'used', label: 'Used task', phase: 'Research' },
+    { id: 'later', label: 'Later task', phase: 'Write' },
+  ],
+}
+phase('Research')
+return await agent('Run one', { id: 'used' })`,
+      runAgent: async () => 'done',
+    });
+
+    // The skipped card still belongs to its own phase group, so the sweep has
+    // to open that stage even though the script never entered it.
+    const writeId = stageId(events, 'Write');
+    expect(workflowTaskEvent(events, 'Later task', 'skipped')).toMatchObject({
+      stageId: writeId,
+      task: { reason: 'not-reached' },
+    });
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'stage.start',
+        id: writeId,
+        kind: 'phase',
+      }),
+    );
+    expect(events).toContainEqual({
+      type: 'stage.end',
+      id: writeId,
+      status: RUN_OUTCOME.COMPLETED,
+    });
+  });
+
+  it('keeps a phase-less declared task out of the phase active at call time', async () => {
+    const { trace, events } = recordingTrace();
+    await runPersistedWorkflowScriptWithProgress(trace, {
+      store: getExecutionStore(executionId),
+      checkpointId: 'phase-less-declared-task',
+      script: `export const meta = {
+  name: 'phase-less-declared-task',
+  description: 'declares a task with no phase',
+  phases: [{ title: 'Research' }],
+  tasks: [{ id: 'loose', label: 'Loose task' }],
+}
+phase('Research')
+return await agent('Run loose', { id: 'loose' })`,
+      runAgent: async () => 'done',
+    });
+
+    // meta.tasks[].phase is optional, so the plan can declare a task with no
+    // phase while a phase() is active. Its card must stay where it was first
+    // classified — a progress tree cannot move a card between groups — and the
+    // payload every host folds `done/total` by must say the same thing, so a
+    // phase-less task is counted under no phase rather than under the wrong one.
+    for (const status of ['planned', 'running', 'completed'] as const) {
+      expect(workflowTaskEvent(events, 'Loose task', status)).toMatchObject({
+        stageId: undefined,
+      });
+      expect(
+        workflowTaskEvent(events, 'Loose task', status)?.task.phase,
+      ).toBeUndefined();
+    }
+
+    // The two answers agree by construction: the phase whose group holds the
+    // card and the phase the shared fold reads off the payload are the same
+    // recorded value. Under the active phase both are empty.
+    const researchId = stageId(events, 'Research');
+    const latest = latestWorkflowTaskEvents(events);
+    expect(
+      workflowPhaseTaskProgress(
+        latest.flatMap((event) =>
+          event.task.phase === 'Research' ? [event.task] : [],
+        ),
+      ),
+    ).toEqual({ done: 0, total: 0 });
+    expect(latest.filter((event) => event.stageId === researchId)).toHaveLength(
+      0,
+    );
+  });
+
+  it('does not fail an active phase for a failed phase-less declared task', async () => {
+    const { trace, events } = recordingTrace();
+    await runPersistedWorkflowScriptWithProgress(trace, {
+      store: getExecutionStore(executionId),
+      checkpointId: 'failed-phase-less-declared-task',
+      script: `export const meta = {
+  name: 'failed-phase-less-declared-task',
+  description: 'keeps a phase-less failure outside the active phase',
+  phases: [{ title: 'Research' }],
+  tasks: [{ id: 'loose', label: 'Loose task' }],
+}
+phase('Research')
+return await agent('Run loose', { id: 'loose' })`,
+      runAgent: async () => {
+        throw new Error('model unavailable');
+      },
+    });
+
+    const researchId = stageId(events, 'Research');
+    expect(workflowTaskEvent(events, 'Loose task', 'failed')).toMatchObject({
+      stageId: undefined,
+      task: { phase: undefined, error: 'model unavailable' },
+    });
+    expect(events).toContainEqual({
+      type: 'stage.end',
+      id: researchId,
+      status: RUN_OUTCOME.COMPLETED,
+    });
   });
 
   it('marks a planned task failed when the live-call cap refuses it', async () => {
