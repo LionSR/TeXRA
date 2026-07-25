@@ -1,7 +1,6 @@
 import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInteractionEvents';
 
-import { type CliDecisionApprovalEvent } from '../approvalEvents';
-
+import { type CliDecisionApprovalEvent } from './approvalPolicy';
 import { formatAgentProposalApprovalSummary } from './approvalSummaries';
 
 export function summarizeApprovalEvent<K extends CliDecisionApprovalEvent>(
