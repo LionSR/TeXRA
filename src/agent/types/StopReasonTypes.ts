@@ -92,3 +92,15 @@ export function isTokenLimitStopReason(
   if (!reason) return false;
   return TOKEN_LIMIT_STOP_REASONS.includes(reason);
 }
+
+/**
+ * Whether a provider stop reason specifically means the model's context
+ * window (not just an output token budget) was exceeded — Anthropic today,
+ * but kept as a semantic predicate so shared flow code never compares
+ * against a raw provider constant.
+ */
+export function isContextWindowExceededStopReason(
+  reason: ProviderStopReason | undefined,
+): boolean {
+  return reason === ANTHROPIC_STOP.MODEL_CONTEXT_WINDOW_EXCEEDED;
+}

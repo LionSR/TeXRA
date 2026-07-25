@@ -91,6 +91,20 @@ async function selectWorkflowScriptModel(
   }
 }
 
+function workflowScriptModelSelection(
+  invocation: WorkflowAgentInvocation,
+  parent: LaunchRunContext,
+  agentCategory: AgentCategory,
+): Promise<string> {
+  return selectWorkflowScriptModel({
+    ...(invocation.options.model !== undefined && {
+      requestedModel: invocation.options.model,
+    }),
+    parentModel: parent.model,
+    agentCategory,
+  });
+}
+
 /**
  * Identity of the detached workflow-run that owns this script's `agent()`
  * grandchildren. Re-rooting them here (instead of the orchestrator) gives a
@@ -172,13 +186,11 @@ export function createWorkflowScriptAgentRunner(
               invocation.options.agentName,
               runScope.delegationAgentScope ?? undefined,
             );
-            const model = await selectWorkflowScriptModel({
-              ...(invocation.options.model !== undefined && {
-                requestedModel: invocation.options.model,
-              }),
-              parentModel: parent.model,
-              agentCategory: AgentCategory.ToolUse,
-            });
+            const model = await workflowScriptModelSelection(
+              invocation,
+              parent,
+              AgentCategory.ToolUse,
+            );
             agentName = agent.name;
             configPayload = {
               ...sharedConfigFields,
@@ -194,13 +206,13 @@ export function createWorkflowScriptAgentRunner(
               invocation.options.agentName ?? defaultAgentName,
               runScope.delegationAgentScope ?? undefined,
             );
-            const model = await selectWorkflowScriptModel({
-              ...(invocation.options.model !== undefined && {
-                requestedModel: invocation.options.model,
-              }),
-              parentModel: parent.model,
-              agentCategory: AgentCategory.Workflow,
-            });
+            // Model resolves before any file I/O so an unavailable/invalid
+            // declared model fails the call without touching the filesystem.
+            const model = await workflowScriptModelSelection(
+              invocation,
+              parent,
+              AgentCategory.Workflow,
+            );
             const [inputFiles, contextFiles, mediaFiles] = await Promise.all([
               resolveInvocationFileList(
                 run.executionId,
