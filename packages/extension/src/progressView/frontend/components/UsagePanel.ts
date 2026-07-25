@@ -360,14 +360,14 @@ export class UsagePanel extends LitElement {
             >Compaction at ${COMPACTION_THRESHOLD}%</wa-tooltip
           >
         </span>
-        <wa-tooltip for="usage-context-gauge"
-          >${clamped.toFixed(0)}% context used</wa-tooltip
-        >
         <span class="context-state__value">
           ${formatCompactTokenCount(inputTokens)} /
           ${formatCompactTokenCount(contextWindow)}
         </span>
       </span>
+      <wa-tooltip for="usage-context-gauge"
+        >${clamped.toFixed(0)}% context used</wa-tooltip
+      >
     `;
   }
 
