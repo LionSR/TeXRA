@@ -140,6 +140,13 @@ services/shared-store split: AGENTS.md "Patterns across the codebase"
 - **UI anti-patterns.** Never compensate for data-model problems at render time
   (no `Date.now()`, synthetic IDs, or dedup in renderers — fix the upstream
   data). One home per user action; secondary surfaces show read-only status.
+- **Silent degradation is a defect.** A fallback that masks a failure must be
+  loud — log the cause at `warn` and surface it — or not exist. `catch {}`, a
+  `??` over a failed read, a Zod `.catch(default)` on persisted data, and a
+  `default: return` that quietly drops an unknown event all turn a bug into
+  wrong-but-quiet behavior that nobody reports. Taxonomy and the accepted
+  best-effort exceptions: §15 of
+  `.claude/skills/code-review/references/review-checklist.md`.
 - **Exports are contracts.** A new export needs a consumer in the same PR;
   `npm run check:dead-code-ratchet` enforces it against
   `config/ratchets/knip-baseline.json`.
