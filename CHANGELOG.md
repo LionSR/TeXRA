@@ -21,6 +21,9 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Workflow task costs now reflect each task's own spend** — task rows and
+  cards no longer show the workflow run's cumulative cost when each task
+  finishes.
 - **Large foreground shell commands use bounded memory** — command results
   retain useful diagnostics from the beginning and end without buffering the
   complete output in memory.
