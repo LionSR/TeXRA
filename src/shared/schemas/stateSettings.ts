@@ -25,6 +25,7 @@ import {
   ClaudeAgentEffortSchema,
   ClaudeAgentModelSchema,
   ClaudeAgentPermissionModeSchema,
+  parseClaudeAgentModel,
   CODEX_APPROVAL_POLICY_DEFAULT,
   CODEX_REASONING_EFFORT_DEFAULT,
   CODEX_SANDBOX_MODE_DEFAULT,
@@ -109,6 +110,11 @@ export interface StateSettingEntry {
    * when the key is absent. `schema.parse(undefined)` yields that default.
    */
   readonly schema: z.ZodType;
+  /**
+   * Optional normalization for legacy persisted values before schema validation.
+   * Keep migration mappings in the domain parser referenced here, not the row.
+   */
+  readonly normalizePersisted?: (raw: unknown) => unknown;
   /** Short label for compact settings UIs; falls back to the stripped key. */
   readonly title?: string;
   /** Human-readable description, shared across every host that renders it. */
@@ -353,6 +359,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   {
     key: WorkspaceStateKey.CLAUDE_AGENT_MODEL,
     schema: ClaudeAgentModelSchema.prefault(CLAUDE_AGENT_DEFAULT_MODEL),
+    normalizePersisted: parseClaudeAgentModel,
     title: 'Claude Code model',
     description: 'Claude model selected for Claude Code agent sessions.',
     category: 'ai-agents',
@@ -360,7 +367,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     hosts: ['vscode', 'desktop', 'cli'],
     cliConsumer: CLAUDE_AGENT_CONFIG_CONSUMER,
     cliRuntimeReachability: CLAUDE_AGENT_RUNTIME_REACHABILITY,
-    enumLabels: ['Sonnet 5', 'Fable 5', 'Opus 4.8', 'Haiku 4.5'],
+    enumLabels: ['Sonnet 5', 'Fable 5', 'Opus 5', 'Haiku 4.5'],
   },
   {
     key: WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,

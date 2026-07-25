@@ -191,11 +191,11 @@ export const latexdiffCommand = withUsageSections(
       title: 'EXAMPLES',
       rows: [
         [
-          'texra latexdiff revise -m claude-opus-4-8 -i paper.tex',
+          'texra latexdiff revise -m opus5T -i paper.tex',
           'diff the latest revise run of paper.tex against its pre-run base',
         ],
         [
-          'texra latexdiff revise -m claude-opus-4-8 -i paper.tex --between-rounds',
+          'texra latexdiff revise -m opus5T -i paper.tex --between-rounds',
           'also diff each round against the previous round',
         ],
       ],
