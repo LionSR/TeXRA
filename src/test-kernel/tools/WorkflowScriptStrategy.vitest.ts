@@ -11,7 +11,7 @@ import {
 } from '@agent/workflowScript';
 import type { AgentFinalResult } from '@agent/runtime/AgentFinalResult';
 import { WorkflowControlRegistry } from '@agent/runtime/workflowControlRegistry';
-import type { ExecutionId } from '@shared/schemas';
+import type { ExecutionId, WorkflowTaskProgress } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
   createWorkflowScriptStrategy,
@@ -115,6 +115,44 @@ describe('createWorkflowScriptStrategy', () => {
     // The run log rides along so the invoking model sees what executed.
     expect(delivery).toContain('=== Run log ===');
     expect(delivery).toContain('Finished');
+  });
+
+  it('bills each task its own call while still settling the run total', async () => {
+    const ports = fakePorts();
+    const logger = new TraceEmitter();
+    const tasks: WorkflowTaskProgress[] = [];
+    logger.subscribe((event) => {
+      if (event.type === 'workflow.task') tasks.push(event.task);
+    });
+    const strategy = createWorkflowScriptStrategy(
+      strategyParams({
+        name: 'per-call-cost',
+        logger,
+        script: `export const meta = {
+  name: 'per-call-cost',
+  description: 'bills two equal calls',
+}
+await agent('First')
+return await agent('Second')`,
+        createRunAgent: (hooks) => async (invocation) => {
+          const result = { ...finalResult, cost: 0.05 };
+          hooks.onCost(invocation, result.cost);
+          return result;
+        },
+      }),
+    );
+
+    await strategy.launch(ports, new AbortController());
+
+    // Two calls costing the same report the same — the second is not $0.10
+    // just because the run had spent that much by the time it settled.
+    expect(
+      tasks
+        .filter((task) => task.status === 'completed')
+        .map((task) => task.totalCostUsd),
+    ).toEqual([0.05, 0.05]);
+    // The run-cumulative figure still reaches the parent's cost accounting.
+    expect(ports.recordCost).toHaveBeenCalledWith(expect.closeTo(0.1, 5));
   });
 
   it('replays a named checkpoint and settles zero for a pure resume', async () => {

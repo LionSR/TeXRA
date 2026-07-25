@@ -7,6 +7,8 @@ import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
 
 /**
  * Canonical metadata copy for terminal workflow-task progress on every host.
+ * The cost is this task's own spend — a per-task row is read as that row's, so
+ * it carries no `total` qualifier and does not grow down a phase's card list.
  */
 export function formatWorkflowTaskMetadataParts(
   task: WorkflowTaskProgress,
@@ -25,7 +27,7 @@ export function formatWorkflowTaskMetadataParts(
       : formatCompactDuration(task.durationMs),
     task.totalCostUsd === undefined
       ? undefined
-      : `${formatCostUsd(task.totalCostUsd)} total`,
+      : formatCostUsd(task.totalCostUsd),
   ].filter((part): part is string => part !== undefined);
 }
 

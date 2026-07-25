@@ -21,6 +21,12 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **A workflow task's cost is now that task's own cost** — the figure on a
+  workflow-script task card and task line reported the whole run's spend at the
+  moment the task settled, so it grew down the list even when every task cost
+  the same. Each task now reports what its own `agent()` call spent, and the
+  now-redundant `total` qualifier is gone (`$0.020 total` → `$0.020`). The run's
+  cumulative cost still rolls up to the invoking agent's usage unchanged.
 - **Large foreground shell commands use bounded memory** — command results
   retain useful diagnostics from the beginning and end without buffering the
   complete output in memory.

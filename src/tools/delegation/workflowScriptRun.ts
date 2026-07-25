@@ -21,8 +21,13 @@ type WorkflowScriptRunWithProgressOptions = Omit<
   PersistedWorkflowScriptRunOptions,
   'onEvent'
 > & {
-  /** Cumulative live spend across this run's children, for progress lines. */
-  readonly getLiveCostUsd?: () => number;
+  /**
+   * One call's own live spend, by the engine's 0-based call index. Progress
+   * lines are per task, so they report per call; the run total is settled
+   * separately onto the parent's usage. Undefined for a call that performed no
+   * live attempt (a journal replay), which therefore reports no cost at all.
+   */
+  readonly getCallCostUsd?: (index: number) => number | undefined;
   /**
    * Receives every progress line also written to the trace (phases, script
    * log() output, per-call outcomes) so the caller can hand the run log back
@@ -34,6 +39,12 @@ type WorkflowScriptRunWithProgressOptions = Omit<
 interface PhaseStage {
   readonly handle: StageHandle;
   failed: boolean;
+}
+
+interface LiveCall {
+  readonly phase: string | undefined;
+  /** 0-based engine call index — the key this call's cost is observed under. */
+  readonly index: number;
 }
 
 interface ProjectedWorkflowTask {
@@ -116,11 +127,17 @@ export async function runPersistedWorkflowScriptWithProgress(
   trace: AgentTrace,
   options: WorkflowScriptRunWithProgressOptions,
 ): Promise<WorkflowScriptRunResult> {
-  const { getLiveCostUsd, onActivity, ...runOptions } = options;
+  const { getCallCostUsd, onActivity, ...runOptions } = options;
   const parentStageId = trace.activeStageId();
   const phases = new Map<string, PhaseStage>();
   const phaseStageIds = new Map<string, string>();
-  const callPhases = new Map<WorkflowScriptProgressId, string | undefined>();
+  /**
+   * What the run knows about a call it has started but not yet settled: the
+   * phase it began in, and the engine call index its cost is billed under.
+   * Entries survive exactly until `agent:end`, so a call still present when the
+   * run tears down is one that never finished.
+   */
+  const liveCalls = new Map<WorkflowScriptProgressId, LiveCall>();
   const projectedTasks = new Map<
     WorkflowScriptProgressId,
     ProjectedWorkflowTask
@@ -256,7 +273,10 @@ export async function runPersistedWorkflowScriptWithProgress(
         break;
       case 'agent:start': {
         const phaseTitle = event.phase ?? currentPhase;
-        callPhases.set(event.progressId, phaseTitle);
+        liveCalls.set(event.progressId, {
+          phase: phaseTitle,
+          index: event.index,
+        });
         // Open the phase the moment the run reaches it; `emitTask` resolves
         // the card's group on its own from the task's recorded phase.
         openPhaseStage(phaseTitle, event.phaseIndex, event.phaseTotal);
@@ -272,19 +292,22 @@ export async function runPersistedWorkflowScriptWithProgress(
       case 'agent:end': {
         // A recorded undefined means the live call started outside any phase;
         // only cached end-only events may use the phase active at replay time.
-        const phaseTitle = callPhases.has(event.progressId)
-          ? callPhases.get(event.progressId)
+        const liveCall = liveCalls.get(event.progressId);
+        const phaseTitle = liveCall
+          ? liveCall.phase
           : (event.phase ?? currentPhase);
-        callPhases.delete(event.progressId);
+        liveCalls.delete(event.progressId);
         // A cached replay has no agent:start, so this is where its phase opens.
         openPhaseStage(phaseTitle, event.phaseIndex, event.phaseTotal);
         // Cached replays spend nothing, so their lines stay cost-free; live
-        // onCost settles before agent:end, so the total here is current.
+        // onCost settles before agent:end, so this call's spend is final here.
+        // Retried attempts share the engine index, so a retried call bills the
+        // work it discarded — the same reading the run's own total takes.
         const spent =
           event.outcome === 'completed' ||
           event.outcome === 'failed' ||
           event.outcome === 'skipped'
-            ? getLiveCostUsd?.()
+            ? getCallCostUsd?.(event.index)
             : undefined;
         // Live terminal events carry all attempt metadata known by the engine.
         // Cached replays report none because they perform no live attempt.
@@ -383,7 +406,10 @@ export async function runPersistedWorkflowScriptWithProgress(
       } else if (status === 'running') {
         markPhaseFailed(task.phase);
         const error = 'The workflow ended before this task completed.';
-        const totalCostUsd = getLiveCostUsd?.();
+        // Never settled, so its call is still live and still names its index.
+        const index = liveCalls.get(task.id)?.index;
+        const totalCostUsd =
+          index === undefined ? undefined : getCallCostUsd?.(index);
         const failedTask: WorkflowTaskProgress = {
           ...task,
           status: 'failed',

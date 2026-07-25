@@ -139,7 +139,10 @@ export function createWorkflowScriptStrategy(
       // identity so discarded retry/skip/failure work is still billed while a
       // pure journal replay settles zero.
       const observedCosts = new Map<string, number>();
-      let liveCostUsd = 0;
+      // The same attempts folded by engine call index, which is what a per-task
+      // progress line reports. Kept beside the identity-keyed map rather than
+      // derived from it: journal reconciliation owns that key and must keep it.
+      const observedCallCosts = new Map<number, number>();
       // Live grandchild execution id → engine call index, maintained by the
       // runner's child-active hook. The identity bridge that lets an
       // execution-id-keyed host action reach the engine's index-keyed control.
@@ -152,7 +155,10 @@ export function createWorkflowScriptStrategy(
             identity,
             (observedCosts.get(identity) ?? 0) + cost,
           );
-          liveCostUsd += cost;
+          observedCallCosts.set(
+            invocation.index,
+            (observedCallCosts.get(invocation.index) ?? 0) + cost,
+          );
         },
         onChildActive: (grandchildExecutionId, invocation, active) => {
           if (active) {
@@ -176,7 +182,7 @@ export function createWorkflowScriptStrategy(
           }),
           signal: abortController.signal,
           runAgent,
-          getLiveCostUsd: () => liveCostUsd,
+          getCallCostUsd: (index) => observedCallCosts.get(index),
           onActivity: runLog.add,
           onControl: (control) => {
             // Translate an execution-id-keyed host request into an

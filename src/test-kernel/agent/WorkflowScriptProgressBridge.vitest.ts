@@ -505,24 +505,26 @@ return await agent('Review the argument', { id: 'review-task' })`;
     }
   });
 
-  it('renders the running total on live finish lines only', async () => {
+  it("bills each task its own call's cost, not the run total so far", async () => {
     const store = getExecutionStore(executionId);
     const script = `${meta}
 await agent('First')
 return await agent('Second')`;
     const { trace, events } = recordingTrace();
-    let liveCostUsd = 0;
+    const callCosts = new Map<number, number>();
     await runPersistedWorkflowScriptWithProgress(trace, {
       store,
       checkpointId: 'live-cost',
       script,
-      runAgent: async () => {
-        liveCostUsd += 0.05;
+      runAgent: async ({ index }: WorkflowAgentInvocation) => {
+        callCosts.set(index, (callCosts.get(index) ?? 0) + 0.05);
         return 'done';
       },
-      getLiveCostUsd: () => liveCostUsd,
+      getCallCostUsd: (index) => callCosts.get(index),
     });
 
+    // Two calls costing the same report the same, in either position: the
+    // second must not read as $0.10 just because it settled later.
     expect(workflowTaskEvent(events, 'First', 'completed')?.task).toMatchObject(
       {
         totalCostUsd: 0.05,
@@ -531,7 +533,7 @@ return await agent('Second')`;
     expect(
       workflowTaskEvent(events, 'Second', 'completed')?.task,
     ).toMatchObject({
-      totalCostUsd: 0.1,
+      totalCostUsd: 0.05,
     });
 
     clearStoreCache();
@@ -541,7 +543,8 @@ return await agent('Second')`;
       checkpointId: 'live-cost',
       script,
       runAgent: vi.fn(() => Promise.reject(new Error('must not run'))),
-      getLiveCostUsd: () => 0,
+      // A pure replay observes no attempt, so no call has a cost.
+      getCallCostUsd: () => undefined,
     });
 
     expect(
@@ -552,7 +555,6 @@ return await agent('Second')`;
   it('enriches live finish lines with the reported model and duration', async () => {
     const { trace, events } = recordingTrace();
     const activities: string[] = [];
-    let liveCostUsd = 0;
     await runPersistedWorkflowScriptWithProgress(trace, {
       store: getExecutionStore(executionId),
       checkpointId: 'model-duration',
@@ -560,10 +562,9 @@ return await agent('Second')`;
 return await agent('Draft')`,
       runAgent: async (invocation: WorkflowAgentInvocation) => {
         invocation.reportModel?.('deepseekT');
-        liveCostUsd += 0.02;
         return 'done';
       },
-      getLiveCostUsd: () => liveCostUsd,
+      getCallCostUsd: (index) => (index === 0 ? 0.02 : undefined),
       onActivity: (line) => activities.push(line),
     });
 
@@ -575,9 +576,7 @@ return await agent('Draft')`,
       },
     );
     expect(activities).toContainEqual(
-      expect.stringMatching(
-        /^Finished: Draft · deepseekT · .+ · \$0\.020 total$/,
-      ),
+      expect.stringMatching(/^Finished: Draft · deepseekT · .+ · \$0\.020$/),
     );
   });
 
@@ -608,7 +607,7 @@ return await agent('Late skip')`,
       onControl: (handle) => {
         control = handle;
       },
-      getLiveCostUsd: () => 0.04,
+      getCallCostUsd: (index) => (index === 0 ? 0.04 : undefined),
       onActivity: (line) => activities.push(line),
     });
 
@@ -626,9 +625,7 @@ return await agent('Late skip')`,
     });
     expect(activities).toContain('Running: Late skip');
     expect(activities).toContainEqual(
-      expect.stringMatching(
-        /^Skipped: Late skip · kimiK2 · .+ · \$0\.040 total$/,
-      ),
+      expect.stringMatching(/^Skipped: Late skip · kimiK2 · .+ · \$0\.040$/),
     );
   });
 
@@ -726,7 +723,7 @@ return await agent('Abort', { phase: 'Execution' })`,
           invocation.reportModel?.('abort-model');
           throw new WorkflowRunAbortError('fatal runner error');
         },
-        getLiveCostUsd: () => 0.06,
+        getCallCostUsd: (index) => (index === 0 ? 0.06 : undefined),
         onActivity: (line) => activities.push(line),
       }),
     ).rejects.toThrow('fatal runner error');
@@ -748,7 +745,7 @@ return await agent('Abort', { phase: 'Execution' })`,
     });
     expect(activities).toContainEqual(
       expect.stringMatching(
-        /^Failed: Abort · abort-model · .+ · \$0\.060 total — fatal runner error$/,
+        /^Failed: Abort · abort-model · .+ · \$0\.060 — fatal runner error$/,
       ),
     );
   });
@@ -772,7 +769,9 @@ return 'guest success'`,
           markStarted?.();
           return await new Promise<never>(() => undefined);
         },
-        getLiveCostUsd: () => 0.03,
+        // Index-aware: the cleanup path must resolve the abandoned call's own
+        // index from the still-live call it never settled.
+        getCallCostUsd: (index) => (index === 0 ? 0.03 : undefined),
         onActivity: (line) => activities.push(line),
       });
 
@@ -795,7 +794,7 @@ return 'guest success'`,
       });
       expect(activities).toContain('Running: Orphaned');
       expect(activities).toContain(
-        'Failed: Orphaned · $0.030 total — The workflow ended before this task completed.',
+        'Failed: Orphaned · $0.030 — The workflow ended before this task completed.',
       );
     } finally {
       vi.useRealTimers();
