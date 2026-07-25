@@ -25,7 +25,7 @@ the **platform ports / export surface**.
 
 ## Headline
 
-**The area is already unusually well-aligned and is *not* over-abstracted.** The
+**The area is already unusually well-aligned and is _not_ over-abstracted.** The
 repo's anti-abstraction guardrails (no barrels, no re-export shims, single-caller
 extractions banned, factories need multiple callers, exports need a consumer) are
 visibly holding across all four areas. The remaining work is **boundary declaration
@@ -38,7 +38,7 @@ Verified-clean, with evidence:
   zone). The only `vscode` hits under `src/` are in `src/test-kernel/` doubles.
 - **One coherent logger.** `src/logger/logUtils.ts` (~217 lines) with a
   **host-injected sink** (`setOutputChannelFactory`) and a console fallback — the
-  pluggable-sink shape an SDK needs. Deliberately *not* a `Platform` port
+  pluggable-sink shape an SDK needs. Deliberately _not_ a `Platform` port
   (documented at `src/platform/platform.ts:31-34`). No competing logger wrappers.
   `console.*` in core is effectively zero (`src/agent/` = 2, both the one
   deliberate leaf-module `console.warn` + its explanatory comment; `src/model/` =
@@ -65,7 +65,7 @@ cut. The layering inside the `agent` subsystem is a cycle, not a stack:
   (`ResponseCycleFlow.ts:25`).
 - `runtime` → **`implementations/flows`**: `executeAgent.ts:9-11`,
   `SessionResumeRetrieval.ts:25-26`.
-- `core/flows` → **`@tools`** (a *value*, not a type):
+- `core/flows` → **`@tools`** (a _value_, not a type):
   `CommonCycleTypes.ts:20` imports `formatPostCompactionContext` from
   `@tools/subagentResults`.
 - `runtime` → **`@tools`**: 14 imports across `agentToolResolution.ts`,
@@ -76,7 +76,7 @@ freezes the **coarse** `agent → tools` / `tools → agent` value edges as acce
 but it collapses the whole `agent` subsystem to one node, so the finer
 `core/flows ↔ runtime ↔ tools` cycle is **untracked**. Everything here is
 host-agnostic (no `vscode`), so it doesn't violate the platform rules — but
-*host-agnostic ≠ cleanly extractable*: you cannot lift `core` into a package
+_host-agnostic ≠ cleanly extractable_: you cannot lift `core` into a package
 without also lifting `runtime/RunContext`, `runtime/textConnection`, and the
 `@tools` formatting helpers, or inverting those edges behind injected ports.
 
@@ -87,7 +87,12 @@ rather than importing them from `core/flows`, and add an **intra-`agent` edge
 ratchet** so the cycle can't regrow. Absent a package cut, this is documentation,
 not urgent work.
 
-### 2. Dead `ModelHandlerOpenAIReasoning` route — safe delete (persisted-enum caution)
+### 2. Dead `ModelHandlerOpenAIReasoning` route — RESOLVED (deleted)
+
+> **Status: fixed.** Both the enum member and the switch case were deleted after
+> the verification below. `ReasoningModelHandlerOpenAI` itself stays — it remains
+> the base class of the four OpenAI-compatible reasoning handlers, so the dead
+> code was only the _direct instantiation route_, never the class.
 
 `'ModelHandlerOpenAIReasoning'` is declared in the persisted compatibility-key enum
 (`modelHandlerCompatibilityKey.ts:10`) and has a live `switch` case constructing
@@ -99,12 +104,43 @@ references outside the enum declaration + switch case (grep across `src/` +
 `packages/`, tests included — confirmed: exactly 3 references, all inside those two
 sites).
 
-**Recommendation:** delete both the enum member and the switch case. Caveat: it's a
-persisted-format union, so confirm via `git blame`/history that no *earlier* version
-ever emitted the key before removing (a value never produced can't have been
-persisted, but the enum is load-bearing for resume routing — verify first).
+**Verification performed before deleting** (the enum is load-bearing for resume
+routing, so this was checked on every axis):
 
-### 3. `AgentFinalResult` field-rename reconciliation tax — minor cleanup
+- `git log --all -S "ModelHandlerOpenAIReasoning"` shows the string was introduced
+  by #9095 and was **producer-less from the moment it was added** — no shipped
+  version could have persisted it.
+- The persisted-key read path degrades gracefully anyway:
+  `modelHandlerCompatibilityInference.ts:140` uses `.nullish().safeParse(...)` and
+  falls back to message-shape inference when the key doesn't parse.
+- Zero test references; zero references anywhere outside the two deleted sites.
+
+### 3. `AgentFinalResult` field-rename — WITHDRAWN, the rename is load-bearing
+
+> **Status: withdrawn after deeper inspection.** The initial pass called this a
+> low-risk cleanup. It is not — the rename is required by the persisted contract,
+> and collapsing it would be a data-compatibility break. Recorded here so the idea
+> isn't re-proposed.
+
+`AgentFinalResult` is not merely an in-memory envelope: it **is the canonical
+persisted result format**. `resultMeta.ts:39-53` embeds `AgentFinalResultSchema`
+directly in `SubagentResultMetaSchema.result`, and `WorkflowAgentFinalResultSchema`
+in `CliWorkflowResultMetaSchema.result`. So `response`/`files` are the field names
+already written to disk in every existing run record.
+
+Renaming them to `lastResponse`/`touchedFiles` would mean every existing canonical
+record fails `ResultMetaSchema.safeParse` (strict object, unknown key) and falls
+through to `LegacyPersistedResultMetaSchema` — where it **also** fails, because
+`LegacySubagentResultMetaSchema` is derived from a `z.strictObject` that has no
+`parentExecutionId` field (`resultMeta.ts:43,114-120`). The result would be a hard
+parse throw on historical subagent records, not a graceful downgrade.
+
+The reconciler (`projectToolUseFinalTextFields`, `firstDefinedArray`) therefore
+earns its keep: it exists because the flow vocabulary (`lastResponse`/`touchedFiles`)
+and the persisted vocabulary (`response`/`files`) are genuinely two contracts, and
+legacy records in the wild carry either spelling (`LegacyAgentResultFieldsSchema`
+accepts all four names, `resultMeta.ts:88-101`). It is already correctly
+single-sourced across both builders. **Leave it alone.**
 
 The result-envelope chain is **not** redundant re-wrapping — `AgentFlowResult` →
 `AgentRuntimeFlowResult` (adds the non-terminal `WAITING` arm, 5 subagent-suspension
@@ -112,7 +148,7 @@ sites) → `AgentFinalResult` (post-artifact envelope adding `diffs`, coerced `c
 default-filled arrays; 3 real callers) are distinct lifecycle stages. Keep them.
 
 The nit is narrow: `AgentFinalResult` renames `lastResponse`→`response` and
-`touchedFiles`→`files` (`AgentFinalResult.ts:66-102`). That rename is the *sole*
+`touchedFiles`→`files` (`AgentFinalResult.ts:66-102`). That rename is the _sole_
 reason `projectToolUseFinalTextFields` + `firstDefinedArray` exist, and it forces
 dual-name branching downstream (`storage/resultMeta.ts:201-202` branches on
 `record.response || record.lastResponse`; `nativeSubagentStrategy.ts:90` still emits
@@ -145,11 +181,11 @@ The de-facto public surface is already coherent — the missing piece is an
 `finalizeRunTerminal`/`runFlowWithLifecycle` (lifecycle choreography),
 `buildAgentLaunchContext`/`withExecutionRunContext` (launch assembly), the concrete
 `ExecutionRegistry` / `AgentExecutionHandle` classes (publish the `AgentRunHandle`
-*interface*, not the class), and the emit-name registries
+_interface_, not the class), and the emit-name registries
 (`runtimeInteractionEvents`/`runtimePresentationEvents`/`runFactEvents` — wire
 vocabularies).
 
-**Straddling seams to resolve for a *hard* boundary** (not violations today):
+**Straddling seams to resolve for a _hard_ boundary** (not violations today):
 
 - The `@common/state` and `@common/webview` aliases resolve into
   `packages/extension` while `@common/*` resolves into `src/common` — the one alias
@@ -182,7 +218,7 @@ subagent boundaries already exist as strategy seams:
 - Terminal choreography is exactly-once, single-owner (`finalizeRunTerminal`,
   atomic `claimTerminalFinalize`).
 
-**The one tangle** is the same as finding #1: subagent *delivery formatting*
+**The one tangle** is the same as finding #1: subagent _delivery formatting_
 (`@tools/subagentResults`, `@tools/childRunDelivery`, `@tools/subagentDeliveryFormat`)
 lives in `@tools` but is driven from `runtime/childRunLoop` and even `core/flows`. In
 an SDK cut, "how a subagent's result is formatted and delivered to its parent" wants
@@ -211,7 +247,7 @@ Clean and well-factored; the only defect is finding #2 above.
 - `ModelFactory` is a justified factory (exhaustive `Record<ModelProvider,…>` +
   one pure key predicate the live path switches on), not over-engineering.
 
-## What is explicitly *not* worth doing
+## What is explicitly _not_ worth doing
 
 - Don't resurrect the retired package-fence / `RunDescriptor` / `ModelCell` /
   `RetryGate` proposals — `main` chose the lighter path on purpose.
@@ -223,10 +259,9 @@ Clean and well-factored; the only defect is finding #2 above.
 
 ## Recommended next steps (small, ordered)
 
-1. **Confirm and delete** the dead `ModelHandlerOpenAIReasoning` route (finding #2),
-   after a `git`-history check that the persisted key was never emitted.
-2. **Optional:** align `AgentFinalResult` field names to delete the reconciler and
-   downstream dual-name branching (finding #3).
+1. ~~Delete the dead `ModelHandlerOpenAIReasoning` route~~ — **done** (finding #2).
+2. ~~Align `AgentFinalResult` field names~~ — **withdrawn**, the rename is required
+   by the persisted contract (finding #3). No action.
 3. **Only if a real `@texra/core` cut is pursued:** invert the intra-`agent`
    dependency web (finding #1) — relocate/inject `RunContext`, `textConnection`, and
    the `@tools/subagentResults` formatting helper behind ports — and add an
@@ -235,8 +270,8 @@ Clean and well-factored; the only defect is finding #2 above.
 
 ---
 
-*Method: three parallel evidence-gathering passes (core+runtime, model handlers,
+_Method: three parallel evidence-gathering passes (core+runtime, model handlers,
 logger+surface), each required to back every claim with `file:line` and grep'd
 caller counts, and to state areas found clean explicitly rather than invent
 problems. Findings cross-checked against the retired PRDs and the current ratchet
-baselines.*
+baselines._
