@@ -177,10 +177,8 @@ export function replayTrace(trace: TraceDocument): void {
         // ghost-stream hydrate convention documented on StreamSnapshot) —
         // an archived trace has no in-flight children regardless of what a
         // stale snapshot recorded.
-        activeSubagents: [],
-        finishedSubagentCount: snapshot.finishedSubagentCount,
-        activeProcesses: [],
-        finishedProcessCount: snapshot.finishedProcessCount,
+        subagents: [],
+        processes: [],
       },
     },
   };

@@ -84,10 +84,8 @@ describe('SyncStreamContentMessageSchema', () => {
       conversationProgress: { toolCallCount: 0 },
       roundStage: null,
       badges: {
-        activeSubagents: [],
-        finishedSubagentCount: 0,
-        activeProcesses: [],
-        finishedProcessCount: 0,
+        subagents: [],
+        processes: [],
       },
       parentStreamId: null,
     },

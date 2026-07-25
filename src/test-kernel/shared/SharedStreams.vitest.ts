@@ -90,21 +90,26 @@ describe('buildStreamMetadata', () => {
       status: STREAM_STATUS.READY,
       conversationProgress: { toolCallCount: 0 },
       roundStage: null,
-      activeSubagents: [],
-      finishedSubagentCount: 0,
-      activeProcesses: [],
-      finishedProcessCount: 0,
+      subagents: [],
+      processes: [],
     });
     expect(Object.hasOwn(metadata, 'substate')).toBe(true);
     expect(metadata.substate).toBeUndefined();
   });
 
-  it('preserves supplied status, progress, child badges, and timestamps', () => {
+  it('preserves supplied status, progress, child rosters, and timestamps', () => {
     const child: ActiveChildInfo = {
       kind: 'process',
       executionId: 'agent-1',
       agentName: 'review',
       status: STREAM_STATUS.RUNNING,
+    };
+    const finishedChild: ActiveChildInfo = {
+      kind: 'process',
+      executionId: 'agent-0',
+      agentName: 'review',
+      status: STREAM_PHASE.COMPLETED,
+      finishedAt: 122,
     };
 
     expect(
@@ -115,10 +120,8 @@ describe('buildStreamMetadata', () => {
         lastTimestamp: 123,
         conversationProgress: { toolCallCount: 5 },
         roundStage: { index: 1, total: 3 },
-        activeSubagents: [child],
-        finishedSubagentCount: 1,
-        activeProcesses: [child],
-        finishedProcessCount: 3,
+        subagents: [child, finishedChild],
+        processes: [child],
       }),
     ).toEqual({
       kind: AgentCategory.ToolUse,
@@ -127,10 +130,8 @@ describe('buildStreamMetadata', () => {
       lastTimestamp: 123,
       conversationProgress: { toolCallCount: 5 },
       roundStage: { index: 1, total: 3 },
-      activeSubagents: [child],
-      finishedSubagentCount: 1,
-      activeProcesses: [child],
-      finishedProcessCount: 3,
+      subagents: [child, finishedChild],
+      processes: [child],
     });
   });
 });

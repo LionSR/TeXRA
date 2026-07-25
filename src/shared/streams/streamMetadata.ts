@@ -3,7 +3,6 @@ import { z } from 'zod';
 import {
   AgentCategorySchema,
   DEFAULT_CONVERSATION_PROGRESS,
-  DEFAULT_FINISHED_CHILD_COUNT,
   DEFAULT_STREAM_METADATA_STATUS,
   StreamMetadataSchema,
   type StreamMetadata,
@@ -33,11 +32,7 @@ export function buildStreamMetadata(
       ...DEFAULT_CONVERSATION_PROGRESS,
     },
     roundStage: inputs.roundStage ?? null,
-    activeSubagents: inputs.activeSubagents ?? [],
-    finishedSubagentCount:
-      inputs.finishedSubagentCount ?? DEFAULT_FINISHED_CHILD_COUNT,
-    activeProcesses: inputs.activeProcesses ?? [],
-    finishedProcessCount:
-      inputs.finishedProcessCount ?? DEFAULT_FINISHED_CHILD_COUNT,
+    subagents: inputs.subagents ?? [],
+    processes: inputs.processes ?? [],
   };
 }
