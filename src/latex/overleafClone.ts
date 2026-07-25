@@ -135,14 +135,14 @@ export async function cloneOverleafProject(
   workspacePath: string,
   ports: OverleafCloneWorkflowPorts,
 ): Promise<OverleafCloneOutcome> {
-  const token = await resolveOverleafToken(remote, ports);
-  if (token.status !== 'ready') return token;
-
   const preconditionFailure = await checkOverleafClonePreconditions(
     workspacePath,
     ports,
   );
   if (preconditionFailure) return preconditionFailure;
+
+  const token = await resolveOverleafToken(remote, ports);
+  if (token.status !== 'ready') return token;
 
   const remoteUrl = buildAuthenticatedRemoteUrl(remote, token.credential);
   const label = remote.isOverleaf ? 'Overleaf' : 'ShareLaTeX';
