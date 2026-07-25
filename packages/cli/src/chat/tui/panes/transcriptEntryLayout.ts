@@ -2,6 +2,7 @@
 // budgeting, static scrollback, and print-once full output.
 
 import type { WorkflowTaskProgress } from '@shared/schemas';
+import { formatWorkflowPhaseHeading } from '@shared/copy/workflowTask';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { renderAnsiMarkdown } from '../render/ansiMarkdown';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
@@ -236,13 +237,9 @@ function entryLines(
       return richProjection ? lines : wrapDisplayLines(lines, columns);
     }
     case 'phase': {
-      const suffix =
-        entry.phaseIndex !== undefined && entry.phaseTotal !== undefined
-          ? ` (${entry.phaseIndex + 1}/${entry.phaseTotal})`
-          : '';
       const geometry = ROLE_GEOMETRY.phase;
       return wrapWithPrefix(
-        `${STATUS_DIAMOND} ${entry.phaseLabel}${suffix}`,
+        `${STATUS_DIAMOND} ${formatWorkflowPhaseHeading(entry)}`,
         columns,
         geometry.firstPrefix,
         geometry.continuationPrefix,
