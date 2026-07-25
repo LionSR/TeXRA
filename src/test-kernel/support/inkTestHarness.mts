@@ -95,18 +95,28 @@ export async function renderOutputAtTerminalSize(
   });
   const settled =
     options.until ?? ((output: string) => output.trim().length > 0);
-  const currentFrame = (): string => {
+  const currentFrame = (): string | undefined => {
     for (let index = stdout.writes.length - 1; index >= 0; index -= 1) {
-      const frame = stripAnsi(stdout.writes[index] ?? '');
-      if (frame.trim().length > 0) return frame;
+      const write = stdout.writes[index];
+      if (write === '') return '';
+      if (write === undefined) continue;
+      const frame = stripAnsi(write);
+      if (frame.length > 0) return frame;
     }
-    return '';
+    return undefined;
   };
+  const timeoutMessage = `Ink rendered no matching frame at ${columns} columns`;
   try {
-    await waitForCondition(() => settled(currentFrame()), {
-      timeoutMessage: `Ink rendered no matching frame at ${columns} columns`,
-    });
-    return currentFrame();
+    await waitForCondition(
+      () => {
+        const frame = currentFrame();
+        return frame !== undefined && settled(frame);
+      },
+      { timeoutMessage },
+    );
+    const frame = currentFrame();
+    if (frame === undefined) throw new Error(timeoutMessage);
+    return frame;
   } finally {
     instance.unmount();
   }
