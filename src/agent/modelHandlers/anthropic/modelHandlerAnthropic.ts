@@ -214,6 +214,19 @@ function collectFileReferenceCounts(
   return counts;
 }
 
+/**
+ * Build a text content block.
+ *
+ * Nine sites used to hand-roll this literal with an `as ContentBlockParam`
+ * cast. The cast was never needed — `citations` and `cache_control` are both
+ * optional on `TextBlockParam` — it only suppressed the union inference that
+ * an explicit return type resolves. Naming the constructor keeps the shape in
+ * one place and keeps the unchecked cast out of the file.
+ */
+function textBlock(text: string): ContentBlockParam {
+  return { type: 'text', text };
+}
+
 export class ModelHandlerAnthropic extends ModelHandler<
   MessageParam,
   BetaUsage,
@@ -1224,7 +1237,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
   protected createAssistantMessageForPrefillText(text: string): MessageParam {
     return {
       role: 'assistant',
-      content: [{ type: 'text', text } as ContentBlockParam],
+      content: [textBlock(text)],
     };
   }
 
@@ -1236,23 +1249,20 @@ export class ModelHandlerAnthropic extends ModelHandler<
     if (placement === 'continuation') {
       messages.push({
         role: 'user',
-        content: [{ type: 'text', text } as ContentBlockParam],
+        content: [textBlock(text)],
       });
       return;
     }
 
     const lastMessage = messages.at(-1);
     if (lastMessage && Array.isArray(lastMessage.content)) {
-      lastMessage.content.push({
-        type: 'text',
-        text,
-      } as ContentBlockParam);
+      lastMessage.content.push(textBlock(text));
       return;
     }
 
     messages.push({
       role: 'user',
-      content: [{ type: 'text', text } as ContentBlockParam],
+      content: [textBlock(text)],
     });
   }
 
@@ -1290,17 +1300,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
         }
       }
 
-      targetMessage.content.push({
-        type: 'text',
-        text,
-      } as ContentBlockParam);
+      targetMessage.content.push(textBlock(text));
     } else {
-      targetMessage.content = [
-        {
-          type: 'text',
-          text: options.fallbackText ?? text,
-        } as ContentBlockParam,
-      ];
+      targetMessage.content = [textBlock(options.fallbackText ?? text)];
     }
 
     if (options.afterContinuationPrompt) {
@@ -1350,10 +1352,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       workspaceState.resetReasoning();
     }
 
-    content.push({
-      type: 'text',
-      text: workspaceState.assembly.accumulatedOutput,
-    } as ContentBlockParam);
+    content.push(textBlock(workspaceState.assembly.accumulatedOutput));
 
     return { role: 'assistant', content };
   }
@@ -1733,10 +1732,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       if (firstTextBlock) {
         firstTextBlock.text = text + firstTextBlock.text;
       } else {
-        lastUserMsg.content.unshift({
-          type: 'text',
-          text,
-        } as ContentBlockParam);
+        lastUserMsg.content.unshift(textBlock(text));
       }
     }
   }
@@ -1757,10 +1753,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     if (formattedMedia.length === 0) return [];
 
     if (typeof lastUserMsg.content === 'string') {
-      lastUserMsg.content = [
-        ...formattedMedia,
-        { type: 'text', text: lastUserMsg.content } as ContentBlockParam,
-      ];
+      lastUserMsg.content = [...formattedMedia, textBlock(lastUserMsg.content)];
     } else if (Array.isArray(lastUserMsg.content)) {
       lastUserMsg.content.unshift(...formattedMedia);
     }

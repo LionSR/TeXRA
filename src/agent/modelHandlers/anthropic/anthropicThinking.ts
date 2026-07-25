@@ -43,60 +43,143 @@ const THINKING_TEMPERATURE_EXCLUDED_PATTERNS = [
   'claude-mythos-',
 ];
 
-const isClaudeOpus46 = (fullName: string): boolean =>
-  fullName.startsWith(OPUS_46_FULLNAME);
-
-const isClaudeOpus47 = (fullName: string): boolean =>
-  fullName.startsWith(OPUS_47_FULLNAME);
-
-const isClaudeOpus48 = (fullName: string): boolean =>
-  fullName.startsWith(OPUS_48_FULLNAME);
-
-const isClaudeOpus5 = (fullName: string): boolean =>
-  fullName.startsWith(OPUS_5_FULLNAME);
-
-const isClaudeSonnet46 = (fullName: string): boolean =>
-  fullName.startsWith(SONNET_46_FULLNAME);
-
-const isClaudeSonnet5 = (fullName: string): boolean =>
-  fullName.startsWith(SONNET_5_FULLNAME);
+/** Per-family request traits, selected by `fullName` prefix. */
+interface AnthropicModelTraits {
+  /** Adaptive thinking via the effort parameter, rather than budget_tokens. */
+  adaptiveThinking: boolean;
+  /** Anthropic's native server-side context compaction. */
+  compactionEligible: boolean;
+  /**
+   * Highest effort tier the family accepts. `'xhigh'` families take the
+   * distinct "extra" tier the SDK added in 0.100.0; `'max'` families predate
+   * that split and fold a requested `xhigh` into `max`; `'high'` families cap
+   * there.
+   */
+  maxEffort: NonNullable<BetaOutputConfig['effort']> &
+    ('high' | 'max' | 'xhigh');
+  /**
+   * Whether `display: 'summarized'` must be requested. These families default
+   * to `'omitted'`, which would suppress reasoning output entirely.
+   */
+  summarizedDisplay: boolean;
+}
 
 /**
- * Mythos-class models (Fable 5 and Mythos 5) share one request surface: adaptive
- * thinking is always on, manual budget_tokens and `thinking: {type: "disabled"}`
- * both return 400, raw chain-of-thought is never returned (display defaults to
- * "omitted"), and sampling parameters are rejected. They also support the same
- * effort tiers as Opus 4.8 and Opus 5 (including the distinct "xhigh").
+ * One row per model family, replacing the five hand-maintained boolean chains
+ * these traits used to be spread across. Adding a model is a single new row
+ * instead of an edit to every predicate that happens to list its siblings —
+ * the drift mode that made the old chains easy to get subtly wrong.
+ *
+ * Mythos-class models (Fable 5, Mythos 5) share one request surface: adaptive
+ * thinking is always on, manual budget_tokens and `thinking: {type:
+ * "disabled"}` both return 400, raw chain-of-thought is never returned, and
+ * sampling parameters are rejected. They accept the same effort tiers as
+ * Opus 4.8 / Opus 5.
  */
-const isMythosClass = (fullName: string): boolean =>
-  fullName.startsWith(FABLE_5_FULLNAME) ||
-  fullName.startsWith(MYTHOS_5_FULLNAME);
+const ANTHROPIC_MODEL_TRAITS: ReadonlyArray<
+  readonly [prefix: string, traits: AnthropicModelTraits]
+> = [
+  [
+    OPUS_46_FULLNAME,
+    {
+      adaptiveThinking: true,
+      compactionEligible: true,
+      maxEffort: 'max',
+      summarizedDisplay: false,
+    },
+  ],
+  [
+    OPUS_47_FULLNAME,
+    {
+      adaptiveThinking: true,
+      compactionEligible: true,
+      maxEffort: 'max',
+      summarizedDisplay: true,
+    },
+  ],
+  [
+    OPUS_48_FULLNAME,
+    {
+      adaptiveThinking: true,
+      compactionEligible: true,
+      maxEffort: 'xhigh',
+      summarizedDisplay: true,
+    },
+  ],
+  [
+    OPUS_5_FULLNAME,
+    {
+      adaptiveThinking: true,
+      compactionEligible: true,
+      maxEffort: 'xhigh',
+      summarizedDisplay: true,
+    },
+  ],
+  [
+    SONNET_46_FULLNAME,
+    {
+      adaptiveThinking: true,
+      compactionEligible: true,
+      maxEffort: 'high',
+      summarizedDisplay: false,
+    },
+  ],
+  [
+    SONNET_5_FULLNAME,
+    {
+      adaptiveThinking: true,
+      compactionEligible: true,
+      maxEffort: 'xhigh',
+      summarizedDisplay: true,
+    },
+  ],
+  [
+    FABLE_5_FULLNAME,
+    {
+      adaptiveThinking: true,
+      compactionEligible: true,
+      maxEffort: 'xhigh',
+      summarizedDisplay: true,
+    },
+  ],
+  [
+    MYTHOS_5_FULLNAME,
+    {
+      adaptiveThinking: true,
+      compactionEligible: true,
+      maxEffort: 'xhigh',
+      summarizedDisplay: true,
+    },
+  ],
+];
+
+/** Traits for models with no matching row: manual thinking, capped at 'high'. */
+const DEFAULT_MODEL_TRAITS: AnthropicModelTraits = {
+  adaptiveThinking: false,
+  compactionEligible: false,
+  maxEffort: 'high',
+  summarizedDisplay: false,
+};
+
+function traitsFor(fullName: string): AnthropicModelTraits {
+  return (
+    ANTHROPIC_MODEL_TRAITS.find(([prefix]) =>
+      fullName.startsWith(prefix),
+    )?.[1] ?? DEFAULT_MODEL_TRAITS
+  );
+}
 
 /**
  * Whether this model supports adaptive thinking with the effort parameter.
- * Per Anthropic docs, Opus 4.6, Opus 4.7, Opus 4.8, Opus 5, Sonnet 4.6,
- * Sonnet 5, and the Mythos-class models support adaptive thinking. Opus 4.7+,
- * Sonnet 5, and Mythos-class models only accept adaptive thinking — manual
- * budget_tokens returns 400.
+ * Opus 4.7+, Sonnet 5, and Mythos-class models only accept adaptive thinking —
+ * manual budget_tokens returns 400.
  */
 export const supportsAdaptiveThinking = (fullName: string): boolean =>
-  isClaudeOpus46(fullName) ||
-  isClaudeOpus47(fullName) ||
-  isClaudeOpus48(fullName) ||
-  isClaudeOpus5(fullName) ||
-  isClaudeSonnet46(fullName) ||
-  isClaudeSonnet5(fullName) ||
-  isMythosClass(fullName);
+  traitsFor(fullName).adaptiveThinking;
 
 /** Whether this model supports Anthropic's native server-side context compaction. */
 export const isCompactionEligibleModel = (fullName: string): boolean =>
-  isClaudeOpus46(fullName) ||
-  isClaudeOpus47(fullName) ||
-  isClaudeOpus48(fullName) ||
-  isClaudeOpus5(fullName) ||
-  isClaudeSonnet46(fullName) ||
-  isClaudeSonnet5(fullName) ||
-  isMythosClass(fullName);
+  traitsFor(fullName).compactionEligible;
 
 /**
  * Whether temperature must be removed when thinking is enabled.
@@ -124,35 +207,17 @@ export function mapAnthropicEffort(
     return 'high';
   }
 
+  const { maxEffort } = traitsFor(fullName);
   switch (reasoningEffort) {
     case 'max':
-      // The top tier ("Max"). Opus 4.6/4.7/4.8/5, Sonnet 5, and Mythos-class
-      // models all accept Anthropic's 'max' effort; everything else caps at
-      // 'high'.
-      return isClaudeOpus5(fullName) ||
-        isClaudeOpus48(fullName) ||
-        isClaudeOpus47(fullName) ||
-        isClaudeOpus46(fullName) ||
-        isClaudeSonnet5(fullName) ||
-        isMythosClass(fullName)
-        ? 'max'
-        : 'high';
+      // The top tier ("Max"). Every family that accepts anything above 'high'
+      // accepts 'max'; the rest cap at 'high'.
+      return maxEffort === 'high' ? 'high' : 'max';
     case 'xhigh':
-      // Opus 4.8/5, Sonnet 5, and the Mythos-class models expose the distinct
-      // 'xhigh' ("extra") effort tier the SDK added in 0.100.0, which is exactly
-      // what TeXRA's "Extra High" selector means — map to it directly. Opus
-      // 4.6/4.7 predate the tier split and only accept 'max'; everything else
-      // caps at 'high'.
-      if (
-        isClaudeOpus5(fullName) ||
-        isClaudeOpus48(fullName) ||
-        isClaudeSonnet5(fullName) ||
-        isMythosClass(fullName)
-      )
-        return 'xhigh';
-      return isClaudeOpus46(fullName) || isClaudeOpus47(fullName)
-        ? 'max'
-        : 'high';
+      // TeXRA's "Extra High" maps straight to the family's ceiling: 'xhigh'
+      // where the SDK 0.100.0 tier split exists, 'max' on the families that
+      // predate it, 'high' everywhere else.
+      return maxEffort;
     case 'high':
       return 'high';
     case 'medium':
@@ -212,14 +277,10 @@ export function buildThinkingConfig({
     // all). Request 'summarized' so thinking still streams to the user — older
     // adaptive-thinking models (Opus 4.6, Sonnet 4.6) already emit reasoning by
     // default and are unaffected.
-    const thinking: ThinkingConfigResult['thinking'] =
-      isClaudeOpus47(fullName) ||
-      isClaudeOpus48(fullName) ||
-      isClaudeOpus5(fullName) ||
-      isClaudeSonnet5(fullName) ||
-      isMythosClass(fullName)
-        ? { type: 'adaptive', display: 'summarized' }
-        : { type: 'adaptive' };
+    const thinking: ThinkingConfigResult['thinking'] = traitsFor(fullName)
+      .summarizedDisplay
+      ? { type: 'adaptive', display: 'summarized' }
+      : { type: 'adaptive' };
 
     return { thinking, outputConfig: { effort }, removeTemperature };
   }
