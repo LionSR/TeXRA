@@ -80,7 +80,6 @@ interface ConversationRegionProps {
   readonly onKillExecution: (executionId: string) => void;
   readonly onSkipExecution: (executionId: string) => void;
   readonly onRetryExecution: (executionId: string) => void;
-  readonly onOpenProcessDetail: (executionId: string) => void;
   readonly onPrintStream: (streamId: StreamTabId) => void;
 }
 
@@ -93,7 +92,6 @@ export function ConversationRegion({
   onKillExecution,
   onSkipExecution,
   onRetryExecution,
-  onOpenProcessDetail,
   onPrintStream,
   onStaticTranscriptChange,
   renderFooterChrome,
@@ -150,7 +148,6 @@ export function ConversationRegion({
         queuedFollowUpPanelRows,
         rows,
       });
-  const activeProcesses = snapshot.childListTarget.slice?.activeProcesses ?? [];
   const hasTodosPlanPanel = shouldShowTodosPlanPanel({
     foregroundOpen,
     hasPlan: activeSlice?.plan != null,
@@ -182,15 +179,13 @@ export function ConversationRegion({
     todosPlanRows,
   } = allocateConversationBottomPanelRows({
     maxRows: BOTTOM_PANEL_MAX_ROWS,
-    processCount: foregroundOpen ? 0 : activeProcesses.length,
     sessionCount: foregroundOpen ? 0 : snapshot.sessionViews.length,
     childListFocused: snapshot.childListFocused,
     todosPlanContentRows,
     transcriptRows,
   });
   const conversationRows = transcriptRows - bottomPanelBudget;
-  const childListHasRows =
-    snapshot.sessionViews.length > 0 || activeProcesses.length > 0;
+  const childListHasRows = snapshot.sessionViews.length > 0;
   const childListVisible = childListHasRows && subagentRows > 1;
   useLayoutEffect(() => {
     if (snapshot.childListFocused && !foregroundOpen && !childListVisible) {
@@ -260,16 +255,13 @@ export function ConversationRegion({
               onKillExecution={onKillExecution}
               onSkipExecution={onSkipExecution}
               onRetryExecution={onRetryExecution}
-              onOpenProcessDetail={onOpenProcessDetail}
               onSelectionChange={onChildSelectionChange}
               onPrintStream={onPrintStream}
               pendingApprovals={snapshot.pendingApprovals}
               listRootStreamId={snapshot.childListTarget.streamId}
               selectedValue={snapshot.selectedChildValue}
               sessions={snapshot.sessionViews}
-              activeProcesses={activeProcesses}
               activeSubagentExecutionIds={snapshot.activeSubagentExecutionIds}
-              processOutput={snapshot.childListTarget.slice?.processOutput}
             />
             <TodosPlanPanel maxRows={todosPlanRows} />
           </Box>

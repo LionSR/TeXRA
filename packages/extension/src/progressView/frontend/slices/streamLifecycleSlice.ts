@@ -220,7 +220,6 @@ export const streamLifecycleHandlers = {
         draft.streamById = new Map();
         draft.streamStates = new Map();
         draft.streamLogs = new Map();
-        draft.processOutputs = new Map();
         draft.followupOptionsByStream = new Map();
         draft.activeStreamId = null;
       }),

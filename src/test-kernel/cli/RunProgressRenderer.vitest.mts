@@ -287,23 +287,6 @@ function handleStreamDescription(
   });
 }
 
-function handleActiveProcesses(
-  renderer: TestRunProgressRenderer,
-  parentStreamId: string,
-  processes: readonly ActiveChildInfo[],
-): void {
-  renderer?.handleSessionEvent({
-    scope: 'run',
-    streamId: parentStreamId as StreamTabId,
-    event: {
-      type: 'child.activity',
-      kind: 'processes',
-      parentStreamId: parentStreamId as StreamTabId,
-      items: processes,
-    },
-  });
-}
-
 function handleActiveSubagents(
   renderer: TestRunProgressRenderer,
   parentStreamId: string,
@@ -314,7 +297,6 @@ function handleActiveSubagents(
     streamId: parentStreamId as StreamTabId,
     event: {
       type: 'child.activity',
-      kind: 'subagents',
       parentStreamId: parentStreamId as StreamTabId,
       items: children,
     },
@@ -527,12 +509,12 @@ describe('CLI run progress renderer', () => {
 
     handleRunConfig(renderer, workflowTaskState());
     handleStreamDescription(renderer, 'stream-1', 'drafting');
-    handleActiveProcesses(renderer, 'stream-1', [
+    handleActiveSubagents(renderer, 'stream-1', [
       {
-        kind: 'process',
-        executionId: 'process-1',
-        agentName: 'bash',
-        toolName: 'Bash',
+        kind: 'subagent',
+        executionId: 'child-1',
+        childStreamId: 'child-stream',
+        agentName: 'review',
         status: 'running',
       },
     ]);
@@ -540,7 +522,7 @@ describe('CLI run progress renderer', () => {
     expect(output.text).toBe(
       'polish paper.tex · 0s\n' +
         'polish paper.tex · drafting · 0s\n' +
-        'polish paper.tex · drafting · tool: Bash · 0s\n',
+        'polish paper.tex · drafting · subagent: review · 0s\n',
     );
   });
 
@@ -600,7 +582,6 @@ describe('CLI run progress renderer', () => {
       streamId,
       event: {
         type: 'child.activity',
-        kind: 'subagents',
         parentStreamId: streamId,
         items: [
           {
@@ -826,24 +807,25 @@ describe('CLI run progress renderer', () => {
     );
 
     handleRunConfig(renderer, workflowTaskState());
-    handleActiveProcesses(renderer, 'stream-1', [
+    handleActiveSubagents(renderer, 'stream-1', [
       {
-        kind: 'process',
-        executionId: 'process-1',
+        kind: 'subagent',
+        executionId: 'child-1',
+        childStreamId: 'child-stream-1',
         agentName: '',
-        toolName: '',
         status: 'running',
       },
       {
-        kind: 'process',
-        executionId: 'process-2',
-        agentName: 'latexmk',
+        kind: 'subagent',
+        executionId: 'child-2',
+        childStreamId: 'child-stream-2',
+        agentName: 'review',
         status: 'running',
       },
     ]);
 
     expect(output.text).toBe(
-      'polish paper.tex · 0s\npolish paper.tex · tool: latexmk · 0s\n',
+      'polish paper.tex · 0s\npolish paper.tex · subagent: review · 0s\n',
     );
   });
 
@@ -868,12 +850,12 @@ describe('CLI run progress renderer', () => {
         inputFiles: [],
       }),
     );
-    handleActiveProcesses(renderer, 'root-stream', [
+    handleActiveSubagents(renderer, 'root-stream', [
       {
-        kind: 'process',
-        executionId: 'tool-1',
-        agentName: 'bash',
-        toolName: 'Bash',
+        kind: 'subagent',
+        executionId: 'child-1',
+        childStreamId: 'child-stream',
+        agentName: 'review',
         status: 'running',
       },
     ]);
@@ -886,19 +868,19 @@ describe('CLI run progress renderer', () => {
     );
     handleRoundStage(renderer, 'root-stream', { index: 2 });
     handleConversationProgress(renderer, 'root-stream', { toolCallCount: 9 });
-    handleActiveProcesses(renderer, 'root-stream', [
+    handleActiveSubagents(renderer, 'root-stream', [
       {
-        kind: 'process',
-        executionId: 'tool-2',
-        agentName: 'late-tool',
-        toolName: 'LateTool',
+        kind: 'subagent',
+        executionId: 'child-2',
+        childStreamId: 'late-child-stream',
+        agentName: 'late-review',
         status: 'running',
       },
     ]);
 
     expect(output.text).toBe(
       'orchestrator · 0s\n' +
-        'orchestrator · tool: Bash · 0s\n' +
+        'orchestrator · subagent: review · 0s\n' +
         'orchestrator · done · 11s\n',
     );
   });
@@ -954,12 +936,12 @@ describe('CLI run progress renderer', () => {
     // Post-terminal activity must not un-freeze the renderer (STREAM_PHASE.FAILED
     // must be recognized as a terminal outcome phase, same as COMPLETED/CANCELLED).
     handleConversationProgress(renderer, 'root-stream', { toolCallCount: 9 });
-    handleActiveProcesses(renderer, 'root-stream', [
+    handleActiveSubagents(renderer, 'root-stream', [
       {
-        kind: 'process',
-        executionId: 'tool-2',
-        agentName: 'late-tool',
-        toolName: 'LateTool',
+        kind: 'subagent',
+        executionId: 'child-2',
+        childStreamId: 'late-child-stream',
+        agentName: 'late-review',
         status: 'running',
       },
     ]);
@@ -1169,7 +1151,6 @@ describe('CLI run progress renderer', () => {
         streamId: 'parent-stream' as StreamTabId,
         event: {
           type: 'child.activity',
-          kind: 'subagents',
           parentStreamId: 'parent-stream',
           items: [
             {

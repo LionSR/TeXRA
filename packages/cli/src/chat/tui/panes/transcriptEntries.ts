@@ -70,7 +70,6 @@ export function isRenderableTranscriptEntry(entry: ConversationEntry): boolean {
     case 'phase':
     case 'workflowTask':
       return terminalVisibleTranscriptText(entry.text).trim().length > 0;
-    case 'process':
     case 'tool':
       return true;
   }
@@ -208,10 +207,6 @@ export function splitTranscriptEntries(
     }
     if (entry.role === 'tool' || entry.role === 'workflowTask') {
       pending.push(entry);
-      continue;
-    }
-    if (entry.role === 'process') {
-      finalized.push(entry);
       continue;
     }
     if (entry.role === 'assistant' && showLiveAssistant) {

@@ -42,7 +42,7 @@ const CODEX_SUBSCRIPTION_REFRESH_MS = 10_000;
 interface StatusBarProps {
   readonly agentSelectionAvailable?: boolean;
   readonly childListFocused?: boolean;
-  readonly childListSelectionKind?: 'stream' | 'process';
+  readonly childListSelectionKind?: 'stream';
   readonly childListSelectionKillable?: boolean;
   readonly childListSelectionWorkflowControllable?: boolean;
   readonly childNavigationAvailable: boolean;
@@ -183,7 +183,6 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
             streams,
           ).length
         : 0,
-    activeProcesses: statusSlice?.activeProcesses.length ?? 0,
     approvalDepth: approvals.depth,
     approvalKind: approvals.kind,
     model: accessTarget.model,

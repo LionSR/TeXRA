@@ -1072,17 +1072,9 @@ describe('DesktopProgressBridge', () => {
       kind: 'round',
       index: 2,
     });
-    emitRunEvent(bridge, 'parent' as StreamTabId, {
-      type: 'child.activity',
-      kind: 'processes',
-      parentStreamId: 'parent',
-      items: [{ kind: 'process', executionId: 'process-1', agentName: 'bash' }],
-    });
-
     vi.spyOn(Date, 'now').mockReturnValue(2_000);
     emitRunEvent(bridge, 'parent' as StreamTabId, {
       type: 'child.activity',
-      kind: 'subagents',
       parentStreamId: 'parent',
       items: [
         {
@@ -1110,11 +1102,10 @@ describe('DesktopProgressBridge', () => {
       conversationProgress: { toolCallCount: 5 },
       roundStage: { index: 2 },
       subagents: [{ executionId: 'agent-1', agentName: 'reviewer' }],
-      processes: [{ executionId: 'process-1', agentName: 'bash' }],
     });
   });
 
-  it('retains finished children per arm without clobbering the other active dimension', async () => {
+  it('retains a finished child as a full row', async () => {
     vi.spyOn(Date, 'now').mockReturnValue(1_000);
     const messages: unknown[] = [];
     const bridge = await createBridge(messages);
@@ -1125,13 +1116,6 @@ describe('DesktopProgressBridge', () => {
     });
     emitRunEvent(bridge, 'parent' as StreamTabId, {
       type: 'child.activity',
-      kind: 'processes',
-      parentStreamId: 'parent',
-      items: [{ kind: 'process', executionId: 'process-1', agentName: 'bash' }],
-    });
-    emitRunEvent(bridge, 'parent' as StreamTabId, {
-      type: 'child.activity',
-      kind: 'subagents',
       parentStreamId: 'parent',
       items: [
         {
@@ -1144,13 +1128,6 @@ describe('DesktopProgressBridge', () => {
     });
     emitRunEvent(bridge, 'parent' as StreamTabId, {
       type: 'child.activity',
-      kind: 'processes',
-      parentStreamId: 'parent',
-      items: [],
-    });
-    emitRunEvent(bridge, 'parent' as StreamTabId, {
-      type: 'child.activity',
-      kind: 'subagents',
       parentStreamId: 'parent',
       items: [],
     });
@@ -1159,7 +1136,7 @@ describe('DesktopProgressBridge', () => {
       messages,
       PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES,
     ).at(-1);
-    // Each arm keeps its own finished child as a full row — a retained entry
+    // The roster keeps its finished child as a full row — a retained entry
     // is exactly the vanished one, stamped with `finishedAt`.
     expect(badgeUpdate).toMatchObject({
       subagents: [
@@ -1167,14 +1144,6 @@ describe('DesktopProgressBridge', () => {
           kind: 'subagent',
           executionId: 'agent-1',
           agentName: 'reviewer',
-          finishedAt: 1_000,
-        },
-      ],
-      processes: [
-        {
-          kind: 'process',
-          executionId: 'process-1',
-          agentName: 'bash',
           finishedAt: 1_000,
         },
       ],
@@ -1923,7 +1892,6 @@ describe('DesktopProgressBridge', () => {
         roundStage: null,
         badges: {
           subagents: [],
-          processes: [],
         },
         parentStreamId: null,
       },

@@ -32,7 +32,6 @@ import {
   type UpdateConversationProgressPayload,
   type UpdateMissingOutputsPayload,
   type UpdatePlanPayload,
-  type UpdateProcessOutputPayload,
   type UpdateQueuedFollowUpsPayload,
   type UpdateRoundStagePayload,
   type UpdateStreamDescriptionPayload,
@@ -158,16 +157,7 @@ export class ProgressFactApplier {
       });
     },
     'child.activity': (_streamId, event) =>
-      this.updateChildRoster(event.parentStreamId, event.kind, [
-        ...event.items,
-      ]),
-    'process.output': (_streamId, event) =>
-      this.handleUpdateProcessOutput({
-        parentStreamId: event.parentStreamId,
-        executionId: event.executionId,
-        stdout: event.stdout,
-        stderr: event.stderr,
-      }),
+      this.updateChildRoster(event.parentStreamId, [...event.items]),
   };
 
   constructor(
@@ -278,16 +268,9 @@ export class ProgressFactApplier {
     >;
     const handler = handlers[event.type];
     if (!handler) return;
-    // Every type derives its context from `event.type`, except `child.activity`
-    // — the one fact whose failure context was historically keyed on
-    // `event.kind` (subagents vs processes), preserved so those failures stay
-    // distinguishable in logs.
-    let context = `failed to handle ${event.type} fact`;
-    if (event.type === 'child.activity') {
-      const activityKind = event.kind === 'subagents' ? 'subagent' : 'process';
-      context = `failed to handle ${activityKind} activity fact`;
-    }
-    this.applyFact(context, () => handler(streamId, event));
+    this.applyFact(`failed to handle ${event.type} fact`, () =>
+      handler(streamId, event),
+    );
   }
 
   private applyFact(context: string, handle: () => void | Promise<void>): void {
@@ -319,24 +302,6 @@ export class ProgressFactApplier {
       this.webviewUpdater.updateParentStream(
         childStreamId,
         parentStreamId ?? undefined,
-      );
-    }
-  }
-
-  public handleUpdateProcessOutput({
-    parentStreamId,
-    executionId,
-    stdout,
-    stderr,
-  }: UpdateProcessOutputPayload): void {
-    // Always send — output accumulates in frontend state per-stream,
-    // so it must not be dropped when the stream is inactive.
-    if (this.webviewUpdater.isAvailable()) {
-      this.webviewUpdater.updateProcessOutput(
-        parentStreamId,
-        executionId,
-        stdout,
-        stderr,
       );
     }
   }
@@ -641,13 +606,12 @@ export class ProgressFactApplier {
    */
   public updateChildRoster(
     parentStreamId: StreamTabId,
-    field: 'subagents' | 'processes',
     next: StreamExecutionState['subagents'],
   ): void {
     let nextBadges: StreamBadgeSnapshot | null = null;
 
     this.state.updateStreamState(parentStreamId, (prev) => {
-      const previous = prev[field];
+      const previous = prev.subagents;
       const vanishedIds = diffActiveChildren(
         previous.filter((child) => child.finishedAt === undefined),
         next,
@@ -667,7 +631,7 @@ export class ProgressFactApplier {
           .filter((child) => vanishedIds.has(child.executionId))
           .map((child) => ({ ...child, finishedAt })),
       ].slice(-RETAINED_FINISHED_CHILDREN_CAP);
-      const updatedState = { ...prev, [field]: [...next, ...retained] };
+      const updatedState = { ...prev, subagents: [...next, ...retained] };
       nextBadges = this.state.projectChildRosters(updatedState);
       return updatedState;
     });

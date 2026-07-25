@@ -1,27 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  computeTaskDetailLayout,
-  isUltraCompactTaskDetailRows,
-  TASK_DETAIL_LABEL_WIDTH,
-  taskDetailKeyHintsForColumns,
-} from '@cli/chat/tui/modals/TaskDetailView';
-import {
   childElapsed,
-  liveChildExecutionElapsedKey,
   numericFocusTargetForActiveStream,
-  processTailLines,
   resolveChildListTarget,
 } from '@cli/chat/tui/state/childControls';
-import {
-  taskDetailFollowTailScrollOffsetForColumns,
-  taskDetailVisibleOutputRowsFromOffsetForColumns,
-} from '@cli/chat/tui/state/taskDetailScroll';
-import {
-  NO_BYPASS,
-  type ProcessOutputTail,
-  type StreamSlice,
-} from '@cli/chat/tui/state/cliState';
+import { NO_BYPASS, type StreamSlice } from '@cli/chat/tui/state/cliState';
 import { streamTreeViews } from '@cli/chat/tui/state/streamViews';
 import { STREAM_PHASE, type StreamTabId } from '@shared/schemas';
 import { buildChildStreamEntries } from '@test/support/childStreamEntries';
@@ -44,28 +28,14 @@ function slice(overrides: Partial<StreamSlice> = {}): StreamSlice {
     conversation: undefined,
     entries: [],
     queuedFollowUpMessages: [],
-    activeProcesses: [],
     todos: [],
     plan: null,
-    processOutput: new Map(),
     bypass: NO_BYPASS,
     ...overrides,
   };
 }
 
 describe('CLI child controls', () => {
-  it('keeps process output tails compact and cached by immutable tail object', () => {
-    const tail: ProcessOutputTail = {
-      stdout: 'first\nsecond\n',
-      stderr: 'warning\n',
-    };
-    const lines = processTailLines(tail);
-
-    expect(lines).toEqual(['first', 'second', 'warning']);
-    expect(processTailLines(tail)).toBe(lines);
-    expect(processTailLines(undefined)).toEqual([]);
-  });
-
   it('updates live elapsed time only for running children', () => {
     expect(
       childElapsed(
@@ -84,20 +54,6 @@ describe('CLI child controls', () => {
         elapsed: '9s',
       }),
     ).toBe('9s');
-    expect(
-      liveChildExecutionElapsedKey(
-        [],
-        [
-          {
-            kind: 'process',
-            executionId: 'process-1',
-            agentName: 'latexmk',
-            startedAt: 1_000,
-            status: STREAM_PHASE.RUNNING,
-          },
-        ],
-      ),
-    ).toBe('process-1:1000');
   });
 
   it('resolves one child-list target and falls back to its immediate ancestor', () => {
@@ -228,50 +184,5 @@ describe('CLI child controls', () => {
         zeroBasedIndex: 0,
       }),
     ).toBe(child);
-  });
-
-  it('keeps TaskDetailView process-only hints and compact layouts', () => {
-    expect(TASK_DETAIL_LABEL_WIDTH).toBe(13);
-    expect(isUltraCompactTaskDetailRows(4)).toBe(true);
-    expect(
-      taskDetailKeyHintsForColumns({
-        availableColumns: 90,
-        canKill: true,
-        showScrollHint: true,
-      }),
-    ).toEqual([
-      { key: '↑/↓', action: 'scroll' },
-      { key: 'PgUp/PgDn', action: 'page' },
-      { key: 'g/G', action: 'top/bottom' },
-      { key: 'k', action: 'kill' },
-      { key: 'Esc', action: 'back' },
-    ]);
-    expect(
-      computeTaskDetailLayout({
-        availableRows: 8,
-        hasTailLines: true,
-        metaRows: 4,
-      }),
-    ).toMatchObject({ compact: true, showCommand: false, showTitle: false });
-  });
-
-  it('follows and windows the process tail by rendered rows', () => {
-    const tailLines = ['one', 'two', 'three', 'four'];
-    const offset = taskDetailFollowTailScrollOffsetForColumns({
-      availableColumns: 80,
-      compact: true,
-      tailLines,
-      visibleRowBudget: 2,
-    });
-    expect(offset).toBe(2);
-    expect(
-      taskDetailVisibleOutputRowsFromOffsetForColumns({
-        availableColumns: 80,
-        compact: true,
-        offset,
-        tailLines,
-        visibleRowBudget: 2,
-      }),
-    ).toEqual(['three', 'four']);
   });
 });

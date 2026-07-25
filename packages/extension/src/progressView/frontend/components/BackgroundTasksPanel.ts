@@ -1,5 +1,5 @@
 /**
- * Collapsible panel for displaying background tasks (processes and subagents).
+ * Collapsible panel for displaying background tasks (subagents and inquiries).
  *
  * Uses `<wa-details>` for the outer panel and for each nested section
  * (Processes, Subagents, Inquiries) and per-task output, for consistent
@@ -47,14 +47,9 @@ import {
   EMPTY_INQUIRY_THREADS,
   EMPTY_STREAM_BY_ID,
   inquiryThreadsContext,
-  processOutputContext,
   streamByIdContext,
   type StreamByIdMap,
 } from '../contexts/streamContexts';
-import { EMPTY_PROCESS_OUTPUTS, type ProcessOutputMap } from '../store';
-
-// Side-effect imports - sibling components
-import './TerminalOutput';
 
 // Web Awesome native components
 import '@awesome.me/webawesome/dist/components/details/details.js';
@@ -208,36 +203,14 @@ export class BackgroundTasksPanel extends LitElement {
       .section-label wa-icon {
         font-size: var(--font-size-xs);
       }
-
-      /* Collapsible output per task — also a <wa-details>. */
-      wa-details.task-output {
-        margin-left: calc(var(--wa-space-2xs) + var(--font-size-sm));
-      }
-
-      wa-details.task-output::part(header) {
-        font-size: var(--font-size-xs);
-        color: var(--color-text-secondary);
-      }
-
-      .output-container {
-        margin-top: var(--wa-space-3xs);
-        border: var(--border-thin) solid var(--color-border);
-        border-radius: var(--border-radius-small);
-        overflow: hidden;
-      }
     `,
   ];
 
   /** Live children plus the finished ones retained for display (`finishedAt`). */
-  @property({ attribute: false }) processes: ActiveChildInfo[] = [];
   @property({ attribute: false }) subagents: ActiveChildInfo[] = [];
 
   /** Open state — auto-expands when active tasks appear, auto-collapses when all finish. */
   @state() open = false;
-
-  @consume({ context: processOutputContext, subscribe: true })
-  @state()
-  private processOutputs: ProcessOutputMap = EMPTY_PROCESS_OUTPUTS;
 
   @consume({ context: streamByIdContext, subscribe: true })
   @state()
@@ -253,7 +226,6 @@ export class BackgroundTasksPanel extends LitElement {
   protected override willUpdate(changed: PropertyValues): void {
     super.willUpdate(changed);
     const active =
-      this.processes.filter((child) => child.finishedAt === undefined).length +
       this.subagents.filter((child) => child.finishedAt === undefined).length +
       this.inquiries.filter((thread) => thread.status === 'open').length;
     // Auto-open when tasks appear (0 → N), auto-close when all finish (N → 0)
@@ -266,10 +238,7 @@ export class BackgroundTasksPanel extends LitElement {
   }
 
   override render(): TemplateResult | typeof nothing {
-    if (
-      this.processes.length + this.subagents.length + this.inquiries.length ===
-      0
-    ) {
+    if (this.subagents.length + this.inquiries.length === 0) {
       return nothing;
     }
 
@@ -282,9 +251,7 @@ export class BackgroundTasksPanel extends LitElement {
         @wa-hide=${this.handleHide}
       >
         <div class="task-list">
-          ${this.renderSection(this.processes, 'process')}
-          ${this.renderSection(this.subagents, 'subagent')}
-          ${this.renderInquirySection()}
+          ${this.renderSection(this.subagents)} ${this.renderInquirySection()}
         </div>
       </wa-details>
     `;
@@ -368,7 +335,6 @@ export class BackgroundTasksPanel extends LitElement {
 
   private renderSection(
     children: ActiveChildInfo[],
-    kind: 'process' | 'subagent',
   ): TemplateResult | typeof nothing {
     if (children.length === 0) return nothing;
 
@@ -376,19 +342,17 @@ export class BackgroundTasksPanel extends LitElement {
       (child) => child.finishedAt === undefined,
     ).length;
     const finishedCount = children.length - activeCount;
-    const icon = kind === 'process' ? 'terminal' : 'server-process';
-    const label = kind === 'process' ? 'Processes' : 'Subagents';
 
     return html`
       <wa-details class="collapsible-quiet">
         <div slot="summary" class="section-label">
           <wa-icon
             library=${TEXRA_ICON_LIBRARY}
-            name=${icon}
+            name="server-process"
             aria-hidden="true"
           ></wa-icon>
           <span
-            >${label}${
+            >Subagents${
               activeCount ? html` &middot; ${activeCount} active` : nothing
             }${
               finishedCount ? html` &middot; ${finishedCount} done` : nothing
@@ -408,7 +372,6 @@ export class BackgroundTasksPanel extends LitElement {
 
   private renderTaskItem(child: ActiveChildInfo): TemplateResult {
     const icon = getTaskIcon(child);
-    const entry = this.processOutputs.get(child.executionId);
     const childStreamId =
       child.kind === 'subagent' ? child.childStreamId : undefined;
     const isClickable = childStreamId !== undefined;
@@ -474,28 +437,7 @@ export class BackgroundTasksPanel extends LitElement {
             >${badge.text}</wa-badge
           >
         </div>
-        ${
-          entry?.stdout
-            ? this.renderOutputStream('stdout', entry.stdout)
-            : nothing
-        }
-        ${
-          entry?.stderr
-            ? this.renderOutputStream('stderr', entry.stderr)
-            : nothing
-        }
       </div>
-    `;
-  }
-
-  private renderOutputStream(label: string, text: string): TemplateResult {
-    return html`
-      <wa-details class="collapsible-quiet task-output" open>
-        <span slot="summary">${label}</span>
-        <div class="output-container">
-          <terminal-output .text=${text}></terminal-output>
-        </div>
-      </wa-details>
     `;
   }
 

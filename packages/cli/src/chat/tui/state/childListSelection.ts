@@ -1,14 +1,10 @@
 // Local imports - shared stream identity
 import type { StreamTabId } from '@shared/schemas';
 
-export type ChildListValue = `stream:${string}` | `process:${string}`;
+export type ChildListValue = `stream:${string}`;
 
 export function childStreamListValue(streamId: StreamTabId): ChildListValue {
   return `stream:${streamId}`;
-}
-
-export function childProcessListValue(executionId: string): ChildListValue {
-  return `process:${executionId}`;
 }
 
 export function childListStreamId(
@@ -16,14 +12,6 @@ export function childListStreamId(
 ): StreamTabId | undefined {
   return value?.startsWith('stream:')
     ? (value.slice('stream:'.length) as StreamTabId)
-    : undefined;
-}
-
-export function childListProcessId(
-  value: ChildListValue | undefined,
-): string | undefined {
-  return value?.startsWith('process:')
-    ? value.slice('process:'.length)
     : undefined;
 }
 

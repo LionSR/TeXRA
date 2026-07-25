@@ -574,9 +574,8 @@ export function attachTranscriptRecorder(
           return;
 
         case 'child.activity':
-        case 'process.output':
-          // Stage 3a child/process facts replace legacy progress events for UI
-          // badges and process panes; they were not transcript rows before.
+          // Stage 3a child facts replace legacy progress events for UI badges;
+          // they were not transcript rows before.
           return;
 
         default: {

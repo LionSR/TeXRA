@@ -57,7 +57,6 @@ export class ToolUseStreamContent extends BaseStreamContent {
       ></plan-view>
 
       <background-tasks-panel
-        .processes=${currentState.processes}
         .subagents=${currentState.subagents}
       ></background-tasks-panel>
 
