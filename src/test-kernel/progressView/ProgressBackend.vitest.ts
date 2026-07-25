@@ -281,6 +281,32 @@ describe('ProgressBackend', () => {
     }
   });
 
+  it('attaches snapshot events before run-fact projection', () => {
+    const target = createIsolatedRecordingBackend();
+    const { backend, session } = target;
+    const subscription = backend.setupEventListeners();
+    const streamId = 'snapshot-before-projection' as StreamTabId;
+
+    try {
+      emitRunConfig(
+        target,
+        streamId,
+        'c40001' as ExecutionId,
+        toolUseTaskState('search', 'deepseekproT'),
+      );
+
+      expect(backend.state.getStreamMetadata(streamId).run).toMatchObject({
+        kind: 'agent',
+        agent: 'search',
+        model: 'deepseekproT',
+      });
+    } finally {
+      subscription.dispose();
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
   it('applies active-stream facts before host navigation callbacks', () => {
     const session = createTestSession();
     const streamId = 'fact-before-route' as StreamTabId;
@@ -2049,7 +2075,7 @@ describe('ProgressBackend', () => {
       await backend.state.snapshots.load([]);
       backend.state.streamLogs.ensureStream(stream);
       backend.state.activeStream = stream;
-      backend.state.setStreamTaskState(
+      backend.state.snapshots.setTaskState(
         stream,
         toolUseTaskState('search', 'deepseekproT'),
         'abc123' as ExecutionId,
@@ -2223,11 +2249,12 @@ describe('ProgressBackend', () => {
         isRemote: true,
         creationTimestamp: 123,
       });
-      backend.state.setStreamTaskState(
+      backend.state.snapshots.setTaskState(
         stream,
         toolUseTaskState('search', 'deepseekproT'),
         executionId,
       );
+      backend.state.refreshStreamMetadataFromSnapshot(stream);
       // A late provisional event cannot replace task-state authority.
       backend.state.updateStreamMetadata(stream, {
         agentCategory: AgentCategory.Workflow,
@@ -2379,7 +2406,7 @@ describe('ProgressBackend', () => {
     try {
       await backend.state.snapshots.load([stream]);
       backend.state.streamLogs.ensureStream(stream);
-      backend.state.setStreamTaskState(
+      backend.state.snapshots.setTaskState(
         stream,
         toolUseTaskState('search', 'deepseekproT'),
         executionId,
@@ -2414,7 +2441,7 @@ describe('ProgressBackend', () => {
 
     try {
       backend.state.streamLogs.ensureStream(stream);
-      backend.state.setStreamTaskState(
+      backend.state.snapshots.setTaskState(
         stream,
         toolUseTaskState('search', 'deepseekproT'),
         executionId,
@@ -2457,7 +2484,7 @@ describe('ProgressBackend', () => {
 
     try {
       backend.state.streamLogs.ensureStream(stream);
-      backend.state.setStreamTaskState(
+      backend.state.snapshots.setTaskState(
         stream,
         toolUseTaskState('search', 'deepseekproT'),
         executionId,
@@ -2489,7 +2516,7 @@ describe('ProgressBackend', () => {
 
     try {
       backend.state.streamLogs.ensureStream(stream);
-      backend.state.setStreamTaskState(
+      backend.state.snapshots.setTaskState(
         stream,
         toolUseTaskState('search', 'deepseekproT'),
         executionId,
@@ -2518,7 +2545,7 @@ describe('ProgressBackend', () => {
     try {
       await backend.state.snapshots.load([stream]);
       backend.state.streamLogs.ensureStream(stream);
-      backend.state.setStreamTaskState(
+      backend.state.snapshots.setTaskState(
         stream,
         toolUseTaskState('search', 'deepseekproT'),
         executionId,
@@ -2619,7 +2646,7 @@ describe('ProgressBackend', () => {
     try {
       await backend.state.snapshots.load([stream]);
       backend.state.streamLogs.ensureStream(stream);
-      backend.state.setStreamTaskState(
+      backend.state.snapshots.setTaskState(
         stream,
         toolUseTaskState('search', 'deepseekproT'),
         executionId,
@@ -3120,7 +3147,7 @@ describe('ProgressBackend', () => {
 
     try {
       first.backend.state.streamLogs.ensureStream(stream);
-      first.backend.state.setStreamTaskState(
+      first.backend.state.snapshots.setTaskState(
         stream,
         toolUseTaskState('search', 'deepseekproT'),
         executionId,
