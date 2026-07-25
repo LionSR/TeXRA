@@ -29,12 +29,12 @@ All notable changes to this project will be documented in this file.
 
 ### CLI
 
-#### Changes
+#### Breaking Changes
 
-- **`--output-format ndjson` no longer lists a `updateProcessOutput` progress
-  record** — background shell output has been streamed as a normal child
-  stream since child tabs shipped, so this record was never emitted. Consumers
-  reading NDJSON progress records are unaffected.
+- **`--output-format ndjson` no longer documents a `updateProcessOutput`
+  record** — background shell output reaches the terminal through child
+  streams, so this record was never emitted. Scripts reading the NDJSON stream
+  need no change.
 
 #### New Features
 
