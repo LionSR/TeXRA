@@ -96,31 +96,43 @@ describe('cloneOverleafProject', () => {
     ).resolves.toEqual({ status: 'success' });
 
     const blockedPorts = createPorts({
+      getStoredToken: vi.fn(async () => undefined),
       listWorkspaceEntries: vi.fn(async () => ['paper.tex']),
+      promptToken: vi.fn(async () => 'olp_prompted'),
     });
     await expect(
       cloneOverleafProject(REMOTE, '/workspace', blockedPorts),
     ).resolves.toEqual({ status: 'workspaceNotEmpty' });
     expect(blockedPorts.showWorkspaceNotEmpty).toHaveBeenCalledOnce();
+    expect(blockedPorts.promptToken).not.toHaveBeenCalled();
+    expect(blockedPorts.storeToken).not.toHaveBeenCalled();
     expect(blockedPorts.runClone).not.toHaveBeenCalled();
   });
 
   it('returns explicit outcomes for unavailable git and unreadable workspaces', async () => {
     const gitMissingPorts = createPorts({
+      getStoredToken: vi.fn(async () => undefined),
       isGitAvailable: vi.fn(() => false),
+      promptToken: vi.fn(async () => 'olp_prompted'),
     });
     await expect(
       cloneOverleafProject(REMOTE, '/workspace', gitMissingPorts),
     ).resolves.toEqual({ status: 'gitMissing' });
+    expect(gitMissingPorts.promptToken).not.toHaveBeenCalled();
+    expect(gitMissingPorts.storeToken).not.toHaveBeenCalled();
 
     const unreadablePorts = createPorts({
+      getStoredToken: vi.fn(async () => undefined),
       listWorkspaceEntries: vi.fn(async () => {
         throw new Error('permission denied');
       }),
+      promptToken: vi.fn(async () => 'olp_prompted'),
     });
     await expect(
       cloneOverleafProject(REMOTE, '/workspace', unreadablePorts),
     ).resolves.toEqual({ status: 'workspaceUnreadable' });
+    expect(unreadablePorts.promptToken).not.toHaveBeenCalled();
+    expect(unreadablePorts.storeToken).not.toHaveBeenCalled();
     expect(unreadablePorts.showWorkspaceUnreadable).toHaveBeenCalledWith(
       expect.objectContaining({ message: 'permission denied' }),
     );
