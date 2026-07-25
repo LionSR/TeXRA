@@ -78,6 +78,25 @@ export const STREAM_LOG_ENTRY_TYPES = {
 
 const StreamLogEntryTypeSchema = z.enum(STREAM_LOG_ENTRY_TYPES);
 
+const LoadedMediaMetadataSchema = z.discriminatedUnion('kind', [
+  z.object({
+    /**
+     * Visual model input, including PDFs handled natively or rendered into
+     * pages. The TUI's `[image]` label describes this model-facing category,
+     * not merely an `image/*` filesystem MIME type.
+     */
+    kind: z.literal('image'),
+    mimeType: z.string().min(1),
+    sizeBytes: z.int().nonnegative(),
+  }),
+  z.object({
+    kind: z.literal('audio'),
+    mimeType: z.string().min(1),
+    sizeBytes: z.int().nonnegative(),
+  }),
+]);
+export type LoadedMediaMetadata = z.infer<typeof LoadedMediaMetadataSchema>;
+
 export const FileListEntrySchema = z.object({
   path: z.string(),
   ok: z.boolean(),
@@ -85,6 +104,8 @@ export const FileListEntrySchema = z.object({
   sourceDisplay: z.string().optional(),
   varName: z.string().optional(),
   internal: z.boolean().optional(),
+  /** Present only when this file was loaded through the media pipeline. */
+  media: LoadedMediaMetadataSchema.optional(),
 });
 
 export type FileListEntry = z.infer<typeof FileListEntrySchema>;

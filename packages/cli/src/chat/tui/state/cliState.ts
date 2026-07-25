@@ -81,6 +81,11 @@ type ConversationEntryOrigin =
       readonly syntheticAfterSettlementSeqNo: number;
     };
 
+export interface LoadedImage {
+  readonly path: string;
+  readonly sizeBytes: number;
+}
+
 /**
  * Discriminated on `role` so `toolUse` is required exactly for the rows that
  * need it, instead of an independently-optional field every consumer has to
@@ -108,6 +113,10 @@ export type ConversationEntry = ConversationEntryOrigin &
     | (ConversationEntryBase & {
         readonly role: 'tool';
         readonly toolUse: NormalizedToolUse;
+      })
+    | (ConversationEntryBase & {
+        readonly role: 'media';
+        readonly images: readonly LoadedImage[];
       })
   );
 

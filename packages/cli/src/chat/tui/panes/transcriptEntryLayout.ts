@@ -25,6 +25,7 @@ import {
   USER_ENTRY_PREFIX,
 } from '../ui/glyphs';
 import { isInquiryContinuationText } from './transcriptEntries';
+import { loadedImageDisplayLines } from './loadedImageDisplay';
 import { toolUseDisplayLines, toolUseMarginBottomRows } from './toolRenderers';
 import type { ConversationEntry } from '../state/cliState';
 
@@ -58,6 +59,13 @@ const ROLE_GEOMETRY = {
     firstPrefix: ERROR_ENTRY_PREFIX,
     continuationPrefix: ' '.repeat(ERROR_ENTRY_PREFIX.length),
     inset: 2,
+    marginBottomRows: 0,
+    marginTopRows: 0,
+  },
+  media: {
+    firstPrefix: '',
+    continuationPrefix: '  ',
+    inset: 0,
     marginBottomRows: 0,
     marginTopRows: 0,
   },
@@ -236,6 +244,8 @@ function entryLines(
       // terminal row. Other modes paint the wrapped text projection directly.
       return richProjection ? lines : wrapDisplayLines(lines, columns);
     }
+    case 'media':
+      return loadedImageDisplayLines(entry.images, columns);
     case 'phase': {
       const geometry = ROLE_GEOMETRY.phase;
       return wrapWithPrefix(
