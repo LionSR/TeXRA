@@ -2,12 +2,9 @@
 import * as vscode from 'vscode';
 
 // Local imports - media utilities
-import {
-  startRecording,
-  stopRecordingAndTranscribe,
-} from '@tools/media/audio';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
+import { startRecording, stopRecordingAndTranscribe } from '@tools/media/audio';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'RecordingManager';

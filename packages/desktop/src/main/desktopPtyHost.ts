@@ -1,0 +1,187 @@
+// Interactive terminal sessions for the desktop app.
+//
+// Distinct from desktopTerminalRunner.ts, which runs one command to completion
+// and returns its captured output — that serves the setup wizard's scripted
+// checks. This host owns long-lived pseudo-terminals the *user* types into, so
+// it needs a real pty (job control, TTY-aware programs, ANSI, resize) rather
+// than a buffered child process.
+//
+// node-pty is a native module, but it loads under Electron's ABI as shipped
+// (verified against the bundled Electron 43 before adopting it), so no
+// electron-rebuild step is required. It is imported lazily all the same: a
+// user who never opens a terminal shouldn't pay for loading a native addon, and
+// if the addon is missing on some platform the failure surfaces as "terminal
+// unavailable" instead of preventing the app from starting.
+
+import { platform as osPlatform } from 'node:os';
+
+/**
+ * Structural subset of node-pty we depend on. Declared locally so this module
+ * type-checks without the native addon's types resolving at build time, and so
+ * the import can stay dynamic.
+ */
+interface PtyProcess {
+  onData(listener: (data: string) => void): void;
+  onExit(
+    listener: (event: { exitCode: number; signal?: number }) => void,
+  ): void;
+  write(data: string): void;
+  resize(cols: number, rows: number): void;
+  kill(signal?: string): void;
+  readonly pid: number;
+}
+
+interface NodePtyModule {
+  spawn(
+    file: string,
+    args: readonly string[] | string,
+    options: {
+      name?: string;
+      cols?: number;
+      rows?: number;
+      cwd?: string;
+      env?: Record<string, string>;
+    },
+  ): PtyProcess;
+}
+
+interface PtySessionHandle {
+  readonly id: string;
+  write(data: string): void;
+  resize(cols: number, rows: number): void;
+  dispose(): void;
+}
+
+export interface DesktopPtyHostOptions {
+  /** Default working directory for new sessions (the workspace root). */
+  cwd?: string;
+  /** Streams pty output to the renderer. */
+  onData(sessionId: string, data: string): void;
+  /** Reports process exit so the UI can mark the session finished. */
+  onExit(sessionId: string, exitCode: number): void;
+  onError?(error: unknown): void;
+}
+
+export interface DesktopPtyHost {
+  /**
+   * Starts a session. Rejects when the native module is unavailable, so the
+   * caller can report "terminal unavailable" rather than hanging on a
+   * terminal that will never produce output.
+   */
+  create(input: {
+    id: string;
+    cols: number;
+    rows: number;
+    cwd?: string;
+  }): Promise<PtySessionHandle>;
+  get(id: string): PtySessionHandle | undefined;
+  disposeAll(): void;
+}
+
+/**
+ * Default shell for an interactive session. `$SHELL` is the user's actual
+ * choice; the per-platform fallbacks only matter when it is unset (some launch
+ * contexts, notably a GUI app started by launchd, don't inherit it).
+ */
+function defaultShell(): string {
+  if (process.env.SHELL) return process.env.SHELL;
+  if (osPlatform() === 'win32') {
+    return process.env.COMSPEC ?? 'powershell.exe';
+  }
+  return '/bin/bash';
+}
+
+/**
+ * Environment for the pty. Electron injects variables that confuse child
+ * processes into thinking they are the Electron app rather than a plain shell,
+ * so they are stripped.
+ */
+function ptyEnvironment(): Record<string, string> {
+  const env: Record<string, string> = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value == null) continue;
+    if (key === 'ELECTRON_RUN_AS_NODE') continue;
+    if (key === 'ELECTRON_RENDERER_URL') continue;
+    env[key] = value;
+  }
+  // Programs branch on TERM for color and cursor support. xterm.js speaks
+  // xterm-256color, and without this many tools fall back to dumb output.
+  env.TERM = 'xterm-256color';
+  return env;
+}
+
+let nodePtyLoad: Promise<NodePtyModule> | undefined;
+
+async function loadNodePty(): Promise<NodePtyModule> {
+  // Cached so repeated terminals don't re-resolve the addon; a failure clears
+  // the cache so a later attempt can retry.
+  nodePtyLoad ??= import('node-pty')
+    .then((module) => module as unknown as NodePtyModule)
+    .catch((error: unknown) => {
+      nodePtyLoad = undefined;
+      throw error;
+    });
+  return nodePtyLoad;
+}
+
+export function createDesktopPtyHost(
+  options: DesktopPtyHostOptions,
+): DesktopPtyHost {
+  const sessions = new Map<string, PtySessionHandle>();
+
+  return {
+    async create({ id, cols, rows, cwd }) {
+      const existing = sessions.get(id);
+      if (existing) return existing;
+
+      const pty = await loadNodePty();
+      const child = pty.spawn(defaultShell(), [], {
+        name: 'xterm-256color',
+        // A pty spawned at 0 columns makes shells emit unusable line wrapping,
+        // so clamp to a sane minimum until the renderer reports real bounds.
+        cols: Math.max(cols, 20),
+        rows: Math.max(rows, 5),
+        cwd: cwd ?? options.cwd ?? process.cwd(),
+        env: ptyEnvironment(),
+      });
+
+      child.onData((data) => options.onData(id, data));
+      child.onExit(({ exitCode }) => {
+        sessions.delete(id);
+        options.onExit(id, exitCode);
+      });
+
+      const handle: PtySessionHandle = {
+        id,
+        write: (data) => child.write(data),
+        resize: (nextCols, nextRows) => {
+          try {
+            child.resize(Math.max(nextCols, 20), Math.max(nextRows, 5));
+          } catch (error) {
+            // Resizing a pty whose process already exited throws; the exit
+            // handler has cleaned up, so this is not actionable.
+            options.onError?.(error);
+          }
+        },
+        dispose: () => {
+          sessions.delete(id);
+          try {
+            child.kill();
+          } catch (error) {
+            options.onError?.(error);
+          }
+        },
+      };
+      sessions.set(id, handle);
+      return handle;
+    },
+
+    get: (id) => sessions.get(id),
+
+    disposeAll() {
+      // Copy first: dispose() mutates the map through the shared handle.
+      for (const handle of [...sessions.values()]) handle.dispose();
+      sessions.clear();
+    },
+  };
+}

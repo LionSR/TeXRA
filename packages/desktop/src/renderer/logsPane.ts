@@ -6,21 +6,27 @@ import {
   DESKTOP_LOG_COMMANDS,
   type DesktopSetLogMessage,
 } from '../desktopLogMessages';
-import type WaDrawer from '@awesome.me/webawesome/dist/components/drawer/drawer.js';
 
 interface LogViewerState {
   meta: string;
   text: string;
 }
 
-export interface LogsDrawerController {
+export interface LogsPaneController {
+  /**
+   * Root element, hosted by the Logs tab. Previously this lived inside a
+   * `wa-drawer`; logs are now a tab so they can stay open next to a running
+   * stream instead of covering it.
+   */
+  readonly element: HTMLElement;
+  /** Requests a fresh snapshot; called when the Logs tab is opened. */
   open(): void;
   applySnapshot(message: DesktopSetLogMessage): void;
   /** Re-render the viewer template with the current state (used during recovery). */
   rerenderViewer(): void;
 }
 
-export function createLogsDrawer(appRoot: HTMLElement): LogsDrawerController {
+export function createLogsPane(): LogsPaneController {
   const container: HTMLElement = document.createElement('div');
   container.setAttribute('data-desktop-view', 'logs');
   container.className = 'desktop-log-host';
@@ -29,8 +35,6 @@ export function createLogsDrawer(appRoot: HTMLElement): LogsDrawerController {
     meta: 'Recent redacted log entries appear here.',
     text: 'Open Logs to load recent entries.',
   };
-
-  let drawer: WaDrawer | null = null;
 
   function requestSnapshot(): void {
     postMessage(DESKTOP_LOG_COMMANDS.REQUEST_LOG);
@@ -78,21 +82,7 @@ export function createLogsDrawer(appRoot: HTMLElement): LogsDrawerController {
     render(viewerTemplate(state), container);
   }
 
-  function ensure(): WaDrawer {
-    if (drawer) return drawer;
-    const d = document.createElement('wa-drawer') as WaDrawer;
-    d.classList.add('desktop-logs-drawer');
-    d.setAttribute('label', 'Desktop Logs');
-    d.setAttribute('placement', 'bottom');
-    d.append(container);
-    appRoot.append(d);
-    drawer = d;
-    return d;
-  }
-
   function open(): void {
-    const d = ensure();
-    d.open = true;
     requestSnapshot();
   }
 
@@ -107,5 +97,5 @@ export function createLogsDrawer(appRoot: HTMLElement): LogsDrawerController {
     rerenderViewer();
   }
 
-  return { open, applySnapshot, rerenderViewer };
+  return { element: container, open, applySnapshot, rerenderViewer };
 }

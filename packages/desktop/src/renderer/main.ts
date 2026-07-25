@@ -4,7 +4,6 @@ import './themeTokens.css';
 import '@shared/wa';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
-import '@awesome.me/webawesome/dist/components/drawer/drawer.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import { html, render, type TemplateResult } from 'lit';
 import { create as mutate } from 'mutative';
@@ -65,6 +64,7 @@ import {
   renderIconActionButton,
   renderLabeledActionButton,
 } from '@shared/wa/actionButtons';
+import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 
 import {
   DesktopSetRouteMessageSchema,
@@ -94,13 +94,37 @@ import {
 import { DesktopShowPromptMessageSchema } from '../desktopPromptMessages';
 import { createDesktopCommandPalette } from './desktopCommandPalette';
 import { createFirstRunWalkthrough } from './desktopOnboarding';
+import { tabStripTemplate } from './tabStrip';
+import { createEditorPane, type EditorFileEntry } from './editorPane';
+import { createTerminalPane } from './terminalPane';
+import {
+  activateTab,
+  activeTab,
+  closeTab,
+  initialTabState,
+  openTab,
+  setTabDirty,
+  tabIdFor,
+  tabKindForRoute,
+  type DesktopTabKind,
+  type DesktopTabState,
+} from '../desktopWorkspaceTabs';
+import {
+  DESKTOP_WORKSPACE_COMMANDS,
+  DesktopBrowserStateMessageSchema,
+  DesktopFileErrorMessageSchema,
+  DesktopFileReadMessageSchema,
+  DesktopFilesListedMessageSchema,
+  DesktopFileWrittenMessageSchema,
+  DesktopTerminalDataMessageSchema,
+  DesktopTerminalErrorMessageSchema,
+  DesktopTerminalExitMessageSchema,
+} from '../desktopWorkspaceMessages';
 import { getRendererPlatform } from './rendererPlatform';
 import { createPdfOverlay } from './pdfOverlay';
 import { createDiffOverlay } from './diffOverlay';
 import { createDesktopPromptOverlay } from './promptOverlay';
-import { createLogsDrawer } from './logsDrawer';
-import { createOverlayDialog } from './overlayDialog';
-import type WaDialog from '@awesome.me/webawesome/dist/components/dialog/dialog.js';
+import { createLogsPane } from './logsPane';
 
 const root = document.querySelector<HTMLElement>('#app');
 
@@ -114,16 +138,14 @@ const appRoot = root;
 // Pane state
 // =============================================================================
 //
-// PRD § 6 + § 7.D: replace the four-route shell with a three-pane window.
-//   - Left rail: <stream-tabs> (sessions) + Settings entry
+// The window is a tab shell. The workspace tab holds the two-pane layout:
+//   - Left rail: <stream-tabs> (sessions)
 //   - Center: <main-app> when no active stream, else <stream-conversation>
-//   - Right: reserved for future diff/approve UX (collapsed today)
+// Settings, Logs, editors, terminals, and browser tabs are siblings of it.
 //
 // `setRouteState` survives only as a backwards-compat hook so existing IPC
 // (`desktop:setRoute` from menu/command-palette) still reaches the right
-// surface. `'main' | 'progress'` map to the center pane (progress = focus
-// the active stream); `'settings'` opens the overlay; `'logs'` opens the
-// drawer. The four-route tab bar is gone.
+// surface; tabKindForRoute maps each legacy route onto its owning tab.
 
 const hasWorkspace = window.texraDesktop?.hasWorkspace ?? true;
 const rendererPlatform = getRendererPlatform(document.defaultView);
@@ -150,10 +172,37 @@ function setRouteState(route: DesktopRoute): void {
   document.body.dataset.desktopRoute = route;
 }
 
-// `<settings-app>` lives inside the wa-dialog overlay below; `<main-app>` and
-// `<stream-conversation>` mount directly in the center pane. These are
-// instantiated once and slotted into the shell template via Lit's DOM-node
-// interpolation so Lit preserves their internal state across re-renders.
+// =============================================================================
+// Tab state
+// =============================================================================
+//
+// Settings and Logs used to be modal overlays, which meant reading either one
+// covered the run you were configuring. They are now tabs alongside the
+// workspace, so state is inspectable while a run streams.
+//
+// The tab reducer lives in ../desktopWorkspaceTabs.ts (pure, unit-tested); this
+// module owns only the mutable current value and the re-render trigger.
+
+let tabState: DesktopTabState = initialTabState();
+
+function updateTabs(next: DesktopTabState): void {
+  if (next === tabState) return;
+  const previousTabId = tabState.activeTabId;
+  tabState = next;
+  rerenderShell();
+  syncBrowserViewBounds();
+  // Lay out only on an actual tab change; a dirty-flag or title update
+  // re-renders the strip but must not re-open the editor's file.
+  if (previousTabId !== next.activeTabId) layoutActivePane();
+}
+
+function openWorkspaceTab(kind: DesktopTabKind, target?: string): void {
+  updateTabs(openTab(tabState, { kind, ...(target ? { target } : {}) }));
+}
+
+// `<settings-app>`, `<main-app>`, and `<stream-conversation>` are instantiated
+// once and slotted into the shell template via Lit's DOM-node interpolation, so
+// Lit preserves their internal state across re-renders and tab switches.
 const mainView: HTMLElement = document.createElement('main-app');
 mainView.setAttribute('data-desktop-view', 'main');
 const noWorkspacePlaceholder: HTMLElement = document.createElement('section');
@@ -176,7 +225,45 @@ const railTabs = document.createElement('stream-tabs') as StreamTabs;
 const settingsView: HTMLElement = document.createElement('settings-app');
 settingsView.setAttribute('data-desktop-view', 'settings');
 
-const logsDrawer = createLogsDrawer(appRoot);
+// The logs viewer now lives in a tab instead of a drawer, so its element is
+// hosted directly in the tab body rather than inside a wa-drawer.
+const logsController = createLogsPane();
+const logsPane = logsController.element;
+
+// Editor + terminal panes. Both are created eagerly but load their heavy
+// dependencies (Monaco, xterm) lazily on first activation, so an app that never
+// opens either pays nothing.
+const editorPane = createEditorPane({
+  listFiles: () => requestFiles(),
+  readFile: (path) => requestFileRead(path),
+  writeFile: (path, contents) => requestFileWrite(path, contents),
+  onDirtyChange: (path, dirty) => {
+    updateTabs(
+      setTabDirty(tabState, tabIdFor({ kind: 'editor', target: path }), dirty),
+    );
+  },
+  onError: (error) => console.error('TeXRA editor pane', error),
+});
+
+const terminalPane = createTerminalPane({
+  start: (sessionId, cols, rows) =>
+    postMessage(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_START, {
+      sessionId,
+      cols,
+      rows,
+    }),
+  sendInput: (sessionId, data) =>
+    postMessage(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_INPUT, { sessionId, data }),
+  resize: (sessionId, cols, rows) =>
+    postMessage(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_RESIZE, {
+      sessionId,
+      cols,
+      rows,
+    }),
+  close: (sessionId) =>
+    postMessage(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_CLOSE, { sessionId }),
+});
+
 const diffOverlay = createDiffOverlay(appRoot);
 const pdfOverlay = createPdfOverlay(appRoot);
 const promptOverlay = createDesktopPromptOverlay(appRoot, (message) =>
@@ -184,8 +271,189 @@ const promptOverlay = createDesktopPromptOverlay(appRoot, (message) =>
 );
 
 function openLogsDrawer(): void {
-  setRouteState('logs');
-  logsDrawer.open();
+  openWorkspaceTab('logs');
+  logsController.open();
+}
+
+// =============================================================================
+// Editor / terminal / browser request plumbing
+// =============================================================================
+//
+// The renderer is sandboxed, so file I/O runs in the main process. These
+// helpers turn the fire-and-forget message pairs into promises the editor pane
+// can await, keyed by path so concurrent reads don't cross-resolve.
+
+type PendingFileRequest = {
+  resolve(contents: string): void;
+  reject(error: Error): void;
+};
+
+const pendingFileReads = new Map<string, PendingFileRequest[]>();
+const pendingFileWrites = new Map<string, PendingFileRequest[]>();
+let pendingFileList:
+  | {
+      resolve(files: readonly EditorFileEntry[]): void;
+      reject(error: Error): void;
+    }
+  | undefined;
+
+function settlePending(
+  map: Map<string, PendingFileRequest[]>,
+  path: string,
+  settle: (request: PendingFileRequest) => void,
+): void {
+  const waiting = map.get(path);
+  if (!waiting) return;
+  map.delete(path);
+  for (const request of waiting) settle(request);
+}
+
+function requestFiles(): Promise<readonly EditorFileEntry[]> {
+  return new Promise((resolve, reject) => {
+    pendingFileList = { resolve, reject };
+    postMessage(DESKTOP_WORKSPACE_COMMANDS.LIST_FILES);
+  });
+}
+
+function requestFileRead(path: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const waiting = pendingFileReads.get(path) ?? [];
+    waiting.push({ resolve, reject });
+    pendingFileReads.set(path, waiting);
+    postMessage(DESKTOP_WORKSPACE_COMMANDS.READ_FILE, { path });
+  });
+}
+
+function requestFileWrite(path: string, contents: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const waiting = pendingFileWrites.get(path) ?? [];
+    waiting.push({ resolve: () => resolve(), reject });
+    pendingFileWrites.set(path, waiting);
+    postMessage(DESKTOP_WORKSPACE_COMMANDS.WRITE_FILE, { path, contents });
+  });
+}
+
+/**
+ * Reports the browser slot's geometry to the main process, which positions the
+ * WebContentsView over it. A WebContentsView is not part of renderer layout, so
+ * this runs on every render, resize, and tab switch — otherwise the view would
+ * float where the slot used to be.
+ */
+function syncBrowserViewBounds(): void {
+  const current = activeTab(tabState);
+  if (current.kind !== 'browser') {
+    postMessage(DESKTOP_WORKSPACE_COMMANDS.BROWSER_HIDE);
+    return;
+  }
+  // Measure after layout settles; a tab that just became visible has no box
+  // until the browser has flushed the style change.
+  requestAnimationFrame(() => {
+    const slot = document.querySelector('#desktop-browser-slot');
+    if (!slot) return;
+    const rect = slot.getBoundingClientRect();
+    postMessage(DESKTOP_WORKSPACE_COMMANDS.BROWSER_BOUNDS, {
+      tabId: current.id,
+      bounds: {
+        x: Math.round(rect.left),
+        y: Math.round(rect.top),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+      },
+    });
+  });
+}
+
+/**
+ * Lays out whichever pane just became active. Monaco and xterm both measure
+ * their container on demand and render at zero size if that happened while the
+ * container was `display:none`.
+ */
+function layoutActivePane(): void {
+  const current = activeTab(tabState);
+  if (current.kind === 'editor') {
+    editorPane.layout();
+    if (current.target) void editorPane.open(current.target);
+    return;
+  }
+  if (current.kind === 'terminal') {
+    terminalPane.activate(current.id);
+  }
+}
+
+const NEW_TAB_ENTRIES: ReadonlyArray<{
+  readonly label: string;
+  readonly icon: TeXRAIconName;
+  readonly run: () => void;
+}> = [
+  {
+    label: 'Editor',
+    icon: 'file-code',
+    run: () => {
+      openWorkspaceTab('editor');
+      void editorPane.refresh();
+    },
+  },
+  {
+    label: 'Terminal',
+    icon: 'terminal',
+    run: () => openWorkspaceTab('terminal'),
+  },
+  {
+    label: 'Browser',
+    icon: 'globe',
+    run: () => openWorkspaceTab('browser', 'https://texra.ai/'),
+  },
+  { label: 'Settings', icon: 'gear', run: () => openWorkspaceTab('settings') },
+  { label: 'Logs', icon: 'file-lines', run: () => openWorkspaceTab('logs') },
+];
+
+/**
+ * New-tab menu. A lightweight popover positioned under the "+" button rather
+ * than a wa-dropdown: the trigger is re-created on every shell render, and
+ * wa-dropdown binds to its trigger element identity.
+ */
+function openNewTabMenu(anchor: HTMLElement): void {
+  const existing = document.querySelector('.desktop-new-tab-menu');
+  if (existing) {
+    existing.remove();
+    return;
+  }
+  const menu = document.createElement('div');
+  menu.className = 'desktop-new-tab-menu';
+  menu.setAttribute('role', 'menu');
+  const rect = anchor.getBoundingClientRect();
+  menu.style.top = `${Math.round(rect.bottom + 4)}px`;
+  menu.style.left = `${Math.round(rect.left)}px`;
+  render(
+    html`${NEW_TAB_ENTRIES.map(
+      (entry) => html`
+        <button
+          type="button"
+          role="menuitem"
+          class="desktop-new-tab-item"
+          @click=${() => {
+            menu.remove();
+            entry.run();
+          }}
+        >
+          ${waIcon(entry.icon)} <span>${entry.label}</span>
+        </button>
+      `,
+    )}`,
+    menu,
+  );
+  appRoot.append(menu);
+  // Dismiss on the next outside click. `capture` so it runs before the item's
+  // own handler removes the menu, and `once` so it never leaks.
+  setTimeout(() => {
+    document.addEventListener(
+      'click',
+      (event) => {
+        if (!menu.contains(event.target as Node)) menu.remove();
+      },
+      { once: true, capture: true },
+    );
+  }, 0);
 }
 
 function emptyWorkspaceTemplate(): TemplateResult {
@@ -260,10 +528,12 @@ function shellTemplate(): TemplateResult {
   const showConversation = activeId != null && hasStreams;
   const workspacePath = window.texraDesktop?.workspacePath;
   const workspaceDirectoryLabel = getWorkspaceDirectoryLabel(workspacePath);
+  const current = activeTab(tabState);
   return html`
     <section class="desktop-shell">
       <nav class="desktop-nav" aria-label="Desktop chrome">
         <span class="desktop-workspace-directory" title=${workspacePath ?? ''}>
+          ${waIcon('folder-open', { className: 'desktop-workspace-icon' })}
           ${workspaceDirectoryLabel}
         </span>
         ${renderIconActionButton({
@@ -271,7 +541,7 @@ function shellTemplate(): TemplateResult {
           label: 'Back to launcher',
           className: 'desktop-icon-button',
           appearance: 'plain',
-          hidden: !showConversation,
+          hidden: !(showConversation && current.kind === 'workspace'),
           title: commandTitle('texra.showMainView', 'Back to launcher'),
           onClick: returnToLauncher,
         })}
@@ -288,75 +558,118 @@ function shellTemplate(): TemplateResult {
           title=${shortcutTitle('Commands', 'CommandOrControl+K')}
           @click=${openCommandPalette}
         >
-          Commands
+          ${waIcon('search', { slot: 'start' })} Commands
         </wa-button>
-        ${renderIconActionButton({
-          icon: 'file-lines',
-          label: 'Logs',
-          className: 'desktop-icon-button',
-          appearance: 'plain',
-          action: 'logs',
-          title: commandTitle(DESKTOP_LOCAL_COMMANDS.SHOW_LOGS, 'Logs'),
-          onClick: openLogsDrawer,
-        })}
       </nav>
-      <div class="desktop-three-pane">
-        <aside class="desktop-rail" aria-label="Sessions">
-          <header class="desktop-rail-header">
-            <div class="desktop-rail-header-content">
-              <span class="desktop-rail-title">Sessions</span>
-            </div>
-            ${renderIconActionButton({
-              icon: 'plus',
-              label: 'New run',
-              className: 'desktop-rail-new',
-              appearance: 'outlined',
-              title: commandTitle('texra.mainView.reset', 'New run'),
-              onClick: returnToLauncher,
-            })}
-          </header>
-          <div class="desktop-rail-tabs">${railTabs}</div>
-          <footer class="desktop-rail-footer">
-            ${renderLabeledActionButton({
-              icon: 'gear',
-              text: 'Settings',
-              className: 'desktop-rail-settings',
-              appearance: 'plain',
-              title: commandTitle('texra.openSettings', 'Settings'),
-              onClick: openSettingsOverlay,
-            })}
-          </footer>
-        </aside>
-        <main class="desktop-center" id="desktop-center">
-          <section
-            class="desktop-pane"
-            data-pane="launcher"
-            ?hidden=${showConversation}
-          >
-            ${
-              hasWorkspace
-                ? html`
-                    <section class="desktop-launcher-surface">
-                      ${mainView}
-                    </section>
-                  `
-                : noWorkspacePlaceholder
-            }
-          </section>
-          <section
-            class="desktop-pane"
-            data-pane="conversation"
-            ?hidden=${!showConversation}
-          >
-            ${conversationView}
-          </section>
-        </main>
-        <aside
-          class="desktop-right"
-          aria-label="Reserved for future diff/approve UX"
-          aria-hidden="true"
-          hidden
-        ></aside>
+      ${tabStripTemplate(tabState, {
+        onActivate: (tabId) => updateTabs(activateTab(tabState, tabId)),
+        onClose: (tabId) => updateTabs(closeTab(tabState, tabId)),
+        onNew: openNewTabMenu,
+      })}
+      <div class="desktop-tab-body">
+        <!--
+          Every tab's pane stays mounted and is hidden when inactive, rather
+          than being torn down and rebuilt on each switch. Monaco models,
+          terminal scrollback, and in-flight <settings-app> edits all live in
+          DOM state that a remount would silently discard.
+        -->
+        <section
+          class="desktop-tab-pane"
+          data-tab-pane="workspace"
+          ?hidden=${current.kind !== 'workspace'}
+        >
+          <div class="desktop-two-pane">
+            <aside class="desktop-rail" aria-label="Sessions">
+              <header class="desktop-rail-header">
+                <div class="desktop-rail-header-content">
+                  <span class="desktop-rail-title">Sessions</span>
+                </div>
+                ${renderIconActionButton({
+                  icon: 'plus',
+                  label: 'New run',
+                  className: 'desktop-rail-new',
+                  appearance: 'outlined',
+                  title: commandTitle('texra.mainView.reset', 'New run'),
+                  onClick: returnToLauncher,
+                })}
+              </header>
+              <div class="desktop-rail-tabs">${railTabs}</div>
+              <footer class="desktop-rail-footer">
+                ${renderLabeledActionButton({
+                  icon: 'gear',
+                  text: 'Settings',
+                  className: 'desktop-rail-settings',
+                  appearance: 'plain',
+                  title: commandTitle('texra.openSettings', 'Settings'),
+                  onClick: () => openWorkspaceTab('settings'),
+                })}
+              </footer>
+            </aside>
+            <main class="desktop-center" id="desktop-center">
+              <section
+                class="desktop-pane"
+                data-pane="launcher"
+                ?hidden=${showConversation}
+              >
+                ${
+                  hasWorkspace
+                    ? html`
+                        <section class="desktop-launcher-surface">
+                          ${mainView}
+                        </section>
+                      `
+                    : noWorkspacePlaceholder
+                }
+              </section>
+              <section
+                class="desktop-pane"
+                data-pane="conversation"
+                ?hidden=${!showConversation}
+              >
+                ${conversationView}
+              </section>
+            </main>
+          </div>
+        </section>
+        <section
+          class="desktop-tab-pane"
+          data-tab-pane="settings"
+          ?hidden=${current.kind !== 'settings'}
+        >
+          ${settingsView}
+        </section>
+        <section
+          class="desktop-tab-pane"
+          data-tab-pane="logs"
+          ?hidden=${current.kind !== 'logs'}
+        >
+          ${logsPane}
+        </section>
+        <section
+          class="desktop-tab-pane"
+          data-tab-pane="editor"
+          ?hidden=${current.kind !== 'editor'}
+        >
+          ${editorPane.element}
+        </section>
+        <section
+          class="desktop-tab-pane"
+          data-tab-pane="terminal"
+          ?hidden=${current.kind !== 'terminal'}
+        >
+          ${terminalPane.element}
+        </section>
+        <!--
+          Browser tabs render in a main-process WebContentsView layered over
+          this window, so the renderer only reserves the rectangle it should
+          occupy. This slot is measured in syncBrowserViewBounds.
+        -->
+        <section
+          class="desktop-tab-pane"
+          id="desktop-browser-slot"
+          data-tab-pane="browser"
+          ?hidden=${current.kind !== 'browser'}
+        ></section>
       </div>
     </section>
   `;
@@ -420,7 +733,7 @@ function renderBootstrapFallback(error: unknown): void {
 
 function recoverFromBootstrapFallback(): void {
   try {
-    logsDrawer.rerenderViewer();
+    logsController.rerenderViewer();
     rerenderShell();
     // Recovery must wire rail tabs / conversation events and install the
     // signal watcher. Without these the recovered shell renders but stays
@@ -481,7 +794,7 @@ function installShellSignalWatcher(): void {
 
 let bootstrapFailed = false;
 try {
-  logsDrawer.rerenderViewer();
+  logsController.rerenderViewer();
   rerenderShell();
   installShellSignalWatcher();
 } catch (error) {
@@ -497,32 +810,11 @@ if (bootstrapFailed) {
 }
 
 // =============================================================================
-// Settings overlay
+// Settings
 // =============================================================================
-
-let settingsDialog: WaDialog | null = null;
-
-function ensureSettingsDialog(): WaDialog {
-  if (settingsDialog) return settingsDialog;
-  // Settings-app fills the dialog body. We pass it as the shell content (no
-  // titled header) so subsequent re-opens reuse the same instance, preserving
-  // tab selection and state.
-  settingsDialog = createOverlayDialog({
-    appRoot,
-    prefix: 'desktop-settings',
-    ariaLabel: 'Settings',
-    closeLabel: 'Close settings',
-    content: settingsView,
-    attributes: { 'data-route-button': 'settings' },
-  }).dialog;
-  return settingsDialog;
-}
-
-function openSettingsOverlay(): void {
-  const dialog = ensureSettingsDialog();
-  setRouteState('settings');
-  dialog.open = true;
-}
+//
+// Settings is a tab, not a modal dialog: configuring a run while watching it is
+// the common case, and an overlay made those mutually exclusive.
 
 type ShowSettingsArgs = Parameters<DesktopCommandActions['showSettings']>;
 
@@ -530,7 +822,7 @@ function openSettingsTab(
   tabIndex?: ShowSettingsArgs[0],
   agentSubTab?: ShowSettingsArgs[1],
 ): void {
-  openSettingsOverlay();
+  openWorkspaceTab('settings');
   if (tabIndex == null) return;
   window.postMessage(
     buildDesktopSettingsTabMessage(tabIndex, agentSubTab),
@@ -615,30 +907,21 @@ function returnToLauncher(): void {
   setRouteState('main');
 }
 
-// Bridge for legacy `desktop:setRoute` IPC. The shell no longer has four
-// routes, so map the old route names onto the new surfaces:
-//   - 'main' / 'progress' → center pane (clear active stream for 'main')
-//   - 'settings' → overlay
-//   - 'logs' → drawer
+// Bridge for legacy `desktop:setRoute` IPC (menu items, command palette).
+// Each route resolves to the tab that now owns its surface; 'main' additionally
+// clears the active stream so the workspace tab shows the launcher.
 function setRoute(route: DesktopRoute): void {
   setRouteState(route);
   if (bootstrapFailed) return;
-  switch (route) {
-    case 'main':
-      returnToLauncher();
-      break;
-    case 'progress':
-      // No-op: the conversation pane shows automatically when activeStreamId$
-      // is set. If no active stream, stay on launcher.
-      rerenderShell();
-      break;
-    case 'settings':
-      openSettingsOverlay();
-      break;
-    case 'logs':
-      openLogsDrawer();
-      break;
+  if (route === 'main') {
+    returnToLauncher();
+    return;
   }
+  const kind = tabKindForRoute(route);
+  openWorkspaceTab(kind);
+  // Opening the Logs tab must also fetch a snapshot; the pane renders whatever
+  // it last received, which on first open is a placeholder.
+  if (kind === 'logs') logsController.open();
 }
 
 window.addEventListener('message', (event) => {
@@ -665,7 +948,7 @@ window.addEventListener('message', (event) => {
   }
   const logParsed = DesktopSetLogMessageSchema.safeParse(event.data);
   if (logParsed.success) {
-    logsDrawer.applySnapshot(logParsed.data);
+    logsController.applySnapshot(logParsed.data);
     return;
   }
   const diffParsed = DesktopShowDiffMessageSchema.safeParse(event.data);
@@ -691,12 +974,105 @@ window.addEventListener('message', (event) => {
     promptOverlay.open(promptParsed.data);
     return;
   }
+  if (handleWorkspaceMessage(event.data)) return;
   // Progress view messages: dispatch directly into the shared messageDispatcher
   // — no need to mount <progress-app> for plumbing. PRD § 7.C.
   if (isProgressOutboundMessage(event.data)) {
     dispatchMessage(event.data);
     return;
   }
+});
+
+/**
+ * Handles main-process replies for the editor, terminal, and browser panes.
+ * Returns true when the message was claimed, so the caller stops dispatching.
+ */
+function handleWorkspaceMessage(data: unknown): boolean {
+  const listed = DesktopFilesListedMessageSchema.safeParse(data);
+  if (listed.success) {
+    pendingFileList?.resolve(listed.data.files);
+    pendingFileList = undefined;
+    return true;
+  }
+  const read = DesktopFileReadMessageSchema.safeParse(data);
+  if (read.success) {
+    settlePending(pendingFileReads, read.data.path, (request) =>
+      request.resolve(read.data.contents),
+    );
+    return true;
+  }
+  const written = DesktopFileWrittenMessageSchema.safeParse(data);
+  if (written.success) {
+    settlePending(pendingFileWrites, written.data.path, (request) =>
+      request.resolve(''),
+    );
+    return true;
+  }
+  const fileError = DesktopFileErrorMessageSchema.safeParse(data);
+  if (fileError.success) {
+    const error = new Error(fileError.data.message);
+    // An empty path marks a listing failure; anything else is a specific file's
+    // read or write. Reject both queues for that path: only one will be
+    // populated, and leaving the other pending would hang the editor.
+    if (!fileError.data.path) {
+      pendingFileList?.reject(error);
+      pendingFileList = undefined;
+    } else {
+      settlePending(pendingFileReads, fileError.data.path, (request) =>
+        request.reject(error),
+      );
+      settlePending(pendingFileWrites, fileError.data.path, (request) =>
+        request.reject(error),
+      );
+    }
+    return true;
+  }
+  const terminalData = DesktopTerminalDataMessageSchema.safeParse(data);
+  if (terminalData.success) {
+    terminalPane.write(terminalData.data.sessionId, terminalData.data.data);
+    return true;
+  }
+  const terminalExit = DesktopTerminalExitMessageSchema.safeParse(data);
+  if (terminalExit.success) {
+    terminalPane.reportExit(
+      terminalExit.data.sessionId,
+      terminalExit.data.exitCode,
+    );
+    return true;
+  }
+  const terminalError = DesktopTerminalErrorMessageSchema.safeParse(data);
+  if (terminalError.success) {
+    terminalPane.reportError(
+      terminalError.data.sessionId,
+      terminalError.data.message,
+    );
+    return true;
+  }
+  const browserState = DesktopBrowserStateMessageSchema.safeParse(data);
+  if (browserState.success) {
+    // Only the title is surfaced today: it renames the tab so a browser tab
+    // reads as its page rather than a generic "Browser".
+    const { tabId, title } = browserState.data;
+    const tab = tabState.tabs.find((entry) => entry.id === tabId);
+    if (tab && title && tab.title !== title) {
+      updateTabs({
+        ...tabState,
+        tabs: tabState.tabs.map((entry) =>
+          entry.id === tabId ? { ...entry, title } : entry,
+        ),
+      });
+    }
+    return true;
+  }
+  return false;
+}
+
+// Keep the embedded browser aligned when the window resizes: its view is
+// positioned in absolute window coordinates, not renderer layout.
+window.addEventListener('resize', () => {
+  syncBrowserViewBounds();
+  editorPane.layout();
+  terminalPane.layout();
 });
 
 // =============================================================================

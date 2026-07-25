@@ -49,7 +49,6 @@ import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { FileLister } from '@frontend/files/fileLister';
 import { StatusBarUsageTracker } from '@frontend/statusBar/StatusBarUsageTracker';
 import { subscribeStatusBarSessionEvents } from '@frontend/statusBar/statusBarSessionEvents';
-import { killActiveRecording } from '@tools/media/audio';
 import { disposeDiffRefresh } from '@frontend/ui/diffView';
 import { registerFileDecorations } from '@frontend/ui/fileDecorations';
 import { registerWelcomeView } from '@frontend/ui/welcomeView';
@@ -105,6 +104,7 @@ import {
   seedDisabledToolDefaults,
 } from '@tools/toolAvailability';
 import { setOpenPdfOpener } from '@tools/OpenPdfTool';
+import { killActiveRecording } from '@tools/media/audio';
 import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
 import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { setInlineCommentProvider } from '@tools/comment/InlineCommentTool';

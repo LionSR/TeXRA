@@ -26,11 +26,11 @@ import {
   wakeQueuedFollowUpStream,
 } from '@agent/followUp/ToolUseFollowUp';
 import { isRuntimePresentationEvent } from '@agent/runtime/runtimePresentationEvents';
-import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
+import { getServerSideKeyService } from '@auth/serverKeys';
 import {
-  startRecording,
-  stopRecordingAndTranscribe,
-} from '@tools/media/audio';
+  isPreferCodexSubscription,
+  setPreferCodexSubscription,
+} from '@auth/codex/codexPreference';
 import {
   getFileListConfig,
   loadFileListSettings,
@@ -44,6 +44,7 @@ import {
   resolveTeamLaunch,
   TEAM_SELECTION_REQUIRED_MESSAGE,
 } from '@common/teams/TeamPlan';
+import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
 import {
   repairRestartedStreams,
   RestartRepairRetryScheduler,
@@ -80,6 +81,23 @@ import {
   prepareMainViewTeamExecutionRequest,
 } from '@controllers/mainView/MainViewExecutionController';
 import type { SessionStores } from '@controllers/progressView/backend/state/SessionStores';
+import {
+  runCleanMultiple,
+  runCleanRunDir,
+  runCleanSingle,
+  runPack,
+  runPackRunDir,
+} from '@housekeeping';
+import {
+  API_PROVIDERS,
+  hasUsableApiKey,
+  isApiProvider,
+  lookupApiKey,
+} from '@model/apiProviders';
+import {
+  computeModelOptionsData,
+  invalidateModelOptionsCache,
+} from '@model/computeModelOptions';
 import { platform } from '@platform/platform';
 import { PROGRESS_VIEW_COMMANDS, COMMON_COMMANDS } from '@shared/ipc';
 import {
@@ -97,35 +115,14 @@ import {
   formatStreamDeletionRetention,
 } from '@shared/copy/executionHistory';
 import type { MainViewExecuteMessage } from '@shared/schemas/mainView/executeMessage';
-import {
-  runCleanMultiple,
-  runCleanRunDir,
-  runCleanSingle,
-  runPack,
-  runPackRunDir,
-} from '@housekeeping';
-import {
-  isPreferCodexSubscription,
-  setPreferCodexSubscription,
-} from '@auth/codex/codexPreference';
-import { getServerSideKeyService } from '@auth/serverKeys';
-import {
-  API_PROVIDERS,
-  hasUsableApiKey,
-  isApiProvider,
-  lookupApiKey,
-} from '@model/apiProviders';
-import {
-  computeModelOptionsData,
-  invalidateModelOptionsCache,
-} from '@model/computeModelOptions';
 import { AgentCategory } from '@shared/schemas/agent';
 import type { FileOpResult } from '@shared/schemas/opResults';
 import type { SettingsTab } from '@shared/schemas/settingsViewMessages';
-import { cleanupUnscopedApprovals } from '@tools/approval';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
-import { getConfig } from '@utils/config/configUtils';
+import { cleanupUnscopedApprovals } from '@tools/approval';
+import { startRecording, stopRecordingAndTranscribe } from '@tools/media/audio';
 import { WorkspaceFS } from '@utils/files';
+import { getConfig } from '@utils/config/configUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -506,8 +503,7 @@ export class DesktopProgressBridge {
     return new ProgressApiKeyRetryController({
       providers: API_PROVIDERS,
       readKey: (provider) => lookupApiKey(platform().secrets, provider),
-      hasUsableKey: (provider) =>
-        hasUsableApiKey(platform().secrets, provider),
+      hasUsableKey: (provider) => hasUsableApiKey(platform().secrets, provider),
       promptForApiKey: async () => {
         this.routeToSettings(SETTINGS_TAB.MODELS);
         await this.options.host.showInfoMessage(
@@ -558,7 +554,8 @@ export class DesktopProgressBridge {
   }
 
   private postRecordingStatus(
-    status: { status: 'started' | 'stopped' } | { status: 'error'; error: string },
+    status:
+      { status: 'started' | 'stopped' } | { status: 'error'; error: string },
   ): void {
     this.postToRenderer({
       command: PROGRESS_VIEW_COMMANDS.UPDATE_RECORDING,
@@ -691,12 +688,14 @@ export class DesktopProgressBridge {
       return;
     }
 
-    const runWorkspaceOperation = (): Promise<FileOpResult> =>
-      operation === 'pack'
-        ? runPack(model, inputFile, agent, outputFiles)
-        : outputFiles.length > 0
-          ? runCleanMultiple(model, inputFile, agent, outputFiles)
-          : runCleanSingle(model, inputFile, agent);
+    const runWorkspaceOperation = (): Promise<FileOpResult> => {
+      if (operation === 'pack') {
+        return runPack(model, inputFile, agent, outputFiles);
+      }
+      return outputFiles.length > 0
+        ? runCleanMultiple(model, inputFile, agent, outputFiles)
+        : runCleanSingle(model, inputFile, agent);
+    };
 
     let result: FileOpResult;
     try {
@@ -714,14 +713,14 @@ export class DesktopProgressBridge {
         // Same precedence as the extension's `mergeRunDirAndWorkspaceResult`:
         // report an error from either pass, otherwise prefer the workspace
         // result unless it found nothing.
-        result =
-          runDirResult.status === 'error'
+        const mergeResults = (): FileOpResult => {
+          if (runDirResult.status === 'error') return runDirResult;
+          if (workspaceResult.status === 'error') return workspaceResult;
+          return workspaceResult.status === 'noFiles'
             ? runDirResult
-            : workspaceResult.status === 'error'
-              ? workspaceResult
-              : workspaceResult.status !== 'noFiles'
-                ? workspaceResult
-                : runDirResult;
+            : workspaceResult;
+        };
+        result = mergeResults();
       } else {
         result = await runWorkspaceOperation();
       }
@@ -746,12 +745,11 @@ export class DesktopProgressBridge {
     switch (result.status) {
       case 'success': {
         const folder = result.outputFolder;
+        const packedMessage = folder
+          ? `Files packed into ${folder}`
+          : 'Files packed.';
         await this.options.host.showInfoMessage(
-          operation === 'pack'
-            ? folder
-              ? `Files packed into ${folder}`
-              : 'Files packed.'
-            : 'Output files cleaned.',
+          operation === 'pack' ? packedMessage : 'Output files cleaned.',
         );
         return;
       }

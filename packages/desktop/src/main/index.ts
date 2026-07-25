@@ -64,6 +64,11 @@ import { createDesktopDiffHost } from './desktopDiffHost.js';
 import { initializeDesktopProcessStores } from './desktopProcessStores.js';
 import { createDesktopFileSelection } from './desktopFileSelection.js';
 import { createDesktopPreviewHost } from './desktopPreviewHost.js';
+import { createDesktopAuthBrowser } from './desktopAuthBrowser.js';
+import { createDesktopBrowserViews } from './desktopBrowserViews.js';
+import { createDesktopPtyHost } from './desktopPtyHost.js';
+import { createDesktopWorkspaceIpc } from './desktopWorkspaceIpc.js';
+import { DESKTOP_WORKSPACE_COMMANDS } from '../desktopWorkspaceMessages.js';
 import { installDesktopProtocolCallbackLifecycle } from './desktopProtocolCallbacks.js';
 import {
   attachRendererConsoleLog,
@@ -541,11 +546,28 @@ function createWindow(options: {
     });
     await onboardingIpcRef.current?.refreshOnboardingFunnel();
   };
-  const desktopAuthHost: DesktopSupabaseAuthHost = {
+  // Completes OAuth inside a window we control, so the `texra://` callback is
+  // intercepted from our own navigation events instead of requiring the OS to
+  // route a deep link back to a registered protocol client. An unpackaged dev
+  // run has no registered TeXRA.app, which is why external-browser sign-in
+  // hung indefinitely. See desktopAuthBrowser.ts.
+  const authBrowser = createDesktopAuthBrowser({
+    deliverCallback: (rawUrl) => protocolLifecycle.router.routeUrl(rawUrl),
     openExternalUrl: (url) => previewHost.openExternal(url),
+    getParentWindow: () => (window.isDestroyed() ? undefined : window),
+    onError: reportAsyncError,
+  });
+  const desktopAuthHost: DesktopSupabaseAuthHost = {
+    openExternalUrl: (url) => authBrowser.open(url),
     showInfoMessage,
     showErrorMessage,
-    onSessionChanged: refreshDesktopAuthSurfaces,
+    onSessionChanged: async () => {
+      // The callback already closed the window; this covers a session arriving
+      // by any other path (token refresh, a second window) so a stale consent
+      // page can't linger after the user is signed in.
+      authBrowser.close();
+      await refreshDesktopAuthSurfaces();
+    },
   };
   const desktopAuth = createDesktopSupabaseAuth({
     router: protocolLifecycle.router,
@@ -1167,7 +1189,65 @@ function createWindow(options: {
       onAsyncError: reportAsyncError,
     },
   );
+  // Interactive terminals and embedded browser tabs. Both stream to the
+  // renderer through the IPC bridge installed just below, so they post via
+  // `ipcRef.current` rather than capturing a bridge that doesn't exist yet.
+  const postWorkspaceMessage = (message: unknown): void => {
+    if (window.isDestroyed() || window.webContents.isDestroyed()) return;
+    ipcRef.current?.postToRenderer(message);
+  };
+  const ptyHost = createDesktopPtyHost({
+    cwd: options.workspacePath,
+    onData: (sessionId, data) =>
+      postWorkspaceMessage({
+        command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_DATA,
+        sessionId,
+        data,
+      }),
+    onExit: (sessionId, exitCode) =>
+      postWorkspaceMessage({
+        command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_EXIT,
+        sessionId,
+        exitCode,
+      }),
+    onError: reportAsyncError,
+  });
+  const browserViews = createDesktopBrowserViews({
+    getWindow: () => (window.isDestroyed() ? undefined : window),
+    openExternalUrl: (url) => previewHost.openExternal(url),
+    onNavigated: (state) =>
+      postWorkspaceMessage({
+        command: DESKTOP_WORKSPACE_COMMANDS.BROWSER_STATE,
+        ...state,
+      }),
+    onError: reportAsyncError,
+  });
+  const workspaceIpc = createDesktopWorkspaceIpc(
+    { postToRenderer: postWorkspaceMessage },
+    {
+      ptyHost,
+      browserViews,
+      // The renderer measures the browser slot in CSS pixels relative to its
+      // own viewport; a WebContentsView is positioned in the window's
+      // device-independent content space. These coincide at zoom factor 1, so
+      // scale by the renderer's zoom to keep the view aligned when the user
+      // has zoomed the UI.
+      toWindowBounds: (bounds) => {
+        const zoom = window.isDestroyed()
+          ? 1
+          : window.webContents.getZoomFactor();
+        return {
+          x: Math.round(bounds.x * zoom),
+          y: Math.round(bounds.y * zoom),
+          width: Math.round(bounds.width * zoom),
+          height: Math.round(bounds.height * zoom),
+        };
+      },
+      onAsyncError: reportAsyncError,
+    },
+  );
   const mainViewIpc = installDesktopMainViewIpc(window, {
+    workspace: workspaceIpc,
     executeAgent: async (message) => {
       const execution = await getAgentExecution();
       void execution.handleExecute(message).catch(reportAsyncError);
@@ -1228,6 +1308,13 @@ function createWindow(options: {
     }
     desktopAuth.dispose();
     setupSignInRegistration.dispose();
+    // A child auth window would otherwise keep the app alive after its parent
+    // closed, leaving no way to reach it.
+    authBrowser.dispose();
+    // Shells keep running and web contents keep loading unless explicitly torn
+    // down — neither is reachable once the window is gone.
+    ptyHost.disposeAll();
+    browserViews.disposeAll();
   });
   window.webContents.once('did-finish-load', () => {
     void options.initializeCrashReporting();

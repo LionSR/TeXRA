@@ -16,6 +16,7 @@ import {
   DEFAULT_AGENT_TEMPLATE_TOOLS_YAML,
   renderAgentTemplateString,
 } from '@agent/templates/agentTemplateRenderer';
+import { SupabaseClient } from '@auth/SupabaseClient';
 import type { TeamAvailabilityChoice } from '@common/teams/TeamAvailabilityPreflight';
 import { loadTeamOptions } from '@common/teams/TeamPlan';
 import { applyTeamRosterWithPreflight } from '@common/teams/TeamRosterApplication';
@@ -32,9 +33,8 @@ import {
   buildCustomAgentDirMessage,
 } from '@shared/settingsView/handlers/agentSelectionHandlers';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
-import { SupabaseClient } from '@auth/SupabaseClient';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { AbsoluteFS } from '@utils/files';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 export interface DefaultDesktopAgentSettingsControllerOptions extends SettingsStatePorts {
   readonly registry: {
@@ -453,9 +453,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     }
   }
 
-  private async deleteCustomAgent(data: {
-    agentName: string;
-  }): Promise<void> {
+  private async deleteCustomAgent(data: { agentName: string }): Promise<void> {
     const entry = getAgent(createKey('custom', data.agentName));
     if (!entry?.path) {
       await this.notifications.showErrorMessage(

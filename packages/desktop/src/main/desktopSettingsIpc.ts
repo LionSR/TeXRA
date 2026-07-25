@@ -40,11 +40,11 @@ import {
   unbindAllForPR,
   unbindAllForRepo,
 } from '@tools/github';
+import { GoalStore } from '@tools/goal';
 import {
   GITHUB_TOKEN_STORAGE_KEY,
   resolveGitHubTokenSource,
 } from '@tools/github/githubAuth';
-import { GoalStore } from '@tools/goal';
 import { StorageFS } from '@utils/files';
 import {
   applyGitAuthorSettings,
@@ -419,11 +419,12 @@ export function createDesktopSettingsIpc(
     //   owner/repo/pulls/N  → PR
     //   owner/repo/issues/N → issue
     const key = data.key;
-    const removed = key.includes('/pulls/')
-      ? unbindAllForPR(key)
-      : key.includes('/issues/')
-        ? unbindAllForIssue(key)
-        : unbindAllForRepo(key);
+    const unbind = (): number => {
+      if (key.includes('/pulls/')) return unbindAllForPR(key);
+      if (key.includes('/issues/')) return unbindAllForIssue(key);
+      return unbindAllForRepo(key);
+    };
+    const removed = unbind();
     if (removed === 0) {
       await options.ui.showInfoMessage(`No active subscription for ${key}.`);
       return;

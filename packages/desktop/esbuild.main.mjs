@@ -21,7 +21,11 @@ const result = await esbuild.build({
   metafile: true,
   outdir,
   chunkNames: 'chunks/[name]-[hash]',
-  external: ['electron', 'fsevents'],
+  // node-pty is a native addon: it resolves its own .node binary relative to
+  // its package directory at runtime, which breaks once the JS is inlined into
+  // a bundle chunk. Keep it external so the require resolves to the real
+  // installed package (electron-builder ships it via node_modules).
+  external: ['electron', 'fsevents', 'node-pty'],
   loader: { '.wasm': 'binary' },
   tsconfig: 'tsconfig.main.json',
   target: 'node22',

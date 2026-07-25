@@ -32,7 +32,9 @@ const reportRebuild = {
     build.onEnd(async (result) => {
       const stamp = new Date().toTimeString().slice(0, 8);
       if (result.errors.length > 0) {
-        console.error(`[main:watch ${stamp}] FAILED (${result.errors.length} errors)`);
+        console.error(
+          `[main:watch ${stamp}] FAILED (${result.errors.length} errors)`,
+        );
         return;
       }
       if (result.metafile) {
@@ -61,7 +63,9 @@ const context = await esbuild.context({
   metafile: true,
   outdir,
   chunkNames: 'chunks/[name]-[hash]',
-  external: ['electron', 'fsevents'],
+  // Mirrors esbuild.main.mjs: node-pty is a native addon and must resolve from
+  // the real installed package rather than a bundled copy.
+  external: ['electron', 'fsevents', 'node-pty'],
   loader: { '.wasm': 'binary' },
   tsconfig: 'tsconfig.main.json',
   target: 'node22',

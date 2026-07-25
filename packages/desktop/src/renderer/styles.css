@@ -1,7 +1,12 @@
 :root {
   --desktop-nav-height: 40px;
+  --desktop-tab-strip-height: 34px;
   --desktop-rail-width: clamp(320px, 28vw, 390px);
-  --desktop-right-width: 0px; /* reserved; collapsed today (PRD § 6) */
+  --desktop-editor-tree-width: clamp(200px, 20vw, 300px);
+  /* Shared motion + elevation so hover and menu affordances are consistent
+     across the shell instead of each surface inventing its own. */
+  --desktop-transition-fast: 120ms ease;
+  --desktop-shadow-menu: 0 8px 24px var(--wa-color-shadow, rgb(0 0 0 / 24%));
   font-family: var(--wa-font-family-body);
   background: var(--wa-color-surface-default);
   color: var(--wa-color-text-normal);
@@ -17,7 +22,9 @@ body {
      the way down to the pane containers. */
   height: 100vh;
   display: grid;
-  grid-template-rows: var(--desktop-nav-height) minmax(0, 1fr);
+  grid-template-rows:
+    var(--desktop-nav-height) var(--desktop-tab-strip-height)
+    minmax(0, 1fr);
   background: var(--wa-color-surface-default);
   color: var(--wa-color-text-normal);
 }
@@ -83,16 +90,216 @@ wa-button.desktop-command-button {
 }
 
 /* =====================================================================
-   Three-pane layout (PRD § 6 + § 7.D)
+   Tab strip
    ----------------------------------------------------------------------
-   left rail | center | right (reserved)
+   Hand-rolled rather than wa-tab-group: per-tab close buttons, a dirty
+   indicator, and overflow scrolling fought that component's slot contract.
    --------------------------------------------------------------------- */
 
-.desktop-three-pane {
+.desktop-tab-strip {
+  display: flex;
+  align-items: stretch;
+  gap: var(--wa-space-3xs);
+  height: var(--desktop-tab-strip-height);
+  padding: 0 var(--wa-space-2xs);
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--wa-color-surface-border);
+  background: var(--wa-color-surface-lowered);
+}
+
+.desktop-tab-strip-scroll {
+  display: flex;
+  align-items: stretch;
+  gap: var(--wa-space-3xs);
+  flex: 1 1 auto;
+  min-width: 0;
+  /* Many open tabs scroll horizontally instead of shrinking to unreadable
+     slivers. The scrollbar is hidden; the strip is short and dragging it is
+     not the intended interaction (click, or the command palette). */
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.desktop-tab-strip-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.desktop-tab {
+  display: flex;
+  align-items: center;
+  gap: var(--wa-space-2xs);
+  flex: 0 0 auto;
+  max-width: 200px;
+  padding: 0 var(--wa-space-2xs) 0 var(--wa-space-xs);
+  margin: var(--wa-space-3xs) 0;
+  border: 1px solid transparent;
+  border-radius: var(--wa-border-radius-m);
+  color: var(--wa-color-text-quiet);
+  font-size: 12px;
+  cursor: default;
+  user-select: none;
+  transition:
+    background var(--desktop-transition-fast),
+    color var(--desktop-transition-fast);
+}
+
+.desktop-tab:hover {
+  background: var(--wa-color-surface-raised);
+  color: var(--wa-color-text-normal);
+}
+
+.desktop-tab[data-active='true'] {
+  background: var(--wa-color-surface-default);
+  border-color: var(--wa-color-surface-border);
+  color: var(--wa-color-text-normal);
+  font-weight: var(--wa-font-weight-semibold);
+}
+
+.desktop-tab-icon {
+  flex: 0 0 auto;
+  font-size: 11px;
+  opacity: 0.75;
+}
+
+.desktop-tab-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Dirty indicator. Sits where the close button would be so the row doesn't
+   reflow when a file becomes modified. */
+.desktop-tab-dirty {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--wa-color-brand-fill-loud, currentColor);
+}
+
+.desktop-tab-close,
+.desktop-tab-new {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--wa-border-radius-s);
+  background: transparent;
+  color: inherit;
+  font-size: 10px;
+  cursor: default;
+  /* Hidden until hover so the strip stays quiet, but still focusable and
+     always visible on the active tab. */
+  opacity: 0;
+  transition: opacity var(--desktop-transition-fast);
+}
+
+.desktop-tab:hover .desktop-tab-close,
+.desktop-tab[data-active='true'] .desktop-tab-close,
+.desktop-tab-close:focus-visible {
+  opacity: 0.7;
+}
+
+.desktop-tab-close:hover {
+  background: var(--wa-color-surface-border);
+  opacity: 1;
+}
+
+.desktop-tab-new {
+  align-self: center;
+  opacity: 0.6;
+}
+
+.desktop-tab-new:hover {
+  background: var(--wa-color-surface-raised);
+  opacity: 1;
+}
+
+.desktop-tab-body {
   display: grid;
-  grid-template-columns: var(--desktop-rail-width) minmax(0, 1fr) var(
-      --desktop-right-width
-    );
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+}
+
+/* All panes share one grid cell; `[hidden]` collapses the inactive ones.
+   Panes stay mounted so Monaco models, terminal scrollback, and in-flight
+   settings edits survive a tab switch. */
+.desktop-tab-pane {
+  display: grid;
+  grid-area: 1 / 1;
+  grid-template-rows: minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.desktop-tab-pane[hidden] {
+  display: none;
+}
+
+.desktop-tab-pane > * {
+  min-width: 0;
+  min-height: 0;
+}
+
+.desktop-workspace-icon {
+  margin-right: var(--wa-space-2xs);
+  opacity: 0.7;
+}
+
+/* =====================================================================
+   New-tab menu
+   --------------------------------------------------------------------- */
+
+.desktop-new-tab-menu {
+  position: fixed;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  min-width: 160px;
+  padding: var(--wa-space-2xs);
+  border: 1px solid var(--wa-color-surface-border);
+  border-radius: var(--wa-border-radius-l);
+  background: var(--wa-color-surface-raised);
+  box-shadow: var(--desktop-shadow-menu);
+}
+
+.desktop-new-tab-item {
+  display: flex;
+  align-items: center;
+  gap: var(--wa-space-xs);
+  padding: var(--wa-space-2xs) var(--wa-space-xs);
+  border: 0;
+  border-radius: var(--wa-border-radius-m);
+  background: transparent;
+  color: var(--wa-color-text-normal);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: default;
+}
+
+.desktop-new-tab-item:hover {
+  background: var(--wa-color-surface-default);
+}
+
+/* =====================================================================
+   Two-pane workspace layout
+   ----------------------------------------------------------------------
+   left rail (session history) | center (launcher / conversation)
+   --------------------------------------------------------------------- */
+
+.desktop-two-pane {
+  display: grid;
+  grid-template-columns: var(--desktop-rail-width) minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
   height: 100%;
@@ -223,18 +430,25 @@ wa-button.desktop-rail-settings::part(base) {
   height: 100%;
 }
 
-.desktop-right {
-  /* Reserved column. Hidden today; will host the diff/approve UX later. */
-  display: none;
-}
-
 @media (max-width: 760px) {
-  .desktop-three-pane {
+  .desktop-two-pane {
     grid-template-columns: 1fr;
     grid-template-rows: minmax(160px, 32vh) minmax(0, 1fr);
   }
 
   .desktop-rail {
+    border-right: 0;
+    border-bottom: 1px solid var(--wa-color-surface-border);
+  }
+
+  /* The tree costs too much width to keep beside the editor on a narrow
+     window; stack it above instead. */
+  .desktop-editor-pane {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(120px, 26vh) minmax(0, 1fr);
+  }
+
+  .desktop-editor-tree {
     border-right: 0;
     border-bottom: 1px solid var(--wa-color-surface-border);
   }
@@ -468,21 +682,14 @@ wa-dialog.desktop-prompt-overlay .desktop-prompt-subtitle {
 }
 
 /* =====================================================================
-   Logs drawer (wa-drawer)
+   Logs pane (hosted by the Logs tab)
    --------------------------------------------------------------------- */
-
-wa-drawer.desktop-logs-drawer {
-  --size: 40vh;
-}
-
-wa-drawer.desktop-logs-drawer::part(body) {
-  padding: 0;
-}
 
 .desktop-log-host {
   display: block;
   height: 100%;
   width: 100%;
+  overflow: hidden;
 }
 
 /* =====================================================================
@@ -826,4 +1033,265 @@ wa-dialog.desktop-onboarding {
   .desktop-onboarding-actions wa-button {
     flex: 1 1 150px;
   }
+}
+
+/* Work-type choices — the tour's first step. Each row selects a discipline
+   team, so they read as large tappable cards rather than a radio list. */
+.desktop-onboarding-choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wa-space-2xs);
+  margin-top: var(--wa-space-s);
+}
+
+.desktop-onboarding-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--wa-space-s);
+  width: 100%;
+  padding: var(--wa-space-s);
+  border: 1px solid var(--wa-color-surface-border);
+  border-radius: var(--wa-border-radius-l);
+  background: var(--wa-color-surface-lowered);
+  color: var(--wa-color-text-normal);
+  font: inherit;
+  text-align: left;
+  cursor: default;
+  transition:
+    border-color var(--desktop-transition-fast),
+    background var(--desktop-transition-fast);
+}
+
+.desktop-onboarding-choice:hover,
+.desktop-onboarding-choice:focus-visible {
+  border-color: var(--wa-color-brand-border-loud);
+  background: var(--wa-color-surface-raised);
+}
+
+.desktop-onboarding-choice-icon {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--wa-color-brand-on-quiet);
+  font-size: 15px;
+}
+
+.desktop-onboarding-choice-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.desktop-onboarding-choice-text strong {
+  font-size: 14px;
+  font-weight: var(--wa-font-weight-semibold);
+}
+
+.desktop-onboarding-choice-text > span {
+  color: var(--wa-color-text-quiet);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* Roster confirmation — shows what the chosen team actually enabled, so the
+   preset is legible rather than an opaque label. */
+.desktop-onboarding-roster {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wa-space-s);
+  margin-top: var(--wa-space-s);
+}
+
+.desktop-onboarding-roster-summary {
+  margin: 0;
+  color: var(--wa-color-text-quiet);
+  font-size: 13px;
+}
+
+.desktop-onboarding-roster-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wa-space-2xs);
+}
+
+.desktop-onboarding-roster-label {
+  color: var(--wa-color-text-quiet);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.desktop-onboarding-roster-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wa-space-2xs);
+}
+
+.desktop-onboarding-chip {
+  padding: 2px var(--wa-space-2xs);
+  border: 1px solid var(--wa-color-surface-border);
+  border-radius: var(--wa-border-radius-pill, 999px);
+  background: var(--wa-color-surface-lowered);
+  color: var(--wa-color-text-normal);
+  font-family: var(--wa-font-family-mono);
+  font-size: 11px;
+}
+
+/* =====================================================================
+   Editor pane (file tree + Monaco)
+   --------------------------------------------------------------------- */
+
+.desktop-editor-pane {
+  display: grid;
+  grid-template-columns: var(--desktop-editor-tree-width) minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+.desktop-editor-tree {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-right: 1px solid var(--wa-color-surface-border);
+  background: var(--wa-color-surface-lowered);
+}
+
+.desktop-editor-tree-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: var(--height-header);
+  padding: 0 var(--wa-space-2xs) 0 var(--wa-space-s);
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--wa-color-surface-border);
+  color: var(--wa-color-text-normal);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.desktop-editor-tree-refresh {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--wa-border-radius-s);
+  background: transparent;
+  color: var(--wa-color-text-quiet);
+  cursor: default;
+}
+
+.desktop-editor-tree-refresh:hover {
+  background: var(--wa-color-surface-raised);
+  color: var(--wa-color-text-normal);
+}
+
+.desktop-editor-tree-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+  padding: var(--wa-space-2xs);
+  overflow-y: auto;
+  list-style: none;
+}
+
+.desktop-editor-tree-row {
+  display: flex;
+  align-items: center;
+  gap: var(--wa-space-2xs);
+  width: 100%;
+  padding: var(--wa-space-3xs) var(--wa-space-2xs);
+  border: 0;
+  border-radius: var(--wa-border-radius-s);
+  background: transparent;
+  color: var(--wa-color-text-quiet);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: default;
+}
+
+.desktop-editor-tree-row:hover {
+  background: var(--wa-color-surface-raised);
+  color: var(--wa-color-text-normal);
+}
+
+.desktop-editor-tree-row[data-open='true'] {
+  background: var(--wa-color-surface-default);
+  color: var(--wa-color-text-normal);
+  font-weight: var(--wa-font-weight-semibold);
+}
+
+.desktop-editor-tree-icon {
+  flex: 0 0 auto;
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+/* Long relative paths truncate from the left so the filename stays visible —
+   the tail is what identifies the file. */
+.desktop-editor-tree-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+}
+
+.desktop-editor-dirty-dot {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--wa-color-brand-fill-loud, currentColor);
+}
+
+.desktop-editor-tree-empty {
+  padding: var(--wa-space-m);
+  color: var(--wa-color-text-quiet);
+  font-size: 12px;
+}
+
+.desktop-editor-surface {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+/* =====================================================================
+   Terminal pane
+   --------------------------------------------------------------------- */
+
+.desktop-terminal-pane {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  padding: var(--wa-space-2xs);
+  box-sizing: border-box;
+  background: var(--wa-color-surface-default);
+}
+
+/* Sessions stack in one cell; inactive ones are [hidden]. Keeping them mounted
+   preserves scrollback and the running shell. */
+.desktop-terminal-surface {
+  grid-area: 1 / 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.desktop-terminal-surface[hidden] {
+  display: none;
 }
