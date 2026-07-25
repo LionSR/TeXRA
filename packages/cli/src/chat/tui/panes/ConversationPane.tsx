@@ -4,7 +4,10 @@
 import { Box, Text } from 'ink';
 
 import { AgentCategory } from '@shared/schemas';
-import { workflowPhaseTaskProgress } from '@shared/copy/workflowTask';
+import {
+  formatWorkflowPhaseHeading,
+  workflowPhaseTaskProgress,
+} from '@shared/copy/workflowTask';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { formatResultCount } from '@utils/text/stringUtils';
 
@@ -128,10 +131,6 @@ export function workflowRunStatusSummary(
 ): string | undefined {
   if (slice?.category !== AgentCategory.Workflow) return undefined;
   const phase = slice.entries.findLast((entry) => entry.role === 'phase');
-  const phaseCounts =
-    phase?.phaseIndex !== undefined && phase.phaseTotal !== undefined
-      ? ` (${phase.phaseIndex + 1}/${phase.phaseTotal})`
-      : '';
   const { done, total } = workflowPhaseTaskProgress(
     phase
       ? slice.entries.flatMap((entry) =>
@@ -144,7 +143,7 @@ export function workflowRunStatusSummary(
   const input = slice.files?.input.length ?? 0;
   const context = slice.files?.context.length ?? 0;
   const segments = [
-    ...(phase ? [`${phase.phaseLabel}${phaseCounts}`] : []),
+    ...(phase ? [formatWorkflowPhaseHeading(phase)] : []),
     ...(total > 0 ? [`${done}/${total} done`] : []),
     ...(input > 0 || context > 0
       ? [

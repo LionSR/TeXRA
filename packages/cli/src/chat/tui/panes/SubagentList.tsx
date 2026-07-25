@@ -10,7 +10,11 @@ import {
   type StreamTabId,
   type WorkflowTaskProgress,
 } from '@shared/schemas';
-import { workflowPhaseTaskProgress } from '@shared/copy/workflowTask';
+import {
+  formatWorkflowPhaseHeading,
+  workflowPhaseTaskProgress,
+  type WorkflowPhaseHeading,
+} from '@shared/copy/workflowTask';
 import {
   formatPhaseStageLabel,
   formatRoundStageLabel,
@@ -76,10 +80,7 @@ function RowMetadata({
 
 const SUBAGENT_SUMMARY_MAX_COLUMNS = 100;
 
-interface PhaseHeaderDetails {
-  readonly label: string;
-  readonly index?: number;
-  readonly total?: number;
+interface PhaseHeaderDetails extends WorkflowPhaseHeading {
   readonly progress?: string;
 }
 
@@ -90,17 +91,13 @@ function PhaseHeader({
   readonly details: PhaseHeaderDetails;
   readonly metadataColumn: boolean;
 }): React.JSX.Element {
-  const position =
-    details.index !== undefined && details.total !== undefined
-      ? ` (${details.index + 1}/${details.total})`
-      : '';
   const inlineProgress =
     !metadataColumn && details.progress ? ` · ${details.progress}` : '';
   return (
     <Box flexDirection="row" flexGrow={1} minWidth={0}>
       <Box minWidth={0} flexShrink={1}>
         <Text dimColor wrap="truncate-end">
-          {`    ${STATUS_DIAMOND} ${details.label}${position}${inlineProgress}`}
+          {`    ${STATUS_DIAMOND} ${formatWorkflowPhaseHeading(details)}${inlineProgress}`}
         </Text>
       </Box>
       {metadataColumn && details.progress ? (
@@ -259,16 +256,14 @@ export function SubagentList(
       rootSession?.slice?.category === AgentCategory.Workflow
         ? rootSession.slice.entries
         : [];
-    const phasePositions = new Map<
-      string,
-      { readonly index?: number; readonly total?: number }
-    >();
+    const phaseHeadings = new Map<string, WorkflowPhaseHeading>();
     const tasksByPhase = new Map<string, WorkflowTaskProgress[]>();
     for (const entry of entries) {
       if (entry.role === 'phase') {
-        phasePositions.set(entry.phaseLabel, {
-          index: entry.phaseIndex,
-          total: entry.phaseTotal,
+        phaseHeadings.set(entry.phaseLabel, {
+          phaseLabel: entry.phaseLabel,
+          phaseIndex: entry.phaseIndex,
+          phaseTotal: entry.phaseTotal,
         });
       } else if (
         entry.role === 'workflowTask' &&
@@ -301,12 +296,9 @@ export function SubagentList(
         const value = childPhaseListValue(headerOrdinal++);
         const tasks = tasksByPhase.get(phase) ?? [];
         const { done, total } = workflowPhaseTaskProgress(tasks);
-        const position = phasePositions.get(phase);
         nextItems.push({ label: phase, value, disabled: true });
         nextHeaders.set(value, {
-          label: phase,
-          index: position?.index,
-          total: position?.total,
+          ...(phaseHeadings.get(phase) ?? { phaseLabel: phase }),
           ...(total > 0 ? { progress: `${done}/${total}` } : {}),
         });
       }
