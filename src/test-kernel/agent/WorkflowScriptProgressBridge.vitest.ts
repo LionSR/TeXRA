@@ -275,6 +275,36 @@ return await agent('Run loose', { id: 'loose' })`,
     );
   });
 
+  it('does not fail an active phase for a failed phase-less declared task', async () => {
+    const { trace, events } = recordingTrace();
+    await runPersistedWorkflowScriptWithProgress(trace, {
+      store: getExecutionStore(executionId),
+      checkpointId: 'failed-phase-less-declared-task',
+      script: `export const meta = {
+  name: 'failed-phase-less-declared-task',
+  description: 'keeps a phase-less failure outside the active phase',
+  phases: [{ title: 'Research' }],
+  tasks: [{ id: 'loose', label: 'Loose task' }],
+}
+phase('Research')
+return await agent('Run loose', { id: 'loose' })`,
+      runAgent: async () => {
+        throw new Error('model unavailable');
+      },
+    });
+
+    const researchId = stageId(events, 'Research');
+    expect(workflowTaskEvent(events, 'Loose task', 'failed')).toMatchObject({
+      stageId: undefined,
+      task: { phase: undefined, error: 'model unavailable' },
+    });
+    expect(events).toContainEqual({
+      type: 'stage.end',
+      id: researchId,
+      status: RUN_OUTCOME.COMPLETED,
+    });
+  });
+
   it('marks a planned task failed when the live-call cap refuses it', async () => {
     const { trace, events } = recordingTrace();
     await expect(

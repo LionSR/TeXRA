@@ -222,6 +222,12 @@ export async function runPersistedWorkflowScriptWithProgress(
       stageId: phase === undefined ? parentStageId : phaseStageIdFor(phase),
     });
   };
+  const recordedTaskPhase = (
+    task: Pick<WorkflowTaskProgress, 'id' | 'phase'>,
+  ): string | undefined => {
+    const projected = projectedTasks.get(task.id);
+    return projected ? projected.definition.phase : task.phase;
+  };
   const markPhaseFailed = (
     title: string | undefined,
     index?: number,
@@ -284,7 +290,6 @@ export async function runPersistedWorkflowScriptWithProgress(
         // Cached replays report none because they perform no live attempt.
         switch (event.outcome) {
           case 'failed': {
-            markPhaseFailed(phaseTitle, event.phaseIndex, event.phaseTotal);
             const task: WorkflowTaskProgress = {
               id: event.progressId,
               label: event.label,
@@ -297,6 +302,11 @@ export async function runPersistedWorkflowScriptWithProgress(
                 : {}),
               ...(spent !== undefined ? { totalCostUsd: spent } : {}),
             };
+            markPhaseFailed(
+              recordedTaskPhase(task),
+              event.phaseIndex,
+              event.phaseTotal,
+            );
             emitTask(task);
             recordTerminalActivity(task);
             break;
