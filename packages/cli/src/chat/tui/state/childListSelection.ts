@@ -1,10 +1,16 @@
 // Local imports - shared stream identity
 import type { StreamTabId } from '@shared/schemas';
 
-export type ChildListValue = `stream:${string}`;
+export type ChildListValue = `stream:${string}` | `phase:${number}`;
 
 export function childStreamListValue(streamId: StreamTabId): ChildListValue {
   return `stream:${streamId}`;
+}
+
+/** List-local structural identity for a disabled phase header. The ordinal
+ *  avoids encoding a free-form phase label into a delimiter-based key. */
+export function childPhaseListValue(ordinal: number): ChildListValue {
+  return `phase:${ordinal}`;
 }
 
 export function childListStreamId(
