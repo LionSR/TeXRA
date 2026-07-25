@@ -98,16 +98,6 @@ export function resolveChildListTarget({
   };
 }
 
-export function liveChildExecutionElapsedKey(
-  activeSubagents: readonly ActiveChildInfo[],
-): string | undefined {
-  const liveKeys = [...activeSubagents]
-    .filter(hasLiveChildElapsed)
-    .map((child) => `${child.executionId}:${child.startedAt}`)
-    .sort();
-  return liveKeys.length > 0 ? liveKeys.join(',') : undefined;
-}
-
 export function numericFocusTargetForActiveStream(init: {
   readonly activeStreamId: StreamTabId | undefined;
   readonly childStreamEntries: ChildStreamEntries;
