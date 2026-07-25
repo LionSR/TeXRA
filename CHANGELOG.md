@@ -56,6 +56,9 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Team availability choices stay interactive after leaving the launcher** —
+  the CLI now waits for sign-in, continue, or cancel input instead of exiting
+  at the prompt.
 - **The child list drops its always-empty background-process rows** — the
   `N proc` status segment and the task-detail panel behind `Enter` were served
   by a roster no run could populate; background `bash` keeps its own child
