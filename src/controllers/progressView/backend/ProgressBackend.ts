@@ -76,9 +76,9 @@ export interface ProgressBackendOptions {
   /** Session that owns this backend's coordination state (defaults to the process session). */
   session?: SessionHandle;
   /**
-   * `session` when the supplied snapshot store already has its own
-   * process-lifetime session-event subscription. The backend then projects
-   * facts without applying the same durable mutations a second time.
+   * `session` when the caller has already attached this snapshot store to the
+   * session event hub, already registered an artifact flusher for it, and
+   * already loaded/swept it at process start. See the #6981 retirement ledger.
    */
   stateOwnership?: 'backend' | 'session';
   /**
@@ -110,6 +110,7 @@ export class ProgressBackend {
   private readonly onSetActiveStream?: (
     payload: SetActiveStreamPayload,
   ) => void;
+  private readonly detachSnapshotEvents: () => void;
   private readonly detachArtifactFlusher: () => void;
   private readonly stateOwnership: 'backend' | 'session';
   private disposed = false;
@@ -131,6 +132,10 @@ export class ProgressBackend {
       this.session,
       options.stores,
     );
+    this.detachSnapshotEvents =
+      this.stateOwnership === 'session'
+        ? () => undefined
+        : this.state.snapshots.attachSessionEvents(this.session.events);
     this.detachArtifactFlusher =
       this.stateOwnership === 'session'
         ? () => undefined
@@ -162,7 +167,6 @@ export class ProgressBackend {
       ui.hasPendingPermissions,
       (stream) => this.deleteStream(stream),
       options.getStreamControls,
-      this.stateOwnership,
     );
     this.interactionHandler = new ProgressInteractionHandler(ui.callbacks);
     this.onSetActiveStream = options.onSetActiveStream;
@@ -355,6 +359,7 @@ export class ProgressBackend {
 
   dispose(): void {
     this.disposed = true;
+    this.detachSnapshotEvents();
     this.detachArtifactFlusher();
     this.webviewBridge.dispose();
   }
