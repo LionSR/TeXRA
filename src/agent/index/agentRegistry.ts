@@ -2,6 +2,8 @@
 
 import * as path from 'node:path';
 
+import PQueue from 'p-queue';
+
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { AgentRosterController } from '@agent/roster/AgentRosterController';
 import * as logger from '@logger/logUtils';
@@ -95,7 +97,7 @@ const cache = new Map<string, AgentEntry>();
 let initialized = false;
 let initPromise: Promise<void> | null = null;
 let cacheIncludesRemote = false;
-let refreshQueue: Promise<void> = Promise.resolve();
+const refreshQueue = new PQueue({ concurrency: 1 });
 let registryEpoch = 0;
 
 export interface LoadAgentsOptions {
@@ -487,16 +489,16 @@ export function isAgentRegistryReady(): boolean {
  */
 export function refresh(options: LoadAgentsOptions = {}): Promise<void> {
   const refreshEpoch = ++registryEpoch;
-  const run = refreshQueue.then(async () => {
+  // `add` widens to `T | void` to cover abort via signal/timeout; we pass
+  // neither, so the task always runs and resolves with `void`.
+  return refreshQueue.add(async () => {
     if (refreshEpoch !== registryEpoch) return;
     if (initPromise) await initPromise.catch(() => undefined);
     if (refreshEpoch !== registryEpoch) return;
     initialized = false;
     cacheIncludesRemote = false;
     await loadAgents(options);
-  });
-  refreshQueue = run.catch(() => undefined);
-  return run;
+  }) as Promise<void>;
 }
 
 function removeRemoteEntries(): void {

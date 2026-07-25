@@ -4,6 +4,7 @@ import * as path from 'node:path';
 // Third-party imports
 import * as vscode from 'vscode';
 import dotenv from 'dotenv';
+import PQueue from 'p-queue';
 
 // Local imports
 import { loadAgents } from '@agent/index';
@@ -634,15 +635,13 @@ export async function activate(context: vscode.ExtensionContext) {
   );
   apiKeyStatusBarItem.name = 'TeXRA Setup';
   context.subscriptions.push(apiKeyStatusBarItem);
-  let apiKeyStatusRefreshQueue = Promise.resolve();
-  const queueApiKeyStatusRefresh = (): Promise<void> => {
-    const refresh = apiKeyStatusRefreshQueue.then(refreshApiKeyStatus);
-    // Keep the queue usable after a failed lookup while preserving the error
-    // for this caller. Serial execution ensures the last refresh sees the
-    // newest credential state and is the last one to update the UI.
-    apiKeyStatusRefreshQueue = refresh.catch(() => undefined);
-    return refresh;
-  };
+  const apiKeyStatusRefreshQueue = new PQueue({ concurrency: 1 });
+  // Serial execution ensures the last refresh sees the newest credential
+  // state and is the last one to update the UI. `add` widens to
+  // `T | void` to cover abort via signal/timeout; we pass neither, so the
+  // task always runs and resolves with `void`.
+  const queueApiKeyStatusRefresh = (): Promise<void> =>
+    apiKeyStatusRefreshQueue.add(refreshApiKeyStatus) as Promise<void>;
   const safeRefreshApiKeyStatus = () =>
     queueApiKeyStatusRefresh().catch((err) =>
       logger.error(
