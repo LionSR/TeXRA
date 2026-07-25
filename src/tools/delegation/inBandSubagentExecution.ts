@@ -75,6 +75,12 @@ interface InBandSubagentExecutionBaseOptions {
   readonly signal?: AbortSignal;
   readonly onStreamResolved?: (streamId: StreamTabId) => void;
   readonly onCost?: (totalCostUsd: number | undefined) => void | Promise<void>;
+  /**
+   * Workflow-script phase owning this child, when the caller is a
+   * workflow-script run. Rides to the child's roster row so a host can group
+   * grandchild rows by phase.
+   */
+  readonly workflowPhase?: string;
 }
 
 /** Options for the typed child API. Direct persisted parentage is required. */
@@ -510,6 +516,7 @@ async function executeInBand(
           isSubagent: true,
           enforceCategory: true,
           parentStreamId: options.parentStreamId,
+          workflowPhase: options.workflowPhase,
           approvalPromptsUnavailable: options.approvalPromptsUnavailable,
           runtimeUnavailableTools: options.runtimeUnavailableTools,
           stopAfterCycle: true,
