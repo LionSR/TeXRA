@@ -115,6 +115,27 @@ function isStaticTranscriptEntryAt(
   );
 }
 
+/** `(settlement order, synthetic-after-source tiebreak)` sort key for one entry. */
+function transcriptOrderKey(
+  entry: ConversationEntry,
+  index: number,
+): readonly [seq: number, synthetic: number] {
+  const seq =
+    entry.settlementSeqNo ??
+    entry.syntheticAfterSettlementSeqNo ??
+    entry.sourceSeqNo ??
+    index + 1;
+  const synthetic = entry.syntheticAfterSettlementSeqNo !== undefined ? 1 : 0;
+  return [seq, synthetic];
+}
+
+function compareTranscriptOrderKeys(
+  left: readonly [number, number],
+  right: readonly [number, number],
+): number {
+  return left[0] - right[0] || left[1] - right[1];
+}
+
 /**
  * Printable rows in their append-only scrollback order.
  *
@@ -123,36 +144,38 @@ function isStaticTranscriptEntryAt(
  * them, with their original array position as the final stable tie-breaker.
  * Consumers that place rows relative to `<Static>` output must use this same
  * order rather than the stream's mutable storage order.
+ *
+ * Runs on every stream-sync tick, and entries arrive in settlement order on
+ * all but the rare reorder — so it skips the O(n log n) sort whenever the
+ * filtered slice is already ordered, at the cost of one O(n) pass over it.
  */
 export function orderedStaticTranscriptEntries(
   entries: readonly ConversationEntry[],
   status: StreamPhase | undefined,
 ): readonly ConversationEntry[] {
-  return entries
+  const candidates = entries
     .map((entry, index) => ({ entry, index }))
     .filter(({ index }) => isStaticTranscriptEntryAt(entries, index, status))
-    .toSorted((left, right) => {
-      const leftSynthetic =
-        left.entry.syntheticAfterSettlementSeqNo !== undefined;
-      const rightSynthetic =
-        right.entry.syntheticAfterSettlementSeqNo !== undefined;
-      const leftSeq =
-        left.entry.settlementSeqNo ??
-        left.entry.syntheticAfterSettlementSeqNo ??
-        left.entry.sourceSeqNo ??
-        left.index + 1;
-      const rightSeq =
-        right.entry.settlementSeqNo ??
-        right.entry.syntheticAfterSettlementSeqNo ??
-        right.entry.sourceSeqNo ??
-        right.index + 1;
-      return (
-        leftSeq - rightSeq ||
-        Number(leftSynthetic) - Number(rightSynthetic) ||
-        left.index - right.index
+    .map(({ entry, index }) => ({
+      entry,
+      index,
+      key: transcriptOrderKey(entry, index),
+    }));
+
+  const alreadyOrdered = candidates.every(
+    (candidate, i) =>
+      i === 0 ||
+      compareTranscriptOrderKeys(candidates[i - 1]!.key, candidate.key) <= 0,
+  );
+  const ordered = alreadyOrdered
+    ? candidates
+    : candidates.toSorted(
+        (left, right) =>
+          compareTranscriptOrderKeys(left.key, right.key) ||
+          left.index - right.index,
       );
-    })
-    .map(({ entry }) => entry);
+
+  return ordered.map(({ entry }) => entry);
 }
 
 export function splitTranscriptEntries(

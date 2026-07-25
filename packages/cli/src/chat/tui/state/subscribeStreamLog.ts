@@ -310,6 +310,22 @@ function renderLogEntryText(
   }
 }
 
+/**
+ * Once an entry settles, or (for the given kind) always finalizes, it stays
+ * finalized: a re-sync tick can never roll an already-promoted entry back.
+ */
+function computeFinalized(
+  entry: StreamLogEntry,
+  prev: ConversationEntry | undefined,
+  alwaysFinalized = false,
+): boolean {
+  return (
+    entry.settlementSeqNo !== undefined ||
+    alwaysFinalized ||
+    (prev?.finalized ?? false)
+  );
+}
+
 function renderLogEntry(
   entry: StreamLogEntry,
   prev: ConversationEntry | undefined,
@@ -337,8 +353,7 @@ function renderLogEntry(
       role: 'tool',
       text: '',
       ...(entry.messageType ? { messageType: entry.messageType } : {}),
-      finalized:
-        entry.settlementSeqNo !== undefined || (prev?.finalized ?? false),
+      finalized: computeFinalized(entry, prev),
       ...(entry.settlementSeqNo !== undefined
         ? { settlementSeqNo: entry.settlementSeqNo }
         : {}),
@@ -367,8 +382,7 @@ function renderLogEntry(
       role: 'workflowTask',
       text: formatWorkflowTaskLine(task),
       messageType: entry.messageType,
-      finalized:
-        entry.settlementSeqNo !== undefined || (prev?.finalized ?? false),
+      finalized: computeFinalized(entry, prev),
       ...(entry.settlementSeqNo !== undefined
         ? { settlementSeqNo: entry.settlementSeqNo }
         : {}),
@@ -416,10 +430,7 @@ function renderLogEntry(
   // moves on to a later entry; inherit the prior flag here so a re-sync
   // can't de-finalize an already-promoted block. User/error rows can't
   // change after they appear, so they finalize immediately.
-  const finalized =
-    entry.settlementSeqNo !== undefined ||
-    role !== 'assistant' ||
-    (prev?.finalized ?? false);
+  const finalized = computeFinalized(entry, prev, role !== 'assistant');
   const next: ConversationEntry = {
     id: entry.id,
     sourceSeqNo: entry.seqNo,
