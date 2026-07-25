@@ -41,6 +41,27 @@ export class FakeStdout extends EventEmitter {
   }
 }
 
+/** Render against an explicit terminal size and return handles for assertions
+ *  and cleanup. Use this for components that read `useWindowSize()`:
+ *  `renderToString(..., { columns })` sizes Yoga but leaves that hook reading
+ *  the ambient process stdout. */
+export function renderWithTerminalSize(
+  ink: any,
+  node: any,
+  columns: number,
+  rows = 24,
+): { readonly instance: any; readonly stdout: FakeStdout } {
+  const stdout = new FakeStdout(columns, rows);
+  const instance = ink.render(node, {
+    stdin: new FakeStdin(false),
+    stdout,
+    interactive: true,
+    exitOnCtrlC: false,
+    patchConsole: false,
+  });
+  return { instance, stdout };
+}
+
 /** Minimal readable TTY used by interactive Ink tests. */
 export class FakeStdin extends EventEmitter {
   private readonly chunks: string[] = [];
