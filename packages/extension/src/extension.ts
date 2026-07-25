@@ -49,7 +49,7 @@ import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { FileLister } from '@frontend/files/fileLister';
 import { StatusBarUsageTracker } from '@frontend/statusBar/StatusBarUsageTracker';
 import { subscribeStatusBarSessionEvents } from '@frontend/statusBar/statusBarSessionEvents';
-import { killActiveRecording } from '@frontend/media/audio';
+import { killActiveRecording } from '@tools/media/audio';
 import { disposeDiffRefresh } from '@frontend/ui/diffView';
 import { registerFileDecorations } from '@frontend/ui/fileDecorations';
 import { registerWelcomeView } from '@frontend/ui/welcomeView';

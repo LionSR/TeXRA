@@ -761,6 +761,17 @@ function createWindow(options: {
     },
     prompts: {
       promptText: (input) => promptController.request(input),
+      confirm: async ({ title, message }) => {
+        const result = await dialog.showMessageBox(window, {
+          type: 'warning',
+          title,
+          message,
+          buttons: ['Continue', 'Cancel'],
+          defaultId: 0,
+          cancelId: 1,
+        });
+        return result.response === 0;
+      },
       chooseTeamAvailability: ({ presetName, unavailableNames }) =>
         chooseTeamAvailability(unavailableNames, presetName),
     },
@@ -769,6 +780,7 @@ function createWindow(options: {
       signIn: signInForRemoteAgentCatalog,
     },
     notifications: { showInfoMessage, showErrorMessage },
+    resourcesPath: options.resourcesPath,
   });
   const credentialSettingsController =
     new DefaultDesktopCredentialSettingsController({
@@ -921,6 +933,15 @@ function createWindow(options: {
       } catch (error) {
         if (!windowClosed) reportAsyncError(error);
       }
+    },
+    // Only a live presentation knows a stream's label, so this reads the
+    // already-constructed bridge rather than creating one; the Git tab falls
+    // back to the raw stream id when no window is attached.
+    getStreamLabel: (streamId) => agentExecution?.getStreamLabel(streamId),
+    promptForSecret: (input) =>
+      promptController.request({ ...input, password: true }),
+    openExternal: async (url) => {
+      await shell.openExternal(url);
     },
     onError: reportAsyncError,
   };

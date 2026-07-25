@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import {
   startRecording,
   stopRecordingAndTranscribe,
-} from '@frontend/media/audio';
+} from '@tools/media/audio';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';

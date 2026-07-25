@@ -124,7 +124,7 @@ import { registerIconLibrary } from '@awesome.me/webawesome/dist/components/icon
 import { html, type TemplateResult } from 'lit';
 import { ifDefined } from 'lit/directives/if-defined.js';
 
-const TEXRA_ICON_LIBRARY = 'texra';
+export const TEXRA_ICON_LIBRARY = 'texra';
 
 type FontAwesomePathData = string | string[];
 
