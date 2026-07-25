@@ -166,7 +166,8 @@ All notable changes to this project will be documented in this file.
 - **Kimi Code subscription joins model access** — the launcher and `/api` now
   offer Kimi Code alongside ChatGPT subscription, included TeXRA access, and
   personal API keys. Selecting it routes Kimi models through your Kimi Code
-  membership while other models fall back to your saved keys.
+  membership while other models use the independently selected included or
+  personal fallback.
 - **API keys and provider routing can be managed from `/config`** — masked key
   status and secure entry are available for every provider, with Kimi Code,
   provider region, and GLM Coding Plan preferences under "Models and providers".
