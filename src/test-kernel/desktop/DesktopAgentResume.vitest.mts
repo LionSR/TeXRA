@@ -266,6 +266,7 @@ describe('desktop process resume owner', () => {
     });
     const harness = createResumeHarness();
     runAgent.mockImplementation(async (_request, options) => {
+      await options.onRun?.({} as never);
       options.session?.publishRunEvent(stream, {
         type: 'result',
         outcome: RUN_OUTCOME.FAILED,
@@ -301,6 +302,7 @@ describe('desktop process resume owner', () => {
     });
     const harness = createResumeHarness();
     runAgent.mockImplementation(async (_request, options) => {
+      await options.onRun?.({} as never);
       options.session?.publishRunEvent(stream, {
         type: 'result',
         outcome: RUN_OUTCOME.COMPLETED,

@@ -108,12 +108,10 @@ function reportResumeFailure(
   streamId: StreamTabId,
   error: unknown,
   context: DesktopResumeContext,
-  lifecycleStarted: boolean,
 ): void {
   context.logger.error(`Failed to resume desktop stream ${streamId}`, {
     data: toLogData(error),
   });
-  if (lifecycleStarted) return;
   context.session.interactions.emit(
     'requestShowError',
     { message: `Resume failed: ${toErrorMessage(error)}` },
@@ -146,12 +144,9 @@ function resumeDesktopStream(
     return !isResumeInvalidated();
   };
   const reportUnhandledFailure = (id: StreamTabId, error: unknown): void => {
-    if (!terminalRejectionHandled) {
-      reportResumeFailure(id, error, context, lifecycleStarted);
-    }
+    if (!terminalRejectionHandled) reportResumeFailure(id, error, context);
   };
   const runtimeHost = context.session.interactions;
-  let lifecycleStarted = false;
   return resolveAndResumeStream(streamId, {
     runtimeHost,
     streamStatus: context.session.status,
@@ -190,9 +185,6 @@ function resumeDesktopStream(
           runtimeUnavailableTools: DESKTOP_UNAVAILABLE_TOOLS,
           canAcquireResumeLease,
           isCancellationRequested: isResumeInvalidated,
-          onRun: () => {
-            lifecycleStarted = true;
-          },
           onError: (error) => reportUnhandledFailure(streamId, error),
         },
       ),
@@ -207,9 +199,6 @@ function resumeDesktopStream(
         {
           modelHandlerCompatibilityKey,
           suppressErrorNotification: true,
-          onRun: () => {
-            lifecycleStarted = true;
-          },
         },
       ),
     reportNoResumableSession: () =>
