@@ -110,13 +110,6 @@ describe('stream meta frontend state', () => {
         },
         roundStage: { index: 1 },
         subagents: [],
-        processes: [
-          {
-            kind: 'process',
-            executionId: 'process-a',
-            agentName: 'bash',
-          },
-        ],
       },
       activeStream: siblingId,
       agentFilter: 'toolUse',
@@ -135,13 +128,6 @@ describe('stream meta frontend state', () => {
       },
       roundStage: { index: 1 },
       subagents: [],
-      processes: [
-        {
-          kind: 'process',
-          executionId: 'process-a',
-          agentName: 'bash',
-        },
-      ],
     });
     expect(getState().activeStreamId).toBe(siblingId);
     expect(getState().streamFilter).toBe('toolUse');
@@ -219,7 +205,6 @@ describe('stream meta frontend state', () => {
             toolCallCount: 0,
           },
           subagents: [],
-          processes: [],
         },
       },
     });
@@ -260,7 +245,6 @@ describe('stream meta frontend state', () => {
           },
           roundStage: null,
           subagents: [],
-          processes: [],
         },
       } satisfies ProgressViewOutboundMessage),
     ) as ProgressViewOutboundMessage;
@@ -295,7 +279,6 @@ describe('stream meta frontend state', () => {
           roundStage: null,
           badges: {
             subagents: [],
-            processes: [],
           },
           parentStreamId: null,
         },

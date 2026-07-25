@@ -1,15 +1,15 @@
 // Shared bordered-panel scaffold used by FormFrame (transient list-form
-// states), ConfirmCard (y/n approval modals), ExternalInquiry, UserQuestion's
-// QuestionShell and TaskDetailView: a bordered box with
-// a colored bold title, a body slot, and an optional footer row.
+// states), ConfirmCard (y/n approval modals), ExternalInquiry and
+// UserQuestion's QuestionShell: a bordered box with a colored bold title, a
+// body slot, and an optional footer row.
 
 import { Box, Text, type BoxProps } from 'ink';
 
 export interface BorderedPanelProps {
   readonly borderStyle?: BoxProps['borderStyle'];
   readonly color: string;
-  /** Omit (or pass a falsy value) to render no title row — e.g. TaskDetailView
-   *  hides its title entirely once the viewport gets too short for it. */
+  /** Omit (or pass a falsy value) to render no title row — callers drop the
+   *  title once the viewport gets too short for it. */
   readonly title?: React.ReactNode;
   readonly width?: number;
   readonly children: React.ReactNode;

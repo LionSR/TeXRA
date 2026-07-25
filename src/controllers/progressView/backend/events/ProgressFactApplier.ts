@@ -157,9 +157,7 @@ export class ProgressFactApplier {
       });
     },
     'child.activity': (_streamId, event) =>
-      this.updateChildRoster(event.parentStreamId, event.kind, [
-        ...event.items,
-      ]),
+      this.updateChildRoster(event.parentStreamId, [...event.items]),
   };
 
   constructor(
@@ -270,16 +268,9 @@ export class ProgressFactApplier {
     >;
     const handler = handlers[event.type];
     if (!handler) return;
-    // Every type derives its context from `event.type`, except `child.activity`
-    // — the one fact whose failure context was historically keyed on
-    // `event.kind` (subagents vs processes), preserved so those failures stay
-    // distinguishable in logs.
-    let context = `failed to handle ${event.type} fact`;
-    if (event.type === 'child.activity') {
-      const activityKind = event.kind === 'subagents' ? 'subagent' : 'process';
-      context = `failed to handle ${activityKind} activity fact`;
-    }
-    this.applyFact(context, () => handler(streamId, event));
+    this.applyFact(`failed to handle ${event.type} fact`, () =>
+      handler(streamId, event),
+    );
   }
 
   private applyFact(context: string, handle: () => void | Promise<void>): void {
@@ -615,13 +606,12 @@ export class ProgressFactApplier {
    */
   public updateChildRoster(
     parentStreamId: StreamTabId,
-    field: 'subagents' | 'processes',
     next: StreamExecutionState['subagents'],
   ): void {
     let nextBadges: StreamBadgeSnapshot | null = null;
 
     this.state.updateStreamState(parentStreamId, (prev) => {
-      const previous = prev[field];
+      const previous = prev.subagents;
       const vanishedIds = diffActiveChildren(
         previous.filter((child) => child.finishedAt === undefined),
         next,
@@ -641,7 +631,7 @@ export class ProgressFactApplier {
           .filter((child) => vanishedIds.has(child.executionId))
           .map((child) => ({ ...child, finishedAt })),
       ].slice(-RETAINED_FINISHED_CHILDREN_CAP);
-      const updatedState = { ...prev, [field]: [...next, ...retained] };
+      const updatedState = { ...prev, subagents: [...next, ...retained] };
       nextBadges = this.state.projectChildRosters(updatedState);
       return updatedState;
     });

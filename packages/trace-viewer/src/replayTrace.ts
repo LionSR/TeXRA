@@ -178,7 +178,6 @@ export function replayTrace(trace: TraceDocument): void {
         // an archived trace has no in-flight children regardless of what a
         // stale snapshot recorded.
         subagents: [],
-        processes: [],
       },
     },
   };

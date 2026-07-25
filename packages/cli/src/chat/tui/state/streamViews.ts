@@ -105,11 +105,11 @@ function childStreamReferenceLabel(
   streams: ReadonlyMap<StreamTabId, StreamSlice>,
   streamId: StreamTabId,
 ): string {
-  const parentSlice = streams.get(parentStreamId);
-  const child = [
-    ...visibleSubagentRows(parentStreamId, childStreamEntries, streams),
-    ...(parentSlice?.activeProcesses ?? []),
-  ].find((entry) => childExecutionKey(entry) === streamId);
+  const child = visibleSubagentRows(
+    parentStreamId,
+    childStreamEntries,
+    streams,
+  ).find((entry) => childExecutionKey(entry) === streamId);
   return child ? childExecutionLabel(child) : streamId;
 }
 

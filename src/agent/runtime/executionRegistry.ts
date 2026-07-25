@@ -658,7 +658,6 @@ export class ExecutionRegistry {
       streamId: parentStreamId,
       event: {
         type: 'child.activity',
-        kind: 'subagents',
         parentStreamId,
         items: this.collectChildSummary(parentStreamId),
       },

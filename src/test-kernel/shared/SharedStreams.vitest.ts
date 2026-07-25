@@ -1,5 +1,5 @@
 // Suites for src/shared/streams (child-activity reducer, stream metadata,
-// status display, stream-meta reducer).
+// status display).
 
 import { describe, expect, it } from 'vitest';
 import {
@@ -18,11 +18,6 @@ import {
   streamStatusIndicatorClass,
   type StreamStatusLabelStyle,
 } from '@shared/streams/streamStatusDisplay';
-import {
-  EMPTY_STREAM_META,
-  reduceStreamMeta,
-  type StreamMeta,
-} from '@shared/streams/streamMetaReducer';
 
 // ---------------------------------------------------------------------------
 // ChildActivityReducer
@@ -91,22 +86,23 @@ describe('buildStreamMetadata', () => {
       conversationProgress: { toolCallCount: 0 },
       roundStage: null,
       subagents: [],
-      processes: [],
     });
     expect(Object.hasOwn(metadata, 'substate')).toBe(true);
     expect(metadata.substate).toBeUndefined();
   });
 
-  it('preserves supplied status, progress, child rosters, and timestamps', () => {
+  it('preserves supplied status, progress, child roster, and timestamps', () => {
     const child: ActiveChildInfo = {
-      kind: 'process',
+      kind: 'subagent',
       executionId: 'agent-1',
+      childStreamId: 'agent-1-stream',
       agentName: 'review',
       status: STREAM_STATUS.RUNNING,
     };
     const finishedChild: ActiveChildInfo = {
-      kind: 'process',
+      kind: 'subagent',
       executionId: 'agent-0',
+      childStreamId: 'agent-0-stream',
       agentName: 'review',
       status: STREAM_PHASE.COMPLETED,
       finishedAt: 122,
@@ -121,7 +117,6 @@ describe('buildStreamMetadata', () => {
         conversationProgress: { toolCallCount: 5 },
         roundStage: { index: 1, total: 3 },
         subagents: [child, finishedChild],
-        processes: [child],
       }),
     ).toEqual({
       kind: AgentCategory.ToolUse,
@@ -131,7 +126,6 @@ describe('buildStreamMetadata', () => {
       conversationProgress: { toolCallCount: 5 },
       roundStage: { index: 1, total: 3 },
       subagents: [child, finishedChild],
-      processes: [child],
     });
   });
 });
@@ -258,50 +252,4 @@ describe('stream status display labels', () => {
       expect(streamStatusIndicatorClass(status)).toBe(className);
     },
   );
-});
-
-// ---------------------------------------------------------------------------
-// StreamMetaReducer
-// ---------------------------------------------------------------------------
-
-function meta(overrides: Partial<StreamMeta> = {}): StreamMeta {
-  return { ...EMPTY_STREAM_META, ...overrides };
-}
-
-describe('reduceStreamMeta', () => {
-  const active: ActiveChildInfo = {
-    kind: 'process',
-    executionId: 'active',
-    agentName: 'bash',
-  };
-
-  it('sets the active list and prunes output for vanished processes', () => {
-    const base = meta({
-      activeProcesses: [],
-      processOutput: new Map([
-        ['active', { stdout: 'a', stderr: '' }],
-        ['stale', { stdout: 's', stderr: '' }],
-      ]),
-    });
-    const next = reduceStreamMeta(base, {
-      kind: 'activeProcesses',
-      processes: [active],
-    });
-    expect(next.activeProcesses).toEqual([active]);
-    expect(next.processOutput.has('active')).toBe(true);
-    expect(next.processOutput.has('stale')).toBe(false);
-    // Input is untouched.
-    expect(next).not.toBe(base);
-    expect(base.processOutput.has('stale')).toBe(true);
-  });
-
-  it('keeps the same output-map identity when nothing is pruned', () => {
-    const output = new Map([['active', { stdout: 'a', stderr: '' }]]);
-    const base = meta({ processOutput: output });
-    const next = reduceStreamMeta(base, {
-      kind: 'activeProcesses',
-      processes: [active],
-    });
-    expect(next.processOutput).toBe(output);
-  });
 });

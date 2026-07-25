@@ -132,23 +132,6 @@ function compactExecutionsEntry(
   };
 }
 
-function processEntry(
-  id: string,
-): Extract<ConversationEntry, { role: 'process' }> {
-  return {
-    id,
-    role: 'process',
-    text: '',
-    finalized: true,
-    process: {
-      executionId: 'ei_process',
-      title: 'search',
-      isError: false,
-      tailLines: [],
-    },
-  };
-}
-
 describe('CLI conversation transcript splitting', () => {
   it('keeps only explicit finalized entries in scrollback', () => {
     const user = entry('u1', 'user', '1+1', true);
@@ -527,16 +510,8 @@ describe('CLI conversation transcript splitting', () => {
 
   it('keeps bounded rich display rows unwrapped', () => {
     const baseTool = toolEntry('t1', TOOL_USE_STATUS.COMPLETED, 'x'.repeat(40));
-    const baseProcess = processEntry('p1');
-    const process: ConversationEntry = {
-      ...baseProcess,
-      process: {
-        ...baseProcess.process,
-        tailLines: ['y'.repeat(40)],
-      },
-    };
 
-    for (const item of [baseTool, process]) {
+    for (const item of [baseTool]) {
       const live = transcriptEntryLayout(item, { mode: 'live', width: 20 });
       const bounded = boundedTranscriptEntryLayout(
         transcriptEntryLayout(item, { mode: 'bounded', width: 20 }),
@@ -923,40 +898,6 @@ describe('CLI conversation transcript splitting', () => {
       'u1',
       'a1',
     ]);
-  });
-
-  it('budgets process margins before inserting compact static headers', () => {
-    const process = processEntry('p1');
-    const compact = appendStaticTranscriptItems({
-      scrollbackStreamId: STREAM_ID,
-      currentItems: [],
-      streams: streamsFromEntries(STREAM_ID, [process]),
-      meta: SESSION_META,
-      maxRows: 0,
-      width: 80,
-    });
-
-    expect(compact.map((item) => item.id)).toEqual(['p1']);
-    expect(
-      appendStaticTranscriptItems({
-        scrollbackStreamId: STREAM_ID,
-        currentItems: compact,
-        streams: streamsFromEntries(STREAM_ID, [process]),
-        meta: SESSION_META,
-        maxRows: 5,
-        width: 80,
-      }).map((item) => item.id),
-    ).toEqual(['p1']);
-    expect(
-      appendStaticTranscriptItems({
-        scrollbackStreamId: STREAM_ID,
-        currentItems: compact,
-        streams: streamsFromEntries(STREAM_ID, [process]),
-        meta: SESSION_META,
-        maxRows: 6,
-        width: 80,
-      }).map((item) => item.id),
-    ).toEqual(['session-header', 'p1']);
   });
 
   it('keeps full tool output as the conservative static-header budget', () => {
@@ -1474,7 +1415,6 @@ describe('CLI conversation transcript splitting', () => {
     const entries = [
       entry('u1', 'user', 'user text', true),
       entry('e1', 'error', 'error text', true),
-      processEntry('p1'),
     ];
 
     for (const transcriptEntry of entries) {
@@ -1548,10 +1488,8 @@ function sliceWithEntries(
     conversation: undefined,
     entries,
     queuedFollowUpMessages: [],
-    activeProcesses: [],
     todos: [],
     plan: null,
-    processOutput: new Map(),
     bypass: { bash: false, toolEdit: false, superYolo: false },
     ...init,
   };

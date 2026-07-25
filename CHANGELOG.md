@@ -31,10 +31,18 @@ All notable changes to this project will be documented in this file.
 
 #### Breaking Changes
 
-- **`--output-format ndjson` no longer documents a `updateProcessOutput`
-  record** — background shell output reaches the terminal through child
-  streams, so this record was never emitted. Scripts reading the NDJSON stream
-  need no change.
+- **`--output-format ndjson` no longer documents the `updateProcessOutput` and
+  `updateActiveProcesses` records** — background shell output and the
+  background-process roster reach the terminal through child streams, so
+  neither record was ever emitted. Scripts reading the NDJSON stream need no
+  change.
+
+#### Bug Fixes
+
+- **The child list drops its always-empty background-process rows** — the
+  `N proc` status segment and the task-detail panel behind `Enter` were served
+  by a roster no run could populate; background `bash` keeps its own child
+  session row, live output, and `v` full-output print unchanged.
 
 #### New Features
 
