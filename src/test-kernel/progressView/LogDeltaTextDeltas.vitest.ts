@@ -24,6 +24,7 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
+import { projectTaskGroupsFromStreamLog } from '@shared/streams/taskGroupProjection';
 import { assertSupported } from '@shared/utils/dispatcher';
 
 /** Seed the shared appState singleton and return a live reader over it. */
@@ -282,4 +283,39 @@ describe('LOG_DELTA GROUP_END task-group status (#7993 step 3)', () => {
       expect(taskGroups?.[0]?.status).toBe(expectedStatus);
     },
   );
+
+  it('preserves an ambiguous Round N group identically to the shared cold reader', () => {
+    const streamId = 'stream-a' as StreamTabId;
+    const state = createInitialState();
+    state.activeStreamId = streamId;
+    state.streamStates.set(streamId, createStreamState(AgentCategory.Workflow));
+    const getState = seedState(state);
+    const legacyRound = {
+      ...groupEndEntry('legacy-round', 'stopped'),
+      text: 'Round 2',
+    };
+
+    dispatch(logHandlers, {
+      command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
+      streamId,
+      entries: [legacyRound],
+      updates: [],
+      textDeltas: [],
+    });
+
+    const extensionTaskGroups =
+      getState().streamStates.get(streamId)?.taskGroups;
+    expect(extensionTaskGroups).toEqual(
+      projectTaskGroupsFromStreamLog([legacyRound]),
+    );
+    expect(extensionTaskGroups).toMatchObject([
+      {
+        id: 'legacy-round',
+        name: 'Round 2',
+        status: RUN_OUTCOME.COMPLETED,
+      },
+    ]);
+    expect(extensionTaskGroups?.[0]?.kind).toBeUndefined();
+    expect(extensionTaskGroups?.[0]?.index).toBeUndefined();
+  });
 });

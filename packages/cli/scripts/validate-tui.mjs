@@ -142,6 +142,31 @@ const SCENARIOS = [
     ],
   },
   {
+    name: 'workflow-timeline',
+    frame: 'scrollback',
+    rows: 24,
+    cols: 100,
+    env: {
+      HARNESS_ENTRIES: '0',
+      HARNESS_WORKFLOW_TIMELINE: '1',
+    },
+    bootExpect: 'Tab children',
+    keys: ['\t', DOWN, '\r'],
+    expect: [
+      'repositoryAudit completed',
+      'Generated files',
+      'paper.tex',
+      'Compile check failed',
+      'paper.log',
+    ],
+    expectPatterns: [/r0.*completed/, /r1.*completed/],
+    ordered: [
+      { before: 'r0', after: 'Generated files' },
+      { before: 'Generated files', after: 'Compile check failed' },
+      { before: 'Compile check failed', after: 'r1 (2/2) completed' },
+    ],
+  },
+  {
     name: 'live-tool-only-spacing',
     frame: 'scrollback',
     env: {
