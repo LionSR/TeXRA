@@ -100,9 +100,10 @@ export class ToolEditRequestPanel extends BaseBypassApprovalPanel<'toolEdit'> {
     return html`
       <div class="diff-dropdown">
         ${renderLabeledActionButton({
+          id: 'tool-edit-diff-button',
           icon: 'diff',
           text: diffLabel,
-          title: diffTitle,
+          tooltip: diffTitle,
           className: 'diff-main-button',
           onClick: this.handleDiffAction,
         })}
@@ -179,7 +180,7 @@ export class ToolEditRequestPanel extends BaseBypassApprovalPanel<'toolEdit'> {
         : `${parts.join(' / ')} ${lineLabel} changed`;
 
     return html`
-      <span class="approval-request__diff" title=${tooltip}>
+      <span id="tool-edit-diff-summary" class="approval-request__diff">
         ${when(
           added > 0,
           () =>
@@ -194,6 +195,7 @@ export class ToolEditRequestPanel extends BaseBypassApprovalPanel<'toolEdit'> {
         )}
         <span class="approval-request__diff-label">${total} ${lineLabel}</span>
       </span>
+      <wa-tooltip for="tool-edit-diff-summary">${tooltip}</wa-tooltip>
     `;
   }
 

@@ -9,6 +9,7 @@ import { ifDefined } from 'lit/directives/if-defined.js';
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
 import { designTokens, commonViewStyles } from '@shared/styles';
@@ -106,7 +107,7 @@ export class LatexdiffResults extends LitElement {
     >`;
   }
 
-  private renderEntry(entry: DiffResultDisplay): TemplateResult {
+  private renderEntry(entry: DiffResultDisplay, index: number): TemplateResult {
     const {
       baseFile,
       revisedFile,
@@ -124,12 +125,9 @@ export class LatexdiffResults extends LitElement {
       baseRound === null ? displayName : `${displayName} [r${baseRound}]`;
     const revisedLabel = `[r${revisedRound}]`;
 
+    const entryId = `latexdiff-entry-${index}`;
     return html`
-      <li
-        class="detail-item"
-        data-run-id=${ifDefined(runId)}
-        title=${ifDefined(message)}
-      >
+      <li id=${entryId} class="detail-item" data-run-id=${ifDefined(runId)}>
         <wa-icon
           library=${TEXRA_ICON_LIBRARY}
           name=${icon}
@@ -144,6 +142,7 @@ export class LatexdiffResults extends LitElement {
         ></wa-icon>
         ${this.renderFileLink(revisedFile, revisedLabel)}
         (${this.renderFileLink(diffFile, 'diff')})
+        ${message ? html`<wa-tooltip for=${entryId}>${message}</wa-tooltip>` : nothing}
       </li>
     `;
   }
@@ -175,7 +174,7 @@ export class LatexdiffResults extends LitElement {
             this.entries,
             (entry, index) =>
               `${entry.baseFile}-${entry.revisedFile}-${entry.baseRound ?? 'base'}-${entry.revisedRound ?? 'rev'}-${index}`,
-            (entry) => this.renderEntry(entry),
+            (entry, index) => this.renderEntry(entry, index),
           )}
         </ul>
       </wa-details>

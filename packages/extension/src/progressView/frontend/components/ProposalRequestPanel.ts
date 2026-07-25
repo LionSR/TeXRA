@@ -12,6 +12,7 @@ import '@awesome.me/webawesome/dist/components/badge/badge.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/option/option.js';
+import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
@@ -195,9 +196,10 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
       approveTitle: 'Approve (y)',
       rejectTitle: 'Reject (n)',
       trailingActions: renderLabeledActionButton({
+        id: 'proposal-setup-button',
         icon: 'reply',
         text: 'Setup',
-        title: 'Setup (s)',
+        tooltip: 'Setup (s)',
         action: 'setup',
         onClick: () => this.emitAction({ action: 'setup' }),
       }),
@@ -221,15 +223,18 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
     const workingDirectory = data.workingDirectory;
     if (!workingDirectory) return nothing;
     return html`<div
-      class="workflow-proposal__working-directory"
-      title=${workingDirectory}
-    >
-      <span class="workflow-proposal__file-label">Working directory:</span>
-      <span
-        class="workflow-proposal__file-name workflow-proposal__file-name--readonly workflow-proposal__file-name--wrap"
-        >${workingDirectory}</span
+        id="proposal-working-directory"
+        class="workflow-proposal__working-directory"
       >
-    </div>`;
+        <span class="workflow-proposal__file-label">Working directory:</span>
+        <span
+          class="workflow-proposal__file-name workflow-proposal__file-name--readonly workflow-proposal__file-name--wrap"
+          >${workingDirectory}</span
+        >
+      </div>
+      <wa-tooltip for="proposal-working-directory"
+        >${workingDirectory}</wa-tooltip
+      >`;
   }
 
   private renderProposalFiles(
@@ -264,6 +269,10 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
   ): TemplateResult | typeof nothing {
     if (files.length === 0) return nothing;
 
+    const idPrefix = `proposal-${label.toLowerCase()}`.replaceAll(
+      /[^a-z0-9_-]/g,
+      '-',
+    );
     return html`
       <div
         class="workflow-proposal__${label.toLowerCase()}-files"
@@ -276,15 +285,15 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
           (file) => file,
           (file, i) =>
             html`${i > 0 ? ', ' : ''}<span
+                id="${idPrefix}-file-${i}"
                 class="workflow-proposal__file-name${
                   clickable ? '' : ' workflow-proposal__file-name--readonly'
                 }"
-                title=${file}
                 data-file=${ifDefined(clickable ? file : undefined)}
                 role=${ifDefined(clickable ? 'button' : undefined)}
                 tabindex=${ifDefined(clickable ? '0' : undefined)}
                 >${getBasename(file)}</span
-              >`,
+              ><wa-tooltip for="${idPrefix}-file-${i}">${file}</wa-tooltip>`,
         )}
       </div>
     `;

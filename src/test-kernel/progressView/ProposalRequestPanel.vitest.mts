@@ -98,6 +98,19 @@ describe('proposal-request-panel file-name keyboard activation', () => {
     posted = [];
   });
 
+  it('uses a shared tooltip for the direct Setup action', async () => {
+    const element = await mountPanel();
+    const setup = element.shadowRoot?.querySelector('#proposal-setup-button');
+
+    expect(setup).toBeTruthy();
+    expect(setup?.hasAttribute('title')).toBe(false);
+    expect(
+      element.shadowRoot
+        ?.querySelector('wa-tooltip[for="proposal-setup-button"]')
+        ?.textContent?.trim(),
+    ).toBe('Setup (s)');
+  });
+
   it('maps the menu and a shortcut to approve-all while y stays one-off', async () => {
     const element = await mountPanel();
     const actions = recordPermissionActions(element);
@@ -170,6 +183,10 @@ describe('proposal-request-panel file-name keyboard activation', () => {
     for (const name of names ?? []) {
       expect(name.getAttribute('role')).toBe('button');
       expect(name.getAttribute('tabindex')).toBe('0');
+      expect(name.hasAttribute('title')).toBe(false);
+      expect(
+        element.shadowRoot?.querySelector(`wa-tooltip[for="${name.id}"]`),
+      ).toBeTruthy();
     }
   });
 
