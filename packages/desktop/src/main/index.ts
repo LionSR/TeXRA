@@ -398,6 +398,33 @@ function createWindow(options: {
   const showInfoMessage = async (message: string) => {
     await dialog.showMessageBox(window, { type: 'info', message });
   };
+  /**
+   * Sole owner of the "team has unavailable hosted members" prompt. Both the
+   * main-view launch path and the settings path route here so the two can't
+   * drift apart in wording or button labels again.
+   */
+  const chooseTeamAvailability = async (
+    unavailableNames: readonly string[],
+    presetName?: string,
+  ): Promise<'sign-in' | 'continue' | 'cancel'> => {
+    const { response } = await dialog.showMessageBox(window, {
+      type: 'warning',
+      message: formatUnavailableTeamMembersMessage(
+        unavailableNames,
+        presetName,
+      ),
+      buttons: [
+        TEAM_LAUNCH_SIGN_IN_LABEL,
+        TEAM_LAUNCH_CONTINUE_LABEL,
+        TEAM_LAUNCH_CANCEL_LABEL,
+      ],
+      defaultId: 0,
+      cancelId: 2,
+    });
+    if (response === 0) return 'sign-in';
+    if (response === 1) return 'continue';
+    return 'cancel';
+  };
   // Lightweight update check (issue #7682, arm b): at most once/day, notifies
   // at most once per release via a native dialog linking to the GitHub
   // release page. Not a full updater — no download, no install, no feed
@@ -475,6 +502,15 @@ function createWindow(options: {
     }
     ipc.postToRenderer(message);
     return true;
+  };
+  /**
+   * Fire-and-forget post for controllers that don't act on delivery. The
+   * bridge's own `webContents.isDestroyed()` no-op (see above) is the guard
+   * here; only callers that branch on delivery need
+   * {@link postToRendererIfAlive}.
+   */
+  const postToRenderer = (message: unknown): void => {
+    ipcRef.current?.postToRenderer(message);
   };
   const previewHost = createDesktopPreviewHost({
     shell,
@@ -613,22 +649,8 @@ function createWindow(options: {
       });
       return result.response === 0;
     },
-    chooseTeamAvailability: async (unavailableNames) => {
-      const result = await dialog.showMessageBox(window, {
-        type: 'warning',
-        message: formatUnavailableTeamMembersMessage(unavailableNames),
-        buttons: [
-          TEAM_LAUNCH_SIGN_IN_LABEL,
-          TEAM_LAUNCH_CONTINUE_LABEL,
-          TEAM_LAUNCH_CANCEL_LABEL,
-        ],
-        defaultId: 0,
-        cancelId: 2,
-      });
-      if (result.response === 0) return 'sign-in';
-      if (result.response === 1) return 'continue';
-      return 'cancel';
-    },
+    chooseTeamAvailability: (unavailableNames) =>
+      chooseTeamAvailability(unavailableNames),
     signInForRemoteAgentCatalog,
     showInfoMessage,
     showErrorMessage,
@@ -681,7 +703,7 @@ function createWindow(options: {
     return agentExecutionLoad;
   };
   const fileSelection = createDesktopFileSelection({
-    postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
+    postToRenderer,
     showOpenFileDialog: async (options) => {
       const result = await dialog.showOpenDialog(window, {
         title: options.title,
@@ -736,26 +758,12 @@ function createWindow(options: {
       },
     },
     renderer: {
-      postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
+      postToRenderer,
     },
     prompts: {
       promptText: (input) => promptController.request(input),
-      chooseTeamAvailability: async ({ presetName, unavailableNames }) => {
-        const result = await dialog.showMessageBox(window, {
-          type: 'warning',
-          message: `Team "${presetName}" has unavailable TeXRA-hosted members: ${unavailableNames.join(', ')}.`,
-          buttons: [
-            'Sign in to TeXRA',
-            'Continue with available members',
-            'Cancel',
-          ],
-          defaultId: 0,
-          cancelId: 2,
-        });
-        if (result.response === 0) return 'sign-in';
-        if (result.response === 1) return 'continue';
-        return 'cancel';
-      },
+      chooseTeamAvailability: ({ presetName, unavailableNames }) =>
+        chooseTeamAvailability(unavailableNames, presetName),
     },
     remoteCatalog: {
       canAccess: () => SupabaseClient.canAccessRemoteAgentCatalog(),
@@ -770,7 +778,7 @@ function createWindow(options: {
       config: platform().config,
       secrets: platform().secrets,
       renderer: {
-        postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
+        postToRenderer,
       },
       prompt: {
         input: (input) =>
@@ -850,7 +858,7 @@ function createWindow(options: {
       workspaceState: platform().workspaceState,
       globalState: platform().globalState,
       renderer: {
-        postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
+        postToRenderer,
       },
       dashboard: {
         buildItems: buildDefaultToolDashboardItems,
@@ -885,7 +893,7 @@ function createWindow(options: {
       state: platform().globalState,
       secrets: platform().secrets,
       renderer: {
-        postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
+        postToRenderer,
       },
       prompt: {
         input: (input) =>
@@ -919,7 +927,7 @@ function createWindow(options: {
   };
   const historySettingsController = new DesktopHistoryHandlers({
     resourcesPath: options.resourcesPath,
-    postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
+    postToRenderer,
     // Rerun and restore use the same host-neutral owners as the extension,
     // reached through the desktop execution bridge instead of VS Code commands.
     runExecution: (request) =>
@@ -957,7 +965,7 @@ function createWindow(options: {
     reportAsyncError(error);
   }
   const settingsIpc = createDesktopSettingsIpc({
-    postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
+    postToRenderer,
     agentSettingsController,
     crashReportingSettingsController,
     credentialSettingsController,
@@ -996,7 +1004,7 @@ function createWindow(options: {
     openOnboardingReadyGate = resolve;
   });
   const onboardingIpc = createDesktopOnboardingIpc(
-    { postToRenderer: (message) => ipcRef.current?.postToRenderer(message) },
+    { postToRenderer },
     {
       hasCredential: probeCredential,
       readyGate: onboardingReadyGate,
@@ -1125,7 +1133,7 @@ function createWindow(options: {
     onError: reportAsyncError,
   });
   const shellActions = createDesktopShellActions(
-    { postToRenderer: (message) => ipcRef.current?.postToRenderer(message) },
+    { postToRenderer },
     {
       getCustomAgentDirectory: () => platform().agentDirectories.custom(),
       openExternalUrl: previewHost.openExternal,

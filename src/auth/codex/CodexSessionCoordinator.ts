@@ -7,6 +7,10 @@
  * network or a real keychain. Stays `vscode`-free; the loopback server,
  * browser-open, and device-code UI live in the host layer and call into here.
  */
+// Third-party imports
+import PQueue from 'p-queue';
+
+// Local imports
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import {
   CODEX_AUTHORIZE_URL,
@@ -78,7 +82,7 @@ export class CodexSessionCoordinator {
    * writes means a write enqueued after a session replacement can never land
    * before the replacement's own write.
    */
-  private sessionMutations: Promise<void> = Promise.resolve();
+  private readonly sessionMutations = new PQueue({ concurrency: 1 });
   private sessionGeneration = 0;
 
   constructor(init: CodexSessionCoordinatorInit) {
@@ -110,15 +114,13 @@ export class CodexSessionCoordinator {
   }
 
   /**
-   * Chain `op` after every previously queued session-storage write so
+   * Queue `op` behind every previously requested session-storage write so
    * replacement (login/sign-out) and refresh-originated writes settle in the
-   * order they were requested. The chain link is established synchronously
-   * (before the first `await`), so ordering is captured at call time.
+   * order they were requested. Enqueueing happens synchronously (before the
+   * first `await`), so ordering is captured at call time.
    */
   private mutateSession(op: () => Promise<void>): Promise<void> {
-    const mutation = this.sessionMutations.then(op);
-    this.sessionMutations = mutation.catch(() => undefined);
-    return mutation;
+    return this.sessionMutations.add(op);
   }
 
   /**
@@ -131,7 +133,7 @@ export class CodexSessionCoordinator {
   }> {
     while (true) {
       const generation = this.sessionGeneration;
-      await this.sessionMutations;
+      await this.sessionMutations.onIdle();
       const session = await this.loadSession();
       if (generation === this.sessionGeneration) {
         return { generation, session };
