@@ -36,7 +36,7 @@ import {
 } from './claudeAgentShared';
 
 // ============================================================================
-// Model — defaults to Sonnet 4.6; users can override per-call or via workspace state
+// Model — defaults to Sonnet 5; users can override per-call or via workspace state
 // ============================================================================
 
 export const getClaudeAgentModel: () => ClaudeAgentModel =

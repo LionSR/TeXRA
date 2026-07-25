@@ -14,6 +14,7 @@ import {
 const OPUS_46 = 'claude-opus-4-6';
 const OPUS_47 = 'claude-opus-4-7';
 const OPUS_48 = 'claude-opus-4-8';
+const OPUS_5 = 'claude-opus-5';
 const SONNET_46 = 'claude-sonnet-4-6';
 const SONNET_5 = 'claude-sonnet-5';
 const FABLE_5 = 'claude-fable-5';
@@ -29,6 +30,7 @@ describe('mapAnthropicEffort', () => {
     expect(mapAnthropicEffort(OPUS_46, ReasoningEffort.MAX)).toBe('max');
     expect(mapAnthropicEffort(OPUS_47, ReasoningEffort.MAX)).toBe('max');
     expect(mapAnthropicEffort(OPUS_48, ReasoningEffort.MAX)).toBe('max');
+    expect(mapAnthropicEffort(OPUS_5, ReasoningEffort.MAX)).toBe('max');
     // Sonnet 5 accepts the top "max" tier like Opus.
     expect(mapAnthropicEffort(SONNET_5, ReasoningEffort.MAX)).toBe('max');
     // Sonnet 4.6 and older non-Opus models cap at "high".
@@ -41,8 +43,9 @@ describe('mapAnthropicEffort', () => {
     expect(mapAnthropicEffort(MYTHOS_5, ReasoningEffort.MAX)).toBe('max');
   });
 
-  it('maps "xhigh" to the distinct tier on Opus 4.8, Sonnet 5, and Mythos-class models', () => {
+  it('maps "xhigh" to the distinct tier on Opus 4.8/5, Sonnet 5, and Mythos-class models', () => {
     expect(mapAnthropicEffort(OPUS_48, ReasoningEffort.XHIGH)).toBe('xhigh');
+    expect(mapAnthropicEffort(OPUS_5, ReasoningEffort.XHIGH)).toBe('xhigh');
     expect(mapAnthropicEffort(SONNET_5, ReasoningEffort.XHIGH)).toBe('xhigh');
     expect(mapAnthropicEffort(FABLE_5, ReasoningEffort.XHIGH)).toBe('xhigh');
     expect(mapAnthropicEffort(MYTHOS_5, ReasoningEffort.XHIGH)).toBe('xhigh');
@@ -62,11 +65,12 @@ describe('mapAnthropicEffort', () => {
 });
 
 describe('supportsAdaptiveThinking / isCompactionEligibleModel', () => {
-  it('is true for Opus 4.6/4.7/4.8, Sonnet 4.6, Sonnet 5, and Mythos-class models', () => {
+  it('is true for Opus 4.6/4.7/4.8/5, Sonnet 4.6, Sonnet 5, and Mythos-class models', () => {
     for (const model of [
       OPUS_46,
       OPUS_47,
       OPUS_48,
+      OPUS_5,
       SONNET_46,
       SONNET_5,
       FABLE_5,
@@ -84,8 +88,9 @@ describe('supportsAdaptiveThinking / isCompactionEligibleModel', () => {
 });
 
 describe('requiresNoTemperatureWithThinking', () => {
-  it('is true for all Claude 4 families, Sonnet 5, and Mythos-class models', () => {
+  it('is true for all Claude 4 families, Opus 5, Sonnet 5, and Mythos-class models', () => {
     expect(requiresNoTemperatureWithThinking(OPUS_48)).toBe(true);
+    expect(requiresNoTemperatureWithThinking(OPUS_5)).toBe(true);
     expect(requiresNoTemperatureWithThinking(SONNET_46)).toBe(true);
     expect(requiresNoTemperatureWithThinking(SONNET_5)).toBe(true);
     expect(requiresNoTemperatureWithThinking('claude-haiku-4-5')).toBe(true);
@@ -99,6 +104,26 @@ describe('requiresNoTemperatureWithThinking', () => {
 });
 
 describe('buildThinkingConfig', () => {
+  it('uses adaptive thinking with summarized display and top effort tiers on Opus 5', () => {
+    for (const [reasoningEffort, effort] of [
+      [ReasoningEffort.XHIGH, 'xhigh'],
+      [ReasoningEffort.MAX, 'max'],
+    ] as const) {
+      const config = buildThinkingConfig({
+        fullName: OPUS_5,
+        reasoningEffort,
+        maxTokens: 128000,
+        useStreaming: true,
+      });
+      expect(config.thinking).toEqual({
+        type: 'adaptive',
+        display: 'summarized',
+      });
+      expect(config.outputConfig).toEqual({ effort });
+      expect(config.removeTemperature).toBe(true);
+    }
+  });
+
   it('uses adaptive thinking with summarized display on Opus 4.7+', () => {
     const config = buildThinkingConfig({
       fullName: OPUS_48,

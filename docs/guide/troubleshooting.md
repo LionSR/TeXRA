@@ -297,7 +297,7 @@ Opening VS Code from a configured terminal provides the most reliable environmen
 
 3. **Use better models**:
    - Upgrade to more capable models for complex tasks
-   - Try Claude Opus 4.8 or GPT-5.5 for highest quality
+   - Try Claude Opus 5 or GPT-5.5 for highest quality
    - Match the model to your specific task
 
 4. **Reference materials**:

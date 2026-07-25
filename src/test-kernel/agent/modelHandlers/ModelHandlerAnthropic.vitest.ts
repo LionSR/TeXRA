@@ -10,6 +10,7 @@ import { PDFDocument } from '@cantoo/pdf-lib';
 import { afterEach, describe, it, vi } from 'vitest';
 import {
   type ModelCapabilities,
+  MODEL_CONFIGS,
   ModelProvider,
   ReasoningEffort,
 } from 'llm-zoo';
@@ -1222,6 +1223,68 @@ describe('ModelHandlerAnthropic message guards', () => {
       'max',
       "max reasoning effort should map to the top 'max' tier on Opus 4.8",
     );
+  });
+
+  it('sends the llm-zoo opus5T model with native Opus 5 thinking traits', async () => {
+    const handler = new ModelHandlerAnthropic(
+      buildTestModelConfig(MODEL_CONFIGS.opus5T, {
+        capabilities: {
+          supportsTokenCounting: false,
+          reasoningEffort: ReasoningEffort.XHIGH,
+        },
+      }),
+    );
+    handler.setAgentCategory(AgentCategory.ToolUse);
+    stubHandlerForTest(handler);
+
+    const { client, messageOptions } =
+      createCapturingAnthropicClient('claude-opus-5');
+    stubCompactionThresholdPercent(75);
+
+    await handler.createResponse({
+      client,
+      messages: helloMessages(),
+      temperature: 0.7,
+    });
+
+    const options = messageOptions[0] ?? {};
+    assert.equal(options.model, 'claude-opus-5');
+    assert.deepEqual(options.thinking, {
+      type: 'adaptive',
+      display: 'summarized',
+    });
+    assert.equal(options.output_config?.effort, 'xhigh');
+    assert.equal(options.temperature, undefined);
+    assert.ok(options.betas?.includes('compact-2026-01-12'));
+    assert.ok(
+      options.context_management?.edits?.some(
+        (edit: { type: string }) => edit.type === 'compact_20260112',
+      ),
+      'opus5T should be eligible for native compaction',
+    );
+  });
+
+  it('maps opus5T maximum reasoning to Anthropic max effort', async () => {
+    const handler = new ModelHandlerAnthropic(
+      buildTestModelConfig(MODEL_CONFIGS.opus5T, {
+        capabilities: {
+          supportsTokenCounting: false,
+          reasoningEffort: ReasoningEffort.MAX,
+        },
+      }),
+    );
+    stubHandlerForTest(handler);
+
+    const { client, messageOptions } =
+      createCapturingAnthropicClient('claude-opus-5');
+    await handler.createResponse({
+      client,
+      messages: helloMessages(),
+      temperature: 0.7,
+    });
+
+    assert.equal(messageOptions[0]?.output_config?.effort, 'max');
+    assert.equal(messageOptions[0]?.temperature, undefined);
   });
 
   it('round-trips forced compaction state into the next workflow invocation', async () => {
