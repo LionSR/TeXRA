@@ -1,3 +1,4 @@
+import stripAnsi from 'strip-ansi';
 import { describe, expect, it } from 'vitest';
 
 import type { AgentEntry } from '@agent/index';
@@ -9,7 +10,11 @@ import {
   setChatDefaultAgent,
 } from '@cli/chat/tui/forms/AgentRosterForm';
 import { formatCliAgentRoster } from '@cli/runtime/agentRoster';
-import { loadInk } from '@test/support/inkTestHarness.mts';
+import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
+import {
+  loadInk,
+  renderWithTerminalSize,
+} from '@test/support/inkTestHarness.mts';
 
 const agents: AgentEntry[] = [
   {
@@ -31,11 +36,26 @@ const agents: AgentEntry[] = [
 describe('AgentRosterForm', () => {
   it('renders loading through the shared Ink indicator', async () => {
     const { ink, React } = await loadInk();
-    const output = ink.renderToString(
+    const { instance, stdout } = renderWithTerminalSize(
+      ink,
       React.createElement(AgentRosterForm, { onClose: () => undefined }),
+      80,
     );
 
-    expect(output).toMatch(/[|/\\-]\s+Loading agent roster\.\.\./);
+    try {
+      await waitFor(() => stdout.output.includes('Loading agent roster...'));
+      const loadingLines = stripAnsi(stdout.output)
+        .split('\n')
+        .filter((line) => line.includes('Loading agent roster...'));
+      const loadingCopy = loadingLines[0]
+        ?.replace(/^│\s*/, '')
+        .replace(/\s*│$/, '');
+
+      expect(loadingLines).toHaveLength(1);
+      expect(loadingCopy).toMatch(/^[|/\\-] Loading agent roster\.\.\.$/);
+    } finally {
+      instance.unmount();
+    }
   });
 
   it('offers chat defaults only from the effective tool-use roster', () => {
