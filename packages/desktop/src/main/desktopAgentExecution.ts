@@ -392,7 +392,6 @@ export class DesktopProgressBridge {
       if (subagents.length > 0) {
         this.backend.factApplier.handleRunFact(streamId, {
           type: 'child.activity',
-          kind: 'subagents',
           parentStreamId: streamId,
           items: subagents,
         });

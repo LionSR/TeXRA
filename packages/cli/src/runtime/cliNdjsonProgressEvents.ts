@@ -11,7 +11,6 @@ import type {
   SetParentStreamPayload,
   StreamTabId,
   UpdateConversationProgressPayload,
-  UpdateActiveProcessesPayload,
   UpdateActiveSubagentsPayload,
   UpdateCompileFailuresPayload,
   UpdateMissingOutputsPayload,
@@ -57,7 +56,6 @@ export interface CliNdjsonProgressEventPayloads {
   updateQueuedFollowUps: UpdateQueuedFollowUpsPayload;
   goalPaused: GoalPausedPayload;
   updateActiveSubagents: UpdateActiveSubagentsPayload;
-  updateActiveProcesses: UpdateActiveProcessesPayload;
   updateStreamDescription: UpdateStreamDescriptionPayload;
   setParentStream: SetParentStreamPayload;
 

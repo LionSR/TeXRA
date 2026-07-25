@@ -91,7 +91,6 @@ const UpdateRoundStageMessageSchema = StreamScopedBaseSchema.extend({
 const UpdateStreamBadgesMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES),
   subagents: z.array(ActiveChildInfoSchema),
-  processes: z.array(ActiveChildInfoSchema),
 });
 
 const UpdateParentStreamMessageSchema = StreamScopedBaseSchema.extend({
@@ -292,7 +291,6 @@ const StreamContentRenderFields = {
       roundStage: RoundStageSchema.nullable(),
       badges: z.strictObject({
         subagents: z.array(ActiveChildInfoSchema),
-        processes: z.array(ActiveChildInfoSchema),
       }),
       parentStreamId: StreamTabIdSchema.nullable(),
     })

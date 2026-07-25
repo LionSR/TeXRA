@@ -39,7 +39,6 @@ const streamId = 'stream:cli-session-projection' as StreamTabId;
 const executionId = 'execution:cli-session-projection' as ExecutionId;
 const childStreamId = 'stream:cli-child' as StreamTabId;
 const childExecutionId = 'execution:cli-child' as ExecutionId;
-const processExecutionId = 'execution:cli-process' as ExecutionId;
 const storageKey = 'run-a' as StorageKey;
 
 type WorkflowConfig = Omit<AgentConfig, 'agentCategory'> & {
@@ -107,13 +106,6 @@ const child = {
   agentName: 'review',
   status: 'running',
 };
-const process = {
-  kind: 'process' as const,
-  executionId: processExecutionId,
-  agentName: 'latexmk',
-  status: 'running',
-};
-
 const PROGRESS_PROJECTION_CASES = {
   setActiveStream: {
     source: sessionFact('setActiveStream', { streamId }),
@@ -264,20 +256,10 @@ const PROGRESS_PROJECTION_CASES = {
   updateActiveSubagents: {
     source: runEvent({
       type: 'child.activity',
-      kind: 'subagents',
       parentStreamId: streamId,
       items: [child],
     }),
     payload: { parentStreamId: streamId, children: [child] },
-  },
-  updateActiveProcesses: {
-    source: runEvent({
-      type: 'child.activity',
-      kind: 'processes',
-      parentStreamId: streamId,
-      items: [process],
-    }),
-    payload: { parentStreamId: streamId, processes: [process] },
   },
   updateStreamDescription: {
     source: sessionFact('updateStreamDescription', {

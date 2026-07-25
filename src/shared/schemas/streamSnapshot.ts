@@ -40,7 +40,6 @@ import { WorkPlanSnapshotShape } from './workPlan';
 const SharedBackendOwnedFieldsSchema = BackendOwnedFieldsSchema.pick({
   conversationProgress: true,
   subagents: true,
-  processes: true,
 });
 
 /**
@@ -116,7 +115,7 @@ export const StreamSnapshotSchema = SharedBackendOwnedFieldsSchema.extend({
   // conversationProgress comes from SharedBackendOwnedFieldsSchema above.
 
   // -- Liveness (NEVER restored as live — clamp on hydrate) -----------------
-  // subagents, processes come from SharedBackendOwnedFieldsSchema.
+  // subagents comes from SharedBackendOwnedFieldsSchema.
 });
 
 export type StreamSnapshot = z.infer<typeof StreamSnapshotSchema>;

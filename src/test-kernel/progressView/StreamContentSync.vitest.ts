@@ -159,7 +159,6 @@ describe('progress view stream-content projection', () => {
         roundStage: { index: 2 },
         badges: {
           subagents: [activeSubagent],
-          processes: [],
         },
         parentStreamId: parentStream,
       },

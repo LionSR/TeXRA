@@ -53,10 +53,6 @@ import { transcriptViewportKey } from '@cli/chat/tui/state/transcriptViewportMod
 import { projectStreamTranscript } from '@cli/chat/tui/state/transcriptProjection';
 import { subscribeStreamStatus } from '@cli/chat/tui/state/subscribeStreamStatus';
 import { attachTuiRunFactSubscription } from '@cli/chat/tui/state/subscribeRuntimeHost';
-import {
-  buildCompletedProcessTranscript,
-  completedProcessDisplayLines,
-} from '@cli/chat/tui/state/completedProcessTranscript';
 import { isChildExecutionErrorStatus } from '@cli/chat/tui/state/childExecutionStatus';
 import {
   estimateTranscriptEntryRows,
@@ -154,17 +150,15 @@ describe('cliState Phase 4 fields', () => {
     });
   });
 
-  it('initialises every new slice with empty subagent/process/todo/plan/bypass defaults', () => {
+  it('initialises every new slice with empty subagent/todo/plan/bypass defaults', () => {
     patchStream(root, (s) => ({ ...s, status: 'running' }));
     const slice = streams.get().get(root);
     expect(slice).toBeDefined();
     expect(
       activeSubagentsFor(root, childStreamEntries.get(), streams.get()),
     ).toEqual([]);
-    expect(slice?.activeProcesses).toEqual([]);
     expect(slice?.todos).toEqual([]);
     expect(slice?.plan).toBeNull();
-    expect(slice?.processOutput.size).toBe(0);
     expect(slice?.bypass).toEqual({
       bash: false,
       toolEdit: false,
@@ -204,38 +198,18 @@ describe('cliState Phase 4 fields', () => {
       },
     ]);
     setParentStream(child1, root);
-    // Processes never own a stream tab, so an unrelated background process
-    // must be untouched by removing child1's stream below.
-    patchStream(root, (s) => ({
-      ...s,
-      activeProcesses: [
-        {
-          kind: 'process',
-          executionId: 'process-1',
-          agentName: 'bash',
-          status: STREAM_PHASE.RUNNING,
-        },
-      ],
-    }));
     patchStream(child1, (s) => ({ ...s, status: STREAM_PHASE.WAITING }));
 
     expect(orderedSessionDescendants(root)[0]).toBe(child1);
 
     removeStream(child1);
 
-    const parent = streams.get().get(root);
-    expect(parent).toBeDefined();
-    if (!parent) throw new Error('missing parent stream');
     expect(
       retainedChildStreamsFor(root, childStreamEntries.get(), streams.get()),
     ).toEqual([]);
     expect(
       activeSubagentsFor(root, childStreamEntries.get(), streams.get()),
     ).toEqual([]);
-    // Unaffected: process-1 never referenced child1's stream.
-    expect(parent.activeProcesses).toMatchObject([
-      { executionId: 'process-1' },
-    ]);
     expect(
       visibleSubagentRows(root, childStreamEntries.get(), streams.get()),
     ).toEqual([]);
@@ -311,7 +285,6 @@ describe('cliState Phase 4 fields', () => {
         streamId: root,
         event: {
           type: 'child.activity',
-          kind: 'subagents',
           parentStreamId: root,
           items: [
             {
@@ -547,7 +520,6 @@ describe('CLI TUI row allocation', () => {
     expect(
       allocateConversationBottomPanelRows({
         maxRows: 10,
-        processCount: 0,
         sessionCount: 2,
         childListFocused: false,
         todosPlanContentRows: 5,
@@ -561,8 +533,7 @@ describe('CLI TUI row allocation', () => {
     expect(
       allocateConversationBottomPanelRows({
         maxRows: 10,
-        processCount: 1,
-        sessionCount: 0,
+        sessionCount: 1,
         childListFocused: true,
         todosPlanContentRows: 0,
         transcriptRows: 1,
@@ -574,7 +545,7 @@ describe('CLI TUI row allocation', () => {
     });
   });
 
-  it('allocates session rows when process slice data is absent', () => {
+  it('allocates session rows from the session count alone', () => {
     expect(
       allocateConversationBottomPanelRows({
         maxRows: 10,
@@ -1757,22 +1728,6 @@ describe('CLI transcript state', () => {
           syntheticAfterSeq: 4,
           syntheticAfterSettlementSeqNo: 3,
         },
-        {
-          id: 'synthetic-workflow-process',
-          role: 'process',
-          text: '',
-          finalized: true,
-          synthetic: true,
-          syntheticKind: 'process',
-          syntheticAfterSeq: 4,
-          syntheticAfterSettlementSeqNo: 3,
-          process: {
-            executionId: 'workflow-process',
-            title: 'latexmk',
-            isError: false,
-            tailLines: [],
-          },
-        },
       ],
     }));
 
@@ -1790,7 +1745,6 @@ describe('CLI transcript state', () => {
     expect(JSON.stringify(slice)).not.toContain('raw workflow model response');
     expect(JSON.stringify(slice)).not.toContain('synthetic workflow prompt');
     expect(JSON.stringify(slice)).not.toContain('synthetic workflow response');
-    expect(JSON.stringify(slice)).not.toContain('workflow-process');
     expect(slice?.description).toBe('synthetic workflow error');
   });
 
@@ -2540,21 +2494,7 @@ describe('CLI transcript state', () => {
   });
 });
 
-describe('subscribeRuntimeHost.updateActiveProcesses', () => {
-  const runningProcessA: ActiveChildInfo = {
-    kind: 'process',
-    executionId: 'exec-a',
-    agentName: 'latexmk',
-    toolName: 'bash',
-    status: 'running',
-  };
-  const runningProcessB: ActiveChildInfo = {
-    kind: 'process',
-    executionId: 'exec-b',
-    agentName: 'bash',
-    status: 'running',
-  };
-
+describe('subscribeRuntimeHost run facts', () => {
   it('keeps a session-scoped fact subscription live after state reset', () => {
     const hub = new SessionEventHub();
     const detach = attachTuiRunFactSubscription(hub);
@@ -2732,7 +2672,6 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
         streamId: root,
         event: {
           type: 'child.activity',
-          kind: 'subagents',
           parentStreamId: root,
           items: [child],
         },
@@ -2756,42 +2695,6 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
       ).toEqual([child]);
       expect(parentStream.get().get(child1)).toBe(root);
       expect(parentStream.get().get(child2)).toBe(root);
-    } finally {
-      detach();
-    }
-  });
-
-  it('applies direct child.activity(processes) completion once', () => {
-    const hub = new SessionEventHub();
-    const detach = attachTuiRunFactSubscription(hub);
-
-    try {
-      hub.emit({
-        scope: 'run',
-        streamId: root,
-        event: {
-          type: 'child.activity',
-          kind: 'processes',
-          parentStreamId: root,
-          items: [runningProcessA, runningProcessB],
-        },
-      });
-      hub.emit({
-        scope: 'run',
-        streamId: root,
-        event: {
-          type: 'child.activity',
-          kind: 'processes',
-          parentStreamId: root,
-          items: [runningProcessB],
-        },
-      });
-
-      const slice = streams.get().get(root);
-      expect(slice?.activeProcesses).toEqual([runningProcessB]);
-      expect(
-        slice?.entries.filter((entry) => entry.role === 'process'),
-      ).toHaveLength(1);
     } finally {
       detach();
     }
@@ -3252,101 +3155,7 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
     }
   });
 
-  it('persists a completed-process transcript entry when a process finishes', () => {
-    const hub = new SessionEventHub();
-    const detach = attachTuiRunFactSubscription(hub);
-
-    try {
-      // Seed: two live processes.
-      hub.emit({
-        scope: 'run',
-        streamId: root,
-        event: {
-          type: 'child.activity',
-          kind: 'processes',
-          parentStreamId: root,
-          items: [
-            {
-              kind: 'process',
-              executionId: 'exec-a',
-              agentName: 'latexmk',
-              toolName: 'bash',
-              status: 'exit 1',
-              elapsed: '2s',
-            },
-            { kind: 'process', executionId: 'exec-b', agentName: 'bash' },
-          ],
-        },
-      });
-
-      // exec-a finishes: a durable transcript entry is added for it.
-      hub.emit({
-        scope: 'run',
-        streamId: root,
-        event: {
-          type: 'child.activity',
-          kind: 'processes',
-          parentStreamId: root,
-          items: [
-            { kind: 'process', executionId: 'exec-b', agentName: 'bash' },
-          ],
-        },
-      });
-      const slice = streams.get().get(root);
-
-      const processEntries =
-        slice?.entries.filter((entry) => entry.role === 'process') ?? [];
-      expect(processEntries).toHaveLength(1);
-      expect(processEntries[0]).toMatchObject({
-        role: 'process',
-        finalized: true,
-        synthetic: true,
-        syntheticKind: 'process',
-        process: {
-          executionId: 'exec-a',
-          title: 'latexmk',
-          status: 'exit 1',
-          elapsed: '2s',
-          isError: true,
-        },
-      });
-
-      const split = splitTranscriptEntries(
-        slice?.entries ?? [],
-        STREAM_PHASE.WAITING,
-      );
-      expect(split.finalized).toContain(processEntries[0]);
-      expect(split.pending).not.toContain(processEntries[0]);
-    } finally {
-      detach();
-    }
-  });
-
-  it('formats completed-process transcript rows for terminal rendering', () => {
-    const process = buildCompletedProcessTranscript(
-      {
-        kind: 'process',
-        executionId: 'exec-a',
-        agentName: 'latexmk',
-        status: 'exit 2',
-        elapsed: '5s',
-      },
-      {
-        stdout: 'Compiling\n',
-        stderr: 'fatal error\n',
-      },
-    );
-
-    expect(completedProcessDisplayLines(process)).toMatchInlineSnapshot(`
-      [
-        "latexmk · exit 2 · 5s · error",
-        "⎿ Compiling",
-        "  fatal error",
-      ]
-    `);
-  });
-
-  it('classifies completed process error statuses', () => {
+  it('classifies child-execution error statuses', () => {
     expect(isChildExecutionErrorStatus('running')).toBe(false);
     expect(isChildExecutionErrorStatus('exit 0')).toBe(false);
     expect(isChildExecutionErrorStatus('exit 1')).toBe(true);
@@ -3355,27 +3164,10 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
     // A user stop is not an error (RUN_OUTCOME keeps cancelled ≠ failed).
     expect(isChildExecutionErrorStatus('stopped')).toBe(false);
   });
-
-  it('does not keep a stale running status after a process leaves the active list', () => {
-    const process = buildCompletedProcessTranscript(
-      {
-        kind: 'process',
-        executionId: 'exec-a',
-        agentName: 'bash',
-        status: 'running',
-      },
-      undefined,
-    );
-
-    expect(process.status).toBe('completed');
-    expect(process.isError).toBe(false);
-  });
 });
 
 describe('session tree order', () => {
   it('orders retained sibling sessions', () => {
-    // Only subagents own a session, so both live siblings are modeled as
-    // subagents here; a background process is never a selection target.
     applySubagentRoster(root, [
       {
         kind: 'subagent',

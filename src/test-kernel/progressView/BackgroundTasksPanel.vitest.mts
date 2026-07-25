@@ -118,30 +118,4 @@ describe('background-tasks-panel', () => {
 
     element.remove();
   });
-
-  it('uses completed as the deterministic fallback for retained processes', async () => {
-    const element = document.createElement(
-      'background-tasks-panel',
-    ) as BackgroundTasksPanel;
-    element.processes = [
-      {
-        kind: 'process',
-        executionId: 'process-1',
-        agentName: 'bash',
-        status: 'running',
-        elapsed: '3s',
-        finishedAt: 1_000,
-      },
-    ];
-    document.body.append(element);
-    await element.updateComplete;
-
-    // ProcessExecutionHandle has no child stream or terminal status source.
-    // Retained rows therefore preserve the last live roster status, and the
-    // panel deterministically treats any non-failed/cancelled outcome as done.
-    const badge = element.shadowRoot?.querySelector('wa-badge.task-status');
-    expect(badge?.textContent).toBe('completed');
-
-    element.remove();
-  });
 });

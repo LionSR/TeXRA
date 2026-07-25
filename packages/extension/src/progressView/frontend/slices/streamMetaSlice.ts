@@ -179,7 +179,6 @@ export const streamMetaHandlers = {
     setStreamStateForId(data.stream, (prev) =>
       create(prev, (draft) => {
         draft.subagents = data.subagents;
-        draft.processes = data.processes;
       }),
     );
   },

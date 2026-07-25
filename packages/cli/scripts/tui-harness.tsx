@@ -1177,7 +1177,7 @@ function childEventOrderRosterRow(): ActiveChildInfo {
   };
 }
 
-// `child.activity(kind: 'subagents')` run fact — the real roster wiring
+// `child.activity` run fact — the real roster wiring
 // (`ExecutionRegistry.emitChildActivity`, src/agent/runtime/executionRegistry.ts).
 function emitChildEventOrderRoster(
   parentStreamId: StreamTabId,
@@ -1188,7 +1188,6 @@ function emitChildEventOrderRoster(
     streamId: parentStreamId,
     event: {
       type: 'child.activity',
-      kind: 'subagents',
       parentStreamId,
       items: children,
     },
@@ -1405,14 +1404,6 @@ if (SHOW_CHILDREN) {
     status: STREAM_STATUS.RUNNING,
     startedAt: nestedStartedAt,
   };
-  const nestedStrategyProcess = {
-    kind: 'process' as const,
-    executionId: 'harness-nested-proof-audit',
-    agentName: 'proof audit',
-    toolName: 'bash',
-    status: STREAM_STATUS.RUNNING,
-    startedAt: Date.now() - 9_000,
-  };
   const childStreams = [
     {
       kind: 'subagent' as const,
@@ -1463,29 +1454,6 @@ if (SHOW_CHILDREN) {
     ...slice,
     status: STREAM_PHASE.RUNNING,
     runStartedAt: startedAt,
-    activeProcesses: [
-      {
-        kind: 'process' as const,
-        executionId: 'harness-process-latexmk',
-        agentName: 'latex build',
-        toolName: 'bash',
-        status: STREAM_STATUS.RUNNING,
-        startedAt: Date.now() - 19_000,
-      },
-    ],
-    processOutput: new Map([
-      [
-        'harness-process-latexmk',
-        {
-          stdout: [
-            'latexmk: applying rule pdflatex',
-            'chapter1.tex:47: Overfull hbox',
-            'main.tex: Proof sketch needs one missing reference',
-          ].join('\n'),
-          stderr: '',
-        },
-      ],
-    ]),
   }));
   for (const child of childStreams) {
     const streamId = child.childStreamId;
@@ -1497,23 +1465,6 @@ if (SHOW_CHILDREN) {
       ...slice,
       status: streamStatusToPhase(child.status),
       description: `${child.agentName} sub-workflow`,
-      activeProcesses: addNestedChildren
-        ? [nestedStrategyProcess]
-        : slice.activeProcesses,
-      processOutput: addNestedChildren
-        ? new Map([
-            [
-              'harness-nested-proof-audit',
-              {
-                stdout: [
-                  'proof-audit: checking nested child result',
-                  'nested-checker: verified lemma bound',
-                ].join('\n'),
-                stderr: '',
-              },
-            ],
-          ])
-        : slice.processOutput,
       entries: makeChildEntries(child.agentName, child.executionId),
       runStartedAt:
         child.status === STREAM_STATUS.RUNNING ? child.startedAt : undefined,
@@ -1712,7 +1663,6 @@ function markHarnessInterrupted(): void {
     ...slice,
     status: STREAM_PHASE.CANCELLED,
     runStartedAt: undefined,
-    activeProcesses: [],
     entries: [
       ...slice.entries,
       {
@@ -1769,7 +1719,6 @@ function markHarnessStreamInterrupted(streamId: StreamTabId): void {
     ...slice,
     status: STREAM_PHASE.CANCELLED,
     runStartedAt: undefined,
-    activeProcesses: [],
     entries: [
       ...slice.entries,
       {
@@ -1897,7 +1846,6 @@ function markHarnessExecutionStopped(executionId: string): void {
   );
   const executionRows = [
     ...activeSubagentRows,
-    ...parentSlice.activeProcesses,
     ...visibleSubagentRows(STREAM_ID, childStreamEntries.get(), streams.get()),
   ];
   const executionRow = executionRows.find(
@@ -1914,9 +1862,6 @@ function markHarnessExecutionStopped(executionId: string): void {
   );
   patchStream(STREAM_ID, (slice) => ({
     ...slice,
-    activeProcesses: slice.activeProcesses.filter((child) =>
-      isDifferentExecution(child, executionId),
-    ),
     entries: [
       ...slice.entries,
       harnessMessageEntry(

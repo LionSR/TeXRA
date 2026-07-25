@@ -10,10 +10,7 @@ import {
   ConversationPane,
   workflowRunStatusSummary,
 } from '@cli/chat/tui/panes/ConversationPane';
-import {
-  SubagentList,
-  compactChildRowText,
-} from '@cli/chat/tui/panes/SubagentList';
+import { SubagentList } from '@cli/chat/tui/panes/SubagentList';
 import { textDisplayWidth } from '@cli/chat/tui/render/terminalText';
 import {
   activeStreamId,
@@ -63,10 +60,8 @@ function workflowAgentSlice(
     roundStage: undefined,
     entries: [],
     queuedFollowUpMessages: [],
-    activeProcesses: [],
     todos: [],
     plan: null,
-    processOutput: new Map(),
     bypass: { bash: false, toolEdit: false, superYolo: false },
     ...overrides,
   };
@@ -458,44 +453,6 @@ describe('CLI child list display model', () => {
         maxVisibleItems: 1,
       }),
     ).toEqual({ start: 2, end: 3 });
-  });
-
-  it('keeps bounded process rows to the latest one-line output summary', () => {
-    expect(
-      compactChildRowText({
-        child: {
-          kind: 'process',
-          executionId: 'latexmk',
-          agentName: 'latex build',
-          status: 'running',
-          elapsed: '19sec',
-        },
-        nowMs: Date.now(),
-        tail: {
-          stdout:
-            'latexmk: applying rule pdflatex\nmain.tex: Proof sketch needs one missing reference',
-          stderr: '',
-        },
-      }),
-    ).toBe(
-      'latex build running · 19sec · main.tex: Proof sketch needs one missing reference',
-    );
-  });
-
-  it('drops elapsed from the compact row text when the metadata column owns it', () => {
-    expect(
-      compactChildRowText({
-        child: {
-          kind: 'process',
-          executionId: 'latexmk',
-          agentName: 'latex build',
-          status: 'running',
-          elapsed: '19sec',
-        },
-        nowMs: Date.now(),
-        omitElapsed: true,
-      }),
-    ).toBe('latex build running');
   });
 
   it('formats the row metadata column from elapsed and generated tokens', () => {

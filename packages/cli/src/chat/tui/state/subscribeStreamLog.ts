@@ -230,9 +230,6 @@ function entriesEqual(
   if (prev.role === 'tool' && next.role === 'tool') {
     return toolUseEqual(prev.toolUse, next.toolUse);
   }
-  if (prev.role === 'process' && next.role === 'process') {
-    return prev.process === next.process;
-  }
   if (prev.role === 'phase' && next.role === 'phase') {
     return (
       prev.phaseIndex === next.phaseIndex && prev.phaseTotal === next.phaseTotal
@@ -441,7 +438,7 @@ function renderLogEntry(
 
 // An entry is "settled" once its content can no longer change, so it is
 // safe to print once into `<Static>` scrollback:
-//   - user / error / process: fixed the moment they appear.
+//   - user / error: fixed the moment they appear.
 //   - workflow task: fixed once its typed state reaches a terminal status.
 //   - assistant: frozen once the model emits a later entry (more text or a
 //     tool call). The trailing block may still be streaming.
@@ -454,7 +451,6 @@ function isSettledEntry(
   switch (entry.role) {
     case 'user':
     case 'error':
-    case 'process':
     case 'phase':
       return true;
     case 'tool':
@@ -704,7 +700,7 @@ export function syncStreamLog(
       }
       logCandidates.push({ rendered, sortSeq: entry.seqNo, tieBreak: 0 });
     }
-    // Synthetic (local/process) rows are positioned by `syntheticAfterSeq`
+    // Synthetic (CLI-owned) rows are positioned by `syntheticAfterSeq`
     // alongside the ordered log entries; push into a copy so we don't mutate
     // `logCandidates` itself.
     const candidates: TranscriptCandidate[] =

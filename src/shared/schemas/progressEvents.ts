@@ -117,16 +117,10 @@ export interface UpdateRoundStagePayload {
   roundStage: RoundStage;
 }
 
-/** Active subagent roster, projected from `child.activity` (kind 'subagents'). */
+/** Active subagent roster, projected from `child.activity`. */
 export interface UpdateActiveSubagentsPayload {
   parentStreamId: StreamTabId;
   children: ActiveChildInfo[];
-}
-
-/** Active process roster, projected from `child.activity` (kind 'processes'). */
-export interface UpdateActiveProcessesPayload {
-  parentStreamId: StreamTabId;
-  processes: ActiveChildInfo[];
 }
 
 /**

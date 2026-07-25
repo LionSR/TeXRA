@@ -1,6 +1,6 @@
 // Host-neutral "which active children vanished" diff, shared by the webview
 // progress-view backend and the CLI TUI. Both hosts independently computed
-// this same previous-vs-next id-set diff for subagent/process activity; this
+// this same previous-vs-next id-set diff for subagent activity; this
 // module owns the one comparison so hosts stay on a single correct algorithm.
 //
 // NO host imports here (no vscode / electron / ink / immer): the diff is a
