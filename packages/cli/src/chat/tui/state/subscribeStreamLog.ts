@@ -55,6 +55,10 @@ import { isFinalTranscriptStatus } from './transcript';
 
 const MAX_ERROR_DETAIL_LENGTH = 240;
 
+/**
+ * Project successful local context-media preparation. FILE_LIST does not
+ * claim that a remote provider subsequently accepted the attachment.
+ */
 function projectFileListImages(data: unknown): LoadedImage[] {
   if (!Array.isArray(data)) return [];
 
