@@ -74,7 +74,7 @@ function buildTooltip(
       ? (info.modelLabel ?? info.model)
       : undefined;
   const mainLine = [
-    info.label,
+    info.label || info.name,
     `Status: ${statusLabel}`,
     modelDisplay && `Model: ${modelDisplay}`,
     info.inputFile && `Input: ${info.inputFile}`,
@@ -155,6 +155,9 @@ export class StreamTab extends LitElement {
     const streamDecorator = this._streamDecorator;
     const hasChildren = this.childCount > 0 && !this.compact;
     const childStreamLabel = formatResultCount(this.childCount, 'child stream');
+    const childToggleLabel = this.expanded
+      ? 'Collapse child streams'
+      : childStreamLabel;
 
     return html`
       <div
@@ -170,29 +173,31 @@ export class StreamTab extends LitElement {
         ${
           hasChildren
             ? html`<wa-button
-                class="action-icon-button tab-expand"
-                appearance="plain"
-                variant="neutral"
-                size="small"
-                type="button"
-                data-stream=${stream.name}
-                data-action="toggle-children"
-                title=${
-                  this.expanded ? 'Collapse child streams' : childStreamLabel
-                }
-                aria-expanded=${this.expanded ? 'true' : 'false'}
-                >${waIcon('chevron-right')}</wa-button
-              >`
+                  id="stream-tab-expand-button"
+                  class="action-icon-button tab-expand"
+                  appearance="plain"
+                  variant="neutral"
+                  size="small"
+                  type="button"
+                  data-stream=${stream.name}
+                  data-action="toggle-children"
+                  aria-label=${childToggleLabel}
+                  aria-expanded=${this.expanded ? 'true' : 'false'}
+                  >${waIcon('chevron-right')}</wa-button
+                ><wa-tooltip for="stream-tab-expand-button"
+                  >${childToggleLabel}</wa-tooltip
+                >`
             : nothing
         }
         <button
+          id="stream-tab-select-button"
           class="tab"
           data-stream=${stream.name}
           data-action="select"
-          title=${tooltip}
+          aria-label=${tooltip}
         >
           <div class="tab-header">
-            <span class="tab-title"
+            <span id="stream-tab-title" class="tab-title"
               >${
                 stream.parentStreamId
                   ? html`<wa-icon
@@ -207,12 +212,12 @@ export class StreamTab extends LitElement {
             ${
               this.childCount > 0 && this.compact
                 ? html`<wa-icon
+                    id="stream-tab-compact-children"
                     library=${TEXRA_ICON_LIBRARY}
                     name="chevron-right"
                     class="compact-subagent-hint"
                     role="img"
                     aria-label=${childStreamLabel}
-                    title=${childStreamLabel}
                   ></wa-icon>`
                 : nothing
             }
@@ -256,25 +261,21 @@ export class StreamTab extends LitElement {
                       }</span
                     >
                     <wa-icon
+                      id="stream-tab-kind"
                       library=${TEXRA_ICON_LIBRARY}
                       name=${streamDecorator.icon}
                       class="stream-kind"
                       aria-hidden="true"
-                      title=${
-                        stream.kind === 'workflowScript'
-                          ? streamDecorator.label
-                          : `Category: ${streamDecorator.label}`
-                      }
                     ></wa-icon>
                     ${when(
                       stream.isRemote,
                       () => html`
                         <wa-icon
+                          id="stream-tab-remote"
                           library=${TEXRA_ICON_LIBRARY}
                           name=${AGENT_DECORATORS.properties.remote.icon}
                           class="remote-agent"
                           aria-hidden="true"
-                          title=${AGENT_DECORATORS.properties.remote.hint}
                         ></wa-icon>
                       `,
                     )}
@@ -282,6 +283,31 @@ export class StreamTab extends LitElement {
                 `
           }
         </button>
+        <wa-tooltip for="stream-tab-title">${tooltip}</wa-tooltip>
+        ${
+          this.childCount > 0 && this.compact
+            ? html`<wa-tooltip for="stream-tab-compact-children"
+                >${childStreamLabel}</wa-tooltip
+              >`
+            : nothing
+        }
+        ${
+          this.compact
+            ? nothing
+            : html`<wa-tooltip for="stream-tab-kind"
+                  >${
+                    stream.kind === 'workflowScript'
+                      ? streamDecorator.label
+                      : `Category: ${streamDecorator.label}`
+                  }</wa-tooltip
+                >${when(
+                  stream.isRemote,
+                  () =>
+                    html`<wa-tooltip for="stream-tab-remote"
+                      >${AGENT_DECORATORS.properties.remote.hint}</wa-tooltip
+                    >`,
+                )}`
+        }
         <wa-button
           id="stream-tab-delete-button"
           class="action-icon-button tab-delete"

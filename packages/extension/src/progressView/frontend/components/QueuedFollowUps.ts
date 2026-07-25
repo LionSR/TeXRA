@@ -1,11 +1,11 @@
 // Third-party imports
-import { LitElement, html, css, type TemplateResult } from 'lit';
+import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
-import { ifDefined } from 'lit/directives/if-defined.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
 import { designTokens, commonViewStyles } from '@shared/styles';
@@ -123,10 +123,11 @@ export class QueuedFollowUps extends LitElement {
           ${repeat(
             this.messages,
             (_message, index) => index,
-            (message) => {
+            (message, index) => {
               const { display, full } = this.truncateMessage(message);
+              const itemId = `queued-follow-up-${index}`;
               return html`
-                <div class="queued-follow-up-item" title=${ifDefined(full)}>
+                <div id=${itemId} class="queued-follow-up-item">
                   <wa-icon
                     library=${TEXRA_ICON_LIBRARY}
                     name="comment"
@@ -135,6 +136,7 @@ export class QueuedFollowUps extends LitElement {
                   ></wa-icon>
                   <span class="queued-follow-up-text">${display}</span>
                 </div>
+                ${full ? html`<wa-tooltip for=${itemId}>${full}</wa-tooltip>` : nothing}
               `;
             },
           )}

@@ -188,6 +188,12 @@ describe('file-list keyboard activation', () => {
 
     const filePath = element.shadowRoot?.querySelector('.file-path');
     expect(filePath).toBeInstanceOf(HTMLElement);
+    expect(filePath?.hasAttribute('title')).toBe(false);
+    expect(
+      element.shadowRoot
+        ?.querySelector(`wa-tooltip[for="${filePath?.id}"]`)
+        ?.textContent?.trim(),
+    ).toBe('paper_revised.tex');
     dispatchSpace(filePath!);
 
     expect(actions).toEqual([

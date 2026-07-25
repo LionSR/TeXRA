@@ -127,6 +127,20 @@ describe('stream-header', () => {
    * status-indicator pattern.
    */
   describe('tooltips', () => {
+    it('anchors the truncated stream label via wa-tooltip[for]', async () => {
+      const element = await mount();
+      const name = element.shadowRoot?.querySelector(
+        `#${ELEMENT_IDS.ACTIVE_STREAM_NAME}`,
+      );
+
+      expect(name?.hasAttribute('title')).toBe(false);
+      expect(
+        element.shadowRoot
+          ?.querySelector(`wa-tooltip[for="${ELEMENT_IDS.ACTIVE_STREAM_NAME}"]`)
+          ?.textContent?.trim(),
+      ).toBe('Stream A');
+    });
+
     it('anchors the goal chip tooltip via wa-tooltip[for], not a native title', async () => {
       const element = await mount({
         goalActive: true,

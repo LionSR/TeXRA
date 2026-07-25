@@ -8,6 +8,7 @@ import { repeat } from 'lit/directives/repeat.js';
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
 import { designTokens, commonViewStyles } from '@shared/styles';
@@ -138,8 +139,8 @@ export class ContextManagement extends LitElement {
           ${repeat(
             this.items,
             (item) => item.label,
-            (item) => html`
-              <span class="stat-item" title=${item.label}>
+            (item, index) => html`
+              <span id="context-stat-${index}" class="stat-item">
                 <wa-icon
                   library=${TEXRA_ICON_LIBRARY}
                   name=${item.icon}
@@ -147,6 +148,7 @@ export class ContextManagement extends LitElement {
                 ></wa-icon>
                 ${item.value}
               </span>
+              <wa-tooltip for="context-stat-${index}">${item.label}</wa-tooltip>
             `,
           )}
           ${

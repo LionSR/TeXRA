@@ -78,6 +78,10 @@ describe('background-tasks-panel', () => {
       (node) => node.textContent,
     );
     expect(names).toEqual(['reviewer', 'polisher']);
+    for (const name of shadow.querySelectorAll<HTMLElement>('.task-name')) {
+      expect(name.hasAttribute('title')).toBe(false);
+      expect(shadow.querySelector(`wa-tooltip[for="${name.id}"]`)).toBeTruthy();
+    }
 
     const rows = [...shadow.querySelectorAll('.task-item')];
     expect(rows.at(-1)?.textContent).toContain('1m 4s');
