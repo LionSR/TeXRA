@@ -130,14 +130,6 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
       };
       entry.isSettled = () => settled;
       this.pending.set(requestId, entry);
-      this.options.session.approvals.toolEdit.registerPending(requestId, {
-        // `streamId` is `.nullish()` on the tool schema (string | null |
-        // undefined); the approval registry expects `string | undefined`, so
-        // collapse null → undefined (matches nativeToolEditApproval).
-        streamId: request.streamId ?? undefined,
-        isSettled: () => settled,
-        settle: (value) => this.settle(requestId, value),
-      });
       this.showProgressPermission(
         this.options.session,
         requestId,
@@ -322,7 +314,6 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
     if (!entry || entry.isSettled()) return;
 
     this.pending.delete(requestId);
-    this.options.session.approvals.toolEdit.unregisterPending(requestId);
     entry.settle(result);
     this.options.runtimeHost.emit('resolveToolEditPermission', { requestId });
     this.cleanupEntry(entry);

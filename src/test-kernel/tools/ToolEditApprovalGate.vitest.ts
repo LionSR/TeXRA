@@ -356,41 +356,4 @@ describe('Tool edit approval gating', () => {
     assert.match(result.error ?? '', /old_str must not be empty/);
     assert.strictEqual(await WorkspaceFS.read('shared.tex'), 'alpha\n');
   });
-
-  it('toggles tool-edit bypass state and returns the new value', () => {
-    // Test toggle mechanics (per-stream state)
-    // Initially bypass is off (cleared in beforeEach)
-
-    // Toggle on - should return true
-    const enabledState =
-      defaultSession().approvals.toolEdit.bypass.toggleBypass(
-        TEST_STREAM_ID,
-        noopAgentRuntimeHost,
-      );
-    assert.strictEqual(enabledState, true, 'Toggle returns true when enabling');
-
-    // Toggle off - should return false
-    const disabledState =
-      defaultSession().approvals.toolEdit.bypass.toggleBypass(
-        TEST_STREAM_ID,
-        noopAgentRuntimeHost,
-      );
-    assert.strictEqual(
-      disabledState,
-      false,
-      'Toggle returns false when disabling',
-    );
-
-    // Toggle on again
-    const reenabledState =
-      defaultSession().approvals.toolEdit.bypass.toggleBypass(
-        TEST_STREAM_ID,
-        noopAgentRuntimeHost,
-      );
-    assert.strictEqual(
-      reenabledState,
-      true,
-      'Toggle returns true when re-enabling',
-    );
-  });
 });

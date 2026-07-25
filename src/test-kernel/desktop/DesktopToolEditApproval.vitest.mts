@@ -795,11 +795,8 @@ describe('desktop tool edit approval', () => {
     'cleans pending entries and temp files when stream cleanup rejects a request',
     async () => {
       const tempRoot = await mkdtemp(path.join(tmpdir(), 'texra-approval-'));
-      const {
-        requestToolEditApproval,
-        cleanupApprovalsForStream,
-        desktopModule,
-      } = await loadApprovalModules();
+      const { cleanupApprovalsForStream, desktopModule } =
+        await loadApprovalModules();
       const runtimeHost = createRecordingRuntimeHost();
       const session = createTestSession();
       const controller = desktopModule.createDesktopToolEditApprovalController({
@@ -809,11 +806,16 @@ describe('desktop tool edit approval', () => {
         tempRoot,
       });
       useControllerApproval(controller);
+      session.useHostInteractions({
+        requestToolEditApproval: (request) =>
+          controller.requestApproval(request),
+        cancel: (selector) => controller.cancel(selector),
+      });
       const { shownToolEditPermissions: shown } = runtimeHost;
       const { resolvedToolEditPermissions: resolved } = runtimeHost;
 
       try {
-        const resultPromise = requestToolEditApproval({
+        const resultPromise = session.interactions.requestToolEditApproval({
           path: '/workspace/cleanup.tex',
           originalContent: 'old\n',
           proposedContent: 'new\n',
@@ -822,10 +824,13 @@ describe('desktop tool edit approval', () => {
         });
         await vi.waitFor(() => expect(shown).toHaveLength(1));
 
-        // Pending registries are session-owned: sweep the owning session.
+        // Pending interactions are session-owned: sweep the owning session.
         cleanupApprovalsForStream('stream-cleanup', session);
 
-        await expect(resultPromise).resolves.toMatchObject({ accepted: false });
+        await expect(resultPromise).resolves.toMatchObject({
+          accepted: false,
+          userMessage: 'Stream resources released.',
+        });
         expect(resolved).toEqual([{ requestId: shown[0].requestId }]);
         await waitForEmptyDir(tempRoot);
         expect(await readdir(tempRoot)).toEqual([]);
