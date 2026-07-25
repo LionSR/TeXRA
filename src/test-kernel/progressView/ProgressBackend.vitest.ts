@@ -3431,7 +3431,7 @@ describe('retained finished children', () => {
       seedParent(backend);
       const child = subagent('late');
       const childStreamId = 'late-stream' as StreamTabId;
-      backend.state.setStreamParent(childStreamId, PARENT);
+      backend.state.snapshots.setParentStream(childStreamId, PARENT);
 
       // Roster drop first — the child is still `running` at this point.
       backend.factApplier.updateChildRoster(PARENT, 'subagents', [child]);
@@ -3471,7 +3471,7 @@ describe('retained finished children', () => {
     try {
       seedParent(backend);
       const childStreamId = 'doomed-stream' as StreamTabId;
-      backend.state.setStreamParent(childStreamId, PARENT);
+      backend.state.snapshots.setParentStream(childStreamId, PARENT);
 
       // Roster drop first, so the retained row is stamped `running` forever.
       backend.factApplier.updateChildRoster(PARENT, 'subagents', [
