@@ -25,9 +25,11 @@ export type RunExecutionRequest = (
         },
         streamId: string,
       ): () => void;
+      publishRunEvent(streamId: string, event: unknown): void;
     };
     runtimeUnavailableTools?: readonly string[];
     onRun?: (handle: unknown) => void | Promise<void>;
+    suppressErrorNotification?: boolean;
   },
 ) => Promise<void>;
 

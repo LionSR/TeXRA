@@ -23,6 +23,7 @@ import {
 } from '@agent/index/agentRegistry';
 import { registerAgentShutdownHandlers } from '@agent/runtime/agentShutdown';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
+import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import {
@@ -1233,6 +1234,11 @@ if (protocolLifecycle.shouldContinue) {
       const { lifecycle } = platformInit;
       const transcripts = await StreamLogStore.open();
       const processSession = new SessionHandle({ transcripts });
+      const detachTerminalResultToast = attachTerminalResultToast(
+        processSession,
+        processSession.interactions,
+        { replayWhenAttached: true },
+      );
       let disposeProcessStores = (): void => undefined;
       let disposeAgentResumeHandler = (): void => undefined;
       let sessionStores!: SessionStores;
@@ -1248,6 +1254,7 @@ if (protocolLifecycle.shouldContinue) {
       );
       lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => {
         disposeAgentResumeHandler();
+        detachTerminalResultToast();
         disposeProcessStores();
         processSession.dispose();
       });
