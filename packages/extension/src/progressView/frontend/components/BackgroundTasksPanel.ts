@@ -4,9 +4,12 @@
  * Uses `<wa-details>` for the outer panel and for each nested section
  * (Processes, Subagents, Inquiries) and per-task output, for consistent
  * styling with other panels (Todos, Files, etc.) — the nested sections use the
- * `.collapsible-quiet` variant. Each active subagent is clickable to navigate
- * to its stream tab. Processes don't have their own tab so they are not
- * clickable.
+ * `.collapsible-quiet` variant. Each subagent row is clickable to navigate to
+ * its stream tab — finished ones included, their tab is still there. Processes
+ * don't have their own tab so they are not clickable.
+ *
+ * Rows are live children followed by the finished children the backend retains
+ * (`ActiveChildInfo.finishedAt`); this panel never counts what it cannot list.
  */
 
 // Third-party imports
@@ -206,10 +209,6 @@ export class BackgroundTasksPanel extends LitElement {
         font-size: var(--font-size-xs);
       }
 
-      .empty-message {
-        padding: var(--wa-space-2xs) 0;
-      }
-
       /* Collapsible output per task — also a <wa-details>. */
       wa-details.task-output {
         margin-left: calc(var(--wa-space-2xs) + var(--font-size-sm));
@@ -229,10 +228,9 @@ export class BackgroundTasksPanel extends LitElement {
     `,
   ];
 
-  @property({ attribute: false }) activeProcesses: ActiveChildInfo[] = [];
-  @property({ attribute: false }) finishedProcessCount = 0;
-  @property({ attribute: false }) activeSubagents: ActiveChildInfo[] = [];
-  @property({ attribute: false }) finishedSubagentCount = 0;
+  /** Live children plus the finished ones retained for display (`finishedAt`). */
+  @property({ attribute: false }) processes: ActiveChildInfo[] = [];
+  @property({ attribute: false }) subagents: ActiveChildInfo[] = [];
 
   /** Open state — auto-expands when active tasks appear, auto-collapses when all finish. */
   @state() open = false;
@@ -255,8 +253,8 @@ export class BackgroundTasksPanel extends LitElement {
   protected override willUpdate(changed: PropertyValues): void {
     super.willUpdate(changed);
     const active =
-      this.activeProcesses.length +
-      this.activeSubagents.length +
+      this.processes.filter((child) => child.finishedAt === undefined).length +
+      this.subagents.filter((child) => child.finishedAt === undefined).length +
       this.inquiries.filter((thread) => thread.status === 'open').length;
     // Auto-open when tasks appear (0 → N), auto-close when all finish (N → 0)
     if (this.prevActiveCount === 0 && active > 0) {
@@ -268,9 +266,12 @@ export class BackgroundTasksPanel extends LitElement {
   }
 
   override render(): TemplateResult | typeof nothing {
-    const active = this.activeProcesses.length + this.activeSubagents.length;
-    const finished = this.finishedProcessCount + this.finishedSubagentCount;
-    if (active + finished + this.inquiries.length === 0) return nothing;
+    if (
+      this.processes.length + this.subagents.length + this.inquiries.length ===
+      0
+    ) {
+      return nothing;
+    }
 
     return html`
       <wa-details
@@ -281,16 +282,8 @@ export class BackgroundTasksPanel extends LitElement {
         @wa-hide=${this.handleHide}
       >
         <div class="task-list">
-          ${this.renderSection(
-            this.activeProcesses,
-            this.finishedProcessCount,
-            'process',
-          )}
-          ${this.renderSection(
-            this.activeSubagents,
-            this.finishedSubagentCount,
-            'subagent',
-          )}
+          ${this.renderSection(this.processes, 'process')}
+          ${this.renderSection(this.subagents, 'subagent')}
           ${this.renderInquirySection()}
         </div>
       </wa-details>
@@ -374,14 +367,15 @@ export class BackgroundTasksPanel extends LitElement {
   }
 
   private renderSection(
-    active: ActiveChildInfo[],
-    finishedCount: number,
+    children: ActiveChildInfo[],
     kind: 'process' | 'subagent',
   ): TemplateResult | typeof nothing {
-    const hasActive = active.length > 0;
-    const hasFinished = finishedCount > 0;
-    if (!hasActive && !hasFinished) return nothing;
+    if (children.length === 0) return nothing;
 
+    const activeCount = children.filter(
+      (child) => child.finishedAt === undefined,
+    ).length;
+    const finishedCount = children.length - activeCount;
     const icon = kind === 'process' ? 'terminal' : 'server-process';
     const label = kind === 'process' ? 'Processes' : 'Subagents';
 
@@ -395,31 +389,18 @@ export class BackgroundTasksPanel extends LitElement {
           ></wa-icon>
           <span
             >${label}${
-              hasActive ? html` &middot; ${active.length} active` : nothing
+              activeCount ? html` &middot; ${activeCount} active` : nothing
             }${
-              hasFinished ? html` &middot; ${finishedCount} done` : nothing
+              finishedCount ? html` &middot; ${finishedCount} done` : nothing
             }</span
           >
         </div>
         <div class="section-content">
-          ${
-            hasActive
-              ? repeat(
-                  active,
-                  (c) => c.executionId,
-                  (c) => this.renderTaskItem(c),
-                )
-              : nothing
-          }
-          ${
-            !hasActive && hasFinished
-              ? html`<div class="empty-message">
-                  <em class="text-secondary"
-                    >All ${finishedCount} ${label.toLowerCase()} completed</em
-                  >
-                </div>`
-              : nothing
-          }
+          ${repeat(
+            children,
+            (c) => c.executionId,
+            (c) => this.renderTaskItem(c),
+          )}
         </div>
       </wa-details>
     `;
@@ -434,7 +415,7 @@ export class BackgroundTasksPanel extends LitElement {
     const description = childStreamId
       ? this.streamById.get(childStreamId)?.description
       : undefined;
-    const waiting = isWaiting(child);
+    const badge = taskStatusBadge(child);
 
     return html`
       <div class="task-item">
@@ -488,9 +469,9 @@ export class BackgroundTasksPanel extends LitElement {
           }
           <wa-badge
             class="task-status"
-            variant=${waiting ? 'neutral' : 'warning'}
+            variant=${badge.variant}
             appearance="filled"
-            >${waiting ? 'waiting' : 'running'}</wa-badge
+            >${badge.text}</wa-badge
           >
         </div>
         ${
@@ -550,12 +531,29 @@ function getTaskIcon(child: ActiveChildInfo): string {
   return child.kind === 'subagent' ? 'server-process' : 'terminal';
 }
 
-/** Check if a child is in a waiting/idle state rather than actively processing. */
-function isWaiting(child: ActiveChildInfo): boolean {
-  return (
-    child.status === STREAM_PHASE.WAITING ||
-    child.status === DEFAULT_STREAM_METADATA_STATUS
-  );
+/**
+ * Status badge for a background-task row. A retained finished child
+ * (`finishedAt` set) shows its terminal outcome; a live one shows whether it
+ * is waiting/idle or actively processing.
+ */
+function taskStatusBadge(child: ActiveChildInfo): {
+  readonly text: string;
+  readonly variant: 'neutral' | 'warning' | 'success' | 'danger';
+} {
+  if (child.finishedAt === undefined) {
+    return child.status === STREAM_PHASE.WAITING ||
+      child.status === DEFAULT_STREAM_METADATA_STATUS
+      ? { text: 'waiting', variant: 'neutral' }
+      : { text: 'running', variant: 'warning' };
+  }
+  switch (child.status) {
+    case STREAM_PHASE.FAILED:
+      return { text: STREAM_PHASE.FAILED, variant: 'danger' };
+    case STREAM_PHASE.CANCELLED:
+      return { text: STREAM_PHASE.CANCELLED, variant: 'neutral' };
+    default:
+      return { text: STREAM_PHASE.COMPLETED, variant: 'success' };
+  }
 }
 
 function inquiryStatusVariant(

@@ -46,4 +46,52 @@ describe('background-tasks-panel', () => {
     expect(rule?.style.borderStyle).toBe('none');
     expect(rule?.style.borderRadius).toBe('0px');
   });
+
+  it('lists a retained finished subagent as a named row, not a count', async () => {
+    const element = document.createElement(
+      'background-tasks-panel',
+    ) as BackgroundTasksPanel;
+    element.subagents = [
+      {
+        kind: 'subagent',
+        executionId: 'exec-1',
+        childStreamId: 'child-1',
+        agentName: 'reviewer',
+        status: 'running',
+        elapsed: '12s',
+      },
+      {
+        kind: 'subagent',
+        executionId: 'exec-2',
+        childStreamId: 'child-2',
+        agentName: 'polisher',
+        status: 'completed',
+        elapsed: '1m 4s',
+        finishedAt: 1_000,
+      },
+    ];
+    document.body.append(element);
+    await element.updateComplete;
+
+    const shadow = element.shadowRoot!;
+    const names = [...shadow.querySelectorAll('.task-name')].map(
+      (node) => node.textContent,
+    );
+    expect(names).toEqual(['reviewer', 'polisher']);
+
+    const rows = [...shadow.querySelectorAll('.task-item')];
+    expect(rows.at(-1)?.textContent).toContain('1m 4s');
+    const badges = [...shadow.querySelectorAll('wa-badge.task-status')].map(
+      (node) => node.textContent,
+    );
+    expect(badges).toEqual(['running', 'completed']);
+    expect(shadow.textContent).not.toContain('completed</em>');
+    expect(shadow.textContent).not.toMatch(/All \d+ subagents completed/);
+
+    // Header counts both dimensions from the one list.
+    expect(shadow.textContent).toContain('1 active');
+    expect(shadow.textContent).toContain('1 done');
+
+    element.remove();
+  });
 });

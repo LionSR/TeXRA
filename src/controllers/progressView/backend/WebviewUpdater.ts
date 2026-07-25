@@ -461,10 +461,8 @@ export class WebviewUpdater {
       lastTimestamp: state.streamLogs.getLastTimestamp(streamInfo.name),
       conversationProgress: current?.conversationProgress,
       roundStage: current?.roundStage,
-      activeSubagents: current?.activeSubagents,
-      finishedSubagentCount: current?.finishedSubagentCount,
-      activeProcesses: current?.activeProcesses,
-      finishedProcessCount: current?.finishedProcessCount,
+      subagents: current?.subagents,
+      processes: current?.processes,
     });
   }
 }

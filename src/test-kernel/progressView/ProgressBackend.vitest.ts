@@ -1917,8 +1917,8 @@ describe('ProgressBackend', () => {
       expect(target.backend.state.getStreamState(parentStreamId)).toMatchObject(
         {
           roundStage: { index: 2, total: 4 },
-          activeSubagents: [child],
-          activeProcesses: [process],
+          subagents: [child],
+          processes: [process],
         },
       );
       expect(
@@ -1978,7 +1978,7 @@ describe('ProgressBackend', () => {
     }
   });
 
-  it('clears stale per-run badges when an existing stream re-enters running', async () => {
+  it('clears retained finished children when an existing stream re-enters running', async () => {
     const { backend, messages } = createRecordingBackend();
     const stream = 'tool-stream' as StreamTabId;
 
@@ -1998,8 +1998,23 @@ describe('ProgressBackend', () => {
         ...prev,
         conversationProgress: { toolCallCount: 7 },
         roundStage: { index: 2 },
-        finishedSubagentCount: 3,
-        finishedProcessCount: 2,
+        subagents: [
+          {
+            kind: 'subagent',
+            childStreamId: 'child-stream',
+            executionId: 'finished-child',
+            agentName: 'reviewer',
+            finishedAt: 1,
+          },
+        ],
+        processes: [
+          {
+            kind: 'process',
+            executionId: 'finished-process',
+            agentName: 'bash',
+            finishedAt: 1,
+          },
+        ],
       }));
 
       await backend.factApplier.setStreamStatus(
@@ -2029,8 +2044,8 @@ describe('ProgressBackend', () => {
         status: STREAM_PHASE.RUNNING,
         conversationProgress: { toolCallCount: 0 },
         roundStage: null,
-        finishedSubagentCount: 0,
-        finishedProcessCount: 0,
+        subagents: [],
+        processes: [],
       });
       expect(
         JSON.parse(JSON.stringify(patch)).streamState.roundStage,
@@ -3310,5 +3325,172 @@ describe('ProgressBackend', () => {
         session.dispose();
       }
     });
+  });
+});
+
+describe('retained finished children', () => {
+  const PARENT = 'parent-stream' as StreamTabId;
+
+  function subagent(
+    id: string,
+    overrides: Partial<ActiveChildInfo> = {},
+  ): ActiveChildInfo {
+    return {
+      kind: 'subagent',
+      executionId: id,
+      childStreamId: `${id}-stream` as StreamTabId,
+      agentName: `agent-${id}`,
+      status: STREAM_PHASE.RUNNING,
+      ...overrides,
+    } as ActiveChildInfo;
+  }
+
+  function seedParent(backend: ProgressBackend): void {
+    backend.state.streamLogs.ensureStream(PARENT);
+    backend.state.getOrCreateStreamState(PARENT, AgentCategory.Workflow);
+    backend.state.activeStream = PARENT;
+  }
+
+  it('keeps a vanished child as a row stamped with finishedAt', () => {
+    const { backend } = createRecordingBackend();
+    try {
+      seedParent(backend);
+
+      backend.factApplier.updateChildRoster(PARENT, 'subagents', [
+        subagent('a'),
+        subagent('b'),
+      ]);
+      backend.factApplier.updateChildRoster(PARENT, 'subagents', [
+        subagent('a'),
+      ]);
+
+      const roster = backend.state.getStreamState(PARENT)?.subagents ?? [];
+      expect(roster).toHaveLength(2);
+      expect(roster.find((c) => c.executionId === 'a')?.finishedAt).toBe(
+        undefined,
+      );
+      expect(
+        roster.find((c) => c.executionId === 'b')?.finishedAt,
+      ).toBeGreaterThan(0);
+    } finally {
+      backend.dispose();
+    }
+  });
+
+  it('never marks anything finished from a first roster', () => {
+    const { backend } = createRecordingBackend();
+    try {
+      seedParent(backend);
+
+      backend.factApplier.updateChildRoster(PARENT, 'subagents', [
+        subagent('a'),
+      ]);
+
+      const roster = backend.state.getStreamState(PARENT)?.subagents ?? [];
+      expect(roster.map((c) => c.executionId)).toEqual(['a']);
+      expect(roster[0]?.finishedAt).toBeUndefined();
+    } finally {
+      backend.dispose();
+    }
+  });
+
+  it('shows a terminal status that lands after the roster drop', async () => {
+    const { backend, messages } = createRecordingBackend();
+    try {
+      seedParent(backend);
+      const child = subagent('late');
+      const childStreamId = 'late-stream' as StreamTabId;
+      backend.state.setStreamParent(childStreamId, PARENT);
+
+      // Roster drop first — the child is still `running` at this point.
+      backend.factApplier.updateChildRoster(PARENT, 'subagents', [child]);
+      backend.factApplier.updateChildRoster(PARENT, 'subagents', []);
+      messages.length = 0;
+
+      // Terminal status arrives afterwards.
+      backend.state.streamStatus.transitionToTerminal(
+        childStreamId,
+        STREAM_PHASE.COMPLETED,
+      );
+      await backend.factApplier.setStreamStatus(
+        childStreamId,
+        STREAM_PHASE.COMPLETED,
+      );
+
+      const badges = messages.filter(
+        (message) =>
+          message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES,
+      );
+      expect(badges.at(-1)).toMatchObject({
+        stream: PARENT,
+        subagents: [
+          expect.objectContaining({
+            executionId: 'late',
+            status: STREAM_PHASE.COMPLETED,
+          }),
+        ],
+      });
+    } finally {
+      backend.dispose();
+    }
+  });
+
+  it('caps retained rows, evicting the oldest and keeping every live one', () => {
+    const { backend } = createRecordingBackend();
+    // Mirrors RETAINED_FINISHED_CHILDREN_CAP in ProgressFactApplier.
+    const cap = 200;
+    const overflow = 5;
+    try {
+      seedParent(backend);
+      const live = subagent('live');
+
+      for (let i = 0; i < cap + overflow; i += 1) {
+        vi.spyOn(Date, 'now').mockReturnValue(1_000 + i);
+        backend.factApplier.updateChildRoster(PARENT, 'subagents', [
+          live,
+          subagent(`child-${i}`),
+        ]);
+        backend.factApplier.updateChildRoster(PARENT, 'subagents', [live]);
+      }
+      vi.restoreAllMocks();
+
+      const roster = backend.state.getStreamState(PARENT)?.subagents ?? [];
+      const retained = roster.filter((c) => c.finishedAt !== undefined);
+      expect(roster.filter((c) => c.finishedAt === undefined)).toEqual([live]);
+      expect(retained).toHaveLength(cap);
+      // The five oldest are evicted; the newest survives.
+      const ids = retained.map((c) => c.executionId);
+      expect(ids).not.toContain('child-0');
+      expect(ids).not.toContain(`child-${overflow - 1}`);
+      expect(retained[0]?.executionId).toBe(`child-${overflow}`);
+      expect(retained.at(-1)?.executionId).toBe(`child-${cap + overflow - 1}`);
+    } finally {
+      backend.dispose();
+    }
+  });
+
+  it('clears retained rows when the stream re-enters running', async () => {
+    const { backend } = createRecordingBackend();
+    try {
+      seedParent(backend);
+      const live = subagent('live');
+
+      backend.factApplier.updateChildRoster(PARENT, 'subagents', [
+        live,
+        subagent('done'),
+      ]);
+      backend.factApplier.updateChildRoster(PARENT, 'subagents', [live]);
+      expect(backend.state.getStreamState(PARENT)?.subagents).toHaveLength(2);
+
+      await backend.factApplier.setStreamStatus(
+        PARENT,
+        STREAM_PHASE.RUNNING,
+        STREAM_PHASE.COMPLETED,
+      );
+
+      expect(backend.state.getStreamState(PARENT)?.subagents).toEqual([live]);
+    } finally {
+      backend.dispose();
+    }
   });
 });

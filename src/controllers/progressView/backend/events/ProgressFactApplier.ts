@@ -51,6 +51,13 @@ import { withEventErrorHandling } from './errorHandling';
 /** Throttle interval for conversation progress webview pushes (ms). */
 const PROGRESS_THROTTLE_MS = 500;
 
+/**
+ * Memory bound on retained finished children, per stream per kind. A long
+ * session can finish thousands; the oldest `finishedAt` is evicted first and
+ * live entries are never evicted. Mirrors `RESOLVED_PROPOSAL_IDS_CAP`.
+ */
+const RETAINED_FINISHED_CHILDREN_CAP = 200;
+
 export type ProgressEventSubscription = {
   dispose(): void;
 };
@@ -151,15 +158,9 @@ export class ProgressFactApplier {
       });
     },
     'child.activity': (_streamId, event) =>
-      this.updateActiveChildren(event.parentStreamId, {
-        activeField:
-          event.kind === 'subagents' ? 'activeSubagents' : 'activeProcesses',
-        countField:
-          event.kind === 'subagents'
-            ? 'finishedSubagentCount'
-            : 'finishedProcessCount',
-        next: [...event.items],
-      }),
+      this.updateChildRoster(event.parentStreamId, event.kind, [
+        ...event.items,
+      ]),
     'process.output': (_streamId, event) =>
       this.handleUpdateProcessOutput({
         parentStreamId: event.parentStreamId,
@@ -203,7 +204,7 @@ export class ProgressFactApplier {
       this.getStreamCategory(streamId) ?? provisionalCategory;
     const category = knownCategory ?? AgentCategory.Workflow;
     this.state.getOrCreateStreamState(streamId, category);
-    this.state.resetFinishedChildCounters(streamId);
+    this.state.resetPerRunChildState(streamId);
     this.pendingProgressUpdates.delete(streamId);
 
     if (this.state.activeStream === streamId) {
@@ -630,23 +631,38 @@ export class ProgressFactApplier {
     this.pendingProgressUpdates.clear();
   }
 
-  public updateActiveChildren(
+  /**
+   * Replace a parent stream's live child roster, retaining every child that
+   * just left it instead of folding it into a counter — a finished subagent
+   * keeps its executionId, agentName, status, startedAt, elapsed and toolName
+   * so hosts can list it. A retained row is only ever created from an entry
+   * that was already in OUR roster and is absent from `next`, so a first
+   * roster can never mark anything finished.
+   */
+  public updateChildRoster(
     parentStreamId: StreamTabId,
-    opts: {
-      activeField: 'activeSubagents' | 'activeProcesses';
-      countField: 'finishedSubagentCount' | 'finishedProcessCount';
-      next: StreamExecutionState['activeSubagents'];
-    },
+    field: 'subagents' | 'processes',
+    next: StreamExecutionState['subagents'],
   ): void {
     let nextBadges: StreamBadgeSnapshot | null = null;
 
     this.state.updateStreamState(parentStreamId, (prev) => {
-      const vanishedIds = diffActiveChildren(prev[opts.activeField], opts.next);
-      const updatedState = {
-        ...prev,
-        [opts.activeField]: opts.next,
-        [opts.countField]: (prev[opts.countField] ?? 0) + vanishedIds.size,
-      };
+      const previous = prev[field];
+      const vanishedIds = diffActiveChildren(
+        previous.filter((child) => child.finishedAt === undefined),
+        next,
+      );
+      const finishedAt = Date.now();
+      // Previously-retained rows first (already in ascending `finishedAt`
+      // order), then the newly-vanished ones — so the list stays chronological
+      // by construction and the cap evicts the oldest without a sort.
+      const retained = [
+        ...previous.filter((child) => child.finishedAt !== undefined),
+        ...previous
+          .filter((child) => vanishedIds.has(child.executionId))
+          .map((child) => ({ ...child, finishedAt })),
+      ].slice(-RETAINED_FINISHED_CHILDREN_CAP);
+      const updatedState = { ...prev, [field]: [...next, ...retained] };
       nextBadges = this.toBadgeSnapshot(updatedState);
       return updatedState;
     });
@@ -660,12 +676,26 @@ export class ProgressFactApplier {
     }
   }
 
+  /**
+   * A child's roster drop can arrive BEFORE its terminal status (the cancel
+   * path untracks the handle, then transitions the stream), so the status
+   * stamped at drop time can still read `running`. Overlay the displayed
+   * status from the status machine — the same source the registry reads —
+   * rather than trusting the stamped value.
+   */
   private toBadgeSnapshot(state: StreamExecutionState): StreamBadgeSnapshot {
     return {
-      activeSubagents: state.activeSubagents,
-      finishedSubagentCount: state.finishedSubagentCount,
-      activeProcesses: state.activeProcesses,
-      finishedProcessCount: state.finishedProcessCount,
+      subagents: state.subagents.map((child) =>
+        child.kind === 'subagent'
+          ? {
+              ...child,
+              status:
+                this.state.streamStatus.get(child.childStreamId) ??
+                child.status,
+            }
+          : child,
+      ),
+      processes: state.processes,
     };
   }
 
@@ -798,6 +828,20 @@ export class ProgressFactApplier {
       : undefined;
 
     if (!this.webviewUpdater.isAvailable()) return;
+
+    // A child's roster drop can land BEFORE its terminal status, so a retained
+    // row's status is only correct once re-projected here. Re-push the
+    // parent's badges whenever a child of the active stream changes phase.
+    const parentStreamId = this.state.snapshots.getParentStreamId(streamId);
+    if (parentStreamId && parentStreamId === this.state.activeStream) {
+      const parentState = this.state.getStreamState(parentStreamId);
+      if (parentState) {
+        this.webviewUpdater.updateStreamBadges(
+          parentStreamId,
+          this.toBadgeSnapshot(parentState),
+        );
+      }
+    }
 
     const isNewStream = !this.state.streamLogs.has(streamId);
     this.state.streamLogs.ensureStream(streamId);
