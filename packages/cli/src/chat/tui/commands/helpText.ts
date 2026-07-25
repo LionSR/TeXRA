@@ -73,7 +73,7 @@ function keyboardSection(options: SlashCommandHelpOptions): string {
     `- ${textInputEditingHelp()}`,
     '- `Esc` stops the focused agent · `Ctrl-C` exits idle chats; stops active responses',
     "- `Ctrl-T` prints the focused stream's full output once into terminal scrollback",
-    "- `Tab` selects child sessions and processes · `v` prints the selected stream's full output",
+    "- `Tab` selects child sessions · `v` prints the selected stream's full output",
     `- \`${focusChord}\` focuses a stream directly`,
   ].join('\n');
 }

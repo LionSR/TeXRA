@@ -9,17 +9,10 @@ import {
   type GoalPausedPayload,
   type SetActiveStreamPayload,
   type StreamTabId,
-  type UpdateActiveProcessesPayload,
-  type UpdateProcessOutputPayload,
   type UpdateQueuedFollowUpsPayload,
   type UpdateRoundStagePayload,
   type UpdateStreamUsagePayload,
 } from '@shared/schemas';
-import {
-  reduceStreamMeta,
-  type StreamMetaCommand,
-} from '@shared/streams/streamMetaReducer';
-import { diffActiveChildren } from '@shared/streams/childActivityReducer';
 import { assertNever } from '@utils/core';
 
 import {
@@ -28,14 +21,12 @@ import {
   removeStream,
   patchStream,
   registerCliStateResetHook,
-  type StreamSlice,
 } from './cliState';
 import {
   applySubagentRoster,
   isChildStreamRemoved,
   setParentStream,
 } from './childExecutions';
-import { appendCompletedProcessEntries } from './completedProcessTranscript';
 import { sumResumeUsageStats } from './resumeHint';
 import { appendLocalAssistantTranscript } from './transcript';
 
@@ -164,45 +155,6 @@ function applyActiveSubagents(payload: {
   applySubagentRoster(payload.parentStreamId, payload.children);
 }
 
-function applyActiveProcesses(payload: UpdateActiveProcessesPayload): void {
-  // The shared reducer drops tails for executions that left the active
-  // list; the CLI also persists a bounded transcript for each finished
-  // process before its tail is pruned (a CLI-only side effect).
-  patchStream(payload.parentStreamId, (s) => {
-    const vanishedIds = diffActiveChildren(
-      s.activeProcesses,
-      payload.processes,
-    );
-    const entries = appendCompletedProcessEntries(
-      payload.parentStreamId,
-      s,
-      vanishedIds,
-    );
-    const meta = applyStreamMeta(s, {
-      kind: 'activeProcesses',
-      processes: payload.processes,
-    });
-    return {
-      ...s,
-      activeProcesses: meta.activeProcesses,
-      entries,
-      processOutput: meta.processOutput,
-    };
-  });
-}
-
-function applyProcessOutput(payload: UpdateProcessOutputPayload): void {
-  patchStream(payload.parentStreamId, (s) => ({
-    ...s,
-    processOutput: applyStreamMeta(s, {
-      kind: 'processOutput',
-      executionId: payload.executionId,
-      stdout: payload.stdout,
-      stderr: payload.stderr,
-    }).processOutput,
-  }));
-}
-
 function applyParentStream(payload: {
   childStreamId: StreamTabId;
   parentStreamId: StreamTabId | null;
@@ -261,24 +213,9 @@ function applyDirectTuiRunEvent(
       });
       return true;
     case 'child.activity':
-      if (event.kind === 'subagents') {
-        applyActiveSubagents({
-          parentStreamId: event.parentStreamId,
-          children: [...event.items],
-        });
-        return true;
-      }
-      applyActiveProcesses({
+      applyActiveSubagents({
         parentStreamId: event.parentStreamId,
-        processes: [...event.items],
-      });
-      return true;
-    case 'process.output':
-      applyProcessOutput({
-        parentStreamId: event.parentStreamId,
-        executionId: event.executionId,
-        stdout: event.stdout,
-        stderr: event.stderr,
+        children: [...event.items],
       });
       return true;
     default:
@@ -299,31 +236,6 @@ function refreshQueuedFollowUps(
       queuedFollowUpMessages: messages,
     };
   });
-}
-
-/** Cap on per-process tail length held in the signal map (UTF-16 code
- *  units, not bytes — markdown-it / ink work in JS strings). Beyond this
- *  the shared stream-meta reducer truncates at the head (exact cut, no
- *  `retainChars`) so the live pane never grows unbounded. */
-const PROCESS_TAIL_CHARS_MAX = 8 * 1024;
-const CLI_OUTPUT_CAP = { maxChars: PROCESS_TAIL_CHARS_MAX } as const;
-
-/**
- * Run one stream-meta command against a CLI slice with the CLI cap policy.
- * The shared reducer owns only process-tail capping and pruning.
- */
-function applyStreamMeta(
-  s: StreamSlice,
-  command: StreamMetaCommand,
-): Pick<StreamSlice, 'activeProcesses' | 'processOutput'> {
-  return reduceStreamMeta(
-    {
-      activeProcesses: s.activeProcesses,
-      processOutput: s.processOutput,
-    },
-    command,
-    { outputCap: CLI_OUTPUT_CAP },
-  );
 }
 
 export function attachTuiRunFactSubscription(
@@ -399,7 +311,6 @@ export function attachTuiRunFactSubscription(
         'usage',
         'stage.start',
         'child.activity',
-        'process.output',
       ],
     },
   );

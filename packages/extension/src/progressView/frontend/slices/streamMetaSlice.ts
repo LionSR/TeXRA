@@ -1,6 +1,6 @@
 /**
  * Stream metadata handlers: UPDATE_STREAM_STATUS, UPDATE_STREAM_DESCRIPTION,
- * UPDATE_CONVERSATION_PROGRESS, UPDATE_STREAM_BADGES, UPDATE_PROCESS_OUTPUT.
+ * UPDATE_CONVERSATION_PROGRESS, UPDATE_STREAM_BADGES.
  */
 
 import { create } from 'mutative';
@@ -13,19 +13,9 @@ import {
   type StreamTabId,
   type StreamTabInfo,
 } from '@shared/schemas';
-import {
-  EMPTY_STREAM_META,
-  PROCESS_OUTPUT_MAX_CHARS,
-  reduceStreamMeta,
-} from '@shared/streams/streamMetaReducer';
 import { compareByNewestCreationTime } from '@shared/streams/streamOrdering';
 
-import {
-  EMPTY_PROCESS_OUTPUTS,
-  getStreamState,
-  isToolUseState,
-  type ProcessOutputMap,
-} from '../store';
+import { getStreamState, isToolUseState } from '../store';
 import {
   mergeBackendOwnedState,
   metadataToStreamStatePartial,
@@ -46,16 +36,6 @@ export function takePendingDescription(
   if (desc !== undefined) pendingDescriptions.delete(streamId);
   return desc;
 }
-
-/**
- * Per-output cap policy for the webview: keep at most 100k UTF-16 code units
- * per stdout/stderr, trimming to 80k when the cap is crossed so output can keep
- * appending for a while before the next reset. The shared reducer applies it.
- */
-const WEBVIEW_OUTPUT_CAP = {
-  maxChars: PROCESS_OUTPUT_MAX_CHARS,
-  retainChars: 80_000,
-} as const;
 
 function upsertSortedStreamInfo(
   streams: Map<StreamTabId, StreamTabInfo>,
@@ -199,50 +179,6 @@ export const streamMetaHandlers = {
     setStreamStateForId(data.stream, (prev) =>
       create(prev, (draft) => {
         draft.subagents = data.subagents;
-        draft.processes = data.processes;
-      }),
-    );
-    // Prune output buffers for processes that just left the active list. Output
-    // lives in a separate store, so only `processOutput` is projected into the
-    // shared reducer and spliced back; an unchanged map skips the re-render.
-    // The roster also carries retained finished rows — pass only the live
-    // subset, or the prune would never fire again.
-    const prev = appState.get();
-    const current = prev.processOutputs.get(data.stream);
-    if (!current) return;
-    const { processOutput } = reduceStreamMeta(
-      { ...EMPTY_STREAM_META, processOutput: current },
-      {
-        kind: 'activeProcesses',
-        processes: data.processes.filter(
-          (child) => child.finishedAt === undefined,
-        ),
-      },
-      { outputCap: WEBVIEW_OUTPUT_CAP },
-    );
-    if (processOutput === current) return;
-    appState.set(
-      create(prev, (draft) => {
-        draft.processOutputs.set(
-          data.stream,
-          processOutput as ProcessOutputMap,
-        );
-      }),
-    );
-  },
-
-  [PROGRESS_VIEW_COMMANDS.UPDATE_PROCESS_OUTPUT]: (data) => {
-    const { stream, executionId, stdout, stderr } = data;
-    const prev = appState.get();
-    const current = prev.processOutputs.get(stream) ?? EMPTY_PROCESS_OUTPUTS;
-    const { processOutput } = reduceStreamMeta(
-      { ...EMPTY_STREAM_META, processOutput: current },
-      { kind: 'processOutput', executionId, stdout, stderr },
-      { outputCap: WEBVIEW_OUTPUT_CAP },
-    );
-    appState.set(
-      create(prev, (draft) => {
-        draft.processOutputs.set(stream, processOutput as ProcessOutputMap);
       }),
     );
   },

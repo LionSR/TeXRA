@@ -85,7 +85,6 @@ describe('SyncStreamContentMessageSchema', () => {
       roundStage: null,
       badges: {
         subagents: [],
-        processes: [],
       },
       parentStreamId: null,
     },

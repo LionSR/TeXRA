@@ -36,7 +36,7 @@ type StatusInputOverrides = Partial<
   foregroundEscapeAction?: string;
   shortcutsActive?: boolean;
   childListFocused?: boolean;
-  childListSelectionKind?: 'stream' | 'process';
+  childListSelectionKind?: 'stream';
   childListSelectionKillable?: boolean;
   childListSelectionWorkflowControllable?: boolean;
 };
@@ -70,7 +70,6 @@ function statusInput(
     usage: undefined,
     roundStage: undefined,
     subagents: 0,
-    activeProcesses: 0,
     approvalDepth: 0,
     model: 'deepseekT',
     modelAccess: 'personal',
@@ -263,23 +262,6 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).toContain('Tab input');
     expect(display.bindings).toContain('Esc input');
     expect(display.bindings).not.toContain('Tab children');
-  });
-
-  it('uses process-only actions for a selected process row', () => {
-    const display = buildStatusBarDisplay(
-      statusInput({
-        childListFocused: true,
-        childListSelectionKind: 'process',
-        childListSelectionKillable: true,
-        childNavigationAvailable: true,
-        width: 120,
-      }),
-    );
-
-    expect(display.bindings).toContain('Enter details');
-    expect(display.bindings).toContain('k kill');
-    expect(display.bindings).not.toContain('v full output');
-    expect(display.bindings).not.toContain('i details');
   });
 
   it('shows foreground actions while a list-owned surface is open', () => {
@@ -483,7 +465,6 @@ describe('CLI StatusBar display model', () => {
         usage: { inputTokens: 80_000, outputTokens: 25_000, cost: 0 },
         roundStage: { index: 1 },
         subagents: 2,
-        activeProcesses: 1,
         approvalDepth: 3,
         childNavigationAvailable: true,
         streamFocusAvailable: true,
@@ -500,7 +481,6 @@ describe('CLI StatusBar display model', () => {
       '80k/1.0M (8%)',
       'queued 2',
       '2 subagents',
-      '1 proc',
       '3 approvals',
     ]);
     expect(display.bindings).not.toContain('Alt-s subagents');
@@ -653,7 +633,6 @@ describe('CLI StatusBar display model', () => {
         status: STREAM_PHASE.RUNNING,
         elapsedMs: 88_000,
         subagents: 3,
-        activeProcesses: 1,
         childNavigationAvailable: true,
         streamFocusAvailable: true,
         ctrlCAction: 'stop',
@@ -674,7 +653,6 @@ describe('CLI StatusBar display model', () => {
         status: STREAM_PHASE.RUNNING,
         elapsedMs: 88_000,
         subagents: 3,
-        activeProcesses: 1,
         childNavigationAvailable: true,
         streamFocusAvailable: true,
         shortcutModifierLabel: 'Option',
@@ -694,7 +672,6 @@ describe('CLI StatusBar display model', () => {
         status: STREAM_PHASE.RUNNING,
         elapsedMs: 75_000,
         subagents: 3,
-        activeProcesses: 1,
         childNavigationAvailable: true,
         streamFocusAvailable: true,
         ctrlCAction: 'stop',
@@ -1151,7 +1128,6 @@ describe('CLI StatusBar display model', () => {
       statusInput({
         status: STREAM_PHASE.RUNNING,
         subagents: 2,
-        activeProcesses: 1,
         approvalDepth: 1,
         childNavigationAvailable: true,
         streamFocusAvailable: true,
@@ -1200,7 +1176,6 @@ describe('CLI StatusBar display model', () => {
       statusInput({
         status: STREAM_PHASE.RUNNING,
         subagents: 3,
-        activeProcesses: 1,
         childNavigationAvailable: true,
         streamFocusAvailable: true,
         ctrlCAction: 'stop',
@@ -1217,7 +1192,6 @@ describe('CLI StatusBar display model', () => {
       statusInput({
         status: STREAM_PHASE.RUNNING,
         subagents: 3,
-        activeProcesses: 1,
         childNavigationAvailable: true,
         streamFocusAvailable: true,
         ctrlCAction: 'stop',

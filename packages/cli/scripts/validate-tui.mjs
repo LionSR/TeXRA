@@ -10,7 +10,7 @@
 //
 // This is intentionally small: a handful of scenarios that exercise the
 // transcript, queued follow-ups, a slash command, an approval modal, the
-// child list + process detail, and the Ctrl-C exit path. It is NOT a general
+// child list, and the Ctrl-C exit path. It is NOT a general
 // terminal-automation framework.
 //
 // Run:  node scripts/validate-tui.mjs        (from packages/cli)
@@ -2582,13 +2582,7 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab children',
-    expect: [
-      '+3 sessions, +1 process',
-      '3 sub',
-      '1 proc',
-      'Tab children',
-      'Ctrl-C stop',
-    ],
+    expect: ['+3 sessions', '3 sub', 'Tab children', 'Ctrl-C stop'],
   },
   {
     name: 'subagents-with-todos-narrow-status',
@@ -2602,7 +2596,7 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab children',
-    expect: ['+3 sessions, +1 process', 'Tab children', 'Ctrl-C stop'],
+    expect: ['+3 sessions', 'Tab children', 'Ctrl-C stop'],
     unexpect: ['Option-p tasks'],
   },
   {
@@ -2670,7 +2664,7 @@ const SCENARIOS = [
     bootExpect: 'Tab children',
     keys: ['\t', DOWN, DOWN],
     resizes: [{ cols: 44, rows: 7 }],
-    expect: ['leanSolver w', '+3 sessions, +1 process'],
+    expect: ['leanSolver w', '+3 sessions'],
     maxOccurrences: [{ text: 'leanSolver waiting for you', max: 1 }],
   },
   {
@@ -2769,7 +2763,7 @@ const SCENARIOS = [
     },
     bootExpect: 'Tab children',
     keys: ['\t', DOWN, DOWN, DOWN, '\r'],
-    expect: ['1 subagent', 'localChecker running', 'proof audit running'],
+    expect: ['1 subagent', 'localChecker running'],
     unexpect: [
       'leanSolver',
       'reviewer',
@@ -2883,25 +2877,6 @@ const SCENARIOS = [
     ],
   },
   {
-    name: 'task-process-detail',
-    frame: 'scrollback',
-    env: {
-      HARNESS_ENTRIES: '4',
-      HARNESS_CHILDREN: '1',
-      HARNESS_CAN_INTERRUPT: '1',
-    },
-    bootExpect: 'Tab children',
-    keys: ['\t', DOWN, DOWN, DOWN, DOWN, '\r'],
-    expect: [
-      'Task details',
-      'shell · latex build',
-      'Command:     latex build',
-      'main.tex: Proof sketch needs one missing reference',
-      'k kill',
-      'Esc back',
-    ],
-  },
-  {
     name: 'tiny-status-separators',
     cols: 30,
     rows: 10,
@@ -2914,65 +2889,7 @@ const SCENARIOS = [
     frame: 'viewport',
     expect: ['personal'],
     expectPatterns: [/◆ [-|\/\\] running 1m/],
-    unexpect: ['◆running', 'personal3', '3 sub 1 proc'],
-  },
-  {
-    name: 'task-process-detail-return-list-selection',
-    frame: 'viewport',
-    cols: 120,
-    env: {
-      HARNESS_ENTRIES: '4',
-      HARNESS_CHILDREN: '1',
-      HARNESS_CAN_INTERRUPT: '1',
-    },
-    bootExpect: 'Tab children',
-    keys: ['\t', DOWN, DOWN, DOWN, DOWN, '\r', ESC],
-    expect: [
-      '›   ● latex build running',
-      'Session selection active.',
-      'Enter details',
-      'k kill',
-      'Esc input',
-    ],
-    unexpect: [
-      'Task details',
-      'signal read during notification phase',
-      'ERROR',
-    ],
-  },
-  {
-    name: 'tiny-task-process-detail',
-    cols: 40,
-    rows: 10,
-    env: {
-      HARNESS_ENTRIES: '4',
-      HARNESS_CHILDREN: '1',
-      HARNESS_CAN_INTERRUPT: '1',
-    },
-    bootExpect: 'TeXRA',
-    keys: ['\t', DOWN, DOWN, DOWN, DOWN, '\r'],
-    frame: 'viewport',
-    expect: [
-      'shell · latex build',
-      'main.tex: Proof sketch needs one',
-      'missing reference',
-      'Esc back',
-    ],
-    unexpect: ['│ ›', 'Task details', 'Output:', '*    y*'],
-  },
-  {
-    name: 'tiny-task-process-detail-controls',
-    cols: 50,
-    rows: 8,
-    env: {
-      HARNESS_ENTRIES: '4',
-      HARNESS_CHILDREN: '1',
-      HARNESS_CAN_INTERRUPT: '1',
-    },
-    keys: ['\t', DOWN, DOWN, DOWN, DOWN, '\r'],
-    frame: 'viewport',
-    expect: ['shell · latex build', 'reference', 'k kill', 'Esc back'],
-    unexpect: ['Esc ba…'],
+    unexpect: ['◆running', 'personal3'],
   },
   {
     name: 'stopped-subagent-list',
@@ -3014,7 +2931,6 @@ const SCENARIOS = [
       'Ctrl-C stop root',
     ],
     expectCollapsed: [STOPPED_SUBAGENT_INPUT_MESSAGE],
-    unexpect: ['2 sub 1 proc'],
     unexpectPatterns: [RUNNING_STATUS_PATTERN],
   },
   {
@@ -3068,7 +2984,6 @@ const SCENARIOS = [
     unexpect: [
       'The selected subagent is no longer accepting follow-ups.',
       'Harness received: can you still receive this?',
-      '2 sub 1 proc',
     ],
     unexpectPatterns: [RUNNING_STATUS_PATTERN],
   },

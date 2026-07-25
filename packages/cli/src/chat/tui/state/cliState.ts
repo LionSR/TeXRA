@@ -9,13 +9,11 @@ import type { CliApiMode } from '@cli/runtime/apiAccessMode';
 import type { RunModelDecisionReason } from '@model/runModelDecision';
 import {
   AgentCategory,
-  type ActiveChildInfo,
   type ConversationProgress,
   type MessageType,
   type NormalizedToolUse,
   type OutputFileInfo,
   type Plan,
-  type ProcessOutputTail,
   type RoundIndexed,
   type RoundStage,
   type StreamPhase,
@@ -33,8 +31,6 @@ import {
   resetChildStreamEntries,
 } from './childExecutions';
 
-export type { ProcessOutputTail };
-
 // ---------------------------------------------------------------------------
 // types
 // ---------------------------------------------------------------------------
@@ -42,14 +38,13 @@ export type { ProcessOutputTail };
 // Data model for the CLI TUI's signal-backed state. Mirrors the webview's
 // `progressState` shape — same primitives (`@lit-labs/signals`), same shape
 // (one record per stream + an `activeStreamId`) so future feature parity is a
-// port, not a rewrite. Phase 4 extends with per-stream subagent/process/todos/
-// plan/process-output fields plus the per-stream bypass-state badges the
-// StatusBar consumes.
+// port, not a rewrite. Phase 4 extends with per-stream subagent/todos/plan
+// fields plus the per-stream bypass-state badges the StatusBar consumes.
 
 interface ConversationEntryBase {
   /** Same id as the upstream `StreamLogEntry.id` — stable across deltas. */
   readonly id: string;
-  /** Rendered log text. Empty for tool and process rows. */
+  /** Rendered log text. Empty for tool rows. */
   readonly text: string;
   /** Original shared log vocabulary. Role alone intentionally groups several
    * display kinds and is not precise enough for semantic selection. */
@@ -78,7 +73,7 @@ type ConversationEntryOrigin =
       readonly sourceSeqNo?: never;
       readonly settlementSeqNo?: never;
       /** Why the CLI synthesized this entry. */
-      readonly syntheticKind: 'local' | 'process';
+      readonly syntheticKind: 'local';
       /** StreamLog head at the moment this row was appended. */
       readonly syntheticAfterSeq: number;
       /** Durable settlement cursor when this row became printable. */
@@ -86,9 +81,9 @@ type ConversationEntryOrigin =
     };
 
 /**
- * Discriminated on `role` so `toolUse`/`process` are required exactly for
- * the rows that need them, instead of independently-optional fields every
- * consumer has to null-check regardless of role.
+ * Discriminated on `role` so `toolUse` is required exactly for the rows that
+ * need it, instead of an independently-optional field every consumer has to
+ * null-check regardless of role.
  */
 export type ConversationEntry = ConversationEntryOrigin &
   (
@@ -113,20 +108,7 @@ export type ConversationEntry = ConversationEntryOrigin &
         readonly role: 'tool';
         readonly toolUse: NormalizedToolUse;
       })
-    | (ConversationEntryBase & {
-        readonly role: 'process';
-        readonly process: CompletedProcessTranscript;
-      })
   );
-
-export interface CompletedProcessTranscript {
-  readonly executionId: string;
-  readonly title: string;
-  readonly status?: string;
-  readonly elapsed?: string | null;
-  readonly isError: boolean;
-  readonly tailLines: readonly string[];
-}
 
 export interface SessionMeta {
   readonly agent: string;
@@ -196,12 +178,8 @@ export interface StreamSlice {
   readonly roundStage?: RoundStage | undefined;
   readonly entries: readonly ConversationEntry[];
   readonly queuedFollowUpMessages: readonly string[];
-  readonly activeProcesses: readonly ActiveChildInfo[];
   readonly todos: readonly TodoItem[];
   readonly plan: Plan | null;
-  /** Tailed stdout/stderr per execution id; latest only — capped at
-   *  `PROCESS_TAIL_CHARS_MAX` in subscribeRuntimeHost. */
-  readonly processOutput: ReadonlyMap<string, ProcessOutputTail>;
   /** YOLO / auto-approval state is stream-scoped upstream (see
    *  `permissionSlice.ts` in the extension), so concurrent parent/child
    *  sessions can show distinct badges. */
@@ -252,10 +230,8 @@ function emptySlice(streamId: StreamTabId): StreamSlice {
     roundStage: undefined,
     entries: [],
     queuedFollowUpMessages: [],
-    activeProcesses: [],
     todos: [],
     plan: null,
-    processOutput: new Map(),
     bypass: NO_BYPASS,
   };
 }
@@ -432,8 +408,8 @@ export const rootRunStreamId = ROOT_RUN_STREAM_ID;
 // ---------------------------------------------------------------------------
 
 // Signals for the App-level foreground surfaces: the inline slash form,
-// slash-command palette, reverse search, and process detail. These view-level
-// toggles live here as signal state rather than local component state.
+// slash-command palette, and reverse search. These view-level toggles live
+// here as signal state rather than local component state.
 
 /** Active inline slash form, or `undefined` when the chat input owns the
  *  screen. The form's `onDone` clears this slot. Kept opaque (the form
@@ -485,10 +461,6 @@ const SLASH_PALETTE_OPEN = signal<boolean>(false);
 export const slashPaletteOpen = SLASH_PALETTE_OPEN;
 const REVERSE_SEARCH_OPEN = signal<boolean>(false);
 export const reverseSearchOpen = REVERSE_SEARCH_OPEN;
-
-/** Process whose captured output is open in TaskDetailView. */
-const TASK_DETAIL_EXECUTION_ID = signal<string | undefined>(undefined);
-export const taskDetailExecutionId = TASK_DETAIL_EXECUTION_ID;
 
 // ---------------------------------------------------------------------------
 // transientNoticeSlice
@@ -655,7 +627,6 @@ export function resetCliState(
   INFO_PANE_QUEUE.set([]);
   slashPaletteOpen.set(false);
   reverseSearchOpen.set(false);
-  taskDetailExecutionId.set(undefined);
   clearTransientNotice();
   for (const resetHook of RESET_HOOKS) resetHook();
 }
