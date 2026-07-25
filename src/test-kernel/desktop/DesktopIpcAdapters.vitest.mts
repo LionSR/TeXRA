@@ -86,7 +86,6 @@ async function createShellHarness(
       openExternalUrl: vi.fn(async () => {}),
       openLogFolder: vi.fn(async () => {}),
       openPath: vi.fn(async () => {}),
-      openWorkspaceInNewWindow: vi.fn(async () => {}),
       openWorkspaceFolder: vi.fn(async () => {}),
       signIn: vi.fn(async () => {}),
       getRecentCommits: async () => ({ commits: [], isGitRepo: false }),

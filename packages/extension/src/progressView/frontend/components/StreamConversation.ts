@@ -50,18 +50,27 @@ import './LogList';
 export class StreamConversation extends SignalWatcher(LitElement) {
   static override styles = css`
     :host {
+      --conversation-reading-width: 800px;
+
       display: flex;
       flex-direction: column;
       flex: 1;
       min-width: 0;
       min-height: 0;
       overflow: hidden;
+      background: var(--wa-color-surface-default);
+      color: var(--wa-color-text-normal);
     }
 
     tool-use-stream-content,
     workflow-stream-content,
     process-stream-content {
-      display: contents;
+      display: flex;
+      flex: 1 1 auto;
+      flex-direction: column;
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
     }
   `;
 

@@ -34,7 +34,10 @@ import {
   type SessionTypeChangeDetail,
   type TeamChangeDetail,
 } from '@shared/schemas';
-import { registerTeXRAWebAwesomeIcons } from '@shared/wa/webAwesomeIcons';
+import {
+  registerTeXRAWebAwesomeIcons,
+  waIcon,
+} from '@shared/wa/webAwesomeIcons';
 import type { StateRestoreMessage } from '@shared/schemas/commonViewMessages';
 import { renderViewHeader } from '@shared/wa/viewHeader';
 import type { MutableWaTabGroup, WaTabShowEvent } from '@shared/wa/tabs';
@@ -61,6 +64,7 @@ import {
   isGitRepo$,
   latexdiffsVisible$,
   loginBannerVisible$,
+  multiFiles$,
   onboardingFunnelState$,
   resetMainViewState,
   sessionContext,
@@ -293,11 +297,34 @@ export class MainApp extends MainAppBase {
 
   render(): TemplateResult {
     const onboardingState = onboardingFunnelState$.get();
+    const desktopHost = this.isDesktopHost;
     if (onboardingState === 'pending') {
       return html`
-        <div class="content-wrapper">
+        <div
+          class="content-wrapper launcher-loading-wrapper ${
+            desktopHost ? 'desktop-launcher-loading' : ''
+          }"
+        >
           ${this.renderViewHeader()}
-          <div class="main-content"></div>
+          <div
+            class="main-content launcher-loading"
+            role="status"
+            aria-label="Loading launcher"
+          >
+            <div class="launcher-loading-canvas" aria-hidden="true">
+              <div class="launcher-loading-mark"></div>
+              <div class="launcher-loading-line launcher-loading-title"></div>
+              <div class="launcher-loading-line launcher-loading-copy"></div>
+              <div class="launcher-loading-composer">
+                <div
+                  class="launcher-loading-line launcher-loading-prompt"
+                ></div>
+                <div class="launcher-loading-controls">
+                  <span></span><span></span><span></span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       `;
     }
@@ -307,7 +334,11 @@ export class MainApp extends MainAppBase {
       // agent/model pickers, Files, and LaTeX Diffs are meaningless, and the
       // welcome card replaces the login/API-key/getting-started banners.
       return html`
-        <div class="content-wrapper">
+        <div
+          class="content-wrapper ${
+            desktopHost ? 'desktop-onboarding-canvas' : ''
+          }"
+        >
           ${this.renderViewHeader()}
           <div class="main-content">
             <onboarding-welcome-card
@@ -342,139 +373,198 @@ export class MainApp extends MainAppBase {
     const db = dependencyBanner$.get();
     const sf = singleFiles$.get();
     const fo = fileOptions$.get();
+    const files = multiFiles$.get();
+    const visibleFileCount = visibleFileConfigs.reduce((count, config) => {
+      if (config.type === 'input') return count + files.inputFiles.length;
+      if (config.type === 'context') return count + files.contextFiles.length;
+      if (config.type === 'media') return count + files.mediaFiles.length;
+      return count + files.outputFiles.length;
+    }, 0);
+
+    const setupCard =
+      onboardingState === 'setup'
+        ? html`<onboarding-setup-card
+            @onboarding-run-setup=${() =>
+              postMessage(MAIN_VIEW_COMMANDS.ONBOARDING_RUN_SETUP)}
+            @onboarding-open-getting-started=${
+              this.onOnboardingOpenGettingStarted
+            }
+            @onboarding-skip-setup=${() =>
+              postMessage(MAIN_VIEW_COMMANDS.ONBOARDING_SKIP_SETUP)}
+          ></onboarding-setup-card>`
+        : nothing;
+
+    const instructionPanel = html`
+      <instruction-panel
+        .desktopHost=${desktopHost}
+        .showSessionHint=${!sessionHintDismissed$.get()}
+        @session-type-change=${({
+          detail,
+        }: CustomEvent<SessionTypeChangeDetail>) =>
+          changeSessionType(detail.value)}
+        @launch-target-change=${({
+          detail,
+        }: CustomEvent<LaunchTargetChangeDetail>) =>
+          changeLaunchTarget(detail.value)}
+        @team-change=${({ detail }: CustomEvent<TeamChangeDetail>) =>
+          changeTeam(detail.value)}
+        @agent-change=${({ detail }: CustomEvent<AgentChangeDetail>) =>
+          changeAgent(detail.sessionType, detail.value)}
+        @model-change=${({ detail }: CustomEvent<ModelChangeDetail>) =>
+          changeModel(detail.value)}
+        @instruction-input=${this.onInstructionInput}
+        @instruction-paste=${() => saveState()}
+        @panel-action=${({ detail }: CustomEvent<ActionDetail>) =>
+          runPanelAction(detail.action)}
+        @execute=${() => executeAgent()}
+        @agent-settings=${() => runAgentConfigAction('edit')}
+        @browse-all-agents=${() => runAgentConfigAction('edit')}
+        @team-settings=${this.onOpenMultiAgentSettings}
+        @manage-teams=${this.onOpenMultiAgentSettings}
+        @model-settings=${() =>
+          postMessage(MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS)}
+        @focus-instruction=${({
+          detail,
+        }: CustomEvent<FocusInstructionDetail>) =>
+          postMessage(MAIN_VIEW_COMMANDS.SHOW_INSTRUCTION, {
+            key: detail.key,
+            text: detail.text,
+          })}
+        @dismiss-session-hint=${this.onDismissSessionHint}
+      ></instruction-panel>
+    `;
+
+    const banners = html`
+      <banner-group
+        .apiKeyBanner=${akb}
+        .agentConfigBanner=${acb}
+        .dependencyBanner=${db}
+        .gettingStartedVisible=${
+          gettingStartedVisible$.get() && !gettingStartedDismissed$.get()
+        }
+        .loginBannerVisible=${loginBannerVisible$.get()}
+        @api-key-action=${({ detail }: CustomEvent<BannerActionDetail>) =>
+          runApiKeyBannerAction(detail.action as 'set' | 'guide')}
+        @agent-config-action=${({ detail }: CustomEvent<BannerActionDetail>) =>
+          runAgentConfigAction(detail.action as 'edit' | 'dir' | 'docs')}
+        @dependency-dismiss=${() => dependencyBanner$.set({ visible: false })}
+        @recheck-dependencies=${() =>
+          postMessage(MAIN_VIEW_COMMANDS.RECHECK_DEPENDENCIES)}
+        @open-install-guide=${({ detail }: CustomEvent<InstallGuideDetail>) =>
+          postMessage(MAIN_VIEW_COMMANDS.OPEN_INSTALL_GUIDE, {
+            tool: detail.tool,
+          })}
+        @sign-in=${this.onSignInFromBanner}
+        @dismiss-login=${this.onDismissLogin}
+        @dismiss-getting-started=${this.onDismissGettingStarted}
+        @getting-started-action=${({
+          detail,
+        }: CustomEvent<GettingStartedActionDetail>) =>
+          postMessage(MAIN_VIEW_COMMANDS.GETTING_STARTED_ACTION, {
+            action: detail.action,
+          })}
+      ></banner-group>
+    `;
+
+    const fileSelectionGroup = html`
+      <div class="file-selection-group">
+        ${repeat(
+          visibleFileConfigs,
+          (config) => config.type,
+          (config) => html`
+            <file-select-group
+              .config=${config}
+              @add-opened-files=${({
+                detail,
+              }: CustomEvent<MultipleFilesTypeActionDetail>) => {
+                if (detail.type !== 'output') {
+                  addOpenedFiles(detail.type);
+                }
+              }}
+              @empty-files=${({
+                detail,
+              }: CustomEvent<MultipleFilesTypeActionDetail>) =>
+                emptyFiles(detail.type)}
+              @select-multiple-files=${({
+                detail,
+              }: CustomEvent<MultipleFilesActionDetail>) =>
+                selectMultipleFiles(detail.listId)}
+              @remove-file=${({ detail }: CustomEvent<RemoveFileDetail>) =>
+                removeFile(detail.listId, detail.file)}
+              @files-reordered=${({
+                detail,
+              }: CustomEvent<ReorderFilesDetail>) =>
+                updateMultiFiles(detail.listId, detail.files)}
+              @checkbox-change=${({
+                detail,
+              }: CustomEvent<CheckboxChangeDetail>) =>
+                updateCheckboxValue(detail.id, detail.checked)}
+            ></file-select-group>
+          `,
+        )}
+      </div>
+    `;
+
+    if (desktopHost) {
+      return html`
+        <div class="content-wrapper desktop-launcher">
+          <div class="desktop-launcher-scroll">
+            <div class="desktop-launcher-canvas">
+              <section
+                class="desktop-launcher-hero"
+                aria-labelledby="desktopLauncherTitle"
+              >
+                <div class="desktop-launcher-mark" aria-hidden="true">
+                  ${waIcon('sparkle')}
+                </div>
+                <h1 id="desktopLauncherTitle">What are you working on?</h1>
+                <p>
+                  Describe the outcome you want. TeXRA can read your workspace,
+                  make edits, and show its progress while it works.
+                </p>
+              </section>
+              ${setupCard}
+              <div class="desktop-launcher-banners">${banners}</div>
+              <details class="desktop-file-context">
+                <summary>
+                  <span class="desktop-file-context-label">
+                    ${waIcon('file-circle-plus')} Context and attachments
+                  </span>
+                  <span class="desktop-file-context-count">
+                    ${
+                      visibleFileCount === 0
+                        ? 'Add files'
+                        : `${visibleFileCount} ${
+                            visibleFileCount === 1 ? 'file' : 'files'
+                          }`
+                    }
+                  </span>
+                  ${waIcon('chevron-right', {
+                    className: 'desktop-file-context-chevron',
+                  })}
+                </summary>
+                <div class="desktop-file-context-body">
+                  ${fileSelectionGroup}
+                </div>
+              </details>
+            </div>
+          </div>
+          <div class="desktop-composer-dock">${instructionPanel}</div>
+        </div>
+      `;
+    }
 
     return html`
       <div class="content-wrapper">
         ${this.renderViewHeader()}
 
         <div class="main-content">
-          ${
-            onboardingState === 'setup'
-              ? html`<onboarding-setup-card
-                  @onboarding-run-setup=${() =>
-                    postMessage(MAIN_VIEW_COMMANDS.ONBOARDING_RUN_SETUP)}
-                  @onboarding-open-getting-started=${
-                    this.onOnboardingOpenGettingStarted
-                  }
-                  @onboarding-skip-setup=${() =>
-                    postMessage(MAIN_VIEW_COMMANDS.ONBOARDING_SKIP_SETUP)}
-                ></onboarding-setup-card>`
-              : nothing
-          }
-
-          <instruction-panel
-            .showSessionHint=${!sessionHintDismissed$.get()}
-            @session-type-change=${({
-              detail,
-            }: CustomEvent<SessionTypeChangeDetail>) =>
-              changeSessionType(detail.value)}
-            @launch-target-change=${({
-              detail,
-            }: CustomEvent<LaunchTargetChangeDetail>) =>
-              changeLaunchTarget(detail.value)}
-            @team-change=${({ detail }: CustomEvent<TeamChangeDetail>) =>
-              changeTeam(detail.value)}
-            @agent-change=${({ detail }: CustomEvent<AgentChangeDetail>) =>
-              changeAgent(detail.sessionType, detail.value)}
-            @model-change=${({ detail }: CustomEvent<ModelChangeDetail>) =>
-              changeModel(detail.value)}
-            @instruction-input=${this.onInstructionInput}
-            @instruction-paste=${() => saveState()}
-            @panel-action=${({ detail }: CustomEvent<ActionDetail>) =>
-              runPanelAction(detail.action)}
-            @execute=${() => executeAgent()}
-            @agent-settings=${() => runAgentConfigAction('edit')}
-            @browse-all-agents=${() => runAgentConfigAction('edit')}
-            @team-settings=${this.onOpenMultiAgentSettings}
-            @manage-teams=${this.onOpenMultiAgentSettings}
-            @model-settings=${() =>
-              postMessage(MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS)}
-            @focus-instruction=${({
-              detail,
-            }: CustomEvent<FocusInstructionDetail>) =>
-              postMessage(MAIN_VIEW_COMMANDS.SHOW_INSTRUCTION, {
-                key: detail.key,
-                text: detail.text,
-              })}
-            @dismiss-session-hint=${this.onDismissSessionHint}
-          ></instruction-panel>
-
-          <banner-group
-            .apiKeyBanner=${akb}
-            .agentConfigBanner=${acb}
-            .dependencyBanner=${db}
-            .gettingStartedVisible=${
-              gettingStartedVisible$.get() && !gettingStartedDismissed$.get()
-            }
-            .loginBannerVisible=${loginBannerVisible$.get()}
-            @api-key-action=${({ detail }: CustomEvent<BannerActionDetail>) =>
-              runApiKeyBannerAction(detail.action as 'set' | 'guide')}
-            @agent-config-action=${({
-              detail,
-            }: CustomEvent<BannerActionDetail>) =>
-              runAgentConfigAction(detail.action as 'edit' | 'dir' | 'docs')}
-            @dependency-dismiss=${() =>
-              dependencyBanner$.set({ visible: false })}
-            @recheck-dependencies=${() =>
-              postMessage(MAIN_VIEW_COMMANDS.RECHECK_DEPENDENCIES)}
-            @open-install-guide=${({
-              detail,
-            }: CustomEvent<InstallGuideDetail>) =>
-              postMessage(MAIN_VIEW_COMMANDS.OPEN_INSTALL_GUIDE, {
-                tool: detail.tool,
-              })}
-            @sign-in=${this.onSignInFromBanner}
-            @dismiss-login=${this.onDismissLogin}
-            @dismiss-getting-started=${this.onDismissGettingStarted}
-            @getting-started-action=${({
-              detail,
-            }: CustomEvent<GettingStartedActionDetail>) =>
-              postMessage(MAIN_VIEW_COMMANDS.GETTING_STARTED_ACTION, {
-                action: detail.action,
-              })}
-          ></banner-group>
+          ${setupCard} ${instructionPanel} ${banners}
 
           <wa-divider></wa-divider>
           <section class="file-selection" aria-labelledby="filesHeading">
             <h2 id="filesHeading" class="file-selection-heading">Files</h2>
-            <div class="file-selection-group">
-              ${repeat(
-                visibleFileConfigs,
-                (config) => config.type,
-                (config) => html`
-                  <file-select-group
-                    .config=${config}
-                    @add-opened-files=${({
-                      detail,
-                    }: CustomEvent<MultipleFilesTypeActionDetail>) => {
-                      if (detail.type !== 'output') {
-                        addOpenedFiles(detail.type);
-                      }
-                    }}
-                    @empty-files=${({
-                      detail,
-                    }: CustomEvent<MultipleFilesTypeActionDetail>) =>
-                      emptyFiles(detail.type)}
-                    @select-multiple-files=${({
-                      detail,
-                    }: CustomEvent<MultipleFilesActionDetail>) =>
-                      selectMultipleFiles(detail.listId)}
-                    @remove-file=${({
-                      detail,
-                    }: CustomEvent<RemoveFileDetail>) =>
-                      removeFile(detail.listId, detail.file)}
-                    @files-reordered=${({
-                      detail,
-                    }: CustomEvent<ReorderFilesDetail>) =>
-                      updateMultiFiles(detail.listId, detail.files)}
-                    @checkbox-change=${({
-                      detail,
-                    }: CustomEvent<CheckboxChangeDetail>) =>
-                      updateCheckboxValue(detail.id, detail.checked)}
-                  ></file-select-group>
-                `,
-              )}
-            </div>
+            ${fileSelectionGroup}
           </section>
         </div>
 

@@ -20,17 +20,13 @@ import { commonViewStyles, designTokens } from '@shared/styles';
 import {
   dispatchSettingsViewOutbound,
   SETTINGS_TAB,
-  SETTINGS_TAB_PANEL_BY_NAME,
-  SETTINGS_TAB_ORDER,
   SETTINGS_TAB_PANEL_NAMES,
-  type SettingsTabName,
   type SettingsViewOutboundHandlerRegistry,
 } from '@shared/schemas';
 import { assertSupported, isKnownUnsupported } from '@shared/utils/dispatcher';
 import {
   registerTeXRAWebAwesomeIcons,
   waIcon,
-  type TeXRAIconName,
 } from '@shared/wa/webAwesomeIcons';
 import {
   API_KEY_PROVIDER_IDS,
@@ -40,6 +36,7 @@ import {
 // Local imports - settings view
 import '@shared/wa/tabs';
 import type { WaTabShowEvent } from '@shared/wa/tabs';
+import { SETTINGS_NAV_GROUPS, type SettingsNavGroup } from './settingsNav';
 import { settingsViewStyles } from './styles';
 
 // Side-effect: register tab components
@@ -121,31 +118,6 @@ registerTeXRAWebAwesomeIcons();
 
 const API_KEY_PROVIDER_SET = new Set<string>(API_KEY_PROVIDER_IDS);
 
-type SettingsTabMetadata = {
-  readonly icon: TeXRAIconName;
-  readonly label: string;
-};
-
-const SETTINGS_TAB_METADATA: Record<SettingsTabName, SettingsTabMetadata> = {
-  MEMORY: { icon: 'database', label: 'Memory' },
-  HISTORY: { icon: 'clock-rotate-left', label: 'History' },
-  MODELS: { icon: 'server', label: 'Models' },
-  AGENTS: { icon: 'robot', label: 'Agents' },
-  MULTI_AGENT: { icon: 'users', label: 'Multi-Agent' },
-  TOOLS: { icon: 'screwdriver-wrench', label: 'Tools' },
-  AI_AGENTS: { icon: 'robot', label: 'Integrations' },
-  GIT: { icon: 'code-branch', label: 'Git' },
-  LATEX: { icon: 'file-code', label: 'LaTeX' },
-  GOAL: { icon: 'compass', label: 'Goal' },
-};
-
-/** Header tab strip: panel name, icon, and label in display order. */
-const SETTINGS_TABS = SETTINGS_TAB_ORDER.map((name) => ({
-  name,
-  panel: SETTINGS_TAB_PANEL_BY_NAME[name],
-  ...SETTINGS_TAB_METADATA[name],
-}));
-
 // Cast: BaseWebviewApp is abstract, but SignalWatcher expects a concrete constructor.
 // Safe because SettingsApp implements all abstract members below.
 const SettingsAppBase = SignalWatcher(
@@ -210,10 +182,21 @@ export class SettingsApp extends SettingsAppBase {
     }
   }
 
+  // The nav addresses panels by name; the index is derived here so nav order
+  // and grouping stay free of the `SETTINGS_TAB` wire indices.
   private handleTabShow(event: WaTabShowEvent): void {
     const selectedIndex = SETTINGS_TAB_PANEL_NAMES.indexOf(event.detail.name);
     if (selectedIndex >= 0) {
       selectedTabIndex.set(selectedIndex);
+    }
+    // Each panel keeps its own scroll offset across activations. With a left
+    // nav the row stays visible while the panel swaps, so a retained offset
+    // reads as the new panel opening mid-page.
+    const panel = this.shadowRoot?.querySelector(
+      `wa-tab-panel[name="${event.detail.name}"]`,
+    );
+    if (panel != null) {
+      panel.scrollTop = 0;
     }
   }
 
@@ -404,8 +387,42 @@ export class SettingsApp extends SettingsAppBase {
     `;
   }
 
+  /**
+   * One nav group: a heading plus its rows. The heading is slotted into `nav`
+   * but is not a `wa-tab`, so WA's `getAllTabs()` filter leaves it out of tab
+   * logic and arrow-key navigation while still rendering it in the column.
+   */
+  private renderNavGroup(
+    group: SettingsNavGroup,
+    goalSupported: boolean,
+  ): TemplateResult | typeof nothing {
+    const entries = group.entries.filter(
+      (entry) => entry.panel !== 'goal' || goalSupported,
+    );
+    if (entries.length === 0) {
+      return nothing;
+    }
+
+    return html`
+      <div slot="nav" class="settings-nav-group" role="presentation">
+        ${group.label}
+      </div>
+      ${entries.map(
+        (entry) =>
+          html`<wa-tab panel=${entry.panel}
+            >${waIcon(entry.icon, { className: 'settings-tab-icon' })}
+            <span class="settings-tab-label">${entry.label}</span></wa-tab
+          >`,
+      )}
+    `;
+  }
+
   override render(): TemplateResult {
     const desktopHost = this.isDesktopHost;
+    const goalSupported = !isKnownUnsupported(
+      unsupportedCommands.get(),
+      SETTINGS_VIEW_COMMANDS.GET_GOAL_LIST,
+    );
 
     return html`
       <div class="settings-container">
@@ -413,24 +430,14 @@ export class SettingsApp extends SettingsAppBase {
 
         <wa-tab-group
           class="settings-tabs"
+          placement="start"
           .active=${
             SETTINGS_TAB_PANEL_NAMES[selectedTabIndex.get()] ?? 'memory'
           }
           @wa-tab-show=${this.handleTabShow}
         >
-          ${SETTINGS_TABS.filter(
-            (tab) =>
-              tab.panel !== 'goal' ||
-              !isKnownUnsupported(
-                unsupportedCommands.get(),
-                SETTINGS_VIEW_COMMANDS.GET_GOAL_LIST,
-              ),
-          ).map(
-            (tab) =>
-              html`<wa-tab panel=${tab.panel}
-                >${waIcon(tab.icon, { className: 'settings-tab-icon' })}
-                ${tab.label}</wa-tab
-              >`,
+          ${SETTINGS_NAV_GROUPS.map((group) =>
+            this.renderNavGroup(group, goalSupported),
           )}
 
           <wa-tab-panel name="memory">
@@ -442,16 +449,13 @@ export class SettingsApp extends SettingsAppBase {
           </wa-tab-panel>
 
           ${
-            isKnownUnsupported(
-              unsupportedCommands.get(),
-              SETTINGS_VIEW_COMMANDS.GET_GOAL_LIST,
-            )
-              ? nothing
-              : html`
+            goalSupported
+              ? html`
                   <wa-tab-panel name="goal">
                     <goal-tab .items=${goalItems.get()}></goal-tab>
                   </wa-tab-panel>
                 `
+              : nothing
           }
 
           <wa-tab-panel name="history">

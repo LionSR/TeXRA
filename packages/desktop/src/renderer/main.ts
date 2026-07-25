@@ -1,11 +1,27 @@
+// Bundled product typeface. Imported before the token sheets so the faces are
+// registered by the time --wa-font-family-body resolves. Geist carries the UI,
+// JetBrains Mono the code/terminal/path surfaces; both are self-hosted rather
+// than fetched, since the app must render identically offline.
+import '@fontsource-variable/geist';
+import '@fontsource-variable/jetbrains-mono';
+
 import './styles.css';
 import './themeTokens.css';
 
 import '@shared/wa';
+// Side-effect import, placed after '@shared/wa' (which registers the Font
+// Awesome solid set) so the desktop's stroke set takes over the same library
+// names. Registration runs at module scope inside that file rather than from a
+// call here, because ES imports hoist above statements — a call site in this
+// file would run after every component module had already been evaluated.
+// See desktopIconLibrary.ts for why the desktop diverges from the extension.
+import './desktopIconLibrary';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import { html, render, type TemplateResult } from 'lit';
+import '@awesome.me/webawesome/dist/components/popover/popover.js';
+import '@awesome.me/webawesome/dist/components/split-panel/split-panel.js';
+import { html, nothing, render, type TemplateResult } from 'lit';
 import { create as mutate } from 'mutative';
 import '@progressView/frontend';
 import '@progressView/frontend/components/TexraDiffView';
@@ -93,22 +109,31 @@ import {
 } from '../desktopPdfMessages';
 import { DesktopShowPromptMessageSchema } from '../desktopPromptMessages';
 import { createDesktopCommandPalette } from './desktopCommandPalette';
-import { createFirstRunWalkthrough } from './desktopOnboarding';
-import { tabStripTemplate } from './tabStrip';
+import { createStartupTeamPanel } from './desktopOnboarding';
 import { createEditorPane, type EditorFileEntry } from './editorPane';
 import { createTerminalPane } from './terminalPane';
+import './taskShell.css';
+import { taskSidebarTemplate, workbenchTabsTemplate } from './taskShell';
 import {
-  activateTab,
-  activeTab,
-  closeTab,
-  initialTabState,
-  openTab,
-  setTabDirty,
-  tabIdFor,
-  tabKindForRoute,
-  type DesktopTabKind,
-  type DesktopTabState,
-} from '../desktopWorkspaceTabs';
+  activeWorkbenchTab,
+  closeWorkbench,
+  closeWorkbenchTab,
+  focusWorkbenchTab,
+  initialDesktopTaskShellState,
+  openWorkbenchTab,
+  renameWorkbenchTab,
+  setSidebarWidth,
+  setWorkbenchTabDirty,
+  setWorkbenchWidth,
+  toggleFiles,
+  toggleSidebar,
+  workbenchKindForRoute,
+  workspaceInitials,
+  workspaceName,
+  type DesktopTaskShellState,
+  type WorkbenchKind,
+  type WorkbenchTab,
+} from '../desktopTaskShell';
 import {
   DESKTOP_WORKSPACE_COMMANDS,
   DesktopBrowserStateMessageSchema,
@@ -133,19 +158,23 @@ if (root == null) {
 }
 
 const appRoot = root;
+const startupTeamPanel = createStartupTeamPanel({
+  dismiss: () => postMessage(DESKTOP_ONBOARDING_COMMANDS.DISMISS),
+  onVisibilityChanged: rerenderShell,
+  setRoute,
+  openMultiAgent: () => openSettingsTab(SETTINGS_TAB.MULTI_AGENT),
+});
 
 // =============================================================================
-// Pane state
+// Task shell
 // =============================================================================
 //
-// The window is a tab shell. The workspace tab holds the two-pane layout:
-//   - Left rail: <stream-tabs> (sessions)
-//   - Center: <main-app> when no active stream, else <stream-conversation>
-// Settings, Logs, editors, terminals, and browser tabs are siblings of it.
+// The conversation is the permanent task canvas. Project navigation stays in
+// the left sidebar, while files and tools share one optional right workbench.
 //
 // `setRouteState` survives only as a backwards-compat hook so existing IPC
 // (`desktop:setRoute` from menu/command-palette) still reaches the right
-// surface; tabKindForRoute maps each legacy route onto its owning tab.
+// surface; sectionForRoute maps each legacy route onto its owning section.
 
 const hasWorkspace = window.texraDesktop?.hasWorkspace ?? true;
 const rendererPlatform = getRendererPlatform(document.defaultView);
@@ -173,31 +202,30 @@ function setRouteState(route: DesktopRoute): void {
 }
 
 // =============================================================================
-// Tab state
+// Conversation-first shell state
 // =============================================================================
 //
-// Settings and Logs used to be modal overlays, which meant reading either one
-// covered the run you were configuring. They are now tabs alongside the
-// workspace, so state is inspectable while a run streams.
-//
-// The tab reducer lives in ../desktopWorkspaceTabs.ts (pure, unit-tested); this
-// module owns only the mutable current value and the re-render trigger.
+// The task canvas is permanent. Files, terminals, settings, logs, and browser
+// content open in one optional workbench to its right, so a user can inspect an
+// artifact without losing the conversation that produced it.
 
-let tabState: DesktopTabState = initialTabState();
+let shellState: DesktopTaskShellState = initialDesktopTaskShellState();
 
-function updateTabs(next: DesktopTabState): void {
-  if (next === tabState) return;
-  const previousTabId = tabState.activeTabId;
-  tabState = next;
+function updateShell(next: DesktopTaskShellState): void {
+  if (next === shellState) return;
+  const previousTabId = shellState.activeWorkbenchTabId;
+  const previousSidebarWidth = shellState.sidebarWidth;
+  const previousWorkbenchWidth = shellState.workbenchWidth;
+  shellState = next;
   rerenderShell();
   syncBrowserViewBounds();
-  // Lay out only on an actual tab change; a dirty-flag or title update
-  // re-renders the strip but must not re-open the editor's file.
-  if (previousTabId !== next.activeTabId) layoutActivePane();
-}
-
-function openWorkspaceTab(kind: DesktopTabKind, target?: string): void {
-  updateTabs(openTab(tabState, { kind, ...(target ? { target } : {}) }));
+  if (
+    previousTabId !== next.activeWorkbenchTabId ||
+    previousSidebarWidth !== next.sidebarWidth ||
+    previousWorkbenchWidth !== next.workbenchWidth
+  ) {
+    layoutVisibleSurface();
+  }
 }
 
 // `<settings-app>`, `<main-app>`, and `<stream-conversation>` are instantiated
@@ -210,7 +238,37 @@ if (!hasWorkspace) {
   // Empty-state placeholder when no workspace is open. The launcher cannot
   // run anything without a workspace; show a minimal prompt instead.
   noWorkspacePlaceholder.className = 'desktop-empty-workspace';
-  render(emptyWorkspaceTemplate(), noWorkspacePlaceholder);
+  render(
+    html`
+      <section class="desktop-empty-workspace-panel">
+        <div class="shell-empty-icon icon-surface is-size-l">
+          ${waIcon('folder-open')}
+        </div>
+        <h1>Open a folder to start</h1>
+        <p>
+          TeXRA needs a workspace before it can find your files, run agents, and
+          place their output.
+        </p>
+        <ul class="desktop-empty-workspace-capabilities">
+          <li>Pick the TeX, Markdown, or source files an agent should read.</li>
+          <li>Run a team of agents with the model you choose.</li>
+          <li>Follow progress, edit files, and review output in one window.</li>
+        </ul>
+        <div class="desktop-empty-workspace-actions">
+          ${renderLabeledActionButton({
+            icon: 'folder-open',
+            text: 'Open Folder',
+            appearance: 'filled',
+            variant: 'brand',
+            className: 'btn-primary',
+            onClick: () =>
+              postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER),
+          })}
+        </div>
+      </section>
+    `,
+    noWorkspacePlaceholder,
+  );
 }
 
 const conversationView: HTMLElement = document.createElement(
@@ -237,9 +295,12 @@ const editorPane = createEditorPane({
   listFiles: () => requestFiles(),
   readFile: (path) => requestFileRead(path),
   writeFile: (path, contents) => requestFileWrite(path, contents),
+  onRequestOpen: (path) => {
+    updateShell(openWorkbenchTab(shellState, { kind: 'editor', target: path }));
+  },
   onDirtyChange: (path, dirty) => {
-    updateTabs(
-      setTabDirty(tabState, tabIdFor({ kind: 'editor', target: path }), dirty),
+    updateShell(
+      setWorkbenchTabDirty(shellState, `workbench:editor:${path}`, dirty),
     );
   },
   onError: (error) => console.error('TeXRA editor pane', error),
@@ -271,8 +332,7 @@ const promptOverlay = createDesktopPromptOverlay(appRoot, (message) =>
 );
 
 function openLogsDrawer(): void {
-  openWorkspaceTab('logs');
-  logsController.open();
+  openKind('logs');
 }
 
 // =============================================================================
@@ -334,25 +394,42 @@ function requestFileWrite(path: string, contents: string): Promise<void> {
 }
 
 /**
+ * Progress-view messages are dispatched straight into the shared
+ * messageDispatcher; `<progress-app>` is never mounted on desktop, its children
+ * mount directly (PRD § 7.C).
+ */
+function isProgressOutboundMessage(
+  raw: unknown,
+): raw is ProgressViewOutboundMessage {
+  return ProgressViewOutboundMessageSchema.safeParse(raw).success;
+}
+
+/**
  * Reports the browser slot's geometry to the main process, which positions the
  * WebContentsView over it. A WebContentsView is not part of renderer layout, so
- * this runs on every render, resize, and tab switch — otherwise the view would
- * float where the slot used to be.
+ * this runs on every render, resize, and layout change — otherwise the view
+ * would float where the slot used to be.
+ *
+ * Only one browser view can be shown at a time: each is a separate
+ * WebContentsView layered over the window, and two would need two rectangles the
+ * main process tracks independently. The active browser workbench tab wins; the
+ * rest render their placeholder.
  */
 function syncBrowserViewBounds(): void {
-  const current = activeTab(tabState);
-  if (current.kind !== 'browser') {
+  const tab = activeWorkbenchTab(shellState);
+  if (tab?.kind !== 'browser') {
     postMessage(DESKTOP_WORKSPACE_COMMANDS.BROWSER_HIDE);
     return;
   }
-  // Measure after layout settles; a tab that just became visible has no box
+  const tabId = tab.id;
+  // Measure after layout settles; a workbench that just appeared has no box
   // until the browser has flushed the style change.
   requestAnimationFrame(() => {
-    const slot = document.querySelector('#desktop-browser-slot');
+    const slot = document.querySelector(`[data-browser-slot="${tabId}"]`);
     if (!slot) return;
     const rect = slot.getBoundingClientRect();
     postMessage(DESKTOP_WORKSPACE_COMMANDS.BROWSER_BOUNDS, {
-      tabId: current.id,
+      tabId,
       bounds: {
         x: Math.round(rect.left),
         y: Math.round(rect.top),
@@ -364,329 +441,417 @@ function syncBrowserViewBounds(): void {
 }
 
 /**
- * Lays out whichever pane just became active. Monaco and xterm both measure
- * their container on demand and render at zero size if that happened while the
- * container was `display:none`.
+ * Re-measures the active workbench surface. Monaco and xterm both render at
+ * zero size if they measured while hidden.
  */
-function layoutActivePane(): void {
-  const current = activeTab(tabState);
-  if (current.kind === 'editor') {
+function layoutVisibleSurface(): void {
+  const tab = activeWorkbenchTab(shellState);
+  if (!tab) return;
+  if (tab.kind === 'editor') {
     editorPane.layout();
-    if (current.target) void editorPane.open(current.target);
-    return;
+    if (tab.target) void editorPane.open(tab.target);
   }
-  if (current.kind === 'terminal') {
-    terminalPane.activate(current.id);
+  // activate() creates the terminal on first use and re-fits an existing one.
+  if (tab.kind === 'terminal') terminalPane.activate(tab.id);
+  // The main process owns the WebContentsView, so hand it the URL once.
+  if (tab.kind === 'browser' && tab.target && !loadedBrowserTabs.has(tab.id)) {
+    loadedBrowserTabs.add(tab.id);
+    postMessage(DESKTOP_WORKSPACE_COMMANDS.BROWSER_OPEN, {
+      tabId: tab.id,
+      url: tab.target,
+    });
   }
 }
-
-const NEW_TAB_ENTRIES: ReadonlyArray<{
-  readonly label: string;
-  readonly icon: TeXRAIconName;
-  readonly run: () => void;
-}> = [
-  {
-    label: 'Editor',
-    icon: 'file-code',
-    run: () => {
-      openWorkspaceTab('editor');
-      void editorPane.refresh();
-    },
-  },
-  {
-    label: 'Terminal',
-    icon: 'terminal',
-    run: () => openWorkspaceTab('terminal'),
-  },
-  {
-    label: 'Browser',
-    icon: 'globe',
-    run: () => openWorkspaceTab('browser', 'https://texra.ai/'),
-  },
-  { label: 'Settings', icon: 'gear', run: () => openWorkspaceTab('settings') },
-  { label: 'Logs', icon: 'file-lines', run: () => openWorkspaceTab('logs') },
-];
 
 /**
- * New-tab menu. A lightweight popover positioned under the "+" button rather
- * than a wa-dropdown: the trigger is re-created on every shell render, and
- * wa-dropdown binds to its trigger element identity.
+ * Browser tabs whose URL has already been handed to the main process. Without
+ * this the page would reload on every re-render; without posting at all (the
+ * original bug) the view stayed blank because nothing ever called loadURL.
  */
-function openNewTabMenu(anchor: HTMLElement): void {
-  const existing = document.querySelector('.desktop-new-tab-menu');
-  if (existing) {
-    existing.remove();
+const loadedBrowserTabs = new Set<string>();
+
+/** Opens a surface in the right workbench with a sensible default target. */
+function openKind(kind: WorkbenchKind): void {
+  if (kind === 'terminal') {
+    updateShell(
+      openWorkbenchTab(shellState, {
+        kind,
+        target: window.texraDesktop?.workspacePath ?? '',
+      }),
+    );
     return;
   }
-  const menu = document.createElement('div');
-  menu.className = 'desktop-new-tab-menu';
-  menu.setAttribute('role', 'menu');
-  const rect = anchor.getBoundingClientRect();
-  menu.style.top = `${Math.round(rect.bottom + 4)}px`;
-  menu.style.left = `${Math.round(rect.left)}px`;
-  render(
-    html`${NEW_TAB_ENTRIES.map(
-      (entry) => html`
-        <button
-          type="button"
-          role="menuitem"
-          class="desktop-new-tab-item"
-          @click=${() => {
-            menu.remove();
-            entry.run();
-          }}
-        >
-          ${waIcon(entry.icon)} <span>${entry.label}</span>
-        </button>
-      `,
-    )}`,
-    menu,
-  );
-  appRoot.append(menu);
-  // Dismiss on the next outside click. `capture` so it runs before the item's
-  // own handler removes the menu, and `once` so it never leaks.
-  setTimeout(() => {
-    document.addEventListener(
-      'click',
-      (event) => {
-        if (!menu.contains(event.target as Node)) menu.remove();
-      },
-      { once: true, capture: true },
+  if (kind === 'browser') {
+    updateShell(
+      openWorkbenchTab(shellState, {
+        kind,
+        target: 'https://texra.ai/',
+        title: 'texra.ai',
+      }),
     );
-  }, 0);
+    return;
+  }
+  if (kind === 'editor') {
+    updateShell(openWorkbenchTab(shellState, { kind }));
+    void editorPane.refresh();
+    return;
+  }
+  if (kind === 'logs') logsController.open();
+  updateShell(openWorkbenchTab(shellState, { kind }));
 }
 
-function emptyWorkspaceTemplate(): TemplateResult {
+// =============================================================================
+// Pane content
+// =============================================================================
+
+/**
+ * Content for one tab. Every surface stays mounted once opened and is hidden when
+ * its tab is inactive, so Monaco models, terminal scrollback, and in-flight
+ * settings edits survive both tab switches and layout changes.
+ *
+ * The editor, terminal, settings, and logs surfaces are single shared instances,
+ * so they render in whichever pane currently holds their tab — Lit moves the DOM
+ * node rather than duplicating it.
+ */
+function workbenchPlaceholderTemplate(): TemplateResult {
   return html`
-    <section class="desktop-empty-workspace-panel">
-      <h1>Open a folder to use TeXRA</h1>
-      <p>
-        TeXRA desktop needs a workspace before it can discover files, run
-        agents, and place outputs.
-      </p>
-      <ul class="desktop-empty-workspace-capabilities">
-        <li>Select TeX, Markdown, or text files from the opened folder.</li>
-        <li>Run workflow or tool-use agents with the chosen model.</li>
-        <li>Review progress, logs, and generated outputs in one window.</li>
-      </ul>
-      <div class="desktop-empty-workspace-actions">
-        ${renderLabeledActionButton({
-          icon: 'folder-open',
-          text: 'Open Folder',
-          appearance: 'filled',
-          variant: 'brand',
-          className: 'desktop-primary-button',
-          onClick: () =>
-            postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER),
-        })}
-        ${renderLabeledActionButton({
-          icon: 'file-lines',
-          text: 'Logs',
-          appearance: 'outlined',
-          className: 'desktop-secondary-button',
-          onClick: openLogsDrawer,
-        })}
+    <div class="task-workbench-placeholder">
+      <div class="task-workbench-placeholder-content">
+        <div class="task-workbench-placeholder-icon icon-surface is-size-l">
+          ${waIcon('file-code')}
+        </div>
+        <h2>Choose a file</h2>
+        <p>
+          Open a file from the project list to inspect or edit it beside this
+          task.
+        </p>
       </div>
-    </section>
+    </div>
   `;
 }
 
-// =============================================================================
-// Progress message + event wiring (without mounting <progress-app>)
-// =============================================================================
-//
-// PRD § 7.C: `<progress-app>` is NOT mounted in Electron; the children mount
-// directly. The same `messageDispatcher` + `eventHandlers` modules drive both
-// hosts over the shared `progressState` singletons.
-//
-// Filter persistence isn't wired on desktop (yet) — that layer is VS
-// Code-only, in `ProgressApp.onFilterChange`. Filter changes still apply for
-// the active session.
-
-function isProgressOutboundMessage(
-  raw: unknown,
-): raw is ProgressViewOutboundMessage {
-  return ProgressViewOutboundMessageSchema.safeParse(raw).success;
+function workbenchContentTemplate(tab: WorkbenchTab): TemplateResult {
+  switch (tab.kind) {
+    case 'editor':
+      return tab.target
+        ? html`<div class="task-workbench-surface">${editorPane.element}</div>`
+        : workbenchPlaceholderTemplate();
+    case 'terminal':
+      return html`<div class="task-workbench-surface">
+        ${terminalPane.element}
+      </div>`;
+    case 'browser':
+      return html`<div
+        class="task-workbench-surface"
+        data-browser-slot=${tab.id}
+      ></div>`;
+    case 'settings':
+      return html`<div class="task-workbench-surface" data-scroll="true">
+        ${settingsView}
+      </div>`;
+    case 'logs':
+      return html`<div class="task-workbench-surface" data-scroll="true">
+        ${logsPane}
+      </div>`;
+  }
 }
 
-// =============================================================================
-// Shell template
-// =============================================================================
-
-function getWorkspaceDirectoryLabel(workspacePath: string | undefined): string {
-  if (!workspacePath) return 'No folder';
-
-  const normalized = workspacePath.replaceAll('\\', '/');
-  const trimmed = normalized.replace(/\/+$/, '');
-  if (!trimmed) return normalized.startsWith('/') ? '/' : workspacePath;
-  return trimmed.split('/').at(-1) || trimmed;
+function disposeWorkbenchTab(tabId: string): void {
+  const tab = shellState.workbenchTabs.find((entry) => entry.id === tabId);
+  if (tab?.kind === 'browser') {
+    loadedBrowserTabs.delete(tabId);
+    postMessage(DESKTOP_WORKSPACE_COMMANDS.BROWSER_CLOSE, { tabId });
+  }
+  if (tab?.kind === 'terminal') terminalPane.dispose(tabId);
+  updateShell(closeWorkbenchTab(shellState, tabId));
 }
 
-function shellTemplate(): TemplateResult {
-  const activeId = activeStreamId$.get();
-  const hasStreams = hasAnyStreams$.get();
-  const showConversation = activeId != null && hasStreams;
-  const workspacePath = window.texraDesktop?.workspacePath;
-  const workspaceDirectoryLabel = getWorkspaceDirectoryLabel(workspacePath);
-  const current = activeTab(tabState);
+function workbenchTemplate(tab: WorkbenchTab): TemplateResult {
   return html`
-    <section class="desktop-shell">
-      <nav class="desktop-nav" aria-label="Desktop chrome">
-        <span class="desktop-workspace-directory" title=${workspacePath ?? ''}>
-          ${waIcon('folder-open', { className: 'desktop-workspace-icon' })}
-          ${workspaceDirectoryLabel}
+    <aside class="task-workbench" aria-label="Workbench">
+      ${workbenchTabsTemplate(
+        shellState.workbenchTabs,
+        shellState.activeWorkbenchTabId,
+        {
+          onActivate: (tabId) =>
+            updateShell(focusWorkbenchTab(shellState, tabId)),
+          onClose: disposeWorkbenchTab,
+          onCloseWorkbench: () => updateShell(closeWorkbench(shellState)),
+        },
+      )}
+      <div class="task-workbench-body">
+        <section class="task-workbench-pane">
+          ${workbenchContentTemplate(tab)}
+        </section>
+      </div>
+    </aside>
+  `;
+}
+
+function currentTaskTitle(): string {
+  const activeId = activeStreamId$.get();
+  const stream = streams$.get().find((entry) => entry.name === activeId);
+  return stream?.label || stream?.name || 'New task';
+}
+
+function environmentPopoverTemplate(
+  workspacePath: string | undefined,
+): TemplateResult {
+  return html`
+    <wa-popover
+      class="task-environment-popover"
+      for="taskEnvironmentButton"
+      placement="bottom-end"
+      distance="6"
+      without-arrow
+    >
+      <div class="task-environment-heading">Environment</div>
+      <div class="task-environment-row">
+        <span class="icon-surface is-size-s">${waIcon('folder-open')}</span>
+        <span title=${workspacePath ?? ''}>
+          ${workspaceName(workspacePath)}
         </span>
-        ${renderIconActionButton({
-          icon: 'arrow-left',
-          label: 'Back to launcher',
-          className: 'desktop-icon-button',
-          appearance: 'plain',
-          hidden: !(showConversation && current.kind === 'workspace'),
-          title: commandTitle('texra.showMainView', 'Back to launcher'),
-          onClick: returnToLauncher,
-        })}
-        <!--
-          No icon in this design — renderLabeledActionButton requires one,
-          so this command-palette trigger stays hand-rolled (aria-haspopup
-          also isn't part of the shared helper's option surface).
-        -->
+      </div>
+      <div class="task-environment-row">
+        <span class="icon-surface is-size-s">${waIcon('code-branch')}</span>
+        <span>Local workspace</span>
+      </div>
+      <div class="task-environment-row">
+        <span class="icon-surface is-size-s">${waIcon('file-code')}</span>
+        <span>${shellState.workbenchTabs.length} open workbench items</span>
+      </div>
+      <div class="task-environment-actions">
         <wa-button
-          class="desktop-command-button"
+          type="button"
+          class="task-environment-action btn-ghost"
+          appearance="plain"
+          size="s"
+          data-popover="close"
+          @click=${() => {
+            openKind('editor');
+          }}
+        >
+          <span class="icon-surface is-size-s">${waIcon('file-code')}</span>
+          <span>Editor</span>
+        </wa-button>
+        <wa-button
+          type="button"
+          class="task-environment-action btn-ghost"
+          appearance="plain"
+          size="s"
+          data-popover="close"
+          @click=${() => {
+            openKind('terminal');
+          }}
+        >
+          <span class="icon-surface is-size-s">${waIcon('terminal')}</span>
+          <span>Terminal</span>
+        </wa-button>
+        <wa-button
+          type="button"
+          class="task-environment-action btn-ghost"
+          appearance="plain"
+          size="s"
+          data-popover="close"
+          @click=${() => {
+            openKind('browser');
+          }}
+        >
+          <span class="icon-surface is-size-s">${waIcon('globe')}</span>
+          <span>Browser</span>
+        </wa-button>
+      </div>
+    </wa-popover>
+  `;
+}
+
+function taskConversationTemplate(): TemplateResult {
+  const activeId = activeStreamId$.get();
+  const showConversation = activeId != null && hasAnyStreams$.get();
+  const defaultLauncherContent = hasWorkspace
+    ? html`<section class="task-launcher-surface">${mainView}</section>`
+    : noWorkspacePlaceholder;
+  const launcherContent = startupTeamPanel.isVisible()
+    ? startupTeamPanel.template()
+    : defaultLauncherContent;
+  return html`
+    <main class="task-conversation" aria-label="Task conversation">
+      <header class="task-header">
+        <wa-button
+          type="button"
+          class="task-header-button icon-button is-size-l"
+          appearance="plain"
+          size="s"
+          aria-label=${
+            shellState.sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'
+          }
+          title=${shellState.sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
+          @click=${() => updateShell(toggleSidebar(shellState))}
+        >
+          ${waIcon(
+            shellState.sidebarCollapsed ? 'chevron-right' : 'chevron-left',
+          )}
+        </wa-button>
+        <span class="task-header-title">${currentTaskTitle()}</span>
+        <span class="task-header-spacer"></span>
+        <wa-button
+          id="taskEnvironmentButton"
+          type="button"
+          class="task-environment-button btn-secondary"
           appearance="outlined"
-          size="small"
-          aria-haspopup="dialog"
+          size="s"
+          with-caret
+        >
+          ${waIcon('folder-open', { slot: 'start' })}
+          <span>${workspaceName(window.texraDesktop?.workspacePath)}</span>
+        </wa-button>
+        <wa-button
+          type="button"
+          class="task-header-button icon-button is-size-l"
+          appearance="plain"
+          size="s"
+          aria-label="Open commands"
           title=${shortcutTitle('Commands', 'CommandOrControl+K')}
           @click=${openCommandPalette}
         >
-          ${waIcon('search', { slot: 'start' })} Commands
+          ${waIcon('ellipsis')}
         </wa-button>
-      </nav>
-      ${tabStripTemplate(tabState, {
-        onActivate: (tabId) => updateTabs(activateTab(tabState, tabId)),
-        onClose: (tabId) => updateTabs(closeTab(tabState, tabId)),
-        onNew: openNewTabMenu,
-      })}
-      <div class="desktop-tab-body">
-        <!--
-          Every tab's pane stays mounted and is hidden when inactive, rather
-          than being torn down and rebuilt on each switch. Monaco models,
-          terminal scrollback, and in-flight <settings-app> edits all live in
-          DOM state that a remount would silently discard.
-        -->
+        ${environmentPopoverTemplate(window.texraDesktop?.workspacePath)}
+      </header>
+      <div class="task-conversation-body" id="desktop-center">
         <section
-          class="desktop-tab-pane"
-          data-tab-pane="workspace"
-          ?hidden=${current.kind !== 'workspace'}
+          class="task-conversation-pane"
+          data-pane="launcher"
+          ?hidden=${showConversation}
         >
-          <div class="desktop-two-pane">
-            <aside class="desktop-rail" aria-label="Sessions">
-              <header class="desktop-rail-header">
-                <div class="desktop-rail-header-content">
-                  <span class="desktop-rail-title">Sessions</span>
-                </div>
-                ${renderIconActionButton({
-                  icon: 'plus',
-                  label: 'New run',
-                  className: 'desktop-rail-new',
-                  appearance: 'outlined',
-                  title: commandTitle('texra.mainView.reset', 'New run'),
-                  onClick: returnToLauncher,
-                })}
-              </header>
-              <div class="desktop-rail-tabs">${railTabs}</div>
-              <footer class="desktop-rail-footer">
-                ${renderLabeledActionButton({
-                  icon: 'gear',
-                  text: 'Settings',
-                  className: 'desktop-rail-settings',
-                  appearance: 'plain',
-                  title: commandTitle('texra.openSettings', 'Settings'),
-                  onClick: () => openWorkspaceTab('settings'),
-                })}
-              </footer>
-            </aside>
-            <main class="desktop-center" id="desktop-center">
-              <section
-                class="desktop-pane"
-                data-pane="launcher"
-                ?hidden=${showConversation}
-              >
-                ${
-                  hasWorkspace
-                    ? html`
-                        <section class="desktop-launcher-surface">
-                          ${mainView}
-                        </section>
-                      `
-                    : noWorkspacePlaceholder
-                }
-              </section>
-              <section
-                class="desktop-pane"
-                data-pane="conversation"
-                ?hidden=${!showConversation}
-              >
-                ${conversationView}
-              </section>
-            </main>
-          </div>
+          ${launcherContent}
         </section>
         <section
-          class="desktop-tab-pane"
-          data-tab-pane="settings"
-          ?hidden=${current.kind !== 'settings'}
+          class="task-conversation-pane"
+          data-pane="conversation"
+          ?hidden=${!showConversation}
         >
-          ${settingsView}
+          ${conversationView}
         </section>
-        <section
-          class="desktop-tab-pane"
-          data-tab-pane="logs"
-          ?hidden=${current.kind !== 'logs'}
-        >
-          ${logsPane}
-        </section>
-        <section
-          class="desktop-tab-pane"
-          data-tab-pane="editor"
-          ?hidden=${current.kind !== 'editor'}
-        >
-          ${editorPane.element}
-        </section>
-        <section
-          class="desktop-tab-pane"
-          data-tab-pane="terminal"
-          ?hidden=${current.kind !== 'terminal'}
-        >
-          ${terminalPane.element}
-        </section>
-        <!--
-          Browser tabs render in a main-process WebContentsView layered over
-          this window, so the renderer only reserves the rectangle it should
-          occupy. This slot is measured in syncBrowserViewBounds.
-        -->
-        <section
-          class="desktop-tab-pane"
-          id="desktop-browser-slot"
-          data-tab-pane="browser"
-          ?hidden=${current.kind !== 'browser'}
-        ></section>
       </div>
-    </section>
+    </main>
   `;
+}
+
+interface SplitPanelElement extends HTMLElement {
+  readonly positionInPixels: number;
+}
+
+function rememberSidebarWidth(event: Event): void {
+  const width = (event.currentTarget as SplitPanelElement).positionInPixels;
+  shellState = setSidebarWidth(shellState, width);
+}
+
+function rememberWorkbenchWidth(event: Event): void {
+  const width = (event.currentTarget as SplitPanelElement).positionInPixels;
+  shellState = setWorkbenchWidth(shellState, width);
+}
+
+function taskMainTemplate(workbench: WorkbenchTab | undefined): TemplateResult {
+  if (!workbench) return taskConversationTemplate();
+  return html`
+    <wa-split-panel
+      class="task-main-split"
+      orientation="horizontal"
+      primary="end"
+      .positionInPixels=${shellState.workbenchWidth}
+      @wa-reposition=${rememberWorkbenchWidth}
+    >
+      <div slot="start" class="task-main-panel">
+        ${taskConversationTemplate()}
+      </div>
+      <div slot="end" class="task-workbench-panel">
+        ${workbenchTemplate(workbench)}
+      </div>
+    </wa-split-panel>
+  `;
+}
+
+function shellTemplate(): TemplateResult {
+  const workspacePath = window.texraDesktop?.workspacePath;
+  const workbench = activeWorkbenchTab(shellState);
+  const main = taskMainTemplate(workbench);
+
+  if (shellState.sidebarCollapsed) {
+    return html`
+      <div
+        class="task-shell task-shell-collapsed"
+        data-workbench-open=${workbench ? 'true' : 'false'}
+      >
+        ${main}
+      </div>
+    `;
+  }
+
+  return html`
+    <wa-split-panel
+      class="task-shell"
+      orientation="horizontal"
+      primary="start"
+      .positionInPixels=${shellState.sidebarWidth}
+      data-workbench-open=${workbench ? 'true' : 'false'}
+      @wa-reposition=${rememberSidebarWidth}
+    >
+      <div slot="start" class="task-sidebar-slot">
+        ${taskSidebarTemplate(
+          {
+            files: editorPane.treeElement,
+            filesExpanded: shellState.filesExpanded,
+            hasWorkspace,
+            initials: workspaceInitials(workspacePath),
+            pendingApprovalCount: pendingApprovalIds$.get().size,
+            sessions: railTabs,
+            streamCount: streams$.get().length,
+            workspaceName: workspaceName(workspacePath),
+            ...(workspacePath ? { workspacePath } : {}),
+          },
+          {
+            onNewTask: returnToLauncher,
+            onSearch: openCommandPalette,
+            onToggleFiles: () => updateShell(toggleFiles(shellState)),
+            onOpenFolder: () =>
+              postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER),
+            onOpenTerminal: () => openKind('terminal'),
+            onOpenBrowser: () => openKind('browser'),
+            onOpenSettings: () => openKind('settings'),
+            onOpenLogs: () => openKind('logs'),
+          },
+        )}
+      </div>
+      <div slot="end" class="task-shell-main-panel">${main}</div>
+    </wa-split-panel>
+  `;
+}
+
+let surfaceResizeObserver: ResizeObserver | undefined;
+
+function observeSurfaceResizes(): void {
+  surfaceResizeObserver ??= new ResizeObserver(() => {
+    editorPane.layout();
+    terminalPane.layout();
+    syncBrowserViewBounds();
+  });
+  for (const element of document.querySelectorAll(
+    '.task-conversation, .task-workbench',
+  )) {
+    surfaceResizeObserver.observe(element);
+  }
 }
 
 function rerenderShell(): void {
   render(shellTemplate(), appRoot);
-  // Sync the rail tabs' properties from progressState every render. (Lit's
-  // property assignment is idempotent + diffed via Object.is, so this is
-  // cheap.) `<stream-tabs>` reads these as plain @property values, not via
-  // SignalWatcher.
   railTabs.streams = tabStreams$.get();
   railTabs.activeStreamId = activeStreamId$.get();
   railTabs.filter = streamFilter$.get();
   railTabs.streamStates = streamStates$.get();
   railTabs.pendingApprovalStreamIds = pendingApprovalIds$.get();
   railTabs.childStreamsByParent = childStreamsByParent$.get();
+  observeSurfaceResizes();
 }
 
 function toBootstrapErrorMessage(error: unknown): string {
@@ -744,6 +909,7 @@ function recoverFromBootstrapFallback(): void {
     bootstrapFailed = false;
     postMessage(DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE);
     postWebviewReady();
+    document.body.dataset.desktopReady = 'true';
   } catch (recoveryError) {
     console.error('TeXRA desktop renderer recovery failed', recoveryError);
     bootstrapFailed = true;
@@ -822,7 +988,7 @@ function openSettingsTab(
   tabIndex?: ShowSettingsArgs[0],
   agentSubTab?: ShowSettingsArgs[1],
 ): void {
-  openWorkspaceTab('settings');
+  openKind('settings');
   if (tabIndex == null) return;
   window.postMessage(
     buildDesktopSettingsTabMessage(tabIndex, agentSubTab),
@@ -834,21 +1000,11 @@ function openSettingsTab(
 // Onboarding + command palette
 // =============================================================================
 
-const firstRunWalkthrough = bootstrapFailed
-  ? undefined
-  : createFirstRunWalkthrough({
-      document,
-      dismiss: () => postMessage(DESKTOP_ONBOARDING_COMMANDS.DISMISS),
-      setRoute,
-      openMultiAgent: () => openSettingsTab(SETTINGS_TAB.MULTI_AGENT),
-    });
-if (firstRunWalkthrough) appRoot.append(firstRunWalkthrough.element);
-
 const commandPalette = bootstrapFailed
   ? undefined
   : createDesktopCommandPalette({
       document,
-      canOpen: () => !firstRunWalkthrough?.isVisible(),
+      canOpen: () => true,
       actions: {
         showRoute: setRoute,
         showSettings: openSettingsTab,
@@ -862,11 +1018,8 @@ const commandPalette = bootstrapFailed
         openWorkspaceFolder: () => {
           postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER);
         },
-        openWorkspaceInNewWindow: () => {
-          postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_IN_NEW_WINDOW);
-        },
         showFirstRunWalkthrough: () => {
-          firstRunWalkthrough?.show();
+          startupTeamPanel.show();
         },
         resetMainView: () => {
           returnToLauncher();
@@ -917,11 +1070,10 @@ function setRoute(route: DesktopRoute): void {
     returnToLauncher();
     return;
   }
-  const kind = tabKindForRoute(route);
-  openWorkspaceTab(kind);
-  // Opening the Logs tab must also fetch a snapshot; the pane renders whatever
-  // it last received, which on first open is a placeholder.
-  if (kind === 'logs') logsController.open();
+  // Opening Logs must also fetch a snapshot; the pane renders whatever it last
+  // received, which on first open is a placeholder.
+  const kind = workbenchKindForRoute(route);
+  if (kind) openKind(kind);
 }
 
 window.addEventListener('message', (event) => {
@@ -935,9 +1087,9 @@ window.addEventListener('message', (event) => {
   );
   if (onboardingParsed.success) {
     if (onboardingParsed.data.shouldShow) {
-      firstRunWalkthrough?.show();
+      startupTeamPanel.show();
     } else {
-      firstRunWalkthrough?.hide();
+      startupTeamPanel.hide();
     }
     return;
   }
@@ -1050,18 +1202,10 @@ function handleWorkspaceMessage(data: unknown): boolean {
   }
   const browserState = DesktopBrowserStateMessageSchema.safeParse(data);
   if (browserState.success) {
-    // Only the title is surfaced today: it renames the tab so a browser tab
-    // reads as its page rather than a generic "Browser".
+    // Only the title is surfaced today: it renames the document so a browser
+    // tab reads as its page rather than a generic "Browser".
     const { tabId, title } = browserState.data;
-    const tab = tabState.tabs.find((entry) => entry.id === tabId);
-    if (tab && title && tab.title !== title) {
-      updateTabs({
-        ...tabState,
-        tabs: tabState.tabs.map((entry) =>
-          entry.id === tabId ? { ...entry, title } : entry,
-        ),
-      });
-    }
+    updateShell(renameWorkbenchTab(shellState, tabId, title));
     return true;
   }
   return false;
@@ -1170,6 +1314,7 @@ if (!bootstrapFailed) {
   wireConversation();
   postMessage(DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE);
   postWebviewReady();
+  document.body.dataset.desktopReady = 'true';
 }
 
 function postWebviewReady(): void {

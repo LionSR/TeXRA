@@ -3,6 +3,7 @@
 // formatting. Repatriated from src/shared/wa/commandPalette.ts (#8825): the
 // desktop renderer is its only consumer.
 
+import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 import '@awesome.me/webawesome/dist/components/input/input.js';
 import { html, nothing, render } from 'lit';
@@ -202,7 +203,7 @@ export function createDesktopCommandPalette({
     render(
       html`
         <wa-input
-          class="desktop-command-palette-input"
+          class="desktop-command-palette-input input-plain"
           type="search"
           autocomplete="off"
           spellcheck="false"
@@ -224,9 +225,11 @@ export function createDesktopCommandPalette({
             visibleEntries,
             (entry) => entry.id,
             (entry, index) => html`
-              <button
+              <wa-button
                 class="desktop-command-palette-item"
                 type="button"
+                appearance="plain"
+                size="s"
                 role="option"
                 data-command-id=${entry.id}
                 ?disabled=${!entry.enabled}
@@ -237,10 +240,10 @@ export function createDesktopCommandPalette({
                 <span class="desktop-command-palette-label"
                   >${entry.label}</span
                 >
-                <span class="desktop-command-palette-meta"
+                <span slot="end" class="desktop-command-palette-meta"
                   >${entry.meta ?? ''}</span
                 >
-              </button>
+              </wa-button>
             `,
           )}
         </div>

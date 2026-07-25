@@ -6,6 +6,11 @@ export {
 } from './commonViewStyles';
 export { designTokens, animationStyles } from './litStyles';
 
+// The canonical button/input/focus-ring/settings-row skins reach consumers
+// through `commonViewStyles` (which interpolates them), so they are not
+// re-exported here. Components that compose a narrower sheet — e.g. a split
+// button without the full common view — import from './controlStyles' directly.
+
 // Component styles
 export { selectStyles, compactFormControlStyles } from './selectStyles';
 export { requestPanelSharedStyles, sp } from './requestPanelSharedStyles';

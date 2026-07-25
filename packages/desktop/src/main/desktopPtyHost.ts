@@ -13,7 +13,10 @@
 // if the addon is missing on some platform the failure surfaces as "terminal
 // unavailable" instead of preventing the app from starting.
 
+import { chmodSync, statSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { platform as osPlatform } from 'node:os';
+import { dirname, join } from 'node:path';
 
 /**
  * Structural subset of node-pty we depend on. Declared locally so this module
@@ -110,13 +113,52 @@ function ptyEnvironment(): Record<string, string> {
   return env;
 }
 
+/**
+ * Restores the executable bit on node-pty's `spawn-helper`.
+ *
+ * On macOS, node-pty shells out to a small `spawn-helper` binary to allocate the
+ * pty. It ships in the package's `prebuilds/<platform>-<arch>/` directory, but
+ * pnpm's content-addressed store extracts it without the executable bit — so
+ * every `pty.spawn()` fails with a bare `posix_spawnp failed.` and no hint as to
+ * why. (A plain npm install happens to preserve the mode, which is why this is
+ * easy to miss.)
+ *
+ * Fixed here rather than in a postinstall script so it survives any install
+ * path, including a packaged app whose files were copied by the builder.
+ */
+function ensureSpawnHelperExecutable(): void {
+  if (osPlatform() === 'win32') return;
+  try {
+    const require_ = createRequire(import.meta.url);
+    const packageRoot = dirname(require_.resolve('node-pty/package.json'));
+    const helper = join(
+      packageRoot,
+      'prebuilds',
+      `${osPlatform()}-${process.arch}`,
+      'spawn-helper',
+    );
+    const mode = statSync(helper).mode;
+    // Only write when a bit is actually missing: chmod on every launch would be
+    // a pointless syscall, and on a read-only install it would throw.
+    if ((mode & 0o111) === 0o111) return;
+    chmodSync(helper, mode | 0o111);
+  } catch {
+    // A missing helper or read-only filesystem is not fatal here: the spawn
+    // below will fail with its own error, which the caller surfaces in the
+    // terminal as "Could not start a terminal".
+  }
+}
+
 let nodePtyLoad: Promise<NodePtyModule> | undefined;
 
 async function loadNodePty(): Promise<NodePtyModule> {
   // Cached so repeated terminals don't re-resolve the addon; a failure clears
   // the cache so a later attempt can retry.
   nodePtyLoad ??= import('node-pty')
-    .then((module) => module as unknown as NodePtyModule)
+    .then((module) => {
+      ensureSpawnHelperExecutable();
+      return module as unknown as NodePtyModule;
+    })
     .catch((error: unknown) => {
       nodePtyLoad = undefined;
       throw error;

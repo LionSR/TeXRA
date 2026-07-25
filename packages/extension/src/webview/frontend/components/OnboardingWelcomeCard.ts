@@ -42,11 +42,20 @@ export class OnboardingWelcomeCard extends LitElement {
         padding: var(--wa-space-s) var(--wa-space-m);
       }
 
+      wa-callout::part(icon) {
+        align-items: flex-start;
+      }
+
+      .welcome-icon {
+        margin-top: var(--wa-space-3xs);
+      }
+
       .card-title {
         display: block;
         font-weight: var(--font-weight-semibold, 600);
-        font-size: 1.05em;
+        font-size: var(--font-size-lg);
         letter-spacing: -0.005em;
+        line-height: var(--line-height-tight);
         margin-bottom: var(--wa-space-2xs);
       }
 
@@ -78,7 +87,7 @@ export class OnboardingWelcomeCard extends LitElement {
       .path-step__label {
         display: flex;
         align-items: center;
-        gap: var(--wa-space-3xs);
+        gap: var(--wa-space-2xs);
         margin-bottom: var(--wa-space-3xs);
         font-size: var(--font-size-sm);
         font-weight: var(--font-weight-semibold, 600);
@@ -160,7 +169,13 @@ export class OnboardingWelcomeCard extends LitElement {
   override render(): TemplateResult {
     return html`
       <wa-callout id="onboardingWelcomeCard" variant="brand">
-        ${waIcon('wand-magic-sparkles', { slot: 'icon' })}
+        <span
+          slot="icon"
+          class="welcome-icon icon-surface is-size-l"
+          aria-hidden="true"
+        >
+          ${waIcon('wand-magic-sparkles')}
+        </span>
         <span class="card-title">${ONBOARDING_CARD_TITLE}</span>
         <p class="card-copy">
           Start with one credential. TeXRA then checks this project, picks the
@@ -169,21 +184,32 @@ export class OnboardingWelcomeCard extends LitElement {
         <div class="path" aria-label="Getting started path">
           <div class="path-step">
             <span class="path-step__label">
-              ${waIcon('right-to-bracket')} 1. Connect
+              <span class="icon-surface is-size-s" aria-hidden="true">
+                ${waIcon('right-to-bracket')}
+              </span>
+              <span>1. Connect</span>
             </span>
             <p class="path-step__copy">
               ChatGPT subscription, Researcher Access, or a provider API key.
             </p>
           </div>
           <div class="path-step">
-            <span class="path-step__label"> ${waIcon('rocket')} 2. Setup </span>
+            <span class="path-step__label">
+              <span class="icon-surface is-size-s" aria-hidden="true">
+                ${waIcon('rocket')}
+              </span>
+              <span>2. Setup</span>
+            </span>
             <p class="path-step__copy">
               The setup assistant checks LaTeX and applies a starter team.
             </p>
           </div>
           <div class="path-step">
             <span class="path-step__label">
-              ${waIcon('code-compare')} 3. Review
+              <span class="icon-surface is-size-s" aria-hidden="true">
+                ${waIcon('code-compare')}
+              </span>
+              <span>3. Review</span>
             </span>
             <p class="path-step__copy">
               Run a polish pass and inspect the diff before accepting changes.
@@ -194,11 +220,14 @@ export class OnboardingWelcomeCard extends LitElement {
           <div class="choice">
             <wa-button
               id="onboardingChatGptButton"
+              class="btn-primary"
               variant="brand"
               appearance="filled"
+              size="m"
               @click=${this.handleChatGpt}
             >
-              ${waIcon('comment-discussion')} ${ONBOARDING_CHOICE_CHATGPT.label}
+              ${waIcon('comment-discussion', { slot: 'start' })}
+              ${ONBOARDING_CHOICE_CHATGPT.label}
             </wa-button>
             <span class="choice-description">
               ${ONBOARDING_CHOICE_CHATGPT.description}
@@ -207,10 +236,13 @@ export class OnboardingWelcomeCard extends LitElement {
           <div class="choice">
             <wa-button
               id="onboardingSignInButton"
+              class="btn-secondary"
               appearance="outlined"
+              size="m"
               @click=${this.handleSignIn}
             >
-              ${waIcon('right-to-bracket')} ${ONBOARDING_CHOICE_SIGN_IN.label}
+              ${waIcon('right-to-bracket', { slot: 'start' })}
+              ${ONBOARDING_CHOICE_SIGN_IN.label}
             </wa-button>
             <span class="choice-description">
               ${ONBOARDING_CHOICE_SIGN_IN.description}
@@ -219,10 +251,13 @@ export class OnboardingWelcomeCard extends LitElement {
           <div class="choice">
             <wa-button
               id="onboardingApiKeyButton"
+              class="btn-secondary"
               appearance="outlined"
+              size="m"
               @click=${this.handleApiKey}
             >
-              ${waIcon('key')} ${ONBOARDING_CHOICE_API_KEY.label}
+              ${waIcon('key', { slot: 'start' })}
+              ${ONBOARDING_CHOICE_API_KEY.label}
             </wa-button>
             <span class="choice-description">
               ${ONBOARDING_CHOICE_API_KEY.description}
@@ -232,16 +267,18 @@ export class OnboardingWelcomeCard extends LitElement {
         <div class="skip-row">
           <wa-button
             id="onboardingWalkthroughButton"
+            class="btn-ghost"
             appearance="plain"
-            size="small"
+            size="s"
             @click=${this.handleOpenGettingStarted}
           >
-            ${waIcon('book')} Open walkthrough
+            ${waIcon('book', { slot: 'start' })} Open walkthrough
           </wa-button>
           <wa-button
             id="onboardingSkipButton"
+            class="btn-ghost"
             appearance="plain"
-            size="small"
+            size="s"
             @click=${this.handleSkip}
           >
             ${ONBOARDING_CHOICE_SKIP_LABEL}

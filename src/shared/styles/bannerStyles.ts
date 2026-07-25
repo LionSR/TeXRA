@@ -66,10 +66,20 @@ export const bannerStyles: CSSResult = css`
     flex-shrink: 0;
   }
 
+  /* Banner action buttons are bare <wa-button>s (no skin class), so the ghost
+     skin is applied by descendant selector here. A banner is a tight band, so
+     it takes the small step off the control scale. */
   .actions wa-button::part(base) {
-    min-height: 24px;
-    padding-inline: var(--wa-space-xs);
-    border-radius: var(--wa-border-radius-s, 4px);
+    min-height: var(--control-size-s);
+    padding-inline: var(--control-padding-inline);
+    border: 0;
+    border-radius: var(--border-radius-medium);
+    background: transparent;
     font-size: var(--font-size-sm);
+    transition: background-color var(--transition-fast);
+  }
+
+  .actions wa-button::part(base):hover {
+    background: var(--surface-hover);
   }
 `;

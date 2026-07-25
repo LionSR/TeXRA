@@ -36,16 +36,25 @@ async function setRoute(route: 'main' | 'settings'): Promise<void> {
   }, route);
   await launched.page.waitForFunction(
     (r) => {
+      if (document.body.dataset.desktopRoute !== r) return false;
       if (r === 'main') {
         const pane = document.querySelector<HTMLElement>(
-          '.desktop-pane[data-pane="launcher"]',
+          '.task-conversation-pane[data-pane="launcher"]',
         );
         return pane != null && pane.hidden === false;
       }
-      const dialog = document.querySelector<HTMLElement>(
-        'wa-dialog.desktop-settings-overlay',
+      const shell = document.querySelector<HTMLElement>('.task-shell');
+      const tab = document.querySelector<HTMLElement>(
+        '.task-workbench-tab[data-kind="settings"][data-active="true"]',
       );
-      return dialog != null && dialog.hasAttribute('open');
+      const settings = document.querySelector<HTMLElement>(
+        '.task-workbench-surface settings-app[data-desktop-view="settings"]',
+      );
+      return (
+        shell?.dataset.workbenchOpen === 'true' &&
+        tab != null &&
+        settings != null
+      );
     },
     route,
     { timeout: 5000 },
@@ -62,8 +71,9 @@ async function readToolsPanelMetrics(): Promise<{
   scrollTop: number;
 } | null> {
   return launched.page.evaluate(() => {
-    const dialog = document.querySelector('wa-dialog.desktop-settings-overlay');
-    const settingsApp = dialog?.querySelector('settings-app');
+    const settingsApp = document.querySelector(
+      'settings-app[data-desktop-view="settings"]',
+    );
     const root = settingsApp?.shadowRoot;
     const panel = root?.querySelector<HTMLElement>(
       'wa-tab-panel[name="tools"]',
@@ -103,7 +113,7 @@ test('main view no longer renders inner Launcher/Progress toolbar', async ({}, t
   expect(probe.latexdiffs).toBe(false);
 });
 
-test('settings overlay scrolls (Tools tab top + bottom)', async ({}, testInfo) => {
+test('settings workbench scrolls (Tools tab top + bottom)', async ({}, testInfo) => {
   await setRoute('settings');
   await launched.page.evaluate(
     ({ command, tabIndex }) => {
@@ -123,10 +133,9 @@ test('settings overlay scrolls (Tools tab top + bottom)', async ({}, testInfo) =
   // the panel mid-load (scrollHeight === clientHeight).
   await launched.page.waitForFunction(
     () => {
-      const dialog = document.querySelector(
-        'wa-dialog.desktop-settings-overlay',
+      const settingsApp = document.querySelector(
+        'settings-app[data-desktop-view="settings"]',
       );
-      const settingsApp = dialog?.querySelector('settings-app');
       const root = settingsApp?.shadowRoot;
       if (!root) return false;
       const panel = root.querySelector('wa-tab-panel[name="tools"][active]');
@@ -152,8 +161,9 @@ test('settings overlay scrolls (Tools tab top + bottom)', async ({}, testInfo) =
 
   // Scroll the panel to the bottom and re-screenshot.
   await launched.page.evaluate(() => {
-    const dialog = document.querySelector('wa-dialog.desktop-settings-overlay');
-    const settingsApp = dialog?.querySelector('settings-app');
+    const settingsApp = document.querySelector(
+      'settings-app[data-desktop-view="settings"]',
+    );
     const root = settingsApp?.shadowRoot;
     const panel = root?.querySelector<HTMLElement>(
       'wa-tab-panel[name="tools"]',

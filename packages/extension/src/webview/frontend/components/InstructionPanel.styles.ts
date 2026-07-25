@@ -106,7 +106,7 @@ export const instructionPanelStyles: CSSResult = css`
     padding: var(--wa-space-3xs) var(--wa-space-2xs);
     font-size: var(--font-size-sm);
     line-height: var(--line-height-relaxed);
-    animation: session-hint-fade 150ms ease;
+    animation: session-hint-fade var(--transition-fast);
   }
 
   .session-hint::part(message) {
@@ -146,15 +146,14 @@ export const instructionPanelStyles: CSSResult = css`
     margin-left: var(--wa-space-3xs);
   }
 
+  /* Sizing, font, and padding come from formControlStyles' wa-textarea rules;
+     only the growth cap is local (this is the composer, so it grows further
+     than a settings field). */
   wa-textarea#instruction {
     width: 100%;
     margin: var(--wa-space-3xs) 0;
-    font-family: var(--wa-font-family-mono);
-    font-size: var(--font-size);
-  }
-
-  wa-textarea#instruction::part(textarea) {
-    max-height: var(--height-xlarge);
+    --textarea-min-height: var(--textarea-h-s);
+    --textarea-max-height: var(--height-xlarge);
   }
 
   .instruction-controls {
@@ -224,7 +223,7 @@ export const instructionPanelStyles: CSSResult = css`
     display: flex;
     align-items: center;
     gap: var(--wa-space-2xs);
-    transition: opacity 150ms ease;
+    transition: opacity var(--transition-fast);
   }
 
   .team-picker-pane {
@@ -268,7 +267,7 @@ export const instructionPanelStyles: CSSResult = css`
     display: flex;
     align-items: center;
     flex: 0 0 auto;
-    line-height: 1;
+    line-height: var(--line-height-tight);
   }
 
   .model-selection-footer wa-button {
@@ -277,9 +276,10 @@ export const instructionPanelStyles: CSSResult = css`
   }
 
   /*
-   * Execute is the primary action of the entire UI, so it gets a
-   * slightly larger, more distinctive treatment than the other
-   * footer wa-buttons (which are 24x24 icon-only controls).
+   * Execute is the primary action of the entire UI and the one place in this
+   * view that spends the accent budget. It carries .btn-primary, so the fill,
+   * radius, weight, hover, and focus ring all come from the shared skin; only
+   * the footer placement and the label floor are local.
    */
   wa-button.execute-button {
     min-width: auto;
@@ -290,22 +290,6 @@ export const instructionPanelStyles: CSSResult = css`
 
   wa-button.execute-button::part(base) {
     min-width: 64px;
-    min-height: 24px;
-    height: 24px;
-    padding: 0 var(--wa-space-s);
-    gap: var(--wa-space-2xs);
-    border-radius: var(--wa-border-radius-m);
-    background: var(--wa-color-brand-fill-loud);
-    color: var(--wa-color-brand-on-loud);
-    border: var(--border-thin) solid
-      color-mix(in srgb, black 8%, var(--wa-color-brand-fill-loud));
-    font-weight: var(--font-weight-semibold, 600);
-    letter-spacing: 0.01em;
-  }
-
-  wa-button.execute-button:focus-visible::part(base) {
-    outline: 2px solid var(--wa-color-focus, var(--wa-color-brand-fill-loud));
-    outline-offset: 2px;
   }
 
   wa-button.execute-button wa-icon {
@@ -314,7 +298,7 @@ export const instructionPanelStyles: CSSResult = css`
 
   .execute-button__label {
     font-size: var(--font-size-sm);
-    line-height: 1;
+    line-height: var(--line-height-tight);
   }
 
   /* Lock both selects to identical fixed width. Without flex: 0 0, the
@@ -342,6 +326,194 @@ export const instructionPanelStyles: CSSResult = css`
     top: auto;
   }
 
+  /* Electron opts into a conversation-first composer while the extension
+     retains the compact form above. The outer card owns the visual boundary;
+     the textarea becomes a quiet, borderless writing surface inside it. */
+  :host([desktop-host]) {
+    width: 100%;
+    --agent-select-max-width: clamp(7.5rem, 18vw, 10.5rem);
+    --agent-model-listbox-max-width: min(24rem, calc(100vw - 3rem));
+  }
+
+  :host([desktop-host]) .instruction-box {
+    gap: var(--wa-space-2xs);
+    margin: 0;
+    padding: var(--wa-space-xs);
+    border-color: color-mix(
+      in srgb,
+      var(--wa-color-text-normal) 13%,
+      transparent
+    );
+    border-radius: 26px;
+    background: var(--wa-color-surface-raised);
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, white 4%, transparent),
+      0 12px 32px color-mix(in srgb, black 18%, transparent);
+    transition:
+      border-color var(--transition-fast),
+      box-shadow var(--transition-fast);
+  }
+
+  :host([desktop-host]) .instruction-box:focus-within {
+    border-color: color-mix(
+      in srgb,
+      var(--wa-color-text-normal) 23%,
+      transparent
+    );
+    box-shadow:
+      0 0 0 1px
+        color-mix(in srgb, var(--wa-color-brand-fill-loud) 18%, transparent),
+      0 16px 40px color-mix(in srgb, black 22%, transparent);
+  }
+
+  :host([desktop-host]) .instruction-box.drop-active::after {
+    inset: var(--wa-space-2xs);
+    border-radius: 20px;
+    background: color-mix(
+      in srgb,
+      var(--wa-color-surface-raised) 92%,
+      transparent
+    );
+  }
+
+  :host([desktop-host]) .session-hint {
+    /* Desktop gives the same guidance through the mode tooltips and the
+       launcher welcome copy; keeping the full IDE callout inside a compact
+       composer would push the prompt away from the bottom edge. */
+    display: none;
+  }
+
+  :host([desktop-host]) wa-textarea#instruction {
+    order: 1;
+    margin: 0;
+    color: var(--wa-color-text-normal);
+    font-family: var(--wa-font-family-body);
+    font-size: var(--font-size-prose, var(--font-size-lg));
+    line-height: var(--line-height-relaxed);
+    --wa-form-control-background-color: transparent;
+    --wa-form-control-border-color: transparent;
+    --wa-form-control-border-width: 0;
+    --wa-form-control-padding-block: 0.55rem;
+    --wa-form-control-padding-inline: 0.45rem;
+  }
+
+  :host([desktop-host]) wa-textarea#instruction::part(base) {
+    border: 0;
+    background: transparent;
+    outline: 0;
+  }
+
+  :host([desktop-host]) wa-textarea#instruction::part(textarea) {
+    min-height: 76px;
+    max-height: min(30vh, 180px);
+  }
+
+  :host([desktop-host]) .instruction-header {
+    order: 2;
+    min-height: 30px;
+    margin: 0;
+    padding-top: var(--wa-space-2xs);
+    border-top: var(--border-thin) solid
+      color-mix(in srgb, var(--wa-color-text-normal) 9%, transparent);
+    flex-wrap: nowrap;
+  }
+
+  :host([desktop-host]) .instruction-header-leading {
+    flex: 1 1 auto;
+    min-width: 0;
+    flex-wrap: nowrap;
+  }
+
+  :host([desktop-host]) .desktop-drop-affordance {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--wa-space-3xs);
+    min-width: 0;
+    color: var(--wa-color-text-quiet);
+    font-size: var(--font-size-sm);
+    white-space: nowrap;
+  }
+
+  :host([desktop-host]) .desktop-drop-affordance wa-icon,
+  :host([desktop-host]) .model-selection-footer wa-icon,
+  :host([desktop-host]) wa-button.execute-button wa-icon {
+    display: block;
+    flex: 0 0 auto;
+    width: 1em;
+    height: 1em;
+    font-size: var(--font-size-icon-sm);
+    line-height: var(--line-height-tight);
+  }
+
+  :host([desktop-host]) .instruction-session-toggle {
+    margin-left: auto;
+  }
+
+  :host([desktop-host]) .instruction-header-actions {
+    flex: 0 0 auto;
+  }
+
+  :host([desktop-host]) .instruction-controls {
+    order: 3;
+    flex-wrap: nowrap;
+    gap: var(--wa-space-2xs);
+    min-height: 36px;
+  }
+
+  :host([desktop-host]) .model-selection-footer {
+    display: flex;
+    align-items: center;
+    flex: 1 1 auto;
+    gap: var(--wa-space-2xs);
+    min-width: 0;
+  }
+
+  :host([desktop-host]) .model-selection-footer .select-group {
+    gap: var(--wa-space-3xs);
+  }
+
+  :host([desktop-host]) .model-selection-footer .agent-select-group,
+  :host([desktop-host]) .model-selection-footer .model-select-group {
+    flex: 1 1 9rem;
+    max-width: 12rem;
+  }
+
+  :host([desktop-host])
+    .model-selection-footer
+    :is(.agent-select-group, .model-select-group)
+    wa-select {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+  }
+
+  :host([desktop-host]) .model-selection-footer wa-button.settings-button {
+    width: 28px;
+    min-width: 28px;
+    height: 28px;
+  }
+
+  :host([desktop-host]) wa-button.execute-button {
+    width: 36px;
+    height: 36px;
+    margin-left: auto;
+  }
+
+  :host([desktop-host]) wa-button.execute-button::part(base) {
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+    min-height: 36px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--wa-border-radius-circle);
+  }
+
+  :host([desktop-host]) .execute-button__label {
+    display: none;
+  }
+
   .visually-hidden {
     position: absolute;
     width: 1px;
@@ -365,9 +537,28 @@ export const instructionPanelStyles: CSSResult = css`
     }
   }
 
+  @media (max-width: 720px) {
+    :host([desktop-host]) .desktop-drop-affordance span {
+      display: none;
+    }
+
+    :host([desktop-host]) .instruction-controls {
+      flex-wrap: wrap;
+    }
+
+    :host([desktop-host]) .model-selection-footer {
+      flex-wrap: wrap;
+    }
+
+    :host([desktop-host]) wa-button.execute-button {
+      align-self: flex-end;
+    }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .session-hint,
-    .launcher-picker-pane {
+    .launcher-picker-pane,
+    :host([desktop-host]) .instruction-box {
       transition: none;
     }
   }

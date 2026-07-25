@@ -2,12 +2,14 @@ import { css, type CSSResult } from 'lit';
 
 /**
  * Compact wa-input / wa-select sizing — stricter IDE-density form controls.
- * WA defaults to ~38px tall; reduce to ~22px to match minimal VS Code chrome.
+ * WA defaults to ~38px tall; the host's `--height-control-compact` pulls that
+ * down to editor-panel density in the extension and window density on desktop.
  *
  * Exported as a focused subset so file-select / main-view components can pull
- * just the form-control rules without inheriting the full select sheet.
- * `selectStyles` below interpolates this block to keep a single source of
- * truth for the selectors.
+ * just the input/select rules without inheriting the full select sheet. The
+ * canonical skin (`formControlStyles` in controlStyles.ts) interpolates this
+ * and adds `wa-textarea`, the option row, and `.input-plain`; import that
+ * unless you specifically want only these two elements.
  */
 export const compactFormControlStyles: CSSResult = css`
   wa-select {
@@ -37,13 +39,6 @@ export const compactFormControlStyles: CSSResult = css`
     padding-block: var(--wa-space-3xs);
     border-radius: var(--border-radius);
     box-shadow: var(--wa-shadow-s, var(--wa-shadow-m));
-  }
-
-  wa-select wa-option::part(base) {
-    min-height: var(--height-control-compact);
-    padding: 2px 8px 2px 4px;
-    font-size: var(--font-size-sm);
-    line-height: var(--line-height-normal);
   }
 
   wa-input {
@@ -105,12 +100,6 @@ export const selectStyles: CSSResult = css`
 
   .clickable:hover {
     color: var(--wa-color-text-normal);
-  }
-
-  .clickable:focus-visible {
-    outline: var(--border-thin) solid var(--wa-color-focus);
-    outline-offset: var(--border-thin);
-    border-radius: var(--border-radius-small);
   }
 
   wa-icon.clickable:hover {

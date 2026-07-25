@@ -1,68 +1,35 @@
 import { css, type CSSResult } from 'lit';
 
-import { compactFormControlStyles } from './selectStyles';
+import {
+  buttonStyles,
+  focusRingStyles,
+  formControlStyles,
+  iconSurfaceStyles,
+  settingsRowStyles,
+} from './controlStyles';
 
 /**
- * Header action button — `<wa-button class="header-action">` in view headers.
- * Prevents the button from shrinking and pins its minimum hit area to the
- * shared `--height-control` token. Both the main webview and the progress view
- * root components share this pattern.
+ * Header action button. Kept as a named export because two root components
+ * compose it without the full common sheet; the skin itself now lives in
+ * `buttonStyles` (`.header-action` is one of its `.btn-ghost` aliases), so
+ * this is the button layer scoped down, not a second definition.
  */
 export const headerActionStyles: CSSResult = css`
-  .header-action {
-    flex-shrink: 0;
-  }
-
-  .header-action::part(base) {
-    min-height: var(--height-control, 24px);
-  }
+  ${buttonStyles}
 `;
 
 /**
- * Compact icon-only action button — stricter minimalism.
- * 20×20, no hover fill, opacity-driven hover/disabled.
+ * Compact icon-only action button, for components that pull just the
+ * icon-button rules without the full common sheet (file-select rows, the
+ * user-message toolbar).
  *
- * Exported as a focused subset so file-select/main-view components can pull
- * just the icon-button rules without inheriting the full common view sheet.
- * `commonViewStyles` below interpolates this block to keep a single source
- * of truth for the selectors.
+ * The 20×20 opacity-driven skin this used to declare is gone: hover is now a
+ * background fill from `--surface-hover` (opacity could not compose with the
+ * surface ladder, so the same button read differently on each surface), and
+ * the geometry comes off the `--control-size` scale.
  */
 export const compactIconActionButtonStyles: CSSResult = css`
-  .action-icon-button {
-    flex-shrink: 0;
-  }
-
-  .action-icon-button::part(base) {
-    width: 20px;
-    min-width: 0;
-    height: 20px;
-    min-height: 0;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: var(--wa-color-text-quiet, var(--wa-color-text-normal));
-    opacity: var(--opacity-subtle);
-    transition: opacity var(--transition-fast);
-  }
-
-  .action-icon-button::part(base):hover {
-    opacity: var(--opacity-full);
-    background: transparent;
-  }
-
-  .action-icon-button:focus-visible::part(base) {
-    outline: var(--border-thin) solid var(--wa-color-focus);
-    outline-offset: var(--border-thin);
-  }
-
-  .action-icon-button[disabled]::part(base) {
-    opacity: var(--opacity-faint);
-    background: transparent;
-  }
-
-  .action-icon-button wa-icon {
-    font-size: 13px;
-  }
+  ${buttonStyles}
 `;
 
 /**
@@ -97,8 +64,9 @@ const busyIconButtonStyles: CSSResult = css`
 
 /**
  * Single-line text truncation declarations (no selector). Interpolate this
- * into a rule when the truncated target is a shadow part (e.g.
- * `::part(label)`) that can't take the `.truncate` class directly.
+ * into a rule; the 14 call sites that need it are all shadow parts (e.g.
+ * `::part(label)`) or already-classed elements, which is why there is no
+ * companion utility class.
  */
 export const truncateTextRule: CSSResult = css`
   overflow: hidden;
@@ -231,30 +199,12 @@ export const commonViewStyles: CSSResult = css`
     flex-wrap: nowrap;
   }
 
-  /* Compact action button (with text) — stricter IDE-density chrome.
-   * Borderless default; hover adds a subtle border (no fill swap). */
-  .action-button::part(base) {
-    gap: var(--wa-space-2xs);
-    min-height: var(--height-control-compact);
-    padding: 0 6px;
-    border: var(--border-thin) solid transparent;
-    background: transparent;
-    font-size: var(--font-size-sm);
-  }
-
-  .action-button::part(base):hover {
-    background: transparent;
-    border-color: var(--wa-color-surface-border, var(--color-border));
-  }
-
-  .action-button wa-icon {
-    font-size: var(--font-size-sm);
-  }
-
-  ${headerActionStyles}
-  ${compactIconActionButtonStyles}
+  ${buttonStyles}
+  ${iconSurfaceStyles}
   ${busyIconButtonStyles}
-  ${compactFormControlStyles}
+  ${formControlStyles}
+  ${focusRingStyles}
+  ${settingsRowStyles}
 
   /* Stricter compactness for wa-checkbox / wa-radio — smaller label,
    * tighter gap between control and label. */
@@ -286,12 +236,6 @@ export const commonViewStyles: CSSResult = css`
     text-decoration: underline;
   }
 
-  .clickable-link:focus-visible {
-    outline: var(--border-thin) solid var(--wa-color-focus);
-    outline-offset: var(--border-thin);
-    border-radius: var(--border-radius-small);
-  }
-
   .detail-list {
     list-style: none;
     margin: 0;
@@ -311,12 +255,6 @@ export const commonViewStyles: CSSResult = css`
     cursor: pointer;
     list-style: none;
     user-select: none;
-  }
-
-  .details-summary:focus-visible {
-    outline: var(--border-thin) solid var(--wa-color-focus);
-    outline-offset: var(--border-thin);
-    border-radius: var(--border-radius-small);
   }
 
   /* Compact banner variant used by progress-view custom-element panels. */
@@ -488,10 +426,5 @@ export const commonViewStyles: CSSResult = css`
     color: var(--color-text-secondary);
     text-transform: uppercase;
     letter-spacing: var(--letter-spacing-caps);
-  }
-
-  /* Utility: single-line text truncation with ellipsis */
-  .truncate {
-    ${truncateTextRule}
   }
 `;

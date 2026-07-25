@@ -1,6 +1,5 @@
 import { existsSync, mkdirSync, watch, type FSWatcher } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
-import { spawn } from 'node:child_process';
 import { dirname, join, resolve as resolvePath } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -9,6 +8,7 @@ import {
   clipboard,
   dialog,
   Menu,
+  nativeTheme,
   session,
   shell,
 } from 'electron';
@@ -138,7 +138,6 @@ import { initializeElectronPlatform } from './platform/index.js';
 import {
   DESKTOP_WORKSPACE_PATH_STATE_KEY,
   serializeWorkspacePresenceArg,
-  withNewWindowWorkspaceArgs,
   withWorkspacePathArg,
 } from '../workspacePath.js';
 import type {
@@ -204,6 +203,7 @@ const PRODUCTION_CSP = [
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
   "font-src 'self' data:",
+  "img-src 'self' data: blob:",
   "connect-src 'self' data:",
 ].join('; ');
 const SETUP_COMMAND_TIMEOUT_MS = 10 * 60_000;
@@ -211,6 +211,8 @@ const DEVELOPMENT_CSP = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-eval'",
   "style-src 'self' 'unsafe-inline'",
+  "font-src 'self' data:",
+  "img-src 'self' data: blob:",
   "connect-src 'self' data: ws://localhost:* ws://127.0.0.1:* http://localhost:* http://127.0.0.1:*",
 ].join('; ');
 
@@ -340,11 +342,34 @@ function createWindow(options: {
     options.workspacePath,
   );
   const window = new BrowserWindow({
-    width: 960,
-    height: 680,
-    minWidth: 720,
-    minHeight: 520,
+    // The task canvas remains useful with a project sidebar and an optional
+    // workbench open beside it at the default size.
+    width: 1280,
+    height: 860,
+    minWidth: 860,
+    minHeight: 600,
+    // Present the window only after Chromium has painted its first frame.
+    // Relying on BrowserWindow's implicit show can strand a hidden-inset
+    // window behind the launching macOS Space while the app itself is active.
+    show: false,
     title: initialWindowTitle,
+    // Frameless chrome. The OS title bar was a dead 28px strip in the app's own
+    // color scheme that no amount of theming could reach, and it visually cut the
+    // window off from the shell below it.
+    //
+    // `hiddenInset` (macOS) keeps the traffic-light buttons but removes the bar,
+    // so the task shell header becomes the drag region. On Windows/Linux,
+    // `titleBarOverlay` hands us the same arrangement with system controls
+    // drawn over our surface.
+    titleBarStyle: 'hiddenInset',
+    // Inset the traffic lights so they sit centred in the 48px header rather
+    // than crowding its top-left corner.
+    ...(process.platform === 'darwin'
+      ? { trafficLightPosition: { x: 18, y: 18 } }
+      : { titleBarOverlay: true }),
+    // Match the operating-system theme before the renderer paints to avoid a
+    // contrasting flash behind the frameless window.
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#212121' : '#f7f7f7',
     webPreferences: {
       preload: join(desktopMainDir, '../preload/index.cjs'),
       contextIsolation: true,
@@ -608,34 +633,25 @@ function createWindow(options: {
       DESKTOP_WORKSPACE_PATH_STATE_KEY,
       selectedPath,
     );
-    app.relaunch({
-      args: withWorkspacePathArg(process.argv.slice(1), selectedPath),
-    });
+    const relaunchArgs = withWorkspacePathArg(
+      process.argv.slice(1),
+      selectedPath,
+    );
+    // The development supervisor owns Vite and the Electron child. Let it
+    // replace the child so the new process keeps a live renderer URL; calling
+    // app.relaunch() directly orphaned the replacement and made the
+    // supervisor tear Vite down as soon as the original process exited.
+    if (
+      process.env.TEXRA_DESKTOP_DEV_SUPERVISED === '1' &&
+      typeof process.send === 'function'
+    ) {
+      process.send(relaunchArgs);
+    } else {
+      app.relaunch({ args: relaunchArgs });
+    }
     // `app.exit()` bypasses before-quit; use the lifecycle-aware path so the
     // process session drains before Electron starts the replacement process.
     app.quit();
-  };
-  const openWorkspaceInNewWindow = async () => {
-    const result = await dialog.showOpenDialog(window, {
-      title: 'Open Folder in New Window',
-      defaultPath: folderPickerDefaultPath,
-      properties: ['openDirectory'],
-    });
-    const selectedPath = result.canceled ? undefined : result.filePaths[0];
-    if (!selectedPath) return;
-
-    // Not routed through executeCommand: this launches a new, independent
-    // Electron window process (detached + unref'd) that must outlive this
-    // process and is never awaited — executeCommand always awaits subprocess
-    // completion, which would hang here.
-    spawn(
-      process.execPath,
-      withNewWindowWorkspaceArgs(process.argv.slice(1), selectedPath),
-      {
-        detached: true,
-        stdio: 'ignore',
-      },
-    ).unref();
   };
   attachRendererConsoleLog(window.webContents);
   const agentExecutionHost: DesktopAgentExecutionHost = {
@@ -1181,7 +1197,6 @@ function createWindow(options: {
       openExternalUrl: previewHost.openExternal,
       openLogFolder: openLogsFolder,
       openPath: previewHost.openPath,
-      openWorkspaceInNewWindow,
       openWorkspaceFolder,
       signIn: () => desktopAuth.signIn(),
       getRecentCommits: () => gitHost.getRecentCommits(),
@@ -1316,7 +1331,28 @@ function createWindow(options: {
     ptyHost.disposeAll();
     browserViews.disposeAll();
   });
+  let windowPresented = false;
+  const presentWindow = (): void => {
+    if (windowPresented || window.isDestroyed()) return;
+    windowPresented = true;
+    window.center();
+    // A development launch commonly starts from a full-screen terminal or
+    // browser. macOS otherwise assigns the new window to that Space but keeps
+    // it underneath the full-screen app, making the running UI look blank.
+    // Keep local preview windows reachable across Spaces; packaged windows
+    // retain normal macOS workspace behavior.
+    if (process.platform === 'darwin' && process.env.ELECTRON_RENDERER_URL) {
+      window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    }
+    window.show();
+    if (process.platform === 'darwin') app.focus({ steal: true });
+    window.focus();
+  };
+  window.once('ready-to-show', presentWindow);
   window.webContents.once('did-finish-load', () => {
+    // `ready-to-show` is not guaranteed when the page is already cached, so
+    // keep load completion as an idempotent presentation fallback.
+    presentWindow();
     void options.initializeCrashReporting();
   });
 

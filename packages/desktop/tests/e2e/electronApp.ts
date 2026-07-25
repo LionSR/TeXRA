@@ -82,9 +82,34 @@ export async function launchTexraApp(
   });
 
   const page = await app.firstWindow();
-  await page.setViewportSize({ width: 1280, height: 800 });
-  // Wait for the renderer root to mount before tests interact.
+  // Resize the native window, not Playwright's renderer viewport. Calling
+  // page.setViewportSize() installs a fixed emulation viewport in Electron:
+  // the BrowserWindow can then grow while CSS `vw`/`vh` stay frozen at the
+  // original size, leaving a dead white region on the right and bottom.
+  // Keeping the canonical capture size at the BrowserWindow layer preserves
+  // deterministic screenshots while exercising real desktop resize behavior.
+  await app.evaluate(({ BrowserWindow }) => {
+    const window = BrowserWindow.getAllWindows().at(0);
+    if (!window) throw new Error('TeXRA window was not found.');
+    window.setContentSize(1280, 800);
+  });
+  // `firstWindow()` resolves when Electron creates BrowserWindow, before the
+  // main process's did-finish-load presentation fallback necessarily runs.
+  // Wait for the renderer's explicit ready marker, then assert native
+  // visibility so this remains a real blank/hidden-window regression guard
+  // instead of a race against the first frame.
   await page.waitForSelector('#app', { state: 'attached' });
+  await page.waitForFunction(
+    () => document.body.dataset.desktopReady === 'true',
+    undefined,
+    { timeout: 20_000 },
+  );
+  await app.evaluate(({ BrowserWindow }) => {
+    const window = BrowserWindow.getAllWindows().at(0);
+    if (!window?.isVisible()) {
+      throw new Error('TeXRA window finished loading without being presented.');
+    }
+  });
   return { app, page, workspacePath, ownsWorkspace };
 }
 
@@ -107,8 +132,9 @@ export async function dismissOnboarding(page: Page): Promise<void> {
   const hasDismissButton = await page
     .waitForFunction(
       () => {
-        const btn = Array.from(document.querySelectorAll('wa-button')).find(
-          (b) => b.textContent?.trim() === 'Got it',
+        const panel = document.querySelector('.desktop-startup-panel');
+        const btn = Array.from(panel?.querySelectorAll('wa-button') ?? []).find(
+          (button) => button.textContent?.trim() === 'Skip for now',
         );
         return btn instanceof HTMLElement;
       },
@@ -118,15 +144,53 @@ export async function dismissOnboarding(page: Page): Promise<void> {
     .then(() => true)
     .catch(() => false);
 
-  if (!hasDismissButton) return;
-
-  await page.evaluate(() => {
-    const btn = Array.from(document.querySelectorAll('wa-button')).find(
-      (b) => b.textContent?.trim() === 'Got it',
+  if (hasDismissButton) {
+    await page.evaluate(() => {
+      const panel = document.querySelector('.desktop-startup-panel');
+      const btn = Array.from(panel?.querySelectorAll('wa-button') ?? []).find(
+        (button) => button.textContent?.trim() === 'Skip for now',
+      );
+      if (btn instanceof HTMLElement) btn.click();
+    });
+    await page.waitForFunction(
+      () => document.querySelector('.desktop-startup-panel') == null,
+      undefined,
+      { timeout: 5000 },
     );
-    if (btn instanceof HTMLElement) btn.click();
-  });
+  }
+
+  // A fresh profile can also show the credential welcome card inside
+  // <main-app>'s shadow tree. Skipping it is separate from dismissing the shell
+  // startup panel above; without both, E2E tests exercise onboarding instead of
+  // the launcher and can miss task-composer regressions.
   await page
-    .locator('wa-dialog.desktop-onboarding')
-    .waitFor({ state: 'hidden', timeout: 5000 });
+    .waitForFunction(
+      () => {
+        const root = document.querySelector('main-app')?.shadowRoot;
+        return (
+          root?.querySelector('onboarding-welcome-card, instruction-panel') !=
+          null
+        );
+      },
+      undefined,
+      { timeout: 15_000 },
+    )
+    .catch(() => undefined);
+  const skip = page.locator('onboarding-welcome-card #onboardingSkipButton');
+  const canSkip = await skip.isVisible().catch(() => false);
+  if (canSkip) {
+    // Programmatic activation avoids a closing walkthrough backdrop briefly
+    // intercepting the pointer between the two independent onboarding steps.
+    await skip.evaluate((button: HTMLElement) => button.click());
+    await skip.waitFor({ state: 'detached', timeout: 5000 });
+  }
+
+  // The launcher can render before main.ts has finished registering its
+  // desktop:setRoute listener. Wait for the renderer's explicit readiness
+  // marker so the first command after onboarding is never dropped.
+  await page.waitForFunction(
+    () => document.body.dataset.desktopReady === 'true',
+    undefined,
+    { timeout: 10_000 },
+  );
 }

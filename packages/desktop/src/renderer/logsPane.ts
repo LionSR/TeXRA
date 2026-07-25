@@ -49,7 +49,7 @@ export function createLogsPane(): LogsPaneController {
       renderLabeledActionButton({
         icon,
         text: label,
-        className: 'desktop-secondary-button',
+        className: 'btn-secondary',
         appearance: 'outlined',
         onClick,
       });

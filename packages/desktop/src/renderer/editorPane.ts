@@ -12,8 +12,12 @@
 // File I/O goes over IPC to the main process, which owns the only trustworthy
 // view of the filesystem: the renderer is sandboxed with no node integration.
 
+import '@awesome.me/webawesome/dist/components/callout/callout.js';
+import '@awesome.me/webawesome/dist/components/tree/tree.js';
+import '@awesome.me/webawesome/dist/components/tree-item/tree-item.js';
 import { html, render, type TemplateResult } from 'lit';
 
+import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import {
   loadMonaco,
@@ -22,6 +26,8 @@ import {
   type MonacoModule,
 } from '@shared/monaco/monacoLoader';
 import type { DesktopThemeKind } from '@shared/schemas/commonViewMessages';
+
+import { getDesktopChromeFontSize } from './desktopTypography';
 
 type CodeEditor = ReturnType<MonacoModule['editor']['create']>;
 type TextModel = ReturnType<MonacoModule['editor']['createModel']>;
@@ -39,11 +45,25 @@ export interface EditorPaneCallbacks {
   writeFile(path: string, contents: string): Promise<void>;
   /** Reports dirty state so the tab strip can show its indicator. */
   onDirtyChange(path: string, dirty: boolean): void;
+  /**
+   * A tree row was activated. The pane does NOT load the file itself: the shell
+   * owns tabs, so it creates (or focuses) the editor tab and calls back into
+   * `open()`. Without this the tree loaded files into a pane that had no tab,
+   * so nothing appeared.
+   */
+  onRequestOpen(path: string): void;
   onError(error: unknown): void;
 }
 
 export interface EditorPane {
+  /** Editor surface, hosted by whichever pane holds the editor tab. */
   readonly element: HTMLElement;
+  /**
+   * File tree, hosted by the explorer sidebar rather than beside the editor: the
+   * tree is workspace-wide context, not part of one document's view, so it should
+   * stay put while editor tabs move between panes.
+   */
+  readonly treeElement: HTMLElement;
   /** Opens `path`, loading it if not already open. */
   open(path: string): Promise<void>;
   /** Refreshes the file tree from disk. */
@@ -59,11 +79,13 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
   const element = document.createElement('div');
   element.className = 'desktop-editor-pane';
 
+  // The tree is a sibling of the editor in the DOM, not a child: the sidebar
+  // mounts it independently of wherever the editor surface currently lives.
   const treeHost = document.createElement('div');
   treeHost.className = 'desktop-editor-tree';
   const editorHost = document.createElement('div');
   editorHost.className = 'desktop-editor-surface';
-  element.append(treeHost, editorHost);
+  element.append(editorHost);
 
   let monaco: MonacoModule | undefined;
   let editor: CodeEditor | undefined;
@@ -80,12 +102,23 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     render(treeTemplate(), treeHost);
   }
 
+  /**
+   * Opens the file a tree row addresses. Directories carry no editor content,
+   * so they are filtered here rather than marked `disabled` — a disabled
+   * `wa-tree-item` drops out of the roving tabindex entirely, which would make
+   * a directory an unreachable hole in keyboard navigation.
+   */
+  function requestOpenFromRow(row: HTMLElement | null | undefined): void {
+    const path = row?.dataset.path;
+    if (path && row?.dataset.kind === 'file') callbacks.onRequestOpen(path);
+  }
+
   function treeTemplate(): TemplateResult {
     if (treeError) {
       return html`
-        <div class="desktop-editor-tree-empty" role="alert">
-          <p>${treeError}</p>
-        </div>
+        <wa-callout class="desktop-editor-tree-empty" variant="danger">
+          ${waIcon('triangle-exclamation', { slot: 'icon' })} ${treeError}
+        </wa-callout>
       `;
     }
     if (files.length === 0) {
@@ -98,41 +131,59 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     return html`
       <div class="desktop-editor-tree-header">
         <span>Files</span>
-        <button
-          type="button"
-          class="desktop-editor-tree-refresh"
-          aria-label="Refresh file list"
-          title="Refresh file list"
-          @click=${() => void refresh()}
-        >
-          ${waIcon('refresh')}
-        </button>
+        ${renderIconActionButton({
+          id: 'editor-tree-refresh',
+          icon: 'refresh',
+          label: 'Refresh file list',
+          tooltip: 'Refresh file list',
+          className: 'desktop-editor-tree-refresh',
+          onClick: () => void refresh(),
+        })}
       </div>
-      <ul class="desktop-editor-tree-list" role="tree">
+      <wa-tree
+        class="desktop-editor-tree-list"
+        selection="leaf"
+        @wa-selection-change=${(
+          event: CustomEvent<{ selection: HTMLElement[] }>,
+        ) => requestOpenFromRow(event.detail.selection.at(-1))}
+        @click=${handleTreeClick}
+      >
         ${files.map((entry) => fileRowTemplate(entry))}
-      </ul>
+      </wa-tree>
     `;
+  }
+
+  /**
+   * Re-open the already-selected row. `wa-tree.selectItem` only dispatches
+   * `wa-selection-change` when the selected set actually changes, so clicking
+   * the row that is already selected emits nothing — and the row stays
+   * selected after its editor tab is closed, which would leave that file
+   * unopenable from the tree.
+   */
+  function handleTreeClick(event: MouseEvent): void {
+    const row = (event.target as HTMLElement | null)?.closest<HTMLElement>(
+      'wa-tree-item',
+    );
+    if (row?.hasAttribute('selected')) requestOpenFromRow(row);
   }
 
   function fileRowTemplate(entry: EditorFileEntry): TemplateResult {
     const isOpen = entry.path === openPath;
     const isDirty = dirtyPaths.has(entry.path);
     return html`
-      <li role="treeitem" aria-selected=${isOpen ? 'true' : 'false'}>
-        <button
-          type="button"
-          class="desktop-editor-tree-row"
-          data-open=${isOpen ? 'true' : 'false'}
-          title=${entry.path}
-          @click=${() => void open(entry.path)}
-        >
-          ${waIcon(entry.isDirectory ? 'folder' : 'file-lines', {
-            className: 'desktop-editor-tree-icon',
-          })}
-          <span class="desktop-editor-tree-label">${entry.path}</span>
-          ${isDirty ? html`<span class="desktop-editor-dirty-dot"></span>` : ''}
-        </button>
-      </li>
+      <wa-tree-item
+        class="desktop-editor-tree-row"
+        data-path=${entry.path}
+        data-kind=${entry.isDirectory ? 'directory' : 'file'}
+        .selected=${isOpen}
+        title=${entry.path}
+      >
+        ${waIcon(entry.isDirectory ? 'folder' : 'file-lines', {
+          className: 'desktop-editor-tree-icon',
+        })}
+        <span class="desktop-editor-tree-label">${entry.path}</span>
+        ${isDirty ? html`<span class="desktop-editor-dirty-dot"></span>` : ''}
+      </wa-tree-item>
     `;
   }
 
@@ -143,23 +194,40 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     } catch (error) {
       callbacks.onError(error);
       render(
-        html`<div class="desktop-editor-tree-empty" role="alert">
-          <p>The editor failed to load.</p>
-        </div>`,
+        html`<wa-callout class="desktop-editor-tree-empty" variant="danger">
+          ${waIcon('triangle-exclamation', { slot: 'icon' })} The editor failed
+          to load.
+        </wa-callout>`,
         editorHost,
       );
       return undefined;
     }
+    const editorFontSize = getDesktopChromeFontSize();
     editor = monaco.editor.create(editorHost, {
       theme: monacoThemeForHostTheme(theme),
+      // Monaco measures its own container, and the pane is resized by splits and
+      // divider drags, not only by the window.
       automaticLayout: true,
+      // A minimap on a prose-shaped document is noise; the file tree already
+      // names the file. Line numbers stay because errors are reported by line.
       minimap: { enabled: false },
-      fontSize: 13,
-      // Papers and proofs are prose-shaped; soft wrap avoids horizontal
-      // scrolling through a paragraph-length line.
-      wordWrap: 'on',
+      fontSize: editorFontSize,
+      lineHeight: Math.round(editorFontSize * 1.5),
+      // Papers and proofs have paragraph-length lines, so wrapping beats a
+      // horizontal scrollbar — but wrap on word boundaries, not anywhere.
+      // Monaco's default `wordWrapBreakAfterCharacters` splits inside a control
+      // sequence, turning `\documentclass{article}` into two lines mid-token.
+      wordWrap: 'bounded',
+      wordWrapColumn: 120,
+      wrappingStrategy: 'advanced',
       scrollBeyondLastLine: false,
       renderWhitespace: 'selection',
+      lineNumbersMinChars: 3,
+      glyphMargin: false,
+      folding: true,
+      padding: { top: 12, bottom: 12 },
+      smoothScrolling: true,
+      cursorBlinking: 'smooth',
     });
     return editor;
   }
@@ -223,6 +291,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
 
   return {
     element,
+    treeElement: treeHost,
     open,
     refresh,
 

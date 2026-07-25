@@ -23,7 +23,6 @@ export const DESKTOP_LOCAL_COMMANDS = {
   SHOW_LOGS: 'texra.desktop.showLogs',
   OPEN_LOG_FOLDER: 'texra.desktop.openLogFolder',
   OPEN_WORKSPACE_FOLDER: 'texra.desktop.openWorkspaceFolder',
-  OPEN_WORKSPACE_IN_NEW_WINDOW: 'texra.desktop.openWorkspaceInNewWindow',
   SHOW_FIRST_RUN_WALKTHROUGH: 'texra.desktop.showFirstRunWalkthrough',
   OPEN_DESKTOP_DOCS: 'texra.desktop.openDesktopDocs',
 } as const;
@@ -63,7 +62,6 @@ const DESKTOP_MENU_GROUPS = [
 
 const DESKTOP_FILE_COMMANDS = [
   DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
-  DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_IN_NEW_WINDOW,
 ] as const satisfies readonly DesktopLocalCommandId[];
 
 const DESKTOP_HELP_COMMANDS = [
@@ -108,7 +106,6 @@ export interface DesktopCommandActions {
   openDesktopDocs?(): void;
   openLogFolder?(): void;
   openWorkspaceFolder?(): void;
-  openWorkspaceInNewWindow?(): void;
   showFirstRunWalkthrough?(): void;
   resetMainView?(): void;
 }
@@ -158,16 +155,6 @@ const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
     },
   ],
   [
-    DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_IN_NEW_WINDOW,
-    {
-      id: DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_IN_NEW_WINDOW,
-      label: 'New Window',
-      category: 'File',
-      accelerator: 'CommandOrControl+Shift+N',
-      enabled: true,
-    },
-  ],
-  [
     DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER,
     {
       id: DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER,
@@ -180,7 +167,7 @@ const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
     DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH,
     {
       id: DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH,
-      label: 'Show First-Run Walkthrough',
+      label: 'Show Startup Team Chooser',
       category: 'Help',
       enabled: true,
     },
@@ -313,9 +300,6 @@ const DESKTOP_COMMAND_HANDLERS = {
   ),
   [DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER]: optionalAction(
     (a) => a.openWorkspaceFolder,
-  ),
-  [DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_IN_NEW_WINDOW]: optionalAction(
-    (a) => a.openWorkspaceInNewWindow,
   ),
   [DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH]: optionalAction(
     (a) => a.showFirstRunWalkthrough,

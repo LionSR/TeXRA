@@ -6,10 +6,16 @@ import { css } from 'lit';
  */
 export const toolUseStyles = css`
   .tool-use-section {
-    margin: var(--wa-space-2xs) 0;
-    border-left: var(--border-medium) solid
-      color-mix(in srgb, var(--wa-color-text-link) 30%, transparent);
-    padding-left: var(--wa-space-xs);
+    margin: var(--wa-space-xs) 0;
+    padding: var(--wa-space-xs) var(--wa-space-s);
+    border: var(--border-thin) solid
+      color-mix(in srgb, var(--wa-color-surface-border) 76%, transparent);
+    border-radius: var(--wa-border-radius-m, var(--border-radius));
+    background: color-mix(
+      in srgb,
+      var(--wa-color-surface-lowered) 72%,
+      transparent
+    );
   }
 
   .tool-use-title {
@@ -29,7 +35,7 @@ export const toolUseStyles = css`
   }
 
   .tool-use-subsection {
-    margin: var(--wa-space-3xs) 0;
+    margin: 0;
   }
 
   .tool-use-sublabel {
@@ -118,10 +124,34 @@ export const toolUseStyles = css`
 
   .tool-output-terminal {
     display: block;
-    border-radius: var(--border-radius-small);
+    border-radius: var(--wa-border-radius-m, var(--border-radius-small));
     overflow: hidden;
     background: var(--wa-color-surface-default);
     border: var(--border-thin) solid var(--color-border);
+  }
+
+  wa-details.tool-use-details {
+    margin-block: var(--wa-space-2xs);
+  }
+
+  wa-details.tool-use-details::part(base) {
+    border: var(--border-thin) solid
+      color-mix(in srgb, var(--wa-color-surface-border) 76%, transparent);
+    border-radius: var(--wa-border-radius-m, var(--border-radius));
+    background: color-mix(
+      in srgb,
+      var(--wa-color-neutral-fill-quiet) 44%,
+      transparent
+    );
+  }
+
+  wa-details.tool-use-details::part(header) {
+    min-height: 34px;
+    padding-inline: var(--wa-space-xs);
+  }
+
+  wa-details.tool-use-details::part(content) {
+    padding: 0 var(--wa-space-xs) var(--wa-space-xs);
   }
 
   /* Proposal restore link — a real <button> (not a role="button" span) so

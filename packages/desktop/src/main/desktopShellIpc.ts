@@ -33,7 +33,6 @@ export interface DesktopShellActionFactoryOptions {
   openExternalUrl(url: string): Promise<void>;
   openLogFolder(): Promise<void>;
   openPath(filePath: string): Promise<void>;
-  openWorkspaceInNewWindow(): Promise<void>;
   openWorkspaceFolder(): Promise<void>;
   signIn(): Promise<void>;
   /**
@@ -57,7 +56,6 @@ export interface DesktopShellActions extends DesktopCommandActions {
   openDesktopDocs(): void;
   openLogFolder(): void;
   openWorkspaceFolder(): void;
-  openWorkspaceInNewWindow(): void;
   resetMainView(): void;
   showFirstRunWalkthrough(): void;
   /**
@@ -119,10 +117,6 @@ export function createDesktopShellActions(
     void options.openWorkspaceFolder().catch(reportAsyncError);
   }
 
-  function openWorkspaceInNewWindow() {
-    void options.openWorkspaceInNewWindow().catch(reportAsyncError);
-  }
-
   function openDesktopDocs() {
     void options.openExternalUrl(DESKTOP_DOCS_URL).catch(reportAsyncError);
   }
@@ -141,7 +135,6 @@ export function createDesktopShellActions(
     openAgentDirectory,
     openDesktopDocs,
     openLogFolder,
-    openWorkspaceInNewWindow,
     openWorkspaceFolder,
     resetMainView,
     sendRecentCommits: () => {
@@ -254,9 +247,6 @@ function dispatchDesktopLocalOnShell(
       return true;
     case DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER:
       actions.openWorkspaceFolder();
-      return true;
-    case DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_IN_NEW_WINDOW:
-      actions.openWorkspaceInNewWindow();
       return true;
     case DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH:
       actions.showFirstRunWalkthrough();

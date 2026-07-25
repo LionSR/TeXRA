@@ -273,6 +273,49 @@
   --wa-border-radius-circle: 50%;
   --wa-border-radius-square: 0px;
 
+  /* ==========================================================================
+     Shared control layer — the extension's values for the tokens declared in
+     src/shared/styles/litStyles.ts.
+     --------------------------------------------------------------------------
+     :root duplicates of the shared :host block on purpose: light-DOM content
+     in this webview cannot adopt a Lit CSSResult, so the document tree needs
+     its own copy. Keep the two in sync.
+     ========================================================================== */
+
+  /* State overlays. Alpha, not hue, so one token works on every VS Code theme
+     — including ones this bridge has never seen. */
+  --surface-hover: light-dark(rgb(0 0 0 / 7%), rgb(255 255 255 / 15%));
+  --surface-active: light-dark(rgb(0 0 0 / 5%), rgb(255 255 255 / 10%));
+  --surface-selected: light-dark(rgb(0 0 0 / 9%), rgb(255 255 255 / 12%));
+
+  --border-hairline: light-dark(rgb(0 0 0 / 10%), rgb(255 255 255 / 10%));
+  --border-hairline-soft: light-dark(rgb(0 0 0 / 5%), rgb(255 255 255 / 5%));
+  --border-hairline-strong: light-dark(
+    rgb(0 0 0 / 15%),
+    rgb(255 255 255 / 20%)
+  );
+
+  /* Control geometry. Tighter than the desktop's: this is a sidebar-width
+     panel, and the row/control scale is what keeps it reading as editor
+     chrome rather than a web page embedded in one. */
+  --control-size-s: 20px;
+  --control-size-m: 22px;
+  --control-size-l: 24px;
+  --control-padding-inline: 6px;
+  --control-fill: light-dark(rgb(0 0 0 / 5%), rgb(255 255 255 / 5%));
+  --control-fill-hover: light-dark(rgb(0 0 0 / 8%), rgb(255 255 255 / 9%));
+  --row-height: 24px;
+  --row-radius: var(--wa-border-radius-m);
+  --row-padding: 2px 6px;
+  --focus-ring-width: 1px;
+  --focus-ring-offset: 1px;
+  --textarea-h-s: 2.75rem;
+  --textarea-h-m: 6rem;
+  --textarea-h-l: 6.625rem;
+  --wa-height-option: 22px;
+  --letter-spacing-tight: -0.005em;
+  --width-content-max: 1000px;
+
   /* Web Awesome canonical space scale. Mirrors the values from the WA default
      theme so consumers can rely on --wa-space-* even if the WA color-scheme
      class hasn't been mounted yet. */
@@ -319,11 +362,12 @@ body {
   }
 }
 
-/* VS Code-compact dropdown items. WA defaults to ~0.5em padding which makes
-   each option ~32px tall; VS Code menus run ~22-24px. */
+/* Option-row height for light DOM. The rule itself lives once in
+   `formControlStyles` (src/shared/styles/controlStyles.ts) and reads this
+   token; it was previously declared three times at three different heights. */
 wa-option::part(base),
 wa-dropdown-item::part(base) {
+  min-height: var(--wa-height-option);
   padding: var(--wa-space-3xs) var(--wa-space-xs);
-  min-height: 0;
   line-height: var(--wa-line-height-condensed);
 }

@@ -10,7 +10,14 @@ export const logEntryStyles = css`
 
   .log-container {
     flex: 1 1 auto;
-    padding: var(--wa-space-3xs) var(--wa-space-xs);
+    width: 100%;
+    padding: var(--wa-space-m)
+      max(
+        var(--wa-space-m),
+        calc((100% - var(--conversation-reading-width, 800px)) / 2)
+      )
+      var(--wa-space-2xl);
+    box-sizing: border-box;
     min-width: 0;
     min-height: 0;
     font-family: var(--font-family);
@@ -21,9 +28,9 @@ export const logEntryStyles = css`
   }
 
   .log-line {
-    line-height: var(--line-height-normal);
+    line-height: 1.5;
     margin: 0;
-    padding: calc(var(--wa-space-3xs) / 2) 0;
+    padding: var(--wa-space-3xs) 0;
     display: block;
     white-space: pre-wrap;
     word-wrap: break-word;
@@ -50,12 +57,16 @@ export const logEntryStyles = css`
     grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: start;
     gap: var(--wa-space-2xs);
-    margin: var(--wa-space-3xs) 0;
-    padding: var(--wa-space-2xs) var(--wa-space-xs);
+    margin: var(--wa-space-2xs) 0;
+    padding: var(--wa-space-xs);
     border: var(--border-thin) solid var(--wa-color-surface-border);
-    border-left: 3px solid var(--color-text-secondary);
-    border-radius: var(--border-radius);
-    background: var(--wa-color-surface-default);
+    border-left: 2px solid var(--color-text-secondary);
+    border-radius: var(--wa-border-radius-m, var(--border-radius));
+    background: color-mix(
+      in srgb,
+      var(--wa-color-surface-raised) 52%,
+      transparent
+    );
     content-visibility: auto;
     contain-intrinsic-size: auto 42px;
   }
@@ -123,7 +134,7 @@ export const logEntryStyles = css`
     align-self: center;
     padding: calc(var(--wa-space-3xs) / 2) var(--wa-space-2xs);
     border-radius: 999px;
-    background: var(--wa-color-neutral-fill-quiet);
+    background: transparent;
     color: var(--color-text-secondary);
     font-size: var(--font-size-sm);
     white-space: nowrap;
@@ -154,7 +165,7 @@ export const logEntryStyles = css`
   }
 
   .log-entry-content {
-    padding: var(--wa-space-2xs) 0 var(--wa-space-xs) var(--wa-space-s);
+    padding: var(--wa-space-2xs) 0 var(--wa-space-m);
     overflow: visible;
   }
 
@@ -350,13 +361,57 @@ export const logEntryStyles = css`
   }
 
   .banner-details {
-    margin: var(--wa-space-2xs) 0;
+    margin: var(--wa-space-xs) 0;
     content-visibility: auto;
     contain-intrinsic-size: auto 40px;
   }
 
+  wa-details.banner-details::part(base) {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  wa-details.banner-details::part(header) {
+    min-height: 30px;
+    padding: 0;
+  }
+
+  wa-details.banner-details::part(content) {
+    padding: 0;
+  }
+
+  .details-summary {
+    gap: var(--wa-space-2xs);
+    min-width: 0;
+    color: var(--wa-color-text-quiet);
+    font-size: var(--font-size-sm);
+  }
+
+  .details-summary > .icon {
+    opacity: var(--opacity-muted);
+  }
+
   .banner-content {
     margin: 0;
+  }
+
+  .banner-content--model {
+    color: var(--wa-color-text-normal);
+    font-size: var(--font-size);
+    line-height: 1.6;
+  }
+
+  .banner-content--thinking,
+  .banner-content--scratchpad {
+    padding: var(--wa-space-xs) var(--wa-space-s);
+    border-radius: var(--wa-border-radius-m, var(--border-radius));
+    background: color-mix(
+      in srgb,
+      var(--wa-color-neutral-fill-quiet) 72%,
+      transparent
+    );
+    color: var(--wa-color-text-quiet);
   }
 
   /* Raw streamed text has no <p>/<br> tags to carry line breaks (unlike the
@@ -390,6 +445,7 @@ export const logEntryStyles = css`
       var(--wa-color-surface-default, transparent)
     );
     color: var(--wa-color-terminal-foreground, var(--wa-color-text-normal));
+    padding-block: var(--wa-space-m);
   }
 
   :host([terminal]) .log-line {
@@ -397,6 +453,12 @@ export const logEntryStyles = css`
     line-height: 1.35;
     word-break: normal;
     overflow-wrap: anywhere;
+  }
+
+  @media (max-width: 640px) {
+    .log-container {
+      padding-inline: var(--wa-space-xs);
+    }
   }
 
   /* Bullet/timestamp prefix is noisy for raw process output. */

@@ -59,7 +59,19 @@ export type {
   CodexSandboxMode,
 } from '../agentCliSettings';
 
-/** Tab name order - single source of truth for tab indices */
+/**
+ * Tab name order — single source of truth for tab indices, and a wire format:
+ * `SETTINGS_TAB.X` indices travel over IPC (`SET_TAB.tabIndex`) and are
+ * hand-copied as integer tables in the desktop e2e specs and the walkthrough
+ * capture script.
+ *
+ * Therefore this array is APPEND-ONLY, forever. Never reorder, rename, or
+ * remove an entry — an existing index must keep meaning the same panel, or a
+ * producer built against an older index silently lands on the wrong panel while
+ * every hardcoded index table still "passes". Display grouping and display
+ * order are a separate presentation layer (`SETTINGS_TAB_GROUPS` below), so a
+ * nav reshuffle never touches these indices.
+ */
 export const SETTINGS_TAB_ORDER = [
   'MEMORY',
   'HISTORY',
@@ -93,6 +105,34 @@ export const SETTINGS_TAB = Object.fromEntries(
 ) as Record<SettingsTabName, number>;
 
 export type SettingsTab = (typeof SETTINGS_TAB)[keyof typeof SETTINGS_TAB];
+
+/**
+ * Presentation-only grouping for the settings left-nav.
+ *
+ * Deliberately a second, independent layer: `SETTINGS_TAB_ORDER` is the wire
+ * format (indices cross IPC and are hand-copied into e2e index tables), so nav
+ * grouping and nav display order must never be expressed by reordering it.
+ * Groups address panels by `SettingsTabName`, which the nav renders as the
+ * panel name (`SETTINGS_TAB_PANEL_BY_NAME`) and `SettingsApp.handleTabShow`
+ * resolves back to an index via `SETTINGS_TAB_PANEL_NAMES.indexOf(...)` — so
+ * regrouping or reordering the nav changes no index and no `SETTINGS_TAB.X`
+ * call site.
+ *
+ * Every tab must appear in exactly one group, or its panel becomes unreachable
+ * from the nav while still being a valid IPC target. `SharedSchemas.vitest.ts`
+ * asserts the flattened list is a permutation of `SETTINGS_TAB_ORDER`, so an
+ * appended tab cannot ship without being placed here.
+ */
+export const SETTINGS_TAB_GROUPS = [
+  { label: 'Models & Access', tabs: ['MODELS'] },
+  { label: 'Agents', tabs: ['AGENTS', 'MULTI_AGENT'] },
+  { label: 'Tools & Integrations', tabs: ['TOOLS', 'AI_AGENTS', 'LATEX'] },
+  { label: 'Workspace', tabs: ['GIT'] },
+  { label: 'Activity', tabs: ['HISTORY', 'MEMORY', 'GOAL'] },
+] as const satisfies readonly {
+  label: string;
+  tabs: readonly SettingsTabName[];
+}[];
 
 /** Outbound schema to switch tabs */
 const SetTabMessageSchema = z.object({

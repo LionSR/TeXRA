@@ -28,8 +28,7 @@ export const viewTabStyles: CSSResult = css`
     padding-block: 5px;
     padding-inline: var(--wa-space-s);
     color: color-mix(in srgb, var(--wa-color-text-normal) 70%, transparent);
-    border-radius: var(--wa-border-radius-s, 4px) var(--wa-border-radius-s, 4px)
-      0 0;
+    border-radius: var(--border-radius) var(--border-radius) 0 0;
   }
 
   /*

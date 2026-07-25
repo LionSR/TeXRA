@@ -280,7 +280,7 @@ const icons = {
 // `as const satisfies …` keeps alias keys as a literal union (so
 // `keyof typeof CODICON_ALIASES` narrows TeXRAIconName) and compile-checks
 // every alias value against the registered icon names.
-const CODICON_ALIASES = {
+export const CODICON_ALIASES = {
   account: 'circle-user',
   add: 'plus',
   archive: 'box-archive',

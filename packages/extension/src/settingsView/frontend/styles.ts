@@ -2,11 +2,7 @@
 import { css, type CSSResult } from 'lit';
 
 // Shared history/search styles — use native Lit array instead of unsafeCSS embedding
-import {
-  searchStyles,
-  historyListStyles,
-  waTabThemeTokenStyles,
-} from '@shared/styles';
+import { searchStyles, historyListStyles } from '@shared/styles';
 
 const settingsHeaderStyles: CSSResult = css`
   /* Settings header bar */
@@ -27,10 +23,12 @@ const settingsHeaderStyles: CSSResult = css`
   }
 
   .settings-header-user-icon {
-    width: var(--font-size-lg);
-    height: var(--font-size-lg);
+    display: block;
+    width: 1em;
+    height: 1em;
     flex: 0 0 auto;
-    font-size: var(--font-size-lg);
+    font-size: var(--font-size-icon);
+    line-height: var(--line-height-tight);
     opacity: var(--opacity-subtle);
   }
 
@@ -58,7 +56,6 @@ const settingsHeaderStyles: CSSResult = css`
     display: flex;
     align-items: center;
     gap: var(--wa-space-2xs);
-    margin-right: calc(var(--wa-space-s) + var(--height-control));
   }
 
   .settings-header-auth-button {
@@ -80,6 +77,9 @@ const settingsContainerStyles: CSSResult = css`
     display: flex;
     flex-direction: column;
     height: 100%;
+    /* A settings pane can be a quarter of a 2x2 desktop grid, so the nav
+       collapses against the container, not the viewport. */
+    container: settings / inline-size;
   }
 
   wa-tab-group.settings-tabs {
@@ -87,13 +87,18 @@ const settingsContainerStyles: CSSResult = css`
     display: flex;
     flex-direction: column;
     min-height: 0;
-    ${waTabThemeTokenStyles}
+    /* placement="start": no vertical rule beside the nav, and the active row
+       is a filled row rather than an edge indicator. */
+    --track-color: transparent;
+    --indicator-color: transparent;
   }
 
   /* WA's internal .tab-group wrapper (exposed as ::part(base)) is a flex
      column but doesn't inherit the bounded host height. Without height
-     100% it sizes to content and the panel below grows past the dialog
-     viewport, defeating overflow:auto on the panel. */
+     100% it sizes to content and the panel beside it grows past the dialog
+     viewport, defeating overflow:auto on the panel. Still required with
+     placement="start" — the wrapper is then a flex row, but the height
+     inheritance problem is the same. */
   wa-tab-group.settings-tabs::part(base) {
     height: 100%;
     min-height: 0;
@@ -106,33 +111,84 @@ const settingsContainerStyles: CSSResult = css`
     flex-direction: column;
   }
 
-  /*
-   * Settings has 8 tabs — the strip needs a touch more breathing
-   * room for icon+label rows than the inline view-tabs. The shared
-   * waTabThemeTokenStyles sets the indicator weight + colour;
-   * here we tune density + the active-state polish for this surface.
-   */
   wa-tab-group.settings-tabs::part(nav) {
-    padding-inline: var(--wa-space-2xs);
+    width: var(--settings-nav-width, 220px);
+    overflow-y: auto;
+  }
+
+  wa-tab-group.settings-tabs::part(tabs) {
+    padding: var(--wa-space-2xs);
     gap: 1px;
   }
 
   wa-tab-group.settings-tabs wa-tab {
-    font-size: var(--font-size-sm);
-    letter-spacing: -0.005em;
+    letter-spacing: var(--letter-spacing-tight, -0.005em);
   }
 
+  /* State overlays and row geometry come from the shared token layer. The
+     fallbacks derive from the host's own text colour so hover/selected stay
+     correct in both themes on a host that hasn't adopted the tokens yet. */
   wa-tab-group.settings-tabs wa-tab::part(base) {
-    padding-block: 6px;
-    padding-inline: var(--wa-space-s);
-    color: color-mix(in srgb, var(--wa-color-text-normal) 65%, transparent);
-    border-radius: var(--wa-border-radius-s, 4px) var(--wa-border-radius-s, 4px)
-      0 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    min-height: var(--row-height, 36px);
+    padding: var(--row-padding, 6px 10px);
+    border-radius: var(--row-radius, var(--wa-border-radius-m));
+    font-size: var(--font-size);
+    font-weight: var(--font-weight);
+    color: var(--wa-color-text-quiet);
+    transition: background-color var(--transition-fast);
+  }
+
+  wa-tab-group.settings-tabs wa-tab:hover::part(base) {
+    background: var(
+      --surface-hover,
+      color-mix(in srgb, var(--wa-color-text-normal) 7%, transparent)
+    );
   }
 
   wa-tab-group.settings-tabs wa-tab[active]::part(base) {
+    background: var(
+      --surface-selected,
+      color-mix(in srgb, var(--wa-color-text-normal) 9%, transparent)
+    );
     color: var(--wa-color-text-normal);
-    font-weight: var(--font-weight-semibold, 600);
+    font-weight: var(--font-weight-medium);
+  }
+
+  /* Group heading. Slotted into "nav" but not a wa-tab, so WA's getAllTabs()
+     filter keeps it out of tab logic and arrow-key navigation. */
+  .settings-nav-group {
+    padding: var(--wa-space-m) 10px var(--wa-space-3xs);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    color: var(--wa-color-text-quiet);
+  }
+
+  .settings-nav-group:first-of-type {
+    padding-top: var(--wa-space-2xs);
+  }
+
+  /* Icon-only nav: a quarter-pane is too narrow for labels, and truncating
+     them loses the distinction between adjacent rows. */
+  @container settings (max-width: 620px) {
+    wa-tab-group.settings-tabs::part(nav) {
+      width: 52px;
+    }
+
+    wa-tab-group.settings-tabs wa-tab::part(base) {
+      justify-content: center;
+    }
+
+    wa-tab-group.settings-tabs wa-tab .settings-tab-label,
+    .settings-nav-group {
+      display: none;
+    }
+
+    wa-tab .settings-tab-icon {
+      margin-inline-end: 0;
+    }
   }
 
   wa-tab-panel {
@@ -159,9 +215,11 @@ const settingsContainerStyles: CSSResult = css`
 
   .settings-unavailable-icon,
   .settings-tab-icon {
+    display: block;
     width: 1em;
     height: 1em;
     flex: 0 0 auto;
+    line-height: var(--line-height-tight);
   }
 
   wa-tab .settings-tab-icon {
@@ -171,7 +229,6 @@ const settingsContainerStyles: CSSResult = css`
 
   wa-tab[active] .settings-tab-icon {
     opacity: 1;
-    color: var(--wa-color-brand-fill-loud);
   }
 `;
 

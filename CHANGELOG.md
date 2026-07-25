@@ -47,6 +47,37 @@ All notable changes to this project will be documented in this file.
   view retains at most 4,000 complete lines and marks when earlier lines have
   been removed.
 
+### Desktop
+
+#### New Features
+
+- **The desktop app now centers every task around its conversation** — projects
+  and task history stay in a quiet sidebar, while files, terminals, browser
+  pages, logs, and settings open in a resizable workbench without replacing the
+  task.
+- **The launcher and transcripts use a unified desktop design** — the new
+  neutral theme, compact activity cards, persistent composers, consistent
+  controls, and stroke icons make setup, execution, and follow-up feel like one
+  coherent application.
+- **The starter-team chooser now opens in the task canvas at startup** — it no
+  longer blocks the app as a modal, and users can save a preference to hide it
+  on later launches.
+
+#### Bug Fixes
+
+- **The desktop development command launches the complete app** — it builds the
+  Electron entry points, starts the renderer on an available local port, and
+  opens Electron instead of leaving only a browser development server running.
+- **The launcher no longer appears blank while startup state loads** — a visible
+  loading canvas bridges startup, and send controls stay unavailable until the
+  request, model, and agent or team are ready.
+- **The desktop canvas now follows window resizing** — expanding the Electron
+  window no longer leaves a fixed-size interface surrounded by empty space, and
+  the project sidebar and workbench remain resizable.
+- **Switching project folders no longer opens a blank desktop window** — the
+  current app window restarts into the selected workspace while the development
+  renderer remains available.
+
 ### CLI
 
 #### Breaking Changes

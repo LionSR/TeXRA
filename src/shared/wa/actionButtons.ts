@@ -11,6 +11,18 @@ import { type TeXRAIconName, waIcon } from './webAwesomeIcons';
 
 type ActionButtonAppearance = 'filled' | 'outlined' | 'plain';
 type ActionButtonVariant = 'brand' | 'neutral';
+/**
+ * Step on the shared `--control-size` scale (24 / 28 / 32px). Replaces the
+ * six one-off `min-height`/`width` overrides call sites used to write to
+ * resize an icon button.
+ */
+type ActionButtonSize = 's' | 'm' | 'l';
+
+const SIZE_CLASS = {
+  s: 'is-size-s',
+  m: 'is-size-m',
+  l: 'is-size-l',
+} as const satisfies Record<ActionButtonSize, string>;
 
 export interface IconActionButtonOptions {
   readonly id?: string;
@@ -21,6 +33,8 @@ export interface IconActionButtonOptions {
   readonly className?: string;
   readonly appearance?: ActionButtonAppearance;
   readonly variant?: ActionButtonVariant;
+  /** Icon-button geometry off the `--control-size` scale. Defaults to `s`. */
+  readonly size?: ActionButtonSize;
   readonly disabled?: boolean;
   /**
    * Icon-only. When defined, the button renders inside an overlay wrapper:
@@ -49,7 +63,7 @@ export interface IconActionButtonOptions {
 
 export interface LabeledActionButtonOptions extends Omit<
   IconActionButtonOptions,
-  'label' | 'busy'
+  'label' | 'busy' | 'size'
 > {
   readonly text: string;
   readonly label?: string;
@@ -83,6 +97,7 @@ function renderActionButtonParts({
   className,
   appearance = 'plain',
   variant = 'neutral',
+  size,
   disabled,
   busy,
   tooltip,
@@ -93,6 +108,9 @@ function renderActionButtonParts({
   const classes = [
     text ? 'action-button' : 'action-icon-button',
     busy ? 'is-busy' : undefined,
+    // Only meaningful on the square icon variant; a labeled button is sized by
+    // its text and the shared button height.
+    text || size === undefined ? undefined : SIZE_CLASS[size],
     className,
   ]
     .filter(Boolean)

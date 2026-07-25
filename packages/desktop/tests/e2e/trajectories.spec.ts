@@ -56,7 +56,7 @@ async function setRoute(
       if (document.body.dataset.desktopRoute !== target) return false;
       if (target === 'main') {
         const launcher = document.querySelector<HTMLElement>(
-          '.desktop-pane[data-pane="launcher"]',
+          '.task-conversation-pane[data-pane="launcher"]',
         );
         return launcher != null && launcher.hidden === false;
       }
@@ -114,17 +114,18 @@ test('first launch shows a usable launcher chrome', async () => {
   const workspaceDirectory =
     launched.workspacePath.split(/[\\/]/).at(-1) ?? launched.workspacePath;
   const directoryLabel = await launched.page
-    .locator('.desktop-workspace-directory')
+    .locator('.task-project-copy strong')
     .first()
     .innerText();
   expect(directoryLabel).toContain(workspaceDirectory);
-  await expect(launched.page.locator('.desktop-command-button')).toBeVisible();
-  await expect(launched.page.locator('.desktop-folder-button')).toHaveCount(0);
+  await expect(
+    launched.page.locator('.task-header-button[aria-label="Open commands"]'),
+  ).toBeVisible();
   // The main view itself either renders <main-app> or the no-workspace empty
   // state — both are valid first-launch outcomes. The audit doc tracks which
   // one each user actually hits.
   const mainSection = launched.page.locator(
-    '.desktop-pane[data-pane="launcher"]',
+    '.task-conversation-pane[data-pane="launcher"]',
   );
   await expect(mainSection).toBeVisible();
 });
@@ -209,8 +210,9 @@ test('rapid settings-tab switching does not crash the renderer', async () => {
   }
   // The chrome must still be alive after the burst.
   await expect(
-    launched.page.locator('.desktop-workspace-directory'),
+    launched.page.locator('.task-project-copy strong'),
   ).toBeVisible();
+  await expect(launched.page.locator('.task-conversation')).toBeVisible();
 });
 
 /**

@@ -11,6 +11,7 @@
     "test": "vitest run --config vitest.config.mjs",
     "test:watch": "vitest --config vitest.config.mjs",
     "desktop:build": "corepack pnpm --filter @texra/trace-viewer run build && corepack pnpm --filter @texra/desktop build",
+    "desktop:dev": "corepack pnpm --filter @texra/desktop dev",
     "desktop:package:local": "node scripts/run-desktop-package-local.mjs",
     "desktop:package:dist": "corepack pnpm run desktop:build && corepack pnpm --filter @texra/desktop package:dist",
     "desktop:package:smoke": "node scripts/smoke-desktop-package-launch.mjs",

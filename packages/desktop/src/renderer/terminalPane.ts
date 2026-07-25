@@ -13,6 +13,8 @@ import { FitAddon } from '@xterm/addon-fit';
 import { Terminal } from '@xterm/xterm';
 import xtermStyles from '@xterm/xterm/css/xterm.css?inline';
 
+import { getDesktopChromeFontSize } from './desktopTypography';
+
 export interface TerminalPaneCallbacks {
   /** Requests a pty for `sessionId` at the measured geometry. */
   start(sessionId: string, cols: number, rows: number): void;
@@ -100,7 +102,7 @@ export function createTerminalPane(
         getComputedStyle(document.body)
           .getPropertyValue('--wa-font-family-mono')
           .trim() || 'monospace',
-      fontSize: 12,
+      fontSize: getDesktopChromeFontSize(),
       // Build logs and test output are long; a shallow buffer would discard the
       // beginning of exactly the runs users need to read.
       scrollback: 10_000,

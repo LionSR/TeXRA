@@ -1,0 +1,268 @@
+// Stroke icon language for the desktop app.
+//
+// The shared icon set is Font Awesome *solid*: filled, heavy, high-density
+// glyphs. That weight is the single loudest remaining signal that the app looks
+// like a 2015 tool panel — solid icons visually shout next to the light type and
+// soft surfaces of the new skin.
+//
+// This module re-registers Web Awesome's `texra` icon library (and `default`,
+// which WA's own internals resolve through) with Lucide's 1.5px-stroke set,
+// scoped to the desktop renderer only. The VS Code extension keeps the solid
+// set, where matching the editor's own iconography is correct.
+//
+// Names are the existing `TeXRAIconName` values, so no call site changes: every
+// `waIcon('file-code')` in the shared components silently upgrades. Anything
+// unmapped falls through to the original Font Awesome resolver rather than
+// rendering an empty box.
+
+import {
+  getIconLibrary,
+  registerIconLibrary,
+  type IconLibraryResolver,
+} from '@awesome.me/webawesome/dist/components/icon/library.js';
+import iconNodes from 'lucide-static/icon-nodes.json';
+
+import {
+  CODICON_ALIASES,
+  registerTeXRAWebAwesomeIcons,
+  TEXRA_ICON_LIBRARY,
+} from '@shared/wa/webAwesomeIcons';
+
+/**
+ * Our icon name -> Lucide icon name.
+ *
+ * Only names that differ need an entry; identical names resolve directly. Kept
+ * as data rather than 120 imports because `lucide-static` ships one SVG per
+ * icon and Vite's `?raw` glob loads them lazily.
+ */
+const LUCIDE_NAME_BY_TEXRA_NAME: Readonly<Record<string, string>> = {
+  // Punctuation / chrome
+  xmark: 'x',
+  'circle-xmark': 'circle-x',
+  'circle-exclamation': 'circle-alert',
+  'circle-question': 'circle-help',
+  'circle-info': 'info',
+  'circle-dot': 'circle-dot',
+  'circle-stop': 'circle-stop',
+  'circle-user': 'circle-user-round',
+  'triangle-exclamation': 'triangle-alert',
+  ellipsis: 'ellipsis',
+  'ellipsis-vertical': 'ellipsis-vertical',
+
+  // Arrows / navigation
+  'arrow-rotate-left': 'rotate-ccw',
+  'arrows-rotate': 'refresh-cw',
+  'rotate-right': 'rotate-cw',
+  'arrow-up-right-from-square': 'external-link',
+  'backward-step': 'skip-back',
+  'forward-step': 'skip-forward',
+  'caret-down': 'chevron-down',
+  'up-right-and-down-left-from-center': 'maximize-2',
+  'down-left-and-up-right-to-center': 'minimize-2',
+
+  // Files / storage
+  'file-lines': 'file-text',
+  'file-import': 'file-input',
+  'file-export': 'file-output',
+  'floppy-disk': 'save',
+  'box-archive': 'archive',
+  box: 'package',
+  'magnifying-glass': 'search',
+  'magnifying-glass-plus': 'zoom-in',
+  'cloud-arrow-down': 'cloud-download',
+  'cloud-arrow-up': 'cloud-upload',
+  'arrow-up-from-bracket': 'upload',
+  'arrow-down-to-line': 'download',
+
+  // Tools / concepts
+  gear: 'settings',
+  gears: 'settings-2',
+  screwdriver: 'wrench',
+  'screwdriver-wrench': 'wrench',
+  tools: 'wrench',
+  'wand-magic-sparkles': 'wand-sparkles',
+  'pen-to-square': 'square-pen',
+  'trash-can': 'trash-2',
+  'chart-line': 'chart-line',
+  'chart-pie': 'chart-pie',
+  'clock-rotate-left': 'history',
+  'right-left': 'arrow-left-right',
+  'code-branch': 'git-branch',
+  'code-commit': 'git-commit-horizontal',
+  'code-pull-request': 'git-pull-request',
+  'code-compare': 'git-compare',
+  'user-group': 'users',
+  'graduation-cap': 'graduation-cap',
+  'check-double': 'check-check',
+  'list-check': 'list-checks',
+  'square-check': 'square-check',
+  microchip: 'cpu',
+  'shield-halved': 'shield',
+  'triangle-exclamation-solid': 'triangle-alert',
+  bolt: 'zap',
+  'money-bill': 'banknote',
+  'circle-half-stroke': 'contrast',
+  'sun-bright': 'sun',
+  'moon-stars': 'moon',
+  paperclip: 'paperclip',
+  thumbtack: 'pin',
+  ban: 'ban',
+  spinner: 'loader-circle',
+
+  // Layout / window controls. Lucide has no window-maximize or compress.
+  'window-maximize': 'maximize-2',
+  compress: 'minimize-2',
+  'picture-in-picture': 'picture-in-picture-2',
+  // Canonical names Lucide spells differently, found by auditing every
+  // waIcon() call site against the Lucide set rather than by guessing.
+  bullseye: 'target',
+  'file-circle-plus': 'file-plus',
+  robot: 'bot',
+  'right-to-bracket': 'log-in',
+  'right-from-bracket': 'log-out',
+  'code-merge': 'git-merge',
+  'magnifying-glass-chart': 'search-code',
+  'note-sticky': 'sticky-note',
+  'plus-minus': 'diff',
+  'circle-large-outline': 'circle',
+  meteor: 'sparkles',
+  cube: 'box',
+  'diagram-project': 'workflow',
+  'list-ul': 'list',
+  comments: 'messages-square',
+  // Codicon-style symbol aliases used by the agent-team presets.
+  'symbol-structure': 'boxes',
+  'symbol-operator': 'sigma',
+  'symbol-number': 'hash',
+  'symbol-method': 'braces',
+  'symbol-namespace': 'box',
+  'symbol-keyword': 'key-round',
+};
+
+/**
+ * Lucide's icon geometry as data: `{ name: [[tag, attrs], ...] }`.
+ *
+ * Imported as one JSON module rather than globbing the per-icon .svg files —
+ * Vite's root is src/renderer, so a `/node_modules/...` glob silently resolves
+ * to nothing and every icon renders blank. A bare module specifier is resolved
+ * by the bundler and fails loudly if missing.
+ */
+// Via `unknown`: the JSON's inferred type is a positional (string | attrs)[]
+// union per node, which does not overlap the tuple shape we consume it as.
+const LUCIDE_ICON_NODES = iconNodes as unknown as Record<
+  string,
+  ReadonlyArray<readonly [string, Record<string, string>]>
+>;
+
+/**
+ * Builds an SVG for a Lucide icon.
+ *
+ * No fixed width/height so it scales with font-size, and stroke-width 1.75
+ * rather than Lucide's default 2 so icons sit beside the UI type instead of
+ * out-weighing it.
+ */
+function lucideSvg(name: string): string | undefined {
+  const nodes = LUCIDE_ICON_NODES[name];
+  if (!nodes) return undefined;
+  const children = nodes
+    .map(([tag, attrs]) => {
+      const serialized = Object.entries(attrs)
+        .map(([key, value]) => `${key}="${value}"`)
+        .join(' ');
+      // `fill="none"` has to sit on each shape, not on the <svg>. wa-icon's
+      // shadow stylesheet declares `svg { fill: currentColor }`, and a CSS
+      // declaration beats a presentation *attribute* on the same element — so a
+      // root-level fill="none" is overridden and every stroke icon renders as a
+      // filled blob. A fill attribute on the child shapes is not targeted by
+      // that rule, so it survives.
+      return `<${tag} ${serialized} fill="none"/>`;
+    })
+    .join('');
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" ` +
+    `stroke="currentColor" stroke-width="1.75" stroke-linecap="round" ` +
+    `stroke-linejoin="round">${children}</svg>`
+  );
+}
+
+/**
+ * Registration runs at module scope, on import, rather than through an exported
+ * function. ES imports hoist above statements, so a `register()` call in the
+ * renderer entry would execute only after every WA component module had already
+ * been evaluated. A side-effect import placed after '@shared/wa' is the only
+ * ordering that reliably wins.
+ */
+
+// Establish and capture the Font Awesome fallback before overriding the same
+// library names. Registering a library replaces its previous resolver, so
+// merely registering Font Awesome first is not enough: without these captured
+// functions, any TeXRA name Lucide lacks resolves to an empty string.
+// Idempotent: the shared module guards its own re-registration.
+registerTeXRAWebAwesomeIcons();
+const texraFontAwesomeResolver = getIconLibrary(TEXRA_ICON_LIBRARY)?.resolver;
+const defaultFontAwesomeResolver =
+  getIconLibrary('default')?.resolver ?? texraFontAwesomeResolver;
+
+/**
+ * Resolves a TeXRA icon name to Lucide geometry.
+ *
+ * Three hops, in order, because names reach here from three vocabularies:
+ *   1. A codicon-style alias (`settings-gear`, `close`, `refresh`) -> its
+ *      canonical Font Awesome name. Read from the shared CODICON_ALIASES table
+ *      rather than duplicated here, so the two cannot drift.
+ *   2. The canonical name -> its Lucide equivalent, where they differ.
+ *   3. The name unchanged, when both sets agree.
+ *
+ * Skipping hop 1 was a real bug: 22 icons (every codicon alias in the shared
+ * components) resolved to a name Lucide does not have and rendered as a blank
+ * box — visible as an empty pill in the tab strip.
+ */
+function resolveLucideName(name: string): string {
+  const canonical =
+    (CODICON_ALIASES as Readonly<Record<string, string>>)[name] ?? name;
+  return (
+    LUCIDE_NAME_BY_TEXRA_NAME[canonical] ??
+    LUCIDE_NAME_BY_TEXRA_NAME[name] ??
+    canonical
+  );
+}
+
+function svgDataUri(svg: string): string {
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+
+const missingIconUri = svgDataUri(
+  // lucide-static includes circle-help in every supported release. Retain a
+  // minimal inline fallback so even package drift cannot turn a typo or an
+  // unexpected Web Awesome internal icon into invisible chrome.
+  lucideSvg('circle-help') ??
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" fill="none"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 2-2.5 2-2.5 4" fill="none"/><circle cx="12" cy="17" r="1" fill="currentColor"/></svg>',
+);
+
+/**
+ * Prefer Lucide, fall back to the captured offline Font Awesome resolver, and
+ * finally render a visible unknown-icon glyph. Web Awesome resolvers may be
+ * synchronous or asynchronous, so preserve either form without forcing every
+ * icon through a Promise.
+ */
+function createDesktopIconResolver(
+  fallbackResolver: IconLibraryResolver | undefined,
+): IconLibraryResolver {
+  return (name, family, variant, autoWidth) => {
+    const svg = lucideSvg(resolveLucideName(name));
+    if (svg) return svgDataUri(svg);
+
+    const fallback = fallbackResolver?.(name, family, variant, autoWidth);
+    if (typeof fallback === 'string') return fallback || missingIconUri;
+    return (
+      fallback?.then((resolved) => resolved || missingIconUri) ?? missingIconUri
+    );
+  };
+}
+
+registerIconLibrary(TEXRA_ICON_LIBRARY, {
+  resolver: createDesktopIconResolver(texraFontAwesomeResolver),
+});
+registerIconLibrary('default', {
+  resolver: createDesktopIconResolver(defaultFontAwesomeResolver),
+});

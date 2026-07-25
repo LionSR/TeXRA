@@ -128,6 +128,14 @@ export class InstructionPanel extends LitElement {
 
   @property({ type: Boolean }) showSessionHint = true;
 
+  /**
+   * Enables the roomy, conversation-first composer used by the Electron host.
+   * The extension keeps its existing compact panel unless the desktop shell
+   * opts in explicitly.
+   */
+  @property({ type: Boolean, attribute: 'desktop-host', reflect: true })
+  desktopHost = false;
+
   /** Reference to instruction textarea for paste handling */
   @query('#instruction')
   private instructionTextarea?: HTMLElement;
@@ -270,8 +278,56 @@ export class InstructionPanel extends LitElement {
     }
   }
 
+  private canExecute(session = this.sessionData): boolean {
+    if (!session?.instruction.trim() || !session.model) return false;
+    if (isTeamLaunch(session)) return Boolean(session.selectedTeamId);
+    return Boolean(
+      session.sessionType === SESSION_TYPES.WORKFLOW
+        ? session.workflowAgent
+        : session.toolUseAgent,
+    );
+  }
+
+  private executeTooltip(session: SessionContextValue): string {
+    if (!session.instruction.trim()) return 'Enter a request to send';
+    if (!session.model) return 'Choose a model before sending';
+    if (isTeamLaunch(session) && !session.selectedTeamId) {
+      return 'Choose a team before sending';
+    }
+    const agent =
+      session.sessionType === SESSION_TYPES.WORKFLOW
+        ? session.workflowAgent
+        : session.toolUseAgent;
+    if (!agent) return 'Choose an agent before sending';
+    return this.desktopHost
+      ? 'Send (Enter) · New line (Shift+Enter)'
+      : `Execute (${this.executeShortcutLabel})`;
+  }
+
   private handleExecute(): void {
+    if (!this.canExecute()) return;
     this.dispatchEvent(MainViewEvents.execute());
+  }
+
+  /**
+   * Desktop follows chat-composer keyboard conventions: Enter sends while
+   * Shift+Enter inserts a newline. Cmd/Ctrl+Enter also sends because those
+   * modifiers are commonly used by users coming from editor-based chat tools.
+   * The extension retains its registered command keybinding unchanged.
+   */
+  private handleInstructionKeydown(event: KeyboardEvent): void {
+    if (
+      !this.desktopHost ||
+      event.defaultPrevented ||
+      event.isComposing ||
+      event.key !== 'Enter' ||
+      event.shiftKey ||
+      event.altKey
+    ) {
+      return;
+    }
+    event.preventDefault();
+    this.handleExecute();
   }
 
   /**
@@ -434,6 +490,7 @@ export class InstructionPanel extends LitElement {
       <div
         class=${classMap({
           'instruction-box': true,
+          'desktop-composer': this.desktopHost,
           'drop-active': this.fileDrop.isDragActive,
         })}
         @dragenter=${this.fileDrop.handleDragEnter}
@@ -443,6 +500,16 @@ export class InstructionPanel extends LitElement {
       >
         <div class="instruction-header">
           <div class="instruction-header-leading">
+            ${
+              this.desktopHost
+                ? html`
+                    <span class="desktop-drop-affordance">
+                      ${waIcon('file-circle-plus')}
+                      <span>Drop files to attach</span>
+                    </span>
+                  `
+                : nothing
+            }
             <div class="instruction-session-toggle">
               <wa-radio-group
                 id="sessionTypeToggle"
@@ -529,11 +596,13 @@ export class InstructionPanel extends LitElement {
         ${this.renderSessionHint(session)}
         <wa-textarea
           id="instruction"
-          rows="10"
+          rows=${this.desktopHost ? '4' : '10'}
           resize="none"
+          enterkeyhint=${this.desktopHost ? 'send' : nothing}
           placeholder=${session.placeholder}
           .value=${session.instruction}
           @input=${this.handleInput}
+          @keydown=${this.handleInstructionKeydown}
           @paste=${this.handleInstructionPaste}
         ></wa-textarea>
         <div class="instruction-controls">
@@ -592,16 +661,20 @@ export class InstructionPanel extends LitElement {
           </div>
           <wa-button
             id="executeButton"
-            class="execute-button"
+            class="execute-button btn-primary"
             appearance="filled"
             variant="brand"
+            ?disabled=${!this.canExecute(session)}
+            aria-label=${this.desktopHost ? 'Send request' : 'Run agent'}
             @click=${this.handleExecute}
           >
-            ${waIcon('play', { slot: 'start' })}
-            <span class="execute-button__label"> Run </span>
+            ${waIcon(this.desktopHost ? 'arrow-up' : 'play', { slot: 'start' })}
+            <span class="execute-button__label">
+              ${this.desktopHost ? 'Send' : 'Run'}
+            </span>
           </wa-button>
           <wa-tooltip for="executeButton">
-            Execute (${this.executeShortcutLabel})
+            ${this.executeTooltip(session)}
           </wa-tooltip>
         </div>
         <div class="visually-hidden" aria-live="polite">

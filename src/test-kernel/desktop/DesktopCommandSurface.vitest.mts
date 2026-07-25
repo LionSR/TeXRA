@@ -52,13 +52,6 @@ describe('desktop command surface', () => {
       enabled: true,
     });
     expect(entries).toContainEqual({
-      id: DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_IN_NEW_WINDOW,
-      label: 'New Window',
-      category: 'File',
-      accelerator: 'Command+Shift+N',
-      enabled: true,
-    });
-    expect(entries).toContainEqual({
       id: 'texra.showMainView',
       label: 'Show Launcher',
       category: 'TeXRA',
@@ -127,7 +120,6 @@ describe('desktop command surface', () => {
       openDesktopDocs: vi.fn(),
       openLogFolder: vi.fn(),
       openWorkspaceFolder: vi.fn(),
-      openWorkspaceInNewWindow: vi.fn(),
       showFirstRunWalkthrough: vi.fn(),
       resetMainView: vi.fn(),
       showRoute: vi.fn(),
@@ -149,12 +141,6 @@ describe('desktop command surface', () => {
     expect(
       dispatchDesktopCommand(
         DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
-        actions,
-      ),
-    ).toBe(true);
-    expect(
-      dispatchDesktopCommand(
-        DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_IN_NEW_WINDOW,
         actions,
       ),
     ).toBe(true);
@@ -186,7 +172,6 @@ describe('desktop command surface', () => {
     expect(actions.showSettings).toHaveBeenNthCalledWith(4, SETTINGS_TAB.GIT);
     expect(actions.resetMainView).toHaveBeenCalledOnce();
     expect(actions.openWorkspaceFolder).toHaveBeenCalledOnce();
-    expect(actions.openWorkspaceInNewWindow).toHaveBeenCalledOnce();
     expect(actions.openLogFolder).toHaveBeenCalledOnce();
     expect(actions.showFirstRunWalkthrough).toHaveBeenCalledOnce();
     expect(
@@ -222,7 +207,6 @@ describe('desktop command surface', () => {
     const actions = {
       openDesktopDocs: vi.fn(),
       openWorkspaceFolder: vi.fn(),
-      openWorkspaceInNewWindow: vi.fn(),
       resetMainView: vi.fn(),
       showFirstRunWalkthrough: vi.fn(),
       showRoute: vi.fn(),
@@ -243,11 +227,9 @@ describe('desktop command surface', () => {
     const fileSubmenu = fileMenu?.submenu ?? [];
     expect(
       fileSubmenu.map((item) => item.label ?? item.role ?? item.type),
-    ).toEqual(['Open Folder', 'New Window', 'separator', 'close']);
+    ).toEqual(['Open Folder', 'separator', 'close']);
     fileSubmenu[0].click?.();
-    fileSubmenu[1].click?.();
     expect(actions.openWorkspaceFolder).toHaveBeenCalledOnce();
-    expect(actions.openWorkspaceInNewWindow).toHaveBeenCalledOnce();
 
     const texraMenu = menu.find((item) => item.label === 'TeXRA');
     const submenu = texraMenu?.submenu ?? [];
@@ -290,7 +272,7 @@ describe('desktop command surface', () => {
     const helpMenu = menu.find((item) => item.label === 'Help');
     const helpSubmenu = helpMenu?.submenu ?? [];
     expect(helpSubmenu.map((item) => item.label)).toEqual([
-      'Show First-Run Walkthrough',
+      'Show Startup Team Chooser',
       'Desktop Documentation',
     ]);
     helpSubmenu[0].click?.();

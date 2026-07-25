@@ -5,6 +5,9 @@
 import { describe, expect, it } from 'vitest';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import {
+  SETTINGS_TAB,
+  SETTINGS_TAB_GROUPS,
+  SETTINGS_TAB_ORDER,
   SETTINGS_TAB_PANEL_NAMES,
   WebFetchPayloadSchema,
   WebSearchPayloadSchema,
@@ -215,5 +218,55 @@ describe('settings view tab definitions', () => {
     expect(new Set(SETTINGS_TAB_PANEL_NAMES).size).toBe(
       SETTINGS_TAB_PANEL_NAMES.length,
     );
+  });
+
+  // `SETTINGS_TAB.X` indices cross the IPC boundary as `SET_TAB.tabIndex`, and
+  // the desktop e2e specs plus scripts/capture-walkthrough-media.mjs hand-copy
+  // the integer table. A reorder would keep every one of those call sites
+  // compiling and every hardcoded index "passing" while navigating to the wrong
+  // panel, so the mapping is pinned literally: adding a tab at the end is a
+  // one-line update here, and any other edit fails loudly.
+  it('pins the settings tab wire contract (index + panel name)', () => {
+    expect(SETTINGS_TAB).toEqual({
+      MEMORY: 0,
+      HISTORY: 1,
+      MODELS: 2,
+      AGENTS: 3,
+      MULTI_AGENT: 4,
+      TOOLS: 5,
+      AI_AGENTS: 6,
+      GIT: 7,
+      LATEX: 8,
+      GOAL: 9,
+    });
+    expect(SETTINGS_TAB_PANEL_NAMES).toEqual([
+      'memory',
+      'history',
+      'models',
+      'agents',
+      'multi-agent',
+      'tools',
+      'ai-agents',
+      'git',
+      'latex',
+      'goal',
+    ]);
+  });
+
+  // A group that silently omits a tab makes that panel unreachable from the
+  // nav while it stays a valid IPC target; a tab listed twice renders two rows
+  // for one panel.
+  it('places every tab in exactly one nav group', () => {
+    const grouped = SETTINGS_TAB_GROUPS.flatMap((group) => group.tabs);
+
+    expect(new Set(grouped).size).toBe(grouped.length);
+    expect([...grouped].sort()).toEqual([...SETTINGS_TAB_ORDER].sort());
+  });
+
+  it('keeps group labels unique and non-empty', () => {
+    const labels = SETTINGS_TAB_GROUPS.map((group) => group.label);
+
+    expect(labels.every((label) => label.trim().length > 0)).toBe(true);
+    expect(new Set(labels).size).toBe(labels.length);
   });
 });

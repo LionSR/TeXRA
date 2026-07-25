@@ -1,4 +1,4 @@
-// Desktop first-run tour.
+// Desktop startup team panel.
 //
 // This replaced a static four-step list of instructions. The problem it solved:
 // TeXRA already ships five discipline teams (Lean, physics, math, CS/ML,
@@ -7,17 +7,19 @@
 // through Settings tab index 4, so a new user never saw it and landed on a
 // generic roster. The capability existed; the discoverability didn't.
 //
-// So the tour leads with the question that actually configures the app: what
+// The panel leads with the question that actually configures the app: what
 // kind of work are you doing? The answer selects a team, which is applied
 // through the same `applyAgentModePreset` path the Settings team picker uses —
 // no parallel configuration mechanism.
 //
 // Steps: pick your work → confirm the preset roster → finish (open the
-// launcher). Users who want to skip can dismiss at any step.
+// launcher). It is shown in the task canvas at startup unless the user saves
+// the "don't show" preference.
 
-import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 import '@awesome.me/webawesome/dist/components/button/button.js';
-import { html, render, nothing, type TemplateResult } from 'lit';
+import '@awesome.me/webawesome/dist/components/card/card.js';
+import '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
+import { html, nothing, type TemplateResult } from 'lit';
 
 import { postMessage } from '@shared/hostBridge';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
@@ -27,19 +29,18 @@ import {
 } from '@shared/schemas/agentPresets';
 import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 
-import { isCommandPaletteShortcut } from './desktopCommandPalette';
 import type { DesktopRoute } from '../desktopShellMessages';
 
-interface WalkthroughDialogController {
-  element: HTMLElement;
+interface StartupPanelController {
   isVisible(): boolean;
+  template(): TemplateResult | typeof nothing;
   show(): void;
   hide(): void;
 }
 
-export interface DesktopFirstRunWalkthroughOptions {
-  document: Document;
+export interface DesktopStartupTeamPanelOptions {
   dismiss(): void;
+  onVisibilityChanged(): void;
   setRoute(route: DesktopRoute): void;
   /** Opens the Settings tab focused on the team picker, for fine-tuning. */
   openMultiAgent(): void;
@@ -91,51 +92,45 @@ const WORK_TYPES: ReadonlyArray<{
 
 type TourStep = 'work' | 'roster' | 'done';
 
-// Each createFirstRunWalkthrough() call grabs a unique id so two co-existing
-// dialogs cannot collide on aria-labelledby.
-let walkthroughTitleCounter = 0;
+// Each panel instance gets a unique heading id for aria-labelledby.
+let panelTitleCounter = 0;
 
-function nextWalkthroughTitleId(): string {
-  walkthroughTitleCounter += 1;
-  return `walkthrough-title-${walkthroughTitleCounter}`;
+function nextPanelTitleId(): string {
+  panelTitleCounter += 1;
+  return `startup-team-title-${panelTitleCounter}`;
 }
 
 function presetById(presetId: string): AgentModePreset | undefined {
   return AGENT_MODE_PRESETS.find((preset) => preset.id === presetId);
 }
 
-export function createFirstRunWalkthrough({
-  document,
+export function createStartupTeamPanel({
   dismiss: postDismissed,
+  onVisibilityChanged,
   setRoute,
   openMultiAgent,
-}: DesktopFirstRunWalkthroughOptions): WalkthroughDialogController {
-  const titleId = nextWalkthroughTitleId();
-  const dialog = document.createElement('wa-dialog');
-  dialog.classList.add('desktop-onboarding');
-  dialog.withoutHeader = true;
-  dialog.setAttribute('aria-labelledby', titleId);
-
-  // Distinguishes user-initiated close (Escape / button click) — which fires
-  // the dismissed callback back to the host — from programmatic close from
-  // hide(), which would otherwise feedback-loop with host state syncs.
-  let suppressNextPost = false;
+}: DesktopStartupTeamPanelOptions): StartupPanelController {
+  const titleId = nextPanelTitleId();
+  let visible = false;
+  let hideAtStartup = false;
   let step: TourStep = 'work';
   let chosenPresetId: string | undefined;
 
-  const closeDialog = (): void => {
-    dialog.open = false;
+  const closePanel = (): void => {
+    visible = false;
+    if (hideAtStartup) postDismissed();
+    onVisibilityChanged();
   };
 
   function goTo(next: TourStep): void {
     step = next;
-    rerender();
+    onVisibilityChanged();
   }
 
   function chooseWorkType(presetId: string): void {
     chosenPresetId = presetId;
     // Apply immediately through the same command the Settings team picker
-    // uses, so the roster is live even if the user dismisses the tour here.
+    // uses, so the roster is live even if the user dismisses the panel here.
     postMessage(SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET, { presetId });
     goTo('roster');
   }
@@ -143,9 +138,9 @@ export function createFirstRunWalkthrough({
   function workStepTemplate(): TemplateResult {
     return html`
       <header class="desktop-onboarding-header">
-        ${waIcon('wand-magic-sparkles', {
-          className: 'desktop-onboarding-icon',
-        })}
+        <span class="desktop-onboarding-icon icon-surface is-size-l">
+          ${waIcon('wand-magic-sparkles')}
+        </span>
         <div>
           <h1 id=${titleId}>What are you working on?</h1>
           <p>
@@ -157,29 +152,36 @@ export function createFirstRunWalkthrough({
       <div class="desktop-onboarding-choices">
         ${WORK_TYPES.filter((entry) => presetById(entry.presetId)).map(
           (entry) => html`
-            <button
-              type="button"
+            <wa-button
               class="desktop-onboarding-choice"
+              appearance="outlined"
+              size="l"
               @click=${() => chooseWorkType(entry.presetId)}
             >
-              ${waIcon(entry.icon, { className: 'desktop-onboarding-choice-icon' })}
+              <span
+                slot="start"
+                class="desktop-onboarding-choice-icon icon-surface is-size-l"
+              >
+                ${waIcon(entry.icon)}
+              </span>
               <span class="desktop-onboarding-choice-text">
                 <strong>${entry.question}</strong>
                 <span>${entry.detail}</span>
               </span>
-            </button>
+            </wa-button>
           `,
         )}
       </div>
-      <div slot="footer" class="desktop-onboarding-actions">
+      ${footerTemplate(html`
         <wa-button
-          class="desktop-secondary-button"
-          appearance="plain"
-          @click=${closeDialog}
+          class="btn-secondary"
+          appearance="outlined"
+          size="s"
+          @click=${closePanel}
         >
           Skip for now
         </wa-button>
-      </div>
+      `)}
     `;
   }
 
@@ -195,7 +197,9 @@ export function createFirstRunWalkthrough({
       preset.workflowAgents.length + preset.toolUseAgents.length;
     return html`
       <header class="desktop-onboarding-header">
-        ${waIcon('circle-check', { className: 'desktop-onboarding-icon' })}
+        <span class="desktop-onboarding-icon icon-surface is-size-l">
+          ${waIcon('circle-check')}
+        </span>
         <div>
           <h1 id=${titleId}>${preset.name} team is ready</h1>
           <p>${preset.description}</p>
@@ -212,11 +216,11 @@ export function createFirstRunWalkthrough({
                   <span class="desktop-onboarding-roster-label">Workflows</span>
                   <div class="desktop-onboarding-roster-chips">
                     ${preset.workflowAgents.map(
-                    (name) =>
-                      html`<span class="desktop-onboarding-chip"
-                        >${name}</span
-                      >`,
-                  )}
+                      (name) =>
+                        html`<span class="desktop-onboarding-chip"
+                          >${name}</span
+                        >`,
+                    )}
                   </div>
                 </div>
               `
@@ -232,41 +236,46 @@ export function createFirstRunWalkthrough({
           </div>
         </div>
       </div>
-      <div slot="footer" class="desktop-onboarding-actions">
+      ${footerTemplate(html`
         <wa-button
-          class="desktop-secondary-button"
+          class="btn-secondary"
           appearance="outlined"
+          size="s"
           @click=${() => goTo('work')}
         >
           Back
         </wa-button>
         <wa-button
-          class="desktop-secondary-button"
+          class="btn-secondary"
           appearance="outlined"
+          size="s"
           @click=${() => {
-            closeDialog();
+            closePanel();
             openMultiAgent();
           }}
         >
           Customize
         </wa-button>
         <wa-button
-          class="desktop-primary-button"
+          class="btn-primary"
           appearance="filled"
           variant="brand"
+          size="s"
           data-walkthrough-primary
           @click=${() => goTo('done')}
         >
           Continue
         </wa-button>
-      </div>
+      `)}
     `;
   }
 
   function doneStepTemplate(): TemplateResult {
     return html`
       <header class="desktop-onboarding-header">
-        ${waIcon('rocket', { className: 'desktop-onboarding-icon' })}
+        <span class="desktop-onboarding-icon icon-surface is-size-l">
+          ${waIcon('rocket')}
+        </span>
         <div>
           <h1 id=${titleId}>You're set up</h1>
           <p>Three things worth knowing before your first run.</p>
@@ -303,26 +312,49 @@ export function createFirstRunWalkthrough({
           </div>
         </li>
       </ol>
-      <div slot="footer" class="desktop-onboarding-actions">
+      ${footerTemplate(html`
         <wa-button
-          class="desktop-secondary-button"
+          class="btn-secondary"
           appearance="outlined"
+          size="s"
           @click=${() => goTo('roster')}
         >
           Back
         </wa-button>
         <wa-button
-          class="desktop-primary-button"
+          class="btn-primary"
           appearance="filled"
           variant="brand"
+          size="s"
           data-walkthrough-primary
           @click=${() => {
-            closeDialog();
+            closePanel();
             setRoute('main');
           }}
         >
           Start working
         </wa-button>
+      `)}
+    `;
+  }
+
+  function footerTemplate(actions: TemplateResult): TemplateResult {
+    return html`
+      <div slot="footer" class="desktop-onboarding-actions">
+        <wa-checkbox
+          class="desktop-onboarding-startup-choice"
+          size="s"
+          .checked=${hideAtStartup}
+          @change=${(event: Event) => {
+            hideAtStartup = (
+              event.currentTarget as HTMLElement & { checked: boolean }
+            ).checked;
+          }}
+        >
+          Don't show this at startup
+        </wa-checkbox>
+        <span class="desktop-onboarding-actions-spacer"></span>
+        ${actions}
       </div>
     `;
   }
@@ -333,52 +365,36 @@ export function createFirstRunWalkthrough({
     done: doneStepTemplate,
   };
 
-  function rerender(): void {
-    render(STEP_TEMPLATES[step](), dialog);
-    // Re-focus the step's primary action after each render so keyboard users
-    // can advance with Enter without tabbing.
-    dialog.querySelector<HTMLElement>('[data-walkthrough-primary]')?.focus();
+  function panelTemplate(): TemplateResult {
+    return html`
+      <section
+        class="desktop-startup-panel"
+        aria-labelledby=${titleId}
+        data-step=${step}
+      >
+        <wa-card
+          class="desktop-onboarding"
+          appearance="filled-outlined"
+          with-footer
+        >
+          ${STEP_TEMPLATES[step]()}
+        </wa-card>
+      </section>
+    `;
   }
 
-  rerender();
-
-  // wa-dialog handles modal backdrop, focus trap, escape key, and focus
-  // restoration automatically. Reapply the previous "primary action focused
-  // first" policy so keyboard users can advance with one Enter, and intercept
-  // the command-palette shortcut so it does not fire while the dialog is open.
-  dialog.addEventListener('wa-after-show', () => {
-    dialog.querySelector<HTMLElement>('[data-walkthrough-primary]')?.focus();
-  });
-  // Every user-initiated dismissal (Escape, footer buttons) posts the
-  // dismissed signal back to the host. Programmatic hide() suppresses the
-  // post via suppressNextPost to avoid a feedback loop with state messages.
-  dialog.addEventListener('wa-after-hide', () => {
-    if (suppressNextPost) {
-      suppressNextPost = false;
-      return;
-    }
-    postDismissed();
-  });
-  // Scoped to the dialog so it only runs while open and only for keys that
-  // originate inside it. stopPropagation prevents the global command-palette
-  // listener (on document) from firing.
-  dialog.addEventListener('keydown', (event) => {
-    if (isCommandPaletteShortcut(event)) {
-      event.preventDefault();
-      event.stopPropagation();
-    }
-  });
-
   return {
-    element: dialog,
-    isVisible: () => dialog.open,
+    isVisible: () => visible,
+    template: () => (visible ? panelTemplate() : nothing),
     show: () => {
-      dialog.open = true;
+      if (visible) return;
+      visible = true;
+      onVisibilityChanged();
     },
     hide: () => {
-      if (!dialog.open) return;
-      suppressNextPost = true;
-      dialog.open = false;
+      if (!visible) return;
+      visible = false;
+      onVisibilityChanged();
     },
   };
 }
