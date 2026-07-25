@@ -6,6 +6,8 @@
  * with no cross-store mutations or error-swallowing policies.
  */
 
+import PQueue from 'p-queue';
+
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { getAgent, isAgentRegistryReady } from '@agent/index/agentRegistry';
@@ -80,36 +82,42 @@ export async function hasPersistedParent(
 // never race and silently drop each other's fields.
 // ---------------------------------------------------------------------------
 
-const metaWriteQueues = new Map<ExecutionId, Promise<void>>();
+const metaWriteQueues = new Map<ExecutionId, PQueue>();
 
 /**
  * Enqueue a read-modify-write operation on an execution's metadata.
- * Operations for the same executionId are serialized; different IDs run
- * independently. The queue entry is cleaned up when the chain settles.
+ * Operations for the same executionId are serialized (a rejected update
+ * doesn't stop the queue from running subsequent ones); different IDs run
+ * independently. The queue entry is cleaned up once it goes idle.
  */
 function enqueueMetaUpdate(
   executionId: ExecutionId,
   updater: (existing: ExecutionMeta) => Partial<ExecutionMeta>,
 ): Promise<void> {
-  const prev = metaWriteQueues.get(executionId) ?? Promise.resolve();
-  const next = prev.then(async () => {
+  let queue = metaWriteQueues.get(executionId);
+  if (!queue) {
+    queue = new PQueue({ concurrency: 1 });
+    metaWriteQueues.set(executionId, queue);
+  }
+  // `add` widens to `T | void` to cover abort via signal/timeout; we pass
+  // neither, so the task always runs and resolves with `void`.
+  const task = queue.add(async () => {
     const store = getExecutionStore(executionId);
     const existing = await store.readMeta();
     if (!existing) {
       throw new Error(`Execution metadata not found for ${executionId}`);
     }
     await store.writeMeta({ ...existing, ...updater(existing) });
-  });
-  // Swallow errors in the chain so subsequent enqueued ops still run.
-  const safe = next.catch(() => {});
-  metaWriteQueues.set(executionId, safe);
-  // Clean up when chain settles to avoid unbounded growth.
-  safe.then(() => {
-    if (metaWriteQueues.get(executionId) === safe) {
+  }) as Promise<void>;
+  return task.finally(() => {
+    if (
+      queue.pending === 0 &&
+      queue.size === 0 &&
+      metaWriteQueues.get(executionId) === queue
+    ) {
       metaWriteQueues.delete(executionId);
     }
   });
-  return next;
 }
 
 /**

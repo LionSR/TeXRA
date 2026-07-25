@@ -1,6 +1,7 @@
 import { chmod, mkdir, readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 
+import PQueue from 'p-queue';
 import writeFileAtomic from 'write-file-atomic';
 
 import { isFileNotFoundError } from '@common/errors';
@@ -55,11 +56,11 @@ async function readJsonRecord(
 }
 
 /**
- * Pending flushes keyed by resolved store path. Module-wide (not per
+ * One-at-a-time flush queue per resolved store path. Module-wide (not per
  * instance) so writers holding separate `JsonStore` instances on the same
  * file preserve call order before entering the cross-process lock.
  */
-const writeChains = new Map<string, Promise<void>>();
+const writeQueues = new Map<string, PQueue>();
 
 /**
  * File-backed key-value store, persisted as a flat JSON object.
@@ -74,8 +75,8 @@ const writeChains = new Map<string, Promise<void>>();
  * applies only that one mutation, so an instance held open across an awaited
  * operation (e.g. a network fetch) can't clobber keys a concurrent writer —
  * another process, or another instance on the same file — persisted in the
- * meantime. Flushes for a given file path are chained through
- * {@link writeChains} for in-process ordering, then guarded by a filesystem
+ * meantime. Flushes for a given file path are serialized through
+ * {@link writeQueues} for in-process ordering, then guarded by a filesystem
  * lock for cross-process exclusion. Reads (`get`, `has`, `snapshot`) still
  * serve this instance's view: open-time contents plus its own mutations; they
  * don't observe other writers' changes.
@@ -129,28 +130,36 @@ export class JsonStore implements StateStore {
   }
 
   /**
-   * Chain the flush onto the file's entry in {@link writeChains} so flushes
-   * run in `set()` call order. The link is established synchronously, before
-   * any await, so order is captured at call time rather than racing on
-   * `mkdir`/read/`write-file-atomic` timing. A failed flush doesn't break the
-   * chain (`.then(flush, flush)`).
+   * Add the flush to the file's entry in {@link writeQueues} so flushes run
+   * in `set()` call order. The task is enqueued synchronously, before any
+   * await, so order is captured at call time rather than racing on
+   * `mkdir`/read/`write-file-atomic` timing. A failed flush doesn't stop the
+   * queue from running subsequent flushes.
    */
   private enqueueFlush(
     key: string,
     value: unknown,
     missingFallback: JsonRecord,
   ): Promise<void> {
-    const flush = () => this.flush(key, value, missingFallback);
-    const chain = writeChains.get(this.filePath) ?? Promise.resolve();
-    const next = chain.then(flush, flush);
-    writeChains.set(this.filePath, next);
-    const deleteCompletedChain = () => {
-      if (writeChains.get(this.filePath) === next) {
-        writeChains.delete(this.filePath);
+    let queue = writeQueues.get(this.filePath);
+    if (!queue) {
+      queue = new PQueue({ concurrency: 1 });
+      writeQueues.set(this.filePath, queue);
+    }
+    // `add` widens to `T | void` to cover abort via signal/timeout; we pass
+    // neither, so the task always runs and resolves with `void`.
+    const task = queue.add(() =>
+      this.flush(key, value, missingFallback),
+    ) as Promise<void>;
+    return task.finally(() => {
+      if (
+        queue.pending === 0 &&
+        queue.size === 0 &&
+        writeQueues.get(this.filePath) === queue
+      ) {
+        writeQueues.delete(this.filePath);
       }
-    };
-    void next.then(deleteCompletedChain, deleteCompletedChain);
-    return next;
+    });
   }
 
   private async flush(
