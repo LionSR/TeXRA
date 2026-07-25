@@ -87,6 +87,40 @@ describe('supportsAdaptiveThinking / isCompactionEligibleModel', () => {
   });
 });
 
+// The per-family traits above are driven by one prefix-keyed table. Pin the
+// full effort cross-product so a new row (or a reordered prefix) can't shift
+// an existing family's ceiling unnoticed — the drift mode the table replaced.
+describe('effort ceilings across every known family', () => {
+  const EXPECTED_CEILINGS: ReadonlyArray<
+    readonly [model: string, onMax: string, onXhigh: string]
+  > = [
+    [OPUS_46, 'max', 'max'],
+    [OPUS_47, 'max', 'max'],
+    [OPUS_48, 'max', 'xhigh'],
+    [OPUS_5, 'max', 'xhigh'],
+    [SONNET_46, 'high', 'high'],
+    [SONNET_5, 'max', 'xhigh'],
+    [FABLE_5, 'max', 'xhigh'],
+    [MYTHOS_5, 'max', 'xhigh'],
+    [SONNET_35, 'high', 'high'],
+  ];
+
+  it.each(EXPECTED_CEILINGS)(
+    '%s maps max -> %s and xhigh -> %s',
+    (model, onMax, onXhigh) => {
+      expect(mapAnthropicEffort(model, ReasoningEffort.MAX)).toBe(onMax);
+      expect(mapAnthropicEffort(model, ReasoningEffort.XHIGH)).toBe(onXhigh);
+    },
+  );
+
+  it('matches a versioned model id the same way as its bare family prefix', () => {
+    expect(
+      mapAnthropicEffort(`${OPUS_48}-20260115`, ReasoningEffort.XHIGH),
+    ).toBe('xhigh');
+    expect(supportsAdaptiveThinking(`${SONNET_5}-20260115`)).toBe(true);
+  });
+});
+
 describe('requiresNoTemperatureWithThinking', () => {
   it('is true for all Claude 4 families, Opus 5, Sonnet 5, and Mythos-class models', () => {
     expect(requiresNoTemperatureWithThinking(OPUS_48)).toBe(true);

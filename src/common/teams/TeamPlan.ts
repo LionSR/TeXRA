@@ -429,10 +429,19 @@ export function formatTeamUnavailableMessage(
   return `Team "${teamId}" is unavailable: ${unavailableNames.join(', ')}.`;
 }
 
+/**
+ * Prompt shown before launching a team that has unavailable hosted members.
+ *
+ * `teamId` is optional because the two hosts reach this prompt with different
+ * context: the main-view launch path already displays the team being launched,
+ * while the settings path names it inline.
+ */
 export function formatUnavailableTeamMembersMessage(
   unavailableNames: readonly string[],
+  teamId?: string,
 ): string {
-  return `This team has unavailable TeXRA-hosted members: ${unavailableNames.join(', ')}.`;
+  const subject = teamId === undefined ? 'This team' : `Team "${teamId}"`;
+  return `${subject} has unavailable TeXRA-hosted members: ${unavailableNames.join(', ')}.`;
 }
 
 export function formatPartialTeamLaunchMessage(
