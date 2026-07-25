@@ -27,8 +27,8 @@ import {
   type CliModelPickerItem,
 } from './modelAccess';
 import {
-  formatCliModelAccessRoute,
-  type CliModelAccessRoute,
+  formatCliModelAccessSummary,
+  type CliModelAccessSelection,
   type CliModelAccessStatus,
 } from './modelAccessRoute';
 import type { CliApiMode } from './apiAccessMode';
@@ -57,7 +57,7 @@ export type CliOrchestrationAction =
   | { readonly kind: 'configure-model-access' }
   | {
       readonly kind: 'set-model-access';
-      readonly access: CliModelAccessRoute;
+      readonly access: CliModelAccessSelection;
     }
   | { readonly kind: 'help' }
   | { readonly kind: 'exit' };
@@ -301,18 +301,10 @@ export function buildCliAgentItems(
 }
 
 function modelAccessItem(status: CliModelAccessStatus): CliOrchestrationItem {
-  let description: string;
-  if (status.active === 'chatgpt' && status.chatGptAccountLabel) {
-    description = `ChatGPT subscription · ${status.chatGptAccountLabel}`;
-  } else if (status.active === 'kimi-code') {
-    description = 'Kimi Code subscription · key configured';
-  } else {
-    description = formatCliModelAccessRoute(status.active);
-  }
   return {
     value: { kind: 'configure-model-access' },
     label: 'Model access',
-    description,
+    description: formatCliModelAccessSummary(status),
   };
 }
 

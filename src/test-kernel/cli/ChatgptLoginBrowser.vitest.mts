@@ -46,9 +46,11 @@ describe('signInCliChatGpt browser choice', () => {
       { writeProgress: (message) => progress.push(message) },
     );
 
-    expect(progress).toHaveLength(1);
+    expect(progress).toHaveLength(2);
     expect(progress[0]).toContain('https://auth.openai.com/authorize?x=1');
-    expect(progress[0]).toContain('different browser');
+    expect(progress[0]).toContain('Browser launch in progress');
+    expect(progress[1]).toContain('https://auth.openai.com/authorize?x=1');
+    expect(progress[1]).toContain('another browser');
   });
 
   it('prints only the URL when the browser fails to launch', async () => {
@@ -65,7 +67,8 @@ describe('signInCliChatGpt browser choice', () => {
     );
 
     expect(progress).toEqual([
-      'Open this URL to sign in with ChatGPT:\nhttps://auth.openai.com/authorize?x=2',
+      'ChatGPT sign-in URL:\nhttps://auth.openai.com/authorize?x=2\nBrowser launch in progress...',
+      'ChatGPT sign-in URL:\nhttps://auth.openai.com/authorize?x=2\nAutomatic browser launch failed; the URL remains available above.',
     ]);
   });
 
@@ -83,8 +86,33 @@ describe('signInCliChatGpt browser choice', () => {
 
     expect(mocks.tryOpenBrowser).not.toHaveBeenCalled();
     expect(progress).toEqual([
-      'Open this URL to sign in with ChatGPT:\nhttps://auth.openai.com/authorize?x=3',
+      'ChatGPT sign-in URL:\nhttps://auth.openai.com/authorize?x=3',
     ]);
+  });
+
+  it('publishes the URL before a slow browser launcher returns', async () => {
+    let finishLaunch: ((result: boolean) => void) | undefined;
+    mocks.tryOpenBrowser.mockReturnValue(
+      new Promise<boolean>((resolve) => {
+        finishLaunch = resolve;
+      }),
+    );
+    mocks.loginWithLoopback.mockImplementation(async ({ openBrowser }) => {
+      await openBrowser('https://auth.openai.com/authorize?x=slow');
+      return loopbackSession();
+    });
+    const progress: string[] = [];
+
+    const signIn = signInCliChatGpt(
+      { device: false, noBrowser: false },
+      { writeProgress: (message) => progress.push(message) },
+    );
+
+    await vi.waitFor(() => {
+      expect(progress[0]).toContain('https://auth.openai.com/authorize?x=slow');
+    });
+    finishLaunch?.(true);
+    await signIn;
   });
 
   it('forwards interactive cancellation to both ChatGPT transports', async () => {

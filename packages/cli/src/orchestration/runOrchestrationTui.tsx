@@ -16,8 +16,8 @@ import {
 } from '../runtime/orchestration';
 import {
   buildCliModelAccessItems,
-  formatCliModelAccessRoute,
-  type CliModelAccessRoute,
+  cliApiFallbackSelection,
+  CLI_MODEL_ACCESS_DESCRIPTION,
   type CliModelAccessStatus,
 } from '../runtime/modelAccessRoute';
 import type { CliApiMode } from '../runtime/apiAccessMode';
@@ -294,10 +294,11 @@ export function OrchestrationApp(
   const teamOpen = step.kind === 'team';
   const accountOpen = step.kind === 'account';
   const modelAccessItems = props.modelAccess
-    ? buildCliModelAccessItems(props.modelAccess)
+    ? buildCliModelAccessItems({
+        kind: 'loaded',
+        access: props.modelAccess,
+      })
     : [];
-  const activeModelAccess: CliModelAccessRoute | undefined =
-    props.modelAccess?.active;
   const isPendingTeam = pending?.kind === 'preset';
   // Model-step header text, shared between the wrapped-row measurement in
   // `headerLines` and the styled render in the `pending` branch below.
@@ -307,10 +308,7 @@ export function OrchestrationApp(
     : 'Model for the first message.';
   let headerLines: readonly string[];
   if (modelAccessOpen) {
-    headerLines = [
-      'Model access',
-      'Choose how TeXRA should authenticate model calls.',
-    ];
+    headerLines = ['Model access', CLI_MODEL_ACCESS_DESCRIPTION];
   } else if (resumeOpen) {
     headerLines = ['Resume', 'Choose a previous session to continue.'];
   } else if (agentOpen) {
@@ -320,10 +318,7 @@ export function OrchestrationApp(
   } else if (accountOpen) {
     headerLines = ['Account', 'Log in or log out.'];
   } else if (pending) {
-    headerLines = [
-      `${modelStepTitle} · ${formatCliModelAccessRoute(props.apiMode)}`,
-      modelStepSubtitle,
-    ];
+    headerLines = [modelStepTitle, modelStepSubtitle];
   } else {
     headerLines = [`TeXRA v${props.version}`, ORCHESTRATION_LAUNCHER_SUBTITLE];
   }
@@ -423,12 +418,12 @@ export function OrchestrationApp(
         <Text bold color="cyan">
           Model access
         </Text>
-        <Text dimColor>Choose how TeXRA should authenticate model calls.</Text>
+        <Text dimColor>{CLI_MODEL_ACCESS_DESCRIPTION}</Text>
         <Box marginTop={1}>
           <Select
             key="orchestration-model-access-picker"
             items={modelAccessItems}
-            activeValue={activeModelAccess}
+            activeValue={cliApiFallbackSelection(props.apiMode)}
             maxVisibleItems={layout.maxVisibleItems}
             showOverflow={layout.showOverflow}
             onSelect={(access) => finish({ kind: 'set-model-access', access })}
@@ -528,8 +523,6 @@ export function OrchestrationApp(
       <Box flexDirection="column" paddingX={1}>
         <Text bold color="cyan">
           {modelStepTitle}
-          {' · '}
-          <Text dimColor>{formatCliModelAccessRoute(props.apiMode)}</Text>
         </Text>
         <Text dimColor>{modelStepSubtitle}</Text>
         <Box marginTop={1}>

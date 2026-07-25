@@ -125,7 +125,7 @@ import {
   formatCliModelAccessRouteInline,
   resolveCliModelAccessRoute,
 } from '../src/runtime/modelAccessRoute';
-import { selectCliModelAccessRoute } from '../src/runtime/modelAccessSelection';
+import { updateCliModelAccess } from '../src/runtime/modelAccessSelection';
 import {
   formatCliApiStatusActionHint,
   formatCliAuthStatusLine,
@@ -207,6 +207,10 @@ const SHOW_WIDE_FIRST_CHILD_LINE =
 const SHOW_ORCHESTRATION = process.env.HARNESS_ORCHESTRATION === '1';
 const SHOW_ORCHESTRATION_STATUS_LINES =
   process.env.HARNESS_ORCHESTRATION_STATUS_LINES !== '0';
+const SHOW_BOTH_SUBSCRIPTION_PREFERENCES =
+  process.env.HARNESS_BOTH_SUBSCRIPTION_PREFERENCES === '1';
+const SHOW_KIMI_CODE_SUBSCRIPTION =
+  process.env.HARNESS_KIMI_CODE_SUBSCRIPTION === '1';
 const SHOW_DELEGATED_ORCHESTRATION_HISTORY =
   process.env.HARNESS_DELEGATED_ORCHESTRATION_HISTORY === '1';
 const SHOW_NO_RUNNABLE_ORCHESTRATION_MODELS =
@@ -499,10 +503,28 @@ const HARNESS_PRESET_PLANS = planCliMultiAgentPresets(
     toolUseAgents: HARNESS_ALL_TOOL_USE_AGENTS,
   },
 );
+const HARNESS_MODEL_ACCESS =
+  SHOW_BOTH_SUBSCRIPTION_PREFERENCES || SHOW_KIMI_CODE_SUBSCRIPTION
+    ? {
+        apiFallback: HARNESS_API_MODE,
+        preferences: {
+          chatGpt: SHOW_BOTH_SUBSCRIPTION_PREFERENCES
+            ? ('on' as const)
+            : ('off' as const),
+          kimiCode: 'on' as const,
+        },
+        chatGptSignedIn: SHOW_BOTH_SUBSCRIPTION_PREFERENCES,
+        ...(SHOW_BOTH_SUBSCRIPTION_PREFERENCES
+          ? { chatGptAccountLabel: 'harness@example.edu' }
+          : {}),
+        kimiCodeKeySet: true,
+      }
+    : undefined;
 const HARNESS_ORCHESTRATION_ITEMS = buildCliOrchestrationItems({
   presetPlans: HARNESS_PRESET_PLANS,
   history: HARNESS_ORCHESTRATION_HISTORY,
   toolUseAgents: HARNESS_VISIBLE_TOOL_USE_AGENT_ENTRIES,
+  modelAccess: HARNESS_MODEL_ACCESS,
 });
 const HARNESS_ORCHESTRATION_RESUME_ITEMS = buildCliResumeItems(
   HARNESS_ORCHESTRATION_HISTORY,
@@ -522,6 +544,7 @@ type HarnessModelFixture = Readonly<{
   value: string;
   label: string;
   availability: NonNullable<CliModelAccess['model']['availability']>;
+  provider?: string;
 }>;
 
 const HARNESS_ORCHESTRATION_MODEL_FIXTURES: readonly HarnessModelFixture[] = [
@@ -536,6 +559,16 @@ const HARNESS_ORCHESTRATION_MODEL_FIXTURES: readonly HarnessModelFixture[] = [
     label: 'DeepSeek V4 Flash',
     availability: 'provider-key',
   },
+  ...(SHOW_KIMI_CODE_SUBSCRIPTION
+    ? [
+        {
+          value: 'kimi3',
+          label: 'Kimi K3',
+          availability: 'provider-key' as const,
+          provider: 'kimiCode',
+        },
+      ]
+    : []),
 ];
 
 function isHarnessModelAvailable(
@@ -614,6 +647,7 @@ if (SHOW_ORCHESTRATION) {
           : []
       }
       apiMode={HARNESS_API_MODE}
+      modelAccess={HARNESS_MODEL_ACCESS}
       version="0.0.0-harness"
       statusLines={
         SHOW_ORCHESTRATION_STATUS_LINES
@@ -2192,25 +2226,27 @@ registerBuiltinSlashCommands({
       `Harness model selected. Future turns: ${model}.`,
     );
   },
-  onModelAccessSelect: (route) => {
-    if (route === 'chatgpt') {
+  onModelAccessSelect: (selection) => {
+    if (selection.kind === 'subscription-preference') {
+      if (selection.provider === 'kimi-code' && selection.state === 'on') {
+        return updateCliModelAccess(
+          { ...HARNESS_CLI_CONTEXT, apiMode: sessionMeta.get().apiMode },
+          selection,
+          { writeProgress: appendHarnessAssistantTranscript },
+        ).then((access) => {
+          sessionMeta.set({ ...sessionMeta.get(), apiMode: access.apiMode });
+          appendHarnessAssistantTranscript(access.message);
+        });
+      }
       appendHarnessAssistantTranscript(
-        'Model access set to ChatGPT subscription.',
+        `${selection.provider} preference set to ${selection.state}.`,
       );
       return;
     }
-    if (route === 'kimi-code') {
-      return selectCliModelAccessRoute(
-        { ...HARNESS_CLI_CONTEXT, apiMode: sessionMeta.get().apiMode },
-        route,
-        { writeProgress: appendHarnessAssistantTranscript },
-      ).then((access) => {
-        sessionMeta.set({ ...sessionMeta.get(), apiMode: access.apiMode });
-        appendHarnessAssistantTranscript(access.message);
-      });
-    }
-    sessionMeta.set({ ...sessionMeta.get(), apiMode: route });
-    appendHarnessAssistantTranscript(`API mode set to ${route}.`);
+    sessionMeta.set({ ...sessionMeta.get(), apiMode: selection.apiMode });
+    appendHarnessAssistantTranscript(
+      `API fallback set to ${selection.apiMode}.`,
+    );
   },
   onMemorySelect: (storagePath) => {
     appendHarnessAssistantTranscript(

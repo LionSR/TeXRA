@@ -7,12 +7,15 @@ import {
   selectCliRunnableModel,
 } from '@cli/runtime/modelAccess';
 import { saveProviderApiKey } from '@cli/runtime/providerApiKey';
-import { parseCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
+import {
+  cliApiFallbackSelection,
+  parseCliModelAccessSelection,
+  type CliModelAccessSelection,
+} from '@cli/runtime/modelAccessRoute';
 import {
   contextForCliModelAccess,
   type CliModelAccessSelectionResult,
-  selectCliApiModelAccessRoute,
-  selectCliModelAccessRoute,
+  updateCliModelAccess,
 } from '@cli/runtime/modelAccessSelection';
 
 import { patchSessionMeta, sessionMeta } from '@cli/chat/tui/state/cliState';
@@ -84,7 +87,10 @@ export async function applyCliProviderApiKey(
   context?: SlashCommandContext,
 ): Promise<string | undefined> {
   await saveProviderApiKey(provider, key);
-  const access = await selectCliApiModelAccessRoute('personal');
+  const access = await updateCliModelAccess(
+    context?.cliContext,
+    cliApiFallbackSelection('personal'),
+  );
   const message = await completeModelAccessSelection(access, context);
   if (provider === 'kimiCode') {
     // The coding-only models route through the subscription automatically;
@@ -109,6 +115,41 @@ export function setCliSessionApiMode(apiMode: CliApiMode): void {
 }
 
 async function applyCliModelAccessSelectionWithSignal(
+  selection: CliModelAccessSelection,
+  context: SlashCommandContext | undefined,
+  output: SlashCommandOutput,
+  signal: AbortSignal,
+): Promise<void> {
+  const cliContext =
+    context == null
+      ? undefined
+      : contextForCliModelAccess(context.cliContext, sessionMeta.get().apiMode);
+  const access = await updateCliModelAccess(cliContext, selection, {
+    writeProgress: (message) =>
+      output.writeProgress(message, { copyable: true }),
+    signal,
+  });
+  output.appendOutcome(await completeModelAccessSelection(access, context));
+}
+
+export function applyCliModelAccessSelection(
+  selection: CliModelAccessSelection,
+  context: SlashCommandContext | undefined,
+  output: SlashCommandOutput = transcriptSlashCommandOutput,
+): Promise<void> & { readonly abort: () => void } {
+  const controller = new AbortController();
+  return Object.assign(
+    applyCliModelAccessSelectionWithSignal(
+      selection,
+      context,
+      output,
+      controller.signal,
+    ),
+    { abort: () => controller.abort() },
+  );
+}
+
+async function applyCliModelAccessInputWithSignal(
   routeInput: string,
   context: SlashCommandContext,
   output: SlashCommandOutput,
@@ -126,32 +167,28 @@ async function applyCliModelAccessSelectionWithSignal(
     return;
   }
 
-  const route = parseCliModelAccessRoute(normalized);
-  if (route) {
-    const access = await selectCliModelAccessRoute(
-      contextForCliModelAccess(context.cliContext, sessionMeta.get().apiMode),
-      route,
-      {
-        writeProgress: (message) =>
-          output.writeProgress(message, { copyable: true }),
-        signal,
-      },
+  const selection = parseCliModelAccessSelection(normalized);
+  if (selection) {
+    await applyCliModelAccessSelectionWithSignal(
+      selection,
+      context,
+      output,
+      signal,
     );
-    output.appendOutcome(await completeModelAccessSelection(access, context));
     return;
   }
 
   output.setNotice(MODEL_ACCESS_USAGE);
 }
 
-export function applyCliModelAccessSelection(
+export function applyCliModelAccessInput(
   routeInput: string,
   context: SlashCommandContext,
   output: SlashCommandOutput = transcriptSlashCommandOutput,
 ): Promise<void> & { readonly abort: () => void } {
   const controller = new AbortController();
   return Object.assign(
-    applyCliModelAccessSelectionWithSignal(
+    applyCliModelAccessInputWithSignal(
       routeInput,
       context,
       output,
