@@ -131,8 +131,7 @@ describe('progress view stream-content projection', () => {
       ...prev,
       conversationProgress: { toolCallCount: 5 },
       roundStage: { index: 2 },
-      activeSubagents: [activeSubagent],
-      finishedSubagentCount: 2,
+      subagents: [activeSubagent],
     }));
 
     handler.syncStreamContent(stream, { includeActiveState: true });
@@ -159,10 +158,8 @@ describe('progress view stream-content projection', () => {
         conversationProgress: { toolCallCount: 5 },
         roundStage: { index: 2 },
         badges: {
-          activeSubagents: [activeSubagent],
-          finishedSubagentCount: 2,
-          activeProcesses: [],
-          finishedProcessCount: 0,
+          subagents: [activeSubagent],
+          processes: [],
         },
         parentStreamId: parentStream,
       },
@@ -233,7 +230,7 @@ describe('progress view stream-content projection', () => {
     state.updateStreamState(stream, (prev) => ({
       ...prev,
       conversationProgress: { toolCallCount: 3 },
-      activeSubagents: [activeSubagent],
+      subagents: [activeSubagent],
     }));
     messages.length = 0;
 
@@ -246,7 +243,7 @@ describe('progress view stream-content projection', () => {
       kind: AgentCategory.ToolUse,
       activeState: {
         conversationProgress: { toolCallCount: 3 },
-        badges: { activeSubagents: [activeSubagent] },
+        badges: { subagents: [activeSubagent] },
       },
     });
   });

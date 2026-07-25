@@ -91,10 +91,8 @@ const UpdateRoundStageMessageSchema = StreamScopedBaseSchema.extend({
 
 const UpdateStreamBadgesMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES),
-  activeSubagents: z.array(ActiveChildInfoSchema),
-  finishedSubagentCount: z.number(),
-  activeProcesses: z.array(ActiveChildInfoSchema),
-  finishedProcessCount: z.number(),
+  subagents: z.array(ActiveChildInfoSchema),
+  processes: z.array(ActiveChildInfoSchema),
 });
 
 const UpdateProcessOutputMessageSchema = StreamScopedBaseSchema.extend(
@@ -301,10 +299,8 @@ const StreamContentRenderFields = {
       conversationProgress: ConversationProgressSchema,
       roundStage: RoundStageSchema.nullable(),
       badges: z.strictObject({
-        activeSubagents: z.array(ActiveChildInfoSchema),
-        finishedSubagentCount: z.number(),
-        activeProcesses: z.array(ActiveChildInfoSchema),
-        finishedProcessCount: z.number(),
+        subagents: z.array(ActiveChildInfoSchema),
+        processes: z.array(ActiveChildInfoSchema),
       }),
       parentStreamId: StreamTabIdSchema.nullable(),
     })

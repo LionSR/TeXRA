@@ -198,21 +198,26 @@ export const streamMetaHandlers = {
   [PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES]: (data) => {
     setStreamStateForId(data.stream, (prev) =>
       create(prev, (draft) => {
-        draft.activeSubagents = data.activeSubagents;
-        draft.finishedSubagentCount = data.finishedSubagentCount;
-        draft.activeProcesses = data.activeProcesses;
-        draft.finishedProcessCount = data.finishedProcessCount;
+        draft.subagents = data.subagents;
+        draft.processes = data.processes;
       }),
     );
     // Prune output buffers for processes that just left the active list. Output
     // lives in a separate store, so only `processOutput` is projected into the
     // shared reducer and spliced back; an unchanged map skips the re-render.
+    // The roster also carries retained finished rows — pass only the live
+    // subset, or the prune would never fire again.
     const prev = appState.get();
     const current = prev.processOutputs.get(data.stream);
     if (!current) return;
     const { processOutput } = reduceStreamMeta(
       { ...EMPTY_STREAM_META, processOutput: current },
-      { kind: 'activeProcesses', processes: data.activeProcesses },
+      {
+        kind: 'activeProcesses',
+        processes: data.processes.filter(
+          (child) => child.finishedAt === undefined,
+        ),
+      },
       { outputCap: WEBVIEW_OUTPUT_CAP },
     );
     if (processOutput === current) return;

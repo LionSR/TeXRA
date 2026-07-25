@@ -112,23 +112,20 @@ export interface StreamExecutionState {
   kind: (typeof AgentCategory)[keyof typeof AgentCategory];
   conversationProgress: ConversationProgress;
   roundStage?: RoundStage;
-  activeSubagents: ActiveChildInfo[];
-  finishedSubagentCount: number;
-  activeProcesses: ActiveChildInfo[];
-  finishedProcessCount: number;
+  /** Live children plus the finished ones retained for display (`finishedAt`
+   *  set). Field names match the `child.activity` event `kind`. */
+  subagents: ActiveChildInfo[];
+  processes: ActiveChildInfo[];
 }
 
 /**
- * Per-stream child-activity badge counts, projected from
+ * Per-stream child-activity rosters, projected from
  * {@link StreamExecutionState}. Sent to the webview on tab switch and whenever
  * subagent/process activity changes.
  */
 export type StreamBadgeSnapshot = Pick<
   StreamExecutionState,
-  | 'activeSubagents'
-  | 'finishedSubagentCount'
-  | 'activeProcesses'
-  | 'finishedProcessCount'
+  'subagents' | 'processes'
 >;
 
 function createExecutionState(
@@ -137,10 +134,8 @@ function createExecutionState(
   return {
     kind,
     conversationProgress: { toolCallCount: 0 },
-    activeSubagents: [],
-    finishedSubagentCount: 0,
-    activeProcesses: [],
-    finishedProcessCount: 0,
+    subagents: [],
+    processes: [],
   };
 }
 
@@ -403,22 +398,33 @@ export class ProgressViewState {
     }
   }
 
-  /** Reset per-run ephemeral counters when a new run starts on the same stream. */
-  resetFinishedChildCounters(stream: StreamTabId): void {
+  /** Reset per-run ephemeral child state when a new run starts on the same
+   *  stream — retained finished children belong to the previous run. */
+  resetPerRunChildState(stream: StreamTabId): void {
     const current = this._streamStates.get(stream);
     if (!current) return;
 
+    const retainedSubagents = current.subagents.filter(
+      (child) => child.finishedAt !== undefined,
+    );
+    const retainedProcesses = current.processes.filter(
+      (child) => child.finishedAt !== undefined,
+    );
     const needsReset =
-      current.finishedSubagentCount !== 0 ||
-      current.finishedProcessCount !== 0 ||
+      retainedSubagents.length > 0 ||
+      retainedProcesses.length > 0 ||
       current.conversationProgress.toolCallCount !== 0 ||
       current.roundStage !== undefined;
 
     if (needsReset) {
       this._streamStates.set(stream, {
         ...current,
-        finishedSubagentCount: 0,
-        finishedProcessCount: 0,
+        subagents: current.subagents.filter(
+          (child) => child.finishedAt === undefined,
+        ),
+        processes: current.processes.filter(
+          (child) => child.finishedAt === undefined,
+        ),
         conversationProgress: { toolCallCount: 0 },
         roundStage: undefined,
       });
@@ -427,6 +433,41 @@ export class ProgressViewState {
 
   getStreamState(stream: StreamTabId): StreamExecutionState | undefined {
     return this._streamStates.get(stream);
+  }
+
+  /**
+   * Project a stream's child rosters for the wire. `streamStatus` — not the
+   * roster row — owns a subagent's phase: a child's roster drop can arrive
+   * BEFORE its terminal status (the cancel path untracks the handle, then
+   * transitions the stream), so the status stamped into a retained row at drop
+   * time can read `running` forever. Resolve it here, at the one boundary every
+   * roster-carrying payload passes through — badges, the tab-switch content
+   * sync, and the structural `UPDATE_STREAMS` / `UPDATE_STREAM_METADATA`
+   * rebuild alike — so no send path can ship the stale stamped value.
+   *
+   * Processes are passed through, and the trap above is subagent-only.
+   * `childStreamId` is exclusive to subagents (see `ActiveChildInfoSchema`), so
+   * a process owns no stream, has no entry in the status machine, and there is
+   * no second source to resolve its row against — its roster row is the only
+   * report of its state. Nor can one appear: `processes` is projected from
+   * `collectChildSummary(parent, ProcessExecutionHandle)`, and production never
+   * constructs a `ProcessExecutionHandle` — a background `bash`/`codex` run is
+   * an `AgentExecutionHandle` (see `executionRegistry.killBackgroundProcesses`),
+   * so the roster is empty outside tests.
+   */
+  projectChildRosters(state: StreamExecutionState): StreamBadgeSnapshot {
+    return {
+      subagents: state.subagents.map((child) =>
+        child.kind === 'subagent'
+          ? {
+              ...child,
+              status:
+                this.streamStatus.get(child.childStreamId) ?? child.status,
+            }
+          : child,
+      ),
+      processes: state.processes,
+    };
   }
 
   getAllStreamStates(): ReadonlyMap<StreamTabId, StreamExecutionState> {
