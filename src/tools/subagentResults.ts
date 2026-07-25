@@ -455,18 +455,17 @@ export function formatBashError(
  * Format active execution state as context for the agent after compaction.
  * Returns null if there are no active children to report.
  *
- * This helps the agent understand what subagents and background processes
- * are still running after context was compressed, so it can:
+ * This helps the agent understand what subagents are still running after
+ * context was compressed, so it can:
  * - Avoid launching duplicate subagents
  * - Know which execution IDs to check on
  * - Understand that pending results may arrive as follow-up messages
  */
 export function formatPostCompactionContext(
   subagents: ActiveChildInfo[],
-  processes: ActiveChildInfo[],
   workPlan?: WorkPlanSnapshot | null,
 ): string | null {
-  const hasChildren = subagents.length > 0 || processes.length > 0;
+  const hasChildren = subagents.length > 0;
   const todos = workPlan?.todos ?? [];
   const hasTodos = todos.length > 0;
   const hasPlan = workPlan?.plan != null || workPlan?.planSummary != null;
@@ -496,19 +495,6 @@ export function formatPostCompactionContext(
       );
     }
     lines.push('</active-subagents>');
-  }
-
-  if (processes.length > 0) {
-    lines.push(`<active-background-bash count="${processes.length}">`);
-    for (const proc of processes) {
-      const elapsedAttr = proc.elapsed
-        ? ` elapsed="${escapeAttr(proc.elapsed)}"`
-        : '';
-      lines.push(
-        `  <background-bash id="${escapeAttr(proc.executionId)}" command="${escapeAttr(proc.agentName)}"${elapsedAttr} />`,
-      );
-    }
-    lines.push('</active-background-bash>');
   }
 
   if (hasTodos) {
