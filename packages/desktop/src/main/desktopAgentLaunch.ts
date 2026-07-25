@@ -20,7 +20,7 @@ export interface DesktopAgentLaunchContext {
   readonly ready: Promise<void>;
   readonly session: SessionHandle;
   /** Resume-only canonical admission checked under the execution lease lock. */
-  readonly canAcquireResumeLease?: () => boolean;
+  readonly canAcquireResumeLease?: () => boolean | Promise<boolean>;
 }
 
 export interface DesktopAgentLaunchOptions {

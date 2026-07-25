@@ -140,6 +140,35 @@ describe('cross-process execution leases', () => {
     });
   });
 
+  it('holds the execution lock while awaiting canonical resume admission', async () => {
+    const executionId = 'd8644f' as ExecutionId;
+    let finishAdmission!: (admitted: boolean) => void;
+    let markAdmissionStarted!: () => void;
+    const admissionStarted = new Promise<void>((resolve) => {
+      markAdmissionStarted = resolve;
+    });
+    const admission = new Promise<boolean>((resolve) => {
+      finishAdmission = resolve;
+    });
+    const acquisition = acquireResumedExecutionLease(executionId, () => {
+      markAdmissionStarted();
+      return admission;
+    });
+    await admissionStarted;
+
+    let maintenanceEntered = false;
+    const maintenance = runWithInactiveExecutionLease(executionId, async () => {
+      maintenanceEntered = true;
+    });
+    await Promise.resolve();
+    expect(maintenanceEntered).toBe(false);
+
+    finishAdmission(false);
+    await expect(acquisition).resolves.toBe('cancelled');
+    await maintenance;
+    expect(maintenanceEntered).toBe(true);
+  });
+
   it('keeps resumed ownership live until terminal lifecycle release', async () => {
     const executionId = 'd86440' as ExecutionId;
     await writeExecution(executionId);

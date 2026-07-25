@@ -468,7 +468,7 @@ export async function executeAgent(
 
 export interface ResumeToolUseFromResumeDataOptions extends SubagentRunOptions {
   /** Recheck canonical admission atomically while acquiring the resumed lease. */
-  readonly canAcquireResumeLease?: () => boolean;
+  readonly canAcquireResumeLease?: () => boolean | Promise<boolean>;
   /**
    * Take messages queued after the initial drain. The flow invokes this once
    * after attaching its live context and before resuming the persisted cursor.

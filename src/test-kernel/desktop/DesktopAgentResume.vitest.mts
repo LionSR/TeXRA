@@ -11,6 +11,7 @@ import * as AgentExecution from '@agent/runtime/executeAgent';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import * as SessionResumeRetrieval from '@agent/runtime/SessionResumeRetrieval';
 import * as AgentRunner from '@agent/runtime/runAgent';
+import { ResumeAdmissionCancelledError } from '@agent/runtime/resumeAdmission';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { DesktopProcessResumeOwner } from '@desktop/main/desktopAgentResume';
 import {
@@ -308,6 +309,43 @@ describe('desktop process resume owner', () => {
       await expect(resume).resolves.toBe(false);
       expect(runAgent).not.toHaveBeenCalled();
       expect(harness.session.transcripts.has(stream)).toBe(false);
+    } finally {
+      harness.dispose();
+    }
+  });
+
+  it('rejects a stale process store after another process deletes the stream', async () => {
+    retrieveSessionResumeData.mockResolvedValue({
+      type: 'workflow',
+      agentConfig: config,
+      executionId,
+    });
+    const harness = createResumeHarness();
+    vi.spyOn(
+      harness.session.transcripts,
+      'hasAuthoritativeStream',
+    ).mockResolvedValue(false);
+    runAgent.mockImplementation(async (_request, options) => {
+      if ((await options.canAcquireResumeLease?.()) === false) {
+        throw new ResumeAdmissionCancelledError(executionId);
+      }
+      return {
+        executionId,
+        streamId: stream,
+        category: 'workflow',
+        outcome: RUN_OUTCOME.COMPLETED,
+        outputs: [],
+        compileFailures: [],
+      };
+    });
+
+    try {
+      await expect(harness.owner.tryResumeStream(stream)).resolves.toBe(false);
+      expect(harness.session.transcripts.has(stream)).toBe(true);
+
+      const emit = vi.fn();
+      harness.session.useHostInteractions({ emit, cancel: vi.fn() });
+      expect(emit).not.toHaveBeenCalled();
     } finally {
       harness.dispose();
     }

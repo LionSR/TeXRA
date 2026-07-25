@@ -270,6 +270,17 @@ export class StreamLogStore {
     return this.summaries.has(streamId);
   }
 
+  /**
+   * Recheck the durable transcript source rather than this process's cached
+   * summary. Resume admission uses this while holding the execution lease
+   * lock, so a stream deleted by another process cannot be recreated from a
+   * stale in-memory summary.
+   */
+  async hasAuthoritativeStream(streamId: StreamTabId): Promise<boolean> {
+    if (this.mode.kind === 'ephemeral') return this.has(streamId);
+    return this.kv.exists(streamId);
+  }
+
   keys(): StreamTabId[] {
     return [...this.summaries.keys()];
   }

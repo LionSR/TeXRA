@@ -46,7 +46,7 @@ export interface RunAgentOptions extends Pick<
   onExecutionLeaseAcquired?: (scope: OwnedExecutionLeaseScope) => void;
   registerExecution?: boolean;
   /** Recheck canonical admission atomically while acquiring a resumed lease. */
-  canAcquireResumeLease?: () => boolean;
+  canAcquireResumeLease?: () => boolean | Promise<boolean>;
   /**
    * Opt-in set by the "fix LaTeX" VS Code actions (Fix-Compilation command, the
    * progress-view compile fixer): run the launched agent on the configured

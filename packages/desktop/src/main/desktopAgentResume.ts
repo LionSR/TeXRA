@@ -125,9 +125,19 @@ function resumeDesktopStream(
   context: DesktopResumeContext,
 ): Promise<boolean> {
   if (!context.session.transcripts.has(streamId)) return Promise.resolve(false);
+  let authoritativeStreamMissing = false;
   const isResumeInvalidated = (): boolean =>
     context.isCancellationRequested() ||
+    authoritativeStreamMissing ||
     !context.session.transcripts.has(streamId);
+  const canAcquireResumeLease = async (): Promise<boolean> => {
+    if (isResumeInvalidated()) return false;
+    if (!(await context.session.transcripts.hasAuthoritativeStream(streamId))) {
+      authoritativeStreamMissing = true;
+      return false;
+    }
+    return !isResumeInvalidated();
+  };
   const runtimeHost = context.session.interactions;
   let lifecycleStarted = false;
   return resolveAndResumeStream(streamId, {
@@ -166,7 +176,7 @@ function resumeDesktopStream(
         {
           session: context.session,
           runtimeUnavailableTools: DESKTOP_UNAVAILABLE_TOOLS,
-          canAcquireResumeLease: () => !isResumeInvalidated(),
+          canAcquireResumeLease,
           isCancellationRequested: isResumeInvalidated,
           onRun: () => {
             lifecycleStarted = true;
@@ -181,7 +191,7 @@ function resumeDesktopStream(
         {
           ready: Promise.resolve(),
           session: context.session,
-          canAcquireResumeLease: () => !isResumeInvalidated(),
+          canAcquireResumeLease,
         },
         {
           modelHandlerCompatibilityKey,
