@@ -605,4 +605,75 @@ describe('CLI child list display model', () => {
     expect(output).not.toContain('in:2');
     expect(output).not.toContain('ctx:1');
   });
+
+  it.each([120, 80, 64, 56])(
+    'shows a run its phase and a reflection stream its round at %i columns',
+    async (columns) => {
+      const { ink, React } = await loadInk();
+      const run = 'run' as StreamTabId;
+      const reflection = 'reflect' as StreamTabId;
+      const output: string = ink.renderToString(
+        React.createElement(SubagentList, {
+          maxRows: 4,
+          sessions: [
+            {
+              id: run,
+              label: 'workflow-script',
+              active: false,
+              slice: workflowAgentSlice('run', {
+                status: STREAM_PHASE.RUNNING,
+                phaseStage: { label: 'Reduce', index: 1, total: 3 },
+              }),
+            },
+            {
+              id: reflection,
+              label: 'reflect',
+              active: false,
+              slice: workflowAgentSlice('reflect', {
+                status: STREAM_PHASE.RUNNING,
+                roundStage: { index: 1, total: 3 },
+              }),
+            },
+          ],
+        }),
+        { columns },
+      );
+
+      // One line per row at every width — the phase takes the round's slot
+      // rather than adding one.
+      expect(
+        output.split('\n').filter((line) => line.includes('Reduce 2/3')),
+      ).toHaveLength(1);
+      expect(output).toContain('workflow-script running · Reduce 2/3');
+      expect(output).toContain('reflect running · r2/3');
+      expect(output).not.toContain('Reduce 2/3 · r2/3');
+      expect(output).not.toContain('r2/3 · Reduce 2/3');
+    },
+  );
+
+  it('never shows both a phase and a round on one row', async () => {
+    const { ink, React } = await loadInk();
+    const run = 'run' as StreamTabId;
+    const output: string = ink.renderToString(
+      React.createElement(SubagentList, {
+        maxRows: 3,
+        sessions: [
+          {
+            id: run,
+            label: 'workflow-script',
+            active: false,
+            slice: workflowAgentSlice('run', {
+              status: STREAM_PHASE.RUNNING,
+              phaseStage: { label: 'Reduce', index: 1, total: 3 },
+              roundStage: { index: 0, total: 9 },
+            }),
+          },
+        ],
+      }),
+      { columns: 100 },
+    );
+
+    expect(output).toContain('Reduce 2/3');
+    expect(output).not.toContain('r1/9');
+  });
 });

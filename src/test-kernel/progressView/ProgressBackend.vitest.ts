@@ -984,6 +984,68 @@ describe('ProgressBackend', () => {
     }
   });
 
+  it('projects a workflow-script phase onto a non-active run stream', async () => {
+    const target = createIsolatedRecordingBackend();
+    const { backend, messages } = target;
+    const subscription = backend.setupEventListeners();
+    const run = 'workflow-run' as StreamTabId;
+
+    try {
+      emitActiveStream(target, {
+        streamId: 'root',
+        agentCategory: AgentCategory.ToolUse,
+      });
+      await vi.waitFor(() => expect(backend.state.activeStream).toBe('root'));
+      emitActiveStream(target, {
+        streamId: run,
+        agentCategory: AgentCategory.Workflow,
+        suppressViewSwitch: true,
+      });
+      await vi.waitFor(() =>
+        expect(backend.state.getStreamState(run)).toBeDefined(),
+      );
+      messages.length = 0;
+
+      target.session.events.emit({
+        scope: 'run',
+        streamId: run,
+        event: {
+          type: 'stage.start',
+          id: 'phase-2',
+          label: 'Reduce',
+          kind: 'phase',
+          index: 1,
+          total: 3,
+        },
+      });
+
+      // The parent's viewport reads this row, so the push must reach a stream
+      // that is not the active one.
+      expect(backend.state.activeStream).toBe('root');
+      await vi.waitFor(() =>
+        expect(backend.state.getStreamState(run)).toMatchObject({
+          phaseStage: { label: 'Reduce', index: 1, total: 3 },
+        }),
+      );
+      const patch = messages.find(
+        (message) =>
+          message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA &&
+          message.streamInfo.name === run,
+      );
+      if (patch?.command !== PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA) {
+        throw new Error('Expected a metadata patch for the run stream');
+      }
+      expect(patch.streamState).toMatchObject({
+        phaseStage: { label: 'Reduce', index: 1, total: 3 },
+        roundStage: null,
+      });
+    } finally {
+      subscription.dispose();
+      backend.dispose();
+      target.session.dispose();
+    }
+  });
+
   it('patches one stream for subagent registration and run-start metadata', async () => {
     const target = createIsolatedRecordingBackend();
     const { backend, messages, session } = target;

@@ -40,15 +40,19 @@ import {
   type InquiryThreadUpdatedEvent,
 } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
+import { formatPhaseStageLabel } from '@shared/streams/streamStatusDisplay';
 import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 import { ProgressEvents } from '../events';
 
 // Local imports - contexts
 import {
   EMPTY_INQUIRY_THREADS,
+  EMPTY_PHASE_STAGE_MAP,
   EMPTY_STREAM_BY_ID,
   inquiryThreadsContext,
+  phaseStagesContext,
   streamByIdContext,
+  type PhaseStageMap,
   type StreamByIdMap,
 } from '../contexts/streamContexts';
 
@@ -141,6 +145,18 @@ export class BackgroundTasksPanel extends LitElement {
         text-decoration-color: var(--wa-color-text-normal);
       }
 
+      /* Sits between the name and the description: a run's phase identifies
+         where it is, so it never shrinks and never wraps the row. */
+      .task-phase {
+        flex: 0 0 auto;
+        max-width: 10rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: var(--font-size-xs);
+        color: var(--color-text-secondary);
+      }
+
       .task-description {
         flex: 1 1 8rem;
         min-width: 0;
@@ -220,6 +236,12 @@ export class BackgroundTasksPanel extends LitElement {
   @consume({ context: inquiryThreadsContext, subscribe: true })
   @state()
   private inquiries: InquiryThreadUpdatedEvent[] = EMPTY_INQUIRY_THREADS;
+
+  /** Current phase per stream — a workflow-script run's row is otherwise
+   *  indistinguishable at minute 2 and minute 38 of the same run. */
+  @consume({ context: phaseStagesContext, subscribe: true })
+  @state()
+  private phaseStages: PhaseStageMap = EMPTY_PHASE_STAGE_MAP;
 
   /** Track previous active count to detect transitions. */
   private prevActiveCount = 0;
@@ -391,6 +413,9 @@ export class BackgroundTasksPanel extends LitElement {
     const description = childStreamId
       ? this.streamById.get(childStreamId)?.description
       : undefined;
+    const phaseLabel = childStreamId
+      ? formatPhaseStageLabel(this.phaseStages.get(childStreamId))
+      : undefined;
     const badge = taskStatusBadge(child);
     const idPrefix = `background-subagent-${index}`;
     const nameTooltip = isClickable
@@ -436,6 +461,15 @@ export class BackgroundTasksPanel extends LitElement {
             >${child.agentName}</span
           >
           <wa-tooltip for="${idPrefix}-name">${nameTooltip}</wa-tooltip>
+          ${
+            phaseLabel
+              ? html`<span id="${idPrefix}-phase" class="task-phase"
+                    >${phaseLabel}</span
+                  ><wa-tooltip for="${idPrefix}-phase"
+                    >${phaseLabel}</wa-tooltip
+                  >`
+              : nothing
+          }
           ${
             description
               ? html`<span id="${idPrefix}-description" class="task-description"

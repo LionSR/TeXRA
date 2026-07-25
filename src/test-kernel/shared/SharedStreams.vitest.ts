@@ -12,6 +12,7 @@ import {
 import { diffActiveChildren } from '@shared/streams/childActivityReducer';
 import { buildStreamMetadata } from '@shared/streams/streamMetadata';
 import {
+  formatPhaseStageLabel,
   formatRoundStageLabel,
   formatStreamStatusLabel,
   streamStatusDisplayKey,
@@ -85,6 +86,7 @@ describe('buildStreamMetadata', () => {
       status: STREAM_STATUS.READY,
       conversationProgress: { toolCallCount: 0 },
       roundStage: null,
+      phaseStage: null,
       subagents: [],
     });
     expect(Object.hasOwn(metadata, 'substate')).toBe(true);
@@ -125,8 +127,18 @@ describe('buildStreamMetadata', () => {
       lastTimestamp: 123,
       conversationProgress: { toolCallCount: 5 },
       roundStage: { index: 1, total: 3 },
+      phaseStage: null,
       subagents: [child, finishedChild],
     });
+  });
+
+  it('carries a workflow-script phase for the run row', () => {
+    expect(
+      buildStreamMetadata({
+        kind: AgentCategory.Workflow,
+        phaseStage: { label: 'Reduce', index: 1, total: 3 },
+      }).phaseStage,
+    ).toEqual({ label: 'Reduce', index: 1, total: 3 });
   });
 });
 
@@ -145,6 +157,28 @@ describe('formatRoundStageLabel', () => {
 
   it('passes undefined through for streams without a round', () => {
     expect(formatRoundStageLabel(undefined)).toBeUndefined();
+  });
+});
+
+describe('formatPhaseStageLabel', () => {
+  it('renders the one-based phase over the declared total', () => {
+    expect(formatPhaseStageLabel({ label: 'Reduce', index: 1, total: 3 })).toBe(
+      'Reduce 2/3',
+    );
+  });
+
+  it('renders the bare position when no total was declared', () => {
+    expect(formatPhaseStageLabel({ label: 'Reduce', index: 1 })).toBe(
+      'Reduce 2',
+    );
+  });
+
+  it('renders only the title for a dynamically opened phase', () => {
+    expect(formatPhaseStageLabel({ label: 'Cleanup' })).toBe('Cleanup');
+  });
+
+  it('passes undefined through for streams without a phase', () => {
+    expect(formatPhaseStageLabel(undefined)).toBeUndefined();
   });
 });
 
