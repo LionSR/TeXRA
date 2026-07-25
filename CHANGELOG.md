@@ -60,6 +60,9 @@ All notable changes to this project will be documented in this file.
 
 #### New Features
 
+- **Focused workflow runs group agent rows by phase** — the child list now
+  separates workflow agents under phase headers with per-phase task progress,
+  while preserving keyboard shortcuts and compact layouts on narrow terminals.
 - **Workflow-script task rows show their status at a glance** — each task in
   the terminal transcript carries its own marker and color for planned,
   running, finished, saved-result, skipped, and failed, instead of every row

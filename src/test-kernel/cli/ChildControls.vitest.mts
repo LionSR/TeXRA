@@ -6,7 +6,11 @@ import {
   resolveChildListTarget,
 } from '@cli/chat/tui/state/childControls';
 import { NO_BYPASS, type StreamSlice } from '@cli/chat/tui/state/cliState';
-import { streamTreeViews } from '@cli/chat/tui/state/streamViews';
+import {
+  groupWorkflowPhaseEntries,
+  streamTreeEntries,
+  streamTreeViews,
+} from '@cli/chat/tui/state/streamViews';
 import { STREAM_PHASE, type StreamTabId } from '@shared/schemas';
 import { buildChildStreamEntries } from '@test/support/childStreamEntries';
 
@@ -155,6 +159,104 @@ describe('CLI child controls', () => {
         zeroBasedIndex: 0,
       }),
     ).toBe(leaf);
+  });
+
+  it('returns phase-less ordering unchanged', () => {
+    const ordered = [
+      { id: 'newest', workflowPhase: undefined },
+      { id: 'oldest', workflowPhase: undefined },
+    ] as const;
+
+    expect(groupWorkflowPhaseEntries(ordered)).toBe(ordered);
+  });
+
+  it('stably groups phases before assigning visible shortcut indices', () => {
+    const ids = ['a', 'b', 'c', 'd', 'e'].map((id) => id as StreamTabId);
+    const [a, b, c, d, e] = ids as [
+      StreamTabId,
+      StreamTabId,
+      StreamTabId,
+      StreamTabId,
+      StreamTabId,
+    ];
+    const entries = buildChildStreamEntries({
+      parentStreamId: root,
+      retained: [
+        {
+          kind: 'subagent',
+          executionId: 'a-exec',
+          agentName: 'a',
+          childStreamId: a,
+          status: STREAM_PHASE.RUNNING,
+          workflowPhase: 'Reduce',
+        },
+        {
+          kind: 'subagent',
+          executionId: 'b-exec',
+          agentName: 'b',
+          childStreamId: b,
+          status: STREAM_PHASE.RUNNING,
+          workflowPhase: 'Map',
+        },
+        {
+          kind: 'subagent',
+          executionId: 'c-exec',
+          agentName: 'c',
+          childStreamId: c,
+          status: STREAM_PHASE.RUNNING,
+          workflowPhase: 'Reduce',
+        },
+        {
+          kind: 'subagent',
+          executionId: 'd-exec',
+          agentName: 'd',
+          childStreamId: d,
+          status: STREAM_PHASE.RUNNING,
+        },
+        {
+          kind: 'subagent',
+          executionId: 'e-exec',
+          agentName: 'e',
+          childStreamId: e,
+          status: STREAM_PHASE.RUNNING,
+          workflowPhase: 'Map',
+        },
+      ],
+    });
+    const streams = new Map<StreamTabId, StreamSlice>([
+      [root, slice({ streamId: root })],
+      ...ids.map(
+        (id) =>
+          [id, slice({ streamId: id, status: STREAM_PHASE.RUNNING })] as const,
+      ),
+    ]);
+    const parentStream = new Map(ids.map((id) => [id, root] as const));
+
+    expect(
+      streamTreeEntries({
+        activeStreamId: root,
+        childStreamEntries: entries,
+        parentStream,
+        rootStreamId: root,
+        streams,
+      }),
+    ).toEqual([
+      { id: root },
+      { id: e, shortcutIndex: 1 },
+      { id: b, shortcutIndex: 2 },
+      { id: d, shortcutIndex: 3 },
+      { id: c, shortcutIndex: 4 },
+      { id: a, shortcutIndex: 5 },
+    ]);
+    expect(
+      numericFocusTargetForActiveStream({
+        activeStreamId: root,
+        childStreamEntries: entries,
+        parentStream,
+        streams,
+        zeroBasedIndex: 1,
+      }),
+    ).toBe(b);
   });
 
   it('preserves Alt/Esc-number stream focus order', () => {
