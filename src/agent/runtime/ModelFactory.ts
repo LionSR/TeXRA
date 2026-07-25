@@ -612,16 +612,6 @@ async function createModelHandlerForResolvedCompatibilityKey(
       );
     }
 
-    case 'ModelHandlerOpenAIReasoning': {
-      logger.debug(CHANNEL, 'Using OpenAI-compatible reasoning handler');
-      const { ReasoningModelHandlerOpenAI } =
-        await import('@agent/modelHandlers/openai/reasoningModelHandlerOpenAI');
-      return finalizeModelHandler(
-        new ReasoningModelHandlerOpenAI(config),
-        'ModelHandlerOpenAIReasoning',
-      );
-    }
-
     case 'ModelHandlerGoogleInteractions': {
       logger.debug(CHANNEL, 'Using Google Interactions API Handler');
       const { ModelHandlerGoogleInteractions } =
