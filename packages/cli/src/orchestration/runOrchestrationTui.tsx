@@ -18,8 +18,6 @@ import {
   buildCliModelAccessItems,
   cliApiFallbackSelection,
   CLI_MODEL_ACCESS_DESCRIPTION,
-  formatCliModelAccessRoute,
-  resolveCliModelAccessRoute,
   type CliModelAccessStatus,
 } from '../runtime/modelAccessRoute';
 import type { CliApiMode } from '../runtime/apiAccessMode';
@@ -308,15 +306,6 @@ export function OrchestrationApp(
   const modelStepSubtitle = isPendingTeam
     ? 'Runs the orchestrator agent and is the model it can choose for delegation.'
     : 'Model for the first message.';
-  const modelStepAccessRoute = resolveCliModelAccessRoute({
-    apiMode: props.apiMode,
-    subscriptionActive:
-      props.modelAccess?.preferences.chatGpt === 'on' &&
-      props.modelAccess.chatGptSignedIn,
-    kimiCodeActive:
-      props.modelAccess?.preferences.kimiCode === 'on' &&
-      props.modelAccess.kimiCodeKeySet === true,
-  });
   let headerLines: readonly string[];
   if (modelAccessOpen) {
     headerLines = ['Model access', CLI_MODEL_ACCESS_DESCRIPTION];
@@ -329,10 +318,7 @@ export function OrchestrationApp(
   } else if (accountOpen) {
     headerLines = ['Account', 'Log in or log out.'];
   } else if (pending) {
-    headerLines = [
-      `${modelStepTitle} · ${formatCliModelAccessRoute(modelStepAccessRoute)}`,
-      modelStepSubtitle,
-    ];
+    headerLines = [modelStepTitle, modelStepSubtitle];
   } else {
     headerLines = [`TeXRA v${props.version}`, ORCHESTRATION_LAUNCHER_SUBTITLE];
   }
@@ -537,10 +523,6 @@ export function OrchestrationApp(
       <Box flexDirection="column" paddingX={1}>
         <Text bold color="cyan">
           {modelStepTitle}
-          {' · '}
-          <Text dimColor>
-            {formatCliModelAccessRoute(modelStepAccessRoute)}
-          </Text>
         </Text>
         <Text dimColor>{modelStepSubtitle}</Text>
         <Box marginTop={1}>

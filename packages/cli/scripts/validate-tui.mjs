@@ -516,7 +516,7 @@ const SCENARIOS = [
     exitKeys: [ESC, ESC],
     expectExit: true,
     expect: [
-      'Model · Included TeXRA access',
+      'Model',
       'Model for the first message.',
       'Sonnet 4.6 (Thinking) — included: available',
       'GPT-5.4 — included: available',
@@ -538,7 +538,7 @@ const SCENARIOS = [
     exitKeys: [ESC, ESC],
     expectExit: true,
     expect: [
-      'Model · Personal API keys',
+      'Model',
       'Model for the first message.',
       'DeepSeek V4 Flash — api: api key set',
       'Esc back',
@@ -563,12 +563,16 @@ const SCENARIOS = [
     exitKeys: [ESC, ESC],
     expectExit: true,
     expect: [
-      'Model · Kimi Code subscription',
+      'Model',
       'DeepSeek V4 Flash — api: api key set',
       'Kimi K3 — api: Kimi Code subscription',
       'Esc back',
     ],
-    unexpect: ['Model · Personal API keys', 'Kimi K3 — api: api key set'],
+    unexpect: [
+      'Model · Personal API keys',
+      'Model · Kimi Code subscription',
+      'Kimi K3 — api: api key set',
+    ],
   },
   {
     name: 'orchestrate-model-pick-esc-back-reselect',
@@ -583,7 +587,7 @@ const SCENARIOS = [
     exitKeys: [ESC, ESC],
     expectExit: true,
     expect: [
-      'Model · Personal API keys',
+      'Model',
       'Model for the first message.',
       'DeepSeek V4 Flash — api: api key set',
       'Esc back',

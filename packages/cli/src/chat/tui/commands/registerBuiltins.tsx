@@ -690,9 +690,7 @@ export function registerBuiltinSlashCommands(options?: {
           }}
           onApiModePersonal={async () => {
             // A key save only needs the mode switch when leaving included
-            // access — already-personal sessions (including an active Kimi
-            // Code route) must not be treated as an explicit "Personal API
-            // keys" picker choice, which would clear the Kimi preference.
+            // access; already-personal sessions require no state change.
             if (sessionMeta.get().apiMode === 'personal') return;
             await onModelAccessSelect(
               cliApiFallbackSelection('personal'),
