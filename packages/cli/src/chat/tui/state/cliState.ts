@@ -15,7 +15,6 @@ import {
   type NormalizedToolUse,
   type OutputFileInfo,
   type Plan,
-  type ProcessOutputTail,
   type RoundIndexed,
   type RoundStage,
   type StreamPhase,
@@ -33,7 +32,14 @@ import {
   resetChildStreamEntries,
 } from './childExecutions';
 
-export type { ProcessOutputTail };
+/**
+ * Tailed stdout/stderr for a background process, held per execution id in
+ * `StreamSlice.processOutput`. TUI-local state, not a wire contract.
+ */
+export interface ProcessOutputTail {
+  readonly stdout: string;
+  readonly stderr: string;
+}
 
 // ---------------------------------------------------------------------------
 // types

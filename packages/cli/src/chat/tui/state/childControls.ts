@@ -42,8 +42,8 @@ export function childElapsed(
 }
 
 const EMPTY_TAIL_LINES: readonly string[] = [];
-// Tail objects are immutable and replaced wholesale by updateProcessOutput,
-// so the split is cached per object: the child list re-renders on every
+// Tail objects are immutable and replaced wholesale, so the split is cached
+// per object: the child list re-renders on every
 // stream-sync tick and would otherwise re-split up to 16 KB per process row.
 const processTailLinesCache = new WeakMap<
   ProcessOutputTail,

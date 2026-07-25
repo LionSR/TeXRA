@@ -17,11 +17,7 @@ import type {
   TaskGroup,
 } from '@shared/schemas';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
-import type {
-  FollowupOptionsState,
-  ProcessOutputMap,
-  StreamState,
-} from '../store';
+import type { FollowupOptionsState, StreamState } from '../store';
 
 // Local imports - progress view components
 import type { PermissionState } from '../permissionState';
@@ -105,15 +101,6 @@ export const streamLogContext = createContext<StreamLogContextValue>(
 
 export const permissionsContext = createContext<PermissionState[]>(
   'progress-permissions',
-);
-
-/**
- * Separate context for background process outputs — changes on every output chunk.
- * Only consumed by BackgroundTasksPanel, avoiding re-renders of other components.
- * Keyed by executionId → accumulated stdout/stderr.
- */
-export const processOutputContext = createContext<ProcessOutputMap>(
-  'progress-process-outputs',
 );
 
 export const EMPTY_INQUIRY_THREADS: InquiryThreadUpdatedEvent[] = [];

@@ -29,6 +29,13 @@ All notable changes to this project will be documented in this file.
 
 ### CLI
 
+#### Changes
+
+- **`--output-format ndjson` no longer lists a `updateProcessOutput` progress
+  record** — background shell output has been streamed as a normal child
+  stream since child tabs shipped, so this record was never emitted. Consumers
+  reading NDJSON progress records are unaffected.
+
 #### New Features
 
 - **Workflow-script task rows show their status at a glance** — each task in

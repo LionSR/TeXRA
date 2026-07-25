@@ -176,15 +176,6 @@ type ChildActivityEvent =
   | (ChildActivityEventBase & { readonly kind: 'subagents' })
   | (ChildActivityEventBase & { readonly kind: 'processes' });
 
-/** Incremental output from a child process owned by a parent run stream. */
-interface ProcessOutputEvent extends StageStamp {
-  readonly type: 'process.output';
-  readonly parentStreamId: StreamTabId;
-  readonly executionId: ExecutionId;
-  readonly stdout: string;
-  readonly stderr: string;
-}
-
 /** UI progress counters for a run, projected by hosts but not transcript logs. */
 interface ConversationProgressEvent extends StageStamp {
   readonly type: 'conversation.progress';
@@ -370,7 +361,6 @@ export type AgentEvent =
   | UsageEvent
   | StatusEvent
   | ChildActivityEvent
-  | ProcessOutputEvent
   | ConversationProgressEvent
   | RunFactEvent
   | ContextStateEvent
@@ -400,5 +390,4 @@ export const RUN_FACT_EVENT_TYPES = Object.freeze([
   'status',
   'stage.start',
   'child.activity',
-  'process.output',
 ] as const satisfies readonly AgentEvent['type'][]);

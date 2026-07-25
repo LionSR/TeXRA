@@ -1876,18 +1876,6 @@ describe('ProgressBackend', () => {
       });
 
       target.session.events.emit({
-        scope: 'run',
-        streamId: parentStreamId,
-        event: {
-          type: 'process.output',
-          parentStreamId,
-          executionId,
-          stdout: 'hello',
-          stderr: '',
-        },
-      });
-
-      target.session.events.emit({
         scope: 'session',
         event: {
           type: 'updateQueuedFollowUps',
