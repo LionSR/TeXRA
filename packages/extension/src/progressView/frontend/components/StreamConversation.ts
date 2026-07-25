@@ -14,6 +14,7 @@ import {
   activeInquiries$,
   logContext$,
   permissions$,
+  phaseStages$,
   streamById$,
   streamContext$,
 } from '../progressState';
@@ -21,15 +22,18 @@ import {
   archivedContext,
   EMPTY_INQUIRY_THREADS,
   EMPTY_LOG_CONTEXT,
+  EMPTY_PHASE_STAGE_MAP,
   EMPTY_STREAM_BY_ID,
   EMPTY_STREAM_CONTEXT,
   followUpEventSinkContext,
   inquiryThreadsContext,
   permissionsContext,
+  phaseStagesContext,
   streamByIdContext,
   streamLogContext,
   streamStateContext,
   type FollowUpEventSink,
+  type PhaseStageMap,
   type StreamByIdMap,
   type StreamContextValue,
   type StreamLogContextValue,
@@ -82,6 +86,10 @@ export class StreamConversation extends SignalWatcher(LitElement) {
   private inquiryThreadsContextValue: InquiryThreadUpdatedEvent[] =
     EMPTY_INQUIRY_THREADS;
 
+  @provide({ context: phaseStagesContext })
+  @state()
+  private phaseStagesContextValue: PhaseStageMap = EMPTY_PHASE_STAGE_MAP;
+
   @provide({ context: followUpEventSinkContext })
   private readonly followUpEventSink: FollowUpEventSink = (event) => {
     this.dispatchEvent(event);
@@ -104,6 +112,7 @@ export class StreamConversation extends SignalWatcher(LitElement) {
     this.permissionsContextValue = permissions$.get();
     this.streamByIdContextValue = streamById$.get();
     this.inquiryThreadsContextValue = activeInquiries$.get();
+    this.phaseStagesContextValue = phaseStages$.get();
   }
 
   override render(): TemplateResult {

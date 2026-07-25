@@ -5,6 +5,7 @@ import type { RoundIndexed } from './roundIndexed';
 import type {
   ActiveChildInfo,
   ConversationProgress,
+  PhaseStage,
   RoundStage,
 } from './streamState';
 import type { StreamPhase, StreamSubstate } from './stream';
@@ -115,6 +116,13 @@ export interface UpdateConversationProgressPayload {
 export interface UpdateRoundStagePayload {
   streamId: StreamTabId;
   roundStage: RoundStage;
+}
+
+/** Phase advance within a workflow-script run, projected from `stage.start`
+ *  (kind 'phase'). */
+export interface UpdatePhaseStagePayload {
+  streamId: StreamTabId;
+  phaseStage: PhaseStage;
 }
 
 /** Active subagent roster, projected from `child.activity`. */

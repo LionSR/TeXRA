@@ -20,6 +20,7 @@ import {
   createStreamState,
   type ProgressViewPlacement,
   type InquiryThreadUpdatedEvent,
+  type PhaseStage,
   type StreamTabId,
   type StreamTabInfo,
   type TaskGroup,
@@ -38,7 +39,9 @@ import {
 } from './store';
 import {
   EMPTY_LOG_CONTEXT,
+  EMPTY_PHASE_STAGE_MAP,
   EMPTY_STREAM_CONTEXT,
+  type PhaseStageMap,
   type StreamContextValue,
   type StreamLogContextValue,
 } from './contexts/streamContexts';
@@ -167,10 +170,12 @@ export const pendingApprovalIds$ = new Signal.Computed(() => {
  * `permissions$.set([])` because that setter triggers `pendingApprovalIds$`
  * recomputation, which reads `_prevApprovalIds` for the stable-Set memo —
  * if we clear the cache after, the next read sees a stale prior Set and
- * returns it instead of the empty post-reset value.
+ * returns it instead of the empty post-reset value. `_prevPhaseStages` is
+ * the same memo over `appState`, so it is cleared before that setter too.
  */
 export function resetProgressState(): void {
   _prevApprovalIds = new Set();
+  _prevPhaseStages = EMPTY_PHASE_STAGE_MAP;
   clearFollowUpInputTransientStateStore();
   appState.set(createInitialState());
   placement.set('sidebar');
@@ -244,6 +249,44 @@ export const activeInquiries$ = new Signal.Computed(() => {
     (thread) => thread.lastActivityIso,
   );
   return threads.length > 0 ? threads : EMPTY_INQUIRIES;
+});
+
+function samePhaseStages(left: PhaseStageMap, right: PhaseStageMap): boolean {
+  if (left.size !== right.size) return false;
+  for (const [streamId, stage] of left) {
+    const other = right.get(streamId);
+    if (
+      other === undefined ||
+      other.label !== stage.label ||
+      other.index !== stage.index ||
+      other.total !== stage.total
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Current phase per stream, for streams that have one. Read by the Background
+ * Tasks panel, whose rows are *other* streams — so unlike `activeStreamState$`
+ * this deliberately spans every stream, and therefore recomputes on *any*
+ * field of *any* stream (`streamStates$` changes identity on every progress
+ * tick). Returns a stable Map reference when the phases themselves are
+ * unchanged, mirroring `pendingApprovalIds$` above, so a run in flight does
+ * not re-render its consumers on unrelated ticks. Values are compared by
+ * content, not reference: an unchanged phase arrives as a fresh object each
+ * time a metadata patch crosses postMessage.
+ */
+let _prevPhaseStages: PhaseStageMap = EMPTY_PHASE_STAGE_MAP;
+export const phaseStages$ = new Signal.Computed((): PhaseStageMap => {
+  const stages = new Map<StreamTabId, PhaseStage>();
+  for (const [streamId, state] of streamStates$.get()) {
+    if (state.phaseStage) stages.set(streamId, state.phaseStage);
+  }
+  if (samePhaseStages(stages, _prevPhaseStages)) return _prevPhaseStages;
+  _prevPhaseStages = stages.size > 0 ? stages : EMPTY_PHASE_STAGE_MAP;
+  return _prevPhaseStages;
 });
 
 const activeIsToolUse$ = new Signal.Computed(() => {

@@ -13,6 +13,7 @@ import {
   type MessageType,
   type NormalizedToolUse,
   type OutputFileInfo,
+  type PhaseStage,
   type Plan,
   type RoundIndexed,
   type RoundStage,
@@ -176,6 +177,9 @@ export interface StreamSlice {
   readonly compactingActive: boolean;
   readonly conversation: ConversationProgress | undefined;
   readonly roundStage?: RoundStage | undefined;
+  /** Current workflow-script phase. Fills the same row slot as `roundStage`
+   *  — a run advances through phases or rounds, never both. */
+  readonly phaseStage?: PhaseStage | undefined;
   readonly entries: readonly ConversationEntry[];
   readonly queuedFollowUpMessages: readonly string[];
   readonly todos: readonly TodoItem[];
@@ -228,6 +232,7 @@ function emptySlice(streamId: StreamTabId): StreamSlice {
     cumulativeUsage: undefined,
     conversation: undefined,
     roundStage: undefined,
+    phaseStage: undefined,
     entries: [],
     queuedFollowUpMessages: [],
     todos: [],

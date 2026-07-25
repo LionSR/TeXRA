@@ -9,6 +9,7 @@ import {
   type GoalPausedPayload,
   type SetActiveStreamPayload,
   type StreamTabId,
+  type UpdatePhaseStagePayload,
   type UpdateQueuedFollowUpsPayload,
   type UpdateRoundStagePayload,
   type UpdateStreamUsagePayload,
@@ -136,6 +137,22 @@ function applyRoundStage(payload: UpdateRoundStagePayload): void {
   });
 }
 
+function applyPhaseStage(payload: UpdatePhaseStagePayload): void {
+  patchStream(payload.streamId, (s) => {
+    if (
+      s.phaseStage?.label === payload.phaseStage.label &&
+      s.phaseStage?.index === payload.phaseStage.index &&
+      s.phaseStage?.total === payload.phaseStage.total
+    ) {
+      return s;
+    }
+    return {
+      ...s,
+      phaseStage: payload.phaseStage,
+    };
+  });
+}
+
 function applyOutputFiles(
   event: Extract<AgentEvent, { type: 'addOutputFiles' }>,
 ): void {
@@ -201,6 +218,19 @@ function applyDirectTuiRunEvent(
     case 'updateCompileFailures':
       return false;
     case 'stage.start':
+      if (event.kind === 'phase') {
+        applyPhaseStage({
+          streamId: fallbackStreamId,
+          phaseStage: {
+            label: event.label,
+            ...(event.index !== undefined ? { index: event.index } : {}),
+            ...(event.total !== undefined && event.total > 0
+              ? { total: event.total }
+              : {}),
+          },
+        });
+        return true;
+      }
       if (event.kind !== 'round') return false;
       applyRoundStage({
         streamId: fallbackStreamId,
