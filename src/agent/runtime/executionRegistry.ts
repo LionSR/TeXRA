@@ -30,7 +30,6 @@ import {
   type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
-import type { StreamProcessOutput } from '@shared/streams/streamMetaReducer';
 import {
   isActivePhase,
   isInFlightPhase,
@@ -43,10 +42,8 @@ import {
   type ExecutionStatusInfo,
   type LiveToolUseFlowContext,
   AgentExecutionHandle,
-  ProcessExecutionHandle,
   isChildExecution,
 } from './ExecutionHandle';
-import { ProcessOutputPoller } from './ProcessOutputPoller';
 import { SessionEventHub } from './SessionEventHub';
 
 const logger = createChannelTrace('executionRegistry');
@@ -109,7 +106,6 @@ export class ExecutionRegistry {
   private disposed = false;
   private readonly changeCallbacks = new Map<string, Array<() => void>>();
   private readonly disposeStatusListener: () => void;
-  private readonly processOutput: ProcessOutputPoller;
   private readonly streamStatus: StreamStatusMachine;
   private events: SessionEventHub | undefined;
   private approvals: SessionApprovals | undefined;
@@ -135,12 +131,10 @@ export class ExecutionRegistry {
   >();
 
   constructor({
-    processOutput = new ProcessOutputPoller(),
     streamStatus = new StreamStatusMachine(),
     events = new SessionEventHub(),
     publishResult,
   }: {
-    readonly processOutput?: ProcessOutputPoller;
     readonly streamStatus?: StreamStatusMachine;
     readonly events?: SessionEventHub;
     readonly publishResult?: (
@@ -148,7 +142,6 @@ export class ExecutionRegistry {
       streamId: StreamTabId,
     ) => void;
   } = {}) {
-    this.processOutput = processOutput;
     this.streamStatus = streamStatus;
     this.attachSessionEvents(events, publishResult);
     // Notify waiters and refresh UI badges when stream status changes
@@ -163,7 +156,7 @@ export class ExecutionRegistry {
           ) {
             this.notifyWaiters(executionId);
             if (handle.isChildExecution) {
-              this.emitChildActivity(handle.parentStreamId, 'subagents');
+              this.emitChildActivity(handle.parentStreamId);
             }
             break;
           }
@@ -178,19 +171,6 @@ export class ExecutionRegistry {
   ): void {
     this.events = events;
     if (publishResult) this.publishResult = publishResult;
-    this.processOutput.setOutputEmitter((payload) => {
-      events.emit({
-        scope: 'run',
-        streamId: payload.parentStreamId,
-        event: {
-          type: 'process.output',
-          parentStreamId: payload.parentStreamId,
-          executionId: payload.executionId,
-          stdout: payload.stdout,
-          stderr: payload.stderr,
-        },
-      });
-    });
   }
 
   /** Bind the session-owned approval state used when a child is detached. */
@@ -212,7 +192,6 @@ export class ExecutionRegistry {
     const executionIds = [...this.handles.keys()];
     this.handles.clear();
     this.activeChildRunLoops.clear();
-    this.processOutput.dispose();
     for (const executionId of executionIds) {
       this.notifyRegistrationListeners(executionId, undefined);
       this.notifyWaiters(executionId);
@@ -252,17 +231,12 @@ export class ExecutionRegistry {
       handle.interrupt();
     }
     this.handles.set(handle.executionId, handle);
-    if (handle instanceof AgentExecutionHandle) {
-      if (handle.isChildExecution) {
-        this.emitChildActivity(handle.parentStreamId, 'subagents');
-        this.emitParentStreamUpdate({
-          childStreamId: handle.childStreamId,
-          parentStreamId: handle.parentStreamId,
-        });
-      }
-    } else if (handle instanceof ProcessExecutionHandle) {
-      this.processOutput.register(handle);
-      this.emitChildActivity(handle.parentStreamId, 'processes');
+    if (handle instanceof AgentExecutionHandle && handle.isChildExecution) {
+      this.emitChildActivity(handle.parentStreamId);
+      this.emitParentStreamUpdate({
+        childStreamId: handle.childStreamId,
+        parentStreamId: handle.parentStreamId,
+      });
     }
     this.notifyRegistrationListeners(handle.executionId, handle);
     this.notifyWaiters(handle.executionId);
@@ -353,22 +327,7 @@ export class ExecutionRegistry {
     this.notifyRegistrationListeners(handle.executionId, undefined);
     this.notifyWaiters(handle.executionId);
     if (handle instanceof AgentExecutionHandle && handle.isChildExecution) {
-      this.emitChildActivity(handle.parentStreamId, 'subagents');
-      return;
-    }
-
-    if (handle instanceof ProcessExecutionHandle) {
-      // The final read must complete before the badge update, because the
-      // badge handler prunes output entries for processes no longer active.
-      const finalize = (): void => {
-        this.processOutput.unregister(handle.executionId);
-        this.emitChildActivity(handle.parentStreamId, 'processes');
-      };
-      if (handle.outputPaths) {
-        void this.processOutput.flush(handle).finally(finalize);
-      } else {
-        finalize();
-      }
+      this.emitChildActivity(handle.parentStreamId);
     }
   }
 
@@ -489,7 +448,7 @@ export class ExecutionRegistry {
       options.detachActiveChildren === true &&
       handle instanceof AgentExecutionHandle
     ) {
-      this.detachActiveChildren(handle.childStreamId, visited);
+      this.detachActiveChildren(handle.childStreamId);
     }
     const result = this.terminate(handle, visited, {
       cascadeChildren: options.detachActiveChildren !== true,
@@ -504,32 +463,20 @@ export class ExecutionRegistry {
     return [...this.handles.keys()];
   }
 
-  /** Return detached output tails for every currently active process. */
-  getActiveProcessOutputSnapshots(): ReadonlyMap<
-    ExecutionId,
-    StreamProcessOutput
-  > {
-    return this.processOutput.getActiveOutputSnapshots();
-  }
-
   /**
    * Kill only background OS processes (bash, codex) without touching agent
    * stream status. Agent executions are left in RUNNING so restart recovery can
    * restore them to WAITING (resumable) if a flow record exists.
    *
-   * A background `bash` run is also an `AgentExecutionHandle` (see
-   * `createChildStream` in `tools/bash.ts`), not a `ProcessExecutionHandle` —
-   * killing its underlying OS process requires `interruptBackgroundProcess()`,
-   * which only fires for a handle whose attached interrupt handler declares
-   * itself as owning a live background process, leaving every other
-   * `AgentExecutionHandle` (root/native-subagent runs, loop-level interrupts)
-   * untouched (#8155).
+   * Killing a background run's underlying OS process requires
+   * `interruptBackgroundProcess()`, which only fires for a handle whose
+   * attached interrupt handler declares itself as owning a live background
+   * process, leaving every other `AgentExecutionHandle` (root/native-subagent
+   * runs, loop-level interrupts) untouched (#8155).
    */
   killBackgroundProcesses(): void {
-    for (const [executionId, handle] of this.handles) {
-      if (handle instanceof ProcessExecutionHandle) {
-        this.kill(executionId);
-      } else if (handle instanceof AgentExecutionHandle) {
+    for (const handle of this.handles.values()) {
+      if (handle instanceof AgentExecutionHandle) {
         handle.interruptBackgroundProcess();
       }
     }
@@ -614,10 +561,7 @@ export class ExecutionRegistry {
    * follow-up queue. Called when stopping an orchestrator without killing
    * children.
    */
-  detachActiveChildren(
-    parentStreamId: StreamTabId,
-    visited: Set<string> = new Set(),
-  ): void {
+  detachActiveChildren(parentStreamId: StreamTabId): void {
     for (const handle of this.handles.values()) {
       if (!isChildExecution(handle, parentStreamId)) continue;
       if (handle instanceof AgentExecutionHandle) {
@@ -627,11 +571,9 @@ export class ExecutionRegistry {
           childStreamId: handle.childStreamId,
           parentStreamId: null,
         });
-      } else if (handle instanceof ProcessExecutionHandle) {
-        this.terminate(handle, visited, { cascadeChildren: false });
       }
     }
-    this.emitChildActivity(parentStreamId, 'subagents');
+    this.emitChildActivity(parentStreamId);
   }
 
   /**
@@ -650,7 +592,7 @@ export class ExecutionRegistry {
     const visited = new Set<string>();
 
     if (options.detachActiveChildren === true) {
-      this.detachActiveChildren(streamId, visited);
+      this.detachActiveChildren(streamId);
     } else {
       this.interruptActiveChildren(streamId, visited, {
         cascadeChildren: true,
@@ -670,18 +612,9 @@ export class ExecutionRegistry {
     this.cancelStreamStatus(streamId);
   }
 
-  /** Get active subagent and process children for a parent stream. */
-  getActiveChildren(parentStreamId: StreamTabId): {
-    subagents: ActiveChildInfo[];
-    processes: ActiveChildInfo[];
-  } {
-    return {
-      subagents: this.collectChildSummary(parentStreamId, AgentExecutionHandle),
-      processes: this.collectChildSummary(
-        parentStreamId,
-        ProcessExecutionHandle,
-      ),
-    };
+  /** Get active subagent children for a parent stream. */
+  getActiveChildren(parentStreamId: StreamTabId): ActiveChildInfo[] {
+    return this.collectChildSummary(parentStreamId);
   }
 
   /**
@@ -719,31 +652,16 @@ export class ExecutionRegistry {
     };
   }
 
-  private emitChildActivity(
-    parentStreamId: StreamTabId,
-    kind: 'subagents' | 'processes',
-  ): void {
-    const items = this.collectChildSummary(
-      parentStreamId,
-      kind === 'subagents' ? AgentExecutionHandle : ProcessExecutionHandle,
-    );
+  private emitChildActivity(parentStreamId: StreamTabId): void {
     this.requireSessionEvents().emit({
       scope: 'run',
       streamId: parentStreamId,
-      event:
-        kind === 'subagents'
-          ? {
-              type: 'child.activity',
-              kind: 'subagents',
-              parentStreamId,
-              items,
-            }
-          : {
-              type: 'child.activity',
-              kind: 'processes',
-              parentStreamId,
-              items,
-            },
+      event: {
+        type: 'child.activity',
+        kind: 'subagents',
+        parentStreamId,
+        items: this.collectChildSummary(parentStreamId),
+      },
     });
   }
 
@@ -766,38 +684,32 @@ export class ExecutionRegistry {
   private requireSessionEvents(): SessionEventHub {
     if (!this.events) {
       throw new Error(
-        'ExecutionRegistry child/process updates require SessionEventHub',
+        'ExecutionRegistry child updates require SessionEventHub',
       );
     }
     return this.events;
   }
 
-  private collectChildSummary(
-    parentStreamId: StreamTabId,
-    ctor: typeof AgentExecutionHandle | typeof ProcessExecutionHandle,
-  ): ActiveChildInfo[] {
+  private collectChildSummary(parentStreamId: StreamTabId): ActiveChildInfo[] {
     const result: ActiveChildInfo[] = [];
     for (const handle of this.handles.values()) {
       if (
-        !(handle instanceof ctor) ||
+        !(handle instanceof AgentExecutionHandle) ||
         !isChildExecution(handle, parentStreamId)
       ) {
         continue;
       }
       const { status, elapsed } = this.getStatus(handle);
-      const base = {
+      result.push({
+        kind: 'subagent',
         executionId: handle.executionId,
         agentName: handle.agentName,
         status,
         startedAt: handle.startedAt,
         elapsed: elapsed ?? null,
+        childStreamId: handle.childStreamId,
         ...(handle.toolName ? { toolName: handle.toolName } : {}),
-      };
-      const info: ActiveChildInfo =
-        handle instanceof AgentExecutionHandle
-          ? { ...base, kind: 'subagent', childStreamId: handle.childStreamId }
-          : { ...base, kind: 'process' };
-      result.push(info);
+      });
     }
     return result;
   }
@@ -830,10 +742,6 @@ export class ExecutionRegistry {
       // (runFlowWithLifecycle). Run its registered waiting-cleanup instead of
       // silently no-oping the kill.
       return this.terminateWaitingHandle(handle);
-    }
-
-    if (handle instanceof ProcessExecutionHandle) {
-      return handle.terminate();
     }
 
     return false;
