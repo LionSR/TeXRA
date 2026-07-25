@@ -26,6 +26,7 @@ import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
 import { createTranscriptPrintRequest } from '@cli/chat/tui/state/transcriptLines';
 import { projectStreamTranscript } from '@cli/chat/tui/state/transcriptProjection';
 import {
+  AgentCategory,
   MESSAGE_TYPES,
   STREAM_PHASE,
   TOOL_USE_STATUS,
@@ -70,7 +71,11 @@ beforeEach(async () => {
   resetCliState();
   clearAllStreamStatusesForTest(defaultSession().status);
   await defaultSession().transcripts.clear();
-  patchStream(STREAM_ID, (slice) => ({ ...slice, model: 'deepseekT' }));
+  patchStream(STREAM_ID, (slice) => ({
+    ...slice,
+    category: AgentCategory.Workflow,
+    model: 'deepseekT',
+  }));
 });
 
 afterEach(() => {
@@ -78,6 +83,33 @@ afterEach(() => {
 });
 
 describe('CLI workflow-script child-stream transcript', () => {
+  it('keeps lifecycle headings for full-log SDK children', () => {
+    const sdkStreamId = 'claude@agent-sdk#exec-1' as StreamTabId;
+    patchStream(sdkStreamId, (slice) => ({
+      ...slice,
+      category: AgentCategory.ToolUse,
+      model: 'claude-sonnet',
+    }));
+    const runTrace = createRunTrace(sdkStreamId, defaultSession().transcripts);
+    try {
+      runTrace.trace.openStage('Claude SDK session', {
+        id: 'sdk-session',
+        kind: 'session',
+      });
+      syncStreamLog(sdkStreamId);
+
+      expect(
+        streams
+          .get()
+          .get(sdkStreamId)
+          ?.entries.map((entry) => entry.text),
+      ).toContain('Claude SDK session');
+    } finally {
+      runTrace.dispose();
+      defaultSession().status.clearStream(sdkStreamId);
+    }
+  });
+
   it('keeps planned task rows live until their terminal state is printable', () => {
     const runTrace = createRunTrace(STREAM_ID, defaultSession().transcripts);
     try {

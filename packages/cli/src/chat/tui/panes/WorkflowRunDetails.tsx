@@ -95,18 +95,6 @@ function roundLabel(round: number, total: number | undefined): string {
     : `r${round} (${round + 1}/${total})`;
 }
 
-/**
- * Produce stable, one-row descriptions for the focused workflow viewport.
- * Phase groups stay in the transcript as dividers. This summary owns run and
- * round lifecycle, generated artifacts, and any other lifecycle group that
- * cannot be associated safely with an indexed round.
- */
-export function workflowRunDetailLines(
-  facts: WorkflowRunFacts | undefined,
-): WorkflowRunDetailLine[] {
-  return workflowRunDetailGroups(facts).flatMap((group) => group.lines);
-}
-
 function lifecyclePriority(
   status: TaskGroupStatus | undefined,
   currentRound: boolean,

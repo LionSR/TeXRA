@@ -1,10 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { ConversationPane } from '@cli/chat/tui/panes/ConversationPane';
-import {
-  selectWorkflowRunDetailLines,
-  workflowRunDetailLines,
-} from '@cli/chat/tui/panes/WorkflowRunDetails';
+import { selectWorkflowRunDetailLines } from '@cli/chat/tui/panes/WorkflowRunDetails';
 import {
   activeStreamId,
   patchStream,
@@ -22,6 +19,12 @@ import { projectTaskGroupsFromStreamLog } from '@shared/streams/taskGroupProject
 import { loadInk } from '@test/support/inkTestHarness.mts';
 
 const STREAM_ID = 'workflow#details' as StreamTabId;
+
+function workflowRunDetailLines(
+  facts: Parameters<typeof selectWorkflowRunDetailLines>[0],
+) {
+  return selectWorkflowRunDetailLines(facts, Number.MAX_SAFE_INTEGER);
+}
 
 afterEach(() => {
   resetCliState();

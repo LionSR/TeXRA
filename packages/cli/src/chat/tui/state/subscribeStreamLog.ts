@@ -326,6 +326,7 @@ function computeFinalized(
 function renderLogEntry(
   entry: StreamLogEntry,
   prev: ConversationEntry | undefined,
+  projectLifecycleToTaskGroups: boolean,
 ): ConversationEntry | null {
   if (entry.messageType === MESSAGE_TYPES.TOOL_USE) {
     // Cache hit: same `data` reference as last sync, no re-normalize.
@@ -418,12 +419,13 @@ function renderLogEntry(
     return prev && entriesEqual(prev, next) ? prev : next;
   }
 
-  // Run/round/session lifecycle rows are projected into `taskGroups`, whose
-  // focused workflow renderer joins them with artifacts. They are not prose
-  // and must not also appear as assistant transcript rows.
+  // Workflow run/round/session lifecycle rows are projected into `taskGroups`,
+  // whose focused renderer joins them with artifacts. Other full-log children
+  // have no such renderer, so their lifecycle headings remain transcript rows.
   if (
-    entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_START ||
-    entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_END
+    projectLifecycleToTaskGroups &&
+    (entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_START ||
+      entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_END)
   ) {
     return null;
   }
@@ -706,7 +708,11 @@ export function syncStreamLog(
       if (!transcriptCandidate && !workflowDefaultLog && !workflowPhaseHeader) {
         continue;
       }
-      const rendered = renderLogEntry(entry, existing.get(entry.id));
+      const rendered = renderLogEntry(
+        entry,
+        existing.get(entry.id),
+        slice.category === AgentCategory.Workflow,
+      );
       if (!rendered) continue;
       if (workflowOperationalOnly) {
         workflowDescriptionCandidates.push({
@@ -719,9 +725,6 @@ export function syncStreamLog(
       // transcript. Detached workflow-script runs intentionally keep their
       // full child log, including Running/Finished and error rows. A phase
       // uses the DEFAULT message type, but remains an operational row.
-      if (!transcriptCandidate && !workflowDefaultLog && !workflowPhaseHeader) {
-        continue;
-      }
       if (
         workflowOperationalOnly &&
         rendered.role !== 'tool' &&
