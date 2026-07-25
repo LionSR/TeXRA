@@ -189,9 +189,10 @@ export function streamTreeEntries(
   // then creation order), so the child list and its
   // Alt+1..9 shortcuts read top-to-bottom from most to least recently
   // started, keeping the row a user is most likely watching near the top.
-  // Grouping belongs here, not in the renderer: this loop also assigns the
-  // Alt+1..9 shortcut numbers, so one owner produces order, shortcuts and
-  // rendering and they cannot drift apart. A list where nothing carries a
+  // Grouping is applied here because this loop also assigns the Alt+1..9
+  // shortcut numbers, so the order a user sees and the numbers that select it
+  // come out of one pass. The divider pass re-applies the same rule, which is
+  // idempotent, so the two cannot drift apart. A list where nothing carries a
   // workflow phase groups to itself, leaving the root viewport untouched.
   const ordered = orderChildIdsByPhase(
     focusOrderDescendants(

@@ -257,8 +257,8 @@ export function SubagentList(
   );
   // The run's own transcript owns the phase outline and the task cards; it is
   // the active stream whenever this list is rooted on it, so its entries are
-  // fully projected. `streamTreeEntries` already made same-phase rows
-  // contiguous, so this only inserts the dividers.
+  // fully projected. `streamTreeEntries` already grouped these rows with the
+  // same rule, so this pass only inserts the dividers.
   const listRootEntries = useMemo(
     () =>
       sessions.find((session) => session.id === props.listRootStreamId)?.slice

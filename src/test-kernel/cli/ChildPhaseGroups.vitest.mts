@@ -105,17 +105,34 @@ describe('CLI child phase grouping', () => {
     ]);
   });
 
-  it('keeps phase-less entries at their own rank between groups', () => {
-    const ids = ['p1', 'bare', 'p2'];
+  it('sorts phase-less entries ahead of every group, in their own order', () => {
+    // A divider only opens a group, so a phase-less entry left between or after
+    // groups would render under a header it has nothing to do with.
+    const ids = ['p1', 'bare-1', 'p2', 'bare-2'];
     const phases = new Map([
       ['p1', 'Map'],
       ['p2', 'Map'],
     ]);
     expect(orderChildIdsByPhase(ids, (id) => phases.get(id))).toEqual([
+      'bare-1',
+      'bare-2',
       'p1',
       'p2',
-      'bare',
     ]);
+  });
+
+  it('orders to a fixed point, so re-grouping a grouped list is a no-op', () => {
+    // `streamTreeEntries` orders and numbers the shortcuts; the divider pass
+    // re-applies this same rule. Idempotence is what stops the two disagreeing.
+    const ids = ['r1', 'bare', 'm1', 'r2'];
+    const phases = new Map([
+      ['r1', 'Reduce'],
+      ['r2', 'Reduce'],
+      ['m1', 'Map'],
+    ]);
+    const once = orderChildIdsByPhase(ids, (id) => phases.get(id));
+    expect(once).toEqual(['bare', 'r1', 'r2', 'm1']);
+    expect(orderChildIdsByPhase(once, (id) => phases.get(id))).toEqual(once);
   });
 
   it('heads each group with the shared phase heading and its task progress', () => {
@@ -179,6 +196,40 @@ describe('CLI child phase grouping', () => {
     ]);
   });
 
+  it('never leaves a phase-less row under a preceding group header', () => {
+    // An `agent()` call outside any `phase()`, and any roster row from before
+    // the field existed, carries no phase. A header opens a group and nothing
+    // closes one, so such a row must never be emitted after one.
+    const rows = childPhaseGroupRows({
+      rows: [
+        { id: 'a', workflowPhase: 'Map' },
+        { id: 'b', workflowPhase: 'Map' },
+        { id: 'bare' },
+      ],
+    });
+    expect(
+      rows.map((row) =>
+        row.kind === 'header' ? row.header.label : row.row.id,
+      ),
+    ).toEqual(['bare', '◆ Map', 'a', 'b']);
+  });
+
+  it('opens one header per phase even when a phase-less row splits it', () => {
+    const rows = childPhaseGroupRows({
+      rows: [
+        { id: 'a', workflowPhase: 'Map' },
+        { id: 'bare' },
+        { id: 'b', workflowPhase: 'Map' },
+      ],
+    });
+    expect(
+      rows.map((row) =>
+        row.kind === 'header' ? row.header.label : row.row.id,
+      ),
+    ).toEqual(['bare', '◆ Map', 'a', 'b']);
+    expect(rows.filter((row) => row.kind === 'header')).toHaveLength(1);
+  });
+
   it('counts one task per logical call even when a retry adds a row', () => {
     // A durable retry registers a *new* child stream under the same phase, so
     // the group holds two rows while its header counts the one task card.
@@ -216,6 +267,25 @@ describe('CLI child phase grouping', () => {
       { id: 'm1', shortcutIndex: 3 },
       { id: 'r2', shortcutIndex: 4 },
       { id: 'r1', shortcutIndex: 5 },
+    ]);
+  });
+
+  it('numbers the phase-less block first, ahead of every group', () => {
+    // Newest-first before grouping: bare2, m2, bare1, m1. The phase-less rows
+    // keep that relative order and lead, so no row is numbered under a divider
+    // it does not belong to, and Alt+N still counts visible agent rows.
+    const grouped = treeEntriesFor([
+      { id: 'm1', phase: 'Map' },
+      { id: 'bare1' },
+      { id: 'm2', phase: 'Map' },
+      { id: 'bare2' },
+    ]);
+    expect(grouped).toEqual([
+      { id: run },
+      { id: 'bare2', shortcutIndex: 1 },
+      { id: 'bare1', shortcutIndex: 2 },
+      { id: 'm2', shortcutIndex: 3 },
+      { id: 'm1', shortcutIndex: 4 },
     ]);
   });
 
