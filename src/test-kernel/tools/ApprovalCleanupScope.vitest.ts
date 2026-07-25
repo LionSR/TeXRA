@@ -19,22 +19,9 @@ import {
   proposalApprovals,
   setDelegatedWorkApprovalBypasses,
   setBashApprovalSessionBypass,
-  type ToolEditApprovalResult,
 } from '@tools/approval';
 
 const sid = (s: string): StreamTabId => s as StreamTabId;
-
-function createPending(id: string, settled: Set<string>, streamId = '') {
-  let isSettled = false;
-  return {
-    streamId: streamId as StreamTabId,
-    isSettled: () => isSettled,
-    settle: () => {
-      isSettled = true;
-      settled.add(id);
-    },
-  };
-}
 
 describe('approval cleanup scope (SDK Step 7d residue #5)', () => {
   it("per-stream cleanup leaves another stream's approval state intact", () => {
@@ -49,8 +36,8 @@ describe('approval cleanup scope (SDK Step 7d residue #5)', () => {
 
     try {
       // A desktop window deleting its own stream `a` scopes the sweep to `a`
-      // (this is what `deleteAllStreams` loops), so a sibling stream `b` keeps
-      // its pending approval / bypass state.
+      // (this is what `deleteAllStreams` loops), so a sibling stream `b`
+      // keeps its bypass state.
       cleanupApprovalsForStream(a);
       expect(isBashApprovalBypassedForStream(a)).toBe(false);
       expect(isBashApprovalBypassedForStream(b)).toBe(true);
@@ -59,78 +46,91 @@ describe('approval cleanup scope (SDK Step 7d residue #5)', () => {
     }
   });
 
-  it('lets the cancellation cause win over the tool-edit registry sweep (#9142)', () => {
-    // Mirrors nativeToolEditApproval.ts / desktopToolEditApproval.ts: a host
-    // adapter's own `cancel` and the session's tool-edit registry both settle
-    // the *same* entry through a shared, idempotent `settle` closure. Whoever
-    // calls it first determines the user-visible result.
+  it('settles a stream tool-edit approval with the cancellation cause', async () => {
     const session = createTestSession();
     const streamId = sid('s:cause-swallow');
-    let settled: ToolEditApprovalResult | undefined;
-    let isSettled = false;
-    const settle = (result: ToolEditApprovalResult): void => {
-      if (isSettled) return;
-      isSettled = true;
-      settled = result;
-    };
-
-    session.approvals.toolEdit.registerPending(streamId, {
-      streamId,
-      isSettled: () => isSettled,
-      settle,
-    });
+    const cancel = vi.fn();
     session.useHostInteractions({
-      cancel: (selector = {}) => {
-        if (selector.streamId !== streamId) return;
-        settle({ accepted: false, userMessage: selector.cause });
-      },
+      requestToolEditApproval: () => new Promise(() => {}),
+      cancel,
+    });
+    const pending = session.interactions.requestToolEditApproval({
+      path: 'paper.tex',
+      originalContent: 'old',
+      proposedContent: 'new',
+      sourceTool: 'edit_file',
+      streamId,
     });
 
     try {
       cleanupApprovalsForStream(streamId, session);
-      // Before #9142's reorder, the registry sweep ran first and settled a
-      // bare `{ accepted: false }`; the later `cancel` call then found the
-      // entry already settled and became a no-op.
-      expect(settled).toEqual({
+      await expect(pending).resolves.toEqual({
         accepted: false,
         userMessage: 'Stream resources released.',
       });
+      expect(cancel).toHaveBeenCalledWith({
+        streamId,
+        cause: 'Stream resources released.',
+      });
     } finally {
-      session.approvals.toolEdit.unregisterPending(streamId);
       session.dispose();
     }
   });
 
-  it('scopes streamless cleanup to the owning session', () => {
+  it('scopes streamless cleanup to the owning session', async () => {
     const sessionA = createTestSession();
     const sessionB = createTestSession();
     const cancelA = vi.fn();
-    sessionA.useHostInteractions({ cancel: cancelA });
-    const settled = new Set<string>();
+    const cancelB = vi.fn();
+    const pendingApproval = (): Promise<never> => new Promise(() => {});
+    sessionA.useHostInteractions({
+      requestToolEditApproval: pendingApproval,
+      requestBashApproval: pendingApproval,
+      cancel: cancelA,
+    });
+    sessionB.useHostInteractions({
+      requestToolEditApproval: pendingApproval,
+      requestBashApproval: pendingApproval,
+      cancel: cancelB,
+    });
 
     try {
-      sessionA.approvals.toolEdit.registerPending(
-        'tool-a',
-        createPending('tool-a', settled),
-      );
-      sessionB.approvals.toolEdit.registerPending(
-        'tool-b',
-        createPending('tool-b', settled),
-      );
-      sessionA.approvals.bash.registerPending(
-        'bash-a',
-        createPending('bash-a', settled),
-      );
-      sessionB.approvals.bash.registerPending(
-        'bash-b',
-        createPending('bash-b', settled),
-      );
+      const toolA = sessionA.interactions.requestToolEditApproval({
+        path: 'a.tex',
+        originalContent: 'old',
+        proposedContent: 'new',
+        sourceTool: 'edit_file',
+      });
+      const bashA = sessionA.interactions.requestBashApproval({
+        command: 'echo a',
+      });
+      const toolB = sessionB.interactions.requestToolEditApproval({
+        path: 'b.tex',
+        originalContent: 'old',
+        proposedContent: 'new',
+        sourceTool: 'edit_file',
+      });
+      const bashB = sessionB.interactions.requestBashApproval({
+        command: 'echo b',
+      });
+      let sessionBSettled = false;
+      void Promise.all([toolB, bashB]).then(() => {
+        sessionBSettled = true;
+      });
 
       cleanupUnscopedApprovals(sessionA);
 
-      // Only session A's streamless approvals are rejected; session B's stay
-      // pending even though they are equally streamless.
-      expect(settled).toEqual(new Set(['tool-a', 'bash-a']));
+      await expect(Promise.all([toolA, bashA])).resolves.toEqual([
+        {
+          accepted: false,
+          userMessage: 'Streamless approval cleanup.',
+        },
+        {
+          accepted: false,
+          userMessage: 'Streamless approval cleanup.',
+        },
+      ]);
+      expect(sessionBSettled).toBe(false);
       expect(cancelA).toHaveBeenCalledWith({
         streamId: null,
         cause: 'Streamless approval cleanup.',
@@ -138,14 +138,21 @@ describe('approval cleanup scope (SDK Step 7d residue #5)', () => {
 
       cleanupUnscopedApprovals(sessionB);
 
-      expect(settled).toEqual(
-        new Set(['tool-a', 'bash-a', 'tool-b', 'bash-b']),
-      );
+      await expect(Promise.all([toolB, bashB])).resolves.toEqual([
+        {
+          accepted: false,
+          userMessage: 'Streamless approval cleanup.',
+        },
+        {
+          accepted: false,
+          userMessage: 'Streamless approval cleanup.',
+        },
+      ]);
+      expect(cancelB).toHaveBeenCalledWith({
+        streamId: null,
+        cause: 'Streamless approval cleanup.',
+      });
     } finally {
-      sessionA.approvals.toolEdit.unregisterPending('tool-a');
-      sessionB.approvals.toolEdit.unregisterPending('tool-b');
-      sessionA.approvals.bash.unregisterPending('bash-a');
-      sessionB.approvals.bash.unregisterPending('bash-b');
       sessionA.dispose();
       sessionB.dispose();
     }
@@ -230,15 +237,20 @@ describe('session-owned approval state (#8144)', () => {
     }
   });
 
-  it('session disposal rejects its remaining pending approvals and clears bypass state', () => {
+  it('session disposal rejects its remaining pending approvals and clears bypass state', async () => {
     const session = createTestSession();
     const streamId = sid('s:appr-dispose');
-    const settled = new Set<string>();
-
-    session.approvals.toolEdit.registerPending(
-      'tool-dispose',
-      createPending('tool-dispose', settled, streamId),
-    );
+    session.useHostInteractions({
+      requestToolEditApproval: () => new Promise(() => {}),
+      cancel: vi.fn(),
+    });
+    const pending = session.interactions.requestToolEditApproval({
+      path: 'dispose.tex',
+      originalContent: 'old',
+      proposedContent: 'new',
+      sourceTool: 'edit_file',
+      streamId,
+    });
     setBashApprovalSessionBypass(streamId, true, noopAgentRuntimeHost, {
       silent: true,
       session,
@@ -246,7 +258,10 @@ describe('session-owned approval state (#8144)', () => {
 
     session.dispose();
 
-    expect(settled).toEqual(new Set(['tool-dispose']));
+    await expect(pending).resolves.toEqual({
+      accepted: false,
+      userMessage: 'Session disposed.',
+    });
     expect(isBashApprovalBypassedForStream(streamId, session)).toBe(false);
   });
 });
