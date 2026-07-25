@@ -26,4 +26,28 @@ describe('Ink test harness', () => {
 
     expect(output).toBe('new-frame');
   });
+
+  it('returns an empty current frame after an effect clears the output', async () => {
+    const { ink, React } = await loadInk();
+    let effectRan = false;
+
+    function ClearingComponent(): any {
+      const [visible, setVisible] = React.useState(true);
+      React.useEffect(() => {
+        effectRan = true;
+        setVisible(false);
+      }, []);
+      return visible ? React.createElement(ink.Text, null, 'old-frame') : null;
+    }
+
+    const output = await renderOutputAtTerminalSize(
+      ink,
+      React.createElement(ClearingComponent),
+      80,
+      { until: (frame) => frame === '' },
+    );
+
+    expect(effectRan).toBe(true);
+    expect(output).toBe('');
+  });
 });
