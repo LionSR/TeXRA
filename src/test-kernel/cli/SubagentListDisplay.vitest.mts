@@ -33,9 +33,8 @@ import { AgentCategory, STREAM_PHASE, type StreamTabId } from '@shared/schemas';
 import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
 import { buildChildStreamEntries } from '@test/support/childStreamEntries';
 import {
-  FakeStdin,
-  FakeStdout,
   loadInk,
+  renderWithTerminalSize,
 } from '@test/support/inkTestHarness.mts';
 
 function session(id: string, active = false): StreamView {
@@ -503,7 +502,7 @@ describe('CLI child list display model', () => {
     ).toBe('45s');
   });
 
-  it('omits the model from bash rows while retaining agent row details', async () => {
+  it('renders agent row metadata correctly at an explicit terminal width', async () => {
     const { ink, React } = await loadInk();
     const run = 'run' as StreamTabId;
     const bash = 'bash-1' as StreamTabId;
@@ -564,23 +563,31 @@ describe('CLI child list display model', () => {
       rootStreamId: run,
       streams,
     });
-    const output: string = ink.renderToString(
+    const { instance, stdout } = renderWithTerminalSize(
+      ink,
       React.createElement(SubagentList, {
         listRootStreamId: run,
         maxRows: 6,
         keyboardActive: false,
         sessions,
       }),
-      { columns: 100 },
+      100,
     );
 
-    expect(sessions.find(({ id }) => id === bash)?.toolName).toBe('bash');
-    expect(sessions.find(({ id }) => id === agent)?.toolName).toBeUndefined();
-    expect(output.match(/bash running/g)).toHaveLength(2);
-    expect(output).not.toContain('gemini35f');
-    expect(output).toContain('bash running · gpt56');
-    expect(output).toContain('5 tool calls');
-    expect(output).toContain('↓40k');
+    try {
+      await waitFor(() => stdout.output.includes('5 tool calls'));
+      const output = stripAnsi(stdout.output);
+
+      expect(sessions.find(({ id }) => id === bash)?.toolName).toBe('bash');
+      expect(sessions.find(({ id }) => id === agent)?.toolName).toBeUndefined();
+      expect(output.match(/bash running/g)).toHaveLength(2);
+      expect(output).not.toContain('gemini35f');
+      expect(output).toContain('bash running · gpt56');
+      expect(output).toContain('5 tool calls');
+      expect(output).toContain('↓40k');
+    } finally {
+      instance.unmount();
+    }
   });
 
   it('keeps run-file metadata out of the compact row', async () => {
@@ -904,20 +911,14 @@ describe('CLI child list display model', () => {
     ];
 
     async function renderAtColumns(columns: number): Promise<string> {
-      const stdout = new FakeStdout(columns);
-      const instance = ink.render(
+      const { instance, stdout } = renderWithTerminalSize(
+        ink,
         React.createElement(SubagentList, {
           listRootStreamId: run,
           maxRows: 10,
           sessions,
         }),
-        {
-          stdin: new FakeStdin(false),
-          stdout,
-          interactive: true,
-          exitOnCtrlC: false,
-          patchConsole: false,
-        },
+        columns,
       );
       try {
         await waitFor(() => stdout.output.includes(freeFormPhase));
