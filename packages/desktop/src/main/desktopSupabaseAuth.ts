@@ -346,7 +346,7 @@ export function createDesktopSupabaseAuth(
 
       await host.openExternalUrl(data.url);
       await host.showInfoMessage(
-        'Complete sign-in in your browser. TeXRA will update when the browser returns to the desktop app.',
+        'Complete sign-in in the window that just opened. TeXRA updates automatically when it finishes.',
       );
     } catch (error) {
       if (ownsAttempt(generation, nonce)) activeAttempt = undefined;
