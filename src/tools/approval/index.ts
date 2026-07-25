@@ -62,16 +62,19 @@ export function cleanupApprovalsForStream(
   session: SessionHandle = defaultSession(),
 ): void {
   const { toolEdit, bash, proposal } = session.approvals;
+  // Cancel the host interaction first so its cause-carrying settlement wins;
+  // the registry sweep below is then a no-op via the idempotent
+  // `approvalSettled` guard instead of the one that determines the result.
+  session.interactions.cancel({
+    streamId,
+    cause: 'Stream resources released.',
+  });
   toolEdit.rejectPendingForStream(streamId);
   bash.rejectPendingForStream(streamId);
   session.approvals.forgetStreamAncestry(streamId);
   toolEdit.bypass.clearForStream(streamId);
   bash.bypass.clearForStream(streamId);
   proposal.clearForStream(streamId);
-  session.interactions.cancel({
-    streamId,
-    cause: 'Stream resources released.',
-  });
 }
 
 /**
@@ -109,12 +112,14 @@ export function releaseStreamResources(
 export function cleanupUnscopedApprovals(
   session: SessionHandle = defaultSession(),
 ): void {
-  session.approvals.toolEdit.rejectUnscopedPending();
-  session.approvals.bash.rejectUnscopedPending();
+  // Cancel first so its cause-carrying settlement wins over the registry
+  // sweep below (see `cleanupApprovalsForStream`).
   session.interactions.cancel({
     streamId: null,
     cause: 'Streamless approval cleanup.',
   });
+  session.approvals.toolEdit.rejectUnscopedPending();
+  session.approvals.bash.rejectUnscopedPending();
 }
 
 /**
