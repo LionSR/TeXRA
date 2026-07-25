@@ -22,13 +22,13 @@ import {
   type ToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
 
-import { type CliDecisionApprovalEvent } from './approvalEvents';
 import { type CliContext } from './cliContext';
 import { writeTextStderr } from './logSinks';
 
 import {
   type ApprovalDecision,
   type CliApprovalPromptHooks,
+  type CliDecisionApprovalEvent,
   askApproval,
   askUserQuestionDenial,
   approvalPromptAllowed,
@@ -43,7 +43,6 @@ import {
   formatToolEditApprovalSummary,
 } from './approval/approvalSummaries';
 import { summarizeApprovalEvent } from './approval/eventDispatch';
-import { handleExternalInquiry } from './approval/humanInputHandlers';
 import { parseUserQuestionAnswer } from './userQuestionAnswer';
 
 export {
@@ -268,24 +267,4 @@ export function createHeadlessCliHostInteractions(
     // pending registry to cancel into.
     cancel: () => {},
   };
-}
-
-export function handleCliApprovalEvent<
-  K extends keyof RuntimeInteractionEventPayloads,
->(
-  event: K,
-  payload: RuntimeInteractionEventPayloads[K],
-  context: CliContext,
-  hooks: CliApprovalPromptHooks = {},
-): boolean {
-  if (event === 'showExternalInquiry') {
-    handleExternalInquiry(
-      payload as RuntimeInteractionEventPayloads['showExternalInquiry'],
-      context,
-      hooks,
-    );
-    return true;
-  }
-
-  return false;
 }
