@@ -15,7 +15,12 @@ import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import { withToolEnvironment } from '@agent/followUp/ToolFileInteractionContext';
 import * as toolUseFollowUp from '@agent/followUp/ToolUseFollowUp';
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import type { StreamTabId } from '@shared/schemas';
+import {
+  LOG_LEVELS,
+  MESSAGE_TYPES,
+  STREAM_LOG_ENTRY_TYPES,
+  type StreamTabId,
+} from '@shared/schemas';
 import type { ExecResult } from '@shared/schemas/opResults';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
@@ -140,7 +145,11 @@ describe('ExecutionsTool /executions/{id}/output', () => {
     assert.equal(result.status, 'executed');
     const output = result.output ?? '';
     assert.match(output, /^Output for \S+ \(process, running/);
-    assert.ok(output.includes('of 200,000 logged chars'));
+    assert.match(
+      output,
+      /— [\d,]+ retained transcript chars; command-output cap 200,000 chars, 3 lines\./,
+    );
+    assert.ok(!output.includes('of 200,000 logged chars'));
     assert.ok(output.includes('[ 42%] Building CXX object src/foo.cc.o'));
     assert.ok(output.includes("err: warning: unused variable 'x'"));
     assert.ok(output.includes('[ 84%] Building CXX object src/bar.cc.o'));
@@ -155,6 +164,19 @@ describe('ExecutionsTool /executions/{id}/output', () => {
     );
 
     await run.finish();
+  });
+
+  it('keeps final unterminated stdout separate from completion lifecycle output', async () => {
+    const run = await launchBackgroundRun((sink) => {
+      sink.onStdout?.('tail without newline');
+    });
+    await run.finish();
+
+    const result = await readOutput(run.executionId);
+    const output = result.output ?? '';
+
+    assert.ok(output.includes('tail without newline\nCompleted in '));
+    assert.ok(!output.includes('tail without newlineCompleted in '));
   });
 
   it('joins chunks that split a line and pages the projection with view_range', async () => {
@@ -184,6 +206,84 @@ describe('ExecutionsTool /executions/{id}/output', () => {
     assert.ok((past.output ?? '').includes('No lines in the requested range'));
 
     await run.finish();
+  });
+
+  it('reconstructs split chunks, flushes source switches, and normalizes line breaks', async () => {
+    const run = await launchBackgroundRun((sink) => {
+      sink.onStdout?.('complete\r');
+      sink.onStdout?.('\n\npartial\r');
+      sink.onStderr?.('warn');
+      sink.onStderr?.('ing\r');
+      sink.onStderr?.('\n\nlast err\r');
+      sink.onStdout?.('tail');
+    });
+
+    const result = await readOutput(run.executionId);
+    const output = result.output ?? '';
+
+    assert.ok(output.includes('Showing lines 1-7 of 7.'));
+    assert.ok(
+      output.includes(
+        'complete\n\npartial\nerr: warning\nerr: \nerr: last err\ntail',
+      ),
+    );
+    assert.ok(!output.includes('\r'));
+    assert.equal(output.match(/^err: /gm)?.length, 3);
+
+    await run.finish();
+  });
+
+  it('renders consecutive untagged legacy rows standalone', async () => {
+    const executionId = generateExecutionId();
+    await registerExecution(
+      executionId,
+      AgentConfigSchema.parse({
+        agent: 'bash',
+        instruction: 'legacy command',
+        agentCategory: AgentCategory.ToolUse,
+      }),
+      'bash',
+      undefined,
+      'process',
+    );
+    const streamId = `bash@tool#${executionId}` as StreamTabId;
+    const transcripts = defaultSession().transcripts;
+    transcripts.ensureStream(streamId);
+    const writer = transcripts.acquireWriter(streamId, 'legacy-output-test');
+    const append = (
+      id: string,
+      text: string,
+      level: typeof LOG_LEVELS.INFO | typeof LOG_LEVELS.WARN = LOG_LEVELS.INFO,
+    ): void => {
+      writer.append({
+        id,
+        type: STREAM_LOG_ENTRY_TYPES.LOG,
+        level,
+        messageType: MESSAGE_TYPES.DEFAULT,
+        timestamp: Date.now(),
+        text,
+      });
+    };
+    append('legacy-one', 'legacy one');
+    append('legacy-two', 'legacy two');
+    append(
+      'legacy-warning',
+      'legacy warning\r\n\rlegacy tail\r',
+      LOG_LEVELS.WARN,
+    );
+    writer.close();
+
+    const result = await readOutput(executionId);
+    const output = result.output ?? '';
+
+    assert.ok(output.includes('Showing lines 1-5 of 5.'));
+    assert.ok(
+      output.includes(
+        'legacy one\nlegacy two\nerr: legacy warning\nerr: \nerr: legacy tail',
+      ),
+    );
+    assert.ok(!output.includes('legacy onelegacy two'));
+    assert.ok(!output.includes('\r'));
   });
 
   it('treats a carriage-return progress redraw as separate lines', async () => {
