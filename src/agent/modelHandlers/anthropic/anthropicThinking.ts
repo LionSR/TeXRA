@@ -1,12 +1,9 @@
-// Model-trait and thinking-configuration logic for Anthropic Claude models.
-//
-// These are pure functions of the model's fullName (and, for effort, the
-// configured reasoning effort). Keeping them out of the handler class makes the
-// model-specific rules independently testable and lets the handler read as
-// orchestration rather than a tangle of version checks.
+// Local request-shaping and thinking-configuration logic for Anthropic models.
+// Adaptive-thinking support and accepted effort values come from the selected
+// llm-zoo registry entry; fullName is used only for Anthropic family traits.
 
 // Third-party imports
-import { ReasoningEffort } from 'llm-zoo';
+import { ReasoningEffort, type ModelCapabilities } from 'llm-zoo';
 
 // Type imports - Anthropic SDK
 import type {
@@ -43,20 +40,10 @@ const THINKING_TEMPERATURE_EXCLUDED_PATTERNS = [
   'claude-mythos-',
 ];
 
-/** Per-family request traits, selected by `fullName` prefix. */
-interface AnthropicModelTraits {
-  /** Adaptive thinking via the effort parameter, rather than budget_tokens. */
-  adaptiveThinking: boolean;
+/** Local Anthropic request traits selected by `fullName` prefix. */
+interface AnthropicRequestTraits {
   /** Anthropic's native server-side context compaction. */
   compactionEligible: boolean;
-  /**
-   * Highest effort tier the family accepts. `'xhigh'` families take the
-   * distinct "extra" tier the SDK added in 0.100.0; `'max'` families predate
-   * that split and fold a requested `xhigh` into `max`; `'high'` families cap
-   * there.
-   */
-  maxEffort: NonNullable<BetaOutputConfig['effort']> &
-    ('high' | 'max' | 'xhigh');
   /**
    * Whether `display: 'summarized'` must be requested. These families default
    * to `'omitted'`, which would suppress reasoning output entirely.
@@ -65,121 +52,38 @@ interface AnthropicModelTraits {
 }
 
 /**
- * One row per model family, replacing the five hand-maintained boolean chains
- * these traits used to be spread across. Adding a model is a single new row
- * instead of an edit to every predicate that happens to list its siblings —
- * the drift mode that made the old chains easy to get subtly wrong.
- *
- * Mythos-class models (Fable 5, Mythos 5) share one request surface: adaptive
- * thinking is always on, manual budget_tokens and `thinking: {type:
- * "disabled"}` both return 400, raw chain-of-thought is never returned, and
- * sampling parameters are rejected. They accept the same effort tiers as
- * Opus 4.8 / Opus 5.
+ * Traits that remain local because they shape Anthropic-specific requests and
+ * are not model capabilities owned by llm-zoo.
  */
-const ANTHROPIC_MODEL_TRAITS: ReadonlyArray<
-  readonly [prefix: string, traits: AnthropicModelTraits]
+const ANTHROPIC_REQUEST_TRAITS: ReadonlyArray<
+  readonly [prefix: string, traits: AnthropicRequestTraits]
 > = [
-  [
-    OPUS_46_FULLNAME,
-    {
-      adaptiveThinking: true,
-      compactionEligible: true,
-      maxEffort: 'max',
-      summarizedDisplay: false,
-    },
-  ],
-  [
-    OPUS_47_FULLNAME,
-    {
-      adaptiveThinking: true,
-      compactionEligible: true,
-      maxEffort: 'max',
-      summarizedDisplay: true,
-    },
-  ],
-  [
-    OPUS_48_FULLNAME,
-    {
-      adaptiveThinking: true,
-      compactionEligible: true,
-      maxEffort: 'xhigh',
-      summarizedDisplay: true,
-    },
-  ],
-  [
-    OPUS_5_FULLNAME,
-    {
-      adaptiveThinking: true,
-      compactionEligible: true,
-      maxEffort: 'xhigh',
-      summarizedDisplay: true,
-    },
-  ],
-  [
-    SONNET_46_FULLNAME,
-    {
-      adaptiveThinking: true,
-      compactionEligible: true,
-      maxEffort: 'high',
-      summarizedDisplay: false,
-    },
-  ],
-  [
-    SONNET_5_FULLNAME,
-    {
-      adaptiveThinking: true,
-      compactionEligible: true,
-      maxEffort: 'xhigh',
-      summarizedDisplay: true,
-    },
-  ],
-  [
-    FABLE_5_FULLNAME,
-    {
-      adaptiveThinking: true,
-      compactionEligible: true,
-      maxEffort: 'xhigh',
-      summarizedDisplay: true,
-    },
-  ],
-  [
-    MYTHOS_5_FULLNAME,
-    {
-      adaptiveThinking: true,
-      compactionEligible: true,
-      maxEffort: 'xhigh',
-      summarizedDisplay: true,
-    },
-  ],
+  [OPUS_46_FULLNAME, { compactionEligible: true, summarizedDisplay: false }],
+  [OPUS_47_FULLNAME, { compactionEligible: true, summarizedDisplay: true }],
+  [OPUS_48_FULLNAME, { compactionEligible: true, summarizedDisplay: true }],
+  [OPUS_5_FULLNAME, { compactionEligible: true, summarizedDisplay: true }],
+  [SONNET_46_FULLNAME, { compactionEligible: true, summarizedDisplay: false }],
+  [SONNET_5_FULLNAME, { compactionEligible: true, summarizedDisplay: true }],
+  [FABLE_5_FULLNAME, { compactionEligible: true, summarizedDisplay: true }],
+  [MYTHOS_5_FULLNAME, { compactionEligible: true, summarizedDisplay: true }],
 ];
 
-/** Traits for models with no matching row: manual thinking, capped at 'high'. */
-const DEFAULT_MODEL_TRAITS: AnthropicModelTraits = {
-  adaptiveThinking: false,
+const DEFAULT_REQUEST_TRAITS: AnthropicRequestTraits = {
   compactionEligible: false,
-  maxEffort: 'high',
   summarizedDisplay: false,
 };
 
-function traitsFor(fullName: string): AnthropicModelTraits {
+function requestTraitsFor(fullName: string): AnthropicRequestTraits {
   return (
-    ANTHROPIC_MODEL_TRAITS.find(([prefix]) =>
+    ANTHROPIC_REQUEST_TRAITS.find(([prefix]) =>
       fullName.startsWith(prefix),
-    )?.[1] ?? DEFAULT_MODEL_TRAITS
+    )?.[1] ?? DEFAULT_REQUEST_TRAITS
   );
 }
 
-/**
- * Whether this model supports adaptive thinking with the effort parameter.
- * Opus 4.7+, Sonnet 5, and Mythos-class models only accept adaptive thinking —
- * manual budget_tokens returns 400.
- */
-export const supportsAdaptiveThinking = (fullName: string): boolean =>
-  traitsFor(fullName).adaptiveThinking;
-
 /** Whether this model supports Anthropic's native server-side context compaction. */
 export const isCompactionEligibleModel = (fullName: string): boolean =>
-  traitsFor(fullName).compactionEligible;
+  requestTraitsFor(fullName).compactionEligible;
 
 /**
  * Whether temperature must be removed when thinking is enabled.
@@ -190,50 +94,70 @@ export const requiresNoTemperatureWithThinking = (fullName: string): boolean =>
     fullName.includes(pattern),
   );
 
+type AnthropicEffort = NonNullable<BetaOutputConfig['effort']>;
+type AnthropicReasoningEffort = Exclude<ReasoningEffort, ReasoningEffort.NONE>;
+
+const ANTHROPIC_EFFORT_ORDER: readonly AnthropicReasoningEffort[] = [
+  ReasoningEffort.LOW,
+  ReasoningEffort.MEDIUM,
+  ReasoningEffort.HIGH,
+  ReasoningEffort.XHIGH,
+  ReasoningEffort.MAX,
+];
+
 /**
- * Returns the Anthropic effort level for the current model.
- * Maps the llm-zoo ReasoningEffort enum to Anthropic's effort levels.
- * Falls back to 'high' (the API default) when no specific effort is configured.
- * The above-'high' tiers are valid for Opus-tier, Sonnet 5, and Mythos-class
- * models: Opus 4.8/5, Sonnet 5, and the Mythos-class models (Fable 5, Mythos 5)
- * accept both the distinct 'xhigh' ("extra") tier and the top 'max' tier, while
- * Opus 4.6/4.7 predate that split and only accept 'max'.
+ * Normalizes a requested effort to llm-zoo's exact accepted vocabulary.
+ * Entries without a vocabulary retain the legacy low/medium/high behavior and
+ * cap above-high requests at high.
  */
-export function mapAnthropicEffort(
-  fullName: string,
+export function normalizeAnthropicEffort(
+  supportedReasoningEfforts: ModelCapabilities['supportedReasoningEfforts'],
   reasoningEffort: ReasoningEffort | null,
-): BetaOutputConfig['effort'] {
-  if (!reasoningEffort) {
-    return 'high';
+): AnthropicEffort {
+  const requested =
+    reasoningEffort === ReasoningEffort.NONE
+      ? ReasoningEffort.LOW
+      : (reasoningEffort ?? ReasoningEffort.HIGH);
+
+  if (!supportedReasoningEfforts?.length) {
+    return requested === ReasoningEffort.MAX ||
+      requested === ReasoningEffort.XHIGH
+      ? 'high'
+      : requested;
   }
 
-  const { maxEffort } = traitsFor(fullName);
-  switch (reasoningEffort) {
-    case 'max':
-      // The top tier ("Max"). Every family that accepts anything above 'high'
-      // accepts 'max'; the rest cap at 'high'.
-      return maxEffort === 'high' ? 'high' : 'max';
-    case 'xhigh':
-      // TeXRA's "Extra High" maps straight to the family's ceiling: 'xhigh'
-      // where the SDK 0.100.0 tier split exists, 'max' on the families that
-      // predate it, 'high' everywhere else.
-      return maxEffort;
-    case 'high':
-      return 'high';
-    case 'medium':
-      return 'medium';
-    case 'low':
-    case 'none':
-      // Anthropic doesn't support fully disabling thinking; 'low' is the minimum.
-      return 'low';
-    default:
-      return 'high';
+  if (supportedReasoningEfforts.includes(requested)) {
+    return requested;
   }
+
+  // The families that introduced `max` before `xhigh` accept xhigh intent at
+  // their `max` tier rather than lowering it to high.
+  if (
+    requested === ReasoningEffort.XHIGH &&
+    supportedReasoningEfforts.includes(ReasoningEffort.MAX)
+  ) {
+    return 'max';
+  }
+
+  const requestedIndex = ANTHROPIC_EFFORT_ORDER.indexOf(requested);
+  return (
+    ANTHROPIC_EFFORT_ORDER.slice(0, requestedIndex + 1).findLast((effort) =>
+      supportedReasoningEfforts.includes(effort),
+    ) ??
+    ANTHROPIC_EFFORT_ORDER.find((effort) =>
+      supportedReasoningEfforts.includes(effort),
+    ) ??
+    'high'
+  );
 }
 
 /** Inputs needed to build the thinking/effort portion of a create request. */
 interface ThinkingConfigInput {
   fullName: string;
+  capabilities: Pick<
+    ModelCapabilities,
+    'supportsAdaptiveThinking' | 'supportedReasoningEfforts'
+  >;
   reasoningEffort: ReasoningEffort | null;
   maxTokens: number;
   useStreaming: boolean;
@@ -249,46 +173,35 @@ interface ThinkingConfigResult {
 }
 
 /**
- * Builds the thinking configuration for a create request.
- *
- * Adaptive-thinking models (Opus 4.6/4.7/4.8/5, Sonnet 4.6, Sonnet 5, and
- * Mythos-class models Fable 5 / Mythos 5) use the effort parameter and let the
- * model decide its budget; interleaved thinking is enabled automatically. Older
- * models use a manual budget_tokens cap.
+ * Builds the thinking configuration for a create request. Adaptive entries use
+ * the effort parameter and let the model decide its budget; other thinking
+ * entries use a manual budget_tokens cap.
  */
 export function buildThinkingConfig({
   fullName,
+  capabilities,
   reasoningEffort,
   maxTokens,
   useStreaming,
 }: ThinkingConfigInput): ThinkingConfigResult {
   const removeTemperature = requiresNoTemperatureWithThinking(fullName);
 
-  if (supportsAdaptiveThinking(fullName)) {
-    // Opus 4.6/4.7/4.8/5, Sonnet 4.6, Sonnet 5, and the Mythos-class models
-    // (Fable 5, Mythos 5): use adaptive thinking with the effort parameter.
-    // Adaptive thinking lets the model decide when and how much to think, and
-    // automatically enables interleaved thinking between tool calls.
-    // budget_tokens is deprecated (and rejected on Opus 4.7+ / Sonnet 5 /
-    // Mythos-class).
-    const effort = mapAnthropicEffort(fullName, reasoningEffort);
-    // Opus 4.7+, Sonnet 5, and Mythos-class models default display to 'omitted',
-    // which suppresses reasoning output (Mythos-class never returns raw CoT at
-    // all). Request 'summarized' so thinking still streams to the user — older
-    // adaptive-thinking models (Opus 4.6, Sonnet 4.6) already emit reasoning by
-    // default and are unaffected.
-    const thinking: ThinkingConfigResult['thinking'] = traitsFor(fullName)
-      .summarizedDisplay
+  if (capabilities.supportsAdaptiveThinking) {
+    const effort = normalizeAnthropicEffort(
+      capabilities.supportedReasoningEfforts,
+      reasoningEffort,
+    );
+    const thinking: ThinkingConfigResult['thinking'] = requestTraitsFor(
+      fullName,
+    ).summarizedDisplay
       ? { type: 'adaptive', display: 'summarized' }
       : { type: 'adaptive' };
 
     return { thinking, outputConfig: { effort }, removeTemperature };
   }
 
-  // Older models: use manual thinking with budget_tokens
-  // budget_tokens must be < max_tokens; use 50% to leave room for actual output
+  // Manual budget_tokens must be < max_tokens. Reserve half for final output.
   const maxBudget = Math.floor(maxTokens * 0.5);
-
   const defaultBudget = useStreaming ? 32768 : 4096;
   const thinkingBudget = Math.min(defaultBudget, maxBudget);
 
