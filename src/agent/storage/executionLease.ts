@@ -227,30 +227,36 @@ function forgetOwnedLease(
   }
 }
 
-async function performHeartbeat(lease: OwnedExecutionLease): Promise<void> {
-  await withLeaseLock(
+async function heartbeat(
+  lease: OwnedExecutionLease,
+  canContinue?: () => boolean | Promise<boolean>,
+): Promise<'owned' | 'lost' | 'cancelled'> {
+  return withLeaseLock(
     lease.executionId,
     async () => {
       const current = await readLease(lease.executionId, lease.storageRoot);
       if (current?.ownerToken !== lease.ownerToken) {
         forgetOwnedLease(lease, { notifyLoss: true });
-        return;
+        return 'lost';
       }
+      if ((await canContinue?.()) === false) return 'cancelled';
       await writeLease(
         { ...current, heartbeatAt: Date.now() },
         lease.storageRoot,
       );
       lease.lastConfirmedHeartbeatAt = Date.now();
+      return 'owned';
     },
     lease.storageRoot,
   );
 }
 
-function heartbeat(lease: OwnedExecutionLease): Promise<void> {
+function renewHeartbeat(lease: OwnedExecutionLease): Promise<void> {
   if (lease.releasing) return Promise.resolve();
   if (lease.heartbeatInFlight) return lease.heartbeatInFlight;
 
-  const work = performHeartbeat(lease)
+  const work = heartbeat(lease)
+    .then(() => undefined)
     .catch((error: unknown) => {
       if (handleHeartbeatFailure(lease, error)) throw error;
     })
@@ -323,7 +329,7 @@ function rememberOwnership(
       for (const owned of ownedLeases.values()) {
         // heartbeat() records and classifies its own failure before rejecting;
         // the interval consumes that rejection because it has no caller.
-        void heartbeat(owned).catch(() => undefined);
+        void renewHeartbeat(owned).catch(() => undefined);
       }
     }, EXECUTION_LEASE_HEARTBEAT_MS);
     heartbeatTimer.unref();
@@ -433,7 +439,7 @@ export async function renewOwnedExecutionLease(
   if (!lease || lease.releasing || !currentScopeOwnsLease(lease)) {
     throw new ExecutionLeaseLostError(executionId);
   }
-  await heartbeat(lease);
+  await renewHeartbeat(lease);
   if (
     lease.releasing ||
     ownedLeases.get(ownershipKey(lease.storageRoot, executionId)) !== lease
@@ -485,21 +491,20 @@ function acquireExecutionLease(
 function acquireExecutionLease(
   executionId: ExecutionId,
   mode: 'resume',
-  canAcquire?: () => boolean,
+  canAcquire?: () => boolean | Promise<boolean>,
 ): Promise<'acquired' | 'existing' | 'cancelled'>;
 async function acquireExecutionLease(
   executionId: ExecutionId,
   mode: 'fresh' | 'resume',
-  canAcquire?: () => boolean,
+  canAcquire?: () => boolean | Promise<boolean>,
 ): Promise<'acquired' | 'existing' | 'cancelled'> {
   const root = storageRoot();
   const key = ownershipKey(root, executionId);
   const existingOwnership = ownedLeases.get(key);
   if (mode === 'resume' && existingOwnership) {
-    await heartbeat(existingOwnership);
-    if (ownedLeases.get(key) === existingOwnership) {
-      return canAcquire?.() === false ? 'cancelled' : 'existing';
-    }
+    const heartbeatResult = await heartbeat(existingOwnership, canAcquire);
+    if (heartbeatResult === 'cancelled') return 'cancelled';
+    if (heartbeatResult === 'owned') return 'existing';
   }
 
   return withLeaseLock(
@@ -514,7 +519,7 @@ async function acquireExecutionLease(
       if (liveness.status === 'active') {
         throw new ExecutionLeaseActiveError(executionId, liveness.heartbeatAt);
       }
-      if (canAcquire?.() === false) return 'cancelled' as const;
+      if ((await canAcquire?.()) === false) return 'cancelled' as const;
       const ownerToken = randomUUID();
       if (existingOwnership) forgetOwnedLease(existingOwnership);
       await writeLease(
@@ -544,7 +549,7 @@ export function acquireFreshExecutionLease(
 /** Establish ownership before a persisted execution is resumed. */
 export function acquireResumedExecutionLease(
   executionId: ExecutionId,
-  canAcquire?: () => boolean,
+  canAcquire?: () => boolean | Promise<boolean>,
 ): Promise<'acquired' | 'existing' | 'cancelled'> {
   return acquireExecutionLease(executionId, 'resume', canAcquire);
 }

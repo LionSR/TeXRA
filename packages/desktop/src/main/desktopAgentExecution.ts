@@ -16,7 +16,7 @@ import type {
   AgentRuntimeEventPayloads,
   AgentRuntimeHost,
 } from '@agent/runtime/AgentRuntimeHost';
-import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
+import { terminalResultToast } from '@agent/runtime/terminalResultToast';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   presentFollowUpWakeResult,
@@ -191,7 +191,6 @@ export class DesktopProgressBridge {
   private readonly session: SessionHandle;
   /** Detaches this window's presentation from process-owned interactions. */
   private detachHostInteractions: () => void = () => undefined;
-  private detachResultToast: () => void = () => undefined;
 
   constructor(
     private readonly postToRenderer: (message: unknown) => boolean | void,
@@ -312,23 +311,31 @@ export class DesktopProgressBridge {
       startExecution: (request) => {
         const logger = this.logger;
         const runtimeHost = this.runtimeHost;
-        let lifecycleStarted = false;
-        void this.runExecution(request, {
-          onLifecycleStart: () => {
-            lifecycleStarted = true;
-          },
-        }).catch((error: unknown) => {
-          logger.error('Desktop merge execution failed', {
-            data: toLogData(error),
-          });
-          // Once the lifecycle starts, the process-session result listener
-          // owns the one terminal error presentation.
-          if (!lifecycleStarted) {
-            runtimeHost.emit('requestShowError', {
-              message: `Merge failed: ${toErrorMessage(error)}`,
-            });
-          }
+        let executionId: string | undefined;
+        let terminalRejectionHandled = false;
+        const unsubscribeResult = this.session.onResult((event) => {
+          if (event.executionId !== executionId) return;
+          terminalRejectionHandled =
+            terminalResultToast(event) !== null ||
+            event.error?.kind === 'abort';
         });
+        void this.runExecution(request, {
+          suppressErrorNotification: true,
+          onRun: (handle) => {
+            executionId = handle.executionId;
+          },
+        })
+          .catch((error: unknown) => {
+            logger.error('Desktop merge execution failed', {
+              data: toLogData(error),
+            });
+            if (!terminalRejectionHandled) {
+              runtimeHost.emit('requestShowError', {
+                message: `Merge failed: ${toErrorMessage(error)}`,
+              });
+            }
+          })
+          .finally(unsubscribeResult);
       },
       listWorkspaceCandidateFiles: () => this.listWorkspaceCandidateFiles(),
     });
@@ -361,18 +368,6 @@ export class DesktopProgressBridge {
     // first render can be enabled.
     await this.options.sessionStores.waitForPendingStreamDeletions();
     if (this.disposed) return;
-    const detachResultToast = attachTerminalResultToast(
-      this.session,
-      this.runtimeHost,
-      { replayWhenAttached: true },
-    );
-    // Missed-result replay is synchronous for the same reason as approval
-    // replay above; never publish a disposer after this presentation closed.
-    if (this.disposed) {
-      detachResultToast();
-      return;
-    }
-    this.detachResultToast = detachResultToast;
     // Close the load→subscribe gap. The process-owned snapshot listener may
     // have accepted metadata facts while restart repair was in flight; now
     // that live subscriptions are established, overlay that canonical state
@@ -674,7 +669,6 @@ export class DesktopProgressBridge {
     this.detachHostInteractions();
     this.toolEditApprovals?.dispose();
     this.clearDesktopPresentationState();
-    this.detachResultToast();
     this.unsubscribe();
     this.backend.dispose();
     this.workflowFileActions?.clearAllBackups();

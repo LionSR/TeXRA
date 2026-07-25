@@ -108,9 +108,9 @@ export function attachTerminalResultToast(
     (event) => {
       const toast = terminalResultToast(event);
       if (toast?.type === 'instruction') {
-        runtimeHost.emit('requestShowInstruction', toast.payload);
+        runtimeHost.emit('requestShowInstruction', toast.payload, options);
       } else if (toast?.type === 'error') {
-        runtimeHost.emit('requestShowError', toast.payload);
+        runtimeHost.emit('requestShowError', toast.payload, options);
       }
     },
     options.replayWhenAttached ? { replayMissed: true } : undefined,
