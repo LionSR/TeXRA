@@ -126,11 +126,8 @@ export function defaultPostCompactionContext(
 ): string | null {
   const { runScope } = useLaunchRunContext();
   const { session, streamId } = runScope;
-  const { subagents, processes } =
-    session.executions.getActiveChildren(streamId);
   return formatPostCompactionContext(
-    subagents,
-    processes,
+    session.executions.getActiveChildren(streamId),
     services.workspace.workPlan.toSnapshot(),
   );
 }

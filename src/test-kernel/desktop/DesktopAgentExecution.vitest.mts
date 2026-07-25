@@ -1538,14 +1538,15 @@ describe('DesktopProgressBridge', () => {
         return new Set();
       }),
       configureSession: async (session) => {
-        const { ProcessExecutionHandle } =
+        const { AgentExecutionHandle } =
           await import('@agent/runtime/ExecutionHandle');
         session.executions.track(
-          new ProcessExecutionHandle(
+          new AgentExecutionHandle(
             'abcdef' as ExecutionId,
             streamId,
+            'bash#attachment-order-child' as StreamTabId,
             'bash',
-            () => true,
+            AgentCategory.ToolUse,
             session.interactions,
           ),
         );
@@ -2764,7 +2765,7 @@ describe('DesktopProgressBridge', () => {
         openTranscripts,
         processResumeOwner,
       } = await loadBridgeModule({ detectWaitingStreams });
-      const { AgentExecutionHandle, ProcessExecutionHandle } =
+      const { AgentExecutionHandle } =
         await import('@agent/runtime/ExecutionHandle');
       const { getExecutionStore } = await import('@agent/storage');
       const { noopAgentRuntimeHost } =
@@ -2910,7 +2911,6 @@ describe('DesktopProgressBridge', () => {
       });
 
       return {
-        ProcessExecutionHandle,
         bridgeA,
         close,
         createHandle,
@@ -2927,239 +2927,6 @@ describe('DesktopProgressBridge', () => {
         trace,
       };
     }
-
-    async function trackOutputProcess(
-      owner: Awaited<ReturnType<typeof createProcessOwner>>,
-      executionId: ExecutionId,
-    ) {
-      const { platform } = await import('@platform/platform');
-      const stdout = `/${executionId}-stdout.log`;
-      const stderr = `/${executionId}-stderr.log`;
-      await Promise.all([
-        platform().fs.writeFile(stdout, Buffer.from('')),
-        platform().fs.writeFile(stderr, Buffer.from('')),
-      ]);
-
-      const processHandle = new owner.ProcessExecutionHandle(
-        executionId,
-        owner.handle.childStreamId,
-        'bash',
-        () => true,
-        owner.noopAgentRuntimeHost,
-      );
-      processHandle.toolName = 'bash';
-      processHandle.outputPaths = { stdout, stderr };
-      owner.processSession.executions.track(processHandle);
-
-      const flush = () =>
-        (
-          owner.processSession.executions as unknown as {
-            processOutput: {
-              flush(handle: typeof processHandle): Promise<void>;
-            };
-          }
-        ).processOutput.flush(processHandle);
-      const appendStdout = (text: string) =>
-        platform().fs.appendFile(stdout, Buffer.from(text));
-      const appendStderr = (text: string) =>
-        platform().fs.appendFile(stderr, Buffer.from(text));
-      return { appendStdout, appendStderr, flush };
-    }
-
-    function processOutputMessages(messages: unknown[]): ProgressMessage[] {
-      return progressMessages(
-        messages,
-        PROGRESS_VIEW_COMMANDS.UPDATE_PROCESS_OUTPUT,
-      );
-    }
-
-    it('replays detached active-process output once and then delivers live output once', async () => {
-      const streamId = 'process-output-reopen' as StreamTabId;
-      const executionId = 'ec01a0' as ExecutionId;
-      const processExecutionId = 'ec01a1' as ExecutionId;
-      const owner = await createProcessOwner({ streamId, executionId });
-      const output = await trackOutputProcess(owner, processExecutionId);
-
-      owner.close();
-      await Promise.all([
-        output.appendStdout('detached stdout'),
-        output.appendStderr('detached stderr'),
-      ]);
-      await output.flush();
-      expect(
-        owner.processSession.executions
-          .getActiveProcessOutputSnapshots()
-          .get(processExecutionId),
-      ).toEqual({
-        stdout: 'detached stdout',
-        stderr: 'detached stderr',
-      });
-
-      const messagesB: unknown[] = [];
-      const { bridgeB } = await owner.reopen(messagesB);
-      try {
-        expect(processOutputMessages(messagesB)).toEqual([
-          expect.objectContaining({
-            stream: streamId,
-            executionId: processExecutionId,
-            stdout: 'detached stdout',
-            stderr: 'detached stderr',
-          }),
-        ]);
-
-        bridgeB.syncFullView();
-        expect(
-          progressMessages(messagesB, PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS).at(
-            -1,
-          ),
-        ).toMatchObject({
-          streamStates: {
-            [streamId]: {
-              processes: [
-                expect.objectContaining({
-                  executionId: processExecutionId,
-                  agentName: 'bash',
-                  kind: 'process',
-                  toolName: 'bash',
-                }),
-              ],
-            },
-          },
-        });
-
-        await Promise.all([
-          output.appendStdout(' live stdout'),
-          output.appendStderr(' live stderr'),
-        ]);
-        await output.flush();
-        expect(processOutputMessages(messagesB)).toEqual([
-          expect.objectContaining({
-            executionId: processExecutionId,
-            stdout: 'detached stdout',
-            stderr: 'detached stderr',
-          }),
-          expect.objectContaining({
-            executionId: processExecutionId,
-            stdout: ' live stdout',
-            stderr: ' live stderr',
-          }),
-        ]);
-      } finally {
-        bridgeB.dispose();
-      }
-    });
-
-    it('has no loss or duplication across a gated subscribe-snapshot boundary', async () => {
-      const streamId = 'process-output-subscribe-boundary' as StreamTabId;
-      const executionId = 'ec01a2' as ExecutionId;
-      const processExecutionId = 'ec01a3' as ExecutionId;
-      let detectCount = 0;
-      let markReplacementLoadStarted!: () => void;
-      let releaseReplacementLoad!: () => void;
-      const replacementLoadStarted = new Promise<void>((resolve) => {
-        markReplacementLoadStarted = resolve;
-      });
-      const replacementLoadGate = new Promise<void>((resolve) => {
-        releaseReplacementLoad = resolve;
-      });
-      const detectWaitingStreams = vi.fn(async () => {
-        detectCount += 1;
-        if (detectCount === 1) return new Set<StreamTabId>();
-        markReplacementLoadStarted();
-        await replacementLoadGate;
-        return new Set<StreamTabId>();
-      });
-      const owner = await createProcessOwner({
-        streamId,
-        executionId,
-        detectWaitingStreams,
-      });
-      const output = await trackOutputProcess(owner, processExecutionId);
-      owner.close();
-
-      const messagesB: unknown[] = [];
-      let postBoundaryFlush: Promise<void> | undefined;
-      const reopening = owner.reopen(messagesB, (message) => {
-        const processOutput = message as ProgressMessage;
-        if (
-          processOutput.command !==
-            PROGRESS_VIEW_COMMANDS.UPDATE_PROCESS_OUTPUT ||
-          processOutput.stdout !== 'before subscription'
-        ) {
-          return;
-        }
-        postBoundaryFlush = (async () => {
-          await output.appendStdout('after snapshot');
-          await output.flush();
-        })();
-      });
-      await replacementLoadStarted;
-      await output.appendStdout('before subscription');
-      await output.flush();
-      expect(messagesB).toEqual([]);
-
-      releaseReplacementLoad();
-      const { bridgeB } = await reopening;
-      try {
-        await vi.waitFor(() => expect(postBoundaryFlush).toBeDefined());
-        await postBoundaryFlush;
-        expect(processOutputMessages(messagesB)).toEqual([
-          expect.objectContaining({
-            executionId: processExecutionId,
-            stdout: 'before subscription',
-            stderr: '',
-          }),
-          expect.objectContaining({
-            executionId: processExecutionId,
-            stdout: 'after snapshot',
-            stderr: '',
-          }),
-        ]);
-      } finally {
-        bridgeB.dispose();
-      }
-    });
-
-    it('does not replay retained output after the process unregisters', async () => {
-      const streamId = 'process-output-finished-before-reopen' as StreamTabId;
-      const executionId = 'ec01a4' as ExecutionId;
-      const processExecutionId = 'ec01a5' as ExecutionId;
-      const owner = await createProcessOwner({ streamId, executionId });
-      const output = await trackOutputProcess(owner, processExecutionId);
-
-      owner.close();
-      await output.appendStdout('finished while detached');
-      await output.flush();
-      owner.processSession.executions.untrack(processExecutionId);
-      await vi.waitFor(() => {
-        expect(
-          owner.processSession.executions
-            .getActiveProcessOutputSnapshots()
-            .has(processExecutionId),
-        ).toBe(false);
-      });
-
-      const messagesB: unknown[] = [];
-      const { bridgeB } = await owner.reopen(messagesB);
-      try {
-        expect(processOutputMessages(messagesB)).toEqual([]);
-        expect(
-          owner.processSession.executions.getActiveChildren(streamId).processes,
-        ).toEqual([]);
-        bridgeB.syncFullView();
-        expect(
-          progressMessages(messagesB, PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS).at(
-            -1,
-          ),
-        ).toMatchObject({
-          streamStates: {
-            [streamId]: { processes: [] },
-          },
-        });
-      } finally {
-        bridgeB.dispose();
-      }
-    });
 
     it('keeps a live transcript append made while replacement state loads', async () => {
       const streamId = 'process-stream-live-reopen' as StreamTabId;
@@ -3877,12 +3644,10 @@ describe('DesktopProgressBridge', () => {
       const childStreamId = 'rebound-child-4' as StreamTabId;
       const executionId = 'ec00f0' as ExecutionId;
       const childExecutionId = 'ec00f1' as ExecutionId;
-      const processExecutionId = 'ec00f2' as ExecutionId;
       const owner = await createProcessOwner({
         streamId,
         executionId,
       });
-      const { ProcessExecutionHandle } = owner;
       const rootInterrupt = vi.fn();
       owner.handle.attachInterruptHandler({ interrupt: rootInterrupt });
 
@@ -3893,29 +3658,17 @@ describe('DesktopProgressBridge', () => {
         agentName: 'searcher',
         category: AgentCategory.ToolUse,
       });
-      const killProcess = vi.fn(() => true);
-      const processHandle = new ProcessExecutionHandle(
-        processExecutionId,
-        streamId,
-        'bash',
-        killProcess,
-        owner.noopAgentRuntimeHost,
-      );
       const childInterrupt = vi.fn();
       childHandle.attachInterruptHandler({ interrupt: childInterrupt });
       owner.close();
       owner.processSession.executions.trackAgentExecution(childHandle, {
         status: STREAM_PHASE.RUNNING,
       });
-      owner.processSession.executions.track(processHandle);
       expect(
         owner.processSession.executions.getActiveChildren(streamId),
-      ).toMatchObject({
-        subagents: [expect.objectContaining({ executionId: childExecutionId })],
-        processes: [
-          expect.objectContaining({ executionId: processExecutionId }),
-        ],
-      });
+      ).toMatchObject([
+        expect.objectContaining({ executionId: childExecutionId }),
+      ]);
       const messagesB: unknown[] = [];
       const { bridgeB } = await owner.reopen(messagesB);
 
@@ -3924,9 +3677,6 @@ describe('DesktopProgressBridge', () => {
         // Both headless children and the child status remain in the one registry.
         expect(bridgeB.session.executions.getHandle(childExecutionId)).toBe(
           childHandle,
-        );
-        expect(bridgeB.session.executions.getHandle(processExecutionId)).toBe(
-          processHandle,
         );
         expect(bridgeB.session.status.get(childStreamId)).toBe(
           STREAM_PHASE.RUNNING,
@@ -3940,9 +3690,6 @@ describe('DesktopProgressBridge', () => {
             [streamId]: {
               subagents: [
                 expect.objectContaining({ executionId: childExecutionId }),
-              ],
-              processes: [
-                expect.objectContaining({ executionId: processExecutionId }),
               ],
             },
           },
@@ -3964,7 +3711,7 @@ describe('DesktopProgressBridge', () => {
           freshChildHandle,
         );
 
-        // Stop cascades through root, current child turn, and process.
+        // Stop cascades through root and the current child turn.
         const stopStream = assertSupported(
           bridgeB.progressViewInboundHandlers[
             PROGRESS_VIEW_COMMANDS.STOP_STREAM
@@ -3977,12 +3724,6 @@ describe('DesktopProgressBridge', () => {
         expect(rootInterrupt).toHaveBeenCalledTimes(1);
         expect(childInterrupt).not.toHaveBeenCalled();
         expect(freshChildInterrupt).toHaveBeenCalledTimes(1);
-        expect(killProcess).toHaveBeenCalledTimes(1);
-
-        owner.processSession.executions.untrack(processExecutionId);
-        expect(
-          bridgeB.session.executions.getHandle(processExecutionId),
-        ).toBeUndefined();
 
         // Identity-safe removal clears the canonical registry.
         freshChildHandle.settleResult({
@@ -4285,20 +4026,19 @@ describe('DesktopProgressBridge', () => {
     it('detaches a closed presentation without disposing process executions', async () => {
       const streamId = 'rebound-stream-dispose' as StreamTabId;
       const executionId = 'ec00f5' as ExecutionId;
-      const processExecutionId = 'ec00f6' as ExecutionId;
+      const backgroundExecutionId = 'ec00f6' as ExecutionId;
       const owner = await createProcessOwner({ streamId, executionId });
       const { bridgeB } = await owner.reopen();
 
-      const processHandle = new owner.ProcessExecutionHandle(
-        processExecutionId,
-        streamId,
-        'bash',
-        () => true,
-        owner.noopAgentRuntimeHost,
-      );
-      owner.bridgeA.session.executions.track(processHandle);
-      expect(bridgeB.session.executions.getHandle(processExecutionId)).toBe(
-        processHandle,
+      const { handle: backgroundHandle } = owner.createHandle({
+        executionId: backgroundExecutionId,
+        childStreamId: 'bash#rebound-stream-dispose' as StreamTabId,
+        agentName: 'bash',
+        category: AgentCategory.ToolUse,
+      });
+      owner.bridgeA.session.executions.track(backgroundHandle);
+      expect(bridgeB.session.executions.getHandle(backgroundExecutionId)).toBe(
+        backgroundHandle,
       );
 
       bridgeB.dispose();
@@ -4306,8 +4046,8 @@ describe('DesktopProgressBridge', () => {
         owner.handle,
       );
       expect(
-        owner.processSession.executions.getHandle(processExecutionId),
-      ).toBe(processHandle);
+        owner.processSession.executions.getHandle(backgroundExecutionId),
+      ).toBe(backgroundHandle);
 
       const { handle: freshHandle } = owner.createHandle();
       owner.processSession.executions.track(freshHandle);
@@ -4317,12 +4057,12 @@ describe('DesktopProgressBridge', () => {
         expect(bridgeC.session.executions.getHandle(executionId)).toBe(
           freshHandle,
         );
-        expect(bridgeC.session.executions.getHandle(processExecutionId)).toBe(
-          processHandle,
-        );
+        expect(
+          bridgeC.session.executions.getHandle(backgroundExecutionId),
+        ).toBe(backgroundHandle);
       } finally {
         bridgeC.dispose();
-        owner.processSession.executions.untrack(processExecutionId);
+        owner.processSession.executions.untrack(backgroundExecutionId);
         owner.processSession.executions.untrack(executionId);
       }
     });

@@ -20,10 +20,7 @@ import {
   resolveExecutionWorkspaceFilePath,
 } from '@agent/storage';
 import { currentSession } from '@agent/runtime/SessionHandle';
-import {
-  AgentExecutionHandle,
-  ProcessExecutionHandle,
-} from '@agent/runtime/ExecutionHandle';
+import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import {
   getRunContextExecutionId,
@@ -89,7 +86,6 @@ import {
   type ExecutionSummaryOptions,
 } from './executions/summaryFormat';
 import { formatSizedEntryLines } from './executions/fileListingFormat';
-import { formatProcessOutputSections } from './executions/processOutputFormat';
 
 // ============================================================================
 // Schema
@@ -182,7 +178,6 @@ Paths:
 - /executions/{id}/report - Result report (persists after context compaction)
 - /executions/{id}/result - Final result envelope (JSON) for chaining; process result for background commands
 - /executions/{id}/children - Child executions
-- /executions/{id}/output - stdout/stderr (background processes only)
 - /executions/{id}/files - Generated files (workflows only)
 - /executions/{id}/files/{path} - Read specific generated file (workflows only)
 - /executions/{id}/workspace-files - Workspace files edited by tool-use runs
@@ -190,7 +185,7 @@ Paths:
 
 Use "current" as {id} to access the active execution.
 Use offset/limit to paginate the /executions listing (default: offset 0, limit 100).
-Use view_range: [start, end] to paginate conversation, output, and file content.
+Use view_range: [start, end] to paginate conversation and file content.
 Use action: "wait" on /executions or /executions/{id} to wait for a status change instead of polling.
 Use action: "wait" with ids: ["id1", "id2", ...] on /executions to wait for any of the listed executions to change.
 Use action: "kill" on /executions/{id} to terminate a running execution.
@@ -257,10 +252,13 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
       case 'children':
         return this.showChildren(executionId);
       case 'output':
-        return this.readProcessOutput(
-          executionId,
-          input.view_range ?? undefined,
-        );
+        // Undocumented compatibility route. A background `bash` run streams its
+        // live output through its own child stream (`createChildStream` in
+        // `tools/bash.ts`), so this endpoint has nothing of its own to read.
+        return {
+          status: 'executed',
+          output: `Output for ${executionId} is no longer available (ephemeral output is cleaned up on completion). Use /executions/${executionId}/report to view the result summary.`,
+        };
       case 'files':
         if (rest.length === 0) {
           return this.listFiles(executionId);
@@ -291,7 +289,6 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
         `- /executions/{id}/conversation - Message history (subagents)\n` +
         `- /executions/{id}/todos        - Task list (tool-use subagents)\n` +
         `- /executions/{id}/children     - Child executions\n` +
-        `- /executions/{id}/output       - stdout/stderr (background processes)\n` +
         `- /executions/{id}/files        - Generated files (workflows)\n` +
         `- /executions/{id}/workspace-files - Workspace files edited by tool-use runs`,
     );
@@ -389,13 +386,7 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
     );
     const lines = page.map(formatListingLine);
 
-    // Count active background processes for the header
-    const activeIds = currentSession().executions.getActiveIds();
-    const bgCount = activeIds.filter(
-      (id) => currentSession().executions.getHandle(id)?.category === 'process',
-    ).length;
-
-    const header = formatListingHeader(start, end, total, bgCount);
+    const header = formatListingHeader(start, end, total);
     return {
       status: 'executed',
       output: `${header}\n\n${lines.join('\n')}${formatPaginationHint(end, total)}`,
@@ -624,38 +615,6 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
       output: removed
         ? `Unsubscribed from ${executionId}.`
         : `No active subscription to ${executionId} on this stream.`,
-    };
-  }
-
-  private async readProcessOutput(
-    executionId: ExecutionId,
-    viewRange?: number[],
-  ): Promise<ToolResult> {
-    // Running process: read live output from ephemeral temp files
-    const handle = currentSession().executions.getHandle(executionId);
-    if (handle instanceof ProcessExecutionHandle && handle.outputPaths) {
-      const readText = (filePath: string): Promise<string> =>
-        platform()
-          .fs.readFile(filePath)
-          .then((bytes) => Buffer.from(bytes).toString('utf8'))
-          .catch(() => '');
-      const [stdout, stderr] = await Promise.all([
-        readText(handle.outputPaths.stdout),
-        readText(handle.outputPaths.stderr),
-      ]);
-      return {
-        status: 'executed',
-        output: applyViewRange(
-          formatProcessOutputSections(executionId, stdout, stderr),
-          viewRange,
-        ),
-      };
-    }
-
-    // Completed process: temp files already cleaned up
-    return {
-      status: 'executed',
-      output: `Output for ${executionId} is no longer available (ephemeral output is cleaned up on completion). Use /executions/${executionId}/report to view the result summary.`,
     };
   }
 
