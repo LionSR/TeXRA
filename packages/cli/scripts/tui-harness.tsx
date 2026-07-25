@@ -26,7 +26,6 @@ import {
   defaultSession,
   initializeDefaultSession,
 } from '@agent/runtime/SessionHandle';
-import { createRunTrace } from '@transcript';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { platform, tryPlatform } from '@platform/platform';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
@@ -58,7 +57,7 @@ import {
 } from '@shared/streams/streamStatus';
 import { GoalStore } from '@tools/goal';
 import { buildContinuationText } from '@tools/inquiry/inquiryContinuation';
-import { StreamLogStore } from '@transcript';
+import { createRunTrace, StreamLogStore } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { App } from '../src/chat/tui/App';
