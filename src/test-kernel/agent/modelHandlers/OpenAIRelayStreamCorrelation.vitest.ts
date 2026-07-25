@@ -1,6 +1,6 @@
 // Third-party imports
 import OpenAI from 'openai';
-import { DEFAULT_MODEL_CAPABILITIES, ModelProvider } from 'llm-zoo';
+import { ModelProvider } from 'llm-zoo';
 import { describe, expect, it } from 'vitest';
 
 // Local imports
@@ -10,6 +10,7 @@ import {
   isUserAbort,
   normalizeProviderError,
 } from '@common/errors/sdkErrorUtils';
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 class TestModelHandlerOpenAI extends ModelHandlerOpenAI {
   runStreaming(client: OpenAI, signal?: AbortSignal) {
@@ -25,23 +26,24 @@ class TestModelHandlerOpenAI extends ModelHandlerOpenAI {
 }
 
 function createHandler(): TestModelHandlerOpenAI {
-  const handler = new TestModelHandlerOpenAI({
-    name: 'test-openai',
-    label: 'Test OpenAI',
-    fullName: 'gpt-test',
-    shortName: 'gpt-test',
-    provider: ModelProvider.OPENAI,
-    maxOutputTokens: 1024,
-    inputPrice: 0,
-    outputPrice: 0,
-    contextWindow: 128_000,
-    capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
-      supportsReasoning: false,
-      supportsTokenCounting: false,
-    },
-    openRouterOnly: true,
-  });
+  const handler = new TestModelHandlerOpenAI(
+    buildTestModelConfig({
+      name: 'test-openai',
+      label: 'Test OpenAI',
+      fullName: 'gpt-test',
+      shortName: 'gpt-test',
+      provider: ModelProvider.OPENAI,
+      maxOutputTokens: 1024,
+      inputPrice: 0,
+      outputPrice: 0,
+      contextWindow: 128_000,
+      capabilities: {
+        supportsReasoning: false,
+        supportsTokenCounting: false,
+      },
+      openRouterOnly: true,
+    }),
+  );
   handler.setLogger(noopTrace);
   return handler;
 }

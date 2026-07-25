@@ -1,35 +1,37 @@
 // Third-party imports
 import { BadRequestError as AnthropicBadRequestError } from '@anthropic-ai/sdk';
-import { DEFAULT_MODEL_CAPABILITIES, ModelProvider } from 'llm-zoo';
+import { ModelProvider } from 'llm-zoo';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - agent model handlers
 import { noopTrace, type AgentTrace } from '@agent/trace';
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/anthropic/modelHandlerAnthropic';
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 // Type imports
 import type Anthropic from '@anthropic-ai/sdk';
 import type { MessageParam } from '@anthropic-ai/sdk/resources/messages';
 
 function createHandler(): ModelHandlerAnthropic {
-  const handler = new ModelHandlerAnthropic({
-    name: 'test-anthropic',
-    label: 'Test Anthropic',
-    fullName: 'claude-test',
-    shortName: 'claude-test',
-    provider: ModelProvider.ANTHROPIC,
-    maxOutputTokens: 1024,
-    inputPrice: 0,
-    outputPrice: 0,
-    contextWindow: 200000,
-    capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
-      supportsTokenCounting: false,
-      supportsReasoning: false,
-    },
-    // Keeps the unit test independent from the server-side key service.
-    openRouterOnly: true,
-  });
+  const handler = new ModelHandlerAnthropic(
+    buildTestModelConfig({
+      name: 'test-anthropic',
+      label: 'Test Anthropic',
+      fullName: 'claude-test',
+      shortName: 'claude-test',
+      provider: ModelProvider.ANTHROPIC,
+      maxOutputTokens: 1024,
+      inputPrice: 0,
+      outputPrice: 0,
+      contextWindow: 200000,
+      capabilities: {
+        supportsTokenCounting: false,
+        supportsReasoning: false,
+      },
+      // Keeps the unit test independent from the server-side key service.
+      openRouterOnly: true,
+    }),
+  );
 
   (handler as { getStreamingConfig: () => boolean }).getStreamingConfig = () =>
     true;

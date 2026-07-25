@@ -4,17 +4,14 @@ import { strict as assert } from 'node:assert';
 // Third-party imports
 import OpenAI from 'openai';
 import { describe, expect, it, vi } from 'vitest';
-import {
-  DEFAULT_MODEL_CAPABILITIES,
-  type ModelConfig,
-  ModelProvider,
-} from 'llm-zoo';
+import { type ModelConfig, ModelProvider } from 'llm-zoo';
 
 // Local imports - handler under test
 import { ModelHandlerKimi } from '@agent/modelHandlers/openai/modelHandlerKimi';
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 function buildHandler(): ModelHandlerKimi {
-  const config: ModelConfig = {
+  const config: ModelConfig = buildTestModelConfig({
     name: 'kimi-test',
     label: 'Kimi Test',
     fullName: 'kimi-k2.5',
@@ -24,9 +21,8 @@ function buildHandler(): ModelHandlerKimi {
     inputPrice: 0,
     outputPrice: 0,
     contextWindow: 200000,
-    capabilities: { ...DEFAULT_MODEL_CAPABILITIES },
     openRouterOnly: false,
-  };
+  });
   return new ModelHandlerKimi(config);
 }
 

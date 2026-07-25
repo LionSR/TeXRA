@@ -1,9 +1,12 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  cleanupTempDirs,
+  makeTempDir as makeSharedTempDir,
+} from '@test/support/tempDirPlatform';
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
 
 interface DesktopPreviewHostModule {
@@ -58,16 +61,11 @@ describe('desktop preview host', () => {
     vi.doUnmock('@latex/latexToolchain');
     vi.doUnmock('node:fs/promises');
     vi.restoreAllMocks();
-    const dirs = tempDirs.splice(0);
-    await Promise.all(
-      dirs.map((dir) => rm(dir, { recursive: true, force: true })),
-    );
+    await cleanupTempDirs(tempDirs);
   });
 
   async function makeTempDir(): Promise<string> {
-    const dir = await mkdtemp(path.join(tmpdir(), 'texra-preview-host-'));
-    tempDirs.push(dir);
-    return dir;
+    return makeSharedTempDir('texra-preview-host-', tempDirs);
   }
 
   async function makeOverlayFixture(): Promise<{

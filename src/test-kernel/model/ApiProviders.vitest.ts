@@ -13,6 +13,7 @@ import {
   type ApiProvider,
 } from '@model/apiProviders';
 import type { PlatformSecrets } from '@platform/secrets';
+import { createDeferred } from '@test/support/asyncTestUtils';
 import { UnsetApiKeyTool } from '@tools/setup/UnsetApiKeyTool';
 import { setSetupPlatform } from '@tools/setup/platform';
 
@@ -64,17 +65,6 @@ function createSecrets(
       },
     },
   };
-}
-
-function createDeferred<T>(): {
-  promise: Promise<T>;
-  resolve: (value: T) => void;
-} {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => {
-    resolve = done;
-  });
-  return { promise, resolve };
 }
 
 function setupApiKeyToolPlatform(

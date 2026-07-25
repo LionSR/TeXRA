@@ -1,27 +1,29 @@
 // Third-party imports
-import { DEFAULT_MODEL_CAPABILITIES, ModelProvider } from 'llm-zoo';
+import { ModelProvider } from 'llm-zoo';
 import { describe, expect, it } from 'vitest';
 
 // Local imports - agent model handlers
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/anthropic/modelHandlerAnthropic';
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 function createHandler(): ModelHandlerAnthropic {
-  return new ModelHandlerAnthropic({
-    name: 'test-anthropic',
-    label: 'Test Anthropic',
-    fullName: 'claude-test',
-    shortName: 'claude-test',
-    provider: ModelProvider.ANTHROPIC,
-    maxOutputTokens: 1024,
-    inputPrice: 3,
-    outputPrice: 15,
-    contextWindow: 200000,
-    capabilities: {
-      ...DEFAULT_MODEL_CAPABILITIES,
-      supportsPromptCaching: true,
-    },
-    openRouterOnly: false,
-  });
+  return new ModelHandlerAnthropic(
+    buildTestModelConfig({
+      name: 'test-anthropic',
+      label: 'Test Anthropic',
+      fullName: 'claude-test',
+      shortName: 'claude-test',
+      provider: ModelProvider.ANTHROPIC,
+      maxOutputTokens: 1024,
+      inputPrice: 3,
+      outputPrice: 15,
+      contextWindow: 200000,
+      capabilities: {
+        supportsPromptCaching: true,
+      },
+      openRouterOnly: false,
+    }),
+  );
 }
 
 describe('Anthropic cache pricing', () => {
