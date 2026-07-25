@@ -104,21 +104,6 @@ async function resolveDesktopResumeState(
   };
 }
 
-function reportResumeFailure(
-  streamId: StreamTabId,
-  error: unknown,
-  context: DesktopResumeContext,
-): void {
-  context.logger.error(`Failed to resume desktop stream ${streamId}`, {
-    data: toLogData(error),
-  });
-  context.session.interactions.emit(
-    'requestShowError',
-    { message: `Resume failed: ${toErrorMessage(error)}` },
-    { replayWhenAttached: true },
-  );
-}
-
 function resumeDesktopStream(
   streamId: StreamTabId,
   context: DesktopResumeContext,
@@ -142,7 +127,15 @@ function resumeDesktopStream(
     return !isResumeInvalidated();
   };
   const reportUnhandledFailure = (id: StreamTabId, error: unknown): void => {
-    if (!terminalResult.isHandled()) reportResumeFailure(id, error, context);
+    context.logger.error(`Failed to resume desktop stream ${id}`, {
+      data: toLogData(error),
+    });
+    if (terminalResult.isHandled()) return;
+    context.session.interactions.emit(
+      'requestShowError',
+      { message: `Resume failed: ${toErrorMessage(error)}` },
+      { replayWhenAttached: true },
+    );
   };
   const runtimeHost = context.session.interactions;
   return resolveAndResumeStream(streamId, {
