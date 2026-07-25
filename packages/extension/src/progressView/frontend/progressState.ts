@@ -20,6 +20,7 @@ import {
   createStreamState,
   type ProgressViewPlacement,
   type InquiryThreadUpdatedEvent,
+  type PhaseStage,
   type StreamTabId,
   type StreamTabInfo,
   type TaskGroup,
@@ -38,7 +39,9 @@ import {
 } from './store';
 import {
   EMPTY_LOG_CONTEXT,
+  EMPTY_PHASE_STAGE_MAP,
   EMPTY_STREAM_CONTEXT,
+  type PhaseStageMap,
   type StreamContextValue,
   type StreamLogContextValue,
 } from './contexts/streamContexts';
@@ -244,6 +247,21 @@ export const activeInquiries$ = new Signal.Computed(() => {
     (thread) => thread.lastActivityIso,
   );
   return threads.length > 0 ? threads : EMPTY_INQUIRIES;
+});
+
+/**
+ * Current phase per stream, for streams that have one. Read by the Background
+ * Tasks panel, whose rows are *other* streams — so unlike `activeStreamState$`
+ * this deliberately spans every stream. Streams without a phase are omitted so
+ * a session with no workflow-script run keeps the stable empty identity, and
+ * its consumers never re-render on an unrelated stream's progress tick.
+ */
+export const phaseStages$ = new Signal.Computed((): PhaseStageMap => {
+  const stages = new Map<StreamTabId, PhaseStage>();
+  for (const [streamId, state] of streamStates$.get()) {
+    if (state.phaseStage) stages.set(streamId, state.phaseStage);
+  }
+  return stages.size > 0 ? stages : EMPTY_PHASE_STAGE_MAP;
 });
 
 const activeIsToolUse$ = new Signal.Computed(() => {

@@ -95,6 +95,25 @@ export const RoundStageSchema = z.object({
 
 export type RoundStage = z.infer<typeof RoundStageSchema>;
 
+// Phase Stage (ephemeral phase label from typed stage.start metadata)
+//
+// A workflow-script run advances through named phases instead of numbered
+// rounds, so it fills this slot where a tool-use run fills `roundStage`. Both
+// are projected from the same `stage.start` fact, discriminated by its `kind`,
+// and a stream that opens phases never opens rounds.
+
+const PhaseStageSchema = z.object({
+  /** Phase title, free-form text from the workflow script. */
+  label: z.string(),
+  /** Zero-based position in the declared phase list. Absent for a phase the
+   *  script opened dynamically, which has no declared position. */
+  index: z.int().nonnegative().optional(),
+  /** Number of declared phases, when known. */
+  total: z.int().positive().optional(),
+});
+
+export type PhaseStage = z.infer<typeof PhaseStageSchema>;
+
 // Conversation Progress (tool-call counters updated during execution)
 
 export const ConversationProgressSchema = z.object({
@@ -121,6 +140,7 @@ export const BackendOwnedFieldsSchema = z.object({
     DEFAULT_CONVERSATION_PROGRESS,
   ),
   roundStage: RoundStageSchema.optional(),
+  phaseStage: PhaseStageSchema.optional(),
   /** Child roster — live entries plus the finished ones retained for display
    *  (`finishedAt` set). */
   subagents: z.array(ActiveChildInfoSchema).prefault([]),
@@ -128,6 +148,7 @@ export const BackendOwnedFieldsSchema = z.object({
 
 const BackendOwnedMetadataFieldsSchema = BackendOwnedFieldsSchema.extend({
   roundStage: RoundStageSchema.nullable().optional(),
+  phaseStage: PhaseStageSchema.nullable().optional(),
 });
 
 export const StreamMetadataSchema = BackendOwnedMetadataFieldsSchema.extend({

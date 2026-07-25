@@ -254,6 +254,52 @@ describe('stream meta frontend state', () => {
     expect(getState().streamStates.get(streamId)?.roundStage).toBeUndefined();
   });
 
+  it('merges and clears a phase stage from a transport-safe metadata patch', () => {
+    const streamId = 'stream-a' as StreamTabId;
+    const state = createInitialState();
+    registerWorkflowStream(state, streamId);
+    const getState = seedState(state);
+
+    const patch = (
+      phaseStage: { label: string; index?: number; total?: number } | null,
+    ): ProgressViewOutboundMessage =>
+      JSON.parse(
+        JSON.stringify({
+          command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
+          streamInfo: {
+            name: streamId,
+            label: 'stream-a',
+            kind: 'agent',
+            agentCategory: AgentCategory.Workflow,
+            creationTimestamp: 1,
+          },
+          streamState: {
+            kind: AgentCategory.Workflow,
+            status: STREAM_PHASE.RUNNING,
+            conversationProgress: {
+              toolCallCount: 0,
+            },
+            roundStage: null,
+            phaseStage,
+            subagents: [],
+          },
+        } satisfies ProgressViewOutboundMessage),
+      ) as ProgressViewOutboundMessage;
+
+    dispatch(
+      streamMetaHandlers,
+      patch({ label: 'Reduce', index: 1, total: 3 }),
+    );
+    expect(getState().streamStates.get(streamId)?.phaseStage).toEqual({
+      label: 'Reduce',
+      index: 1,
+      total: 3,
+    });
+
+    dispatch(streamMetaHandlers, patch(null));
+    expect(getState().streamStates.get(streamId)?.phaseStage).toBeUndefined();
+  });
+
   it('clears round stage when synced content explicitly clears it', () => {
     const streamId = 'stream-a' as StreamTabId;
     const state = createInitialState();

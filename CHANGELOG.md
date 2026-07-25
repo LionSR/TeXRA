@@ -18,6 +18,11 @@ All notable changes to this project will be documented in this file.
   proceeds instead of only at completion. Reads default to the last 200 lines
   and accept `view_range` to page back through the retained log, which stays
   readable after the command finishes.
+- **A running workflow script shows its current phase from the parent's view**
+  — the run's row now reads `Reduce 2/3` beside its status, in the CLI's child
+  list and in the progress view's Background Tasks panel, so a long multi-phase
+  run is no longer indistinguishable at minute 2 and minute 38. Tool-use rows
+  keep showing their round (`r2/3`); no row shows both.
 
 #### Bug Fixes
 

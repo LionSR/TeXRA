@@ -11,6 +11,7 @@ import { createContext } from '@lit/context';
 import type {
   LogMessageData,
   InquiryThreadUpdatedEvent,
+  PhaseStage,
   StreamLifecycleStatus,
   StreamTabId,
   StreamTabInfo,
@@ -120,6 +121,20 @@ export const EMPTY_STREAM_BY_ID: StreamByIdMap = new Map();
 
 export const streamByIdContext = createContext<StreamByIdMap>(
   'progress-stream-by-id',
+);
+
+/**
+ * phaseStages context: Map<streamId, PhaseStage> for the streams currently in
+ * a workflow-script phase. Consumed by BackgroundTasksPanel, whose rows are
+ * *other* streams than the active one — `streamStateContext` only carries the
+ * active stream's state, so a child run's phase cannot be read from there.
+ */
+export type PhaseStageMap = ReadonlyMap<StreamTabId, PhaseStage>;
+
+export const EMPTY_PHASE_STAGE_MAP: PhaseStageMap = new Map();
+
+export const phaseStagesContext = createContext<PhaseStageMap>(
+  'progress-phase-stages',
 );
 
 /**
