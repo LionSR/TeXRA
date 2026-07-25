@@ -6,15 +6,32 @@ import writeFileAtomic from 'write-file-atomic';
 
 import { isFileNotFoundError } from '@common/errors';
 
-import type { StateStore } from '../interfaces';
+import type { FileLockProvider, StateStore } from '../interfaces';
 
-const LOCK_STALE_MS = 10_000;
-const LOCK_RETRY_OPTIONS = {
-  retries: 120,
-  factor: 1.2,
-  minTimeout: 10,
-  maxTimeout: 100,
-} as const;
+/**
+ * Cross-process lock for the read-modify-write flush below. Shares its
+ * mechanics (KeyedMutex in-process serialization, onCompromised handling,
+ * error aggregation) with `fileLocks.ts`'s other callers, tuned for this
+ * store's short, frequent flushes rather than long-running work. Loaded
+ * lazily, on first flush, so importing `JsonStore` doesn't pull in
+ * `proper-lockfile` before any write actually happens.
+ */
+let jsonStoreFileLocksPromise: Promise<FileLockProvider> | undefined;
+function getJsonStoreFileLocks(): Promise<FileLockProvider> {
+  jsonStoreFileLocksPromise ??= import('./fileLocks').then(
+    ({ createNodeFileLocks }) =>
+      createNodeFileLocks({
+        staleMs: 10_000,
+        retries: {
+          retries: 120,
+          factor: 1.2,
+          minTimeout: 10,
+          maxTimeout: 100,
+        },
+      }),
+  );
+  return jsonStoreFileLocksPromise;
+}
 
 type JsonRecord = Record<string, unknown>;
 
@@ -168,13 +185,8 @@ export class JsonStore implements StateStore {
     missingFallback: JsonRecord,
   ): Promise<void> {
     await ensureDir(dirname(this.filePath), this.options.mode);
-    const { default: properLockfile } = await import('proper-lockfile');
-    const release = await properLockfile.lock(this.filePath, {
-      realpath: false,
-      stale: LOCK_STALE_MS,
-      retries: LOCK_RETRY_OPTIONS,
-    });
-    try {
+    const fileLocks = await getJsonStoreFileLocks();
+    await fileLocks.runExclusive(this.filePath, async () => {
       const record = await readJsonRecord(this.filePath, missingFallback);
       if (value === undefined) {
         delete record[key];
@@ -188,9 +200,7 @@ export class JsonStore implements StateStore {
           ? undefined
           : { mode: this.options.mode },
       );
-    } finally {
-      await release();
-    }
+    });
   }
 }
 
