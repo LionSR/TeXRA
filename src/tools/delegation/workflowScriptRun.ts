@@ -263,9 +263,10 @@ export async function runPersistedWorkflowScriptWithProgress(
             : undefined;
         // Live terminal events carry all attempt metadata known by the engine.
         // Cached replays report none because they perform no live attempt.
-        const terminalMetadata = (
-          source: { readonly model?: string; readonly durationMs?: number },
-        ) => ({
+        const terminalMetadata = (source: {
+          readonly model?: string;
+          readonly durationMs?: number;
+        }) => ({
           ...(source.model !== undefined ? { model: source.model } : {}),
           ...(source.durationMs !== undefined
             ? { durationMs: source.durationMs }
