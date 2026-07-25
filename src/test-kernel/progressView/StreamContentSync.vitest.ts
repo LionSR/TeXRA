@@ -122,7 +122,7 @@ describe('progress view stream-content projection', () => {
     state.snapshots.addUsage(stream, runId, usage);
     state.snapshots.setTodos(stream, [todo]);
     state.snapshots.setPlan(stream, plan);
-    state.setStreamParent(stream, parentStream);
+    state.snapshots.setParentStream(stream, parentStream);
     state.updateStreamMetadata(stream, {
       agentCategory: AgentCategory.ToolUse,
     });
