@@ -832,11 +832,15 @@ describe('CLI child list display model', () => {
 
     const wideOutput = await renderAtColumns(60);
     const narrowOutput = await renderAtColumns(59);
-    const wideMapHeader = wideOutput
-      .split('\n')
-      .find((line) => line.includes(`${freeFormPhase} (1/2)`));
+    const wideLines = wideOutput.split('\n');
+    const wideMapHeader = wideLines.find((line) =>
+      line.includes(`${freeFormPhase} (1/2)`),
+    );
+    const wideMapRow = wideLines.find((line) => line.includes('writer-retry'));
 
     expect(wideMapHeader).toBeDefined();
+    expect(wideMapRow).toBeDefined();
+    expect(wideMapHeader?.indexOf('◆')).toBe(wideMapRow?.indexOf('●'));
     expect(wideMapHeader?.trimEnd().endsWith('1/1')).toBe(true);
     expect(wideMapHeader).not.toContain('(1/2) · 1/1');
     expect(narrowOutput).toContain(`${freeFormPhase} (1/2) · 1/1`);

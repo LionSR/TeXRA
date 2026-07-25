@@ -100,7 +100,7 @@ function PhaseHeader({
     <Box flexDirection="row" flexGrow={1} minWidth={0}>
       <Box minWidth={0} flexShrink={1}>
         <Text dimColor wrap="truncate-end">
-          {`   ${STATUS_DIAMOND} ${details.label}${position}${inlineProgress}`}
+          {`    ${STATUS_DIAMOND} ${details.label}${position}${inlineProgress}`}
         </Text>
       </Box>
       {metadataColumn && details.progress ? (
