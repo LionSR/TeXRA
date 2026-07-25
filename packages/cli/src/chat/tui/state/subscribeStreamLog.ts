@@ -12,6 +12,7 @@ import {
   AgentCategory,
   CompactionActivityDataSchema,
   ErrorLogDataSchema,
+  FileListEntrySchema,
   GroupLogPayloadSchema,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
@@ -33,6 +34,7 @@ import { createFlushableDebounce } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { truncateSummary } from '@utils/text/stringUtils';
 import { normalizeKnownHtmlForCliMarkdown } from '../render/htmlMarkdownNormalize';
+import { safeTerminalText } from '../render/terminalText';
 import {
   isRenderableTranscriptEntry,
   trimAssistantTranscriptLead,
@@ -45,16 +47,48 @@ import {
   patchStream,
   setTransientNotice,
   type ConversationEntry,
+  type LoadedImage,
 } from './cliState';
 import { isChildStreamRemoved } from './childExecutions';
 import { subscribeToSignalChanges } from './signalSubscription';
 import { isFinalTranscriptStatus } from './transcript';
-import { safeTerminalText } from './transcriptLines';
 
 const MAX_ERROR_DETAIL_LENGTH = 240;
 
+/**
+ * Project successful local context-media preparation. FILE_LIST does not
+ * claim that a remote provider subsequently accepted the attachment.
+ */
+function projectFileListImages(data: unknown): LoadedImage[] {
+  if (!Array.isArray(data)) return [];
+
+  const images: LoadedImage[] = [];
+  const seen = new Set<string>();
+  for (const candidate of data) {
+    const entry = FileListEntrySchema.safeParse(candidate);
+    if (
+      !entry.success ||
+      !entry.data.ok ||
+      entry.data.media?.kind !== 'image'
+    ) {
+      continue;
+    }
+    if (!entry.data.path.trim()) continue;
+    const image = {
+      path: entry.data.path,
+      sizeBytes: entry.data.media.sizeBytes,
+    };
+    const key = `${image.path}\u0000${image.sizeBytes}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    images.push(image);
+  }
+  return images;
+}
+
 const TRANSCRIPT_MESSAGE_TYPES = new Set<string>([
   MESSAGE_TYPES.ERROR,
+  MESSAGE_TYPES.FILE_LIST,
   MESSAGE_TYPES.MODEL_RESPONSE,
   MESSAGE_TYPES.TOOL_USE,
   MESSAGE_TYPES.USER_MESSAGE,
@@ -230,6 +264,9 @@ function entriesEqual(
   if (prev.role === 'tool' && next.role === 'tool') {
     return toolUseEqual(prev.toolUse, next.toolUse);
   }
+  if (prev.role === 'media' && next.role === 'media') {
+    return isDeepStrictEqual(prev.images, next.images);
+  }
   if (prev.role === 'phase' && next.role === 'phase') {
     return (
       prev.phaseIndex === next.phaseIndex && prev.phaseTotal === next.phaseTotal
@@ -327,6 +364,24 @@ function renderLogEntry(
   entry: StreamLogEntry,
   prev: ConversationEntry | undefined,
 ): ConversationEntry | null {
+  if (entry.messageType === MESSAGE_TYPES.FILE_LIST) {
+    const images = projectFileListImages(entry.data);
+    if (images.length === 0) return null;
+    const next: ConversationEntry = {
+      id: entry.id,
+      sourceSeqNo: entry.seqNo,
+      role: 'media',
+      text: '',
+      messageType: MESSAGE_TYPES.FILE_LIST,
+      finalized: true,
+      ...(entry.settlementSeqNo !== undefined
+        ? { settlementSeqNo: entry.settlementSeqNo }
+        : {}),
+      images,
+    };
+    return prev && entriesEqual(prev, next) ? prev : next;
+  }
+
   if (entry.messageType === MESSAGE_TYPES.TOOL_USE) {
     // Cache hit: same `data` reference as last sync, no re-normalize.
     // Promotion to `<Static>` is decided later by `finalizeSettledPrefix`
@@ -463,6 +518,7 @@ function isSettledEntry(
     case 'user':
     case 'error':
     case 'phase':
+    case 'media':
       return true;
     case 'tool':
       return (
@@ -668,6 +724,7 @@ export function syncStreamLog(
         (!workflowOperationalOnly ||
           entry.role === 'tool' ||
           entry.role === 'phase' ||
+          entry.role === 'media' ||
           entry.role === 'error'),
     );
     const streamFinal = isFinalTranscriptStatus(slice.status);
@@ -705,6 +762,7 @@ export function syncStreamLog(
         workflowOperationalOnly &&
         rendered.role !== 'tool' &&
         rendered.role !== 'phase' &&
+        rendered.role !== 'media' &&
         rendered.role !== 'error'
       ) {
         continue;
