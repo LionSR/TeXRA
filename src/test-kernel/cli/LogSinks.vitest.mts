@@ -1,8 +1,15 @@
+// Node imports
+import { PassThrough } from 'node:stream';
+
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { isCliPipeClosureError, NdjsonStdoutSink } from '@cli/runtime/logSinks';
+import {
+  askCliQuestion,
+  isCliPipeClosureError,
+  NdjsonStdoutSink,
+} from '@cli/runtime/logSinks';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 
 function createStdoutStub(writeResults: boolean[] = [true]) {
@@ -118,5 +125,18 @@ describe('CLI pipe errors', () => {
       ),
     ).toBe(true);
     expect(isCliPipeClosureError(new Error('disk full'))).toBe(false);
+  });
+});
+
+describe('CLI questions', () => {
+  it('acquires stdin ownership before waiting for an answer', async () => {
+    const input = Object.assign(new PassThrough(), { ref: vi.fn() });
+    const output = new PassThrough();
+
+    const answer = askCliQuestion('Choose: ', input, output);
+    input.end('continue\n');
+
+    await expect(answer).resolves.toBe('continue');
+    expect(input.ref).toHaveBeenCalledOnce();
   });
 });
