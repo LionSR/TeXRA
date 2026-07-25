@@ -70,6 +70,10 @@ function workflowAgentSlice(
     plan: null,
     bypass: { bash: false, toolEdit: false, superYolo: false },
     ...overrides,
+    outputFilesByRound: overrides.outputFilesByRound ?? {},
+    missingOutputsByRound: overrides.missingOutputsByRound ?? {},
+    compileFailuresByRound: overrides.compileFailuresByRound ?? {},
+    taskGroups: overrides.taskGroups ?? [],
   };
 }
 

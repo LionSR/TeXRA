@@ -9,6 +9,7 @@ import type { CliApiMode } from '@cli/runtime/apiAccessMode';
 import type { RunModelDecisionReason } from '@model/runModelDecision';
 import {
   AgentCategory,
+  type CompileFailure,
   type ConversationProgress,
   type MessageType,
   type NormalizedToolUse,
@@ -20,6 +21,7 @@ import {
   type StreamPhase,
   type StreamSubstate,
   type StreamTabId,
+  type TaskGroup,
   type TodoItem,
   type TokenUsageStats,
   type WorkflowTaskProgress,
@@ -162,8 +164,12 @@ export interface StreamSlice {
   /** Normalized run files received with `run.config`. Absent until that fact
    *  arrives; each category may then be empty. */
   readonly files?: StreamFileMetadata | undefined;
-  /** Canonical streamed workflow outputs, preserving every announced round. */
-  readonly outputFilesByRound?: RoundIndexed<OutputFileInfo> | undefined;
+  /** Canonical workflow artifacts, merged from live facts and durable sidecars. */
+  readonly outputFilesByRound: RoundIndexed<OutputFileInfo>;
+  readonly missingOutputsByRound: RoundIndexed<string>;
+  readonly compileFailuresByRound: RoundIndexed<CompileFailure>;
+  /** Run/round/phase lifecycle projected from the canonical StreamLog. */
+  readonly taskGroups: readonly TaskGroup[];
   readonly status: StreamPhase | undefined;
   readonly substate?: StreamSubstate;
   /** Epoch ms when this stream last entered `RUNNING`; cleared on any other
@@ -234,7 +240,10 @@ function emptySlice(streamId: StreamTabId): StreamSlice {
     substate: undefined,
     runStartedAt: undefined,
     description: undefined,
-    outputFilesByRound: undefined,
+    outputFilesByRound: {},
+    missingOutputsByRound: {},
+    compileFailuresByRound: {},
+    taskGroups: [],
     thinkingActive: false,
     compactingActive: false,
     usage: undefined,
@@ -261,6 +270,36 @@ function emptySlice(streamId: StreamTabId): StreamSlice {
 
 const STREAMS = signal<ReadonlyMap<StreamTabId, StreamSlice>>(new Map());
 const RETIRED_STREAMS = new Set<StreamTabId>();
+const STREAM_ARTIFACT_REVISIONS = new Map<
+  StreamTabId,
+  StreamArtifactRevision
+>();
+
+/**
+ * Source revisions for destructive artifact mutations that cannot be encoded
+ * by spreading a round-indexed value over a cold snapshot.
+ */
+export interface StreamArtifactRevision {
+  readonly missingOutputsReset: number;
+}
+
+/** Capture an immutable revision value for an asynchronous artifact read. */
+export function streamArtifactRevision(
+  streamId: StreamTabId,
+): StreamArtifactRevision {
+  return {
+    missingOutputsReset:
+      STREAM_ARTIFACT_REVISIONS.get(streamId)?.missingOutputsReset ?? 0,
+  };
+}
+
+/** Record that every persisted missing-output round before this point is stale. */
+export function recordMissingOutputsReset(streamId: StreamTabId): void {
+  const current = streamArtifactRevision(streamId);
+  STREAM_ARTIFACT_REVISIONS.set(streamId, {
+    missingOutputsReset: current.missingOutputsReset + 1,
+  });
+}
 
 /** Per-stream state map, keyed by `StreamTabId`. */
 export const streams = STREAMS;
@@ -574,6 +613,7 @@ export function bumpCodexPreferenceVersion(): void {
 // for its former children — can resurrect it.
 
 export function removeStream(streamId: StreamTabId): void {
+  STREAM_ARTIFACT_REVISIONS.delete(streamId);
   const current = streams.get();
   if (current.has(streamId)) {
     const out = new Map(current);
@@ -628,6 +668,7 @@ export function resetCliState(
 ): void {
   CLI_STATE_GENERATION += 1;
   RETIRED_STREAMS.clear();
+  STREAM_ARTIFACT_REVISIONS.clear();
   for (const streamId of streams.get().keys()) RETIRED_STREAMS.add(streamId);
   sessionMeta.set(nextSessionMeta);
   activeStreamId.set(undefined);

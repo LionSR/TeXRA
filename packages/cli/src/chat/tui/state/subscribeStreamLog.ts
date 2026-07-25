@@ -30,6 +30,7 @@ import {
 import { normalizeToolUseData } from '@shared/toolUse';
 import { formatWorkflowTaskLine } from '@shared/copy/workflowTask';
 import { isActivePhase } from '@shared/streams/streamStatus';
+import { projectTaskGroupsFromStreamLog } from '@shared/streams/taskGroupProjection';
 import { createFlushableDebounce } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { truncateSummary } from '@utils/text/stringUtils';
@@ -282,8 +283,7 @@ function entriesEqual(
  * A phase group header — the `stage.start`/`stage.end` rows a workflow-script
  * run emits per `phase()` (recorded as GROUP_START then upserted in place to
  * GROUP_END with `data.kind === 'phase'`). Detected by `kind`, not entry
- * `type`, so the header keeps its distinct role after the phase closes. Round,
- * run, and session groups (other `kind` values) fall through to plain rows.
+ * `type`, so the header keeps its distinct role after the phase closes.
  */
 function phaseGroupData(
   entry: StreamLogEntry,
@@ -363,6 +363,7 @@ function computeFinalized(
 function renderLogEntry(
   entry: StreamLogEntry,
   prev: ConversationEntry | undefined,
+  projectLifecycleToTaskGroups: boolean,
 ): ConversationEntry | null {
   if (entry.messageType === MESSAGE_TYPES.FILE_LIST) {
     const images = projectFileListImages(entry.data);
@@ -473,11 +474,29 @@ function renderLogEntry(
     return prev && entriesEqual(prev, next) ? prev : next;
   }
 
+  // Workflow run/round/session lifecycle rows are projected into `taskGroups`,
+  // whose focused renderer joins them with artifacts. Other full-log children
+  // have no such renderer, so their lifecycle headings remain transcript rows.
+  if (
+    projectLifecycleToTaskGroups &&
+    (entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_START ||
+      entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_END)
+  ) {
+    return null;
+  }
+
   const text = entry.text ?? '';
   const role = logEntryRole(entry.messageType);
   const assistantTranscript =
     role === 'assistant' ? trimAssistantTranscriptLead(text) : undefined;
-  const renderedText = renderLogEntryText(role, text, entry.data);
+  let renderedText = renderLogEntryText(role, text, entry.data);
+  if (
+    role === 'assistant' &&
+    entry.messageType === MESSAGE_TYPES.DEFAULT &&
+    entry.type === STREAM_LOG_ENTRY_TYPES.LOG
+  ) {
+    renderedText = redactSecrets(safeTerminalText(renderedText));
+  }
   // Assistant text is promoted by `finalizeSettledPrefix` once the model
   // moves on to a later entry; inherit the prior flag here so a re-sync
   // can't de-finalize an already-promoted block. User/error rows can't
@@ -703,6 +722,7 @@ export function syncStreamLog(
   if (!log) return;
 
   const allEntries = log.getRange(0);
+  const taskGroups = projectTaskGroupsFromStreamLog(allEntries);
   const thinkingActive = latestLogActivityIsThinking(allEntries);
   const compactingActive = latestCompactionActivityIsRunning(allEntries);
   const transcriptMessageTypes = transcriptMessageTypesForStream(streamId);
@@ -733,13 +753,23 @@ export function syncStreamLog(
     for (const entry of allEntries) {
       const messageType = entry.messageType ?? '';
       const transcriptCandidate = transcriptMessageTypes.has(messageType);
-      if (
-        !transcriptCandidate &&
-        (!workflowOperationalOnly || messageType !== MESSAGE_TYPES.DEFAULT)
-      ) {
+      const workflowDefaultLog =
+        workflowOperationalOnly &&
+        entry.type === STREAM_LOG_ENTRY_TYPES.LOG &&
+        entry.level !== 'debug' &&
+        messageType === MESSAGE_TYPES.DEFAULT;
+      const workflowPhaseHeader =
+        workflowOperationalOnly &&
+        messageType === MESSAGE_TYPES.DEFAULT &&
+        phaseGroupData(entry) !== null;
+      if (!transcriptCandidate && !workflowDefaultLog && !workflowPhaseHeader) {
         continue;
       }
-      const rendered = renderLogEntry(entry, existing.get(entry.id));
+      const rendered = renderLogEntry(
+        entry,
+        existing.get(entry.id),
+        slice.category === AgentCategory.Workflow,
+      );
       if (!rendered) continue;
       if (workflowOperationalOnly) {
         workflowDescriptionCandidates.push({
@@ -753,17 +783,12 @@ export function syncStreamLog(
       // full child log, including Running/Finished and error rows. A phase
       // uses the DEFAULT message type, but remains an operational row.
       if (
-        !transcriptCandidate &&
-        !(workflowOperationalOnly && rendered.role === 'phase')
-      ) {
-        continue;
-      }
-      if (
         workflowOperationalOnly &&
         rendered.role !== 'tool' &&
         rendered.role !== 'phase' &&
         rendered.role !== 'media' &&
-        rendered.role !== 'error'
+        rendered.role !== 'error' &&
+        !workflowDefaultLog
       ) {
         continue;
       }
@@ -829,7 +854,8 @@ export function syncStreamLog(
         ) &&
         slice.description === description &&
         slice.thinkingActive === thinkingActive &&
-        slice.compactingActive === compactingActive
+        slice.compactingActive === compactingActive &&
+        isDeepStrictEqual(slice.taskGroups, taskGroups)
       ) {
         return slice;
       }
@@ -839,6 +865,7 @@ export function syncStreamLog(
         entries: compactEntries,
         thinkingActive,
         compactingActive,
+        taskGroups,
       };
     }
 
@@ -856,7 +883,8 @@ export function syncStreamLog(
       !changed &&
       slice.description === description &&
       slice.thinkingActive === thinkingActive &&
-      slice.compactingActive === compactingActive
+      slice.compactingActive === compactingActive &&
+      isDeepStrictEqual(slice.taskGroups, taskGroups)
     ) {
       return slice;
     }
@@ -866,6 +894,7 @@ export function syncStreamLog(
       entries: next,
       thinkingActive,
       compactingActive,
+      taskGroups,
     };
   });
 

@@ -36,6 +36,10 @@ function slice(overrides: Partial<StreamSlice> = {}): StreamSlice {
     plan: null,
     bypass: NO_BYPASS,
     ...overrides,
+    outputFilesByRound: overrides.outputFilesByRound ?? {},
+    missingOutputsByRound: overrides.missingOutputsByRound ?? {},
+    compileFailuresByRound: overrides.compileFailuresByRound ?? {},
+    taskGroups: overrides.taskGroups ?? [],
   };
 }
 
