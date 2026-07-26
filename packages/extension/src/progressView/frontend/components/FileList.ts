@@ -24,11 +24,7 @@ import { designTokens, commonViewStyles } from '@shared/styles';
 import { roundIndexedEntries } from '@shared/schemas/roundIndexed';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
-import {
-  TEXRA_ICON_LIBRARY,
-  type TeXRAIconName,
-  waIcon,
-} from '@shared/wa/webAwesomeIcons';
+import { type TeXRAIconName, waIcon } from '@shared/wa/webAwesomeIcons';
 import { normalizeFilePath } from '@utils/core';
 import { ELEMENT_IDS } from '../constants';
 import { ProgressEvents } from '../events';
@@ -343,13 +339,7 @@ export class FileList extends LitElement {
                     size="small"
                     @click=${this.runLatexFixer}
                   >
-                    <wa-icon
-                      slot="start"
-                      library=${TEXRA_ICON_LIBRARY}
-                      name="tools"
-                      aria-hidden="true"
-                    ></wa-icon>
-                    Run latexFixer
+                    ${waIcon('tools', { slot: 'start' })} Run latexFixer
                   </wa-button>
                 </div>
               `
@@ -364,11 +354,7 @@ export class FileList extends LitElement {
 
     return html`
       <div class="storage-hint" role="note">
-        <wa-icon
-          library=${TEXRA_ICON_LIBRARY}
-          name="folder-opened"
-          aria-hidden="true"
-        ></wa-icon>
+        ${waIcon('folder-opened')}
         <span class="storage-hint__text">
           Files stay in task-run storage until accepted. Click a file to preview
           it, use Accept to copy it into your workspace, or use the folder
@@ -472,13 +458,7 @@ export class FileList extends LitElement {
       <div class="file-item">
         ${
           failure
-            ? html`<wa-icon
-                  id="${idPrefix}-compile-warning"
-                  library=${TEXRA_ICON_LIBRARY}
-                  name="warning"
-                  class="compile-warning"
-                  aria-label="Compile check failed"
-                ></wa-icon>
+            ? html`${waIcon('warning', { id: `${idPrefix}-compile-warning`, className: 'compile-warning', label: 'Compile check failed' })}
                 <wa-tooltip for="${idPrefix}-compile-warning"
                   >Compile check failed</wa-tooltip
                 >`
