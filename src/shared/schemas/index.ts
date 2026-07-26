@@ -44,7 +44,7 @@ export * from './mainView';
 export * from './progressView';
 
 // Layer 6: Other view message schemas
-export * as commonViewMessages from './commonViewMessages';
+export * from './commonViewMessages';
 // Memory/History/Profile view-message schemas have a single public home in
 // settingsViewMessages (the canonical settings entry point), which re-exports
 // the symbols consumers need. They are not re-exported directly here, so each
