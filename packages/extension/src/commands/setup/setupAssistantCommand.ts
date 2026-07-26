@@ -14,7 +14,6 @@ import {
   SETUP_INSTRUCTION,
 } from '@controllers/onboarding/setupLaunch';
 import { signInWithChatGptSubscription } from '@frontend/auth/codexSubscriptionSignIn';
-import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import * as logger from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { platform } from '@platform/platform';
@@ -257,7 +256,7 @@ export async function launchSetupAssistant(): Promise<SetupAssistantLaunchResult
       await runAgent(
         { config },
         {
-          runtimeHost: extensionAgentRuntimeHost,
+          runtimeHost: defaultSession().interactions,
         },
       );
     };

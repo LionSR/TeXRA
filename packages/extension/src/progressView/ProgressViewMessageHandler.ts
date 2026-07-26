@@ -26,7 +26,6 @@ import {
 import { ProgressWorkflowActionsController } from '@controllers/progressView/ProgressWorkflowActionsController';
 import { ProgressViewHost } from '@controllers/progressView/ProgressViewHost';
 import { SecretManager } from '@frontend/secretManager';
-import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { loadOptions } from '@frontend/agents/optionsLoader';
 import { handleProgressViewToolEditApprovalAction } from '@frontend/approval/nativeToolEditApproval';
 import { RecordingManager } from '@frontend/media/RecordingManager';
@@ -483,7 +482,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           },
         },
         bypass: {
-          runtimeHost: extensionAgentRuntimeHost,
+          runtimeHost: defaultSession().interactions,
           showInfo: (message) => this.host.info(message),
         },
         file: {

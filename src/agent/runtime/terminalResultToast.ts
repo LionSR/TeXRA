@@ -12,13 +12,14 @@
  * preserving the lifecycle's `!isSubagent` gating.
  *
  * `attachTerminalResultToast` wires that mapper to a session for hosts that
- * present through an {@link AgentRuntimeHost} (CLI, desktop). The `session` is
- * load-bearing: desktop passes its process session, while CLI/extension
- * pass the process {@link defaultSession}. A helper that hard-coded the
- * default would route desktop to the wrong session and never see its
- * results. Every host presents through its `runtimeHost`; in the extension,
- * `extensionAgentRuntimeHost.emit` routes these presentation requests to the
- * extension presentation handlers exactly once.
+ * present through an {@link AgentRuntimeHost} (CLI, desktop, extension). The
+ * `session` is load-bearing: desktop passes its process session, while
+ * CLI/extension pass the process {@link defaultSession}. A helper that
+ * hard-coded the default would route desktop to the wrong session and never
+ * see its results. Every host presents through its `runtimeHost`; in the
+ * extension, that's `session.interactions`, which forwards to whatever
+ * `HostInteractions` is currently attached (`ProgressViewProvider`'s
+ * presentation dispatch).
  */
 import type { ResultEvent } from '@agent/trace';
 import {
