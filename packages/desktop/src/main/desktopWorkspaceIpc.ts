@@ -20,8 +20,8 @@ import {
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
 import { platform } from '@platform/platform';
 import { WorkspaceFS } from '@utils/files';
-import { getConfig } from '@utils/config/configUtils';
 import { normalizeFilePath } from '@utils/core';
+import { getConfig } from '@utils/config/configUtils';
 import { isPathWithin } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isDirectory, isFile, isSymlink } from '@utils/files/fsEntryType';
