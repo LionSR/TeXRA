@@ -374,22 +374,6 @@ consumers, one of them inside the runtime itself. **Restate the acceptance targe
 and `executeCommand.ts` (45 LoC, 0 detaches), learns everything needed to write a frontend,
 and opening `runExecution.ts` teaches nothing extra — because nothing extra is left in it.
 
-## 8. What not to do
-
-Carried from north-star §5 and re-confirmed by these studies: no `@texra/core` barrel before
-the fence enforces; no `runSession()` facade; no repo-wide `StreamTabId` rename; no
-dependency-cruiser; no definitions-as-options API; no trace↔bus merge. Added by this study:
-
-- **Do not collapse to a single rail Codex-style.** Its purity is a subprocess artifact, and
-  it costs silently auto-denied approvals. Keep a blocking-decision callback rail.
-- **Do not unify the two shaping pipelines.** Extension and desktop already share one
-  renderer; Ink genuinely diverges.
-- **Do not treat export count as the target.** 236 exports did not stop the reference SDK
-  from being embeddable in four lines.
-- **Do not make `SessionHandle` the public surface without argument.** Anthropic built,
-  shipped, and then _removed_ `unstable_v2_createSession` / `SDKSession` in 0.3.142,
-  reverting to the single iterator. That experiment has already been run.
-
 ## 7.1 The interaction-surface design (tournament result, design of record)
 
 Produced by a judge-panel tournament: four independent designs (minimal-surface,
@@ -523,6 +507,22 @@ measuring the second will be disappointed. §9 remains untouched by this design.
   `commonViewMessages`, which publishes a namespace **nobody imports**, leaving that family with
   no working barrel path and all 10 consumers forced deep.
 
+## 8. What not to do
+
+Carried from north-star §5 and re-confirmed by these studies: no `@texra/core` barrel before
+the fence enforces; no `runSession()` facade; no repo-wide `StreamTabId` rename; no
+dependency-cruiser; no definitions-as-options API; no trace↔bus merge. Added by this study:
+
+- **Do not collapse to a single rail Codex-style.** Its purity is a subprocess artifact, and
+  it costs silently auto-denied approvals. Keep a blocking-decision callback rail.
+- **Do not unify the two shaping pipelines.** Extension and desktop already share one
+  renderer; Ink genuinely diverges.
+- **Do not treat export count as the target.** 236 exports did not stop the reference SDK
+  from being embeddable in four lines.
+- **Do not make `SessionHandle` the public surface without argument.** Anthropic built,
+  shipped, and then _removed_ `unstable_v2_createSession` / `SDKSession` in 0.3.142,
+  reverting to the single iterator. That experiment has already been run.
+
 ## 8.1 Where the mass is — and why there is no four-figure production win
 
 Measured at HEAD (tracked files, tests and fixtures excluded, `wc -l`):
@@ -541,7 +541,10 @@ Production mass by bucket: provider + product domain 63,246 (21.6%) · renderers
 
 **Duplication is not the lever.** A normalized-line clone census (K=6, ≥25-line blocks, 0
 pair-level false positives on inspection) finds lines participating in any cross-file clone =
-**2,823 / 294,420 = 0.96% of production**. The complete list of clusters above threshold is
+**2,823 / 294,420 = 0.96% of production**. (The census denominator counts total lines by a
+different methodology than the `wc -l` production count above — the two don't reconcile
+exactly, but the gap is immaterial to the 0.96% conclusion.) The complete list of clusters
+above threshold is
 ten pairs totalling 449 lines; the largest is **80** lines (`modelHandlerGoogleGenAI` ↔
 `modelHandlerGoogleInteractions`, two distinct Google APIs — justified). **There is no
 ≥1,000-LoC copy-paste cluster in this repository.** The "duplication" the studies report is
@@ -569,7 +572,7 @@ product risk** — and it buys no architecture, which should be said plainly whe
 | `@shared` names                                  |               586 |                     573 imported / 990 exported |
 
 Exact and re-confirmed: CLI `tui/state` 5,764; `restartRepair.ts` 415; `SessionStores.ts` 549;
-`@controllers/` consumers 0/44/44/0; 11 ALS reads of which 8 are `runScope`-only; 4
+`@controllers/` consumers 1/44/44/0; 11 ALS reads of which 8 are `runScope`-only; 4
 `StreamSnapshotStore` write-owners.
 
 ### Withdrawn as net-positive
