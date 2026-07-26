@@ -99,12 +99,7 @@ export class SettingsAgentCatalogController {
     return parseAgentModePresets(this.deps.state.getCustomPresetsRaw());
   }
 
-  /**
-   * Returns the persisted records without replacing recoverable fields with
-   * their display-time fallbacks. Save and delete operations edit this array
-   * so a later write cannot erase data that the current parser does not know
-   * how to render.
-   */
+  /** Returns raw records so catalog writes preserve unparsed data. */
   private getCustomPresetRecords(): unknown[] {
     const raw = this.deps.state.getCustomPresetsRaw();
     return Array.isArray(raw) ? raw : [];

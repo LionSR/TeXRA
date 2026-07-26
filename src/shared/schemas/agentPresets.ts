@@ -30,17 +30,7 @@ const AGENT_MODE_PRESET_ICON_NAME_SET = new Set<string>(
 const FALLBACK_AGENT_MODE_PRESET_ICON =
   'bookmark' satisfies AgentModePresetIconName;
 
-/**
- * Normalizes a persisted icon name, degrading an unrecognized one to
- * {@link FALLBACK_AGENT_MODE_PRESET_ICON} instead of failing the preset.
- *
- * Rejecting here used to destroy user data: {@link parseAgentModePresets}
- * drops any preset that fails to parse, and the parsed list is written back
- * over `WorkspaceStateKey.CUSTOM_AGENT_PRESETS` by the next preset save or
- * delete — so one unknown icon name permanently erased the whole team. The
- * fallback is loud per CLAUDE.md "Silent degradation is a defect" (taxonomy:
- * review-checklist §15 loud read).
- */
+/** Normalizes persisted icons, warning and using a safe display fallback. */
 const AgentModePresetIconSchema = z.string().transform((rawIcon) => {
   const icon = rawIcon.trim();
   const normalized = icon.startsWith('codicon-') ? icon.slice(8) : icon;
