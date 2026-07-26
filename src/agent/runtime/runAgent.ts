@@ -1,12 +1,9 @@
+import { finalizeExecution, registerExecution } from '@agent/storage';
 import {
   abandonOwnedExecutionLease,
   acquireResumedExecutionLease,
-  completeOwnedExecutionLease,
-  finalizeExecution,
-  registerExecution,
-} from '@agent/storage';
-import {
   captureOwnedExecutionLease,
+  completeOwnedExecutionLease,
   markOwnedExecutionLeaseUndurable,
   type OwnedExecutionLeaseScope,
 } from '@agent/storage/executionLease';

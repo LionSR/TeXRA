@@ -10,13 +10,14 @@
 // config/ratchets/host-agent-mock-baseline.json.
 
 // Node imports
-import { readdirSync, readFileSync } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 // Third-party imports
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
+
+import { REPO_ROOT, sourceFilesUnder, toRepoPath } from '../support/repoScan';
 
 const MOCK_FORMS = ['mock', 'doMock'] as const;
 
@@ -41,10 +42,6 @@ function compareSites(a: MockSite, b: MockSite): number {
   );
 }
 
-const REPO_ROOT = resolve(
-  fileURLToPath(new URL('.', import.meta.url)),
-  '../../..',
-);
 const BASELINE_FILE = 'config/ratchets/host-agent-mock-baseline.json';
 const BASELINE_PATH = resolve(REPO_ROOT, BASELINE_FILE);
 
@@ -53,18 +50,7 @@ const HOST_DIRS = [
   resolve(REPO_ROOT, 'src/test-kernel/desktop'),
 ];
 
-const SOURCE_FILE = /\.(?:ts|tsx|mts|cts)$/;
 const AGENT_SPECIFIER = /^@agent(?:\/|$)/;
-
-function repoRelative(path: string): string {
-  return relative(REPO_ROOT, path).replaceAll('\\', '/');
-}
-
-function sourceFilesUnder(dir: string): string[] {
-  return (readdirSync(dir, { recursive: true }) as string[])
-    .filter((entry) => SOURCE_FILE.test(entry) && !entry.endsWith('.d.ts'))
-    .map((entry) => join(dir, entry));
-}
 
 function mockFormFromCall(
   node: ts.Node,
@@ -104,7 +90,7 @@ function collectAgentMockSites(file: string): MockSite[] {
       if (specifierArg != null && ts.isStringLiteralLike(specifierArg)) {
         const specifier = specifierArg.text;
         if (AGENT_SPECIFIER.test(specifier)) {
-          sites.push({ file: repoRelative(file), form: mock.form, specifier });
+          sites.push({ file: toRepoPath(file), form: mock.form, specifier });
         }
       }
     }
