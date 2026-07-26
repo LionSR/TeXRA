@@ -12,14 +12,14 @@ import {
   formatWorkflowTaskMetadataParts,
   workflowTaskDetail,
 } from '@shared/copy/workflowTask';
-import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
+import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 import { assertNever } from '@utils/core';
 
 function statusIcon(task: WorkflowTaskProgress): TemplateResult {
   if (task.status === 'running') {
     return html`<wa-spinner aria-label="Running"></wa-spinner>`;
   }
-  const icon = (() => {
+  const icon: TeXRAIconName = (() => {
     switch (task.status) {
       case 'planned':
         return 'circle-outline';
@@ -34,11 +34,7 @@ function statusIcon(task: WorkflowTaskProgress): TemplateResult {
         return assertNever(task, 'Unhandled workflow task status');
     }
   })();
-  return html`<wa-icon
-    library=${TEXRA_ICON_LIBRARY}
-    name=${icon}
-    aria-hidden="true"
-  ></wa-icon>`;
+  return waIcon(icon);
 }
 
 function terminalMetadata(

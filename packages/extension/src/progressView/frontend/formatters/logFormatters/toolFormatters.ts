@@ -24,7 +24,7 @@ import {
   DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
   DELEGATION_TOOL_CATEGORY,
 } from '@shared/constants/delegationTools';
-import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
+import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 import { toolDisplayKind } from '@shared/tools/toolKind';
 import { deriveToolInputPreview } from '@shared/tools/toolInputPreview';
 import {
@@ -88,7 +88,7 @@ export function formatToolUseTemplate(
   // Determine display state
   const isInProgress = status === 'in_progress';
   const showAsError = normalizedToolLog.isError && !isUserFeedback;
-  let iconName: string;
+  let iconName: TeXRAIconName | typeof SPINNER_ICON_NAME;
   if (isUserFeedback) {
     iconName = 'comment';
   } else if (isInProgress) {
@@ -207,7 +207,7 @@ export function formatToolUseTemplate(
   // stopSummaryToggleKeydown for why the keydown path additionally needs an
   // explicit stopPropagation.
   // prettier-ignore
-  const extraContent = html`${timerTemplate ?? nothing}${proposalId ? html`<button type="button" class="proposal-restore-link proposal-banner-setup" data-proposal-id=${proposalId} title="Setup this proposal configuration" @keydown=${stopSummaryToggleKeydown}><wa-icon library=${TEXRA_ICON_LIBRARY} name="reply" aria-hidden="true"></wa-icon> Setup</button>` : nothing}`;
+  const extraContent = html`${timerTemplate ?? nothing}${proposalId ? html`<button type="button" class="proposal-restore-link proposal-banner-setup" data-proposal-id=${proposalId} title="Setup this proposal configuration" @keydown=${stopSummaryToggleKeydown}>${waIcon('reply')} Setup</button>` : nothing}`;
 
   // prettier-ignore
   return html`<wa-details appearance="plain" icon-placement="start" class=${classMap({

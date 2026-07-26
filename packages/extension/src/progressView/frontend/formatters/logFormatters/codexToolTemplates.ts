@@ -15,7 +15,7 @@ import {
   CodexTodoToolInputSchema,
   CodexTurnToolInputSchema,
 } from '@shared/schemas/codex';
-import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
+import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 import { formatDuration } from '@utils/core';
 
 // Local imports - formatter helpers
@@ -30,7 +30,10 @@ import '@awesome.me/webawesome/dist/components/badge/badge.js';
 import '@awesome.me/webawesome/dist/components/divider/divider.js';
 
 type RenderableSection = TemplateResult | typeof nothing | undefined | null;
-type BadgeData = { iconName: string; label: string };
+type BadgeData = {
+  iconName: TeXRAIconName | typeof SPINNER_ICON_NAME;
+  label: string;
+};
 type CodexToolRenderer = (input: unknown) => TemplateResult | typeof nothing;
 
 /** Lenient schema for parsing codex tool input in the renderer. */
@@ -45,10 +48,10 @@ type CodexFileChangeToolInput = z.infer<typeof CodexFileChangeToolInputSchema>;
 type CodexTodoToolInput = z.infer<typeof CodexTodoToolInputSchema>;
 
 function renderBadge({ iconName, label }: BadgeData): TemplateResult {
-  // prettier-ignore
-  const iconTemplate = iconName === SPINNER_ICON_NAME
-    ? html`<wa-spinner></wa-spinner>`
-    : html`<wa-icon library=${TEXRA_ICON_LIBRARY} name=${iconName} aria-hidden="true"></wa-icon>`;
+  const iconTemplate =
+    iconName === SPINNER_ICON_NAME
+      ? html`<wa-spinner></wa-spinner>`
+      : waIcon(iconName);
   // prettier-ignore
   return html`<wa-badge variant="neutral" appearance="filled">${iconTemplate} ${label}</wa-badge>`;
 }
@@ -97,14 +100,14 @@ function renderCodexPromptSection(input: CodexInputDisplay): RenderableSection {
 }
 
 function renderCodexModeSection(input: CodexInputDisplay): RenderableSection {
-  const badges = [
-    ...(input.sandbox_mode
-      ? [{ iconName: 'shield', label: input.sandbox_mode }]
-      : []),
-    ...(input.thread_id
-      ? [{ iconName: 'comment-discussion', label: 'follow-up' }]
-      : []),
-  ];
+  const badges: BadgeData[] = [
+    input.sandbox_mode
+      ? { iconName: 'shield', label: input.sandbox_mode }
+      : null,
+    input.thread_id
+      ? { iconName: 'comment-discussion', label: 'follow-up' }
+      : null,
+  ].filter((badge): badge is BadgeData => badge != null);
 
   return renderBadgeSection('Mode:', badges);
 }
@@ -137,11 +140,7 @@ function renderCodexFileChangeItem(
 ): TemplateResult {
   return html`
     <li class="detail-item">
-      <wa-icon
-        library=${TEXRA_ICON_LIBRARY}
-        name="file"
-        aria-hidden="true"
-      ></wa-icon>
+      ${waIcon('file')}
       <span
         class="file-link clickable-link"
         data-file=${change.path}
@@ -224,11 +223,7 @@ function renderCodexTodoItem(item: {
 }): TemplateResult {
   return html`
     <li class="detail-item">
-      <wa-icon
-        library=${TEXRA_ICON_LIBRARY}
-        name=${item.completed ? 'pass-filled' : 'circle-large-outline'}
-        aria-hidden="true"
-      ></wa-icon>
+      ${waIcon(item.completed ? 'pass-filled' : 'circle-large-outline')}
       <span>${item.text}</span>
     </li>
   `;
@@ -271,7 +266,9 @@ function renderCodexTodoContent(
   ]);
 }
 
-function getCodexTurnStateIcon(state: string): string {
+function getCodexTurnStateIcon(
+  state: string,
+): TeXRAIconName | typeof SPINNER_ICON_NAME {
   switch (state) {
     case 'failed':
       return 'error';
