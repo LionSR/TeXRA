@@ -1,10 +1,13 @@
 import type { HostUserQuestionResult } from '@agent/runtime/HostInteractions';
-import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInteractionEvents';
 import { isRelayMonthlyLimitMessage } from '@common/errors/sdkErrorUtils';
 import {
   isChatGptSubscriptionLimitError,
   isCredentialExhausted,
+  type AgentProposalPermission,
+  type BashPermission,
   type ExhaustionReason,
+  type PlanApprovalPermission,
+  type RetryPermission,
   type ApprovalDecision as SharedApprovalDecision,
 } from '@shared/schemas';
 
@@ -16,12 +19,20 @@ import { askCliQuestion } from '../logSinks';
  * or by prompting, as opposed to the human-input requests (user questions,
  * external inquiry) that always need a person. Both the headless adapter and
  * the TUI discriminate on this set.
+ *
+ * CLI-owned, not a runtime event vocabulary: nothing emits these names over
+ * `AgentRuntimeHost`. They are the discriminator for the CLI's own approval
+ * prompts, and the payloads are the plain `@shared/schemas` permission shapes
+ * the live `HostInteractions` requests already carry.
  */
-export type CliDecisionApprovalEvent =
-  | 'showBashPermission'
-  | 'showPlanApproval'
-  | 'showAgentProposal'
-  | 'showRetryRequest';
+export interface CliDecisionApprovalPayloads {
+  showBashPermission: BashPermission;
+  showPlanApproval: PlanApprovalPermission;
+  showAgentProposal: AgentProposalPermission;
+  showRetryRequest: RetryPermission;
+}
+
+export type CliDecisionApprovalEvent = keyof CliDecisionApprovalPayloads;
 
 // The headless adapter only ever sets accepted + userMessage, but reusing the
 // host-neutral shape (which also carries optional userQuestionAnswers) keeps a
@@ -59,14 +70,12 @@ export function hasCliApprovalDenied(context: CliContext): boolean {
 /** Whether the failed retry was a ChatGPT-subscription (Codex) usage limit, so
  *  the switch turns off the subscription preference rather than relay access. */
 export function isCliChatGptSubscriptionRetry(
-  payload: RuntimeInteractionEventPayloads['showRetryRequest'],
+  payload: RetryPermission,
 ): boolean {
   return isChatGptSubscriptionLimitError(payload.errorDetails);
 }
 
-export function isCliApiSwitchableRetry(
-  payload: RuntimeInteractionEventPayloads['showRetryRequest'],
-): boolean {
+export function isCliApiSwitchableRetry(payload: RetryPermission): boolean {
   const details = payload.errorDetails;
   if (!details) return false;
   if (isChatGptSubscriptionLimitError(details)) return true;
@@ -180,12 +189,10 @@ export function immediateDecision(
  *  and auto-approval modes should not burn the retry budget. */
 function isUnretryableRetryRequest(
   event: CliDecisionApprovalEvent,
-  payload: RuntimeInteractionEventPayloads[CliDecisionApprovalEvent],
+  payload: CliDecisionApprovalPayloads[CliDecisionApprovalEvent],
 ): boolean {
   if (event !== 'showRetryRequest') return false;
-  const details = (
-    payload as RuntimeInteractionEventPayloads['showRetryRequest']
-  ).errorDetails;
+  const details = (payload as RetryPermission).errorDetails;
   if (!details) return false;
   if (isCredentialExhausted(details)) return true;
   if (details.statusCode === 401 || details.statusCode === 403) return true;
@@ -194,7 +201,7 @@ function isUnretryableRetryRequest(
 
 export function immediateDecisionForApproval(
   event: CliDecisionApprovalEvent,
-  payload: RuntimeInteractionEventPayloads[CliDecisionApprovalEvent],
+  payload: CliDecisionApprovalPayloads[CliDecisionApprovalEvent],
   context: CliContext,
 ): ApprovalDecision | undefined {
   if (isUnretryableRetryRequest(event, payload)) {
