@@ -44,7 +44,7 @@ import { getProposalFileGroups } from '@shared/schemas/proposalFields';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderWorkflowExtractFlagBadges } from '@shared/wa/extractFlagBadges';
-import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { getBasename } from '@utils/core';
 
 // Local imports - base class
@@ -148,11 +148,7 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
             hasAgentOptions
               ? html`
                   <div class="workflow-proposal__agent-select">
-                    <wa-icon
-                      library=${TEXRA_ICON_LIBRARY}
-                      name="sparkle"
-                      aria-hidden="true"
-                    ></wa-icon>
+                    ${waIcon('sparkle')}
                     <wa-select
                       class="proposal-agent-dropdown"
                       .value=${currentAgent}
@@ -170,11 +166,7 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
             hasModelOptions
               ? html`
                   <div class="workflow-proposal__model-select">
-                    <wa-icon
-                      library=${TEXRA_ICON_LIBRARY}
-                      name="robot"
-                      aria-hidden="true"
-                    ></wa-icon>
+                    ${waIcon('robot')}
                     <wa-select
                       class="proposal-model-dropdown"
                       .value=${currentModel}

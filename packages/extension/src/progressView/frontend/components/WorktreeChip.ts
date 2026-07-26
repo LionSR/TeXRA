@@ -1,6 +1,5 @@
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
-import { classMap } from 'lit/directives/class-map.js';
 
 import {
   WORKTREE_PR_STATE,
@@ -10,7 +9,7 @@ import {
   type WorktreeCIState,
 } from '@shared/schemas';
 import { designTokens } from '@shared/styles';
-import { TEXRA_ICON_LIBRARY, waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/badge/badge.js';
@@ -34,7 +33,7 @@ const PR_STATE_VARIANT: Record<
   [WORKTREE_PR_STATE.DRAFT]: 'neutral',
 };
 
-const CI_ICON: Record<WorktreeCIState, string> = {
+const CI_ICON: Record<WorktreeCIState, TeXRAIconName> = {
   [WORKTREE_CI_STATE.PENDING]: 'circle-dot',
   [WORKTREE_CI_STATE.RUNNING]: 'circle-dot',
   [WORKTREE_CI_STATE.SUCCESS]: 'circle-check',
@@ -255,13 +254,7 @@ export class WorktreeChip extends LitElement {
       }
       ${
         pr.ciState
-          ? html`<wa-icon
-                id="worktree-ci-status"
-                library=${TEXRA_ICON_LIBRARY}
-                name=${CI_ICON[ci]}
-                class=${classMap({ 'ci-icon': true, [`ci-${ci}`]: true })}
-                aria-label=${CI_LABEL[ci]}
-              ></wa-icon>
+          ? html`${waIcon(CI_ICON[ci], { id: 'worktree-ci-status', className: `ci-icon ci-${ci}`, label: CI_LABEL[ci] })}
               <wa-tooltip for="worktree-ci-status">${CI_LABEL[ci]}</wa-tooltip>`
           : nothing
       }
