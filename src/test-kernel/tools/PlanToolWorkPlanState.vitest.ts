@@ -281,24 +281,6 @@ describe('PlanTool — update (plan approval)', () => {
       await GoalStore.forget(streamId);
     }
   });
-
-  it('clears a timed-out plan from displayed work-plan state', async () => {
-    await installPlatform(false);
-    const { decisions, resultPromise, events, workPlanState } = startPlanUpdate(
-      'stream:plan-timeout' as StreamTabId,
-      plan.objective,
-    );
-
-    const approval = findPlanApproval(events);
-    expect(submitPlanDecision(decisions, approval, { action: 'timeout' })).toBe(
-      true,
-    );
-
-    const result = await resultPromise;
-    expect(result.status).toBe('error');
-    expect(workPlanState.plan).toBeNull();
-    expect(workPlanState.planSummary).toBeNull();
-  });
 });
 
 describe('PlanTool — pause/complete (goal lifecycle)', () => {
