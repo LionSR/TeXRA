@@ -5,21 +5,25 @@ import { customElement, property } from 'lit/decorators.js';
 
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
-import { designTokens, commonViewStyles } from '@shared/styles';
 import type { MemoryViewItem } from '@shared/schemas';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import {
+  commonViewStyles,
+  designTokens,
+  settingsBannerStyles,
+} from '@shared/styles';
+import { renderLabeledActionButton } from '@shared/wa/actionButtons';
+import { renderSettingsBanner } from '@shared/wa/settingsBanner';
 
 // Side-effect: register child components.
 import '../components/memory/MemoryToggle';
 import '../components/memory/MemoryList';
-import '@awesome.me/webawesome/dist/components/button/button.js';
-import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 @customElement('memory-tab')
 export class MemoryTab extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
+    settingsBannerStyles,
     css`
       :host {
         display: block;
@@ -50,38 +54,30 @@ export class MemoryTab extends LitElement {
   };
 
   private renderMemoryReminder(): TemplateResult {
-    return html`
-      <div class="settings-reminder memory-reminder">
-        ${waIcon('info', { className: 'settings-reminder-icon' })}
-        <div class="settings-reminder-body">
-          <div class="settings-reminder-title">Memory notes</div>
-          <div class="settings-reminder-description">
-            The AI assistant can save notes here to remember important
-            information across conversations. These notes help the assistant
-            provide more contextual and personalized help.
-          </div>
-          <div class="settings-reminder-actions">
-            <wa-button
-              appearance="outlined"
-              variant="neutral"
-              size="small"
-              @click=${this.handleRefresh}
-            >
-              ${waIcon('rotate-right', { slot: 'start' })} Refresh
-            </wa-button>
-            <wa-button
-              appearance="outlined"
-              variant="neutral"
-              size="small"
-              title="Open memory folder in file explorer"
-              @click=${this.handleOpenFolder}
-            >
-              ${waIcon('folder-open', { slot: 'start' })} Open Folder
-            </wa-button>
-          </div>
-        </div>
-      </div>
-    `;
+    return renderSettingsBanner({
+      id: 'memory-notes-banner',
+      className: 'memory-reminder',
+      title: 'Memory notes',
+      description:
+        'The AI assistant can save notes here to remember important information across conversations. These notes help the assistant provide more contextual and personalized help.',
+      actions: html`
+        ${renderLabeledActionButton({
+          icon: 'rotate-right',
+          text: 'Refresh',
+          kind: 'secondary',
+          appearance: 'outlined',
+          onClick: this.handleRefresh,
+        })}
+        ${renderLabeledActionButton({
+          icon: 'folder-open',
+          text: 'Open Folder',
+          kind: 'secondary',
+          appearance: 'outlined',
+          title: 'Open memory folder in file explorer',
+          onClick: this.handleOpenFolder,
+        })}
+      `,
+    });
   }
 
   override render(): TemplateResult {

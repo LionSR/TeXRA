@@ -133,6 +133,25 @@ const settingsContainerStyles: CSSResult = css`
     border-inline-start: 0;
   }
 
+  .settings-unavailable-icon,
+  .settings-tab-icon {
+    display: grid;
+    place-items: center;
+    width: 1em;
+    height: 1em;
+    flex: 0 0 auto;
+    line-height: 1;
+  }
+
+  wa-tab .settings-tab-icon {
+    margin-inline-end: 0.45em;
+    opacity: var(--opacity-normal);
+  }
+
+  wa-tab[active] .settings-tab-icon {
+    opacity: 1;
+  }
+
   /* Group captions are supporting context. Drop them before squeezing the
      actual destinations, while keeping the tab labels available. */
   @container settings (max-width: 900px) {
@@ -197,25 +216,6 @@ const settingsContainerStyles: CSSResult = css`
     gap: var(--wa-space-2xs);
     color: var(--text-color);
     font-weight: var(--font-weight-medium);
-  }
-
-  .settings-unavailable-icon,
-  .settings-tab-icon {
-    display: grid;
-    place-items: center;
-    width: 1em;
-    height: 1em;
-    flex: 0 0 auto;
-    line-height: 1;
-  }
-
-  wa-tab .settings-tab-icon {
-    margin-inline-end: 0.45em;
-    opacity: var(--opacity-normal);
-  }
-
-  wa-tab[active] .settings-tab-icon {
-    opacity: 1;
   }
 `;
 

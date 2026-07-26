@@ -4,7 +4,7 @@ import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import { designTokens } from '@shared/styles';
+import { commonViewStyles, designTokens } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
@@ -25,7 +25,11 @@ import type WaRadioGroup from '@awesome.me/webawesome/dist/components/radio-grou
 
 @customElement('api-access-section')
 export class ApiAccessSection extends LitElement {
-  static override styles = [designTokens, apiAccessSectionStyles];
+  static override styles = [
+    designTokens,
+    commonViewStyles,
+    apiAccessSectionStyles,
+  ];
 
   @property({ attribute: false }) mode: 'included' | 'personal' = 'personal';
 
@@ -40,7 +44,7 @@ export class ApiAccessSection extends LitElement {
   override render(): TemplateResult {
     return html`
       <div class="api-access-section">
-        <h2>Model Access</h2>
+        <h2 class="settings-subsection-heading">Model Access</h2>
         <wa-radio-group
           class="api-access-options"
           name="apiAccessMode"

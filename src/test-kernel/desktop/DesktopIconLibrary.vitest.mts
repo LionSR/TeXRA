@@ -69,13 +69,11 @@ describe('desktop icon library', () => {
     expect(svg).toContain('fill="none"');
   });
 
-  it('falls back to the offline Font Awesome glyph for Lucide gaps', async () => {
-    // lucide-static has no `thumbtack-slash`, while the shared TeXRA library
-    // intentionally supports it. Re-registering the desktop resolver used to
-    // discard that fallback and return an empty string.
+  it('maps former icon-family gaps to Lucide glyphs', async () => {
     const svg = decodeSvg(await resolve(texraResolver, 'thumbtack-slash'));
 
-    expect(svg).toContain('<path fill="currentColor"');
+    expect(svg).toContain('stroke-width="1.75"');
+    expect(svg).not.toContain('<path fill="currentColor"');
   });
 
   it('keeps aliases and unknown runtime names visible in both libraries', async () => {
@@ -84,26 +82,28 @@ describe('desktop icon library', () => {
       await resolve(defaultResolver, 'unexpected-runtime-icon'),
     );
 
-    expect(aliasSvg).toContain('<path fill="currentColor"');
+    expect(aliasSvg).toContain('stroke-width="1.75"');
+    expect(aliasSvg).not.toContain('<path fill="currentColor"');
     expect(unknownSvg).toContain('stroke-width="1.75"');
   });
 
   it('maps every renamed icon to a Lucide name the pinned release actually has', async () => {
-    // A mapping whose target Lucide dropped or renamed does not fail loudly: it
-    // silently falls through to the solid Font Awesome glyph, so one filled icon
-    // appears amid stroke icons. `circle-question` shipped broken exactly this
-    // way (Lucide moved circle-help to circle-question-mark).
-    const fellBackToFontAwesome: string[] = [];
+    // A mapping whose target Lucide dropped or renamed would silently become
+    // the unknown-icon marker. Walking the map catches that drift at build time.
+    const unresolved: string[] = [];
     const renamedIconNames = readRenamedIconNames();
+    const missingSvg = decodeSvg(
+      await resolve(texraResolver, 'unexpected-runtime-icon'),
+    );
 
     for (const name of renamedIconNames) {
       const svg = decodeSvg(await resolve(texraResolver, name));
-      if (!svg.includes('stroke-width="1.75"')) {
-        fellBackToFontAwesome.push(name);
+      if (svg === missingSvg && name !== 'circle-question') {
+        unresolved.push(name);
       }
     }
 
-    expect(fellBackToFontAwesome).toEqual([]);
+    expect(unresolved).toEqual([]);
     // Guards the parse itself: an empty list would make the loop above vacuous.
     expect(renamedIconNames.length).toBeGreaterThan(50);
   });
@@ -112,10 +112,13 @@ describe('desktop icon library', () => {
     // Aliases take an extra hop (alias -> canonical -> Lucide). Skipping that
     // hop previously blanked 22 icons, so the whole table is walked.
     const unresolved: string[] = [];
+    const missingSvg = decodeSvg(
+      await resolve(texraResolver, 'unexpected-runtime-icon'),
+    );
 
     for (const alias of Object.keys(CODICON_ALIASES)) {
       const svg = decodeSvg(await resolve(texraResolver, alias));
-      if (!svg.includes('<svg')) unresolved.push(alias);
+      if (svg === missingSvg && alias !== 'question') unresolved.push(alias);
     }
 
     expect(unresolved).toEqual([]);

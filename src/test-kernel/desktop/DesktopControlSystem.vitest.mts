@@ -62,6 +62,8 @@ describe('desktop control system', () => {
     expect(lightDom).toContain(
       'wa-button.action-button:not(.btn-primary):not(.btn-secondary)',
     );
+    expect(lightDom).not.toContain('desktop-primary-button');
+    expect(lightDom).not.toContain('desktop-secondary-button');
     expect(shadowDom).toContain(
       'export const iconSurfaceStyles: CSSResult = css`',
     );

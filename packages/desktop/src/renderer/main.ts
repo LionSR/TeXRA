@@ -9,12 +9,9 @@ import './styles.css';
 import './themeTokens.css';
 
 import '@shared/wa';
-// Side-effect import, placed after '@shared/wa' (which registers the Font
-// Awesome solid set) so the desktop's stroke set takes over the same library
-// names. Registration runs at module scope inside that file rather than from a
-// call here, because ES imports hoist above statements — a call site in this
-// file would run after every component module had already been evaluated.
-// See desktopIconLibrary.ts for why the desktop diverges from the extension.
+// Side-effect import, placed after the shared icon contract so the desktop's
+// Lucide resolver owns both Web Awesome library names. Registration runs at
+// module scope inside that file because ES imports hoist above statements.
 import './desktopIconLibrary';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
@@ -84,6 +81,7 @@ import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 
 import {
   DesktopSetRouteMessageSchema,
+  DesktopToggleLayoutMessageSchema,
   type DesktopRoute,
 } from '../desktopShellMessages';
 import { DesktopSetLogMessageSchema } from '../desktopLogMessages';
@@ -121,18 +119,26 @@ import {
   closeWorkbenchTab,
   focusWorkbenchTab,
   initialDesktopTaskShellState,
+  moveWorkbenchTab,
   openWorkbenchTab,
   renameWorkbenchTab,
+  setBottomPanelHeight,
+  setProjectSectionPosition,
   setSidebarWidth,
   setWorkbenchTabDirty,
   setWorkbenchWidth,
   toggleFiles,
   toggleSidebar,
+  toggleSummaryBar,
+  toggleWorkbench,
+  WORKBENCH_PLACEMENTS,
   workbenchKindForRoute,
+  workbenchTabsForPlacement,
   workspaceInitials,
   workspaceName,
   type DesktopTaskShellState,
   type WorkbenchKind,
+  type WorkbenchPlacement,
   type WorkbenchTab,
 } from '../desktopTaskShell';
 import {
@@ -210,9 +216,8 @@ function setRouteState(route: DesktopRoute): void {
 // Conversation-first shell state
 // =============================================================================
 //
-// The task canvas is permanent. Files, terminals, settings, logs, and browser
-// content open in one optional workbench to its right, so a user can inspect an
-// artifact without losing the conversation that produced it.
+// The task canvas is permanent. Workbench tabs can live in independently
+// resizable Right and Bottom panes without replacing the conversation.
 
 let shellState: DesktopTaskShellState = initialDesktopTaskShellState();
 let environmentSummary: DesktopEnvironmentSummary | undefined;
@@ -221,19 +226,49 @@ let environmentPopoverOpen = false;
 
 function updateShell(next: DesktopTaskShellState): void {
   if (next === shellState) return;
-  const previousTabId = shellState.activeWorkbenchTabId;
+  const previousActiveTabIds = shellState.activeWorkbenchTabIds;
+  const previousBottomPanelHeight = shellState.bottomPanelHeight;
   const previousSidebarWidth = shellState.sidebarWidth;
   const previousWorkbenchWidth = shellState.workbenchWidth;
   shellState = next;
   rerenderShell();
   syncBrowserViewBounds();
   if (
-    previousTabId !== next.activeWorkbenchTabId ||
+    previousActiveTabIds.right !== next.activeWorkbenchTabIds.right ||
+    previousActiveTabIds.bottom !== next.activeWorkbenchTabIds.bottom ||
+    previousBottomPanelHeight !== next.bottomPanelHeight ||
     previousSidebarWidth !== next.sidebarWidth ||
     previousWorkbenchWidth !== next.workbenchWidth
   ) {
-    layoutVisibleSurface();
+    layoutVisibleSurfaces();
   }
+}
+
+function toggleBottomBarVisibility(): void {
+  if (
+    !activeWorkbenchTab(shellState, 'bottom') &&
+    workbenchTabsForPlacement(shellState, 'bottom').length === 0
+  ) {
+    openKind('terminal');
+    return;
+  }
+  updateShell(toggleWorkbench(shellState, 'bottom'));
+}
+
+function toggleSidePanelVisibility(): void {
+  if (
+    !activeWorkbenchTab(shellState, 'right') &&
+    workbenchTabsForPlacement(shellState, 'right').length === 0
+  ) {
+    openKind('settings');
+    return;
+  }
+  updateShell(toggleWorkbench(shellState, 'right'));
+}
+
+function toggleSummaryBarVisibility(): void {
+  environmentPopoverOpen = false;
+  updateShell(toggleSummaryBar(shellState));
 }
 
 // `<settings-app>`, `<main-app>`, and `<stream-conversation>` are instantiated
@@ -432,7 +467,9 @@ function isProgressOutboundMessage(
  * rest render their placeholder.
  */
 function syncBrowserViewBounds(): void {
-  const tab = activeWorkbenchTab(shellState);
+  const tab = WORKBENCH_PLACEMENTS.map((placement) =>
+    activeWorkbenchTab(shellState, placement),
+  ).find((candidate) => candidate?.kind === 'browser');
   if (tab?.kind !== 'browser') {
     postMessage(DESKTOP_WORKSPACE_COMMANDS.BROWSER_HIDE);
     return;
@@ -460,22 +497,28 @@ function syncBrowserViewBounds(): void {
  * Re-measures the active workbench surface. Monaco and xterm both render at
  * zero size if they measured while hidden.
  */
-function layoutVisibleSurface(): void {
-  const tab = activeWorkbenchTab(shellState);
-  if (!tab) return;
-  if (tab.kind === 'editor') {
-    editorPane.layout();
-    if (tab.target) void editorPane.open(tab.target);
-  }
-  // activate() creates the terminal on first use and re-fits an existing one.
-  if (tab.kind === 'terminal') terminalPane.activate(tab.id);
-  // The main process owns the WebContentsView, so hand it the URL once.
-  if (tab.kind === 'browser' && tab.target && !loadedBrowserTabs.has(tab.id)) {
-    loadedBrowserTabs.add(tab.id);
-    postMessage(DESKTOP_WORKSPACE_COMMANDS.BROWSER_OPEN, {
-      tabId: tab.id,
-      url: tab.target,
-    });
+function layoutVisibleSurfaces(): void {
+  for (const placement of WORKBENCH_PLACEMENTS) {
+    const tab = activeWorkbenchTab(shellState, placement);
+    if (!tab) continue;
+    if (tab.kind === 'editor') {
+      editorPane.layout();
+      if (tab.target) void editorPane.open(tab.target);
+    }
+    // activate() creates the terminal on first use and re-fits an existing one.
+    if (tab.kind === 'terminal') terminalPane.activate(tab.id);
+    // The main process owns the WebContentsView, so hand it the URL once.
+    if (
+      tab.kind === 'browser' &&
+      tab.target &&
+      !loadedBrowserTabs.has(tab.id)
+    ) {
+      loadedBrowserTabs.add(tab.id);
+      postMessage(DESKTOP_WORKSPACE_COMMANDS.BROWSER_OPEN, {
+        tabId: tab.id,
+        url: tab.target,
+      });
+    }
   }
 }
 
@@ -486,7 +529,7 @@ function layoutVisibleSurface(): void {
  */
 const loadedBrowserTabs = new Set<string>();
 
-/** Opens a surface in the right workbench with a sensible default target. */
+/** Opens a surface in its default pane with a sensible default target. */
 function openKind(kind: WorkbenchKind): void {
   if (kind === 'terminal') {
     updateShell(
@@ -580,17 +623,34 @@ function disposeWorkbenchTab(tabId: string): void {
   updateShell(closeWorkbenchTab(shellState, tabId));
 }
 
-function workbenchTemplate(tab: WorkbenchTab): TemplateResult {
+function moveTabToPlacement(
+  tabId: string,
+  placement: WorkbenchPlacement,
+): void {
+  updateShell(moveWorkbenchTab(shellState, tabId, placement));
+}
+
+function workbenchTemplate(
+  tab: WorkbenchTab,
+  placement: WorkbenchPlacement,
+): TemplateResult {
+  const placementLabel = placement === 'right' ? 'Right' : 'Bottom';
   return html`
-    <aside class="task-workbench" aria-label="Workbench">
+    <aside
+      class="task-workbench"
+      data-placement=${placement}
+      aria-label=${`${placementLabel} workbench`}
+    >
       ${workbenchTabsTemplate(
-        shellState.workbenchTabs,
-        shellState.activeWorkbenchTabId,
+        workbenchTabsForPlacement(shellState, placement),
+        shellState.activeWorkbenchTabIds[placement],
+        placement,
         {
           onActivate: (tabId) =>
             updateShell(focusWorkbenchTab(shellState, tabId)),
           onClose: disposeWorkbenchTab,
-          onCloseWorkbench: () => updateShell(closeWorkbench(shellState)),
+          onHide: () => updateShell(closeWorkbench(shellState, placement)),
+          onMove: moveTabToPlacement,
         },
       )}
       <div class="task-workbench-body">
@@ -815,17 +875,25 @@ function taskConversationTemplate(): TemplateResult {
         </wa-button>
         <span class="task-header-title">${currentTaskTitle()}</span>
         <span class="task-header-spacer"></span>
-        <wa-button
-          id="taskEnvironmentButton"
-          type="button"
-          class="task-environment-button btn-secondary"
-          appearance="outlined"
-          size="s"
-          with-caret
-        >
-          ${waIcon('folder-open', { slot: 'start' })}
-          <span>${workspaceName(window.texraDesktop?.workspacePath)}</span>
-        </wa-button>
+        ${
+          shellState.summaryBarVisible
+            ? html`
+                <wa-button
+                  id="taskEnvironmentButton"
+                  type="button"
+                  class="task-environment-button btn-secondary"
+                  appearance="outlined"
+                  size="s"
+                  with-caret
+                >
+                  ${waIcon('folder-open', { slot: 'start' })}
+                  <span
+                    >${workspaceName(window.texraDesktop?.workspacePath)}</span
+                  >
+                </wa-button>
+              `
+            : nothing
+        }
         <wa-button
           type="button"
           class="task-header-button icon-button is-size-l"
@@ -837,7 +905,52 @@ function taskConversationTemplate(): TemplateResult {
         >
           ${waIcon('ellipsis')}
         </wa-button>
-        ${environmentPopoverTemplate(window.texraDesktop?.workspacePath)}
+        <div class="task-layout-controls" aria-label="Layout controls">
+          ${renderIconActionButton({
+            id: 'taskToggleSummaryBar',
+            icon: 'list-ul',
+            label: 'Toggle summary bar',
+            tooltip: commandTitle(
+              DESKTOP_LOCAL_COMMANDS.TOGGLE_SUMMARY_BAR,
+              'Toggle summary bar',
+            ),
+            className: 'task-layout-toggle',
+            size: 'l',
+            pressed: shellState.summaryBarVisible,
+            onClick: toggleSummaryBarVisibility,
+          })}
+          ${renderIconActionButton({
+            id: 'taskToggleBottomBar',
+            icon: 'window-maximize',
+            label: 'Toggle bottom bar',
+            tooltip: commandTitle(
+              DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR,
+              'Toggle bottom bar',
+            ),
+            className: 'task-layout-toggle',
+            size: 'l',
+            pressed: activeWorkbenchTab(shellState, 'bottom') != null,
+            onClick: toggleBottomBarVisibility,
+          })}
+          ${renderIconActionButton({
+            id: 'taskToggleSidePanel',
+            icon: 'picture-in-picture',
+            label: 'Toggle side panel',
+            tooltip: commandTitle(
+              DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL,
+              'Toggle side panel',
+            ),
+            className: 'task-layout-toggle',
+            size: 'l',
+            pressed: activeWorkbenchTab(shellState, 'right') != null,
+            onClick: toggleSidePanelVisibility,
+          })}
+        </div>
+        ${
+          shellState.summaryBarVisible
+            ? environmentPopoverTemplate(window.texraDesktop?.workspacePath)
+            : nothing
+        }
       </header>
       <div class="task-conversation-body" id="desktop-center">
         <section
@@ -872,6 +985,7 @@ function taskConversationTemplate(): TemplateResult {
 }
 
 interface SplitPanelElement extends HTMLElement {
+  readonly position: number;
   readonly positionInPixels: number;
 }
 
@@ -880,19 +994,31 @@ function rememberSidebarWidth(event: Event): void {
   shellState = setSidebarWidth(shellState, width);
 }
 
+function rememberProjectSectionPosition(event: Event): void {
+  const position = (event.currentTarget as SplitPanelElement).position;
+  shellState = setProjectSectionPosition(shellState, position);
+}
+
+function rememberBottomPanelHeight(event: Event): void {
+  const height = (event.currentTarget as SplitPanelElement).positionInPixels;
+  shellState = setBottomPanelHeight(shellState, height);
+}
+
 function rememberWorkbenchWidth(event: Event): void {
   const width = (event.currentTarget as SplitPanelElement).positionInPixels;
   shellState = setWorkbenchWidth(shellState, width);
 }
 
-function taskMainTemplate(workbench: WorkbenchTab | undefined): TemplateResult {
-  if (!workbench) return taskConversationTemplate();
+function taskRightLayoutTemplate(
+  rightTab: WorkbenchTab | undefined,
+): TemplateResult {
+  if (!rightTab) return taskConversationTemplate();
   return html`
     <wa-split-panel
       class="task-main-split"
       orientation="horizontal"
       primary="end"
-      .positionInPixels=${shellState.workbenchWidth}
+      position-in-pixels=${shellState.workbenchWidth}
       @wa-reposition=${rememberWorkbenchWidth}
     >
       <span slot="divider" class="task-split-handle">
@@ -902,7 +1028,32 @@ function taskMainTemplate(workbench: WorkbenchTab | undefined): TemplateResult {
         ${taskConversationTemplate()}
       </div>
       <div slot="end" class="task-workbench-panel">
-        ${workbenchTemplate(workbench)}
+        ${workbenchTemplate(rightTab, 'right')}
+      </div>
+    </wa-split-panel>
+  `;
+}
+
+function taskMainTemplate(
+  rightTab: WorkbenchTab | undefined,
+  bottomTab: WorkbenchTab | undefined,
+): TemplateResult {
+  const rightLayout = taskRightLayoutTemplate(rightTab);
+  if (!bottomTab) return rightLayout;
+  return html`
+    <wa-split-panel
+      class="task-bottom-split"
+      orientation="vertical"
+      primary="end"
+      position-in-pixels=${shellState.bottomPanelHeight}
+      @wa-reposition=${rememberBottomPanelHeight}
+    >
+      <span slot="divider" class="task-bottom-split-handle">
+        ${waIcon('ellipsis')}
+      </span>
+      <div slot="start" class="task-main-panel">${rightLayout}</div>
+      <div slot="end" class="task-bottom-workbench-panel">
+        ${workbenchTemplate(bottomTab, 'bottom')}
       </div>
     </wa-split-panel>
   `;
@@ -910,14 +1061,18 @@ function taskMainTemplate(workbench: WorkbenchTab | undefined): TemplateResult {
 
 function shellTemplate(): TemplateResult {
   const workspacePath = window.texraDesktop?.workspacePath;
-  const workbench = activeWorkbenchTab(shellState);
-  const main = taskMainTemplate(workbench);
+  const rightTab = activeWorkbenchTab(shellState, 'right');
+  const bottomTab = activeWorkbenchTab(shellState, 'bottom');
+  const main = taskMainTemplate(rightTab, bottomTab);
+  const workbenchOpen = rightTab != null || bottomTab != null;
 
   if (shellState.sidebarCollapsed) {
     return html`
       <div
         class="task-shell task-shell-collapsed"
-        data-workbench-open=${workbench ? 'true' : 'false'}
+        data-workbench-open=${String(workbenchOpen)}
+        data-right-panel-open=${String(rightTab != null)}
+        data-bottom-panel-open=${String(bottomTab != null)}
       >
         ${main}
       </div>
@@ -930,7 +1085,9 @@ function shellTemplate(): TemplateResult {
       orientation="horizontal"
       primary="start"
       .positionInPixels=${shellState.sidebarWidth}
-      data-workbench-open=${workbench ? 'true' : 'false'}
+      data-workbench-open=${String(workbenchOpen)}
+      data-right-panel-open=${String(rightTab != null)}
+      data-bottom-panel-open=${String(bottomTab != null)}
       @wa-reposition=${rememberSidebarWidth}
     >
       <span slot="divider" class="task-split-handle">
@@ -944,6 +1101,7 @@ function shellTemplate(): TemplateResult {
             hasWorkspace,
             initials: workspaceInitials(workspacePath),
             pendingApprovalCount: pendingApprovalIds$.get().size,
+            projectSectionPosition: shellState.projectSectionPosition,
             sessions: railTabs,
             streamCount: streams$.get().length,
             workspaceName: workspaceName(workspacePath),
@@ -963,6 +1121,7 @@ function shellTemplate(): TemplateResult {
             onOpenBrowser: () => openKind('browser'),
             onOpenSettings: () => openKind('settings'),
             onOpenLogs: () => openKind('logs'),
+            onResizeProjectSection: rememberProjectSectionPosition,
           },
         )}
       </div>
@@ -1160,6 +1319,9 @@ const desktopRendererCommandActions: DesktopCommandActions = {
   showFirstRunWalkthrough: () => {
     startupTeamPanel.show();
   },
+  toggleBottomBar: toggleBottomBarVisibility,
+  toggleSidePanel: toggleSidePanelVisibility,
+  toggleSummaryBar: toggleSummaryBarVisibility,
   resetMainView: () => {
     returnToLauncher();
     window.postMessage(
@@ -1232,6 +1394,21 @@ window.addEventListener('message', (event) => {
   const routeParsed = DesktopSetRouteMessageSchema.safeParse(event.data);
   if (routeParsed.success) {
     setRoute(routeParsed.data.route);
+    return;
+  }
+  const layoutParsed = DesktopToggleLayoutMessageSchema.safeParse(event.data);
+  if (layoutParsed.success) {
+    switch (layoutParsed.data.panel) {
+      case 'bottomBar':
+        toggleBottomBarVisibility();
+        break;
+      case 'sidePanel':
+        toggleSidePanelVisibility();
+        break;
+      case 'summaryBar':
+        toggleSummaryBarVisibility();
+        break;
+    }
     return;
   }
   const onboardingParsed = DesktopOnboardingSetStateMessageSchema.safeParse(

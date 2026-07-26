@@ -342,79 +342,17 @@ export const commonViewStyles: CSSResult = css`
     margin: 0 auto;
   }
 
-  /* Shared settings reminder for compact informational panels at the top of tabs */
-  .settings-reminder {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    column-gap: var(--wa-space-xs);
-    row-gap: var(--wa-space-2xs);
-    padding: var(--wa-space-2xs) var(--wa-space-xs);
-    margin-bottom: var(--wa-space-s);
-    border: var(--border-thin) solid var(--wa-color-focus);
-    border-radius: var(--border-radius);
-    background: var(--wa-color-surface-default);
-  }
-
-  .settings-reminder-icon {
-    grid-row: 1 / -1;
-    margin-top: 2px;
-    font-size: var(--font-size-lg);
-    color: var(--wa-color-focus);
-  }
-
-  .settings-reminder-title {
-    font-weight: var(--font-weight-medium);
+  .settings-subsection-heading {
+    margin-top: var(--wa-space-l);
+    margin-bottom: var(--wa-space-xs);
+    padding-bottom: var(--wa-space-2xs);
+    border-bottom: var(--border-thin) solid var(--color-border);
     color: var(--wa-color-text-normal);
+    font-size: var(--font-size-lg);
   }
 
-  .settings-reminder-description {
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-sm);
-    line-height: var(--line-height-normal);
-  }
-
-  .settings-reminder-body {
-    display: flex;
-    flex-direction: column;
-    gap: var(--wa-space-2xs);
-    min-width: 0;
-  }
-
-  .settings-reminder-actions {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--wa-space-2xs);
-  }
-
-  .settings-reminder-list {
-    display: flex;
-    flex-direction: column;
-    gap: var(--wa-space-2xs);
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-
-  .settings-reminder-list li {
-    display: flex;
-    align-items: flex-start;
-    gap: var(--wa-space-2xs);
-  }
-
-  .settings-reminder-step {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 18px;
-    height: 18px;
-    flex: 0 0 18px;
-    border-radius: 50%;
-    color: var(--wa-color-surface-default);
-    background: var(--wa-color-focus);
-    font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-bold);
-    line-height: var(--line-height-tight);
+  .category-section {
+    margin-bottom: var(--wa-space-s);
   }
 
   /* Shared section header — uppercase divider used across settings tabs.

@@ -46,7 +46,7 @@ export const focusRingStyles: CSSResult = css`
  * Four button skins plus two modifiers.
  *
  *   .btn-primary    the one accent fill; at most one per view
- *   .btn-secondary  neutral fill, no border
+ *   .btn-secondary  neutral fill with a quiet border
  *   .btn-ghost      transparent until hovered — the workhorse
  *   .icon-button    square, icon-only, sized by --control-size
  *   .is-link        on .btn-ghost: reads as a text link
@@ -61,10 +61,14 @@ export const buttonStyles: CSSResult = css`
   .btn-secondary::part(base) {
     min-height: var(--height-button);
     padding-inline: var(--wa-space-m);
-    border: 0;
+    border: var(--border-thin) solid transparent;
     border-radius: var(--border-radius-medium);
     font-weight: var(--font-weight-medium);
-    transition: background-color var(--transition-fast);
+    transition:
+      background-color var(--transition-normal),
+      border-color var(--transition-normal),
+      color var(--transition-normal),
+      box-shadow var(--transition-normal);
   }
 
   :is(
@@ -107,12 +111,22 @@ export const buttonStyles: CSSResult = css`
   }
 
   .btn-secondary::part(base) {
+    border-color: var(--border-hairline-strong);
     background: var(--control-fill);
     color: var(--wa-color-text-normal);
   }
 
   .btn-secondary::part(base):hover {
-    background: var(--control-fill-hover);
+    border-color: color-mix(
+      in srgb,
+      var(--wa-color-focus) 38%,
+      var(--border-hairline-strong)
+    );
+    background: color-mix(
+      in srgb,
+      var(--wa-color-brand-fill-quiet) 40%,
+      var(--control-fill-hover)
+    );
   }
 
   .btn-secondary::part(base):active {
@@ -131,16 +145,20 @@ export const buttonStyles: CSSResult = css`
     gap: var(--wa-space-2xs);
     min-height: var(--height-control-compact);
     padding-inline: var(--control-padding-inline);
-    border: 0;
+    border: var(--border-thin) solid transparent;
     border-radius: var(--border-radius-medium);
     background: transparent;
     font-size: var(--font-size-sm);
-    transition: background-color var(--transition-fast);
+    transition:
+      background-color var(--transition-normal),
+      border-color var(--transition-normal),
+      color var(--transition-normal);
   }
 
   .btn-ghost::part(base):hover,
   .action-button:not(.btn-primary):not(.btn-secondary)::part(base):hover,
   .header-action::part(base):hover {
+    border-color: var(--border-hairline);
     background: var(--surface-hover);
   }
 
@@ -174,17 +192,19 @@ export const buttonStyles: CSSResult = css`
     height: var(--control-size);
     min-height: 0;
     padding: 0;
-    border: 0;
+    border: var(--border-thin) solid transparent;
     border-radius: var(--row-radius);
     background: transparent;
     color: var(--wa-color-text-quiet);
     transition:
       background-color var(--transition-fast),
+      border-color var(--transition-fast),
       color var(--transition-fast);
   }
 
   .icon-button::part(base):hover,
   .action-icon-button::part(base):hover {
+    border-color: var(--border-hairline);
     background: var(--surface-hover);
     color: var(--wa-color-text-normal);
   }
@@ -193,8 +213,51 @@ export const buttonStyles: CSSResult = css`
   .action-icon-button::part(base):active,
   .icon-button[aria-pressed='true']::part(base),
   .action-icon-button[aria-pressed='true']::part(base) {
-    background: var(--surface-selected);
+    border-color: color-mix(
+      in srgb,
+      var(--wa-color-focus) 34%,
+      var(--border-hairline)
+    );
+    background: var(--wa-color-brand-fill-quiet);
     color: var(--wa-color-text-normal);
+  }
+
+  :is(
+    .btn-primary,
+    .btn-secondary,
+    .btn-ghost,
+    .action-button,
+    .header-action,
+    .icon-button,
+    .action-icon-button
+  ):not([disabled]) {
+    transition:
+      filter var(--transition-normal),
+      transform var(--transition-normal);
+  }
+
+  :is(
+      .btn-primary,
+      .btn-secondary,
+      .btn-ghost,
+      .action-button,
+      .header-action,
+      .icon-button,
+      .action-icon-button
+    ):not([disabled]):hover {
+    transform: translateY(-1px);
+  }
+
+  :is(
+      .btn-primary,
+      .btn-secondary,
+      .btn-ghost,
+      .action-button,
+      .header-action,
+      .icon-button,
+      .action-icon-button
+    ):not([disabled]):active {
+    transform: translateY(0) scale(0.97);
   }
 
   .icon-button wa-icon,
@@ -260,13 +323,23 @@ export const buttonStyles: CSSResult = css`
     padding: 0;
     background: transparent;
     color: var(--color-text-link);
+    text-decoration: underline;
+    text-decoration-color: transparent;
+    text-underline-offset: 2px;
+    transition:
+      color var(--transition-fast),
+      text-decoration-color var(--transition-fast);
   }
 
   .btn-ghost.is-link::part(base):hover,
   .action-button.is-link::part(base):hover {
     background: transparent;
     color: var(--color-text-link-active);
-    text-decoration: underline;
+    text-decoration-color: currentColor;
+  }
+
+  :is(.btn-ghost.is-link, .action-button.is-link):is(:hover, :active) {
+    transform: none;
   }
 
   /* Destructive actions read as red text. A filled red button is reserved for
@@ -278,6 +351,20 @@ export const buttonStyles: CSSResult = css`
   .is-danger::part(base):hover {
     background: color-mix(in srgb, var(--color-error) 10%, transparent);
     color: var(--color-error);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :is(
+        .btn-primary,
+        .btn-secondary,
+        .btn-ghost,
+        .action-button,
+        .header-action,
+        .icon-button,
+        .action-icon-button
+      ):not([disabled]):is(:hover, :active) {
+      transform: none;
+    }
   }
 `;
 

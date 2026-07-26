@@ -4,9 +4,15 @@ import { LitElement, html, nothing, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import { commonViewStyles, designTokens } from '@shared/styles';
+import {
+  commonViewStyles,
+  designTokens,
+  settingsBannerStyles,
+} from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
+import { renderLabeledActionButton } from '@shared/wa/actionButtons';
+import { renderSettingsBanner } from '@shared/wa/settingsBanner';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Web Awesome icon bundle (side-effect import)
@@ -39,6 +45,7 @@ export class ModelsTab extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
+    settingsBannerStyles,
     css`
       :host {
         display: block;
@@ -154,57 +161,47 @@ export class ModelsTab extends LitElement {
         : 'Use ChatGPT subscription for Codex models, or configure personal API keys for OpenAI, Anthropic, Google, and other providers.';
 
     const accessJump = this.authenticated
-      ? html`<wa-button
-          appearance="outlined"
-          variant="neutral"
-          size="small"
-          @click=${this.handleScrollToApiAccess}
-        >
-          Model Access
-        </wa-button>`
+      ? renderLabeledActionButton({
+          text: 'Model Access',
+          kind: 'secondary',
+          appearance: 'outlined',
+          onClick: this.handleScrollToApiAccess,
+        })
       : nothing;
 
-    return html`
-      <div class="settings-reminder">
-        ${waIcon('info', { className: 'settings-reminder-icon' })}
-        <div class="settings-reminder-body">
-          <div class="settings-reminder-title">Model credentials</div>
-          <div class="settings-reminder-description">${description}</div>
-          <div class="settings-reminder-actions">
-            ${accessJump}
-            <wa-button
-              appearance="outlined"
-              variant="neutral"
-              size="small"
-              @click=${this.handleScrollToChatGpt}
-            >
-              ${waIcon('comment-discussion', { slot: 'start' })} ChatGPT
-              Subscription
-            </wa-button>
-            ${
-              copilotAvailable
-                ? html`<wa-button
-                    appearance="outlined"
-                    variant="neutral"
-                    size="small"
-                    @click=${() => this.scrollToSection('#copilot-access')}
-                  >
-                    ${waIcon('shield', { slot: 'start' })} Copilot in VS Code
-                  </wa-button>`
-                : nothing
-            }
-            <wa-button
-              appearance="outlined"
-              variant="neutral"
-              size="small"
-              @click=${this.handleScrollToApiConfig}
-            >
-              ${waIcon('key', { slot: 'start' })} Jump to API Configuration
-            </wa-button>
-          </div>
-        </div>
-      </div>
-    `;
+    return renderSettingsBanner({
+      id: 'model-credentials-banner',
+      title: 'Model credentials',
+      description,
+      actions: html`
+        ${accessJump}
+        ${renderLabeledActionButton({
+          icon: 'comment-discussion',
+          text: 'ChatGPT Subscription',
+          kind: 'secondary',
+          appearance: 'outlined',
+          onClick: this.handleScrollToChatGpt,
+        })}
+        ${
+          copilotAvailable
+            ? renderLabeledActionButton({
+                icon: 'shield',
+                text: 'Copilot in VS Code',
+                kind: 'secondary',
+                appearance: 'outlined',
+                onClick: () => this.scrollToSection('#copilot-access'),
+              })
+            : nothing
+        }
+        ${renderLabeledActionButton({
+          icon: 'key',
+          text: 'Jump to API Configuration',
+          kind: 'secondary',
+          appearance: 'outlined',
+          onClick: this.handleScrollToApiConfig,
+        })}
+      `,
+    });
   }
 
   override render(): TemplateResult {

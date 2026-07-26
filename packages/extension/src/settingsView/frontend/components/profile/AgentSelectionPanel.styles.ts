@@ -214,19 +214,6 @@ export const agentSelectionPanelStyles: CSSResult = css`
     background: var(--wa-color-surface-default);
   }
 
-  wa-button.agent-count-link::part(base) {
-    font-size: var(--font-size-xs);
-    color: var(--wa-color-text-link);
-    min-height: 0;
-    padding: 0;
-    border: none;
-    background: transparent;
-  }
-
-  wa-button.agent-count-link::part(base):hover {
-    text-decoration: underline;
-  }
-
   .agent-detail-path {
     font-size: var(--font-size-xs);
     font-family: var(--wa-font-family-mono, monospace), monospace;
@@ -235,16 +222,6 @@ export const agentSelectionPanelStyles: CSSResult = css`
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-
-  .agent-action-btn--danger::part(base) {
-    color: var(--wa-color-danger-on-quiet);
-    border-color: var(--wa-color-danger-on-quiet);
-  }
-
-  .agent-action-btn--danger:hover::part(base) {
-    background: var(--wa-color-danger-fill-quiet);
-    border-color: var(--wa-color-danger-on-quiet);
   }
 
   .agent-delete-confirm {

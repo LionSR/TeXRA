@@ -21,6 +21,9 @@ import type { DesktopRoute } from './desktopShellMessages.js';
 
 export const DESKTOP_LOCAL_COMMANDS = {
   SHOW_LOGS: 'texra.desktop.showLogs',
+  TOGGLE_BOTTOM_BAR: 'texra.desktop.toggleBottomBar',
+  TOGGLE_SIDE_PANEL: 'texra.desktop.toggleSidePanel',
+  TOGGLE_SUMMARY_BAR: 'texra.desktop.toggleSummaryBar',
   OPEN_LOG_FOLDER: 'texra.desktop.openLogFolder',
   OPEN_WORKSPACE_FOLDER: 'texra.desktop.openWorkspaceFolder',
   SHOW_FIRST_RUN_WALKTHROUGH: 'texra.desktop.showFirstRunWalkthrough',
@@ -39,6 +42,9 @@ const DESKTOP_MENU_GROUPS = [
     DESKTOP_LOCAL_COMMANDS.SHOW_LOGS,
     DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER,
     'texra.openSettings',
+    DESKTOP_LOCAL_COMMANDS.TOGGLE_SUMMARY_BAR,
+    DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR,
+    DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL,
     'texra.mainView.reset',
   ],
   [
@@ -108,6 +114,9 @@ export interface DesktopCommandActions {
   openWorkspaceFolder?(): void;
   showFirstRunWalkthrough?(): void;
   resetMainView?(): void;
+  toggleBottomBar?(): void;
+  toggleSidePanel?(): void;
+  toggleSummaryBar?(): void;
 }
 
 export interface DesktopSettingsTabMessage {
@@ -141,6 +150,36 @@ const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
       id: DESKTOP_LOCAL_COMMANDS.SHOW_LOGS,
       label: 'Show Logs',
       category: 'TeXRA',
+      enabled: true,
+    },
+  ],
+  [
+    DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR,
+    {
+      id: DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR,
+      label: 'Toggle Bottom Bar',
+      category: 'View',
+      accelerator: 'CommandOrControl+J',
+      enabled: true,
+    },
+  ],
+  [
+    DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL,
+    {
+      id: DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL,
+      label: 'Toggle Side Panel',
+      category: 'View',
+      accelerator: 'CommandOrControl+Alt+B',
+      enabled: true,
+    },
+  ],
+  [
+    DESKTOP_LOCAL_COMMANDS.TOGGLE_SUMMARY_BAR,
+    {
+      id: DESKTOP_LOCAL_COMMANDS.TOGGLE_SUMMARY_BAR,
+      label: 'Toggle Summary Bar',
+      category: 'View',
+      accelerator: 'CommandOrControl+Alt+S',
       enabled: true,
     },
   ],
@@ -273,6 +312,15 @@ const DESKTOP_COMMAND_HANDLERS = {
   'texra.showProgressView': requiredAction((a) => a.showRoute('progress')),
   [DESKTOP_LOCAL_COMMANDS.SHOW_LOGS]: requiredAction((a) =>
     a.showRoute('logs'),
+  ),
+  [DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR]: optionalAction(
+    (a) => a.toggleBottomBar,
+  ),
+  [DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL]: optionalAction(
+    (a) => a.toggleSidePanel,
+  ),
+  [DESKTOP_LOCAL_COMMANDS.TOGGLE_SUMMARY_BAR]: optionalAction(
+    (a) => a.toggleSummaryBar,
   ),
   'texra.openSettings': requiredAction((a) => a.showSettings()),
   'texra.mainView.reset': optionalAction((a) => a.resetMainView),

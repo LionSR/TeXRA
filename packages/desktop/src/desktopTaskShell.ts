@@ -1,10 +1,9 @@
 // Conversation-first desktop shell state.
 //
-// The desktop keeps the task conversation mounted at all times and opens
-// artifacts (files, terminals, browser, settings, logs) in one optional
-// workbench on the right. This mirrors the interaction model of modern agent
-// clients: the transcript is the product, while implementation details remain
-// available without taking over the window.
+// The desktop keeps the task conversation mounted at all times and lets
+// workbench tabs live beside it or below it. This mirrors modern editor shells:
+// the transcript stays primary while artifacts can move to the layout that
+// best fits the current task.
 //
 // This reducer is intentionally host-neutral. Electron resources are created
 // and disposed by the renderer; this module only describes what is visible.
@@ -21,7 +20,11 @@ export const WORKBENCH_KINDS = [
 
 export type WorkbenchKind = (typeof WORKBENCH_KINDS)[number];
 
+export const WORKBENCH_PLACEMENTS = ['right', 'bottom'] as const;
+export type WorkbenchPlacement = (typeof WORKBENCH_PLACEMENTS)[number];
+
 interface WorkbenchKindMeta {
+  readonly defaultPlacement: WorkbenchPlacement;
   readonly icon: TeXRAIconName;
   readonly label: string;
   readonly singleton: boolean;
@@ -30,31 +33,66 @@ interface WorkbenchKindMeta {
 export const WORKBENCH_KIND_META: Readonly<
   Record<WorkbenchKind, WorkbenchKindMeta>
 > = {
-  editor: { icon: 'file-code', label: 'Editor', singleton: false },
-  terminal: { icon: 'terminal', label: 'Terminal', singleton: false },
-  browser: { icon: 'globe', label: 'Browser', singleton: true },
-  settings: { icon: 'gear', label: 'Settings', singleton: true },
-  logs: { icon: 'file-lines', label: 'Logs', singleton: true },
+  editor: {
+    defaultPlacement: 'right',
+    icon: 'file-code',
+    label: 'Editor',
+    singleton: false,
+  },
+  terminal: {
+    defaultPlacement: 'bottom',
+    icon: 'terminal',
+    label: 'Terminal',
+    singleton: false,
+  },
+  browser: {
+    defaultPlacement: 'right',
+    icon: 'globe',
+    label: 'Browser',
+    singleton: true,
+  },
+  settings: {
+    defaultPlacement: 'right',
+    icon: 'gear',
+    label: 'Settings',
+    singleton: true,
+  },
+  logs: {
+    defaultPlacement: 'right',
+    icon: 'file-lines',
+    label: 'Logs',
+    singleton: true,
+  },
 };
 
 export interface WorkbenchTab {
   readonly id: string;
   readonly kind: WorkbenchKind;
+  readonly placement: WorkbenchPlacement;
   readonly title: string;
   readonly target?: string;
   readonly dirty?: boolean;
 }
 
 export interface DesktopTaskShellState {
+  readonly activeWorkbenchTabIds: Readonly<
+    Partial<Record<WorkbenchPlacement, string>>
+  >;
+  readonly bottomPanelHeight: number;
   readonly sidebarCollapsed: boolean;
   readonly sidebarWidth: number;
   readonly filesExpanded: boolean;
+  readonly projectSectionPosition: number;
+  readonly summaryBarVisible: boolean;
   readonly workbenchWidth: number;
   readonly workbenchTabs: readonly WorkbenchTab[];
-  readonly activeWorkbenchTabId?: string;
   readonly nextTerminalSerial: number;
 }
 
+export const BOTTOM_PANEL_MIN_HEIGHT = 180;
+export const BOTTOM_PANEL_MAX_HEIGHT = 560;
+export const PROJECT_SECTION_MIN_POSITION = 20;
+export const PROJECT_SECTION_MAX_POSITION = 80;
 export const SIDEBAR_MIN_WIDTH = 220;
 export const SIDEBAR_MAX_WIDTH = 480;
 export const WORKBENCH_MIN_WIDTH = 380;
@@ -62,9 +100,13 @@ export const WORKBENCH_MAX_WIDTH = 960;
 
 export function initialDesktopTaskShellState(): DesktopTaskShellState {
   return {
+    activeWorkbenchTabIds: {},
+    bottomPanelHeight: 300,
     sidebarCollapsed: false,
     sidebarWidth: 288,
     filesExpanded: true,
+    projectSectionPosition: 52,
+    summaryBarVisible: true,
     workbenchWidth: 640,
     workbenchTabs: [],
     nextTerminalSerial: 1,
@@ -73,10 +115,19 @@ export function initialDesktopTaskShellState(): DesktopTaskShellState {
 
 export function activeWorkbenchTab(
   state: DesktopTaskShellState,
+  placement: WorkbenchPlacement,
 ): WorkbenchTab | undefined {
+  const activeTabId = state.activeWorkbenchTabIds[placement];
   return state.workbenchTabs.find(
-    (tab) => tab.id === state.activeWorkbenchTabId,
+    (tab) => tab.id === activeTabId && tab.placement === placement,
   );
+}
+
+export function workbenchTabsForPlacement(
+  state: DesktopTaskShellState,
+  placement: WorkbenchPlacement,
+): readonly WorkbenchTab[] {
+  return state.workbenchTabs.filter((tab) => tab.placement === placement);
 }
 
 export function workbenchTab(
@@ -84,6 +135,24 @@ export function workbenchTab(
   tabId: string,
 ): WorkbenchTab | undefined {
   return state.workbenchTabs.find((tab) => tab.id === tabId);
+}
+
+function activateWorkbenchTab(
+  state: DesktopTaskShellState,
+  tab: WorkbenchTab,
+): DesktopTaskShellState {
+  const activeWorkbenchTabIds = { ...state.activeWorkbenchTabIds };
+  for (const placement of WORKBENCH_PLACEMENTS) {
+    if (placement === tab.placement) continue;
+    const activeTab = activeWorkbenchTab(state, placement);
+    if (activeTab?.kind !== tab.kind) continue;
+    activeWorkbenchTabIds[placement] = workbenchTabsForPlacement(
+      state,
+      placement,
+    ).findLast((candidate) => candidate.kind !== tab.kind)?.id;
+  }
+  activeWorkbenchTabIds[tab.placement] = tab.id;
+  return { ...state, activeWorkbenchTabIds };
 }
 
 function basename(filePath: string): string {
@@ -104,6 +173,7 @@ function titleFor(kind: WorkbenchKind, target?: string): string {
 
 export interface OpenWorkbenchTabRequest {
   readonly kind: WorkbenchKind;
+  readonly placement?: WorkbenchPlacement;
   readonly target?: string;
   readonly title?: string;
 }
@@ -119,29 +189,35 @@ export function openWorkbenchTab(
   state: DesktopTaskShellState,
   request: OpenWorkbenchTabRequest,
 ): DesktopTaskShellState {
+  const placement =
+    request.placement ?? WORKBENCH_KIND_META[request.kind].defaultPlacement;
   if (request.kind === 'terminal') {
     const serial = state.nextTerminalSerial;
     const tab: WorkbenchTab = {
       id: `workbench:terminal:${serial}`,
       kind: 'terminal',
+      placement,
       title: request.title ?? `Terminal ${serial}`,
       ...(request.target ? { target: request.target } : {}),
     };
-    return {
-      ...state,
-      workbenchTabs: [...state.workbenchTabs, tab],
-      activeWorkbenchTabId: tab.id,
-      nextTerminalSerial: serial + 1,
-    };
+    return activateWorkbenchTab(
+      {
+        ...state,
+        workbenchTabs: [...state.workbenchTabs, tab],
+        nextTerminalSerial: serial + 1,
+      },
+      tab,
+    );
   }
 
   const id = tabId(request.kind, request.target);
   const existing = workbenchTab(state, id);
-  if (existing) return { ...state, activeWorkbenchTabId: id };
+  if (existing) return activateWorkbenchTab(state, existing);
 
   const tab: WorkbenchTab = {
     id,
     kind: request.kind,
+    placement,
     title: request.title ?? titleFor(request.kind, request.target),
     ...(request.target ? { target: request.target } : {}),
   };
@@ -152,60 +228,124 @@ export function openWorkbenchTab(
       ? state.workbenchTabs.filter((entry) => entry.id !== 'workbench:editor')
       : state.workbenchTabs;
 
-  return {
-    ...state,
-    workbenchTabs: [...withoutEditorPlaceholder, tab],
-    activeWorkbenchTabId: tab.id,
-  };
+  return activateWorkbenchTab(
+    {
+      ...state,
+      workbenchTabs: [...withoutEditorPlaceholder, tab],
+    },
+    tab,
+  );
 }
 
 export function focusWorkbenchTab(
   state: DesktopTaskShellState,
   tabIdToFocus: string,
 ): DesktopTaskShellState {
-  if (!workbenchTab(state, tabIdToFocus)) return state;
-  return { ...state, activeWorkbenchTabId: tabIdToFocus };
+  const tab = workbenchTab(state, tabIdToFocus);
+  if (!tab) return state;
+  return activateWorkbenchTab(state, tab);
 }
 
 export function closeWorkbenchTab(
   state: DesktopTaskShellState,
   tabIdToClose: string,
 ): DesktopTaskShellState {
-  const index = state.workbenchTabs.findIndex((tab) => tab.id === tabIdToClose);
-  if (index === -1) return state;
+  const tab = workbenchTab(state, tabIdToClose);
+  if (!tab) return state;
 
   const workbenchTabs = state.workbenchTabs.filter(
-    (tab) => tab.id !== tabIdToClose,
+    (entry) => entry.id !== tabIdToClose,
   );
-  if (state.activeWorkbenchTabId !== tabIdToClose) {
+  if (state.activeWorkbenchTabIds[tab.placement] !== tabIdToClose) {
     return { ...state, workbenchTabs };
   }
 
-  const fallback = workbenchTabs[index - 1] ?? workbenchTabs[index];
+  const placementTabs = workbenchTabsForPlacement(state, tab.placement);
+  const index = placementTabs.findIndex((entry) => entry.id === tabIdToClose);
+  const fallback = placementTabs[index - 1] ?? placementTabs[index + 1];
   return {
     ...state,
     workbenchTabs,
-    activeWorkbenchTabId: fallback?.id,
+    activeWorkbenchTabIds: {
+      ...state.activeWorkbenchTabIds,
+      [tab.placement]: fallback?.id,
+    },
   };
 }
 
 export function closeWorkbench(
   state: DesktopTaskShellState,
+  placement: WorkbenchPlacement,
 ): DesktopTaskShellState {
-  if (state.activeWorkbenchTabId == null) return state;
-  return { ...state, activeWorkbenchTabId: undefined };
+  if (state.activeWorkbenchTabIds[placement] == null) return state;
+  return {
+    ...state,
+    activeWorkbenchTabIds: {
+      ...state.activeWorkbenchTabIds,
+      [placement]: undefined,
+    },
+  };
 }
 
 export function reopenWorkbench(
   state: DesktopTaskShellState,
+  placement: WorkbenchPlacement,
 ): DesktopTaskShellState {
-  if (state.activeWorkbenchTabId != null || state.workbenchTabs.length === 0) {
+  if (state.activeWorkbenchTabIds[placement] != null) {
     return state;
   }
+  const tab = workbenchTabsForPlacement(state, placement).at(-1);
+  if (!tab) return state;
   return {
     ...state,
-    activeWorkbenchTabId: state.workbenchTabs.at(-1)?.id,
+    activeWorkbenchTabIds: {
+      ...state.activeWorkbenchTabIds,
+      [placement]: tab.id,
+    },
   };
+}
+
+export function toggleWorkbench(
+  state: DesktopTaskShellState,
+  placement: WorkbenchPlacement,
+): DesktopTaskShellState {
+  if (activeWorkbenchTab(state, placement)) {
+    return closeWorkbench(state, placement);
+  }
+  return reopenWorkbench(state, placement);
+}
+
+export function moveWorkbenchTab(
+  state: DesktopTaskShellState,
+  tabIdToMove: string,
+  placement: WorkbenchPlacement,
+): DesktopTaskShellState {
+  const tab = workbenchTab(state, tabIdToMove);
+  if (!tab || tab.placement === placement) {
+    return focusWorkbenchTab(state, tabIdToMove);
+  }
+
+  const sourceTabs = workbenchTabsForPlacement(state, tab.placement);
+  const sourceIndex = sourceTabs.findIndex((entry) => entry.id === tabIdToMove);
+  const sourceFallback =
+    sourceTabs[sourceIndex - 1] ?? sourceTabs[sourceIndex + 1];
+  const activeWorkbenchTabIds = {
+    ...state.activeWorkbenchTabIds,
+    [placement]: tabIdToMove,
+  };
+  if (state.activeWorkbenchTabIds[tab.placement] === tabIdToMove) {
+    activeWorkbenchTabIds[tab.placement] = sourceFallback?.id;
+  }
+
+  const movedTab: WorkbenchTab = { ...tab, placement };
+  const movedState: DesktopTaskShellState = {
+    ...state,
+    activeWorkbenchTabIds,
+    workbenchTabs: state.workbenchTabs.map((entry) =>
+      entry.id === tabIdToMove ? movedTab : entry,
+    ),
+  };
+  return activateWorkbenchTab(movedState, movedTab);
 }
 
 export function renameWorkbenchTab(
@@ -249,8 +389,28 @@ export function toggleFiles(
   return { ...state, filesExpanded: !state.filesExpanded };
 }
 
+export function toggleSummaryBar(
+  state: DesktopTaskShellState,
+): DesktopTaskShellState {
+  return { ...state, summaryBarVisible: !state.summaryBarVisible };
+}
+
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, Math.round(value)));
+}
+
+export function setBottomPanelHeight(
+  state: DesktopTaskShellState,
+  height: number,
+): DesktopTaskShellState {
+  return {
+    ...state,
+    bottomPanelHeight: clamp(
+      height,
+      BOTTOM_PANEL_MIN_HEIGHT,
+      BOTTOM_PANEL_MAX_HEIGHT,
+    ),
+  };
 }
 
 export function setSidebarWidth(
@@ -260,6 +420,20 @@ export function setSidebarWidth(
   return {
     ...state,
     sidebarWidth: clamp(width, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH),
+  };
+}
+
+export function setProjectSectionPosition(
+  state: DesktopTaskShellState,
+  position: number,
+): DesktopTaskShellState {
+  return {
+    ...state,
+    projectSectionPosition: clamp(
+      position,
+      PROJECT_SECTION_MIN_POSITION,
+      PROJECT_SECTION_MAX_POSITION,
+    ),
   };
 }
 

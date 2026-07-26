@@ -8,6 +8,9 @@
 
 :root {
   --task-shell-header-height: 48px;
+  --task-shell-icon-box: var(--control-size-s);
+  --task-shell-icon-size: var(--font-size-icon-sm);
+  --task-workbench-tab-height: var(--task-shell-header-height);
   --task-sidebar-default-width: 288px;
   /* Traffic lights end near 70px with the custom hidden-inset position. Keep
      native controls plus a full compact-control gap clear of app content. */
@@ -33,14 +36,16 @@
 }
 
 .task-shell::part(panel),
-.task-main-split::part(panel) {
+.task-main-split::part(panel),
+.task-bottom-split::part(panel) {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
 }
 
 .task-shell::part(divider),
-.task-main-split::part(divider) {
+.task-main-split::part(divider),
+.task-bottom-split::part(divider) {
   background: var(--wa-color-surface-border);
   transition: background-color var(--transition-fast);
 }
@@ -48,13 +53,16 @@
 .task-shell::part(divider):hover,
 .task-shell::part(divider):focus-visible,
 .task-main-split::part(divider):hover,
-.task-main-split::part(divider):focus-visible {
+.task-main-split::part(divider):focus-visible,
+.task-bottom-split::part(divider):hover,
+.task-bottom-split::part(divider):focus-visible {
   background: var(--wa-color-focus);
 }
 
 .task-shell-main-panel,
 .task-main-panel,
-.task-workbench-panel {
+.task-workbench-panel,
+.task-bottom-workbench-panel {
   width: 100%;
   height: 100%;
   min-width: 0;
@@ -72,6 +80,18 @@
   height: 100%;
 }
 
+.task-bottom-split {
+  --divider-width: 1px;
+  --divider-hit-area: 12px;
+  --min: 180px;
+  --max: min(560px, 62%);
+  display: grid;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
 .task-split-handle {
   display: block;
   width: 18px;
@@ -82,6 +102,18 @@
   opacity: 0.45;
   pointer-events: none;
   transform: rotate(90deg);
+}
+
+.task-bottom-split-handle {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  color: var(--wa-color-text-quiet);
+  font-size: var(--font-size-xs);
+  line-height: 1;
+  opacity: 0.45;
+  pointer-events: none;
 }
 
 /* ── Project/task sidebar ─────────────────────────────────────────────── */
@@ -148,6 +180,24 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   -webkit-app-region: no-drag;
 }
 
+.task-sidebar-brand-menu wa-icon,
+.task-project-chevron,
+.task-section-split-handle wa-icon,
+.task-split-handle wa-icon,
+.task-bottom-split-handle wa-icon,
+.task-header-button wa-icon,
+.task-layout-toggle wa-icon,
+.task-environment-button wa-icon,
+.task-workbench-tab-close wa-icon,
+.task-workbench-close wa-icon {
+  display: grid;
+  place-items: center;
+  width: 1em;
+  height: 1em;
+  font-size: var(--task-shell-icon-size);
+  line-height: 1;
+}
+
 .task-sidebar-primary {
   display: grid;
   gap: 2px;
@@ -179,10 +229,14 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
 }
 
 .task-sidebar-action-icon {
-  flex: 0 0 auto;
-  width: 16px;
+  display: grid;
+  place-items: center;
+  width: var(--task-shell-icon-box);
+  height: var(--task-shell-icon-box);
+  flex: 0 0 var(--task-shell-icon-box);
   color: var(--wa-color-text-quiet);
-  font-size: var(--font-size-icon);
+  font-size: var(--task-shell-icon-size);
+  line-height: 1;
 }
 
 .task-sidebar-action[data-primary='true'] .task-sidebar-action-icon {
@@ -201,18 +255,59 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
 }
 
 .task-sidebar-scroll {
+  --divider-width: 1px;
+  --divider-hit-area: 12px;
+  --min: 120px;
+  --max: calc(100% - 120px);
+  display: grid;
+  width: 100%;
+  height: 100%;
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
+}
+
+.task-sidebar-scroll::part(panel) {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.task-sidebar-scroll::part(divider) {
+  min-height: 0;
+  overflow: visible;
+  background: var(--wa-color-surface-border);
+  transition: background-color var(--transition-fast);
+}
+
+.task-sidebar-scroll::part(divider):hover,
+.task-sidebar-scroll::part(divider):focus-visible {
+  background: var(--wa-color-focus);
+}
+
+.task-section-split-handle {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  color: var(--wa-color-text-quiet);
+  font-size: var(--font-size-xs);
+  line-height: 1;
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.task-sidebar-section {
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 10px;
+  box-sizing: border-box;
   overflow: auto;
   scrollbar-width: thin;
 }
 
-.task-sidebar-section {
-  min-width: 0;
-  padding: 10px;
-}
-
-.task-sidebar-section + .task-sidebar-section {
+.task-history-section {
   padding-top: 4px;
 }
 
@@ -317,9 +412,9 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
 
 .task-project-files .desktop-editor-tree-list {
   display: block;
-  max-height: min(42vh, 360px);
+  max-height: none;
   padding: 0;
-  overflow-y: auto;
+  overflow: visible;
 }
 
 .task-project-files .desktop-editor-tree-row {
@@ -344,13 +439,13 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
 }
 
 .task-sidebar-sessions {
-  min-height: 120px;
+  min-height: 0;
 }
 
 .task-sidebar-sessions > stream-tabs {
   display: flex;
   min-width: 0;
-  min-height: 120px;
+  min-height: 0;
   --background-color: transparent;
   --color-border: transparent;
 }
@@ -373,7 +468,6 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
 }
 
 .task-sidebar-footer .task-sidebar-action-icon {
-  width: 14px;
   font-size: var(--font-size-icon-sm);
 }
 
@@ -389,6 +483,8 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   min-height: 0;
   background: var(--wa-color-surface-default);
   overflow: hidden;
+  container-name: task-conversation;
+  container-type: inline-size;
 }
 
 .task-header {
@@ -425,6 +521,19 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
 
 .task-header-spacer {
   flex: 1 1 auto;
+}
+
+.task-layout-controls {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 3px;
+  padding-left: 2px;
+  -webkit-app-region: no-drag;
+}
+
+.task-layout-toggle {
+  display: block;
 }
 
 .task-environment-button {
@@ -518,7 +627,11 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
 .task-environment-row-icon {
   display: grid;
   place-items: center;
+  width: var(--task-shell-icon-box);
+  height: var(--task-shell-icon-box);
   color: var(--wa-color-text-quiet);
+  font-size: var(--task-shell-icon-size);
+  line-height: 1;
 }
 
 .task-environment-trailing {
@@ -592,16 +705,21 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
 /* ── Optional workbench ───────────────────────────────────────────────── */
 
 .task-workbench {
+  --workbench-tabs-height: var(--task-shell-header-height);
   position: relative;
   z-index: 3;
   display: grid;
-  grid-template-rows: var(--task-shell-header-height) minmax(0, 1fr);
+  grid-template-rows: var(--workbench-tabs-height) minmax(0, 1fr);
   width: 100%;
   height: 100%;
   min-width: 0;
   min-height: 0;
   background: var(--wa-color-surface-default);
   overflow: hidden;
+}
+
+.task-workbench[data-placement='bottom'] {
+  --workbench-tabs-height: var(--task-workbench-tab-height);
 }
 
 .task-workbench-tabs {
@@ -660,8 +778,13 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
 }
 
 .task-workbench-tab-icon {
-  flex: 0 0 auto;
-  font-size: var(--font-size-icon-sm);
+  display: grid;
+  place-items: center;
+  width: var(--task-shell-icon-box);
+  height: var(--task-shell-icon-box);
+  flex: 0 0 var(--task-shell-icon-box);
+  font-size: var(--task-shell-icon-size);
+  line-height: 1;
 }
 
 .task-workbench-tab-activate {
@@ -675,8 +798,8 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
 .task-workbench-tab-activate::part(base) {
   justify-content: flex-start;
   width: 100%;
-  min-height: var(--task-shell-header-height);
-  padding: 0 4px 0 11px;
+  min-height: var(--workbench-tabs-height);
+  padding: 0 4px 0 8px;
   border-radius: 0;
   background: transparent;
 }
@@ -710,6 +833,34 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
 
 .task-workbench-tab-close {
   opacity: 0;
+}
+
+.task-workbench-tab-menu {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+
+.task-workbench-tab-menu-anchor {
+  position: fixed;
+  z-index: -1;
+  top: var(--context-menu-y, 0);
+  left: var(--context-menu-x, 0);
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.task-workbench-tab-menu wa-dropdown-item wa-icon {
+  display: grid;
+  place-items: center;
+  width: var(--task-shell-icon-box);
+  height: var(--task-shell-icon-box);
+  font-size: var(--task-shell-icon-size);
+  line-height: 1;
 }
 
 .task-workbench-tab:hover .task-workbench-tab-close,
@@ -789,6 +940,34 @@ body[data-desktop-platform='darwin'] .task-shell-collapsed .task-header {
   .task-main-split {
     --min: 320px;
     --max: min(720px, calc(100% - 320px));
+  }
+}
+
+@container task-conversation (max-width: 560px) {
+  .task-environment-button {
+    width: var(--control-size-l);
+  }
+
+  .task-environment-button::part(base) {
+    width: var(--control-size-l);
+    min-width: 0;
+    padding: 0;
+  }
+
+  .task-environment-button::part(caret),
+  .task-environment-button span {
+    display: none;
+  }
+}
+
+@container task-conversation (max-width: 420px) {
+  .task-header {
+    gap: 4px;
+    padding-inline: 8px;
+  }
+
+  .task-header-title {
+    display: none;
   }
 }
 

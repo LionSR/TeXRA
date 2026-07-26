@@ -19,7 +19,7 @@ interface EmptyStateAction {
   // 'small' without forking the helper.
   readonly size?: 'small' | 'medium';
   // Forwarded onto the underlying <wa-button>. Lets callers re-apply host-
-  // specific button classes (e.g. desktop-primary-button) for theming hooks.
+  // specific semantic button classes (e.g. btn-primary) for theming hooks.
   readonly className?: string;
   // Optional leading icon, rendered with slot="start" inside the button.
   // Lets callers preserve action-icon affordances (e.g. play/gear) without

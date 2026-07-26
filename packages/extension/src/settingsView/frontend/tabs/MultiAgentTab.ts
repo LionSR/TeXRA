@@ -6,7 +6,11 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports - shared styles
-import { designTokens, commonViewStyles } from '@shared/styles';
+import {
+  designTokens,
+  commonViewStyles,
+  settingsBannerStyles,
+} from '@shared/styles';
 
 // Web Awesome icon bundle (side-effect import)
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -17,6 +21,7 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { renderSettingsBanner } from '@shared/wa/settingsBanner';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - shared schemas
@@ -31,6 +36,7 @@ export class MultiAgentTab extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
+    settingsBannerStyles,
     css`
       :host {
         display: block;
@@ -45,13 +51,6 @@ export class MultiAgentTab extends LitElement {
       .setting-description {
         margin: var(--wa-space-2xs) 0 0 0;
         font-size: var(--font-size-sm);
-      }
-
-      .multi-agent-reminder-steps {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
-        gap: var(--wa-space-2xs) var(--wa-space-s);
-        margin-top: var(--wa-space-3xs);
       }
 
       /* Team cards */
@@ -328,20 +327,16 @@ export class MultiAgentTab extends LitElement {
   override render(): TemplateResult {
     return html`
       <div class="multi-agent-container tab-content-container">
-        <div class="settings-reminder">
-          ${waIcon('organization', { className: 'settings-reminder-icon' })}
-          <div class="settings-reminder-body">
-            <div class="settings-reminder-title">Multi-agent workflow</div>
-            <div class="settings-reminder-description">
-              The orchestrator reads your paper and hands work to specialized
-              agents for writing, derivations, numerical experiments, citations,
-              figures, and more.
-            </div>
-            <ol
-              class="settings-reminder-list settings-reminder-description multi-agent-reminder-steps"
-            >
+        ${renderSettingsBanner({
+          id: 'multi-agent-workflow-banner',
+          icon: 'organization',
+          title: 'Multi-agent workflow',
+          description:
+            'The orchestrator reads your paper and hands work to specialized agents for writing, derivations, numerical experiments, citations, figures, and more.',
+          detail: html`
+            <ol class="settings-banner-list">
               <li>
-                <span class="settings-reminder-step">1</span>
+                <span class="settings-banner-step">1</span>
                 <span
                   ><strong>Pick a team</strong> below that matches your field.
                   This enables and configures the right specialized agents for
@@ -350,14 +345,14 @@ export class MultiAgentTab extends LitElement {
                 >
               </li>
               <li>
-                <span class="settings-reminder-step">2</span>
+                <span class="settings-banner-step">2</span>
                 <span
                   ><strong>Select orchestrator</strong> from the agent dropdown
                   (look for the target icon), then click Execute.</span
                 >
               </li>
               <li>
-                <span class="settings-reminder-step">3</span>
+                <span class="settings-banner-step">3</span>
                 <span
                   ><strong>Approve tasks</strong> in Progress as they come in —
                   press <strong>y</strong> to approve or <strong>n</strong> to
@@ -366,8 +361,8 @@ export class MultiAgentTab extends LitElement {
                 >
               </li>
             </ol>
-          </div>
-        </div>
+          `,
+        })}
 
         <h3>Multi-Agent Teams</h3>
 

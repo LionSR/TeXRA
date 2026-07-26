@@ -18,7 +18,7 @@ export { viewTabStyles, waTabThemeTokenStyles } from './viewTabStyles';
 
 // Shared inline wa-callout banner chrome (agent-config, api-key, dependency,
 // login, getting-started, workflow-hint banners)
-export { bannerStyles } from './bannerStyles';
+export { bannerStyles, settingsBannerStyles } from './bannerStyles';
 
 // History/search styles
 export {

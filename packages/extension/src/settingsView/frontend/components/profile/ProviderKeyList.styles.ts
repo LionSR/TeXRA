@@ -3,18 +3,6 @@
 import { css, type CSSResult } from 'lit';
 
 export const providerKeyListStyles: CSSResult = css`
-  /* Generic section heading, duplicated identically in ApiAccessSection.styles.ts
-     and ModelSelectionList.styles.ts — each profile section renders its own
-     bare <h2>, and the rule is too small to warrant a shared module. */
-  h2 {
-    color: var(--wa-color-text-normal);
-    margin-top: var(--wa-space-l);
-    margin-bottom: var(--wa-space-xs);
-    font-size: var(--font-size-lg);
-    border-bottom: var(--border-thin) solid var(--color-border);
-    padding-bottom: var(--wa-space-2xs);
-  }
-
   /* ============================================
    * Provider Keys Table
    * ============================================ */
@@ -164,19 +152,6 @@ export const providerKeyListStyles: CSSResult = css`
 
   wa-button.provider-setting-link {
     margin-left: var(--wa-space-2xs);
-  }
-
-  wa-button.provider-setting-link::part(base) {
-    font-size: var(--font-size-sm);
-    color: var(--wa-color-text-link);
-    min-height: 0;
-    padding: 0;
-    border: none;
-    background: transparent;
-  }
-
-  wa-button.provider-setting-link::part(base):hover {
-    text-decoration: underline;
   }
 
   .endpoint-input {

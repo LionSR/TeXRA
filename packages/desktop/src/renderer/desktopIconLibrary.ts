@@ -1,22 +1,13 @@
 // Stroke icon language for the desktop app.
 //
-// The shared icon set is Font Awesome *solid*: filled, heavy, high-density
-// glyphs. That weight is the single loudest remaining signal that the app looks
-// like a 2015 tool panel — solid icons visually shout next to the light type and
-// soft surfaces of the new skin.
-//
-// This module re-registers Web Awesome's `texra` icon library (and `default`,
-// which WA's own internals resolve through) with Lucide's 1.5px-stroke set,
-// scoped to the desktop renderer only. The VS Code extension keeps the solid
-// set, where matching the editor's own iconography is correct.
+// The desktop renderer uses one Lucide stroke language throughout. This module
+// registers both Web Awesome icon-library names with Lucide geometry, including
+// a Lucide question marker for unknown runtime names.
 //
 // Names are the existing `TeXRAIconName` values, so no call site changes: every
-// `waIcon('file-code')` in the shared components silently upgrades. Anything
-// unmapped falls through to the original Font Awesome resolver rather than
-// rendering an empty box.
+// `waIcon('file-code')` in the shared components silently upgrades.
 
 import {
-  getIconLibrary,
   registerIconLibrary,
   type IconLibraryResolver,
 } from '@awesome.me/webawesome/dist/components/icon/library.js';
@@ -24,7 +15,6 @@ import iconNodes from 'lucide-static/icon-nodes.json';
 
 import {
   CODICON_ALIASES,
-  registerTeXRAWebAwesomeIcons,
   TEXRA_ICON_LIBRARY,
 } from '@shared/wa/webAwesomeIcons';
 
@@ -81,6 +71,9 @@ const LUCIDE_NAME_BY_TEXRA_NAME: Readonly<Record<string, string>> = {
   'screwdriver-wrench': 'wrench',
   tools: 'wrench',
   'wand-magic-sparkles': 'wand-sparkles',
+  flask: 'flask-conical',
+  microphone: 'mic',
+  'paper-plane': 'send',
   'pen-to-square': 'square-pen',
   'trash-can': 'trash-2',
   'chart-line': 'chart-line',
@@ -106,13 +99,14 @@ const LUCIDE_NAME_BY_TEXRA_NAME: Readonly<Record<string, string>> = {
   'moon-stars': 'moon',
   paperclip: 'paperclip',
   thumbtack: 'pin',
+  'thumbtack-slash': 'pin-off',
   ban: 'ban',
   spinner: 'loader-circle',
 
-  // Layout / window controls. Lucide has no window-maximize or compress.
-  'window-maximize': 'maximize-2',
+  // Layout / window controls.
+  'window-maximize': 'panel-bottom',
   compress: 'minimize-2',
-  'picture-in-picture': 'picture-in-picture-2',
+  'picture-in-picture': 'panel-right',
   // Canonical names Lucide spells differently, found by auditing every
   // waIcon() call site against the Lucide set rather than by guessing.
   bullseye: 'target',
@@ -134,6 +128,7 @@ const LUCIDE_NAME_BY_TEXRA_NAME: Readonly<Record<string, string>> = {
   'symbol-structure': 'boxes',
   'symbol-operator': 'sigma',
   'symbol-number': 'hash',
+  hashtag: 'hash',
   'symbol-method': 'braces',
   'symbol-namespace': 'box',
   'symbol-keyword': 'key-round',
@@ -193,23 +188,13 @@ function lucideSvg(name: string): string | undefined {
  * ordering that reliably wins.
  */
 
-// Establish and capture the Font Awesome fallback before overriding the same
-// library names. Registering a library replaces its previous resolver, so
-// merely registering Font Awesome first is not enough: without these captured
-// functions, any TeXRA name Lucide lacks resolves to an empty string.
-// Idempotent: the shared module guards its own re-registration.
-registerTeXRAWebAwesomeIcons();
-const texraFontAwesomeResolver = getIconLibrary(TEXRA_ICON_LIBRARY)?.resolver;
-const defaultFontAwesomeResolver =
-  getIconLibrary('default')?.resolver ?? texraFontAwesomeResolver;
-
 /**
  * Resolves a TeXRA icon name to Lucide geometry.
  *
  * Three hops, in order, because names reach here from three vocabularies:
  *   1. A codicon-style alias (`settings-gear`, `close`, `refresh`) -> its
- *      canonical Font Awesome name. Read from the shared CODICON_ALIASES table
- *      rather than duplicated here, so the two cannot drift.
+ *      canonical shared name. Read from the shared CODICON_ALIASES table rather
+ *      than duplicated here, so the two cannot drift.
  *   2. The canonical name -> its Lucide equivalent, where they differ.
  *   3. The name unchanged, when both sets agree.
  *
@@ -240,29 +225,20 @@ const missingIconUri = svgDataUri(
 );
 
 /**
- * Prefer Lucide, fall back to the captured offline Font Awesome resolver, and
- * finally render a visible unknown-icon glyph. Web Awesome resolvers may be
- * synchronous or asynchronous, so preserve either form without forcing every
- * icon through a Promise.
+ * Resolve every desktop glyph from Lucide. Unknown names stay visible through
+ * Lucide's question marker so a package rename cannot create a blank control
+ * or silently introduce a different visual family.
  */
-function createDesktopIconResolver(
-  fallbackResolver: IconLibraryResolver | undefined,
-): IconLibraryResolver {
-  return (name, family, variant, autoWidth) => {
+function createDesktopIconResolver(): IconLibraryResolver {
+  return (name) => {
     const svg = lucideSvg(resolveLucideName(name));
-    if (svg) return svgDataUri(svg);
-
-    const fallback = fallbackResolver?.(name, family, variant, autoWidth);
-    if (typeof fallback === 'string') return fallback || missingIconUri;
-    return (
-      fallback?.then((resolved) => resolved || missingIconUri) ?? missingIconUri
-    );
+    return svg ? svgDataUri(svg) : missingIconUri;
   };
 }
 
 registerIconLibrary(TEXRA_ICON_LIBRARY, {
-  resolver: createDesktopIconResolver(texraFontAwesomeResolver),
+  resolver: createDesktopIconResolver(),
 });
 registerIconLibrary('default', {
-  resolver: createDesktopIconResolver(defaultFontAwesomeResolver),
+  resolver: createDesktopIconResolver(),
 });

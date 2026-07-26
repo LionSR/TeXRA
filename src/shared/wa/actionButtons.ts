@@ -11,6 +11,7 @@ import { type TeXRAIconName, waIcon } from './webAwesomeIcons';
 
 type ActionButtonAppearance = 'filled' | 'outlined' | 'plain';
 type ActionButtonVariant = 'brand' | 'neutral';
+type ActionButtonKind = 'primary' | 'secondary' | 'ghost' | 'link' | 'danger';
 /**
  * Step on the shared `--control-size` scale (24 / 28 / 32px). Use this instead
  * of a local `width`/`height` override: the skin derives the icon size and
@@ -24,6 +25,14 @@ const SIZE_CLASS = {
   l: 'is-size-l',
 } as const satisfies Record<ActionButtonSize, string>;
 
+const KIND_CLASS = {
+  primary: 'btn-primary',
+  secondary: 'btn-secondary',
+  ghost: 'btn-ghost',
+  link: 'btn-ghost is-link',
+  danger: 'btn-ghost is-danger',
+} as const satisfies Record<ActionButtonKind, string>;
+
 export interface IconActionButtonOptions {
   readonly id?: string;
   readonly icon: TeXRAIconName;
@@ -33,9 +42,13 @@ export interface IconActionButtonOptions {
   readonly className?: string;
   readonly appearance?: ActionButtonAppearance;
   readonly variant?: ActionButtonVariant;
+  /** Semantic skin. Prefer this over choosing appearance/variant directly. */
+  readonly kind?: ActionButtonKind;
   /** Icon-button geometry off the `--control-size` scale. Defaults to `s`. */
   readonly size?: ActionButtonSize;
   readonly disabled?: boolean;
+  /** Selected state for toggle buttons. Reflected as `aria-pressed`. */
+  readonly pressed?: boolean;
   /**
    * Icon-only. When defined, the button renders inside an overlay wrapper:
    * while `true` a spinner covers the (hidden, disabled) button so the toolbar
@@ -63,16 +76,18 @@ export interface IconActionButtonOptions {
 
 export interface LabeledActionButtonOptions extends Omit<
   IconActionButtonOptions,
-  'label' | 'busy' | 'size'
+  'label' | 'busy' | 'icon' | 'size'
 > {
+  readonly icon?: TeXRAIconName;
   readonly text: string;
   readonly label?: string;
 }
 
 interface ActionButtonBaseOptions extends Omit<
   IconActionButtonOptions,
-  'label'
+  'icon' | 'label'
 > {
+  readonly icon?: TeXRAIconName;
   readonly label?: string;
   readonly text?: string;
 }
@@ -97,8 +112,10 @@ function renderActionButtonParts({
   className,
   appearance = 'plain',
   variant = 'neutral',
+  kind,
   size,
   disabled,
+  pressed,
   busy,
   tooltip,
   hidden,
@@ -107,6 +124,7 @@ function renderActionButtonParts({
 }: ActionButtonBaseOptions): ActionButtonParts {
   const classes = [
     text ? 'action-button' : 'action-icon-button',
+    kind ? KIND_CLASS[kind] : undefined,
     busy ? 'is-busy' : undefined,
     // Only meaningful on the square icon variant; a labeled button is sized by
     // its text and the shared button height.
@@ -132,6 +150,9 @@ function renderActionButtonParts({
       size="small"
       type="button"
       aria-label=${ariaLabel}
+      aria-pressed=${ifDefined(
+        pressed === undefined ? undefined : String(pressed),
+      )}
       title=${ifDefined(useWebAwesomeTooltip ? undefined : nativeTitle)}
       data-action=${ifDefined(action)}
       ?disabled=${disabled || busy}
@@ -141,7 +162,8 @@ function renderActionButtonParts({
       )}
       @click=${onClick}
     >
-      ${waIcon(icon, { slot: text ? 'start' : undefined })} ${text}
+      ${icon ? waIcon(icon, { slot: text ? 'start' : undefined }) : nothing}
+      ${text}
     </wa-button>
   `;
 

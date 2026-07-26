@@ -126,31 +126,14 @@ export const latexTabStyles: CSSResult = css`
     white-space: nowrap;
   }
 
-  /* Prerequisite hint uses wa-callout; only layout for actions row + the
-     inline command text live here. */
-  wa-callout.prerequisite-hint {
+  /* The shared settings banner owns the callout; this view only lets the
+     install command consume the remaining action-row width. */
+  .prerequisite-hint {
     margin-bottom: var(--wa-space-xs);
-    /* wa-callout ignores --padding; set the real property (its :host hardcodes 1em). */
-    padding: var(--wa-space-xs);
   }
 
-  .hint-title {
-    font-weight: var(--font-weight-medium);
-    color: var(--wa-color-text-normal);
-    margin-bottom: var(--wa-space-3xs);
-  }
-
-  .hint-description {
-    font-size: var(--font-size-sm);
-    color: var(--color-text-secondary);
-    line-height: var(--line-height-normal);
-  }
-
-  .hint-actions {
-    display: flex;
-    align-items: center;
-    gap: var(--wa-space-2xs);
-    margin-top: var(--wa-space-2xs);
+  .prerequisite-hint .settings-banner-actions {
+    flex-wrap: nowrap;
   }
 
   /* .section-header chrome lives in commonViewStyles; this view spaces the

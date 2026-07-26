@@ -12,10 +12,10 @@ import {
 } from './electronApp.js';
 
 // End-to-end coverage for the task-centric shell. The conversation is permanent
-// while Settings, Logs, editor, terminal, and browser surfaces share the right
-// workbench. The task-shell reducer is unit-tested separately; this suite checks
-// the wiring that unit tests cannot reach — that workbench tabs mount their
-// panes, Monaco loads a real file from disk, and a pty produces output.
+// while workbench tabs can live in independently resizable Right and Bottom
+// panes. The task-shell reducer is unit-tested separately; this suite checks the
+// wiring that unit tests cannot reach — that movable tabs mount their panes,
+// Monaco loads a real file from disk, and a pty produces output.
 
 let launched: LaunchedApp;
 let workspacePath: string;
@@ -123,7 +123,7 @@ test('loads the project tree before an editor panel is opened', async () => {
   ).toHaveCount(0);
 });
 
-test('resizes the window canvas and project sidebar', async () => {
+test('resizes the window canvas, project sidebar, and project/task sections', async () => {
   const { app, page } = launched;
 
   const contentBounds = await app.evaluate(({ BrowserWindow }) => {
@@ -159,6 +159,33 @@ test('resizes the window canvas and project sidebar', async () => {
   await expect
     .poll(async () => (await sidebar.boundingBox())?.width ?? 0)
     .toBeGreaterThan(initialSidebarWidth + 40);
+
+  await page.locator('.task-sidebar-scroll').evaluate(async (element) => {
+    await (element as HTMLElement & { updateComplete: Promise<unknown> })
+      .updateComplete;
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+    });
+  });
+  const projectDividerY = (): Promise<number> =>
+    page.locator('.task-sidebar-scroll').evaluate((element) => {
+      const divider = element.shadowRoot?.querySelector('[part~="divider"]');
+      if (!(divider instanceof HTMLElement)) {
+        throw new Error('Project/Tasks divider was not rendered.');
+      }
+      return divider.getBoundingClientRect().y;
+    });
+  const initialSectionDividerY = await projectDividerY();
+
+  await page
+    .locator('.task-sidebar-scroll > [part~="divider"]')
+    .first()
+    .focus();
+  await page.keyboard.press('Shift+ArrowDown');
+  await expect
+    .poll(projectDividerY)
+    .toBeGreaterThan(initialSectionDividerY + 40);
+  await expect(page.locator('.task-history-section')).toBeVisible();
 });
 
 test('aligns titlebar content and keeps the collapsed toggle clear of macOS controls', async () => {
@@ -317,10 +344,112 @@ test('opens settings beside the permanent conversation', async () => {
   await expect(page.locator('.task-conversation')).toBeVisible();
 });
 
-test('loads tools promptly, centers compact nav icons, and customizes shortcuts', async () => {
+test('toggles and restores the bottom, side, and summary bars', async () => {
+  const { page } = launched;
+
+  await openSidebarWorkbench('Settings');
+  const bottomToggle = page.locator('#taskToggleBottomBar');
+  const sideToggle = page.locator('#taskToggleSidePanel');
+  const summaryToggle = page.locator('#taskToggleSummaryBar');
+
+  await expect(bottomToggle).toHaveAttribute('aria-pressed', 'false');
+  await expect(sideToggle).toHaveAttribute('aria-pressed', 'true');
+  await expect(summaryToggle).toHaveAttribute('aria-pressed', 'true');
+
+  await bottomToggle.click();
+  const bottomWorkbench = page.locator(
+    '.task-workbench[data-placement="bottom"]',
+  );
+  await expect(bottomWorkbench).toBeVisible();
+  await expect(page.locator(activeWorkbenchTab('terminal'))).toBeVisible();
+  await expect(bottomToggle).toHaveAttribute('aria-pressed', 'true');
+
+  const initialBottomHeight = (await bottomWorkbench.boundingBox())?.height;
+  expect(initialBottomHeight).toBeDefined();
+  if (initialBottomHeight != null) {
+    const divider = page.locator('.task-bottom-split [part="divider"]').first();
+    await divider.focus();
+    await page.keyboard.press('Shift+ArrowUp');
+    await expect
+      .poll(async () => (await bottomWorkbench.boundingBox())?.height ?? 0)
+      .toBeGreaterThan(initialBottomHeight + 40);
+  }
+
+  await bottomToggle.click();
+  await expect(bottomWorkbench).toHaveCount(0);
+  await expect(bottomToggle).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('.task-sidebar-footer')).toBeVisible();
+
+  await summaryToggle.click();
+  await expect(page.locator('.task-environment-button')).toHaveCount(0);
+  await expect(summaryToggle).toHaveAttribute('aria-pressed', 'false');
+  await summaryToggle.click();
+  await expect(page.locator('.task-environment-button')).toBeVisible();
+
+  await sideToggle.click();
+  await expect(page.locator('.task-workbench')).toHaveCount(0);
+  await expect(sideToggle).toHaveAttribute('aria-pressed', 'false');
+  await expect(sideToggle).toBeVisible();
+  await sideToggle.click();
+  await expect(page.locator(activeWorkbenchTab('settings'))).toBeVisible();
+  await expect(sideToggle).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('moves tabs between Bottom and Right from the context menu', async () => {
+  const { page } = launched;
+  const bottomToggle = page.locator('#taskToggleBottomBar');
+
+  await bottomToggle.click();
+  const terminalTab = page.locator(activeWorkbenchTab('terminal'));
+  await expect(terminalTab).toBeVisible();
+  await expect(
+    terminalTab.locator('xpath=ancestor::aside[@data-placement="bottom"]'),
+  ).toBeVisible();
+
+  await terminalTab.click({ button: 'right' });
+  const contextMenu = terminalTab.locator('.task-workbench-tab-menu');
+  await expect(contextMenu).toHaveAttribute('open', '');
+  await contextMenu.locator('wa-dropdown-item[value="move-right"]').click();
+  await expect(
+    terminalTab.locator('xpath=ancestor::aside[@data-placement="right"]'),
+  ).toBeVisible();
+  await expect(page.locator('.task-bottom-split')).toHaveCount(0);
+
+  await terminalTab.click({ button: 'right' });
+  await terminalTab.locator('wa-dropdown-item[value="move-bottom"]').click();
+  await expect(
+    terminalTab.locator('xpath=ancestor::aside[@data-placement="bottom"]'),
+  ).toBeVisible();
+  await expect(page.locator(activeWorkbenchTab('settings'))).toBeVisible();
+
+  await openSidebarWorkbench('Terminal');
+  const bottomTabs = page.locator(
+    '.task-workbench[data-placement="bottom"] .task-workbench-tab',
+  );
+  const countBeforeContextClose = await bottomTabs.count();
+  const closeCandidate = page.locator(activeWorkbenchTab('terminal'));
+  await closeCandidate.click({ button: 'right' });
+  await closeCandidate.locator('wa-dropdown-item[value="close"]').click();
+  await expect(bottomTabs).toHaveCount(countBeforeContextClose - 1);
+});
+
+test('loads tools, centers every compact nav icon, and customizes shortcuts', async () => {
   const { app, page } = launched;
 
   await openSidebarWorkbench('Settings');
+  const workbenchSplit = page.locator('.task-main-split');
+  await workbenchSplit.evaluate((element) => {
+    const split = element as HTMLElement & { positionInPixels: number };
+    split.positionInPixels = 440;
+    split.dispatchEvent(new CustomEvent('wa-reposition', { bubbles: true }));
+  });
+  await expect
+    .poll(async () => {
+      const bounds = await page.locator('settings-app').boundingBox();
+      return bounds?.width ?? Number.POSITIVE_INFINITY;
+    })
+    .toBeLessThanOrEqual(520);
+
   await page.evaluate(() => {
     window.postMessage({ command: 'setTab', tabIndex: 5 }, '*');
   });
@@ -328,26 +457,30 @@ test('loads tools promptly, centers compact nav icons, and customizes shortcuts'
     timeout: 5_000,
   });
 
-  const alignment = await page.evaluate(() => {
+  const alignments = await page.evaluate(() => {
     const root = document.querySelector('settings-app')?.shadowRoot;
-    const tab = root?.querySelector<HTMLElement>('wa-tab[active]');
-    const base = tab?.shadowRoot?.querySelector<HTMLElement>('[part~="base"]');
-    const icon = tab?.querySelector<HTMLElement>('.settings-tab-icon');
-    const label = tab?.querySelector<HTMLElement>('.settings-tab-label');
-    if (!base || !icon || !label) {
-      throw new Error('Compact settings navigation was not mounted.');
-    }
-    const baseRect = base.getBoundingClientRect();
-    const iconRect = icon.getBoundingClientRect();
-    return {
-      labelDisplay: getComputedStyle(label).display,
-      horizontalOffset:
-        (iconRect.left + iconRect.right - baseRect.left - baseRect.right) / 2,
-      verticalOffset:
-        (iconRect.top + iconRect.bottom - baseRect.top - baseRect.bottom) / 2,
-    };
+    const tabs = root?.querySelectorAll<HTMLElement>('wa-tab') ?? [];
+    return [...tabs].map((tab) => {
+      const base = tab.shadowRoot?.querySelector<HTMLElement>('[part~="base"]');
+      const icon = tab.querySelector<HTMLElement>('.settings-tab-icon');
+      const label = tab.querySelector<HTMLElement>('.settings-tab-label');
+      if (!base || !icon || !label) {
+        throw new Error('Compact settings navigation was not mounted.');
+      }
+      const baseRect = base.getBoundingClientRect();
+      const iconRect = icon.getBoundingClientRect();
+      return {
+        labelDisplay: getComputedStyle(label).display,
+        horizontalOffset:
+          (iconRect.left + iconRect.right - baseRect.left - baseRect.right) / 2,
+        verticalOffset:
+          (iconRect.top + iconRect.bottom - baseRect.top - baseRect.bottom) / 2,
+      };
+    });
   });
-  if (alignment.labelDisplay === 'none') {
+  expect(alignments.length).toBeGreaterThan(0);
+  for (const alignment of alignments) {
+    expect(alignment.labelDisplay).toBe('none');
     expect(Math.abs(alignment.horizontalOffset)).toBeLessThanOrEqual(1);
     expect(Math.abs(alignment.verticalOffset)).toBeLessThanOrEqual(1);
   }
@@ -355,6 +488,16 @@ test('loads tools promptly, centers compact nav icons, and customizes shortcuts'
   await page.evaluate(() => {
     window.postMessage({ command: 'setTab', tabIndex: 11 }, '*');
   });
+  const shortcuts = page.locator('shortcuts-tab');
+  await expect(
+    shortcuts.getByText('Toggle Bottom Bar', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    shortcuts.getByText('Toggle Side Panel', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    shortcuts.getByText('Toggle Summary Bar', { exact: true }),
+  ).toBeVisible();
   const recorder = page.locator('shortcuts-tab .shortcut-recorder').first();
   await expect(recorder).toBeVisible();
   await recorder.click();
@@ -372,6 +515,70 @@ test('loads tools promptly, centers compact nav icons, and customizes shortcuts'
     page.locator('wa-dialog.desktop-command-palette'),
   ).toHaveJSProperty('open', true);
   await page.keyboard.press('Escape');
+});
+
+test('keeps settings banners consistent in a narrow side panel', async () => {
+  const { page } = launched;
+  const bannerTabs = [
+    { index: 0, tag: 'memory-tab' },
+    { index: 2, tag: 'models-tab' },
+    { index: 4, tag: 'multi-agent-tab' },
+    { index: 9, tag: 'goal-tab' },
+  ] as const;
+  const bannerMetrics: Array<{
+    readonly borderRadius: string;
+    readonly iconSize: string;
+    readonly padding: string;
+    readonly titleWeight: string;
+  }> = [];
+
+  await openSidebarWorkbench('Settings');
+  for (const tab of bannerTabs) {
+    await page.evaluate((tabIndex) => {
+      window.postMessage({ command: 'setTab', tabIndex }, '*');
+    }, tab.index);
+
+    const banner = page.locator(`${tab.tag} .settings-banner`).first();
+    await expect(banner).toBeVisible();
+    await expect
+      .poll(() =>
+        banner.evaluate(
+          (element) => element.scrollWidth <= element.clientWidth + 1,
+        ),
+      )
+      .toBe(true);
+
+    bannerMetrics.push(
+      await banner.evaluate((element) => {
+        const callout = element.querySelector('wa-callout');
+        const icon = element.querySelector('wa-icon[slot="icon"]');
+        const title = element.querySelector('.settings-banner-title');
+        if (
+          !(callout instanceof HTMLElement) ||
+          !(icon instanceof HTMLElement) ||
+          !(title instanceof HTMLElement)
+        ) {
+          throw new Error('Shared settings banner chrome was not rendered.');
+        }
+        const calloutStyle = getComputedStyle(callout);
+        return {
+          borderRadius: calloutStyle.borderRadius,
+          iconSize: getComputedStyle(icon).fontSize,
+          padding: calloutStyle.padding,
+          titleWeight: getComputedStyle(title).fontWeight,
+        };
+      }),
+    );
+  }
+
+  expect(new Set(bannerMetrics.map((metric) => metric.borderRadius)).size).toBe(
+    1,
+  );
+  expect(new Set(bannerMetrics.map((metric) => metric.iconSize)).size).toBe(1);
+  expect(new Set(bannerMetrics.map((metric) => metric.padding)).size).toBe(1);
+  expect(new Set(bannerMetrics.map((metric) => metric.titleWeight)).size).toBe(
+    1,
+  );
 });
 
 test('shows live environment status without duplicate panel actions', async () => {
@@ -450,32 +657,40 @@ test('runs an interactive shell in a terminal workbench tab', async () => {
   const { page } = launched;
 
   await openSidebarWorkbench('Terminal');
-  await expect(page.locator(activeWorkbenchTab('terminal'))).toBeVisible();
+  const terminalTab = page.locator(activeWorkbenchTab('terminal'));
+  await expect(terminalTab).toBeVisible();
+  await expect(
+    terminalTab.locator('xpath=ancestor::aside[@data-placement="bottom"]'),
+  ).toBeVisible();
 
   // xterm renders rows into .xterm-rows. A prompt appearing at all proves the
   // pty spawned, node-pty loaded under Electron's ABI, and output streamed back
   // through IPC.
-  const rows = page.locator('.desktop-terminal-surface .xterm-rows');
+  const terminalSurface = terminalTab
+    .locator('xpath=ancestor::aside[@data-placement="bottom"]')
+    .locator('.desktop-terminal-surface:not([hidden])');
+  const rows = terminalSurface.locator('.xterm-rows');
   await expect(rows).toBeVisible({ timeout: 20_000 });
   await expect(rows).not.toBeEmpty({ timeout: 20_000 });
 
   // Echo a unique token to confirm keystrokes reach the shell.
-  await page.locator('.desktop-terminal-surface .xterm').click();
+  await terminalSurface.locator('.xterm').click();
   await page.keyboard.type('echo texra-pty-ok');
   await page.keyboard.press('Enter');
   await expect(rows).toContainText('texra-pty-ok', { timeout: 20_000 });
 });
 
-test('closes a tab and falls back to its left neighbor', async () => {
+test('closes a bottom tab and falls back within the same pane', async () => {
   const { page } = launched;
 
-  // Establish this test's own left neighbor and active tab. Playwright restarts
-  // the worker after a failure, so depending on tabs opened by earlier tests
-  // would turn one surface failure into a misleading cascade.
-  await openSidebarWorkbench('Settings');
+  // Establish two terminal tabs in Bottom so the fallback cannot accidentally
+  // select a tab from Right.
+  await openSidebarWorkbench('Terminal');
   await openSidebarWorkbench('Terminal');
 
-  const tabs = page.locator('.task-workbench-tab');
+  const tabs = page.locator(
+    '.task-workbench[data-placement="bottom"] .task-workbench-tab',
+  );
   const before = await tabs.count();
   const terminalTab = page.locator(activeWorkbenchTab('terminal'));
   const fallbackLabel = await tabs
@@ -488,10 +703,14 @@ test('closes a tab and falls back to its left neighbor', async () => {
   await expect(tabs).toHaveCount(before - 1);
   await expect(
     page.locator(
-      '.task-workbench-tab[data-active="true"] .task-workbench-tab-label',
+      '.task-workbench[data-placement="bottom"] .task-workbench-tab[data-active="true"] .task-workbench-tab-label',
     ),
   ).toHaveText(fallbackLabel);
-  await expect(page.locator('.task-workbench-pane')).toBeVisible();
+  await expect(
+    page.locator(
+      '.task-workbench[data-placement="bottom"] .task-workbench-pane',
+    ),
+  ).toBeVisible();
   await expect(page.locator('.task-conversation')).toBeVisible();
 });
 

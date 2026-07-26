@@ -38,7 +38,7 @@ describe('desktop command surface', () => {
           expect(entry.category).toBe('Help');
           continue;
         }
-        expect(['File', 'TeXRA', 'Help']).toContain(entry.category);
+        expect(['File', 'TeXRA', 'View', 'Help']).toContain(entry.category);
         continue;
       }
       expect(entry.label).toBe(catalogEntry.shortTitle ?? catalogEntry.title);
@@ -75,6 +75,27 @@ describe('desktop command surface', () => {
       id: DESKTOP_LOCAL_COMMANDS.SHOW_LOGS,
       label: 'Show Logs',
       category: 'TeXRA',
+      enabled: true,
+    });
+    expect(entries).toContainEqual({
+      id: DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR,
+      label: 'Toggle Bottom Bar',
+      category: 'View',
+      accelerator: 'Command+J',
+      enabled: true,
+    });
+    expect(entries).toContainEqual({
+      id: DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL,
+      label: 'Toggle Side Panel',
+      category: 'View',
+      accelerator: 'Command+Alt+B',
+      enabled: true,
+    });
+    expect(entries).toContainEqual({
+      id: DESKTOP_LOCAL_COMMANDS.TOGGLE_SUMMARY_BAR,
+      label: 'Toggle Summary Bar',
+      category: 'View',
+      accelerator: 'Command+Alt+S',
       enabled: true,
     });
     const firstHelpIndex = entries.findIndex(
@@ -124,6 +145,9 @@ describe('desktop command surface', () => {
       resetMainView: vi.fn(),
       showRoute: vi.fn(),
       showSettings: vi.fn(),
+      toggleBottomBar: vi.fn(),
+      toggleSidePanel: vi.fn(),
+      toggleSummaryBar: vi.fn(),
     };
 
     expect(dispatchDesktopCommand('texra.showMainView', actions)).toBe(true);
@@ -135,6 +159,18 @@ describe('desktop command surface', () => {
     ).toBe(true);
     expect(dispatchDesktopCommand('texra.openSettings', actions)).toBe(true);
     expect(dispatchDesktopCommand('texra.mainView.reset', actions)).toBe(true);
+    expect(
+      dispatchDesktopCommand(DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR, actions),
+    ).toBe(true);
+    expect(
+      dispatchDesktopCommand(DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL, actions),
+    ).toBe(true);
+    expect(
+      dispatchDesktopCommand(
+        DESKTOP_LOCAL_COMMANDS.TOGGLE_SUMMARY_BAR,
+        actions,
+      ),
+    ).toBe(true);
     expect(dispatchDesktopCommand('texra.showModels', actions)).toBe(true);
     expect(dispatchDesktopCommand('texra.showAgents', actions)).toBe(true);
     expect(dispatchDesktopCommand('texra.showGitSettings', actions)).toBe(true);
@@ -171,6 +207,9 @@ describe('desktop command surface', () => {
     );
     expect(actions.showSettings).toHaveBeenNthCalledWith(4, SETTINGS_TAB.GIT);
     expect(actions.resetMainView).toHaveBeenCalledOnce();
+    expect(actions.toggleBottomBar).toHaveBeenCalledOnce();
+    expect(actions.toggleSidePanel).toHaveBeenCalledOnce();
+    expect(actions.toggleSummaryBar).toHaveBeenCalledOnce();
     expect(actions.openWorkspaceFolder).toHaveBeenCalledOnce();
     expect(actions.openLogFolder).toHaveBeenCalledOnce();
     expect(actions.showFirstRunWalkthrough).toHaveBeenCalledOnce();
@@ -239,6 +278,9 @@ describe('desktop command surface', () => {
       'Show Logs',
       'Open Logs Folder',
       'Open TeXRA Settings',
+      'Toggle Summary Bar',
+      'Toggle Bottom Bar',
+      'Toggle Side Panel',
       'New',
       'separator',
       'Execute Agent',

@@ -7,11 +7,18 @@
 
 import '@awesome.me/webawesome/dist/components/badge/badge.js';
 import '@awesome.me/webawesome/dist/components/button/button.js';
+import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
+import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
+import '@awesome.me/webawesome/dist/components/split-panel/split-panel.js';
 import { html, nothing, type TemplateResult } from 'lit';
 
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
-import { WORKBENCH_KIND_META, type WorkbenchTab } from '../desktopTaskShell.js';
+import {
+  WORKBENCH_KIND_META,
+  type WorkbenchPlacement,
+  type WorkbenchTab,
+} from '../desktopTaskShell.js';
 
 export interface TaskSidebarModel {
   readonly files: Node;
@@ -19,6 +26,7 @@ export interface TaskSidebarModel {
   readonly hasWorkspace: boolean;
   readonly initials: string;
   readonly pendingApprovalCount: number;
+  readonly projectSectionPosition: number;
   readonly sessions: Node;
   readonly streamCount: number;
   readonly workspaceName: string;
@@ -34,6 +42,7 @@ export interface TaskSidebarCallbacks {
   onOpenBrowser(): void;
   onOpenSettings(): void;
   onOpenLogs(): void;
+  onResizeProjectSection(event: Event): void;
 }
 
 function sidebarAction(options: {
@@ -85,6 +94,8 @@ export function taskSidebarTemplate(
       : 'chevron-right';
   }
 
+  // The nested split panel can connect before its slotted parent has a height.
+  // Web Awesome recovers its pixel position from this attribute after resize.
   return html`
     <aside class="task-sidebar" aria-label="Projects and tasks">
       <header class="task-sidebar-brand">
@@ -116,8 +127,16 @@ export function taskSidebarTemplate(
         })}
       </nav>
 
-      <div class="task-sidebar-scroll">
-        <section class="task-sidebar-section task-project-section">
+      <wa-split-panel
+        class="task-sidebar-scroll"
+        orientation="vertical"
+        position=${model.projectSectionPosition}
+        @wa-reposition=${callbacks.onResizeProjectSection}
+      >
+        <span slot="divider" class="task-section-split-handle">
+          ${waIcon('ellipsis')}
+        </span>
+        <section slot="start" class="task-sidebar-section task-project-section">
           <div class="task-sidebar-section-label">Project</div>
           <wa-button
             type="button"
@@ -150,7 +169,7 @@ export function taskSidebarTemplate(
           </div>
         </section>
 
-        <section class="task-sidebar-section task-history-section">
+        <section slot="end" class="task-sidebar-section task-history-section">
           <div class="task-sidebar-section-heading">
             <span class="task-sidebar-section-label">Tasks</span>
             <wa-badge
@@ -163,7 +182,7 @@ export function taskSidebarTemplate(
           </div>
           <div class="task-sidebar-sessions">${model.sessions}</div>
         </section>
-      </div>
+      </wa-split-panel>
 
       <footer class="task-sidebar-footer">
         ${sidebarAction({
@@ -195,16 +214,62 @@ export function taskSidebarTemplate(
 export interface WorkbenchTabsCallbacks {
   onActivate(tabId: string): void;
   onClose(tabId: string): void;
-  onCloseWorkbench(): void;
+  onHide(): void;
+  onMove(tabId: string, placement: WorkbenchPlacement): void;
+}
+
+interface ContextMenuDropdown extends HTMLElement {
+  open: boolean;
+}
+
+function openTabContextMenu(event: MouseEvent): void {
+  event.preventDefault();
+  const tab = event.currentTarget as HTMLElement;
+  const dropdown = tab.querySelector<ContextMenuDropdown>(
+    '.task-workbench-tab-menu',
+  );
+  const anchor = tab.querySelector<HTMLElement>(
+    '.task-workbench-tab-menu-anchor',
+  );
+  if (!dropdown || !anchor) return;
+  anchor.style.setProperty('--context-menu-x', `${event.clientX}px`);
+  anchor.style.setProperty('--context-menu-y', `${event.clientY}px`);
+  dropdown.open = true;
+}
+
+function handleTabMenuSelect(
+  event: CustomEvent<{ item: HTMLElement & { value?: string } }>,
+  tabId: string,
+  callbacks: WorkbenchTabsCallbacks,
+): void {
+  switch (event.detail.item.value) {
+    case 'close':
+      callbacks.onClose(tabId);
+      break;
+    case 'move-bottom':
+      callbacks.onMove(tabId, 'bottom');
+      break;
+    case 'move-right':
+      callbacks.onMove(tabId, 'right');
+      break;
+  }
 }
 
 export function workbenchTabsTemplate(
   tabs: readonly WorkbenchTab[],
   activeTabId: string | undefined,
+  placement: WorkbenchPlacement,
   callbacks: WorkbenchTabsCallbacks,
 ): TemplateResult {
+  const hideDirection =
+    placement === 'right' ? 'chevron-right' : 'chevron-down';
+  const placementLabel = placement === 'right' ? 'right' : 'bottom';
   return html`
-    <div class="task-workbench-tabs" role="tablist" aria-label="Workbench tabs">
+    <div
+      class="task-workbench-tabs"
+      role="tablist"
+      aria-label=${`${placementLabel} workbench tabs`}
+    >
       <div class="task-workbench-tabs-scroll">
         ${tabs.map((tab) => {
           const active = tab.id === activeTabId;
@@ -213,6 +278,8 @@ export function workbenchTabsTemplate(
               class="task-workbench-tab"
               data-active=${active ? 'true' : 'false'}
               data-kind=${tab.kind}
+              data-tab-id=${tab.id}
+              @contextmenu=${openTabContextMenu}
             >
               <wa-button
                 type="button"
@@ -253,6 +320,39 @@ export function workbenchTabsTemplate(
               >
                 ${waIcon('xmark')}
               </wa-button>
+              <wa-dropdown
+                class="task-workbench-tab-menu"
+                placement="bottom-start"
+                @wa-select=${(
+                  event: CustomEvent<{
+                    item: HTMLElement & { value?: string };
+                  }>,
+                ) => handleTabMenuSelect(event, tab.id, callbacks)}
+              >
+                <button
+                  slot="trigger"
+                  type="button"
+                  class="task-workbench-tab-menu-anchor"
+                  tabindex="-1"
+                  aria-hidden="true"
+                ></button>
+                <wa-dropdown-item value="close">
+                  ${waIcon('xmark', { slot: 'icon' })} Close
+                </wa-dropdown-item>
+                <wa-dropdown-item
+                  value="move-bottom"
+                  ?disabled=${placement === 'bottom'}
+                >
+                  ${waIcon('window-maximize', { slot: 'icon' })} Move to Bottom
+                </wa-dropdown-item>
+                <wa-dropdown-item
+                  value="move-right"
+                  ?disabled=${placement === 'right'}
+                >
+                  ${waIcon('picture-in-picture', { slot: 'icon' })} Move to
+                  Right
+                </wa-dropdown-item>
+              </wa-dropdown>
             </div>
           `;
         })}
@@ -262,11 +362,11 @@ export function workbenchTabsTemplate(
         class="task-workbench-close icon-button is-size-m focus-ring-inset"
         appearance="plain"
         size="s"
-        aria-label="Hide workbench"
-        title="Hide workbench"
-        @click=${callbacks.onCloseWorkbench}
+        aria-label=${`Hide ${placementLabel} panel`}
+        title=${`Hide ${placementLabel} panel`}
+        @click=${callbacks.onHide}
       >
-        ${waIcon('chevron-right')}
+        ${waIcon(hideDirection)}
       </wa-button>
     </div>
   `;

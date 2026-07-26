@@ -1,0 +1,56 @@
+// Third-party imports
+import { html, nothing, type TemplateResult } from 'lit';
+
+// Local imports - Web Awesome
+import { renderBannerFrame } from './bannerFrame';
+import type { TeXRAIconName } from './webAwesomeIcons';
+
+export interface SettingsBannerOptions {
+  readonly id: string;
+  readonly title: string;
+  readonly description: string | TemplateResult;
+  readonly icon?: TeXRAIconName;
+  readonly detail?: TemplateResult;
+  readonly actions?: TemplateResult;
+  readonly className?: string;
+  readonly variant?: 'brand' | 'neutral' | 'success' | 'warning' | 'danger';
+}
+
+/**
+ * Shared informational banner for Settings tabs.
+ *
+ * Callers provide content only. Web Awesome owns the callout surface, while
+ * settingsBannerStyles owns its hierarchy, spacing, icon, and action row.
+ */
+export function renderSettingsBanner(
+  options: SettingsBannerOptions,
+): TemplateResult {
+  return renderBannerFrame({
+    id: options.id,
+    variant: options.variant ?? 'neutral',
+    appearance: 'outlined',
+    size: 'small',
+    icon: options.icon ?? 'info',
+    frameClassName: ['settings-banner', options.className]
+      .filter(Boolean)
+      .join(' '),
+    body: html`
+      <div class="settings-banner-body">
+        <div class="settings-banner-title">${options.title}</div>
+        <div class="settings-banner-description">${options.description}</div>
+        ${
+          options.detail === undefined
+            ? nothing
+            : html`<div class="settings-banner-detail">${options.detail}</div>`
+        }
+        ${
+          options.actions === undefined
+            ? nothing
+            : html`<div class="settings-banner-actions">
+                ${options.actions}
+              </div>`
+        }
+      </div>
+    `,
+  });
+}

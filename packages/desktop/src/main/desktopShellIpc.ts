@@ -11,6 +11,7 @@ import {
 } from '@shared/schemas/settingsViewMessages';
 import {
   DESKTOP_SHELL_COMMANDS,
+  type DesktopLayoutPanel,
   type DesktopRoute,
 } from '../desktopShellMessages.js';
 import { buildDesktopOnboardingSetStateMessage } from '../desktopOnboardingMessages.js';
@@ -130,6 +131,13 @@ export function createDesktopShellActions(
     renderer.postToRenderer(buildDesktopMainViewResetMessage());
   }
 
+  function toggleLayout(panel: DesktopLayoutPanel) {
+    renderer.postToRenderer({
+      command: DESKTOP_SHELL_COMMANDS.TOGGLE_LAYOUT,
+      panel,
+    });
+  }
+
   return {
     signIn,
     openAgentDirectory,
@@ -158,6 +166,9 @@ export function createDesktopShellActions(
     },
     showRoute: postRoute,
     showSettings: postSettingsRoute,
+    toggleBottomBar: () => toggleLayout('bottomBar'),
+    toggleSidePanel: () => toggleLayout('sidePanel'),
+    toggleSummaryBar: () => toggleLayout('summaryBar'),
     showFirstRunWalkthrough: () => {
       renderer.postToRenderer(buildDesktopOnboardingSetStateMessage(true));
     },

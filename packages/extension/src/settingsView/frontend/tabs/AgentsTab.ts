@@ -96,12 +96,6 @@ export class AgentsTab extends LitElement {
         gap: var(--wa-space-2xs);
       }
 
-      .agents-create-btn::part(base) {
-        color: var(--wa-color-text-normal);
-        border-color: var(--wa-color-focus);
-        font-weight: var(--font-weight-medium);
-      }
-
       /* Row 2: directory info bar */
       .agents-dir-bar {
         display: flex;
@@ -266,9 +260,9 @@ export class AgentsTab extends LitElement {
                       ${waIcon('new-file', { slot: 'start' })} From Template
                     </wa-button>
                     <wa-button
-                      class="agents-create-btn"
-                      appearance="outlined"
-                      variant="neutral"
+                      class="agents-create-btn btn-primary"
+                      appearance="filled"
+                      variant="brand"
                       size="small"
                       title="Create a new agent with AI"
                       @click=${this.handleCreateAgent}

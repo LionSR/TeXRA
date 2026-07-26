@@ -369,7 +369,7 @@ export class ModelSelectionList extends LitElement {
 
     return html`
       <div class="model-selection-section">
-        <h2>Model Selection</h2>
+        <h2 class="settings-subsection-heading">Model Selection</h2>
         ${this.renderHelperModelDropdown()}
         <div class="short-names-toggle">
           <wa-switch

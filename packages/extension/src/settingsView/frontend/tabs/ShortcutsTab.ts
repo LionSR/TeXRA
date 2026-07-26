@@ -58,7 +58,7 @@ export class ShortcutsTab extends LitElement {
       }
 
       .shortcuts-command {
-        font-family: var(--font-family-mono);
+        font-family: var(--wa-font-family-mono);
         font-size: var(--font-size-xs);
         color: var(--wa-color-text-quiet);
       }

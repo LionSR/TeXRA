@@ -133,10 +133,6 @@ export class AIAgentsTab extends LitElement {
         color: var(--wa-color-text-quiet);
       }
 
-      .category-section {
-        margin-bottom: var(--wa-space-m);
-      }
-
       .agent-inline-settings {
         padding: var(--wa-space-2xs) var(--wa-space-xs);
         margin-bottom: var(--wa-space-2xs);

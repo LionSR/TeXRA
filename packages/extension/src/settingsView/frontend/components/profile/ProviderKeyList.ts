@@ -161,7 +161,7 @@ export class ProviderKeyList extends LitElement {
     const warningLink =
       setting.warningUrl && setting.warningUrlLabel
         ? html` <wa-button
-            class="provider-setting-link"
+            class="provider-setting-link btn-ghost is-link"
             appearance="plain"
             size="small"
             @click=${() =>
@@ -265,7 +265,7 @@ export class ProviderKeyList extends LitElement {
 
     return html`
       <div class="provider-keys-section">
-        <h2>API Configuration</h2>
+        <h2 class="settings-subsection-heading">API Configuration</h2>
         <p class="provider-keys-description">${description}</p>
         ${this.renderGlobalStreamingToggle()}
         <table class="provider-keys-table">

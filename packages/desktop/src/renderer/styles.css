@@ -63,22 +63,22 @@ wa-button[hidden] {
 }
 
 wa-button.btn-primary::part(base),
-wa-button.btn-secondary::part(base),
-wa-button.desktop-primary-button::part(base),
-wa-button.desktop-secondary-button::part(base) {
+wa-button.btn-secondary::part(base) {
   min-height: var(--wa-height-button);
   padding-inline: var(--wa-space-m);
-  border: 0;
+  border: var(--border-thin) solid transparent;
   border-radius: var(--wa-border-radius-m);
   font-weight: var(--font-weight-medium);
-  transition: background-color var(--transition-fast);
+  transition:
+    background-color var(--transition-normal),
+    border-color var(--transition-normal),
+    color var(--transition-normal),
+    box-shadow var(--transition-normal);
 }
 
 wa-button:is(
     .btn-primary,
     .btn-secondary,
-    .desktop-primary-button,
-    .desktop-secondary-button,
     .btn-ghost,
     .action-button,
     .icon-button,
@@ -93,14 +93,12 @@ wa-button:is(
 /* A flat fill, not the former product gradient: the gradient plus its
    shadow-on-hover was the loudest element in the app and made the one CTA
    compete with content. */
-wa-button.btn-primary::part(base),
-wa-button.desktop-primary-button::part(base) {
+wa-button.btn-primary::part(base) {
   background: var(--wa-color-brand-fill-loud);
   color: var(--wa-color-brand-on-loud);
 }
 
-wa-button.btn-primary::part(base):hover,
-wa-button.desktop-primary-button::part(base):hover {
+wa-button.btn-primary::part(base):hover {
   background: color-mix(
     in srgb,
     var(--wa-color-brand-fill-loud) 92%,
@@ -108,8 +106,7 @@ wa-button.desktop-primary-button::part(base):hover {
   );
 }
 
-wa-button.btn-primary::part(base):active,
-wa-button.desktop-primary-button::part(base):active {
+wa-button.btn-primary::part(base):active {
   background: color-mix(
     in srgb,
     var(--wa-color-brand-fill-loud) 84%,
@@ -117,47 +114,56 @@ wa-button.desktop-primary-button::part(base):active {
   );
 }
 
-wa-button.btn-secondary::part(base),
-wa-button.desktop-secondary-button::part(base) {
+wa-button.btn-secondary::part(base) {
+  border-color: var(--border-hairline-strong);
   background: var(--control-fill);
   color: var(--wa-color-text-normal);
 }
 
-wa-button.btn-secondary::part(base):hover,
-wa-button.desktop-secondary-button::part(base):hover {
-  background: var(--control-fill-hover);
+wa-button.btn-secondary::part(base):hover {
+  border-color: color-mix(
+    in srgb,
+    var(--wa-color-focus) 38%,
+    var(--border-hairline-strong)
+  );
+  background: color-mix(
+    in srgb,
+    var(--wa-color-brand-fill-quiet) 40%,
+    var(--control-fill-hover)
+  );
 }
 
-wa-button.btn-secondary::part(base):active,
-wa-button.desktop-secondary-button::part(base):active {
+wa-button.btn-secondary::part(base):active {
   background: var(--surface-selected);
 }
 
 wa-button.btn-ghost::part(base),
-wa-button.action-button:not(.btn-primary):not(.btn-secondary):not(
-    .desktop-primary-button
-  ):not(.desktop-secondary-button)::part(base) {
+wa-button.action-button:not(.btn-primary):not(.btn-secondary)::part(base) {
   gap: var(--wa-space-2xs);
   min-height: var(--wa-height-control-compact);
   padding-inline: var(--control-padding-inline);
-  border: 0;
+  border: var(--border-thin) solid transparent;
   border-radius: var(--wa-border-radius-m);
   background: transparent;
   font-size: var(--font-size-sm);
-  transition: background-color var(--transition-fast);
+  transition:
+    background-color var(--transition-normal),
+    border-color var(--transition-normal),
+    color var(--transition-normal);
 }
 
 wa-button.btn-ghost::part(base):hover,
-wa-button.action-button:not(.btn-primary):not(.btn-secondary):not(
-    .desktop-primary-button
-  ):not(.desktop-secondary-button)::part(base):hover {
+wa-button.action-button:not(.btn-primary):not(.btn-secondary)::part(
+    base
+  ):hover {
+  border-color: var(--border-hairline);
   background: var(--surface-hover);
 }
 
 wa-button.btn-ghost::part(base):active,
-wa-button.action-button:not(.btn-primary):not(.btn-secondary):not(
-    .desktop-primary-button
-  ):not(.desktop-secondary-button)::part(base):active {
+wa-button.action-button:not(.btn-primary):not(.btn-secondary)::part(
+    base
+  ):active {
   background: var(--surface-active);
 }
 
@@ -182,17 +188,19 @@ wa-button.action-icon-button::part(base) {
   height: var(--control-size);
   min-height: 0;
   padding: 0;
-  border: 0;
+  border: var(--border-thin) solid transparent;
   border-radius: var(--row-radius);
   background: transparent;
   color: var(--wa-color-text-quiet);
   transition:
     background-color var(--transition-fast),
+    border-color var(--transition-fast),
     color var(--transition-fast);
 }
 
 wa-button.icon-button::part(base):hover,
 wa-button.action-icon-button::part(base):hover {
+  border-color: var(--border-hairline);
   background: var(--surface-hover);
   color: var(--wa-color-text-normal);
 }
@@ -201,8 +209,48 @@ wa-button.icon-button::part(base):active,
 wa-button.action-icon-button::part(base):active,
 wa-button.icon-button[aria-pressed='true']::part(base),
 wa-button.action-icon-button[aria-pressed='true']::part(base) {
-  background: var(--surface-selected);
+  border-color: color-mix(
+    in srgb,
+    var(--wa-color-focus) 34%,
+    var(--border-hairline)
+  );
+  background: var(--wa-color-brand-fill-quiet);
   color: var(--wa-color-text-normal);
+}
+
+wa-button:is(
+    .btn-primary,
+    .btn-secondary,
+    .btn-ghost,
+    .action-button,
+    .icon-button,
+    .action-icon-button
+  ):not([disabled]) {
+  transition:
+    filter var(--transition-normal),
+    transform var(--transition-normal);
+}
+
+wa-button:is(
+    .btn-primary,
+    .btn-secondary,
+    .btn-ghost,
+    .action-button,
+    .icon-button,
+    .action-icon-button
+  ):not([disabled]):hover {
+  transform: translateY(-1px);
+}
+
+wa-button:is(
+    .btn-primary,
+    .btn-secondary,
+    .btn-ghost,
+    .action-button,
+    .icon-button,
+    .action-icon-button
+  ):not([disabled]):active {
+  transform: translateY(0) scale(0.97);
 }
 
 wa-button.icon-button.is-size-s,
@@ -228,12 +276,8 @@ wa-button.action-icon-button wa-icon {
 wa-button:is(
     .btn-primary,
     .btn-secondary,
-    .desktop-primary-button,
-    .desktop-secondary-button,
     .btn-ghost,
-    .action-button:not(.btn-primary):not(.btn-secondary):not(
-        .desktop-primary-button
-      ):not(.desktop-secondary-button),
+    .action-button:not(.btn-primary):not(.btn-secondary),
     .icon-button,
     .action-icon-button
   )[disabled]::part(base) {
@@ -242,16 +286,11 @@ wa-button:is(
   box-shadow: none;
 }
 
-wa-button:is(.btn-primary, .desktop-primary-button)[disabled]::part(base):is(
-    :hover,
-    :active
-  ) {
+wa-button.btn-primary[disabled]::part(base):is(:hover, :active) {
   background: var(--wa-color-brand-fill-loud);
 }
 
-wa-button:is(.btn-secondary, .desktop-secondary-button)[disabled]::part(
-    base
-  ):is(:hover, :active) {
+wa-button.btn-secondary[disabled]::part(base):is(:hover, :active) {
   background: var(--control-fill);
 }
 
@@ -265,8 +304,47 @@ wa-button:is(
   color: var(--wa-color-text-quiet);
 }
 
+wa-button.btn-ghost.is-link::part(base),
+wa-button.action-button.is-link::part(base) {
+  min-height: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--color-text-link);
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 2px;
+  transition:
+    color var(--transition-fast),
+    text-decoration-color var(--transition-fast);
+}
+
+wa-button.btn-ghost.is-link::part(base):hover,
+wa-button.action-button.is-link::part(base):hover {
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-text-link-active);
+  text-decoration-color: currentColor;
+}
+
+wa-button:is(.btn-ghost.is-link, .action-button.is-link):is(:hover, :active) {
+  transform: none;
+}
+
 wa-button.is-danger::part(base) {
   color: var(--wa-color-danger-on-quiet);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  wa-button:is(
+      .btn-primary,
+      .btn-secondary,
+      .btn-ghost,
+      .action-button,
+      .icon-button,
+      .action-icon-button
+    ):not([disabled]):is(:hover, :active) {
+    transform: none;
+  }
 }
 
 /* Decorative leading-icon surface. This mirrors `iconSurfaceStyles` for the

@@ -1,7 +1,6 @@
 /** Recommended LaTeX VS Code settings, dependency status, and TeXRA compile/diff options. */
 
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
-import '@awesome.me/webawesome/dist/components/callout/callout.js';
 import '@awesome.me/webawesome/dist/components/input/input.js';
 import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/option/option.js';
@@ -12,10 +11,16 @@ import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared webview
-import { commonViewStyles, designTokens } from '@shared/styles';
+import {
+  commonViewStyles,
+  designTokens,
+  settingsBannerStyles,
+} from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
+import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderLoadingState } from '@shared/wa/loadingState';
+import { renderSettingsBanner } from '@shared/wa/settingsBanner';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Web Awesome button + icon bundles (side-effect imports)
@@ -220,7 +225,12 @@ const RECOMMENDED_SETTINGS: SettingInfo[] = [
 
 @customElement('latex-tab')
 export class LaTeXTab extends LitElement {
-  static override styles = [designTokens, commonViewStyles, latexTabStyles];
+  static override styles = [
+    designTokens,
+    commonViewStyles,
+    settingsBannerStyles,
+    latexTabStyles,
+  ];
 
   @property({ attribute: false })
   settings: LatexSettingsStatus = { ...DEFAULT_LATEX_SETTINGS_STATUS };
@@ -412,30 +422,27 @@ export class LaTeXTab extends LitElement {
     installCommand: string,
     pmName: string,
   ): TemplateResult {
-    return html`
-      <wa-callout class="prerequisite-hint" variant="brand">
-        ${waIcon('info', { slot: 'icon' })}
-        <div class="hint-title">${title}</div>
-        <div class="hint-description">${description}</div>
-        <div class="hint-actions">
-          <code class="install-command-text">${installCommand}</code>
-          <wa-copy-button value=${installCommand}></wa-copy-button>
-          <wa-button
-            appearance="outlined"
-            variant="neutral"
-            size="small"
-            title=${
-              this.desktopHost
-                ? `Run ${pmName} installer`
-                : `Run ${pmName} installer in VS Code terminal`
-            }
-            @click=${() => this.handleRunInTerminal(installCommand)}
-          >
-            ${waIcon('terminal', { slot: 'start' })} Run in Terminal
-          </wa-button>
-        </div>
-      </wa-callout>
-    `;
+    return renderSettingsBanner({
+      id: `latex-${pmName.toLowerCase()}-prerequisite-banner`,
+      className: 'prerequisite-hint',
+      variant: 'brand',
+      title,
+      description,
+      actions: html`
+        <code class="install-command-text">${installCommand}</code>
+        <wa-copy-button value=${installCommand}></wa-copy-button>
+        ${renderLabeledActionButton({
+          icon: 'terminal',
+          text: 'Run in Terminal',
+          kind: 'secondary',
+          appearance: 'outlined',
+          title: this.desktopHost
+            ? `Run ${pmName} installer`
+            : `Run ${pmName} installer in VS Code terminal`,
+          onClick: () => this.handleRunInTerminal(installCommand),
+        })}
+      `,
+    });
   }
 
   private renderDependencies(): TemplateResult {

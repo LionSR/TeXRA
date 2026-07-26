@@ -99,10 +99,6 @@ export class GitTab extends LitElement {
         flex-wrap: wrap;
       }
 
-      .token-remove-btn::part(base):hover {
-        color: var(--wa-color-danger-on-quiet);
-      }
-
       .instructions {
         margin: var(--wa-space-2xs) 0 0 0;
         font-size: var(--font-size-sm);
@@ -286,8 +282,8 @@ export class GitTab extends LitElement {
                       ${
                         this.githubTokenStatus === 'secret'
                           ? html`<wa-button
-                              class="token-remove-btn"
-                              appearance="outlined"
+                              class="token-remove-btn btn-ghost is-danger"
+                              appearance="plain"
                               variant="neutral"
                               size="small"
                               @click=${this.handleRemoveGitHubToken}

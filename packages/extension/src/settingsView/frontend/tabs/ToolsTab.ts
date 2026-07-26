@@ -141,10 +141,6 @@ export class ToolsTab extends LitElement {
         color: var(--color-status-error);
       }
 
-      .category-section {
-        margin-bottom: var(--wa-space-s);
-      }
-
       /* .category-header chrome lives in commonViewStyles. */
       .category-header wa-icon {
         font-size: var(--font-size);

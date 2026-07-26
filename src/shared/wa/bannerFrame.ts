@@ -18,19 +18,24 @@ import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
  */
 export function renderBannerFrame(options: {
   readonly id: string;
-  readonly variant: 'warning' | 'brand';
+  readonly variant: 'brand' | 'neutral' | 'success' | 'warning' | 'danger';
+  readonly appearance?: 'accent' | 'filled' | 'outlined' | 'plain';
+  readonly size?: 'small' | 'medium' | 'large';
   readonly icon?: TeXRAIconName;
+  readonly frameClassName?: string;
   readonly calloutClassName?: string;
   readonly role?: string;
   readonly ariaLabel?: string;
   readonly body: TemplateResult;
 }): TemplateResult {
   return html`
-    <div class="banner-frame">
+    <div class=${`banner-frame ${options.frameClassName ?? ''}`.trim()}>
       <wa-callout
         id=${options.id}
         class=${ifDefined(options.calloutClassName)}
         variant=${options.variant}
+        appearance=${ifDefined(options.appearance)}
+        size=${ifDefined(options.size)}
         role=${ifDefined(options.role)}
         aria-label=${ifDefined(options.ariaLabel)}
       >

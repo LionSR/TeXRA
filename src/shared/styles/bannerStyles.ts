@@ -5,18 +5,7 @@
 
 import { css, type CSSResult } from 'lit';
 
-export const bannerStyles: CSSResult = css`
-  :host {
-    display: block;
-  }
-
-  /* Banners reflect a boolean \`visible\` property to the host attribute; when
-     absent the host is removed from layout (and via display:none from the
-     accessibility tree, so no aria-hidden is needed). */
-  :host(:not([visible])) {
-    display: none;
-  }
-
+export const bannerFrameStyles: CSSResult = css`
   .banner-frame {
     min-height: 0;
   }
@@ -88,5 +77,94 @@ export const bannerStyles: CSSResult = css`
 
   .actions wa-button:not([appearance~='filled'])::part(base):hover {
     background: var(--surface-hover);
+  }
+`;
+
+const bannerVisibilityStyles: CSSResult = css`
+  :host {
+    display: block;
+  }
+
+  /* Stateful banners reflect a boolean \`visible\` property to the host. Keep
+     this separate from the reusable frame styles so ordinary settings tabs can
+     use the same banner chrome without disappearing. */
+  :host(:not([visible])) {
+    display: none;
+  }
+`;
+
+export const bannerStyles: CSSResult = css`
+  ${bannerVisibilityStyles}
+  ${bannerFrameStyles}
+`;
+
+/** Canonical Settings banner composition: one callout, title/description
+ * hierarchy, optional detail content, and a wrapping action row. */
+export const settingsBannerStyles: CSSResult = css`
+  ${bannerFrameStyles}
+
+  .settings-banner.banner-frame {
+    margin-bottom: var(--wa-space-s);
+  }
+
+  .settings-banner wa-callout {
+    margin-bottom: 0;
+    border-radius: var(--border-radius);
+  }
+
+  .settings-banner-body {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: var(--wa-space-2xs);
+  }
+
+  .settings-banner-title {
+    color: var(--wa-color-text-normal);
+    font-weight: var(--font-weight-medium);
+  }
+
+  .settings-banner-description,
+  .settings-banner-detail {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-normal);
+  }
+
+  .settings-banner-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--wa-space-2xs);
+  }
+
+  .settings-banner-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    gap: var(--wa-space-2xs) var(--wa-space-s);
+    margin: var(--wa-space-3xs) 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .settings-banner-list li {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--wa-space-2xs);
+  }
+
+  .settings-banner-step {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    flex: 0 0 18px;
+    border-radius: 50%;
+    background: var(--wa-color-brand-fill-loud);
+    color: var(--wa-color-brand-on-loud);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-bold);
+    line-height: var(--line-height-tight);
   }
 `;
