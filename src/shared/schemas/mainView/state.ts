@@ -196,8 +196,6 @@ const FileSelectConfigSchema = z.object({
   addOpenedLabel: z.string(),
   emptyListLabel: z.string(),
   selectListLabel: z.string(),
-  tooltip: z.string(),
-  description: z.string().nullish(),
   toolConfig: z.enum(['tool', 'autoExtract']).nullish(),
 });
 export type FileSelectConfig = z.infer<typeof FileSelectConfigSchema>;
