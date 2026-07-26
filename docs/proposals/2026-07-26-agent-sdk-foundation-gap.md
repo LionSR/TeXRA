@@ -158,7 +158,10 @@ The same fact→view switch exists **four times** (219 LoC of switch, inside 2,0
 over the same 13 `RUN_FACT_EVENT_TYPES` and 10 `SessionFact` arms) — **three of the four
 inside the CLI**. One
 status write site fans to three rails with **13 production apply-sites**, forcing 30 LoC of
-dedup in a renderer (banned by CLAUDE.md's UI anti-patterns rule).
+dedup in a renderer. _(Corrected 2026-07-26: the two **projectable** status rails — trace and
+session-fact; `onDidChange` is the third and fires unconditionally — were mutually exclusive in
+production, so this dedup map was never reachable — dead code, not an active CLAUDE.md
+violation; see the acceptance-criteria row 5 correction in §7.)_
 
 ## 4. Intermediate layers, measured — and mostly exonerated
 
@@ -346,6 +349,27 @@ arm in #9127 (it closes the transcript boundary and settles open tool rows on WA
 silent-degradation rule; and the five `onDidChange` listeners are all legitimate in-process
 consumers, one of them inside the runtime itself. **Restate the acceptance target as 10.**
 
+> **Corrected 2026-07-26 — "deleting the three projector trace-arms" is not the mechanism that
+> gets there; see [#9250 comment](https://github.com/LionSR/TeXRA/issues/9250#issuecomment-5084548544)
+> and #9263.** `publishStatus` gates the session-fact emit on `options.events`, and no production
+> call site has ever passed `trace` and `events` together
+> (`ExecutionRegistry.streamStatusEmitOptions` returns one or the other; `AgentLaunchContext`
+> used `...(runTrace ? {} : { events })`). So dropping the `!options.trace &&` guard alone is a
+> no-op, and deleting the three projector trace-arms alone **silences status entirely** for every
+> trace-owned transition — run start, terminal, manual-retry WAITING/RESUME/CANCEL, restart
+> repair. The rails being mutually exclusive also means the renderer dedup map that §3.3 calls a
+> CLAUDE.md violation was **unreachable dead code**, not an active violation.
+>
+> The route that actually reaches 13 → 10: `StreamStatusMachine` receives the session hub at
+> construction — mirroring `new ExecutionRegistry({ streamStatus, events })` a few statements
+> later in the same `SessionHandle` constructor — and publishes the fact itself. The
+> independent `SessionHandleInit.status` injection seam goes away with it, so the machine and
+> the hub can no longer be bound to different owners.
+> `StreamStatusEmitOptions.events` and its 7 call-site properties are deleted, along with
+> `'status'` from `RUN_FACT_EVENT_TYPES`. Apply-sites land at 13 → 10 as targeted (trace 4→1,
+> fact 4→4, `onDidChange` 5→5), for **−69** production LoC, with `TexraTranscriptRecorder`
+> untouched.
+
 **One-line test for the goal:** a reader opens `desktopAgentLaunch.ts` (44 LoC, 0 detaches)
 and `executeCommand.ts` (45 LoC, 0 detaches), learns everything needed to write a frontend,
 and opening `runExecution.ts` teaches nothing extra — because nothing extra is left in it.
@@ -453,6 +477,15 @@ reaches it. Disjoint consumers; **one rail fixes both.**
 
 Orthogonal, each needing its own ruling: the reveal-stream fold (7) and the status rail
 13 → 10 (8, atomic). **No persisted format changes in any step.**
+
+> **Corrected 2026-07-26** — step 8 as prescribed in the §7 acceptance-criteria row-5 note is
+> not atomic-safe: dropping the
+> `!options.trace &&` guard alone is a no-op and deleting the three projector trace-arms alone
+> silences status for every trace-owned transition (run start, terminal, manual-retry
+> WAITING/RESUME/CANCEL, restart repair) — the two do not compose into "one rail." See the
+> corrected acceptance-criteria row 5 note (§7) and
+> [#9250 comment](https://github.com/LionSR/TeXRA/issues/9250#issuecomment-5084548544) / #9263
+> for the mechanism that actually ships 13 → 10.
 
 ### Correction to a premise this doc previously carried
 
