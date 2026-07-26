@@ -57,7 +57,7 @@ const settingsContainerStyles: CSSResult = css`
   .settings-page-nav {
     gap: var(--wa-space-3xs);
     min-height: var(--height-control);
-    padding: var(--wa-space-3xs) var(--wa-space-xs);
+    padding: 0 var(--wa-space-xs);
   }
 
   .settings-category-button,
@@ -66,8 +66,7 @@ const settingsContainerStyles: CSSResult = css`
     white-space: nowrap;
   }
 
-  .settings-category-button::part(base),
-  .settings-page-button::part(base) {
+  .settings-category-button::part(base) {
     justify-content: center;
     min-height: var(--height-control);
     padding: 0 var(--wa-space-xs);
@@ -83,8 +82,7 @@ const settingsContainerStyles: CSSResult = css`
       color var(--transition-fast);
   }
 
-  .settings-category-button:hover::part(base),
-  .settings-page-button:hover::part(base) {
+  .settings-category-button:hover::part(base) {
     background: var(--surface-hover);
     color: var(--wa-color-text-normal);
   }
@@ -97,10 +95,33 @@ const settingsContainerStyles: CSSResult = css`
     box-shadow: var(--wa-shadow-s, none);
   }
 
+  .settings-page-button::part(base) {
+    justify-content: center;
+    min-height: var(--height-control);
+    padding: 0 var(--wa-space-xs);
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--wa-color-text-quiet);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight);
+    letter-spacing: var(--letter-spacing-tight);
+    box-shadow: inset 0 -2px transparent;
+    transition:
+      background-color var(--transition-fast),
+      color var(--transition-fast),
+      box-shadow var(--transition-fast);
+  }
+
+  .settings-page-button:hover::part(base) {
+    background: var(--surface-hover);
+    color: var(--wa-color-text-normal);
+  }
+
   .settings-page-button[data-active='true']::part(base) {
-    background: var(--surface-selected);
     color: var(--wa-color-text-normal);
     font-weight: var(--font-weight-medium);
+    box-shadow: inset 0 -2px var(--wa-color-text-normal);
   }
 
   .settings-category-button wa-icon,
@@ -127,17 +148,9 @@ const settingsContainerStyles: CSSResult = css`
   }
 
   .settings-page-header {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    align-items: center;
-    gap: var(--wa-space-s);
     margin-bottom: var(--wa-space-s);
     padding-bottom: var(--wa-space-s);
     border-bottom: var(--border-thin) solid var(--border-hairline);
-  }
-
-  .settings-page-header-icon {
-    color: var(--wa-color-text-normal);
   }
 
   .settings-page-header-copy {
@@ -175,27 +188,6 @@ const settingsContainerStyles: CSSResult = css`
     font-weight: var(--font-weight-medium);
   }
 
-  @container settings (max-width: 680px) {
-    .settings-category-button::part(base) {
-      width: var(--height-control);
-      gap: 0;
-      place-content: center;
-      padding: 0;
-    }
-
-    .settings-category-button::part(start) {
-      margin: 0;
-    }
-
-    .settings-category-button wa-icon {
-      margin-inline-end: 0;
-    }
-
-    .settings-category-button::part(label) {
-      display: none;
-    }
-  }
-
   @container settings (max-width: 520px) {
     .settings-category-nav,
     .settings-page-nav {
@@ -226,12 +218,7 @@ const settingsContainerStyles: CSSResult = css`
     }
 
     .settings-page-header {
-      align-items: start;
-      gap: var(--wa-space-xs);
-    }
-
-    .settings-page-header-icon {
-      --icon-surface-size: var(--control-size-m);
+      padding-bottom: var(--wa-space-xs);
     }
   }
 `;

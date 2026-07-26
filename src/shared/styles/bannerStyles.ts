@@ -112,6 +112,24 @@ export const settingsBannerStyles: CSSResult = css`
     border-radius: var(--border-radius);
   }
 
+  .settings-banner wa-callout::part(message) {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .settings-banner-layout {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--wa-space-xs);
+    min-width: 0;
+  }
+
+  .settings-banner-icon {
+    align-self: start;
+    color: var(--wa-color-text-normal);
+  }
+
   .settings-banner-body {
     display: flex;
     min-width: 0;
@@ -135,7 +153,9 @@ export const settingsBannerStyles: CSSResult = css`
     display: flex;
     flex-wrap: wrap;
     align-items: center;
+    justify-content: flex-end;
     gap: var(--wa-space-2xs);
+    max-width: min(42rem, 46%);
   }
 
   .settings-banner-list {
@@ -166,5 +186,18 @@ export const settingsBannerStyles: CSSResult = css`
     font-size: var(--font-size-xs);
     font-weight: var(--font-weight-bold);
     line-height: var(--line-height-tight);
+  }
+
+  @container settings (max-width: 440px) {
+    .settings-banner-layout {
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: start;
+    }
+
+    .settings-banner-actions {
+      grid-column: 2;
+      justify-content: flex-end;
+      max-width: none;
+    }
   }
 `;

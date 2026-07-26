@@ -15,6 +15,7 @@ import {
   dispatchCommandFromRegistry,
   type CommandHandler,
 } from '@shared/commands/registry';
+import type { TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 import type { MenuItemConstructorOptions } from 'electron';
 
 import type { DesktopRoute } from './desktopShellMessages.js';
@@ -87,10 +88,39 @@ export const DESKTOP_COMMAND_IDS: readonly DesktopCommandId[] = [
   ...DESKTOP_HELP_COMMANDS,
 ];
 
+const DESKTOP_COMMAND_ICONS = {
+  [DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER]: 'folder-open',
+  'texra.showMainView': 'pencil',
+  'texra.showProgressView': 'eye',
+  [DESKTOP_LOCAL_COMMANDS.SHOW_LOGS]: 'file-lines',
+  [DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER]: 'folder',
+  'texra.openSettings': 'gear',
+  [DESKTOP_LOCAL_COMMANDS.TOGGLE_SUMMARY_BAR]: 'list-ul',
+  [DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR]: 'window-maximize',
+  [DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL]: 'picture-in-picture',
+  'texra.mainView.reset': 'file-circle-plus',
+  'texra.execute': 'play',
+  'texra.runSetupAssistant': 'rocket',
+  'texra.showImportOptions': 'download',
+  'texra.showMemory': 'database',
+  'texra.showAgentHistory': 'clock-rotate-left',
+  'texra.showModels': 'server',
+  'texra.showAgents': 'robot',
+  'texra.showTools': 'screwdriver-wrench',
+  'texra.showMultiAgent': 'diagram-project',
+  'texra.showGitSettings': 'code-branch',
+  'texra.openGettingStarted': 'graduation-cap',
+  'texra.cleanOutput': 'eraser',
+  'texra.cleanBuild': 'trash',
+  [DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH]: 'users',
+  [DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS]: 'book',
+} as const satisfies Record<DesktopCommandId, TeXRAIconName>;
+
 export interface DesktopCommandMenuEntry {
   id: DesktopCommandId;
   label: string;
   category: string;
+  icon: TeXRAIconName;
   accelerator?: string;
   enabled: boolean;
   unavailableReason?: string;
@@ -133,7 +163,7 @@ export interface DesktopMainViewResetMessage {
 
 const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
   DesktopLocalCommandId,
-  DesktopCommandMenuEntry
+  Omit<DesktopCommandMenuEntry, 'icon'>
 >([
   [
     DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS,
@@ -259,6 +289,7 @@ export function getDesktopCommandMenuEntries(
       if (!localEntry) throw new Error(`Missing desktop command entry: ${id}`);
       return {
         ...localEntry,
+        icon: DESKTOP_COMMAND_ICONS[id],
         accelerator: toPlatformAccelerator(localEntry.accelerator, platform),
       };
     }
@@ -275,6 +306,7 @@ export function getDesktopCommandMenuEntries(
       id,
       label: entry.shortTitle ?? entry.title,
       category: entry.category,
+      icon: DESKTOP_COMMAND_ICONS[id],
       ...(accelerator && { accelerator }),
       enabled: unavailableReason == null,
       ...(unavailableReason && { unavailableReason }),

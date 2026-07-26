@@ -274,21 +274,23 @@ export function createDesktopCommandPalette({
                         @mouseenter=${handleItemMouseEnter(index)}
                         @click=${handleItemClick(entry)}
                       >
-                        <span class="desktop-command-palette-item-icon">
-                          ${waIcon(entry.icon)}
-                        </span>
-                        <span class="desktop-command-palette-copy">
-                          <span class="desktop-command-palette-label">
-                            ${entry.label}
+                        <span class="desktop-command-palette-main">
+                          <span class="desktop-command-palette-item-icon">
+                            ${waIcon(entry.icon)}
                           </span>
-                          ${
-                            entry.description
-                              ? html`<span
-                                  class="desktop-command-palette-description"
-                                  >${entry.description}</span
-                                >`
-                              : nothing
-                          }
+                          <span class="desktop-command-palette-copy">
+                            <span class="desktop-command-palette-label">
+                              ${entry.label}
+                            </span>
+                            ${
+                              entry.description
+                                ? html`<span
+                                    class="desktop-command-palette-description"
+                                    >${entry.description}</span
+                                  >`
+                                : nothing
+                            }
+                          </span>
                         </span>
                         ${
                           entry.meta
@@ -410,7 +412,7 @@ function toPaletteEntry(
     id: entry.id,
     label: entry.label,
     description: entry.unavailableReason,
-    icon: iconForCommandCategory(entry.category),
+    icon: entry.icon,
     meta: formatDesktopAccelerator(
       shortcut?.accelerator ?? entry.accelerator,
       platform,
@@ -443,24 +445,6 @@ function groupCommandPaletteEntries(
     category,
     entries: groupEntries,
   }));
-}
-
-function iconForCommandCategory(category: string): TeXRAIconName {
-  switch (category.toLowerCase()) {
-    case 'file':
-      return 'folder-open';
-    case 'view':
-      return 'window-maximize';
-    case 'help':
-      return 'circle-question';
-    case 'settings':
-      return 'gear';
-    case 'agent':
-    case 'agents':
-      return 'robot';
-    default:
-      return 'wand-magic-sparkles';
-  }
 }
 
 function slugify(value: string): string {

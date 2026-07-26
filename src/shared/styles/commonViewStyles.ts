@@ -110,6 +110,75 @@ export const commonViewStyles: CSSResult = css`
     outline: var(--border-thin) solid var(--wa-color-focus);
   }
 
+  .settings-disclosure-list {
+    display: grid;
+    gap: var(--wa-space-2xs);
+  }
+
+  .settings-disclosure {
+    overflow: hidden;
+    border: var(--border-thin) solid var(--color-border);
+    border-radius: var(--border-radius);
+    background: var(--wa-color-surface-default);
+  }
+
+  .settings-disclosure-summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    min-height: var(--control-size-l);
+    color: var(--wa-color-text-normal);
+  }
+
+  .settings-disclosure-toggle {
+    display: block;
+    min-width: 0;
+  }
+
+  .settings-disclosure-toggle::part(base) {
+    justify-content: flex-start;
+    width: 100%;
+    min-height: var(--control-size-l);
+    padding: var(--wa-space-xs);
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+  }
+
+  .settings-disclosure-toggle:hover::part(base) {
+    background: var(--surface-hover);
+  }
+
+  .settings-disclosure-chevron {
+    display: grid;
+    width: 1em;
+    height: 1em;
+    flex: 0 0 1em;
+    place-items: center;
+    color: var(--color-text-secondary);
+    transition: transform var(--transition-fast);
+  }
+
+  .settings-disclosure-toggle[aria-expanded='true']
+    .settings-disclosure-chevron {
+    transform: rotate(90deg);
+  }
+
+  .settings-disclosure-status,
+  .settings-disclosure-actions {
+    padding-inline-end: var(--wa-space-xs);
+    white-space: nowrap;
+  }
+
+  .settings-disclosure-content {
+    padding: var(--wa-space-xs);
+    border-top: var(--border-thin) solid var(--color-border);
+    background: var(--wa-color-surface-lowered);
+  }
+
   .list-item-header {
     display: flex;
     justify-content: space-between;

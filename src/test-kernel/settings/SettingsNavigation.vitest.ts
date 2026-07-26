@@ -37,6 +37,7 @@ let declareAllCommandsSupported: () => void = () => {};
 
 async function mountSettingsApp(): Promise<LitElementLike> {
   const app = document.createElement('settings-app') as LitElementLike;
+  app.setAttribute('data-desktop-view', 'settings');
   declareAllCommandsSupported();
   setSelectedTabIndex(SETTINGS_TAB.ACCOUNT);
   document.body.append(app);
@@ -150,7 +151,7 @@ describe('hierarchical settings navigation', () => {
         expect(header?.querySelector('p')?.textContent?.trim()).toBe(
           entry.description,
         );
-        expect(header?.querySelector('wa-icon')).not.toBeNull();
+        expect(header?.querySelector('wa-icon')).toBeNull();
       }
     }
   });
@@ -210,5 +211,21 @@ describe('hierarchical settings navigation', () => {
         `.settings-page-button[data-panel="${SETTINGS_TAB_PANEL_BY_NAME.GOAL}"]`,
       ),
     ).toBeNull();
+  });
+
+  it('keeps desktop-only shortcuts out of the extension navigation', async () => {
+    const app = document.createElement('settings-app') as LitElementLike;
+    declareAllCommandsSupported();
+    setSelectedTabIndex(SETTINGS_TAB.SHORTCUTS);
+    document.body.append(app);
+    await app.updateComplete;
+
+    expect(
+      app.shadowRoot?.querySelector(
+        `.settings-page-button[data-panel="${SETTINGS_TAB_PANEL_BY_NAME.SHORTCUTS}"]`,
+      ),
+    ).toBeNull();
+    expect(activePanelLabel(app)).toBe('Account & Usage');
+    expect(app.shadowRoot?.querySelector('shortcuts-tab')).toBeNull();
   });
 });

@@ -272,7 +272,9 @@ export class SettingsApp extends SettingsAppBase {
   ): readonly SettingsNavEntry[] {
     return group.entries.filter(
       (entry) =>
-        entry.panel !== SETTINGS_TAB_PANEL_BY_NAME.GOAL || goalSupported,
+        (entry.panel !== SETTINGS_TAB_PANEL_BY_NAME.GOAL || goalSupported) &&
+        (entry.panel !== SETTINGS_TAB_PANEL_BY_NAME.SHORTCUTS ||
+          this.isDesktopHost),
     );
   }
 
@@ -492,8 +494,12 @@ export class SettingsApp extends SettingsAppBase {
       unsupportedCommands.get(),
       SETTINGS_VIEW_COMMANDS.GET_GOAL_LIST,
     );
-    const activePanel =
+    const requestedPanel =
       SETTINGS_TAB_PANEL_NAMES[selectedTabIndex.get()] ?? 'memory';
+    const activePanel =
+      !desktopHost && requestedPanel === SETTINGS_TAB_PANEL_BY_NAME.SHORTCUTS
+        ? SETTINGS_TAB_PANEL_BY_NAME.ACCOUNT
+        : requestedPanel;
     const activeEntry = SETTINGS_NAV_GROUPS.flatMap(
       (group) => group.entries,
     ).find((entry) => entry.panel === activePanel);
@@ -510,11 +516,6 @@ export class SettingsApp extends SettingsAppBase {
             activeEntry
               ? html`
                   <header class="settings-page-header tab-content-container">
-                    <span
-                      class="settings-page-header-icon icon-surface is-size-l"
-                    >
-                      ${waIcon(activeEntry.icon)}
-                    </span>
                     <div class="settings-page-header-copy">
                       <h1>${activeEntry.label}</h1>
                       <p>${activeEntry.description}</p>

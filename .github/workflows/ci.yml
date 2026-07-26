@@ -111,6 +111,10 @@ jobs:
         run: pnpm run format:check
 
       - name: Type check
+        env:
+          # Root TypeScript plus every workspace package now exceeds Node's
+          # default ~2 GB old-space limit on the hosted runner.
+          NODE_OPTIONS: --max-old-space-size=4096
         run: pnpm run typecheck
 
       - name: Lint

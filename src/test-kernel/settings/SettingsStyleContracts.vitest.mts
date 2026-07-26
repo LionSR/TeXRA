@@ -34,6 +34,15 @@ describe('settings style contracts', () => {
 
     const commonStyles = read('src/shared/styles/commonViewStyles.ts');
     expect(commonStyles).not.toContain('.settings-reminder');
+
+    const bannerRenderer = read('src/shared/wa/settingsBanner.ts');
+    const bannerStyles = read('src/shared/styles/bannerStyles.ts');
+    expect(bannerRenderer).toContain('settings-banner-layout');
+    expect(bannerRenderer).not.toContain("slot: 'icon'");
+    expect(bannerStyles).toContain(
+      'grid-template-columns: auto minmax(0, 1fr) auto',
+    );
+    expect(bannerStyles).toContain('justify-content: flex-end');
   });
 
   it('keeps semantic button skins in the shared action renderer', () => {
@@ -71,5 +80,30 @@ describe('settings style contracts', () => {
     expect(read('src/shared/styles/controlStyles.ts')).not.toContain(
       '.settings-section-title',
     );
+  });
+
+  it('uses one disclosure-row skin for provider credentials and models', () => {
+    const commonStyles = read('src/shared/styles/commonViewStyles.ts');
+    expect(commonStyles).toContain('.settings-disclosure');
+    expect(commonStyles).toContain('.settings-disclosure-summary');
+    expect(commonStyles).toContain('.settings-disclosure-toggle');
+
+    for (const component of ['ProviderKeyList.ts', 'ModelSelectionList.ts']) {
+      const source = read(
+        path.join(
+          'packages/extension/src/settingsView/frontend/components/profile',
+          component,
+        ),
+      );
+      expect(source).toContain('settings-disclosure-list');
+      expect(source).toContain('settings-disclosure-summary');
+      expect(source).toContain('settings-disclosure-toggle');
+    }
+
+    expect(
+      read(
+        'packages/extension/src/settingsView/frontend/components/profile/ProviderKeyList.ts',
+      ),
+    ).not.toContain('<table');
   });
 });

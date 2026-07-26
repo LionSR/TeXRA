@@ -331,8 +331,12 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
 }
 
 .task-sidebar-section-count::part(base) {
+  display: inline-grid;
+  min-height: 22px;
   min-width: 22px;
+  place-items: center;
   padding: 1px 6px;
+  line-height: 1;
 }
 
 .task-project-row {
@@ -949,9 +953,19 @@ body[data-desktop-platform='darwin'] .task-shell-collapsed .task-header {
   }
 
   .task-environment-button::part(base) {
+    display: grid;
     width: var(--control-size-l);
     min-width: 0;
+    place-items: center;
     padding: 0;
+  }
+
+  .task-environment-button::part(start) {
+    margin: 0;
+  }
+
+  .task-environment-button wa-icon {
+    margin: 0;
   }
 
   .task-environment-button::part(caret),

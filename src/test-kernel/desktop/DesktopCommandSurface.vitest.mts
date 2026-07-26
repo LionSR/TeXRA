@@ -48,6 +48,7 @@ describe('desktop command surface', () => {
       id: DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
       label: 'Open Folder',
       category: 'File',
+      icon: 'folder-open',
       accelerator: 'Command+O',
       enabled: true,
     });
@@ -55,6 +56,7 @@ describe('desktop command surface', () => {
       id: 'texra.showMainView',
       label: 'Show Launcher',
       category: 'TeXRA',
+      icon: 'pencil',
       accelerator: 'Command+Option+M',
       enabled: true,
     });
@@ -62,6 +64,7 @@ describe('desktop command surface', () => {
       id: 'texra.showProgressView',
       label: 'Show Progress',
       category: 'TeXRA',
+      icon: 'eye',
       accelerator: 'Command+Option+P',
       enabled: true,
     });
@@ -69,18 +72,21 @@ describe('desktop command surface', () => {
       id: DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS,
       label: 'Desktop Documentation',
       category: 'Help',
+      icon: 'book',
       enabled: true,
     });
     expect(entries).toContainEqual({
       id: DESKTOP_LOCAL_COMMANDS.SHOW_LOGS,
       label: 'Show Logs',
       category: 'TeXRA',
+      icon: 'file-lines',
       enabled: true,
     });
     expect(entries).toContainEqual({
       id: DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR,
       label: 'Toggle Bottom Bar',
       category: 'View',
+      icon: 'window-maximize',
       accelerator: 'Command+J',
       enabled: true,
     });
@@ -88,6 +94,7 @@ describe('desktop command surface', () => {
       id: DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL,
       label: 'Toggle Side Panel',
       category: 'View',
+      icon: 'picture-in-picture',
       accelerator: 'Command+Alt+B',
       enabled: true,
     });
@@ -95,6 +102,7 @@ describe('desktop command surface', () => {
       id: DESKTOP_LOCAL_COMMANDS.TOGGLE_SUMMARY_BAR,
       label: 'Toggle Summary Bar',
       category: 'View',
+      icon: 'list-ul',
       accelerator: 'Command+Alt+S',
       enabled: true,
     });

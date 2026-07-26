@@ -114,11 +114,11 @@ const SETTINGS_GROUP_ICONS: Record<
   (typeof SETTINGS_TAB_GROUPS)[number]['label'],
   TeXRAIconName
 > = {
-  'Account & Access': 'circle-user',
-  Agents: 'robot',
-  Capabilities: 'screwdriver-wrench',
-  Workspace: 'folder',
-  'Data & Activity': 'clock-rotate-left',
+  'Account & Access': 'key',
+  Agents: 'diagram-project',
+  Capabilities: 'bolt',
+  Workspace: 'folder-tree',
+  'Data & Activity': 'chart-line',
 };
 
 /** Grouped navigation tabs in display order, resolved to panel names. */

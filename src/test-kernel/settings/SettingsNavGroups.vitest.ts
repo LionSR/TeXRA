@@ -44,4 +44,15 @@ describe('settings nav groups', () => {
       }
     }
   });
+
+  it('keeps category icons distinct from page icons', () => {
+    const categoryIcons = SETTINGS_NAV_GROUPS.map((group) => group.icon);
+
+    expect(new Set(categoryIcons).size).toBe(categoryIcons.length);
+    for (const group of SETTINGS_NAV_GROUPS) {
+      expect(group.entries.map((entry) => entry.icon)).not.toContain(
+        group.icon,
+      );
+    }
+  });
 });
