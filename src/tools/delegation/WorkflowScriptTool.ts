@@ -2,18 +2,17 @@
 import { z } from 'zod';
 
 // Local imports
-import {
-  ExecutionLeaseActiveError,
-  getExecutionStore,
-  registerExecution,
-  releaseOwnedExecutionLeaseAfterFailure,
-} from '@agent/storage';
+import { getExecutionStore, registerExecution } from '@agent/storage';
 import {
   deriveWorkflowScriptCheckpointId,
   parseWorkflowScript,
   readWorkflowScriptCheckpoint,
 } from '@agent/workflowScript';
-import { captureOwnedExecutionLease } from '@agent/storage/executionLease';
+import {
+  captureOwnedExecutionLease,
+  ExecutionLeaseActiveError,
+  releaseOwnedExecutionLeaseAfterFailure,
+} from '@agent/storage/executionLease';
 import {
   AgentConfigSchema,
   type AgentConfigPayload,

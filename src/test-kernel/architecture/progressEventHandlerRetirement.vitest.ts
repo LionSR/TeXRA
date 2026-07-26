@@ -1,15 +1,14 @@
 // Node imports
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
-const REPO_ROOT = resolve(
-  fileURLToPath(new URL('.', import.meta.url)),
-  '../../..',
-);
+import {
+  REPO_ROOT,
+  sourceFilesUnder as sharedSourceFilesUnder,
+} from '../support/repoScan';
 
 const RETIRED_MODULE =
   'src/controllers/progressView/backend/events/ProgressEventHandler.ts';
@@ -29,25 +28,12 @@ const SCAN_ROOTS = [
   'src',
 ] as const;
 
-const SOURCE_FILE = /\.(?:ts|tsx|mts|cts)$/;
-
-function toRepoPath(path: string): string {
-  return relative(REPO_ROOT, resolve(REPO_ROOT, path)).replaceAll('\\', '/');
-}
-
 function sourceFilesUnder(root: string): string[] {
-  const absoluteRoot = resolve(REPO_ROOT, root);
-  let entries: string[];
-  try {
-    entries = readdirSync(absoluteRoot, { recursive: true }) as string[];
-  } catch {
-    return [];
-  }
-
-  return entries
-    .filter((entry) => SOURCE_FILE.test(entry) && !entry.endsWith('.d.ts'))
-    .map((entry) => toRepoPath(join(absoluteRoot, entry)))
-    .filter((file) => !file.startsWith('src/test-kernel/'));
+  return sharedSourceFilesUnder(resolve(REPO_ROOT, root), {
+    missingDirReturnsEmpty: true,
+    repoRelative: true,
+    excludeTestKernel: true,
+  });
 }
 
 function stripComments(source: string): string {
