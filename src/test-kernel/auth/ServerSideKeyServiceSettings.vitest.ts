@@ -82,6 +82,13 @@ describe('ServerSideKeyService', () => {
     assert.equal(service.getUseIncludedModelAccess(), false);
   });
 
+  it('keeps included access off when there is no host state store', () => {
+    const tier = createTierService();
+    const service = createService(tier.service, null);
+
+    assert.equal(service.getUseIncludedModelAccess(), false);
+  });
+
   it('persists setting changes and fires change events', async () => {
     const tier = createTierService();
     const state = new FakeStateStore({ [USE_INCLUDED_ACCESS_KEY]: false });
@@ -115,8 +122,10 @@ describe('ServerSideKeyService', () => {
     );
 
     try {
-      await service.setUseIncludedModelAccess(false);
-      assert.deepEqual(changes, [false]);
+      // Stateless services start with included access off, so `true` is the
+      // transition that fires here.
+      await service.setUseIncludedModelAccess(true);
+      assert.deepEqual(changes, [true]);
     } finally {
       disposeFailing();
       disposeRecording();
