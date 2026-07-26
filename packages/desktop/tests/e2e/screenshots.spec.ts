@@ -1,6 +1,6 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { test, expect } from '@playwright/test';
+import { test, expect, type TestInfo } from '@playwright/test';
 
 import {
   closeTexraApp,
@@ -11,9 +11,19 @@ import {
 } from './electronApp.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const SCREENSHOTS_DIR = join(HERE, '__screenshots__');
+const BASELINE_SCREENSHOTS_DIR = join(HERE, '__screenshots__');
+const UPDATE_BASELINE_SCREENSHOTS =
+  process.env.TEXRA_UPDATE_E2E_SCREENSHOTS === '1';
 
 let launched: LaunchedApp;
+
+function getScreenshotPath(testInfo: TestInfo, fileName: string): string {
+  if (UPDATE_BASELINE_SCREENSHOTS) {
+    return join(BASELINE_SCREENSHOTS_DIR, fileName);
+  }
+
+  return testInfo.outputPath(fileName);
+}
 
 test.beforeAll(async () => {
   launched = await launchTexraApp();
@@ -50,7 +60,7 @@ async function selectSettingsPage(
   );
 }
 
-test('startup team chooser screenshot', async () => {
+test('startup team chooser screenshot', async ({}, testInfo) => {
   const panel = launched.page.locator('.desktop-startup-panel');
   await expect(panel).toBeVisible();
   await expect(
@@ -59,38 +69,38 @@ test('startup team chooser screenshot', async () => {
     }),
   ).toBeVisible();
   await launched.page.screenshot({
-    path: join(SCREENSHOTS_DIR, 'startup.png'),
+    path: getScreenshotPath(testInfo, 'startup.png'),
     fullPage: false,
   });
   await dismissOnboarding(launched.page);
 });
 
-test('launcher screenshot', async () => {
+test('launcher screenshot', async ({}, testInfo) => {
   await setRoute(launched, 'main');
   await launched.page.screenshot({
-    path: join(SCREENSHOTS_DIR, 'launcher.png'),
+    path: getScreenshotPath(testInfo, 'launcher.png'),
     fullPage: false,
   });
   expect(launched.page.url()).toBeTruthy();
 });
 
-test('progress screenshot', async () => {
+test('progress screenshot', async ({}, testInfo) => {
   // With no active stream, the permanent task canvas stays on <main-app>.
   // Capture it with the project/task sidebar — the default progress surface.
   await setRoute(launched, 'progress');
   await launched.page.screenshot({
-    path: join(SCREENSHOTS_DIR, 'progress.png'),
+    path: getScreenshotPath(testInfo, 'progress.png'),
     fullPage: false,
   });
   expect(launched.page.url()).toBeTruthy();
 });
 
-test('settings screenshot', async () => {
+test('settings screenshot', async ({}, testInfo) => {
   await setRoute(launched, 'settings');
   // Open the Multi-Agent settings page — the most visually rich area.
   await selectSettingsPage('multi-agent', 4);
   await launched.page.screenshot({
-    path: join(SCREENSHOTS_DIR, 'settings.png'),
+    path: getScreenshotPath(testInfo, 'settings.png'),
     fullPage: false,
   });
   expect(launched.page.url()).toBeTruthy();
