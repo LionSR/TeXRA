@@ -55,8 +55,8 @@ export interface DesktopTaskShellState {
   readonly nextTerminalSerial: number;
 }
 
-export const SIDEBAR_MIN_WIDTH = 240;
-export const SIDEBAR_MAX_WIDTH = 380;
+export const SIDEBAR_MIN_WIDTH = 220;
+export const SIDEBAR_MAX_WIDTH = 480;
 export const WORKBENCH_MIN_WIDTH = 380;
 export const WORKBENCH_MAX_WIDTH = 960;
 
@@ -287,10 +287,11 @@ export function workspaceInitials(workspacePath: string | undefined): string {
   const name = normalized.split('/').findLast(Boolean);
   if (!name) return 'TX';
   const words = name.split(/[\s._-]+/).filter(Boolean);
-  return words
+  const initials = words
     .slice(0, 2)
     .map((word) => word[0]?.toUpperCase())
     .join('');
+  return initials || 'TX';
 }
 
 export function workspaceName(workspacePath: string | undefined): string {

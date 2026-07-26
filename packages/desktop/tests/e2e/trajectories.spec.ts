@@ -32,6 +32,7 @@ const SETTINGS_TAB_INDEX = {
   AI_AGENTS: 6,
   GIT: 7,
   LATEX: 8,
+  ACCOUNT: 10,
 } as const;
 
 let launched: LaunchedApp;
@@ -132,20 +133,18 @@ test('first launch shows a usable launcher chrome', async () => {
 });
 
 /**
- * Trajectory 2 — Settings: Models tab carries the auth banner + provider grid.
+ * Trajectory 2 — Settings: Models tab carries model access + provider keys.
  *
- * In the standalone Electron build the Researcher Access (auth) banner is
- * rendered inside the Models settings tab (not the launcher). The walkthrough
- * dismissal above means we land on the launcher, then jump to settings.
+ * Account identity and usage live in their own page; Models remains the single
+ * home for configuring model access and provider credentials.
  */
-test('settings → models tab mounts and the auth surface is reachable', async () => {
+test('settings → models tab mounts and provider settings are reachable', async () => {
   await setSettingsTab(SETTINGS_TAB_INDEX.MODELS);
   // Confirm the Models panel actually activated; without this we may catch
   // the previous tab's render and report a false positive.
   await waitForActiveSettingsPanel('models');
-  // Sanity: the panel mounted a child custom element (the profile/models
-  // surface). The actual auth banner text and provider list live one or
-  // two shadow roots deep, so we only assert structural presence here.
+  // Sanity: the panel mounted its child custom element. The provider list lives
+  // another shadow root deep, so structural presence is sufficient here.
   const panelHasChild = await launched.page.evaluate(() => {
     const settingsApp = document.querySelector('settings-app');
     const panel = settingsApp?.shadowRoot?.querySelector(
@@ -154,6 +153,25 @@ test('settings → models tab mounts and the auth surface is reachable', async (
     return panel != null && panel.children.length > 0;
   });
   expect(panelHasChild).toBe(true);
+});
+
+test('account and usage lives in its own settings panel', async () => {
+  await setSettingsTab(SETTINGS_TAB_INDEX.ACCOUNT);
+  await waitForActiveSettingsPanel('account');
+
+  const structure = await launched.page.evaluate(() => {
+    const root = document.querySelector('settings-app')?.shadowRoot;
+    const account = root?.querySelector('account-tab');
+    return {
+      accountPage: account?.shadowRoot?.querySelector('.account-page') != null,
+      persistentHeader: root?.querySelector('.settings-header') != null,
+    };
+  });
+
+  expect(structure).toEqual({
+    accountPage: true,
+    persistentHeader: false,
+  });
 });
 
 /**

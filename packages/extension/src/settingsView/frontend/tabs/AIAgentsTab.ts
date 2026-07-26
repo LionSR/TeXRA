@@ -144,19 +144,6 @@ export class AIAgentsTab extends LitElement {
         background: var(--wa-color-surface-lowered);
       }
 
-      .setting-row {
-        display: flex;
-        align-items: center;
-        gap: var(--wa-space-2xs);
-        min-height: 24px;
-      }
-
-      .setting-row label {
-        font-size: var(--font-size-sm);
-        color: var(--color-text-secondary);
-        white-space: nowrap;
-      }
-
       .setting-select {
         min-width: 10rem;
         max-width: 14rem;
@@ -189,15 +176,22 @@ export class AIAgentsTab extends LitElement {
     onChange: (e: Event) => void,
   ): TemplateResult {
     return html`
-      <div class="setting-row">
-        <label>${label}</label>
-        <wa-select class="setting-select" .value=${value} @change=${onChange}>
-          ${options.map(
-            (opt) => html`
-              <wa-option value=${opt.value}>${opt.label}</wa-option>
-            `,
-          )}
-        </wa-select>
+      <div class="settings-row">
+        <span class="settings-row-label">${label}</span>
+        <div class="settings-row-control">
+          <wa-select
+            class="setting-select"
+            aria-label=${label}
+            .value=${value}
+            @change=${onChange}
+          >
+            ${options.map(
+              (opt) => html`
+                <wa-option value=${opt.value}>${opt.label}</wa-option>
+              `,
+            )}
+          </wa-select>
+        </div>
       </div>
     `;
   }

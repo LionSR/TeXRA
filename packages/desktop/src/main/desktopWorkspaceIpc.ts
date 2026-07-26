@@ -13,13 +13,16 @@ import { getIncludedExtensions } from '@common/files/fileTypeUtils';
 import { platform } from '@platform/platform';
 import { WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
+import { isPathWithin } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { OFFICE_EXTENSIONS } from '@utils/files/mimeUtils';
 
 import {
   DESKTOP_WORKSPACE_COMMANDS,
   DesktopWorkspaceInboundMessageSchema,
+  EMPTY_DESKTOP_ENVIRONMENT_SUMMARY,
   type DesktopBrowserBounds,
+  type DesktopEnvironmentSummary,
 } from '../desktopWorkspaceMessages.js';
 import type {
   DesktopCommandMessage,
@@ -38,22 +41,34 @@ export interface DesktopWorkspaceIpcOptions {
    * differs from the renderer's own coordinates under display zoom.
    */
   toWindowBounds(bounds: DesktopBrowserBounds): DesktopBrowserBounds;
+  getEnvironmentSummary?(): Promise<DesktopEnvironmentSummary>;
   onAsyncError?(error: unknown): void;
 }
 
 /**
  * Resolves a renderer-supplied path inside the workspace, or throws.
  *
- * `WorkspaceFS.locatePath` classifies anything escaping the root as
- * 'external'; refusing those is what stops `../../.ssh/id_rsa` from being
- * readable through the editor pane.
+ * The lexical check rejects `..` traversal first. Canonical paths are then
+ * compared so a workspace symlink cannot lead the editor outside the project.
  */
-function resolveWorkspacePath(inputPath: string): string {
+async function resolveWorkspacePath(inputPath: string): Promise<string> {
   const located = WorkspaceFS.locatePath(inputPath);
   if (located.kind !== 'workspace') {
     throw new Error('Only files inside the workspace folder can be opened.');
   }
-  return located.absolutePath;
+
+  const root = WorkspaceFS.getPath();
+  if (!root) {
+    throw new Error('Workspace path is not available.');
+  }
+  const [canonicalRoot, canonicalTarget] = await Promise.all([
+    platform().fs.realPath(root),
+    platform().fs.realPath(located.absolutePath),
+  ]);
+  if (!isPathWithin(canonicalRoot, canonicalTarget)) {
+    throw new Error('Only files inside the workspace folder can be opened.');
+  }
+  return canonicalTarget;
 }
 
 export function createDesktopWorkspaceIpc(
@@ -111,7 +126,7 @@ export function createDesktopWorkspaceIpc(
 
   async function readFile(path: string): Promise<void> {
     try {
-      const contents = await WorkspaceFS.read(resolveWorkspacePath(path));
+      const contents = await WorkspaceFS.read(await resolveWorkspacePath(path));
       renderer.postToRenderer({
         command: DESKTOP_WORKSPACE_COMMANDS.FILE_READ,
         path,
@@ -125,7 +140,7 @@ export function createDesktopWorkspaceIpc(
 
   async function writeFile(path: string, contents: string): Promise<void> {
     try {
-      await WorkspaceFS.write(resolveWorkspacePath(path), contents);
+      await WorkspaceFS.write(await resolveWorkspacePath(path), contents);
       renderer.postToRenderer({
         command: DESKTOP_WORKSPACE_COMMANDS.FILE_WRITTEN,
         path,
@@ -211,6 +226,30 @@ export function createDesktopWorkspaceIpc(
           return true;
         case DESKTOP_WORKSPACE_COMMANDS.BROWSER_CLOSE:
           options.browserViews.close(data.tabId);
+          return true;
+        case DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_REQUEST:
+          if (!options.getEnvironmentSummary) {
+            renderer.postToRenderer({
+              command: DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_STATE,
+              environment: EMPTY_DESKTOP_ENVIRONMENT_SUMMARY,
+            });
+            return true;
+          }
+          void options
+            .getEnvironmentSummary()
+            .then((environment) => {
+              renderer.postToRenderer({
+                command: DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_STATE,
+                environment,
+              });
+            })
+            .catch((error: unknown) => {
+              reportError(error);
+              renderer.postToRenderer({
+                command: DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_STATE,
+                environment: EMPTY_DESKTOP_ENVIRONMENT_SUMMARY,
+              });
+            });
           return true;
       }
     },

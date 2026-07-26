@@ -376,7 +376,6 @@ export function buildDesktopMenuTemplate(
     if (!entry) throw new Error(`Missing desktop menu entry: ${id}`);
     return {
       label: entry.label,
-      ...(entry.accelerator && { accelerator: entry.accelerator }),
       ...(entry.unavailableReason && { toolTip: entry.unavailableReason }),
       enabled: entry.enabled,
       click: () => {

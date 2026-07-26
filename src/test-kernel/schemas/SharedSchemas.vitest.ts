@@ -238,6 +238,8 @@ describe('settings view tab definitions', () => {
       GIT: 7,
       LATEX: 8,
       GOAL: 9,
+      ACCOUNT: 10,
+      SHORTCUTS: 11,
     });
     expect(SETTINGS_TAB_PANEL_NAMES).toEqual([
       'memory',
@@ -250,6 +252,8 @@ describe('settings view tab definitions', () => {
       'git',
       'latex',
       'goal',
+      'account',
+      'shortcuts',
     ]);
   });
 

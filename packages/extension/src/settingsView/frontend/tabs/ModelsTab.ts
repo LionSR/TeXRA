@@ -22,7 +22,6 @@ import type {
   NumberVscodeSetting,
   ProviderKeyStatus,
 } from '@shared/schemas/settingsViewMessages';
-import type { SpendingStatus } from '@shared/schemas/spendingStatus';
 import { CHATGPT_TOOL_USE_ONLY_DESCRIPTION } from '@shared/schemas/coreSettings';
 
 // Local imports - utilities
@@ -30,7 +29,6 @@ import { pluralize } from '@utils/text/stringUtils';
 
 // Local imports - settings view components (side-effect: register)
 import '../components/profile/ApiAccessSection';
-import '../components/profile/RelayQuotaMeter';
 import '../components/profile/ProviderKeyList';
 import '../components/profile/ModelSelectionList';
 import '../components/profile/ReliabilitySettingsSection';
@@ -98,8 +96,6 @@ export class ModelsTab extends LitElement {
   @property({ attribute: false }) authenticated = false;
   @property({ attribute: false }) apiAccessMode: 'included' | 'personal' =
     'personal';
-  @property({ attribute: false }) spendingStatus: SpendingStatus | null = null;
-  @property({ type: Boolean }) quotaAutoSwitched = false;
   @property({ attribute: false }) providerKeyStatuses: ProviderKeyStatus[] = [];
   @property({ attribute: false }) chatgptAuth: ChatGptAuthStatus | null = null;
   @property({ attribute: false }) globalStreamingDefault = true;
@@ -190,7 +186,7 @@ export class ModelsTab extends LitElement {
                 ? html`<wa-button
                     appearance="outlined"
                     variant="neutral"
-                    size="s"
+                    size="small"
                     @click=${() => this.scrollToSection('#copilot-access')}
                   >
                     ${waIcon('shield', { slot: 'start' })} Copilot in VS Code
@@ -218,17 +214,9 @@ export class ModelsTab extends LitElement {
         ></api-access-section>`
       : nothing;
 
-    const quotaMeter =
-      this.authenticated && this.spendingStatus
-        ? html`<relay-quota-meter
-            .status=${this.spendingStatus}
-            .autoSwitched=${this.quotaAutoSwitched}
-          ></relay-quota-meter>`
-        : nothing;
-
     return html`
       <div class="models-container tab-content-container">
-        ${this.renderTabHint()} ${apiAccessSection} ${quotaMeter}
+        ${this.renderTabHint()} ${apiAccessSection}
         ${this.renderChatGptSection()} ${this.renderCopilotSection()}
         <provider-key-list
           .providerKeyStatuses=${this.providerKeyStatuses}
@@ -303,7 +291,7 @@ export class ModelsTab extends LitElement {
                 </span>
                 <wa-button
                   appearance="outlined"
-                  size="s"
+                  size="small"
                   @click=${() =>
                     postMessage(SETTINGS_VIEW_COMMANDS.SIGN_OUT_CHATGPT)}
                 >
@@ -365,7 +353,7 @@ export class ModelsTab extends LitElement {
             consentModel
               ? html`<wa-button
                   variant="brand"
-                  size="s"
+                  size="small"
                   @click=${() =>
                     postMessage(SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS, {
                       modelName: consentModel.name,

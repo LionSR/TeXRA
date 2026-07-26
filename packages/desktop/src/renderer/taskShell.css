@@ -9,13 +9,16 @@
 :root {
   --task-shell-header-height: 48px;
   --task-sidebar-default-width: 288px;
+  /* Traffic lights end near 70px with the custom hidden-inset position. Keep
+     native controls plus a full compact-control gap clear of app content. */
+  --macos-titlebar-safe-inset: 92px;
 }
 
 .task-shell {
   --divider-width: 1px;
   --divider-hit-area: 12px;
-  --min: 240px;
-  --max: 380px;
+  --min: 220px;
+  --max: min(480px, 42vw);
   position: relative;
   display: grid;
   width: 100vw;
@@ -63,10 +66,22 @@
   --divider-width: 1px;
   --divider-hit-area: 12px;
   --min: 380px;
-  --max: 960px;
+  --max: min(960px, calc(100% - 380px));
   display: grid;
   width: 100%;
   height: 100%;
+}
+
+.task-split-handle {
+  display: block;
+  width: 18px;
+  height: 18px;
+  color: var(--wa-color-text-quiet);
+  font-size: var(--font-size-xs);
+  line-height: 1;
+  opacity: 0.45;
+  pointer-events: none;
+  transform: rotate(90deg);
 }
 
 /* ── Project/task sidebar ─────────────────────────────────────────────── */
@@ -96,9 +111,13 @@
   align-items: center;
   gap: 9px;
   height: var(--task-shell-header-height);
-  padding: 0 12px 0 72px;
+  padding: 0 12px;
   box-sizing: border-box;
   -webkit-app-region: drag;
+}
+
+body[data-desktop-platform='darwin'] .task-sidebar-brand {
+  padding-left: var(--macos-titlebar-safe-inset);
 }
 
 .task-sidebar-logo {
@@ -298,14 +317,24 @@
 
 .task-project-files .desktop-editor-tree-list {
   display: block;
-  max-height: 230px;
-  padding: 2px 0;
+  max-height: min(42vh, 360px);
+  padding: 0;
   overflow-y: auto;
 }
 
+.task-project-files .desktop-editor-tree-row {
+  --indent-size: 1.15em;
+}
+
 .task-project-files .desktop-editor-tree-row::part(item) {
-  min-height: 30px;
-  border-radius: 7px;
+  min-height: 26px;
+  padding: 0 4px;
+  border-radius: 6px;
+}
+
+.task-project-files .desktop-editor-tree-row::part(expand-button) {
+  width: 1.5em;
+  height: 1.5em;
 }
 
 .task-project-files .desktop-editor-tree-empty {
@@ -411,40 +440,72 @@
 }
 
 .task-environment-popover {
-  --max-width: min(320px, calc(100vw - 28px));
+  --max-width: min(360px, calc(100vw - 28px));
   -webkit-app-region: no-drag;
 }
 
 .task-environment-popover::part(body) {
-  width: 300px;
+  width: 340px;
   max-width: calc(100vw - 48px);
-  padding: 10px;
+  max-height: min(680px, calc(100vh - 72px));
+  padding: 10px 12px;
+  overflow-y: auto;
 }
 
 .task-environment-popover::part(popup__popup) {
   border-color: var(--wa-color-menu-border);
-  border-radius: 14px;
+  border-radius: 18px;
   background: var(--wa-color-menu-background);
   box-shadow: var(--desktop-shadow-lg);
 }
 
 .task-environment-heading {
-  padding: 5px 8px 7px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 36px;
+  padding: 0 5px 5px 8px;
   color: var(--wa-color-text-quiet);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
-  letter-spacing: 0.02em;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: -0.01em;
+}
+
+.task-environment-refresh[disabled] wa-icon {
+  animation: environment-spin 0.9s linear infinite;
+}
+
+@keyframes environment-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.task-environment-section {
+  padding: 6px 0;
+  border-top: 1px solid var(--wa-color-surface-border);
+}
+
+.task-environment-section:first-of-type {
+  border-top: 0;
+}
+
+.task-environment-section-title {
+  padding: 7px 8px 4px;
+  color: var(--wa-color-text-quiet);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
 }
 
 .task-environment-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 9px;
-  min-height: 34px;
+  gap: 8px;
+  min-height: 32px;
   padding: 0 8px;
-  border-radius: 8px;
   color: var(--wa-color-text-normal);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size);
 }
 
 .task-environment-row > span {
@@ -454,34 +515,47 @@
   white-space: nowrap;
 }
 
-.task-environment-actions {
+.task-environment-row-icon {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 5px;
-  margin-top: 7px;
-  padding-top: 8px;
-  border-top: 1px solid var(--wa-color-surface-border);
+  place-items: center;
+  color: var(--wa-color-text-quiet);
 }
 
-.task-environment-action {
-  display: block;
-  width: 100%;
+.task-environment-trailing {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  max-width: 150px;
+  color: var(--wa-color-text-quiet);
+  font-size: var(--font-size-xs);
+  text-overflow: ellipsis;
+}
+
+.task-environment-trailing.is-success {
+  color: var(--wa-color-success-60);
+}
+
+.task-environment-diff {
+  font-variant-numeric: tabular-nums;
+}
+
+.task-environment-diff .is-added {
+  color: var(--wa-color-success-60);
+}
+
+.task-environment-diff .is-deleted {
+  color: var(--wa-color-danger-60);
+}
+
+.task-environment-more {
+  padding: 3px 8px 4px 40px;
   color: var(--wa-color-text-quiet);
   font-size: var(--font-size-xs);
 }
 
-.task-environment-action::part(base) {
-  width: 100%;
-  min-height: 54px;
-  padding: 7px 4px;
-  border-radius: var(--wa-border-radius-m);
-}
-
-.task-environment-action::part(label) {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 5px;
+.task-environment-popover .is-muted {
+  color: var(--wa-color-text-quiet);
 }
 
 .task-conversation-body {
@@ -655,7 +729,7 @@
 }
 
 body[data-desktop-platform='darwin'] .task-shell-collapsed .task-header {
-  padding-left: 76px;
+  padding-left: var(--macos-titlebar-safe-inset);
 }
 
 .task-workbench-body,
@@ -675,6 +749,12 @@ body[data-desktop-platform='darwin'] .task-shell-collapsed .task-header {
 
 .task-workbench-surface[data-scroll='true'] {
   overflow: auto;
+}
+
+.task-workbench-surface > settings-app {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .task-workbench-placeholder {
@@ -702,13 +782,13 @@ body[data-desktop-platform='darwin'] .task-shell-collapsed .task-header {
 .task-workbench-placeholder p {
   margin: 0;
   font-size: var(--font-size-sm);
-  line-height: 1.5;
+  line-height: var(--line-height-relaxed);
 }
 
 @media (max-width: 1120px) {
   .task-main-split {
     --min: 320px;
-    --max: min(720px, 64vw);
+    --max: min(720px, calc(100% - 320px));
   }
 }
 

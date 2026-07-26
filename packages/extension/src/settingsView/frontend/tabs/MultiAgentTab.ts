@@ -42,12 +42,6 @@ export class MultiAgentTab extends LitElement {
         gap: var(--wa-space-xs);
       }
 
-      .setting-block {
-        padding: var(--wa-space-xs);
-        background-color: var(--wa-color-neutral-fill-quiet);
-        border-radius: var(--border-radius);
-      }
-
       .setting-description {
         margin: var(--wa-space-2xs) 0 0 0;
         font-size: var(--font-size-sm);
@@ -395,57 +389,69 @@ export class MultiAgentTab extends LitElement {
           tabs.
         </p>
 
-        <div class="setting-block">
-          <wa-switch
-            ?checked=${this.allowOrchestratorKill}
-            @change=${(e: Event) =>
-              this.postToggle(
-                SETTINGS_VIEW_COMMANDS.SET_ALLOW_ORCHESTRATOR_KILL,
-                e,
-              )}
-          >
-            Let orchestrator stop agents early
-          </wa-switch>
-          <p class="text-secondary setting-description">
-            The orchestrator can cancel agents that are stuck or no longer
-            needed. Turn this off if you want every agent to finish no matter
-            what.
-          </p>
-        </div>
-
-        <div class="setting-block">
-          <wa-switch
-            ?checked=${this.detachSubagentsOnStop}
-            @change=${(e: Event) =>
-              this.postToggle(
-                SETTINGS_VIEW_COMMANDS.SET_DETACH_SUBAGENTS_ON_STOP,
-                e,
-              )}
-          >
-            Keep agents running if I stop the orchestrator
-          </wa-switch>
-          <p class="text-secondary setting-description">
-            Normally everything stops when you stop the orchestrator. Turn this
-            on to let agents that are mid-task finish on their own.
-          </p>
-        </div>
-
-        <div class="setting-block">
-          <wa-switch
-            ?checked=${this.worktreeSupport}
-            @change=${(e: Event) =>
-              postMessage(SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING, {
-                key: WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
-                value: Boolean((e.target as WaSwitch | null)?.checked),
-              })}
-          >
-            Allow agents to work in git worktrees
-          </wa-switch>
-          <p class="text-secondary setting-description">
-            When enabled, delegated agents can operate in git worktrees outside
-            the main workspace. All tool calls within the subagent automatically
-            use the worktree as their root directory.
-          </p>
+        <div class="settings-section">
+          <div class="settings-row">
+            <div class="settings-row-text">
+              <span class="settings-row-label">
+                Let orchestrator stop agents early
+              </span>
+              <span class="settings-row-help">
+                The orchestrator can cancel agents that are stuck or no longer
+                needed. Turn this off if you want every agent to finish.
+              </span>
+            </div>
+            <wa-switch
+              class="settings-row-control"
+              aria-label="Let orchestrator stop agents early"
+              ?checked=${this.allowOrchestratorKill}
+              @change=${(e: Event) =>
+                this.postToggle(
+                  SETTINGS_VIEW_COMMANDS.SET_ALLOW_ORCHESTRATOR_KILL,
+                  e,
+                )}
+            ></wa-switch>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-text">
+              <span class="settings-row-label">
+                Keep agents running after I stop the orchestrator
+              </span>
+              <span class="settings-row-help">
+                Let agents that are already mid-task finish independently.
+              </span>
+            </div>
+            <wa-switch
+              class="settings-row-control"
+              aria-label="Keep agents running after I stop the orchestrator"
+              ?checked=${this.detachSubagentsOnStop}
+              @change=${(e: Event) =>
+                this.postToggle(
+                  SETTINGS_VIEW_COMMANDS.SET_DETACH_SUBAGENTS_ON_STOP,
+                  e,
+                )}
+            ></wa-switch>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-text">
+              <span class="settings-row-label">
+                Allow agents to work in git worktrees
+              </span>
+              <span class="settings-row-help">
+                Delegated agents can use isolated worktrees, with every tool
+                call rooted in that worktree.
+              </span>
+            </div>
+            <wa-switch
+              class="settings-row-control"
+              aria-label="Allow agents to work in git worktrees"
+              ?checked=${this.worktreeSupport}
+              @change=${(e: Event) =>
+                postMessage(SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING, {
+                  key: WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
+                  value: Boolean((e.target as WaSwitch | null)?.checked),
+                })}
+            ></wa-switch>
+          </div>
         </div>
       </div>
     `;

@@ -109,8 +109,9 @@ import {
 } from '../desktopPdfMessages';
 import { DesktopShowPromptMessageSchema } from '../desktopPromptMessages';
 import { createDesktopCommandPalette } from './desktopCommandPalette';
+import { createDesktopShortcutRegistry } from './desktopShortcutRegistry';
 import { createStartupTeamPanel } from './desktopOnboarding';
-import { createEditorPane, type EditorFileEntry } from './editorPane';
+import { createEditorPane } from './editorPane';
 import { createTerminalPane } from './terminalPane';
 import './taskShell.css';
 import { taskSidebarTemplate, workbenchTabsTemplate } from './taskShell';
@@ -137,6 +138,7 @@ import {
 import {
   DESKTOP_WORKSPACE_COMMANDS,
   DesktopBrowserStateMessageSchema,
+  DesktopEnvironmentStateMessageSchema,
   DesktopFileErrorMessageSchema,
   DesktopFileReadMessageSchema,
   DesktopFilesListedMessageSchema,
@@ -144,12 +146,14 @@ import {
   DesktopTerminalDataMessageSchema,
   DesktopTerminalErrorMessageSchema,
   DesktopTerminalExitMessageSchema,
+  type DesktopEnvironmentSummary,
 } from '../desktopWorkspaceMessages';
 import { getRendererPlatform } from './rendererPlatform';
 import { createPdfOverlay } from './pdfOverlay';
 import { createDiffOverlay } from './diffOverlay';
 import { createDesktopPromptOverlay } from './promptOverlay';
 import { createLogsPane } from './logsPane';
+import type { EditorFileEntry } from './editorTree';
 
 const root = document.querySelector<HTMLElement>('#app');
 
@@ -211,6 +215,9 @@ function setRouteState(route: DesktopRoute): void {
 // artifact without losing the conversation that produced it.
 
 let shellState: DesktopTaskShellState = initialDesktopTaskShellState();
+let environmentSummary: DesktopEnvironmentSummary | undefined;
+let environmentLoading = false;
+let environmentPopoverOpen = false;
 
 function updateShell(next: DesktopTaskShellState): void {
   if (next === shellState) return;
@@ -332,10 +339,6 @@ const promptOverlay = createDesktopPromptOverlay(appRoot, (message) =>
   hostBridge.postMessage(message),
 );
 
-function openLogsDrawer(): void {
-  openKind('logs');
-}
-
 // =============================================================================
 // Editor / terminal / browser request plumbing
 // =============================================================================
@@ -353,6 +356,7 @@ const pendingFileReads = new Map<string, PendingFileRequest[]>();
 const pendingFileWrites = new Map<string, PendingFileRequest[]>();
 let pendingFileList:
   | {
+      promise: Promise<readonly EditorFileEntry[]>;
       resolve(files: readonly EditorFileEntry[]): void;
       reject(error: Error): void;
     }
@@ -370,10 +374,21 @@ function settlePending(
 }
 
 function requestFiles(): Promise<readonly EditorFileEntry[]> {
-  return new Promise((resolve, reject) => {
-    pendingFileList = { resolve, reject };
-    postMessage(DESKTOP_WORKSPACE_COMMANDS.LIST_FILES);
+  if (pendingFileList) return pendingFileList.promise;
+
+  let resolveList!: (files: readonly EditorFileEntry[]) => void;
+  let rejectList!: (error: Error) => void;
+  const promise = new Promise<readonly EditorFileEntry[]>((resolve, reject) => {
+    resolveList = resolve;
+    rejectList = reject;
   });
+  pendingFileList = {
+    promise,
+    resolve: resolveList,
+    reject: rejectList,
+  };
+  postMessage(DESKTOP_WORKSPACE_COMMANDS.LIST_FILES);
+  return promise;
 }
 
 function requestFileRead(path: string): Promise<string> {
@@ -501,14 +516,6 @@ function openKind(kind: WorkbenchKind): void {
   updateShell(openWorkbenchTab(shellState, { kind }));
 }
 
-/**
- * Lets Web Awesome finish the current button interaction before a workbench
- * transition replaces the header or tab that owns that button.
- */
-function openKindAfterInteraction(kind: WorkbenchKind): void {
-  requestAnimationFrame(() => openKind(kind));
-}
-
 // =============================================================================
 // Pane content
 // =============================================================================
@@ -555,9 +562,7 @@ function workbenchContentTemplate(tab: WorkbenchTab): TemplateResult {
         data-browser-slot=${tab.id}
       ></div>`;
     case 'settings':
-      return html`<div class="task-workbench-surface" data-scroll="true">
-        ${settingsView}
-      </div>`;
+      return html`<div class="task-workbench-surface">${settingsView}</div>`;
     case 'logs':
       return html`<div class="task-workbench-surface" data-scroll="true">
         ${logsPane}
@@ -606,6 +611,19 @@ function currentTaskTitle(): string {
 function environmentPopoverTemplate(
   workspacePath: string | undefined,
 ): TemplateResult {
+  const childCount = [...childStreamsByParent$.get().values()].reduce(
+    (total, children) => total + children.length,
+    0,
+  );
+  const terminalCount = shellState.workbenchTabs.filter(
+    (tab) => tab.kind === 'terminal',
+  ).length;
+  const sources = shellState.workbenchTabs.filter(
+    (tab) => tab.kind === 'editor' && tab.target,
+  );
+  const branchLabel =
+    environmentSummary?.branch ?? (environmentLoading ? 'Loading…' : 'Local');
+
   return html`
     <wa-popover
       class="task-environment-popover"
@@ -613,65 +631,164 @@ function environmentPopoverTemplate(
       placement="bottom-end"
       distance="6"
       without-arrow
+      .open=${environmentPopoverOpen}
+      @wa-show=${handleEnvironmentPopoverShow}
+      @wa-hide=${handleEnvironmentPopoverHide}
     >
-      <div class="task-environment-heading">Environment</div>
-      <div class="task-environment-row">
-        <span class="icon-surface is-size-s">${waIcon('folder-open')}</span>
-        <span title=${workspacePath ?? ''}>
-          ${workspaceName(workspacePath)}
-        </span>
-      </div>
-      <div class="task-environment-row">
-        <span class="icon-surface is-size-s">${waIcon('code-branch')}</span>
-        <span>Local workspace</span>
-      </div>
-      <div class="task-environment-row">
-        <span class="icon-surface is-size-s">${waIcon('window-maximize')}</span>
-        <span>Open panels: ${shellState.workbenchTabs.length}</span>
-      </div>
-      <div class="task-environment-actions">
+      <div class="task-environment-heading">
+        <span>Environment</span>
         <wa-button
           type="button"
-          class="task-environment-action btn-ghost"
+          class="task-environment-refresh icon-button is-size-m"
           appearance="plain"
           size="s"
-          data-popover="close"
-          @click=${() => {
-            openKindAfterInteraction('editor');
-          }}
+          aria-label="Refresh environment"
+          title="Refresh environment"
+          ?disabled=${environmentLoading}
+          @click=${requestEnvironmentSummary}
         >
-          <span class="icon-surface is-size-s">${waIcon('file-code')}</span>
-          <span>Editor</span>
+          ${waIcon(environmentLoading ? 'spinner' : 'refresh')}
         </wa-button>
-        <wa-button
-          type="button"
-          class="task-environment-action btn-ghost"
-          appearance="plain"
-          size="s"
-          data-popover="close"
-          @click=${() => {
-            openKindAfterInteraction('terminal');
-          }}
-        >
-          <span class="icon-surface is-size-s">${waIcon('terminal')}</span>
-          <span>Terminal</span>
-        </wa-button>
-        <wa-button
-          type="button"
-          class="task-environment-action btn-ghost"
-          appearance="plain"
-          size="s"
-          data-popover="close"
-          @click=${() => {
-            openKindAfterInteraction('browser');
-          }}
-        >
-          <span class="icon-surface is-size-s">${waIcon('globe')}</span>
-          <span>Browser</span>
-        </wa-button>
+      </div>
+      <div class="task-environment-section">
+        <div class="task-environment-row">
+          <span class="task-environment-row-icon"
+            >${waIcon('diff-multiple')}</span
+          >
+          <span>Changes</span>
+          <span class="task-environment-trailing task-environment-diff">
+            <span class="is-added">+${environmentSummary?.additions ?? 0}</span>
+            <span class="is-deleted"
+              >-${environmentSummary?.deletions ?? 0}</span
+            >
+          </span>
+        </div>
+        <div class="task-environment-row">
+          <span class="task-environment-row-icon"
+            >${waIcon('folder-open')}</span
+          >
+          <span title=${workspacePath ?? ''}
+            >${workspaceName(workspacePath)}</span
+          >
+          <span class="task-environment-trailing">
+            ${environmentSummary?.changedFiles ?? 0} changed
+          </span>
+        </div>
+        <div class="task-environment-row">
+          <span class="task-environment-row-icon"
+            >${waIcon('code-branch')}</span
+          >
+          <span title=${branchLabel}>${branchLabel}</span>
+          ${environmentSyncTemplate(environmentSummary)}
+        </div>
+        <div class="task-environment-row">
+          <span class="task-environment-row-icon">${waIcon('git-commit')}</span>
+          <span>Commit or push</span>
+          <span class="task-environment-trailing">
+            ${
+              (environmentSummary?.changedFiles ?? 0) === 0
+                ? 'Clean'
+                : `${environmentSummary?.changedFiles ?? 0} pending`
+            }
+          </span>
+        </div>
+      </div>
+
+      <div class="task-environment-section">
+        <div class="task-environment-section-title">Agents</div>
+        <div class="task-environment-row">
+          <span class="task-environment-row-icon">${waIcon('users')}</span>
+          <span>Subagents</span>
+          <span class="task-environment-trailing">
+            ${childCount === 0 ? 'None' : `${childCount} active or completed`}
+          </span>
+        </div>
+      </div>
+
+      <div class="task-environment-section">
+        <div class="task-environment-section-title">Background processes</div>
+        <div class="task-environment-row">
+          <span class="task-environment-row-icon">${waIcon('terminal')}</span>
+          <span>Background terminal</span>
+          <span class="task-environment-trailing">
+            ${terminalCount === 0 ? 'None' : terminalCount}
+          </span>
+        </div>
+      </div>
+
+      <div class="task-environment-section">
+        <div class="task-environment-section-title">Sources</div>
+        ${
+          sources.length === 0
+            ? html`
+                <div class="task-environment-row is-muted">
+                  <span class="task-environment-row-icon">
+                    ${waIcon('link')}
+                  </span>
+                  <span>No open sources</span>
+                </div>
+              `
+            : sources.slice(0, 3).map(
+                (source) => html`
+                  <div class="task-environment-row">
+                    <span class="task-environment-row-icon">
+                      ${waIcon('file-code')}
+                    </span>
+                    <span title=${source.target ?? ''}>${source.title}</span>
+                  </div>
+                `,
+              )
+        }
+        ${
+          sources.length > 3
+            ? html`
+                <div class="task-environment-more">
+                  +${sources.length - 3} more
+                </div>
+              `
+            : nothing
+        }
       </div>
     </wa-popover>
   `;
+}
+
+function environmentSyncTemplate(
+  summary: DesktopEnvironmentSummary | undefined,
+): TemplateResult {
+  if (!summary?.upstream) {
+    return html`
+      <span class="task-environment-trailing is-muted">No upstream</span>
+    `;
+  }
+  if (summary.ahead === 0 && summary.behind === 0) {
+    return html`
+      <span class="task-environment-trailing is-success">
+        ${waIcon('circle-check')} Synced
+      </span>
+    `;
+  }
+  return html`
+    <span class="task-environment-trailing">
+      ${summary.ahead > 0 ? `↑${summary.ahead}` : nothing}
+      ${summary.behind > 0 ? `↓${summary.behind}` : nothing}
+    </span>
+  `;
+}
+
+function handleEnvironmentPopoverShow(): void {
+  environmentPopoverOpen = true;
+  requestEnvironmentSummary();
+}
+
+function handleEnvironmentPopoverHide(): void {
+  environmentPopoverOpen = false;
+}
+
+function requestEnvironmentSummary(): void {
+  if (environmentLoading) return;
+  environmentLoading = true;
+  postMessage(DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_REQUEST);
 }
 
 function taskConversationTemplate(): TemplateResult {
@@ -778,6 +895,9 @@ function taskMainTemplate(workbench: WorkbenchTab | undefined): TemplateResult {
       .positionInPixels=${shellState.workbenchWidth}
       @wa-reposition=${rememberWorkbenchWidth}
     >
+      <span slot="divider" class="task-split-handle">
+        ${waIcon('ellipsis')}
+      </span>
       <div slot="start" class="task-main-panel">
         ${taskConversationTemplate()}
       </div>
@@ -813,6 +933,9 @@ function shellTemplate(): TemplateResult {
       data-workbench-open=${workbench ? 'true' : 'false'}
       @wa-reposition=${rememberSidebarWidth}
     >
+      <span slot="divider" class="task-split-handle">
+        ${waIcon('ellipsis')}
+      </span>
       <div slot="start" class="task-sidebar-slot">
         ${taskSidebarTemplate(
           {
@@ -856,6 +979,7 @@ function observeSurfaceResizes(): void {
     terminalPane.layout();
     syncBrowserViewBounds();
   });
+  surfaceResizeObserver.disconnect();
   for (const element of document.querySelectorAll(
     '.task-conversation, .task-workbench',
   )) {
@@ -1020,38 +1144,46 @@ function openSettingsTab(
 // Onboarding + command palette
 // =============================================================================
 
+const desktopRendererCommandActions: DesktopCommandActions = {
+  showRoute: setRoute,
+  showSettings: openSettingsTab,
+  showStream: switchToStream,
+  openDesktopDocs: () => {
+    postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS);
+  },
+  openLogFolder: () => {
+    postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER);
+  },
+  openWorkspaceFolder: () => {
+    postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER);
+  },
+  showFirstRunWalkthrough: () => {
+    startupTeamPanel.show();
+  },
+  resetMainView: () => {
+    returnToLauncher();
+    window.postMessage(
+      buildDesktopMainViewResetMessage(),
+      getWindowTargetOrigin(),
+    );
+  },
+};
 const commandPalette = bootstrapFailed
   ? undefined
   : createDesktopCommandPalette({
       document,
       canOpen: () => true,
-      actions: {
-        showRoute: setRoute,
-        showSettings: openSettingsTab,
-        showStream: switchToStream,
-        openDesktopDocs: () => {
-          postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS);
-        },
-        openLogFolder: () => {
-          postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER);
-        },
-        openWorkspaceFolder: () => {
-          postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER);
-        },
-        showFirstRunWalkthrough: () => {
-          startupTeamPanel.show();
-        },
-        resetMainView: () => {
-          returnToLauncher();
-          window.postMessage(
-            buildDesktopMainViewResetMessage(),
-            getWindowTargetOrigin(),
-          );
-        },
-      },
+      actions: desktopRendererCommandActions,
       getStreams: () => streams$.get(),
     });
-if (commandPalette) appRoot.append(commandPalette.element);
+if (commandPalette) document.body.append(commandPalette.element);
+const shortcutRegistry = bootstrapFailed
+  ? undefined
+  : createDesktopShortcutRegistry({
+      document,
+      actions: desktopRendererCommandActions,
+      openCommands: () => commandPalette?.open(),
+    });
 
 function openCommandPalette(): void {
   commandPalette?.open();
@@ -1228,6 +1360,13 @@ function handleWorkspaceMessage(data: unknown): boolean {
     updateShell(renameWorkbenchTab(shellState, tabId, title));
     return true;
   }
+  const environment = DesktopEnvironmentStateMessageSchema.safeParse(data);
+  if (environment.success) {
+    environmentSummary = environment.data.environment;
+    environmentLoading = false;
+    rerenderShell();
+    return true;
+  }
   return false;
 }
 
@@ -1337,6 +1476,17 @@ if (!bootstrapFailed) {
   if (hasWorkspace) void editorPane.refresh();
   document.body.dataset.desktopReady = 'true';
 }
+
+window.addEventListener(
+  'beforeunload',
+  () => {
+    surfaceResizeObserver?.disconnect();
+    shortcutRegistry?.dispose();
+    editorPane.dispose();
+    terminalPane.disposeAll();
+  },
+  { once: true },
+);
 
 function postWebviewReady(): void {
   // The desktop main process expects `WEBVIEW_READY` from both 'main' and

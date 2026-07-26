@@ -13,6 +13,7 @@
   "main": "./dist/main/index.js",
   "scripts": {
     "dev": "node scripts/dev.mjs",
+    "watch:main": "node esbuild.main.watch.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.main.json && tsc --noEmit -p tsconfig.preload.json && tsc --noEmit -p tsconfig.renderer.json",
     "build:main": "node esbuild.main.mjs",
     "build:preload": "esbuild src/preload/index.ts --bundle --platform=node --format=cjs --outfile=dist/preload/index.cjs --external:electron",

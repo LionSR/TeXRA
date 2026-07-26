@@ -51,7 +51,6 @@ export interface DesktopCommandPaletteOptions {
   canOpen?: () => boolean;
 }
 
-const COMMAND_PALETTE_SHORTCUT_KEY = 'k';
 const DESKTOP_SWITCH_STREAM_COMMAND_PREFIX = 'texra.desktop.switchStream:';
 
 // Pure helpers exported for unit testing (filter/index/dispatch) — the
@@ -110,15 +109,6 @@ export function executeCommandPaletteEntry(
   return result !== false;
 }
 
-export function isCommandPaletteShortcut(event: KeyboardEvent): boolean {
-  return (
-    event.key.toLowerCase() === COMMAND_PALETTE_SHORTCUT_KEY &&
-    (event.metaKey || event.ctrlKey) &&
-    !event.altKey &&
-    !event.shiftKey
-  );
-}
-
 export function createDesktopCommandPalette({
   document,
   actions,
@@ -126,8 +116,6 @@ export function createDesktopCommandPalette({
   platform = getRendererPlatform(document.defaultView),
   canOpen,
 }: DesktopCommandPaletteOptions): CommandPaletteController {
-  const view = document.defaultView;
-
   const getEntries = (): CommandPaletteEntry[] => {
     const streams = actions.showStream == null ? [] : (getStreams?.() ?? []);
     return [
@@ -281,16 +269,6 @@ export function createDesktopCommandPalette({
     dialog.querySelector<WaInput>('.desktop-command-palette-input')?.focus();
   });
 
-  // Global Cmd/Ctrl+K shortcut — must live on the document so it fires when
-  // no palette descendant is focused. canOpen guards against modal dialogs
-  // (e.g. the onboarding walkthrough) stealing the shortcut while visible.
-  view?.addEventListener('keydown', (event) => {
-    if (!isCommandPaletteShortcut(event)) return;
-    if (isTextEntryShortcutTarget(view, document, event)) return;
-    event.preventDefault();
-    open();
-  });
-
   renderTemplate();
   return { element: dialog, open, close };
 }
@@ -359,7 +337,7 @@ function isElement(
   return elementConstructor != null && target instanceof elementConstructor;
 }
 
-function isTextEntryShortcutTarget(
+export function isTextEntryShortcutTarget(
   view: Window | null,
   document: Document,
   event: KeyboardEvent,

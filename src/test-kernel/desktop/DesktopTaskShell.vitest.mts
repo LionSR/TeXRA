@@ -281,6 +281,7 @@ describe('desktop task shell model', () => {
     expect(workspaceInitials('/work/My Paper/')).toBe('MP');
     expect(workspaceInitials(String.raw`C:\work\TeXRA.paper`)).toBe('TP');
     expect(workspaceInitials('/work/single')).toBe('S');
+    expect(workspaceInitials('/work/.__-')).toBe('TX');
     expect(workspaceInitials(undefined)).toBe('TX');
   });
 });

@@ -904,6 +904,7 @@ function createWindow(options: {
   };
   const toolingSettingsController = new DefaultDesktopToolingSettingsController(
     {
+      onError: reportAsyncError,
       workspaceState: platform().workspaceState,
       globalState: platform().globalState,
       renderer: {
@@ -1258,6 +1259,7 @@ function createWindow(options: {
           height: Math.round(bounds.height * zoom),
         };
       },
+      getEnvironmentSummary: () => gitHost.getEnvironmentSummary(),
       onAsyncError: reportAsyncError,
     },
   );

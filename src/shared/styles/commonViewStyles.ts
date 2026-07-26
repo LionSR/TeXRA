@@ -336,6 +336,8 @@ export const commonViewStyles: CSSResult = css`
 
   /* Shared tab content container — consistent max-width and centering for all settings tabs */
   .tab-content-container {
+    box-sizing: border-box;
+    width: 100%;
     max-width: 1000px;
     margin: 0 auto;
   }

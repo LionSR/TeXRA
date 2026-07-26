@@ -161,10 +161,6 @@ export class ToolsTab extends LitElement {
         gap: var(--wa-space-xs);
       }
 
-      .setting-block {
-        margin-bottom: var(--wa-space-2xs);
-      }
-
       .desktop-settings {
         padding: var(--wa-space-xs);
         margin-bottom: var(--wa-space-xs);
@@ -237,7 +233,7 @@ export class ToolsTab extends LitElement {
           ${waIcon('shield')} Approval &amp; Safety
         </div>
 
-        <div class="setting-block">
+        <div class="settings-section">
           <wa-switch
             ?checked=${this.bashApprovalEnabled}
             @change=${this.handleBashApprovalToggle}
@@ -255,7 +251,7 @@ export class ToolsTab extends LitElement {
       <div class="category-section">
         <div class="category-header">${waIcon('robot')} Agent Skills</div>
 
-        <div class="setting-block">
+        <div class="settings-section">
           <wa-switch
             ?checked=${this.agentSkillsEnabled}
             @change=${this.handleAgentSkillsToggle}

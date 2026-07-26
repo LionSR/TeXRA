@@ -29,10 +29,6 @@ import {
   registerTeXRAWebAwesomeIcons,
   waIcon,
 } from '@shared/wa/webAwesomeIcons';
-import {
-  API_KEY_PROVIDER_IDS,
-  PROVIDER_DISPLAY_NAMES,
-} from '@shared/constants/providers';
 
 // Local imports - settings view
 import '@shared/wa/tabs';
@@ -42,6 +38,7 @@ import { settingsViewStyles } from './styles';
 
 // Side-effect: register tab components
 import './tabs/MemoryTab';
+import './tabs/AccountTab';
 import './tabs/GoalTab';
 import './tabs/HistoryTab';
 import './tabs/ModelsTab';
@@ -51,6 +48,7 @@ import './tabs/ToolsTab';
 import './tabs/AIAgentsTab';
 import './tabs/GitTab';
 import './tabs/LaTeXTab';
+import './tabs/ShortcutsTab';
 import './components/profile/ProviderKeyModal';
 
 // Local imports - module-scope settings state + composed message handlers
@@ -111,13 +109,10 @@ import {
   unsupportedCommands,
   userEmail,
   workflowAgents,
-  type ProviderKeyModalTarget,
 } from './settingsState';
 import type { HistoryTab } from './tabs/HistoryTab';
 
 registerTeXRAWebAwesomeIcons();
-
-const API_KEY_PROVIDER_SET = new Set<string>(API_KEY_PROVIDER_IDS);
 
 // Cast: BaseWebviewApp is abstract, but SignalWatcher expects a concrete constructor.
 // Safe because SettingsApp implements all abstract members below.
@@ -179,7 +174,7 @@ export class SettingsApp extends SettingsAppBase {
   override connectedCallback(): void {
     super.connectedCallback();
     if (this.isDesktopHost && selectedTabIndex.get() === 0) {
-      selectedTabIndex.set(SETTINGS_TAB.MODELS);
+      selectedTabIndex.set(SETTINGS_TAB.ACCOUNT);
     }
   }
 
@@ -190,8 +185,8 @@ export class SettingsApp extends SettingsAppBase {
     if (selectedIndex >= 0) {
       selectedTabIndex.set(selectedIndex);
     }
-    // Each panel keeps its own scroll offset across activations. With a left
-    // nav the row stays visible while the panel swaps, so a retained offset
+    // Each panel keeps its own scroll offset across activations. The top
+    // navigation stays visible while the panel swaps, so a retained offset
     // reads as the new panel opening mid-page.
     //
     // Deferred a frame on purpose: WA sets `active` as a Lit reactive property
@@ -208,15 +203,6 @@ export class SettingsApp extends SettingsAppBase {
       }
     });
   }
-
-  // Header auth actions (SettingsApp's own header buttons)
-  private readonly handleSignIn = (): void => {
-    postMessage(SETTINGS_VIEW_COMMANDS.SIGN_IN);
-  };
-
-  private readonly handleSignOut = (): void => {
-    postMessage(SETTINGS_VIEW_COMMANDS.SIGN_OUT);
-  };
 
   // Provider-key entry flow. Lives here (not in a leaf component) because it
   // branches on `isDesktopHost` — a `BaseWebviewApp` capability — to choose
@@ -256,111 +242,8 @@ export class SettingsApp extends SettingsAppBase {
     providerKeyModal.set(null);
   };
 
-  private getDefaultProviderKeyTarget(): ProviderKeyModalTarget {
-    const helperProvider = modelSelectionItems
-      .get()
-      .find((model) => model.name === helperModel.get())?.provider;
-    const keyStatuses = providerKeyStatuses.get();
-    const fallbackProvider =
-      keyStatuses.find((entry) => entry.status === 'not-set')?.provider ??
-      API_KEY_PROVIDER_IDS[0];
-    const provider =
-      helperProvider && API_KEY_PROVIDER_SET.has(helperProvider)
-        ? helperProvider
-        : fallbackProvider;
-    const status = keyStatuses.find((entry) => entry.provider === provider);
-    return {
-      provider,
-      displayName:
-        status?.displayName ?? PROVIDER_DISPLAY_NAMES[provider] ?? provider,
-    };
-  }
-
-  private readonly handleSetDefaultProviderKey = (): void => {
-    const target = this.getDefaultProviderKeyTarget();
+  private handleManageProviderKeys(): void {
     selectedTabIndex.set(SETTINGS_TAB.MODELS);
-    this.openProviderKeyFlow(target);
-  };
-
-  private readonly handleOpenVscodeSettings = (): void => {
-    postMessage(SETTINGS_VIEW_COMMANDS.OPEN_VSCODE_SETTINGS);
-  };
-
-  private renderHeader(): TemplateResult {
-    const settingsButton = isKnownUnsupported(
-      unsupportedCommands.get(),
-      SETTINGS_VIEW_COMMANDS.OPEN_VSCODE_SETTINGS,
-    )
-      ? nothing
-      : html`
-          <wa-button
-            aria-label="Open VS Code Settings"
-            appearance="plain"
-            size="small"
-            title="Open VS Code Settings"
-            @click=${this.handleOpenVscodeSettings}
-          >
-            ${waIcon('gear')}
-          </wa-button>
-        `;
-
-    if (authenticated.get()) {
-      return html`
-        <div class="settings-header">
-          <div class="settings-header-user">
-            ${waIcon('circle-user', { className: 'settings-header-user-icon' })}
-            <div class="settings-header-info">
-              <span class="settings-header-email">${userEmail.get()}</span>
-              <span class="settings-header-tier">${tier.get()} Plan</span>
-            </div>
-          </div>
-          <div class="settings-header-actions">
-            ${settingsButton}
-            <wa-button
-              class="settings-header-auth-button"
-              appearance="outlined"
-              variant="neutral"
-              size="small"
-              title="Sign out"
-              @click=${this.handleSignOut}
-            >
-              ${waIcon('xmark', { slot: 'start' })} Sign out
-            </wa-button>
-          </div>
-        </div>
-      `;
-    }
-
-    return html`
-      <div class="settings-header">
-        <span class="settings-header-signed-out">
-          Use TeXRA with your own API keys
-        </span>
-        <div class="settings-header-actions">
-          ${settingsButton}
-          <wa-button
-            class="settings-header-auth-button"
-            appearance="outlined"
-            variant="neutral"
-            size="small"
-            title="Set provider API key"
-            @click=${this.handleSetDefaultProviderKey}
-          >
-            ${waIcon('key', { slot: 'start' })} Set API key
-          </wa-button>
-          <wa-button
-            class="settings-header-auth-button"
-            appearance="filled"
-            variant="brand"
-            size="small"
-            title="Sign in"
-            @click=${this.handleSignIn}
-          >
-            ${waIcon('user', { slot: 'start' })} Sign in
-          </wa-button>
-        </div>
-      </div>
-    `;
   }
 
   private renderProviderKeyModal(): TemplateResult | typeof nothing {
@@ -397,15 +280,15 @@ export class SettingsApp extends SettingsAppBase {
   }
 
   /**
-   * One nav group: a heading plus its rows. The heading is slotted into `nav`
+   * One nav group: a heading plus its tabs. The heading is slotted into `nav`
    * but is not a `wa-tab`, so WA's `getAllTabs()` filter leaves it out of tab
-   * logic and arrow-key navigation while still rendering it in the column.
+   * logic and arrow-key navigation while still rendering it in the top bar.
    *
    * It is also `aria-hidden`: `role="presentation"` drops the div's own
    * semantics but not its text, which would otherwise sit inside the
    * `role="tablist"` as a bare string labelling nothing. The group name reaches
-   * assistive tech through each row's `aria-label` instead, which is also the
-   * row's only accessible name once the container query collapses the nav to
+   * assistive tech through each tab's `aria-label` instead, which is also the
+   * tab's only accessible name once the container query collapses the nav to
    * icons.
    */
   private renderNavGroup(
@@ -431,6 +314,7 @@ export class SettingsApp extends SettingsAppBase {
           html`<wa-tab
             panel=${entry.panel}
             aria-label=${`${group.label}: ${entry.label}`}
+            title=${entry.label}
             >${waIcon(entry.icon, { className: 'settings-tab-icon' })}
             <span class="settings-tab-label">${entry.label}</span></wa-tab
           >`,
@@ -447,11 +331,9 @@ export class SettingsApp extends SettingsAppBase {
 
     return html`
       <div class="settings-container">
-        ${this.renderHeader()}
-
         <wa-tab-group
           class="settings-tabs"
-          placement="start"
+          placement="top"
           .active=${
             SETTINGS_TAB_PANEL_NAMES[selectedTabIndex.get()] ?? 'memory'
           }
@@ -460,6 +342,21 @@ export class SettingsApp extends SettingsAppBase {
           ${SETTINGS_NAV_GROUPS.map((group) =>
             this.renderNavGroup(group, goalSupported),
           )}
+
+          <wa-tab-panel name="account">
+            <account-tab
+              .authenticated=${authenticated.get()}
+              .userEmail=${userEmail.get()}
+              .tier=${tier.get()}
+              .spendingStatus=${spendingStatus.get()}
+              .quotaAutoSwitched=${quotaAutoSwitched.get()}
+              .vscodeSettingsAvailable=${!isKnownUnsupported(
+                unsupportedCommands.get(),
+                SETTINGS_VIEW_COMMANDS.OPEN_VSCODE_SETTINGS,
+              )}
+              @manage-provider-keys=${this.handleManageProviderKeys}
+            ></account-tab>
+          </wa-tab-panel>
 
           <wa-tab-panel name="memory">
             <memory-tab
@@ -490,8 +387,6 @@ export class SettingsApp extends SettingsAppBase {
             <models-tab
               .authenticated=${authenticated.get()}
               .apiAccessMode=${apiAccessMode.get()}
-              .spendingStatus=${spendingStatus.get()}
-              .quotaAutoSwitched=${quotaAutoSwitched.get()}
               .providerKeyStatuses=${providerKeyStatuses.get()}
               .chatgptAuth=${chatgptAuth.get()}
               .globalStreamingDefault=${globalStreamingDefault.get()}
@@ -579,6 +474,10 @@ export class SettingsApp extends SettingsAppBase {
                 SETTINGS_VIEW_COMMANDS.GET_INLINE_CRITICISM_ENABLED,
               )}
             ></latex-tab>
+          </wa-tab-panel>
+
+          <wa-tab-panel name="shortcuts">
+            <shortcuts-tab .desktopHost=${desktopHost}></shortcuts-tab>
           </wa-tab-panel>
         </wa-tab-group>
         ${this.renderProviderKeyModal()}

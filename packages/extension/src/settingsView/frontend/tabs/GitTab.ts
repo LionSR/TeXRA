@@ -52,12 +52,6 @@ export class GitTab extends LitElement {
         gap: var(--wa-space-xs);
       }
 
-      .setting-block {
-        padding: var(--wa-space-xs);
-        background-color: var(--wa-color-neutral-fill-quiet);
-        border-radius: var(--border-radius);
-      }
-
       .setting-description {
         margin: var(--wa-space-2xs) 0 0 0;
         font-size: var(--font-size-sm);
@@ -270,7 +264,7 @@ export class GitTab extends LitElement {
           )
             ? nothing
             : html`
-                <div class="setting-block">
+                <div class="settings-section">
                   <p class="section-title">GitHub personal access token</p>
                   <p class="setting-description">
                     Used to poll GitHub for pull request events (comments,
@@ -353,7 +347,7 @@ export class GitTab extends LitElement {
             SETTINGS_VIEW_COMMANDS.GET_PR_SUBSCRIPTIONS,
           ) && this.prSubscriptions.length > 0
             ? html`
-                <div class="setting-block">
+                <div class="settings-section">
                   <p class="section-title">Active GitHub subscriptions</p>
                   <p class="setting-description">
                     An agent is monitoring these repositories
@@ -432,7 +426,7 @@ export class GitTab extends LitElement {
             : nothing
         }
 
-        <div class="setting-block">
+        <div class="settings-section">
           <wa-switch
             ?checked=${this.markCommits}
             ?disabled=${this.toggleDisabled}
@@ -449,7 +443,7 @@ export class GitTab extends LitElement {
         ${
           this.markCommits
             ? html`
-                <div class="setting-block">
+                <div class="settings-section">
                   <div class="input-row">
                     <label>Name</label>
                     <wa-input

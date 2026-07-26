@@ -58,11 +58,11 @@ async function mountSettingsApp(): Promise<LitElementLike> {
   return app;
 }
 
-function navRow(app: LitElementLike, panel: string): HTMLElement {
+function navTab(app: LitElementLike, panel: string): HTMLElement {
   const tab = app.shadowRoot?.querySelector<HTMLElement>(
     `wa-tab[panel="${panel}"]`,
   );
-  expect(tab, `missing nav row for panel "${panel}"`).not.toBeNull();
+  expect(tab, `missing navigation tab for panel "${panel}"`).not.toBeNull();
   return tab!;
 }
 
@@ -73,11 +73,11 @@ function activePanelName(app: LitElementLike): string | null | undefined {
 }
 
 /**
- * The grouped left-nav is presentation only: rows address panels by name and
- * `SettingsApp.handleTabShow` maps the name back to the `SETTINGS_TAB` index
- * that travels over IPC. These tests exercise that round trip through the real
- * component, so a regrouping that broke it fails here instead of silently
- * opening the wrong panel.
+ * The grouped top navigation is presentation only: tabs address panels by name,
+ * and `SettingsApp.handleTabShow` maps the name back to the `SETTINGS_TAB`
+ * index that travels over IPC. These tests exercise that round trip through
+ * the real component, so a regrouping that broke it fails here instead of
+ * silently opening the wrong panel.
  */
 describe('settings nav navigation', () => {
   useLitComponentTestDom(async () => {
@@ -99,8 +99,9 @@ describe('settings nav navigation', () => {
     setSelectedTabIndex(0);
   });
 
-  it('renders one nav row per tab, grouped under headings', async () => {
+  it('renders one top-level option per tab, grouped under headings', async () => {
     const app = await mountSettingsApp();
+    const tabGroup = app.shadowRoot?.querySelector('wa-tab-group');
 
     const panels = [...(app.shadowRoot?.querySelectorAll('wa-tab') ?? [])].map(
       (tab) => tab.getAttribute('panel'),
@@ -112,13 +113,14 @@ describe('settings nav navigation', () => {
     expect(panels).toEqual(navEntries.map((entry) => entry.panel));
     expect(panels).toHaveLength(SETTINGS_TAB_ORDER.length);
     expect(headings).toEqual(navGroups.map((group) => group.label));
+    expect(tabGroup?.getAttribute('placement')).toBe('top');
   });
 
-  it('activates the panel matching each nav row and reports its wire index', async () => {
+  it('activates the panel matching each navigation tab and reports its wire index', async () => {
     const app = await mountSettingsApp();
 
     for (const entry of navEntries) {
-      navRow(app, entry.panel).click();
+      navTab(app, entry.panel).click();
       await app.updateComplete;
 
       expect(activePanelName(app)).toBe(entry.panel);
@@ -139,6 +141,31 @@ describe('settings nav navigation', () => {
     ).not.toBeNull();
   });
 
+  it('keeps account actions in their own panel and navigates key management to models', async () => {
+    const app = await mountSettingsApp();
+
+    navTab(app, SETTINGS_TAB_PANEL_BY_NAME.ACCOUNT).click();
+    await app.updateComplete;
+
+    const account =
+      app.shadowRoot?.querySelector<LitElementLike>('account-tab');
+    await account?.updateComplete;
+    const manageKeys = account?.shadowRoot?.querySelector<HTMLElement>(
+      '.account-manage-keys',
+    );
+
+    expect(app.shadowRoot?.querySelector('.settings-header')).toBeNull();
+    expect(account).not.toBeNull();
+    expect(manageKeys).not.toBeNull();
+
+    manageKeys?.click();
+    await app.updateComplete;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(activePanelName(app)).toBe(SETTINGS_TAB_PANEL_BY_NAME.MODELS);
+    expect(getSelectedTabIndex()).toBe(SETTINGS_TAB.MODELS);
+  });
+
   it('keeps group headings out of the tab list', async () => {
     // wa-tab-group builds its tab list from slot[name="nav"] filtered to
     // wa-tab, which is what lets a heading share the column without becoming a
@@ -151,7 +178,7 @@ describe('settings nav navigation', () => {
     // initial activation runs from an IntersectionObserver the test DOM does not
     // provide), so asserting "unchanged" against no active panel would pass for
     // a heading that does steal activation.
-    navRow(app, SETTINGS_TAB_PANEL_BY_NAME.LATEX).click();
+    navTab(app, SETTINGS_TAB_PANEL_BY_NAME.LATEX).click();
     await app.updateComplete;
     expect(activePanelName(app)).toBe(SETTINGS_TAB_PANEL_BY_NAME.LATEX);
 
@@ -163,16 +190,16 @@ describe('settings nav navigation', () => {
     expect(activePanelName(app)).toBe(SETTINGS_TAB_PANEL_BY_NAME.LATEX);
   });
 
-  it('names every nav row for the icon-only collapsed layout', async () => {
-    // The container query at 620px hides the label span, and waIcon() emits
-    // aria-hidden, so the aria-label is the row's only accessible name in a
+  it('names every nav tab for the icon-only collapsed layout', async () => {
+    // The narrow container query hides the label span, and waIcon() emits
+    // aria-hidden, so the aria-label is the tab's only accessible name in a
     // quarter-pane. The group name is folded in because it is the heading text
     // that aria-hidden removes from the tablist.
     const app = await mountSettingsApp();
 
     for (const group of navGroups) {
       for (const entry of group.entries) {
-        expect(navRow(app, entry.panel).getAttribute('aria-label')).toBe(
+        expect(navTab(app, entry.panel).getAttribute('aria-label')).toBe(
           `${group.label}: ${entry.label}`,
         );
       }

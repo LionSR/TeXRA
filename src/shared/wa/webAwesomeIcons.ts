@@ -280,7 +280,7 @@ const icons = {
 // `as const satisfies …` keeps alias keys as a literal union (so
 // `keyof typeof CODICON_ALIASES` narrows TeXRAIconName) and compile-checks
 // every alias value against the registered icon names.
-export const CODICON_ALIASES = {
+export const CODICON_ALIASES = Object.freeze({
   account: 'circle-user',
   add: 'plus',
   archive: 'box-archive',
@@ -366,7 +366,7 @@ export const CODICON_ALIASES = {
   window: 'window-maximize',
   x: 'xmark',
   zap: 'bolt',
-} as const satisfies Readonly<Record<string, keyof typeof icons>>;
+} as const satisfies Readonly<Record<string, keyof typeof icons>>);
 
 let isRegistered = false;
 

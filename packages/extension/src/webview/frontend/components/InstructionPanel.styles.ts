@@ -577,7 +577,7 @@ export const instructionPanelStyles: CSSResult = css`
     }
   }
 
-  @container desktop-composer (max-width: 520px) {
+  @container desktop-composer (max-width: 460px) {
     :host([desktop-host]) .desktop-drop-affordance span {
       display: none;
     }

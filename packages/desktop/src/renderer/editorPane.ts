@@ -28,15 +28,15 @@ import {
 import type { DesktopThemeKind } from '@shared/schemas/commonViewMessages';
 
 import { getDesktopChromeFontSize } from './desktopTypography';
+import {
+  buildEditorTree,
+  type EditorFileEntry,
+  type EditorTreeDirectory,
+  type EditorTreeNode,
+} from './editorTree';
 
 type CodeEditor = ReturnType<MonacoModule['editor']['create']>;
 type TextModel = ReturnType<MonacoModule['editor']['createModel']>;
-
-export interface EditorFileEntry {
-  /** Workspace-relative path, used as the tree label and the open key. */
-  readonly path: string;
-  readonly isDirectory: boolean;
-}
 
 export interface EditorPaneCallbacks {
   /** Lists workspace files for the tree. */
@@ -89,16 +89,20 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
 
   let monaco: MonacoModule | undefined;
   let editor: CodeEditor | undefined;
-  let files: readonly EditorFileEntry[] = [];
+  let editorLoad: Promise<CodeEditor | undefined> | undefined;
+  let latestOpenRequest = 0;
+  let treeNodes: readonly EditorTreeNode[] = [];
   let openPath: string | undefined;
   let theme: DesktopThemeKind = 'dark';
   let treeError: string | undefined;
   let treeLoading = true;
   let refreshPromise: Promise<void> | undefined;
+  const expandedDirectories = new Set<string>();
   // One model per opened file so switching tabs preserves each file's undo
   // history and cursor — recreating a model on every switch would lose both.
   const models = new Map<string, TextModel>();
   const dirtyPaths = new Set<string>();
+  const syncingPaths = new Set<string>();
 
   function renderTree(): void {
     render(treeTemplate(), treeHost);
@@ -130,7 +134,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
         </div>
       `;
     }
-    if (files.length === 0) {
+    if (treeNodes.length === 0) {
       return html`
         <div class="desktop-editor-tree-empty">
           <p>No files found in this workspace.</p>
@@ -157,7 +161,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
         ) => requestOpenFromRow(event.detail.selection.at(-1))}
         @click=${handleTreeClick}
       >
-        ${files.map((entry) => fileRowTemplate(entry))}
+        ${treeNodes.map((node) => treeNodeTemplate(node))}
       </wa-tree>
     `;
   }
@@ -176,21 +180,59 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     if (row?.hasAttribute('selected')) requestOpenFromRow(row);
   }
 
-  function fileRowTemplate(entry: EditorFileEntry): TemplateResult {
-    const isOpen = entry.path === openPath;
-    const isDirty = dirtyPaths.has(entry.path);
+  function handleDirectoryToggle(
+    event: Event,
+    directory: EditorTreeDirectory,
+    expanded: boolean,
+  ): void {
+    // Tree item events bubble through ancestor tree items. Only the directory
+    // whose disclosure control changed should update its expansion state.
+    if (event.target !== event.currentTarget) return;
+    if (expanded) {
+      expandedDirectories.add(directory.path);
+    } else {
+      expandedDirectories.delete(directory.path);
+    }
+  }
+
+  function treeNodeTemplate(node: EditorTreeNode): TemplateResult {
+    if (node.kind === 'directory') {
+      const expanded = expandedDirectories.has(node.path);
+      return html`
+        <wa-tree-item
+          class="desktop-editor-tree-row"
+          data-path=${node.path}
+          data-kind="directory"
+          .expanded=${expanded}
+          title=${node.path}
+          @wa-expand=${(event: Event) =>
+            handleDirectoryToggle(event, node, true)}
+          @wa-collapse=${(event: Event) =>
+            handleDirectoryToggle(event, node, false)}
+        >
+          ${waIcon(expanded ? 'folder-open' : 'folder', {
+            className: 'desktop-editor-tree-icon',
+          })}
+          <span class="desktop-editor-tree-label">${node.name}</span>
+          ${node.children.map((child) => treeNodeTemplate(child))}
+        </wa-tree-item>
+      `;
+    }
+
+    const isOpen = node.path === openPath;
+    const isDirty = dirtyPaths.has(node.path);
     return html`
       <wa-tree-item
         class="desktop-editor-tree-row"
-        data-path=${entry.path}
-        data-kind=${entry.isDirectory ? 'directory' : 'file'}
+        data-path=${node.path}
+        data-kind="file"
         .selected=${isOpen}
-        title=${entry.path}
+        title=${node.path}
       >
-        ${waIcon(entry.isDirectory ? 'folder' : 'file-lines', {
+        ${waIcon('file-lines', {
           className: 'desktop-editor-tree-icon',
         })}
-        <span class="desktop-editor-tree-label">${entry.path}</span>
+        <span class="desktop-editor-tree-label">${node.name}</span>
         ${isDirty ? html`<span class="desktop-editor-dirty-dot"></span>` : ''}
       </wa-tree-item>
     `;
@@ -198,50 +240,57 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
 
   async function ensureEditor(): Promise<CodeEditor | undefined> {
     if (editor) return editor;
-    try {
-      monaco = await loadMonaco();
-    } catch (error) {
-      callbacks.onError(error);
-      render(
-        html`<wa-callout class="desktop-editor-tree-empty" variant="danger">
-          ${waIcon('triangle-exclamation', { slot: 'icon' })} The editor failed
-          to load.
-        </wa-callout>`,
-        editorHost,
-      );
-      return undefined;
-    }
-    const editorFontSize = getDesktopChromeFontSize();
-    editor = monaco.editor.create(editorHost, {
-      theme: monacoThemeForHostTheme(theme),
-      // Monaco measures its own container, and the pane is resized by splits and
-      // divider drags, not only by the window.
-      automaticLayout: true,
-      // A minimap on a prose-shaped document is noise; the file tree already
-      // names the file. Line numbers stay because errors are reported by line.
-      minimap: { enabled: false },
-      fontSize: editorFontSize,
-      lineHeight: Math.round(editorFontSize * 1.5),
-      // Papers and proofs have paragraph-length lines, so wrapping beats a
-      // horizontal scrollbar — but wrap on word boundaries, not anywhere.
-      // Monaco's default `wordWrapBreakAfterCharacters` splits inside a control
-      // sequence, turning `\documentclass{article}` into two lines mid-token.
-      wordWrap: 'bounded',
-      wordWrapColumn: 120,
-      wrappingStrategy: 'advanced',
-      scrollBeyondLastLine: false,
-      renderWhitespace: 'selection',
-      lineNumbersMinChars: 3,
-      glyphMargin: false,
-      folding: true,
-      padding: { top: 12, bottom: 12 },
-      smoothScrolling: true,
-      cursorBlinking: 'smooth',
-    });
-    return editor;
+    if (editorLoad) return editorLoad;
+
+    editorLoad = loadMonaco()
+      .then((loadedMonaco) => {
+        monaco = loadedMonaco;
+        const editorFontSize = getDesktopChromeFontSize();
+        editor = loadedMonaco.editor.create(editorHost, {
+          theme: monacoThemeForHostTheme(theme),
+          // Monaco measures its own container, and the pane is resized by splits
+          // and divider drags, not only by the window.
+          automaticLayout: true,
+          // A minimap on a prose-shaped document is noise; the file tree already
+          // names the file. Line numbers stay because errors are reported by line.
+          minimap: { enabled: false },
+          fontSize: editorFontSize,
+          lineHeight: Math.round(editorFontSize * 1.5),
+          // Papers and proofs have paragraph-length lines, so wrapping beats a
+          // horizontal scrollbar — but wrap on word boundaries, not anywhere.
+          wordWrap: 'bounded',
+          wordWrapColumn: 120,
+          wrappingStrategy: 'advanced',
+          scrollBeyondLastLine: false,
+          renderWhitespace: 'selection',
+          lineNumbersMinChars: 3,
+          glyphMargin: false,
+          folding: true,
+          padding: { top: 12, bottom: 12 },
+          smoothScrolling: true,
+          cursorBlinking: 'smooth',
+        });
+        return editor;
+      })
+      .catch((error: unknown) => {
+        callbacks.onError(error);
+        render(
+          html`<wa-callout class="desktop-editor-tree-empty" variant="danger">
+            ${waIcon('triangle-exclamation', { slot: 'icon' })} The editor
+            failed to load.
+          </wa-callout>`,
+          editorHost,
+        );
+        return undefined;
+      })
+      .finally(() => {
+        editorLoad = undefined;
+      });
+    return editorLoad;
   }
 
   async function open(path: string): Promise<void> {
+    const request = ++latestOpenRequest;
     const target = await ensureEditor();
     if (!target || !monaco) return;
     try {
@@ -256,13 +305,30 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
         // edits too, which is correct here: only reads and saves are
         // programmatic, and both reset the flag explicitly.
         model.onDidChangeContent(() => {
+          if (syncingPaths.has(path)) return;
           if (dirtyPaths.has(path)) return;
           dirtyPaths.add(path);
           callbacks.onDirtyChange(path, true);
           renderTree();
         });
         models.set(path, model);
+      } else if (!dirtyPaths.has(path)) {
+        const contents = await callbacks.readFile(path);
+        // The read crosses IPC. Recheck dirty state in case the user edited the
+        // cached model while it was in flight; their local change always wins.
+        if (!dirtyPaths.has(path) && model.getValue() !== contents) {
+          syncingPaths.add(path);
+          try {
+            model.setValue(contents);
+          } finally {
+            syncingPaths.delete(path);
+          }
+        }
       }
+      // Several tree clicks can race the first Monaco load and IPC reads.
+      // Populate every requested model, but only the newest request may choose
+      // which one is visible.
+      if (request !== latestOpenRequest) return;
       target.setModel(model);
       openPath = path;
       renderTree();
@@ -278,7 +344,11 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     refreshPromise = callbacks
       .listFiles()
       .then((listedFiles) => {
-        files = listedFiles;
+        const tree = buildEditorTree(listedFiles);
+        treeNodes = tree.nodes;
+        for (const path of expandedDirectories) {
+          if (!tree.directoryPaths.has(path)) expandedDirectories.delete(path);
+        }
         treeError = undefined;
       })
       .catch((error: unknown) => {

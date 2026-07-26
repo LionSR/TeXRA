@@ -83,6 +83,8 @@ export const SETTINGS_TAB_ORDER = [
   'GIT',
   'LATEX',
   'GOAL',
+  'ACCOUNT',
+  'SHORTCUTS',
 ] as const;
 
 export type SettingsTabName = (typeof SETTINGS_TAB_ORDER)[number];
@@ -107,7 +109,7 @@ export const SETTINGS_TAB = Object.fromEntries(
 export type SettingsTab = (typeof SETTINGS_TAB)[keyof typeof SETTINGS_TAB];
 
 /**
- * Presentation-only grouping for the settings left-nav.
+ * Presentation-only grouping for the settings top navigation.
  *
  * Deliberately a second, independent layer: `SETTINGS_TAB_ORDER` is the wire
  * format (indices cross IPC and are hand-copied into e2e index tables), so nav
@@ -124,10 +126,11 @@ export type SettingsTab = (typeof SETTINGS_TAB)[keyof typeof SETTINGS_TAB];
  * appended tab cannot ship without being placed here.
  */
 export const SETTINGS_TAB_GROUPS = [
+  { label: 'Account', tabs: ['ACCOUNT'] },
   { label: 'Models & Access', tabs: ['MODELS'] },
   { label: 'Agents', tabs: ['AGENTS', 'MULTI_AGENT'] },
   { label: 'Tools & Integrations', tabs: ['TOOLS', 'AI_AGENTS', 'LATEX'] },
-  { label: 'Workspace', tabs: ['GIT'] },
+  { label: 'Workspace', tabs: ['GIT', 'SHORTCUTS'] },
   { label: 'Activity', tabs: ['HISTORY', 'MEMORY', 'GOAL'] },
 ] as const satisfies readonly {
   label: string;

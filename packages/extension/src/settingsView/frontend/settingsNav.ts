@@ -1,5 +1,5 @@
 /**
- * Settings left-nav presentation layer.
+ * Settings top-navigation presentation layer.
  *
  * Deliberately separate from the tab wire format. `SETTINGS_TAB_ORDER` fixes
  * the indices that travel over IPC (`SET_TAB.tabIndex`) and are hand-copied
@@ -42,15 +42,17 @@ const SETTINGS_TAB_METADATA: Record<
   AGENTS: { icon: 'robot', label: 'Agents' },
   MULTI_AGENT: { icon: 'users', label: 'Teams' },
   TOOLS: { icon: 'screwdriver-wrench', label: 'Tools' },
-  // Not 'robot': that is AGENTS, and once the nav collapses to icons two rows
+  // Not 'robot': that is AGENTS, and once the nav collapses to icons two tabs
   // sharing a glyph are indistinguishable. External agents are the CLI ones.
   AI_AGENTS: { icon: 'terminal', label: 'External Agents' },
   GIT: { icon: 'code-branch', label: 'Git' },
   LATEX: { icon: 'file-code', label: 'LaTeX' },
   GOAL: { icon: 'compass', label: 'Goals' },
+  ACCOUNT: { icon: 'circle-user', label: 'Account & Usage' },
+  SHORTCUTS: { icon: 'code', label: 'Shortcuts' },
 };
 
-/** Grouped nav rows in display order, resolved to panel names. */
+/** Grouped navigation tabs in display order, resolved to panel names. */
 export const SETTINGS_NAV_GROUPS: readonly SettingsNavGroup[] =
   SETTINGS_TAB_GROUPS.map((group) => ({
     label: group.label,

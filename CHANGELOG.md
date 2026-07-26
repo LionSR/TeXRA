@@ -62,6 +62,18 @@ All notable changes to this project will be documented in this file.
 - **The starter-team chooser now opens in the task canvas at startup** — it no
   longer blocks the app as a modal, and users can save a preference to hide it
   on later launches.
+- **Project files now follow their folder hierarchy in the sidebar** — nested
+  folders expand in place, keep their open state while the list refreshes, and
+  show concise file names instead of flattened paths.
+- **Settings now use a responsive top navigation** — account identity, sign-in,
+  included usage, and credential access have a dedicated Account & Usage page,
+  while the remaining settings stay reachable in compact split views.
+- **Desktop keyboard shortcuts are now customizable** — users can search,
+  reassign, clear, and restore bindings from a dedicated settings page, with
+  changes applied immediately.
+- **The task toolbar now includes an environment summary** — a compact floating
+  panel shows workspace changes, branch status, active agents, background
+  terminal state, and attached sources without duplicating their controls.
 
 #### Bug Fixes
 
@@ -91,6 +103,14 @@ All notable changes to this project will be documented in this file.
 - **The task composer stays organized as its panel narrows** — session and
   runner choices, agent and model selectors, tools, and the centered send
   button now form clear responsive groups instead of colliding or drifting.
+- **Files changed outside TeXRA refresh before editing** — switching back to a
+  clean editor tab no longer risks saving an older cached copy over newer
+  project changes.
+- **Desktop editor access stays inside the open project** — linked paths can no
+  longer be used to read or write files outside the workspace.
+- **Desktop startup and narrow layouts remain usable** — onboarding adapts to
+  split panes, tool information appears immediately while refreshing, and
+  macOS window controls no longer collide with navigation.
 
 ### CLI
 

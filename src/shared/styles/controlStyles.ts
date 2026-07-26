@@ -487,9 +487,8 @@ export const splitButtonStyles: CSSResult = css`
  * per-row card, no per-row radius, no per-row background.
  *
  * Reaches the settings tabs through `commonViewStyles`, which every tab already
- * adopts. It supersedes the two `.setting-row` and four `.setting-block` local
- * copies (byte-identical apart from spacing drift); retiring those call sites
- * belongs to the settings-hierarchy workstream that owns those files.
+ * adopts. Settings tabs use this one hierarchy instead of defining local row
+ * or block variants.
  */
 export const settingsRowStyles: CSSResult = css`
   .settings-section {

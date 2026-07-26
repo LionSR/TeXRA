@@ -33,21 +33,38 @@ export class OnboardingWelcomeCard extends LitElement {
     css`
       :host {
         display: block;
+        min-width: 0;
       }
 
-      /* Match the inline-banner framing (see bannerStyles): wa-callout owns
-         the variant color/border; we only adjust its hardcoded padding. */
+      .welcome-card-container {
+        min-width: 0;
+        container: onboarding-card / inline-size;
+      }
+
       wa-callout {
+        box-sizing: border-box;
+        display: block;
+        width: 100%;
+        max-width: 100%;
         margin-bottom: var(--wa-space-s);
-        padding: var(--wa-space-s) var(--wa-space-m);
+        padding: var(--wa-space-m);
       }
 
       wa-callout::part(icon) {
-        align-items: flex-start;
+        display: none;
       }
 
-      .welcome-icon {
-        margin-top: var(--wa-space-3xs);
+      .welcome-header {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        align-items: start;
+        gap: var(--wa-space-s);
+        min-width: 0;
+        margin-bottom: var(--wa-space-s);
+      }
+
+      .welcome-heading {
+        min-width: 0;
       }
 
       .card-title {
@@ -56,18 +73,19 @@ export class OnboardingWelcomeCard extends LitElement {
         font-size: var(--font-size-lg);
         letter-spacing: -0.005em;
         line-height: var(--line-height-tight);
-        margin-bottom: var(--wa-space-2xs);
+        margin: var(--wa-space-3xs) 0 var(--wa-space-2xs);
       }
 
       .card-copy {
-        margin: 0 0 var(--wa-space-s);
+        margin: 0;
         color: var(--vscode-descriptionForeground);
         line-height: var(--line-height-normal, 1.4);
+        overflow-wrap: anywhere;
       }
 
       .path {
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
         gap: var(--wa-space-xs);
         margin: 0 0 var(--wa-space-s);
       }
@@ -98,6 +116,7 @@ export class OnboardingWelcomeCard extends LitElement {
         color: var(--vscode-descriptionForeground);
         font-size: var(--font-size-sm);
         line-height: var(--line-height-normal, 1.4);
+        overflow-wrap: anywhere;
       }
 
       .choices {
@@ -112,7 +131,19 @@ export class OnboardingWelcomeCard extends LitElement {
 
       .choice wa-button::part(base) {
         width: 100%;
+        height: auto;
+        min-height: var(--height-button);
+        padding-block: var(--wa-space-2xs);
         justify-content: center;
+        white-space: normal;
+      }
+
+      .choice wa-button::part(label) {
+        display: block;
+        min-width: 0;
+        overflow-wrap: anywhere;
+        white-space: normal !important;
+        text-align: center;
       }
 
       .choice-description {
@@ -122,6 +153,7 @@ export class OnboardingWelcomeCard extends LitElement {
         font-size: var(--font-size-sm);
         opacity: var(--opacity-subtle);
         line-height: var(--line-height-normal, 1.4);
+        overflow-wrap: anywhere;
       }
 
       .skip-row {
@@ -138,9 +170,46 @@ export class OnboardingWelcomeCard extends LitElement {
         opacity: var(--opacity-subtle);
       }
 
-      @media (max-width: 520px) {
-        .path {
+      @container onboarding-card (max-width: 420px) {
+        wa-callout {
+          padding: var(--wa-space-xs);
+        }
+
+        .welcome-header {
           grid-template-columns: 1fr;
+          gap: var(--wa-space-xs);
+        }
+
+        .welcome-icon {
+          display: none;
+        }
+
+        .path {
+          gap: var(--wa-space-2xs);
+          margin-bottom: var(--wa-space-xs);
+        }
+
+        .path-step {
+          display: grid;
+          grid-template-columns: minmax(86px, auto) minmax(0, 1fr);
+          gap: var(--wa-space-xs);
+          padding: var(--wa-space-2xs);
+        }
+
+        .path-step__label {
+          margin-bottom: 0;
+        }
+
+        .choices {
+          gap: var(--wa-space-xs);
+        }
+
+        .choice wa-button {
+          font-size: var(--font-size-sm);
+        }
+
+        .choice-description {
+          text-align: left;
         }
       }
     `,
@@ -168,123 +237,128 @@ export class OnboardingWelcomeCard extends LitElement {
 
   override render(): TemplateResult {
     return html`
-      <wa-callout id="onboardingWelcomeCard" variant="brand">
-        <span
-          slot="icon"
-          class="welcome-icon icon-surface is-size-l"
-          aria-hidden="true"
-        >
-          ${waIcon('wand-magic-sparkles')}
-        </span>
-        <span class="card-title">${ONBOARDING_CARD_TITLE}</span>
-        <p class="card-copy">
-          Start with one credential. TeXRA then checks this project, picks the
-          right agent team, and starts your first useful edit.
-        </p>
-        <div class="path" aria-label="Getting started path">
-          <div class="path-step">
-            <span class="path-step__label">
-              <span class="icon-surface is-size-s" aria-hidden="true">
-                ${waIcon('right-to-bracket')}
-              </span>
-              <span>1. Connect</span>
-            </span>
-            <p class="path-step__copy">
-              ChatGPT subscription, Researcher Access, or a provider API key.
-            </p>
-          </div>
-          <div class="path-step">
-            <span class="path-step__label">
-              <span class="icon-surface is-size-s" aria-hidden="true">
-                ${waIcon('rocket')}
-              </span>
-              <span>2. Setup</span>
-            </span>
-            <p class="path-step__copy">
-              The setup assistant checks LaTeX and applies a starter team.
-            </p>
-          </div>
-          <div class="path-step">
-            <span class="path-step__label">
-              <span class="icon-surface is-size-s" aria-hidden="true">
-                ${waIcon('code-compare')}
-              </span>
-              <span>3. Review</span>
-            </span>
-            <p class="path-step__copy">
-              Run a polish pass and inspect the diff before accepting changes.
-            </p>
-          </div>
-        </div>
-        <div class="choices">
-          <div class="choice">
-            <wa-button
-              id="onboardingChatGptButton"
-              class="btn-primary"
-              variant="brand"
-              appearance="filled"
-              size="m"
-              @click=${this.handleChatGpt}
+      <div class="welcome-card-container">
+        <wa-callout id="onboardingWelcomeCard" variant="brand">
+          <div class="welcome-header">
+            <span
+              class="welcome-icon icon-surface is-size-l"
+              aria-hidden="true"
             >
-              ${waIcon('comment-discussion', { slot: 'start' })}
-              ${ONBOARDING_CHOICE_CHATGPT.label}
-            </wa-button>
-            <span class="choice-description">
-              ${ONBOARDING_CHOICE_CHATGPT.description}
+              ${waIcon('wand-magic-sparkles')}
             </span>
+            <div class="welcome-heading">
+              <span class="card-title">${ONBOARDING_CARD_TITLE}</span>
+              <p class="card-copy">
+                Start with one credential. TeXRA then checks this project, picks
+                the right agent team, and starts your first useful edit.
+              </p>
+            </div>
           </div>
-          <div class="choice">
+          <div class="path" aria-label="Getting started path">
+            <div class="path-step">
+              <span class="path-step__label">
+                <span class="icon-surface is-size-s" aria-hidden="true">
+                  ${waIcon('right-to-bracket')}
+                </span>
+                <span>1. Connect</span>
+              </span>
+              <p class="path-step__copy">
+                ChatGPT subscription, Researcher Access, or a provider API key.
+              </p>
+            </div>
+            <div class="path-step">
+              <span class="path-step__label">
+                <span class="icon-surface is-size-s" aria-hidden="true">
+                  ${waIcon('rocket')}
+                </span>
+                <span>2. Setup</span>
+              </span>
+              <p class="path-step__copy">
+                The setup assistant checks LaTeX and applies a starter team.
+              </p>
+            </div>
+            <div class="path-step">
+              <span class="path-step__label">
+                <span class="icon-surface is-size-s" aria-hidden="true">
+                  ${waIcon('code-compare')}
+                </span>
+                <span>3. Review</span>
+              </span>
+              <p class="path-step__copy">
+                Run a polish pass and inspect the diff before accepting changes.
+              </p>
+            </div>
+          </div>
+          <div class="choices">
+            <div class="choice">
+              <wa-button
+                id="onboardingChatGptButton"
+                class="btn-primary"
+                variant="brand"
+                appearance="filled"
+                size="m"
+                @click=${this.handleChatGpt}
+              >
+                ${waIcon('comment-discussion', { slot: 'start' })}
+                ${ONBOARDING_CHOICE_CHATGPT.label}
+              </wa-button>
+              <span class="choice-description">
+                ${ONBOARDING_CHOICE_CHATGPT.description}
+              </span>
+            </div>
+            <div class="choice">
+              <wa-button
+                id="onboardingSignInButton"
+                class="btn-secondary"
+                appearance="outlined"
+                size="m"
+                @click=${this.handleSignIn}
+              >
+                ${waIcon('right-to-bracket', { slot: 'start' })}
+                ${ONBOARDING_CHOICE_SIGN_IN.label}
+              </wa-button>
+              <span class="choice-description">
+                ${ONBOARDING_CHOICE_SIGN_IN.description}
+              </span>
+            </div>
+            <div class="choice">
+              <wa-button
+                id="onboardingApiKeyButton"
+                class="btn-secondary"
+                appearance="outlined"
+                size="m"
+                @click=${this.handleApiKey}
+              >
+                ${waIcon('key', { slot: 'start' })}
+                ${ONBOARDING_CHOICE_API_KEY.label}
+              </wa-button>
+              <span class="choice-description">
+                ${ONBOARDING_CHOICE_API_KEY.description}
+              </span>
+            </div>
+          </div>
+          <div class="skip-row">
             <wa-button
-              id="onboardingSignInButton"
-              class="btn-secondary"
-              appearance="outlined"
-              size="m"
-              @click=${this.handleSignIn}
+              id="onboardingWalkthroughButton"
+              class="btn-ghost"
+              appearance="plain"
+              size="s"
+              @click=${this.handleOpenGettingStarted}
             >
-              ${waIcon('right-to-bracket', { slot: 'start' })}
-              ${ONBOARDING_CHOICE_SIGN_IN.label}
+              ${waIcon('book', { slot: 'start' })} Open walkthrough
             </wa-button>
-            <span class="choice-description">
-              ${ONBOARDING_CHOICE_SIGN_IN.description}
-            </span>
-          </div>
-          <div class="choice">
             <wa-button
-              id="onboardingApiKeyButton"
-              class="btn-secondary"
-              appearance="outlined"
-              size="m"
-              @click=${this.handleApiKey}
+              id="onboardingSkipButton"
+              class="btn-ghost"
+              appearance="plain"
+              size="s"
+              @click=${this.handleSkip}
             >
-              ${waIcon('key', { slot: 'start' })}
-              ${ONBOARDING_CHOICE_API_KEY.label}
+              ${ONBOARDING_CHOICE_SKIP_LABEL}
             </wa-button>
-            <span class="choice-description">
-              ${ONBOARDING_CHOICE_API_KEY.description}
-            </span>
           </div>
-        </div>
-        <div class="skip-row">
-          <wa-button
-            id="onboardingWalkthroughButton"
-            class="btn-ghost"
-            appearance="plain"
-            size="s"
-            @click=${this.handleOpenGettingStarted}
-          >
-            ${waIcon('book', { slot: 'start' })} Open walkthrough
-          </wa-button>
-          <wa-button
-            id="onboardingSkipButton"
-            class="btn-ghost"
-            appearance="plain"
-            size="s"
-            @click=${this.handleSkip}
-          >
-            ${ONBOARDING_CHOICE_SKIP_LABEL}
-          </wa-button>
-        </div>
-      </wa-callout>
+        </wa-callout>
+      </div>
     `;
   }
 }

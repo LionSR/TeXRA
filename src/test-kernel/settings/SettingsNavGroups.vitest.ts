@@ -12,20 +12,20 @@ import {
 const navEntries = SETTINGS_NAV_GROUPS.flatMap((group) => group.entries);
 
 describe('settings nav groups', () => {
-  it('renders a row for every tab exactly once', () => {
+  it('renders every navigation tab exactly once', () => {
     const names = navEntries.map((entry) => entry.name);
 
     expect(new Set(names).size).toBe(names.length);
     expect([...names].sort()).toEqual([...SETTINGS_TAB_ORDER].sort());
   });
 
-  // This is the index-compatibility check the nav rests on: a row carries only
+  // This is the index-compatibility check the nav rests on: a tab carries only
   // a panel name, and `SettingsApp.handleTabShow` turns that name back into the
-  // wire index with `SETTINGS_TAB_PANEL_NAMES.indexOf(...)`. If a row's panel
+  // wire index with `SETTINGS_TAB_PANEL_NAMES.indexOf(...)`. If a tab's panel
   // name ever resolved to a different index than `SETTINGS_TAB` assigns, the
-  // nav would silently open the wrong panel while every hardcoded index table
-  // still matched.
-  it('resolves each nav row to its own panel index', () => {
+  // navigation would silently open the wrong panel while every hardcoded index
+  // table still matched.
+  it('resolves each navigation tab to its own panel index', () => {
     for (const entry of navEntries) {
       expect(SETTINGS_TAB_PANEL_NAMES.indexOf(entry.panel)).toBe(
         SETTINGS_TAB[entry.name],
@@ -33,7 +33,7 @@ describe('settings nav groups', () => {
     }
   });
 
-  it('labels every row and group heading', () => {
+  it('labels every tab and group heading', () => {
     for (const group of SETTINGS_NAV_GROUPS) {
       expect(group.label.trim()).not.toBe('');
       expect(group.entries.length).toBeGreaterThan(0);

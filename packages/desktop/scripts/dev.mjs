@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { createServer } from 'node:net';
 import { dirname, resolve } from 'node:path';
+import { setTimeout as scheduleTimeout } from 'node:timers';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 
@@ -9,6 +10,7 @@ const require = createRequire(import.meta.url);
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const electronPath = require('electron');
 const packageManagerCli = process.env.npm_execpath;
+const FORCE_STOP_DELAY_MS = 2_000;
 const children = new Set();
 let stopping = false;
 
@@ -101,6 +103,13 @@ function stop(exitCode) {
     if (!child.killed) child.kill('SIGTERM');
   }
   process.exitCode = exitCode;
+  const forceStopTimer = scheduleTimeout(() => {
+    for (const child of children) {
+      if (child.exitCode == null) child.kill('SIGKILL');
+    }
+    process.exit(exitCode);
+  }, FORCE_STOP_DELAY_MS);
+  forceStopTimer.unref();
 }
 
 function isRelaunchArgs(message) {
@@ -138,6 +147,14 @@ function launchElectron(rendererUrl, args) {
 async function main() {
   await runPackageScript('build:main');
   await runPackageScript('build:preload');
+  const mainWatchInvocation = packageManagerCommand(['run', 'watch:main']);
+  const mainWatch = spawnLogged(
+    mainWatchInvocation.command,
+    mainWatchInvocation.args,
+  );
+  mainWatch.once('exit', (code) => {
+    if (!stopping) stop(code ?? 1);
+  });
 
   const rendererPort = await findAvailablePort();
   const rendererUrl = `http://127.0.0.1:${rendererPort}`;

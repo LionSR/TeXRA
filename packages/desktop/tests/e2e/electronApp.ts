@@ -1,6 +1,7 @@
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { _electron as electron } from 'playwright';
 import type { ElectronApplication, Page } from 'playwright';
@@ -32,12 +33,15 @@ export interface LaunchedApp {
   app: ElectronApplication;
   page: Page;
   workspacePath: string;
+  userDataPath: string;
   /**
    * True when `launchTexraApp()` allocated a temp workspace itself (caller
    * did not supply one). `closeTexraApp()` cleans this up so repeated CI
    * runs do not litter the system temp directory.
    */
   ownsWorkspace: boolean;
+  /** True when `launchTexraApp()` allocated an isolated desktop profile. */
+  ownsUserData: boolean;
 }
 
 /**
@@ -65,6 +69,9 @@ export async function launchTexraApp(
   const ownsWorkspace = options.workspacePath === undefined;
   const workspacePath =
     options.workspacePath ?? mkdtempSync(join(tmpdir(), 'texra-e2e-'));
+  const ownsUserData = options.userDataPath === undefined;
+  const userDataPath =
+    options.userDataPath ?? mkdtempSync(join(tmpdir(), 'texra-e2e-user-data-'));
 
   const app = await electron.launch({
     args: [MAIN_ENTRY, '--texra-workspace', workspacePath],
@@ -73,9 +80,7 @@ export async function launchTexraApp(
       ...process.env,
       // Hint to platform/secrets layer to avoid the macOS keychain prompt.
       TEXRA_DISABLE_KEYCHAIN: '1',
-      ...(options.userDataPath
-        ? { TEXRA_DESKTOP_E2E_USER_DATA_PATH: options.userDataPath }
-        : {}),
+      TEXRA_DESKTOP_E2E_USER_DATA_PATH: userDataPath,
       NODE_ENV: 'production',
       ...options.env,
     },
@@ -104,23 +109,38 @@ export async function launchTexraApp(
     undefined,
     { timeout: 20_000 },
   );
-  await app.evaluate(({ BrowserWindow }) => {
-    const window = BrowserWindow.getAllWindows().at(0);
-    if (!window?.isVisible()) {
-      throw new Error('TeXRA window finished loading without being presented.');
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    const visible = await app.evaluate(
+      ({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows().at(0)?.isVisible() ?? false,
+    );
+    if (visible) {
+      return {
+        app,
+        page,
+        workspacePath,
+        userDataPath,
+        ownsWorkspace,
+        ownsUserData,
+      };
     }
-  });
-  return { app, page, workspacePath, ownsWorkspace };
+    await sleep(50);
+  }
+  throw new Error('TeXRA window finished loading without being presented.');
 }
 
 export async function closeTexraApp(launched: LaunchedApp): Promise<void> {
   await launched.app.close();
-  // Clean up the auto-allocated temp workspace so repeated test runs do not
-  // accumulate `/tmp/texra-e2e-*` directories. If the caller supplied a
-  // workspace path, leave it alone — the caller owns its lifecycle.
-  if (launched.ownsWorkspace) {
+  // Clean up only auto-allocated directories. Caller-supplied workspace and
+  // profile paths may be reused across relaunches and remain caller-owned.
+  const ownedPaths = [
+    launched.ownsWorkspace ? launched.workspacePath : undefined,
+    launched.ownsUserData ? launched.userDataPath : undefined,
+  ];
+  for (const path of ownedPaths) {
+    if (!path) continue;
     try {
-      rmSync(launched.workspacePath, { recursive: true, force: true });
+      rmSync(path, { recursive: true, force: true });
     } catch {
       // Best-effort cleanup. A stale temp dir is preferable to a noisy
       // teardown failure that masks the real test outcome.

@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -32,6 +32,12 @@ test.beforeAll(async () => {
     'export const projectTreeLoaded = true;\n',
     'utf8',
   );
+  mkdirSync(join(workspacePath, 'src', 'components'), { recursive: true });
+  writeFileSync(
+    join(workspacePath, 'src', 'components', 'Panel.ts'),
+    'export class Panel {}\n',
+    'utf8',
+  );
   launched = await launchTexraApp({ workspacePath });
   await dismissOnboarding(launched.page);
 });
@@ -46,15 +52,6 @@ async function openSidebarWorkbench(label: string): Promise<void> {
   await launched.page
     .locator('.task-sidebar-footer .task-sidebar-action')
     .filter({ hasText: label })
-    .click();
-}
-
-/** Opens the generic editor workbench from the task environment menu. */
-async function openEditorWorkbench(): Promise<void> {
-  await launched.page.locator('.task-environment-button').click();
-  await launched.page
-    .locator('.task-environment-action')
-    .filter({ hasText: 'Editor' })
     .click();
 }
 
@@ -99,6 +96,28 @@ test('loads the project tree before an editor panel is opened', async () => {
   await expect(
     page.locator('.desktop-editor-tree-row:has-text("sample.ts")'),
   ).toBeVisible();
+  const sourceDirectory = page.locator(
+    '.desktop-editor-tree-row[data-kind="directory"][data-path="src"]',
+  );
+  await expect(sourceDirectory).toBeVisible();
+  await expect(
+    page.locator(
+      '.desktop-editor-tree-row[data-kind="directory"][data-path="src/components"]',
+    ),
+  ).not.toBeVisible();
+  await sourceDirectory.click();
+  const componentsDirectory = page.locator(
+    '.desktop-editor-tree-row[data-kind="directory"][data-path="src/components"]',
+  );
+  await expect(componentsDirectory).toBeVisible();
+  await componentsDirectory.click();
+  const nestedFile = page.locator(
+    '.desktop-editor-tree-row[data-kind="file"][data-path="src/components/Panel.ts"]',
+  );
+  await expect(nestedFile).toBeVisible();
+  await expect(nestedFile.locator('.desktop-editor-tree-label')).toHaveText(
+    'Panel.ts',
+  );
   await expect(
     page.locator('.desktop-editor-tree-empty:has-text("No files found")'),
   ).toHaveCount(0);
@@ -145,8 +164,10 @@ test('resizes the window canvas and project sidebar', async () => {
 test('aligns titlebar content and keeps the collapsed toggle clear of macOS controls', async () => {
   const { app, page } = launched;
   const brand = await page.locator('.task-sidebar-brand').boundingBox();
+  const brandLogo = await page.locator('.task-sidebar-logo').boundingBox();
   const taskHeader = await page.locator('.task-header').boundingBox();
   expect(brand).not.toBeNull();
+  expect(brandLogo).not.toBeNull();
   expect(taskHeader).not.toBeNull();
   expect(brand?.height).toBe(taskHeader?.height);
   expect(brand?.y).toBe(taskHeader?.y);
@@ -159,7 +180,8 @@ test('aligns titlebar content and keeps the collapsed toggle clear of macOS cont
   const toggleBounds = await toggle.boundingBox();
   expect(toggleBounds).not.toBeNull();
   if (platform === 'darwin') {
-    expect(toggleBounds?.x).toBeGreaterThanOrEqual(76);
+    expect(brandLogo?.x).toBeGreaterThanOrEqual(92);
+    expect(toggleBounds?.x).toBeGreaterThanOrEqual(92);
   }
 
   await toggle.click();
@@ -295,23 +317,133 @@ test('opens settings beside the permanent conversation', async () => {
   await expect(page.locator('.task-conversation')).toBeVisible();
 });
 
+test('loads tools promptly, centers compact nav icons, and customizes shortcuts', async () => {
+  const { app, page } = launched;
+
+  await openSidebarWorkbench('Settings');
+  await page.evaluate(() => {
+    window.postMessage({ command: 'setTab', tabIndex: 5 }, '*');
+  });
+  await expect(page.locator('tools-tab tool-card').first()).toBeVisible({
+    timeout: 5_000,
+  });
+
+  const alignment = await page.evaluate(() => {
+    const root = document.querySelector('settings-app')?.shadowRoot;
+    const tab = root?.querySelector<HTMLElement>('wa-tab[active]');
+    const base = tab?.shadowRoot?.querySelector<HTMLElement>('[part~="base"]');
+    const icon = tab?.querySelector<HTMLElement>('.settings-tab-icon');
+    const label = tab?.querySelector<HTMLElement>('.settings-tab-label');
+    if (!base || !icon || !label) {
+      throw new Error('Compact settings navigation was not mounted.');
+    }
+    const baseRect = base.getBoundingClientRect();
+    const iconRect = icon.getBoundingClientRect();
+    return {
+      labelDisplay: getComputedStyle(label).display,
+      horizontalOffset:
+        (iconRect.left + iconRect.right - baseRect.left - baseRect.right) / 2,
+      verticalOffset:
+        (iconRect.top + iconRect.bottom - baseRect.top - baseRect.bottom) / 2,
+    };
+  });
+  if (alignment.labelDisplay === 'none') {
+    expect(Math.abs(alignment.horizontalOffset)).toBeLessThanOrEqual(1);
+    expect(Math.abs(alignment.verticalOffset)).toBeLessThanOrEqual(1);
+  }
+
+  await page.evaluate(() => {
+    window.postMessage({ command: 'setTab', tabIndex: 11 }, '*');
+  });
+  const recorder = page.locator('shortcuts-tab .shortcut-recorder').first();
+  await expect(recorder).toBeVisible();
+  await recorder.click();
+  const platform = await app.evaluate(() => process.platform);
+  const customShortcut =
+    platform === 'darwin' ? 'Meta+Shift+J' : 'Control+Shift+J';
+  await page.keyboard.press(customShortcut);
+  await expect(recorder).toContainText(
+    platform === 'darwin' ? '⌘⇧J' : 'Ctrl+Shift+J',
+  );
+
+  await page.locator('.task-header-title').click();
+  await page.keyboard.press(customShortcut);
+  await expect(
+    page.locator('wa-dialog.desktop-command-palette'),
+  ).toHaveJSProperty('open', true);
+  await page.keyboard.press('Escape');
+});
+
+test('shows live environment status without duplicate panel actions', async () => {
+  const { page } = launched;
+
+  await page.locator('.task-environment-button').click();
+  const popover = page.locator('.task-environment-popover');
+  await expect(popover).toBeVisible();
+  await expect(popover).toContainText('Environment');
+  await expect(popover).toContainText('Changes');
+  await expect(popover).toContainText('Background terminal');
+  await expect(popover).toContainText('No open sources');
+  await expect(popover.locator('wa-button')).toHaveCount(1);
+  await expect(popover.locator('.task-environment-refresh')).not.toBeDisabled();
+  await page.locator('.task-environment-button').click();
+});
+
 test('loads a workspace file into the Monaco editor workbench', async () => {
   const { page } = launched;
 
-  await openEditorWorkbench();
+  const latexRow = page.locator(
+    '.desktop-editor-tree-row[data-path="sample.tex"]',
+  );
+  const typescriptRow = page.locator(
+    '.desktop-editor-tree-row[data-path="sample.ts"]',
+  );
+  await expect(latexRow).toBeVisible({ timeout: 15_000 });
+  await expect(typescriptRow).toBeVisible();
+
+  // Hit the cold Monaco path with two immediate selections. Both requests
+  // share one editor load, and the last click must remain the visible model
+  // even if the first file read resolves later.
+  await latexRow.click();
+  await typescriptRow.click();
   await expect(page.locator(activeWorkbenchTab('editor'))).toBeVisible();
+  await expect(page.locator(activeWorkbenchTab('editor'))).toContainText(
+    'sample.ts',
+  );
+  await expect(
+    page.locator('.desktop-editor-surface .view-lines'),
+  ).toContainText('projectTreeLoaded', { timeout: 20_000 });
 
-  // The tree is populated from the same listing rules the agent file picker
-  // uses, so the file written in beforeAll should appear.
-  const row = page.locator('.desktop-editor-tree-row:has-text("sample.tex")');
-  await expect(row).toBeVisible({ timeout: 15_000 });
-  await row.click();
-
-  // Monaco renders its content into .view-lines; waiting on the text proves the
-  // editor loaded AND that file I/O crossed the IPC boundary successfully.
+  await latexRow.click();
   await expect(
     page.locator('.desktop-editor-surface .view-lines'),
   ).toContainText('documentclass', { timeout: 20_000 });
+});
+
+test('reloads a clean cached editor model after an external file change', async () => {
+  const { page } = launched;
+  const typescriptRow = page.locator(
+    '.desktop-editor-tree-row[data-path="sample.ts"]',
+  );
+  const latexRow = page.locator(
+    '.desktop-editor-tree-row[data-path="sample.tex"]',
+  );
+
+  await typescriptRow.click();
+  await expect(
+    page.locator('.desktop-editor-surface .view-lines'),
+  ).toContainText('projectTreeLoaded', { timeout: 20_000 });
+
+  writeFileSync(
+    join(workspacePath, 'sample.tex'),
+    '\\documentclass{article}\n\\begin{document}\nexternal update\n\\end{document}\n',
+    'utf8',
+  );
+  await latexRow.click();
+
+  await expect(
+    page.locator('.desktop-editor-surface .view-lines'),
+  ).toContainText('external update', { timeout: 20_000 });
 });
 
 test('runs an interactive shell in a terminal workbench tab', async () => {

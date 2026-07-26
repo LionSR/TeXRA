@@ -27,6 +27,11 @@ import {
 import { isGitRepository } from '@utils/system/isGitRepository';
 import { extendEnvPath } from '@utils/system/platformPaths';
 
+import {
+  EMPTY_DESKTOP_ENVIRONMENT_SUMMARY,
+  type DesktopEnvironmentSummary,
+} from '../desktopWorkspaceMessages.js';
+
 const execFileAsync = promisify(execFile);
 
 /**
@@ -55,6 +60,8 @@ export interface DesktopGitHost {
    * the boolean are answered conservatively when probing fails.
    */
   getRecentCommits(): Promise<DesktopGitCommitsResult>;
+  /** Returns the live local branch, change totals, and upstream sync state. */
+  getEnvironmentSummary(): Promise<DesktopEnvironmentSummary>;
 }
 
 interface DesktopGitCommitsResult {
@@ -90,6 +97,25 @@ export function createDesktopGitHost(
   options: CreateDesktopGitHostOptions,
 ): DesktopGitHost {
   const limit = clampCommitLimit(options.commitLimit ?? DEFAULT_COMMIT_LIMIT);
+
+  async function readGit(
+    workspace: string,
+    args: readonly string[],
+    reportFailure = false,
+  ): Promise<string | undefined> {
+    try {
+      const { stdout } = await execFileAsync('git', [...args], {
+        cwd: workspace,
+        timeout: GIT_TIMEOUT_MS,
+        maxBuffer: MAX_BUFFER_BYTES,
+        env: { ...process.env, PATH: extendEnvPath() },
+      });
+      return stdout.trim();
+    } catch (error) {
+      if (reportFailure) options.onError?.(error);
+      return undefined;
+    }
+  }
 
   return {
     async getRecentCommits(): Promise<DesktopGitCommitsResult> {
@@ -142,7 +168,82 @@ export function createDesktopGitHost(
         return { commits: [], isGitRepo: true };
       }
     },
+    async getEnvironmentSummary(): Promise<DesktopEnvironmentSummary> {
+      const workspace = options.getWorkspacePath();
+      if (!workspace || !(await isGitRepository(workspace))) {
+        return EMPTY_DESKTOP_ENVIRONMENT_SUMMARY;
+      }
+
+      const [branchOutput, statusOutput, numstatOutput, upstreamOutput] =
+        await Promise.all([
+          readGit(workspace, ['rev-parse', '--abbrev-ref', 'HEAD']),
+          readGit(workspace, ['status', '--short', '--untracked-files=normal']),
+          readGit(workspace, ['diff', '--numstat', 'HEAD', '--']),
+          readGit(workspace, [
+            'rev-parse',
+            '--abbrev-ref',
+            '--symbolic-full-name',
+            '@{upstream}',
+          ]),
+        ]);
+      const { additions, deletions } = parseNumstat(numstatOutput);
+      const changedFiles = splitNonEmptyLines(statusOutput).length;
+      const branch =
+        branchOutput && branchOutput !== 'HEAD' ? branchOutput : undefined;
+      const upstream = upstreamOutput || undefined;
+      let ahead = 0;
+      let behind = 0;
+
+      if (upstream) {
+        const divergence = await readGit(workspace, [
+          'rev-list',
+          '--left-right',
+          '--count',
+          `HEAD...${upstream}`,
+        ]);
+        [ahead, behind] = parseDivergence(divergence);
+      }
+
+      return {
+        isGitRepository: true,
+        ...(branch ? { branch } : {}),
+        ...(upstream ? { upstream } : {}),
+        changedFiles,
+        additions,
+        deletions,
+        ahead,
+        behind,
+      };
+    },
   };
+}
+
+function splitNonEmptyLines(output: string | undefined): string[] {
+  return output?.split(/\r?\n/).filter(Boolean) ?? [];
+}
+
+function parseNumstat(output: string | undefined): {
+  additions: number;
+  deletions: number;
+} {
+  let additions = 0;
+  let deletions = 0;
+  for (const line of splitNonEmptyLines(output)) {
+    const [added = '', deleted = ''] = line.split('\t');
+    additions += parseGitCount(added);
+    deletions += parseGitCount(deleted);
+  }
+  return { additions, deletions };
+}
+
+function parseDivergence(output: string | undefined): [number, number] {
+  const [ahead = '', behind = ''] = output?.split(/\s+/) ?? [];
+  return [parseGitCount(ahead), parseGitCount(behind)];
+}
+
+function parseGitCount(value: string): number {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
 }
 
 function clampCommitLimit(value: number): number {

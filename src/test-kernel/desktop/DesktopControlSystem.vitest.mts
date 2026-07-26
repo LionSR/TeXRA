@@ -83,12 +83,12 @@ describe('desktop control system', () => {
     );
     expect(renderer).toContain('task-header-button icon-button is-size-l');
     expect(renderer).toContain('task-environment-button btn-secondary');
-    expect(renderer).toContain('task-environment-action btn-ghost');
-    expect(renderer).toContain('Open panels:');
+    expect(renderer).toContain('class="task-environment-row"');
+    expect(renderer).not.toContain('openKindAfterInteraction');
+    expect(renderer).toContain('No open sources');
     expect(renderer).not.toContain('open workbench items');
     expect(shellCss).toContain('.task-workbench-tab-activate::part(base)');
     expect(shellCss).toContain('background: transparent');
-    expect(shellCss).toContain('border-radius: var(--wa-border-radius-m)');
     expect(shellCss).not.toMatch(/font-size:\s*\d+px/);
     expect(shellCss).not.toContain('.task-header-button::part(base)');
     expect(shellCss).not.toContain(
@@ -137,6 +137,13 @@ describe('desktop control system', () => {
       'document.body.dataset.desktopPlatform = rendererPlatform',
     );
     expect(shellCss).toContain('height: var(--task-shell-header-height)');
+    expect(shellCss).toMatch(/--macos-titlebar-safe-inset:\s*92px/);
+    expect(shellCss).toContain(
+      "body[data-desktop-platform='darwin'] .task-sidebar-brand",
+    );
+    expect(shellCss).toContain(
+      'padding-left: var(--macos-titlebar-safe-inset)',
+    );
     expect(shellCss).toContain(
       "body[data-desktop-platform='darwin'] .task-shell-collapsed .task-header",
     );
