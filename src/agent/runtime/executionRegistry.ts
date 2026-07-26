@@ -131,8 +131,8 @@ export class ExecutionRegistry {
   >();
 
   constructor({
-    streamStatus = new StreamStatusMachine(),
     events = new SessionEventHub(),
+    streamStatus = new StreamStatusMachine(events),
     publishResult,
   }: {
     readonly streamStatus?: StreamStatusMachine;
@@ -966,14 +966,13 @@ export class ExecutionRegistry {
   private streamStatusEmitOptions(
     handle?: AgentExecutionHandle,
   ): StreamStatusEmitOptions {
-    if (handle?.trace) return { trace: handle.trace };
-    return this.events ? { events: this.events } : {};
+    return handle?.trace ? { trace: handle.trace } : {};
   }
 
   /**
-   * Mark a stream CANCELLED from a user stop. Routes the status emission through
-   * the handle's trace when one is available and falls back to the registry's
-   * SessionEventHub otherwise (see {@link streamStatusEmitOptions}).
+   * Mark a stream CANCELLED from a user stop. Passes the handle's trace when
+   * one is available; the session-fact rail is published by the status machine
+   * itself, so no caller has to route it (see {@link streamStatusEmitOptions}).
    */
   private cancelStreamStatus(
     streamId: StreamTabId,

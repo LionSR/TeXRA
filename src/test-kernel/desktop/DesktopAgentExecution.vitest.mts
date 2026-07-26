@@ -675,11 +675,15 @@ function emitStatusFact(
     previousStatus?: StreamPhase;
   },
 ): void {
-  emitRunEvent(bridge, payload.streamId, {
-    type: 'status',
+  // Status reaches the bridge on the session-fact rail only: `StreamStatusMachine`
+  // publishes every transition as `updateStreamStatus`, and no projector reads
+  // run-scope `status` trace events any more.
+  emitSessionFact(bridge, 'updateStreamStatus', {
     streamId: payload.streamId,
-    phase: payload.status,
-    previousPhase: payload.previousStatus,
+    status: payload.status,
+    ...(payload.previousStatus
+      ? { previousStatus: payload.previousStatus }
+      : {}),
     cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
   });
 }
@@ -4180,9 +4184,7 @@ describe('DesktopProgressBridge', () => {
         // A bare process-session transition (no live trace) still reaches the
         // reopened presentation as a session fact.
         expect(
-          owner.processSession.status.transitionToWaiting(streamId, 'wait', {
-            events: owner.processSession.events,
-          }),
+          owner.processSession.status.transitionToWaiting(streamId, 'wait'),
         ).toBe(true);
         expect(bridgeB.session.status.get(streamId)).toBe(STREAM_PHASE.WAITING);
         expect(facts).toContainEqual(
@@ -4239,7 +4241,6 @@ describe('DesktopProgressBridge', () => {
           owner.bridgeA.session.status.transitionToTerminal(
             childStreamId,
             STREAM_PHASE.COMPLETED,
-            { events: owner.processSession.events },
           ),
         ).toBe(true);
         expect(bridgeB.session.status.get(childStreamId)).toBe(

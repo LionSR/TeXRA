@@ -25,7 +25,6 @@ export interface StreamStatusChange {
 }
 
 export interface StreamStatusEmitOptions {
-  events?: SessionEventHub;
   trace?: AgentTrace;
   substate?: StreamSubstate;
 }
@@ -56,6 +55,14 @@ export class StreamStatusMachine {
   private readonly statusListeners = new Set<
     (change: StreamStatusChange) => void
   >();
+
+  /**
+   * @param events Session hub this machine publishes `updateStreamStatus`
+   *   facts on. The session constructs both and hands the hub over once, so a
+   *   transition reaches every projector on the session-fact rail no matter
+   *   which caller triggered it — callers pass only their own trace.
+   */
+  constructor(private readonly events?: SessionEventHub) {}
 
   get(stream: StreamTabId): StreamPhase | undefined {
     return this.stateFor(stream)?.phase;
@@ -309,15 +316,13 @@ export class StreamStatusMachine {
     options.trace?.emit(event);
 
     const change = projectStatusEvent(event);
-    if (!options.trace && options.events) {
-      options.events.emit({
-        scope: 'session',
-        event: {
-          type: 'updateStreamStatus',
-          payload: change,
-        },
-      });
-    }
+    this.events?.emit({
+      scope: 'session',
+      event: {
+        type: 'updateStreamStatus',
+        payload: change,
+      },
+    });
     for (const listener of this.statusListeners) {
       listener(change);
     }
