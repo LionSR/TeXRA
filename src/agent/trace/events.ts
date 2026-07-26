@@ -363,6 +363,11 @@ export type AgentEvent =
  * Event types consumed by both progress-view and headless CLI projections.
  * This host subscription vocabulary is intentionally broader than
  * `RunFactEvent`: it also includes transient runtime events that hosts project.
+ *
+ * `status` is deliberately absent. `StreamStatusMachine` publishes every
+ * transition as an `updateStreamStatus` session fact, so projectors read
+ * status from that one rail; the `status` trace event survives only for
+ * `TexraTranscriptRecorder`, which subscribes to the run trace directly.
  */
 export const RUN_FACT_EVENT_TYPES = Object.freeze([
   'conversation.progress',
@@ -375,7 +380,6 @@ export const RUN_FACT_EVENT_TYPES = Object.freeze([
   'run.start',
   'run.config',
   'usage',
-  'status',
   'stage.start',
   'child.activity',
 ] as const satisfies readonly AgentEvent['type'][]);

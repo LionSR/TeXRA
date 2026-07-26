@@ -121,13 +121,6 @@ export class ProgressFactApplier {
     },
     'run.config': (_streamId, event) =>
       this.handleSetTaskState(event.streamId, event.config.agentCategory),
-    status: (_streamId, event) =>
-      this.setStreamStatus(
-        event.streamId,
-        event.phase,
-        event.previousPhase,
-        event.substate,
-      ),
     updateTodos: (_streamId, event) => this.handleUpdateTodos(event),
     updatePlan: (_streamId, event) => this.handleUpdatePlan(event),
     addOutputFiles: (_streamId, event) => this.handleAddOutputFiles(event),

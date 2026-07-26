@@ -30,7 +30,6 @@ import type { CliContext } from './cliContext';
 const RUN_PROGRESS_RUN_FACT_TYPES = [
   'conversation.progress',
   'run.config',
-  'status',
   'stage.start',
   'child.activity',
 ] as const satisfies readonly AgentEvent['type'][];
@@ -193,9 +192,6 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
           this.updateHeartbeat();
           this.render(true);
         }
-        return true;
-      case 'status':
-        this.applyStatus(event.streamId, event.phase);
         return true;
       case 'conversation.progress':
         if (this.rootStreamTerminal) return true;
