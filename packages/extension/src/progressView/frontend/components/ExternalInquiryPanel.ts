@@ -40,7 +40,7 @@ import {
 } from '@shared/styles';
 import { CopyButtonController } from '@shared/litControllers/CopyButtonController';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
-import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { createFlushableDebounce, tryParseUrl } from '@utils/core';
 import { createBoundedIdSet } from '@utils/core/boundedIdSet';
@@ -299,12 +299,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
           slot="summary"
           class="external-inquiry-request__transcript-summary"
         >
-          <wa-icon
-            library=${TEXRA_ICON_LIBRARY}
-            name="history"
-            aria-hidden="true"
-          ></wa-icon>
-          Conversation transcript (${answeredTurns.length})
+          ${waIcon('history')} Conversation transcript (${answeredTurns.length})
         </span>
         <div class="external-inquiry-request__transcript-turns">
           ${repeat(
@@ -378,13 +373,8 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
   private renderSearchHint(): TemplateResult {
     return html`
       <div class="external-inquiry-request__search-hint">
-        <wa-icon
-          library=${TEXRA_ICON_LIBRARY}
-          name="lightbulb"
-          aria-hidden="true"
-        ></wa-icon>
-        Consider enabling <strong>Search</strong> mode in the external tool for
-        this question
+        ${waIcon('lightbulb')} Consider enabling <strong>Search</strong> mode in
+        the external tool for this question
       </div>
     `;
   }
@@ -393,22 +383,13 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
     return html`
       <div class="external-inquiry-request__attach-files">
         <div class="external-inquiry-request__attach-label">
-          <wa-icon
-            library=${TEXRA_ICON_LIBRARY}
-            name="cloud-upload"
-            aria-hidden="true"
-          ></wa-icon>
-          Files to upload to the external model:
+          ${waIcon('cloud-upload')} Files to upload to the external model:
         </div>
         <div class="external-inquiry-request__file-list">
           ${files.map(
             (file) => html`
               <div class="external-inquiry-request__file-item">
-                <wa-icon
-                  library=${TEXRA_ICON_LIBRARY}
-                  name="file"
-                  aria-hidden="true"
-                ></wa-icon>
+                ${waIcon('file')}
                 <span>${file}</span>
               </div>
             `,
