@@ -1,10 +1,7 @@
-import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInteractionEvents';
-import type { RuntimePresentationEventPayloads } from '@agent/runtime/runtimePresentationEvents';
-
-export type AgentRuntimeEventPayloads = RuntimeInteractionEventPayloads &
-  RuntimePresentationEventPayloads;
-
-export type AgentRuntimeEvent = keyof AgentRuntimeEventPayloads;
+import type {
+  RuntimePresentationEvent,
+  RuntimePresentationEventPayloads,
+} from '@agent/runtime/runtimePresentationEvents';
 
 export interface AgentRuntimeEmitOptions {
   /** Retain a presentation event until a temporarily detached UI returns. */
@@ -14,29 +11,21 @@ export interface AgentRuntimeEmitOptions {
 /**
  * The direct host-event sink the agent core emits through during a run. Hosts
  * (VS Code extension, CLI, desktop, or an SDK embedder) implement `emit` and
- * route interaction and presentation requests to their UI / transport.
+ * route presentation requests to their UI / transport.
  *
- * **Headless / SDK contract.** Not every event is required for execution. A
- * headless consumer can implement a partial host and safely ignore the
- * UI-oriented events — the run completes regardless, *provided something is
- * attached*. `session.useHostInteractions({ cancel: () => {} })` is the
- * minimum: it settles every request the host omits. Attaching nothing instead
- * parks blocking requests indefinitely. Two tiers:
- *
- * - **Host interaction surface** (`RuntimeInteractionEventPayloads`): typed
- *   approval and user-question requests that may affect the agent loop.
- * - **Frontend-bound, ignorable** (`RuntimePresentationEventPayloads`):
- *   `requestOpenFile`, `requestShowInstruction`, `showAgentConfigBanner`,
- *   `requestShowError`, `requestEnsureProgressView`, pure host-UI requests
- *   with no effect on the agent loop.
+ * **Headless / SDK contract.** Every event is frontend-bound and ignorable:
+ * `requestOpenFile`, `requestShowInstruction`, `showAgentConfigBanner`,
+ * `requestShowError`, and `requestEnsureProgressView` have no effect on the
+ * agent loop. Response-bearing requests use `HostInteractions`, not this
+ * presentation surface.
  *
  * {@link noopAgentRuntimeHost} (drop everything) is a valid host — it is used
  * by tests and non-interactive paths.
  */
 export interface AgentRuntimeHost {
-  emit<K extends AgentRuntimeEvent>(
+  emit<K extends RuntimePresentationEvent>(
     event: K,
-    payload: AgentRuntimeEventPayloads[K],
+    payload: RuntimePresentationEventPayloads[K],
     options?: AgentRuntimeEmitOptions,
   ): void;
 }

@@ -14,11 +14,6 @@ import {
   type GetProgressStreamControls,
   type ProgressEventSubscription,
 } from '@controllers/progressView/backend/events/ProgressFactApplier';
-import {
-  ProgressInteractionHandler,
-  type ProgressBackendInteractionEvent,
-  type ProgressBackendInteractionPayloads,
-} from '@controllers/progressView/backend/events/ProgressInteractionHandler';
 import { ProgressViewState } from '@controllers/progressView/backend/state/ProgressViewState';
 import { buildStreamInfos } from '@controllers/progressView/backend/streamInfoUtils';
 import {
@@ -98,7 +93,6 @@ export class ProgressBackend {
   readonly webviewUpdater: WebviewUpdater;
   readonly webviewBridge: WebviewBridge;
   readonly factApplier: ProgressFactApplier;
-  readonly interactionHandler: ProgressInteractionHandler;
   readonly approvalHandlers: ApprovalRequestHandlerSet;
   readonly setApprovalBypassState: (
     update: HostApprovalBypassStateUpdate,
@@ -156,7 +150,6 @@ export class ProgressBackend {
       (stream) => this.deleteStream(stream),
       options.getStreamControls,
     );
-    this.interactionHandler = new ProgressInteractionHandler(ui.callbacks);
     this.setApprovalBypassState = ui.setApprovalBypassState;
     this.onSetActiveStream = options.onSetActiveStream;
   }
@@ -327,20 +320,6 @@ export class ProgressBackend {
         factApplierSubscription.dispose();
       },
     };
-  }
-
-  handleInteractionEvent<K extends ProgressBackendInteractionEvent>(
-    event: K,
-    payload: ProgressBackendInteractionPayloads[K],
-  ): void {
-    // A run may still hold the host-channel emit closure that routes here after
-    // this backend is disposed (e.g. a desktop window closed while the run keeps
-    // executing headless). Applying events to a disposed backend would mutate
-    // torn-down state and post messages to a closed window, so the direct
-    // applier no-ops once disposed. Before #7363 the bus-listener teardown made
-    // this path implicitly safe; the direct call needs an explicit guard.
-    if (this.disposed) return;
-    this.interactionHandler.handleInteractionEvent(event, payload);
   }
 
   dispose(): void {

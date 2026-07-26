@@ -16,10 +16,12 @@ import type {
 import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
 import type {
   AgentRuntimeEmitOptions,
-  AgentRuntimeEvent,
-  AgentRuntimeEventPayloads,
   AgentRuntimeHost,
 } from './AgentRuntimeHost';
+import type {
+  RuntimePresentationEvent,
+  RuntimePresentationEventPayloads,
+} from './runtimePresentationEvents';
 
 const logger = createChannelTrace('SessionHostInteractions');
 
@@ -272,9 +274,9 @@ export function matchesCancelSelector(
  */
 export interface HostInteractions {
   /** Present an ignorable runtime event through the active host attachment. */
-  emit?<K extends AgentRuntimeEvent>(
+  emit?<K extends RuntimePresentationEvent>(
     event: K,
-    payload: AgentRuntimeEventPayloads[K],
+    payload: RuntimePresentationEventPayloads[K],
   ): void;
   /** Read diagnostics from the active host integration. */
   readonly readDiagnostics?: DiagnosticsReader;
@@ -387,9 +389,9 @@ export class SessionHostInteractions
     };
   }
 
-  emit<K extends AgentRuntimeEvent>(
+  emit<K extends RuntimePresentationEvent>(
     event: K,
-    payload: AgentRuntimeEventPayloads[K],
+    payload: RuntimePresentationEventPayloads[K],
     options: AgentRuntimeEmitOptions = {},
   ): void {
     const active = this.activeAttachment;
