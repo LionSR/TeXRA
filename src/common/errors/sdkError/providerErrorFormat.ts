@@ -637,7 +637,7 @@ export function isProviderErrorAutoRetryable(err: unknown): boolean {
   return (
     formatted.userRetryable &&
     formatted.exhaustionReason === undefined &&
-    formatted.statusCode !== StatusCodes.UNAUTHORIZED &&
+    !isUnauthorizedProviderError(formatted) &&
     formatted.statusCode !== StatusCodes.FORBIDDEN
   );
 }
