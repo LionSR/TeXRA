@@ -13,8 +13,11 @@ import type {
   ProposalResult,
   RetryResult,
 } from '@agent/runtime/HostInteractions';
-import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInteractionEvents';
-import type { UserQuestionAnswers } from '@shared/schemas';
+import type {
+  BashPermission,
+  RetryPermission,
+  UserQuestionAnswers,
+} from '@shared/schemas';
 
 import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool';
 import {
@@ -29,6 +32,7 @@ import {
   type ApprovalDecision,
   type CliApprovalPromptHooks,
   type CliDecisionApprovalEvent,
+  type CliDecisionApprovalPayloads,
   askApproval,
   askUserQuestionDenial,
   approvalPromptAllowed,
@@ -90,7 +94,7 @@ async function decideToolEdit(
 
 async function decideApprovalEvent<K extends CliDecisionApprovalEvent>(
   event: K,
-  payload: RuntimeInteractionEventPayloads[K],
+  payload: CliDecisionApprovalPayloads[K],
   context: CliContext,
   hooks: CliApprovalPromptHooks,
   options: { writeRejectionToStderr?: boolean } = {},
@@ -98,7 +102,7 @@ async function decideApprovalEvent<K extends CliDecisionApprovalEvent>(
   const immediate = immediateDecisionForApproval(event, payload, context);
 
   if (event === 'showRetryRequest') {
-    const data = payload as RuntimeInteractionEventPayloads['showRetryRequest'];
+    const data = payload as RetryPermission;
     if (!immediate) hooks.beforePrompt?.();
     writeTextStderr(formatRetryRequestMessage(data));
   }
@@ -200,7 +204,7 @@ export function createHeadlessCliHostInteractions(
       return decideToolEdit(request, context, hooks);
     },
     async requestBashApproval(request) {
-      const payload: RuntimeInteractionEventPayloads['showBashPermission'] = {
+      const payload: BashPermission = {
         requestId: 'headless-bash',
         command: request.command,
         ...(request.cwd ? { cwd: request.cwd } : {}),
@@ -234,7 +238,7 @@ export function createHeadlessCliHostInteractions(
       return toProposalResult(decision);
     },
     async requestRetry(request: HostRetryRequest) {
-      const payload: RuntimeInteractionEventPayloads['showRetryRequest'] = {
+      const payload: RetryPermission = {
         requestId: request.requestId,
         streamId: request.streamId,
         operation: request.operation,
