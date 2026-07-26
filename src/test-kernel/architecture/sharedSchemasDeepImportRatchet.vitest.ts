@@ -181,6 +181,90 @@ function importedNames(
   );
 }
 
+interface DeepImportReference {
+  names: string[] | undefined;
+  specifier: string;
+  typeOnly: boolean;
+}
+
+function importTypeSpecifier(node: ts.ImportTypeNode): string | undefined {
+  return ts.isLiteralTypeNode(node.argument) &&
+    ts.isStringLiteralLike(node.argument.literal)
+    ? node.argument.literal.text
+    : undefined;
+}
+
+function firstQualifiedName(name: ts.EntityName): string {
+  return ts.isIdentifier(name) ? name.text : firstQualifiedName(name.left);
+}
+
+/** Find every syntactic form that can reach into a schema leaf. */
+function deepImportReferences(
+  sourceFile: ts.SourceFile,
+): DeepImportReference[] {
+  const references: DeepImportReference[] = [];
+  const add = (
+    specifier: string | undefined,
+    names: string[] | undefined,
+    typeOnly: boolean,
+  ): void => {
+    if (specifier?.startsWith(DEEP_IMPORT_PREFIX) !== true) return;
+    references.push({ names, specifier, typeOnly });
+  };
+  const visit = (node: ts.Node): void => {
+    if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
+      add(
+        node.moduleSpecifier != null &&
+          ts.isStringLiteralLike(node.moduleSpecifier)
+          ? node.moduleSpecifier.text
+          : undefined,
+        importedNames(node),
+        ts.isImportDeclaration(node)
+          ? (node.importClause?.isTypeOnly ?? false)
+          : node.isTypeOnly,
+      );
+    } else if (
+      ts.isImportEqualsDeclaration(node) &&
+      ts.isExternalModuleReference(node.moduleReference)
+    ) {
+      const expression = node.moduleReference.expression;
+      add(
+        expression != null && ts.isStringLiteralLike(expression)
+          ? expression.text
+          : undefined,
+        undefined,
+        node.isTypeOnly,
+      );
+    } else if (ts.isImportTypeNode(node)) {
+      add(
+        importTypeSpecifier(node),
+        node.qualifier == null
+          ? undefined
+          : [firstQualifiedName(node.qualifier)],
+        true,
+      );
+    } else if (ts.isCallExpression(node)) {
+      const isDynamicImport =
+        node.expression.kind === ts.SyntaxKind.ImportKeyword;
+      const isRequire =
+        ts.isIdentifier(node.expression) && node.expression.text === 'require';
+      if (isDynamicImport || isRequire) {
+        const [argument] = node.arguments;
+        add(
+          argument != null && ts.isStringLiteralLike(argument)
+            ? argument.text
+            : undefined,
+          undefined,
+          false,
+        );
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return references;
+}
+
 function collectCurrent(): Pick<SchemasBaseline, 'forced' | 'gratuitous'> {
   const surface = barrelExportedNames(BARREL_PATH);
   const forced: DeepImports = {};
@@ -198,27 +282,15 @@ function collectCurrent(): Pick<SchemasBaseline, 'forced' | 'gratuitous'> {
       // its sibling suites of CPU when vitest runs them in parallel.
       const text = readFileSync(file, 'utf8');
       if (!text.includes(DEEP_IMPORT_PREFIX)) continue;
-      // Import and `export … from` declarations are only ever top-level, so
-      // the statement list is the whole search space.
-      for (const node of parseSourceFile(file, text).statements) {
-        if (
-          !(ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) ||
-          node.moduleSpecifier == null ||
-          !ts.isStringLiteralLike(node.moduleSpecifier) ||
-          !node.moduleSpecifier.text.startsWith(DEEP_IMPORT_PREFIX)
-        ) {
-          continue;
-        }
-        const names = importedNames(node);
+      for (const reference of deepImportReferences(
+        parseSourceFile(file, text),
+      )) {
         const bucket =
-          names?.every((name) => surface.has(name)) === true
+          reference.names?.every((name) => surface.has(name)) === true
             ? gratuitous
             : forced;
-        const typeOnly = ts.isImportDeclaration(node)
-          ? (node.importClause?.isTypeOnly ?? false)
-          : node.isTypeOnly;
-        (bucket[node.moduleSpecifier.text] ??= []).push(
-          typeOnly ? `${repoPath} (type-only)` : repoPath,
+        (bucket[reference.specifier] ??= []).push(
+          reference.typeOnly ? `${repoPath} (type-only)` : repoPath,
         );
       }
     }
@@ -242,7 +314,86 @@ function total(imports: DeepImports): number {
   );
 }
 
+function contractedEntries(
+  baseline: SchemasBaseline,
+  current: Pick<SchemasBaseline, 'forced' | 'gratuitous'>,
+): string[] {
+  return Object.entries(current.forced).flatMap(([specifier, entries]) => {
+    const previouslyReachable = new Set(baseline.gratuitous[specifier] ?? []);
+    return entries
+      .filter((entry) => previouslyReachable.has(entry))
+      .map((entry) => `${specifier}: ${entry}`);
+  });
+}
+
 describe('@shared/schemas deep-import ratchet', () => {
+  it('finds every TypeScript module-loading form', () => {
+    const source = parseSourceFile(
+      'probe.ts',
+      `
+        import { AgentCategory } from '@shared/schemas/agent';
+        export { AgentCategory } from '@shared/schemas/agent';
+        import agent = require('@shared/schemas/agent');
+        const dynamic = import('@shared/schemas/agent');
+        const commonJs = require('@shared/schemas/agent');
+        type Category = import('@shared/schemas/agent').AgentCategory;
+      `,
+    );
+
+    expect(deepImportReferences(source)).toEqual([
+      {
+        names: ['AgentCategory'],
+        specifier: '@shared/schemas/agent',
+        typeOnly: false,
+      },
+      {
+        names: ['AgentCategory'],
+        specifier: '@shared/schemas/agent',
+        typeOnly: false,
+      },
+      {
+        names: undefined,
+        specifier: '@shared/schemas/agent',
+        typeOnly: false,
+      },
+      {
+        names: undefined,
+        specifier: '@shared/schemas/agent',
+        typeOnly: false,
+      },
+      {
+        names: undefined,
+        specifier: '@shared/schemas/agent',
+        typeOnly: false,
+      },
+      {
+        names: ['AgentCategory'],
+        specifier: '@shared/schemas/agent',
+        typeOnly: true,
+      },
+    ]);
+  });
+
+  it('detects contraction within an already-forced leaf', () => {
+    const specifier = '@shared/schemas/profileViewMessages';
+    const movedEntry = 'src/example.ts (type-only)';
+    const fixtureBaseline: SchemasBaseline = {
+      semantics: '',
+      forced: { [specifier]: ['src/already-forced.ts'] },
+      gratuitous: { [specifier]: [movedEntry] },
+    };
+    const fixtureCurrent = {
+      forced: {
+        [specifier]: ['src/already-forced.ts', movedEntry],
+      },
+      gratuitous: {},
+    };
+
+    expect(contractedEntries(fixtureBaseline, fixtureCurrent)).toEqual([
+      `${specifier}: ${movedEntry}`,
+    ]);
+  });
+
   // One scan for the whole suite; every case reads the same snapshot.
   const current = collectCurrent();
   if (process.env.TEXRA_UPDATE_SHARED_SCHEMAS_BASELINE === '1') {
@@ -297,6 +448,16 @@ describe('@shared/schemas deep-import ratchet', () => {
       `These statements name symbols '@shared/schemas' does not re-export, from modules that were not previously off-surface:\n` +
         newlyForced.map((specifier) => `  + ${specifier}`).join('\n') +
         `\n\nEither import a symbol the barrel publishes, or land the surface-membership decision and regenerate ${BASELINE_FILE}.`,
+    ).toEqual([]);
+  });
+
+  it('does not shrink the surface of a leaf that was partially published', () => {
+    const contracted = contractedEntries(baseline, current);
+    expect(
+      contracted,
+      `These statements could previously use '@shared/schemas', but their symbols are no longer exported by the barrel:\n` +
+        contracted.map((entry) => `  ${entry}`).join('\n') +
+        `\n\nRestore the published symbols, or land the surface-membership decision and regenerate ${BASELINE_FILE}.`,
     ).toEqual([]);
   });
 
