@@ -158,7 +158,8 @@ The same fact→view switch exists **four times** (219 LoC of switch, inside 2,0
 over the same 13 `RUN_FACT_EVENT_TYPES` and 10 `SessionFact` arms) — **three of the four
 inside the CLI**. One
 status write site fans to three rails with **13 production apply-sites**, forcing 30 LoC of
-dedup in a renderer. _(Corrected 2026-07-26: the two status rails were mutually exclusive in
+dedup in a renderer. _(Corrected 2026-07-26: the two **projectable** status rails — trace and
+session-fact; `onDidChange` is the third and fires unconditionally — were mutually exclusive in
 production, so this dedup map was never reachable — dead code, not an active CLAUDE.md
 violation; see the acceptance-criteria row 5 correction in §7.)_
 
@@ -356,12 +357,14 @@ consumers, one of them inside the runtime itself. **Restate the acceptance targe
 > used `...(runTrace ? {} : { events })`). So dropping the `!options.trace &&` guard alone is a
 > no-op, and deleting the three projector trace-arms alone **silences status entirely** for every
 > trace-owned transition — run start, terminal, manual-retry WAITING/RESUME/CANCEL, restart
-> repair. The rails being mutually exclusive also means the renderer dedup map §3.3 calls a
+> repair. The rails being mutually exclusive also means the renderer dedup map that §3.3 calls a
 > CLAUDE.md violation was **unreachable dead code**, not an active violation.
 >
 > The route that actually reaches 13 → 10: `StreamStatusMachine` receives the session hub at
-> construction — mirroring `new ExecutionRegistry({ streamStatus, events })` three lines away in
-> the same `SessionHandle` constructor — and publishes the fact itself.
+> construction — mirroring `new ExecutionRegistry({ streamStatus, events })` a few statements
+> later in the same `SessionHandle` constructor — and publishes the fact itself. The
+> independent `SessionHandleInit.status` injection seam goes away with it, so the machine and
+> the hub can no longer be bound to different owners.
 > `StreamStatusEmitOptions.events` and its 7 call-site properties are deleted, along with
 > `'status'` from `RUN_FACT_EVENT_TYPES`. Apply-sites land at 13 → 10 as targeted (trace 4→1,
 > fact 4→4, `onDidChange` 5→5), for **−69** production LoC, with `TexraTranscriptRecorder`
@@ -475,7 +478,8 @@ reaches it. Disjoint consumers; **one rail fixes both.**
 Orthogonal, each needing its own ruling: the reveal-stream fold (7) and the status rail
 13 → 10 (8, atomic). **No persisted format changes in any step.**
 
-> **Corrected 2026-07-26** — step 8 as described above is not atomic-safe: dropping the
+> **Corrected 2026-07-26** — step 8 as prescribed in the §7 acceptance-criteria row-5 note is
+> not atomic-safe: dropping the
 > `!options.trace &&` guard alone is a no-op and deleting the three projector trace-arms alone
 > silences status for every trace-owned transition (run start, terminal, manual-retry
 > WAITING/RESUME/CANCEL, restart repair) — the two do not compose into "one rail." See the
