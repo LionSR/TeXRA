@@ -32,7 +32,7 @@ import {
 } from '@shared/styles';
 
 // Local imports - progress view helpers
-import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
+import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 import {
   createEmptyPermissionGroups,
   findPanelForPermission,
@@ -61,7 +61,7 @@ import './UserQuestionPanel';
 /** Section configuration for rendering permission groups */
 interface SectionConfig {
   cssClass: string;
-  icon: string;
+  icon: TeXRAIconName;
   title: string;
   renderPanel: (p: PermissionState) => TemplateResult;
 }
@@ -199,11 +199,7 @@ export class RequestPanels extends LitElement {
   ): TemplateResult {
     return html`
       <div class="${config.cssClass}__header">
-        <wa-icon
-          library=${TEXRA_ICON_LIBRARY}
-          name=${config.icon}
-          aria-hidden="true"
-        ></wa-icon>
+        ${waIcon(config.icon)}
         <span>${config.title}</span>
         ${extra}
       </div>
@@ -260,11 +256,7 @@ export class RequestPanels extends LitElement {
           ?disabled=${index === 0}
           @click=${this._eiPrev}
         >
-          <wa-icon
-            library=${TEXRA_ICON_LIBRARY}
-            name="chevron-left"
-            aria-hidden="true"
-          ></wa-icon>
+          ${waIcon('chevron-left')}
         </wa-button>
         <wa-tooltip for="ei-prev-btn">Previous inquiry</wa-tooltip>
         <span class="external-inquiry-requests__counter">
@@ -277,11 +269,7 @@ export class RequestPanels extends LitElement {
           ?disabled=${index === perms.length - 1}
           @click=${this._eiNext}
         >
-          <wa-icon
-            library=${TEXRA_ICON_LIBRARY}
-            name="chevron-right"
-            aria-hidden="true"
-          ></wa-icon>
+          ${waIcon('chevron-right')}
         </wa-button>
         <wa-tooltip for="ei-next-btn">Next inquiry</wa-tooltip>
       </div>

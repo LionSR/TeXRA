@@ -33,7 +33,7 @@ import { isInFlightPhase } from '@shared/streams/streamStatus';
 import { parseWorkflowOutputRoundDir } from '@shared/constants/workflowOutput';
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 import { scrollToBottom } from '@shared/utils/dom';
-import { TEXRA_ICON_LIBRARY, waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 import { renderEmptyState } from '@shared/wa/emptyState';
 import { formatDuration } from '@utils/core';
 import { pluralize } from '@utils/text/stringUtils';
@@ -67,7 +67,7 @@ const GROUP_MESSAGE_WINDOW_STEP = 400;
  * (#7993 step 3) — `CANCELLED` now renders distinctly from `COMPLETED`
  * instead of folding into one neutral "stopped" icon.
  */
-function getStatusIcon(status: string): string | null {
+function getStatusIcon(status: string): TeXRAIconName | null {
   switch (status) {
     case STREAM_PHASE.RUNNING:
       return null;
@@ -527,11 +527,7 @@ export class TaskGroupList extends LitElement {
       <span class="group-status-icon">
         ${
           statusIcon
-            ? html`<wa-icon
-                library=${TEXRA_ICON_LIBRARY}
-                name=${statusIcon}
-                aria-hidden="true"
-              ></wa-icon>`
+            ? html`${waIcon(statusIcon)}`
             : html`<wa-spinner></wa-spinner>`
         }
       </span>
@@ -539,12 +535,7 @@ export class TaskGroupList extends LitElement {
       ${this.renderGroupProgress(group, messages)}
       <span class="group-time">
         <span class="group-start-time" data-start=${String(group.startTime)}>
-          <wa-icon
-            library=${TEXRA_ICON_LIBRARY}
-            name="clock"
-            aria-hidden="true"
-          ></wa-icon>
-          ${formattedStartTime}
+          ${waIcon('clock')} ${formattedStartTime}
         </span>
         ${
           durationText

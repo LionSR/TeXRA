@@ -30,7 +30,7 @@ import {
   renderAgentOptions,
   renderModelOptions,
 } from '@shared/utils/selectTemplates';
-import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 import { ProgressEvents } from '../events';
 import type { FollowupOptionsState } from '../store';
@@ -186,13 +186,7 @@ export class WorkflowToolUseFollowupSection extends LitElement {
               ?disabled=${!ready}
               @click=${this.setupFollowup}
             >
-              <wa-icon
-                slot="start"
-                library=${TEXRA_ICON_LIBRARY}
-                name="reply"
-                aria-hidden="true"
-              ></wa-icon>
-              Setup
+              ${waIcon('reply', { slot: 'start' })} Setup
             </wa-button>
             <wa-button
               appearance="filled"
@@ -201,13 +195,7 @@ export class WorkflowToolUseFollowupSection extends LitElement {
               ?disabled=${!ready}
               @click=${this.runFollowup}
             >
-              <wa-icon
-                slot="start"
-                library=${TEXRA_ICON_LIBRARY}
-                name="play"
-                aria-hidden="true"
-              ></wa-icon>
-              Run
+              ${waIcon('play', { slot: 'start' })} Run
             </wa-button>
           </div>
         </div>
