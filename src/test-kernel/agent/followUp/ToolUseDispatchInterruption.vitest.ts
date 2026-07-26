@@ -15,7 +15,7 @@ import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createRunTrace, StreamLogStore } from '@transcript';
 
 // Local file imports
-import { withTestRunContext } from '../progressTestUtils';
+import { testRunScope, withTestRunContext } from '../progressTestUtils';
 
 /**
  * Regression test for https://github.com/LionSR/TeXRA/issues/7163.
@@ -79,6 +79,7 @@ describe('ToolUseDispatchNode interruption', () => {
     }));
 
     const services = {
+      runScope: testRunScope('test-stream'),
       checkInterruption,
       client: {},
       config: { agent: 'test-agent', model: 'test-model' },
@@ -255,6 +256,7 @@ describe('ToolUseDispatchNode interruption', () => {
     }));
 
     const services = {
+      runScope: testRunScope('test-stream'),
       checkInterruption,
       client: {},
       config: { agent: 'test-agent', model: 'test-model' },

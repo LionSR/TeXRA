@@ -15,7 +15,6 @@ import type {
   ModelCredentialRoute,
   ModelCredentialSelection,
 } from '@agent/types/ModelHandlerContracts';
-import { useLaunchRunContext } from '@agent/runtime/RunContext';
 import {
   classifyModelRateLimitFailure,
   classifyRelayRequestLimitFailure,
@@ -66,15 +65,16 @@ export interface ModelInvocationConfig<TShared, TServices> {
 /**
  * Only the services this node and its `RetryableInvocationNode` base class
  * actually read: the model handler, logger, setting (temperature/tools),
- * config (for `saveCycleDebug`'s log context), the retry machinery's abort
- * controller setter, plus the live model client. Picking
+ * config (for `saveCycleDebug`'s log context), the run scope (retry gate and
+ * debug-log identity), the retry machinery's abort controller setter, plus the
+ * live model client. Picking
  * from `AgentCore`/`BaseFlowContextInit` instead of requiring the literal
  * type keeps every existing caller, which passes the full services bag,
  * satisfying this narrower shape structurally.
  */
 type InvocationServices = Pick<
   AgentCore,
-  'modelHandler' | 'logger' | 'setting' | 'config'
+  'modelHandler' | 'logger' | 'setting' | 'config' | 'runScope'
 > &
   Pick<BaseFlowContextInit, 'setAbortController'> & {
     readonly client: unknown;
@@ -132,7 +132,7 @@ export class ModelInvocationNode<
       const modelRetryRoute = services.modelHandler.getModelRetryRouteKey(
         services.client,
       );
-      const gate = useLaunchRunContext().runScope.session.modelRetries;
+      const gate = services.runScope.session.modelRetries;
       const usesRelay = services.clientCredentialRoute === 'relay';
       const invoke = async () => {
         const start = Date.now();
