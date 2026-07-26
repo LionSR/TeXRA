@@ -149,7 +149,11 @@ describe('repairRestartedStreams', () => {
         outcome: RUN_OUTCOME.COMPLETED,
       });
       expect(result.failedStreams).toEqual([]);
-      expect(closeRunningGroups).not.toHaveBeenCalled();
+      expect(closeRunningGroups).toHaveBeenCalledWith(
+        [streamId],
+        RUN_OUTCOME.COMPLETED,
+        expect.any(Number),
+      );
       expect(finalizeExecution).not.toHaveBeenCalled();
     } finally {
       await store.clear();

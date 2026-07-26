@@ -250,11 +250,7 @@ export class SessionHandle {
     }
   }
 
-  private async runRestartRepair(refreshStores = false): Promise<void> {
-    if (refreshStores) {
-      await this.transcripts.reload();
-      await this.snapshots.load(this.transcripts.keys());
-    }
+  private async runRestartRepair(): Promise<void> {
     const executionIds = this.snapshots.getExecutionIdMap();
     let waitingStreams: Set<StreamTabId>;
     let repairStreams: Set<StreamTabId>;
@@ -297,7 +293,7 @@ export class SessionHandle {
       logger,
     });
     this.restartRepairRetry.schedule(result.nextLeaseCheckAt, () => {
-      void this.runRestartRepair(true).catch((error: unknown) => {
+      void this.runRestartRepair().catch((error: unknown) => {
         logger.warn('Failed delayed restart repair', { data: error });
       });
     });

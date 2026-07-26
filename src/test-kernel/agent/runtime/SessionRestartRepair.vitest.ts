@@ -7,6 +7,7 @@ import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   EXECUTION_STATUS,
   LOG_LEVELS,
+  RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
   type ExecutionId,
@@ -85,6 +86,50 @@ describe('SessionHandle restart repair', () => {
       expect(transcripts.get(streamId)?.getRange(0).at(-1)).toMatchObject({
         type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
         data: { status: 'failed' },
+      });
+    } finally {
+      session.dispose();
+    }
+  });
+
+  it('closes an orphaned group without rewriting its completed execution', async () => {
+    const completedExecutionId = 'c0ffee123' as ExecutionId;
+    const completedStreamId =
+      `completed#${completedExecutionId}` as StreamTabId;
+    const transcripts = await StreamLogStore.open();
+    transcripts.append(completedStreamId, {
+      id: 'completed-running-group',
+      type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
+      level: LOG_LEVELS.INFO,
+      timestamp: 1_000,
+      data: { status: STREAM_PHASE.RUNNING },
+    });
+    await transcripts.flush();
+
+    const executionStore = getExecutionStore(completedExecutionId);
+    await executionStore.writeMeta({
+      timestamp: '2026-07-26T00:00:00.000Z',
+      terminalStatus: EXECUTION_STATUS.COMPLETED,
+    });
+
+    const session = new SessionHandle({
+      transcripts,
+      restartRepair: 'deferred',
+    });
+    try {
+      await session.waitUntilReady();
+
+      expect(session.status.get(completedStreamId)).toBe(
+        STREAM_PHASE.COMPLETED,
+      );
+      await expect(executionStore.readMeta()).resolves.toMatchObject({
+        terminalStatus: EXECUTION_STATUS.COMPLETED,
+      });
+      expect(
+        transcripts.get(completedStreamId)?.getRange(0).at(-1),
+      ).toMatchObject({
+        type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
+        data: { status: RUN_OUTCOME.COMPLETED },
       });
     } finally {
       session.dispose();

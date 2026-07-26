@@ -333,6 +333,20 @@ export async function repairRestartedStreams(
         if (executionId) {
           const settlement = await readExecutionSettlement(executionId);
           if (settlement.settled) {
+            repairStarted = true;
+            synchronizeSettledPhase(
+              options.streamStatus,
+              streamId,
+              settlement.outcome,
+              options.statusEmitOptions,
+            );
+            if (settlement.outcome) {
+              await options.closeRunningGroups(
+                [streamId],
+                settlement.outcome,
+                now,
+              );
+            }
             return { kind: 'settled' as const, settlement };
           }
         }
@@ -366,12 +380,6 @@ export async function repairRestartedStreams(
         continue;
       }
       if (repaired.value.kind === 'settled') {
-        synchronizeSettledPhase(
-          options.streamStatus,
-          streamId,
-          repaired.value.settlement.outcome,
-          options.statusEmitOptions,
-        );
         options.logger?.debug(
           `Skipped restart repair for terminal execution ${executionId}`,
         );
