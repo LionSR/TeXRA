@@ -449,14 +449,9 @@ async function assembleAgentLaunchContext(
 function acquireStreamOrThrow(
   streamId: StreamTabId,
   streamStatus: StreamStatusMachine,
-  session: SessionHandle,
   taskType: string = 'Task',
 ): void {
-  if (
-    streamStatus.tryAcquire(streamId, {
-      events: session.events,
-    })
-  ) {
+  if (streamStatus.tryAcquire(streamId)) {
     return;
   }
 
@@ -488,7 +483,6 @@ function compensateFailedActivation(args: {
   reservedStreamId?: StreamTabId;
   activatedStreamId?: StreamTabId;
   streamStatus: StreamStatusMachine;
-  session: SessionHandle;
   err: unknown;
   // The run-trace from assembleAgentLaunchContext when it was created before the
   // throw. Reused for the error log so we don't allocate a second one; outer
@@ -500,7 +494,6 @@ function compensateFailedActivation(args: {
     reservedStreamId,
     activatedStreamId,
     streamStatus,
-    session,
     err,
     runTrace,
   } = args;
@@ -521,10 +514,7 @@ function compensateFailedActivation(args: {
       !streamStatus.transitionToTerminal(
         activatedStreamId,
         STREAM_PHASE.FAILED,
-        {
-          trace: runTrace?.trace,
-          ...(runTrace ? {} : { events: session.events }),
-        },
+        runTrace ? { trace: runTrace.trace } : {},
       )
     ) {
       runTrace?.trace.warn('Failed to mark activation failure terminal', {
@@ -538,9 +528,7 @@ function compensateFailedActivation(args: {
   }
 
   if (reservedStreamId) {
-    streamStatus.releaseIfReserved(reservedStreamId, {
-      events: session.events,
-    });
+    streamStatus.releaseIfReserved(reservedStreamId);
   }
 }
 
@@ -566,12 +554,7 @@ export async function buildAgentLaunchContext(
     ? undefined
     : getStreamTabId(config.agent, config.model, { executionId });
   if (reservedStreamId) {
-    acquireStreamOrThrow(
-      reservedStreamId,
-      streamStatus,
-      launchSession,
-      input.taskType,
-    );
+    acquireStreamOrThrow(reservedStreamId, streamStatus, input.taskType);
   }
 
   const resources = new AgentLaunchResources();
@@ -592,7 +575,6 @@ export async function buildAgentLaunchContext(
         reservedStreamId,
         activatedStreamId,
         streamStatus,
-        session: launchSession,
         err,
         runTrace,
       });
