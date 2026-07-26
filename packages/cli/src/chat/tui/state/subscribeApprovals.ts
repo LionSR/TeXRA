@@ -13,9 +13,7 @@
 // Promise<ToolEditApprovalResult>, not a fire-and-forget event.
 
 import { nanoid } from 'nanoid';
-import pDefer from 'p-defer';
 import PQueue from 'p-queue';
-import pTimeout from 'p-timeout';
 
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
@@ -23,7 +21,6 @@ import {
   type HostBashApprovalRequest,
   type HostBashApprovalResult,
   type HostInteractionCancelSelector,
-  type HostInteractionOptions,
   type HostInteractions,
   type HostRetryInteractionOptions,
   type HostRetryRequest,
@@ -156,86 +153,27 @@ export function createTuiHostInteractions(
         ? { accepted: true, appliedContent: request.proposedContent }
         : { accepted: false, userMessage: decision.userMessage };
     },
-    requestBashApproval(request, options) {
+    requestBashApproval(request) {
       const requestId = `bash-${nanoid()}`;
-      return withInteractionTimeout(
-        () => requestBashInteraction(request, context, host, requestId),
-        options,
-        {
-          accepted: false,
-          userMessage: 'Approval request timed out.',
-          timedOut: true,
-        },
-        () =>
-          clearApprovalsWhere(
-            (payload) =>
-              payload.kind === 'bash' &&
-              payload.payload.requestId === requestId,
-            NEUTRAL_TIMEOUT_DECISION,
-          ),
-      );
+      return requestBashInteraction(request, context, host, requestId);
     },
-    requestPlanApproval(request, options) {
-      return withInteractionTimeout(
-        () => requestPlanInteraction(request, context),
-        options,
-        { action: 'timeout' },
-        () =>
-          clearApprovalsWhere(
-            (payload) =>
-              payload.kind === 'plan' &&
-              payload.payload.approvalId === request.approvalId,
-            NEUTRAL_TIMEOUT_DECISION,
-          ),
-      );
+    requestPlanApproval(request) {
+      return requestPlanInteraction(request, context);
     },
-    requestAgentProposal(request, options) {
-      return withInteractionTimeout(
-        () => requestProposalInteraction(request, context, host),
-        options,
-        { action: 'timeout' },
-        () =>
-          clearApprovalsWhere(
-            (payload) =>
-              payload.kind === 'proposal' &&
-              payload.payload.proposalId === request.proposalId,
-            NEUTRAL_TIMEOUT_DECISION,
-          ),
-      );
+    requestAgentProposal(request) {
+      return requestProposalInteraction(request, context, host);
     },
     requestRetry(request, options) {
-      return withInteractionTimeout(
-        () =>
-          requestRetryInteraction(
-            request,
-            context,
-            retryRoutes,
-            retryCredentialCommitQueue,
-            options,
-          ),
+      return requestRetryInteraction(
+        request,
+        context,
+        retryRoutes,
+        retryCredentialCommitQueue,
         options,
-        { action: 'timeout' },
-        () => {
-          settleRetryRoute(retryRoutes, request.streamId, {
-            action: 'timeout',
-          });
-          clearRetryApprovalsForStream(request.streamId);
-        },
       );
     },
-    askUserQuestion(request, options) {
-      return withInteractionTimeout(
-        () => requestUserQuestionInteraction(request, context),
-        options,
-        { submitted: false, feedback: 'Approval request timed out.' },
-        () =>
-          clearApprovalsWhere(
-            (payload) =>
-              payload.kind === 'userQuestion' &&
-              payload.payload.requestId === request.requestId,
-            NEUTRAL_TIMEOUT_DECISION,
-          ),
-      );
+    askUserQuestion(request) {
+      return requestUserQuestionInteraction(request, context);
     },
     openExternalInquiry(request) {
       return openExternalInquiryInteraction(request, context);
@@ -317,51 +255,6 @@ function prepareRetryClient(
   signal: AbortSignal,
 ): Promise<void> {
   return runRetryTask(() => prepare(selection, signal), signal);
-}
-
-const NEUTRAL_TIMEOUT_DECISION: ApprovalDecision = {
-  accepted: true,
-  userMessage: 'Approval request timed out.',
-};
-
-function validTimeoutMs(timeoutMs: number | undefined): number | undefined {
-  if (timeoutMs == null || !Number.isFinite(timeoutMs) || timeoutMs <= 0) {
-    return undefined;
-  }
-  return Math.max(1, Math.floor(timeoutMs));
-}
-
-/**
- * Race an interaction against `options.timeoutMs`, including any async work
- * the interaction does *before* it reaches the modal queue (e.g. the
- * auto-switch retry route's keychain lookup in `beforeQueue`). `start` is a
- * thunk rather than an already-created Promise so the timer is armed before
- * that work begins — a hanging pre-queue lookup still times out on schedule
- * instead of extending the interaction past the intended bound.
- */
-function withInteractionTimeout<T>(
-  start: () => Promise<T>,
-  options: HostInteractionOptions | undefined,
-  timeoutResult: T,
-  onTimeout: () => void,
-): Promise<T> {
-  const timeoutMs = validTimeoutMs(options?.timeoutMs);
-  if (timeoutMs == null) return start();
-
-  const interaction = pDefer<T>();
-  const timedInteraction = pTimeout(interaction.promise, {
-    milliseconds: timeoutMs,
-    fallback: () => {
-      onTimeout();
-      return timeoutResult;
-    },
-  });
-  try {
-    start().then(interaction.resolve, interaction.reject);
-  } catch (error) {
-    interaction.reject(error);
-  }
-  return timedInteraction;
 }
 
 function isActiveRetryRoute(
