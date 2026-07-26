@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatUnavailableApprovalInstruction } from '@cli/commands/_helpers/approvalPolicyInstruction';
-import { formatMultiAgentRunInstruction } from '@cli/commands/_helpers/multiAgentInstruction';
-import { formatCliRunFileInstruction } from '@cli/commands/_helpers/runFileInstruction';
-import { formatToolUseAgentRunInstruction } from '@cli/commands/_helpers/toolUseRunInstruction';
+import {
+  formatCliRunFileInstruction,
+  formatMultiAgentRunInstruction,
+  formatToolUseAgentRunInstruction,
+  formatUnavailableApprovalInstruction,
+} from '@cli/commands/_helpers/runInstructions';
 import { approvalPromptsUnavailable } from '@cli/runtime/approvalPolicyAvailability';
 
 const workingDirectory = '/tmp/texra-workspace';

@@ -37,12 +37,14 @@ vi.mock('vscode', () => ({
   },
 }));
 
-vi.mock('@commands/auth', () => ({
+vi.mock('@auth/constants', () => ({
   AUTH_COMMANDS: { SIGN_IN: 'texra.signIn' },
+}));
+vi.mock('@commands/auth/authCommands', () => ({
   getAuthStatus: vi.fn(),
 }));
 
-vi.mock('@frontend/agents', () => ({
+vi.mock('@frontend/agents/AgentDirectoryManager', () => ({
   agentDirectories: { custom: mocks.getCustomAgentDirectory },
 }));
 
