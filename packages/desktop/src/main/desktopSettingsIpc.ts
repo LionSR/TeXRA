@@ -277,11 +277,20 @@ export function createDesktopSettingsIpc(
     postApprovalSettings();
   }
 
+  async function updateToolSafetySetting(
+    key: WorkspaceStateKey,
+    value: boolean,
+  ): Promise<void> {
+    await workspaceState.update(key, value);
+    postApprovalSettings();
+  }
+
   /**
-   * Generic write path for scalar `STATE_SETTINGS` rows (git-author + external
-   * coding-agent controls). The shared {@link resolveStateSettingWrite} owns the
-   * value validation + family classification (shared with the extension host);
-   * this host only dispatches the resolved family to its updater.
+   * Generic write path for scalar `STATE_SETTINGS` rows (git author, external
+   * coding agents, and tool safety). The shared
+   * {@link resolveStateSettingWrite} owns value validation and family
+   * classification across graphical hosts; this host only dispatches the
+   * resolved family to its updater.
    */
   async function updateStateSetting(
     key: string,
@@ -291,8 +300,10 @@ export function createDesktopSettingsIpc(
     if (!write) return;
     if (write.family === 'git') {
       await updateGitAuthorSetting(write.key, write.value);
-    } else {
+    } else if (write.family === 'agent') {
       await updateAgentSetting(write.key, write.value);
+    } else {
+      await updateToolSafetySetting(write.key, write.value);
     }
   }
 

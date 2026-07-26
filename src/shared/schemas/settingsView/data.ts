@@ -318,6 +318,7 @@ const UpdateToolDashboardMessageSchema = z.object({
 const UpdateApprovalSettingsMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS),
   bashApprovalEnabled: z.boolean(),
+  toolPathProtectionEnabled: z.boolean(),
   codexSandboxMode: CodexSandboxModeSchema,
   codexReasoningEffort: CodexReasoningEffortSchema,
   codexApprovalPolicy: CodexApprovalPolicySchema,

@@ -359,6 +359,30 @@ describe('desktop settings IPC', () => {
     expect(isWorktreeSupportEnabled()).toBe(true);
   });
 
+  it('round-trips tool path protection through workspace state', async () => {
+    const workspaceState = new FakeStateStore();
+    const { settings, posted } = createCapturedSettingsFixture({
+      workspaceState,
+    });
+
+    expect(
+      settings.handleMessage({
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
+        key: WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
+        value: false,
+      }),
+    ).toBe(true);
+    await flushAsyncWork();
+
+    expect(
+      workspaceState.get(WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED),
+    ).toBe(false);
+    expect(posted.at(-1)).toMatchObject({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS,
+      toolPathProtectionEnabled: false,
+    });
+  });
+
   it('delegates crash-reporting commands to the required controller', async () => {
     const get = vi.fn(async () => undefined);
     const setEnabled = vi.fn(async () => undefined);
