@@ -39,7 +39,6 @@ export * from './diffResult';
 
 // Layer 4: MainView schemas (consolidated)
 export * from './mainView';
-export * as mainViewMessages from './mainView';
 
 // Layer 5: ProgressView schemas (consolidated)
 export * from './progressView';

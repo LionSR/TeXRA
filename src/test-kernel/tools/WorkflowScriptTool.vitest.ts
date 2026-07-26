@@ -7,7 +7,8 @@ import {
   deriveWorkflowScriptCheckpointId,
   writeWorkflowScriptCheckpoint,
 } from '@agent/workflowScript';
-import { ExecutionLeaseActiveError, getExecutionStore } from '@agent/storage';
+import { getExecutionStore } from '@agent/storage';
+import { ExecutionLeaseActiveError } from '@agent/storage/executionLease';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
 import type { LaunchRunContext } from '@agent/runtime/RunContext';
 import { withRunContext } from '@agent/runtime/RunContext';
@@ -30,9 +31,10 @@ const mocks = vi.hoisted(() => ({
   configureDelegatedChildApprovals: vi.fn(),
 }));
 
-// Spread the real storage module so `ExecutionLeaseActiveError`,
-// `getExecutionStore`, and lease helpers stay authentic; only registration is
-// spied so the launch can be observed without touching the async run loop.
+// Spread the real storage module so `getExecutionStore` stays authentic;
+// only registration is spied so the launch can be observed without touching
+// the async run loop. The executionLease mock below spreads the real
+// `ExecutionLeaseActiveError` and lease helpers the same way.
 vi.mock('@agent/storage', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@agent/storage')>();
   return { ...actual, registerExecution: mocks.registerExecution };
