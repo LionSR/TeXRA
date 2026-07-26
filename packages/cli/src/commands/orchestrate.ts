@@ -8,7 +8,7 @@ import { platform } from '@platform/platform';
 import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas/agentSkills';
 import { readAgentSkillsEnabled } from '@shared/settingsView/handlers/agentSkillsHandlers';
 import { getFirstRunDone } from '@shared/state/onboardingState';
-import { updateConfig } from '@utils/config';
+import { updateConfig } from '@utils/config/configUtils';
 
 import { firstRunSetupAgentOverride } from '../onboarding/setupContinuation';
 import { CliExitCode } from '../runtime/exitCodes';

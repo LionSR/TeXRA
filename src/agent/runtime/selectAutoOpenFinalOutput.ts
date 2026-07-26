@@ -1,7 +1,7 @@
 import type { WorkflowFlowResult } from '@agent/runtime/AgentFlowResult';
 import { RUN_OUTCOME } from '@shared/schemas';
 import type { OutputFileSummary } from '@shared/schemas/output';
-import { getConfig } from '@utils/config';
+import { getConfig } from '@utils/config/configUtils';
 
 /**
  * Decide whether a finished workflow should auto-open a final output, and which

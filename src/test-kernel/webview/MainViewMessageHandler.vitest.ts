@@ -74,15 +74,17 @@ vi.mock('@shared/state/onboardingState', () => ({
   setFirstRunDone: vi.fn(),
   setOnboardingDeclined: vi.fn(),
 }));
-vi.mock('@utils/config', () => ({
+vi.mock('@utils/config/constants', () => ({
   SETTINGS_QUERY: { EXTENSION: '@ext:texra.extension' },
+}));
+vi.mock('@utils/config/configUtils', () => ({
   getConfig: vi.fn(),
   updateConfig: mocks.updateConfig,
 }));
 vi.mock('@utils/config/providerConfig', () => ({
   getProviderKeyUrl: mocks.getProviderKeyUrl,
 }));
-vi.mock('@utils/system', () => ({
+vi.mock('@utils/system/toolUtils', () => ({
   checkCoreDependencies: mocks.checkCoreDependencies,
   getToolDocsCommand: mocks.getToolDocsCommand,
 }));
