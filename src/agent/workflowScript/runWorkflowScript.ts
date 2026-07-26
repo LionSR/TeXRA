@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 
 import stableStringify from 'fast-json-stable-stringify';
 import PQueue from 'p-queue';
+import pTimeout from 'p-timeout';
 import {
   WorkflowScriptFilesSchema,
   type WorkflowScriptFiles,
@@ -684,17 +685,10 @@ export async function runWorkflowScript(
       // past its timeout by more than the grace period; stragglers beyond
       // it are orphaned (their journal entries may be lost, which resume
       // treats as a retry).
-      let graceTimer: NodeJS.Timeout | undefined;
-      try {
-        await Promise.race([
-          Promise.allSettled([...pendingAgentCalls]),
-          new Promise<void>((resolve) => {
-            graceTimer = setTimeout(resolve, DRAIN_GRACE_MS);
-          }),
-        ]);
-      } finally {
-        if (graceTimer) clearTimeout(graceTimer);
-      }
+      await pTimeout(Promise.allSettled([...pendingAgentCalls]), {
+        milliseconds: DRAIN_GRACE_MS,
+        fallback: () => undefined,
+      });
     }
   }
 

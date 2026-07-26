@@ -22,7 +22,7 @@ import { CopyButtonController } from '@shared/litControllers/CopyButtonControlle
 import { designTokens } from '@shared/styles/litStyles';
 import { markdownStyles } from '@shared/styles/markdownStyles';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
-import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - formatter helpers
 import { processMarkdownContent } from '../formatters/markdownRenderer';
@@ -231,12 +231,7 @@ export class UserMessage extends LitElement {
         >
           <div class="user-message-header">
             <span class="user-message-header-left">
-              <wa-icon
-                library=${TEXRA_ICON_LIBRARY}
-                name="comment"
-                class="user-message-icon"
-                aria-hidden="true"
-              ></wa-icon>
+              ${waIcon('comment', { className: 'user-message-icon' })}
               <span id="user-message-timestamp" class="user-message-timestamp"
                 >${timeDisplay}</span
               >

@@ -17,6 +17,7 @@ import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 
 // Local imports - shared schemas
 import type { LogMessageData } from '@shared/schemas';
+import type { TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - formatter helpers
 import { formatDisplayTimestamp } from '../timestampUtils';
@@ -28,7 +29,7 @@ import type { FormatResult } from '../baseLogFormatter';
 const BANNER_CONFIG: Record<
   string,
   {
-    iconName: string;
+    iconName: TeXRAIconName;
     labelText: string;
     copyTitle: string;
     contentClass: string;
