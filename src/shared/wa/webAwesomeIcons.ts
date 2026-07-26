@@ -124,7 +124,7 @@ import { registerIconLibrary } from '@awesome.me/webawesome/dist/components/icon
 import { html, type TemplateResult } from 'lit';
 import { ifDefined } from 'lit/directives/if-defined.js';
 
-const TEXRA_ICON_LIBRARY = 'texra';
+export const TEXRA_ICON_LIBRARY = 'texra';
 
 type FontAwesomePathData = string | string[];
 
@@ -280,7 +280,7 @@ const icons = {
 // `as const satisfies …` keeps alias keys as a literal union (so
 // `keyof typeof CODICON_ALIASES` narrows TeXRAIconName) and compile-checks
 // every alias value against the registered icon names.
-const CODICON_ALIASES = {
+export const CODICON_ALIASES = Object.freeze({
   account: 'circle-user',
   add: 'plus',
   archive: 'box-archive',
@@ -366,7 +366,7 @@ const CODICON_ALIASES = {
   window: 'window-maximize',
   x: 'xmark',
   zap: 'bolt',
-} as const satisfies Readonly<Record<string, keyof typeof icons>>;
+} as const satisfies Readonly<Record<string, keyof typeof icons>>);
 
 let isRegistered = false;
 
@@ -404,8 +404,14 @@ export function registerTeXRAWebAwesomeIcons(): void {
 // the codicon-style aliases. Exported so callers can type-check icon usage.
 export type TeXRAIconName = keyof typeof icons | keyof typeof CODICON_ALIASES;
 
+/** Canonical names used to verify host-specific icon resolvers exhaustively. */
+export const TEXRA_ICON_NAMES = Object.freeze(
+  Object.keys(icons) as (keyof typeof icons)[],
+);
+
 interface WaIconOptions {
   readonly id?: string;
+  readonly canvas?: 'auto' | 'fixed' | 'roomy' | 'square';
   // 'start' / 'end' for wa-button; 'icon' for wa-callout / wa-card.
   readonly slot?: 'start' | 'end' | 'icon';
   readonly className?: string;
@@ -427,6 +433,7 @@ export function waIcon(
     library=${TEXRA_ICON_LIBRARY}
     name=${name}
     variant=${options.variant ?? 'solid'}
+    canvas=${options.canvas ?? 'auto'}
     slot=${ifDefined(options.slot)}
     class=${ifDefined(options.className)}
     label=${ifDefined(options.label)}

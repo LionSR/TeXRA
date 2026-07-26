@@ -11,6 +11,7 @@ import { commonViewStyles, designTokens } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import type { NumberVscodeSetting } from '@shared/schemas/settingsViewMessages';
+import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
 import { clampOptional } from '@utils/core';
 
 // Local imports - shared schemas
@@ -26,30 +27,6 @@ export class ReliabilitySettingsSection extends LitElement {
         display: block;
       }
 
-      .setting-block {
-        padding: var(--wa-space-xs);
-        background-color: var(--wa-color-neutral-fill-quiet);
-        border-radius: var(--border-radius);
-      }
-
-      .setting-description {
-        margin: var(--wa-space-2xs) 0 var(--wa-space-xs) 0;
-        font-size: var(--font-size-sm);
-      }
-
-      .setting-row {
-        display: flex;
-        align-items: center;
-        gap: var(--wa-space-xs);
-        padding: var(--wa-space-2xs) 0;
-      }
-
-      .setting-row label {
-        min-width: 140px;
-        font-size: var(--font-size-sm);
-        color: var(--wa-color-text-normal);
-      }
-
       .setting-input {
         width: 80px;
       }
@@ -57,13 +34,6 @@ export class ReliabilitySettingsSection extends LitElement {
       .setting-unit {
         color: var(--color-text-secondary);
         font-size: var(--font-size-sm);
-      }
-
-      .setting-help {
-        color: var(--color-text-secondary);
-        font-size: var(--font-size-xs);
-        margin: 0;
-        padding-left: calc(140px + var(--wa-space-xs));
       }
     `,
   ];
@@ -89,35 +59,41 @@ export class ReliabilitySettingsSection extends LitElement {
 
   private renderSetting(setting: NumberVscodeSetting): TemplateResult {
     return html`
-      <div class="setting-row">
-        <label>${setting.label}</label>
-        <wa-input
-          class="setting-input"
-          type="number"
-          .value=${String(setting.value)}
-          min=${setting.min ?? nothing}
-          max=${setting.max ?? nothing}
-          @change=${(event: Event) =>
-            this.handleSettingChange(setting, event.target as WaInput)}
-        ></wa-input>
-        ${
-          setting.unit
-            ? html`<span class="setting-unit">${setting.unit}</span>`
-            : nothing
-        }
+      <div class="settings-row">
+        <div class="settings-row-text">
+          <span class="settings-row-label">${setting.label}</span>
+          <span class="settings-row-help">${setting.description}</span>
+        </div>
+        <div class="settings-row-control">
+          <wa-input
+            class="setting-input"
+            type="number"
+            aria-label=${setting.label}
+            .value=${String(setting.value)}
+            min=${setting.min ?? nothing}
+            max=${setting.max ?? nothing}
+            @change=${(event: Event) =>
+              this.handleSettingChange(setting, event.target as WaInput)}
+          ></wa-input>
+          ${
+            setting.unit
+              ? html`<span class="setting-unit">${setting.unit}</span>`
+              : nothing
+          }
+        </div>
       </div>
-      <p class="setting-help">${setting.description}</p>
     `;
   }
 
   override render(): TemplateResult | typeof nothing {
     if (this.settings.length === 0) return nothing;
     return html`
-      <h3>Reliability</h3>
-      <p class="text-secondary setting-description">
-        Tweak how long model sessions handle retries and context limits.
-      </p>
-      <div class="setting-block">
+      ${renderSettingsSectionHeading({
+        title: 'Reliability',
+        description:
+          'Tweak how long model sessions handle retries and context limits.',
+      })}
+      <div class="settings-section">
         ${this.settings.map((setting) => this.renderSetting(setting))}
       </div>
     `;

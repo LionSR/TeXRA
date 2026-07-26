@@ -42,7 +42,6 @@ import {
 import './QueuedFollowUps';
 
 // Web Awesome native components
-import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 
 @customElement('follow-up-input')
@@ -57,7 +56,6 @@ export class FollowUpInput extends LitElement {
 
       :host([visible]) {
         display: block;
-        margin-top: var(--wa-space-xs);
         max-width: 100%;
       }
 
@@ -66,55 +64,137 @@ export class FollowUpInput extends LitElement {
       }
 
       .follow-up-container {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
-        padding: var(--wa-space-2xs) 0;
-        gap: var(--wa-space-2xs);
+        display: flex;
+        flex-direction: column;
+        gap: var(--wa-space-xs);
         min-width: 0;
       }
 
       .follow-up-container > queued-follow-ups {
         display: block;
-        grid-column: 1 / -1;
         min-width: 0;
       }
 
-      .follow-up-input-row {
+      .composer-surface {
         display: flex;
-        align-items: flex-end;
-        gap: var(--wa-space-2xs);
-        grid-column: 1 / -1;
+        flex-direction: column;
         min-width: 0;
+        padding: var(--wa-space-3xs);
+        border: var(--border-thin) solid var(--wa-color-surface-border);
+        border-radius: var(--wa-border-radius-xl, 20px);
+        background: var(--wa-color-surface-raised);
+        box-shadow:
+          0 1px 2px
+            color-mix(in srgb, var(--wa-color-surface-shadow) 18%, transparent),
+          0 8px 28px
+            color-mix(in srgb, var(--wa-color-surface-shadow) 12%, transparent);
+        transition:
+          border-color var(--transition-fast),
+          box-shadow var(--transition-fast);
       }
 
+      .composer-surface:focus-within {
+        border-color: color-mix(
+          in srgb,
+          var(--wa-color-focus) 42%,
+          var(--wa-color-surface-border)
+        );
+        box-shadow:
+          0 1px 2px
+            color-mix(in srgb, var(--wa-color-surface-shadow) 20%, transparent),
+          0 10px 32px
+            color-mix(in srgb, var(--wa-color-surface-shadow) 16%, transparent);
+      }
+
+      /* Height comes off the shared textarea scale; the composer sits inside
+         its own bordered card, so it drops the field's own box. */
       #followUpInput {
         display: block;
-        flex: 1;
         min-width: 0;
         width: 100%;
         box-sizing: border-box;
-        line-height: var(--line-height-normal);
-        min-height: 106px;
-        max-height: var(--height-xlarge);
+        line-height: var(--line-height-relaxed);
         height: auto;
+        --textarea-min-height: var(--textarea-h-s);
+        --textarea-max-height: min(24vh, 180px);
       }
 
+      #followUpInput::part(base) {
+        border: 0;
+        background: transparent;
+        box-shadow: none;
+      }
+
+      /* The one place a textarea renders sans rather than mono: this is prose a
+         user writes to an agent, not code. */
       #followUpInput::part(textarea) {
-        min-height: 106px;
-        max-height: var(--height-xlarge);
         width: 100%;
+        padding: var(--wa-space-xs) var(--wa-space-s) var(--wa-space-3xs);
         box-sizing: border-box;
         overflow-x: hidden;
         overflow-y: auto;
         white-space: pre-wrap;
         overflow-wrap: anywhere;
+        font-family: var(--wa-font-family-body);
+        font-size: var(--font-size);
+        line-height: var(--line-height-relaxed);
       }
 
       .follow-up-actions {
         display: flex;
-        flex-direction: column !important;
+        flex-direction: row;
         align-items: center;
-        gap: var(--wa-space-2xs);
+        gap: var(--wa-space-3xs);
+        min-height: 36px;
+        padding: 0 var(--wa-space-3xs) var(--wa-space-3xs);
+      }
+
+      /* Composer buttons take the large step off the shared control scale; the
+         circular radius is the one local departure, so the send affordance
+         reads as a button on a composer rather than a toolbar icon. Fill,
+         color, and hover all come from the shared icon-button skin. */
+      .follow-up-actions .action-icon-button,
+      .follow-up-actions .action-icon-busy {
+        --control-size: var(--control-size-l);
+      }
+
+      .follow-up-actions .action-icon-busy {
+        width: var(--control-size);
+        min-width: var(--control-size);
+        height: var(--control-size);
+      }
+
+      .follow-up-actions .action-icon-button::part(base) {
+        border-radius: var(--wa-border-radius-circle);
+      }
+
+      .follow-up-actions .composer-send {
+        margin-left: auto;
+      }
+
+      .follow-up-actions .composer-send::part(base) {
+        color: var(--wa-color-surface-default);
+        background: var(--wa-color-text-normal);
+      }
+
+      .follow-up-actions .composer-send::part(base):hover {
+        color: var(--wa-color-surface-default);
+        background: color-mix(
+          in srgb,
+          var(--wa-color-text-normal) 86%,
+          var(--wa-color-surface-default)
+        );
+      }
+
+      .follow-up-actions .recording::part(base) {
+        color: var(--wa-color-danger-on-quiet);
+        background: var(--wa-color-danger-fill-quiet);
+      }
+
+      @media (max-width: 440px) {
+        #followUpInput::part(textarea) {
+          padding-inline: var(--wa-space-xs);
+        }
       }
     `,
   ];
@@ -318,75 +398,77 @@ export class FollowUpInput extends LitElement {
   override render(): TemplateResult | typeof nothing {
     if (this.archived) return nothing;
     return html`
-      <wa-details class="panel-collapsible" summary="Followup">
-        <div id=${ELEMENT_IDS.FOLLOW_UP_CONTAINER} class="follow-up-container">
-          <queued-follow-ups
-            .messages=${this.queuedMessages}
-          ></queued-follow-ups>
+      <section
+        id=${ELEMENT_IDS.FOLLOW_UP_CONTAINER}
+        class="follow-up-container"
+        aria-label="Follow-up message"
+      >
+        <queued-follow-ups .messages=${this.queuedMessages}></queued-follow-ups>
 
-          <div class="follow-up-input-row">
-            <wa-textarea
-              id=${ELEMENT_IDS.FOLLOW_UP_INPUT}
-              placeholder="Send follow-up message"
-              rows="10"
-              resize="vertical"
-              .value=${live(this.value)}
-              @input=${this.handleInput}
-              @keydown=${this.handleKeydown}
-              @paste=${this.handlePaste}
-            ></wa-textarea>
+        <div class="composer-surface">
+          <wa-textarea
+            id=${ELEMENT_IDS.FOLLOW_UP_INPUT}
+            placeholder="Message TeXRA…"
+            rows="2"
+            resize="none"
+            .value=${live(this.value)}
+            @input=${this.handleInput}
+            @keydown=${this.handleKeydown}
+            @paste=${this.handlePaste}
+          ></wa-textarea>
 
-            <div class="follow-up-actions">
-              ${
-                isKnownUnsupported(
-                  this.unsupportedCommands,
-                  PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP,
-                )
-                  ? nothing
-                  : renderIconActionButton({
-                      id: ELEMENT_IDS.POLISH_FOLLOW_UP_BTN,
-                      icon: 'sparkle',
-                      label: 'Polish follow-up',
-                      tooltip: 'Polish follow-up with AI',
-                      busy: this.polishing,
-                      onClick: this.emitPolish,
-                    })
-              }
-              ${
-                isKnownUnsupported(
-                  this.unsupportedCommands,
-                  PROGRESS_VIEW_COMMANDS.START_RECORDING,
-                )
-                  ? nothing
-                  : renderIconActionButton({
-                      id: ELEMENT_IDS.RECORD_FOLLOW_UP_BTN,
-                      icon: this.recordingController.state.icon,
-                      label: this.recordingController.state.title,
-                      tooltip: this.recordingController.state.title,
-                      className: this.recordingController.state.recording
-                        ? this.recordingController.state.recordingClass
-                        : '',
-                      onClick: this.recordingController.handleClick,
-                    })
-              }
-              ${renderIconActionButton({
-                id: ELEMENT_IDS.CLEAR_FOLLOW_UP_BTN,
-                icon: 'clear-all',
-                label: 'Clear input',
-                tooltip: 'Clear input',
-                onClick: this.emitClear,
-              })}
-              ${renderIconActionButton({
-                id: ELEMENT_IDS.SEND_FOLLOW_UP_BTN,
-                icon: 'send',
-                label: 'Send',
-                tooltip: 'Send follow-up message',
-                onClick: this.emitSend,
-              })}
-            </div>
+          <div class="follow-up-actions">
+            ${
+              isKnownUnsupported(
+                this.unsupportedCommands,
+                PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP,
+              )
+                ? nothing
+                : renderIconActionButton({
+                    id: ELEMENT_IDS.POLISH_FOLLOW_UP_BTN,
+                    icon: 'sparkle',
+                    label: 'Polish follow-up',
+                    tooltip: 'Polish follow-up with AI',
+                    busy: this.polishing,
+                    onClick: this.emitPolish,
+                  })
+            }
+            ${
+              isKnownUnsupported(
+                this.unsupportedCommands,
+                PROGRESS_VIEW_COMMANDS.START_RECORDING,
+              )
+                ? nothing
+                : renderIconActionButton({
+                    id: ELEMENT_IDS.RECORD_FOLLOW_UP_BTN,
+                    icon: this.recordingController.state.icon,
+                    label: this.recordingController.state.title,
+                    tooltip: this.recordingController.state.title,
+                    className: this.recordingController.state.recording
+                      ? this.recordingController.state.recordingClass
+                      : '',
+                    onClick: this.recordingController.handleClick,
+                  })
+            }
+            ${renderIconActionButton({
+              id: ELEMENT_IDS.CLEAR_FOLLOW_UP_BTN,
+              icon: 'clear-all',
+              label: 'Clear input',
+              tooltip: 'Clear input',
+              onClick: this.emitClear,
+            })}
+            ${renderIconActionButton({
+              id: ELEMENT_IDS.SEND_FOLLOW_UP_BTN,
+              icon: 'arrow-up',
+              label: 'Send',
+              tooltip: 'Send follow-up message',
+              className: 'composer-send',
+              appearance: 'filled',
+              onClick: this.emitSend,
+            })}
           </div>
         </div>
-      </wa-details>
+      </section>
     `;
   }
 

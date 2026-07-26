@@ -10,7 +10,7 @@ during UI work.
 # Build first (the suite does not rebuild per-test).
 pnpm --filter @texra/desktop build
 
-# Run the suite. Generates PNGs in tests/e2e/__screenshots__/.
+# Run the suite. Generates ignored PNG artifacts under tests/e2e/test-results/.
 pnpm --filter @texra/desktop test:e2e
 ```
 
@@ -20,11 +20,13 @@ the default `npm test` flow.
 ## Baselines
 
 Baseline PNGs in `tests/e2e/__screenshots__/` are committed to the repo so
-reviewers have a fixed reference. To refresh after a deliberate UI change:
+reviewers have a fixed reference. Normal test runs never modify them. To
+refresh after a deliberate UI change:
 
-1. Run `pnpm --filter @texra/desktop test:e2e`.
-2. Inspect the diffs in `tests/e2e/test-results/` (gitignored).
-3. Copy the new captures into `__screenshots__/` and commit.
+1. Run
+   `TEXRA_UPDATE_E2E_SCREENSHOTS=1 pnpm --filter @texra/desktop test:e2e`.
+2. Inspect the changed baselines.
+3. Commit them only when the visual change is intentional.
 
 `tests/e2e/test-results/` (Playwright's per-run artifact dump) is gitignored.
 

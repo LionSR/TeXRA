@@ -4,10 +4,16 @@ import { repeat } from 'lit/directives/repeat.js';
 
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
-import { designTokens, commonViewStyles } from '@shared/styles';
+import {
+  designTokens,
+  commonViewStyles,
+  settingsBannerStyles,
+} from '@shared/styles';
 import { formatGoalTime, isGoalInFlight, goalElapsedMs } from '@shared/schemas';
 import type { Goal, GoalStatus } from '@shared/schemas';
 import { metaStripStyles, renderDotMeta } from '@shared/wa/metaStrip';
+import { renderLabeledActionButton } from '@shared/wa/actionButtons';
+import { renderSettingsBanner } from '@shared/wa/settingsBanner';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderEmptyState } from '@shared/wa/emptyState';
 import type { MetaPart } from '@shared/wa/metaStrip';
@@ -27,6 +33,7 @@ export class GoalTab extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
+    settingsBannerStyles,
     metaStripStyles,
     css`
       :host {
@@ -67,7 +74,7 @@ export class GoalTab extends LitElement {
       }
 
       .objective {
-        font-size: var(--wa-font-size-s);
+        font-size: var(--font-size-sm);
         color: var(--wa-color-text-normal);
         line-height: 1.4;
         overflow: hidden;
@@ -78,7 +85,7 @@ export class GoalTab extends LitElement {
 
       .stream-id {
         font-family: var(--wa-font-family-mono);
-        font-size: var(--wa-font-size-xs);
+        font-size: var(--font-size-xs);
         color: var(--wa-color-text-quiet);
       }
     `,
@@ -102,31 +109,19 @@ export class GoalTab extends LitElement {
   }
 
   private renderReminder(): TemplateResult {
-    return html`
-      <div class="settings-reminder">
-        ${waIcon('info', { className: 'settings-reminder-icon' })}
-        <div class="settings-reminder-body">
-          <div class="settings-reminder-title">Goal</div>
-          <div class="settings-reminder-description">
-            Goals are autonomous-continuation modes the assistant enters for
-            itself when you describe a goal with a verifiable stopping
-            condition. The agent decides when to start, pause, or complete a
-            Goal via its tools — this list is for observation and navigation
-            only.
-          </div>
-          <div class="settings-reminder-actions">
-            <wa-button
-              appearance="outlined"
-              variant="neutral"
-              size="small"
-              @click=${this.handleRefresh}
-            >
-              ${waIcon('rotate-right', { slot: 'start' })} Refresh
-            </wa-button>
-          </div>
-        </div>
-      </div>
-    `;
+    return renderSettingsBanner({
+      id: 'goal-information-banner',
+      title: 'Goal',
+      description:
+        'Goals are autonomous-continuation modes the assistant enters for itself when you describe a goal with a verifiable stopping condition. The agent decides when to start, pause, or complete a Goal via its tools — this list is for observation and navigation only.',
+      actions: renderLabeledActionButton({
+        icon: 'rotate-right',
+        text: 'Refresh',
+        kind: 'secondary',
+        appearance: 'outlined',
+        onClick: this.handleRefresh,
+      }),
+    });
   }
 
   private renderRow(item: Goal): TemplateResult {

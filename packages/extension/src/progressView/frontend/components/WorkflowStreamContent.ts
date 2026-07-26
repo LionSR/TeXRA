@@ -7,6 +7,7 @@ import { customElement } from 'lit/decorators.js';
 // Local imports - progress view
 import { hasOutputFiles } from '../stateUtils';
 import { BaseStreamContent } from './BaseStreamContent';
+import { conversationContentStyles } from './ConversationContent.styles';
 import { renderStreamHeader } from './streamHeaderView';
 import { isWorkflowState, type WorkflowStreamState } from '../store';
 
@@ -24,6 +25,8 @@ import './WorkflowHintBanner';
 
 @customElement('workflow-stream-content')
 export class WorkflowStreamContent extends BaseStreamContent {
+  static override styles = conversationContentStyles;
+
   private get currentState(): WorkflowStreamState | null {
     const { streamState } = this.streamContext;
     return streamState && isWorkflowState(streamState) ? streamState : null;
@@ -44,35 +47,45 @@ export class WorkflowStreamContent extends BaseStreamContent {
         this.streamContext.unsupportedCommands,
       )}
 
-      <workflow-hint-banner></workflow-hint-banner>
+      <div class="conversation-content">
+        <div class="conversation-column conversation-prelude">
+          <workflow-hint-banner></workflow-hint-banner>
 
-      <request-panels .permissions=${this.filteredPermissions}></request-panels>
+          <request-panels
+            .permissions=${this.filteredPermissions}
+          ></request-panels>
 
-      <background-tasks-panel
-        .subagents=${state.subagents}
-      ></background-tasks-panel>
+          <background-tasks-panel
+            .subagents=${state.subagents}
+          ></background-tasks-panel>
+        </div>
 
-      <log-list></log-list>
+        <div class="conversation-log"><log-list></log-list></div>
 
-      <usage-panel
-        .usage=${state.sessionUsage ?? null}
-        .contextState=${state.contextState ?? null}
-      ></usage-panel>
+        <div class="conversation-column conversation-epilogue">
+          <usage-panel
+            .usage=${state.sessionUsage ?? null}
+            .contextState=${state.contextState ?? null}
+          ></usage-panel>
 
-      <file-list
-        .filesByRound=${state.files}
-        .failuresByRound=${state.compileFailures}
-        .showRoundHeaders=${true}
-        .unsupportedCommands=${this.streamContext.unsupportedCommands}
-      ></file-list>
+          <file-list
+            .filesByRound=${state.files}
+            .failuresByRound=${state.compileFailures}
+            .showRoundHeaders=${true}
+            .unsupportedCommands=${this.streamContext.unsupportedCommands}
+          ></file-list>
 
-      <workflow-tool-use-followup-section
-        .status=${state.status}
-        .hasOutputFiles=${hasOutputFiles(state.files)}
-        .options=${this.streamContext.followupOptions}
-        .streamModel=${streamInfo.kind === 'agent' ? (streamInfo.model ?? null) : null}
-        .unsupportedCommands=${this.streamContext.unsupportedCommands}
-      ></workflow-tool-use-followup-section>
+          <workflow-tool-use-followup-section
+            .status=${state.status}
+            .hasOutputFiles=${hasOutputFiles(state.files)}
+            .options=${this.streamContext.followupOptions}
+            .streamModel=${
+              streamInfo.kind === 'agent' ? (streamInfo.model ?? null) : null
+            }
+            .unsupportedCommands=${this.streamContext.unsupportedCommands}
+          ></workflow-tool-use-followup-section>
+        </div>
+      </div>
     `;
   }
 }

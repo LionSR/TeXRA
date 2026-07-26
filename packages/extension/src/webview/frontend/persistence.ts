@@ -48,6 +48,7 @@ import {
   toolUseInstruction$,
   workflowAgent$,
   workflowInstruction$,
+  workingDirectory$,
 } from './mainViewState';
 
 /**
@@ -98,6 +99,7 @@ export function saveState(): void {
     sessionType: sessionType$.get(),
     launchTarget: launchTarget$.get(),
     selectedTeamId: selectedTeamId$.get(),
+    workingDirectory: workingDirectory$.get(),
     workflowAgent: workflowAgent$.get(),
     toolUseAgent: toolUseAgent$.get(),
     model: model$.get(),
@@ -186,6 +188,7 @@ function applyState(state: MainViewPersistedState): void {
     state.sessionType === SESSION_TYPES.WORKFLOW ? 'agent' : state.launchTarget,
   );
   selectedTeamId$.set(state.selectedTeamId);
+  workingDirectory$.set(state.workingDirectory);
   workflowAgent$.set(state.workflowAgent);
   toolUseAgent$.set(state.toolUseAgent);
   model$.set(state.model);

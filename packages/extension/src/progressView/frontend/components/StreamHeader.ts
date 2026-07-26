@@ -141,7 +141,11 @@ export class StreamHeader extends LitElement {
       }
 
       .log-header {
-        padding: var(--wa-space-2xs) var(--wa-space-xs);
+        padding: var(--wa-space-2xs)
+          max(
+            var(--wa-space-m),
+            calc((100% - var(--conversation-header-width, 1040px)) / 2)
+          );
         font-size: var(--font-size-sm);
         display: flex;
         flex-direction: column;
@@ -153,6 +157,11 @@ export class StreamHeader extends LitElement {
         max-width: 100%;
         color: var(--color-text-secondary);
         border-bottom: var(--border-thin) solid var(--color-border);
+        background: color-mix(
+          in srgb,
+          var(--wa-color-surface-default) 94%,
+          transparent
+        );
       }
 
       .log-header__primary {
@@ -190,8 +199,9 @@ export class StreamHeader extends LitElement {
         text-overflow: ellipsis;
         white-space: nowrap;
         color: var(--wa-color-text-normal);
-        font-weight: var(--font-weight-medium);
-        letter-spacing: -0.005em;
+        font-size: var(--font-size);
+        font-weight: var(--font-weight-semibold);
+        letter-spacing: -0.012em;
       }
 
       .header-actions {
@@ -205,15 +215,26 @@ export class StreamHeader extends LitElement {
 
       .header-actions wa-button-group {
         max-width: 100%;
+        padding: 2px;
+        border: var(--border-thin) solid var(--wa-color-surface-border);
+        border-radius: var(--wa-border-radius-pill, 999px);
+        background: var(--wa-color-neutral-fill-quiet);
+      }
+
+      /* Geometry comes from the shared icon-button skin via size="m"; the
+         circular radius is the one local departure, so the toolbar reads as a
+         segmented pill rather than a row of squares. */
+      .header-actions .action-icon-button::part(base) {
+        border-radius: var(--wa-border-radius-circle, 50%);
       }
 
       /* Status indicator overrides - base styles from statusIndicatorStyles.
          The hover label is a native <wa-tooltip> anchored to this dot via
          its "for" attribute. */
       .status-indicator {
-        width: var(--wa-space-xs);
-        height: var(--wa-space-xs);
-        margin: 0 var(--wa-space-2xs);
+        width: 7px;
+        height: 7px;
+        margin: 0 var(--wa-space-3xs);
       }
 
       /* Note: .is-ready and other status states from statusIndicatorStyles */
@@ -257,7 +278,8 @@ export class StreamHeader extends LitElement {
         display: inline-flex;
         align-items: center;
         gap: var(--wa-space-3xs);
-        padding: var(--wa-space-3xs) var(--wa-space-2xs);
+        padding: var(--wa-space-3xs) var(--wa-space-xs);
+        background: var(--wa-color-neutral-fill-quiet);
         font-size: var(--font-size-sm);
         color: var(--color-text-secondary);
         cursor: pointer;
@@ -283,7 +305,11 @@ export class StreamHeader extends LitElement {
         font-size: var(--font-size-xs);
       }
 
-      @container (max-width: 320px) {
+      @container (max-width: 520px) {
+        .log-header {
+          padding-inline: var(--wa-space-xs);
+        }
+
         .log-header__primary {
           flex-wrap: wrap;
         }
@@ -295,6 +321,7 @@ export class StreamHeader extends LitElement {
         .header-actions {
           width: 100%;
           margin-left: 0;
+          justify-content: flex-start;
         }
       }
     `,
@@ -385,6 +412,7 @@ export class StreamHeader extends LitElement {
           label: tooltipText,
           tooltip: tooltipText,
           className,
+          size: 'm',
           disabled,
           ariaHidden: hidden,
           onClick: () => {
@@ -507,7 +535,7 @@ export class StreamHeader extends LitElement {
         id=${ELEMENT_IDS.PROGRESS_BADGE}
         class="progress-badge"
         variant="neutral"
-        size="small"
+        size="s"
       >
         ${waIcon('pulse')}
         ${renderProgressBadgeContent(this.progress, this.roundStage)}

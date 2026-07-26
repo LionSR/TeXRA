@@ -92,6 +92,7 @@ export class MainViewProvider
     this.setupFileWatcher();
     this.setupAgentWatcher();
     this.setupConfigurationWatcher();
+    this.setupWorkspaceWatcher();
     this.setupAuthListener();
     this.registerCommandHandlers();
   }
@@ -115,6 +116,17 @@ export class MainViewProvider
 
   private setupConfigurationWatcher() {
     watchConfig(this.context, ['texra.files'], this.refreshFiles.bind(this));
+  }
+
+  private setupWorkspaceWatcher(): void {
+    this.context.subscriptions.push(
+      vscode.workspace.onDidChangeWorkspaceFolders(() => {
+        const view = this.getMainModeView();
+        if (view) {
+          this.messageHandler.postWorkspaceRoots(view);
+        }
+      }),
+    );
   }
 
   private setupAuthListener() {

@@ -4,6 +4,7 @@ import {
   closeTexraApp,
   dismissOnboarding,
   launchTexraApp,
+  setRoute,
   type LaunchedApp,
 } from './electronApp.js';
 
@@ -30,31 +31,8 @@ test.afterAll(async () => {
   if (launched) await closeTexraApp(launched);
 });
 
-async function setRoute(route: 'main' | 'settings'): Promise<void> {
-  await launched.page.evaluate((r) => {
-    window.postMessage({ command: 'desktop:setRoute', route: r }, '*');
-  }, route);
-  await launched.page.waitForFunction(
-    (r) => {
-      if (r === 'main') {
-        const pane = document.querySelector<HTMLElement>(
-          '.desktop-pane[data-pane="launcher"]',
-        );
-        return pane != null && pane.hidden === false;
-      }
-      const dialog = document.querySelector<HTMLElement>(
-        'wa-dialog.desktop-settings-overlay',
-      );
-      return dialog != null && dialog.hasAttribute('open');
-    },
-    route,
-    { timeout: 5000 },
-  );
-}
-
 /**
- * Read the scroll metrics of the Tools settings panel (the scrollable element
- * under the flex-body fix). Returns null when the panel has not mounted.
+ * Read the scroll metrics of the active Settings page.
  */
 async function readToolsPanelMetrics(): Promise<{
   scrollHeight: number;
@@ -62,12 +40,11 @@ async function readToolsPanelMetrics(): Promise<{
   scrollTop: number;
 } | null> {
   return launched.page.evaluate(() => {
-    const dialog = document.querySelector('wa-dialog.desktop-settings-overlay');
-    const settingsApp = dialog?.querySelector('settings-app');
-    const root = settingsApp?.shadowRoot;
-    const panel = root?.querySelector<HTMLElement>(
-      'wa-tab-panel[name="tools"]',
+    const settingsApp = document.querySelector(
+      'settings-app[data-desktop-view="settings"]',
     );
+    const root = settingsApp?.shadowRoot;
+    const panel = root?.querySelector<HTMLElement>('.settings-panel');
     if (!panel) return null;
     return {
       scrollHeight: panel.scrollHeight,
@@ -78,7 +55,7 @@ async function readToolsPanelMetrics(): Promise<{
 }
 
 test('main view no longer renders inner Launcher/Progress toolbar', async ({}, testInfo) => {
-  await setRoute('main');
+  await setRoute(launched, 'main');
   await launched.page.screenshot({
     path: testInfo.outputPath('verify-fixes', 'main-view.png'),
     fullPage: false,
@@ -103,8 +80,71 @@ test('main view no longer renders inner Launcher/Progress toolbar', async ({}, t
   expect(probe.latexdiffs).toBe(false);
 });
 
-test('settings overlay scrolls (Tools tab top + bottom)', async ({}, testInfo) => {
-  await setRoute('settings');
+test('command palette keeps each icon and label in one compact row', async ({}, testInfo) => {
+  await setRoute(launched, 'main');
+  const closeWorkbench = launched.page.locator('.task-workbench-close');
+  if (await closeWorkbench.isVisible()) {
+    await closeWorkbench.click();
+  }
+  await launched.page
+    .locator('.task-header-button[aria-label="Open commands"]')
+    .click();
+  await launched.page.waitForSelector(
+    '.desktop-command-palette-item[aria-selected="true"]',
+  );
+  await launched.page.waitForTimeout(180);
+
+  const metrics = await launched.page.evaluate(() => {
+    const items = [
+      ...document.querySelectorAll<HTMLElement>(
+        '.desktop-command-palette-item',
+      ),
+    ];
+    const rows = items.map((item) => {
+      const main = item.querySelector<HTMLElement>(
+        '.desktop-command-palette-main',
+      );
+      const icon = item.querySelector<HTMLElement>(
+        '.desktop-command-palette-item-icon',
+      );
+      const copy = item.querySelector<HTMLElement>(
+        '.desktop-command-palette-copy',
+      );
+      return {
+        item: item.getBoundingClientRect(),
+        main: main?.getBoundingClientRect(),
+        icon: icon?.getBoundingClientRect(),
+        copy: copy?.getBoundingClientRect(),
+      };
+    });
+    const iconNames = new Set(
+      items
+        .map((item) => item.querySelector('wa-icon')?.getAttribute('name'))
+        .filter(Boolean),
+    );
+    return { rows, uniqueIconCount: iconNames.size };
+  });
+
+  await launched.page.screenshot({
+    path: testInfo.outputPath('verify-fixes', 'command-palette.png'),
+    fullPage: false,
+  });
+
+  for (const row of metrics.rows) {
+    expect(row.main).toBeTruthy();
+    expect(row.icon).toBeTruthy();
+    expect(row.copy).toBeTruthy();
+    expect(row.item.height).toBeLessThanOrEqual(52);
+    expect(row.icon!.right).toBeLessThanOrEqual(row.copy!.left);
+    expect(row.main!.top).toBeGreaterThanOrEqual(row.item.top);
+    expect(row.main!.bottom).toBeLessThanOrEqual(row.item.bottom);
+  }
+  expect(metrics.uniqueIconCount).toBeGreaterThan(8);
+  await launched.page.keyboard.press('Escape');
+});
+
+test('settings workbench scrolls (Tools tab top + bottom)', async ({}, testInfo) => {
+  await setRoute(launched, 'settings');
   await launched.page.evaluate(
     ({ command, tabIndex }) => {
       window.postMessage({ command, tabIndex }, '*');
@@ -114,24 +154,25 @@ test('settings overlay scrolls (Tools tab top + bottom)', async ({}, testInfo) =
       tabIndex: SETTINGS_TAB_INDEX.TOOLS,
     },
   );
-  // Wait for both the tab panel to be marked active AND its tools-tab
-  // content to have finished loading. ToolsTab renders a `.loading-state`
+  // Wait for the Tools page to be marked active AND its content to have
+  // finished loading. ToolsTab renders a `.loading-state`
   // placeholder while `loaded` is false and swaps in `<tool-card>` elements
   // once the tool dashboard data has arrived (see ToolsTab.ts render()); the
   // panel's scrollHeight only reflects real content after that swap, so
-  // gating on `[active]` alone races the content population and can catch
+  // gating on the navigation state alone races content population and can catch
   // the panel mid-load (scrollHeight === clientHeight).
   await launched.page.waitForFunction(
     () => {
-      const dialog = document.querySelector(
-        'wa-dialog.desktop-settings-overlay',
+      const settingsApp = document.querySelector(
+        'settings-app[data-desktop-view="settings"]',
       );
-      const settingsApp = dialog?.querySelector('settings-app');
       const root = settingsApp?.shadowRoot;
       if (!root) return false;
-      const panel = root.querySelector('wa-tab-panel[name="tools"][active]');
-      if (!panel) return false;
-      const toolsTab = panel.querySelector('tools-tab');
+      const activePage = root.querySelector(
+        '.settings-page-button[data-panel="tools"][data-active="true"]',
+      );
+      if (!activePage) return false;
+      const toolsTab = root.querySelector('tools-tab');
       const toolsRoot = toolsTab?.shadowRoot;
       if (!toolsRoot) return false;
       return toolsRoot.querySelector('tool-card') != null;
@@ -140,8 +181,7 @@ test('settings overlay scrolls (Tools tab top + bottom)', async ({}, testInfo) =
     { timeout: 10_000 },
   );
 
-  // Find the wa-tab-panel for tools — that's the scrollable element under
-  // the new flex-body fix.
+  // The active Settings page owns scrolling for every hierarchical page.
   const probeBefore = await readToolsPanelMetrics();
   console.log('tools panel before scroll:', probeBefore);
 
@@ -150,14 +190,50 @@ test('settings overlay scrolls (Tools tab top + bottom)', async ({}, testInfo) =
     fullPage: false,
   });
 
+  const bannerMetrics = await launched.page.evaluate(() => {
+    const settingsRoot = document.querySelector(
+      'settings-app[data-desktop-view="settings"]',
+    )?.shadowRoot;
+    const toolsRoot = settingsRoot?.querySelector('tools-tab')?.shadowRoot;
+    const layout = toolsRoot?.querySelector<HTMLElement>(
+      '.settings-banner-layout',
+    );
+    const icon = toolsRoot?.querySelector<HTMLElement>('.settings-banner-icon');
+    const body = toolsRoot?.querySelector<HTMLElement>('.settings-banner-body');
+    const actions = toolsRoot?.querySelector<HTMLElement>(
+      '.settings-banner-actions',
+    );
+    return {
+      layout: layout?.getBoundingClientRect(),
+      icon: icon?.getBoundingClientRect(),
+      body: body?.getBoundingClientRect(),
+      actions: actions?.getBoundingClientRect(),
+    };
+  });
+  expect(bannerMetrics.icon).toBeTruthy();
+  expect(bannerMetrics.body).toBeTruthy();
+  expect(bannerMetrics.actions).toBeTruthy();
+  expect(bannerMetrics.icon!.width).toBeLessThanOrEqual(40);
+  expect(bannerMetrics.icon!.right).toBeLessThanOrEqual(
+    bannerMetrics.body!.left,
+  );
+  const actionsAreBesideBody =
+    bannerMetrics.body!.right <= bannerMetrics.actions!.left + 1;
+  const actionsAreBelowBody =
+    bannerMetrics.actions!.top >= bannerMetrics.body!.bottom - 1 &&
+    bannerMetrics.actions!.left >= bannerMetrics.body!.left - 1;
+  expect(actionsAreBesideBody || actionsAreBelowBody).toBe(true);
+  expect(bannerMetrics.actions!.right).toBeLessThanOrEqual(
+    bannerMetrics.layout!.right,
+  );
+
   // Scroll the panel to the bottom and re-screenshot.
   await launched.page.evaluate(() => {
-    const dialog = document.querySelector('wa-dialog.desktop-settings-overlay');
-    const settingsApp = dialog?.querySelector('settings-app');
-    const root = settingsApp?.shadowRoot;
-    const panel = root?.querySelector<HTMLElement>(
-      'wa-tab-panel[name="tools"]',
+    const settingsApp = document.querySelector(
+      'settings-app[data-desktop-view="settings"]',
     );
+    const root = settingsApp?.shadowRoot;
+    const panel = root?.querySelector<HTMLElement>('.settings-panel');
     if (panel) panel.scrollTop = panel.scrollHeight;
   });
   await launched.page.waitForTimeout(150);

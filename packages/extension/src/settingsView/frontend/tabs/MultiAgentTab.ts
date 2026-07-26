@@ -6,7 +6,11 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports - shared styles
-import { designTokens, commonViewStyles } from '@shared/styles';
+import {
+  designTokens,
+  commonViewStyles,
+  settingsBannerStyles,
+} from '@shared/styles';
 
 // Web Awesome icon bundle (side-effect import)
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -17,6 +21,8 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { renderSettingsBanner } from '@shared/wa/settingsBanner';
+import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - shared schemas
@@ -31,6 +37,7 @@ export class MultiAgentTab extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
+    settingsBannerStyles,
     css`
       :host {
         display: block;
@@ -40,24 +47,6 @@ export class MultiAgentTab extends LitElement {
         display: flex;
         flex-direction: column;
         gap: var(--wa-space-xs);
-      }
-
-      .setting-block {
-        padding: var(--wa-space-xs);
-        background-color: var(--wa-color-neutral-fill-quiet);
-        border-radius: var(--border-radius);
-      }
-
-      .setting-description {
-        margin: var(--wa-space-2xs) 0 0 0;
-        font-size: var(--font-size-sm);
-      }
-
-      .multi-agent-reminder-steps {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
-        gap: var(--wa-space-2xs) var(--wa-space-s);
-        margin-top: var(--wa-space-3xs);
       }
 
       /* Team cards */
@@ -145,7 +134,7 @@ export class MultiAgentTab extends LitElement {
         margin-top: 0;
       }
 
-      /* Compact agent pills — WA's size="small" is still too chunky for a
+      /* Compact agent pills — WA's size="s" is still too chunky for a
          dense grid of badges. Override the chrome-padding part to halve
          vertical padding and trim the font size. */
       wa-tag.preset-agent-badge::part(base),
@@ -272,7 +261,7 @@ export class MultiAgentTab extends LitElement {
               ? html`<wa-tag
                   class="preset-active-badge"
                   variant="brand"
-                  size="small"
+                  size="s"
                 >
                   ${waIcon('check')} Active
                 </wa-tag>`
@@ -288,7 +277,7 @@ export class MultiAgentTab extends LitElement {
                     <wa-tag
                       class="preset-agent-badge preset-agent-badge--orchestrator"
                       variant="brand"
-                      size="small"
+                      size="s"
                       title="${name} is the orchestrator for this team"
                     >
                       <span class="preset-orchestrator-icon" aria-hidden="true"
@@ -304,10 +293,7 @@ export class MultiAgentTab extends LitElement {
         <div class="preset-card-agents">
           ${teammateAgents.map(
             (name) =>
-              html`<wa-tag
-                class="preset-agent-badge"
-                variant="neutral"
-                size="small"
+              html`<wa-tag class="preset-agent-badge" variant="neutral" size="s"
                 >${name}</wa-tag
               >`,
           )}
@@ -318,7 +304,7 @@ export class MultiAgentTab extends LitElement {
                 class="preset-delete-btn"
                 appearance="plain"
                 variant="neutral"
-                size="small"
+                size="s"
                 @click=${(e: Event) => this.handleDeletePreset(e, preset)}
                 title="Delete team"
                 aria-label="Delete team"
@@ -334,118 +320,93 @@ export class MultiAgentTab extends LitElement {
   override render(): TemplateResult {
     return html`
       <div class="multi-agent-container tab-content-container">
-        <div class="settings-reminder">
-          ${waIcon('organization', { className: 'settings-reminder-icon' })}
-          <div class="settings-reminder-body">
-            <div class="settings-reminder-title">Multi-agent workflow</div>
-            <div class="settings-reminder-description">
-              The orchestrator reads your paper and hands work to specialized
-              agents for writing, derivations, numerical experiments, citations,
-              figures, and more.
-            </div>
-            <ol
-              class="settings-reminder-list settings-reminder-description multi-agent-reminder-steps"
-            >
-              <li>
-                <span class="settings-reminder-step">1</span>
-                <span
-                  ><strong>Pick a team</strong> below that matches your field.
-                  This enables and configures the right specialized agents for
-                  you. You can also add or remove individual agents in the
-                  <strong>Agents</strong> tab.</span
-                >
-              </li>
-              <li>
-                <span class="settings-reminder-step">2</span>
-                <span
-                  ><strong>Select orchestrator</strong> from the agent dropdown
-                  (look for the target icon), then click Execute.</span
-                >
-              </li>
-              <li>
-                <span class="settings-reminder-step">3</span>
-                <span
-                  ><strong>Approve tasks</strong> in Progress as they come in —
-                  press <strong>y</strong> to approve or <strong>n</strong> to
-                  reject. Use the rocket button in Progress to let one stream
-                  run without task-by-task approval.</span
-                >
-              </li>
-            </ol>
-          </div>
-        </div>
-
-        <h3>Multi-Agent Teams</h3>
-
-        <p class="text-secondary setting-description">
-          Click one to activate it. You can make your own teams in the Agents
-          tab.
-        </p>
+        ${renderSettingsBanner({
+          id: 'multi-agent-workflow-banner',
+          icon: 'organization',
+          title: 'Multi-agent workflow',
+          description:
+            'Choose a team, select its orchestrator in the task composer, then review delegated work in Progress.',
+        })}
+        ${renderSettingsSectionHeading({
+          title: 'Multi-agent teams',
+          description:
+            'Choose a team to activate it. Create and refine custom teams in Agents.',
+        })}
 
         <div class="preset-grid">
           ${AGENT_MODE_PRESETS.map((p) => this.renderPresetCard(p, false))}
           ${this.customPresets.map((p) => this.renderPresetCard(p, true))}
         </div>
 
-        <h3>Team Coordination</h3>
+        ${renderSettingsSectionHeading({
+          title: 'Team coordination',
+          description:
+            "Control how the orchestrator works with the rest of the team. It can only use agents and models you've enabled.",
+        })}
 
-        <p class="text-secondary setting-description">
-          Control how the orchestrator works with the rest of the team. It can
-          only use agents and models you've turned on in the Models and Agents
-          tabs.
-        </p>
-
-        <div class="setting-block">
-          <wa-switch
-            ?checked=${this.allowOrchestratorKill}
-            @change=${(e: Event) =>
-              this.postToggle(
-                SETTINGS_VIEW_COMMANDS.SET_ALLOW_ORCHESTRATOR_KILL,
-                e,
-              )}
-          >
-            Let orchestrator stop agents early
-          </wa-switch>
-          <p class="text-secondary setting-description">
-            The orchestrator can cancel agents that are stuck or no longer
-            needed. Turn this off if you want every agent to finish no matter
-            what.
-          </p>
-        </div>
-
-        <div class="setting-block">
-          <wa-switch
-            ?checked=${this.detachSubagentsOnStop}
-            @change=${(e: Event) =>
-              this.postToggle(
-                SETTINGS_VIEW_COMMANDS.SET_DETACH_SUBAGENTS_ON_STOP,
-                e,
-              )}
-          >
-            Keep agents running if I stop the orchestrator
-          </wa-switch>
-          <p class="text-secondary setting-description">
-            Normally everything stops when you stop the orchestrator. Turn this
-            on to let agents that are mid-task finish on their own.
-          </p>
-        </div>
-
-        <div class="setting-block">
-          <wa-switch
-            ?checked=${this.worktreeSupport}
-            @change=${(e: Event) =>
-              postMessage(SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING, {
-                key: WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
-                value: Boolean((e.target as WaSwitch | null)?.checked),
-              })}
-          >
-            Allow agents to work in git worktrees
-          </wa-switch>
-          <p class="text-secondary setting-description">
-            When enabled, delegated agents can operate in git worktrees outside
-            the main workspace. All tool calls within the subagent automatically
-            use the worktree as their root directory.
-          </p>
+        <div class="settings-section">
+          <div class="settings-row">
+            <div class="settings-row-text">
+              <span class="settings-row-label">
+                Let orchestrator stop agents early
+              </span>
+              <span class="settings-row-help">
+                The orchestrator can cancel agents that are stuck or no longer
+                needed. Turn this off if you want every agent to finish.
+              </span>
+            </div>
+            <wa-switch
+              class="settings-row-control"
+              aria-label="Let orchestrator stop agents early"
+              ?checked=${this.allowOrchestratorKill}
+              @change=${(e: Event) =>
+                this.postToggle(
+                  SETTINGS_VIEW_COMMANDS.SET_ALLOW_ORCHESTRATOR_KILL,
+                  e,
+                )}
+            ></wa-switch>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-text">
+              <span class="settings-row-label">
+                Keep agents running after I stop the orchestrator
+              </span>
+              <span class="settings-row-help">
+                Let agents that are already mid-task finish independently.
+              </span>
+            </div>
+            <wa-switch
+              class="settings-row-control"
+              aria-label="Keep agents running after I stop the orchestrator"
+              ?checked=${this.detachSubagentsOnStop}
+              @change=${(e: Event) =>
+                this.postToggle(
+                  SETTINGS_VIEW_COMMANDS.SET_DETACH_SUBAGENTS_ON_STOP,
+                  e,
+                )}
+            ></wa-switch>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-text">
+              <span class="settings-row-label">
+                Allow agents to work in git worktrees
+              </span>
+              <span class="settings-row-help">
+                Delegated agents can use isolated worktrees, with every tool
+                call rooted in that worktree.
+              </span>
+            </div>
+            <wa-switch
+              class="settings-row-control"
+              aria-label="Allow agents to work in git worktrees"
+              ?checked=${this.worktreeSupport}
+              @change=${(e: Event) =>
+                postMessage(SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING, {
+                  key: WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
+                  value: Boolean((e.target as WaSwitch | null)?.checked),
+                })}
+            ></wa-switch>
+          </div>
         </div>
       </div>
     `;

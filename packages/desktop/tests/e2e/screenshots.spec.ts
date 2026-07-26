@@ -1,22 +1,32 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { test, expect } from '@playwright/test';
+import { test, expect, type TestInfo } from '@playwright/test';
 
 import {
   closeTexraApp,
   dismissOnboarding,
   launchTexraApp,
+  setRoute,
   type LaunchedApp,
 } from './electronApp.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const SCREENSHOTS_DIR = join(HERE, '__screenshots__');
+const BASELINE_SCREENSHOTS_DIR = join(HERE, '__screenshots__');
+const UPDATE_BASELINE_SCREENSHOTS =
+  process.env.TEXRA_UPDATE_E2E_SCREENSHOTS === '1';
 
 let launched: LaunchedApp;
 
+function getScreenshotPath(testInfo: TestInfo, fileName: string): string {
+  if (UPDATE_BASELINE_SCREENSHOTS) {
+    return join(BASELINE_SCREENSHOTS_DIR, fileName);
+  }
+
+  return testInfo.outputPath(fileName);
+}
+
 test.beforeAll(async () => {
   launched = await launchTexraApp();
-  await dismissOnboarding(launched.page);
 });
 
 test.afterAll(async () => {
@@ -25,146 +35,89 @@ test.afterAll(async () => {
   }
 });
 
-/**
- * Send a `desktop:setRoute` IPC message to drive the new shell:
- *   - 'main' / 'progress' map to the center pane
- *   - 'settings' opens the wa-dialog overlay
- *   - 'logs' opens the wa-drawer drawer
- *
- * After PRD § 7.D the four-route shell is gone, so this helper waits on the
- * appropriate surface for the requested target rather than the old
- * `.desktop-route[data-route]` container.
- */
-async function setRoute(
-  route: 'main' | 'progress' | 'settings' | 'logs',
+async function selectSettingsPage(
+  panelName: string,
+  tabIndex: number,
 ): Promise<void> {
-  await launched.page.evaluate((next) => {
-    window.postMessage({ command: 'desktop:setRoute', route: next }, '*');
-  }, route);
-  await launched.page.waitForFunction(
-    (targetRoute) => {
-      switch (targetRoute) {
-        case 'main':
-        case 'progress': {
-          const pane = document.querySelector<HTMLElement>(
-            '.desktop-pane[data-pane="launcher"]',
-          );
-          return pane != null && pane.hidden === false;
-        }
-        case 'settings': {
-          const dialog = document.querySelector<HTMLElement>(
-            'wa-dialog.desktop-settings-overlay',
-          );
-          return dialog != null && dialog.hasAttribute('open');
-        }
-        case 'logs': {
-          const drawer = document.querySelector<HTMLElement>(
-            'wa-drawer.desktop-logs-drawer',
-          );
-          return drawer != null && drawer.hasAttribute('open');
-        }
-      }
-    },
-    route,
-    { timeout: 5000 },
-  );
-}
-
-async function selectSettingsTab(panelName: string): Promise<void> {
+  await launched.page.evaluate((index) => {
+    window.postMessage({ command: 'setTab', tabIndex: index }, '*');
+  }, tabIndex);
   await launched.page.waitForFunction(
     (panel) => {
-      const dialog = document.querySelector(
-        'wa-dialog.desktop-settings-overlay',
+      const settingsApp = document.querySelector(
+        'settings-app[data-desktop-view="settings"]',
       );
-      const settingsApp = dialog?.querySelector('settings-app');
-      return (
-        settingsApp?.shadowRoot?.querySelector(`wa-tab[panel="${panel}"]`) !=
-        null
-      );
-    },
-    panelName,
-    { timeout: 10000 },
-  );
-  await launched.page.evaluate((panel) => {
-    const dialog = document.querySelector('wa-dialog.desktop-settings-overlay');
-    const settingsApp = dialog?.querySelector('settings-app');
-    const tab = settingsApp?.shadowRoot?.querySelector<HTMLElement>(
-      `wa-tab[panel="${panel}"]`,
-    );
-    if (!tab) {
-      throw new Error(`Settings tab not found: ${panel}`);
-    }
-    tab.click();
-  }, panelName);
-  await launched.page.waitForFunction(
-    (panel) => {
-      const dialog = document.querySelector(
-        'wa-dialog.desktop-settings-overlay',
-      );
-      const settingsApp = dialog?.querySelector('settings-app');
       const root = settingsApp?.shadowRoot;
       if (!root) return false;
-      const activeTab = root.querySelector(`wa-tab[panel="${panel}"][active]`);
-      const activePanel = root.querySelector(
-        `wa-tab-panel[name="${panel}"][active]`,
+      return (
+        root.querySelector(
+          `.settings-page-button[data-panel="${panel}"][data-active="true"]`,
+        ) != null
       );
-      return activeTab != null || activePanel != null;
     },
     panelName,
     { timeout: 10000 },
   );
 }
 
-test('launcher screenshot', async () => {
-  await setRoute('main');
+test('startup team chooser screenshot', async ({}, testInfo) => {
+  const panel = launched.page.locator('.desktop-startup-panel');
+  await expect(panel).toBeVisible();
+  await expect(
+    panel.locator('wa-checkbox').filter({
+      hasText: "Don't show this at startup",
+    }),
+  ).toBeVisible();
   await launched.page.screenshot({
-    path: join(SCREENSHOTS_DIR, 'launcher.png'),
+    path: getScreenshotPath(testInfo, 'startup.png'),
+    fullPage: false,
+  });
+  await dismissOnboarding(launched.page);
+});
+
+test('launcher screenshot', async ({}, testInfo) => {
+  await setRoute(launched, 'main');
+  await launched.page.screenshot({
+    path: getScreenshotPath(testInfo, 'launcher.png'),
     fullPage: false,
   });
   expect(launched.page.url()).toBeTruthy();
 });
 
-test('progress screenshot', async () => {
-  // With no active stream, the center pane stays on <main-app>. The rail on
-  // the left is the visible "progress" surface (sessions list). Capture the
-  // rail + launcher together — that's the new default progress experience.
-  await setRoute('progress');
+test('progress screenshot', async ({}, testInfo) => {
+  // With no active stream, the permanent task canvas stays on <main-app>.
+  // Capture it with the project/task sidebar — the default progress surface.
+  await setRoute(launched, 'progress');
   await launched.page.screenshot({
-    path: join(SCREENSHOTS_DIR, 'progress.png'),
+    path: getScreenshotPath(testInfo, 'progress.png'),
     fullPage: false,
   });
   expect(launched.page.url()).toBeTruthy();
 });
 
-test('settings screenshot', async () => {
-  await setRoute('settings');
-  // Open the Multi-Agent settings tab — the most visually rich area.
-  await selectSettingsTab('multi-agent');
+test('settings screenshot', async ({}, testInfo) => {
+  await setRoute(launched, 'settings');
+  // Open the Multi-Agent settings page — the most visually rich area.
+  await selectSettingsPage('multi-agent', 4);
   await launched.page.screenshot({
-    path: join(SCREENSHOTS_DIR, 'settings.png'),
+    path: getScreenshotPath(testInfo, 'settings.png'),
     fullPage: false,
   });
   expect(launched.page.url()).toBeTruthy();
 });
 
 test('command palette opens and dismisses', async () => {
-  await setRoute('main');
-  // Close the settings overlay if a previous test left it open.
-  await launched.page.evaluate(() => {
-    const dialog = document.querySelector<HTMLElement>(
-      'wa-dialog.desktop-settings-overlay',
-    );
-    if (dialog && dialog.hasAttribute('open')) {
-      dialog.removeAttribute('open');
-    }
-  });
-  const opened = await launched.page.evaluate(() => {
-    const btn = document.querySelector<HTMLElement>('.desktop-command-button');
-    if (!btn) return false;
-    btn.click();
-    return true;
-  });
-  expect(opened).toBe(true);
+  await setRoute(launched, 'main');
+  // A prior screenshot can leave Settings in the workbench. Hide the workbench
+  // so this check exercises the conversation-header command affordance.
+  const closeWorkbench = launched.page.locator('.task-workbench-close');
+  if (await closeWorkbench.isVisible()) {
+    await closeWorkbench.click();
+  }
+  await expect(launched.page.locator('.task-conversation')).toBeVisible();
+  await launched.page
+    .locator('.task-header-button[aria-label="Open commands"]')
+    .click();
   await launched.page.waitForFunction(
     () => {
       const dialog = document.querySelector<HTMLElement>(

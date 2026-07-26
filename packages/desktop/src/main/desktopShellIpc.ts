@@ -11,6 +11,7 @@ import {
 } from '@shared/schemas/settingsViewMessages';
 import {
   DESKTOP_SHELL_COMMANDS,
+  type DesktopLayoutPanel,
   type DesktopRoute,
 } from '../desktopShellMessages.js';
 import { buildDesktopOnboardingSetStateMessage } from '../desktopOnboardingMessages.js';
@@ -33,7 +34,6 @@ export interface DesktopShellActionFactoryOptions {
   openExternalUrl(url: string): Promise<void>;
   openLogFolder(): Promise<void>;
   openPath(filePath: string): Promise<void>;
-  openWorkspaceInNewWindow(): Promise<void>;
   openWorkspaceFolder(): Promise<void>;
   signIn(): Promise<void>;
   /**
@@ -57,7 +57,7 @@ export interface DesktopShellActions extends DesktopCommandActions {
   openDesktopDocs(): void;
   openLogFolder(): void;
   openWorkspaceFolder(): void;
-  openWorkspaceInNewWindow(): void;
+  saveFile(): void;
   resetMainView(): void;
   showFirstRunWalkthrough(): void;
   /**
@@ -119,10 +119,6 @@ export function createDesktopShellActions(
     void options.openWorkspaceFolder().catch(reportAsyncError);
   }
 
-  function openWorkspaceInNewWindow() {
-    void options.openWorkspaceInNewWindow().catch(reportAsyncError);
-  }
-
   function openDesktopDocs() {
     void options.openExternalUrl(DESKTOP_DOCS_URL).catch(reportAsyncError);
   }
@@ -136,13 +132,24 @@ export function createDesktopShellActions(
     renderer.postToRenderer(buildDesktopMainViewResetMessage());
   }
 
+  function toggleLayout(panel: DesktopLayoutPanel) {
+    renderer.postToRenderer({
+      command: DESKTOP_SHELL_COMMANDS.TOGGLE_LAYOUT,
+      panel,
+    });
+  }
+
   return {
     signIn,
     openAgentDirectory,
     openDesktopDocs,
     openLogFolder,
-    openWorkspaceInNewWindow,
     openWorkspaceFolder,
+    saveFile: () => {
+      renderer.postToRenderer({
+        command: DESKTOP_SHELL_COMMANDS.SAVE_FILE,
+      });
+    },
     resetMainView,
     sendRecentCommits: () => {
       const postReply = (commits: string[], isGitRepo: boolean) => {
@@ -165,6 +172,9 @@ export function createDesktopShellActions(
     },
     showRoute: postRoute,
     showSettings: postSettingsRoute,
+    toggleBottomBar: () => toggleLayout('bottomBar'),
+    toggleSidePanel: () => toggleLayout('sidePanel'),
+    toggleSummaryBar: () => toggleLayout('summaryBar'),
     showFirstRunWalkthrough: () => {
       renderer.postToRenderer(buildDesktopOnboardingSetStateMessage(true));
     },
@@ -254,9 +264,6 @@ function dispatchDesktopLocalOnShell(
       return true;
     case DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER:
       actions.openWorkspaceFolder();
-      return true;
-    case DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_IN_NEW_WINDOW:
-      actions.openWorkspaceInNewWindow();
       return true;
     case DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH:
       actions.showFirstRunWalkthrough();

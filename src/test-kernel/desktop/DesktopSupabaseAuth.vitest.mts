@@ -24,6 +24,9 @@ import { createDeferred } from '@test/support/asyncTestUtils';
 
 function createCoordinator() {
   const storedSession: { current: SupabaseSession | null } = { current: null };
+  const createSessionFromCallback = vi.fn<
+    DesktopAuthCoordinator['createSessionFromCallback']
+  >(async () => callbackSessionResult());
   return {
     loadSession: vi.fn(async () => storedSession.current),
     storeSession: vi.fn(async (session: SupabaseSession) => {
@@ -32,7 +35,7 @@ function createCoordinator() {
     clearSession: vi.fn(async () => {
       storedSession.current = null;
     }),
-    createSessionFromCallback: vi.fn(async () => callbackSessionResult()),
+    createSessionFromCallback,
     whenReady: vi.fn(async () => {}),
     ensureFreshToken: vi.fn(
       async () => storedSession.current?.accessToken ?? null,
@@ -334,7 +337,7 @@ describe('desktop Supabase auth', () => {
     auth.dispose();
   });
 
-  it('cancels a waiting sign-in when its window auth is disposed', async () => {
+  it('cancels a waiting system-browser sign-in without throwing', async () => {
     const router = createDesktopProtocolCallbackRouter();
     const oauthClient = createOAuthClient();
     const auth = createTestAuth({
@@ -353,6 +356,88 @@ describe('desktop Supabase auth', () => {
     auth.dispose();
 
     await expect(completion).resolves.toBe(false);
+  });
+
+  it('treats a denied system-browser callback as cancellation', async () => {
+    const router = createDesktopProtocolCallbackRouter();
+    const coordinator = createCoordinator();
+    coordinator.createSessionFromCallback.mockResolvedValueOnce({
+      success: false,
+      error: 'The user closed the authorization page',
+      isAuthError: true,
+    });
+    const oauthClient = createOAuthClient();
+    const showErrorMessage = vi.fn(async () => {});
+    const log = createLog();
+    const auth = createTestAuth({
+      router,
+      coordinator,
+      oauthClient,
+      openExternalUrl: vi.fn(async () => {}),
+      showErrorMessage,
+      log,
+    });
+    const completion = auth.signInAndWaitForSession(undefined, {
+      timeoutMs: 1_000,
+    });
+    await vi.waitFor(() =>
+      expect(oauthClient.auth.signInWithOAuth).toHaveBeenCalled(),
+    );
+
+    const nonce = nonceFor(oauthClient);
+    router.routeUrl(
+      `texra://texra-ai.texra/auth-callback?app_nonce=${nonce}&error=access_denied`,
+    );
+
+    await expect(completion).resolves.toBe(false);
+    expect(showErrorMessage).not.toHaveBeenCalled();
+    expect(log.info).toHaveBeenCalledWith(
+      'Desktop sign-in was cancelled in the system browser',
+    );
+    expect(coordinator.storeSession).not.toHaveBeenCalled();
+    auth.dispose();
+  });
+
+  it('contains a failed cancellation notification without rejecting', async () => {
+    const router = createDesktopProtocolCallbackRouter();
+    const coordinator = createCoordinator();
+    coordinator.createSessionFromCallback.mockRejectedValueOnce(
+      new Error('callback failure'),
+    );
+    const oauthClient = createOAuthClient();
+    const log = createLog();
+    const auth = createTestAuth({
+      router,
+      coordinator,
+      oauthClient,
+      openExternalUrl: vi.fn(async () => {}),
+      showErrorMessage: vi.fn(async () => {
+        throw new Error('notification failure');
+      }),
+      log,
+    });
+    const completion = auth.signInAndWaitForSession(undefined, {
+      timeoutMs: 1_000,
+    });
+    await vi.waitFor(() =>
+      expect(oauthClient.auth.signInWithOAuth).toHaveBeenCalled(),
+    );
+
+    router.routeUrl(
+      authCallbackUrl({
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+        nonce: nonceFor(oauthClient),
+      }),
+    );
+
+    await expect(completion).resolves.toBe(false);
+    await vi.waitFor(() =>
+      expect(log.warn).toHaveBeenCalledWith(
+        'Desktop sign-in error notification failed: notification failure',
+      ),
+    );
+    auth.dispose();
   });
 
   it('rejects a foreign callback whose nonce does not match the pending sign-in (login-CSRF)', async () => {

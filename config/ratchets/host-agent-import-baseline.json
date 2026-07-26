@@ -44,6 +44,7 @@
       "@agent/index/agentRegistry",
       "@agent/index/BundledAgentDirectories",
       "@agent/index/platformAgentDirectories",
+      "@agent/remote/remoteAgentConfigClient",
       "@agent/runtime/AgentRuntimeHost",
       "@agent/runtime/agentShutdown",
       "@agent/runtime/detachSubagentsOnStop",
@@ -61,6 +62,7 @@
       "@agent/runtime/terminalResultToast",
       "@agent/storage",
       "@agent/storage/detectWaitingStreams",
+      "@agent/templates/agentTemplateRenderer",
       "@agent/trace",
       "@agent/utils/agentConfigToTaskState"
     ],

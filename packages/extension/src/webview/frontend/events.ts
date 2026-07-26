@@ -28,6 +28,7 @@ import type {
   RemoveFileDetail,
   SessionTypeChangeDetail,
   TeamChangeDetail,
+  WorkingDirectoryChangeDetail,
 } from '@shared/schemas';
 import { createEvent } from '@shared/utils/events';
 export const MainViewEvents = {
@@ -133,6 +134,9 @@ export const MainViewEvents = {
 
   modelChange: (detail: ModelChangeDetail) =>
     createEvent('model-change', detail),
+
+  workingDirectoryChange: (detail: WorkingDirectoryChangeDetail) =>
+    createEvent('working-directory-change', detail),
 
   instructionInput: (detail: InstructionChangeDetail) =>
     createEvent('instruction-input', detail),

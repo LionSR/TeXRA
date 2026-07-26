@@ -109,6 +109,7 @@ export const MAIN_VIEW_COMMANDS = {
   SET_MODEL_OPTIONS: 'setModelOptions',
   SET_AGENT_OPTIONS: 'setAgentOptions',
   SET_TEAM_OPTIONS: 'setTeamOptions',
+  SET_WORKSPACE_ROOTS: 'setWorkspaceRoots',
   SET_SELECTED_AGENT: 'setSelectedAgent',
 
   // File refresh and update operations
