@@ -1,8 +1,97 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const channelTraceMocks = vi.hoisted(() => ({
+  warn: vi.fn(),
+}));
+
+vi.mock('@agent/trace', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@agent/trace')>();
+  return {
+    ...actual,
+    createChannelTrace: vi.fn(() => ({
+      ...actual.noopTrace,
+      warn: channelTraceMocks.warn,
+    })),
+  };
+});
+
+beforeEach(() => {
+  vi.resetModules();
+  channelTraceMocks.warn.mockReset();
+});
 
 describe('default session lifecycle', () => {
+  it('warns once only when a non-default session is live at resolution', async () => {
+    const {
+      SessionHandle,
+      defaultSession,
+      initializeDefaultSession,
+      teardownDefaultSession,
+    } = await import('@agent/runtime/SessionHandle');
+    const { StreamLogStore } = await import('@transcript');
+    const processDefault = initializeDefaultSession({
+      transcripts: StreamLogStore.ephemeral('process default'),
+    });
+
+    try {
+      expect(defaultSession()).toBe(processDefault);
+      expect(channelTraceMocks.warn).not.toHaveBeenCalled();
+
+      const disposedSession = new SessionHandle({
+        transcripts: StreamLogStore.ephemeral('disposed non-default'),
+      });
+      disposedSession.dispose();
+      expect(defaultSession()).toBe(processDefault);
+      expect(channelTraceMocks.warn).not.toHaveBeenCalled();
+
+      const liveSession = new SessionHandle({
+        transcripts: StreamLogStore.ephemeral('live non-default'),
+      });
+      try {
+        expect(defaultSession()).toBe(processDefault);
+        expect(defaultSession()).toBe(processDefault);
+        expect(channelTraceMocks.warn).toHaveBeenCalledOnce();
+        expect(channelTraceMocks.warn).toHaveBeenCalledWith(
+          'defaultSession() resolved while a non-default SessionHandle was live. Pass or propagate the owning session instead.',
+        );
+      } finally {
+        liveSession.dispose();
+      }
+    } finally {
+      teardownDefaultSession();
+    }
+  });
+
+  it('does not let a throwing warning sink break or repeat fallback resolution', async () => {
+    const warningFailure = new Error('warning sink failed');
+    channelTraceMocks.warn.mockImplementation(() => {
+      throw warningFailure;
+    });
+    const {
+      SessionHandle,
+      defaultSession,
+      initializeDefaultSession,
+      teardownDefaultSession,
+    } = await import('@agent/runtime/SessionHandle');
+    const { StreamLogStore } = await import('@transcript');
+    const processDefault = initializeDefaultSession({
+      transcripts: StreamLogStore.ephemeral('process default'),
+    });
+    const liveSession = new SessionHandle({
+      transcripts: StreamLogStore.ephemeral('live non-default'),
+    });
+
+    try {
+      expect(defaultSession()).toBe(processDefault);
+      expect(defaultSession()).toBe(processDefault);
+      expect(channelTraceMocks.warn).toHaveBeenCalledOnce();
+    } finally {
+      liveSession.dispose();
+      teardownDefaultSession();
+    }
+  });
+
   it('rejects access before explicit initialization', async () => {
-    vi.resetModules();
     const { defaultSession, initializeDefaultSession, teardownDefaultSession } =
       await import('@agent/runtime/SessionHandle');
     const { StreamLogStore } = await import('@transcript');
@@ -27,7 +116,6 @@ describe('default session lifecycle', () => {
   });
 
   it('can initialize again only after explicit teardown', async () => {
-    vi.resetModules();
     const {
       defaultSession,
       initializeDefaultSession,
