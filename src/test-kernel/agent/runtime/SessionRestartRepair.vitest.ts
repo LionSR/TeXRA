@@ -2,7 +2,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { clearStoreCache, getExecutionStore } from '@agent/storage';
 import { flowKey } from '@agent/node/persistedFlow';
-import { EXECUTION_LEASE_STALE_MS } from '@agent/storage/executionLease';
+import {
+  acquireFreshExecutionLease,
+  completeOwnedExecutionLease,
+  EXECUTION_LEASE_STALE_MS,
+} from '@agent/storage/executionLease';
 import * as waitingDetection from '@agent/storage/detectWaitingStreams';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
@@ -264,19 +268,14 @@ describe('SessionHandle restart repair', () => {
     }
   });
 
-  it('waits for live execution owners before replacing workspace stores', async () => {
+  it('waits for execution artifacts before replacing workspace stores', async () => {
+    const liveExecutionId = 'workspace-live' as ExecutionId;
     const transcripts = await StreamLogStore.open();
     const session = new SessionHandle({
       transcripts,
       restartRepair: 'deferred',
     });
-    let releaseExecutions: (() => void) | undefined;
-    const executionsIdle = new Promise<void>((resolve) => {
-      releaseExecutions = resolve;
-    });
-    vi.spyOn(session.executions, 'waitUntilIdle').mockReturnValue(
-      executionsIdle,
-    );
+    await acquireFreshExecutionLease(liveExecutionId);
     const reload = vi.spyOn(transcripts, 'reload').mockResolvedValue();
 
     try {
@@ -284,11 +283,47 @@ describe('SessionHandle restart repair', () => {
       await Promise.resolve();
 
       expect(reload).not.toHaveBeenCalled();
-      releaseExecutions?.();
+      await completeOwnedExecutionLease(liveExecutionId);
       await replacement;
 
       expect(reload).toHaveBeenCalledOnce();
     } finally {
+      await completeOwnedExecutionLease(liveExecutionId);
+      session.dispose();
+    }
+  });
+
+  it('holds new root executions outside the workspace replacement', async () => {
+    const queuedExecutionId = 'workspace-queued' as ExecutionId;
+    const transcripts = await StreamLogStore.open();
+    const session = new SessionHandle({
+      transcripts,
+      restartRepair: 'deferred',
+    });
+    let finishReload: (() => void) | undefined;
+    const reloadBlocked = new Promise<void>((resolve) => {
+      finishReload = resolve;
+    });
+    vi.spyOn(transcripts, 'reload').mockReturnValue(reloadBlocked);
+
+    try {
+      const replacement = session.reloadAfterStorageRootChange();
+      await Promise.resolve();
+      const acquisition = acquireFreshExecutionLease(queuedExecutionId);
+      let acquired = false;
+      void acquisition.then(() => {
+        acquired = true;
+      });
+      await Promise.resolve();
+
+      expect(acquired).toBe(false);
+      finishReload?.();
+      await replacement;
+      await acquisition;
+
+      expect(acquired).toBe(true);
+    } finally {
+      await completeOwnedExecutionLease(queuedExecutionId);
       session.dispose();
     }
   });

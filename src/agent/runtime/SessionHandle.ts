@@ -35,6 +35,7 @@ import { createChannelTrace } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { detectWaitingStreams } from '@agent/storage/detectWaitingStreams';
 import { executionIdFromStream } from '@agent/storage/executionIdFromStream';
+import { runWithOwnedExecutionLeaseQuiescence } from '@agent/storage/executionLease';
 import { STREAM_PHASE, type StreamTabId } from '@shared/schemas';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import type { RunTraceFlushEntry } from '@transcript/runTrace';
@@ -266,27 +267,30 @@ export class SessionHandle {
     reloadTranscripts = false,
   ): Promise<void> {
     try {
-      if (reloadTranscripts) {
-        // Reopening a transcript store invalidates every writer token. A
-        // workspace-root move therefore waits for this session's live runs to
-        // release their writers before replacing persistence.
-        await this.executions.waitUntilIdle();
+      const repair = async () => {
         if (generation !== this.storageGeneration) return;
-        await this.transcripts.reload();
-        this.status.clearAll();
+        if (reloadTranscripts) {
+          await this.transcripts.reload();
+          this.status.clearAll();
+        }
+        if (generation !== this.storageGeneration) return;
+        const streamIds = this.transcripts.keys();
+        await this.snapshots.load(streamIds);
+        if (generation !== this.storageGeneration) return;
+        for (const streamId of this.transcripts.getUnfinishedStreamIds()) {
+          this.status.transition(
+            streamId,
+            STREAM_PHASE.RUNNING,
+            STREAM_TRANSITION_CAUSE.LIFECYCLE,
+          );
+        }
+        await this.runRestartRepair(generation);
+      };
+      if (reloadTranscripts) {
+        await runWithOwnedExecutionLeaseQuiescence(repair);
+      } else {
+        await repair();
       }
-      if (generation !== this.storageGeneration) return;
-      const streamIds = this.transcripts.keys();
-      await this.snapshots.load(streamIds);
-      if (generation !== this.storageGeneration) return;
-      for (const streamId of this.transcripts.getUnfinishedStreamIds()) {
-        this.status.transition(
-          streamId,
-          STREAM_PHASE.RUNNING,
-          STREAM_TRANSITION_CAUSE.LIFECYCLE,
-        );
-      }
-      await this.runRestartRepair(generation);
     } catch (error) {
       logger.warn('Failed to repair session stores after restart', {
         data: error,

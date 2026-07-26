@@ -81,6 +81,80 @@ const ownedLeases = new Map<string, OwnedExecutionLease>();
 const executionOwnership = new AsyncLocalStorage<ReadonlyMap<string, string>>();
 const maintenanceExecutions = new AsyncLocalStorage<ReadonlySet<string>>();
 let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
+let acquisitionsInFlight = 0;
+const acquisitionIdleWaiters = new Set<() => void>();
+let maintenanceTail: Promise<void> = Promise.resolve();
+let pendingMaintenanceCount = 0;
+let maintenanceBarrier:
+  { readonly promise: Promise<void>; readonly resolve: () => void } | undefined;
+
+function createMaintenanceBarrier(): NonNullable<typeof maintenanceBarrier> {
+  let resolve: () => void = () => undefined;
+  const promise = new Promise<void>((settle) => {
+    resolve = settle;
+  });
+  return { promise, resolve };
+}
+
+async function enterLeaseAcquisition(): Promise<void> {
+  // An existing owned run may need to launch a child before it can settle.
+  // Root launches wait; nested launches remain admitted and are included in
+  // the dynamic quiescence check below.
+  if ((executionOwnership.getStore()?.size ?? 0) === 0) {
+    while (maintenanceBarrier) await maintenanceBarrier.promise;
+  }
+  acquisitionsInFlight += 1;
+}
+
+function leaveLeaseAcquisition(): void {
+  acquisitionsInFlight -= 1;
+  if (acquisitionsInFlight !== 0) return;
+  for (const resolve of acquisitionIdleWaiters) resolve();
+  acquisitionIdleWaiters.clear();
+}
+
+function waitForLeaseAcquisitions(): Promise<void> {
+  if (acquisitionsInFlight === 0) return Promise.resolve();
+  return new Promise((resolve) => acquisitionIdleWaiters.add(resolve));
+}
+
+async function waitForOwnedLeaseQuiescence(): Promise<void> {
+  for (;;) {
+    await waitForLeaseAcquisitions();
+    const releases = [...ownedLeases.values()].map((lease) => lease.released);
+    if (releases.length === 0) return;
+    await Promise.all(releases);
+  }
+}
+
+/**
+ * Run storage-root maintenance after all execution artifacts are durable.
+ *
+ * New root executions wait outside the barrier. Nested work already owned by
+ * a live execution remains admitted so maintenance cannot deadlock a parent
+ * waiting for its child; the loop includes every such acquisition and lease.
+ */
+export function runWithOwnedExecutionLeaseQuiescence<T>(
+  operation: () => T | Promise<T>,
+): Promise<T> {
+  pendingMaintenanceCount += 1;
+  maintenanceBarrier ??= createMaintenanceBarrier();
+  const queued = maintenanceTail.then(async () => {
+    await waitForOwnedLeaseQuiescence();
+    return operation();
+  });
+  maintenanceTail = queued.then(
+    () => undefined,
+    () => undefined,
+  );
+  return queued.finally(() => {
+    pendingMaintenanceCount -= 1;
+    if (pendingMaintenanceCount !== 0) return;
+    const barrier = maintenanceBarrier;
+    maintenanceBarrier = undefined;
+    barrier?.resolve();
+  });
+}
 
 function storageRoot(): string {
   return platform().storage.getStoragePath();
@@ -498,62 +572,70 @@ async function acquireExecutionLease(
   mode: 'fresh' | 'resume',
   canAcquire?: () => boolean | Promise<boolean>,
 ): Promise<'acquired' | 'existing' | 'cancelled'> {
-  const root = storageRoot();
-  const key = ownershipKey(root, executionId);
-  const existingOwnership = ownedLeases.get(key);
-  if (mode === 'resume' && existingOwnership) {
-    let heartbeatResult: Awaited<ReturnType<typeof heartbeat>> | undefined;
-    try {
-      heartbeatResult = await heartbeat(existingOwnership, canAcquire);
-    } catch (error) {
-      if (handleHeartbeatFailure(existingOwnership, error)) throw error;
-      if (
-        ownedLeases.get(key) === existingOwnership &&
-        !existingOwnership.releasing
-      ) {
-        const admitted = await withLeaseLock(
+  await enterLeaseAcquisition();
+  try {
+    const root = storageRoot();
+    const key = ownershipKey(root, executionId);
+    const existingOwnership = ownedLeases.get(key);
+    if (mode === 'resume' && existingOwnership) {
+      let heartbeatResult: Awaited<ReturnType<typeof heartbeat>> | undefined;
+      try {
+        heartbeatResult = await heartbeat(existingOwnership, canAcquire);
+      } catch (error) {
+        if (handleHeartbeatFailure(existingOwnership, error)) throw error;
+        if (
+          ownedLeases.get(key) === existingOwnership &&
+          !existingOwnership.releasing
+        ) {
+          const admitted = await withLeaseLock(
+            executionId,
+            async () => (await canAcquire?.()) !== false,
+            root,
+          );
+          return admitted ? 'existing' : 'cancelled';
+        }
+      }
+      if (heartbeatResult === 'cancelled') return 'cancelled';
+      if (heartbeatResult === 'owned') return 'existing';
+    }
+
+    return await withLeaseLock(
+      executionId,
+      async () => {
+        const now = Date.now();
+        const liveness = await readPersistedExecutionLiveness(
           executionId,
-          async () => (await canAcquire?.()) !== false,
+          root,
+          now,
+        );
+        if (liveness.status === 'active') {
+          throw new ExecutionLeaseActiveError(
+            executionId,
+            liveness.heartbeatAt,
+          );
+        }
+        if ((await canAcquire?.()) === false) return 'cancelled' as const;
+        const acquiredAt = Date.now();
+        const ownerToken = randomUUID();
+        if (existingOwnership) forgetOwnedLease(existingOwnership);
+        await writeLease(
+          {
+            version: 1,
+            executionId,
+            ownerToken,
+            acquiredAt,
+            heartbeatAt: acquiredAt,
+          },
           root,
         );
-        return admitted ? 'existing' : 'cancelled';
-      }
-    }
-    if (heartbeatResult === 'cancelled') return 'cancelled';
-    if (heartbeatResult === 'owned') return 'existing';
+        rememberOwnership(executionId, ownerToken, root);
+        return 'acquired' as const;
+      },
+      root,
+    );
+  } finally {
+    leaveLeaseAcquisition();
   }
-
-  return withLeaseLock(
-    executionId,
-    async () => {
-      const now = Date.now();
-      const liveness = await readPersistedExecutionLiveness(
-        executionId,
-        root,
-        now,
-      );
-      if (liveness.status === 'active') {
-        throw new ExecutionLeaseActiveError(executionId, liveness.heartbeatAt);
-      }
-      if ((await canAcquire?.()) === false) return 'cancelled' as const;
-      const acquiredAt = Date.now();
-      const ownerToken = randomUUID();
-      if (existingOwnership) forgetOwnedLease(existingOwnership);
-      await writeLease(
-        {
-          version: 1,
-          executionId,
-          ownerToken,
-          acquiredAt,
-          heartbeatAt: acquiredAt,
-        },
-        root,
-      );
-      rememberOwnership(executionId, ownerToken, root);
-      return 'acquired' as const;
-    },
-    root,
-  );
 }
 
 /** Acquire a new execution before any execution-scoped data becomes writable. */
@@ -575,11 +657,15 @@ export function acquireResumedExecutionLease(
 export async function releaseOwnedExecutionLease(
   executionId: ExecutionId,
 ): Promise<void> {
-  const ownerships = [...ownedLeases.values()].filter(
+  const ownerships = currentOwnedLeases(executionId);
+  await Promise.all(ownerships.map(releaseOwnership));
+}
+
+function currentOwnedLeases(executionId: ExecutionId): OwnedExecutionLease[] {
+  return [...ownedLeases.values()].filter(
     (lease) =>
       lease.executionId === executionId && currentScopeOwnsLease(lease),
   );
-  await Promise.all(ownerships.map(releaseOwnership));
 }
 
 /**
@@ -588,19 +674,14 @@ export async function releaseOwnedExecutionLease(
  * horizon, but a long-lived host cannot keep the failed lease fresh forever.
  */
 export function abandonOwnedExecutionLease(executionId: ExecutionId): void {
-  const root = storageRoot();
-  const lease = ownedLeases.get(ownershipKey(root, executionId));
-  if (lease && currentScopeOwnsLease(lease)) {
-    forgetOwnedLease(lease);
-  }
+  for (const lease of currentOwnedLeases(executionId)) forgetOwnedLease(lease);
 }
 
 /** Prevent release after a required execution artifact failed to persist. */
 export function markOwnedExecutionLeaseUndurable(
   executionId: ExecutionId,
 ): void {
-  const lease = ownedLeases.get(ownershipKey(storageRoot(), executionId));
-  if (lease && currentScopeOwnsLease(lease)) {
+  for (const lease of currentOwnedLeases(executionId)) {
     lease.durabilityFailed = true;
   }
 }
@@ -609,8 +690,7 @@ export function markOwnedExecutionLeaseUndurable(
 export async function completeOwnedExecutionLease(
   executionId: ExecutionId,
 ): Promise<void> {
-  const lease = ownedLeases.get(ownershipKey(storageRoot(), executionId));
-  if (lease?.durabilityFailed) {
+  if (currentOwnedLeases(executionId).some((lease) => lease.durabilityFailed)) {
     abandonOwnedExecutionLease(executionId);
     return;
   }
