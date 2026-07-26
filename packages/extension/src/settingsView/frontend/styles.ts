@@ -1,144 +1,175 @@
 // Third-party imports
 import { css, type CSSResult } from 'lit';
 
-// Shared history/search styles — use native Lit array instead of unsafeCSS embedding
-import {
-  searchStyles,
-  historyListStyles,
-  waTabThemeTokenStyles,
-} from '@shared/styles';
-
-const settingsHeaderStyles: CSSResult = css`
-  /* Settings header bar */
-  .settings-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: var(--wa-space-xs) var(--wa-space-s);
-    background: var(--wa-color-surface-lowered);
-    border-bottom: var(--border-thin) solid var(--color-border);
-    margin-bottom: var(--wa-space-xs);
-  }
-
-  .settings-header-user {
-    display: flex;
-    align-items: center;
-    gap: var(--wa-space-xs);
-  }
-
-  .settings-header-user-icon {
-    width: var(--font-size-lg);
-    height: var(--font-size-lg);
-    flex: 0 0 auto;
-    font-size: var(--font-size-lg);
-    opacity: var(--opacity-subtle);
-  }
-
-  .settings-header-info {
-    display: flex;
-    flex-direction: column;
-    gap: var(--wa-space-3xs);
-  }
-
-  .settings-header-email {
-    font-weight: var(--font-weight-medium);
-    color: var(--wa-color-text-normal);
-  }
-
-  .settings-header-tier {
-    font-size: var(--font-size-sm);
-    color: var(--color-text-secondary);
-  }
-
-  .settings-header-signed-out {
-    color: var(--color-text-secondary);
-  }
-
-  .settings-header-actions {
-    display: flex;
-    align-items: center;
-    gap: var(--wa-space-2xs);
-    margin-right: calc(var(--wa-space-s) + var(--height-control));
-  }
-
-  .settings-header-auth-button {
-    flex-shrink: 0;
-  }
-
-  .settings-header-auth-button::part(base) {
-    min-height: var(--height-control);
-  }
-`;
+// Shared history/search styles
+import { historyListStyles, searchStyles } from '@shared/styles';
 
 const settingsContainerStyles: CSSResult = css`
   :host {
     display: block;
+    min-width: 0;
     height: 100%;
+    overflow: hidden;
   }
 
   .settings-container {
+    container: settings / inline-size;
     display: flex;
     flex-direction: column;
+    min-width: 0;
     height: 100%;
+    overflow: hidden;
   }
 
-  wa-tab-group.settings-tabs {
-    flex: 1;
+  .settings-navigation {
+    z-index: 2;
+    flex: 0 0 auto;
+    border-bottom: var(--border-thin) solid var(--border-hairline);
+    background: color-mix(
+      in srgb,
+      var(--wa-color-surface-lowered) 86%,
+      var(--wa-color-surface-default)
+    );
+  }
+
+  .settings-category-nav,
+  .settings-page-nav {
     display: flex;
-    flex-direction: column;
-    min-height: 0;
-    ${waTabThemeTokenStyles}
+    align-items: center;
+    min-width: 0;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
   }
 
-  /* WA's internal .tab-group wrapper (exposed as ::part(base)) is a flex
-     column but doesn't inherit the bounded host height. Without height
-     100% it sizes to content and the panel below grows past the dialog
-     viewport, defeating overflow:auto on the panel. */
-  wa-tab-group.settings-tabs::part(base) {
-    height: 100%;
-    min-height: 0;
+  .settings-category-nav::-webkit-scrollbar,
+  .settings-page-nav::-webkit-scrollbar {
+    display: none;
   }
 
-  wa-tab-group.settings-tabs::part(body) {
-    flex: 1;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
+  .settings-category-nav {
+    gap: var(--wa-space-3xs);
+    min-height: var(--height-control-l);
+    padding: var(--wa-space-2xs) var(--wa-space-xs);
+    border-bottom: var(--border-thin) solid var(--border-hairline);
   }
 
-  /*
-   * Settings has 8 tabs — the strip needs a touch more breathing
-   * room for icon+label rows than the inline view-tabs. The shared
-   * waTabThemeTokenStyles sets the indicator weight + colour;
-   * here we tune density + the active-state polish for this surface.
-   */
-  wa-tab-group.settings-tabs::part(nav) {
-    padding-inline: var(--wa-space-2xs);
-    gap: 1px;
+  .settings-page-nav {
+    gap: var(--wa-space-3xs);
+    min-height: var(--height-control);
+    padding: 0 var(--wa-space-xs);
   }
 
-  wa-tab-group.settings-tabs wa-tab {
-    font-size: var(--font-size-sm);
-    letter-spacing: -0.005em;
+  .settings-category-button,
+  .settings-page-button {
+    flex: 0 0 auto;
+    white-space: nowrap;
   }
 
-  wa-tab-group.settings-tabs wa-tab::part(base) {
-    padding-block: 6px;
-    padding-inline: var(--wa-space-s);
-    color: color-mix(in srgb, var(--wa-color-text-normal) 65%, transparent);
-    border-radius: var(--wa-border-radius-s, 4px) var(--wa-border-radius-s, 4px)
-      0 0;
+  .settings-category-button::part(base) {
+    justify-content: center;
+    min-height: var(--height-control);
+    padding: 0 var(--wa-space-xs);
+    border: var(--border-thin) solid transparent;
+    border-radius: var(--wa-border-radius-pill);
+    color: var(--wa-color-text-quiet);
+    font-size: var(--font-size);
+    font-weight: var(--font-weight);
+    letter-spacing: var(--letter-spacing-tight);
+    transition:
+      background-color var(--transition-fast),
+      border-color var(--transition-fast),
+      color var(--transition-fast);
   }
 
-  wa-tab-group.settings-tabs wa-tab[active]::part(base) {
+  .settings-category-button:hover::part(base) {
+    background: var(--surface-hover);
     color: var(--wa-color-text-normal);
-    font-weight: var(--font-weight-semibold, 600);
   }
 
-  wa-tab-panel {
+  .settings-category-button[data-active='true']::part(base) {
+    border-color: var(--border-hairline);
+    background: var(--wa-color-surface-default);
+    color: var(--wa-color-text-normal);
+    font-weight: var(--font-weight-medium);
+    box-shadow: var(--wa-shadow-s, none);
+  }
+
+  .settings-page-button::part(base) {
+    justify-content: center;
+    min-height: var(--height-control);
+    padding: 0 var(--wa-space-xs);
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--wa-color-text-quiet);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight);
+    letter-spacing: var(--letter-spacing-tight);
+    box-shadow: inset 0 -2px transparent;
+    transition:
+      background-color var(--transition-fast),
+      color var(--transition-fast),
+      box-shadow var(--transition-fast);
+  }
+
+  .settings-page-button:hover::part(base) {
+    background: var(--surface-hover);
+    color: var(--wa-color-text-normal);
+  }
+
+  .settings-page-button[data-active='true']::part(base) {
+    color: var(--wa-color-text-normal);
+    font-weight: var(--font-weight-medium);
+    box-shadow: inset 0 -2px var(--wa-color-text-normal);
+  }
+
+  .settings-category-button wa-icon,
+  .settings-page-button wa-icon,
+  .settings-unavailable-icon,
+  .settings-tab-icon {
+    display: grid;
+    flex: 0 0 auto;
+    width: 1em;
+    height: 1em;
+    place-items: center;
+    line-height: 1;
+  }
+
+  .settings-panel {
     flex: 1;
+    box-sizing: border-box;
+    min-width: 0;
+    min-height: 0;
+    max-width: 100%;
+    padding: var(--wa-space-s);
     overflow: auto;
-    --padding: var(--wa-space-s);
+    overscroll-behavior: contain;
+  }
+
+  .settings-page-header {
+    margin-bottom: var(--wa-space-s);
+    padding-bottom: var(--wa-space-s);
+    border-bottom: var(--border-thin) solid var(--border-hairline);
+  }
+
+  .settings-page-header-copy {
+    min-width: 0;
+  }
+
+  .settings-page-header h1 {
+    margin: 0;
+    color: var(--wa-color-text-normal);
+    font-size: var(--font-size-h1);
+    font-weight: var(--wa-font-weight-semibold);
+    line-height: var(--line-height-heading);
+  }
+
+  .settings-page-header p {
+    margin: var(--wa-space-3xs) 0 0;
+    color: var(--wa-color-text-quiet);
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-normal);
   }
 
   .settings-unavailable {
@@ -157,31 +188,43 @@ const settingsContainerStyles: CSSResult = css`
     font-weight: var(--font-weight-medium);
   }
 
-  .settings-unavailable-icon,
-  .settings-tab-icon {
-    width: 1em;
-    height: 1em;
-    flex: 0 0 auto;
-  }
+  @container settings (max-width: 520px) {
+    .settings-category-nav,
+    .settings-page-nav {
+      padding-inline: var(--wa-space-2xs);
+    }
 
-  wa-tab .settings-tab-icon {
-    margin-inline-end: 0.45em;
-    opacity: var(--opacity-normal);
-  }
+    .settings-page-button::part(base) {
+      width: var(--height-control);
+      gap: 0;
+      place-content: center;
+      padding: 0;
+    }
 
-  wa-tab[active] .settings-tab-icon {
-    opacity: 1;
-    color: var(--wa-color-brand-fill-loud);
+    .settings-page-button::part(start) {
+      margin: 0;
+    }
+
+    .settings-page-button wa-icon {
+      margin-inline-end: 0;
+    }
+
+    .settings-page-button::part(label) {
+      display: none;
+    }
+
+    .settings-panel {
+      padding: var(--wa-space-xs);
+    }
+
+    .settings-page-header {
+      padding-bottom: var(--wa-space-xs);
+    }
   }
 `;
 
-/**
- * Combined settings view styles — array of shared + local styles.
- * Lit supports nested CSSResult arrays natively.
- */
 export const settingsViewStyles = [
   searchStyles,
   historyListStyles,
-  settingsHeaderStyles,
   settingsContainerStyles,
 ];

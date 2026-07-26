@@ -13,6 +13,7 @@ import type { ToolDashboardItem } from '@shared/schemas/settingsViewMessages';
 import type { ExternalToolCheckResult } from '@tools/toolAvailability';
 
 interface DefaultDesktopToolingSettingsControllerOptions extends SettingsStatePorts {
+  readonly onError: (error: unknown) => void;
   readonly renderer: {
     postToRenderer(message: unknown): void;
   };
@@ -85,14 +86,15 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
 
   async postStartupData(): Promise<void> {
     await Promise.all([
-      this.postToolDashboardData(),
+      this.postToolDashboardData(true),
       this.postLatexSettingsStatus(),
     ]);
+    void this.refreshToolDashboard().catch(this.options.onError);
   }
 
   private async postToolDashboardData(useCachedResults = false): Promise<void> {
     const cachedResults = useCachedResults
-      ? await this.options.dashboard.getCachedCheckResults()
+      ? ((await this.options.dashboard.getCachedCheckResults()) ?? [])
       : undefined;
     const items = await this.options.dashboard.buildItems(cachedResults);
     this.options.renderer.postToRenderer({
@@ -132,6 +134,10 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
   }
 
   private async recheckToolStatus(): Promise<void> {
+    await this.refreshToolDashboard();
+  }
+
+  private async refreshToolDashboard(): Promise<void> {
     await this.options.dashboard.refreshAvailability();
     await this.postToolDashboardData(true);
   }

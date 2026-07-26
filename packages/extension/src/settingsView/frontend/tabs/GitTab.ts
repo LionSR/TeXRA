@@ -12,7 +12,8 @@ import {
   renderSetStatusIcon,
   statusCheckIconStyles,
 } from '@shared/wa/statusIcons';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { renderLabeledActionButton } from '@shared/wa/actionButtons';
+import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
 
 // Web Awesome icon bundle (side-effect import)
 import '@awesome.me/webawesome/dist/components/button/button.js';
@@ -52,18 +53,6 @@ export class GitTab extends LitElement {
         gap: var(--wa-space-xs);
       }
 
-      .setting-block {
-        padding: var(--wa-space-xs);
-        background-color: var(--wa-color-neutral-fill-quiet);
-        border-radius: var(--border-radius);
-      }
-
-      .setting-description {
-        margin: var(--wa-space-2xs) 0 0 0;
-        font-size: var(--font-size-sm);
-        color: var(--wa-color-text-quiet);
-      }
-
       .input-row {
         display: flex;
         align-items: center;
@@ -78,11 +67,6 @@ export class GitTab extends LitElement {
 
       .input-row wa-input {
         flex: 1;
-      }
-
-      .section-title {
-        font-weight: var(--font-weight-semibold);
-        margin: 0;
       }
 
       .token-row {
@@ -103,10 +87,6 @@ export class GitTab extends LitElement {
         align-items: center;
         gap: var(--wa-space-2xs);
         flex-wrap: wrap;
-      }
-
-      .token-remove-btn::part(base):hover {
-        color: var(--wa-color-danger-on-quiet);
       }
 
       .instructions {
@@ -262,7 +242,7 @@ export class GitTab extends LitElement {
   override render(): TemplateResult {
     const tokenIsSet = this.githubTokenStatus !== 'none';
     return html`
-      <div class="git-container">
+      <div class="git-container tab-content-container">
         ${
           isKnownUnsupported(
             this.unsupportedCommands,
@@ -270,46 +250,41 @@ export class GitTab extends LitElement {
           )
             ? nothing
             : html`
-                <div class="setting-block">
-                  <p class="section-title">GitHub personal access token</p>
-                  <p class="setting-description">
-                    Used to poll GitHub for pull request events (comments,
-                    reviews, failed CI) when you subscribe to a PR.
-                  </p>
+                <div class="settings-section">
+                  ${renderSettingsSectionHeading({
+                    title: 'GitHub personal access token',
+                    description:
+                      'Used to poll GitHub for pull request events, reviews, comments, and failed checks.',
+                    icon: 'key',
+                  })}
                   <div class="token-row">
                     <span class="token-row-label">Status:</span>
                     ${this.renderTokenStatusBadge()}
                     <span class="token-actions">
-                      <wa-button
-                        appearance="outlined"
-                        variant="neutral"
-                        size="small"
-                        @click=${this.handleSetGitHubToken}
-                      >
-                        ${waIcon('key', { slot: 'start' })}
-                        ${tokenIsSet ? 'Replace token' : 'Set token'}
-                      </wa-button>
+                      ${renderLabeledActionButton({
+                        icon: 'key',
+                        text: tokenIsSet ? 'Replace token' : 'Set token',
+                        kind: 'secondary',
+                        appearance: 'outlined',
+                        onClick: this.handleSetGitHubToken,
+                      })}
                       ${
                         this.githubTokenStatus === 'secret'
-                          ? html`<wa-button
-                              class="token-remove-btn"
-                              appearance="outlined"
-                              variant="neutral"
-                              size="small"
-                              @click=${this.handleRemoveGitHubToken}
-                            >
-                              ${waIcon('trash', { slot: 'start' })} Remove
-                            </wa-button>`
+                          ? renderLabeledActionButton({
+                              icon: 'trash',
+                              text: 'Remove',
+                              kind: 'danger',
+                              onClick: this.handleRemoveGitHubToken,
+                            })
                           : nothing
                       }
-                      <wa-button
-                        appearance="outlined"
-                        variant="neutral"
-                        size="small"
-                        @click=${this.handleOpenGitHubTokenUrl}
-                      >
-                        ${waIcon('github', { slot: 'start' })} Create on GitHub…
-                      </wa-button>
+                      ${renderLabeledActionButton({
+                        icon: 'github',
+                        text: 'Create on GitHub…',
+                        kind: 'secondary',
+                        appearance: 'outlined',
+                        onClick: this.handleOpenGitHubTokenUrl,
+                      })}
                     </span>
                   </div>
                   <div class="instructions">
@@ -353,21 +328,13 @@ export class GitTab extends LitElement {
             SETTINGS_VIEW_COMMANDS.GET_PR_SUBSCRIPTIONS,
           ) && this.prSubscriptions.length > 0
             ? html`
-                <div class="setting-block">
-                  <p class="section-title">Active GitHub subscriptions</p>
-                  <p class="setting-description">
-                    An agent is monitoring these repositories
-                    (<code>owner/repo</code>), pull requests
-                    (<code>owner/repo/pulls/N</code>), or issues
-                    (<code>owner/repo/issues/N</code>) in the background,
-                    polling GitHub every ~30 seconds. New comments, reviews, and
-                    CI failures arrive as follow-up messages in the agent's
-                    conversation so it can investigate and act on them. PR
-                    subscriptions end automatically on close/merge; issue
-                    subscriptions stay active across close so reopens are
-                    caught. All kinds detach after 24 hours of continuous
-                    network failure. Click <em>Stop</em> to cancel one manually.
-                  </p>
+                <div class="settings-section">
+                  ${renderSettingsSectionHeading({
+                    title: 'Active GitHub subscriptions',
+                    description:
+                      'Agents monitoring repositories, pull requests, or issues for new activity.',
+                    icon: 'comment-discussion',
+                  })}
                   <ul class="subscriptions-list">
                     ${this.prSubscriptions.map(
                       (subscription) => html`
@@ -387,20 +354,16 @@ export class GitTab extends LitElement {
                                               class="subscription-owner-label"
                                               >${owner.label}</span
                                             >
-                                            <wa-button
-                                              appearance="outlined"
-                                              variant="neutral"
-                                              size="small"
-                                              @click=${() =>
+                                            ${renderLabeledActionButton({
+                                              icon: 'comment-discussion',
+                                              text: 'Jump to agent',
+                                              kind: 'secondary',
+                                              appearance: 'outlined',
+                                              onClick: () =>
                                                 this.handleOpenPRSubscriptionStream(
                                                   owner.streamId,
-                                                )}
-                                            >
-                                              ${waIcon('comment-discussion', {
-                                                slot: 'start',
-                                              })}
-                                              Jump to agent
-                                            </wa-button>
+                                                ),
+                                            })}
                                           </div>
                                         `,
                                       )}
@@ -414,15 +377,14 @@ export class GitTab extends LitElement {
                                   `
                             }
                           </div>
-                          <wa-button
-                            appearance="outlined"
-                            variant="neutral"
-                            size="small"
-                            @click=${() =>
-                              this.handleUnsubscribePR(subscription.key)}
-                          >
-                            ${waIcon('debug-stop', { slot: 'start' })} Stop
-                          </wa-button>
+                          ${renderLabeledActionButton({
+                            icon: 'debug-stop',
+                            text: 'Stop',
+                            kind: 'secondary',
+                            appearance: 'outlined',
+                            onClick: () =>
+                              this.handleUnsubscribePR(subscription.key),
+                          })}
                         </li>
                       `,
                     )}
@@ -432,24 +394,41 @@ export class GitTab extends LitElement {
             : nothing
         }
 
-        <div class="setting-block">
-          <wa-switch
-            ?checked=${this.markCommits}
-            ?disabled=${this.toggleDisabled}
-            @change=${this.handleMarkCommitsToggle}
-          >
-            Mark commits with TeXRA author info
-          </wa-switch>
-          <p class="setting-description">
-            When enabled, commits made by TeXRA agents are attributed to a
-            custom author identity instead of your personal git config.
-          </p>
+        <div class="settings-section">
+          ${renderSettingsSectionHeading({
+            title: 'Agent commit attribution',
+            description:
+              'Keep agent-authored commits distinguishable from your personal Git identity.',
+            icon: 'git-commit',
+          })}
+          <div class="settings-row">
+            <div class="settings-row-text">
+              <span class="settings-row-label">Mark TeXRA commits</span>
+              <span class="settings-row-help">
+                Use the TeXRA author identity for commits created by agents.
+              </span>
+            </div>
+            <div class="settings-row-control">
+              <wa-switch
+                aria-label="Mark commits with TeXRA author info"
+                ?checked=${this.markCommits}
+                ?disabled=${this.toggleDisabled}
+                @change=${this.handleMarkCommitsToggle}
+              ></wa-switch>
+            </div>
+          </div>
         </div>
 
         ${
           this.markCommits
             ? html`
-                <div class="setting-block">
+                <div class="settings-section">
+                  ${renderSettingsSectionHeading({
+                    title: 'Author identity',
+                    description:
+                      'Applied to the author and committer fields for agent Git commands.',
+                    icon: 'circle-user',
+                  })}
                   <div class="input-row">
                     <label>Name</label>
                     <wa-input
@@ -466,11 +445,6 @@ export class GitTab extends LitElement {
                       @change=${this.handleAuthorEmailChange}
                     ></wa-input>
                   </div>
-                  <p class="setting-description">
-                    These values are set as GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL,
-                    GIT_COMMITTER_NAME, and GIT_COMMITTER_EMAIL for all commands
-                    run by TeXRA.
-                  </p>
                 </div>
               `
             : nothing

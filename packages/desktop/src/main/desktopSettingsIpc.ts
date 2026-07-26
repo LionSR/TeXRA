@@ -4,8 +4,13 @@ import {
   createSettingsViewCommandHandlers,
   type SettingsViewCommandActions,
 } from '@controllers/settingsView/SettingsViewCommandHandlers';
+import {
+  listGitHubSubscriptionEntries,
+  unsubscribeGitHubKey,
+} from '@controllers/settingsView/githubSubscriptions';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import type { ConfigProvider } from '@platform/interfaces';
+import { platform } from '@platform/platform';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { resolveStateSettingWrite } from '@shared/settingsView/handlers/stateSettingWrite';
@@ -29,6 +34,10 @@ import {
 import { buildSuperYoloMessage } from '@shared/settingsView/handlers/superYoloHandlers';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { GoalStore } from '@tools/goal';
+import {
+  GITHUB_TOKEN_STORAGE_KEY,
+  resolveGitHubTokenSource,
+} from '@tools/github/githubAuth';
 import { StorageFS } from '@utils/files';
 import {
   applyGitAuthorSettings,
@@ -49,6 +58,18 @@ import type { DesktopToolingSettingsController } from './desktopToolingSettingsC
 export interface DesktopSettingsUiHost {
   openPath(filePath: string): Promise<void>;
   revealStream(streamId: string): Promise<void>;
+  /**
+   * Display label for a stream, used by the Git tab to name each subscription's
+   * owning agent run. Returns undefined when no presentation is attached, in
+   * which case the raw stream id is shown.
+   */
+  getStreamLabel?(streamId: string): string | undefined;
+  /** Prompt for a secret (masked). Used for the GitHub personal access token. */
+  promptForSecret?(input: {
+    title: string;
+    prompt: string;
+  }): Promise<string | undefined>;
+  openExternal?(url: string): Promise<void>;
   showInfoMessage(message: string): Promise<void>;
   showErrorMessage(message: string): Promise<void>;
   confirmAction(message: string, confirmLabel?: string): Promise<boolean>;
@@ -335,6 +356,59 @@ export function createDesktopSettingsIpc(
 
   applyCurrentGitAuthorSettings();
 
+  // ── GitHub token + PR/repo/issue subscriptions (Git tab) ──
+
+  async function postGitHubTokenStatus(): Promise<void> {
+    options.postToRenderer({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_GITHUB_TOKEN_STATUS,
+      status: await resolveGitHubTokenSource(platform().secrets),
+    });
+  }
+
+  async function setGitHubToken(): Promise<void> {
+    const token = await options.ui.promptForSecret?.({
+      title: 'GitHub token',
+      prompt:
+        'Paste a GitHub personal access token (repo or public_repo scope)',
+    });
+    if (!token?.trim()) return;
+    await platform().secrets.set(GITHUB_TOKEN_STORAGE_KEY, token.trim());
+    await options.ui.showInfoMessage('GitHub token saved.');
+    await postGitHubTokenStatus();
+  }
+
+  async function removeGitHubToken(): Promise<void> {
+    await platform().secrets.delete(GITHUB_TOKEN_STORAGE_KEY);
+    await options.ui.showInfoMessage('GitHub token removed.');
+    await postGitHubTokenStatus();
+  }
+
+  async function openGitHubTokenUrl(): Promise<void> {
+    await options.ui.openExternal?.(
+      'https://github.com/settings/tokens/new?description=TeXRA%20PR%20subscription&scopes=repo',
+    );
+  }
+
+  async function postGitHubSubscriptions(): Promise<void> {
+    options.postToRenderer({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS,
+      subscriptions: listGitHubSubscriptionEntries((streamId) =>
+        options.ui.getStreamLabel?.(streamId),
+      ),
+    });
+  }
+
+  async function unsubscribeGitHub(data: { key: string }): Promise<void> {
+    const removed = unsubscribeGitHubKey(data.key);
+    if (removed === 0) {
+      await options.ui.showInfoMessage(
+        `No active subscription for ${data.key}.`,
+      );
+      return;
+    }
+    await postGitHubSubscriptions();
+  }
+
   const StateKeys = WorkspaceStateKey;
 
   const settingsActions: SettingsViewCommandActions = {
@@ -383,28 +457,17 @@ export function createDesktopSettingsIpc(
         ),
     },
     agentSelection: options.agentSettingsController.actions,
+    // Mirrors the extension's `GitHubSubscriptionHandlers`. The token store and
+    // the subscription registry are host-agnostic (`@tools/github`); only the
+    // secret prompt, the browser hand-off, and the stream reveal differ here.
     githubSubscriptions: {
-      getTokenStatus: unsupported(
-        'GitHub PR subscriptions are not available in the desktop app yet.',
-      ),
-      setToken: unsupported(
-        'GitHub PR subscriptions are not available in the desktop app yet.',
-      ),
-      removeToken: unsupported(
-        'GitHub PR subscriptions are not available in the desktop app yet.',
-      ),
-      openTokenUrl: unsupported(
-        'GitHub PR subscriptions are not available in the desktop app yet.',
-      ),
-      getSubscriptions: unsupported(
-        'GitHub PR subscriptions are not available in the desktop app yet.',
-      ),
-      unsubscribe: unsupported(
-        'GitHub PR subscriptions are not available in the desktop app yet.',
-      ),
-      openSubscriptionStream: unsupported(
-        'GitHub PR subscriptions are not available in the desktop app yet.',
-      ),
+      getTokenStatus: () => postGitHubTokenStatus(),
+      setToken: () => setGitHubToken(),
+      removeToken: () => removeGitHubToken(),
+      openTokenUrl: () => openGitHubTokenUrl(),
+      getSubscriptions: () => postGitHubSubscriptions(),
+      unsubscribe: (data) => unsubscribeGitHub(data),
+      openSubscriptionStream: (data) => options.ui.revealStream(data.streamId),
     },
     chatGpt: options.credentialSettingsController.chatGptActions,
     approval: {
@@ -418,12 +481,16 @@ export function createDesktopSettingsIpc(
     },
     tools: options.toolingSettingsController.toolsActions,
     latex: options.toolingSettingsController.latexActions,
+    // Inline criticism renders `\criticize{...}` annotations as editor
+    // squiggles and Problems-panel entries. Both are VS Code editor surfaces
+    // with no desktop counterpart, so this stays host-specific rather than
+    // "not yet ported".
     inlineCriticism: {
       getEnabled: unsupported(
-        'Inline criticism is not available in the desktop app yet.',
+        'Inline criticism needs the VS Code editor and Problems panel.',
       ),
       setEnabled: unsupported(
-        'Inline criticism is not available in the desktop app yet.',
+        'Inline criticism needs the VS Code editor and Problems panel.',
       ),
     },
     goals: {

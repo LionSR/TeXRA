@@ -14,6 +14,13 @@ const workerModuleIds = [
   'monaco-editor/language/typescript/ts.worker?worker',
 ];
 
+/**
+ * The shared loader also imports Monaco's grammar contributions for their side
+ * effect (editor.api.js alone registers no languages), so the mock has to satisfy
+ * that import or the whole load promise rejects and no editor is created.
+ */
+const GRAMMAR_MODULE_ID = 'monaco-editor/languages/register.all.js';
+
 const originalGlobals = {
   document: globalThis.document,
   window: globalThis.window,
@@ -108,7 +115,16 @@ describe('texra-diff-view', () => {
         createModel,
         setTheme,
       },
+      // The loader registers TeX grammars, which Monaco does not bundle. Stubbed
+      // rather than asserted here: this test covers the diff editor, and the
+      // grammar registration has its own coverage.
+      languages: {
+        register: vi.fn(),
+        setMonarchTokensProvider: vi.fn(),
+        setLanguageConfiguration: vi.fn(),
+      },
     }));
+    vi.doMock(GRAMMAR_MODULE_ID, () => ({ default: undefined }));
     for (const workerModuleId of workerModuleIds) {
       vi.doMock(workerModuleId, () => ({ default: MockWorker }));
     }

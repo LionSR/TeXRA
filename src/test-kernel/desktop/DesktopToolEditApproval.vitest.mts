@@ -464,13 +464,14 @@ describe('desktop tool edit approval', () => {
           sourceTool: 'write_file',
         });
         await vi.waitFor(() => expect(shown).toHaveLength(1));
+        await vi.waitFor(() => expect(openDiff).toHaveBeenCalledOnce());
 
         controller.handleAction({
           requestId: shown[0].requestId,
           action: 'openDiff',
         });
 
-        await vi.waitFor(() => expect(openDiff).toHaveBeenCalledOnce());
+        await vi.waitFor(() => expect(openDiff).toHaveBeenCalledTimes(2));
         expect(openPath).not.toHaveBeenCalled();
         const [original, proposed, title, options] = openDiff.mock.calls[0];
         expect(title).toBe('Tool edit: main.tex');

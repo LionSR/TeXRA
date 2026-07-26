@@ -1,14 +1,28 @@
+import { mkdtemp } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
 // Local imports
+import { createKey, getAgent } from '@agent/index';
+import { fetchRemoteAgentConfigYaml } from '@agent/remote/remoteAgentConfigClient';
 import type {
   computeAgentOptionsData,
   loadAgents,
   refresh,
   AgentEntry,
 } from '@agent/index/agentRegistry';
+import {
+  AGENT_TEMPLATE_FILES,
+  DEFAULT_AGENT_TEMPLATE_TOOLS_YAML,
+  renderAgentTemplateString,
+} from '@agent/templates/agentTemplateRenderer';
+import { SupabaseClient } from '@auth/SupabaseClient';
 import type { TeamAvailabilityChoice } from '@common/teams/TeamAvailabilityPreflight';
 import { loadTeamOptions } from '@common/teams/TeamPlan';
 import { applyTeamRosterWithPreflight } from '@common/teams/TeamRosterApplication';
 import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
+import { SettingsAgentFileController } from '@controllers/settingsView/SettingsAgentFileController';
+import { SettingsRemoteAgentPromptController } from '@controllers/settingsView/SettingsRemoteAgentPromptController';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
 import type { SettingsViewCommandActions } from '@controllers/settingsView/SettingsViewCommandHandlers';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
@@ -19,7 +33,8 @@ import {
   buildCustomAgentDirMessage,
 } from '@shared/settingsView/handlers/agentSelectionHandlers';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
-import { unsupported } from '@shared/utils/dispatcher';
+import { AbsoluteFS } from '@utils/files';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 export interface DefaultDesktopAgentSettingsControllerOptions extends SettingsStatePorts {
   readonly registry: {
@@ -46,11 +61,24 @@ export interface DefaultDesktopAgentSettingsControllerOptions extends SettingsSt
       title: string;
       prompt: string;
     }) => Promise<string | undefined>;
+    /**
+     * Confirm a destructive or overwriting action. Used by the custom-agent
+     * delete and overwrite paths, which the extension guards with a modal.
+     */
+    readonly confirm?: (input: {
+      title: string;
+      message: string;
+    }) => Promise<boolean>;
     readonly chooseTeamAvailability: (input: {
       presetName: string;
       unavailableNames: readonly string[];
     }) => Promise<TeamAvailabilityChoice>;
   };
+  /**
+   * Root of the packaged resources tree, used to read the bundled agent
+   * templates (`templates/<kind>.yaml`) when creating an agent from template.
+   */
+  readonly resourcesPath: string;
   readonly remoteCatalog: {
     readonly canAccess: () => Promise<boolean>;
     readonly signIn: () => Promise<boolean>;
@@ -80,6 +108,15 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
   private readonly prompts: DefaultDesktopAgentSettingsControllerOptions['prompts'];
   private readonly remoteCatalog: DefaultDesktopAgentSettingsControllerOptions['remoteCatalog'];
   private readonly notifications: DefaultDesktopAgentSettingsControllerOptions['notifications'];
+  private readonly resourcesPath: string;
+  /** Path planners for custom-agent copy/delete/template writes. */
+  private readonly fileController = new SettingsAgentFileController();
+  private readonly remotePromptController =
+    new SettingsRemoteAgentPromptController({
+      getUserTier: () => SupabaseClient.getUserTier(),
+      getAccessToken: () => SupabaseClient.getAccessToken(),
+      fetchPromptConfig: fetchRemoteAgentConfigYaml,
+    });
 
   constructor(options: DefaultDesktopAgentSettingsControllerOptions) {
     const {
@@ -91,6 +128,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
       prompts,
       remoteCatalog,
       notifications,
+      resourcesPath,
     } = options;
     this.registry = registry;
     this.directory = directory;
@@ -98,6 +136,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     this.prompts = prompts;
     this.remoteCatalog = remoteCatalog;
     this.notifications = notifications;
+    this.resourcesPath = resourcesPath;
     const controllers = createSettingsAgentControllers({
       workspaceState,
       globalState,
@@ -114,19 +153,11 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
       setAllEnabled: (input) => this.updateAllAgentsEnabled(input),
       openYaml: (input) => this.openAgentYaml(input),
       openFolder: () => this.openAgentFolder(),
-      create: unsupported(
-        'Creating custom agents is not available in the desktop app yet.',
-      ),
-      customize: unsupported(
-        'Customizing agents is not available in the desktop app yet.',
-      ),
-      deleteCustom: unsupported(
-        'Deleting custom agents is not available in the desktop app yet.',
-      ),
+      create: (input) => this.createAgent(input),
+      customize: (input) => this.customizeAgent(input),
+      deleteCustom: (input) => this.deleteCustomAgent(input),
       revealFile: (input) => this.revealAgentFile(input),
-      viewRemotePrompt: unsupported(
-        'Viewing a remote agent prompt is not available in the desktop app yet.',
-      ),
+      viewRemotePrompt: (input) => this.viewRemoteAgentPrompt(input),
       setCustomDir: () => this.setCustomAgentDir(),
       resetCustomDir: () => this.resetCustomAgentDir(),
       applyModePreset: (presetId) => this.applyAgentModePreset(presetId),
@@ -242,6 +273,19 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
     ]);
   }
 
+  /**
+   * Re-read the agent catalog from disk and rebroadcast every view that shows
+   * it. Creating, copying, or deleting a custom agent changes the YAML files the
+   * registry was built from, so a plain re-post would serve a stale catalog.
+   */
+  private async refreshAfterAgentMutation(): Promise<void> {
+    await this.registry.refreshAgents();
+    await Promise.all([
+      this.postAgentSelectionData(),
+      this.postMainAgentAndTeamOptionsData(),
+    ]);
+  }
+
   private async resetCustomAgentDir(): Promise<void> {
     await this.directoryController.resetCustomDir();
     await Promise.all([
@@ -276,6 +320,207 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
       return;
     }
     await this.directory.openPath(result.path);
+  }
+
+  /**
+   * Create a custom agent. Mirrors the extension's `handleCreateAgent`: the
+   * template path writes a rendered bundled template, while the AI path is the
+   * agent-creator flow. Only the template path is wired here; AI creation needs
+   * the creator flow's own UI, which this host does not present yet.
+   */
+  private async createAgent(data: {
+    category: AgentCategory;
+    mode: 'ai' | 'template';
+  }): Promise<void> {
+    if (data.mode !== 'template') {
+      await this.notifications.showErrorMessage(
+        'Creating an agent with AI is not available in the desktop app yet. Choose "From template" instead.',
+      );
+      return;
+    }
+
+    const categoryLabel = data.category === 'toolUse' ? 'Tool Use' : 'Workflow';
+    const name = await this.prompts.promptText({
+      title: `New ${categoryLabel} agent`,
+      prompt: `Enter a name for the new ${categoryLabel} agent (without .yaml extension)`,
+    });
+    if (!name) return;
+
+    const invalid = this.fileController.validateTemplateName(name);
+    if (invalid) {
+      await this.notifications.showErrorMessage(invalid);
+      return;
+    }
+
+    try {
+      const customDir = await this.directory.getCustomAgentDirectory();
+      await AbsoluteFS.ensureDir(customDir);
+
+      const plan = this.fileController.planTemplateAgent({
+        category: data.category,
+        name,
+        customDir,
+      });
+
+      if (await AbsoluteFS.exists(plan.filePath)) {
+        await this.notifications.showErrorMessage(
+          `A file named "${plan.fileName}" already exists in the custom agents folder.`,
+        );
+        return;
+      }
+
+      const raw = await AbsoluteFS.read(
+        path.join(
+          this.resourcesPath,
+          'templates',
+          AGENT_TEMPLATE_FILES[plan.templateKind],
+        ),
+      );
+      await AbsoluteFS.write(
+        plan.filePath,
+        renderAgentTemplateString(raw, {
+          AGENT_NAME: plan.baseName,
+          DESCRIPTION: plan.description,
+          TOOLS_YAML: DEFAULT_AGENT_TEMPLATE_TOOLS_YAML,
+        }),
+      );
+
+      await this.directory.openPath(plan.filePath);
+      await this.notifications.showInfoMessage(
+        `Created custom agent: ${plan.fileName}`,
+      );
+      await this.refreshAfterAgentMutation();
+    } catch (error) {
+      await this.notifications.showErrorMessage(
+        `Failed to create custom agent: ${toErrorMessage(error)}`,
+      );
+    }
+  }
+
+  /** Copy a bundled agent into the custom directory so it can be edited. */
+  private async customizeAgent(data: {
+    agentName: string;
+    agentSource: AgentSource;
+  }): Promise<void> {
+    const entry = getAgent(createKey(data.agentSource, data.agentName));
+    if (!entry?.path) {
+      await this.notifications.showErrorMessage(
+        `Agent not found or has no file: ${data.agentName}`,
+      );
+      return;
+    }
+
+    try {
+      const [customDir, sourceDir] = await Promise.all([
+        this.directory.getCustomAgentDirectory(),
+        this.directory.getSourceDirectory(data.agentSource),
+      ]);
+
+      const result = this.fileController.planCustomizeAgent({
+        entry: { path: entry.path },
+        customDir,
+        ...(sourceDir && { sourceDir }),
+      });
+      if (!result.ok) {
+        await this.notifications.showErrorMessage(
+          'Refusing to copy: target path escapes the custom agents directory.',
+        );
+        return;
+      }
+
+      const { targetPath } = result.plan;
+      await AbsoluteFS.ensureDir(path.dirname(targetPath));
+
+      // Never clobber an existing custom copy, which may hold user edits.
+      if (await AbsoluteFS.exists(targetPath)) {
+        const confirmed = await this.prompts.confirm?.({
+          title: 'Overwrite custom copy?',
+          message: `A custom copy already exists: ${path.basename(targetPath)}`,
+        });
+        if (confirmed !== true) return;
+      }
+
+      await AbsoluteFS.copy(entry.path, targetPath, { overwrite: true });
+      await this.directory.openPath(targetPath);
+      await this.notifications.showInfoMessage(
+        `Created custom copy: ${path.basename(targetPath)}`,
+      );
+      await this.refreshAfterAgentMutation();
+    } catch (error) {
+      await this.notifications.showErrorMessage(
+        `Failed to create custom agent copy: ${toErrorMessage(error)}`,
+      );
+    }
+  }
+
+  private async deleteCustomAgent(data: { agentName: string }): Promise<void> {
+    const entry = getAgent(createKey('custom', data.agentName));
+    if (!entry?.path) {
+      await this.notifications.showErrorMessage(
+        `Custom agent not found: ${data.agentName}`,
+      );
+      return;
+    }
+
+    try {
+      const customDir = await this.directory.getCustomAgentDirectory();
+      const result = this.fileController.planDeleteCustomAgent({
+        entry: { path: entry.path },
+        customDir,
+      });
+      if (!result.ok) {
+        await this.notifications.showErrorMessage(
+          'Refusing to delete: file is not inside the custom agents directory.',
+        );
+        return;
+      }
+
+      const confirmed = await this.prompts.confirm?.({
+        title: 'Delete custom agent?',
+        message: `Delete "${data.agentName}"? This cannot be undone.`,
+      });
+      if (confirmed !== true) return;
+
+      await AbsoluteFS.delete(result.plan.path, { recursive: false });
+      await this.notifications.showInfoMessage(
+        `Deleted custom agent: ${data.agentName}`,
+      );
+      await this.refreshAfterAgentMutation();
+    } catch (error) {
+      await this.notifications.showErrorMessage(
+        `Failed to delete custom agent: ${toErrorMessage(error)}`,
+      );
+    }
+  }
+
+  /**
+   * Show a hosted agent's prompt YAML. The extension opens an untitled editor;
+   * the desktop has no editor surface, so the config is written to a temporary
+   * file and opened with the OS handler.
+   */
+  private async viewRemoteAgentPrompt(data: {
+    agentName: string;
+  }): Promise<void> {
+    try {
+      const result = await this.remotePromptController.getPromptConfig(
+        data.agentName,
+      );
+      if (!result.ok) {
+        await this.notifications.showErrorMessage(result.message);
+        return;
+      }
+
+      const target = path.join(
+        await mkdtemp(path.join(tmpdir(), 'texra-agent-prompt-')),
+        `${data.agentName}.yaml`,
+      );
+      await AbsoluteFS.write(target, result.config);
+      await this.directory.openPath(target);
+    } catch (error) {
+      await this.notifications.showErrorMessage(
+        `Failed to view remote agent prompt: ${toErrorMessage(error)}`,
+      );
+    }
   }
 
   private async revealAgentFile(input: {

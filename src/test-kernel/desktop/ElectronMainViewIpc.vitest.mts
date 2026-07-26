@@ -25,7 +25,6 @@ interface TestDesktopShellActions {
   openDesktopDocs: ReturnType<typeof vi.fn>;
   openLogFolder: ReturnType<typeof vi.fn>;
   openWorkspaceFolder: ReturnType<typeof vi.fn>;
-  openWorkspaceInNewWindow: ReturnType<typeof vi.fn>;
   resetMainView: ReturnType<typeof vi.fn>;
   showFirstRunWalkthrough: ReturnType<typeof vi.fn>;
   sendRecentCommits: ReturnType<typeof vi.fn>;
@@ -175,7 +174,6 @@ function createMainViewShellActions(): TestDesktopShellActions {
     openDesktopDocs: vi.fn(),
     openLogFolder: vi.fn(),
     openWorkspaceFolder: vi.fn(),
-    openWorkspaceInNewWindow: vi.fn(),
     resetMainView: vi.fn(),
     showFirstRunWalkthrough: vi.fn(),
     sendRecentCommits: vi.fn(),

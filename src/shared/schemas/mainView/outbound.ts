@@ -21,6 +21,7 @@ import {
   AgentOptionDataSchema,
   ModelOptionDataSchema,
   TeamOptionDataSchema,
+  WorkspaceRootOptionDataSchema,
 } from './state';
 
 const FileListSchema = z.array(z.string());
@@ -51,6 +52,11 @@ const SetAgentOptionsMessageSchema = z.object({
 const SetTeamOptionsMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS),
   optionsData: z.array(TeamOptionDataSchema).prefault([]),
+});
+
+const SetWorkspaceRootsMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.SET_WORKSPACE_ROOTS),
+  optionsData: z.array(WorkspaceRootOptionDataSchema).prefault([]),
 });
 
 const SetEditedFileMessageSchema = withFilesArray(
@@ -173,6 +179,7 @@ export const MainViewMessageSchema = z.discriminatedUnion('command', [
   SetModelOptionsMessageSchema,
   SetAgentOptionsMessageSchema,
   SetTeamOptionsMessageSchema,
+  SetWorkspaceRootsMessageSchema,
   SetEditedFileMessageSchema,
   SetBaseFileMessageSchema,
   EditedFileSelectedMessageSchema,

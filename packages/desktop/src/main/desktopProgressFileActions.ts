@@ -151,6 +151,37 @@ export class DesktopProgressFileActions {
     await this.runLatexdiffFile(baseFile, editedFile);
   }
 
+  /**
+   * Stream-toolbar "diff" action: run the round-aware latexdiff for a whole run
+   * and open every diff it produced.
+   *
+   * This is the counterpart of `runLatexdiffForRun`, which exists to diff one
+   * accepted file pair and therefore has a single-file fallback. Here there is
+   * no such pair to fall back to — the request is scoped to a run — so an empty
+   * or failed outcome reports instead, matching what the VS Code command shows
+   * when a run yields no diff operations. Like the rest of the desktop
+   * latexdiff surface it uses `DEFAULT_MATH_MARKUP`, since this host has no
+   * quick-pick to choose a markup mode with.
+   */
+  async runLatexdiffForStream(
+    runContext: DesktopLatexdiffRunContext,
+  ): Promise<void> {
+    const outcome = await this.runSharedLatexdiff(runContext);
+    if (!outcome || outcome.totalOperations === 0) {
+      await this.ui.showInfoMessage(
+        'No LaTeX diff operations available for this run.',
+      );
+      return;
+    }
+
+    const opened = await this.openSharedLatexdiffResults(outcome);
+    if (opened) return;
+
+    await this.ui.showErrorMessage(
+      `All LaTeX diff operations failed (math markup: "${DEFAULT_MATH_MARKUP}").`,
+    );
+  }
+
   async runLatexdiffFile(baseFile: string, editedFile: string): Promise<void> {
     const service = new LaTeXdiffService('DesktopProgressBridge');
     const result = await service.runDiff(

@@ -65,36 +65,87 @@ export const designTokens: CSSResult = css`
     --line-height-normal: 1.4;
     --line-height-relaxed: 1.5;
 
-    /* Border radius */
-    --border-radius-small: 2px;
-    --border-radius: 3px;
-    --border-radius-medium: 4px;
-    --border-radius-large: 6px;
-    --border-radius-pill: 999px;
+    /* Border radius. Sourced from the host's --wa-border-radius-* bridge so
+       each host sets its own shape language: the extension wants near-flat
+       controls that read as native editor chrome, while the desktop app is a
+       standalone product with a softer, larger radius scale. No literal
+       fallbacks — a comma-plus-4px fallback matched neither host (extension 2px,
+       desktop 6px) and silently produced a third shape wherever the bridge
+       hadn't loaded yet. */
+    --border-radius: var(--wa-border-radius-s);
+    --border-radius-medium: var(--wa-border-radius-m);
+    --border-radius-large: var(--wa-border-radius-l);
+    /* Alias, not a step: it resolved to the same value as --border-radius and
+       the two names drifting apart is the failure mode worth preventing. */
+    --border-radius-small: var(--border-radius);
 
-    /* Heights */
-    --height-control: 24px;
-    --height-control-compact: 22px;
+    /* Heights. Also host-overridable: the desktop app runs roomier controls
+       than a sidebar-width editor panel can afford. */
+    --height-control: var(--wa-height-control, 24px);
+    --height-control-compact: var(--wa-height-control-compact, 22px);
     /* Shared height for the Progress view's pane headers — the conversation
        header and the stream-tabs rail header pin to this so the two panes
        start their content at the same baseline (and match the desktop rail). */
-    --height-header: 34px;
-    --height-button: 30px;
+    --height-header: var(--wa-height-header, 34px);
+    --height-button: var(--wa-height-button, 30px);
     --height-small: 100px;
-    --height-medium: 200px;
     --height-large: 300px;
     --height-xlarge: 400px;
-    --height-max: 1000px;
 
     /* Widths */
     --width-icon: 16px;
     --width-button-min: 80px;
-    --width-dropdown: 160px;
+    --width-content-max: 1000px;
 
     /* Borders */
     --border-thin: 1px;
     --border-medium: 2px;
-    --border-thick: 3px;
+
+    /* State overlays. Every hover/active/selected state in the app is one of
+       these three translucent overlays on a background-color-only transition —
+       never a new hue, never a border, never movement. Translucency is what
+       makes one token correct on every surface in the ladder; the light and
+       dark alphas differ because the same alpha does not read as the same step
+       against paper-white and charcoal. */
+    --surface-hover: light-dark(rgb(0 0 0 / 7%), rgb(255 255 255 / 15%));
+    --surface-active: light-dark(rgb(0 0 0 / 5%), rgb(255 255 255 / 10%));
+    --surface-selected: light-dark(rgb(0 0 0 / 9%), rgb(255 255 255 / 12%));
+
+    /* Seams. Alpha hairlines for the places a border is load-bearing (settings
+       rows, code blocks, inputs); large regions separate by a background step
+       instead. */
+    --border-hairline: light-dark(rgb(0 0 0 / 10%), rgb(255 255 255 / 10%));
+    --border-hairline-soft: light-dark(rgb(0 0 0 / 5%), rgb(255 255 255 / 5%));
+    --border-hairline-strong: light-dark(
+      rgb(0 0 0 / 15%),
+      rgb(255 255 255 / 20%)
+    );
+
+    /* Control geometry, consumed by controlStyles.ts.
+
+       The host-varying steps read a --wa-* bridge token with the desktop
+       value as the fallback, the same shape as --height-control above. A bare
+       value here would be unreachable by a host: :host beats an inherited
+       :root declaration for the whole shadow subtree, and these webviews are
+       a single Lit root, so a host that wants tighter chrome has to be able to
+       reach in. Only the steps that actually differ per host take the
+       indirection. */
+    --control-size-s: var(--wa-control-size-s, 24px);
+    --control-size-m: var(--wa-control-size-m, 28px);
+    --control-size-l: var(--wa-control-size-l, 32px);
+    --control-padding-inline: 6px;
+    --control-fill: light-dark(rgb(0 0 0 / 5%), rgb(255 255 255 / 5%));
+    --control-fill-hover: light-dark(rgb(0 0 0 / 8%), rgb(255 255 255 / 9%));
+    --row-height: var(--wa-row-height, 36px);
+    --row-radius: var(--border-radius-medium);
+    --row-padding: var(--wa-row-padding, 6px 10px);
+    /* Not host-varying, deliberately: one ring width everywhere. A 1px ring is
+       the kind of thing that reads as tidy and fails a low-vision user. */
+    --focus-ring-width: 2px;
+    --focus-ring-offset: 2px;
+    --textarea-h-s: 2.75rem;
+    --textarea-h-m: 6rem;
+    --textarea-h-l: 6.625rem;
 
     /* Opacity levels */
     --opacity-separator: 0.3;
@@ -111,8 +162,10 @@ export const designTokens: CSSResult = css`
     --transition-normal: 0.2s ease;
     --transition-slow: 0.3s ease;
 
-    /* Letter spacing for uppercase labels/badges (em scales with font-size). */
+    /* Letter spacing. Caps for uppercase labels/badges, tight for display type
+       (em scales with font-size). */
     --letter-spacing-caps: 0.06em;
+    --letter-spacing-tight: -0.005em;
   }
 
   /* Match text selection to the host editor theme instead of the browser

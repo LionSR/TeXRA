@@ -15,7 +15,7 @@ vi.mock('vscode', () => ({
   window: { withProgress: mocks.withProgress },
 }));
 
-vi.mock('@frontend/media/audio', () => ({
+vi.mock('@tools/media/audio', () => ({
   startRecording: mocks.startRecording,
   stopRecordingAndTranscribe: mocks.stopRecordingAndTranscribe,
 }));

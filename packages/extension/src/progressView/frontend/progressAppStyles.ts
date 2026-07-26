@@ -113,7 +113,7 @@ export const progressAppStyles = css`
   }
 
   .progress-empty-panel .empty-state-actions wa-button::part(base) {
-    min-height: var(--height-button, 30px);
+    min-height: var(--height-button);
   }
 
   wa-icon {
@@ -199,6 +199,6 @@ export const progressAppStyles = css`
   }
 
   .desktop-empty-progress wa-button::part(base) {
-    min-height: 32px;
+    min-height: var(--control-size-l);
   }
 `;
