@@ -1185,6 +1185,55 @@ describe('CLI run progress renderer', () => {
     ]);
   });
 
+  it('preserves approval bypass records in ndjson mode', async () => {
+    const output = await captureStreamWrites(process.stdout, async () => {
+      const host = createCliRuntimeHost(
+        context({ mode: 'headless', outputFormat: 'ndjson' }),
+      );
+
+      host.emitApprovalBypassState({
+        streamId: 'stream-1',
+        kind: 'bash',
+        bypassActive: true,
+      });
+      host.emitApprovalBypassState({
+        streamId: 'stream-1',
+        kind: 'toolEdit',
+        bypassActive: false,
+      });
+      host.emitApprovalBypassState({
+        streamId: 'stream-1',
+        kind: 'superYolo',
+        bypassActive: true,
+      });
+
+      await host.close();
+    });
+
+    const records = output
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+
+    expect(records).toEqual([
+      expect.objectContaining({
+        kind: 'progress',
+        event: 'updateBashApprovalBypassState',
+        payload: { streamId: 'stream-1', bypassActive: true },
+      }),
+      expect.objectContaining({
+        kind: 'progress',
+        event: 'updateToolEditApprovalBypassState',
+        payload: { streamId: 'stream-1', bypassActive: false },
+      }),
+      expect.objectContaining({
+        kind: 'progress',
+        event: 'updateSuperYoloBypassState',
+        payload: { streamId: 'stream-1', bypassActive: true },
+      }),
+    ]);
+  });
+
   it('applies an explicit ndjson policy to every runtime presentation request', async () => {
     const output = await captureStreamWrites(process.stdout, async () => {
       const host = createCliRuntimeHost(

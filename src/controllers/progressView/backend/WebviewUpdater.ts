@@ -178,7 +178,7 @@ export class WebviewUpdater {
 
   updateBypassState(
     stream: StreamTabId,
-    type: 'toolEdit' | 'superYolo',
+    type: 'bash' | 'toolEdit' | 'superYolo',
     bypassActive: boolean,
   ): void {
     this.sendMessage({

@@ -217,29 +217,39 @@ describe('human prompt progress events', () => {
   it('publishes tool-edit bypass changes through the explicit runtime host', () => {
     const explicit = createRecordingHost();
     const streamId = 'stream:tool-edit-bypass' as StreamTabId;
+    const detach = defaultSession().useHostInteractions(explicit.interactions);
 
-    setToolEditApprovalSessionBypass(streamId, true, explicit.host);
+    try {
+      setToolEditApprovalSessionBypass(streamId, true, explicit.host);
 
-    expect(explicit.events).toEqual([
-      {
-        event: 'updateToolEditApprovalBypassState',
-        payload: { streamId, bypassActive: true },
-      },
-    ]);
+      expect(explicit.events).toEqual([
+        {
+          event: 'setApprovalBypassState',
+          payload: { streamId, kind: 'toolEdit', bypassActive: true },
+        },
+      ]);
+    } finally {
+      detach();
+    }
   });
 
   it('publishes bash bypass changes through the explicit runtime host', () => {
     const explicit = createRecordingHost();
     const streamId = 'stream:bash-bypass' as StreamTabId;
+    const detach = defaultSession().useHostInteractions(explicit.interactions);
 
-    setBashApprovalSessionBypass(streamId, true, explicit.host);
+    try {
+      setBashApprovalSessionBypass(streamId, true, explicit.host);
 
-    expect(explicit.events).toEqual([
-      {
-        event: 'updateBashApprovalBypassState',
-        payload: { streamId, bypassActive: true },
-      },
-    ]);
+      expect(explicit.events).toEqual([
+        {
+          event: 'setApprovalBypassState',
+          payload: { streamId, kind: 'bash', bypassActive: true },
+        },
+      ]);
+    } finally {
+      detach();
+    }
   });
 
   it('keeps bash and edit session bypasses independent', async () => {
@@ -323,14 +333,19 @@ describe('human prompt progress events', () => {
   it('publishes proposal bypass changes through the explicit runtime host', () => {
     const explicit = createRecordingHost();
     const streamId = 'stream:proposal-bypass' as StreamTabId;
+    const detach = defaultSession().useHostInteractions(explicit.interactions);
 
-    proposalApprovals().setBypass(streamId, true, explicit.host);
+    try {
+      proposalApprovals().setBypass(streamId, true, explicit.host);
 
-    expect(explicit.events).toEqual([
-      {
-        event: 'updateSuperYoloBypassState',
-        payload: { streamId, bypassActive: true },
-      },
-    ]);
+      expect(explicit.events).toEqual([
+        {
+          event: 'setApprovalBypassState',
+          payload: { streamId, kind: 'superYolo', bypassActive: true },
+        },
+      ]);
+    } finally {
+      detach();
+    }
   });
 });
