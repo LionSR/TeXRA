@@ -14,6 +14,7 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles + helpers
 import { commonViewStyles, designTokens } from '@shared/styles';
+import { splitButtonStyles } from '@shared/styles/controlStyles';
 import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
 import { createEvent } from '@shared/utils/events';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
@@ -41,16 +42,21 @@ const DELEGATED_WORK_VALUE = 'approve-all-delegated-work';
  * edit/command item emits `approve-session` and whose delegated-work item emits
  * `approve-all-delegated-work`. Selection is handled via Web
  * Awesome's `wa-select` (Enter/Space dispatch `wa-select`, not a DOM click on
- * the item), so the menu stays keyboard-accessible. Layout/colors are scoped
- * here; the host is width-capped to match the `.action-button` rule in
- * `requestPanelSharedStyles` (#6658) so Approve stays button-sized like its
- * siblings.
+ * the item), so the menu stays keyboard-accessible.
+ *
+ * The fused-pill layout comes from the shared `splitButtonStyles`; this
+ * component contributes only its success tint (`--split-accent`) and the host
+ * width cap that matches the `.action-button` rule in
+ * `requestPanelSharedStyles` (#6658), so Approve stays button-sized like its
+ * siblings. The `.approve-split*` class names are kept alongside the shared
+ * ones because the component's tests query them.
  */
 @customElement('approve-split-button')
 export class ApproveSplitButton extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
+    splitButtonStyles,
     css`
       /* Mirror the .action-button cap (requestPanelSharedStyles, #6658): hug content
          and width-cap so Approve stays button-sized instead of growing to fill
@@ -61,91 +67,8 @@ export class ApproveSplitButton extends LitElement {
         flex: 0 1 auto;
         min-width: auto;
         max-width: min(14rem, 100%);
-      }
-
-      .approve-split-main {
-        flex: 1 1 auto;
-        min-width: 0;
-      }
-
-      .approve-split-main::part(base) {
-        width: 100%;
-        justify-content: center;
-        color: var(--wa-color-success-fill-loud);
-      }
-
-      .approve-split {
-        position: relative;
-        display: inline-flex;
-        align-items: stretch;
-        width: 100%;
-        min-width: 0;
-      }
-
-      /* Square the inner corners so the label and caret fuse into one pill. */
-      .approve-split .approve-split-main::part(base) {
-        border-top-right-radius: 0;
-        border-bottom-right-radius: 0;
-      }
-
-      /* Pull the caret onto the label so their 1px borders overlap into a
-         single divider (instead of a doubled line) once they appear on hover. */
-      .approve-split-menu {
-        flex: 0 0 auto;
-        display: inline-flex;
-        margin-left: calc(-1 * var(--border-thin));
-      }
-
-      .approve-split-trigger {
-        flex: 0 0 auto;
-        width: 1.5rem;
-        min-width: 1.5rem;
-      }
-
-      /* Match the .action-button chrome: borderless at rest with the border
-         reserved (transparent) so nothing shifts, the caret at full presence
-         (success color, not the faint icon-button default), and only the right
-         corners rounded so it tucks against the label. */
-      .approve-split-trigger::part(base) {
-        min-height: var(--height-control-compact);
-        height: auto;
-        width: 100%;
-        padding: 0;
-        opacity: var(--opacity-full);
-        color: var(--wa-color-success-fill-loud);
-        background: transparent;
-        border: var(--border-thin) solid transparent;
-        border-top-left-radius: 0;
-        border-bottom-left-radius: 0;
-      }
-
-      .approve-split-trigger::part(base):hover {
-        background: transparent;
-      }
-
-      .approve-split-trigger wa-icon {
-        font-size: var(--font-size-sm);
-      }
-
-      /* Hovering or opening either half outlines the whole pair as one box with
-         a single internal divider, so the caret reads as Approve's menu rather
-         than a stray glyph floating beside the button. */
-      .approve-split:hover .approve-split-main::part(base),
-      .approve-split:hover .approve-split-trigger::part(base),
-      .approve-split:focus-within .approve-split-main::part(base),
-      .approve-split:focus-within .approve-split-trigger::part(base),
-      .approve-split wa-dropdown[open] .approve-split-main::part(base),
-      .approve-split wa-dropdown[open] .approve-split-trigger::part(base) {
-        border-color: var(--wa-color-surface-border, var(--color-border));
-      }
-
-      .approve-split-trigger:focus-visible::part(base) {
-        outline: var(--border-thin) solid var(--wa-color-focus);
-        outline-offset: var(--border-thin);
-      }
-
-      .approve-split wa-dropdown[open] .approve-split-trigger wa-icon {
-        transform: rotate(180deg);
+        /* Tints both halves of the shared split-button skin. */
+        --split-accent: var(--wa-color-success-fill-loud);
       }
     `,
   ];
@@ -168,7 +91,7 @@ export class ApproveSplitButton extends LitElement {
       text: 'Approve',
       title: this.approveTitle,
       action: 'approve',
-      className: 'approve-split-main',
+      className: 'approve-split-main split-button-main',
       disabled: this.disabled,
       onClick: () => this.emit('approve'),
     });
@@ -179,20 +102,20 @@ export class ApproveSplitButton extends LitElement {
       return approveButton;
     }
     return html`
-      <div class="approve-split">
+      <div class="approve-split split-button">
         ${approveButton}
         <wa-dropdown
-          class="approve-split-menu"
+          class="approve-split-menu split-button-menu"
           placement="bottom-end"
           @wa-select=${this.handleSelect}
         >
           <wa-button
             id="approve-split-trigger-button"
             slot="trigger"
-            class="approve-split-trigger"
+            class="approve-split-trigger split-button-trigger"
             appearance="plain"
             variant="neutral"
-            size="small"
+            size="s"
             type="button"
             aria-label="More approve options"
           >

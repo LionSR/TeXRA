@@ -271,7 +271,7 @@ export class ToolCard extends LitElement {
     const label = toolStatusLabel(status, this.item.statusLabel);
 
     return html`
-      <wa-tag class="tool-badge" variant=${config.variant} size="small">
+      <wa-tag class="tool-badge" variant=${config.variant} size="s">
         ${waIcon(config.icon)} ${label}
       </wa-tag>
     `;
@@ -317,7 +317,7 @@ export class ToolCard extends LitElement {
                     id="tool-install-btn-${this.item.id}"
                     appearance="filled"
                     variant="brand"
-                    size="small"
+                    size="s"
                     @click=${() => this.runCommand('install')}
                   >
                     ${waIcon('terminal', { slot: 'start' })} Install in Terminal
@@ -335,7 +335,7 @@ export class ToolCard extends LitElement {
                     id="tool-auth-btn-${this.item.id}"
                     appearance=${secondaryAppearance}
                     variant=${secondaryVariant}
-                    size="small"
+                    size="s"
                     @click=${() => this.runCommand('auth')}
                   >
                     ${waIcon('right-to-bracket', { slot: 'start' })} Sign in
@@ -352,7 +352,7 @@ export class ToolCard extends LitElement {
                   <wa-button
                     appearance="filled"
                     variant="brand"
-                    size="small"
+                    size="s"
                     @click=${this.handleInstallExtension}
                   >
                     ${waIcon('cloud-arrow-down', { slot: 'start' })} Install
@@ -367,7 +367,7 @@ export class ToolCard extends LitElement {
                   <wa-button
                     appearance=${secondaryAppearance}
                     variant=${secondaryVariant}
-                    size="small"
+                    size="s"
                     @click=${this.handleInstallUrl}
                   >
                     ${waIcon('arrow-up-right-from-square', { slot: 'start' })}

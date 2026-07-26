@@ -38,30 +38,33 @@ describe('desktop command surface', () => {
           expect(entry.category).toBe('Help');
           continue;
         }
-        expect(['File', 'TeXRA', 'Help']).toContain(entry.category);
+        expect(['File', 'TeXRA', 'View', 'Help']).toContain(entry.category);
         continue;
       }
       expect(entry.label).toBe(catalogEntry.shortTitle ?? catalogEntry.title);
       expect(entry.category).toBe(catalogEntry.category);
     }
     expect(entries).toContainEqual({
-      id: DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
-      label: 'Open Folder',
+      id: DESKTOP_LOCAL_COMMANDS.SAVE_FILE,
+      label: 'Save',
       category: 'File',
-      accelerator: 'Command+O',
+      icon: 'floppy-disk',
+      accelerator: 'Command+S',
       enabled: true,
     });
     expect(entries).toContainEqual({
-      id: DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_IN_NEW_WINDOW,
-      label: 'New Window',
+      id: DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
+      label: 'Open Folder',
       category: 'File',
-      accelerator: 'Command+Shift+N',
+      icon: 'folder-open',
+      accelerator: 'Command+O',
       enabled: true,
     });
     expect(entries).toContainEqual({
       id: 'texra.showMainView',
       label: 'Show Launcher',
       category: 'TeXRA',
+      icon: 'pencil',
       accelerator: 'Command+Option+M',
       enabled: true,
     });
@@ -69,6 +72,7 @@ describe('desktop command surface', () => {
       id: 'texra.showProgressView',
       label: 'Show Progress',
       category: 'TeXRA',
+      icon: 'eye',
       accelerator: 'Command+Option+P',
       enabled: true,
     });
@@ -76,12 +80,38 @@ describe('desktop command surface', () => {
       id: DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS,
       label: 'Desktop Documentation',
       category: 'Help',
+      icon: 'book',
       enabled: true,
     });
     expect(entries).toContainEqual({
       id: DESKTOP_LOCAL_COMMANDS.SHOW_LOGS,
       label: 'Show Logs',
       category: 'TeXRA',
+      icon: 'file-lines',
+      enabled: true,
+    });
+    expect(entries).toContainEqual({
+      id: DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR,
+      label: 'Toggle Bottom Bar',
+      category: 'View',
+      icon: 'window-maximize',
+      accelerator: 'Command+J',
+      enabled: true,
+    });
+    expect(entries).toContainEqual({
+      id: DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL,
+      label: 'Toggle Side Panel',
+      category: 'View',
+      icon: 'picture-in-picture',
+      accelerator: 'Command+Alt+B',
+      enabled: true,
+    });
+    expect(entries).toContainEqual({
+      id: DESKTOP_LOCAL_COMMANDS.TOGGLE_SUMMARY_BAR,
+      label: 'Toggle Summary Bar',
+      category: 'View',
+      icon: 'list-ul',
+      accelerator: 'Command+Alt+S',
       enabled: true,
     });
     const firstHelpIndex = entries.findIndex(
@@ -127,11 +157,14 @@ describe('desktop command surface', () => {
       openDesktopDocs: vi.fn(),
       openLogFolder: vi.fn(),
       openWorkspaceFolder: vi.fn(),
-      openWorkspaceInNewWindow: vi.fn(),
+      saveFile: vi.fn(),
       showFirstRunWalkthrough: vi.fn(),
       resetMainView: vi.fn(),
       showRoute: vi.fn(),
       showSettings: vi.fn(),
+      toggleBottomBar: vi.fn(),
+      toggleSidePanel: vi.fn(),
+      toggleSummaryBar: vi.fn(),
     };
 
     expect(dispatchDesktopCommand('texra.showMainView', actions)).toBe(true);
@@ -143,6 +176,18 @@ describe('desktop command surface', () => {
     ).toBe(true);
     expect(dispatchDesktopCommand('texra.openSettings', actions)).toBe(true);
     expect(dispatchDesktopCommand('texra.mainView.reset', actions)).toBe(true);
+    expect(
+      dispatchDesktopCommand(DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR, actions),
+    ).toBe(true);
+    expect(
+      dispatchDesktopCommand(DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL, actions),
+    ).toBe(true);
+    expect(
+      dispatchDesktopCommand(
+        DESKTOP_LOCAL_COMMANDS.TOGGLE_SUMMARY_BAR,
+        actions,
+      ),
+    ).toBe(true);
     expect(dispatchDesktopCommand('texra.showModels', actions)).toBe(true);
     expect(dispatchDesktopCommand('texra.showAgents', actions)).toBe(true);
     expect(dispatchDesktopCommand('texra.showGitSettings', actions)).toBe(true);
@@ -153,10 +198,7 @@ describe('desktop command surface', () => {
       ),
     ).toBe(true);
     expect(
-      dispatchDesktopCommand(
-        DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_IN_NEW_WINDOW,
-        actions,
-      ),
+      dispatchDesktopCommand(DESKTOP_LOCAL_COMMANDS.SAVE_FILE, actions),
     ).toBe(true);
     expect(
       dispatchDesktopCommand(DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER, actions),
@@ -185,8 +227,11 @@ describe('desktop command surface', () => {
     );
     expect(actions.showSettings).toHaveBeenNthCalledWith(4, SETTINGS_TAB.GIT);
     expect(actions.resetMainView).toHaveBeenCalledOnce();
+    expect(actions.toggleBottomBar).toHaveBeenCalledOnce();
+    expect(actions.toggleSidePanel).toHaveBeenCalledOnce();
+    expect(actions.toggleSummaryBar).toHaveBeenCalledOnce();
     expect(actions.openWorkspaceFolder).toHaveBeenCalledOnce();
-    expect(actions.openWorkspaceInNewWindow).toHaveBeenCalledOnce();
+    expect(actions.saveFile).toHaveBeenCalledOnce();
     expect(actions.openLogFolder).toHaveBeenCalledOnce();
     expect(actions.showFirstRunWalkthrough).toHaveBeenCalledOnce();
     expect(
@@ -222,7 +267,7 @@ describe('desktop command surface', () => {
     const actions = {
       openDesktopDocs: vi.fn(),
       openWorkspaceFolder: vi.fn(),
-      openWorkspaceInNewWindow: vi.fn(),
+      saveFile: vi.fn(),
       resetMainView: vi.fn(),
       showFirstRunWalkthrough: vi.fn(),
       showRoute: vi.fn(),
@@ -243,11 +288,11 @@ describe('desktop command surface', () => {
     const fileSubmenu = fileMenu?.submenu ?? [];
     expect(
       fileSubmenu.map((item) => item.label ?? item.role ?? item.type),
-    ).toEqual(['Open Folder', 'New Window', 'separator', 'close']);
+    ).toEqual(['Save', 'Open Folder', 'separator', 'close']);
     fileSubmenu[0].click?.();
+    expect(actions.saveFile).toHaveBeenCalledOnce();
     fileSubmenu[1].click?.();
     expect(actions.openWorkspaceFolder).toHaveBeenCalledOnce();
-    expect(actions.openWorkspaceInNewWindow).toHaveBeenCalledOnce();
 
     const texraMenu = menu.find((item) => item.label === 'TeXRA');
     const submenu = texraMenu?.submenu ?? [];
@@ -257,6 +302,9 @@ describe('desktop command surface', () => {
       'Show Logs',
       'Open Logs Folder',
       'Open TeXRA Settings',
+      'Toggle Summary Bar',
+      'Toggle Bottom Bar',
+      'Toggle Side Panel',
       'New',
       'separator',
       'Execute Agent',
@@ -290,7 +338,7 @@ describe('desktop command surface', () => {
     const helpMenu = menu.find((item) => item.label === 'Help');
     const helpSubmenu = helpMenu?.submenu ?? [];
     expect(helpSubmenu.map((item) => item.label)).toEqual([
-      'Show First-Run Walkthrough',
+      'Show Startup Team Chooser',
       'Desktop Documentation',
     ]);
     helpSubmenu[0].click?.();

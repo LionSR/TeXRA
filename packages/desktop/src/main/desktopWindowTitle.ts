@@ -83,6 +83,12 @@ export function installDesktopWindowTitle(
     disposePending();
     disposeStatus();
     disposeRegistrations();
+    // Check the window before touching `.webContents`: the property getter
+    // itself throws "Object has been destroyed" once the window is gone, so
+    // reaching for `webContents.isDestroyed()` was already too late. This
+    // disposer runs from the window's own `closed` handler, which is exactly
+    // that case — the listener dies with the web contents anyway.
+    if (window.isDestroyed()) return;
     if (!window.webContents.isDestroyed()) {
       window.webContents.removeListener(
         'page-title-updated',

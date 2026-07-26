@@ -19,6 +19,7 @@ import {
   type PlanApprovalResult,
   type ProposalResult,
   type RetryResult,
+  type RetrySettlement,
   type SettledInteractionKind,
   type UserQuestionSettlement,
 } from '@agent/runtime/HostInteractions';
@@ -53,9 +54,15 @@ export interface DesktopHostInteractions extends HostInteractions {
     streamId: StreamTabId,
     initiatingProposalId: string,
   ): Promise<void>;
+  isRetryPending(streamId: StreamTabId, requestId: string): boolean;
   submitBashDecision(requestId: string, decision: BashSettlement): boolean;
   submitPlanDecision(requestId: string, decision: PlanApprovalResult): boolean;
   submitProposalDecision(requestId: string, decision: ProposalResult): boolean;
+  submitRetryDecision(
+    streamId: StreamTabId,
+    requestId: string,
+    decision: RetrySettlement,
+  ): boolean;
   submitUserQuestionDecision(
     requestId: string,
     decision: UserQuestionSettlement,
@@ -67,6 +74,7 @@ const DESKTOP_PROGRESS_INTERACTION_KINDS = [
   'bash',
   'plan',
   'proposal',
+  'retry',
   'userQuestion',
 ] as const satisfies readonly SettledInteractionKind[];
 
@@ -146,8 +154,25 @@ class DesktopHostInteractionsImpl implements DesktopHostInteractions {
     });
   }
 
-  requestRetry(_request: HostRetryRequest): Promise<RetryResult> {
-    return Promise.resolve({ action: 'cancel' });
+  /**
+   * Surface a retryable model failure to the user instead of auto-cancelling it.
+   *
+   * This previously resolved `{action: 'cancel'}` immediately, which terminated
+   * the run with "Retry cancelled by user" without the user ever being asked.
+   * It now mirrors the extension: reveal the stream and park the request on the
+   * shared `retry` approval handler, whose card the progress view already
+   * renders (`RetryRequestPanel`). The renderer settles it through
+   * `submitRetryDecision` / a cancel decision below.
+   */
+  requestRetry(
+    request: HostRetryRequest,
+    options?: HostInteractionOptions,
+  ): Promise<RetryResult> {
+    this.revealStream(request.streamId);
+    return this.options.getApprovalHandlers().retry.request(request, {
+      cancellationScope: options?.cancellationScope,
+      cancellationResult: (cause) => cancellationResultFor('retry', cause),
+    });
   }
 
   askUserQuestion(
@@ -170,6 +195,29 @@ class DesktopHostInteractionsImpl implements DesktopHostInteractions {
   ): Promise<{ threadId: string }> {
     this.options.getApprovalHandlers().externalInquiry.show(request);
     return Promise.resolve({ threadId: request.threadId });
+  }
+
+  isRetryPending(streamId: StreamTabId, requestId: string): boolean {
+    return (
+      this.options.getApprovalHandlers().retry.get(streamId)?.requestId ===
+      requestId
+    );
+  }
+
+  /**
+   * Settle a pending retry request. Returns false when the request is no longer
+   * the pending one for that stream, so a stale renderer click cannot resolve a
+   * newer request.
+   */
+  submitRetryDecision(
+    streamId: StreamTabId,
+    requestId: string,
+    decision: RetrySettlement,
+  ): boolean {
+    if (!this.isRetryPending(streamId, requestId)) return false;
+    return this.options
+      .getApprovalHandlers()
+      .retry.complete(streamId, decision);
   }
 
   submitBashDecision(requestId: string, decision: BashSettlement): boolean {

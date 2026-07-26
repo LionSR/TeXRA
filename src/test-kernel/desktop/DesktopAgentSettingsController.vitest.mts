@@ -96,6 +96,7 @@ function createControllerFixture(options: ControllerFixtureOptions = {}) {
         errorMessages.push(message);
       },
     },
+    resourcesPath: '/test/resources',
   });
   return {
     controller,
@@ -145,17 +146,20 @@ function physicistCatalog(): AgentCatalog {
 }
 
 describe('DefaultDesktopAgentSettingsController', () => {
-  it('declares unavailable desktop agent commands explicitly', () => {
+  it('implements the custom-agent management commands', () => {
     const { actions } = createControllerFixture().controller;
 
+    // These were `unsupported(...)` placeholders until the custom-agent
+    // create/copy/delete flows and the remote prompt viewer were ported from
+    // the extension, so assert they are real handlers now.
     expect(
       [
         actions.create,
         actions.customize,
         actions.deleteCustom,
         actions.viewRemotePrompt,
-      ].every(isUnsupported),
-    ).toBe(true);
+      ].some(isUnsupported),
+    ).toBe(false);
   });
 
   it('posts startup agent data to the settings renderer', async () => {

@@ -96,7 +96,7 @@ export const agentSelectionPanelStyles: CSSResult = css`
 
   .agent-list-item.selected {
     background: var(--wa-color-brand-fill-quiet);
-    color: var(--wa-color-list-active-fg, var(--wa-color-text-normal));
+    color: var(--wa-color-text-normal);
     border-left-color: var(--wa-color-brand-fill-loud);
   }
 
@@ -210,21 +210,7 @@ export const agentSelectionPanelStyles: CSSResult = css`
     padding: var(--wa-space-2xs) var(--wa-space-xs);
     font-size: var(--font-size-xs);
     color: var(--color-text-secondary);
-    border-top: var(--border-thin) solid var(--color-border);
     background: var(--wa-color-surface-default);
-  }
-
-  wa-button.agent-count-link::part(base) {
-    font-size: var(--font-size-xs);
-    color: var(--wa-color-text-link);
-    min-height: 0;
-    padding: 0;
-    border: none;
-    background: transparent;
-  }
-
-  wa-button.agent-count-link::part(base):hover {
-    text-decoration: underline;
   }
 
   .agent-detail-path {
@@ -235,16 +221,6 @@ export const agentSelectionPanelStyles: CSSResult = css`
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-
-  .agent-action-btn--danger::part(base) {
-    color: var(--wa-color-danger-on-quiet);
-    border-color: var(--wa-color-danger-on-quiet);
-  }
-
-  .agent-action-btn--danger:hover::part(base) {
-    background: var(--wa-color-danger-fill-quiet);
-    border-color: var(--wa-color-danger-on-quiet);
   }
 
   .agent-delete-confirm {

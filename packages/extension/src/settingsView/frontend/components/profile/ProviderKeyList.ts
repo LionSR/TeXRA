@@ -3,14 +3,13 @@
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
-import { classMap } from 'lit/directives/class-map.js';
-
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
+import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
 import {
   renderSetStatusIcon,
   statusCheckIconStyles,
@@ -107,7 +106,7 @@ export class ProviderKeyList extends LitElement {
     `;
   }
 
-  private renderDetailRow(entry: ProviderKeyStatus): TemplateResult {
+  private renderDetails(entry: ProviderKeyStatus): TemplateResult {
     const streamingToggle = html`
       <div class="provider-setting">
         <wa-switch
@@ -146,14 +145,10 @@ export class ProviderKeyList extends LitElement {
       : nothing;
 
     return html`
-      <tr class="provider-detail-row">
-        <td colspan="3">
-          <div class="provider-settings">
-            ${streamingToggle} ${endpointInput}
-            ${entry.vscodeSettings.map((s) => this.renderVscodeSetting(s))}
-          </div>
-        </td>
-      </tr>
+      <div class="settings-disclosure-content provider-settings">
+        ${streamingToggle} ${endpointInput}
+        ${entry.vscodeSettings.map((s) => this.renderVscodeSetting(s))}
+      </div>
     `;
   }
 
@@ -161,9 +156,9 @@ export class ProviderKeyList extends LitElement {
     const warningLink =
       setting.warningUrl && setting.warningUrlLabel
         ? html` <wa-button
-            class="provider-setting-link"
+            class="provider-setting-link btn-ghost is-link"
             appearance="plain"
-            size="small"
+            size="s"
             @click=${() =>
               postMessage(SETTINGS_VIEW_COMMANDS.OPEN_EXTERNAL_URL, {
                 url: setting.warningUrl!,
@@ -199,58 +194,58 @@ export class ProviderKeyList extends LitElement {
     `;
   }
 
-  private renderRow(
-    entry: ProviderKeyStatus,
-  ): TemplateResult | TemplateResult[] {
+  private renderRow(entry: ProviderKeyStatus): TemplateResult {
     const isExpanded = this.expandedProvider === entry.provider;
 
-    const mainRow = html`
-      <tr>
-        <td>
-          <div class="provider-name-cell">
-            <wa-button
-              class=${classMap({
-                'provider-expand-btn': true,
-                expanded: isExpanded,
-              })}
-              appearance="plain"
-              size="small"
-              title="${isExpanded ? 'Collapse settings' : 'Expand settings'}"
-              @click=${() => this.toggleExpanded(entry.provider)}
-            >
-              ${waIcon('chevron-right')}
-            </wa-button>
+    return html`
+      <section class="settings-disclosure">
+        <div class="settings-disclosure-summary">
+          <wa-button
+            class="settings-disclosure-toggle"
+            appearance="plain"
+            size="s"
+            aria-expanded=${String(isExpanded)}
+            title="${isExpanded ? 'Collapse settings' : 'Expand settings'}"
+            @click=${() => this.toggleExpanded(entry.provider)}
+          >
+            ${waIcon('chevron-right', {
+              className: 'settings-disclosure-chevron',
+            })}
             <span class="provider-name">${entry.displayName}</span>
+          </wa-button>
+          <span class="settings-disclosure-status">
+            ${this.renderKeyStatus(entry.status)}
+          </span>
+          <div class="settings-disclosure-actions">
+            ${this.renderActions(entry)}
           </div>
-        </td>
-        <td>${this.renderKeyStatus(entry.status)}</td>
-        <td>${this.renderActions(entry)}</td>
-      </tr>
+        </div>
+        ${isExpanded ? this.renderDetails(entry) : nothing}
+      </section>
     `;
-
-    if (isExpanded) {
-      return [mainRow, this.renderDetailRow(entry)];
-    }
-    return mainRow;
   }
 
   private renderGlobalStreamingToggle(): TemplateResult {
     return html`
-      <div class="global-streaming-toggle">
-        <wa-switch
-          ?checked=${this.globalStreamingDefault}
-          @change=${(e: Event) => {
-            const checked = (e.target as WaSwitch).checked;
-            postMessage(SETTINGS_VIEW_COMMANDS.SET_GLOBAL_STREAMING, {
-              enabled: checked,
-            });
-          }}
-        >
-          Enable streaming
-        </wa-switch>
-        <span class="global-streaming-description"
-          >Global default for all providers</span
-        >
+      <div class="settings-row">
+        <div class="settings-row-text">
+          <span class="settings-row-label">Enable streaming</span>
+          <span class="settings-row-help"
+            >Global default for all providers</span
+          >
+        </div>
+        <div class="settings-row-control">
+          <wa-switch
+            aria-label="Enable streaming"
+            ?checked=${this.globalStreamingDefault}
+            @change=${(e: Event) => {
+              const checked = (e.target as WaSwitch).checked;
+              postMessage(SETTINGS_VIEW_COMMANDS.SET_GLOBAL_STREAMING, {
+                enabled: checked,
+              });
+            }}
+          ></wa-switch>
+        </div>
       </div>
     `;
   }
@@ -265,21 +260,15 @@ export class ProviderKeyList extends LitElement {
 
     return html`
       <div class="provider-keys-section">
-        <h2>API Configuration</h2>
-        <p class="provider-keys-description">${description}</p>
+        ${renderSettingsSectionHeading({
+          title: 'API configuration',
+          description,
+          icon: 'key',
+        })}
         ${this.renderGlobalStreamingToggle()}
-        <table class="provider-keys-table">
-          <thead>
-            <tr>
-              <th>Provider</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${rows.map((entry) => this.renderRow(entry))}
-          </tbody>
-        </table>
+        <div class="settings-disclosure-list">
+          ${rows.map((entry) => this.renderRow(entry))}
+        </div>
       </div>
     `;
   }

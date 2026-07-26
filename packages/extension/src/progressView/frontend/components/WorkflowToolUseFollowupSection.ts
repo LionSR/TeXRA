@@ -182,7 +182,7 @@ export class WorkflowToolUseFollowupSection extends LitElement {
           <div class="followup__actions">
             <wa-button
               appearance="plain"
-              size="small"
+              size="s"
               ?disabled=${!ready}
               @click=${this.setupFollowup}
             >
@@ -191,7 +191,7 @@ export class WorkflowToolUseFollowupSection extends LitElement {
             <wa-button
               appearance="filled"
               variant="brand"
-              size="small"
+              size="s"
               ?disabled=${!ready}
               @click=${this.runFollowup}
             >

@@ -1,8 +1,7 @@
 /**
- * AI Agents tab — shows third-party agent integrations (Codex, Claude Code,
- * external inquiries) grouped on their own panel. Reuses the same
- * `tool-card` component as the Tools tab, plus the Codex-specific inline
- * settings that used to live inside ToolsTab.
+ * Integrations tab for coding agents, services, reference managers, and
+ * assisted inquiries. Reuses the same `tool-card` component as the Tools tab,
+ * plus the Codex-specific inline settings that used to live inside ToolsTab.
  */
 
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
@@ -20,7 +19,6 @@ import { renderLoadingState } from '@shared/wa/loadingState';
 // Local imports - shared schemas
 import type {
   ToolDashboardItem,
-  ToolStatus,
   CodexSandboxMode,
   CodexReasoningEffort,
   CodexApprovalPolicy,
@@ -81,21 +79,6 @@ export class AIAgentsTab extends LitElement {
         display: block;
       }
 
-      .ai-agents-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: var(--wa-space-xs);
-        margin-bottom: var(--wa-space-xs);
-      }
-
-      .ai-agents-intro {
-        margin: 0;
-        font-size: var(--font-size-sm);
-        color: var(--color-text-secondary);
-        line-height: var(--line-height-normal);
-      }
-
       .ai-agents-empty {
         padding: var(--wa-space-l);
         text-align: center;
@@ -107,6 +90,7 @@ export class AIAgentsTab extends LitElement {
         display: flex;
         align-items: center;
         gap: var(--wa-space-s);
+        margin-bottom: var(--wa-space-xs);
         font-size: var(--font-size-sm);
         white-space: nowrap;
       }
@@ -131,30 +115,6 @@ export class AIAgentsTab extends LitElement {
 
       .ai-agents-status-neutral {
         color: var(--wa-color-text-quiet);
-      }
-
-      .category-section {
-        margin-bottom: var(--wa-space-m);
-      }
-
-      .agent-inline-settings {
-        padding: var(--wa-space-2xs) var(--wa-space-xs);
-        margin-bottom: var(--wa-space-2xs);
-        border-radius: var(--border-radius);
-        background: var(--wa-color-surface-lowered);
-      }
-
-      .setting-row {
-        display: flex;
-        align-items: center;
-        gap: var(--wa-space-2xs);
-        min-height: 24px;
-      }
-
-      .setting-row label {
-        font-size: var(--font-size-sm);
-        color: var(--color-text-secondary);
-        white-space: nowrap;
       }
 
       .setting-select {
@@ -189,22 +149,34 @@ export class AIAgentsTab extends LitElement {
     onChange: (e: Event) => void,
   ): TemplateResult {
     return html`
-      <div class="setting-row">
-        <label>${label}</label>
-        <wa-select class="setting-select" .value=${value} @change=${onChange}>
-          ${options.map(
-            (opt) => html`
-              <wa-option value=${opt.value}>${opt.label}</wa-option>
-            `,
-          )}
-        </wa-select>
+      <div class="settings-row">
+        <div class="settings-row-text">
+          <span class="settings-row-label">${label}</span>
+          <span class="settings-row-help">
+            Applied whenever this integration runs.
+          </span>
+        </div>
+        <div class="settings-row-control">
+          <wa-select
+            class="setting-select"
+            aria-label=${label}
+            .value=${value}
+            @change=${onChange}
+          >
+            ${options.map(
+              (opt) => html`
+                <wa-option value=${opt.value}>${opt.label}</wa-option>
+              `,
+            )}
+          </wa-select>
+        </div>
       </div>
     `;
   }
 
   private renderCodexInlineSettings(): TemplateResult {
     return html`
-      <div class="agent-inline-settings">
+      <div class="settings-section">
         ${this.renderSelectRow(
           'Sandbox mode',
           this.codexSandboxMode,
@@ -229,7 +201,7 @@ export class AIAgentsTab extends LitElement {
 
   private renderClaudeAgentInlineSettings(): TemplateResult {
     return html`
-      <div class="agent-inline-settings">
+      <div class="settings-section">
         ${this.renderSelectRow(
           'Model',
           this.claudeAgentModel,
@@ -264,18 +236,10 @@ export class AIAgentsTab extends LitElement {
     return this.items.filter((item) => item.category === 'ai-agents');
   }
 
-  /**
-   * Read-only status summary derived from the same `toolDashboardItems`
-   * signal the Tools tab uses to drive its actionable "Re-check" button.
-   * This tab only reflects that shared state — the Tools tab owns the one
-   * control that re-runs the probe (see AGENTS.md "UI anti-patterns" (Duplicate UI controls)).
-   */
   private renderStatusSummary(
     items: readonly ToolDashboardItem[],
-  ): TemplateResult | typeof nothing {
-    if (items.length === 0) return nothing;
-
-    const counts: Record<ToolStatus, number> = {
+  ): TemplateResult {
+    const counts: Record<ToolDashboardItem['status'], number> = {
       available: 0,
       'not-found': 0,
       unknown: 0,
@@ -326,21 +290,13 @@ export class AIAgentsTab extends LitElement {
 
     return html`
       <div class="tab-content-container">
-        <div class="ai-agents-header">
-          <p class="ai-agents-intro">
-            Connect external tools and services that TeXRA can call from agent
-            runs, such as coding agents, GitHub, and reference managers. Each
-            integration shows its own setup and authentication state here.
-          </p>
-          ${this.renderStatusSummary(items)}
-        </div>
-
         ${
           items.length === 0
             ? html`<div class="ai-agents-empty">
                 No integrations registered.
               </div>`
             : html`
+                ${this.renderStatusSummary(items)}
                 <div class="category-section">
                   ${repeat(
                     items,

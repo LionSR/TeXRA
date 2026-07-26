@@ -3,18 +3,6 @@
 import { css, type CSSResult } from 'lit';
 
 export const modelSelectionListStyles: CSSResult = css`
-  /* Generic section heading, duplicated identically in ProviderKeyList.styles.ts
-     and ApiAccessSection.styles.ts — each profile section renders its own
-     bare <h2>, and the rule is too small to warrant a shared module. */
-  h2 {
-    color: var(--wa-color-text-normal);
-    margin-top: var(--wa-space-l);
-    margin-bottom: var(--wa-space-xs);
-    font-size: var(--font-size-lg);
-    border-bottom: var(--border-thin) solid var(--color-border);
-    padding-bottom: var(--wa-space-2xs);
-  }
-
   /* ============================================
    * Model Selection List
    * ============================================ */
@@ -45,67 +33,6 @@ export const modelSelectionListStyles: CSSResult = css`
     max-width: 300px;
   }
 
-  .provider-group {
-    border: var(--border-thin) solid var(--color-border);
-    border-radius: var(--border-radius);
-    margin-bottom: var(--wa-space-2xs);
-    overflow: hidden;
-  }
-
-  .provider-group-header {
-    display: flex;
-    align-items: center;
-    gap: var(--wa-space-xs);
-    width: 100%;
-    background: var(--wa-color-surface-default);
-    border: none;
-    color: var(--wa-color-text-normal);
-    font-size: var(--font-size-sm);
-    font-family: inherit;
-    text-align: left;
-  }
-
-  /*
-   * No hover on .provider-group-header itself — only the inner
-   * .provider-group-toggle button is the click target. Hovering the
-   * surrounding header (which also holds the read-only key-status badge)
-   * would misleadingly suggest the whole row is clickable.
-   */
-
-  .provider-group-toggle {
-    display: flex;
-    align-items: center;
-    flex: 1;
-    min-width: 0;
-  }
-
-  .provider-group-toggle::part(base) {
-    display: flex;
-    align-items: center;
-    /* wa-button's own .button part defaults to justify-content: center
-     * (a centered label suits a typical button) -- override it here since
-     * this button's content is a left-aligned row (chevron, name, count),
-     * matching the API Configuration provider rows above it. */
-    justify-content: flex-start;
-    width: 100%;
-    padding: var(--wa-space-xs);
-    background: none;
-    border: none;
-    color: inherit;
-    font: inherit;
-    text-align: left;
-  }
-
-  .provider-group-toggle::part(base):hover {
-    background: var(--wa-color-neutral-fill-quiet);
-  }
-
-  .provider-group-toggle:focus-visible::part(base) {
-    outline: var(--border-thin) solid var(--wa-color-focus);
-    outline-offset: var(--border-thin);
-    border-radius: var(--border-radius-small);
-  }
-
   .provider-group-chevron {
     display: inline-flex;
     align-items: center;
@@ -134,10 +61,6 @@ export const modelSelectionListStyles: CSSResult = css`
   }
 
   .provider-group-actions {
-    display: flex;
-    align-items: center;
-    gap: var(--wa-space-2xs);
-    padding-right: var(--wa-space-xs);
     white-space: nowrap;
   }
 
@@ -146,7 +69,6 @@ export const modelSelectionListStyles: CSSResult = css`
   }
 
   .provider-group-content {
-    border-top: var(--border-thin) solid var(--color-border);
     padding: var(--wa-space-2xs) 0;
   }
 

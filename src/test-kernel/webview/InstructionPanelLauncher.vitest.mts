@@ -55,6 +55,8 @@ function makeSession(
     toolUseAgentOptions: [],
     modelOptions: [],
     teamOptions: [],
+    workspaceRootOptions: [],
+    workingDirectory: '',
     isRecording: false,
     isPolishing: false,
     debugMode: false,

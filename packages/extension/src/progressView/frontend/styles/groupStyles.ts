@@ -6,14 +6,18 @@ import { css } from 'lit';
  */
 export const groupStyles = css`
   .log-group-header {
-    padding: var(--wa-space-2xs) var(--wa-space-xs);
-    margin: var(--wa-space-3xs) 0;
-    border-radius: var(--border-radius-small);
+    padding: var(--wa-space-xs);
+    margin: var(--wa-space-2xs) 0;
+    border-radius: var(--wa-border-radius-m, var(--border-radius-small));
     cursor: pointer;
     display: flex;
     align-items: center;
-    background-color: transparent;
-    border-left: var(--border-medium) solid var(--color-border);
+    background-color: color-mix(
+      in srgb,
+      var(--wa-color-neutral-fill-quiet) 58%,
+      transparent
+    );
+    border-left: 2px solid var(--color-border);
 
     &.is-running {
       border-left-color: var(--wa-color-status-warning-bg);
@@ -30,8 +34,9 @@ export const groupStyles = css`
   }
 
   .log-group-content {
-    padding-left: var(--wa-space-2xs);
-    border-left: var(--border-thin) dashed var(--wa-color-tabs-border);
+    padding-left: var(--wa-space-xs);
+    border-left: var(--border-thin) solid
+      color-mix(in srgb, var(--wa-color-tabs-border) 60%, transparent);
   }
 
   .log-run {
@@ -48,7 +53,7 @@ export const groupStyles = css`
   }
 
   .group-title {
-    font-weight: var(--font-weight-bold);
+    font-weight: var(--font-weight-medium);
     flex-grow: 1;
   }
 

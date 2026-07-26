@@ -38,14 +38,18 @@ describe('DesktopShowDiffMessageSchema', () => {
     const parsed = DesktopShowDiffMessageSchema.parse({
       command: 'desktop:showDiff',
       title: 'Compare',
+      displayPath: 'src/file.ts',
       originalText: 'a',
       proposedText: 'b',
+      additions: 1,
+      deletions: 1,
       language: 'latex',
       originalPath: '/a',
       proposedPath: '/b',
     });
     expect(parsed.command).toBe('desktop:showDiff');
     expect(parsed.language).toBe('latex');
+    expect(parsed.displayPath).toBe('src/file.ts');
   });
 
   it('defaults missing language to plaintext', async () => {
@@ -57,5 +61,7 @@ describe('DesktopShowDiffMessageSchema', () => {
       proposedText: 'b',
     });
     expect(parsed.language).toBe('plaintext');
+    expect(parsed.additions).toBe(0);
+    expect(parsed.deletions).toBe(0);
   });
 });

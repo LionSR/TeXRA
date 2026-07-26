@@ -41,6 +41,11 @@ slides/
 packages/desktop/tests/e2e/test-results/
 packages/desktop/playwright-report/
 
+# Dev-only symlink mirroring electron-builder.yml's extraResources mapping
+# (../extension/resources -> resources) so an unpackaged `electron .` run can
+# still locate TeXRA resources. Packaged builds get this from the builder.
+packages/desktop/extension/
+
 # External design references cloned locally; do not vendor them into TeXRA.
 references/openrouter-skills/
 

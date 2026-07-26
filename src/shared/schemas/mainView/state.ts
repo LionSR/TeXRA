@@ -98,6 +98,12 @@ export const AgentOptionDataSchema = PickerOptionBaseSchema.extend({
 });
 export type AgentOptionData = z.infer<typeof AgentOptionDataSchema>;
 
+/** Open workspace folder offered as an execution working directory. */
+export const WorkspaceRootOptionDataSchema = PickerOptionBaseSchema;
+export type WorkspaceRootOptionData = z.infer<
+  typeof WorkspaceRootOptionDataSchema
+>;
+
 /**
  * Team picker option row for the main-view "Run with: Team" target. `value`
  * carries the preset id (one of the built-ins in `AGENT_MODE_PRESETS` or a
@@ -137,6 +143,7 @@ const MainViewPersistedStateBaseSchema = UIFileFieldsSchema.merge(
   sessionType: SessionTypeSchema.prefault('toolUse'),
   launchTarget: LaunchTargetSchema.prefault('agent'),
   selectedTeamId: z.string().prefault(''),
+  workingDirectory: z.string().prefault(''),
   workflowAgent: z.string().prefault('correct'),
   toolUseAgent: z.string().prefault('orchestrator'),
   model: z.string().prefault(DEFAULT_AGENT_MODEL),
@@ -246,6 +253,8 @@ const SessionContextSchema = z.object({
   toolUseAgentOptions: z.array(AgentOptionDataSchema),
   modelOptions: z.array(ModelOptionDataSchema),
   teamOptions: z.array(TeamOptionDataSchema),
+  workspaceRootOptions: z.array(WorkspaceRootOptionDataSchema),
+  workingDirectory: z.string(),
   isRecording: z.boolean(),
   isPolishing: z.boolean(),
   debugMode: z.boolean(),
@@ -265,6 +274,7 @@ export type EditedFileChangeDetail = StringValueDetail;
 export type ModelChangeDetail = StringValueDetail;
 export type InstructionChangeDetail = StringValueDetail;
 export type CommitChangeDetail = StringValueDetail;
+export type WorkingDirectoryChangeDetail = StringValueDetail;
 
 const FileActionDetailSchema = z.object({
   type: CurrentFileTypeSchema,

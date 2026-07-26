@@ -55,6 +55,7 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 
 type SessionHintKey = SessionType | 'orchestrator' | 'team';
+type DesktopLaunchMode = 'interactive' | 'team' | 'workflow';
 
 const SESSION_HINT_COPY: Record<
   SessionHintKey,
@@ -100,6 +101,11 @@ function isTeamLaunch(
   );
 }
 
+function getDesktopLaunchMode(session: SessionContextValue): DesktopLaunchMode {
+  if (session.sessionType === SESSION_TYPES.WORKFLOW) return 'workflow';
+  return session.launchTarget === 'team' ? 'team' : 'interactive';
+}
+
 function resolveSessionHintKey(session: SessionContextValue): SessionHintKey {
   // The team hint describes the launcher, so it takes precedence over the
   // orchestrator hint (which describes the selected agent). Workflows always
@@ -127,6 +133,14 @@ export class InstructionPanel extends LitElement {
   private sessionData?: SessionContextValue;
 
   @property({ type: Boolean }) showSessionHint = true;
+
+  /**
+   * Enables the roomy, conversation-first composer used by the Electron host.
+   * The extension keeps its existing compact panel unless the desktop shell
+   * opts in explicitly.
+   */
+  @property({ type: Boolean, attribute: 'desktop-host', reflect: true })
+  desktopHost = false;
 
   /** Reference to instruction textarea for paste handling */
   @query('#instruction')
@@ -203,6 +217,40 @@ export class InstructionPanel extends LitElement {
     this.dispatchEvent(MainViewEvents.launchTargetChange({ value }));
   }
 
+  private handleDesktopLaunchModeChange(event: Event): void {
+    const select = event.currentTarget as WaSelect | null;
+    const value = typeof select?.value === 'string' ? select.value : '';
+
+    switch (value) {
+      case 'workflow':
+        this.dispatchEvent(
+          MainViewEvents.sessionTypeChange({
+            value: SESSION_TYPES.WORKFLOW,
+          }),
+        );
+        return;
+      case 'team':
+        this.dispatchEvent(
+          MainViewEvents.sessionTypeChange({
+            value: SESSION_TYPES.TOOL_USE,
+          }),
+        );
+        this.dispatchEvent(
+          MainViewEvents.launchTargetChange({ value: 'team' }),
+        );
+        return;
+      default:
+        this.dispatchEvent(
+          MainViewEvents.sessionTypeChange({
+            value: SESSION_TYPES.TOOL_USE,
+          }),
+        );
+        this.dispatchEvent(
+          MainViewEvents.launchTargetChange({ value: 'agent' }),
+        );
+    }
+  }
+
   private handleAgentChange(event: Event): void {
     const select = event.currentTarget as (WaSelect & HTMLElement) | null;
     if (!select) return;
@@ -239,6 +287,14 @@ export class InstructionPanel extends LitElement {
     );
   }
 
+  private handleWorkingDirectoryChange(event: Event): void {
+    this.dispatchEvent(
+      MainViewEvents.workingDirectoryChange({
+        value: readSelectValue(event),
+      }),
+    );
+  }
+
   private handleInput(event: Event): void {
     const value = (event.currentTarget as HTMLTextAreaElement).value;
     this.dispatchEvent(MainViewEvents.instructionInput({ value }));
@@ -270,8 +326,56 @@ export class InstructionPanel extends LitElement {
     }
   }
 
+  private canExecute(session = this.sessionData): boolean {
+    if (!session?.instruction.trim() || !session.model) return false;
+    if (isTeamLaunch(session)) return Boolean(session.selectedTeamId);
+    return Boolean(
+      session.sessionType === SESSION_TYPES.WORKFLOW
+        ? session.workflowAgent
+        : session.toolUseAgent,
+    );
+  }
+
+  private executeTooltip(session: SessionContextValue): string {
+    if (!session.instruction.trim()) return 'Enter a request to send';
+    if (!session.model) return 'Choose a model before sending';
+    if (isTeamLaunch(session) && !session.selectedTeamId) {
+      return 'Choose a team before sending';
+    }
+    const agent =
+      session.sessionType === SESSION_TYPES.WORKFLOW
+        ? session.workflowAgent
+        : session.toolUseAgent;
+    if (!agent) return 'Choose an agent before sending';
+    return this.desktopHost
+      ? 'Send (Enter) · New line (Shift+Enter)'
+      : `Execute (${this.executeShortcutLabel})`;
+  }
+
   private handleExecute(): void {
+    if (!this.canExecute()) return;
     this.dispatchEvent(MainViewEvents.execute());
+  }
+
+  /**
+   * Desktop follows chat-composer keyboard conventions: Enter sends while
+   * Shift+Enter inserts a newline. Cmd/Ctrl+Enter also sends because those
+   * modifiers are commonly used by users coming from editor-based chat tools.
+   * The extension retains its registered command keybinding unchanged.
+   */
+  private handleInstructionKeydown(event: KeyboardEvent): void {
+    if (
+      !this.desktopHost ||
+      event.defaultPrevented ||
+      event.isComposing ||
+      event.key !== 'Enter' ||
+      event.shiftKey ||
+      event.altKey
+    ) {
+      return;
+    }
+    event.preventDefault();
+    this.handleExecute();
   }
 
   /**
@@ -342,6 +446,7 @@ export class InstructionPanel extends LitElement {
         class="agent-select"
         data-session-type=${agent.sessionType}
         aria-label=${agent.ariaLabel}
+        size=${this.desktopHost ? 'xs' : nothing}
         placement="top"
         placeholder="Agent…"
         .value=${agent.value}
@@ -396,6 +501,7 @@ export class InstructionPanel extends LitElement {
             id="teamPicker"
             class="agent-select team-select"
             aria-label="Team"
+            size=${this.desktopHost ? 'xs' : nothing}
             placement="top"
             placeholder="Team…"
             .value=${session.selectedTeamId}
@@ -425,15 +531,131 @@ export class InstructionPanel extends LitElement {
     `;
   }
 
+  private renderDesktopLaunchMode(
+    session: SessionContextValue,
+  ): TemplateResult {
+    return html`
+      <wa-select
+        id="desktopLaunchMode"
+        class="desktop-launch-mode"
+        aria-label="Run mode"
+        size="xs"
+        placement="top"
+        .value=${getDesktopLaunchMode(session)}
+        @change=${this.handleDesktopLaunchModeChange}
+      >
+        ${waIcon('diagram-project', { slot: 'start' })}
+        <wa-option value="interactive">Interactive</wa-option>
+        <wa-option value="team">Team</wa-option>
+        <wa-option value="workflow">Workflow</wa-option>
+      </wa-select>
+    `;
+  }
+
+  private renderWorkspaceRootSelect(
+    session: SessionContextValue,
+  ): TemplateResult | typeof nothing {
+    if (session.workspaceRootOptions.length < 2) return nothing;
+
+    return html`
+      <div class="select-group workspace-root-control">
+        <wa-select
+          id="workingDirectory"
+          class="workspace-root-select"
+          aria-label="Working directory"
+          size=${this.desktopHost ? 'xs' : nothing}
+          placement="top"
+          title=${session.workingDirectory}
+          .value=${session.workingDirectory}
+          @change=${this.handleWorkingDirectoryChange}
+        >
+          ${waIcon('folder-tree', { slot: 'start' })}
+          ${session.workspaceRootOptions.map(
+            (option) => html`
+              <wa-option value=${option.value} title=${option.value}>
+                ${option.label}
+              </wa-option>
+            `,
+          )}
+        </wa-select>
+      </div>
+    `;
+  }
+
   override render(): TemplateResult | typeof nothing {
     const session = this.sessionData;
     if (!session) {
       return nothing;
     }
+    const sessionTypeToggle = html`
+      <div class="instruction-session-toggle">
+        <wa-radio-group
+          id="sessionTypeToggle"
+          aria-label="Choose the session type"
+          orientation="horizontal"
+          .value=${session.sessionType}
+          @change=${this.handleSessionTypeChange}
+        >
+          <wa-radio
+            id="sessionTypeToolUse"
+            value="toolUse"
+            data-session-type="toolUse"
+            appearance="default"
+          >
+            Interactive
+          </wa-radio>
+          <wa-radio
+            id="sessionTypeWorkflow"
+            value="workflow"
+            data-session-type="workflow"
+            appearance="default"
+          >
+            Workflow
+          </wa-radio>
+        </wa-radio-group>
+        <wa-tooltip for="sessionTypeToolUse">
+          ${getSessionTitle(SESSION_TYPES.TOOL_USE)}
+        </wa-tooltip>
+        <wa-tooltip for="sessionTypeWorkflow">
+          ${getSessionTitle(SESSION_TYPES.WORKFLOW)}
+        </wa-tooltip>
+      </div>
+    `;
+    const launchTargetToggle =
+      !this.desktopHost && session.sessionType === SESSION_TYPES.TOOL_USE
+        ? html`
+            <div class="select-group launch-target-group">
+              <wa-radio-group
+                id="launchTargetToggle"
+                aria-label="Choose who runs this request"
+                orientation="horizontal"
+                .value=${session.launchTarget}
+                @change=${this.handleLaunchTargetChange}
+              >
+                <wa-radio
+                  id="launchTargetAgent"
+                  value="agent"
+                  appearance="default"
+                >
+                  Agent
+                </wa-radio>
+                <wa-radio
+                  id="launchTargetTeam"
+                  value="team"
+                  appearance="default"
+                >
+                  Team
+                </wa-radio>
+              </wa-radio-group>
+            </div>
+          `
+        : nothing;
+
     return html`
       <div
         class=${classMap({
           'instruction-box': true,
+          'desktop-composer': this.desktopHost,
           'drop-active': this.fileDrop.isDragActive,
         })}
         @dragenter=${this.fileDrop.handleDragEnter}
@@ -443,36 +665,17 @@ export class InstructionPanel extends LitElement {
       >
         <div class="instruction-header">
           <div class="instruction-header-leading">
-            <div class="instruction-session-toggle">
-              <wa-radio-group
-                id="sessionTypeToggle"
-                aria-label="Choose the session type"
-                orientation="horizontal"
-                .value=${session.sessionType}
-                @change=${this.handleSessionTypeChange}
-              >
-                <wa-radio
-                  id="sessionTypeToolUse"
-                  value="toolUse"
-                  data-session-type="toolUse"
-                >
-                  Interactive
-                </wa-radio>
-                <wa-radio
-                  id="sessionTypeWorkflow"
-                  value="workflow"
-                  data-session-type="workflow"
-                >
-                  Workflow
-                </wa-radio>
-              </wa-radio-group>
-              <wa-tooltip for="sessionTypeToolUse">
-                ${getSessionTitle(SESSION_TYPES.TOOL_USE)}
-              </wa-tooltip>
-              <wa-tooltip for="sessionTypeWorkflow">
-                ${getSessionTitle(SESSION_TYPES.WORKFLOW)}
-              </wa-tooltip>
-            </div>
+            ${
+              this.desktopHost
+                ? html`
+                    <span class="desktop-drop-affordance">
+                      <span class="icon-surface is-size-m">
+                        ${waIcon('file-circle-plus')}
+                      </span>
+                    </span>
+                  `
+                : sessionTypeToggle
+            }
           </div>
           <div
             class="instruction-header-actions"
@@ -522,36 +725,26 @@ export class InstructionPanel extends LitElement {
         ${this.renderSessionHint(session)}
         <wa-textarea
           id="instruction"
-          rows="10"
+          rows=${this.desktopHost ? '4' : '10'}
           resize="none"
+          enterkeyhint=${this.desktopHost ? 'send' : nothing}
           placeholder=${session.placeholder}
           .value=${session.instruction}
           @input=${this.handleInput}
+          @keydown=${this.handleInstructionKeydown}
           @paste=${this.handleInstructionPaste}
         ></wa-textarea>
         <div class="instruction-controls">
           <div class="model-selection-footer">
+            ${this.renderWorkspaceRootSelect(session)}
             ${
-              session.sessionType === SESSION_TYPES.TOOL_USE
+              this.desktopHost
                 ? html`
-                    <div class="select-group launch-target-group">
-                      <wa-radio-group
-                        id="launchTargetToggle"
-                        aria-label="Choose who runs this request"
-                        orientation="horizontal"
-                        .value=${session.launchTarget}
-                        @change=${this.handleLaunchTargetChange}
-                      >
-                        <wa-radio id="launchTargetAgent" value="agent">
-                          Agent
-                        </wa-radio>
-                        <wa-radio id="launchTargetTeam" value="team">
-                          Team
-                        </wa-radio>
-                      </wa-radio-group>
+                    <div class="desktop-mode-controls">
+                      ${this.renderDesktopLaunchMode(session)}
                     </div>
                   `
-                : nothing
+                : launchTargetToggle
             }
             ${this.renderLauncherPicker(session)}
             <div
@@ -570,6 +763,7 @@ export class InstructionPanel extends LitElement {
                 class="model-select"
                 placement="top"
                 aria-label=${isTeamLaunch(session) ? 'Lead model' : 'Model'}
+                size=${this.desktopHost ? 'xs' : nothing}
                 placeholder="Select model…"
                 title=${
                   this.getModelTooltip(session.modelOptions, session.model) ||
@@ -585,16 +779,25 @@ export class InstructionPanel extends LitElement {
           </div>
           <wa-button
             id="executeButton"
-            class="execute-button"
+            class="execute-button btn-primary"
             appearance="filled"
             variant="brand"
+            ?disabled=${!this.canExecute(session)}
+            aria-label=${this.desktopHost ? 'Send request' : 'Run agent'}
             @click=${this.handleExecute}
           >
-            ${waIcon('play', { slot: 'start' })}
-            <span class="execute-button__label"> Run </span>
+            ${
+              this.desktopHost
+                ? waIcon('paper-plane', { slot: 'start' })
+                : waIcon('play', { slot: 'start' })
+            }
+            <span class="execute-button__label">
+              ${this.desktopHost ? 'Send' : 'Run'}
+            </span>
+            ${this.desktopHost ? html`<kbd class="execute-button__key">↵</kbd>` : nothing}
           </wa-button>
           <wa-tooltip for="executeButton">
-            Execute (${this.executeShortcutLabel})
+            ${this.executeTooltip(session)}
           </wa-tooltip>
         </div>
         <div class="visually-hidden" aria-live="polite">
