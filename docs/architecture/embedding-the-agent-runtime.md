@@ -80,18 +80,13 @@ An embedder that only wants the raw loop can skip this step. An embedder that
 wants the `memory` and `plan` injections but not Lean can call
 `registerAgentFeatures()` directly.
 
-### Step 2 — `initializeServerSideKeyAccess({})`
+### Step 2 — choose the included-model-access policy
 
-`src/auth/serverKeys/index.ts:57-68`. Every option is optional, so `{}` is a
-valid call.
-
-**This is mandatory for the default `'configured'` credential selection today,
-and the failure is a throw, not a degradation.**
-`getServerSideKeyService()` throws
-`'ServerSideKeyService not initialized. Call initializeServerSideKeyAccess() first.'`
-when the singleton is absent (`src/auth/serverKeys/index.ts:35-42`), and
-`ModelHandler.resolveClientCredential` calls it unconditionally whenever the
-credential selection is the default `'configured'`:
+There is no server-side-key bootstrap call. `getServerSideKeyService()`
+constructs the process singleton on first use
+(`src/auth/serverKeys/index.ts:33-62`), and
+`ModelHandler.resolveClientCredential` calls it whenever the credential
+selection is the default `'configured'`:
 
 ```ts
 // src/agent/modelHandlers/ModelHandler.ts:506-507
@@ -99,35 +94,34 @@ const serverSideKeyService =
   selection === 'configured' ? getServerSideKeyService() : null;
 ```
 
-The `?.` on the following lines (`:508-527`) is for the `'personal'` branch,
-not for an uninitialized singleton. Production model-client constructors call
-`resolveClientCredential` directly
+The `?.` on the following lines (`:508-527`) is for the `'personal'` branch.
+Production model-client constructors call `resolveClientCredential` directly
 (`src/agent/modelHandlers/anthropic/modelHandlerAnthropic.ts:396`;
 `src/agent/modelHandlers/openai/modelHandlerOpenAI.ts:249`;
 `src/agent/modelHandlers/google/modelHandlerGoogleGenAI.ts:175`;
 `src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts:546`;
 `src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts:1165`;
-`src/agent/modelHandlers/openrouter/modelHandlerOpenRouterNative.ts:142`), so
-this throws inside the run, not at startup — the worst place for it.
+`src/agent/modelHandlers/openrouter/modelHandlerOpenRouterNative.ts:142`).
 
-There is a second policy requirement. With no state supplied, included-model
-access defaults to `true`
-(`src/auth/serverKeys/ServerSideKeyService.ts:102-104`). A headless BYOK host
+The singleton reads `globalState` from the platform. With an initialized
+platform, included-model access begins from the persisted setting, defaulting
+to `true` when that setting is absent
+(`src/auth/serverKeys/ServerSideKeyService.ts:106-108`). A headless BYOK host
 should therefore call
-`await getServerSideKeyService().setUseIncludedModelAccess(false)`. Otherwise,
-an eligible model first attempts the relay-access check, whose tier request is
-an ordinary `fetch` (`src/auth/serverKeys/TierService.ts:171-188`). A host that
-wants included access must instead initialize its authentication surface and
-set the policy from that state. The CLI makes this choice explicitly
+`await getServerSideKeyService().setUseIncludedModelAccess(false)` before its
+first model call. Otherwise, an eligible model first attempts the relay-access
+check, whose tier request is an ordinary `fetch`
+(`src/auth/serverKeys/TierService.ts:171-188`). A host that wants included
+access must instead initialize its authentication surface and set the policy
+from that state. The CLI makes this choice explicitly
 (`packages/cli/src/runtime/initPlatform.ts:359-376`).
 
-All three shipped hosts call `initializeServerSideKeyAccess`: the CLI at
-`packages/cli/src/runtime/initPlatform.ts:335`, desktop at
-`packages/desktop/src/main/desktopSupabaseAuth.ts:422`, the extension via
-`packages/extension/src/extension.ts:315`.
-
-> This may relax. Work is in flight to make the singleton lazy. Until it lands,
-> treat the call as required when using the default credential selection.
+If no platform has been initialized when the singleton is first requested,
+construction still succeeds, but included-model access is forced off and a
+warning is logged. This is safe for a stateless BYOK embedder: credential
+resolution continues without a relay request. The singleton retains that
+stateless policy for the rest of the process, however, so a host that wants
+persisted or included access must complete Step 1 before the first model call.
 
 ### Step 3 — agent directories
 
@@ -225,10 +219,7 @@ import {
   bootstrapNodeAgentDirectories,
 } from '@platform/defaults/nodeHost';
 import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
-import {
-  getServerSideKeyService,
-  initializeServerSideKeyAccess,
-} from '@auth/serverKeys';
+import { getServerSideKeyService } from '@auth/serverKeys';
 import { loadAgents } from '@agent/index/agentRegistry';
 import { initializeDefaultSession } from '@agent/runtime/SessionHandle';
 import { StreamLogStore } from '@transcript';
@@ -248,8 +239,7 @@ initPlatform(
   }),
 ); // Step 1
 initNodeAgentRuntime(lifecycle); // Optional shipped-feature parity
-initializeServerSideKeyAccess({}); // Step 2
-await getServerSideKeyService().setUseIncludedModelAccess(false); // BYOK
+await getServerSideKeyService().setUseIncludedModelAccess(false); // Step 2: BYOK
 await bootstrapNodeAgentDirectories({/* … */}); // Step 3
 
 // Use StreamLogStore.ephemeral('embedder') here for memory-only transcripts.
@@ -566,9 +556,10 @@ classification makes that distinction.
   direct Lean services. Without it those features are absent
   (`src/platform/defaults/nodeHost.ts:121-136`;
   `src/agent/features.ts:18-38`).
-- **`:335` — `initializeServerSideKeyAccess({…})`:** Required for today's
-  default `'configured'` credential path, which otherwise throws inside the
-  run (§1 Step 2).
+- **Server-side-key service:** No bootstrap registration is required. The
+  process singleton is constructed lazily from `platform().globalState`; the
+  CLI's authentication and model-policy block then selects whether included
+  model access is enabled (§1 Step 2).
 - **`:380` — `bootstrapNodeAgentDirectories({ channel: 'cli', … })`:**
   Required only when using the packaged agent bundle; an injected port that
   names other real directories replaces it (§2).
@@ -601,14 +592,13 @@ classification makes that distinction.
 
 ### Cross-check against desktop
 
-The desktop main process makes the same four initialization choices, showing
+The desktop main process makes the same three initialization choices, showing
 how a shipped host obtains full feature parity rather than proving that every
 call is a minimum runtime requirement:
 `initPlatform` at `packages/desktop/src/main/platform/index.ts:272`,
-`initNodeAgentRuntime` at `:317`, `bootstrapNodeAgentDirectories` at `:324`,
-and `initializeServerSideKeyAccess` at
-`packages/desktop/src/main/desktopSupabaseAuth.ts:422`. It also calls the two
-optional ones (`:318`, `:319`). Product policy is not necessarily CLI-only:
+`initNodeAgentRuntime` at `:317`, and `bootstrapNodeAgentDirectories` at
+`:324`. It also calls the two optional ones (`:318`, `:319`). Product policy is
+not necessarily CLI-only:
 desktop also calls
 `seedDisabledToolDefaults(GlobalStateKey.LAST_KNOWN_VERSION)` at
 `packages/desktop/src/main/platform/index.ts:304-307`.
@@ -619,10 +609,12 @@ desktop also calls
 
 1. **Only part of the shipped ordering is immediately load-bearing.** Step 3
    reads `platform()`, so Step 1 must precede it; nothing checks this beyond the
-   throw in `platform()` itself. Step 2 does not read the platform and may occur
-   before Step 1 (`src/auth/serverKeys/index.ts:57-68`). Feature-parity
-   registration stores predicates and a Lean adapter without evaluating host
-   services; the platform is needed only when the memory predicate later runs
+   throw in `platform()` itself. Step 2 can run without a platform, but doing so
+   permanently pins the lazy singleton to its safe stateless policy: included
+   model access remains off for that process
+   (`src/auth/serverKeys/index.ts:33-62`). Feature-parity registration stores
+   predicates and a Lean adapter without evaluating host services; the
+   platform is needed only when the memory predicate later runs
    (`src/agent/features.ts:18-38`;
    `src/tools/lean/direct/directLspAdapter.ts:47-52`).
 2. **Feature-parity registration is once-per-process.** A second
@@ -646,10 +638,11 @@ desktop also calls
    (`src/agent/runtime/SessionHandle.ts:445-449`). Embedding inside a process that
    already hosts TeXRA means reusing `tryDefaultSession()` or owning your own
    `SessionHandle`.
-6. **Failure modes cluster at run time, not startup.** Missing Step 2 throws
-   during credential resolution; a missing `loadAgents` throws at agent
-   resolution; a missing interactions attachment hangs mid-run. None of them
-   fails fast at bootstrap.
+6. **Some failure modes cluster at run time, not startup.** A missing
+   `loadAgents` throws at agent resolution, and a missing interactions
+   attachment hangs mid-run. Neither fails fast at bootstrap. Missing the
+   platform before credential resolution is instead a loud, safe degradation:
+   included model access is disabled and the service logs a warning.
 
 ## 7. Related documents
 
