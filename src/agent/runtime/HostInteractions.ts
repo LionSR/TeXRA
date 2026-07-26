@@ -68,8 +68,7 @@ export interface HostRetryInteractionOptions extends HostInteractionOptions {
 export type PlanApprovalResult =
   | { action: 'approve'; feedback?: never }
   | { action: 'approve_and_goal'; feedback?: never }
-  | { action: 'reject'; feedback?: string }
-  | { action: 'timeout'; feedback?: never };
+  | { action: 'reject'; feedback?: string };
 
 export type ProposalResult =
   | {
@@ -89,18 +88,11 @@ export type ProposalResult =
       model?: never;
       agent?: never;
       feedback?: never;
-    }
-  | {
-      action: 'timeout';
-      model?: never;
-      agent?: never;
-      feedback?: never;
     };
 
 export type RetrySettlement =
   | { action: 'retry'; feedback?: string; reason?: never }
-  | { action: 'cancel'; feedback?: never; reason?: never }
-  | { action: 'timeout'; feedback?: never; reason?: never };
+  | { action: 'cancel'; feedback?: never; reason?: never };
 
 export type RetryResult =
   | RetrySettlement
@@ -126,15 +118,6 @@ export interface HostBashApprovalRequest {
 export interface HostBashApprovalResult {
   readonly accepted: boolean;
   readonly userMessage?: string;
-  /**
-   * Set when `accepted: false` came from the host-side interaction timeout
-   * rather than an explicit user rejection — mirrors the distinct
-   * `{ action: 'timeout' }` shape `PlanApprovalResult`/`ProposalResult`/
-   * `RetryResult` already use (see #7327), kept as a flag here since
-   * restructuring this result to a discriminated union isn't worth it for a
-   * single boolean. Consumers must not report a timeout as a user rejection.
-   */
-  readonly timedOut?: boolean;
 }
 
 export type HostAgentProposalRequest = AgentProposal & {
@@ -181,8 +164,7 @@ export interface HostExternalInquiryHandle {
 
 export type BashSettlement =
   | { readonly action: 'approve'; readonly feedback?: never }
-  | { readonly action: 'reject'; readonly feedback?: string }
-  | { readonly action: 'timeout'; readonly feedback?: never };
+  | { readonly action: 'reject'; readonly feedback?: string };
 
 export type UserQuestionSettlement =
   | {
@@ -216,7 +198,6 @@ type CancellationResultFactories = {
 const cancellationResultFactories: CancellationResultFactories = {
   bash: (feedback) => ({
     accepted: false,
-    timedOut: undefined,
     userMessage: feedback?.trim(),
   }),
   plan: (feedback) => ({ action: 'reject', feedback }),

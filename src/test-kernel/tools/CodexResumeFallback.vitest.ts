@@ -191,6 +191,39 @@ describe('codex tool - atomic resume fallback', () => {
     expect(CodexThreads.lookup('stale-thread')).toBeUndefined();
   });
 
+  it('exposes an in-flight initial turn to the shared shutdown drain', async () => {
+    setupCommonMocks();
+    const interrupt = vi.fn();
+    const thread = { id: undefined, runStreamed: vi.fn() };
+    let strategy: ChildRunStrategy<unknown> | undefined;
+    mocks.importCodexClass.mockResolvedValue(
+      class MockCodex {
+        startThread(): typeof thread {
+          return thread;
+        }
+      },
+    );
+    mocks.startChildRunLoop.mockImplementation(
+      (params: { strategy: ChildRunStrategy<unknown> }) => {
+        strategy = params.strategy;
+      },
+    );
+
+    await new CodexTool().call({
+      prompt: 'start a long initial turn',
+      sandbox_mode: 'workspace-write',
+    });
+
+    const executions = {
+      getAgentHandleByStream: () => ({ interrupt }),
+    } as any;
+    strategy?.onLoopStart?.({ executions } as any);
+    CodexThreads.interruptAll();
+
+    expect(interrupt).toHaveBeenCalledOnce();
+    strategy?.releaseSessionOwnership?.();
+  });
+
   it('lets a waiting caller own the fallback after the first launch fails', async () => {
     setupCommonMocks();
     const firstImportStarted = pDefer<void>();

@@ -65,11 +65,7 @@ export class SendToTerminalTool extends defineTool({
 
     const approval = await requestBashApproval({ command });
     if (!approval.accepted) {
-      return buildBashApprovalRejectedResult(
-        command,
-        approval.userMessage,
-        approval.timedOut,
-      );
+      return buildBashApprovalRejectedResult(command, approval.userMessage);
     }
 
     const name = TERMINAL_NAME_PREFIX + input.label.trim();
