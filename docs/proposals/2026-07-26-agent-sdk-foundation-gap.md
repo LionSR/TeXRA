@@ -11,6 +11,15 @@
 > different one: **what should the surface be?** — grounded for the first time in the two
 > reference SDKs the repo already depends on, read from their shipped `.d.ts` in
 > `node_modules` and executed, not from documentation.
+>
+> **Landed since this was measured** (all merged 2026-07-26, so several baselines below have
+> already moved): #9222 preset data-loss fix · #9224 the embedding guide · #9225 the
+> unattached-interaction park made loud · #9226 status-bar phase mirror deleted · #9227 inert
+> `HostInteractionOptions.timeoutMs` deleted (−298 LoC) · #9228 `ServerSideKeyService` lazy
+> (one of the six ordered globals) · #9229 CLI shutdown handlers registered · #9234
+> `SessionHandle` owns its snapshot store (acceptance row 1; 4 write-owners → 0) · #9236
+> vendored PocketFlow cookbook deleted (−3,909) · #9238 `RoundPersistedFlow` moved out of the
+> engine directory. Re-measure before quoting any figure here.
 
 ## 1. The measured gap
 
@@ -31,8 +40,8 @@ Sources: `node_modules/@anthropic-ai/claude-agent-sdk/sdk.d.ts` (7,104 lines, 23
 across `src/` + `packages/`.
 
 The real TeXRA surface is not the 17-module three-host intersection usually quoted: hosts
-reach **1,310 symbols across 344 modules** through 16 core aliases (`@shared` alone is 586
-names).
+reach **1,310 symbols across 344 modules** through 16 core aliases (`@shared` alone accounts
+for 573 imported / 990 exported names).
 
 **Export count is not the metric.** Anthropic ships 236 exports and 7,104 `.d.ts` lines and
 is still trivially embeddable. Coherence of concepts beats their number — which means the
@@ -109,14 +118,16 @@ Consequences: the extension re-implements the artifact-flush drain as a fourth s
 (`ProgressViewState.ts:565-568` vs `SessionHandle.flushArtifactsOnce`); and because it never
 implemented the `emit` port that desktop satisfies in **six lines**
 (`desktopHostInteractions.ts:80-85`), it wrote its own 1000-event replay buffer
-(`extensionPresentationEvents.ts:20,28-74`) — 108 LoC and a duplicate mechanism for six
+(`extensionPresentationEvents.ts:20,28-74`) — 76 LoC and a duplicate mechanism for six
 lines not written.
 
 ### 3.3 Misfiling caused a real parity hole
 
-**`src/controllers/` has zero CLI consumers.** Measured:
-`grep -rn "@controllers/" packages/*/src` → **cli 0, extension 44, desktop 44,
-trace-viewer 0**. CLAUDE.md describes it as "host-neutral orchestration"; it is in fact the
+**`src/controllers/` has only one CLI consumer.** Measured:
+`grep -rn "@controllers/" packages/*/src` → **cli 1, extension 44, desktop 44,
+trace-viewer 0** (the one CLI hit, `packages/cli/src/onboarding/runOnboarding.tsx:24`, imports
+`planOnboardingFunnelTransition`). CLAUDE.md describes it as "host-neutral orchestration"; it
+is in fact the
 **extension-webview controller layer** — and since the desktop renderer _is_ the extension
 webview (§3.1), "shared by two hosts" is weaker than it sounds: one projector serves one
 renderer. It is a real layer (54 modules, 10,590 LoC, 0 `vscode` imports — the boundary rule
@@ -133,16 +144,19 @@ mechanism that produced the parity hole:
 - `progressView/backend/state/SessionStores.ts` (549 LoC) — same shape, same CLI blind spot.
 
 A CLI crash therefore leaves RUNNING execution status and flow records on disk with no repair
-pass. Same story for `registerAgentShutdownHandlers` and `teardownDefaultSession`. These are
-not platform differences; they are obligations a host missed because nothing made them
+pass. Same story for `teardownDefaultSession`, which the CLI never calls
+(`registerAgentShutdownHandlers` is already wired in
+`packages/cli/src/runtime/initPlatform.ts:323`, so that half of shutdown is not a gap). These
+are not platform differences; they are obligations a host missed because nothing made them
 discoverable.
 
 **Moving them is worth zero on its own** (0 elements, 0 LoC, churns 4 files, and R4 bans
 churn-only renames). It pays only inside the PR that makes `SessionHandle` call the repair on
 store open — which is where the ~180 host LoC and the CLI parity hole go together.
 
-The same fact→view switch exists **four times** (441 LoC over the same 13
-`RUN_FACT_EVENT_TYPES` and 10 `SessionFact` arms) — **three of the four inside the CLI**. One
+The same fact→view switch exists **four times** (219 LoC of switch, inside 2,058 LoC of file,
+over the same 13 `RUN_FACT_EVENT_TYPES` and 10 `SessionFact` arms) — **three of the four
+inside the CLI**. One
 status write site fans to three rails with **13 production apply-sites**, forcing 30 LoC of
 dedup in a renderer (banned by CLAUDE.md's UI anti-patterns rule).
 
@@ -204,15 +218,10 @@ All 7 are subagent-lineage concerns; `runAgent` is the root-launch entry and its
 rename.
 
 **The tool registry is closed.** `IToolRegistry` is `{get, has}`
-(`src/agent/core/tools/ToolTypes.ts:41-44`); 52 tools are hard-coded in `createDefaultTools()`
+(`src/agent/core/tools/ToolTypes.ts:41-44`); 54 tools are hard-coded in `createDefaultTools()`
 (`src/tools/registry.ts:89-146`); there is **no public `register`**. An embedder cannot add a
 tool. Compare `tool(name, desc, zodSchema, handler)` in one call. This remains the largest
 single gap on the launch path — and it is the one place the surface must **grow**.
-
-**The tool registry is closed.** `IToolRegistry` is `{get, has}`
-(`src/agent/core/tools/ToolTypes.ts:41-44`); 52 tools are hard-coded in `createDefaultTools()`
-(`src/tools/registry.ts:89-146`); there is **no public `register`**. An embedder cannot add a
-tool. Compare `tool(name, desc, zodSchema, handler)` in one call.
 
 ## 5. State-model diagnosis
 
@@ -317,16 +326,16 @@ north-star's own ≤~80-line acceptance bar, with zero new elements.
 
 Checkable by a number, a grep, or a file that does not exist. Baselines at `5fc03f9436`.
 
-| #   | Property                                                           | Today                                                                                 | Target                                        |
-| --- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------- | --------------------------------------------- |
-| 1   | One owner of durable persistence                                   | 9 host attach/construct hits; `stateOwnership` live                                   | 0; symbol absent                              |
-| 2   | Attach/detach symmetry costs the host nothing                      | cli headless 7, cli TUI 4                                                             | 0 everywhere                                  |
-| 3   | Per-run block is intent-only                                       | 158 / 74 / 44 / 45 LoC                                                                | all ≤45; `setupRunHost` deleted               |
-| 4   | Bootstrap is one call                                              | cli 15 registrations across 14 modules                                                | ≤3 per host, inside `createNodePlatform`      |
-| 5   | One status rail                                                    | 13 apply-sites, 3 rails                                                               | **10**, renderer dedup deleted (see note)     |
-| 6   | Recovery + shutdown are the runtime's, uniformly                   | cli references: 0 repair, 0 shutdown                                                  | 0 host references (absorbed)                  |
-| 7   | Port is required-shaped; no host re-implements a runtime mechanism | 0/7 required; 99 identical ext/desktop lines; `extensionPresentationEvents.ts` exists | 6/7 required; ≤20; file absent                |
-| 8   | An executable minimal example, gated                               | none                                                                                  | ≤50 lines, zero `attach`/`detach` identifiers |
+| #   | Property                                                           | Today                                                                                  | Target                                        |
+| --- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------- | --------------------------------------------- |
+| 1   | One owner of durable persistence                                   | 9 host attach/construct hits; `stateOwnership` live                                    | 0; symbol absent                              |
+| 2   | Attach/detach symmetry costs the host nothing                      | cli headless 7, cli TUI 4                                                              | 0 everywhere                                  |
+| 3   | Per-run block is intent-only                                       | 158 / 74 / 44 / 45 LoC                                                                 | all ≤45; `setupRunHost` deleted               |
+| 4   | Bootstrap is one call                                              | cli 15 registrations across 14 modules                                                 | ≤3 per host, inside `createNodePlatform`      |
+| 5   | One status rail                                                    | 13 apply-sites, 3 rails                                                                | **10**, renderer dedup deleted (see note)     |
+| 6   | Recovery + shutdown are the runtime's, uniformly                   | cli references: 0 repair, 0 `teardownDefaultSession` (shutdown handlers already wired) | 0 host references (absorbed)                  |
+| 7   | Port is required-shaped; no host re-implements a runtime mechanism | 0/7 required; 99 identical ext/desktop lines; `extensionPresentationEvents.ts` exists  | 6/7 required; ≤20; file absent                |
+| 8   | An executable minimal example, gated                               | none                                                                                   | ≤50 lines, zero `attach`/`detach` identifiers |
 
 **Note on row 5 — the "≤5" target in north-star §6 is unreachable by deletion; 10 is the
 floor.** The 13 apply-sites were enumerated exactly. Deleting the three _projector_ trace-arms
@@ -546,6 +555,6 @@ Exact and re-confirmed: CLI `tui/state` 5,764; `restartRepair.ts` 415; `SessionS
 None of §6 makes this a _foundation_ while `AgentConfig.toolConfig` carries five LaTeX
 booleans (`src/shared/schemas/toolConfig.ts:6-12`), `WorkflowFlowResult` carries
 `compileFailures` (`AgentFlowResult.ts:34`), `RunAgentOptions` carries a VS Code feature flag
-(`preferHelperModel`, `runAgent.ts:50-56`), and 52 TeXRA tools are welded into a registry with
+(`preferHelperModel`, `runAgent.ts:50-56`), and 54 TeXRA tools are welded into a registry with
 no public `register`. **The separation is a product-out-of-runtime split, not a tidying.**
 §6 is what makes that split possible; it is not a substitute for it.
