@@ -128,8 +128,13 @@ describe('workspace storage defaults', () => {
     const firstStoragePath = provider.getStoragePath();
 
     workspacePath = '/workspace/b';
+    expect(provider.getStoragePath()).toBe(firstStoragePath);
+    expect(provider.hasPendingWorkspaceStorageChange()).toBe(true);
+    expect(provider.commitWorkspaceStorageChange()).toBe(true);
     const secondStoragePath = provider.getStoragePath();
 
+    expect(provider.hasPendingWorkspaceStorageChange()).toBe(false);
+    expect(provider.commitWorkspaceStorageChange()).toBe(false);
     expect(provider.getGlobalStoragePath()).toBe(join(root, 'global-storage'));
     expect(firstStoragePath).not.toBe(secondStoragePath);
     await expect(pathExists(firstStoragePath)).resolves.toBe(true);

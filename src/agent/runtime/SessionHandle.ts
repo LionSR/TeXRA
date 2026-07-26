@@ -36,6 +36,7 @@ import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManage
 import { detectWaitingStreams } from '@agent/storage/detectWaitingStreams';
 import { executionIdFromStream } from '@agent/storage/executionIdFromStream';
 import { runWithOwnedExecutionLeaseQuiescence } from '@agent/storage/executionLease';
+import { platform } from '@platform/platform';
 import { STREAM_PHASE, type StreamTabId } from '@shared/schemas';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import type { RunTraceFlushEntry } from '@transcript/runTrace';
@@ -246,6 +247,9 @@ export class SessionHandle {
    */
   reloadAfterStorageRootChange(): Promise<void> {
     if (this.transcripts.mode.kind !== 'persistent') return Promise.resolve();
+    if (platform().storage.hasPendingWorkspaceStorageChange?.() === false) {
+      return Promise.resolve();
+    }
     this.storageGeneration += 1;
     const generation = this.storageGeneration;
     this.restartRepairRetry.cancel();
@@ -270,6 +274,9 @@ export class SessionHandle {
       const repair = async () => {
         if (generation !== this.storageGeneration) return;
         if (reloadTranscripts) {
+          if (platform().storage.commitWorkspaceStorageChange?.() === false) {
+            return;
+          }
           await this.transcripts.reload();
           this.status.clearAll();
         }

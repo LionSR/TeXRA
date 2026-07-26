@@ -9,6 +9,7 @@ import {
 } from '@agent/storage/executionLease';
 import * as waitingDetection from '@agent/storage/detectWaitingStreams';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
+import { platform } from '@platform/platform';
 import {
   EXECUTION_STATUS,
   LOG_LEVELS,
@@ -322,6 +323,68 @@ describe('SessionHandle restart repair', () => {
       expect(reload).toHaveBeenCalledOnce();
     } finally {
       await completeOwnedExecutionLease(liveExecutionId);
+      session.dispose();
+    }
+  });
+
+  it('keeps the old storage root pinned until execution artifacts finish', async () => {
+    const liveExecutionId = 'workspace-root-pinned' as ExecutionId;
+    const transcripts = await StreamLogStore.open();
+    const session = new SessionHandle({
+      transcripts,
+      restartRepair: 'deferred',
+    });
+    const storage = platform().storage;
+    let activeRoot = '/workspace/old-storage';
+    vi.spyOn(storage, 'getStoragePath').mockImplementation(() => activeRoot);
+    Object.assign(storage, {
+      hasPendingWorkspaceStorageChange: () => true,
+      commitWorkspaceStorageChange: () => {
+        activeRoot = '/workspace/new-storage';
+        return true;
+      },
+    });
+    await acquireFreshExecutionLease(liveExecutionId);
+    const reload = vi.spyOn(transcripts, 'reload').mockResolvedValue();
+
+    try {
+      const replacement = session.reloadAfterStorageRootChange();
+      await Promise.resolve();
+
+      expect(storage.getStoragePath()).toBe('/workspace/old-storage');
+      expect(reload).not.toHaveBeenCalled();
+
+      await completeOwnedExecutionLease(liveExecutionId);
+      await replacement;
+
+      expect(storage.getStoragePath()).toBe('/workspace/new-storage');
+      expect(reload).toHaveBeenCalledOnce();
+    } finally {
+      await completeOwnedExecutionLease(liveExecutionId);
+      session.dispose();
+    }
+  });
+
+  it('skips replacement when the workspace storage root is unchanged', async () => {
+    const transcripts = await StreamLogStore.open();
+    const session = new SessionHandle({
+      transcripts,
+      restartRepair: 'deferred',
+    });
+    const storage = platform().storage;
+    const commitWorkspaceStorageChange = vi.fn(() => false);
+    Object.assign(storage, {
+      hasPendingWorkspaceStorageChange: () => false,
+      commitWorkspaceStorageChange,
+    });
+    const reload = vi.spyOn(transcripts, 'reload').mockResolvedValue();
+
+    try {
+      await session.reloadAfterStorageRootChange();
+
+      expect(commitWorkspaceStorageChange).not.toHaveBeenCalled();
+      expect(reload).not.toHaveBeenCalled();
+    } finally {
       session.dispose();
     }
   });

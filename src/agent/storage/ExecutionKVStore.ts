@@ -199,11 +199,10 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
 
   /**
    * Read a key and validate it against a schema, returning the parsed value
-   * or `null` when the key is absent or fails validation. Single source of
-   * truth for the read-validate-or-null policy shared by the typed readers
-   * below. A missing file is the expected case and stays quiet; a present
-   * value that fails validation is a loud read (#6966 bullet 5) — corrupt is
-   * never silently conflated with missing (#7210 pattern).
+   * or `null` when the key is absent. Permissive typed readers also return
+   * `null` after warning about malformed data; durable repair selects the
+   * throwing policy so corruption remains distinct from absence. This is the
+   * single validation boundary shared by both policies.
    */
   private async readValidated<T>(
     key: string,
@@ -211,8 +210,8 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
     malformed: 'return-null' | 'throw' = 'return-null',
   ): Promise<T | null> {
     const raw = await this.read(key);
-    if (raw == null) return null;
-    const result = schema.nullable().safeParse(raw);
+    if (raw === undefined) return null;
+    const result = schema.safeParse(raw);
     if (result.success) return result.data;
     logger.warn(
       CHANNEL,
