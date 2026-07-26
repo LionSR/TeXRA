@@ -397,7 +397,7 @@ function schemaModuleExports(
       addModuleExport(
         exports,
         exportClause.name.text,
-        ['type', 'value'],
+        statement.isTypeOnly ? ['type'] : ['type', 'value'],
         [file],
       );
       continue;
@@ -624,7 +624,7 @@ function collectCurrent(): Pick<
         .toSorted(([a], [b]) => a.localeCompare(b))
         .map(([specifier, entries]) => [
           specifier,
-          entries.toSorted((a, b) => a.localeCompare(b)),
+          [...new Set(entries)].toSorted((a, b) => a.localeCompare(b)),
         ]),
     );
   return {
