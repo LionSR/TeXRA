@@ -60,7 +60,6 @@ import { escapeText } from '@shared/utils/xmlEscape';
 import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
 import { getFirstRunDone } from '@shared/state/onboardingState';
 import { isActivePhase } from '@shared/streams/streamStatus';
-import { StreamSnapshotStore } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -408,21 +407,10 @@ export async function runChat(
     stdout: process.stdout,
   });
 
-  // Persist per-stream sidecar data (todos, plan, usage, output files) via the
-  // shared, host-agnostic snapshot store so a `texra resume` restores the full
+  // Per-stream sidecar data (todos, plan, usage, output files) is persisted by
+  // the session's own snapshot store, so a `texra resume` restores the full
   // display — the same streamData/{id}/* files the extension/desktop read.
-  const snapshotStore = new StreamSnapshotStore();
   const artifactSession = defaultSession();
-  let detachSnapshotEvents: (() => void) | undefined =
-    snapshotStore.attachSessionEvents(artifactSession.events);
-  let detachSnapshotFlusher: (() => void) | undefined =
-    artifactSession.useArtifactFlusher(() => snapshotStore.flush());
-  const detachSnapshotPersistence = (): void => {
-    detachSnapshotFlusher?.();
-    detachSnapshotFlusher = undefined;
-    detachSnapshotEvents?.();
-    detachSnapshotEvents = undefined;
-  };
 
   const disposers: Array<() => void> = [];
   // Crash safety: if the process dies outside the orderly teardown below
@@ -435,7 +423,7 @@ export async function runChat(
   const terminalTitleUpdates = installTerminalTitleUpdates(context.cwd);
   disposers.push(terminalTitleUpdates.dispose);
   disposers.push(subscribeStreamLog());
-  disposers.push(subscribeStreamArtifacts(snapshotStore));
+  disposers.push(subscribeStreamArtifacts(artifactSession.snapshots));
   disposers.push(subscribeStreamStatus());
 
   const session: TuiSession = {
@@ -512,7 +500,7 @@ export async function runChat(
     getSessionContext: currentSessionContext,
     disposers,
     followUpQueue,
-    snapshotStore,
+    snapshotStore: artifactSession.snapshots,
   });
   disposers.push(
     setCliAgentResumeHandler({
@@ -873,7 +861,6 @@ export async function runChat(
     followUpQueue,
     getApprovalPolicy,
     flushArtifacts: () => artifactSession.flushArtifacts(),
-    detachSnapshotPersistence,
     repaintAfterTerminalResume: () =>
       viewportController.repaintAfterTerminalResume(),
     suspendTerminalTitle: terminalTitleUpdates.suspend,
