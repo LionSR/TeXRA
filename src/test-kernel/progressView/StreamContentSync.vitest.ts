@@ -276,6 +276,7 @@ describe('progress view stream-content projection', () => {
       (streamId) => {
         expect(streamId).toBe(controlledStream);
         return {
+          bashBypass: true,
           toolEditBypass: true,
           superYoloBypass: true,
           goalActive: true,

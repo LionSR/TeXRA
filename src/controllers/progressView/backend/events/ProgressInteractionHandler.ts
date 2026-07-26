@@ -4,27 +4,19 @@ import { withEventErrorHandling } from './errorHandling';
 
 /**
  * UI callbacks for the interaction events that still enter the progress view:
- * tool-edit show/resolve and the two approval-bypass state pushes. Durable
- * run and stream facts are handled by `ProgressFactApplier`.
+ * tool-edit show/resolve callbacks. Durable run and stream facts are handled
+ * by `ProgressFactApplier`; approval-bypass state uses `HostInteractions`.
  */
 export interface UICallbacks {
   showToolEditPermission: (
     payload: RuntimeInteractionEventPayloads['showToolEditPermission'],
   ) => void;
   resolveToolEditPermission: (requestId: string) => void;
-  updateToolEditApprovalBypassState: (
-    streamId: string,
-    bypassActive: boolean,
-  ) => void;
-  updateSuperYoloBypassState: (streamId: string, bypassActive: boolean) => void;
 }
 
 export type ProgressBackendInteractionPayloads = Pick<
   RuntimeInteractionEventPayloads,
-  | 'showToolEditPermission'
-  | 'resolveToolEditPermission'
-  | 'updateToolEditApprovalBypassState'
-  | 'updateSuperYoloBypassState'
+  'showToolEditPermission' | 'resolveToolEditPermission'
 >;
 
 export type ProgressBackendInteractionEvent =
@@ -33,8 +25,6 @@ export type ProgressBackendInteractionEvent =
 const PROGRESS_BACKEND_INTERACTION_EVENTS = [
   'showToolEditPermission',
   'resolveToolEditPermission',
-  'updateToolEditApprovalBypassState',
-  'updateSuperYoloBypassState',
 ] as const satisfies readonly ProgressBackendInteractionEvent[];
 
 const ProgressBackendInteractionEventSet: ReadonlySet<string> = new Set(
@@ -83,24 +73,6 @@ export class ProgressInteractionHandler {
         context: 'failed to resolve approval prompt',
         handle: (payload) =>
           this.uiCallbacks.resolveToolEditPermission(payload.requestId),
-      },
-      updateToolEditApprovalBypassState: {
-        module: 'ProgressInteractionHandler',
-        context: 'failed to update approval bypass state',
-        handle: (payload) =>
-          this.uiCallbacks.updateToolEditApprovalBypassState(
-            payload.streamId,
-            payload.bypassActive,
-          ),
-      },
-      updateSuperYoloBypassState: {
-        module: 'ProgressInteractionHandler',
-        context: 'failed to update super yolo bypass state',
-        handle: (payload) =>
-          this.uiCallbacks.updateSuperYoloBypassState(
-            payload.streamId,
-            payload.bypassActive,
-          ),
       },
     };
   }

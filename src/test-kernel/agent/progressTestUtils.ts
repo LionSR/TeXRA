@@ -218,6 +218,8 @@ export function createRecordingHost(): {
     },
   };
   const interactions: HostInteractions = {
+    setApprovalBypassState: (update) =>
+      events.push({ event: 'setApprovalBypassState', payload: update }),
     requestBashApproval: (request) => {
       const requestId = `bash-${pendingBashes.size + 1}`;
       const streamId = request.streamId ?? '';
@@ -370,7 +372,7 @@ export function sessionWithInteractions(
   if (interactions) owner.use(interactions);
   return {
     interactions: owner,
-    approvals: createSessionApprovals(),
+    approvals: createSessionApprovals(owner),
     modelRetries: new ModelRetryGate(),
     status,
     transcripts: { ensureLoaded: async () => {} },
