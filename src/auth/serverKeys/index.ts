@@ -13,11 +13,12 @@
  * - free tier: Included non-premium models (up to $3/M input)
  */
 
-import type { StateStore } from '@platform/interfaces';
+import { appSignals } from '@eventBus/AppSignals';
+import * as logger from '@logger/logUtils';
+import { tryGlobalState } from '@platform/platform';
 import { SUPABASE_CUSTOM_DOMAIN } from '../config';
 import { TierService } from './TierService';
 import { ServerSideKeyService } from './ServerSideKeyService';
-import type { SupabaseSessionLog } from '../supabaseSessionTypes';
 
 // Service class
 export { ServerSideKeyService };
@@ -29,15 +30,37 @@ export { ServerSideKeyService };
 let _instance: ServerSideKeyService | null = null;
 
 /**
- * Get the singleton ServerSideKeyService instance.
- * Throws if not initialized - call initializeServerSideKeyAccess() first.
+ * Get the singleton ServerSideKeyService instance, constructing it on first
+ * use. There is no host bootstrap step: state comes from the platform and the
+ * toggle change signal goes onto `appSignals`, both of which every host
+ * already owns.
+ *
+ * An embedder that never calls `initPlatform()` still gets a usable service —
+ * with included (relay) model access forced off, since without a state store
+ * the preference can neither be read nor surfaced. See the
+ * `ServerSideKeyService` constructor.
  */
 export function getServerSideKeyService(): ServerSideKeyService {
-  if (!_instance) {
-    throw new Error(
-      'ServerSideKeyService not initialized. Call initializeServerSideKeyAccess() first.',
+  if (_instance) return _instance;
+
+  const state = tryGlobalState();
+  if (!state) {
+    logger.warn(
+      'ServerSideKeyService',
+      'No platform state store; included model access is off for this ' +
+        'process. Call initPlatform() before the first model call to use ' +
+        'relay access, or configure a provider API key.',
     );
   }
+
+  const baseUrl = `https://${SUPABASE_CUSTOM_DOMAIN}`;
+  _instance = new ServerSideKeyService(
+    baseUrl,
+    new TierService(baseUrl, logger),
+    state,
+    logger,
+    (enabled) => appSignals.emit('includedModelAccessChanged', enabled),
+  );
   return _instance;
 }
 
@@ -46,24 +69,4 @@ export function getServerSideKeyService(): ServerSideKeyService {
  */
 export function setServerSideKeyService(service: ServerSideKeyService): void {
   _instance = service;
-}
-
-/**
- * Initialize the server-side key access module.
- * Call this during extension activation.
- *
- * @param options - Host-provided state and logger
- */
-export function initializeServerSideKeyAccess(options: {
-  state?: StateStore;
-  logger?: SupabaseSessionLog;
-  notifyIncludedModelAccessChanged?: (enabled: boolean) => void;
-}): void {
-  _instance = new ServerSideKeyService(
-    `https://${SUPABASE_CUSTOM_DOMAIN}`,
-    new TierService(`https://${SUPABASE_CUSTOM_DOMAIN}`, options.logger),
-    options.state ?? null,
-    options.logger,
-    options.notifyIncludedModelAccessChanged,
-  );
 }
