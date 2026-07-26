@@ -105,7 +105,7 @@ function resolveRelative(
 
 interface ImportBinding {
   name: string;
-  space: ExportSpace;
+  requestedSpace: ExportSpace | 'ordinary';
 }
 
 /**
@@ -124,17 +124,19 @@ function importedBindings(
     if (!ts.isNamedImports(clause.namedBindings)) return undefined;
     return clause.namedBindings.elements.map((element) => ({
       name: (element.propertyName ?? element.name).text,
-      space:
-        clause.isTypeOnly || element.isTypeOnly ? ('type' as const) : 'value',
+      requestedSpace:
+        clause.isTypeOnly || element.isTypeOnly
+          ? ('type' as const)
+          : ('ordinary' as const),
     }));
   }
   if (!ts.isNamedExports(clause)) return undefined;
   return clause.elements.map((element) => ({
     name: (element.propertyName ?? element.name).text,
-    space:
+    requestedSpace:
       (ts.isExportDeclaration(node) && node.isTypeOnly) || element.isTypeOnly
         ? ('type' as const)
-        : 'value',
+        : ('ordinary' as const),
   }));
 }
 
@@ -170,13 +172,15 @@ function deepImportReferences(
   };
   const visit = (node: ts.Node): void => {
     if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
+      const bindings = importedBindings(node);
       add(
         node.moduleSpecifier != null &&
           ts.isStringLiteralLike(node.moduleSpecifier)
           ? node.moduleSpecifier.text
           : undefined,
-        importedBindings(node),
-        importedBindings(node)?.every(({ space }) => space === 'type') ?? false,
+        bindings,
+        bindings?.every(({ requestedSpace }) => requestedSpace === 'type') ??
+          false,
       );
     } else if (
       ts.isImportEqualsDeclaration(node) &&
@@ -195,7 +199,12 @@ function deepImportReferences(
         importTypeSpecifier(node),
         node.qualifier == null
           ? undefined
-          : [{ name: firstQualifiedName(node.qualifier), space: 'type' }],
+          : [
+              {
+                name: firstQualifiedName(node.qualifier),
+                requestedSpace: 'type',
+              },
+            ],
         true,
       );
     } else if (ts.isCallExpression(node)) {
@@ -448,9 +457,11 @@ function sortPublishedSurface(
   );
 }
 
-function publishedSurface(): PublishedSurface {
+function publishedSurface(
+  moduleMemo = new Map<string, ModuleExports>(),
+): PublishedSurface {
   const surface: MutablePublishedSurface = new Map();
-  for (const [name, entry] of schemaModuleExports(BARREL_PATH)) {
+  for (const [name, entry] of schemaModuleExports(BARREL_PATH, moduleMemo)) {
     for (const source of entry.sources) {
       const specifier = schemaSpecifier(source);
       if (specifier == null) continue;
@@ -473,11 +484,34 @@ function scanRoots(): string[] {
   ];
 }
 
+function reachableSpace(
+  surface: PublishedSurface,
+  specifier: string,
+  binding: ImportBinding,
+  moduleMemo: Map<string, ModuleExports>,
+): ExportSpace | undefined {
+  const published = surface[specifier];
+  if (binding.requestedSpace === 'type') {
+    return published?.type.includes(binding.name) === true ? 'type' : undefined;
+  }
+  if (published?.value.includes(binding.name) === true) return 'value';
+  if (published?.type.includes(binding.name) !== true) return undefined;
+
+  const leaf = specifier.slice(DEEP_IMPORT_PREFIX.length);
+  const file = resolveRelative(BARREL_PATH, `./${leaf}`);
+  if (file == null) return undefined;
+  const leafExport = schemaModuleExports(file, moduleMemo).get(binding.name);
+  return leafExport != null && !leafExport.spaces.has('value')
+    ? 'type'
+    : undefined;
+}
+
 function collectCurrent(): Pick<
   SchemasBaseline,
   'surface' | 'forced' | 'gratuitous'
 > {
-  const fullSurface = publishedSurface();
+  const moduleMemo = new Map<string, ModuleExports>();
+  const fullSurface = publishedSurface(moduleMemo);
   const referencedSurface: MutablePublishedSurface = new Map();
   const forced: DeepImports = {};
   const gratuitous: DeepImports = {};
@@ -497,17 +531,20 @@ function collectCurrent(): Pick<
       for (const reference of deepImportReferences(
         parseSourceFile(file, text),
       )) {
+        const resolvedSpaces = reference.bindings?.map((binding) =>
+          reachableSpace(fullSurface, reference.specifier, binding, moduleMemo),
+        );
         const isGratuitous =
-          reference.bindings?.every(({ name, space }) =>
-            fullSurface[reference.specifier]?.[space].includes(name),
-          ) === true;
+          resolvedSpaces?.every((space) => space != null) === true;
         const bucket = isGratuitous ? gratuitous : forced;
         if (isGratuitous) {
-          for (const { name, space } of reference.bindings ?? []) {
+          for (const [index, binding] of (reference.bindings ?? []).entries()) {
+            const space = resolvedSpaces?.[index];
+            if (space == null) continue;
             addPublishedBinding(
               referencedSurface,
               reference.specifier,
-              name,
+              binding.name,
               space,
             );
           }
@@ -573,17 +610,12 @@ describe('@shared/schemas deep-import ratchet', () => {
 
     expect(deepImportReferences(source)).toEqual([
       {
-        bindings: [{ name: 'AgentCategory', space: 'value' }],
+        bindings: [{ name: 'AgentCategory', requestedSpace: 'ordinary' }],
         specifier: '@shared/schemas/agent',
         typeOnly: false,
       },
       {
-        bindings: [{ name: 'AgentCategory', space: 'value' }],
-        specifier: '@shared/schemas/agent',
-        typeOnly: false,
-      },
-      {
-        bindings: undefined,
+        bindings: [{ name: 'AgentCategory', requestedSpace: 'ordinary' }],
         specifier: '@shared/schemas/agent',
         typeOnly: false,
       },
@@ -608,7 +640,12 @@ describe('@shared/schemas deep-import ratchet', () => {
         typeOnly: false,
       },
       {
-        bindings: [{ name: 'AgentCategory', space: 'type' }],
+        bindings: undefined,
+        specifier: '@shared/schemas/agent',
+        typeOnly: false,
+      },
+      {
+        bindings: [{ name: 'AgentCategory', requestedSpace: 'type' }],
         specifier: '@shared/schemas/agent',
         typeOnly: true,
       },
@@ -641,7 +678,8 @@ describe('@shared/schemas deep-import ratchet', () => {
   });
 
   it('tracks published names by their exact leaf and export namespace', () => {
-    const surface = publishedSurface();
+    const moduleMemo = new Map<string, ModuleExports>();
+    const surface = publishedSurface(moduleMemo);
 
     expect(surface['@shared/schemas/profileViewMessages']?.type).toContain(
       'NumberVscodeSetting',
@@ -661,6 +699,28 @@ describe('@shared/schemas deep-import ratchet', () => {
     expect(surface['@shared/schemas/commonViewMessages']?.value).not.toContain(
       'Theme',
     );
+    expect(
+      reachableSpace(
+        surface,
+        '@shared/schemas/profileViewMessages',
+        {
+          name: 'NumberVscodeSetting',
+          requestedSpace: 'ordinary',
+        },
+        moduleMemo,
+      ),
+    ).toBe('type');
+    expect(
+      reachableSpace(
+        surface,
+        '@shared/schemas/profileViewMessages',
+        {
+          name: 'API_ACCESS_MODE_OPTIONS',
+          requestedSpace: 'ordinary',
+        },
+        moduleMemo,
+      ),
+    ).toBe('value');
   });
 
   // One scan for the whole suite; every case reads the same snapshot.
