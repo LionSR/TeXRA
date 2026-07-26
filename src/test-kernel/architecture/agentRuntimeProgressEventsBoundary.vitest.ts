@@ -1,16 +1,17 @@
 // Node imports
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { basename, dirname, join, relative, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { existsSync, readFileSync } from 'node:fs';
+import { basename, dirname, join, resolve } from 'node:path';
 
 // Third-party imports
 import * as ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
-const REPO_ROOT = resolve(
-  fileURLToPath(new URL('.', import.meta.url)),
-  '../../..',
-);
+import {
+  REPO_ROOT,
+  SOURCE_FILE,
+  sourceFilesUnder,
+  toRepoPath,
+} from '../support/repoScan';
 
 const LEGACY_MODULE = 'src/agent/runtime/hostProgressEvents.ts';
 const OLD_AGENT_RUNTIME_MODULE =
@@ -34,29 +35,15 @@ const SCAN_ROOTS = [
   'src',
 ] as const;
 
-const SOURCE_FILE = /\.(?:ts|tsx|mts|cts)$/;
 const SOURCE_OR_OUTPUT_EXTENSION = /\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/;
 
-function toRepoPath(path: string): string {
-  return relative(REPO_ROOT, resolve(REPO_ROOT, path)).replaceAll('\\', '/');
-}
-
-function sourceFilesUnder(root: string): string[] {
-  const absoluteRoot = resolve(REPO_ROOT, root);
-  let entries: string[];
-  try {
-    entries = readdirSync(absoluteRoot, { recursive: true }) as string[];
-  } catch {
-    return [];
-  }
-
-  return entries
-    .filter((entry) => SOURCE_FILE.test(entry) && !entry.endsWith('.d.ts'))
-    .map((entry) => toRepoPath(join(absoluteRoot, entry)))
-    .filter((file) => !file.startsWith('src/test-kernel/'));
-}
-
-const SOURCE_FILES = SCAN_ROOTS.flatMap(sourceFilesUnder);
+const SOURCE_FILES = SCAN_ROOTS.flatMap((root) =>
+  sourceFilesUnder(resolve(REPO_ROOT, root), {
+    missingDirReturnsEmpty: true,
+    repoRelative: true,
+    excludeTestKernel: true,
+  }),
+);
 const SOURCE_TEXT_BY_FILE = new Map<string, string>();
 const MODULE_SPECIFIERS_BY_FILE = new Map<string, string[]>();
 
