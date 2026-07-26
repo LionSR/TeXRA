@@ -369,6 +369,12 @@
   --line-height-normal: 1.4;
   --line-height-relaxed: 1.5;
   --line-height-prose: 1.625;
+  /* Three weights, not a continuum. Chrome runs 400/500; 600 is reserved for
+     dialog and section titles. Arbitrary intermediate weights (550, 650, 750)
+     read as noise across a variable font and are invisible on a static one. */
+  --font-weight: var(--wa-font-weight-normal);
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
   --letter-spacing-tight: -0.005em;
   --width-content-max: 1000px;
 

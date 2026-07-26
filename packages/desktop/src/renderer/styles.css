@@ -70,7 +70,7 @@ wa-button.desktop-secondary-button::part(base) {
   padding-inline: var(--wa-space-m);
   border: 0;
   border-radius: var(--wa-border-radius-m);
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
   transition: background-color var(--transition-fast);
 }
 
@@ -627,7 +627,7 @@ wa-input.desktop-command-palette-input {
   color: var(--wa-color-text-quiet);
   font-family: var(--wa-font-family-mono);
   font-size: var(--font-size-xs);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 
 /* =====================================================================
@@ -1046,7 +1046,7 @@ wa-card.desktop-onboarding::part(footer) {
 .desktop-onboarding-roster-label {
   color: var(--wa-color-text-quiet);
   font-size: var(--font-size-sm);
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
 }
 
 .desktop-onboarding-roster-chips {
@@ -1107,7 +1107,7 @@ wa-card.desktop-onboarding::part(footer) {
   box-sizing: border-box;
   color: var(--wa-color-text-quiet);
   font-size: var(--font-size-sm);
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
 }
 
 .desktop-editor-tree-refresh {

@@ -22,6 +22,21 @@ describe('desktop control system', () => {
     expect(tokens).toContain('--font-size-sm: calc(var(--font-size) * 0.9)');
   });
 
+  it('runs the shell on a three-step weight ramp, not raw numbers', () => {
+    // Intermediate weights (550/650/750) are the failure mode: they read as
+    // noise on a variable font and round to the neighbouring step on a static
+    // one, so the same label renders at different weights per platform.
+    const tokens = read('packages/desktop/src/renderer/themeTokens.css');
+    const shellCss = read('packages/desktop/src/renderer/taskShell.css');
+    const lightDom = read('packages/desktop/src/renderer/styles.css');
+
+    expect(tokens).toMatch(/--font-weight-medium:\s*500/);
+    expect(tokens).toMatch(/--font-weight-semibold:\s*600/);
+    for (const css of [shellCss, lightDom]) {
+      expect(css).not.toMatch(/font-weight:\s*\d/);
+    }
+  });
+
   it('mirrors interactive states and decorative icon surfaces across light and shadow DOM', () => {
     const lightDom = read('packages/desktop/src/renderer/styles.css');
     const shadowDom = read('src/shared/styles/controlStyles.ts');

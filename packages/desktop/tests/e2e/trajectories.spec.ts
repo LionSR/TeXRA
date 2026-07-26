@@ -29,8 +29,9 @@ const SETTINGS_TAB_INDEX = {
   AGENTS: 3,
   MULTI_AGENT: 4,
   TOOLS: 5,
-  GIT: 6,
-  LATEX: 7,
+  AI_AGENTS: 6,
+  GIT: 7,
+  LATEX: 8,
 } as const;
 
 let launched: LaunchedApp;
