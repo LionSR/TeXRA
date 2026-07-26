@@ -30,7 +30,6 @@ import {
   type ProposalResult,
   type RetryResult,
 } from '@agent/runtime/HostInteractions';
-import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInteractionEvents';
 import { isPreferCodexSubscription } from '@auth/codex';
 import { getCliApiMode, setCliApiMode } from '@cli/runtime/apiAccessMode';
 import {
@@ -51,7 +50,14 @@ import {
   isApiProvider,
 } from '@model/apiProviders';
 import { platform } from '@platform/platform';
-import { isUpstreamCreditDepletedError } from '@shared/schemas';
+import {
+  isUpstreamCreditDepletedError,
+  type AgentProposalPermission,
+  type BashPermission,
+  type ExternalInquiryPermission,
+  type PlanApprovalPermission,
+  type RetryPermission,
+} from '@shared/schemas';
 import {
   setBashApprovalSessionBypass,
   setDelegatedWorkApprovalBypasses,
@@ -316,7 +322,7 @@ async function decideWithPolicy<
     kind === 'retry'
       ? immediateDecisionForApproval(
           'showRetryRequest',
-          payload as RuntimeInteractionEventPayloads['showRetryRequest'],
+          payload as RetryPermission,
           context,
         )
       : immediateDecision(context);
@@ -374,7 +380,7 @@ async function requestBashInteraction(
   host: CliRuntimeHost,
   requestId: string,
 ): Promise<HostBashApprovalResult> {
-  const payload: RuntimeInteractionEventPayloads['showBashPermission'] = {
+  const payload: BashPermission = {
     requestId,
     command: request.command,
     ...(request.cwd ? { cwd: request.cwd } : {}),
@@ -397,7 +403,7 @@ async function requestBashInteraction(
 }
 
 async function requestPlanInteraction(
-  request: RuntimeInteractionEventPayloads['showPlanApproval'],
+  request: PlanApprovalPermission,
   context: CliContext,
 ): Promise<PlanApprovalResult> {
   const decision = await decideWithPolicy(context, 'plan', request);
@@ -408,7 +414,7 @@ async function requestPlanInteraction(
 }
 
 async function requestProposalInteraction(
-  request: RuntimeInteractionEventPayloads['showAgentProposal'],
+  request: AgentProposalPermission,
   context: CliContext,
   host: CliRuntimeHost,
 ): Promise<ProposalResult> {
@@ -558,7 +564,7 @@ async function requestUserQuestionInteraction(
 }
 
 async function openExternalInquiryInteraction(
-  payload: RuntimeInteractionEventPayloads['showExternalInquiry'],
+  payload: ExternalInquiryPermission,
   context: CliContext,
 ): Promise<{ threadId: string }> {
   handleExternalInquiry(payload, context);
@@ -740,7 +746,7 @@ async function switchRetryToPersonalCredentials(
 }
 
 function handleExternalInquiry(
-  payload: RuntimeInteractionEventPayloads['showExternalInquiry'],
+  payload: ExternalInquiryPermission,
   context: CliContext,
 ): void {
   const threadId = payload.threadId;
