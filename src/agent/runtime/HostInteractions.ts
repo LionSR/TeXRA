@@ -49,7 +49,6 @@ export type ToolNotificationHandler = (
 ) => void;
 
 export interface HostInteractionOptions {
-  readonly timeoutMs?: number;
   /** Internal identity used to cancel one forwarded presentation request. */
   readonly cancellationScope?: object;
 }
