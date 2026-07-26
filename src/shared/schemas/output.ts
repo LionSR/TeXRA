@@ -121,7 +121,7 @@ export const CompileFailureSummarySchema = z.object({
   logPath: z.string(),
   logAbsolutePath: z.string(),
 });
-export type CompileFailureSummary = z.infer<typeof CompileFailureSummarySchema>;
+type CompileFailureSummary = z.infer<typeof CompileFailureSummarySchema>;
 
 export const CompileResultSchema = z.discriminatedUnion('status', [
   z.strictObject({
