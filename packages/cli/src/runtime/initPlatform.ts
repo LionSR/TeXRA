@@ -3,10 +3,7 @@ import * as nodePath from 'node:path';
 
 // Local imports
 import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
-import {
-  getServerSideKeyService,
-  initializeServerSideKeyAccess,
-} from '@auth/serverKeys';
+import { getServerSideKeyService } from '@auth/serverKeys';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { setOutputChannelFactory } from '@logger/logUtils';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
@@ -46,7 +43,7 @@ import { CliExitCode } from './exitCodes';
 import type { LogBackend } from './supabaseAuth';
 import type { CliContext } from './cliContext';
 
-let serverSideKeysInitialized = false;
+let supabaseAuthInitialized = false;
 let cliWorkspaceCwd = '';
 let quietPlatformLogs = false;
 let shutdownHandlersInstalled = false;
@@ -330,13 +327,9 @@ export async function initCliPlatform(
     );
   }
 
-  if (!serverSideKeysInitialized) {
+  if (!supabaseAuthInitialized) {
     initializeCliSupabaseAuth(cliPlatformLog, context.storageRoot);
-    initializeServerSideKeyAccess({
-      state: tryPlatform()?.globalState,
-      logger: cliPlatformLog,
-    });
-    serverSideKeysInitialized = true;
+    supabaseAuthInitialized = true;
   }
 
   setSetupPlatform({
