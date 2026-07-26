@@ -620,6 +620,7 @@ async function launchClaudeAgentSession(
     additionalDirectories: resolvedWorkspace.additionalDirectories,
   };
   const env = await config.buildClaudeAgentEnv();
+  const pathToClaudeCodeExecutable = await findClaudeBinaryPath();
   const agentConfig = config.buildClaudeAgentConfig(input.prompt);
   const preview = truncateWithEllipsis(input.prompt, 60);
 
@@ -632,7 +633,7 @@ async function launchClaudeAgentSession(
     description: input.prompt,
     config: agentConfig,
     registerFailedMessage: 'Failed to register Claude Code CLI execution.',
-    startLoop: async ({ childStream, executionId }) =>
+    startLoop: ({ childStream, executionId }) =>
       startClaudeAgentLoop({
         childStream,
         parentStreamId,
@@ -644,7 +645,7 @@ async function launchClaudeAgentSession(
         cwd: workspace.cwd,
         additionalDirectories: workspace.additionalDirectories,
         env,
-        pathToClaudeCodeExecutable: await findClaudeBinaryPath(),
+        pathToClaudeCodeExecutable,
         runtimeHost,
         resumeSessionId: input.session_id ?? undefined,
         releaseFallbackClaim,
