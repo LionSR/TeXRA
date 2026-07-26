@@ -422,6 +422,13 @@ export class SessionHandle {
 /** Live sessions whose background processes must be stopped at shutdown. */
 const liveSessions = new Set<SessionHandle>();
 
+function hasLiveNonDefaultSession(processDefault: SessionHandle): boolean {
+  for (const session of liveSessions) {
+    if (session !== processDefault) return true;
+  }
+  return false;
+}
+
 /** Stop background OS processes owned by every live runtime session. */
 export function killAllSessionBackgroundProcesses(): void {
   for (const session of liveSessions) {
@@ -430,6 +437,7 @@ export function killAllSessionBackgroundProcesses(): void {
 }
 
 let cachedDefaultSession: SessionHandle | undefined;
+let defaultSessionFallbackWarned = false;
 
 export type DefaultSessionInit = Omit<SessionHandleInit, 'flushers'>;
 
@@ -465,7 +473,9 @@ export function teardownDefaultSession(): void {
  *
  * Hosts must initialize it explicitly after opening transcript persistence.
  * Access before that composition step is a lifecycle error rather than an
- * implicit memory-only session.
+ * implicit memory-only session. If another session is live, retrieval emits at
+ * most one best-effort warning for the process lifetime, including across
+ * teardown and reinitialization of the default session.
  */
 export function defaultSession(): SessionHandle {
   if (!cachedDefaultSession) {
@@ -473,7 +483,21 @@ export function defaultSession(): SessionHandle {
       'The default session has not been initialized. Call initializeDefaultSession() after opening its transcript store.',
     );
   }
-  return cachedDefaultSession;
+  const processDefault = cachedDefaultSession;
+  if (
+    !defaultSessionFallbackWarned &&
+    hasLiveNonDefaultSession(processDefault)
+  ) {
+    defaultSessionFallbackWarned = true;
+    try {
+      logger.warn(
+        'defaultSession() resolved while a non-default SessionHandle was live. Pass or propagate the owning session instead.',
+      );
+    } catch {
+      // Diagnostics must not break the sanctioned fallback.
+    }
+  }
+  return processDefault;
 }
 
 /**
