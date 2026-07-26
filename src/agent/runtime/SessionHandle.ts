@@ -282,6 +282,9 @@ export class SessionHandle {
       executionIds,
       repairStreams,
       closeRunningGroups: async (streamIds, status, now) => {
+        // StreamLogStore commits each settlement through its onChange channel;
+        // attached progress bridges therefore receive dirty-entry deltas
+        // without a host-specific full-view refresh.
         const closed = await this.transcripts.endRunningGroupsForStreams(
           streamIds,
           now,

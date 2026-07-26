@@ -73,7 +73,6 @@ export async function initializeDesktopProcessStores(options: {
     },
   });
   await stores.sweepOrphanedStreams(new Set(canonicalStreamIds));
-  await snapshots.load(canonicalStreamIds);
   if (legacyImport) {
     try {
       await legacyImport.commit(legacyImport.claims);
