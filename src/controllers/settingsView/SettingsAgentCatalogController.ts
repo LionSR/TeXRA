@@ -24,7 +24,7 @@ import {
 } from '@shared/schemas/agent';
 import type { AgentSelectionItem } from '@shared/schemas/settingsViewMessages';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
-import { byName } from '@utils/core';
+import { byName, isObject } from '@utils/core';
 
 export interface SettingsAgentCatalogEntry {
   name: string;
@@ -45,11 +45,8 @@ export interface SettingsAgentCatalogState {
   getAgents(category: AgentCategory): SettingsAgentCatalogEntry[];
   getVisibleAgents(category: AgentCategory): SettingsAgentCatalogEntry[];
   getCustomPresetsRaw(): unknown;
-  setCustomPresets(presets: AgentModePreset[]): Promise<void>;
-  removeCustomPreset(
-    presetId: string,
-    remaining: AgentModePreset[],
-  ): Promise<void>;
+  setCustomPresets(presets: unknown[]): Promise<void>;
+  removeCustomPreset(presetId: string, remaining: unknown[]): Promise<void>;
 }
 
 export interface SettingsAgentCatalogControllerDeps {
@@ -100,6 +97,12 @@ export class SettingsAgentCatalogController {
 
   getCustomPresets(): AgentModePreset[] {
     return parseAgentModePresets(this.deps.state.getCustomPresetsRaw());
+  }
+
+  /** Returns raw records so catalog writes preserve unparsed data. */
+  private getCustomPresetRecords(): unknown[] {
+    const raw = this.deps.state.getCustomPresetsRaw();
+    return Array.isArray(raw) ? raw : [];
   }
 
   getCustomPreset(presetId: string): AgentModePreset | null {
@@ -220,20 +223,21 @@ export class SettingsAgentCatalogController {
     };
 
     await this.deps.state.setCustomPresets([
-      ...this.getCustomPresets(),
+      ...this.getCustomPresetRecords(),
       preset,
     ]);
     return preset;
   }
 
   async deleteCustomPreset(presetId: string): Promise<AgentModePreset | null> {
-    const presets = this.getCustomPresets();
+    const records = this.getCustomPresetRecords();
+    const presets = parseAgentModePresets(records);
     const target = presets.find((preset) => preset.id === presetId);
     if (!target) return null;
 
     await this.deps.state.removeCustomPreset(
       presetId,
-      presets.filter((preset) => preset.id !== presetId),
+      records.filter((record) => !isObject(record) || record.id !== presetId),
     );
     return target;
   }
