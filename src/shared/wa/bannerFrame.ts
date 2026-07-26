@@ -20,7 +20,7 @@ export function renderBannerFrame(options: {
   readonly id: string;
   readonly variant: 'brand' | 'neutral' | 'success' | 'warning' | 'danger';
   readonly appearance?: 'accent' | 'filled' | 'outlined' | 'plain';
-  readonly size?: 'small' | 'medium' | 'large';
+  readonly size?: 's' | 'm' | 'l';
   readonly icon?: TeXRAIconName;
   readonly frameClassName?: string;
   readonly calloutClassName?: string;

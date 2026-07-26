@@ -29,7 +29,7 @@ export function renderSettingsBanner(
     id: options.id,
     variant: options.variant ?? 'neutral',
     appearance: 'outlined',
-    size: 'small',
+    size: 's',
     icon: options.icon ?? 'info',
     frameClassName: ['settings-banner', options.className]
       .filter(Boolean)

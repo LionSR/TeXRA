@@ -13,7 +13,7 @@ const UI_ROOTS = [
   'src/shared',
 ] as const;
 const SOURCE_EXTENSION = /\.(?:html|js|mjs|ts|tsx)$/;
-const DEPRECATED_SIZE = /size="(?:small|medium|large)"/;
+const DEPRECATED_SIZE = /(?:size="|size:\s*['"])(?:small|medium|large)['"]/;
 
 function collectSourceFiles(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {

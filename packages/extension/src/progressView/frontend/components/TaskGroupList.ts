@@ -650,32 +650,32 @@ export class TaskGroupList extends LitElement {
               {
                 label: 'Run setup',
                 icon: 'rocket',
-                size: 'small',
+                size: 's',
                 onClick: () => this.handleGettingStartedAction('runSetup'),
               },
               {
                 label: 'Sample project',
                 icon: 'file-circle-plus',
-                size: 'small',
+                size: 's',
                 onClick: () =>
                   this.handleGettingStartedAction('createSampleProject'),
               },
               {
                 label: 'Import Overleaf',
                 icon: 'cloud-arrow-down',
-                size: 'small',
+                size: 's',
                 onClick: () => this.handleGettingStartedAction('cloneOverleaf'),
               },
               {
                 label: 'Import arXiv',
                 icon: 'download',
-                size: 'small',
+                size: 's',
                 onClick: () => this.handleGettingStartedAction('downloadArxiv'),
               },
               {
                 label: 'Walkthrough',
                 icon: 'book',
-                size: 'small',
+                size: 's',
                 onClick: () =>
                   this.handleGettingStartedAction('openWalkthrough'),
               },
