@@ -81,7 +81,7 @@ import { runCleanBuild, runCleanOutput } from '@housekeeping';
 import type { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { dispatchCommandFromRegistry } from '@shared/commands/registry';
-import { SETTINGS_QUERY } from '@utils/config';
+import { SETTINGS_QUERY } from '@utils/config/constants';
 
 // Local file imports
 import {

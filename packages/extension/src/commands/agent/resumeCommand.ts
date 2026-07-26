@@ -11,7 +11,7 @@ import { defaultSession } from '@agent/runtime/SessionHandle';
 import { registerCommands } from '@commands/_shared/registerCommands';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { logErrorMessage } from '@frontend/ui/errorHandlingUtils';
-import { getToolUsePersistenceEnabled } from '@utils/config';
+import { getToolUsePersistenceEnabled } from '@utils/config/constants';
 
 interface ResumeAgentResult {
   success: boolean;

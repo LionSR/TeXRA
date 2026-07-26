@@ -9,7 +9,7 @@ import {
 import * as logger from '@logger/logUtils';
 import type { FileLocation } from '@shared/schemas';
 import { WorkspaceFS, FlexibleFS, pathToLocation } from '@utils/files';
-import { runToolWithCheck } from '@utils/system';
+import { runToolWithCheck } from '@utils/system/toolUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';
 import { splitContentLines } from '@utils/text/stringUtils';

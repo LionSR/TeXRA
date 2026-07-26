@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import * as logger from '@logger/logUtils';
-import * as config from '@utils/config';
+import * as config from '@utils/config/configUtils';
 
 const SECRET = 'sk-proj-redaction-example-1234567890abcdef';
 

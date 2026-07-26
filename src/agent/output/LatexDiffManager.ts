@@ -20,7 +20,7 @@ import {
   FlexibleFS,
   TaskRunFileService,
 } from '@utils/files';
-import { checkToolInstalled } from '@utils/system';
+import { checkToolInstalled } from '@utils/system/toolUtils';
 import { getComparablePath } from '@utils/files/taskRunStorage';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';

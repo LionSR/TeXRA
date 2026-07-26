@@ -16,8 +16,8 @@ import {
   type OverleafRemote,
 } from '@latex/overleafProject';
 import * as logger from '@logger/logUtils';
-import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
+import { getConfig } from '@utils/config/configUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { COMMIT_HASH_PATTERN } from '@utils/git/commitHashPattern';
 import {

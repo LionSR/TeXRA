@@ -13,7 +13,7 @@ import {
   workflowOutputRoundDir,
 } from '@shared/constants/workflowOutput';
 import { WorkspaceFS } from '@utils/files';
-import { getConfig } from '@utils/config';
+import { getConfig } from '@utils/config/configUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports

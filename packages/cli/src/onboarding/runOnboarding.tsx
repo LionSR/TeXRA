@@ -21,13 +21,13 @@ import { DEFAULT_OAUTH_PROVIDER, type OAuthProvider } from '@auth/config';
 import { setPreferCodexSubscription, type CodexSession } from '@auth/codex';
 import { LoadingIndicator } from '@cli/chat/tui/ui/LoadingIndicator';
 import { useCancellableEffect } from '@cli/chat/tui/state/useCancellableEffect';
+import { planOnboardingFunnelTransition } from '@controllers/onboarding/onboardingFunnel';
 import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { platform } from '@platform/platform';
 import {
   backfillFirstRunDone,
-  getFirstRunDone,
-  getOnboardingDeclined,
+  readOnboardingFlags,
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
@@ -158,23 +158,25 @@ export async function maybeRunCliOnboarding(
     hasPriorInstall,
     hasRunHistory,
   }).catch(() => {});
-  if (!hasCredential && getFirstRunDone(globalState)) {
-    return NO_ONBOARDING_RESULT;
+  // Route through the same funnel-transition planner the extension/desktop
+  // hosts use, rather than a hand-copied precedence ladder. `selectSetupAgent`
+  // is discarded: the CLI has no launcher agent list to steer. Clearing a
+  // stale skip must stay decoupled from the 3-way state — an
+  // already-credentialed launch clears a stale skip (the PRD's "configuring a
+  // credential clears the flag") even when firstRunDone is also true, which
+  // `transition.clearDeclined` captures directly.
+  const transition = planOnboardingFunnelTransition(undefined, {
+    hasCredential,
+    ...readOnboardingFlags(globalState),
+  });
+  if (transition.clearDeclined) {
+    await setOnboardingDeclined(globalState, false).catch(() => {});
   }
-  if (hasCredential) {
-    // A credential clears a stale skip (the PRD's "configuring a credential
-    // clears the flag"), but an already-credentialed launch is NOT a
-    // post-picker continuation: `configured` stays false so the setup agent
-    // only takes the session right after the picker actually configured a
-    // credential in this process. Anything looser hijacks every launch into
-    // setup until firstRunDone flips, with no exit path if the setup
-    // conversation never completes a run.
-    if (getOnboardingDeclined(globalState)) {
-      await setOnboardingDeclined(globalState, false).catch(() => {});
-    }
-    return NO_ONBOARDING_RESULT;
-  }
-  if (getOnboardingDeclined(globalState)) {
+  // `configured` stays false for both 'done' and 'setup': an
+  // already-credentialed or already-completed launch is not a post-picker
+  // continuation, so the setup agent only takes the session right after the
+  // picker actually configures a credential in this process.
+  if (transition.state !== 'needs-credential') {
     return NO_ONBOARDING_RESULT;
   }
   return runOnboardingFlow({

@@ -6,7 +6,7 @@ import { isFileNotFoundError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS, WorkspaceFS } from '@utils/files';
 import { delay } from '@utils/core';
-import { runToolWithCheck } from '@utils/system';
+import { runToolWithCheck } from '@utils/system/toolUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';
 
