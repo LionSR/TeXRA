@@ -6,6 +6,8 @@ import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionCo
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { resolveAndFormat, currentToolRoot } from '@tools/pathResolution';
+import { WorkspaceFS } from '@utils/files';
+import { isPathWithin } from '@utils/core/pathCore';
 import { executeCommand } from '@utils/system/execUtils';
 import { splitOutputLines } from '@utils/text/stringUtils';
 
@@ -121,10 +123,15 @@ export class GrepTool extends defineTool({
     const { path, display } = resolveAndFormat(input.path ?? undefined, root);
     const gitignore = await getGitignoreMatcher();
     const args = buildArguments(input, outputMode);
-    const ignoreArgs = gitignore.ignoreFiles.flatMap((ignoreFile) => [
-      '--ignore-file',
-      ignoreFile,
-    ]);
+    const workspacePath = WorkspaceFS.getPath();
+    const applyWorkspaceIgnores =
+      workspacePath != null && isPathWithin(workspacePath, path.absolute);
+    const ignoreArgs = applyWorkspaceIgnores
+      ? gitignore.ignoreFiles.flatMap((ignoreFile) => [
+          '--ignore-file',
+          ignoreFile,
+        ])
+      : [];
 
     // `--` ends rg option parsing so the LLM-controlled pattern can't be read as
     // a flag — e.g. `--pre=<cmd>` would run <cmd> as a preprocessor on every
