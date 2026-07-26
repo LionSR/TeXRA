@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   currentSession: vi.fn(),
   query: vi.fn(),
   buildClaudeAgentEnv: vi.fn(),
+  findClaudeBinaryPath: vi.fn(),
   enqueueFollowUp: vi.fn(),
 }));
 
@@ -87,7 +88,7 @@ vi.mock('@tools/claudeAgentConfig', () => ({
 
 vi.mock('@tools/claudeAgentImport', () => ({
   importClaudeAgentSdk: async () => mocks.query,
-  findClaudeBinaryPath: async () => undefined,
+  findClaudeBinaryPath: mocks.findClaudeBinaryPath,
 }));
 
 import { ClaudeAgentTool } from '@tools/claudeAgent';
@@ -114,6 +115,7 @@ describe('claude_agent tool — resume fallback for a torn-down registry', () =>
   function setupCommonMocks(): void {
     mocks.startChildRunLoop.mockReset();
     mocks.buildClaudeAgentEnv.mockReset();
+    mocks.findClaudeBinaryPath.mockReset();
     mocks.requestBashApproval.mockResolvedValue({ accepted: true });
     mocks.getCurrentToolContexts.mockReturnValue({
       runContext: {
@@ -128,6 +130,7 @@ describe('claude_agent tool — resume fallback for a torn-down registry', () =>
     mocks.getExecutionStore.mockReturnValue({ write: async () => {} });
     mocks.ensureRunDir.mockResolvedValue(undefined);
     mocks.buildClaudeAgentEnv.mockResolvedValue({});
+    mocks.findClaudeBinaryPath.mockResolvedValue(undefined);
     mocks.createChildStream.mockReturnValue(
       createFakeAgentCliChildStream(childStreamId),
     );
@@ -135,6 +138,77 @@ describe('claude_agent tool — resume fallback for a torn-down registry', () =>
       followUps: { acquire: () => ({ enqueue: mocks.enqueueFollowUp }) },
     });
   }
+
+  it('resolves the Claude binary before child creation and then tracks startup synchronously', async () => {
+    setupCommonMocks();
+    const binaryPath = pDefer<string | undefined>();
+    const executions = { getAgentHandleByStream: () => undefined } as any;
+    const startupEvents: string[] = [];
+    const originalTrackInFlight =
+      ClaudeAgentSessions.trackInFlight.bind(ClaudeAgentSessions);
+    const trackInFlight = vi
+      .spyOn(ClaudeAgentSessions, 'trackInFlight')
+      .mockImplementation((entry) => {
+        startupEvents.push('tracked');
+        originalTrackInFlight(entry);
+      });
+    mocks.findClaudeBinaryPath.mockReturnValue(binaryPath.promise);
+    mocks.startChildRunLoop.mockImplementation(
+      (params: { strategy: ChildRunStrategy<unknown> }) => {
+        startupEvents.push('startLoop');
+        params.strategy.onLoopStart?.({ executions } as any);
+        startupEvents.push('startLoopReturned');
+      },
+    );
+
+    try {
+      const launch = new ClaudeAgentTool().call({
+        prompt: 'start after binary discovery',
+      });
+      await vi.waitFor(() =>
+        expect(mocks.findClaudeBinaryPath).toHaveBeenCalledOnce(),
+      );
+
+      expect(mocks.registerExecution).not.toHaveBeenCalled();
+      expect(mocks.createChildStream).not.toHaveBeenCalled();
+      expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
+      expect(trackInFlight).not.toHaveBeenCalled();
+
+      binaryPath.resolve('/opt/claude');
+      await expect(launch).resolves.toMatchObject({ status: 'executed' });
+
+      expect(mocks.createChildStream).toHaveBeenCalledOnce();
+      expect(mocks.startChildRunLoop).toHaveBeenCalledOnce();
+      expect(trackInFlight).toHaveBeenCalledOnce();
+      expect(startupEvents).toEqual([
+        'startLoop',
+        'tracked',
+        'startLoopReturned',
+      ]);
+    } finally {
+      const trackedExecutionId = trackInFlight.mock.calls[0]?.[0].executionId;
+      trackInFlight.mockRestore();
+      if (trackedExecutionId) {
+        ClaudeAgentSessions.releaseByExecutionId(trackedExecutionId);
+      }
+    }
+  });
+
+  it('does not create an execution when Claude binary discovery fails', async () => {
+    setupCommonMocks();
+    mocks.findClaudeBinaryPath.mockRejectedValue(
+      new Error('Claude binary lookup failed'),
+    );
+
+    const result = await new ClaudeAgentTool().call({
+      prompt: 'must not create a stale child',
+    });
+
+    expect(result.status).toBe('error');
+    expect(mocks.registerExecution).not.toHaveBeenCalled();
+    expect(mocks.createChildStream).not.toHaveBeenCalled();
+    expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
+  });
 
   it('seeds the fallback launch with the stale session_id so the SDK resumes from disk', async () => {
     setupCommonMocks();
@@ -218,6 +292,30 @@ describe('claude_agent tool — resume fallback for a torn-down registry', () =>
 
     strategy?.releaseSessionOwnership?.();
     expect(ClaudeAgentSessions.lookup('stale-session')).toBeUndefined();
+  });
+
+  it('exposes an in-flight initial turn to the shared shutdown drain', async () => {
+    setupCommonMocks();
+    const interrupt = vi.fn();
+    let strategy: ChildRunStrategy<unknown> | undefined;
+    mocks.startChildRunLoop.mockImplementation(
+      (params: { strategy: ChildRunStrategy<unknown> }) => {
+        strategy = params.strategy;
+      },
+    );
+
+    await new ClaudeAgentTool().call({
+      prompt: 'start a long initial turn',
+    });
+
+    const executions = {
+      getAgentHandleByStream: () => ({ interrupt }),
+    } as any;
+    strategy?.onLoopStart?.({ executions } as any);
+    ClaudeAgentSessions.interruptAll();
+
+    expect(interrupt).toHaveBeenCalledOnce();
+    strategy?.releaseSessionOwnership?.();
   });
 
   it('lets a waiting caller own the fallback after the first launch fails', async () => {

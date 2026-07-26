@@ -8,8 +8,8 @@ import { killAllSessionBackgroundProcesses } from './SessionHandle';
 
 /**
  * Stops agent-spawned child processes and CLI-backed agent sessions before
- * host teardown. Every long-lived host (VS Code extension, Electron desktop)
- * registers these so agent work never outlives the host.
+ * host teardown. Every host (VS Code extension, Electron desktop, terminal
+ * CLI) registers these so agent work never outlives the host.
  */
 export function registerAgentShutdownHandlers(lifecycle: LifecycleHost): void {
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
