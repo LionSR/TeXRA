@@ -1,3 +1,6 @@
+// Node imports
+import * as nodePath from 'node:path';
+
 // Third-party imports
 import { z } from 'zod';
 
@@ -6,8 +9,6 @@ import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionCo
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { resolveAndFormat, currentToolRoot } from '@tools/pathResolution';
-import { WorkspaceFS } from '@utils/files';
-import { isPathWithin } from '@utils/core/pathCore';
 import { executeCommand } from '@utils/system/execUtils';
 import { splitOutputLines } from '@utils/text/stringUtils';
 
@@ -123,9 +124,7 @@ export class GrepTool extends defineTool({
     const { path, display } = resolveAndFormat(input.path ?? undefined, root);
     const gitignore = await getGitignoreMatcher();
     const args = buildArguments(input, outputMode);
-    const workspacePath = WorkspaceFS.getPath();
-    const applyWorkspaceIgnores =
-      workspacePath != null && isPathWithin(workspacePath, path.absolute);
+    const applyWorkspaceIgnores = !nodePath.isAbsolute(path.relative);
     const ignoreArgs = applyWorkspaceIgnores
       ? gitignore.ignoreFiles.flatMap((ignoreFile) => [
           '--ignore-file',
