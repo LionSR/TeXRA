@@ -26,6 +26,7 @@ import {
   renderLabeledActionButtonParts,
 } from '@shared/wa/actionButtons';
 import { type TeXRAIconName, waIcon } from '@shared/wa/webAwesomeIcons';
+import { byString } from '@utils/core';
 import { MainViewEvents } from '../events';
 import { fileSelectLayoutStyles } from '../styles/fileSelectStyles';
 
@@ -292,7 +293,7 @@ export class LatexDiffsSection extends LitElement {
   }
 
   private renderFileOptions(options: string[]): TemplateResult {
-    const sortedOptions = options.toSorted((a, b) => a.localeCompare(b));
+    const sortedOptions = options.toSorted(byString);
     return html`
       <wa-option value="">None</wa-option>
       ${repeat(
