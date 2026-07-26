@@ -12,7 +12,7 @@ import { createTestSession } from '@test/support/sessionTestUtils';
 describe('subscribeStatusBarSessionEvents', () => {
   it('tracks stream status changes from the session status plane', () => {
     const session = createTestSession();
-    const tracker = new StatusBarUsageTracker();
+    const tracker = new StatusBarUsageTracker(session.status);
     const onStatusChanged = vi.fn();
     const onUsageChanged = vi.fn();
     const dispose = subscribeStatusBarSessionEvents({
@@ -30,13 +30,16 @@ describe('subscribeStatusBarSessionEvents', () => {
 
     dispose();
     session.status.transition('stream-a', STREAM_PHASE.COMPLETED, 'lifecycle');
-    expect(tracker.activeStreamCount).toBe(1);
+    // Disposal stops the status-bar refresh, not the underlying fact: the
+    // count is read live from the session status plane, so it still follows
+    // the terminal transition.
+    expect(tracker.activeStreamCount).toBe(0);
     expect(onStatusChanged).toHaveBeenCalledTimes(1);
   });
 
   it('records valid run usage events after an in-flight status', () => {
     const session = createTestSession();
-    const tracker = new StatusBarUsageTracker();
+    const tracker = new StatusBarUsageTracker(session.status);
     const onStatusChanged = vi.fn();
     const onUsageChanged = vi.fn();
     const dispose = subscribeStatusBarSessionEvents({
@@ -72,7 +75,7 @@ describe('subscribeStatusBarSessionEvents', () => {
 
   it('ignores usage for unknown streams', () => {
     const session = createTestSession();
-    const tracker = new StatusBarUsageTracker();
+    const tracker = new StatusBarUsageTracker(session.status);
     const onStatusChanged = vi.fn();
     const onUsageChanged = vi.fn();
     const dispose = subscribeStatusBarSessionEvents({
