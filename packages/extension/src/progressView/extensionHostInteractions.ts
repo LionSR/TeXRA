@@ -1,11 +1,11 @@
 import { nanoid } from 'nanoid';
 import * as vscode from 'vscode';
 
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type {
-  AgentRuntimeEvent,
-  AgentRuntimeEventPayloads,
-  AgentRuntimeHost,
-} from '@agent/runtime/AgentRuntimeHost';
+  RuntimePresentationEvent,
+  RuntimePresentationEventPayloads,
+} from '@agent/runtime/runtimePresentationEvents';
 import {
   cancellationResultFor,
   type BashSettlement,
@@ -176,13 +176,10 @@ export function createExtensionHostInteractions(
     handlers().userQuestion.complete(requestId, toUserQuestionResult(decision));
 
   return {
-    // Thin pass-through to the caller-supplied presentation dispatcher —
-    // exactly what the desktop host does (`desktopHostInteractions.ts`).
-    // The actual event routing (progress-view interaction events, then the
-    // presentation-event switch) lives in `options.runtimeHost`.
-    emit<K extends AgentRuntimeEvent>(
+    // Thin pass-through to the caller-supplied presentation dispatcher.
+    emit<K extends RuntimePresentationEvent>(
       event: K,
-      payload: AgentRuntimeEventPayloads[K],
+      payload: RuntimePresentationEventPayloads[K],
     ): void {
       options.runtimeHost.emit(event, payload);
     },

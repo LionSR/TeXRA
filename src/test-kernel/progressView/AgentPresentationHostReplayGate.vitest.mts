@@ -11,13 +11,8 @@ import type {
   RetryResult,
 } from '@agent/runtime/HostInteractions';
 import { ApprovalRequestHandler } from '@controllers/progressView/backend/ApprovalRequestHandler';
-import {
-  ProgressInteractionHandler,
-  type UICallbacks,
-} from '@controllers/progressView/backend/events/ProgressInteractionHandler';
 import type { ApprovalRequestHandlerSet } from '@controllers/progressView/backend/progressBackendUiConfig';
 import { createAgentPresentationHost } from '@frontend/events/agentEventListeners';
-import { setExtensionInteractionEventSink } from '@frontend/events/extensionInteractionEvents';
 import { createExtensionHostInteractions } from '@progressView/extensionHostInteractions';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type {
@@ -153,7 +148,6 @@ function attachedSession(): SessionHandle {
 
 describe('extension presentation-event emit port (#9251 replay gate)', () => {
   it('redisplays a pending tool-edit approval exactly once per webview reload', () => {
-    const session = attachedSession();
     let canSend = false;
     const sendShow = vi.fn();
     const sendDismiss = vi.fn();
@@ -161,61 +155,25 @@ describe('extension presentation-event emit port (#9251 replay gate)', () => {
       ToolEditPermission,
       'requestId'
     >('requestId', sendShow, sendDismiss, () => canSend);
-    const uiCallbacks: UICallbacks = {
-      showToolEditPermission: (p) => toolEdit.show(p),
-      resolveToolEditPermission: (id) => toolEdit.dismiss(id),
-    };
-    const interactionHandler = new ProgressInteractionHandler(uiCallbacks);
-    const detachSink = setExtensionInteractionEventSink((event, payload) =>
-      interactionHandler.handleInteractionEvent(event, payload),
-    );
-    const presentationHost = createAgentPresentationHost(
-      {} as unknown as ProgressViewProvider,
-    );
-    const interactions = createExtensionHostInteractions({
-      runtimeHost: presentationHost,
-      session,
-      getApprovalHandlers: () => createApprovalHandlers(toolEdit),
-      setApprovalBypassState: vi.fn(),
-    });
-    const detachInteractions = session.useHostInteractions(interactions);
+    // The webview is not ready, so the host-local approval handler records the
+    // prompt without delivering it.
+    toolEdit.show(toolEditPermission('req-a'));
+    expect(sendShow).not.toHaveBeenCalled();
 
-    try {
-      // The webview isn't ready yet (mirrors `nativeToolEditApproval.ts`
-      // calling `getRuntimeHost().emit('showToolEditPermission', ...)`):
-      // the request is tracked but not delivered.
-      session.interactions.emit(
-        'showToolEditPermission',
-        toolEditPermission('req-a'),
-      );
-      expect(sendShow).not.toHaveBeenCalled();
+    // Each webview reload clears delivery tracking and redisplays the one
+    // pending prompt exactly once.
+    canSend = true;
+    toolEdit.replay();
+    expect(sendShow).toHaveBeenCalledTimes(1);
+    toolEdit.replay();
+    expect(sendShow).toHaveBeenCalledTimes(2);
 
-      // Webview reload #1 (`ProgressViewProvider.markWebviewReady` →
-      // `replayPendingPrompts` → `replayApprovalRequestHandlers`): the
-      // webview becomes ready and replay delivers the pending prompt once.
-      canSend = true;
-      toolEdit.replay();
-      expect(sendShow).toHaveBeenCalledTimes(1);
+    toolEdit.dismiss('req-a');
 
-      // Reload #2: still exactly one further redisplay per reload — not a
-      // duplicate flood, and not a dropped prompt.
-      toolEdit.replay();
-      expect(sendShow).toHaveBeenCalledTimes(2);
-
-      // The approval resolves (mirrors the `resolveToolEditPermission`
-      // event fired once the user acts on it in the native diff view).
-      session.interactions.emit('resolveToolEditPermission', {
-        requestId: 'req-a',
-      });
-
-      // A further reload must not resurrect an already-resolved approval.
-      toolEdit.replay();
-      expect(sendShow).toHaveBeenCalledTimes(2);
-      expect(sendDismiss).toHaveBeenCalledWith('req-a');
-    } finally {
-      detachInteractions();
-      detachSink();
-    }
+    // A further reload must not resurrect an already-resolved approval.
+    toolEdit.replay();
+    expect(sendShow).toHaveBeenCalledTimes(2);
+    expect(sendDismiss).toHaveBeenCalledWith('req-a');
   });
 
   it('replays a launch-path presentation event exactly once once the presentation host attaches', async () => {
