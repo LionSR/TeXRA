@@ -14,6 +14,7 @@
       "@agent/index/platformAgentDirectories",
       "@agent/modelHandlers/support/contextUtilization",
       "@agent/runtime/AgentRuntimeHost",
+      "@agent/runtime/agentShutdown",
       "@agent/runtime/detachSubagentsOnStop",
       "@agent/runtime/executeAgent",
       "@agent/runtime/executionRegistry",
