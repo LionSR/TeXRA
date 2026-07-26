@@ -4,12 +4,12 @@ import { ModelProvider } from 'llm-zoo';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import type { AgentTrace } from '@agent/trace';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { tagOpenAISdkError } from '@agent/modelHandlers/openai/openAISdkError';
 import { BackgroundPoller } from '@agent/modelHandlers/support/BackgroundPoller';
 import { isUserAbort } from '@common/errors/sdkErrorUtils';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
+import { spiedTrace } from '@test/support/spiedTrace';
 
 // Third-party imports
 import type OpenAI from 'openai';
@@ -29,14 +29,7 @@ function createHandler(): ModelHandlerOpenAIResponse {
       openRouterOnly: false,
     }),
   );
-  handler.setLogger({
-    streamId: 'test',
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    domain: vi.fn(),
-  } as unknown as AgentTrace);
+  handler.setLogger(spiedTrace());
   return handler;
 }
 
@@ -127,13 +120,7 @@ describe('OpenAI Responses background abort handling', () => {
       pollIntervalMs: 1,
       maxDurationMs: 0,
       isPending: (response) => response.status === 'in_progress',
-      logger: {
-        debug: vi.fn(),
-        info: vi.fn(),
-        warn: vi.fn(),
-        error: vi.fn(),
-        domain: vi.fn(),
-      } as unknown as AgentTrace,
+      logger: spiedTrace(),
     });
 
     const thrown = await target
