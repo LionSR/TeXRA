@@ -31,7 +31,7 @@ import {
 } from '@progressView/frontend/formatters/constants';
 import { toolDisplayKind } from '@shared/tools/toolKind';
 import { EXECUTIONS_DEFAULT_ACTION } from '@shared/tools/executionsDisplay';
-import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
+import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 import {
   DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
   DELEGATION_TOOLS,
@@ -79,7 +79,7 @@ function buildFileGroupsSection(
 ): TemplateResult | undefined {
   if (fileGroups.length === 0) return undefined;
   // prettier-ignore
-  const fileItems = html`${fileGroups.flatMap((group) => group.files.map((file) => html`<li class="detail-item"><wa-icon library=${TEXRA_ICON_LIBRARY} name="file" aria-hidden="true"></wa-icon> <span class="${group.clickable ? 'file-link clickable-link' : 'file-label'}" data-file=${ifDefined(group.clickable ? file : undefined)} role=${ifDefined(group.clickable ? 'button' : undefined)} tabindex=${ifDefined(group.clickable ? '0' : undefined)}>${file}</span> <span class="file-source">(${group.label})</span></li>`))}`;
+  const fileItems = html`${fileGroups.flatMap((group) => group.files.map((file) => html`<li class="detail-item">${waIcon('file')} <span class="${group.clickable ? 'file-link clickable-link' : 'file-label'}" data-file=${ifDefined(group.clickable ? file : undefined)} role=${ifDefined(group.clickable ? 'button' : undefined)} tabindex=${ifDefined(group.clickable ? '0' : undefined)}>${file}</span> <span class="file-source">(${group.label})</span></li>`))}`;
   return buildToolUseSection(
     'Files:',
     html`<ul class="detail-list">
@@ -280,7 +280,7 @@ function buildAcceptRunFilesSections(
         ? html` <span class="file-stats"><span class="added">+${edit.lineChanges.added}</span><span class="removed">-${edit.lineChanges.removed}</span></span>`
         : nothing;
       // prettier-ignore
-      return html`<li class="detail-item"><wa-icon library=${TEXRA_ICON_LIBRARY} name="file" aria-hidden="true"></wa-icon> <span class="file-link clickable-link" data-file=${dest} role="button" tabindex="0">${dest}</span>${isMapped ? html` <span class="file-source">(from ${source})</span>` : nothing}${diffStats}</li>`;
+      return html`<li class="detail-item">${waIcon('file')} <span class="file-link clickable-link" data-file=${dest} role="button" tabindex="0">${dest}</span>${isMapped ? html` <span class="file-source">(from ${source})</span>` : nothing}${diffStats}</li>`;
     })}`;
     // prettier-ignore
     sections.push(buildToolUseSection('Files:', html`<ul class="detail-list">${fileItems}</ul>`));
@@ -326,7 +326,7 @@ function buildDelegationSections(ctx: ToolSectionContext): TemplateResult[] {
     extractFlags.push('Extract TikZ');
   if (extractFlags.length > 0) {
     // prettier-ignore
-    sections.push(buildToolUseSection('Extraction:', html`${extractFlags.map((f) => html`<wa-badge variant="neutral" appearance="filled"><wa-icon library=${TEXRA_ICON_LIBRARY} name="file-media" aria-hidden="true"></wa-icon> ${f}</wa-badge>`)}`));
+    sections.push(buildToolUseSection('Extraction:', html`${extractFlags.map((f) => html`<wa-badge variant="neutral" appearance="filled">${waIcon('file-media')} ${f}</wa-badge>`)}`));
   }
 
   const fileGroups = getProposalFileGroups(delegateInput);
@@ -432,7 +432,7 @@ function buildMcpSections(ctx: ToolSectionContext): TemplateResult[] {
   const otherBlocks = contentBlocks.filter((block) => !isMcpTextBlock(block));
 
   if (typeof mcpOutput?.status === 'string') {
-    let statusIconName: string;
+    let statusIconName: TeXRAIconName | typeof SPINNER_ICON_NAME;
     if (mcpOutput.status === 'failed') {
       statusIconName = 'error';
     } else if (mcpOutput.status === 'in_progress') {
@@ -440,10 +440,10 @@ function buildMcpSections(ctx: ToolSectionContext): TemplateResult[] {
     } else {
       statusIconName = 'check';
     }
-    // prettier-ignore
-    const statusIconTemplate = statusIconName === SPINNER_ICON_NAME
-      ? html`<wa-spinner></wa-spinner>`
-      : html`<wa-icon library=${TEXRA_ICON_LIBRARY} name=${statusIconName} aria-hidden="true"></wa-icon>`;
+    const statusIconTemplate =
+      statusIconName === SPINNER_ICON_NAME
+        ? html`<wa-spinner></wa-spinner>`
+        : waIcon(statusIconName);
     // prettier-ignore
     sections.push(buildToolUseSection('Status:', html`<wa-badge variant="neutral" appearance="filled">${statusIconTemplate} ${mcpOutput.status}</wa-badge>`));
     renderedMcpOutput = true;

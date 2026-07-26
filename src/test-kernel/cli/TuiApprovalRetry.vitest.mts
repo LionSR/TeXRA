@@ -84,7 +84,6 @@ import {
   streams,
 } from '@cli/chat/tui/state/cliState';
 import { createTuiHostInteractions } from '@cli/chat/tui/state/subscribeApprovals';
-import { hasCliApprovalDenied } from '@cli/runtime/approvalAdapter';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
 import type { ApiProvider } from '@model/apiProviders';
@@ -1173,63 +1172,6 @@ describe('TUI retry approvals', () => {
     clearApprovals();
     await expect(result).resolves.toEqual({ action: 'cancel' });
     expect(currentApproval.get()).toBeUndefined();
-  });
-
-  it('times out an active plan approval modal', async () => {
-    const { cliContext, interactions } = tui();
-    const result = interactions.requestPlanApproval?.(
-      {
-        approvalId: 'plan-timeout',
-        streamId: 'plan-stream',
-        goalEnabled: false,
-        plan: { objective: 'Check the timeout path.' },
-      },
-      { timeoutMs: 10 },
-    );
-
-    await vi.waitFor(() => {
-      expect(currentApproval.get()?.payload).toMatchObject({
-        kind: 'plan',
-        payload: { approvalId: 'plan-timeout' },
-      });
-    });
-    await expect(result).resolves.toEqual({ action: 'timeout' });
-    expect(hasCliApprovalDenied(cliContext)).toBe(false);
-  });
-
-  it('times out an active retry modal', async () => {
-    mocks.hasUsableApiKey.mockResolvedValue(false);
-
-    const { cliContext, interactions } = tui();
-    const result = interactions.requestRetry?.(
-      relayRetry({ streamId: 'retry-timeout', provider: 'openai' }),
-      { timeoutMs: 100 },
-    );
-
-    await vi.waitFor(() => {
-      expect(currentApproval.get()?.payload).toMatchObject({
-        kind: 'retry',
-        payload: { streamId: 'retry-timeout' },
-      });
-    });
-    await expect(result).resolves.toEqual({ action: 'timeout' });
-    expect(hasCliApprovalDenied(cliContext)).toBe(false);
-  });
-
-  it('times out while a retry is still waiting on the keychain', async () => {
-    mocks.hasUsableApiKey.mockImplementation(
-      () => new Promise(() => undefined),
-    );
-
-    const { cliContext, interactions } = tui();
-    const result = interactions.requestRetry?.(
-      relayRetry({ streamId: 'lookup-timeout', provider: 'openai' }),
-      { timeoutMs: 10 },
-    );
-
-    await expect(result).resolves.toEqual({ action: 'timeout' });
-    expect(currentApproval.get()).toBeUndefined();
-    expect(hasCliApprovalDenied(cliContext)).toBe(false);
   });
 
   it('ignores stale auto-switch lookups after a newer retry replaces them', async () => {

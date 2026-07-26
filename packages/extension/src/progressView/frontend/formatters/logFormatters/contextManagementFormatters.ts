@@ -19,6 +19,7 @@ import {
   type ContextManagementData,
   type LogMessageData,
 } from '@shared/schemas';
+import type { TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 import { formatCompactTokenCount } from '@utils/core';
 
 // Local imports - formatter helpers
@@ -41,7 +42,7 @@ const TOKENS_FREED_ACTIONS = new Set([
 /** Action display configuration. */
 const ACTION_CONFIG: Record<
   string,
-  { icon: string; label: string; color: string }
+  { icon: TeXRAIconName; label: string; color: string }
 > = {
   compaction: {
     icon: 'fold',

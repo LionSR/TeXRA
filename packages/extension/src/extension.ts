@@ -653,7 +653,10 @@ export async function activate(context: vscode.ExtensionContext) {
     }),
   });
 
-  const statusBarUsageTracker = new StatusBarUsageTracker();
+  const statusBarSession = defaultSession();
+  const statusBarUsageTracker = new StatusBarUsageTracker(
+    statusBarSession.status,
+  );
   const updateStatusBarTooltip = () => {
     if (!statusBarItem) return;
     const { cost, inputTokens, outputTokens } =
@@ -698,7 +701,7 @@ export async function activate(context: vscode.ExtensionContext) {
   };
 
   disposeStatusListener = subscribeStatusBarSessionEvents({
-    session: defaultSession(),
+    session: statusBarSession,
     tracker: statusBarUsageTracker,
     onStatusChanged: () => {
       updateStatusBarTooltip();
