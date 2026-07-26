@@ -514,6 +514,44 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
     }
   });
 
+  it('keeps a parked request pending when the diagnostic sink throws', async () => {
+    setOutputChannelFactory(() => ({
+      appendLine: () => {
+        throw new Error('diagnostic sink failed');
+      },
+    }));
+    const session = createTestSession();
+    const adapter = createControllablePlanAdapter();
+    try {
+      const pending = session.interactions
+        .requestPlanApproval({
+          approvalId: 'approval:throwing-warning',
+          streamId,
+          plan,
+          goalEnabled: false,
+        })
+        .then(
+          (result) => ({ status: 'resolved' as const, result }),
+          (error: unknown) => ({ status: 'rejected' as const, error }),
+        );
+
+      expect(session.interactions.pendingCount).toBe(1);
+      session.useHostInteractions(adapter.interactions);
+      expect(adapter.requests).toHaveLength(1);
+      expect(
+        adapter.submit('approval:throwing-warning', { action: 'approve' }),
+      ).toBe(true);
+      await expect(pending).resolves.toEqual({
+        status: 'resolved',
+        result: { action: 'approve' },
+      });
+      expect(session.interactions.pendingCount).toBe(0);
+    } finally {
+      session.dispose();
+      setOutputChannelFactory(null);
+    }
+  });
+
   it('settles against the documented minimal `{ cancel }` host', async () => {
     const session = createTestSession();
     session.useHostInteractions({ cancel: vi.fn() });
@@ -556,6 +594,10 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
   });
 
   it('keeps a pending request across adapter detach and reattach', async () => {
+    const lines: string[] = [];
+    setOutputChannelFactory(() => ({
+      appendLine: (message: string) => lines.push(message),
+    }));
     const session = createTestSession();
     const first = createControllablePlanAdapter();
     const second = createControllablePlanAdapter();
@@ -575,6 +617,11 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
       await Promise.resolve();
       expect(first.dispose).toHaveBeenCalledOnce();
       expect(pendingCounts).toEqual([1]);
+      expect(
+        lines.filter((line) =>
+          line.includes('No interaction host is attached'),
+        ),
+      ).toHaveLength(1);
 
       session.useHostInteractions(second.interactions);
       expect(second.requests).toHaveLength(1);
@@ -585,6 +632,7 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
       expect(pendingCounts).toEqual([1, 0]);
     } finally {
       session.dispose();
+      setOutputChannelFactory(null);
     }
   });
 
