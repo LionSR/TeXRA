@@ -25,8 +25,8 @@
 //     src/test-kernel/architecture/sharedSchemasDeepImportRatchet
 
 // Node imports
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { dirname, join, relative, resolve } from 'node:path';
 
 // Third-party imports
 import ts from 'typescript';
@@ -43,14 +43,6 @@ const BARREL_PATH = resolve(REPO_ROOT, 'src/shared/schemas/index.ts');
 const SURFACE_INTERIOR = 'src/shared/schemas/';
 const DEEP_IMPORT_PREFIX = '@shared/schemas/';
 
-const SCAN_ROOTS = [
-  'src',
-  'packages/cli/src',
-  'packages/desktop/src',
-  'packages/extension/src',
-  'packages/trace-viewer/src',
-];
-
 const SEMANTICS =
   "Production statements that reach past the published '@shared/schemas' " +
   'barrel into a leaf module, keyed by specifier, valued by the importing ' +
@@ -63,13 +55,25 @@ const SEMANTICS =
   'specifier count may not grow. Classification is computed against ' +
   'src/shared/schemas/index.ts at test time, so widening the barrel ' +
   'reclassifies statements automatically (and requires regenerating this ' +
-  'file in the same PR). Scan excludes src/test-kernel/ and the surface ' +
-  'interior src/shared/schemas/.';
+  'file in the same PR). The leaf-aware published-surface snapshot preserves ' +
+  'the exact type/value bindings used by baseline gratuitous imports, so those ' +
+  'bindings may not contract even if their importers move. Scan covers ' +
+  'repo-root src/ and every packages/*/src directory, excluding ' +
+  'src/test-kernel/ and the surface interior src/shared/schemas/.';
 
 type DeepImports = Record<string, string[]>;
+type ExportSpace = 'type' | 'value';
+
+interface PublishedLeafSurface {
+  type: string[];
+  value: string[];
+}
+
+type PublishedSurface = Record<string, PublishedLeafSurface>;
 
 interface SchemasBaseline {
   semantics: string;
+  surface: PublishedSurface;
   forced: DeepImports;
   gratuitous: DeepImports;
 }
@@ -99,71 +103,18 @@ function resolveRelative(
   );
 }
 
-/** Every name `import { … } from '@shared/schemas'` can resolve, `export *` followed. */
-function barrelExportedNames(
-  file: string,
-  seen = new Set<string>(),
-): Set<string> {
-  const names = new Set<string>();
-  if (seen.has(file)) return names;
-  seen.add(file);
-  for (const statement of parseSourceFile(file).statements) {
-    if (ts.isExportDeclaration(statement)) {
-      const { exportClause, moduleSpecifier } = statement;
-      if (exportClause != null && ts.isNamedExports(exportClause)) {
-        for (const element of exportClause.elements)
-          names.add(element.name.text);
-      } else if (exportClause != null && ts.isNamespaceExport(exportClause)) {
-        names.add(exportClause.name.text);
-      } else if (
-        exportClause == null &&
-        moduleSpecifier != null &&
-        ts.isStringLiteralLike(moduleSpecifier)
-      ) {
-        const target = resolveRelative(file, moduleSpecifier.text);
-        if (target == null)
-          throw new Error(
-            `Unresolved re-export ${moduleSpecifier.text} in ${file}`,
-          );
-        for (const name of barrelExportedNames(target, seen)) names.add(name);
-      }
-      continue;
-    }
-    const modifiers = ts.canHaveModifiers(statement)
-      ? ts.getModifiers(statement)
-      : undefined;
-    if (
-      !modifiers?.some(
-        (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword,
-      )
-    )
-      continue;
-    if (ts.isVariableStatement(statement)) {
-      for (const declaration of statement.declarationList.declarations) {
-        if (ts.isIdentifier(declaration.name)) names.add(declaration.name.text);
-      }
-    } else if (
-      (ts.isFunctionDeclaration(statement) ||
-        ts.isClassDeclaration(statement) ||
-        ts.isInterfaceDeclaration(statement) ||
-        ts.isTypeAliasDeclaration(statement) ||
-        ts.isEnumDeclaration(statement)) &&
-      statement.name != null
-    ) {
-      names.add(statement.name.text);
-    }
-  }
-  return names;
+interface ImportBinding {
+  name: string;
+  space: ExportSpace;
 }
 
 /**
- * The names a statement pulls from the leaf, or `undefined` for the forms that
- * take the module wholesale (namespace, default, side-effect, `export *`) and
- * so can never be shown barrel-reachable.
+ * The bindings a statement pulls from the leaf, or `undefined` for forms that
+ * take the module wholesale and therefore cannot use the barrel verbatim.
  */
-function importedNames(
+function importedBindings(
   node: ts.ImportDeclaration | ts.ExportDeclaration,
-): string[] | undefined {
+): ImportBinding[] | undefined {
   const clause = ts.isImportDeclaration(node)
     ? node.importClause
     : node.exportClause;
@@ -171,18 +122,24 @@ function importedNames(
   if (ts.isImportClause(clause)) {
     if (clause.name != null || clause.namedBindings == null) return undefined;
     if (!ts.isNamedImports(clause.namedBindings)) return undefined;
-    return clause.namedBindings.elements.map(
-      (element) => (element.propertyName ?? element.name).text,
-    );
+    return clause.namedBindings.elements.map((element) => ({
+      name: (element.propertyName ?? element.name).text,
+      space:
+        clause.isTypeOnly || element.isTypeOnly ? ('type' as const) : 'value',
+    }));
   }
   if (!ts.isNamedExports(clause)) return undefined;
-  return clause.elements.map(
-    (element) => (element.propertyName ?? element.name).text,
-  );
+  return clause.elements.map((element) => ({
+    name: (element.propertyName ?? element.name).text,
+    space:
+      (ts.isExportDeclaration(node) && node.isTypeOnly) || element.isTypeOnly
+        ? ('type' as const)
+        : 'value',
+  }));
 }
 
 interface DeepImportReference {
-  names: string[] | undefined;
+  bindings: ImportBinding[] | undefined;
   specifier: string;
   typeOnly: boolean;
 }
@@ -205,11 +162,11 @@ function deepImportReferences(
   const references: DeepImportReference[] = [];
   const add = (
     specifier: string | undefined,
-    names: string[] | undefined,
+    bindings: ImportBinding[] | undefined,
     typeOnly: boolean,
   ): void => {
     if (specifier?.startsWith(DEEP_IMPORT_PREFIX) !== true) return;
-    references.push({ names, specifier, typeOnly });
+    references.push({ bindings, specifier, typeOnly });
   };
   const visit = (node: ts.Node): void => {
     if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
@@ -218,10 +175,8 @@ function deepImportReferences(
           ts.isStringLiteralLike(node.moduleSpecifier)
           ? node.moduleSpecifier.text
           : undefined,
-        importedNames(node),
-        ts.isImportDeclaration(node)
-          ? (node.importClause?.isTypeOnly ?? false)
-          : node.isTypeOnly,
+        importedBindings(node),
+        importedBindings(node)?.every(({ space }) => space === 'type') ?? false,
       );
     } else if (
       ts.isImportEqualsDeclaration(node) &&
@@ -240,7 +195,7 @@ function deepImportReferences(
         importTypeSpecifier(node),
         node.qualifier == null
           ? undefined
-          : [firstQualifiedName(node.qualifier)],
+          : [{ name: firstQualifiedName(node.qualifier), space: 'type' }],
         true,
       );
     } else if (ts.isCallExpression(node)) {
@@ -248,7 +203,23 @@ function deepImportReferences(
         node.expression.kind === ts.SyntaxKind.ImportKeyword;
       const isRequire =
         ts.isIdentifier(node.expression) && node.expression.text === 'require';
-      if (isDynamicImport || isRequire) {
+      const isRequireResolve =
+        ts.isPropertyAccessExpression(node.expression) &&
+        ts.isIdentifier(node.expression.expression) &&
+        node.expression.expression.text === 'require' &&
+        node.expression.name.text === 'resolve';
+      const isImportMetaResolve =
+        ts.isPropertyAccessExpression(node.expression) &&
+        ts.isMetaProperty(node.expression.expression) &&
+        node.expression.expression.keywordToken ===
+          ts.SyntaxKind.ImportKeyword &&
+        node.expression.name.text === 'resolve';
+      if (
+        isDynamicImport ||
+        isRequire ||
+        isRequireResolve ||
+        isImportMetaResolve
+      ) {
         const [argument] = node.arguments;
         add(
           argument != null && ts.isStringLiteralLike(argument)
@@ -265,12 +236,253 @@ function deepImportReferences(
   return references;
 }
 
-function collectCurrent(): Pick<SchemasBaseline, 'forced' | 'gratuitous'> {
-  const surface = barrelExportedNames(BARREL_PATH);
+interface ModuleExport {
+  readonly sources: Set<string>;
+  readonly spaces: Set<ExportSpace>;
+}
+
+type ModuleExports = Map<string, ModuleExport>;
+
+function hasExportModifier(node: ts.Node): boolean {
+  return (
+    ts.canHaveModifiers(node) &&
+    (ts
+      .getModifiers(node)
+      ?.some(({ kind }) => kind === ts.SyntaxKind.ExportKeyword) ??
+      false)
+  );
+}
+
+function addModuleExport(
+  exports: ModuleExports,
+  name: string,
+  spaces: Iterable<ExportSpace>,
+  sources: Iterable<string>,
+): void {
+  const entry = exports.get(name) ?? {
+    sources: new Set<string>(),
+    spaces: new Set<ExportSpace>(),
+  };
+  for (const space of spaces) entry.spaces.add(space);
+  for (const source of sources) entry.sources.add(source);
+  exports.set(name, entry);
+}
+
+function declarationSpaces(node: ts.Node): readonly ExportSpace[] | undefined {
+  if (ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node)) {
+    return ['type'];
+  }
+  if (
+    ts.isVariableStatement(node) ||
+    ts.isFunctionDeclaration(node) ||
+    ts.isClassDeclaration(node) ||
+    ts.isEnumDeclaration(node) ||
+    ts.isModuleDeclaration(node)
+  ) {
+    // A value export can also be imported with `import type` and referenced
+    // through `typeof`; only an `export type` loses the value namespace.
+    return ['type', 'value'];
+  }
+  return undefined;
+}
+
+function constrainedSpaces(
+  spaces: ReadonlySet<ExportSpace>,
+  typeOnly: boolean,
+): readonly ExportSpace[] {
+  if (!typeOnly) return [...spaces];
+  return spaces.size === 0 ? [] : ['type'];
+}
+
+/**
+ * Public names of one schema module, together with every same-name re-export
+ * path by which the root barrel can expose that exact leaf.
+ */
+function schemaModuleExports(
+  file: string,
+  memo = new Map<string, ModuleExports>(),
+  active = new Set<string>(),
+): ModuleExports {
+  const cached = memo.get(file);
+  if (cached) return cached;
+  if (active.has(file)) {
+    throw new Error(`Cyclic schema re-export graph at ${toRepoPath(file)}`);
+  }
+  active.add(file);
+  const exports: ModuleExports = new Map();
+  const sourceFile = parseSourceFile(file);
+
+  for (const statement of sourceFile.statements) {
+    if (!hasExportModifier(statement)) continue;
+    const spaces = declarationSpaces(statement);
+    if (spaces == null) continue;
+    if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        if (ts.isIdentifier(declaration.name)) {
+          addModuleExport(exports, declaration.name.text, spaces, [file]);
+        }
+      }
+    } else if (
+      (ts.isFunctionDeclaration(statement) ||
+        ts.isClassDeclaration(statement) ||
+        ts.isInterfaceDeclaration(statement) ||
+        ts.isTypeAliasDeclaration(statement) ||
+        ts.isEnumDeclaration(statement) ||
+        ts.isModuleDeclaration(statement)) &&
+      statement.name != null &&
+      ts.isIdentifier(statement.name)
+    ) {
+      addModuleExport(exports, statement.name.text, spaces, [file]);
+    }
+  }
+
+  for (const statement of sourceFile.statements) {
+    if (!ts.isExportDeclaration(statement)) continue;
+    const { exportClause, moduleSpecifier } = statement;
+    const specifier =
+      moduleSpecifier != null && ts.isStringLiteralLike(moduleSpecifier)
+        ? moduleSpecifier.text
+        : undefined;
+    const target =
+      specifier?.startsWith('.') === true
+        ? resolveRelative(file, specifier)
+        : undefined;
+    if (specifier?.startsWith('.') === true && target == null) {
+      throw new Error(
+        `Unresolved re-export ${specifier} in ${toRepoPath(file)}`,
+      );
+    }
+    const targetExports =
+      target == null ? undefined : schemaModuleExports(target, memo, active);
+
+    if (exportClause == null) {
+      if (targetExports == null) continue;
+      for (const [name, entry] of targetExports) {
+        addModuleExport(
+          exports,
+          name,
+          constrainedSpaces(entry.spaces, statement.isTypeOnly),
+          [...entry.sources, file],
+        );
+      }
+      continue;
+    }
+
+    if (ts.isNamespaceExport(exportClause)) {
+      addModuleExport(
+        exports,
+        exportClause.name.text,
+        ['type', 'value'],
+        [file],
+      );
+      continue;
+    }
+
+    for (const element of exportClause.elements) {
+      const sourceName = (element.propertyName ?? element.name).text;
+      const publicName = element.name.text;
+      const typeOnly = statement.isTypeOnly || element.isTypeOnly;
+      const targetEntry = targetExports?.get(sourceName);
+      const externalSpaces = typeOnly
+        ? (['type'] as const)
+        : (['type', 'value'] as const);
+      const spaces =
+        targetEntry == null
+          ? externalSpaces
+          : constrainedSpaces(targetEntry.spaces, typeOnly);
+      const sources =
+        targetEntry != null && sourceName === publicName
+          ? [...targetEntry.sources, file]
+          : [file];
+      addModuleExport(exports, publicName, spaces, sources);
+    }
+  }
+
+  active.delete(file);
+  memo.set(file, exports);
+  return exports;
+}
+
+function schemaSpecifier(file: string): string | undefined {
+  const schemasRoot = resolve(REPO_ROOT, SURFACE_INTERIOR);
+  const leaf = relative(schemasRoot, file)
+    .replaceAll('\\', '/')
+    .replace(/\.(?:ts|tsx)$/, '')
+    .replace(/\/index$/, '');
+  if (leaf.startsWith('../') || leaf === 'index') return undefined;
+  return `${DEEP_IMPORT_PREFIX}${leaf}`;
+}
+
+type MutablePublishedSurface = Map<
+  string,
+  { type: Set<string>; value: Set<string> }
+>;
+
+function addPublishedBinding(
+  surface: MutablePublishedSurface,
+  specifier: string,
+  name: string,
+  space: ExportSpace,
+): void {
+  const leaf = surface.get(specifier) ?? {
+    type: new Set<string>(),
+    value: new Set<string>(),
+  };
+  leaf[space].add(name);
+  surface.set(specifier, leaf);
+}
+
+function sortPublishedSurface(
+  surface: MutablePublishedSurface,
+): PublishedSurface {
+  return Object.fromEntries(
+    [...surface]
+      .toSorted(([a], [b]) => a.localeCompare(b))
+      .map(([specifier, spaces]) => [
+        specifier,
+        {
+          type: [...spaces.type].toSorted((a, b) => a.localeCompare(b)),
+          value: [...spaces.value].toSorted((a, b) => a.localeCompare(b)),
+        },
+      ]),
+  );
+}
+
+function publishedSurface(): PublishedSurface {
+  const surface: MutablePublishedSurface = new Map();
+  for (const [name, entry] of schemaModuleExports(BARREL_PATH)) {
+    for (const source of entry.sources) {
+      const specifier = schemaSpecifier(source);
+      if (specifier == null) continue;
+      for (const space of entry.spaces) {
+        addPublishedBinding(surface, specifier, name, space);
+      }
+    }
+  }
+  return sortPublishedSurface(surface);
+}
+
+function scanRoots(): string[] {
+  const packagesRoot = resolve(REPO_ROOT, 'packages');
+  return [
+    'src',
+    ...readdirSync(packagesRoot, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => `packages/${entry.name}/src`)
+      .toSorted((a, b) => a.localeCompare(b)),
+  ];
+}
+
+function collectCurrent(): Pick<
+  SchemasBaseline,
+  'surface' | 'forced' | 'gratuitous'
+> {
+  const fullSurface = publishedSurface();
+  const referencedSurface: MutablePublishedSurface = new Map();
   const forced: DeepImports = {};
   const gratuitous: DeepImports = {};
 
-  for (const root of SCAN_ROOTS) {
+  for (const root of scanRoots()) {
     for (const file of sourceFilesUnder(resolve(REPO_ROOT, root), {
       excludeTestKernel: true,
       missingDirReturnsEmpty: true,
@@ -285,10 +497,21 @@ function collectCurrent(): Pick<SchemasBaseline, 'forced' | 'gratuitous'> {
       for (const reference of deepImportReferences(
         parseSourceFile(file, text),
       )) {
-        const bucket =
-          reference.names?.every((name) => surface.has(name)) === true
-            ? gratuitous
-            : forced;
+        const isGratuitous =
+          reference.bindings?.every(({ name, space }) =>
+            fullSurface[reference.specifier]?.[space].includes(name),
+          ) === true;
+        const bucket = isGratuitous ? gratuitous : forced;
+        if (isGratuitous) {
+          for (const { name, space } of reference.bindings ?? []) {
+            addPublishedBinding(
+              referencedSurface,
+              reference.specifier,
+              name,
+              space,
+            );
+          }
+        }
         (bucket[reference.specifier] ??= []).push(
           reference.typeOnly ? `${repoPath} (type-only)` : repoPath,
         );
@@ -304,7 +527,11 @@ function collectCurrent(): Pick<SchemasBaseline, 'forced' | 'gratuitous'> {
           entries.toSorted((a, b) => a.localeCompare(b)),
         ]),
     );
-  return { forced: sorted(forced), gratuitous: sorted(gratuitous) };
+  return {
+    surface: sortPublishedSurface(referencedSurface),
+    forced: sorted(forced),
+    gratuitous: sorted(gratuitous),
+  };
 }
 
 function total(imports: DeepImports): number {
@@ -314,16 +541,18 @@ function total(imports: DeepImports): number {
   );
 }
 
-function contractedEntries(
+function contractedSurface(
   baseline: SchemasBaseline,
-  current: Pick<SchemasBaseline, 'forced' | 'gratuitous'>,
+  current: PublishedSurface,
 ): string[] {
-  return Object.entries(current.forced).flatMap(([specifier, entries]) => {
-    const previouslyReachable = new Set(baseline.gratuitous[specifier] ?? []);
-    return entries
-      .filter((entry) => previouslyReachable.has(entry))
-      .map((entry) => `${specifier}: ${entry}`);
-  });
+  return Object.entries(baseline.surface).flatMap(([specifier, spaces]) =>
+    (['type', 'value'] as const).flatMap((space) => {
+      const currentNames = new Set(current[specifier]?.[space] ?? []);
+      return spaces[space]
+        .filter((name) => !currentNames.has(name))
+        .map((name) => `${specifier} [${space}]: ${name}`);
+    }),
+  );
 }
 
 describe('@shared/schemas deep-import ratchet', () => {
@@ -336,62 +565,102 @@ describe('@shared/schemas deep-import ratchet', () => {
         import agent = require('@shared/schemas/agent');
         const dynamic = import('@shared/schemas/agent');
         const commonJs = require('@shared/schemas/agent');
+        const requirePath = require.resolve('@shared/schemas/agent');
+        const importPath = import.meta.resolve('@shared/schemas/agent');
         type Category = import('@shared/schemas/agent').AgentCategory;
       `,
     );
 
     expect(deepImportReferences(source)).toEqual([
       {
-        names: ['AgentCategory'],
+        bindings: [{ name: 'AgentCategory', space: 'value' }],
         specifier: '@shared/schemas/agent',
         typeOnly: false,
       },
       {
-        names: ['AgentCategory'],
+        bindings: [{ name: 'AgentCategory', space: 'value' }],
         specifier: '@shared/schemas/agent',
         typeOnly: false,
       },
       {
-        names: undefined,
+        bindings: undefined,
         specifier: '@shared/schemas/agent',
         typeOnly: false,
       },
       {
-        names: undefined,
+        bindings: undefined,
         specifier: '@shared/schemas/agent',
         typeOnly: false,
       },
       {
-        names: undefined,
+        bindings: undefined,
         specifier: '@shared/schemas/agent',
         typeOnly: false,
       },
       {
-        names: ['AgentCategory'],
+        bindings: undefined,
+        specifier: '@shared/schemas/agent',
+        typeOnly: false,
+      },
+      {
+        bindings: undefined,
+        specifier: '@shared/schemas/agent',
+        typeOnly: false,
+      },
+      {
+        bindings: [{ name: 'AgentCategory', space: 'type' }],
         specifier: '@shared/schemas/agent',
         typeOnly: true,
       },
     ]);
   });
 
-  it('detects contraction within an already-forced leaf', () => {
+  it('detects leaf-local type/value surface contraction independently of importers', () => {
     const specifier = '@shared/schemas/profileViewMessages';
-    const movedEntry = 'src/example.ts (type-only)';
     const fixtureBaseline: SchemasBaseline = {
       semantics: '',
-      forced: { [specifier]: ['src/already-forced.ts'] },
-      gratuitous: { [specifier]: [movedEntry] },
-    };
-    const fixtureCurrent = {
-      forced: {
-        [specifier]: ['src/already-forced.ts', movedEntry],
+      surface: {
+        [specifier]: {
+          type: ['NumberVscodeSetting', 'RuntimeSchema'],
+          value: ['RuntimeSchema'],
+        },
       },
-      gratuitous: {},
+      forced: { [specifier]: ['src/already-forced.ts'] },
+      gratuitous: { [specifier]: ['src/old.ts'] },
+    };
+    const fixtureCurrent: PublishedSurface = {
+      [specifier]: {
+        type: ['NumberVscodeSetting', 'RuntimeSchema'],
+        value: [],
+      },
     };
 
-    expect(contractedEntries(fixtureBaseline, fixtureCurrent)).toEqual([
-      `${specifier}: ${movedEntry}`,
+    expect(contractedSurface(fixtureBaseline, fixtureCurrent)).toEqual([
+      `${specifier} [value]: RuntimeSchema`,
     ]);
+  });
+
+  it('tracks published names by their exact leaf and export namespace', () => {
+    const surface = publishedSurface();
+
+    expect(surface['@shared/schemas/profileViewMessages']?.type).toContain(
+      'NumberVscodeSetting',
+    );
+    expect(surface['@shared/schemas/profileViewMessages']?.value).not.toContain(
+      'NumberVscodeSetting',
+    );
+    expect(surface['@shared/schemas/settingsViewMessages']?.type).toContain(
+      'NumberVscodeSetting',
+    );
+    expect(surface['@shared/schemas/commonViewMessages']?.type).not.toContain(
+      'NumberVscodeSetting',
+    );
+    expect(surface['@shared/schemas/commonViewMessages']?.value).toContain(
+      'ThemeSchema',
+    );
+    expect(surface['@shared/schemas/commonViewMessages']?.value).not.toContain(
+      'Theme',
+    );
   });
 
   // One scan for the whole suite; every case reads the same snapshot.
@@ -451,11 +720,11 @@ describe('@shared/schemas deep-import ratchet', () => {
     ).toEqual([]);
   });
 
-  it('does not shrink the surface of a leaf that was partially published', () => {
-    const contracted = contractedEntries(baseline, current);
+  it('does not shrink the leaf-aware published surface', () => {
+    const contracted = contractedSurface(baseline, publishedSurface());
     expect(
       contracted,
-      `These statements could previously use '@shared/schemas', but their symbols are no longer exported by the barrel:\n` +
+      `These leaf symbols were previously reachable through '@shared/schemas', but are no longer exported in the same namespace:\n` +
         contracted.map((entry) => `  ${entry}`).join('\n') +
         `\n\nRestore the published symbols, or land the surface-membership decision and regenerate ${BASELINE_FILE}.`,
     ).toEqual([]);
@@ -466,9 +735,20 @@ describe('@shared/schemas deep-import ratchet', () => {
     // fall below the forced floor and would be read as permanently stuck.
     expect(Object.keys(baseline)).toEqual([
       'semantics',
+      'surface',
       'forced',
       'gratuitous',
     ]);
+    for (const [specifier, spaces] of Object.entries(baseline.surface)) {
+      for (const space of ['type', 'value'] as const) {
+        expect(
+          spaces[space],
+          `${BASELINE_FILE} surface["${specifier}"].${space}`,
+        ).toEqual(
+          [...new Set(spaces[space])].toSorted((a, b) => a.localeCompare(b)),
+        );
+      }
+    }
     for (const key of ['forced', 'gratuitous'] as const) {
       for (const [specifier, entries] of Object.entries(baseline[key])) {
         // Sorted AND distinct: a duplicated entry would inflate the allowed

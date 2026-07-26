@@ -1,5 +1,279 @@
 {
-  "semantics": "Production statements that reach past the published '@shared/schemas' barrel into a leaf module, keyed by specifier, valued by the importing file ('(type-only)' marks an `import type` statement, so a file that splits its value and type imports contributes two distinct entries). 'forced' statements name at least one symbol the barrel does not re-export: they are a report that a leaf module is missing from the published surface, and only a NEW off-surface specifier fails the ratchet. 'gratuitous' statements could have used the barrel verbatim; their per-specifier count may not grow. Classification is computed against src/shared/schemas/index.ts at test time, so widening the barrel reclassifies statements automatically (and requires regenerating this file in the same PR). Scan excludes src/test-kernel/ and the surface interior src/shared/schemas/.",
+  "semantics": "Production statements that reach past the published '@shared/schemas' barrel into a leaf module, keyed by specifier, valued by the importing file ('(type-only)' marks an `import type` statement, so a file that splits its value and type imports contributes two distinct entries). 'forced' statements name at least one symbol the barrel does not re-export: they are a report that a leaf module is missing from the published surface, and only a NEW off-surface specifier fails the ratchet. 'gratuitous' statements could have used the barrel verbatim; their per-specifier count may not grow. Classification is computed against src/shared/schemas/index.ts at test time, so widening the barrel reclassifies statements automatically (and requires regenerating this file in the same PR). The leaf-aware published-surface snapshot preserves the exact type/value bindings used by baseline gratuitous imports, so those bindings may not contract even if their importers move. Scan covers repo-root src/ and every packages/*/src directory, excluding src/test-kernel/ and the surface interior src/shared/schemas/.",
+  "surface": {
+    "@shared/schemas/agent": {
+      "type": ["AgentCategory", "AgentSource", "AgentSourceType"],
+      "value": [
+        "AGENT_SOURCE",
+        "AgentCategory",
+        "AgentCategorySchema",
+        "agentKey",
+        "agentKeyOf",
+        "agentMatchesIdentifier",
+        "agentName",
+        "AgentNameSchema",
+        "AgentSourceSchema",
+        "getCleanAgentName"
+      ]
+    },
+    "@shared/schemas/agentCliSettings": {
+      "type": [
+        "ClaudeAgentEffort",
+        "ClaudeAgentModel",
+        "ClaudeAgentPermissionMode"
+      ],
+      "value": [
+        "BASH_APPROVAL_CONFIG_KEY",
+        "CLAUDE_AGENT_DEFAULT_EFFORT",
+        "CLAUDE_AGENT_DEFAULT_MODEL",
+        "CLAUDE_AGENT_DEFAULT_PERMISSION_MODE",
+        "ClaudeAgentEffortSchema",
+        "ClaudeAgentPermissionModeSchema",
+        "CODEX_APPROVAL_POLICY_DEFAULT",
+        "CODEX_REASONING_EFFORT_DEFAULT",
+        "CODEX_SANDBOX_MODE_DEFAULT",
+        "CodexApprovalPolicySchema",
+        "CodexReasoningEffortSchema",
+        "CodexSandboxModeSchema",
+        "parseClaudeAgentEffort",
+        "parseClaudeAgentModel",
+        "parseClaudeAgentPermissionMode",
+        "parseCodexApprovalPolicy",
+        "parseCodexReasoningEffort",
+        "parseCodexSandboxMode"
+      ]
+    },
+    "@shared/schemas/agentRoster": {
+      "type": [
+        "AgentDelegationScope",
+        "AgentRosterCategorySelection",
+        "AgentRosterSelection"
+      ],
+      "value": [
+        "AgentDelegationScopeSchema",
+        "AgentRosterSelectionSchema",
+        "INHERITED_AGENT_ROSTER"
+      ]
+    },
+    "@shared/schemas/commonViewMessages": {
+      "type": [
+        "DesktopThemeKind",
+        "StateRestoreMessage",
+        "SwitchViewTarget",
+        "Theme"
+      ],
+      "value": [
+        "CommonViewMessageSchema",
+        "DESKTOP_THEME_KIND",
+        "SetThemeMessageSchema"
+      ]
+    },
+    "@shared/schemas/fileFields": {
+      "type": [],
+      "value": ["migrateLegacyContextFileFields", "NullableFileFieldsSchema"]
+    },
+    "@shared/schemas/fileTypes": {
+      "type": [
+        "CurrentFileType",
+        "DocumentFileType",
+        "ExtendedDocumentFileType",
+        "MultipleDocumentFileType"
+      ],
+      "value": [
+        "DocumentFileTypeSchema",
+        "isMultipleDocumentFileType",
+        "MULTIPLE_DOCUMENT_FILE_TYPES"
+      ]
+    },
+    "@shared/schemas/goal": {
+      "type": ["Goal", "GoalStatus"],
+      "value": [
+        "deriveGoalState",
+        "formatGoalTime",
+        "GOAL_FEATURE_FLAG_KEY",
+        "goalElapsedMs",
+        "GoalSchema",
+        "isGoalInFlight",
+        "LEGACY_GOAL_FEATURE_FLAG_KEYS"
+      ]
+    },
+    "@shared/schemas/identifiers": {
+      "type": ["ExecutionId", "StreamTabId"],
+      "value": ["ExecutionIdSchema", "StreamTabIdSchema"]
+    },
+    "@shared/schemas/lineChanges": {
+      "type": ["DiffStats", "LineChanges"],
+      "value": []
+    },
+    "@shared/schemas/log": {
+      "type": [],
+      "value": ["StreamLogEntrySchema"]
+    },
+    "@shared/schemas/mainView": {
+      "type": ["MainViewInboundMessage"],
+      "value": [
+        "GETTING_STARTED_COMMANDS",
+        "MainViewInboundMessageSchema",
+        "MainViewMessageSchema"
+      ]
+    },
+    "@shared/schemas/mainView/executeMessage": {
+      "type": ["MainViewExecuteMessage"],
+      "value": []
+    },
+    "@shared/schemas/mainView/inbound": {
+      "type": ["FileOperationMessage"],
+      "value": []
+    },
+    "@shared/schemas/mainView/state": {
+      "type": ["TeamOptionData"],
+      "value": []
+    },
+    "@shared/schemas/onboarding": {
+      "type": ["OnboardingFunnelState"],
+      "value": []
+    },
+    "@shared/schemas/output": {
+      "type": [
+        "AcceptCopyMeta",
+        "FileLocation",
+        "OutputFileInfo",
+        "OutputFileSummary"
+      ],
+      "value": [
+        "CompileFailureSummarySchema",
+        "OUTPUT_DOCUMENT_TAG",
+        "OUTPUT_DOCUMENTS_TAG",
+        "OUTPUT_END_TAG",
+        "OutputFileSummarySchema",
+        "roundOutputsToCompileFailureSummaries",
+        "roundOutputsToOutputSummaries"
+      ]
+    },
+    "@shared/schemas/profileViewMessages": {
+      "type": ["NumberVscodeSetting"],
+      "value": []
+    },
+    "@shared/schemas/progressView": {
+      "type": [
+        "ProgressAgentProposalActionMessage",
+        "ProgressViewInboundHandlerRegistry",
+        "ProgressViewInboundMessage",
+        "ProgressViewOutboundMessage"
+      ],
+      "value": [
+        "dispatchProgressViewInbound",
+        "ProgressViewInboundMessageSchema",
+        "ProgressViewOutboundMessageSchema"
+      ]
+    },
+    "@shared/schemas/prompts": {
+      "type": ["ToolEditApprovalAction"],
+      "value": []
+    },
+    "@shared/schemas/proposalFields": {
+      "type": ["ProposalFileGroup"],
+      "value": ["getProposalFileGroups"]
+    },
+    "@shared/schemas/roundIndexed": {
+      "type": [],
+      "value": ["roundIndexedEntries"]
+    },
+    "@shared/schemas/runDescriptor": {
+      "type": ["RunDescriptor"],
+      "value": []
+    },
+    "@shared/schemas/settingsViewMessages": {
+      "type": [
+        "AgentSelectionItem",
+        "ChatGptAuthStatus",
+        "ClaudeAgentEffort",
+        "ClaudeAgentModel",
+        "ClaudeAgentPermissionMode",
+        "CodexApprovalPolicy",
+        "CodexReasoningEffort",
+        "CodexSandboxMode",
+        "Goal",
+        "LatexConfigValues",
+        "LatexSettingsStatus",
+        "MemoryPreview",
+        "MemoryViewItem",
+        "ModelSelectionItem",
+        "NumberVscodeSetting",
+        "ProviderKeyStatus",
+        "ProviderVscodeSetting",
+        "PRSubscriptionEntry",
+        "ReasoningLevel",
+        "SETTINGS_VIEW_CMD",
+        "SettingsMessageFor",
+        "SettingsTab",
+        "SettingsViewInboundHandlerRegistry",
+        "SettingsViewInboundMessage",
+        "ToolCategory",
+        "ToolCommandKind",
+        "ToolDashboardItem",
+        "ToolInfo",
+        "ToolStatus",
+        "UpdateAgentModePresetsMessage",
+        "UpdateAgentSelectionMessage",
+        "UpdateAgentSkillsSettingsMessage",
+        "UpdateApprovalAndSafetySettingsMessage",
+        "UpdateChatGptAuthStatusMessage",
+        "UpdateCustomAgentDirMessage",
+        "UpdateGitAuthorSettingsMessage",
+        "UpdateLatexConfigValuesMessage",
+        "UpdateModelSelectionMessage",
+        "UpdateSuperYoloEnabledMessage"
+      ],
+      "value": [
+        "API_ACCESS_MODE_OPTIONS",
+        "DEFAULT_LATEX_SETTINGS_STATUS",
+        "dispatchSettingsViewInbound",
+        "LatexConfigValuesSchema",
+        "REASONING_LEVEL_LABELS",
+        "REASONING_LEVEL_OPTIONS",
+        "ReasoningLevelSchema",
+        "SETTINGS_TAB",
+        "SETTINGS_VIEW_CMD",
+        "SettingsViewInboundMessageSchema"
+      ]
+    },
+    "@shared/schemas/spendingStatus": {
+      "type": ["SpendingStatus"],
+      "value": ["isSpendingQuotaExceeded", "SpendingStatusSchema"]
+    },
+    "@shared/schemas/stream": {
+      "type": ["ExecutionMeta", "ExecutionStatus", "RunOutcome", "StreamPhase"],
+      "value": [
+        "EXECUTION_META_SCHEMA_VERSION",
+        "EXECUTION_STATUS",
+        "ExecutionMetaSchema",
+        "ExecutionStatusSchema",
+        "RUN_OUTCOME",
+        "STREAM_PHASE"
+      ]
+    },
+    "@shared/schemas/streamSnapshot": {
+      "type": [],
+      "value": ["STREAM_SNAPSHOT_SCHEMA_VERSION", "StreamSnapshotSchema"]
+    },
+    "@shared/schemas/todoDisplay": {
+      "type": [],
+      "value": ["countByStatus", "STATUS_DISPLAY"]
+    },
+    "@shared/schemas/toolConfig": {
+      "type": ["ToolConfig"],
+      "value": ["DEFAULT_TOOL_CONFIG", "ToolConfigSchema"]
+    },
+    "@shared/schemas/usage": {
+      "type": ["TokenUsageStats"],
+      "value": ["UsageProviderSchema", "UsageRouteSchema"]
+    },
+    "@shared/schemas/workPlan": {
+      "type": [],
+      "value": ["planSummaryLine"]
+    }
+  },
   "forced": {
     "@shared/schemas/agentPresets": [
       "packages/cli/src/chat/tui/forms/AgentRosterForm.tsx",
@@ -85,6 +359,7 @@
       "src/utils/config/platformSettings.ts",
       "src/utils/system/gitAuthorSettings.ts"
     ],
+    "@shared/schemas/toolConfig": ["src/latex/LatexMediaManager.ts"],
     "@shared/schemas/toolResult": [
       "packages/extension/src/frontend/lm/registerLanguageModelTools.ts (type-only)",
       "src/agent/core/flows/toolUseRound/toolCallParsing.ts",
@@ -102,13 +377,13 @@
       "src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts (type-only)",
       "src/agent/modelHandlers/openai/openAIResponseFileUploads.ts (type-only)",
       "src/agent/modelHandlers/openrouter/modelHandlerOpenRouterNative.ts (type-only)",
-      "src/agent/modelHandlers/utils/toolAttachmentUtils.ts",
+      "src/agent/modelHandlers/utils/toolAttachmentUtils.ts (type-only)",
       "src/agent/modelHandlers/vscodelm/modelHandlerVscodeLm.ts (type-only)",
       "src/agent/types/IModelHandler.ts (type-only)",
       "src/tools/AcceptRunFilesTool.ts",
       "src/tools/agentCliShared.ts",
-      "src/tools/approval/bashApproval.ts",
-      "src/tools/approval/toolEditApproval.ts",
+      "src/tools/approval/bashApproval.ts (type-only)",
+      "src/tools/approval/toolEditApproval.ts (type-only)",
       "src/tools/arxiv/ArxivDownloadTool.ts",
       "src/tools/arxiv/ArxivMetadataTool.ts",
       "src/tools/arxiv/ArxivSearchTool.ts (type-only)",
@@ -116,7 +391,7 @@
       "src/tools/bash.ts",
       "src/tools/citation/CrossrefSearchTool.ts",
       "src/tools/citation/rateLimiter.ts",
-      "src/tools/claudeAgent.ts",
+      "src/tools/claudeAgent.ts (type-only)",
       "src/tools/codex.ts",
       "src/tools/comment/InlineCommentTool.ts",
       "src/tools/contextHelpers.ts",
@@ -130,7 +405,7 @@
       "src/tools/EditTool.ts",
       "src/tools/ExecutionsTool.ts",
       "src/tools/fileEditFlow.ts",
-      "src/tools/fileInteractions.ts",
+      "src/tools/fileInteractions.ts (type-only)",
       "src/tools/github/githubSubscriptionTool.ts",
       "src/tools/glob.ts",
       "src/tools/grep.ts",
@@ -138,14 +413,14 @@
       "src/tools/inquiry/ExternalInquiryTool.ts",
       "src/tools/latex/ExtractBibliographyTool.ts (type-only)",
       "src/tools/latex/ExtractFiguresTool.ts (type-only)",
-      "src/tools/latex/ExtractTikzFiguresTool.ts",
+      "src/tools/latex/ExtractTikzFiguresTool.ts (type-only)",
       "src/tools/latex/figureExtractionShared.ts",
       "src/tools/lean/LoogleTool.ts",
       "src/tools/lean/LspTools.ts (type-only)",
       "src/tools/memory/MemoryTool.ts",
       "src/tools/OpenPdfTool.ts",
       "src/tools/pathResolution.ts",
-      "src/tools/plan/PlanTool.ts",
+      "src/tools/plan/PlanTool.ts (type-only)",
       "src/tools/ReadTool.ts",
       "src/tools/ReportReviewIssueTool.ts",
       "src/tools/setup/apiKeyHelpers.ts",
@@ -153,15 +428,15 @@
       "src/tools/setup/ConfigTools.ts",
       "src/tools/setup/InstallVscodeExtensionTool.ts",
       "src/tools/setup/InvokeCommandTool.ts",
-      "src/tools/setup/ListApiKeysTool.ts",
-      "src/tools/setup/ProbeEnvironmentTool.ts",
+      "src/tools/setup/ListApiKeysTool.ts (type-only)",
+      "src/tools/setup/ProbeEnvironmentTool.ts (type-only)",
       "src/tools/setup/SendToTerminalTool.ts",
-      "src/tools/setup/UnsetApiKeyTool.ts",
+      "src/tools/setup/UnsetApiKeyTool.ts (type-only)",
       "src/tools/setup/VerifySetupTool.ts",
       "src/tools/structuredOutput.ts (type-only)",
       "src/tools/texcount/TexcountTool.ts",
       "src/tools/TextEditorTool.ts",
-      "src/tools/todo/TodoTool.ts",
+      "src/tools/todo/TodoTool.ts (type-only)",
       "src/tools/userQuestion/UserQuestionTool.ts (type-only)",
       "src/tools/utils.ts",
       "src/tools/web/WebFetchTool.ts",
@@ -194,7 +469,7 @@
       "packages/cli/src/runtime/modelAccess.ts (type-only)",
       "packages/cli/src/runtime/orchestration.ts",
       "packages/cli/src/runtime/runModel.ts",
-      "packages/desktop/src/desktopCommandSurface.ts",
+      "packages/desktop/src/desktopCommandSurface.ts (type-only)",
       "packages/desktop/src/main/desktopAgentSettingsController.ts (type-only)",
       "packages/desktop/src/main/desktopCredentialSettingsController.ts",
       "packages/desktop/src/main/desktopMainViewStartup.ts",
@@ -280,7 +555,7 @@
       "src/tools/delegationAgentAvailability.ts (type-only)"
     ],
     "@shared/schemas/commonViewMessages": [
-      "packages/desktop/src/main/desktopShellIpc.ts",
+      "packages/desktop/src/main/desktopShellIpc.ts (type-only)",
       "packages/desktop/src/main/desktopViewStateIpc.ts",
       "packages/desktop/src/renderer/diffOverlay.ts",
       "packages/desktop/src/renderer/main.ts",
@@ -457,7 +732,6 @@
     "@shared/schemas/toolConfig": [
       "src/agent/core/definition/AgentConfig.ts",
       "src/controllers/mainView/MainViewExecutionController.ts",
-      "src/latex/LatexMediaManager.ts",
       "src/shared/wa/extractFlagBadges.ts (type-only)"
     ],
     "@shared/schemas/usage": [
