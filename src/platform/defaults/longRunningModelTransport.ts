@@ -40,6 +40,8 @@ async function normalizeModelRequest(
 ): Promise<[UndiciRequestInfo, UndiciRequestInit]> {
   if (!(input instanceof Request)) {
     if (init?.body instanceof FormData) {
+      // OpenAI builds multipart bodies with the host-global FormData, while
+      // package Undici recognizes only its own FormData implementation.
       const body = new UndiciFormData();
       for (const [name, value] of init.body.entries()) {
         if (typeof value === 'string') {
@@ -104,26 +106,28 @@ export function composeLongRunningModelDispatcher(): Dispatcher {
  * where native fetch would couple our dispatcher to whatever undici the host
  * Node embeds. That same choice is why {@link normalizeModelRequest} exists —
  * package-undici fetch rejects native `Request` instances (OpenRouter's
- * HTTPClient passes one), so it is rebuilt from interoperable primitives.
+ * HTTPClient passes one) and does not serialize host-global `FormData`
+ * instances (OpenAI's audio client passes one), so both are translated at
+ * this boundary.
  */
-export const longRunningModelFetch: UploadCompatibleFetch = Object.assign(
-  async (input: RequestInfo | URL, init?: RequestInit) => {
-    const [requestInput, requestInit] = await normalizeModelRequest(
-      input,
-      init,
-    );
-    // Undici implements the Web Fetch response contract at runtime, but its
-    // package-local types are not assignable to the DOM library's Response.
-    return undiciFetch(requestInput, {
-      ...requestInit,
-      dispatcher: composeLongRunningModelDispatcher(),
-    }) as unknown as Promise<Response>;
-  },
-  {
-    // OpenAI checks this constructor before creating multipart uploads.
-    Response,
-  },
-);
+const longRunningModelFetchImpl: typeof fetch = async (
+  input: RequestInfo | URL,
+  init?: RequestInit,
+) => {
+  const [requestInput, requestInit] = await normalizeModelRequest(input, init);
+  // Undici implements the Web Fetch response contract at runtime, but its
+  // package-local types are not assignable to the DOM library's Response.
+  return undiciFetch(requestInput, {
+    ...requestInit,
+    dispatcher: composeLongRunningModelDispatcher(),
+  }) as unknown as Promise<Response>;
+};
+// OpenAI checks this constructor before creating multipart uploads.
+Object.defineProperty(longRunningModelFetchImpl, 'Response', {
+  value: Response,
+});
+export const longRunningModelFetch =
+  longRunningModelFetchImpl as UploadCompatibleFetch;
 
 /**
  * Route Google classic streaming generation through the model transport.
