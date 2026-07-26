@@ -29,7 +29,7 @@ import {
   serializeCliRunResult,
   toolUseResultText,
 } from '../runtime/terminalStatus';
-import { formatToolUseAgentRunInstruction } from './_helpers/toolUseRunInstruction';
+import { formatToolUseAgentRunInstruction } from './_helpers/runInstructions';
 import { withExpandedRunInputs } from '../runtime/workflowInputs';
 
 export interface ToolUseAgentRunInit {
