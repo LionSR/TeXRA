@@ -19,7 +19,7 @@ import {
 } from '@tools/pathResolution';
 import { filterNotNull } from '@utils/core';
 import { WorkspaceFS } from '@utils/files';
-import { isPathWithin, toPosixPath } from '@utils/core/pathCore';
+import { toPosixPath } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { pluralize } from '@utils/text/stringUtils';
 
@@ -55,9 +55,6 @@ export class GlobTool extends defineTool({
     const root = currentToolRoot();
     const { path, display } = resolveAndFormat(input.path ?? undefined, root);
     const gitignore = await getGitignoreMatcher();
-    const workspacePath = WorkspaceFS.getPath();
-    const applyWorkspaceIgnores =
-      workspacePath != null && isPathWithin(workspacePath, path.absolute);
 
     const cancelSignal = getCurrentToolCallContext()?.signal;
     let matches: string[];
@@ -100,8 +97,7 @@ export class GlobTool extends defineTool({
         const relativePath = resolved.relative;
         if (
           relativePath === '.' ||
-          (applyWorkspaceIgnores &&
-            !nodePath.isAbsolute(relativePath) &&
+          (!nodePath.isAbsolute(relativePath) &&
             gitignore.ignores(relativePath))
         ) {
           return null;
