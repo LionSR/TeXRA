@@ -1081,28 +1081,25 @@ describe('RetryState', () => {
     }
   });
 
-  it.each(['cancel', 'timeout'] as const)(
-    'stops the stream after manual retry %s',
-    async (action) => {
-      const streamId = `retry-state-${action}` as StreamTabId;
-      const { node, session, streamStatus, requestRetry } =
-        createRetryNode(streamId);
+  it('stops the stream after manual retry cancellation', async () => {
+    const streamId = 'retry-state-cancel' as StreamTabId;
+    const { node, session, streamStatus, requestRetry } =
+      createRetryNode(streamId);
 
-      requestRetry.mockResolvedValueOnce({ action });
+    requestRetry.mockResolvedValueOnce({ action: 'cancel' });
 
-      try {
-        seedStreamStatusForTest(streamStatus, streamId, STREAM_STATUS.RUNNING);
+    try {
+      seedStreamStatusForTest(streamStatus, streamId, STREAM_STATUS.RUNNING);
 
-        await withRetryRunContext(streamId, session, () =>
-          node.promptFor(new Error('temporary provider failure')),
-        );
+      await withRetryRunContext(streamId, session, () =>
+        node.promptFor(new Error('temporary provider failure')),
+      );
 
-        expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
-      } finally {
-        clearStreamStatusForTest(streamStatus, streamId);
-      }
-    },
-  );
+      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
+    } finally {
+      clearStreamStatusForTest(streamStatus, streamId);
+    }
+  });
 
   it('classifies a policy/headless retry denial as failed, not cancelled (#7331)', async () => {
     const streamId = 'retry-state-deny' as StreamTabId;

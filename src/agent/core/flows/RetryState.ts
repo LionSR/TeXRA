@@ -401,11 +401,7 @@ export abstract class RetryableInvocationNode<
       return { shouldRetry: false, userCancelled: false };
     }
 
-    const message =
-      result.action === 'timeout'
-        ? 'Retry timed out (no response)'
-        : 'Retry cancelled by user';
-    logProgressStatus(logger, message);
+    logProgressStatus(logger, 'Retry cancelled by user');
     streamStatus.transition(streamId, STREAM_PHASE.CANCELLED, 'user-stop', {
       trace: logger,
     });

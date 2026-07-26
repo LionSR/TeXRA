@@ -3,6 +3,7 @@ import * as nodePath from 'node:path';
 
 // Local imports
 import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
+import { registerAgentShutdownHandlers } from '@agent/runtime/agentShutdown';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { setOutputChannelFactory } from '@logger/logUtils';
@@ -311,6 +312,15 @@ export async function initCliPlatform(
     // injections and the direct Lean language services (errors surface via the
     // Tools dashboard if `lake` isn't on PATH).
     initNodeAgentRuntime(lifecycle);
+
+    // Kill agent-spawned OS children before the process dies, exactly as the
+    // extension and desktop hosts do. Background `bash` runs are spawned
+    // `detached` (their own process group, see execUtils) so they survive
+    // `texra` exiting and can never deliver their follow-up result — without
+    // this drain they are orphaned. Registered before the usage-log flush
+    // below so the kills (all synchronous) land first, matching the other
+    // hosts' ordering.
+    registerAgentShutdownHandlers(lifecycle);
 
     // Attribute agent-authored commits to the TeXRA identity by default;
     // configurable via `.texra/config.json` `texra.git.markCommits`.

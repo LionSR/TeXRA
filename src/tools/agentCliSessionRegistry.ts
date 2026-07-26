@@ -40,6 +40,7 @@ type AgentCliSessionState<T> =
 
 export class AgentCliSessionRegistry<T extends AgentCliSessionEntry> {
   private readonly sessions = new Map<string, AgentCliSessionState<T>>();
+  private readonly inFlight = new Map<ExecutionId, T>();
 
   constructor(
     private readonly persistedSessionKey: string,
@@ -98,6 +99,11 @@ export class AgentCliSessionRegistry<T extends AgentCliSessionEntry> {
       });
   }
 
+  /** Track a launched loop before its SDK session id is safe to publish. */
+  trackInFlight(entry: T): void {
+    this.inFlight.set(entry.executionId, entry);
+  }
+
   lookup(sessionId: string): T | undefined {
     const state = this.sessions.get(sessionId);
     return state?.kind === 'active' ? state.entry : undefined;
@@ -116,8 +122,9 @@ export class AgentCliSessionRegistry<T extends AgentCliSessionEntry> {
     if (state?.kind === 'reserved') state.resolve(undefined);
   }
 
-  /** Release active aliases owned by one child execution without touching claims. */
+  /** Release every alias and in-flight handle owned by one child execution. */
   releaseByExecutionId(executionId: ExecutionId): void {
+    this.inFlight.delete(executionId);
     for (const [sessionId, state] of this.sessions) {
       if (state.kind === 'active' && state.entry.executionId === executionId) {
         this.sessions.delete(sessionId);
@@ -126,10 +133,19 @@ export class AgentCliSessionRegistry<T extends AgentCliSessionEntry> {
   }
 
   interruptAll(): void {
-    for (const state of [...this.sessions.values()]) {
-      if (state.kind === 'reserved') continue;
-      const { childStreamId, executions } = state.entry;
-      executions.getAgentHandleByStream(childStreamId)?.interrupt();
+    const interrupted = new Set<ExecutionId>();
+    const interrupt = (entry: T): void => {
+      if (interrupted.has(entry.executionId)) return;
+      const { childStreamId, executions } = entry;
+      const handle = executions.getAgentHandleByStream(childStreamId);
+      if (!handle) return;
+      interrupted.add(entry.executionId);
+      handle.interrupt();
+    };
+
+    for (const entry of this.inFlight.values()) interrupt(entry);
+    for (const state of this.sessions.values()) {
+      if (state.kind === 'active') interrupt(state.entry);
     }
   }
 }
