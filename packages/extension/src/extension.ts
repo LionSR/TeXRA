@@ -26,7 +26,6 @@ import {
   setRuntimeExtensionId,
 } from '@auth/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
-import { initializeServerSideKeyAccess } from '@auth/serverKeys';
 import { hasAnyUsableSetupCredential } from '@commands/setup/setupAssistantCommand';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
@@ -312,13 +311,6 @@ export async function activate(context: vscode.ExtensionContext) {
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => disposeDiffRefresh());
   await StorageFS.ensureDir(RUNS_STORAGE_DIR);
   FileLister.initialize(context);
-  initializeServerSideKeyAccess({
-    state: context.globalState,
-    logger,
-    notifyIncludedModelAccessChanged: (enabled) => {
-      appSignals.emit('includedModelAccessChanged', enabled);
-    },
-  });
 
   // Seed first-install defaults (e.g. disabled tools) before anything writes
   // LAST_KNOWN_VERSION, so upgrading users are not affected.
