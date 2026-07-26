@@ -153,11 +153,11 @@ state (`src/agent/index/agentRegistry.ts:740-750`); when it misses,
 `AgentLaunchContext` emits `showAgentConfigBanner` and throws
 `Could not find agent: <name>` (`src/agent/runtime/AgentLaunchContext.ts:158-159`).
 
-`loadAgents` (`src/agent/index/agentRegistry.ts:116-148`) is what fills it, and
-it is only ever called from host code — every call site is in
-`packages/cli/…`, `packages/desktop/…`, or `src/controllers/…`; nothing under
-`src/agent/runtime/` calls it. Pass `{ includeRemote: false }` unless you want
-the Supabase remote-agent catalog.
+`loadAgents` (`src/agent/index/agentRegistry.ts:116-148`) is what fills it.
+Neither `runAgent`, `executeAgent`, nor `AgentLaunchContext` populates the
+registry, so the caller must ensure that loading has happened before launch.
+Pass `{ includeRemote: false }` unless you want the Supabase remote-agent
+catalog.
 
 ### Per-call — `runtimeHost` is a required option
 
@@ -210,7 +210,6 @@ const validated = validateExecutionRequest({
   config: {
     agent: 'assistant',
     agentCategory: AgentCategory.ToolUse,
-    model: 'sonnet',
     instruction: 'Hello',
   },
 });
@@ -227,10 +226,13 @@ try {
 ```
 
 `validateExecutionRequest` (`src/agent/core/state/executionRequests.ts:24-43`)
-is the only sanctioned way to produce the `ValidatedExecutionRequest` that
-`runAgent` takes (`:15-18`). It runs `AgentConfigSchema.safeParse`
-(`src/agent/core/definition/AgentConfig.ts:109-112`); `agent`, `model`, and
-`instruction` all have `.prefault()` defaults
+is the result-style validation helper: it returns either a
+`ValidatedExecutionRequest` or a validation message. A caller that prefers
+exceptions may instead run `AgentConfigSchema.parse` and construct the
+`ValidatedExecutionRequest` structurally, as production extension callers do
+(`packages/extension/src/commands/agent/executeCommand.ts:37-46`;
+`packages/extension/src/frontend/review/AgentReviewService.ts:328-347`).
+`agent`, `model`, and `instruction` all have `.prefault()` defaults
 (`src/agent/core/definition/AgentConfig.ts:18,27,28`), and an absent
 `agentCategory` normalizes to `Workflow`
 (`src/agent/core/definition/AgentConfig.ts:77-86`). The example sets
@@ -423,12 +425,22 @@ the runtime already knows the parking behaviour exists.
   which redispatches everything still pending
   (`src/agent/runtime/HostInteractions.ts:621-639`). Parking is not permanent
   _if_ a host eventually attaches.
-- **`cancel()` / `dispose()` settle without an attachment.**
+- **Interrupting a retained run handle settles pending interactions.**
+  `RunAgentOptions.onRun` exposes an `AgentRunHandle`
+  (`src/agent/runtime/runAgent.ts:29-42`;
+  `src/agent/runtime/ExecutionHandle.ts:328-342`). Retain it and call
+  `handle.interrupt()` to abort the run; both workflow and tool-use
+  interruption call `runSession.interactions.cancel`
+  (`src/agent/runtime/executeAgent.ts:215-221`;
+  `src/agent/implementations/flows/tooluse/runToolUseFlow.ts:347-349`).
+  This is the supported cancellation path, not a substitute for attaching a
+  host to a run that should continue.
+- **Direct `cancel()` / `dispose()` also settle without an attachment.**
   `cancel` falls through to `settleFallbacks()` synchronously when there is no
   active attachment (`src/agent/runtime/HostInteractions.ts:549-555`), and
   `dispose()` settles anything still owned
-  (`src/agent/runtime/HostInteractions.ts:558-589`). But nothing in the run
-  calls either — the embedder has to, from outside a run that is already stuck.
+  (`src/agent/runtime/HostInteractions.ts:558-589`). These direct methods are
+  available to an embedder that owns the session.
 - **`approvalPromptsUnavailable: true` narrows the problem, it does not solve
   it.** That option filters `requiresApproval` tools out of the model-facing
   tool list before invocation
@@ -453,13 +465,26 @@ is **never calling `useHostInteractions` at all**, which no type can catch.
 
 ## 4. What degrades gracefully (safe to skip)
 
-| Skipped step                                                                                                  | Behaviour                                                                                                                                                                       | Citation                                                                                            |
-| ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `initializeNodeGoalPrompts(resourcesPath)`                                                                    | Goal prompts fall back to inline templates. `loadPrompts` returns `inlineTemplates` when no path was registered; a _broken_ registered YAML also falls back but logs a warning. | `src/agent/goal/promptLoader.ts:78-99`; registration at `src/platform/defaults/nodeHost.ts:145-147` |
-| `initializeNodeRuntimeSkills({…})`                                                                            | Runtime skills degrade to an empty catalog: `if (sources.length === 0) return { catalog: '', issues: [] };`                                                                     | `src/skills/runtimeSkills.ts:57-59`; registration at `src/platform/defaults/nodeHost.ts:157-169`    |
-| `seedDisabledToolDefaults(key)`                                                                               | No first-install tool defaults are written, so no toggleable external tools are default-disabled. More tools available, not fewer.                                              | `src/tools/toolAvailability.ts:77-95`                                                               |
-| `initNodeAgentRuntime(lifecycle)`                                                                             | The raw loop still runs, but the `memory`/`plan` injections and direct Lean language services are absent.                                                                       | `src/platform/defaults/nodeHost.ts:121-136`; `src/agent/features.ts:18-38`                          |
-| `registerDirectLeanLanguageServices` (call `registerAgentFeatures()` alone instead of `initNodeAgentRuntime`) | Lean LSP tooling unavailable; the `memory`/`plan` injections remain registered.                                                                                                 | `src/platform/defaults/nodeHost.ts:133-136`                                                         |
+- **`initializeNodeGoalPrompts(resourcesPath)`:** Goal prompts fall back to
+  inline templates. `loadPrompts` returns `inlineTemplates` when no path was
+  registered; a broken registered YAML also falls back but logs a warning
+  (`src/agent/goal/promptLoader.ts:78-99`; registration at
+  `src/platform/defaults/nodeHost.ts:145-147`).
+- **`initializeNodeRuntimeSkills({…})`:** Runtime skills degrade to an empty
+  catalog: `if (sources.length === 0) return { catalog: '', issues: [] };`
+  (`src/skills/runtimeSkills.ts:57-59`; registration at
+  `src/platform/defaults/nodeHost.ts:157-169`).
+- **`seedDisabledToolDefaults(key)`:** No first-install tool defaults are
+  written, so no toggleable external tools are default-disabled. More tools
+  are available, not fewer (`src/tools/toolAvailability.ts:77-95`).
+- **`initNodeAgentRuntime(lifecycle)`:** The raw loop still runs, but the
+  `memory`/`plan` injections and direct Lean language services are absent
+  (`src/platform/defaults/nodeHost.ts:121-136`;
+  `src/agent/features.ts:18-38`).
+- **`registerDirectLeanLanguageServices`:** If the embedder calls
+  `registerAgentFeatures()` alone instead of `initNodeAgentRuntime`, Lean LSP
+  tooling is unavailable; the `memory`/`plan` injections remain registered
+  (`src/platform/defaults/nodeHost.ts:133-136`).
 
 `bootstrapNodeAgentDirectories` is safe to skip **only** if you supply your own
 `AgentDirectoriesPort` (§2). Skipping it without that leaves the port pointing
@@ -472,37 +497,50 @@ nothing.
 
 `packages/cli/src/runtime/initPlatform.ts` is 392 lines and performs ~15
 registrations after `initPlatform`. An embedder reading it cannot tell which
-are runtime requirements and which are `texra`-the-product. This table is that
-distinction.
+are runtime requirements and which are `texra`-the-product. The following
+classification makes that distinction.
 
 ### Runtime bootstrap and shipped-feature parity
 
-| Line   | Call                                               | Status                                                                                                                                                                                                                                      |
-| ------ | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `:280` | `initPlatform(createNodePlatform({…}))`            | Required: `platform()` throws otherwise (`src/platform/platform.ts:73-80`).                                                                                                                                                                 |
-| `:316` | `initNodeAgentRuntime(lifecycle)`                  | Shipped-feature parity, not a raw-loop requirement: registers the `memory` + `plan` injections and direct Lean services. Without it those features are absent (`src/platform/defaults/nodeHost.ts:121-136`; `src/agent/features.ts:18-38`). |
-| `:335` | `initializeServerSideKeyAccess({…})`               | Required for today's default `'configured'` credential path, which otherwise throws inside the run (§1 Step 2).                                                                                                                             |
-| `:380` | `bootstrapNodeAgentDirectories({channel:'cli',…})` | Required only when using the packaged agent bundle; an injected port that names other real directories replaces it (§2).                                                                                                                    |
+- **`:280` — `initPlatform(createNodePlatform({…}))`:** Required.
+  `platform()` throws otherwise (`src/platform/platform.ts:73-80`).
+- **`:316` — `initNodeAgentRuntime(lifecycle)`:** Shipped-feature parity, not a
+  raw-loop requirement. It registers the `memory` and `plan` injections and
+  direct Lean services. Without it those features are absent
+  (`src/platform/defaults/nodeHost.ts:121-136`;
+  `src/agent/features.ts:18-38`).
+- **`:335` — `initializeServerSideKeyAccess({…})`:** Required for today's
+  default `'configured'` credential path, which otherwise throws inside the
+  run (§1 Step 2).
+- **`:380` — `bootstrapNodeAgentDirectories({ channel: 'cli', … })`:**
+  Required only when using the packaged agent bundle; an injected port that
+  names other real directories replaces it (§2).
 
 ### CLI initialization choices (8) — not runtime obligations
 
-| Line       | Call                                                                                            | What it is                                                                               |
-| ---------- | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `:306`     | `seedDisabledToolDefaults(CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION)`                               | First-install policy: default-disable toggleable external tools. Version-keyed per host. |
-| `:311`     | `installCliShutdownSignalHandlers(lifecycle)`                                                   | SIGINT/SIGTERM handling for a terminal process.                                          |
-| `:320`     | `applyCliGitAuthorConfig(platform().config)`                                                    | Attributes agent-authored commits to the TeXRA git identity.                             |
-| `:327-330` | `UsageLogService.initialize({}, version, 'cli')` + shutdown flush                               | Supabase usage log tagged `editorType: 'cli'`, for relay pricing.                        |
-| `:334`     | `initializeCliSupabaseAuth(log, storageRoot)`                                                   | Supabase sign-in wiring for the CLI's auth flow.                                         |
-| `:342-348` | `setSetupPlatform({ host: 'cli', signIn })`                                                     | Wires the setup-assistant onboarding surface.                                            |
-| `:350-357` | OpenRouter / api-mode reconciliation + `invalidateModelOptionsCache()`                          | Resolves `--api-mode` against the persisted OpenRouter toggle.                           |
-| `:359-377` | auth probe → `setUseIncludedModelAccess(authed)`, then `setCliHelperModel(context.helperModel)` | Relay ("included model access") policy and the CLI's `--helper-model` flag.              |
+- **`:306` — `seedDisabledToolDefaults(...)`:** First-install policy:
+  default-disable toggleable external tools. The key is versioned per host.
+- **`:311` — `installCliShutdownSignalHandlers(lifecycle)`:** SIGINT/SIGTERM
+  handling for a terminal process.
+- **`:320` — `applyCliGitAuthorConfig(platform().config)`:** Attributes
+  agent-authored commits to the TeXRA Git identity.
+- **`:327-330` — `UsageLogService.initialize(...)` and shutdown flush:**
+  Supabase usage logging tagged `editorType: 'cli'`, for relay pricing.
+- **`:334` — `initializeCliSupabaseAuth(log, storageRoot)`:** Supabase sign-in
+  wiring for the CLI's authentication flow.
+- **`:342-348` — `setSetupPlatform({ host: 'cli', signIn })`:** Wires the
+  setup-assistant onboarding surface.
+- **`:350-357` — OpenRouter/API-mode reconciliation and model-cache
+  invalidation:** Resolves `--api-mode` against the persisted OpenRouter
+  toggle.
+- **`:359-377` — authentication probe and CLI model policy:** Sets relay
+  ("included model access") policy and applies the CLI's `--helper-model`
+  flag.
 
 ### Optional, graceful (2)
 
-| Line   | Call                                               | See |
-| ------ | -------------------------------------------------- | --- |
-| `:378` | `initializeNodeGoalPrompts(context.resourcesPath)` | §4  |
-| `:387` | `initializeNodeRuntimeSkills({…})`                 | §4  |
+- `:378` — `initializeNodeGoalPrompts(context.resourcesPath)` (§4).
+- `:387` — `initializeNodeRuntimeSkills({…})` (§4).
 
 ### Cross-check against desktop
 
@@ -522,9 +560,11 @@ desktop also calls
 
 ## 6. Known sharp edges
 
-1. **Ordering is load-bearing and unenforced.** The feature-parity registration
-   and Steps 2-3 all read `platform()`, so Step 1 must precede them; nothing
-   checks this beyond the throw in `platform()` itself.
+1. **Some ordering is load-bearing and unenforced.** The feature-parity
+   registration and Step 3 read `platform()`, so Step 1 must precede them;
+   nothing checks this beyond the throw in `platform()` itself. Step 2 does not
+   read the platform and may occur before Step 1
+   (`src/auth/serverKeys/index.ts:57-68`).
 2. **Feature-parity registration is once-per-process.** A second
    `initNodeAgentRuntime` throws or double-registers
    (`src/platform/defaults/nodeHost.ts:129-131`). Contrast
