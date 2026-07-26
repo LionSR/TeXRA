@@ -11,12 +11,14 @@ and the `-2026-06-25` → `-2026-07-23` checkpoint chain (most recently
 
 This pass re-verified the standing audit against branch
 `claude/eager-noether-10hqsl` at HEAD `5fc03f9` (`CHANGELOG.md` heading
-`[0.39.9] - Unreleased`). **Branch-lineage note:** this branch does **not**
-descend from the `-07-23` pin `f7dded0` (`git merge-base --is-ancestor f7dded0
-HEAD` → false; `f7dded0` was on `claude/eager-noether-tevmuv`), so this pass
-pins to its own HEAD rather than reporting an `f7dded0..HEAD` range. The
-`-07-25` audit (dated yesterday) is the freshest same-scope record and is the
-primary reconciliation target below.
+`[0.39.9] - Unreleased`). The `-07-23` pin `f7dded0` **is** an ancestor of that
+HEAD: `git merge-base --is-ancestor f7dded0 5fc03f9` succeeds, and
+`git rev-list --count f7dded0..5fc03f9` reports **105 commits**. This pass did
+not perform a commit-by-commit audit of that range. It instead inspected the
+tree afresh at `5fc03f9` and reconciled its findings against the `-07-25` audit,
+the freshest same-scope record. The statements below are therefore
+current-tree findings, not a claim that each of the 105 intervening commits was
+individually reviewed.
 
 **Run context (honesty note).** This was an **unattended scheduled run** with
 **no external adversarial review available** (no Codex second pass — the lever
@@ -58,13 +60,15 @@ coupling); neither is actionable in an unattended pass.
    CLAUDE.md anti-abstraction pattern is actually followed:
    `ResponseCycleNode.exec()` creates and runs `createResponseCycleFlow<C>()`
    inline (`reflection/nodes/ResponseCycleNode.ts:105`), no wrapper between node
-   and flow. `runAgent` vs `executeAgent` (executionId ownership; 20+ real
-   `executeAgent` callers), the `AgentFlowResult` → `AgentRuntimeFlowResult`
-   (WAITING arm) → `AgentFinalResult` (post-artifact envelope) chain, the
-   `helperModel` / `helperModelName` / `helperModelPreference` split, and the
-   single-impl `IToolUseSession` port were each examined and **excluded as
-   justified**. Matches `-07-25` §3 and the held rulings carried since
-   `-07-18`/`-07-21`.
+   and flow. `runAgent` vs `executeAgent` remains justified by execution-ID
+   ownership, but the direct production caller census is **three**, not 20+:
+   `runAgent.ts`, `nativeSubagentStrategy.ts`, and the lazy import in
+   `inBandSubagentExecution.ts`. The `AgentFlowResult` →
+   `AgentRuntimeFlowResult` (WAITING arm) → `AgentFinalResult` (post-artifact
+   envelope) chain, the `helperModel` / `helperModelName` /
+   `helperModelPreference` split, and the single-implementation
+   `IToolUseSession` port were each examined and **excluded as justified**.
+   Matches `-07-25` §3 and the held rulings carried since `-07-18`/`-07-21`.
 
 2. **[Keep] `createRunScope`** (`RunScope.ts:26`, 1 caller,
    `AgentLaunchContext.ts:385`) — a freeze-only factory. The reader's own verdict
@@ -88,10 +92,13 @@ coupling); neither is actionable in an unattended pass.
    `#7101`-triage reviewed-train ruling holds (do not collapse the justification
    doc-comments). Matches `-07-23` item 4.
 
-5. **[strategic] `IModelHandler` port width (44 `Pick`ed members) fuses a
-   provider-adapter contract with TeXRA runtime-coordination methods**
-   (`getWireRouteKey`, `getModelRetryRouteKey`, `getCredentialRouteForClient`,
-   `requestCompaction`/`clearCompactionRequest`, `consumeInsertedAttachmentKinds`).
+5. **[strategic] `IModelHandler`'s 44-member surface fuses a provider-adapter
+   contract with TeXRA runtime-coordination methods.** The surface comprises 43
+   members selected by `Pick<ModelHandler>` and one optional intersection
+   member, `createBatchedToolUseFollowUpMessages`. Coordination examples include
+   `getWireRouteKey`, `getModelRetryRouteKey`, `getCredentialRouteForClient`,
+   `requestCompaction`/`clearCompactionRequest`, and
+   `consumeInsertedAttachmentKinds`.
    This is the standing **port-width / message-opacity** strategic item
    (`-07-23` item 5): auto-derived via `Pick<ModelHandler>` so it is a
    surface-shape observation, not a drift risk or a delete. A real SDK port would
@@ -100,7 +107,7 @@ coupling); neither is actionable in an unattended pass.
    `src/agent/types/IModelHandler.ts:41`.
 
 6. **[strategic] `SdkToolCall` embeds every vendor SDK's raw types**
-   (`ModelHandlerContracts.ts:14-18`: `openai/resources/…`, `@google/genai`,
+   (`ModelHandlerContracts.ts:11-18`: `openai/resources/…`, `@google/genai`,
    `@anthropic-ai/sdk`, `@openrouter/sdk`) and is the port's default `T`, so the
    would-be-public port transitively names all four vendor SDKs. **Already
    tracked** — the identifier and this tension appear in the `-07-15` audit and
@@ -178,13 +185,16 @@ coupling); neither is actionable in an unattended pass.
     forward.
 
 12. **[strategic] Agent-review findings return via a side channel.**
-    `AgentReviewService.executeReview` runs the `changeReviewer` agent as a full
-    subagent (`runAgent({ stopAfterCycle: true })`), but findings stream out
-    mid-run through the `report_review_issue` tool into host-mutable state rather
-    than on the run result. Cutting this to a typed `{issues[]}` return is the
-    clearest application of the "return a value" pattern to an entangled unit —
-    consistent with, and gated by, the same NS-1 boundary work. Recorded as a
-    strategic candidate; not applied unattended.
+    `AgentReviewService.executeReview` runs `changeReviewer` as a **top-level**
+    tool-use agent session via `runAgent` with `stopAfterCycle: true`. Because
+    `runAgent` registers a fresh run without a parent execution ID and does not
+    forward `isSubagent`, this path does not exercise subagent lineage,
+    detachment, or cost roll-up. Its findings nevertheless stream out mid-run
+    through the `report_review_issue` tool into host-mutable state rather than
+    on the run result. Returning a typed `{issues[]}` value is therefore a
+    candidate for the general agent-result surface, consistent with and gated
+    by the same NS-1 boundary work; it is not evidence about the subagent
+    boundary itself. Recorded as a strategic candidate; not applied unattended.
 
 ## No change lands (by design this pass)
 
@@ -232,8 +242,12 @@ narrowing without a deliberate compatibility boundary for `Map` inputs.**
   `Map | Record` with the `instanceof Map` branch.
 - `workflowScriptAgentRunner.ts:123` `createWorkflowScriptAgentRunner` confirmed
   a **live production** binding (`WorkflowScriptTool.ts:247`), not a test fake.
-- Branch lineage: `f7dded0` (the `-07-23` pin) is **not** an ancestor of HEAD;
-  this branch (`claude/eager-noether-10hqsl`) pins to its own HEAD `5fc03f9`.
+- Direct `executeAgent` census: three production call sites —
+  `src/agent/runtime/runAgent.ts`,
+  `src/tools/delegation/nativeSubagentStrategy.ts`, and the lazy import in
+  `src/tools/delegation/inBandSubagentExecution.ts`.
+- Branch lineage: `f7dded0` is an ancestor of `5fc03f9`; the intervening range
+  contains 105 commits.
 
 ## Coverage gaps (honest scope of this pass)
 
@@ -244,10 +258,10 @@ narrowing without a deliberate compatibility boundary for `Map` inputs.**
   readers' greps, **not** re-run to full-`src/`-scope forensic standard. Treat the
   spine invariants and the directly-re-grepped counts as verified; treat wider
   override/caller tables as re-derived-but-not-re-audited.
-- This pass did not diff against `f7dded0` (different branch lineage), so the
-  per-commit reconciliation the `-07-22`/`-07-23` passes performed against the
-  `395e229`/`f7dded0` pins is not carried here; reconciliation is against the
-  `-07-25` audit and the standing rulings instead.
+- This pass did not perform a commit-by-commit audit of the available
+  105-commit range `f7dded0..5fc03f9`. It performed a fresh state inspection at
+  `5fc03f9` and reconciled that state against the `-07-25` audit and the
+  standing rulings instead.
 - This checkpoint is added under `docs/proposals/`, an internal directory
   excluded from the texra.ai publish allowlist (`docs/.vitepress/publicDocs.js`)
   — not a root-level doc, so it does not touch the `docs-root-boundary` gate.
