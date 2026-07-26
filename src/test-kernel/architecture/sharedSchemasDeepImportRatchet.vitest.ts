@@ -188,7 +188,9 @@ function deepImportReferences(
           : undefined,
         bindings,
         bindings?.every(({ requestedSpace }) => requestedSpace === 'type') ??
-          false,
+          (ts.isImportDeclaration(node)
+            ? (node.importClause?.isTypeOnly ?? false)
+            : node.isTypeOnly),
       );
     } else if (
       ts.isImportEqualsDeclaration(node) &&
@@ -524,6 +526,7 @@ function isLeafFullyPublished(
   surface: PublishedSurface,
   specifier: string,
   moduleMemo: Map<string, ModuleExports>,
+  typeOnly = false,
 ): boolean {
   const leaf = specifier.slice(DEEP_IMPORT_PREFIX.length);
   const file = resolveRelative(BARREL_PATH, `./${leaf}`);
@@ -531,10 +534,16 @@ function isLeafFullyPublished(
   const leafExports = schemaModuleExports(file, moduleMemo);
   if (leafExports.size === 0) return false;
   const published = surface[specifier];
-  return [...leafExports].every(([name, entry]) =>
-    [...entry.spaces].every(
-      (space) => published?.[space].includes(name) === true,
-    ),
+  const required = [...leafExports].flatMap(([name, entry]) =>
+    [...entry.spaces]
+      .filter((space) => !typeOnly || space === 'type')
+      .map((space) => ({ name, space })),
+  );
+  return (
+    required.length > 0 &&
+    required.every(
+      ({ name, space }) => published?.[space].includes(name) === true,
+    )
   );
 }
 
@@ -568,13 +577,19 @@ function collectCurrent(): Pick<
         );
         const isGratuitous =
           reference.bindings == null
-            ? isLeafFullyPublished(fullSurface, reference.specifier, moduleMemo)
+            ? isLeafFullyPublished(
+                fullSurface,
+                reference.specifier,
+                moduleMemo,
+                reference.typeOnly,
+              )
             : resolvedSpaces?.every((space) => space != null) === true;
         const bucket = isGratuitous ? gratuitous : forced;
         if (isGratuitous) {
           if (reference.bindings == null) {
             const published = fullSurface[reference.specifier];
             for (const space of ['type', 'value'] as const) {
+              if (reference.typeOnly && space === 'value') continue;
               for (const name of published?.[space] ?? []) {
                 addPublishedBinding(
                   referencedSurface,
@@ -649,6 +664,9 @@ describe('@shared/schemas deep-import ratchet', () => {
         export { AgentCategory } from '@shared/schemas/agent';
         import defaultAgent from '@shared/schemas/agent';
         import * as agentNamespace from '@shared/schemas/agent';
+        import type * as agentTypes from '@shared/schemas/agent';
+        export type * from '@shared/schemas/agent';
+        export type * as agentExportTypes from '@shared/schemas/agent';
         import agent = require('@shared/schemas/agent');
         const dynamic = import('@shared/schemas/agent');
         const commonJs = require('@shared/schemas/agent');
@@ -679,6 +697,21 @@ describe('@shared/schemas deep-import ratchet', () => {
         bindings: undefined,
         specifier: '@shared/schemas/agent',
         typeOnly: false,
+      },
+      {
+        bindings: undefined,
+        specifier: '@shared/schemas/agent',
+        typeOnly: true,
+      },
+      {
+        bindings: undefined,
+        specifier: '@shared/schemas/agent',
+        typeOnly: true,
+      },
+      {
+        bindings: undefined,
+        specifier: '@shared/schemas/agent',
+        typeOnly: true,
       },
       {
         bindings: undefined,
