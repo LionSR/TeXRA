@@ -14,7 +14,7 @@ import type {
   ToolEditApprovalRequest,
   ToolEditApprovalResult,
 } from '@platform/interfaces';
-import type { StreamTabId } from '@shared/schemas';
+import type { StreamTabId, ToolEditPermission } from '@shared/schemas';
 import type { ToolEditApprovalAction } from '@shared/schemas/prompts';
 import type { LineChanges } from '@shared/schemas/lineChanges';
 import { type ToolResult } from '@shared/schemas/toolResult';
@@ -60,18 +60,18 @@ export function isApprovalBypassedForStream(
 }
 
 /**
- * Emit the tool-edit approval prompt to the progress view: register the
+ * Prepare a tool-edit approval prompt for the host: register the
  * stream awaiting input (without switching the active tab — the request
- * surfaces as a pending badge on the stream's row, #8246) and post the
- * `showToolEditPermission` event with the bypass affordance gated on the
- * stream's current bypass state.
+ * surfaces as a pending badge on the stream's row, #8246) and construct the
+ * permission payload with the bypass affordance gated on the stream's current
+ * bypass state.
  *
  * Shared host-agnostic logic for the VS Code (`nativeToolEditApproval`) and
  * desktop (`desktopToolEditApproval`) approval surfaces. Each host computes
  * `relativePath` in its own way and performs any host-specific routing (e.g.
  * revealing the progress view) around this call.
  */
-export function emitToolEditApprovalPrompt(
+export function prepareToolEditApprovalPrompt(
   runtimeHost: AgentRuntimeHost,
   session: SessionHandle,
   params: {
@@ -80,7 +80,7 @@ export function emitToolEditApprovalPrompt(
     relativePath: string;
     lineChanges: LineChanges;
   },
-): void {
+): ToolEditPermission {
   const { requestId, request, relativePath, lineChanges } = params;
   const { streamId } = request;
   if (streamId) {
@@ -100,7 +100,7 @@ export function emitToolEditApprovalPrompt(
   const isBypassed = streamId
     ? session.approvals.toolEdit.bypass.isBypassed(streamId)
     : false;
-  runtimeHost.emit('showToolEditPermission', {
+  return {
     requestId,
     path: request.path,
     relativePath,
@@ -110,7 +110,7 @@ export function emitToolEditApprovalPrompt(
     addedLines: lineChanges.added,
     removedLines: lineChanges.removed,
     isLatex: isLatexFile(request.path),
-  });
+  };
 }
 
 // ============================================================================

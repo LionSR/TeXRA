@@ -517,7 +517,12 @@ export async function activate(context: vscode.ExtensionContext) {
   const viewProviders = registerCommands(context);
   registerFileDecorations(context);
 
-  initializeNativeToolEditApproval(context, defaultSession().interactions);
+  initializeNativeToolEditApproval(context, defaultSession().interactions, {
+    showToolEditPermission: (payload) =>
+      progressViewProvider.backend.approvalHandlers.toolEdit.show(payload),
+    resolveToolEditPermission: (requestId) =>
+      progressViewProvider.backend.approvalHandlers.toolEdit.dismiss(requestId),
+  });
   setLeanLanguageServices(leanVscodeIntegration);
   setOpenPdfOpener(async ({ location, preserveFocus }) => {
     await vscode.commands.executeCommand(

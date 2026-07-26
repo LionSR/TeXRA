@@ -1,9 +1,9 @@
 import { nanoid } from 'nanoid';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type {
-  AgentRuntimeEvent,
-  AgentRuntimeEventPayloads,
-  AgentRuntimeHost,
-} from '@agent/runtime/AgentRuntimeHost';
+  RuntimePresentationEvent,
+  RuntimePresentationEventPayloads,
+} from '@agent/runtime/runtimePresentationEvents';
 import {
   cancellationResultFor,
   type BashSettlement,
@@ -79,9 +79,9 @@ export function createDesktopHostInteractions(
 class DesktopHostInteractionsImpl implements DesktopHostInteractions {
   constructor(private readonly options: DesktopHostInteractionsOptions) {}
 
-  emit<K extends AgentRuntimeEvent>(
+  emit<K extends RuntimePresentationEvent>(
     event: K,
-    payload: AgentRuntimeEventPayloads[K],
+    payload: RuntimePresentationEventPayloads[K],
   ): void {
     this.options.runtimeHost.emit(event, payload);
   }

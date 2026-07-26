@@ -22,7 +22,6 @@
       "@agent/runtime/resolveAndResumeStream",
       "@agent/runtime/resumeQueuedToolUse",
       "@agent/runtime/runAgent",
-      "@agent/runtime/runtimeInteractionEvents",
       "@agent/runtime/runtimePresentationEvents",
       "@agent/runtime/SessionEventHub",
       "@agent/runtime/SessionHandle",

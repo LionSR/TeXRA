@@ -23,11 +23,9 @@ import { replayApprovalRequestHandlers } from '@controllers/progressView/backend
 import { ProgressBackend } from '@controllers/progressView/backend/ProgressBackend';
 import { getProgressStreamControls } from '@controllers/progressView/progressStreamControls';
 
-import type { ProgressBackendInteractionPayloads } from '@controllers/progressView/backend/events/ProgressInteractionHandler';
 import { appSignals } from '@eventBus/AppSignals';
 import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
 import { createAgentPresentationHost } from '@frontend/events/agentEventListeners';
-import { setExtensionInteractionEventSink } from '@frontend/events/extensionInteractionEvents';
 import {
   buildVisibleBasicModelOptionsData,
   computeModelOptionsData,
@@ -67,7 +65,6 @@ export class ProgressViewProvider extends BaseWebviewProvider {
 
   public readonly backend: ProgressBackend;
   public readonly state: ProgressBackend['state'];
-  public readonly interactionHandler: ProgressBackend['interactionHandler'];
   public readonly webviewBridge: ProgressBackend['webviewBridge'];
   public readonly webviewUpdater: ProgressBackend['webviewUpdater'];
 
@@ -150,7 +147,6 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     this.state = this.backend.state;
     this.webviewUpdater = this.backend.webviewUpdater;
     this.webviewBridge = this.backend.webviewBridge;
-    this.interactionHandler = this.backend.interactionHandler;
 
     this.contentProvider = new BundledViewContentProvider(
       context,
@@ -175,14 +171,6 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     const progressBackendSubscription = this.backend.setupEventListeners();
     this.detachHostInteractions =
       defaultSession().useHostInteractions(interactions);
-    const detachExtensionInteractionEvents = setExtensionInteractionEventSink(
-      (event, payload) => {
-        this.backend.handleInteractionEvent(
-          event,
-          payload as ProgressBackendInteractionPayloads[typeof event],
-        );
-      },
-    );
     // Terminal-error toasts come from the run's `result` event (the lifecycle
     // no longer emits them directly). This re-emits `requestShow*` through
     // the session's interactions, reaching the presentation dispatch above
@@ -195,7 +183,6 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     this._disposables.push(
       progressBackendSubscription,
       { dispose: this.detachHostInteractions },
-      { dispose: detachExtensionInteractionEvents },
       { dispose: detachTerminalResultToast },
     );
 
