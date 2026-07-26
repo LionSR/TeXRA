@@ -94,8 +94,11 @@ describe('createDesktopDiffHost', () => {
     expect(posted[0]).toMatchObject({
       command: 'desktop:showDiff',
       title: 'Compare doc.tex',
+      displayPath: 'Compare doc.tex',
       originalText: 'hello\nold\n',
       proposedText: 'hello\nnew\n',
+      additions: 1,
+      deletions: 1,
       language: 'latex',
       proposedPath,
       originalPath,

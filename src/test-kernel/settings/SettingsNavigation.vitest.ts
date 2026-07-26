@@ -1,0 +1,231 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('@shared/hostBridge', () => ({
+  postMessage: vi.fn(),
+  getState: () => ({}),
+  setState: () => {},
+  hostBridge: {
+    postMessage: vi.fn(),
+    getState: () => undefined,
+    setState: () => undefined,
+  },
+}));
+
+import { SETTINGS_TAB, SETTINGS_TAB_PANEL_BY_NAME } from '@shared/schemas';
+
+import { useLitComponentTestDom } from './litComponentTestUtils';
+
+type LitElementLike = HTMLElement & { updateComplete: Promise<unknown> };
+
+interface NavEntry {
+  readonly name: keyof typeof SETTINGS_TAB;
+  readonly panel: string;
+  readonly icon: string;
+  readonly label: string;
+  readonly description: string;
+}
+
+interface NavGroup {
+  readonly label: string;
+  readonly entries: readonly NavEntry[];
+}
+
+let navGroups: readonly NavGroup[] = [];
+let setSelectedTabIndex: (index: number) => void = () => {};
+let getSelectedTabIndex: () => number = () => -1;
+let declareAllCommandsSupported: () => void = () => {};
+
+async function mountSettingsApp(): Promise<LitElementLike> {
+  const app = document.createElement('settings-app') as LitElementLike;
+  app.setAttribute('data-desktop-view', 'settings');
+  declareAllCommandsSupported();
+  setSelectedTabIndex(SETTINGS_TAB.ACCOUNT);
+  document.body.append(app);
+  await app.updateComplete;
+  return app;
+}
+
+function categoryButton(app: LitElementLike, label: string): HTMLElement {
+  const button = [
+    ...(app.shadowRoot?.querySelectorAll<HTMLElement>(
+      '.settings-category-button',
+    ) ?? []),
+  ].find((candidate) => candidate.getAttribute('aria-label') === label);
+  expect(button, `missing settings category "${label}"`).not.toBeNull();
+  return button!;
+}
+
+function pageButton(app: LitElementLike, panel: string): HTMLElement {
+  const button = app.shadowRoot?.querySelector<HTMLElement>(
+    `.settings-page-button[data-panel="${panel}"]`,
+  );
+  expect(button, `missing settings page "${panel}"`).not.toBeNull();
+  return button!;
+}
+
+function activePanelLabel(app: LitElementLike): string | null | undefined {
+  return app.shadowRoot
+    ?.querySelector('.settings-panel')
+    ?.getAttribute('aria-label');
+}
+
+describe('hierarchical settings navigation', () => {
+  useLitComponentTestDom(async () => {
+    await import('@settingsView/frontend/SettingsApp');
+    const nav = await import('@settingsView/frontend/settingsNav');
+    const state = await import('@settingsView/frontend/settingsState');
+    navGroups = nav.SETTINGS_NAV_GROUPS as typeof navGroups;
+    setSelectedTabIndex = (index) => state.selectedTabIndex.set(index);
+    getSelectedTabIndex = () => state.selectedTabIndex.get();
+    declareAllCommandsSupported = () =>
+      state.unsupportedCommands.set(new Set<string>());
+  });
+
+  beforeEach(() => {
+    setSelectedTabIndex(SETTINGS_TAB.ACCOUNT);
+  });
+
+  it('renders category navigation plus only the active category pages', async () => {
+    const app = await mountSettingsApp();
+
+    expect(
+      app.shadowRoot?.querySelectorAll('.settings-category-button'),
+    ).toHaveLength(navGroups.length);
+    const activeGroup = navGroups.find((group) =>
+      group.entries.some((entry) => entry.name === 'ACCOUNT'),
+    )!;
+    expect(
+      app.shadowRoot?.querySelectorAll('.settings-page-button'),
+    ).toHaveLength(activeGroup.entries.length);
+  });
+
+  it('selects the first page when changing category, then any page within it', async () => {
+    const app = await mountSettingsApp();
+
+    for (const group of navGroups) {
+      categoryButton(app, group.label).click();
+      await app.updateComplete;
+
+      expect(getSelectedTabIndex()).toBe(SETTINGS_TAB[group.entries[0]!.name]);
+      expect(activePanelLabel(app)).toBe(group.entries[0]!.label);
+      expect(
+        app.shadowRoot?.querySelectorAll('.settings-page-button'),
+      ).toHaveLength(group.entries.length);
+
+      for (const entry of group.entries) {
+        pageButton(app, entry.panel).click();
+        await app.updateComplete;
+        expect(getSelectedTabIndex()).toBe(SETTINGS_TAB[entry.name]);
+        expect(activePanelLabel(app)).toBe(entry.label);
+      }
+    }
+  });
+
+  it('activates the page addressed by a wire index', async () => {
+    const app = await mountSettingsApp();
+
+    setSelectedTabIndex(SETTINGS_TAB.LATEX);
+    await app.updateComplete;
+
+    expect(activePanelLabel(app)).toBe('LaTeX');
+    expect(
+      app.shadowRoot?.querySelector(
+        '.settings-page-button[data-panel="latex"][data-active="true"]',
+      ),
+    ).not.toBeNull();
+    expect(app.shadowRoot?.querySelector('latex-tab')).not.toBeNull();
+  });
+
+  it('renders the same page heading contract for every settings page', async () => {
+    const app = await mountSettingsApp();
+
+    for (const group of navGroups) {
+      for (const entry of group.entries) {
+        setSelectedTabIndex(SETTINGS_TAB[entry.name]);
+        await app.updateComplete;
+
+        const header = app.shadowRoot?.querySelector('.settings-page-header');
+        expect(header?.querySelector('h1')?.textContent?.trim()).toBe(
+          entry.label,
+        );
+        expect(header?.querySelector('p')?.textContent?.trim()).toBe(
+          entry.description,
+        );
+        expect(header?.querySelector('wa-icon')).toBeNull();
+      }
+    }
+  });
+
+  it('keeps account key management in the models page', async () => {
+    const app = await mountSettingsApp();
+    setSelectedTabIndex(SETTINGS_TAB.ACCOUNT);
+    await app.updateComplete;
+
+    const account =
+      app.shadowRoot?.querySelector<LitElementLike>('account-tab');
+    await account?.updateComplete;
+    account?.dispatchEvent(
+      new CustomEvent('manage-provider-keys', {
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    await app.updateComplete;
+
+    expect(getSelectedTabIndex()).toBe(SETTINGS_TAB.MODELS);
+    expect(activePanelLabel(app)).toBe('Providers & Models');
+    expect(app.shadowRoot?.querySelector('models-tab')).not.toBeNull();
+    expect(app.shadowRoot?.querySelector('account-tab')).toBeNull();
+  });
+
+  it('keeps icon-only navigation controls accessible', async () => {
+    const app = await mountSettingsApp();
+
+    for (const group of navGroups) {
+      expect(categoryButton(app, group.label).getAttribute('aria-label')).toBe(
+        group.label,
+      );
+      categoryButton(app, group.label).click();
+      await app.updateComplete;
+      for (const entry of group.entries) {
+        expect(pageButton(app, entry.panel).getAttribute('aria-label')).toBe(
+          `${group.label}: ${entry.label}`,
+        );
+      }
+    }
+  });
+
+  it('keeps unsupported Goals out of the Data & Activity pages', async () => {
+    const app = document.createElement('settings-app') as LitElementLike;
+    document.body.append(app);
+    await app.updateComplete;
+
+    const dataGroup = navGroups.find(
+      (group) => group.label === 'Data & Activity',
+    )!;
+    categoryButton(app, dataGroup.label).click();
+    await app.updateComplete;
+
+    expect(
+      app.shadowRoot?.querySelector(
+        `.settings-page-button[data-panel="${SETTINGS_TAB_PANEL_BY_NAME.GOAL}"]`,
+      ),
+    ).toBeNull();
+  });
+
+  it('keeps desktop-only shortcuts out of the extension navigation', async () => {
+    const app = document.createElement('settings-app') as LitElementLike;
+    declareAllCommandsSupported();
+    setSelectedTabIndex(SETTINGS_TAB.SHORTCUTS);
+    document.body.append(app);
+    await app.updateComplete;
+
+    expect(
+      app.shadowRoot?.querySelector(
+        `.settings-page-button[data-panel="${SETTINGS_TAB_PANEL_BY_NAME.SHORTCUTS}"]`,
+      ),
+    ).toBeNull();
+    expect(activePanelLabel(app)).toBe('Account & Usage');
+    expect(app.shadowRoot?.querySelector('shortcuts-tab')).toBeNull();
+  });
+});

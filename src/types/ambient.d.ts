@@ -270,9 +270,25 @@ declare module 'turndown-plugin-gfm' {
 
 /// <reference types="vite/client" />
 
-/** Monaco's exported editor-only entry point; TypeScript's legacy Node resolver cannot follow the package export map. */
+/**
+ * Monaco's ESM entry points. TypeScript's legacy Node resolver cannot follow the
+ * package export map, so each subpath we import needs an ambient declaration.
+ *
+ * `languages` is re-exported alongside `editor` because registering a grammar
+ * (Monaco ships none for TeX) goes through `monaco.languages`.
+ */
 declare module 'monaco-editor/editor/editor.api.js' {
-  export { editor } from 'monaco-editor';
+  export { editor, languages } from 'monaco-editor';
+}
+
+/**
+ * Contributes Monaco's ~80 bundled Monarch grammars. Imported purely for its
+ * side effect: `editor.api.js` is the bare editor core and registers no
+ * languages, so without this every file renders as plain text.
+ */
+declare module 'monaco-editor/languages/register.all.js' {
+  const registered: void;
+  export default registered;
 }
 
 declare module '*?worker' {

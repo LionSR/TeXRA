@@ -21,6 +21,10 @@ const mocks = vi.hoisted(() => ({
   openExternal: vi.fn(),
   parseUri: vi.fn((value: string) => ({ kind: 'parsed', value })),
   fileUri: vi.fn((value: string) => ({ kind: 'file', value })),
+  workspaceFolders: [] as Array<{
+    name: string;
+    uri: { fsPath: string };
+  }>,
 }));
 
 vi.mock('vscode', () => ({
@@ -34,6 +38,11 @@ vi.mock('vscode', () => ({
   window: {
     activeColorTheme: { kind: 2 },
     showInformationMessage: vi.fn(),
+  },
+  workspace: {
+    get workspaceFolders() {
+      return mocks.workspaceFolders;
+    },
   },
 }));
 
@@ -124,6 +133,7 @@ describe('MainViewMessageHandler interaction mappings', () => {
     mocks.getProviderKeyUrl.mockReturnValue(undefined);
     mocks.getCustomAgentDirectory.mockResolvedValue('/agents/custom');
     mocks.openExternal.mockResolvedValue(true);
+    mocks.workspaceFolders.length = 0;
     handler = new MainViewMessageHandler({
       globalState: {},
     } as unknown as vscode.ExtensionContext);
@@ -153,6 +163,23 @@ describe('MainViewMessageHandler interaction mappings', () => {
       ['texra.openProgressViewInTab', [], 'MainView'],
       ['texra.showProgressView', [{ inPlace: true }], 'MainView'],
     ]);
+  });
+
+  it('pushes every open workspace folder as a launcher root option', () => {
+    mocks.workspaceFolders.push(
+      { name: 'paper', uri: { fsPath: '/workspace/paper' } },
+      { name: 'figures', uri: { fsPath: '/workspace/figures' } },
+    );
+
+    handler.postWorkspaceRoots(view);
+
+    expect(postMessage).toHaveBeenCalledWith({
+      command: MAIN_VIEW_COMMANDS.SET_WORKSPACE_ROOTS,
+      optionsData: [
+        { label: 'paper', value: '/workspace/paper' },
+        { label: 'figures', value: '/workspace/figures' },
+      ],
+    });
   });
 
   it('preserves extension and agent-settings arguments', async () => {

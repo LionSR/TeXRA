@@ -64,37 +64,45 @@ export class UserMessage extends LitElement {
       .user-message-container {
         display: flex;
         justify-content: flex-end;
-        margin: var(--wa-space-3xs) 0;
+        margin: var(--wa-space-l) 0 var(--wa-space-m);
       }
 
       .user-message {
-        padding: var(--wa-space-3xs) var(--wa-space-2xs);
-        max-width: 85%;
-        background-color: var(--wa-color-editor-selection);
-        border: var(--border-thin) solid var(--wa-color-surface-border);
-        border-radius: var(--border-radius);
+        position: relative;
+        padding: var(--wa-space-xs) var(--wa-space-s);
+        max-width: min(78%, 38rem);
+        background-color: var(--wa-color-neutral-fill-quiet);
+        border: 0;
+        border-radius: var(--wa-border-radius-xl, 20px);
+        box-shadow: inset 0 0 0 1px
+          color-mix(in srgb, var(--wa-color-surface-border) 72%, transparent);
       }
 
       .user-message-header {
+        position: absolute;
+        top: calc(100% + var(--wa-space-3xs));
+        right: var(--wa-space-2xs);
         display: flex;
         align-items: center;
         gap: var(--wa-space-3xs);
         font-size: var(--font-size-xs);
         color: var(--wa-color-text-quiet);
+        opacity: 0;
+        transition: opacity var(--transition-fast);
       }
 
       .user-message-header-left {
-        display: flex;
-        align-items: center;
-        gap: var(--wa-space-3xs);
-        flex: 1;
+        display: none;
       }
 
       .user-message-copy {
         opacity: 0;
       }
 
-      .user-message:hover .user-message-copy {
+      .user-message:hover .user-message-header,
+      .user-message:focus-within .user-message-header,
+      .user-message:hover .user-message-copy,
+      .user-message:focus-within .user-message-copy {
         opacity: 1;
       }
 
@@ -110,26 +118,32 @@ export class UserMessage extends LitElement {
         color: var(--wa-color-text-normal);
         white-space: pre-wrap;
         word-wrap: break-word;
-        line-height: var(--line-height-normal);
-        font-size: var(--font-size-sm);
+        line-height: 1.55;
+        font-size: var(--font-size);
       }
 
       .user-message--structured-delivery .user-message-content {
         max-height: min(45vh, 520px);
         overflow: auto;
-        padding: var(--wa-space-2xs);
+        padding: var(--wa-space-xs);
         background: var(
           --wa-color-surface-lowered,
           var(--wa-color-surface-default)
         );
-        border-radius: var(--border-radius-small);
+        border-radius: var(--wa-border-radius-m, var(--border-radius-small));
         font-size: var(--font-size-sm);
-        line-height: 1.35;
+        line-height: 1.5;
         white-space: normal;
       }
 
       .user-message-timestamp {
         font-size: var(--font-size-xs);
+      }
+
+      @media (max-width: 520px) {
+        .user-message {
+          max-width: 88%;
+        }
       }
 
       /*

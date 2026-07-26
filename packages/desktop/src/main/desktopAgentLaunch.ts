@@ -26,6 +26,12 @@ export interface DesktopAgentLaunchContext {
 
 export interface DesktopAgentLaunchOptions {
   readonly modelHandlerCompatibilityKey?: ModelHandlerCompatibilityKey | null;
+  /**
+   * Run on the configured helper model instead of the request's own model. Only
+   * the compile-fixer action opts in, matching the extension, where the same
+   * flag rides on the `texra.execute` payload.
+   */
+  readonly preferHelperModel?: boolean;
   /** Observe the concrete run identity used by process-session result events. */
   readonly onRun?: (handle: AgentRunHandle) => void | Promise<void>;
   /** The caller owns presentation for failures before the run lifecycle. */
@@ -46,6 +52,7 @@ export async function launchDesktopAgent(
     session: context.session,
     runtimeUnavailableTools: DESKTOP_UNAVAILABLE_TOOLS,
     modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
+    ...(options.preferHelperModel && { preferHelperModel: true }),
     onRun: options.onRun,
     suppressErrorNotification: options.suppressErrorNotification,
     ...(context.canAcquireResumeLease && {

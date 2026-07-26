@@ -1,6 +1,5 @@
 import { existsSync, mkdirSync, watch, type FSWatcher } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
-import { spawn } from 'node:child_process';
 import { dirname, join, resolve as resolvePath } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -9,6 +8,7 @@ import {
   clipboard,
   dialog,
   Menu,
+  nativeTheme,
   session,
   shell,
 } from 'electron';
@@ -36,7 +36,6 @@ import { LatexConfigPersistenceController } from '@controllers/settingsView/Late
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { prepareMainViewExecutionRequest } from '@controllers/mainView/MainViewExecutionController';
 import type { SessionStores } from '@controllers/progressView/backend/state/SessionStores';
-import type { TerminalRunResult } from '@hosts/uiHosts';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { platform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
@@ -64,6 +63,10 @@ import { createDesktopDiffHost } from './desktopDiffHost.js';
 import { initializeDesktopProcessStores } from './desktopProcessStores.js';
 import { createDesktopFileSelection } from './desktopFileSelection.js';
 import { createDesktopPreviewHost } from './desktopPreviewHost.js';
+import { createDesktopBrowserViews } from './desktopBrowserViews.js';
+import { createDesktopPtyHost } from './desktopPtyHost.js';
+import { createDesktopWorkspaceIpc } from './desktopWorkspaceIpc.js';
+import { DESKTOP_WORKSPACE_COMMANDS } from '../desktopWorkspaceMessages.js';
 import { installDesktopProtocolCallbackLifecycle } from './desktopProtocolCallbacks.js';
 import {
   attachRendererConsoleLog,
@@ -97,11 +100,6 @@ import { DefaultDesktopToolingSettingsController } from './desktopToolingSetting
 import { createDesktopGitHost } from './desktopGitHost.js';
 import { createDesktopShellActions } from './desktopShellIpc.js';
 import {
-  openMacTerminalCommand,
-  setupCommandNeedsInteractiveTerminal,
-} from './desktopSetupTerminal.js';
-import { createDesktopTerminalRunner } from './desktopTerminalRunner.js';
-import {
   getDesktopWindowTitle,
   installDesktopWindowTitle,
 } from './desktopWindowTitle.js';
@@ -132,7 +130,6 @@ import { initializeElectronPlatform } from './platform/index.js';
 import {
   DESKTOP_WORKSPACE_PATH_STATE_KEY,
   serializeWorkspacePresenceArg,
-  withNewWindowWorkspaceArgs,
   withWorkspacePathArg,
 } from '../workspacePath.js';
 import type {
@@ -198,13 +195,15 @@ const PRODUCTION_CSP = [
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
   "font-src 'self' data:",
+  "img-src 'self' data: blob:",
   "connect-src 'self' data:",
 ].join('; ');
-const SETUP_COMMAND_TIMEOUT_MS = 10 * 60_000;
 const DEVELOPMENT_CSP = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-eval'",
   "style-src 'self' 'unsafe-inline'",
+  "font-src 'self' data:",
+  "img-src 'self' data: blob:",
   "connect-src 'self' data: ws://localhost:* ws://127.0.0.1:* http://localhost:* http://127.0.0.1:*",
 ].join('; ');
 
@@ -218,98 +217,6 @@ function installContentSecurityPolicy(): void {
         ],
       },
     });
-  });
-}
-
-function describeSetupCommandOutcome(result: TerminalRunResult): {
-  type: 'warning' | 'error' | 'info';
-  message: string;
-} {
-  if (result.timedOut) {
-    return { type: 'warning', message: 'Setup command timed out' };
-  }
-  if (result.exitCode === undefined) {
-    return {
-      type: 'warning',
-      message: 'Setup command finished without an observable exit code',
-    };
-  }
-  if (result.exitCode !== 0) {
-    return {
-      type: 'error',
-      message: `Setup command failed with exit code ${result.exitCode}`,
-    };
-  }
-  return { type: 'info', message: 'Setup command finished' };
-}
-
-async function showSetupCommandResult(
-  window: BrowserWindow,
-  command: string,
-  result: TerminalRunResult,
-): Promise<void> {
-  const output = result.output.trim();
-  const hasOutput = output.length > 0;
-  const buttons = hasOutput
-    ? ['Copy Output', 'Copy Command', 'Close']
-    : ['Copy Command', 'Close'];
-  const { type, message } = describeSetupCommandOutcome(result);
-  const response = await dialog.showMessageBox(window, {
-    type,
-    message,
-    detail: [`Command:\n${command}`, output ? `Output:\n${output}` : '']
-      .filter(Boolean)
-      .join('\n\n'),
-    buttons,
-    defaultId: 0,
-    cancelId: buttons.length - 1,
-  });
-
-  if (hasOutput && response.response === 0) {
-    clipboard.writeText(output);
-  } else if (
-    (hasOutput && response.response === 1) ||
-    (!hasOutput && response.response === 0)
-  ) {
-    clipboard.writeText(command);
-  }
-}
-
-async function showCopyCommandDialog(
-  window: BrowserWindow,
-  command: string,
-  options: {
-    type: 'info' | 'warning';
-    message: string;
-    detail: string;
-    defaultId: 0 | 1;
-  },
-): Promise<void> {
-  const response = await dialog.showMessageBox(window, {
-    type: options.type,
-    message: options.message,
-    detail: options.detail,
-    buttons: ['Copy Command', 'Close'],
-    defaultId: options.defaultId,
-    cancelId: 1,
-  });
-
-  if (response.response === 0) {
-    clipboard.writeText(command);
-  }
-}
-
-async function showManualSetupCommand(
-  window: BrowserWindow,
-  command: string,
-): Promise<void> {
-  await showCopyCommandDialog(window, command, {
-    type: 'warning',
-    message: 'Setup command needs an interactive terminal',
-    detail:
-      `Command:\n${command}\n\n` +
-      'This command may ask for a password or confirmation. TeXRA will not run it in a hidden process. Copy it into a terminal, then return to TeXRA and recheck the dependency status.',
-    defaultId: 0,
   });
 }
 
@@ -334,11 +241,34 @@ function createWindow(options: {
     options.workspacePath,
   );
   const window = new BrowserWindow({
-    width: 960,
-    height: 680,
-    minWidth: 720,
-    minHeight: 520,
+    // The task canvas remains useful with a project sidebar and an optional
+    // workbench open beside it at the default size.
+    width: 1280,
+    height: 860,
+    minWidth: 860,
+    minHeight: 600,
+    // Present the window only after Chromium has painted its first frame.
+    // Relying on BrowserWindow's implicit show can strand a hidden-inset
+    // window behind the launching macOS Space while the app itself is active.
+    show: false,
     title: initialWindowTitle,
+    // Frameless chrome. The OS title bar was a dead 28px strip in the app's own
+    // color scheme that no amount of theming could reach, and it visually cut the
+    // window off from the shell below it.
+    //
+    // `hiddenInset` (macOS) keeps the traffic-light buttons but removes the bar,
+    // so the task shell header becomes the drag region. On Windows/Linux,
+    // `titleBarOverlay` hands us the same arrangement with system controls
+    // drawn over our surface.
+    titleBarStyle: 'hiddenInset',
+    // Inset the traffic lights so they sit centred in the 48px header rather
+    // than crowding its top-left corner.
+    ...(process.platform === 'darwin'
+      ? { trafficLightPosition: { x: 18, y: 18 } }
+      : { titleBarOverlay: true }),
+    // Match the operating-system theme before the renderer paints to avoid a
+    // contrasting flash behind the frameless window.
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#212121' : '#f7f7f7',
     webPreferences: {
       preload: join(desktopMainDir, '../preload/index.cjs'),
       contextIsolation: true,
@@ -453,41 +383,6 @@ function createWindow(options: {
       },
     }).catch(reportAsyncError);
   }
-  const setupCommandCwd = options.workspacePath ?? app.getPath('home');
-  const setupTerminalRunner = createDesktopTerminalRunner({
-    cwd: setupCommandCwd,
-  });
-  const runSetupCommand = async (command: string) => {
-    if (process.platform === 'darwin') {
-      try {
-        await openMacTerminalCommand(command, setupCommandCwd);
-        await showCopyCommandDialog(window, command, {
-          type: 'info',
-          message: 'Setup command opened in Terminal',
-          detail:
-            `Command:\n${command}\n\n` +
-            'Complete any prompts in the Terminal window, then return to TeXRA and recheck the dependency status.',
-          defaultId: 1,
-        });
-      } catch {
-        await showManualSetupCommand(window, command);
-      }
-      return;
-    }
-
-    if (setupCommandNeedsInteractiveTerminal(command)) {
-      await showManualSetupCommand(window, command);
-      return;
-    }
-
-    const result = await setupTerminalRunner.runCommand({
-      name: 'TeXRA Setup',
-      command,
-      cwd: setupCommandCwd,
-      timeoutMs: SETUP_COMMAND_TIMEOUT_MS,
-    });
-    await showSetupCommandResult(window, command, result);
-  };
   // `installDesktopHostBridge.postToRenderer` is itself a no-op when
   // `webContents.isDestroyed()`. Without checking that here too, callers would
   // falsely report success and skip their external-viewer fallback. Bot
@@ -510,6 +405,12 @@ function createWindow(options: {
    */
   const postToRenderer = (message: unknown): void => {
     ipcRef.current?.postToRenderer(message);
+  };
+  const runSetupCommand = async (command: string): Promise<void> => {
+    postToRenderer({
+      command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_OPEN_COMMAND,
+      initialCommand: command,
+    });
   };
   const previewHost = createDesktopPreviewHost({
     shell,
@@ -585,34 +486,25 @@ function createWindow(options: {
       DESKTOP_WORKSPACE_PATH_STATE_KEY,
       selectedPath,
     );
-    app.relaunch({
-      args: withWorkspacePathArg(process.argv.slice(1), selectedPath),
-    });
+    const relaunchArgs = withWorkspacePathArg(
+      process.argv.slice(1),
+      selectedPath,
+    );
+    // The development supervisor owns Vite and the Electron child. Let it
+    // replace the child so the new process keeps a live renderer URL; calling
+    // app.relaunch() directly orphaned the replacement and made the
+    // supervisor tear Vite down as soon as the original process exited.
+    if (
+      process.env.TEXRA_DESKTOP_DEV_SUPERVISED === '1' &&
+      typeof process.send === 'function'
+    ) {
+      process.send(relaunchArgs);
+    } else {
+      app.relaunch({ args: relaunchArgs });
+    }
     // `app.exit()` bypasses before-quit; use the lifecycle-aware path so the
     // process session drains before Electron starts the replacement process.
     app.quit();
-  };
-  const openWorkspaceInNewWindow = async () => {
-    const result = await dialog.showOpenDialog(window, {
-      title: 'Open Folder in New Window',
-      defaultPath: folderPickerDefaultPath,
-      properties: ['openDirectory'],
-    });
-    const selectedPath = result.canceled ? undefined : result.filePaths[0];
-    if (!selectedPath) return;
-
-    // Not routed through executeCommand: this launches a new, independent
-    // Electron window process (detached + unref'd) that must outlive this
-    // process and is never awaited — executeCommand always awaits subprocess
-    // completion, which would hang here.
-    spawn(
-      process.execPath,
-      withNewWindowWorkspaceArgs(process.argv.slice(1), selectedPath),
-      {
-        detached: true,
-        stdio: 'ignore',
-      },
-    ).unref();
   };
   attachRendererConsoleLog(window.webContents);
   const agentExecutionHost: DesktopAgentExecutionHost = {
@@ -760,6 +652,17 @@ function createWindow(options: {
     },
     prompts: {
       promptText: (input) => promptController.request(input),
+      confirm: async ({ title, message }) => {
+        const result = await dialog.showMessageBox(window, {
+          type: 'warning',
+          title,
+          message,
+          buttons: ['Continue', 'Cancel'],
+          defaultId: 0,
+          cancelId: 1,
+        });
+        return result.response === 0;
+      },
       chooseTeamAvailability: ({ presetName, unavailableNames }) =>
         chooseTeamAvailability(unavailableNames, presetName),
     },
@@ -768,6 +671,7 @@ function createWindow(options: {
       signIn: signInForRemoteAgentCatalog,
     },
     notifications: { showInfoMessage, showErrorMessage },
+    resourcesPath: options.resourcesPath,
   });
   const credentialSettingsController =
     new DefaultDesktopCredentialSettingsController({
@@ -853,6 +757,7 @@ function createWindow(options: {
   };
   const toolingSettingsController = new DefaultDesktopToolingSettingsController(
     {
+      onError: reportAsyncError,
       workspaceState: platform().workspaceState,
       globalState: platform().globalState,
       renderer: {
@@ -920,6 +825,15 @@ function createWindow(options: {
       } catch (error) {
         if (!windowClosed) reportAsyncError(error);
       }
+    },
+    // Only a live presentation knows a stream's label, so this reads the
+    // already-constructed bridge rather than creating one; the Git tab falls
+    // back to the raw stream id when no window is attached.
+    getStreamLabel: (streamId) => agentExecution?.getStreamLabel(streamId),
+    promptForSecret: (input) =>
+      promptController.request({ ...input, password: true }),
+    openExternal: async (url) => {
+      await shell.openExternal(url);
     },
     onError: reportAsyncError,
   };
@@ -1137,7 +1051,6 @@ function createWindow(options: {
       openExternalUrl: previewHost.openExternal,
       openLogFolder: openLogsFolder,
       openPath: previewHost.openPath,
-      openWorkspaceInNewWindow,
       openWorkspaceFolder,
       signIn: () => desktopAuth.signIn(),
       getRecentCommits: () => gitHost.getRecentCommits(),
@@ -1145,7 +1058,66 @@ function createWindow(options: {
       onAsyncError: reportAsyncError,
     },
   );
+  // Interactive terminals and embedded browser tabs. Both stream to the
+  // renderer through the IPC bridge installed just below, so they post via
+  // `ipcRef.current` rather than capturing a bridge that doesn't exist yet.
+  const postWorkspaceMessage = (message: unknown): void => {
+    if (window.isDestroyed() || window.webContents.isDestroyed()) return;
+    ipcRef.current?.postToRenderer(message);
+  };
+  const ptyHost = createDesktopPtyHost({
+    cwd: options.workspacePath,
+    onData: (sessionId, data) =>
+      postWorkspaceMessage({
+        command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_DATA,
+        sessionId,
+        data,
+      }),
+    onExit: (sessionId, exitCode) =>
+      postWorkspaceMessage({
+        command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_EXIT,
+        sessionId,
+        exitCode,
+      }),
+    onError: reportAsyncError,
+  });
+  const browserViews = createDesktopBrowserViews({
+    getWindow: () => (window.isDestroyed() ? undefined : window),
+    openExternalUrl: (url) => previewHost.openExternal(url),
+    onNavigated: (state) =>
+      postWorkspaceMessage({
+        command: DESKTOP_WORKSPACE_COMMANDS.BROWSER_STATE,
+        ...state,
+      }),
+    onError: reportAsyncError,
+  });
+  const workspaceIpc = createDesktopWorkspaceIpc(
+    { postToRenderer: postWorkspaceMessage },
+    {
+      ptyHost,
+      browserViews,
+      // The renderer measures the browser slot in CSS pixels relative to its
+      // own viewport; a WebContentsView is positioned in the window's
+      // device-independent content space. These coincide at zoom factor 1, so
+      // scale by the renderer's zoom to keep the view aligned when the user
+      // has zoomed the UI.
+      toWindowBounds: (bounds) => {
+        const zoom = window.isDestroyed()
+          ? 1
+          : window.webContents.getZoomFactor();
+        return {
+          x: Math.round(bounds.x * zoom),
+          y: Math.round(bounds.y * zoom),
+          width: Math.round(bounds.width * zoom),
+          height: Math.round(bounds.height * zoom),
+        };
+      },
+      getEnvironmentSummary: () => gitHost.getEnvironmentSummary(),
+      onAsyncError: reportAsyncError,
+    },
+  );
   const mainViewIpc = installDesktopMainViewIpc(window, {
+    workspace: workspaceIpc,
     executeAgent: async (message) => {
       const execution = await getAgentExecution();
       void execution.handleExecute(message).catch(reportAsyncError);
@@ -1206,8 +1178,25 @@ function createWindow(options: {
     }
     desktopAuth.dispose();
     setupSignInRegistration.dispose();
+    // Shells keep running and web contents keep loading unless explicitly torn
+    // down — neither is reachable once the window is gone.
+    ptyHost.disposeAll();
+    browserViews.disposeAll();
   });
+  let windowPresented = false;
+  const presentWindow = (): void => {
+    if (windowPresented || window.isDestroyed()) return;
+    windowPresented = true;
+    window.center();
+    window.show();
+    if (process.platform === 'darwin') app.focus({ steal: true });
+    window.focus();
+  };
+  window.once('ready-to-show', presentWindow);
   window.webContents.once('did-finish-load', () => {
+    // `ready-to-show` is not guaranteed when the page is already cached, so
+    // keep load completion as an idempotent presentation fallback.
+    presentWindow();
     void options.initializeCrashReporting();
   });
 

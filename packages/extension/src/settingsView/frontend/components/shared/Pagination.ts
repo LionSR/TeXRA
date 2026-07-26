@@ -135,7 +135,7 @@ export class Pagination extends LitElement {
           <wa-button
             appearance="outlined"
             variant="neutral"
-            size="small"
+            size="s"
             aria-label="First page"
             title="First page"
             ?disabled=${atFirst}
@@ -146,7 +146,7 @@ export class Pagination extends LitElement {
           <wa-button
             appearance="outlined"
             variant="neutral"
-            size="small"
+            size="s"
             aria-label="Previous page"
             title="Previous page"
             ?disabled=${atFirst}
@@ -160,7 +160,7 @@ export class Pagination extends LitElement {
           <wa-button
             appearance="outlined"
             variant="neutral"
-            size="small"
+            size="s"
             aria-label="Next page"
             title="Next page"
             ?disabled=${atLast}
@@ -171,7 +171,7 @@ export class Pagination extends LitElement {
           <wa-button
             appearance="outlined"
             variant="neutral"
-            size="small"
+            size="s"
             aria-label="Last page"
             title="Last page"
             ?disabled=${atLast}

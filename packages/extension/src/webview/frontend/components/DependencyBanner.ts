@@ -83,7 +83,7 @@ export class DependencyBanner extends StateVisibleBanner<DependencyBannerState> 
                     <wa-button
                       class="dependency-install-button"
                       appearance="plain"
-                      size="small"
+                      size="s"
                       @click=${() => this.handleInstall(tool)}
                     >
                       ${waIcon('cloud-arrow-down', { slot: 'start' })} Install
@@ -97,7 +97,7 @@ export class DependencyBanner extends StateVisibleBanner<DependencyBannerState> 
           <wa-button
             id="dependencyRecheckButton"
             appearance="plain"
-            size="small"
+            size="s"
             @click=${this.handleRecheck}
           >
             ${waIcon('rotate-right', { slot: 'start' })} Re-check
@@ -105,7 +105,7 @@ export class DependencyBanner extends StateVisibleBanner<DependencyBannerState> 
           <wa-button
             id="dependencyDismissButton"
             appearance="plain"
-            size="small"
+            size="s"
             title="Dismiss (can be re-enabled in settings)"
             @click=${this.handleDismiss}
           >

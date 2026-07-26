@@ -13,9 +13,16 @@ function createDialogCloseButton(
   onClose: () => void,
 ): HTMLElement {
   const close = document.createElement('wa-button');
-  close.classList.add(className);
+  close.classList.add(
+    className,
+    'desktop-overlay-close',
+    'icon-button',
+    'is-size-l',
+    'focus-ring-inset',
+  );
   close.setAttribute('appearance', 'plain');
   close.setAttribute('size', 's');
+  close.setAttribute('type', 'button');
   close.setAttribute('aria-label', label);
   close.setAttribute('title', label);
   render(waIcon('xmark'), close);

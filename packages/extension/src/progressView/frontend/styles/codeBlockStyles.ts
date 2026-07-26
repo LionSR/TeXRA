@@ -8,7 +8,8 @@ import { css } from 'lit';
 export const codeBlockStyles = css`
   .code-block {
     position: relative;
-    border-radius: var(--border-radius-small);
+    border: var(--border-thin) solid var(--wa-color-surface-border);
+    border-radius: var(--wa-border-radius-m, var(--border-radius-small));
     overflow: hidden;
     max-width: 100%;
     min-width: 0;
@@ -19,7 +20,7 @@ export const codeBlockStyles = css`
     align-items: center;
     justify-content: space-between;
     padding: var(--wa-space-3xs) var(--wa-space-2xs);
-    background-color: var(--wa-color-tabs-background);
+    background-color: var(--wa-color-surface-lowered);
     border-bottom: var(--border-thin) solid var(--color-border);
     font-size: var(--font-size-xs);
   }
@@ -35,7 +36,7 @@ export const codeBlockStyles = css`
     margin: 0;
     padding: var(--wa-space-2xs);
     background-color: var(--wa-color-surface-default);
-    border: var(--border-thin) solid var(--wa-color-surface-border);
+    border: 0;
     border-radius: 0;
     overflow-x: auto;
     box-sizing: border-box;

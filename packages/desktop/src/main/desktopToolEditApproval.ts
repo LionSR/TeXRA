@@ -139,6 +139,7 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
         request,
         lineChanges,
       );
+      void this.runAction(requestId, () => this.openDiffPatch(entry));
     });
 
     if (result.accepted && result.appliedContent != null) return result;
@@ -376,7 +377,7 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
     await this.options.ui.openDiff(
       { filePath: entry.originalUri.fsPath },
       { filePath: entry.proposedUri.fsPath },
-      `Tool edit: ${path.basename(entry.request.path)}`,
+      `Tool edit: ${this.relativeDisplayPath(entry.request.path)}`,
       { preserveFocus: true },
     );
   }

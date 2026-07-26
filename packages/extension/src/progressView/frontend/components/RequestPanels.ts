@@ -252,7 +252,7 @@ export class RequestPanels extends LitElement {
         <wa-button
           id="ei-prev-btn"
           appearance="plain"
-          size="small"
+          size="s"
           ?disabled=${index === 0}
           @click=${this._eiPrev}
         >
@@ -265,7 +265,7 @@ export class RequestPanels extends LitElement {
         <wa-button
           id="ei-next-btn"
           appearance="plain"
-          size="small"
+          size="s"
           ?disabled=${index === perms.length - 1}
           @click=${this._eiNext}
         >

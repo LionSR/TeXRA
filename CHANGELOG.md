@@ -37,6 +37,86 @@ All notable changes to this project will be documented in this file.
 - **Bounded terminal scrollback** — long terminal-mode logs retain recent
   complete lines and indicate when older output has been removed.
 
+### Desktop
+
+#### New Features
+
+- **The desktop app now centers every task around its conversation** — projects
+  and task history stay in a quiet sidebar, while files, terminals, browser
+  pages, logs, and settings open in a resizable workbench without replacing the
+  task.
+- **The launcher and transcripts use a unified desktop design** — the new
+  neutral theme, compact activity cards, persistent composers, consistent
+  controls, and stroke icons make setup, execution, and follow-up feel like one
+  coherent application.
+- **The starter-team chooser now opens in the task canvas at startup** — it no
+  longer blocks the app as a modal, and users can save a preference to hide it
+  on later launches.
+- **Project files now follow their folder hierarchy in the sidebar** — nested
+  folders expand in place, keep their open state while the list refreshes, and
+  show concise file names instead of flattened paths.
+- **Settings now use a responsive top navigation** — account identity, sign-in,
+  included usage, and credential access have a dedicated Account & Usage page,
+  while a compact category-and-page hierarchy keeps the remaining settings
+  reachable without an overflowing row of tabs. Every page now follows the
+  same heading, section, banner, control-row, and responsive layout.
+- **Desktop keyboard shortcuts are now customizable** — users can search,
+  reassign, clear, and restore bindings from a dedicated settings page, with
+  changes applied immediately.
+- **The task toolbar now includes an environment summary** — a compact floating
+  panel shows workspace changes, branch status, active agents, background
+  terminal state, and attached sources without duplicating their controls.
+- **Requested file changes now open in a Review workbench** — changed files are
+  grouped by folder beside an in-app diff, with per-file and total line counts
+  for inspecting an agent's proposed edits.
+- **Desktop logs now provide an itemized live viewer** — entries refresh
+  automatically, remain independently expandable, and keep refresh, copy,
+  export, and folder actions in one toolbar.
+
+#### Bug Fixes
+
+- **The desktop development command launches the complete app** — it builds the
+  Electron entry points, starts the renderer on an available local port, and
+  opens Electron instead of leaving only a browser development server running.
+- **The launcher no longer appears blank while startup state loads** — a visible
+  loading canvas bridges startup, and send controls stay unavailable until the
+  request, model, and agent or team are ready.
+- **The desktop canvas now follows window resizing** — expanding the Electron
+  window no longer leaves a fixed-size interface surrounded by empty space, and
+  the project sidebar and workbench remain resizable.
+- **Switching project folders no longer opens a blank desktop window** — the
+  current app window restarts into the selected workspace while the development
+  renderer remains available.
+- **The startup chooser now hands off to a ready launcher** — skipping setup
+  no longer leaves the task canvas on an empty loading state.
+- **Project files appear as soon as a workspace opens** — the sidebar now loads
+  text source files at startup instead of reporting an empty project until the
+  editor is opened.
+- **Desktop chrome behaves consistently on macOS** — the brand and task header
+  align with the traffic-light controls, the collapsed-sidebar button stays
+  clear of them, and development windows no longer follow every Space.
+- **Workbench controls use one consistent hover shape** — panel shortcuts and
+  editor, terminal, and browser tabs no longer show nested or mismatched hover
+  backgrounds.
+- **The task composer stays organized as its panel narrows** — session and
+  runner choices, agent and model selectors, tools, and the centered send
+  button now form clear responsive groups instead of colliding or drifting.
+- **Files changed outside TeXRA refresh before editing** — switching back to a
+  clean editor tab no longer risks saving an older cached copy over newer
+  project changes.
+- **Desktop editor access stays inside the open project** — linked paths can no
+  longer be used to read or write files outside the workspace.
+- **Desktop startup and narrow layouts remain usable** — onboarding adapts to
+  split panes, tool information appears immediately while refreshing, and
+  macOS window controls no longer collide with navigation.
+- **Desktop sign-in stays in the system browser** — cancelling authorization
+  returns safely to TeXRA instead of opening an embedded sign-in window or
+  terminating the app.
+- **The project tree and terminal match the surrounding workspace** — hovering
+  a file no longer highlights every parent folder, tree icons sit close to
+  their labels, and the terminal no longer has nested borders or a mismatched
+  black container.
+
 ### CLI
 
 #### New Features

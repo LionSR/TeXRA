@@ -98,30 +98,30 @@ export class ToolEditRequestPanel extends BaseBypassApprovalPanel<'toolEdit'> {
     }
 
     return html`
-      <div class="diff-dropdown">
+      <div class="diff-dropdown split-button">
         ${renderLabeledActionButton({
           id: 'tool-edit-diff-button',
           icon: 'diff',
           text: diffLabel,
           tooltip: diffTitle,
-          className: 'diff-main-button',
+          className: 'diff-main-button split-button-main',
           onClick: this.handleDiffAction,
         })}
         ${
           showDropdown
             ? html`
                 <wa-dropdown
-                  class="diff-dropdown-menu"
+                  class="diff-dropdown-menu split-button-menu"
                   placement="bottom-end"
                   @wa-select=${this.handleMenuSelect}
                 >
                   <wa-button
                     id="tool-edit-diff-dropdown-trigger"
                     slot="trigger"
-                    class="diff-dropdown-trigger"
+                    class="diff-dropdown-trigger split-button-trigger"
                     appearance="plain"
                     variant="neutral"
-                    size="small"
+                    size="s"
                     type="button"
                     aria-label="More diff actions"
                   >

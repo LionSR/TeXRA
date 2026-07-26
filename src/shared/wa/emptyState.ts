@@ -14,12 +14,12 @@ interface EmptyStateAction {
   readonly onClick: () => void;
   readonly appearance?: 'filled' | 'outlined';
   readonly variant?: 'brand' | 'neutral';
-  // Defaults to 'medium' (the <wa-button> default). Lets compact panels
+  // Defaults to 'm' (the <wa-button> default). Lets compact panels
   // (e.g. a getting-started row packed with several actions) opt into
-  // 'small' without forking the helper.
-  readonly size?: 'small' | 'medium';
+  // 's' without forking the helper.
+  readonly size?: 's' | 'm';
   // Forwarded onto the underlying <wa-button>. Lets callers re-apply host-
-  // specific button classes (e.g. desktop-primary-button) for theming hooks.
+  // specific semantic button classes (e.g. btn-primary) for theming hooks.
   readonly className?: string;
   // Optional leading icon, rendered with slot="start" inside the button.
   // Lets callers preserve action-icon affordances (e.g. play/gear) without

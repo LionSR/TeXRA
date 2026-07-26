@@ -16,10 +16,11 @@ export const searchStyles: CSSResult = css`
     width: 100%;
   }
 
+  /* Padding and font-size here never reached the shadow <input> — they landed
+     on the wa-input host, which does not forward them. Sizing comes from
+     formControlStyles' ::part(input) rule; this only claims the row. */
   .search-input {
     flex: 1;
-    padding: var(--wa-space-xs);
-    font-size: var(--font-size);
   }
 
   .search-controls {
@@ -36,17 +37,16 @@ export const searchStyles: CSSResult = css`
     text-align: center;
   }
 
+  /* Destructive, so it resolves to --color-error on hover rather than the
+     diff-palette --color-removed it used before: red-on-hover text, never a
+     red fill. Matches the .is-danger modifier in controlStyles. */
   .action-icon-button[data-action='clear-history'] {
-    color: var(--color-text-secondary);
     margin-left: var(--wa-space-2xs);
   }
 
-  .action-icon-button[data-action='clear-history']::part(base) {
-    border-radius: var(--border-radius-medium);
-  }
-
-  .action-icon-button[data-action='clear-history']:hover {
-    color: var(--color-removed);
+  .action-icon-button[data-action='clear-history']::part(base):hover {
+    background: color-mix(in srgb, var(--color-error) 10%, transparent);
+    color: var(--color-error);
   }
 `;
 

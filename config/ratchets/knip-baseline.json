@@ -17,11 +17,6 @@
       "name": "isAllowedExternalUrl"
     },
     {
-      "file": "packages/desktop/src/main/desktopSetupTerminal.ts",
-      "category": "exports",
-      "name": "buildMacTerminalCommand"
-    },
-    {
       "file": "packages/desktop/src/main/platform/electronSecrets.ts",
       "category": "exports",
       "name": "__resetKeychainStateForTests"

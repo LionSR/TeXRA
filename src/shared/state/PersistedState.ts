@@ -105,6 +105,9 @@ export class PersistedState<T extends Record<string, unknown>> {
 
   private load(): T {
     const stored = this.storage.get(this.key);
+    if (stored === undefined) {
+      return this.resolveDefaults();
+    }
     const result = this.schema.safeParse(stored);
     if (result.success) {
       return result.data;
