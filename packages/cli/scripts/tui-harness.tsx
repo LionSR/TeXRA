@@ -1438,7 +1438,6 @@ function transitionChildEventOrderRunning(streamId: StreamTabId): void {
     streamId,
     STREAM_PHASE.RUNNING,
     STREAM_TRANSITION_CAUSE.LIFECYCLE,
-    { events: defaultSession().events },
   );
 }
 
@@ -1446,9 +1445,6 @@ function transitionChildEventOrderTerminal(streamId: StreamTabId): void {
   defaultSession().status.transitionToTerminal(
     streamId,
     STREAM_PHASE.COMPLETED,
-    {
-      events: defaultSession().events,
-    },
   );
 }
 
@@ -1463,7 +1459,6 @@ function attemptChildEventOrderLateResume(streamId: StreamTabId): void {
     streamId,
     STREAM_PHASE.RUNNING,
     STREAM_TRANSITION_CAUSE.RESUME,
-    { events: defaultSession().events },
   );
 }
 
@@ -1941,7 +1936,6 @@ function markHarnessStreamInterrupted(streamId: StreamTabId): void {
     streamId,
     STREAM_PHASE.CANCELLED,
     STREAM_TRANSITION_CAUSE.USER_STOP,
-    { events: defaultSession().events },
   );
 }
 
