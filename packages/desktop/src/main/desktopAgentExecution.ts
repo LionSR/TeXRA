@@ -120,7 +120,10 @@ import {
   mergeRunDirAndWorkspaceResult,
   type FileOpResult,
 } from '@shared/schemas/opResults';
-import type { SettingsTab } from '@shared/schemas/settingsViewMessages';
+import {
+  SETTINGS_TAB,
+  type SettingsTab,
+} from '@shared/schemas/settingsViewMessages';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { cleanupUnscopedApprovals } from '@tools/approval';
 import { startRecording, stopRecordingAndTranscribe } from '@tools/media/audio';
@@ -128,10 +131,7 @@ import { WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import {
-  buildDesktopSettingsTabMessage,
-  SETTINGS_TAB,
-} from '../desktopCommandSurface.js';
+import { buildDesktopSettingsTabMessage } from '../desktopCommandSurface.js';
 import { buildDesktopOnboardingSetStateMessage } from '../desktopOnboardingMessages.js';
 import { DESKTOP_SHELL_COMMANDS } from '../desktopShellMessages.js';
 import {
