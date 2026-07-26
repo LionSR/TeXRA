@@ -89,6 +89,9 @@ export function resolveWorkspaceRelativePath(
 ): WorkspacePathResolution {
   const trimmed = targetPath?.trim();
   const input = !trimmed || trimmed === '.' ? '' : trimmed;
+  // This setting deliberately uses the same workspaceState slot in every
+  // host. Do not add a CLI-specific store without also making host identity
+  // explicit at this enforcement boundary.
   const restrictPaths = readPlatformSetting<boolean>(
     WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
   );
