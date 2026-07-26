@@ -416,27 +416,6 @@ describe('createDesktopHostInteractions', () => {
     });
   });
 
-  it('preserves a bash timeout resolution as distinct from rejection', async () => {
-    const handlers = createHandlers();
-    const { interactions } = await createInteractions(handlers);
-
-    const resultPromise = interactions.requestBashApproval({
-      command: 'sleep 10',
-      streamId: 'stream-a' as StreamTabId,
-    });
-    const requestId = firstShowRequestId(handlers.transport.bash.show);
-
-    expect(
-      interactions.submitBashDecision(requestId, { action: 'timeout' }),
-    ).toBe(true);
-
-    await expect(resultPromise).resolves.toEqual({
-      accepted: false,
-      timedOut: true,
-    });
-    expect(handlers.transport.bash.dismiss).toHaveBeenCalledWith(requestId);
-  });
-
   it('preserves typed proposal approval overrides', async () => {
     const handlers = createHandlers();
     const { interactions } = await createInteractions(handlers);

@@ -258,7 +258,6 @@ export class BashTool extends defineTool({
       return buildBashApprovalRejectedResult(
         input.command,
         approval.userMessage,
-        approval.timedOut,
       );
     }
 

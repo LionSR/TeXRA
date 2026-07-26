@@ -121,12 +121,6 @@ function proposalResultToToolResult(
         error: `Delegation to '${agentName}' was rejected.\nYour delegation was: ${echo}${feedbackLine}`,
       };
     }
-    case 'timeout':
-      return {
-        status: 'error',
-        summary: `Delegation to '${agentName}' timed out`,
-        error: `Delegation to '${agentName}' timed out waiting for user approval.\nYour delegation was: ${echo}`,
-      };
     case 'setup':
       return {
         status: 'executed',
