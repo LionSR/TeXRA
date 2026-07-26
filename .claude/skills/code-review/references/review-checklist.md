@@ -10,7 +10,7 @@ The full zone list lives in `CLAUDE.md` → "Separation of concerns: VS Code cou
 
 - **`grep -nE "from ['\"]vscode['\"]"`** in `src/agent/`, `src/model/`, `src/latex/`, `src/tools/`, `src/controllers/`, `src/shared/`, `src/replacement/`, `src/eventBus/`, or any webview `frontend/`. Any hit is a finding.
 - **New `from '@agent/*'` imports in `src/shared/`** → finding. `src/shared/` is for wire contracts and UI-shared message types; host-neutral orchestration belongs under `src/controllers/`.
-- **Direct `vscode.workspace.getConfiguration` / `workspace.fs` / `secrets`** in agnostic code → use `platform().config`, `platform().fs`, `platform().secrets` (see `src/platform/platform.ts`). Note: `@utils/config` is the VS Code-allowed wrapper; agnostic code goes through `platform()`.
+- **Direct `vscode.workspace.getConfiguration` / `workspace.fs` / `secrets`** in agnostic code → use `platform().config`, `platform().fs`, `platform().secrets` (see `src/platform/platform.ts`). Note: `@utils/config/configUtils` is the VS Code-allowed module; agnostic code goes through `platform()`.
 - **`instanceof vscode.FileSystemError`** → `isFileNotFoundError(err)` from `@common/errors`.
 - **`vscode.FileType.File` / `.Directory`** → `isFile()` / `isDirectory()` from `@utils/files/fsEntryType`.
 - **`vscode.window.show*Message()` in business logic** → return error results; let the command/frontend layer handle UI.
@@ -40,7 +40,7 @@ Design rules in `AGENTS.md` → "Zod v4 Schema Patterns" (including "Schemas as 
 
 ## 4. Configuration, storage, files
 
-- **Inline config strings** sprinkled across modules → use the typed accessors (`platform().config` in agnostic code; `getConfig`/`watchConfig` from `@utils/config` in VS Code-allowed code) so `watchConfig` can react. Verify keys exist in `package.json`'s `contributes.configuration`.
+- **Inline config strings** sprinkled across modules → use the typed accessors (`platform().config` in agnostic code; `getConfig`/`watchConfig` from `@utils/config/configUtils` in VS Code-allowed code) so `watchConfig` can react. Verify keys exist in `package.json`'s `contributes.configuration`.
 - **Manual workspace path joining** → `WorkspaceFS.getPath()` and the helpers in `@utils/files`.
 - **Pasted-image paths** generated/resolved manually → `pastedImageUtils`.
 - **Long-running writers without retention** → `RelativeFS.cleanupOldFiles` (or equivalent).

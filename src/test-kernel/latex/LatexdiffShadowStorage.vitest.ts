@@ -23,7 +23,7 @@ const mocks = vi.hoisted(() => ({
   executeCommand: vi.fn(),
 }));
 
-vi.mock('@utils/system', () => ({
+vi.mock('@utils/system/execUtils', () => ({
   executeCommand: mocks.executeCommand,
 }));
 

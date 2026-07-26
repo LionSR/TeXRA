@@ -355,7 +355,7 @@ For good separation of concerns and platform independence, core business logic s
 
 **Configuration, storage, and workspace files**
 
-- Use `getConfig`, `updateConfig`, and `watchConfig` from `@utils/config` to read and react to settings changes.
+- Use `getConfig`, `updateConfig`, and `watchConfig` from `@utils/config/configUtils` to read and react to settings changes.
 - Interact with the filesystem through `@utils/files` helpers (`WorkspaceFS`, `RelativeFS`, `StorageFS`, `GlobalStorageFS`, `AbsoluteFS`). They resolve workspace paths, manage global storage, and expose cleanup helpers like `RelativeFS.cleanupOldFiles`.
 - Generate and identify pasted-image filenames with
   `@utils/files/pastedImageName`. Resolve, validate, and persist their paths
