@@ -606,21 +606,19 @@ describe('executeCliRequest', () => {
   it('closes the runtime host when sidecar flush fails', async () => {
     vi.resetModules();
     const flushError = new Error('flush failed');
-    vi.doMock('@transcript', async (importOriginal) => {
-      const actual = await importOriginal<typeof import('@transcript')>();
-      return {
-        ...actual,
-        StreamSnapshotStore: class {
-          attachSessionEvents = vi.fn(() => vi.fn());
+    // The session owns the sidecar store, so the stub has to replace the
+    // module `SessionHandle` imports (not the `@transcript` barrel).
+    vi.doMock('@transcript/StreamSnapshotStore', () => ({
+      StreamSnapshotStore: class {
+        attachSessionEvents = vi.fn(() => vi.fn());
 
-          handleProgressEvent = vi.fn();
+        handleProgressEvent = vi.fn();
 
-          flush = vi.fn(async () => {
-            throw flushError;
-          });
-        },
-      };
-    });
+        flush = vi.fn(async () => {
+          throw flushError;
+        });
+      },
+    }));
 
     try {
       await installFreshDefaultSession();
@@ -633,7 +631,7 @@ describe('executeCliRequest', () => {
 
       expect(mocks.close).toHaveBeenCalledTimes(1);
     } finally {
-      vi.doUnmock('@transcript');
+      vi.doUnmock('@transcript/StreamSnapshotStore');
       vi.resetModules();
       await installFreshDefaultSession();
     }
