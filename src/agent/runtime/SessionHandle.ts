@@ -267,6 +267,11 @@ export class SessionHandle {
   ): Promise<void> {
     try {
       if (reloadTranscripts) {
+        // Reopening a transcript store invalidates every writer token. A
+        // workspace-root move therefore waits for this session's live runs to
+        // release their writers before replacing persistence.
+        await this.executions.waitUntilIdle();
+        if (generation !== this.storageGeneration) return;
         await this.transcripts.reload();
         this.status.clearAll();
       }

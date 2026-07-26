@@ -333,9 +333,9 @@ export async function repairRestartedStreams(
     try {
       const repair = async () => {
         if (executionId) {
+          repairStarted = true;
           const settlement = await readExecutionSettlement(executionId);
           if (settlement.settled) {
-            repairStarted = true;
             synchronizeSettledPhase(
               options.streamStatus,
               streamId,

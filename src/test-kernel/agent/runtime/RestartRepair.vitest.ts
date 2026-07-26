@@ -160,6 +160,37 @@ describe('repairRestartedStreams', () => {
     }
   });
 
+  it('propagates settlement metadata read failures', async () => {
+    const streamId = 'stream-unreadable-settlement' as StreamTabId;
+    const executionId = 'execution-unreadable-settlement' as ExecutionId;
+    const store = getExecutionStore(executionId);
+    const streamStatus = new StreamStatusMachine();
+    seedRunning(streamStatus, streamId);
+    const readMeta = vi
+      .spyOn(store, 'readMeta')
+      .mockRejectedValue(new Error('metadata temporarily unreadable'));
+
+    try {
+      await expect(
+        repairRestartedStreams({
+          streamStatus,
+          waitingStreams: new Set(),
+          executionIds: new Map([[streamId, executionId]]),
+          closeRunningGroups: vi.fn(async () => []),
+          runWithInactiveExecutionLease: vi.fn(async (_id, operation) => ({
+            status: 'performed' as const,
+            value: await operation(),
+          })),
+        }),
+      ).rejects.toThrow('metadata temporarily unreadable');
+      expect(readMeta).toHaveBeenCalledOnce();
+      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.RUNNING);
+    } finally {
+      readMeta.mockRestore();
+      await store.clear();
+    }
+  });
+
   it('closes an unknown legacy terminal state conservatively as failed', async () => {
     const streamId = 'stream-legacy-terminal' as StreamTabId;
     const executionId = 'execution-legacy-terminal' as ExecutionId;

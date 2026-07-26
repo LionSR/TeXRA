@@ -264,6 +264,35 @@ describe('SessionHandle restart repair', () => {
     }
   });
 
+  it('waits for live execution owners before replacing workspace stores', async () => {
+    const transcripts = await StreamLogStore.open();
+    const session = new SessionHandle({
+      transcripts,
+      restartRepair: 'deferred',
+    });
+    let releaseExecutions: (() => void) | undefined;
+    const executionsIdle = new Promise<void>((resolve) => {
+      releaseExecutions = resolve;
+    });
+    vi.spyOn(session.executions, 'waitUntilIdle').mockReturnValue(
+      executionsIdle,
+    );
+    const reload = vi.spyOn(transcripts, 'reload').mockResolvedValue();
+
+    try {
+      const replacement = session.reloadAfterStorageRootChange();
+      await Promise.resolve();
+
+      expect(reload).not.toHaveBeenCalled();
+      releaseExecutions?.();
+      await replacement;
+
+      expect(reload).toHaveBeenCalledOnce();
+    } finally {
+      session.dispose();
+    }
+  });
+
   it('surfaces a repair write failure at the readiness boundary', async () => {
     const transcripts = await StreamLogStore.open();
     transcripts.append(streamId, {

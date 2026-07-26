@@ -374,6 +374,23 @@ export class ExecutionRegistry {
     );
   }
 
+  /** Resolve once this session no longer owns any live execution handle. */
+  waitUntilIdle(): Promise<void> {
+    if (this.handles.size === 0) return Promise.resolve();
+    return new Promise((resolve) => {
+      let detach: () => void = () => undefined;
+      const settleIfIdle = () => {
+        if (this.handles.size > 0) return;
+        detach();
+        resolve();
+      };
+      detach = this.addRegistrationListener(settleIfIdle);
+      // Close the track/untrack race between the initial check and listener
+      // registration.
+      settleIfIdle();
+    });
+  }
+
   getToolUseFlowContext(
     streamId: StreamTabId,
   ): LiveToolUseFlowContext | undefined {
