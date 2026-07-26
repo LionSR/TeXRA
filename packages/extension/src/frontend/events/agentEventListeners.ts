@@ -195,8 +195,14 @@ export function createAgentPresentationHost(
             progressViewProvider,
           );
           return;
-        default:
+        default: {
+          // Exhaustiveness guard: a new RuntimePresentationEvent must take an
+          // explicit stance here rather than being silently dropped by this
+          // host (CLAUDE.md, silent degradation).
+          const _exhaustive: never = event;
+          void _exhaustive;
           return;
+        }
       }
     },
   };
