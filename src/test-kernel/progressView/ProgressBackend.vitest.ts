@@ -244,6 +244,27 @@ function emitRunFact<K extends RunFactEventName>(
 }
 
 describe('ProgressBackend', () => {
+  it('waits for session readiness without reloading its live transcript', async () => {
+    const transcripts = await StreamLogStore.open();
+    const session = new SessionHandle({
+      transcripts,
+      restartRepair: 'deferred',
+    });
+    const waitUntilReady = vi.spyOn(session, 'waitUntilReady');
+    const reload = vi.spyOn(transcripts, 'reload');
+    const { backend } = createIsolatedRecordingBackend(session);
+
+    try {
+      await backend.load();
+
+      expect(waitUntilReady).toHaveBeenCalledOnce();
+      expect(reload).not.toHaveBeenCalled();
+    } finally {
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
   it('projects every approval bypass kind through one backend port', () => {
     const { backend, messages } = createRecordingBackend();
 

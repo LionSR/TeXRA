@@ -519,11 +519,10 @@ export class ProgressViewState {
   async load(stateOwnership: 'backend' | 'session' = 'backend'): Promise<void> {
     this.logger.info('[Persistence] Starting state load from storage');
 
-    // Persistent stores opened by this backend still need their initial disk
-    // refresh. A process-owned session has already opened its canonical live
-    // store; reloading it for a replacement presentation would race live appends.
-    if (stateOwnership === 'backend') await this.streamLogs.reload();
-    else await this.stores.waitForPendingStreamDeletions();
+    // ProgressBackend waits for SessionHandle readiness before entering this
+    // method. The session owns transcript opening and sidecar hydration; a
+    // presentation must never reload those live stores.
+    await this.stores.waitForPendingStreamDeletions();
 
     const streamIds = this.streamLogs.keys();
     this.logger.info(`[Persistence] Discovered ${streamIds.length} stream(s)`);
@@ -536,7 +535,6 @@ export class ProgressViewState {
           { data: sweep },
         );
       }
-      await this.snapshots.load(streamIds);
     }
     for (const stream of streamIds) {
       this.resetStreamMetadataForRun(stream);

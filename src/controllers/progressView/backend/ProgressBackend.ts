@@ -285,6 +285,7 @@ export class ProgressBackend {
   }
 
   async load(): Promise<void> {
+    await this.session.waitUntilReady();
     await this.state.load(this.stateOwnership);
   }
 
