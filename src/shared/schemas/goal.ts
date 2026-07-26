@@ -51,7 +51,7 @@ export const GoalStateSchema = z.discriminatedUnion('active', [
     objective: z.string(),
   }),
 ]);
-export type GoalState = z.infer<typeof GoalStateSchema>;
+type GoalState = z.infer<typeof GoalStateSchema>;
 
 /**
  * Single source of truth for the "status/objective are only meaningful while
