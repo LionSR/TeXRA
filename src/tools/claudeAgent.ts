@@ -481,6 +481,19 @@ function startClaudeAgentLoop(params: {
     onTurnError: (turn, log) => {
       if (turn.errorMessage) log.error(turn.errorMessage);
     },
+    onLoopStart: (session) => {
+      ClaudeAgentSessions.trackInFlight({
+        childStreamId,
+        parentStreamId,
+        executionId,
+        executions: session.executions,
+        model: params.model,
+        permissionMode: params.permissionMode,
+        effort: params.effort,
+        cwd: params.cwd,
+        additionalDirectories: params.additionalDirectories,
+      });
+    },
     onTurnSuccess: (turn, session) => {
       if (fallbackSessionId) registerSession(fallbackSessionId, session);
       if (turn.sessionId) registerSession(turn.sessionId, session);
@@ -607,6 +620,7 @@ async function launchClaudeAgentSession(
     additionalDirectories: resolvedWorkspace.additionalDirectories,
   };
   const env = await config.buildClaudeAgentEnv();
+  const pathToClaudeCodeExecutable = await findClaudeBinaryPath();
   const agentConfig = config.buildClaudeAgentConfig(input.prompt);
   const preview = truncateWithEllipsis(input.prompt, 60);
 
@@ -619,7 +633,7 @@ async function launchClaudeAgentSession(
     description: input.prompt,
     config: agentConfig,
     registerFailedMessage: 'Failed to register Claude Code CLI execution.',
-    startLoop: async ({ childStream, executionId }) =>
+    startLoop: ({ childStream, executionId }) =>
       startClaudeAgentLoop({
         childStream,
         parentStreamId,
@@ -631,7 +645,7 @@ async function launchClaudeAgentSession(
         cwd: workspace.cwd,
         additionalDirectories: workspace.additionalDirectories,
         env,
-        pathToClaudeCodeExecutable: await findClaudeBinaryPath(),
+        pathToClaudeCodeExecutable,
         runtimeHost,
         resumeSessionId: input.session_id ?? undefined,
         releaseFallbackClaim,
