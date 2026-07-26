@@ -144,7 +144,6 @@ function createIsolatedRecordingBackend(
   const messages: ProgressViewOutboundMessage[] = [];
   const backend = new ProgressBackend({
     storage: new FakeStateStore(),
-    snapshots: new StreamSnapshotStore(),
     session,
     sendMessage: (message) => {
       messages.push(message);
@@ -315,7 +314,6 @@ describe('ProgressBackend', () => {
     });
     const backend = new ProgressBackend({
       storage: new FakeStateStore(),
-      snapshots: new StreamSnapshotStore(),
       session,
       sendMessage: vi.fn(() => true),
       hasTarget: () => true,
@@ -534,7 +532,6 @@ describe('ProgressBackend', () => {
     const lifecycle = createLifecycleOptions();
     const backend = new ProgressBackend({
       storage: new FakeStateStore(),
-      snapshots: new StreamSnapshotStore(),
       session,
       sendMessage: (message) => {
         messages.push(message);
@@ -828,7 +825,6 @@ describe('ProgressBackend', () => {
     const lifecycle = createLifecycleOptions();
     const backend = new ProgressBackend({
       storage: new FakeStateStore(),
-      snapshots: new StreamSnapshotStore(),
       session,
       sendMessage: vi.fn(),
       hasTarget: () => true,
@@ -1812,7 +1808,14 @@ describe('ProgressBackend', () => {
       expect(handleRunFact).not.toHaveBeenCalled();
       expect(handleInteractionEvent).not.toHaveBeenCalled();
       expect(updateFiles).not.toHaveBeenCalled();
-      expect(backend.state.snapshots.getOutputFiles(streamId)).toEqual({});
+      // The presentation no-ops, but the sidecar store is session-owned, so it
+      // keeps recording: disposing one window/webview must not stop the runtime
+      // persisting an in-flight run's outputs. The desktop already behaved this
+      // way (its `stateOwnership: 'session'` backend never detached the store);
+      // the extension now matches it.
+      expect(backend.state.snapshots.getOutputFiles(streamId)).toEqual({
+        1: [outputFile],
+      });
     } finally {
       subscription.dispose();
       await backend.state.clearAll();

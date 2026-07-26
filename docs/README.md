@@ -20,7 +20,8 @@ Git repository.
 - `architecture/` documents current system boundaries and invariants.
 - `dev/` contains development procedures, audits, and release operations.
 - `design/` contains UI and product design material.
-- `pocketflow/` documents the workflow framework.
+- `pocketflow/` documents the agent state slices that travel through the flow
+  engine (`src/agent/node/index.ts`).
 - `proposals/` and `prds/` contain plans and product requirements.
 - `reference/` contains technical reference material.
 - `skills/` contains skill documentation.
