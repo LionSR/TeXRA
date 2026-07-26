@@ -27,17 +27,6 @@
       "src/tools/codexShared.ts",
       "src/tools/codexShared.ts (type-only)"
     ],
-    "@shared/schemas/commonViewMessages": [
-      "packages/desktop/src/main/desktopShellIpc.ts",
-      "packages/desktop/src/main/desktopViewStateIpc.ts",
-      "packages/desktop/src/renderer/diffOverlay.ts",
-      "packages/desktop/src/renderer/main.ts",
-      "packages/extension/src/progressView/frontend/components/TexraDiffView.ts",
-      "packages/extension/src/webview/frontend/MainApp.ts (type-only)",
-      "packages/extension/src/webview/frontend/persistence.ts (type-only)",
-      "src/shared/BaseWebviewApp.ts",
-      "src/shared/wa/hostTheme.ts (type-only)"
-    ],
     "@shared/schemas/coreSettings": [
       "packages/cli/src/schemas/knownKeys.ts",
       "packages/extension/src/frontend/review/AgentReviewService.ts",
@@ -289,6 +278,17 @@
       "src/controllers/mainView/MainViewExecutionController.ts (type-only)",
       "src/tools/delegation/proposalFlow.ts (type-only)",
       "src/tools/delegationAgentAvailability.ts (type-only)"
+    ],
+    "@shared/schemas/commonViewMessages": [
+      "packages/desktop/src/main/desktopShellIpc.ts",
+      "packages/desktop/src/main/desktopViewStateIpc.ts",
+      "packages/desktop/src/renderer/diffOverlay.ts",
+      "packages/desktop/src/renderer/main.ts",
+      "packages/extension/src/progressView/frontend/components/TexraDiffView.ts",
+      "packages/extension/src/webview/frontend/MainApp.ts (type-only)",
+      "packages/extension/src/webview/frontend/persistence.ts (type-only)",
+      "src/shared/BaseWebviewApp.ts",
+      "src/shared/wa/hostTheme.ts (type-only)"
     ],
     "@shared/schemas/fileFields": ["src/agent/core/definition/AgentConfig.ts"],
     "@shared/schemas/fileTypes": [
