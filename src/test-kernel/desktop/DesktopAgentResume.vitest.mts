@@ -82,10 +82,10 @@ function createResumeHarness(): {
   session: SessionHandle;
   dispose(): void;
 } {
-  const session = createTestSession();
+  const session = createTestSession({ snapshots: createSnapshots() });
   session.transcripts.ensureStream(stream);
   const owner = new DesktopProcessResumeOwner();
-  const detach = owner.attach({ session, snapshots: createSnapshots() });
+  const detach = owner.attach({ session });
   const detachTerminalResultToast = attachTerminalResultToast(
     session,
     session.interactions,

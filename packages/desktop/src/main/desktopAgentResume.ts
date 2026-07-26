@@ -12,7 +12,6 @@ import { trackTerminalResultPresentation } from '@agent/runtime/terminalResultTo
 
 // Shared imports
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
-import type { StreamSnapshotStore } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports
@@ -30,7 +29,6 @@ interface DesktopResumeState {
 
 interface DesktopResumeContext {
   readonly session: SessionHandle;
-  readonly snapshots: StreamSnapshotStore;
   readonly logger: AgentTrace;
   readonly isCancellationRequested: () => boolean;
 }
@@ -40,10 +38,7 @@ export class DesktopProcessResumeOwner {
   private context: DesktopResumeContext | undefined;
 
   /** Attach the canonical process session after platform initialization. */
-  attach(options: {
-    session: SessionHandle;
-    snapshots: StreamSnapshotStore;
-  }): () => void {
+  attach(options: { session: SessionHandle }): () => void {
     let cancelled = false;
     const context: DesktopResumeContext = {
       ...options,
@@ -72,10 +67,11 @@ async function resolveDesktopResumeState(
   streamId: StreamTabId,
   context: DesktopResumeContext,
 ): Promise<DesktopResumeState | undefined> {
-  let runState = context.snapshots.getRunConfig(streamId);
-  let executionId = context.snapshots.getExecutionId(streamId);
+  let runState = context.session.snapshots.getRunConfig(streamId);
+  let executionId = context.session.snapshots.getExecutionId(streamId);
   if (runState && executionId) {
-    const parentStreamId = context.snapshots.getParentStreamId(streamId);
+    const parentStreamId =
+      context.session.snapshots.getParentStreamId(streamId);
     return {
       runState,
       executionId,
@@ -84,7 +80,7 @@ async function resolveDesktopResumeState(
   }
 
   try {
-    await context.snapshots.preload([streamId]);
+    await context.session.snapshots.preload([streamId]);
   } catch (error) {
     context.logger.warn(
       `Failed to read persisted resume data for ${streamId}`,
@@ -92,11 +88,12 @@ async function resolveDesktopResumeState(
     );
     return undefined;
   }
-  runState = context.snapshots.getRunConfig(streamId);
-  executionId = executionId ?? context.snapshots.getExecutionId(streamId);
+  runState = context.session.snapshots.getRunConfig(streamId);
+  executionId =
+    executionId ?? context.session.snapshots.getExecutionId(streamId);
   if (!runState || !context.session.transcripts.has(streamId)) return undefined;
 
-  const parentStreamId = context.snapshots.getParentStreamId(streamId);
+  const parentStreamId = context.session.snapshots.getParentStreamId(streamId);
   return {
     runState,
     ...(executionId && { executionId }),
