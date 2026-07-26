@@ -160,6 +160,48 @@ describe('repairRestartedStreams', () => {
     }
   });
 
+  it('closes an unknown legacy terminal state conservatively as failed', async () => {
+    const streamId = 'stream-legacy-terminal' as StreamTabId;
+    const executionId = 'execution-legacy-terminal' as ExecutionId;
+    const store = getExecutionStore(executionId);
+    await store.writeMeta({
+      timestamp: '2026-07-26T00:00:00.000Z',
+      terminalStatus: 'legacy-terminal',
+    });
+    const streamStatus = new StreamStatusMachine();
+    seedRunning(streamStatus, streamId);
+    const closeRunningGroups = vi.fn(async () => [streamId]);
+    const finalizeExecution = createDurableFinalizer();
+
+    try {
+      const result = await repairRestartedStreams({
+        streamStatus,
+        waitingStreams: new Set(),
+        executionIds: new Map([[streamId, executionId]]),
+        closeRunningGroups,
+        finalizeExecution,
+        runWithInactiveExecutionLease: vi.fn(async (_id, operation) => ({
+          status: 'performed' as const,
+          value: await operation(),
+        })),
+      });
+
+      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.FAILED);
+      expect(closeRunningGroups).toHaveBeenCalledWith(
+        [streamId],
+        RUN_OUTCOME.FAILED,
+        expect.any(Number),
+      );
+      expect(result.failedStreams).toEqual([]);
+      await expect(store.readMeta()).resolves.toMatchObject({
+        terminalStatus: 'legacy-terminal',
+      });
+      expect(finalizeExecution).not.toHaveBeenCalled();
+    } finally {
+      await store.clear();
+    }
+  });
+
   it('derives the lease identity when restart metadata has no execution mapping', async () => {
     const executionId = 'a8644a' as ExecutionId;
     const streamId = `tool@model#${executionId}` as StreamTabId;

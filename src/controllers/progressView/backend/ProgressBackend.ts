@@ -289,6 +289,14 @@ export class ProgressBackend {
     await this.state.load(this.stateOwnership);
   }
 
+  /** Replace session stores and presentation caches after a workspace move. */
+  async reloadAfterStorageRootChange(): Promise<void> {
+    await this.session.reloadAfterStorageRootChange();
+    this.state.resetAfterStorageRootChange();
+    this.webviewBridge.clearAll();
+    await this.state.load(this.stateOwnership);
+  }
+
   setupEventListeners(): ProgressEventSubscription {
     const factApplierSubscription = this.factApplier.createLocalSubscription();
     const detachSessionFacts = this.session.events.subscribe(

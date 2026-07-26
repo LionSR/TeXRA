@@ -21,6 +21,12 @@ setupPlatform({ workspacePath: '/workspace/session-restart-repair' });
 
 const executionId = 'abc123' as ExecutionId;
 const streamId = `crashed#${executionId}` as StreamTabId;
+const validFlowRecord = {
+  flowName: 'texra',
+  shared: { messages: [] },
+  createdAt: '2026-07-26T00:00:00.000Z',
+  nodes: [],
+};
 
 afterEach(async () => {
   await StorageFS.delete('executionLeases', { recursive: true }).catch(
@@ -131,6 +137,79 @@ describe('SessionHandle restart repair', () => {
         type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
         data: { status: RUN_OUTCOME.COMPLETED },
       });
+    } finally {
+      session.dispose();
+    }
+  });
+
+  it('detects a resumable run from its canonical stream suffix', async () => {
+    const resumableExecutionId = 'facade123' as ExecutionId;
+    const resumableStreamId =
+      `resumable#${resumableExecutionId}` as StreamTabId;
+    const transcripts = await StreamLogStore.open();
+    transcripts.append(resumableStreamId, {
+      id: 'resumable-running-group',
+      type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
+      level: LOG_LEVELS.INFO,
+      timestamp: 1_000,
+      data: { status: STREAM_PHASE.RUNNING },
+    });
+    await transcripts.flush();
+
+    const executionStore = getExecutionStore(resumableExecutionId);
+    await executionStore.writeMeta({
+      timestamp: '2026-07-26T00:00:00.000Z',
+      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+    });
+    await executionStore.write(flowKey(resumableExecutionId), validFlowRecord);
+
+    const session = new SessionHandle({
+      transcripts,
+      restartRepair: 'deferred',
+    });
+    try {
+      await session.waitUntilReady();
+
+      expect(
+        session.snapshots.getExecutionId(resumableStreamId),
+      ).toBeUndefined();
+      expect(session.status.get(resumableStreamId)).toBe(STREAM_PHASE.WAITING);
+      await expect(
+        executionStore.read(flowKey(resumableExecutionId)),
+      ).resolves.toEqual(validFlowRecord);
+      expect(
+        transcripts.get(resumableStreamId)?.getRange(0).at(-1),
+      ).toMatchObject({
+        type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
+        data: { status: RUN_OUTCOME.CANCELLED },
+      });
+    } finally {
+      session.dispose();
+    }
+  });
+
+  it('replaces stores and status only at the workspace-root boundary', async () => {
+    const transcripts = await StreamLogStore.open();
+    const session = new SessionHandle({
+      transcripts,
+      restartRepair: 'deferred',
+    });
+    const reload = vi.spyOn(transcripts, 'reload').mockResolvedValue();
+    const loadSnapshots = vi.spyOn(session.snapshots, 'load');
+    session.status.transition(
+      'previous-workspace' as StreamTabId,
+      STREAM_PHASE.RUNNING,
+      'lifecycle',
+    );
+
+    try {
+      await session.reloadAfterStorageRootChange();
+
+      expect(reload).toHaveBeenCalledOnce();
+      expect(loadSnapshots).toHaveBeenCalledWith(transcripts.keys());
+      expect(
+        session.status.get('previous-workspace' as StreamTabId),
+      ).toBeUndefined();
     } finally {
       session.dispose();
     }

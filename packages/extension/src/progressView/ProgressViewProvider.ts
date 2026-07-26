@@ -185,7 +185,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     this._disposables.push(
       vscode.workspace.onDidChangeWorkspaceFolders(async () => {
         try {
-          await this.backend.load();
+          await this.backend.reloadAfterStorageRootChange();
           this.syncFullView();
         } catch (error) {
           this.logger.error(

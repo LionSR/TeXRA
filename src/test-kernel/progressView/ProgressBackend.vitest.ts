@@ -265,6 +265,36 @@ describe('ProgressBackend', () => {
     }
   });
 
+  it('uses the session-owned replacement boundary after a workspace move', async () => {
+    const transcripts = await StreamLogStore.open();
+    const session = new SessionHandle({
+      transcripts,
+      restartRepair: 'deferred',
+    });
+    const reloadAfterStorageRootChange = vi
+      .spyOn(session, 'reloadAfterStorageRootChange')
+      .mockResolvedValue();
+    const transcriptReload = vi.spyOn(transcripts, 'reload');
+    const { backend } = createIsolatedRecordingBackend(session);
+    const resetPresentation = vi.spyOn(
+      backend.state,
+      'resetAfterStorageRootChange',
+    );
+    const clearBridge = vi.spyOn(backend.webviewBridge, 'clearAll');
+
+    try {
+      await backend.reloadAfterStorageRootChange();
+
+      expect(reloadAfterStorageRootChange).toHaveBeenCalledOnce();
+      expect(resetPresentation).toHaveBeenCalledOnce();
+      expect(clearBridge).toHaveBeenCalledOnce();
+      expect(transcriptReload).not.toHaveBeenCalled();
+    } finally {
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
   it('projects every approval bypass kind through one backend port', () => {
     const { backend, messages } = createRecordingBackend();
 

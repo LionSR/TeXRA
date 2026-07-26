@@ -34,6 +34,7 @@ import type { AgentEvent, AgentTrace, ResultEvent } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { detectWaitingStreams } from '@agent/storage/detectWaitingStreams';
+import { executionIdFromStream } from '@agent/storage/executionIdFromStream';
 import { STREAM_PHASE, type StreamTabId } from '@shared/schemas';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import type { RunTraceFlushEntry } from '@transcript/runTrace';
@@ -153,7 +154,9 @@ export class SessionHandle {
    */
   readonly workflowControls: WorkflowControlRegistry;
   private restartRepairPromise: Promise<void> | undefined;
+  private restartRepairWork: Promise<void> = Promise.resolve();
   private readonly restartRepairRetry = new RestartRepairRetryScheduler();
+  private storageGeneration = 0;
   constructor(init: SessionHandleInit) {
     if (init.transcripts.mode.kind === 'read-only') {
       throw new Error(
@@ -212,7 +215,9 @@ export class SessionHandle {
       this.transcripts.mode.kind === 'persistent' &&
       init.restartRepair !== 'deferred'
     ) {
-      this.restartRepairPromise = this.repairStoresAfterRestart();
+      this.restartRepairPromise = this.enqueueRestartRepair(() =>
+        this.repairStoresAfterRestart(this.storageGeneration),
+      );
       // Construction cannot be awaited. Hosts observe the same promise
       // through waitUntilReady(); this branch only prevents a rejection from
       // becoming unhandled before the host reaches that boundary.
@@ -226,14 +231,49 @@ export class SessionHandle {
    */
   waitUntilReady(): Promise<void> {
     if (this.transcripts.mode.kind !== 'persistent') return Promise.resolve();
-    this.restartRepairPromise ??= this.repairStoresAfterRestart();
+    this.restartRepairPromise ??= this.enqueueRestartRepair(() =>
+      this.repairStoresAfterRestart(this.storageGeneration),
+    );
     return this.restartRepairPromise;
   }
 
-  private async repairStoresAfterRestart(): Promise<void> {
+  /**
+   * Replace session persistence after the host's workspace storage root moves.
+   *
+   * Ordinary view loads must not reopen these live stores. The host calls this
+   * explicit lifecycle boundary only after a workspace-root change.
+   */
+  reloadAfterStorageRootChange(): Promise<void> {
+    if (this.transcripts.mode.kind !== 'persistent') return Promise.resolve();
+    this.storageGeneration += 1;
+    const generation = this.storageGeneration;
+    this.restartRepairRetry.cancel();
+    const repair = this.enqueueRestartRepair(() =>
+      this.repairStoresAfterRestart(generation, true),
+    );
+    this.restartRepairPromise = repair;
+    return repair;
+  }
+
+  private enqueueRestartRepair(work: () => Promise<void>): Promise<void> {
+    const queued = this.restartRepairWork.then(work, work);
+    this.restartRepairWork = queued.catch(() => undefined);
+    return queued;
+  }
+
+  private async repairStoresAfterRestart(
+    generation: number,
+    reloadTranscripts = false,
+  ): Promise<void> {
     try {
+      if (reloadTranscripts) {
+        await this.transcripts.reload();
+        this.status.clearAll();
+      }
+      if (generation !== this.storageGeneration) return;
       const streamIds = this.transcripts.keys();
       await this.snapshots.load(streamIds);
+      if (generation !== this.storageGeneration) return;
       for (const streamId of this.transcripts.getUnfinishedStreamIds()) {
         this.status.transition(
           streamId,
@@ -241,7 +281,7 @@ export class SessionHandle {
           STREAM_TRANSITION_CAUSE.LIFECYCLE,
         );
       }
-      await this.runRestartRepair();
+      await this.runRestartRepair(generation);
     } catch (error) {
       logger.warn('Failed to repair session stores after restart', {
         data: error,
@@ -250,8 +290,14 @@ export class SessionHandle {
     }
   }
 
-  private async runRestartRepair(): Promise<void> {
-    const executionIds = this.snapshots.getExecutionIdMap();
+  private async runRestartRepair(generation: number): Promise<void> {
+    if (generation !== this.storageGeneration) return;
+    const executionIds = new Map(this.snapshots.getExecutionIdMap());
+    for (const streamId of this.transcripts.keys()) {
+      if (executionIds.has(streamId)) continue;
+      const derived = executionIdFromStream(streamId);
+      if (derived) executionIds.set(streamId, derived);
+    }
     let waitingStreams: Set<StreamTabId>;
     let repairStreams: Set<StreamTabId>;
     try {
@@ -271,6 +317,7 @@ export class SessionHandle {
           .filter((streamId) => !executionIds.has(streamId)),
       );
     }
+    if (generation !== this.storageGeneration) return;
 
     const result = await repairRestartedStreams({
       streamStatus: this.status,
@@ -293,7 +340,9 @@ export class SessionHandle {
       logger,
     });
     this.restartRepairRetry.schedule(result.nextLeaseCheckAt, () => {
-      void this.runRestartRepair().catch((error: unknown) => {
+      void this.enqueueRestartRepair(() =>
+        this.runRestartRepair(generation),
+      ).catch((error: unknown) => {
         logger.warn('Failed delayed restart repair', { data: error });
       });
     });

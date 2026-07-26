@@ -555,6 +555,13 @@ export class ProgressViewState {
     this.logger.info('[Persistence] State load complete');
   }
 
+  /** Drop workspace-scoped caches before loading a replacement storage root. */
+  resetAfterStorageRootChange(): void {
+    this._prefs.reload();
+    this._sessionState.clear();
+    this._streamStates.clear();
+  }
+
   /**
    * Flush pending writes from all managers.
    */

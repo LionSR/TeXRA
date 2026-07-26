@@ -100,7 +100,7 @@ export class RestartRepairRetryScheduler {
     this.cancel();
   }
 
-  private cancel(): void {
+  cancel(): void {
     if (this.timer) clearTimeout(this.timer);
     this.timer = undefined;
   }
@@ -141,7 +141,10 @@ async function readExecutionSettlement(
     return { settled: false };
   }
   if (meta.outcome !== RUN_OUTCOME.CANCELLED) {
-    return { settled: true, outcome: meta.outcome };
+    return {
+      settled: true,
+      outcome: meta.outcome ?? RUN_OUTCOME.FAILED,
+    };
   }
   const resumability = await deriveResumability(executionId);
   return resumability.resumable
