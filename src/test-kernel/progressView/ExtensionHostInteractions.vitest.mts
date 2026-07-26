@@ -185,6 +185,18 @@ function recordSessionEvents(session: SessionHandle): SessionEvent[] {
 }
 
 describe('createExtensionHostInteractions', () => {
+  it('forwards emit to the caller-supplied runtime host (#9251)', () => {
+    const runtimeHost = createRuntimeHost();
+    const session = createTestSession();
+    const interactions = createInteractions({ runtimeHost, session });
+
+    interactions.emit?.('requestShowError', { message: 'boom' });
+
+    expect(runtimeHost.emit).toHaveBeenCalledWith('requestShowError', {
+      message: 'boom',
+    });
+  });
+
   it('provides diagnostics and notification capabilities', async () => {
     const session = createTestSession();
     const interactions = createInteractions({ session });

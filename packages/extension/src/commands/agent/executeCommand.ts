@@ -6,8 +6,8 @@ import { z, ZodError } from 'zod';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { ModelHandlerCompatibilityKeySchema } from '@agent/runtime/modelHandlerCompatibilityKey';
 import { runAgent } from '@agent/runtime/runAgent';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
-import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import * as logger from '@logger/logUtils';
 import type { ExecutionId } from '@shared/schemas';
 
@@ -45,7 +45,7 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
     await runAgent(
       { config, executionId: wrapped?.executionId },
       {
-        runtimeHost: extensionAgentRuntimeHost,
+        runtimeHost: defaultSession().interactions,
         openWorkflowOutput: openFinalOutputIfAvailable,
         // Set only by the "fix LaTeX" actions (see handleFixCompilation and the
         // progress-view compile fixer); a direct main-view launch omits it and

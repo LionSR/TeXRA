@@ -432,9 +432,11 @@ export async function executeAgent(
             // Subagents don't need to force-open the progress board or show notifications —
             // the orchestrator's stream is already visible.
             if (!isSubagent) {
-              runRuntimeHost.emit('requestEnsureProgressView', {
-                fallbackNotification: buildFallbackNotification(config),
-              });
+              runRuntimeHost.emit(
+                'requestEnsureProgressView',
+                { fallbackNotification: buildFallbackNotification(config) },
+                { replayWhenAttached: true },
+              );
             }
             logger.info('Executing agent', {
               data: { agent: config.agent, model: config.model },
