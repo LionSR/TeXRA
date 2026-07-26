@@ -315,6 +315,7 @@ describe('childRunLoop E2E fixtures', () => {
     const childStreamId = uniqueStreamId('complete-followup');
     const parentStreamId = 'parent' as StreamTabId;
     const { strategy, callCount, resolveTurn } = createFakeStrategy();
+    const onLoopStart = vi.fn();
     const onTurnSuccess = vi.fn();
     const parentWake = vi.fn();
     const deliveryCompleted = pDefer<{ kind: 'delivered' }>();
@@ -328,9 +329,11 @@ describe('childRunLoop E2E fixtures', () => {
       parentStreamId,
       executionId: 'exec-complete-followup' as ExecutionId,
       agentName: 'fake',
-      strategy: { ...strategy, onTurnSuccess },
+      strategy: { ...strategy, onLoopStart, onTurnSuccess },
     });
 
+    expect(onLoopStart).toHaveBeenCalledOnce();
+    expect(onLoopStart).toHaveBeenCalledWith(session);
     await vi.waitFor(() =>
       expect(isChildRunLoopActive(childStreamId)).toBe(true),
     );

@@ -220,6 +220,30 @@ describe('claude_agent tool — resume fallback for a torn-down registry', () =>
     expect(ClaudeAgentSessions.lookup('stale-session')).toBeUndefined();
   });
 
+  it('exposes an in-flight initial turn to the shared shutdown drain', async () => {
+    setupCommonMocks();
+    const interrupt = vi.fn();
+    let strategy: ChildRunStrategy<unknown> | undefined;
+    mocks.startChildRunLoop.mockImplementation(
+      (params: { strategy: ChildRunStrategy<unknown> }) => {
+        strategy = params.strategy;
+      },
+    );
+
+    await new ClaudeAgentTool().call({
+      prompt: 'start a long initial turn',
+    });
+
+    const executions = {
+      getAgentHandleByStream: () => ({ interrupt }),
+    } as any;
+    strategy?.onLoopStart?.({ executions } as any);
+    ClaudeAgentSessions.interruptAll();
+
+    expect(interrupt).toHaveBeenCalledOnce();
+    strategy?.releaseSessionOwnership?.();
+  });
+
   it('lets a waiting caller own the fallback after the first launch fails', async () => {
     setupCommonMocks();
     const firstEnvStarted = pDefer<void>();

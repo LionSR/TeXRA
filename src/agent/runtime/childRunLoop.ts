@@ -128,6 +128,9 @@ export interface ChildRunStrategy<TTurn> {
   /** Log a turn-level error message for a non-throwing failure. */
   onTurnError?(turn: TTurn, logger: AgentTrace): void;
 
+  /** After loop setup, before the initial turn starts. */
+  onLoopStart?(session: SessionHandle): void;
+
   /** After a successful turn: register the session/thread id, etc. */
   onTurnSuccess?(turn: TTurn, session: SessionHandle): void;
 
@@ -515,6 +518,7 @@ export function startChildRunLoop<TTurn>(
   runWithOwnedExecutionLease(executionId, () => undefined);
 
   const runSession = currentSession();
+  strategy.onLoopStart?.(runSession);
   const loop = new ChildRunInterruptible(runSession, childStreamId);
   const stopWatchingLease = onOwnedExecutionLeaseLost(executionId, () => {
     logger.error('Execution lease was lost; interrupting the former owner', {

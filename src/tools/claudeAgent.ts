@@ -481,6 +481,19 @@ function startClaudeAgentLoop(params: {
     onTurnError: (turn, log) => {
       if (turn.errorMessage) log.error(turn.errorMessage);
     },
+    onLoopStart: (session) => {
+      ClaudeAgentSessions.trackInFlight({
+        childStreamId,
+        parentStreamId,
+        executionId,
+        executions: session.executions,
+        model: params.model,
+        permissionMode: params.permissionMode,
+        effort: params.effort,
+        cwd: params.cwd,
+        additionalDirectories: params.additionalDirectories,
+      });
+    },
     onTurnSuccess: (turn, session) => {
       if (fallbackSessionId) registerSession(fallbackSessionId, session);
       if (turn.sessionId) registerSession(turn.sessionId, session);
