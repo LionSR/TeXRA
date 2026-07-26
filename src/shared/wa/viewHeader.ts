@@ -85,7 +85,7 @@ function renderHeaderAction({
       class="header-action"
       aria-label=${label}
       appearance="plain"
-      size="small"
+      size="s"
       @click=${onClick}
     >
       ${waIcon(icon)}

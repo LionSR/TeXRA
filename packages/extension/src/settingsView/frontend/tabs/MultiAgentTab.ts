@@ -138,7 +138,7 @@ export class MultiAgentTab extends LitElement {
         margin-top: 0;
       }
 
-      /* Compact agent pills — WA's size="small" is still too chunky for a
+      /* Compact agent pills — WA's size="s" is still too chunky for a
          dense grid of badges. Override the chrome-padding part to halve
          vertical padding and trim the font size. */
       wa-tag.preset-agent-badge::part(base),
@@ -265,7 +265,7 @@ export class MultiAgentTab extends LitElement {
               ? html`<wa-tag
                   class="preset-active-badge"
                   variant="brand"
-                  size="small"
+                  size="s"
                 >
                   ${waIcon('check')} Active
                 </wa-tag>`
@@ -281,7 +281,7 @@ export class MultiAgentTab extends LitElement {
                     <wa-tag
                       class="preset-agent-badge preset-agent-badge--orchestrator"
                       variant="brand"
-                      size="small"
+                      size="s"
                       title="${name} is the orchestrator for this team"
                     >
                       <span class="preset-orchestrator-icon" aria-hidden="true"
@@ -297,10 +297,7 @@ export class MultiAgentTab extends LitElement {
         <div class="preset-card-agents">
           ${teammateAgents.map(
             (name) =>
-              html`<wa-tag
-                class="preset-agent-badge"
-                variant="neutral"
-                size="small"
+              html`<wa-tag class="preset-agent-badge" variant="neutral" size="s"
                 >${name}</wa-tag
               >`,
           )}
@@ -311,7 +308,7 @@ export class MultiAgentTab extends LitElement {
                 class="preset-delete-btn"
                 appearance="plain"
                 variant="neutral"
-                size="small"
+                size="s"
                 @click=${(e: Event) => this.handleDeletePreset(e, preset)}
                 title="Delete team"
                 aria-label="Delete team"

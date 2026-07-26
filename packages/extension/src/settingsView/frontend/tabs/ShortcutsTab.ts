@@ -228,7 +228,7 @@ export class ShortcutsTab extends LitElement {
           <wa-button
             class="shortcut-recorder"
             appearance="outlined"
-            size="small"
+            size="s"
             data-recording=${String(recording)}
             @click=${() => this.startRecording(entry.id)}
             @keydown=${(event: KeyboardEvent) =>
@@ -239,7 +239,7 @@ export class ShortcutsTab extends LitElement {
           <wa-button
             class="icon-button is-size-m"
             appearance="plain"
-            size="small"
+            size="s"
             aria-label=${`Reset ${entry.label}`}
             title="Reset to default"
             @click=${() =>
@@ -250,7 +250,7 @@ export class ShortcutsTab extends LitElement {
           <wa-button
             class="icon-button is-size-m"
             appearance="plain"
-            size="small"
+            size="s"
             aria-label=${`Clear ${entry.label}`}
             title="Clear shortcut"
             @click=${() => this.updateShortcut(entry.id, undefined)}
@@ -281,7 +281,7 @@ export class ShortcutsTab extends LitElement {
               immediately and persist for this desktop profile.
             </p>
           </div>
-          <wa-button appearance="outlined" size="small" @click=${this.resetAll}>
+          <wa-button appearance="outlined" size="s" @click=${this.resetAll}>
             ${waIcon('arrow-rotate-left', { slot: 'start' })} Reset all
           </wa-button>
         </div>

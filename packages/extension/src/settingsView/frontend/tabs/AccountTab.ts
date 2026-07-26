@@ -197,7 +197,7 @@ export class AccountTab extends LitElement {
                     <wa-button
                       appearance="outlined"
                       variant="neutral"
-                      size="small"
+                      size="s"
                       @click=${this.handleSignOut}
                     >
                       ${waIcon('right-from-bracket', { slot: 'start' })} Sign
@@ -208,7 +208,7 @@ export class AccountTab extends LitElement {
                     <wa-button
                       appearance="filled"
                       variant="brand"
-                      size="small"
+                      size="s"
                       @click=${this.handleSignIn}
                     >
                       ${waIcon('user', { slot: 'start' })} Sign in
@@ -244,7 +244,7 @@ export class AccountTab extends LitElement {
                 class="account-manage-keys"
                 appearance="outlined"
                 variant="neutral"
-                size="small"
+                size="s"
                 @click=${this.handleManageProviderKeys}
               >
                 ${waIcon('key', { slot: 'start' })} Manage keys
@@ -265,7 +265,7 @@ export class AccountTab extends LitElement {
                       <wa-button
                         appearance="outlined"
                         variant="neutral"
-                        size="small"
+                        size="s"
                         @click=${this.handleOpenVscodeSettings}
                       >
                         ${waIcon('gear', { slot: 'start' })} Open settings

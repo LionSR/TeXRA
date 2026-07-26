@@ -163,7 +163,7 @@ export class ProviderKeyList extends LitElement {
         ? html` <wa-button
             class="provider-setting-link btn-ghost is-link"
             appearance="plain"
-            size="small"
+            size="s"
             @click=${() =>
               postMessage(SETTINGS_VIEW_COMMANDS.OPEN_EXTERNAL_URL, {
                 url: setting.warningUrl!,
@@ -214,7 +214,7 @@ export class ProviderKeyList extends LitElement {
                 expanded: isExpanded,
               })}
               appearance="plain"
-              size="small"
+              size="s"
               title="${isExpanded ? 'Collapse settings' : 'Expand settings'}"
               @click=${() => this.toggleExpanded(entry.provider)}
             >

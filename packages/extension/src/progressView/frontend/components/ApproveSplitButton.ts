@@ -115,7 +115,7 @@ export class ApproveSplitButton extends LitElement {
             class="approve-split-trigger split-button-trigger"
             appearance="plain"
             variant="neutral"
-            size="small"
+            size="s"
             type="button"
             aria-label="More approve options"
           >

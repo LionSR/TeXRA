@@ -321,7 +321,7 @@ export class ModelSelectionList extends LitElement {
       <wa-button
         class="deprecated-toggle"
         appearance="plain"
-        size="small"
+        size="s"
         @click=${() => this.toggleDeprecated(group.provider)}
       >
         ${waIcon('chevron-right', {

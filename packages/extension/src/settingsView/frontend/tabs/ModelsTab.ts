@@ -249,7 +249,7 @@ export class ModelsTab extends LitElement {
       <section id="chatgpt-subscription" class="keyless-source">
         <div class="keyless-source__header">
           <span class="keyless-source__title">ChatGPT subscription</span>
-          <wa-tag variant="neutral" size="small">experimental</wa-tag>
+          <wa-tag variant="neutral" size="s">experimental</wa-tag>
         </div>
         <p class="keyless-source__hint">
           Use OpenAI models through your ChatGPT Plus, Pro, or Team
@@ -288,7 +288,7 @@ export class ModelsTab extends LitElement {
                 </span>
                 <wa-button
                   appearance="outlined"
-                  size="small"
+                  size="s"
                   @click=${() =>
                     postMessage(SETTINGS_VIEW_COMMANDS.SIGN_OUT_CHATGPT)}
                 >
@@ -297,7 +297,7 @@ export class ModelsTab extends LitElement {
               </div>`
             : html`<wa-button
                 variant="brand"
-                size="small"
+                size="s"
                 @click=${() =>
                   postMessage(SETTINGS_VIEW_COMMANDS.SIGN_IN_CHATGPT)}
               >
@@ -336,7 +336,7 @@ export class ModelsTab extends LitElement {
       <section id="copilot-access" class="keyless-source">
         <div class="keyless-source__header">
           <span class="keyless-source__title">Copilot in VS Code</span>
-          <wa-tag variant="neutral" size="small">keyless</wa-tag>
+          <wa-tag variant="neutral" size="s">keyless</wa-tag>
         </div>
         <p class="keyless-source__hint">
           Use models supplied by your GitHub Copilot subscription. No provider
@@ -350,7 +350,7 @@ export class ModelsTab extends LitElement {
             consentModel
               ? html`<wa-button
                   variant="brand"
-                  size="small"
+                  size="s"
                   @click=${() =>
                     postMessage(SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS, {
                       modelName: consentModel.name,

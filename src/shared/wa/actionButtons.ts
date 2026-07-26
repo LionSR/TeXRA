@@ -147,7 +147,7 @@ function renderActionButtonParts({
       class=${classes}
       appearance=${appearance}
       variant=${variant}
-      size="small"
+      size="s"
       type="button"
       aria-label=${ariaLabel}
       aria-pressed=${ifDefined(

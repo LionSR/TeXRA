@@ -173,7 +173,7 @@ export class StreamTab extends LitElement {
                   class="action-icon-button tab-expand"
                   appearance="plain"
                   variant="neutral"
-                  size="small"
+                  size="s"
                   type="button"
                   data-stream=${stream.name}
                   data-action="toggle-children"
@@ -285,7 +285,7 @@ export class StreamTab extends LitElement {
           class="action-icon-button tab-delete"
           appearance="plain"
           variant="neutral"
-          size="small"
+          size="s"
           type="button"
           aria-label="Delete stream"
           data-stream=${stream.name}

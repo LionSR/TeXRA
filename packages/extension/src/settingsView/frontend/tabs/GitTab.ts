@@ -273,7 +273,7 @@ export class GitTab extends LitElement {
                       <wa-button
                         appearance="outlined"
                         variant="neutral"
-                        size="small"
+                        size="s"
                         @click=${this.handleSetGitHubToken}
                       >
                         ${waIcon('key', { slot: 'start' })}
@@ -285,7 +285,7 @@ export class GitTab extends LitElement {
                               class="token-remove-btn btn-ghost is-danger"
                               appearance="plain"
                               variant="neutral"
-                              size="small"
+                              size="s"
                               @click=${this.handleRemoveGitHubToken}
                             >
                               ${waIcon('trash', { slot: 'start' })} Remove
@@ -295,7 +295,7 @@ export class GitTab extends LitElement {
                       <wa-button
                         appearance="outlined"
                         variant="neutral"
-                        size="small"
+                        size="s"
                         @click=${this.handleOpenGitHubTokenUrl}
                       >
                         ${waIcon('github', { slot: 'start' })} Create on GitHub…
@@ -380,7 +380,7 @@ export class GitTab extends LitElement {
                                             <wa-button
                                               appearance="outlined"
                                               variant="neutral"
-                                              size="small"
+                                              size="s"
                                               @click=${() =>
                                                 this.handleOpenPRSubscriptionStream(
                                                   owner.streamId,
@@ -407,7 +407,7 @@ export class GitTab extends LitElement {
                           <wa-button
                             appearance="outlined"
                             variant="neutral"
-                            size="small"
+                            size="s"
                             @click=${() =>
                               this.handleUnsubscribePR(subscription.key)}
                           >

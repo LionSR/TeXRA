@@ -535,7 +535,7 @@ export class StreamHeader extends LitElement {
         id=${ELEMENT_IDS.PROGRESS_BADGE}
         class="progress-badge"
         variant="neutral"
-        size="small"
+        size="s"
       >
         ${waIcon('pulse')}
         ${renderProgressBadgeContent(this.progress, this.roundStage)}

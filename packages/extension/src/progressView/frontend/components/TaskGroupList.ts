@@ -357,7 +357,7 @@ export class TaskGroupList extends LitElement {
       <div class="log-reveal-row">
         <wa-button
           appearance="outlined"
-          size="small"
+          size="s"
           data-reveal-kind=${options.kind}
           data-reveal-scope=${options.scope}
           data-hidden-count=${String(options.hiddenCount)}

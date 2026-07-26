@@ -121,7 +121,7 @@ export class ToolEditRequestPanel extends BaseBypassApprovalPanel<'toolEdit'> {
                     class="diff-dropdown-trigger split-button-trigger"
                     appearance="plain"
                     variant="neutral"
-                    size="small"
+                    size="s"
                     type="button"
                     aria-label="More diff actions"
                   >

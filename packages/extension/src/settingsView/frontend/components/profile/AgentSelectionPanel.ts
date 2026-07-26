@@ -318,7 +318,7 @@ export class AgentSelectionPanel extends LitElement {
                     ? html`<wa-button
                         class="agent-count-link btn-ghost is-link"
                         appearance="plain"
-                        size="small"
+                        size="s"
                         @click=${() => this.handleSetAllEnabled(source, true)}
                         title="Show all ${sourceName} agents"
                       >
@@ -331,7 +331,7 @@ export class AgentSelectionPanel extends LitElement {
                     ? html`<wa-button
                         class="agent-count-link btn-ghost is-link"
                         appearance="plain"
-                        size="small"
+                        size="s"
                         @click=${() => this.handleSetAllEnabled(source, false)}
                         title="Hide all ${sourceName} agents"
                       >
@@ -373,14 +373,14 @@ export class AgentSelectionPanel extends LitElement {
           <span class="agent-detail-name">${agent.name}</span>
           ${
             builtIn
-              ? html`<wa-tag variant="neutral" size="small">Built-in</wa-tag>`
+              ? html`<wa-tag variant="neutral" size="s">Built-in</wa-tag>`
               : nothing
           }
           ${
             badge
               ? html`<wa-tag
                   variant="neutral"
-                  size="small"
+                  size="s"
                   title="${badge.label} agent"
                   >${waIcon(badge.icon)} ${badge.label}</wa-tag
                 >`
@@ -420,7 +420,7 @@ export class AgentSelectionPanel extends LitElement {
                           html`<wa-tag
                             class="agent-tool-badge"
                             variant="neutral"
-                            size="small"
+                            size="s"
                             >${t}</wa-tag
                           >`,
                       )}

@@ -316,7 +316,7 @@ export class LaTeXTab extends LitElement {
         <wa-button
           appearance="outlined"
           variant="neutral"
-          size="small"
+          size="s"
           title="${dep.actionLabel ?? 'Install'}"
           @click=${() => postMessage(dep.actionCommand!)}
         >
@@ -325,10 +325,7 @@ export class LaTeXTab extends LitElement {
         </wa-button>
       `;
     } else {
-      actionSlot = html`<wa-tag
-        class="setting-badge"
-        variant="neutral"
-        size="small"
+      actionSlot = html`<wa-tag class="setting-badge" variant="neutral" size="s"
         >Not found</wa-tag
       >`;
     }
@@ -358,7 +355,7 @@ export class LaTeXTab extends LitElement {
                   <wa-button
                     appearance="outlined"
                     variant="neutral"
-                    size="small"
+                    size="s"
                     title="Run: ${installCmd.command}"
                     @click=${() => this.handleRunInTerminal(installCmd.command)}
                   >
@@ -476,7 +473,7 @@ export class LaTeXTab extends LitElement {
                 <wa-button
                   appearance="outlined"
                   variant="neutral"
-                  size="small"
+                  size="s"
                   title="Reset this setting to default"
                   @click=${() => this.handleApply(info.key, true)}
                 >
@@ -487,7 +484,7 @@ export class LaTeXTab extends LitElement {
                 <wa-button
                   appearance="outlined"
                   variant="neutral"
-                  size="small"
+                  size="s"
                   title="Apply this setting"
                   @click=${() => this.handleApply(info.key)}
                 >
@@ -517,7 +514,7 @@ export class LaTeXTab extends LitElement {
                   <wa-button
                     appearance="outlined"
                     variant="neutral"
-                    size="small"
+                    size="s"
                     title="Apply all recommended settings"
                     @click=${() => this.handleApply()}
                   >
@@ -749,7 +746,7 @@ export class LaTeXTab extends LitElement {
     return html`<wa-button
       appearance="outlined"
       variant="neutral"
-      size="small"
+      size="s"
       aria-label="Reset to default"
       title="Reset to default (${defaultDisplay})"
       @click=${() => this.dispatchSetConfigValue(field, undefined)}

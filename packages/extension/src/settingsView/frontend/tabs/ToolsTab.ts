@@ -283,7 +283,7 @@ export class ToolsTab extends LitElement {
               variant=${
                 this.desktopCrashReportingConfigured ? 'success' : 'warning'
               }
-              size="small"
+              size="s"
             >
               ${
                 this.desktopCrashReportingConfigured ? 'DSN set' : 'DSN missing'
@@ -292,7 +292,7 @@ export class ToolsTab extends LitElement {
             <wa-button
               appearance="outlined"
               variant="neutral"
-              size="small"
+              size="s"
               @click=${this.handleSetDesktopCrashReportingDsn}
             >
               ${waIcon('key', { slot: 'start' })}
@@ -404,7 +404,7 @@ export class ToolsTab extends LitElement {
             <wa-button
               appearance="outlined"
               variant="neutral"
-              size="small"
+              size="s"
               title="Re-check tool availability"
               @click=${this.handleRecheck}
             >

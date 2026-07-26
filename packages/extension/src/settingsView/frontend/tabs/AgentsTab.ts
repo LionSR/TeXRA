@@ -237,7 +237,7 @@ export class AgentsTab extends LitElement {
             <wa-button
               appearance="outlined"
               variant="neutral"
-              size="small"
+              size="s"
               title="Save current agent configuration as a team"
               @click=${this.handleSaveTeam}
             >
@@ -253,7 +253,7 @@ export class AgentsTab extends LitElement {
                     <wa-button
                       appearance="outlined"
                       variant="neutral"
-                      size="small"
+                      size="s"
                       title="Create a new agent from a blank YAML template"
                       @click=${this.handleCreateFromTemplate}
                     >
@@ -263,7 +263,7 @@ export class AgentsTab extends LitElement {
                       class="agents-create-btn btn-primary"
                       appearance="filled"
                       variant="brand"
-                      size="small"
+                      size="s"
                       title="Create a new agent with AI"
                       @click=${this.handleCreateAgent}
                     >
@@ -286,7 +286,7 @@ export class AgentsTab extends LitElement {
               ? html`<wa-tag
                   class="agents-dir-default-badge"
                   variant="neutral"
-                  size="small"
+                  size="s"
                   >default</wa-tag
                 >`
               : nothing
@@ -296,7 +296,7 @@ export class AgentsTab extends LitElement {
               class="action-icon-button"
               appearance="plain"
               variant="neutral"
-              size="small"
+              size="s"
               @click=${this.handleOpenFolder}
               title="Open folder in file explorer"
               aria-label="Open folder in file explorer"
@@ -306,7 +306,7 @@ export class AgentsTab extends LitElement {
             <wa-button
               appearance="outlined"
               variant="neutral"
-              size="small"
+              size="s"
               title="Change custom agents directory"
               @click=${this.handleChangeCustomDir}
             >
@@ -317,7 +317,7 @@ export class AgentsTab extends LitElement {
                 ? html`<wa-button
                     appearance="outlined"
                     variant="neutral"
-                    size="small"
+                    size="s"
                     title="Reset to default directory"
                     @click=${this.handleResetCustomDir}
                   >
