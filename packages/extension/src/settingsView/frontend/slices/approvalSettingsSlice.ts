@@ -5,6 +5,7 @@ import type { SettingsViewOutboundHandlerRegistry } from '@shared/schemas';
 
 import {
   bashApprovalEnabled,
+  toolPathProtectionEnabled,
   claudeAgentEffort,
   claudeAgentModel,
   claudeAgentPermissionMode,
@@ -22,6 +23,7 @@ import {
 export const approvalSettingsHandlers = {
   [SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS]: (data) => {
     bashApprovalEnabled.set(data.bashApprovalEnabled);
+    toolPathProtectionEnabled.set(data.toolPathProtectionEnabled);
     codexSandboxMode.set(data.codexSandboxMode);
     codexReasoningEffort.set(data.codexReasoningEffort);
     codexApprovalPolicy.set(data.codexApprovalPolicy);

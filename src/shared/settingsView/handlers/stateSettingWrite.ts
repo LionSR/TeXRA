@@ -8,12 +8,12 @@
 //   - a value-less message is a no-op (the catalog schemas `.prefault()`, so
 //     parsing `undefined` would resolve to the default and silently reset the
 //     setting — this command has no clear-to-default semantics), and
-//   - only the git-author and external-agent categories are routable; any other
-//     catalog category is ignored rather than mis-persisted through the agent
-//     path or refreshing the wrong UI.
+//   - only the git-author, external-agent, and scalar tool-safety categories
+//     are routable; any other catalog category is ignored rather than
+//     mis-persisted or refreshing the wrong UI.
 
 import { stateSettingByKey } from '@shared/schemas/stateSettings';
-import type { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
 /**
  * A validated, classified state-setting write, or `null` when the message must
@@ -32,6 +32,11 @@ type StateSettingWrite =
       readonly family: 'agent';
       readonly key: WorkspaceStateKey;
       readonly value: string;
+    }
+  | {
+      readonly family: 'tool-safety';
+      readonly key: WorkspaceStateKey;
+      readonly value: boolean;
     }
   | null;
 
@@ -58,6 +63,16 @@ export function resolveStateSettingWrite(
       family: 'agent',
       key: key as WorkspaceStateKey,
       value: parsed.data as string,
+    };
+  }
+  if (
+    entry.category === 'tools' &&
+    key === WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED
+  ) {
+    return {
+      family: 'tool-safety',
+      key: WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
+      value: parsed.data as boolean,
     };
   }
   return null;
