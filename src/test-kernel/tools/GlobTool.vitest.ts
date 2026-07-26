@@ -1,5 +1,5 @@
 // Node imports
-import { mkdtemp, rm, utimes, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 
@@ -45,7 +45,6 @@ async function withGlobWorkspace(
   try {
     await Promise.all(
       [
-        '.gitignore',
         'new.tex',
         'old.tex',
         'vanished.tex',
@@ -53,6 +52,7 @@ async function withGlobWorkspace(
         'unreadable.tex',
       ].map((name) => writeFile(path.join(workspacePath, name), name)),
     );
+    await writeFile(path.join(workspacePath, '.gitignore'), 'dist/\n');
     await utimes(path.join(workspacePath, 'old.tex'), 1, 1);
     await utimes(path.join(workspacePath, 'new.tex'), 2, 2);
     await run(workspacePath);
@@ -129,14 +129,19 @@ describe('GlobTool match metadata', () => {
         path.join(tmpdir(), 'texra-glob-external-'),
       );
       try {
-        await writeFile(path.join(externalPath, 'external.tex'), 'external');
+        const externalDistPath = path.join(externalPath, 'dist');
+        await mkdir(externalDistPath);
+        await writeFile(
+          path.join(externalDistPath, 'external.tex'),
+          'external',
+        );
         await platform().workspaceState.update(
           WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
           false,
         );
 
         const result = await new GlobTool().call({
-          pattern: '*.tex',
+          pattern: '**/*.tex',
           path: externalPath,
         });
 
