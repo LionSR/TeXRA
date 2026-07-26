@@ -895,21 +895,31 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     await this.withActiveWebview((w) => this.sendApprovalSettings(w));
   }
 
+  private async updateToolSafetySetting(
+    key: WorkspaceStateKey,
+    value: boolean,
+  ): Promise<void> {
+    await workspaceSM.update(key, value);
+    await this.withActiveWebview((w) => this.sendApprovalSettings(w));
+  }
+
   /**
-   * Generic write path for scalar `STATE_SETTINGS` rows (git-author + external
-   * coding-agent controls). The shared {@link resolveStateSettingWrite} owns the
-   * value validation + family classification (so it can't drift from the desktop
-   * host); this host only dispatches the resolved family to its updater, which
-   * owns the persist + rebroadcast (and, for git, the `applyGitAuthorConfig()`
-   * side effect).
+   * Generic write path for scalar `STATE_SETTINGS` rows (git author, external
+   * coding agents, and tool safety). The shared
+   * {@link resolveStateSettingWrite} owns value validation and family
+   * classification so it cannot drift from the desktop host. This host only
+   * dispatches the resolved family to its updater, which owns persistence,
+   * rebroadcasting, and the git-author side effect.
    */
   private async updateStateSetting(key: string, value: unknown): Promise<void> {
     const write = resolveStateSettingWrite(key, value);
     if (!write) return;
     if (write.family === 'git') {
       await this.updateGitAuthorSetting(write.key, write.value);
-    } else {
+    } else if (write.family === 'agent') {
       await this.updateAgentSetting(write.key, write.value);
+    } else {
+      await this.updateToolSafetySetting(write.key, write.value);
     }
   }
 
