@@ -167,9 +167,7 @@ function relayRetry(params: {
   } as RetryPermission;
 }
 
-function chatGptSubscriptionRetry(
-  streamId: string,
-): RetryPermission {
+function chatGptSubscriptionRetry(streamId: string): RetryPermission {
   return {
     streamId,
     operation: 'model request',

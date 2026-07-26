@@ -56,19 +56,17 @@ function useCliHostInteractions(
   );
 }
 
-const credentialExhaustedRetry: RetryPermission =
-  {
-    requestId: 'relay-limit-retry',
-    streamId:
-      'test-stream' as RetryPermission['streamId'],
-    operation: 'Model request',
-    errorMessage: 'HTTP 429 Too Many Requests',
-    errorDetails: {
-      exhaustionReason: 'relay-limit',
-      isRelayError: true,
-      statusCode: 429,
-    },
-  };
+const credentialExhaustedRetry: RetryPermission = {
+  requestId: 'relay-limit-retry',
+  streamId: 'test-stream' as RetryPermission['streamId'],
+  operation: 'Model request',
+  errorMessage: 'HTTP 429 Too Many Requests',
+  errorDetails: {
+    exhaustionReason: 'relay-limit',
+    isRelayError: true,
+    statusCode: 429,
+  },
+};
 
 beforeEach(async () => {
   const { initPlatform: init } = await import('@platform/platform');
