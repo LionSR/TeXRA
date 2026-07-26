@@ -23,14 +23,14 @@ import {
   WebFetchPayloadSchema,
   type LogMessageData,
 } from '@shared/schemas';
-import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
+import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 import { tryParseUrl } from '@utils/core';
 import { buildBannerContent, joinWithSeparator } from './helpers';
 
 /** Wrap formatted tool content in the shared collapsible banner shell. */
 function buildToolUseDetails(opts: {
   message: LogMessageData;
-  iconName: string;
+  iconName: TeXRAIconName | typeof SPINNER_ICON_NAME;
   label: string;
   isError: boolean;
   content: TemplateResult;
@@ -54,7 +54,7 @@ const STATUS_SUFFIXES: Record<string, string> = {
 };
 
 // Web search status-based wa-icon names; SPINNER_ICON_NAME triggers a spinner.
-const STATUS_ICONS: Record<string, string> = {
+const STATUS_ICONS: Record<string, TeXRAIconName | typeof SPINNER_ICON_NAME> = {
   failed: 'error',
   in_progress: SPINNER_ICON_NAME,
 };
@@ -94,7 +94,7 @@ export function formatWebSearchTemplate(
     // result with no safe URL should read as inert text, not a dead link).
     // prettier-ignore
     const resultItems = (results ?? []).map(
-      (r) => html`<li class="detail-item"><wa-icon library=${TEXRA_ICON_LIBRARY} name="link" aria-hidden="true"></wa-icon> ${r.url ? html`<a href=${r.url} class="web-search-link" target="_blank" rel="noopener noreferrer">${r.title ?? r.domain ?? r.url}</a>` : html`<span class="web-search-link">${r.title ?? r.domain ?? ''}</span>`}${r.domain ? html` <span class="file-source">(${r.domain})</span>` : ''}</li>`,
+      (r) => html`<li class="detail-item">${waIcon('link')} ${r.url ? html`<a href=${r.url} class="web-search-link" target="_blank" rel="noopener noreferrer">${r.title ?? r.domain ?? r.url}</a>` : html`<span class="web-search-link">${r.title ?? r.domain ?? ''}</span>`}${r.domain ? html` <span class="file-source">(${r.domain})</span>` : ''}</li>`,
     );
     // prettier-ignore
     const resultsTemplate = html`<span class="file-list-summary">Results (${resultCount})</span><ul class="detail-list">${resultItems}</ul>`;

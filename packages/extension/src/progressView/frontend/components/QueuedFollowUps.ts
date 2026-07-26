@@ -9,7 +9,7 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
 import { designTokens, commonViewStyles } from '@shared/styles';
-import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 // Local imports - progress view constants
@@ -128,12 +128,7 @@ export class QueuedFollowUps extends LitElement {
               const itemId = `queued-follow-up-${index}`;
               return html`
                 <div id=${itemId} class="queued-follow-up-item">
-                  <wa-icon
-                    library=${TEXRA_ICON_LIBRARY}
-                    name="comment"
-                    class="queued-follow-up-icon"
-                    aria-hidden="true"
-                  ></wa-icon>
+                  ${waIcon('comment', { className: 'queued-follow-up-icon' })}
                   <span class="queued-follow-up-text">${display}</span>
                 </div>
                 ${full ? html`<wa-tooltip for=${itemId}>${full}</wa-tooltip>` : nothing}

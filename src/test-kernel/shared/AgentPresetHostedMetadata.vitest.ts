@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   AGENT_MODE_PRESETS,
+  parseAgentModePresets,
   STARTER_AGENT_MODE_PRESET,
 } from '@shared/schemas/agentPresets';
 
@@ -25,5 +26,64 @@ describe('agent preset hosted-definition metadata', () => {
     );
 
     expect(softwareTeam?.texraHostedAgents).toEqual([]);
+  });
+});
+
+describe('parseAgentModePresets icon degradation', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const customPreset = (icon: string): unknown => ({
+    id: 'custom-1',
+    name: 'My Team',
+    description: 'Hand-saved roster',
+    icon,
+    workflowAgents: ['polish'],
+    toolUseAgents: ['assistant'],
+  });
+
+  it('keeps a preset whose icon is unknown, degrading to bookmark loudly', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const presets = parseAgentModePresets([customPreset('nonexistent-icon')]);
+
+    // Regression: the preset itself must survive. Rejecting the icon dropped
+    // the whole team, and the next save/delete rewrote the parsed list back
+    // over persisted state — permanent data loss.
+    expect(presets).toHaveLength(1);
+    expect(presets[0]?.id).toBe('custom-1');
+    expect(presets[0]?.workflowAgents).toEqual(['polish']);
+    expect(presets[0]?.icon).toBe('bookmark');
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('nonexistent-icon'),
+    );
+  });
+
+  it('does not drop sibling presets when one icon is unknown', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const presets = parseAgentModePresets([
+      customPreset('rocket'),
+      { ...(customPreset('bogus') as object), id: 'custom-2' },
+    ]);
+
+    expect(presets.map((preset) => preset.id)).toEqual([
+      'custom-1',
+      'custom-2',
+    ]);
+    expect(presets.map((preset) => preset.icon)).toEqual([
+      'rocket',
+      'bookmark',
+    ]);
+  });
+
+  it('still normalizes codicon-prefixed known icons without warning', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const presets = parseAgentModePresets([customPreset('codicon-tools')]);
+
+    expect(presets[0]?.icon).toBe('tools');
+    expect(warn).not.toHaveBeenCalled();
   });
 });

@@ -41,7 +41,7 @@ import {
 } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { formatPhaseStageLabel } from '@shared/streams/streamStatusDisplay';
-import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
+import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 import { ProgressEvents } from '../events';
 
 // Local imports - contexts
@@ -295,11 +295,7 @@ export class BackgroundTasksPanel extends LitElement {
     return html`
       <wa-details class="collapsible-quiet" open>
         <div slot="summary" class="section-label">
-          <wa-icon
-            library=${TEXRA_ICON_LIBRARY}
-            name="comments"
-            aria-hidden="true"
-          ></wa-icon>
+          ${waIcon('comments')}
           <span
             >Inquiries${
               openCount ? html` &middot; ${openCount} open` : nothing
@@ -332,12 +328,7 @@ export class BackgroundTasksPanel extends LitElement {
     return html`
       <div class="task-item">
         <div class="task-header">
-          <wa-icon
-            library=${TEXRA_ICON_LIBRARY}
-            name="circle-question"
-            aria-hidden="true"
-            class="task-icon task-icon--inquiry"
-          ></wa-icon>
+          ${waIcon('circle-question', { className: 'task-icon task-icon--inquiry' })}
           <span id="${idPrefix}-id" class="inquiry-id">${thread.threadId}</span>
           <wa-tooltip for="${idPrefix}-id">${thread.threadId}</wa-tooltip>
           <span id="${idPrefix}-description" class="task-description"
@@ -378,11 +369,7 @@ export class BackgroundTasksPanel extends LitElement {
     return html`
       <wa-details class="collapsible-quiet">
         <div slot="summary" class="section-label">
-          <wa-icon
-            library=${TEXRA_ICON_LIBRARY}
-            name="server-process"
-            aria-hidden="true"
-          ></wa-icon>
+          ${waIcon('server-process')}
           <span
             >Subagents${
               activeCount ? html` &middot; ${activeCount} active` : nothing
@@ -425,16 +412,9 @@ export class BackgroundTasksPanel extends LitElement {
     return html`
       <div class="task-item">
         <div class="task-header">
-          <wa-icon
-            library=${TEXRA_ICON_LIBRARY}
-            name=${icon}
-            aria-hidden="true"
-            class=${classMap({
-              'task-icon': true,
-              'task-icon--process': !isAgentTool(child),
-              'task-icon--subagent': isAgentTool(child),
-            })}
-          ></wa-icon>
+          ${waIcon(icon, {
+            className: `task-icon ${isAgentTool(child) ? 'task-icon--subagent' : 'task-icon--process'}`,
+          })}
           <span
             id="${idPrefix}-name"
             class=${classMap({
@@ -519,7 +499,7 @@ function isAgentTool(child: ActiveChildInfo): boolean {
 }
 
 /** Pick the appropriate wa-icon name for a background task item. */
-function getTaskIcon(child: ActiveChildInfo): string {
+function getTaskIcon(child: ActiveChildInfo): TeXRAIconName {
   if (child.toolName === 'bash') return 'terminal';
   if (isAgentTool(child)) return 'robot';
   // Subagents (delegation, workflow) default to server-process;

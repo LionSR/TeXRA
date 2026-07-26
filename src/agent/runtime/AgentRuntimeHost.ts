@@ -18,7 +18,10 @@ export interface AgentRuntimeEmitOptions {
  *
  * **Headless / SDK contract.** Not every event is required for execution. A
  * headless consumer can implement a partial host and safely ignore the
- * UI-oriented events — the run completes regardless. Two tiers:
+ * UI-oriented events — the run completes regardless, *provided something is
+ * attached*. `session.useHostInteractions({ cancel: () => {} })` is the
+ * minimum: it settles every request the host omits. Attaching nothing instead
+ * parks blocking requests indefinitely. Two tiers:
  *
  * - **Host interaction surface** (`RuntimeInteractionEventPayloads`): typed
  *   approval and user-question requests that may affect the agent loop.

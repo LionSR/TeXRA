@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getExecutionStore } from '@agent/storage';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { TaskStateSchema, type TaskState } from '@agent/core/state/TaskState';
+import * as logUtils from '@logger/logUtils';
 import type { Platform } from '@platform/platform';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import {
@@ -392,6 +393,30 @@ describe('StreamSnapshotStore', () => {
     expect(snap.todos).toEqual([]);
     expect(snap.plan).toBeNull();
     expect(snap.runUsage).toEqual({});
+  });
+
+  it('degrades a structurally unreadable work plan to empty LOUDLY (not via a silent .catch)', async () => {
+    const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
+    const dir = streamDataDir(STREAM);
+    await StorageFS.ensureDir(dir);
+    // A non-object top-level shape survives the `!raw` guard but fails the
+    // object parse — the exact corruption the old whole-object `.catch`
+    // swallowed without a trace.
+    await StorageFS.write(
+      path.join(dir, 'workPlan.json'),
+      JSON.stringify(['not', 'a', 'work plan']),
+    );
+
+    const snap = await new StreamSnapshotStore().read(STREAM);
+
+    expect(snap.todos).toEqual([]);
+    expect(snap.plan).toBeNull();
+    expect(warnSpy).toHaveBeenCalledWith(
+      'StreamSnapshotStore',
+      expect.stringContaining('unreadable persisted work plan'),
+      expect.anything(),
+    );
+    warnSpy.mockRestore();
   });
 
   it('migrates the legacy nested {runId:{round}} shape to flat ONCE at the load entry', async () => {

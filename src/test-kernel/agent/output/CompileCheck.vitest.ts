@@ -5,7 +5,6 @@ import * as path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import type { AgentTrace } from '@agent/trace';
 import { runCompileCheck } from '@agent/output/compileCheck';
 import { createOutputState, ensureRoundData } from '@agent/output/outputState';
 import type { CompileLatex2PdfResult } from '@latex/texTools';
@@ -16,6 +15,7 @@ import type {
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { installPlatform } from '@test/support/setupPlatform';
+import { spiedTrace } from '@test/support/spiedTrace';
 import {
   TaskRunFileService,
   createRunStorageLocation,
@@ -87,15 +87,6 @@ function seedMainTexOutput(executionId: ExecutionId) {
   return outputState;
 }
 
-function logger(): AgentTrace {
-  return {
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  } as unknown as AgentTrace;
-}
-
 function initLatexPlatform(files: Record<string, string>): Promise<void> {
   return installPlatform({
     files,
@@ -128,7 +119,7 @@ describe('runCompileCheck', () => {
       {
         fileService: new TaskRunFileService(executionId),
         outputState,
-        logger: logger(),
+        logger: spiedTrace(),
         streamId: 'compile-stream',
       },
       0,
@@ -166,7 +157,7 @@ describe('runCompileCheck', () => {
       {
         fileService: new TaskRunFileService(executionId),
         outputState,
-        logger: logger(),
+        logger: spiedTrace(),
         streamId: 'compile-stream',
       },
       0,
@@ -204,7 +195,7 @@ describe('runCompileCheck', () => {
       {
         fileService: new TaskRunFileService(executionId),
         outputState,
-        logger: logger(),
+        logger: spiedTrace(),
         streamId: 'compile-stream',
       },
       0,
@@ -247,7 +238,7 @@ describe('runCompileCheck', () => {
       {
         fileService: new TaskRunFileService(executionId),
         outputState,
-        logger: logger(),
+        logger: spiedTrace(),
         streamId: 'compile-stream',
       },
       0,
@@ -281,7 +272,7 @@ describe('runCompileCheck', () => {
     const ctx = {
       fileService: new TaskRunFileService(executionId),
       outputState,
-      logger: logger(),
+      logger: spiedTrace(),
       streamId: 'compile-stream',
     };
 
@@ -326,7 +317,7 @@ describe('runCompileCheck', () => {
       {
         fileService: new TaskRunFileService(executionId),
         outputState,
-        logger: logger(),
+        logger: spiedTrace(),
         streamId: 'compile-stream',
       },
       0,
@@ -368,7 +359,7 @@ describe('runCompileCheck', () => {
       {
         fileService: new TaskRunFileService(executionId),
         outputState,
-        logger: logger(),
+        logger: spiedTrace(),
         streamId: 'compile-stream',
       },
       0,
@@ -416,7 +407,7 @@ describe('runCompileCheck', () => {
         {
           fileService: new TaskRunFileService(executionId),
           outputState,
-          logger: logger(),
+          logger: spiedTrace(),
           streamId: 'compile-stream',
         },
         0,

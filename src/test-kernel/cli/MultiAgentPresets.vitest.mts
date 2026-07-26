@@ -1,5 +1,5 @@
 // Third-party imports
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import type { AgentEntry } from '@agent/index';
@@ -433,7 +433,7 @@ describe('CLI multi-agent presets', () => {
     ]);
   });
 
-  it('loads valid custom team presets and ignores invalid state', () => {
+  it('loads valid custom team presets, drops structurally malformed state, and keeps unknown-icon teams', () => {
     const valid = [
       {
         id: 'custom-paper',
@@ -461,6 +461,13 @@ describe('CLI multi-agent presets', () => {
         source: 'custom',
       },
     ]);
+
+    // An unrecognized icon is cosmetic and must NOT cost the user the team:
+    // these presets come from persisted workspace state that the next preset
+    // save/delete rewrites wholesale, so dropping one here deleted it for good.
+    // It degrades to `bookmark` with a warn instead. Structurally malformed
+    // presets (below) are still dropped.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     expect(
       customPresets([
         ...valid,
@@ -479,7 +486,21 @@ describe('CLI multi-agent presets', () => {
         icon: 'bookmark',
         source: 'custom',
       },
+      {
+        id: 'custom-broken-icon',
+        name: 'Broken Icon',
+        description: 'Structurally valid but uses an unknown icon.',
+        icon: 'bookmark',
+        workflowAgents: [],
+        toolUseAgents: [],
+        source: 'custom',
+      },
     ]);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('not-a-valid-icon'),
+    );
+    warn.mockRestore();
+
     expect(customPresets([{ id: 'broken' }])).toEqual([]);
   });
 

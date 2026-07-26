@@ -27,7 +27,7 @@ import {
   type LogMessageData,
 } from '@shared/schemas';
 import { OUTPUT_DOCUMENTS_TAG } from '@shared/schemas/output';
-import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
+import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 import { formatCompactTokenCount, getBasename } from '@utils/core';
 import { formatCostUsd } from '@utils/text/stringUtils';
 
@@ -68,7 +68,7 @@ export function formatFileListTemplate(
 function renderXmlLink(xmlFile: string) {
   const xmlFileName = getBasename(xmlFile);
   // prettier-ignore
-  return html`<div class="xml-link-container"><wa-icon library=${TEXRA_ICON_LIBRARY} name="file-code" aria-hidden="true"></wa-icon> <span>Open XML to check tag consistency:</span> <span class="file-link clickable-link" data-file=${xmlFile} role="button" tabindex="0">${xmlFileName}</span> <span class="document-tag">(Expected &lt;${OUTPUT_DOCUMENTS_TAG}&gt; block)</span></div>`;
+  return html`<div class="xml-link-container">${waIcon('file-code')} <span>Open XML to check tag consistency:</span> <span class="file-link clickable-link" data-file=${xmlFile} role="button" tabindex="0">${xmlFileName}</span> <span class="document-tag">(Expected &lt;${OUTPUT_DOCUMENTS_TAG}&gt; block)</span></div>`;
 }
 
 /** Format missing outputs entry as TemplateResult. */
@@ -95,7 +95,7 @@ export function formatMissingOutputsTemplate(
   const listItems = missing.map((f) => {
     const filePath = String(f);
     const basename = getBasename(filePath);
-    return html`<li class="detail-item" title=${filePath}><wa-icon library=${TEXRA_ICON_LIBRARY} name="warning" aria-hidden="true"></wa-icon> <span class="file-link clickable-link" data-file=${filePath} role="button" tabindex="0">${basename}</span></li>`;
+    return html`<li class="detail-item" title=${filePath}>${waIcon('warning')} <span class="file-link clickable-link" data-file=${filePath} role="button" tabindex="0">${basename}</span></li>`;
   });
   // prettier-ignore
   return html`<wa-details appearance="plain" icon-placement="start" class="banner-details file-list-details" ?open=${shouldOpen}>${buildDetailsSummary({
@@ -138,7 +138,7 @@ type NumericExtendedTokenUsageStatsKey = {
 /** Configuration for a statistics field: [key, icon, label, formatter]. */
 type StatFieldConfig = readonly [
   key: NumericExtendedTokenUsageStatsKey,
-  icon: string,
+  icon: TeXRAIconName,
   label: string,
   formatter: (value: number) => string,
 ];
