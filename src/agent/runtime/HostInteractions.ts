@@ -632,7 +632,12 @@ export class SessionHostInteractions
         });
       }
     }
-    if (!active) return;
+    if (!active) {
+      for (const pending of this.pending) {
+        if (!pending.cancellationRequested) this.warnParked(pending);
+      }
+      return;
+    }
     for (const pending of this.pending) {
       if (!pending.cancellationRequested) this.dispatch(pending);
     }
@@ -667,14 +672,7 @@ export class SessionHostInteractions
   private dispatch(pending: PendingSessionInteraction): void {
     const attachment = this.activeAttachment;
     if (!attachment) {
-      // Only `enqueue` reaches this branch — re-dispatch runs behind an active
-      // attachment — so one park logs once, not once per dispatch attempt.
-      logger.warn(
-        `No interaction host is attached: parked the ${pending.kind} request ` +
-          `(stream ${pending.streamId ?? 'none'}) until one attaches. A ` +
-          'headless embedder must attach at least `{ cancel: () => {} }`, or ' +
-          'blocking requests never settle.',
-      );
+      this.warnParked(pending);
       return;
     }
     const version = this.attachmentVersion;
@@ -700,6 +698,19 @@ export class SessionHostInteractions
         this.rejectCurrentDispatch(pending, attachment, version, error);
       },
     );
+  }
+
+  private warnParked(pending: PendingSessionInteraction): void {
+    try {
+      logger.warn(
+        `No interaction host is attached: parked the ${pending.kind} request ` +
+          `(stream ${pending.streamId ?? 'none'}) until one attaches. A ` +
+          'headless embedder must attach at least `{ cancel: () => {} }`, or ' +
+          'blocking requests never settle.',
+      );
+    } catch {
+      // A diagnostic sink must not reject or remove the request it describes.
+    }
   }
 
   private rejectCurrentDispatch(
