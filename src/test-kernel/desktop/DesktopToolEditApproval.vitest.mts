@@ -7,7 +7,6 @@ import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInteractionEvents';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionEvent } from '@agent/runtime/SessionEventHub';
 import type { DiffOptions, DiffSession, DiffSource } from '@hosts/uiHosts';
@@ -16,6 +15,7 @@ import type {
   ToolEditApprovalRequest,
   ToolEditApprovalResult,
 } from '@platform/interfaces';
+import type { ToolEditPermission } from '@shared/schemas';
 import type { ToolEditApprovalAction } from '@shared/schemas/prompts';
 import { createTestSession as createIsolatedTestSession } from '@test/support/sessionTestUtils';
 import { delay } from '@utils/core';
@@ -31,6 +31,8 @@ interface DesktopToolEditApprovalModule {
     runtimeHost: AgentRuntimeHost;
     session: SessionHandle;
     ui: ReturnType<typeof createStubDesktopAgentExecutionHost>;
+    showToolEditPermission(payload: ToolEditPermission): void;
+    resolveToolEditPermission(requestId: string): void;
     tempRoot?: string;
   }): {
     approvePendingForStream(streamId: string): Promise<void>;
@@ -52,8 +54,8 @@ interface DesktopToolEditApprovalModule {
 }
 
 interface RecordingRuntimeHost extends AgentRuntimeHost {
-  shownToolEditPermissions: RuntimeInteractionEventPayloads['showToolEditPermission'][];
-  resolvedToolEditPermissions: RuntimeInteractionEventPayloads['resolveToolEditPermission'][];
+  shownToolEditPermissions: ToolEditPermission[];
+  resolvedToolEditPermissions: Array<{ requestId: string }>;
 }
 
 let activeToolEditApproval:
@@ -84,26 +86,24 @@ function useControllerApproval(controller: {
 }
 
 function createRecordingRuntimeHost(): RecordingRuntimeHost {
-  const shownToolEditPermissions: RuntimeInteractionEventPayloads['showToolEditPermission'][] =
-    [];
-  const resolvedToolEditPermissions: RuntimeInteractionEventPayloads['resolveToolEditPermission'][] =
-    [];
+  const shownToolEditPermissions: ToolEditPermission[] = [];
+  const resolvedToolEditPermissions: Array<{ requestId: string }> = [];
   return {
     shownToolEditPermissions,
     resolvedToolEditPermissions,
-    emit: (event, payload) => {
-      if (event === 'showToolEditPermission') {
-        shownToolEditPermissions.push(
-          payload as RuntimeInteractionEventPayloads['showToolEditPermission'],
-        );
-        return;
-      }
-      if (event === 'resolveToolEditPermission') {
-        resolvedToolEditPermissions.push(
-          payload as RuntimeInteractionEventPayloads['resolveToolEditPermission'],
-        );
-      }
-    },
+    emit: vi.fn(),
+  };
+}
+
+function controllerHostCallbacks(runtimeHost: RecordingRuntimeHost): {
+  showToolEditPermission(payload: ToolEditPermission): void;
+  resolveToolEditPermission(requestId: string): void;
+} {
+  return {
+    showToolEditPermission: (payload) =>
+      runtimeHost.shownToolEditPermissions.push(payload),
+    resolveToolEditPermission: (requestId) =>
+      runtimeHost.resolvedToolEditPermissions.push({ requestId }),
   };
 }
 
@@ -253,6 +253,7 @@ describe('desktop tool edit approval', () => {
       const session = createTestSession();
       const controller = desktopModule.createDesktopToolEditApprovalController({
         runtimeHost,
+        ...controllerHostCallbacks(runtimeHost),
         session,
         ui: createStubDesktopAgentExecutionHost(),
         tempRoot,
@@ -317,6 +318,7 @@ describe('desktop tool edit approval', () => {
       const opened: string[] = [];
       const controller = desktopModule.createDesktopToolEditApprovalController({
         runtimeHost,
+        ...controllerHostCallbacks(runtimeHost),
         session,
         tempRoot,
         ui: createStubDesktopAgentExecutionHost({
@@ -401,6 +403,7 @@ describe('desktop tool edit approval', () => {
       );
       const controller = desktopModule.createDesktopToolEditApprovalController({
         runtimeHost,
+        ...controllerHostCallbacks(runtimeHost),
         session: createTestSession(),
         tempRoot,
         ui: createStubDesktopAgentExecutionHost({ openPath, openDiff }),
@@ -452,6 +455,7 @@ describe('desktop tool edit approval', () => {
       const opened: string[] = [];
       const controller = desktopModule.createDesktopToolEditApprovalController({
         runtimeHost,
+        ...controllerHostCallbacks(runtimeHost),
         session: createTestSession(),
         tempRoot,
         ui: createStubDesktopAgentExecutionHost({
@@ -518,6 +522,7 @@ describe('desktop tool edit approval', () => {
       const openBuildDisplay = vi.fn(async () => {});
       const controller = desktopModule.createDesktopToolEditApprovalController({
         runtimeHost,
+        ...controllerHostCallbacks(runtimeHost),
         session: createTestSession(),
         tempRoot,
         ui: createStubDesktopAgentExecutionHost({ openBuildDisplay }),
@@ -582,6 +587,7 @@ describe('desktop tool edit approval', () => {
       const messages: string[] = [];
       const controller = desktopModule.createDesktopToolEditApprovalController({
         runtimeHost,
+        ...controllerHostCallbacks(runtimeHost),
         session: createTestSession(),
         tempRoot,
         ui: createStubDesktopAgentExecutionHost({
@@ -646,6 +652,7 @@ describe('desktop tool edit approval', () => {
       const runtimeHost = createRecordingRuntimeHost();
       const controller = desktopModule.createDesktopToolEditApprovalController({
         runtimeHost,
+        ...controllerHostCallbacks(runtimeHost),
         session: createTestSession(),
         ui: createStubDesktopAgentExecutionHost(),
         tempRoot,
@@ -689,6 +696,7 @@ describe('desktop tool edit approval', () => {
       const runtimeHost = createRecordingRuntimeHost();
       const controller = desktopModule.createDesktopToolEditApprovalController({
         runtimeHost,
+        ...controllerHostCallbacks(runtimeHost),
         session: createTestSession(),
         ui: createStubDesktopAgentExecutionHost(),
         tempRoot,
@@ -728,6 +736,7 @@ describe('desktop tool edit approval', () => {
       const runtimeHost = createRecordingRuntimeHost();
       const controller = desktopModule.createDesktopToolEditApprovalController({
         runtimeHost,
+        ...controllerHostCallbacks(runtimeHost),
         session: createTestSession(),
         ui: createStubDesktopAgentExecutionHost(),
         tempRoot,
@@ -801,6 +810,7 @@ describe('desktop tool edit approval', () => {
       const session = createTestSession();
       const controller = desktopModule.createDesktopToolEditApprovalController({
         runtimeHost,
+        ...controllerHostCallbacks(runtimeHost),
         session,
         ui: createStubDesktopAgentExecutionHost(),
         tempRoot,

@@ -27,7 +27,7 @@ import {
   type DiffSource,
   type DiffViewHost,
 } from '@hosts/uiHosts';
-import type { StreamTabId } from '@shared/schemas';
+import type { StreamTabId, ToolEditPermission } from '@shared/schemas';
 import type { ToolEditApprovalAction } from '@shared/schemas/prompts';
 import type { LineChanges } from '@shared/schemas/lineChanges';
 import {
@@ -39,7 +39,7 @@ import { writeApprovalTempFiles } from '@tools/approval/tempFileManager';
 import {
   computeLineChangeSummary,
   computeUserPatch,
-  emitToolEditApprovalPrompt,
+  prepareToolEditApprovalPrompt,
   firstChangedLine,
   type ToolEditApprovalRequest,
   type ToolEditApprovalResult,
@@ -80,6 +80,8 @@ const initializingApprovals = new Map<string, InitializingNativeApproval>();
 const diffViewHost: DiffViewHost = new VscodeDiffViewHost();
 let storageDirectory: string | undefined;
 let runtimeHost: AgentRuntimeHost | undefined;
+let showToolEditPermission: (payload: ToolEditPermission) => void;
+let resolveToolEditPermission: (requestId: string) => void;
 
 /** Reject native approvals owned by one session and selected interaction scope. */
 export function cancelNativeToolEditApprovals(
@@ -229,16 +231,18 @@ function publishProgressViewApprovalPrompt(
 ): void {
   // Activate the stream that needs approval and post the prompt (shared with
   // the desktop host); VS Code computes the relative path via the workspace.
-  emitToolEditApprovalPrompt(getRuntimeHost(), session, {
-    requestId,
-    request,
-    relativePath,
-    lineChanges,
-  });
+  showToolEditPermission(
+    prepareToolEditApprovalPrompt(getRuntimeHost(), session, {
+      requestId,
+      request,
+      relativePath,
+      lineChanges,
+    }),
+  );
 }
 
 function resolveProgressViewApprovalPrompt(requestId: string): void {
-  getRuntimeHost().emit('resolveToolEditPermission', { requestId });
+  resolveToolEditPermission(requestId);
 }
 
 function restoreProgressViewApprovalPrompt(
@@ -548,16 +552,22 @@ export async function handleProgressViewToolEditApprovalAction(
 /**
  * Initialize the native VS Code tool edit approval handler.
  *
- * Sets up the storage directory and runtime host used by {@link nativeRequestApproval},
- * which is wired into the Platform at {@link initPlatform} time.  The wiring itself
- * lives in the extension's `initPlatform` call — this function only supplies the
+ * Sets up the storage directory, presentation host, and progress-view approval
+ * callbacks used by {@link nativeRequestApproval}. The wiring itself lives in
+ * the extension's `initPlatform` call; this function only supplies the
  * module-level dependencies `nativeRequestApproval` closes over.
  */
 export function initializeNativeToolEditApproval(
   context: vscode.ExtensionContext,
   host: AgentRuntimeHost,
+  callbacks: {
+    showToolEditPermission(payload: ToolEditPermission): void;
+    resolveToolEditPermission(requestId: string): void;
+  },
 ): void {
   const baseDir = context.storageUri ?? context.globalStorageUri;
   storageDirectory = path.join(baseDir.fsPath, 'tool-edit-previews');
   runtimeHost = host;
+  showToolEditPermission = callbacks.showToolEditPermission;
+  resolveToolEditPermission = callbacks.resolveToolEditPermission;
 }
