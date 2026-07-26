@@ -116,6 +116,46 @@ describe('repairRestartedStreams', () => {
     expect(finalizeExecution).not.toHaveBeenCalled();
   });
 
+  it('preserves an execution that completed before a delayed lease retry', async () => {
+    const streamId = 'stream-completed-before-retry' as StreamTabId;
+    const executionId = 'execution-completed-before-retry' as ExecutionId;
+    const store = getExecutionStore(executionId);
+    await store.writeMeta({
+      timestamp: '2026-07-26T00:00:00.000Z',
+      terminalStatus: EXECUTION_STATUS.COMPLETED,
+      outcome: RUN_OUTCOME.COMPLETED,
+    });
+    const streamStatus = new StreamStatusMachine();
+    seedRunning(streamStatus, streamId);
+    const closeRunningGroups = vi.fn(async () => [] as StreamTabId[]);
+    const finalizeExecution = createDurableFinalizer();
+
+    try {
+      const result = await repairRestartedStreams({
+        streamStatus,
+        waitingStreams: new Set(),
+        executionIds: new Map([[streamId, executionId]]),
+        closeRunningGroups,
+        finalizeExecution,
+        runWithInactiveExecutionLease: vi.fn(async (_id, operation) => ({
+          status: 'performed' as const,
+          value: await operation(),
+        })),
+      });
+
+      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.COMPLETED);
+      await expect(store.readMeta()).resolves.toMatchObject({
+        terminalStatus: EXECUTION_STATUS.COMPLETED,
+        outcome: RUN_OUTCOME.COMPLETED,
+      });
+      expect(result.failedStreams).toEqual([]);
+      expect(closeRunningGroups).not.toHaveBeenCalled();
+      expect(finalizeExecution).not.toHaveBeenCalled();
+    } finally {
+      await store.clear();
+    }
+  });
+
   it('derives the lease identity when restart metadata has no execution mapping', async () => {
     const executionId = 'a8644a' as ExecutionId;
     const streamId = `tool@model#${executionId}` as StreamTabId;

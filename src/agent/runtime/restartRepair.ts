@@ -9,6 +9,8 @@ import {
   runWithInactiveExecutionLease as defaultRunWithInactiveExecutionLease,
 } from '@agent/storage/executionLease';
 import { executionIdFromStream } from '@agent/storage/executionIdFromStream';
+import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
+import { deriveResumability } from '@agent/storage/resumability';
 import type {
   StreamStatusEmitOptions,
   StreamStatusMachine,
@@ -117,6 +119,59 @@ function repairCandidates(
   return [...streamStatus.entries()]
     .filter(([, phase]) => phase === STREAM_PHASE.RUNNING)
     .map(([streamId]) => streamId);
+}
+
+type ExecutionSettlement =
+  | { readonly settled: false }
+  | { readonly settled: true; readonly outcome?: RunOutcome };
+
+/**
+ * Revalidate terminal metadata while holding the execution lease.
+ *
+ * A cancelled execution remains unsettled when it still has a resumable flow;
+ * completed and failed executions are always terminal. Unknown legacy terminal
+ * statuses are protected from repair even though they cannot be projected onto
+ * the current stream-phase vocabulary.
+ */
+async function readExecutionSettlement(
+  executionId: ExecutionId,
+): Promise<ExecutionSettlement> {
+  const meta = await getExecutionStore(executionId).readMeta();
+  if (!meta || (meta.terminalStatus == null && meta.outcome == null)) {
+    return { settled: false };
+  }
+  if (meta.outcome !== RUN_OUTCOME.CANCELLED) {
+    return { settled: true, outcome: meta.outcome };
+  }
+  const resumability = await deriveResumability(executionId);
+  return resumability.resumable
+    ? { settled: false }
+    : { settled: true, outcome: RUN_OUTCOME.CANCELLED };
+}
+
+function synchronizeSettledPhase(
+  streamStatus: StreamStatusMachine,
+  streamId: StreamTabId,
+  outcome: RunOutcome | undefined,
+  statusEmitOptions: StreamStatusEmitOptions | undefined,
+): void {
+  if (outcome == null) return;
+  const current = streamStatus.get(streamId);
+  if (current == null || !RESTART_REPAIR_PHASES.has(current)) return;
+  if (current === STREAM_PHASE.WAITING) {
+    streamStatus.transition(
+      streamId,
+      STREAM_PHASE.RUNNING,
+      STREAM_TRANSITION_CAUSE.RESUME,
+      statusEmitOptions,
+    );
+  }
+  streamStatus.transition(
+    streamId,
+    outcome,
+    STREAM_TRANSITION_CAUSE.LIFECYCLE,
+    statusEmitOptions,
+  );
 }
 
 /** Repair one stream back to WAITING, logging the outcome. */
@@ -274,9 +329,23 @@ export async function repairRestartedStreams(
       options.executionIds.get(streamId) ?? executionIdFromStream(streamId);
     let repairStarted = false;
     try {
-      const repair = () => {
+      const repair = async () => {
+        if (executionId) {
+          const settlement = await readExecutionSettlement(executionId);
+          if (settlement.settled) {
+            return { kind: 'settled' as const, settlement };
+          }
+        }
         repairStarted = true;
-        return repairRestartedStream(options, streamId, executionId, now);
+        return {
+          kind: 'repaired' as const,
+          result: await repairRestartedStream(
+            options,
+            streamId,
+            executionId,
+            now,
+          ),
+        };
       };
       const repaired = executionId
         ? await (
@@ -296,12 +365,28 @@ export async function repairRestartedStreams(
         );
         continue;
       }
-      result.waitingStreams.push(...repaired.value.waitingStreams);
-      result.failedStreams.push(...repaired.value.failedStreams);
-      result.closedWaitingGroups.push(...repaired.value.closedWaitingGroups);
-      result.closedFailedGroups.push(...repaired.value.closedFailedGroups);
+      if (repaired.value.kind === 'settled') {
+        synchronizeSettledPhase(
+          options.streamStatus,
+          streamId,
+          repaired.value.settlement.outcome,
+          options.statusEmitOptions,
+        );
+        options.logger?.debug(
+          `Skipped restart repair for terminal execution ${executionId}`,
+        );
+        continue;
+      }
+      result.waitingStreams.push(...repaired.value.result.waitingStreams);
+      result.failedStreams.push(...repaired.value.result.failedStreams);
+      result.closedWaitingGroups.push(
+        ...repaired.value.result.closedWaitingGroups,
+      );
+      result.closedFailedGroups.push(
+        ...repaired.value.result.closedFailedGroups,
+      );
       result.terminalStatusUpdated.push(
-        ...repaired.value.terminalStatusUpdated,
+        ...repaired.value.result.terminalStatusUpdated,
       );
     } catch (error) {
       if (repairStarted) throw error;
