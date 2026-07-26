@@ -10,7 +10,6 @@ vi.mock('@tools/inquiry/ExternalInquiryTool', () => ({
   handleExternalInquiryAction: handleExternalInquiryActionMock,
 }));
 
-import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInteractionEvents';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import type { HostRetryRequest } from '@agent/runtime/HostInteractions';
 import {
@@ -30,6 +29,8 @@ import type { CliApprovalPromptHooks } from '@cli/runtime/approval/approvalPolic
 import {
   AgentCategory,
   DEFAULT_TOOL_CONFIG,
+  type AgentProposalPermission,
+  type RetryPermission,
   type StreamTabId,
 } from '@shared/schemas';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
@@ -55,11 +56,11 @@ function useCliHostInteractions(
   );
 }
 
-const credentialExhaustedRetry: RuntimeInteractionEventPayloads['showRetryRequest'] =
+const credentialExhaustedRetry: RetryPermission =
   {
     requestId: 'relay-limit-retry',
     streamId:
-      'test-stream' as RuntimeInteractionEventPayloads['showRetryRequest']['streamId'],
+      'test-stream' as RetryPermission['streamId'],
     operation: 'Model request',
     errorMessage: 'HTTP 429 Too Many Requests',
     errorDetails: {
@@ -148,7 +149,7 @@ describe('human input approval policy', () => {
 });
 
 describe('approval prompt hooks', () => {
-  const proposal: RuntimeInteractionEventPayloads['showAgentProposal'] = {
+  const proposal: AgentProposalPermission = {
     proposalId: 'proposal-1',
     streamId: 'root@deepseekT#abc',
     agent: 'review',
@@ -528,7 +529,7 @@ describe('formatRetryRequestMessage', () => {
   });
 
   it('recognizes relay monthly-limit text when the relay body is absent', () => {
-    const retry: RuntimeInteractionEventPayloads['showRetryRequest'] = {
+    const retry: RetryPermission = {
       ...credentialExhaustedRetry,
       errorMessage:
         'HTTP 429 Too Many Requests – 429 Monthly spending limit reached ($300).',
