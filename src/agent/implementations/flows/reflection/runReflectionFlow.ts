@@ -21,7 +21,6 @@ import {
   PersistedFlowStateError,
   readPersistedFlowRecord,
 } from '@agent/node/persistedFlow';
-import { RoundPersistedFlow } from '@agent/node/roundPersistedFlow';
 import { attachProviderError } from '@common/errors/sdkErrorUtils';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
 import {
@@ -51,6 +50,7 @@ import {
   ReflectionFlowStateCanonicalSchema,
   type ReflectionFlowShared,
 } from './ReflectionFlowState';
+import { RoundPersistedFlow } from './RoundPersistedFlow';
 import type {
   ReflectionServices,
   WorkflowOutputPolicy,
