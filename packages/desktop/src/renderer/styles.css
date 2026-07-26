@@ -874,7 +874,6 @@ wa-input.desktop-command-palette-input::part(input) {
   border: 1px solid var(--wa-color-surface-border);
   border-radius: var(--wa-border-radius-xl);
   background: var(--wa-color-surface-lowered);
-  box-shadow: var(--desktop-shadow-md), var(--desktop-edge-highlight);
   text-align: center;
 }
 
@@ -947,7 +946,6 @@ wa-input.desktop-command-palette-input::part(input) {
   border: 1px solid var(--wa-color-surface-border);
   border-radius: var(--wa-border-radius-xl);
   background: var(--wa-color-surface-lowered);
-  box-shadow: var(--desktop-shadow-md), var(--desktop-edge-highlight);
   text-align: center;
   color: var(--wa-color-text-normal);
 }

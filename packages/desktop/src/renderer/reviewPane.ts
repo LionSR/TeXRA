@@ -4,10 +4,7 @@ import '@awesome.me/webawesome/dist/components/input/input.js';
 import '@progressView/frontend/components/TexraDiffView';
 import { html, nothing, render, type TemplateResult } from 'lit';
 
-import {
-  DESKTOP_THEME_KIND,
-  type DesktopThemeKind,
-} from '@shared/schemas/commonViewMessages';
+import { DESKTOP_THEME_KIND, type DesktopThemeKind } from '@shared/schemas';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 import { buildEditorTree, type EditorTreeNode } from './editorTree';

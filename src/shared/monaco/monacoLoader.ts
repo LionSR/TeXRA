@@ -7,7 +7,7 @@
 // wrong worker to a language service. One loader, one `MonacoEnvironment`
 // assignment, shared promise cache.
 
-import { DESKTOP_THEME_KIND } from '@shared/schemas/commonViewMessages';
+import { DESKTOP_THEME_KIND } from '@shared/schemas';
 
 export type MonacoModule = typeof import('monaco-editor/editor/editor.api.js');
 type MonacoWorkerModule = { default: new () => Worker };

@@ -17,6 +17,7 @@ import '@awesome.me/webawesome/dist/components/tree/tree.js';
 import '@awesome.me/webawesome/dist/components/tree-item/tree-item.js';
 import { html, nothing, render, type TemplateResult } from 'lit';
 
+import type { DesktopThemeKind } from '@shared/schemas';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import {
@@ -25,7 +26,6 @@ import {
   monacoThemeForHostTheme,
   type MonacoModule,
 } from '@shared/monaco/monacoLoader';
-import type { DesktopThemeKind } from '@shared/schemas/commonViewMessages';
 
 import { getDesktopChromeFontSize } from './desktopTypography';
 import {

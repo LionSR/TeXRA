@@ -355,10 +355,7 @@ export const instructionPanelStyles: CSSResult = css`
     border-color: var(--border-hairline-strong);
     border-radius: var(--border-radius-large);
     background: var(--wa-color-surface-raised);
-    box-shadow: 0 8px 24px color-mix(in srgb, black 10%, transparent);
-    transition:
-      border-color var(--transition-fast),
-      box-shadow var(--transition-fast);
+    transition: border-color var(--transition-fast);
   }
 
   :host([desktop-host]) .instruction-box:focus-within {
@@ -367,9 +364,7 @@ export const instructionPanelStyles: CSSResult = css`
       var(--wa-color-focus) 55%,
       var(--border-hairline-strong)
     );
-    box-shadow:
-      0 0 0 4px var(--wa-color-brand-fill-quiet),
-      0 8px 24px color-mix(in srgb, black 12%, transparent);
+    box-shadow: 0 0 0 2px var(--wa-color-brand-fill-quiet);
   }
 
   :host([desktop-host]) .instruction-box.drop-active::after {

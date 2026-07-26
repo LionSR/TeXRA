@@ -96,12 +96,15 @@ import {
 import { platform } from '@platform/platform';
 import { PROGRESS_VIEW_COMMANDS, COMMON_COMMANDS } from '@shared/ipc';
 import {
+  AgentCategory,
+  SETTINGS_TAB,
   type RunOutcome,
   type AgentCategoryFilter,
   type MainViewPersistedState,
   type ProgressViewOutboundMessage,
   type ExecutionId,
   type RequestOpenFilePayload,
+  type SettingsTab,
   type StreamTabId,
 } from '@shared/schemas';
 import { unsupported, unsupportedCommands } from '@shared/utils/dispatcher';
@@ -110,15 +113,10 @@ import {
   formatStreamDeletionRetention,
 } from '@shared/copy/executionHistory';
 import type { MainViewExecuteMessage } from '@shared/schemas/mainView/executeMessage';
-import { AgentCategory } from '@shared/schemas/agent';
 import {
   mergeRunDirAndWorkspaceResult,
   type FileOpResult,
 } from '@shared/schemas/opResults';
-import {
-  SETTINGS_TAB,
-  type SettingsTab,
-} from '@shared/schemas/settingsViewMessages';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { cleanupUnscopedApprovals } from '@tools/approval';
 import { startRecording, stopRecordingAndTranscribe } from '@tools/media/audio';

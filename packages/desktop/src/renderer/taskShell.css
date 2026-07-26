@@ -565,13 +565,6 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   overflow-y: auto;
 }
 
-.task-environment-popover::part(popup__popup) {
-  border-color: var(--wa-color-menu-border);
-  border-radius: 18px;
-  background: var(--wa-color-menu-background);
-  box-shadow: var(--desktop-shadow-lg);
-}
-
 .task-environment-heading {
   display: flex;
   align-items: center;
