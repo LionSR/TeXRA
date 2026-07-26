@@ -30,7 +30,7 @@ import {
   injectStandaloneTrace,
   type AssembleTraceResult,
 } from '@transcript';
-import { StorageFS, pathToLocation } from '@utils/files';
+import { AbsoluteFS, StorageFS, pathToLocation } from '@utils/files';
 
 // ============================================================
 // Result types
@@ -171,14 +171,13 @@ export class ChatExportController {
     }
     const { trace } = traceResult;
 
-    const fsExtra = (await import('fs-extra')).default;
-    if (!(await fsExtra.pathExists(standaloneTemplatePath))) {
+    if (!(await AbsoluteFS.exists(standaloneTemplatePath))) {
       throw new Error(
         `Trace-viewer standalone bundle missing at ${standaloneTemplatePath} — ` +
           'rebuild the extension (npm run package:fast) so packages/trace-viewer builds.',
       );
     }
-    const template = await fsExtra.readFile(standaloneTemplatePath, 'utf8');
+    const template = await AbsoluteFS.read(standaloneTemplatePath);
     const html = injectStandaloneTrace(template, trace);
 
     const filename = generateExportFilename(
