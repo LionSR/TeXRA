@@ -24,6 +24,21 @@ import type { RunTraceFlushEntry } from '@transcript/runTrace';
 // Local file imports
 import { createRecordingHost } from '../progressTestUtils';
 
+const channelTraceMocks = vi.hoisted(() => ({
+  warn: vi.fn(),
+}));
+
+vi.mock('@agent/trace', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@agent/trace')>();
+  return {
+    ...actual,
+    createChannelTrace: vi.fn(() => ({
+      ...actual.noopTrace,
+      warn: channelTraceMocks.warn,
+    })),
+  };
+});
+
 const plan: Plan = { objective: 'Compose the per-session runtime owners.' };
 
 function activeTraceFlusher(flush: () => void): RunTraceFlushEntry {
@@ -47,6 +62,32 @@ function trackAgent(
   session.executions.track(handle);
   return handle;
 }
+
+describe('defaultSession fallback diagnostic', () => {
+  it('warns once only when a non-default session is live at resolution', () => {
+    channelTraceMocks.warn.mockClear();
+    const processDefault = defaultSession();
+
+    expect(channelTraceMocks.warn).not.toHaveBeenCalled();
+
+    const disposedSession = createTestSession();
+    disposedSession.dispose();
+    expect(defaultSession()).toBe(processDefault);
+    expect(channelTraceMocks.warn).not.toHaveBeenCalled();
+
+    const liveSession = createTestSession();
+    try {
+      expect(defaultSession()).toBe(processDefault);
+      expect(defaultSession()).toBe(processDefault);
+      expect(channelTraceMocks.warn).toHaveBeenCalledOnce();
+      expect(channelTraceMocks.warn).toHaveBeenCalledWith(
+        'defaultSession() resolved while a non-default SessionHandle was live. Pass or propagate the owning session instead.',
+      );
+    } finally {
+      liveSession.dispose();
+    }
+  });
+});
 
 describe('SessionHandle', () => {
   it('awaits artifact writers before disposal and leaves the live-session registry', async () => {

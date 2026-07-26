@@ -430,6 +430,7 @@ export function killAllSessionBackgroundProcesses(): void {
 }
 
 let cachedDefaultSession: SessionHandle | undefined;
+let defaultSessionFallbackWarned = false;
 
 export type DefaultSessionInit = Omit<SessionHandleInit, 'flushers'>;
 
@@ -471,6 +472,15 @@ export function defaultSession(): SessionHandle {
   if (!cachedDefaultSession) {
     throw new Error(
       'The default session has not been initialized. Call initializeDefaultSession() after opening its transcript store.',
+    );
+  }
+  if (
+    !defaultSessionFallbackWarned &&
+    [...liveSessions].some((session) => session !== cachedDefaultSession)
+  ) {
+    defaultSessionFallbackWarned = true;
+    logger.warn(
+      'defaultSession() resolved while a non-default SessionHandle was live. Pass or propagate the owning session instead.',
     );
   }
   return cachedDefaultSession;
