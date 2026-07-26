@@ -4,10 +4,10 @@ import { z } from 'zod';
 import * as logger from '@logger/logUtils';
 import type { FileLocation } from '@shared/schemas';
 import { FlexibleFS, pathToLocation } from '@utils/files';
-import { runToolWithCheck } from '@utils/system';
 import { filterNotNull, ensureArray } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { hasExtension } from '@utils/core/pathCore';
+import { runToolWithCheck } from '@utils/system/toolUtils';
 
 const CHANNEL = 'LaTeXCommands';
 

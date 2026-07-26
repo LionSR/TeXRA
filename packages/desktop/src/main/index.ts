@@ -51,8 +51,8 @@ import {
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { backfillFirstRunDone } from '@shared/state/onboardingState';
 import { StreamLogStore } from '@transcript';
-import { DEBOUNCE_OPTIONS_MS } from '@utils/config';
 import { debounce } from '@utils/core';
+import { DEBOUNCE_OPTIONS_MS } from '@utils/config/constants';
 import { BinaryResolver } from '@utils/system/binaryResolver';
 import {
   checkToolInstalled,

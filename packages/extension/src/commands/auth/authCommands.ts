@@ -8,7 +8,7 @@ import {
   showLoggedErrorMessage,
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
-import { getConfig } from '@utils/config';
+import { getConfig } from '@utils/config/configUtils';
 
 const CHANNEL = 'authCommands';
 
