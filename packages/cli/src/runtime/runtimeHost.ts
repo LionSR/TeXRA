@@ -1,13 +1,8 @@
 // Local imports - runtime
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type {
-  AgentRuntimeEvent,
-  AgentRuntimeEventPayloads,
-  AgentRuntimeHost,
-} from '@agent/runtime/AgentRuntimeHost';
-import {
-  isRuntimePresentationEvent,
-  type RuntimePresentationEvent,
-  type RuntimePresentationEventPayloads,
+  RuntimePresentationEvent,
+  RuntimePresentationEventPayloads,
 } from '@agent/runtime/runtimePresentationEvents';
 import type {
   ApprovalBypassKind,
@@ -123,29 +118,18 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
       };
       writeNdjsonStdout(record);
     },
-    emit<K extends AgentRuntimeEvent>(
+    emit<K extends RuntimePresentationEvent>(
       event: K,
-      payload: AgentRuntimeEventPayloads[K],
+      payload: RuntimePresentationEventPayloads[K],
     ) {
       if (closed) return;
 
       if (context.outputFormat === 'ndjson') {
-        if (isRuntimePresentationEvent(event)) {
-          writeRuntimePresentationNdjson(
-            ensureLogger(),
-            event,
-            payload as RuntimePresentationEventPayloads[RuntimePresentationEvent],
-          );
-          return;
-        }
-
-        const record: CliNdjsonRecord = {
-          kind: 'progress',
+        writeRuntimePresentationNdjson(
+          ensureLogger(),
           event,
-          ts: new Date().toISOString(),
-          payload,
-        };
-        writeNdjsonStdout(record);
+          payload as RuntimePresentationEventPayloads[RuntimePresentationEvent],
+        );
         return;
       }
 

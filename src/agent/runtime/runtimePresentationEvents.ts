@@ -22,21 +22,3 @@ export interface RuntimePresentationEventPayloads {
 }
 
 export type RuntimePresentationEvent = keyof RuntimePresentationEventPayloads;
-
-const RUNTIME_PRESENTATION_EVENTS = [
-  'requestOpenFile',
-  'requestShowInstruction',
-  'showAgentConfigBanner',
-  'requestShowError',
-  'requestEnsureProgressView',
-] as const satisfies readonly RuntimePresentationEvent[];
-
-const RuntimePresentationEventSet: ReadonlySet<string> = new Set(
-  RUNTIME_PRESENTATION_EVENTS,
-);
-
-export function isRuntimePresentationEvent(
-  event: string,
-): event is RuntimePresentationEvent {
-  return RuntimePresentationEventSet.has(event);
-}

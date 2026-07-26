@@ -11,11 +11,7 @@ import {
 import type { TaskState } from '@agent/core/state/TaskState';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import { detectWaitingStreams } from '@agent/storage/detectWaitingStreams';
-import type {
-  AgentRuntimeEvent,
-  AgentRuntimeEventPayloads,
-  AgentRuntimeHost,
-} from '@agent/runtime/AgentRuntimeHost';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { trackTerminalResultPresentation } from '@agent/runtime/terminalResultToast';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
@@ -23,7 +19,10 @@ import {
   sendFollowUp,
   wakeQueuedFollowUpStream,
 } from '@agent/followUp/ToolUseFollowUp';
-import { isRuntimePresentationEvent } from '@agent/runtime/runtimePresentationEvents';
+import type {
+  RuntimePresentationEvent,
+  RuntimePresentationEventPayloads,
+} from '@agent/runtime/runtimePresentationEvents';
 import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
 import {
   getFileListConfig,
@@ -46,10 +45,6 @@ import {
 import { replayApprovalRequestHandlers } from '@controllers/progressView/backend/progressBackendUiConfig';
 import { buildStreamInfo } from '@controllers/progressView/backend/streamInfoUtils';
 import { ProgressBackend } from '@controllers/progressView/backend/ProgressBackend';
-import {
-  isProgressBackendInteractionEvent,
-  type ProgressBackendInteractionPayloads,
-} from '@controllers/progressView/backend/events/ProgressInteractionHandler';
 import { getProgressStreamControls } from '@controllers/progressView/progressStreamControls';
 import { ProgressViewHost } from '@controllers/progressView/ProgressViewHost';
 import { buildMainViewState } from '@controllers/mainView/MainViewStateRestoreController';
@@ -195,7 +190,7 @@ export class DesktopProgressBridge {
   ) {
     this.logger = options.logger ?? createChannelTrace('DesktopProgressBridge');
     const presentationHost: AgentRuntimeHost = {
-      emit: (event, payload) => this.handleInteractionEvent(event, payload),
+      emit: (event, payload) => this.handlePresentationEvent(event, payload),
     };
     this.session = options.session;
     this.runtimeHost = this.session.interactions;
@@ -295,6 +290,10 @@ export class DesktopProgressBridge {
       runtimeHost: presentationHost,
       session: this.session,
       ui: this.options.host,
+      showToolEditPermission: (payload) =>
+        this.backend.approvalHandlers.toolEdit.show(payload),
+      resolveToolEditPermission: (requestId) =>
+        this.backend.approvalHandlers.toolEdit.dismiss(requestId),
     });
     this.hostInteractions = createDesktopHostInteractions({
       runtimeHost: presentationHost,
@@ -857,33 +856,24 @@ export class DesktopProgressBridge {
     });
   }
 
-  private handleInteractionEvent<K extends AgentRuntimeEvent>(
+  private handlePresentationEvent<K extends RuntimePresentationEvent>(
     event: K,
-    payload: AgentRuntimeEventPayloads[K],
+    payload: RuntimePresentationEventPayloads[K],
   ): void {
     if (this.disposed) return;
-    if (isProgressBackendInteractionEvent(event)) {
-      this.backend.handleInteractionEvent(
-        event,
-        payload as ProgressBackendInteractionPayloads[typeof event],
-      );
-      return;
-    }
-
-    if (!isRuntimePresentationEvent(event)) return;
 
     switch (event) {
       case 'requestEnsureProgressView': {
         const data =
-          payload as AgentRuntimeEventPayloads['requestEnsureProgressView'];
+          payload as RuntimePresentationEventPayloads['requestEnsureProgressView'];
         if (!data.fallbackNotification) this.routeToProgress();
         return;
       }
       case 'requestShowError':
       case 'requestShowInstruction': {
         const { message } = payload as
-          | AgentRuntimeEventPayloads['requestShowError']
-          | AgentRuntimeEventPayloads['requestShowInstruction'];
+          | RuntimePresentationEventPayloads['requestShowError']
+          | RuntimePresentationEventPayloads['requestShowInstruction'];
         void this.options.host.showErrorMessage(message);
         return;
       }

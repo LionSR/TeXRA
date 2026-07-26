@@ -9,20 +9,14 @@
  */
 import * as vscode from 'vscode';
 
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type {
-  AgentRuntimeEvent,
-  AgentRuntimeEventPayloads,
-  AgentRuntimeHost,
-} from '@agent/runtime/AgentRuntimeHost';
-import { isRuntimePresentationEvent } from '@agent/runtime/runtimePresentationEvents';
-import {
-  isProgressBackendInteractionEvent,
-  type ProgressBackendInteractionPayloads,
-} from '@controllers/progressView/backend/events/ProgressInteractionHandler';
+  RuntimePresentationEvent,
+  RuntimePresentationEventPayloads,
+} from '@agent/runtime/runtimePresentationEvents';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
-import { emitExtensionInteractionEvent } from '@frontend/events/extensionInteractionEvents';
 import * as logger from '@logger/logUtils';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import {
@@ -148,11 +142,9 @@ async function handleRequestEnsureProgressView(
  * forwards `emit` calls to (`createExtensionHostInteractions`'s `runtimeHost`
  * option, wired in `ProgressViewProvider`'s constructor).
  *
- * Progress-view interaction events (tool-edit approval prompts, bypass-state
- * pushes) route through the existing `extensionInteractionEvents` sink
- * unchanged; the five presentation events below are the extension's own
- * dispatch, replacing a previous per-host presentation-event bus and its
- * static router (a duplicate replay mechanism — see #9251).
+ * The five presentation events below are the extension's own dispatch,
+ * replacing a previous per-host presentation-event bus and its static router
+ * (a duplicate replay mechanism — see #9251).
  * `SessionHostInteractions` (the runtime) owns replaying an event emitted
  * before this host attaches, via `AgentRuntimeEmitOptions.replayWhenAttached`.
  */
@@ -160,18 +152,10 @@ export function createAgentPresentationHost(
   progressViewProvider: ProgressViewProvider,
 ): AgentRuntimeHost {
   return {
-    emit<K extends AgentRuntimeEvent>(
+    emit<K extends RuntimePresentationEvent>(
       event: K,
-      payload: AgentRuntimeEventPayloads[K],
+      payload: RuntimePresentationEventPayloads[K],
     ): void {
-      if (isProgressBackendInteractionEvent(event)) {
-        emitExtensionInteractionEvent(
-          event,
-          payload as ProgressBackendInteractionPayloads[typeof event],
-        );
-        return;
-      }
-      if (!isRuntimePresentationEvent(event)) return;
       switch (event) {
         case 'requestOpenFile':
           handleRequestOpenFile(payload as RequestOpenFilePayload);
