@@ -6,6 +6,7 @@ import {
   closeTexraApp,
   dismissOnboarding,
   launchTexraApp,
+  setRoute,
   type LaunchedApp,
 } from './electronApp.js';
 
@@ -23,63 +24,6 @@ test.afterAll(async () => {
     await closeTexraApp(launched);
   }
 });
-
-/**
- * Send a legacy `desktop:setRoute` IPC message through the task-centric shell.
- * Main and progress keep the permanent conversation surface; Settings and Logs
- * activate their corresponding right-workbench tabs.
- */
-async function setRoute(
-  route: 'main' | 'progress' | 'settings' | 'logs',
-): Promise<void> {
-  await launched.page.evaluate((next) => {
-    window.postMessage({ command: 'desktop:setRoute', route: next }, '*');
-  }, route);
-  await launched.page.waitForFunction(
-    (targetRoute) => {
-      if (document.body.dataset.desktopRoute !== targetRoute) return false;
-      const shell = document.querySelector<HTMLElement>('.task-shell');
-      if (!shell) return false;
-      switch (targetRoute) {
-        case 'main':
-        case 'progress': {
-          const pane = document.querySelector<HTMLElement>(
-            '.task-conversation-pane[data-pane="launcher"]',
-          );
-          return pane != null && pane.hidden === false;
-        }
-        case 'settings': {
-          const tab = document.querySelector<HTMLElement>(
-            '.task-workbench-tab[data-kind="settings"][data-active="true"]',
-          );
-          const settings = document.querySelector<HTMLElement>(
-            '.task-workbench-surface settings-app[data-desktop-view="settings"]',
-          );
-          return (
-            shell.dataset.workbenchOpen === 'true' &&
-            tab != null &&
-            settings != null
-          );
-        }
-        case 'logs': {
-          const tab = document.querySelector<HTMLElement>(
-            '.task-workbench-tab[data-kind="logs"][data-active="true"]',
-          );
-          const logs = document.querySelector<HTMLElement>(
-            '.task-workbench-surface [data-desktop-view="logs"]',
-          );
-          return (
-            shell.dataset.workbenchOpen === 'true' &&
-            tab != null &&
-            logs != null
-          );
-        }
-      }
-    },
-    route,
-    { timeout: 5000 },
-  );
-}
 
 async function selectSettingsPage(
   panelName: string,
@@ -122,7 +66,7 @@ test('startup team chooser screenshot', async () => {
 });
 
 test('launcher screenshot', async () => {
-  await setRoute('main');
+  await setRoute(launched, 'main');
   await launched.page.screenshot({
     path: join(SCREENSHOTS_DIR, 'launcher.png'),
     fullPage: false,
@@ -133,7 +77,7 @@ test('launcher screenshot', async () => {
 test('progress screenshot', async () => {
   // With no active stream, the permanent task canvas stays on <main-app>.
   // Capture it with the project/task sidebar — the default progress surface.
-  await setRoute('progress');
+  await setRoute(launched, 'progress');
   await launched.page.screenshot({
     path: join(SCREENSHOTS_DIR, 'progress.png'),
     fullPage: false,
@@ -142,7 +86,7 @@ test('progress screenshot', async () => {
 });
 
 test('settings screenshot', async () => {
-  await setRoute('settings');
+  await setRoute(launched, 'settings');
   // Open the Multi-Agent settings page — the most visually rich area.
   await selectSettingsPage('multi-agent', 4);
   await launched.page.screenshot({
@@ -153,7 +97,7 @@ test('settings screenshot', async () => {
 });
 
 test('command palette opens and dismisses', async () => {
-  await setRoute('main');
+  await setRoute(launched, 'main');
   // A prior screenshot can leave Settings in the workbench. Hide the workbench
   // so this check exercises the conversation-header command affordance.
   const closeWorkbench = launched.page.locator('.task-workbench-close');

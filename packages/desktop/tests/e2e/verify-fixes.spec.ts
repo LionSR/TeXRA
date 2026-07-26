@@ -4,6 +4,7 @@ import {
   closeTexraApp,
   dismissOnboarding,
   launchTexraApp,
+  setRoute,
   type LaunchedApp,
 } from './electronApp.js';
 
@@ -30,37 +31,6 @@ test.afterAll(async () => {
   if (launched) await closeTexraApp(launched);
 });
 
-async function setRoute(route: 'main' | 'settings'): Promise<void> {
-  await launched.page.evaluate((r) => {
-    window.postMessage({ command: 'desktop:setRoute', route: r }, '*');
-  }, route);
-  await launched.page.waitForFunction(
-    (r) => {
-      if (document.body.dataset.desktopRoute !== r) return false;
-      if (r === 'main') {
-        const pane = document.querySelector<HTMLElement>(
-          '.task-conversation-pane[data-pane="launcher"]',
-        );
-        return pane != null && pane.hidden === false;
-      }
-      const shell = document.querySelector<HTMLElement>('.task-shell');
-      const tab = document.querySelector<HTMLElement>(
-        '.task-workbench-tab[data-kind="settings"][data-active="true"]',
-      );
-      const settings = document.querySelector<HTMLElement>(
-        '.task-workbench-surface settings-app[data-desktop-view="settings"]',
-      );
-      return (
-        shell?.dataset.workbenchOpen === 'true' &&
-        tab != null &&
-        settings != null
-      );
-    },
-    route,
-    { timeout: 5000 },
-  );
-}
-
 /**
  * Read the scroll metrics of the active Settings page.
  */
@@ -85,7 +55,7 @@ async function readToolsPanelMetrics(): Promise<{
 }
 
 test('main view no longer renders inner Launcher/Progress toolbar', async ({}, testInfo) => {
-  await setRoute('main');
+  await setRoute(launched, 'main');
   await launched.page.screenshot({
     path: testInfo.outputPath('verify-fixes', 'main-view.png'),
     fullPage: false,
@@ -111,7 +81,7 @@ test('main view no longer renders inner Launcher/Progress toolbar', async ({}, t
 });
 
 test('settings workbench scrolls (Tools tab top + bottom)', async ({}, testInfo) => {
-  await setRoute('settings');
+  await setRoute(launched, 'settings');
   await launched.page.evaluate(
     ({ command, tabIndex }) => {
       window.postMessage({ command, tabIndex }, '*');

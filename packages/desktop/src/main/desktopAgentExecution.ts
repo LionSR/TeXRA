@@ -116,7 +116,10 @@ import {
 } from '@shared/copy/executionHistory';
 import type { MainViewExecuteMessage } from '@shared/schemas/mainView/executeMessage';
 import { AgentCategory } from '@shared/schemas/agent';
-import type { FileOpResult } from '@shared/schemas/opResults';
+import {
+  mergeRunDirAndWorkspaceResult,
+  type FileOpResult,
+} from '@shared/schemas/opResults';
 import type { SettingsTab } from '@shared/schemas/settingsViewMessages';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { cleanupUnscopedApprovals } from '@tools/approval';
@@ -710,17 +713,7 @@ export class DesktopProgressBridge {
               )
             : await runCleanRunDir(executionId as ExecutionId);
         const workspaceResult = await runWorkspaceOperation();
-        // Same precedence as the extension's `mergeRunDirAndWorkspaceResult`:
-        // report an error from either pass, otherwise prefer the workspace
-        // result unless it found nothing.
-        const mergeResults = (): FileOpResult => {
-          if (runDirResult.status === 'error') return runDirResult;
-          if (workspaceResult.status === 'error') return workspaceResult;
-          return workspaceResult.status === 'noFiles'
-            ? runDirResult
-            : workspaceResult;
-        };
-        result = mergeResults();
+        result = mergeRunDirAndWorkspaceResult(runDirResult, workspaceResult);
       } else {
         result = await runWorkspaceOperation();
       }

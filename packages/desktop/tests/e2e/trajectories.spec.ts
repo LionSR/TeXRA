@@ -4,6 +4,8 @@ import {
   closeTexraApp,
   dismissOnboarding,
   launchTexraApp,
+  setRoute,
+  setSettingsTab,
   type LaunchedApp,
 } from './electronApp.js';
 
@@ -47,44 +49,6 @@ test.afterAll(async () => {
   if (launched) await closeTexraApp(launched);
 });
 
-async function setRoute(
-  route: 'main' | 'progress' | 'settings' | 'logs',
-): Promise<void> {
-  await launched.page.evaluate((next) => {
-    window.postMessage({ command: 'desktop:setRoute', route: next }, '*');
-  }, route);
-  await launched.page.waitForFunction(
-    (target) => {
-      if (document.body.dataset.desktopRoute !== target) return false;
-      if (target === 'main') {
-        const launcher = document.querySelector<HTMLElement>(
-          '.task-conversation-pane[data-pane="launcher"]',
-        );
-        return launcher != null && launcher.hidden === false;
-      }
-      return true;
-    },
-    route,
-    { timeout: 5000 },
-  );
-}
-
-async function setSettingsTab(tabIndex: number): Promise<void> {
-  await setRoute('settings');
-  await launched.page.evaluate((idx) => {
-    window.postMessage({ command: 'setTab', tabIndex: idx }, '*');
-  }, tabIndex);
-  // Best-effort: wait for the settings-app shadow DOM to mount.
-  await launched.page.waitForFunction(
-    () => {
-      const settingsApp = document.querySelector('settings-app');
-      return settingsApp?.shadowRoot != null;
-    },
-    undefined,
-    { timeout: 10_000 },
-  );
-}
-
 /**
  * Wait until the named settings panel (or its tab) reports `active`. Without
  * this confirmation a test can catch the previous tab's render and report a
@@ -110,7 +74,7 @@ async function waitForActiveSettingsPanel(panel: string): Promise<void> {
  * The launcher (main route) must mount without crashing the renderer.
  */
 test('first launch shows a usable launcher chrome', async () => {
-  await setRoute('main');
+  await setRoute(launched, 'main');
   // The workspace directory and command palette button must be reachable.
   const workspaceDirectory =
     launched.workspacePath.split(/[\\/]/).at(-1) ?? launched.workspacePath;
@@ -138,7 +102,7 @@ test('first launch shows a usable launcher chrome', async () => {
  * home for configuring model access and provider credentials.
  */
 test('settings → models tab mounts and provider settings are reachable', async () => {
-  await setSettingsTab(SETTINGS_TAB_INDEX.MODELS);
+  await setSettingsTab(launched, SETTINGS_TAB_INDEX.MODELS);
   // Confirm the Models panel actually activated; without this we may catch
   // the previous tab's render and report a false positive.
   await waitForActiveSettingsPanel('models');
@@ -152,7 +116,7 @@ test('settings → models tab mounts and provider settings are reachable', async
 });
 
 test('account and usage lives in its own settings panel', async () => {
-  await setSettingsTab(SETTINGS_TAB_INDEX.ACCOUNT);
+  await setSettingsTab(launched, SETTINGS_TAB_INDEX.ACCOUNT);
   await waitForActiveSettingsPanel('account');
 
   const structure = await launched.page.evaluate(() => {
@@ -176,7 +140,7 @@ test('account and usage lives in its own settings panel', async () => {
  * the desktop app on a shared Electron user-data directory.
  */
 test('settings → memory tab mounts', async () => {
-  await setSettingsTab(SETTINGS_TAB_INDEX.MEMORY);
+  await setSettingsTab(launched, SETTINGS_TAB_INDEX.MEMORY);
   await waitForActiveSettingsPanel('memory');
 });
 
@@ -186,7 +150,7 @@ test('settings → memory tab mounts', async () => {
  * may be empty on a fresh run, so we only assert structural surfaces.
  */
 test('logs route renders the desktop log viewer', async () => {
-  await setRoute('logs');
+  await setRoute(launched, 'logs');
   const header = launched.page.locator('.desktop-log-viewer-header');
   await expect(header).toBeVisible();
   // Header has Refresh / Copy / Export / Open Folder buttons.
@@ -203,7 +167,7 @@ test('logs route renders the desktop log viewer', async () => {
  * surfaces a copy-the-command dialog rather than running it for the user).
  */
 test('settings → tools tab mounts', async () => {
-  await setSettingsTab(SETTINGS_TAB_INDEX.TOOLS);
+  await setSettingsTab(launched, SETTINGS_TAB_INDEX.TOOLS);
   await waitForActiveSettingsPanel('tools');
 });
 
@@ -221,7 +185,7 @@ test('rapid settings-tab switching does not crash the renderer', async () => {
     SETTINGS_TAB_INDEX.MULTI_AGENT,
     SETTINGS_TAB_INDEX.LATEX,
   ]) {
-    await setSettingsTab(idx);
+    await setSettingsTab(launched, idx);
   }
   // The chrome must still be alive after the burst.
   await expect(

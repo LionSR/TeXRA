@@ -10,6 +10,7 @@ import {
 } from '@shared/schemas/commonViewMessages';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
+import { buildEditorTree, type EditorTreeNode } from './editorTree';
 import type { DesktopShowDiffMessage } from '../desktopDiffMessages';
 import './reviewPane.css';
 
@@ -26,11 +27,6 @@ interface ReviewEntry extends DesktopShowDiffMessage {
   readonly path: string;
 }
 
-interface ReviewTreeNode {
-  readonly children: Map<string, ReviewTreeNode>;
-  entry?: ReviewEntry;
-}
-
 export interface ReviewPaneController {
   readonly element: HTMLElement;
   clear(): void;
@@ -45,37 +41,6 @@ function reviewPath(payload: DesktopShowDiffMessage): string {
     payload.originalPath ??
     payload.title
   );
-}
-
-function buildReviewTree(entries: readonly ReviewEntry[]): ReviewTreeNode {
-  const root: ReviewTreeNode = { children: new Map() };
-  for (const entry of entries) {
-    const segments = entry.path.split(/[\\/]/).filter(Boolean);
-    let node = root;
-    for (const segment of segments) {
-      let child = node.children.get(segment);
-      if (!child) {
-        child = { children: new Map() };
-        node.children.set(segment, child);
-      }
-      node = child;
-    }
-    node.entry = entry;
-  }
-  return root;
-}
-
-function sortedTreeChildren(
-  node: ReviewTreeNode,
-): readonly [string, ReviewTreeNode][] {
-  return [...node.children.entries()].toSorted((left, right) => {
-    const leftIsDirectory = left[1].children.size > 0;
-    const rightIsDirectory = right[1].children.size > 0;
-    if (leftIsDirectory !== rightIsDirectory) {
-      return leftIsDirectory ? -1 : 1;
-    }
-    return left[0].localeCompare(right[0]);
-  });
 }
 
 export function createReviewPane(): ReviewPaneController {
@@ -112,11 +77,11 @@ export function createReviewPane(): ReviewPaneController {
   }
 
   function renderTree(
-    node: ReviewTreeNode,
+    nodes: readonly EditorTreeNode[],
     depth = 0,
   ): readonly TemplateResult[] {
-    return sortedTreeChildren(node).map(([label, child]) => {
-      if (child.children.size > 0) {
+    return nodes.map((node) => {
+      if (node.kind === 'directory') {
         return html`
           <wa-details
             class="desktop-review-directory"
@@ -125,13 +90,13 @@ export function createReviewPane(): ReviewPaneController {
           >
             <span slot="summary">
               ${waIcon('chevron-down')} ${waIcon('folder')}
-              <span>${label}</span>
+              <span>${node.name}</span>
             </span>
-            ${renderTree(child, depth + 1)}
+            ${renderTree(node.children, depth + 1)}
           </wa-details>
         `;
       }
-      const entry = child.entry;
+      const entry = entries.get(node.path);
       if (!entry) return html``;
       const active = entry.key === selectedKey;
       return html`
@@ -146,7 +111,7 @@ export function createReviewPane(): ReviewPaneController {
           @click=${() => select(entry)}
         >
           ${waIcon('file-code', { slot: 'start' })}
-          <span>${label}</span>
+          <span>${node.name}</span>
           <span class="desktop-review-file-state" slot="end"></span>
         </wa-button>
       `;
@@ -227,7 +192,14 @@ export function createReviewPane(): ReviewPaneController {
             <div class="desktop-review-tree">
               ${
                 visible.length > 0
-                  ? renderTree(buildReviewTree(visible))
+                  ? renderTree(
+                      buildEditorTree(
+                        visible.map((entry) => ({
+                          path: entry.path,
+                          isDirectory: false,
+                        })),
+                      ).nodes,
+                    )
                   : html`
                       <div class="desktop-review-no-results">
                         No matching files
