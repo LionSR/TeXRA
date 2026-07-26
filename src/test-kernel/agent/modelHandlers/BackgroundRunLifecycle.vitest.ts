@@ -3,21 +3,14 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AgentTrace } from '@agent/trace';
 import { BackgroundRunLifecycle } from '@agent/modelHandlers/openai/BackgroundRunLifecycle';
 import { BackgroundPoller } from '@agent/modelHandlers/support/BackgroundPoller';
+import { spiedTrace } from '@test/support/spiedTrace';
 
 import type OpenAI from 'openai';
 import type { Response } from 'openai/resources/responses/responses';
 
-function trace(): AgentTrace {
-  return {
-    debug: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    domain: vi.fn(),
-  } as unknown as AgentTrace;
-}
-
-function createLifecycle(logger: AgentTrace = trace()): BackgroundRunLifecycle {
+function createLifecycle(
+  logger: AgentTrace = spiedTrace(),
+): BackgroundRunLifecycle {
   return new BackgroundRunLifecycle({
     logger: () => logger,
     provider: 'openai',
@@ -190,7 +183,7 @@ describe('BackgroundRunLifecycle.waitForCompletion', () => {
       pollIntervalMs: 0,
       maxDurationMs: 1000,
       isPending: (r) => lifecycle.isPending(r),
-      logger: trace(),
+      logger: spiedTrace(),
     });
     const client = {
       responses: {

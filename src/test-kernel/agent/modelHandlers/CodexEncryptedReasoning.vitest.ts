@@ -1,24 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { type ModelConfig, ModelProvider, ReasoningEffort } from 'llm-zoo';
 
-import type { AgentTrace } from '@agent/trace';
+import { noopTrace } from '@agent/trace';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { ModelHandlerCodex } from '@agent/modelHandlers/openai/modelHandlerCodex';
 import { AgentCategory } from '@shared/schemas/agent';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import type { Response } from 'openai/resources/responses/responses';
-
-function loggerStub(): AgentTrace {
-  return {
-    streamId: 'test',
-    debug: () => undefined,
-    info: () => undefined,
-    warn: () => undefined,
-    error: () => undefined,
-    domain: () => undefined,
-  } as unknown as AgentTrace;
-}
 
 function config(): ModelConfig {
   return buildTestModelConfig({
@@ -44,14 +33,14 @@ function config(): ModelConfig {
 
 function baseHandler(): ModelHandlerOpenAIResponse {
   const h = new ModelHandlerOpenAIResponse(config());
-  h.setLogger(loggerStub());
+  h.setLogger(noopTrace);
   return h;
 }
 
 function codexHandler(): ModelHandlerCodex {
   const h = new ModelHandlerCodex(config());
   h.setAgentCategory(AgentCategory.ToolUse);
-  h.setLogger(loggerStub());
+  h.setLogger(noopTrace);
   return h;
 }
 
