@@ -1,5 +1,6 @@
 // Local imports - system utilities
-import { executeCommand, checkToolInstalled } from '@utils/system';
+import { executeCommand } from '@utils/system/execUtils';
+import { checkToolInstalled } from '@utils/system/toolUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 export const WOLFRAM_CODE_TIMEOUT_MS = 30_000; // 30 s

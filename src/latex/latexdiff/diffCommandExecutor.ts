@@ -2,7 +2,7 @@
 import * as logger from '@logger/logUtils';
 import type { ExecResult } from '@shared/schemas/opResults';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { executeCommand } from '@utils/system';
+import { executeCommand } from '@utils/system/execUtils';
 import { getConfig } from '@utils/config/configUtils';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 

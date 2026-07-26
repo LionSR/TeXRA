@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 
 import * as logger from '@logger/logUtils';
-import { REFRESH_THRESHOLD_MS } from '@utils/config';
+import { REFRESH_THRESHOLD_MS } from '@utils/config/constants';
 
 const CHANNEL = 'DiffRefresh';
 

@@ -22,8 +22,12 @@ import {
   setFirstRunDone,
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
-import { getConfig, updateConfig, SETTINGS_QUERY } from '@utils/config';
-import { checkCoreDependencies, getToolDocsCommand } from '@utils/system';
+import { getConfig, updateConfig } from '@utils/config/configUtils';
+import { SETTINGS_QUERY } from '@utils/config/constants';
+import {
+  checkCoreDependencies,
+  getToolDocsCommand,
+} from '@utils/system/toolUtils';
 import { getProviderKeyUrl } from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
