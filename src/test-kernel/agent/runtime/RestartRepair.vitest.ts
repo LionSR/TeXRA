@@ -166,8 +166,8 @@ describe('repairRestartedStreams', () => {
     const store = getExecutionStore(executionId);
     const streamStatus = new StreamStatusMachine();
     seedRunning(streamStatus, streamId);
-    const readMeta = vi
-      .spyOn(store, 'readMeta')
+    const readMetaStrict = vi
+      .spyOn(store, 'readMetaStrict')
       .mockRejectedValue(new Error('metadata temporarily unreadable'));
 
     try {
@@ -183,10 +183,10 @@ describe('repairRestartedStreams', () => {
           })),
         }),
       ).rejects.toThrow('metadata temporarily unreadable');
-      expect(readMeta).toHaveBeenCalledOnce();
+      expect(readMetaStrict).toHaveBeenCalledOnce();
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.RUNNING);
     } finally {
-      readMeta.mockRestore();
+      readMetaStrict.mockRestore();
       await store.clear();
     }
   });

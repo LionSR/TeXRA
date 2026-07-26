@@ -126,6 +126,12 @@ export interface ExecutionKVStore {
 
   // -- Typed readers --------------------------------------------------------
   readMeta(): Promise<ExecutionMeta | null>;
+  /**
+   * Read metadata while preserving the distinction between an absent record
+   * and a malformed present record. Durable repair paths use this accessor so
+   * corruption stops recovery instead of being treated as missing state.
+   */
+  readMetaStrict(): Promise<ExecutionMeta | null>;
   readConfig(): Promise<AgentConfig | null>;
   readReport(): Promise<string | null>;
   readTodos(): Promise<TodoEntry[]>;
@@ -202,6 +208,7 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
   private async readValidated<T>(
     key: string,
     schema: z.ZodType<T>,
+    malformed: 'return-null' | 'throw' = 'return-null',
   ): Promise<T | null> {
     const raw = await this.read(key);
     if (raw == null) return null;
@@ -214,11 +221,16 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
       )}`,
       { data: result.error },
     );
+    if (malformed === 'throw') throw result.error;
     return null;
   }
 
   async readMeta(): Promise<ExecutionMeta | null> {
     return this.readValidated(KEYS.META, ExecutionMetaSchema);
+  }
+
+  async readMetaStrict(): Promise<ExecutionMeta | null> {
+    return this.readValidated(KEYS.META, ExecutionMetaSchema, 'throw');
   }
 
   async readConfig(): Promise<AgentConfig | null> {

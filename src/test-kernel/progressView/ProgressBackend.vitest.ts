@@ -295,6 +295,40 @@ describe('ProgressBackend', () => {
     }
   });
 
+  it('reconciles presentation caches after a partial session reload', async () => {
+    const transcripts = await StreamLogStore.open();
+    const session = new SessionHandle({
+      transcripts,
+      restartRepair: 'deferred',
+    });
+    const reloadError = new Error('snapshot hydration failed');
+    vi.spyOn(session, 'reloadAfterStorageRootChange').mockRejectedValue(
+      reloadError,
+    );
+    const { backend } = createIsolatedRecordingBackend(session);
+    const resetPresentation = vi.spyOn(
+      backend.state,
+      'resetAfterStorageRootChange',
+    );
+    const clearBridge = vi.spyOn(backend.webviewBridge, 'clearAll');
+    const loadPresentation = vi
+      .spyOn(backend.state, 'load')
+      .mockResolvedValue();
+
+    try {
+      await expect(backend.reloadAfterStorageRootChange()).rejects.toBe(
+        reloadError,
+      );
+
+      expect(resetPresentation).toHaveBeenCalledOnce();
+      expect(clearBridge).toHaveBeenCalledOnce();
+      expect(loadPresentation).toHaveBeenCalledOnce();
+    } finally {
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
   it('serializes complete presentation reloads across rapid workspace moves', async () => {
     const transcripts = await StreamLogStore.open();
     const session = new SessionHandle({

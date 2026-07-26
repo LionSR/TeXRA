@@ -293,10 +293,26 @@ export class ProgressBackend {
   /** Replace session stores and presentation caches after a workspace move. */
   reloadAfterStorageRootChange(): Promise<void> {
     const reload = async () => {
-      await this.session.reloadAfterStorageRootChange();
+      let sessionReloadError: unknown;
+      try {
+        await this.session.reloadAfterStorageRootChange();
+      } catch (error) {
+        sessionReloadError = error;
+      }
       this.state.resetAfterStorageRootChange();
       this.webviewBridge.clearAll();
-      await this.state.load(this.stateOwnership);
+      try {
+        await this.state.load(this.stateOwnership);
+      } catch (presentationReloadError) {
+        if (sessionReloadError) {
+          throw new AggregateError(
+            [sessionReloadError, presentationReloadError],
+            'Failed to replace session storage and reload its presentation',
+          );
+        }
+        throw presentationReloadError;
+      }
+      if (sessionReloadError) throw sessionReloadError;
     };
     const queued = this.storageRootReloadWork.then(reload, reload);
     this.storageRootReloadWork = queued.catch(() => undefined);

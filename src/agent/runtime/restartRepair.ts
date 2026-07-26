@@ -136,7 +136,7 @@ type ExecutionSettlement =
 async function readExecutionSettlement(
   executionId: ExecutionId,
 ): Promise<ExecutionSettlement> {
-  const meta = await getExecutionStore(executionId).readMeta();
+  const meta = await getExecutionStore(executionId).readMetaStrict();
   if (!meta || (meta.terminalStatus == null && meta.outcome == null)) {
     return { settled: false };
   }

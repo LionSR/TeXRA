@@ -104,6 +104,39 @@ describe('SessionHandle restart repair', () => {
     }
   });
 
+  it('preserves recovery state when present execution metadata is malformed', async () => {
+    const transcripts = await StreamLogStore.open();
+    transcripts.append(streamId, {
+      id: 'malformed-meta-running-group',
+      type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
+      level: LOG_LEVELS.INFO,
+      timestamp: 1_000,
+      data: { status: STREAM_PHASE.RUNNING },
+    });
+    await transcripts.flush();
+
+    const executionStore = getExecutionStore(executionId);
+    const malformedMeta = { timestamp: 123 };
+    await executionStore.write('meta', malformedMeta);
+    await executionStore.write(flowKey(executionId), validFlowRecord);
+
+    const session = new SessionHandle({
+      transcripts,
+      restartRepair: 'deferred',
+    });
+    try {
+      await expect(session.waitUntilReady()).rejects.toThrow();
+
+      await expect(executionStore.read('meta')).resolves.toEqual(malformedMeta);
+      await expect(executionStore.read(flowKey(executionId))).resolves.toEqual(
+        validFlowRecord,
+      );
+      expect(transcripts.get(streamId)?.getRange(0)).toHaveLength(1);
+    } finally {
+      session.dispose();
+    }
+  });
+
   it('closes an orphaned group without rewriting its completed execution', async () => {
     const completedExecutionId = 'c0ffee123' as ExecutionId;
     const completedStreamId =
