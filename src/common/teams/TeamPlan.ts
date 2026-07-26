@@ -17,6 +17,7 @@ import {
   type AgentModePreset,
 } from '@shared/schemas/agentPresets';
 import type { TeamOptionData } from '@shared/schemas/mainView/state';
+import { capitalize } from '@utils/text/stringUtils';
 
 import {
   preflightTeamAvailability,
@@ -548,7 +549,7 @@ function presetAgentAvailability(
 
 function formatTeamOptionDisabledReason(reason: string): string {
   if (reason === 'no runnable team root') return 'No runnable team lead.';
-  return `${reason.charAt(0).toUpperCase()}${reason.slice(1)}.`;
+  return `${capitalize(reason)}.`;
 }
 
 function lookupKey(value: string): string {
