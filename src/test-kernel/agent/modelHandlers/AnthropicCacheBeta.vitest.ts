@@ -3,10 +3,10 @@ import { ModelProvider } from 'llm-zoo';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - agent model handlers
-import type { AgentTrace } from '@agent/trace';
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/anthropic/modelHandlerAnthropic';
 import type { ToolDefinition } from '@model';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
+import { spiedTrace } from '@test/support/spiedTrace';
 
 // Type imports
 import type Anthropic from '@anthropic-ai/sdk';
@@ -35,14 +35,7 @@ function createHandler(): ModelHandlerAnthropic {
     }),
   );
 
-  handler.setLogger({
-    streamId: 'test',
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    domain: vi.fn(),
-  } as unknown as AgentTrace);
+  handler.setLogger(spiedTrace());
   (handler as { getStreamingConfig: () => boolean }).getStreamingConfig = () =>
     false;
   return handler;

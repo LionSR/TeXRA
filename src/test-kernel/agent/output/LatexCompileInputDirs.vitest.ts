@@ -5,7 +5,6 @@ import * as path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import type { AgentTrace } from '@agent/trace';
 import {
   AgentCategory,
   AgentWorkflowSettingSchema,
@@ -23,6 +22,7 @@ import type {
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { installPlatform } from '@test/support/setupPlatform';
+import { spiedTrace } from '@test/support/spiedTrace';
 import {
   TaskRunFileService,
   createExternalLocation,
@@ -81,15 +81,6 @@ function outputFile(
   };
 }
 
-function logger(): AgentTrace {
-  return {
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  } as unknown as AgentTrace;
-}
-
 function initLatexPlatform(files: Record<string, string>): Promise<void> {
   return installPlatform({
     files,
@@ -142,7 +133,7 @@ describe('workflow LaTeX compile input directories', () => {
       {
         fileService: new TaskRunFileService(executionId),
         outputState,
-        logger: logger(),
+        logger: spiedTrace(),
         streamId: 'compile-stream',
       },
       1,
@@ -179,7 +170,7 @@ describe('workflow LaTeX compile input directories', () => {
         {
           fileService: new TaskRunFileService(executionId),
           outputState,
-          logger: logger(),
+          logger: spiedTrace(),
           streamId: 'compile-stream',
         },
         2,
@@ -263,7 +254,7 @@ describe('workflow LaTeX compile input directories', () => {
       }),
       () => ({}),
       [],
-      logger(),
+      spiedTrace(),
       'diff-stream',
       new TaskRunFileService(executionId),
     );
@@ -318,7 +309,7 @@ describe('workflow LaTeX compile input directories', () => {
       }),
       () => ({}),
       [],
-      logger(),
+      spiedTrace(),
       'diff-stream',
       new TaskRunFileService(executionId),
     );
@@ -353,7 +344,7 @@ describe('workflow LaTeX compile input directories', () => {
   it('keeps a successful diff when publishing its PDF fails', async () => {
     const executionId = 'latexdiff-publish-failure';
     await initLatexPlatform({});
-    const trace = logger();
+    const trace = spiedTrace();
     const manager = new LatexDiffManager(
       AgentWorkflowSettingSchema.parse({
         agentCategory: AgentCategory.Workflow,
