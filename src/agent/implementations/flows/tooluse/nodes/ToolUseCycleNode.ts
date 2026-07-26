@@ -2,7 +2,6 @@ import PQueue from 'p-queue';
 
 import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import { useLaunchRunContext } from '@agent/runtime/RunContext';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import {
@@ -63,8 +62,7 @@ export class ToolUseCycleNode<C> extends Node<
   }
 
   async exec(prepRes: CyclePrepResult): Promise<ToolUseCycleOutcome> {
-    const { modelHandler } = this.services;
-    const { runScope } = useLaunchRunContext();
+    const { modelHandler, runScope } = this.services;
     const { streamId } = runScope;
 
     if (prepRes.shouldSkipCycle) {
