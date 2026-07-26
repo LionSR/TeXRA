@@ -107,6 +107,7 @@ import {
   tier,
   toolDashboardItems,
   toolDashboardLoaded,
+  toolPathProtectionEnabled,
   toolUseAgents,
   unsupportedCommands,
   userEmail,
@@ -408,6 +409,7 @@ export class SettingsApp extends SettingsAppBase {
             .items=${toolDashboardItems.get()}
             .loaded=${toolDashboardLoaded.get()}
             .bashApprovalEnabled=${bashApprovalEnabled.get()}
+            .toolPathProtectionEnabled=${toolPathProtectionEnabled.get()}
             .agentSkillsEnabled=${agentSkillsEnabled.get()}
             .showAgentSkillsSettings=${this.isDesktopHost}
             .showDesktopCrashReporting=${!isKnownUnsupported(

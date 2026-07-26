@@ -13,6 +13,7 @@ vi.mock('@shared/hostBridge', () => ({
 import type { ToolsTab } from '@settingsView/frontend/tabs/ToolsTab';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ToolDashboardItem } from '@shared/schemas/settingsViewMessages';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
 // Local imports - test utilities
 import { useLitComponentTestDom } from './litComponentTestUtils';
@@ -107,6 +108,36 @@ describe('tools-tab availability summary', () => {
     expect(mocks.postMessage).toHaveBeenCalledWith(
       SETTINGS_VIEW_COMMANDS.SET_AGENT_SKILLS_ENABLED,
       { enabled: false },
+    );
+  });
+
+  it('renders and updates working-directory path protection', async () => {
+    const element = await mount([tool('file-ops', 'available')], (toolsTab) => {
+      toolsTab.toolPathProtectionEnabled = false;
+    });
+    const protectionSwitch = [
+      ...(element.shadowRoot?.querySelectorAll('wa-switch') ?? []),
+    ].find((candidate) =>
+      candidate.textContent?.includes(
+        'Restrict tool paths to the working directory',
+      ),
+    ) as (HTMLElement & { checked?: boolean }) | undefined;
+
+    expect(protectionSwitch).toBeDefined();
+    expect(protectionSwitch?.checked).toBe(false);
+
+    if (!protectionSwitch) return;
+    protectionSwitch.checked = true;
+    protectionSwitch.dispatchEvent(
+      new Event('change', { bubbles: true, composed: true }),
+    );
+
+    expect(mocks.postMessage).toHaveBeenCalledWith(
+      SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
+      {
+        key: WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
+        value: true,
+      },
     );
   });
 });

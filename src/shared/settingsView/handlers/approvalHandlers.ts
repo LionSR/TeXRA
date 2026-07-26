@@ -1,7 +1,7 @@
 /**
  * Approval settings handlers shared between desktop and extension hosts.
  *
- * Builds the approval-settings outbound message from workspace state and
+ * Builds the approval-and-safety outbound message from workspace state and
  * applies updates from inbound messages. Both hosts hold the same workspace
  * state shape — the only host-specific dependency is the bash-approval flag,
  * which lives in `ConfigProvider` rather than workspace state.
@@ -9,8 +9,9 @@
 import * as logger from '@logger/logUtils';
 import type { ConfigProvider, ConfigTarget } from '@platform/interfaces';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { DEFAULT_TOOL_PATH_PROTECTION_ENABLED } from '@shared/schemas/stateSettings';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import type { UpdateApprovalSettingsMessage } from '@shared/schemas/settingsViewMessages';
+import type { UpdateApprovalAndSafetySettingsMessage } from '@shared/schemas/settingsViewMessages';
 import {
   BASH_APPROVAL_CONFIG_KEY,
   CLAUDE_AGENT_DEFAULT_EFFORT,
@@ -43,7 +44,7 @@ export const BASH_APPROVAL_CONFIG_TARGET: ConfigTarget = 'workspace';
 
 export function buildApprovalSettingsMessage(
   ports: ApprovalHandlerPorts,
-): UpdateApprovalSettingsMessage {
+): UpdateApprovalAndSafetySettingsMessage {
   const { workspaceState, config } = ports;
 
   // Read a workspace-state string (with default) and parse it to its enum.
@@ -58,6 +59,10 @@ export function buildApprovalSettingsMessage(
   return {
     command: SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS,
     bashApprovalEnabled: config.get<boolean>(BASH_APPROVAL_CONFIG_KEY, true),
+    toolPathProtectionEnabled: workspaceState.get<boolean>(
+      WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
+      DEFAULT_TOOL_PATH_PROTECTION_ENABLED,
+    ),
     codexSandboxMode: read(
       WorkspaceStateKey.CODEX_SANDBOX_MODE,
       CODEX_SANDBOX_MODE_DEFAULT,
