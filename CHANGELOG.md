@@ -25,8 +25,10 @@ All notable changes to this project will be documented in this file.
   than the workflow's cumulative cost.
 - **Custom team compatibility** — teams with older icon data no longer
   disappear from the catalog.
-- **Reliable large command output** — long shell commands and terminal logs no
-  longer consume unbounded memory.
+- **Long Claude sessions recover automatically** — when a session reaches its
+  context limit, TeXRA compacts the conversation and continues the run.
+- **Reliable large command output** — long foreground shell commands no longer
+  consume unbounded memory.
 
 ### Extension (VS Code) and Desktop
 
@@ -37,15 +39,6 @@ All notable changes to this project will be documented in this file.
 
 ### CLI
 
-#### Bug Fixes
-
-- **Independent access preferences** — ChatGPT, Kimi Code, and API fallback
-  choices no longer change one another unexpectedly.
-- **Reliable post-launcher prompts** — sign-in and team availability prompts
-  remain interactive after leaving the launcher.
-- **Cleaner child list** — removed background-process rows that were always
-  empty.
-
 #### New Features
 
 - **Workflow phase views** — focused workflow runs group agents by phase and
@@ -54,6 +47,15 @@ All notable changes to this project will be documented in this file.
   completed, skipped, and failed work.
 - **Visible media inputs** — loaded images and PDFs appear in the terminal
   transcript.
+
+#### Bug Fixes
+
+- **Independent access preferences** — ChatGPT, Kimi Code, and API fallback
+  choices no longer change one another unexpectedly.
+- **Reliable post-launcher prompts** — sign-in and team availability prompts
+  remain interactive after leaving the launcher.
+- **Cleaner child list** — removed background-process rows that were always
+  empty.
 
 ## [0.39.8] - 2026-07-24
 
