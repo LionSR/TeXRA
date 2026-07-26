@@ -11,6 +11,7 @@ import {
   type BashSettlement,
   type HostBashApprovalRequest,
   type HostBashApprovalResult,
+  type HostApprovalBypassStateUpdate,
   type HostInteractionCancelSelector,
   type HostInteractionOptions,
   type HostInteractions,
@@ -50,6 +51,7 @@ export interface ExtensionHostInteractionsOptions {
   runtimeHost: AgentRuntimeHost;
   session: SessionHandle;
   getApprovalHandlers(): ApprovalRequestHandlerSet;
+  setApprovalBypassState(update: HostApprovalBypassStateUpdate): void;
 }
 
 export interface ExtensionHostInteractions extends HostInteractions {
@@ -212,6 +214,7 @@ export function createExtensionHostInteractions(
     submitUserQuestionDecision,
     dismissExternalInquiry: (requestId) =>
       handlers().externalInquiry.dismiss(requestId),
+    setApprovalBypassState: options.setApprovalBypassState,
     requestToolEditApproval(
       request: ToolEditApprovalRequest,
       interactionOptions?: HostInteractionOptions,

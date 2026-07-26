@@ -165,6 +165,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
       runtimeHost: createAgentPresentationHost(this),
       session: defaultSession(),
       getApprovalHandlers: () => this.backend.approvalHandlers,
+      setApprovalBypassState: this.backend.setApprovalBypassState,
     });
     this.messageHandler = new ProgressViewMessageHandler(
       this,
