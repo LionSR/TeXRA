@@ -1,11 +1,16 @@
 // Node imports
-import { readdirSync, readFileSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { readFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 
 // Third-party imports
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
+
+import {
+  REPO_ROOT,
+  sourceFilesUnder,
+  toRepoPath as repoRelative,
+} from '../support/repoScan';
 
 type EdgeKind = 'type-only' | 'value';
 
@@ -27,17 +32,11 @@ interface EdgeViolation {
   currentKind: EdgeKind;
 }
 
-const REPO_ROOT = resolve(
-  fileURLToPath(new URL('.', import.meta.url)),
-  '../../..',
-);
 const SRC_ROOT = resolve(REPO_ROOT, 'src');
 const BASELINE_PATH = resolve(
   REPO_ROOT,
   'config/ratchets/architecture-edges-baseline.json',
 );
-
-const SOURCE_FILE = /\.(?:ts|tsx|mts|cts)$/;
 
 const SUBSYSTEM_ALIASES = new Map<string, string>([
   ['@agent', 'agent'],
@@ -68,22 +67,12 @@ const SUBSYSTEM_ALIASES = new Map<string, string>([
   ['@utils', 'utils'],
 ]);
 
-function repoRelative(path: string): string {
-  return relative(REPO_ROOT, path).replaceAll('\\', '/');
-}
-
 function subsystemFromRepoRelative(path: string): string | null {
   const [root, subsystem] = path.split('/');
   if (root !== 'src' || subsystem == null || subsystem === 'test-kernel') {
     return null;
   }
   return subsystem;
-}
-
-function sourceFilesUnder(dir: string): string[] {
-  return (readdirSync(dir, { recursive: true }) as string[])
-    .filter((entry) => SOURCE_FILE.test(entry) && !entry.endsWith('.d.ts'))
-    .map((entry) => join(dir, entry));
 }
 
 function resolveImportedSubsystem(

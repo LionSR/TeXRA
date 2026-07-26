@@ -1,16 +1,12 @@
 // Node imports
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 
 // Third-party imports
 import * as ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
-const REPO_ROOT = resolve(
-  fileURLToPath(new URL('.', import.meta.url)),
-  '../../..',
-);
+import { REPO_ROOT, sourceFilesUnder, toRepoPath } from '../support/repoScan';
 
 const TARGET_MODULE = 'packages/cli/src/runtime/sessionProgressSubscription.ts';
 const TARGET_MODULE_STEM = TARGET_MODULE.replace(/\.(?:ts|tsx|mts|cts)$/, '');
@@ -31,26 +27,7 @@ const SCAN_ROOTS = [
   'src',
 ] as const;
 
-const SOURCE_FILE = /\.(?:ts|tsx|mts|cts)$/;
 const SOURCE_OR_OUTPUT_EXTENSION = /\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/;
-
-function toRepoPath(path: string): string {
-  return relative(REPO_ROOT, resolve(REPO_ROOT, path)).replaceAll('\\', '/');
-}
-
-function sourceFilesUnder(root: string): string[] {
-  const absoluteRoot = resolve(REPO_ROOT, root);
-  let entries: string[];
-  try {
-    entries = readdirSync(absoluteRoot, { recursive: true }) as string[];
-  } catch {
-    return [];
-  }
-
-  return entries
-    .filter((entry) => SOURCE_FILE.test(entry) && !entry.endsWith('.d.ts'))
-    .map((entry) => toRepoPath(join(absoluteRoot, entry)));
-}
 
 function literalText(node: ts.Expression | undefined): string | null {
   return node != null && ts.isStringLiteralLike(node) ? node.text : null;
@@ -140,7 +117,12 @@ describe('CLI session progress projection boundary', () => {
   it('keeps sessionProgressSubscription scoped to headless CLI NDJSON output', () => {
     expect(existsSync(resolve(REPO_ROOT, TARGET_MODULE))).toBe(true);
 
-    const importers = SCAN_ROOTS.flatMap(sourceFilesUnder)
+    const importers = SCAN_ROOTS.flatMap((root) =>
+      sourceFilesUnder(resolve(REPO_ROOT, root), {
+        missingDirReturnsEmpty: true,
+        repoRelative: true,
+      }),
+    )
       .filter(importsTargetModule)
       .toSorted();
 

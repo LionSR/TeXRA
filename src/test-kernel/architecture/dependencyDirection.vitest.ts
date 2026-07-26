@@ -1,10 +1,14 @@
 // Node imports
-import { readdirSync, readFileSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { readFileSync } from 'node:fs';
+import { dirname, relative, resolve } from 'node:path';
 
 // Third-party imports
 import { describe, expect, it } from 'vitest';
+
+import {
+  REPO_ROOT,
+  sourceFilesUnder as sharedSourceFilesUnder,
+} from '../support/repoScan';
 
 /**
  * Architecture ratchet: the platform-independent ("VS Code-free") source zones
@@ -17,11 +21,6 @@ import { describe, expect, it } from 'vitest';
  * gate. The two layers are independent on purpose — if you add a zone here, add
  * it to `VSCODE_FREE_ZONE_DIRS` in `eslint.config.mjs` too (and vice versa).
  */
-
-const REPO_ROOT = resolve(
-  fileURLToPath(new URL('.', import.meta.url)),
-  '../../..',
-);
 
 // Keep in sync with `VSCODE_FREE_ZONE_DIRS` in eslint.config.mjs.
 const VSCODE_FREE_ZONES = [
@@ -38,8 +37,6 @@ const VSCODE_FREE_ZONES = [
   'packages/extension/src/progressView/frontend',
   'packages/extension/src/settingsView/frontend',
 ] as const;
-
-const SOURCE_FILE = /\.(?:ts|tsx|mts)$/;
 
 // `import … from 'vscode'` / `export … from 'vscode'`, CommonJS `require('vscode')`
 // (incl. `import x = require('vscode')`), and dynamic `import('vscode')`.
@@ -100,18 +97,11 @@ function stripComments(source: string): string {
 }
 
 function sourceFilesUnder(zone: string): string[] {
-  const absoluteZone = resolve(REPO_ROOT, zone);
-  let entries: string[];
-  try {
-    entries = readdirSync(absoluteZone, { recursive: true }) as string[];
-  } catch {
-    // A renamed/removed zone surfaces as the file-count guard below failing,
-    // not as a silently green ratchet.
-    return [];
-  }
-  return entries
-    .filter((rel) => SOURCE_FILE.test(rel) && !rel.endsWith('.d.ts'))
-    .map((rel) => join(absoluteZone, rel));
+  // A renamed/removed zone surfaces as the file-count guard below failing,
+  // not as a silently green ratchet.
+  return sharedSourceFilesUnder(resolve(REPO_ROOT, zone), {
+    missingDirReturnsEmpty: true,
+  });
 }
 
 function productionSrcFiles(): string[] {
