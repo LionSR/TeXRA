@@ -388,10 +388,15 @@ Agent flows follow the PocketFlow pattern in `src/agent/implementations/flows/`:
   - `FlowTransition.CONTINUE` - loop back to flow entry
   - `FlowTransition.FINALIZE` - exit flow after finalization
   - `FlowTransition.COMPLETE` - return control to caller
-- **Node lifecycle**: `prep(shared) → exec(prepRes) → post(shared, prepRes, execRes)`. Override `maxRetries` and `retryDelay` getters for retry configuration.
+- **Node lifecycle**: `prep(shared) → exec(prepRes) → post(shared, prepRes, execRes)`. Retries are configured through the `Node` constructor — `super(maxRetries, waitSeconds)` (see `RetryState.ts`), not by overriding getters. Customize retry behaviour with the `shouldAutoRetry(error)`, `retryPrompt(prepRes, error)`, and `execFallback(prepRes, error)` hooks, and set `node.signal` to abort in-flight retries.
 - **Agent owns lifecycle**: Agents handle init/finalize; flows handle only execution logic. Nodes should throw errors directly (agent.run() catches).
 
-See `docs/pocketflow/` for full framework documentation.
+The engine is local to this repo: `src/agent/node/index.ts` defines `BaseNode`,
+`Node`, and `Flow` — read it for the authoritative semantics. It is a trimmed
+descendant of upstream PocketFlow and does **not** implement the upstream
+`BatchNode`/`BatchFlow`, `ParallelBatchNode`/`ParallelBatchFlow`, or the
+`params`/`setParams` channel; do not write code against them. State slices that
+travel through the flows are described in `docs/pocketflow/state_architecture.md`.
 
 **Webviews and UI**
 
