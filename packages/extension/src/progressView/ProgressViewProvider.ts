@@ -5,7 +5,6 @@ import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
-import { detectWaitingStreams } from '@agent/storage/detectWaitingStreams';
 import {
   BaseWebviewProvider,
   BundledViewContentProvider,
@@ -15,10 +14,6 @@ import {
 } from '@common/webview';
 import { workspaceSM } from '@common/state';
 import { buildStreamInfo } from '@controllers/progressView/backend/streamInfoUtils';
-import {
-  repairRestartedStreams,
-  RestartRepairRetryScheduler,
-} from '@controllers/progressView/backend/restartRepair';
 import { replayApprovalRequestHandlers } from '@controllers/progressView/backend/progressBackendUiConfig';
 import { ProgressBackend } from '@controllers/progressView/backend/ProgressBackend';
 import { getProgressStreamControls } from '@controllers/progressView/progressStreamControls';
@@ -79,7 +74,6 @@ export class ProgressViewProvider extends BaseWebviewProvider {
   /** Set by disposePanelResources so showInSidebar knows replay is needed. */
   private _panelJustDisposed = false;
   private readonly logger: AgentTrace;
-  private readonly restartRepairRetry = new RestartRepairRetryScheduler();
 
   private _sidebarWebviewGetter?: () => vscode.Webview | undefined;
   private _mainViewProvider?: MainViewProvider;
@@ -391,31 +385,6 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     return this.isActivePlacementReady() && this.webviewUpdater.isAvailable();
   }
 
-  public async cleanupTasksAfterRestart(): Promise<void> {
-    const executionIds = this.state.snapshots.getExecutionIdMap();
-    const waitingStreams = await detectWaitingStreams(executionIds);
-    const repairStreams = new Set<StreamTabId>([
-      ...executionIds.keys(),
-      ...this.state.streamLogs.keys(),
-    ]);
-    const result = await repairRestartedStreams({
-      streamStatus: this.state.streamStatus,
-      waitingStreams,
-      executionIds,
-      repairStreams,
-      closeRunningGroups: (streamIds, status, now) =>
-        this.state.endRunningTaskGroups(now, streamIds, status),
-      statusEmitOptions: { trace: this.logger },
-      logger: this.logger,
-    });
-    this.restartRepairRetry.schedule(result.nextLeaseCheckAt, () => {
-      void this.cleanupTasksAfterRestart().catch((error: unknown) => {
-        this.logger.warn('Failed delayed restart repair', { data: error });
-      });
-    });
-    this.syncFullView();
-  }
-
   public isViewVisible(): boolean {
     if (this._activePlacement === 'editor') {
       return this._panelView?.visible === true;
@@ -585,7 +554,6 @@ export class ProgressViewProvider extends BaseWebviewProvider {
 
   public override dispose(): void {
     this.disposePanelResources(true);
-    this.restartRepairRetry.dispose();
     this.backend.dispose();
     super.dispose();
   }

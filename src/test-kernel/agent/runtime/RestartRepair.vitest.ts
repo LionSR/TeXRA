@@ -5,7 +5,7 @@ import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import {
   repairRestartedStreams,
   RestartRepairRetryScheduler,
-} from '@controllers/progressView/backend/restartRepair';
+} from '@agent/runtime/restartRepair';
 import {
   EXECUTION_STATUS,
   RUN_OUTCOME,

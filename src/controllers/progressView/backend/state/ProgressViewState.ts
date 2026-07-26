@@ -10,6 +10,11 @@ import {
   defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
+import {
+  SessionStores,
+  type DeleteAllStreamsResult,
+  type DeleteStreamResult,
+} from '@agent/runtime/SessionStores';
 import type { StateStore } from '@platform/interfaces';
 import {
   AgentCategoryFilterSchema,
@@ -36,12 +41,6 @@ import { GoalStore } from '@tools/goal';
 import type { StreamLogStore, StreamSnapshotStore } from '@transcript';
 import { clamp } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import {
-  SessionStores,
-  type DeleteAllStreamsResult,
-  type DeleteStreamResult,
-} from './SessionStores';
-
 /** Bounded fan-out for the one-time legacy-instruction backfill at load(),
  *  mirroring `StreamSnapshotStore`'s own per-stream disk-read concurrency. */
 const LEGACY_INSTRUCTION_BACKFILL_CONCURRENCY = 8;

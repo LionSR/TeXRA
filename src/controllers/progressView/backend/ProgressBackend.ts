@@ -4,6 +4,7 @@ import {
   defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
+import type { SessionStores } from '@agent/runtime/SessionStores';
 import {
   WebviewBridge,
   type ProgressViewMessageSender,
@@ -31,8 +32,6 @@ import type {
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { isInFlightPhase } from '@shared/streams/streamStatus';
 import { canUseStreamDataDir } from '@transcript/streamDataPaths';
-import type { SessionStores } from './state/SessionStores';
-
 type ProgressBackendApprovalOptions = Omit<
   BuildApprovalRequestHandlerSetParams,
   'webviewUpdater'

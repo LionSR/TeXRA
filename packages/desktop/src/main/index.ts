@@ -23,6 +23,7 @@ import {
 } from '@agent/index/agentRegistry';
 import { registerAgentShutdownHandlers } from '@agent/runtime/agentShutdown';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { SessionStores } from '@agent/runtime/SessionStores';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { SupabaseClient } from '@auth/SupabaseClient';
@@ -35,7 +36,6 @@ import {
 import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { prepareMainViewExecutionRequest } from '@controllers/mainView/MainViewExecutionController';
-import type { SessionStores } from '@controllers/progressView/backend/state/SessionStores';
 import type { TerminalRunResult } from '@hosts/uiHosts';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { platform } from '@platform/platform';
@@ -1050,7 +1050,6 @@ function createWindow(options: {
         // the duration of the run.
         await getAgentExecution();
         return launchDesktopAgent(preparation.request, {
-          ready: Promise.resolve(),
           session: options.processSession,
         });
       },
@@ -1230,7 +1229,10 @@ if (protocolLifecycle.shouldContinue) {
       );
       const { lifecycle } = platformInit;
       const transcripts = await StreamLogStore.open();
-      const processSession = new SessionHandle({ transcripts });
+      const processSession = new SessionHandle({
+        transcripts,
+        restartRepair: 'deferred',
+      });
       const detachTerminalResultToast = attachTerminalResultToast(
         processSession,
         processSession.interactions,
@@ -1266,6 +1268,7 @@ if (protocolLifecycle.shouldContinue) {
             ? join(app.getPath('userData'), 'streams.json')
             : undefined,
         });
+        await processSession.waitUntilReady();
         sessionStores = processStores.stores;
         disposeProcessStores = () => processStores.dispose();
         disposeAgentResumeHandler = processResumeOwner.attach({

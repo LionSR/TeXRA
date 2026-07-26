@@ -18,7 +18,6 @@ export const DESKTOP_UNAVAILABLE_TOOLS: readonly RegisteredToolName[] = [
 ];
 
 export interface DesktopAgentLaunchContext {
-  readonly ready: Promise<void>;
   readonly session: SessionHandle;
   /** Resume-only canonical admission checked under the execution lease lock. */
   readonly canAcquireResumeLease?: () => boolean | Promise<boolean>;
@@ -38,7 +37,6 @@ export async function launchDesktopAgent(
   context: DesktopAgentLaunchContext,
   options: DesktopAgentLaunchOptions = {},
 ): Promise<void> {
-  await context.ready;
   const { runAgent } = await import('@agent/runtime/runAgent');
   const runtimeHost = context.session.interactions;
   await runAgent(request, {

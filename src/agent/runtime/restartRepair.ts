@@ -248,12 +248,11 @@ async function writeFailedTerminalStatuses(
 }
 
 /**
- * Shared restart repair owner for extension and desktop hosts.
+ * Apply one restart-repair pass.
  *
- * Hosts still supply host-specific facts (waiting detection, active-run race
- * guards, restored desktop streams), but this function owns the writes that
- * must stay consistent: stream status, transcript group closure, and terminal
- * execution metadata for failed repairs.
+ * {@link SessionHandle} owns discovery, lease-aware retries, and the
+ * transcript callback. The explicit inputs here keep the state transition and
+ * persistence writes independently testable.
  */
 export async function repairRestartedStreams(
   options: RestartRepairOptions,

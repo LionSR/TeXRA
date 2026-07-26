@@ -4,7 +4,9 @@
  * SDK Step 7d composition root. It is a **composition record**, not a facade:
  * it re-exposes no per-concern methods, so callers keep the existing instance
  * vocabulary they already use after 7a–c landed (`session.interactions.x(...)`,
- * `session.executions.y(...)`). It composes the landed runtime owners —
+ * `session.executions.y(...)`). Its sole lifecycle gate,
+ * {@link SessionHandle.waitUntilReady}, ensures persistent restart repair has
+ * settled before a host exposes the session. It composes the landed runtime owners —
  * {@link ExecutionRegistry}, {@link ExecutionSubscriptionBinder},
  * {@link SessionHostInteractions} — plus the other session-scoped owners.
  *
@@ -31,7 +33,9 @@
 import type { AgentEvent, AgentTrace, ResultEvent } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
-import type { StreamTabId } from '@shared/schemas';
+import { detectWaitingStreams } from '@agent/storage/detectWaitingStreams';
+import { STREAM_PHASE, type StreamTabId } from '@shared/schemas';
+import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import type { RunTraceFlushEntry } from '@transcript/runTrace';
 import type { StreamLogStore } from '@transcript/StreamLogStore';
 import { StreamSnapshotStore } from '@transcript/StreamSnapshotStore';
@@ -51,6 +55,10 @@ import {
 } from './streamApprovalQueue';
 import { WorkflowControlRegistry } from './workflowControlRegistry';
 import { releaseExecutionLeaseAfterArtifacts } from './executionOwnership';
+import {
+  repairRestartedStreams,
+  RestartRepairRetryScheduler,
+} from './restartRepair';
 
 const logger = createChannelTrace('sessionHandle');
 
@@ -89,8 +97,13 @@ function isReplayableTerminalResult(event: ResultEvent): boolean {
  * could be bound to a different hub than `events` and silently drop every
  * status fact. The session always co-constructs the pair instead.
  */
-export type SessionHandleInit = Pick<SessionHandle, 'transcripts'> &
-  Partial<
+export type SessionHandleInit = Pick<SessionHandle, 'transcripts'> & {
+  /**
+   * Delay store repair until {@link SessionHandle.waitUntilReady} is called.
+   * Desktop uses this while claiming legacy stream identities.
+   */
+  restartRepair?: 'deferred';
+} & Partial<
     Pick<
       SessionHandle,
       | 'executions'
@@ -139,6 +152,8 @@ export class SessionHandle {
    * to skip/retry a focused grandchild `agent()` call.
    */
   readonly workflowControls: WorkflowControlRegistry;
+  private restartRepairPromise: Promise<void> | undefined;
+  private readonly restartRepairRetry = new RestartRepairRetryScheduler();
   constructor(init: SessionHandleInit) {
     if (init.transcripts.mode.kind === 'read-only') {
       throw new Error(
@@ -193,6 +208,92 @@ export class SessionHandle {
       releaseExecutionLeaseAfterArtifacts(this, executionId),
     );
     liveSessions.add(this);
+    if (
+      this.transcripts.mode.kind === 'persistent' &&
+      init.restartRepair !== 'deferred'
+    ) {
+      this.restartRepairPromise = this.repairStoresAfterRestart();
+      // Construction cannot be awaited. Hosts observe the same promise
+      // through waitUntilReady(); this branch only prevents a rejection from
+      // becoming unhandled before the host reaches that boundary.
+      void this.restartRepairPromise.catch(() => undefined);
+    }
+  }
+
+  /**
+   * Wait for canonical stores and restart repair before exposing restored
+   * session state to a host.
+   */
+  waitUntilReady(): Promise<void> {
+    if (this.transcripts.mode.kind !== 'persistent') return Promise.resolve();
+    this.restartRepairPromise ??= this.repairStoresAfterRestart();
+    return this.restartRepairPromise;
+  }
+
+  private async repairStoresAfterRestart(): Promise<void> {
+    try {
+      const streamIds = this.transcripts.keys();
+      await this.snapshots.load(streamIds);
+      for (const streamId of this.transcripts.getUnfinishedStreamIds()) {
+        this.status.transition(
+          streamId,
+          STREAM_PHASE.RUNNING,
+          STREAM_TRANSITION_CAUSE.LIFECYCLE,
+        );
+      }
+      await this.runRestartRepair();
+    } catch (error) {
+      logger.warn('Failed to repair session stores after restart', {
+        data: error,
+      });
+      throw error;
+    }
+  }
+
+  private async runRestartRepair(): Promise<void> {
+    const executionIds = this.snapshots.getExecutionIdMap();
+    let waitingStreams: Set<StreamTabId>;
+    let repairStreams: Set<StreamTabId>;
+    try {
+      waitingStreams = await detectWaitingStreams(executionIds);
+      repairStreams = new Set([
+        ...executionIds.keys(),
+        ...this.transcripts.keys(),
+      ]);
+    } catch (error) {
+      logger.warn('Failed to detect resumable streams during restart repair', {
+        data: error,
+      });
+      waitingStreams = new Set();
+      repairStreams = new Set(
+        this.transcripts
+          .getUnfinishedStreamIds()
+          .filter((streamId) => !executionIds.has(streamId)),
+      );
+    }
+
+    const result = await repairRestartedStreams({
+      streamStatus: this.status,
+      waitingStreams,
+      executionIds,
+      repairStreams,
+      closeRunningGroups: async (streamIds, status, now) => {
+        const closed = await this.transcripts.endRunningGroupsForStreams(
+          streamIds,
+          now,
+          status,
+        );
+        if (closed.length > 0) await this.transcripts.flush();
+        return closed;
+      },
+      statusEmitOptions: { trace: logger },
+      logger,
+    });
+    this.restartRepairRetry.schedule(result.nextLeaseCheckAt, () => {
+      void this.runRestartRepair().catch((error: unknown) => {
+        logger.warn('Failed delayed restart repair', { data: error });
+      });
+    });
   }
 
   useHostInteractions(interactions: HostInteractions): () => void {
@@ -423,6 +524,7 @@ export class SessionHandle {
 
   /** Dispose the runtime owners and drop result listeners. */
   private teardownOwners(): void {
+    this.restartRepairRetry.dispose();
     this.subscriptions.dispose();
     this.executions.dispose();
     // Drop bypass state before the interaction slot settles pending approvals.
