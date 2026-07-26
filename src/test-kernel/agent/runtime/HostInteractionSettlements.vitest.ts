@@ -3,6 +3,7 @@ import { expect, expectTypeOf, it } from 'vitest';
 
 // Local imports - host interactions
 import {
+  type BashSettlement,
   cancellationResultFor,
   type HostBashApprovalResult,
   type HostUserQuestionResult,
@@ -46,6 +47,21 @@ it('makes contradictory interaction decisions unrepresentable', () => {
   expectTypeOf<
     IsAssignable<{ action: 'cancel'; reason: string }, RetrySettlement>
   >().toEqualTypeOf<false>();
+  expectTypeOf<
+    IsAssignable<{ action: 'timeout' }, PlanApprovalResult>
+  >().toEqualTypeOf<false>();
+  expectTypeOf<
+    IsAssignable<{ action: 'timeout' }, ProposalResult>
+  >().toEqualTypeOf<false>();
+  expectTypeOf<
+    IsAssignable<{ action: 'timeout' }, RetrySettlement>
+  >().toEqualTypeOf<false>();
+  expectTypeOf<
+    IsAssignable<{ action: 'timeout' }, BashSettlement>
+  >().toEqualTypeOf<false>();
+  expectTypeOf<
+    'timedOut' extends keyof HostBashApprovalResult ? true : false
+  >().toEqualTypeOf<false>();
 });
 
 it("returns each interaction kind's exact cancellation result", () => {
@@ -67,7 +83,6 @@ it("returns each interaction kind's exact cancellation result", () => {
 it('normalizes bash cancellation feedback like an explicit rejection', () => {
   expect(cancellationResultFor('bash', '  reason  ')).toEqual({
     accepted: false,
-    timedOut: undefined,
     userMessage: 'reason',
   });
 });

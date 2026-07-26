@@ -276,18 +276,8 @@ Best practices:
       return this.startGoalForPlan(plan, streamId);
     }
 
-    // Rejected or timed out — clear the plan from UI
+    // Rejected — clear the plan from UI
     workPlanState.updatePlan(null);
-
-    if (result.action === 'timeout') {
-      logger.warn('Plan approval timed out');
-      return {
-        status: 'error',
-        summary: 'Plan approval timed out',
-        error:
-          'The plan approval request timed out before the user responded. Please try again or proceed without a plan.',
-      };
-    }
 
     const feedback = result.feedback;
     const feedbackNote = feedback

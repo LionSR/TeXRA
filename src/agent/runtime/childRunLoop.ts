@@ -10,7 +10,7 @@
 // Host-agnostic, VS Code-free.
 
 import { synchronizeAgentResultOutcome, type ResultMeta } from '@agent/storage';
-import type { AgentTrace } from '@agent/trace';
+import type { AgentTrace, StageHandle } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import {
   markOwnedExecutionLeaseUndurable,
@@ -127,6 +127,9 @@ export interface ChildRunStrategy<TTurn> {
 
   /** Log a turn-level error message for a non-throwing failure. */
   onTurnError?(turn: TTurn, logger: AgentTrace): void;
+
+  /** After loop setup, before the initial turn starts. */
+  onLoopStart?(session: SessionHandle): void;
 
   /** After a successful turn: register the session/thread id, etc. */
   onTurnSuccess?(turn: TTurn, session: SessionHandle): void;
@@ -515,15 +518,17 @@ export function startChildRunLoop<TTurn>(
   runWithOwnedExecutionLease(executionId, () => undefined);
 
   const runSession = currentSession();
+  let sessionOwnershipReleased = false;
+  const releaseSessionOwnershipOnce = (): void => {
+    if (sessionOwnershipReleased) return;
+    sessionOwnershipReleased = true;
+    strategy.releaseSessionOwnership?.();
+  };
+
   const loop = new ChildRunInterruptible(runSession, childStreamId);
-  const stopWatchingLease = onOwnedExecutionLeaseLost(executionId, () => {
-    logger.error('Execution lease was lost; interrupting the former owner', {
-      data: { executionId, childStreamId },
-    });
-    loop.interrupt();
-  });
-  const queue = runSession.followUps.acquire(childStreamId);
-  loop.setQueue(queue);
+  let stopWatchingLease: (() => void) | undefined;
+  let queue!: FollowUpQueue;
+  let queueAcquired = false;
   let attachedHandle: AgentExecutionHandle | undefined;
   let detachLoopInterrupt: (() => void) | undefined;
   const attachLoopInterrupt = (): void => {
@@ -533,19 +538,52 @@ export function startChildRunLoop<TTurn>(
     attachedHandle = handle;
     detachLoopInterrupt = handle.attachInterruptHandler(loop);
   };
-  attachLoopInterrupt();
-  const unregisterChildRunLoop =
-    runSession.executions.registerChildRunLoop(childStreamId);
+  let unregisterChildRunLoop: (() => void) | undefined;
+  let sessionStage: StageHandle | undefined;
 
-  const sessionStage = childStream
-    ? logger.openStage(strategy.stageLabel)
-    : undefined;
-  let sessionOwnershipReleased = false;
-  const releaseSessionOwnershipOnce = (): void => {
-    if (sessionOwnershipReleased) return;
-    sessionOwnershipReleased = true;
-    strategy.releaseSessionOwnership?.();
-  };
+  try {
+    strategy.onLoopStart?.(runSession);
+    stopWatchingLease = onOwnedExecutionLeaseLost(executionId, () => {
+      logger.error('Execution lease was lost; interrupting the former owner', {
+        data: { executionId, childStreamId },
+      });
+      loop.interrupt();
+    });
+    queue = runSession.followUps.acquire(childStreamId);
+    queueAcquired = true;
+    loop.setQueue(queue);
+    attachLoopInterrupt();
+    unregisterChildRunLoop =
+      runSession.executions.registerChildRunLoop(childStreamId);
+    sessionStage = childStream
+      ? logger.openStage(strategy.stageLabel)
+      : undefined;
+  } catch (error) {
+    // Preserve the setup error while unwinding every resource acquired so far.
+    const cleanupErrors: unknown[] = [];
+    const cleanup = (operation: () => void): void => {
+      try {
+        operation();
+      } catch (cleanupError) {
+        cleanupErrors.push(cleanupError);
+      }
+    };
+    cleanup(() => sessionStage?.end(RUN_OUTCOME.FAILED));
+    cleanup(() => unregisterChildRunLoop?.());
+    cleanup(() => detachLoopInterrupt?.());
+    cleanup(() => {
+      if (queueAcquired) runSession.followUps.release(childStreamId);
+    });
+    cleanup(() => stopWatchingLease?.());
+    cleanup(releaseSessionOwnershipOnce);
+    if (cleanupErrors.length > 0) {
+      throw new AggregateError(
+        [error, ...cleanupErrors],
+        `Child run ${executionId} setup failed and rollback was incomplete`,
+      );
+    }
+    throw error;
+  }
 
   let latestCostUsd: number | undefined;
   const ports: ChildRunPorts = {
@@ -672,7 +710,7 @@ export function startChildRunLoop<TTurn>(
       }
     } finally {
       detachLoopInterrupt?.();
-      unregisterChildRunLoop();
+      unregisterChildRunLoop?.();
       runSession.followUps.release(childStreamId);
       releaseSessionOwnershipOnce();
       try {
@@ -765,7 +803,7 @@ export function startChildRunLoop<TTurn>(
             data: { executionId, error },
           });
         } finally {
-          stopWatchingLease();
+          stopWatchingLease?.();
         }
       }
     }

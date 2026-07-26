@@ -11,7 +11,6 @@ export function toBashApprovalResult(
 ): HostBashApprovalResult {
   return {
     accepted: decision.action === 'approve',
-    timedOut: decision.action === 'timeout' ? true : undefined,
     // Deliberate alignment choice, not an oversight: `userMessage` exists to
     // explain a rejection back to the agent (see buildBashApprovalRejectedResult),
     // so it's scoped to the reject action alone. The pre-alignment desktop
