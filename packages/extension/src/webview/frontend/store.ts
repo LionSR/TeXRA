@@ -143,8 +143,6 @@ export const FILE_SELECT_CONFIGS: ReadonlyArray<FileSelectConfig> = [
     addOpenedLabel: 'Add opened files as input',
     emptyListLabel: 'Clear all input files',
     selectListLabel: 'Add input files',
-    tooltip: 'Primary files the agent processes, such as .tex, .txt, or .md',
-    description: 'Read and edited by the agent',
     toolConfig: 'tool',
   },
   {
@@ -154,9 +152,6 @@ export const FILE_SELECT_CONFIGS: ReadonlyArray<FileSelectConfig> = [
     addOpenedLabel: 'Add opened files as context',
     emptyListLabel: 'Clear all context files',
     selectListLabel: 'Add context files',
-    tooltip:
-      "Read-only context the agent sees but won't modify — bibliographies (.bib/.bbl), reference papers, style/macro files (.sty/.cls), or any document the output should match",
-    description: 'Read-only context — not modified',
   },
   {
     type: 'media',
@@ -165,8 +160,6 @@ export const FILE_SELECT_CONFIGS: ReadonlyArray<FileSelectConfig> = [
     addOpenedLabel: 'Add opened files as media',
     emptyListLabel: 'Clear all media files',
     selectListLabel: 'Add media files',
-    tooltip: 'Images, figures, and media assets used by the document',
-    description: 'Images and figures the agent can view',
     toolConfig: 'autoExtract',
   },
 ];

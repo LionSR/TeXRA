@@ -80,16 +80,6 @@ export const fileSelectLayoutStyles = css`
     flex-shrink: 0;
   }
 
-  .file-select-hint {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-secondary);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    flex-shrink: 1;
-    min-width: 0;
-  }
-
   .file-select-actions {
     display: flex;
     flex-direction: row;

@@ -6,7 +6,6 @@ import { repeat } from 'lit/directives/repeat.js';
 
 import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
-import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 import { designTokens } from '@shared/styles';
 import type {
@@ -317,8 +316,7 @@ export class FileSelectGroup extends LitElement {
             <span class="file-select-icon" aria-hidden="true">
               ${waIcon(config.icon as TeXRAIconName)}
             </span>
-            <label id="${this.listId}Label">${config.label}</label>
-            <wa-tooltip for="${this.listId}Label">${config.tooltip}</wa-tooltip>
+            <label>${config.label}</label>
             ${
               config.toolConfig === 'tool'
                 ? this.renderToolConfigMenu()
@@ -327,15 +325,6 @@ export class FileSelectGroup extends LitElement {
             ${
               config.toolConfig === 'autoExtract'
                 ? this.renderAutoExtractMenu()
-                : nothing
-            }
-            ${
-              config.description
-                ? html`<span
-                    class="file-select-hint"
-                    title=${config.description}
-                    >${config.description}</span
-                  >`
                 : nothing
             }
           </div>
