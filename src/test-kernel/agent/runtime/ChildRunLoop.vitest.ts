@@ -75,6 +75,11 @@ import {
   type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
+import { AgentCliSessionRegistry } from '@tools/agentCliSessionRegistry';
+import {
+  ClaudeAgentSessions,
+  CodexThreads,
+} from '@tools/agentCliSessionStores';
 
 let session: SessionHandle;
 const trackedExecutionIds = new Set<string>();
@@ -221,6 +226,220 @@ describe('childRunLoop E2E fixtures', () => {
     expect(callCount()).toBe(0);
   });
 
+  it('unwinds provider ownership and loop resources when synchronous setup fails', () => {
+    const childStreamId = uniqueStreamId('setup-failure');
+    const parentStreamId = 'parent' as StreamTabId;
+    const executionId = 'exec-setup-failure' as ExecutionId;
+    const registry = new AgentCliSessionRegistry('test_session_id');
+    const releaseSessionOwnership = vi.fn(() =>
+      registry.releaseByExecutionId(executionId),
+    );
+    const handle = trackChildHandle(executionId, parentStreamId, childStreamId);
+    const interruptHandle = vi.spyOn(handle, 'interrupt');
+    const registerLoop = vi
+      .spyOn(session.executions, 'registerChildRunLoop')
+      .mockImplementationOnce(() => {
+        throw new Error('loop registration failed');
+      });
+    const { strategy } = createFakeStrategy();
+
+    try {
+      expect(() =>
+        startChildRunLoop({
+          childStreamId,
+          parentStreamId,
+          executionId,
+          agentName: 'fake-cli',
+          strategy: {
+            ...strategy,
+            onLoopStart: (runSession) => {
+              registry.trackInFlight({
+                childStreamId,
+                executionId,
+                executions: runSession.executions,
+              });
+            },
+            releaseSessionOwnership,
+          },
+        }),
+      ).toThrow('loop registration failed');
+
+      expect(releaseSessionOwnership).toHaveBeenCalledOnce();
+      expect(isChildRunLoopActive(childStreamId)).toBe(false);
+      expect(mocks.leaseLossListener).toBeUndefined();
+      expect(handle.interrupt()).toBe(false);
+      interruptHandle.mockClear();
+      registry.interruptAll();
+      expect(interruptHandle).not.toHaveBeenCalled();
+      expect(
+        session.followUps.enqueue(
+          childStreamId,
+          { text: 'must stay released' },
+          { createIfMissing: true },
+        ),
+      ).toBe(false);
+    } finally {
+      registerLoop.mockRestore();
+      interruptHandle.mockRestore();
+      registry.releaseByExecutionId(executionId);
+    }
+  });
+
+  it('reports rollback failures after completing later cleanup actions', () => {
+    const childStreamId = uniqueStreamId('setup-rollback-failure');
+    const parentStreamId = 'parent' as StreamTabId;
+    const executionId = 'exec-setup-rollback-failure' as ExecutionId;
+    const setupError = new Error('loop registration failed');
+    const cleanupError = new Error('queue release failed');
+    const releaseSessionOwnership = vi.fn();
+    const handle = trackChildHandle(executionId, parentStreamId, childStreamId);
+    const registerLoop = vi
+      .spyOn(session.executions, 'registerChildRunLoop')
+      .mockImplementationOnce(() => {
+        throw setupError;
+      });
+    const releaseQueue = vi
+      .spyOn(session.followUps, 'release')
+      .mockImplementationOnce(() => {
+        throw cleanupError;
+      });
+    const { strategy } = createFakeStrategy();
+    let thrown: unknown;
+
+    try {
+      try {
+        startChildRunLoop({
+          childStreamId,
+          parentStreamId,
+          executionId,
+          agentName: 'fake-cli',
+          strategy: { ...strategy, releaseSessionOwnership },
+        });
+      } catch (error) {
+        thrown = error;
+      }
+
+      expect(thrown).toBeInstanceOf(AggregateError);
+      expect((thrown as AggregateError).errors).toEqual([
+        setupError,
+        cleanupError,
+      ]);
+      expect(releaseSessionOwnership).toHaveBeenCalledOnce();
+      expect(mocks.leaseLossListener).toBeUndefined();
+      expect(handle.interrupt()).toBe(false);
+    } finally {
+      registerLoop.mockRestore();
+      releaseQueue.mockRestore();
+      session.followUps.release(childStreamId);
+    }
+  });
+
+  it.each([
+    {
+      name: 'CodexThreads',
+      track: (
+        childStreamId: StreamTabId,
+        parentStreamId: StreamTabId,
+        executionId: ExecutionId,
+        runSession: SessionHandle,
+      ) =>
+        CodexThreads.trackInFlight({
+          thread: {} as never,
+          childStreamId,
+          parentStreamId,
+          executionId,
+          executions: runSession.executions,
+        }),
+      interruptAll: () => CodexThreads.interruptAll(),
+      release: (executionId: ExecutionId) =>
+        CodexThreads.releaseByExecutionId(executionId),
+    },
+    {
+      name: 'ClaudeAgentSessions',
+      track: (
+        childStreamId: StreamTabId,
+        parentStreamId: StreamTabId,
+        executionId: ExecutionId,
+        runSession: SessionHandle,
+      ) =>
+        ClaudeAgentSessions.trackInFlight({
+          childStreamId,
+          parentStreamId,
+          executionId,
+          executions: runSession.executions,
+          model: 'claude-sonnet-4-6',
+          permissionMode: 'acceptEdits',
+          effort: 'high',
+        }),
+      interruptAll: () => ClaudeAgentSessions.interruptAll(),
+      release: (executionId: ExecutionId) =>
+        ClaudeAgentSessions.releaseByExecutionId(executionId),
+    },
+  ])(
+    '$name interrupts a real initial-turn loop and releases ownership once',
+    async ({ name, track, interruptAll, release }) => {
+      const childStreamId = uniqueStreamId(`${name}-initial-turn`);
+      const parentStreamId = 'parent' as StreamTabId;
+      const executionId = `exec-${name}-initial-turn` as ExecutionId;
+      const events: string[] = [];
+      const aborted = vi.fn();
+      const releaseSessionOwnership = vi.fn(() => release(executionId));
+      trackChildHandle(executionId, parentStreamId, childStreamId);
+
+      const strategy: ChildRunStrategy<FakeTurn> = {
+        stageLabel: `${name} session`,
+        launch: (_ports, abortController) => {
+          events.push('launch');
+          return new Promise((_resolve, reject) => {
+            const rejectAbort = () => {
+              aborted();
+              const error = new Error('Aborted');
+              error.name = 'AbortError';
+              reject(error);
+            };
+            if (abortController.signal.aborted) rejectAbort();
+            else {
+              abortController.signal.addEventListener('abort', rejectAbort, {
+                once: true,
+              });
+            }
+          });
+        },
+        isTerminal: () => false,
+        formatDelivery: () => 'unexpected delivery',
+        formatError: () => 'unexpected error',
+        onLoopStart: (runSession) => {
+          events.push('registered');
+          track(childStreamId, parentStreamId, executionId, runSession);
+        },
+        releaseSessionOwnership,
+      };
+
+      try {
+        startChildRunLoop({
+          childStreamId,
+          parentStreamId,
+          executionId,
+          agentName: name,
+          strategy,
+        });
+
+        expect(events).toEqual(['registered', 'launch']);
+        expect(isChildRunLoopActive(childStreamId)).toBe(true);
+        interruptAll();
+
+        await vi.waitFor(() => {
+          expect(aborted).toHaveBeenCalledOnce();
+          expect(isChildRunLoopActive(childStreamId)).toBe(false);
+        });
+        expect(releaseSessionOwnership).toHaveBeenCalledOnce();
+        expect(session.executions.getHandle(executionId)).toBeUndefined();
+      } finally {
+        release(executionId);
+      }
+    },
+  );
+
   it('interrupts an in-flight child when its execution lease is lost', async () => {
     const childStreamId = uniqueStreamId('lease-loss');
     const parentStreamId = 'parent' as StreamTabId;
@@ -315,6 +534,7 @@ describe('childRunLoop E2E fixtures', () => {
     const childStreamId = uniqueStreamId('complete-followup');
     const parentStreamId = 'parent' as StreamTabId;
     const { strategy, callCount, resolveTurn } = createFakeStrategy();
+    const onLoopStart = vi.fn();
     const onTurnSuccess = vi.fn();
     const parentWake = vi.fn();
     const deliveryCompleted = pDefer<{ kind: 'delivered' }>();
@@ -328,9 +548,11 @@ describe('childRunLoop E2E fixtures', () => {
       parentStreamId,
       executionId: 'exec-complete-followup' as ExecutionId,
       agentName: 'fake',
-      strategy: { ...strategy, onTurnSuccess },
+      strategy: { ...strategy, onLoopStart, onTurnSuccess },
     });
 
+    expect(onLoopStart).toHaveBeenCalledOnce();
+    expect(onLoopStart).toHaveBeenCalledWith(session);
     await vi.waitFor(() =>
       expect(isChildRunLoopActive(childStreamId)).toBe(true),
     );
