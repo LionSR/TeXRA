@@ -23,13 +23,18 @@ primary reconciliation target below.
 the `-07-22` checkpoint relied on to catch its own applied-then-reverted
 mistake). It ran a **fresh, uninformed four-way fan-out audit** — four
 independent readers briefed only with the repo's anti-abstraction rules and
-_not_ with the standing adjudications — over (1) `agent/core` + `agent/runtime`
-+ `agent/implementations/flows`, (2) `agent/modelHandlers` + `toolConversion` +
-`IModelHandler` + `ModelFactory`, (3) `logger` + the public API / export
-surface + host→core import boundary, and (4) the delegation / subagent
-subsystem and split-point candidates. Findings were then reconciled against the
-`-07-25` audit and the adjudicated rulings in the standing checkpoints. This
-pass deliberately **applies no code change** — see "No change lands" below.
+_not_ with the standing adjudications. The readers audited:
+
+1. `agent/core`, `agent/runtime`, and `agent/implementations/flows`;
+2. `agent/modelHandlers`, `toolConversion`, `IModelHandler`, and
+   `ModelFactory`;
+3. `logger`, the public API and export surface, and the host→core import
+   boundary;
+4. the delegation and subagent subsystem, together with possible split points.
+
+Findings were then reconciled against the `-07-25` audit and the adjudicated
+rulings in the standing checkpoints. This pass deliberately **applies no code
+change** — see "No change lands" below.
 
 ## Verdict — unchanged
 
