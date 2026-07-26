@@ -49,13 +49,3 @@ export {
   type ResumabilityDecision,
 } from './resumability';
 export { resolveChildRunOutput } from './childRunOutput';
-export {
-  acquireResumedExecutionLease,
-  abandonOwnedExecutionLease,
-  completeOwnedExecutionLease,
-  markOwnedExecutionLeaseUndurable,
-  releaseOwnedExecutionLeaseAfterFailure,
-  ExecutionLeaseActiveError,
-  ExecutionLeaseLostError,
-  type OwnedExecutionLeaseScope,
-} from './executionLease';

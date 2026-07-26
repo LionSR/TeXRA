@@ -13,7 +13,8 @@ import {
 } from '@agent/implementations/flows/agentCreator/agentCreatorFlow';
 import { renderAgentTemplateString } from '@agent/templates/agentTemplateRenderer';
 import { settleQuickInput } from '@commands/_shared/quickInputUtils';
-import { agentDirectories, promptToAddAgentToConfig } from '@frontend/agents';
+import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
+import { promptToAddAgentToConfig } from '@frontend/agents/register';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { AbsoluteFS } from '@utils/files';
 

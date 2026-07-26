@@ -2,12 +2,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
+import { getExecutionStore } from '@agent/storage';
+import type { AgentTrace } from '@agent/trace';
 import {
   ExecutionLeaseLostError,
-  getExecutionStore,
   type OwnedExecutionLeaseScope,
-} from '@agent/storage';
-import type { AgentTrace } from '@agent/trace';
+} from '@agent/storage/executionLease';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   AgentExecutionHandle,

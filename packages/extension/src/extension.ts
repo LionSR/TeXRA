@@ -26,7 +26,7 @@ import {
   setRuntimeExtensionId,
 } from '@auth/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
-import { hasAnyUsableSetupCredential } from '@commands/setup';
+import { hasAnyUsableSetupCredential } from '@commands/setup/setupAssistantCommand';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
 import {
@@ -44,8 +44,8 @@ import {
   registerAgentDirectoryRoots,
 } from '@frontend/setup';
 import { runTerminalCommand } from '@frontend/setupTerminalRunner';
-import { agentDirectories } from '@frontend/agents';
-import { FileLister } from '@frontend/files';
+import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
+import { FileLister } from '@frontend/files/fileLister';
 import { StatusBarUsageTracker } from '@frontend/statusBar/StatusBarUsageTracker';
 import { subscribeStatusBarSessionEvents } from '@frontend/statusBar/statusBarSessionEvents';
 import { killActiveRecording } from '@frontend/media/audio';
