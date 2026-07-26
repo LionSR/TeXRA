@@ -109,8 +109,8 @@ import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
 import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { setInlineCommentProvider } from '@tools/comment/InlineCommentTool';
 import { StreamLogStore } from '@transcript';
-import { getConfig } from '@utils/config';
 import { StorageFS } from '@utils/files';
+import { getConfig } from '@utils/config/configUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports

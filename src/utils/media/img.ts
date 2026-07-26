@@ -8,10 +8,10 @@ import { fromPath } from 'pdf2pic';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
-import { getConfig } from '@utils/config';
 import { generateShortId } from '@utils/core';
 import { AbsoluteFS, getMimeType, WorkspaceFS } from '@utils/files';
-import { checkMultipleToolsInstalled } from '@utils/system';
+import { getConfig } from '@utils/config/configUtils';
+import { checkMultipleToolsInstalled } from '@utils/system/toolUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { executeCommand } from '@utils/system/execUtils';
 

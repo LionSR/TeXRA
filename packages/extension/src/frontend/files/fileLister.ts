@@ -9,8 +9,8 @@ import {
   type ListableFileType,
 } from '@common/files/fileListingRules';
 import * as logger from '@logger/logUtils';
-import { getConfig, watchConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
+import { getConfig, watchConfig } from '@utils/config/configUtils';
 
 import { getFilesRecursively } from './listing';
 

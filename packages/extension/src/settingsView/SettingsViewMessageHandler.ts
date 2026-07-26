@@ -98,13 +98,15 @@ import { GoalStore, subscribeGoalStateChanges } from '@tools/goal';
 import { findExternalToolDef } from '@tools/externalToolDefs';
 import { StorageFS, WorkspaceFS } from '@utils/files';
 import { debounce } from '@utils/core';
-import { DEBOUNCE_OPTIONS_MS } from '@utils/config';
 import { hasExtension } from '@utils/core/pathCore';
 import {
   buildGitAuthorSettingsMessage,
   readGitAuthorSettingsFromState,
 } from '@utils/system/gitAuthorSettings';
-import { setToolUseMemoryEnabled } from '@utils/config/constants';
+import {
+  DEBOUNCE_OPTIONS_MS,
+  setToolUseMemoryEnabled,
+} from '@utils/config/constants';
 import {
   setGlobalStreaming,
   getProviderStreaming,

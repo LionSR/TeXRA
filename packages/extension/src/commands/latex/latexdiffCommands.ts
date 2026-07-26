@@ -36,7 +36,7 @@ import * as logger from '@logger/logUtils';
 import type { FileLocation } from '@shared/schemas';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
 import { FlexibleFS, pathToLocation } from '@utils/files';
-import { checkToolInstalled } from '@utils/system';
+import { checkToolInstalled } from '@utils/system/toolUtils';
 
 // Local file imports
 import { getLatexdiffPackNotifications } from './latexHousekeepingNotifications';
