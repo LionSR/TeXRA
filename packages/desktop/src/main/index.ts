@@ -50,7 +50,7 @@ import {
 } from '@shared/schemas/agent';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { backfillFirstRunDone } from '@shared/state/onboardingState';
-import { StreamLogStore, type StreamSnapshotStore } from '@transcript';
+import { StreamLogStore } from '@transcript';
 import { DEBOUNCE_OPTIONS_MS } from '@utils/config';
 import { debounce } from '@utils/core';
 import { BinaryResolver } from '@utils/system/binaryResolver';
@@ -319,7 +319,6 @@ function createWindow(options: {
   authCallbackState: DesktopAuthCallbackState;
   initializeCrashReporting: () => Promise<void>;
   processSession: SessionHandle;
-  progressSnapshotStore: StreamSnapshotStore;
   sessionStores: SessionStores;
   /**
    * Captured in `initializeElectronPlatform` BEFORE the bundled-agent sync
@@ -666,7 +665,6 @@ function createWindow(options: {
     postToRenderer: postToRendererIfAlive,
     host: agentExecutionHost,
     session: options.processSession,
-    progressSnapshotStore: options.progressSnapshotStore,
     sessionStores: options.sessionStores,
   };
   let agentExecution: DesktopProgressBridge | undefined;
@@ -1264,7 +1262,6 @@ if (protocolLifecycle.shouldContinue) {
       try {
         const processStores = await initializeDesktopProcessStores({
           session: processSession,
-          snapshots: platformInit.progressSnapshotStore,
           legacyStreamFilePath: protocolLifecycle.ownsSingleInstanceLock
             ? join(app.getPath('userData'), 'streams.json')
             : undefined,
@@ -1273,7 +1270,6 @@ if (protocolLifecycle.shouldContinue) {
         disposeProcessStores = () => processStores.dispose();
         disposeAgentResumeHandler = processResumeOwner.attach({
           session: processSession,
-          snapshots: platformInit.progressSnapshotStore,
         });
         // before-quit semantics: hold every quit event until shutdown handlers
         // have finished draining (a second Cmd+Q while we're mid-drain must NOT
@@ -1334,7 +1330,6 @@ if (protocolLifecycle.shouldContinue) {
             authCallbackState,
             initializeCrashReporting,
             processSession,
-            progressSnapshotStore: platformInit.progressSnapshotStore,
             sessionStores,
             hasPriorInstall: platformInit.hasPriorInstall,
             resourcesPath: platformInit.resourcesPath,

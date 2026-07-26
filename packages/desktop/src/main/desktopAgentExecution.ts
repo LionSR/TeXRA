@@ -77,7 +77,6 @@ import {
 } from '@shared/copy/executionHistory';
 import type { MainViewExecuteMessage } from '@shared/schemas/mainView/executeMessage';
 import { cleanupUnscopedApprovals } from '@tools/approval';
-import type { StreamSnapshotStore } from '@transcript';
 import { getConfig } from '@utils/config/configUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -108,7 +107,6 @@ export interface DesktopAgentExecutionOptions {
   postToRenderer(message: unknown): boolean | void;
   host: DesktopAgentExecutionHost;
   session: SessionHandle;
-  progressSnapshotStore: StreamSnapshotStore;
   sessionStores: SessionStores;
   /** Aborts construction and detaches presentation when its window closes. */
   presentationSignal?: AbortSignal;
@@ -119,7 +117,6 @@ export interface DesktopProgressBridgeOptions {
   sessionStores: SessionStores;
   logger?: AgentTrace;
   host: DesktopAgentExecutionHost;
-  progressSnapshotStore: StreamSnapshotStore;
   wakeQueuedFollowUpStream?: typeof wakeQueuedFollowUpStream;
 }
 
@@ -209,7 +206,6 @@ export class DesktopProgressBridge {
       session: this.session,
       stateOwnership: 'session',
       storage: platform().workspaceState,
-      snapshots: options.progressSnapshotStore,
       stores: options.sessionStores,
       sendMessage: (message) => {
         return this.postToRenderer(message) !== false;
@@ -1286,7 +1282,6 @@ export async function createDesktopAgentExecution(
     session: options.session,
     sessionStores: options.sessionStores,
     host: options.host,
-    progressSnapshotStore: options.progressSnapshotStore,
   });
   const disposeAbortedPresentation = (): void => progress.dispose();
   options.presentationSignal?.addEventListener(

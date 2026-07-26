@@ -33,7 +33,7 @@ import {
 import { isProcessAgent } from '@shared/streams/agentKind';
 import { isActivePhase } from '@shared/streams/streamStatus';
 import { GoalStore } from '@tools/goal';
-import { StreamSnapshotStore, type StreamLogStore } from '@transcript';
+import type { StreamLogStore, StreamSnapshotStore } from '@transcript';
 import { clamp } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -169,7 +169,6 @@ export class ProgressViewState {
 
   constructor(
     storage: StateStore,
-    snapshots = new StreamSnapshotStore(),
     session: SessionHandle = defaultSession(),
     stores?: SessionStores,
   ) {
@@ -183,7 +182,7 @@ export class ProgressViewState {
     );
     this.streamLogs = session.transcripts;
     this.followUps = session.followUps;
-    this.snapshots = snapshots;
+    this.snapshots = session.snapshots;
     this.stores =
       stores ??
       new SessionStores({
