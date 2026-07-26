@@ -23,6 +23,7 @@ import {
   createDesktopHostInteractions,
   type DesktopHostInteractions,
 } from '@desktop/main/desktopHostInteractions';
+import { setOutputChannelFactory } from '@logger/logUtils';
 import {
   AgentCategory,
   type AgentProposal,
@@ -474,6 +475,61 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
     expect(() => session.interactions.dispose()).toThrow('cancel failed');
     expect(dispose).toHaveBeenCalledOnce();
     session.dispose();
+  });
+
+  it('warns once when a request parks unattached, then redispatches it', async () => {
+    const lines: string[] = [];
+    setOutputChannelFactory(() => ({
+      appendLine: (message: string) => lines.push(message),
+    }));
+    const session = createTestSession();
+    const adapter = createControllablePlanAdapter();
+    const parkWarnings = (): string[] =>
+      lines.filter((line) => line.includes('No interaction host is attached'));
+    try {
+      const pending = session.interactions.requestPlanApproval({
+        approvalId: 'approval:parked-warning',
+        streamId,
+        plan,
+        goalEnabled: false,
+      });
+
+      expect(parkWarnings()).toHaveLength(1);
+      expect(parkWarnings()[0]).toContain('WARN');
+      expect(parkWarnings()[0]).toContain('plan');
+      expect(parkWarnings()[0]).toContain(streamId);
+
+      // Parking stays load-bearing: a host attaching later still replays the
+      // request exactly once (this is how a webview reload recovers a prompt).
+      session.useHostInteractions(adapter.interactions);
+      expect(adapter.requests).toHaveLength(1);
+      expect(
+        adapter.submit('approval:parked-warning', { action: 'approve' }),
+      ).toBe(true);
+      await expect(pending).resolves.toEqual({ action: 'approve' });
+      expect(parkWarnings()).toHaveLength(1);
+    } finally {
+      session.dispose();
+      setOutputChannelFactory(null);
+    }
+  });
+
+  it('settles against the documented minimal `{ cancel }` host', async () => {
+    const session = createTestSession();
+    session.useHostInteractions({ cancel: vi.fn() });
+    try {
+      await expect(
+        session.interactions.requestPlanApproval({
+          approvalId: 'approval:minimal-host',
+          streamId,
+          plan,
+          goalEnabled: false,
+        }),
+      ).resolves.toEqual({ action: 'reject' });
+      expect(session.interactions.pendingCount).toBe(0);
+    } finally {
+      session.dispose();
+    }
   });
 
   it('buffers a request made while no adapter is attached', async () => {
