@@ -103,6 +103,7 @@ export class ProgressBackend {
     payload: SetActiveStreamPayload,
   ) => void;
   private readonly stateOwnership: 'backend' | 'session';
+  private storageRootReloadWork: Promise<void> = Promise.resolve();
   private disposed = false;
 
   constructor(options: ProgressBackendOptions) {
@@ -290,11 +291,16 @@ export class ProgressBackend {
   }
 
   /** Replace session stores and presentation caches after a workspace move. */
-  async reloadAfterStorageRootChange(): Promise<void> {
-    await this.session.reloadAfterStorageRootChange();
-    this.state.resetAfterStorageRootChange();
-    this.webviewBridge.clearAll();
-    await this.state.load(this.stateOwnership);
+  reloadAfterStorageRootChange(): Promise<void> {
+    const reload = async () => {
+      await this.session.reloadAfterStorageRootChange();
+      this.state.resetAfterStorageRootChange();
+      this.webviewBridge.clearAll();
+      await this.state.load(this.stateOwnership);
+    };
+    const queued = this.storageRootReloadWork.then(reload, reload);
+    this.storageRootReloadWork = queued.catch(() => undefined);
+    return queued;
   }
 
   setupEventListeners(): ProgressEventSubscription {

@@ -295,6 +295,39 @@ describe('ProgressBackend', () => {
     }
   });
 
+  it('serializes complete presentation reloads across rapid workspace moves', async () => {
+    const transcripts = await StreamLogStore.open();
+    const session = new SessionHandle({
+      transcripts,
+      restartRepair: 'deferred',
+    });
+    let finishFirstReload: (() => void) | undefined;
+    const firstReload = new Promise<void>((resolve) => {
+      finishFirstReload = resolve;
+    });
+    const reloadAfterStorageRootChange = vi
+      .spyOn(session, 'reloadAfterStorageRootChange')
+      .mockReturnValueOnce(firstReload)
+      .mockResolvedValue();
+    const { backend } = createIsolatedRecordingBackend(session);
+
+    try {
+      const first = backend.reloadAfterStorageRootChange();
+      const second = backend.reloadAfterStorageRootChange();
+      await Promise.resolve();
+
+      expect(reloadAfterStorageRootChange).toHaveBeenCalledOnce();
+      finishFirstReload?.();
+      await first;
+      await second;
+
+      expect(reloadAfterStorageRootChange).toHaveBeenCalledTimes(2);
+    } finally {
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
   it('projects every approval bypass kind through one backend port', () => {
     const { backend, messages } = createRecordingBackend();
 
