@@ -58,9 +58,12 @@ registerDirectLeanLanguageServices(lifecycle);
 
 `registerAgentFeatures` installs the two conditional tool injections — `memory`
 and the unified `plan` tool that drives the goal loop
-(`src/agent/features.ts:18-31`). Its predicates read `platform().globalState`,
-so it **must** run after Step 1; the comment at `src/agent/features.ts:33-34`
-says so.
+(`src/agent/features.ts:18-31`). The shipped hosts call it after Step 1, as the
+source comment prescribes (`src/agent/features.ts:33-34`). Registration itself
+only stores predicates, however: the `platform().globalState` read occurs
+later, when the memory predicate is evaluated. Thus this ordering is a
+supported convention rather than an immediate execution dependency; the
+platform must merely exist before injected tools are resolved.
 
 If used, call it **exactly once per process**: the doc comment at
 `src/platform/defaults/nodeHost.ts:129-131` records that both inner
@@ -560,11 +563,14 @@ desktop also calls
 
 ## 6. Known sharp edges
 
-1. **Some ordering is load-bearing and unenforced.** The feature-parity
-   registration and Step 3 read `platform()`, so Step 1 must precede them;
-   nothing checks this beyond the throw in `platform()` itself. Step 2 does not
-   read the platform and may occur before Step 1
-   (`src/auth/serverKeys/index.ts:57-68`).
+1. **Only part of the shipped ordering is immediately load-bearing.** Step 3
+   reads `platform()`, so Step 1 must precede it; nothing checks this beyond the
+   throw in `platform()` itself. Step 2 does not read the platform and may occur
+   before Step 1 (`src/auth/serverKeys/index.ts:57-68`). Feature-parity
+   registration stores predicates and a Lean adapter without evaluating host
+   services; the platform is needed only when the memory predicate later runs
+   (`src/agent/features.ts:18-38`;
+   `src/tools/lean/direct/directLspAdapter.ts:47-52`).
 2. **Feature-parity registration is once-per-process.** A second
    `initNodeAgentRuntime` throws or double-registers
    (`src/platform/defaults/nodeHost.ts:129-131`). Contrast
