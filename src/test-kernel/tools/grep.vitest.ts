@@ -5,7 +5,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // Standard library imports
 
 // Local imports
+import { platform } from '@platform/platform';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { setupPlatform } from '@test/support/setupPlatform';
+import * as gitignoreUtils from '@tools/gitignore';
 import { buildArguments, GrepTool, type GrepInput } from '@tools/grep';
 import * as execUtils from '@utils/system/execUtils';
 
@@ -121,5 +124,41 @@ describe('GrepTool execution', () => {
     expect(result.status).toBe('error');
     expect(result.error).toContain('Regex error: regex parse error');
     expect(result.error).toContain('literal: true');
+  });
+
+  it('does not apply workspace ignore files to unrestricted external searches', async () => {
+    vi.spyOn(gitignoreUtils, 'getGitignoreMatcher').mockResolvedValue({
+      hasRules: true,
+      ignores: () => false,
+      ignoreFiles: ['/workspace/.gitignore'],
+    });
+    const executeSpy = vi.spyOn(execUtils, 'executeCommand').mockResolvedValue({
+      success: true,
+      stdout: '/outside/dist/external.tex:external\n',
+      stderr: null,
+      timedOut: false,
+      exitCode: 0,
+    });
+    await platform().workspaceState.update(
+      WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
+      false,
+    );
+
+    try {
+      const result = await new GrepTool().call({
+        pattern: 'external',
+        path: '/outside/dist',
+        output_mode: 'content',
+      });
+
+      expect(result.status).toBe('executed');
+      expect(executeSpy).toHaveBeenCalledOnce();
+      expect(executeSpy.mock.calls[0]?.[0]).not.toContain('--ignore-file');
+    } finally {
+      await platform().workspaceState.update(
+        WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
+        true,
+      );
+    }
   });
 });
