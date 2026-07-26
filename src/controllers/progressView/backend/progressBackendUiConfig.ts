@@ -1,6 +1,7 @@
 import type { AgentTrace } from '@agent/trace';
 import {
   type HostBashApprovalResult,
+  type HostApprovalBypassStateUpdate,
   matchesCancelSelector,
   type HostInteractionCancelSelector,
   type HostUserQuestionResult,
@@ -266,12 +267,13 @@ export async function replayApprovalRequestHandlers(
 
 interface ProgressBackendUiConfig {
   callbacks: UICallbacks;
+  setApprovalBypassState(update: HostApprovalBypassStateUpdate): void;
   hasPendingPermissions(streamId: string): boolean;
 }
 
 interface ProgressBackendUiConfigParams {
   handlers: ApprovalRequestHandlerSet;
-  /** Transport for the bypass-state pushes (handlers own their own transport). */
+  /** Transport for approval-bypass state (handlers own their own transport). */
   webviewUpdater: WebviewUpdater;
   /** Gate shared with the handlers; also guards the bypass-state pushes. */
   canSend: () => boolean;
@@ -295,16 +297,11 @@ export function createProgressBackendUiConfig(
     callbacks: {
       showToolEditPermission: (p) => handlers.toolEdit.show(p),
       resolveToolEditPermission: (id) => handlers.toolEdit.dismiss(id),
-      updateToolEditApprovalBypassState: (streamId, bypassActive) => {
-        if (canSend()) {
-          webviewUpdater.updateBypassState(streamId, 'toolEdit', bypassActive);
-        }
-      },
-      updateSuperYoloBypassState: (streamId, bypassActive) => {
-        if (canSend()) {
-          webviewUpdater.updateBypassState(streamId, 'superYolo', bypassActive);
-        }
-      },
+    },
+    setApprovalBypassState: ({ streamId, kind, bypassActive }) => {
+      if (canSend()) {
+        webviewUpdater.updateBypassState(streamId, kind, bypassActive);
+      }
     },
     hasPendingPermissions: (streamId) =>
       APPROVAL_REQUEST_HANDLER_KEYS.some((key) =>

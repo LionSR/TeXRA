@@ -171,7 +171,6 @@ export function createProgressViewCommandHandlers(
       session,
     });
     setBashApprovalSessionBypass(stream, enabled, runtimeHost, {
-      silent: true,
       session,
     });
     await showInfo?.(

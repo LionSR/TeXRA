@@ -4,6 +4,7 @@
 
 import type {
   HostAgentProposalRequest,
+  HostApprovalBypassStateUpdate,
   HostBashApprovalResult,
   HostInteractions,
   HostRetryRequest,
@@ -66,6 +67,12 @@ export {
   formatRetryRequestMessage,
   formatToolEditApprovalSummary,
 } from './approval/approvalSummaries';
+
+interface HeadlessCliHostInteractionHooks extends CliApprovalPromptHooks {
+  readonly setApprovalBypassState?: (
+    update: HostApprovalBypassStateUpdate,
+  ) => void;
+}
 
 function toToolEditResult(
   decision: ApprovalDecision,
@@ -197,9 +204,10 @@ async function askHeadlessUserQuestion(
 
 export function createHeadlessCliHostInteractions(
   context: CliContext,
-  hooks: CliApprovalPromptHooks = {},
+  hooks: HeadlessCliHostInteractionHooks = {},
 ): HostInteractions {
   return {
+    setApprovalBypassState: hooks.setApprovalBypassState,
     requestToolEditApproval(request) {
       return decideToolEdit(request, context, hooks);
     },

@@ -377,10 +377,18 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
 
   it('keeps tool-edit and bash bypass symmetric behind the edit shield', async () => {
     const stream = 'stream:edit-bypass';
-    const { events, host } = createRecordingRuntimeHost();
+    const { host } = createRecordingRuntimeHost();
+    const session = createTestSession();
+    const setApprovalBypassState = vi.fn();
+    session.useHostInteractions({
+      setApprovalBypassState,
+      cancel: vi.fn(),
+    });
     const showInfo = vi.fn();
     const handlers = createProgressViewCommandHandlers(
-      createActions({ bypass: { runtimeHost: host, showInfo } }),
+      createActions({
+        bypass: { runtimeHost: host, session, showInfo },
+      }),
     );
 
     expectDispatched(
@@ -392,14 +400,13 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
     );
     await Promise.resolve();
 
-    expect(isApprovalBypassedForStream(stream)).toBe(true);
-    expect(isBashApprovalBypassedForStream(stream)).toBe(true);
-    expect(events).toEqual([
-      {
-        event: 'updateToolEditApprovalBypassState',
-        payload: { streamId: stream, bypassActive: true },
-      },
-    ]);
+    expect(isApprovalBypassedForStream(stream, session)).toBe(true);
+    expect(isBashApprovalBypassedForStream(stream, session)).toBe(true);
+    expect(setApprovalBypassState).toHaveBeenCalledWith({
+      streamId: stream,
+      kind: 'toolEdit',
+      bypassActive: true,
+    });
     expect(showInfo).toHaveBeenCalledWith(
       'File edits and shell commands will be auto-approved for this run.',
     );
@@ -413,12 +420,14 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
     );
     await Promise.resolve();
 
-    expect(isApprovalBypassedForStream(stream)).toBe(false);
-    expect(isBashApprovalBypassedForStream(stream)).toBe(false);
-    expect(events.at(-1)).toEqual({
-      event: 'updateToolEditApprovalBypassState',
-      payload: { streamId: stream, bypassActive: false },
+    expect(isApprovalBypassedForStream(stream, session)).toBe(false);
+    expect(isBashApprovalBypassedForStream(stream, session)).toBe(false);
+    expect(setApprovalBypassState).toHaveBeenCalledWith({
+      streamId: stream,
+      kind: 'toolEdit',
+      bypassActive: false,
     });
+    session.dispose();
   });
 
   it('forces edit and bash bypass on without inverting a decoupled stream', async () => {
@@ -451,10 +460,16 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
 
   it('makes delegated task bypass enable edit and bash bypasses', async () => {
     const stream = 'stream:proposal-bypass';
-    const { events, host } = createRecordingRuntimeHost();
+    const { host } = createRecordingRuntimeHost();
+    const session = createTestSession();
+    const setApprovalBypassState = vi.fn();
+    session.useHostInteractions({
+      setApprovalBypassState,
+      cancel: vi.fn(),
+    });
     const showInfo = vi.fn();
     const actions = createActions({
-      bypass: { runtimeHost: host, showInfo },
+      bypass: { runtimeHost: host, session, showInfo },
     });
     const handlers = createProgressViewCommandHandlers(actions);
 
@@ -467,19 +482,16 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
     );
     await Promise.resolve();
 
-    expect(proposalApprovals().isBypassed(stream)).toBe(true);
-    expect(isApprovalBypassedForStream(stream)).toBe(true);
-    expect(isBashApprovalBypassedForStream(stream)).toBe(true);
-    expect(events).toEqual([
-      {
-        event: 'updateSuperYoloBypassState',
-        payload: { streamId: stream, bypassActive: true },
-      },
-      {
-        event: 'updateToolEditApprovalBypassState',
-        payload: { streamId: stream, bypassActive: true },
-      },
-    ]);
+    expect(proposalApprovals(session).isBypassed(stream)).toBe(true);
+    expect(isApprovalBypassedForStream(stream, session)).toBe(true);
+    expect(isBashApprovalBypassedForStream(stream, session)).toBe(true);
+    expect(setApprovalBypassState.mock.calls.map(([update]) => update)).toEqual(
+      [
+        { streamId: stream, kind: 'superYolo', bypassActive: true },
+        { streamId: stream, kind: 'toolEdit', bypassActive: true },
+        { streamId: stream, kind: 'bash', bypassActive: true },
+      ],
+    );
     expect(showInfo).toHaveBeenCalledWith(
       'Agent tasks, file edits, and shell commands will be auto-approved for this run.',
     );
@@ -493,9 +505,9 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
       handlers,
     );
     await Promise.resolve();
-    expect(proposalApprovals().isBypassed(stream)).toBe(true);
-    expect(isApprovalBypassedForStream(stream)).toBe(true);
-    expect(isBashApprovalBypassedForStream(stream)).toBe(true);
+    expect(proposalApprovals(session).isBypassed(stream)).toBe(true);
+    expect(isApprovalBypassedForStream(stream, session)).toBe(true);
+    expect(isBashApprovalBypassedForStream(stream, session)).toBe(true);
     expect(actions.approval.approvePendingDelegatedWork).toHaveBeenCalledWith(
       stream,
       'proposal-current',
@@ -510,22 +522,20 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
     );
     await Promise.resolve();
 
-    expect(proposalApprovals().isBypassed(stream)).toBe(false);
-    expect(isApprovalBypassedForStream(stream)).toBe(false);
-    expect(isBashApprovalBypassedForStream(stream)).toBe(false);
-    expect(events.slice(-2)).toEqual([
-      {
-        event: 'updateSuperYoloBypassState',
-        payload: { streamId: stream, bypassActive: false },
-      },
-      {
-        event: 'updateToolEditApprovalBypassState',
-        payload: { streamId: stream, bypassActive: false },
-      },
+    expect(proposalApprovals(session).isBypassed(stream)).toBe(false);
+    expect(isApprovalBypassedForStream(stream, session)).toBe(false);
+    expect(isBashApprovalBypassedForStream(stream, session)).toBe(false);
+    expect(
+      setApprovalBypassState.mock.calls.slice(-3).map(([update]) => update),
+    ).toEqual([
+      { streamId: stream, kind: 'superYolo', bypassActive: false },
+      { streamId: stream, kind: 'toolEdit', bypassActive: false },
+      { streamId: stream, kind: 'bash', bypassActive: false },
     ]);
     expect(showInfo).toHaveBeenLastCalledWith(
       'Agent tasks, file edits, and shell commands will require approval for this run.',
     );
+    session.dispose();
   });
 });
 

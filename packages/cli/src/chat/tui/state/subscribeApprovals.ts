@@ -149,11 +149,6 @@ export function createTuiHostInteractions(
         request.streamId
       ) {
         setToolEditApprovalSessionBypass(request.streamId, true, host);
-        setTuiApprovalBypassState({
-          streamId: request.streamId,
-          kind: 'toolEdit',
-          bypassActive: true,
-        });
       }
       return decision.accepted
         ? { accepted: true, appliedContent: request.proposedContent }
@@ -184,7 +179,10 @@ export function createTuiHostInteractions(
     openExternalInquiry(request) {
       return openExternalInquiryInteraction(request, context);
     },
-    setApprovalBypassState: setTuiApprovalBypassState,
+    setApprovalBypassState(update) {
+      setTuiApprovalBypassState(update);
+      host.emitApprovalBypassState(update);
+    },
     cancel(selector: HostInteractionCancelSelector = {}) {
       // Retry routes live outside the modal queue (the pre-queue auto-switch
       // lookup), so a retry-kind or unfiltered cancel must settle them too —
@@ -390,11 +388,6 @@ async function requestBashInteraction(
   const decision = await decideWithPolicy(context, 'bash', payload);
   if (decision.accepted && decision.bypass === 'bash' && request.streamId) {
     setBashApprovalSessionBypass(request.streamId, true, host);
-    setTuiApprovalBypassState({
-      streamId: request.streamId,
-      kind: 'bash',
-      bypassActive: true,
-    });
   }
   return {
     accepted: decision.accepted,
@@ -425,13 +418,6 @@ async function requestProposalInteraction(
     request.streamId
   ) {
     setDelegatedWorkApprovalBypasses(request.streamId, true, host);
-    for (const kind of ['superYolo', 'toolEdit', 'bash'] as const) {
-      setTuiApprovalBypassState({
-        streamId: request.streamId,
-        kind,
-        bypassActive: true,
-      });
-    }
     approveQueuedDelegatedWorkForStream(request.streamId);
   }
   const feedback = feedbackOnReject(decision);

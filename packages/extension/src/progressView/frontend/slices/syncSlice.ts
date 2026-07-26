@@ -56,6 +56,7 @@ export const syncHandlers = {
         todos: workPlan.todos,
         plan: workPlan.plan,
         queuedFollowUps: workPlan.queuedFollowUps,
+        bashBypass: controls.bashBypass,
         toolEditBypass: controls.toolEditBypass,
         superYoloBypass: controls.superYoloBypass,
         goalActive: goal.active,
