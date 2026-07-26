@@ -82,6 +82,11 @@ const mocks = vi.hoisted(() => ({
   initializeNodeGoalPrompts: vi.fn(),
   initializeNodeRuntimeSkills: vi.fn(),
   initNodeAgentRuntime: vi.fn(),
+  registerAgentShutdownHandlers: vi.fn(
+    (_lifecycle: { onShutdown: unknown }) => {
+      // Wiring assertion only — the drain itself is covered by AgentShutdown.
+    },
+  ),
   initializeServerSideKeyAccess: vi.fn(),
   serverSideKeyService: {
     setUseIncludedModelAccess: vi.fn(),
@@ -101,6 +106,10 @@ vi.mock('@agent/index/platformAgentDirectories', () => ({
 
 vi.mock('@platform/defaults/longRunningModelTransport', () => ({
   installLongRunningModelFetch: mocks.installLongRunningModelFetch,
+}));
+
+vi.mock('@agent/runtime/agentShutdown', () => ({
+  registerAgentShutdownHandlers: mocks.registerAgentShutdownHandlers,
 }));
 
 vi.mock('@auth/serverKeys', () => ({
@@ -277,6 +286,22 @@ describe('CLI platform init', () => {
     expect(vi.mocked(UsageLogService.dispose)).not.toHaveBeenCalled();
     for (const handler of mocks.shutdownHandlers) await handler();
     expect(vi.mocked(UsageLogService.dispose)).toHaveBeenCalled();
+  });
+
+  it('registers the agent shutdown drain on first platform init', async () => {
+    // Regression: the CLI was the one host that never registered these, so a
+    // background `bash` run (spawned detached, in its own process group) and
+    // any live codex / claude_agent session outlived `texra` as orphans.
+    mocks.tryPlatform.mockReturnValueOnce(undefined);
+    isAuthenticatedSpy.mockResolvedValue(false);
+
+    await initCliPlatform(cliContext({ installSignalHandlers: false }));
+
+    // The CLI lifecycle host — the one every exit path drains through
+    // (bin/texra.ts's finally, the signal handlers, the TUI's exitNow).
+    expect(mocks.registerAgentShutdownHandlers).toHaveBeenCalledWith(
+      expect.objectContaining({ onShutdown: expect.any(Function) }),
+    );
   });
 
   it('marks the operator-terminal console sink as trusted', async () => {
