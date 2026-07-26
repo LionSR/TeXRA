@@ -233,6 +233,7 @@ describe('SessionHandle', () => {
       expect(fresh.status).not.toBe(defaultSession().status);
       expect(fresh.events).not.toBe(defaultSession().events);
       expect(fresh.transcripts).not.toBe(defaultSession().transcripts);
+      expect(fresh.snapshots).not.toBe(defaultSession().snapshots);
       expect(fresh.followUps).not.toBe(defaultSession().followUps);
       expect(fresh.approvals).not.toBe(defaultSession().approvals);
       expect(fresh.modelRetries).not.toBe(defaultSession().modelRetries);

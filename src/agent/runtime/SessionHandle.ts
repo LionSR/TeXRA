@@ -34,6 +34,7 @@ import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManage
 import type { StreamTabId } from '@shared/schemas';
 import type { RunTraceFlushEntry } from '@transcript/runTrace';
 import type { StreamLogStore } from '@transcript/StreamLogStore';
+import { StreamSnapshotStore } from '@transcript/StreamSnapshotStore';
 import { getRunContextSession, tryUseRunContext } from './RunContext';
 import { ExecutionRegistry } from './executionRegistry';
 import { ExecutionSubscriptionBinder } from './ExecutionSubscriptionBinder';
@@ -90,6 +91,7 @@ export type SessionHandleInit = Pick<SessionHandle, 'transcripts'> &
       | 'events'
       | 'status'
       | 'followUps'
+      | 'snapshots'
       | 'flushers'
       | 'interactions'
       | 'modelRetries'
@@ -110,6 +112,9 @@ export class SessionHandle {
   readonly transcripts: StreamLogStore;
   /** Session-owned follow-up queue owner. */
   readonly followUps: ToolUseFollowUpQueue;
+  /** Session-owned per-stream sidecar store for runs launched in this session. */
+  readonly snapshots: StreamSnapshotStore;
+  private readonly detachSnapshotEvents: () => void;
   /** This session's execution-keyed trace flushers. */
   readonly flushers: Map<string, RunTraceFlushEntry>;
   private readonly artifactFlushers = new Set<() => Promise<void>>();
@@ -164,6 +169,11 @@ export class SessionHandle {
     this.status = status;
     this.transcripts = transcripts;
     this.followUps = followUps;
+    // The sidecar store is a session artifact exactly like `transcripts`: the
+    // session projects its own run events into it and flushes it below, so no
+    // host has to construct, attach, and flush one of its own.
+    this.snapshots = init.snapshots ?? new StreamSnapshotStore();
+    this.detachSnapshotEvents = this.snapshots.attachSessionEvents(events);
     this.interactions = init.interactions ?? new SessionHostInteractions();
     this.approvals = approvals;
     this.modelRetries = init.modelRetries ?? new ModelRetryGate();
@@ -263,7 +273,11 @@ export class SessionHandle {
   }
 
   private async flushArtifactsOnce(): Promise<void> {
-    const writers = [() => this.transcripts.flush(), ...this.artifactFlushers];
+    const writers = [
+      () => this.transcripts.flush(),
+      () => this.snapshots.flush(),
+      ...this.artifactFlushers,
+    ];
     const results = await Promise.allSettled(
       writers.map((flush) => Promise.resolve().then(flush)),
     );
@@ -408,6 +422,7 @@ export class SessionHandle {
     this.approvals.clearAll();
     this.modelRetries.dispose();
     this.interactions.dispose();
+    this.detachSnapshotEvents();
     this.artifactFlushers.clear();
     this.resultListeners.clear();
     this.missedTerminalResults.clear();
