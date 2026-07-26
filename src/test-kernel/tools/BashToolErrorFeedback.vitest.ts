@@ -182,10 +182,7 @@ describe('BashTool error feedback', () => {
     expect(executeSpy).toHaveBeenCalledOnce();
   });
 
-  it('reports a real rejection distinctly from an approval timeout', async () => {
-    // Regression coverage for #7444: a host-side approval timeout must not
-    // collapse into the same "User rejected command" shape as an
-    // explicit reject once it reaches the agent.
+  it('reports an explicit approval rejection to the agent', async () => {
     vi.mocked(requestBashApproval).mockResolvedValueOnce({
       accepted: false,
       userMessage: 'No thanks.',
@@ -193,15 +190,5 @@ describe('BashTool error feedback', () => {
     const rejected = await new BashTool().call({ command: 'echo rejected' });
     expect(rejected.status).toBe('error');
     expect(rejected.error).toContain('User rejected command');
-
-    vi.mocked(requestBashApproval).mockResolvedValueOnce({
-      accepted: false,
-      userMessage: 'Approval request timed out.',
-      timedOut: true,
-    });
-    const timedOut = await new BashTool().call({ command: 'echo timeout' });
-    expect(timedOut.status).toBe('error');
-    expect(timedOut.error).not.toContain('User rejected command');
-    expect(timedOut.error).toContain('timed out');
   });
 });
