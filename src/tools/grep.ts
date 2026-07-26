@@ -1,3 +1,6 @@
+// Node imports
+import * as nodePath from 'node:path';
+
 // Third-party imports
 import { z } from 'zod';
 
@@ -121,10 +124,13 @@ export class GrepTool extends defineTool({
     const { path, display } = resolveAndFormat(input.path ?? undefined, root);
     const gitignore = await getGitignoreMatcher();
     const args = buildArguments(input, outputMode);
-    const ignoreArgs = gitignore.ignoreFiles.flatMap((ignoreFile) => [
-      '--ignore-file',
-      ignoreFile,
-    ]);
+    const applyWorkspaceIgnores = !nodePath.isAbsolute(path.relative);
+    const ignoreArgs = applyWorkspaceIgnores
+      ? gitignore.ignoreFiles.flatMap((ignoreFile) => [
+          '--ignore-file',
+          ignoreFile,
+        ])
+      : [];
 
     // `--` ends rg option parsing so the LLM-controlled pattern can't be read as
     // a flag — e.g. `--pre=<cmd>` would run <cmd> as a preprocessor on every

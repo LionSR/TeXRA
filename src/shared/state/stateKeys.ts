@@ -48,6 +48,9 @@ export enum WorkspaceStateKey {
   // Git worktree support
   GIT_WORKTREE_SUPPORT = 'texra.git.worktreeSupport',
 
+  // Tool path safety
+  TOOL_PATH_PROTECTION_ENABLED = 'texra.tools.restrictPathsToWorkingDirectory',
+
   // LaTeX/compile/diff settings (migrated from VS Code config)
   WORKFLOW_AUTO_COMPILE = 'texra.workflow.autoCompileAfterOutput',
   WORKFLOW_AUTO_COMPILE_TIMEOUT_MS = 'texra.workflow.autoCompileTimeoutMs',

@@ -59,6 +59,12 @@ export const DEFAULT_GIT_MARK_COMMITS = true;
 export const DEFAULT_GIT_WORKTREE_SUPPORT = false;
 
 /**
+ * Keep file-oriented tools inside the active working directory unless the
+ * user explicitly grants them access to arbitrary filesystem paths.
+ */
+export const DEFAULT_TOOL_PATH_PROTECTION_ENABLED = true;
+
+/**
  * Host-neutral catalog for **state-backed** TeXRA settings.
  *
  * Unlike {@link CoreSettingsShape} (config-tree settings that flow into the VS
@@ -234,6 +240,12 @@ const TOOL_AVAILABILITY_RUNTIME_REACHABILITY = {
     'texra agents run <tool-use-agent> --instruction "use an external tool"',
   through:
     'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/agent/runtime/agentToolResolution.ts -> src/tools/toolAvailability.ts',
+} satisfies CliRuntimeReachability;
+const TOOL_PATH_PROTECTION_RUNTIME_REACHABILITY = {
+  command:
+    'texra agents run <tool-use-agent> --instruction "read a file outside the working directory"',
+  through:
+    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/tools/pathResolution.ts',
 } satisfies CliRuntimeReachability;
 
 const PROXY_CONFIG_CONSUMER =
@@ -666,6 +678,18 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     cliConsumer: 'src/tools/toolAvailability.ts',
     cliRuntimeReachability: TOOL_AVAILABILITY_RUNTIME_REACHABILITY,
     openForm: 'tools',
+  },
+  {
+    key: WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
+    schema: z.boolean().prefault(DEFAULT_TOOL_PATH_PROTECTION_ENABLED),
+    title: 'Restrict tool paths',
+    description:
+      'Keep file-reading, editing, search, diagnostics, and PDF tools inside the active working directory. Turn this off only when an agent must use arbitrary filesystem paths.',
+    category: 'tools',
+    store: 'workspaceState',
+    hosts: ['vscode', 'desktop', 'cli'],
+    cliConsumer: 'src/tools/pathResolution.ts',
+    cliRuntimeReachability: TOOL_PATH_PROTECTION_RUNTIME_REACHABILITY,
   },
 ] as const;
 
