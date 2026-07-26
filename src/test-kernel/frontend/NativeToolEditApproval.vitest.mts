@@ -391,6 +391,51 @@ describe('native tool edit approval', () => {
     expect(runtimeHost.resolved).toEqual([{ requestId }]);
   });
 
+  it('isolates host-local prompt failures from the approval result', async () => {
+    const runtimeHost = createRecordingRuntimeHost();
+    const session = createTestSession();
+    sessions.push(session);
+    initializeNativeToolEditApproval(
+      {
+        storageUri: { fsPath: storageRoot },
+        globalStorageUri: { fsPath: storageRoot },
+      } as unknown as VSCode.ExtensionContext,
+      runtimeHost,
+      {
+        showToolEditPermission: (payload) => {
+          runtimeHost.shown.push(payload);
+          throw new Error('show failed');
+        },
+        resolveToolEditPermission: () => {
+          throw new Error('resolve failed');
+        },
+      },
+    );
+    const approval = nativeRequestApproval(
+      {
+        path: '/workspace/isolated.txt',
+        originalContent: 'old\n',
+        proposedContent: 'new\n',
+        sourceTool: 'write_file',
+        streamId: 'stream-isolated',
+      },
+      { session },
+    );
+    activeApprovals.push(approval);
+    await vi.waitFor(() => expect(runtimeHost.shown).toHaveLength(1));
+    const requestId = runtimeHost.shown[0]?.requestId;
+    if (!requestId) {
+      throw new Error('Expected a tool edit approval request ID.');
+    }
+
+    await handleProgressViewToolEditApprovalAction({
+      requestId,
+      action: 'reject',
+    });
+
+    await expect(approval).resolves.toMatchObject({ accepted: false });
+  });
+
   it('restores a failed approval prompt and accepts a later retry', async () => {
     const { approval, requestId, runtimeHost } = await startApproval();
     const proposedUri = currentProposedUri();

@@ -306,6 +306,51 @@ describe('desktop tool edit approval', () => {
   );
 
   approvalTest(
+    'isolates host-local prompt failures from the approval result',
+    async () => {
+      const tempRoot = await mkdtemp(path.join(tmpdir(), 'texra-approval-'));
+      const { desktopModule } = await loadApprovalModules();
+      const runtimeHost = createRecordingRuntimeHost();
+      const session = createTestSession();
+      let shown: ToolEditPermission | undefined;
+      const controller = desktopModule.createDesktopToolEditApprovalController({
+        runtimeHost,
+        session,
+        ui: createStubDesktopAgentExecutionHost(),
+        tempRoot,
+        showToolEditPermission: (payload) => {
+          shown = payload;
+          throw new Error('show failed');
+        },
+        resolveToolEditPermission: () => {
+          throw new Error('resolve failed');
+        },
+      });
+
+      try {
+        const approval = controller.requestApproval({
+          path: '/workspace/isolated.txt',
+          originalContent: 'old\n',
+          proposedContent: 'new\n',
+          sourceTool: 'write_file',
+          streamId: 'stream-isolated',
+        });
+        await vi.waitFor(() => expect(shown).toBeDefined());
+
+        controller.handleAction({
+          requestId: shown!.requestId,
+          action: 'reject',
+        });
+
+        await expect(approval).resolves.toMatchObject({ accepted: false });
+      } finally {
+        controller.dispose();
+        await rm(tempRoot, { recursive: true, force: true });
+      }
+    },
+  );
+
+  approvalTest(
     'routes proposed-file previews through desktop temp files before rejection',
     async () => {
       const tempRoot = await mkdtemp(path.join(tmpdir(), 'texra-approval-'));

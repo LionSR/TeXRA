@@ -20,6 +20,7 @@ import {
   type HostInteractionCancelSelector,
 } from '@agent/runtime/HostInteractions';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { withEventErrorHandling } from '@controllers/progressView/backend/events/errorHandling';
 import { VscodeDiffViewHost } from '@frontend/approval/VscodeDiffViewHost';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import {
@@ -231,18 +232,27 @@ function publishProgressViewApprovalPrompt(
 ): void {
   // Activate the stream that needs approval and post the prompt (shared with
   // the desktop host); VS Code computes the relative path via the workspace.
-  showToolEditPermission(
-    prepareToolEditApprovalPrompt(getRuntimeHost(), session, {
-      requestId,
-      request,
-      relativePath,
-      lineChanges,
-    }),
+  withEventErrorHandling(
+    'NativeToolEditApproval',
+    'failed to show approval prompt',
+    () =>
+      showToolEditPermission(
+        prepareToolEditApprovalPrompt(getRuntimeHost(), session, {
+          requestId,
+          request,
+          relativePath,
+          lineChanges,
+        }),
+      ),
   );
 }
 
 function resolveProgressViewApprovalPrompt(requestId: string): void {
-  resolveToolEditPermission(requestId);
+  withEventErrorHandling(
+    'NativeToolEditApproval',
+    'failed to resolve approval prompt',
+    () => resolveToolEditPermission(requestId),
+  );
 }
 
 function restoreProgressViewApprovalPrompt(
