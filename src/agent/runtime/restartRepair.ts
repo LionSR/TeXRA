@@ -123,7 +123,7 @@ function repairCandidates(
 
 type ExecutionSettlement =
   | { readonly settled: false }
-  | { readonly settled: true; readonly outcome?: RunOutcome };
+  | { readonly settled: true; readonly outcome: RunOutcome };
 
 /**
  * Revalidate terminal metadata while holding the execution lease.
@@ -155,10 +155,9 @@ async function readExecutionSettlement(
 function synchronizeSettledPhase(
   streamStatus: StreamStatusMachine,
   streamId: StreamTabId,
-  outcome: RunOutcome | undefined,
+  outcome: RunOutcome,
   statusEmitOptions: StreamStatusEmitOptions | undefined,
 ): void {
-  if (outcome == null) return;
   const current = streamStatus.get(streamId);
   if (current == null || !RESTART_REPAIR_PHASES.has(current)) return;
   if (current === STREAM_PHASE.WAITING) {
@@ -343,13 +342,11 @@ export async function repairRestartedStreams(
               settlement.outcome,
               options.statusEmitOptions,
             );
-            if (settlement.outcome) {
-              await options.closeRunningGroups(
-                [streamId],
-                settlement.outcome,
-                now,
-              );
-            }
+            await options.closeRunningGroups(
+              [streamId],
+              settlement.outcome,
+              now,
+            );
             return { kind: 'settled' as const, settlement };
           }
         }
