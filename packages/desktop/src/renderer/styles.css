@@ -64,10 +64,10 @@ wa-button[hidden] {
 
 wa-button.btn-primary::part(base),
 wa-button.btn-secondary::part(base) {
-  min-height: var(--wa-height-button);
+  min-height: var(--height-button);
   padding-inline: var(--wa-space-m);
   border: var(--border-thin) solid transparent;
-  border-radius: var(--wa-border-radius-m);
+  border-radius: var(--border-radius-medium);
   font-weight: var(--font-weight-medium);
   transition:
     background-color var(--transition-normal),
@@ -137,13 +137,18 @@ wa-button.btn-secondary::part(base):active {
   background: var(--surface-selected);
 }
 
+wa-button.btn-ghost,
+wa-button.action-button {
+  flex-shrink: 0;
+}
+
 wa-button.btn-ghost::part(base),
 wa-button.action-button:not(.btn-primary):not(.btn-secondary)::part(base) {
   gap: var(--wa-space-2xs);
-  min-height: var(--wa-height-control-compact);
+  min-height: var(--height-control-compact);
   padding-inline: var(--control-padding-inline);
   border: var(--border-thin) solid transparent;
-  border-radius: var(--wa-border-radius-m);
+  border-radius: var(--border-radius-medium);
   background: transparent;
   font-size: var(--font-size-sm);
   transition:
@@ -169,7 +174,7 @@ wa-button.action-button:not(.btn-primary):not(.btn-secondary)::part(
 
 wa-button.btn-ghost wa-icon,
 wa-button.action-button wa-icon {
-  font-size: var(--font-size-sm, 0.9em);
+  font-size: var(--font-size-sm);
 }
 
 wa-button.icon-button,

@@ -10,11 +10,9 @@ import {
 } from '@shared/styles';
 import { formatDesktopAccelerator } from '@shared/commands/accelerators';
 import {
-  DESKTOP_SHORTCUT_EVENTS,
+  getDesktopShortcutService,
   keyboardEventToAccelerator,
   type DesktopShortcutEntry,
-  type DesktopShortcutState,
-  type DesktopShortcutUpdate,
 } from '@shared/commands/shortcutPreferences';
 import {
   renderIconActionButton,
@@ -91,21 +89,18 @@ export class ShortcutsTab extends LitElement {
   @state() private feedback = '';
   @state() private feedbackIsError = false;
 
-  private readonly handleState = (event: Event): void => {
-    const state = (event as CustomEvent<DesktopShortcutState>).detail;
-    this.entries = state.entries;
-  };
+  private unsubscribe: (() => void) | undefined;
 
   override connectedCallback(): void {
     super.connectedCallback();
-    window.addEventListener(DESKTOP_SHORTCUT_EVENTS.STATE, this.handleState);
-    queueMicrotask(() => {
-      window.dispatchEvent(new Event(DESKTOP_SHORTCUT_EVENTS.REQUEST));
+    this.unsubscribe = getDesktopShortcutService()?.subscribe((entries) => {
+      this.entries = entries;
     });
   }
 
   override disconnectedCallback(): void {
-    window.removeEventListener(DESKTOP_SHORTCUT_EVENTS.STATE, this.handleState);
+    this.unsubscribe?.();
+    this.unsubscribe = undefined;
     super.disconnectedCallback();
   }
 
@@ -159,10 +154,7 @@ export class ShortcutsTab extends LitElement {
   }
 
   private updateShortcut(id: string, accelerator: string | undefined): void {
-    const detail: DesktopShortcutUpdate = { id, accelerator };
-    window.dispatchEvent(
-      new CustomEvent(DESKTOP_SHORTCUT_EVENTS.UPDATE, { detail }),
-    );
+    getDesktopShortcutService()?.update(id, accelerator);
     this.recordingId = undefined;
     this.feedback = accelerator
       ? `Saved ${formatDesktopAccelerator(accelerator, currentPlatform())}.`
@@ -171,7 +163,7 @@ export class ShortcutsTab extends LitElement {
   }
 
   private resetAll(): void {
-    window.dispatchEvent(new Event(DESKTOP_SHORTCUT_EVENTS.RESET));
+    getDesktopShortcutService()?.reset();
     this.recordingId = undefined;
     this.feedback = 'Restored all default shortcuts.';
     this.feedbackIsError = false;

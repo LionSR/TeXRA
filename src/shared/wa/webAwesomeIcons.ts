@@ -404,6 +404,11 @@ export function registerTeXRAWebAwesomeIcons(): void {
 // the codicon-style aliases. Exported so callers can type-check icon usage.
 export type TeXRAIconName = keyof typeof icons | keyof typeof CODICON_ALIASES;
 
+/** Canonical names used to verify host-specific icon resolvers exhaustively. */
+export const TEXRA_ICON_NAMES = Object.freeze(
+  Object.keys(icons) as (keyof typeof icons)[],
+);
+
 interface WaIconOptions {
   readonly id?: string;
   // 'start' / 'end' for wa-button; 'icon' for wa-callout / wa-card.

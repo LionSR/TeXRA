@@ -68,6 +68,22 @@ describe('desktop control system', () => {
       'export const iconSurfaceStyles: CSSResult = css`',
     );
     expect(commonView).toContain('${iconSurfaceStyles}');
+
+    const lockstepDeclarations = [
+      'min-height: var(--height-button)',
+      'border-radius: var(--border-radius-medium)',
+      'min-height: var(--height-control-compact)',
+      'background: var(--wa-color-brand-fill-loud)',
+      'background: var(--surface-selected)',
+      'background: var(--surface-hover)',
+      'background: var(--surface-active)',
+      'background: var(--wa-color-brand-fill-quiet)',
+      'font-size: var(--font-size-sm)',
+    ];
+    for (const declaration of lockstepDeclarations) {
+      expect(lightDom).toContain(declaration);
+      expect(shadowDom).toContain(declaration);
+    }
   });
 
   it('uses canonical control classes instead of local shell button skins', () => {

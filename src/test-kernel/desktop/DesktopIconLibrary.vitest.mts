@@ -9,6 +9,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import {
   CODICON_ALIASES,
   TEXRA_ICON_LIBRARY,
+  TEXRA_ICON_NAMES,
 } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - desktop test paths
@@ -122,5 +123,22 @@ describe('desktop icon library', () => {
     }
 
     expect(unresolved).toEqual([]);
+  });
+
+  it('resolves every canonical TeXRA name to a pinned Lucide glyph', async () => {
+    const unresolved: string[] = [];
+    const missingSvg = decodeSvg(
+      await resolve(texraResolver, 'unexpected-runtime-icon'),
+    );
+
+    for (const name of TEXRA_ICON_NAMES) {
+      const svg = decodeSvg(await resolve(texraResolver, name));
+      if (svg === missingSvg && name !== 'circle-question') {
+        unresolved.push(name);
+      }
+    }
+
+    expect(unresolved).toEqual([]);
+    expect(TEXRA_ICON_NAMES.length).toBeGreaterThan(100);
   });
 });

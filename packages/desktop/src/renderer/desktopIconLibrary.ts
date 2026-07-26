@@ -52,6 +52,7 @@ const LUCIDE_NAME_BY_TEXRA_NAME: Readonly<Record<string, string>> = {
 
   // Files / storage
   'file-lines': 'file-text',
+  'file-pdf': 'file-text',
   'file-import': 'file-input',
   'file-export': 'file-output',
   'floppy-disk': 'save',
@@ -124,6 +125,7 @@ const LUCIDE_NAME_BY_TEXRA_NAME: Readonly<Record<string, string>> = {
   'diagram-project': 'workflow',
   'list-ul': 'list',
   comments: 'messages-square',
+  comment: 'message-circle',
   // Codicon-style symbol aliases used by the agent-team presets.
   'symbol-structure': 'boxes',
   'symbol-operator': 'sigma',

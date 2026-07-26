@@ -7,6 +7,10 @@
  */
 import * as vscode from 'vscode';
 
+import {
+  listGitHubSubscriptionEntries,
+  unsubscribeGitHubKey,
+} from '@controllers/settingsView/githubSubscriptions';
 import { SecretManager } from '@frontend/secretManager';
 import {
   showLoggedErrorMessage,
@@ -21,18 +25,6 @@ import {
   SETTINGS_VIEW_CMD,
   type SettingsMessageFor,
 } from '@shared/schemas/settingsViewMessages';
-import {
-  SharedIssuePollingSource,
-  listIssueSubscriptionBindings,
-  listPRSubscriptionBindings,
-  listRepoSubscriptionBindings,
-  SharedPRPollingSource,
-  SharedRepoPollingSource,
-  unbindAllForIssue,
-  unbindAllForPR,
-  unbindAllForRepo,
-} from '@tools/github';
-
 import type { SettingsHandlerContext } from './SettingsHandlerContext';
 
 /** GitHub token and subscription handler delegate. */
@@ -92,52 +84,19 @@ export class GitHubSubscriptionHandlers {
   }
 
   async sendPRSubscriptions(webview: vscode.Webview): Promise<void> {
-    const toEntry = (binding: {
-      key: string;
-      streamIds: readonly string[];
-    }): { key: string; owners: { streamId: string; label: string }[] } => ({
-      key: binding.key,
-      owners: binding.streamIds.map((streamId) => ({
-        streamId,
-        label: getProgressStreamLabel(streamId) ?? streamId,
-      })),
-    });
-
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS,
-      subscriptions: [
-        ...listPRSubscriptionBindings(SharedPRPollingSource.activeKeys()).map(
-          toEntry,
-        ),
-        ...listRepoSubscriptionBindings(
-          SharedRepoPollingSource.activeKeys(),
-        ).map(toEntry),
-        ...listIssueSubscriptionBindings(
-          SharedIssuePollingSource.activeKeys(),
-        ).map(toEntry),
-      ],
+      subscriptions: listGitHubSubscriptionEntries(getProgressStreamLabel),
     });
   }
 
   handleUnsubscribePR(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.UNSUBSCRIBE_PR>,
   ): void {
-    // Path form mirrors GitHub's REST URL shape:
-    //   owner/repo               → repo
-    //   owner/repo/pulls/N       → PR
-    //   owner/repo/issues/N      → issue
-    const k = data.key;
-    let removed: number;
-    if (k.includes('/pulls/')) {
-      removed = unbindAllForPR(k);
-    } else if (k.includes('/issues/')) {
-      removed = unbindAllForIssue(k);
-    } else {
-      removed = unbindAllForRepo(k);
-    }
+    const removed = unsubscribeGitHubKey(data.key);
     if (removed === 0) {
       void vscode.window.showInformationMessage(
-        `No active subscription for ${k}.`,
+        `No active subscription for ${data.key}.`,
       );
     }
   }

@@ -1,15 +1,13 @@
-/**
- * DOM event contract shared by the desktop shortcut runtime and the settings
- * tab. Persistence stays in the desktop renderer profile; the VS Code host
- * renders the tab as unavailable.
- */
+// Third-party imports
+import { z } from 'zod';
 
-export const DESKTOP_SHORTCUT_EVENTS = {
-  REQUEST: 'texra-desktop-shortcuts-request',
-  STATE: 'texra-desktop-shortcuts-state',
-  UPDATE: 'texra-desktop-shortcuts-update',
-  RESET: 'texra-desktop-shortcuts-reset',
-} as const;
+/**
+ * In-process contract shared by the desktop shortcut runtime and Settings.
+ *
+ * Shortcuts are renderer behavior, so routing them through Electron IPC would
+ * add a second owner without adding a trust boundary. The desktop installs one
+ * service instance; the VS Code host does not install it and hides the tab.
+ */
 
 export interface DesktopShortcutEntry {
   readonly id: string;
@@ -19,17 +17,48 @@ export interface DesktopShortcutEntry {
   readonly accelerator?: string;
 }
 
-export interface DesktopShortcutState {
-  readonly entries: readonly DesktopShortcutEntry[];
-}
-
-export interface DesktopShortcutUpdate {
-  readonly id: string;
-  readonly accelerator?: string;
+export interface DesktopShortcutService {
+  entries(): readonly DesktopShortcutEntry[];
+  subscribe(
+    listener: (entries: readonly DesktopShortcutEntry[]) => void,
+  ): () => void;
+  update(id: string, accelerator: string | undefined): void;
+  reset(): void;
 }
 
 export const DESKTOP_SHORTCUT_STORAGE_KEY =
   'texra.desktop.shortcutOverrides.v1';
+export const DESKTOP_SHORTCUT_INVALID_BACKUP_KEY =
+  'texra.desktop.shortcutOverrides.invalidBackup.v1';
+
+export const DesktopShortcutOverridesSchema = z.record(
+  z.string(),
+  z.string().min(1).max(128).nullable(),
+);
+export type DesktopShortcutOverrides = z.infer<
+  typeof DesktopShortcutOverridesSchema
+>;
+
+let installedService: DesktopShortcutService | undefined;
+
+/** Installs the desktop shortcut service and returns its exact disposer. */
+export function installDesktopShortcutService(
+  service: DesktopShortcutService,
+): () => void {
+  if (installedService && installedService !== service) {
+    throw new Error('A desktop shortcut service is already installed.');
+  }
+  installedService = service;
+  return () => {
+    if (installedService === service) installedService = undefined;
+  };
+}
+
+/** Returns the desktop service, or undefined in non-desktop hosts. */
+export function getDesktopShortcutService():
+  DesktopShortcutService | undefined {
+  return installedService;
+}
 
 const MODIFIER_KEYS = new Set(['Alt', 'Control', 'Meta', 'Shift', 'AltGraph']);
 

@@ -4,6 +4,10 @@ import {
   createSettingsViewCommandHandlers,
   type SettingsViewCommandActions,
 } from '@controllers/settingsView/SettingsViewCommandHandlers';
+import {
+  listGitHubSubscriptionEntries,
+  unsubscribeGitHubKey,
+} from '@controllers/settingsView/githubSubscriptions';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import type { ConfigProvider } from '@platform/interfaces';
 import { platform } from '@platform/platform';
@@ -29,17 +33,6 @@ import {
 } from '@shared/settingsView/handlers/agentSkillsHandlers';
 import { buildSuperYoloMessage } from '@shared/settingsView/handlers/superYoloHandlers';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
-import {
-  listIssueSubscriptionBindings,
-  listPRSubscriptionBindings,
-  listRepoSubscriptionBindings,
-  SharedIssuePollingSource,
-  SharedPRPollingSource,
-  SharedRepoPollingSource,
-  unbindAllForIssue,
-  unbindAllForPR,
-  unbindAllForRepo,
-} from '@tools/github';
 import { GoalStore } from '@tools/goal';
 import {
   GITHUB_TOKEN_STORAGE_KEY,
@@ -386,47 +379,20 @@ export function createDesktopSettingsIpc(
   }
 
   async function postGitHubSubscriptions(): Promise<void> {
-    const toEntry = (binding: {
-      key: string;
-      streamIds: readonly string[];
-    }): { key: string; owners: { streamId: string; label: string }[] } => ({
-      key: binding.key,
-      owners: binding.streamIds.map((streamId) => ({
-        streamId,
-        label: options.ui.getStreamLabel?.(streamId) ?? streamId,
-      })),
-    });
-
     options.postToRenderer({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS,
-      subscriptions: [
-        ...listPRSubscriptionBindings(SharedPRPollingSource.activeKeys()).map(
-          toEntry,
-        ),
-        ...listRepoSubscriptionBindings(
-          SharedRepoPollingSource.activeKeys(),
-        ).map(toEntry),
-        ...listIssueSubscriptionBindings(
-          SharedIssuePollingSource.activeKeys(),
-        ).map(toEntry),
-      ],
+      subscriptions: listGitHubSubscriptionEntries((streamId) =>
+        options.ui.getStreamLabel?.(streamId),
+      ),
     });
   }
 
   async function unsubscribeGitHub(data: { key: string }): Promise<void> {
-    // Path form mirrors GitHub's REST URL shape:
-    //   owner/repo          → repo
-    //   owner/repo/pulls/N  → PR
-    //   owner/repo/issues/N → issue
-    const key = data.key;
-    const unbind = (): number => {
-      if (key.includes('/pulls/')) return unbindAllForPR(key);
-      if (key.includes('/issues/')) return unbindAllForIssue(key);
-      return unbindAllForRepo(key);
-    };
-    const removed = unbind();
+    const removed = unsubscribeGitHubKey(data.key);
     if (removed === 0) {
-      await options.ui.showInfoMessage(`No active subscription for ${key}.`);
+      await options.ui.showInfoMessage(
+        `No active subscription for ${data.key}.`,
+      );
       return;
     }
     await postGitHubSubscriptions();

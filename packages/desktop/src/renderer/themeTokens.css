@@ -284,6 +284,7 @@
   --wa-border-radius-pill: 9999px;
   --wa-border-radius-circle: 50%;
   --wa-border-radius-square: 0px;
+  --border-radius-medium: var(--wa-border-radius-m);
 
   /* Control metrics for the shared Lit components (litStyles.ts reads these
      with the VS Code-compact values as fallbacks). A standalone window can
@@ -294,6 +295,8 @@
   --wa-height-header: 46px;
   --wa-height-button: 34px;
   --wa-height-option: 32px;
+  --height-control-compact: var(--wa-height-control-compact);
+  --height-button: var(--wa-height-button);
 
   /* ==========================================================================
      Shared control layer — the desktop's values for the tokens declared in

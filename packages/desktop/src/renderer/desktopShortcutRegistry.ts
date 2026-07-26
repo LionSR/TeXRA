@@ -1,11 +1,13 @@
 import type {
   DesktopShortcutEntry,
-  DesktopShortcutState,
-  DesktopShortcutUpdate,
+  DesktopShortcutOverrides,
+  DesktopShortcutService,
 } from '@shared/commands/shortcutPreferences';
 import {
-  DESKTOP_SHORTCUT_EVENTS,
+  DESKTOP_SHORTCUT_INVALID_BACKUP_KEY,
   DESKTOP_SHORTCUT_STORAGE_KEY,
+  DesktopShortcutOverridesSchema,
+  installDesktopShortcutService,
   keyboardEventToAccelerator,
 } from '@shared/commands/shortcutPreferences';
 
@@ -27,23 +29,24 @@ interface DesktopShortcutRegistryOptions {
   readonly platform?: NodeJS.Platform;
 }
 
-export interface DesktopShortcutRegistry {
-  entries(): readonly DesktopShortcutEntry[];
-  subscribe(
-    listener: (entries: readonly DesktopShortcutEntry[]) => void,
-  ): () => void;
+export interface DesktopShortcutRegistry extends DesktopShortcutService {
   dispose(): void;
 }
 
-type ShortcutOverrides = Record<string, string | null>;
+interface StoredShortcutOverrides {
+  readonly overrides: DesktopShortcutOverrides;
+  readonly invalidRaw?: string;
+}
 
-/** Installs the one desktop shortcut dispatcher and settings event bridge. */
+/** Installs the one desktop shortcut dispatcher and Settings service. */
 export function createDesktopShortcutRegistry(
   options: DesktopShortcutRegistryOptions,
 ): DesktopShortcutRegistry {
   const view = options.document.defaultView;
   const platform = options.platform ?? getRendererPlatform(view);
-  let overrides = readOverrides(view?.localStorage);
+  const stored = readOverrides(view?.localStorage);
+  let overrides = stored.overrides;
+  let invalidRaw = stored.invalidRaw;
   const listeners = new Set<
     (entries: readonly DesktopShortcutEntry[]) => void
   >();
@@ -75,39 +78,31 @@ export function createDesktopShortcutRegistry(
     });
   }
 
-  function postState(): void {
-    if (!view) return;
+  function notify(): void {
     const currentEntries = entries();
-    const detail: DesktopShortcutState = { entries: currentEntries };
-    view.dispatchEvent(
-      new CustomEvent(DESKTOP_SHORTCUT_EVENTS.STATE, { detail }),
-    );
     for (const listener of listeners) {
       listener(currentEntries);
     }
   }
 
-  function handleRequest(): void {
-    postState();
-  }
-
-  function handleUpdate(event: Event): void {
-    const update = (event as CustomEvent<DesktopShortcutUpdate>).detail;
-    if (!availableEntries.some((entry) => entry.id === update.id)) {
-      if (update.id !== DESKTOP_COMMAND_PALETTE_ID) return;
+  function update(id: string, accelerator: string | undefined): void {
+    if (!availableEntries.some((entry) => entry.id === id)) {
+      if (id !== DESKTOP_COMMAND_PALETTE_ID) return;
     }
     overrides = {
       ...overrides,
-      [update.id]: update.accelerator ?? null,
+      [id]: accelerator ?? null,
     };
-    writeOverrides(view?.localStorage, overrides);
-    postState();
+    invalidRaw = writeOverrides(view?.localStorage, overrides, invalidRaw);
+    notify();
   }
 
-  function handleReset(): void {
+  function reset(): void {
     overrides = {};
+    invalidRaw = undefined;
     view?.localStorage.removeItem(DESKTOP_SHORTCUT_STORAGE_KEY);
-    postState();
+    view?.localStorage.removeItem(DESKTOP_SHORTCUT_INVALID_BACKUP_KEY);
+    notify();
   }
 
   function handleKeydown(event: KeyboardEvent): void {
@@ -136,12 +131,10 @@ export function createDesktopShortcutRegistry(
     dispatchDesktopCommand(entry.id as DesktopCommandId, options.actions);
   }
 
-  view?.addEventListener(DESKTOP_SHORTCUT_EVENTS.REQUEST, handleRequest);
-  view?.addEventListener(DESKTOP_SHORTCUT_EVENTS.UPDATE, handleUpdate);
-  view?.addEventListener(DESKTOP_SHORTCUT_EVENTS.RESET, handleReset);
   view?.addEventListener('keydown', handleKeydown, { capture: true });
 
-  return {
+  let uninstallService = (): void => {};
+  const registry: DesktopShortcutRegistry = {
     entries,
     subscribe(
       listener: (entries: readonly DesktopShortcutEntry[]) => void,
@@ -150,14 +143,16 @@ export function createDesktopShortcutRegistry(
       listener(entries());
       return () => listeners.delete(listener);
     },
+    update,
+    reset,
     dispose(): void {
       listeners.clear();
-      view?.removeEventListener(DESKTOP_SHORTCUT_EVENTS.REQUEST, handleRequest);
-      view?.removeEventListener(DESKTOP_SHORTCUT_EVENTS.UPDATE, handleUpdate);
-      view?.removeEventListener(DESKTOP_SHORTCUT_EVENTS.RESET, handleReset);
       view?.removeEventListener('keydown', handleKeydown, { capture: true });
+      uninstallService();
     },
   };
+  uninstallService = installDesktopShortcutService(registry);
+  return registry;
 }
 
 function isRecordingShortcut(
@@ -184,31 +179,28 @@ function hasPrimaryModifier(event: KeyboardEvent): boolean {
   return event.metaKey || event.ctrlKey || event.altKey;
 }
 
-function readOverrides(storage: Storage | undefined): ShortcutOverrides {
-  if (!storage) return {};
+function readOverrides(storage: Storage | undefined): StoredShortcutOverrides {
+  if (!storage) return { overrides: {} };
   const raw = storage.getItem(DESKTOP_SHORTCUT_STORAGE_KEY);
-  if (!raw) return {};
+  if (!raw) return { overrides: {} };
   try {
     const parsed: unknown = JSON.parse(raw);
-    if (!isShortcutOverrides(parsed)) return {};
-    return parsed;
+    const result = DesktopShortcutOverridesSchema.safeParse(parsed);
+    if (result.success) return { overrides: result.data };
   } catch {
-    return {};
+    // The invalid value is retained and backed up on the next explicit write.
   }
+  return { overrides: {}, invalidRaw: raw };
 }
 
 function writeOverrides(
   storage: Storage | undefined,
-  overrides: ShortcutOverrides,
-): void {
-  storage?.setItem(DESKTOP_SHORTCUT_STORAGE_KEY, JSON.stringify(overrides));
-}
-
-function isShortcutOverrides(value: unknown): value is ShortcutOverrides {
-  if (typeof value !== 'object' || value == null || Array.isArray(value)) {
-    return false;
+  overrides: DesktopShortcutOverrides,
+  invalidRaw: string | undefined,
+): undefined {
+  if (invalidRaw) {
+    storage?.setItem(DESKTOP_SHORTCUT_INVALID_BACKUP_KEY, invalidRaw);
   }
-  return Object.values(value).every(
-    (accelerator) => accelerator === null || typeof accelerator === 'string',
-  );
+  storage?.setItem(DESKTOP_SHORTCUT_STORAGE_KEY, JSON.stringify(overrides));
+  return undefined;
 }
