@@ -109,6 +109,7 @@ function context(): CliContext {
 function host(): CliRuntimeHost {
   return {
     emit: vi.fn(),
+    emitApprovalBypassState: vi.fn(),
     close: vi.fn(async () => undefined),
   } as unknown as CliRuntimeHost;
 }
@@ -283,13 +284,11 @@ describe('TUI retry approvals', () => {
       userMessage: undefined,
     });
     expect(streams.get().get('bash-bypass-stream')?.bypass.bash).toBe(true);
-    expect(runtimeHost.emit).toHaveBeenCalledWith(
-      'updateBashApprovalBypassState',
-      {
-        streamId: 'bash-bypass-stream',
-        bypassActive: true,
-      },
-    );
+    expect(runtimeHost.emitApprovalBypassState).toHaveBeenCalledWith({
+      streamId: 'bash-bypass-stream',
+      kind: 'bash',
+      bypassActive: true,
+    });
   });
 
   it('updates TUI bash bypass state when goal auto-approval is enabled and cleared', async () => {
@@ -300,13 +299,11 @@ describe('TUI retry approvals', () => {
       runtimeHost,
     );
     expect(streams.get().get('goal-bypass-stream')?.bypass.bash).toBe(true);
-    expect(runtimeHost.emit).toHaveBeenCalledWith(
-      'updateBashApprovalBypassState',
-      {
-        streamId: 'goal-bypass-stream',
-        bypassActive: true,
-      },
-    );
+    expect(runtimeHost.emitApprovalBypassState).toHaveBeenCalledWith({
+      streamId: 'goal-bypass-stream',
+      kind: 'bash',
+      bypassActive: true,
+    });
 
     await setGoalSessionBashAutoApproval(
       'goal-bypass-stream',
@@ -314,13 +311,11 @@ describe('TUI retry approvals', () => {
       runtimeHost,
     );
     expect(streams.get().get('goal-bypass-stream')?.bypass.bash).toBe(false);
-    expect(runtimeHost.emit).toHaveBeenCalledWith(
-      'updateBashApprovalBypassState',
-      {
-        streamId: 'goal-bypass-stream',
-        bypassActive: false,
-      },
-    );
+    expect(runtimeHost.emitApprovalBypassState).toHaveBeenCalledWith({
+      streamId: 'goal-bypass-stream',
+      kind: 'bash',
+      bypassActive: false,
+    });
   });
 
   it('updates TUI edit bypass state at the approval decision site', async () => {
@@ -346,13 +341,11 @@ describe('TUI retry approvals', () => {
       appliedContent: 'new',
     });
     expect(streams.get().get('edit-bypass-stream')?.bypass.toolEdit).toBe(true);
-    expect(runtimeHost.emit).toHaveBeenCalledWith(
-      'updateToolEditApprovalBypassState',
-      {
-        streamId: 'edit-bypass-stream',
-        bypassActive: true,
-      },
-    );
+    expect(runtimeHost.emitApprovalBypassState).toHaveBeenCalledWith({
+      streamId: 'edit-bypass-stream',
+      kind: 'toolEdit',
+      bypassActive: true,
+    });
   });
 
   it('enables the complete delegated-task approval mode at the proposal decision site', async () => {
@@ -391,14 +384,21 @@ describe('TUI retry approvals', () => {
     expect(isBashApprovalBypassedForStream('proposal-bypass-stream')).toBe(
       true,
     );
-    expect(runtimeHost.emit).toHaveBeenCalledWith(
-      'updateSuperYoloBypassState',
-      { streamId: 'proposal-bypass-stream', bypassActive: true },
-    );
-    expect(runtimeHost.emit).toHaveBeenCalledWith(
-      'updateToolEditApprovalBypassState',
-      { streamId: 'proposal-bypass-stream', bypassActive: true },
-    );
+    expect(runtimeHost.emitApprovalBypassState).toHaveBeenCalledWith({
+      streamId: 'proposal-bypass-stream',
+      kind: 'superYolo',
+      bypassActive: true,
+    });
+    expect(runtimeHost.emitApprovalBypassState).toHaveBeenCalledWith({
+      streamId: 'proposal-bypass-stream',
+      kind: 'toolEdit',
+      bypassActive: true,
+    });
+    expect(runtimeHost.emitApprovalBypassState).toHaveBeenCalledWith({
+      streamId: 'proposal-bypass-stream',
+      kind: 'bash',
+      bypassActive: true,
+    });
   });
 
   it('approves delegated work already queued in the same stream', async () => {

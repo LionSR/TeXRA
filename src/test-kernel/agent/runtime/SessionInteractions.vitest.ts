@@ -116,6 +116,7 @@ function createPortSession(): {
   session: SessionHandle;
   uiEvents: UiEvent[];
   emitted: string[];
+  setApprovalBypassState: ReturnType<typeof vi.fn>;
   interactions: DesktopHostInteractions;
 } {
   const uiEvents: UiEvent[] = [];
@@ -125,9 +126,11 @@ function createPortSession(): {
   };
   const handlers = createHandlerSet(uiEvents);
   const session = createTestSession();
+  const setApprovalBypassState = vi.fn();
   const interactions = createDesktopHostInteractions({
     runtimeHost,
     session,
+    setApprovalBypassState,
     showInfoMessage: vi.fn(),
     getApprovalHandlers: () => handlers,
     getToolEditApprovals: () => ({
@@ -141,7 +144,13 @@ function createPortSession(): {
     }),
   });
   session.useHostInteractions(interactions);
-  return { session, uiEvents, emitted, interactions };
+  return {
+    session,
+    uiEvents,
+    emitted,
+    setApprovalBypassState,
+    interactions,
+  };
 }
 
 function createControllablePlanAdapter(
@@ -219,6 +228,19 @@ const criticism = {
 };
 
 describe('session.interactions immediate capabilities', () => {
+  it('forwards approval bypass state through the desktop port', () => {
+    const { interactions, setApprovalBypassState } = createPortSession();
+    const update = {
+      streamId,
+      kind: 'toolEdit',
+      bypassActive: true,
+    } as const;
+
+    interactions.setApprovalBypassState?.(update);
+
+    expect(setApprovalBypassState).toHaveBeenCalledWith(update);
+  });
+
   it('delegates immediate capabilities to the active adapter', async () => {
     const session = createTestSession();
     const diagnostics = [diagnostic];

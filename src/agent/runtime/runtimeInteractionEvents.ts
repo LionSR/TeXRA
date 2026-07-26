@@ -1,4 +1,4 @@
-import type { StreamTabId, ToolEditPermission } from '@shared/schemas';
+import type { ToolEditPermission } from '@shared/schemas';
 
 /**
  * Host interaction and approval UI requests emitted by runtime/tool code.
@@ -10,16 +10,4 @@ import type { StreamTabId, ToolEditPermission } from '@shared/schemas';
 export interface RuntimeInteractionEventPayloads {
   showToolEditPermission: ToolEditPermission;
   resolveToolEditPermission: { requestId: string };
-  updateToolEditApprovalBypassState: {
-    streamId: StreamTabId;
-    bypassActive: boolean;
-  };
-  updateBashApprovalBypassState: {
-    streamId: StreamTabId;
-    bypassActive: boolean;
-  };
-  updateSuperYoloBypassState: {
-    streamId: StreamTabId;
-    bypassActive: boolean;
-  };
 }

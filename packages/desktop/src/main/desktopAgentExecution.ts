@@ -301,6 +301,7 @@ export class DesktopProgressBridge {
       session: this.session,
       getApprovalHandlers: () => this.backend.approvalHandlers,
       getToolEditApprovals: () => this.toolEditApprovals!,
+      setApprovalBypassState: this.backend.setApprovalBypassState,
       showInfoMessage: (message) => this.options.host.showInfoMessage(message),
     });
     this.fileActions = new DesktopProgressFileActions(this.options.host, {

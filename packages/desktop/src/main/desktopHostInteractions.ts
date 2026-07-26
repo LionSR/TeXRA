@@ -9,6 +9,7 @@ import {
   type BashSettlement,
   type HostBashApprovalRequest,
   type HostBashApprovalResult,
+  type HostApprovalBypassStateUpdate,
   type HostInteractionCancelSelector,
   type HostInteractionOptions,
   type HostInteractions,
@@ -43,6 +44,7 @@ export interface DesktopHostInteractionsOptions {
   session: SessionHandle;
   getApprovalHandlers(): ApprovalRequestHandlerSet;
   getToolEditApprovals(): DesktopToolEditApprovalController;
+  setApprovalBypassState(update: HostApprovalBypassStateUpdate): void;
   showInfoMessage(message: string): Promise<void> | void;
 }
 
@@ -86,6 +88,10 @@ class DesktopHostInteractionsImpl implements DesktopHostInteractions {
 
   showInfoMessage(message: string): Promise<void> | void {
     return this.options.showInfoMessage(message);
+  }
+
+  setApprovalBypassState(update: HostApprovalBypassStateUpdate): void {
+    this.options.setApprovalBypassState(update);
   }
 
   requestToolEditApproval(

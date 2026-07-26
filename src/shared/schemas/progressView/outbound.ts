@@ -236,7 +236,7 @@ const UpdatePermissionMessageSchema = z.discriminatedUnion('action', [
     id: z.string(),
   }),
 ]);
-const BypassTypeSchema = z.enum(['toolEdit', 'superYolo']);
+const BypassTypeSchema = z.enum(['bash', 'toolEdit', 'superYolo']);
 
 const UpdateBypassMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_BYPASS),
@@ -321,6 +321,7 @@ const ToolUseStreamContentMessageSchema = z.strictObject({
     queuedFollowUps: z.array(z.string()),
   }),
   controls: z.strictObject({
+    bashBypass: z.boolean(),
     toolEditBypass: z.boolean(),
     superYoloBypass: z.boolean(),
     goal: GoalStateSchema,
