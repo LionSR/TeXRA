@@ -457,6 +457,15 @@ function startCodexLoop(params: {
     runTurn,
     isTerminal: () => false,
     getUsage: (turn) => turn.usage,
+    onLoopStart: (session) => {
+      CodexThreads.trackInFlight({
+        thread,
+        childStreamId,
+        parentStreamId,
+        executionId,
+        executions: session.executions,
+      });
+    },
     onTurnSuccess: (_turn, session) => {
       if (fallbackThreadId) registerThread(fallbackThreadId, session);
       if (thread.id) registerThread(thread.id, session);

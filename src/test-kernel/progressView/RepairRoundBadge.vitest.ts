@@ -7,7 +7,7 @@ import { BaseNode } from '@agent/node';
 import {
   RoundPersistedFlow,
   type RoundAwareState,
-} from '@agent/node/roundPersistedFlow';
+} from '@agent/implementations/flows/reflection/RoundPersistedFlow';
 import { computeRoundStageTotal } from '@agent/implementations/flows/reflection/runReflectionFlow';
 import type { ExecutionKVStore } from '@agent/storage/ExecutionKVStore';
 import type { RoundStage } from '@shared/schemas';
