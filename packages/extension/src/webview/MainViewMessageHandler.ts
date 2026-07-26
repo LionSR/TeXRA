@@ -450,6 +450,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       return;
     }
     await super.handleWebviewReady(undefined, webviewView);
+    this.postWorkspaceRoots(webviewView);
     webviewView.webview.postMessage(
       this.startupController.getOrchestratorBannerMessage(),
     );
@@ -475,5 +476,17 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     // issues from its credential-changed hooks — so the provider sees the
     // in-session State 0 → 1 transition.
     await this.onboarding?.refreshOnboardingFunnel();
+  }
+
+  /** Push the open workspace folders used by the launcher's root picker. */
+  public postWorkspaceRoots(webviewView: vscode.WebviewView): void {
+    webviewView.webview.postMessage({
+      command: MAIN_VIEW_COMMANDS.SET_WORKSPACE_ROOTS,
+      optionsData:
+        vscode.workspace.workspaceFolders?.map((folder) => ({
+          label: folder.name,
+          value: folder.uri.fsPath,
+        })) ?? [],
+    });
   }
 }

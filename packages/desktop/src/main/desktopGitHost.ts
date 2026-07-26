@@ -7,17 +7,11 @@
  * returns the lines verbatim. The desktop shell historically replied to
  * `MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS` with an empty list because no
  * `vscode.git`-equivalent host port existed. This module fills that gap by
- * spawning `git log` directly via Node's `child_process.execFile` (no shell,
- * no string interpolation — the workspace path travels via `cwd`), reusing
- * the same host-neutral `isGitRepository` probe and label format the
- * extension uses so the two hosts can't drift apart.
+ * invoking `git log` through the shared command runner (no shell, no string
+ * interpolation — the workspace path travels via `cwd`), reusing the same
+ * host-neutral process policy, repository probe, and label format as the
+ * extension.
  */
-
-// Not routed through executeCommand: it doesn't expose a `maxBuffer` option,
-// and the explicit MAX_BUFFER_BYTES cap below is a deliberate Electron
-// main-process OOM guard (execa's own default maxBuffer is ~100 MiB).
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 
 import { clamp } from '@utils/core';
 import {
@@ -25,9 +19,12 @@ import {
   splitCommitLines,
 } from '@utils/git/commitLogFormat';
 import { isGitRepository } from '@utils/system/isGitRepository';
-import { extendEnvPath } from '@utils/system/platformPaths';
+import { executeCommand } from '@utils/system/execUtils';
 
-const execFileAsync = promisify(execFile);
+import {
+  EMPTY_DESKTOP_ENVIRONMENT_SUMMARY,
+  type DesktopEnvironmentSummary,
+} from '../desktopWorkspaceMessages.js';
 
 /**
  * Maximum number of commits the renderer will display in the launcher banner.
@@ -55,6 +52,8 @@ export interface DesktopGitHost {
    * the boolean are answered conservatively when probing fails.
    */
   getRecentCommits(): Promise<DesktopGitCommitsResult>;
+  /** Returns the live local branch, change totals, and upstream sync state. */
+  getEnvironmentSummary(): Promise<DesktopEnvironmentSummary>;
 }
 
 interface DesktopGitCommitsResult {
@@ -91,6 +90,28 @@ export function createDesktopGitHost(
 ): DesktopGitHost {
   const limit = clampCommitLimit(options.commitLimit ?? DEFAULT_COMMIT_LIMIT);
 
+  async function readGit(
+    workspace: string,
+    args: readonly string[],
+    reportFailure = true,
+  ): Promise<string | undefined> {
+    const result = await executeCommand(['git', ...args], {
+      cwd: workspace,
+      timeout: GIT_TIMEOUT_MS,
+      maxBuffer: MAX_BUFFER_BYTES,
+      quiet: !reportFailure,
+    });
+    if (result.success) return result.stdout ?? '';
+    if (reportFailure) {
+      options.onError?.(
+        new Error(
+          result.stderr ?? `git ${args[0] ?? 'command'} exited unsuccessfully`,
+        ),
+      );
+    }
+    return undefined;
+  }
+
   return {
     async getRecentCommits(): Promise<DesktopGitCommitsResult> {
       const workspace = options.getWorkspacePath();
@@ -111,38 +132,101 @@ export function createDesktopGitHost(
         return { commits: [], isGitRepo: false };
       }
 
-      try {
-        const { stdout } = await execFileAsync(
-          'git',
-          [
-            // `--no-pager` is portable; Windows lacks `cat` on PATH (#3817).
-            '--no-pager',
-            'log',
-            '-n',
-            String(limit),
-            `--pretty=format:${COMMIT_LABEL_FORMAT}`,
-          ],
-          {
-            cwd: workspace,
-            timeout: GIT_TIMEOUT_MS,
-            maxBuffer: MAX_BUFFER_BYTES,
-            // Same extended PATH as the shared isGitRepository probe, so the
-            // gate can't report a repo the log call then fails to read.
-            env: { ...process.env, PATH: extendEnvPath() },
-          },
-        );
-        return {
-          commits: splitCommitLines(stdout),
-          isGitRepo: true,
-        };
-      } catch (error) {
-        // rev-parse already passed, so we know it's a repo — report
-        // isGitRepo:true with an empty list so empty-repo states stay honest.
-        options.onError?.(error);
-        return { commits: [], isGitRepo: true };
+      const output = await readGit(workspace, [
+        // `--no-pager` is portable; Windows lacks `cat` on PATH (#3817).
+        '--no-pager',
+        'log',
+        '-n',
+        String(limit),
+        `--pretty=format:${COMMIT_LABEL_FORMAT}`,
+      ]);
+      // rev-parse already passed, so a failed log is still a git repo. The
+      // shared runner reports the failure through onError above.
+      return {
+        commits: output === undefined ? [] : splitCommitLines(output),
+        isGitRepo: true,
+      };
+    },
+    async getEnvironmentSummary(): Promise<DesktopEnvironmentSummary> {
+      const workspace = options.getWorkspacePath();
+      if (!workspace || !(await isGitRepository(workspace))) {
+        return EMPTY_DESKTOP_ENVIRONMENT_SUMMARY;
       }
+
+      const [branchOutput, statusOutput, numstatOutput, upstreamOutput] =
+        await Promise.all([
+          readGit(workspace, ['rev-parse', '--abbrev-ref', 'HEAD']),
+          readGit(workspace, ['status', '--short', '--untracked-files=normal']),
+          readGit(workspace, ['diff', '--numstat', 'HEAD', '--']),
+          readGit(
+            workspace,
+            [
+              'rev-parse',
+              '--abbrev-ref',
+              '--symbolic-full-name',
+              '@{upstream}',
+            ],
+            false,
+          ),
+        ]);
+      const { additions, deletions } = parseNumstat(numstatOutput);
+      const changedFiles = splitNonEmptyLines(statusOutput).length;
+      const branch =
+        branchOutput && branchOutput !== 'HEAD' ? branchOutput : undefined;
+      const upstream = upstreamOutput || undefined;
+      let ahead = 0;
+      let behind = 0;
+
+      if (upstream) {
+        const divergence = await readGit(workspace, [
+          'rev-list',
+          '--left-right',
+          '--count',
+          `HEAD...${upstream}`,
+        ]);
+        [ahead, behind] = parseDivergence(divergence);
+      }
+
+      return {
+        isGitRepository: true,
+        ...(branch ? { branch } : {}),
+        ...(upstream ? { upstream } : {}),
+        changedFiles,
+        additions,
+        deletions,
+        ahead,
+        behind,
+      };
     },
   };
+}
+
+function splitNonEmptyLines(output: string | undefined): string[] {
+  return output?.split(/\r?\n/).filter(Boolean) ?? [];
+}
+
+function parseNumstat(output: string | undefined): {
+  additions: number;
+  deletions: number;
+} {
+  let additions = 0;
+  let deletions = 0;
+  for (const line of splitNonEmptyLines(output)) {
+    const [added = '', deleted = ''] = line.split('\t');
+    additions += parseGitCount(added);
+    deletions += parseGitCount(deleted);
+  }
+  return { additions, deletions };
+}
+
+function parseDivergence(output: string | undefined): [number, number] {
+  const [ahead = '', behind = ''] = output?.split(/\s+/) ?? [];
+  return [parseGitCount(ahead), parseGitCount(behind)];
+}
+
+function parseGitCount(value: string): number {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
 }
 
 function clampCommitLimit(value: number): number {

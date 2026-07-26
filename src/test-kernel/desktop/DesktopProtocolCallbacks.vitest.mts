@@ -305,7 +305,7 @@ class FakeDesktopProtocolApp implements DesktopProtocolApp {
 describe('desktop protocol callback lifecycle', () => {
   it.each([
     {
-      name: 'keeps normal launches behind the single-instance lock',
+      name: 'stops a launch when another desktop instance owns the lock',
       lockAvailable: false,
       argv: [] as string[],
       shouldContinue: false,
@@ -314,18 +314,18 @@ describe('desktop protocol callback lifecycle', () => {
       protocolRegistrations: [] as string[],
     },
     {
-      name: 'lets explicit new-window launches run as separate processes',
+      name: 'stops retired new-window launches behind the same lock',
       lockAvailable: false,
       argv: ['--texra-new-window', '--texra-workspace-path=/Users/ray/paper'],
-      shouldContinue: true,
+      shouldContinue: false,
       requestCount: 1,
-      quitCount: 0,
+      quitCount: 1,
       protocolRegistrations: [] as string[],
     },
     {
-      name: 'lets explicit new-window launches become primary when no owner exists',
+      name: 'allows the first desktop process to become primary',
       lockAvailable: true,
-      argv: ['--texra-new-window', '--texra-workspace-path=/Users/ray/paper'],
+      argv: ['--texra-workspace-path=/Users/ray/paper'],
       shouldContinue: true,
       requestCount: 1,
       quitCount: 0,
@@ -352,7 +352,7 @@ describe('desktop protocol callback lifecycle', () => {
     },
   );
 
-  it('does not focus the primary window for explicit new-window probes', () => {
+  it('focuses the primary window for every second-instance launch', () => {
     const app = new FakeDesktopProtocolApp({ lockAvailable: true });
     let focusCount = 0;
 
@@ -368,9 +368,9 @@ describe('desktop protocol callback lifecycle', () => {
       '--texra-new-window',
       '--texra-workspace-path=/Users/ray/paper',
     ]);
-    assert.equal(focusCount, 0);
+    assert.equal(focusCount, 1);
 
     app.emitSecondInstance(['--texra-workspace-path=/Users/ray/other-paper']);
-    assert.equal(focusCount, 1);
+    assert.equal(focusCount, 2);
   });
 });

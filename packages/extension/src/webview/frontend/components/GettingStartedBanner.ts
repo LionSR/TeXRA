@@ -99,35 +99,35 @@ export class GettingStartedBanner extends LitElement {
               <wa-button
                 variant="brand"
                 appearance="filled"
-                size="small"
+                size="s"
                 @click=${() => this.handleAction('runSetup')}
               >
                 ${waIcon('rocket', { slot: 'start' })} Run setup assistant
               </wa-button>
               <wa-button
                 appearance="outlined"
-                size="small"
+                size="s"
                 @click=${() => this.handleAction('createSampleProject')}
               >
                 ${waIcon('file-circle-plus', { slot: 'start' })} Sample project
               </wa-button>
               <wa-button
                 appearance="outlined"
-                size="small"
+                size="s"
                 @click=${() => this.handleAction('cloneOverleaf')}
               >
                 ${waIcon('cloud-arrow-down', { slot: 'start' })} Import Overleaf
               </wa-button>
               <wa-button
                 appearance="outlined"
-                size="small"
+                size="s"
                 @click=${() => this.handleAction('downloadArxiv')}
               >
                 ${waIcon('download', { slot: 'start' })} Import arXiv
               </wa-button>
               <wa-button
                 appearance="outlined"
-                size="small"
+                size="s"
                 @click=${() => this.handleAction('openWalkthrough')}
               >
                 ${waIcon('book', { slot: 'start' })} Walkthrough
@@ -137,7 +137,7 @@ export class GettingStartedBanner extends LitElement {
           <wa-button
             class="dismiss-button"
             appearance="plain"
-            size="small"
+            size="s"
             title="Dismiss for this session"
             aria-label="Dismiss getting started row"
             @click=${this.handleDismiss}

@@ -86,6 +86,11 @@ type TestableBridge = Bridge & {
       requestId: string,
       decision: PlanApprovalResult,
     ): boolean;
+    submitRetryDecision(
+      streamId: StreamTabId,
+      requestId: string,
+      decision: { action: 'retry' | 'cancel'; feedback?: string },
+    ): boolean;
   };
   waitUntilReady(): Promise<void>;
   runtimeHost: {
@@ -140,6 +145,7 @@ type BridgeWithSession = TestableBridge & {
       }) => Promise<unknown>;
       requestAgentProposal?: (request: unknown) => Promise<unknown>;
       requestRetry?: (request: {
+        requestId: string;
         streamId: StreamTabId;
         operation: string;
       }) => Promise<unknown>;
@@ -551,6 +557,25 @@ function progressMessages(
       message !== null &&
       (message as ProgressMessage).command === command,
   );
+}
+
+function shownRetryRequestId(messages: unknown[]): string | undefined {
+  for (const message of progressMessages(
+    messages,
+    PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
+  )) {
+    const update = message as ProgressMessage & {
+      action?: string;
+      permission?: { kind?: string; data?: { requestId?: string } };
+    };
+    if (
+      update.action === 'show' &&
+      update.permission?.kind === PERMISSION_KIND.RETRY
+    ) {
+      return update.permission.data?.requestId;
+    }
+  }
+  return undefined;
 }
 
 function shownToolEditRequestId(messages: unknown[]): string | undefined {
@@ -1002,27 +1027,41 @@ describe('DesktopProgressBridge', () => {
     );
   });
 
-  it('keeps desktop retry requests on the existing cancel path', async () => {
+  it('surfaces a retry request to the user instead of auto-cancelling it', async () => {
     const messages: unknown[] = [];
     const bridge = await createBridge(messages);
 
     messages.length = 0;
-    await expect(
-      bridgeInteractions(bridge).requestRetry?.({
-        streamId: 'stream-retry' as StreamTabId,
-        operation: 'model request',
-      }),
-    ).resolves.toEqual({ action: 'cancel' });
-    expect(
-      progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION),
-    ).not.toContainEqual(
-      expect.objectContaining({
-        action: 'show',
-        permission: expect.objectContaining({
-          kind: PERMISSION_KIND.RETRY,
+    // The request must stay pending until the renderer settles it, so don't
+    // await the promise here — awaiting the old auto-cancel was exactly the
+    // behavior that terminated runs with "Retry cancelled by user" without ever
+    // asking.
+    const pending = bridgeInteractions(bridge).requestRetry?.({
+      requestId: 'retry-host-interaction',
+      streamId: 'stream-retry' as StreamTabId,
+      operation: 'model request',
+    });
+
+    await vi.waitFor(() => {
+      expect(
+        progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION),
+      ).toContainEqual(
+        expect.objectContaining({
+          action: 'show',
+          permission: expect.objectContaining({
+            kind: PERMISSION_KIND.RETRY,
+          }),
         }),
-      }),
+      );
+    });
+
+    // A cancel decision from the renderer still resolves it the same way.
+    bridge.hostInteractions.submitRetryDecision(
+      'stream-retry' as StreamTabId,
+      shownRetryRequestId(messages) ?? '',
+      { action: 'cancel' },
     );
+    await expect(pending).resolves.toEqual({ action: 'cancel' });
   });
 
   it('preserves progress and badge metadata across repeated stream syncs', async () => {
@@ -3155,11 +3194,6 @@ describe('DesktopProgressBridge', () => {
           PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION
         ],
       );
-      await handleOldToolEdit({
-        command: PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
-        requestId: oldRequestId,
-        action: 'openDiff',
-      });
       await vi.waitFor(() => expect(owner.diffPathsA).toHaveLength(1));
       const [oldDiff] = owner.diffPathsA;
       await expect(access(oldDiff!.original)).resolves.toBeUndefined();

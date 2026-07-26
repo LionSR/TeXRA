@@ -3,18 +3,6 @@
 import { css, type CSSResult } from 'lit';
 
 export const apiAccessSectionStyles: CSSResult = css`
-  /* Generic section heading, duplicated identically in ProviderKeyList.styles.ts
-     and ModelSelectionList.styles.ts — each profile section renders its own
-     bare <h2>, and the rule is too small to warrant a shared module. */
-  h2 {
-    color: var(--wa-color-text-normal);
-    margin-top: var(--wa-space-l);
-    margin-bottom: var(--wa-space-xs);
-    font-size: var(--font-size-lg);
-    border-bottom: var(--border-thin) solid var(--color-border);
-    padding-bottom: var(--wa-space-2xs);
-  }
-
   /* ============================================
    * API Access Options
    * ============================================ */

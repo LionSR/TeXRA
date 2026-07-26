@@ -169,7 +169,7 @@ export class FileSelectGroup extends LitElement {
           })}
           appearance="plain"
           variant="neutral"
-          size="small"
+          size="s"
           type="button"
           aria-label=${opts.label}
         >
@@ -269,7 +269,7 @@ export class FileSelectGroup extends LitElement {
                 class="action-icon-button remove-button"
                 appearance="plain"
                 variant="neutral"
-                size="small"
+                size="s"
                 type="button"
                 aria-label="Remove file"
                 data-remove-file=${file}

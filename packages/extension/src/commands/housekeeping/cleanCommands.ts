@@ -9,11 +9,11 @@ import {
   runCleanRunDir,
 } from '@housekeeping';
 import * as logger from '@logger/logUtils';
-import type { FileOpResult } from '@shared/schemas/opResults';
 import {
   mergeRunDirAndWorkspaceResult,
-  type CleanConfig,
-} from './fileOpSchemas';
+  type FileOpResult,
+} from '@shared/schemas/opResults';
+import { type CleanConfig } from './fileOpSchemas';
 import { emitClearMissingOutputs } from './streamEventUtils';
 
 const CHANNEL = 'cleanCommands';

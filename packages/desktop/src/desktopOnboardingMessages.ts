@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export const DESKTOP_ONBOARDING_DISMISSED_STATE_KEY =
-  'texra.desktop.firstRunWalkthroughDismissed';
+  'texra.desktop.hideStartupTeamChooser';
 
 export const DESKTOP_ONBOARDING_COMMANDS = {
   REQUEST_STATE: 'desktop:requestOnboarding',

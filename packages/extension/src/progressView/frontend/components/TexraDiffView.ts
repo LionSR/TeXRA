@@ -7,6 +7,11 @@ import { consume } from '@lit/context';
 import { themeContext } from '@shared/BaseWebviewApp';
 import { commonViewStyles, designTokens } from '@shared/styles';
 import { DESKTOP_THEME_KIND } from '@shared/schemas/commonViewMessages';
+import {
+  loadMonaco,
+  monacoThemeForHostTheme,
+  type MonacoModule,
+} from '@shared/monaco/monacoLoader';
 
 // Local imports - shared Web Awesome helpers
 import { renderLoadingState } from '@shared/wa/loadingState';
@@ -14,88 +19,8 @@ import { renderLoadingState } from '@shared/wa/loadingState';
 // Local imports - errors
 import { extractErrorMessage } from '@utils/errors/errorMessage';
 
-type MonacoModule = typeof import('monaco-editor/editor/editor.api.js');
-type MonacoWorkerModule = { default: new () => Worker };
 type DiffEditor = ReturnType<MonacoModule['editor']['createDiffEditor']>;
 type TextModel = ReturnType<MonacoModule['editor']['createModel']>;
-type MonacoEnvironmentHost = typeof self & {
-  MonacoEnvironment?: {
-    getWorker(workerId: string, label: string): Worker;
-  };
-};
-
-interface MonacoWorkerConstructors {
-  editor: new () => Worker;
-  json: new () => Worker;
-  css: new () => Worker;
-  html: new () => Worker;
-  ts: new () => Worker;
-}
-
-let monacoLoad: Promise<MonacoModule> | undefined;
-let workersConfigured = false;
-
-function setupMonacoWorkers(workers: MonacoWorkerConstructors): void {
-  if (workersConfigured) return;
-  (self as MonacoEnvironmentHost).MonacoEnvironment = {
-    getWorker(_workerId: string, label: string): Worker {
-      switch (label) {
-        case 'json':
-          return new workers.json();
-        case 'css':
-        case 'scss':
-        case 'less':
-          return new workers.css();
-        case 'html':
-        case 'handlebars':
-        case 'razor':
-          return new workers.html();
-        case 'typescript':
-        case 'javascript':
-          return new workers.ts();
-        default:
-          return new workers.editor();
-      }
-    },
-  };
-  workersConfigured = true;
-}
-
-async function loadMonaco(): Promise<MonacoModule> {
-  monacoLoad ??= Promise.all([
-    import('monaco-editor/editor/editor.api.js'),
-    import('monaco-editor/editor/editor.worker?worker'),
-    import('monaco-editor/language/json/json.worker?worker'),
-    import('monaco-editor/language/css/css.worker?worker'),
-    import('monaco-editor/language/html/html.worker?worker'),
-    import('monaco-editor/language/typescript/ts.worker?worker'),
-  ])
-    .then(
-      ([monaco, editorWorker, jsonWorker, cssWorker, htmlWorker, tsWorker]) => {
-        setupMonacoWorkers({
-          editor: (editorWorker as MonacoWorkerModule).default,
-          json: (jsonWorker as MonacoWorkerModule).default,
-          css: (cssWorker as MonacoWorkerModule).default,
-          html: (htmlWorker as MonacoWorkerModule).default,
-          ts: (tsWorker as MonacoWorkerModule).default,
-        });
-        return monaco;
-      },
-    )
-    .catch((error: unknown) => {
-      monacoLoad = undefined;
-      throw error;
-    });
-  return monacoLoad;
-}
-
-function monacoThemeForHostTheme(
-  themeKind: string,
-): 'vs' | 'vs-dark' | 'hc-black' | 'hc-light' {
-  if (themeKind === DESKTOP_THEME_KIND.LIGHT) return 'vs';
-  if (themeKind === DESKTOP_THEME_KIND.HIGH_CONTRAST) return 'hc-black';
-  return 'vs-dark';
-}
 
 @customElement('texra-diff-view')
 export class TexraDiffView extends LitElement {
@@ -108,6 +33,11 @@ export class TexraDiffView extends LitElement {
         min-height: 240px;
       }
 
+      :host([fill]) {
+        height: 100%;
+        min-height: 0;
+      }
+
       .diff-view {
         display: flex;
         min-height: 240px;
@@ -115,6 +45,13 @@ export class TexraDiffView extends LitElement {
         max-height: 640px;
         border: var(--border-thin) solid var(--color-border);
         background: var(--wa-color-surface-default);
+      }
+
+      :host([fill]) .diff-view {
+        height: 100%;
+        min-height: 0;
+        max-height: none;
+        border: 0;
       }
 
       .editor {
@@ -145,6 +82,7 @@ export class TexraDiffView extends LitElement {
   @property({ attribute: false }) originalText = '';
   @property({ attribute: false }) proposedText = '';
   @property() language = 'plaintext';
+  @property({ type: Boolean, reflect: true }) fill = false;
 
   @consume({ context: themeContext, subscribe: true })
   @property({ attribute: false })

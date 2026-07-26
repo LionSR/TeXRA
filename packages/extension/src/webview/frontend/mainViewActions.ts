@@ -59,6 +59,7 @@ import {
   toolUseInstruction$,
   workflowAgent$,
   workflowInstruction$,
+  workingDirectory$,
 } from './mainViewState';
 import { saveState } from './persistence';
 import {
@@ -411,6 +412,11 @@ export function changeModel(value: string): void {
   postMessage(MAIN_VIEW_COMMANDS.MODEL_SELECTED, { model: value });
 }
 
+export function changeWorkingDirectory(value: string): void {
+  workingDirectory$.set(value);
+  saveState();
+}
+
 // ---------------------------------------------------------------------------
 // Execute / panel actions
 // ---------------------------------------------------------------------------
@@ -419,6 +425,7 @@ export function buildExecuteMessage(): MainViewExecuteMessage {
   const sessionType = sessionType$.get();
   const launchTarget =
     sessionType === SESSION_TYPES.WORKFLOW ? 'agent' : launchTarget$.get();
+  const workingDirectory = workingDirectory$.get().trim();
   return buildMainViewExecuteMessage({
     sessionType,
     workflowAgent: workflowAgent$.get(),
@@ -432,6 +439,7 @@ export function buildExecuteMessage(): MainViewExecuteMessage {
     checkboxValues: checkboxValues$.get(),
     session: {
       launchTarget,
+      ...(workingDirectory ? { workingDirectory } : {}),
       teamId:
         launchTarget === 'team'
           ? selectedTeamId$.get() || undefined

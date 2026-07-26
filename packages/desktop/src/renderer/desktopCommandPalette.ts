@@ -3,11 +3,16 @@
 // formatting. Repatriated from src/shared/wa/commandPalette.ts (#8825): the
 // desktop renderer is its only consumer.
 
+import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 import '@awesome.me/webawesome/dist/components/input/input.js';
 import { html, nothing, render } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
 import type { StreamTabId, StreamTabInfo } from '@shared/schemas';
+import { SETTINGS_TAB } from '@shared/schemas';
+import { formatDesktopAccelerator } from '@shared/commands/accelerators';
+import type { DesktopShortcutEntry } from '@shared/commands/shortcutPreferences';
+import { type TeXRAIconName, waIcon } from '@shared/wa/webAwesomeIcons';
 import { isThenable } from '@utils/core';
 import {
   dispatchDesktopCommand,
@@ -28,12 +33,19 @@ import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js'
 interface CommandPaletteEntry {
   readonly id: string;
   readonly label: string;
+  readonly description?: string;
+  readonly icon: TeXRAIconName;
   readonly meta?: string;
   readonly category?: string;
   readonly enabled: boolean;
 }
 
-interface CommandPaletteController {
+interface CommandPaletteGroup {
+  readonly category: string;
+  readonly entries: readonly CommandPaletteEntry[];
+}
+
+export interface CommandPaletteController {
   element: HTMLElement;
   open(): void;
   close(): void;
@@ -43,6 +55,7 @@ export interface DesktopCommandPaletteOptions {
   document: Document;
   actions: DesktopCommandActions;
   getStreams?: () => readonly StreamTabInfo[];
+  getShortcuts?: () => readonly DesktopShortcutEntry[];
   platform?: NodeJS.Platform;
   // Returning false suppresses ALL palette opens — both the global
   // Cmd/Ctrl+K shortcut and any direct `controller.open()` call (e.g. while
@@ -50,14 +63,19 @@ export interface DesktopCommandPaletteOptions {
   canOpen?: () => boolean;
 }
 
-const COMMAND_PALETTE_SHORTCUT_KEY = 'k';
 const DESKTOP_SWITCH_STREAM_COMMAND_PREFIX = 'texra.desktop.switchStream:';
 
 // Pure helpers exported for unit testing (filter/index/dispatch) — the
 // test-kernel suite exercises the same source of truth the palette runs.
 
 export function filterCommandPaletteEntries<
-  T extends { id: string; label: string; meta?: string; category?: string },
+  T extends {
+    id: string;
+    label: string;
+    description?: string;
+    meta?: string;
+    category?: string;
+  },
 >(entries: readonly T[], query: string): T[] {
   const normalizedQuery = query.trim().toLowerCase();
   if (!normalizedQuery) return [...entries];
@@ -69,10 +87,12 @@ export function filterCommandPaletteEntries<
     // category-name match. Empty/undefined fields collapse to '' and don't
     // affect matching.
     const category = entry.category ?? '';
+    const description = entry.description ?? '';
     const meta = entry.meta ?? '';
-    const haystack = `${entry.label} ${category} ${meta} ${entry.id}`
-      .replaceAll('.', ' ')
-      .toLowerCase();
+    const haystack =
+      `${entry.label} ${description} ${category} ${meta} ${entry.id}`
+        .replaceAll('.', ' ')
+        .toLowerCase();
     return queryParts.every((part) => haystack.includes(part));
   });
 }
@@ -109,28 +129,23 @@ export function executeCommandPaletteEntry(
   return result !== false;
 }
 
-export function isCommandPaletteShortcut(event: KeyboardEvent): boolean {
-  return (
-    event.key.toLowerCase() === COMMAND_PALETTE_SHORTCUT_KEY &&
-    (event.metaKey || event.ctrlKey) &&
-    !event.altKey &&
-    !event.shiftKey
-  );
-}
-
 export function createDesktopCommandPalette({
   document,
   actions,
   getStreams,
+  getShortcuts,
   platform = getRendererPlatform(document.defaultView),
   canOpen,
 }: DesktopCommandPaletteOptions): CommandPaletteController {
-  const view = document.defaultView;
-
   const getEntries = (): CommandPaletteEntry[] => {
     const streams = actions.showStream == null ? [] : (getStreams?.() ?? []);
+    const shortcutsById = new Map(
+      (getShortcuts?.() ?? []).map((entry) => [entry.id, entry]),
+    );
     return [
-      ...getDesktopCommandMenuEntries(undefined, platform).map(toPaletteEntry),
+      ...getDesktopCommandMenuEntries(undefined, platform).map((entry) =>
+        toPaletteEntry(entry, shortcutsById.get(entry.id), platform),
+      ),
       ...streams.map(toStreamPaletteEntry),
     ];
   };
@@ -160,7 +175,7 @@ export function createDesktopCommandPalette({
   const handleFilterInput = (event: Event): void => {
     const target = event.target as WaInput | null;
     query = target?.value ?? '';
-    visibleEntries = filterCommandPaletteEntries(allEntries, query);
+    visibleEntries = visibleCommandPaletteEntries(allEntries, query);
     activeIndex = visibleEntries.length > 0 ? 0 : -1;
     renderTemplate();
   };
@@ -199,19 +214,26 @@ export function createDesktopCommandPalette({
   };
 
   const renderTemplate = (): void => {
+    const groups = groupCommandPaletteEntries(visibleEntries);
     render(
       html`
-        <wa-input
-          class="desktop-command-palette-input"
-          type="search"
-          autocomplete="off"
-          spellcheck="false"
-          placeholder="Run command"
-          aria-label="Run command"
-          .value=${query}
-          @input=${handleFilterInput}
-          @keydown=${handleFilterKeydown}
-        ></wa-input>
+        <div class="desktop-command-palette-search">
+          ${waIcon('search', {
+            className: 'desktop-command-palette-search-icon',
+          })}
+          <wa-input
+            class="desktop-command-palette-input input-plain"
+            type="search"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="Search commands"
+            aria-label="Search commands"
+            .value=${query}
+            @input=${handleFilterInput}
+            @keydown=${handleFilterKeydown}
+          ></wa-input>
+          <kbd class="desktop-command-palette-key">Esc</kbd>
+        </div>
         <div class="desktop-command-palette-list" role="listbox">
           ${
             visibleEntries.length === 0
@@ -220,30 +242,90 @@ export function createDesktopCommandPalette({
                 </div>`
               : nothing
           }
-          ${repeat(
-            visibleEntries,
-            (entry) => entry.id,
-            (entry, index) => html`
-              <button
-                class="desktop-command-palette-item"
-                type="button"
-                role="option"
-                data-command-id=${entry.id}
-                ?disabled=${!entry.enabled}
-                aria-selected=${index === activeIndex ? 'true' : 'false'}
-                @mouseenter=${handleItemMouseEnter(index)}
-                @click=${handleItemClick(entry)}
+          ${groups.map(
+            (group) => html`
+              <section
+                class="desktop-command-palette-group"
+                aria-labelledby=${`command-group-${slugify(group.category)}`}
               >
-                <span class="desktop-command-palette-label"
-                  >${entry.label}</span
+                <h2
+                  id=${`command-group-${slugify(group.category)}`}
+                  class="desktop-command-palette-group-label"
                 >
-                <span class="desktop-command-palette-meta"
-                  >${entry.meta ?? ''}</span
-                >
-              </button>
+                  ${group.category}
+                </h2>
+                ${repeat(
+                  group.entries,
+                  (entry) => entry.id,
+                  (entry) => {
+                    const index = visibleEntries.indexOf(entry);
+                    return html`
+                      <wa-button
+                        class="desktop-command-palette-item"
+                        type="button"
+                        appearance="plain"
+                        size="s"
+                        role="option"
+                        data-command-id=${entry.id}
+                        ?disabled=${!entry.enabled}
+                        aria-selected=${
+                          index === activeIndex ? 'true' : 'false'
+                        }
+                        @mouseenter=${handleItemMouseEnter(index)}
+                        @click=${handleItemClick(entry)}
+                      >
+                        <span class="desktop-command-palette-main">
+                          <span class="desktop-command-palette-item-icon">
+                            ${waIcon(entry.icon)}
+                          </span>
+                          <span class="desktop-command-palette-copy">
+                            <span class="desktop-command-palette-label">
+                              ${entry.label}
+                            </span>
+                            ${
+                              entry.description
+                                ? html`<span
+                                    class="desktop-command-palette-description"
+                                    >${entry.description}</span
+                                  >`
+                                : nothing
+                            }
+                          </span>
+                        </span>
+                        ${
+                          entry.meta
+                            ? html`<kbd
+                                slot="end"
+                                class="desktop-command-palette-meta"
+                                >${entry.meta}</kbd
+                              >`
+                            : nothing
+                        }
+                      </wa-button>
+                    `;
+                  },
+                )}
+              </section>
             `,
           )}
         </div>
+        <footer class="desktop-command-palette-footer">
+          <div class="desktop-command-palette-help" aria-hidden="true">
+            <span><kbd>↑↓</kbd> Navigate</span>
+            <span><kbd>↵</kbd> Open</span>
+          </div>
+          <wa-button
+            class="desktop-command-palette-customize"
+            appearance="plain"
+            size="s"
+            @click=${() => {
+              close();
+              actions.showSettings(SETTINGS_TAB.SHORTCUTS);
+            }}
+          >
+            ${waIcon('code', { slot: 'start' })} Customize shortcuts
+          </wa-button>
+        </footer>
       `,
       dialog,
     );
@@ -261,7 +343,7 @@ export function createDesktopCommandPalette({
     if (dialog.open) return;
     allEntries = getEntries();
     query = '';
-    visibleEntries = [...allEntries];
+    visibleEntries = visibleCommandPaletteEntries(allEntries, query);
     activeIndex = visibleEntries.length > 0 ? 0 : -1;
     renderTemplate();
     dialog.open = true;
@@ -276,16 +358,6 @@ export function createDesktopCommandPalette({
   // focus the filter input directly so users can start typing immediately.
   dialog.addEventListener('wa-after-show', () => {
     dialog.querySelector<WaInput>('.desktop-command-palette-input')?.focus();
-  });
-
-  // Global Cmd/Ctrl+K shortcut — must live on the document so it fires when
-  // no palette descendant is focused. canOpen guards against modal dialogs
-  // (e.g. the onboarding walkthrough) stealing the shortcut while visible.
-  view?.addEventListener('keydown', (event) => {
-    if (!isCommandPaletteShortcut(event)) return;
-    if (isTextEntryShortcutTarget(view, document, event)) return;
-    event.preventDefault();
-    open();
   });
 
   renderTemplate();
@@ -309,12 +381,13 @@ function toStreamPaletteEntry(stream: StreamTabInfo): CommandPaletteEntry {
   return {
     id: buildSwitchStreamCommandId(stream.name),
     label: `Switch to ${stream.label || stream.name}`,
-    meta:
+    description:
       stream.description ||
       stream.agent ||
       (stream.kind === 'workflowScript' ? stream.workflowName : undefined) ||
       (stream.kind === 'agent' ? stream.modelLabel : undefined) ||
       'Stream',
+    icon: 'terminal',
     category: 'Streams',
     enabled: true,
   };
@@ -330,19 +403,52 @@ function parseSwitchStreamCommandId(id: string): StreamTabId | undefined {
   return streamId || undefined;
 }
 
-function toPaletteEntry(entry: DesktopCommandMenuEntry): CommandPaletteEntry {
-  // Meta-column precedence: unavailableReason > accelerator > category.
-  // Disabled entries surface their reason; enabled entries show the
-  // keybinding when present, falling back to the catalog category.
-  // `category` is always carried separately so the palette filter can match
-  // it even when `meta` holds an accelerator or unavailable reason.
+function toPaletteEntry(
+  entry: DesktopCommandMenuEntry,
+  shortcut: DesktopShortcutEntry | undefined,
+  platform: NodeJS.Platform,
+): CommandPaletteEntry {
   return {
     id: entry.id,
     label: entry.label,
-    meta: entry.unavailableReason ?? entry.accelerator ?? entry.category,
+    description: entry.unavailableReason,
+    icon: entry.icon,
+    meta: formatDesktopAccelerator(
+      shortcut?.accelerator ?? entry.accelerator,
+      platform,
+    ),
     category: entry.category,
     enabled: entry.enabled,
   };
+}
+
+function visibleCommandPaletteEntries(
+  entries: readonly CommandPaletteEntry[],
+  query: string,
+): CommandPaletteEntry[] {
+  const filtered = filterCommandPaletteEntries(entries, query);
+  if (query.trim()) return filtered;
+  return filtered.filter((entry) => entry.enabled);
+}
+
+function groupCommandPaletteEntries(
+  entries: readonly CommandPaletteEntry[],
+): CommandPaletteGroup[] {
+  const grouped = new Map<string, CommandPaletteEntry[]>();
+  for (const entry of entries) {
+    const category = entry.category ?? 'Other';
+    const group = grouped.get(category) ?? [];
+    group.push(entry);
+    grouped.set(category, group);
+  }
+  return [...grouped].map(([category, groupEntries]) => ({
+    category,
+    entries: groupEntries,
+  }));
+}
+
+function slugify(value: string): string {
+  return value.toLowerCase().replaceAll(/[^a-z0-9]+/g, '-');
 }
 
 function isElement(
@@ -356,7 +462,7 @@ function isElement(
   return elementConstructor != null && target instanceof elementConstructor;
 }
 
-function isTextEntryShortcutTarget(
+export function isTextEntryShortcutTarget(
   view: Window | null,
   document: Document,
   event: KeyboardEvent,

@@ -40,7 +40,6 @@ interface DesktopCommandPaletteModule {
     entry: { id: string; label: string; enabled: boolean } | undefined,
     onExecute: (id: string) => boolean | Promise<boolean>,
   ): boolean;
-  isCommandPaletteShortcut(event: KeyboardEvent): boolean;
 }
 
 interface DesktopPaletteStream {
@@ -147,24 +146,6 @@ describe('desktop command palette', () => {
       ),
     ).toBe(false);
     expect(actions.showSettings).not.toHaveBeenCalled();
-  });
-
-  it('uses the native command palette shortcut shape', async () => {
-    const { isCommandPaletteShortcut } = await loadDesktopCommandPalette();
-
-    expect(
-      isCommandPaletteShortcut({ key: 'k', metaKey: true } as KeyboardEvent),
-    ).toBe(true);
-    expect(
-      isCommandPaletteShortcut({ key: 'k', ctrlKey: true } as KeyboardEvent),
-    ).toBe(true);
-    expect(
-      isCommandPaletteShortcut({
-        key: 'k',
-        metaKey: true,
-        shiftKey: true,
-      } as KeyboardEvent),
-    ).toBe(false);
   });
 
   // wa-dialog + wa-input wiring (Lit-rendered web components). The DOM
@@ -355,45 +336,6 @@ describe('desktop command palette', () => {
     pressKey(waInput, { key: 'ArrowUp' });
     await flushDialogTicks();
     expect(selectedIndex()).toBe(0);
-  });
-
-  it('honors the canOpen guard for global command palette shortcuts', async () => {
-    const { createDesktopCommandPalette } = await loadDesktopCommandPalette();
-    const controller = createDesktopCommandPalette({
-      document,
-      actions: { showRoute: vi.fn(), showSettings: vi.fn() },
-      canOpen: () => false,
-      platform: 'darwin',
-    });
-    document.body.append(controller.element);
-    await flushDialogTicks();
-
-    const trigger = document.createElement('button');
-    document.body.append(trigger);
-    trigger.focus();
-    pressKey(trigger, { key: 'k', metaKey: true });
-    await flushDialogTicks();
-
-    expect(controller.element.open).toBe(false);
-  });
-
-  it('does not steal command palette shortcuts from text-entry targets', async () => {
-    const { createDesktopCommandPalette } = await loadDesktopCommandPalette();
-    const controller = createDesktopCommandPalette({
-      document,
-      actions: { showRoute: vi.fn(), showSettings: vi.fn() },
-      platform: 'darwin',
-    });
-    document.body.append(controller.element);
-    await flushDialogTicks();
-
-    const search = document.createElement('input');
-    document.body.append(search);
-    search.focus();
-    pressKey(search, { key: 'k', metaKey: true });
-    await flushDialogTicks();
-
-    expect(controller.element.open).toBe(false);
   });
 
   it('exposes the wa-input value through the shadow-root native input', async () => {

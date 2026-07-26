@@ -8,7 +8,10 @@ import {
   type DiffSource,
   type DiffViewHost,
 } from '@hosts/uiHosts';
-import { computeUserPatch } from '@tools/approval/toolEditApproval';
+import {
+  computeLineChangeSummary,
+  computeUserPatch,
+} from '@tools/approval/toolEditApproval';
 
 import {
   DESKTOP_DIFF_COMMANDS,
@@ -26,22 +29,22 @@ export interface DesktopDiffHostOptions {
   openPath(filePath: string): Promise<void>;
   /**
    * Posts a `desktop:showDiff` IPC message to the renderer so it can
-   * mount `<texra-diff-view>` inside the wa-dialog overlay. Return
+   * mount `<texra-diff-view>` inside the Review workbench. Return
    * `false` (or throw) when the renderer is not reachable — e.g. the
    * IPC bridge isn't wired yet at startup, or the BrowserWindow has
    * been destroyed. The host then transparently falls back to the
    * external-editor flow so the user never gets a silent failure
    * (caught by Copilot review on PR #3815).
    *
-   * When undefined, `openDiff` skips the overlay entirely and uses
+   * When undefined, `openDiff` skips the workbench entirely and uses
    * the external-editor flow — keeps tests and unattended invocations
    * working.
    */
   postToRenderer?(message: unknown): boolean | void;
   /**
    * Force the legacy external-editor flow (writes a `.diff` patch file).
-   * Useful for headless tests and as an opt-out if the in-app overlay
-   * misbehaves. Defaults to `false` (prefer the in-app overlay).
+   * Useful for headless tests and as an opt-out if the in-app workbench
+   * misbehaves. Defaults to `false` (prefer the in-app workbench).
    */
   forceExternal?: boolean;
 }
@@ -49,7 +52,7 @@ export interface DesktopDiffHostOptions {
 export function createDesktopDiffHost(
   options: DesktopDiffHostOptions,
 ): Pick<DiffViewHost, 'openDiff'> {
-  // Try to render the diff in the wa-dialog overlay. Returns `false` (so the
+  // Try to render the diff in the Review workbench. Returns `false` (so the
   // caller falls back to the external editor) when the renderer rejects or
   // throws; mirrors the preview host's contract.
   function tryShowDiffInRenderer(message: DesktopShowDiffMessage): boolean {
@@ -74,15 +77,22 @@ export function createDesktopDiffHost(
       readFile(original.filePath, 'utf8'),
       readFile(proposed.filePath, 'utf8'),
     ]);
+    const lineChanges = computeLineChangeSummary(
+      originalContent,
+      proposedContent,
+    );
 
-    // Prefer the in-app overlay when wired. A `false` return value or
+    // Prefer the in-app Review workbench when wired. A `false` return value or
     // a thrown error opts into the external-editor fallback (covers the
     // startup IPC race, destroyed BrowserWindow, and `forceExternal`).
     const shownInRenderer = tryShowDiffInRenderer({
       command: DESKTOP_DIFF_COMMANDS.SHOW_DIFF,
       title,
+      displayPath: title.replace(/^Tool edit:\s*/, ''),
       originalText: originalContent,
       proposedText: proposedContent,
+      additions: lineChanges.added,
+      deletions: lineChanges.removed,
       language: monacoLanguageForFilePath(proposed.filePath),
       originalPath: original.filePath,
       proposedPath: proposed.filePath,

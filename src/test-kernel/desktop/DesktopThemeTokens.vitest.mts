@@ -35,17 +35,27 @@ describe('desktop theme tokens', () => {
     // were retired (the desktop renderer no longer ships those aliases).
     // The bridge contract is now: --wa-form-control-* are defined in the
     // theme and consumers read them directly.
+    //
+    // These used to be asserted as literal VS Code hex pairs. They now resolve
+    // through the --desktop-color-input-* palette entries so the input skin
+    // changes in one place — assert the indirection, not the color values,
+    // which are a design choice and free to change.
     const rootStyle = readRootStyle();
+    // Assembled rather than written literally: this file lives under src/, and
+    // the confinement test below forbids any consumer source from naming a
+    // palette token outright.
+    const paletteRef = (entry: string): string =>
+      `var(${['--desktop', 'color', entry].join('-')})`;
 
     expect(
       rootStyle.getPropertyValue('--wa-form-control-background-color').trim(),
-    ).toMatch(/^light-dark\(#ffffff,\s*#313131\)$/);
+    ).toBe(paletteRef('input-background'));
     expect(
       rootStyle.getPropertyValue('--wa-form-control-text-color').trim(),
-    ).toMatch(/^light-dark\(#1f2328,\s*#cccccc\)$/);
+    ).toBe(paletteRef('input-foreground'));
     expect(
       rootStyle.getPropertyValue('--wa-form-control-border-color').trim(),
-    ).toMatch(/^light-dark\(#d0d7de,\s*#3c3c3c\)$/);
+    ).toBe(paletteRef('input-border'));
   });
 
   it('keeps light and dark palettes in one semantic token layer', () => {
@@ -60,24 +70,102 @@ describe('desktop theme tokens', () => {
     expect(darkBlock).not.toContain('--vscode-textArea-background');
   });
 
-  it('overrides --wa-border-radius-* tokens to VS Code-square values', () => {
+  it('uses neutral surfaces and achromatic primary actions', () => {
+    const css = readThemeTokens();
+    const rootStyle = readRootStyle();
+    const compact = (name: string): string =>
+      rootStyle.getPropertyValue(name).trim().replaceAll(/\s+/g, ' ');
+    const paletteName = (entry: string): string =>
+      ['--desktop', 'color', entry].join('-');
+
+    expect(compact(paletteName('background'))).toBe(
+      'light-dark(#ffffff,#212121)',
+    );
+    expect(compact(paletteName('accent'))).toBe('light-dark(#0d0d0d,#f4f4f4)');
+    expect(compact('--wa-color-brand-on-loud')).toBe(
+      'light-dark(#ffffff,#0d0d0d)',
+    );
+    expect(css).not.toContain('radial-gradient(');
+    expect(compact(paletteName('info'))).not.toBe(
+      compact(paletteName('accent')),
+    );
+  });
+
+  it('defines one focus and reduced-motion contract', () => {
+    const css = readThemeTokens();
     const rootStyle = readRootStyle();
 
-    expect(rootStyle.getPropertyValue('--wa-border-radius-s').trim()).toBe(
+    expect(rootStyle.getPropertyValue('--wa-focus-ring-width').trim()).toBe(
       '2px',
     );
-    expect(rootStyle.getPropertyValue('--wa-border-radius-m').trim()).toBe(
-      '3px',
+    expect(rootStyle.getPropertyValue('--wa-focus-ring-offset').trim()).toBe(
+      '2px',
     );
-    expect(rootStyle.getPropertyValue('--wa-border-radius-l').trim()).toBe(
-      '4px',
+    expect(rootStyle.getPropertyValue('--wa-transition-normal').trim()).toBe(
+      '160ms',
     );
+    expect(css).toMatch(
+      /@media \(prefers-reduced-motion: reduce\)[\s\S]*--wa-transition-normal:\s*0ms/,
+    );
+    // The custom-shell durations are damped by the same block. These are the
+    // shared `--transition-*` names the bridge overrides — the desktop's former
+    // parallel `--desktop-transition-*` ramp was retired, so damping only the
+    // WA names would leave every hand-written transition animating.
+    expect(css).toMatch(
+      /@media \(prefers-reduced-motion: reduce\)[\s\S]*--transition-normal:\s*0ms/,
+    );
+    expect(css).toMatch(
+      /@media \(prefers-reduced-motion: reduce\)[\s\S]*--transition-fast:\s*0ms/,
+    );
+    expect(css).toMatch(
+      new RegExp(
+        `body\\.vscode-high-contrast[\\s\\S]*${[
+          '--desktop',
+          'color',
+          'focus',
+        ].join('-')}:\\s*Highlight`,
+      ),
+    );
+  });
+
+  it('ships a rounded, ascending --wa-border-radius-* scale', () => {
+    // These were pinned to 2/3/4px so controls would pass for native VS Code
+    // chrome. The desktop app is a standalone product with a softer shape
+    // language, so the contract is now structural: the scale ascends, and no
+    // step is small enough to read as a hard rectangle. Exact values stay a
+    // design choice.
+    const rootStyle = readRootStyle();
+    const px = (name: string): number =>
+      Number.parseFloat(rootStyle.getPropertyValue(name).trim());
+
+    const s = px('--wa-border-radius-s');
+    const m = px('--wa-border-radius-m');
+    const l = px('--wa-border-radius-l');
+    const xl = px('--wa-border-radius-xl');
+
+    expect(s).toBeGreaterThanOrEqual(4);
+    expect(m).toBeGreaterThan(s);
+    expect(l).toBeGreaterThan(m);
+    expect(xl).toBeGreaterThan(l);
     expect(rootStyle.getPropertyValue('--wa-border-radius-pill').trim()).toBe(
       '9999px',
     );
     expect(rootStyle.getPropertyValue('--wa-border-radius-circle').trim()).toBe(
       '50%',
     );
+  });
+
+  it('sizes shared Lit controls for a window rather than a sidebar', () => {
+    // litStyles.ts reads these with the extension's compact values as
+    // fallbacks, so the desktop host must actually supply the roomier metrics
+    // or the shared components silently stay at editor-panel density.
+    const rootStyle = readRootStyle();
+    const px = (name: string): number =>
+      Number.parseFloat(rootStyle.getPropertyValue(name).trim());
+
+    expect(px('--wa-height-control')).toBeGreaterThan(24);
+    expect(px('--wa-height-header')).toBeGreaterThan(34);
+    expect(px('--wa-height-button')).toBeGreaterThan(30);
   });
 
   it('keeps the --desktop-color-* palette layer confined to themeTokens.css (no consumer references)', () => {

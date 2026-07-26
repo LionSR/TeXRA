@@ -64,7 +64,7 @@ function renderFileActionButton(opts: FileActionOptions): TemplateResult {
       class="action-icon-button ${opts.className}"
       appearance="plain"
       variant="neutral"
-      size="small"
+      size="s"
       type="button"
       aria-label=${opts.label}
       data-command=${opts.command}
@@ -336,7 +336,7 @@ export class FileList extends LitElement {
                   <wa-button
                     appearance="filled"
                     variant="brand"
-                    size="small"
+                    size="s"
                     @click=${this.runLatexFixer}
                   >
                     ${waIcon('tools', { slot: 'start' })} Run latexFixer

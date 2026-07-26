@@ -316,9 +316,9 @@ export class AgentSelectionPanel extends LitElement {
                 ${
                   enabledInGroup < agents.length
                     ? html`<wa-button
-                        class="agent-count-link"
+                        class="agent-count-link btn-ghost is-link"
                         appearance="plain"
-                        size="small"
+                        size="s"
                         @click=${() => this.handleSetAllEnabled(source, true)}
                         title="Show all ${sourceName} agents"
                       >
@@ -329,9 +329,9 @@ export class AgentSelectionPanel extends LitElement {
                 ${
                   enabledInGroup > 0
                     ? html`<wa-button
-                        class="agent-count-link"
+                        class="agent-count-link btn-ghost is-link"
                         appearance="plain"
-                        size="small"
+                        size="s"
                         @click=${() => this.handleSetAllEnabled(source, false)}
                         title="Hide all ${sourceName} agents"
                       >
@@ -373,14 +373,14 @@ export class AgentSelectionPanel extends LitElement {
           <span class="agent-detail-name">${agent.name}</span>
           ${
             builtIn
-              ? html`<wa-tag variant="neutral" size="small">Built-in</wa-tag>`
+              ? html`<wa-tag variant="neutral" size="s">Built-in</wa-tag>`
               : nothing
           }
           ${
             badge
               ? html`<wa-tag
                   variant="neutral"
-                  size="small"
+                  size="s"
                   title="${badge.label} agent"
                   >${waIcon(badge.icon)} ${badge.label}</wa-tag
                 >`
@@ -420,7 +420,7 @@ export class AgentSelectionPanel extends LitElement {
                           html`<wa-tag
                             class="agent-tool-badge"
                             variant="neutral"
-                            size="small"
+                            size="s"
                             >${t}</wa-tag
                           >`,
                       )}
@@ -440,6 +440,7 @@ export class AgentSelectionPanel extends LitElement {
                     text: 'Open YAML',
                     label: 'Open agent YAML definition',
                     className: 'agent-action-btn',
+                    kind: 'ghost',
                     onClick: () => this.handleOpenYaml(agent),
                   })}
                 `
@@ -461,6 +462,7 @@ export class AgentSelectionPanel extends LitElement {
                     title:
                       "View the remote agent's prompt definition (read-only)",
                     className: 'agent-action-btn',
+                    kind: 'ghost',
                     onClick: () => this.handleViewRemotePrompt(agent),
                   })}
                 `
@@ -474,6 +476,7 @@ export class AgentSelectionPanel extends LitElement {
                     text: 'Reveal in File Explorer',
                     title: 'Show this file in your system file explorer',
                     className: 'agent-action-btn',
+                    kind: 'ghost',
                     onClick: () => this.handleRevealAgentFile(agent),
                   })}
                 `
@@ -495,6 +498,7 @@ export class AgentSelectionPanel extends LitElement {
                     className: 'agent-action-btn',
                     appearance: 'filled',
                     variant: 'brand',
+                    kind: 'primary',
                     onClick: () => this.handleCustomizeAgent(agent),
                   })}
                 `
@@ -512,7 +516,8 @@ export class AgentSelectionPanel extends LitElement {
                     text: 'Delete',
                     label: 'Delete custom agent',
                     title: 'Delete this custom agent',
-                    className: 'agent-action-btn agent-action-btn--danger',
+                    className: 'agent-action-btn',
+                    kind: 'danger',
                     onClick: () => this.handleDeleteCustomAgent(agent),
                   })}
                 `
@@ -532,7 +537,8 @@ export class AgentSelectionPanel extends LitElement {
                       icon: 'trash',
                       text: 'Delete',
                       label: 'Confirm delete custom agent',
-                      className: 'agent-action-btn agent-action-btn--danger',
+                      className: 'agent-action-btn',
+                      kind: 'danger',
                       onClick: () => this.handleDeleteCustomAgent(agent),
                     })}
                     ${renderLabeledActionButton({
@@ -540,6 +546,7 @@ export class AgentSelectionPanel extends LitElement {
                       text: 'Cancel',
                       label: 'Cancel delete custom agent',
                       className: 'agent-action-btn',
+                      kind: 'ghost',
                       onClick: () => this.cancelDelete(),
                     })}
                   </div>

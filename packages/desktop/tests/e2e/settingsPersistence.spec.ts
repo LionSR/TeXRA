@@ -8,6 +8,8 @@ import {
   closeTexraApp,
   dismissOnboarding,
   launchTexraApp,
+  setRoute,
+  setSettingsTab,
   type LaunchedApp,
 } from './electronApp.js';
 import {
@@ -35,38 +37,6 @@ function writeMemoryEntry(input: {
   const memoryDir = join(findWorkspaceStoragePath(input), 'memories');
   mkdirSync(memoryDir, { recursive: true });
   writeFileSync(join(memoryDir, MEMORY_FILE_NAME), MEMORY_FILE_CONTENT, 'utf8');
-}
-
-async function setRoute(
-  launched: LaunchedApp,
-  route: 'main' | 'progress' | 'settings' | 'logs',
-): Promise<void> {
-  await launched.page.evaluate((next) => {
-    window.postMessage({ command: 'desktop:setRoute', route: next }, '*');
-  }, route);
-  await launched.page.waitForFunction(
-    (target) => document.body.dataset.desktopRoute === target,
-    route,
-    { timeout: 5000 },
-  );
-}
-
-async function setSettingsTab(
-  launched: LaunchedApp,
-  tabIndex: number,
-): Promise<void> {
-  await setRoute(launched, 'settings');
-  await launched.page.evaluate((idx) => {
-    window.postMessage({ command: 'setTab', tabIndex: idx }, '*');
-  }, tabIndex);
-  await launched.page.waitForFunction(
-    () => {
-      const settingsApp = document.querySelector('settings-app');
-      return settingsApp?.shadowRoot != null;
-    },
-    undefined,
-    { timeout: 10_000 },
-  );
 }
 
 async function sendHostCommand(

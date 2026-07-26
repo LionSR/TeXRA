@@ -1,4 +1,4 @@
-/** Compact monthly-spend meter for the Settings → Models tab. */
+/** Compact monthly-spend meter for the Account & Usage settings tab. */
 
 import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
@@ -13,6 +13,11 @@ import { clamp } from '@utils/core';
 import { formatPercent } from '@utils/text/stringUtils';
 
 const WARNING_THRESHOLD_PCT = 80;
+const USD_FORMATTER = new Intl.NumberFormat(undefined, {
+  style: 'currency',
+  currency: 'USD',
+  maximumFractionDigits: 2,
+});
 
 type QuotaState = 'ok' | 'warning' | 'exhausted';
 
@@ -47,7 +52,6 @@ export class RelayQuotaMeter extends LitElement {
         display: block;
       }
       .quota-meter {
-        margin: 0 0 var(--wa-space-m);
         padding: var(--wa-space-m) var(--wa-space-l);
         border: var(--border-thin) solid var(--wa-color-neutral-border-quiet);
         border-radius: var(--border-radius);
@@ -120,13 +124,17 @@ export class RelayQuotaMeter extends LitElement {
       <div class="quota-meter" data-state=${state}>
         <div class="quota-row">
           <span class="quota-label">Relay usage this month</span>
-          <span class="quota-amount">${formatPercent(percent)} used</span>
+          <span class="quota-amount">
+            ${USD_FORMATTER.format(s.currentSpend)} of
+            ${USD_FORMATTER.format(s.limit)}
+          </span>
         </div>
         <wa-progress-bar
           class="quota-bar"
           value=${Math.round(percent)}
           label="Relay usage this month"
         ></wa-progress-bar>
+        <div class="quota-note">${formatPercent(percent)} used</div>
         ${note ? html`<div class="quota-note">${note}</div>` : nothing}
       </div>
     `;

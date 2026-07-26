@@ -5,7 +5,6 @@ import {
   TEXRA_PROTOCOL,
   TEXRA_PROTOCOL_SCHEME,
 } from '../desktopProtocol.js';
-import { isNewWindowLaunch } from '../workspacePath.js';
 
 export interface DesktopProtocolCallback {
   rawUrl: string;
@@ -57,14 +56,7 @@ export interface DesktopProtocolApp {
 export interface DesktopProtocolLifecycle {
   router: DesktopProtocolCallbackRouter;
   shouldContinue: boolean;
-  /**
-   * True only for the single process holding Electron's single-instance
-   * lock. A second "open folder in new window" launch runs as its own
-   * process with `shouldContinue: true` but does NOT hold the lock — use
-   * this to gate process-singleton behavior (e.g. the desktop update
-   * check) that would otherwise duplicate across those processes, since
-   * each has an independent in-memory view of persisted global state.
-   */
+  /** True only for the process holding Electron's single-instance lock. */
   ownsSingleInstanceLock: boolean;
 }
 
@@ -161,24 +153,19 @@ export function installDesktopProtocolCallbackLifecycle(
 ): DesktopProtocolLifecycle {
   const { app } = options;
   const router = createDesktopProtocolCallbackRouter({ log: options.log });
-  const isExplicitNewWindow = isNewWindowLaunch({ argv: options.argv });
   const ownsSingleInstanceLock = app.requestSingleInstanceLock();
 
-  if (!ownsSingleInstanceLock && !isExplicitNewWindow) {
+  if (!ownsSingleInstanceLock) {
     app.quit();
     return { router, shouldContinue: false, ownsSingleInstanceLock };
   }
 
-  if (ownsSingleInstanceLock) {
-    registerProtocolClient(options);
+  registerProtocolClient(options);
 
-    app.on('second-instance', (_event, argv) => {
-      const routedCount = router.routeArgv(argv);
-      if (!isNewWindowLaunch({ argv }) || routedCount > 0) {
-        options.focusMainWindow?.();
-      }
-    });
-  }
+  app.on('second-instance', (_event, argv) => {
+    router.routeArgv(argv);
+    options.focusMainWindow?.();
+  });
 
   app.on('open-url', (event, url) => {
     event.preventDefault();
