@@ -473,7 +473,9 @@ export function teardownDefaultSession(): void {
  *
  * Hosts must initialize it explicitly after opening transcript persistence.
  * Access before that composition step is a lifecycle error rather than an
- * implicit memory-only session.
+ * implicit memory-only session. If another session is live, retrieval emits at
+ * most one best-effort warning for the process lifetime, including across
+ * teardown and reinitialization of the default session.
  */
 export function defaultSession(): SessionHandle {
   if (!cachedDefaultSession) {
