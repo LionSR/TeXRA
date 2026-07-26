@@ -1,5 +1,5 @@
 // Local imports - stream state
-import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { StreamPhase } from '@shared/schemas';
 import { isActivePhase, isInFlightPhase } from '@shared/streams/streamStatus';
 import type { TokenUsageStats } from '@shared/schemas/usage';
@@ -29,7 +29,7 @@ export class StatusBarUsageTracker {
 
   constructor(
     private readonly status: Pick<
-      StreamStatusMachine,
+      SessionHandle['status'],
       'entries' | 'isInFlight'
     >,
   ) {}
