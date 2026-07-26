@@ -1,7 +1,5 @@
 /** Retry state management: Node retry config, error tracking, and retryable node base class. */
 
-import { StatusCodes } from 'http-status-codes';
-
 import { Node } from '@agent/node';
 import { logErrorData, logProgressStatus, type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -14,6 +12,7 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import { normalizeProviderError } from '@common/errors';
 import {
   isProviderErrorAutoRetryable,
+  isUnauthorizedProviderError,
   isUserAbort,
 } from '@common/errors/sdkErrorUtils';
 import {
@@ -165,7 +164,7 @@ export abstract class RetryableInvocationNode<
       const retryFormatted = normalizeProviderError(retryErr);
       if (
         retryFormatted.isRelayError &&
-        retryFormatted.statusCode === StatusCodes.UNAUTHORIZED
+        isUnauthorizedProviderError(retryFormatted)
       ) {
         services.logger.debug(
           'Still 401 after token refresh, skipping auto-retries',
@@ -229,7 +228,7 @@ export abstract class RetryableInvocationNode<
       if (
         (formatted.isRelayError ||
           services.clientCredentialRoute === 'relay') &&
-        formatted.statusCode === StatusCodes.UNAUTHORIZED &&
+        isUnauthorizedProviderError(formatted) &&
         !this._hasAttemptedTokenRefresh
       ) {
         return this.attemptRelay401Recovery(err, operation, signal);
