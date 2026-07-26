@@ -87,7 +87,6 @@ export async function resumeQueuedToolUseFromResumeData(
 
   followUpsQueue.acquire(streamId);
   streamStatus.transition(streamId, STREAM_PHASE.RUNNING, 'resume', {
-    events: session.events,
     substate: STREAM_SUBSTATE.RESUMING,
   });
 
@@ -198,9 +197,7 @@ export async function resumeQueuedToolUseFromResumeData(
         followUpsRestored ||
         streamStatus.getSubstate(streamId) === STREAM_SUBSTATE.RESUMING)
     ) {
-      streamStatus.transitionToWaiting(streamId, 'wait', {
-        events: session.events,
-      });
+      streamStatus.transitionToWaiting(streamId, 'wait');
     }
   }
 

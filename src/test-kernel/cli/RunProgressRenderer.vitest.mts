@@ -260,15 +260,19 @@ function handleStreamStatus(
   streamId: string,
   status: StreamPhase,
 ): void {
+  // Status reaches the renderer on the session-fact rail only: `StreamStatusMachine`
+  // publishes every transition as `updateStreamStatus`, and the renderer no longer
+  // reads run-scope `status` trace events.
   renderer?.handleSessionEvent({
-    scope: 'run',
-    streamId: streamId as StreamTabId,
+    scope: 'session',
     event: {
-      type: 'status',
-      streamId: streamId as StreamTabId,
-      phase: status,
-      previousPhase: STREAM_PHASE.RUNNING,
-      cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
+      type: 'updateStreamStatus',
+      payload: {
+        streamId: streamId as StreamTabId,
+        status,
+        previousStatus: STREAM_PHASE.RUNNING,
+        cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
+      },
     },
   });
 }
@@ -594,17 +598,7 @@ describe('CLI run progress renderer', () => {
         ],
       },
     });
-    renderer?.handleSessionEvent({
-      scope: 'run',
-      streamId,
-      event: {
-        type: 'status',
-        streamId,
-        phase: STREAM_PHASE.COMPLETED,
-        previousPhase: STREAM_PHASE.RUNNING,
-        cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
-      },
-    });
+    handleStreamStatus(renderer, streamId, STREAM_PHASE.COMPLETED);
 
     expect(output.text).toBe(
       'polish paper.tex · 0s\n' +

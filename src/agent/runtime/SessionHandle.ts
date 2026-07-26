@@ -141,8 +141,8 @@ export class SessionHandle {
     }
     // Forced dependency order, every cross-reference explicit — never let a
     // member fall back to a neighboring module singleton (silent-state-split).
-    const status = init.status ?? new StreamStatusMachine();
     const events = init.events ?? new SessionEventHub();
+    const status = init.status ?? new StreamStatusMachine(events);
     const transcripts = init.transcripts;
     const followUps = init.followUps ?? new ToolUseFollowUpQueue();
     const approvals = createSessionApprovals();
