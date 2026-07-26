@@ -492,12 +492,9 @@ export class StreamSnapshotStore {
         if (sessionEvent.scope !== 'session') return;
         switch (sessionEvent.event.type) {
           case 'clearMissingOutputs': {
-            const { streamId, streamConfig } = sessionEvent.event.payload;
-            let targets: StreamTabId[] = [];
-            if (streamId) targets = [streamId];
-            else if (streamConfig) {
-              targets = this.findWorkflowStreamsMatching(streamConfig);
-            }
+            const targets = this.resolveMissingOutputTargets(
+              sessionEvent.event.payload,
+            );
             for (const target of targets) this.clearMissingOutputs(target);
             return;
           }
@@ -1641,6 +1638,24 @@ export class StreamSnapshotStore {
       result.push(stream);
     }
     return result;
+  }
+
+  /**
+   * Resolve a `clearMissingOutputs` target descriptor to the stream tabs it
+   * affects: an explicit `streamId`, else every workflow tab matching
+   * `streamConfig`, else none. Shared by this store's own session-event handler
+   * and the progress-view `ProgressFactApplier` so the resolution rule lives in
+   * exactly one place.
+   */
+  resolveMissingOutputTargets(target: {
+    streamId?: StreamTabId;
+    streamConfig?: WorkflowStreamMatch;
+  }): StreamTabId[] {
+    if (target.streamId) return [target.streamId];
+    if (target.streamConfig) {
+      return this.findWorkflowStreamsMatching(target.streamConfig);
+    }
+    return [];
   }
 
   // ==========================================================================
