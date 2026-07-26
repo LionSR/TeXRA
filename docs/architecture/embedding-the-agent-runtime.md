@@ -201,6 +201,7 @@ initNodeAgentRuntime(lifecycle); // Optional shipped-feature parity
 initializeServerSideKeyAccess({}); // Step 2
 await bootstrapNodeAgentDirectories({/* … */}); // Step 3
 
+// Use StreamLogStore.ephemeral('embedder') here for memory-only transcripts.
 const session = initializeDefaultSession({
   transcripts: await StreamLogStore.open(),
 });
@@ -228,7 +229,7 @@ try {
 }
 ```
 
-`validateExecutionRequest` (`src/agent/core/state/executionRequests.ts:24-43`)
+`validateExecutionRequest` (`src/agent/core/state/executionRequests.ts:24-45`)
 is the result-style validation helper: it returns either a
 `ValidatedExecutionRequest` or a validation message. A caller that prefers
 exceptions may instead run `AgentConfigSchema.parse` and construct the
