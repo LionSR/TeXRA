@@ -132,7 +132,7 @@ export const TOOL_LABEL_MAP: Record<string, string> = {
  * Maps tool names to wa-icon names (codicon-style aliases supported via the
  * shared TeXRA icon library).
  */
-export const TOOL_ICON_MAP: Record<string, string> = {
+export const TOOL_ICON_MAP: Record<string, TeXRAIconName> = {
   // File operations
   read_file: 'file',
   write_file: 'new-file',
