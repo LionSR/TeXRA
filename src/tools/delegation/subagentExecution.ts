@@ -8,11 +8,11 @@
  */
 
 // Local imports
+import { registerExecution } from '@agent/storage';
 import {
-  registerExecution,
+  captureOwnedExecutionLease,
   releaseOwnedExecutionLeaseAfterFailure,
-} from '@agent/storage';
-import { captureOwnedExecutionLease } from '@agent/storage/executionLease';
+} from '@agent/storage/executionLease';
 import {
   AgentConfigSchema,
   type AgentConfigPayload,

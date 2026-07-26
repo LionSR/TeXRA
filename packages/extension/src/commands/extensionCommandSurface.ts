@@ -2,22 +2,25 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { signIn as authSignIn, signOut as authSignOut } from '@commands/auth';
+import {
+  signIn as authSignIn,
+  signOut as authSignOut,
+} from '@commands/auth/authCommands';
 import {
   stopAgent as agentStopAgent,
   compactResponse as agentCompactResponse,
-  handleCreateAgentWithAI as agentHandleCreateAgentWithAI,
-  runExecuteCommand as agentRunExecuteCommand,
-} from '@commands/agent';
-import { downloadArXivSource as latexDownloadArXivSource } from '@commands/latex';
-import { launchSetupAssistant } from '@commands/setup';
+} from '@commands/agent/agentCommands';
+import { handleCreateAgentWithAI as agentHandleCreateAgentWithAI } from '@commands/agent/agentCreatorCommands';
+import { runExecuteCommand as agentRunExecuteCommand } from '@commands/agent/executeCommand';
+import { downloadArXivSource as latexDownloadArXivSource } from '@commands/latex/arXivCommands';
+import { launchSetupAssistant } from '@commands/setup/setupAssistantCommand';
+import { createSampleProject as sysCreateSampleProject } from '@commands/system/sampleProjectCommands';
+import { handleTestConnection as sysHandleTestConnection } from '@commands/tests/connectionTests';
 import {
-  createSampleProject as sysCreateSampleProject,
-  handleTestConnection as sysHandleTestConnection,
   handleTestAgentLoading as sysHandleTestAgentLoading,
   handleLoadSpecificAgent as sysHandleLoadSpecificAgent,
-  showImportOptions as sysShowImportOptions,
-} from '@commands/system';
+} from '@commands/system/yamlCommands';
+import { showImportOptions as sysShowImportOptions } from '@commands/system/mainViewCommands';
 import {
   handleClean as fileHandleClean,
   handleCleanMultiple as fileHandleCleanMultiple,

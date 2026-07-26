@@ -11,13 +11,13 @@
 import {
   getExecutionStore,
   registerExecution,
-  releaseOwnedExecutionLeaseAfterFailure,
   type ResultMeta,
 } from '@agent/storage';
 import {
   captureOwnedExecutionLease,
   markOwnedExecutionLeaseUndurable,
   ownsExecutionLease,
+  releaseOwnedExecutionLeaseAfterFailure,
 } from '@agent/storage/executionLease';
 import {
   AgentConfigSchema,
