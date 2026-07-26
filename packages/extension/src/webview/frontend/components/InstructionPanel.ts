@@ -55,6 +55,7 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 
 type SessionHintKey = SessionType | 'orchestrator' | 'team';
+type DesktopLaunchMode = 'interactive' | 'team' | 'workflow';
 
 const SESSION_HINT_COPY: Record<
   SessionHintKey,
@@ -98,6 +99,11 @@ function isTeamLaunch(
     session?.sessionType === SESSION_TYPES.TOOL_USE &&
     session.launchTarget === 'team'
   );
+}
+
+function getDesktopLaunchMode(session: SessionContextValue): DesktopLaunchMode {
+  if (session.sessionType === SESSION_TYPES.WORKFLOW) return 'workflow';
+  return session.launchTarget === 'team' ? 'team' : 'interactive';
 }
 
 function resolveSessionHintKey(session: SessionContextValue): SessionHintKey {
@@ -211,6 +217,40 @@ export class InstructionPanel extends LitElement {
     this.dispatchEvent(MainViewEvents.launchTargetChange({ value }));
   }
 
+  private handleDesktopLaunchModeChange(event: Event): void {
+    const select = event.currentTarget as WaSelect | null;
+    const value = typeof select?.value === 'string' ? select.value : '';
+
+    switch (value) {
+      case 'workflow':
+        this.dispatchEvent(
+          MainViewEvents.sessionTypeChange({
+            value: SESSION_TYPES.WORKFLOW,
+          }),
+        );
+        return;
+      case 'team':
+        this.dispatchEvent(
+          MainViewEvents.sessionTypeChange({
+            value: SESSION_TYPES.TOOL_USE,
+          }),
+        );
+        this.dispatchEvent(
+          MainViewEvents.launchTargetChange({ value: 'team' }),
+        );
+        return;
+      default:
+        this.dispatchEvent(
+          MainViewEvents.sessionTypeChange({
+            value: SESSION_TYPES.TOOL_USE,
+          }),
+        );
+        this.dispatchEvent(
+          MainViewEvents.launchTargetChange({ value: 'agent' }),
+        );
+    }
+  }
+
   private handleAgentChange(event: Event): void {
     const select = event.currentTarget as (WaSelect & HTMLElement) | null;
     if (!select) return;
@@ -244,6 +284,14 @@ export class InstructionPanel extends LitElement {
   private handleModelChange(event: Event): void {
     this.dispatchEvent(
       MainViewEvents.modelChange({ value: readSelectValue(event) }),
+    );
+  }
+
+  private handleWorkingDirectoryChange(event: Event): void {
+    this.dispatchEvent(
+      MainViewEvents.workingDirectoryChange({
+        value: readSelectValue(event),
+      }),
     );
   }
 
@@ -398,6 +446,7 @@ export class InstructionPanel extends LitElement {
         class="agent-select"
         data-session-type=${agent.sessionType}
         aria-label=${agent.ariaLabel}
+        size=${this.desktopHost ? 'xs' : nothing}
         placement="top"
         placeholder="Agent…"
         .value=${agent.value}
@@ -452,6 +501,7 @@ export class InstructionPanel extends LitElement {
             id="teamPicker"
             class="agent-select team-select"
             aria-label="Team"
+            size=${this.desktopHost ? 'xs' : nothing}
             placement="top"
             placeholder="Team…"
             .value=${session.selectedTeamId}
@@ -481,6 +531,57 @@ export class InstructionPanel extends LitElement {
     `;
   }
 
+  private renderDesktopLaunchMode(
+    session: SessionContextValue,
+  ): TemplateResult {
+    return html`
+      <wa-select
+        id="desktopLaunchMode"
+        class="desktop-launch-mode"
+        aria-label="Run mode"
+        size="xs"
+        placement="top"
+        .value=${getDesktopLaunchMode(session)}
+        @change=${this.handleDesktopLaunchModeChange}
+      >
+        ${waIcon('diagram-project', { slot: 'start' })}
+        <wa-option value="interactive">Interactive</wa-option>
+        <wa-option value="team">Team</wa-option>
+        <wa-option value="workflow">Workflow</wa-option>
+      </wa-select>
+    `;
+  }
+
+  private renderWorkspaceRootSelect(
+    session: SessionContextValue,
+  ): TemplateResult | typeof nothing {
+    if (session.workspaceRootOptions.length < 2) return nothing;
+
+    return html`
+      <div class="select-group workspace-root-control">
+        <wa-select
+          id="workingDirectory"
+          class="workspace-root-select"
+          aria-label="Working directory"
+          size=${this.desktopHost ? 'xs' : nothing}
+          placement="top"
+          title=${session.workingDirectory}
+          .value=${session.workingDirectory}
+          @change=${this.handleWorkingDirectoryChange}
+        >
+          ${waIcon('folder-tree', { slot: 'start' })}
+          ${session.workspaceRootOptions.map(
+            (option) => html`
+              <wa-option value=${option.value} title=${option.value}>
+                ${option.label}
+              </wa-option>
+            `,
+          )}
+        </wa-select>
+      </div>
+    `;
+  }
+
   override render(): TemplateResult | typeof nothing {
     const session = this.sessionData;
     if (!session) {
@@ -499,6 +600,7 @@ export class InstructionPanel extends LitElement {
             id="sessionTypeToolUse"
             value="toolUse"
             data-session-type="toolUse"
+            appearance="default"
           >
             Interactive
           </wa-radio>
@@ -506,6 +608,7 @@ export class InstructionPanel extends LitElement {
             id="sessionTypeWorkflow"
             value="workflow"
             data-session-type="workflow"
+            appearance="default"
           >
             Workflow
           </wa-radio>
@@ -519,7 +622,7 @@ export class InstructionPanel extends LitElement {
       </div>
     `;
     const launchTargetToggle =
-      session.sessionType === SESSION_TYPES.TOOL_USE
+      !this.desktopHost && session.sessionType === SESSION_TYPES.TOOL_USE
         ? html`
             <div class="select-group launch-target-group">
               <wa-radio-group
@@ -529,10 +632,20 @@ export class InstructionPanel extends LitElement {
                 .value=${session.launchTarget}
                 @change=${this.handleLaunchTargetChange}
               >
-                <wa-radio id="launchTargetAgent" value="agent">
+                <wa-radio
+                  id="launchTargetAgent"
+                  value="agent"
+                  appearance="default"
+                >
                   Agent
                 </wa-radio>
-                <wa-radio id="launchTargetTeam" value="team"> Team </wa-radio>
+                <wa-radio
+                  id="launchTargetTeam"
+                  value="team"
+                  appearance="default"
+                >
+                  Team
+                </wa-radio>
               </wa-radio-group>
             </div>
           `
@@ -556,8 +669,9 @@ export class InstructionPanel extends LitElement {
               this.desktopHost
                 ? html`
                     <span class="desktop-drop-affordance">
-                      ${waIcon('file-circle-plus')}
-                      <span>Drop files to attach</span>
+                      <span class="icon-surface is-size-m">
+                        ${waIcon('file-circle-plus')}
+                      </span>
                     </span>
                   `
                 : sessionTypeToggle
@@ -618,7 +732,7 @@ export class InstructionPanel extends LitElement {
         ${this.renderSessionHint(session)}
         <wa-textarea
           id="instruction"
-          rows=${this.desktopHost ? '4' : '10'}
+          rows=${this.desktopHost ? '2' : '10'}
           resize="none"
           enterkeyhint=${this.desktopHost ? 'send' : nothing}
           placeholder=${session.placeholder}
@@ -629,11 +743,12 @@ export class InstructionPanel extends LitElement {
         ></wa-textarea>
         <div class="instruction-controls">
           <div class="model-selection-footer">
+            ${this.renderWorkspaceRootSelect(session)}
             ${
               this.desktopHost
                 ? html`
                     <div class="desktop-mode-controls">
-                      ${sessionTypeToggle} ${launchTargetToggle}
+                      ${this.renderDesktopLaunchMode(session)}
                     </div>
                   `
                 : launchTargetToggle
@@ -655,6 +770,7 @@ export class InstructionPanel extends LitElement {
                 class="model-select"
                 placement="top"
                 aria-label=${isTeamLaunch(session) ? 'Lead model' : 'Model'}
+                size=${this.desktopHost ? 'xs' : nothing}
                 placeholder="Select model…"
                 title=${
                   this.getModelTooltip(session.modelOptions, session.model) ||
@@ -679,12 +795,13 @@ export class InstructionPanel extends LitElement {
           >
             ${
               this.desktopHost
-                ? waIcon('arrow-up')
+                ? waIcon('paper-plane', { slot: 'start' })
                 : waIcon('play', { slot: 'start' })
             }
             <span class="execute-button__label">
               ${this.desktopHost ? 'Send' : 'Run'}
             </span>
+            ${this.desktopHost ? html`<kbd class="execute-button__key">↵</kbd>` : nothing}
           </wa-button>
           <wa-tooltip for="executeButton">
             ${this.executeTooltip(session)}

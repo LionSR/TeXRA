@@ -7,14 +7,24 @@
 // disk: a path from the renderer is untrusted input, and `../` traversal would
 // otherwise read or overwrite anything the user can reach.
 
-import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
-import { loadFileListSettings } from '@common/files/fileListingRules';
+// Node imports
+import { join } from 'node:path';
+
+// Local imports - file listing
+import {
+  loadFileListSettings,
+  passesFileFilters,
+  prepareFileFilters,
+  shouldVisitDirectory,
+} from '@common/files/fileListingRules';
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
 import { platform } from '@platform/platform';
 import { WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
+import { normalizeFilePath } from '@utils/core';
 import { isPathWithin } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { isDirectory, isFile, isSymlink } from '@utils/files/fsEntryType';
 import { OFFICE_EXTENSIONS } from '@utils/files/mimeUtils';
 
 import {
@@ -85,15 +95,27 @@ export function createDesktopWorkspaceIpc(
     });
   }
 
-  async function listFiles(): Promise<void> {
+  async function listFiles(directory: string): Promise<void> {
+    const normalizedDirectory = normalizeFilePath(directory)
+      .replace(/^\.\//, '')
+      .replace(/\/$/, '');
     try {
       const root = WorkspaceFS.getPath();
+      if (!root) {
+        renderer.postToRenderer({
+          command: DESKTOP_WORKSPACE_COMMANDS.FILES_LISTED,
+          directory: normalizedDirectory,
+          files: [],
+        });
+        return;
+      }
+
       const settings = loadFileListSettings(getConfig);
       // The project tree is a code editor, not the agent input picker. Reuse
-      // the shared traversal and ignore-directory policy, but do not inherit
+      // the shared ignore policy, but do not inherit
       // the input picker's `.ts`/`.js`/`.json` exclusions. Only known binary
       // media and office formats are hidden from this text editor.
-      const config = {
+      const filters = prepareFileFilters({
         extensions: [],
         ignoredExtensions: [
           ...new Set([
@@ -105,22 +127,44 @@ export function createDesktopWorkspaceIpc(
         ignoredDirs: settings.ignoredDirectories,
         ignoredKeywords: [],
         ignoredFiles: [],
-      };
-      const files = root
-        ? await listWorkspaceFiles({
-            root,
-            config,
-            readDirectory: (directory) =>
-              platform().fs.readDirectory(directory),
-          })
-        : [];
+      });
+      const absoluteDirectory = normalizedDirectory
+        ? await resolveWorkspacePath(normalizedDirectory)
+        : root;
+      const entries = await platform().fs.readDirectory(absoluteDirectory);
+      const files = entries
+        .toSorted(([left], [right]) =>
+          left.localeCompare(right, undefined, {
+            numeric: true,
+            sensitivity: 'base',
+          }),
+        )
+        .flatMap(([name, type]) => {
+          if (isSymlink(type)) return [];
+          const path = normalizeFilePath(
+            normalizedDirectory ? join(normalizedDirectory, name) : name,
+          );
+          if (isDirectory(type)) {
+            return shouldVisitDirectory(path, filters)
+              ? [{ path, isDirectory: true }]
+              : [];
+          }
+          return isFile(type) && passesFileFilters(path, filters)
+            ? [{ path, isDirectory: false }]
+            : [];
+        });
       renderer.postToRenderer({
         command: DESKTOP_WORKSPACE_COMMANDS.FILES_LISTED,
-        files: files.map((path) => ({ path, isDirectory: false })),
+        directory: normalizedDirectory,
+        files,
       });
     } catch (error) {
       reportError(error);
-      postFileError('', error);
+      renderer.postToRenderer({
+        command: DESKTOP_WORKSPACE_COMMANDS.FILES_LIST_ERROR,
+        directory: normalizedDirectory,
+        message: toErrorMessage(error),
+      });
     }
   }
 
@@ -155,9 +199,17 @@ export function createDesktopWorkspaceIpc(
     sessionId: string,
     cols: number,
     rows: number,
+    initialCommand?: string,
   ): Promise<void> {
     try {
-      await options.ptyHost.create({ id: sessionId, cols, rows });
+      const session = await options.ptyHost.create({
+        id: sessionId,
+        cols,
+        rows,
+      });
+      if (initialCommand) {
+        session.write(`${initialCommand}\r`);
+      }
     } catch (error) {
       reportError(error);
       // Surface in the terminal itself: a silent no-op looks like a shell that
@@ -178,7 +230,7 @@ export function createDesktopWorkspaceIpc(
 
       switch (data.command) {
         case DESKTOP_WORKSPACE_COMMANDS.LIST_FILES:
-          void listFiles();
+          void listFiles(data.directory);
           return true;
         case DESKTOP_WORKSPACE_COMMANDS.READ_FILE:
           void readFile(data.path);
@@ -188,7 +240,12 @@ export function createDesktopWorkspaceIpc(
           return true;
 
         case DESKTOP_WORKSPACE_COMMANDS.TERMINAL_START:
-          void startTerminal(data.sessionId, data.cols, data.rows);
+          void startTerminal(
+            data.sessionId,
+            data.cols,
+            data.rows,
+            data.initialCommand,
+          );
           return true;
         case DESKTOP_WORKSPACE_COMMANDS.TERMINAL_INPUT:
           options.ptyHost.get(data.sessionId)?.write(data.data);

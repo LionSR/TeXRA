@@ -1,3 +1,5 @@
+import * as path from 'node:path';
+
 import * as vscode from 'vscode';
 
 import { AUTH_COMMANDS } from '@auth/constants';
@@ -61,6 +63,21 @@ export interface MultipleOperationMessage {
 export async function handleExecute(
   message: MainViewExecuteMessage,
 ): Promise<void> {
+  const requestedWorkingDirectory = message.session?.workingDirectory?.trim();
+  if (
+    requestedWorkingDirectory &&
+    !vscode.workspace.workspaceFolders?.some(
+      (folder) =>
+        path.resolve(folder.uri.fsPath) ===
+        path.resolve(requestedWorkingDirectory),
+    )
+  ) {
+    vscode.window.showErrorMessage(
+      'Choose one of the open workspace folders as the working directory.',
+    );
+    return;
+  }
+
   let preparation: MainViewExecutionPreparationResult;
   if (message.session?.launchTarget === 'team') {
     try {

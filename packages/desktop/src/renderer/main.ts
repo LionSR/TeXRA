@@ -153,11 +153,13 @@ import {
   DesktopEnvironmentStateMessageSchema,
   DesktopFileErrorMessageSchema,
   DesktopFileReadMessageSchema,
+  DesktopFilesListErrorMessageSchema,
   DesktopFilesListedMessageSchema,
   DesktopFileWrittenMessageSchema,
   DesktopTerminalDataMessageSchema,
   DesktopTerminalErrorMessageSchema,
   DesktopTerminalExitMessageSchema,
+  DesktopTerminalOpenCommandMessageSchema,
   type DesktopEnvironmentSummary,
 } from '../desktopWorkspaceMessages';
 import { getRendererPlatform } from './rendererPlatform';
@@ -342,7 +344,7 @@ const logsPane = logsController.element;
 // dependencies (Monaco, xterm) lazily on first activation, so an app that never
 // opens either pays nothing.
 const editorPane = createEditorPane({
-  listFiles: () => requestFiles(),
+  listFiles: (directory) => requestFiles(directory),
   readFile: (path) => requestFileRead(path),
   writeFile: (path, contents) => requestFileWrite(path, contents),
   onRequestOpen: (path) => {
@@ -356,13 +358,18 @@ const editorPane = createEditorPane({
   onError: (error) => console.error('TeXRA editor pane', error),
 });
 
+const pendingTerminalCommands = new Map<string, string>();
 const terminalPane = createTerminalPane({
-  start: (sessionId, cols, rows) =>
+  start: (sessionId, cols, rows) => {
+    const initialCommand = pendingTerminalCommands.get(sessionId);
+    pendingTerminalCommands.delete(sessionId);
     postMessage(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_START, {
       sessionId,
       cols,
       rows,
-    }),
+      ...(initialCommand ? { initialCommand } : {}),
+    });
+  },
   sendInput: (sessionId, data) =>
     postMessage(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_INPUT, { sessionId, data }),
   resize: (sessionId, cols, rows) =>
@@ -394,15 +401,15 @@ type PendingFileRequest = {
   reject(error: Error): void;
 };
 
+interface PendingFileListRequest {
+  readonly promise: Promise<readonly EditorFileEntry[]>;
+  resolve(files: readonly EditorFileEntry[]): void;
+  reject(error: Error): void;
+}
+
 const pendingFileReads = new Map<string, PendingFileRequest[]>();
 const pendingFileWrites = new Map<string, PendingFileRequest[]>();
-let pendingFileList:
-  | {
-      promise: Promise<readonly EditorFileEntry[]>;
-      resolve(files: readonly EditorFileEntry[]): void;
-      reject(error: Error): void;
-    }
-  | undefined;
+const pendingFileLists = new Map<string, PendingFileListRequest>();
 
 function settlePending(
   map: Map<string, PendingFileRequest[]>,
@@ -415,8 +422,9 @@ function settlePending(
   for (const request of waiting) settle(request);
 }
 
-function requestFiles(): Promise<readonly EditorFileEntry[]> {
-  if (pendingFileList) return pendingFileList.promise;
+function requestFiles(directory: string): Promise<readonly EditorFileEntry[]> {
+  const pending = pendingFileLists.get(directory);
+  if (pending) return pending.promise;
 
   let resolveList!: (files: readonly EditorFileEntry[]) => void;
   let rejectList!: (error: Error) => void;
@@ -424,12 +432,12 @@ function requestFiles(): Promise<readonly EditorFileEntry[]> {
     resolveList = resolve;
     rejectList = reject;
   });
-  pendingFileList = {
+  pendingFileLists.set(directory, {
     promise,
     resolve: resolveList,
     reject: rejectList,
-  };
-  postMessage(DESKTOP_WORKSPACE_COMMANDS.LIST_FILES);
+  });
+  postMessage(DESKTOP_WORKSPACE_COMMANDS.LIST_FILES, { directory });
   return promise;
 }
 
@@ -565,6 +573,19 @@ function openKind(kind: WorkbenchKind): void {
   updateShell(openWorkbenchTab(shellState, { kind }));
 }
 
+/** Opens a visible bottom terminal and executes a settings-provided command. */
+function openTerminalCommand(initialCommand: string): void {
+  const next = openWorkbenchTab(shellState, {
+    kind: 'terminal',
+    placement: 'bottom',
+    target: window.texraDesktop?.workspacePath ?? '',
+  });
+  const terminal = activeWorkbenchTab(next, 'bottom');
+  if (terminal?.kind !== 'terminal') return;
+  pendingTerminalCommands.set(terminal.id, initialCommand);
+  updateShell(next);
+}
+
 // =============================================================================
 // Pane content
 // =============================================================================
@@ -627,7 +648,10 @@ function disposeWorkbenchTab(tabId: string): void {
     loadedBrowserTabs.delete(tabId);
     postMessage(DESKTOP_WORKSPACE_COMMANDS.BROWSER_CLOSE, { tabId });
   }
-  if (tab?.kind === 'terminal') terminalPane.dispose(tabId);
+  if (tab?.kind === 'terminal') {
+    pendingTerminalCommands.delete(tabId);
+    terminalPane.dispose(tabId);
+  }
   updateShell(closeWorkbenchTab(shellState, tabId));
 }
 
@@ -1497,8 +1521,16 @@ window.addEventListener('message', (event) => {
 function handleWorkspaceMessage(data: unknown): boolean {
   const listed = DesktopFilesListedMessageSchema.safeParse(data);
   if (listed.success) {
-    pendingFileList?.resolve(listed.data.files);
-    pendingFileList = undefined;
+    pendingFileLists.get(listed.data.directory)?.resolve(listed.data.files);
+    pendingFileLists.delete(listed.data.directory);
+    return true;
+  }
+  const listError = DesktopFilesListErrorMessageSchema.safeParse(data);
+  if (listError.success) {
+    pendingFileLists
+      .get(listError.data.directory)
+      ?.reject(new Error(listError.data.message));
+    pendingFileLists.delete(listError.data.directory);
     return true;
   }
   const read = DesktopFileReadMessageSchema.safeParse(data);
@@ -1518,25 +1550,25 @@ function handleWorkspaceMessage(data: unknown): boolean {
   const fileError = DesktopFileErrorMessageSchema.safeParse(data);
   if (fileError.success) {
     const error = new Error(fileError.data.message);
-    // An empty path marks a listing failure; anything else is a specific file's
-    // read or write. Reject both queues for that path: only one will be
-    // populated, and leaving the other pending would hang the editor.
-    if (!fileError.data.path) {
-      pendingFileList?.reject(error);
-      pendingFileList = undefined;
-    } else {
-      settlePending(pendingFileReads, fileError.data.path, (request) =>
-        request.reject(error),
-      );
-      settlePending(pendingFileWrites, fileError.data.path, (request) =>
-        request.reject(error),
-      );
-    }
+    // Reject both queues for this path: only one will be populated, and leaving
+    // the other pending would hang the editor.
+    settlePending(pendingFileReads, fileError.data.path, (request) =>
+      request.reject(error),
+    );
+    settlePending(pendingFileWrites, fileError.data.path, (request) =>
+      request.reject(error),
+    );
     return true;
   }
   const terminalData = DesktopTerminalDataMessageSchema.safeParse(data);
   if (terminalData.success) {
     terminalPane.write(terminalData.data.sessionId, terminalData.data.data);
+    return true;
+  }
+  const terminalCommand =
+    DesktopTerminalOpenCommandMessageSchema.safeParse(data);
+  if (terminalCommand.success) {
+    openTerminalCommand(terminalCommand.data.initialCommand);
     return true;
   }
   const terminalExit = DesktopTerminalExitMessageSchema.safeParse(data);

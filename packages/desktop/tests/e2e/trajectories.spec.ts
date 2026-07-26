@@ -158,6 +158,48 @@ test('logs route renders the desktop log viewer', async () => {
     '.desktop-log-viewer-actions wa-button',
   );
   await expect(actions).toHaveCount(4);
+
+  await launched.page.evaluate(() => {
+    window.postMessage(
+      {
+        command: 'desktop:setLog',
+        log: {
+          path: '/tmp/texra-desktop.log',
+          text: '2026-07-26T12:00:00.000Z [info] Geometry check',
+          truncated: false,
+        },
+      },
+      '*',
+    );
+  });
+  const infoSurface = launched.page.locator(
+    '.desktop-log-entry[data-level="info"] .desktop-log-entry-level-icon',
+  );
+  await expect(infoSurface).toBeVisible();
+  const iconOffset = await infoSurface.evaluate((surface) => {
+    const icon = surface.querySelector<HTMLElement>('wa-icon');
+    const svg = icon?.shadowRoot?.querySelector<SVGElement>('svg');
+    if (!icon || !svg) throw new Error('Log info icon was not rendered.');
+    const surfaceRect = surface.getBoundingClientRect();
+    const iconRect = icon.getBoundingClientRect();
+    const svgRect = svg.getBoundingClientRect();
+    const centerOffset = (rect: DOMRect) => ({
+      x:
+        (rect.left + rect.right) / 2 -
+        (surfaceRect.left + surfaceRect.right) / 2,
+      y:
+        (rect.top + rect.bottom) / 2 -
+        (surfaceRect.top + surfaceRect.bottom) / 2,
+    });
+    return {
+      host: centerOffset(iconRect),
+      svg: centerOffset(svgRect),
+    };
+  });
+  expect(iconOffset).toEqual({
+    host: { x: 0, y: 0 },
+    svg: { x: 0, y: 0 },
+  });
 });
 
 /**

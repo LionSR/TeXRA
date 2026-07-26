@@ -29,6 +29,8 @@ const SESSION: SessionContextValue = {
   toolUseAgentOptions: [],
   modelOptions: [],
   teamOptions: [],
+  workspaceRootOptions: [],
+  workingDirectory: '',
   isRecording: false,
   isPolishing: false,
   debugMode: false,
@@ -97,14 +99,14 @@ describe('instruction-panel desktop composer', () => {
     expect(query(desktop, '.desktop-drop-affordance')).toBeTruthy();
     expect(query(desktop, '.desktop-mode-controls')).toBeTruthy();
     expect(
-      query(desktop, '.desktop-mode-controls #sessionTypeToggle'),
+      query(desktop, '.desktop-mode-controls #desktopLaunchMode'),
     ).toBeTruthy();
     expect(
       desktop.shadowRoot?.querySelector(
         '.instruction-header #sessionTypeToggle',
       ),
     ).toBeNull();
-    expect(query(desktop, '#instruction').getAttribute('rows')).toBe('4');
+    expect(query(desktop, '#instruction').getAttribute('rows')).toBe('2');
     expect(query(desktop, '#instruction').getAttribute('enterkeyhint')).toBe(
       'send',
     );
@@ -114,9 +116,20 @@ describe('instruction-panel desktop composer', () => {
     expect(query(desktop, '.execute-button__label').textContent?.trim()).toBe(
       'Send',
     );
+    expect(query(desktop, '#executeButton wa-icon').getAttribute('slot')).toBe(
+      'start',
+    );
+    expect(desktop.shadowRoot?.querySelector('#sessionTypeToggle')).toBeNull();
+    expect(desktop.shadowRoot?.querySelector('#launchTargetToggle')).toBeNull();
+    expect(query(desktop, '#desktopLaunchMode').getAttribute('size')).toBe(
+      'xs',
+    );
+    for (const id of ['#desktopLaunchMode', '#toolUseAgent', '#model']) {
+      expect(query(desktop, id).getAttribute('size')).toBe('xs');
+    }
     expect(
-      query(desktop, '#executeButton wa-icon').getAttribute('slot'),
-    ).toBeNull();
+      query(desktop, '.desktop-drop-affordance .icon-surface.is-size-m'),
+    ).toBeTruthy();
 
     expect(extension.hasAttribute('desktop-host')).toBe(false);
     expect(
@@ -132,9 +145,93 @@ describe('instruction-panel desktop composer', () => {
     expect(
       query(extension, '#executeButton wa-icon').getAttribute('slot'),
     ).toBe('start');
+    expect(
+      query(extension, '#sessionTypeToolUse').getAttribute('appearance'),
+    ).toBe('default');
     expect(query(extension, '.execute-button__label').textContent?.trim()).toBe(
       'Run',
     );
+  });
+
+  it('maps the unified desktop mode picker to the existing session state', async () => {
+    const element = await mountPanel(true, {
+      ...SESSION,
+      sessionType: 'workflow',
+      launchTarget: 'agent',
+    });
+    const mode = query<HTMLElement & { value: string }>(
+      element,
+      '#desktopLaunchMode',
+    );
+    const changes: Array<{ event: string; value: string }> = [];
+    element.addEventListener('session-type-change', (event) => {
+      changes.push({
+        event: 'session-type-change',
+        value: (event as CustomEvent<{ value: string }>).detail.value,
+      });
+    });
+    element.addEventListener('launch-target-change', (event) => {
+      changes.push({
+        event: 'launch-target-change',
+        value: (event as CustomEvent<{ value: string }>).detail.value,
+      });
+    });
+
+    mode.value = 'team';
+    mode.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+
+    expect(changes).toEqual([
+      { event: 'session-type-change', value: 'toolUse' },
+      { event: 'launch-target-change', value: 'team' },
+    ]);
+
+    changes.length = 0;
+    mode.value = 'workflow';
+    mode.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+
+    expect(changes).toEqual([
+      { event: 'session-type-change', value: 'workflow' },
+    ]);
+  });
+
+  it('shows and updates the working directory only for multi-root workspaces', async () => {
+    const singleRoot = await mountPanel(true, {
+      ...SESSION,
+      workspaceRootOptions: [{ label: 'paper', value: '/workspace/paper' }],
+      workingDirectory: '/workspace/paper',
+    });
+    expect(
+      singleRoot.shadowRoot?.querySelector('#workingDirectory'),
+    ).toBeNull();
+
+    const multiRoot = await mountPanel(true, {
+      ...SESSION,
+      workspaceRootOptions: [
+        { label: 'paper', value: '/workspace/paper' },
+        { label: 'figures', value: '/workspace/figures' },
+      ],
+      workingDirectory: '/workspace/paper',
+    });
+    const picker = query<HTMLElement & { value: string }>(
+      multiRoot,
+      '#workingDirectory',
+    );
+    let selected = '';
+    multiRoot.addEventListener('working-directory-change', (event) => {
+      selected = (event as CustomEvent<{ value: string }>).detail.value;
+    });
+
+    expect(picker.getAttribute('aria-label')).toBe('Working directory');
+    expect(
+      multiRoot.shadowRoot?.querySelectorAll('#workingDirectory wa-option'),
+    ).toHaveLength(2);
+
+    picker.value = '/workspace/figures';
+    picker.dispatchEvent(
+      new Event('change', { bubbles: true, composed: true }),
+    );
+
+    expect(selected).toBe('/workspace/figures');
   });
 
   it('sends on Enter in desktop mode and preserves Shift+Enter for a newline', async () => {

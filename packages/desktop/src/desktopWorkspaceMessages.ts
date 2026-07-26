@@ -11,6 +11,7 @@ export const DESKTOP_WORKSPACE_COMMANDS = {
   // Editor
   LIST_FILES: 'desktop:workspace:listFiles',
   FILES_LISTED: 'desktop:workspace:filesListed',
+  FILES_LIST_ERROR: 'desktop:workspace:filesListError',
   READ_FILE: 'desktop:workspace:readFile',
   FILE_READ: 'desktop:workspace:fileRead',
   WRITE_FILE: 'desktop:workspace:writeFile',
@@ -24,6 +25,7 @@ export const DESKTOP_WORKSPACE_COMMANDS = {
   TERMINAL_DATA: 'desktop:terminal:data',
   TERMINAL_EXIT: 'desktop:terminal:exit',
   TERMINAL_ERROR: 'desktop:terminal:error',
+  TERMINAL_OPEN_COMMAND: 'desktop:terminal:openCommand',
   // Browser
   BROWSER_OPEN: 'desktop:browser:open',
   BROWSER_BOUNDS: 'desktop:browser:bounds',
@@ -43,6 +45,7 @@ export const DESKTOP_WORKSPACE_COMMANDS = {
 
 const DesktopListFilesMessageSchema = z.object({
   command: z.literal(DESKTOP_WORKSPACE_COMMANDS.LIST_FILES),
+  directory: z.string().prefault(''),
 });
 
 const DesktopWorkspaceFileEntrySchema = z.object({
@@ -52,7 +55,14 @@ const DesktopWorkspaceFileEntrySchema = z.object({
 
 export const DesktopFilesListedMessageSchema = z.object({
   command: z.literal(DESKTOP_WORKSPACE_COMMANDS.FILES_LISTED),
+  directory: z.string(),
   files: z.array(DesktopWorkspaceFileEntrySchema),
+});
+
+export const DesktopFilesListErrorMessageSchema = z.object({
+  command: z.literal(DESKTOP_WORKSPACE_COMMANDS.FILES_LIST_ERROR),
+  directory: z.string(),
+  message: z.string(),
 });
 
 const DesktopReadFileMessageSchema = z.object({
@@ -90,6 +100,7 @@ const DesktopTerminalStartMessageSchema = z.object({
   sessionId: z.string(),
   cols: z.number().int().positive(),
   rows: z.number().int().positive(),
+  initialCommand: z.string().min(1).optional(),
 });
 
 const DesktopTerminalInputMessageSchema = z.object({
@@ -126,6 +137,11 @@ export const DesktopTerminalErrorMessageSchema = z.object({
   command: z.literal(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_ERROR),
   sessionId: z.string(),
   message: z.string(),
+});
+
+export const DesktopTerminalOpenCommandMessageSchema = z.object({
+  command: z.literal(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_OPEN_COMMAND),
+  initialCommand: z.string().min(1),
 });
 
 // ── Browser ──

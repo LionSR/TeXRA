@@ -105,12 +105,12 @@ test('loads the project tree before an editor panel is opened', async () => {
       '.desktop-editor-tree-row[data-kind="directory"][data-path="src/components"]',
     ),
   ).not.toBeVisible();
-  await sourceDirectory.click();
+  await sourceDirectory.locator('[part="expand-button"]').click();
   const componentsDirectory = page.locator(
     '.desktop-editor-tree-row[data-kind="directory"][data-path="src/components"]',
   );
   await expect(componentsDirectory).toBeVisible();
-  await componentsDirectory.click();
+  await componentsDirectory.locator('[part="expand-button"]').click();
   const nestedFile = page.locator(
     '.desktop-editor-tree-row[data-kind="file"][data-path="src/components/Panel.ts"]',
   );
@@ -253,42 +253,81 @@ test('keeps the composer grouped and centered at compact widths', async () => {
     const mode = root?.querySelector<HTMLElement>('.desktop-mode-controls');
     const agent = root?.querySelector<HTMLElement>('.agent-select-group');
     const model = root?.querySelector<HTMLElement>('.model-select-group');
+    const settings = root?.querySelector<HTMLElement>('#agentSettingsButton');
+    const settingsBase =
+      settings?.shadowRoot?.querySelector<HTMLElement>('[part~="base"]');
+    const settingsIcon = settings?.querySelector<HTMLElement>('wa-icon');
+    const settingsSvg =
+      settingsIcon?.shadowRoot?.querySelector<SVGElement>('svg');
     const execute = root?.querySelector<HTMLElement>('#executeButton');
     const executeBase =
       execute?.shadowRoot?.querySelector<HTMLElement>('[part~="base"]');
-    const arrow = execute?.querySelector<HTMLElement>('wa-icon');
-    if (!box || !mode || !agent || !model || !executeBase || !arrow) {
+    const sendIcon = execute?.querySelector<HTMLElement>('wa-icon');
+    if (
+      !box ||
+      !mode ||
+      !agent ||
+      !model ||
+      !settingsBase ||
+      !settingsIcon ||
+      !settingsSvg ||
+      !executeBase ||
+      !sendIcon
+    ) {
       throw new Error('Desktop composer controls were not mounted.');
     }
 
+    const boxRect = box.getBoundingClientRect();
     const modeRect = mode.getBoundingClientRect();
     const agentRect = agent.getBoundingClientRect();
     const modelRect = model.getBoundingClientRect();
+    const settingsBaseRect = settingsBase.getBoundingClientRect();
+    const settingsIconRect = settingsIcon.getBoundingClientRect();
+    const settingsSvgRect = settingsSvg.getBoundingClientRect();
     const buttonRect = executeBase.getBoundingClientRect();
-    const arrowRect = arrow.getBoundingClientRect();
+    const sendIconRect = sendIcon.getBoundingClientRect();
     return {
       overflow: box.scrollWidth - box.clientWidth,
-      modeBottom: modeRect.bottom,
-      pickerTop: Math.min(agentRect.top, modelRect.top),
-      pickerCenter: (agentRect.top + agentRect.bottom) / 2,
-      modelCenter: (modelRect.top + modelRect.bottom) / 2,
+      controlsInside: [modeRect, agentRect, modelRect, buttonRect].every(
+        (rect) =>
+          rect.left >= boxRect.left - 1 &&
+          rect.right <= boxRect.right + 1 &&
+          rect.top >= boxRect.top - 1 &&
+          rect.bottom <= boxRect.bottom + 1,
+      ),
+      modeCenter: (modeRect.top + modeRect.bottom) / 2,
+      agentCenter: (agentRect.top + agentRect.bottom) / 2,
       modelBottom: modelRect.bottom,
       buttonBottom: buttonRect.bottom,
-      horizontalArrowOffset:
-        (arrowRect.left + arrowRect.right) / 2 -
-        (buttonRect.left + buttonRect.right) / 2,
-      verticalArrowOffset:
-        (arrowRect.top + arrowRect.bottom) / 2 -
+      verticalSendIconOffset:
+        (sendIconRect.top + sendIconRect.bottom) / 2 -
         (buttonRect.top + buttonRect.bottom) / 2,
+      settingsIconOffset: {
+        x:
+          (settingsSvgRect.left + settingsSvgRect.right) / 2 -
+          (settingsBaseRect.left + settingsBaseRect.right) / 2,
+        y:
+          (settingsSvgRect.top + settingsSvgRect.bottom) / 2 -
+          (settingsBaseRect.top + settingsBaseRect.bottom) / 2,
+      },
+      settingsHostOffset: {
+        x:
+          (settingsIconRect.left + settingsIconRect.right) / 2 -
+          (settingsBaseRect.left + settingsBaseRect.right) / 2,
+        y:
+          (settingsIconRect.top + settingsIconRect.bottom) / 2 -
+          (settingsBaseRect.top + settingsBaseRect.bottom) / 2,
+      },
     };
   });
 
   expect(layout.overflow).toBe(0);
-  expect(layout.modeBottom).toBeLessThanOrEqual(layout.pickerTop);
-  expect(Math.abs(layout.pickerCenter - layout.modelCenter)).toBeLessThan(1);
+  expect(layout.controlsInside).toBe(true);
+  expect(Math.abs(layout.modeCenter - layout.agentCenter)).toBeLessThan(1);
   expect(Math.abs(layout.buttonBottom - layout.modelBottom)).toBeLessThan(1);
-  expect(Math.abs(layout.horizontalArrowOffset)).toBeLessThan(1);
-  expect(Math.abs(layout.verticalArrowOffset)).toBeLessThan(1);
+  expect(Math.abs(layout.verticalSendIconOffset)).toBeLessThan(1);
+  expect(layout.settingsHostOffset).toEqual({ x: 0, y: 0 });
+  expect(layout.settingsIconOffset).toEqual({ x: 0, y: 0 });
 
   await app.evaluate(({ BrowserWindow }) => {
     BrowserWindow.getAllWindows().at(0)?.setContentSize(1500, 900);
@@ -554,7 +593,7 @@ test('keeps settings banners consistent in a narrow side panel', async () => {
     bannerMetrics.push(
       await banner.evaluate((element) => {
         const callout = element.querySelector('wa-callout');
-        const icon = element.querySelector('wa-icon[slot="icon"]');
+        const icon = element.querySelector('.settings-banner-icon');
         const title = element.querySelector('.settings-banner-title');
         if (
           !(callout instanceof HTMLElement) ||
@@ -681,6 +720,34 @@ test('runs an interactive shell in a terminal workbench tab', async () => {
   await page.keyboard.type('echo texra-pty-ok');
   await page.keyboard.press('Enter');
   await expect(rows).toContainText('texra-pty-ok', { timeout: 20_000 });
+});
+
+test('runs host-requested setup commands in a new bottom terminal', async () => {
+  const { page } = launched;
+  const bottomTabs = page.locator(
+    '.task-workbench[data-placement="bottom"] .task-workbench-tab',
+  );
+  const before = await bottomTabs.count();
+
+  await page.evaluate(() => {
+    window.postMessage(
+      {
+        command: 'desktop:terminal:openCommand',
+        initialCommand: 'printf "texra-integrated-command-ok\\n"',
+      },
+      '*',
+    );
+  });
+
+  await expect(bottomTabs).toHaveCount(before + 1);
+  const activeTerminal = page
+    .locator(activeWorkbenchTab('terminal'))
+    .locator('xpath=ancestor::aside[@data-placement="bottom"]')
+    .locator('.desktop-terminal-surface:not([hidden])');
+  await expect(activeTerminal.locator('.xterm-rows')).toContainText(
+    'texra-integrated-command-ok',
+    { timeout: 20_000 },
+  );
 });
 
 test('closes a bottom tab and falls back within the same pane', async () => {

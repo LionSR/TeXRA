@@ -38,11 +38,9 @@ interface MutableEditorTreeFile {
 }
 
 type MutableEditorTreeNode = MutableEditorTreeDirectory | MutableEditorTreeFile;
+type NamedTreeNode = Pick<EditorTreeNode, 'kind' | 'name'>;
 
-function compareTreeNodes(
-  left: MutableEditorTreeNode,
-  right: MutableEditorTreeNode,
-): number {
+function compareTreeNodes(left: NamedTreeNode, right: NamedTreeNode): number {
   if (left.kind !== right.kind) {
     return left.kind === 'directory' ? -1 : 1;
   }
@@ -67,11 +65,11 @@ function freezeNodes(
 }
 
 /**
- * Converts the workspace's flat file listing into the canonical editor tree.
+ * Converts a flat recursive listing into a nested tree.
  *
- * The listing normally contains files only, so parent folders are inferred
- * here once at the data boundary. Renderers receive named nodes and never need
- * to split or deduplicate paths.
+ * Review surfaces receive an already-complete changed-file list, so they keep
+ * this full-tree representation. The workspace explorer uses
+ * {@link buildEditorDirectoryEntries} instead and never calls this recursively.
  */
 export function buildEditorTree(
   entries: readonly EditorFileEntry[],
@@ -89,11 +87,11 @@ export function buildEditorTree(
     let siblings = root;
     for (const [index, name] of segments.entries()) {
       const lastSegment = index === segments.length - 1;
-      const isDirectory = !lastSegment || entry.isDirectory;
+      const isDirectoryEntry = !lastSegment || entry.isDirectory;
       const path = segments.slice(0, index + 1).join('/');
       const existing = siblings.get(name);
 
-      if (isDirectory) {
+      if (isDirectoryEntry) {
         directoryPaths.add(path);
         if (existing?.kind === 'directory') {
           siblings = existing.children;
@@ -114,8 +112,6 @@ export function buildEditorTree(
       siblings.set(name, {
         kind: 'file',
         name,
-        // Keep the original path as the IPC key. Only directory paths need a
-        // canonical separator because they never cross the filesystem boundary.
         path: entry.path,
       });
     }
@@ -125,4 +121,38 @@ export function buildEditorTree(
     nodes: freezeNodes(root.values()),
     directoryPaths,
   };
+}
+
+/**
+ * Converts one direct directory listing into sorted tree rows.
+ *
+ * The main process returns direct children only. Keeping this boundary flat is
+ * what lets the renderer request each directory lazily instead of crawling the
+ * entire workspace before showing the first row.
+ */
+export function buildEditorDirectoryEntries(
+  entries: readonly EditorFileEntry[],
+): readonly EditorTreeNode[] {
+  const nodes: EditorTreeNode[] = [];
+
+  for (const entry of entries) {
+    const normalizedPath = entry.path
+      .replaceAll('\\', '/')
+      .replace(/^\.\//, '')
+      .replace(/\/$/, '');
+    const name = normalizedPath.split('/').at(-1);
+    if (!name) continue;
+    if (entry.isDirectory) {
+      nodes.push({
+        kind: 'directory',
+        name,
+        path: normalizedPath,
+        children: [],
+      });
+    } else {
+      nodes.push({ kind: 'file', name, path: normalizedPath });
+    }
+  }
+
+  return nodes.toSorted(compareTreeNodes);
 }

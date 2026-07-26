@@ -36,7 +36,6 @@ import { LatexConfigPersistenceController } from '@controllers/settingsView/Late
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { prepareMainViewExecutionRequest } from '@controllers/mainView/MainViewExecutionController';
 import type { SessionStores } from '@controllers/progressView/backend/state/SessionStores';
-import type { TerminalRunResult } from '@hosts/uiHosts';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { platform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
@@ -100,11 +99,6 @@ import {
 import { DefaultDesktopToolingSettingsController } from './desktopToolingSettingsController.js';
 import { createDesktopGitHost } from './desktopGitHost.js';
 import { createDesktopShellActions } from './desktopShellIpc.js';
-import {
-  openMacTerminalCommand,
-  setupCommandNeedsInteractiveTerminal,
-} from './desktopSetupTerminal.js';
-import { createDesktopTerminalRunner } from './desktopTerminalRunner.js';
 import {
   getDesktopWindowTitle,
   installDesktopWindowTitle,
@@ -204,7 +198,6 @@ const PRODUCTION_CSP = [
   "img-src 'self' data: blob:",
   "connect-src 'self' data:",
 ].join('; ');
-const SETUP_COMMAND_TIMEOUT_MS = 10 * 60_000;
 const DEVELOPMENT_CSP = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-eval'",
@@ -224,98 +217,6 @@ function installContentSecurityPolicy(): void {
         ],
       },
     });
-  });
-}
-
-function describeSetupCommandOutcome(result: TerminalRunResult): {
-  type: 'warning' | 'error' | 'info';
-  message: string;
-} {
-  if (result.timedOut) {
-    return { type: 'warning', message: 'Setup command timed out' };
-  }
-  if (result.exitCode === undefined) {
-    return {
-      type: 'warning',
-      message: 'Setup command finished without an observable exit code',
-    };
-  }
-  if (result.exitCode !== 0) {
-    return {
-      type: 'error',
-      message: `Setup command failed with exit code ${result.exitCode}`,
-    };
-  }
-  return { type: 'info', message: 'Setup command finished' };
-}
-
-async function showSetupCommandResult(
-  window: BrowserWindow,
-  command: string,
-  result: TerminalRunResult,
-): Promise<void> {
-  const output = result.output.trim();
-  const hasOutput = output.length > 0;
-  const buttons = hasOutput
-    ? ['Copy Output', 'Copy Command', 'Close']
-    : ['Copy Command', 'Close'];
-  const { type, message } = describeSetupCommandOutcome(result);
-  const response = await dialog.showMessageBox(window, {
-    type,
-    message,
-    detail: [`Command:\n${command}`, output ? `Output:\n${output}` : '']
-      .filter(Boolean)
-      .join('\n\n'),
-    buttons,
-    defaultId: 0,
-    cancelId: buttons.length - 1,
-  });
-
-  if (hasOutput && response.response === 0) {
-    clipboard.writeText(output);
-  } else if (
-    (hasOutput && response.response === 1) ||
-    (!hasOutput && response.response === 0)
-  ) {
-    clipboard.writeText(command);
-  }
-}
-
-async function showCopyCommandDialog(
-  window: BrowserWindow,
-  command: string,
-  options: {
-    type: 'info' | 'warning';
-    message: string;
-    detail: string;
-    defaultId: 0 | 1;
-  },
-): Promise<void> {
-  const response = await dialog.showMessageBox(window, {
-    type: options.type,
-    message: options.message,
-    detail: options.detail,
-    buttons: ['Copy Command', 'Close'],
-    defaultId: options.defaultId,
-    cancelId: 1,
-  });
-
-  if (response.response === 0) {
-    clipboard.writeText(command);
-  }
-}
-
-async function showManualSetupCommand(
-  window: BrowserWindow,
-  command: string,
-): Promise<void> {
-  await showCopyCommandDialog(window, command, {
-    type: 'warning',
-    message: 'Setup command needs an interactive terminal',
-    detail:
-      `Command:\n${command}\n\n` +
-      'This command may ask for a password or confirmation. TeXRA will not run it in a hidden process. Copy it into a terminal, then return to TeXRA and recheck the dependency status.',
-    defaultId: 0,
   });
 }
 
@@ -482,41 +383,6 @@ function createWindow(options: {
       },
     }).catch(reportAsyncError);
   }
-  const setupCommandCwd = options.workspacePath ?? app.getPath('home');
-  const setupTerminalRunner = createDesktopTerminalRunner({
-    cwd: setupCommandCwd,
-  });
-  const runSetupCommand = async (command: string) => {
-    if (process.platform === 'darwin') {
-      try {
-        await openMacTerminalCommand(command, setupCommandCwd);
-        await showCopyCommandDialog(window, command, {
-          type: 'info',
-          message: 'Setup command opened in Terminal',
-          detail:
-            `Command:\n${command}\n\n` +
-            'Complete any prompts in the Terminal window, then return to TeXRA and recheck the dependency status.',
-          defaultId: 1,
-        });
-      } catch {
-        await showManualSetupCommand(window, command);
-      }
-      return;
-    }
-
-    if (setupCommandNeedsInteractiveTerminal(command)) {
-      await showManualSetupCommand(window, command);
-      return;
-    }
-
-    const result = await setupTerminalRunner.runCommand({
-      name: 'TeXRA Setup',
-      command,
-      cwd: setupCommandCwd,
-      timeoutMs: SETUP_COMMAND_TIMEOUT_MS,
-    });
-    await showSetupCommandResult(window, command, result);
-  };
   // `installDesktopHostBridge.postToRenderer` is itself a no-op when
   // `webContents.isDestroyed()`. Without checking that here too, callers would
   // falsely report success and skip their external-viewer fallback. Bot
@@ -539,6 +405,12 @@ function createWindow(options: {
    */
   const postToRenderer = (message: unknown): void => {
     ipcRef.current?.postToRenderer(message);
+  };
+  const runSetupCommand = async (command: string): Promise<void> => {
+    postToRenderer({
+      command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_OPEN_COMMAND,
+      initialCommand: command,
+    });
   };
   const previewHost = createDesktopPreviewHost({
     shell,

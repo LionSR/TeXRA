@@ -82,8 +82,6 @@ export const buttonStyles: CSSResult = css`
     )
     wa-icon {
     flex: 0 0 auto;
-    width: 1em;
-    height: 1em;
   }
 
   .btn-primary::part(base) {
@@ -179,6 +177,8 @@ export const buttonStyles: CSSResult = css`
     /* Legacy compact toolbars keep the small step; .icon-button callers get
        the 28px default and can opt into any step via --control-size. */
     --control-size: var(--control-size-s);
+    width: var(--control-size);
+    height: var(--control-size);
   }
 
   .icon-button {
@@ -187,6 +187,9 @@ export const buttonStyles: CSSResult = css`
 
   .icon-button::part(base),
   .action-icon-button::part(base) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     width: var(--control-size);
     min-width: 0;
     height: var(--control-size);
@@ -200,6 +203,15 @@ export const buttonStyles: CSSResult = css`
       background-color var(--transition-fast),
       border-color var(--transition-fast),
       color var(--transition-fast);
+  }
+
+  .icon-button::part(label),
+  .action-icon-button::part(label) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
   }
 
   .icon-button::part(base):hover,
@@ -391,6 +403,10 @@ export const iconSurfaceStyles: CSSResult = css`
   }
 
   .icon-surface wa-icon {
+    width: 1em;
+    min-width: 1em;
+    height: 1em;
+    min-height: 1em;
     font-size: var(--font-size-icon-sm);
   }
 

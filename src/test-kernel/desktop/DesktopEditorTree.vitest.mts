@@ -2,54 +2,29 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports - desktop renderer
-import { buildEditorTree } from '@desktop/renderer/editorTree';
+import { buildEditorDirectoryEntries } from '@desktop/renderer/editorTree';
 
 describe('desktop editor tree', () => {
-  it('groups workspace files into sorted nested directories', () => {
-    const tree = buildEditorTree([
+  it('sorts one directory listing with folders before files', () => {
+    const nodes = buildEditorDirectoryEntries([
       { path: 'README.md', isDirectory: false },
-      { path: 'src/view/Panel.ts', isDirectory: false },
-      { path: 'src/index.ts', isDirectory: false },
-      { path: 'assets/logo.svg', isDirectory: false },
+      { path: 'src', isDirectory: true },
+      { path: 'assets', isDirectory: true },
       { path: 'package.json', isDirectory: false },
     ]);
 
-    expect(tree.nodes).toEqual([
+    expect(nodes).toEqual([
       {
         kind: 'directory',
         name: 'assets',
         path: 'assets',
-        children: [
-          {
-            kind: 'file',
-            name: 'logo.svg',
-            path: 'assets/logo.svg',
-          },
-        ],
+        children: [],
       },
       {
         kind: 'directory',
         name: 'src',
         path: 'src',
-        children: [
-          {
-            kind: 'directory',
-            name: 'view',
-            path: 'src/view',
-            children: [
-              {
-                kind: 'file',
-                name: 'Panel.ts',
-                path: 'src/view/Panel.ts',
-              },
-            ],
-          },
-          {
-            kind: 'file',
-            name: 'index.ts',
-            path: 'src/index.ts',
-          },
-        ],
+        children: [],
       },
       {
         kind: 'file',
@@ -62,36 +37,26 @@ describe('desktop editor tree', () => {
         path: 'README.md',
       },
     ]);
-    expect([...tree.directoryPaths]).toEqual(['src', 'src/view', 'assets']);
   });
 
-  it('normalizes directory keys while preserving file paths used by IPC', () => {
-    const tree = buildEditorTree([
-      { path: String.raw`docs\paper\main.tex`, isDirectory: false },
-      { path: 'docs/figures', isDirectory: true },
-      { path: './notes.md', isDirectory: false },
+  it('normalizes path separators and names nested direct children', () => {
+    const nodes = buildEditorDirectoryEntries([
+      { path: String.raw`docs\paper`, isDirectory: true },
+      { path: './docs/notes.md', isDirectory: false },
     ]);
 
-    expect(tree.directoryPaths).toEqual(
-      new Set(['docs', 'docs/paper', 'docs/figures']),
-    );
-    expect(tree.nodes).toMatchObject([
+    expect(nodes).toEqual([
       {
-        name: 'docs',
-        children: [
-          { name: 'figures', children: [] },
-          {
-            name: 'paper',
-            children: [
-              {
-                name: 'main.tex',
-                path: String.raw`docs\paper\main.tex`,
-              },
-            ],
-          },
-        ],
+        kind: 'directory',
+        name: 'paper',
+        path: 'docs/paper',
+        children: [],
       },
-      { name: 'notes.md', path: './notes.md' },
+      {
+        kind: 'file',
+        name: 'notes.md',
+        path: 'docs/notes.md',
+      },
     ]);
   });
 });

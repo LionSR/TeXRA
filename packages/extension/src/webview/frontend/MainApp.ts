@@ -33,6 +33,7 @@ import {
   type RemoveFileDetail,
   type SessionTypeChangeDetail,
   type TeamChangeDetail,
+  type WorkingDirectoryChangeDetail,
 } from '@shared/schemas';
 import {
   registerTeXRAWebAwesomeIcons,
@@ -82,6 +83,7 @@ import {
   changeModel,
   changeSessionType,
   changeTeam,
+  changeWorkingDirectory,
   emptyFile,
   emptyFiles,
   executeAgent,
@@ -412,6 +414,10 @@ export class MainApp extends MainAppBase {
           changeAgent(detail.sessionType, detail.value)}
         @model-change=${({ detail }: CustomEvent<ModelChangeDetail>) =>
           changeModel(detail.value)}
+        @working-directory-change=${({
+          detail,
+        }: CustomEvent<WorkingDirectoryChangeDetail>) =>
+          changeWorkingDirectory(detail.value)}
         @instruction-input=${this.onInstructionInput}
         @instruction-paste=${() => saveState()}
         @panel-action=${({ detail }: CustomEvent<ActionDetail>) =>

@@ -217,9 +217,12 @@ test('settings workbench scrolls (Tools tab top + bottom)', async ({}, testInfo)
   expect(bannerMetrics.icon!.right).toBeLessThanOrEqual(
     bannerMetrics.body!.left,
   );
-  expect(bannerMetrics.body!.right).toBeLessThanOrEqual(
-    bannerMetrics.actions!.left,
-  );
+  const actionsAreBesideBody =
+    bannerMetrics.body!.right <= bannerMetrics.actions!.left + 1;
+  const actionsAreBelowBody =
+    bannerMetrics.actions!.top >= bannerMetrics.body!.bottom - 1 &&
+    bannerMetrics.actions!.left >= bannerMetrics.body!.left - 1;
+  expect(actionsAreBesideBody || actionsAreBelowBody).toBe(true);
   expect(bannerMetrics.actions!.right).toBeLessThanOrEqual(
     bannerMetrics.layout!.right,
   );

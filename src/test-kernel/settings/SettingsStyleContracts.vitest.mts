@@ -42,6 +42,10 @@ describe('settings style contracts', () => {
     expect(bannerStyles).toContain(
       'grid-template-columns: auto minmax(0, 1fr) auto',
     );
+    expect(bannerStyles).toContain('@container settings (max-width: 720px)');
+    expect(bannerStyles).toMatch(
+      /\.settings-banner-actions\s*\{[\s\S]*?grid-column:\s*2;[\s\S]*?width:\s*100%;/u,
+    );
     expect(bannerStyles).toContain('justify-content: flex-end');
   });
 
@@ -87,6 +91,9 @@ describe('settings style contracts', () => {
     expect(commonStyles).toContain('.settings-disclosure');
     expect(commonStyles).toContain('.settings-disclosure-summary');
     expect(commonStyles).toContain('.settings-disclosure-toggle');
+    expect(commonStyles).toMatch(
+      /\.settings-disclosure-toggle::part\(label\)\s*\{[\s\S]*?display:\s*flex;[\s\S]*?align-items:\s*center;/u,
+    );
 
     for (const component of ['ProviderKeyList.ts', 'ModelSelectionList.ts']) {
       const source = read(
@@ -105,5 +112,33 @@ describe('settings style contracts', () => {
         'packages/extension/src/settingsView/frontend/components/profile/ProviderKeyList.ts',
       ),
     ).not.toContain('<table');
+  });
+
+  it('keeps selected agent labels readable and uses only the panel divider', () => {
+    const styles = read(
+      'packages/extension/src/settingsView/frontend/components/profile/AgentSelectionPanel.styles.ts',
+    );
+
+    expect(styles).toMatch(
+      /\.agent-list-item\.selected\s*\{[\s\S]*?color:\s*var\(--wa-color-text-normal\);/u,
+    );
+    expect(styles).not.toMatch(/\.agent-count\s*\{[\s\S]*?border-top:/u);
+  });
+
+  it('gives the standalone settings webview a bounded scrolling viewport', () => {
+    const shell = read('packages/extension/src/settingsView/index.html');
+    const styles = read(
+      'packages/extension/src/settingsView/frontend/styles.ts',
+    );
+
+    expect(shell).toMatch(
+      /html,\s*body\s*\{[\s\S]*?height:\s*100%;[\s\S]*?body\s*\{[\s\S]*?display:\s*flex;[\s\S]*?overflow:\s*hidden;/u,
+    );
+    expect(shell).toMatch(
+      /settings-app\s*\{[\s\S]*?flex:\s*1;[\s\S]*?min-height:\s*0;/u,
+    );
+    expect(styles).toMatch(
+      /\.settings-panel\s*\{[\s\S]*?min-height:\s*0;[\s\S]*?overflow:\s*auto;/u,
+    );
   });
 });

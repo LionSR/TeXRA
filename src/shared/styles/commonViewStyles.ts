@@ -128,6 +128,11 @@ export const commonViewStyles: CSSResult = css`
     align-items: center;
     min-height: var(--control-size-l);
     color: var(--wa-color-text-normal);
+    transition: background-color var(--transition-fast);
+  }
+
+  .settings-disclosure-summary:hover {
+    background: var(--surface-hover);
   }
 
   .settings-disclosure-toggle {
@@ -148,8 +153,16 @@ export const commonViewStyles: CSSResult = css`
     text-align: left;
   }
 
+  .settings-disclosure-toggle::part(label) {
+    display: flex;
+    align-items: center;
+    gap: var(--wa-space-2xs);
+    width: 100%;
+    min-width: 0;
+  }
+
   .settings-disclosure-toggle:hover::part(base) {
-    background: var(--surface-hover);
+    background: transparent;
   }
 
   .settings-disclosure-chevron {
@@ -171,6 +184,11 @@ export const commonViewStyles: CSSResult = css`
   .settings-disclosure-actions {
     padding-inline-end: var(--wa-space-xs);
     white-space: nowrap;
+  }
+
+  .settings-disclosure-actions {
+    display: flex;
+    align-items: center;
   }
 
   .settings-disclosure-content {

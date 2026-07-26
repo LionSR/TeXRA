@@ -86,8 +86,6 @@ wa-button:is(
   )
   wa-icon {
   flex: 0 0 auto;
-  width: 1em;
-  height: 1em;
 }
 
 /* A flat fill, not the former product gradient: the gradient plus its
@@ -180,6 +178,8 @@ wa-button.action-button wa-icon {
 wa-button.icon-button,
 wa-button.action-icon-button {
   --control-size: var(--control-size-s);
+  width: var(--control-size);
+  height: var(--control-size);
 }
 
 wa-button.icon-button {
@@ -188,6 +188,9 @@ wa-button.icon-button {
 
 wa-button.icon-button::part(base),
 wa-button.action-icon-button::part(base) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: var(--control-size);
   min-width: 0;
   height: var(--control-size);
@@ -201,6 +204,15 @@ wa-button.action-icon-button::part(base) {
     background-color var(--transition-fast),
     border-color var(--transition-fast),
     color var(--transition-fast);
+}
+
+wa-button.icon-button::part(label),
+wa-button.action-icon-button::part(label) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
 }
 
 wa-button.icon-button::part(base):hover,
@@ -368,6 +380,10 @@ wa-button.is-danger::part(base) {
 }
 
 .icon-surface wa-icon {
+  width: 1em;
+  min-width: 1em;
+  height: 1em;
+  min-height: 1em;
   font-size: var(--font-size-icon-sm, var(--font-size));
 }
 
@@ -602,8 +618,8 @@ wa-dialog.desktop-command-palette::part(body) {
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--wa-space-xs);
-  min-height: 54px;
-  padding: 0 var(--wa-space-s);
+  min-height: 58px;
+  padding: var(--wa-space-2xs) var(--wa-space-s);
   border-bottom: var(--border-thin) solid var(--border-hairline);
 }
 
@@ -621,12 +637,21 @@ wa-input.desktop-command-palette-input {
 }
 
 wa-input.desktop-command-palette-input::part(base) {
-  min-height: 52px;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
+  min-height: 44px;
+  padding: 0 var(--wa-space-2xs);
+  border: var(--border-thin) solid transparent;
+  border-radius: var(--row-radius);
   background: transparent;
   box-shadow: none;
+}
+
+wa-input.desktop-command-palette-input:hover::part(base) {
+  border-color: var(--border-hairline-strong);
+}
+
+wa-input.desktop-command-palette-input:focus-within::part(base) {
+  border-color: var(--wa-color-focus);
+  box-shadow: 0 0 0 1px var(--wa-color-focus);
 }
 
 wa-input.desktop-command-palette-input::part(input) {
@@ -1084,6 +1109,7 @@ wa-input.desktop-command-palette-input::part(input) {
 }
 
 .desktop-log-entry-level-icon {
+  position: relative;
   display: grid;
   place-items: center;
   width: var(--control-size-s);
@@ -1091,6 +1117,19 @@ wa-input.desktop-command-palette-input::part(input) {
   border-radius: var(--wa-border-radius-s);
   background: var(--control-fill);
   color: var(--wa-color-text-quiet);
+}
+
+.desktop-log-entry-level-icon wa-icon {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--font-size-icon-sm);
+  min-width: var(--font-size-icon-sm);
+  height: var(--font-size-icon-sm);
+  min-height: var(--font-size-icon-sm);
+  margin: 0;
+  line-height: 1;
+  transform: translate(-50%, -50%);
 }
 
 .desktop-log-entry[data-level='error'] .desktop-log-entry-level-icon {
@@ -1153,7 +1192,7 @@ wa-input.desktop-command-palette-input::part(input) {
   text-align: center;
 }
 
-@container (max-width: 560px) {
+@container (max-width: 720px) {
   .desktop-log-viewer-header {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -1526,6 +1565,28 @@ wa-card.desktop-onboarding::part(footer) {
   flex: 0 0 1em;
   place-items: center;
   opacity: 0.7;
+}
+
+.desktop-editor-tree-icon wa-icon {
+  width: 1em;
+  min-width: 1em;
+  height: 1em;
+  min-height: 1em;
+}
+
+.desktop-editor-tree-status {
+  color: var(--wa-color-text-quiet);
+  font-family: var(--wa-font-family-body);
+  font-size: var(--font-size-xs);
+}
+
+.desktop-editor-tree-status::part(item) {
+  min-height: var(--row-height-compact);
+  padding: var(--row-padding);
+}
+
+.desktop-editor-tree-status.is-error {
+  color: var(--wa-color-danger-on-quiet);
 }
 
 /* Each row renders one path segment. Preserve its reading direction and

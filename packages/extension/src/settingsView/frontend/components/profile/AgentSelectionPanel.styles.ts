@@ -96,7 +96,7 @@ export const agentSelectionPanelStyles: CSSResult = css`
 
   .agent-list-item.selected {
     background: var(--wa-color-brand-fill-quiet);
-    color: var(--wa-color-list-active-fg, var(--wa-color-text-normal));
+    color: var(--wa-color-text-normal);
     border-left-color: var(--wa-color-brand-fill-loud);
   }
 
@@ -210,7 +210,6 @@ export const agentSelectionPanelStyles: CSSResult = css`
     padding: var(--wa-space-2xs) var(--wa-space-xs);
     font-size: var(--font-size-xs);
     color: var(--color-text-secondary);
-    border-top: var(--border-thin) solid var(--color-border);
     background: var(--wa-color-surface-default);
   }
 

@@ -15,7 +15,7 @@
 import '@awesome.me/webawesome/dist/components/callout/callout.js';
 import '@awesome.me/webawesome/dist/components/tree/tree.js';
 import '@awesome.me/webawesome/dist/components/tree-item/tree-item.js';
-import { html, render, type TemplateResult } from 'lit';
+import { html, nothing, render, type TemplateResult } from 'lit';
 
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
@@ -29,7 +29,7 @@ import type { DesktopThemeKind } from '@shared/schemas/commonViewMessages';
 
 import { getDesktopChromeFontSize } from './desktopTypography';
 import {
-  buildEditorTree,
+  buildEditorDirectoryEntries,
   type EditorFileEntry,
   type EditorTreeDirectory,
   type EditorTreeNode,
@@ -39,8 +39,8 @@ type CodeEditor = ReturnType<MonacoModule['editor']['create']>;
 type TextModel = ReturnType<MonacoModule['editor']['createModel']>;
 
 export interface EditorPaneCallbacks {
-  /** Lists workspace files for the tree. */
-  listFiles(): Promise<readonly EditorFileEntry[]>;
+  /** Lists the direct children of one workspace directory for the tree. */
+  listFiles(directory: string): Promise<readonly EditorFileEntry[]>;
   readFile(path: string): Promise<string>;
   writeFile(path: string, contents: string): Promise<void>;
   /** Reports dirty state so the tab strip can show its indicator. */
@@ -97,7 +97,11 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
   let treeError: string | undefined;
   let treeLoading = true;
   let refreshPromise: Promise<void> | undefined;
+  let treeRevision = 0;
   const expandedDirectories = new Set<string>();
+  const directoryChildren = new Map<string, readonly EditorTreeNode[]>();
+  const loadingDirectories = new Set<string>();
+  const directoryErrors = new Set<string>();
   // One model per opened file so switching tabs preserves each file's undo
   // history and cursor — recreating a model on every switch would lose both.
   const models = new Map<string, TextModel>();
@@ -190,21 +194,69 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     if (event.target !== event.currentTarget) return;
     if (expanded) {
       expandedDirectories.add(directory.path);
+      void loadDirectory(directory);
     } else {
       expandedDirectories.delete(directory.path);
+    }
+  }
+
+  function handleDirectoryLazyLoad(
+    event: Event,
+    directory: EditorTreeDirectory,
+  ): void {
+    if (event.target !== event.currentTarget) return;
+    expandedDirectories.add(directory.path);
+    void loadDirectory(directory);
+  }
+
+  async function loadDirectory(directory: EditorTreeDirectory): Promise<void> {
+    if (
+      directoryChildren.has(directory.path) ||
+      loadingDirectories.has(directory.path)
+    ) {
+      return;
+    }
+
+    const revision = treeRevision;
+    loadingDirectories.add(directory.path);
+    directoryErrors.delete(directory.path);
+    renderTree();
+    try {
+      const entries = await callbacks.listFiles(directory.path);
+      if (revision !== treeRevision) return;
+      directoryChildren.set(
+        directory.path,
+        buildEditorDirectoryEntries(entries),
+      );
+    } catch (error) {
+      if (revision !== treeRevision) return;
+      callbacks.onError(error);
+      directoryErrors.add(directory.path);
+    } finally {
+      if (revision === treeRevision) {
+        loadingDirectories.delete(directory.path);
+        renderTree();
+      }
     }
   }
 
   function treeNodeTemplate(node: EditorTreeNode): TemplateResult {
     if (node.kind === 'directory') {
       const expanded = expandedDirectories.has(node.path);
+      const loaded = directoryChildren.has(node.path);
+      const children = directoryChildren.get(node.path) ?? [];
+      const loading = loadingDirectories.has(node.path);
+      const failed = directoryErrors.has(node.path);
       return html`
         <wa-tree-item
           class="desktop-editor-tree-row"
           data-path=${node.path}
           data-kind="directory"
           .expanded=${expanded}
+          .lazy=${!loaded}
           title=${node.path}
+          @wa-lazy-load=${(event: Event) =>
+            handleDirectoryLazyLoad(event, node)}
           @wa-expand=${(event: Event) =>
             handleDirectoryToggle(event, node, true)}
           @wa-collapse=${(event: Event) =>
@@ -214,7 +266,23 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
             ${waIcon(expanded ? 'folder-open' : 'folder')}
           </span>
           <span class="desktop-editor-tree-label">${node.name}</span>
-          ${node.children.map((child) => treeNodeTemplate(child))}
+          ${
+            loading
+              ? html`<wa-tree-item class="desktop-editor-tree-status" disabled
+                  >Loading…</wa-tree-item
+                >`
+              : nothing
+          }
+          ${
+            failed
+              ? html`<wa-tree-item
+                  class="desktop-editor-tree-status is-error"
+                  disabled
+                  >Could not load folder</wa-tree-item
+                >`
+              : nothing
+          }
+          ${children.map((child) => treeNodeTemplate(child))}
         </wa-tree-item>
       `;
     }
@@ -337,23 +405,28 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
 
   function refresh(): Promise<void> {
     if (refreshPromise) return refreshPromise;
+    treeRevision += 1;
+    const revision = treeRevision;
     treeLoading = true;
+    expandedDirectories.clear();
+    directoryChildren.clear();
+    loadingDirectories.clear();
+    directoryErrors.clear();
     renderTree();
     refreshPromise = callbacks
-      .listFiles()
+      .listFiles('')
       .then((listedFiles) => {
-        const tree = buildEditorTree(listedFiles);
-        treeNodes = tree.nodes;
-        for (const path of expandedDirectories) {
-          if (!tree.directoryPaths.has(path)) expandedDirectories.delete(path);
-        }
+        if (revision !== treeRevision) return;
+        treeNodes = buildEditorDirectoryEntries(listedFiles);
         treeError = undefined;
       })
       .catch((error: unknown) => {
+        if (revision !== treeRevision) return;
         callbacks.onError(error);
         treeError = 'Could not list workspace files.';
       })
       .finally(() => {
+        if (revision !== treeRevision) return;
         treeLoading = false;
         refreshPromise = undefined;
         renderTree();

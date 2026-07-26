@@ -140,6 +140,12 @@ function renderActionButtonParts({
     ? html`<wa-tooltip for=${id}>${tooltip}</wa-tooltip>`
     : nothing;
   const nativeTitle = tooltip && !id ? tooltip : (title ?? ariaLabel);
+  let content: TemplateResult | typeof nothing = nothing;
+  if (text) {
+    content = html`${icon ? waIcon(icon, { slot: 'start' }) : nothing}${text}`;
+  } else if (icon) {
+    content = waIcon(icon);
+  }
 
   const button = html`
     <wa-button
@@ -161,10 +167,8 @@ function renderActionButtonParts({
         ariaHidden === undefined ? undefined : String(ariaHidden),
       )}
       @click=${onClick}
+      >${content}</wa-button
     >
-      ${icon ? waIcon(icon, { slot: text ? 'start' : undefined }) : nothing}
-      ${text}
-    </wa-button>
   `;
 
   return { button, tooltip: tooltipTemplate };

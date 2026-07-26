@@ -185,6 +185,17 @@ export const instructionPanelStyles: CSSResult = css`
     flex: 0 0 auto;
   }
 
+  .model-selection-footer .workspace-root-control {
+    flex: 1 1 12rem;
+    max-width: 20rem;
+  }
+
+  .workspace-root-select {
+    width: 100%;
+    min-width: 0;
+    font-size: var(--font-size-sm);
+  }
+
   .launch-target-group wa-radio-group {
     display: flex;
     align-items: center;
@@ -270,7 +281,7 @@ export const instructionPanelStyles: CSSResult = css`
     line-height: var(--line-height-tight);
   }
 
-  .model-selection-footer wa-button {
+  .model-selection-footer wa-button:not(.action-icon-button) {
     min-width: var(--height-control);
     height: var(--height-control);
   }
@@ -333,7 +344,7 @@ export const instructionPanelStyles: CSSResult = css`
     width: 100%;
     container-name: desktop-composer;
     container-type: inline-size;
-    --desktop-send-size: 36px;
+    --desktop-send-size: var(--control-size-l);
     --agent-model-listbox-max-width: min(24rem, calc(100vw - 3rem));
   }
 
@@ -341,16 +352,10 @@ export const instructionPanelStyles: CSSResult = css`
     gap: var(--wa-space-2xs);
     margin: 0;
     padding: var(--wa-space-xs);
-    border-color: color-mix(
-      in srgb,
-      var(--wa-color-text-normal) 13%,
-      transparent
-    );
-    border-radius: 26px;
+    border-color: var(--border-hairline-strong);
+    border-radius: var(--border-radius-large);
     background: var(--wa-color-surface-raised);
-    box-shadow:
-      0 0 0 1px color-mix(in srgb, white 4%, transparent),
-      0 12px 32px color-mix(in srgb, black 18%, transparent);
+    box-shadow: 0 8px 24px color-mix(in srgb, black 10%, transparent);
     transition:
       border-color var(--transition-fast),
       box-shadow var(--transition-fast);
@@ -359,18 +364,17 @@ export const instructionPanelStyles: CSSResult = css`
   :host([desktop-host]) .instruction-box:focus-within {
     border-color: color-mix(
       in srgb,
-      var(--wa-color-text-normal) 23%,
-      transparent
+      var(--wa-color-focus) 55%,
+      var(--border-hairline-strong)
     );
     box-shadow:
-      0 0 0 1px
-        color-mix(in srgb, var(--wa-color-brand-fill-loud) 18%, transparent),
-      0 16px 40px color-mix(in srgb, black 22%, transparent);
+      0 0 0 4px var(--wa-color-brand-fill-quiet),
+      0 8px 24px color-mix(in srgb, black 12%, transparent);
   }
 
   :host([desktop-host]) .instruction-box.drop-active::after {
     inset: var(--wa-space-2xs);
-    border-radius: 20px;
+    border-radius: var(--border-radius-large);
     background: color-mix(
       in srgb,
       var(--wa-color-surface-raised) 92%,
@@ -406,22 +410,21 @@ export const instructionPanelStyles: CSSResult = css`
   }
 
   :host([desktop-host]) wa-textarea#instruction::part(textarea) {
-    min-height: 76px;
+    min-height: 52px;
     max-height: min(30vh, 180px);
   }
 
   :host([desktop-host]) .instruction-header {
     order: 2;
-    min-height: 30px;
+    justify-content: flex-start;
+    min-height: var(--control-size-m);
     margin: 0;
-    padding-top: var(--wa-space-2xs);
-    border-top: var(--border-thin) solid
-      color-mix(in srgb, var(--wa-color-text-normal) 9%, transparent);
+    padding: 0;
     flex-wrap: nowrap;
   }
 
   :host([desktop-host]) .instruction-header-leading {
-    flex: 1 1 auto;
+    flex: 0 0 auto;
     min-width: 0;
     flex-wrap: nowrap;
   }
@@ -433,11 +436,15 @@ export const instructionPanelStyles: CSSResult = css`
     min-width: 0;
     color: var(--wa-color-text-quiet);
     font-size: var(--font-size-sm);
-    white-space: nowrap;
   }
 
-  :host([desktop-host]) .desktop-drop-affordance wa-icon,
-  :host([desktop-host]) .model-selection-footer wa-icon,
+  :host([desktop-host])
+    :is(.instruction-header-actions, .model-selection-footer)
+    .action-icon-button {
+    --control-size: var(--control-size-m);
+  }
+
+  :host([desktop-host]) .desktop-drop-affordance .icon-surface wa-icon,
   :host([desktop-host]) wa-button.execute-button wa-icon {
     display: block;
     flex: 0 0 auto;
@@ -449,12 +456,13 @@ export const instructionPanelStyles: CSSResult = css`
 
   :host([desktop-host]) .instruction-header-actions {
     flex: 0 0 auto;
+    gap: var(--wa-space-3xs);
   }
 
   :host([desktop-host]) .instruction-controls {
     order: 3;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) var(--desktop-send-size);
+    grid-template-columns: minmax(0, 1fr) max-content;
     align-items: end;
     gap: var(--wa-space-2xs);
     min-height: var(--desktop-send-size);
@@ -463,7 +471,7 @@ export const instructionPanelStyles: CSSResult = css`
   :host([desktop-host]) .model-selection-footer {
     display: grid;
     grid-template-columns:
-      max-content minmax(7.5rem, 1fr)
+      minmax(7rem, 0.6fr) minmax(7.5rem, 1fr)
       minmax(7.5rem, 1fr);
     align-items: center;
     gap: var(--wa-space-2xs);
@@ -471,21 +479,16 @@ export const instructionPanelStyles: CSSResult = css`
   }
 
   :host([desktop-host]) .desktop-mode-controls {
-    display: flex;
-    align-items: center;
-    gap: var(--wa-space-xs);
-    min-width: max-content;
+    min-width: 0;
   }
 
-  :host([desktop-host]) .desktop-mode-controls .instruction-session-toggle {
-    padding-right: var(--wa-space-xs);
-    border-right: var(--border-thin) solid
-      color-mix(in srgb, var(--wa-color-text-normal) 9%, transparent);
+  :host([desktop-host]) .workspace-root-control {
+    grid-column: 1 / -1;
+    max-width: none;
   }
 
-  :host([desktop-host]) .instruction-session-toggle,
-  :host([desktop-host]) .launch-target-group {
-    min-height: var(--control-size-m);
+  :host([desktop-host]) .desktop-launch-mode {
+    width: 100%;
   }
 
   :host([desktop-host]) .model-selection-footer .select-group {
@@ -507,39 +510,36 @@ export const instructionPanelStyles: CSSResult = css`
     max-width: none;
   }
 
-  :host([desktop-host]) .model-selection-footer wa-button.settings-button {
-    width: 28px;
-    min-width: 28px;
-    height: 28px;
-  }
-
   :host([desktop-host]) wa-button.execute-button {
-    width: var(--desktop-send-size);
-    height: var(--desktop-send-size);
     align-self: end;
     justify-self: end;
     margin: 0;
   }
 
   :host([desktop-host]) wa-button.execute-button::part(base) {
-    width: var(--desktop-send-size);
-    min-width: var(--desktop-send-size);
-    height: var(--desktop-send-size);
     min-height: var(--desktop-send-size);
-    padding: 0;
-    border: 0;
-    border-radius: var(--wa-border-radius-circle);
+    padding-inline: var(--wa-space-s);
   }
 
   :host([desktop-host]) wa-button.execute-button::part(label) {
-    display: grid;
-    width: 100%;
-    height: 100%;
-    place-items: center;
+    display: flex;
+    align-items: center;
+    gap: var(--wa-space-2xs);
   }
 
-  :host([desktop-host]) .execute-button__label {
-    display: none;
+  :host([desktop-host]) .execute-button__key {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    padding: 2px 4px;
+    border: var(--border-thin) solid
+      color-mix(in srgb, currentColor 24%, transparent);
+    border-radius: var(--border-radius);
+    background: color-mix(in srgb, currentColor 10%, transparent);
+    font-family: var(--wa-font-family-code);
+    font-size: var(--font-size-xs);
+    line-height: 1;
   }
 
   .visually-hidden {
@@ -567,44 +567,29 @@ export const instructionPanelStyles: CSSResult = css`
 
   /* The conversation can be narrower than the window when a workbench is
      open, so responsive composition follows this component's own width. */
-  @container desktop-composer (max-width: 720px) {
+  @container desktop-composer (max-width: 640px) {
     :host([desktop-host]) .model-selection-footer {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
-    :host([desktop-host]) .desktop-mode-controls {
+    :host([desktop-host]) .model-select-group {
       grid-column: 1 / -1;
     }
   }
 
   @container desktop-composer (max-width: 460px) {
-    :host([desktop-host]) .desktop-drop-affordance span {
-      display: none;
-    }
-
     :host([desktop-host]) .model-selection-footer {
       grid-template-columns: minmax(0, 1fr);
     }
 
-    :host([desktop-host]) .desktop-mode-controls {
-      flex-wrap: wrap;
-      min-width: 0;
-    }
-  }
-
-  @container desktop-composer (max-width: 360px) {
-    :host([desktop-host]) .desktop-mode-controls {
-      align-items: flex-start;
-      flex-direction: column;
-      gap: var(--wa-space-2xs);
+    :host([desktop-host])
+      .model-selection-footer
+      :is(.agent-select-group, .model-select-group) {
+      gap: var(--wa-space-3xs);
     }
 
-    :host([desktop-host]) .desktop-mode-controls .instruction-session-toggle {
-      padding-right: 0;
-      padding-bottom: var(--wa-space-2xs);
-      border-right: 0;
-      border-bottom: var(--border-thin) solid
-        color-mix(in srgb, var(--wa-color-text-normal) 9%, transparent);
+    :host([desktop-host]) .model-select-group {
+      grid-column: auto;
     }
   }
 

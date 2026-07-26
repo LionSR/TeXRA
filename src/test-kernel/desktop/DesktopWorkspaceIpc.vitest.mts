@@ -58,7 +58,15 @@ describe('desktop workspace IPC', () => {
     workspacePath = join(fixtureRoot, 'workspace');
     externalPath = join(fixtureRoot, 'external.txt');
     mkdirSync(workspacePath);
+    mkdirSync(join(workspacePath, 'src', 'deep'), { recursive: true });
+    mkdirSync(join(workspacePath, 'node_modules'));
     writeFileSync(join(workspacePath, 'paper.tex'), 'inside', 'utf8');
+    writeFileSync(join(workspacePath, 'src', 'index.ts'), 'export {};', 'utf8');
+    writeFileSync(
+      join(workspacePath, 'src', 'deep', 'nested.ts'),
+      'export {};',
+      'utf8',
+    );
     writeFileSync(externalPath, 'outside', 'utf8');
     symlinkSync(externalPath, join(workspacePath, 'linked.tex'));
     const [{ initPlatform }, { nodeFilesystem }] = await Promise.all([
@@ -77,6 +85,54 @@ describe('desktop workspace IPC', () => {
 
   afterEach(() => {
     rmSync(fixtureRoot, { recursive: true, force: true });
+  });
+
+  it('lists only direct children and loads nested directories on demand', async () => {
+    const postToRenderer = vi.fn();
+    const ipc = createDesktopWorkspaceIpc(
+      { postToRenderer },
+      {
+        ptyHost: createPtyHost(),
+        browserViews: createBrowserViews(),
+        toWindowBounds: (bounds) => bounds,
+      },
+    );
+
+    ipc.handleMessage({
+      command: DESKTOP_WORKSPACE_COMMANDS.LIST_FILES,
+    });
+    await vi.waitFor(() =>
+      expect(postToRenderer).toHaveBeenCalledWith({
+        command: DESKTOP_WORKSPACE_COMMANDS.FILES_LISTED,
+        directory: '',
+        files: [
+          { path: 'paper.tex', isDirectory: false },
+          { path: 'src', isDirectory: true },
+        ],
+      }),
+    );
+
+    ipc.handleMessage({
+      command: DESKTOP_WORKSPACE_COMMANDS.LIST_FILES,
+      directory: 'src',
+    });
+    await vi.waitFor(() =>
+      expect(postToRenderer).toHaveBeenCalledWith({
+        command: DESKTOP_WORKSPACE_COMMANDS.FILES_LISTED,
+        directory: 'src',
+        files: [
+          { path: 'src/deep', isDirectory: true },
+          { path: 'src/index.ts', isDirectory: false },
+        ],
+      }),
+    );
+    expect(postToRenderer).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        files: expect.arrayContaining([
+          expect.objectContaining({ path: 'src/deep/nested.ts' }),
+        ]),
+      }),
+    );
   });
 
   it('reads regular workspace files but rejects symlink targets outside the workspace', async () => {
@@ -185,6 +241,47 @@ describe('desktop workspace IPC', () => {
     expect(postToRenderer).toHaveBeenLastCalledWith({
       command: DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_STATE,
       environment: EMPTY_DESKTOP_ENVIRONMENT_SUMMARY,
+    });
+  });
+
+  it('runs setup commands only after the integrated pty is ready', async () => {
+    const write = vi.fn();
+    const create = vi.fn(async () => ({
+      id: 'workbench:terminal:1',
+      write,
+      resize: vi.fn(),
+      dispose: vi.fn(),
+    }));
+    const ipc = createDesktopWorkspaceIpc(
+      { postToRenderer: vi.fn() },
+      {
+        ptyHost: {
+          create,
+          get: vi.fn(() => undefined),
+          disposeAll: vi.fn(),
+        },
+        browserViews: createBrowserViews(),
+        toWindowBounds: (bounds) => bounds,
+      },
+    );
+
+    expect(
+      ipc.handleMessage({
+        command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_START,
+        sessionId: 'workbench:terminal:1',
+        cols: 80,
+        rows: 24,
+        initialCommand: 'brew install ghostscript',
+      }),
+    ).toBe(true);
+
+    await vi.waitFor(() =>
+      expect(write).toHaveBeenCalledWith('brew install ghostscript\r'),
+    );
+    expect(create).toHaveBeenCalledWith({
+      id: 'workbench:terminal:1',
+      cols: 80,
+      rows: 24,
     });
   });
 });

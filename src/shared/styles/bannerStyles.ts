@@ -188,7 +188,7 @@ export const settingsBannerStyles: CSSResult = css`
     line-height: var(--line-height-tight);
   }
 
-  @container settings (max-width: 440px) {
+  @container settings (max-width: 720px) {
     .settings-banner-layout {
       grid-template-columns: auto minmax(0, 1fr);
       align-items: start;
@@ -196,6 +196,7 @@ export const settingsBannerStyles: CSSResult = css`
 
     .settings-banner-actions {
       grid-column: 2;
+      width: 100%;
       justify-content: flex-end;
       max-width: none;
     }

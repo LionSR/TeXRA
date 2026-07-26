@@ -66,7 +66,7 @@ export const selectStyles: CSSResult = css`
     gap: var(--wa-space-3xs);
   }
 
-  .select-group wa-icon {
+  .select-group > wa-icon {
     margin-right: var(--wa-space-2xs);
     color: var(--text-color, var(--wa-color-text-normal));
     vertical-align: text-bottom;

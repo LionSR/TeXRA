@@ -411,6 +411,7 @@ export const TEXRA_ICON_NAMES = Object.freeze(
 
 interface WaIconOptions {
   readonly id?: string;
+  readonly canvas?: 'auto' | 'fixed' | 'roomy' | 'square';
   // 'start' / 'end' for wa-button; 'icon' for wa-callout / wa-card.
   readonly slot?: 'start' | 'end' | 'icon';
   readonly className?: string;
@@ -432,6 +433,7 @@ export function waIcon(
     library=${TEXRA_ICON_LIBRARY}
     name=${name}
     variant=${options.variant ?? 'solid'}
+    canvas=${options.canvas ?? 'auto'}
     slot=${ifDefined(options.slot)}
     class=${ifDefined(options.className)}
     label=${ifDefined(options.label)}

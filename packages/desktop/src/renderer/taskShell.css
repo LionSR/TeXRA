@@ -953,10 +953,11 @@ body[data-desktop-platform='darwin'] .task-shell-collapsed .task-header {
   }
 
   .task-environment-button::part(base) {
-    display: grid;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     width: var(--control-size-l);
     min-width: 0;
-    place-items: center;
     padding: 0;
   }
 
@@ -966,6 +967,7 @@ body[data-desktop-platform='darwin'] .task-shell-collapsed .task-header {
 
   .task-environment-button wa-icon {
     margin: 0;
+    line-height: 0;
   }
 
   .task-environment-button::part(caret),

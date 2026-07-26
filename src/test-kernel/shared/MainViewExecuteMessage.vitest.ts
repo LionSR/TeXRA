@@ -81,6 +81,38 @@ describe('MainView execute message builder', () => {
     expect(message.files?.inputFilesActive).toBe(false);
   });
 
+  it('preserves the selected workspace root in the execute session', () => {
+    const message = buildMainViewExecuteMessage({
+      sessionType: 'toolUse',
+      workflowAgent: 'correct',
+      toolUseAgent: 'orchestrator',
+      model: 'gpt-5.4',
+      instruction: 'Inspect the selected project.',
+      singleFiles: { baseFile: '', editedFile: '' },
+      multiFiles: {
+        inputFiles: [],
+        contextFiles: [],
+        mediaFiles: [],
+        outputFiles: [],
+      },
+      checkboxValues: {
+        autoExtractFigure: false,
+        autoExtractTikzFigure: false,
+        autoCompileInputPdf: false,
+        attachTeXCount: false,
+      },
+      session: {
+        launchTarget: 'agent',
+        workingDirectory: '/workspace/paper',
+      },
+    });
+
+    expect(message.session).toEqual({
+      launchTarget: 'agent',
+      workingDirectory: '/workspace/paper',
+    });
+  });
+
   it('derives execute payload validation from the shared schema', () => {
     const message = buildMainViewExecuteMessage({
       sessionType: 'toolUse',

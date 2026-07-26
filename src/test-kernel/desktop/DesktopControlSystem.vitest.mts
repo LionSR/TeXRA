@@ -192,4 +192,40 @@ describe('desktop control system', () => {
     expect(palette).toContain('<wa-input');
     expect(palette).toContain("components/dialog/dialog.js'");
   });
+
+  it('keeps compact icons and responsive toolbars geometrically centered', () => {
+    const shellCss = read('packages/desktop/src/renderer/taskShell.css');
+    const lightDom = read('packages/desktop/src/renderer/styles.css');
+
+    expect(shellCss).toMatch(
+      /\.task-environment-button::part\(base\)\s*\{[\s\S]*?display:\s*flex;[\s\S]*?align-items:\s*center;[\s\S]*?justify-content:\s*center;/u,
+    );
+    expect(lightDom).toMatch(
+      /\.desktop-log-entry-level-icon wa-icon\s*\{[\s\S]*?top:\s*50%;[\s\S]*?left:\s*50%;[\s\S]*?transform:\s*translate\(-50%, -50%\);/u,
+    );
+    expect(lightDom).toContain('@container (max-width: 720px)');
+  });
+
+  it('draws the command palette focus frame inside the dialog bounds', () => {
+    const lightDom = read('packages/desktop/src/renderer/styles.css');
+
+    expect(lightDom).toMatch(
+      /\.desktop-command-palette-search\s*\{[\s\S]*?padding:\s*var\(--wa-space-2xs\) var\(--wa-space-s\);/u,
+    );
+    expect(lightDom).toMatch(
+      /wa-input\.desktop-command-palette-input:focus-within::part\(base\)\s*\{[\s\S]*?border-color:\s*var\(--wa-color-focus\);/u,
+    );
+  });
+
+  it('routes setup commands to the visible integrated terminal', () => {
+    const electronMain = read('packages/desktop/src/main/index.ts');
+    const renderer = read('packages/desktop/src/renderer/main.ts');
+
+    expect(electronMain).toContain(
+      'DESKTOP_WORKSPACE_COMMANDS.TERMINAL_OPEN_COMMAND',
+    );
+    expect(electronMain).not.toContain('openMacTerminalCommand');
+    expect(renderer).toContain('function openTerminalCommand(');
+    expect(renderer).toContain("placement: 'bottom'");
+  });
 });
