@@ -14,7 +14,7 @@ import type { TokenUsageStats, UsageRoute } from '@shared/schemas';
 
 // Local imports - shared styles
 import { designTokens } from '@shared/styles';
-import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { clamp, formatCompactTokenCount } from '@utils/core';
 import { formatCostUsd } from '@utils/text/stringUtils';
 
@@ -233,20 +233,10 @@ export class UsagePanel extends LitElement {
     const cacheWrite = this.usage.cacheCreationInputTokens ?? 0;
 
     return html`
-      <wa-icon
-        library=${TEXRA_ICON_LIBRARY}
-        name="pie-chart"
-        aria-hidden="true"
-      ></wa-icon>
+      ${waIcon('pie-chart')}
       <span class="run-summary__label">Total usage:</span>
       <span class="run-summary__value">
-        <wa-icon
-          id="usage-input-icon"
-          library=${TEXRA_ICON_LIBRARY}
-          name="arrow-up"
-          aria-hidden="true"
-        ></wa-icon
-        >${formatCompactTokenCount(inputTokens)}<wa-tooltip
+        ${waIcon('arrow-up', { id: 'usage-input-icon' })}${formatCompactTokenCount(inputTokens)}<wa-tooltip
           for="usage-input-icon"
           >Input tokens</wa-tooltip
         >
@@ -254,13 +244,7 @@ export class UsagePanel extends LitElement {
           cacheRead > 0,
           () =>
             html` ·
-              <wa-icon
-                id="usage-cache-read-icon"
-                library=${TEXRA_ICON_LIBRARY}
-                name="cloud-download"
-                aria-hidden="true"
-              ></wa-icon
-              >${formatCompactTokenCount(cacheRead)}<wa-tooltip
+              ${waIcon('cloud-download', { id: 'usage-cache-read-icon' })}${formatCompactTokenCount(cacheRead)}<wa-tooltip
                 for="usage-cache-read-icon"
                 >Cache read tokens (discounted)</wa-tooltip
               >`,
@@ -269,13 +253,7 @@ export class UsagePanel extends LitElement {
           cacheMiss > 0,
           () =>
             html` ·
-              <wa-icon
-                id="usage-cache-miss-icon"
-                library=${TEXRA_ICON_LIBRARY}
-                name="cloud-upload"
-                aria-hidden="true"
-              ></wa-icon
-              >${formatCompactTokenCount(cacheMiss)}<wa-tooltip
+              ${waIcon('cloud-upload', { id: 'usage-cache-miss-icon' })}${formatCompactTokenCount(cacheMiss)}<wa-tooltip
                 for="usage-cache-miss-icon"
                 >Cache miss tokens (full price)</wa-tooltip
               >`,
@@ -284,25 +262,13 @@ export class UsagePanel extends LitElement {
           cacheWrite > 0,
           () =>
             html` ·
-              <wa-icon
-                id="usage-cache-write-icon"
-                library=${TEXRA_ICON_LIBRARY}
-                name="database"
-                aria-hidden="true"
-              ></wa-icon
-              >${formatCompactTokenCount(cacheWrite)}<wa-tooltip
+              ${waIcon('database', { id: 'usage-cache-write-icon' })}${formatCompactTokenCount(cacheWrite)}<wa-tooltip
                 for="usage-cache-write-icon"
                 >Cache creation tokens (1.25x cost)</wa-tooltip
               >`,
         )}
         ·
-        <wa-icon
-          id="usage-output-icon"
-          library=${TEXRA_ICON_LIBRARY}
-          name="arrow-down"
-          aria-hidden="true"
-        ></wa-icon
-        >${formatCompactTokenCount(outputTokens)}<wa-tooltip
+        ${waIcon('arrow-down', { id: 'usage-output-icon' })}${formatCompactTokenCount(outputTokens)}<wa-tooltip
           for="usage-output-icon"
           >Output tokens</wa-tooltip
         >
@@ -339,11 +305,7 @@ export class UsagePanel extends LitElement {
 
     return html`
       <span id="usage-context-gauge" class="context-gauge">
-        <wa-icon
-          library=${TEXRA_ICON_LIBRARY}
-          name="window"
-          aria-hidden="true"
-        ></wa-icon>
+        ${waIcon('window')}
         <span class="context-gauge__track">
           <wa-progress-bar
             class="context-gauge__bar"
