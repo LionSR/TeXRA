@@ -1,11 +1,11 @@
 import { structuredPatch } from 'diff';
 
 import type { HostUserQuestionRequest } from '@agent/runtime/HostInteractions';
-import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInteractionEvents';
 import {
   agentProposalCategoryLabel,
   getProposalFileGroups,
   type AgentProposalPermission,
+  type RetryPermission,
 } from '@shared/schemas';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 
@@ -139,9 +139,7 @@ export function formatAgentProposalApprovalSummary(
   ].join('\n');
 }
 
-export function formatRetryRequestMessage(
-  payload: RuntimeInteractionEventPayloads['showRetryRequest'],
-): string {
+export function formatRetryRequestMessage(payload: RetryPermission): string {
   const message = `Retry requested (${payload.operation}): ${payload.errorMessage ?? 'unknown error'}`;
   if (isCliChatGptSubscriptionRetry(payload)) {
     return [message, CLI_CHATGPT_SUBSCRIPTION_RETRY_HINT].join('\n');
