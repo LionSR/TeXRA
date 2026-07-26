@@ -117,7 +117,6 @@ import {
   createDesktopAuthCallbackState,
   createDesktopAuthCoordinator,
   createDesktopSupabaseAuth,
-  initializeDesktopServerSideKeyAccess,
   type DesktopAuthCallbackState,
   type DesktopAuthCoordinator,
   type DesktopSupabaseAuthHost,
@@ -1323,7 +1322,6 @@ if (protocolLifecycle.shouldContinue) {
         const authCallbackState = createDesktopAuthCallbackState(
           platform().globalState,
         );
-        initializeDesktopServerSideKeyAccess(console);
         installContentSecurityPolicy();
         reopenMainWindow = () =>
           createWindow({

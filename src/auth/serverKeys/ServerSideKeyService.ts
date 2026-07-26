@@ -99,8 +99,13 @@ export class ServerSideKeyService {
       enabled: boolean,
     ) => void = () => {},
   ) {
-    this.useIncludedModelAccess =
-      this.globalState?.get<boolean>(USE_INCLUDED_ACCESS_KEY, true) ?? true;
+    // Without a state store the preference can neither be read nor persisted
+    // nor surfaced in any settings UI, so included (relay) access starts off
+    // rather than silently routing that process's model traffic through
+    // TeXRA's servers. Only a host that owns state can opt in.
+    this.useIncludedModelAccess = this.globalState
+      ? (this.globalState.get<boolean>(USE_INCLUDED_ACCESS_KEY, true) ?? true)
+      : false;
   }
 
   private hasFullAccess(): boolean {
