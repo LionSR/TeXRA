@@ -167,11 +167,9 @@ export function stampFlowRecordSchemaVersion<T extends FlowRecord>(flow: T): T {
  * Result from a step execution.
  * Used by stepWithResult() for subclasses that need action and shared state.
  */
-export interface StepResult<S> {
+interface StepResult<S> {
   /** Whether there are more nodes to execute */
   hasMore: boolean;
-  /** Whether this step persisted a non-terminal wait at the current node. */
-  waiting?: boolean;
   /** The action returned by the node (for routing) */
   action: string | undefined;
   /** The shared state after node execution (mutated in-place) */
@@ -358,7 +356,6 @@ export class PersistedFlow<
 
     return {
       hasMore: !waiting,
-      ...(waiting ? { waiting } : {}),
       action,
       shared,
     };
@@ -380,8 +377,8 @@ export class PersistedFlow<
 
   /**
    * Reset the node history so the next stepWithResult() starts from the
-   * beginning of the flow graph. Used by RoundPersistedFlow to loop rounds
-   * without embedding loop edges in the graph itself.
+   * beginning of the flow graph. Used by round-looping subclasses to restart
+   * the graph without embedding loop edges in it.
    */
   protected async resetNodeHistory(shared: S): Promise<void> {
     await this.commitShared(shared, (flow) => {

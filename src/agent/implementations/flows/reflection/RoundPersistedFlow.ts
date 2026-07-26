@@ -1,5 +1,7 @@
 /**
- * RoundPersistedFlow - Flow-level round management with persistence.
+ * RoundPersistedFlow - the reflection flow's round loop, over a PersistedFlow.
+ * Rounds — including the bounded compile-repair round — are reflection-product
+ * policy, so this lives here and not in the generic `@agent/node` engine.
  *
  * Extends PersistedFlow to centrally manage round transitions:
  * - Round counter increment (single source of truth)
@@ -16,8 +18,10 @@
  * ```
  */
 
+import { BaseNode } from '@agent/node';
 import type { ExecutionKVStore } from '@agent/storage';
 import type { StageHandle } from '@agent/trace';
+import { PersistedFlow } from '@agent/node/persistedFlow';
 import {
   RUN_OUTCOME,
   type RetryErrorInfo,
@@ -25,8 +29,6 @@ import {
 } from '@shared/schemas';
 import { deriveRunOutcome } from '@shared/streams/streamStatus';
 
-import { BaseNode } from './index';
-import { PersistedFlow } from './persistedFlow';
 import type { z } from 'zod';
 
 // ============================================================================
