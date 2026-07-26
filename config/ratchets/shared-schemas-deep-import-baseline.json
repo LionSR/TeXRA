@@ -359,7 +359,6 @@
       "src/utils/config/platformSettings.ts",
       "src/utils/system/gitAuthorSettings.ts"
     ],
-    "@shared/schemas/toolConfig": ["src/latex/LatexMediaManager.ts"],
     "@shared/schemas/toolResult": [
       "packages/extension/src/frontend/lm/registerLanguageModelTools.ts (type-only)",
       "src/agent/core/flows/toolUseRound/toolCallParsing.ts",
@@ -732,6 +731,7 @@
     "@shared/schemas/toolConfig": [
       "src/agent/core/definition/AgentConfig.ts",
       "src/controllers/mainView/MainViewExecutionController.ts",
+      "src/latex/LatexMediaManager.ts",
       "src/shared/wa/extractFlagBadges.ts (type-only)"
     ],
     "@shared/schemas/usage": [
