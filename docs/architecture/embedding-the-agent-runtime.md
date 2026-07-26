@@ -13,9 +13,11 @@ Nothing here is a stable contract — this note documents what an external
 program has to do _today_ to get a `runAgent` call to complete, so that SDK work
 has a measurable baseline.
 
-Every claim below is cited to `file:line` and was verified at `origin/main`
-(`ce15dc051d`). Where the code is awkward, this note says so rather than
-describing an intended future shape.
+Every claim below is cited to `file:line`. The original baseline was verified
+at the PR base (`5fc03f9436`); review corrections were rechecked against
+`origin/main` (`ce15dc051d`). None of the 37 cited files changed between those
+snapshots. Where the code is awkward, this note says so rather than describing
+an intended future shape.
 
 ---
 
