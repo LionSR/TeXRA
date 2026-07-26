@@ -9,6 +9,7 @@ import type {
 } from '@agent/core/definition/AgentDataclass';
 import type { UserVariableChannels } from '@agent/core/definition/AgentCycleOptions';
 import type { AgentRunStateSnapshot } from '@agent/core/state/AgentState';
+import type { RunScope } from '@agent/runtime/RunScope';
 
 /** Callback invoked when a round/cycle completes for usage tracking. */
 export type RoundFinalizedCallback = (
@@ -16,6 +17,8 @@ export type RoundFinalizedCallback = (
 ) => void | Promise<void>;
 
 export interface AgentCore<C = unknown> {
+  /** Run identity and owning session; the same frozen object the ambient `RunContext` carries. */
+  readonly runScope: RunScope;
   modelHandler: IModelHandler<ProviderMessage, unknown, SdkToolCall, C>;
   config: AgentConfig;
   setting: AgentSetting;

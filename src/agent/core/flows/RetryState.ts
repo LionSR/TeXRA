@@ -3,7 +3,7 @@
 import { Node } from '@agent/node';
 import { logErrorData, logProgressStatus, type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { useLaunchRunContext } from '@agent/runtime/RunContext';
+import type { RunScope } from '@agent/runtime/RunScope';
 import type {
   ModelCredentialRoute,
   ModelCredentialSelection,
@@ -60,6 +60,7 @@ export type InvocationResult<TSuccess> =
 interface RetryableNodeServices {
   config: Pick<AgentConfig, 'model'>;
   logger: AgentTrace;
+  readonly runScope: RunScope;
   setAbortController: (ac: AbortController | null) => void;
   refreshClient?: (
     selection?: ModelCredentialSelection,
@@ -327,8 +328,7 @@ export abstract class RetryableInvocationNode<
   protected async handleManualRetryPrompt(
     error: Error,
   ): Promise<ManualRetryPromptResult> {
-    const { logger } = this.services;
-    const { runScope } = useLaunchRunContext();
+    const { logger, runScope } = this.services;
     const { session, streamId } = runScope;
     const streamStatus = session.status;
     const operationName = this.getOperationName();

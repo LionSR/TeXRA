@@ -5,7 +5,7 @@ import { responseCycleToolsForModel } from '@agent/core/flows/ResponseCycleFlow'
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { createRunScope } from '@agent/runtime/RunScope';
 import { getDefaultToolRegistry } from '@tools/registry';
-import { withTestRunContext } from './progressTestUtils';
+import { testRunScope, withTestRunContext } from './progressTestUtils';
 
 function toolNames(tools: readonly { name: string }[] | undefined): string[] {
   return tools?.map((tool) => tool.name) ?? [];
@@ -125,6 +125,7 @@ describe('response cycle tool visibility', () => {
         isBackgroundModeActive: () => false,
         setOutputStreaming: vi.fn(),
       },
+      runScope: testRunScope('response-cycle-invocation'),
       runtimeHost: { emit: vi.fn() },
       setAbortController: vi.fn(),
       setting: {

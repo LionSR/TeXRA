@@ -59,6 +59,7 @@ import {
   createRecordingHost,
   recordSessionEvents,
   runEventsOfType,
+  testRunScope,
   withTestRunContext,
 } from '../progressTestUtils';
 
@@ -98,6 +99,7 @@ describe('tool-use progress events', () => {
     const streamId = 'stream:single-shot-final-tool' as StreamTabId;
     const node = new ToolUseCycleNode().setServices({
       streamId,
+      runScope: testRunScope(streamId, { runtimeHost: host }),
       runtimeHost: host,
       logger,
       modelHandler: {
@@ -127,6 +129,7 @@ describe('tool-use progress events', () => {
     const streamId = 'stream:headless-final-tool' as StreamTabId;
     const node = new ToolUseCycleNode().setServices({
       streamId,
+      runScope: testRunScope(streamId, { runtimeHost: host }),
       runtimeHost: host,
       logger,
       modelHandler: {
@@ -166,6 +169,7 @@ describe('tool-use progress events', () => {
 
     const node = new ToolUseCycleNode().setServices({
       streamId,
+      runScope: testRunScope(streamId, { runtimeHost: host }),
       runtimeHost: host,
       logger,
       modelHandler: { getClient: vi.fn() },
@@ -310,6 +314,7 @@ describe('tool-use round outcome persistence (#8023)', () => {
       );
       const node = new ToolUseCycleNode().setServices({
         streamId,
+        runScope: testRunScope(streamId, { runtimeHost: host }),
         runtimeHost: host,
         logger,
         modelHandler: { getClient: vi.fn() },

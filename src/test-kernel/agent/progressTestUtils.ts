@@ -1,7 +1,10 @@
 // Local imports
 import type { AgentEvent } from '@agent/trace';
 import type { ToolUseRunShared } from '@agent/implementations/flows/tooluse/nodes/types';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import {
+  noopAgentRuntimeHost,
+  type AgentRuntimeHost,
+} from '@agent/runtime/AgentRuntimeHost';
 import {
   matchesCancelSelector,
   SessionHostInteractions,
@@ -18,7 +21,7 @@ import {
   type UserQuestionSettlement,
 } from '@agent/runtime/HostInteractions';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import { createRunScope } from '@agent/runtime/RunScope';
+import { createRunScope, type RunScope } from '@agent/runtime/RunScope';
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
 import type {
   SessionEvent,
@@ -375,12 +378,37 @@ export function sessionWithInteractions(
 }
 
 /**
+ * The `RunScope` a flow-services fixture must carry, since nodes read run
+ * identity from `services.runScope`. Same shape {@link withTestRunContext}
+ * installs ambiently — pass one `session` to both so they agree.
+ */
+export function testRunScope(
+  streamId: string,
+  options: {
+    session?: SessionHandle;
+    runtimeHost?: AgentRuntimeHost;
+  } = {},
+): RunScope {
+  const runtimeHost = options.runtimeHost ?? noopAgentRuntimeHost;
+  return createRunScope({
+    runtimeHost,
+    streamId: streamId as StreamTabId,
+    executionId: 'deadbeef' as ExecutionId,
+    agentName: 'test-agent',
+    session:
+      options.session ??
+      sessionWithInteractions(interactionsByHost.get(runtimeHost)),
+  });
+}
+
+/**
  * Run `fn` inside a launch `RunContext` carrying `runtimeHost`/`streamId`.
  *
- * Flow nodes read these from the ambient `RunContext` rather than the
- * services bag (DI cleanup Step 2) — production always runs them inside
- * `withExecutionRunContext`, which always projects a `launch` context. Tests
- * that call a node's `exec`/`post` directly need the same scope.
+ * Most flow nodes now read run identity from `services.runScope`; the reads
+ * still on the ambient context need the launch scope installed — production
+ * always runs them inside `withExecutionRunContext`, which always projects a
+ * `launch` context. Tests calling a node's `exec`/`post` directly need the
+ * same scope. Pass `session` so it matches the one on the services bag.
  */
 export function withTestRunContext<T>(
   runtimeHost: AgentRuntimeHost,
@@ -393,19 +421,10 @@ export function withTestRunContext<T>(
     stopAfterCycle?: boolean;
   } = {},
 ): Promise<T> {
-  const {
-    session = sessionWithInteractions(interactionsByHost.get(runtimeHost)),
-    ...contextOptions
-  } = options;
+  const { session, ...contextOptions } = options;
   return withRunContext(
     createRunContext({
-      runScope: createRunScope({
-        runtimeHost,
-        streamId: streamId as StreamTabId,
-        executionId: 'deadbeef' as ExecutionId,
-        agentName: 'test-agent',
-        session,
-      }),
+      runScope: testRunScope(streamId, { runtimeHost, session }),
       modelSource: 'live',
       getModel: () => undefined,
       ...contextOptions,

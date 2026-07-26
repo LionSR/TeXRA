@@ -6,7 +6,6 @@ import { logContextStateSnapshot } from '@agent/trace';
 import { isRemoteAgent } from '@agent/index/agentRegistry';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { AgentCore } from '@agent/core/flows/BaseFlowServices';
-import { useLaunchRunContext } from '@agent/runtime/RunContext';
 import {
   ProviderMessageArraySchema,
   type ProviderMessage,
@@ -103,11 +102,10 @@ export type CycleDebugFileOptions = {
 export async function saveCycleDebug(
   object: unknown,
   objectType: 'messages' | 'response',
-  services: Pick<AgentCore, 'logger' | 'config'>,
+  services: Pick<AgentCore, 'logger' | 'config' | 'runScope'>,
   fileOptions: CycleDebugFileOptions,
 ): Promise<void> {
-  const { runScope } = useLaunchRunContext();
-  const { executionId } = runScope;
+  const { executionId } = services.runScope;
   await maybeSaveDebugObject({
     object,
     objectType,
@@ -122,10 +120,9 @@ export async function saveCycleDebug(
 }
 
 export function defaultPostCompactionContext(
-  services: Pick<WorkspaceScopedCore, 'workspace'>,
+  services: Pick<WorkspaceScopedCore, 'workspace' | 'runScope'>,
 ): string | null {
-  const { runScope } = useLaunchRunContext();
-  const { session, streamId } = runScope;
+  const { session, streamId } = services.runScope;
   return formatPostCompactionContext(
     session.executions.getActiveChildren(streamId),
     services.workspace.workPlan.toSnapshot(),

@@ -29,6 +29,7 @@ import {
   createRecordingHost,
   recordSessionEvents,
   runEventsOfType,
+  testRunScope,
   withTestRunContext,
 } from '../progressTestUtils';
 
@@ -117,6 +118,7 @@ function createOutputNode(
 ): OutputNode {
   return new OutputNode().setServices({
     streamId,
+    runScope: testRunScope(streamId, { runtimeHost: host }),
     logger,
     outputState,
     runtimeHost: host,
