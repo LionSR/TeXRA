@@ -38,11 +38,7 @@ import '@awesome.me/webawesome/dist/components/relative-time/relative-time.js';
 import './WorktreeChip';
 import { formatRelativeTime } from '@shared/utils/string';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
-import {
-  TEXRA_ICON_LIBRARY,
-  type TeXRAIconName,
-  waIcon,
-} from '@shared/wa/webAwesomeIcons';
+import { type TeXRAIconName, waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderEmptyState } from '@shared/wa/emptyState';
 import { formatResultCount } from '@utils/text/stringUtils';
 import { layoutStyles } from '../styles/logStyles';
@@ -200,25 +196,13 @@ export class StreamTab extends LitElement {
             <span id="stream-tab-title" class="tab-title"
               >${
                 stream.parentStreamId
-                  ? html`<wa-icon
-                      library=${TEXRA_ICON_LIBRARY}
-                      name="chevron-right"
-                      class="nested-stream-icon"
-                      aria-hidden="true"
-                    ></wa-icon>`
+                  ? html`${waIcon('chevron-right', { className: 'nested-stream-icon' })}`
                   : nothing
               }${stream.label || stream.name}</span
             >
             ${
               this.childCount > 0 && this.compact
-                ? html`<wa-icon
-                    id="stream-tab-compact-children"
-                    library=${TEXRA_ICON_LIBRARY}
-                    name="chevron-right"
-                    class="compact-subagent-hint"
-                    role="img"
-                    aria-label=${childStreamLabel}
-                  ></wa-icon>`
+                ? html`${waIcon('chevron-right', { id: 'stream-tab-compact-children', className: 'compact-subagent-hint', label: childStreamLabel })}`
                 : nothing
             }
           </div>
@@ -260,23 +244,11 @@ export class StreamTab extends LitElement {
                           : ''
                       }</span
                     >
-                    <wa-icon
-                      id="stream-tab-kind"
-                      library=${TEXRA_ICON_LIBRARY}
-                      name=${streamDecorator.icon}
-                      class="stream-kind"
-                      aria-hidden="true"
-                    ></wa-icon>
+                    ${waIcon(streamDecorator.icon, { id: 'stream-tab-kind', className: 'stream-kind' })}
                     ${when(
                       stream.isRemote,
                       () => html`
-                        <wa-icon
-                          id="stream-tab-remote"
-                          library=${TEXRA_ICON_LIBRARY}
-                          name=${AGENT_DECORATORS.properties.remote.icon}
-                          class="remote-agent"
-                          aria-hidden="true"
-                        ></wa-icon>
+                        ${waIcon(AGENT_DECORATORS.properties.remote.icon, { id: 'stream-tab-remote', className: 'remote-agent' })}
                       `,
                     )}
                   </div>

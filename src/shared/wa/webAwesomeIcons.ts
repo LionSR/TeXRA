@@ -124,7 +124,7 @@ import { registerIconLibrary } from '@awesome.me/webawesome/dist/components/icon
 import { html, type TemplateResult } from 'lit';
 import { ifDefined } from 'lit/directives/if-defined.js';
 
-export const TEXRA_ICON_LIBRARY = 'texra';
+const TEXRA_ICON_LIBRARY = 'texra';
 
 type FontAwesomePathData = string | string[];
 
@@ -405,6 +405,7 @@ export function registerTeXRAWebAwesomeIcons(): void {
 export type TeXRAIconName = keyof typeof icons | keyof typeof CODICON_ALIASES;
 
 interface WaIconOptions {
+  readonly id?: string;
   // 'start' / 'end' for wa-button; 'icon' for wa-callout / wa-card.
   readonly slot?: 'start' | 'end' | 'icon';
   readonly className?: string;
@@ -422,6 +423,7 @@ export function waIcon(
   options: WaIconOptions = {},
 ): TemplateResult {
   return html`<wa-icon
+    id=${ifDefined(options.id)}
     library=${TEXRA_ICON_LIBRARY}
     name=${name}
     variant=${options.variant ?? 'solid'}
