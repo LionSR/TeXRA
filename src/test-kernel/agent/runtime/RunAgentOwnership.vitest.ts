@@ -12,15 +12,14 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@agent/storage', () => ({
-  abandonOwnedExecutionLease: mocks.abandonOwnedExecutionLease,
-  renewOwnedExecutionLease: mocks.renewOwnedExecutionLease,
-  acquireResumedExecutionLease: mocks.acquireResumedExecutionLease,
-  completeOwnedExecutionLease: mocks.completeOwnedExecutionLease,
   finalizeExecution: mocks.finalizeExecution,
   registerExecution: mocks.registerExecution,
 }));
 
 vi.mock('@agent/storage/executionLease', () => ({
+  abandonOwnedExecutionLease: mocks.abandonOwnedExecutionLease,
+  acquireResumedExecutionLease: mocks.acquireResumedExecutionLease,
+  completeOwnedExecutionLease: mocks.completeOwnedExecutionLease,
   captureOwnedExecutionLease:
     (_executionId: ExecutionId) => (operation: () => unknown) =>
       operation(),

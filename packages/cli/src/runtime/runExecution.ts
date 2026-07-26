@@ -1,7 +1,7 @@
 import {
   ExecutionLeaseLostError,
   type OwnedExecutionLeaseScope,
-} from '@agent/storage';
+} from '@agent/storage/executionLease';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {

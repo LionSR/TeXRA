@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { registerCommands } from '@commands/_shared/registerCommands';
-import { getFileLister } from '@frontend/files';
+import { getFileLister } from '@frontend/files/fileLister';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { openFirstLabelMatch } from '@latex/labelSearch';
 import * as logger from '@logger/logUtils';

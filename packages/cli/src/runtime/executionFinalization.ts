@@ -1,8 +1,5 @@
-import {
-  finalizeExecution,
-  markOwnedExecutionLeaseUndurable,
-  type FinalizeExecutionInput,
-} from '@agent/storage';
+import { finalizeExecution, type FinalizeExecutionInput } from '@agent/storage';
+import { markOwnedExecutionLeaseUndurable } from '@agent/storage/executionLease';
 import type { ExecutionStatus } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
