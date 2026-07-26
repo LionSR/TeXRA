@@ -18,6 +18,7 @@ import type {
   ToolDashboardItem,
   ToolCategory,
 } from '@shared/schemas/settingsViewMessages';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
 // Side-effect imports - register WA button, icon, and switch components
 import '@awesome.me/webawesome/dist/components/button/button.js';
@@ -165,6 +166,16 @@ export class ToolsTab extends LitElement {
         margin-bottom: var(--wa-space-2xs);
       }
 
+      .setting-description {
+        margin: var(--wa-space-3xs) 0 0 0;
+        font-size: var(--font-size-sm);
+        color: var(--wa-color-text-quiet);
+      }
+
+      .tool-path-setting {
+        margin-top: var(--wa-space-xs);
+      }
+
       .desktop-settings {
         padding: var(--wa-space-xs);
         margin-bottom: var(--wa-space-xs);
@@ -196,6 +207,7 @@ export class ToolsTab extends LitElement {
   @property({ attribute: false }) items: ToolDashboardItem[] = [];
   @property({ type: Boolean }) loaded = false;
   @property({ type: Boolean }) bashApprovalEnabled = true;
+  @property({ type: Boolean }) toolPathProtectionEnabled = true;
   @property({ type: Boolean }) agentSkillsEnabled = true;
   @property({ attribute: false }) showAgentSkillsSettings = false;
   @property({ attribute: false }) showDesktopCrashReporting = false;
@@ -213,6 +225,14 @@ export class ToolsTab extends LitElement {
 
   private handleBashApprovalToggle = (e: Event): void => {
     this.postToggle(SETTINGS_VIEW_COMMANDS.SET_BASH_APPROVAL_ENABLED, e);
+  };
+
+  private handleToolPathProtectionToggle = (e: Event): void => {
+    const target = e.target as WaSwitch | null;
+    postMessage(SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING, {
+      key: WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
+      value: Boolean(target?.checked),
+    });
   };
 
   private handleAgentSkillsToggle = (e: Event): void => {
@@ -386,7 +406,31 @@ export class ToolsTab extends LitElement {
         ${repeat(
           items,
           (item) => item.id,
-          (item) => html`<tool-card .item=${item}></tool-card>`,
+          (item) => html`
+            <tool-card .item=${item}>
+              ${
+                item.id === 'file-ops'
+                  ? html`
+                      <div
+                        slot="details"
+                        class="setting-block tool-path-setting"
+                      >
+                        <wa-switch
+                          ?checked=${this.toolPathProtectionEnabled}
+                          @change=${this.handleToolPathProtectionToggle}
+                        >
+                          Restrict tool paths to the working directory
+                        </wa-switch>
+                        <p class="setting-description">
+                          When disabled, file, search, diagnostics, and PDF
+                          tools may use arbitrary filesystem paths.
+                        </p>
+                      </div>
+                    `
+                  : nothing
+              }
+            </tool-card>
+          `,
         )}
       </div>
     `;
