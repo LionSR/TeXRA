@@ -1,3 +1,6 @@
+// Node imports
+import * as nodePath from 'node:path';
+
 // Third-party imports
 import { glob } from 'glob';
 import { z } from 'zod';
@@ -16,9 +19,9 @@ import {
 } from '@tools/pathResolution';
 import { filterNotNull } from '@utils/core';
 import { WorkspaceFS } from '@utils/files';
+import { toPosixPath } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { pluralize } from '@utils/text/stringUtils';
-import { toPosixPath } from '@utils/core/pathCore';
 
 // Local file imports
 import { defineTool } from './core/define';
@@ -92,7 +95,11 @@ export class GlobTool extends defineTool({
         }
 
         const relativePath = resolved.relative;
-        if (relativePath === '.' || gitignore.ignores(relativePath)) {
+        if (
+          relativePath === '.' ||
+          (!nodePath.isAbsolute(relativePath) &&
+            gitignore.ignores(relativePath))
+        ) {
           return null;
         }
 

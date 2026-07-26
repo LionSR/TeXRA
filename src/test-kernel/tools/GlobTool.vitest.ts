@@ -1,5 +1,5 @@
 // Node imports
-import { mkdtemp, rm, utimes, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 
@@ -9,6 +9,9 @@ import { describe, expect, it, vi } from 'vitest';
 // Local imports - platform
 import { platform } from '@platform/platform';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+
+// Local imports - shared
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
 // Local imports - test support
 import { installPlatform } from '@test/support/setupPlatform';
@@ -49,6 +52,7 @@ async function withGlobWorkspace(
         'unreadable.tex',
       ].map((name) => writeFile(path.join(workspacePath, name), name)),
     );
+    await writeFile(path.join(workspacePath, '.gitignore'), 'dist/\n');
     await utimes(path.join(workspacePath, 'old.tex'), 1, 1);
     await utimes(path.join(workspacePath, 'new.tex'), 2, 2);
     await run(workspacePath);
@@ -116,6 +120,36 @@ describe('GlobTool match metadata', () => {
         status: 'error',
         error: 'match is unreadable',
       });
+    });
+  });
+
+  it('does not pass unrestricted external paths to the workspace ignore matcher', async () => {
+    await withGlobWorkspace(async () => {
+      const externalPath = await mkdtemp(
+        path.join(tmpdir(), 'texra-glob-external-'),
+      );
+      try {
+        const externalDistPath = path.join(externalPath, 'dist');
+        await mkdir(externalDistPath);
+        await writeFile(
+          path.join(externalDistPath, 'external.tex'),
+          'external',
+        );
+        await platform().workspaceState.update(
+          WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
+          false,
+        );
+
+        const result = await new GlobTool().call({
+          pattern: '**/*.tex',
+          path: externalPath,
+        });
+
+        expect(result).toMatchObject({ status: 'executed' });
+        expect(result.output).toContain('external.tex');
+      } finally {
+        await rm(externalPath, { recursive: true, force: true });
+      }
     });
   });
 });

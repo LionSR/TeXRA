@@ -401,6 +401,8 @@ export const SETTINGS_VIEW_COMMANDS = {
   UPDATE_CUSTOM_AGENT_DIR: 'updateCustomAgentDir',
   UPDATE_SUPER_YOLO_ENABLED: 'updateSuperYoloEnabled',
   UPDATE_AGENT_MODE_PRESETS: 'updateAgentModePresets',
+  // Stable outbound name for the broader execution-permissions-and-safety
+  // snapshot (bash approval, coding-agent controls, and tool path protection).
   UPDATE_APPROVAL_SETTINGS: 'updateApprovalSettings',
   UPDATE_AGENT_SKILLS_SETTINGS: 'updateAgentSkillsSettings',
   UPDATE_TOOL_DASHBOARD: 'updateToolDashboard',
