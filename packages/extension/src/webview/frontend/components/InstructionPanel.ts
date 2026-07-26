@@ -725,7 +725,7 @@ export class InstructionPanel extends LitElement {
         ${this.renderSessionHint(session)}
         <wa-textarea
           id="instruction"
-          rows=${this.desktopHost ? '2' : '10'}
+          rows=${this.desktopHost ? '4' : '10'}
           resize="none"
           enterkeyhint=${this.desktopHost ? 'send' : nothing}
           placeholder=${session.placeholder}

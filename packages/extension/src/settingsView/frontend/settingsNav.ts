@@ -75,12 +75,11 @@ const SETTINGS_TAB_METADATA: Record<
     description:
       'Review tool availability, permissions, and desktop diagnostics.',
   },
-  // Not 'robot': that is AGENTS, and once the nav collapses to icons two tabs
-  // sharing a glyph are indistinguishable. External agents are the CLI ones.
   AI_AGENTS: {
-    icon: 'terminal',
-    label: 'External Agents',
-    description: 'Connect external agents, services, and reference tools.',
+    icon: 'link',
+    label: 'Integrations',
+    description:
+      'Connect coding agents, services, reference managers, and other tools.',
   },
   GIT: {
     icon: 'code-branch',

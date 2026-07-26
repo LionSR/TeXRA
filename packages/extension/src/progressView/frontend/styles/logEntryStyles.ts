@@ -361,7 +361,7 @@ export const logEntryStyles = css`
   }
 
   .banner-details {
-    margin: var(--wa-space-xs) 0;
+    margin: var(--wa-space-3xs) 0;
     content-visibility: auto;
     contain-intrinsic-size: auto 40px;
   }
@@ -373,7 +373,7 @@ export const logEntryStyles = css`
   }
 
   wa-details.banner-details::part(header) {
-    min-height: 30px;
+    min-height: 26px;
     padding: 0;
   }
 
@@ -382,7 +382,7 @@ export const logEntryStyles = css`
   }
 
   .details-summary {
-    gap: var(--wa-space-2xs);
+    gap: var(--wa-space-3xs);
     min-width: 0;
     color: var(--wa-color-text-quiet);
     font-size: var(--font-size-sm);

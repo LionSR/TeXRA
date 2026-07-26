@@ -234,11 +234,20 @@ export function openWorkbenchTab(
     request.kind === 'editor' && request.target
       ? state.workbenchTabs.filter((entry) => entry.id !== 'workbench:editor')
       : state.workbenchTabs;
+  const activeWorkbenchTabIds = { ...state.activeWorkbenchTabIds };
+  if (request.kind === 'editor' && request.target) {
+    for (const placement of ['right', 'bottom'] as const) {
+      if (activeWorkbenchTabIds[placement] === 'workbench:editor') {
+        activeWorkbenchTabIds[placement] = undefined;
+      }
+    }
+  }
 
   return activateWorkbenchTab(
     {
       ...state,
       workbenchTabs: [...withoutEditorPlaceholder, tab],
+      activeWorkbenchTabIds,
     },
     tab,
   );

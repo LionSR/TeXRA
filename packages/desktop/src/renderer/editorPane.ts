@@ -438,8 +438,10 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     const path = openPath;
     const model = path ? models.get(path) : undefined;
     if (!path || !model) return;
+    const savedVersion = model.getVersionId();
     try {
       await callbacks.writeFile(path, model.getValue());
+      if (model.getVersionId() !== savedVersion) return;
       dirtyPaths.delete(path);
       callbacks.onDirtyChange(path, false);
       renderTree();

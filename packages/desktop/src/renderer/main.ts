@@ -80,6 +80,7 @@ import {
 import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 
 import {
+  DesktopSaveFileMessageSchema,
   DesktopSetRouteMessageSchema,
   DesktopToggleLayoutMessageSchema,
   type DesktopRoute,
@@ -1355,6 +1356,9 @@ const desktopRendererCommandActions: DesktopCommandActions = {
   openWorkspaceFolder: () => {
     postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER);
   },
+  saveFile: () => {
+    void editorPane.save();
+  },
   showFirstRunWalkthrough: () => {
     startupTeamPanel.show();
   },
@@ -1439,6 +1443,11 @@ function setRoute(route: DesktopRoute): void {
 }
 
 window.addEventListener('message', (event) => {
+  const saveParsed = DesktopSaveFileMessageSchema.safeParse(event.data);
+  if (saveParsed.success) {
+    void editorPane.save();
+    return;
+  }
   const routeParsed = DesktopSetRouteMessageSchema.safeParse(event.data);
   if (routeParsed.success) {
     setRoute(routeParsed.data.route);

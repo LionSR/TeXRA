@@ -45,6 +45,14 @@ describe('desktop command surface', () => {
       expect(entry.category).toBe(catalogEntry.category);
     }
     expect(entries).toContainEqual({
+      id: DESKTOP_LOCAL_COMMANDS.SAVE_FILE,
+      label: 'Save',
+      category: 'File',
+      icon: 'floppy-disk',
+      accelerator: 'Command+S',
+      enabled: true,
+    });
+    expect(entries).toContainEqual({
       id: DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
       label: 'Open Folder',
       category: 'File',
@@ -149,6 +157,7 @@ describe('desktop command surface', () => {
       openDesktopDocs: vi.fn(),
       openLogFolder: vi.fn(),
       openWorkspaceFolder: vi.fn(),
+      saveFile: vi.fn(),
       showFirstRunWalkthrough: vi.fn(),
       resetMainView: vi.fn(),
       showRoute: vi.fn(),
@@ -189,6 +198,9 @@ describe('desktop command surface', () => {
       ),
     ).toBe(true);
     expect(
+      dispatchDesktopCommand(DESKTOP_LOCAL_COMMANDS.SAVE_FILE, actions),
+    ).toBe(true);
+    expect(
       dispatchDesktopCommand(DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER, actions),
     ).toBe(true);
     expect(
@@ -219,6 +231,7 @@ describe('desktop command surface', () => {
     expect(actions.toggleSidePanel).toHaveBeenCalledOnce();
     expect(actions.toggleSummaryBar).toHaveBeenCalledOnce();
     expect(actions.openWorkspaceFolder).toHaveBeenCalledOnce();
+    expect(actions.saveFile).toHaveBeenCalledOnce();
     expect(actions.openLogFolder).toHaveBeenCalledOnce();
     expect(actions.showFirstRunWalkthrough).toHaveBeenCalledOnce();
     expect(
@@ -254,6 +267,7 @@ describe('desktop command surface', () => {
     const actions = {
       openDesktopDocs: vi.fn(),
       openWorkspaceFolder: vi.fn(),
+      saveFile: vi.fn(),
       resetMainView: vi.fn(),
       showFirstRunWalkthrough: vi.fn(),
       showRoute: vi.fn(),
@@ -274,8 +288,10 @@ describe('desktop command surface', () => {
     const fileSubmenu = fileMenu?.submenu ?? [];
     expect(
       fileSubmenu.map((item) => item.label ?? item.role ?? item.type),
-    ).toEqual(['Open Folder', 'separator', 'close']);
+    ).toEqual(['Save', 'Open Folder', 'separator', 'close']);
     fileSubmenu[0].click?.();
+    expect(actions.saveFile).toHaveBeenCalledOnce();
+    fileSubmenu[1].click?.();
     expect(actions.openWorkspaceFolder).toHaveBeenCalledOnce();
 
     const texraMenu = menu.find((item) => item.label === 'TeXRA');

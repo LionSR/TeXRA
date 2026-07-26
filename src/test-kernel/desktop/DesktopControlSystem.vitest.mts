@@ -228,4 +228,34 @@ describe('desktop control system', () => {
     expect(renderer).toContain('function openTerminalCommand(');
     expect(renderer).toContain("placement: 'bottom'");
   });
+
+  it('keeps embedded browsing and editor saving behind explicit policies', () => {
+    const browserViews = read(
+      'packages/desktop/src/main/desktopBrowserViews.ts',
+    );
+    const commandSurface = read(
+      'packages/desktop/src/desktopCommandSurface.ts',
+    );
+    const editorPane = read('packages/desktop/src/renderer/editorPane.ts');
+    const renderer = read('packages/desktop/src/renderer/main.ts');
+
+    expect(browserViews).toContain("parsed?.protocol === 'https:'");
+    expect(browserViews).toContain("protocol === 'http:'");
+    expect(browserViews).toContain("protocol === 'mailto:'");
+    expect(browserViews).toContain('Blocked external browser URL');
+    expect(browserViews).toContain('setPermissionRequestHandler');
+    expect(browserViews).toContain('setPermissionCheckHandler');
+    expect(commandSurface).toContain("SAVE_FILE: 'texra.desktop.saveFile'");
+    expect(commandSurface).toContain("accelerator: 'CommandOrControl+S'");
+    expect(renderer).toContain('void editorPane.save()');
+    expect(editorPane).toContain('model.getVersionId() !== savedVersion');
+  });
+
+  it('executes immediate follow-up plans after restoring their launcher state', () => {
+    const bridge = read('packages/desktop/src/main/desktopAgentExecution.ts');
+
+    expect(bridge).toMatch(
+      /case 'restoreState':[\s\S]*?if \(!plan\.executeImmediately\) return;[\s\S]*?await this\.runExecution\(validated\.request\);/u,
+    );
+  });
 });

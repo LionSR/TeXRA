@@ -19,10 +19,10 @@ import {
 } from '@common/files/fileListingRules';
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
 import { platform } from '@platform/platform';
-import { WorkspaceFS } from '@utils/files';
-import { getConfig } from '@utils/config/configUtils';
 import { normalizeFilePath } from '@utils/core';
+import { WorkspaceFS } from '@utils/files';
 import { isPathWithin } from '@utils/core/pathCore';
+import { getConfig } from '@utils/config/configUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isDirectory, isFile, isSymlink } from '@utils/files/fsEntryType';
 import { OFFICE_EXTENSIONS } from '@utils/files/mimeUtils';

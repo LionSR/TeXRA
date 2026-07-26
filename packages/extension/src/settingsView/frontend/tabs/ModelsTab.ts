@@ -4,15 +4,10 @@ import { LitElement, html, nothing, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import {
-  commonViewStyles,
-  designTokens,
-  settingsBannerStyles,
-} from '@shared/styles';
+import { commonViewStyles, designTokens } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
-import { renderSettingsBanner } from '@shared/wa/settingsBanner';
 import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
@@ -46,13 +41,19 @@ export class ModelsTab extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
-    settingsBannerStyles,
     css`
       :host {
         display: block;
       }
 
       /* max-width and centering provided by .tab-content-container */
+
+      .models-jump-links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--wa-space-2xs);
+        margin-bottom: var(--wa-space-s);
+      }
 
       .keyless-source__limit {
         display: flex;
@@ -120,14 +121,10 @@ export class ModelsTab extends LitElement {
     });
   };
 
-  private renderTabHint(): TemplateResult {
+  private renderSectionLinks(): TemplateResult {
     const copilotAvailable = this.modelSelectionItems.some(
       (model) => model.provider === 'copilot',
     );
-    const description =
-      this.apiAccessMode === 'included'
-        ? 'Use included access, ChatGPT subscription for Codex models, or personal provider API keys.'
-        : 'Use ChatGPT subscription for Codex models, or configure personal API keys for OpenAI, Anthropic, Google, and other providers.';
 
     const accessJump = this.authenticated
       ? renderLabeledActionButton({
@@ -138,11 +135,8 @@ export class ModelsTab extends LitElement {
         })
       : nothing;
 
-    return renderSettingsBanner({
-      id: 'model-credentials-banner',
-      title: 'Model credentials',
-      description,
-      actions: html`
+    return html`
+      <nav class="models-jump-links" aria-label="Model settings sections">
         ${accessJump}
         ${renderLabeledActionButton({
           icon: 'comment-discussion',
@@ -169,8 +163,8 @@ export class ModelsTab extends LitElement {
           appearance: 'outlined',
           onClick: this.handleScrollToApiConfig,
         })}
-      `,
-    });
+      </nav>
+    `;
   }
 
   override render(): TemplateResult {
@@ -182,7 +176,7 @@ export class ModelsTab extends LitElement {
 
     return html`
       <div class="models-container tab-content-container">
-        ${this.renderTabHint()} ${apiAccessSection}
+        ${this.renderSectionLinks()} ${apiAccessSection}
         ${this.renderChatGptSection()} ${this.renderCopilotSection()}
         <provider-key-list
           .providerKeyStatuses=${this.providerKeyStatuses}

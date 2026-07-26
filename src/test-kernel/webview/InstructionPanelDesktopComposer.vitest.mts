@@ -106,7 +106,7 @@ describe('instruction-panel desktop composer', () => {
         '.instruction-header #sessionTypeToggle',
       ),
     ).toBeNull();
-    expect(query(desktop, '#instruction').getAttribute('rows')).toBe('2');
+    expect(query(desktop, '#instruction').getAttribute('rows')).toBe('4');
     expect(query(desktop, '#instruction').getAttribute('enterkeyhint')).toBe(
       'send',
     );

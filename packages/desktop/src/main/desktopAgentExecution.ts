@@ -25,11 +25,11 @@ import type {
   RuntimePresentationEvent,
   RuntimePresentationEventPayloads,
 } from '@agent/runtime/runtimePresentationEvents';
+import { getServerSideKeyService } from '@auth/serverKeys';
 import {
   isPreferCodexSubscription,
   setPreferCodexSubscription,
 } from '@auth/codex/codexPreference';
-import { getServerSideKeyService } from '@auth/serverKeys';
 import {
   getFileListConfig,
   loadFileListSettings,
@@ -632,7 +632,21 @@ export class DesktopProgressBridge {
         const restored = this.restoreTaskState(plan.taskState);
         if (!restored) {
           await this.options.host.showErrorMessage('Failed to restore state');
+          return;
         }
+        if (!plan.executeImmediately) return;
+
+        const validated = validateExecutionRequest({
+          config: plan.taskState.agentConfig,
+        });
+        if (!validated.valid) {
+          this.logger.error('Invalid desktop follow-up execution request', {
+            data: validated.issue,
+          });
+          await this.options.host.showErrorMessage(validated.message);
+          return;
+        }
+        await this.runExecution(validated.request);
         return;
       }
       case 'execute': {

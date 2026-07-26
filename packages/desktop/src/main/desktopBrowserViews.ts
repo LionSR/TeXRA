@@ -63,6 +63,11 @@ function isEmbeddableUrl(rawUrl: string): boolean {
   return parsed?.protocol === 'https:' || parsed?.protocol === 'http:';
 }
 
+/** The only non-web scheme that the embedded browser may hand to the OS. */
+function isAllowedExternalUrl(rawUrl: string): boolean {
+  return tryParseUrl(rawUrl)?.protocol === 'mailto:';
+}
+
 export function createDesktopBrowserViews(
   options: DesktopBrowserViewsOptions,
 ): DesktopBrowserViews {
@@ -70,6 +75,14 @@ export function createDesktopBrowserViews(
   let attachedTabId: string | undefined;
 
   const reportError = (error: unknown) => options.onError?.(error);
+
+  function openAllowedExternalUrl(url: string): void {
+    if (!isAllowedExternalUrl(url)) {
+      reportError(new Error(`Blocked external browser URL: ${url}`));
+      return;
+    }
+    options.openExternalUrl(url).catch(reportError);
+  }
 
   function publishState(tabId: string, view: WebContentsView): void {
     const { webContents } = view;
@@ -91,14 +104,14 @@ export function createDesktopBrowserViews(
       if (isEmbeddableUrl(url)) {
         webContents.loadURL(url).catch(reportError);
       } else {
-        options.openExternalUrl(url).catch(reportError);
+        openAllowedExternalUrl(url);
       }
       return { action: 'deny' };
     });
     webContents.on('will-navigate', (event, url) => {
       if (isEmbeddableUrl(url)) return;
       event.preventDefault();
-      options.openExternalUrl(url).catch(reportError);
+      openAllowedExternalUrl(url);
     });
     // Registered one at a time rather than in a loop: `WebContents.on` is a
     // union of per-event overloads, so a loop variable collapses to the last
@@ -133,6 +146,10 @@ export function createDesktopBrowserViews(
         partition: 'persist:texra-browser',
       },
     });
+    view.webContents.session.setPermissionRequestHandler(
+      (_webContents, _permission, callback) => callback(false),
+    );
+    view.webContents.session.setPermissionCheckHandler(() => false);
     installPolicy(tabId, view.webContents);
     views.set(tabId, view);
     return view;
@@ -166,7 +183,7 @@ export function createDesktopBrowserViews(
   return {
     open(tabId, url) {
       if (!isEmbeddableUrl(url)) {
-        options.openExternalUrl(url).catch(reportError);
+        openAllowedExternalUrl(url);
         return;
       }
       const view = ensureView(tabId);
@@ -191,7 +208,7 @@ export function createDesktopBrowserViews(
 
     navigate(tabId, url) {
       if (!isEmbeddableUrl(url)) {
-        options.openExternalUrl(url).catch(reportError);
+        openAllowedExternalUrl(url);
         return;
       }
       views.get(tabId)?.webContents.loadURL(url).catch(reportError);

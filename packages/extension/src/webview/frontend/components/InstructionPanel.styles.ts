@@ -410,8 +410,8 @@ export const instructionPanelStyles: CSSResult = css`
   }
 
   :host([desktop-host]) wa-textarea#instruction::part(textarea) {
-    min-height: 52px;
-    max-height: min(30vh, 180px);
+    min-height: 96px;
+    max-height: min(36vh, 240px);
   }
 
   :host([desktop-host]) .instruction-header {

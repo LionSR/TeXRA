@@ -27,6 +27,7 @@ export const DESKTOP_LOCAL_COMMANDS = {
   TOGGLE_SUMMARY_BAR: 'texra.desktop.toggleSummaryBar',
   OPEN_LOG_FOLDER: 'texra.desktop.openLogFolder',
   OPEN_WORKSPACE_FOLDER: 'texra.desktop.openWorkspaceFolder',
+  SAVE_FILE: 'texra.desktop.saveFile',
   SHOW_FIRST_RUN_WALKTHROUGH: 'texra.desktop.showFirstRunWalkthrough',
   OPEN_DESKTOP_DOCS: 'texra.desktop.openDesktopDocs',
 } as const;
@@ -68,6 +69,7 @@ const DESKTOP_MENU_GROUPS = [
 )[])[];
 
 const DESKTOP_FILE_COMMANDS = [
+  DESKTOP_LOCAL_COMMANDS.SAVE_FILE,
   DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
 ] as const satisfies readonly DesktopLocalCommandId[];
 
@@ -89,6 +91,7 @@ export const DESKTOP_COMMAND_IDS: readonly DesktopCommandId[] = [
 ];
 
 const DESKTOP_COMMAND_ICONS = {
+  [DESKTOP_LOCAL_COMMANDS.SAVE_FILE]: 'floppy-disk',
   [DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER]: 'folder-open',
   'texra.showMainView': 'pencil',
   'texra.showProgressView': 'eye',
@@ -142,6 +145,7 @@ export interface DesktopCommandActions {
   openDesktopDocs?(): void;
   openLogFolder?(): void;
   openWorkspaceFolder?(): void;
+  saveFile?(): void;
   showFirstRunWalkthrough?(): void;
   resetMainView?(): void;
   toggleBottomBar?(): void;
@@ -165,6 +169,16 @@ const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
   DesktopLocalCommandId,
   Omit<DesktopCommandMenuEntry, 'icon'>
 >([
+  [
+    DESKTOP_LOCAL_COMMANDS.SAVE_FILE,
+    {
+      id: DESKTOP_LOCAL_COMMANDS.SAVE_FILE,
+      label: 'Save',
+      category: 'File',
+      accelerator: 'CommandOrControl+S',
+      enabled: true,
+    },
+  ],
   [
     DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS,
     {
@@ -381,6 +395,7 @@ const DESKTOP_COMMAND_HANDLERS = {
   [DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER]: optionalAction(
     (a) => a.openWorkspaceFolder,
   ),
+  [DESKTOP_LOCAL_COMMANDS.SAVE_FILE]: optionalAction((a) => a.saveFile),
   [DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH]: optionalAction(
     (a) => a.showFirstRunWalkthrough,
   ),

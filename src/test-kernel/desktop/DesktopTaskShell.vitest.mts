@@ -116,6 +116,7 @@ describe('desktop task shell model', () => {
   it('replaces the generic editor placeholder when a file opens', () => {
     let state = openWorkbenchTab(initialDesktopTaskShellState(), {
       kind: 'editor',
+      placement: 'bottom',
     });
     expect(state.workbenchTabs.map((tab) => tab.id)).toEqual([
       'workbench:editor',
@@ -129,6 +130,10 @@ describe('desktop task shell model', () => {
     expect(state.workbenchTabs.map((tab) => tab.id)).toEqual([
       'workbench:editor:paper.tex',
     ]);
+    expect(state.activeWorkbenchTabIds.bottom).toBeUndefined();
+    expect(state.activeWorkbenchTabIds.right).toBe(
+      'workbench:editor:paper.tex',
+    );
   });
 
   it('focuses existing singleton and editor tabs without duplicating them', () => {

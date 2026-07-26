@@ -1,8 +1,7 @@
 /**
- * AI Agents tab — shows third-party agent integrations (Codex, Claude Code,
- * external inquiries) grouped on their own panel. Reuses the same
- * `tool-card` component as the Tools tab, plus the Codex-specific inline
- * settings that used to live inside ToolsTab.
+ * Integrations tab for coding agents, services, reference managers, and
+ * assisted inquiries. Reuses the same `tool-card` component as the Tools tab,
+ * plus the Codex-specific inline settings that used to live inside ToolsTab.
  */
 
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
@@ -11,22 +10,15 @@ import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared styles
-import {
-  commonViewStyles,
-  designTokens,
-  settingsBannerStyles,
-} from '@shared/styles';
+import { commonViewStyles, designTokens } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderLoadingState } from '@shared/wa/loadingState';
-import { renderSettingsBanner } from '@shared/wa/settingsBanner';
-import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
 
 // Local imports - shared schemas
 import type {
   ToolDashboardItem,
-  ToolStatus,
   CodexSandboxMode,
   CodexReasoningEffort,
   CodexApprovalPolicy,
@@ -82,7 +74,6 @@ export class AIAgentsTab extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
-    settingsBannerStyles,
     css`
       :host {
         display: block;
@@ -99,6 +90,7 @@ export class AIAgentsTab extends LitElement {
         display: flex;
         align-items: center;
         gap: var(--wa-space-s);
+        margin-bottom: var(--wa-space-xs);
         font-size: var(--font-size-sm);
         white-space: nowrap;
       }
@@ -244,18 +236,10 @@ export class AIAgentsTab extends LitElement {
     return this.items.filter((item) => item.category === 'ai-agents');
   }
 
-  /**
-   * Read-only status summary derived from the same `toolDashboardItems`
-   * signal the Tools tab uses to drive its actionable "Re-check" button.
-   * This tab only reflects that shared state — the Tools tab owns the one
-   * control that re-runs the probe (see AGENTS.md "UI anti-patterns" (Duplicate UI controls)).
-   */
   private renderStatusSummary(
     items: readonly ToolDashboardItem[],
-  ): TemplateResult | typeof nothing {
-    if (items.length === 0) return nothing;
-
-    const counts: Record<ToolStatus, number> = {
+  ): TemplateResult {
+    const counts: Record<ToolDashboardItem['status'], number> = {
       available: 0,
       'not-found': 0,
       unknown: 0,
@@ -306,26 +290,13 @@ export class AIAgentsTab extends LitElement {
 
     return html`
       <div class="tab-content-container">
-        ${renderSettingsBanner({
-          id: 'external-integrations-banner',
-          icon: 'terminal',
-          title: 'External integrations',
-          description:
-            'Connect coding agents, GitHub, reference managers, and other services TeXRA can call during agent runs.',
-          detail:
-            items.length > 0 ? this.renderStatusSummary(items) : undefined,
-        })}
         ${
           items.length === 0
             ? html`<div class="ai-agents-empty">
                 No integrations registered.
               </div>`
             : html`
-                ${renderSettingsSectionHeading({
-                  title: `Available integrations (${items.length})`,
-                  description:
-                    'Each integration reports its setup and authentication state here.',
-                })}
+                ${this.renderStatusSummary(items)}
                 <div class="category-section">
                   ${repeat(
                     items,

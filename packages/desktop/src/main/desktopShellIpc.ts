@@ -57,6 +57,7 @@ export interface DesktopShellActions extends DesktopCommandActions {
   openDesktopDocs(): void;
   openLogFolder(): void;
   openWorkspaceFolder(): void;
+  saveFile(): void;
   resetMainView(): void;
   showFirstRunWalkthrough(): void;
   /**
@@ -144,6 +145,11 @@ export function createDesktopShellActions(
     openDesktopDocs,
     openLogFolder,
     openWorkspaceFolder,
+    saveFile: () => {
+      renderer.postToRenderer({
+        command: DESKTOP_SHELL_COMMANDS.SAVE_FILE,
+      });
+    },
     resetMainView,
     sendRecentCommits: () => {
       const postReply = (commits: string[], isGitRepo: boolean) => {

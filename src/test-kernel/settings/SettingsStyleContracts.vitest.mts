@@ -8,11 +8,9 @@ import { describe, expect, it } from 'vitest';
 const SETTINGS_TABS_ROOT = 'packages/extension/src/settingsView/frontend/tabs';
 const SETTINGS_BANNER_TABS = [
   'AccountTab.ts',
-  'AIAgentsTab.ts',
   'GoalTab.ts',
   'LaTeXTab.ts',
   'MemoryTab.ts',
-  'ModelsTab.ts',
   'MultiAgentTab.ts',
   'ShortcutsTab.ts',
   'ToolsTab.ts',
@@ -47,6 +45,12 @@ describe('settings style contracts', () => {
       /\.settings-banner-actions\s*\{[\s\S]*?grid-column:\s*2;[\s\S]*?width:\s*100%;/u,
     );
     expect(bannerStyles).toContain('justify-content: flex-end');
+
+    for (const tab of ['AIAgentsTab.ts', 'ModelsTab.ts']) {
+      const source = read(path.join(SETTINGS_TABS_ROOT, tab));
+      expect(source).not.toContain('renderSettingsBanner');
+      expect(source).not.toContain('settingsBannerStyles');
+    }
   });
 
   it('keeps semantic button skins in the shared action renderer', () => {

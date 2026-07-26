@@ -1,10 +1,8 @@
 // Interactive terminal sessions for the desktop app.
 //
-// Distinct from desktopTerminalRunner.ts, which runs one command to completion
-// and returns its captured output — that serves the setup wizard's scripted
-// checks. This host owns long-lived pseudo-terminals the *user* types into, so
-// it needs a real pty (job control, TTY-aware programs, ANSI, resize) rather
-// than a buffered child process.
+// This host owns long-lived pseudo-terminals the user types into, so it needs a
+// real pty (job control, TTY-aware programs, ANSI, resize) rather than a
+// buffered child process.
 //
 // node-pty is a native module, but it loads under Electron's ABI as shipped
 // (verified against the bundled Electron 43 before adopting it), so no

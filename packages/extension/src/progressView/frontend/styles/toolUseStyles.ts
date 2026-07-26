@@ -131,7 +131,7 @@ export const toolUseStyles = css`
   }
 
   wa-details.tool-use-details {
-    margin-block: var(--wa-space-2xs);
+    margin-block: var(--wa-space-3xs);
   }
 
   wa-details.tool-use-details::part(base) {
@@ -146,8 +146,8 @@ export const toolUseStyles = css`
   }
 
   wa-details.tool-use-details::part(header) {
-    min-height: 34px;
-    padding-inline: var(--wa-space-xs);
+    min-height: 28px;
+    padding: var(--wa-space-3xs) var(--wa-space-xs);
   }
 
   wa-details.tool-use-details::part(content) {
