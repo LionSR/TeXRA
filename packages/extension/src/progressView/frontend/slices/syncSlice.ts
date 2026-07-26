@@ -44,8 +44,8 @@ export const syncHandlers = {
       }));
     } else {
       const { workPlan, controls } = data;
-      // `controls.goal` is already GoalState (the wire schema imports
-      // GoalStateSchema directly from `@shared/schemas/goal`) — no need to
+      // `controls.goal` already matches GoalStateSchema (the wire schema
+      // imports it directly from `@shared/schemas/goal`) — no need to
       // round-trip it through deriveGoalState.
       const goal = controls.goal;
       updateToolUseState(data.stream, (prev) => ({
