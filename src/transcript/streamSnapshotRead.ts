@@ -141,7 +141,11 @@ export async function readLegacyInstruction(
  * (returns empty) rather than coerced, so we never consume a future shape's
  * fields as v1 — this is the single forward-compat gate. Within a known
  * version, `PersistedWorkPlanSchema`'s per-field `.catch` keeps one corrupt
- * value from nuking the rest instead of throwing and aborting the read.
+ * value from nuking the rest. A structurally unreadable file (a non-object
+ * shape that survives the `!raw` guard) degrades to an empty plan LOUDLY —
+ * warned and diagnosable — rather than via a silent whole-object `.catch`
+ * default, matching the read-side degradation handling in
+ * {@link assembleSnapshot}.
  */
 function readPersistedWorkPlan(raw: unknown): WorkPlanSnapshot {
   if (!raw) return EMPTY_WORK_PLAN;
@@ -150,10 +154,16 @@ function readPersistedWorkPlan(raw: unknown): WorkPlanSnapshot {
       ? raw.schemaVersion
       : STREAM_SNAPSHOT_SCHEMA_VERSION;
   if (version > STREAM_SNAPSHOT_SCHEMA_VERSION) return EMPTY_WORK_PLAN;
-  return PersistedWorkPlanSchema.catch({
-    schemaVersion: STREAM_SNAPSHOT_SCHEMA_VERSION,
-    ...EMPTY_WORK_PLAN,
-  }).parse(raw);
+  const result = PersistedWorkPlanSchema.safeParse(raw);
+  if (!result.success) {
+    logger.warn(
+      CHANNEL,
+      'Discarding unreadable persisted work plan; using empty.',
+      { data: result.error },
+    );
+    return EMPTY_WORK_PLAN;
+  }
+  return result.data;
 }
 
 /** Read every per-stream sidecar file ONCE, flattening any legacy nested data. */

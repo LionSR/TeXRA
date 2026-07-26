@@ -351,16 +351,7 @@ export class ProgressFactApplier {
   }
 
   public handleClearMissingOutputs(payload: ClearMissingOutputsPayload): void {
-    let targets: StreamTabId[];
-    if (payload.streamId) {
-      targets = [payload.streamId];
-    } else if (payload.streamConfig) {
-      targets = this.state.snapshots.findWorkflowStreamsMatching(
-        payload.streamConfig,
-      );
-    } else {
-      targets = [];
-    }
+    const targets = this.state.snapshots.resolveMissingOutputTargets(payload);
     for (const streamId of targets) {
       this.sendIfActive(streamId, () =>
         this.webviewUpdater.updateMissingOutputs(streamId, {
