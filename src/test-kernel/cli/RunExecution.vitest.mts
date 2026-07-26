@@ -4,7 +4,6 @@ import * as path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ExecutionLeaseLostError } from '@agent/storage';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { executeCliRequest } from '@cli/runtime/runExecution';
@@ -699,6 +698,11 @@ describe('executeCliRequest', () => {
     const platform = createFakePlatform();
     initPlatform(platform);
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    // Imported dynamically (matching the module above) so the `instanceof`
+    // check in runExecution.ts sees the same module instance even after an
+    // earlier test's `vi.resetModules()` in this file.
+    const { ExecutionLeaseLostError } =
+      await import('@agent/storage/executionLease');
     let resolveRun:
       | ((result: Awaited<ReturnType<typeof mocks.runAgent>>) => void)
       | undefined;

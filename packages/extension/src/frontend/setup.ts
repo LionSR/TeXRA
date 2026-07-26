@@ -14,7 +14,7 @@ import {
   globalSM,
   workspaceSM,
 } from '@common/state';
-import { agentDirectories } from '@frontend/agents';
+import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
