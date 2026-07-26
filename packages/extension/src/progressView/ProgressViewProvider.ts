@@ -4,6 +4,7 @@ import { computeAgentOptionsData } from '@agent/index';
 import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import { defaultSession } from '@agent/runtime/SessionHandle';
+import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { detectWaitingStreams } from '@agent/storage/detectWaitingStreams';
 import {
   BaseWebviewProvider,
@@ -25,7 +26,7 @@ import { getProgressStreamControls } from '@controllers/progressView/progressStr
 import type { ProgressBackendInteractionPayloads } from '@controllers/progressView/backend/events/ProgressInteractionHandler';
 import { appSignals } from '@eventBus/AppSignals';
 import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
-import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
+import { createAgentPresentationHost } from '@frontend/events/agentEventListeners';
 import { setExtensionInteractionEventSink } from '@frontend/events/extensionInteractionEvents';
 import {
   buildVisibleBasicModelOptionsData,
@@ -161,7 +162,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
       },
     );
     const interactions = createExtensionHostInteractions({
-      runtimeHost: extensionAgentRuntimeHost,
+      runtimeHost: createAgentPresentationHost(this),
       session: defaultSession(),
       getApprovalHandlers: () => this.backend.approvalHandlers,
     });
@@ -181,10 +182,20 @@ export class ProgressViewProvider extends BaseWebviewProvider {
         );
       },
     );
+    // Terminal-error toasts come from the run's `result` event (the lifecycle
+    // no longer emits them directly). This re-emits `requestShow*` through
+    // the session's interactions, reaching the presentation dispatch above
+    // exactly once, whichever host is currently attached.
+    const detachTerminalResultToast = attachTerminalResultToast(
+      defaultSession(),
+      defaultSession().interactions,
+      { replayWhenAttached: true },
+    );
     this._disposables.push(
       progressBackendSubscription,
       { dispose: this.detachHostInteractions },
       { dispose: detachExtensionInteractionEvents },
+      { dispose: detachTerminalResultToast },
     );
 
     ProgressViewProvider._instance = this;

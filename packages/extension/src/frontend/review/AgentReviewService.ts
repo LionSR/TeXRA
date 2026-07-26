@@ -32,7 +32,6 @@ import {
 } from '@agent/review/reviewIssues';
 import { runAgent } from '@agent/runtime/runAgent';
 import { currentSession } from '@agent/runtime/SessionHandle';
-import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import {
   showLoggedErrorMessage,
@@ -346,7 +345,12 @@ class AgentReviewServiceImpl {
       const result = await runAgent(
         { config },
         {
-          runtimeHost: extensionAgentRuntimeHost,
+          // `run.session` is `currentSession()` at review-launch time — the
+          // same session this `runtimeHost` reads through the session's own
+          // interactions attachment, so presentation events reach whatever
+          // host that session has attached (matching every other launch
+          // site's session-routed runtimeHost).
+          runtimeHost: run.session.interactions,
           openWorkflowOutput: openFinalOutputIfAvailable,
           stopAfterCycle: true,
           session: run.session,
