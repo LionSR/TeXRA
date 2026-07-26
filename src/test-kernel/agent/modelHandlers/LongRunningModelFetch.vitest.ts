@@ -1,5 +1,7 @@
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import OpenAI from 'openai';
+import { FormData as UndiciFormData, type Dispatcher } from 'undici';
 
 const transportMocks = vi.hoisted(() => ({
   undiciFetch: vi.fn(),
@@ -20,9 +22,6 @@ import {
   installLongRunningModelFetch,
   longRunningModelFetch,
 } from '@platform/defaults/longRunningModelTransport';
-
-// Type imports
-import type { Dispatcher } from 'undici';
 
 const nativeFetch = globalThis.fetch;
 
@@ -81,6 +80,30 @@ describe('long-running model transport', () => {
       }),
       expect.anything(),
     );
+  });
+
+  it('translates OpenAI multipart uploads for package Undici', async () => {
+    transportMocks.getGlobalDispatcher.mockReturnValue({
+      compose: vi.fn().mockReturnValue({}),
+    } as unknown as Dispatcher);
+    transportMocks.undiciFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ text: 'transcribed text' }), {
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    const client = new OpenAI({
+      apiKey: 'test-key',
+      fetch: longRunningModelFetch,
+    });
+
+    const result = await client.audio.transcriptions.create({
+      file: new File(['audio'], 'recording.wav', { type: 'audio/wav' }),
+      model: 'gpt-4o-transcribe',
+    });
+
+    expect(result.text).toBe('transcribed text');
+    const [, init] = transportMocks.undiciFetch.mock.calls[0] ?? [];
+    expect(init?.body).toBeInstanceOf(UndiciFormData);
   });
 
   it('routes classic streamGenerateContent through the timeout-aware transport', async () => {
