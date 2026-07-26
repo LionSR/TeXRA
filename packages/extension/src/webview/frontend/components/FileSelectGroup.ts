@@ -6,6 +6,7 @@ import { repeat } from 'lit/directives/repeat.js';
 
 import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
+import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 import { designTokens } from '@shared/styles';
 import type {
