@@ -220,10 +220,7 @@ export function createNativeSubagentStrategy(
           streamId,
           STREAM_PHASE.RUNNING,
           STREAM_TRANSITION_CAUSE.RESUME,
-          {
-            events: params.parentSession.events,
-            substate: STREAM_SUBSTATE.RESUMING,
-          },
+          { substate: STREAM_SUBSTATE.RESUMING },
         );
         return await resumeToolUseFromResumeData(resume, params.runtimeHost, {
           session: params.parentSession,

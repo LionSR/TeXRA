@@ -922,8 +922,8 @@ describe('executionRegistry', () => {
 
   it('owns visible stream stop policy for root and children', () => {
     const explicit = createRecordingHost();
-    const streamStatus = new StreamStatusMachine();
     const events = new SessionEventHub();
+    const streamStatus = new StreamStatusMachine(events);
     const recorded = recordSessionEvents(events, { scope: 'session' });
     const registry = new ExecutionRegistry({
       streamStatus,
@@ -1018,8 +1018,8 @@ describe('executionRegistry', () => {
 
   it('detaches descendants when killing with detached subagents', () => {
     const explicit = createRecordingHost();
-    const streamStatus = new StreamStatusMachine();
     const events = new SessionEventHub();
+    const streamStatus = new StreamStatusMachine(events);
     const recorded = recordSessionEvents(events, { scope: 'session' });
     const registry = new ExecutionRegistry({
       streamStatus,
@@ -1079,8 +1079,8 @@ describe('executionRegistry', () => {
 
   it('detaches children when stopping a stream with detached subagents', () => {
     const explicit = createRecordingHost();
-    const streamStatus = new StreamStatusMachine();
     const events = new SessionEventHub();
+    const streamStatus = new StreamStatusMachine(events);
     const recorded = recordSessionEvents(events, { scope: 'session' });
     const registry = new ExecutionRegistry({
       streamStatus,
@@ -1231,8 +1231,8 @@ describe('executionRegistry', () => {
   });
 
   it('cancels an ownerless stream', () => {
-    const streamStatus = new StreamStatusMachine();
     const events = new SessionEventHub();
+    const streamStatus = new StreamStatusMachine(events);
     const recorded = recordSessionEvents(events, { scope: 'session' });
     const registry = new ExecutionRegistry({ streamStatus, events });
     const streamId = 'ownerless-stop-policy-test' as StreamTabId;
@@ -1378,8 +1378,8 @@ describe('executionRegistry', () => {
 
   it('detaches children of an ownerless stream and cancels it', () => {
     const explicit = createRecordingHost();
-    const streamStatus = new StreamStatusMachine();
     const events = new SessionEventHub();
+    const streamStatus = new StreamStatusMachine(events);
     const recorded = recordSessionEvents(events, { scope: 'session' });
     const registry = new ExecutionRegistry({ streamStatus, events });
     const parentStreamId = 'parent-ownerless-detach-test' as StreamTabId;
