@@ -3,7 +3,7 @@ import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
 // Local imports
-import { getAgentRegistrationSkipReason } from '@frontend/agents';
+import { getAgentRegistrationSkipReason } from '@frontend/agents/register';
 
 describe('getAgentRegistrationSkipReason', () => {
   it('returns alreadyRegistered when the agent is present', () => {

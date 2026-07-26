@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { computeAgentOptionsData, refresh } from '@agent/index';
-import { arXivCommands } from '@commands/latex';
+import { arXivCommands } from '@commands/latex/arXivCommands';
 import { registerCommands } from '@commands/_shared/registerCommands';
 import { gitCommands } from '@commands/git/gitCommands';
 import { loadMainViewModelOptions } from '@frontend/agents/optionsLoader';
