@@ -7,9 +7,11 @@ import {
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import { ToolError } from '@shared/schemas/toolResult';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { WorkspaceFS } from '@utils/files';
 import { findExternalRoot } from '@utils/files/externalRoots';
 import { locatePathInRoot } from '@utils/files/workspaceRoot';
+import { readPlatformSetting } from '@utils/config/platformSettings';
 import {
   getPathSegments,
   isPathWithin,
@@ -87,6 +89,16 @@ export function resolveWorkspaceRelativePath(
 ): WorkspacePathResolution {
   const trimmed = targetPath?.trim();
   const input = !trimmed || trimmed === '.' ? '' : trimmed;
+  let restrictPaths: boolean | undefined;
+  const pathsAreRestricted = (): boolean => {
+    // This setting deliberately uses the same workspaceState slot in every
+    // host. Do not add a CLI-specific store without also making host identity
+    // explicit at this enforcement boundary.
+    restrictPaths ??= readPlatformSetting<boolean>(
+      WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
+    );
+    return restrictPaths;
+  };
 
   if (root) {
     // Absolute paths need special handling — locatePathInRoot only works with relative paths.
@@ -98,6 +110,9 @@ export function resolveWorkspaceRelativePath(
         const external = externalAllowance(input);
         if (external) {
           return external;
+        }
+        if (!pathsAreRestricted()) {
+          return unrestrictedExternalResolution(input);
         }
         throw new ToolError('Path must stay within the working directory.');
       }
@@ -113,6 +128,9 @@ export function resolveWorkspaceRelativePath(
       // registry, so reuse that match instead of paying for a second lookup.
       if (resolved.allowed) {
         return externalResolution(resolved.absolutePath, resolved.allowed);
+      }
+      if (!pathsAreRestricted()) {
+        return unrestrictedExternalResolution(resolved.absolutePath);
       }
       throw new ToolError('Path must stay within the working directory.');
     }
@@ -131,6 +149,9 @@ export function resolveWorkspaceRelativePath(
       if (external) {
         return external;
       }
+      if (!pathsAreRestricted()) {
+        return unrestrictedExternalResolution(input);
+      }
     }
     throw new ToolError('Workspace path is not available.');
   }
@@ -141,11 +162,25 @@ export function resolveWorkspaceRelativePath(
     if (resolved.allowed) {
       return externalResolution(resolved.absolutePath, resolved.allowed);
     }
+    if (!pathsAreRestricted()) {
+      return unrestrictedExternalResolution(resolved.absolutePath);
+    }
     throw new ToolError('Path must stay within the workspace.');
   }
 
   const relative = resolved.relativePath || '.';
   return { relative, absolute: resolved.absolutePath, fsPath: relative };
+}
+
+/** Build the ordinary external-path shape when containment is explicitly off. */
+function unrestrictedExternalResolution(
+  absolutePath: string,
+): WorkspacePathResolution {
+  return {
+    relative: absolutePath,
+    absolute: absolutePath,
+    fsPath: absolutePath,
+  };
 }
 
 /**
