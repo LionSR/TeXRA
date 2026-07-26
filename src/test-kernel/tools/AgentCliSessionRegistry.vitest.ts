@@ -194,6 +194,30 @@ describe('AgentCliSessionRegistry', () => {
     }
   });
 
+  it('interrupts an in-flight loop without promoting its reserved resume id', () => {
+    const registry = new AgentCliSessionRegistry('test_session_id');
+    const executionId = 'execution-in-flight' as ExecutionId;
+    const interrupt = vi.fn();
+    const releaseClaim = registry.claim('reserved-session');
+
+    registry.trackInFlight({
+      childStreamId: 'child-in-flight' as StreamTabId,
+      executionId,
+      executions: {
+        getAgentHandleByStream: () => ({ interrupt }),
+      } as any,
+    });
+
+    expect(registry.lookup('reserved-session')).toBeUndefined();
+    registry.interruptAll();
+    expect(interrupt).toHaveBeenCalledOnce();
+
+    registry.releaseByExecutionId(executionId);
+    registry.interruptAll();
+    expect(interrupt).toHaveBeenCalledOnce();
+    releaseClaim?.();
+  });
+
   it('interrupts each child through the execution registry that owns the session', () => {
     const registry = new AgentCliSessionRegistry('test_session_id');
     const ownerA = new ExecutionRegistry();

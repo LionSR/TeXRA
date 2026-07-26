@@ -10,6 +10,10 @@ import { setOutputChannelFactory } from '@logger/logUtils';
 import type { StreamTabId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UsageLogService } from '@telemetry/UsageLogService';
+import {
+  ClaudeAgentSessions,
+  CodexThreads,
+} from '@tools/agentCliSessionStores';
 import { getSetupPlatform } from '@tools/setup/platform';
 
 type SignalSpyEvent = 'SIGINT' | 'SIGTERM';
@@ -277,6 +281,37 @@ describe('CLI platform init', () => {
     expect(vi.mocked(UsageLogService.dispose)).not.toHaveBeenCalled();
     for (const handler of mocks.shutdownHandlers) await handler();
     expect(vi.mocked(UsageLogService.dispose)).toHaveBeenCalled();
+  });
+
+  it('registers the agent shutdown drain on first platform init', async () => {
+    // Regression: the CLI was the one host that never registered these, so a
+    // background `bash` run (spawned detached, in its own process group) and
+    // any live codex / claude_agent session outlived `texra` as orphans.
+    // Asserted through the real `registerAgentShutdownHandlers` and its
+    // observable effect on shutdown, not by mocking the @agent module.
+    const interruptCodex = vi
+      .spyOn(CodexThreads, 'interruptAll')
+      .mockImplementation(() => {});
+    const interruptClaude = vi
+      .spyOn(ClaudeAgentSessions, 'interruptAll')
+      .mockImplementation(() => {});
+    mocks.tryPlatform.mockReturnValueOnce(undefined);
+    isAuthenticatedSpy.mockResolvedValue(false);
+
+    try {
+      await initCliPlatform(cliContext({ installSignalHandlers: false }));
+
+      // Registration alone must not interrupt anything; the drain belongs to
+      // the CLI lifecycle host every exit path runs (bin/texra.ts's finally,
+      // the signal handlers, the TUI's exitNow).
+      expect(interruptCodex).not.toHaveBeenCalled();
+      for (const handler of mocks.shutdownHandlers) await handler();
+      expect(interruptCodex).toHaveBeenCalledOnce();
+      expect(interruptClaude).toHaveBeenCalledOnce();
+    } finally {
+      interruptCodex.mockRestore();
+      interruptClaude.mockRestore();
+    }
   });
 
   it('marks the operator-terminal console sink as trusted', async () => {
