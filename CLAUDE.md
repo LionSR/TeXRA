@@ -119,8 +119,10 @@ Full patterns: AGENTS.md "Zod v4 Schema Patterns".
 ## Agent system
 
 Core lives in `src/agent/`: `core/` is the host-agnostic domain model (see
-`src/agent/core/README.md`), `implementations/flows/` holds the PocketFlow
-flows (`reflection`, `tooluse`, `agentCreator`), and `modelHandlers/` abstracts
+`src/agent/core/README.md`), `implementations/flows/` holds the two PocketFlow
+flows (`reflection`, `tooluse`) plus `agentCreator/`, which despite the
+directory and filename is _not_ a flow — it is one linear async function
+(`runAgentCreator`) with a single production caller. `modelHandlers/` abstracts
 provider APIs. Agents are configured by YAML in
 `packages/extension/resources/agents/`, one unified YAML per agent covering
 single and multi-document output.
@@ -131,7 +133,13 @@ lower-level `executeAgent` only when you already own the `executionId` (subagent
 dispatch, resume paths). Resume a persisted tool-use session via
 `resumeToolUseFromResumeData`, not `runAgent`. PocketFlow conventions and the
 services/shared-store split: AGENTS.md "Patterns across the codebase"
-(PocketFlow architecture) and `docs/pocketflow/`.
+(PocketFlow architecture) and `docs/pocketflow/state_architecture.md`.
+
+**The flow engine is local, not upstream PocketFlow.** `src/agent/node/index.ts`
+(~250 lines, built on `p-retry`) is the only definition of `BaseNode`, `Node`,
+and `Flow`. Upstream's `BatchNode`/`BatchFlow`,
+`ParallelBatchNode`/`ParallelBatchFlow`, and the `params`/`setParams` channel do
+not exist here — read the file rather than upstream docs.
 
 ## Design guardrails
 
