@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // Standard library imports
 
 // Local imports
+import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { platform } from '@platform/platform';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -160,5 +162,35 @@ describe('GrepTool execution', () => {
         true,
       );
     }
+  });
+
+  it('retains workspace ignore files for an explicit working directory', async () => {
+    vi.spyOn(gitignoreUtils, 'getGitignoreMatcher').mockResolvedValue({
+      hasRules: true,
+      ignores: () => false,
+      ignoreFiles: ['/workspace/.gitignore'],
+    });
+    const executeSpy = vi.spyOn(execUtils, 'executeCommand').mockResolvedValue({
+      success: true,
+      stdout: null,
+      stderr: null,
+      timedOut: false,
+      exitCode: 1,
+    });
+
+    const result = await withRunContext(
+      createRunContext({
+        runtimeHost: noopAgentRuntimeHost,
+        workingDirectory: '/outside/worktree',
+      }),
+      () =>
+        new GrepTool().call({
+          pattern: 'external',
+          output_mode: 'content',
+        }),
+    );
+
+    expect(result.status).toBe('executed');
+    expect(executeSpy.mock.calls[0]?.[0]).toContain('--ignore-file');
   });
 });
