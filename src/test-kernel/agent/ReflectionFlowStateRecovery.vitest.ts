@@ -74,22 +74,24 @@ async function runPersistedReflectionFlow(
   streamId: StreamTabId,
 ): Promise<Awaited<ReturnType<typeof runReflectionFlow>>> {
   const session = createTestSession();
+  const runScope = createRunScope({
+    runtimeHost: noopAgentRuntimeHost,
+    streamId,
+    executionId,
+    agentName: CONFIG.agent,
+    session,
+  });
   const context = createRunContext({
     modelSource: 'live',
     getModel: () => CONFIG.model,
-    runScope: createRunScope({
-      runtimeHost: noopAgentRuntimeHost,
-      streamId,
-      executionId,
-      agentName: CONFIG.agent,
-      session,
-    }),
+    runScope,
   });
 
   try {
     return await withRunContext(context, () =>
       runReflectionFlow({
         config: CONFIG,
+        runScope,
         setting: SETTING,
         prompt: PROMPT,
         logger: noopTrace,

@@ -15,7 +15,7 @@ import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createRunTrace, StreamLogStore } from '@transcript';
 
 // Local file imports
-import { withTestRunContext } from '../progressTestUtils';
+import { testRunScope, withTestRunContext } from '../progressTestUtils';
 
 /**
  * Fields identical across every `ToolUseRoundServices` fixture below --
@@ -24,6 +24,7 @@ import { withTestRunContext } from '../progressTestUtils';
  */
 function baseRoundServices(traceLabel: string) {
   return {
+    runScope: testRunScope('test-stream'),
     checkInterruption: () => false,
     client: {},
     config: { agent: 'test-agent', model: 'test-model' },

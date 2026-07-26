@@ -9,12 +9,17 @@ import type {
   WaitExecResult,
 } from '@agent/implementations/flows/tooluse/nodes/types';
 import type { ToolUseServices } from '@agent/implementations/flows/tooluse/ToolUseServices';
-import { toolUseRunShared, withTestRunContext } from '../progressTestUtils';
+import {
+  testRunScope,
+  toolUseRunShared,
+  withTestRunContext,
+} from '../progressTestUtils';
 
 function buildServices(
   overrides: Partial<ToolUseServices<unknown>> = {},
 ): ToolUseServices<unknown> {
   return {
+    runScope: testRunScope('test-stream'),
     logger: Object.assign(new TraceEmitter(), {
       debug: vi.fn(),
       info: vi.fn(),
