@@ -14,13 +14,11 @@ import PQueue from 'p-queue';
 
 import type { StreamTabId } from '@shared/schemas';
 
+import {
+  type ApprovalBypassKind,
+  SessionHostInteractions,
+} from './HostInteractions';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
-
-/** Progress events that announce per-stream approval-bypass changes. */
-type ApprovalBypassEvent =
-  | 'updateToolEditApprovalBypassState'
-  | 'updateBashApprovalBypassState'
-  | 'updateSuperYoloBypassState';
 
 /** The three independently-tracked bypass kinds `SessionApprovals` owns. */
 type BypassAncestryKind = 'toolEdit' | 'bash' | 'proposal';
@@ -32,7 +30,7 @@ const ALL_BYPASS_ANCESTRY_KINDS: readonly BypassAncestryKind[] = [
 ];
 
 /**
- * Per-stream bypass state bound to the progress event that announces it.
+ * Per-stream bypass state bound to the host interaction that announces it.
  *
  * Single implementation behind the tool-edit, bash, and proposal (super-YOLO)
  * bypass values, so set/clear semantics and UI notification stay uniform
@@ -47,8 +45,8 @@ const ALL_BYPASS_ANCESTRY_KINDS: readonly BypassAncestryKind[] = [
 export interface StreamApprovalBypass {
   isBypassed(streamId: StreamTabId): boolean;
   /**
-   * Set bypass for a stream. Emits the bound progress event when a
-   * `runtimeHost` is provided (unless `silent`); omit the host for
+   * Set bypass for a stream. Notifies the active host interaction when a
+   * `runtimeHost` is provided (unless `silent`); omit the runtime host for
    * pre-activation setup where no UI exists yet.
    */
   setBypass(
@@ -62,7 +60,8 @@ export interface StreamApprovalBypass {
 }
 
 function createStreamApprovalBypass(
-  event: ApprovalBypassEvent,
+  kind: ApprovalBypassKind,
+  interactions: Pick<SessionHostInteractions, 'setApprovalBypassState'>,
   resolveParent: (streamId: StreamTabId) => StreamTabId | undefined,
   resolveDescendants: (streamId: StreamTabId) => readonly StreamTabId[],
 ): StreamApprovalBypass {
@@ -93,12 +92,17 @@ function createStreamApprovalBypass(
     );
     byStream.set(streamId, enabled);
     if (runtimeHost && !options?.silent) {
-      runtimeHost.emit(event, { streamId, bypassActive: enabled });
+      interactions.setApprovalBypassState({
+        streamId,
+        kind,
+        bypassActive: enabled,
+      });
       for (const descendant of descendants) {
         const bypassActive = resolve(descendant);
         if (previousDescendantStates.get(descendant) !== bypassActive) {
-          runtimeHost.emit(event, {
+          interactions.setApprovalBypassState({
             streamId: descendant,
+            kind,
             bypassActive,
           });
         }
@@ -127,7 +131,8 @@ interface StreamApprovalController {
 }
 
 interface StreamApprovalControllerOptions {
-  bypassEvent: ApprovalBypassEvent;
+  kind: ApprovalBypassKind;
+  interactions: Pick<SessionHostInteractions, 'setApprovalBypassState'>;
   resolveParent: (streamId: StreamTabId) => StreamTabId | undefined;
   resolveDescendants: (streamId: StreamTabId) => readonly StreamTabId[];
 }
@@ -139,7 +144,8 @@ function createStreamApprovalController(
 
   return {
     bypass: createStreamApprovalBypass(
-      options.bypassEvent,
+      options.kind,
+      options.interactions,
       options.resolveParent,
       options.resolveDescendants,
     ),
@@ -223,7 +229,12 @@ export interface SessionApprovals {
   clearAll(): void;
 }
 
-export function createSessionApprovals(): SessionApprovals {
+export function createSessionApprovals(
+  interactions: Pick<
+    SessionHostInteractions,
+    'setApprovalBypassState'
+  > = new SessionHostInteractions(),
+): SessionApprovals {
   // One ancestry graph per bypass kind — deliberately NOT shared — so that
   // e.g. linking `bash` ancestry for a delegated subagent can never let it
   // also inherit `toolEdit` or `proposal` bypass from the same parent.
@@ -256,17 +267,20 @@ export function createSessionApprovals(): SessionApprovals {
     };
 
   const toolEdit = createStreamApprovalController({
-    bypassEvent: 'updateToolEditApprovalBypassState',
+    kind: 'toolEdit',
+    interactions,
     resolveParent: resolveParentFor('toolEdit'),
     resolveDescendants: resolveDescendantsFor('toolEdit'),
   });
   const bash = createStreamApprovalController({
-    bypassEvent: 'updateBashApprovalBypassState',
+    kind: 'bash',
+    interactions,
     resolveParent: resolveParentFor('bash'),
     resolveDescendants: resolveDescendantsFor('bash'),
   });
   const proposal = createStreamApprovalBypass(
-    'updateSuperYoloBypassState',
+    'superYolo',
+    interactions,
     resolveParentFor('proposal'),
     resolveDescendantsFor('proposal'),
   );

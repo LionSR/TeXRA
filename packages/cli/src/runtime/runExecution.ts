@@ -186,6 +186,8 @@ export async function executeCliRequest(
   const detachHostInteractions = session.useHostInteractions(
     createHeadlessCliHostInteractions(runContext, {
       beforePrompt: () => runtimeHost.prepareInteractivePrompt?.(),
+      setApprovalBypassState: (update) =>
+        runtimeHost.emitApprovalBypassState(update),
     }),
   );
   // Present terminal-error toasts from the run's `result` event through the same

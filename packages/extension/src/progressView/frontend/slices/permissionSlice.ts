@@ -91,10 +91,16 @@ export const permissionHandlers = {
   [PROGRESS_VIEW_COMMANDS.UPDATE_BYPASS]: (data) => {
     updateToolUseState(data.stream, (prev) =>
       create(prev, (draft) => {
-        if (data.type === 'toolEdit') {
-          draft.toolEditBypass = data.bypassActive;
-        } else {
-          draft.superYoloBypass = data.bypassActive;
+        switch (data.type) {
+          case 'bash':
+            draft.bashBypass = data.bypassActive;
+            break;
+          case 'toolEdit':
+            draft.toolEditBypass = data.bypassActive;
+            break;
+          case 'superYolo':
+            draft.superYoloBypass = data.bypassActive;
+            break;
         }
       }),
     );

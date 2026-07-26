@@ -151,7 +151,8 @@ export class SessionHandle {
     const status = new StreamStatusMachine(events);
     const transcripts = init.transcripts;
     const followUps = init.followUps ?? new ToolUseFollowUpQueue();
-    const approvals = createSessionApprovals();
+    const interactions = init.interactions ?? new SessionHostInteractions();
+    const approvals = createSessionApprovals(interactions);
     const executions =
       init.executions ??
       new ExecutionRegistry({ streamStatus: status, events });
@@ -180,7 +181,7 @@ export class SessionHandle {
     // host has to construct, attach, and flush one of its own.
     this.snapshots = init.snapshots ?? new StreamSnapshotStore();
     this.detachSnapshotEvents = this.snapshots.attachSessionEvents(events);
-    this.interactions = init.interactions ?? new SessionHostInteractions();
+    this.interactions = interactions;
     this.approvals = approvals;
     this.modelRetries = init.modelRetries ?? new ModelRetryGate();
     this.workflowControls =

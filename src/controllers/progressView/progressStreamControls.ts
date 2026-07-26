@@ -3,6 +3,7 @@ import type { ProgressStreamControls } from '@controllers/progressView/backend/e
 import type { StreamTabId } from '@shared/schemas';
 import {
   isApprovalBypassedForStream,
+  isBashApprovalBypassedForStream,
   proposalApprovals,
 } from '@tools/approval';
 import { GoalStore } from '@tools/goal';
@@ -13,6 +14,7 @@ export function getProgressStreamControls(
 ): ProgressStreamControls {
   const goal = GoalStore.getForStream(streamId);
   const bypasses = {
+    bashBypass: isBashApprovalBypassedForStream(streamId, session),
     toolEditBypass: isApprovalBypassedForStream(streamId, session),
     superYoloBypass: proposalApprovals(session).isBypassed(streamId),
   };
