@@ -11,7 +11,7 @@ import type { ConfigProvider, ConfigTarget } from '@platform/interfaces';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { DEFAULT_TOOL_PATH_PROTECTION_ENABLED } from '@shared/schemas/stateSettings';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import type { UpdateApprovalSettingsMessage } from '@shared/schemas/settingsViewMessages';
+import type { UpdateApprovalAndSafetySettingsMessage } from '@shared/schemas/settingsViewMessages';
 import {
   BASH_APPROVAL_CONFIG_KEY,
   CLAUDE_AGENT_DEFAULT_EFFORT,
@@ -44,7 +44,7 @@ export const BASH_APPROVAL_CONFIG_TARGET: ConfigTarget = 'workspace';
 
 export function buildApprovalSettingsMessage(
   ports: ApprovalHandlerPorts,
-): UpdateApprovalSettingsMessage {
+): UpdateApprovalAndSafetySettingsMessage {
   const { workspaceState, config } = ports;
 
   // Read a workspace-state string (with default) and parse it to its enum.

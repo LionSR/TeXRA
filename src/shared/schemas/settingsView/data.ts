@@ -315,7 +315,14 @@ const UpdateToolDashboardMessageSchema = z.object({
 // ============================================================
 
 /** Outbound: backend → frontend approval settings */
-const UpdateApprovalSettingsMessageSchema = z.object({
+/**
+ * Outbound snapshot for workspace execution permissions and safety.
+ *
+ * The command string predates the Codex, Claude, and tool-path controls it now
+ * carries. Keep that stable wire discriminator while naming the schema by its
+ * actual broader role.
+ */
+const UpdateApprovalAndSafetySettingsMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS),
   bashApprovalEnabled: z.boolean(),
   toolPathProtectionEnabled: z.boolean(),
@@ -326,8 +333,8 @@ const UpdateApprovalSettingsMessageSchema = z.object({
   claudeAgentPermissionMode: ClaudeAgentPermissionModeSchema,
   claudeAgentEffort: ClaudeAgentEffortSchema,
 });
-export type UpdateApprovalSettingsMessage = z.infer<
-  typeof UpdateApprovalSettingsMessageSchema
+export type UpdateApprovalAndSafetySettingsMessage = z.infer<
+  typeof UpdateApprovalAndSafetySettingsMessageSchema
 >;
 
 /** Outbound: backend → frontend agent skill-catalog setting. */
@@ -539,7 +546,7 @@ const SettingsViewOutboundMessageSchema = z.discriminatedUnion('command', [
   UpdateCustomAgentDirMessageSchema,
   UpdateSuperYoloEnabledMessageSchema,
   UpdateAgentModePresetsMessageSchema,
-  UpdateApprovalSettingsMessageSchema,
+  UpdateApprovalAndSafetySettingsMessageSchema,
   UpdateAgentSkillsSettingsMessageSchema,
   UpdateToolDashboardMessageSchema,
   UpdateGitAuthorSettingsMessageSchema,
