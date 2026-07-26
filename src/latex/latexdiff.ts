@@ -7,7 +7,7 @@ import * as logger from '@logger/logUtils';
 import type { FileLocation } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { FlexibleFS, pathToLocation } from '@utils/files';
-import { executeCommand } from '@utils/system';
+import { executeCommand } from '@utils/system/execUtils';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 import { runLatexFormatter } from './texFormatter';
 import {

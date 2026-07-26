@@ -19,8 +19,8 @@ vi.mock('vscode', () => ({
     showWarningMessage: mocks.showWarningMessage,
   },
 }));
-vi.mock('@utils/config', async (importActual) => ({
-  ...(await importActual<typeof import('@utils/config')>()),
+vi.mock('@utils/config/constants', async (importActual) => ({
+  ...(await importActual<typeof import('@utils/config/constants')>()),
   getToolUsePersistenceEnabled: mocks.getToolUsePersistenceEnabled,
 }));
 vi.mock('@agent/runtime/resumeQueuedToolUse', () => ({

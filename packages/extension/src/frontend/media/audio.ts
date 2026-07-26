@@ -8,7 +8,7 @@ import { getSdkErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS, StorageFS } from '@utils/files';
 import { delay } from '@utils/core';
-import { THREE_DAYS_MS } from '@utils/config';
+import { THREE_DAYS_MS } from '@utils/config/constants';
 import { getConfig } from '@utils/config/configUtils';
 import {
   BinaryResolver,

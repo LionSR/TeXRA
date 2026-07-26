@@ -170,7 +170,7 @@ async function createHarness(
   vi.resetModules();
   emitCiStartedEvents = options.emitCiStartedEvents ?? false;
   const ghGet = vi.fn();
-  vi.doMock('@utils/config', () => ({
+  vi.doMock('@utils/config/configUtils', () => ({
     getConfig: vi.fn((_key: string, defaultValue: unknown) =>
       emitCiStartedEvents ? true : defaultValue,
     ),
@@ -199,7 +199,7 @@ function queuePollResponses(
 describe('PRPollingSource CI-started events', () => {
   afterEach(() => {
     vi.doUnmock('@tools/github/githubClient');
-    vi.doUnmock('@utils/config');
+    vi.doUnmock('@utils/config/configUtils');
     emitCiStartedEvents = false;
     vi.resetModules();
   });

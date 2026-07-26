@@ -34,10 +34,9 @@ import {
   type CurrentFileType,
   type ExtendedDocumentFileType,
 } from '@shared/schemas/fileTypes';
-import { WorkspaceFS } from '@utils/files';
-
-import { getConfig } from '@utils/config';
 import { getFileStem } from '@utils/core';
+import { WorkspaceFS } from '@utils/files';
+import { getConfig } from '@utils/config/configUtils';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import { BaseWebviewManager } from './BaseWebviewManager';
