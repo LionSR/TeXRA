@@ -22,7 +22,8 @@ import {
   clearStreamStatusForTest,
   seedStreamStatusForTest,
 } from '@test/helpers/streamStatusTestUtils';
-import { createChildStream } from '@tools/childStream';
+import { launchAgentCliSession } from '@tools/agentCliShared';
+import { createChildStream, type ChildStream } from '@tools/childStream';
 
 // Local file imports
 import {
@@ -471,6 +472,64 @@ describe('child stream progress events', () => {
       });
     } finally {
       recorded.detach();
+    }
+  });
+
+  it('finalizes a child stream when agent CLI loop setup fails synchronously', async () => {
+    const active = createRecordingHost();
+    const setupError = new Error('child loop setup failed');
+    const session = defaultSession();
+    const recorded = recordSessionEvents(session.events);
+    let childStream: ChildStream | undefined;
+    let childExecutionId: ExecutionId | undefined;
+    let handle: ReturnType<typeof session.executions.getAgentHandleByStream>;
+
+    try {
+      await expect(
+        launchAgentCliSession({
+          parentStreamId,
+          parentExecutionId: undefined,
+          runtimeHost: active.host,
+          agentName: 'codex',
+          streamPrefix: 'codex',
+          description: 'Fail during synchronous loop setup',
+          config,
+          registerFailedMessage: 'registration failed',
+          startLoop: (context) => {
+            childStream = context.childStream;
+            childExecutionId = context.executionId;
+            handle = session.executions.getAgentHandleByStream(
+              context.childStream.childStreamId,
+            );
+            throw setupError;
+          },
+          summary: 'unreachable',
+          launchedLine: 'unreachable',
+          followUpLine: 'unreachable',
+        }),
+      ).rejects.toBe(setupError);
+
+      expect(childStream).toBeDefined();
+      expect(childExecutionId).toBeDefined();
+      expect(handle).toBeDefined();
+      if (!childStream || !childExecutionId || !handle) {
+        throw new Error('expected the failed child launch to be captured');
+      }
+      expect(session.executions.getHandle(childExecutionId)).toBeUndefined();
+      expect(session.status.get(childStream.childStreamId)).toBe(
+        STREAM_PHASE.FAILED,
+      );
+      await expect(handle.result).resolves.toMatchObject({
+        type: 'result',
+        outcome: 'failed',
+        executionId: childExecutionId,
+        streamId: childStream.childStreamId,
+      });
+    } finally {
+      recorded.detach();
+      if (childStream) {
+        clearStreamStatusForTest(session.status, childStream.childStreamId);
+      }
     }
   });
 

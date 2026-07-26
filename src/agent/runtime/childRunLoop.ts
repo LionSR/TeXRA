@@ -560,11 +560,12 @@ export function startChildRunLoop<TTurn>(
       : undefined;
   } catch (error) {
     // Preserve the setup error while unwinding every resource acquired so far.
+    const cleanupErrors: unknown[] = [];
     const cleanup = (operation: () => void): void => {
       try {
         operation();
-      } catch {
-        // Setup is already failing; continue the remaining cleanup.
+      } catch (cleanupError) {
+        cleanupErrors.push(cleanupError);
       }
     };
     cleanup(() => sessionStage?.end(RUN_OUTCOME.FAILED));
@@ -575,6 +576,12 @@ export function startChildRunLoop<TTurn>(
     });
     cleanup(() => stopWatchingLease?.());
     cleanup(releaseSessionOwnershipOnce);
+    if (cleanupErrors.length > 0) {
+      throw new AggregateError(
+        [error, ...cleanupErrors],
+        `Child run ${executionId} setup failed and rollback was incomplete`,
+      );
+    }
     throw error;
   }
 

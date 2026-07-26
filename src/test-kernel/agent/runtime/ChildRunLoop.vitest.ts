@@ -285,6 +285,55 @@ describe('childRunLoop E2E fixtures', () => {
     }
   });
 
+  it('reports rollback failures after completing later cleanup actions', () => {
+    const childStreamId = uniqueStreamId('setup-rollback-failure');
+    const parentStreamId = 'parent' as StreamTabId;
+    const executionId = 'exec-setup-rollback-failure' as ExecutionId;
+    const setupError = new Error('loop registration failed');
+    const cleanupError = new Error('queue release failed');
+    const releaseSessionOwnership = vi.fn();
+    const handle = trackChildHandle(executionId, parentStreamId, childStreamId);
+    const registerLoop = vi
+      .spyOn(session.executions, 'registerChildRunLoop')
+      .mockImplementationOnce(() => {
+        throw setupError;
+      });
+    const releaseQueue = vi
+      .spyOn(session.followUps, 'release')
+      .mockImplementationOnce(() => {
+        throw cleanupError;
+      });
+    const { strategy } = createFakeStrategy();
+    let thrown: unknown;
+
+    try {
+      try {
+        startChildRunLoop({
+          childStreamId,
+          parentStreamId,
+          executionId,
+          agentName: 'fake-cli',
+          strategy: { ...strategy, releaseSessionOwnership },
+        });
+      } catch (error) {
+        thrown = error;
+      }
+
+      expect(thrown).toBeInstanceOf(AggregateError);
+      expect((thrown as AggregateError).errors).toEqual([
+        setupError,
+        cleanupError,
+      ]);
+      expect(releaseSessionOwnership).toHaveBeenCalledOnce();
+      expect(mocks.leaseLossListener).toBeUndefined();
+      expect(handle.interrupt()).toBe(false);
+    } finally {
+      registerLoop.mockRestore();
+      releaseQueue.mockRestore();
+      session.followUps.release(childStreamId);
+    }
+  });
+
   it.each([
     {
       name: 'CodexThreads',

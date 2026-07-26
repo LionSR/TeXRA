@@ -186,7 +186,7 @@ export async function launchAgentCliSession(
   const runWithOwnership = captureOwnedExecutionLease(executionId);
 
   return await runWithOwnership(async () => {
-    let childStream: ChildStream;
+    let childStream: ChildStream | undefined;
     try {
       childStream = createChildStream(executionId, params.parentStreamId, {
         streamPrefix: params.streamPrefix,
@@ -200,7 +200,21 @@ export async function launchAgentCliSession(
       });
       await params.startLoop({ childStream, executionId });
     } catch (error) {
-      throw await releaseOwnedExecutionLeaseAfterFailure(executionId, error);
+      let failure = error;
+      if (childStream) {
+        try {
+          await childStream.finalize({
+            outcome: { kind: 'failed', error },
+            persistence: { kind: 'finalize', flowRecord: 'delete' },
+          });
+        } catch (finalizeError) {
+          failure = new AggregateError(
+            [error, finalizeError],
+            `Agent CLI execution ${executionId} failed and its child stream could not be finalized`,
+          );
+        }
+      }
+      throw await releaseOwnedExecutionLeaseAfterFailure(executionId, failure);
     }
 
     return {
