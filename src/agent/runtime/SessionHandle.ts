@@ -422,6 +422,13 @@ export class SessionHandle {
 /** Live sessions whose background processes must be stopped at shutdown. */
 const liveSessions = new Set<SessionHandle>();
 
+function hasLiveNonDefaultSession(processDefault: SessionHandle): boolean {
+  for (const session of liveSessions) {
+    if (session !== processDefault) return true;
+  }
+  return false;
+}
+
 /** Stop background OS processes owned by every live runtime session. */
 export function killAllSessionBackgroundProcesses(): void {
   for (const session of liveSessions) {
@@ -474,16 +481,21 @@ export function defaultSession(): SessionHandle {
       'The default session has not been initialized. Call initializeDefaultSession() after opening its transcript store.',
     );
   }
+  const processDefault = cachedDefaultSession;
   if (
     !defaultSessionFallbackWarned &&
-    [...liveSessions].some((session) => session !== cachedDefaultSession)
+    hasLiveNonDefaultSession(processDefault)
   ) {
     defaultSessionFallbackWarned = true;
-    logger.warn(
-      'defaultSession() resolved while a non-default SessionHandle was live. Pass or propagate the owning session instead.',
-    );
+    try {
+      logger.warn(
+        'defaultSession() resolved while a non-default SessionHandle was live. Pass or propagate the owning session instead.',
+      );
+    } catch {
+      // Diagnostics must not break the sanctioned fallback.
+    }
   }
-  return cachedDefaultSession;
+  return processDefault;
 }
 
 /**
