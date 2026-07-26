@@ -13,7 +13,6 @@ import { describe, it, afterEach } from 'vitest';
 
 // Local imports
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   AgentExecutionHandle,
@@ -438,9 +437,7 @@ describe('ToolUseFollowUp', () => {
 
     const result = { status: 'queued' as const, reason: 'waiting' as const };
 
-    const routedSession = createTestSession({
-      status: new StreamStatusMachine(),
-    });
+    const routedSession = createTestSession();
     seedStreamStatusForTest(
       routedSession.status,
       parentStreamId,

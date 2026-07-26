@@ -331,26 +331,6 @@ const resumingStatusPayload: RunStatusProjectionPayload = {
   substate: STREAM_SUBSTATE.RESUMING,
 };
 
-function emitRunStatus(
-  events: SessionEventHub,
-  payload: RunStatusProjectionPayload,
-): void {
-  events.emit({
-    scope: 'run',
-    streamId,
-    event: {
-      type: 'status',
-      streamId: payload.streamId,
-      phase: payload.status,
-      cause: payload.cause,
-      ...(payload.previousStatus
-        ? { previousPhase: payload.previousStatus }
-        : {}),
-      ...(payload.substate ? { substate: payload.substate } : {}),
-    },
-  });
-}
-
 function emitSessionStatus(
   events: SessionEventHub,
   payload: UpdateStreamStatusPayload,
@@ -447,6 +427,26 @@ describe('attachCliSessionProgressProjection', () => {
     const detach = attachCliSessionProgressProjection(events, writeRecord);
 
     try {
+      emitSessionStatus(events, resumingStatusPayload);
+
+      expect(writeRecord).toHaveBeenCalledTimes(1);
+      expect(writeRecord).toHaveBeenCalledWith(
+        progressRecord('updateStreamStatus', resumingStatusPayload),
+      );
+    } finally {
+      detach();
+    }
+  });
+
+  it('ignores run-scope status trace events', () => {
+    const events = new SessionEventHub();
+    const writeRecord = recordWriter();
+    const detach = attachCliSessionProgressProjection(events, writeRecord);
+
+    try {
+      // `status` is no longer a projected run fact: `StreamStatusMachine` owns
+      // the single `updateStreamStatus` rail, so a stray run-scope status event
+      // must never reach the public NDJSON stream.
       events.emit({
         scope: 'run',
         streamId,
@@ -460,39 +460,13 @@ describe('attachCliSessionProgressProjection', () => {
         },
       });
 
-      expect(writeRecord).toHaveBeenCalledWith(
-        progressRecord('updateStreamStatus', {
-          streamId,
-          status: STREAM_PHASE.RUNNING,
-          previousStatus: STREAM_PHASE.WAITING,
-          cause: STREAM_TRANSITION_CAUSE.RESUME,
-          substate: STREAM_SUBSTATE.RESUMING,
-        }),
-      );
+      expect(writeRecord).not.toHaveBeenCalled();
     } finally {
       detach();
     }
   });
 
-  it('emits one NDJSON stream-status record for duplicate run-then-session status facts', () => {
-    const events = new SessionEventHub();
-    const writeRecord = recordWriter();
-    const detach = attachCliSessionProgressProjection(events, writeRecord);
-
-    try {
-      emitRunStatus(events, resumingStatusPayload);
-      emitSessionStatus(events, resumingStatusPayload);
-
-      expect(writeRecord).toHaveBeenCalledTimes(1);
-      expect(writeRecord).toHaveBeenCalledWith(
-        progressRecord('updateStreamStatus', resumingStatusPayload),
-      );
-    } finally {
-      detach();
-    }
-  });
-
-  it('keeps same-phase stream-status records when substate changes', () => {
+  it('writes one record per published status fact without renderer dedup', () => {
     const events = new SessionEventHub();
     const writeRecord = recordWriter();
     const detach = attachCliSessionProgressProjection(events, writeRecord);
@@ -502,7 +476,7 @@ describe('attachCliSessionProgressProjection', () => {
     };
 
     try {
-      emitRunStatus(events, resumingStatusPayload);
+      emitSessionStatus(events, resumingStatusPayload);
       emitSessionStatus(events, startingPayload);
 
       expect(writeRecord).toHaveBeenCalledTimes(2);
@@ -513,38 +487,6 @@ describe('attachCliSessionProgressProjection', () => {
       expect(writeRecord).toHaveBeenNthCalledWith(
         2,
         progressRecord('updateStreamStatus', startingPayload),
-      );
-    } finally {
-      detach();
-    }
-  });
-
-  it('forgets the last status when a stream is removed', () => {
-    const events = new SessionEventHub();
-    const writeRecord = recordWriter();
-    const detach = attachCliSessionProgressProjection(events, writeRecord);
-
-    try {
-      emitSessionStatus(events, resumingStatusPayload);
-      emitSessionStatus(events, resumingStatusPayload);
-      events.emit({
-        scope: 'session',
-        event: { type: 'removeStream', payload: { streamId } },
-      });
-      emitSessionStatus(events, resumingStatusPayload);
-
-      expect(writeRecord).toHaveBeenCalledTimes(3);
-      expect(writeRecord).toHaveBeenNthCalledWith(
-        1,
-        progressRecord('updateStreamStatus', resumingStatusPayload),
-      );
-      expect(writeRecord).toHaveBeenNthCalledWith(
-        2,
-        progressRecord('removeStream', { streamId }),
-      );
-      expect(writeRecord).toHaveBeenNthCalledWith(
-        3,
-        progressRecord('updateStreamStatus', resumingStatusPayload),
       );
     } finally {
       detach();
