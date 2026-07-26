@@ -172,8 +172,7 @@ export class ToolUseWaitNode<C> extends Node<
     prepRes: WaitPrepResult,
     execRes: WaitExecResult,
   ): Promise<string | undefined> {
-    const { onFollowUpConsumed, logger } = this.services;
-    const { runScope } = useLaunchRunContext();
+    const { onFollowUpConsumed, logger, runScope } = this.services;
     const { streamId, session } = runScope;
 
     if (execRes.kind === 'waiting') {

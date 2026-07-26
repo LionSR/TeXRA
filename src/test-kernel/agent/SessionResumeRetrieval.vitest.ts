@@ -153,16 +153,17 @@ async function runPersistedFlow(
     input: Object.freeze({ MODEL: config.model }),
     transient: {},
   };
+  const runScope = createRunScope({
+    runtimeHost: noopAgentRuntimeHost,
+    streamId,
+    executionId,
+    agentName: config.agent,
+    session,
+  });
   const context = createRunContext({
     modelSource: 'live',
     getModel: () => config.model,
-    runScope: createRunScope({
-      runtimeHost: noopAgentRuntimeHost,
-      streamId,
-      executionId,
-      agentName: config.agent,
-      session,
-    }),
+    runScope,
   });
   let interrupted = false;
 
@@ -171,6 +172,7 @@ async function runPersistedFlow(
       runToolUseFlow(
         {
           config,
+          runScope,
           setting: TOOL_USE_SETTING,
           prompt: TOOL_USE_PROMPT,
           logger: noopTrace,

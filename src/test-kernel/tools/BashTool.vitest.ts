@@ -63,6 +63,7 @@ import * as execUtils from '@utils/system/execUtils';
 import {
   createRecordingHost,
   recordSessionEvents,
+  testRunScope,
   withTestRunContext,
 } from '../agent/progressTestUtils';
 
@@ -165,6 +166,7 @@ function roundServices(opts: {
   setAbortController?: (controller: AbortController | null) => void;
 }): ToolUseRoundServices<OpenAI> {
   return {
+    runScope: testRunScope(opts.streamId),
     modelHandler: new BashMockHandler(testModelConfig),
     config: testModelConfig as any,
     setting: {
@@ -262,8 +264,11 @@ describe('BashTool', () => {
     // Create and run the flow directly
     const flow = createToolUseRoundFlow();
     flow.setServices(options);
-    await withTestRunContext(noopAgentRuntimeHost, 'bash-tool', () =>
-      flow.run(shared),
+    await withTestRunContext(
+      noopAgentRuntimeHost,
+      'bash-tool',
+      () => flow.run(shared),
+      { session: options.runScope.session },
     );
 
     const toolOutputMessage = messages.find(
@@ -520,27 +525,31 @@ describe('BashTool', () => {
 
       const node = new ToolUseDispatchNode<OpenAI>();
       node.setServices(options);
-      await withTestRunContext(noopAgentRuntimeHost, 'tool-status-log', () =>
-        node.post(
-          shared,
-          [call],
-          [
-            {
-              call,
-              result: {},
-              parsedInput: {},
-              extracted: {
-                attachments: [],
-                sanitizedResult: { status: 'executed' },
-              },
-              editedFiles: [],
-              logRef: {
-                logId: undefined,
-                groupId: runTrace.trace.activeStageId(),
-              },
-            } as any,
-          ],
-        ),
+      await withTestRunContext(
+        noopAgentRuntimeHost,
+        'tool-status-log',
+        () =>
+          node.post(
+            shared,
+            [call],
+            [
+              {
+                call,
+                result: {},
+                parsedInput: {},
+                extracted: {
+                  attachments: [],
+                  sanitizedResult: { status: 'executed' },
+                },
+                editedFiles: [],
+                logRef: {
+                  logId: undefined,
+                  groupId: runTrace.trace.activeStageId(),
+                },
+              } as any,
+            ],
+          ),
+        { session: options.runScope.session },
       );
 
       const completedEvent = events.findLast(
@@ -1003,6 +1012,7 @@ describe('BashTool', () => {
         noopAgentRuntimeHost,
         'bash-tool',
         () => node.exec(call),
+        { session: options.runScope.session },
       );
 
       assert.equal(result, null);

@@ -1,5 +1,4 @@
 import { Node } from '@agent/node';
-import { useLaunchRunContext } from '@agent/runtime/RunContext';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
 import type { RoundFileMapping } from '@agent/output/types';
 import type { CompiledPdfArtifact } from '@agent/output/compiledPdfArtifacts';
@@ -60,9 +59,9 @@ export class OutputNode<C = unknown> extends Node<
   ReflectionServices<C>
 > {
   private outputDependencies(): OutputDependencies {
-    const { runScope } = useLaunchRunContext();
+    const { baseFiles, config, fileService, logger, setting, runScope } =
+      this.services;
     const { runtimeHost, streamId } = runScope;
-    const { baseFiles, config, fileService, logger, setting } = this.services;
 
     return {
       baseFiles,

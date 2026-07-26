@@ -235,8 +235,11 @@ export function getRunContextSession(
  * Flow nodes only ever execute inside `withExecutionRunContext` (in
  * `AgentLaunchContext.ts`), which always projects a `launch` context — the
  * `bare` variant of `createRunContext` is exclusively for manually
- * constructed test/one-shot tool contexts. Use this instead of re-deriving
- * these fields on the flow-service bag.
+ * constructed test/one-shot tool contexts.
+ *
+ * Code holding a flow-service bag reads `services.runScope` directly (the same
+ * frozen object, declared on `AgentCore`); this accessor is the fallback for
+ * code that holds no bag, chiefly the `src/tools/` layer.
  */
 export function useLaunchRunContext(): LaunchRunContext {
   const context = useRunContext();
