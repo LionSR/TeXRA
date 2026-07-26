@@ -10,7 +10,6 @@ import {
 import { XmlOutputManager } from '@agent/output/XmlOutputManager';
 import { LatexDiffManager } from '@agent/output/LatexDiffManager';
 import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
-import { useLaunchRunContext } from '@agent/runtime/RunContext';
 import { activeModelHandlerCompatibilityKey } from '@agent/runtime/ModelFactory';
 import { inferAndLogPersistedModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityInference';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
@@ -101,8 +100,8 @@ export async function runReflectionFlow<C = unknown>(
     userVarChannels,
     checkInterruption,
     onRoundFinalized,
+    runScope,
   } = input;
-  const { runScope } = useLaunchRunContext();
   const { runtimeHost, streamId, executionId, session: runSession } = runScope;
   // Capture the run's scope at setup; the interrupt closure below fires from
   // the host thread outside the ALS.

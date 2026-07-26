@@ -11,7 +11,7 @@ import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { CreateResponseOptions } from '@agent/types/ModelHandlerContracts';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import { createRunTrace, StreamLogStore } from '@transcript';
-import { withTestRunContext } from '../progressTestUtils';
+import { testRunScope, withTestRunContext } from '../progressTestUtils';
 
 function buildRound(supportsForcedToolChoice: boolean) {
   const requests: CreateResponseOptions[] = [];
@@ -58,6 +58,7 @@ function buildRound(supportsForcedToolChoice: boolean) {
     checkInterruption: () => false,
     client: {},
     config: { agent: 'test-agent', model: 'test-model' },
+    runScope: testRunScope('final-tool-synthesis'),
     fileService: {
       createLocation: (filePath: string) => ({ absolutePath: filePath }),
     },
