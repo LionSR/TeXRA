@@ -524,10 +524,6 @@ export function runPanelAction(action: ActionDetail['action']): void {
     case 'record':
       toggleRecording();
       break;
-    case 'erase':
-      setInstruction('');
-      saveState();
-      break;
   }
 }
 
