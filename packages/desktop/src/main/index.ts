@@ -1268,9 +1268,9 @@ if (protocolLifecycle.shouldContinue) {
             ? join(app.getPath('userData'), 'streams.json')
             : undefined,
         });
+        disposeProcessStores = () => processStores.dispose();
         await processSession.waitUntilReady();
         sessionStores = processStores.stores;
-        disposeProcessStores = () => processStores.dispose();
         disposeAgentResumeHandler = processResumeOwner.attach({
           session: processSession,
         });
