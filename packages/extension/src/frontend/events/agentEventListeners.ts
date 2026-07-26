@@ -1,20 +1,28 @@
 /**
- * Frontend listeners for events emitted by agent core/runtime.
+ * Frontend handlers for presentation events emitted by agent core/runtime.
  *
- * These listeners bridge the gap between the agent layer (which must not
- * import from @frontend/) and the VS Code UI. The extension runtime host
- * routes presentation requests to the extension presentation channel; this
- * module subscribes and performs the actual UI operations.
+ * These bridge the gap between the agent layer (which must not import from
+ * @frontend/) and the VS Code UI. `createAgentPresentationHost` builds the
+ * `AgentRuntimeHost` the extension's `HostInteractions` adapter forwards
+ * `emit` calls to (see `progressView/extensionHostInteractions.ts`); this
+ * module performs the actual UI operations for each event.
  */
 import * as vscode from 'vscode';
 
-import { defaultSession } from '@agent/runtime/SessionHandle';
-import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
+import type {
+  AgentRuntimeEvent,
+  AgentRuntimeEventPayloads,
+  AgentRuntimeHost,
+} from '@agent/runtime/AgentRuntimeHost';
+import { isRuntimePresentationEvent } from '@agent/runtime/runtimePresentationEvents';
+import {
+  isProgressBackendInteractionEvent,
+  type ProgressBackendInteractionPayloads,
+} from '@controllers/progressView/backend/events/ProgressInteractionHandler';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
-import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
-import { extensionPresentationEvents } from '@frontend/events/extensionPresentationEvents';
+import { emitExtensionInteractionEvent } from '@frontend/events/extensionInteractionEvents';
 import * as logger from '@logger/logUtils';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import {
@@ -136,47 +144,66 @@ async function handleRequestEnsureProgressView(
 }
 
 /**
- * Register all agent→frontend event listeners.
- * Returns a Disposable that cleans up all subscriptions.
+ * Build the `AgentRuntimeHost` the extension's `HostInteractions` adapter
+ * forwards `emit` calls to (`createExtensionHostInteractions`'s `runtimeHost`
+ * option, wired in `ProgressViewProvider`'s constructor).
+ *
+ * Progress-view interaction events (tool-edit approval prompts, bypass-state
+ * pushes) route through the existing `extensionInteractionEvents` sink
+ * unchanged; the five presentation events below are the extension's own
+ * dispatch, replacing a previous per-host presentation-event bus and its
+ * static router (a duplicate replay mechanism — see #9251).
+ * `SessionHostInteractions` (the runtime) owns replaying an event emitted
+ * before this host attaches, via `AgentRuntimeEmitOptions.replayWhenAttached`.
  */
-export function registerAgentEventListeners(
+export function createAgentPresentationHost(
   progressViewProvider: ProgressViewProvider,
-): vscode.Disposable {
-  const controller = new AbortController();
-  const { signal } = controller;
-
-  extensionPresentationEvents.on('requestOpenFile', handleRequestOpenFile, {
-    signal,
-  });
-  extensionPresentationEvents.on(
-    'requestShowInstruction',
-    handleRequestShowInstruction,
-    { signal },
-  );
-  extensionPresentationEvents.on(
-    'showAgentConfigBanner',
-    (payload) => void handleShowAgentConfigBanner(payload),
-    { signal },
-  );
-  extensionPresentationEvents.on('requestShowError', handleRequestShowError, {
-    signal,
-  });
-  extensionPresentationEvents.on(
-    'requestEnsureProgressView',
-    (payload) =>
-      void handleRequestEnsureProgressView(payload, progressViewProvider),
-    { signal },
-  );
-
-  // Terminal-error toasts now come from the run's `result` event (the lifecycle
-  // no longer emits them directly). The same shared helper every host uses
-  // re-emits `requestShow*` through `extensionAgentRuntimeHost`, reaching the
-  // extension presentation handlers registered above exactly once.
-  const detachResult = attachTerminalResultToast(
-    defaultSession(),
-    extensionAgentRuntimeHost,
-  );
-  signal.addEventListener('abort', detachResult, { once: true });
-
-  return new vscode.Disposable(() => controller.abort());
+): AgentRuntimeHost {
+  return {
+    emit<K extends AgentRuntimeEvent>(
+      event: K,
+      payload: AgentRuntimeEventPayloads[K],
+    ): void {
+      if (isProgressBackendInteractionEvent(event)) {
+        emitExtensionInteractionEvent(
+          event,
+          payload as ProgressBackendInteractionPayloads[typeof event],
+        );
+        return;
+      }
+      if (!isRuntimePresentationEvent(event)) return;
+      switch (event) {
+        case 'requestOpenFile':
+          handleRequestOpenFile(payload as RequestOpenFilePayload);
+          return;
+        case 'requestShowInstruction':
+          handleRequestShowInstruction(
+            payload as RequestShowInstructionPayload,
+          );
+          return;
+        case 'showAgentConfigBanner':
+          void handleShowAgentConfigBanner(
+            payload as ShowAgentConfigBannerPayload,
+          );
+          return;
+        case 'requestShowError':
+          handleRequestShowError(payload as RequestShowErrorPayload);
+          return;
+        case 'requestEnsureProgressView':
+          void handleRequestEnsureProgressView(
+            payload as RequestEnsureProgressViewPayload,
+            progressViewProvider,
+          );
+          return;
+        default: {
+          // Exhaustiveness guard: a new RuntimePresentationEvent must take an
+          // explicit stance here rather than being silently dropped by this
+          // host (CLAUDE.md, silent degradation).
+          const _exhaustive: never = event;
+          void _exhaustive;
+          return;
+        }
+      }
+    },
+  };
 }
