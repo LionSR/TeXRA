@@ -2170,8 +2170,9 @@ describe('ProgressBackend', () => {
     // block-bodied handler that discarded the promise would hand
     // `withEventErrorHandling` `undefined`, leaving this untouched — and a
     // post-await rejection would then escape logging as an unhandled rejection.
-    // Both `setStreamStatus` callers (the run-fact `status` path and the
-    // session-fact `updateStreamStatus` path) are covered.
+    // `setStreamStatus` now has exactly one caller — the session-fact
+    // `updateStreamStatus` path — since `StreamStatusMachine` publishes every
+    // transition on that rail and the run-fact `status` arm is gone.
     let adopted = 0;
     const tracking: PromiseLike<void> = {
       then(onFulfilled, onRejected) {
@@ -2184,12 +2185,6 @@ describe('ProgressBackend', () => {
     );
 
     try {
-      backend.factApplier.handleRunFact(stream, {
-        type: 'status',
-        streamId: stream,
-        phase: STREAM_PHASE.RUNNING,
-        cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
-      });
       backend.factApplier.handleSessionFact({
         type: 'updateStreamStatus',
         payload: { streamId: stream, status: STREAM_PHASE.RUNNING },
@@ -2198,7 +2193,7 @@ describe('ProgressBackend', () => {
       // Thenable adoption runs on a microtask; flush before asserting.
       await new Promise((resolve) => setImmediate(resolve));
 
-      expect(adopted).toBe(2);
+      expect(adopted).toBe(1);
     } finally {
       backend.dispose();
     }

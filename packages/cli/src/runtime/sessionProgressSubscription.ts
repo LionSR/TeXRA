@@ -5,7 +5,7 @@ import type {
 } from '@agent/runtime/SessionEventHub';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
-import type { StreamTabId, UpdateStreamStatusPayload } from '@shared/schemas';
+import type { StreamTabId } from '@shared/schemas';
 import { assertNever } from '@utils/core';
 import { writeNdjsonStdout } from './logSinks';
 import type {
@@ -69,19 +69,6 @@ function projectCliRunFact(
         streamId: event.streamId,
         executionId: event.executionId,
         taskState: agentConfigToTaskState(event.config),
-      },
-    };
-  }
-
-  if (event.type === 'status') {
-    return {
-      event: 'updateStreamStatus',
-      payload: {
-        streamId: event.streamId,
-        status: event.phase,
-        cause: event.cause,
-        ...(event.previousPhase ? { previousStatus: event.previousPhase } : {}),
-        ...(event.substate ? { substate: event.substate } : {}),
       },
     };
   }
@@ -176,16 +163,6 @@ function projectCliRunFact(
   return undefined;
 }
 
-function statusProjectionKey(payload: UpdateStreamStatusPayload): string {
-  return JSON.stringify([
-    payload.streamId,
-    payload.status,
-    payload.previousStatus ?? null,
-    payload.cause ?? null,
-    payload.substate ?? null,
-  ]);
-}
-
 /**
  * Headless CLI compatibility adapter. Public NDJSON output still speaks the
  * frozen progress-event vocabulary inside `kind: "progress"` records, so this
@@ -195,17 +172,7 @@ export function attachCliSessionProgressProjection(
   events: SessionEventHub,
   writeRecord: CliNdjsonProgressRecordWriter = writeNdjsonStdout,
 ): () => void {
-  const lastStatusByStream = new Map<StreamTabId, string>();
-
   function emitProjected(projected: CliProjectedNdjsonProgressEvent): void {
-    if (projected.event === 'updateStreamStatus') {
-      const key = statusProjectionKey(projected.payload);
-      const streamId = projected.payload.streamId;
-      if (lastStatusByStream.get(streamId) === key) return;
-      lastStatusByStream.set(streamId, key);
-    } else if (projected.event === 'removeStream') {
-      lastStatusByStream.delete(projected.payload.streamId);
-    }
     writeRecord({
       kind: 'progress',
       event: projected.event,
