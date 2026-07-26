@@ -1,20 +1,11 @@
 // Node imports
-import {
-  lstat,
-  mkdir,
-  mkdtemp,
-  readlink,
-  realpath,
-  writeFile,
-} from 'node:fs/promises';
-import * as os from 'node:os';
+import { lstat, mkdir, readlink, realpath, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import type { AgentTrace } from '@agent/trace';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import {
   LatexMediaManager,
@@ -27,7 +18,8 @@ import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import type { FileLocation } from '@shared/schemas';
 import type { ToolConfig } from '@shared/schemas/toolConfig';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
-import { cleanupTempDirs } from '@test/support/tempDirPlatform';
+import { spiedTrace } from '@test/support/spiedTrace';
+import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 import {
   createExternalLocation,
   createWorkspaceLocation,
@@ -68,20 +60,9 @@ const compilePdfConfig: ToolConfig = {
   autoCompileInputPdf: true,
 };
 
-const logger = {
-  debug: vi.fn(),
-  info: vi.fn(),
-  warn: vi.fn(),
-  error: vi.fn(),
-} as unknown as AgentTrace;
+const logger = spiedTrace();
 
 const tempDirs: string[] = [];
-
-async function makeTempDir(): Promise<string> {
-  const tempDir = await mkdtemp(path.join(os.tmpdir(), 'texra-latex-media-'));
-  tempDirs.push(tempDir);
-  return tempDir;
-}
 
 function installPlatform(workspaceDir: string): Promise<void> {
   return installFakePlatform(
@@ -143,7 +124,7 @@ describe('LatexMediaManager PDF compilation', () => {
   });
 
   it('filters nullish compile results before adding media files', async () => {
-    const workspaceDir = await makeTempDir();
+    const workspaceDir = await makeTempDir('texra-latex-media-', tempDirs);
     await installPlatform(workspaceDir);
 
     const inputPaths = [
@@ -220,7 +201,9 @@ describe('LatexMediaManager figure baseDir resolution (issue #7228)', () => {
     // workspace root and the realpath'd baseDir it computes would disagree,
     // and mirrorWorkspaceFile would (correctly, but confusingly for this test)
     // classify the figure as external and skip mirroring it.
-    const tempDir = await realpath(await makeTempDir());
+    const tempDir = await realpath(
+      await makeTempDir('texra-latex-media-', tempDirs),
+    );
     const workspaceDir = path.join(tempDir, 'workspace');
     const storageRoot = path.join(tempDir, 'storage');
     const figureDir = path.join(workspaceDir, 'figures');

@@ -6,11 +6,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { WebSocketError } from 'openai/resources/responses/internal-base';
 
 // Local imports
-import type { AgentTrace } from '@agent/trace';
 import { OpenAIResponseWebSocketTransport } from '@agent/modelHandlers/openai/OpenAIResponseWebSocketTransport';
 import type { ResponseStreamProcessor } from '@agent/modelHandlers/openai/ResponseStreamProcessor';
 import { normalizeProviderError } from '@common/errors';
 import { detectSdkErrorMetadata } from '@common/errors/sdkErrorUtils';
+import { spiedTrace } from '@test/support/spiedTrace';
 
 // Third-party type imports
 import type OpenAI from 'openai';
@@ -49,17 +49,6 @@ vi.mock('openai/resources/responses/ws', () => ({
   },
 }));
 
-function createLogger(): AgentTrace {
-  return {
-    streamId: 'test',
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    domain: vi.fn(),
-  } as unknown as AgentTrace;
-}
-
 interface TransportInternals {
   wsConnection: FakeResponsesWS | null;
   getOrCreateWebSocket(
@@ -85,7 +74,7 @@ function createTransport(): OpenAIResponseWebSocketTransport {
     process: vi.fn(),
   } as unknown as ResponseStreamProcessor;
   return new OpenAIResponseWebSocketTransport({
-    logger: createLogger(),
+    logger: spiedTrace(),
     createStreamProcessor: vi.fn(() => processor),
   });
 }
