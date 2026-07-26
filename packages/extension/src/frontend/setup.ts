@@ -24,7 +24,7 @@ import {
   LATEX_WORKSHOP_EXT_ID,
   type LatexConfigField,
 } from '@shared/constants/latex';
-import { updateConfig } from '@utils/config';
+import { updateConfig } from '@utils/config/configUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { registerExternalRoot } from '@utils/files/externalRoots';
 import { extendEnvPath } from '@utils/system/platformPaths';

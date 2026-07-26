@@ -34,8 +34,9 @@ import {
   readOnboardingFlags,
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
-import { watchConfig, DEBOUNCE_OPTIONS_MS } from '@utils/config';
 import { debounce } from '@utils/core';
+import { watchConfig } from '@utils/config/configUtils';
+import { DEBOUNCE_OPTIONS_MS } from '@utils/config/constants';
 
 // Local file imports
 import { MainViewMessageHandler } from './webview/MainViewMessageHandler';
