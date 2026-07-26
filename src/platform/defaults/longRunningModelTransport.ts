@@ -1,6 +1,7 @@
 // Third-party imports
 import {
   fetch as undiciFetch,
+  FormData as UndiciFormData,
   getGlobalDispatcher,
   type Dispatcher,
   type RequestInfo as UndiciRequestInfo,
@@ -11,6 +12,7 @@ const MODEL_STREAM_INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
 const MODEL_RESPONSE_HEADERS_TIMEOUT_MS = 10 * 60 * 1000;
 const ROUTING_FETCH_MARKER = Symbol('texra.longRunningModelFetchRouter');
 type RoutingFetch = typeof fetch & { [ROUTING_FETCH_MARKER]?: true };
+type UploadCompatibleFetch = typeof fetch & { Response: typeof Response };
 
 function isGoogleClassicStreamingRequest(input: RequestInfo | URL): boolean {
   let url: string;
@@ -37,6 +39,23 @@ async function normalizeModelRequest(
   init?: RequestInit,
 ): Promise<[UndiciRequestInfo, UndiciRequestInit]> {
   if (!(input instanceof Request)) {
+    if (init?.body instanceof FormData) {
+      const body = new UndiciFormData();
+      for (const [name, value] of init.body.entries()) {
+        if (typeof value === 'string') {
+          body.append(name, value);
+        } else {
+          body.append(name, value, value.name);
+        }
+      }
+      return [
+        input as UndiciRequestInfo,
+        {
+          ...init,
+          body,
+        } as UndiciRequestInit,
+      ];
+    }
     return [input as UndiciRequestInfo, init as UndiciRequestInit];
   }
 
@@ -87,15 +106,24 @@ export function composeLongRunningModelDispatcher(): Dispatcher {
  * package-undici fetch rejects native `Request` instances (OpenRouter's
  * HTTPClient passes one), so it is rebuilt from interoperable primitives.
  */
-export const longRunningModelFetch: typeof fetch = async (input, init) => {
-  const [requestInput, requestInit] = await normalizeModelRequest(input, init);
-  // Undici implements the Web Fetch response contract at runtime, but its
-  // package-local types are not assignable to the DOM library's Response.
-  return undiciFetch(requestInput, {
-    ...requestInit,
-    dispatcher: composeLongRunningModelDispatcher(),
-  }) as unknown as Promise<Response>;
-};
+export const longRunningModelFetch: UploadCompatibleFetch = Object.assign(
+  async (input: RequestInfo | URL, init?: RequestInit) => {
+    const [requestInput, requestInit] = await normalizeModelRequest(
+      input,
+      init,
+    );
+    // Undici implements the Web Fetch response contract at runtime, but its
+    // package-local types are not assignable to the DOM library's Response.
+    return undiciFetch(requestInput, {
+      ...requestInit,
+      dispatcher: composeLongRunningModelDispatcher(),
+    }) as unknown as Promise<Response>;
+  },
+  {
+    // OpenAI checks this constructor before creating multipart uploads.
+    Response,
+  },
+);
 
 /**
  * Route Google classic streaming generation through the model transport.
