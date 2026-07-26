@@ -2,84 +2,58 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.39.9] - Unreleased
+## [0.39.9] - 2026-07-26
 
 ### Shared (all surfaces)
 
 #### New Features
 
-- **Agent skills can be switched on or off from every interface** — the CLI
-  launcher, the VS Code setting, and the desktop Tools settings now control
-  whether tool-use agents receive TeXRA and imported skills.
-- **Claude Opus 5 support** — the latest Opus 5 models (`opus5`, `opus5T`) are
-  available for demanding research and engineering tasks, replacing Opus 4.8
-  as the default Anthropic model. Opus 5 keeps the full 1M context window and
-  adaptive thinking.
-- **Agents can read a background command's output while it runs** — the
-  `executions` tool's `/executions/{id}/output` path returns a long build or
-  test run's stdout and stderr in arrival order, updating as the command
-  proceeds instead of only at completion. Reads default to the last 200 lines
-  and accept `view_range` to page back through the retained log, which stays
-  readable after the command finishes.
-- **A running workflow script shows its current phase from the parent's view**
-  — the run's row now reads `Reduce 2/3` beside its status, in the CLI's child
-  list and in the progress view's Background Tasks panel, so a long multi-phase
-  run is no longer indistinguishable at minute 2 and minute 38. Tool-use rows
-  keep showing their round (`r2/3`); no row shows both.
+- **Agent skills controls** — enable or disable TeXRA and imported skills from
+  the CLI, VS Code, or desktop settings.
+- **Claude Opus 5 support** — Opus 5 is now available and replaces Opus 4.8 as
+  the default Anthropic model.
+- **Live background command output** — agents can inspect a command's output
+  while it is still running.
+- **Workflow phase progress** — running workflow scripts show their current
+  phase in the CLI and progress view.
 
 #### Bug Fixes
 
-- **Claude effort controls now match each model's supported tiers** — Opus
-  4.7 accepts Extra High, while Opus 4.6 and Sonnet 4.6 map Extra High to
-  their supported Max tier instead of using stale local limits.
-- **Workflow task costs now reflect each task's own spend** — task rows and
-  cards no longer show the workflow run's cumulative cost when each task
-  finishes.
-- **Large foreground shell commands use bounded memory** — command results
-  retain useful diagnostics from the beginning and end without buffering the
-  complete output in memory.
+- **Correct Claude effort levels** — effort choices now match each model's
+  supported tiers.
+- **Accurate workflow task costs** — each task now shows its own cost rather
+  than the workflow's cumulative cost.
+- **Custom team compatibility** — teams with older icon data no longer
+  disappear from the catalog.
+- **Reliable large command output** — long shell commands and terminal logs no
+  longer consume unbounded memory.
 
 ### Extension (VS Code) and Desktop
 
 #### Bug Fixes
 
-- **Long terminal-mode logs keep bounded recent scrollback** — the progress
-  view retains at most 4,000 complete lines and marks when earlier lines have
-  been removed.
+- **Bounded terminal scrollback** — long terminal-mode logs retain recent
+  complete lines and indicate when older output has been removed.
 
 ### CLI
 
-#### Breaking Changes
-
-- **`--output-format ndjson` no longer documents the `updateProcessOutput` and
-  `updateActiveProcesses` records** — background shell output and the
-  background-process roster reach the terminal through child streams, so
-  neither record was ever emitted. Scripts reading the NDJSON stream need no
-  change.
-
 #### Bug Fixes
 
-- **Team availability choices stay interactive after leaving the launcher** —
-  the CLI now waits for sign-in, continue, or cancel input instead of exiting
-  at the prompt.
-- **The child list drops its always-empty background-process rows** — the
-  `N proc` status segment and the task-detail panel behind `Enter` were served
-  by a roster no run could populate; background `bash` keeps its own child
-  session row, live output, and `v` full-output print unchanged.
+- **Independent access preferences** — ChatGPT, Kimi Code, and API fallback
+  choices no longer change one another unexpectedly.
+- **Reliable post-launcher prompts** — sign-in and team availability prompts
+  remain interactive after leaving the launcher.
+- **Cleaner child list** — removed background-process rows that were always
+  empty.
 
 #### New Features
 
-- **Focused workflow runs group agent rows by phase** — the child list now
-  separates workflow agents under phase headers with per-phase task progress,
-  while preserving keyboard shortcuts and compact layouts on narrow terminals.
-- **Workflow-script task rows show their status at a glance** — each task in
-  the terminal transcript carries its own marker and color for planned,
-  running, finished, saved-result, skipped, and failed, instead of every row
-  looking alike. A task the run never reached now also explains itself the way
-  the progress view already did.
-- **Loaded images are visible in the terminal transcript** — image and PDF
-  inputs show their file path and size after they are prepared as context
-  media.
+- **Workflow phase views** — focused workflow runs group agents by phase and
+  show per-phase task progress.
+- **Clear workflow task states** — task rows distinguish planned, running,
+  completed, skipped, and failed work.
+- **Visible media inputs** — loaded images and PDFs appear in the terminal
+  transcript.
 
 ## [0.39.8] - 2026-07-24
 
