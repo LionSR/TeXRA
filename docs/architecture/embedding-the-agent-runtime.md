@@ -44,6 +44,13 @@ tool-availability host — and requires the host to supply the rest:
 `lifecycle`, `agentResume`, `agentDirectories`, `getWorkspacePath`
 (`src/platform/defaults/nodeHost.ts:53-69`).
 
+When Step 3 will copy the packaged bundle, `agentDirectories` must be the
+matching global-storage port from `createPlatformAgentDirectories`, or an
+equivalent port that resolves the same copied directories. The factory and the
+bootstrap both use `GlobalStorageAgentDirectoryStorage`
+(`src/agent/index/platformAgentDirectories.ts:25-29,59-65`). Bootstrapping
+alone does not replace the port already installed in the platform.
+
 Only a composition root calls `initPlatform`; that rule is stated in the
 `nodeHost` module header (`src/platform/defaults/nodeHost.ts:1-14`).
 
@@ -93,11 +100,28 @@ const serverSideKeyService =
 ```
 
 The `?.` on the following lines (`:508-527`) is for the `'personal'` branch,
-not for an uninitialized singleton. Credential resolution happens on every
-model client construction (`src/agent/modelHandlers/ModelHandler.ts:682`), so
+not for an uninitialized singleton. Production model-client constructors call
+`resolveClientCredential` directly
+(`src/agent/modelHandlers/anthropic/modelHandlerAnthropic.ts:396`;
+`src/agent/modelHandlers/openai/modelHandlerOpenAI.ts:249`;
+`src/agent/modelHandlers/google/modelHandlerGoogleGenAI.ts:175`;
+`src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts:546`;
+`src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts:1165`;
+`src/agent/modelHandlers/openrouter/modelHandlerOpenRouterNative.ts:142`), so
 this throws inside the run, not at startup — the worst place for it.
 
-All three shipped hosts call it: the CLI at
+There is a second policy requirement. With no state supplied, included-model
+access defaults to `true`
+(`src/auth/serverKeys/ServerSideKeyService.ts:102-104`). A headless BYOK host
+should therefore call
+`await getServerSideKeyService().setUseIncludedModelAccess(false)`. Otherwise,
+an eligible model first attempts the relay-access check, whose tier request is
+an ordinary `fetch` (`src/auth/serverKeys/TierService.ts:171-188`). A host that
+wants included access must instead initialize its authentication surface and
+set the policy from that state. The CLI makes this choice explicitly
+(`packages/cli/src/runtime/initPlatform.ts:359-376`).
+
+All three shipped hosts call `initializeServerSideKeyAccess`: the CLI at
 `packages/cli/src/runtime/initPlatform.ts:335`, desktop at
 `packages/desktop/src/main/desktopSupabaseAuth.ts:422`, the extension via
 `packages/extension/src/extension.ts:315`.
@@ -107,9 +131,22 @@ All three shipped hosts call it: the CLI at
 
 ### Step 3 — agent directories
 
-Either bootstrap the packaged bundle:
+To use the packaged bundle, install its matching port in Step 1 and then
+bootstrap the files:
 
 ```ts
+// Before Step 1:
+const agentDirectories = createPlatformAgentDirectories({
+  channel: 'my-embedder',
+  customDirectoryStore: { get: () => undefined },
+});
+initPlatform(
+  createNodePlatform({
+    /* …8 other required services… */
+    agentDirectories,
+  }),
+);
+
 // src/platform/defaults/nodeHost.ts:178-199
 await bootstrapNodeAgentDirectories({
   channel: 'my-embedder',
@@ -119,7 +156,7 @@ await bootstrapNodeAgentDirectories({
 });
 ```
 
-…or skip the bundle entirely and hand `createNodePlatform` an
+Alternatively, skip the bundle entirely and hand `createNodePlatform` an
 `AgentDirectoriesPort` that points at your own directory. See
 [§2](#2-agentdirectoriesport-is-three-directory-paths-not-agent-values) — this
 is the part the plan of record describes incorrectly.
@@ -187,7 +224,11 @@ import {
   initNodeAgentRuntime,
   bootstrapNodeAgentDirectories,
 } from '@platform/defaults/nodeHost';
-import { initializeServerSideKeyAccess } from '@auth/serverKeys';
+import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
+import {
+  getServerSideKeyService,
+  initializeServerSideKeyAccess,
+} from '@auth/serverKeys';
 import { loadAgents } from '@agent/index/agentRegistry';
 import { initializeDefaultSession } from '@agent/runtime/SessionHandle';
 import { StreamLogStore } from '@transcript';
@@ -196,9 +237,19 @@ import { validateExecutionRequest } from '@agent/core/state/executionRequests';
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { AgentCategory } from '@shared/schemas/agent';
 
-initPlatform(createNodePlatform({/* …9 required services… */})); // Step 1
+const agentDirectories = createPlatformAgentDirectories({
+  channel: 'my-embedder',
+  customDirectoryStore: { get: () => undefined },
+});
+initPlatform(
+  createNodePlatform({
+    /* …8 other required services… */
+    agentDirectories,
+  }),
+); // Step 1
 initNodeAgentRuntime(lifecycle); // Optional shipped-feature parity
 initializeServerSideKeyAccess({}); // Step 2
+await getServerSideKeyService().setUseIncludedModelAccess(false); // BYOK
 await bootstrapNodeAgentDirectories({/* … */}); // Step 3
 
 // Use StreamLogStore.ephemeral('embedder') here for memory-only transcripts.
@@ -239,7 +290,7 @@ exceptions may instead run `AgentConfigSchema.parse` and construct the
 `agent`, `model`, and `instruction` all have `.prefault()` defaults
 (`src/agent/core/definition/AgentConfig.ts:18,27,28`), and an absent
 `agentCategory` normalizes to `Workflow`
-(`src/agent/core/definition/AgentConfig.ts:77-86`). The example sets
+(`src/agent/core/definition/AgentConfig.ts:77-88`). The example sets
 `AgentCategory.ToolUse` explicitly because `assistant` is loaded from the
 tool-use agent directory (`src/agent/index/agentYamlScanner.ts:212-217`);
 launch resolution searches only the requested category
@@ -271,8 +322,9 @@ disk_; that is the entire capability.
 
 ### Why in-memory definitions cannot work: two filesystem planes in one function
 
-`loadAgents` resolves the three paths and hands each to `scanDirectory`
-(`src/agent/index/agentRegistry.ts:160-173`). Inside `scanDirectory`:
+`loadAgents` calls `doLoad`, which resolves the three paths and hands each to
+`scanDirectory` (`src/agent/index/agentRegistry.ts:150,160-173`). Inside
+`scanDirectory`:
 
 - **Enumeration** uses the npm `glob` package with **no `fs` option**
   (`src/agent/index/agentYamlScanner.ts:53-57`, import at `:3`). `glob` without
@@ -490,10 +542,11 @@ is **never calling `useHostInteractions` at all**, which no type can catch.
   tooling is unavailable; the `memory`/`plan` injections remain registered
   (`src/platform/defaults/nodeHost.ts:133-136`).
 
-`bootstrapNodeAgentDirectories` is safe to skip **only** if you supply your own
-`AgentDirectoriesPort` (§2). Skipping it without that leaves the port pointing
-at a global-storage tree that was never populated, and `loadAgents` finds
-nothing.
+`bootstrapNodeAgentDirectories` is safe to skip **only** if the installed
+`AgentDirectoriesPort` names directories populated by some other means (§2).
+When using `createPlatformAgentDirectories`, skipping the bootstrap leaves its
+global-storage built-in directories unpopulated, and `loadAgents` finds no
+packaged agents.
 
 ---
 
@@ -578,12 +631,14 @@ desktop also calls
    `initializeNodeGoalPrompts`, which is explicitly re-entrant
    (`src/platform/defaults/nodeHost.ts:141-143`) because CLI validation
    re-enters platform init in one process.
-3. **`bootstrapNodeAgentDirectories` is guarded by a module-level `Map`**
-   keyed on `channel:versionStateKey` → `resourcesPath`
-   (`src/platform/defaults/nodeHost.ts:84`, guard at `:181-185`, set at `:198`).
-   A call is skipped only when all three values match a previous call: the same
-   channel, the same version-state key, and the same resources path. Sharing a
-   channel alone does not cause a collision.
+3. **`bootstrapNodeAgentDirectories` uses an ambiguous string guard key.** A
+   module-level `Map` stores `resourcesPath` under the guard key
+   `${channel}:${versionStateKey}`
+   (`src/platform/defaults/nodeHost.ts:84,181-185,198`). A call is skipped when
+   that derived string and the resources path match a previous call. Colons are
+   not escaped, so distinct pairs such as `('a:b', 'c')` and `('a', 'b:c')`
+   collide. Embedders must use colon-free channel and version-state values
+   until the key representation is made unambiguous.
 4. **The registry is process-global**, not session-scoped
    (`src/agent/index/agentRegistry.ts:116-148`). There is no per-embedder agent
    namespace.
