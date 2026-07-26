@@ -64,7 +64,6 @@ import { createDesktopDiffHost } from './desktopDiffHost.js';
 import { initializeDesktopProcessStores } from './desktopProcessStores.js';
 import { createDesktopFileSelection } from './desktopFileSelection.js';
 import { createDesktopPreviewHost } from './desktopPreviewHost.js';
-import { createDesktopAuthBrowser } from './desktopAuthBrowser.js';
 import { createDesktopBrowserViews } from './desktopBrowserViews.js';
 import { createDesktopPtyHost } from './desktopPtyHost.js';
 import { createDesktopWorkspaceIpc } from './desktopWorkspaceIpc.js';
@@ -571,28 +570,11 @@ function createWindow(options: {
     });
     await onboardingIpcRef.current?.refreshOnboardingFunnel();
   };
-  // Completes OAuth inside a window we control, so the `texra://` callback is
-  // intercepted from our own navigation events instead of requiring the OS to
-  // route a deep link back to a registered protocol client. An unpackaged dev
-  // run has no registered TeXRA.app, which is why external-browser sign-in
-  // hung indefinitely. See desktopAuthBrowser.ts.
-  const authBrowser = createDesktopAuthBrowser({
-    deliverCallback: (rawUrl) => protocolLifecycle.router.routeUrl(rawUrl),
-    openExternalUrl: (url) => previewHost.openExternal(url),
-    getParentWindow: () => (window.isDestroyed() ? undefined : window),
-    onError: reportAsyncError,
-  });
   const desktopAuthHost: DesktopSupabaseAuthHost = {
-    openExternalUrl: (url) => authBrowser.open(url),
+    openExternalUrl: (url) => previewHost.openExternal(url),
     showInfoMessage,
     showErrorMessage,
-    onSessionChanged: async () => {
-      // The callback already closed the window; this covers a session arriving
-      // by any other path (token refresh, a second window) so a stale consent
-      // page can't linger after the user is signed in.
-      authBrowser.close();
-      await refreshDesktopAuthSurfaces();
-    },
+    onSessionChanged: refreshDesktopAuthSurfaces,
   };
   const desktopAuth = createDesktopSupabaseAuth({
     router: protocolLifecycle.router,
@@ -1325,9 +1307,6 @@ function createWindow(options: {
     }
     desktopAuth.dispose();
     setupSignInRegistration.dispose();
-    // A child auth window would otherwise keep the app alive after its parent
-    // closed, leaving no way to reach it.
-    authBrowser.dispose();
     // Shells keep running and web contents keep loading unless explicitly torn
     // down — neither is reachable once the window is gone.
     ptyHost.disposeAll();

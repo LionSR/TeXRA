@@ -210,9 +210,9 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
           @wa-collapse=${(event: Event) =>
             handleDirectoryToggle(event, node, false)}
         >
-          ${waIcon(expanded ? 'folder-open' : 'folder', {
-            className: 'desktop-editor-tree-icon',
-          })}
+          <span class="desktop-editor-tree-icon">
+            ${waIcon(expanded ? 'folder-open' : 'folder')}
+          </span>
           <span class="desktop-editor-tree-label">${node.name}</span>
           ${node.children.map((child) => treeNodeTemplate(child))}
         </wa-tree-item>
@@ -229,9 +229,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
         .selected=${isOpen}
         title=${node.path}
       >
-        ${waIcon('file-lines', {
-          className: 'desktop-editor-tree-icon',
-        })}
+        <span class="desktop-editor-tree-icon">${waIcon('file-lines')}</span>
         <span class="desktop-editor-tree-label">${node.name}</span>
         ${isDirty ? html`<span class="desktop-editor-dirty-dot"></span>` : ''}
       </wa-tree-item>

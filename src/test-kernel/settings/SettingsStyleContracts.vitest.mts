@@ -7,11 +7,15 @@ import { describe, expect, it } from 'vitest';
 
 const SETTINGS_TABS_ROOT = 'packages/extension/src/settingsView/frontend/tabs';
 const SETTINGS_BANNER_TABS = [
+  'AccountTab.ts',
+  'AIAgentsTab.ts',
   'GoalTab.ts',
   'LaTeXTab.ts',
   'MemoryTab.ts',
   'ModelsTab.ts',
   'MultiAgentTab.ts',
+  'ShortcutsTab.ts',
+  'ToolsTab.ts',
 ] as const;
 
 function read(relativePath: string): string {
@@ -42,22 +46,30 @@ describe('settings style contracts', () => {
     expect(renderer).toContain("danger: 'btn-ghost is-danger'");
   });
 
-  it('uses one shared profile subsection heading treatment', () => {
+  it('uses one shared settings section heading treatment', () => {
     const commonStyles = read('src/shared/styles/commonViewStyles.ts');
-    expect(commonStyles).toContain('.settings-subsection-heading');
+    expect(commonStyles).toContain('.settings-section-heading');
+    expect(commonStyles).toContain('.settings-section-heading-title');
 
-    for (const stylesheet of [
-      'ApiAccessSection.styles.ts',
-      'ModelSelectionList.styles.ts',
-      'ProviderKeyList.styles.ts',
+    for (const component of [
+      'ApiAccessSection.ts',
+      'ModelSelectionList.ts',
+      'ProviderKeyList.ts',
+      'ReliabilitySettingsSection.ts',
     ]) {
       const source = read(
         path.join(
           'packages/extension/src/settingsView/frontend/components/profile',
-          stylesheet,
+          component,
         ),
       );
-      expect(source).not.toMatch(/^\s*h2\s*\{/m);
+      expect(source).toContain('renderSettingsSectionHeading');
+      expect(source).not.toMatch(/<h[1-6][\s>]/);
     }
+
+    expect(commonStyles).not.toContain('.settings-subsection-heading');
+    expect(read('src/shared/styles/controlStyles.ts')).not.toContain(
+      '.settings-section-title',
+    );
   });
 });

@@ -1,6 +1,6 @@
 import { css, type CSSResult } from 'lit';
 
-export const waTabThemeTokenStyles: CSSResult = css`
+const waTabThemeTokenStyles: CSSResult = css`
   --track-width: var(--border-thin);
   --track-color: var(--color-border);
   --indicator-color: var(--wa-color-brand-fill-loud);

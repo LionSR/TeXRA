@@ -91,15 +91,11 @@ describe('tools-tab availability summary', () => {
     const element = await mount([], (toolsTab) => {
       toolsTab.showAgentSkillsSettings = true;
     });
-    const skillSwitch = [
-      ...(element.shadowRoot?.querySelectorAll('wa-switch') ?? []),
-    ].find((candidate) =>
-      candidate.textContent?.includes(
-        'TeXRA and imported skills are available to tool-use agents',
-      ),
-    ) as (HTMLElement & { checked?: boolean }) | undefined;
+    const skillSwitch = element.shadowRoot?.querySelector<
+      HTMLElement & { checked?: boolean }
+    >('wa-switch[aria-label="Make skills available to tool-use agents"]');
 
-    expect(skillSwitch).toBeDefined();
+    expect(skillSwitch).not.toBeNull();
     expect(skillSwitch?.checked).toBe(true);
 
     if (!skillSwitch) return;

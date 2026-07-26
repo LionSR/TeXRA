@@ -7,16 +7,6 @@
       "name": "DESKTOP_COMMAND_IDS"
     },
     {
-      "file": "packages/desktop/src/main/desktopAuthBrowser.ts",
-      "category": "exports",
-      "name": "isAllowedAuthUrl"
-    },
-    {
-      "file": "packages/desktop/src/main/desktopAuthBrowser.ts",
-      "category": "exports",
-      "name": "isAuthCallbackRedirect"
-    },
-    {
       "file": "packages/desktop/src/main/desktopCrashReporting.ts",
       "category": "exports",
       "name": "scrubDesktopCrashEvent"

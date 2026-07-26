@@ -10,8 +10,8 @@ export interface SettingsBannerOptions {
   readonly title: string;
   readonly description: string | TemplateResult;
   readonly icon?: TeXRAIconName;
-  readonly detail?: TemplateResult;
-  readonly actions?: TemplateResult;
+  readonly detail?: TemplateResult | typeof nothing;
+  readonly actions?: TemplateResult | typeof nothing;
   readonly className?: string;
   readonly variant?: 'brand' | 'neutral' | 'success' | 'warning' | 'danger';
 }

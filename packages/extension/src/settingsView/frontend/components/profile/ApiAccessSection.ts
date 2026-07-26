@@ -8,6 +8,7 @@ import { commonViewStyles, designTokens } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
 
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -44,7 +45,12 @@ export class ApiAccessSection extends LitElement {
   override render(): TemplateResult {
     return html`
       <div class="api-access-section">
-        <h2 class="settings-subsection-heading">Model Access</h2>
+        ${renderSettingsSectionHeading({
+          title: 'Model access',
+          description:
+            'Choose whether TeXRA uses included access or credentials from your provider accounts.',
+          icon: 'circle-user',
+        })}
         <wa-radio-group
           class="api-access-options"
           name="apiAccessMode"

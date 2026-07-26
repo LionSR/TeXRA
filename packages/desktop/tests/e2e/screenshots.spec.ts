@@ -81,32 +81,13 @@ async function setRoute(
   );
 }
 
-async function selectSettingsTab(panelName: string): Promise<void> {
-  await launched.page.waitForFunction(
-    (panel) => {
-      const settingsApp = document.querySelector(
-        'settings-app[data-desktop-view="settings"]',
-      );
-      return (
-        settingsApp?.shadowRoot?.querySelector(`wa-tab[panel="${panel}"]`) !=
-        null
-      );
-    },
-    panelName,
-    { timeout: 10000 },
-  );
-  await launched.page.evaluate((panel) => {
-    const settingsApp = document.querySelector(
-      'settings-app[data-desktop-view="settings"]',
-    );
-    const tab = settingsApp?.shadowRoot?.querySelector<HTMLElement>(
-      `wa-tab[panel="${panel}"]`,
-    );
-    if (!tab) {
-      throw new Error(`Settings tab not found: ${panel}`);
-    }
-    tab.click();
-  }, panelName);
+async function selectSettingsPage(
+  panelName: string,
+  tabIndex: number,
+): Promise<void> {
+  await launched.page.evaluate((index) => {
+    window.postMessage({ command: 'setTab', tabIndex: index }, '*');
+  }, tabIndex);
   await launched.page.waitForFunction(
     (panel) => {
       const settingsApp = document.querySelector(
@@ -114,11 +95,11 @@ async function selectSettingsTab(panelName: string): Promise<void> {
       );
       const root = settingsApp?.shadowRoot;
       if (!root) return false;
-      const activeTab = root.querySelector(`wa-tab[panel="${panel}"][active]`);
-      const activePanel = root.querySelector(
-        `wa-tab-panel[name="${panel}"][active]`,
+      return (
+        root.querySelector(
+          `.settings-page-button[data-panel="${panel}"][data-active="true"]`,
+        ) != null
       );
-      return activeTab != null || activePanel != null;
     },
     panelName,
     { timeout: 10000 },
@@ -162,8 +143,8 @@ test('progress screenshot', async () => {
 
 test('settings screenshot', async () => {
   await setRoute('settings');
-  // Open the Multi-Agent settings tab — the most visually rich area.
-  await selectSettingsTab('multi-agent');
+  // Open the Multi-Agent settings page — the most visually rich area.
+  await selectSettingsPage('multi-agent', 4);
   await launched.page.screenshot({
     path: join(SCREENSHOTS_DIR, 'settings.png'),
     fullPage: false,

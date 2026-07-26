@@ -459,11 +459,14 @@ test('loads tools, centers every compact nav icon, and customizes shortcuts', as
 
   const alignments = await page.evaluate(() => {
     const root = document.querySelector('settings-app')?.shadowRoot;
-    const tabs = root?.querySelectorAll<HTMLElement>('wa-tab') ?? [];
-    return [...tabs].map((tab) => {
-      const base = tab.shadowRoot?.querySelector<HTMLElement>('[part~="base"]');
-      const icon = tab.querySelector<HTMLElement>('.settings-tab-icon');
-      const label = tab.querySelector<HTMLElement>('.settings-tab-label');
+    const buttons =
+      root?.querySelectorAll<HTMLElement>('.settings-page-button') ?? [];
+    return [...buttons].map((button) => {
+      const base =
+        button.shadowRoot?.querySelector<HTMLElement>('[part~="base"]');
+      const icon = button.querySelector<HTMLElement>('.settings-tab-icon');
+      const label =
+        button.shadowRoot?.querySelector<HTMLElement>('[part~="label"]');
       if (!base || !icon || !label) {
         throw new Error('Compact settings navigation was not mounted.');
       }

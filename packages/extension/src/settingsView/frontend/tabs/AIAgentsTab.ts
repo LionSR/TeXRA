@@ -11,11 +11,17 @@ import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared styles
-import { commonViewStyles, designTokens } from '@shared/styles';
+import {
+  commonViewStyles,
+  designTokens,
+  settingsBannerStyles,
+} from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderLoadingState } from '@shared/wa/loadingState';
+import { renderSettingsBanner } from '@shared/wa/settingsBanner';
+import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
 
 // Local imports - shared schemas
 import type {
@@ -76,24 +82,10 @@ export class AIAgentsTab extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
+    settingsBannerStyles,
     css`
       :host {
         display: block;
-      }
-
-      .ai-agents-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: var(--wa-space-xs);
-        margin-bottom: var(--wa-space-xs);
-      }
-
-      .ai-agents-intro {
-        margin: 0;
-        font-size: var(--font-size-sm);
-        color: var(--color-text-secondary);
-        line-height: var(--line-height-normal);
       }
 
       .ai-agents-empty {
@@ -133,13 +125,6 @@ export class AIAgentsTab extends LitElement {
         color: var(--wa-color-text-quiet);
       }
 
-      .agent-inline-settings {
-        padding: var(--wa-space-2xs) var(--wa-space-xs);
-        margin-bottom: var(--wa-space-2xs);
-        border-radius: var(--border-radius);
-        background: var(--wa-color-surface-lowered);
-      }
-
       .setting-select {
         min-width: 10rem;
         max-width: 14rem;
@@ -173,7 +158,12 @@ export class AIAgentsTab extends LitElement {
   ): TemplateResult {
     return html`
       <div class="settings-row">
-        <span class="settings-row-label">${label}</span>
+        <div class="settings-row-text">
+          <span class="settings-row-label">${label}</span>
+          <span class="settings-row-help">
+            Applied whenever this integration runs.
+          </span>
+        </div>
         <div class="settings-row-control">
           <wa-select
             class="setting-select"
@@ -194,7 +184,7 @@ export class AIAgentsTab extends LitElement {
 
   private renderCodexInlineSettings(): TemplateResult {
     return html`
-      <div class="agent-inline-settings">
+      <div class="settings-section">
         ${this.renderSelectRow(
           'Sandbox mode',
           this.codexSandboxMode,
@@ -219,7 +209,7 @@ export class AIAgentsTab extends LitElement {
 
   private renderClaudeAgentInlineSettings(): TemplateResult {
     return html`
-      <div class="agent-inline-settings">
+      <div class="settings-section">
         ${this.renderSelectRow(
           'Model',
           this.claudeAgentModel,
@@ -316,21 +306,26 @@ export class AIAgentsTab extends LitElement {
 
     return html`
       <div class="tab-content-container">
-        <div class="ai-agents-header">
-          <p class="ai-agents-intro">
-            Connect external tools and services that TeXRA can call from agent
-            runs, such as coding agents, GitHub, and reference managers. Each
-            integration shows its own setup and authentication state here.
-          </p>
-          ${this.renderStatusSummary(items)}
-        </div>
-
+        ${renderSettingsBanner({
+          id: 'external-integrations-banner',
+          icon: 'terminal',
+          title: 'External integrations',
+          description:
+            'Connect coding agents, GitHub, reference managers, and other services TeXRA can call during agent runs.',
+          detail:
+            items.length > 0 ? this.renderStatusSummary(items) : undefined,
+        })}
         ${
           items.length === 0
             ? html`<div class="ai-agents-empty">
                 No integrations registered.
               </div>`
             : html`
+                ${renderSettingsSectionHeading({
+                  title: `Available integrations (${items.length})`,
+                  description:
+                    'Each integration reports its setup and authentication state here.',
+                })}
                 <div class="category-section">
                   ${repeat(
                     items,

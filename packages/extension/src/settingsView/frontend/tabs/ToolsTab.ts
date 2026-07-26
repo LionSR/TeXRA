@@ -7,10 +7,17 @@ import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared styles
-import { commonViewStyles, designTokens } from '@shared/styles';
+import {
+  commonViewStyles,
+  designTokens,
+  settingsBannerStyles,
+} from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
+import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderLoadingState } from '@shared/wa/loadingState';
+import { renderSettingsBanner } from '@shared/wa/settingsBanner';
+import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
 import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - shared schemas
@@ -73,28 +80,13 @@ export class ToolsTab extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
+    settingsBannerStyles,
     css`
       :host {
         display: block;
       }
 
       /* max-width and centering provided by .tab-content-container */
-
-      .tools-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: var(--wa-space-s);
-      }
-
-      .tools-title {
-        display: flex;
-        align-items: center;
-        gap: var(--wa-space-2xs);
-        font-size: var(--font-size-lg);
-        font-weight: var(--font-weight-medium);
-        color: var(--wa-color-text-normal);
-      }
 
       .tools-summary {
         display: flex;
@@ -140,48 +132,6 @@ export class ToolsTab extends LitElement {
       .tools-stat-missing {
         color: var(--color-status-error);
       }
-
-      /* .category-header chrome lives in commonViewStyles. */
-      .category-header wa-icon {
-        font-size: var(--font-size);
-      }
-
-      .category-count {
-        font-weight: normal;
-        opacity: var(--opacity-normal);
-      }
-
-      .tools-header-actions {
-        display: flex;
-        align-items: center;
-        gap: var(--wa-space-xs);
-      }
-
-      .desktop-settings {
-        padding: var(--wa-space-xs);
-        margin-bottom: var(--wa-space-xs);
-        background-color: var(--wa-color-neutral-fill-quiet);
-        border-radius: var(--border-radius);
-      }
-
-      .desktop-settings-title {
-        font-weight: var(--font-weight-semibold);
-        margin: 0;
-      }
-
-      .desktop-settings-description {
-        margin: var(--wa-space-2xs) 0 0 0;
-        font-size: var(--font-size-sm);
-        color: var(--wa-color-text-quiet);
-      }
-
-      .desktop-settings-row {
-        display: flex;
-        align-items: center;
-        gap: var(--wa-space-2xs);
-        margin-top: var(--wa-space-2xs);
-        flex-wrap: wrap;
-      }
     `,
   ];
 
@@ -225,17 +175,27 @@ export class ToolsTab extends LitElement {
   private renderApprovalSettings(): TemplateResult {
     return html`
       <div class="category-section">
-        <div class="category-header">
-          ${waIcon('shield')} Approval &amp; Safety
-        </div>
-
+        ${renderSettingsSectionHeading({
+          icon: 'shield',
+          title: 'Approval & safety',
+        })}
         <div class="settings-section">
-          <wa-switch
-            ?checked=${this.bashApprovalEnabled}
-            @change=${this.handleBashApprovalToggle}
-          >
-            Require approval for shell commands &amp; agent sessions
-          </wa-switch>
+          <div class="settings-row">
+            <div class="settings-row-text">
+              <span class="settings-row-label">
+                Require approval for shell commands and agent sessions
+              </span>
+              <span class="settings-row-help">
+                Pause before potentially consequential local actions.
+              </span>
+            </div>
+            <wa-switch
+              class="settings-row-control"
+              aria-label="Require approval for shell commands and agent sessions"
+              ?checked=${this.bashApprovalEnabled}
+              @change=${this.handleBashApprovalToggle}
+            ></wa-switch>
+          </div>
         </div>
       </div>
     `;
@@ -245,15 +205,27 @@ export class ToolsTab extends LitElement {
     if (!this.showAgentSkillsSettings) return nothing;
     return html`
       <div class="category-section">
-        <div class="category-header">${waIcon('robot')} Agent Skills</div>
-
+        ${renderSettingsSectionHeading({
+          icon: 'robot',
+          title: 'Agent skills',
+        })}
         <div class="settings-section">
-          <wa-switch
-            ?checked=${this.agentSkillsEnabled}
-            @change=${this.handleAgentSkillsToggle}
-          >
-            TeXRA and imported skills are available to tool-use agents
-          </wa-switch>
+          <div class="settings-row">
+            <div class="settings-row-text">
+              <span class="settings-row-label">
+                Make skills available to tool-use agents
+              </span>
+              <span class="settings-row-help">
+                Includes built-in TeXRA skills and imported skills.
+              </span>
+            </div>
+            <wa-switch
+              class="settings-row-control"
+              aria-label="Make skills available to tool-use agents"
+              ?checked=${this.agentSkillsEnabled}
+              @change=${this.handleAgentSkillsToggle}
+            ></wa-switch>
+          </div>
         </div>
       </div>
     `;
@@ -263,43 +235,47 @@ export class ToolsTab extends LitElement {
     if (!this.showDesktopCrashReporting) return nothing;
     return html`
       <div class="category-section">
-        <div class="category-header">
-          ${waIcon('desktop-download')} Desktop Diagnostics
-        </div>
-        <div class="desktop-settings">
-          <p class="desktop-settings-title">Native crash reporting</p>
-          <p class="desktop-settings-description">
-            Opt-in native crash capture for the standalone Electron app. Reports
-            are scrubbed before upload and performance tracing stays disabled.
-          </p>
-          <div class="desktop-settings-row">
-            <wa-switch
-              ?checked=${this.desktopCrashReportingEnabled}
-              @change=${this.handleDesktopCrashReportingToggle}
-            >
-              Enable native crash reporting
-            </wa-switch>
-            <wa-tag
-              variant=${
-                this.desktopCrashReportingConfigured ? 'success' : 'warning'
-              }
-              size="s"
-            >
-              ${
-                this.desktopCrashReportingConfigured ? 'DSN set' : 'DSN missing'
-              }
-            </wa-tag>
-            <wa-button
-              appearance="outlined"
-              variant="neutral"
-              size="s"
-              @click=${this.handleSetDesktopCrashReportingDsn}
-            >
-              ${waIcon('key', { slot: 'start' })}
-              ${
-                this.desktopCrashReportingConfigured ? 'Replace DSN' : 'Set DSN'
-              }
-            </wa-button>
+        ${renderSettingsSectionHeading({
+          icon: 'desktop-download',
+          title: 'Desktop diagnostics',
+        })}
+        <div class="settings-section">
+          <div class="settings-row">
+            <div class="settings-row-text">
+              <span class="settings-row-label">Native crash reporting</span>
+              <span class="settings-row-help">
+                Opt-in native crash capture. Reports are scrubbed before upload
+                and performance tracing stays disabled.
+              </span>
+            </div>
+            <div class="settings-row-control action-button-group">
+              <wa-switch
+                aria-label="Enable native crash reporting"
+                ?checked=${this.desktopCrashReportingEnabled}
+                @change=${this.handleDesktopCrashReportingToggle}
+              ></wa-switch>
+              <wa-tag
+                variant=${
+                  this.desktopCrashReportingConfigured ? 'success' : 'warning'
+                }
+                size="s"
+              >
+                ${
+                  this.desktopCrashReportingConfigured
+                    ? 'DSN set'
+                    : 'DSN missing'
+                }
+              </wa-tag>
+              ${renderLabeledActionButton({
+                icon: 'key',
+                text: this.desktopCrashReportingConfigured
+                  ? 'Replace DSN'
+                  : 'Set DSN',
+                kind: 'secondary',
+                appearance: 'outlined',
+                onClick: this.handleSetDesktopCrashReportingDsn,
+              })}
+            </div>
           </div>
         </div>
       </div>
@@ -371,10 +347,10 @@ export class ToolsTab extends LitElement {
     const meta = CATEGORY_META[category];
     return html`
       <div class="category-section">
-        <div class="category-header">
-          ${waIcon(meta.icon)} ${meta.label}
-          <span class="category-count">(${items.length})</span>
-        </div>
+        ${renderSettingsSectionHeading({
+          icon: meta.icon,
+          title: `${meta.label} (${items.length})`,
+        })}
         ${repeat(
           items,
           (item) => item.id,
@@ -398,21 +374,21 @@ export class ToolsTab extends LitElement {
 
     return html`
       <div class="tools-container tab-content-container">
-        <div class="tools-header">
-          <div class="tools-header-actions">
-            ${this.renderSummary(items)}
-            <wa-button
-              appearance="outlined"
-              variant="neutral"
-              size="s"
-              title="Re-check tool availability"
-              @click=${this.handleRecheck}
-            >
-              ${waIcon('refresh', { slot: 'start' })} Re-check
-            </wa-button>
-          </div>
-        </div>
-
+        ${renderSettingsBanner({
+          id: 'tool-availability-banner',
+          icon: 'tools',
+          title: 'Tool availability',
+          description:
+            'Monitor local capabilities and configure the tools agents may use.',
+          detail: this.renderSummary(items),
+          actions: renderLabeledActionButton({
+            icon: 'refresh',
+            text: 'Re-check',
+            kind: 'secondary',
+            appearance: 'outlined',
+            onClick: () => this.handleRecheck(),
+          }),
+        })}
         ${this.renderAgentSkillsSettings()} ${this.renderApprovalSettings()}
         ${this.renderDesktopCrashReporting()}
         ${CATEGORY_ORDER.filter((cat) => groups.has(cat)).map((cat) =>

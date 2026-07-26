@@ -14,6 +14,7 @@ export const WORKBENCH_KINDS = [
   'editor',
   'terminal',
   'browser',
+  'review',
   'settings',
   'logs',
 ] as const;
@@ -49,6 +50,12 @@ export const WORKBENCH_KIND_META: Readonly<
     defaultPlacement: 'right',
     icon: 'globe',
     label: 'Browser',
+    singleton: true,
+  },
+  review: {
+    defaultPlacement: 'right',
+    icon: 'diff-multiple',
+    label: 'Review',
     singleton: true,
   },
   settings: {

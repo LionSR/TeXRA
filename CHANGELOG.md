@@ -67,13 +67,21 @@ All notable changes to this project will be documented in this file.
   show concise file names instead of flattened paths.
 - **Settings now use a responsive top navigation** — account identity, sign-in,
   included usage, and credential access have a dedicated Account & Usage page,
-  while the remaining settings stay reachable in compact split views.
+  while a compact category-and-page hierarchy keeps the remaining settings
+  reachable without an overflowing row of tabs. Every page now follows the
+  same heading, section, banner, control-row, and responsive layout.
 - **Desktop keyboard shortcuts are now customizable** — users can search,
   reassign, clear, and restore bindings from a dedicated settings page, with
   changes applied immediately.
 - **The task toolbar now includes an environment summary** — a compact floating
   panel shows workspace changes, branch status, active agents, background
   terminal state, and attached sources without duplicating their controls.
+- **Requested file changes now open in a Review workbench** — changed files are
+  grouped by folder beside an in-app diff, with per-file and total line counts
+  for inspecting an agent's proposed edits.
+- **Desktop logs now provide an itemized live viewer** — entries refresh
+  automatically, remain independently expandable, and keep refresh, copy,
+  export, and folder actions in one toolbar.
 
 #### Bug Fixes
 
@@ -111,6 +119,13 @@ All notable changes to this project will be documented in this file.
 - **Desktop startup and narrow layouts remain usable** — onboarding adapts to
   split panes, tool information appears immediately while refreshing, and
   macOS window controls no longer collide with navigation.
+- **Desktop sign-in stays in the system browser** — cancelling authorization
+  returns safely to TeXRA instead of opening an embedded sign-in window or
+  terminating the app.
+- **The project tree and terminal match the surrounding workspace** — hovering
+  a file no longer highlights every parent folder, tree icons sit close to
+  their labels, and the terminal no longer has nested borders or a mismatched
+  black container.
 
 ### CLI
 

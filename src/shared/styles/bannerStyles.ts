@@ -5,7 +5,7 @@
 
 import { css, type CSSResult } from 'lit';
 
-export const bannerFrameStyles: CSSResult = css`
+const bannerFrameStyles: CSSResult = css`
   .banner-frame {
     min-height: 0;
   }

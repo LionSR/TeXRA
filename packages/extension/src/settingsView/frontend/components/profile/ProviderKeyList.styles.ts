@@ -32,20 +32,6 @@ export const providerKeyListStyles: CSSResult = css`
    * Provider Keys Section
    * ============================================ */
 
-  .provider-keys-section {
-    margin-top: var(--wa-space-l);
-  }
-
-  .provider-keys-section h2 {
-    margin-top: 0;
-  }
-
-  .provider-keys-description {
-    color: var(--color-text-secondary);
-    margin-bottom: var(--wa-space-xs);
-    line-height: var(--line-height-normal);
-  }
-
   .provider-name {
     font-weight: var(--font-weight-medium);
     white-space: nowrap;

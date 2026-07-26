@@ -1,8 +1,8 @@
 // Third-party imports
 import { css, type CSSResult } from 'lit';
 
-// Shared history/search styles — use native Lit array instead of unsafeCSS embedding
-import { searchStyles, historyListStyles } from '@shared/styles';
+// Shared history/search styles
+import { historyListStyles, searchStyles } from '@shared/styles';
 
 const settingsContainerStyles: CSSResult = css`
   :host {
@@ -13,48 +13,17 @@ const settingsContainerStyles: CSSResult = css`
   }
 
   .settings-container {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-    height: 100%;
-    overflow: hidden;
-    /* A settings pane can be a quarter of a desktop grid, so navigation adapts
-       to its container rather than the viewport. */
     container: settings / inline-size;
-  }
-
-  wa-tab-group.settings-tabs {
-    flex: 1;
     display: flex;
     flex-direction: column;
-    min-width: 0;
-    min-height: 0;
-    /* The active tab is a filled pill rather than a thin edge indicator. */
-    --track-color: transparent;
-    --indicator-color: transparent;
-  }
-
-  /* WA's internal .tab-group wrapper (exposed as ::part(base)) is a flex
-     column but doesn't inherit the bounded host height. Without height
-     100% it sizes to content and the panel grows past the dialog viewport,
-     defeating overflow:auto on the panel. */
-  wa-tab-group.settings-tabs::part(base) {
     min-width: 0;
     height: 100%;
-    min-height: 0;
-  }
-
-  wa-tab-group.settings-tabs::part(body) {
-    flex: 1;
-    min-width: 0;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
     overflow: hidden;
   }
 
-  wa-tab-group.settings-tabs::part(nav) {
-    width: 100%;
+  .settings-navigation {
+    z-index: 2;
+    flex: 0 0 auto;
     border-bottom: var(--border-thin) solid var(--border-hairline);
     background: color-mix(
       in srgb,
@@ -63,46 +32,64 @@ const settingsContainerStyles: CSSResult = css`
     );
   }
 
-  wa-tab-group.settings-tabs::part(tabs) {
+  .settings-category-nav,
+  .settings-page-nav {
     display: flex;
     align-items: center;
-    flex-wrap: nowrap;
-    width: max-content;
-    min-width: 100%;
-    gap: var(--wa-space-3xs);
-    padding: var(--wa-space-2xs) var(--wa-space-xs);
+    min-width: 0;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
   }
 
-  wa-tab-group.settings-tabs wa-tab {
+  .settings-category-nav::-webkit-scrollbar,
+  .settings-page-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .settings-category-nav {
+    gap: var(--wa-space-3xs);
+    min-height: var(--height-control-l);
+    padding: var(--wa-space-2xs) var(--wa-space-xs);
+    border-bottom: var(--border-thin) solid var(--border-hairline);
+  }
+
+  .settings-page-nav {
+    gap: var(--wa-space-3xs);
+    min-height: var(--height-control);
+    padding: var(--wa-space-3xs) var(--wa-space-xs);
+  }
+
+  .settings-category-button,
+  .settings-page-button {
     flex: 0 0 auto;
-    letter-spacing: var(--letter-spacing-tight);
     white-space: nowrap;
   }
 
-  /* Tabs use the shared compact-control geometry so icon, label, and pointer
-     target stay aligned at every pane width. */
-  wa-tab-group.settings-tabs wa-tab::part(base) {
-    display: flex;
-    align-items: center;
+  .settings-category-button::part(base),
+  .settings-page-button::part(base) {
     justify-content: center;
     min-height: var(--height-control);
     padding: 0 var(--wa-space-xs);
     border: var(--border-thin) solid transparent;
     border-radius: var(--wa-border-radius-pill);
+    color: var(--wa-color-text-quiet);
     font-size: var(--font-size);
     font-weight: var(--font-weight);
-    color: var(--wa-color-text-quiet);
+    letter-spacing: var(--letter-spacing-tight);
     transition:
       background-color var(--transition-fast),
       border-color var(--transition-fast),
       color var(--transition-fast);
   }
 
-  wa-tab-group.settings-tabs wa-tab:hover::part(base) {
+  .settings-category-button:hover::part(base),
+  .settings-page-button:hover::part(base) {
     background: var(--surface-hover);
+    color: var(--wa-color-text-normal);
   }
 
-  wa-tab-group.settings-tabs wa-tab[active]::part(base) {
+  .settings-category-button[data-active='true']::part(base) {
     border-color: var(--border-hairline);
     background: var(--wa-color-surface-default);
     color: var(--wa-color-text-normal);
@@ -110,96 +97,66 @@ const settingsContainerStyles: CSSResult = css`
     box-shadow: var(--wa-shadow-s, none);
   }
 
-  /* Group heading. Slotted into "nav" but not a wa-tab, so WA's getAllTabs()
-     filter keeps it out of tab logic and arrow-key navigation. */
-  .settings-nav-group {
-    flex: 0 0 auto;
-    align-self: center;
-    margin-inline-start: var(--wa-space-2xs);
-    padding-inline: var(--wa-space-xs) var(--wa-space-2xs);
-    border-inline-start: var(--border-thin) solid var(--border-hairline);
-    color: var(--wa-color-text-quiet);
-    font-size: var(--font-size-xs);
+  .settings-page-button[data-active='true']::part(base) {
+    background: var(--surface-selected);
+    color: var(--wa-color-text-normal);
     font-weight: var(--font-weight-medium);
-    letter-spacing: 0.04em;
-    line-height: var(--line-height-tight);
-    text-transform: uppercase;
-    white-space: nowrap;
   }
 
-  .settings-nav-group:first-of-type {
-    margin-inline-start: 0;
-    padding-inline-start: 0;
-    border-inline-start: 0;
-  }
-
+  .settings-category-button wa-icon,
+  .settings-page-button wa-icon,
   .settings-unavailable-icon,
   .settings-tab-icon {
     display: grid;
-    place-items: center;
+    flex: 0 0 auto;
     width: 1em;
     height: 1em;
-    flex: 0 0 auto;
+    place-items: center;
     line-height: 1;
   }
 
-  wa-tab .settings-tab-icon {
-    margin-inline-end: 0.45em;
-    opacity: var(--opacity-normal);
-  }
-
-  wa-tab[active] .settings-tab-icon {
-    opacity: 1;
-  }
-
-  /* Group captions are supporting context. Drop them before squeezing the
-     actual destinations, while keeping the tab labels available. */
-  @container settings (max-width: 900px) {
-    .settings-nav-group {
-      display: none;
-    }
-  }
-
-  /* Very narrow split panes retain all destinations as icon-only Web Awesome
-     tabs. Every tab has an aria-label and title, so the compact rendering does
-     not remove its name. */
-  @container settings (max-width: 520px) {
-    wa-tab-group.settings-tabs::part(tabs) {
-      gap: var(--wa-space-3xs);
-      padding-inline: var(--wa-space-2xs);
-    }
-
-    wa-tab-group.settings-tabs wa-tab {
-      width: var(--height-control);
-      height: var(--height-control);
-    }
-
-    wa-tab-group.settings-tabs wa-tab::part(base) {
-      box-sizing: border-box;
-      width: 100%;
-      height: 100%;
-      min-height: 0;
-      display: grid;
-      place-items: center;
-      padding: 0;
-    }
-
-    wa-tab-group.settings-tabs wa-tab .settings-tab-label {
-      display: none;
-    }
-
-    wa-tab .settings-tab-icon {
-      margin-inline-end: 0;
-    }
-  }
-
-  wa-tab-panel {
+  .settings-panel {
     flex: 1;
     box-sizing: border-box;
     min-width: 0;
+    min-height: 0;
     max-width: 100%;
+    padding: var(--wa-space-s);
     overflow: auto;
-    --padding: var(--wa-space-s);
+    overscroll-behavior: contain;
+  }
+
+  .settings-page-header {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: var(--wa-space-s);
+    margin-bottom: var(--wa-space-s);
+    padding-bottom: var(--wa-space-s);
+    border-bottom: var(--border-thin) solid var(--border-hairline);
+  }
+
+  .settings-page-header-icon {
+    color: var(--wa-color-text-normal);
+  }
+
+  .settings-page-header-copy {
+    min-width: 0;
+  }
+
+  .settings-page-header h1 {
+    margin: 0;
+    color: var(--wa-color-text-normal);
+    font-size: var(--font-size-h1);
+    font-weight: var(--wa-font-weight-semibold);
+    line-height: var(--line-height-heading);
+  }
+
+  .settings-page-header p {
+    margin: var(--wa-space-3xs) 0 0;
+    color: var(--wa-color-text-quiet);
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-normal);
   }
 
   .settings-unavailable {
@@ -217,12 +174,68 @@ const settingsContainerStyles: CSSResult = css`
     color: var(--text-color);
     font-weight: var(--font-weight-medium);
   }
+
+  @container settings (max-width: 680px) {
+    .settings-category-button::part(base) {
+      width: var(--height-control);
+      gap: 0;
+      place-content: center;
+      padding: 0;
+    }
+
+    .settings-category-button::part(start) {
+      margin: 0;
+    }
+
+    .settings-category-button wa-icon {
+      margin-inline-end: 0;
+    }
+
+    .settings-category-button::part(label) {
+      display: none;
+    }
+  }
+
+  @container settings (max-width: 520px) {
+    .settings-category-nav,
+    .settings-page-nav {
+      padding-inline: var(--wa-space-2xs);
+    }
+
+    .settings-page-button::part(base) {
+      width: var(--height-control);
+      gap: 0;
+      place-content: center;
+      padding: 0;
+    }
+
+    .settings-page-button::part(start) {
+      margin: 0;
+    }
+
+    .settings-page-button wa-icon {
+      margin-inline-end: 0;
+    }
+
+    .settings-page-button::part(label) {
+      display: none;
+    }
+
+    .settings-panel {
+      padding: var(--wa-space-xs);
+    }
+
+    .settings-page-header {
+      align-items: start;
+      gap: var(--wa-space-xs);
+    }
+
+    .settings-page-header-icon {
+      --icon-surface-size: var(--control-size-m);
+    }
+  }
 `;
 
-/**
- * Combined settings view styles — array of shared + local styles.
- * Lit supports nested CSSResult arrays natively.
- */
 export const settingsViewStyles = [
   searchStyles,
   historyListStyles,

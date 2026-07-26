@@ -194,7 +194,7 @@ const DesktopEnvironmentRequestMessageSchema = z.object({
   command: z.literal(DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_REQUEST),
 });
 
-export const DesktopEnvironmentSummarySchema = z.object({
+const DesktopEnvironmentSummarySchema = z.object({
   isGitRepository: z.boolean(),
   branch: z.string().optional(),
   upstream: z.string().optional(),

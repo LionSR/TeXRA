@@ -3356,11 +3356,6 @@ describe('DesktopProgressBridge', () => {
           PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION
         ],
       );
-      await handleOldToolEdit({
-        command: PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
-        requestId: oldRequestId,
-        action: 'openDiff',
-      });
       await vi.waitFor(() => expect(owner.diffPathsA).toHaveLength(1));
       const [oldDiff] = owner.diffPathsA;
       await expect(access(oldDiff!.original)).resolves.toBeUndefined();

@@ -342,34 +342,77 @@ export const commonViewStyles: CSSResult = css`
     margin: 0 auto;
   }
 
-  .settings-subsection-heading {
-    margin-top: var(--wa-space-l);
-    margin-bottom: var(--wa-space-xs);
-    padding-bottom: var(--wa-space-2xs);
+  .settings-section-heading {
+    display: grid;
+    gap: var(--wa-space-3xs);
+    margin: var(--wa-space-l) 0 var(--wa-space-xs);
+    padding-bottom: var(--wa-space-xs);
     border-bottom: var(--border-thin) solid var(--color-border);
+  }
+
+  .settings-section-heading-row {
+    display: flex;
+    align-items: center;
+    gap: var(--wa-space-2xs);
+    min-width: 0;
+  }
+
+  .settings-section-heading-icon {
+    display: grid;
+    width: 1em;
+    height: 1em;
+    flex: 0 0 auto;
+    place-items: center;
+    color: var(--wa-color-text-quiet);
+    font-size: var(--font-size);
+  }
+
+  .settings-section-heading-title {
+    margin: 0;
     color: var(--wa-color-text-normal);
     font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-semibold);
+    line-height: var(--line-height-tight);
+  }
+
+  .settings-section-heading-description {
+    max-width: 72ch;
+    margin: 0;
+    color: var(--wa-color-text-quiet);
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-relaxed);
+  }
+
+  .settings-section-heading-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--wa-space-2xs);
+    margin-inline-start: auto;
   }
 
   .category-section {
     margin-bottom: var(--wa-space-s);
   }
 
-  /* Shared section header — uppercase divider used across settings tabs.
-     LaTeXTab uses .section-header; ToolsTab uses .category-header. Both
-     resolve to identical chrome here. */
-  .section-header,
-  .category-header {
-    display: flex;
-    align-items: center;
-    gap: var(--wa-space-2xs);
-    padding-bottom: var(--wa-space-2xs);
-    margin-bottom: var(--wa-space-xs);
-    border-bottom: var(--border-thin) solid var(--color-border);
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium);
-    color: var(--color-text-secondary);
-    text-transform: uppercase;
-    letter-spacing: var(--letter-spacing-caps);
+  @container settings (max-width: 520px) {
+    .settings-section-heading-row {
+      flex-wrap: wrap;
+    }
+
+    .settings-section-heading-actions {
+      width: 100%;
+      margin-inline-start: 0;
+    }
+
+    .settings-row {
+      align-items: stretch;
+      flex-direction: column;
+      gap: var(--wa-space-xs);
+    }
+
+    .settings-row-control {
+      justify-content: flex-start;
+    }
   }
 `;

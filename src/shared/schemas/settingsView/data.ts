@@ -126,12 +126,11 @@ export type SettingsTab = (typeof SETTINGS_TAB)[keyof typeof SETTINGS_TAB];
  * appended tab cannot ship without being placed here.
  */
 export const SETTINGS_TAB_GROUPS = [
-  { label: 'Account', tabs: ['ACCOUNT'] },
-  { label: 'Models & Access', tabs: ['MODELS'] },
+  { label: 'Account & Access', tabs: ['ACCOUNT', 'MODELS'] },
   { label: 'Agents', tabs: ['AGENTS', 'MULTI_AGENT'] },
-  { label: 'Tools & Integrations', tabs: ['TOOLS', 'AI_AGENTS', 'LATEX'] },
+  { label: 'Capabilities', tabs: ['TOOLS', 'AI_AGENTS', 'LATEX'] },
   { label: 'Workspace', tabs: ['GIT', 'SHORTCUTS'] },
-  { label: 'Activity', tabs: ['HISTORY', 'MEMORY', 'GOAL'] },
+  { label: 'Data & Activity', tabs: ['HISTORY', 'MEMORY', 'GOAL'] },
 ] as const satisfies readonly {
   label: string;
   tabs: readonly SettingsTabName[];

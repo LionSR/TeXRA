@@ -95,11 +95,10 @@ async function waitForActiveSettingsPanel(panel: string): Promise<void> {
     (name) => {
       const settingsApp = document.querySelector('settings-app');
       const root = settingsApp?.shadowRoot;
-      const activePanel = root?.querySelector(
-        `wa-tab-panel[name="${name}"][active]`,
+      const activePage = root?.querySelector(
+        `.settings-page-button[data-panel="${name}"][data-active="true"]`,
       );
-      const activeTab = root?.querySelector(`wa-tab[panel="${name}"][active]`);
-      return activeTab != null || activePanel != null;
+      return activePage != null;
     },
     panel,
     { timeout: 10_000 },
@@ -147,10 +146,7 @@ test('settings → models tab mounts and provider settings are reachable', async
   // another shadow root deep, so structural presence is sufficient here.
   const panelHasChild = await launched.page.evaluate(() => {
     const settingsApp = document.querySelector('settings-app');
-    const panel = settingsApp?.shadowRoot?.querySelector(
-      'wa-tab-panel[name="models"][active]',
-    );
-    return panel != null && panel.children.length > 0;
+    return settingsApp?.shadowRoot?.querySelector('models-tab') != null;
   });
   expect(panelHasChild).toBe(true);
 });
@@ -235,32 +231,26 @@ test('rapid settings-tab switching does not crash the renderer', async () => {
 });
 
 /**
- * Trajectory 18 — in-app diff overlay (audit item C).
+ * Trajectory 18 — in-app Review workbench.
  *
  * `desktopDiffHost` posts `desktop:showDiff` to the renderer; the renderer
- * lazy-creates a wa-dialog overlay containing `<texra-diff-view>`. We
- * simulate the IPC by `window.postMessage`-ing the same payload and assert
- * the dialog opens and carries the supplied title + content.
+ * opens a persistent Review tab containing `<texra-diff-view>` and a changed
+ * file tree. We simulate the IPC by `window.postMessage`-ing the same payload
+ * and assert the workbench opens and carries the supplied title + content.
  *
  * Monaco is heavy (workers + WASM) so we don't wait for the editor to
- * finish loading — only that the dialog and the `<texra-diff-view>`
+ * finish loading — only that the workbench and the `<texra-diff-view>`
  * element exist with the right props.
  */
-test('desktop:showDiff opens the in-app diff overlay', async () => {
-  // Reset chrome to a known state — the previous test may have left
-  // settings open.
-  await launched.page.evaluate(() => {
-    const dialogs = document.querySelectorAll('wa-dialog');
-    dialogs.forEach((d) => {
-      (d as unknown as { open: boolean }).open = false;
-    });
-  });
-
+test('desktop:showDiff opens the in-app Review workbench', async () => {
   const payload = {
     command: 'desktop:showDiff',
     title: 'Compare paper.tex',
+    displayPath: 'paper.tex',
     originalText: '\\documentclass{article}\nold body\n',
     proposedText: '\\documentclass{article}\nnew body\n',
+    additions: 1,
+    deletions: 1,
     language: 'latex',
     originalPath: '/tmp/original/paper.tex',
     proposedPath: '/tmp/proposed/paper.tex',
@@ -270,34 +260,25 @@ test('desktop:showDiff opens the in-app diff overlay', async () => {
     window.postMessage(message, '*');
   }, payload);
 
-  // Wait for the dialog to appear and open. wa-dialog reflects `open` as
-  // an attribute when set; check both since timing of wa internals
-  // varies.
-  await launched.page.waitForFunction(
-    () => {
-      const dialog = document.querySelector('wa-dialog.desktop-diff-overlay');
-      if (!dialog) return false;
-      const open = (dialog as unknown as { open: boolean }).open === true;
-      return open || dialog.hasAttribute('open');
-    },
-    undefined,
-    { timeout: 5000 },
+  const reviewTab = launched.page.locator(
+    '.task-workbench-tab[data-kind="review"][data-active="true"]',
   );
-
-  const dialog = launched.page.locator('wa-dialog.desktop-diff-overlay');
-  await expect(dialog).toHaveCount(1);
-  // Title + subtitle are populated from the payload.
-  await expect(dialog.locator('.desktop-diff-title')).toHaveText(
+  await expect(reviewTab).toBeVisible();
+  const review = launched.page.locator('.desktop-review-pane');
+  await expect(review).toBeVisible();
+  await expect(review.locator('.desktop-review-summary strong')).toHaveText(
     'Compare paper.tex',
   );
-  await expect(dialog.locator('.desktop-diff-subtitle')).toHaveText(
-    '/tmp/proposed/paper.tex',
+  await expect(review.locator('.desktop-review-file')).toContainText(
+    'paper.tex',
   );
+  await expect(review.locator('.desktop-review-counts')).toContainText('+1');
+  await expect(review.locator('.desktop-review-counts')).toContainText('-1');
   // The diff component element exists with the right props (we don't
   // wait for Monaco to finish loading — verifying the contract is enough).
   const diffViewProps = await launched.page.evaluate(() => {
     const el = document.querySelector(
-      'wa-dialog.desktop-diff-overlay texra-diff-view',
+      '.desktop-review-pane texra-diff-view',
     ) as
       | (HTMLElement & {
           originalText: string;
@@ -317,19 +298,13 @@ test('desktop:showDiff opens the in-app diff overlay', async () => {
   expect(diffViewProps?.proposedText).toContain('new body');
   expect(diffViewProps?.language).toBe('latex');
 
-  // Close via desktop:closeDiff — the dialog should close.
+  // Close via desktop:closeDiff — the Review tab should close.
   await launched.page.evaluate(() => {
     window.postMessage({ command: 'desktop:closeDiff' }, '*');
   });
-  await launched.page.waitForFunction(
-    () => {
-      const dialog = document.querySelector('wa-dialog.desktop-diff-overlay');
-      if (!dialog) return true;
-      return (dialog as unknown as { open: boolean }).open === false;
-    },
-    undefined,
-    { timeout: 5000 },
-  );
+  await expect(
+    launched.page.locator('.task-workbench-tab[data-kind="review"]'),
+  ).toHaveCount(0);
 });
 
 /**

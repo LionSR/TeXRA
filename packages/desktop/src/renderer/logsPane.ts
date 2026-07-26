@@ -1,15 +1,56 @@
+// Third-party imports
+import '@awesome.me/webawesome/dist/components/details/details.js';
 import { html, render, type TemplateResult } from 'lit';
+import { repeat } from 'lit/directives/repeat.js';
+
+// Shared imports
 import { postMessage } from '@shared/hostBridge';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
+import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
+import { formatTimestamp, truncateSummary } from '@utils/text/stringUtils';
+
+// Local imports
 import { DESKTOP_LOCAL_COMMANDS } from '../desktopCommandSurface';
 import {
   DESKTOP_LOG_COMMANDS,
   type DesktopSetLogMessage,
 } from '../desktopLogMessages';
 
+export type DesktopLogLevel =
+  'debug' | 'error' | 'info' | 'log' | 'warn' | 'unknown';
+
+export interface DesktopLogEntry {
+  readonly id: string;
+  readonly level: DesktopLogLevel;
+  readonly levelLabel: string;
+  readonly message: string;
+  readonly raw: string;
+  readonly summary: string;
+  readonly timestamp?: string;
+  readonly timestampLabel: string;
+}
+
 interface LogViewerState {
+  entries: readonly DesktopLogEntry[];
+  emptyMessage: string;
   meta: string;
-  text: string;
+}
+
+interface DesktopLogEntryDraft {
+  readonly level: DesktopLogLevel;
+  readonly messageLines: string[];
+  readonly rawLines: string[];
+  readonly timestamp?: string;
+}
+
+export interface LogsPaneOptions {
+  readonly sendCommand?: (command: string) => void;
+  readonly scheduleRefresh?: (
+    callback: () => void,
+    intervalMs: number,
+  ) => number;
+  readonly cancelRefresh?: (handle: number) => void;
+  readonly refreshIntervalMs?: number;
 }
 
 export interface LogsPaneController {
@@ -19,25 +60,161 @@ export interface LogsPaneController {
    * stream instead of covering it.
    */
   readonly element: HTMLElement;
-  /** Requests a fresh snapshot; called when the Logs tab is opened. */
-  open(): void;
   applySnapshot(message: DesktopSetLogMessage): void;
+  /** Starts or stops polling as the singleton Logs tab gains or loses focus. */
+  setActive(active: boolean): void;
   /** Re-render the viewer template with the current state (used during recovery). */
   rerenderViewer(): void;
 }
 
-export function createLogsPane(): LogsPaneController {
+const LOG_LINE_PATTERN =
+  /^(?<timestamp>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z) \[(?<level>debug|error|info|log|warn)\](?: (?<message>.*))?$/u;
+const LOG_SUMMARY_MAX_LENGTH = 180;
+const LOG_AUTO_REFRESH_INTERVAL_MS = 5_000;
+const LOG_LEVEL_PRESENTATION = {
+  debug: { icon: 'code', label: 'Debug' },
+  error: { icon: 'circle-xmark', label: 'Error' },
+  info: { icon: 'circle-info', label: 'Info' },
+  log: { icon: 'terminal', label: 'Log' },
+  unknown: { icon: 'file-lines', label: 'Partial' },
+  warn: { icon: 'triangle-exclamation', label: 'Warning' },
+} as const satisfies Record<
+  DesktopLogLevel,
+  { readonly icon: TeXRAIconName; readonly label: string }
+>;
+
+/**
+ * Splits the redacted desktop log excerpt at its timestamped entry boundaries.
+ * Stack traces and other continuation lines remain attached to the entry that
+ * emitted them. IDs derive from entry contents, so keyed details rows preserve
+ * their expanded state across automatic refreshes.
+ */
+export function parseDesktopLogEntries(text: string): DesktopLogEntry[] {
+  const drafts: DesktopLogEntryDraft[] = [];
+  let current: DesktopLogEntryDraft | undefined;
+  const lines = text
+    .replaceAll('\r\n', '\n')
+    .replaceAll('\r', '\n')
+    .split('\n');
+  if (lines.at(-1) === '') lines.pop();
+
+  for (const line of lines) {
+    const match = LOG_LINE_PATTERN.exec(line);
+    const timestamp = match?.groups?.timestamp;
+    const level = match?.groups?.level as DesktopLogLevel | undefined;
+    if (timestamp && level) {
+      if (current) drafts.push(current);
+      const message = match?.groups?.message ?? '';
+      current = {
+        level,
+        messageLines: [message],
+        rawLines: [line],
+        timestamp,
+      };
+      continue;
+    }
+
+    if (current) {
+      current.messageLines.push(line);
+      current.rawLines.push(line);
+      continue;
+    }
+
+    if (line.trim().length > 0) {
+      current = {
+        level: 'unknown',
+        messageLines: [line],
+        rawLines: [line],
+      };
+    }
+  }
+  if (current) drafts.push(current);
+
+  const duplicateIds = new Map<string, number>();
+  return drafts.map((draft) => {
+    const raw = draft.rawLines.join('\n');
+    let hash = 2_166_136_261;
+    // charCodeAt is intentional: the same UTF-16 log contents must keep the same
+    // row key across refreshes, including content outside the basic plane.
+    for (let index = 0; index < raw.length; index += 1) {
+      hash = Math.imul(hash ^ raw.charCodeAt(index), 16_777_619);
+    }
+    const baseId = `desktop-log-${(hash >>> 0).toString(36)}`;
+    const duplicateCount = duplicateIds.get(baseId) ?? 0;
+    duplicateIds.set(baseId, duplicateCount + 1);
+
+    const message = draft.messageLines.join('\n');
+    const presentation = LOG_LEVEL_PRESENTATION[draft.level];
+    return {
+      id: duplicateCount === 0 ? baseId : `${baseId}-${duplicateCount + 1}`,
+      level: draft.level,
+      levelLabel: presentation.label,
+      message,
+      raw,
+      summary:
+        truncateSummary(message, LOG_SUMMARY_MAX_LENGTH) || '(no message)',
+      ...(draft.timestamp ? { timestamp: draft.timestamp } : {}),
+      timestampLabel: draft.timestamp
+        ? formatTimestamp(draft.timestamp)
+        : 'Partial entry',
+    };
+  });
+}
+
+export function createLogsPane(
+  options: LogsPaneOptions = {},
+): LogsPaneController {
   const container: HTMLElement = document.createElement('div');
   container.setAttribute('data-desktop-view', 'logs');
   container.className = 'desktop-log-host';
 
+  const sendCommand =
+    options.sendCommand ?? ((command: string) => postMessage(command));
+  const scheduleRefresh =
+    options.scheduleRefresh ??
+    ((callback: () => void, intervalMs: number) =>
+      window.setInterval(callback, intervalMs));
+  const cancelRefresh =
+    options.cancelRefresh ?? ((handle: number) => window.clearInterval(handle));
+  const refreshIntervalMs =
+    options.refreshIntervalMs ?? LOG_AUTO_REFRESH_INTERVAL_MS;
+
   let state: LogViewerState = {
+    entries: [],
+    emptyMessage: 'Open Logs to load recent entries.',
     meta: 'Recent redacted log entries appear here.',
-    text: 'Open Logs to load recent entries.',
   };
+  let active = false;
+  let refreshHandle: number | undefined;
 
   function requestSnapshot(): void {
-    postMessage(DESKTOP_LOG_COMMANDS.REQUEST_LOG);
+    sendCommand(DESKTOP_LOG_COMMANDS.REQUEST_LOG);
+  }
+
+  function entryTemplate(entry: DesktopLogEntry): TemplateResult {
+    const presentation = LOG_LEVEL_PRESENTATION[entry.level];
+    return html`
+      <wa-details
+        class="desktop-log-entry"
+        appearance="plain"
+        icon-placement="start"
+        data-entry-id=${entry.id}
+        data-level=${entry.level}
+        role="listitem"
+      >
+        <div slot="summary" class="desktop-log-entry-summary">
+          <span class="desktop-log-entry-level-icon" aria-hidden="true">
+            ${waIcon(presentation.icon)}
+          </span>
+          <span class="desktop-log-entry-level">${entry.levelLabel}</span>
+          <time class="desktop-log-entry-time" datetime=${entry.timestamp ?? ''}
+            >${entry.timestampLabel}</time
+          >
+          <span class="desktop-log-entry-preview">${entry.summary}</span>
+        </div>
+        <pre class="desktop-log-entry-content">${entry.raw}</pre>
+      </wa-details>
+    `;
   }
 
   function viewerTemplate(s: LogViewerState): TemplateResult {
@@ -63,17 +240,33 @@ export function createLogsPane(): LogsPaneController {
           <div class="desktop-log-viewer-actions">
             ${action('rotate-right', 'Refresh', requestSnapshot)}
             ${action('copy', 'Copy', () =>
-              postMessage(DESKTOP_LOG_COMMANDS.COPY_LOG),
+              sendCommand(DESKTOP_LOG_COMMANDS.COPY_LOG),
             )}
             ${action('download', 'Export', () =>
-              postMessage(DESKTOP_LOG_COMMANDS.EXPORT_LOG),
+              sendCommand(DESKTOP_LOG_COMMANDS.EXPORT_LOG),
             )}
             ${action('folder-open', 'Open Folder', () =>
-              postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER),
+              sendCommand(DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER),
             )}
           </div>
         </header>
-        <pre class="desktop-log-viewer-output">${s.text}</pre>
+        <div
+          class="desktop-log-viewer-list"
+          role="list"
+          aria-label="Recent desktop log entries"
+        >
+          ${
+            s.entries.length === 0
+              ? html`<div class="desktop-log-viewer-empty" role="status">
+                  ${s.emptyMessage}
+                </div>`
+              : repeat(
+                  s.entries.toReversed(),
+                  (entry) => entry.id,
+                  entryTemplate,
+                )
+          }
+        </div>
       </section>
     `;
   }
@@ -82,14 +275,32 @@ export function createLogsPane(): LogsPaneController {
     render(viewerTemplate(state), container);
   }
 
-  function open(): void {
+  function setActive(nextActive: boolean): void {
+    if (active === nextActive) return;
+    active = nextActive;
+    if (!active) {
+      if (refreshHandle != null) cancelRefresh(refreshHandle);
+      refreshHandle = undefined;
+      return;
+    }
+
     requestSnapshot();
+    refreshHandle = scheduleRefresh(() => {
+      if (!active) return;
+      if (!container.isConnected) {
+        setActive(false);
+        return;
+      }
+      requestSnapshot();
+    }, refreshIntervalMs);
   }
 
   function applySnapshot(message: DesktopSetLogMessage): void {
     const path = message.log.path ?? 'desktop log file';
+    const entries = parseDesktopLogEntries(message.log.text);
     state = {
-      text: message.log.text || 'No desktop log entries yet.',
+      entries,
+      emptyMessage: 'No desktop log entries yet.',
       meta: message.log.truncated
         ? `Showing the most recent redacted entries from ${path}.`
         : `Showing redacted entries from ${path}.`,
@@ -97,5 +308,6 @@ export function createLogsPane(): LogsPaneController {
     rerenderViewer();
   }
 
-  return { element: container, open, applySnapshot, rerenderViewer };
+  rerenderViewer();
+  return { element: container, applySnapshot, setActive, rerenderViewer };
 }

@@ -261,7 +261,13 @@ export function createDesktopSupabaseAuth(
           }
           const message = toErrorMessage(error);
           log.error(`Desktop auth callback failed: ${message}`);
-          await host.showErrorMessage(`Sign-in failed: ${message}`);
+          try {
+            await host.showErrorMessage(`Sign-in failed: ${message}`);
+          } catch (notificationError) {
+            log.warn(
+              `Desktop sign-in error notification failed: ${toErrorMessage(notificationError)}`,
+            );
+          }
         }
       }
     } finally {
@@ -346,7 +352,7 @@ export function createDesktopSupabaseAuth(
 
       await host.openExternalUrl(data.url);
       await host.showInfoMessage(
-        'Complete sign-in in the window that just opened. TeXRA updates automatically when it finishes.',
+        'Complete sign-in in your browser. TeXRA updates automatically when it finishes.',
       );
     } catch (error) {
       if (ownsAttempt(generation, nonce)) activeAttempt = undefined;
@@ -451,7 +457,20 @@ async function processProtocolCallback(
 
   if (!result.success) {
     if (result.isAuthError) {
-      await host.showErrorMessage(`Sign-in failed: ${result.error}`);
+      const callbackError =
+        new URLSearchParams(callback.query).get('error') ??
+        new URLSearchParams(callback.fragment).get('error');
+      if (callbackError === 'access_denied') {
+        log.info('Desktop sign-in was cancelled in the system browser');
+        return false;
+      }
+      try {
+        await host.showErrorMessage(`Sign-in failed: ${result.error}`);
+      } catch (error) {
+        log.warn(
+          `Desktop sign-in error notification failed: ${toErrorMessage(error)}`,
+        );
+      }
     } else {
       log.debug(`Desktop auth callback ignored: ${result.error}`);
     }

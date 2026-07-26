@@ -9,9 +9,15 @@ import { customElement, property } from 'lit/decorators.js';
 // Local imports - shared webview
 import { postMessage } from '@shared/hostBridge';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { commonViewStyles, designTokens } from '@shared/styles';
+import {
+  commonViewStyles,
+  designTokens,
+  settingsBannerStyles,
+} from '@shared/styles';
 import type { SpendingStatus } from '@shared/schemas/spendingStatus';
-import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { renderLabeledActionButton } from '@shared/wa/actionButtons';
+import { renderSettingsBanner } from '@shared/wa/settingsBanner';
+import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
 
 // Local imports - settings view components
 import '../components/profile/RelayQuotaMeter';
@@ -21,74 +27,18 @@ export class AccountTab extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
+    settingsBannerStyles,
     css`
       :host {
         display: block;
       }
 
       .account-page {
-        display: grid;
-        gap: var(--wa-space-l);
-      }
-
-      .account-identity {
-        display: grid;
-        grid-template-columns: auto minmax(0, 1fr) auto;
-        align-items: center;
-        gap: var(--wa-space-s);
-        padding: var(--wa-space-l);
-        border: var(--border-thin) solid var(--border-hairline);
-        border-radius: var(--wa-border-radius-l);
-        background: var(--wa-color-surface-lowered);
-      }
-
-      .account-copy {
-        min-width: 0;
-      }
-
-      .account-title {
-        margin: 0;
-        color: var(--wa-color-text-normal);
-        font-size: var(--font-size-lg);
-        font-weight: var(--font-weight-semibold);
-      }
-
-      .account-detail {
-        margin: var(--wa-space-3xs) 0 0;
-        overflow: hidden;
-        color: var(--wa-color-text-quiet);
-        font-size: var(--font-size-sm);
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        display: block;
       }
 
       .account-tier {
         text-transform: capitalize;
-      }
-
-      .account-actions {
-        display: flex;
-        align-items: center;
-        gap: var(--wa-space-2xs);
-      }
-
-      .account-section {
-        display: grid;
-        gap: var(--wa-space-xs);
-      }
-
-      .account-section-heading {
-        margin: 0;
-        color: var(--wa-color-text-normal);
-        font-size: var(--font-size);
-        font-weight: var(--font-weight-semibold);
-      }
-
-      .account-section-description {
-        margin: 0;
-        color: var(--wa-color-text-quiet);
-        font-size: var(--font-size-sm);
-        line-height: var(--line-height-relaxed);
       }
 
       .account-empty {
@@ -98,22 +48,6 @@ export class AccountTab extends LitElement {
         color: var(--wa-color-text-quiet);
         background: var(--wa-color-surface-lowered);
         font-size: var(--font-size-sm);
-      }
-
-      .account-settings {
-        border-top: var(--border-thin) solid var(--border-hairline);
-      }
-
-      @container settings (max-width: 520px) {
-        .account-identity {
-          grid-template-columns: auto minmax(0, 1fr);
-          padding: var(--wa-space-m);
-        }
-
-        .account-actions {
-          grid-column: 1 / -1;
-          justify-content: flex-end;
-        }
       }
     `,
   ];
@@ -169,70 +103,61 @@ export class AccountTab extends LitElement {
     `;
   }
 
-  override render(): TemplateResult {
-    const identity = this.authenticated
+  private renderIdentityBanner(): TemplateResult {
+    const title = this.authenticated
+      ? this.userEmail || 'TeXRA account'
+      : 'TeXRA account';
+    const description = this.authenticated
+      ? html`<span class="account-tier">${this.tier}</span> plan`
+      : 'Sign in to use included access and monitor usage.';
+    const actions = this.authenticated
       ? html`
-          <h2 class="account-title">${this.userEmail || 'TeXRA account'}</h2>
-          <p class="account-detail">
-            <span class="account-tier">${this.tier}</span> plan
-          </p>
+          <wa-tag variant="success">Connected</wa-tag>
+          ${renderLabeledActionButton({
+            icon: 'right-from-bracket',
+            text: 'Sign out',
+            kind: 'secondary',
+            appearance: 'outlined',
+            onClick: this.handleSignOut,
+          })}
         `
-      : html`
-          <h2 class="account-title">TeXRA account</h2>
-          <p class="account-detail">
-            Sign in to use included access and monitor usage.
-          </p>
-        `;
+      : renderLabeledActionButton({
+          icon: 'user',
+          text: 'Sign in',
+          kind: 'primary',
+          appearance: 'filled',
+          onClick: this.handleSignIn,
+        });
+    return renderSettingsBanner({
+      id: 'account-identity-banner',
+      icon: 'circle-user',
+      title,
+      description,
+      actions,
+    });
+  }
 
+  override render(): TemplateResult {
     return html`
       <div class="account-page tab-content-container">
-        <section class="account-identity">
-          <span class="icon-surface is-size-l"> ${waIcon('circle-user')} </span>
-          <div class="account-copy">${identity}</div>
-          <div class="account-actions">
-            ${
-              this.authenticated
-                ? html`
-                    <wa-tag variant="success">Connected</wa-tag>
-                    <wa-button
-                      appearance="outlined"
-                      variant="neutral"
-                      size="s"
-                      @click=${this.handleSignOut}
-                    >
-                      ${waIcon('right-from-bracket', { slot: 'start' })} Sign
-                      out
-                    </wa-button>
-                  `
-                : html`
-                    <wa-button
-                      appearance="filled"
-                      variant="brand"
-                      size="s"
-                      @click=${this.handleSignIn}
-                    >
-                      ${waIcon('user', { slot: 'start' })} Sign in
-                    </wa-button>
-                  `
-            }
-          </div>
-        </section>
+        ${this.renderIdentityBanner()}
 
-        <section class="account-section">
-          <h3 class="account-section-heading">Included access usage</h3>
-          <p class="account-section-description">
-            Monthly usage for models provided through your TeXRA plan.
-          </p>
+        <section>
+          ${renderSettingsSectionHeading({
+            title: 'Included access usage',
+            description:
+              'Monthly usage for models provided through your TeXRA plan.',
+          })}
           ${this.renderUsage()}
         </section>
 
-        <section class="account-section">
-          <h3 class="account-section-heading">Credentials</h3>
-          <p class="account-section-description">
-            Provider API keys remain in Models & Access, alongside the models
-            that use them.
-          </p>
-          <div class="account-settings">
+        <section>
+          ${renderSettingsSectionHeading({
+            title: 'Credentials',
+            description:
+              'Provider API keys remain in Providers & Models, alongside the models that use them.',
+          })}
+          <div class="settings-section">
             <div class="settings-row">
               <div class="settings-row-text">
                 <span class="settings-row-label">Provider API keys</span>
@@ -240,15 +165,15 @@ export class AccountTab extends LitElement {
                   Configure OpenAI, Anthropic, Google, and other providers.
                 </span>
               </div>
-              <wa-button
-                class="account-manage-keys"
-                appearance="outlined"
-                variant="neutral"
-                size="s"
-                @click=${this.handleManageProviderKeys}
-              >
-                ${waIcon('key', { slot: 'start' })} Manage keys
-              </wa-button>
+              <div class="settings-row-control">
+                ${renderLabeledActionButton({
+                  icon: 'key',
+                  text: 'Manage keys',
+                  kind: 'secondary',
+                  appearance: 'outlined',
+                  onClick: () => this.handleManageProviderKeys(),
+                })}
+              </div>
             </div>
             ${
               this.vscodeSettingsAvailable
@@ -262,14 +187,15 @@ export class AccountTab extends LitElement {
                           Open host-level TeXRA configuration.
                         </span>
                       </div>
-                      <wa-button
-                        appearance="outlined"
-                        variant="neutral"
-                        size="s"
-                        @click=${this.handleOpenVscodeSettings}
-                      >
-                        ${waIcon('gear', { slot: 'start' })} Open settings
-                      </wa-button>
+                      <div class="settings-row-control">
+                        ${renderLabeledActionButton({
+                          icon: 'gear',
+                          text: 'Open settings',
+                          kind: 'secondary',
+                          appearance: 'outlined',
+                          onClick: this.handleOpenVscodeSettings,
+                        })}
+                      </div>
                     </div>
                   `
                 : nothing

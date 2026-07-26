@@ -27,7 +27,11 @@ interface DesktopShortcutRegistryOptions {
   readonly platform?: NodeJS.Platform;
 }
 
-interface DesktopShortcutRegistry {
+export interface DesktopShortcutRegistry {
+  entries(): readonly DesktopShortcutEntry[];
+  subscribe(
+    listener: (entries: readonly DesktopShortcutEntry[]) => void,
+  ): () => void;
   dispose(): void;
 }
 
@@ -40,6 +44,9 @@ export function createDesktopShortcutRegistry(
   const view = options.document.defaultView;
   const platform = options.platform ?? getRendererPlatform(view);
   let overrides = readOverrides(view?.localStorage);
+  const listeners = new Set<
+    (entries: readonly DesktopShortcutEntry[]) => void
+  >();
   const availableEntries = getDesktopCommandMenuEntries(
     undefined,
     platform,
@@ -70,10 +77,14 @@ export function createDesktopShortcutRegistry(
 
   function postState(): void {
     if (!view) return;
-    const detail: DesktopShortcutState = { entries: entries() };
+    const currentEntries = entries();
+    const detail: DesktopShortcutState = { entries: currentEntries };
     view.dispatchEvent(
       new CustomEvent(DESKTOP_SHORTCUT_EVENTS.STATE, { detail }),
     );
+    for (const listener of listeners) {
+      listener(currentEntries);
+    }
   }
 
   function handleRequest(): void {
@@ -131,7 +142,16 @@ export function createDesktopShortcutRegistry(
   view?.addEventListener('keydown', handleKeydown, { capture: true });
 
   return {
+    entries,
+    subscribe(
+      listener: (entries: readonly DesktopShortcutEntry[]) => void,
+    ): () => void {
+      listeners.add(listener);
+      listener(entries());
+      return () => listeners.delete(listener);
+    },
     dispose(): void {
+      listeners.clear();
       view?.removeEventListener(DESKTOP_SHORTCUT_EVENTS.REQUEST, handleRequest);
       view?.removeEventListener(DESKTOP_SHORTCUT_EVENTS.UPDATE, handleUpdate);
       view?.removeEventListener(DESKTOP_SHORTCUT_EVENTS.RESET, handleReset);

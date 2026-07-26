@@ -33,6 +33,11 @@ export class TexraDiffView extends LitElement {
         min-height: 240px;
       }
 
+      :host([fill]) {
+        height: 100%;
+        min-height: 0;
+      }
+
       .diff-view {
         display: flex;
         min-height: 240px;
@@ -40,6 +45,13 @@ export class TexraDiffView extends LitElement {
         max-height: 640px;
         border: var(--border-thin) solid var(--color-border);
         background: var(--wa-color-surface-default);
+      }
+
+      :host([fill]) .diff-view {
+        height: 100%;
+        min-height: 0;
+        max-height: none;
+        border: 0;
       }
 
       .editor {
@@ -70,6 +82,7 @@ export class TexraDiffView extends LitElement {
   @property({ attribute: false }) originalText = '';
   @property({ attribute: false }) proposedText = '';
   @property() language = 'plaintext';
+  @property({ type: Boolean, reflect: true }) fill = false;
 
   @consume({ context: themeContext, subscribe: true })
   @property({ attribute: false })

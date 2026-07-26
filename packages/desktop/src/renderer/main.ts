@@ -106,8 +106,14 @@ import {
   DesktopClosePdfMessageSchema,
 } from '../desktopPdfMessages';
 import { DesktopShowPromptMessageSchema } from '../desktopPromptMessages';
-import { createDesktopCommandPalette } from './desktopCommandPalette';
-import { createDesktopShortcutRegistry } from './desktopShortcutRegistry';
+import {
+  createDesktopCommandPalette,
+  type CommandPaletteController,
+} from './desktopCommandPalette';
+import {
+  createDesktopShortcutRegistry,
+  DESKTOP_COMMAND_PALETTE_ID,
+} from './desktopShortcutRegistry';
 import { createStartupTeamPanel } from './desktopOnboarding';
 import { createEditorPane } from './editorPane';
 import { createTerminalPane } from './terminalPane';
@@ -156,7 +162,7 @@ import {
 } from '../desktopWorkspaceMessages';
 import { getRendererPlatform } from './rendererPlatform';
 import { createPdfOverlay } from './pdfOverlay';
-import { createDiffOverlay } from './diffOverlay';
+import { createReviewPane } from './reviewPane';
 import { createDesktopPromptOverlay } from './promptOverlay';
 import { createLogsPane } from './logsPane';
 import type { EditorFileEntry } from './editorTree';
@@ -189,11 +195,15 @@ const startupTeamPanel = createStartupTeamPanel({
 const hasWorkspace = window.texraDesktop?.hasWorkspace ?? true;
 const rendererPlatform = getRendererPlatform(document.defaultView);
 document.body.dataset.desktopPlatform = rendererPlatform;
-const desktopCommandEntriesById = new Map(
+const shortcutAcceleratorsById = new Map<string, string | undefined>(
   getDesktopCommandMenuEntries(undefined, rendererPlatform).map((entry) => [
     entry.id,
-    entry,
+    entry.accelerator,
   ]),
+);
+shortcutAcceleratorsById.set(
+  DESKTOP_COMMAND_PALETTE_ID,
+  rendererPlatform === 'darwin' ? 'Command+K' : 'Control+K',
 );
 
 function shortcutTitle(label: string, accelerator: string | undefined): string {
@@ -202,10 +212,7 @@ function shortcutTitle(label: string, accelerator: string | undefined): string {
 }
 
 function commandTitle(commandId: DesktopCommandId, label: string): string {
-  return shortcutTitle(
-    label,
-    desktopCommandEntriesById.get(commandId)?.accelerator,
-  );
+  return shortcutTitle(label, shortcutAcceleratorsById.get(commandId));
 }
 
 function setRouteState(route: DesktopRoute): void {
@@ -368,7 +375,7 @@ const terminalPane = createTerminalPane({
     postMessage(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_CLOSE, { sessionId }),
 });
 
-const diffOverlay = createDiffOverlay(appRoot);
+const reviewPane = createReviewPane();
 const pdfOverlay = createPdfOverlay(appRoot);
 const promptOverlay = createDesktopPromptOverlay(appRoot, (message) =>
   hostBridge.postMessage(message),
@@ -555,7 +562,6 @@ function openKind(kind: WorkbenchKind): void {
     void editorPane.refresh();
     return;
   }
-  if (kind === 'logs') logsController.open();
   updateShell(openWorkbenchTab(shellState, { kind }));
 }
 
@@ -604,12 +610,14 @@ function workbenchContentTemplate(tab: WorkbenchTab): TemplateResult {
         class="task-workbench-surface"
         data-browser-slot=${tab.id}
       ></div>`;
+    case 'review':
+      return html`<div class="task-workbench-surface">
+        ${reviewPane.element}
+      </div>`;
     case 'settings':
       return html`<div class="task-workbench-surface">${settingsView}</div>`;
     case 'logs':
-      return html`<div class="task-workbench-surface" data-scroll="true">
-        ${logsPane}
-      </div>`;
+      return html`<div class="task-workbench-surface">${logsPane}</div>`;
   }
 }
 
@@ -900,7 +908,10 @@ function taskConversationTemplate(): TemplateResult {
           appearance="plain"
           size="s"
           aria-label="Open commands"
-          title=${shortcutTitle('Commands', 'CommandOrControl+K')}
+          title=${shortcutTitle(
+            'Commands',
+            shortcutAcceleratorsById.get(DESKTOP_COMMAND_PALETTE_ID),
+          )}
           @click=${openCommandPalette}
         >
           ${waIcon('ellipsis')}
@@ -1148,6 +1159,10 @@ function observeSurfaceResizes(): void {
 
 function rerenderShell(): void {
   render(shellTemplate(), appRoot);
+  logsController.setActive(
+    activeWorkbenchTab(shellState, 'right')?.kind === 'logs' ||
+      activeWorkbenchTab(shellState, 'bottom')?.kind === 'logs',
+  );
   railTabs.streams = tabStreams$.get();
   railTabs.activeStreamId = activeStreamId$.get();
   railTabs.filter = streamFilter$.get();
@@ -1330,15 +1345,7 @@ const desktopRendererCommandActions: DesktopCommandActions = {
     );
   },
 };
-const commandPalette = bootstrapFailed
-  ? undefined
-  : createDesktopCommandPalette({
-      document,
-      canOpen: () => true,
-      actions: desktopRendererCommandActions,
-      getStreams: () => streams$.get(),
-    });
-if (commandPalette) document.body.append(commandPalette.element);
+let commandPalette: CommandPaletteController | undefined;
 const shortcutRegistry = bootstrapFailed
   ? undefined
   : createDesktopShortcutRegistry({
@@ -1346,6 +1353,23 @@ const shortcutRegistry = bootstrapFailed
       actions: desktopRendererCommandActions,
       openCommands: () => commandPalette?.open(),
     });
+if (!bootstrapFailed) {
+  commandPalette = createDesktopCommandPalette({
+    document,
+    canOpen: () => true,
+    actions: desktopRendererCommandActions,
+    getStreams: () => streams$.get(),
+    getShortcuts: () => shortcutRegistry?.entries() ?? [],
+  });
+  document.body.append(commandPalette.element);
+}
+const disposeShortcutHints = shortcutRegistry?.subscribe((entries) => {
+  shortcutAcceleratorsById.clear();
+  for (const entry of entries) {
+    shortcutAcceleratorsById.set(entry.id, entry.accelerator);
+  }
+  rerenderShell();
+});
 
 function openCommandPalette(): void {
   commandPalette?.open();
@@ -1434,11 +1458,13 @@ window.addEventListener('message', (event) => {
   }
   const diffParsed = DesktopShowDiffMessageSchema.safeParse(event.data);
   if (diffParsed.success) {
-    diffOverlay.open(diffParsed.data);
+    reviewPane.open(diffParsed.data);
+    openKind('review');
     return;
   }
   if (DesktopCloseDiffMessageSchema.safeParse(event.data).success) {
-    diffOverlay.close();
+    reviewPane.clear();
+    disposeWorkbenchTab('workbench:review');
     return;
   }
   const pdfParsed = DesktopShowPdfMessageSchema.safeParse(event.data);
@@ -1658,6 +1684,7 @@ window.addEventListener(
   'beforeunload',
   () => {
     surfaceResizeObserver?.disconnect();
+    disposeShortcutHints?.();
     shortcutRegistry?.dispose();
     editorPane.dispose();
     terminalPane.disposeAll();
@@ -1675,5 +1702,5 @@ function postWebviewReady(): void {
 
 function applyDesktopTheme(theme: DesktopThemeKind): void {
   applyHostBodyTheme(theme);
-  diffOverlay.setTheme(theme);
+  reviewPane.setTheme(theme);
 }

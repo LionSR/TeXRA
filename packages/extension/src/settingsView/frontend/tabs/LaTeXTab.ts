@@ -21,6 +21,7 @@ import { postMessage } from '@shared/hostBridge';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderLoadingState } from '@shared/wa/loadingState';
 import { renderSettingsBanner } from '@shared/wa/settingsBanner';
+import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Web Awesome button + icon bundles (side-effect imports)
@@ -448,50 +449,53 @@ export class LaTeXTab extends LitElement {
       : DEPENDENCIES;
 
     return html`
-      <div class="section-header">${waIcon('package')} Dependencies</div>
-      ${this.renderPrerequisiteHint()}
-      ${dependencies.map((dep) => this.renderDependencyCard(dep))}
+      <div class="settings-section">
+        ${renderSettingsSectionHeading({
+          title: 'Dependencies',
+          description:
+            'TeXRA checks the local tools used for compilation, diffs, formatting, and document analysis.',
+          icon: 'package',
+        })}
+        ${this.renderPrerequisiteHint()}
+        ${dependencies.map((dep) => this.renderDependencyCard(dep))}
+      </div>
     `;
   }
 
   private renderSettingCard(info: SettingInfo): TemplateResult {
     const isSet = this.settings[info.key];
     return html`
-      <div class="setting-card">
-        ${waIcon(isSet ? 'check' : 'warning', {
-          className: `setting-status-icon ${isSet ? 'is-set' : 'not-set'}`,
-        })}
-        <div class="setting-info">
-          <div class="setting-name">${info.name}</div>
+      <div class="settings-row">
+        <div class="settings-row-text">
+          <span class="settings-row-label">${info.name}</span>
           <div class="setting-config-key">${info.configKey}</div>
           <div class="setting-value">${info.value}</div>
-          <div class="setting-description">${info.description}</div>
+          <span class="settings-row-help">${info.description}</span>
         </div>
-        ${
-          isSet
-            ? html`
-                <wa-button
-                  appearance="outlined"
-                  variant="neutral"
-                  size="s"
-                  title="Reset this setting to default"
-                  @click=${() => this.handleApply(info.key, true)}
-                >
-                  ${waIcon('discard', { slot: 'start' })} Reset
-                </wa-button>
-              `
-            : html`
-                <wa-button
-                  appearance="outlined"
-                  variant="neutral"
-                  size="s"
-                  title="Apply this setting"
-                  @click=${() => this.handleApply(info.key)}
-                >
-                  ${waIcon('check', { slot: 'start' })} Apply
-                </wa-button>
-              `
-        }
+        <div class="settings-row-control">
+          ${waIcon(isSet ? 'check' : 'warning', {
+            className: `setting-status-icon ${isSet ? 'is-set' : 'not-set'}`,
+          })}
+          ${
+            isSet
+              ? renderLabeledActionButton({
+                  icon: 'discard',
+                  text: 'Reset',
+                  kind: 'secondary',
+                  appearance: 'outlined',
+                  title: 'Reset this setting to default',
+                  onClick: () => this.handleApply(info.key, true),
+                })
+              : renderLabeledActionButton({
+                  icon: 'check',
+                  text: 'Apply',
+                  kind: 'secondary',
+                  appearance: 'outlined',
+                  title: 'Apply this setting',
+                  onClick: () => this.handleApply(info.key),
+                })
+          }
+        </div>
       </div>
     `;
   }
@@ -529,19 +533,17 @@ export class LaTeXTab extends LitElement {
           this.desktopHost
             ? nothing
             : html`
-                <div class="section-header spaced">
-                  ${waIcon('settings-gear')} Recommended Settings
+                <div class="settings-section">
+                  ${renderSettingsSectionHeading({
+                    title: 'Recommended settings',
+                    description:
+                      'Keep generated files out of the VS Code sidebar and reduce noise during agent runs.',
+                    icon: 'settings-gear',
+                  })}
+                  ${RECOMMENDED_SETTINGS.map((info) =>
+                    this.renderSettingCard(info),
+                  )}
                 </div>
-
-                <div class="latex-description">
-                  Agents create temporary files during compilation. The
-                  following VS Code settings are recommended to keep your
-                  workspace tidy and avoid distracting sidebar activity.
-                </div>
-
-                ${RECOMMENDED_SETTINGS.map((info) =>
-                  this.renderSettingCard(info),
-                )}
               `
         }
         ${
@@ -556,28 +558,36 @@ export class LaTeXTab extends LitElement {
 
   private renderInlineCriticismSetting(): TemplateResult {
     return html`
-      <div class="section-header spaced">
-        ${waIcon('comment-discussion')} Inline Criticism
-      </div>
-      <div class="setting-card">
-        ${waIcon(this.inlineCriticismEnabled ? 'check' : 'circle-slash', {
-          className: `setting-status-icon ${
-            this.inlineCriticismEnabled ? 'is-set' : 'not-set'
-          }`,
+      <div class="settings-section">
+        ${renderSettingsSectionHeading({
+          title: 'Inline criticism',
+          description:
+            'Control how TeXRA surfaces structured review annotations in LaTeX documents.',
+          icon: 'comment-discussion',
         })}
-        <div class="setting-info">
-          <div class="setting-name">Surface \\criticize annotations</div>
-          <div class="setting-description">
-            Parse \\criticize{message}{severity}{confidence} annotations from
-            agent-revised LaTeX files and show them as editor diagnostics.
+        <div class="settings-row">
+          <div class="settings-row-text">
+            <span class="settings-row-label"
+              >Surface \\criticize annotations</span
+            >
+            <span class="settings-row-help">
+              Parse \\criticize{message}{severity}{confidence} annotations from
+              agent-revised LaTeX files and show them as editor diagnostics.
+            </span>
+          </div>
+          <div class="settings-row-control">
+            ${waIcon(this.inlineCriticismEnabled ? 'check' : 'circle-slash', {
+              className: `setting-status-icon ${
+                this.inlineCriticismEnabled ? 'is-set' : 'not-set'
+              }`,
+            })}
+            <wa-switch
+              aria-label="Surface criticize annotations"
+              ?checked=${this.inlineCriticismEnabled}
+              @change=${this.handleInlineCriticismToggle}
+            ></wa-switch>
           </div>
         </div>
-        <wa-switch
-          ?checked=${this.inlineCriticismEnabled}
-          @change=${this.handleInlineCriticismToggle}
-        >
-          ${this.inlineCriticismEnabled ? 'On' : 'Off'}
-        </wa-switch>
       </div>
     `;
   }
@@ -597,89 +607,88 @@ export class LaTeXTab extends LitElement {
   private renderCompileDiffSettings(): TemplateResult {
     const cv = this.configValues;
     return html`
-      <div class="section-header spaced">
-        ${waIcon('zap')} Compile &amp; Diff
+      <div class="settings-section">
+        ${renderSettingsSectionHeading({
+          title: 'Compile and diff',
+          description:
+            'Workspace-specific compilation, review, and formatting behavior.',
+          icon: 'zap',
+        })}
+        ${this.renderBooleanSetting({
+          field: 'workflowAutoCompile',
+          label: 'Auto-compile after each round',
+          description:
+            'After a workflow writes .tex outputs, attempt to compile each root document (latexmk, falling back to pdflatex) in run storage.',
+          defaultValue: LATEX_CONFIG_DEFAULTS.workflowAutoCompile,
+          currentValue: cv.workflowAutoCompile,
+        })}
+        ${this.renderNumberSetting({
+          field: 'workflowAutoCompileTimeoutMs',
+          label: 'Auto-compile timeout (ms)',
+          description: `Per-file timeout for the post-workflow compile check. Minimum ${LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min}.`,
+          defaultValue: LATEX_CONFIG_DEFAULTS.workflowAutoCompileTimeoutMs,
+          currentValue: cv.workflowAutoCompileTimeoutMs,
+          min: LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min,
+        })}
+        ${this.renderBooleanSetting({
+          field: 'workflowAutoOpenPdf',
+          label: 'Open compiled PDF or log',
+          description:
+            'After auto-compile finishes, open the latest PDF on success or the truncated LaTeX log on failure.',
+          defaultValue: LATEX_CONFIG_DEFAULTS.workflowAutoOpenPdf,
+          currentValue: cv.workflowAutoOpenPdf,
+        })}
+        ${this.renderBooleanSetting({
+          field: 'workflowRejectOnCompileFailure',
+          label: 'Reject rounds when compile fails',
+          description:
+            'When a LaTeX compile check fails, use the next planned round to repair the output with the compile log.',
+          defaultValue: LATEX_CONFIG_DEFAULTS.workflowRejectOnCompileFailure,
+          currentValue: cv.workflowRejectOnCompileFailure,
+        })}
+        ${this.renderBooleanSetting({
+          field: 'latexdiffBetweenRounds',
+          label: 'Generate diffs between consecutive rounds',
+          description:
+            'In addition to comparing each round to the original input, also generate diffs between consecutive agent rounds.',
+          defaultValue: LATEX_CONFIG_DEFAULTS.latexdiffBetweenRounds,
+          currentValue: cv.latexdiffBetweenRounds,
+        })}
+        ${this.renderNumberSetting({
+          field: 'latexdiffTimeoutMs',
+          label: 'latexdiff timeout (ms)',
+          description: `Timeout for latexdiff invocations. Range ${LATEX_CONFIG_RANGES.latexdiffTimeoutMs.min}–${LATEX_CONFIG_RANGES.latexdiffTimeoutMs.max}.`,
+          defaultValue: LATEX_CONFIG_DEFAULTS.latexdiffTimeoutMs,
+          currentValue: cv.latexdiffTimeoutMs,
+          min: LATEX_CONFIG_RANGES.latexdiffTimeoutMs.min,
+          max: LATEX_CONFIG_RANGES.latexdiffTimeoutMs.max,
+        })}
+        ${this.renderEnumSetting({
+          field: 'latexdiffMathMarkup',
+          label: 'latexdiff math markup',
+          description: 'Granularity of markup in displayed math environments.',
+          defaultValue: LATEX_CONFIG_DEFAULTS.latexdiffMathMarkup,
+          currentValue: cv.latexdiffMathMarkup,
+          options: LATEXDIFF_MATH_MARKUP_OPTIONS,
+        })}
+        ${this.renderBooleanSetting({
+          field: 'latexdiffChangesOnly',
+          label: 'Show only changed pages in latexdiff PDFs',
+          description:
+            'Pass latexdiff the ONLYCHANGEDPAGE subtype so compiled diff PDFs focus on pages with edits.',
+          defaultValue: LATEX_CONFIG_DEFAULTS.latexdiffChangesOnly,
+          currentValue: cv.latexdiffChangesOnly,
+        })}
+        ${this.renderEnumSetting({
+          field: 'latexFormatter',
+          label: 'LaTeX formatter',
+          description:
+            '"none" disables formatting; "latexindent" requires Perl; "tex-fmt" is a Rust-based alternative.',
+          defaultValue: LATEX_CONFIG_DEFAULTS.latexFormatter,
+          currentValue: cv.latexFormatter,
+          options: LATEX_FORMATTER_OPTIONS,
+        })}
       </div>
-      <div class="latex-description">
-        TeXRA-specific compile and diff behavior, persisted per workspace. These
-        were previously edited in <code>settings.json</code>; they now live
-        here.
-      </div>
-
-      ${this.renderBooleanSetting({
-        field: 'workflowAutoCompile',
-        label: 'Auto-compile after each round',
-        description:
-          'After a workflow writes .tex outputs, attempt to compile each root document (latexmk, falling back to pdflatex) in run storage.',
-        defaultValue: LATEX_CONFIG_DEFAULTS.workflowAutoCompile,
-        currentValue: cv.workflowAutoCompile,
-      })}
-      ${this.renderNumberSetting({
-        field: 'workflowAutoCompileTimeoutMs',
-        label: 'Auto-compile timeout (ms)',
-        description: `Per-file timeout for the post-workflow compile check. Minimum ${LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min}.`,
-        defaultValue: LATEX_CONFIG_DEFAULTS.workflowAutoCompileTimeoutMs,
-        currentValue: cv.workflowAutoCompileTimeoutMs,
-        min: LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min,
-      })}
-      ${this.renderBooleanSetting({
-        field: 'workflowAutoOpenPdf',
-        label: 'Open compiled PDF or log',
-        description:
-          'After auto-compile finishes, open the latest PDF on success or the truncated LaTeX log on failure.',
-        defaultValue: LATEX_CONFIG_DEFAULTS.workflowAutoOpenPdf,
-        currentValue: cv.workflowAutoOpenPdf,
-      })}
-      ${this.renderBooleanSetting({
-        field: 'workflowRejectOnCompileFailure',
-        label: 'Reject rounds when compile fails',
-        description:
-          'When a LaTeX compile check fails, use the next planned round to repair the output with the compile log.',
-        defaultValue: LATEX_CONFIG_DEFAULTS.workflowRejectOnCompileFailure,
-        currentValue: cv.workflowRejectOnCompileFailure,
-      })}
-      ${this.renderBooleanSetting({
-        field: 'latexdiffBetweenRounds',
-        label: 'Generate diffs between consecutive rounds',
-        description:
-          'In addition to comparing each round to the original input, also generate diffs between consecutive agent rounds.',
-        defaultValue: LATEX_CONFIG_DEFAULTS.latexdiffBetweenRounds,
-        currentValue: cv.latexdiffBetweenRounds,
-      })}
-      ${this.renderNumberSetting({
-        field: 'latexdiffTimeoutMs',
-        label: 'latexdiff timeout (ms)',
-        description: `Timeout for latexdiff invocations. Range ${LATEX_CONFIG_RANGES.latexdiffTimeoutMs.min}–${LATEX_CONFIG_RANGES.latexdiffTimeoutMs.max}.`,
-        defaultValue: LATEX_CONFIG_DEFAULTS.latexdiffTimeoutMs,
-        currentValue: cv.latexdiffTimeoutMs,
-        min: LATEX_CONFIG_RANGES.latexdiffTimeoutMs.min,
-        max: LATEX_CONFIG_RANGES.latexdiffTimeoutMs.max,
-      })}
-      ${this.renderEnumSetting({
-        field: 'latexdiffMathMarkup',
-        label: 'latexdiff math markup',
-        description: 'Granularity of markup in displayed math environments.',
-        defaultValue: LATEX_CONFIG_DEFAULTS.latexdiffMathMarkup,
-        currentValue: cv.latexdiffMathMarkup,
-        options: LATEXDIFF_MATH_MARKUP_OPTIONS,
-      })}
-      ${this.renderBooleanSetting({
-        field: 'latexdiffChangesOnly',
-        label: 'Show only changed pages in latexdiff PDFs',
-        description:
-          'Pass latexdiff the ONLYCHANGEDPAGE subtype so compiled diff PDFs focus on pages with edits.',
-        defaultValue: LATEX_CONFIG_DEFAULTS.latexdiffChangesOnly,
-        currentValue: cv.latexdiffChangesOnly,
-      })}
-      ${this.renderEnumSetting({
-        field: 'latexFormatter',
-        label: 'LaTeX formatter',
-        description:
-          '"none" disables formatting; "latexindent" requires Perl; "tex-fmt" is a Rust-based alternative.',
-        defaultValue: LATEX_CONFIG_DEFAULTS.latexFormatter,
-        currentValue: cv.latexFormatter,
-        options: LATEX_FORMATTER_OPTIONS,
-      })}
     `;
   }
 
@@ -698,30 +707,32 @@ export class LaTeXTab extends LitElement {
     const effective = opts.currentValue ?? opts.defaultValue;
     const isCustom = opts.currentValue !== undefined;
     return html`
-      <div class="setting-card">
-        ${waIcon(effective ? 'check' : 'circle-slash', {
-          className: `setting-status-icon ${effective ? 'is-set' : 'not-set'}`,
-        })}
-        <div class="setting-info">
-          <div class="setting-name">${opts.label}</div>
-          <div class="setting-description">${opts.description}</div>
+      <div class="settings-row">
+        <div class="settings-row-text">
+          <span class="settings-row-label">${opts.label}</span>
+          <span class="settings-row-help">${opts.description}</span>
         </div>
-        <wa-switch
-          ?checked=${effective}
-          @change=${(e: Event) => {
-            const checked = (e.target as WaSwitch).checked;
-            this.dispatchSetConfigValue(opts.field, checked);
-          }}
-          title="Toggle"
-        ></wa-switch>
-        ${
-          isCustom
-            ? this.renderResetButton(
-                opts.field,
-                opts.defaultValue ? 'On' : 'Off',
-              )
-            : nothing
-        }
+        <div class="settings-row-control">
+          ${waIcon(effective ? 'check' : 'circle-slash', {
+            className: `setting-status-icon ${effective ? 'is-set' : 'not-set'}`,
+          })}
+          <wa-switch
+            aria-label=${opts.label}
+            ?checked=${effective}
+            @change=${(e: Event) => {
+              const checked = (e.target as WaSwitch).checked;
+              this.dispatchSetConfigValue(opts.field, checked);
+            }}
+          ></wa-switch>
+          ${
+            isCustom
+              ? this.renderResetButton(
+                  opts.field,
+                  opts.defaultValue ? 'On' : 'Off',
+                )
+              : nothing
+          }
+        </div>
       </div>
     `;
   }
@@ -767,11 +778,13 @@ export class LaTeXTab extends LitElement {
     const effective = opts.currentValue ?? opts.defaultValue;
     const isCustom = opts.currentValue !== undefined;
     return html`
-      <div class="setting-card">
-        ${this.renderSettingStatusIcon(isCustom)}
-        <div class="setting-info">
-          <div class="setting-name">${opts.label}</div>
-          <div class="setting-description">${opts.description}</div>
+      <div class="settings-row">
+        <div class="settings-row-text">
+          <span class="settings-row-label">${opts.label}</span>
+          <span class="settings-row-help">${opts.description}</span>
+        </div>
+        <div class="settings-row-control">
+          ${this.renderSettingStatusIcon(isCustom)}
           <wa-input
             type="number"
             min=${opts.min}
@@ -792,12 +805,12 @@ export class LaTeXTab extends LitElement {
             }}
             class="setting-number-input"
           ></wa-input>
+          ${
+            isCustom
+              ? this.renderResetButton(opts.field, String(opts.defaultValue))
+              : nothing
+          }
         </div>
-        ${
-          isCustom
-            ? this.renderResetButton(opts.field, String(opts.defaultValue))
-            : nothing
-        }
       </div>
     `;
   }
@@ -815,11 +828,13 @@ export class LaTeXTab extends LitElement {
     const effective = opts.currentValue ?? opts.defaultValue;
     const isCustom = opts.currentValue !== undefined;
     return html`
-      <div class="setting-card">
-        ${this.renderSettingStatusIcon(isCustom)}
-        <div class="setting-info">
-          <div class="setting-name">${opts.label}</div>
-          <div class="setting-description">${opts.description}</div>
+      <div class="settings-row">
+        <div class="settings-row-text">
+          <span class="settings-row-label">${opts.label}</span>
+          <span class="settings-row-help">${opts.description}</span>
+        </div>
+        <div class="settings-row-control">
+          ${this.renderSettingStatusIcon(isCustom)}
           <wa-select
             .value=${String(effective)}
             @change=${(e: Event) => {
@@ -834,12 +849,12 @@ export class LaTeXTab extends LitElement {
               `,
             )}
           </wa-select>
+          ${
+            isCustom
+              ? this.renderResetButton(opts.field, String(opts.defaultValue))
+              : nothing
+          }
         </div>
-        ${
-          isCustom
-            ? this.renderResetButton(opts.field, String(opts.defaultValue))
-            : nothing
-        }
       </div>
     `;
   }

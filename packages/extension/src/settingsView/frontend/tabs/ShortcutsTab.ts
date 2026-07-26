@@ -3,7 +3,11 @@ import '@awesome.me/webawesome/dist/components/input/input.js';
 import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
-import { commonViewStyles, designTokens } from '@shared/styles';
+import {
+  commonViewStyles,
+  designTokens,
+  settingsBannerStyles,
+} from '@shared/styles';
 import { formatDesktopAccelerator } from '@shared/commands/accelerators';
 import {
   DESKTOP_SHORTCUT_EVENTS,
@@ -12,6 +16,12 @@ import {
   type DesktopShortcutState,
   type DesktopShortcutUpdate,
 } from '@shared/commands/shortcutPreferences';
+import {
+  renderIconActionButton,
+  renderLabeledActionButton,
+} from '@shared/wa/actionButtons';
+import { renderSettingsBanner } from '@shared/wa/settingsBanner';
+import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 @customElement('shortcuts-tab')
@@ -19,37 +29,16 @@ export class ShortcutsTab extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
+    settingsBannerStyles,
     css`
       :host {
         display: block;
       }
 
-      .shortcuts-header {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: var(--wa-space-s);
-        margin-block-end: var(--wa-space-s);
-      }
-
-      .shortcuts-header-copy {
-        min-width: 0;
-      }
-
-      .shortcuts-header h2 {
-        margin: 0;
-        font-size: var(--font-size-lg);
-      }
-
-      .shortcuts-header p,
       .shortcuts-feedback,
       .shortcuts-empty {
         color: var(--wa-color-text-quiet);
         font-size: var(--font-size-sm);
-      }
-
-      .shortcuts-header p {
-        margin: var(--wa-space-3xs) 0 0;
       }
 
       .shortcuts-search {
@@ -88,16 +77,6 @@ export class ShortcutsTab extends LitElement {
       }
 
       @container settings (max-width: 520px) {
-        .shortcuts-header {
-          flex-direction: column;
-        }
-
-        .settings-row {
-          align-items: stretch;
-          flex-direction: column;
-          gap: var(--wa-space-xs);
-        }
-
         .shortcuts-control {
           justify-content: flex-start;
         }
@@ -226,7 +205,7 @@ export class ShortcutsTab extends LitElement {
         </div>
         <div class="settings-row-control shortcuts-control">
           <wa-button
-            class="shortcut-recorder"
+            class="shortcut-recorder btn-secondary"
             appearance="outlined"
             size="s"
             data-recording=${String(recording)}
@@ -236,27 +215,19 @@ export class ShortcutsTab extends LitElement {
           >
             ${waIcon('code', { slot: 'start' })} ${label}
           </wa-button>
-          <wa-button
-            class="icon-button is-size-m"
-            appearance="plain"
-            size="s"
-            aria-label=${`Reset ${entry.label}`}
-            title="Reset to default"
-            @click=${() =>
-              this.updateShortcut(entry.id, entry.defaultAccelerator)}
-          >
-            ${waIcon('arrow-rotate-left')}
-          </wa-button>
-          <wa-button
-            class="icon-button is-size-m"
-            appearance="plain"
-            size="s"
-            aria-label=${`Clear ${entry.label}`}
-            title="Clear shortcut"
-            @click=${() => this.updateShortcut(entry.id, undefined)}
-          >
-            ${waIcon('xmark')}
-          </wa-button>
+          ${renderIconActionButton({
+            icon: 'arrow-rotate-left',
+            label: `Reset ${entry.label}`,
+            tooltip: 'Reset to default',
+            onClick: () =>
+              this.updateShortcut(entry.id, entry.defaultAccelerator),
+          })}
+          ${renderIconActionButton({
+            icon: 'xmark',
+            label: `Clear ${entry.label}`,
+            tooltip: 'Clear shortcut',
+            onClick: () => this.updateShortcut(entry.id, undefined),
+          })}
         </div>
       </div>
     `;
@@ -271,20 +242,28 @@ export class ShortcutsTab extends LitElement {
       `;
     }
     const entries = this.visibleEntries();
+    const groups = new Map<string, DesktopShortcutEntry[]>();
+    for (const entry of entries) {
+      const group = groups.get(entry.category) ?? [];
+      group.push(entry);
+      groups.set(entry.category, group);
+    }
     return html`
       <div class="tab-content-container">
-        <div class="shortcuts-header">
-          <div class="shortcuts-header-copy">
-            <h2>Keyboard shortcuts</h2>
-            <p>
-              Select a binding, then press the new chord. Changes apply
-              immediately and persist for this desktop profile.
-            </p>
-          </div>
-          <wa-button appearance="outlined" size="s" @click=${this.resetAll}>
-            ${waIcon('arrow-rotate-left', { slot: 'start' })} Reset all
-          </wa-button>
-        </div>
+        ${renderSettingsBanner({
+          id: 'keyboard-shortcuts-banner',
+          icon: 'code',
+          title: 'Keyboard shortcuts',
+          description:
+            'Select a binding, then press the new chord. Changes apply immediately to the desktop app and persist for this profile.',
+          actions: renderLabeledActionButton({
+            icon: 'arrow-rotate-left',
+            text: 'Reset all',
+            kind: 'secondary',
+            appearance: 'outlined',
+            onClick: () => this.resetAll(),
+          }),
+        })}
         <wa-input
           class="shortcuts-search"
           type="search"
@@ -299,13 +278,22 @@ export class ShortcutsTab extends LitElement {
         >
           ${this.feedback || nothing}
         </p>
-        <div class="settings-section">
-          ${
-            entries.length === 0
-              ? html`<p class="shortcuts-empty">No matching commands.</p>`
-              : entries.map((entry) => this.renderEntry(entry))
-          }
-        </div>
+        ${
+          entries.length === 0
+            ? html`<p class="shortcuts-empty">No matching commands.</p>`
+            : [...groups].map(
+                ([category, categoryEntries]) => html`
+                  <section>
+                    ${renderSettingsSectionHeading({
+                      title: `${category} (${categoryEntries.length})`,
+                    })}
+                    <div class="settings-section">
+                      ${categoryEntries.map((entry) => this.renderEntry(entry))}
+                    </div>
+                  </section>
+                `,
+              )
+        }
       </div>
     `;
   }

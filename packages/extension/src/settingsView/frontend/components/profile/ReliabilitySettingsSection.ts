@@ -11,6 +11,7 @@ import { commonViewStyles, designTokens } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import type { NumberVscodeSetting } from '@shared/schemas/settingsViewMessages';
+import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
 import { clampOptional } from '@utils/core';
 
 // Local imports - shared schemas
@@ -24,11 +25,6 @@ export class ReliabilitySettingsSection extends LitElement {
     css`
       :host {
         display: block;
-      }
-
-      .setting-description {
-        margin: var(--wa-space-2xs) 0 var(--wa-space-xs) 0;
-        font-size: var(--font-size-sm);
       }
 
       .setting-input {
@@ -92,10 +88,11 @@ export class ReliabilitySettingsSection extends LitElement {
   override render(): TemplateResult | typeof nothing {
     if (this.settings.length === 0) return nothing;
     return html`
-      <h3>Reliability</h3>
-      <p class="text-secondary setting-description">
-        Tweak how long model sessions handle retries and context limits.
-      </p>
+      ${renderSettingsSectionHeading({
+        title: 'Reliability',
+        description:
+          'Tweak how long model sessions handle retries and context limits.',
+      })}
       <div class="settings-section">
         ${this.settings.map((setting) => this.renderSetting(setting))}
       </div>

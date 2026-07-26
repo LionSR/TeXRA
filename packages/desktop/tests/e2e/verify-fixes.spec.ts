@@ -62,8 +62,7 @@ async function setRoute(route: 'main' | 'settings'): Promise<void> {
 }
 
 /**
- * Read the scroll metrics of the Tools settings panel (the scrollable element
- * under the flex-body fix). Returns null when the panel has not mounted.
+ * Read the scroll metrics of the active Settings page.
  */
 async function readToolsPanelMetrics(): Promise<{
   scrollHeight: number;
@@ -75,9 +74,7 @@ async function readToolsPanelMetrics(): Promise<{
       'settings-app[data-desktop-view="settings"]',
     );
     const root = settingsApp?.shadowRoot;
-    const panel = root?.querySelector<HTMLElement>(
-      'wa-tab-panel[name="tools"]',
-    );
+    const panel = root?.querySelector<HTMLElement>('.settings-panel');
     if (!panel) return null;
     return {
       scrollHeight: panel.scrollHeight,
@@ -124,12 +121,12 @@ test('settings workbench scrolls (Tools tab top + bottom)', async ({}, testInfo)
       tabIndex: SETTINGS_TAB_INDEX.TOOLS,
     },
   );
-  // Wait for both the tab panel to be marked active AND its tools-tab
-  // content to have finished loading. ToolsTab renders a `.loading-state`
+  // Wait for the Tools page to be marked active AND its content to have
+  // finished loading. ToolsTab renders a `.loading-state`
   // placeholder while `loaded` is false and swaps in `<tool-card>` elements
   // once the tool dashboard data has arrived (see ToolsTab.ts render()); the
   // panel's scrollHeight only reflects real content after that swap, so
-  // gating on `[active]` alone races the content population and can catch
+  // gating on the navigation state alone races content population and can catch
   // the panel mid-load (scrollHeight === clientHeight).
   await launched.page.waitForFunction(
     () => {
@@ -138,9 +135,11 @@ test('settings workbench scrolls (Tools tab top + bottom)', async ({}, testInfo)
       );
       const root = settingsApp?.shadowRoot;
       if (!root) return false;
-      const panel = root.querySelector('wa-tab-panel[name="tools"][active]');
-      if (!panel) return false;
-      const toolsTab = panel.querySelector('tools-tab');
+      const activePage = root.querySelector(
+        '.settings-page-button[data-panel="tools"][data-active="true"]',
+      );
+      if (!activePage) return false;
+      const toolsTab = root.querySelector('tools-tab');
       const toolsRoot = toolsTab?.shadowRoot;
       if (!toolsRoot) return false;
       return toolsRoot.querySelector('tool-card') != null;
@@ -149,8 +148,7 @@ test('settings workbench scrolls (Tools tab top + bottom)', async ({}, testInfo)
     { timeout: 10_000 },
   );
 
-  // Find the wa-tab-panel for tools — that's the scrollable element under
-  // the new flex-body fix.
+  // The active Settings page owns scrolling for every hierarchical page.
   const probeBefore = await readToolsPanelMetrics();
   console.log('tools panel before scroll:', probeBefore);
 
@@ -165,9 +163,7 @@ test('settings workbench scrolls (Tools tab top + bottom)', async ({}, testInfo)
       'settings-app[data-desktop-view="settings"]',
     );
     const root = settingsApp?.shadowRoot;
-    const panel = root?.querySelector<HTMLElement>(
-      'wa-tab-panel[name="tools"]',
-    );
+    const panel = root?.querySelector<HTMLElement>('.settings-panel');
     if (panel) panel.scrollTop = panel.scrollHeight;
   });
   await launched.page.waitForTimeout(150);

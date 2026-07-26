@@ -1,10 +1,5 @@
-// Third-party imports
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// `hostBridge` is part of the mock because <history-tab> constructs a
-// PersistedState over it. jsdom swallows throws inside a custom-element upgrade
-// reaction, so omitting it doesn't fail the test — it just silently leaves one
-// panel's element unconstructed.
 vi.mock('@shared/hostBridge', () => ({
   postMessage: vi.fn(),
   getState: () => ({}),
@@ -16,14 +11,8 @@ vi.mock('@shared/hostBridge', () => ({
   },
 }));
 
-// Local imports - tab wire format (schema-only; safe to import before jsdom)
-import {
-  SETTINGS_TAB,
-  SETTINGS_TAB_ORDER,
-  SETTINGS_TAB_PANEL_BY_NAME,
-} from '@shared/schemas';
+import { SETTINGS_TAB, SETTINGS_TAB_PANEL_BY_NAME } from '@shared/schemas';
 
-// Local imports - test utilities
 import { useLitComponentTestDom } from './litComponentTestUtils';
 
 type LitElementLike = HTMLElement & { updateComplete: Promise<unknown> };
@@ -31,178 +20,195 @@ type LitElementLike = HTMLElement & { updateComplete: Promise<unknown> };
 interface NavEntry {
   readonly name: keyof typeof SETTINGS_TAB;
   readonly panel: string;
+  readonly icon: string;
   readonly label: string;
+  readonly description: string;
 }
 
-// Loaded inside the DOM setup, not at module scope: lit captures `document`
-// when it is first imported, so any module that pulls in lit (SettingsApp, the
-// nav table via the icon helpers, the state signals) must load after
-// useLitComponentTestDom has installed the jsdom globals.
-let navGroups: readonly { label: string; entries: readonly NavEntry[] }[] = [];
-let navEntries: readonly NavEntry[] = [];
+interface NavGroup {
+  readonly label: string;
+  readonly entries: readonly NavEntry[];
+}
+
+let navGroups: readonly NavGroup[] = [];
 let setSelectedTabIndex: (index: number) => void = () => {};
 let getSelectedTabIndex: () => number = () => -1;
 let declareAllCommandsSupported: () => void = () => {};
 
 async function mountSettingsApp(): Promise<LitElementLike> {
   const app = document.createElement('settings-app') as LitElementLike;
-  // SettingsApp's constructor resets the module-scope signals, so the host
-  // capability set has to be declared after construction.
   declareAllCommandsSupported();
+  setSelectedTabIndex(SETTINGS_TAB.ACCOUNT);
   document.body.append(app);
   await app.updateComplete;
-  // wa-tab-group syncs tabs to panels from a slotchange plus an
-  // IntersectionObserver callback, so the initial activation lands a macrotask
-  // after the host's first update.
-  await new Promise((resolve) => setTimeout(resolve, 20));
   return app;
 }
 
-function navTab(app: LitElementLike, panel: string): HTMLElement {
-  const tab = app.shadowRoot?.querySelector<HTMLElement>(
-    `wa-tab[panel="${panel}"]`,
+function categoryButton(app: LitElementLike, label: string): HTMLElement {
+  const button = [
+    ...(app.shadowRoot?.querySelectorAll<HTMLElement>(
+      '.settings-category-button',
+    ) ?? []),
+  ].find((candidate) => candidate.getAttribute('aria-label') === label);
+  expect(button, `missing settings category "${label}"`).not.toBeNull();
+  return button!;
+}
+
+function pageButton(app: LitElementLike, panel: string): HTMLElement {
+  const button = app.shadowRoot?.querySelector<HTMLElement>(
+    `.settings-page-button[data-panel="${panel}"]`,
   );
-  expect(tab, `missing navigation tab for panel "${panel}"`).not.toBeNull();
-  return tab!;
+  expect(button, `missing settings page "${panel}"`).not.toBeNull();
+  return button!;
 }
 
-function activePanelName(app: LitElementLike): string | null | undefined {
+function activePanelLabel(app: LitElementLike): string | null | undefined {
   return app.shadowRoot
-    ?.querySelector('wa-tab-panel[active]')
-    ?.getAttribute('name');
+    ?.querySelector('.settings-panel')
+    ?.getAttribute('aria-label');
 }
 
-/**
- * The grouped top navigation is presentation only: tabs address panels by name,
- * and `SettingsApp.handleTabShow` maps the name back to the `SETTINGS_TAB`
- * index that travels over IPC. These tests exercise that round trip through
- * the real component, so a regrouping that broke it fails here instead of
- * silently opening the wrong panel.
- */
-describe('settings nav navigation', () => {
+describe('hierarchical settings navigation', () => {
   useLitComponentTestDom(async () => {
     await import('@settingsView/frontend/SettingsApp');
     const nav = await import('@settingsView/frontend/settingsNav');
     const state = await import('@settingsView/frontend/settingsState');
     navGroups = nav.SETTINGS_NAV_GROUPS as typeof navGroups;
-    navEntries = navGroups.flatMap((group) => group.entries);
     setSelectedTabIndex = (index) => state.selectedTabIndex.set(index);
     getSelectedTabIndex = () => state.selectedTabIndex.get();
-    // `unsupportedCommands` starts as null ("nothing known yet"), which
-    // `isKnownUnsupported` treats as unsupported and which hides the Goals row.
-    // An empty set is the host saying every command is available.
     declareAllCommandsSupported = () =>
       state.unsupportedCommands.set(new Set<string>());
   });
 
   beforeEach(() => {
-    setSelectedTabIndex(0);
+    setSelectedTabIndex(SETTINGS_TAB.ACCOUNT);
   });
 
-  it('renders one top-level option per tab, grouped under headings', async () => {
+  it('renders category navigation plus only the active category pages', async () => {
     const app = await mountSettingsApp();
-    const tabGroup = app.shadowRoot?.querySelector('wa-tab-group');
 
-    const panels = [...(app.shadowRoot?.querySelectorAll('wa-tab') ?? [])].map(
-      (tab) => tab.getAttribute('panel'),
-    );
-    const headings = [
-      ...(app.shadowRoot?.querySelectorAll('.settings-nav-group') ?? []),
-    ].map((heading) => heading.textContent?.trim());
-
-    expect(panels).toEqual(navEntries.map((entry) => entry.panel));
-    expect(panels).toHaveLength(SETTINGS_TAB_ORDER.length);
-    expect(headings).toEqual(navGroups.map((group) => group.label));
-    expect(tabGroup?.getAttribute('placement')).toBe('top');
+    expect(
+      app.shadowRoot?.querySelectorAll('.settings-category-button'),
+    ).toHaveLength(navGroups.length);
+    const activeGroup = navGroups.find((group) =>
+      group.entries.some((entry) => entry.name === 'ACCOUNT'),
+    )!;
+    expect(
+      app.shadowRoot?.querySelectorAll('.settings-page-button'),
+    ).toHaveLength(activeGroup.entries.length);
   });
 
-  it('activates the panel matching each navigation tab and reports its wire index', async () => {
+  it('selects the first page when changing category, then any page within it', async () => {
     const app = await mountSettingsApp();
 
-    for (const entry of navEntries) {
-      navTab(app, entry.panel).click();
+    for (const group of navGroups) {
+      categoryButton(app, group.label).click();
       await app.updateComplete;
 
-      expect(activePanelName(app)).toBe(entry.panel);
-      expect(getSelectedTabIndex()).toBe(SETTINGS_TAB[entry.name]);
+      expect(getSelectedTabIndex()).toBe(SETTINGS_TAB[group.entries[0]!.name]);
+      expect(activePanelLabel(app)).toBe(group.entries[0]!.label);
+      expect(
+        app.shadowRoot?.querySelectorAll('.settings-page-button'),
+      ).toHaveLength(group.entries.length);
+
+      for (const entry of group.entries) {
+        pageButton(app, entry.panel).click();
+        await app.updateComplete;
+        expect(getSelectedTabIndex()).toBe(SETTINGS_TAB[entry.name]);
+        expect(activePanelLabel(app)).toBe(entry.label);
+      }
     }
   });
 
-  it('activates the panel addressed by a SET_TAB wire index', async () => {
+  it('activates the page addressed by a wire index', async () => {
     const app = await mountSettingsApp();
 
     setSelectedTabIndex(SETTINGS_TAB.LATEX);
     await app.updateComplete;
-    await new Promise((resolve) => setTimeout(resolve, 20));
 
-    expect(activePanelName(app)).toBe('latex');
+    expect(activePanelLabel(app)).toBe('LaTeX');
     expect(
-      app.shadowRoot?.querySelector('wa-tab[panel="latex"][active]'),
+      app.shadowRoot?.querySelector(
+        '.settings-page-button[data-panel="latex"][data-active="true"]',
+      ),
     ).not.toBeNull();
+    expect(app.shadowRoot?.querySelector('latex-tab')).not.toBeNull();
   });
 
-  it('keeps account actions in their own panel and navigates key management to models', async () => {
+  it('renders the same page heading contract for every settings page', async () => {
     const app = await mountSettingsApp();
 
-    navTab(app, SETTINGS_TAB_PANEL_BY_NAME.ACCOUNT).click();
+    for (const group of navGroups) {
+      for (const entry of group.entries) {
+        setSelectedTabIndex(SETTINGS_TAB[entry.name]);
+        await app.updateComplete;
+
+        const header = app.shadowRoot?.querySelector('.settings-page-header');
+        expect(header?.querySelector('h1')?.textContent?.trim()).toBe(
+          entry.label,
+        );
+        expect(header?.querySelector('p')?.textContent?.trim()).toBe(
+          entry.description,
+        );
+        expect(header?.querySelector('wa-icon')).not.toBeNull();
+      }
+    }
+  });
+
+  it('keeps account key management in the models page', async () => {
+    const app = await mountSettingsApp();
+    setSelectedTabIndex(SETTINGS_TAB.ACCOUNT);
     await app.updateComplete;
 
     const account =
       app.shadowRoot?.querySelector<LitElementLike>('account-tab');
     await account?.updateComplete;
-    const manageKeys = account?.shadowRoot?.querySelector<HTMLElement>(
-      '.account-manage-keys',
+    account?.dispatchEvent(
+      new CustomEvent('manage-provider-keys', {
+        bubbles: true,
+        composed: true,
+      }),
     );
-
-    expect(app.shadowRoot?.querySelector('.settings-header')).toBeNull();
-    expect(account).not.toBeNull();
-    expect(manageKeys).not.toBeNull();
-
-    manageKeys?.click();
     await app.updateComplete;
-    await new Promise((resolve) => setTimeout(resolve, 20));
 
-    expect(activePanelName(app)).toBe(SETTINGS_TAB_PANEL_BY_NAME.MODELS);
     expect(getSelectedTabIndex()).toBe(SETTINGS_TAB.MODELS);
+    expect(activePanelLabel(app)).toBe('Providers & Models');
+    expect(app.shadowRoot?.querySelector('models-tab')).not.toBeNull();
+    expect(app.shadowRoot?.querySelector('account-tab')).toBeNull();
   });
 
-  it('keeps group headings out of the tab list', async () => {
-    // wa-tab-group builds its tab list from slot[name="nav"] filtered to
-    // wa-tab, which is what lets a heading share the column without becoming a
-    // focusable pseudo-tab bound to no panel.
-    const app = await mountSettingsApp();
-    const heading = app.shadowRoot?.querySelector<HTMLElement>(
-      '.settings-nav-group',
-    );
-    // A row has to be activated first: nothing is active at mount here (WA's
-    // initial activation runs from an IntersectionObserver the test DOM does not
-    // provide), so asserting "unchanged" against no active panel would pass for
-    // a heading that does steal activation.
-    navTab(app, SETTINGS_TAB_PANEL_BY_NAME.LATEX).click();
-    await app.updateComplete;
-    expect(activePanelName(app)).toBe(SETTINGS_TAB_PANEL_BY_NAME.LATEX);
-
-    heading?.click();
-    await app.updateComplete;
-
-    expect(heading?.getAttribute('role')).toBe('presentation');
-    expect(heading?.matches('wa-tab')).toBe(false);
-    expect(activePanelName(app)).toBe(SETTINGS_TAB_PANEL_BY_NAME.LATEX);
-  });
-
-  it('names every nav tab for the icon-only collapsed layout', async () => {
-    // The narrow container query hides the label span, and waIcon() emits
-    // aria-hidden, so the aria-label is the tab's only accessible name in a
-    // quarter-pane. The group name is folded in because it is the heading text
-    // that aria-hidden removes from the tablist.
+  it('keeps icon-only navigation controls accessible', async () => {
     const app = await mountSettingsApp();
 
     for (const group of navGroups) {
+      expect(categoryButton(app, group.label).getAttribute('aria-label')).toBe(
+        group.label,
+      );
+      categoryButton(app, group.label).click();
+      await app.updateComplete;
       for (const entry of group.entries) {
-        expect(navTab(app, entry.panel).getAttribute('aria-label')).toBe(
+        expect(pageButton(app, entry.panel).getAttribute('aria-label')).toBe(
           `${group.label}: ${entry.label}`,
         );
       }
     }
+  });
+
+  it('keeps unsupported Goals out of the Data & Activity pages', async () => {
+    const app = document.createElement('settings-app') as LitElementLike;
+    document.body.append(app);
+    await app.updateComplete;
+
+    const dataGroup = navGroups.find(
+      (group) => group.label === 'Data & Activity',
+    )!;
+    categoryButton(app, dataGroup.label).click();
+    await app.updateComplete;
+
+    expect(
+      app.shadowRoot?.querySelector(
+        `.settings-page-button[data-panel="${SETTINGS_TAB_PANEL_BY_NAME.GOAL}"]`,
+      ),
+    ).toBeNull();
   });
 });

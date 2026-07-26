@@ -4,7 +4,7 @@ export interface EditorFileEntry {
   readonly isDirectory: boolean;
 }
 
-export interface EditorTreeFile {
+interface EditorTreeFile {
   readonly kind: 'file';
   readonly name: string;
   readonly path: string;

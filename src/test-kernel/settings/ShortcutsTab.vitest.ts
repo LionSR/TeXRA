@@ -74,11 +74,13 @@ describe('shortcuts-tab', () => {
     const recorder =
       element.shadowRoot?.querySelector<HTMLElement>('.shortcut-recorder');
     recorder?.click();
+    const isMac = navigator.platform.toLowerCase().includes('mac');
     recorder?.dispatchEvent(
       new KeyboardEvent('keydown', {
         bubbles: true,
         key: 'p',
-        metaKey: true,
+        ctrlKey: !isMac,
+        metaKey: isMac,
         shiftKey: true,
       }),
     );
@@ -88,7 +90,7 @@ describe('shortcuts-tab', () => {
       DesktopShortcutUpdate | undefined;
     expect(detail).toEqual({
       id: 'texra.desktop.showCommands',
-      accelerator: 'Command+Shift+P',
+      accelerator: isMac ? 'Command+Shift+P' : 'Control+Shift+P',
     });
     window.removeEventListener(DESKTOP_SHORTCUT_EVENTS.UPDATE, update);
   });

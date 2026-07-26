@@ -582,13 +582,6 @@ export const settingsRowStyles: CSSResult = css`
     margin-block-end: var(--wa-space-l);
   }
 
-  .settings-section-title {
-    margin-block: var(--wa-space-l) var(--wa-space-2xs);
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-semibold);
-    color: var(--wa-color-text-quiet);
-  }
-
   .settings-row {
     display: flex;
     align-items: center;

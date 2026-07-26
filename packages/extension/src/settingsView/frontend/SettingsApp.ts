@@ -31,9 +31,11 @@ import {
 } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - settings view
-import '@shared/wa/tabs';
-import type { WaTabShowEvent } from '@shared/wa/tabs';
-import { SETTINGS_NAV_GROUPS, type SettingsNavGroup } from './settingsNav';
+import {
+  SETTINGS_NAV_GROUPS,
+  type SettingsNavEntry,
+  type SettingsNavGroup,
+} from './settingsNav';
 import { settingsViewStyles } from './styles';
 
 // Side-effect: register tab components
@@ -178,29 +180,14 @@ export class SettingsApp extends SettingsAppBase {
     }
   }
 
-  // The nav addresses panels by name; the index is derived here so nav order
-  // and grouping stay free of the `SETTINGS_TAB` wire indices.
-  private handleTabShow(event: WaTabShowEvent): void {
-    const selectedIndex = SETTINGS_TAB_PANEL_NAMES.indexOf(event.detail.name);
-    if (selectedIndex >= 0) {
-      selectedTabIndex.set(selectedIndex);
-    }
-    // Each panel keeps its own scroll offset across activations. The top
-    // navigation stays visible while the panel swaps, so a retained offset
-    // reads as the new panel opening mid-page.
-    //
-    // Deferred a frame on purpose: WA sets `active` as a Lit reactive property
-    // and dispatches this event synchronously in the same call, so at dispatch
-    // time the panel is still `display: none`. An element with no box ignores
-    // the scrollTop setter, which made the reset silently do nothing.
-    const { name } = event.detail;
+  private selectSettingsEntry(entry: SettingsNavEntry): void {
+    const selectedIndex = SETTINGS_TAB_PANEL_NAMES.indexOf(entry.panel);
+    if (selectedIndex < 0) return;
+    selectedTabIndex.set(selectedIndex);
     requestAnimationFrame(() => {
-      const panel = this.shadowRoot?.querySelector(
-        `wa-tab-panel[name="${name}"]`,
-      );
-      if (panel != null) {
-        panel.scrollTop = 0;
-      }
+      const panel =
+        this.shadowRoot?.querySelector<HTMLElement>('.settings-panel');
+      if (panel) panel.scrollTop = 0;
     });
   }
 
@@ -279,47 +266,224 @@ export class SettingsApp extends SettingsAppBase {
     `;
   }
 
-  /**
-   * One nav group: a heading plus its tabs. The heading is slotted into `nav`
-   * but is not a `wa-tab`, so WA's `getAllTabs()` filter leaves it out of tab
-   * logic and arrow-key navigation while still rendering it in the top bar.
-   *
-   * It is also `aria-hidden`: `role="presentation"` drops the div's own
-   * semantics but not its text, which would otherwise sit inside the
-   * `role="tablist"` as a bare string labelling nothing. The group name reaches
-   * assistive tech through each tab's `aria-label` instead, which is also the
-   * tab's only accessible name once the container query collapses the nav to
-   * icons.
-   */
-  private renderNavGroup(
+  private entriesForGroup(
     group: SettingsNavGroup,
     goalSupported: boolean,
-  ): TemplateResult {
-    const entries = group.entries.filter(
+  ): readonly SettingsNavEntry[] {
+    return group.entries.filter(
       (entry) =>
         entry.panel !== SETTINGS_TAB_PANEL_BY_NAME.GOAL || goalSupported,
     );
+  }
+
+  private renderSettingsNavigation(
+    activePanel: string,
+    goalSupported: boolean,
+  ): TemplateResult {
+    const activeGroup =
+      SETTINGS_NAV_GROUPS.find((group) =>
+        group.entries.some((entry) => entry.panel === activePanel),
+      ) ?? SETTINGS_NAV_GROUPS[0];
+    const activeEntries = this.entriesForGroup(activeGroup, goalSupported);
 
     return html`
-      <div
-        slot="nav"
-        class="settings-nav-group"
-        role="presentation"
-        aria-hidden="true"
-      >
-        ${group.label}
-      </div>
-      ${entries.map(
-        (entry) =>
-          html`<wa-tab
-            panel=${entry.panel}
-            aria-label=${`${group.label}: ${entry.label}`}
-            title=${entry.label}
-            >${waIcon(entry.icon, { className: 'settings-tab-icon' })}
-            <span class="settings-tab-label">${entry.label}</span></wa-tab
-          >`,
-      )}
+      <nav class="settings-navigation" aria-label="Settings">
+        <div class="settings-category-nav" aria-label="Settings categories">
+          ${SETTINGS_NAV_GROUPS.map((group) => {
+            const entries = this.entriesForGroup(group, goalSupported);
+            if (entries.length === 0) return nothing;
+            const active = group === activeGroup;
+            return html`
+              <wa-button
+                class="settings-category-button"
+                appearance="plain"
+                size="s"
+                aria-label=${group.label}
+                aria-pressed=${String(active)}
+                data-active=${String(active)}
+                data-group=${group.label}
+                @click=${() => this.selectSettingsEntry(entries[0])}
+              >
+                ${waIcon(group.icon, { slot: 'start' })} ${group.label}
+              </wa-button>
+            `;
+          })}
+        </div>
+        <div
+          class="settings-page-nav"
+          role="tablist"
+          aria-label=${`${activeGroup.label} pages`}
+        >
+          ${activeEntries.map((entry) => {
+            const active = entry.panel === activePanel;
+            return html`
+              <wa-button
+                class="settings-page-button"
+                appearance="plain"
+                size="s"
+                role="tab"
+                aria-label=${`${activeGroup.label}: ${entry.label}`}
+                aria-selected=${String(active)}
+                data-active=${String(active)}
+                data-panel=${entry.panel}
+                title=${entry.label}
+                @click=${() => this.selectSettingsEntry(entry)}
+              >
+                ${waIcon(entry.icon, {
+                  className: 'settings-tab-icon',
+                  slot: 'start',
+                })}
+                <span class="settings-tab-label">${entry.label}</span>
+              </wa-button>
+            `;
+          })}
+        </div>
+      </nav>
     `;
+  }
+
+  private renderActivePanel(
+    activePanel: string,
+    desktopHost: boolean,
+    goalSupported: boolean,
+  ): TemplateResult {
+    switch (activePanel) {
+      case 'account':
+        return html`
+          <account-tab
+            .authenticated=${authenticated.get()}
+            .userEmail=${userEmail.get()}
+            .tier=${tier.get()}
+            .spendingStatus=${spendingStatus.get()}
+            .quotaAutoSwitched=${quotaAutoSwitched.get()}
+            .vscodeSettingsAvailable=${!isKnownUnsupported(
+              unsupportedCommands.get(),
+              SETTINGS_VIEW_COMMANDS.OPEN_VSCODE_SETTINGS,
+            )}
+            @manage-provider-keys=${this.handleManageProviderKeys}
+          ></account-tab>
+        `;
+      case 'models':
+        return html`
+          <models-tab
+            .authenticated=${authenticated.get()}
+            .apiAccessMode=${apiAccessMode.get()}
+            .providerKeyStatuses=${providerKeyStatuses.get()}
+            .chatgptAuth=${chatgptAuth.get()}
+            .globalStreamingDefault=${globalStreamingDefault.get()}
+            .modelSelectionItems=${modelSelectionItems.get()}
+            .reliabilitySettings=${reliabilitySettings.get()}
+            .helperModel=${helperModel.get()}
+            .preferShortModelNames=${preferShortModelNames.get()}
+            @provider-key-set=${this.handleSetProviderKey}
+          ></models-tab>
+        `;
+      case 'agents':
+        return html`
+          <agents-tab
+            .workflowAgents=${workflowAgents.get()}
+            .toolUseAgents=${toolUseAgents.get()}
+            .customAgentDir=${customAgentDir.get()}
+            .customAgentDirIsDefault=${customAgentDirIsDefault.get()}
+            .initialSubTab=${agentSubTab.get()}
+            .userTier=${tier.get()}
+            .unsupportedCommands=${unsupportedCommands.get()}
+          ></agents-tab>
+        `;
+      case 'multi-agent':
+        return html`
+          <multi-agent-tab
+            .customPresets=${customPresets.get()}
+            .orchestratorAgents=${orchestratorAgents.get()}
+            .allowOrchestratorKill=${allowOrchestratorKill.get()}
+            .detachSubagentsOnStop=${detachSubagentsOnStop.get()}
+            .worktreeSupport=${gitWorktreeSupport.get()}
+          ></multi-agent-tab>
+        `;
+      case 'tools':
+        return html`
+          <tools-tab
+            .items=${toolDashboardItems.get()}
+            .loaded=${toolDashboardLoaded.get()}
+            .bashApprovalEnabled=${bashApprovalEnabled.get()}
+            .agentSkillsEnabled=${agentSkillsEnabled.get()}
+            .showAgentSkillsSettings=${this.isDesktopHost}
+            .showDesktopCrashReporting=${!isKnownUnsupported(
+              unsupportedCommands.get(),
+              SETTINGS_VIEW_COMMANDS.GET_DESKTOP_CRASH_REPORTING,
+            )}
+            .desktopCrashReportingEnabled=${desktopCrashReportingEnabled.get()}
+            .desktopCrashReportingConfigured=${desktopCrashReportingConfigured.get()}
+          ></tools-tab>
+        `;
+      case 'ai-agents':
+        return html`
+          <ai-agents-tab
+            .items=${toolDashboardItems.get()}
+            .loaded=${toolDashboardLoaded.get()}
+            .codexSandboxMode=${codexSandboxMode.get()}
+            .codexReasoningEffort=${codexReasoningEffort.get()}
+            .codexApprovalPolicy=${codexApprovalPolicy.get()}
+            .claudeAgentModel=${claudeAgentModel.get()}
+            .claudeAgentPermissionMode=${claudeAgentPermissionMode.get()}
+            .claudeAgentEffort=${claudeAgentEffort.get()}
+          ></ai-agents-tab>
+        `;
+      case 'latex':
+        return html`
+          <latex-tab
+            .settings=${latexSettingsStatus.get()}
+            .loaded=${latexSettingsLoaded.get()}
+            .configValues=${latexConfigValues.get()}
+            .configLoaded=${latexConfigValuesLoaded.get()}
+            .inlineCriticismEnabled=${inlineCriticismEnabled.get()}
+            .desktopHost=${desktopHost}
+            .inlineCriticismSupported=${!isKnownUnsupported(
+              unsupportedCommands.get(),
+              SETTINGS_VIEW_COMMANDS.GET_INLINE_CRITICISM_ENABLED,
+            )}
+          ></latex-tab>
+        `;
+      case 'git':
+        return html`
+          <git-tab
+            .markCommits=${gitMarkCommits.get()}
+            .authorName=${gitAuthorName.get()}
+            .authorEmail=${gitAuthorEmail.get()}
+            .toggleDisabled=${!gitSettingsLoaded.get()}
+            .unsupportedCommands=${unsupportedCommands.get()}
+            .githubTokenStatus=${githubTokenStatus.get()}
+            .prSubscriptions=${prSubscriptions.get()}
+          ></git-tab>
+        `;
+      case 'shortcuts':
+        return html`
+          <shortcuts-tab .desktopHost=${desktopHost}></shortcuts-tab>
+        `;
+      case 'history':
+        return html`
+          <history-tab
+            .items=${historyItems.get()}
+            .unsupportedCommands=${unsupportedCommands.get()}
+          ></history-tab>
+        `;
+      case 'goal':
+        return goalSupported
+          ? html`<goal-tab .items=${goalItems.get()}></goal-tab>`
+          : this.renderDesktopUnavailablePanel(
+              'Goals unavailable',
+              'This host does not support autonomous goals.',
+            );
+      case 'memory':
+      default:
+        return html`
+          <memory-tab
+            .items=${memoryItems.get()}
+            .enabled=${memoryEnabled.get()}
+            .toggleDisabled=${memoryToggleDisabled.get()}
+          ></memory-tab>
+        `;
+    }
   }
 
   override render(): TemplateResult {
@@ -328,158 +492,39 @@ export class SettingsApp extends SettingsAppBase {
       unsupportedCommands.get(),
       SETTINGS_VIEW_COMMANDS.GET_GOAL_LIST,
     );
+    const activePanel =
+      SETTINGS_TAB_PANEL_NAMES[selectedTabIndex.get()] ?? 'memory';
+    const activeEntry = SETTINGS_NAV_GROUPS.flatMap(
+      (group) => group.entries,
+    ).find((entry) => entry.panel === activePanel);
 
     return html`
       <div class="settings-container">
-        <wa-tab-group
-          class="settings-tabs"
-          placement="top"
-          .active=${
-            SETTINGS_TAB_PANEL_NAMES[selectedTabIndex.get()] ?? 'memory'
-          }
-          @wa-tab-show=${this.handleTabShow}
+        ${this.renderSettingsNavigation(activePanel, goalSupported)}
+        <section
+          class="settings-panel"
+          role="tabpanel"
+          aria-label=${activeEntry?.label ?? 'Settings'}
         >
-          ${SETTINGS_NAV_GROUPS.map((group) =>
-            this.renderNavGroup(group, goalSupported),
-          )}
-
-          <wa-tab-panel name="account">
-            <account-tab
-              .authenticated=${authenticated.get()}
-              .userEmail=${userEmail.get()}
-              .tier=${tier.get()}
-              .spendingStatus=${spendingStatus.get()}
-              .quotaAutoSwitched=${quotaAutoSwitched.get()}
-              .vscodeSettingsAvailable=${!isKnownUnsupported(
-                unsupportedCommands.get(),
-                SETTINGS_VIEW_COMMANDS.OPEN_VSCODE_SETTINGS,
-              )}
-              @manage-provider-keys=${this.handleManageProviderKeys}
-            ></account-tab>
-          </wa-tab-panel>
-
-          <wa-tab-panel name="memory">
-            <memory-tab
-              .items=${memoryItems.get()}
-              .enabled=${memoryEnabled.get()}
-              .toggleDisabled=${memoryToggleDisabled.get()}
-            ></memory-tab>
-          </wa-tab-panel>
-
           ${
-            goalSupported
+            activeEntry
               ? html`
-                  <wa-tab-panel name="goal">
-                    <goal-tab .items=${goalItems.get()}></goal-tab>
-                  </wa-tab-panel>
+                  <header class="settings-page-header tab-content-container">
+                    <span
+                      class="settings-page-header-icon icon-surface is-size-l"
+                    >
+                      ${waIcon(activeEntry.icon)}
+                    </span>
+                    <div class="settings-page-header-copy">
+                      <h1>${activeEntry.label}</h1>
+                      <p>${activeEntry.description}</p>
+                    </div>
+                  </header>
                 `
               : nothing
           }
-
-          <wa-tab-panel name="history">
-            <history-tab
-              .items=${historyItems.get()}
-              .unsupportedCommands=${unsupportedCommands.get()}
-            ></history-tab>
-          </wa-tab-panel>
-
-          <wa-tab-panel name="models">
-            <models-tab
-              .authenticated=${authenticated.get()}
-              .apiAccessMode=${apiAccessMode.get()}
-              .providerKeyStatuses=${providerKeyStatuses.get()}
-              .chatgptAuth=${chatgptAuth.get()}
-              .globalStreamingDefault=${globalStreamingDefault.get()}
-              .modelSelectionItems=${modelSelectionItems.get()}
-              .reliabilitySettings=${reliabilitySettings.get()}
-              .helperModel=${helperModel.get()}
-              .preferShortModelNames=${preferShortModelNames.get()}
-              @provider-key-set=${this.handleSetProviderKey}
-            ></models-tab>
-          </wa-tab-panel>
-
-          <wa-tab-panel name="agents">
-            <agents-tab
-              .workflowAgents=${workflowAgents.get()}
-              .toolUseAgents=${toolUseAgents.get()}
-              .customAgentDir=${customAgentDir.get()}
-              .customAgentDirIsDefault=${customAgentDirIsDefault.get()}
-              .initialSubTab=${agentSubTab.get()}
-              .userTier=${tier.get()}
-              .unsupportedCommands=${unsupportedCommands.get()}
-            ></agents-tab>
-          </wa-tab-panel>
-
-          <wa-tab-panel name="multi-agent">
-            <multi-agent-tab
-              .customPresets=${customPresets.get()}
-              .orchestratorAgents=${orchestratorAgents.get()}
-              .allowOrchestratorKill=${allowOrchestratorKill.get()}
-              .detachSubagentsOnStop=${detachSubagentsOnStop.get()}
-              .worktreeSupport=${gitWorktreeSupport.get()}
-            ></multi-agent-tab>
-          </wa-tab-panel>
-
-          <wa-tab-panel name="tools">
-            <tools-tab
-              .items=${toolDashboardItems.get()}
-              .loaded=${toolDashboardLoaded.get()}
-              .bashApprovalEnabled=${bashApprovalEnabled.get()}
-              .agentSkillsEnabled=${agentSkillsEnabled.get()}
-              .showAgentSkillsSettings=${this.isDesktopHost}
-              .showDesktopCrashReporting=${!isKnownUnsupported(
-                unsupportedCommands.get(),
-                SETTINGS_VIEW_COMMANDS.GET_DESKTOP_CRASH_REPORTING,
-              )}
-              .desktopCrashReportingEnabled=${desktopCrashReportingEnabled.get()}
-              .desktopCrashReportingConfigured=${desktopCrashReportingConfigured.get()}
-            ></tools-tab>
-          </wa-tab-panel>
-
-          <wa-tab-panel name="ai-agents">
-            <ai-agents-tab
-              .items=${toolDashboardItems.get()}
-              .loaded=${toolDashboardLoaded.get()}
-              .codexSandboxMode=${codexSandboxMode.get()}
-              .codexReasoningEffort=${codexReasoningEffort.get()}
-              .codexApprovalPolicy=${codexApprovalPolicy.get()}
-              .claudeAgentModel=${claudeAgentModel.get()}
-              .claudeAgentPermissionMode=${claudeAgentPermissionMode.get()}
-              .claudeAgentEffort=${claudeAgentEffort.get()}
-            ></ai-agents-tab>
-          </wa-tab-panel>
-
-          <wa-tab-panel name="git">
-            <git-tab
-              .markCommits=${gitMarkCommits.get()}
-              .authorName=${gitAuthorName.get()}
-              .authorEmail=${gitAuthorEmail.get()}
-              .toggleDisabled=${!gitSettingsLoaded.get()}
-              .unsupportedCommands=${unsupportedCommands.get()}
-              .githubTokenStatus=${githubTokenStatus.get()}
-              .prSubscriptions=${prSubscriptions.get()}
-            ></git-tab>
-          </wa-tab-panel>
-
-          <wa-tab-panel name="latex">
-            <latex-tab
-              .settings=${latexSettingsStatus.get()}
-              .loaded=${latexSettingsLoaded.get()}
-              .configValues=${latexConfigValues.get()}
-              .configLoaded=${latexConfigValuesLoaded.get()}
-              .inlineCriticismEnabled=${inlineCriticismEnabled.get()}
-              .desktopHost=${desktopHost}
-              .inlineCriticismSupported=${!isKnownUnsupported(
-                unsupportedCommands.get(),
-                SETTINGS_VIEW_COMMANDS.GET_INLINE_CRITICISM_ENABLED,
-              )}
-            ></latex-tab>
-          </wa-tab-panel>
-
-          <wa-tab-panel name="shortcuts">
-            <shortcuts-tab .desktopHost=${desktopHost}></shortcuts-tab>
-          </wa-tab-panel>
-        </wa-tab-group>
+          ${this.renderActivePanel(activePanel, desktopHost, goalSupported)}
+        </section>
         ${this.renderProviderKeyModal()}
       </div>
     `;

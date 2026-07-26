@@ -11,6 +11,7 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
+import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
 import {
   renderSetStatusIcon,
   statusCheckIconStyles,
@@ -265,8 +266,11 @@ export class ProviderKeyList extends LitElement {
 
     return html`
       <div class="provider-keys-section">
-        <h2 class="settings-subsection-heading">API Configuration</h2>
-        <p class="provider-keys-description">${description}</p>
+        ${renderSettingsSectionHeading({
+          title: 'API configuration',
+          description,
+          icon: 'key',
+        })}
         ${this.renderGlobalStreamingToggle()}
         <table class="provider-keys-table">
           <thead>

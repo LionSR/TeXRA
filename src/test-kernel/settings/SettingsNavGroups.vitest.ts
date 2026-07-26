@@ -40,6 +40,7 @@ describe('settings nav groups', () => {
       for (const entry of group.entries) {
         expect(entry.label.trim()).not.toBe('');
         expect(entry.icon.trim()).not.toBe('');
+        expect(entry.description.trim()).not.toBe('');
       }
     }
   });

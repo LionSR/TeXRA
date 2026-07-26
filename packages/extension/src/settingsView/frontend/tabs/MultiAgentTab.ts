@@ -22,6 +22,7 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { renderSettingsBanner } from '@shared/wa/settingsBanner';
+import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - shared schemas
@@ -46,11 +47,6 @@ export class MultiAgentTab extends LitElement {
         display: flex;
         flex-direction: column;
         gap: var(--wa-space-xs);
-      }
-
-      .setting-description {
-        margin: var(--wa-space-2xs) 0 0 0;
-        font-size: var(--font-size-sm);
       }
 
       /* Team cards */
@@ -329,57 +325,24 @@ export class MultiAgentTab extends LitElement {
           icon: 'organization',
           title: 'Multi-agent workflow',
           description:
-            'The orchestrator reads your paper and hands work to specialized agents for writing, derivations, numerical experiments, citations, figures, and more.',
-          detail: html`
-            <ol class="settings-banner-list">
-              <li>
-                <span class="settings-banner-step">1</span>
-                <span
-                  ><strong>Pick a team</strong> below that matches your field.
-                  This enables and configures the right specialized agents for
-                  you. You can also add or remove individual agents in the
-                  <strong>Agents</strong> tab.</span
-                >
-              </li>
-              <li>
-                <span class="settings-banner-step">2</span>
-                <span
-                  ><strong>Select orchestrator</strong> from the agent dropdown
-                  (look for the target icon), then click Execute.</span
-                >
-              </li>
-              <li>
-                <span class="settings-banner-step">3</span>
-                <span
-                  ><strong>Approve tasks</strong> in Progress as they come in —
-                  press <strong>y</strong> to approve or <strong>n</strong> to
-                  reject. Use the rocket button in Progress to let one stream
-                  run without task-by-task approval.</span
-                >
-              </li>
-            </ol>
-          `,
+            'Choose a team, select its orchestrator in the task composer, then review delegated work in Progress.',
         })}
-
-        <h3>Multi-Agent Teams</h3>
-
-        <p class="text-secondary setting-description">
-          Click one to activate it. You can make your own teams in the Agents
-          tab.
-        </p>
+        ${renderSettingsSectionHeading({
+          title: 'Multi-agent teams',
+          description:
+            'Choose a team to activate it. Create and refine custom teams in Agents.',
+        })}
 
         <div class="preset-grid">
           ${AGENT_MODE_PRESETS.map((p) => this.renderPresetCard(p, false))}
           ${this.customPresets.map((p) => this.renderPresetCard(p, true))}
         </div>
 
-        <h3>Team Coordination</h3>
-
-        <p class="text-secondary setting-description">
-          Control how the orchestrator works with the rest of the team. It can
-          only use agents and models you've turned on in the Models and Agents
-          tabs.
-        </p>
+        ${renderSettingsSectionHeading({
+          title: 'Team coordination',
+          description:
+            "Control how the orchestrator works with the rest of the team. It can only use agents and models you've enabled.",
+        })}
 
         <div class="settings-section">
           <div class="settings-row">

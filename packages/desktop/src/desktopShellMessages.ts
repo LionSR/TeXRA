@@ -13,7 +13,7 @@ export const DesktopSetRouteMessageSchema = z.object({
   route: DesktopRouteSchema,
 });
 
-export const DesktopLayoutPanelSchema = z.enum([
+const DesktopLayoutPanelSchema = z.enum([
   'bottomBar',
   'sidePanel',
   'summaryBar',

@@ -13,6 +13,7 @@ import {
   renderSetStatusIcon,
   statusCheckIconStyles,
 } from '@shared/wa/statusIcons';
+import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
 
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -369,7 +370,12 @@ export class ModelSelectionList extends LitElement {
 
     return html`
       <div class="model-selection-section">
-        <h2 class="settings-subsection-heading">Model Selection</h2>
+        ${renderSettingsSectionHeading({
+          title: 'Model selection',
+          description:
+            'Choose the models exposed to agents and the default helper model used for lightweight tasks.',
+          icon: 'server',
+        })}
         ${this.renderHelperModelDropdown()}
         <div class="short-names-toggle">
           <wa-switch
