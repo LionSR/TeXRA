@@ -69,7 +69,6 @@ import type {
   HostRetryInteractionOptions,
 } from '@agent/runtime/HostInteractions';
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import type { RuntimeInteractionEventPayloads } from '@agent/runtime/runtimeInteractionEvents';
 import {
   clearApprovals,
   currentApproval,
@@ -87,7 +86,7 @@ import { createTuiHostInteractions } from '@cli/chat/tui/state/subscribeApproval
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
 import type { ApiProvider } from '@model/apiProviders';
-import { AgentCategory } from '@shared/schemas';
+import { AgentCategory, type RetryPermission } from '@shared/schemas';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { setGoalSessionBashAutoApproval } from '@tools/goal';
 import {
@@ -154,7 +153,7 @@ function relayRetry(params: {
   streamId: string;
   provider?: string;
   message?: string;
-}): RuntimeInteractionEventPayloads['showRetryRequest'] {
+}): RetryPermission {
   return {
     streamId: params.streamId,
     operation: 'model request',
@@ -165,12 +164,10 @@ function relayRetry(params: {
       isRelayError: true,
       ...(params.provider ? { provider: params.provider } : {}),
     },
-  } as RuntimeInteractionEventPayloads['showRetryRequest'];
+  } as RetryPermission;
 }
 
-function chatGptSubscriptionRetry(
-  streamId: string,
-): RuntimeInteractionEventPayloads['showRetryRequest'] {
+function chatGptSubscriptionRetry(streamId: string): RetryPermission {
   return {
     streamId,
     operation: 'model request',
@@ -180,7 +177,7 @@ function chatGptSubscriptionRetry(
       exhaustionReason: 'chatgpt-subscription',
       provider: 'openai',
     },
-  } as RuntimeInteractionEventPayloads['showRetryRequest'];
+  } as RetryPermission;
 }
 
 function decideRetry(decision: ApprovalDecision): void {
@@ -610,7 +607,7 @@ describe('TUI retry approvals', () => {
         isRelayError: false,
         provider: 'openai',
       },
-    } as RuntimeInteractionEventPayloads['showRetryRequest']);
+    } as RetryPermission);
 
     await vi.waitFor(() => {
       expect(mocks.setCliApiMode).toHaveBeenCalledWith('personal');

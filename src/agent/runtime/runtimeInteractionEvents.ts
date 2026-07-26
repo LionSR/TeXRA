@@ -1,12 +1,4 @@
-import type {
-  AgentProposalPermission,
-  BashPermission,
-  ExternalInquiryPermission,
-  PlanApprovalPermission,
-  RetryPermission,
-  StreamTabId,
-  ToolEditPermission,
-} from '@shared/schemas';
+import type { StreamTabId, ToolEditPermission } from '@shared/schemas';
 
 /**
  * Host interaction and approval UI requests emitted by runtime/tool code.
@@ -16,7 +8,6 @@ import type {
  * interaction-owned rather than part of the frozen progress fact map.
  */
 export interface RuntimeInteractionEventPayloads {
-  showRetryRequest: RetryPermission;
   showToolEditPermission: ToolEditPermission;
   resolveToolEditPermission: { requestId: string };
   updateToolEditApprovalBypassState: {
@@ -31,8 +22,4 @@ export interface RuntimeInteractionEventPayloads {
     streamId: StreamTabId;
     bypassActive: boolean;
   };
-  showBashPermission: BashPermission;
-  showAgentProposal: AgentProposalPermission;
-  showPlanApproval: PlanApprovalPermission;
-  showExternalInquiry: ExternalInquiryPermission;
 }
