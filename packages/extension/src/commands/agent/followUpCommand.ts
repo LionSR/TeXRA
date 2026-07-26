@@ -60,9 +60,6 @@ async function lazyDetectWaitingStatus(
       const repaired = defaultSession().status.transitionToWaiting(
         streamId,
         'restart-repair',
-        {
-          events: defaultSession().events,
-        },
       );
       if (repaired) {
         logger.debug(`Lazy detected waiting session for stream: ${streamId}`);

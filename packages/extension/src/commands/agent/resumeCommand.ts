@@ -9,7 +9,6 @@ import {
 } from '@agent/runtime/SessionResumeRetrieval';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { registerCommands } from '@commands/_shared/registerCommands';
-import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { logErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { getToolUsePersistenceEnabled } from '@utils/config/constants';
 
@@ -56,7 +55,7 @@ export function resumeExtensionToolUseFromResumeData(
   return resumeQueuedToolUseFromResumeData(
     resume.streamId,
     resume,
-    extensionAgentRuntimeHost,
+    defaultSession().interactions,
     {
       ...(followUp !== undefined && {
         extraFollowUps: [{ text: followUp, origin: 'user' as const }],

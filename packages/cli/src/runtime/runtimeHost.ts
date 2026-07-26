@@ -1,14 +1,13 @@
 // Local imports - runtime
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type {
-  AgentRuntimeEvent,
-  AgentRuntimeEventPayloads,
-  AgentRuntimeHost,
-} from '@agent/runtime/AgentRuntimeHost';
-import {
-  isRuntimePresentationEvent,
-  type RuntimePresentationEvent,
-  type RuntimePresentationEventPayloads,
+  RuntimePresentationEvent,
+  RuntimePresentationEventPayloads,
 } from '@agent/runtime/runtimePresentationEvents';
+import type {
+  ApprovalBypassKind,
+  HostApprovalBypassStateUpdate,
+} from '@agent/runtime/HostInteractions';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { INSTRUCTION_ACTION, type InstructionAction } from '@shared/schemas';
@@ -31,8 +30,15 @@ import type { CliContext } from './cliContext';
 export type CliRuntimeHost = AgentRuntimeHost & {
   attachRunProgressRenderer(events: SessionEventHub): () => void;
   prepareInteractivePrompt?: () => void;
+  emitApprovalBypassState(update: HostApprovalBypassStateUpdate): void;
   close(): Promise<void>;
 };
+
+const ApprovalBypassNdjsonEvent = {
+  bash: 'updateBashApprovalBypassState',
+  toolEdit: 'updateToolEditApprovalBypassState',
+  superYolo: 'updateSuperYoloBypassState',
+} as const satisfies Record<ApprovalBypassKind, string>;
 
 /**
  * Human-readable phrasing for {@link InstructionAction} tokens printed to
@@ -102,29 +108,28 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
   return {
     attachRunProgressRenderer: attachProgressRenderer,
     prepareInteractivePrompt,
-    emit<K extends AgentRuntimeEvent>(
+    emitApprovalBypassState({ streamId, kind, bypassActive }) {
+      if (closed || context.outputFormat !== 'ndjson') return;
+      const record: CliNdjsonRecord = {
+        kind: 'progress',
+        event: ApprovalBypassNdjsonEvent[kind],
+        ts: new Date().toISOString(),
+        payload: { streamId, bypassActive },
+      };
+      writeNdjsonStdout(record);
+    },
+    emit<K extends RuntimePresentationEvent>(
       event: K,
-      payload: AgentRuntimeEventPayloads[K],
+      payload: RuntimePresentationEventPayloads[K],
     ) {
       if (closed) return;
 
       if (context.outputFormat === 'ndjson') {
-        if (isRuntimePresentationEvent(event)) {
-          writeRuntimePresentationNdjson(
-            ensureLogger(),
-            event,
-            payload as RuntimePresentationEventPayloads[RuntimePresentationEvent],
-          );
-          return;
-        }
-
-        const record: CliNdjsonRecord = {
-          kind: 'progress',
+        writeRuntimePresentationNdjson(
+          ensureLogger(),
           event,
-          ts: new Date().toISOString(),
-          payload,
-        };
-        writeNdjsonStdout(record);
+          payload as RuntimePresentationEventPayloads[RuntimePresentationEvent],
+        );
         return;
       }
 

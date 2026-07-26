@@ -194,6 +194,7 @@ const ToolUseStreamStateSchema = BaseStreamStateSchema.extend({
   todos: z.array(TodoItemSchema).prefault([]),
   plan: PlanSchema.nullable().prefault(null),
   queuedFollowUps: z.array(z.string()).prefault([]),
+  bashBypass: z.boolean().optional(),
   toolEditBypass: z.boolean().optional(),
   superYoloBypass: z.boolean().optional(),
   goalActive: z.boolean().optional(),

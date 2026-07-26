@@ -96,7 +96,7 @@ type TestableBridge = Bridge & {
   runtimeHost: {
     emit(event: string, payload: unknown): void;
   };
-  handleInteractionEvent(event: string, payload: unknown): void;
+  handlePresentationEvent(event: string, payload: unknown): void;
   syncFullView(): void;
   completeWebviewReady(): Promise<void>;
   tryResumeStream(streamId: StreamTabId): Promise<boolean>;
@@ -700,11 +700,15 @@ function emitStatusFact(
     previousStatus?: StreamPhase;
   },
 ): void {
-  emitRunEvent(bridge, payload.streamId, {
-    type: 'status',
+  // Status reaches the bridge on the session-fact rail only: `StreamStatusMachine`
+  // publishes every transition as `updateStreamStatus`, and no projector reads
+  // run-scope `status` trace events any more.
+  emitSessionFact(bridge, 'updateStreamStatus', {
     streamId: payload.streamId,
-    phase: payload.status,
-    previousPhase: payload.previousStatus,
+    status: payload.status,
+    ...(payload.previousStatus
+      ? { previousStatus: payload.previousStatus }
+      : {}),
     cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
   });
 }
@@ -820,48 +824,14 @@ describe('DesktopProgressBridge', () => {
     expect(onRunCompleted).not.toHaveBeenCalled();
   });
 
-  it('leaves output-file host events to the session run-fact path', async () => {
-    const messages: unknown[] = [];
-    const bridge = await createBridge(messages);
-    const streamId = 'desktop:output-files' as StreamTabId;
-    const initialFileUpdates = progressMessages(
-      messages,
-      PROGRESS_VIEW_COMMANDS.UPDATE_FILES,
-    ).length;
-
-    bridge.handleInteractionEvent('addOutputFiles', {
-      streamId,
-      filesByRound: {
-        1: [
-          {
-            source: 'paper.tex',
-            location: {
-              kind: 'workspace',
-              absolutePath: '/workspace/paper.tex',
-              relativePath: 'paper.tex',
-            },
-            round: 1,
-            lineage: null,
-            diff: null,
-          },
-        ],
-      },
-    });
-    await settleProgressEvents();
-
-    expect(
-      progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_FILES),
-    ).toHaveLength(initialFileUpdates);
-  });
-
   it('keeps desktop runtime host app events on the window-local bridge path', async () => {
     const messages: unknown[] = [];
     const showErrorMessage = vi.fn();
     const bridge = await createBridge(messages, { showErrorMessage });
     messages.length = 0;
 
-    bridge.handleInteractionEvent('requestEnsureProgressView', {});
-    bridge.handleInteractionEvent('requestEnsureProgressView', {
+    bridge.handlePresentationEvent('requestEnsureProgressView', {});
+    bridge.handlePresentationEvent('requestEnsureProgressView', {
       fallbackNotification: {
         agentName: 'writer',
         modelName: 'test-model',
@@ -869,10 +839,10 @@ describe('DesktopProgressBridge', () => {
         outputInfo: 'to paper.out.tex',
       },
     });
-    bridge.handleInteractionEvent('requestShowError', {
+    bridge.handlePresentationEvent('requestShowError', {
       message: 'Root run failed',
     });
-    bridge.handleInteractionEvent('requestShowInstruction', {
+    bridge.handlePresentationEvent('requestShowInstruction', {
       key: 'missingApiKey',
       message: 'API key not found. Set your API key in Settings and run again.',
       actions: ['set-api-key', 'open-configuration-guide'],
@@ -924,7 +894,7 @@ describe('DesktopProgressBridge', () => {
     const openPath = vi.fn(async () => {});
     const bridge = await createBridge(messages, { openPath });
 
-    bridge.handleInteractionEvent('requestOpenFile', {
+    bridge.handlePresentationEvent('requestOpenFile', {
       location: {
         kind: 'runStorage',
         absolutePath: '/runs/exec-1/output/paper.pdf',
@@ -4214,9 +4184,7 @@ describe('DesktopProgressBridge', () => {
         // A bare process-session transition (no live trace) still reaches the
         // reopened presentation as a session fact.
         expect(
-          owner.processSession.status.transitionToWaiting(streamId, 'wait', {
-            events: owner.processSession.events,
-          }),
+          owner.processSession.status.transitionToWaiting(streamId, 'wait'),
         ).toBe(true);
         expect(bridgeB.session.status.get(streamId)).toBe(STREAM_PHASE.WAITING);
         expect(facts).toContainEqual(
@@ -4273,7 +4241,6 @@ describe('DesktopProgressBridge', () => {
           owner.bridgeA.session.status.transitionToTerminal(
             childStreamId,
             STREAM_PHASE.COMPLETED,
-            { events: owner.processSession.events },
           ),
         ).toBe(true);
         expect(bridgeB.session.status.get(childStreamId)).toBe(

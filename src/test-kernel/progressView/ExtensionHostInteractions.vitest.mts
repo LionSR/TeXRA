@@ -6,6 +6,7 @@ import * as vscode from 'vscode';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionEvent } from '@agent/runtime/SessionEventHub';
 import type {
+  HostApprovalBypassStateUpdate,
   HostBashApprovalResult,
   HostUserQuestionResult,
   PlanApprovalResult,
@@ -167,12 +168,14 @@ function firstShowRequestId(show: ReturnType<typeof vi.fn>): string {
 function createInteractions(options: {
   runtimeHost?: ReturnType<typeof createRuntimeHost>;
   handlers?: ApprovalRequestHandlerSet;
+  setApprovalBypassState?: (update: HostApprovalBypassStateUpdate) => void;
   session: SessionHandle;
 }) {
   return createExtensionHostInteractions({
     runtimeHost: options.runtimeHost ?? createRuntimeHost(),
     session: options.session,
     getApprovalHandlers: () => options.handlers ?? createHandlers(),
+    setApprovalBypassState: options.setApprovalBypassState ?? vi.fn(),
   });
 }
 
@@ -185,6 +188,35 @@ function recordSessionEvents(session: SessionHandle): SessionEvent[] {
 }
 
 describe('createExtensionHostInteractions', () => {
+  it('forwards emit to the caller-supplied runtime host (#9251)', () => {
+    const runtimeHost = createRuntimeHost();
+    const session = createTestSession();
+    const interactions = createInteractions({ runtimeHost, session });
+
+    interactions.emit?.('requestShowError', { message: 'boom' });
+
+    expect(runtimeHost.emit).toHaveBeenCalledWith('requestShowError', {
+      message: 'boom',
+    });
+  });
+
+  it('forwards approval bypass state through the host port', () => {
+    const setApprovalBypassState = vi.fn();
+    const interactions = createInteractions({
+      session: createTestSession(),
+      setApprovalBypassState,
+    });
+    const update = {
+      streamId: 'stream:bypass',
+      kind: 'bash',
+      bypassActive: true,
+    } as const;
+
+    interactions.setApprovalBypassState?.(update);
+
+    expect(setApprovalBypassState).toHaveBeenCalledWith(update);
+  });
+
   it('provides diagnostics and notification capabilities', async () => {
     const session = createTestSession();
     const interactions = createInteractions({ session });

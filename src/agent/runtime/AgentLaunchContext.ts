@@ -55,7 +55,7 @@ import {
   withRunContext,
   type CreateLaunchRunContextOptions,
 } from './RunContext';
-import { createRunScope, type RunScope } from './RunScope';
+import { createRunScope } from './RunScope';
 import {
   countMediaFilesNeedingVision,
   formatMediaNeedsVisionWarning,
@@ -70,7 +70,6 @@ import type { AgentRuntimeHost } from './AgentRuntimeHost';
 const logger = createChannelTrace('AgentLaunchContext');
 
 export interface AgentLaunchContext extends AgentCore {
-  readonly runScope: RunScope;
   usageMonitor: UsageMonitor;
   storageKey: StorageKey;
   parentStage: StageHandle;
@@ -155,7 +154,11 @@ export async function getAgentPath(
   const result = resolveAgentForLaunch(category, agentIdentifier, source);
   if (result) return result;
 
-  runtimeHost.emit('showAgentConfigBanner', { agentName: agentIdentifier });
+  runtimeHost.emit(
+    'showAgentConfigBanner',
+    { agentName: agentIdentifier },
+    { replayWhenAttached: true },
+  );
   throw new AgentError(`Could not find agent: ${agentIdentifier}`);
 }
 
@@ -166,12 +169,16 @@ async function validateModelExists(
   const modelConfig = await resolveRuntimeModelConfig(modelName);
   if (modelConfig) return modelConfig;
 
-  runtimeHost.emit('requestShowInstruction', {
-    key: 'modelNotRecognized',
-    message: `Model "${modelName}" is not recognized. Review the documentation for supported models.`,
-    actions: [INSTRUCTION_ACTION.OPEN_MODELS_DOC],
-    showSuppress: false,
-  });
+  runtimeHost.emit(
+    'requestShowInstruction',
+    {
+      key: 'modelNotRecognized',
+      message: `Model "${modelName}" is not recognized. Review the documentation for supported models.`,
+      actions: [INSTRUCTION_ACTION.OPEN_MODELS_DOC],
+      showSuppress: false,
+    },
+    { replayWhenAttached: true },
+  );
   throw new AgentError(`Model ${modelName} is not registered`);
 }
 
@@ -449,14 +456,9 @@ async function assembleAgentLaunchContext(
 function acquireStreamOrThrow(
   streamId: StreamTabId,
   streamStatus: StreamStatusMachine,
-  session: SessionHandle,
   taskType: string = 'Task',
 ): void {
-  if (
-    streamStatus.tryAcquire(streamId, {
-      events: session.events,
-    })
-  ) {
+  if (streamStatus.tryAcquire(streamId)) {
     return;
   }
 
@@ -488,7 +490,6 @@ function compensateFailedActivation(args: {
   reservedStreamId?: StreamTabId;
   activatedStreamId?: StreamTabId;
   streamStatus: StreamStatusMachine;
-  session: SessionHandle;
   err: unknown;
   // The run-trace from assembleAgentLaunchContext when it was created before the
   // throw. Reused for the error log so we don't allocate a second one; outer
@@ -500,7 +501,6 @@ function compensateFailedActivation(args: {
     reservedStreamId,
     activatedStreamId,
     streamStatus,
-    session,
     err,
     runTrace,
   } = args;
@@ -521,10 +521,7 @@ function compensateFailedActivation(args: {
       !streamStatus.transitionToTerminal(
         activatedStreamId,
         STREAM_PHASE.FAILED,
-        {
-          trace: runTrace?.trace,
-          ...(runTrace ? {} : { events: session.events }),
-        },
+        runTrace ? { trace: runTrace.trace } : {},
       )
     ) {
       runTrace?.trace.warn('Failed to mark activation failure terminal', {
@@ -538,9 +535,7 @@ function compensateFailedActivation(args: {
   }
 
   if (reservedStreamId) {
-    streamStatus.releaseIfReserved(reservedStreamId, {
-      events: session.events,
-    });
+    streamStatus.releaseIfReserved(reservedStreamId);
   }
 }
 
@@ -566,12 +561,7 @@ export async function buildAgentLaunchContext(
     ? undefined
     : getStreamTabId(config.agent, config.model, { executionId });
   if (reservedStreamId) {
-    acquireStreamOrThrow(
-      reservedStreamId,
-      streamStatus,
-      launchSession,
-      input.taskType,
-    );
+    acquireStreamOrThrow(reservedStreamId, streamStatus, input.taskType);
   }
 
   const resources = new AgentLaunchResources();
@@ -592,15 +582,16 @@ export async function buildAgentLaunchContext(
         reservedStreamId,
         activatedStreamId,
         streamStatus,
-        session: launchSession,
         err,
         runTrace,
       });
     });
     if (!input.suppressErrorNotification && !(err instanceof ZodError)) {
-      runtimeHost.emit('requestShowError', {
-        message: toErrorMessage(err),
-      });
+      runtimeHost.emit(
+        'requestShowError',
+        { message: toErrorMessage(err) },
+        { replayWhenAttached: true },
+      );
     }
     throw err;
   }

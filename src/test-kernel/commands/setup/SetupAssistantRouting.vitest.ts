@@ -192,10 +192,6 @@ vi.mock('@agent/runtime/runAgent', () => ({
   runAgent: () => Promise.resolve(),
 }));
 
-vi.mock('@frontend/agentRuntime/extensionAgentRuntimeHost', () => ({
-  extensionAgentRuntimeHost: {},
-}));
-
 vi.mock('@logger/logUtils', () => ({
   createChannelWriter: () => () => {},
   initialize: () => {},

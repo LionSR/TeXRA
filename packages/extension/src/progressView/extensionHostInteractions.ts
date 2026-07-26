@@ -2,11 +2,16 @@ import { nanoid } from 'nanoid';
 import * as vscode from 'vscode';
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type {
+  RuntimePresentationEvent,
+  RuntimePresentationEventPayloads,
+} from '@agent/runtime/runtimePresentationEvents';
 import {
   cancellationResultFor,
   type BashSettlement,
   type HostBashApprovalRequest,
   type HostBashApprovalResult,
+  type HostApprovalBypassStateUpdate,
   type HostInteractionCancelSelector,
   type HostInteractionOptions,
   type HostInteractions,
@@ -46,6 +51,7 @@ export interface ExtensionHostInteractionsOptions {
   runtimeHost: AgentRuntimeHost;
   session: SessionHandle;
   getApprovalHandlers(): ApprovalRequestHandlerSet;
+  setApprovalBypassState(update: HostApprovalBypassStateUpdate): void;
 }
 
 export interface ExtensionHostInteractions extends HostInteractions {
@@ -170,6 +176,13 @@ export function createExtensionHostInteractions(
     handlers().userQuestion.complete(requestId, toUserQuestionResult(decision));
 
   return {
+    // Thin pass-through to the caller-supplied presentation dispatcher.
+    emit<K extends RuntimePresentationEvent>(
+      event: K,
+      payload: RuntimePresentationEventPayloads[K],
+    ): void {
+      options.runtimeHost.emit(event, payload);
+    },
     readDiagnostics: getLinterMessages,
     addCriticism: (payload) => {
       const accepted = pushManualCriticism(payload);
@@ -198,6 +211,7 @@ export function createExtensionHostInteractions(
     submitUserQuestionDecision,
     dismissExternalInquiry: (requestId) =>
       handlers().externalInquiry.dismiss(requestId),
+    setApprovalBypassState: options.setApprovalBypassState,
     requestToolEditApproval(
       request: ToolEditApprovalRequest,
       interactionOptions?: HostInteractionOptions,

@@ -11,7 +11,8 @@ import {
 } from '@agent/runtime/HostInteractions';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { isLatexFile } from '@common/files/fileTypeUtils';
-import type { StreamTabId } from '@shared/schemas';
+import { withEventErrorHandling } from '@controllers/progressView/backend/events/errorHandling';
+import type { StreamTabId, ToolEditPermission } from '@shared/schemas';
 import type { ToolEditApprovalAction } from '@shared/schemas/prompts';
 import {
   previewProposedLatex,
@@ -21,7 +22,7 @@ import {
 import { writeApprovalTempFiles } from '@tools/approval/tempFileManager';
 import {
   computeLineChangeSummary,
-  emitToolEditApprovalPrompt,
+  prepareToolEditApprovalPrompt,
   type ToolEditApprovalRequest,
   type ToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
@@ -40,6 +41,8 @@ export interface DesktopToolEditApprovalOptions {
   runtimeHost: AgentRuntimeHost;
   session: SessionHandle;
   ui: DesktopToolEditApprovalUi;
+  showToolEditPermission(payload: ToolEditPermission): void;
+  resolveToolEditPermission(requestId: string): void;
   tempRoot?: string;
 }
 
@@ -294,12 +297,19 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
     // Activate the stream that needs approval and post the prompt (shared with
     // the VS Code host); the desktop host has no workspace API, so it falls
     // back to a basename when computing the relative display path.
-    emitToolEditApprovalPrompt(this.options.runtimeHost, session, {
-      requestId,
-      request,
-      relativePath: this.relativeDisplayPath(request.path),
-      lineChanges,
-    });
+    withEventErrorHandling(
+      'DesktopToolEditApproval',
+      'failed to show approval prompt',
+      () =>
+        this.options.showToolEditPermission(
+          prepareToolEditApprovalPrompt(this.options.runtimeHost, session, {
+            requestId,
+            request,
+            relativePath: this.relativeDisplayPath(request.path),
+            lineChanges,
+          }),
+        ),
+    );
   }
 
   private relativeDisplayPath(filePath: string): string {
@@ -316,7 +326,11 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
 
     this.pending.delete(requestId);
     entry.settle(result);
-    this.options.runtimeHost.emit('resolveToolEditPermission', { requestId });
+    withEventErrorHandling(
+      'DesktopToolEditApproval',
+      'failed to resolve approval prompt',
+      () => this.options.resolveToolEditPermission(requestId),
+    );
     this.cleanupEntry(entry);
   }
 

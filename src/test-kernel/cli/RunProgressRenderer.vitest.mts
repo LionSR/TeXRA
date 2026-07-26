@@ -260,15 +260,19 @@ function handleStreamStatus(
   streamId: string,
   status: StreamPhase,
 ): void {
+  // Status reaches the renderer on the session-fact rail only: `StreamStatusMachine`
+  // publishes every transition as `updateStreamStatus`, and the renderer no longer
+  // reads run-scope `status` trace events.
   renderer?.handleSessionEvent({
-    scope: 'run',
-    streamId: streamId as StreamTabId,
+    scope: 'session',
     event: {
-      type: 'status',
-      streamId: streamId as StreamTabId,
-      phase: status,
-      previousPhase: STREAM_PHASE.RUNNING,
-      cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
+      type: 'updateStreamStatus',
+      payload: {
+        streamId: streamId as StreamTabId,
+        status,
+        previousStatus: STREAM_PHASE.RUNNING,
+        cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
+      },
     },
   });
 }
@@ -594,17 +598,7 @@ describe('CLI run progress renderer', () => {
         ],
       },
     });
-    renderer?.handleSessionEvent({
-      scope: 'run',
-      streamId,
-      event: {
-        type: 'status',
-        streamId,
-        phase: STREAM_PHASE.COMPLETED,
-        previousPhase: STREAM_PHASE.RUNNING,
-        cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
-      },
-    });
+    handleStreamStatus(renderer, streamId, STREAM_PHASE.COMPLETED);
 
     expect(output.text).toBe(
       'polish paper.tex · 0s\n' +
@@ -1187,6 +1181,55 @@ describe('CLI run progress renderer', () => {
             },
           ],
         },
+      }),
+    ]);
+  });
+
+  it('preserves approval bypass records in ndjson mode', async () => {
+    const output = await captureStreamWrites(process.stdout, async () => {
+      const host = createCliRuntimeHost(
+        context({ mode: 'headless', outputFormat: 'ndjson' }),
+      );
+
+      host.emitApprovalBypassState({
+        streamId: 'stream-1',
+        kind: 'bash',
+        bypassActive: true,
+      });
+      host.emitApprovalBypassState({
+        streamId: 'stream-1',
+        kind: 'toolEdit',
+        bypassActive: false,
+      });
+      host.emitApprovalBypassState({
+        streamId: 'stream-1',
+        kind: 'superYolo',
+        bypassActive: true,
+      });
+
+      await host.close();
+    });
+
+    const records = output
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+
+    expect(records).toEqual([
+      expect.objectContaining({
+        kind: 'progress',
+        event: 'updateBashApprovalBypassState',
+        payload: { streamId: 'stream-1', bypassActive: true },
+      }),
+      expect.objectContaining({
+        kind: 'progress',
+        event: 'updateToolEditApprovalBypassState',
+        payload: { streamId: 'stream-1', bypassActive: false },
+      }),
+      expect.objectContaining({
+        kind: 'progress',
+        event: 'updateSuperYoloBypassState',
+        payload: { streamId: 'stream-1', bypassActive: true },
       }),
     ]);
   });

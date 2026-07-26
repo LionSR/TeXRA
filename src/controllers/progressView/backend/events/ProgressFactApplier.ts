@@ -62,6 +62,7 @@ export type ProgressEventSubscription = {
 };
 
 interface ProgressStreamBypassControls {
+  bashBypass: boolean;
   toolEditBypass: boolean;
   superYoloBypass: boolean;
 }
@@ -87,6 +88,7 @@ type RunFactHandlers = {
 
 function getDefaultProgressStreamControls(): ProgressStreamControls {
   return {
+    bashBypass: false,
     toolEditBypass: false,
     superYoloBypass: false,
     goalActive: false,
@@ -121,13 +123,6 @@ export class ProgressFactApplier {
     },
     'run.config': (_streamId, event) =>
       this.handleSetTaskState(event.streamId, event.config.agentCategory),
-    status: (_streamId, event) =>
-      this.setStreamStatus(
-        event.streamId,
-        event.phase,
-        event.previousPhase,
-        event.substate,
-      ),
     updateTodos: (_streamId, event) => this.handleUpdateTodos(event),
     updatePlan: (_streamId, event) => this.handleUpdatePlan(event),
     addOutputFiles: (_streamId, event) => this.handleAddOutputFiles(event),
@@ -747,6 +742,7 @@ export class ProgressFactApplier {
         queuedFollowUps: this.state.followUps.getAll(stream),
       },
       controls: {
+        bashBypass: controls.bashBypass,
         toolEditBypass: controls.toolEditBypass,
         superYoloBypass: controls.superYoloBypass,
         goal: controls.goalActive

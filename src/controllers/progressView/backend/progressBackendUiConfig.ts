@@ -1,6 +1,7 @@
 import type { AgentTrace } from '@agent/trace';
 import {
   type HostBashApprovalResult,
+  type HostApprovalBypassStateUpdate,
   matchesCancelSelector,
   type HostInteractionCancelSelector,
   type HostUserQuestionResult,
@@ -24,7 +25,6 @@ import { assertNever } from '@utils/core';
 
 import { ApprovalRequestHandler } from './ApprovalRequestHandler';
 import { ExternalInquiryRequestHandler } from './ExternalInquiryRequestHandler';
-import type { UICallbacks } from './events/ProgressInteractionHandler';
 import type { WebviewUpdater } from './WebviewUpdater';
 
 /**
@@ -265,46 +265,35 @@ export async function replayApprovalRequestHandlers(
 }
 
 interface ProgressBackendUiConfig {
-  callbacks: UICallbacks;
+  setApprovalBypassState(update: HostApprovalBypassStateUpdate): void;
   hasPendingPermissions(streamId: string): boolean;
 }
 
 interface ProgressBackendUiConfigParams {
   handlers: ApprovalRequestHandlerSet;
-  /** Transport for the bypass-state pushes (handlers own their own transport). */
+  /** Transport for approval-bypass state (handlers own their own transport). */
   webviewUpdater: WebviewUpdater;
   /** Gate shared with the handlers; also guards the bypass-state pushes. */
   canSend: () => boolean;
 }
 
 /**
- * Build the host-neutral {@link ProgressBackendUiConfig} (UI callbacks plus the
- * pending-permissions guard) from a set of {@link ApprovalRequestHandler}s.
+ * Build the host-neutral bypass-state transport and pending-permissions guard
+ * from a set of {@link ApprovalRequestHandler}s.
  *
- * The tool-edit callbacks delegate to their handler, so host differences live
- * entirely in how each handler is constructed (its show/dismiss transport and
- * `canSend` gate) — not in this wiring. The guard checks `hasPendingForStream`
- * across all handlers (see {@link APPROVAL_REQUEST_HANDLER_KEYS}), reusing the
- * handler's empty-streamId-blocks-all rule instead of re-deriving it per host.
+ * The guard checks `hasPendingForStream` across all handlers (see
+ * {@link APPROVAL_REQUEST_HANDLER_KEYS}), reusing the handler's
+ * empty-streamId-blocks-all rule instead of re-deriving it per host.
  */
 export function createProgressBackendUiConfig(
   params: ProgressBackendUiConfigParams,
 ): ProgressBackendUiConfig {
   const { handlers, webviewUpdater, canSend } = params;
   return {
-    callbacks: {
-      showToolEditPermission: (p) => handlers.toolEdit.show(p),
-      resolveToolEditPermission: (id) => handlers.toolEdit.dismiss(id),
-      updateToolEditApprovalBypassState: (streamId, bypassActive) => {
-        if (canSend()) {
-          webviewUpdater.updateBypassState(streamId, 'toolEdit', bypassActive);
-        }
-      },
-      updateSuperYoloBypassState: (streamId, bypassActive) => {
-        if (canSend()) {
-          webviewUpdater.updateBypassState(streamId, 'superYolo', bypassActive);
-        }
-      },
+    setApprovalBypassState: ({ streamId, kind, bypassActive }) => {
+      if (canSend()) {
+        webviewUpdater.updateBypassState(streamId, kind, bypassActive);
+      }
     },
     hasPendingPermissions: (streamId) =>
       APPROVAL_REQUEST_HANDLER_KEYS.some((key) =>

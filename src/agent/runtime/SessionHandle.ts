@@ -81,7 +81,14 @@ function isReplayableTerminalResult(event: ResultEvent): boolean {
   );
 }
 
-/** A valid transcript store is required; other owners may be injected. */
+/**
+ * A valid transcript store is required; other owners may be injected.
+ *
+ * `status` is deliberately absent: the machine publishes `updateStreamStatus`
+ * on the hub it is handed at construction, so a separately-injected machine
+ * could be bound to a different hub than `events` and silently drop every
+ * status fact. The session always co-constructs the pair instead.
+ */
 export type SessionHandleInit = Pick<SessionHandle, 'transcripts'> &
   Partial<
     Pick<
@@ -89,7 +96,6 @@ export type SessionHandleInit = Pick<SessionHandle, 'transcripts'> &
       | 'executions'
       | 'subscriptions'
       | 'events'
-      | 'status'
       | 'followUps'
       | 'snapshots'
       | 'flushers'
@@ -141,11 +147,12 @@ export class SessionHandle {
     }
     // Forced dependency order, every cross-reference explicit — never let a
     // member fall back to a neighboring module singleton (silent-state-split).
-    const status = init.status ?? new StreamStatusMachine();
     const events = init.events ?? new SessionEventHub();
+    const status = new StreamStatusMachine(events);
     const transcripts = init.transcripts;
     const followUps = init.followUps ?? new ToolUseFollowUpQueue();
-    const approvals = createSessionApprovals();
+    const interactions = init.interactions ?? new SessionHostInteractions();
+    const approvals = createSessionApprovals(interactions);
     const executions =
       init.executions ??
       new ExecutionRegistry({ streamStatus: status, events });
@@ -174,7 +181,7 @@ export class SessionHandle {
     // host has to construct, attach, and flush one of its own.
     this.snapshots = init.snapshots ?? new StreamSnapshotStore();
     this.detachSnapshotEvents = this.snapshots.attachSessionEvents(events);
-    this.interactions = init.interactions ?? new SessionHostInteractions();
+    this.interactions = interactions;
     this.approvals = approvals;
     this.modelRetries = init.modelRetries ?? new ModelRetryGate();
     this.workflowControls =

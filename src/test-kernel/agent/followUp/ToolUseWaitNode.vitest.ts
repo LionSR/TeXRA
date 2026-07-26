@@ -40,6 +40,7 @@ import {
   recordSessionEvents,
   runEventsOfType,
   sessionWithInteractions,
+  testRunScope,
   toolUseRunShared,
   withTestRunContext,
 } from '../progressTestUtils';
@@ -54,7 +55,11 @@ type WaitNodeModelHandlerOverrides = Omit<
 type WaitNodeServiceOverrides = Partial<
   Pick<
     ToolUseServices,
-    'checkInterruption' | 'isSubagent' | 'onFollowUpConsumed' | 'onIdle'
+    | 'checkInterruption'
+    | 'isSubagent'
+    | 'onFollowUpConsumed'
+    | 'onIdle'
+    | 'runScope'
   >
 > & {
   fileService?: Partial<ToolUseServices['fileService']>;
@@ -69,6 +74,7 @@ function createWaitNodeServices(
   const { fileService, modelHandler, session, ...topLevel } = overrides;
   const { capabilities, ...modelHandlerOverrides } = modelHandler ?? {};
   return {
+    runScope: testRunScope('test-stream'),
     checkInterruption: () => false,
     fileService: {
       createLocation: (filePath: string) => ({ absolutePath: filePath }),
@@ -417,6 +423,11 @@ describe('ToolUseWaitNode', () => {
       lastError: { message: 'cycle failed', userRetryable: false },
     });
     const runtimeHost = { emit: vi.fn() };
+    const setApprovalBypassState = vi.fn();
+    const session = sessionWithInteractions({
+      setApprovalBypassState,
+      cancel: vi.fn(),
+    });
     const logger = new TraceEmitter();
     const hub = new SessionEventHub();
     const recorded = recordSessionEvents(hub, { scope: 'run' });
@@ -443,7 +454,7 @@ describe('ToolUseWaitNode', () => {
             lastResponse: undefined,
             touchedFiles: [],
           }),
-        { stopAfterCycle: true },
+        { session, stopAfterCycle: true },
       );
 
       const goal = GoalStore.getForStream(streamId);
@@ -455,14 +466,16 @@ describe('ToolUseWaitNode', () => {
           streamId,
         }),
       );
-      expect(runtimeHost.emit).toHaveBeenCalledWith(
-        'updateBashApprovalBypassState',
-        { streamId, bypassActive: false },
-      );
-      expect(runtimeHost.emit).not.toHaveBeenCalledWith(
-        'updateToolEditApprovalBypassState',
-        { streamId, bypassActive: false },
-      );
+      expect(setApprovalBypassState).toHaveBeenCalledWith({
+        streamId,
+        kind: 'bash',
+        bypassActive: false,
+      });
+      expect(setApprovalBypassState).not.toHaveBeenCalledWith({
+        streamId,
+        kind: 'toolEdit',
+        bypassActive: false,
+      });
     } finally {
       recorded.detach();
       detachTrace();
@@ -714,6 +727,7 @@ describe('ToolUseWaitNode', () => {
     const createUserFollowUpMessages = vi.fn(async () => []);
     const runtimeHost = { emit: vi.fn() };
     const services = createWaitNodeServices({
+      runScope: testRunScope(streamId, { session: ownerSession }),
       modelHandler: {
         createUserFollowUpMessages,
       },

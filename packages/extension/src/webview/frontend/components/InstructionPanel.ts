@@ -720,13 +720,6 @@ export class InstructionPanel extends LitElement {
               className: session.isRecording ? 'recording' : '',
               action: 'record',
             })}
-            ${renderIconActionButton({
-              id: 'eraseInstructionButton',
-              icon: 'clear-all',
-              label: 'Erase instruction',
-              tooltip: 'Erase instruction',
-              action: 'erase',
-            })}
           </div>
         </div>
         ${this.renderSessionHint(session)}

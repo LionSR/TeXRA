@@ -54,11 +54,9 @@ import { registerWelcomeView } from '@frontend/ui/welcomeView';
 import { initializeNativeToolEditApproval } from '@frontend/approval/nativeToolEditApproval';
 import { SupabaseAuthProvider } from '@frontend/auth/SupabaseAuthProvider';
 import { SupabaseUriHandler } from '@frontend/auth/UriHandler';
-import { registerAgentEventListeners } from '@frontend/events/agentEventListeners';
 import { createLanguageModelPort } from '@frontend/lm/createLanguageModelPort';
 import { registerLanguageModelTools } from '@frontend/lm/registerLanguageModelTools';
 import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessionsChanged';
-import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import * as leanVscodeIntegration from '@frontend/lean/VscodeIntegration';
 import { applyGitAuthorConfig } from '@frontend/git/gitAuthorSetup';
 import { resolveGitCommonRoot } from '@frontend/git/resolveGitRoot';
@@ -519,7 +517,12 @@ export async function activate(context: vscode.ExtensionContext) {
   const viewProviders = registerCommands(context);
   registerFileDecorations(context);
 
-  initializeNativeToolEditApproval(context, extensionAgentRuntimeHost);
+  initializeNativeToolEditApproval(context, defaultSession().interactions, {
+    showToolEditPermission: (payload) =>
+      progressViewProvider.backend.approvalHandlers.toolEdit.show(payload),
+    resolveToolEditPermission: (requestId) =>
+      progressViewProvider.backend.approvalHandlers.toolEdit.dismiss(requestId),
+  });
   setLeanLanguageServices(leanVscodeIntegration);
   setOpenPdfOpener(async ({ location, preserveFocus }) => {
     await vscode.commands.executeCommand(
@@ -715,15 +718,11 @@ export async function activate(context: vscode.ExtensionContext) {
     await viewProviders.mainViewProvider.showInSidebar();
   };
 
-  const agentEventDisposable =
-    registerAgentEventListeners(progressViewProvider);
-
   // Surface curated research tools to VS Code's Language Model Tool API
   // (Copilot Chat `#texra_*` references).
   registerLanguageModelTools(context);
 
   context.subscriptions.push(
-    agentEventDisposable,
     { dispose: disposeStatusListener },
     statusBarItem,
     // `texra.showMainView` keeps its bespoke registration here because the
