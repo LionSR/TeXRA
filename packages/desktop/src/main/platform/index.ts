@@ -27,7 +27,6 @@ import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { configKeyVariants } from '@shared/config/configKeys';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
-import { StreamSnapshotStore } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
@@ -47,7 +46,6 @@ import { showSecretStorageWarningDialog } from './secretStorageWarningDialog.js'
 export interface ElectronPlatformInitResult {
   workspacePath: string | undefined;
   lifecycle: LifecycleHost;
-  progressSnapshotStore: StreamSnapshotStore;
   /**
    * Desktop's memory/history/executions data root (`~/.texra` in
    * production, see `resolveDesktopDataRoot()`). Threaded out so crash
@@ -308,10 +306,6 @@ export async function initializeElectronPlatform(
 
   const resourcesPath = resolveResourcesPath(mainDirname);
 
-  // The Electron composition root attaches this process-owned snapshot store
-  // to its SessionHandle and flushes it with the other session artifacts.
-  const snapshotStore = new StreamSnapshotStore();
-
   // Register the shared Node-host agent runtime: memory + goal tool injections
   // and the direct Lean language services (lake env lean --server).
   initNodeAgentRuntime(lifecycle);
@@ -331,7 +325,6 @@ export async function initializeElectronPlatform(
   return {
     workspacePath,
     lifecycle,
-    progressSnapshotStore: snapshotStore,
     dataRoot,
     hasPriorInstall,
     resourcesPath,

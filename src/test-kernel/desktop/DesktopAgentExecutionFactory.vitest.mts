@@ -249,13 +249,15 @@ async function createExecution(options: {
   const { initializeDesktopProcessStores } =
     await import('@desktop/main/desktopProcessStores');
   const transcripts = await StreamLogStore.open();
-  const session = new SessionHandle({ transcripts });
-  options.inspectSession?.(session);
   const progressSnapshotStore = new StreamSnapshotStore();
   await options.prepareSnapshotStore?.(progressSnapshotStore);
+  const session = new SessionHandle({
+    transcripts,
+    snapshots: progressSnapshotStore,
+  });
+  options.inspectSession?.(session);
   const processStores = await initializeDesktopProcessStores({
     session,
-    snapshots: progressSnapshotStore,
     ...(options.legacyStreamFilePath
       ? { legacyStreamFilePath: options.legacyStreamFilePath }
       : {}),
@@ -265,7 +267,6 @@ async function createExecution(options: {
     execution = await createDesktopAgentExecution({
       postToRenderer: options.postToRenderer ?? vi.fn(),
       session,
-      progressSnapshotStore,
       sessionStores: processStores.stores,
       presentationSignal: options.presentationSignal,
       host: createStubDesktopAgentExecutionHost({

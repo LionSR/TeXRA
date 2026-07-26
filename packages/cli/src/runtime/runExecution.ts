@@ -14,7 +14,6 @@ import { AgentError } from '@common/errors';
 import { tryPlatform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { EXECUTION_STATUS, RUN_OUTCOME } from '@shared/schemas';
-import { StreamSnapshotStore } from '@transcript';
 import { generateExecutionId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -181,13 +180,6 @@ export async function executeCliRequest(
   // This executes before runtime-host construction and before runAgent.
   const { session } = await initializeHeadlessTranscriptSession();
   const runtimeHost = createCliRuntimeHost(runContext);
-  const snapshotStore = new StreamSnapshotStore();
-  const detachSnapshotEvents = snapshotStore.attachSessionEvents(
-    session.events,
-  );
-  const detachSnapshotFlusher = session.useArtifactFlusher(() =>
-    snapshotStore.flush(),
-  );
   const detachRunProgressRenderer = runtimeHost.attachRunProgressRenderer(
     session.events,
   );
@@ -304,8 +296,6 @@ export async function executeCliRequest(
       await finalizeShutdownStatus();
       await session.flushArtifacts();
     } finally {
-      detachSnapshotFlusher();
-      detachSnapshotEvents();
       await runtimeHost.close();
     }
   }
