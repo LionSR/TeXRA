@@ -2,21 +2,31 @@
 
 **Status: internal. Not published on texra.ai.** There is no `@texra/core`
 package and no SDK surface; everything below is a deep import through the
-repo-root path aliases declared in `tsconfig.json`. Nothing here is a stable
-contract — this note documents what an external program has to do _today_ to
-get a `runAgent` call to complete, so that SDK work has a measurable baseline.
+repo-root path aliases declared in `tsconfig.json`. Plain `tsc` output does not
+rewrite those aliases. An external program must therefore build from a TeXRA
+checkout with equivalent alias-aware bundler configuration, or replace the
+aliases with resolvable paths. The repository's Vite builds derive their alias
+map from `tsconfig.json` (`scripts/aliases.mjs:14-20`,
+`packages/extension/vite.config.ts:39`), while the extension's esbuild bundle
+reads its generated package tsconfig (`packages/extension/esbuild.config.mjs:34-48`).
+Nothing here is a stable contract — this note documents what an external
+program has to do _today_ to get a `runAgent` call to complete, so that SDK work
+has a measurable baseline.
 
 Every claim below is cited to `file:line` and was verified at `origin/main`
-(`5fc03f9436`). Where the code is awkward, this note says so rather than
+(`ce15dc051d`). Where the code is awkward, this note says so rather than
 describing an intended future shape.
 
 ---
 
 ## 1. The minimum sequence to a working `runAgent`
 
-Four process-wide bootstrap steps, then two runtime prerequisites, then the
-per-call options. Skipping any of them throws or hangs; none of them is
-optional today.
+The sections below separate minimum launch requirements from shipped-feature
+parity. A raw agent loop needs an initialized platform, usable credentials,
+agent directories, a session, a populated registry, an interactions
+attachment, and an explicit runtime host. `initNodeAgentRuntime` supplies the
+memory/plan injections and Lean integration used by the shipped Node hosts, but
+the raw loop can run without those optional features.
 
 ### Step 1 — `initPlatform(createNodePlatform(...))`
 
@@ -35,7 +45,7 @@ tool-availability host — and requires the host to supply the rest:
 Only a composition root calls `initPlatform`; that rule is stated in the
 `nodeHost` module header (`src/platform/defaults/nodeHost.ts:1-14`).
 
-### Step 2 — `initNodeAgentRuntime(lifecycle)`
+### Feature-parity step — `initNodeAgentRuntime(lifecycle)`
 
 `src/platform/defaults/nodeHost.ts:133-136`. It is exactly two registrations:
 
@@ -50,19 +60,21 @@ and the unified `plan` tool that drives the goal loop
 so it **must** run after Step 1; the comment at `src/agent/features.ts:33-34`
 says so.
 
-Call it **exactly once per process**: the doc comment at
+If used, call it **exactly once per process**: the doc comment at
 `src/platform/defaults/nodeHost.ts:129-131` records that both inner
 registrations throw or double-register on a second call.
 
-An embedder that only wants the raw loop can call `registerAgentFeatures()`
-directly and skip the Lean language services.
+An embedder that only wants the raw loop can skip this step. An embedder that
+wants the `memory` and `plan` injections but not Lean can call
+`registerAgentFeatures()` directly.
 
-### Step 3 — `initializeServerSideKeyAccess({})`
+### Step 2 — `initializeServerSideKeyAccess({})`
 
 `src/auth/serverKeys/index.ts:57-68`. Every option is optional, so `{}` is a
 valid call.
 
-**This is mandatory today, and the failure is a throw, not a degradation.**
+**This is mandatory for the default `'configured'` credential selection today,
+and the failure is a throw, not a degradation.**
 `getServerSideKeyService()` throws
 `'ServerSideKeyService not initialized. Call initializeServerSideKeyAccess() first.'`
 when the singleton is absent (`src/auth/serverKeys/index.ts:35-42`), and
@@ -83,12 +95,12 @@ this throws inside the run, not at startup — the worst place for it.
 All three shipped hosts call it: the CLI at
 `packages/cli/src/runtime/initPlatform.ts:335`, desktop at
 `packages/desktop/src/main/desktopSupabaseAuth.ts:422`, the extension via
-`packages/extension/src/extension.ts:29`.
+`packages/extension/src/extension.ts:315`.
 
 > This may relax. Work is in flight to make the singleton lazy. Until it lands,
-> treat the call as required.
+> treat the call as required when using the default credential selection.
 
-### Step 4 — agent directories
+### Step 3 — agent directories
 
 Either bootstrap the packaged bundle:
 
@@ -107,10 +119,11 @@ await bootstrapNodeAgentDirectories({
 [§2](#2-agentdirectoriesport-is-three-directory-paths-not-agent-values) — this
 is the part the plan of record describes incorrectly.
 
-### Prerequisite A — `initializeDefaultSession({ transcripts })`
+### Prerequisite A — a default or explicit session
 
-Not part of the four bootstrap steps, and not in
-`packages/cli/src/runtime/initPlatform.ts` at all, but still required.
+Not part of the process bootstrap, and not in
+`packages/cli/src/runtime/initPlatform.ts` at all, but a session is still
+required.
 
 `runAgent` falls back to `defaultSession()` when the caller passes no session
 (`src/agent/runtime/runAgent.ts:93`), and `defaultSession()` throws
@@ -156,6 +169,12 @@ headless implementation (`src/agent/runtime/AgentRuntimeHost.ts:19-31`).
 
 ### Putting it together
 
+This example assumes an alias-aware build from a TeXRA checkout, as described
+at the start of this document. Copying these imports into an ordinary external
+TypeScript project and running plain `tsc` is insufficient: there are no
+runtime packages named `@platform/platform`, `@agent/runtime/runAgent`, and so
+on.
+
 ```ts
 import { initPlatform } from '@platform/platform';
 import {
@@ -170,27 +189,39 @@ import { StreamLogStore } from '@transcript';
 import { runAgent } from '@agent/runtime/runAgent';
 import { validateExecutionRequest } from '@agent/core/state/executionRequests';
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { AgentCategory } from '@shared/schemas/agent';
 
-initPlatform(createNodePlatform({/* …9 required services… */})); // 1
-initNodeAgentRuntime(lifecycle); // 2
-initializeServerSideKeyAccess({}); // 3
-await bootstrapNodeAgentDirectories({/* … */}); // 4
+initPlatform(createNodePlatform({/* …9 required services… */})); // Step 1
+initNodeAgentRuntime(lifecycle); // Optional shipped-feature parity
+initializeServerSideKeyAccess({}); // Step 2
+await bootstrapNodeAgentDirectories({/* … */}); // Step 3
 
 const session = initializeDefaultSession({
   transcripts: await StreamLogStore.open(),
 });
-session.useHostInteractions({ cancel: () => {} }); // see §3 — DO NOT SKIP
+const detachHostInteractions = session.useHostInteractions({
+  cancel: () => {},
+}); // see §3 — DO NOT SKIP
 await loadAgents({ includeRemote: false });
 
 const validated = validateExecutionRequest({
-  config: { agent: 'assistant', model: 'sonnet', instruction: 'Hello' },
+  config: {
+    agent: 'assistant',
+    agentCategory: AgentCategory.ToolUse,
+    model: 'sonnet',
+    instruction: 'Hello',
+  },
 });
 if (!validated.valid) throw new Error(validated.message);
 
-await runAgent(validated.request, {
-  runtimeHost: noopAgentRuntimeHost,
-  session,
-});
+try {
+  await runAgent(validated.request, {
+    runtimeHost: noopAgentRuntimeHost,
+    session,
+  });
+} finally {
+  detachHostInteractions();
+}
 ```
 
 `validateExecutionRequest` (`src/agent/core/state/executionRequests.ts:24-43`)
@@ -200,7 +231,11 @@ is the only sanctioned way to produce the `ValidatedExecutionRequest` that
 `instruction` all have `.prefault()` defaults
 (`src/agent/core/definition/AgentConfig.ts:18,27,28`), and an absent
 `agentCategory` normalizes to `Workflow`
-(`src/agent/core/definition/AgentConfig.ts:77-86`).
+(`src/agent/core/definition/AgentConfig.ts:77-86`). The example sets
+`AgentCategory.ToolUse` explicitly because `assistant` is loaded from the
+tool-use agent directory (`src/agent/index/agentYamlScanner.ts:212-217`);
+launch resolution searches only the requested category
+(`src/agent/index/agentRegistry.ts:740-749`).
 
 ---
 
@@ -282,7 +317,7 @@ one agent, an embedder cannot either.
   path (`src/agent/index/agentYamlScanner.ts:49`), so
   `builtIn: async () => ''` and `builtInToolUse: async () => ''` are legal and
   cheap. This is the "empty-builtIn trick" the proposals mention, and it does
-  work. With it you can skip Step 4's `bootstrapNodeAgentDirectories` entirely
+  work. With it you can skip Step 3's `bootstrapNodeAgentDirectories` entirely
   and point `custom()` at your own directory of YAML.
 - **Choosing where custom agents live.** The CLI builds its port with
   `createPlatformAgentDirectories({ channel: 'cli', customDirectoryStore: … })`
@@ -421,7 +456,8 @@ is **never calling `useHostInteractions` at all**, which no type can catch.
 | `initializeNodeGoalPrompts(resourcesPath)`                                                                    | Goal prompts fall back to inline templates. `loadPrompts` returns `inlineTemplates` when no path was registered; a _broken_ registered YAML also falls back but logs a warning. | `src/agent/goal/promptLoader.ts:78-99`; registration at `src/platform/defaults/nodeHost.ts:145-147` |
 | `initializeNodeRuntimeSkills({…})`                                                                            | Runtime skills degrade to an empty catalog: `if (sources.length === 0) return { catalog: '', issues: [] };`                                                                     | `src/skills/runtimeSkills.ts:57-59`; registration at `src/platform/defaults/nodeHost.ts:157-169`    |
 | `seedDisabledToolDefaults(key)`                                                                               | No first-install tool defaults are written, so no toggleable external tools are default-disabled. More tools available, not fewer.                                              | `src/tools/toolAvailability.ts:77-95`                                                               |
-| `registerDirectLeanLanguageServices` (call `registerAgentFeatures()` alone instead of `initNodeAgentRuntime`) | Lean LSP tooling unavailable; the rest of the runtime is unaffected.                                                                                                            | `src/platform/defaults/nodeHost.ts:133-136`                                                         |
+| `initNodeAgentRuntime(lifecycle)`                                                                             | The raw loop still runs, but the `memory`/`plan` injections and direct Lean language services are absent.                                                                       | `src/platform/defaults/nodeHost.ts:121-136`; `src/agent/features.ts:18-38`                          |
+| `registerDirectLeanLanguageServices` (call `registerAgentFeatures()` alone instead of `initNodeAgentRuntime`) | Lean LSP tooling unavailable; the `memory`/`plan` injections remain registered.                                                                                                 | `src/platform/defaults/nodeHost.ts:133-136`                                                         |
 
 `bootstrapNodeAgentDirectories` is safe to skip **only** if you supply your own
 `AgentDirectoriesPort` (§2). Skipping it without that leaves the port pointing
@@ -437,16 +473,16 @@ registrations after `initPlatform`. An embedder reading it cannot tell which
 are runtime requirements and which are `texra`-the-product. This table is that
 distinction.
 
-### Embedder obligations (4)
+### Runtime bootstrap and shipped-feature parity
 
-| Line   | Call                                               | Why required                                                                                                                                                                                                                             |
-| ------ | -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `:280` | `initPlatform(createNodePlatform({…}))`            | `platform()` throws otherwise (`src/platform/platform.ts:73-80`).                                                                                                                                                                        |
-| `:316` | `initNodeAgentRuntime(lifecycle)`                  | Registers the `memory` + `plan` tool injections (`src/agent/features.ts:35-38`). Without it those tools are silently absent — the comment at `src/platform/defaults/nodeHost.ts:125-127` records that the CLI once had exactly this bug. |
-| `:335` | `initializeServerSideKeyAccess({…})`               | Throws inside the run otherwise (§1 Step 3).                                                                                                                                                                                             |
-| `:380` | `bootstrapNodeAgentDirectories({channel:'cli',…})` | Populates the packaged agent tree — unless you inject your own port (§2).                                                                                                                                                                |
+| Line   | Call                                               | Status                                                                                                                                                                                                                                      |
+| ------ | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `:280` | `initPlatform(createNodePlatform({…}))`            | Required: `platform()` throws otherwise (`src/platform/platform.ts:73-80`).                                                                                                                                                                 |
+| `:316` | `initNodeAgentRuntime(lifecycle)`                  | Shipped-feature parity, not a raw-loop requirement: registers the `memory` + `plan` injections and direct Lean services. Without it those features are absent (`src/platform/defaults/nodeHost.ts:121-136`; `src/agent/features.ts:18-38`). |
+| `:335` | `initializeServerSideKeyAccess({…})`               | Required for today's default `'configured'` credential path, which otherwise throws inside the run (§1 Step 2).                                                                                                                             |
+| `:380` | `bootstrapNodeAgentDirectories({channel:'cli',…})` | Required only when using the packaged agent bundle; an injected port that names other real directories replaces it (§2).                                                                                                                    |
 
-### CLI product features (8) — do not copy these
+### CLI initialization choices (8) — not runtime obligations
 
 | Line       | Call                                                                                            | What it is                                                                               |
 | ---------- | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
@@ -468,30 +504,37 @@ distinction.
 
 ### Cross-check against desktop
 
-The desktop main process runs the same four-step skeleton, which is the
-evidence that these four are host-independent rather than CLI-shaped:
+The desktop main process makes the same four initialization choices, showing
+how a shipped host obtains full feature parity rather than proving that every
+call is a minimum runtime requirement:
 `initPlatform` at `packages/desktop/src/main/platform/index.ts:272`,
 `initNodeAgentRuntime` at `:317`, `bootstrapNodeAgentDirectories` at `:324`,
 and `initializeServerSideKeyAccess` at
 `packages/desktop/src/main/desktopSupabaseAuth.ts:422`. It also calls the two
-optional ones (`:318`, `:319`) and none of the eight CLI product features.
+optional ones (`:318`, `:319`). Product policy is not necessarily CLI-only:
+desktop also calls
+`seedDisabledToolDefaults(GlobalStateKey.LAST_KNOWN_VERSION)` at
+`packages/desktop/src/main/platform/index.ts:304-307`.
 
 ---
 
 ## 6. Known sharp edges
 
-1. **Ordering is load-bearing and unenforced.** Steps 2-4 all read
-   `platform()`, so Step 1 must precede them; nothing checks this beyond the
-   throw in `platform()` itself.
-2. **Step 2 is once-per-process.** A second `initNodeAgentRuntime` throws or
-   double-registers (`src/platform/defaults/nodeHost.ts:129-131`). Contrast
+1. **Ordering is load-bearing and unenforced.** The feature-parity registration
+   and Steps 2-3 all read `platform()`, so Step 1 must precede them; nothing
+   checks this beyond the throw in `platform()` itself.
+2. **Feature-parity registration is once-per-process.** A second
+   `initNodeAgentRuntime` throws or double-registers
+   (`src/platform/defaults/nodeHost.ts:129-131`). Contrast
    `initializeNodeGoalPrompts`, which is explicitly re-entrant
    (`src/platform/defaults/nodeHost.ts:141-143`) because CLI validation
    re-enters platform init in one process.
 3. **`bootstrapNodeAgentDirectories` is guarded by a module-level `Map`**
    keyed on `channel:versionStateKey` → `resourcesPath`
-   (`src/platform/defaults/nodeHost.ts:84`, guard at `:181-185`, set at `:198`). Two embedders in one
-   process sharing a channel name will silently skip the second bootstrap.
+   (`src/platform/defaults/nodeHost.ts:84`, guard at `:181-185`, set at `:198`).
+   A call is skipped only when all three values match a previous call: the same
+   channel, the same version-state key, and the same resources path. Sharing a
+   channel alone does not cause a collision.
 4. **The registry is process-global**, not session-scoped
    (`src/agent/index/agentRegistry.ts:116-148`). There is no per-embedder agent
    namespace.
@@ -499,7 +542,7 @@ optional ones (`:318`, `:319`) and none of the eight CLI product features.
    (`src/agent/runtime/SessionHandle.ts:445-449`). Embedding inside a process that
    already hosts TeXRA means reusing `tryDefaultSession()` or owning your own
    `SessionHandle`.
-6. **Failure modes cluster at run time, not startup.** Missing Step 3 throws
+6. **Failure modes cluster at run time, not startup.** Missing Step 2 throws
    during credential resolution; a missing `loadAgents` throws at agent
    resolution; a missing interactions attachment hangs mid-run. None of them
    fails fast at bootstrap.
