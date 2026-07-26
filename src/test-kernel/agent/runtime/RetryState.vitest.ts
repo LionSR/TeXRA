@@ -32,7 +32,7 @@ import type {
   RetryResult,
 } from '@agent/runtime/HostInteractions';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import { createRunScope } from '@agent/runtime/RunScope';
+import { createRunScope, type RunScope } from '@agent/runtime/RunScope';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import {
@@ -68,10 +68,12 @@ import { createTestSession } from '@test/support/sessionTestUtils';
 import {
   createRecordingHost,
   sessionWithInteractions,
+  testRunScope,
 } from '../progressTestUtils';
 
 interface TestRetryServices {
   config: { model: string };
+  runScope: RunScope;
   streamId: StreamTabId;
   runtimeHost: AgentRuntimeHost;
   logger: AgentTrace;
@@ -132,15 +134,21 @@ function createRetryNode(
   streamId: StreamTabId,
   refreshClient?: (selection?: unknown, signal?: AbortSignal) => Promise<void>,
   clientCredentialRoute?: ModelCredentialRoute,
+  // The node reads its session from `services.runScope`, so a test driving a
+  // real session's host interactions must hand that same session in here.
+  sessionOverride?: SessionHandle,
 ): RetryNodeKit {
-  const streamStatus = new StreamStatusMachine();
   const requestRetry = vi.fn<RetryNodeKit['requestRetry']>();
-  const session = sessionWithInteractions(
-    { requestRetry, cancel: () => {} },
-    streamStatus,
-  );
+  const session =
+    sessionOverride ??
+    sessionWithInteractions(
+      { requestRetry, cancel: () => {} },
+      new StreamStatusMachine(),
+    );
+  const streamStatus = session.status;
   const node = new ExposedRetryNode().setServices({
     config: { model: 'copilot:sonnet46' },
+    runScope: testRunScope(streamId, { session }),
     streamId,
     runtimeHost: noopAgentRuntimeHost,
     logger: noopTrace,
@@ -264,6 +272,7 @@ async function captureModelRetry(
     logger: noopTrace,
     setting: { temperature: 0 },
     config: { model: 'openai:test' },
+    runScope: testRunScope(streamId, { session }),
     setAbortController: vi.fn(),
     client,
     clientCredentialRoute: credentialRoute,
@@ -444,6 +453,7 @@ describe('RetryState', () => {
     try {
       const node = new StatuslessServerErrorNode().setServices({
         config: { model: 'openai:test' },
+        runScope: testRunScope('retry-delay' as StreamTabId),
         streamId: 'retry-delay' as StreamTabId,
         runtimeHost: noopAgentRuntimeHost,
         logger: noopTrace,
@@ -489,6 +499,7 @@ describe('RetryState', () => {
       };
       const node = new InterruptibleBackoffNode().setServices({
         config: { model: 'openai:test' },
+        runScope: testRunScope('retry-interrupt' as StreamTabId),
         streamId: 'retry-interrupt' as StreamTabId,
         runtimeHost: noopAgentRuntimeHost,
         logger: noopTrace,
@@ -1050,7 +1061,7 @@ describe('RetryState', () => {
     const session = createTestSession();
     const recording = createRecordingHost();
     session.useHostInteractions(recording.interactions);
-    const { node } = createRetryNode(streamId);
+    const { node } = createRetryNode(streamId, undefined, undefined, session);
     const streamStatus = session.status;
 
     try {

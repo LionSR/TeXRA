@@ -55,7 +55,7 @@ import {
   withRunContext,
   type CreateLaunchRunContextOptions,
 } from './RunContext';
-import { createRunScope, type RunScope } from './RunScope';
+import { createRunScope } from './RunScope';
 import {
   countMediaFilesNeedingVision,
   formatMediaNeedsVisionWarning,
@@ -70,7 +70,6 @@ import type { AgentRuntimeHost } from './AgentRuntimeHost';
 const logger = createChannelTrace('AgentLaunchContext');
 
 export interface AgentLaunchContext extends AgentCore {
-  readonly runScope: RunScope;
   usageMonitor: UsageMonitor;
   storageKey: StorageKey;
   parentStage: StageHandle;
