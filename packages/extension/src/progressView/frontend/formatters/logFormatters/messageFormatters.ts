@@ -24,7 +24,7 @@ import {
   type ErrorLogData,
   type LogMessageData,
 } from '@shared/schemas';
-import { TEXRA_ICON_LIBRARY, waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - formatter helpers
 import { stringifyWithLanguage } from '../parseUtils';
@@ -142,7 +142,7 @@ export function formatErrorTemplate(message: LogMessageData): FormatResult {
   // (::part(icon)); banner-details--no-toggle hides that part when there's
   // nothing to expand, replacing the old inline visibility:hidden style.
   // prettier-ignore
-  const summaryTemplate = html`<div slot="summary" class="details-summary"><wa-icon library=${TEXRA_ICON_LIBRARY} name="error" class="icon" aria-hidden="true"></wa-icon>${labelSpan}${copyButton}</div>`;
+  const summaryTemplate = html`<div slot="summary" class="details-summary">${waIcon('error', { className: 'icon' })}${labelSpan}${copyButton}</div>`;
   // prettier-ignore
   return html`<wa-details appearance="plain" icon-placement="start" class=${classMap({
     'banner-details': true,
