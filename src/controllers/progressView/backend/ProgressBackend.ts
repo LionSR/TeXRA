@@ -294,11 +294,13 @@ export class ProgressBackend {
   reloadAfterStorageRootChange(): Promise<void> {
     const reload = async () => {
       let sessionReloadError: unknown;
+      let storageRootReplaced = false;
       try {
-        await this.session.reloadAfterStorageRootChange();
+        storageRootReplaced = await this.session.reloadAfterStorageRootChange();
       } catch (error) {
         sessionReloadError = error;
       }
+      if (!sessionReloadError && !storageRootReplaced) return;
       this.state.resetAfterStorageRootChange();
       this.webviewBridge.clearAll();
       try {

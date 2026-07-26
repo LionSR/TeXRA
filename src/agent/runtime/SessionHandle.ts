@@ -217,13 +217,14 @@ export class SessionHandle {
       this.transcripts.mode.kind === 'persistent' &&
       init.restartRepair !== 'deferred'
     ) {
-      this.restartRepairPromise = this.enqueueRestartRepair(() =>
+      const startupRepair = this.enqueueRestartRepair(() =>
         this.repairStoresAfterRestart(this.storageGeneration),
-      );
+      ).then(() => undefined);
+      this.restartRepairPromise = startupRepair;
       // Construction cannot be awaited. Hosts observe the same promise
       // through waitUntilReady(); this branch only prevents a rejection from
       // becoming unhandled before the host reaches that boundary.
-      void this.restartRepairPromise.catch(() => undefined);
+      void startupRepair.catch(() => undefined);
     }
   }
 
@@ -233,9 +234,11 @@ export class SessionHandle {
    */
   waitUntilReady(): Promise<void> {
     if (this.transcripts.mode.kind !== 'persistent') return Promise.resolve();
-    this.restartRepairPromise ??= this.enqueueRestartRepair(() =>
-      this.repairStoresAfterRestart(this.storageGeneration),
-    );
+    if (!this.restartRepairPromise) {
+      this.restartRepairPromise = this.enqueueRestartRepair(() =>
+        this.repairStoresAfterRestart(this.storageGeneration),
+      ).then(() => undefined);
+    }
     return this.restartRepairPromise;
   }
 
@@ -245,10 +248,12 @@ export class SessionHandle {
    * Ordinary view loads must not reopen these live stores. The host calls this
    * explicit lifecycle boundary only after a workspace-root change.
    */
-  reloadAfterStorageRootChange(): Promise<void> {
-    if (this.transcripts.mode.kind !== 'persistent') return Promise.resolve();
+  reloadAfterStorageRootChange(): Promise<boolean> {
+    if (this.transcripts.mode.kind !== 'persistent') {
+      return Promise.resolve(false);
+    }
     if (platform().storage.hasPendingWorkspaceStorageChange?.() === false) {
-      return Promise.resolve();
+      return Promise.resolve(false);
     }
     this.storageGeneration += 1;
     const generation = this.storageGeneration;
@@ -256,34 +261,37 @@ export class SessionHandle {
     const repair = this.enqueueRestartRepair(() =>
       this.repairStoresAfterRestart(generation, true),
     );
-    this.restartRepairPromise = repair;
+    this.restartRepairPromise = repair.then(() => undefined);
     return repair;
   }
 
-  private enqueueRestartRepair(work: () => Promise<void>): Promise<void> {
+  private enqueueRestartRepair<T>(work: () => Promise<T>): Promise<T> {
     const queued = this.restartRepairWork.then(work, work);
-    this.restartRepairWork = queued.catch(() => undefined);
+    this.restartRepairWork = queued.then(
+      () => undefined,
+      () => undefined,
+    );
     return queued;
   }
 
   private async repairStoresAfterRestart(
     generation: number,
     reloadTranscripts = false,
-  ): Promise<void> {
+  ): Promise<boolean> {
     try {
       const repair = async () => {
-        if (generation !== this.storageGeneration) return;
+        if (generation !== this.storageGeneration) return false;
         if (reloadTranscripts) {
           if (platform().storage.commitWorkspaceStorageChange?.() === false) {
-            return;
+            return false;
           }
           await this.transcripts.reload();
           this.status.clearAll();
         }
-        if (generation !== this.storageGeneration) return;
+        if (generation !== this.storageGeneration) return false;
         const streamIds = this.transcripts.keys();
         await this.snapshots.load(streamIds);
-        if (generation !== this.storageGeneration) return;
+        if (generation !== this.storageGeneration) return false;
         for (const streamId of this.transcripts.getUnfinishedStreamIds()) {
           this.status.transition(
             streamId,
@@ -292,12 +300,12 @@ export class SessionHandle {
           );
         }
         await this.runRestartRepair(generation);
+        return true;
       };
       if (reloadTranscripts) {
-        await runWithOwnedExecutionLeaseQuiescence(repair);
-      } else {
-        await repair();
+        return await runWithOwnedExecutionLeaseQuiescence(repair);
       }
+      return await repair();
     } catch (error) {
       logger.warn('Failed to repair session stores after restart', {
         data: error,

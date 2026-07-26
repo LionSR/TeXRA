@@ -273,7 +273,7 @@ describe('ProgressBackend', () => {
     });
     const reloadAfterStorageRootChange = vi
       .spyOn(session, 'reloadAfterStorageRootChange')
-      .mockResolvedValue();
+      .mockResolvedValue(true);
     const transcriptReload = vi.spyOn(transcripts, 'reload');
     const { backend } = createIsolatedRecordingBackend(session);
     const resetPresentation = vi.spyOn(
@@ -289,6 +289,33 @@ describe('ProgressBackend', () => {
       expect(resetPresentation).toHaveBeenCalledOnce();
       expect(clearBridge).toHaveBeenCalledOnce();
       expect(transcriptReload).not.toHaveBeenCalled();
+    } finally {
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
+  it('keeps presentation caches when the effective storage root is unchanged', async () => {
+    const transcripts = await StreamLogStore.open();
+    const session = new SessionHandle({
+      transcripts,
+      restartRepair: 'deferred',
+    });
+    vi.spyOn(session, 'reloadAfterStorageRootChange').mockResolvedValue(false);
+    const { backend } = createIsolatedRecordingBackend(session);
+    const resetPresentation = vi.spyOn(
+      backend.state,
+      'resetAfterStorageRootChange',
+    );
+    const clearBridge = vi.spyOn(backend.webviewBridge, 'clearAll');
+    const loadPresentation = vi.spyOn(backend.state, 'load');
+
+    try {
+      await backend.reloadAfterStorageRootChange();
+
+      expect(resetPresentation).not.toHaveBeenCalled();
+      expect(clearBridge).not.toHaveBeenCalled();
+      expect(loadPresentation).not.toHaveBeenCalled();
     } finally {
       backend.dispose();
       session.dispose();
@@ -335,14 +362,14 @@ describe('ProgressBackend', () => {
       transcripts,
       restartRepair: 'deferred',
     });
-    let finishFirstReload: (() => void) | undefined;
-    const firstReload = new Promise<void>((resolve) => {
+    let finishFirstReload: ((replaced: boolean) => void) | undefined;
+    const firstReload = new Promise<boolean>((resolve) => {
       finishFirstReload = resolve;
     });
     const reloadAfterStorageRootChange = vi
       .spyOn(session, 'reloadAfterStorageRootChange')
       .mockReturnValueOnce(firstReload)
-      .mockResolvedValue();
+      .mockResolvedValue(true);
     const { backend } = createIsolatedRecordingBackend(session);
 
     try {
@@ -351,7 +378,7 @@ describe('ProgressBackend', () => {
       await Promise.resolve();
 
       expect(reloadAfterStorageRootChange).toHaveBeenCalledOnce();
-      finishFirstReload?.();
+      finishFirstReload?.(true);
       await first;
       await second;
 
