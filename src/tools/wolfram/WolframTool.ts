@@ -62,11 +62,7 @@ export class WolframTool extends defineTool({
     const command = wolframApprovalCommand(input.code);
     const approval = await requestBashApproval({ command });
     if (!approval.accepted) {
-      return buildBashApprovalRejectedResult(
-        command,
-        approval.userMessage,
-        approval.timedOut,
-      );
+      return buildBashApprovalRejectedResult(command, approval.userMessage);
     }
 
     getCurrentToolContexts()?.callContext?.hooks?.onExecutionReady?.();
