@@ -37,7 +37,7 @@ import {
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { withUsageSections } from './_helpers/dispatch';
-import { formatMultiAgentRunInstruction } from './_helpers/multiAgentInstruction';
+import { formatMultiAgentRunInstruction } from './_helpers/runInstructions';
 import { emitCliResult } from './_helpers/output';
 import {
   AGENT_RUN_GLOBAL_ARGS,

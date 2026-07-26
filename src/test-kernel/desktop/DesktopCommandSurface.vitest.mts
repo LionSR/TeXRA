@@ -2,7 +2,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - command catalog and shared schemas
-import { toElectronAccelerator } from '@shared/commands/accelerators';
+import {
+  formatDesktopAccelerator,
+  toElectronAccelerator,
+} from '@shared/commands/accelerators';
 import { commandCatalogById, type CommandId } from '@shared/commands/catalog';
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
 
@@ -105,9 +108,7 @@ describe('desktop command surface', () => {
     ).toBe('Control+Alt+Shift+C');
   });
 
-  it('formats accelerators for desktop tooltip display', async () => {
-    const { formatDesktopAccelerator } = await loadDesktopCommandSurface();
-
+  it('formats accelerators for desktop tooltip display', () => {
     expect(formatDesktopAccelerator('Command+Option+M', 'darwin')).toBe('⌘⌥M');
     expect(formatDesktopAccelerator('CommandOrControl+O', 'darwin')).toBe('⌘O');
     expect(formatDesktopAccelerator('CommandOrControl+O', 'linux')).toBe(

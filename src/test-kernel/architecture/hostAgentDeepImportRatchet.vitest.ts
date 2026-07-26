@@ -11,13 +11,14 @@
 // exit (#6968, closed); this is the deferred execution.
 
 // Node imports
-import { readdirSync, readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 // Third-party imports
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
+
+import { REPO_ROOT, sourceFilesUnder } from '../support/repoScan';
 
 const HOSTS = ['cli', 'desktop', 'extension'] as const;
 
@@ -28,10 +29,6 @@ interface HostBaseline {
   hosts: Record<Host, string[]>;
 }
 
-const REPO_ROOT = resolve(
-  fileURLToPath(new URL('.', import.meta.url)),
-  '../../..',
-);
 const BASELINE_FILE = 'config/ratchets/host-agent-import-baseline.json';
 const BASELINE_PATH = resolve(REPO_ROOT, BASELINE_FILE);
 
@@ -41,14 +38,7 @@ const HOST_DIRS: Record<Host, string> = {
   extension: resolve(REPO_ROOT, 'packages/extension/src'),
 };
 
-const SOURCE_FILE = /\.(?:ts|tsx|mts|cts)$/;
 const AGENT_DEEP_IMPORT = /^@agent\//;
-
-function sourceFilesUnder(dir: string): string[] {
-  return (readdirSync(dir, { recursive: true }) as string[])
-    .filter((entry) => SOURCE_FILE.test(entry) && !entry.endsWith('.d.ts'))
-    .map((entry) => join(dir, entry));
-}
 
 function moduleSpecifiers(node: ts.Node): string[] {
   if (

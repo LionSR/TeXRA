@@ -15,11 +15,11 @@ import {
   planMainViewDroppedFileAttachments,
   type MainViewAllowedDropExtensions,
 } from '@controllers/mainView/MainViewDroppedFilesController';
+import { getFileLister } from '@frontend/files/fileLister';
 import {
   FILE_SELECTION_COMMAND_IDS,
   MULTIPLE_FILE_COMMANDS,
-  getFileLister,
-} from '@frontend/files';
+} from '@frontend/files/fileSelectionRegistry';
 import { selectFiles } from '@frontend/ui/dialogs';
 import {
   showLoggedErrorMessage,
