@@ -60,8 +60,12 @@ repo and the first thing to check on any diff.
 
 **VS Code-free zones** — must NOT import `vscode`:
 `src/agent/`, `src/model/`, `src/latex/`, `src/tools/`, `src/controllers/`,
-`src/shared/`, `src/replacement/`, `src/eventBus/`, `src/hosts/`, and all
-webview frontends (`packages/extension/src/*/frontend/`).
+`src/shared/`, `src/replacement/`, `src/eventBus/`, `src/hosts/`, and the
+webview frontends — `packages/extension/src/webview/frontend/`,
+`packages/extension/src/progressView/frontend/`, and
+`packages/extension/src/settingsView/frontend/`. Do not confuse these with
+`packages/extension/src/frontend/` (no view-name segment), which is the
+top-level extension-host frontend below and is VS Code-allowed.
 
 **VS Code-allowed zones** — platform wiring belongs here:
 `packages/extension/src/extension.ts` (calls `initPlatform()` exactly once),

@@ -624,6 +624,11 @@ export function classifyWireRouteFailure(
   return { retryAfterMs: detectRetryAfterMs(chain) };
 }
 
+/** Whether a normalized provider error is a 401 (relay/auth token rejected). */
+export function isUnauthorizedProviderError(formatted: ProviderError): boolean {
+  return formatted.statusCode === StatusCodes.UNAUTHORIZED;
+}
+
 /** Whether repeating the same provider request can recover without user action. */
 export function isProviderErrorAutoRetryable(err: unknown): boolean {
   if (isUserAbort(err) || isContextWindowError(err)) return false;
@@ -632,7 +637,7 @@ export function isProviderErrorAutoRetryable(err: unknown): boolean {
   return (
     formatted.userRetryable &&
     formatted.exhaustionReason === undefined &&
-    formatted.statusCode !== StatusCodes.UNAUTHORIZED &&
+    !isUnauthorizedProviderError(formatted) &&
     formatted.statusCode !== StatusCodes.FORBIDDEN
   );
 }

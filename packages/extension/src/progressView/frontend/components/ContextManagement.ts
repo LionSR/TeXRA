@@ -12,21 +12,21 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
 import { designTokens, commonViewStyles } from '@shared/styles';
-import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
+import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - progress view helpers
 import { buildDetailsSummary } from '../formatters/htmlBuilders';
 
 /** Stat item to display */
 export interface StatItem {
-  icon: string;
+  icon: TeXRAIconName;
   label: string;
   value: string;
 }
 
 /** Action configuration */
 export interface ActionConfig {
-  icon: string;
+  icon: TeXRAIconName;
   label: string;
   color: string;
 }
@@ -141,12 +141,7 @@ export class ContextManagement extends LitElement {
             (item) => item.label,
             (item, index) => html`
               <span id="context-stat-${index}" class="stat-item">
-                <wa-icon
-                  library=${TEXRA_ICON_LIBRARY}
-                  name=${item.icon}
-                  aria-hidden="true"
-                ></wa-icon>
-                ${item.value}
+                ${waIcon(item.icon)} ${item.value}
               </span>
               <wa-tooltip for="context-stat-${index}">${item.label}</wa-tooltip>
             `,
@@ -156,12 +151,7 @@ export class ContextManagement extends LitElement {
               ? html`
                   <div class="summary-block">
                     <div class="summary-title">
-                      <wa-icon
-                        library=${TEXRA_ICON_LIBRARY}
-                        name="note"
-                        aria-hidden="true"
-                      ></wa-icon>
-                      Compaction summary
+                      ${waIcon('note')} Compaction summary
                     </div>
                     <pre class="summary-text">${this.summary}</pre>
                   </div>

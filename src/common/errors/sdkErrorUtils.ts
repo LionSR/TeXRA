@@ -42,6 +42,7 @@ export {
   formatProviderHttpError,
   normalizeProviderError,
   isProviderErrorAutoRetryable,
+  isUnauthorizedProviderError,
   isModelRateLimitFailure,
   isRelayProviderUnobservedFailure,
   isRelayRequestGateReachableFailure,

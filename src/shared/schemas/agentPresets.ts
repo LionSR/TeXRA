@@ -27,18 +27,22 @@ const AGENT_MODE_PRESET_ICON_NAME_SET = new Set<string>(
   AGENT_MODE_PRESET_ICON_NAMES,
 );
 
-const AgentModePresetIconSchema = z.string().transform((rawIcon, ctx) => {
+const FALLBACK_AGENT_MODE_PRESET_ICON =
+  'bookmark' satisfies AgentModePresetIconName;
+
+/** Normalizes persisted icons, warning and using a safe display fallback. */
+const AgentModePresetIconSchema = z.string().transform((rawIcon) => {
   const icon = rawIcon.trim();
   const normalized = icon.startsWith('codicon-') ? icon.slice(8) : icon;
   if (AGENT_MODE_PRESET_ICON_NAME_SET.has(normalized)) {
     return normalized as AgentModePresetIconName;
   }
 
-  ctx.addIssue({
-    code: 'custom',
-    message: `Unknown agent team icon: ${normalized}`,
-  });
-  return z.NEVER;
+  console.warn(
+    `[agentPresets] Unknown agent team icon "${normalized}"; falling back to ` +
+      `"${FALLBACK_AGENT_MODE_PRESET_ICON}" instead of dropping the team.`,
+  );
+  return FALLBACK_AGENT_MODE_PRESET_ICON;
 });
 
 /** Schema for a single agent team. */

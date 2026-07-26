@@ -49,7 +49,6 @@ export type ToolNotificationHandler = (
 ) => void;
 
 export interface HostInteractionOptions {
-  readonly timeoutMs?: number;
   /** Internal identity used to cancel one forwarded presentation request. */
   readonly cancellationScope?: object;
 }
@@ -632,7 +631,12 @@ export class SessionHostInteractions
         });
       }
     }
-    if (!active) return;
+    if (!active) {
+      for (const pending of this.pending) {
+        if (!pending.cancellationRequested) this.warnParked(pending);
+      }
+      return;
+    }
     for (const pending of this.pending) {
       if (!pending.cancellationRequested) this.dispatch(pending);
     }
@@ -666,7 +670,10 @@ export class SessionHostInteractions
 
   private dispatch(pending: PendingSessionInteraction): void {
     const attachment = this.activeAttachment;
-    if (!attachment) return;
+    if (!attachment) {
+      this.warnParked(pending);
+      return;
+    }
     const version = this.attachmentVersion;
     let result: Promise<unknown> | undefined;
     try {
@@ -690,6 +697,19 @@ export class SessionHostInteractions
         this.rejectCurrentDispatch(pending, attachment, version, error);
       },
     );
+  }
+
+  private warnParked(pending: PendingSessionInteraction): void {
+    try {
+      logger.warn(
+        `No interaction host is attached: parked the ${pending.kind} request ` +
+          `(stream ${pending.streamId ?? 'none'}) until one attaches. A ` +
+          'headless embedder must attach at least `{ cancel: () => {} }`, or ' +
+          'blocking requests never settle.',
+      );
+    } catch {
+      // A diagnostic sink must not reject or remove the request it describes.
+    }
   }
 
   private rejectCurrentDispatch(

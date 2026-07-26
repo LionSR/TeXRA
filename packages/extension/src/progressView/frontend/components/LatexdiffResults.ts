@@ -14,7 +14,7 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 // Local imports - shared styles
 import { designTokens, commonViewStyles } from '@shared/styles';
 import type { DiffResultDisplay, DiffStatus } from '@shared/schemas';
-import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
+import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - progress view events
 import { ProgressEvents } from '../events';
@@ -23,7 +23,7 @@ import { ProgressEvents } from '../events';
 import { buildDetailsSummary } from '../formatters/htmlBuilders';
 
 /** Status wa-icon name lookup for latexdiff entries. */
-const LATEXDIFF_STATUS_ICONS: Record<DiffStatus, string> = {
+const LATEXDIFF_STATUS_ICONS: Record<DiffStatus, TeXRAIconName> = {
   success: 'check',
   error: 'error',
 };
@@ -128,18 +128,8 @@ export class LatexdiffResults extends LitElement {
     const entryId = `latexdiff-entry-${index}`;
     return html`
       <li id=${entryId} class="detail-item" data-run-id=${ifDefined(runId)}>
-        <wa-icon
-          library=${TEXRA_ICON_LIBRARY}
-          name=${icon}
-          aria-hidden="true"
-        ></wa-icon>
-        ${this.renderFileLink(baseFile, baseLabel)}
-        <wa-icon
-          class="arrow"
-          library=${TEXRA_ICON_LIBRARY}
-          name="arrow-right"
-          aria-hidden="true"
-        ></wa-icon>
+        ${waIcon(icon)} ${this.renderFileLink(baseFile, baseLabel)}
+        ${waIcon('arrow-right', { className: 'arrow' })}
         ${this.renderFileLink(revisedFile, revisedLabel)}
         (${this.renderFileLink(diffFile, 'diff')})
         ${message ? html`<wa-tooltip for=${entryId}>${message}</wa-tooltip>` : nothing}
