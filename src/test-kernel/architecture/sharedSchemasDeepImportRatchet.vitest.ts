@@ -120,7 +120,15 @@ function importedBindings(
     : node.exportClause;
   if (clause == null) return undefined;
   if (ts.isImportClause(clause)) {
-    if (clause.name != null || clause.namedBindings == null) return undefined;
+    if (clause.name != null) {
+      return [
+        {
+          name: 'default',
+          requestedSpace: clause.isTypeOnly ? 'type' : 'ordinary',
+        },
+      ];
+    }
+    if (clause.namedBindings == null) return undefined;
     if (!ts.isNamedImports(clause.namedBindings)) return undefined;
     return clause.namedBindings.elements.map((element) => ({
       name: (element.propertyName ?? element.name).text,
@@ -212,6 +220,11 @@ function deepImportReferences(
         node.expression.kind === ts.SyntaxKind.ImportKeyword;
       const isRequire =
         ts.isIdentifier(node.expression) && node.expression.text === 'require';
+      const isModuleRequire =
+        ts.isPropertyAccessExpression(node.expression) &&
+        ts.isIdentifier(node.expression.expression) &&
+        node.expression.expression.text === 'module' &&
+        node.expression.name.text === 'require';
       const isRequireResolve =
         ts.isPropertyAccessExpression(node.expression) &&
         ts.isIdentifier(node.expression.expression) &&
@@ -226,6 +239,7 @@ function deepImportReferences(
       if (
         isDynamicImport ||
         isRequire ||
+        isModuleRequire ||
         isRequireResolve ||
         isImportMetaResolve
       ) {
@@ -506,6 +520,24 @@ function reachableSpace(
     : undefined;
 }
 
+function isLeafFullyPublished(
+  surface: PublishedSurface,
+  specifier: string,
+  moduleMemo: Map<string, ModuleExports>,
+): boolean {
+  const leaf = specifier.slice(DEEP_IMPORT_PREFIX.length);
+  const file = resolveRelative(BARREL_PATH, `./${leaf}`);
+  if (file == null) return false;
+  const leafExports = schemaModuleExports(file, moduleMemo);
+  if (leafExports.size === 0) return false;
+  const published = surface[specifier];
+  return [...leafExports].every(([name, entry]) =>
+    [...entry.spaces].every(
+      (space) => published?.[space].includes(name) === true,
+    ),
+  );
+}
+
 function collectCurrent(): Pick<
   SchemasBaseline,
   'surface' | 'forced' | 'gratuitous'
@@ -535,18 +567,34 @@ function collectCurrent(): Pick<
           reachableSpace(fullSurface, reference.specifier, binding, moduleMemo),
         );
         const isGratuitous =
-          resolvedSpaces?.every((space) => space != null) === true;
+          reference.bindings == null
+            ? isLeafFullyPublished(fullSurface, reference.specifier, moduleMemo)
+            : resolvedSpaces?.every((space) => space != null) === true;
         const bucket = isGratuitous ? gratuitous : forced;
         if (isGratuitous) {
-          for (const [index, binding] of (reference.bindings ?? []).entries()) {
-            const space = resolvedSpaces?.[index];
-            if (space == null) continue;
-            addPublishedBinding(
-              referencedSurface,
-              reference.specifier,
-              binding.name,
-              space,
-            );
+          if (reference.bindings == null) {
+            const published = fullSurface[reference.specifier];
+            for (const space of ['type', 'value'] as const) {
+              for (const name of published?.[space] ?? []) {
+                addPublishedBinding(
+                  referencedSurface,
+                  reference.specifier,
+                  name,
+                  space,
+                );
+              }
+            }
+          } else {
+            for (const [index, binding] of reference.bindings.entries()) {
+              const space = resolvedSpaces?.[index];
+              if (space == null) continue;
+              addPublishedBinding(
+                referencedSurface,
+                reference.specifier,
+                binding.name,
+                space,
+              );
+            }
           }
         }
         (bucket[reference.specifier] ??= []).push(
@@ -599,9 +647,12 @@ describe('@shared/schemas deep-import ratchet', () => {
       `
         import { AgentCategory } from '@shared/schemas/agent';
         export { AgentCategory } from '@shared/schemas/agent';
+        import defaultAgent from '@shared/schemas/agent';
+        import * as agentNamespace from '@shared/schemas/agent';
         import agent = require('@shared/schemas/agent');
         const dynamic = import('@shared/schemas/agent');
         const commonJs = require('@shared/schemas/agent');
+        const moduleCommonJs = module.require('@shared/schemas/agent');
         const requirePath = require.resolve('@shared/schemas/agent');
         const importPath = import.meta.resolve('@shared/schemas/agent');
         type Category = import('@shared/schemas/agent').AgentCategory;
@@ -616,6 +667,21 @@ describe('@shared/schemas deep-import ratchet', () => {
       },
       {
         bindings: [{ name: 'AgentCategory', requestedSpace: 'ordinary' }],
+        specifier: '@shared/schemas/agent',
+        typeOnly: false,
+      },
+      {
+        bindings: [{ name: 'default', requestedSpace: 'ordinary' }],
+        specifier: '@shared/schemas/agent',
+        typeOnly: false,
+      },
+      {
+        bindings: undefined,
+        specifier: '@shared/schemas/agent',
+        typeOnly: false,
+      },
+      {
+        bindings: undefined,
         specifier: '@shared/schemas/agent',
         typeOnly: false,
       },
@@ -699,6 +765,16 @@ describe('@shared/schemas deep-import ratchet', () => {
     expect(surface['@shared/schemas/commonViewMessages']?.value).not.toContain(
       'Theme',
     );
+    expect(
+      isLeafFullyPublished(surface, '@shared/schemas/agent', moduleMemo),
+    ).toBe(true);
+    expect(
+      isLeafFullyPublished(
+        surface,
+        '@shared/schemas/profileViewMessages',
+        moduleMemo,
+      ),
+    ).toBe(false);
     expect(
       reachableSpace(
         surface,
