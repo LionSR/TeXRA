@@ -13,9 +13,6 @@ import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import { releaseStreamResources } from '@tools/approval';
 import { GoalStore } from '@tools/goal';
 
-// Transcript imports
-import type { StreamSnapshotStore } from '@transcript';
-
 // Local imports
 import { prepareDesktopLegacyStreamImport } from './desktopLegacyStreamImporter.js';
 import { toLogData } from './desktopLogUtils.js';
@@ -27,16 +24,16 @@ import { toLogData } from './desktopLogUtils.js';
  * stores. The same canonical initialization runs when no legacy file exists.
  *
  * Legacy identities must be claimed in the transcript index before orphaned
- * sidecars are swept. The returned callback detaches the snapshot projection
- * during process shutdown.
+ * sidecars are swept. The returned callback detaches this module's own
+ * stream-removal subscription and deletion-ordered flusher during process
+ * shutdown; the session owns the snapshot store's projection and flush.
  */
 export async function initializeDesktopProcessStores(options: {
   session: SessionHandle;
-  snapshots: StreamSnapshotStore;
   legacyStreamFilePath?: string;
 }) {
-  const { session, snapshots } = options;
-  const { transcripts } = session;
+  const { session } = options;
+  const { transcripts, snapshots } = session;
   const logger = createChannelTrace('DesktopLegacyStreamImporter');
   let legacyImport:
     Awaited<ReturnType<typeof prepareDesktopLegacyStreamImport>> | undefined;
@@ -106,7 +103,6 @@ export async function initializeDesktopProcessStores(options: {
     }
   }
 
-  const detachSnapshotEvents = snapshots.attachSessionEvents(session.events);
   const detachStreamRemoval = session.events.subscribe(
     (sessionEvent) => {
       if (
@@ -135,7 +131,6 @@ export async function initializeDesktopProcessStores(options: {
     stores,
     dispose() {
       detachStreamRemoval();
-      detachSnapshotEvents();
       detachArtifactFlusher();
     },
   };

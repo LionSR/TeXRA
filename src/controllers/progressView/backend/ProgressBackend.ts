@@ -34,7 +34,6 @@ import type {
 } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { isInFlightPhase } from '@shared/streams/streamStatus';
-import type { StreamSnapshotStore } from '@transcript';
 import { canUseStreamDataDir } from '@transcript/streamDataPaths';
 import type { SessionStores } from './state/SessionStores';
 
@@ -62,7 +61,6 @@ interface ProgressBackendLifecycleOptions {
 
 export interface ProgressBackendOptions {
   storage: StateStore;
-  snapshots?: StreamSnapshotStore;
   stores?: SessionStores;
   sendMessage: ProgressViewMessageSender;
   hasTarget(): boolean;
@@ -73,9 +71,9 @@ export interface ProgressBackendOptions {
   /** Session that owns this backend's coordination state (defaults to the process session). */
   session?: SessionHandle;
   /**
-   * `session` when the caller has already attached this snapshot store to the
-   * session event hub, already registered an artifact flusher for it, and
-   * already loaded/swept it at process start. See the #6981 retirement ledger.
+   * `session` when the caller has already loaded and swept the session's
+   * stores at process start. A process-owned session has opened the canonical
+   * live store, so a replacement presentation must not reload or sweep it.
    */
   stateOwnership?: 'backend' | 'session';
   /**
@@ -107,8 +105,6 @@ export class ProgressBackend {
   private readonly onSetActiveStream?: (
     payload: SetActiveStreamPayload,
   ) => void;
-  private readonly detachSnapshotEvents: () => void;
-  private readonly detachArtifactFlusher: () => void;
   private readonly stateOwnership: 'backend' | 'session';
   private disposed = false;
 
@@ -125,18 +121,9 @@ export class ProgressBackend {
     };
     this.state = new ProgressViewState(
       options.storage,
-      options.snapshots,
       this.session,
       options.stores,
     );
-    this.detachSnapshotEvents =
-      this.stateOwnership === 'session'
-        ? () => undefined
-        : this.state.snapshots.attachSessionEvents(this.session.events);
-    this.detachArtifactFlusher =
-      this.stateOwnership === 'session'
-        ? () => undefined
-        : this.session.useArtifactFlusher(() => this.state.snapshots.flush());
     this.webviewUpdater = new WebviewUpdater(
       this.postMessage,
       options.hasTarget,
@@ -353,8 +340,6 @@ export class ProgressBackend {
 
   dispose(): void {
     this.disposed = true;
-    this.detachSnapshotEvents();
-    this.detachArtifactFlusher();
     this.webviewBridge.dispose();
   }
 }

@@ -78,8 +78,6 @@ interface SessionExitControllerContext {
   readonly getApprovalPolicy: () => CliApprovalPolicy;
   /** Materialize buffered trace chunks + drain debounced StreamLog writes. */
   readonly flushArtifacts: () => Promise<void>;
-  /** Detach the snapshot-persistence event/flusher wiring. */
-  readonly detachSnapshotPersistence: () => void;
   /** Repaint the TUI from a known origin after a `fg`/SIGCONT resume. */
   readonly repaintAfterTerminalResume: () => void;
   /** Replace a live attention title with the idle project title while stopped. */
@@ -160,13 +158,7 @@ export function createSessionExitController(
   // writes so the tail of the session isn't lost (SAVE_DEBOUNCE_MS window).
   // Persistent flushes have bounded retries; an explicitly ephemeral session
   // has no disk work to drain.
-  const drainPersistence = async (): Promise<void> => {
-    try {
-      await ctx.flushArtifacts();
-    } finally {
-      ctx.detachSnapshotPersistence();
-    }
-  };
+  const drainPersistence = (): Promise<void> => ctx.flushArtifacts();
   // These TUI exit paths call process.exit() directly, so bin/texra.ts's
   // `finally` (which runs platform shutdown) never fires. Run the same
   // shutdown sequence the (suppressed) platform SIGINT/SIGTERM handlers
