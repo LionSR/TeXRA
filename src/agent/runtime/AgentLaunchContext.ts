@@ -155,7 +155,11 @@ export async function getAgentPath(
   const result = resolveAgentForLaunch(category, agentIdentifier, source);
   if (result) return result;
 
-  runtimeHost.emit('showAgentConfigBanner', { agentName: agentIdentifier });
+  runtimeHost.emit(
+    'showAgentConfigBanner',
+    { agentName: agentIdentifier },
+    { replayWhenAttached: true },
+  );
   throw new AgentError(`Could not find agent: ${agentIdentifier}`);
 }
 
@@ -166,12 +170,16 @@ async function validateModelExists(
   const modelConfig = await resolveRuntimeModelConfig(modelName);
   if (modelConfig) return modelConfig;
 
-  runtimeHost.emit('requestShowInstruction', {
-    key: 'modelNotRecognized',
-    message: `Model "${modelName}" is not recognized. Review the documentation for supported models.`,
-    actions: [INSTRUCTION_ACTION.OPEN_MODELS_DOC],
-    showSuppress: false,
-  });
+  runtimeHost.emit(
+    'requestShowInstruction',
+    {
+      key: 'modelNotRecognized',
+      message: `Model "${modelName}" is not recognized. Review the documentation for supported models.`,
+      actions: [INSTRUCTION_ACTION.OPEN_MODELS_DOC],
+      showSuppress: false,
+    },
+    { replayWhenAttached: true },
+  );
   throw new AgentError(`Model ${modelName} is not registered`);
 }
 
@@ -598,9 +606,11 @@ export async function buildAgentLaunchContext(
       });
     });
     if (!input.suppressErrorNotification && !(err instanceof ZodError)) {
-      runtimeHost.emit('requestShowError', {
-        message: toErrorMessage(err),
-      });
+      runtimeHost.emit(
+        'requestShowError',
+        { message: toErrorMessage(err) },
+        { replayWhenAttached: true },
+      );
     }
     throw err;
   }
