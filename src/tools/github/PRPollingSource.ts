@@ -12,7 +12,7 @@
  */
 
 import type { Disposable } from '@platform/interfaces';
-import { getConfig } from '@utils/config';
+import { getConfig } from '@utils/config/configUtils';
 import { shouldDropBotEvent } from './botFilter';
 import {
   DEFAULT_CHECK_ANNOTATION_LEVEL,

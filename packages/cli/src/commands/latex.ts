@@ -8,7 +8,7 @@ import type {
   DiffProgressReporter,
   DiffRunResult,
 } from '@latex/latexdiff/types';
-import { checkToolInstalled } from '@utils/system';
+import { checkToolInstalled } from '@utils/system/toolUtils';
 
 import { CliExitCode } from '../runtime/exitCodes';
 import { initLocalCliPlatform } from '../runtime/initPlatform';

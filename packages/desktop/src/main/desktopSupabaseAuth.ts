@@ -16,12 +16,8 @@ import {
   type SupabaseSession,
   type SupabaseSessionLog,
 } from '@auth/SupabaseSession';
-import {
-  getServerSideKeyService,
-  initializeServerSideKeyAccess,
-} from '@auth/serverKeys';
+import { getServerSideKeyService } from '@auth/serverKeys';
 import type { AuthCallbackUriParts } from '@auth/core/authCallback';
-import { platform } from '@platform/platform';
 import type { StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -419,15 +415,6 @@ export function createDesktopAuthCoordinator(options: {
   return createHostAuthCoordinator({
     secrets: options.secrets,
     log: createSessionLog(options.log),
-  });
-}
-
-export function initializeDesktopServerSideKeyAccess(
-  log: DesktopAuthLog,
-): void {
-  initializeServerSideKeyAccess({
-    state: platform().globalState,
-    logger: createSessionLog(log),
   });
 }
 
