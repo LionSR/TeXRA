@@ -1,9 +1,6 @@
 // Local imports - stream state
-import {
-  DEFAULT_STREAM_METADATA_STATUS,
-  type StreamLifecycleStatus,
-  type StreamPhase,
-} from '@shared/schemas';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { StreamPhase } from '@shared/schemas';
 import { isActivePhase, isInFlightPhase } from '@shared/streams/streamStatus';
 import type { TokenUsageStats } from '@shared/schemas/usage';
 
@@ -19,47 +16,41 @@ const ZERO_USAGE: StatusBarUsageTotals = {
   outputTokens: 0,
 };
 
-function lifecyclePhase(
-  status: StreamLifecycleStatus,
-): StreamPhase | undefined {
-  return status === DEFAULT_STREAM_METADATA_STATUS ? undefined : status;
-}
-
-/** Tracks active streams and usage totals for the extension status bar. */
+/**
+ * Accumulates the live spend of the streams currently running in a session,
+ * for the extension status bar.
+ *
+ * The phase of each stream is *not* mirrored here: the session status plane
+ * that feeds this tracker is also the thing it asks "is this stream in flight"
+ * and "how many streams are active", so there is one writer of that fact.
+ */
 export class StatusBarUsageTracker {
-  private readonly activeStreams = new Set<string>();
-  private readonly streamStatuses = new Map<string, StreamLifecycleStatus>();
   private readonly usageByStream = new Map<string, StatusBarUsageTotals>();
 
-  public updateStreamStatus(
-    streamId: string,
-    status: StreamLifecycleStatus,
-  ): void {
-    const phase = lifecyclePhase(status);
-    if (isActivePhase(phase)) {
-      this.activeStreams.add(streamId);
-    } else {
-      this.activeStreams.delete(streamId);
-    }
+  constructor(
+    private readonly status: Pick<
+      SessionHandle['status'],
+      'entries' | 'isInFlight'
+    >,
+  ) {}
 
-    if (!isInFlightPhase(phase)) {
-      this.streamStatuses.delete(streamId);
-      this.usageByStream.delete(streamId);
-      return;
-    }
-
-    this.streamStatuses.set(streamId, status);
+  /**
+   * Drops a stream's accumulated spend once it leaves flight, so the status bar
+   * reports what the running streams have cost rather than a session total.
+   */
+  public updateStreamStatus(streamId: string, status: StreamPhase): void {
+    if (isInFlightPhase(status)) return;
+    this.usageByStream.delete(streamId);
   }
 
   /**
-   * Records a per-round usage delta only for streams known to be in flight.
-   * The runtime emits the in-flight status before usage for a round; unknown or
-   * terminated stream ids are ignored so stale async events cannot recreate
-   * completed streams.
+   * Records a per-round usage delta only for streams the session status plane
+   * reports as in flight. The runtime publishes the in-flight status before
+   * usage for a round; unknown or terminated stream ids are ignored so stale
+   * async events cannot recreate completed streams.
    */
   public recordUsage(streamId: string, usage: TokenUsageStats): boolean {
-    const status = this.streamStatuses.get(streamId);
-    if (status === undefined || !isInFlightPhase(lifecyclePhase(status))) {
+    if (!this.status.isInFlight(streamId)) {
       return false;
     }
 
@@ -73,7 +64,11 @@ export class StatusBarUsageTracker {
   }
 
   public get activeStreamCount(): number {
-    return this.activeStreams.size;
+    let count = 0;
+    for (const [, phase] of this.status.entries()) {
+      if (isActivePhase(phase)) count += 1;
+    }
+    return count;
   }
 
   public get totalUsage(): StatusBarUsageTotals {
