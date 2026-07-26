@@ -1,9 +1,10 @@
 import * as vscode from 'vscode';
 
-import { AUTH_COMMANDS, getAuthStatus } from '@commands/auth';
+import { AUTH_COMMANDS } from '@auth/constants';
+import { getAuthStatus } from '@commands/auth/authCommands';
 import { BaseViewMessageHandler } from '@common/webview';
 import { MainViewStartupController } from '@controllers/mainView/MainViewStartupController';
-import { agentDirectories } from '@frontend/agents';
+import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { loadOptions } from '@frontend/agents/optionsLoader';
 import { signInWithChatGptSubscription } from '@frontend/auth/codexSubscriptionSignIn';
 import { RecordingManager } from '@frontend/media/RecordingManager';

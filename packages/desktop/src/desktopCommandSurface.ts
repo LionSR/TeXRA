@@ -19,9 +19,6 @@ import type { MenuItemConstructorOptions } from 'electron';
 
 import type { DesktopRoute } from './desktopShellMessages.js';
 
-export { SETTINGS_TAB };
-export { formatDesktopAccelerator };
-
 export const DESKTOP_LOCAL_COMMANDS = {
   SHOW_LOGS: 'texra.desktop.showLogs',
   OPEN_LOG_FOLDER: 'texra.desktop.openLogFolder',

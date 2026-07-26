@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 // Local imports
 import { refresh, computeAgentOptionsData, getAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { hasAnyUsableSetupCredential } from '@commands/setup';
+import { hasAnyUsableSetupCredential } from '@commands/setup/setupAssistantCommand';
 import { consumePendingState } from '@common/state';
 import {
   BaseWebviewProvider,
@@ -19,7 +19,7 @@ import {
   type OnboardingFunnelState,
 } from '@controllers/onboarding/onboardingFunnel';
 import { appSignals } from '@eventBus/AppSignals';
-import { agentDirectories } from '@frontend/agents';
+import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import {
   isAgentCatalogAuthRefreshDeferred,
   runAfterAgentCatalogAuthRefresh,

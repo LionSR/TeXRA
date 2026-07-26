@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 
-import { AUTH_COMMANDS } from '@commands/auth';
+import { AUTH_COMMANDS } from '@auth/constants';
 import {
   formatPartialTeamLaunchMessage,
   formatTeamLaunchBlockedMessage,

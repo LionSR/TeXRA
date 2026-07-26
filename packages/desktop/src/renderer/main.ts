@@ -47,6 +47,8 @@ import '@webview/frontend';
 import { hostBridge, postMessage } from '@shared/hostBridge';
 import type { StreamTabId } from '@shared/schemas';
 import { Signal } from '@shared/signals';
+import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
+import { formatDesktopAccelerator } from '@shared/commands/accelerators';
 import {
   SetThemeMessageSchema,
   type DesktopThemeKind,
@@ -73,9 +75,7 @@ import {
   buildDesktopMainViewResetMessage,
   buildDesktopSettingsTabMessage,
   DESKTOP_LOCAL_COMMANDS,
-  formatDesktopAccelerator,
   getDesktopCommandMenuEntries,
-  SETTINGS_TAB,
   type DesktopCommandActions,
   type DesktopCommandId,
 } from '../desktopCommandSurface';

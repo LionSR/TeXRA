@@ -21,7 +21,7 @@ vi.mock('vscode', () => ({
   },
 }));
 
-vi.mock('@commands/auth', () => ({
+vi.mock('@auth/constants', () => ({
   AUTH_COMMANDS: { SIGN_IN: 'texra.auth.signIn' },
 }));
 vi.mock('@common/teams/TeamPlan', () => ({

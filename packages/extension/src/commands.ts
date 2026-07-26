@@ -3,21 +3,17 @@ import * as vscode from 'vscode';
 
 // Local imports - commands
 import {
-  registerFileSelectionCommands,
-  registerOpenFileCommands,
-} from '@commands/files';
-import { registerLatexdiffCommands } from '@commands/latex';
-import {
-  registerMergeCommands,
-  registerFollowUpCommand,
-  registerResumeAgentCommand,
-} from '@commands/agent';
-import { registerMainViewCommands } from '@commands/system';
-import { registerStateRestoreCommand } from '@commands/taskFormState';
-import {
   createExtensionCommandActions,
   registerExtensionCommandRegistry,
 } from '@commands/extensionCommandSurface';
+import { registerFileSelectionCommands } from '@commands/files/fileSelectionCommands';
+import { registerOpenFileCommands } from '@commands/files/openFileCommands';
+import { registerLatexdiffCommands } from '@commands/latex/latexdiffCommands';
+import { registerMergeCommands } from '@commands/agent/mergeCommands';
+import { registerFollowUpCommand } from '@commands/agent/followUpCommand';
+import { registerResumeAgentCommand } from '@commands/agent/resumeCommand';
+import { registerMainViewCommands } from '@commands/system/mainViewCommands';
+import { registerStateRestoreCommand } from '@commands/taskFormState/stateRestoreCommand';
 import { registerGitCommands } from '@commands/git/gitCommands';
 import { registerAgentReviewCommands } from '@commands/review/agentReviewCommands';
 
