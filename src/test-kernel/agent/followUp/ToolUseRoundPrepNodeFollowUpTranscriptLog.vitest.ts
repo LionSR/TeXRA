@@ -5,12 +5,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { ToolUseRoundPrepNode } from '@agent/core/flows/toolUseRound/ToolUseRoundPrepNode';
 import type { ToolUseRoundServices } from '@agent/core/flows/CycleServices';
 import type { ToolUseRoundShared } from '@agent/core/flows/toolUseRound/roundShared';
-import { withTestRunContext } from '../progressTestUtils';
+import { testRunScope, withTestRunContext } from '../progressTestUtils';
 
 function buildServices(
   overrides: Partial<ToolUseRoundServices<unknown>> = {},
 ): ToolUseRoundServices<unknown> {
   return {
+    runScope: testRunScope('test-stream'),
     checkInterruption: () => false,
     config: { model: 'deepseekT', agent: 'chat' } as never,
     logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
