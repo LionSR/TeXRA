@@ -1,3 +1,6 @@
+// Node imports
+import * as nodePath from 'node:path';
+
 // Third-party imports
 import { glob } from 'glob';
 import { z } from 'zod';
@@ -92,7 +95,11 @@ export class GlobTool extends defineTool({
         }
 
         const relativePath = resolved.relative;
-        if (relativePath === '.' || gitignore.ignores(relativePath)) {
+        if (
+          relativePath === '.' ||
+          (!nodePath.isAbsolute(relativePath) &&
+            gitignore.ignores(relativePath))
+        ) {
           return null;
         }
 
