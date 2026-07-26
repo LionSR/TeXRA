@@ -7,10 +7,26 @@ import { StatusBarUsageTracker } from '@frontend/statusBar/StatusBarUsageTracker
 import { STREAM_PHASE } from '@shared/schemas/stream';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 
+/** The tracker reads its phase facts from the status plane it is given. */
+function trackerOverStatusPlane(): {
+  status: StreamStatusMachine;
+  tracker: StatusBarUsageTracker;
+} {
+  const status = new StreamStatusMachine();
+  return { status, tracker: new StatusBarUsageTracker(status) };
+}
+
+function startStream(status: StreamStatusMachine, streamId: string): void {
+  status.transition(
+    streamId,
+    STREAM_PHASE.RUNNING,
+    STREAM_TRANSITION_CAUSE.LIFECYCLE,
+  );
+}
+
 describe('StatusBarUsageTracker', () => {
   it('ignores usage for streams without a known in-flight status', () => {
-    const status = new StreamStatusMachine();
-    const tracker = new StatusBarUsageTracker(status);
+    const { tracker } = trackerOverStatusPlane();
 
     expect(
       tracker.recordUsage('stream-a', {
@@ -27,13 +43,8 @@ describe('StatusBarUsageTracker', () => {
   });
 
   it('accumulates per-round usage deltas for an active stream', () => {
-    const status = new StreamStatusMachine();
-    const tracker = new StatusBarUsageTracker(status);
-    status.transition(
-      'stream-a',
-      STREAM_PHASE.RUNNING,
-      STREAM_TRANSITION_CAUSE.LIFECYCLE,
-    );
+    const { status, tracker } = trackerOverStatusPlane();
+    startStream(status, 'stream-a');
 
     expect(
       tracker.recordUsage('stream-a', {
@@ -57,13 +68,8 @@ describe('StatusBarUsageTracker', () => {
   });
 
   it('retains accumulated usage while a stream waits for follow-up input', () => {
-    const status = new StreamStatusMachine();
-    const tracker = new StatusBarUsageTracker(status);
-    status.transition(
-      'stream-a',
-      STREAM_PHASE.RUNNING,
-      STREAM_TRANSITION_CAUSE.LIFECYCLE,
-    );
+    const { status, tracker } = trackerOverStatusPlane();
+    startStream(status, 'stream-a');
     tracker.recordUsage('stream-a', {
       cost: 0.01,
       inputTokens: 10,
@@ -91,13 +97,8 @@ describe('StatusBarUsageTracker', () => {
   });
 
   it('ignores delayed usage after a stream reaches a final status', () => {
-    const status = new StreamStatusMachine();
-    const tracker = new StatusBarUsageTracker(status);
-    status.transition(
-      'stream-a',
-      STREAM_PHASE.RUNNING,
-      STREAM_TRANSITION_CAUSE.LIFECYCLE,
-    );
+    const { status, tracker } = trackerOverStatusPlane();
+    startStream(status, 'stream-a');
     tracker.recordUsage('stream-a', {
       cost: 0.01,
       inputTokens: 10,
@@ -150,21 +151,12 @@ describe('StatusBarUsageTracker', () => {
   });
 
   it('counts only the streams the session status plane reports as active', () => {
-    const status = new StreamStatusMachine();
-    const tracker = new StatusBarUsageTracker(status);
+    const { status, tracker } = trackerOverStatusPlane();
 
     expect(tracker.activeStreamCount).toBe(0);
 
-    status.transition(
-      'stream-a',
-      STREAM_PHASE.RUNNING,
-      STREAM_TRANSITION_CAUSE.LIFECYCLE,
-    );
-    status.transition(
-      'stream-b',
-      STREAM_PHASE.RUNNING,
-      STREAM_TRANSITION_CAUSE.LIFECYCLE,
-    );
+    startStream(status, 'stream-a');
+    startStream(status, 'stream-b');
     expect(tracker.activeStreamCount).toBe(2);
 
     // A stream cleared out of the status plane without a published phase
