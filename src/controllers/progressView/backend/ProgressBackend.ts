@@ -1,4 +1,5 @@
 import { RUN_FACT_EVENT_TYPES } from '@agent/trace';
+import type { HostApprovalBypassStateUpdate } from '@agent/runtime/HostInteractions';
 import {
   defaultSession,
   type SessionHandle,
@@ -99,6 +100,9 @@ export class ProgressBackend {
   readonly factApplier: ProgressFactApplier;
   readonly interactionHandler: ProgressInteractionHandler;
   readonly approvalHandlers: ApprovalRequestHandlerSet;
+  readonly setApprovalBypassState: (
+    update: HostApprovalBypassStateUpdate,
+  ) => void;
   private readonly session: SessionHandle;
   private readonly lifecycle: ProgressBackendLifecycleOptions;
   private readonly postMessage: (message: ProgressViewOutboundMessage) => void;
@@ -153,6 +157,7 @@ export class ProgressBackend {
       options.getStreamControls,
     );
     this.interactionHandler = new ProgressInteractionHandler(ui.callbacks);
+    this.setApprovalBypassState = ui.setApprovalBypassState;
     this.onSetActiveStream = options.onSetActiveStream;
   }
 

@@ -164,8 +164,6 @@ describe('extension presentation-event emit port (#9251 replay gate)', () => {
     const uiCallbacks: UICallbacks = {
       showToolEditPermission: (p) => toolEdit.show(p),
       resolveToolEditPermission: (id) => toolEdit.dismiss(id),
-      updateToolEditApprovalBypassState: () => {},
-      updateSuperYoloBypassState: () => {},
     };
     const interactionHandler = new ProgressInteractionHandler(uiCallbacks);
     const detachSink = setExtensionInteractionEventSink((event, payload) =>
@@ -178,6 +176,7 @@ describe('extension presentation-event emit port (#9251 replay gate)', () => {
       runtimeHost: presentationHost,
       session,
       getApprovalHandlers: () => createApprovalHandlers(toolEdit),
+      setApprovalBypassState: vi.fn(),
     });
     const detachInteractions = session.useHostInteractions(interactions);
 
@@ -244,6 +243,7 @@ describe('extension presentation-event emit port (#9251 replay gate)', () => {
         runtimeHost: presentationHost,
         session,
         getApprovalHandlers: () => createApprovalHandlers(),
+        setApprovalBypassState: vi.fn(),
       });
       const detach = session.useHostInteractions(interactions);
       try {

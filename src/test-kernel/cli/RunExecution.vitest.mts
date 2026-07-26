@@ -144,6 +144,7 @@ function stubRunExecutionDeps(): void {
   });
   mocks.createCliRuntimeHost.mockReturnValue({
     emit: mocks.emit,
+    emitApprovalBypassState: vi.fn(),
     attachRunProgressRenderer: vi.fn(() => mocks.detachRunProgressRenderer),
     prepareInteractivePrompt: mocks.prepareInteractivePrompt,
     close: mocks.close,
@@ -308,15 +309,32 @@ describe('executeCliRequest', () => {
 
     expect(mocks.createHeadlessCliHostInteractions).toHaveBeenCalledWith(
       context,
-      expect.objectContaining({ beforePrompt: expect.any(Function) }),
+      expect.objectContaining({
+        beforePrompt: expect.any(Function),
+        setApprovalBypassState: expect.any(Function),
+      }),
     );
 
     const hooks = mocks.createHeadlessCliHostInteractions.mock
       .calls[0]?.[1] as {
       beforePrompt?: () => void;
+      setApprovalBypassState?: (update: {
+        streamId: string;
+        kind: 'bash';
+        bypassActive: boolean;
+      }) => void;
     };
     hooks.beforePrompt?.();
     expect(mocks.prepareInteractivePrompt).toHaveBeenCalledTimes(1);
+    const update = {
+      streamId: 'stream:bypass',
+      kind: 'bash',
+      bypassActive: true,
+    } as const;
+    hooks.setApprovalBypassState?.(update);
+    expect(
+      mocks.createCliRuntimeHost.mock.results[0]?.value.emitApprovalBypassState,
+    ).toHaveBeenCalledWith(update);
   });
 
   it('restores CLI host interactions before closing the runtime host', async () => {

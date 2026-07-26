@@ -244,6 +244,41 @@ function emitRunFact<K extends RunFactEventName>(
 }
 
 describe('ProgressBackend', () => {
+  it('projects every approval bypass kind through one backend port', () => {
+    const { backend, messages } = createRecordingBackend();
+
+    for (const kind of ['bash', 'toolEdit', 'superYolo'] as const) {
+      backend.setApprovalBypassState({
+        streamId: 'stream:bypass',
+        kind,
+        bypassActive: true,
+      });
+    }
+
+    expect(messages).toEqual([
+      {
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_BYPASS,
+        stream: 'stream:bypass',
+        type: 'bash',
+        bypassActive: true,
+      },
+      {
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_BYPASS,
+        stream: 'stream:bypass',
+        type: 'toolEdit',
+        bypassActive: true,
+      },
+      {
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_BYPASS,
+        stream: 'stream:bypass',
+        type: 'superYolo',
+        bypassActive: true,
+      },
+    ]);
+
+    backend.dispose();
+  });
+
   it('constructs the shared progress backend service graph', () => {
     const backend = new ProgressBackend({
       storage: new FakeStateStore(),
@@ -1488,9 +1523,8 @@ describe('ProgressBackend', () => {
     // A run that kept executing headless after a desktop window closed still
     // holds the host-channel emit closure that routes to handleInteractionEvent.
     expect(() =>
-      backend.handleInteractionEvent('updateToolEditApprovalBypassState', {
-        streamId,
-        bypassActive: true,
+      backend.handleInteractionEvent('resolveToolEditPermission', {
+        requestId: 'edit-after-close',
       }),
     ).not.toThrow();
 

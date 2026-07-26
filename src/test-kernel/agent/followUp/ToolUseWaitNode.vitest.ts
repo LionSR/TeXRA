@@ -423,6 +423,11 @@ describe('ToolUseWaitNode', () => {
       lastError: { message: 'cycle failed', userRetryable: false },
     });
     const runtimeHost = { emit: vi.fn() };
+    const setApprovalBypassState = vi.fn();
+    const session = sessionWithInteractions({
+      setApprovalBypassState,
+      cancel: vi.fn(),
+    });
     const logger = new TraceEmitter();
     const hub = new SessionEventHub();
     const recorded = recordSessionEvents(hub, { scope: 'run' });
@@ -449,7 +454,7 @@ describe('ToolUseWaitNode', () => {
             lastResponse: undefined,
             touchedFiles: [],
           }),
-        { stopAfterCycle: true },
+        { session, stopAfterCycle: true },
       );
 
       const goal = GoalStore.getForStream(streamId);
@@ -461,14 +466,16 @@ describe('ToolUseWaitNode', () => {
           streamId,
         }),
       );
-      expect(runtimeHost.emit).toHaveBeenCalledWith(
-        'updateBashApprovalBypassState',
-        { streamId, bypassActive: false },
-      );
-      expect(runtimeHost.emit).not.toHaveBeenCalledWith(
-        'updateToolEditApprovalBypassState',
-        { streamId, bypassActive: false },
-      );
+      expect(setApprovalBypassState).toHaveBeenCalledWith({
+        streamId,
+        kind: 'bash',
+        bypassActive: false,
+      });
+      expect(setApprovalBypassState).not.toHaveBeenCalledWith({
+        streamId,
+        kind: 'toolEdit',
+        bypassActive: false,
+      });
     } finally {
       recorded.detach();
       detachTrace();

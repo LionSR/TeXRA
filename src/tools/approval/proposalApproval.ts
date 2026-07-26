@@ -44,5 +44,5 @@ export function setDelegatedWorkApprovalBypasses(
   // ancestry-resolved inheritance from the parent — super-YOLO granted here
   // must survive the parent later re-gating its own edits.
   toolEdit.bypass.setBypass(streamId, enabled, runtimeHost);
-  bash.bypass.setBypass(streamId, enabled, runtimeHost, { silent: true });
+  bash.bypass.setBypass(streamId, enabled, runtimeHost);
 }
