@@ -10,6 +10,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { platform } from '@platform/platform';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 
+// Local imports - shared
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
+
 // Local imports - test support
 import { installPlatform } from '@test/support/setupPlatform';
 
@@ -42,6 +45,7 @@ async function withGlobWorkspace(
   try {
     await Promise.all(
       [
+        '.gitignore',
         'new.tex',
         'old.tex',
         'vanished.tex',
@@ -116,6 +120,31 @@ describe('GlobTool match metadata', () => {
         status: 'error',
         error: 'match is unreadable',
       });
+    });
+  });
+
+  it('does not pass unrestricted external paths to the workspace ignore matcher', async () => {
+    await withGlobWorkspace(async () => {
+      const externalPath = await mkdtemp(
+        path.join(tmpdir(), 'texra-glob-external-'),
+      );
+      try {
+        await writeFile(path.join(externalPath, 'external.tex'), 'external');
+        await platform().workspaceState.update(
+          WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
+          false,
+        );
+
+        const result = await new GlobTool().call({
+          pattern: '*.tex',
+          path: externalPath,
+        });
+
+        expect(result).toMatchObject({ status: 'executed' });
+        expect(result.output).toContain('external.tex');
+      } finally {
+        await rm(externalPath, { recursive: true, force: true });
+      }
     });
   });
 });
