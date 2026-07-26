@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { clearStoreCache, getExecutionStore } from '@agent/storage';
 import { flowKey } from '@agent/node/persistedFlow';
 import { EXECUTION_LEASE_STALE_MS } from '@agent/storage/executionLease';
+import * as waitingDetection from '@agent/storage/detectWaitingStreams';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   EXECUTION_STATUS,
@@ -29,6 +30,7 @@ const validFlowRecord = {
 };
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await StorageFS.delete('executionLeases', { recursive: true }).catch(
     () => undefined,
   );
@@ -182,6 +184,53 @@ describe('SessionHandle restart repair', () => {
       ).toMatchObject({
         type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
         data: { status: RUN_OUTCOME.CANCELLED },
+      });
+    } finally {
+      session.dispose();
+    }
+  });
+
+  it('fails a suffix-only crashed run when resumability detection fails', async () => {
+    const degradedExecutionId = 'decade123' as ExecutionId;
+    const degradedStreamId = `degraded#${degradedExecutionId}` as StreamTabId;
+    const transcripts = await StreamLogStore.open();
+    transcripts.append(degradedStreamId, {
+      id: 'degraded-running-group',
+      type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
+      level: LOG_LEVELS.INFO,
+      timestamp: 1_000,
+      data: { status: STREAM_PHASE.RUNNING },
+    });
+    await transcripts.flush();
+
+    const executionStore = getExecutionStore(degradedExecutionId);
+    await executionStore.writeMeta({
+      timestamp: '2026-07-26T00:00:00.000Z',
+    });
+    await executionStore.write(flowKey(degradedExecutionId), validFlowRecord);
+    vi.spyOn(waitingDetection, 'detectWaitingStreams').mockRejectedValueOnce(
+      new Error('resumability read failed'),
+    );
+
+    const session = new SessionHandle({
+      transcripts,
+      restartRepair: 'deferred',
+    });
+    try {
+      await session.waitUntilReady();
+
+      expect(
+        session.snapshots.getExecutionId(degradedStreamId),
+      ).toBeUndefined();
+      expect(session.status.get(degradedStreamId)).toBe(STREAM_PHASE.FAILED);
+      await expect(
+        executionStore.read(flowKey(degradedExecutionId)),
+      ).resolves.toBeUndefined();
+      expect(
+        transcripts.get(degradedStreamId)?.getRange(0).at(-1),
+      ).toMatchObject({
+        type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
+        data: { status: RUN_OUTCOME.FAILED },
       });
     } finally {
       session.dispose();

@@ -292,7 +292,8 @@ export class SessionHandle {
 
   private async runRestartRepair(generation: number): Promise<void> {
     if (generation !== this.storageGeneration) return;
-    const executionIds = new Map(this.snapshots.getExecutionIdMap());
+    const snapshotExecutionIds = this.snapshots.getExecutionIdMap();
+    const executionIds = new Map(snapshotExecutionIds);
     for (const streamId of this.transcripts.keys()) {
       if (executionIds.has(streamId)) continue;
       const derived = executionIdFromStream(streamId);
@@ -314,7 +315,7 @@ export class SessionHandle {
       repairStreams = new Set(
         this.transcripts
           .getUnfinishedStreamIds()
-          .filter((streamId) => !executionIds.has(streamId)),
+          .filter((streamId) => !snapshotExecutionIds.has(streamId)),
       );
     }
     if (generation !== this.storageGeneration) return;
