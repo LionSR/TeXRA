@@ -265,7 +265,10 @@ const SEARCH_TOOL_USE_AGENT_CONFIG = AgentConfigSchema.parse({
 async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
   bridgeModule: DesktopAgentExecutionModule;
   openTranscripts(): Promise<StreamLogStore>;
-  createSession(transcripts: StreamLogStore): SessionHandle;
+  createSession(
+    transcripts: StreamLogStore,
+    snapshots: ProgressSnapshotStore,
+  ): SessionHandle;
   createProgressSnapshotStore(): ProgressSnapshotStore;
   processResumeOwner: import('@desktop/main/desktopAgentResume').DesktopProcessResumeOwner;
   progressSnapshotStore: ProgressSnapshotStore;
@@ -445,7 +448,8 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
   });
   return {
     bridgeModule,
-    createSession: (transcripts) => new SessionHandle({ transcripts }),
+    createSession: (transcripts, snapshots) =>
+      new SessionHandle({ transcripts, snapshots }),
     createProgressSnapshotStore,
     openTranscripts: () => StreamLogStore.open(),
     processResumeOwner,
@@ -475,7 +479,7 @@ async function createBridge(
     await options.configureProgressSnapshotStore(progressSnapshotStore);
     await progressSnapshotStore.flush();
   }
-  const session = createSession(transcripts);
+  const session = createSession(transcripts, progressSnapshotStore);
   const { attachTerminalResultToast } =
     await import('@agent/runtime/terminalResultToast');
   const detachTerminalResultToast = attachTerminalResultToast(
@@ -499,13 +503,7 @@ async function createBridge(
       releaseStreamResources(stream, session);
     },
   });
-  const disposeResumeHandler = processResumeOwner.attach({
-    session,
-    snapshots: progressSnapshotStore,
-  });
-  const detachSnapshotEvents = progressSnapshotStore.attachSessionEvents(
-    session.events,
-  );
+  const disposeResumeHandler = processResumeOwner.attach({ session });
   await options.configureSession?.(session);
   const bridge = new bridgeModule.DesktopProgressBridge(
     (message) => {
@@ -518,7 +516,6 @@ async function createBridge(
       logger: options.loggerErrorSpy
         ? { ...noopTrace, error: options.loggerErrorSpy }
         : undefined,
-      progressSnapshotStore,
       host: createStubDesktopAgentExecutionHost({
         ...(options.showErrorMessage
           ? { showErrorMessage: options.showErrorMessage }
@@ -538,7 +535,6 @@ async function createBridge(
       bridge.dispose();
       disposeResumeHandler();
       detachTerminalResultToast();
-      detachSnapshotEvents();
       session.dispose();
     },
   });
@@ -2807,7 +2803,8 @@ describe('DesktopProgressBridge', () => {
       const transcripts = await openTranscripts();
       transcripts.ensureStream(streamId);
       await transcripts.flush();
-      const processSession = createSession(transcripts);
+      const progressSnapshotStore = createProgressSnapshotStore();
+      const processSession = createSession(transcripts, progressSnapshotStore);
       const { attachTerminalResultToast } =
         await import('@agent/runtime/terminalResultToast');
       const detachTerminalResultToast = attachTerminalResultToast(
@@ -2817,15 +2814,12 @@ describe('DesktopProgressBridge', () => {
       );
       const { initializeDesktopProcessStores } =
         await import('@desktop/main/desktopProcessStores');
-      const progressSnapshotStore = createProgressSnapshotStore();
       const processStores = await initializeDesktopProcessStores({
         session: processSession,
-        snapshots: progressSnapshotStore,
       });
       const { stores: sessionStores } = processStores;
       const disposeResumeHandler = processResumeOwner.attach({
         session: processSession,
-        snapshots: progressSnapshotStore,
       });
       const taskState = workflowTaskState();
       progressSnapshotStore.setTaskState(
@@ -2850,7 +2844,6 @@ describe('DesktopProgressBridge', () => {
         {
           session: processSession,
           sessionStores,
-          progressSnapshotStore,
           ...(wakeQueuedFollowUpStream ? { wakeQueuedFollowUpStream } : {}),
           host: createStubDesktopAgentExecutionHost({
             openDiff: async (original, proposed, title) => {
@@ -2924,7 +2917,6 @@ describe('DesktopProgressBridge', () => {
           {
             session: processSession,
             sessionStores,
-            progressSnapshotStore,
             host: createStubDesktopAgentExecutionHost({
               showErrorMessage: async (message) => {
                 errorsB.push(message);
