@@ -482,27 +482,6 @@ export class StreamTabs extends LitElement {
             ? nothing
             : html`<div class="stream-list-footer">
                 <div class="stream-list-controls">
-                  <wa-radio-group
-                    id=${ELEMENT_IDS.AGENT_FILTER_CONTAINER}
-                    class="agent-filter-group"
-                    .value=${this.filter}
-                    @change=${this.handleFilterChange}
-                  >
-                    ${repeat(
-                      FILTER_BUTTONS,
-                      (btn) => btn.id,
-                      (btn) => html`
-                        <wa-radio
-                          id=${btn.id}
-                          value=${btn.filter}
-                          ?checked=${this.filter === btn.filter}
-                        >
-                          ${btn.label}
-                        </wa-radio>
-                      `,
-                    )}
-                  </wa-radio-group>
-
                   <div class="stream-list-actions">
                     ${renderIconActionButton({
                       id: ELEMENT_IDS.DELETE_ALL_BTN,

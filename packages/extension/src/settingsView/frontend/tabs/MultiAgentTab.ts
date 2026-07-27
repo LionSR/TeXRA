@@ -323,14 +323,9 @@ export class MultiAgentTab extends LitElement {
         ${renderSettingsBanner({
           id: 'multi-agent-workflow-banner',
           icon: 'organization',
-          title: 'Multi-agent workflow',
+          title: 'Teams',
           description:
-            'Choose a team, select its orchestrator in the task composer, then review delegated work in Progress.',
-        })}
-        ${renderSettingsSectionHeading({
-          title: 'Multi-agent teams',
-          description:
-            'Choose a team to activate it. Create and refine custom teams in Agents.',
+            'Choose a team to activate it, select its orchestrator in the task composer, then review delegated work in Progress. Create and refine custom teams in Agents.',
         })}
 
         <div class="preset-grid">

@@ -115,8 +115,8 @@ export class FollowUpInput extends LitElement {
         box-sizing: border-box;
         line-height: var(--line-height-relaxed);
         height: auto;
-        --textarea-min-height: var(--textarea-h-s);
-        --textarea-max-height: min(24vh, 180px);
+        --textarea-min-height: var(--textarea-h-m);
+        --textarea-max-height: min(32vh, 240px);
       }
 
       #followUpInput::part(base) {
@@ -129,7 +129,7 @@ export class FollowUpInput extends LitElement {
          user writes to an agent, not code. */
       #followUpInput::part(textarea) {
         width: 100%;
-        padding: var(--wa-space-xs) var(--wa-space-s) var(--wa-space-3xs);
+        padding: var(--wa-space-s) var(--wa-space-s) var(--wa-space-xs);
         box-sizing: border-box;
         overflow-x: hidden;
         overflow-y: auto;
@@ -450,13 +450,6 @@ export class FollowUpInput extends LitElement {
                     onClick: this.recordingController.handleClick,
                   })
             }
-            ${renderIconActionButton({
-              id: ELEMENT_IDS.CLEAR_FOLLOW_UP_BTN,
-              icon: 'clear-all',
-              label: 'Clear input',
-              tooltip: 'Clear input',
-              onClick: this.emitClear,
-            })}
             ${renderIconActionButton({
               id: ELEMENT_IDS.SEND_FOLLOW_UP_BTN,
               icon: 'arrow-up',
