@@ -65,7 +65,7 @@ Verified present at HEAD (commit refs from `git log 5fc03f9..HEAD`):
 | §7.1 step 1 — delete the 5 producerless `show*` arms | `96831e6` | `runtimeInteractionEvents.ts` **deleted**; 0 `show*` arms in `src/agent/runtime/`. |
 | §7.1 step 2 — one approval-bypass rail | `4279d90` | bypass notifications unified. |
 | §7.1 step 3 — tool-edit prompts become host-local | `8e3d367` (#9272) | `RuntimeInteractionEventPayloads` tool-edit arms gone from runtime. |
-| §7.1 step 4 / row 7 — implement `AgentRuntimeHost.emit`, delete the extension presentation bus | `9a12686` (#9251/#9262) | `emit` implemented on the extension host. *(Note: `extensionPresentationEvents.ts` still present at HEAD — see "Remaining.")* |
+| §7.1 step 4 / row 7 — implement `AgentRuntimeHost.emit`, delete the extension presentation bus | `9a12686` (#9251/#9262) | `emit` implemented on the extension host and `extensionPresentationEvents.ts` **deleted** — verified absent at HEAD; no `presentationEvents`/`PresentationBus` remnants remain. |
 | §7 row 5 — one status rail (13 → 10 apply-sites) | `5007b29` (#9250), `917f7c7` | status collapsed onto one rail via the mechanism the `-07-26` §7 correction prescribed (hub at `StreamStatusMachine` construction), not the disproven guard-drop; `SessionHandleInit.status` seam dropped. |
 | Acceptance row 1 — `SessionHandle` owns its snapshot store | `8ed6ae3` (#9234) | `StreamSnapshotStore` now attached/flushed via `SessionHandle`. |
 | Engine hygiene — move `RoundPersistedFlow` out of the generic node engine | `4f93ae2` (#9238) | done. |
@@ -99,14 +99,12 @@ foundation-gap §9 correctly names as the ceiling. Re-verified present at HEAD:
 4. **NS-1 host→core public surface.** Hosts still reach `@agent/*` deep specifiers frozen
    by the enforcing ratchet; no Tier-1 manifest yet. Strategic, sequenced.
 5. **Partial: `stateOwnership` not fully retired.** `SessionHandle` now owns the snapshot
-   store (#9234), but `stateOwnership` still has 8 references and `StreamSnapshotStore`'s
-   header still declares itself the "SINGLE writer" with host-owned public mutators —
-   acceptance row 1's "symbol absent" target is not yet met.
-6. **Minor: `extensionPresentationEvents.ts` still exists** despite `9a12686`'s "delete the
-   presentation bus" intent. Worth a maintainer confirming whether the file is now vestigial
-   (foundation-gap §7.1 step 4 expected it gone once `emit` was implemented) or still
-   load-bearing for a case the redesign carved out (the doc's own §7.1 correction notes the
-   extension keeps a *different* replay path). Flagged for attended follow-up, not touched here.
+   store (#9234), but `stateOwnership` still has **8 live (non-test) references** —
+   `ProgressBackend` (`:75,107,114,294,315`), `ProgressViewState.load` (`:519,530`), and the
+   desktop caller passing `stateOwnership: 'session'` (`desktopAgentExecution.ts:259`) — and
+   `StreamSnapshotStore`'s header still declares itself the "SINGLE writer" with host-owned
+   public mutators. Acceptance row 1's "symbol absent" target is therefore not yet met. This is
+   the tail of the #9234 absorption, gated behind a real ruling — not touched here.
 
 ## No change lands (by design this pass)
 
@@ -136,3 +134,14 @@ inputs.**
 - This checkpoint lives under `docs/proposals/` (internal, excluded from the texra.ai
   publish allowlist) — not a root-level doc, so it does not touch the `docs-root-boundary`
   gate.
+
+## Correction to this checkpoint (same-day)
+
+The first commit of this checkpoint claimed `extensionPresentationEvents.ts` "still exists"
+as a minor follow-up. **That was wrong** — an artifact of a `find … && echo EXISTS` probe
+that fires even on no match (`find` exits 0 with empty output). Re-checked with an explicit
+existence test: the file is **absent**, and `9a12686` (#9251) deleted the presentation bus in
+full as intended. The "Landed" table and "Remaining" list above are corrected accordingly.
+The `stateOwnership` follow-up, by contrast, was re-verified and **stands** (8 live references,
+enumerated above). Recorded here rather than silently amended, per the repo's correction
+convention.
