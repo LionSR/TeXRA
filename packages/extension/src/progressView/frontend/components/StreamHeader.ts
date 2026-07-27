@@ -493,7 +493,7 @@ export class StreamHeader extends LitElement {
     return html`<wa-badge
         id=${ELEMENT_IDS.GOAL_CHIP}
         class="goal-chip"
-        variant=${isPaused ? 'warning' : 'brand'}
+        variant=${isPaused ? 'triangle-exclamation' : 'brand'}
         appearance="filled"
         aria-label=${tooltip}
       >
@@ -511,7 +511,7 @@ export class StreamHeader extends LitElement {
         variant="neutral"
         size="s"
       >
-        ${waIcon('pulse')}
+        ${waIcon('chart-line')}
         ${renderProgressBadgeContent(this.progress, this.roundStage)}
       </wa-tag>
       ${

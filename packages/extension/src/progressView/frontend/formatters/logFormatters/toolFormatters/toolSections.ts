@@ -327,7 +327,7 @@ function buildDelegationSections(ctx: ToolSectionContext): TemplateResult[] {
     extractFlags.push('Extract TikZ');
   if (extractFlags.length > 0) {
     // prettier-ignore
-    sections.push(buildToolUseSection('Extraction:', html`${extractFlags.map((f) => html`<wa-badge variant="neutral" appearance="filled">${waIcon('file-media')} ${f}</wa-badge>`)}`));
+    sections.push(buildToolUseSection('Extraction:', html`${extractFlags.map((f) => html`<wa-badge variant="neutral" appearance="filled">${waIcon('image')} ${f}</wa-badge>`)}`));
   }
 
   const fileGroups = getProposalFileGroups(delegateInput);
@@ -435,7 +435,7 @@ function buildMcpSections(ctx: ToolSectionContext): TemplateResult[] {
   if (typeof mcpOutput?.status === 'string') {
     let statusIconName: TeXRAIconName | typeof SPINNER_ICON_NAME;
     if (mcpOutput.status === 'failed') {
-      statusIconName = 'error';
+      statusIconName = 'circle-exclamation';
     } else if (mcpOutput.status === 'in_progress') {
       statusIconName = SPINNER_ICON_NAME;
     } else {

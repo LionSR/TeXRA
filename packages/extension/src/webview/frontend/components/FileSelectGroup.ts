@@ -186,7 +186,7 @@ export class FileSelectGroup extends LitElement {
     const values = this.currentCheckboxValues;
     return this.renderConfigDropdown({
       id: 'toggleToolConfig',
-      icon: 'tools',
+      icon: 'screwdriver-wrench',
       label: 'Tool configuration options',
       hasOptions: Boolean(values.attachTeXCount),
       items: html`
@@ -206,7 +206,7 @@ export class FileSelectGroup extends LitElement {
     const values = this.currentCheckboxValues;
     return this.renderConfigDropdown({
       id: 'toggleAutoExtract',
-      icon: 'wand',
+      icon: 'wand-magic-sparkles',
       label: 'Auto-extract options',
       hasOptions:
         values.autoExtractFigure ||
@@ -333,7 +333,7 @@ export class FileSelectGroup extends LitElement {
           <div class="file-select-actions">
             ${renderIconActionButton({
               id: `addOpened${typeLabel}FilesButton`,
-              icon: 'folder-opened',
+              icon: 'folder-open',
               label: config.addOpenedLabel,
               tooltip: config.addOpenedLabel,
               onClick: this.handleAddOpenedFiles,
@@ -347,7 +347,7 @@ export class FileSelectGroup extends LitElement {
             })}
             ${renderIconActionButton({
               id: `select${typeLabel}FilesButton`,
-              icon: 'add',
+              icon: 'plus',
               label: config.selectListLabel,
               tooltip: config.selectListLabel,
               onClick: this.handleSelectMultipleFiles,
