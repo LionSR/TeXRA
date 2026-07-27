@@ -2,16 +2,29 @@
 
 // Standard library imports
 import { strict as assert } from 'node:assert';
+import { mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import * as path from 'node:path';
-import { describe, it, beforeEach, afterEach, vi } from 'vitest';
+import { beforeAll, describe, it, beforeEach, afterEach, vi } from 'vitest';
 
 // Local imports - agent runtime
-import { resolveAgent, type ResolvedAgent } from '@agent/index';
+import {
+  getAgent,
+  loadAgents,
+  refresh,
+  registerInlineAgents,
+  resolveAgent,
+  resolveAgentForLaunch,
+  type ResolvedAgent,
+} from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   loadAgentSettingAndPrompts,
   validateAgentYamlContent,
 } from '@agent/runtime/agentLoad';
+import type { AgentDirectoriesPort } from '@platform/interfaces';
+import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { installPlatform } from '@test/support/setupPlatform';
 import { AbsoluteFS } from '@utils/files';
 
 vi.mock('@agent/index', async () => {
@@ -258,5 +271,156 @@ describe('loadAgentSettingAndPrompts', () => {
       // any later test in this describe block.
       resolveAgentMock.mockImplementation(actual.resolveAgent);
     }
+  });
+});
+
+describe('inline agent definitions', () => {
+  const SCRATCHPAD = {
+    name: 'scratchpad',
+    description: 'Registered as a value, never written to disk.',
+    settings: { agentCategory: AgentCategory.ToolUse, tools: ['grep'] },
+    prompts: { systemPrompt: 'You are an inline agent.' },
+  };
+
+  async function useAgentDirectories(dir: string): Promise<void> {
+    const directories: AgentDirectoriesPort = {
+      custom: async () => dir,
+      builtIn: async () => dir,
+      builtInToolUse: async () => dir,
+    };
+    await installPlatform(
+      {},
+      { fs: nodeFilesystem, agentDirectories: directories },
+    );
+  }
+
+  beforeAll(async () => {
+    // Every agent directory points at an empty folder: nothing the registry
+    // returns below can have come from YAML on disk.
+    await useAgentDirectories(
+      await mkdtemp(path.join(tmpdir(), 'texra-empty-agents-')),
+    );
+    registerInlineAgents([SCRATCHPAD]);
+    await loadAgents({ includeRemote: false });
+  });
+
+  it('resolves a registered definition with no YAML behind it', () => {
+    const entry = getAgent('scratchpad');
+    assert.strictEqual(entry?.source, 'inline');
+    assert.strictEqual(entry.path, '');
+    assert.strictEqual(entry.category, AgentCategory.ToolUse);
+    assert.deepStrictEqual(entry.tools, ['grep']);
+    assert.strictEqual(getAgent('inline:scratchpad')?.name, 'scratchpad');
+  });
+
+  it('returns settings and prompts without reading the filesystem', async () => {
+    const resolution = resolveAgentForLaunch(
+      AgentCategory.ToolUse,
+      'scratchpad',
+    );
+    assert.ok(resolution, 'launch resolution should find the inline agent');
+    assert.strictEqual(resolution.definitionPath, '');
+
+    const read = vi.spyOn(AbsoluteFS, 'read');
+    try {
+      const [settings, prompts] = await loadAgentSettingAndPrompts(resolution);
+
+      assert.strictEqual(settings.agentCategory, AgentCategory.ToolUse);
+      assert.strictEqual(
+        prompts.systemPrompt,
+        'You are an inline agent.',
+        'prompts should come back already parsed',
+      );
+      assert.strictEqual(read.mock.calls.length, 0);
+    } finally {
+      read.mockRestore();
+    }
+  });
+
+  it('survives a catalog refresh that rebuilds the cache', async () => {
+    await refresh({ includeRemote: false });
+    assert.strictEqual(getAgent('inline:scratchpad')?.source, 'inline');
+  });
+
+  it('accepts a registration made after the initial load', () => {
+    registerInlineAgents([
+      {
+        name: 'lateComer',
+        settings: { agentCategory: AgentCategory.Workflow, rounds: 3 },
+        prompts: { userRequest: 'Do the thing.' },
+      },
+    ]);
+
+    const entry = getAgent('lateComer');
+    assert.strictEqual(entry?.source, 'inline');
+    assert.strictEqual(entry.rounds, 3);
+  });
+
+  it('rejects a definition that declares inherits', () => {
+    assert.throws(
+      () =>
+        registerInlineAgents([
+          {
+            name: 'derived',
+            inherits: 'scratchpad',
+            settings: { agentCategory: AgentCategory.ToolUse },
+            prompts: {},
+          },
+        ]),
+      (error: unknown) =>
+        error instanceof Error &&
+        error.message.includes('must be self-contained'),
+    );
+  });
+
+  it('rejects a malformed definition at the registration call', () => {
+    assert.throws(() => registerInlineAgents([{ name: '' }]));
+  });
+
+  it('fails loudly when the load path names an unregistered inline agent', async () => {
+    await assert.rejects(
+      () =>
+        loadAgentSettingAndPrompts({
+          entry: {
+            name: 'ghost',
+            source: 'inline',
+            path: '',
+            category: AgentCategory.ToolUse,
+          },
+          definitionPath: '',
+          resolvedName: 'ghost',
+        }),
+      (error: unknown) =>
+        error instanceof Error &&
+        error.message.includes('Inline agent "ghost" is not registered'),
+    );
+  });
+
+  it('keys inline agents apart from a same-named custom agent', async () => {
+    const customDir = await mkdtemp(path.join(tmpdir(), 'texra-custom-'));
+    await writeFile(
+      path.join(customDir, 'scratchpad.yaml'),
+      [
+        'name: scratchpad',
+        'description: On-disk namesake',
+        'settings:',
+        '  agentCategory: toolUse',
+        '  tools: []',
+        'prompts:',
+        '  systemPrompt: On-disk scratchpad.',
+        '',
+      ].join('\n'),
+    );
+    await useAgentDirectories(customDir);
+    await refresh({ includeRemote: false });
+
+    // Distinct keys, so neither registration displaces the other...
+    assert.strictEqual(
+      getAgent('custom:scratchpad')?.path,
+      path.join(customDir, 'scratchpad.yaml'),
+    );
+    assert.strictEqual(getAgent('inline:scratchpad')?.path, '');
+    // ...and the bare name prefers the definition the embedder supplied.
+    assert.strictEqual(getAgent('scratchpad')?.source, 'inline');
   });
 });
