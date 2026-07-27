@@ -30,7 +30,12 @@ import {
   TOOL_USE_LOOKUP_PRIORITY,
 } from './agentRegistryConstants';
 import { scanDirectory } from './agentYamlScanner';
-import { clearInlineAgents, defineInlineAgents, inlineAgentDefinition, inlineAgentEntries } from './inlineAgents';
+import {
+  clearInlineAgents,
+  defineInlineAgents,
+  inlineAgentDefinition,
+  inlineAgentEntries,
+} from './inlineAgents';
 import { loadRemoteAgents, persistRemoteAgentMeta } from './remoteAgentMeta';
 import {
   entriesToOptionData,
