@@ -54,7 +54,7 @@ export const WORKBENCH_KIND_META: Readonly<
   },
   review: {
     defaultPlacement: 'right',
-    icon: 'diff-multiple',
+    icon: 'plus-minus',
     label: 'Review',
     singleton: true,
   },
