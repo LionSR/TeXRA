@@ -229,6 +229,23 @@ describe('createWorkflowScriptAgentRunner', () => {
     expect(first).toBe(second);
   });
 
+  it('rejects dependencies that change between engine hashing and launch', async () => {
+    const options = { inputFiles: ['proof.tex'] };
+    mocks.workspaceReadBytes.mockResolvedValueOnce(Buffer.from('old proof'));
+    const dependencyFingerprint =
+      await fingerprintWorkflowAgentDependencies(runExecutionId, options);
+    mocks.workspaceReadBytes.mockResolvedValue(Buffer.from('new proof'));
+    const runner = defaultRunner();
+
+    await expect(
+      runner({
+        ...invocation(options),
+        dependencyFingerprint,
+      }),
+    ).rejects.toThrow(/changed while the child was launching/);
+    expect(mocks.executeStableSubagentInBand).not.toHaveBeenCalled();
+  });
+
   it('uses delegation policy and executes a direct in-band child', async () => {
     const call = invocation({
       inputFiles: ['paper.tex'],

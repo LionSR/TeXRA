@@ -368,7 +368,7 @@ export async function runWorkflowScript(
         );
       }
     }
-    const key = journalKey(
+    let key = journalKey(
       prompt,
       callOptions,
       WORKFLOW_JOURNAL_KEY_FORMAT.DEPENDENCY_AWARE_V3,
@@ -394,6 +394,43 @@ export async function runWorkflowScript(
       );
     }
     issuedCallKeys.add(key);
+
+    const refreshDependencyIdentity = async (): Promise<void> => {
+      if (!hasFileDependencies) return;
+      let refreshedFingerprint: string | undefined;
+      try {
+        refreshedFingerprint =
+          await fingerprintAgentDependencies?.(callOptions);
+      } catch (error) {
+        throw rememberFatalRunError(
+          error instanceof WorkflowRunAbortError
+            ? error
+            : new WorkflowRunAbortError(
+                `Workflow agent() file dependencies could not be fingerprinted: ${toErrorMessage(error)}`,
+                { cause: error },
+              ),
+        );
+      }
+      if (refreshedFingerprint === dependencyFingerprint) return;
+
+      const refreshedKey = journalKey(
+        prompt,
+        callOptions,
+        WORKFLOW_JOURNAL_KEY_FORMAT.DEPENDENCY_AWARE_V3,
+        refreshedFingerprint,
+      );
+      if (issuedCallKeys.has(refreshedKey)) {
+        throw rememberFatalRunError(
+          new WorkflowRunAbortError(
+            'A changed agent() file dependency now conflicts with another call identity; rerun the workflow from its saved script.',
+          ),
+        );
+      }
+      issuedCallKeys.delete(key);
+      issuedCallKeys.add(refreshedKey);
+      dependencyFingerprint = refreshedFingerprint;
+      key = refreshedKey;
+    };
 
     const emitFailedEnd = (
       error: unknown,
@@ -528,16 +565,28 @@ export async function runWorkflowScript(
             );
           }
           callController.signal.throwIfAborted();
-          return runAgent({
-            index,
-            key,
-            prompt,
-            options: callOptions,
-            signal: callController.signal,
-            reportModel: (model) => {
-              resolvedModel = model;
-            },
-          });
+          const launch = () =>
+            runAgent({
+              index,
+              key,
+              ...(dependencyFingerprint !== undefined && {
+                dependencyFingerprint,
+              }),
+              prompt,
+              options: callOptions,
+              signal: callController.signal,
+              reportModel: (model) => {
+                resolvedModel = model;
+              },
+            });
+          // File contents can change while this call waits for a concurrency
+          // slot or between interactive attempts. Refresh the identity before
+          // every physical launch so the journal and stable child id describe
+          // the bytes this attempt is about to consume. Keep no-file launches
+          // synchronous here: orchestration timing is part of abort semantics.
+          return hasFileDependencies
+            ? refreshDependencyIdentity().then(launch)
+            : launch();
           // p-queue types add() as Promise<T | void>; runAgent's result is
           // always present here (the task never returns void), so the cast
           // keeps the value flowing through unchanged.

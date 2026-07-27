@@ -141,6 +141,8 @@ export interface WorkflowAgentInvocation {
   index: number;
   /** Stable hash of the prompt and normalized execution-affecting options. */
   key: string;
+  /** Opaque host fingerprint already incorporated into `key`, when present. */
+  dependencyFingerprint?: string;
   prompt: string;
   options: WorkflowAgentCallOptions;
   /**

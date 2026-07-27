@@ -837,6 +837,71 @@ return await agent('Inspect src', { id: 'inspect' })`,
     ).rejects.toThrow(/must fingerprint agent\(\) file dependencies/);
   });
 
+  it('refreshes file identity after waiting in the concurrency queue', async () => {
+    let releaseFirst!: () => void;
+    const firstBlocked = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    let fingerprint = 'old-proof';
+    const invocations: WorkflowAgentInvocation[] = [];
+    const runPromise = runWorkflowScript({
+      script: `${META}return await parallel([
+  () => agent('blocker', { id: 'blocker' }),
+  () => agent('review', { id: 'review', inputFiles: ['proof.tex'] }),
+])`,
+      concurrency: 1,
+      fingerprintAgentDependencies: async () => fingerprint,
+      runAgent: async (invocation) => {
+        invocations.push(invocation);
+        if (invocation.options.id === 'blocker') await firstBlocked;
+        return invocation.options.id;
+      },
+    });
+
+    await vi.waitFor(() => expect(invocations).toHaveLength(1));
+    fingerprint = 'new-proof';
+    releaseFirst();
+    await runPromise;
+
+    expect(invocations[1]?.dependencyFingerprint).toBe('new-proof');
+  });
+
+  it('refreshes file identity before an interactive retry', async () => {
+    let control!: WorkflowScriptControl;
+    let fingerprint = 'old-proof';
+    const invocations: WorkflowAgentInvocation[] = [];
+    const runner = (invocation: WorkflowAgentInvocation) =>
+      new Promise<string>((resolve, reject) => {
+        invocations.push(invocation);
+        if (invocations.length === 2) resolve('fresh result');
+        invocation.signal.addEventListener(
+          'abort',
+          () => reject(new Error('aborted')),
+          { once: true },
+        );
+      });
+    const runPromise = runWorkflowScript({
+      script: `${META}return await agent('review', {
+  inputFiles: ['proof.tex'],
+})`,
+      runAgent: runner,
+      fingerprintAgentDependencies: async () => fingerprint,
+      onControl: (handle) => {
+        control = handle;
+      },
+    });
+
+    await vi.waitFor(() => expect(invocations).toHaveLength(1));
+    const firstKey = invocations[0]?.key;
+    fingerprint = 'new-proof';
+    control.retry(0);
+    const run = await runPromise;
+
+    expect(invocations[1]?.dependencyFingerprint).toBe('new-proof');
+    expect(invocations[1]?.key).not.toBe(firstKey);
+    expect(run.journal[0]?.key).toBe(invocations[1]?.key);
+  });
+
   it('ends a cached call with an error when its journal value is invalid', async () => {
     const script = `${META}return await agent('cached')`;
     const first = await runWorkflowScript({ script, runAgent: echoRunner });

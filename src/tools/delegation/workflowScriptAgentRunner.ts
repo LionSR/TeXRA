@@ -185,6 +185,17 @@ export function createWorkflowScriptAgentRunner(
   const { runScope } = parent;
 
   return async (invocation) => {
+    if (invocation.dependencyFingerprint !== undefined) {
+      const launchFingerprint = await fingerprintWorkflowAgentDependencies(
+        run.executionId,
+        invocation.options,
+      );
+      if (launchFingerprint !== invocation.dependencyFingerprint) {
+        throw new WorkflowRunAbortError(
+          'Workflow agent() file dependencies changed while the child was launching; rerun the saved workflow script.',
+        );
+      }
+    }
     const logicalExecutionId = deriveExecutionId({
       checkpointId,
       key: invocation.key,
