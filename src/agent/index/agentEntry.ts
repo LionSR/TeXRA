@@ -1,6 +1,6 @@
 /** Agent registry value objects (canonical AgentSource: @shared/schemas/agent). */
 
-import type { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import type { AgentCategory, AgentDefinition } from '@agent/core/definition/AgentDataclass';
 import type { AgentSource } from '@shared/schemas/agent';
 
 /**
@@ -31,4 +31,11 @@ export interface ResolvedAgent {
   definitionPath: string;
   /** Agent name as resolved. */
   resolvedName: string;
+  /**
+   * When `entry.source === 'inline'`, the validated definition that was
+   * registered — carried here so the loader uses the exact definition the
+   * resolver selected, not whatever a concurrent re-registration may have
+   * replaced (Fix #9).
+   */
+  inlineDefinition?: AgentDefinition;
 }
