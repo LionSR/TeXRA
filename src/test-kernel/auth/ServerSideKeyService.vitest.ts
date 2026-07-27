@@ -211,3 +211,35 @@ describe('ServerSideKeyService quota fallback', () => {
     expect(tier.clearCacheCalls).toBe(0);
   });
 });
+
+describe('ServerSideKeyService anonymous access cache', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('refetches instead of serving a cached anonymous fetch', async () => {
+    const state = new FakeStateStore({ [USE_INCLUDED_ACCESS_KEY]: true });
+    const tier = createTierService({ providers: ['openai'] });
+    vi.spyOn(SupabaseClient, 'isAuthenticated').mockResolvedValue(true);
+    vi.spyOn(SupabaseClient, 'getUserTier').mockResolvedValue(ULTRA_TIER);
+    const tokenSpy = vi
+      .spyOn(SupabaseClient, 'getRelayAccessToken')
+      .mockResolvedValue(null);
+    const service = createService(tier.service, state);
+
+    // Session refresh is dead: the fetch runs anonymously.
+    expect(await service.canUseServerSideKeys()).toBe(true);
+    expect(tier.getConfigCalls).toBe(1);
+
+    // The cache is still TTL-valid, but it was populated anonymously — a
+    // repeat check must refetch and pick up the now-valid token rather than
+    // serving a snapshot that has no user spending data.
+    tokenSpy.mockResolvedValue('token');
+    expect(await service.canUseServerSideKeys()).toBe(true);
+    expect(tier.getConfigCalls).toBe(2);
+
+    // Once the cached fetch was authenticated, the TTL cache serves as before.
+    expect(await service.canUseServerSideKeys()).toBe(true);
+    expect(tier.getConfigCalls).toBe(2);
+  });
+});
