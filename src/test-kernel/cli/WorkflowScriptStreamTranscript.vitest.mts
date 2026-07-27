@@ -110,7 +110,7 @@ describe('CLI workflow-script child-stream transcript', () => {
     }
   });
 
-  it('keeps planned task rows live until their terminal state is printable', () => {
+  it('keeps planned call rows live until their terminal state is printable', () => {
     const runTrace = createRunTrace(STREAM_ID, defaultSession().transcripts);
     try {
       for (const [id, label] of [
@@ -237,7 +237,7 @@ describe('CLI workflow-script child-stream transcript', () => {
           id: 'cancelled-running',
           label: 'Audit cancellation',
           status: 'failed',
-          error: 'The workflow ended before this task completed.',
+          error: 'The workflow ended before this call completed.',
         },
       });
       syncStreamLog(STREAM_ID);
@@ -273,7 +273,7 @@ describe('CLI workflow-script child-stream transcript', () => {
           .filter((item) => item.kind === 'entry')
           .map((item) => item.entry.text),
       ).toEqual([
-        'Failed: Audit cancellation — The workflow ended before this task completed.',
+        'Failed: Audit cancellation — The workflow ended before this call completed.',
       ]);
       expect(
         staticItems
@@ -368,7 +368,7 @@ describe('CLI workflow-script child-stream transcript', () => {
           .filter((item) => item.kind === 'entry')
           .map((item) => item.entry.text),
       ).toEqual([
-        'Skipped: Audit later — The workflow ended before this task was reached.',
+        'Skipped: Audit later — The workflow ended before this call was reached.',
       ]);
       expect(
         staticItems
@@ -378,7 +378,7 @@ describe('CLI workflow-script child-stream transcript', () => {
       const output = await renderStaticTranscript();
       // The skipped marker distinguishes the row from a finished or failed one.
       expect(output).toContain('⊘ Skipped: Audit later');
-      expect(output).toContain('The workflow ended before this task was');
+      expect(output).toContain('The workflow ended before this call was');
       expect(output).not.toContain('Planned: Audit later');
     } finally {
       runTrace.dispose();
@@ -1214,7 +1214,7 @@ describe('CLI workflow-script child-stream transcript', () => {
 
       const output = await renderStaticTranscript();
       // The phase header renders with its distinct diamond divider glyph, and
-      // the task row carries its own per-status marker.
+      // the call row carries its own per-status marker.
       expect(output).toContain('◆ Draft sections');
       expect(output).toContain('☑ Finished: Draft introduction');
       expect(output).toContain('deepseekT · 12s · $0.002');
