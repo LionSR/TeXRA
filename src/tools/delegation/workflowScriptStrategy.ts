@@ -42,9 +42,18 @@ import {
   sumCurrentWorkflowRunCost,
   workflowJournalEntryCostIdentity,
 } from './workflowScriptRun';
+import { fingerprintWorkflowAgentDependencies } from './workflowScriptAgentRunner';
 
 const RUN_LOG_MAX_LINES = 80;
 const RUN_LOG_MAX_LINE_LENGTH = 500;
+
+/** One model-facing reference for editing and rerunning a persisted script. */
+export function formatWorkflowScriptReference(scriptPath: string): string {
+  return [
+    `Script file: ${scriptPath}`,
+    `To revise and rerun it, edit that file and call ${DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME} with scriptPath: '${scriptPath}'.`,
+  ].join('\n');
+}
 
 interface RunLogCollector {
   readonly add: (line: string) => void;
@@ -88,6 +97,8 @@ export interface WorkflowScriptStrategyParams {
   readonly store: ExecutionKVStore;
   readonly checkpointId: string;
   readonly script: string;
+  /** Canonical editable path to this submitted script in the workspace. */
+  readonly scriptPath: string;
   /** JSON arguments; `null`/`undefined` retains the checkpoint's arguments. */
   readonly args: unknown;
   /** Role-separated files exposed as immutable workflow launch context. */
@@ -99,6 +110,8 @@ export interface WorkflowScriptStrategyParams {
    * on while the run is in flight, so a host can target a focused grandchild.
    */
   readonly workflowControls: WorkflowControlRegistry;
+  /** Persist-only when a headless caller awaits and returns the report itself. */
+  readonly deliveryMode?: ChildRunStrategy<WorkflowScriptRunResult>['deliveryMode'];
   /**
    * Build the `agent()` adapter bound to the run's ancestry, wired to the
    * supplied per-live-child cost hook so delta accounting stays local to this
@@ -131,6 +144,7 @@ export function createWorkflowScriptStrategy(
 
   return {
     stageLabel: `Workflow script '${params.name}'`,
+    ...(params.deliveryMode && { deliveryMode: params.deliveryMode }),
 
     launch: async (ports, abortController) => {
       // The stable child runner's native cost callback fires only for work
@@ -179,6 +193,8 @@ export function createWorkflowScriptStrategy(
           }),
           signal: abortController.signal,
           runAgent,
+          fingerprintAgentDependencies: (options) =>
+            fingerprintWorkflowAgentDependencies(params.executionId, options),
           getCallCostUsd: (index) => callCostsByIndex.get(index),
           onActivity: runLog.add,
           onControl: (control) => {
@@ -242,7 +258,9 @@ export function createWorkflowScriptStrategy(
           tag: DELIVERY_TAG.workflowScriptResult,
           executionId: params.executionId,
         },
-        { response: `${formatWorkflowResult(turn.result)}${runLog.format()}` },
+        {
+          response: `${formatWorkflowResult(turn.result)}${runLog.format()}\n\n${formatWorkflowScriptReference(params.scriptPath)}`,
+        },
       ),
 
     formatError: (_turn, err) =>
@@ -252,7 +270,7 @@ export function createWorkflowScriptStrategy(
           executionId: params.executionId,
         },
         {
-          message: `${toErrorMessage(err)}${runLog.format()}\n\nCompleted agent() calls are journaled under meta.name '${params.name}': call ${DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME} again with the same meta.name to resume without repeating them.`,
+          message: `${toErrorMessage(err)}${runLog.format()}\n\n${formatWorkflowScriptReference(params.scriptPath)}\n\nCompleted agent() calls are journaled under meta.name '${params.name}'; rerunning that file resumes without repeating them.`,
         },
       ),
   };

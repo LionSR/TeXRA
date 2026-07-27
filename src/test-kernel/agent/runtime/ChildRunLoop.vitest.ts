@@ -466,6 +466,29 @@ describe('childRunLoop E2E fixtures', () => {
     expect(mocks.enqueueChildRunFollowUp).not.toHaveBeenCalled();
   });
 
+  it('persists without parent delivery in persist-only mode', async () => {
+    const childStreamId = uniqueStreamId('persist-only');
+    const executionId = 'exec-persist-only' as ExecutionId;
+    const { strategy, resolveTurn } = createFakeStrategy();
+
+    const handle = startChildRunLoop({
+      childStreamId,
+      parentStreamId: 'headless-parent' as StreamTabId,
+      executionId,
+      agentName: 'fake',
+      strategy: { ...strategy, deliveryMode: 'persistOnly' },
+    });
+    await resolveTurn(1, { kind: 'terminal', value: 'saved' });
+    await handle.completion;
+
+    expect(mocks.persistChildRunReport).toHaveBeenCalledWith(
+      executionId,
+      'delivered:saved',
+    );
+    expect(mocks.enqueueChildRunFollowUp).not.toHaveBeenCalled();
+    expect(mocks.wakeChildRunFollowUp).not.toHaveBeenCalled();
+  });
+
   it('releases session ownership before delivering a failed turn', async () => {
     const childStreamId = uniqueStreamId('failed-turn-release');
     const parentStreamId = 'parent' as StreamTabId;
