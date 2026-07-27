@@ -389,6 +389,45 @@ describe('ProgressBackend', () => {
     }
   });
 
+  it('finishes the initial presentation load before a workspace move', async () => {
+    const transcripts = await StreamLogStore.open();
+    const session = new SessionHandle({
+      transcripts,
+      restartRepair: 'deferred',
+    });
+    vi.spyOn(session, 'waitUntilReady').mockResolvedValue();
+    const reloadAfterStorageRootChange = vi
+      .spyOn(session, 'reloadAfterStorageRootChange')
+      .mockResolvedValue(true);
+    const { backend } = createIsolatedRecordingBackend(session);
+    let finishInitialLoad: (() => void) | undefined;
+    const initialLoadBlocked = new Promise<void>((resolve) => {
+      finishInitialLoad = resolve;
+    });
+    vi.spyOn(backend.state, 'load')
+      .mockReturnValueOnce(initialLoadBlocked)
+      .mockResolvedValue();
+
+    try {
+      const initialLoad = backend.load();
+      await vi.waitFor(() => {
+        expect(backend.state.load).toHaveBeenCalledOnce();
+      });
+      const workspaceMove = backend.reloadAfterStorageRootChange();
+      await Promise.resolve();
+
+      expect(reloadAfterStorageRootChange).not.toHaveBeenCalled();
+      finishInitialLoad?.();
+      await initialLoad;
+      await workspaceMove;
+
+      expect(reloadAfterStorageRootChange).toHaveBeenCalledOnce();
+    } finally {
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
   it('projects every approval bypass kind through one backend port', () => {
     const { backend, messages } = createRecordingBackend();
 

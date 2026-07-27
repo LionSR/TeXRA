@@ -105,7 +105,7 @@ export class ProgressBackend {
     payload: SetActiveStreamPayload,
   ) => void;
   private readonly stateOwnership: 'backend' | 'session';
-  private readonly storageRootReloadQueue = new PQueue({ concurrency: 1 });
+  private readonly storageRootQueue = new PQueue({ concurrency: 1 });
   private disposed = false;
 
   constructor(options: ProgressBackendOptions) {
@@ -287,9 +287,11 @@ export class ProgressBackend {
     }
   }
 
-  async load(): Promise<void> {
-    await this.session.waitUntilReady();
-    await this.state.load(this.stateOwnership);
+  load(): Promise<void> {
+    return this.enqueueStorageRootWork(async () => {
+      await this.session.waitUntilReady();
+      await this.state.load(this.stateOwnership);
+    });
   }
 
   /** Replace session stores and presentation caches after a workspace move. */
@@ -318,9 +320,13 @@ export class ProgressBackend {
       }
       if (sessionReloadError) throw sessionReloadError;
     };
+    return this.enqueueStorageRootWork(reload);
+  }
+
+  private enqueueStorageRootWork(work: () => Promise<void>): Promise<void> {
     // `add` widens to `void | undefined` for abort/timeout options; neither is
-    // used, so every enqueued reload runs and resolves with `void`.
-    return this.storageRootReloadQueue.add(reload) as Promise<void>;
+    // used, so every enqueued operation runs and resolves with `void`.
+    return this.storageRootQueue.add(work) as Promise<void>;
   }
 
   setupEventListeners(): ProgressEventSubscription {
