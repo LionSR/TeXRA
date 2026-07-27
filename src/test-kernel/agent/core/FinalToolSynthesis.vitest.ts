@@ -110,14 +110,22 @@ describe('final-tool synthesis turn', () => {
     ]);
   });
 
-  it('uses the unforced floor when the provider cannot force tools', async () => {
+  it('asks once without forcing when the provider cannot force tools', async () => {
     const { requests, services, shared } = buildRound(false);
 
     await withTestRunContext(noopAgentRuntimeHost, 'final-tool-floor', () =>
       createToolUseRoundFlow().setServices(services).run(shared),
     );
 
-    expect(requests).toHaveLength(1);
-    expect(requests[0]?.finalTool).toBeUndefined();
+    expect(requests.map((request) => request.finalTool)).toEqual([
+      undefined,
+      undefined,
+    ]);
+    expect(shared.finalToolAttempted).toBe(true);
+    expect(shared.messages).toEqual([
+      { role: 'user', content: 'Research this' },
+      { role: 'assistant', content: 'Draft answer' },
+      { role: 'user', content: 'Submit the final structured output now.' },
+    ]);
   });
 });
