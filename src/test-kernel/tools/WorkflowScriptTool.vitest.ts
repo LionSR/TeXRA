@@ -422,8 +422,10 @@ describe('WorkflowScriptTool', () => {
   it('waits for the workflow report in a one-cycle headless run', async () => {
     const runExecutionId = runExecutionIdFor('tool-test');
     const store = getExecutionStore(runExecutionId);
+    const scriptReference =
+      'Script file: .texra/workflow-scripts/draft-tool-call.mjs';
     vi.spyOn(store, 'readReport').mockResolvedValue(
-      '<workflow-script-result>solved</workflow-script-result>',
+      `<workflow-script-result>solved</workflow-script-result>\n\n${scriptReference}`,
     );
     vi.spyOn(store, 'readMeta').mockResolvedValue({
       terminalStatus: EXECUTION_STATUS.COMPLETED,
@@ -441,9 +443,31 @@ describe('WorkflowScriptTool', () => {
         '<workflow-script-result>solved</workflow-script-result>',
       ),
     });
-    expect(result.output).toContain(
-      'Script file: .texra/workflow-scripts/draft-tool-call.mjs',
+    expect(result.output?.split(scriptReference)).toHaveLength(2);
+  });
+
+  it('returns a persisted headless failure without duplicating its script reference', async () => {
+    const runExecutionId = runExecutionIdFor('tool-test');
+    const store = getExecutionStore(runExecutionId);
+    const scriptReference =
+      'Script file: .texra/workflow-scripts/draft-tool-call.mjs';
+    vi.spyOn(store, 'readReport').mockResolvedValue(
+      `<workflow-script-error>broken</workflow-script-error>\n\n${scriptReference}`,
     );
+    vi.spyOn(store, 'readMeta').mockResolvedValue({
+      terminalStatus: EXECUTION_STATUS.ERROR,
+    } as never);
+
+    const result = await callTool(undefined, undefined, 'correct', true);
+
+    expect(result).toMatchObject({
+      status: 'error',
+      summary: "Workflow script 'tool-test' failed",
+      error: expect.stringContaining(
+        '<workflow-script-error>broken</workflow-script-error>',
+      ),
+    });
+    expect(result.error?.split(scriptReference)).toHaveLength(2);
   });
 
   it('rejects an unknown default agent before registering a detached run', async () => {

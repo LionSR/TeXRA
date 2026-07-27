@@ -476,23 +476,17 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
           );
         }
         if (runMeta?.terminalStatus !== EXECUTION_STATUS.COMPLETED) {
-          return withScriptReference(
-            {
-              status: 'error',
-              summary: `Workflow script '${meta.name}' failed`,
-              error: report,
-            },
-            scriptPath,
-          );
+          return {
+            status: 'error',
+            summary: `Workflow script '${meta.name}' failed`,
+            error: report,
+          } satisfies ToolResult;
         }
-        return withScriptReference(
-          {
-            status: 'executed',
-            summary: `Completed workflow script '${meta.name}'`,
-            output: report,
-          },
-          scriptPath,
-        );
+        return {
+          status: 'executed',
+          summary: `Completed workflow script '${meta.name}'`,
+          output: report,
+        } satisfies ToolResult;
       }
 
       return withScriptReference(
