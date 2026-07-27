@@ -71,9 +71,7 @@ export function handleStreamDelete(
  * write on top of this handler; desktop/trace-viewer wire this handler
  * directly and persist nothing.
  */
-export function handleFilterChange(
-  event: CustomEvent<FilterEventDetail>,
-): void {
+function handleFilterChange(event: CustomEvent<FilterEventDetail>): void {
   const { filter } = event.detail;
   appState.set(
     create(appState.get(), (draft) => {

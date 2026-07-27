@@ -11,7 +11,7 @@ type VSCodeValueElement = HTMLElement & { value?: string };
  * radio element's value, falls back to group value. Works for both
  * `wa-radio` (Web Awesome) and the legacy `vscode-radio` elements.
  */
-export function getRadioValue<T extends string>(event: Event): T | null {
+function getRadioValue<T extends string>(event: Event): T | null {
   const radio =
     getComposedPathElement(event, 'wa-radio') ||
     getComposedPathElement(event, 'vscode-radio');

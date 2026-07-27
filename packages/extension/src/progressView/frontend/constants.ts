@@ -1,5 +1,4 @@
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
-import type { AgentCategoryFilter } from '@shared/schemas';
 import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
 
 /**
@@ -42,10 +41,6 @@ export const ELEMENT_IDS = {
   POLISH_FOLLOW_UP_BTN: 'polishFollowUpBtn',
   CLEAR_FOLLOW_UP_BTN: 'clearFollowUpBtn',
   SEND_FOLLOW_UP_BTN: 'sendFollowUpBtn',
-  AGENT_FILTER_CONTAINER: 'agentFilterButtons',
-  FILTER_ALL_BTN: 'filterAllBtn',
-  FILTER_WORKFLOW_BTN: 'filterWorkflowBtn',
-  FILTER_TOOL_BTN: 'filterToolBtn',
 };
 
 export const GROUP_DOM_IDS = Object.freeze({
@@ -172,27 +167,3 @@ export const TOOLBAR_BUTTONS = {
   workflow: WORKFLOW_TOOLBAR,
   toolUse: TOOL_USE_TOOLBAR,
 };
-
-interface FilterButton {
-  readonly id: string;
-  readonly label: string;
-  readonly filter: AgentCategoryFilter;
-}
-
-export const FILTER_BUTTONS: readonly FilterButton[] = [
-  {
-    id: ELEMENT_IDS.FILTER_ALL_BTN,
-    label: 'All',
-    filter: 'all',
-  },
-  {
-    id: ELEMENT_IDS.FILTER_WORKFLOW_BTN,
-    label: 'Workflow',
-    filter: 'workflow',
-  },
-  {
-    id: ELEMENT_IDS.FILTER_TOOL_BTN,
-    label: 'Interactive',
-    filter: 'toolUse',
-  },
-];
