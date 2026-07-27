@@ -365,6 +365,76 @@ describe('SessionHandle restart repair', () => {
     }
   });
 
+  it('flushes old-root stores before committing the new storage root', async () => {
+    const transcripts = await StreamLogStore.open();
+    const session = new SessionHandle({
+      transcripts,
+      restartRepair: 'deferred',
+    });
+    const storage = platform().storage;
+    const order: string[] = [];
+    Object.assign(storage, {
+      hasPendingWorkspaceStorageChange: () => true,
+      commitWorkspaceStorageChange: () => {
+        order.push('commit');
+        return true;
+      },
+    });
+    vi.spyOn(transcripts, 'flush').mockImplementation(async () => {
+      order.push('transcripts.flush');
+    });
+    vi.spyOn(session.snapshots, 'flush').mockImplementation(async () => {
+      order.push('snapshots.flush');
+    });
+    vi.spyOn(transcripts, 'reload').mockImplementation(async () => {
+      order.push('transcripts.reload');
+    });
+
+    try {
+      await session.reloadAfterStorageRootChange();
+
+      expect(order.indexOf('transcripts.flush')).toBeLessThan(
+        order.indexOf('commit'),
+      );
+      expect(order.indexOf('snapshots.flush')).toBeLessThan(
+        order.indexOf('commit'),
+      );
+      expect(order.indexOf('commit')).toBeLessThan(
+        order.indexOf('transcripts.reload'),
+      );
+    } finally {
+      session.dispose();
+    }
+  });
+
+  it('does not commit a new root when the old transcript flush fails', async () => {
+    const transcripts = await StreamLogStore.open();
+    const session = new SessionHandle({
+      transcripts,
+      restartRepair: 'deferred',
+    });
+    const storage = platform().storage;
+    const commitWorkspaceStorageChange = vi.fn(() => true);
+    Object.assign(storage, {
+      hasPendingWorkspaceStorageChange: () => true,
+      commitWorkspaceStorageChange,
+    });
+    const flushError = new Error('old transcript writes remain unresolved');
+    vi.spyOn(transcripts, 'flush').mockRejectedValue(flushError);
+    const reload = vi.spyOn(transcripts, 'reload');
+
+    try {
+      await expect(session.reloadAfterStorageRootChange()).rejects.toBe(
+        flushError,
+      );
+
+      expect(commitWorkspaceStorageChange).not.toHaveBeenCalled();
+      expect(reload).not.toHaveBeenCalled();
+    } finally {
+      session.dispose();
+    }
+  });
+
   it('skips replacement when the workspace storage root is unchanged', async () => {
     const transcripts = await StreamLogStore.open();
     const session = new SessionHandle({

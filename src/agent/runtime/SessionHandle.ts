@@ -155,7 +155,7 @@ export class SessionHandle {
    * to skip/retry a focused grandchild `agent()` call.
    */
   readonly workflowControls: WorkflowControlRegistry;
-  private restartRepairPromise: Promise<void> | undefined;
+  private restartRepairPromise: Promise<unknown> | undefined;
   private restartRepairWork: Promise<void> = Promise.resolve();
   private readonly restartRepairRetry = new RestartRepairRetryScheduler();
   private storageGeneration = 0;
@@ -219,7 +219,7 @@ export class SessionHandle {
     ) {
       const startupRepair = this.enqueueRestartRepair(() =>
         this.repairStoresAfterRestart(this.storageGeneration),
-      ).then(() => undefined);
+      );
       this.restartRepairPromise = startupRepair;
       // Construction cannot be awaited. Hosts observe the same promise
       // through waitUntilReady(); this branch only prevents a rejection from
@@ -237,9 +237,9 @@ export class SessionHandle {
     if (!this.restartRepairPromise) {
       this.restartRepairPromise = this.enqueueRestartRepair(() =>
         this.repairStoresAfterRestart(this.storageGeneration),
-      ).then(() => undefined);
+      );
     }
-    return this.restartRepairPromise;
+    return this.restartRepairPromise.then(() => undefined);
   }
 
   /**
@@ -261,7 +261,7 @@ export class SessionHandle {
     const repair = this.enqueueRestartRepair(() =>
       this.repairStoresAfterRestart(generation, true),
     );
-    this.restartRepairPromise = repair.then(() => undefined);
+    this.restartRepairPromise = repair;
     return repair;
   }
 
@@ -282,6 +282,7 @@ export class SessionHandle {
       const repair = async () => {
         if (generation !== this.storageGeneration) return false;
         if (reloadTranscripts) {
+          await Promise.all([this.transcripts.flush(), this.snapshots.flush()]);
           if (platform().storage.commitWorkspaceStorageChange?.() === false) {
             return false;
           }
