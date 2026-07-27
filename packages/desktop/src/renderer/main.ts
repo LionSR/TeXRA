@@ -24,9 +24,7 @@ import '@progressView/frontend';
 import '@progressView/frontend/components/TexraDiffView';
 import type { StreamTabs } from '@progressView/frontend/components/StreamTabs';
 import {
-  handleDeleteAll,
   handleFileAction,
-  handleFilterChange,
   handleFollowupRequestOptions,
   handleFollowUpChange,
   handleFollowUpClear,
@@ -48,7 +46,6 @@ import {
   childStreamsByParent$,
   hasAnyStreams$,
   pendingApprovalIds$,
-  streamFilter$,
   streamStates$,
   streams$,
   tabStreams$,
@@ -332,6 +329,7 @@ conversationView.setAttribute('data-desktop-view', 'progress');
 // Left rail: a fresh <stream-tabs> mount wired to module-level progressState.
 // PRD § 7.D requires mounting <stream-tabs> directly (not inside <progress-app>).
 const railTabs = document.createElement('stream-tabs') as StreamTabs;
+railTabs.presentation = 'orchestration';
 
 const settingsView: HTMLElement = document.createElement('settings-app');
 settingsView.setAttribute('data-desktop-view', 'settings');
@@ -1193,7 +1191,6 @@ function rerenderShell(): void {
   );
   railTabs.streams = tabStreams$.get();
   railTabs.activeStreamId = activeStreamId$.get();
-  railTabs.filter = streamFilter$.get();
   railTabs.streamStates = streamStates$.get();
   railTabs.pendingApprovalStreamIds = pendingApprovalIds$.get();
   railTabs.childStreamsByParent = childStreamsByParent$.get();
@@ -1281,7 +1278,6 @@ function installShellSignalWatcher(): void {
     activeStreamId$.get();
     hasAnyStreams$.get();
     tabStreams$.get();
-    streamFilter$.get();
     streamStates$.get();
     pendingApprovalIds$.get();
     childStreamsByParent$.get();
@@ -1648,11 +1644,6 @@ function wireRailTabs(): void {
     'stream-delete',
     handleStreamDelete as EventListener,
   );
-  railTabs.addEventListener(
-    'filter-change',
-    handleFilterChange as EventListener,
-  );
-  railTabs.addEventListener('delete-all', handleDeleteAll as EventListener);
 }
 
 let conversationWired = false;

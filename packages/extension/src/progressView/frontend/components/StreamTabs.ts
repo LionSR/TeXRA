@@ -315,6 +315,8 @@ export class StreamTabs extends LitElement {
 
   @property({ attribute: false }) streams: StreamTabInfo[] = [];
   @property({ type: Boolean, reflect: true }) compact = false;
+  @property({ type: String }) presentation: 'progress' | 'orchestration' =
+    'progress';
   /** Optional rail-header title. Empty (default) renders no header band. */
   @property({ type: String }) heading = '';
   @property({ attribute: false }) activeStreamId: string | null = null;
@@ -474,7 +476,9 @@ export class StreamTabs extends LitElement {
           )}
         </div>
         ${
-          this.compact || (this.streams.length === 0 && this.filter === 'all')
+          this.presentation === 'orchestration' ||
+          this.compact ||
+          (this.streams.length === 0 && this.filter === 'all')
             ? nothing
             : html`<div class="stream-list-footer">
                 <div class="stream-list-controls">

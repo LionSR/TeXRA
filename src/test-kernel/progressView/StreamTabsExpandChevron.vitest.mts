@@ -79,6 +79,26 @@ describe('stream-tab expand chevron', () => {
     expect(ariaLabel).toContain('unlabeled-stream');
   });
 
+  it('omits the session footer in the orchestration presentation', async () => {
+    const tabs = document.createElement('stream-tabs') as StreamTabs;
+    tabs.presentation = 'orchestration';
+    tabs.streams = [makeStream('session')];
+    document.body.append(tabs);
+    await tabs.updateComplete;
+
+    expect(tabs.shadowRoot?.querySelector('.stream-list-footer')).toBeNull();
+    expect(tabs.shadowRoot?.querySelector('stream-tab')).toBeTruthy();
+  });
+
+  it('retains the session footer in the progress presentation', async () => {
+    const tabs = document.createElement('stream-tabs') as StreamTabs;
+    tabs.streams = [makeStream('session')];
+    document.body.append(tabs);
+    await tabs.updateComplete;
+
+    expect(tabs.shadowRoot?.querySelector('.stream-list-footer')).toBeTruthy();
+  });
+
   it('anchors the general hint to the title, not an ancestor of specific hints', async () => {
     const tabs = document.createElement('stream-tabs') as StreamTabs;
     tabs.streams = [
