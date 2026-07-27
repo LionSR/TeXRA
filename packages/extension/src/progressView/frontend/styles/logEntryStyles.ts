@@ -165,7 +165,7 @@ export const logEntryStyles = css`
   }
 
   .log-entry-content {
-    padding: var(--wa-space-2xs) 0 var(--wa-space-m);
+    padding: var(--wa-space-2xs) 0 var(--wa-space-2xs);
     overflow: visible;
   }
 

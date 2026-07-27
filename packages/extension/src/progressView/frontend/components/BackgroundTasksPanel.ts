@@ -1,10 +1,10 @@
 /**
  * Collapsible panel for displaying background tasks (subagents and inquiries).
  *
- * Uses `<wa-details>` for the outer panel and for each nested section
- * (Processes, Subagents, Inquiries) and per-task output, for consistent
- * styling with other panels (Todos, Files, etc.) — the nested sections use the
- * `.collapsible-quiet` variant. Each subagent row is clickable to navigate to
+ * Uses `<wa-details>` for the outer panel, and — only when both the Subagents
+ * and Inquiries sections are populated — a nested `.collapsible-quiet`
+ * `<wa-details>` per section; a lone section renders its rows directly under
+ * the outer panel. Each subagent row is clickable to navigate to
  * its stream tab — finished ones included, their tab is still there. Processes
  * don't have their own tab so they are not clickable.
  *
@@ -92,10 +92,6 @@ export class BackgroundTasksPanel extends LitElement {
         max-height: clamp(12rem, 42vh, 24rem);
         overflow-y: auto;
         scrollbar-gutter: stable;
-      }
-
-      .task-item {
-        margin-bottom: 0;
       }
 
       .task-header {
@@ -265,6 +261,11 @@ export class BackgroundTasksPanel extends LitElement {
       return nothing;
     }
 
+    // With a single populated section, the inner disclosure header is pure
+    // chrome — render the list directly under the outer panel instead.
+    const withSectionHeaders =
+      this.subagents.length > 0 && this.inquiries.length > 0;
+
     return html`
       <wa-details
         class="panel-collapsible"
@@ -274,14 +275,28 @@ export class BackgroundTasksPanel extends LitElement {
         @wa-hide=${this.handleHide}
       >
         <div class="task-list">
-          ${this.renderSection(this.subagents)} ${this.renderInquirySection()}
+          ${this.renderSection(this.subagents, withSectionHeaders)}
+          ${this.renderInquirySection(withSectionHeaders)}
         </div>
       </wa-details>
     `;
   }
 
-  private renderInquirySection(): TemplateResult | typeof nothing {
+  private renderInquirySection(
+    withHeader: boolean,
+  ): TemplateResult | typeof nothing {
     if (this.inquiries.length === 0) return nothing;
+
+    const content = html`
+      <div class="section-content">
+        ${repeat(
+          this.inquiries,
+          (thread) => thread.threadId,
+          (thread, index) => this.renderInquiryItem(thread, index),
+        )}
+      </div>
+    `;
+    if (!withHeader) return content;
 
     let openCount = 0;
     let answeredCount = 0;
@@ -308,13 +323,7 @@ export class BackgroundTasksPanel extends LitElement {
             }</span
           >
         </div>
-        <div class="section-content">
-          ${repeat(
-            this.inquiries,
-            (thread) => thread.threadId,
-            (thread, index) => this.renderInquiryItem(thread, index),
-          )}
-        </div>
+        ${content}
       </wa-details>
     `;
   }
@@ -326,40 +335,49 @@ export class BackgroundTasksPanel extends LitElement {
     const preview = thread.lastQuestionPreview || '(empty question)';
     const idPrefix = `background-inquiry-${index}`;
     return html`
-      <div class="task-item">
-        <div class="task-header">
-          ${waIcon('circle-question', { className: 'task-icon task-icon--inquiry' })}
-          <span id="${idPrefix}-id" class="inquiry-id">${thread.threadId}</span>
-          <wa-tooltip for="${idPrefix}-id">${thread.threadId}</wa-tooltip>
-          <span id="${idPrefix}-description" class="task-description"
-            >${preview}</span
-          >
-          <wa-tooltip for="${idPrefix}-description">${preview}</wa-tooltip>
-          <wa-relative-time
-            id="${idPrefix}-elapsed"
-            class="task-elapsed"
-            date=${thread.lastActivityIso}
-            format="narrow"
-            sync
-          ></wa-relative-time>
-          <wa-tooltip for="${idPrefix}-elapsed"
-            >${thread.lastActivityIso}</wa-tooltip
-          >
-          <wa-badge
-            class="task-status"
-            variant=${inquiryStatusVariant(thread.status)}
-            appearance="filled"
-            >${thread.status}</wa-badge
-          >
-        </div>
+      <div class="task-header">
+        ${waIcon('circle-question', { className: 'task-icon task-icon--inquiry' })}
+        <span class="inquiry-id">${thread.threadId}</span>
+        <span id="${idPrefix}-description" class="task-description"
+          >${preview}</span
+        >
+        <wa-tooltip for="${idPrefix}-description">${preview}</wa-tooltip>
+        <wa-relative-time
+          id="${idPrefix}-elapsed"
+          class="task-elapsed"
+          date=${thread.lastActivityIso}
+          format="narrow"
+          sync
+        ></wa-relative-time>
+        <wa-tooltip for="${idPrefix}-elapsed"
+          >${thread.lastActivityIso}</wa-tooltip
+        >
+        <wa-badge
+          class="task-status"
+          variant=${inquiryStatusVariant(thread.status)}
+          appearance="filled"
+          >${thread.status}</wa-badge
+        >
       </div>
     `;
   }
 
   private renderSection(
     children: ActiveChildInfo[],
+    withHeader: boolean,
   ): TemplateResult | typeof nothing {
     if (children.length === 0) return nothing;
+
+    const content = html`
+      <div class="section-content">
+        ${repeat(
+          children,
+          (c) => c.executionId,
+          (c, index) => this.renderTaskItem(c, index),
+        )}
+      </div>
+    `;
+    if (!withHeader) return content;
 
     const activeCount = children.filter(
       (child) => child.finishedAt === undefined,
@@ -378,13 +396,7 @@ export class BackgroundTasksPanel extends LitElement {
             }</span
           >
         </div>
-        <div class="section-content">
-          ${repeat(
-            children,
-            (c) => c.executionId,
-            (c, index) => this.renderTaskItem(c, index),
-          )}
-        </div>
+        ${content}
       </wa-details>
     `;
   }
@@ -410,67 +422,61 @@ export class BackgroundTasksPanel extends LitElement {
       : child.agentName;
 
     return html`
-      <div class="task-item">
-        <div class="task-header">
-          ${waIcon(icon, {
-            className: `task-icon ${isAgentTool(child) ? 'task-icon--subagent' : 'task-icon--process'}`,
+      <div class="task-header">
+        ${waIcon(icon, {
+          className: `task-icon ${isAgentTool(child) ? 'task-icon--subagent' : 'task-icon--process'}`,
+        })}
+        <span
+          id="${idPrefix}-name"
+          class=${classMap({
+            'task-name': true,
+            'task-name--clickable': isClickable,
           })}
-          <span
-            id="${idPrefix}-name"
-            class=${classMap({
-              'task-name': true,
-              'task-name--clickable': isClickable,
-            })}
-            role=${isClickable ? 'link' : 'text'}
-            tabindex=${isClickable ? '0' : '-1'}
-            @click=${
-              isClickable
-                ? () => this.navigateToStream(childStreamId!)
-                : nothing
-            }
-            @keydown=${
-              isClickable
-                ? (e: KeyboardEvent) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      this.navigateToStream(childStreamId!);
-                    }
+          role=${isClickable ? 'link' : 'text'}
+          tabindex=${isClickable ? '0' : '-1'}
+          @click=${
+            isClickable ? () => this.navigateToStream(childStreamId!) : nothing
+          }
+          @keydown=${
+            isClickable
+              ? (e: KeyboardEvent) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    this.navigateToStream(childStreamId!);
                   }
-                : nothing
-            }
-            >${child.agentName}</span
-          >
-          <wa-tooltip for="${idPrefix}-name">${nameTooltip}</wa-tooltip>
-          ${
-            phaseLabel
-              ? html`<span id="${idPrefix}-phase" class="task-phase"
-                    >${phaseLabel}</span
-                  ><wa-tooltip for="${idPrefix}-phase"
-                    >${phaseLabel}</wa-tooltip
-                  >`
+                }
               : nothing
           }
-          ${
-            description
-              ? html`<span id="${idPrefix}-description" class="task-description"
-                    >(${description})</span
-                  ><wa-tooltip for="${idPrefix}-description"
-                    >${description}</wa-tooltip
-                  >`
-              : nothing
-          }
-          ${
-            child.elapsed
-              ? html`<span class="task-elapsed">(${child.elapsed})</span>`
-              : nothing
-          }
-          <wa-badge
-            class="task-status"
-            variant=${badge.variant}
-            appearance="filled"
-            >${badge.text}</wa-badge
-          >
-        </div>
+          >${child.agentName}</span
+        >
+        <wa-tooltip for="${idPrefix}-name">${nameTooltip}</wa-tooltip>
+        ${
+          phaseLabel
+            ? html`<span id="${idPrefix}-phase" class="task-phase"
+                  >${phaseLabel}</span
+                ><wa-tooltip for="${idPrefix}-phase">${phaseLabel}</wa-tooltip>`
+            : nothing
+        }
+        ${
+          description
+            ? html`<span id="${idPrefix}-description" class="task-description"
+                  >(${description})</span
+                ><wa-tooltip for="${idPrefix}-description"
+                  >${description}</wa-tooltip
+                >`
+            : nothing
+        }
+        ${
+          child.elapsed
+            ? html`<span class="task-elapsed">(${child.elapsed})</span>`
+            : nothing
+        }
+        <wa-badge
+          class="task-status"
+          variant=${badge.variant}
+          appearance="filled"
+          >${badge.text}</wa-badge
+        >
       </div>
     `;
   }
