@@ -76,6 +76,25 @@ describe('ToolUseFollowUpQueue ownership', () => {
     ]);
   });
 
+  it('enqueues live_owner notifications on a recoverable entry without claiming', () => {
+    const queues = new ToolUseFollowUpQueue();
+    const id = stream('stream:live-notify');
+    const child = queues.claimLive(id, 'child')!;
+    queues.release(child, 'recoverable');
+
+    // live_owner admission on a recoverable entry (no child owner) should
+    // enqueue without claiming ownership, returning 'queued'.
+    expect(queues.submit(id, { text: 'progress' }, 'live_owner')).toEqual({
+      kind: 'queued',
+    });
+    expect(queues.getAll(id)).toEqual(['progress']);
+
+    // The entry stays recoverable (no owner) — a subsequent recovery claim
+    // can still acquire it.
+    const recovery = queues.claimRecovery(id);
+    expect(recovery).toBeDefined();
+  });
+
   it('keeps sessions isolated for the same stream id', () => {
     const a = new ToolUseFollowUpQueue();
     const b = new ToolUseFollowUpQueue();
