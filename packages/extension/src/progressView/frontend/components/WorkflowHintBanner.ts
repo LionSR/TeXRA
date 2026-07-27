@@ -66,7 +66,7 @@ export class WorkflowHintBanner extends LitElement {
     return renderBannerFrame({
       id: 'workflowHintBanner',
       variant: 'brand',
-      icon: 'info',
+      icon: 'circle-info',
       role: 'note',
       ariaLabel: 'Workflow mode reminder',
       body: html`
@@ -79,7 +79,7 @@ export class WorkflowHintBanner extends LitElement {
           </div>
           ${renderIconActionButton({
             id: 'workflow-hint-dismiss-button',
-            icon: 'close',
+            icon: 'xmark',
             label: 'Dismiss workflow mode reminder',
             tooltip: 'Dismiss this reminder',
             onClick: this.handleDismiss,
