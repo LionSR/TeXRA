@@ -88,7 +88,11 @@ import {
   invalidateModelOptionsCache,
 } from '@model/computeModelOptions';
 import { platform } from '@platform/platform';
-import { PROGRESS_VIEW_COMMANDS, COMMON_COMMANDS } from '@shared/ipc';
+import {
+  COMMON_COMMANDS,
+  MAIN_VIEW_COMMANDS,
+  PROGRESS_VIEW_COMMANDS,
+} from '@shared/ipc';
 import {
   AgentCategory,
   SETTINGS_TAB,
@@ -1241,6 +1245,16 @@ export class DesktopProgressBridge {
         void this.options.host.showErrorMessage(message);
         return;
       }
+      case 'showAgentConfigBanner': {
+        const { agentName } =
+          payload as RuntimePresentationEventPayloads['showAgentConfigBanner'];
+        this.postToRenderer({
+          command: MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER,
+          agentName,
+          customDirSet: true,
+        });
+        return;
+      }
       case 'requestOpenFile': {
         // The extension previews via its LaTeX-Workshop build+view flow
         // (openBuildDisplayIfTex); desktop has no such editor integration,
@@ -1256,8 +1270,11 @@ export class DesktopProgressBridge {
           });
         return;
       }
-      default:
+      default: {
+        const _exhaustive: never = event;
+        void _exhaustive;
         return;
+      }
     }
   }
 
