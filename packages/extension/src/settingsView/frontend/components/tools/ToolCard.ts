@@ -231,8 +231,7 @@ export class ToolCard extends LitElement {
     ToolDashboardItem['status'],
     {
       icon: TeXRAIconName;
-      variant:
-        'brand' | 'neutral' | 'success' | 'warning' | 'danger';
+      variant: 'brand' | 'neutral' | 'success' | 'warning' | 'danger';
     }
   > = {
     available: { icon: 'check', variant: 'success' },
