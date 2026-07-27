@@ -837,6 +837,18 @@ return await agent('Inspect src', { id: 'inspect' })`,
     ).rejects.toThrow(/must fingerprint agent\(\) file dependencies/);
   });
 
+  it('rejects an empty host fingerprint for file-backed calls', async () => {
+    await expect(
+      runWorkflowScript({
+        script: `${META}return await agent('review', {
+  inputFiles: ['proof.tex'],
+})`,
+        runAgent: echoRunner,
+        fingerprintAgentDependencies: async () => undefined as never,
+      }),
+    ).rejects.toThrow(/returned no fingerprint/);
+  });
+
   it('refreshes file identity after waiting in the concurrency queue', async () => {
     let releaseFirst!: () => void;
     const firstBlocked = new Promise<void>((resolve) => {

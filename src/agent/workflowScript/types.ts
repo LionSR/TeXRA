@@ -308,7 +308,7 @@ export interface WorkflowScriptRunOptions {
    */
   fingerprintAgentDependencies?: (
     options: WorkflowAgentCallOptions,
-  ) => Promise<string | undefined>;
+  ) => Promise<string>;
   /** Parent cancellation signal; aborts guest execution and active agents. */
   signal?: AbortSignal;
   /** Max concurrently running agent() calls. Default 4. */

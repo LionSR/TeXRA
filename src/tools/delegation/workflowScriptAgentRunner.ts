@@ -83,13 +83,17 @@ async function resolveInvocationFileList(
 export async function fingerprintWorkflowAgentDependencies(
   parentExecutionId: LaunchRunContext['runScope']['executionId'],
   options: WorkflowAgentCallOptions,
-): Promise<string | undefined> {
+): Promise<string> {
   const groups = [
     ['input', options.inputFiles ?? []],
     ['context', options.contextFiles ?? []],
     ['media', options.mediaFiles ?? []],
   ] as const;
-  if (groups.every(([, files]) => files.length === 0)) return undefined;
+  if (groups.every(([, files]) => files.length === 0)) {
+    throw new WorkflowRunAbortError(
+      'Cannot fingerprint a workflow agent call without file dependencies.',
+    );
+  }
 
   const hash = createHash('sha256');
   for (const [label, files] of groups) {

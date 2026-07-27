@@ -357,6 +357,11 @@ export async function runWorkflowScript(
       try {
         dependencyFingerprint =
           await fingerprintAgentDependencies?.(callOptions);
+        if (!isNonEmptyString(dependencyFingerprint)) {
+          throw new WorkflowRunAbortError(
+            'The workflow host returned no fingerprint for agent() file dependencies.',
+          );
+        }
       } catch (error) {
         throw rememberFatalRunError(
           error instanceof WorkflowRunAbortError
@@ -401,6 +406,11 @@ export async function runWorkflowScript(
       try {
         refreshedFingerprint =
           await fingerprintAgentDependencies?.(callOptions);
+        if (!isNonEmptyString(refreshedFingerprint)) {
+          throw new WorkflowRunAbortError(
+            'The workflow host returned no fingerprint for agent() file dependencies.',
+          );
+        }
       } catch (error) {
         throw rememberFatalRunError(
           error instanceof WorkflowRunAbortError
