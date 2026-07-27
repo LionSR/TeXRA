@@ -2,8 +2,8 @@ import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   STREAMING_TEXT_MESSAGE_TYPES,
-  WorkflowTaskProgressSchema,
-  isTerminalWorkflowTaskProgress,
+  WorkflowCallProgressSchema,
+  isTerminalWorkflowCallProgress,
   type StreamLogEntry,
   type StreamLogTextDelta,
 } from '@shared/schemas';
@@ -44,15 +44,15 @@ export function isRunningStreamingTextEntry(entry: StreamLogEntry): boolean {
   return data.status === 'running';
 }
 
-export function isNonterminalWorkflowTaskEntry(entry: StreamLogEntry): boolean {
+export function isNonterminalWorkflowCallEntry(entry: StreamLogEntry): boolean {
   if (
     entry.type !== STREAM_LOG_ENTRY_TYPES.LOG ||
     entry.messageType !== MESSAGE_TYPES.WORKFLOW_TASK
   ) {
     return false;
   }
-  const task = WorkflowTaskProgressSchema.safeParse(entry.data);
-  return task.success && !isTerminalWorkflowTaskProgress(task.data);
+  const call = WorkflowCallProgressSchema.safeParse(entry.data);
+  return call.success && !isTerminalWorkflowCallProgress(call.data);
 }
 
 export class StreamLog {
@@ -65,7 +65,7 @@ export class StreamLog {
   private settlementSeqCounter = 0;
   private runningGroupCount = 0;
   private runningStreamingTextCount = 0;
-  private nonterminalWorkflowTaskCount = 0;
+  private nonterminalWorkflowCallCount = 0;
 
   constructor(
     entries: readonly StreamLogEntry[] = [],
@@ -99,8 +99,8 @@ export class StreamLog {
       if (isRunningStreamingTextEntry(entry)) {
         this.runningStreamingTextCount += 1;
       }
-      if (isNonterminalWorkflowTaskEntry(entry)) {
-        this.nonterminalWorkflowTaskCount += 1;
+      if (isNonterminalWorkflowCallEntry(entry)) {
+        this.nonterminalWorkflowCallCount += 1;
       }
     }
   }
@@ -135,8 +135,8 @@ export class StreamLog {
     return this.runningStreamingTextCount > 0;
   }
 
-  get hasNonterminalWorkflowTask(): boolean {
-    return this.nonterminalWorkflowTaskCount > 0;
+  get hasNonterminalWorkflowCall(): boolean {
+    return this.nonterminalWorkflowCallCount > 0;
   }
 
   append(entry: StreamLogAppendInput): StreamLogEntry {
@@ -166,8 +166,8 @@ export class StreamLog {
     if (isRunningStreamingTextEntry(fullEntry)) {
       this.runningStreamingTextCount += 1;
     }
-    if (isNonterminalWorkflowTaskEntry(fullEntry)) {
-      this.nonterminalWorkflowTaskCount += 1;
+    if (isNonterminalWorkflowCallEntry(fullEntry)) {
+      this.nonterminalWorkflowCallCount += 1;
     }
     return fullEntry;
   }
@@ -232,13 +232,13 @@ export class StreamLog {
       this.runningStreamingTextCount += 1;
     }
 
-    const wasNonterminalWorkflowTask = isNonterminalWorkflowTaskEntry(current);
-    const isNowNonterminalWorkflowTask =
-      isNonterminalWorkflowTaskEntry(updated);
-    if (wasNonterminalWorkflowTask && !isNowNonterminalWorkflowTask) {
-      this.nonterminalWorkflowTaskCount -= 1;
-    } else if (!wasNonterminalWorkflowTask && isNowNonterminalWorkflowTask) {
-      this.nonterminalWorkflowTaskCount += 1;
+    const wasNonterminalWorkflowCall = isNonterminalWorkflowCallEntry(current);
+    const isNowNonterminalWorkflowCall =
+      isNonterminalWorkflowCallEntry(updated);
+    if (wasNonterminalWorkflowCall && !isNowNonterminalWorkflowCall) {
+      this.nonterminalWorkflowCallCount -= 1;
+    } else if (!wasNonterminalWorkflowCall && isNowNonterminalWorkflowCall) {
+      this.nonterminalWorkflowCallCount += 1;
     }
 
     this.entries[index] = updated;

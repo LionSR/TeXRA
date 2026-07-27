@@ -1,10 +1,15 @@
 /**
  * In-band native subagent execution for callers that consume a typed result.
  *
- * This is the synchronous counterpart to `childRunLoop`: it owns child
- * registration, execution, post-flow artifact construction, result persistence,
- * and caller cancellation. XML presentation remains in a separate adapter for
- * the existing delegation tool.
+ * This is the durable synchronous composition of the same native strategy
+ * `childRunLoop` drives for detached delegation. It adds stable physical-attempt
+ * reservation/recovery and required result persistence around that standard
+ * launch primitive; XML presentation remains a delivery adapter.
+ *
+ * The attempt ledger here is physical: it records reservation and launch edges
+ * for one model run. The workflow journal is logical: it records an `agent()`
+ * call's replayable value. Journal replay is checked first by the workflow
+ * engine; only a journal miss enters this physical attempt layer.
  */
 
 // Local imports
@@ -24,12 +29,8 @@ import {
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
 import type { AgentFinalResult } from '@agent/runtime/AgentFinalResult';
-import {
-  getAgentFlowErrorResult,
-  type AgentFlowResult,
-} from '@agent/runtime/AgentFlowResult';
+import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import type { AgentRunHandle } from '@agent/runtime/ExecutionHandle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { releaseExecutionLeaseAfterArtifacts } from '@agent/runtime/executionOwnership';
 import * as logger from '@logger/logUtils';
@@ -340,43 +341,22 @@ async function persistDeliveryBestEffort(
   }
 }
 
-/** Bind caller cancellation to the live child while its flow is running. */
-function bindAbortSignal(
-  signal: AbortSignal | undefined,
-  handle: AgentRunHandle,
-): () => void {
-  if (!signal) return () => {};
-  const interrupt = (): void => {
-    handle.interrupt();
-  };
-  if (signal.aborted) {
-    interrupt();
-    return () => {};
-  }
-  signal.addEventListener('abort', interrupt, { once: true });
-  return () => signal.removeEventListener('abort', interrupt);
-}
-
-function createCostSettler(
+function recordCost(
   onCost: InBandSubagentExecutionBaseOptions['onCost'],
-): (totalCostUsd: number | undefined) => void {
-  let settled = false;
-  return (totalCostUsd) => {
-    if (settled) return;
-    settled = true;
-    try {
-      const observed = onCost?.(totalCostUsd);
-      void Promise.resolve(observed).catch((error: unknown) => {
-        logger.warn(LOG_CHANNEL, 'Subagent cost observer rejected', {
-          data: error,
-        });
-      });
-    } catch (error) {
-      logger.warn(LOG_CHANNEL, 'Subagent cost observer failed', {
+  totalCostUsd: number | undefined,
+): void {
+  try {
+    const observed = onCost?.(totalCostUsd);
+    void Promise.resolve(observed).catch((error: unknown) => {
+      logger.warn(LOG_CHANNEL, 'Subagent cost observer rejected', {
         data: error,
       });
-    }
-  };
+    });
+  } catch (error) {
+    logger.warn(LOG_CHANNEL, 'Subagent cost observer failed', {
+      data: error,
+    });
+  }
 }
 
 async function persistFailure(
@@ -461,13 +441,13 @@ async function executeInBand(
 ): Promise<CompletedInBandSubagent> {
   options.signal?.throwIfAborted();
 
-  // Lazy import: the agent runtime loads delegation tools through its registry.
-  // Keeping this edge lazy avoids closing that registry cycle at module load.
-  const { executeAgent } = await import('@agent/runtime/executeAgent');
+  // Lazy import: the strategy imports executeAgent, whose runtime registry
+  // loads delegation tools. Keeping this edge lazy avoids closing that cycle.
+  const { createNativeSubagentStrategy } =
+    await import('./nativeSubagentStrategy');
   const config = AgentConfigSchema.parse(options.configPayload);
   const startedAt = Date.now();
   const workingDirectory = config.workingDirectory ?? undefined;
-  const settleCost = createCostSettler(options.onCost);
 
   try {
     await registerExecution(
@@ -506,32 +486,40 @@ async function executeInBand(
         }
       }
 
-      let runError: unknown;
-      let detachAbort = (): void => {};
+      const strategy = createNativeSubagentStrategy({
+        config,
+        agentCategoryExplicit: true,
+        executionId,
+        agentName: options.agentName,
+        orchestratorStreamId: options.parentStreamId,
+        parentSession: options.session,
+        runtimeHost: options.runtimeHost,
+        startedAt,
+        workingDirectory,
+        approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+        runtimeUnavailableTools: options.runtimeUnavailableTools,
+        workflowPhase: options.workflowPhase,
+        executionMode: 'single-cycle',
+        signal: options.signal,
+        onStreamResolved: options.onStreamResolved ?? (() => {}),
+      });
       let flowResult: AgentFlowResult;
       try {
-        flowResult = await executeAgent(config, executionId, {
-          runtimeHost: options.runtimeHost,
-          session: options.session,
-          isSubagent: true,
-          enforceCategory: true,
-          parentStreamId: options.parentStreamId,
-          workflowPhase: options.workflowPhase,
-          approvalPromptsUnavailable: options.approvalPromptsUnavailable,
-          runtimeUnavailableTools: options.runtimeUnavailableTools,
-          stopAfterCycle: true,
-          onStreamResolved: options.onStreamResolved,
-          onRunError: (error) => {
-            runError = error;
+        const turn = await strategy.launch(
+          {
+            notify: () => {},
+            recordCost: (totalCostUsd) =>
+              recordCost(options.onCost, totalCostUsd),
           },
-          onRun: (handle) => {
-            detachAbort();
-            detachAbort = bindAbortSignal(options.signal, handle);
-          },
-        });
+          new AbortController(),
+        );
+        if (turn.outcome === 'waiting') {
+          throw new Error(
+            `Single-cycle subagent ${executionId} unexpectedly suspended.`,
+          );
+        }
+        flowResult = turn;
       } catch (error) {
-        const errorResult = getAgentFlowErrorResult(error);
-        settleCost(errorResult?.totalCostUsd);
         await persistFailure(
           mode,
           executionId,
@@ -540,19 +528,17 @@ async function executeInBand(
           options.parentExecutionId,
           config.agentCategory,
           error,
-          errorResult,
+          strategy.getTurnResult(),
           startedAt,
           workingDirectory,
         );
         throw error;
-      } finally {
-        detachAbort();
       }
 
-      settleCost(flowResult.totalCostUsd);
       if (flowResult.outcome === 'failed') {
         const error =
-          runError ?? new Error('Subagent ended with failed outcome.');
+          strategy.getTurnError() ??
+          new Error('Subagent ended with failed outcome.');
         await persistFailure(
           mode,
           executionId,
