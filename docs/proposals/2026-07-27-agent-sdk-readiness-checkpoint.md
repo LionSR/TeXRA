@@ -145,3 +145,21 @@ full as intended. The "Landed" table and "Remaining" list above are corrected ac
 The `stateOwnership` follow-up, by contrast, was re-verified and **stands** (8 live references,
 enumerated above). Recorded here rather than silently amended, per the repo's correction
 convention.
+
+## Correction to this checkpoint (PR-merge)
+
+The "No change lands" section above (lines 109–118) states that the `taskType` dead-field
+removal was **not applied** and that `taskType` carries a constructor-parameter default at
+`AgentLaunchContext.ts:459`. **This was true when the checkpoint was drafted** (the
+unattended pass correctly deferred the change per the `-07-22` discipline), but the
+maintainer re-derived the claim in an attended PR and determined that `taskType` is the
+one genuinely behavior-neutral candidate — **0 setters** repo-wide, a parameter default
+that was never overridden, and a byte-identical error string after inlining `'Task'`.
+The removal was therefore applied in commit `5c2b81f` (this PR) against the
+checkpoint's recommendation: the field, the forwarded argument, and the now-constant
+parameter are removed from `AgentLaunchContext.ts`. The "no longer a clean 0 setters
+case" framing and the `:459` line-number reference are stale as of the merge commit.
+The checkpoint's broader principle — that unattended passes should not apply structural
+changes without out-of-pass review — is affirmed by this outcome: the change landed
+*only* after re-derivation by a maintainer in an attended PR, which is exactly the
+safeguard the `-07-22` revert mandated.
