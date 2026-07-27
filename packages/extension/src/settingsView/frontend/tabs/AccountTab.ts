@@ -106,25 +106,29 @@ export class AccountTab extends LitElement {
         </div>
       `;
     }
+    // Surface session-expired and spend-check errors ahead of any cached
+    // spending-status snapshot. TierService only updates spendingStatus on
+    // authenticated fetches, so a stale non-null value can outlive the
+    // session that produced it and mask the real error state.
+    if (this.sessionExpired) {
+      return html`
+        <div class="account-empty">
+          Usage data can't load because your session has expired. Sign in
+          again to reconnect.
+        </div>
+      `;
+    }
+    if (this.spendingStatusError != null) {
+      return html`
+        <div class="account-empty">
+          Usage check failed on the server
+          (${this.spendingStatusError.failureReason ?? 'unknown reason'}).
+          Included access is temporarily unavailable; switch to your own
+          provider API keys or try again later.
+        </div>
+      `;
+    }
     if (this.spendingStatus == null) {
-      if (this.sessionExpired) {
-        return html`
-          <div class="account-empty">
-            Usage data can't load because your session has expired. Sign in
-            again to reconnect.
-          </div>
-        `;
-      }
-      if (this.spendingStatusError != null) {
-        return html`
-          <div class="account-empty">
-            Usage check failed on the server
-            (${this.spendingStatusError.failureReason ?? 'unknown reason'}).
-            Your access still works; usage data will return once the server
-            recovers.
-          </div>
-        `;
-      }
       return html`
         <div class="account-empty">
           Usage data is not available for this account.
