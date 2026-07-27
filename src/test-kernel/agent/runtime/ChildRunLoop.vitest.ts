@@ -1074,8 +1074,8 @@ describe('childRunLoop E2E fixtures', () => {
       launch: async (ports) => {
         ports.recordCost(tracker.record(completed, 0.1));
         ports.recordCost(tracker.record(completed, 0));
-        ports.recordCost(tracker.record({ key: 'skipped' }, 0.2));
-        ports.recordCost(tracker.record({ key: 'failed' }, 0.15));
+        ports.recordCost(tracker.record({ index: 3, key: 'skipped' }, 0.2));
+        ports.recordCost(tracker.record({ index: 4, key: 'failed' }, 0.15));
         ports.recordCost(tracker.total([historical, completed, recovered]));
         return { kind: 'terminal', value: 'done' };
       },

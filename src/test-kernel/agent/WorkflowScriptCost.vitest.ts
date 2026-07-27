@@ -68,8 +68,8 @@ describe('workflow attempt cost', () => {
     expect(tracker.record(completed, 0.1)).toBe(0.1);
     // Production normalizes the final attempt's undefined callback to zero.
     expect(tracker.record(completed, 0)).toBe(0.1);
-    expect(tracker.record({ key: 'skipped' }, 0.2)).toBeCloseTo(0.3);
-    expect(tracker.record({ key: 'failed' }, 0.15)).toBeCloseTo(0.45);
+    expect(tracker.record({ index: 1, key: 'skipped' }, 0.2)).toBeCloseTo(0.3);
+    expect(tracker.record({ index: 2, key: 'failed' }, 0.15)).toBeCloseTo(0.45);
     expect(tracker.total([completed])).toBeCloseTo(0.95);
   });
 
@@ -80,6 +80,27 @@ describe('workflow attempt cost', () => {
     tracker.record(completed, 0.1);
     tracker.record(completed, 0.2);
     expect(tracker.total([completed])).toBeCloseTo(0.6);
+  });
+
+  it('separates sequential duplicate keys when only the first call is live', () => {
+    const live = entry(0, workflowResult(0.4), 'duplicate');
+    const recovered = entry(1, workflowResult(0.7), 'duplicate');
+    const tracker = createWorkflowAttemptCostTracker();
+
+    tracker.record(live, 0.4);
+    expect(tracker.total([live, recovered])).toBe(0.4);
+  });
+
+  it('separates parallel duplicate keys when only one call retries', () => {
+    const retried = entry(0, workflowResult(0.5), 'duplicate');
+    const singleAttempt = entry(1, workflowResult(0.4), 'duplicate');
+    const tracker = createWorkflowAttemptCostTracker();
+
+    // Interleaved callback order models parallel calls. Only index 0 retries.
+    tracker.record(retried, 0.1);
+    tracker.record(singleAttempt, 0.4);
+    tracker.record(retried, 0);
+    expect(tracker.total([retried, singleAttempt])).toBeCloseTo(1);
   });
 
   it('settles zero for empty-baseline stable recovery with no callback', () => {
@@ -105,7 +126,7 @@ describe('workflow attempt cost', () => {
   it('retains live spend when the final journal is malformed', () => {
     const tracker = createWorkflowAttemptCostTracker();
 
-    expect(tracker.record({ key: 'live' }, 0.2)).toBe(0.2);
+    expect(tracker.record({ index: 0, key: 'live' }, 0.2)).toBe(0.2);
     expect(() => tracker.total([entry(0, { cost: 1 }, 'live')])).toThrow(
       WorkflowJournalCostError,
     );
