@@ -7,7 +7,7 @@ import * as path from 'node:path';
 // Third-party imports
 import { describe, it, vi } from 'vitest';
 import { ModelProvider, ReasoningEffort } from 'llm-zoo';
-import { OpenAIError } from 'openai';
+import { APIUserAbortError, OpenAIError } from 'openai';
 
 // Local imports
 import { noopTrace, type AgentTrace } from '@agent/trace';
@@ -18,6 +18,7 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
+import { tagOpenAISdkError } from '@agent/modelHandlers/openai/openAISdkError';
 import type {
   ModelCredentialRoute,
   OpenAIResponseToolCall,
@@ -27,11 +28,13 @@ import {
   attachContextWindowError,
   hasContextWindowErrorMarker,
   isContextWindowError,
+  isUserAbort,
 } from '@common/errors/sdkErrorUtils';
 import type { ToolDefinition } from '@model';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
+import { spiedTrace } from '@test/support/spiedTrace';
 import { pathToLocation } from '@utils/files';
 
 // Third-party imports
@@ -136,6 +139,57 @@ function withSdkOptions<T extends { responses: object }>(client: T) {
   return Object.assign(client, {
     withOptions: vi.fn(() => client),
   });
+}
+
+function createBackgroundAbortHandler(): ModelHandlerOpenAIResponse {
+  const handler = new ModelHandlerOpenAIResponse(
+    buildTestModelConfig({
+      name: 'test-gpt',
+      label: 'Test GPT',
+      fullName: 'gpt-test',
+      shortName: 'gpt-test',
+      provider: ModelProvider.OPENAI,
+      maxOutputTokens: 1024,
+      inputPrice: 0,
+      outputPrice: 0,
+      contextWindow: 200000,
+      openRouterOnly: false,
+    }),
+  );
+  handler.setLogger(spiedTrace());
+  return handler;
+}
+
+type BackgroundLifecycleInternals = {
+  backgroundPoller: BackgroundPoller<{
+    id?: string;
+    status?: string | null;
+  }>;
+  pendingResponseId: string | null;
+  tryResume(client: OpenAI, signal?: AbortSignal): Promise<unknown>;
+  waitForCompletion(
+    client: OpenAI,
+    initialResponse: { id?: string; status?: string | null },
+    signal?: AbortSignal,
+  ): Promise<unknown>;
+};
+
+function backgroundLifecycleInternals(
+  handler: ModelHandlerOpenAIResponse,
+): BackgroundLifecycleInternals {
+  return (
+    handler as unknown as { backgroundLifecycle: BackgroundLifecycleInternals }
+  ).backgroundLifecycle;
+}
+
+function createRetrieveThrowingClient(error: unknown): OpenAI {
+  return {
+    responses: {
+      retrieve: vi.fn(async () => {
+        throw error;
+      }),
+    },
+  } as unknown as OpenAI;
 }
 
 describe('ModelHandlerOpenAIResponse auxiliary requests', () => {
@@ -1635,5 +1689,73 @@ describe('ModelHandlerOpenAIResponse.normalizeUsage', () => {
     const normalized = handler.normalizeUsage(usage, 0);
 
     assert.equal(normalized.cacheCreationTokens, undefined);
+  });
+});
+
+describe('ModelHandlerOpenAIResponse background abort handling', () => {
+  // Pins the SDK contract the abort path depends on: openai throws its own
+  // APIUserAbortError (not a DOMException) when the signal fires inside
+  // retrieve(). If an SDK upgrade changes this, the abort path must be
+  // re-verified.
+  it('recognizes the SDK abort class via isUserAbort once tagged', () => {
+    const err = new APIUserAbortError();
+    assert.equal(err instanceof DOMException, false);
+    tagOpenAISdkError(err, 'openai');
+    assert.equal(isUserAbort(err), true);
+  });
+
+  it('recognizes plain AbortController DOMExceptions (delay path)', () => {
+    const err = new DOMException('This operation was aborted', 'AbortError');
+    assert.equal(isUserAbort(err), true);
+  });
+
+  it('clears the pending background ID on abort during resume retrieve', async () => {
+    const handler = createBackgroundAbortHandler();
+    const target = backgroundLifecycleInternals(handler);
+    target.pendingResponseId = 'resp_pending_abort';
+
+    const abortError = new APIUserAbortError();
+    const client = createRetrieveThrowingClient(abortError);
+
+    await assert.rejects(target.tryResume(client), APIUserAbortError);
+
+    // An aborted resume must not retain the pending ID, or the next run
+    // silently resumes a response the user cancelled.
+    assert.equal(target.pendingResponseId, null);
+  });
+
+  it('retains the pending background ID on transient retrieve failures', async () => {
+    const handler = createBackgroundAbortHandler();
+    const target = backgroundLifecycleInternals(handler);
+    target.pendingResponseId = 'resp_pending_transient';
+
+    const transient = new Error('socket hang up');
+    const client = createRetrieveThrowingClient(transient);
+
+    await assert.rejects(target.tryResume(client), /socket hang up/);
+
+    // No status code means the response is likely still alive server-side,
+    // so retain its ID for the outer retry.
+    assert.equal(target.pendingResponseId, 'resp_pending_transient');
+  });
+
+  it('surfaces background polling timeouts', async () => {
+    const handler = createBackgroundAbortHandler();
+    const target = backgroundLifecycleInternals(handler);
+    target.backgroundPoller = new BackgroundPoller({
+      pollIntervalMs: 1,
+      maxDurationMs: 0,
+      isPending: (response) => response.status === 'in_progress',
+      logger: spiedTrace(),
+    });
+
+    const thrown = await target
+      .waitForCompletion(
+        { responses: { retrieve: vi.fn() } } as unknown as OpenAI,
+        { id: 'resp_timeout', status: 'in_progress' },
+      )
+      .catch((err: unknown) => err);
+
+    assert.ok(thrown instanceof Error);
   });
 });
