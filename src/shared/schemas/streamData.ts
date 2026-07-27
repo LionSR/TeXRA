@@ -24,7 +24,6 @@ import {
 import {
   TokenUsageStatsBaseSchema,
   UsageRouteSchema,
-  emptyUsageStats,
   isEmptyUsage,
   type TokenUsageStats,
 } from './usage';
@@ -155,13 +154,13 @@ const TokenUsageStatsParsingBaseSchema = z
     return usageRoute == null ? stats : { ...stats, usageRoute };
   }) as z.ZodType<TokenUsageStats>;
 
-export const TokenUsageStatsParsingSchema =
-  TokenUsageStatsParsingBaseSchema.catch(emptyUsageStats());
-
-// Compile-time assertion: parsing schema output must be assignable to canonical type.
-void (null as unknown as z.infer<
-  typeof TokenUsageStatsParsingSchema
-> satisfies TokenUsageStats);
+/**
+ * Exported so callers that need to validate a single usage delta (e.g.
+ * {@link StreamSnapshotStore.addUsage}) can `safeParse` it themselves and log
+ * loudly on failure, instead of defaulting to zero. Never wrap this in
+ * `.catch()` for persisted/cost data — see `parseUsageData`'s docs and #7464.
+ */
+export { TokenUsageStatsParsingBaseSchema };
 
 export interface ParsedUsageData {
   /** Successfully parsed, non-empty per-run usage. */

@@ -3521,6 +3521,8 @@ describe('DesktopProgressBridge', () => {
       const { bridgeB } = await owner.reopen(messagesB);
 
       try {
+        // Activate the stream to trigger UPDATE_STREAMS delivery
+        bridgeB.revealStream(streamId);
         await vi.waitFor(() => {
           const approvalShows = progressMessages(
             messagesB,
