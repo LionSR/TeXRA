@@ -1,19 +1,83 @@
-// Test composition imports
+// Test environment imports
 import '@test/support/defaultSessionTestSetup';
 
 // Test support imports
 import { afterEach, describe, expect, it } from 'vitest';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { defaultSession } from '@agent/runtime/SessionHandle';
+import type { StateStore } from '@platform/interfaces';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
 
 import { createRecordingHost } from '@test/agent/progressTestUtils';
-import { setupPlatform } from '@test/support/setupPlatform';
+import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { GoalStore, subscribeGoalStateChanges } from '@tools/goal';
 
 const STREAM_A = 'stream:forget-a' as StreamTabId;
 const STREAM_B = 'stream:forget-b' as StreamTabId;
+const SUBSCRIPTION_STREAM = 'stream:goal-state-subscription' as StreamTabId;
+const CONCURRENT_STREAM_A = 'stream:concurrent-goal-a' as StreamTabId;
+const CONCURRENT_STREAM_B = 'stream:concurrent-goal-b' as StreamTabId;
+
+class BlockingFirstIndexWriteState implements StateStore {
+  private readonly values = new Map<string, unknown>();
+
+  private pendingIndexWrite: {
+    value: unknown;
+    resolve: () => void;
+  } | null = null;
+
+  private readonly pendingWaiters: Array<() => void> = [];
+
+  private shouldBlockNextIndexWrite = true;
+
+  get<T>(key: string, defaultValue?: T): T {
+    if (!this.values.has(key)) {
+      return defaultValue as T;
+    }
+    return this.values.get(key) as T;
+  }
+
+  update(key: string, value: unknown): Promise<void> {
+    if (key === 'goals:index' && this.shouldBlockNextIndexWrite) {
+      this.shouldBlockNextIndexWrite = false;
+      return new Promise((resolve) => {
+        this.pendingIndexWrite = { value, resolve };
+        for (const waiter of this.pendingWaiters.splice(0)) waiter();
+      });
+    }
+
+    this.applyUpdate(key, value);
+    return Promise.resolve();
+  }
+
+  waitForBlockedIndexWrite(): Promise<void> {
+    if (this.pendingIndexWrite) {
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => {
+      this.pendingWaiters.push(resolve);
+    });
+  }
+
+  releaseBlockedIndexWrite(): void {
+    if (!this.pendingIndexWrite) {
+      throw new Error('No blocked index write to release.');
+    }
+    const pending = this.pendingIndexWrite;
+    this.pendingIndexWrite = null;
+    this.applyUpdate('goals:index', pending.value);
+    pending.resolve();
+  }
+
+  private applyUpdate(key: string, value: unknown): void {
+    if (value === undefined) {
+      this.values.delete(key);
+      return;
+    }
+    this.values.set(key, value);
+  }
+}
 
 describe('GoalStore.forget (abandon-on-delete contract)', () => {
   setupPlatform();
@@ -188,5 +252,124 @@ describe('GoalStore.forget (abandon-on-delete contract)', () => {
       'keep this goal',
     );
     expect(GoalStore.list().map((g) => g.streamId)).toEqual([keptStream]);
+  });
+});
+
+describe('subscribeGoalStateChanges', () => {
+  setupPlatform();
+
+  it('delivers only goal changes from the supplied session', () => {
+    const sessionA = createTestSession();
+    const sessionB = createTestSession();
+    const seen: unknown[] = [];
+    const detach = subscribeGoalStateChanges(sessionA, (change) => {
+      seen.push(change);
+    });
+
+    try {
+      sessionB.events.emit({
+        scope: 'session',
+        event: {
+          type: 'goalStateChanged',
+          payload: { streamId: 'other-session' as StreamTabId },
+        },
+      });
+      sessionA.events.emit({
+        scope: 'session',
+        event: {
+          type: 'setActiveStream',
+          payload: { streamId: 'same-session' as StreamTabId },
+        },
+      });
+      sessionA.events.emit({
+        scope: 'session',
+        event: {
+          type: 'goalStateChanged',
+          payload: { streamId: 'same-session' as StreamTabId },
+        },
+      });
+
+      expect(seen).toEqual([{ streamId: 'same-session' }]);
+    } finally {
+      detach();
+      sessionA.dispose();
+      sessionB.dispose();
+    }
+  });
+
+  it('routes start, status, and edit notifications through the current run session only', async () => {
+    const runSession = createTestSession();
+    const otherSession = createTestSession();
+    const seenRun: unknown[] = [];
+    const seenOther: unknown[] = [];
+    const seenDefault: unknown[] = [];
+    const detachRun = subscribeGoalStateChanges(runSession, (change) => {
+      seenRun.push(change);
+    });
+    const detachOther = subscribeGoalStateChanges(otherSession, (change) => {
+      seenOther.push(change);
+    });
+    const detachDefault = subscribeGoalStateChanges(
+      defaultSession(),
+      (change) => {
+        seenDefault.push(change);
+      },
+    );
+
+    try {
+      await withRunContext(
+        createRunContext({
+          runtimeHost: createRecordingHost().host,
+          session: runSession,
+        }),
+        async () => {
+          await GoalStore.start(SUBSCRIPTION_STREAM, 'prove the estimate');
+          await GoalStore.setStatus(SUBSCRIPTION_STREAM, 'paused');
+          await GoalStore.editObjective(
+            SUBSCRIPTION_STREAM,
+            'prove the sharp estimate',
+          );
+        },
+      );
+
+      expect(seenRun).toEqual([
+        { streamId: SUBSCRIPTION_STREAM },
+        { streamId: SUBSCRIPTION_STREAM },
+        { streamId: SUBSCRIPTION_STREAM },
+      ]);
+      expect(seenOther).toEqual([]);
+      expect(seenDefault).toEqual([]);
+    } finally {
+      detachRun();
+      detachOther();
+      detachDefault();
+      runSession.dispose();
+      otherSession.dispose();
+    }
+  });
+});
+
+describe('GoalStore index concurrency', () => {
+  it('keeps both entries when concurrent start() calls overlap during the index write', async () => {
+    const state = new BlockingFirstIndexWriteState();
+    await installPlatform({}, { workspaceState: state });
+
+    const firstStart = GoalStore.start(CONCURRENT_STREAM_A, 'objective a');
+    await state.waitForBlockedIndexWrite();
+
+    const secondStart = GoalStore.start(CONCURRENT_STREAM_B, 'objective b');
+    await Promise.resolve();
+
+    state.releaseBlockedIndexWrite();
+    await Promise.all([firstStart, secondStart]);
+
+    expect(
+      GoalStore.list()
+        .map((goal) => goal.streamId)
+        .toSorted(),
+    ).toEqual([CONCURRENT_STREAM_A, CONCURRENT_STREAM_B].toSorted());
+    expect(state.get<StreamTabId[]>('goals:index', []).toSorted()).toEqual(
+      [CONCURRENT_STREAM_A, CONCURRENT_STREAM_B].toSorted(),
+    );
   });
 });
