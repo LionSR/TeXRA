@@ -1,6 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-afterEach(() => {
+import type { StreamTabId } from '@shared/schemas';
+
+const tempDirs: string[] = [];
+
+afterEach(async () => {
+  const [{ teardownDefaultSession }, { cleanupTempDirs }] = await Promise.all([
+    import('@agent/runtime/SessionHandle'),
+    import('@test/support/tempDirPlatform'),
+  ]);
+  teardownDefaultSession();
+  await cleanupTempDirs(tempDirs);
   vi.doUnmock('@agent/runtime/runAgent');
   vi.doUnmock('@cli/runtime/runtimeHost');
   vi.doUnmock('@cli/runtime/transcriptSession');
@@ -81,5 +91,37 @@ describe('CLI transcript session policy', () => {
         },
       ),
     ).rejects.toBe(failure);
+  });
+
+  it('reclaims an orphaned stream sidecar when a headless session opens', async () => {
+    vi.resetModules();
+    const [
+      { initPlatform },
+      { createTempDirPlatform },
+      { StreamLogStore, StreamSnapshotStore },
+      { initializeHeadlessTranscriptSession },
+    ] = await Promise.all([
+      import('@platform/platform'),
+      import('@test/support/tempDirPlatform'),
+      import('@transcript'),
+      import('@cli/runtime/transcriptSession'),
+    ]);
+    initPlatform(
+      await createTempDirPlatform('texra-cli-orphan-sweep-', tempDirs),
+    );
+    const orphan = 'orphaned-cli-stream' as StreamTabId;
+    const writer = new StreamSnapshotStore();
+    writer.setDescription(orphan, 'orphaned sidecar');
+    await writer.flush();
+    await expect(writer.listPersistedStreams()).resolves.toEqual([orphan]);
+
+    const transcripts = await StreamLogStore.open();
+    const result = await initializeHeadlessTranscriptSession(
+      async () => transcripts,
+    );
+
+    await expect(
+      result.session.snapshots.listPersistedStreams(),
+    ).resolves.toEqual([]);
   });
 });

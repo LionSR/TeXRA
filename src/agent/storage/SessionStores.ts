@@ -48,7 +48,7 @@ export interface DeleteAllStreamsResult {
 export type DeleteStreamResult = 'deleted' | 'active' | 'failed';
 
 /**
- * Owns the durable footprint for a progress stream.
+ * Coordinates the durable footprint for a progress stream.
  *
  * `StreamLogStore` and `StreamSnapshotStore` keep separate on-disk formats;
  * this class owns the lifecycle invariant across those formats plus the

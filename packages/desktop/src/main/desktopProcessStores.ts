@@ -1,9 +1,7 @@
 // Agent imports
 import { createChannelTrace } from '@agent/trace';
+import { SessionStores } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-
-// Controller imports
-import { SessionStores } from '@agent/runtime/SessionStores';
 
 // Tool imports
 import { releaseStreamResources } from '@tools/approval';
