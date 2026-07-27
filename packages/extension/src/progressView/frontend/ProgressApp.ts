@@ -3,7 +3,6 @@ import { html, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 
-import { z } from 'zod';
 import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
 import '@awesome.me/webawesome/dist/components/split-panel/split-panel.js';
 
@@ -13,13 +12,9 @@ import { BaseWebviewApp } from '@shared/BaseWebviewApp';
 import { postMessage } from '@shared/hostBridge';
 
 // Local imports - shared schemas
-import {
-  AgentCategoryFilterSchema,
-  type ProgressViewOutboundMessage,
-} from '@shared/schemas';
+import { type ProgressViewOutboundMessage } from '@shared/schemas';
 import { SignalWatcher } from '@shared/signals';
 import { designTokens, viewTabStyles } from '@shared/styles';
-import { PersistedState } from '@shared/state/PersistedState';
 import { registerTeXRAWebAwesomeIcons } from '@shared/wa/webAwesomeIcons';
 import { renderEmptyState } from '@shared/wa/emptyState';
 import { renderViewHeader } from '@shared/wa/viewHeader';
@@ -28,7 +23,6 @@ import type { MutableWaTabGroup, WaTabShowEvent } from '@shared/wa/tabs';
 
 // Local imports - progress view frontend
 import { progressAppStyles } from './progressAppStyles';
-import { webviewStorage } from './webviewStorage';
 import {
   activeStreamId$,
   appState,
@@ -38,19 +32,15 @@ import {
   pendingApprovalIds$,
   placement,
   resetProgressState,
-  streamFilter$,
   streamStates$,
   tabStreams$,
 } from './progressState';
 
 // Local imports - event handlers
 import {
-  handleDeleteAll,
   handleFileAction,
-  handleFilterChange,
   handleFollowupRequestOptions,
   handleFollowUpChange,
-  handleFollowUpClear,
   handleFollowUpFocusComplete,
   handleFollowUpPolish,
   handleFollowUpSend,
@@ -63,18 +53,12 @@ import {
   sendFollowupCommand,
 } from './eventHandlers';
 import { dispatchMessage } from './messageDispatcher';
-import type { FilterEventDetail } from './events';
 // Local imports - progress view components
 import './components/StreamTabs';
 import './components/StreamConversation';
 import './components/UserMessage';
 import './components/LatexdiffResults';
 import './components/ContextManagement';
-
-/** Schema for persisted preferences. */
-const ProgressViewPrefsSchema = z.object({
-  streamFilter: AgentCategoryFilterSchema.catch('all'),
-});
 
 registerTeXRAWebAwesomeIcons();
 
@@ -103,23 +87,12 @@ export class ProgressApp extends ProgressAppBase {
     narrowLayout.set(width < 500);
   });
 
-  private prefsManager = new PersistedState(
-    webviewStorage,
-    'progressViewPrefs',
-    ProgressViewPrefsSchema,
-  );
-
   constructor() {
     super();
-    // Module-level state is shared across remounts in the same JS context
-    // (tests, hot reload). Reset writable signals + the approval-id memo,
-    // then layer the persisted streamFilter pref on top of the post-reset
-    // appState — keeps the constructor to one `appState.set` instead of two.
     resetProgressState();
-    const prefs = this.prefsManager.getState();
     appState.set({
       ...appState.get(),
-      streamFilter: prefs.streamFilter,
+      streamFilter: 'all', // Filter UI removed — always show all streams.
     });
   }
 
@@ -189,7 +162,6 @@ export class ProgressApp extends ProgressAppBase {
                       @followup-change=${handleFollowUpChange}
                       @followup-send=${handleFollowUpSend}
                       @followup-polish=${handleFollowUpPolish}
-                      @followup-clear=${handleFollowUpClear}
                       @followup-focus-complete=${handleFollowUpFocusComplete}
                     ></stream-conversation>
 
@@ -199,14 +171,11 @@ export class ProgressApp extends ProgressAppBase {
                       .compact=${compactTabs}
                       .streams=${tabStreams$.get()}
                       .activeStreamId=${activeStreamId$.get()}
-                      .filter=${streamFilter$.get()}
                       .streamStates=${streamStates$.get()}
                       .pendingApprovalStreamIds=${pendingApprovalIds$.get()}
                       .childStreamsByParent=${childStreamsByParent$.get()}
                       @stream-switch=${handleStreamSwitch}
                       @stream-delete=${handleStreamDelete}
-                      @filter-change=${this.onFilterChange}
-                      @delete-all=${handleDeleteAll}
                     ></stream-tabs>
                   </wa-split-panel>
                 </div>
@@ -325,17 +294,6 @@ export class ProgressApp extends ProgressAppBase {
 
   private onPopBack = (): void => {
     postMessage(PROGRESS_VIEW_COMMANDS.POP_BACK);
-  };
-
-  /**
-   * The one host-specific layer over the shared `handleFilterChange`:
-   * persist the chosen filter through this webview's `prefsManager`
-   * (VS Code webview state). Desktop/trace-viewer wire the shared handler
-   * directly and persist nothing.
-   */
-  private onFilterChange = (e: CustomEvent<FilterEventDetail>): void => {
-    handleFilterChange(e);
-    this.prefsManager.update({ streamFilter: e.detail.filter });
   };
 
   // `sendFollowupCommand` is shared by both followup entry points; these

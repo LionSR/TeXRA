@@ -33,7 +33,6 @@ import '@progressView/frontend/components/TerminalOutput';
 
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/badge/badge.js';
-import '@awesome.me/webawesome/dist/components/divider/divider.js';
 
 /** Known per-tool default timeouts (ms) for display in the running timer. */
 const TOOL_DEFAULT_TIMEOUTS: Record<string, number> = {
@@ -93,16 +92,6 @@ export function truncateHeaderSummary(text: string, maxLength: number): string {
   const summary =
     outputMarker >= 0 ? oneLine.slice(0, outputMarker).trim() : oneLine;
   return truncateWithEllipsis(summary || oneLine, maxLength);
-}
-
-/** Join template sections with horizontal rule separators. */
-export function joinWithSeparator(sections: TemplateResult[]): TemplateResult {
-  return html`${sections.map(
-    (section, i) =>
-      html`${section}${
-        i < sections.length - 1 ? html`<wa-divider></wa-divider>` : ''
-      }`,
-  )}`;
 }
 
 /** Build the banner content wrapper shared by tool-use and web-search entries. */
