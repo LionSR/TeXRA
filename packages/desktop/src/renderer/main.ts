@@ -48,7 +48,7 @@ import {
   pendingApprovalIds$,
   streamStates$,
   streams$,
-  tabStreams$,
+  topLevelStreams$,
 } from '@progressView/frontend/progressState';
 import { COMMON_COMMANDS, PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import '@settingsView/frontend';
@@ -1189,7 +1189,7 @@ function rerenderShell(): void {
     activeWorkbenchTab(shellState, 'right')?.kind === 'logs' ||
       activeWorkbenchTab(shellState, 'bottom')?.kind === 'logs',
   );
-  railTabs.streams = tabStreams$.get();
+  railTabs.streams = topLevelStreams$.get();
   railTabs.activeStreamId = activeStreamId$.get();
   railTabs.streamStates = streamStates$.get();
   railTabs.pendingApprovalStreamIds = pendingApprovalIds$.get();
@@ -1277,7 +1277,7 @@ function installShellSignalWatcher(): void {
   const shellDeps = new Signal.Computed(() => {
     activeStreamId$.get();
     hasAnyStreams$.get();
-    tabStreams$.get();
+    topLevelStreams$.get();
     streamStates$.get();
     pendingApprovalIds$.get();
     childStreamsByParent$.get();
