@@ -97,9 +97,9 @@ export const streamMetaHandlers = {
         if (data.activeStream !== undefined) {
           draft.activeStreamId = data.activeStream || null;
         }
-        if (data.agentFilter !== undefined) {
-          draft.streamFilter = data.agentFilter;
-        }
+        // streamFilter is intentionally left at its default ('all') — the
+        // filter UI was removed in #9314 and the backend-persisted value is
+        // no longer relevant.
       }),
     );
   },
