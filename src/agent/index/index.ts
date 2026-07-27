@@ -29,6 +29,7 @@ export {
   // Core functions
   loadAgents,
   registerInlineAgents,
+  clearInlineAgents,
   getAgent,
   resolveAgent,
   resolveAgentForLaunch,

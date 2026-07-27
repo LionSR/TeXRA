@@ -30,7 +30,7 @@ import {
   TOOL_USE_LOOKUP_PRIORITY,
 } from './agentRegistryConstants';
 import { scanDirectory } from './agentYamlScanner';
-import { defineInlineAgents, inlineAgentEntries } from './inlineAgents';
+import { clearInlineAgents, defineInlineAgents, inlineAgentDefinition, inlineAgentEntries } from './inlineAgents';
 import { loadRemoteAgents, persistRemoteAgentMeta } from './remoteAgentMeta';
 import {
   entriesToOptionData,
@@ -45,6 +45,7 @@ const CHANNEL = 'agentRegistry';
 export type { AgentEntry, ResolvedAgent } from './agentEntry';
 export { extractToolNames } from './agentYamlScanner';
 export { BUILTIN_TEAM_ROOT_AGENT_NAMES } from './agentRegistryConstants';
+export { clearInlineAgents } from './inlineAgents';
 export { createKey };
 
 /** Legacy prefix from pre-rename era (builtIn → builtInWorkflow). */
@@ -465,7 +466,19 @@ export function resolveAgent(identifier: string): ResolvedAgent | undefined {
 }
 
 function toResolvedAgent(entry: AgentEntry): ResolvedAgent {
-  return { entry, definitionPath: entry.path, resolvedName: entry.name };
+  const resolved: ResolvedAgent = {
+    entry,
+    definitionPath: entry.path,
+    resolvedName: entry.name,
+  };
+  // Carry the inline definition in the resolution so the load path doesn't
+  // re-lookup mutable global state — a re-registration between resolution
+  // and load could otherwise pair a stale entry with a replaced definition
+  // (Fix #9).
+  if (entry.source === 'inline') {
+    resolved.inlineDefinition = inlineAgentDefinition(entry.name);
+  }
+  return resolved;
 }
 
 /**
