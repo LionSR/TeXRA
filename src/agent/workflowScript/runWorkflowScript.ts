@@ -756,7 +756,8 @@ function normalizeAgentOptions(raw: unknown): WorkflowAgentCallOptions {
       const requirement = requiresContent ? 'a non-empty string' : 'a string';
       throw new Error(`agent() option "${field}" must be ${requirement}.`);
     }
-    const normalized = requiresContent ? value.trim() : value;
+    const normalized =
+      requiresContent || field === 'label' ? value.trim() : value;
     common[field] =
       field === 'phase'
         ? normalizeWorkflowScriptPhaseTitle(normalized)

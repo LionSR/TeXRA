@@ -255,7 +255,7 @@ return await agent('Inspect src', { id: 'core' })`,
 }
 return await agent('inspect', {
   id: 'known',
-  label: 'Known task',
+  label: '  Known task  ',
   phase: 'Audit',
 })`,
       runAgent: runner,
