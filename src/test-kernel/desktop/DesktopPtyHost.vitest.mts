@@ -127,4 +127,27 @@ describe('desktop pty host', () => {
     expect(spawnPty).toHaveBeenCalledOnce();
     expect(host.get('workbench:terminal:1')).toBe(replacement);
   });
+
+  it('ignores a module-load failure from an invalidated creation', async () => {
+    let failLoading = (_error: Error): void => {};
+    const loadFailure = new Promise<PtyModule>((_resolve, reject) => {
+      failLoading = reject;
+    });
+    const host = createDesktopPtyHost({
+      onData: vi.fn(),
+      onExit: vi.fn(),
+      loadPty: vi.fn<LoadPty>().mockReturnValue(loadFailure),
+    });
+
+    const staleCreation = host.create({
+      id: 'workbench:terminal:1',
+      cols: 80,
+      rows: 24,
+    });
+    host.disposeAll();
+    failLoading(new Error('node-pty unavailable'));
+
+    await expect(staleCreation).resolves.toBeUndefined();
+    expect(host.get('workbench:terminal:1')).toBeUndefined();
+  });
 });

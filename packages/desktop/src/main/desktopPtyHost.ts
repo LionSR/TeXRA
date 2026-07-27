@@ -179,7 +179,13 @@ export function createDesktopPtyHost(
       if (existing) return existing;
 
       const creationGeneration = generation;
-      const pty = await (options.loadPty?.() ?? loadNodePty());
+      let pty: NodePtyModule;
+      try {
+        pty = await (options.loadPty?.() ?? loadNodePty());
+      } catch (error) {
+        if (creationGeneration !== generation) return undefined;
+        throw error;
+      }
       // disposeAll marks every request begun by the old renderer as stale,
       // including requests that had not yet reached the sessions map.
       if (creationGeneration !== generation) return undefined;
