@@ -11,7 +11,6 @@ import { createEvent } from '@shared/utils/events';
 import type { ExtractedClipboardImage } from '@shared/utils/clipboardImages';
 
 import type { PermissionState } from './permissionState';
-import type { StreamFilter } from './store';
 
 // =============================================================================
 // Event Detail Types
@@ -19,10 +18,6 @@ import type { StreamFilter } from './store';
 
 export interface StreamEventDetail {
   streamId: string;
-}
-
-export interface FilterEventDetail {
-  filter: StreamFilter;
 }
 
 export interface ToolbarCommandDetail {
@@ -186,9 +181,6 @@ export const ProgressEvents = {
 
   streamDelete: (detail: StreamEventDetail) =>
     createEvent('stream-delete', detail),
-
-  filterChange: (detail: FilterEventDetail) =>
-    createEvent('filter-change', detail),
 
   toolbarCommand: (detail: ToolbarCommandDetail) =>
     createEvent('toolbar-command', detail),

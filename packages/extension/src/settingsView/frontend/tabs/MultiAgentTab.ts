@@ -327,6 +327,10 @@ export class MultiAgentTab extends LitElement {
           description:
             'Choose a team to activate it, select its orchestrator in the task composer, then review delegated work in Progress. Create and refine custom teams in Agents.',
         })}
+        ${renderSettingsSectionHeading({
+          title: 'Available teams',
+          description: 'Select a team to activate it.',
+        })}
 
         <div class="preset-grid">
           ${AGENT_MODE_PRESETS.map((p) => this.renderPresetCard(p, false))}
