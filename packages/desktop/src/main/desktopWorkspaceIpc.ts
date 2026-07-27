@@ -114,10 +114,21 @@ async function resolveWorkspaceWritePath(inputPath: string): Promise<string> {
     if (!isFileNotFoundError(error)) throw error;
   }
 
-  const [canonicalRoot, canonicalParent] = await Promise.all([
-    platform().fs.realPath(root),
-    platform().fs.realPath(dirname(located.absolutePath)),
-  ]);
+  let canonicalRoot: string;
+  let canonicalParent: string;
+  try {
+    [canonicalRoot, canonicalParent] = await Promise.all([
+      platform().fs.realPath(root),
+      platform().fs.realPath(dirname(located.absolutePath)),
+    ]);
+  } catch (error) {
+    if (isFileNotFoundError(error)) {
+      throw new Error(
+        'The file cannot be recreated because its parent folder no longer exists.',
+      );
+    }
+    throw error;
+  }
   const canonicalTarget = join(canonicalParent, basename(located.absolutePath));
   if (!isPathWithin(canonicalRoot, canonicalTarget)) {
     throw new Error('Only files inside the workspace folder can be opened.');

@@ -228,6 +228,34 @@ describe('desktop workspace IPC', () => {
     );
   });
 
+  it('reports a clear error when the deleted file parent is also gone', async () => {
+    const postToRenderer = vi.fn();
+    const ipc = createDesktopWorkspaceIpc(
+      { postToRenderer },
+      {
+        ptyHost: createPtyHost(),
+        browserViews: createBrowserViews(),
+        toWindowBounds: (bounds) => bounds,
+      },
+    );
+    rmSync(join(workspacePath, 'src'), { recursive: true });
+
+    ipc.handleMessage({
+      command: DESKTOP_WORKSPACE_COMMANDS.WRITE_FILE,
+      path: 'src/index.ts',
+      contents: 'unrecoverable buffer',
+    });
+
+    await vi.waitFor(() =>
+      expect(postToRenderer).toHaveBeenCalledWith({
+        command: DESKTOP_WORKSPACE_COMMANDS.FILE_ERROR,
+        path: 'src/index.ts',
+        message:
+          'The file cannot be recreated because its parent folder no longer exists.',
+      }),
+    );
+  });
+
   it('reports renderer editor dirty state to the window lifecycle', () => {
     const onEditorDirtyChange = vi.fn();
     const ipc = createDesktopWorkspaceIpc(
