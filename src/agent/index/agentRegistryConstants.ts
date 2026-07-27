@@ -6,8 +6,17 @@ export {
   PREFERRED_TOOL_USE_AGENTS,
 } from '@shared/constants/agents';
 
-/** Source priority for lookups (higher priority first). */
+/**
+ * Source priority for lookups (higher priority first).
+ *
+ * `inline` leads both lists: a definition the embedder handed the runtime as a
+ * value is the most specific statement of intent, so it wins over a same-named
+ * file on disk. It must be listed rather than left out — `deduplicateByName`
+ * compares `indexOf`, and an absent source scores `-1`, which would rank it
+ * first by accident instead of by decision.
+ */
 export const LOOKUP_PRIORITY: AgentSource[] = [
+  'inline',
   'custom',
   'remote',
   'builtInWorkflow',
@@ -16,6 +25,7 @@ export const LOOKUP_PRIORITY: AgentSource[] = [
 
 /** Source priority for tool-use sessions (prefers tool-use agents over workflow). */
 export const TOOL_USE_LOOKUP_PRIORITY: AgentSource[] = [
+  'inline',
   'custom',
   'remote',
   'builtInToolUse',

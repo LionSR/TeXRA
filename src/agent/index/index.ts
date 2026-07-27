@@ -28,6 +28,7 @@ export {
   type ResolvedAgent,
   // Core functions
   loadAgents,
+  registerInlineAgents,
   getAgent,
   resolveAgent,
   resolveAgentForLaunch,

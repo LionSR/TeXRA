@@ -43,6 +43,7 @@ const SOURCE_DISPLAY_NAMES: Record<string, string> = {
   [AGENT_SOURCE.BUILT_IN_TOOL_USE]: 'Built-in',
   [AGENT_SOURCE.CUSTOM]: 'Custom',
   [AGENT_SOURCE.REMOTE]: 'Remote',
+  [AGENT_SOURCE.INLINE]: 'Inline',
 };
 
 function isBuiltIn(source: string): boolean {
