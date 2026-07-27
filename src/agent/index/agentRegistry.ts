@@ -30,6 +30,7 @@ import {
   TOOL_USE_LOOKUP_PRIORITY,
 } from './agentRegistryConstants';
 import { scanDirectory } from './agentYamlScanner';
+import { defineInlineAgents, inlineAgentEntries } from './inlineAgents';
 import { loadRemoteAgents, persistRemoteAgentMeta } from './remoteAgentMeta';
 import {
   entriesToOptionData,
@@ -147,6 +148,22 @@ export async function loadAgents(
   return initPromise;
 }
 
+/**
+ * Register agent definitions supplied as values, so an embedder can hand the
+ * runtime an agent without writing a YAML file. Each definition is validated
+ * here (throwing on a malformed one) and published under `inline:<name>` — a
+ * namespace of its own, so an inline agent can never collide with a same-named
+ * `custom` entry, only outrank it in bare-name lookups.
+ *
+ * Safe before or after {@link loadAgents}: entries land in the live cache
+ * immediately and are re-merged by every subsequent load or refresh.
+ */
+export function registerInlineAgents(definitions: readonly unknown[]): void {
+  for (const entry of defineInlineAgents(definitions)) {
+    cache.set(agentKeyOf(entry), entry);
+  }
+}
+
 async function doLoad(
   includeRemote: boolean,
   loadEpoch: number,
@@ -172,8 +189,12 @@ async function doLoad(
       includeRemote ? loadRemoteAgents() : Promise.resolve([]),
     ]);
 
-  // Register all entries
+  // Register all entries. Inline definitions were normalized at registration
+  // and live outside the directory scan, so they are re-merged on every load —
+  // a catalog refresh rebuilds the cache from scratch and would otherwise drop
+  // them.
   const allEntries = [
+    ...inlineAgentEntries(),
     ...customEntries,
     ...builtInEntries,
     ...toolUseEntries,

@@ -20,6 +20,13 @@ export const AGENT_SOURCE = {
   BUILT_IN_WORKFLOW: 'builtInWorkflow',
   BUILT_IN_TOOL_USE: 'builtInToolUse',
   REMOTE: 'remote',
+  /**
+   * Definition supplied as a value rather than read from a YAML file — the
+   * embedding-API counterpart of `remote`, which likewise fabricates a registry
+   * entry with an empty `path` and skips the loader's filesystem read. Entries
+   * come from `registerInlineAgents` (`@agent/index/agentRegistry`).
+   */
+  INLINE: 'inline',
 } as const;
 
 /** Single source of truth for agent source identifiers. */
