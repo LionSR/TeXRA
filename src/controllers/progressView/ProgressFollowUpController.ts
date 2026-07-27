@@ -37,7 +37,9 @@ interface ProgressFollowUpWorkspace {
 
 export interface ProgressFollowUpControllerDeps {
   getAgentCategory(agent: string): AgentCategory | undefined;
-  loadModelOptions(): Promise<readonly ProgressFollowUpModelOption[]>;
+  loadModelOptions(
+    category: AgentCategory,
+  ): Promise<readonly ProgressFollowUpModelOption[]>;
   state: ProgressFollowUpState;
   workspace: ProgressFollowUpWorkspace;
 }
@@ -103,7 +105,9 @@ export class ProgressFollowUpController {
   async planToolUseFollowUpForStream(
     input: StreamToolUseFollowUpInput,
   ): Promise<ProgressFollowUpPlan> {
-    const modelOptions = await this.deps.loadModelOptions();
+    const modelOptions = await this.deps.loadModelOptions(
+      AgentCategory.ToolUse,
+    );
     const outputFiles = Object.values(
       this.deps.state.getOutputFiles(input.streamId),
     ).flat();
@@ -120,7 +124,9 @@ export class ProgressFollowUpController {
   async planCompileFixerForStream(
     streamId: StreamTabId,
   ): Promise<ProgressFollowUpPlan> {
-    const modelOptions = await this.deps.loadModelOptions();
+    const modelOptions = await this.deps.loadModelOptions(
+      AgentCategory.Workflow,
+    );
     const compileFailures = Object.values(
       this.deps.state.getCompileFailures(streamId),
     ).flat();

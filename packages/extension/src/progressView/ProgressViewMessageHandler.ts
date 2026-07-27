@@ -32,7 +32,10 @@ import { RecordingManager } from '@frontend/media/RecordingManager';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import type { PromptHost } from '@hosts/uiHosts';
 import { isApiProvider } from '@model/apiProviders';
-import { invalidateModelOptionsCache } from '@model/computeModelOptions';
+import {
+  computeModelOptionsData,
+  invalidateModelOptionsCache,
+} from '@model/computeModelOptions';
 import { getRuntimeModelDirectFallback } from '@model/runtimeModelRegistry';
 import type { GettingStartedAction, StreamTabId } from '@shared/schemas';
 import { COMMON_COMMANDS, PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
@@ -570,10 +573,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     return new ProgressFollowUpController({
       getAgentCategory: (agent) =>
         getAgent(agent, AgentCategory.ToolUse)?.category,
-      loadModelOptions: async () => {
-        const { modelOptions } = await loadOptions();
-        return modelOptions;
-      },
+      loadModelOptions: (agentCategory) =>
+        computeModelOptionsData(undefined, undefined, { agentCategory }),
       state: {
         getTaskState: (stream) =>
           this.provider.state.snapshots.getTaskState(stream),

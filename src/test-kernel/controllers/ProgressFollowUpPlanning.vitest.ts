@@ -93,17 +93,22 @@ const emptyFollowUpState: ProgressFollowUpState = {
 
 function createController({
   existingFiles = new Set(['main.tex']),
+  loadedCategories,
   modelOptions = [],
   state = emptyFollowUpState,
 }: {
   existingFiles?: Set<string>;
+  loadedCategories?: AgentCategory[];
   modelOptions?: readonly ProgressFollowUpModelOption[];
   state?: ProgressFollowUpState;
 } = {}): ProgressFollowUpController {
   return new ProgressFollowUpController({
     getAgentCategory: (agent) =>
       agent === 'tool-agent' ? AgentCategory.ToolUse : AgentCategory.Workflow,
-    loadModelOptions: async () => modelOptions,
+    loadModelOptions: async (category) => {
+      loadedCategories?.push(category);
+      return modelOptions;
+    },
     state,
     workspace: {
       locatePath: (candidate) =>
@@ -190,6 +195,24 @@ describe('ProgressFollowUpController', () => {
       plan.taskState.agentConfig.instruction,
       /User follow-up request: Check the final paragraph\./,
     );
+  });
+
+  it('loads model availability for the category each follow-up plan executes', async () => {
+    const loadedCategories: AgentCategory[] = [];
+    const controller = createController({ loadedCategories });
+
+    await controller.planToolUseFollowUpForStream({
+      streamId: 'stream-a',
+      agent: 'tool-agent',
+      model: 'gemini31p',
+      executeImmediately: false,
+    });
+    await controller.planCompileFixerForStream('stream-a');
+
+    assert.deepEqual(loadedCategories, [
+      AgentCategory.ToolUse,
+      AgentCategory.Workflow,
+    ]);
   });
 
   it('rejects follow-up setup when the selected model is disabled', () => {

@@ -2,10 +2,9 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { deriveResumability } from '@agent/storage';
-import { createChannelTrace } from '@agent/trace';
 import {
   presentFollowUpWakeResult,
+  repairFollowUpWaitingStatus,
   sendFollowUp,
   wakeQueuedFollowUpStream,
   type SendFollowUpResult,
@@ -14,12 +13,6 @@ import { defaultSession } from '@agent/runtime/SessionHandle';
 import { registerCommands } from '@commands/_shared/registerCommands';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type { StreamTabId } from '@shared/schemas';
-import { STREAM_PHASE } from '@shared/schemas';
-import { isInFlightPhase } from '@shared/streams/streamStatus';
-
-const logger = createChannelTrace('followUpCommand');
-
-const inFlightDetections = new Set<StreamTabId>();
 
 function emitQueuedFollowUpsChanged(streamId: StreamTabId): void {
   defaultSession().events.emit({
@@ -29,47 +22,6 @@ function emitQueuedFollowUpsChanged(streamId: StreamTabId): void {
       payload: { streamId },
     },
   });
-}
-
-async function lazyDetectWaitingStatus(
-  streamId: StreamTabId,
-): Promise<boolean> {
-  const currentStatus = defaultSession().status.get(streamId);
-  if (currentStatus === STREAM_PHASE.WAITING) {
-    return true;
-  }
-  if (isInFlightPhase(currentStatus)) {
-    return false;
-  }
-  if (inFlightDetections.has(streamId)) {
-    return false;
-  }
-
-  const executionId =
-    ProgressViewProvider.getInstance()?.state?.snapshots.getExecutionId(
-      streamId,
-    );
-  if (!executionId) {
-    return false;
-  }
-
-  inFlightDetections.add(streamId);
-  try {
-    const resumability = await deriveResumability(executionId);
-    if (resumability.resumable) {
-      const repaired = defaultSession().status.transitionToWaiting(
-        streamId,
-        'restart-repair',
-      );
-      if (repaired) {
-        logger.debug(`Lazy detected waiting session for stream: ${streamId}`);
-      }
-      return repaired;
-    }
-    return false;
-  } finally {
-    inFlightDetections.delete(streamId);
-  }
 }
 
 async function handleFollowUpResult(
@@ -118,7 +70,13 @@ export function registerFollowUpCommand(context: vscode.ExtensionContext) {
       }) => {
         const { stream: streamId, text, mediaFiles } = payload;
 
-        await lazyDetectWaitingStatus(streamId);
+        await repairFollowUpWaitingStatus(
+          streamId,
+          ProgressViewProvider.getInstance()?.state?.snapshots.getExecutionId(
+            streamId,
+          ),
+          defaultSession(),
+        );
 
         const result = await sendFollowUp(streamId, text, mediaFiles);
         await handleFollowUpResult(result, streamId);

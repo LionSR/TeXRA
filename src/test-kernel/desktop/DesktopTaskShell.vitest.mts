@@ -187,6 +187,21 @@ describe('desktop task shell model', () => {
     expect(active(state, 'bottom')?.title).toBe('Build shell');
   });
 
+  it('keeps non-singleton tabs active in both workbench placements', () => {
+    let state = openWorkbenchTab(initialDesktopTaskShellState(), {
+      kind: 'terminal',
+    });
+    state = moveWorkbenchTab(state, 'workbench:terminal:1', 'right');
+    state = openWorkbenchTab(state, { kind: 'terminal' });
+
+    expect(active(state, 'right')?.id).toBe('workbench:terminal:1');
+    expect(active(state, 'bottom')?.id).toBe('workbench:terminal:2');
+
+    state = focusWorkbenchTab(state, 'workbench:terminal:1');
+    expect(active(state, 'right')?.id).toBe('workbench:terminal:1');
+    expect(active(state, 'bottom')?.id).toBe('workbench:terminal:2');
+  });
+
   it('focuses known tabs and ignores unknown ids', () => {
     const state = open(
       initialDesktopTaskShellState(),

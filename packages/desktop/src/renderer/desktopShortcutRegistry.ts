@@ -47,6 +47,11 @@ export function createDesktopShortcutRegistry(
   const stored = readOverrides(view?.localStorage);
   let overrides = stored.overrides;
   let invalidRaw = stored.invalidRaw;
+  if (invalidRaw) {
+    console.warn(
+      'Ignored malformed desktop shortcut preferences; the original value will be backed up before the next update.',
+    );
+  }
   const listeners = new Set<
     (entries: readonly DesktopShortcutEntry[]) => void
   >();
@@ -131,8 +136,6 @@ export function createDesktopShortcutRegistry(
     dispatchDesktopCommand(entry.id as DesktopCommandId, options.actions);
   }
 
-  view?.addEventListener('keydown', handleKeydown, { capture: true });
-
   let uninstallService = (): void => {};
   const registry: DesktopShortcutRegistry = {
     entries,
@@ -152,6 +155,7 @@ export function createDesktopShortcutRegistry(
     },
   };
   uninstallService = installDesktopShortcutService(registry);
+  view?.addEventListener('keydown', handleKeydown, { capture: true });
   return registry;
 }
 

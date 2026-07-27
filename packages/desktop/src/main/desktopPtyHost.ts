@@ -53,6 +53,21 @@ interface PtySessionHandle {
   dispose(): void;
 }
 
+const PTY_MIN_COLS = 20;
+const PTY_MAX_COLS = 1_000;
+const PTY_MIN_ROWS = 5;
+const PTY_MAX_ROWS = 500;
+
+function normalizePtySize(
+  cols: number,
+  rows: number,
+): { cols: number; rows: number } {
+  return {
+    cols: Math.min(Math.max(cols, PTY_MIN_COLS), PTY_MAX_COLS),
+    rows: Math.min(Math.max(rows, PTY_MIN_ROWS), PTY_MAX_ROWS),
+  };
+}
+
 export interface DesktopPtyHostOptions {
   /** Default working directory for new sessions (the workspace root). */
   cwd?: string;
@@ -61,6 +76,8 @@ export interface DesktopPtyHostOptions {
   /** Reports process exit so the UI can mark the session finished. */
   onExit(sessionId: string, exitCode: number): void;
   onError?(error: unknown): void;
+  /** Test seam for the lazily imported native addon. */
+  loadPty?(): Promise<NodePtyModule>;
 }
 
 export interface DesktopPtyHost {
@@ -168,57 +185,94 @@ export function createDesktopPtyHost(
   options: DesktopPtyHostOptions,
 ): DesktopPtyHost {
   const sessions = new Map<string, PtySessionHandle>();
+  const pendingSessions = new Map<string, Promise<PtySessionHandle>>();
+  let generation = 0;
+
+  async function startSession(input: {
+    id: string;
+    cols: number;
+    rows: number;
+    cwd?: string;
+  }): Promise<PtySessionHandle> {
+    const createGeneration = generation;
+    const pty = await (options.loadPty?.() ?? loadNodePty());
+    const size = normalizePtySize(input.cols, input.rows);
+    const child = pty.spawn(defaultShell(), [], {
+      name: 'xterm-256color',
+      // A pty spawned at 0 columns makes shells emit unusable line wrapping,
+      // so clamp to a sane minimum until the renderer reports real bounds.
+      cols: size.cols,
+      rows: size.rows,
+      cwd: input.cwd ?? options.cwd ?? process.cwd(),
+      env: ptyEnvironment(),
+    });
+
+    if (createGeneration !== generation) {
+      child.kill();
+      throw new Error(
+        'Terminal creation was cancelled during renderer reload.',
+      );
+    }
+
+    child.onData((data) => options.onData(input.id, data));
+    const handle: PtySessionHandle = {
+      id: input.id,
+      write: (data) => child.write(data),
+      resize: (nextCols, nextRows) => {
+        try {
+          const nextSize = normalizePtySize(nextCols, nextRows);
+          child.resize(nextSize.cols, nextSize.rows);
+        } catch (error) {
+          // Resizing a pty whose process already exited throws; the exit
+          // handler has cleaned up, so this is not actionable.
+          options.onError?.(error);
+        }
+      },
+      dispose: () => {
+        if (sessions.get(input.id) === handle) {
+          sessions.delete(input.id);
+        }
+        try {
+          child.kill();
+        } catch (error) {
+          options.onError?.(error);
+        }
+      },
+    };
+    child.onExit(({ exitCode }) => {
+      if (sessions.get(input.id) === handle) {
+        sessions.delete(input.id);
+      }
+      options.onExit(input.id, exitCode);
+    });
+    sessions.set(input.id, handle);
+    return handle;
+  }
 
   return {
-    async create({ id, cols, rows, cwd }) {
-      const existing = sessions.get(id);
+    async create(input) {
+      const existing = sessions.get(input.id);
       if (existing) return existing;
 
-      const pty = await loadNodePty();
-      const child = pty.spawn(defaultShell(), [], {
-        name: 'xterm-256color',
-        // A pty spawned at 0 columns makes shells emit unusable line wrapping,
-        // so clamp to a sane minimum until the renderer reports real bounds.
-        cols: Math.max(cols, 20),
-        rows: Math.max(rows, 5),
-        cwd: cwd ?? options.cwd ?? process.cwd(),
-        env: ptyEnvironment(),
-      });
+      const pending = pendingSessions.get(input.id);
+      if (pending) return pending;
 
-      child.onData((data) => options.onData(id, data));
-      child.onExit(({ exitCode }) => {
-        sessions.delete(id);
-        options.onExit(id, exitCode);
-      });
-
-      const handle: PtySessionHandle = {
-        id,
-        write: (data) => child.write(data),
-        resize: (nextCols, nextRows) => {
-          try {
-            child.resize(Math.max(nextCols, 20), Math.max(nextRows, 5));
-          } catch (error) {
-            // Resizing a pty whose process already exited throws; the exit
-            // handler has cleaned up, so this is not actionable.
-            options.onError?.(error);
-          }
-        },
-        dispose: () => {
-          sessions.delete(id);
-          try {
-            child.kill();
-          } catch (error) {
-            options.onError?.(error);
-          }
-        },
-      };
-      sessions.set(id, handle);
-      return handle;
+      const creation = startSession(input);
+      pendingSessions.set(input.id, creation);
+      try {
+        return await creation;
+      } finally {
+        if (pendingSessions.get(input.id) === creation) {
+          pendingSessions.delete(input.id);
+        }
+      }
     },
 
     get: (id) => sessions.get(id),
 
     disposeAll() {
+      generation += 1;
+      pendingSessions.clear();
       // Copy first: dispose() mutates the map through the shared handle.
       for (const handle of [...sessions.values()]) handle.dispose();
       sessions.clear();

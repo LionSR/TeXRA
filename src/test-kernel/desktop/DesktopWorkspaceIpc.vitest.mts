@@ -27,6 +27,7 @@ import { createFakePlatform } from '@test/support/FakePlatform';
 let fixtureRoot = '';
 let workspacePath = '';
 let externalPath = '';
+let externalDirectory = '';
 
 function createPtyHost(): DesktopPtyHost {
   return {
@@ -57,7 +58,9 @@ describe('desktop workspace IPC', () => {
     fixtureRoot = mkdtempSync(join(tmpdir(), 'texra-workspace-ipc-'));
     workspacePath = join(fixtureRoot, 'workspace');
     externalPath = join(fixtureRoot, 'external.txt');
+    externalDirectory = join(fixtureRoot, 'external');
     mkdirSync(workspacePath);
+    mkdirSync(externalDirectory);
     mkdirSync(join(workspacePath, 'src', 'deep'), { recursive: true });
     mkdirSync(join(workspacePath, 'node_modules'));
     writeFileSync(join(workspacePath, 'paper.tex'), 'inside', 'utf8');
@@ -69,6 +72,11 @@ describe('desktop workspace IPC', () => {
     );
     writeFileSync(externalPath, 'outside', 'utf8');
     symlinkSync(externalPath, join(workspacePath, 'linked.tex'));
+    symlinkSync(
+      externalDirectory,
+      join(workspacePath, 'linked-directory'),
+      'dir',
+    );
     const [{ initPlatform }, { nodeFilesystem }] = await Promise.all([
       import('@platform/platform'),
       import('@platform/defaults/nodeFilesystem'),
@@ -184,6 +192,53 @@ describe('desktop workspace IPC', () => {
       }),
     );
     expect(readFileSync(externalPath, 'utf8')).toBe('outside');
+  });
+
+  it('creates missing files without allowing a symlinked parent to escape', async () => {
+    const postToRenderer = vi.fn();
+    const onAsyncError = vi.fn();
+    const ipc = createDesktopWorkspaceIpc(
+      { postToRenderer },
+      {
+        ptyHost: createPtyHost(),
+        browserViews: createBrowserViews(),
+        toWindowBounds: (bounds) => bounds,
+        onAsyncError,
+      },
+    );
+
+    ipc.handleMessage({
+      command: DESKTOP_WORKSPACE_COMMANDS.WRITE_FILE,
+      path: 'created.tex',
+      contents: 'created inside',
+    });
+    await vi.waitFor(() =>
+      expect(postToRenderer).toHaveBeenCalledWith({
+        command: DESKTOP_WORKSPACE_COMMANDS.FILE_WRITTEN,
+        path: 'created.tex',
+      }),
+    );
+    expect(readFileSync(join(workspacePath, 'created.tex'), 'utf8')).toBe(
+      'created inside',
+    );
+
+    ipc.handleMessage({
+      command: DESKTOP_WORKSPACE_COMMANDS.WRITE_FILE,
+      path: 'linked-directory/escaped.tex',
+      contents: 'must stay inside',
+    });
+    await vi.waitFor(() =>
+      expect(postToRenderer).toHaveBeenCalledWith({
+        command: DESKTOP_WORKSPACE_COMMANDS.FILE_ERROR,
+        operation: 'write',
+        path: 'linked-directory/escaped.tex',
+        message: 'Only files inside the workspace folder can be opened.',
+      }),
+    );
+    expect(onAsyncError).toHaveBeenCalledOnce();
+    expect(() =>
+      readFileSync(join(externalDirectory, 'escaped.tex'), 'utf8'),
+    ).toThrow();
   });
 
   it('posts environment state and clears loading state after host failures', async () => {

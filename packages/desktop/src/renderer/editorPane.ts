@@ -72,6 +72,8 @@ export interface EditorPane {
   /** Re-lays-out Monaco after its container resizes or becomes visible. */
   layout(): void;
   save(): Promise<void>;
+  /** Releases a closed clean document while preserving unsaved buffers. */
+  close(path: string): void;
   dispose(): void;
 }
 
@@ -473,6 +475,21 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     },
 
     save,
+
+    close(path) {
+      // Closing and reopening a dirty tab must recover the unsaved buffer.
+      // Clean documents have no renderer-owned state worth retaining.
+      if (dirtyPaths.has(path)) return;
+      const model = models.get(path);
+      if (!model) return;
+      if (editor?.getModel() === model) {
+        editor.setModel(null);
+        openPath = undefined;
+      }
+      model.dispose();
+      models.delete(path);
+      syncingPaths.delete(path);
+    },
 
     dispose() {
       editor?.dispose();

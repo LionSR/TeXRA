@@ -89,6 +89,7 @@ export const DesktopFileWrittenMessageSchema = z.object({
 
 export const DesktopFileErrorMessageSchema = z.object({
   command: z.literal(DESKTOP_WORKSPACE_COMMANDS.FILE_ERROR),
+  operation: z.enum(['read', 'write']),
   path: z.string(),
   message: z.string(),
 });

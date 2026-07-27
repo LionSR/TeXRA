@@ -8,9 +8,10 @@
 // otherwise read or overwrite anything the user can reach.
 
 // Node imports
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 
 // Local imports - file listing
+import { isFileNotFoundError } from '@common/errors';
 import {
   loadFileListSettings,
   passesFileFilters,
@@ -61,7 +62,10 @@ export interface DesktopWorkspaceIpcOptions {
  * The lexical check rejects `..` traversal first. Canonical paths are then
  * compared so a workspace symlink cannot lead the editor outside the project.
  */
-async function resolveWorkspacePath(inputPath: string): Promise<string> {
+async function resolveWorkspacePath(
+  inputPath: string,
+  operation: 'read' | 'write',
+): Promise<string> {
   const located = WorkspaceFS.locatePath(inputPath);
   if (located.kind !== 'workspace') {
     throw new Error('Only files inside the workspace folder can be opened.');
@@ -71,13 +75,26 @@ async function resolveWorkspacePath(inputPath: string): Promise<string> {
   if (!root) {
     throw new Error('Workspace path is not available.');
   }
-  const [canonicalRoot, canonicalTarget] = await Promise.all([
-    platform().fs.realPath(root),
-    platform().fs.realPath(located.absolutePath),
-  ]);
+  const canonicalRoot = await platform().fs.realPath(root);
+  let canonicalTarget: string;
+  try {
+    canonicalTarget = await platform().fs.realPath(located.absolutePath);
+  } catch (error) {
+    if (operation !== 'write' || !isFileNotFoundError(error)) throw error;
+
+    // A save may recreate a file deleted outside TeXRA. Canonicalize its
+    // existing parent so a symlinked directory still cannot escape the
+    // workspace, then append only the missing leaf name.
+    const canonicalParent = await platform().fs.realPath(
+      dirname(located.absolutePath),
+    );
+    canonicalTarget = join(canonicalParent, basename(located.absolutePath));
+  }
   if (!isPathWithin(canonicalRoot, canonicalTarget)) {
     throw new Error('Only files inside the workspace folder can be opened.');
   }
+  // The platform filesystem has no open-relative primitive, so containment
+  // validation and the subsequent operation cannot be one atomic syscall.
   return canonicalTarget;
 }
 
@@ -87,9 +104,14 @@ export function createDesktopWorkspaceIpc(
 ): DesktopMessageHandler {
   const reportError = (error: unknown) => options.onAsyncError?.(error);
 
-  function postFileError(path: string, error: unknown): void {
+  function postFileError(
+    operation: 'read' | 'write',
+    path: string,
+    error: unknown,
+  ): void {
     renderer.postToRenderer({
       command: DESKTOP_WORKSPACE_COMMANDS.FILE_ERROR,
+      operation,
       path,
       message: toErrorMessage(error),
     });
@@ -129,7 +151,7 @@ export function createDesktopWorkspaceIpc(
         ignoredFiles: [],
       });
       const absoluteDirectory = normalizedDirectory
-        ? await resolveWorkspacePath(normalizedDirectory)
+        ? await resolveWorkspacePath(normalizedDirectory, 'read')
         : root;
       const entries = await platform().fs.readDirectory(absoluteDirectory);
       const files = entries
@@ -170,7 +192,9 @@ export function createDesktopWorkspaceIpc(
 
   async function readFile(path: string): Promise<void> {
     try {
-      const contents = await WorkspaceFS.read(await resolveWorkspacePath(path));
+      const contents = await WorkspaceFS.read(
+        await resolveWorkspacePath(path, 'read'),
+      );
       renderer.postToRenderer({
         command: DESKTOP_WORKSPACE_COMMANDS.FILE_READ,
         path,
@@ -178,20 +202,23 @@ export function createDesktopWorkspaceIpc(
       });
     } catch (error) {
       reportError(error);
-      postFileError(path, error);
+      postFileError('read', path, error);
     }
   }
 
   async function writeFile(path: string, contents: string): Promise<void> {
     try {
-      await WorkspaceFS.write(await resolveWorkspacePath(path), contents);
+      await WorkspaceFS.write(
+        await resolveWorkspacePath(path, 'write'),
+        contents,
+      );
       renderer.postToRenderer({
         command: DESKTOP_WORKSPACE_COMMANDS.FILE_WRITTEN,
         path,
       });
     } catch (error) {
       reportError(error);
-      postFileError(path, error);
+      postFileError('write', path, error);
     }
   }
 

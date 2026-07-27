@@ -155,6 +155,17 @@ async function main() {
   mainWatch.once('exit', (code) => {
     if (!stopping) stop(code ?? 1);
   });
+  const preloadWatchInvocation = packageManagerCommand([
+    'run',
+    'watch:preload',
+  ]);
+  const preloadWatch = spawnLogged(
+    preloadWatchInvocation.command,
+    preloadWatchInvocation.args,
+  );
+  preloadWatch.once('exit', (code) => {
+    if (!stopping) stop(code ?? 1);
+  });
 
   const rendererPort = await findAvailablePort();
   const rendererUrl = `http://127.0.0.1:${rendererPort}`;

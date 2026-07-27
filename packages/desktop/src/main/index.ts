@@ -1090,6 +1090,17 @@ function createWindow(options: {
       }),
     onError: reportAsyncError,
   });
+  window.webContents.on(
+    'did-start-navigation',
+    (_event, _url, isInPlace, isMainFrame) => {
+      if (isInPlace || !isMainFrame) return;
+      // A renderer reload creates a fresh terminal/session id namespace and a
+      // new DOM for browser bounds. Tear down resources owned by the previous
+      // document before it can leave native views painted over the new UI.
+      ptyHost.disposeAll();
+      browserViews.disposeAll();
+    },
+  );
   const workspaceIpc = createDesktopWorkspaceIpc(
     { postToRenderer: postWorkspaceMessage },
     {

@@ -18,6 +18,7 @@ import type { SessionStores } from '@agent/runtime/SessionStores';
 import {
   notifyFollowUpSent,
   presentFollowUpWakeResult,
+  repairFollowUpWaitingStatus,
   sendFollowUp,
   wakeQueuedFollowUpStream,
 } from '@agent/followUp/ToolUseFollowUp';
@@ -88,7 +89,11 @@ import {
   invalidateModelOptionsCache,
 } from '@model/computeModelOptions';
 import { platform } from '@platform/platform';
-import { PROGRESS_VIEW_COMMANDS, COMMON_COMMANDS } from '@shared/ipc';
+import {
+  PROGRESS_VIEW_COMMANDS,
+  COMMON_COMMANDS,
+  MAIN_VIEW_COMMANDS,
+} from '@shared/ipc';
 import {
   AgentCategory,
   SETTINGS_TAB,
@@ -98,6 +103,7 @@ import {
   type ProgressViewOutboundMessage,
   type ExecutionId,
   type RequestOpenFilePayload,
+  type ShowAgentConfigBannerPayload,
   type SettingsTab,
   type StreamTabId,
 } from '@shared/schemas';
@@ -113,7 +119,11 @@ import {
 } from '@shared/schemas/opResults';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { cleanupUnscopedApprovals } from '@tools/approval';
-import { startRecording, stopRecordingAndTranscribe } from '@tools/media/audio';
+import {
+  killActiveRecording,
+  startRecording,
+  stopRecordingAndTranscribe,
+} from '@tools/media/audio';
 import { WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -528,7 +538,8 @@ export class DesktopProgressBridge {
     return new ProgressFollowUpController({
       getAgentCategory: (agent) =>
         getAgent(agent, AgentCategory.ToolUse)?.category,
-      loadModelOptions: () => computeModelOptionsData(),
+      loadModelOptions: (agentCategory) =>
+        computeModelOptionsData(undefined, undefined, { agentCategory }),
       state: {
         getTaskState: (stream) => this.state.snapshots.getTaskState(stream),
         getOutputFiles: (stream) => this.state.snapshots.getOutputFiles(stream),
@@ -1166,6 +1177,7 @@ export class DesktopProgressBridge {
     // Make this presentation sink inert before detaching resources owned by
     // the closing BrowserWindow.
     this.disposed = true;
+    killActiveRecording();
     this.detachCompletedResult();
     // Detaching first advances the session's attachment generation. Any
     // cancellation produced while the old presenters are disposed is stale;
@@ -1256,8 +1268,20 @@ export class DesktopProgressBridge {
           });
         return;
       }
-      default:
+      case 'showAgentConfigBanner': {
+        const data = payload as ShowAgentConfigBannerPayload;
+        this.postToRenderer({
+          command: MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER,
+          agentName: data.agentName,
+          customDirSet: true,
+        });
         return;
+      }
+      default: {
+        const exhaustive: never = event;
+        void exhaustive;
+        return;
+      }
     }
   }
 
@@ -1434,6 +1458,11 @@ export class DesktopProgressBridge {
     text: string,
     mediaFiles?: readonly string[],
   ): Promise<void> {
+    await repairFollowUpWaitingStatus(
+      streamId,
+      this.getStreamExecutionId(streamId),
+      this.session,
+    );
     // Resolve the follow-up target against the process session: the run's
     // handle is tracked in `this.session`, but this IPC path runs outside the
     // run ALS, so the module default (currentSession ⇒ defaultSession) would

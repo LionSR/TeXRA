@@ -80,6 +80,8 @@ describe('desktop development launcher', () => {
           });
         } else if (args.includes('watch:main')) {
           events.push('main-watch');
+        } else if (args.includes('watch:preload')) {
+          events.push('preload-watch');
         } else if (args.includes('vite')) {
           events.push('vite');
         } else {
@@ -130,14 +132,15 @@ describe('desktop development launcher', () => {
     await import(
       `${moduleFileUrl(repoPath('packages/desktop/scripts/dev.mjs'))}?test=${Date.now()}`
     );
-    await vi.waitFor(() => expect(calls).toHaveLength(5));
+    await vi.waitFor(() => expect(calls).toHaveLength(6));
 
     expect(calls[0]?.args).toEqual(['/test/pnpm.cjs', 'run', 'build:main']);
     expect(calls[1]?.args).toEqual(['/test/pnpm.cjs', 'run', 'build:preload']);
 
     expect(calls[2]?.args).toEqual(['/test/pnpm.cjs', 'run', 'watch:main']);
+    expect(calls[3]?.args).toEqual(['/test/pnpm.cjs', 'run', 'watch:preload']);
 
-    const viteCall = calls[3];
+    const viteCall = calls[4];
     expect(viteCall?.args).toEqual([
       '/test/pnpm.cjs',
       'exec',
@@ -151,7 +154,7 @@ describe('desktop development launcher', () => {
       '--strictPort',
     ]);
 
-    const electronCall = calls[4];
+    const electronCall = calls[5];
     expect(electronCall?.args.slice(1)).toEqual([
       '--texra-workspace',
       '/tmp/paper',
@@ -167,7 +170,14 @@ describe('desktop development launcher', () => {
       'inherit',
       'ipc',
     ]);
-    expect(events).toEqual(['main-watch', 'port', 'vite', 'ready', 'electron']);
+    expect(events).toEqual([
+      'main-watch',
+      'preload-watch',
+      'port',
+      'vite',
+      'ready',
+      'electron',
+    ]);
     expect(fetch).toHaveBeenCalledOnce();
     expect(children.every((child) => !child.killed)).toBe(true);
 
@@ -175,15 +185,15 @@ describe('desktop development launcher', () => {
       '/desktop',
       '--texra-workspace-path=/tmp/new-paper',
     ];
-    children[4]?.emit('message', replacementArgs);
-    children[4]?.emit('exit', 0, null);
-    await vi.waitFor(() => expect(calls).toHaveLength(6));
+    children[5]?.emit('message', replacementArgs);
+    children[5]?.emit('exit', 0, null);
+    await vi.waitFor(() => expect(calls).toHaveLength(7));
 
-    expect(calls[5]?.args.slice(1)).toEqual(replacementArgs);
-    expect(calls[5]?.options.env).toMatchObject({
+    expect(calls[6]?.args.slice(1)).toEqual(replacementArgs);
+    expect(calls[6]?.options.env).toMatchObject({
       ELECTRON_RENDERER_URL: `http://127.0.0.1:${port}`,
       TEXRA_DESKTOP_DEV_SUPERVISED: '1',
     });
-    expect(children[3]?.killed).toBe(false);
+    expect(children[4]?.killed).toBe(false);
   });
 });

@@ -11,6 +11,7 @@
  */
 
 import { createChannelTrace } from '@agent/trace';
+import { deriveResumability } from '@agent/storage';
 import { type ToolUseFollowUpQueueReason } from '@agent/runtime/executionRegistry';
 import {
   currentSession,
@@ -22,7 +23,15 @@ import {
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import { platform } from '@platform/platform';
-import type { StreamTabId } from '@shared/schemas';
+import {
+  STREAM_PHASE,
+  type ExecutionId,
+  type StreamTabId,
+} from '@shared/schemas';
+import {
+  isInFlightPhase,
+  STREAM_TRANSITION_CAUSE,
+} from '@shared/streams/streamStatus';
 import type { FollowUpQueueInput } from './FollowUpQueue';
 
 /**
@@ -58,8 +67,51 @@ export interface FollowUpResumePort {
   isResumeInFlight?(streamId: StreamTabId): boolean;
 }
 
+const logger = createChannelTrace('ToolUseFollowUp');
+
 /** In-flight resume attempts per stream — see {@link wakeQueuedFollowUpStream}. */
 const wakeAttempts = new Map<StreamTabId, Promise<boolean>>();
+const waitingStatusDetections = new WeakMap<SessionHandle, Set<StreamTabId>>();
+
+/**
+ * Repairs a resumable persisted stream before follow-up delivery.
+ *
+ * Process startup normally performs this repair. This lazy check covers the
+ * narrow race where a restored stream becomes resumable after startup but
+ * before the user sends its first follow-up.
+ */
+export async function repairFollowUpWaitingStatus(
+  streamId: StreamTabId,
+  executionId: ExecutionId | undefined,
+  session: SessionHandle = defaultSession(),
+): Promise<boolean> {
+  const currentStatus = session.status.get(streamId);
+  if (currentStatus === STREAM_PHASE.WAITING) return true;
+  if (isInFlightPhase(currentStatus) || !executionId) return false;
+
+  let inFlight = waitingStatusDetections.get(session);
+  if (!inFlight) {
+    inFlight = new Set();
+    waitingStatusDetections.set(session, inFlight);
+  }
+  if (inFlight.has(streamId)) return false;
+
+  inFlight.add(streamId);
+  try {
+    const resumability = await deriveResumability(executionId);
+    if (!resumability.resumable) return false;
+    const repaired = session.status.transitionToWaiting(
+      streamId,
+      STREAM_TRANSITION_CAUSE.RESTART_REPAIR,
+    );
+    if (repaired) {
+      logger.debug(`Lazy detected waiting session for stream: ${streamId}`);
+    }
+    return repaired;
+  } finally {
+    inFlight.delete(streamId);
+  }
+}
 
 /**
  * After a queued delivery, wake a stream whose cycle has exited (WAITING
@@ -164,7 +216,6 @@ export async function wakeOrReleaseQueuedStream(
   );
 }
 
-const logger = createChannelTrace('ToolUseFollowUp');
 const followUpSentObservers = new Set<(streamId: StreamTabId) => void>();
 
 export function onFollowUpSent(

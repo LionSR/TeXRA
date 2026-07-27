@@ -149,14 +149,16 @@ function activateWorkbenchTab(
   tab: WorkbenchTab,
 ): DesktopTaskShellState {
   const activeWorkbenchTabIds = { ...state.activeWorkbenchTabIds };
-  for (const placement of WORKBENCH_PLACEMENTS) {
-    if (placement === tab.placement) continue;
-    const activeTab = activeWorkbenchTab(state, placement);
-    if (activeTab?.kind !== tab.kind) continue;
-    activeWorkbenchTabIds[placement] = workbenchTabsForPlacement(
-      state,
-      placement,
-    ).findLast((candidate) => candidate.kind !== tab.kind)?.id;
+  if (WORKBENCH_KIND_META[tab.kind].singleton) {
+    for (const placement of WORKBENCH_PLACEMENTS) {
+      if (placement === tab.placement) continue;
+      const activeTab = activeWorkbenchTab(state, placement);
+      if (activeTab?.kind !== tab.kind) continue;
+      activeWorkbenchTabIds[placement] = workbenchTabsForPlacement(
+        state,
+        placement,
+      ).findLast((candidate) => candidate.kind !== tab.kind)?.id;
+    }
   }
   activeWorkbenchTabIds[tab.placement] = tab.id;
   return { ...state, activeWorkbenchTabIds };

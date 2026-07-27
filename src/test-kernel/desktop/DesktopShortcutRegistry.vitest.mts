@@ -76,6 +76,7 @@ describe('desktop shortcut registry', () => {
 
   it('backs up malformed persisted preferences before an explicit update', async () => {
     const { createDesktopShortcutRegistry } = await loadShortcutRegistry();
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const malformed = '{"texra.desktop.showCommands":42}';
     const storage = document.defaultView?.localStorage;
     if (!storage) throw new Error('Test DOM localStorage is unavailable.');
@@ -95,6 +96,7 @@ describe('desktop shortcut registry', () => {
         .entries()
         .find((entry) => entry.id === 'texra.desktop.showCommands'),
     ).toMatchObject({ accelerator: 'Command+K' });
+    expect(warning).toHaveBeenCalledOnce();
     registry.update('texra.desktop.showCommands', 'Command+Shift+K');
 
     expect(storage.getItem(DESKTOP_SHORTCUT_INVALID_BACKUP_KEY)).toBe(
@@ -106,6 +108,43 @@ describe('desktop shortcut registry', () => {
       'texra.desktop.showCommands': 'Command+Shift+K',
     });
     registry.dispose();
+  });
+
+  it('does not attach a key listener when the shared service is already installed', async () => {
+    const { createDesktopShortcutRegistry } = await loadShortcutRegistry();
+    const first = createDesktopShortcutRegistry({
+      document,
+      actions: {
+        showRoute: vi.fn(),
+        showSettings: vi.fn(),
+      },
+      openCommands: vi.fn(),
+      platform: 'darwin',
+    });
+    const leakedOpenCommands = vi.fn();
+
+    expect(() =>
+      createDesktopShortcutRegistry({
+        document,
+        actions: {
+          showRoute: vi.fn(),
+          showSettings: vi.fn(),
+        },
+        openCommands: leakedOpenCommands,
+        platform: 'darwin',
+      }),
+    ).toThrow();
+
+    first.dispose();
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        bubbles: true,
+        cancelable: true,
+        key: 'k',
+        metaKey: true,
+      }),
+    );
+    expect(leakedOpenCommands).not.toHaveBeenCalled();
   });
 
   it('installs one shared service and removes it on disposal', async () => {

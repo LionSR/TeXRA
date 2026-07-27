@@ -39,7 +39,11 @@ import {
   type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
-import { COMMON_COMMANDS, PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
+import {
+  COMMON_COMMANDS,
+  MAIN_VIEW_COMMANDS,
+  PROGRESS_VIEW_COMMANDS,
+} from '@shared/ipc';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import type { ProgressViewInboundHandlerRegistry } from '@shared/schemas/progressView';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
@@ -847,12 +851,20 @@ describe('DesktopProgressBridge', () => {
       actions: ['set-api-key', 'open-configuration-guide'],
       showSuppress: false,
     });
+    bridge.handlePresentationEvent('showAgentConfigBanner', {
+      agentName: 'missing-agent',
+    });
 
     expect(messages).toContainEqual({
       command: DESKTOP_SHELL_COMMANDS.SET_ROUTE,
       route: 'progress',
     });
-    expect(messages).toHaveLength(1);
+    expect(messages).toContainEqual({
+      command: MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER,
+      agentName: 'missing-agent',
+      customDirSet: true,
+    });
+    expect(messages).toHaveLength(2);
     expect(showErrorMessage).toHaveBeenCalledWith('Root run failed');
     // Folded into the same dialog surface as requestShowError — no second
     // subscribe surface or dialog for instructions.

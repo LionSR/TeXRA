@@ -114,6 +114,7 @@ import {
 import {
   createDesktopShortcutRegistry,
   DESKTOP_COMMAND_PALETTE_ID,
+  type DesktopShortcutRegistry,
 } from './desktopShortcutRegistry';
 import { createStartupTeamPanel } from './desktopOnboarding';
 import { createEditorPane } from './editorPane';
@@ -652,6 +653,9 @@ function disposeWorkbenchTab(tabId: string): void {
   if (tab?.kind === 'terminal') {
     pendingTerminalCommands.delete(tabId);
     terminalPane.dispose(tabId);
+  }
+  if (tab?.kind === 'editor' && tab.target) {
+    editorPane.close(tab.target);
   }
   updateShell(closeWorkbenchTab(shellState, tabId));
 }
@@ -1250,6 +1254,7 @@ function recoverFromBootstrapFallback(): void {
     wireConversation();
     installShellSignalWatcher();
     bootstrapFailed = false;
+    installDesktopCommandSystem();
     postMessage(DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE);
     postWebviewReady();
     document.body.dataset.desktopReady = 'true';
@@ -1374,14 +1379,16 @@ const desktopRendererCommandActions: DesktopCommandActions = {
   },
 };
 let commandPalette: CommandPaletteController | undefined;
-const shortcutRegistry = bootstrapFailed
-  ? undefined
-  : createDesktopShortcutRegistry({
-      document,
-      actions: desktopRendererCommandActions,
-      openCommands: () => commandPalette?.open(),
-    });
-if (!bootstrapFailed) {
+let shortcutRegistry: DesktopShortcutRegistry | undefined;
+let disposeShortcutHints: (() => void) | undefined;
+
+function installDesktopCommandSystem(): void {
+  if (shortcutRegistry || commandPalette) return;
+  shortcutRegistry = createDesktopShortcutRegistry({
+    document,
+    actions: desktopRendererCommandActions,
+    openCommands: () => commandPalette?.open(),
+  });
   commandPalette = createDesktopCommandPalette({
     document,
     canOpen: () => true,
@@ -1390,14 +1397,16 @@ if (!bootstrapFailed) {
     getShortcuts: () => shortcutRegistry?.entries() ?? [],
   });
   document.body.append(commandPalette.element);
+  disposeShortcutHints = shortcutRegistry.subscribe((entries) => {
+    shortcutAcceleratorsById.clear();
+    for (const entry of entries) {
+      shortcutAcceleratorsById.set(entry.id, entry.accelerator);
+    }
+    rerenderShell();
+  });
 }
-const disposeShortcutHints = shortcutRegistry?.subscribe((entries) => {
-  shortcutAcceleratorsById.clear();
-  for (const entry of entries) {
-    shortcutAcceleratorsById.set(entry.id, entry.accelerator);
-  }
-  rerenderShell();
-});
+
+if (!bootstrapFailed) installDesktopCommandSystem();
 
 function openCommandPalette(): void {
   commandPalette?.open();
@@ -1443,6 +1452,7 @@ function setRoute(route: DesktopRoute): void {
 }
 
 window.addEventListener('message', (event) => {
+  if (event.source !== window) return;
   const saveParsed = DesktopSaveFileMessageSchema.safeParse(event.data);
   if (saveParsed.success) {
     void editorPane.save();
@@ -1559,12 +1569,11 @@ function handleWorkspaceMessage(data: unknown): boolean {
   const fileError = DesktopFileErrorMessageSchema.safeParse(data);
   if (fileError.success) {
     const error = new Error(fileError.data.message);
-    // Reject both queues for this path: only one will be populated, and leaving
-    // the other pending would hang the editor.
-    settlePending(pendingFileReads, fileError.data.path, (request) =>
-      request.reject(error),
-    );
-    settlePending(pendingFileWrites, fileError.data.path, (request) =>
+    const pending =
+      fileError.data.operation === 'read'
+        ? pendingFileReads
+        : pendingFileWrites;
+    settlePending(pending, fileError.data.path, (request) =>
       request.reject(error),
     );
     return true;
