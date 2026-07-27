@@ -13,7 +13,7 @@ import {
   SETTINGS_TAB_PANEL_BY_NAME,
   type SettingsTabName,
 } from '@shared/schemas';
-import type { TeXRAIconName } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
 
 export interface SettingsNavEntry {
   readonly name: SettingsTabName;
