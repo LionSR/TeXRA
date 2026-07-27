@@ -1,8 +1,8 @@
 // Declarative conversation-entry geometry shared by Ink renderers, viewport
 // budgeting, static scrollback, and print-once full output.
 
-import type { WorkflowTaskProgress } from '@shared/schemas';
-import { formatWorkflowPhaseHeading } from '@shared/copy/workflowTask';
+import type { WorkflowCallProgress } from '@shared/schemas';
+import { formatWorkflowPhaseHeading } from '@shared/copy/workflowCall';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { renderAnsiMarkdown } from '../render/ansiMarkdown';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
@@ -104,7 +104,7 @@ const ROLE_GEOMETRY = {
 } as const satisfies Record<TranscriptEntryRole, RoleGeometry>;
 
 /**
- * Marker glyph + color per workflow-task status. Steady glyphs only — an
+ * Marker glyph + color per workflow-call status. Steady glyphs only — an
  * animated `running` marker would need a per-component timer, which repaints
  * the whole live region for no added information (see CHILD_STATUS_MARKER).
  * Exhaustive on purpose: a seventh status must break this build rather than
@@ -118,7 +118,7 @@ export const WORKFLOW_TASK_STATUS_STYLE = {
   skipped: { marker: SKIP_CIRCLE, color: COLOR_BORDER },
   failed: { marker: CROSS, color: COLOR_ERROR },
 } as const satisfies Record<
-  WorkflowTaskProgress['status'],
+  WorkflowCallProgress['status'],
   { readonly marker: string; readonly color: string | undefined }
 >;
 

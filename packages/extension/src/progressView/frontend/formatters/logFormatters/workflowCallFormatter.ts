@@ -3,24 +3,24 @@ import { html, nothing, type TemplateResult } from 'lit';
 
 // Local imports - shared contracts
 import {
-  WORKFLOW_TASK_STATUS_LABEL,
-  WorkflowTaskProgressSchema,
+  WORKFLOW_CALL_STATUS_LABEL,
+  WorkflowCallProgressSchema,
   type LogMessageData,
-  type WorkflowTaskProgress,
+  type WorkflowCallProgress,
 } from '@shared/schemas';
 import {
-  formatWorkflowTaskMetadataParts,
-  workflowTaskDetail,
-} from '@shared/copy/workflowTask';
+  formatWorkflowCallMetadataParts,
+  workflowCallDetail,
+} from '@shared/copy/workflowCall';
 import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 import { assertNever } from '@utils/core';
 
-function statusIcon(task: WorkflowTaskProgress): TemplateResult {
-  if (task.status === 'running') {
+function statusIcon(call: WorkflowCallProgress): TemplateResult {
+  if (call.status === 'running') {
     return html`<wa-spinner aria-label="Running"></wa-spinner>`;
   }
   const icon: TeXRAIconName = (() => {
-    switch (task.status) {
+    switch (call.status) {
       case 'planned':
         return 'circle-outline';
       case 'completed':
@@ -31,38 +31,38 @@ function statusIcon(task: WorkflowTaskProgress): TemplateResult {
       case 'failed':
         return 'error';
       default:
-        return assertNever(task, 'Unhandled workflow task status');
+        return assertNever(call, 'Unhandled workflow call status');
     }
   })();
   return waIcon(icon);
 }
 
 function terminalMetadata(
-  task: WorkflowTaskProgress,
+  call: WorkflowCallProgress,
 ): TemplateResult | typeof nothing {
-  const parts = formatWorkflowTaskMetadataParts(task);
+  const parts = formatWorkflowCallMetadataParts(call);
   return parts.length > 0
     ? html`<span class="workflow-task-meta">${parts.join(' · ')}</span>`
     : nothing;
 }
 
-/** Render one workflow task as a status card updated in place by log id. */
-export function formatWorkflowTaskTemplate(
+/** Render one workflow call as a status card updated in place by log id. */
+export function formatWorkflowCallTemplate(
   message: LogMessageData,
 ): TemplateResult {
-  const task = WorkflowTaskProgressSchema.parse(message.data);
-  const detail = workflowTaskDetail(task);
+  const call = WorkflowCallProgressSchema.parse(message.data);
+  const detail = workflowCallDetail(call);
 
   return html`
     <div
-      class=${`workflow-task workflow-task--${task.status}`}
+      class=${`workflow-task workflow-task--${call.status}`}
       data-log-id=${message.id}
       data-group-id=${message.groupId ?? ''}
     >
-      <span class="workflow-task-icon">${statusIcon(task)}</span>
+      <span class="workflow-task-icon">${statusIcon(call)}</span>
       <span class="workflow-task-body">
-        <span class="workflow-task-title">${task.label}</span>
-        ${terminalMetadata(task)}
+        <span class="workflow-task-title">${call.label}</span>
+        ${terminalMetadata(call)}
         ${
           detail
             ? html`<span
@@ -73,7 +73,7 @@ export function formatWorkflowTaskTemplate(
         }
       </span>
       <span class="workflow-task-status"
-        >${WORKFLOW_TASK_STATUS_LABEL[task.status]}</span
+        >${WORKFLOW_CALL_STATUS_LABEL[call.status]}</span
       >
     </div>
   `;
