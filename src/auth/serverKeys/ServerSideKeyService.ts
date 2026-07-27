@@ -16,7 +16,10 @@
 
 import type { StateStore } from '@platform/interfaces';
 import type { ServerSideProvider } from '@shared/constants/providers';
-import type { SpendingStatus } from '@shared/schemas/spendingStatus';
+import type {
+  SpendingStatus,
+  SpendingStatusError,
+} from '@shared/schemas/spendingStatus';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { SupabaseClient } from '../SupabaseClient';
 import {
@@ -75,6 +78,14 @@ export class ServerSideKeyService {
   private accessFetchPromise: Promise<boolean> | null = null;
   private userTier: UserTier | null = null;
 
+  /**
+   * Whether the last access fetch carried a relay auth token. An anonymous
+   * fetch (dead session refresh at the time) must not satisfy a later check
+   * via the cache: the tier config it produced has no user blocks, so we fall
+   * through and refetch, picking up a now-valid token.
+   */
+  private lastFetchAuthenticated = false;
+
   // Cache state tracking
   private _isCachePrimed = false;
 
@@ -132,6 +143,10 @@ export class ServerSideKeyService {
     return this.tierService.getSpendingStatus();
   }
 
+  getSpendingStatusError(): SpendingStatusError | null {
+    return this.tierService.getSpendingStatusError();
+  }
+
   async setUseIncludedModelAccess(
     value: boolean,
     cacheOptions: ClearServerSideKeyCachesOptions = {},
@@ -172,6 +187,7 @@ export class ServerSideKeyService {
     this.accessTimestamp = 0;
     this.accessFetchPromise = null;
     this.userTier = null;
+    this.lastFetchAuthenticated = false;
     if (options.resetQuotaFlip) {
       this.quotaFlipApplied = false;
       this.quotaAutoSwitchActive = false;
@@ -226,8 +242,12 @@ export class ServerSideKeyService {
       return false;
     }
 
+    // An anonymous cached fetch never satisfies this check — see
+    // lastFetchAuthenticated. Refetching picks up a token that has become
+    // valid since (e.g. the user signed in again after a dead refresh).
     if (
       this.isAccessCacheValid() &&
+      this.lastFetchAuthenticated &&
       (this.hasFullAccess() || this.tierService.getConfigSync() !== null)
     ) {
       return this.accessFetchPromise!;
@@ -236,6 +256,7 @@ export class ServerSideKeyService {
     this.accessFetchPromise = (async () => {
       const authToken =
         (await SupabaseClient.getRelayAccessToken()) ?? undefined;
+      this.lastFetchAuthenticated = authToken !== undefined;
 
       const [hasAccess, tierConfig] = await Promise.all([
         this.fetchAccessStatus(),
