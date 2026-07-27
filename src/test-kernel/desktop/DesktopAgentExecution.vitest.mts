@@ -486,7 +486,7 @@ async function createBridge(
     session.interactions,
     { replayWhenAttached: true },
   );
-  const { SessionStores } = await import('@agent/runtime/SessionStores');
+  const { SessionStores } = await import('@agent/storage');
   const { releaseStreamResources } = await import('@tools/approval');
   const { GoalStore: bridgeGoalStore } = await import('@tools/goal');
   const sessionStores = new SessionStores({

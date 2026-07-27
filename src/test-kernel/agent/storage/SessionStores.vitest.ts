@@ -1,12 +1,11 @@
-// Test setup imports
+// Test composition imports
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import type { DeleteExecutionOptions } from '@agent/storage';
-import { SessionStores } from '@agent/runtime/SessionStores';
+import { SessionStores, type DeleteExecutionOptions } from '@agent/storage';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { releaseStreamResources } from '@tools/approval';
