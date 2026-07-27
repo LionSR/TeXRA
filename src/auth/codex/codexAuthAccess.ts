@@ -17,10 +17,6 @@ import {
   type CodexSessionStatus,
 } from './CodexSessionCoordinator';
 import { CodexAuthError } from './codexSessionTypes';
-import {
-  isCodexSubscriptionToolUseOnly,
-  isPreferCodexSubscription,
-} from './codexPreference';
 
 const CHANNEL = 'codexAuth';
 
@@ -64,11 +60,6 @@ export async function getCodexStatus(): Promise<CodexSessionStatus> {
     );
     return { signedIn: false };
   }
-}
-
-/** Whether a Codex session is currently signed in (no network, no throw). */
-export async function isCodexSignedIn(): Promise<boolean> {
-  return (await getCodexStatus()).signedIn;
 }
 
 /**
@@ -118,23 +109,4 @@ export async function isCodexSessionRoutable(): Promise<boolean> {
     }
     throw error;
   }
-}
-
-/**
- * The ChatGPT auth status as the settings views consume it: the session status
- * plus the current subscription preference. One composer so the extension and
- * desktop hosts post the identical payload (the wire shape is validated by
- * `ChatGptAuthStatusSchema` at each host's boundary).
- */
-export async function getChatGptAuthStatus(): Promise<
-  CodexSessionStatus & {
-    preferSubscription: boolean;
-    subscriptionToolUseOnly: boolean;
-  }
-> {
-  return {
-    ...(await getCodexStatus()),
-    preferSubscription: isPreferCodexSubscription(),
-    subscriptionToolUseOnly: isCodexSubscriptionToolUseOnly(),
-  };
 }

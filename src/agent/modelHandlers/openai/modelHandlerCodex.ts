@@ -36,8 +36,6 @@ import {
   CodexAuthError,
   codexCoordinator,
   formatCodexAuthUnavailableMessage,
-  isCodexSubscriptionToolUseOnly,
-  isPreferCodexSubscription,
 } from '@auth/codex';
 import * as logger from '@logger/logUtils';
 import {
@@ -45,6 +43,10 @@ import {
   resolveProviderCapabilities,
   type ProviderCapabilityProfile,
 } from '@model/providerCapabilities';
+import {
+  isCodexSubscriptionToolUseOnly,
+  isPreferCodexSubscription,
+} from '@model/codex/codexPreference';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { ModelHandlerOpenAIResponse } from './modelHandlerOpenAIResponse';

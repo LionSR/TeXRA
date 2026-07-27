@@ -18,12 +18,13 @@ import { useState } from 'react';
 import { listExecutions } from '@agent/storage';
 import { type SupabaseSession } from '@auth/SupabaseSession';
 import { DEFAULT_OAUTH_PROVIDER, type OAuthProvider } from '@auth/config';
-import { setPreferCodexSubscription, type CodexSession } from '@auth/codex';
+import { type CodexSession } from '@auth/codex';
 import { LoadingIndicator } from '@cli/chat/tui/ui/LoadingIndicator';
 import { useCancellableEffect } from '@cli/chat/tui/state/useCancellableEffect';
 import { planOnboardingFunnelTransition } from '@controllers/onboarding/onboardingFunnel';
 import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
+import { setPreferCodexSubscription } from '@model/codex/codexPreference';
 import { platform } from '@platform/platform';
 import {
   backfillFirstRunDone,

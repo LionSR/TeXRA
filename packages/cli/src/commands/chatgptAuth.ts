@@ -1,11 +1,8 @@
 import { defineCommand } from 'citty';
 
-import {
-  codexCoordinator,
-  setPreferCodexSubscription,
-  type CodexSession,
-} from '@auth/codex';
+import { codexCoordinator, type CodexSession } from '@auth/codex';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
+import { setPreferCodexSubscription } from '@model/codex/codexPreference';
 
 import {
   chatGptAccountLabel,
