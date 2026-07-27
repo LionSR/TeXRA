@@ -3,6 +3,7 @@ import type { AgentTrace, StageHandle } from '@agent/trace';
 import {
   runPersistedWorkflowScript,
   type PersistedWorkflowScriptRunOptions,
+  type WorkflowAgentInvocation,
   type WorkflowJournalEntry,
   type WorkflowScriptEvent,
   type WorkflowScriptProgressId,
@@ -52,15 +53,6 @@ export class WorkflowJournalCostError extends Error {
   }
 }
 
-/**
- * Stable identity for excluding a previously settled journal entry.
- */
-export function workflowJournalEntryCostIdentity(
-  entry: Pick<WorkflowJournalEntry, 'index' | 'key'>,
-): string {
-  return `${entry.index}:${entry.key}`;
-}
-
 function workflowJournalEntryCost(entry: WorkflowJournalEntry): number {
   const result = AgentFinalResultSchema.safeParse(entry.result);
   if (!result.success) {
@@ -85,30 +77,62 @@ export function sumCompletedWorkflowJournalCost(
   return total;
 }
 
+export interface WorkflowAttemptCostTracker {
+  /** Record one physical child attempt and return this tool invocation's live total. */
+  record(
+    invocation: Pick<WorkflowAgentInvocation, 'key'>,
+    costUsd: number,
+  ): number;
+  /**
+   * Return this tool invocation's final total. Replayed/recovered journal
+   * entries with no physical-attempt callback contribute zero.
+   */
+  total(finalJournal: readonly WorkflowJournalEntry[]): number;
+}
+
 /**
- * Sum cost attributable to the current run, including attempts discarded by
- * skip/retry/failure. The journal supplies an authoritative completed-attempt
- * cost when an observer reports no value; taking the per-call maximum avoids
- * counting the completed attempt twice when both sources report it.
+ * Track one tool invocation's physical attempts in callback order per journal
+ * key. The production child runner emits exactly one callback for every
+ * physical attempt, including `undefined` cost (normalized to zero), and emits
+ * none for replay or stable recovery. For a completed key, all callbacks but
+ * the last are discarded retries; only the last can correspond to the journal
+ * result, so its charge is `max(observer, journal)` rather than another sum.
+ * `record` and `total` therefore return comparable attempt-scoped USD totals
+ * for the loop-owned best-value latch without charging historical entries.
  */
-export function sumCurrentWorkflowRunCost(
-  journal: readonly WorkflowJournalEntry[],
-  observedCosts: ReadonlyMap<string, number>,
-): number {
-  const unjournaledCosts = new Map(observedCosts);
-  let total = 0;
-  for (const entry of journal) {
-    const journalCost = workflowJournalEntryCost(entry);
-    const identity = workflowJournalEntryCostIdentity(entry);
-    if (unjournaledCosts.has(identity)) {
-      total += Math.max(journalCost, unjournaledCosts.get(identity) ?? 0);
-      unjournaledCosts.delete(identity);
-    }
-  }
-  for (const observedCost of unjournaledCosts.values()) {
-    total += observedCost;
-  }
-  return total;
+export function createWorkflowAttemptCostTracker(): WorkflowAttemptCostTracker {
+  const attemptsByKey = new Map<string, number[]>();
+  let observedTotalUsd = 0;
+
+  return {
+    record: (invocation, costUsd) => {
+      observedTotalUsd += costUsd;
+      const attempts = attemptsByKey.get(invocation.key) ?? [];
+      attempts.push(costUsd);
+      attemptsByKey.set(invocation.key, attempts);
+      return observedTotalUsd;
+    },
+    total: (finalJournal) => {
+      const journalKeys = new Set<string>();
+      let totalUsd = 0;
+      for (const entry of finalJournal) {
+        journalKeys.add(entry.key);
+        const journalCostUsd = workflowJournalEntryCost(entry);
+        const attempts = attemptsByKey.get(entry.key);
+        if (!attempts || attempts.length === 0) continue;
+        for (const discardedCostUsd of attempts.slice(0, -1)) {
+          totalUsd += discardedCostUsd;
+        }
+        totalUsd += Math.max(attempts.at(-1) ?? 0, journalCostUsd);
+      }
+      for (const [key, attempts] of attemptsByKey) {
+        if (!journalKeys.has(key)) {
+          totalUsd += attempts.reduce((sum, costUsd) => sum + costUsd, 0);
+        }
+      }
+      return totalUsd;
+    },
+  };
 }
 
 /** Run a durable workflow script and project its progress onto the parent trace. */

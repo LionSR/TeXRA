@@ -357,26 +357,22 @@ function bindAbortSignal(
   return () => signal.removeEventListener('abort', interrupt);
 }
 
-function createCostSettler(
+function recordCost(
   onCost: InBandSubagentExecutionBaseOptions['onCost'],
-): (totalCostUsd: number | undefined) => void {
-  let settled = false;
-  return (totalCostUsd) => {
-    if (settled) return;
-    settled = true;
-    try {
-      const observed = onCost?.(totalCostUsd);
-      void Promise.resolve(observed).catch((error: unknown) => {
-        logger.warn(LOG_CHANNEL, 'Subagent cost observer rejected', {
-          data: error,
-        });
-      });
-    } catch (error) {
-      logger.warn(LOG_CHANNEL, 'Subagent cost observer failed', {
+  totalCostUsd: number | undefined,
+): void {
+  try {
+    const observed = onCost?.(totalCostUsd);
+    void Promise.resolve(observed).catch((error: unknown) => {
+      logger.warn(LOG_CHANNEL, 'Subagent cost observer rejected', {
         data: error,
       });
-    }
-  };
+    });
+  } catch (error) {
+    logger.warn(LOG_CHANNEL, 'Subagent cost observer failed', {
+      data: error,
+    });
+  }
 }
 
 async function persistFailure(
@@ -467,7 +463,6 @@ async function executeInBand(
   const config = AgentConfigSchema.parse(options.configPayload);
   const startedAt = Date.now();
   const workingDirectory = config.workingDirectory ?? undefined;
-  const settleCost = createCostSettler(options.onCost);
 
   try {
     await registerExecution(
@@ -531,7 +526,7 @@ async function executeInBand(
         });
       } catch (error) {
         const errorResult = getAgentFlowErrorResult(error);
-        settleCost(errorResult?.totalCostUsd);
+        recordCost(options.onCost, errorResult?.totalCostUsd);
         await persistFailure(
           mode,
           executionId,
@@ -549,7 +544,7 @@ async function executeInBand(
         detachAbort();
       }
 
-      settleCost(flowResult.totalCostUsd);
+      recordCost(options.onCost, flowResult.totalCostUsd);
       if (flowResult.outcome === 'failed') {
         const error =
           runError ?? new Error('Subagent ended with failed outcome.');

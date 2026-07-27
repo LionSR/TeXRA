@@ -38,9 +38,8 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import {
+  createWorkflowAttemptCostTracker,
   runPersistedWorkflowScriptWithProgress,
-  sumCurrentWorkflowRunCost,
-  workflowJournalEntryCostIdentity,
 } from './workflowScriptRun';
 import { fingerprintWorkflowAgentDependencies } from './workflowScriptAgentRunner';
 
@@ -147,12 +146,9 @@ export function createWorkflowScriptStrategy(
     ...(params.deliveryMode && { deliveryMode: params.deliveryMode }),
 
     launch: async (ports, abortController) => {
-      // The stable child runner's native cost callback fires only for work
-      // that executes in this attempt; exact journal replays and stable-child
-      // recoveries do not fire it. Keep every observed attempt by stable call
-      // identity so discarded retry/skip/failure work is still billed while a
-      // pure journal replay settles zero.
-      const observedCosts = new Map<string, number>();
+      // Physical-attempt callbacks are the current-invocation boundary: replay
+      // and stable recovery emit none, while every model attempt emits one.
+      const attemptCost = createWorkflowAttemptCostTracker();
       const callCostsByIndex = new Map<number, number>();
       // Live grandchild execution id → engine call index, maintained by the
       // runner's child-active hook. The identity bridge that lets an
@@ -161,11 +157,7 @@ export function createWorkflowScriptStrategy(
       const runAgent = params.createRunAgent({
         onCost: (invocation, totalCostUsd) => {
           const cost = totalCostUsd ?? 0;
-          const identity = workflowJournalEntryCostIdentity(invocation);
-          observedCosts.set(
-            identity,
-            (observedCosts.get(identity) ?? 0) + cost,
-          );
+          ports.recordCost(attemptCost.record(invocation, cost));
           callCostsByIndex.set(
             invocation.index,
             (callCostsByIndex.get(invocation.index) ?? 0) + cost,
@@ -218,18 +210,15 @@ export function createWorkflowScriptStrategy(
           },
         });
       } catch (runError) {
-        // Settle whatever the journal recorded before the failure so a resumed
-        // run still rolls up already-spent cost. Settlement failure never
-        // masks the run error — the run log and resume hint are the model's
-        // only view into what executed.
+        // Include newly journaled calls without re-billing the pre-run
+        // baseline. A malformed checkpoint never masks the run error; live
+        // candidates already recorded through the loop remain available.
         try {
           const checkpoint = await readWorkflowScriptCheckpoint(
             params.store,
             params.checkpointId,
           );
-          ports.recordCost(
-            sumCurrentWorkflowRunCost(checkpoint?.journal ?? [], observedCosts),
-          );
+          ports.recordCost(attemptCost.total(checkpoint?.journal ?? []));
         } catch {
           // Cost settlement is best-effort on the failure path.
         }
@@ -241,9 +230,9 @@ export function createWorkflowScriptStrategy(
         unregisterControls?.();
       }
 
-      // Combine observed attempts with journal-authoritative completed costs;
-      // a malformed journal fails closed before any scalar is recorded.
-      ports.recordCost(sumCurrentWorkflowRunCost(run.journal, observedCosts));
+      // The final journal supplies only this invocation's missing/lower
+      // completed-call fallback; baseline history contributes zero.
+      ports.recordCost(attemptCost.total(run.journal));
       return run;
     },
 
