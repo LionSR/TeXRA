@@ -42,10 +42,8 @@ const listRemoteAgents = vi.hoisted(() =>
   ]),
 );
 
-vi.mock('@agent/remote/RemoteAgentLoader', () => ({
-  RemoteAgentLoader: {
-    listRemoteAgents,
-  },
+vi.mock('@agent/remote/remoteAgentList', () => ({
+  listRemoteAgents,
 }));
 
 const REPO_ROOT = resolve(
