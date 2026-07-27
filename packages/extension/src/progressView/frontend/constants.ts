@@ -21,7 +21,6 @@ export const ELEMENT_IDS = {
   PLAN_VIEW_CONTAINER: 'planViewContainer',
   PLAN_VIEW: 'planView',
   TOOLBAR_CONTAINER: 'toolbarContainer',
-  DELETE_ALL_BTN: 'deleteAllBtn',
   STOP_STREAM_BTN: 'stopStreamBtn',
   RUN_NEW_BTN: 'runNewBtn',
   RESUME_BTN: 'resumeBtn',
@@ -39,7 +38,6 @@ export const ELEMENT_IDS = {
   YOLO_TOGGLE_BTN: 'yoloToggleBtn',
   SUPER_YOLO_TOGGLE_BTN: 'superYoloToggleBtn',
   POLISH_FOLLOW_UP_BTN: 'polishFollowUpBtn',
-  CLEAR_FOLLOW_UP_BTN: 'clearFollowUpBtn',
   SEND_FOLLOW_UP_BTN: 'sendFollowUpBtn',
 };
 

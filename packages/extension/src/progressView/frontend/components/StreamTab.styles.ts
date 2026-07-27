@@ -60,12 +60,9 @@ export const streamTabStyles = css`
     border-left-color: var(--wa-color-text-link);
   }
 
-  .tab-container.status-stopped,
-  .tab-container.status-completed,
-  .tab-container.status-cancelled,
-  .tab-container.status-ready {
-    border-left-color: var(--color-border);
-  }
+  /* Finished states (stopped/completed/cancelled/ready) keep the
+     transparent default: the rail only lights up while something is
+     happening or needs attention. */
 
   .tab-container.status-initializing,
   .tab-container.status-starting {

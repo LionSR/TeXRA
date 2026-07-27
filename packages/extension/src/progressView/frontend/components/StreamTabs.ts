@@ -37,7 +37,6 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/relative-time/relative-time.js';
 import './WorktreeChip';
 import { formatRelativeTime } from '@shared/utils/string';
-import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { type TeXRAIconName, waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderEmptyState } from '@shared/wa/emptyState';
 import { formatResultCount } from '@utils/text/stringUtils';
@@ -253,7 +252,6 @@ export class StreamTab extends LitElement {
                 `
           }
         </button>
-        <wa-tooltip for="stream-tab-title">${tooltip}</wa-tooltip>
         ${
           this.childCount > 0 && this.compact
             ? html`<wa-tooltip for="stream-tab-compact-children"
@@ -473,26 +471,6 @@ export class StreamTabs extends LitElement {
             }),
           )}
         </div>
-        ${
-          this.presentation === 'orchestration' ||
-          this.compact ||
-          (this.streams.length === 0 && this.filter === 'all')
-            ? nothing
-            : html`<div class="stream-list-footer">
-                <div class="stream-list-controls">
-                  <div class="stream-list-actions">
-                    ${renderIconActionButton({
-                      id: ELEMENT_IDS.DELETE_ALL_BTN,
-                      icon: 'trash',
-                      label: 'Clear all streams',
-                      tooltip: 'Clear all streams',
-                      className: 'delete-all-streams',
-                      onClick: this.handleDeleteAll,
-                    })}
-                  </div>
-                </div>
-              </div>`
-        }
       </div>
     `;
   }
@@ -529,9 +507,5 @@ export class StreamTabs extends LitElement {
     else next.delete(parentId);
     this.userOverride.set(parentId, nowExpanded ? 'expanded' : 'collapsed');
     this.expandedParents = next;
-  }
-
-  private handleDeleteAll(): void {
-    this.dispatchEvent(ProgressEvents.deleteAll());
   }
 }

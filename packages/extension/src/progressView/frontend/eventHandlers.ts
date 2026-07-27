@@ -64,10 +64,6 @@ export function handleStreamDelete(
   postMessage(PROGRESS_VIEW_COMMANDS.DELETE_STREAM, { stream: streamId });
 }
 
-export function handleDeleteAll(): void {
-  postMessage(PROGRESS_VIEW_COMMANDS.DELETE_ALL, {});
-}
-
 export function handleToolbarCommand(
   event: CustomEvent<ToolbarCommandDetail>,
 ): void {

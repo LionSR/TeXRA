@@ -190,8 +190,6 @@ export const ProgressEvents = {
   filterChange: (detail: FilterEventDetail) =>
     createEvent('filter-change', detail),
 
-  deleteAll: () => createEvent('delete-all', undefined),
-
   toolbarCommand: (detail: ToolbarCommandDetail) =>
     createEvent('toolbar-command', detail),
 

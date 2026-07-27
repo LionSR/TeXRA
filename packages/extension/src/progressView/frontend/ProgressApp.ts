@@ -45,7 +45,6 @@ import {
 
 // Local imports - event handlers
 import {
-  handleDeleteAll,
   handleFileAction,
   handleFollowupRequestOptions,
   handleFollowUpChange,
@@ -113,10 +112,9 @@ export class ProgressApp extends ProgressAppBase {
     // then layer the persisted streamFilter pref on top of the post-reset
     // appState — keeps the constructor to one `appState.set` instead of two.
     resetProgressState();
-    const prefs = this.prefsManager.getState();
     appState.set({
       ...appState.get(),
-      streamFilter: prefs.streamFilter,
+      streamFilter: 'all', // Filter UI removed — always show all streams.
     });
   }
 
@@ -201,7 +199,6 @@ export class ProgressApp extends ProgressAppBase {
                       .childStreamsByParent=${childStreamsByParent$.get()}
                       @stream-switch=${handleStreamSwitch}
                       @stream-delete=${handleStreamDelete}
-                      @delete-all=${handleDeleteAll}
                     ></stream-tabs>
                   </wa-split-panel>
                 </div>
