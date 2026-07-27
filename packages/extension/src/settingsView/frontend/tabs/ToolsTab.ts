@@ -285,9 +285,7 @@ export class ToolsTab extends LitElement {
               ></wa-switch>
               <wa-tag
                 variant=${
-                  this.desktopCrashReportingConfigured
-                    ? 'success'
-                    : 'warning'
+                  this.desktopCrashReportingConfigured ? 'success' : 'warning'
                 }
                 size="s"
               >
