@@ -515,7 +515,9 @@ stays — it is what lets a desktop per-window reattach pick up a request that
 parked before it attached — and the runtime installs no default attachment.
 Instead, the ruling names the mechanism above as the contract: attach at
 least `{ cancel: () => {} }`, and use `approvalPromptsUnavailable: true` to
-remove the one case that is reachable without any attachment at all.
+remove the most common case that is reachable without any attachment at all
+(a headless run without `approvalPromptsUnavailable` can also reach
+`requestRetry` without an attachment; both gaps are closed by the flag).
 
 **`approvalPromptsUnavailable: true` is the real headless answer for that
 case**, not merely a partial mitigation: an agent that cannot be asked simply
@@ -557,12 +559,9 @@ session and disposing it on close
 (`packages/desktop/src/main/desktopAgentExecution.ts:420-429`;
 `packages/desktop/src/main/index.ts:583-621`). Closing one window would
 silently deny a pending tool-edit diff. A latch that auto-denies before any
-host has ever attached fares no better: desktop's own restart repair can
-leave a resumed run's approval pending before any window's adapter attaches
-(`packages/desktop/src/main/desktopAgentExecution.ts:417-419`), and a latch
-would auto-deny that legitimate startup-resume approval. The runtime cannot
-know whether a UI is coming; the caller can, and `approvalPromptsUnavailable`
-is how it says so.
+host has ever attached fares no better: the runtime cannot know whether a
+UI is coming; the caller can, and `approvalPromptsUnavailable` is how it
+says so.
 
 ---
 
