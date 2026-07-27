@@ -5,12 +5,7 @@ import '@test/support/defaultSessionTestSetup';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
-<<<<<<<< HEAD:src/test-kernel/agent/runtime/SessionStores.vitest.ts
-import type { DeleteExecutionOptions } from '@agent/storage';
-import { SessionStores } from '@agent/runtime/SessionStores';
-========
 import { SessionStores, type DeleteExecutionOptions } from '@agent/storage';
->>>>>>>> main:src/test-kernel/agent/storage/SessionStores.vitest.ts
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { releaseStreamResources } from '@tools/approval';
