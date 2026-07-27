@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  formatWorkflowTaskMetadataParts,
-  formatWorkflowTaskLine,
-  workflowPhaseTaskProgress,
-} from '@shared/copy/workflowTask';
+  formatWorkflowCallMetadataParts,
+  formatWorkflowCallLine,
+  workflowPhaseCallProgress,
+} from '@shared/copy/workflowCall';
 
-describe('workflow task copy', () => {
+describe('workflow call copy', () => {
   it('uses one terminal metadata representation across hosts', () => {
     expect(
-      formatWorkflowTaskMetadataParts({
+      formatWorkflowCallMetadataParts({
         id: 'draft',
         label: 'Draft',
         status: 'completed',
@@ -20,9 +20,9 @@ describe('workflow task copy', () => {
     ).toEqual(['gpt56', '7s', '$0.040']);
   });
 
-  it('does not attach terminal metadata to an active task', () => {
+  it('does not attach terminal metadata to an active call', () => {
     expect(
-      formatWorkflowTaskMetadataParts({
+      formatWorkflowCallMetadataParts({
         id: 'draft',
         label: 'Draft',
         status: 'running',
@@ -32,7 +32,7 @@ describe('workflow task copy', () => {
 
   it('uses one failed-task line across textual hosts', () => {
     expect(
-      formatWorkflowTaskLine({
+      formatWorkflowCallLine({
         id: 'audit',
         label: 'Audit source',
         status: 'failed',
@@ -44,26 +44,26 @@ describe('workflow task copy', () => {
     ).toBe('Failed: Audit source · kimiK2 · 7s · $0.040 — Runner stopped.');
   });
 
-  it('explains a task the run never reached on every textual host', () => {
+  it('explains a call the run never reached on every textual host', () => {
     expect(
-      formatWorkflowTaskLine({
+      formatWorkflowCallLine({
         id: 'audit',
         label: 'Audit later',
         status: 'skipped',
         reason: 'not-reached',
       }),
     ).toBe(
-      'Skipped: Audit later — The workflow ended before this task was reached.',
+      'Skipped: Audit later — The workflow ended before this call was reached.',
     );
   });
 
   it('counts an empty phase as no work rather than complete', () => {
-    expect(workflowPhaseTaskProgress([])).toEqual({ done: 0, total: 0 });
+    expect(workflowPhaseCallProgress([])).toEqual({ done: 0, total: 0 });
   });
 
   it('counts every terminal status as done, not just completions', () => {
     expect(
-      workflowPhaseTaskProgress([
+      workflowPhaseCallProgress([
         { id: 'a', label: 'A', status: 'completed', durationMs: 1 },
         { id: 'b', label: 'B', status: 'cached' },
         { id: 'c', label: 'C', status: 'skipped', reason: 'not-reached' },
@@ -72,9 +72,9 @@ describe('workflow task copy', () => {
     ).toEqual({ done: 4, total: 4 });
   });
 
-  it('leaves planned and running tasks outstanding', () => {
+  it('leaves planned and running calls outstanding', () => {
     expect(
-      workflowPhaseTaskProgress([
+      workflowPhaseCallProgress([
         { id: 'a', label: 'A', status: 'completed', durationMs: 1 },
         { id: 'b', label: 'B', status: 'running' },
         { id: 'c', label: 'C', status: 'planned' },
@@ -84,7 +84,7 @@ describe('workflow task copy', () => {
 
   it('leaves a user skip without an explanatory clause', () => {
     expect(
-      formatWorkflowTaskLine({
+      formatWorkflowCallLine({
         id: 'review',
         label: 'Stopped review',
         status: 'skipped',

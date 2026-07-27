@@ -38,7 +38,7 @@ import {
   formatWebFetchTemplate,
   formatWebSearchTemplate,
 } from './logFormatters/toolFormatters/webFormatters';
-import { formatWorkflowTaskTemplate } from './logFormatters/workflowTaskFormatter';
+import { formatWorkflowCallTemplate } from './logFormatters/workflowCallFormatter';
 
 export { isStreamingTextLogMessage } from './baseLogFormatter';
 
@@ -144,8 +144,8 @@ const TEMPLATE_FORMATTERS: Record<string, TemplateFormatterFn | null> = {
     'context management',
   ),
   workflowTask: wrapWithErrorHandling(
-    formatWorkflowTaskTemplate,
-    'workflow task',
+    formatWorkflowCallTemplate,
+    'workflow call',
   ),
 
   // Special cases
