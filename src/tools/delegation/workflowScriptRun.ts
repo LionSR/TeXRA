@@ -77,12 +77,15 @@ export function sumCompletedWorkflowJournalCost(
   return total;
 }
 
+type WorkflowAttemptIdentity = Pick<WorkflowAgentInvocation, 'index' | 'key'>;
+
+function workflowAttemptIdentity(invocation: WorkflowAttemptIdentity): string {
+  return `${invocation.index}:${invocation.key}`;
+}
+
 export interface WorkflowAttemptCostTracker {
   /** Record one physical child attempt and return this tool invocation's live total. */
-  record(
-    invocation: Pick<WorkflowAgentInvocation, 'key'>,
-    costUsd: number,
-  ): number;
+  record(invocation: WorkflowAttemptIdentity, costUsd: number): number;
   /**
    * Return this tool invocation's final total. Replayed/recovered journal
    * entries with no physical-attempt callback contribute zero.
@@ -92,7 +95,7 @@ export interface WorkflowAttemptCostTracker {
 
 /**
  * Track one tool invocation's physical attempts in callback order per journal
- * key. The production child runner emits exactly one callback for every
+ * index+key identity. The production child runner emits exactly one callback for every
  * physical attempt, including `undefined` cost (normalized to zero), and emits
  * none for replay or stable recovery. For a completed key, all callbacks but
  * the last are discarded retries; only the last can correspond to the journal
@@ -101,32 +104,34 @@ export interface WorkflowAttemptCostTracker {
  * for the loop-owned best-value latch without charging historical entries.
  */
 export function createWorkflowAttemptCostTracker(): WorkflowAttemptCostTracker {
-  const attemptsByKey = new Map<string, number[]>();
+  const attemptsByIdentity = new Map<string, number[]>();
   let observedTotalUsd = 0;
 
   return {
     record: (invocation, costUsd) => {
       observedTotalUsd += costUsd;
-      const attempts = attemptsByKey.get(invocation.key) ?? [];
+      const identity = workflowAttemptIdentity(invocation);
+      const attempts = attemptsByIdentity.get(identity) ?? [];
       attempts.push(costUsd);
-      attemptsByKey.set(invocation.key, attempts);
+      attemptsByIdentity.set(identity, attempts);
       return observedTotalUsd;
     },
     total: (finalJournal) => {
-      const journalKeys = new Set<string>();
+      const journalIdentities = new Set<string>();
       let totalUsd = 0;
       for (const entry of finalJournal) {
-        journalKeys.add(entry.key);
+        const identity = workflowAttemptIdentity(entry);
+        journalIdentities.add(identity);
         const journalCostUsd = workflowJournalEntryCost(entry);
-        const attempts = attemptsByKey.get(entry.key);
+        const attempts = attemptsByIdentity.get(identity);
         if (!attempts || attempts.length === 0) continue;
         for (const discardedCostUsd of attempts.slice(0, -1)) {
           totalUsd += discardedCostUsd;
         }
         totalUsd += Math.max(attempts.at(-1) ?? 0, journalCostUsd);
       }
-      for (const [key, attempts] of attemptsByKey) {
-        if (!journalKeys.has(key)) {
+      for (const [identity, attempts] of attemptsByIdentity) {
+        if (!journalIdentities.has(identity)) {
           totalUsd += attempts.reduce((sum, costUsd) => sum + costUsd, 0);
         }
       }
