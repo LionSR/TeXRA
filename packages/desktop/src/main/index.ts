@@ -1145,6 +1145,17 @@ function createWindow(options: {
       onAsyncError: reportAsyncError,
     },
   );
+  let initialRendererNavigationComplete = false;
+  window.webContents.on('did-navigate', () => {
+    if (!initialRendererNavigationComplete) {
+      initialRendererNavigationComplete = true;
+      return;
+    }
+    // A fresh renderer has its own terminal IDs and browser-tab layout. Tear
+    // down the previous document's main-process resources before those IDs can
+    // be reused or an old WebContentsView can cover the new page.
+    workspaceIpc.disposeRendererResources();
+  });
   const mainViewIpc = installDesktopMainViewIpc(window, {
     workspace: workspaceIpc,
     executeAgent: async (message) => {
@@ -1213,8 +1224,7 @@ function createWindow(options: {
     setupSignInRegistration.dispose();
     // Shells keep running and web contents keep loading unless explicitly torn
     // down — neither is reachable once the window is gone.
-    ptyHost.disposeAll();
-    browserViews.disposeAll();
+    workspaceIpc.disposeRendererResources();
     if (workspaceRelaunch) {
       void (async () => {
         try {
