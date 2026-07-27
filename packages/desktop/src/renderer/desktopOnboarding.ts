@@ -63,13 +63,13 @@ const WORK_TYPES: ReadonlyArray<{
     presetId: 'physicist',
     question: 'Writing a physics paper',
     detail: 'Derivations, numerical checks, literature search, slides, review.',
-    icon: 'symbol-operator',
+    icon: 'cube',
   },
   {
     presetId: 'mathematician',
     question: 'Proving mathematics',
     detail: 'Open problems, proofs, Lean formalization, LaTeX correction.',
-    icon: 'symbol-number',
+    icon: 'hashtag',
   },
   {
     presetId: 'cs-ml',
