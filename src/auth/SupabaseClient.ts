@@ -389,4 +389,18 @@ export class SupabaseClient {
       return false;
     }
   }
+
+  /**
+   * Read the stored session's account label without attempting a token
+   * refresh. Returns null when no session is stored or no auth provider
+   * is registered.
+   */
+  static async getStoredAccountLabel(): Promise<string | null> {
+    if (!this.authProvider) return null;
+    try {
+      return await this.authProvider.getStoredAccountLabel();
+    } catch {
+      return null;
+    }
+  }
 }
