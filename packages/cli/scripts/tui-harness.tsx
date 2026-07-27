@@ -156,12 +156,16 @@ import {
   createCliRuntimeHost,
   type CliRuntimeHost,
 } from '../src/runtime/runtimeHost';
+import { setCliToolEnabled } from '../src/runtime/tools';
 import type { CliContext } from '../src/runtime/cliContext';
 import type { CliModelAccess } from '../src/runtime/modelAccess';
 import type { InputHistory } from '../src/chat/tui/history/inputHistory';
 
 const STREAM_ID = 'harness-stream-1';
 const SHOW_WORKFLOW_TIMELINE = process.env.HARNESS_WORKFLOW_TIMELINE === '1';
+const SHOW_WORKFLOW_RUNNING = process.env.HARNESS_WORKFLOW_RUNNING === '1';
+const RESET_WORKFLOW_SCRIPT_DISABLED =
+  process.env.HARNESS_WORKFLOW_SCRIPT_DISABLED === '1';
 const HARNESS_APPROVAL_USAGE = 'Usage: /approval [ask | never | yolo]';
 const HARNESS_YOLO_USAGE = 'Usage: /yolo [ask | never | yolo]';
 const ENTRY_COUNT = Number(process.env.HARNESS_ENTRIES ?? '15');
@@ -414,6 +418,9 @@ await initLocalCliPlatform({
   skillSourceOptions: {},
   version: '0.0.0-harness',
 });
+if (RESET_WORKFLOW_SCRIPT_DISABLED) {
+  await setCliToolEnabled('workflow-script', false);
+}
 // Seed workspace-storage memory files so `/memory` has rows to list. Files
 // get descending mtimes in list order, so the first name is the newest row
 // and the listing order is deterministic.
@@ -1222,7 +1229,8 @@ if (SHOW_SUBAGENT_FOLLOWUPS) {
 
 function seedWorkflowTimeline(): void {
   const executionId = 'harness-workflow-timeline' as ExecutionId;
-  const childStreamId = 'workflow#harness-workflow-timeline' as StreamTabId;
+  const childStreamId =
+    'workflow-script#harness-workflow-timeline' as StreamTabId;
   defaultSession().events.emit({
     scope: 'session',
     event: {
@@ -1335,6 +1343,122 @@ function seedWorkflowTimeline(): void {
   if (!retained.some((child) => child.childStreamId === childStreamId)) {
     throw new Error('Completed workflow child was not retained for refocus');
   }
+}
+
+function seedRunningWorkflow(): void {
+  const executionId = 'harness-workflow-running' as ExecutionId;
+  const childStreamId =
+    'workflow-script#harness-workflow-running' as StreamTabId;
+  const firstAgentStreamId =
+    'correct@harness-model#harness-workflow-agent-a' as StreamTabId;
+  const secondAgentStreamId =
+    'correct@harness-model#harness-workflow-agent-b' as StreamTabId;
+
+  defaultSession().events.emit({
+    scope: 'session',
+    event: {
+      type: 'setActiveStream',
+      payload: {
+        streamId: childStreamId,
+        agentCategory: AgentCategory.Workflow,
+        suppressViewSwitch: true,
+      },
+    },
+  });
+  emitChildEventOrderRoster(STREAM_ID, [
+    {
+      kind: 'subagent',
+      executionId,
+      agentName: 'live-workflow-validation',
+      childStreamId,
+      toolName: 'delegate_workflow_script',
+    },
+  ]);
+  emitChildEventOrderEdge(childStreamId, STREAM_ID);
+  transitionChildEventOrderRunning(childStreamId);
+
+  const runTrace = createRunTrace(childStreamId, defaultSession().transcripts);
+  const runStage = runTrace.trace.openStage(
+    "Workflow script 'live-workflow-validation'",
+    {
+      id: 'harness-workflow-running-run',
+      kind: 'run',
+    },
+  );
+  const phaseStage = runTrace.trace.openStage('Proofread', {
+    id: 'harness-workflow-running-phase',
+    index: 0,
+    kind: 'phase',
+    parent: runStage,
+    total: 1,
+  });
+  runTrace.trace.emit({
+    type: 'workflow.task',
+    logId: 'harness-workflow-running-task-a',
+    task: {
+      id: 'proofread-a',
+      label: 'Proofread paper A',
+      phase: 'Proofread',
+      status: 'running',
+    },
+    stageId: phaseStage.id,
+  });
+  runTrace.trace.emit({
+    type: 'workflow.task',
+    logId: 'harness-workflow-running-task-b',
+    task: {
+      id: 'proofread-b',
+      label: 'Proofread paper B',
+      phase: 'Proofread',
+      status: 'running',
+    },
+    stageId: phaseStage.id,
+  });
+  // Focus before projection: background workflow streams intentionally keep
+  // only operational rows, while the focused stream owns the task transcript.
+  activeStreamIdSignal.set(childStreamId);
+  syncStreamLog(childStreamId);
+
+  const workflowChildren = [
+    {
+      kind: 'subagent',
+      executionId: 'harness-workflow-agent-a',
+      agentName: 'correct',
+      childStreamId: firstAgentStreamId,
+      elapsed: '18s',
+      workflowPhase: 'Proofread',
+    },
+    {
+      kind: 'subagent',
+      executionId: 'harness-workflow-agent-b',
+      agentName: 'correct',
+      childStreamId: secondAgentStreamId,
+      elapsed: '17s',
+      workflowPhase: 'Proofread',
+    },
+  ] as const satisfies readonly ActiveChildInfo[];
+  for (const child of workflowChildren) {
+    defaultSession().events.emit({
+      scope: 'session',
+      event: {
+        type: 'setActiveStream',
+        payload: {
+          streamId: child.childStreamId,
+          agentCategory: AgentCategory.Workflow,
+          suppressViewSwitch: true,
+        },
+      },
+    });
+    emitChildEventOrderEdge(child.childStreamId, childStreamId);
+    transitionChildEventOrderRunning(child.childStreamId);
+  }
+  emitChildEventOrderRoster(childStreamId, workflowChildren);
+
+  HARNESS_DISPOSERS.push(() => {
+    phaseStage.end('cancelled');
+    runStage.end('cancelled');
+    runTrace.dispose();
+  });
 }
 
 // One child stream, its attachment/roster/edge/status/removal facts driven
@@ -2310,7 +2434,7 @@ inkRef.current = ink;
 
 HARNESS_DISPOSERS.push(subscribeStreamStatus());
 
-if (CHILD_EVENT_ORDER || SHOW_WORKFLOW_TIMELINE) {
+if (CHILD_EVENT_ORDER || SHOW_WORKFLOW_TIMELINE || SHOW_WORKFLOW_RUNNING) {
   // Mirror real CLI startup: `runChatTui.tsx` installs
   // `subscribeStreamStatus()` and the run-fact subscription once per TUI
   // session.
@@ -2319,6 +2443,10 @@ if (CHILD_EVENT_ORDER || SHOW_WORKFLOW_TIMELINE) {
 
 if (SHOW_WORKFLOW_TIMELINE) {
   seedWorkflowTimeline();
+}
+
+if (SHOW_WORKFLOW_RUNNING) {
+  seedRunningWorkflow();
 }
 
 if (CHILD_EVENT_ORDER) {

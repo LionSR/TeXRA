@@ -25,6 +25,7 @@ import {
 } from '@shared/constants/delegationTools';
 import { deriveExecutionId } from '@utils/core/idHash';
 import { WorkspaceFS } from '@utils/files';
+import { convertToolSchema } from '@agent/modelHandlers/toolConversion';
 
 setupPlatform({ storagePath: '/storage', workspacePath: '/workspace' });
 
@@ -115,6 +116,27 @@ async function callTool(
   agent = 'correct',
   stopAfterCycle = false,
 ) {
+  return callToolInput(
+    {
+      agent,
+      scriptInput: 'source',
+      script: overrideScript ?? script,
+      ...(files ? { files } : {}),
+    },
+    stopAfterCycle,
+  );
+}
+
+async function callToolInput(
+  input: {
+    agent: string;
+    scriptInput: 'source' | 'file';
+    script?: string | null;
+    scriptPath?: string | null;
+    files?: WorkflowScriptFiles;
+  },
+  stopAfterCycle = false,
+) {
   return withRunContext(parentContext(stopAfterCycle), () =>
     withToolFileInteractionContext(
       {
@@ -123,12 +145,7 @@ async function callTool(
         trace: new TraceEmitter(),
         hooks: { recordSubagentCost: vi.fn() },
       },
-      () =>
-        new WorkflowScriptTool().call({
-          agent,
-          script: overrideScript ?? script,
-          ...(files ? { files } : {}),
-        }),
+      () => new WorkflowScriptTool().call(input),
     ),
   );
 }
@@ -177,10 +194,22 @@ describe('WorkflowScriptTool', () => {
   });
 
   it('declares the task-plan contract at the model-facing boundary', () => {
-    const description = new WorkflowScriptTool().definition.description;
+    const definition = new WorkflowScriptTool().definition;
+    const description = definition.description;
+    const providerSchema = convertToolSchema(definition);
 
+    expect(providerSchema).toMatchObject({
+      type: 'object',
+      properties: {
+        scriptInput: { enum: ['source', 'file'] },
+      },
+    });
+    expect(providerSchema?.required).toContain('scriptInput');
     expect(description).toContain(
       'declare meta.tasks as { id, label, phase? } records',
+    );
+    expect(description).toContain(
+      "meta.phases accepts title strings such as ['Draft', 'Merge']",
     );
     expect(description).toContain(
       'progress shows the pending plan before execution',
@@ -192,7 +221,7 @@ describe('WorkflowScriptTool', () => {
       'Every agent() call must then reference one declared task with { id }',
     );
     expect(description).toContain(
-      'its label and phase come only from meta.tasks and must not be repeated in the call',
+      'omit label and phase from the call because meta.tasks owns them',
     );
     expect(description).toContain(
       'A call without meta.tasks may also use id, label, and phase',
@@ -205,6 +234,7 @@ describe('WorkflowScriptTool', () => {
   it('rejects invalid JSON arguments at the schema boundary', async () => {
     const result = await new WorkflowScriptTool().call({
       agent: 'correct',
+      scriptInput: 'source',
       script,
       args: { invalid: undefined },
     });
@@ -217,6 +247,7 @@ describe('WorkflowScriptTool', () => {
   it('requires a launched tool context', async () => {
     const outside = await new WorkflowScriptTool().call({
       agent: 'correct',
+      scriptInput: 'source',
       script,
     });
     expect(outside).toMatchObject({
@@ -283,7 +314,109 @@ describe('WorkflowScriptTool', () => {
       summary: "Launched workflow script 'tool-test' (async)",
     });
     expect(result.output).toContain(`Execution ID: ${runExecutionId}`);
+    expect(result.output).toContain(
+      'Script file: .texra/workflow-scripts/draft-tool-call.mjs',
+    );
     expect(result.output).toContain('same meta.name');
+  });
+
+  it('saves submitted source as an editable workspace script', async () => {
+    await callTool();
+
+    expect(
+      await WorkspaceFS.read('.texra/workflow-scripts/draft-tool-call.mjs'),
+    ).toBe(script);
+  });
+
+  it('never overwrites an edited submitted-source draft', async () => {
+    const originalPath = '.texra/workflow-scripts/draft-tool-call.mjs';
+    await WorkspaceFS.ensureDir('.texra/workflow-scripts');
+    await WorkspaceFS.write(originalPath, '// edited by the model');
+
+    const result = await callTool();
+    const savedPath = result.output?.match(
+      /Script file: (\.texra\/workflow-scripts\/\S+?\.mjs)/,
+    )?.[1];
+
+    expect(savedPath).toBeTruthy();
+    expect(savedPath).not.toBe(originalPath);
+    expect(await WorkspaceFS.read(originalPath)).toBe('// edited by the model');
+    expect(await WorkspaceFS.read(savedPath ?? '')).toBe(script);
+  });
+
+  it('loads an edited workflow script from scriptPath', async () => {
+    const editedScript = script
+      .replace("name: 'tool-test'", "name: 'edited-tool-test'")
+      .replace('saved call', 'edited saved call');
+    const scriptPath = '.texra/workflow-scripts/edited.mjs';
+    await WorkspaceFS.ensureDir('.texra/workflow-scripts');
+    await WorkspaceFS.write(scriptPath, editedScript);
+
+    const result = await callToolInput({
+      agent: 'correct',
+      scriptInput: 'file',
+      scriptPath,
+    });
+
+    expect(result).toMatchObject({
+      status: 'executed',
+      summary: "Launched workflow script 'edited-tool-test' (async)",
+    });
+    expect(result.output).toContain(`Script file: ${scriptPath}`);
+    expect(mocks.registerExecution).toHaveBeenCalledWith(
+      runExecutionIdFor('edited-tool-test'),
+      expect.anything(),
+      'edited-tool-test',
+      executionId,
+    );
+  });
+
+  it('saves invalid submitted source and returns its editable draft path', async () => {
+    const invalidScript = 'return await agent("missing meta")';
+
+    const result = await callTool(invalidScript);
+
+    expect(result).toMatchObject({
+      status: 'error',
+      error: expect.stringContaining('Script file:'),
+    });
+    const draftPath = result.error?.match(
+      /Script file: (\.texra\/workflow-scripts\/\S+?\.mjs)/,
+    )?.[1];
+    expect(draftPath).toBeTruthy();
+    expect(await WorkspaceFS.read(draftPath ?? '')).toBe(invalidScript);
+    expect(mocks.registerExecution).not.toHaveBeenCalled();
+  });
+
+  it('reports the same editable file when file-mode parsing fails', async () => {
+    const scriptPath = '.texra/workflow-scripts/broken.mjs';
+    await WorkspaceFS.ensureDir('.texra/workflow-scripts');
+    await WorkspaceFS.write(scriptPath, 'return null');
+
+    const result = await callToolInput({
+      agent: 'correct',
+      scriptInput: 'file',
+      scriptPath,
+    });
+
+    expect(result).toMatchObject({
+      status: 'error',
+      error: expect.stringContaining(`Script file: ${scriptPath}`),
+    });
+    expect(result.error).toContain("scriptInput: 'file'");
+  });
+
+  it('requires the script field selected by scriptInput', async () => {
+    for (const input of [
+      { agent: 'correct', scriptInput: 'source' },
+      { agent: 'correct', scriptInput: 'file' },
+    ]) {
+      const result = await new WorkflowScriptTool().call(input);
+      expect(result).toMatchObject({
+        status: 'error',
+        diagnostics: { type: 'validation_error' },
+      });
+    }
   });
 
   it('waits for the workflow report in a one-cycle headless run', async () => {
@@ -303,8 +436,13 @@ describe('WorkflowScriptTool', () => {
     expect(result).toMatchObject({
       status: 'executed',
       summary: "Completed workflow script 'tool-test'",
-      output: '<workflow-script-result>solved</workflow-script-result>',
+      output: expect.stringContaining(
+        '<workflow-script-result>solved</workflow-script-result>',
+      ),
     });
+    expect(result.output).toContain(
+      'Script file: .texra/workflow-scripts/draft-tool-call.mjs',
+    );
   });
 
   it('rejects an unknown default agent before registering a detached run', async () => {
@@ -314,6 +452,7 @@ describe('WorkflowScriptTool', () => {
       status: 'error',
       error: expect.stringContaining("Unknown workflow agent 'missing-agent'"),
     });
+    expect(result.error).toContain('Script file: .texra/workflow-scripts/');
     expect(mocks.registerExecution).not.toHaveBeenCalled();
     expect(mocks.createChildStream).not.toHaveBeenCalled();
     expect(mocks.startChildRunLoop).not.toHaveBeenCalled();

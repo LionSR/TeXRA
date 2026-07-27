@@ -60,8 +60,11 @@ recommended groups at the bottom are a good starting point.
   asynchronously via the follow-up queue.
 - `delegate_workflow_script` — advanced opt-in tool for a durable sequence of
   workflow-agent calls with predetermined branching and fan-out. Pass a default
-  `agent`, the complete `script`, and optional JSON `args` and role-separated
-  `files`. The selected workspace files are fixed for the run and available
+  `agent` and either `scriptInput: "source"` with the complete `script`, or
+  `scriptInput: "file"` with `scriptPath`. Submitted source is saved as an
+  editable, non-overwriting workspace draft and its path is returned for later
+  file-mode retries. Optional JSON `args` and role-separated `files` apply in
+  either mode. The selected workspace files are fixed for the run and available
   through the immutable `files.inputFiles`, `files.contextFiles`, and
   `files.mediaFiles` arrays. The script begins with an exported `meta` object
   containing `name` and `description`, and can use `agent`, `phase`, `log`,
@@ -74,9 +77,11 @@ recommended groups at the bottom are a good starting point.
   contains the validated object. The optional
   `meta.tasks` plan declares `{ id, label, phase? }` records so progress views
   can show pending work before any model call starts. A task phase must name a
-  title in `meta.phases`; calls reference the plan with
-  `agent(prompt, { id })` and do not repeat its label or phase. Scripts with a
-  data-dependent call set omit the plan. Present in the
+  title in `meta.phases`, which accepts either title strings or
+  `{ title, detail? }` objects; calls reference the plan with
+  `agent(prompt, { id })`. Matching repeated labels or phases are tolerated,
+  while conflicts fail. Scripts with a data-dependent call set omit the plan.
+  Present in the
   built-in `orchestrator` agent's tool list, but gated by the "Workflow
   Script" switch in Settings → Tools (off by default for new installs), which
   disables the tool for every agent regardless of its configured tool list.

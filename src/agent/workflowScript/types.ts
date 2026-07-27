@@ -16,10 +16,13 @@ export function normalizeWorkflowScriptPhaseTitle(title: string): string {
   return WorkflowScriptPhaseTitleSchema.parse(title);
 }
 
-const WorkflowScriptPhaseSchema = z.object({
-  title: WorkflowScriptPhaseTitleSchema,
-  detail: z.string().optional(),
-});
+const WorkflowScriptPhaseSchema = z.union([
+  z.object({
+    title: WorkflowScriptPhaseTitleSchema,
+    detail: z.string().optional(),
+  }),
+  WorkflowScriptPhaseTitleSchema.transform((title) => ({ title })),
+]);
 
 export type WorkflowScriptTask = WorkflowTaskIdentity;
 

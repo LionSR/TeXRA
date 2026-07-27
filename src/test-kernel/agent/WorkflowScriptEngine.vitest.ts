@@ -33,6 +33,20 @@ describe('parseWorkflowScript', () => {
     expect(body).not.toContain('export ');
   });
 
+  it('normalizes phase-title shorthand at the parser boundary', () => {
+    const { meta } = parseWorkflowScript(`export const meta = {
+  name: 'phase-shorthand',
+  description: 'accepts the natural phase-title form',
+  phases: ['Draft', { title: 'Merge', detail: 'Combine outputs' }],
+}
+return null`);
+
+    expect(meta.phases).toEqual([
+      { title: 'Draft' },
+      { title: 'Merge', detail: 'Combine outputs' },
+    ]);
+  });
+
   it('validates the declarative task plan as part of workflow metadata', () => {
     const { meta } = parseWorkflowScript(`export const meta = {
   name: 'planned',
@@ -171,7 +185,7 @@ return await agent('Inspect src', { id: 'core' })`,
     );
   });
 
-  it('rejects calls outside a declared plan and duplicated presentation data', async () => {
+  it('rejects calls outside a declared plan and conflicting presentation data', async () => {
     const plannedMeta = `export const meta = {
   name: 'strict-plan',
   description: 'requires task references',
@@ -192,13 +206,13 @@ return await agent('Inspect src', { id: 'core' })`,
     ).rejects.toThrow(/undeclared task id "other"/);
     await expect(
       runWorkflowScript({
-        script: `${plannedMeta}return await agent('duplicate', {
+        script: `${plannedMeta}return await agent('conflict', {
   id: 'known',
-  label: 'Duplicated label',
+  label: 'Conflicting label',
 })`,
         runAgent: echoRunner,
       }),
-    ).rejects.toThrow(/do not duplicate them in agent\(\) options/);
+    ).rejects.toThrow(/must use the label and phase declared in meta\.tasks/);
 
     await expect(
       runWorkflowScript({
@@ -209,6 +223,30 @@ return await agent('Inspect src', { id: 'core' })`,
         runAgent: echoRunner,
       }),
     ).rejects.toThrow(/may be issued only once per run/i);
+  });
+
+  it('accepts task presentation fields that exactly match the plan', async () => {
+    const runner = vi.fn(echoRunner);
+    await runWorkflowScript({
+      script: `export const meta = {
+  name: 'matching-plan',
+  description: 'tolerates harmless model duplication',
+  phases: ['Audit'],
+  tasks: [{ id: 'known', label: 'Known task', phase: 'Audit' }],
+}
+return await agent('inspect', {
+  id: 'known',
+  label: 'Known task',
+  phase: 'Audit',
+})`,
+      runAgent: runner,
+    });
+
+    expect(runner.mock.calls[0][0].options).toMatchObject({
+      id: 'known',
+      label: 'Known task',
+      phase: 'Audit',
+    });
   });
 
   it('treats an explicitly empty task plan as closed', async () => {

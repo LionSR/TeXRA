@@ -359,10 +359,15 @@ export async function runWorkflowScript(
           ),
         );
       }
-      if (callOptions.label !== undefined || callOptions.phase !== undefined) {
+      if (
+        (callOptions.label !== undefined &&
+          callOptions.label !== plannedTask.label) ||
+        (callOptions.phase !== undefined &&
+          callOptions.phase !== plannedTask.phase)
+      ) {
         throw rememberFatalRunError(
           new WorkflowRunAbortError(
-            `Task "${callOptions.id}" declares its label and phase in meta.tasks; do not duplicate them in agent() options.`,
+            `Task "${callOptions.id}" must use the label and phase declared in meta.tasks.`,
           ),
         );
       }
