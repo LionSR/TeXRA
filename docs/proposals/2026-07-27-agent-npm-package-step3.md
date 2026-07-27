@@ -20,7 +20,25 @@
 The candidate set — `src/agent` minus reflection/agentCreator/6 product modules, plus
 `platform`, `logger`, `model`, `transcript`, `utils`, `common`, the schema subset of
 `shared`, and the generic tool subset — was copied into a scratch tree preserving layout
-and typechecked in isolation (`types: ["node"]`, no `vscode`).
+and typechecked in isolation (`types: ["node"]`, no `vscode`). Each round's selection
+criteria:
+
+- **Round 1 — prescribed seed only:** the exact candidate modules listed above, with no
+  attempt to resolve import gaps. The 492 escapes represent the raw import surface.
+- **Round 2 — absorb support, refuse latex+auth:** Round 1 plus any support files that
+  resolve transitive import gaps (bridge modules, utility helpers, type re-exports),
+  while intentionally excluding `@latex`, `@auth`, and their dependents as product-domain
+  exclusions. This is the "how big is the real graph" measurement.
+- **Round 3** was an intermediate measurement that merged bridge files differently; it was
+  superseded by Round 4 and is omitted.
+- **Round 4 — SDK-shaped floor:** applies **principled exclusions** of product-domain
+  modules (latex, auth, replacement engine, reflection, controllers, telemetry) that an
+  SDK consumer would not need. Fewer files than Round 2, but **more escapes** — Round 2
+  pulled in bridge/support files to close import gaps, while Round 4 intentionally
+  excludes those adapters and marks each product-domain dependency as a deliberate escape
+  site that needs an architectural decision, not a transitive resolution. The 53 escapes
+  are the honest floor: they are the set of places where product logic crosses into the
+  core.
 
 | Round                                 |   Files |         LoC | Escape sites |
 | ------------------------------------- | ------: | ----------: | -----------: |
@@ -37,7 +55,14 @@ perfectly at package scale.
 
 Judgment from the cut: **weeks** to an internal package a friendly consumer could use;
 **months** to a credible public `npm publish` — and the months are _deciding_, not
-_untangling_.
+_untangling_. The 38 escape sites in Round 2 are not 38 independent fixes; they cluster
+into the **5 categories** listed in §2 (tool registry cycle, credential plane, replacement
+engine, library build, and ~32 small product edges). Each category is one behavioral ruling
+plus mechanical follow-through — the blockers are few, and none require deep refactoring.
+The "weeks → internal" path needs only B4 (build toolchain) plus enough of B1-B3 to run
+under a friendly consumer's own key; the "months → public" path needs all five blockers
+resolved plus declaration-emit hardening, and the months are consumed by _deciding_ the
+product-line rulings in §8, not by writing code.
 
 ## 2. Five blockers, ranked (the compiler's list, not an estimate)
 
@@ -107,14 +132,14 @@ small; collectively they are the decision surface.
 
 **Name: `@texra-ai/agent`** — the scope is owned and published (`@texra-ai/cli`);
 `@texra/*` is the private-workspace convention; `core` is burned (CLAUDE.md disclaims it,
-and `packages/core/` exists as a stale untracked directory that should be deleted).
-Version lockstep with the workspace.
+and `packages/core/` existed as a stale directory from a prior attempt — it was removed
+before this proposal was written). Version lockstep with the workspace.
 
 **Three entries, no more:**
 
 | Entry             | Consumer imports                                                                | Why it cannot fold                                                                                                                                                                   |
 | ----------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `@texra-ai/agent` | `runAgent`, run handle, `AgentEvent`, `HostInteractions`, `defineTool`, `ITool` | the run surface; must stay `node:`-free                                                                                                                                              |
+| `@texra-ai/agent` | `runAgent`, run handle, `AgentEvent`, `HostInteractions`, `defineTool`, `ITool` | the run surface; must stay `node:`-free (currently `RunContext.ts` imports `node:async_hooks`, and `executeAgent.ts`/`AgentLaunchContext.ts` import `node:path` — these must move behind platform ports or into `/node` before publish) |
 | `/schemas`        | `AgentConfigSchema`, `AgentDefinitionSchema`, ids, result schemas               | **Zod values** consumers `.parse()`/`.extend()`; the only browser-safe entry. Must be a **named subset** — the in-repo barrel re-exports webview wire contracts that are not SDK API |
 | `/node`           | `nodePlatform({...})`                                                           | node defaults would drag `node:fs`/`proper-lockfile` into every consumer if folded                                                                                                   |
 
@@ -158,6 +183,15 @@ members needed. **No `Session` class, no `on()`/`emit()`** — Anthropic built
 `unstable_v2_createSession`/`SDKSession`, shipped it, and deleted it in 0.3.142; that
 experiment has been run. The `for await` adapter over `AgentTraceSubscriber` is ~60 LoC
 yielding `AgentEvent` verbatim — zero new vocabulary.
+
+**How the adapter resolves the async gap.** Today `runAgent` returns
+`Promise<AgentFlowResult>`, but the sample above calls it synchronously. The adapter
+constructs an `AgentRunHandle` (a deferred facade exposing the 12 existing members) before
+the underlying `runFlowWithLifecycle` completes; the `for await` loop pulls from the
+trace subscriber's event stream, and `await run.result` resolves when the run finishes.
+This pattern is standard for SDK surfaces (both Claude Agent SDK and Codex SDK return an
+iterable handle, not a bare promise) and does not require refactoring the internal
+lifecycle — only a thin entry-point wrapper.
 
 Of the 13-item backlog between before and after, **only two are blocking**: the
 unattached-interaction ruling (#9256's recommendation stands — reuse the CLI's
@@ -212,7 +246,7 @@ access and usage logging · `preferHelperModel`.
 
 1. **Now, independent of any ruling:** fix the two devDep bugs (`nunjucks`, `semver` →
    dependencies); replace the two `TeXRAIconName` type imports with a local union (drops
-   Lit + FontAwesome from the schema graph); delete the stale `packages/core/` directory.
+   Lit + FontAwesome from the schema graph).
 2. **The two blocking rulings:** unattached-interaction policy (#9256 shape) and the
    `runtimeHost` deletion (§7.1 step 5).
 3. **B1:** sever the registry cycle (lazy edges already prototyped in-code), then 5b.
