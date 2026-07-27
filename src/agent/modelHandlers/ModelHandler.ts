@@ -56,9 +56,6 @@ import type {
   ServerToolExtractionResult,
   WebSearchResult,
 } from '@agent/types/ServerToolTypes';
-import { getServerSideKeyService } from '@auth/serverKeys';
-import { MAX_TIER, FREE_TIER } from '@auth/config';
-import { SupabaseClient } from '@auth/SupabaseClient';
 import {
   getSdkErrorMessage,
   isContextWindowError,
@@ -70,7 +67,10 @@ import {
   resolveModelSource,
   type ResolvedModelConfig,
 } from '@model/openRouterRouting';
-import { isGpt5ModelName } from '@model/modelNames';
+import {
+  includedModelAccess,
+  INCLUDED_MODEL_ACCESS_REMEDY,
+} from '@model/includedModelAccess';
 import { getApiKey, type ApiProvider } from '@model/apiProviders';
 import { platform } from '@platform/platform';
 import {
@@ -503,17 +503,17 @@ export abstract class ModelHandler<
     selection: ModelCredentialSelection = 'configured',
   ): Promise<ResolvedClientCredential> {
     const useOpenRouter = shouldUseOpenRouter(this.config);
-    const serverSideKeyService =
-      selection === 'configured' ? getServerSideKeyService() : null;
+    const includedAccess =
+      selection === 'configured' ? includedModelAccess() : null;
     const useIncludedAccess =
-      serverSideKeyService?.getUseIncludedModelAccess() ?? false;
+      includedAccess?.getUseIncludedModelAccess() ?? false;
     const canRouteThroughRelay =
       useIncludedAccess && !useOpenRouter && allowsModelRelay(this.config);
     const hasServerAccess = canRouteThroughRelay
-      ? await serverSideKeyService?.canUseServerSideKeys()
+      ? await includedAccess?.canUseServerSideKeys()
       : false;
 
-    if (canRouteThroughRelay && serverSideKeyService?.wasQuotaAutoSwitched()) {
+    if (canRouteThroughRelay && includedAccess?.wasQuotaAutoSwitched()) {
       throw new Error(
         `Model "${this.config.name}" cannot use the TeXRA relay because your monthly relay quota is exhausted. ` +
           'Switch to "Use My Own Keys" via the TeXRA Profile panel, or wait for the next quota period.',
@@ -522,12 +522,12 @@ export abstract class ModelHandler<
 
     const useRelay =
       canRouteThroughRelay &&
-      serverSideKeyService?.shouldUseServerSideKeysSync(
+      includedAccess?.shouldUseServerSideKeysSync(
         this.config.provider,
         this.config.name,
       );
     if (useRelay) {
-      const apiKey = await SupabaseClient.getRelayAccessToken();
+      const apiKey = await includedAccess?.getAccessToken();
       if (!apiKey) {
         throw new Error(
           'Unable to authenticate with server. Please sign out and sign back in, or switch to personal API keys.',
@@ -558,11 +558,14 @@ export abstract class ModelHandler<
         `Model "${this.config.name}" has no direct API-key provider.`,
       );
     }
+    // Name both ways out. Included access being off is a configuration state,
+    // not an absence of one, so "missing key" alone would send a user with a
+    // subscription hunting for a key they should not need.
     const apiKey = await this.fetchApiKeyOrThrow(
       provider,
       useOpenRouter
-        ? 'Missing API key for OpenRouter. Set your OpenRouter API key to continue.'
-        : `Missing API key for ${provider}. Set your ${provider} API key to continue.`,
+        ? `Missing API key for OpenRouter. ${INCLUDED_MODEL_ACCESS_REMEDY}`
+        : `Missing API key for ${provider}. ${INCLUDED_MODEL_ACCESS_REMEDY}`,
     );
     return {
       apiKey,
@@ -935,8 +938,11 @@ export abstract class ModelHandler<
 
   /**
    * Returns the effective reasoning effort for the current user and model.
-   * On GPT-5 models accessed via included (server-side) keys, the above-high
-   * tiers (xhigh and max) are capped: Max tier → high, free tier → medium.
+   * A request served through included access gets whatever effort that relay
+   * will honor — which tiers of it may cap. Which models are capped and to what
+   * is the relay operator's pricing policy, so it lives with the installed
+   * {@link IncludedModelAccess} rather than in every provider handler; a direct
+   * API key is billed to the user and is never capped.
    */
   protected getEffectiveReasoningEffort(): ReasoningEffort | null {
     const { supportsReasoningEffort, reasoningEffort } = this.capabilities;
@@ -948,23 +954,12 @@ export abstract class ModelHandler<
     // Providers map it to their minimum effort level (e.g. Anthropic → 'low').
     // Returning null here would silently fall back to high/default effort.
 
-    const isGpt5 = isGpt5ModelName(this.config.name);
-    if (
-      isGpt5 &&
-      (reasoningEffort === ReasoningEffort.XHIGH ||
-        reasoningEffort === ReasoningEffort.MAX) &&
-      this.shouldUseServerSideKeys()
-    ) {
-      const userTier = getServerSideKeyService().getUserTier();
-      if (userTier === MAX_TIER) {
-        return ReasoningEffort.HIGH;
-      }
-      if (userTier === FREE_TIER) {
-        return ReasoningEffort.MEDIUM;
-      }
-    }
-
-    return reasoningEffort;
+    return this.shouldUseServerSideKeys()
+      ? includedModelAccess().capReasoningEffort(
+          this.config.name,
+          reasoningEffort,
+        )
+      : reasoningEffort;
   }
 
   /**
