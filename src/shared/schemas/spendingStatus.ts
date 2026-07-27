@@ -13,6 +13,19 @@ export const SpendingStatusSchema = z.object({
 });
 export type SpendingStatus = z.infer<typeof SpendingStatusSchema>;
 
+/**
+ * Relay-side spend-check failure, returned by /tier-config alongside a null
+ * `spendingStatus` when the server could not compute the user's spend (e.g. a
+ * usage-table query failed). Distinguishes "the server failed to check" from
+ * "no usage data exists for this account".
+ */
+export const SpendingStatusErrorSchema = z.object({
+  spendCheckFailed: z.boolean(),
+  failureReason: z.string().nullish(),
+  limit: z.number().finite().nullish(),
+});
+export type SpendingStatusError = z.infer<typeof SpendingStatusErrorSchema>;
+
 /** The exhausted boundary: single source of truth for `TierService` and the
  *  Settings quota meter, so the two can't drift on what "exhausted" means. */
 export function isSpendingQuotaExceeded(status: SpendingStatus): boolean {
