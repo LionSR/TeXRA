@@ -139,10 +139,13 @@ export function formatToolUseTemplate(
   const isTrivialWriteOutput =
     isWriteTool && outputText.trim() === TRIVIAL_WRITE_OUTPUT;
   // Skip the output section when its text is already fully shown in the
-  // collapsed summary title (e.g. "Replaced 1 occurrence.").
+  // collapsed summary title (e.g. "Replaced 1 occurrence."). Exact match
+  // against the summary only — a substring test would also suppress short
+  // outputs that merely happen to appear inside the label or path.
   const normalizedOutput = collapseWhitespace(outputText).trim();
   const isOutputInTitle =
-    normalizedOutput !== '' && titleText.includes(normalizedOutput);
+    normalizedOutput !== '' &&
+    normalizedOutput === collapseWhitespace(headerSummary).trim();
   if (
     outputText &&
     !isOutputInTitle &&
