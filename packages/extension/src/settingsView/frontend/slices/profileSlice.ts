@@ -2,7 +2,10 @@
 
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { SettingsViewOutboundHandlerRegistry } from '@shared/schemas';
-import type { SpendingStatus } from '@shared/schemas/spendingStatus';
+import type {
+  SpendingStatus,
+  SpendingStatusError,
+} from '@shared/schemas/spendingStatus';
 
 import {
   apiAccessMode,
@@ -31,6 +34,19 @@ function spendingStatusEqual(
   );
 }
 
+function spendingStatusErrorEqual(
+  a: SpendingStatusError | null,
+  b: SpendingStatusError | null,
+): boolean {
+  if (a === b) return true;
+  if (a === null || b === null) return false;
+  return (
+    a.spendCheckFailed === b.spendCheckFailed &&
+    a.failureReason === b.failureReason &&
+    a.limit === b.limit
+  );
+}
+
 // `SettingsViewOutboundHandlerRegistry` is now exhaustive (every SettingsView
 // outbound command needs a real handler or `unsupported(...)` — see
 // `@shared/utils/dispatcher`). This slice only owns the profile command, so
@@ -50,7 +66,10 @@ export const profileHandlers = {
       spendingStatus.set(newSpend);
     }
     sessionExpired.set(data.sessionExpired ?? false);
-    spendingStatusError.set(data.spendingStatusError ?? null);
+    const newSpendError = data.spendingStatusError ?? null;
+    if (!spendingStatusErrorEqual(spendingStatusError.get(), newSpendError)) {
+      spendingStatusError.set(newSpendError);
+    }
     quotaAutoSwitched.set(data.quotaAutoSwitched ?? false);
     apiAccessMode.set(data.apiAccessMode);
     providerKeyStatuses.set(data.providerKeyStatuses ?? []);
