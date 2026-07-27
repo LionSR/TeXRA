@@ -288,8 +288,9 @@ export class HistoryItemElement extends LitElement {
     }
 
     const presentation = getHistoryItemPresentation(this.item);
-    const categoryVariant: 'warning' | 'brand' =
-      presentation.isToolUse ? 'warning' : 'brand';
+    const categoryVariant: 'warning' | 'brand' = presentation.isToolUse
+      ? 'warning'
+      : 'brand';
 
     const extraDetails: TemplateResult[] = [];
     const pushSection = (
