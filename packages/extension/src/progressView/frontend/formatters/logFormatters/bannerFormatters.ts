@@ -111,7 +111,7 @@ export function formatModelResponseTemplate(
 
   // prettier-ignore
   return html`<wa-details appearance="plain" icon-placement="start" class="banner-details" ?open=${shouldOpen} data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)} data-timestamp=${ifDefined(fullTimestamp)}>${buildDetailsSummary({
-    iconName: 'sparkle',
+    iconName: 'wand-magic-sparkles',
     label: 'Assistant',
     timestamp: verbose
       ? { display: `[${timeDisplay}]`, tooltip: tooltipTimestamp }

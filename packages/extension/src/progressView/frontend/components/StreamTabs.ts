@@ -287,7 +287,7 @@ export class StreamTab extends LitElement {
           data-stream=${stream.name}
           data-action="delete"
         >
-          ${waIcon('close')}
+          ${waIcon('xmark')}
         </wa-button>
         <wa-tooltip for="stream-tab-delete-button">Delete stream</wa-tooltip>
       </div>

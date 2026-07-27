@@ -66,8 +66,8 @@ export class RecordingButtonController implements ReactiveController {
   get state(): RecordingButtonState {
     const recording = this._recording;
     const icon = recording
-      ? (this.config.stopIcon ?? 'stop-circle')
-      : (this.config.startIcon ?? 'mic');
+      ? (this.config.stopIcon ?? 'circle-stop')
+      : (this.config.startIcon ?? 'microphone');
     const title = recording
       ? (this.config.stopTitle ?? 'Stop recording')
       : (this.config.startTitle ?? 'Record with microphone');

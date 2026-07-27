@@ -37,7 +37,7 @@ export function renderSettingsBanner(
     body: html`
       <div class="settings-banner-layout">
         <span class="settings-banner-icon icon-surface is-size-m">
-          ${waIcon(options.icon ?? 'info')}
+          ${waIcon(options.icon ?? 'circle-info')}
         </span>
         <div class="settings-banner-body">
           <div class="settings-banner-title">${options.title}</div>

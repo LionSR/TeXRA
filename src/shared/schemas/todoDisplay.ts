@@ -4,9 +4,9 @@ import { TODO_STATUS, type TodoStatus } from './todo';
 
 /** wa-icon names for each todo/plan step status (used in webview components). */
 export const STATUS_ICONS: Record<TodoStatus, TeXRAIconName> = {
-  [TODO_STATUS.PENDING]: 'circle-outline',
-  [TODO_STATUS.IN_PROGRESS]: 'loading',
-  [TODO_STATUS.COMPLETED]: 'pass-filled',
+  [TODO_STATUS.PENDING]: 'circle',
+  [TODO_STATUS.IN_PROGRESS]: 'spinner',
+  [TODO_STATUS.COMPLETED]: 'circle-check',
 };
 
 /** Text-based status display for tool output formatting. */

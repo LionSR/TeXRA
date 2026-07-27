@@ -81,17 +81,17 @@ export const AGENT_DECORATORS = {
       hint: 'Remote agent: Prompts loaded from cloud',
     },
     custom: {
-      icon: 'account',
+      icon: 'circle-user',
       label: 'Custom',
       hint: 'Custom agent: User-defined in your agents directory',
     },
   },
   agentCategories: {
-    workflow: { icon: 'symbol-method', label: 'Workflow' },
-    toolUse: { icon: 'tools', label: 'Tool Use' },
+    workflow: { icon: 'cube', label: 'Workflow' },
+    toolUse: { icon: 'screwdriver-wrench', label: 'Tool Use' },
   },
   streamKinds: {
-    workflowScript: { icon: 'list-tree', label: 'Workflow Script' },
+    workflowScript: { icon: 'list-ul', label: 'Workflow Script' },
   },
 } as const;
 

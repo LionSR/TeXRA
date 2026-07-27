@@ -96,11 +96,11 @@ export function formatMissingOutputsTemplate(
   const listItems = missing.map((f) => {
     const filePath = String(f);
     const basename = getBasename(filePath);
-    return html`<li class="detail-item" title=${filePath}>${waIcon('warning')} <span class="file-link clickable-link" data-file=${filePath} role="button" tabindex="0">${basename}</span></li>`;
+    return html`<li class="detail-item" title=${filePath}>${waIcon('triangle-exclamation')} <span class="file-link clickable-link" data-file=${filePath} role="button" tabindex="0">${basename}</span></li>`;
   });
   // prettier-ignore
   return html`<wa-details appearance="plain" icon-placement="start" class="banner-details file-list-details" ?open=${shouldOpen}>${buildDetailsSummary({
-    iconName: 'warning',
+    iconName: 'triangle-exclamation',
     label: `Missing outputs (${missing.length})`,
     labelClass: 'summary-text',
   })}<ul class="file-list-content" data-log-id=${ifDefined(id)}>${listItems}</ul>${xmlFile ? renderXmlLink(xmlFile) : ''}</wa-details>`;
@@ -148,29 +148,39 @@ type StatFieldConfig = readonly [
 const STAT_FIELDS: readonly StatFieldConfig[] = [
   ['inputTokens', 'arrow-up', 'Input tokens', formatCompactTokenCount],
   ['outputTokens', 'arrow-down', 'Output tokens', formatCompactTokenCount],
-  ['cacheReadInputTokens', 'history', 'Cache hits', formatCompactTokenCount],
+  [
+    'cacheReadInputTokens',
+    'clock-rotate-left',
+    'Cache hits',
+    formatCompactTokenCount,
+  ],
   [
     'cacheMissInputTokens',
-    'cloud-upload',
+    'cloud-arrow-up',
     'Cache misses',
     formatCompactTokenCount,
   ],
-  ['cacheCreationInputTokens', 'save', 'Cache writes', formatCompactTokenCount],
-  ['percentageCached', 'graph-line', 'Cached %', (v) => `${v.toFixed(2)}%`],
   [
-    'reasoningTokens',
-    'comment-discussion',
-    'Reasoning tokens',
+    'cacheCreationInputTokens',
+    'floppy-disk',
+    'Cache writes',
     formatCompactTokenCount,
   ],
-  ['toolUseTokens', 'tools', 'Tool tokens', formatCompactTokenCount],
+  ['percentageCached', 'chart-line', 'Cached %', (v) => `${v.toFixed(2)}%`],
+  ['reasoningTokens', 'comments', 'Reasoning tokens', formatCompactTokenCount],
+  [
+    'toolUseTokens',
+    'screwdriver-wrench',
+    'Tool tokens',
+    formatCompactTokenCount,
+  ],
   ['elapsedTime', 'clock', 'Elapsed time', (v) => `${v}s`],
   ['cost', 'rocket', 'Cost', formatCostUsd],
 ];
 
 /** Fixed header config for the statistics panel rendered via <context-management>. */
 const STATISTICS_CONFIG = Object.freeze({
-  icon: 'graph',
+  icon: 'chart-line',
   label: 'Statistics',
   color: 'var(--wa-color-text-normal)',
 });
