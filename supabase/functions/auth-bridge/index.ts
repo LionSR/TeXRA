@@ -292,6 +292,8 @@ function bridgePageHtml(ext: string, id: string): string {
 
     var oauthError = getParam('error');
     var errorDescription = getParam('error_description');
+    var hasCode = getParam('code');
+    var hasToken = getParam('access_token');
 
     openLink.textContent = 'Open in ' + (DISPLAY[EXT] || 'your editor');
 
@@ -335,7 +337,7 @@ function bridgePageHtml(ext: string, id: string): string {
       }
     });
 
-    if (!oauthError && (getParam('code') || getParam('access_token'))) {
+    if (!oauthError && (hasCode || hasToken)) {
       // Auto-open the editor only when a usable OAuth payload is present
       // (a code or access_token, not arbitrary query params). A refresh or
       // direct visit after the history scrub has none — stay manual there.
