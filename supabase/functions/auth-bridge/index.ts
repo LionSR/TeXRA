@@ -5,8 +5,9 @@
  * straight to a raw vscode:// deep link. GoTrue server-redirects into a custom
  * scheme are silently dropped by some browsers (Firefox on Linux), which fails
  * the flow with bad_oauth_state. Redirecting to this https bridge lands the
- * user on a real page that offers a real-click "Open in <editor>" button which
- * hands the result back to the editor's deep link.
+ * user on a real page that auto-opens the editor's deep link (client-side
+ * navigation, which browsers honor where they drop the server redirect) and
+ * keeps a real-click "Open in <editor>" button as the fallback.
  *
  * PKCE flow: the only thing GoTrue puts on this page is a one-time ?code= in the
  * query string (or ?error= on failure). No access/refresh token ever reaches
@@ -333,6 +334,23 @@ function bridgePageHtml(ext: string, id: string): string {
         failed();
       }
     });
+
+    if (!oauthError) {
+      // Auto-open the editor; the button stays as the fallback because
+      // browsers may block or prompt on custom-scheme navigation (and some
+      // strip it entirely without a user gesture).
+      lede.textContent =
+        'Opening ' + (DISPLAY[EXT] || 'your editor') +
+        '… If nothing happens, click the button below.';
+      setTimeout(function () {
+        try {
+          window.location.href = deepLink;
+        } catch (navErr) {
+          // Navigation refused (sandboxed/blocked scheme); the manual
+          // button and copyable link above remain the path forward.
+        }
+      }, 200);
+    }
   }
 </script>`);
 }
