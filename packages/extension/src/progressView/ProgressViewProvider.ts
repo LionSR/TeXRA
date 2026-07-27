@@ -195,7 +195,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
             },
           );
           void vscode.window.showErrorMessage(
-            'TeXRA could not reload transcript persistence for the new workspace. The previous transcript view was preserved.',
+            'TeXRA could not reload the transcript view after the workspace changed. Retry the workspace change or restart TeXRA.',
           );
         }
       }),

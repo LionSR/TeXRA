@@ -356,6 +356,37 @@ describe('ProgressBackend', () => {
     }
   });
 
+  it('retries presentation loading after the storage root already moved', async () => {
+    const transcripts = await StreamLogStore.open();
+    const session = new SessionHandle({
+      transcripts,
+      restartRepair: 'deferred',
+    });
+    vi.spyOn(session, 'reloadAfterStorageRootChange')
+      .mockResolvedValueOnce(true)
+      .mockResolvedValue(false);
+    const { backend } = createIsolatedRecordingBackend(session);
+    const presentationError = new Error('presentation load failed');
+    const loadPresentation = vi
+      .spyOn(backend.state, 'load')
+      .mockRejectedValueOnce(presentationError)
+      .mockResolvedValue();
+
+    try {
+      await expect(backend.reloadAfterStorageRootChange()).rejects.toBe(
+        presentationError,
+      );
+      await expect(
+        backend.reloadAfterStorageRootChange(),
+      ).resolves.toBeUndefined();
+
+      expect(loadPresentation).toHaveBeenCalledTimes(2);
+    } finally {
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
   it('serializes complete presentation reloads across rapid workspace moves', async () => {
     const transcripts = await StreamLogStore.open();
     const session = new SessionHandle({

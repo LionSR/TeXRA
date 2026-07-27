@@ -288,9 +288,10 @@ export class SessionHandle {
     try {
       if (this.restartRepairAbort.signal.aborted) return false;
       if (reloadTranscripts) {
-        return await runWithOwnedExecutionLeaseQuiescence(() =>
-          this.replaceStoresAfterStorageRootChange(generation),
-        );
+        return await runWithOwnedExecutionLeaseQuiescence(async () => {
+          if (this.restartRepairAbort.signal.aborted) return false;
+          return this.replaceStoresAfterStorageRootChange(generation);
+        });
       }
       const repair = async () => {
         if (generation !== this.storageGeneration) return false;

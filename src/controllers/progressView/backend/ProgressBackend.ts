@@ -106,6 +106,7 @@ export class ProgressBackend {
   ) => void;
   private readonly stateOwnership: 'backend' | 'session';
   private readonly storageRootQueue = new PQueue({ concurrency: 1 });
+  private presentationReloadPending = false;
   private disposed = false;
 
   constructor(options: ProgressBackendOptions) {
@@ -304,11 +305,15 @@ export class ProgressBackend {
       } catch (error) {
         sessionReloadError = error;
       }
-      if (!sessionReloadError && !storageRootReplaced) return;
+      if (sessionReloadError || storageRootReplaced) {
+        this.presentationReloadPending = true;
+      }
+      if (!this.presentationReloadPending) return;
       this.state.resetAfterStorageRootChange();
       this.webviewBridge.clearAll();
       try {
         await this.state.load(this.stateOwnership);
+        this.presentationReloadPending = false;
       } catch (presentationReloadError) {
         if (sessionReloadError) {
           throw new AggregateError(

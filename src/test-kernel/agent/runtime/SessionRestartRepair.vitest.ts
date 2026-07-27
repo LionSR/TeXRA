@@ -587,6 +587,36 @@ describe('SessionHandle restart repair', () => {
     }
   });
 
+  it('does not resume a root replacement after session disposal', async () => {
+    const liveExecutionId = 'workspace-disposed' as ExecutionId;
+    const transcripts = await StreamLogStore.open();
+    const session = new SessionHandle({
+      transcripts,
+      restartRepair: 'deferred',
+    });
+    const commitWorkspaceStorageChange = vi.fn(() => true);
+    Object.assign(platform().storage, {
+      hasPendingWorkspaceStorageChange: () => true,
+      commitWorkspaceStorageChange,
+    });
+    await acquireFreshExecutionLease(liveExecutionId);
+
+    try {
+      const replacement = session.reloadAfterStorageRootChange();
+      await Promise.resolve();
+      expect(commitWorkspaceStorageChange).not.toHaveBeenCalled();
+
+      session.dispose();
+      await completeOwnedExecutionLease(liveExecutionId);
+
+      await expect(replacement).resolves.toBe(false);
+      expect(commitWorkspaceStorageChange).not.toHaveBeenCalled();
+    } finally {
+      await completeOwnedExecutionLease(liveExecutionId);
+      session.dispose();
+    }
+  });
+
   it('holds new root executions outside the workspace replacement', async () => {
     const queuedExecutionId = 'workspace-queued' as ExecutionId;
     const transcripts = await StreamLogStore.open();
