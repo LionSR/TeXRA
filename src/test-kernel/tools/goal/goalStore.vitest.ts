@@ -1,4 +1,4 @@
-// Test environment imports
+// Test composition imports
 import '@test/support/defaultSessionTestSetup';
 
 // Test support imports
