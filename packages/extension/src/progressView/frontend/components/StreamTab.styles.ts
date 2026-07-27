@@ -60,12 +60,9 @@ export const streamTabStyles = css`
     border-left-color: var(--wa-color-text-link);
   }
 
-  .tab-container.status-stopped,
-  .tab-container.status-completed,
-  .tab-container.status-cancelled,
-  .tab-container.status-ready {
-    border-left-color: var(--color-border);
-  }
+  /* Finished states (stopped/completed/cancelled/ready) keep the
+     transparent default: the rail only lights up while something is
+     happening or needs attention. */
 
   .tab-container.status-initializing,
   .tab-container.status-starting {
@@ -82,7 +79,7 @@ export const streamTabStyles = css`
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    padding: var(--wa-space-2xs);
+    padding: var(--wa-space-3xs) var(--wa-space-2xs);
     cursor: pointer;
     border: none;
     background: none;
@@ -96,7 +93,7 @@ export const streamTabStyles = css`
   .tab-header {
     display: flex;
     align-items: center;
-    gap: var(--wa-space-2xs);
+    gap: var(--wa-space-3xs);
     width: 100%;
     min-width: 0;
   }
@@ -110,7 +107,7 @@ export const streamTabStyles = css`
   }
 
   .tab-description {
-    font-size: var(--font-size-sm);
+    font-size: var(--font-size-xs);
     color: var(--wa-color-text-quiet, var(--wa-color-text-normal));
     opacity: var(--opacity-hover);
     white-space: nowrap;
@@ -130,8 +127,8 @@ export const streamTabStyles = css`
   .tab-meta {
     display: flex;
     align-items: center;
-    gap: var(--wa-space-2xs);
-    font-size: var(--font-size-sm);
+    gap: var(--wa-space-3xs);
+    font-size: var(--font-size-xs);
     color: var(--wa-color-text-normal);
     opacity: var(--opacity-subtle);
     width: 100%;
@@ -219,7 +216,7 @@ export const streamTabStyles = css`
   }
 
   .tab-container.is-compact .tab {
-    padding: var(--wa-space-2xs) var(--wa-space-3xs);
+    padding: var(--wa-space-3xs) var(--wa-space-3xs);
   }
 
   .tab-container.is-compact .tab-delete {

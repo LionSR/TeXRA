@@ -98,7 +98,7 @@ export const unsupportedProgressCommands$ = signal<ReadonlySet<string> | null>(
 // ---------------------------------------------------------------------------
 
 export const streamById$ = select(appState, (s) => s.streamById);
-export const streamFilter$ = select(appState, (s) => s.streamFilter);
+const streamFilter$ = select(appState, (s) => s.streamFilter);
 export const streamStates$ = select(appState, (s) => s.streamStates);
 const streamLogs$ = select(appState, (s) => s.streamLogs);
 export const activeStreamId$ = select(appState, (s) => s.activeStreamId);

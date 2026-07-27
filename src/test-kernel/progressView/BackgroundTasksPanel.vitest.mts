@@ -95,7 +95,7 @@ describe('background-tasks-panel', () => {
       expect(shadow.querySelector(`wa-tooltip[for="${name.id}"]`)).toBeTruthy();
     }
 
-    const rows = [...shadow.querySelectorAll('.task-item')];
+    const rows = [...shadow.querySelectorAll('.task-header')];
     expect(rows.at(-1)?.textContent).toContain('1m 4s');
     const badges = [...shadow.querySelectorAll('wa-badge.task-status')].map(
       (node) => node.textContent,
@@ -104,9 +104,8 @@ describe('background-tasks-panel', () => {
     expect(shadow.textContent).not.toContain('completed</em>');
     expect(shadow.textContent).not.toMatch(/All \d+ subagents completed/);
 
-    // Header counts both dimensions from the one list.
-    expect(shadow.textContent).toContain('1 active');
-    expect(shadow.textContent).toContain('1 done');
+    // A lone populated section renders rows directly — no section header, so
+    // per-row status badges are the status surface.
 
     element.remove();
   });
@@ -152,7 +151,7 @@ describe('background-tasks-panel', () => {
     );
     // Only the run carries a phase; a stream without one gains no span.
     expect(phases).toEqual(['Reduce 2/3']);
-    const rows = [...shadow.querySelectorAll('.task-item')];
+    const rows = [...shadow.querySelectorAll('.task-header')];
     expect(rows[0]?.textContent).toContain('Reduce 2/3');
     expect(rows[1]?.textContent).not.toContain('Reduce');
 

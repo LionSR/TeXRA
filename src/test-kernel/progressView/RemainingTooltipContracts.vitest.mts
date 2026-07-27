@@ -29,6 +29,11 @@ describe('remaining progress-view tooltip contracts', () => {
     const element = document.createElement(
       'context-management',
     ) as ContextManagement;
+    element.config = {
+      icon: 'history',
+      label: 'Context Management',
+      color: 'var(--wa-color-text-normal)',
+    };
     element.items = [
       { icon: 'history', label: 'Before', value: '10k' },
       { icon: 'history', label: 'After', value: '5k' },
