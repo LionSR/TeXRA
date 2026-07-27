@@ -232,8 +232,10 @@ describe('createWorkflowScriptAgentRunner', () => {
   it('rejects dependencies that change between engine hashing and launch', async () => {
     const options = { inputFiles: ['proof.tex'] };
     mocks.workspaceReadBytes.mockResolvedValueOnce(Buffer.from('old proof'));
-    const dependencyFingerprint =
-      await fingerprintWorkflowAgentDependencies(runExecutionId, options);
+    const dependencyFingerprint = await fingerprintWorkflowAgentDependencies(
+      runExecutionId,
+      options,
+    );
     mocks.workspaceReadBytes.mockResolvedValue(Buffer.from('new proof'));
     const runner = defaultRunner();
 
