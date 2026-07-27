@@ -143,6 +143,8 @@ const moduleDirname = fileURLToPath(new URL('.', import.meta.url));
 const desktopMainDir = findDesktopMainDir(moduleDirname);
 let mainWindow: BrowserWindow | null = null;
 let reopenMainWindow: (() => void) | undefined;
+let workspaceRelaunchInProgress = false;
+let continueQuitAfterWindowClose: (() => void) | undefined;
 
 // Playwright relaunch tests need a deterministic Electron profile so
 // app-scoped stores survive across child processes. Normal desktop launches
@@ -472,6 +474,42 @@ function createWindow(options: {
     signInForRemoteAgentCatalog,
   );
   const folderPickerDefaultPath = options.workspacePath ?? app.getPath('home');
+  let editorHasUnsavedChanges = false;
+  let allowNextPreventedUnload = false;
+  let pendingWorkspaceRelaunch:
+    { selectedPath: string; args: string[] } | undefined;
+  const confirmDiscardUnsavedEditorChanges = (force = false): boolean => {
+    if (!force && !editorHasUnsavedChanges) return true;
+    const response = dialog.showMessageBoxSync(window, {
+      type: 'warning',
+      buttons: ['Keep Editing', 'Discard Changes'],
+      defaultId: 0,
+      cancelId: 0,
+      title: 'Unsaved Changes',
+      message: 'This workspace has unsaved editor changes.',
+      detail: 'Discard the changes and continue?',
+    });
+    if (response !== 1) return false;
+    editorHasUnsavedChanges = false;
+    return true;
+  };
+  window.webContents.on('will-prevent-unload', (event) => {
+    if (allowNextPreventedUnload) {
+      allowNextPreventedUnload = false;
+      event.preventDefault();
+      return;
+    }
+    // The event itself is authoritative: it is emitted only after the
+    // renderer observes a dirty Monaco buffer and refuses the unload. The
+    // mirrored IPC flag may still be in flight.
+    if (confirmDiscardUnsavedEditorChanges(true)) {
+      event.preventDefault();
+      return;
+    }
+    pendingWorkspaceRelaunch = undefined;
+    workspaceRelaunchInProgress = false;
+    continueQuitAfterWindowClose = undefined;
+  });
   const openLogsFolder = async () =>
     previewHost.openPath(getDesktopLogDirectory());
   const openWorkspaceFolder = async () => {
@@ -482,30 +520,18 @@ function createWindow(options: {
     });
     const selectedPath = result.canceled ? undefined : result.filePaths[0];
     if (!selectedPath) return;
-
-    await platform().globalState.update(
-      DESKTOP_WORKSPACE_PATH_STATE_KEY,
+    const hadUnsavedChanges = editorHasUnsavedChanges;
+    if (!confirmDiscardUnsavedEditorChanges()) return;
+    allowNextPreventedUnload = hadUnsavedChanges;
+    pendingWorkspaceRelaunch = {
       selectedPath,
-    );
-    const relaunchArgs = withWorkspacePathArg(
-      process.argv.slice(1),
-      selectedPath,
-    );
-    // The development supervisor owns Vite and the Electron child. Let it
-    // replace the child so the new process keeps a live renderer URL; calling
-    // app.relaunch() directly orphaned the replacement and made the
-    // supervisor tear Vite down as soon as the original process exited.
-    if (
-      process.env.TEXRA_DESKTOP_DEV_SUPERVISED === '1' &&
-      typeof process.send === 'function'
-    ) {
-      process.send(relaunchArgs);
-    } else {
-      app.relaunch({ args: relaunchArgs });
-    }
-    // `app.exit()` bypasses before-quit; use the lifecycle-aware path so the
-    // process session drains before Electron starts the replacement process.
-    app.quit();
+      args: withWorkspacePathArg(process.argv.slice(1), selectedPath),
+    };
+    workspaceRelaunchInProgress = true;
+    // Closing first lets the renderer's authoritative beforeunload check veto
+    // the switch. The replacement is scheduled only from the closed handler,
+    // after unsaved changes can no longer cancel it.
+    window.close();
   };
   attachRendererConsoleLog(window.webContents);
   const agentExecutionHost: DesktopAgentExecutionHost = {
@@ -1113,6 +1139,9 @@ function createWindow(options: {
         };
       },
       getEnvironmentSummary: () => gitHost.getEnvironmentSummary(),
+      onEditorDirtyChange: (dirty) => {
+        editorHasUnsavedChanges = dirty;
+      },
       onAsyncError: reportAsyncError,
     },
   );
@@ -1155,6 +1184,10 @@ function createWindow(options: {
     Menu.buildFromTemplate(buildDesktopMenuTemplate(shellActions)),
   );
   window.once('closed', () => {
+    const workspaceRelaunch = pendingWorkspaceRelaunch;
+    pendingWorkspaceRelaunch = undefined;
+    const continueQuit = continueQuitAfterWindowClose;
+    continueQuitAfterWindowClose = undefined;
     windowClosed = true;
     disposeWindowTitle();
     presentationAbort.abort();
@@ -1182,6 +1215,33 @@ function createWindow(options: {
     // down — neither is reachable once the window is gone.
     ptyHost.disposeAll();
     browserViews.disposeAll();
+    if (workspaceRelaunch) {
+      void (async () => {
+        try {
+          await platform().globalState.update(
+            DESKTOP_WORKSPACE_PATH_STATE_KEY,
+            workspaceRelaunch.selectedPath,
+          );
+        } catch (error) {
+          reportAsyncError(error);
+        }
+        // The development supervisor owns Vite and the Electron child. Let it
+        // replace the child so the new process keeps a live renderer URL.
+        if (
+          process.env.TEXRA_DESKTOP_DEV_SUPERVISED === '1' &&
+          typeof process.send === 'function'
+        ) {
+          process.send(workspaceRelaunch.args);
+        } else {
+          app.relaunch({ args: workspaceRelaunch.args });
+        }
+        // Use the lifecycle-aware path so the process session drains before
+        // Electron starts the replacement process.
+        app.quit();
+      })();
+    } else {
+      continueQuit?.();
+    }
   });
   let windowPresented = false;
   const presentWindow = (): void => {
@@ -1264,15 +1324,20 @@ if (protocolLifecycle.shouldContinue) {
         disposeAgentResumeHandler = processResumeOwner.attach({
           session: processSession,
         });
-        // before-quit semantics: hold every quit event until shutdown handlers
-        // have finished draining (a second Cmd+Q while we're mid-drain must NOT
-        // be allowed to terminate the process). Only after runShutdown resolves
-        // do we let Electron's own quit sequence proceed — and we mark
-        // shutdownStarted to avoid re-entering the runShutdown chain.
+        // Ask the renderer to close before draining process services. A dirty
+        // editor can veto that close and remain fully operational. Once the
+        // window really closes, its handler calls app.quit() again and this
+        // listener proceeds with the ordinary shutdown chain.
         let shutdownStarted = false;
         let quitting = false;
         app.on('before-quit', (event) => {
           if (quitting) return;
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            event.preventDefault();
+            continueQuitAfterWindowClose = () => app.quit();
+            mainWindow.close();
+            return;
+          }
           event.preventDefault();
           if (shutdownStarted) return;
           shutdownStarted = true;
@@ -1345,5 +1410,6 @@ if (protocolLifecycle.shouldContinue) {
 }
 
 app.on('window-all-closed', () => {
+  if (workspaceRelaunchInProgress) return;
   if (process.platform !== 'darwin') app.quit();
 });
