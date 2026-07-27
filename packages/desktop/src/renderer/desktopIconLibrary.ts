@@ -193,10 +193,7 @@ function lucideSvg(name: string): string | undefined {
  * Direct lookup: canonical name → Lucide equivalent → fallback to name.
  */
 function resolveLucideName(name: string): string {
-  return (
-    LUCIDE_NAME_BY_TEXRA_NAME[name] ??
-    name
-  );
+  return LUCIDE_NAME_BY_TEXRA_NAME[name] ?? name;
 }
 
 function svgDataUri(svg: string): string {
