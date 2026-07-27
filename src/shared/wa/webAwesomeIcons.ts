@@ -124,11 +124,7 @@ import { registerIconLibrary } from '@awesome.me/webawesome/dist/components/icon
 import { html, type TemplateResult } from 'lit';
 import { ifDefined } from 'lit/directives/if-defined.js';
 
-import {
-  CODICON_ALIASES,
-  TEXRA_ICON_CANONICAL_NAMES,
-  type TeXRAIconName,
-} from './iconNames';
+import { TEXRA_ICON_CANONICAL_NAMES, type TeXRAIconName } from './iconNames';
 
 export const TEXRA_ICON_LIBRARY = 'texra';
 
@@ -289,11 +285,7 @@ function dataUri(svg: string): string {
 }
 
 function resolveIcon(name: string): FontAwesomeIconDefinition | undefined {
-  const aliased = (
-    CODICON_ALIASES as Readonly<Record<string, keyof typeof icons>>
-  )[name];
-  const canonical = aliased ?? name;
-  return icons[canonical as keyof typeof icons];
+  return icons[name as keyof typeof icons];
 }
 
 function texraIconResolver(name: string): string {

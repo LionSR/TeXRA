@@ -219,7 +219,7 @@ export function createDesktopCommandPalette({
     render(
       html`
         <div class="desktop-command-palette-search">
-          ${waIcon('search', {
+          ${waIcon('magnifying-glass', {
             className: 'desktop-command-palette-search-icon',
           })}
           <wa-input

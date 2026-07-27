@@ -26,7 +26,7 @@ import { buildDetailsSummary } from '../formatters/htmlBuilders';
 /** Status wa-icon name lookup for latexdiff entries. */
 const LATEXDIFF_STATUS_ICONS: Record<DiffStatus, TeXRAIconName> = {
   success: 'check',
-  error: 'error',
+  error: 'circle-exclamation',
 };
 
 @customElement('latexdiff-results')
@@ -132,7 +132,7 @@ export class LatexdiffResults extends LitElement {
         ${waIcon(icon)} ${this.renderFileLink(baseFile, baseLabel)}
         ${waIcon('arrow-right', { className: 'arrow' })}
         ${this.renderFileLink(revisedFile, revisedLabel)}
-        (${this.renderFileLink(diffFile, 'diff')})
+        (${this.renderFileLink(diffFile, 'code-compare')})
         ${message ? html`<wa-tooltip for=${entryId}>${message}</wa-tooltip>` : nothing}
       </li>
     `;
@@ -157,7 +157,7 @@ export class LatexdiffResults extends LitElement {
         data-run-id=${ifDefined(this.runId || undefined)}
       >
         ${buildDetailsSummary({
-          iconName: 'diff',
+          iconName: 'code-compare',
           label: summaryText,
         })}
         <ul class="latexdiff-content">

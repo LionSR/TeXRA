@@ -339,7 +339,8 @@ export class FileList extends LitElement {
                     size="s"
                     @click=${this.runLatexFixer}
                   >
-                    ${waIcon('tools', { slot: 'start' })} Run latexFixer
+                    ${waIcon('screwdriver-wrench', { slot: 'start' })} Run
+                    latexFixer
                   </wa-button>
                 </div>
               `
@@ -354,7 +355,7 @@ export class FileList extends LitElement {
 
     return html`
       <div class="storage-hint" role="note">
-        ${waIcon('folder-opened')}
+        ${waIcon('folder-open')}
         <span class="storage-hint__text">
           Files stay in task-run storage until accepted. Click a file to preview
           it, use Accept to copy it into your workspace, or use the folder
@@ -362,7 +363,7 @@ export class FileList extends LitElement {
         </span>
         ${renderIconActionButton({
           id: 'storage-hint-dismiss-button',
-          icon: 'close',
+          icon: 'xmark',
           label: 'Dismiss storage explanation',
           tooltip: 'Dismiss storage explanation',
           className: 'storage-hint__dismiss',
@@ -456,7 +457,7 @@ export class FileList extends LitElement {
       <div class="file-item">
         ${
           failure
-            ? html`${waIcon('warning', { id: `${idPrefix}-compile-warning`, className: 'compile-warning', label: 'Compile check failed' })}
+            ? html`${waIcon('triangle-exclamation', { id: `${idPrefix}-compile-warning`, className: 'compile-warning', label: 'Compile check failed' })}
                 <wa-tooltip for="${idPrefix}-compile-warning"
                   >Compile check failed</wa-tooltip
                 >`
@@ -481,7 +482,7 @@ export class FileList extends LitElement {
           ${
             failure
               ? renderFileActionButton({
-                  icon: 'output',
+                  icon: 'terminal',
                   label: 'Open compile log',
                   title: `Open compile log (${failure.logRelativePath})`,
                   className: '',
@@ -574,7 +575,7 @@ export class FileList extends LitElement {
   private getSourceDisplayPath(source: string | undefined): string {
     if (
       !source ||
-      source === 'output' ||
+      source === 'terminal' ||
       source === 'output.xml' ||
       source === 'output.tex'
     )
@@ -617,7 +618,7 @@ export class FileList extends LitElement {
 
     return html`
       ${renderFileActionButton({
-        icon: 'diff',
+        icon: 'code-compare',
         label: 'Compare with base',
         title: 'Compare with base in a side-by-side diff',
         className: 'compare-btn',
@@ -627,7 +628,7 @@ export class FileList extends LitElement {
         idPrefix,
       })}
       ${renderFileActionButton({
-        icon: 'diff-multiple',
+        icon: 'plus-minus',
         label: 'Run latexdiff',
         title: 'Run latexdiff against the base file',
         className: 'latexdiff-btn',
@@ -647,7 +648,7 @@ export class FileList extends LitElement {
         idPrefix,
       })}
       ${renderFileActionButton({
-        icon: 'git-merge',
+        icon: 'code-merge',
         label: 'Merge edits',
         title: 'Merge edits into the workspace file',
         className: 'merge-btn',
@@ -668,7 +669,7 @@ export class FileList extends LitElement {
     if (!previousPath || previousPath === basePath) return nothing;
 
     return renderFileActionButton({
-      icon: 'diff-added',
+      icon: 'plus',
       label: 'Compare with previous round',
       title: 'Compare with previous round in a side-by-side diff',
       className: 'prev-btn',

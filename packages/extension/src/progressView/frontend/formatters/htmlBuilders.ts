@@ -196,7 +196,7 @@ export function buildFileListRender(files: FileListEntry[]): {
 
   // prettier-ignore
   const items = html`${files.map((file) => {
-    const iconName = file.ok ? 'check' : 'warning';
+    const iconName = file.ok ? 'check' : 'triangle-exclamation';
     const filePath = file.path;
     const fileName = getBasename(filePath);
 
@@ -221,7 +221,7 @@ export function getToolIconName(
   toolName: string,
   isError = false,
 ): TeXRAIconName {
-  if (isError) return 'error';
+  if (isError) return 'circle-exclamation';
   return TOOL_ICON_MAP[toolName] ?? 'wrench';
 }
 
@@ -341,7 +341,7 @@ export function buildExecutionsPathDisplay(
 ): TemplateResult | typeof nothing {
   if (!execPath) return nothing;
   // prettier-ignore
-  return html`<span class="memory-path">${waIcon('history')} ${execPath}</span>`;
+  return html`<span class="memory-path">${waIcon('clock-rotate-left')} ${execPath}</span>`;
 }
 
 // ============================================================================
