@@ -24,7 +24,6 @@ import {
 } from '@agent/index/agentRegistry';
 import { registerAgentShutdownHandlers } from '@agent/runtime/agentShutdown';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { SessionStores } from '@agent/runtime/SessionStores';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { SupabaseClient } from '@auth/SupabaseClient';

@@ -322,7 +322,7 @@ describe('ProgressBackend', () => {
     }
   });
 
-  it('reconciles presentation caches after a partial session reload', async () => {
+  it('keeps presentation intact when session reload fails without replacing storage root', async () => {
     const transcripts = await StreamLogStore.open();
     const session = new SessionHandle({
       transcripts,
@@ -347,9 +347,9 @@ describe('ProgressBackend', () => {
         reloadError,
       );
 
-      expect(resetPresentation).toHaveBeenCalledOnce();
-      expect(clearBridge).toHaveBeenCalledOnce();
-      expect(loadPresentation).toHaveBeenCalledOnce();
+      expect(resetPresentation).not.toHaveBeenCalled();
+      expect(clearBridge).not.toHaveBeenCalled();
+      expect(loadPresentation).not.toHaveBeenCalled();
     } finally {
       backend.dispose();
       session.dispose();
