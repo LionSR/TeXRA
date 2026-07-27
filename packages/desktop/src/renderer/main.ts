@@ -742,7 +742,7 @@ function environmentPopoverTemplate(
           ?disabled=${environmentLoading}
           @click=${requestEnvironmentSummary}
         >
-          ${waIcon(environmentLoading ? 'spinner' : 'refresh')}
+          ${waIcon(environmentLoading ? 'spinner' : 'rotate-right')}
         </wa-button>
       </div>
       <div class="task-environment-section">
@@ -775,7 +775,7 @@ function environmentPopoverTemplate(
           ${environmentSyncTemplate(environmentSummary)}
         </div>
         <div class="task-environment-row">
-          <span class="task-environment-row-icon">${waIcon('git-commit')}</span>
+          <span class="task-environment-row-icon">${waIcon('circle-dot')}</span>
           <span>Commit or push</span>
           <span class="task-environment-trailing">
             ${
