@@ -16,6 +16,7 @@ import {
   type AgentPromptInput,
 } from '@agent/core/definition/AgentDataclass';
 import { mergeInheritedAgentObject } from '@agent/core/definition/agentDefinitionInheritance';
+import { inlineAgentDefinition } from '@agent/index/inlineAgents';
 import { RemoteAgentLoader } from '@agent/remote/RemoteAgentLoader';
 import { parseYamlWith, safeParseYaml } from '@common/parsing/safeParseYaml';
 import * as logger from '@logger/logUtils';
@@ -114,6 +115,17 @@ export async function loadAgentSettingAndPrompts(
   seen: ReadonlySet<string> = new Set(),
 ): Promise<[AgentSetting, AgentPrompt]> {
   const { entry } = resolution;
+
+  // Handle inline agents: the definition was supplied as a value and validated
+  // at registration, so there is nothing to read from disk. Tools and defaults
+  // still go through the same resolution the YAML path uses below.
+  if (entry.source === 'inline') {
+    const definition = inlineAgentDefinition(resolution.resolvedName);
+    return [
+      AgentSettingSchema.parse(resolveAgentSettingTools(definition.settings)),
+      AgentPromptSchema.parse(definition.prompts),
+    ];
+  }
 
   // Handle remote agents
   if (entry.source === 'remote') {
