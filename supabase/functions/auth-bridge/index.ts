@@ -335,12 +335,13 @@ function bridgePageHtml(ext: string, id: string): string {
       }
     });
 
-    if (!oauthError && tail) {
-      // Auto-open the editor only when there is a callback payload to hand
-      // back (a refresh or direct visit after the history scrub has none —
-      // stay manual there). The button stays as the fallback because
-      // browsers may block or prompt on custom-scheme navigation (and some
-      // strip it entirely without a user gesture).
+    if (!oauthError && (getParam('code') || getParam('access_token'))) {
+      // Auto-open the editor only when a usable OAuth payload is present
+      // (a code or access_token, not arbitrary query params). A refresh or
+      // direct visit after the history scrub has none — stay manual there.
+      // The button stays as the fallback because browsers may block or
+      // prompt on custom-scheme navigation (and some strip it entirely
+      // without a user gesture).
       lede.textContent =
         'Opening ' + (DISPLAY[EXT] || 'your editor') +
         '… If nothing happens, click the button below.';
