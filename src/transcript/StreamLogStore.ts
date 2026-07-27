@@ -9,7 +9,7 @@ import {
   PersistedStreamLogEntrySchema,
   RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
-  WorkflowTaskProgressSchema,
+  WorkflowCallProgressSchema,
   type RunOutcome,
   type StreamLogEntry,
   type StreamTabId,
@@ -22,7 +22,7 @@ import { formatResultCount } from '@utils/text/stringUtils';
 import {
   isRunningGroupEntry,
   isRunningStreamingTextEntry,
-  isNonterminalWorkflowTaskEntry,
+  isNonterminalWorkflowCallEntry,
   StreamLog,
   type StreamLogAppendInput,
   type StreamLogPreservedRawEntry,
@@ -56,6 +56,7 @@ const StreamLogSummarySchema = z.object({
   lastTimestamp: z.number().finite().optional().catch(undefined),
   hasRunningGroup: z.boolean().optional().catch(undefined),
   hasRunningStreamingText: z.boolean().optional().catch(undefined),
+  // Legacy persisted key retained for existing summary sidecars.
   hasNonterminalWorkflowTask: z.boolean().optional().catch(undefined),
 });
 type StreamLogSummary = z.infer<typeof StreamLogSummarySchema>;
@@ -96,7 +97,7 @@ function summaryOf(logInstance: StreamLog): StreamLogSummary {
     lastTimestamp: logInstance.lastTimestamp,
     hasRunningGroup: logInstance.hasRunningGroup,
     hasRunningStreamingText: logInstance.hasRunningStreamingText,
-    ...(logInstance.hasNonterminalWorkflowTask
+    ...(logInstance.hasNonterminalWorkflowCall
       ? { hasNonterminalWorkflowTask: true }
       : {}),
   };
@@ -803,24 +804,24 @@ export class StreamLogStore {
           continue;
         }
 
-        if (isNonterminalWorkflowTaskEntry(entry)) {
-          const task = WorkflowTaskProgressSchema.parse(entry.data);
-          const recoveredTask =
-            task.status === 'planned'
+        if (isNonterminalWorkflowCallEntry(entry)) {
+          const call = WorkflowCallProgressSchema.parse(entry.data);
+          const recoveredCall =
+            call.status === 'planned'
               ? {
-                  ...task,
+                  ...call,
                   status: 'skipped' as const,
                   reason: 'not-reached' as const,
                 }
               : {
-                  ...task,
+                  ...call,
                   status: 'failed' as const,
                   error:
-                    'The previous host stopped before this task completed.',
+                    'The previous host stopped before this call completed.',
                 };
           const updated = logInstance.settle(entry.id, {
-            level: task.status === 'planned' ? 'info' : 'error',
-            data: recoveredTask,
+            level: call.status === 'planned' ? 'info' : 'error',
+            data: recoveredCall,
           });
           if (updated) updatedAny = true;
           continue;
@@ -964,7 +965,7 @@ export class StreamLogStore {
       existing.lastTimestamp = logInstance.lastTimestamp;
       existing.hasRunningGroup = logInstance.hasRunningGroup;
       existing.hasRunningStreamingText = logInstance.hasRunningStreamingText;
-      if (logInstance.hasNonterminalWorkflowTask) {
+      if (logInstance.hasNonterminalWorkflowCall) {
         existing.hasNonterminalWorkflowTask = true;
       } else {
         delete existing.hasNonterminalWorkflowTask;
@@ -1114,7 +1115,7 @@ export class StreamLogStore {
       lastTimestamp: entries.at(-1)?.timestamp,
       hasRunningGroup: entries.some(isRunningGroupEntry),
       hasRunningStreamingText: entries.some(isRunningStreamingTextEntry),
-      ...(entries.some(isNonterminalWorkflowTaskEntry)
+      ...(entries.some(isNonterminalWorkflowCallEntry)
         ? { hasNonterminalWorkflowTask: true }
         : {}),
     };

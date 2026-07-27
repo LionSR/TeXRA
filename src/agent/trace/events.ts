@@ -27,7 +27,7 @@ import type {
   UpdatePlanPayload,
   UpdateStreamUsagePayload,
   UpdateTodosPayload,
-  WorkflowTaskProgress,
+  WorkflowCallProgress,
 } from '@shared/schemas';
 import type { StreamTransitionCause } from '@shared/streams/streamStatus';
 import type { RunDescriptor } from '@shared/schemas/runDescriptor';
@@ -130,13 +130,15 @@ interface ToolEndEvent extends StageStamp {
 }
 
 /**
- * Correlatable workflow-script task state. The same `logId` is emitted as a
- * task moves from its declared plan through execution to a terminal state.
+ * Correlatable workflow-script call state. The same `logId` is emitted as a
+ * call moves from its declared plan through execution to a terminal state.
  */
-interface WorkflowTaskEvent extends StageStamp {
+interface WorkflowCallEvent extends StageStamp {
+  /** Legacy protocol spelling retained for trace consumers. */
   readonly type: 'workflow.task';
   readonly logId: string;
-  readonly task: WorkflowTaskProgress;
+  /** Legacy payload key retained for trace consumers. */
+  readonly task: WorkflowCallProgress;
 }
 
 /** Token-usage report. */
@@ -345,7 +347,7 @@ export type AgentEvent =
   | StageEndEvent
   | ToolStartEvent
   | ToolEndEvent
-  | WorkflowTaskEvent
+  | WorkflowCallEvent
   | UsageEvent
   | StatusEvent
   | ChildActivityEvent
