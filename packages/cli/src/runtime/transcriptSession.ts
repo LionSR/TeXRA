@@ -4,6 +4,7 @@ import {
   tryDefaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
+import { GoalStore } from '@tools/goal';
 import { StreamLogStore } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -47,6 +48,10 @@ async function initializePersistentSession(
   const stores = new SessionStores({
     streamLogs: result.session.transcripts,
     snapshots: result.session.snapshots,
+    goalEntries: {
+      forget: (stream) => GoalStore.forget(stream, result.session),
+      forgetMany: (streams) => GoalStore.forgetMany(streams, result.session),
+    },
   });
   await stores.sweepOrphanedStreams(new Set(result.session.transcripts.keys()));
   return result;

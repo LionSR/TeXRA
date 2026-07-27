@@ -99,11 +99,15 @@ describe('CLI transcript session policy', () => {
       { initPlatform },
       { createTempDirPlatform },
       { StreamLogStore, StreamSnapshotStore },
+      { initializeDefaultSession, teardownDefaultSession },
+      { GoalStore },
       { initializeHeadlessTranscriptSession },
     ] = await Promise.all([
       import('@platform/platform'),
       import('@test/support/tempDirPlatform'),
       import('@transcript'),
+      import('@agent/runtime/SessionHandle'),
+      import('@tools/goal'),
       import('@cli/runtime/transcriptSession'),
     ]);
     initPlatform(
@@ -115,6 +119,13 @@ describe('CLI transcript session policy', () => {
     await writer.flush();
     await expect(writer.listPersistedStreams()).resolves.toEqual([orphan]);
 
+    initializeDefaultSession({
+      transcripts: StreamLogStore.ephemeral('orphaned goal fixture'),
+    });
+    await GoalStore.start(orphan, 'orphaned goal');
+    expect(GoalStore.getForStream(orphan)).not.toBeNull();
+    teardownDefaultSession();
+
     const transcripts = await StreamLogStore.open();
     const result = await initializeHeadlessTranscriptSession(
       async () => transcripts,
@@ -123,5 +134,6 @@ describe('CLI transcript session policy', () => {
     await expect(
       result.session.snapshots.listPersistedStreams(),
     ).resolves.toEqual([]);
+    expect(GoalStore.getForStream(orphan)).toBeNull();
   });
 });
