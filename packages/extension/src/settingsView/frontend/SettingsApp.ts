@@ -359,6 +359,7 @@ export class SettingsApp extends SettingsAppBase {
             .tier=${tier.get()}
             .spendingStatus=${spendingStatus.get()}
             .quotaAutoSwitched=${quotaAutoSwitched.get()}
+            .apiAccessMode=${apiAccessMode.get()}
             .vscodeSettingsAvailable=${!isKnownUnsupported(
               unsupportedCommands.get(),
               SETTINGS_VIEW_COMMANDS.OPEN_VSCODE_SETTINGS,
