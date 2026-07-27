@@ -1,4 +1,4 @@
-import type { TeXRAIconName } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
 
 import { TODO_STATUS, type TodoStatus } from './todo';
 

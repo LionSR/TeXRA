@@ -124,6 +124,19 @@ import { registerIconLibrary } from '@awesome.me/webawesome/dist/components/icon
 import { html, type TemplateResult } from 'lit';
 import { ifDefined } from 'lit/directives/if-defined.js';
 
+import {
+  CODICON_ALIASES,
+  TEXRA_ICON_CANONICAL_NAMES,
+  type TeXRAIconName,
+} from './iconNames';
+
+// Re-exported for existing consumers — the name vocabulary and alias table now
+// live in the UI-free `./iconNames` (see its module doc comment): callers that
+// only need the name type or the alias table can import from there instead of
+// pulling in Lit + FontAwesome through this module.
+export { CODICON_ALIASES };
+export type { TeXRAIconName };
+
 export const TEXRA_ICON_LIBRARY = 'texra';
 
 type FontAwesomePathData = string | string[];
@@ -271,102 +284,10 @@ const icons = {
   'window-maximize': faWindowMaximize,
   wrench: faWrench,
   xmark: faXmark,
-} as const;
-
-// Codicon-name aliases. Lets existing markup keep using familiar codicon names
-// (e.g. <wa-icon name="warning">) while resolving to the closest Font Awesome
-// glyph in the registry above. Prefer canonical names for new code.
-//
-// `as const satisfies …` keeps alias keys as a literal union (so
-// `keyof typeof CODICON_ALIASES` narrows TeXRAIconName) and compile-checks
-// every alias value against the registered icon names.
-export const CODICON_ALIASES = Object.freeze({
-  account: 'circle-user',
-  add: 'plus',
-  archive: 'box-archive',
-  'arrow-small-down': 'caret-down',
-  beaker: 'flask',
-  'check-all': 'check-double',
-  checklist: 'list-check',
-  'circle-large-outline': 'circle',
-  'circle-outline': 'circle',
-  'circle-slash': 'circle-xmark',
-  'clear-all': 'eraser',
-  close: 'xmark',
-  'cloud-download': 'cloud-arrow-down',
-  'cloud-upload': 'cloud-arrow-up',
-  'comment-discussion': 'comments',
-  dash: 'minus',
-  'debug-continue': 'forward-step',
-  'debug-start': 'play',
-  'debug-stop': 'circle-stop',
-  'desktop-download': 'download',
-  'device-camera-video': 'video',
-  diff: 'code-compare',
-  'diff-added': 'plus',
-  // latexdiff marks additions/deletions — ± reads as that markup, where the
-  // previous not-equal (≠) glyph read as a math comparison.
-  'diff-multiple': 'plus-minus',
-  'diff-single': 'plus-minus',
-  discard: 'arrow-rotate-left',
-  edit: 'pencil',
-  error: 'circle-exclamation',
-  'file-media': 'image',
-  files: 'copy',
-  fold: 'compress',
-  'folder-library': 'folder-tree',
-  'folder-opened': 'folder-open',
-  github: 'code-branch',
-  'git-commit': 'circle-dot',
-  'git-merge': 'code-merge',
-  graph: 'chart-line',
-  'graph-line': 'chart-line',
-  history: 'clock-rotate-left',
-  info: 'circle-info',
-  inspect: 'magnifying-glass-chart',
-  library: 'book',
-  'list-tree': 'list-ul',
-  loading: 'spinner',
-  merge: 'code-merge',
-  mic: 'microphone',
-  'mortar-board': 'graduation-cap',
-  'new-file': 'file-circle-plus',
-  note: 'note-sticky',
-  organization: 'building',
-  output: 'terminal',
-  package: 'box',
-  'pass-filled': 'circle-check',
-  'pie-chart': 'chart-pie',
-  pulse: 'chart-line',
-  question: 'circle-question',
-  references: 'link',
-  refresh: 'rotate-right',
-  save: 'floppy-disk',
-  search: 'magnifying-glass',
-  send: 'paper-plane',
-  'server-process': 'server',
-  'settings-gear': 'gear',
-  'sign-in': 'right-to-bracket',
-  'sign-out': 'right-from-bracket',
-  'source-control': 'code-branch',
-  sparkle: 'wand-magic-sparkles',
-  'stop-circle': 'circle-stop',
-  stylesheet: 'palette',
-  'symbol-method': 'cube',
-  'symbol-number': 'hashtag',
-  'symbol-numeric': 'hashtag',
-  'symbol-operator': 'cube',
-  'symbol-structure': 'diagram-project',
-  sync: 'arrows-rotate',
-  tasklist: 'list-check',
-  tools: 'screwdriver-wrench',
-  'type-hierarchy': 'diagram-project',
-  wand: 'wand-magic-sparkles',
-  warning: 'triangle-exclamation',
-  window: 'window-maximize',
-  x: 'xmark',
-  zap: 'bolt',
-} as const satisfies Readonly<Record<string, keyof typeof icons>>);
+} as const satisfies Record<
+  (typeof TEXRA_ICON_CANONICAL_NAMES)[number],
+  FontAwesomeIconDefinition
+>;
 
 let isRegistered = false;
 
@@ -399,10 +320,6 @@ export function registerTeXRAWebAwesomeIcons(): void {
   registerIconLibrary('default', { resolver: texraIconResolver });
   isRegistered = true;
 }
-
-// Names accepted by <wa-icon library="texra" name="..."> — canonical names plus
-// the codicon-style aliases. Exported so callers can type-check icon usage.
-export type TeXRAIconName = keyof typeof icons | keyof typeof CODICON_ALIASES;
 
 /** Canonical names used to verify host-specific icon resolvers exhaustively. */
 export const TEXRA_ICON_NAMES = Object.freeze(
