@@ -16,10 +16,13 @@ export function normalizeWorkflowScriptPhaseTitle(title: string): string {
   return WorkflowScriptPhaseTitleSchema.parse(title);
 }
 
-const WorkflowScriptPhaseSchema = z.object({
-  title: WorkflowScriptPhaseTitleSchema,
-  detail: z.string().optional(),
-});
+const WorkflowScriptPhaseSchema = z.union([
+  z.strictObject({
+    title: WorkflowScriptPhaseTitleSchema,
+    detail: z.string().optional(),
+  }),
+  WorkflowScriptPhaseTitleSchema.transform((title) => ({ title })),
+]);
 
 export type WorkflowScriptTask = WorkflowTaskIdentity;
 
@@ -29,7 +32,7 @@ export type WorkflowScriptTask = WorkflowTaskIdentity;
  * script body ever runs.
  */
 export const WorkflowScriptMetaSchema = z
-  .object({
+  .strictObject({
     name: z.string().min(1),
     description: z.string().min(1),
     whenToUse: z.string().optional(),
@@ -138,6 +141,8 @@ export interface WorkflowAgentInvocation {
   index: number;
   /** Stable hash of the prompt and normalized execution-affecting options. */
   key: string;
+  /** Opaque host fingerprint already incorporated into `key`, when present. */
+  dependencyFingerprint?: string;
   prompt: string;
   options: WorkflowAgentCallOptions;
   /**
@@ -167,7 +172,7 @@ export type WorkflowAgentRunner = (
 /** Hash semantics carried by each journal entry across checkpoint migrations. */
 export const WORKFLOW_JOURNAL_KEY_FORMAT = {
   LEGACY_V1: 'legacy-v1',
-  PRESENTATION_INDEPENDENT_V2: 'presentation-independent-v2',
+  DEPENDENCY_AWARE_V3: 'dependency-aware-v3',
 } as const;
 
 export const WorkflowJournalKeyFormatSchema = z.enum(
@@ -180,8 +185,9 @@ export interface WorkflowJournalEntry {
   index: number;
   /**
    * Stable call hash interpreted according to `keyFormat`. Current entries
-   * exclude display labels and phases; migrated v1 entries include them.
-   * A mismatch forces a live re-run.
+   * exclude display labels and phases and include host-resolved dependency
+   * fingerprints; migrated v1 entries include presentation fields. A mismatch
+   * forces a live re-run.
    */
   key: string;
   /** Hash semantics used to verify and migrate this persisted entry. */
@@ -294,6 +300,14 @@ export interface WorkflowScriptRunOptions {
   /** Exposed to the script as the immutable global `files` object. */
   files?: WorkflowScriptFiles;
   runAgent: WorkflowAgentRunner;
+  /**
+   * Host-owned fingerprint for external file dependencies referenced by one
+   * agent() call. Required when the call carries file options: the engine
+   * includes the opaque value in both journal and child execution identity.
+   */
+  fingerprintAgentDependencies?: (
+    options: WorkflowAgentCallOptions,
+  ) => Promise<string>;
   /** Parent cancellation signal; aborts guest execution and active agents. */
   signal?: AbortSignal;
   /** Max concurrently running agent() calls. Default 4. */

@@ -167,6 +167,26 @@ const SCENARIOS = [
     ],
   },
   {
+    name: 'workflow-running',
+    frame: 'viewport',
+    rows: 30,
+    cols: 100,
+    env: {
+      HARNESS_ENTRIES: '0',
+      HARNESS_WORKFLOW_RUNNING: '1',
+    },
+    expect: [
+      "Workflow script 'live-workflow-validation'",
+      'Proofread (1/1) · 0/2 done',
+      'Running: Proofread paper A',
+      'Running: Proofread paper B',
+      'live-workflow-validation running',
+      'Proofread (1/1)',
+      'correct running',
+      '2 subagents',
+    ],
+  },
+  {
     name: 'live-tool-only-spacing',
     frame: 'scrollback',
     env: {
@@ -1195,11 +1215,27 @@ const SCENARIOS = [
       '/tools',
       'Toggle available external integrations',
       'always on ·',
+      'Workflow Script — disabled · detected · Ready',
       'disabled · detected · Ready',
     ],
     unexpect: ['[TeXRA]', 'toolUtils', 'enabled -', 'TeXRA CLI'],
     maxBlankLinesBetween: [
       { from: 'entry-4 chat history line', to: '/tools', max: 8 },
+    ],
+  },
+  {
+    name: 'workflow-script-toggle',
+    env: {
+      HARNESS_ENTRIES: '0',
+      HARNESS_WORKFLOW_SCRIPT_DISABLED: '1',
+    },
+    keys: ['/tools', { input: '\r', delayMs: ASYNC_FORM_SETTLE_MS }, '4'],
+    frame: 'viewport',
+    settleMs: ASYNC_FORM_SETTLE_MS,
+    expect: [
+      '/tools',
+      'Workflow Script — enabled · detected · Ready',
+      '1-7/Enter toggle',
     ],
   },
   {

@@ -194,6 +194,38 @@ describe('ModelHandlerOpenRouterNative Moonshot fixed temperature', () => {
   });
 });
 
+describe('ModelHandlerOpenRouterNative forced tool choice', () => {
+  it.each([
+    {
+      name: 'disables forcing for reasoning DeepSeek models',
+      provider: ModelProvider.DEEPSEEK,
+      supportsReasoning: true,
+      expected: false,
+    },
+    {
+      name: 'keeps forcing for non-reasoning DeepSeek models',
+      provider: ModelProvider.DEEPSEEK,
+      supportsReasoning: false,
+      expected: true,
+    },
+    {
+      name: 'keeps forcing for reasoning models from other providers',
+      provider: ModelProvider.OPENAI,
+      supportsReasoning: true,
+      expected: true,
+    },
+  ])('$name', ({ provider, supportsReasoning, expected }) => {
+    const handler = new ModelHandlerOpenRouterNative(
+      buildTestModelConfig(OPENROUTER_TEST_CONFIG, {
+        provider,
+        capabilities: { supportsReasoning },
+      }),
+    );
+
+    assert.equal(handler.supportsForcedToolChoice, expected);
+  });
+});
+
 describe('ModelHandlerOpenRouterNative response mode discrimination', () => {
   it('rejects a non-streaming response on the streaming path', async () => {
     const handler = new ModelHandlerOpenRouterNative(
