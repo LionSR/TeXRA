@@ -341,9 +341,19 @@ describe('headless delegation', () => {
     expect(markOwnedExecutionLeaseUndurable).toHaveBeenCalledWith(executionId);
   });
 
-  it('returns and persists the typed final result for in-band consumers', async () => {
-    const result = await runInBand(delegationOptions());
+  it('composes durable workflow calls through the native launch primitive', async () => {
+    const result = await runInBand(
+      delegationOptions({ workflowPhase: 'proof-review' }),
+    );
 
+    expect(mocks.executeAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ agent: 'review' }),
+      result.executionId,
+      expect.objectContaining({
+        stopAfterCycle: true,
+        workflowPhase: 'proof-review',
+      }),
+    );
     expect(result.result).toEqual({
       category: 'toolUse',
       outcome: 'completed',
@@ -367,6 +377,74 @@ describe('headless delegation', () => {
     });
     expect(mocks.writeResultMeta.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.releaseOwnedExecutionLease.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('records a thrown AgentFlowError cost once for durable in-band execution', async () => {
+    const onCost = vi.fn();
+    mocks.executeAgent.mockRejectedValueOnce(
+      new AgentFlowError('review model failed', {
+        category: 'toolUse',
+        outcome: 'failed',
+        executionId: IN_BAND_LOGICAL_EXECUTION_ID,
+        streamId: 'child-stream',
+        lastResponse: 'Partial review.',
+        totalCostUsd: 0.61,
+      }),
+    );
+
+    await expect(runInBand(delegationOptions({ onCost }))).rejects.toThrow(
+      'review model failed',
+    );
+
+    expect(onCost).toHaveBeenCalledOnce();
+    expect(onCost).toHaveBeenCalledWith(0.61);
+    expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
+    expect(mocks.writeResultMeta).toHaveBeenCalledWith(
+      expect.objectContaining({
+        result: expect.objectContaining({
+          cost: 0.61,
+          outcome: 'failed',
+          response: 'Partial review.',
+        }),
+      }),
+    );
+  });
+
+  it('persists a cost-bearing WAITING result as a durable single-cycle failure', async () => {
+    const onCost = vi.fn();
+    mocks.executeAgent.mockResolvedValueOnce({
+      category: 'toolUse',
+      outcome: STREAM_PHASE.WAITING,
+      executionId: IN_BAND_LOGICAL_EXECUTION_ID,
+      streamId: 'child-stream',
+      lastResponse: 'Waiting for clarification.',
+      totalCostUsd: 0.73,
+    });
+
+    await expect(runInBand(delegationOptions({ onCost }))).rejects.toThrow(
+      `Single-cycle subagent ${IN_BAND_LOGICAL_EXECUTION_ID} unexpectedly suspended.`,
+    );
+
+    expect(mocks.executeAgent).toHaveBeenCalledWith(
+      expect.any(Object),
+      IN_BAND_LOGICAL_EXECUTION_ID,
+      expect.objectContaining({
+        allowWaitingResult: true,
+        stopAfterCycle: true,
+      }),
+    );
+    expect(onCost).toHaveBeenCalledOnce();
+    expect(onCost).toHaveBeenCalledWith(0.73);
+    expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
+    expect(mocks.writeResultMeta).toHaveBeenCalledWith(
+      expect.objectContaining({
+        result: expect.objectContaining({
+          cost: 0.73,
+          outcome: 'failed',
+          response: 'Waiting for clarification.',
+        }),
+      }),
     );
   });
 
@@ -964,6 +1042,11 @@ describe('headless delegation', () => {
     expect(result.error).toBe('review model failed');
     expect(recordSubagentCost).toHaveBeenCalledTimes(1);
     expect(recordSubagentCost).toHaveBeenCalledWith(0.57);
+    expect(mocks.writeResultMeta).toHaveBeenCalledWith(
+      expect.objectContaining({
+        result: expect.objectContaining({ cost: 0.57, outcome: 'failed' }),
+      }),
+    );
   });
 
   it('rolls up failed async subagent cost from the error callback', async () => {
@@ -982,7 +1065,7 @@ describe('headless delegation', () => {
     expect(recordSubagentCost).toHaveBeenCalledWith(0.31);
   });
 
-  it('keeps interactive delegations asynchronous', async () => {
+  it('composes interactive delegation through the same native launch primitive', async () => {
     const result = await withRunContext(parentRunContext(), () =>
       callDelegateReview(),
     );
@@ -994,6 +1077,7 @@ describe('headless delegation', () => {
     const executeOptions = mocks.executeAgent.mock.calls.at(-1)?.[2];
     expect(executeOptions).toEqual(
       expect.objectContaining({
+        allowWaitingResult: true,
         onRun: expect.any(Function),
         session: expect.any(Object),
       }),

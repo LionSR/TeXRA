@@ -59,10 +59,10 @@ type TurnUsage = { input_tokens?: number; output_tokens?: number };
  * run. `notify` is best-effort live progress (no report/manifest persist, no
  * gating — duplicate delivery is impossible by construction since there is
  * one delivery site per turn, so there is nothing left to dedupe against).
- * `recordCost` may be called freely, as often as the strategy likes, with the
- * run's latest cumulative cost — the loop commits only the last value it saw,
- * exactly once, when the child's run ends (matching the "settle exactly once
- * with the best available total" contract `settleSubagentCost` used to own).
+ * `recordCost` may be called freely, as often as the strategy likes, with a
+ * cumulative cost estimate. The loop retains the greatest defined value and
+ * commits it exactly once when the child's run ends, so a later partial source
+ * cannot replace the best available total.
  */
 export interface ChildRunPorts {
   notify(update: SubagentProgressUpdate): void;
@@ -212,7 +212,9 @@ export interface ChildRunLoopParams<TTurn> {
    * agent-CLI callers (no cost concept today); native delegation passes its
    * captured `recordSubagentCost` closure.
    */
-  readonly recordCost?: (totalCostUsd: number | undefined) => void;
+  readonly recordCost?: (
+    totalCostUsd: number | undefined,
+  ) => void | Promise<void>;
 }
 
 export interface ChildRunLoopHandle {
@@ -599,7 +601,7 @@ export function startChildRunLoop<TTurn>(
     throw error;
   }
 
-  let latestCostUsd: number | undefined;
+  let bestCostUsd: number | undefined;
   const ports: ChildRunPorts = {
     notify: (update) => {
       if (strategy.deliveryMode === 'persistOnly') return;
@@ -619,7 +621,9 @@ export function startChildRunLoop<TTurn>(
       });
     },
     recordCost: (totalCostUsd) => {
-      if (totalCostUsd !== undefined) latestCostUsd = totalCostUsd;
+      if (totalCostUsd !== undefined) {
+        bestCostUsd = Math.max(bestCostUsd ?? 0, totalCostUsd);
+      }
     },
   };
 
@@ -729,7 +733,14 @@ export function startChildRunLoop<TTurn>(
       runSession.followUps.release(childStreamId);
       releaseSessionOwnershipOnce();
       try {
-        params.recordCost?.(latestCostUsd);
+        try {
+          const observed = params.recordCost?.(bestCostUsd);
+          void Promise.resolve(observed).catch((error: unknown) => {
+            logger.warn('Child cost observer rejected', { data: error });
+          });
+        } catch (error) {
+          logger.warn('Child cost observer failed', { data: error });
+        }
         // The shared terminal finalizer owns the single outcome derivation and
         // its projections: persisted terminal status (before untrack notifies
         // waiters), settled result, and terminal stream phase.
