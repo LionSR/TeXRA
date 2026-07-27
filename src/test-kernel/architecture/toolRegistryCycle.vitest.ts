@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 
 // Third-party imports
 import { build } from 'esbuild';
+import PQueue from 'p-queue';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { REPO_ROOT, sourceFilesUnder, toRepoPath } from '../support/repoScan';
@@ -80,9 +81,14 @@ describe('tool module closures', () => {
   const closures = new Map<string, string[]>();
 
   beforeAll(async () => {
-    const entries = defineToolModules();
-    const resolved = await Promise.all(entries.map(valueClosure));
-    entries.forEach((entry, index) => closures.set(entry, resolved[index]!));
+    // Bounded concurrency: 50 unthrottled esbuild bundles saturate the box and
+    // push the neighbouring architecture ratchets past their own timeouts.
+    const queue = new PQueue({ concurrency: 4 });
+    await queue.addAll(
+      defineToolModules().map((entry) => async () => {
+        closures.set(entry, await valueClosure(entry));
+      }),
+    );
   }, 120_000);
 
   it('enumerates every defineTool() module', () => {
@@ -97,7 +103,8 @@ describe('tool module closures', () => {
           !(AGENT_LAUNCHING_TOOLS as readonly string[]).includes(entry) &&
           files.includes(TOOL_REGISTRY),
       )
-      .map(([entry]) => entry);
+      .map(([entry]) => entry)
+      .sort();
 
     expect(offenders).toEqual([]);
   });
