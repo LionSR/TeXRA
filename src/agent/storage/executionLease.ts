@@ -82,46 +82,100 @@ const ownedLeases = new Map<string, OwnedExecutionLease>();
 const executionOwnership = new AsyncLocalStorage<ReadonlyMap<string, string>>();
 const maintenanceExecutions = new AsyncLocalStorage<ReadonlySet<string>>();
 let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
-let acquisitionsInFlight = 0;
-const acquisitionIdleWaiters = new Set<() => void>();
-const maintenanceQueue = new PQueue({ concurrency: 1 });
-let pendingMaintenanceCount = 0;
-let maintenanceBarrier:
-  { readonly promise: Promise<void>; readonly resolve: () => void } | undefined;
 
-function createMaintenanceBarrier(): NonNullable<typeof maintenanceBarrier> {
-  let resolve: () => void = () => undefined;
-  const promise = new Promise<void>((settle) => {
-    resolve = settle;
-  });
-  return { promise, resolve };
+class ExecutionLeaseCoordination {
+  private acquisitionsInFlight = 0;
+  private readonly acquisitionIdleWaiters = new Set<() => void>();
+  private readonly maintenanceQueue = new PQueue({ concurrency: 1 });
+  private pendingMaintenanceCount = 0;
+  private maintenanceBarrier:
+    | { readonly promise: Promise<void>; readonly resolve: () => void }
+    | undefined;
+
+  async enterAcquisition(nested: boolean): Promise<void> {
+    if (!nested) {
+      while (this.maintenanceBarrier) await this.maintenanceBarrier.promise;
+    }
+    this.acquisitionsInFlight += 1;
+  }
+
+  leaveAcquisition(): void {
+    this.acquisitionsInFlight -= 1;
+    if (this.acquisitionsInFlight !== 0) return;
+    for (const resolve of this.acquisitionIdleWaiters) resolve();
+    this.acquisitionIdleWaiters.clear();
+  }
+
+  async waitForAcquisitions(): Promise<void> {
+    if (this.acquisitionsInFlight === 0) return;
+    await new Promise<void>((resolve) =>
+      this.acquisitionIdleWaiters.add(resolve),
+    );
+  }
+
+  runMaintenance<T>(
+    waitForQuiescence: () => Promise<void>,
+    operation: () => T | Promise<T>,
+  ): Promise<T> {
+    this.pendingMaintenanceCount += 1;
+    if (!this.maintenanceBarrier) {
+      let resolve: () => void = () => undefined;
+      const promise = new Promise<void>((settle) => {
+        resolve = settle;
+      });
+      this.maintenanceBarrier = { promise, resolve };
+    }
+    // `add` widens to `T | void` for abort/timeout options; neither is used.
+    const queued = this.maintenanceQueue.add(async () => {
+      await waitForQuiescence();
+      return operation();
+    }) as Promise<T>;
+    return queued.finally(() => {
+      this.pendingMaintenanceCount -= 1;
+      if (this.pendingMaintenanceCount !== 0) return;
+      const barrier = this.maintenanceBarrier;
+      this.maintenanceBarrier = undefined;
+      barrier?.resolve();
+    });
+  }
+
+  assertIdle(): void {
+    if (
+      this.acquisitionsInFlight !== 0 ||
+      this.pendingMaintenanceCount !== 0 ||
+      this.maintenanceQueue.pending !== 0 ||
+      this.maintenanceQueue.size !== 0 ||
+      this.acquisitionIdleWaiters.size !== 0
+    ) {
+      throw new Error('Execution lease coordination is still active.');
+    }
+  }
+}
+
+let leaseCoordination = new ExecutionLeaseCoordination();
+
+/** Replace tested coordination state after every isolated test case. */
+export function resetExecutionLeaseCoordinationForTests(): void {
+  leaseCoordination.assertIdle();
+  leaseCoordination = new ExecutionLeaseCoordination();
 }
 
 async function enterLeaseAcquisition(): Promise<void> {
   // An existing owned run may need to launch a child before it can settle.
   // Root launches wait; nested launches remain admitted and are included in
   // the dynamic quiescence check below.
-  if ((executionOwnership.getStore()?.size ?? 0) === 0) {
-    while (maintenanceBarrier) await maintenanceBarrier.promise;
-  }
-  acquisitionsInFlight += 1;
+  await leaseCoordination.enterAcquisition(
+    (executionOwnership.getStore()?.size ?? 0) > 0,
+  );
 }
 
 function leaveLeaseAcquisition(): void {
-  acquisitionsInFlight -= 1;
-  if (acquisitionsInFlight !== 0) return;
-  for (const resolve of acquisitionIdleWaiters) resolve();
-  acquisitionIdleWaiters.clear();
-}
-
-function waitForLeaseAcquisitions(): Promise<void> {
-  if (acquisitionsInFlight === 0) return Promise.resolve();
-  return new Promise((resolve) => acquisitionIdleWaiters.add(resolve));
+  leaseCoordination.leaveAcquisition();
 }
 
 async function waitForOwnedLeaseQuiescence(): Promise<void> {
   for (;;) {
-    await waitForLeaseAcquisitions();
+    await leaseCoordination.waitForAcquisitions();
     const releases = [...ownedLeases.values()].map((lease) => lease.released);
     if (releases.length === 0) return;
     await Promise.all(releases);
@@ -138,20 +192,10 @@ async function waitForOwnedLeaseQuiescence(): Promise<void> {
 export function runWithOwnedExecutionLeaseQuiescence<T>(
   operation: () => T | Promise<T>,
 ): Promise<T> {
-  pendingMaintenanceCount += 1;
-  maintenanceBarrier ??= createMaintenanceBarrier();
-  // `add` widens to `T | void` for abort/timeout options; neither is used.
-  const queued = maintenanceQueue.add(async () => {
-    await waitForOwnedLeaseQuiescence();
-    return operation();
-  }) as Promise<T>;
-  return queued.finally(() => {
-    pendingMaintenanceCount -= 1;
-    if (pendingMaintenanceCount !== 0) return;
-    const barrier = maintenanceBarrier;
-    maintenanceBarrier = undefined;
-    barrier?.resolve();
-  });
+  return leaseCoordination.runMaintenance(
+    waitForOwnedLeaseQuiescence,
+    operation,
+  );
 }
 
 function storageRoot(): string {

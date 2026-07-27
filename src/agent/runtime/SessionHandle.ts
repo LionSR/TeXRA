@@ -327,6 +327,12 @@ export class SessionHandle {
   ): Promise<boolean> {
     if (generation !== this.storageGeneration) return false;
     await Promise.all([this.transcripts.flush(), this.snapshots.flush()]);
+    if (
+      generation !== this.storageGeneration ||
+      this.restartRepairAbort.signal.aborted
+    ) {
+      return false;
+    }
     const storage = platform().storage;
     if (storage.commitWorkspaceStorageChange?.() === false) return false;
     const previousStatus = this.status.getAllStreamStates();

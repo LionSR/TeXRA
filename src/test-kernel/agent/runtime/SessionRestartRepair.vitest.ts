@@ -6,6 +6,7 @@ import {
   acquireFreshExecutionLease,
   completeOwnedExecutionLease,
   EXECUTION_LEASE_STALE_MS,
+  resetExecutionLeaseCoordinationForTests,
 } from '@agent/storage/executionLease';
 import * as waitingDetection from '@agent/storage/detectWaitingStreams';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -49,6 +50,7 @@ afterEach(async () => {
     () => undefined,
   );
   clearStoreCache();
+  resetExecutionLeaseCoordinationForTests();
 });
 
 describe('SessionHandle restart repair', () => {
@@ -498,6 +500,39 @@ describe('SessionHandle restart repair', () => {
 
       expect(commitWorkspaceStorageChange).not.toHaveBeenCalled();
       expect(reload).not.toHaveBeenCalled();
+    } finally {
+      session.dispose();
+    }
+  });
+
+  it('does not commit a new root after disposal during the old-root flush', async () => {
+    const transcripts = await StreamLogStore.open();
+    const session = new SessionHandle({
+      transcripts,
+      restartRepair: 'deferred',
+    });
+    const commitWorkspaceStorageChange = vi.fn(() => true);
+    Object.assign(platform().storage, {
+      hasPendingWorkspaceStorageChange: () => true,
+      commitWorkspaceStorageChange,
+    });
+    let finishFlush: (() => void) | undefined;
+    const flushBlocked = new Promise<void>((resolve) => {
+      finishFlush = resolve;
+    });
+    vi.spyOn(transcripts, 'flush').mockReturnValue(flushBlocked);
+
+    try {
+      const replacement = session.reloadAfterStorageRootChange();
+      await vi.waitFor(() => {
+        expect(transcripts.flush).toHaveBeenCalledOnce();
+      });
+
+      session.dispose();
+      finishFlush?.();
+
+      await expect(replacement).resolves.toBe(false);
+      expect(commitWorkspaceStorageChange).not.toHaveBeenCalled();
     } finally {
       session.dispose();
     }
