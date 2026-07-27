@@ -15,7 +15,6 @@ import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { trackTerminalResultPresentation } from '@agent/runtime/terminalResultToast';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { SessionStores } from '@agent/runtime/SessionStores';
 import {
   notifyFollowUpSent,
   presentFollowUpWakeResult,
