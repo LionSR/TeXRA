@@ -47,10 +47,8 @@ import {
 import {
   handleDeleteAll,
   handleFileAction,
-  handleFilterChange,
   handleFollowupRequestOptions,
   handleFollowUpChange,
-  handleFollowUpClear,
   handleFollowUpFocusComplete,
   handleFollowUpPolish,
   handleFollowUpSend,
@@ -63,7 +61,6 @@ import {
   sendFollowupCommand,
 } from './eventHandlers';
 import { dispatchMessage } from './messageDispatcher';
-import type { FilterEventDetail } from './events';
 // Local imports - progress view components
 import './components/StreamTabs';
 import './components/StreamConversation';
@@ -189,7 +186,6 @@ export class ProgressApp extends ProgressAppBase {
                       @followup-change=${handleFollowUpChange}
                       @followup-send=${handleFollowUpSend}
                       @followup-polish=${handleFollowUpPolish}
-                      @followup-clear=${handleFollowUpClear}
                       @followup-focus-complete=${handleFollowUpFocusComplete}
                     ></stream-conversation>
 
@@ -205,7 +201,6 @@ export class ProgressApp extends ProgressAppBase {
                       .childStreamsByParent=${childStreamsByParent$.get()}
                       @stream-switch=${handleStreamSwitch}
                       @stream-delete=${handleStreamDelete}
-                      @filter-change=${this.onFilterChange}
                       @delete-all=${handleDeleteAll}
                     ></stream-tabs>
                   </wa-split-panel>
@@ -325,17 +320,6 @@ export class ProgressApp extends ProgressAppBase {
 
   private onPopBack = (): void => {
     postMessage(PROGRESS_VIEW_COMMANDS.POP_BACK);
-  };
-
-  /**
-   * The one host-specific layer over the shared `handleFilterChange`:
-   * persist the chosen filter through this webview's `prefsManager`
-   * (VS Code webview state). Desktop/trace-viewer wire the shared handler
-   * directly and persist nothing.
-   */
-  private onFilterChange = (e: CustomEvent<FilterEventDetail>): void => {
-    handleFilterChange(e);
-    this.prefsManager.update({ streamFilter: e.detail.filter });
   };
 
   // `sendFollowupCommand` is shared by both followup entry points; these

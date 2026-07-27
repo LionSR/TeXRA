@@ -44,9 +44,9 @@ import { formatResultCount } from '@utils/text/stringUtils';
 import { layoutStyles } from '../styles/logStyles';
 import { streamTabStyles } from './StreamTab.styles';
 import { streamTabsContainerStyles } from './StreamTabsContainer.styles';
-import { ELEMENT_IDS, FILTER_BUTTONS } from '../constants';
+import { ELEMENT_IDS } from '../constants';
 import { ProgressEvents } from '../events';
-import { getComposedPathElement, getRadioValue, setsEqual } from '../utils';
+import { getComposedPathElement, setsEqual } from '../utils';
 import {
   computeStreamTreeProjection,
   getStreamBranchActivity,
@@ -56,8 +56,6 @@ import {
 import type { StreamFilter, StreamState } from '../store';
 
 // Web Awesome native components
-import '@awesome.me/webawesome/dist/components/radio/radio.js';
-import '@awesome.me/webawesome/dist/components/radio-group/radio-group.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 function buildTooltip(
@@ -531,12 +529,6 @@ export class StreamTabs extends LitElement {
     else next.delete(parentId);
     this.userOverride.set(parentId, nowExpanded ? 'expanded' : 'collapsed');
     this.expandedParents = next;
-  }
-
-  private handleFilterChange(event: Event): void {
-    const filter = getRadioValue<StreamFilter>(event);
-    if (!filter) return;
-    this.dispatchEvent(ProgressEvents.filterChange({ filter }));
   }
 
   private handleDeleteAll(): void {

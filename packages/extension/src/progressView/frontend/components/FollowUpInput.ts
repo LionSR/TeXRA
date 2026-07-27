@@ -33,10 +33,7 @@ import {
 } from '../contexts/streamContexts';
 import { ELEMENT_IDS } from '../constants';
 import { ProgressEvents } from '../events';
-import {
-  resetFollowUpInputTransientState,
-  type FollowUpInputTransientState,
-} from '../followUpInputState';
+import { type FollowUpInputTransientState } from '../followUpInputState';
 
 // Local imports - progress view components
 import './QueuedFollowUps';
@@ -538,14 +535,6 @@ export class FollowUpInput extends LitElement {
     }
     this.polishing = true;
     this.dispatchEvent(ProgressEvents.followupPolish());
-  }
-
-  private emitClear(): void {
-    const streamId = this.streamId;
-    const transientState = this.transientState;
-    if (!streamId || !transientState) return;
-    resetFollowUpInputTransientState(transientState);
-    this.dispatchEvent(ProgressEvents.followupClear({ streamId }));
   }
 
   private updateValue(
