@@ -62,12 +62,21 @@ export async function buildProfileMessage(
       remoteAgents: [],
       apiAccessMode: 'personal',
       accessExpiresAt: null,
+      sessionExpired: false,
       spendingStatus: null,
+      spendingStatusError: null,
       quotaAutoSwitched: false,
     };
   }
 
   const user = await SupabaseClient.getUser();
+
+  // A stored session can be a zombie: the access token expired and the
+  // refresh token was revoked (e.g. another host rotated it and gotrue
+  // reuse-detection killed ours). getRelayAccessToken() then resolves null
+  // even though isAuthenticated() is true — surface that instead of showing
+  // "Connected" over a usage panel that can never load.
+  const sessionExpired = (await SupabaseClient.getRelayAccessToken()) == null;
 
   let tier = FREE_TIER;
   try {
@@ -79,6 +88,7 @@ export async function buildProfileMessage(
   let apiAccessMode: ApiAccessMode = 'personal';
   let accessExpiresAt: string | null = null;
   let spendingStatus: UpdateProfileMessage['spendingStatus'] = null;
+  let spendingStatusError: UpdateProfileMessage['spendingStatusError'] = null;
   let quotaAutoSwitched = false;
   try {
     const serverSideKeyService = getServerSideKeyService();
@@ -99,6 +109,7 @@ export async function buildProfileMessage(
       serverSideKeyService.getAccessExpirationDate()?.toISOString() ?? null;
     quotaAutoSwitched = serverSideKeyService.wasQuotaAutoSwitched();
     spendingStatus = serverSideKeyService.getSpendingStatus();
+    spendingStatusError = serverSideKeyService.getSpendingStatusError();
   } catch {
     // Server-side key / tier access is optional; personal provider keys work.
   }
@@ -119,7 +130,9 @@ export async function buildProfileMessage(
     remoteAgents,
     apiAccessMode,
     accessExpiresAt,
+    sessionExpired,
     spendingStatus,
+    spendingStatusError,
     quotaAutoSwitched,
   };
 }

@@ -10,7 +10,9 @@ import {
   globalStreamingDefault,
   providerKeyStatuses,
   quotaAutoSwitched,
+  sessionExpired,
   spendingStatus,
+  spendingStatusError,
   tier,
   userEmail,
 } from '../settingsState';
@@ -47,6 +49,8 @@ export const profileHandlers = {
     if (!spendingStatusEqual(spendingStatus.get(), newSpend)) {
       spendingStatus.set(newSpend);
     }
+    sessionExpired.set(data.sessionExpired ?? false);
+    spendingStatusError.set(data.spendingStatusError ?? null);
     quotaAutoSwitched.set(data.quotaAutoSwitched ?? false);
     apiAccessMode.set(data.apiAccessMode);
     providerKeyStatuses.set(data.providerKeyStatuses ?? []);
