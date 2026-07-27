@@ -3,6 +3,11 @@ import { z } from 'zod';
 
 import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
+import {
+  SessionStores,
+  type DeleteAllStreamsResult,
+  type DeleteStreamResult,
+} from '@agent/storage';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
@@ -10,11 +15,6 @@ import {
   defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import {
-  SessionStores,
-  type DeleteAllStreamsResult,
-  type DeleteStreamResult,
-} from '@agent/runtime/SessionStores';
 import type { StateStore } from '@platform/interfaces';
 import {
   AgentCategoryFilterSchema,
