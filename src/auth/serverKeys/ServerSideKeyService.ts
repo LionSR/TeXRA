@@ -269,14 +269,21 @@ export class ServerSideKeyService {
       return this.accessFetchPromise!;
     }
 
-    // Anonymous-fetch backoff: when the session is dead, every call on the
-    // model-dispatch hot path would otherwise retry the full relay fetch +
-    // token-refresh attempt with no backoff. A short negative-cache keeps
-    // the retry storm bounded while still picking up a re-sign-in promptly.
+    // Anonymous-fetch backoff: when the session is dead AND access was
+    // denied, every call on the model-dispatch hot path would otherwise
+    // retry the full relay fetch + token-refresh attempt with no backoff.
+    // A short negative-cache keeps the retry storm bounded while still
+    // picking up a re-sign-in promptly.
+    //
+    // The backoff only applies to denied anonymous fetches (!accessResult).
+    // A granted anonymous fetch (hasAccess && providers available) means
+    // the only missing piece is the relay auth token, which may be
+    // available on the next attempt — those are allowed to retry.
     if (
       this.accessFetchPromise !== null &&
       this.accessTimestamp > 0 &&
       !this.lastFetchAuthenticated &&
+      !this.accessResult &&
       Date.now() - this.accessTimestamp < ANONYMOUS_FETCH_BACKOFF_MS
     ) {
       return this.accessFetchPromise;
@@ -299,9 +306,20 @@ export class ServerSideKeyService {
         this.tierService.getConfig(authToken),
       ]);
 
+      // Commit fetch metadata before any early-return paths so the
+      // anonymous-fetch backoff has a timestamp to gate on even for
+      // denied outcomes (expired access, missing tier config). Only
+      // commit when we are still the canonical call — a superseded fetch
+      // must not overwrite metadata from the later fetch.
+      const isLatest = this._activeFetchToken === fetchToken;
+      if (isLatest) {
+        this.lastFetchAuthenticated = thisFetchAuthenticated;
+        this.accessTimestamp = Date.now();
+      }
+
       if (this.tierService.isAccessExpired()) {
         this.logger.info?.(CHANNEL, 'User access has expired');
-        this.accessResult = false;
+        if (isLatest) this.accessResult = false;
         return false;
       }
 
@@ -310,25 +328,14 @@ export class ServerSideKeyService {
           CHANNEL,
           'Tier config unavailable for non-Ultra user, denying access',
         );
-        this.accessResult = false;
+        if (isLatest) this.accessResult = false;
         return false;
       }
 
       const providers = this.tierService.getProviders();
       const accessGranted = hasAccess && providers.length > 0;
 
-      // Only commit side-effects when we are still the canonical call.
-      // If an overlapping canUseServerSideKeys() started a new fetch while
-      // we were in-flight, the active token has already been replaced;
-      // writing lastFetchAuthenticated now would bind authentication
-      // metadata from the wrong (earlier) fetch.
-      if (this._activeFetchToken !== fetchToken) return accessGranted;
-
-      this.lastFetchAuthenticated = thisFetchAuthenticated;
-      // Always timestamp the fetch — anonymous/denied fetches need a
-      // timestamp for the short backoff gate above, otherwise every
-      // model-dispatch call retries with no bound.
-      this.accessTimestamp = Date.now();
+      if (!isLatest) return accessGranted;
 
       if (accessGranted) {
         this._isCachePrimed = true;
