@@ -12,10 +12,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import {
-  isChildRunLoopActive,
-  startChildRunLoop,
-} from '@agent/runtime/childRunLoop';
+import { startChildRunLoop } from '@agent/runtime/childRunLoop';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentFlowError } from '@agent/runtime/AgentFlowResult';
 import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
@@ -27,8 +24,7 @@ import {
 } from '@shared/schemas';
 
 const mocks = vi.hoisted(() => ({
-  enqueueChildRunFollowUp: vi.fn(),
-  wakeChildRunFollowUp: vi.fn(),
+  deliverChildRunFollowUp: vi.fn(),
   executeAgent: vi.fn(),
   finalizeExecution: vi.fn(),
   persistChildRunReport: vi.fn(),
@@ -67,8 +63,7 @@ vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
 }));
 
 vi.mock('@tools/childRunDelivery', () => ({
-  enqueueChildRunFollowUp: mocks.enqueueChildRunFollowUp,
-  wakeChildRunFollowUp: mocks.wakeChildRunFollowUp,
+  deliverChildRunFollowUp: mocks.deliverChildRunFollowUp,
   persistChildRunReport: mocks.persistChildRunReport,
   persistChildRunResultMeta: mocks.persistChildRunResultMeta,
 }));
@@ -107,11 +102,7 @@ function baseParams(
 describe('NativeSubagentStrategy', () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    mocks.enqueueChildRunFollowUp.mockResolvedValue({
-      kind: 'enqueued',
-      sendResult: { status: 'sent' },
-    });
-    mocks.wakeChildRunFollowUp.mockResolvedValue({ kind: 'delivered' });
+    mocks.deliverChildRunFollowUp.mockResolvedValue({ kind: 'delivered' });
     mocks.persistChildRunReport.mockResolvedValue({ kind: 'persisted' });
     mocks.persistChildRunResultMeta.mockResolvedValue({ kind: 'skipped' });
     mocks.finalizeExecution.mockResolvedValue({
@@ -645,19 +636,25 @@ describe('NativeSubagentStrategy', () => {
         strategy,
       });
       await vi.waitFor(() =>
-        expect(mocks.enqueueChildRunFollowUp).toHaveBeenCalledTimes(1),
+        expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledTimes(1),
       );
 
-      session.followUps.acquire(childStreamId).enqueue({
-        text: 'Also state exactly where finiteness is used.',
-        origin: 'user',
-      });
+      expect(
+        session.followUps.submit(
+          childStreamId,
+          {
+            text: 'Also state exactly where finiteness is used.',
+            origin: 'user',
+          },
+          'live_owner',
+        ),
+      ).toEqual({ kind: 'live' });
 
       await vi.waitFor(() =>
         expect(mocks.resumeToolUseFromResumeData).toHaveBeenCalledTimes(1),
       );
       await vi.waitFor(() =>
-        expect(mocks.enqueueChildRunFollowUp).toHaveBeenCalledTimes(2),
+        expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledTimes(2),
       );
       // Give an accidentally re-enqueued batch enough time to start a second
       // immediate resume. The guarded mock above prevents an actual busy loop.
@@ -679,22 +676,22 @@ describe('NativeSubagentStrategy', () => {
       ]);
       expect(session.followUps.getAll(childStreamId)).toEqual([]);
       expect(session.status.get(childStreamId)).toBe(STREAM_PHASE.WAITING);
-      const resumedDeliveries = mocks.enqueueChildRunFollowUp.mock.calls.filter(
+      const resumedDeliveries = mocks.deliverChildRunFollowUp.mock.calls.filter(
         ([delivery]) => delivery.followUp.text.includes('follow-up response'),
       );
       expect(resumedDeliveries).toHaveLength(1);
     } finally {
       const handleWasTracked =
         session.executions.getHandle(executionId) !== undefined;
-      if (isChildRunLoopActive(childStreamId)) handle.interrupt();
+      if (session.followUps.hasLiveOwner(childStreamId)) handle.interrupt();
       await vi.waitFor(() =>
-        expect(isChildRunLoopActive(childStreamId)).toBe(false),
+        expect(session.followUps.hasLiveOwner(childStreamId)).toBe(false),
       );
       if (handleWasTracked) await handle.result;
       if (session.executions.getHandle(executionId)) {
         session.executions.untrack(executionId);
       }
-      session.followUps.release(childStreamId);
+      session.followUps.terminalize(childStreamId);
       session.status.clearStream(childStreamId);
     }
   });
@@ -785,16 +782,16 @@ describe('NativeSubagentStrategy', () => {
       });
 
       await vi.waitFor(() =>
-        expect(mocks.enqueueChildRunFollowUp).toHaveBeenCalledTimes(1),
+        expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledTimes(1),
       );
       await vi.waitFor(() =>
-        expect(isChildRunLoopActive(childStreamId)).toBe(false),
+        expect(session.followUps.hasLiveOwner(childStreamId)).toBe(false),
       );
 
       expect(mocks.resumeToolUseFromResumeData).not.toHaveBeenCalled();
       expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
     } finally {
-      session.followUps.release(childStreamId);
+      session.followUps.terminalize(childStreamId);
       session.status.clearStream(childStreamId);
     }
   });

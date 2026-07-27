@@ -10,6 +10,7 @@ import {
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { registerCommands } from '@commands/_shared/registerCommands';
 import { logErrorMessage } from '@frontend/ui/errorHandlingUtils';
+import type { RecoveryContinuation } from '@platform/interfaces';
 import { getToolUsePersistenceEnabled } from '@utils/config/constants';
 
 interface ResumeAgentResult {
@@ -47,6 +48,7 @@ async function showResumeError(error: unknown): Promise<void> {
  */
 export function resumeExtensionToolUseFromResumeData(
   resume: ToolUseResumeData,
+  recovery?: RecoveryContinuation,
   followUp?: string,
 ): Promise<boolean> {
   if (!getToolUsePersistenceEnabled()) {
@@ -57,6 +59,7 @@ export function resumeExtensionToolUseFromResumeData(
     resume,
     defaultSession().interactions,
     {
+      recovery,
       ...(followUp !== undefined && {
         extraFollowUps: [{ text: followUp, origin: 'user' as const }],
       }),
@@ -101,6 +104,7 @@ export function registerResumeAgentCommand(
 
         const success = await resumeExtensionToolUseFromResumeData(
           resume,
+          undefined,
           payload?.followUp,
         );
         return { success };

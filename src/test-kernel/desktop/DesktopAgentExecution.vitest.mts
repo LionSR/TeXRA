@@ -71,8 +71,6 @@ import {
 } from './desktopAgentExecutionTestHarness.mjs';
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
 
-type WakeQueuedFollowUpStream =
-  typeof import('@agent/followUp/ToolUseFollowUp').wakeQueuedFollowUpStream;
 type DesktopProgressBridgeOptions =
   import('@desktop/main/desktopAgentExecution').DesktopProgressBridgeOptions;
 
@@ -167,15 +165,7 @@ type BridgeWithSession = TestableBridge & {
     };
     status: StreamStatusMachine;
     events: SessionHandle['events'];
-    followUps: {
-      enqueue(
-        streamId: StreamTabId,
-        followUp: { text: string },
-        options?: { force?: boolean },
-      ): boolean;
-      getAll(streamId: StreamTabId): string[];
-      release(streamId: StreamTabId): void;
-    };
+    followUps: SessionHandle['followUps'];
   };
 };
 
@@ -197,6 +187,17 @@ function bridgeFollowUps(
   return (bridge as BridgeWithSession).session.followUps;
 }
 
+function seedBridgeFollowUp(
+  bridge: TestableBridge,
+  streamId: StreamTabId,
+  text: string,
+): void {
+  const followUps = bridgeFollowUps(bridge);
+  const lease = followUps.claimLive(streamId, 'flow')!;
+  followUps.queue(lease).enqueue({ text });
+  followUps.release(lease, 'recoverable');
+}
+
 type CreateBridgeOptions = {
   kvStoreBacking?: Map<string, unknown>;
   kvRead?: (key: string) => Promise<unknown> | unknown;
@@ -215,7 +216,6 @@ type CreateBridgeOptions = {
   configureSession?: (session: SessionHandle) => Promise<void> | void;
   deferReady?: boolean;
   detectWaitingStreams?: ReturnType<typeof vi.fn>;
-  wakeQueuedFollowUpStream?: WakeQueuedFollowUpStream;
   showErrorMessage?: (message: string) => Promise<void> | void;
   showInfoMessage?: (message: string) => Promise<void> | void;
   onRunCompleted?: () => void;
@@ -286,12 +286,10 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
   const kvStoreBacking = options.kvStoreBacking ?? new Map<string, unknown>();
   let resumeDelegate: AgentResumePort = {
     tryResumeStream: async () => false,
-    isResumeInFlight: () => false,
   };
   const agentResume: AgentResumePort = {
-    tryResumeStream: (streamId) => resumeDelegate.tryResumeStream(streamId),
-    isResumeInFlight: (streamId) =>
-      resumeDelegate.isResumeInFlight?.(streamId) ?? false,
+    tryResumeStream: (streamId, recovery) =>
+      resumeDelegate.tryResumeStream(streamId, recovery),
   };
   const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
     import('@platform/platform'),
@@ -2334,8 +2332,13 @@ describe('DesktopProgressBridge', () => {
           }),
         }),
     );
+    let pendingAtAttachment: readonly { text: string; origin?: string }[] = [];
     const resumeToolUseFromResumeData = vi.fn(async (...args: unknown[]) => {
-      const options = args[2] as { onFollowUpConsumed?: () => void };
+      const options = args[2] as {
+        onFollowUpConsumed?: () => void;
+        takePendingFollowUps(): readonly { text: string; origin?: string }[];
+      };
+      pendingAtAttachment = options.takePendingFollowUps();
       options.onFollowUpConsumed?.();
     });
     const messages: unknown[] = [];
@@ -2356,11 +2359,7 @@ describe('DesktopProgressBridge', () => {
         childStreamId: 'stream-1',
         parentStreamId,
       });
-      bridgeFollowUps(bridge).enqueue(
-        'stream-1',
-        { text: 'queued follow-up' },
-        { force: true },
-      );
+      seedBridgeFollowUp(bridge, 'stream-1' as StreamTabId, 'queued follow-up');
 
       await expect(bridge.tryResumeStream('stream-1')).resolves.toBe(true);
       expect(retrieveSessionResumeData).toHaveBeenCalledWith(
@@ -2386,7 +2385,6 @@ describe('DesktopProgressBridge', () => {
         unknown,
         {
           drainedFollowUps?: readonly { text: string; origin?: string }[];
-          takePendingFollowUps(): readonly { text: string; origin?: string }[];
         },
       ];
       // The drained batch travels via the direct drainedFollowUps handoff (a
@@ -2395,9 +2393,9 @@ describe('DesktopProgressBridge', () => {
       expect(resumeOptions.drainedFollowUps?.map((item) => item.text)).toEqual([
         'queued follow-up',
       ]);
-      expect(resumeOptions.takePendingFollowUps()).toEqual([]);
+      expect(pendingAtAttachment).toEqual([]);
     } finally {
-      bridgeFollowUps(bridge).release('stream-1');
+      bridgeFollowUps(bridge).terminalize('stream-1');
       bridgeStatus(bridge).clearStream('stream-1');
     }
   });
@@ -2425,11 +2423,7 @@ describe('DesktopProgressBridge', () => {
         executionId: 'ec1001' as ExecutionId,
         taskState: { agentConfig: SEARCH_TOOL_USE_AGENT_CONFIG },
       });
-      bridgeFollowUps(bridge).enqueue(
-        'stream-1',
-        { text: 'queued follow-up' },
-        { force: true },
-      );
+      seedBridgeFollowUp(bridge, 'stream-1' as StreamTabId, 'queued follow-up');
 
       await expect(bridge.tryResumeStream('stream-1')).resolves.toBe(false);
       expect(bridgeFollowUps(bridge).getAll('stream-1')).toEqual([
@@ -2437,7 +2431,7 @@ describe('DesktopProgressBridge', () => {
       ]);
       expect(bridgeStatus(bridge).get('stream-1')).toBe(STREAM_STATUS.WAITING);
     } finally {
-      bridgeFollowUps(bridge).release('stream-1');
+      bridgeFollowUps(bridge).terminalize('stream-1');
       bridgeStatus(bridge).clearStream('stream-1');
     }
   });
@@ -2690,7 +2684,6 @@ describe('DesktopProgressBridge', () => {
       category = AgentCategory.Workflow,
       messages = [],
       detectWaitingStreams,
-      wakeQueuedFollowUpStream,
     }: {
       streamId: StreamTabId;
       executionId: ExecutionId;
@@ -2698,7 +2691,6 @@ describe('DesktopProgressBridge', () => {
       category?: AgentCategory;
       messages?: unknown[];
       detectWaitingStreams?: ReturnType<typeof vi.fn>;
-      wakeQueuedFollowUpStream?: WakeQueuedFollowUpStream;
     }) {
       const {
         bridgeModule,
@@ -2757,7 +2749,6 @@ describe('DesktopProgressBridge', () => {
         {
           session: processSession,
           sessionStores,
-          ...(wakeQueuedFollowUpStream ? { wakeQueuedFollowUpStream } : {}),
           host: createStubDesktopAgentExecutionHost({
             openDiff: async (original, proposed, title) => {
               diffPathsA.push({
@@ -3059,65 +3050,6 @@ describe('DesktopProgressBridge', () => {
         await expect(planPromise).resolves.toEqual({ action: 'approve' });
       } finally {
         bridgeB.dispose();
-      }
-    });
-
-    it('replays a follow-up wake notice that completes after window close exactly once', async () => {
-      const streamId = 'process-follow-up-wake' as StreamTabId;
-      const executionId = 'ec00ea' as ExecutionId;
-      let finishWake: (result: { kind: 'dropped' }) => void = () => undefined;
-      const wakeResult = new Promise<{ kind: 'dropped' }>((resolve) => {
-        finishWake = resolve;
-      });
-      const wakeQueuedFollowUpStream = vi.fn(() => wakeResult);
-      const owner = await createProcessOwner({
-        streamId,
-        executionId,
-        agentName: 'search',
-        category: AgentCategory.ToolUse,
-        wakeQueuedFollowUpStream,
-      });
-      expect(
-        owner.processSession.status.transitionToWaiting(streamId, 'wait', {
-          trace: owner.trace as unknown as AgentTrace,
-        }),
-      ).toBe(true);
-      const send = assertSupported(
-        owner.bridgeA.progressViewInboundHandlers[
-          PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP
-        ],
-      );
-
-      await send({
-        command: PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP,
-        stream: streamId,
-        text: 'Continue after the child completes.',
-      });
-      expect(wakeQueuedFollowUpStream).toHaveBeenCalledOnce();
-      owner.close();
-      finishWake({ kind: 'dropped' });
-      await settleProgressEvents();
-      expect(owner.infosA).toEqual([]);
-
-      const { bridgeB, infosB } = await owner.reopen();
-      try {
-        await vi.waitFor(() =>
-          expect(infosB).toEqual([
-            'Message dropped because no session was available to receive it. Start a new agent task to continue.',
-          ]),
-        );
-        await settleProgressEvents();
-        expect(infosB).toHaveLength(1);
-      } finally {
-        bridgeB.dispose();
-      }
-
-      const { bridgeB: bridgeC, infosB: infosC } = await owner.reopen();
-      try {
-        await settleProgressEvents();
-        expect(infosC).toEqual([]);
-      } finally {
-        bridgeC.dispose();
       }
     });
 
@@ -3686,11 +3618,13 @@ describe('DesktopProgressBridge', () => {
         childStreamId,
         STREAM_PHASE.RUNNING,
       );
-      owner.processSession.followUps.enqueue(
+      const followUpLease = owner.processSession.followUps.claimLive(
         childStreamId,
-        { text: 'late follow-up' },
-        { force: true },
-      );
+        'flow',
+      )!;
+      owner.processSession.followUps
+        .queue(followUpLease)
+        .enqueue({ text: 'late follow-up' });
       await owner.processSession.flushArtifacts();
       owner.close();
       const pendingApproval =

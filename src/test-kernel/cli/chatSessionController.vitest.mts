@@ -126,7 +126,6 @@ vi.mock('@cli/runtime/sessionResume', () => ({
 }));
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { wakeQueuedFollowUpStream } from '@agent/followUp/ToolUseFollowUp';
 import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import { SessionHostInteractions } from '@agent/runtime/HostInteractions';
@@ -460,7 +459,7 @@ describe('createChatSessionController', () => {
       useHostInteractions: vi.fn(() => mocks.detachHostInteractions),
       interactions: { cancel: mocks.cancelInteractions },
       events: { emit: mocks.sessionEventEmit },
-      followUps: { enqueue: mocks.followUpEnqueue },
+      followUps: { restore: mocks.followUpEnqueue },
       status: { isActiveOrResuming: mocks.streamIsActiveOrResuming },
       executions: {
         stopAgentStream: mocks.stopAgentStream,
@@ -476,7 +475,11 @@ describe('createChatSessionController', () => {
     mocks.resumeQueuedToolUseFromResumeData.mockImplementation(
       async (...args: unknown[]) => {
         const options = args[3] as ResumeQueuedToolUseOptions;
-        options.onFollowUpQueueReady?.();
+        options.onFollowUpQueueReady?.({
+          streamId: 'stream:test' as StreamTabId,
+          generation: 1,
+          kind: 'recovery',
+        });
         return true;
       },
     );
@@ -692,7 +695,7 @@ describe('createChatSessionController', () => {
         interactions.use(adapter),
       interactions,
       events,
-      followUps: { enqueue: mocks.followUpEnqueue },
+      followUps: { restore: mocks.followUpEnqueue },
       approvals: { registerStreamParent: vi.fn() },
       status,
       executions,
@@ -1263,13 +1266,7 @@ describe('createChatSessionController', () => {
       makeInit({ session, snapshotStore }),
     );
 
-    await expect(
-      wakeQueuedFollowUpStream(
-        'child-stream',
-        { status: 'queued', reason: 'waiting' },
-        ctrl,
-      ),
-    ).resolves.toEqual({ kind: 'queued_resume_failed' });
+    await expect(ctrl.tryResumeStream('child-stream')).resolves.toBe(false);
 
     expect(snapshotStore.preload).not.toHaveBeenCalled();
   });
@@ -1362,9 +1359,8 @@ describe('createChatSessionController', () => {
     await expect(launcherResume).resolves.toBe(true);
     await expect(admission.completion).resolves.toBe(true);
     expect(mocks.followUpEnqueue).toHaveBeenCalledWith(
-      'stream-1',
-      { text: 'Transfer this accepted message.' },
-      { force: true },
+      expect.objectContaining({ kind: 'recovery' }),
+      [{ text: 'Transfer this accepted message.' }],
     );
   });
 
@@ -1433,7 +1429,11 @@ describe('createChatSessionController', () => {
     mocks.resumeQueuedToolUseFromResumeData.mockImplementationOnce(
       async (...args: unknown[]) => {
         const options = args[3] as ResumeQueuedToolUseOptions;
-        options.onFollowUpQueueReady?.();
+        options.onFollowUpQueueReady?.({
+          streamId: 'stream:test' as StreamTabId,
+          generation: 1,
+          kind: 'recovery',
+        });
         return resume.promise;
       },
     );
@@ -1538,6 +1538,7 @@ describe('createChatSessionController', () => {
       expect.objectContaining({
         isCancellationRequested: expect.any(Function),
       }),
+      undefined,
     );
     expect(mocks.projectStreamTranscript).not.toHaveBeenCalledWith('stream-1', {
       finalize: true,
