@@ -8,7 +8,7 @@ import {
 
 const rendererWindow = globalThis as typeof globalThis & {
   addEventListener?: (
-    type: 'beforeunload',
+    type: 'unload',
     listener: () => void,
     options?: { once?: boolean },
   ) => void;
@@ -28,7 +28,7 @@ installElectronHostBridge({
       listener(message);
     ipcRenderer.on(channel, handler);
     rendererWindow.addEventListener?.(
-      'beforeunload',
+      'unload',
       () => ipcRenderer.off(channel, handler),
       { once: true },
     );
