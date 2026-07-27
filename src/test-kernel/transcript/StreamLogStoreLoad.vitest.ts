@@ -687,6 +687,32 @@ describe('StreamLogStore load', () => {
     expect(store.has('beta')).toBe(false);
   });
 
+  it('discards pending writes when restoring a previously flushed root', async () => {
+    const storage = mockStorage({
+      logs: {
+        alpha: [logEntry('alpha', 1, 100)],
+      },
+      summaries: {
+        alpha: {
+          firstTimestamp: 100,
+          lastTimestamp: 100,
+          hasRunningGroup: false,
+        },
+      },
+    });
+    const store = await StreamLogStore.open();
+    store.append('new-root-dirty', logEntry('new-root-dirty', 1, 200));
+
+    await store.reload({ discardPendingWrites: true });
+
+    expect(store.keys()).toEqual(['alpha']);
+    expect(
+      [...storage.writes.keys()].some((target) =>
+        target.includes(encodeURIComponent('new-root-dirty')),
+      ),
+    ).toBe(false);
+  });
+
   it('uses stream summaries without reading full log files at startup', async () => {
     const storage = mockStorage({
       logs: {

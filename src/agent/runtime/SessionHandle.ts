@@ -279,16 +279,12 @@ export class SessionHandle {
     reloadTranscripts = false,
   ): Promise<boolean> {
     try {
+      if (reloadTranscripts) {
+        return await runWithOwnedExecutionLeaseQuiescence(() =>
+          this.replaceStoresAfterStorageRootChange(generation),
+        );
+      }
       const repair = async () => {
-        if (generation !== this.storageGeneration) return false;
-        if (reloadTranscripts) {
-          await Promise.all([this.transcripts.flush(), this.snapshots.flush()]);
-          if (platform().storage.commitWorkspaceStorageChange?.() === false) {
-            return false;
-          }
-          await this.transcripts.reload();
-          this.status.clearAll();
-        }
         if (generation !== this.storageGeneration) return false;
         const streamIds = this.transcripts.keys();
         await this.snapshots.load(streamIds);
@@ -303,15 +299,77 @@ export class SessionHandle {
         await this.runRestartRepair(generation);
         return true;
       };
-      if (reloadTranscripts) {
-        return await runWithOwnedExecutionLeaseQuiescence(repair);
-      }
       return await repair();
     } catch (error) {
       logger.warn('Failed to repair session stores after restart', {
         data: error,
       });
       throw error;
+    }
+  }
+
+  private async replaceStoresAfterStorageRootChange(
+    generation: number,
+  ): Promise<boolean> {
+    if (generation !== this.storageGeneration) return false;
+    await Promise.all([this.transcripts.flush(), this.snapshots.flush()]);
+    const storage = platform().storage;
+    if (storage.commitWorkspaceStorageChange?.() === false) return false;
+    const previousStatus = this.status.getAllStreamStates();
+    try {
+      await this.transcripts.reload();
+      this.status.clearAll();
+      const streamIds = this.transcripts.keys();
+      await this.snapshots.load(streamIds);
+      for (const streamId of this.transcripts.getUnfinishedStreamIds()) {
+        this.status.transition(
+          streamId,
+          STREAM_PHASE.RUNNING,
+          STREAM_TRANSITION_CAUSE.LIFECYCLE,
+        );
+      }
+      await this.runRestartRepair(generation);
+      storage.finalizeWorkspaceStorageChange?.();
+      return true;
+    } catch (replacementError) {
+      if (storage.rollbackWorkspaceStorageChange?.() !== true) {
+        throw replacementError;
+      }
+      try {
+        await this.transcripts.reload({ discardPendingWrites: true });
+        await this.snapshots.load(this.transcripts.keys());
+        this.status.clearAll();
+        for (const [streamId, state] of previousStatus) {
+          if (state.phase === STREAM_PHASE.WAITING) {
+            this.status.transitionToWaiting(
+              streamId,
+              STREAM_TRANSITION_CAUSE.RESTART_REPAIR,
+              { substate: state.substate },
+            );
+          } else if (
+            state.phase === STREAM_PHASE.COMPLETED ||
+            state.phase === STREAM_PHASE.FAILED ||
+            state.phase === STREAM_PHASE.CANCELLED
+          ) {
+            this.status.transitionToTerminal(streamId, state.phase, {
+              substate: state.substate,
+            });
+          } else {
+            this.status.transition(
+              streamId,
+              state.phase,
+              STREAM_TRANSITION_CAUSE.LIFECYCLE,
+              { substate: state.substate },
+            );
+          }
+        }
+      } catch (rollbackError) {
+        throw new AggregateError(
+          [replacementError, rollbackError],
+          'Workspace storage replacement and rollback both failed',
+        );
+      }
+      throw replacementError;
     }
   }
 

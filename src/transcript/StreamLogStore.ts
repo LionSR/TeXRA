@@ -831,8 +831,13 @@ export class StreamLogStore {
   /**
    * Transactionally reload persistent summaries. A failed read leaves the
    * previously valid in-memory state untouched and rejects to the host.
+   * `discardPendingWrites` is reserved for workspace-root rollback after the
+   * old root was already flushed; it prevents failed new-root repair state
+   * from being written after the provider returns to the old root.
    */
-  async reload(): Promise<void> {
+  async reload(
+    options: { readonly discardPendingWrites?: boolean } = {},
+  ): Promise<void> {
     if (this.mode.kind === 'ephemeral') {
       throw new Error(
         `Cannot reload an ephemeral transcript store (${this.mode.reason}).`,
@@ -840,7 +845,7 @@ export class StreamLogStore {
     }
     if (this.pendingReload) return this.pendingReload;
 
-    const work = this.executeReload();
+    const work = this.executeReload(options.discardPendingWrites ?? false);
     this.pendingReload = work;
     try {
       await work;
@@ -961,9 +966,13 @@ export class StreamLogStore {
     }
   }
 
-  private async executeReload(): Promise<void> {
-    if (this.mode.kind === 'persistent') await this.flush();
-    if (this.dirtyStreamIds.size > 0) {
+  private async executeReload(discardPendingWrites: boolean): Promise<void> {
+    if (discardPendingWrites) {
+      this.cancelPendingSave();
+    } else if (this.mode.kind === 'persistent') {
+      await this.flush();
+    }
+    if (!discardPendingWrites && this.dirtyStreamIds.size > 0) {
       throw new Error(
         'Cannot reload transcripts while persistent writes remain unresolved.',
       );

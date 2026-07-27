@@ -435,6 +435,64 @@ describe('SessionHandle restart repair', () => {
     }
   });
 
+  it('rolls back a failed new-root load and permits retry', async () => {
+    const transcripts = await StreamLogStore.open();
+    const session = new SessionHandle({
+      transcripts,
+      restartRepair: 'deferred',
+    });
+    const storage = platform().storage;
+    let activeRoot = '/workspace/old-storage';
+    const finalizeWorkspaceStorageChange = vi.fn();
+    const rollbackWorkspaceStorageChange = vi.fn(() => {
+      activeRoot = '/workspace/old-storage';
+      return true;
+    });
+    Object.assign(storage, {
+      getStoragePath: () => activeRoot,
+      hasPendingWorkspaceStorageChange: () =>
+        activeRoot === '/workspace/old-storage',
+      commitWorkspaceStorageChange: () => {
+        activeRoot = '/workspace/new-storage';
+        return true;
+      },
+      finalizeWorkspaceStorageChange,
+      rollbackWorkspaceStorageChange,
+    });
+    const reloadError = new Error('new transcript root is unreadable');
+    const reload = vi
+      .spyOn(transcripts, 'reload')
+      .mockRejectedValueOnce(reloadError)
+      .mockResolvedValue();
+    session.status.transition(
+      'old-workspace-running' as StreamTabId,
+      STREAM_PHASE.RUNNING,
+      'lifecycle',
+    );
+
+    try {
+      await expect(session.reloadAfterStorageRootChange()).rejects.toBe(
+        reloadError,
+      );
+
+      expect(activeRoot).toBe('/workspace/old-storage');
+      expect(rollbackWorkspaceStorageChange).toHaveBeenCalledOnce();
+      expect(reload).toHaveBeenCalledTimes(2);
+      expect(reload).toHaveBeenNthCalledWith(2, {
+        discardPendingWrites: true,
+      });
+      expect(session.status.get('old-workspace-running' as StreamTabId)).toBe(
+        STREAM_PHASE.RUNNING,
+      );
+
+      await expect(session.reloadAfterStorageRootChange()).resolves.toBe(true);
+      expect(activeRoot).toBe('/workspace/new-storage');
+      expect(finalizeWorkspaceStorageChange).toHaveBeenCalledOnce();
+    } finally {
+      session.dispose();
+    }
+  });
+
   it('skips replacement when the workspace storage root is unchanged', async () => {
     const transcripts = await StreamLogStore.open();
     const session = new SessionHandle({

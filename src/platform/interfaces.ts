@@ -180,6 +180,15 @@ export interface StorageProvider {
    * Returns whether the exposed root changed.
    */
   commitWorkspaceStorageChange?(): boolean;
+
+  /** Finalize a successfully loaded workspace-storage replacement. */
+  finalizeWorkspaceStorageChange?(): void;
+
+  /**
+   * Restore the root exposed before the most recent commit. Returns whether a
+   * pending commit was rolled back.
+   */
+  rollbackWorkspaceStorageChange?(): boolean;
 }
 
 // ---------------------------------------------------------------------------

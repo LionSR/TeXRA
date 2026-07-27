@@ -190,6 +190,8 @@ function migrateLegacyWorkspaceStorage(
 export class WorkspaceStorageProvider implements StorageProvider {
   private readonly getWorkspacePath: () => string | undefined;
   private activeWorkspacePath: string | undefined;
+  private workspaceChangeRollback:
+    { readonly workspacePath: string | undefined } | undefined;
 
   constructor(
     private readonly storageRoot: string,
@@ -230,7 +232,24 @@ export class WorkspaceStorageProvider implements StorageProvider {
     ) {
       return false;
     }
+    if (this.workspaceChangeRollback) {
+      throw new Error('A workspace storage change is already in progress.');
+    }
+    this.workspaceChangeRollback = {
+      workspacePath: this.activeWorkspacePath,
+    };
     this.activeWorkspacePath = workspacePath;
+    return true;
+  }
+
+  finalizeWorkspaceStorageChange(): void {
+    this.workspaceChangeRollback = undefined;
+  }
+
+  rollbackWorkspaceStorageChange(): boolean {
+    if (!this.workspaceChangeRollback) return false;
+    this.activeWorkspacePath = this.workspaceChangeRollback.workspacePath;
+    this.workspaceChangeRollback = undefined;
     return true;
   }
 
