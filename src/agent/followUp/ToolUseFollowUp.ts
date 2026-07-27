@@ -122,7 +122,7 @@ export async function submitFollowUp(
       item,
       'live_owner',
     );
-    if (submission.kind === 'live') {
+    if (submission.kind === 'live' || submission.kind === 'queued') {
       return {
         status: 'queued',
         reason: 'waiting',
@@ -147,9 +147,15 @@ export async function submitFollowUp(
     item,
     options.mode === 'live_notification' ? 'live_owner' : 'recoverable',
   );
-  if (submission.kind === 'unavailable' || submission.kind === 'not_owned') {
-    return { status: 'dropped' };
+  if (submission.kind === 'unavailable') return { status: 'dropped' };
+  if (submission.kind === 'queued') {
+    return {
+      status: 'queued',
+      reason: target.reason,
+      continuation: 'live',
+    };
   }
+  if (submission.kind === 'not_owned') return { status: 'dropped' };
   if (submission.kind === 'live' || submission.kind === 'recovering') {
     return {
       status: 'queued',

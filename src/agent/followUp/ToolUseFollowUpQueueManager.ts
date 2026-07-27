@@ -43,6 +43,7 @@ export interface FollowUpRecoveryLease
 export type FollowUpSubmission =
   | { readonly kind: 'unavailable' }
   | { readonly kind: 'not_owned' }
+  | { readonly kind: 'queued' }
   | { readonly kind: 'live' }
   | { readonly kind: 'recovering' }
   | { readonly kind: 'recovery'; readonly lease: FollowUpRecoveryLease };
@@ -106,11 +107,12 @@ export class ToolUseFollowUpQueue {
   }
 
   /**
-   * Submit through the queue's ownership boundary. `live_owner` only joins a
-   * child loop that already owns the stream; callers may otherwise use their
-   * active flow directly. `recoverable` admits persisted WAITING and
-   * children-running cursors and synchronously claims their recovery
-   * generation before returning.
+   * Submit through the queue's ownership boundary. `live_owner` joins a child
+   * loop that already owns the stream, or enqueues without claiming when the
+   * entry exists but has no child owner (so live_notification callers can post
+   * progress updates to a WAITING parent queue). `recoverable` admits persisted
+   * WAITING and children-running cursors and synchronously claims their
+   * recovery generation before returning.
    */
   submit(
     streamId: StreamTabId,
@@ -121,7 +123,16 @@ export class ToolUseFollowUpQueue {
 
     let entry = this.entries.get(streamId);
     if (admission === 'live_owner') {
-      if (entry?.owner?.kind !== 'child') return { kind: 'not_owned' };
+      if (entry?.owner?.kind !== 'child') {
+        if (!entry) return { kind: 'not_owned' };
+        // Queue exists but has no child owner — enqueue without claiming.
+        // live_notification callers (child progress updates, execution
+        // subscription events) use this to reach WAITING parents whose
+        // queue will be consumed when the stream resumes.
+        entry.queue.enqueue(followUp);
+        logger.debug(`Queued follow-up for stream ${streamId}.`);
+        return { kind: 'queued' };
+      }
     } else {
       entry ??= this.createEntry(streamId);
       if (!entry.owner) entry.lifecycle = 'recoverable';

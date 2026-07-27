@@ -52,6 +52,28 @@ describe('submitFollowUp', () => {
     ).toEqual(['while waiting', 'between turns', 'during turn']);
   });
 
+  it('enqueues live notifications for a waiting parent without child owner', async () => {
+    const streamId = id('stream:waiting-notification');
+    const session = fakeSession({ kind: 'queue', reason: 'waiting' });
+    const tryResumeStream = vi.fn(async () => true);
+
+    // live_notification on a WAITING queue without child owner should enqueue
+    // without claiming recovery or triggering a stream resume.
+    const result = await submitFollowUp(streamId, 'child progress', {
+      session,
+      resumePort: { tryResumeStream },
+      mode: 'live_notification',
+    });
+
+    expect(result).toMatchObject({
+      status: 'queued',
+      reason: 'waiting',
+      continuation: 'live',
+    });
+    expect(tryResumeStream).not.toHaveBeenCalled();
+    expect(session.followUps.getAll(streamId)).toEqual(['child progress']);
+  });
+
   it('claims one recovery synchronously and orders repeated submissions once', async () => {
     const streamId = id('stream:recovery');
     const session = fakeSession({ kind: 'queue', reason: 'waiting' });
@@ -112,6 +134,33 @@ describe('submitFollowUp', () => {
     const childFirst = new ToolUseFollowUpQueue();
     expect(childFirst.claimLive(streamId, 'child')).toBeDefined();
     expect(childFirst.claimRecovery(streamId)).toBeUndefined();
+  });
+
+  it('enqueues live notifications for children-running parent without recovery', async () => {
+    const streamId = id('stream:children-running-notification');
+    const session = fakeSession({
+      kind: 'queue',
+      reason: 'children_running',
+    });
+    // Create a child-owned entry to simulate the parent having active children.
+    const child = session.followUps.claimLive(streamId, 'child')!;
+    // Release the child so the queue stays but loses its owner.
+    session.followUps.release(child, 'recoverable');
+    const tryResumeStream = vi.fn(async () => true);
+
+    const result = await submitFollowUp(streamId, 'child update', {
+      session,
+      resumePort: { tryResumeStream },
+      mode: 'live_notification',
+    });
+
+    expect(result).toMatchObject({
+      status: 'queued',
+      reason: 'children_running',
+      continuation: 'live',
+    });
+    expect(tryResumeStream).not.toHaveBeenCalled();
+    expect(session.followUps.getAll(streamId)).toEqual(['child update']);
   });
 
   it('keeps children-running explicitly recoverable after child untracking', async () => {
