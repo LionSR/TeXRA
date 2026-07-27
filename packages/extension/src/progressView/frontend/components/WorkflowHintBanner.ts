@@ -67,7 +67,7 @@ export class WorkflowHintBanner extends LitElement {
       id: 'workflowHintBanner',
       variant: 'brand',
       icon: 'circle-info',
-      role: 'note-sticky',
+      role: 'note',
       ariaLabel: 'Workflow mode reminder',
       body: html`
         <div class="hint-row">
