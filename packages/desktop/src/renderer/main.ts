@@ -27,7 +27,6 @@ import {
   handleFileAction,
   handleFollowupRequestOptions,
   handleFollowUpChange,
-  handleFollowUpClear,
   handleFollowUpFocusComplete,
   handleFollowUpPolish,
   handleFollowUpSend,
@@ -1695,10 +1694,6 @@ function wireConversation(): void {
     handleFollowUpSend as EventListener,
   );
   conversationView.addEventListener('followup-polish', handleFollowUpPolish);
-  conversationView.addEventListener(
-    'followup-clear',
-    handleFollowUpClear as EventListener,
-  );
   // followup-focus-complete: clear the focus/polish/transcribe trigger flags.
   conversationView.addEventListener(
     'followup-focus-complete',

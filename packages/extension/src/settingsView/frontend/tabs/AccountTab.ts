@@ -90,7 +90,9 @@ export class AccountTab extends LitElement {
         </div>
       `;
     }
-    if (this.apiAccessMode !== 'included') {
+    // After a quota-exhaustion auto-switch (included -> personal) the meter
+    // stays visible: it carries the "switched you to your own keys" notice.
+    if (this.apiAccessMode !== 'included' && !this.quotaAutoSwitched) {
       return html`
         <div class="account-empty">
           Included model access is not enabled. Switch to included access in

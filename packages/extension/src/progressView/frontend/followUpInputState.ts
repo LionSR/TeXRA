@@ -37,7 +37,7 @@ export function getFollowUpInputTransientState(
 }
 
 /** Invalidate pending work and empty one stream's follow-up image draft. */
-function resetFollowUpInputTransientState(
+export function resetFollowUpInputTransientState(
   state: FollowUpInputTransientState,
 ): void {
   state.imagePasteRevision += 1;

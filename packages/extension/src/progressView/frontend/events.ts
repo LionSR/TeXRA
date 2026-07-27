@@ -37,10 +37,6 @@ export interface FollowUpSendDetail {
   readonly images: readonly ExtractedClipboardImage[];
 }
 
-export interface FollowUpClearDetail {
-  readonly streamId: string;
-}
-
 export interface FollowupCommandDetail {
   agent: string;
   model: string;
@@ -195,9 +191,6 @@ export const ProgressEvents = {
     createEvent('followup-send', detail),
 
   followupPolish: () => createEvent('followup-polish', undefined),
-
-  followupClear: (detail: FollowUpClearDetail) =>
-    createEvent('followup-clear', detail),
 
   followupRequestOptions: () =>
     createEvent('followup-request-options', undefined),

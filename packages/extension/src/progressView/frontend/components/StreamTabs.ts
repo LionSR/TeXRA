@@ -52,7 +52,7 @@ import {
   type StreamBranchActivity,
   type StreamTreeExpansionOverride,
 } from '../streamTree';
-import type { StreamFilter, StreamState } from '../store';
+import type { StreamState } from '../store';
 
 // Web Awesome native components
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
@@ -316,7 +316,6 @@ export class StreamTabs extends LitElement {
   /** Optional rail-header title. Empty (default) renders no header band. */
   @property({ type: String }) heading = '';
   @property({ attribute: false }) activeStreamId: string | null = null;
-  @property({ attribute: false }) filter: StreamFilter = 'all';
   /**
    * Stream states map — passed directly from ProgressApp's streamStates$.
    * Stable Mutative reference (only changed entries get new refs), so

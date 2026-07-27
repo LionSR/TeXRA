@@ -33,7 +33,10 @@ import {
 } from '../contexts/streamContexts';
 import { ELEMENT_IDS } from '../constants';
 import { ProgressEvents } from '../events';
-import { type FollowUpInputTransientState } from '../followUpInputState';
+import {
+  resetFollowUpInputTransientState,
+  type FollowUpInputTransientState,
+} from '../followUpInputState';
 
 // Local imports - progress view components
 import './QueuedFollowUps';
@@ -486,6 +489,11 @@ export class FollowUpInput extends LitElement {
   private handleInput(event: InputEvent): void {
     const target = event.currentTarget as HTMLTextAreaElement | null;
     const value = target?.value ?? '';
+    if (value === '' && this.transientState) {
+      // Erasing the whole draft abandons pasted images too; otherwise their
+      // base64 payloads stay retained until the stream is sent or deleted.
+      resetFollowUpInputTransientState(this.transientState);
+    }
     this.updateValue(value);
   }
 

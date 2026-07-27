@@ -12,9 +12,7 @@ import { BaseWebviewApp } from '@shared/BaseWebviewApp';
 import { postMessage } from '@shared/hostBridge';
 
 // Local imports - shared schemas
-import {
-  type ProgressViewOutboundMessage,
-} from '@shared/schemas';
+import { type ProgressViewOutboundMessage } from '@shared/schemas';
 import { SignalWatcher } from '@shared/signals';
 import { designTokens, viewTabStyles } from '@shared/styles';
 import { registerTeXRAWebAwesomeIcons } from '@shared/wa/webAwesomeIcons';
@@ -34,7 +32,6 @@ import {
   pendingApprovalIds$,
   placement,
   resetProgressState,
-  streamFilter$,
   streamStates$,
   tabStreams$,
 } from './progressState';
@@ -174,7 +171,6 @@ export class ProgressApp extends ProgressAppBase {
                       .compact=${compactTabs}
                       .streams=${tabStreams$.get()}
                       .activeStreamId=${activeStreamId$.get()}
-                      .filter=${streamFilter$.get()}
                       .streamStates=${streamStates$.get()}
                       .pendingApprovalStreamIds=${pendingApprovalIds$.get()}
                       .childStreamsByParent=${childStreamsByParent$.get()}
