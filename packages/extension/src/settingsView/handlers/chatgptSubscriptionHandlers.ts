@@ -8,14 +8,14 @@
  */
 import * as vscode from 'vscode';
 
-import {
-  codexCoordinator,
-  getChatGptAuthStatus,
-  setCodexSubscriptionToolUseOnly,
-  setPreferCodexSubscription,
-} from '@auth/codex';
+import { codexCoordinator } from '@auth/codex';
+import { getChatGptAuthStatus } from '@controllers/modelAccess/chatGptAuthStatus';
 import { signInWithChatGptSubscription } from '@frontend/auth/codexSubscriptionSignIn';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
+import {
+  setCodexSubscriptionToolUseOnly,
+  setPreferCodexSubscription,
+} from '@model/codex/codexPreference';
 import { buildChatGptAuthStatusMessage } from '@shared/settingsView/handlers/chatGptHandlers';
 
 import type { SettingsHandlerContext } from './SettingsHandlerContext';

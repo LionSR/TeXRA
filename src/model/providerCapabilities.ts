@@ -1,12 +1,12 @@
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
+import { includedModelAccess } from '@model/includedModelAccess';
+import { zeroCostAccessOverrides } from '@model/subscriptionAccessOverrides';
+import { isCodexSignedIn } from '@model/codex/codexSignedIn';
 import {
-  isCodexSignedIn,
   isCodexSubscriptionToolUseOnly,
   isPreferCodexSubscription,
-} from '@auth/codex';
-import { getServerSideKeyService } from '@auth/serverKeys';
-import { zeroCostAccessOverrides } from '@model/subscriptionAccessOverrides';
+} from '@model/codex/codexPreference';
 import { platform } from '@platform/platform';
 import type { UsageRoute } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas/agent';
@@ -203,10 +203,10 @@ export async function isKimiCodeSubscriptionActive(
 ): Promise<boolean> {
   const config = await resolveRuntimeModelConfig(modelId);
   if (!config || !isKimiSubscriptionEligible(config)) return false;
-  const serverSideKeyService = getServerSideKeyService();
+  const included = includedModelAccess();
   // The relay only owns the model when included access can actually serve it.
-  const includedAccess = serverSideKeyService.getUseIncludedModelAccess()
-    ? await serverSideKeyService.canUseServerSideKeys()
+  const includedAccess = included.getUseIncludedModelAccess()
+    ? await included.canUseServerSideKeys()
     : false;
   const keySet = await apiKeyExists(platform().secrets, 'kimiCode');
   return (

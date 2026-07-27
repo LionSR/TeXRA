@@ -1,6 +1,6 @@
 // Local imports
-import { getServerSideKeyService } from '@auth/serverKeys';
 import { API_PROVIDERS, lookupApiKey } from '@model/apiProviders';
+import { includedModelAccess } from '@model/includedModelAccess';
 import { isCodexSubscriptionActive } from '@model/providerCapabilities';
 import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -36,5 +36,5 @@ export async function hasUsableSetupCredential(
     return true;
   }
   if (await hasAnyUsableProviderApiKey(secrets)) return true;
-  return getServerSideKeyService().canUseServerSideKeys();
+  return includedModelAccess().canUseServerSideKeys();
 }
