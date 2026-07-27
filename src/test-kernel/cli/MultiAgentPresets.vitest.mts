@@ -56,7 +56,7 @@ describe('CLI multi-agent presets', () => {
         id: 'legacy',
         name: 'Legacy',
         description: 'Saved before hosted metadata existed',
-        icon: 'tools',
+        icon: 'screwdriver-wrench',
         workflowAgents: ['generic', 'polish'],
         toolUseAgents: ['orchestrator', 'review'],
       },
