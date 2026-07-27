@@ -70,7 +70,7 @@ export class SettingsViewProvider
       viewType: SettingsViewProvider.viewType,
       title: 'TeXRA Dashboard',
       viewPath: 'settingsView',
-      iconPath: new vscode.ThemeIcon('settings-gear'),
+      iconPath: new vscode.ThemeIcon('gear'),
     });
 
     if (!isNew && this._view) {

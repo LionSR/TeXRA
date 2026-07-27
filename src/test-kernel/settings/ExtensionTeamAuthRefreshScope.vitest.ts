@@ -18,7 +18,7 @@ describe('extension team auth catalog refresh scope', () => {
       id: 'remote-team',
       name: 'Remote team',
       description: 'Hosted team',
-      icon: 'tools' as const,
+      icon: 'screwdriver-wrench' as const,
       workflowAgents: [],
       toolUseAgents: ['orchestrator'],
       texraHostedAgents: ['orchestrator'],
