@@ -100,6 +100,16 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
     return session?.accessToken ?? null;
   }
 
+  /**
+   * Whether a previously-stored session exists in storage. Loads directly
+   * from the keychain / secure store WITHOUT attempting a token refresh, so
+   * it detects zombie sessions (expired access token + revoked refresh) that
+   * ensureFreshToken() would report as absent.
+   */
+  async hasStoredSession(): Promise<boolean> {
+    return (await this.loadSession()) !== null;
+  }
+
   /** Get access and refresh tokens from secure storage. */
   async getSessionTokens(): Promise<SessionTokens | null> {
     const session = await this.getFreshSession();

@@ -83,3 +83,9 @@ export function setServerSideKeyService(service: ServerSideKeyService): void {
   // a test just because a platform state store appears later.
   _constructedStateless = false;
 }
+
+/** Reset singleton state between unit tests. */
+export function resetServerSideKeyServiceForTests(): void {
+  _instance = null;
+  _constructedStateless = false;
+}

@@ -8,4 +8,6 @@ export interface AuthTokenProvider {
   whenReady(): Promise<void>;
   ensureFreshToken(forceRefresh?: boolean): Promise<string | null>;
   getSessionTokens(): Promise<SessionTokens | null>;
+  /** Whether a previously-stored session exists in storage (no refresh). */
+  hasStoredSession(): Promise<boolean>;
 }

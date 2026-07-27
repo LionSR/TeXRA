@@ -375,4 +375,18 @@ export class SupabaseClient {
   static async canAccessRemoteAgentCatalog(): Promise<boolean> {
     return (await this.getAccessToken()) !== null;
   }
+
+  /**
+   * Whether a previously-stored session exists in storage, without attempting
+   * a token refresh. Detects zombie sessions whose access token has expired
+   * and whose refresh token was revoked.
+   */
+  static async hasStoredSession(): Promise<boolean> {
+    if (!this.authProvider) return false;
+    try {
+      return await this.authProvider.hasStoredSession();
+    } catch {
+      return false;
+    }
+  }
 }

@@ -86,6 +86,14 @@ export class ServerSideKeyService {
    */
   private lastFetchAuthenticated = false;
 
+  /**
+   * Sentry token that changes each time a new access-fetch promise is
+   * installed. The completion handler of a previous fetch checks this
+   * against its captured token to avoid committing side-effects after a
+   * later overlapping call has superseded it.
+   */
+  private _activeFetchToken: object | null = null;
+
   // Cache state tracking
   private _isCachePrimed = false;
 
@@ -188,6 +196,7 @@ export class ServerSideKeyService {
     this.accessFetchPromise = null;
     this.userTier = null;
     this.lastFetchAuthenticated = false;
+    this._activeFetchToken = null;
     if (options.resetQuotaFlip) {
       this.quotaFlipApplied = false;
       this.quotaAutoSwitchActive = false;
@@ -253,10 +262,17 @@ export class ServerSideKeyService {
       return this.accessFetchPromise!;
     }
 
+    // Start the fetch and store the promise synchronously so that
+    // overlapping calls see it. A sentinel token lets the completion
+    // handler detect whether the stored promise has been replaced by a
+    // later overlapping call; this avoids committing authentication
+    // metadata from a stale fetch.
+    const fetchToken = {};
+    this._activeFetchToken = fetchToken;
     this.accessFetchPromise = (async () => {
       const authToken =
         (await SupabaseClient.getRelayAccessToken()) ?? undefined;
-      this.lastFetchAuthenticated = authToken !== undefined;
+      const thisFetchAuthenticated = authToken !== undefined;
 
       const [hasAccess, tierConfig] = await Promise.all([
         this.fetchAccessStatus(),
@@ -280,6 +296,15 @@ export class ServerSideKeyService {
 
       const providers = this.tierService.getProviders();
       const accessGranted = hasAccess && providers.length > 0;
+
+      // Only commit side-effects when we are still the canonical call.
+      // If an overlapping canUseServerSideKeys() started a new fetch while
+      // we were in-flight, the active token has already been replaced;
+      // writing lastFetchAuthenticated now would bind authentication
+      // metadata from the wrong (earlier) fetch.
+      if (this._activeFetchToken !== fetchToken) return accessGranted;
+
+      this.lastFetchAuthenticated = thisFetchAuthenticated;
 
       if (accessGranted) {
         this.accessTimestamp = Date.now();
