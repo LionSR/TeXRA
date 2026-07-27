@@ -189,6 +189,9 @@ function migrateLegacyWorkspaceStorage(
 
 export class WorkspaceStorageProvider implements StorageProvider {
   private readonly getWorkspacePath: () => string | undefined;
+  private activeWorkspacePath: string | undefined;
+  private workspaceChangeRollback:
+    { readonly workspacePath: string | undefined } | undefined;
 
   constructor(
     private readonly storageRoot: string,
@@ -196,10 +199,11 @@ export class WorkspaceStorageProvider implements StorageProvider {
   ) {
     this.getWorkspacePath =
       typeof workspacePath === 'function' ? workspacePath : () => workspacePath;
+    this.activeWorkspacePath = this.getWorkspacePath();
   }
 
   getStoragePath(): string {
-    const workspacePath = this.getWorkspacePath();
+    const workspacePath = this.activeWorkspacePath;
     migrateLegacyWorkspaceStorage(this.storageRoot, workspacePath);
     const storagePath = resolveWorkspaceStoragePath(
       this.storageRoot,
@@ -208,6 +212,45 @@ export class WorkspaceStorageProvider implements StorageProvider {
     mkdirSync(storagePath, { recursive: true });
     writeWorkspaceSidecar(storagePath, workspacePath);
     return storagePath;
+  }
+
+  hasPendingWorkspaceStorageChange(): boolean {
+    return (
+      resolveWorkspaceStoragePath(
+        this.storageRoot,
+        this.activeWorkspacePath,
+      ) !==
+      resolveWorkspaceStoragePath(this.storageRoot, this.getWorkspacePath())
+    );
+  }
+
+  commitWorkspaceStorageChange(): boolean {
+    const workspacePath = this.getWorkspacePath();
+    if (
+      resolveWorkspaceStoragePath(this.storageRoot, workspacePath) ===
+      resolveWorkspaceStoragePath(this.storageRoot, this.activeWorkspacePath)
+    ) {
+      return false;
+    }
+    if (this.workspaceChangeRollback) {
+      throw new Error('A workspace storage change is already in progress.');
+    }
+    this.workspaceChangeRollback = {
+      workspacePath: this.activeWorkspacePath,
+    };
+    this.activeWorkspacePath = workspacePath;
+    return true;
+  }
+
+  finalizeWorkspaceStorageChange(): void {
+    this.workspaceChangeRollback = undefined;
+  }
+
+  rollbackWorkspaceStorageChange(): boolean {
+    if (!this.workspaceChangeRollback) return false;
+    this.activeWorkspacePath = this.workspaceChangeRollback.workspacePath;
+    this.workspaceChangeRollback = undefined;
+    return true;
   }
 
   getGlobalStoragePath(): string {
