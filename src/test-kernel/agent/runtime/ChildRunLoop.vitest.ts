@@ -59,6 +59,10 @@ vi.mock('@tools/childRunDelivery', () => ({
 }));
 
 import {
+  WORKFLOW_JOURNAL_KEY_FORMAT,
+  type WorkflowJournalEntry,
+} from '@agent/workflowScript';
+import {
   startChildRunLoop,
   isChildRunLoopActive,
   type ChildRunPorts,
@@ -80,6 +84,7 @@ import {
   ClaudeAgentSessions,
   CodexThreads,
 } from '@tools/agentCliSessionStores';
+import { createWorkflowAttemptCostTracker } from '@tools/delegation/workflowScriptRun';
 
 let session: SessionHandle;
 const trackedExecutionIds = new Set<string>();
@@ -976,7 +981,7 @@ describe('childRunLoop E2E fixtures', () => {
     expect(session.executions.getHandle(executionId)).toBeUndefined();
   });
 
-  it('recordCost commits exactly once, with the last observed value, when the run ends', async () => {
+  it('recordCost commits exactly once with the greatest observed value', async () => {
     const childStreamId = uniqueStreamId('record-cost');
     const parentStreamId = 'parent' as StreamTabId;
     let launchResolve: ((turn: FakeTurn) => void) | undefined;
@@ -989,7 +994,7 @@ describe('childRunLoop E2E fixtures', () => {
       launch: (ports: ChildRunPorts) =>
         new Promise<FakeTurn>((resolve) => {
           launchResolve = (turn) => {
-            ports.recordCost(0.1);
+            ports.recordCost(0.2);
             resolve(turn);
           };
         }),
@@ -997,7 +1002,8 @@ describe('childRunLoop E2E fixtures', () => {
         new Promise<FakeTurn>((resolve) => {
           calls += 1;
           runTurnResolve = (turn) => {
-            ports.recordCost(0.2);
+            ports.recordCost(undefined);
+            ports.recordCost(0.1);
             resolve(turn);
           };
         }),
@@ -1038,5 +1044,115 @@ describe('childRunLoop E2E fixtures', () => {
     );
     expect(recordCost).toHaveBeenCalledTimes(1);
     expect(recordCost).toHaveBeenCalledWith(0.2);
+  });
+
+  it('settles mixed workflow attempt spend to the parent once', async () => {
+    const entry = (
+      index: number,
+      key: string,
+      cost: number,
+    ): WorkflowJournalEntry => ({
+      index,
+      key,
+      keyFormat: WORKFLOW_JOURNAL_KEY_FORMAT.DEPENDENCY_AWARE_V3,
+      result: {
+        category: 'workflow',
+        outcome: 'completed',
+        outputs: [],
+        compileFailures: [],
+        diffs: [],
+        cost,
+      },
+    });
+    const historical = entry(0, 'historical', 0.8);
+    const completed = entry(1, 'completed', 0.5);
+    const recovered = entry(2, 'recovered', 0.5);
+    const tracker = createWorkflowAttemptCostTracker();
+    const recordCost = vi.fn();
+    const strategy: ChildRunStrategy<FakeTurn> = {
+      stageLabel: 'Workflow attempt cost',
+      launch: async (ports) => {
+        ports.recordCost(tracker.record(completed, 0.1));
+        ports.recordCost(tracker.record(completed, 0));
+        ports.recordCost(tracker.record({ key: 'skipped' }, 0.2));
+        ports.recordCost(tracker.record({ key: 'failed' }, 0.15));
+        ports.recordCost(tracker.total([historical, completed, recovered]));
+        return { kind: 'terminal', value: 'done' };
+      },
+      isTerminal: () => true,
+      formatDelivery: () => 'delivered',
+      formatError: () => 'error',
+    };
+
+    const { completion } = startChildRunLoop({
+      childStreamId: uniqueStreamId('workflow-attempt-cost'),
+      parentStreamId: 'parent' as StreamTabId,
+      executionId: 'exec-workflow-attempt-cost' as ExecutionId,
+      agentName: 'fake',
+      strategy,
+      recordCost,
+    });
+
+    await expect(completion).resolves.toBeUndefined();
+    expect(recordCost).toHaveBeenCalledOnce();
+    expect(recordCost.mock.calls[0]?.[0]).toBeCloseTo(0.95);
+  });
+
+  it('finalizes and wakes when the parent cost observer throws', async () => {
+    const strategy: ChildRunStrategy<FakeTurn> = {
+      stageLabel: 'Throwing cost observer',
+      launch: async (ports) => {
+        ports.recordCost(0.4);
+        return { kind: 'terminal', value: 'done' };
+      },
+      isTerminal: () => true,
+      formatDelivery: () => 'delivered',
+      formatError: () => 'error',
+    };
+    const recordCost = vi.fn(() => {
+      throw new Error('observer failed');
+    });
+
+    const { completion } = startChildRunLoop({
+      childStreamId: uniqueStreamId('throwing-cost-observer'),
+      parentStreamId: 'parent' as StreamTabId,
+      executionId: 'exec-throwing-cost-observer' as ExecutionId,
+      agentName: 'fake',
+      strategy,
+      recordCost,
+    });
+
+    await expect(completion).resolves.toBeUndefined();
+    expect(recordCost).toHaveBeenCalledOnce();
+    expect(mocks.wakeChildRunFollowUp).toHaveBeenCalledOnce();
+  });
+
+  it('finalizes and wakes when the parent cost observer rejects', async () => {
+    const strategy: ChildRunStrategy<FakeTurn> = {
+      stageLabel: 'Rejecting cost observer',
+      launch: async (ports) => {
+        ports.recordCost(0.4);
+        return { kind: 'terminal', value: 'done' };
+      },
+      isTerminal: () => true,
+      formatDelivery: () => 'delivered',
+      formatError: () => 'error',
+    };
+    const recordCost = vi.fn(() =>
+      Promise.reject(new Error('observer failed')),
+    );
+
+    const { completion } = startChildRunLoop({
+      childStreamId: uniqueStreamId('rejecting-cost-observer'),
+      parentStreamId: 'parent' as StreamTabId,
+      executionId: 'exec-rejecting-cost-observer' as ExecutionId,
+      agentName: 'fake',
+      strategy,
+      recordCost,
+    });
+
+    await expect(completion).resolves.toBeUndefined();
+    await vi.waitFor(() => expect(recordCost).toHaveBeenCalledOnce());
+    expect(mocks.wakeChildRunFollowUp).toHaveBeenCalledOnce();
   });
 });

@@ -122,8 +122,8 @@ export function createNativeSubagentStrategy(
     cachedDelivery = undefined;
     const result = await call();
     // Every turn's totalCostUsd is the run's cumulative cost to date, not a
-    // per-turn delta — recordCost just tracks the latest value; the loop
-    // commits it to the parent exactly once, when the child's run ends.
+    // per-turn delta. The loop retains the best value and commits it to the
+    // parent exactly once, when the child's run ends.
     ports.recordCost(result.totalCostUsd);
     return result;
   };
