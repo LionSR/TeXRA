@@ -24,7 +24,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { errorDataToString } from './errorData';
 import { RemoteAgentListItemSchema, type RemoteAgentListItem } from './types';
 
-const CHANNEL = 'RemoteAgentLoader';
+export const CHANNEL = 'RemoteAgentLoader';
 
 const FETCH_TIMEOUT_MS = 30_000;
 
