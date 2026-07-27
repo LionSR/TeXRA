@@ -23,7 +23,6 @@ export {
   type WorkflowStreamState,
 } from '@shared/schemas';
 
-export type StreamFilter = AgentCategoryFilter;
 export type { ContextStateData };
 
 /** Followup options derived from schema (minus command/stream fields) */
@@ -67,7 +66,7 @@ export interface ProgressState {
   activeStreamId: StreamTabId | null;
   /** Canonical stream storage — Map preserves insertion order for iteration. */
   streamById: Map<StreamTabId, StreamTabInfo>;
-  streamFilter: StreamFilter;
+  streamFilter: AgentCategoryFilter;
   /** Meta state per stream (status, todos, usage, ui, taskGroups, etc.) */
   streamStates: Map<StreamTabId, StreamState>;
   /** Log messages per stream — separated so log appends don't trigger meta context updates */

@@ -72,56 +72,10 @@ export const streamTabsContainerStyles = css`
     overflow-x: hidden;
   }
 
-  .stream-list-footer {
-    flex-shrink: 0;
-    border-top: var(--border-thin) solid var(--color-border);
-    padding: var(--wa-space-2xs) var(--wa-space-xs);
-  }
-
-  .stream-list-controls {
-    display: flex;
-    align-items: flex-start;
-    gap: var(--wa-space-2xs);
-    min-width: 0;
-  }
-
-  .agent-filter-group {
-    display: flex;
-    justify-content: flex-start;
-    flex-wrap: wrap;
-    gap: var(--wa-space-2xs);
-    flex: 1 1 auto;
-    min-width: 0;
-  }
-
-  .agent-filter-group wa-radio {
-    min-width: auto;
-    flex: 0 0 auto;
-  }
-
-  .stream-list-actions {
-    display: flex;
-    flex: 0 0 auto;
-    justify-content: flex-end;
-    margin-left: auto;
-  }
-
-  .delete-all-streams {
-    color: var(--color-text-secondary);
-  }
-
-  .delete-all-streams::part(base) {
-    border-radius: var(--border-radius-medium);
-  }
-
-  .delete-all-streams:hover {
-    color: var(--color-removed);
-  }
-
-  /* Recursive child stream nesting */
+  /* Recursive child stream nesting — indentation alone carries the
+     hierarchy (child rows also render a nested-stream chevron). */
   .child-streams {
     padding-left: var(--wa-space-xs, 12px);
-    border-left: var(--border-thin) solid var(--color-border);
     margin-left: var(--wa-space-2xs);
     box-sizing: border-box;
     min-width: 0;

@@ -212,16 +212,12 @@ export const externalInquiryPanelStyles: CSSResult = css`
     text-decoration: underline;
   }
 
+  /* Sizing via the canonical skin's tokens (formControlStyles, now in
+     requestPanelSharedStyles); font/line rules come from the skin itself. */
   .external-inquiry-request__session-links-input {
     width: 100%;
-  }
-
-  .external-inquiry-request__session-links-input::part(textarea) {
-    min-height: 2.75rem;
-    max-height: min(12vh, 5rem);
-    font-family: var(--wa-font-family-mono);
-    font-size: var(--font-size-sm);
-    line-height: var(--line-height-normal);
+    --textarea-min-height: 2.75rem;
+    --textarea-max-height: min(12vh, 5rem);
   }
 
   .external-inquiry-request__session-links-hint {
@@ -251,14 +247,13 @@ export const externalInquiryPanelStyles: CSSResult = css`
 
   .external-inquiry-request__answer-input {
     width: 100%;
+    --textarea-min-height: 96px;
+    --textarea-max-height: min(24vh, 12rem);
   }
 
+  /* Answer text stays at body size, larger than the skin's sm default. */
   .external-inquiry-request__answer-input::part(textarea) {
-    min-height: 96px;
-    max-height: min(24vh, 12rem);
-    font-family: var(--wa-font-family-mono);
     font-size: var(--font-size);
-    line-height: var(--line-height-normal);
   }
 
   .external-inquiry-request__answer-hint {
@@ -274,14 +269,14 @@ export const externalInquiryPanelStyles: CSSResult = css`
       max-height: min(18vh, 10rem);
     }
 
-    .external-inquiry-request__answer-input::part(textarea) {
-      min-height: 80px;
-      max-height: min(20vh, 10rem);
+    .external-inquiry-request__answer-input {
+      --textarea-min-height: 80px;
+      --textarea-max-height: min(20vh, 10rem);
     }
 
-    .external-inquiry-request__session-links-input::part(textarea) {
-      min-height: 2.5rem;
-      max-height: min(10vh, 4.5rem);
+    .external-inquiry-request__session-links-input {
+      --textarea-min-height: 2.5rem;
+      --textarea-max-height: min(10vh, 4.5rem);
     }
   }
 `;
