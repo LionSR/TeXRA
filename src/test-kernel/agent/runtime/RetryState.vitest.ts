@@ -314,6 +314,7 @@ function createAuthTokenProvider(
     whenReady: async () => {},
     ensureFreshToken: async () => 'access-token',
     getSessionTokens: async () => null,
+    hasStoredSession: async () => false,
     ...overrides,
   };
 }

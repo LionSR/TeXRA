@@ -1,8 +1,11 @@
 // Third-party imports
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { getServerSideKeyService } from '@auth/serverKeys';
+import {
+  getServerSideKeyService,
+  resetServerSideKeyServiceForTests,
+} from '@auth/serverKeys';
 import type { StateStore } from '@platform/interfaces';
 import { FakeStateStore } from '@test/support/FakePlatform';
 
@@ -18,6 +21,10 @@ vi.mock('@platform/platform', () => ({
 }));
 
 describe('getServerSideKeyService singleton', () => {
+  afterEach(() => {
+    resetServerSideKeyServiceForTests();
+  });
+
   it('rebuilds a stateless instance once platform state appears', () => {
     // Constructed before initPlatform(): no state store.
     platformState.store = null;
