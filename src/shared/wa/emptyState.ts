@@ -7,8 +7,8 @@ import { html, nothing, type TemplateResult } from 'lit';
 import { ifDefined } from 'lit/directives/if-defined.js';
 import { html as staticHtml, literal } from 'lit/static-html.js';
 
-import type { TeXRAIconName } from './iconNames';
 import { waIcon } from './webAwesomeIcons';
+import type { TeXRAIconName } from './iconNames';
 
 interface EmptyStateAction {
   readonly label: string;
