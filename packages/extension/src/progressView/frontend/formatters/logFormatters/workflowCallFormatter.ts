@@ -12,7 +12,8 @@ import {
   formatWorkflowCallMetadataParts,
   workflowCallDetail,
 } from '@shared/copy/workflowCall';
-import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { assertNever } from '@utils/core';
 
 function statusIcon(call: WorkflowCallProgress): TemplateResult {
