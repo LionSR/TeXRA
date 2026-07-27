@@ -335,8 +335,10 @@ function bridgePageHtml(ext: string, id: string): string {
       }
     });
 
-    if (!oauthError) {
-      // Auto-open the editor; the button stays as the fallback because
+    if (!oauthError && tail) {
+      // Auto-open the editor only when there is a callback payload to hand
+      // back (a refresh or direct visit after the history scrub has none —
+      // stay manual there). The button stays as the fallback because
       // browsers may block or prompt on custom-scheme navigation (and some
       // strip it entirely without a user gesture).
       lede.textContent =
