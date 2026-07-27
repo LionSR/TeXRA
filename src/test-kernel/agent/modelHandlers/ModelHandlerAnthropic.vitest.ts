@@ -5,9 +5,12 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 // Third-party imports
-import { APIUserAbortError as AnthropicUserAbortError } from '@anthropic-ai/sdk';
+import {
+  APIUserAbortError as AnthropicUserAbortError,
+  BadRequestError as AnthropicBadRequestError,
+} from '@anthropic-ai/sdk';
 import { PDFDocument } from '@cantoo/pdf-lib';
-import { afterEach, describe, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   type ModelCapabilities,
   MODEL_CONFIGS,
@@ -86,6 +89,26 @@ function createAnthropicHandler(
   );
 }
 
+function createAnthropicPricingHandler(): ModelHandlerAnthropic {
+  return new ModelHandlerAnthropic(
+    buildTestModelConfig({
+      name: 'test-anthropic',
+      label: 'Test Anthropic',
+      fullName: 'claude-test',
+      shortName: 'claude-test',
+      provider: ModelProvider.ANTHROPIC,
+      maxOutputTokens: 1024,
+      inputPrice: 3,
+      outputPrice: 15,
+      contextWindow: 200000,
+      capabilities: {
+        supportsPromptCaching: true,
+      },
+      openRouterOnly: false,
+    }),
+  );
+}
+
 /** A minimal single-turn "hello" user message, the shape most tests need. */
 function helloMessages(): MessageParam[] {
   return [
@@ -131,6 +154,40 @@ describe('ModelHandlerAnthropic.shouldContinue', () => {
       ),
       false,
     );
+  });
+});
+
+describe('ModelHandlerAnthropic cache pricing', () => {
+  it.each([
+    {
+      name: 'prices cache creation by TTL breakdown when Anthropic reports it',
+      cacheCreation: {
+        ephemeral_5m_input_tokens: 10,
+        ephemeral_1h_input_tokens: 20,
+      },
+      expected:
+        (1000 * 3) / 1e6 +
+        (100 * 15) / 1e6 +
+        (10 * 3 * 1.25) / 1e6 +
+        (20 * 3 * 2) / 1e6,
+    },
+    {
+      name: 'falls back to 5-minute pricing when the TTL breakdown is absent',
+      cacheCreation: {},
+      expected: (1000 * 3) / 1e6 + (100 * 15) / 1e6 + (30 * 3 * 1.25) / 1e6,
+    },
+  ])('$name', ({ cacheCreation, expected }) => {
+    const price = createAnthropicPricingHandler().computePrice({
+      input_tokens: 1000,
+      output_tokens: 100,
+      cache_read_input_tokens: 0,
+      cache_creation_input_tokens: 30,
+      cache_creation: cacheCreation,
+      server_tool_use: null,
+      service_tier: 'standard',
+    } as any);
+
+    expect(price).toBeCloseTo(expected, 12);
   });
 });
 
@@ -2704,6 +2761,75 @@ describe('ModelHandlerAnthropic pre-message_start error handling', () => {
         assert.equal((err as Error).message, droppedStreamError.message);
         return true;
       },
+    );
+  });
+
+  it('keeps raw stream failures out of visible warning logs', async () => {
+    vi.spyOn(serverKeysModule, 'getServerSideKeyService').mockReturnValue({
+      shouldUseServerSideKeysSync: () => false,
+      getUseIncludedModelAccess: () => false,
+      canUseServerSideKeys: async () => false,
+      getRelayBaseUrl: (provider: string) =>
+        `https://relay.example.com/functions/v1/relay/${provider}/v1`,
+    } as unknown as ReturnType<
+      typeof serverKeysModule.getServerSideKeyService
+    >);
+
+    const handler = createAnthropicHandler({
+      supportsTokenCounting: false,
+      supportsReasoning: false,
+    });
+    const logger = {
+      ...noopTrace,
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+      domain: vi.fn(),
+    };
+    handler.setLogger(logger as unknown as AgentTrace);
+    (handler as { getStreamingConfig: () => boolean }).getStreamingConfig =
+      () => true;
+
+    const providerError = new AnthropicBadRequestError(
+      400,
+      {
+        type: 'error',
+        error: {
+          type: 'invalid_request_error',
+          message:
+            'Your credit balance is too low to access the Anthropic API.',
+        },
+        request_id: 'req_low_credit',
+      },
+      undefined,
+      new Headers([['request-id', 'req_low_credit']]),
+    );
+    const stream = buildStreamStub(providerError);
+    const client = {
+      beta: {
+        messages: {
+          stream: vi.fn(() => stream),
+        },
+      },
+    };
+
+    await expect(
+      handler.createResponse({
+        client: client as any,
+        messages: helloMessages(),
+        temperature: 0,
+      }),
+    ).rejects.toBe(providerError);
+
+    expect(logger.warn).not.toHaveBeenCalled();
+    expect(logger.debug).toHaveBeenCalledWith(
+      'Stream failed',
+      expect.objectContaining({
+        data: expect.objectContaining({
+          partialTextLength: 0,
+        }),
+      }),
     );
   });
 });
