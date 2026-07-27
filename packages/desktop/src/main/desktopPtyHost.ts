@@ -61,20 +61,23 @@ export interface DesktopPtyHostOptions {
   /** Reports process exit so the UI can mark the session finished. */
   onExit(sessionId: string, exitCode: number): void;
   onError?(error: unknown): void;
+  /** Overrides native-module loading for a controlled host environment. */
+  loadPty?: () => Promise<NodePtyModule>;
 }
 
 export interface DesktopPtyHost {
   /**
    * Starts a session. Rejects when the native module is unavailable, so the
    * caller can report "terminal unavailable" rather than hanging on a
-   * terminal that will never produce output.
+   * terminal that will never produce output. Returns `undefined` when resource
+   * disposal invalidates the request while the native module is loading.
    */
   create(input: {
     id: string;
     cols: number;
     rows: number;
     cwd?: string;
-  }): Promise<PtySessionHandle>;
+  }): Promise<PtySessionHandle | undefined>;
   get(id: string): PtySessionHandle | undefined;
   disposeAll(): void;
 }
@@ -168,13 +171,29 @@ export function createDesktopPtyHost(
   options: DesktopPtyHostOptions,
 ): DesktopPtyHost {
   const sessions = new Map<string, PtySessionHandle>();
+  let generation = 0;
 
   return {
     async create({ id, cols, rows, cwd }) {
       const existing = sessions.get(id);
       if (existing) return existing;
 
-      const pty = await loadNodePty();
+      const creationGeneration = generation;
+      let pty: NodePtyModule;
+      try {
+        pty = await (options.loadPty?.() ?? loadNodePty());
+      } catch (error) {
+        if (creationGeneration !== generation) return undefined;
+        throw error;
+      }
+      // disposeAll marks every request begun by the old renderer as stale,
+      // including requests that had not yet reached the sessions map.
+      if (creationGeneration !== generation) return undefined;
+      // Two starts for the same renderer ID can share the module-load await.
+      // Whichever resumes second adopts the handle installed by the first.
+      const loadedExisting = sessions.get(id);
+      if (loadedExisting) return loadedExisting;
+
       const child = pty.spawn(defaultShell(), [], {
         name: 'xterm-256color',
         // A pty spawned at 0 columns makes shells emit unusable line wrapping,
@@ -183,12 +202,6 @@ export function createDesktopPtyHost(
         rows: Math.max(rows, 5),
         cwd: cwd ?? options.cwd ?? process.cwd(),
         env: ptyEnvironment(),
-      });
-
-      child.onData((data) => options.onData(id, data));
-      child.onExit(({ exitCode }) => {
-        sessions.delete(id);
-        options.onExit(id, exitCode);
       });
 
       const handle: PtySessionHandle = {
@@ -204,7 +217,7 @@ export function createDesktopPtyHost(
           }
         },
         dispose: () => {
-          sessions.delete(id);
+          if (sessions.get(id) === handle) sessions.delete(id);
           try {
             child.kill();
           } catch (error) {
@@ -212,6 +225,15 @@ export function createDesktopPtyHost(
           }
         },
       };
+      child.onData((data) => {
+        if (sessions.get(id) !== handle) return;
+        options.onData(id, data);
+      });
+      child.onExit(({ exitCode }) => {
+        if (sessions.get(id) !== handle) return;
+        sessions.delete(id);
+        options.onExit(id, exitCode);
+      });
       sessions.set(id, handle);
       return handle;
     },
@@ -219,6 +241,7 @@ export function createDesktopPtyHost(
     get: (id) => sessions.get(id),
 
     disposeAll() {
+      generation += 1;
       // Copy first: dispose() mutates the map through the shared handle.
       for (const handle of [...sessions.values()]) handle.dispose();
       sessions.clear();

@@ -1,12 +1,12 @@
 import PQueue from 'p-queue';
 
 import { RUN_FACT_EVENT_TYPES } from '@agent/trace';
+import type { SessionStores } from '@agent/storage';
 import type { HostApprovalBypassStateUpdate } from '@agent/runtime/HostInteractions';
 import {
   defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import type { SessionStores } from '@agent/runtime/SessionStores';
 import {
   WebviewBridge,
   type ProgressViewMessageSender,
@@ -304,13 +304,6 @@ export class ProgressBackend {
         storageRootReplaced = await this.session.reloadAfterStorageRootChange();
       } catch (error) {
         sessionReloadError = error;
-      }
-      if (sessionReloadError && !storageRootReplaced) {
-        // Session reload failed without replacing the storage root — the
-        // bridge is still intact. Re-throw without tearing down the bridge
-        // or resetting state, so the existing presentation keeps working.
-        if (sessionReloadError instanceof Error) throw sessionReloadError;
-        throw new Error('Session reload failed', { cause: sessionReloadError });
       }
       if (sessionReloadError || storageRootReplaced) {
         this.presentationReloadPending = true;

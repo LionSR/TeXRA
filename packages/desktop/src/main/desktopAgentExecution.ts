@@ -5,6 +5,7 @@ import type { AgentTrace } from '@agent/trace';
 
 import { computeAgentOptionsData, getAgent } from '@agent/index';
 import { createChannelTrace } from '@agent/trace';
+import type { SessionStores } from '@agent/storage';
 import {
   validateExecutionRequest,
   type ValidatedExecutionRequest,
@@ -88,7 +89,11 @@ import {
   invalidateModelOptionsCache,
 } from '@model/computeModelOptions';
 import { platform } from '@platform/platform';
-import { PROGRESS_VIEW_COMMANDS, COMMON_COMMANDS } from '@shared/ipc';
+import {
+  COMMON_COMMANDS,
+  MAIN_VIEW_COMMANDS,
+  PROGRESS_VIEW_COMMANDS,
+} from '@shared/ipc';
 import {
   AgentCategory,
   SETTINGS_TAB,
@@ -350,6 +355,11 @@ export class DesktopProgressBridge {
   ): Promise<void> {
     await this.backend.load();
     if (this.disposed) return;
+
+    // Orchestration rail shows all sessions regardless of category — clear any
+    // persisted filter from a previous session so every top-level stream is
+    // visible in the rail and selectable without a stale-filter mismatch.
+    this.state.agentCategoryFilter = 'all';
 
     this.toolEditApprovals = createDesktopToolEditApprovalController({
       runtimeHost: presentationHost,
@@ -1241,6 +1251,16 @@ export class DesktopProgressBridge {
         void this.options.host.showErrorMessage(message);
         return;
       }
+      case 'showAgentConfigBanner': {
+        const { agentName } =
+          payload as RuntimePresentationEventPayloads['showAgentConfigBanner'];
+        this.postToRenderer({
+          command: MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER,
+          agentName,
+          customDirSet: true,
+        });
+        return;
+      }
       case 'requestOpenFile': {
         // The extension previews via its LaTeX-Workshop build+view flow
         // (openBuildDisplayIfTex); desktop has no such editor integration,
@@ -1256,8 +1276,11 @@ export class DesktopProgressBridge {
           });
         return;
       }
-      default:
+      default: {
+        const _exhaustive: never = event;
+        void _exhaustive;
         return;
+      }
     }
   }
 

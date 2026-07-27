@@ -8,9 +8,10 @@
 // otherwise read or overwrite anything the user can reach.
 
 // Node imports
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 
 // Local imports - file listing
+import { isFileNotFoundError } from '@common/errors';
 import {
   loadFileListSettings,
   passesFileFilters,
@@ -45,6 +46,7 @@ import type { DesktopBrowserViews } from './desktopBrowserViews.js';
 export interface DesktopWorkspaceIpcOptions {
   ptyHost: DesktopPtyHost;
   browserViews: DesktopBrowserViews;
+  onEditorDirtyChange?(dirty: boolean): void;
   /**
    * Translates renderer-reported CSS pixel bounds into window coordinates.
    * A WebContentsView is positioned in device-independent window space, which
@@ -53,6 +55,16 @@ export interface DesktopWorkspaceIpcOptions {
   toWindowBounds(bounds: DesktopBrowserBounds): DesktopBrowserBounds;
   getEnvironmentSummary?(): Promise<DesktopEnvironmentSummary>;
   onAsyncError?(error: unknown): void;
+}
+
+export interface DesktopWorkspaceIpc extends DesktopMessageHandler {
+  /**
+   * Releases resources owned by the current renderer document.
+   *
+   * Renderer reload creates a new terminal-id namespace and a new browser-tab
+   * layout, so neither resource may survive across that boundary.
+   */
+  disposeRendererResources(): void;
 }
 
 /**
@@ -81,10 +93,63 @@ async function resolveWorkspacePath(inputPath: string): Promise<string> {
   return canonicalTarget;
 }
 
+/**
+ * Resolves a write target without requiring the file itself to still exist.
+ * The canonical parent remains mandatory, so recreating an externally deleted
+ * file cannot bypass the workspace or symlink boundary.
+ */
+async function resolveWorkspaceWritePath(inputPath: string): Promise<string> {
+  try {
+    return await resolveWorkspacePath(inputPath);
+  } catch (error) {
+    if (!isFileNotFoundError(error)) throw error;
+  }
+
+  const located = WorkspaceFS.locatePath(inputPath);
+  if (located.kind !== 'workspace') {
+    throw new Error('Only files inside the workspace folder can be opened.');
+  }
+  const root = WorkspaceFS.getPath();
+  if (!root) {
+    throw new Error('Workspace path is not available.');
+  }
+
+  // A dangling symlink also makes realPath fail with ENOENT. It must remain
+  // rejected: writing through it could create a target outside the workspace.
+  try {
+    if (await platform().fs.isSymlink(located.absolutePath)) {
+      throw new Error('Symbolic links cannot be recreated by the editor.');
+    }
+  } catch (error) {
+    if (!isFileNotFoundError(error)) throw error;
+  }
+
+  let canonicalRoot: string;
+  let canonicalParent: string;
+  try {
+    [canonicalRoot, canonicalParent] = await Promise.all([
+      platform().fs.realPath(root),
+      platform().fs.realPath(dirname(located.absolutePath)),
+    ]);
+  } catch (error) {
+    if (isFileNotFoundError(error)) {
+      throw new Error(
+        'The file cannot be recreated because its parent folder no longer exists.',
+      );
+    }
+    throw error;
+  }
+  const canonicalTarget = join(canonicalParent, basename(located.absolutePath));
+  if (!isPathWithin(canonicalRoot, canonicalTarget)) {
+    throw new Error('Only files inside the workspace folder can be opened.');
+  }
+  return canonicalTarget;
+}
+
 export function createDesktopWorkspaceIpc(
   renderer: DesktopRenderer,
   options: DesktopWorkspaceIpcOptions,
-): DesktopMessageHandler {
+): DesktopWorkspaceIpc {
   const reportError = (error: unknown) => options.onAsyncError?.(error);
 
   function postFileError(path: string, error: unknown): void {
@@ -184,7 +249,7 @@ export function createDesktopWorkspaceIpc(
 
   async function writeFile(path: string, contents: string): Promise<void> {
     try {
-      await WorkspaceFS.write(await resolveWorkspacePath(path), contents);
+      await WorkspaceFS.write(await resolveWorkspaceWritePath(path), contents);
       renderer.postToRenderer({
         command: DESKTOP_WORKSPACE_COMMANDS.FILE_WRITTEN,
         path,
@@ -207,6 +272,7 @@ export function createDesktopWorkspaceIpc(
         cols,
         rows,
       });
+      if (!session) return;
       if (initialCommand) {
         session.write(`${initialCommand}\r`);
       }
@@ -223,12 +289,20 @@ export function createDesktopWorkspaceIpc(
   }
 
   return {
+    disposeRendererResources() {
+      options.ptyHost.disposeAll();
+      options.browserViews.disposeAll();
+    },
+
     handleMessage(message: DesktopCommandMessage) {
       const parsed = DesktopWorkspaceInboundMessageSchema.safeParse(message);
       if (!parsed.success) return false;
       const data = parsed.data;
 
       switch (data.command) {
+        case DESKTOP_WORKSPACE_COMMANDS.EDITOR_DIRTY_STATE:
+          options.onEditorDirtyChange?.(data.dirty);
+          return true;
         case DESKTOP_WORKSPACE_COMMANDS.LIST_FILES:
           void listFiles(data.directory);
           return true;

@@ -71,6 +71,7 @@ export interface EditorPane {
   setTheme(theme: DesktopThemeKind): void;
   /** Re-lays-out Monaco after its container resizes or becomes visible. */
   layout(): void;
+  hasUnsavedChanges(): boolean;
   save(): Promise<void>;
   dispose(): void;
 }
@@ -472,6 +473,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
       editor?.layout();
     },
 
+    hasUnsavedChanges: () => dirtyPaths.size > 0,
     save,
 
     dispose() {

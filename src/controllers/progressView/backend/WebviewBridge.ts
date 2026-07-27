@@ -6,6 +6,7 @@ import type {
   StreamLogTextDelta,
   StreamTabId,
 } from '@shared/schemas';
+import { createFlushableDebounce, type FlushableDebounce } from '@utils/core';
 
 const CHANNEL = 'WebviewBridge';
 
@@ -40,7 +41,7 @@ interface StreamEntry {
 }
 
 export class WebviewBridge {
-  private flushTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly flushDebounce: FlushableDebounce;
   /** Registered streams: presence means cursor is seeded; `dirty` means pending flush. */
   private readonly streams = new Map<StreamTabId, StreamEntry>();
   private readonly unsubscribe: () => void;
@@ -52,6 +53,10 @@ export class WebviewBridge {
     private readonly sendMessage: ProgressViewMessageSender,
     private readonly getActiveStream: () => StreamTabId | null,
   ) {
+    this.flushDebounce = createFlushableDebounce(
+      () => void this.runFlush(),
+      FRAME_INTERVAL_MS,
+    );
     this.unsubscribe = this.store.onChange((streamId) => {
       if (streamId !== this.getActiveStream()) return;
       // A stream is mirrored to the webview only after `syncStream` seeds its
@@ -71,10 +76,7 @@ export class WebviewBridge {
 
   dispose(): void {
     this.unsubscribe();
-    if (this.flushTimer) {
-      clearTimeout(this.flushTimer);
-      this.flushTimer = null;
-    }
+    this.flushDebounce.cancel();
     this.streams.clear();
   }
 
@@ -97,11 +99,7 @@ export class WebviewBridge {
       this.flushRequested = true;
       return;
     }
-    if (this.flushTimer) return;
-    this.flushTimer = setTimeout(() => {
-      this.flushTimer = null;
-      void this.runFlush();
-    }, FRAME_INTERVAL_MS);
+    if (!this.flushDebounce.pending) this.flushDebounce.schedule();
   }
 
   private async runFlush(): Promise<void> {

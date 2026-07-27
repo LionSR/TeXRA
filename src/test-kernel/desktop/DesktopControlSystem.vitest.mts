@@ -236,6 +236,8 @@ describe('desktop control system', () => {
     const commandSurface = read(
       'packages/desktop/src/desktopCommandSurface.ts',
     );
+    const electronMain = read('packages/desktop/src/main/index.ts');
+    const preload = read('packages/desktop/src/preload/index.ts');
     const editorPane = read('packages/desktop/src/renderer/editorPane.ts');
     const renderer = read('packages/desktop/src/renderer/main.ts');
 
@@ -248,7 +250,23 @@ describe('desktop control system', () => {
     expect(commandSurface).toContain("SAVE_FILE: 'texra.desktop.saveFile'");
     expect(commandSurface).toContain("accelerator: 'CommandOrControl+S'");
     expect(renderer).toContain('void editorPane.save()');
+    expect(renderer).toContain('editorPane.hasUnsavedChanges()');
+    expect(renderer).toContain('DESKTOP_WORKSPACE_COMMANDS.EDITOR_DIRTY_STATE');
     expect(editorPane).toContain('model.getVersionId() !== savedVersion');
+    expect(electronMain).toContain("on('will-prevent-unload'");
+    expect(electronMain).toContain('confirmDiscardUnsavedEditorChanges(true)');
+    expect(electronMain).toContain('allowNextPreventedUnload');
+    expect(electronMain).toMatch(
+      /webContents\.on\('did-navigate',[\s\S]*?initialRendererNavigationComplete[\s\S]*?workspaceIpc\.disposeRendererResources\(\)/u,
+    );
+    expect(electronMain).toMatch(
+      /workspaceRelaunchInProgress = true;[\s\S]*?window\.close\(\);[\s\S]*?window\.once\('closed',[\s\S]*?app\.relaunch/u,
+    );
+    expect(electronMain).toMatch(
+      /app\.on\('before-quit',[\s\S]*?mainWindow\.close\(\);[\s\S]*?lifecycle\.runShutdown\(\)/u,
+    );
+    expect(preload).toContain("'unload',");
+    expect(preload).not.toContain("'beforeunload'");
   });
 
   it('executes immediate follow-up plans after restoring their launcher state', () => {

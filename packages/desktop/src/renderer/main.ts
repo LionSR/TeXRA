@@ -24,9 +24,7 @@ import '@progressView/frontend';
 import '@progressView/frontend/components/TexraDiffView';
 import type { StreamTabs } from '@progressView/frontend/components/StreamTabs';
 import {
-  handleDeleteAll,
   handleFileAction,
-  handleFilterChange,
   handleFollowupRequestOptions,
   handleFollowUpChange,
   handleFollowUpClear,
@@ -48,10 +46,9 @@ import {
   childStreamsByParent$,
   hasAnyStreams$,
   pendingApprovalIds$,
-  streamFilter$,
   streamStates$,
   streams$,
-  tabStreams$,
+  topLevelStreams$,
 } from '@progressView/frontend/progressState';
 import { COMMON_COMMANDS, PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import '@settingsView/frontend';
@@ -332,6 +329,7 @@ conversationView.setAttribute('data-desktop-view', 'progress');
 // Left rail: a fresh <stream-tabs> mount wired to module-level progressState.
 // PRD § 7.D requires mounting <stream-tabs> directly (not inside <progress-app>).
 const railTabs = document.createElement('stream-tabs') as StreamTabs;
+railTabs.presentation = 'orchestration';
 
 const settingsView: HTMLElement = document.createElement('settings-app');
 settingsView.setAttribute('data-desktop-view', 'settings');
@@ -355,6 +353,9 @@ const editorPane = createEditorPane({
     updateShell(
       setWorkbenchTabDirty(shellState, `workbench:editor:${path}`, dirty),
     );
+    postMessage(DESKTOP_WORKSPACE_COMMANDS.EDITOR_DIRTY_STATE, {
+      dirty: editorPane.hasUnsavedChanges(),
+    });
   },
   onError: (error) => console.error('TeXRA editor pane', error),
 });
@@ -1188,9 +1189,8 @@ function rerenderShell(): void {
     activeWorkbenchTab(shellState, 'right')?.kind === 'logs' ||
       activeWorkbenchTab(shellState, 'bottom')?.kind === 'logs',
   );
-  railTabs.streams = tabStreams$.get();
+  railTabs.streams = topLevelStreams$.get();
   railTabs.activeStreamId = activeStreamId$.get();
-  railTabs.filter = streamFilter$.get();
   railTabs.streamStates = streamStates$.get();
   railTabs.pendingApprovalStreamIds = pendingApprovalIds$.get();
   railTabs.childStreamsByParent = childStreamsByParent$.get();
@@ -1277,8 +1277,7 @@ function installShellSignalWatcher(): void {
   const shellDeps = new Signal.Computed(() => {
     activeStreamId$.get();
     hasAnyStreams$.get();
-    tabStreams$.get();
-    streamFilter$.get();
+    topLevelStreams$.get();
     streamStates$.get();
     pendingApprovalIds$.get();
     childStreamsByParent$.get();
@@ -1645,11 +1644,6 @@ function wireRailTabs(): void {
     'stream-delete',
     handleStreamDelete as EventListener,
   );
-  railTabs.addEventListener(
-    'filter-change',
-    handleFilterChange as EventListener,
-  );
-  railTabs.addEventListener('delete-all', handleDeleteAll as EventListener);
 }
 
 let conversationWired = false;
@@ -1721,8 +1715,14 @@ if (!bootstrapFailed) {
   document.body.dataset.desktopReady = 'true';
 }
 
+window.addEventListener('beforeunload', (event) => {
+  if (!editorPane.hasUnsavedChanges()) return;
+  event.preventDefault();
+  event.returnValue = '';
+});
+
 window.addEventListener(
-  'beforeunload',
+  'unload',
   () => {
     surfaceResizeObserver?.disconnect();
     disposeShortcutHints?.();
