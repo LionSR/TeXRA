@@ -45,9 +45,8 @@ function getPersistedRemoteAgentMeta(): RemoteAgentMetaCache {
 
 export async function loadRemoteAgents(): Promise<AgentEntry[]> {
   try {
-    const { RemoteAgentLoader } =
-      await import('@agent/remote/RemoteAgentLoader');
-    const remotes = await RemoteAgentLoader.listRemoteAgents();
+    const { listRemoteAgents } = await import('@agent/remote/remoteAgentList');
+    const remotes = await listRemoteAgents();
     const metaCache = getPersistedRemoteAgentMeta();
 
     return remotes.map((remote) => {
