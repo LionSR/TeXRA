@@ -6,7 +6,7 @@ import {
   CODEX_PREFER_SUBSCRIPTION_KEY,
   isPreferCodexSubscription,
   setPreferCodexSubscription,
-} from '@auth/codex';
+} from '@model/codex/codexPreference';
 import { platform } from '@platform/platform';
 import type {
   ConfigInspection,
