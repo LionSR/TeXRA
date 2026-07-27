@@ -110,6 +110,16 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
     return (await this.loadSession()) !== null;
   }
 
+  /**
+   * Read the stored session's account label without attempting a token
+   * refresh. Returns null when no session is stored or the data is
+   * unreadable — the caller decides whether to surface "N/A".
+   */
+  async getStoredAccountLabel(): Promise<string | null> {
+    const session = await this.loadSession();
+    return session?.account.label ?? null;
+  }
+
   /** Get access and refresh tokens from secure storage. */
   async getSessionTokens(): Promise<SessionTokens | null> {
     const session = await this.getFreshSession();
