@@ -69,7 +69,8 @@ export interface DesktopPtyHost {
   /**
    * Starts a session. Rejects when the native module is unavailable, so the
    * caller can report "terminal unavailable" rather than hanging on a
-   * terminal that will never produce output.
+   * terminal that will never produce output. Returns `undefined` when resource
+   * disposal invalidates the request while the native module is loading.
    */
   create(input: {
     id: string;
