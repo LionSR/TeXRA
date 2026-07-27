@@ -8,7 +8,7 @@ import {
   SPECIAL_BASENAME_LANGUAGES,
 } from '@progressView/frontend/languageForPath';
 import type { LogLevel } from '@shared/schemas';
-import type { TeXRAIconName } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
 
 /**
  * Font Awesome icon name per log level, rendered via `waIcon`. Replaces

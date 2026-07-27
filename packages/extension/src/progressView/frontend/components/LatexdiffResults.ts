@@ -14,7 +14,8 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 // Local imports - shared styles
 import { designTokens, commonViewStyles } from '@shared/styles';
 import type { DiffResultDisplay, DiffStatus } from '@shared/schemas';
-import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - progress view events
 import { ProgressEvents } from '../events';

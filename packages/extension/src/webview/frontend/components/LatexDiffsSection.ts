@@ -25,7 +25,8 @@ import {
   renderIconActionButton,
   renderLabeledActionButtonParts,
 } from '@shared/wa/actionButtons';
-import { type TeXRAIconName, waIcon } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { byString } from '@utils/core';
 import { MainViewEvents } from '../events';
 import { fileSelectLayoutStyles } from '../styles/fileSelectStyles';

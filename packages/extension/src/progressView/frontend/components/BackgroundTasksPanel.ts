@@ -41,7 +41,8 @@ import {
 } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { formatPhaseStageLabel } from '@shared/streams/streamStatusDisplay';
-import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { ProgressEvents } from '../events';
 
 // Local imports - contexts
