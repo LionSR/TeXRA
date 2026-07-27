@@ -2,8 +2,8 @@
 import { html, nothing, type TemplateResult } from 'lit';
 
 // Local imports - Web Awesome
-import type { TeXRAIconName } from './iconNames';
 import { waIcon } from './webAwesomeIcons';
+import type { TeXRAIconName } from './iconNames';
 
 export interface SettingsSectionHeadingOptions {
   readonly title: string;
