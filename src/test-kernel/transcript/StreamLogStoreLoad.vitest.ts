@@ -713,6 +713,24 @@ describe('StreamLogStore load', () => {
     ).toBe(false);
   });
 
+  it('prepares transcript directories again after a storage-root reload', async () => {
+    const storage = mockStorage({ logs: {}, summaries: {} });
+    const store = await StreamLogStore.open();
+    store.append('old-root', logEntry('old-root', 1, 100));
+    await store.flush();
+    const oldRootPreparations = storage.ensuredDirs.filter(
+      (dir) => dir === STREAM_LOGS_DIR,
+    ).length;
+
+    await store.reload();
+    store.append('new-root', logEntry('new-root', 1, 200));
+    await store.flush();
+
+    expect(
+      storage.ensuredDirs.filter((dir) => dir === STREAM_LOGS_DIR),
+    ).toHaveLength(oldRootPreparations + 1);
+  });
+
   it('uses stream summaries without reading full log files at startup', async () => {
     const storage = mockStorage({
       logs: {
