@@ -88,7 +88,6 @@ export interface AgentLaunchInput {
   executionId?: ExecutionId;
   runtimeHost: AgentRuntimeHost;
   streamTabIdOverride?: StreamTabId;
-  taskType?: string;
   /** Fires after streamId is assigned but before setActiveStream is emitted. */
   onBeforeActivation?: (streamId: StreamTabId) => void;
   /** Register the stream without switching the UI away from its current tab. */
@@ -456,7 +455,6 @@ async function assembleAgentLaunchContext(
 function acquireStreamOrThrow(
   streamId: StreamTabId,
   streamStatus: StreamStatusMachine,
-  taskType: string = 'Task',
 ): void {
   if (streamStatus.tryAcquire(streamId)) {
     return;
@@ -470,7 +468,7 @@ function acquireStreamOrThrow(
       : (streamStatus.get(streamId) ?? '');
   const statusMsg = STATUS_MESSAGES[status] || 'already running';
   throw new AgentError(
-    `${taskType} "${streamId}" is ${statusMsg}. Please wait for it to complete or stop it first.`,
+    `Task "${streamId}" is ${statusMsg}. Please wait for it to complete or stop it first.`,
   );
 }
 
@@ -561,7 +559,7 @@ export async function buildAgentLaunchContext(
     ? undefined
     : getStreamTabId(config.agent, config.model, { executionId });
   if (reservedStreamId) {
-    acquireStreamOrThrow(reservedStreamId, streamStatus, input.taskType);
+    acquireStreamOrThrow(reservedStreamId, streamStatus);
   }
 
   const resources = new AgentLaunchResources();
