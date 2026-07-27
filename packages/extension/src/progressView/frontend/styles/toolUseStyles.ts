@@ -6,16 +6,7 @@ import { css } from 'lit';
  */
 export const toolUseStyles = css`
   .tool-use-section {
-    margin: var(--wa-space-xs) 0;
-    padding: var(--wa-space-xs) var(--wa-space-s);
-    border: var(--border-thin) solid
-      color-mix(in srgb, var(--wa-color-surface-border) 76%, transparent);
-    border-radius: var(--wa-border-radius-m, var(--border-radius));
-    background: color-mix(
-      in srgb,
-      var(--wa-color-surface-lowered) 72%,
-      transparent
-    );
+    margin: var(--wa-space-2xs) 0;
   }
 
   .tool-use-title {
@@ -32,10 +23,6 @@ export const toolUseStyles = css`
   .details-summary .label {
     user-select: text;
     cursor: text;
-  }
-
-  .tool-use-subsection {
-    margin: 0;
   }
 
   .tool-use-sublabel {
@@ -93,6 +80,7 @@ export const toolUseStyles = css`
   }
 
   :is(.tool-user-feedback, .tool-error-content, .tool-output-full) {
+    margin: 0;
     white-space: pre-wrap;
     word-break: break-word;
   }

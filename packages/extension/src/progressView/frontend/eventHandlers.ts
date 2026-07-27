@@ -19,7 +19,6 @@ import { clearInquiryDraft } from './components/ExternalInquiryPanel';
 import {
   APPROVE_SESSION_ACTION,
   APPROVE_ALL_DELEGATED_WORK_ACTION,
-  type FilterEventDetail,
   type FollowUpClearDetail,
   type FollowupCommandDetail,
   type FollowUpChangeDetail,
@@ -63,28 +62,6 @@ export function handleStreamDelete(
 
   // Fire-and-forget to backend
   postMessage(PROGRESS_VIEW_COMMANDS.DELETE_STREAM, { stream: streamId });
-}
-
-/**
- * Filter-preference persistence is host-specific and lives with the caller:
- * `ProgressApp.onFilterChange` layers its VS Code webview `prefsManager`
- * write on top of this handler; desktop/trace-viewer wire this handler
- * directly and persist nothing.
- */
-export function handleFilterChange(
-  event: CustomEvent<FilterEventDetail>,
-): void {
-  const { filter } = event.detail;
-  appState.set(
-    create(appState.get(), (draft) => {
-      draft.streamFilter = filter;
-    }),
-  );
-  postMessage(PROGRESS_VIEW_COMMANDS.FILTER_STREAMS, { filter });
-}
-
-export function handleDeleteAll(): void {
-  postMessage(PROGRESS_VIEW_COMMANDS.DELETE_ALL, {});
 }
 
 export function handleToolbarCommand(

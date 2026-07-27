@@ -182,14 +182,11 @@ export class WorktreeChip extends LitElement {
 
   private renderPRPill(state: WorktreePRState): TemplateResult {
     return html`<wa-badge
-        id="worktree-pr-state"
-        class="pill"
-        variant=${PR_STATE_VARIANT[state]}
-        appearance="filled"
-        >${PR_STATE_LABEL[state]}</wa-badge
-      ><wa-tooltip for="worktree-pr-state"
-        >PR ${PR_STATE_LABEL[state]}</wa-tooltip
-      >`;
+      class="pill"
+      variant=${PR_STATE_VARIANT[state]}
+      appearance="filled"
+      >${PR_STATE_LABEL[state]}</wa-badge
+    >`;
   }
 
   private renderBranch(): TemplateResult | typeof nothing {
@@ -224,11 +221,9 @@ export class WorktreeChip extends LitElement {
 
   private renderPRDetails(pr: NonNullable<WorktreeInfo['pr']>): TemplateResult {
     const ci = pr.ciState ?? WORKTREE_CI_STATE.UNKNOWN;
-    const titleAttr = pr.title ? `#${pr.number} ${pr.title}` : `#${pr.number}`;
     const showStats = pr.additions != null || pr.deletions != null;
     return html`
-      <span id="worktree-pr-number" class="pr-number">#${pr.number}</span>
-      <wa-tooltip for="worktree-pr-number">${titleAttr}</wa-tooltip>
+      <span class="pr-number">#${pr.number}</span>
       ${
         pr.title
           ? html`<span id="worktree-pr-title" class="pr-title">${pr.title}</span
