@@ -30,13 +30,13 @@ describe('remaining progress-view tooltip contracts', () => {
       'context-management',
     ) as ContextManagement;
     element.config = {
-      icon: 'history',
+      icon: 'clock-rotate-left',
       label: 'Context Management',
       color: 'var(--wa-color-text-normal)',
     };
     element.items = [
-      { icon: 'history', label: 'Before', value: '10k' },
-      { icon: 'history', label: 'After', value: '5k' },
+      { icon: 'clock-rotate-left', label: 'Before', value: '10k' },
+      { icon: 'clock-rotate-left', label: 'After', value: '5k' },
     ];
     document.body.append(element);
     await element.updateComplete;
