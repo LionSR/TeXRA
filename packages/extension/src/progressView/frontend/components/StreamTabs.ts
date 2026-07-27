@@ -37,27 +37,24 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/relative-time/relative-time.js';
 import './WorktreeChip';
 import { formatRelativeTime } from '@shared/utils/string';
-import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { type TeXRAIconName, waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderEmptyState } from '@shared/wa/emptyState';
 import { formatResultCount } from '@utils/text/stringUtils';
 import { layoutStyles } from '../styles/logStyles';
 import { streamTabStyles } from './StreamTab.styles';
 import { streamTabsContainerStyles } from './StreamTabsContainer.styles';
-import { ELEMENT_IDS, FILTER_BUTTONS } from '../constants';
+import { ELEMENT_IDS } from '../constants';
 import { ProgressEvents } from '../events';
-import { getComposedPathElement, getRadioValue, setsEqual } from '../utils';
+import { getComposedPathElement, setsEqual } from '../utils';
 import {
   computeStreamTreeProjection,
   getStreamBranchActivity,
   type StreamBranchActivity,
   type StreamTreeExpansionOverride,
 } from '../streamTree';
-import type { StreamFilter, StreamState } from '../store';
+import type { StreamState } from '../store';
 
 // Web Awesome native components
-import '@awesome.me/webawesome/dist/components/radio/radio.js';
-import '@awesome.me/webawesome/dist/components/radio-group/radio-group.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 function buildTooltip(
@@ -255,7 +252,6 @@ export class StreamTab extends LitElement {
                 `
           }
         </button>
-        <wa-tooltip for="stream-tab-title">${tooltip}</wa-tooltip>
         ${
           this.childCount > 0 && this.compact
             ? html`<wa-tooltip for="stream-tab-compact-children"
@@ -320,7 +316,6 @@ export class StreamTabs extends LitElement {
   /** Optional rail-header title. Empty (default) renders no header band. */
   @property({ type: String }) heading = '';
   @property({ attribute: false }) activeStreamId: string | null = null;
-  @property({ attribute: false }) filter: StreamFilter = 'all';
   /**
    * Stream states map — passed directly from ProgressApp's streamStates$.
    * Stable Mutative reference (only changed entries get new refs), so
@@ -475,47 +470,6 @@ export class StreamTabs extends LitElement {
             }),
           )}
         </div>
-        ${
-          this.presentation === 'orchestration' ||
-          this.compact ||
-          (this.streams.length === 0 && this.filter === 'all')
-            ? nothing
-            : html`<div class="stream-list-footer">
-                <div class="stream-list-controls">
-                  <wa-radio-group
-                    id=${ELEMENT_IDS.AGENT_FILTER_CONTAINER}
-                    class="agent-filter-group"
-                    .value=${this.filter}
-                    @change=${this.handleFilterChange}
-                  >
-                    ${repeat(
-                      FILTER_BUTTONS,
-                      (btn) => btn.id,
-                      (btn) => html`
-                        <wa-radio
-                          id=${btn.id}
-                          value=${btn.filter}
-                          ?checked=${this.filter === btn.filter}
-                        >
-                          ${btn.label}
-                        </wa-radio>
-                      `,
-                    )}
-                  </wa-radio-group>
-
-                  <div class="stream-list-actions">
-                    ${renderIconActionButton({
-                      id: ELEMENT_IDS.DELETE_ALL_BTN,
-                      icon: 'trash',
-                      label: 'Clear all streams',
-                      tooltip: 'Clear all streams',
-                      className: 'delete-all-streams',
-                      onClick: this.handleDeleteAll,
-                    })}
-                  </div>
-                </div>
-              </div>`
-        }
       </div>
     `;
   }
@@ -552,15 +506,5 @@ export class StreamTabs extends LitElement {
     else next.delete(parentId);
     this.userOverride.set(parentId, nowExpanded ? 'expanded' : 'collapsed');
     this.expandedParents = next;
-  }
-
-  private handleFilterChange(event: Event): void {
-    const filter = getRadioValue<StreamFilter>(event);
-    if (!filter) return;
-    this.dispatchEvent(ProgressEvents.filterChange({ filter }));
-  }
-
-  private handleDeleteAll(): void {
-    this.dispatchEvent(ProgressEvents.deleteAll());
   }
 }

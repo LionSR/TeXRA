@@ -90,13 +90,14 @@ describe('stream-tab expand chevron', () => {
     expect(tabs.shadowRoot?.querySelector('stream-tab')).toBeTruthy();
   });
 
-  it('retains the session footer in the progress presentation', async () => {
+  it('renders no session footer in the progress presentation either', async () => {
     const tabs = document.createElement('stream-tabs') as StreamTabs;
     tabs.streams = [makeStream('session')];
     document.body.append(tabs);
     await tabs.updateComplete;
 
-    expect(tabs.shadowRoot?.querySelector('.stream-list-footer')).toBeTruthy();
+    expect(tabs.shadowRoot?.querySelector('.stream-list-footer')).toBeNull();
+    expect(tabs.shadowRoot?.querySelector('stream-tab')).toBeTruthy();
   });
 
   it('anchors the general hint to the title, not an ancestor of specific hints', async () => {
@@ -125,7 +126,7 @@ describe('stream-tab expand chevron', () => {
     ).toBeNull();
     expect(
       shadow?.querySelector('wa-tooltip[for="stream-tab-title"]'),
-    ).toBeTruthy();
+    ).toBeNull();
     expect(select?.getAttribute('aria-label')).toContain('Status:');
     expect(
       title?.contains(shadow?.querySelector('#stream-tab-kind') ?? null),

@@ -148,9 +148,8 @@ export class StreamHeader extends LitElement {
           );
         font-size: var(--font-size-sm);
         display: flex;
-        flex-direction: column;
-        justify-content: center;
-        gap: var(--wa-space-2xs);
+        align-items: center;
+        gap: var(--wa-space-xs);
         min-height: var(--height-header);
         box-sizing: border-box;
         min-width: 0;
@@ -164,15 +163,6 @@ export class StreamHeader extends LitElement {
         );
       }
 
-      .log-header__primary {
-        display: flex;
-        align-items: center;
-        gap: var(--wa-space-xs);
-        width: 100%;
-        min-width: 0;
-        max-width: 100%;
-      }
-
       .header-left {
         display: flex;
         align-items: center;
@@ -182,17 +172,7 @@ export class StreamHeader extends LitElement {
         max-width: 100%;
       }
 
-      .stream-header {
-        display: flex;
-        align-items: center;
-        gap: var(--wa-space-2xs);
-        flex: 1 1 auto;
-        min-width: 0;
-        max-width: 100%;
-        overflow: hidden;
-      }
-
-      .stream-header #activeStreamName {
+      #activeStreamName {
         flex: 1;
         min-width: 0;
         overflow: hidden;
@@ -308,9 +288,6 @@ export class StreamHeader extends LitElement {
       @container (max-width: 520px) {
         .log-header {
           padding-inline: var(--wa-space-xs);
-        }
-
-        .log-header__primary {
           flex-wrap: wrap;
         }
 
@@ -428,54 +405,50 @@ export class StreamHeader extends LitElement {
 
     return html`
       <div class="log-header">
-        <div class="log-header__primary">
-          <div class="header-left">
-            ${this.renderParentLink()}
-            <div class="stream-header">
-              <span
-                id=${ELEMENT_IDS.ACTIVE_STREAM_NAME}
-                data-stream=${this.stream.name}
-              >
-                ${this.stream.label || this.stream.name}
-              </span>
-              ${
-                this.stream.label
-                  ? html`<wa-tooltip for=${ELEMENT_IDS.ACTIVE_STREAM_NAME}
-                      >${this.stream.label}</wa-tooltip
-                    >`
-                  : nothing
-              }
-            </div>
-            <span
-              id=${ELEMENT_IDS.STATUS_INDICATOR}
-              class=${classMap({
-                'status-indicator': true,
-                ...(statusClass ? { [statusClass]: true } : {}),
-              })}
-            ></span>
-            <wa-tooltip for=${ELEMENT_IDS.STATUS_INDICATOR}>
-              ${statusLabel}
-            </wa-tooltip>
-            ${this.renderGoalChip()} ${this.renderProgressBadge()}
-          </div>
-          <div class="header-actions">
-            <wa-button-group
-              id=${ELEMENT_IDS.TOOLBAR_CONTAINER}
-              label="Stream actions"
-              data-agent-mode=${agentCategory}
-            >
-              ${repeat(
-                toolbarButtonViews,
-                (view) => view.id,
-                (view) => view.button,
-              )}
-            </wa-button-group>
+        <div class="header-left">
+          ${this.renderParentLink()}
+          <span
+            id=${ELEMENT_IDS.ACTIVE_STREAM_NAME}
+            data-stream=${this.stream.name}
+          >
+            ${this.stream.label || this.stream.name}
+          </span>
+          ${
+            this.stream.label
+              ? html`<wa-tooltip for=${ELEMENT_IDS.ACTIVE_STREAM_NAME}
+                  >${this.stream.label}</wa-tooltip
+                >`
+              : nothing
+          }
+          <span
+            id=${ELEMENT_IDS.STATUS_INDICATOR}
+            class=${classMap({
+              'status-indicator': true,
+              ...(statusClass ? { [statusClass]: true } : {}),
+            })}
+          ></span>
+          <wa-tooltip for=${ELEMENT_IDS.STATUS_INDICATOR}>
+            ${statusLabel}
+          </wa-tooltip>
+          ${this.renderGoalChip()} ${this.renderProgressBadge()}
+        </div>
+        <div class="header-actions">
+          <wa-button-group
+            id=${ELEMENT_IDS.TOOLBAR_CONTAINER}
+            label="Stream actions"
+            data-agent-mode=${agentCategory}
+          >
             ${repeat(
-              toolbarButtonViews.filter((view) => !view.hidden),
+              toolbarButtonViews,
               (view) => view.id,
-              (view) => view.tooltip,
+              (view) => view.button,
             )}
-          </div>
+          </wa-button-group>
+          ${repeat(
+            toolbarButtonViews.filter((view) => !view.hidden),
+            (view) => view.id,
+            (view) => view.tooltip,
+          )}
         </div>
       </div>
     `;
