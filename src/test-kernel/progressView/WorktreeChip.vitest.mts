@@ -159,7 +159,7 @@ describe('worktree-chip', () => {
 
     expect(new Set(ids).size).toBe(ids.length);
     expect(shadow.querySelector('[title]')).toBeNull();
-    expect(shadow.querySelectorAll('wa-tooltip')).toHaveLength(6);
+    expect(shadow.querySelectorAll('wa-tooltip')).toHaveLength(4);
     expect(
       shadow.querySelector('wa-tooltip[for="worktree-pr-title"]')?.textContent,
     ).toBe('Tooltip migration');

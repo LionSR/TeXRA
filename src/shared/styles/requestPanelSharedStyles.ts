@@ -23,6 +23,7 @@
 import { css, unsafeCSS, type CSSResult } from 'lit';
 
 import { truncateTextRule } from './commonViewStyles';
+import { formControlStyles } from './controlStyles';
 
 /**
  * Shared selector groups for :is() consolidation.
@@ -132,12 +133,10 @@ export const requestPanelSharedStyles: CSSResult = css`
     max-width: 100%;
   }
 
+  /* Chrome-less outer section: the item card below is the single visible
+     box; this wrapper only provides margin and header/list stacking. */
   :is(${CONTAINERS}) {
     margin: ${sp.medium} 0;
-    padding: ${sp.medium};
-    border: var(--border-thin) solid var(--wa-form-control-border-color);
-    border-radius: var(--border-radius-large);
-    background: var(--wa-color-surface-default);
     display: flex;
     flex-direction: column;
     gap: ${sp.medium};
@@ -280,6 +279,10 @@ export const requestPanelSharedStyles: CSSResult = css`
   :is(${FEEDBACK_INPUTS}) {
     width: 100%;
   }
+
+  /* Canonical form-control skin: without it wa-textarea's stock padding eats
+     most of the feedback box's height. */
+  ${formControlStyles}
 
   /* Carousel navigation for multiple external inquiries (rendered directly by
      RequestPanels.ts, not by ExternalInquiryPanel). */

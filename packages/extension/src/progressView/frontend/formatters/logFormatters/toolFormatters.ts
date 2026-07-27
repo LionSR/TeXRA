@@ -32,7 +32,7 @@ import {
   type ExecutionLabels,
 } from '@shared/tools/executionsDisplay';
 import { isObject } from '@utils/core';
-import { truncateSummary } from '@utils/text/stringUtils';
+import { collapseWhitespace, truncateSummary } from '@utils/text/stringUtils';
 
 // Local imports - formatter helpers
 import {
@@ -53,7 +53,6 @@ import {
   buildTerminalSection,
   buildToolSection,
   getToolTimeoutMs,
-  joinWithSeparator,
   truncateHeaderSummary,
 } from './toolFormatters/helpers';
 import { dispatchToolSections } from './toolFormatters/toolSections';
@@ -139,8 +138,17 @@ export function formatToolUseTemplate(
   const isWriteTool = toolDisplayKind(toolName) === 'write';
   const isTrivialWriteOutput =
     isWriteTool && outputText.trim() === TRIVIAL_WRITE_OUTPUT;
+  // Skip the output section when its text is already fully shown in the
+  // collapsed summary title (e.g. "Replaced 1 occurrence."). Exact match
+  // against the summary only — a substring test would also suppress short
+  // outputs that merely happen to appear inside the label or path.
+  const normalizedOutput = collapseWhitespace(outputText).trim();
+  const isOutputInTitle =
+    normalizedOutput !== '' &&
+    normalizedOutput === collapseWhitespace(headerSummary).trim();
   if (
     outputText &&
+    !isOutputInTitle &&
     toolName !== DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME &&
     !toolName.startsWith('mcp:') &&
     toolDisplayKind(toolName) !== 'read' &&
@@ -181,7 +189,7 @@ export function formatToolUseTemplate(
           showLanguage: true,
           showCopy: true,
         })
-      : joinWithSeparator(sections);
+      : html`${sections}`;
 
   // Auto-open in-progress tools so users see the command immediately
   const shouldOpen = options?.defaultOpen ?? isInProgress;
