@@ -57,6 +57,16 @@ export interface DesktopWorkspaceIpcOptions {
   onAsyncError?(error: unknown): void;
 }
 
+export interface DesktopWorkspaceIpc extends DesktopMessageHandler {
+  /**
+   * Releases resources owned by the current renderer document.
+   *
+   * Renderer reload creates a new terminal-id namespace and a new browser-tab
+   * layout, so neither resource may survive across that boundary.
+   */
+  disposeRendererResources(): void;
+}
+
 /**
  * Resolves a renderer-supplied path inside the workspace, or throws.
  *
@@ -139,7 +149,7 @@ async function resolveWorkspaceWritePath(inputPath: string): Promise<string> {
 export function createDesktopWorkspaceIpc(
   renderer: DesktopRenderer,
   options: DesktopWorkspaceIpcOptions,
-): DesktopMessageHandler {
+): DesktopWorkspaceIpc {
   const reportError = (error: unknown) => options.onAsyncError?.(error);
 
   function postFileError(path: string, error: unknown): void {
@@ -262,6 +272,7 @@ export function createDesktopWorkspaceIpc(
         cols,
         rows,
       });
+      if (!session) return;
       if (initialCommand) {
         session.write(`${initialCommand}\r`);
       }
@@ -278,6 +289,11 @@ export function createDesktopWorkspaceIpc(
   }
 
   return {
+    disposeRendererResources() {
+      options.ptyHost.disposeAll();
+      options.browserViews.disposeAll();
+    },
+
     handleMessage(message: DesktopCommandMessage) {
       const parsed = DesktopWorkspaceInboundMessageSchema.safeParse(message);
       if (!parsed.success) return false;
