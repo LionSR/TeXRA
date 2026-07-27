@@ -22,6 +22,7 @@ import {
   onOwnedExecutionLeaseLost,
   ownsExecutionLease,
   releaseOwnedExecutionLease,
+  resetExecutionLeaseCoordinationForTests,
   renewOwnedExecutionLease,
   runWithInactiveExecutionLease,
   runWithOwnedExecutionLease,
@@ -76,6 +77,7 @@ afterEach(async () => {
   );
   await StorageFS.delete('executions', { recursive: true }).catch(() => {});
   clearStoreCache();
+  resetExecutionLeaseCoordinationForTests();
 });
 
 beforeEach(() => {

@@ -180,7 +180,6 @@ function resumeDesktopStream(
       launchDesktopAgent(
         { config, executionId },
         {
-          ready: Promise.resolve(),
           session: context.session,
           canAcquireResumeLease,
         },

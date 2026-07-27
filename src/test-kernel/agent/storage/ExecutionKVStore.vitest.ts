@@ -538,6 +538,29 @@ describe('ExecutionKVStore meta read shims', () => {
       { data: expect.any(Error) },
     );
   });
+
+  it('rejects malformed execution meta for durable repair callers', async () => {
+    const id = 'bad-meta-strict' as ExecutionId;
+    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+
+    await getExecutionStore(id).write('meta', { timestamp: 123 });
+
+    await expect(getExecutionStore(id).readMetaStrict()).rejects.toThrow();
+    expect(warnSpy).toHaveBeenCalledWith(
+      'ExecutionKVStore',
+      expect.stringContaining(`Failed to parse execution ${id} meta.json`),
+      { data: expect.any(Error) },
+    );
+  });
+
+  it('rejects persisted null metadata for durable repair callers', async () => {
+    const id = 'null-meta-strict' as ExecutionId;
+    vi.spyOn(logger, 'warn').mockImplementation(() => {});
+
+    await getExecutionStore(id).write('meta', null);
+
+    await expect(getExecutionStore(id).readMetaStrict()).rejects.toThrow();
+  });
 });
 
 describe('ExecutionKVStore loud typed reads (#6966 bullet 5)', () => {

@@ -10,6 +10,11 @@ import {
   defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
+import {
+  SessionStores,
+  type DeleteAllStreamsResult,
+  type DeleteStreamResult,
+} from '@agent/runtime/SessionStores';
 import type { StateStore } from '@platform/interfaces';
 import {
   AgentCategoryFilterSchema,
@@ -36,12 +41,6 @@ import { GoalStore } from '@tools/goal';
 import type { StreamLogStore, StreamSnapshotStore } from '@transcript';
 import { clamp } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import {
-  SessionStores,
-  type DeleteAllStreamsResult,
-  type DeleteStreamResult,
-} from './SessionStores';
-
 /** Bounded fan-out for the one-time legacy-instruction backfill at load(),
  *  mirroring `StreamSnapshotStore`'s own per-stream disk-read concurrency. */
 const LEGACY_INSTRUCTION_BACKFILL_CONCURRENCY = 8;
@@ -520,11 +519,10 @@ export class ProgressViewState {
   async load(stateOwnership: 'backend' | 'session' = 'backend'): Promise<void> {
     this.logger.info('[Persistence] Starting state load from storage');
 
-    // Persistent stores opened by this backend still need their initial disk
-    // refresh. A process-owned session has already opened its canonical live
-    // store; reloading it for a replacement presentation would race live appends.
-    if (stateOwnership === 'backend') await this.streamLogs.reload();
-    else await this.stores.waitForPendingStreamDeletions();
+    // ProgressBackend waits for SessionHandle readiness before entering this
+    // method. The session owns transcript opening and sidecar hydration; a
+    // presentation must never reload those live stores.
+    await this.stores.waitForPendingStreamDeletions();
 
     const streamIds = this.streamLogs.keys();
     this.logger.info(`[Persistence] Discovered ${streamIds.length} stream(s)`);
@@ -537,7 +535,6 @@ export class ProgressViewState {
           { data: sweep },
         );
       }
-      await this.snapshots.load(streamIds);
     }
     for (const stream of streamIds) {
       this.resetStreamMetadataForRun(stream);
@@ -556,6 +553,13 @@ export class ProgressViewState {
     this.validateActiveStream();
 
     this.logger.info('[Persistence] State load complete');
+  }
+
+  /** Drop workspace-scoped caches before loading a replacement storage root. */
+  resetAfterStorageRootChange(): void {
+    this._prefs.reload();
+    this._sessionState.clear();
+    this._streamStates.clear();
   }
 
   /**

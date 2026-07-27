@@ -269,7 +269,10 @@ export async function activate(context: vscode.ExtensionContext) {
     languageModel.onDidChangeModels(invalidateLanguageModels),
     languageModel.onDidChangeAccess(invalidateLanguageModels),
   );
-  initializeDefaultSession({ transcripts: await StreamLogStore.open() });
+  const runtimeSession = initializeDefaultSession({
+    transcripts: await StreamLogStore.open(),
+  });
+  await runtimeSession.waitUntilReady();
   registerAgentFeatures();
   // Mirrors the CLI/desktop Node-host wiring (`nodeHost.ts`'s
   // `initializeNodeRuntimeSkills`, inlined here rather than imported so the
@@ -508,7 +511,6 @@ export async function activate(context: vscode.ExtensionContext) {
 
   logger.info('extension', 'TeXRA extension activated');
 
-  await progressViewProvider.cleanupTasksAfterRestart();
   // Deferred off the activation tick: extendEnvPath() inside performs
   // synchronous glob probes of TeX install directories, which would
   // otherwise block activation on slow disks. (Never rejects — the body is

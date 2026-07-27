@@ -178,6 +178,21 @@ describe('desktop composition root and launch environment', () => {
     expect(shutdownStart).toBeGreaterThanOrEqual(0);
     expect(disposeStores).toBeGreaterThan(shutdownStart);
     expect(dispose).toBeGreaterThan(disposeStores);
+
+    const initializeStores = source.indexOf(
+      'await initializeDesktopProcessStores',
+    );
+    const registerStoreDisposer = source.indexOf(
+      'disposeProcessStores = () => processStores.dispose()',
+      initializeStores,
+    );
+    const awaitSessionRepair = source.indexOf(
+      'await processSession.waitUntilReady()',
+      initializeStores,
+    );
+    expect(initializeStores).toBeGreaterThanOrEqual(0);
+    expect(registerStoreDisposer).toBeGreaterThan(initializeStores);
+    expect(awaitSessionRepair).toBeGreaterThan(registerStoreDisposer);
   });
 
   it('classifies supported process-store bindings and rejects the legacy module', () => {

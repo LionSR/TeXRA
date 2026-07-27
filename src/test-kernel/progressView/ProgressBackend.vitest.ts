@@ -244,6 +244,221 @@ function emitRunFact<K extends RunFactEventName>(
 }
 
 describe('ProgressBackend', () => {
+  it('waits for session readiness without reloading its live transcript', async () => {
+    const transcripts = await StreamLogStore.open();
+    const session = new SessionHandle({
+      transcripts,
+      restartRepair: 'deferred',
+    });
+    const waitUntilReady = vi.spyOn(session, 'waitUntilReady');
+    const reload = vi.spyOn(transcripts, 'reload');
+    const { backend } = createIsolatedRecordingBackend(session);
+
+    try {
+      await backend.load();
+
+      expect(waitUntilReady).toHaveBeenCalledOnce();
+      expect(reload).not.toHaveBeenCalled();
+    } finally {
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
+  it('uses the session-owned replacement boundary after a workspace move', async () => {
+    const transcripts = await StreamLogStore.open();
+    const session = new SessionHandle({
+      transcripts,
+      restartRepair: 'deferred',
+    });
+    const reloadAfterStorageRootChange = vi
+      .spyOn(session, 'reloadAfterStorageRootChange')
+      .mockResolvedValue(true);
+    const transcriptReload = vi.spyOn(transcripts, 'reload');
+    const { backend } = createIsolatedRecordingBackend(session);
+    const resetPresentation = vi.spyOn(
+      backend.state,
+      'resetAfterStorageRootChange',
+    );
+    const clearBridge = vi.spyOn(backend.webviewBridge, 'clearAll');
+
+    try {
+      await backend.reloadAfterStorageRootChange();
+
+      expect(reloadAfterStorageRootChange).toHaveBeenCalledOnce();
+      expect(resetPresentation).toHaveBeenCalledOnce();
+      expect(clearBridge).toHaveBeenCalledOnce();
+      expect(transcriptReload).not.toHaveBeenCalled();
+    } finally {
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
+  it('keeps presentation caches when the effective storage root is unchanged', async () => {
+    const transcripts = await StreamLogStore.open();
+    const session = new SessionHandle({
+      transcripts,
+      restartRepair: 'deferred',
+    });
+    vi.spyOn(session, 'reloadAfterStorageRootChange').mockResolvedValue(false);
+    const { backend } = createIsolatedRecordingBackend(session);
+    const resetPresentation = vi.spyOn(
+      backend.state,
+      'resetAfterStorageRootChange',
+    );
+    const clearBridge = vi.spyOn(backend.webviewBridge, 'clearAll');
+    const loadPresentation = vi.spyOn(backend.state, 'load');
+
+    try {
+      await backend.reloadAfterStorageRootChange();
+
+      expect(resetPresentation).not.toHaveBeenCalled();
+      expect(clearBridge).not.toHaveBeenCalled();
+      expect(loadPresentation).not.toHaveBeenCalled();
+    } finally {
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
+  it('reconciles presentation caches after a partial session reload', async () => {
+    const transcripts = await StreamLogStore.open();
+    const session = new SessionHandle({
+      transcripts,
+      restartRepair: 'deferred',
+    });
+    const reloadError = new Error('snapshot hydration failed');
+    vi.spyOn(session, 'reloadAfterStorageRootChange').mockRejectedValue(
+      reloadError,
+    );
+    const { backend } = createIsolatedRecordingBackend(session);
+    const resetPresentation = vi.spyOn(
+      backend.state,
+      'resetAfterStorageRootChange',
+    );
+    const clearBridge = vi.spyOn(backend.webviewBridge, 'clearAll');
+    const loadPresentation = vi
+      .spyOn(backend.state, 'load')
+      .mockResolvedValue();
+
+    try {
+      await expect(backend.reloadAfterStorageRootChange()).rejects.toBe(
+        reloadError,
+      );
+
+      expect(resetPresentation).toHaveBeenCalledOnce();
+      expect(clearBridge).toHaveBeenCalledOnce();
+      expect(loadPresentation).toHaveBeenCalledOnce();
+    } finally {
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
+  it('retries presentation loading after the storage root already moved', async () => {
+    const transcripts = await StreamLogStore.open();
+    const session = new SessionHandle({
+      transcripts,
+      restartRepair: 'deferred',
+    });
+    vi.spyOn(session, 'reloadAfterStorageRootChange')
+      .mockResolvedValueOnce(true)
+      .mockResolvedValue(false);
+    const { backend } = createIsolatedRecordingBackend(session);
+    const presentationError = new Error('presentation load failed');
+    const loadPresentation = vi
+      .spyOn(backend.state, 'load')
+      .mockRejectedValueOnce(presentationError)
+      .mockResolvedValue();
+
+    try {
+      await expect(backend.reloadAfterStorageRootChange()).rejects.toBe(
+        presentationError,
+      );
+      await expect(
+        backend.reloadAfterStorageRootChange(),
+      ).resolves.toBeUndefined();
+
+      expect(loadPresentation).toHaveBeenCalledTimes(2);
+    } finally {
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
+  it('serializes complete presentation reloads across rapid workspace moves', async () => {
+    const transcripts = await StreamLogStore.open();
+    const session = new SessionHandle({
+      transcripts,
+      restartRepair: 'deferred',
+    });
+    let finishFirstReload: ((replaced: boolean) => void) | undefined;
+    const firstReload = new Promise<boolean>((resolve) => {
+      finishFirstReload = resolve;
+    });
+    const reloadAfterStorageRootChange = vi
+      .spyOn(session, 'reloadAfterStorageRootChange')
+      .mockReturnValueOnce(firstReload)
+      .mockResolvedValue(true);
+    const { backend } = createIsolatedRecordingBackend(session);
+
+    try {
+      const first = backend.reloadAfterStorageRootChange();
+      const second = backend.reloadAfterStorageRootChange();
+      await Promise.resolve();
+
+      expect(reloadAfterStorageRootChange).toHaveBeenCalledOnce();
+      finishFirstReload?.(true);
+      await first;
+      await second;
+
+      expect(reloadAfterStorageRootChange).toHaveBeenCalledTimes(2);
+    } finally {
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
+  it('finishes the initial presentation load before a workspace move', async () => {
+    const transcripts = await StreamLogStore.open();
+    const session = new SessionHandle({
+      transcripts,
+      restartRepair: 'deferred',
+    });
+    vi.spyOn(session, 'waitUntilReady').mockResolvedValue();
+    const reloadAfterStorageRootChange = vi
+      .spyOn(session, 'reloadAfterStorageRootChange')
+      .mockResolvedValue(true);
+    const { backend } = createIsolatedRecordingBackend(session);
+    let finishInitialLoad: (() => void) | undefined;
+    const initialLoadBlocked = new Promise<void>((resolve) => {
+      finishInitialLoad = resolve;
+    });
+    vi.spyOn(backend.state, 'load')
+      .mockReturnValueOnce(initialLoadBlocked)
+      .mockResolvedValue();
+
+    try {
+      const initialLoad = backend.load();
+      await vi.waitFor(() => {
+        expect(backend.state.load).toHaveBeenCalledOnce();
+      });
+      const workspaceMove = backend.reloadAfterStorageRootChange();
+      await Promise.resolve();
+
+      expect(reloadAfterStorageRootChange).not.toHaveBeenCalled();
+      finishInitialLoad?.();
+      await initialLoad;
+      await workspaceMove;
+
+      expect(reloadAfterStorageRootChange).toHaveBeenCalledOnce();
+    } finally {
+      backend.dispose();
+      session.dispose();
+    }
+  });
+
   it('projects every approval bypass kind through one backend port', () => {
     const { backend, messages } = createRecordingBackend();
 
