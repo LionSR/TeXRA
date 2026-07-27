@@ -231,21 +231,15 @@ function prerequisitesChecks<T>(config: {
   probe: () => Promise<T>;
   resolve: (probeResult: unknown) => T | Promise<T>;
   check: (prereqs: T) => boolean;
-  statusLabel?: (prereqs: T) => string | undefined;
-  detailCheck?: (prereqs: T) => string | undefined;
+  statusLabel: (prereqs: T) => string | undefined;
+  detailCheck: (prereqs: T) => string | undefined;
 }): Pick<ExternalToolDef, 'probe' | 'check' | 'statusLabel' | 'detailCheck'> {
   const { probe, resolve, check, statusLabel, detailCheck } = config;
   return {
     probe,
     check: async (probeResult) => check(await resolve(probeResult)),
-    ...(statusLabel && {
-      statusLabel: async (probeResult) =>
-        statusLabel(await resolve(probeResult)),
-    }),
-    ...(detailCheck && {
-      detailCheck: async (probeResult) =>
-        detailCheck(await resolve(probeResult)),
-    }),
+    statusLabel: async (probeResult) => statusLabel(await resolve(probeResult)),
+    detailCheck: async (probeResult) => detailCheck(await resolve(probeResult)),
   };
 }
 
