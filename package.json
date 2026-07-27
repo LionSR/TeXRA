@@ -94,8 +94,8 @@
     "zod-v3-to-v4": "^1.21.3"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.3.218",
-    "@anthropic-ai/sdk": "^0.114.0",
+    "@anthropic-ai/claude-agent-sdk": "^0.3.220",
+    "@anthropic-ai/sdk": "^0.115.0",
     "@awesome.me/webawesome": "^3.10.0",
     "@cantoo/pdf-lib": "^2.7.4",
     "@fortawesome/free-solid-svg-icons": "^7.3.1",
@@ -109,7 +109,7 @@
     "@octokit/request": "^10.0.11",
     "@octokit/request-error": "^7.1.0",
     "@openai/codex-sdk": "^0.145.0",
-    "@openrouter/sdk": "^1.0.17",
+    "@openrouter/sdk": "^1.1.8",
     "@supabase/supabase-js": "2.110.8",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
@@ -179,7 +179,7 @@
     "simple-git": "^3.36.0",
     "sortablejs": "^1.15.7",
     "strip-ansi": "^7.2.0",
-    "tar": "^7.5.21",
+    "tar": "^7.5.22",
     "tree-kill": "^1.2.2",
     "turndown": "^7.2.4",
     "turndown-plugin-gfm": "^1.0.2",
