@@ -190,24 +190,12 @@ function lucideSvg(name: string): string | undefined {
 /**
  * Resolves a TeXRA icon name to Lucide geometry.
  *
- * Three hops, in order, because names reach here from three vocabularies:
- *   1. A codicon-style alias (`settings-gear`, `close`, `refresh`) -> its
- *      canonical shared name. Read from the shared CODICON_ALIASES table rather
- *      than duplicated here, so the two cannot drift.
- *   2. The canonical name -> its Lucide equivalent, where they differ.
- *   3. The name unchanged, when both sets agree.
- *
- * Skipping hop 1 was a real bug: 22 icons (every codicon alias in the shared
- * components) resolved to a name Lucide does not have and rendered as a blank
- * box — visible as an empty pill in the tab strip.
+ * Direct lookup: canonical name → Lucide equivalent → fallback to name.
  */
 function resolveLucideName(name: string): string {
-  const canonical =
-    (CODICON_ALIASES as Readonly<Record<string, string>>)[name] ?? name;
   return (
-    LUCIDE_NAME_BY_TEXRA_NAME[canonical] ??
     LUCIDE_NAME_BY_TEXRA_NAME[name] ??
-    canonical
+    name
   );
 }
 
