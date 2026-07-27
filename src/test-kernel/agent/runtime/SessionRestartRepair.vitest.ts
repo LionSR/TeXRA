@@ -138,6 +138,37 @@ describe('SessionHandle restart repair', () => {
     }
   });
 
+  it('ignores malformed metadata for settled historical streams', async () => {
+    const transcripts = await StreamLogStore.open();
+    transcripts.append(streamId, {
+      id: 'settled-history-running-group',
+      type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
+      level: LOG_LEVELS.INFO,
+      timestamp: 1_000,
+      data: { status: STREAM_PHASE.RUNNING },
+    });
+    await transcripts.endRunningGroupsForStreams(
+      [streamId],
+      2_000,
+      RUN_OUTCOME.COMPLETED,
+    );
+    await transcripts.flush();
+    const executionStore = getExecutionStore(executionId);
+    const malformedMeta = { timestamp: null };
+    await executionStore.write('meta', malformedMeta);
+
+    const session = new SessionHandle({
+      transcripts,
+      restartRepair: 'deferred',
+    });
+    try {
+      await expect(session.waitUntilReady()).resolves.toBeUndefined();
+      await expect(executionStore.read('meta')).resolves.toEqual(malformedMeta);
+    } finally {
+      session.dispose();
+    }
+  });
+
   it('closes an orphaned group without rewriting its completed execution', async () => {
     const completedExecutionId = 'c0ffee123' as ExecutionId;
     const completedStreamId =
@@ -459,11 +490,12 @@ describe('SessionHandle restart repair', () => {
       finalizeWorkspaceStorageChange,
       rollbackWorkspaceStorageChange,
     });
-    const reloadError = new Error('new transcript root is unreadable');
-    const reload = vi
-      .spyOn(transcripts, 'reload')
+    const reload = vi.spyOn(transcripts, 'reload').mockResolvedValue();
+    const reloadError = new Error('new snapshot root is unreadable');
+    vi.spyOn(session.snapshots, 'load')
       .mockRejectedValueOnce(reloadError)
       .mockResolvedValue();
+    const evictSnapshots = vi.spyOn(session.snapshots, 'evictAll');
     session.status.transition(
       'old-workspace-running' as StreamTabId,
       STREAM_PHASE.RUNNING,
@@ -478,6 +510,7 @@ describe('SessionHandle restart repair', () => {
       expect(activeRoot).toBe('/workspace/old-storage');
       expect(rollbackWorkspaceStorageChange).toHaveBeenCalledOnce();
       expect(reload).toHaveBeenCalledTimes(2);
+      expect(evictSnapshots).toHaveBeenCalledOnce();
       expect(reload).toHaveBeenNthCalledWith(2, {
         discardPendingWrites: true,
       });

@@ -1,3 +1,5 @@
+import PQueue from 'p-queue';
+
 import { RUN_FACT_EVENT_TYPES } from '@agent/trace';
 import type { HostApprovalBypassStateUpdate } from '@agent/runtime/HostInteractions';
 import {
@@ -103,7 +105,7 @@ export class ProgressBackend {
     payload: SetActiveStreamPayload,
   ) => void;
   private readonly stateOwnership: 'backend' | 'session';
-  private storageRootReloadWork: Promise<void> = Promise.resolve();
+  private readonly storageRootReloadQueue = new PQueue({ concurrency: 1 });
   private disposed = false;
 
   constructor(options: ProgressBackendOptions) {
@@ -316,9 +318,9 @@ export class ProgressBackend {
       }
       if (sessionReloadError) throw sessionReloadError;
     };
-    const queued = this.storageRootReloadWork.then(reload, reload);
-    this.storageRootReloadWork = queued.catch(() => undefined);
-    return queued;
+    // `add` widens to `void | undefined` for abort/timeout options; neither is
+    // used, so every enqueued reload runs and resolves with `void`.
+    return this.storageRootReloadQueue.add(reload) as Promise<void>;
   }
 
   setupEventListeners(): ProgressEventSubscription {

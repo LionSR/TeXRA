@@ -30,6 +30,8 @@
  * session is justified only as the ownership container.
  */
 
+import PQueue from 'p-queue';
+
 import type { AgentEvent, AgentTrace, ResultEvent } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
@@ -156,7 +158,7 @@ export class SessionHandle {
    */
   readonly workflowControls: WorkflowControlRegistry;
   private restartRepairPromise: Promise<unknown> | undefined;
-  private restartRepairWork: Promise<void> = Promise.resolve();
+  private readonly restartRepairQueue = new PQueue({ concurrency: 1 });
   private readonly restartRepairRetry = new RestartRepairRetryScheduler();
   private storageGeneration = 0;
   constructor(init: SessionHandleInit) {
@@ -266,12 +268,8 @@ export class SessionHandle {
   }
 
   private enqueueRestartRepair<T>(work: () => Promise<T>): Promise<T> {
-    const queued = this.restartRepairWork.then(work, work);
-    this.restartRepairWork = queued.then(
-      () => undefined,
-      () => undefined,
-    );
-    return queued;
+    // `add` widens to `T | void` for abort/timeout options; neither is used.
+    return this.restartRepairQueue.add(work) as Promise<T>;
   }
 
   private async repairStoresAfterRestart(
@@ -337,6 +335,7 @@ export class SessionHandle {
       }
       try {
         await this.transcripts.reload({ discardPendingWrites: true });
+        this.snapshots.evictAll();
         await this.snapshots.load(this.transcripts.keys());
         this.status.clearAll();
         for (const [streamId, state] of previousStatus) {
@@ -387,8 +386,8 @@ export class SessionHandle {
     try {
       waitingStreams = await detectWaitingStreams(executionIds);
       repairStreams = new Set([
-        ...executionIds.keys(),
-        ...this.transcripts.keys(),
+        ...this.transcripts.getUnfinishedStreamIds(),
+        ...waitingStreams,
       ]);
     } catch (error) {
       logger.warn('Failed to detect resumable streams during restart repair', {

@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
 import * as path from 'node:path';
 
+import PQueue from 'p-queue';
 import { z } from 'zod';
 
 import { isFileNotFoundError } from '@common/errors';
@@ -83,7 +84,7 @@ const maintenanceExecutions = new AsyncLocalStorage<ReadonlySet<string>>();
 let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
 let acquisitionsInFlight = 0;
 const acquisitionIdleWaiters = new Set<() => void>();
-let maintenanceTail: Promise<void> = Promise.resolve();
+const maintenanceQueue = new PQueue({ concurrency: 1 });
 let pendingMaintenanceCount = 0;
 let maintenanceBarrier:
   { readonly promise: Promise<void>; readonly resolve: () => void } | undefined;
@@ -139,14 +140,11 @@ export function runWithOwnedExecutionLeaseQuiescence<T>(
 ): Promise<T> {
   pendingMaintenanceCount += 1;
   maintenanceBarrier ??= createMaintenanceBarrier();
-  const queued = maintenanceTail.then(async () => {
+  // `add` widens to `T | void` for abort/timeout options; neither is used.
+  const queued = maintenanceQueue.add(async () => {
     await waitForOwnedLeaseQuiescence();
     return operation();
-  });
-  maintenanceTail = queued.then(
-    () => undefined,
-    () => undefined,
-  );
+  }) as Promise<T>;
   return queued.finally(() => {
     pendingMaintenanceCount -= 1;
     if (pendingMaintenanceCount !== 0) return;
