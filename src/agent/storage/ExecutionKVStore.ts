@@ -126,6 +126,12 @@ export interface ExecutionKVStore {
 
   // -- Typed readers --------------------------------------------------------
   readMeta(): Promise<ExecutionMeta | null>;
+  /**
+   * Read metadata while preserving the distinction between an absent record
+   * and a malformed present record. Durable repair paths use this accessor so
+   * corruption stops recovery instead of being treated as missing state.
+   */
+  readMetaStrict(): Promise<ExecutionMeta | null>;
   readConfig(): Promise<AgentConfig | null>;
   readReport(): Promise<string | null>;
   readTodos(): Promise<TodoEntry[]>;
@@ -193,19 +199,19 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
 
   /**
    * Read a key and validate it against a schema, returning the parsed value
-   * or `null` when the key is absent or fails validation. Single source of
-   * truth for the read-validate-or-null policy shared by the typed readers
-   * below. A missing file is the expected case and stays quiet; a present
-   * value that fails validation is a loud read (#6966 bullet 5) — corrupt is
-   * never silently conflated with missing (#7210 pattern).
+   * or `null` when the key is absent. Permissive typed readers also return
+   * `null` after warning about malformed data; durable repair selects the
+   * throwing policy so corruption remains distinct from absence. This is the
+   * single validation boundary shared by both policies.
    */
   private async readValidated<T>(
     key: string,
     schema: z.ZodType<T>,
+    malformed: 'return-null' | 'throw' = 'return-null',
   ): Promise<T | null> {
     const raw = await this.read(key);
-    if (raw == null) return null;
-    const result = schema.nullable().safeParse(raw);
+    if (raw === undefined) return null;
+    const result = schema.safeParse(raw);
     if (result.success) return result.data;
     logger.warn(
       CHANNEL,
@@ -214,11 +220,16 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
       )}`,
       { data: result.error },
     );
+    if (malformed === 'throw') throw result.error;
     return null;
   }
 
   async readMeta(): Promise<ExecutionMeta | null> {
     return this.readValidated(KEYS.META, ExecutionMetaSchema);
+  }
+
+  async readMetaStrict(): Promise<ExecutionMeta | null> {
+    return this.readValidated(KEYS.META, ExecutionMetaSchema, 'throw');
   }
 
   async readConfig(): Promise<AgentConfig | null> {

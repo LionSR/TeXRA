@@ -9,6 +9,8 @@ import {
   runWithInactiveExecutionLease as defaultRunWithInactiveExecutionLease,
 } from '@agent/storage/executionLease';
 import { executionIdFromStream } from '@agent/storage/executionIdFromStream';
+import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
+import { deriveResumability } from '@agent/storage/resumability';
 import type {
   StreamStatusEmitOptions,
   StreamStatusMachine,
@@ -62,6 +64,8 @@ export interface RestartRepairOptions {
   >;
   logger?: RestartRepairLogger;
   now?: number;
+  /** Stop before beginning another repair mutation after session teardown. */
+  signal?: AbortSignal;
 }
 
 export interface RestartRepairResult {
@@ -72,6 +76,16 @@ export interface RestartRepairResult {
   terminalStatusUpdated: ExecutionId[];
   /** Earliest time a fresh lease skipped at startup can be checked again. */
   nextLeaseCheckAt?: number;
+}
+
+function createRestartRepairResult(): RestartRepairResult {
+  return {
+    waitingStreams: [],
+    failedStreams: [],
+    closedWaitingGroups: [],
+    closedFailedGroups: [],
+    terminalStatusUpdated: [],
+  };
 }
 
 /** Owns the single delayed retry used to revisit leases left fresh by a crash. */
@@ -98,7 +112,7 @@ export class RestartRepairRetryScheduler {
     this.cancel();
   }
 
-  private cancel(): void {
+  cancel(): void {
     if (this.timer) clearTimeout(this.timer);
     this.timer = undefined;
   }
@@ -117,6 +131,61 @@ function repairCandidates(
   return [...streamStatus.entries()]
     .filter(([, phase]) => phase === STREAM_PHASE.RUNNING)
     .map(([streamId]) => streamId);
+}
+
+type ExecutionSettlement =
+  | { readonly settled: false }
+  | { readonly settled: true; readonly outcome: RunOutcome };
+
+/**
+ * Revalidate terminal metadata while holding the execution lease.
+ *
+ * A cancelled execution remains unsettled when it still has a resumable flow;
+ * completed and failed executions are always terminal. Unknown legacy terminal
+ * statuses are protected from repair even though they cannot be projected onto
+ * the current stream-phase vocabulary.
+ */
+async function readExecutionSettlement(
+  executionId: ExecutionId,
+): Promise<ExecutionSettlement> {
+  const meta = await getExecutionStore(executionId).readMetaStrict();
+  if (!meta || (meta.terminalStatus == null && meta.outcome == null)) {
+    return { settled: false };
+  }
+  if (meta.outcome !== RUN_OUTCOME.CANCELLED) {
+    return {
+      settled: true,
+      outcome: meta.outcome ?? RUN_OUTCOME.FAILED,
+    };
+  }
+  const resumability = await deriveResumability(executionId);
+  return resumability.resumable
+    ? { settled: false }
+    : { settled: true, outcome: RUN_OUTCOME.CANCELLED };
+}
+
+function synchronizeSettledPhase(
+  streamStatus: StreamStatusMachine,
+  streamId: StreamTabId,
+  outcome: RunOutcome,
+  statusEmitOptions: StreamStatusEmitOptions | undefined,
+): void {
+  const current = streamStatus.get(streamId);
+  if (current == null || !RESTART_REPAIR_PHASES.has(current)) return;
+  if (current === STREAM_PHASE.WAITING) {
+    streamStatus.transition(
+      streamId,
+      STREAM_PHASE.RUNNING,
+      STREAM_TRANSITION_CAUSE.RESUME,
+      statusEmitOptions,
+    );
+  }
+  streamStatus.transition(
+    streamId,
+    outcome,
+    STREAM_TRANSITION_CAUSE.LIFECYCLE,
+    statusEmitOptions,
+  );
 }
 
 /** Repair one stream back to WAITING, logging the outcome. */
@@ -248,36 +317,62 @@ async function writeFailedTerminalStatuses(
 }
 
 /**
- * Shared restart repair owner for extension and desktop hosts.
+ * Apply one restart-repair pass.
  *
- * Hosts still supply host-specific facts (waiting detection, active-run race
- * guards, restored desktop streams), but this function owns the writes that
- * must stay consistent: stream status, transcript group closure, and terminal
- * execution metadata for failed repairs.
+ * {@link SessionHandle} owns discovery, lease-aware retries, and the
+ * transcript callback. The explicit inputs here keep the state transition and
+ * persistence writes independently testable.
  */
 export async function repairRestartedStreams(
   options: RestartRepairOptions,
 ): Promise<RestartRepairResult> {
-  const result: RestartRepairResult = {
-    waitingStreams: [],
-    failedStreams: [],
-    closedWaitingGroups: [],
-    closedFailedGroups: [],
-    terminalStatusUpdated: [],
-  };
+  const result = createRestartRepairResult();
   const now = options.now ?? Date.now();
 
   for (const streamId of repairCandidates(
     options.streamStatus,
     options.repairStreams,
   )) {
+    if (options.signal?.aborted) break;
     const executionId =
       options.executionIds.get(streamId) ?? executionIdFromStream(streamId);
     let repairStarted = false;
     try {
-      const repair = () => {
+      const repair = async () => {
+        if (executionId) {
+          repairStarted = true;
+          const settlement = await readExecutionSettlement(executionId);
+          if (options.signal?.aborted) {
+            return { kind: 'cancelled' as const };
+          }
+          if (settlement.settled) {
+            synchronizeSettledPhase(
+              options.streamStatus,
+              streamId,
+              settlement.outcome,
+              options.statusEmitOptions,
+            );
+            await options.closeRunningGroups(
+              [streamId],
+              settlement.outcome,
+              now,
+            );
+            return { kind: 'settled' as const, settlement };
+          }
+        }
         repairStarted = true;
-        return repairRestartedStream(options, streamId, executionId, now);
+        if (options.signal?.aborted) {
+          return { kind: 'cancelled' as const };
+        }
+        return {
+          kind: 'repaired' as const,
+          result: await repairRestartedStream(
+            options,
+            streamId,
+            executionId,
+            now,
+          ),
+        };
       };
       const repaired = executionId
         ? await (
@@ -297,12 +392,23 @@ export async function repairRestartedStreams(
         );
         continue;
       }
-      result.waitingStreams.push(...repaired.value.waitingStreams);
-      result.failedStreams.push(...repaired.value.failedStreams);
-      result.closedWaitingGroups.push(...repaired.value.closedWaitingGroups);
-      result.closedFailedGroups.push(...repaired.value.closedFailedGroups);
+      if (repaired.value.kind === 'cancelled') break;
+      if (repaired.value.kind === 'settled') {
+        options.logger?.debug(
+          `Skipped restart repair for terminal execution ${executionId}`,
+        );
+        continue;
+      }
+      result.waitingStreams.push(...repaired.value.result.waitingStreams);
+      result.failedStreams.push(...repaired.value.result.failedStreams);
+      result.closedWaitingGroups.push(
+        ...repaired.value.result.closedWaitingGroups,
+      );
+      result.closedFailedGroups.push(
+        ...repaired.value.result.closedFailedGroups,
+      );
       result.terminalStatusUpdated.push(
-        ...repaired.value.terminalStatusUpdated,
+        ...repaired.value.result.terminalStatusUpdated,
       );
     } catch (error) {
       if (repairStarted) throw error;
@@ -325,6 +431,7 @@ async function repairRestartedStream(
   const failedStreams: StreamTabId[] = [];
   const waitingGroupStreams: StreamTabId[] = [];
   const failedGroupStreams: StreamTabId[] = [];
+  if (options.signal?.aborted) return createRestartRepairResult();
   const currentStatus = options.streamStatus.get(streamId);
   const isWaitingStream = options.waitingStreams.has(streamId);
 

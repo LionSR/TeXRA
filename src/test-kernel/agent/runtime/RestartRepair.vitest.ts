@@ -5,7 +5,7 @@ import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import {
   repairRestartedStreams,
   RestartRepairRetryScheduler,
-} from '@controllers/progressView/backend/restartRepair';
+} from '@agent/runtime/restartRepair';
 import {
   EXECUTION_STATUS,
   RUN_OUTCOME,
@@ -114,6 +114,123 @@ describe('repairRestartedStreams', () => {
     });
     expect(closeRunningGroups).not.toHaveBeenCalled();
     expect(finalizeExecution).not.toHaveBeenCalled();
+  });
+
+  it('preserves an execution that completed before a delayed lease retry', async () => {
+    const streamId = 'stream-completed-before-retry' as StreamTabId;
+    const executionId = 'execution-completed-before-retry' as ExecutionId;
+    const store = getExecutionStore(executionId);
+    await store.writeMeta({
+      timestamp: '2026-07-26T00:00:00.000Z',
+      terminalStatus: EXECUTION_STATUS.COMPLETED,
+      outcome: RUN_OUTCOME.COMPLETED,
+    });
+    const streamStatus = new StreamStatusMachine();
+    seedRunning(streamStatus, streamId);
+    const closeRunningGroups = vi.fn(async () => [] as StreamTabId[]);
+    const finalizeExecution = createDurableFinalizer();
+
+    try {
+      const result = await repairRestartedStreams({
+        streamStatus,
+        waitingStreams: new Set(),
+        executionIds: new Map([[streamId, executionId]]),
+        closeRunningGroups,
+        finalizeExecution,
+        runWithInactiveExecutionLease: vi.fn(async (_id, operation) => ({
+          status: 'performed' as const,
+          value: await operation(),
+        })),
+      });
+
+      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.COMPLETED);
+      await expect(store.readMeta()).resolves.toMatchObject({
+        terminalStatus: EXECUTION_STATUS.COMPLETED,
+        outcome: RUN_OUTCOME.COMPLETED,
+      });
+      expect(result.failedStreams).toEqual([]);
+      expect(closeRunningGroups).toHaveBeenCalledWith(
+        [streamId],
+        RUN_OUTCOME.COMPLETED,
+        expect.any(Number),
+      );
+      expect(finalizeExecution).not.toHaveBeenCalled();
+    } finally {
+      await store.clear();
+    }
+  });
+
+  it('propagates settlement metadata read failures', async () => {
+    const streamId = 'stream-unreadable-settlement' as StreamTabId;
+    const executionId = 'execution-unreadable-settlement' as ExecutionId;
+    const store = getExecutionStore(executionId);
+    const streamStatus = new StreamStatusMachine();
+    seedRunning(streamStatus, streamId);
+    const readMetaStrict = vi
+      .spyOn(store, 'readMetaStrict')
+      .mockRejectedValue(new Error('metadata temporarily unreadable'));
+
+    try {
+      await expect(
+        repairRestartedStreams({
+          streamStatus,
+          waitingStreams: new Set(),
+          executionIds: new Map([[streamId, executionId]]),
+          closeRunningGroups: vi.fn(async () => []),
+          runWithInactiveExecutionLease: vi.fn(async (_id, operation) => ({
+            status: 'performed' as const,
+            value: await operation(),
+          })),
+        }),
+      ).rejects.toThrow('metadata temporarily unreadable');
+      expect(readMetaStrict).toHaveBeenCalledOnce();
+      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.RUNNING);
+    } finally {
+      readMetaStrict.mockRestore();
+      await store.clear();
+    }
+  });
+
+  it('closes an unknown legacy terminal state conservatively as failed', async () => {
+    const streamId = 'stream-legacy-terminal' as StreamTabId;
+    const executionId = 'execution-legacy-terminal' as ExecutionId;
+    const store = getExecutionStore(executionId);
+    await store.writeMeta({
+      timestamp: '2026-07-26T00:00:00.000Z',
+      terminalStatus: 'legacy-terminal',
+    });
+    const streamStatus = new StreamStatusMachine();
+    seedRunning(streamStatus, streamId);
+    const closeRunningGroups = vi.fn(async () => [streamId]);
+    const finalizeExecution = createDurableFinalizer();
+
+    try {
+      const result = await repairRestartedStreams({
+        streamStatus,
+        waitingStreams: new Set(),
+        executionIds: new Map([[streamId, executionId]]),
+        closeRunningGroups,
+        finalizeExecution,
+        runWithInactiveExecutionLease: vi.fn(async (_id, operation) => ({
+          status: 'performed' as const,
+          value: await operation(),
+        })),
+      });
+
+      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.FAILED);
+      expect(closeRunningGroups).toHaveBeenCalledWith(
+        [streamId],
+        RUN_OUTCOME.FAILED,
+        expect.any(Number),
+      );
+      expect(result.failedStreams).toEqual([]);
+      await expect(store.readMeta()).resolves.toMatchObject({
+        terminalStatus: 'legacy-terminal',
+      });
+      expect(finalizeExecution).not.toHaveBeenCalled();
+    } finally {
+      await store.clear();
+    }
   });
 
   it('derives the lease identity when restart metadata has no execution mapping', async () => {
@@ -354,6 +471,55 @@ describe('repairRestartedStreams', () => {
 
     expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.FAILED);
     expect(finalizeExecution).not.toHaveBeenCalled();
+  });
+
+  it('finishes one stream atomically when teardown begins during repair', async () => {
+    const firstStream = 'stream-abort-first' as StreamTabId;
+    const secondStream = 'stream-abort-second' as StreamTabId;
+    const firstExecution = 'execution-abort-first' as ExecutionId;
+    const secondExecution = 'execution-abort-second' as ExecutionId;
+    const streamStatus = new StreamStatusMachine();
+    seedRunning(streamStatus, firstStream);
+    seedRunning(streamStatus, secondStream);
+    const abort = new AbortController();
+    const closeRunningGroups = vi.fn(async (streamIds: StreamTabId[]) => {
+      abort.abort();
+      return streamIds;
+    });
+    const finalizeExecution = createDurableFinalizer();
+    const synchronizeResultOutcome = vi.fn(async () => undefined);
+
+    const result = await repairRestartedStreams({
+      streamStatus,
+      waitingStreams: new Set(),
+      executionIds: new Map([
+        [firstStream, firstExecution],
+        [secondStream, secondExecution],
+      ]),
+      repairStreams: [firstStream, secondStream],
+      closeRunningGroups,
+      finalizeExecution,
+      synchronizeResultOutcome,
+      signal: abort.signal,
+      runWithInactiveExecutionLease: vi.fn(async (_id, operation) => ({
+        status: 'performed' as const,
+        value: await operation(),
+      })),
+    });
+
+    expect(streamStatus.get(firstStream)).toBe(STREAM_PHASE.FAILED);
+    expect(finalizeExecution).toHaveBeenCalledWith({
+      executionId: firstExecution,
+      terminalStatus: EXECUTION_STATUS.ERROR,
+      flowRecord: 'delete',
+    });
+    expect(synchronizeResultOutcome).toHaveBeenCalledWith(
+      firstExecution,
+      RUN_OUTCOME.FAILED,
+    );
+    expect(result.failedStreams).toEqual([firstStream]);
+    expect(streamStatus.get(secondStream)).toBe(STREAM_PHASE.RUNNING);
+    expect(finalizeExecution).toHaveBeenCalledOnce();
   });
 
   it('writes failed terminal meta when retrying an already failed repair', async () => {

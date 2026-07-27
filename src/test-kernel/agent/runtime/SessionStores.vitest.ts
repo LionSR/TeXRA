@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import type { DeleteExecutionOptions } from '@agent/storage';
-import { SessionStores } from '@controllers/progressView/backend/state/SessionStores';
+import { SessionStores } from '@agent/runtime/SessionStores';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { releaseStreamResources } from '@tools/approval';
