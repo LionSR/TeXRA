@@ -18,6 +18,17 @@ export function toToolParameters(schema: ZodType): Record<string, unknown> {
   >;
 }
 
+const EXECUTION_FLAGS = [
+  'parallelSafe',
+  'requiresApproval',
+  'slow',
+  'deferLogUntilApproval',
+  'streamsOutput',
+] as const;
+
+type ExecutionFlag = (typeof EXECUTION_FLAGS)[number];
+type DefineToolFlags = { [K in ExecutionFlag]?: boolean };
+
 /**
  * Define a tool with type-safe schema and either a static or dynamic description.
  *
@@ -25,22 +36,14 @@ export function toToolParameters(schema: ZodType): Record<string, unknown> {
  * asynchronously (e.g., agent registry) - the function is called lazily when
  * the tool definition is accessed.
  */
-export function defineTool<T>(def: {
-  name: string;
-  /** Static description string or function for lazy evaluation */
-  description: string | (() => string);
-  schema: ZodType<T, T>;
-  /**
-   * Declare the tool side-effect-free and approval-free, allowing parallel
-   * calls in one model response to execute concurrently (see ITool).
-   */
-  parallelSafe?: boolean;
-  /** Execution behavior consumed by tool resolution and dispatch. */
-  requiresApproval?: boolean;
-  slow?: boolean;
-  deferLogUntilApproval?: boolean;
-  streamsOutput?: boolean;
-}) {
+export function defineTool<T>(
+  def: {
+    name: string;
+    /** Static description string or function for lazy evaluation */
+    description: string | (() => string);
+    schema: ZodType<T, T>;
+  } & DefineToolFlags,
+) {
   const getDescription = (): string =>
     typeof def.description === 'function' ? def.description() : def.description;
 
