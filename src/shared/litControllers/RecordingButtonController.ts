@@ -1,5 +1,5 @@
 import { postMessage } from '@shared/hostBridge';
-import type { TeXRAIconName } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
 import type { ReactiveController, ReactiveControllerHost } from 'lit';
 
 interface RecordingButtonConfig {
