@@ -17,9 +17,8 @@ import { trackTerminalResultPresentation } from '@agent/runtime/terminalResultTo
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   notifyFollowUpSent,
-  presentFollowUpWakeResult,
-  sendFollowUp,
-  wakeQueuedFollowUpStream,
+  presentFollowUpResult,
+  submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
 import type {
   RuntimePresentationEvent,
@@ -160,42 +159,6 @@ export interface DesktopProgressBridgeOptions {
   sessionStores: SessionStores;
   logger?: AgentTrace;
   host: DesktopAgentExecutionHost;
-  wakeQueuedFollowUpStream?: typeof wakeQueuedFollowUpStream;
-}
-
-async function wakeDesktopFollowUp(
-  streamId: StreamTabId,
-  result: Extract<
-    Awaited<ReturnType<typeof sendFollowUp>>,
-    { status: 'sent' | 'queued' }
-  >,
-  session: SessionHandle,
-  wakeFollowUpStream: typeof wakeQueuedFollowUpStream = wakeQueuedFollowUpStream,
-): Promise<void> {
-  // This continuation deliberately accepts only the process SessionHandle.
-  // It may outlive a window, so it must not capture a bridge or BrowserWindow
-  // presentation. Its important failure notice explicitly survives a detached
-  // interval and is delivered once when the next presentation attaches.
-  const wake = await wakeFollowUpStream(
-    streamId,
-    result,
-    platform().agentResume,
-    session,
-  );
-  const presentation = presentFollowUpWakeResult(wake);
-  if (presentation.severity === 'none') return;
-  if (presentation.refreshQueuedFollowUps) {
-    session.events.emit({
-      scope: 'session',
-      event: {
-        type: 'updateQueuedFollowUps',
-        payload: { streamId },
-      },
-    });
-  }
-  await session.interactions.showInfoMessage(presentation.message, {
-    replayWhenAttached: true,
-  });
 }
 
 export class DesktopProgressBridge {
@@ -1460,12 +1423,10 @@ export class DesktopProgressBridge {
     // handle is tracked in `this.session`, but this IPC path runs outside the
     // run ALS, so the module default (currentSession ⇒ defaultSession) would
     // look in the wrong registry and report `no_session` for a live run.
-    const result = await sendFollowUp(
+    const result = await submitFollowUp(
       streamId,
-      text,
-      mediaFiles,
-      undefined,
-      this.session,
+      { text, mediaFiles },
+      { session: this.session },
     );
     if (result.status === 'sent' || result.status === 'queued') {
       this.session.events.emit({
@@ -1475,17 +1436,12 @@ export class DesktopProgressBridge {
           payload: { streamId },
         },
       });
-      const logger = this.logger;
-      void wakeDesktopFollowUp(
-        streamId,
-        result,
-        this.session,
-        this.options.wakeQueuedFollowUpStream,
-      ).catch((error: unknown) => {
-        logger.warn(`Failed to wake follow-up stream ${streamId}`, {
-          data: toLogData(error),
+      const presentation = presentFollowUpResult(result);
+      if (presentation.severity !== 'none') {
+        await this.session.interactions.showInfoMessage(presentation.message, {
+          replayWhenAttached: true,
         });
-      });
+      }
       return;
     }
 

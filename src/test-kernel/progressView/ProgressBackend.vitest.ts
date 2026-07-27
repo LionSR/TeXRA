@@ -2042,11 +2042,13 @@ describe('ProgressBackend', () => {
           cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
         },
       });
-      target.session.followUps.enqueue(
+      const followUpLease = target.session.followUps.claimLive(
         parentStreamId,
-        { text: 'continue with the local calculation' },
-        { force: true },
-      );
+        'flow',
+      )!;
+      target.session.followUps.queue(followUpLease).enqueue({
+        text: 'continue with the local calculation',
+      });
       emitRunFact(target, parentStreamId, 'updateMissingOutputs', {
         streamId: parentStreamId,
         filesByRound: { 0: ['missing-output.tex'] },
