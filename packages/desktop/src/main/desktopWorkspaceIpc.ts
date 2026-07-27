@@ -8,9 +8,10 @@
 // otherwise read or overwrite anything the user can reach.
 
 // Node imports
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 
 // Local imports - file listing
+import { isFileNotFoundError } from '@common/errors';
 import {
   loadFileListSettings,
   passesFileFilters,
@@ -45,6 +46,7 @@ import type { DesktopBrowserViews } from './desktopBrowserViews.js';
 export interface DesktopWorkspaceIpcOptions {
   ptyHost: DesktopPtyHost;
   browserViews: DesktopBrowserViews;
+  onEditorDirtyChange?(dirty: boolean): void;
   /**
    * Translates renderer-reported CSS pixel bounds into window coordinates.
    * A WebContentsView is positioned in device-independent window space, which
@@ -75,6 +77,48 @@ async function resolveWorkspacePath(inputPath: string): Promise<string> {
     platform().fs.realPath(root),
     platform().fs.realPath(located.absolutePath),
   ]);
+  if (!isPathWithin(canonicalRoot, canonicalTarget)) {
+    throw new Error('Only files inside the workspace folder can be opened.');
+  }
+  return canonicalTarget;
+}
+
+/**
+ * Resolves a write target without requiring the file itself to still exist.
+ * The canonical parent remains mandatory, so recreating an externally deleted
+ * file cannot bypass the workspace or symlink boundary.
+ */
+async function resolveWorkspaceWritePath(inputPath: string): Promise<string> {
+  try {
+    return await resolveWorkspacePath(inputPath);
+  } catch (error) {
+    if (!isFileNotFoundError(error)) throw error;
+  }
+
+  const located = WorkspaceFS.locatePath(inputPath);
+  if (located.kind !== 'workspace') {
+    throw new Error('Only files inside the workspace folder can be opened.');
+  }
+  const root = WorkspaceFS.getPath();
+  if (!root) {
+    throw new Error('Workspace path is not available.');
+  }
+
+  // A dangling symlink also makes realPath fail with ENOENT. It must remain
+  // rejected: writing through it could create a target outside the workspace.
+  try {
+    if (await platform().fs.isSymlink(located.absolutePath)) {
+      throw new Error('Symbolic links cannot be recreated by the editor.');
+    }
+  } catch (error) {
+    if (!isFileNotFoundError(error)) throw error;
+  }
+
+  const [canonicalRoot, canonicalParent] = await Promise.all([
+    platform().fs.realPath(root),
+    platform().fs.realPath(dirname(located.absolutePath)),
+  ]);
+  const canonicalTarget = join(canonicalParent, basename(located.absolutePath));
   if (!isPathWithin(canonicalRoot, canonicalTarget)) {
     throw new Error('Only files inside the workspace folder can be opened.');
   }
@@ -184,7 +228,7 @@ export function createDesktopWorkspaceIpc(
 
   async function writeFile(path: string, contents: string): Promise<void> {
     try {
-      await WorkspaceFS.write(await resolveWorkspacePath(path), contents);
+      await WorkspaceFS.write(await resolveWorkspaceWritePath(path), contents);
       renderer.postToRenderer({
         command: DESKTOP_WORKSPACE_COMMANDS.FILE_WRITTEN,
         path,
@@ -229,6 +273,9 @@ export function createDesktopWorkspaceIpc(
       const data = parsed.data;
 
       switch (data.command) {
+        case DESKTOP_WORKSPACE_COMMANDS.EDITOR_DIRTY_STATE:
+          options.onEditorDirtyChange?.(data.dirty);
+          return true;
         case DESKTOP_WORKSPACE_COMMANDS.LIST_FILES:
           void listFiles(data.directory);
           return true;

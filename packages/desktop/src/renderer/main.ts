@@ -355,6 +355,9 @@ const editorPane = createEditorPane({
     updateShell(
       setWorkbenchTabDirty(shellState, `workbench:editor:${path}`, dirty),
     );
+    postMessage(DESKTOP_WORKSPACE_COMMANDS.EDITOR_DIRTY_STATE, {
+      dirty: editorPane.hasUnsavedChanges(),
+    });
   },
   onError: (error) => console.error('TeXRA editor pane', error),
 });
@@ -1721,8 +1724,14 @@ if (!bootstrapFailed) {
   document.body.dataset.desktopReady = 'true';
 }
 
+window.addEventListener('beforeunload', (event) => {
+  if (!editorPane.hasUnsavedChanges()) return;
+  event.preventDefault();
+  event.returnValue = '';
+});
+
 window.addEventListener(
-  'beforeunload',
+  'unload',
   () => {
     surfaceResizeObserver?.disconnect();
     disposeShortcutHints?.();

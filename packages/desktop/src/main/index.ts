@@ -472,6 +472,25 @@ function createWindow(options: {
     signInForRemoteAgentCatalog,
   );
   const folderPickerDefaultPath = options.workspacePath ?? app.getPath('home');
+  let editorHasUnsavedChanges = false;
+  const confirmDiscardUnsavedEditorChanges = (): boolean => {
+    if (!editorHasUnsavedChanges) return true;
+    const response = dialog.showMessageBoxSync(window, {
+      type: 'warning',
+      buttons: ['Keep Editing', 'Discard Changes'],
+      defaultId: 0,
+      cancelId: 0,
+      title: 'Unsaved Changes',
+      message: 'This workspace has unsaved editor changes.',
+      detail: 'Discard the changes and continue?',
+    });
+    if (response !== 1) return false;
+    editorHasUnsavedChanges = false;
+    return true;
+  };
+  window.webContents.on('will-prevent-unload', (event) => {
+    if (confirmDiscardUnsavedEditorChanges()) event.preventDefault();
+  });
   const openLogsFolder = async () =>
     previewHost.openPath(getDesktopLogDirectory());
   const openWorkspaceFolder = async () => {
@@ -482,6 +501,7 @@ function createWindow(options: {
     });
     const selectedPath = result.canceled ? undefined : result.filePaths[0];
     if (!selectedPath) return;
+    if (!confirmDiscardUnsavedEditorChanges()) return;
 
     await platform().globalState.update(
       DESKTOP_WORKSPACE_PATH_STATE_KEY,
@@ -1113,6 +1133,9 @@ function createWindow(options: {
         };
       },
       getEnvironmentSummary: () => gitHost.getEnvironmentSummary(),
+      onEditorDirtyChange: (dirty) => {
+        editorHasUnsavedChanges = dirty;
+      },
       onAsyncError: reportAsyncError,
     },
   );

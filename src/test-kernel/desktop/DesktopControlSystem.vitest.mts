@@ -236,6 +236,7 @@ describe('desktop control system', () => {
     const commandSurface = read(
       'packages/desktop/src/desktopCommandSurface.ts',
     );
+    const electronMain = read('packages/desktop/src/main/index.ts');
     const editorPane = read('packages/desktop/src/renderer/editorPane.ts');
     const renderer = read('packages/desktop/src/renderer/main.ts');
 
@@ -248,7 +249,11 @@ describe('desktop control system', () => {
     expect(commandSurface).toContain("SAVE_FILE: 'texra.desktop.saveFile'");
     expect(commandSurface).toContain("accelerator: 'CommandOrControl+S'");
     expect(renderer).toContain('void editorPane.save()');
+    expect(renderer).toContain('editorPane.hasUnsavedChanges()');
+    expect(renderer).toContain('DESKTOP_WORKSPACE_COMMANDS.EDITOR_DIRTY_STATE');
     expect(editorPane).toContain('model.getVersionId() !== savedVersion');
+    expect(electronMain).toContain("on('will-prevent-unload'");
+    expect(electronMain).toContain('confirmDiscardUnsavedEditorChanges()');
   });
 
   it('executes immediate follow-up plans after restoring their launcher state', () => {

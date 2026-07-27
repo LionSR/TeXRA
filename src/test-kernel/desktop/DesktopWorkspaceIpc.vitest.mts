@@ -1,5 +1,6 @@
 // Node imports
 import {
+  existsSync,
   mkdtempSync,
   mkdirSync,
   readFileSync,
@@ -27,6 +28,7 @@ import { createFakePlatform } from '@test/support/FakePlatform';
 let fixtureRoot = '';
 let workspacePath = '';
 let externalPath = '';
+let missingExternalPath = '';
 
 function createPtyHost(): DesktopPtyHost {
   return {
@@ -57,6 +59,7 @@ describe('desktop workspace IPC', () => {
     fixtureRoot = mkdtempSync(join(tmpdir(), 'texra-workspace-ipc-'));
     workspacePath = join(fixtureRoot, 'workspace');
     externalPath = join(fixtureRoot, 'external.txt');
+    missingExternalPath = join(fixtureRoot, 'missing-external.txt');
     mkdirSync(workspacePath);
     mkdirSync(join(workspacePath, 'src', 'deep'), { recursive: true });
     mkdirSync(join(workspacePath, 'node_modules'));
@@ -69,6 +72,10 @@ describe('desktop workspace IPC', () => {
     );
     writeFileSync(externalPath, 'outside', 'utf8');
     symlinkSync(externalPath, join(workspacePath, 'linked.tex'));
+    symlinkSync(
+      missingExternalPath,
+      join(workspacePath, 'dangling-linked.tex'),
+    );
     const [{ initPlatform }, { nodeFilesystem }] = await Promise.all([
       import('@platform/platform'),
       import('@platform/defaults/nodeFilesystem'),
@@ -169,8 +176,13 @@ describe('desktop workspace IPC', () => {
       path: 'linked.tex',
       contents: 'overwritten',
     });
+    ipc.handleMessage({
+      command: DESKTOP_WORKSPACE_COMMANDS.WRITE_FILE,
+      path: 'dangling-linked.tex',
+      contents: 'created outside',
+    });
 
-    await vi.waitFor(() => expect(onAsyncError).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(onAsyncError).toHaveBeenCalledTimes(3));
     expect(postToRenderer).not.toHaveBeenCalledWith(
       expect.objectContaining({
         command: DESKTOP_WORKSPACE_COMMANDS.FILE_READ,
@@ -184,6 +196,57 @@ describe('desktop workspace IPC', () => {
       }),
     );
     expect(readFileSync(externalPath, 'utf8')).toBe('outside');
+    expect(existsSync(missingExternalPath)).toBe(false);
+  });
+
+  it('recreates a workspace file deleted after the editor loaded it', async () => {
+    const postToRenderer = vi.fn();
+    const ipc = createDesktopWorkspaceIpc(
+      { postToRenderer },
+      {
+        ptyHost: createPtyHost(),
+        browserViews: createBrowserViews(),
+        toWindowBounds: (bounds) => bounds,
+      },
+    );
+    rmSync(join(workspacePath, 'paper.tex'));
+
+    ipc.handleMessage({
+      command: DESKTOP_WORKSPACE_COMMANDS.WRITE_FILE,
+      path: 'paper.tex',
+      contents: 'recovered buffer',
+    });
+
+    await vi.waitFor(() =>
+      expect(postToRenderer).toHaveBeenCalledWith({
+        command: DESKTOP_WORKSPACE_COMMANDS.FILE_WRITTEN,
+        path: 'paper.tex',
+      }),
+    );
+    expect(readFileSync(join(workspacePath, 'paper.tex'), 'utf8')).toBe(
+      'recovered buffer',
+    );
+  });
+
+  it('reports renderer editor dirty state to the window lifecycle', () => {
+    const onEditorDirtyChange = vi.fn();
+    const ipc = createDesktopWorkspaceIpc(
+      { postToRenderer: vi.fn() },
+      {
+        ptyHost: createPtyHost(),
+        browserViews: createBrowserViews(),
+        toWindowBounds: (bounds) => bounds,
+        onEditorDirtyChange,
+      },
+    );
+
+    expect(
+      ipc.handleMessage({
+        command: DESKTOP_WORKSPACE_COMMANDS.EDITOR_DIRTY_STATE,
+        dirty: true,
+      }),
+    ).toBe(true);
+    expect(onEditorDirtyChange).toHaveBeenCalledWith(true);
   });
 
   it('posts environment state and clears loading state after host failures', async () => {
