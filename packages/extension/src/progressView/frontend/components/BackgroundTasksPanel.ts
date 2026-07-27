@@ -94,10 +94,6 @@ export class BackgroundTasksPanel extends LitElement {
         scrollbar-gutter: stable;
       }
 
-      .task-item {
-        margin-bottom: 0;
-      }
-
       .task-header {
         display: flex;
         align-items: center;

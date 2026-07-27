@@ -23,6 +23,7 @@
 import { css, unsafeCSS, type CSSResult } from 'lit';
 
 import { truncateTextRule } from './commonViewStyles';
+import { formControlStyles } from './controlStyles';
 
 /**
  * Shared selector groups for :is() consolidation.
@@ -278,6 +279,10 @@ export const requestPanelSharedStyles: CSSResult = css`
   :is(${FEEDBACK_INPUTS}) {
     width: 100%;
   }
+
+  /* Canonical form-control skin: without it wa-textarea's stock padding eats
+     most of the feedback box's height. */
+  ${formControlStyles}
 
   /* Carousel navigation for multiple external inquiries (rendered directly by
      RequestPanels.ts, not by ExternalInquiryPanel). */
