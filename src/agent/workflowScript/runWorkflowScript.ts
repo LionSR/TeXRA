@@ -58,6 +58,17 @@ const DEFAULT_MAX_AGENT_CALLS = 200;
 const MAX_FANOUT = 512;
 const DRAIN_GRACE_MS = 5_000;
 const LABEL_EXCERPT_LENGTH = 48;
+const WORKFLOW_AGENT_OPTION_FIELDS = new Set([
+  'id',
+  'label',
+  'phase',
+  'agentName',
+  'model',
+  'schema',
+  'inputFiles',
+  'contextFiles',
+  'mediaFiles',
+]);
 
 type WorkflowScriptFailedEvent = Extract<
   WorkflowScriptEvent,
@@ -92,18 +103,6 @@ const ORCHESTRATION_PRELUDE = `
       writable: false,
       configurable: false,
     });
-  // The run-stop backstop (call cap, timeout abort) must propagate out of
-  // fan-out instead of degrading into a null slot; matched by name because
-  // the host error arrives as a realm-local copy.
-  const isRunAbort = (error) =>
-    error !== null &&
-    typeof error === 'object' &&
-    error.name === 'WorkflowRunAbortError';
-  const errorText = (error) =>
-    error !== null && typeof error === 'object' && 'message' in error
-      ? String(error.message)
-      : String(error);
-
   define('parallel', async function parallel(thunks) {
     if (!Array.isArray(thunks)) {
       throw new Error(
@@ -114,20 +113,11 @@ const ORCHESTRATION_PRELUDE = `
       throw new Error('parallel() accepts at most ' + MAX_FANOUT + ' items.');
     }
     return Promise.all(
-      thunks.map(async (thunk, i) => {
+      thunks.map((thunk, i) => {
         if (typeof thunk !== 'function') {
           throw new Error('parallel(): item ' + i + ' is not a function.');
         }
-        try {
-          return await thunk();
-        } catch (error) {
-          if (isRunAbort(error)) throw error;
-          // agent() failures already resolve to null with their own event;
-          // anything caught here is a bug in the script's own JS — surface
-          // it so a null slot is debuggable.
-          log('parallel(): item ' + i + ' threw: ' + errorText(error));
-          return null;
-        }
+        return thunk();
       }),
     );
   });
@@ -153,13 +143,7 @@ const ORCHESTRATION_PRELUDE = `
         // the item itself, not undefined.
         let value = item;
         for (const stage of stages) {
-          try {
-            value = await stage(value, item, index);
-          } catch (error) {
-            if (isRunAbort(error)) throw error;
-            log('pipeline(): item ' + index + ' threw: ' + errorText(error));
-            return null;
-          }
+          value = await stage(value, item, index);
         }
         return value;
       }),
@@ -748,6 +732,14 @@ function normalizeAgentOptions(raw: unknown): WorkflowAgentCallOptions {
   // cheap defensive copy that also keeps this function safe if it is ever
   // called with a value that did not come through the bridge.
   const source = structuredClone(raw ?? {}) as Record<string, unknown>;
+  const unknownField = Object.keys(source).find(
+    (field) => !WORKFLOW_AGENT_OPTION_FIELDS.has(field),
+  );
+  if (unknownField !== undefined) {
+    throw new Error(
+      `agent() option "${unknownField}" is not recognized. Allowed options: ${[...WORKFLOW_AGENT_OPTION_FIELDS].join(', ')}.`,
+    );
+  }
   const common: {
     id?: string;
     label?: string;

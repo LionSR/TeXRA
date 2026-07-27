@@ -61,12 +61,14 @@ return await parallel(
   tool-use agent (name one via `agentName`) that finishes by calling
   `submit_output`; the call resolves to an envelope whose `.structured` is the
   validated object rather than edited files.
-- `parallel(thunks)` — concurrent barrier; failed thunks resolve to `null`.
+- `parallel(thunks)` — concurrent barrier. Failed `agent()` calls resolve to
+  `null`; other thrown errors reject the workflow.
 - `pipeline(items, ...stages)` — per-item stage chains with **no barrier**
-  between stages; a throwing stage drops that item to `null`. Each stage is
-  called `(prevValue, originalItem, index)`; the first stage's `prevValue`
-  is seeded with the item itself, so later stages can still reach the
-  original item and its index without threading them through return values.
+  between stages. Failed `agent()` calls resolve to `null`; other thrown
+  errors reject the workflow. Each stage is called
+  `(prevValue, originalItem, index)`; the first stage's `prevValue` is seeded
+  with the item itself, so later stages can still reach the original item and
+  its index without threading them through return values.
 - `concat(parts, {separator}?)` — zero-token fan-in for text parts;
   drops `null`/`undefined` (failed stages) and empty strings.
 - `log(msg)` / `phase(title)` / `args` — progress + parameterization.
@@ -145,16 +147,15 @@ return await parallel(
 - **Budgets**: one concurrency semaphore (default 4) across all `agent()`
   calls, a live-call cap (default 200; journal replays are free), a fan-out cap per
   `parallel()`/`pipeline()` call, and a wall-clock timeout. The cap and
-  timeout raise `WorkflowRunAbortError`, which the realm-side
-  `parallel()`/`pipeline()` match by name and deliberately do NOT convert
-  to `null` — the whole run fails. On timeout
-  guest execution is interrupted, the run's `AbortSignal` (on every
+  timeout raise `WorkflowRunAbortError`, which `parallel()`/`pipeline()` do
+  not convert to `null` — the whole run fails. On timeout guest execution is
+  interrupted, the run's `AbortSignal` (on every
   `runAgent` invocation) fires, and new `agent()` calls are refused; runners
   should cancel in-flight work on it.
 - **Debuggability**: a thrown error inside a `parallel()` thunk or
   `pipeline()` stage (a script bug, as opposed to an `agent()` failure,
-  which already resolves to `null` with its own `agent:end` event) is
-  logged via a `log` event before the slot becomes `null`.
+  which already resolves to `null` with its own `agent:end` event) rejects the
+  workflow so the saved script can be edited and rerun.
 
 ## Production integration
 

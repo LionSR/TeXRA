@@ -94,6 +94,25 @@ return null`),
     ).toThrow(/Invalid workflow meta/);
   });
 
+  it('rejects unknown metadata and phase fields instead of dropping typos', () => {
+    expect(() =>
+      parseWorkflowScript(`export const meta = {
+  name: 'typo',
+  description: 'rejects misspelled fields',
+  timeout: 1000,
+}
+return null`),
+    ).toThrow(/Unrecognized key: "timeout"/);
+    expect(() =>
+      parseWorkflowScript(`export const meta = {
+  name: 'phase-typo',
+  description: 'rejects misspelled phase fields',
+  phases: [{ title: 'Proof', details: 'misspelled' }],
+}
+return null`),
+    ).toThrow(/Invalid input[\s\S]*phases\[0\]/);
+  });
+
   it('rejects non-literal meta referencing script identifiers', () => {
     expect(() =>
       parseWorkflowScript(
@@ -509,17 +528,18 @@ return await agent('merge', {
     });
   });
 
-  it('parallel(): failed thunks resolve to null without aborting siblings', async () => {
-    const run = await runWorkflowScript({
-      script: `${META}
+  it('parallel(): surfaces script errors instead of converting them to null', async () => {
+    await expect(
+      runWorkflowScript({
+        script: `${META}
 return await parallel([
   () => agent('ok-1'),
   () => { throw new Error('thunk boom') },
   () => agent('ok-2'),
 ])`,
-      runAgent: echoRunner,
-    });
-    expect(run.result).toEqual(['result:ok-1', null, 'result:ok-2']);
+        runAgent: echoRunner,
+      }),
+    ).rejects.toThrow('thunk boom');
   });
 
   it('agent() resolves to null on runner failure and is not journaled', async () => {
@@ -638,17 +658,18 @@ return await pipeline(
     expect(stage2Order).toEqual(['stage2:fast', 'stage2:slow']);
   });
 
-  it('pipeline(): a throwing stage drops only that item to null', async () => {
-    const run = await runWorkflowScript({
-      script: `${META}
+  it('pipeline(): surfaces script errors instead of dropping the item', async () => {
+    await expect(
+      runWorkflowScript({
+        script: `${META}
 return await pipeline(
   [1, 2, 3],
   (item) => { if (item === 2) throw new Error('drop'); return item * 10 },
   (prev) => prev + 1,
 )`,
-      runAgent: echoRunner,
-    });
-    expect(run.result).toEqual([11, null, 31]);
+        runAgent: echoRunner,
+      }),
+    ).rejects.toThrow('drop');
   });
 
   it('caps concurrent agent() calls to the concurrency limit over a large fan-out', async () => {
@@ -1052,7 +1073,7 @@ return await agent('active', { label: 'Active' })`,
     });
   });
 
-  it('accepts a schema option and drops the obsolete outputSchema option', async () => {
+  it('accepts a schema option and rejects obsolete or misspelled options', async () => {
     const seen: WorkflowAgentInvocation[] = [];
     const runner = vi.fn((invocation: WorkflowAgentInvocation) => {
       seen.push(invocation);
@@ -1060,19 +1081,22 @@ return await agent('active', { label: 'Active' })`,
     });
     await runWorkflowScript({
       script: `${META}
-await agent('a', { agentName: 'assistant', schema: { type: 'object' } })
-return await agent('b', { outputSchema: { type: 'object' } })`,
+return await agent('a', { agentName: 'assistant', schema: { type: 'object' } })`,
       runAgent: runner,
     });
 
-    // schema is a first-class option now; outputSchema is no longer recognized
-    // and is silently dropped like any other unknown option.
     expect(seen[0]?.options.schema).toMatchObject({
       type: 'object',
       properties: {},
     });
-    expect(seen[1]?.options.schema).toBeUndefined();
-    expect(seen[1]?.options).not.toHaveProperty('outputSchema');
+    await expect(
+      runWorkflowScript({
+        script: `${META}return await agent('b', {
+  outputSchema: { type: 'object' },
+})`,
+        runAgent: runner,
+      }),
+    ).rejects.toThrow(/option "outputSchema" is not recognized/);
   });
 
   it('blocks Function-constructor escapes through injected primitives', async () => {
@@ -1364,23 +1388,17 @@ return await parallel([1, 2, 3, 4, 5].map((n) => () => agent('call-' + n)))`,
     ).rejects.toThrow(/agent-call cap/);
   });
 
-  it('logs script bugs swallowed by parallel() so null slots are debuggable', async () => {
-    const logs: string[] = [];
-    const run = await runWorkflowScript({
-      script: `${META}
+  it('lets parallel() surface script bugs to the editable-file retry path', async () => {
+    await expect(
+      runWorkflowScript({
+        script: `${META}
 return await parallel([
   () => agent('ok'),
   () => { throw new Error('script bug here') },
 ])`,
-      runAgent: echoRunner,
-      onEvent: (event) => {
-        if (event.type === 'log') logs.push(event.message);
-      },
-    });
-    expect(run.result).toEqual(['result:ok', null]);
-    expect(logs.some((message) => message.includes('script bug here'))).toBe(
-      true,
-    );
+        runAgent: echoRunner,
+      }),
+    ).rejects.toThrow('script bug here');
   });
 
   it('aborts new agent calls after the wall-clock timeout', async () => {

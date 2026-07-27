@@ -71,6 +71,7 @@ function strategyParams(
     store: getExecutionStore(executionId),
     checkpointId: checkpointIdFor(overrides.name),
     script,
+    scriptPath: '.texra/workflow-scripts/draft-strategy.mjs',
     args: undefined,
     workflowControls,
     ...overrides,
@@ -95,6 +96,19 @@ describe('createWorkflowScriptStrategy', () => {
     expect(strategy.stageLabel).toBe("Workflow script 'strategy-test'");
   });
 
+  it('uses persist-only delivery when the headless caller owns the report', () => {
+    const strategy = createWorkflowScriptStrategy(
+      strategyParams({
+        name: 'strategy-test',
+        deliverToParent: false,
+        createRunAgent: (hooks) => billingRunAgent(hooks),
+      }),
+    );
+
+    expect(strategy.deliveryMode).toBe('persistOnly');
+    expect(strategy.resolveDeliveryTarget).toBeUndefined();
+  });
+
   it('runs a live call, settles its journal cost, and delivers the result', async () => {
     const ports = fakePorts();
     const strategy = createWorkflowScriptStrategy(
@@ -115,6 +129,10 @@ describe('createWorkflowScriptStrategy', () => {
     // The run log rides along so the invoking model sees what executed.
     expect(delivery).toContain('=== Run log ===');
     expect(delivery).toContain('Finished');
+    expect(delivery).toContain(
+      'Script file: .texra/workflow-scripts/draft-strategy.mjs',
+    );
+    expect(delivery).toContain("scriptInput: 'file'");
   });
 
   it('replays a named checkpoint and settles zero for a pure resume', async () => {
@@ -258,6 +276,10 @@ throw new Error('script failed after replay')`;
       "journaled under meta.name 'retained-settlement'",
     );
     expect(errText).toContain('boom');
+    expect(errText).toContain(
+      'Script file: .texra/workflow-scripts/draft-strategy.mjs',
+    );
+    expect(errText).toContain("scriptInput: 'file'");
   });
 
   it('fails closed on a malformed journal cost without recording a scalar', async () => {

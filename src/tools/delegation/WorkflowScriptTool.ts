@@ -45,7 +45,10 @@ import { deriveExecutionId } from '@utils/core/idHash';
 
 // Local file imports
 import { createWorkflowScriptAgentRunner } from './workflowScriptAgentRunner';
-import { createWorkflowScriptStrategy } from './workflowScriptStrategy';
+import {
+  createWorkflowScriptStrategy,
+  formatWorkflowScriptReference,
+} from './workflowScriptStrategy';
 import { rejectOversizedBibAttachments } from './inputFields';
 import { requireVisibleAgent } from './proposalFlow';
 import { assertWorkflowFilesExist } from './workflowFileValidation';
@@ -146,19 +149,12 @@ async function persistWorkflowScript(
   }
 }
 
-function scriptReference(scriptPath: string): string {
-  return [
-    `Script file: ${scriptPath}`,
-    `To revise and rerun it, edit that file and call this tool with scriptInput: 'file' and scriptPath: '${scriptPath}'.`,
-  ].join('\n');
-}
-
 function workflowScriptToolError(
   error: unknown,
   scriptPath: string,
 ): ToolError {
   return new ToolError(
-    `${toErrorMessage(error)}\n\n${scriptReference(scriptPath)}`,
+    `${toErrorMessage(error)}\n\n${formatWorkflowScriptReference(scriptPath)}`,
     { cause: error },
   );
 }
@@ -167,7 +163,7 @@ function withScriptReference(
   result: ToolResult,
   scriptPath: string,
 ): ToolResult {
-  const reference = scriptReference(scriptPath);
+  const reference = formatWorkflowScriptReference(scriptPath);
   if (result.status === 'error') {
     return {
       ...result,
@@ -194,7 +190,7 @@ export class WorkflowScriptTool extends defineTool({
 
 Script input: use scriptInput: 'source' with script for newly generated source, or scriptInput: 'file' with scriptPath to run an existing file. Every source submission is saved immediately as a unique, non-overwriting draft under .texra/workflow-scripts/. Every result returns that editable path; on an error, edit the file and retry in file mode instead of rewriting the source.
 
-Script rules: start with an export const meta object containing name and description; no imports or require (only the injected primitives exist: agent, phase, log, parallel, pipeline, concat, args, and files). meta.phases accepts title strings such as ['Draft', 'Merge'] or objects such as [{ title: 'Draft' }]. When the calls are known in advance, declare meta.tasks as { id, label, phase? } records so progress shows the pending plan before execution. A task phase must name a title in meta.phases. Every agent() call must then reference one declared task with { id }; omit label and phase from the call because meta.tasks owns them (exact matching duplicates are accepted, but conflicts fail). Omit meta.tasks when the call set is data-dependent. The tool's files field binds workspace files to the whole run as files.inputFiles (editable), files.contextFiles (read-only documents), and files.mediaFiles (read-only visual or audio inputs). agent(), parallel(), and pipeline() return Promises: ALWAYS await them. A workflow agent() call may use inputFiles, contextFiles, and mediaFiles; inputFiles is REQUIRED unless the agent declares default outputs. Paths may name workspace files, launch files, or a previous call's outputs. Every call may use agentName (another visible workflow agent; defaults to this tool's agent field) and model (an available model short name for this call). A call without meta.tasks may also use id, label, and phase. Omit model to follow ordinary delegation policy. A failed call inside parallel()/pipeline() resolves to null; filter with .filter(Boolean).
+Script rules: start with an export const meta object containing name and description; no imports or require (only the injected primitives exist: agent, phase, log, parallel, pipeline, concat, args, and files). Metadata and agent() options reject unknown fields so typos fail at the saved script instead of being ignored. meta.phases accepts title strings such as ['Draft', 'Merge'] or objects such as [{ title: 'Draft' }]. When the calls are known in advance, declare meta.tasks as { id, label, phase? } records so progress shows the pending plan before execution. A task phase must name a title in meta.phases. Every agent() call must then reference one declared task with { id }; omit label and phase from the call because meta.tasks owns them (exact matching duplicates are accepted, but conflicts fail). Omit meta.tasks when the call set is data-dependent. The tool's files field binds workspace files to the whole run as files.inputFiles (editable), files.contextFiles (read-only documents), and files.mediaFiles (read-only visual or audio inputs). agent(), parallel(), and pipeline() return Promises: ALWAYS await them. A workflow agent() call may use inputFiles, contextFiles, and mediaFiles; inputFiles is REQUIRED unless the agent declares default outputs. Paths may name workspace files, launch files, or a previous call's outputs. Every call may use agentName (another visible workflow agent; defaults to this tool's agent field) and model (an available model short name for this call). A call without meta.tasks may also use id, label, and phase. Omit model to follow ordinary delegation policy. A failed agent call, including a workflow agent that produces no output files, resolves to null; filter with .filter(Boolean). JavaScript errors in parallel() thunks or pipeline() stages fail the workflow and preserve the editable script path rather than being silently converted to null.
 
 Structured output: agent(prompt, { agentName, model, schema }) runs a tool-use agent that finishes by calling submit_output with a value matching the JSON Schema. Structured calls do not accept file options and must name the tool-use agent explicitly; model remains optional. The call resolves to an envelope whose .structured is the validated object rather than edited files.
 
@@ -444,6 +440,7 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
             store,
             checkpointId,
             script,
+            scriptPath,
             args: input.args,
             files,
             name: meta.name,

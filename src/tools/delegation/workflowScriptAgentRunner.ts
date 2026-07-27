@@ -307,6 +307,11 @@ export function createWorkflowScriptAgentRunner(
           `Workflow subagent ended with ${result.outcome} outcome.`,
         );
       }
+      if (result.category === 'workflow' && result.outputs.length === 0) {
+        throw new Error(
+          'Workflow subagent completed without producing any output files.',
+        );
+      }
       return result;
     } catch (error) {
       if (error instanceof SubagentDurabilityError) {

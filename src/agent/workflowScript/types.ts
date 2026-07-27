@@ -17,7 +17,7 @@ export function normalizeWorkflowScriptPhaseTitle(title: string): string {
 }
 
 const WorkflowScriptPhaseSchema = z.union([
-  z.object({
+  z.strictObject({
     title: WorkflowScriptPhaseTitleSchema,
     detail: z.string().optional(),
   }),
@@ -32,7 +32,7 @@ export type WorkflowScriptTask = WorkflowTaskIdentity;
  * script body ever runs.
  */
 export const WorkflowScriptMetaSchema = z
-  .object({
+  .strictObject({
     name: z.string().min(1),
     description: z.string().min(1),
     whenToUse: z.string().optional(),

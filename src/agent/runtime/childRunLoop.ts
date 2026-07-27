@@ -92,6 +92,13 @@ export interface ChildRunStrategy<TTurn> {
   /** Stage label opened on the child trace (e.g. "Codex session"). */
   readonly stageLabel: string;
 
+  /**
+   * `persistOnly` records the terminal report without routing it to a parent.
+   * Used when a headless caller awaits and reads that report itself. Omitted
+   * strategies deliver normally.
+   */
+  readonly deliveryMode?: 'persistOnly';
+
   /** Produce the first turn's outcome. Throws on hard failure. */
   launch(
     ports: ChildRunPorts,
@@ -424,6 +431,8 @@ async function deliverTurn<TTurn>(params: {
   await persistReportBestEffort(executionId, msg, logger);
   await persistResultMetaBestEffort(executionId, resultMeta, logger);
 
+  if (strategy.deliveryMode === 'persistOnly') return undefined;
+
   // A strategy without `resolveDeliveryTarget` (agent-CLI) always delivers to
   // the run's static parent. A strategy that HAS one (native) may return
   // `undefined` — meaning the child was detached from its orchestrator (see
@@ -593,6 +602,7 @@ export function startChildRunLoop<TTurn>(
   let latestCostUsd: number | undefined;
   const ports: ChildRunPorts = {
     notify: (update) => {
+      if (strategy.deliveryMode === 'persistOnly') return;
       const targetStreamId = strategy.resolveDeliveryTarget
         ? strategy.resolveDeliveryTarget()
         : parentStreamId;

@@ -46,6 +46,14 @@ import {
 const RUN_LOG_MAX_LINES = 80;
 const RUN_LOG_MAX_LINE_LENGTH = 500;
 
+/** One model-facing reference for editing and rerunning a persisted script. */
+export function formatWorkflowScriptReference(scriptPath: string): string {
+  return [
+    `Script file: ${scriptPath}`,
+    `To revise and rerun it, edit that file and call ${DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME} with scriptInput: 'file' and scriptPath: '${scriptPath}'.`,
+  ].join('\n');
+}
+
 interface RunLogCollector {
   readonly add: (line: string) => void;
   readonly format: () => string;
@@ -88,6 +96,8 @@ export interface WorkflowScriptStrategyParams {
   readonly store: ExecutionKVStore;
   readonly checkpointId: string;
   readonly script: string;
+  /** Canonical editable path to this submitted script in the workspace. */
+  readonly scriptPath: string;
   /** JSON arguments; `null`/`undefined` retains the checkpoint's arguments. */
   readonly args: unknown;
   /** Role-separated files exposed as immutable workflow launch context. */
@@ -134,7 +144,7 @@ export function createWorkflowScriptStrategy(
   return {
     stageLabel: `Workflow script '${params.name}'`,
     ...(params.deliverToParent === false && {
-      resolveDeliveryTarget: () => undefined,
+      deliveryMode: 'persistOnly' as const,
     }),
 
     launch: async (ports, abortController) => {
@@ -247,7 +257,9 @@ export function createWorkflowScriptStrategy(
           tag: DELIVERY_TAG.workflowScriptResult,
           executionId: params.executionId,
         },
-        { response: `${formatWorkflowResult(turn.result)}${runLog.format()}` },
+        {
+          response: `${formatWorkflowResult(turn.result)}${runLog.format()}\n\n${formatWorkflowScriptReference(params.scriptPath)}`,
+        },
       ),
 
     formatError: (_turn, err) =>
@@ -257,7 +269,7 @@ export function createWorkflowScriptStrategy(
           executionId: params.executionId,
         },
         {
-          message: `${toErrorMessage(err)}${runLog.format()}\n\nCompleted agent() calls are journaled under meta.name '${params.name}': call ${DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME} again with the same meta.name to resume without repeating them.`,
+          message: `${toErrorMessage(err)}${runLog.format()}\n\n${formatWorkflowScriptReference(params.scriptPath)}\n\nCompleted agent() calls are journaled under meta.name '${params.name}'; rerunning that file resumes without repeating them.`,
         },
       ),
   };

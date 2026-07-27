@@ -85,7 +85,17 @@ const defaultAgent = {
 const result: AgentFinalResult = {
   category: 'workflow',
   outcome: 'completed',
-  outputs: [],
+  outputs: [
+    {
+      round: 0,
+      relativePath: 'r0/draft.tex',
+      absolutePath: '/storage/executions/bbbbbb222222/r0/draft.tex',
+      location: 'runStorage',
+      originalPath: '/workspace/draft.tex',
+      added: 1,
+      removed: 0,
+    },
+  ],
   compileFailures: [],
   diffs: [],
   cost: 0,
@@ -569,6 +579,18 @@ describe('createWorkflowScriptAgentRunner', () => {
 
     await expect(runner(invocation())).rejects.toThrow(
       'Workflow subagent ended with cancelled outcome.',
+    );
+  });
+
+  it('rejects a completed workflow child that produced no output files', async () => {
+    mocks.executeStableSubagentInBand.mockResolvedValueOnce({
+      executionId: 'bbbbbb222222',
+      result: { ...result, outputs: [] },
+    });
+    const runner = defaultRunner();
+
+    await expect(runner(invocation())).rejects.toThrow(
+      'Workflow subagent completed without producing any output files.',
     );
   });
 
