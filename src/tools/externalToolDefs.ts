@@ -218,6 +218,37 @@ async function probeSdkBinaryAvailable(
   }
 }
 
+/**
+ * Wire a prerequisites-style availability entry. `probe` runs once and its
+ * result is cached by the availability layer, then handed back to every
+ * callback as `probeResult`. `resolve` turns that (possibly absent) cached
+ * value into a typed prerequisites object which `check`/`statusLabel`/
+ * `detailCheck` receive directly — so each entry declares the
+ * `resolve(probeResult)` step once instead of repeating it in all three
+ * callbacks, and those callbacks stay pure functions of the resolved value.
+ */
+function prerequisitesChecks<T>(config: {
+  probe: () => Promise<T>;
+  resolve: (probeResult: unknown) => T | Promise<T>;
+  check: (prereqs: T) => boolean;
+  statusLabel?: (prereqs: T) => string | undefined;
+  detailCheck?: (prereqs: T) => string | undefined;
+}): Pick<ExternalToolDef, 'probe' | 'check' | 'statusLabel' | 'detailCheck'> {
+  const { probe, resolve, check, statusLabel, detailCheck } = config;
+  return {
+    probe,
+    check: async (probeResult) => check(await resolve(probeResult)),
+    ...(statusLabel && {
+      statusLabel: async (probeResult) =>
+        statusLabel(await resolve(probeResult)),
+    }),
+    ...(detailCheck && {
+      detailCheck: async (probeResult) =>
+        detailCheck(await resolve(probeResult)),
+    }),
+  };
+}
+
 // ============================================================
 // Definitions
 // ============================================================
@@ -336,47 +367,43 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     configNotes:
       'VS Code build: requires the leanprover.lean4 extension. ' +
       'CLI / desktop builds: requires `lake` on PATH; each Lake project root gets its own language server, surfaced below.',
-    probe: async () => {
-      const extensionAvailable =
-        platform().toolAvailability.isVscodeExtensionInstalled(
-          LEAN4_EXTENSION_ID,
-        );
-      const lakeAvailable = BinaryResolver.findPath('lake') !== null;
-      return { extensionAvailable, lakeAvailable };
-    },
-    check: async (probeResult) => {
-      const { extensionAvailable, lakeAvailable } =
-        resolveLean4Prerequisites(probeResult);
-      return extensionAvailable || lakeAvailable;
-    },
-    statusLabel: async (probeResult) => {
-      const { extensionAvailable, lakeAvailable } =
-        resolveLean4Prerequisites(probeResult);
-      if (!extensionAvailable && !lakeAvailable) return 'Needs setup';
-      const activeCount = listLeanServers().filter(isLeanServerActive).length;
-      return activeCount > 0
-        ? `${formatResultCount(activeCount, 'server')} active`
-        : undefined;
-    },
-    detailCheck: async (probeResult) => {
-      const { extensionAvailable, lakeAvailable } =
-        resolveLean4Prerequisites(probeResult);
-      const lines: string[] = [];
-      if (extensionAvailable) {
-        lines.push('VS Code Lean 4 extension installed.');
-      }
-      if (lakeAvailable) {
-        lines.push('Direct LSP mode available (`lake` on PATH).');
-      }
-      if (!extensionAvailable && !lakeAvailable) {
-        lines.push(
-          'Neither the leanprover.lean4 extension nor a `lake` binary was detected. Install one of them to enable Lean tools.',
-        );
-      }
-      lines.push('');
-      lines.push(summarizeLeanServers());
-      return lines.join('\n');
-    },
+    ...prerequisitesChecks({
+      probe: async () => {
+        const extensionAvailable =
+          platform().toolAvailability.isVscodeExtensionInstalled(
+            LEAN4_EXTENSION_ID,
+          );
+        const lakeAvailable = BinaryResolver.findPath('lake') !== null;
+        return { extensionAvailable, lakeAvailable };
+      },
+      resolve: resolveLean4Prerequisites,
+      check: ({ extensionAvailable, lakeAvailable }) =>
+        extensionAvailable || lakeAvailable,
+      statusLabel: ({ extensionAvailable, lakeAvailable }) => {
+        if (!extensionAvailable && !lakeAvailable) return 'Needs setup';
+        const activeCount = listLeanServers().filter(isLeanServerActive).length;
+        return activeCount > 0
+          ? `${formatResultCount(activeCount, 'server')} active`
+          : undefined;
+      },
+      detailCheck: ({ extensionAvailable, lakeAvailable }) => {
+        const lines: string[] = [];
+        if (extensionAvailable) {
+          lines.push('VS Code Lean 4 extension installed.');
+        }
+        if (lakeAvailable) {
+          lines.push('Direct LSP mode available (`lake` on PATH).');
+        }
+        if (!extensionAvailable && !lakeAvailable) {
+          lines.push(
+            'Neither the leanprover.lean4 extension nor a `lake` binary was detected. Install one of them to enable Lean tools.',
+          );
+        }
+        lines.push('');
+        lines.push(summarizeLeanServers());
+        return lines.join('\n');
+      },
+    }),
   },
   {
     id: 'workflow-script',
@@ -413,34 +440,29 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     toggleable: true,
     installActionCommand: 'texra.showGitSettings',
     installActionLabel: 'Open Git settings',
-    probe: getGitHubPRPrerequisites,
-    check: async (probeResult) => {
-      const { tokenPresent, inGitRepo } =
-        await resolveGitHubPRPrerequisites(probeResult);
-      return tokenPresent && inGitRepo;
-    },
-    statusLabel: async (probeResult) => {
-      const { tokenPresent, inGitRepo } =
-        await resolveGitHubPRPrerequisites(probeResult);
-      if (tokenPresent && inGitRepo) return undefined;
-      if (tokenPresent && !inGitRepo) return 'Needs git repo';
-      if (!tokenPresent && inGitRepo) return 'Needs token';
-      return 'Needs setup';
-    },
-    detailCheck: async (probeResult) => {
-      const { tokenPresent, inGitRepo } =
-        await resolveGitHubPRPrerequisites(probeResult);
-      if (tokenPresent && inGitRepo) {
-        return 'GitHub token detected and workspace is a git repo. Ready to subscribe to PR activity.';
-      }
-      if (!tokenPresent && !inGitRepo) {
-        return 'Open a git-tracked folder, or run git init and add a github.com remote. Then set a token in the Git tab.';
-      }
-      if (!tokenPresent) {
-        return 'This workspace is a git repo. Set a GitHub personal access token in the Git tab to enable PR activity subscriptions.';
-      }
-      return 'GitHub token is set. Open a git-tracked folder, or run git init and add a github.com remote, to use PR activity subscriptions.';
-    },
+    ...prerequisitesChecks({
+      probe: getGitHubPRPrerequisites,
+      resolve: resolveGitHubPRPrerequisites,
+      check: ({ tokenPresent, inGitRepo }) => tokenPresent && inGitRepo,
+      statusLabel: ({ tokenPresent, inGitRepo }) => {
+        if (tokenPresent && inGitRepo) return undefined;
+        if (tokenPresent && !inGitRepo) return 'Needs git repo';
+        if (!tokenPresent && inGitRepo) return 'Needs token';
+        return 'Needs setup';
+      },
+      detailCheck: ({ tokenPresent, inGitRepo }) => {
+        if (tokenPresent && inGitRepo) {
+          return 'GitHub token detected and workspace is a git repo. Ready to subscribe to PR activity.';
+        }
+        if (!tokenPresent && !inGitRepo) {
+          return 'Open a git-tracked folder, or run git init and add a github.com remote. Then set a token in the Git tab.';
+        }
+        if (!tokenPresent) {
+          return 'This workspace is a git repo. Set a GitHub personal access token in the Git tab to enable PR activity subscriptions.';
+        }
+        return 'GitHub token is set. Open a git-tracked folder, or run git init and add a github.com remote, to use PR activity subscriptions.';
+      },
+    }),
   },
 
   {
@@ -481,18 +503,17 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       'Coming soon. This entry only checks whether the local CLI is visible.',
     comingSoon: true,
     hideFromCli: true,
-    probe: probeTexraCli,
-    check: async (probeResult) => resolveBooleanProbe(probeResult) ?? false,
-    statusLabel: async (probeResult) =>
-      resolveBooleanProbe(probeResult)
-        ? 'Detected; integration coming soon'
-        : undefined,
-    detailCheck: async (probeResult) => {
-      const installed = resolveBooleanProbe(probeResult) ?? false;
-      return installed
-        ? 'TeXRA CLI detected on PATH. This integration is not enabled for agent runs yet.'
-        : 'TeXRA CLI not detected on PATH. This integration is not enabled for agent runs yet.';
-    },
+    ...prerequisitesChecks<boolean | undefined>({
+      probe: probeTexraCli,
+      resolve: resolveBooleanProbe,
+      check: (detected) => detected ?? false,
+      statusLabel: (detected) =>
+        detected ? 'Detected; integration coming soon' : undefined,
+      detailCheck: (detected) =>
+        (detected ?? false)
+          ? 'TeXRA CLI detected on PATH. This integration is not enabled for agent runs yet.'
+          : 'TeXRA CLI not detected on PATH. This integration is not enabled for agent runs yet.',
+    }),
   },
 
   {
