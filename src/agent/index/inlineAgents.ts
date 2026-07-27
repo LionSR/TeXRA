@@ -20,6 +20,7 @@
 import {
   AgentCategory,
   AgentDefinitionSchema,
+  AgentPromptSchema,
   AgentWorkflowSettingSchema,
   type AgentDefinition,
 } from '@agent/core/definition/AgentDataclass';
@@ -49,21 +50,38 @@ const inlineAgents = new Map<string, InlineAgent>();
  * entries so the caller can publish them into the live cache.
  *
  * Throws on an invalid definition: an embedder handing over a malformed agent
- * must find out at the call it made, not at launch.
+ * must find out at the call it made, not at launch. The entire batch is
+ * validated before any entry is stored, so a failed registration never leaves
+ * partial state behind.
  */
 export function defineInlineAgents(
   definitions: readonly unknown[],
 ): AgentEntry[] {
-  return definitions.map((definition) => {
-    const inline = normalizeInlineAgent(definition);
+  // Validate every definition first — the module-level map must never contain
+  // orphaned entries from a partially-failed batch (Fix #2/#4).
+  const validated = definitions.map((definition) =>
+    normalizeInlineAgent(definition),
+  );
+  for (const inline of validated) {
     inlineAgents.set(inline.entry.name, inline);
-    return inline.entry;
-  });
+  }
+  return validated.map((inline) => inline.entry);
 }
 
 /** Registry entries for every currently registered inline definition. */
 export function inlineAgentEntries(): AgentEntry[] {
-  return [...inlineAgents.values()].map((inline) => inline.entry);
+  // Return a fresh copy of every entry: `doLoad` mutates `entry.category` and
+  // `entry.rounds` for tool-use overrides, and those mutations must not
+  // permanently corrupt the stored definition (Fix #1/#8).
+  return [...inlineAgents.values()].map((inline) => ({ ...inline.entry }));
+}
+
+/**
+ * Remove every registered inline definition so a host or test lifecycle can
+ * start from a clean slate (Fix #5).
+ */
+export function clearInlineAgents(): void {
+  inlineAgents.clear();
 }
 
 /**
@@ -96,6 +114,28 @@ function normalizeInlineAgent(definition: unknown): InlineAgent {
   const category = settings.agentCategory ?? AgentCategory.Workflow;
   const tools = extractToolNames(settings.tools);
   const defaultOutputFiles = settings.defaultOutputFiles;
+
+  // Validate prompts against their finalized schema at registration time
+  // so an embedder discovers invalid prompts immediately (Fix #6).
+  try {
+    AgentPromptSchema.parse(parsed.prompts);
+  } catch (error) {
+    throw new Error(
+      `Inline agent "${parsed.name}": ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
+    );
+  }
+
+  // Reject category-incompatible settings at registration time:
+  // `rounds` is workflow-only, and `AgentSettingSchema` (the discriminated
+  // union at load time) rejects it for tool-use agents. Catching it here
+  // lets the embedder fix the error at the registration call rather than at
+  // launch (Fix #6).
+  if (category === AgentCategory.ToolUse && settings.rounds !== undefined) {
+    throw new Error(
+      `Inline agent "${parsed.name}": "rounds" is not valid for tool-use agents.`,
+    );
+  }
 
   return {
     entry: {

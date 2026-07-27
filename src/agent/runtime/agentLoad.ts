@@ -120,7 +120,13 @@ export async function loadAgentSettingAndPrompts(
   // at registration, so there is nothing to read from disk. Tools and defaults
   // still go through the same resolution the YAML path uses below.
   if (entry.source === 'inline') {
-    const definition = inlineAgentDefinition(resolution.resolvedName);
+    // Prefer the definition carried in the resolution — it's the exact one
+    // the resolver selected, not whatever a concurrent re-registration may
+    // have replaced (Fix #9). Fall back to the live lookup for callers that
+    // construct a ResolvedAgent without the field.
+    const definition =
+      resolution.inlineDefinition ??
+      inlineAgentDefinition(resolution.resolvedName);
     return [
       AgentSettingSchema.parse(resolveAgentSettingTools(definition.settings)),
       AgentPromptSchema.parse(definition.prompts),
