@@ -42,7 +42,7 @@ import {
   RoundKeySchema,
   StreamTabIdSchema,
   sumUsageStats,
-  TokenUsageStatsParsingSchema,
+  TokenUsageStatsParsingBaseSchema,
   buildRunDescriptor,
   type CompileFailure,
   type ExecutionId,
@@ -831,7 +831,20 @@ export class StreamSnapshotStore {
     storageKey: StorageKey,
     usage: TokenUsageStats,
   ): UsageUpdateResult {
-    const delta = TokenUsageStatsParsingSchema.parse(usage);
+    const parsed = TokenUsageStatsParsingBaseSchema.safeParse(usage);
+    if (!parsed.success) {
+      logger.warn(
+        CHANNEL,
+        `Discarding malformed usage delta for run ${storageKey} on stream ` +
+          `${stream} instead of silently zeroing accumulated cost.`,
+        {
+          data: parsed.error.issues
+            .map((i) => `${i.path.join('.') || '<root>'}: ${i.message}`)
+            .join('; '),
+        },
+      );
+    }
+    const delta = parsed.success ? parsed.data : emptyUsageStats();
     const version = this.streamVersion(stream);
     const overlayPatch = isEmptyUsage(delta)
       ? undefined
