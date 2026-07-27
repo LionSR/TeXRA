@@ -27,7 +27,8 @@ import {
   type LogMessageData,
 } from '@shared/schemas';
 import { OUTPUT_DOCUMENTS_TAG } from '@shared/schemas/output';
-import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { formatCompactTokenCount, getBasename } from '@utils/core';
 import { formatCostUsd } from '@utils/text/stringUtils';
 

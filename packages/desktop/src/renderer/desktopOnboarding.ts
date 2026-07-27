@@ -27,7 +27,8 @@ import {
   AGENT_MODE_PRESETS,
   type AgentModePreset,
 } from '@shared/schemas/agentPresets';
-import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 import type { DesktopRoute } from '../desktopShellMessages';
 

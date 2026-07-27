@@ -6,10 +6,9 @@ import { getIconLibrary } from '@awesome.me/webawesome/dist/components/icon/libr
 import { beforeAll, describe, expect, it } from 'vitest';
 
 // Local imports - shared icon contract
+import { CODICON_ALIASES } from '@shared/wa/iconNames';
 import {
-  CODICON_ALIASES,
-  TEXRA_ICON_LIBRARY,
-  TEXRA_ICON_NAMES,
+  TEXRA_ICON_LIBRARY, TEXRA_ICON_NAMES,
 } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - desktop test paths

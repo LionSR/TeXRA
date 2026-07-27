@@ -16,7 +16,8 @@ import type {
 } from '@shared/schemas';
 import { SortableController } from '@shared/litControllers/SortableController';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
-import { type TeXRAIconName, waIcon } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { getBasename, normalizeFilePath } from '@utils/core';
 import { capitalize } from '@utils/text/stringUtils';
 import { MainViewEvents } from '../events';

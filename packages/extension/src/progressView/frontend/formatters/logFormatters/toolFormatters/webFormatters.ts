@@ -23,7 +23,8 @@ import {
   WebFetchPayloadSchema,
   type LogMessageData,
 } from '@shared/schemas';
-import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { tryParseUrl } from '@utils/core';
 import { buildBannerContent } from './helpers';
 

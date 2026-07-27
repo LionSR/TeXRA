@@ -130,13 +130,6 @@ import {
   type TeXRAIconName,
 } from './iconNames';
 
-// Re-exported for existing consumers — the name vocabulary and alias table now
-// live in the UI-free `./iconNames` (see its module doc comment): callers that
-// only need the name type or the alias table can import from there instead of
-// pulling in Lit + FontAwesome through this module.
-export { CODICON_ALIASES };
-export type { TeXRAIconName };
-
 export const TEXRA_ICON_LIBRARY = 'texra';
 
 type FontAwesomePathData = string | string[];

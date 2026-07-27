@@ -18,7 +18,8 @@ import type { FileListEntry } from '@shared/schemas';
 import { hljs } from '@shared/highlighting/hljs';
 
 // Local imports - shared utilities
-import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { getBasename } from '@utils/core';
 
 // Local imports - formatter helpers

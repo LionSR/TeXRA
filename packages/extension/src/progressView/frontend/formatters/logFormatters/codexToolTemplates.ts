@@ -15,7 +15,8 @@ import {
   CodexTodoToolInputSchema,
   CodexTurnToolInputSchema,
 } from '@shared/schemas/codex';
-import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { formatDuration } from '@utils/core';
 
 // Local imports - formatter helpers

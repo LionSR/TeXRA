@@ -32,7 +32,8 @@ import {
 } from '@shared/styles';
 
 // Local imports - progress view helpers
-import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 import {
   createEmptyPermissionGroups,
   findPanelForPermission,
