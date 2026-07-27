@@ -19,6 +19,29 @@ export function toToolParameters(schema: ZodType): Record<string, unknown> {
 }
 
 /**
+ * The abstract class `defineTool` hands back: a `BaseTool<T>` carrying the
+ * declared execution flags, constructible only through a subclass that
+ * implements `execute`.
+ *
+ * Spelling this out is what keeps `defineTool`'s return type *nameable*.
+ * Without it the return type is an anonymous class expression, and every
+ * `class X extends defineTool(...)` becomes undeclarable — TypeScript emits
+ * `TS4094: Property 'execute' of exported anonymous class type may not be
+ * private or protected` for each one, because a `.d.ts` has no syntax for a
+ * protected member on an anonymous class type. Naming the type sidesteps that
+ * without widening `BaseTool.execute` to public.
+ */
+export type DefinedToolClass<T> = abstract new (
+  override?: Partial<ToolDefinition>,
+) => BaseTool<T> & {
+  readonly parallelSafe: boolean | undefined;
+  readonly requiresApproval: boolean | undefined;
+  readonly slow: boolean | undefined;
+  readonly deferLogUntilApproval: boolean | undefined;
+  readonly streamsOutput: boolean | undefined;
+};
+
+/**
  * Define a tool with type-safe schema and either a static or dynamic description.
  *
  * Use a function for description when the content depends on data that's loaded
@@ -40,7 +63,7 @@ export function defineTool<T>(def: {
   slow?: boolean;
   deferLogUntilApproval?: boolean;
   streamsOutput?: boolean;
-}) {
+}): DefinedToolClass<T> {
   const getDescription = (): string =>
     typeof def.description === 'function' ? def.description() : def.description;
 
