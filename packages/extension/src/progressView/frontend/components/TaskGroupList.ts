@@ -33,7 +33,8 @@ import { isInFlightPhase } from '@shared/streams/streamStatus';
 import { parseWorkflowOutputRoundDir } from '@shared/constants/workflowOutput';
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 import { scrollToBottom } from '@shared/utils/dom';
-import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderEmptyState } from '@shared/wa/emptyState';
 import { formatDuration } from '@utils/core';
 import { pluralize } from '@utils/text/stringUtils';
@@ -72,13 +73,13 @@ function getStatusIcon(status: string): TeXRAIconName | null {
     case STREAM_PHASE.RUNNING:
       return null;
     case STREAM_PHASE.FAILED:
-      return 'error';
+      return 'circle-exclamation';
     case STREAM_PHASE.COMPLETED:
       return 'check';
     case STREAM_PHASE.CANCELLED:
       return 'circle-stop';
     default:
-      return 'circle-outline';
+      return 'circle';
   }
 }
 

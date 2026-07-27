@@ -181,7 +181,7 @@ export class ModelSelectionList extends LitElement {
       </wa-select>
       ${
         includedAccessCap
-          ? waIcon('warning', {
+          ? waIcon('triangle-exclamation', {
               className: 'model-row-icon model-row-icon--warning',
               title,
             })
@@ -198,7 +198,7 @@ export class ModelSelectionList extends LitElement {
     const title = model.requiresKey
       ? `${model.availabilityLabel ?? 'Missing API key'} — configure it in API Configuration`
       : (model.availabilityLabel ?? 'Unavailable');
-    const iconName = model.requiresKey ? 'key' : 'warning';
+    const iconName = model.requiresKey ? 'key' : 'triangle-exclamation';
     const className = model.requiresKey
       ? 'model-row-icon'
       : 'model-row-icon model-row-icon--warning';
@@ -233,7 +233,7 @@ export class ModelSelectionList extends LitElement {
           ${this.renderAvailabilityIcon(model)}
           ${
             isExpensiveModel(model.provider, model.name)
-              ? waIcon('warning', {
+              ? waIcon('triangle-exclamation', {
                   className: 'model-row-icon model-row-icon--warning',
                   title: EXPENSIVE_MODEL_HINT,
                 })
