@@ -1,12 +1,12 @@
 import PQueue from 'p-queue';
 
 import { RUN_FACT_EVENT_TYPES } from '@agent/trace';
+import type { SessionStores } from '@agent/storage';
 import type { HostApprovalBypassStateUpdate } from '@agent/runtime/HostInteractions';
 import {
   defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import type { SessionStores } from '@agent/runtime/SessionStores';
 import {
   WebviewBridge,
   type ProgressViewMessageSender,

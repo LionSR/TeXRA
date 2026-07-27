@@ -1,8 +1,10 @@
+import { SessionStores } from '@agent/storage';
 import {
   initializeDefaultSession,
   tryDefaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
+import { GoalStore } from '@tools/goal';
 import { StreamLogStore } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -37,6 +39,24 @@ async function persistentSession(
   return { session, canResume: true };
 }
 
+async function initializePersistentSession(
+  transcripts: StreamLogStore,
+): Promise<CliTranscriptSession> {
+  const result = await persistentSession(
+    initializeDefaultSession({ transcripts }),
+  );
+  const stores = new SessionStores({
+    streamLogs: result.session.transcripts,
+    snapshots: result.session.snapshots,
+    goalEntries: {
+      forget: (stream) => GoalStore.forget(stream, result.session),
+      forgetMany: (streams) => GoalStore.forgetMany(streams, result.session),
+    },
+  });
+  await stores.sweepOrphanedStreams(new Set(result.session.transcripts.keys()));
+  return result;
+}
+
 /** Prepare the process session for a noninteractive run before it can start. */
 export async function initializeHeadlessTranscriptSession(
   openPersistentStore: OpenPersistentStore = () => StreamLogStore.open(),
@@ -45,7 +65,7 @@ export async function initializeHeadlessTranscriptSession(
   if (existing) return persistentSession(existing);
 
   const transcripts = await openPersistentStore();
-  return persistentSession(initializeDefaultSession({ transcripts }));
+  return initializePersistentSession(transcripts);
 }
 
 /**
@@ -89,7 +109,7 @@ export async function initializeInteractiveTranscriptSession(
     return { session, canResume: false, warning };
   }
 
-  return persistentSession(initializeDefaultSession({ transcripts }));
+  return initializePersistentSession(transcripts);
 }
 
 function formatEphemeralWarning(reason: string): string {
