@@ -1,6 +1,9 @@
 /** Agent registry value objects (canonical AgentSource: @shared/schemas/agent). */
 
-import type { AgentCategory, AgentDefinition } from '@agent/core/definition/AgentDataclass';
+import type {
+  AgentCategory,
+  AgentDefinition,
+} from '@agent/core/definition/AgentDataclass';
 import type { AgentSource } from '@shared/schemas/agent';
 
 /**
