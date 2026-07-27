@@ -60,12 +60,17 @@ export async function buildProfileMessage(
   // keychain — detect it with hasStoredSession() so the UI can surface
   // "Session expired" instead of treating this as a plain signed-out state.
   const sessionExpired = !authenticated && (await SupabaseClient.hasStoredSession());
+  // When the session is a zombie we can still read the stored account label
+  // so the identity banner shows the user's email instead of "N/A".
+  const storedEmail = sessionExpired
+    ? await SupabaseClient.getStoredAccountLabel()
+    : null;
 
   if (!authenticated) {
     return {
       ...base,
       authenticated: false,
-      user: null,
+      user: storedEmail ? { email: storedEmail, id: '' } : null,
       tier: FREE_TIER,
       remoteAgents: [],
       apiAccessMode: 'personal',
