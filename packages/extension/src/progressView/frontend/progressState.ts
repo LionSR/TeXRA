@@ -113,9 +113,14 @@ export const streams$ = new Signal.Computed(() => [
   ...streamById$.get().values(),
 ]);
 
+/** Top-level streams, independent of the progress view's category filter. */
+export const topLevelStreams$ = new Signal.Computed(() =>
+  streams$.get().filter((stream) => !stream.parentStreamId),
+);
+
 /** Top-level streams for the tab list (child streams excluded). */
 export const tabStreams$ = new Signal.Computed(() => {
-  const topLevel = streams$.get().filter((stream) => !stream.parentStreamId);
+  const topLevel = topLevelStreams$.get();
   const filter = streamFilter$.get();
   if (filter === 'all') return topLevel;
   return topLevel.filter((stream) => stream.agentCategory === filter);

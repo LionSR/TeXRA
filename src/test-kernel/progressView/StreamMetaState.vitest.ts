@@ -10,6 +10,8 @@ import {
   phaseStages$,
   resetProgressState,
   setStreamStateForId,
+  tabStreams$,
+  topLevelStreams$,
 } from '@progressView/frontend/progressState';
 import {
   createInitialState,
@@ -59,6 +61,39 @@ function registerWorkflowStream(
 describe('stream meta frontend state', () => {
   beforeEach(() => {
     resetProgressState();
+  });
+
+  it('keeps the unfiltered top-level stream list independent of the progress filter', () => {
+    const workflowId = 'workflow' as StreamTabId;
+    const toolUseId = 'tool-use' as StreamTabId;
+    const childId = 'child' as StreamTabId;
+    const state = createInitialState();
+    state.streamFilter = 'workflow';
+    registerWorkflowStream(state, workflowId);
+    state.streamById.set(toolUseId, {
+      kind: 'agent',
+      name: toolUseId,
+      label: 'tool-use',
+      agentCategory: AgentCategory.ToolUse,
+      creationTimestamp: 2,
+    });
+    state.streamById.set(childId, {
+      kind: 'agent',
+      name: childId,
+      label: 'child',
+      agentCategory: AgentCategory.ToolUse,
+      creationTimestamp: 3,
+      parentStreamId: workflowId,
+    });
+    seedState(state);
+
+    expect(tabStreams$.get().map((stream) => stream.name)).toEqual([
+      workflowId,
+    ]);
+    expect(topLevelStreams$.get().map((stream) => stream.name)).toEqual([
+      workflowId,
+      toolUseId,
+    ]);
   });
 
   it('patches one stream metadata record without replacing siblings', () => {
