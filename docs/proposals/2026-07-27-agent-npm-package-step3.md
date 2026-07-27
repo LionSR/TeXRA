@@ -68,13 +68,21 @@ product-line rulings in §8, not by writing code.
 
 ### B1. The tool registry is closed _and_ cyclic — one problem, not two
 
-Per-tool transitive closures are **byte-identical for all 54 tools: 654 files /
-135,668 LoC**. The cycle:
-`bash.ts:67 → childStream.ts:6 → AgentRunLifecycle.ts:47 → AgentLaunchContext.ts:26 →
-agentLoad.ts:22 → @tools/registry → ArxivDownloadTool.ts:4 → @latex/arxivProcessor` —
+> **Corrected 2026-07-27 (issue-filing re-census at `ee08bb9c24`).** The cut experiment's
+> "byte-identical for all 54 tools: 654 files" does **not** reproduce. Measured over all 50
+> `defineTool()` modules: **19 share one identical 630-file closure** (these include `bash`
+> and the delegation tools — the ones an embedder wants most); the other **31 cap at ~150
+> files with zero LaTeX/Lean/arxiv/Zotero** (`ReadTool` 122, `grep` 120, `glob` 119). The
+> problem is real but narrower and more tractable than first stated. Cycle line numbers
+> below are each off by one at HEAD (`bash.ts:68`, …); the corrected table lives in #9327.
+
+The cycle:
+`bash.ts → childStream.ts → AgentRunLifecycle.ts → AgentLaunchContext.ts →
+agentLoad.ts → @tools/registry → ArxivDownloadTool.ts → @latex/arxivProcessor` —
 already documented in-code at `subagentExecution.ts:41-46` and worked around with lazy
-imports. **Every consumer of `bash` installs LaTeX, Lean, Zotero and arxiv.** Opening the
-registry (§5b) without severing the cycle changes nothing about the install.
+imports. **Every consumer of `bash` still installs LaTeX, Lean, Zotero and arxiv** (bash is
+in the 19). Opening the registry (§5b) without severing the cycle changes nothing about the
+install.
 
 The split itself is clean: **20 generic tools (18,649 LoC) vs 34 domain tools
 (14,834 LoC)**, connected only through `registry.ts`, `externalToolDefs.ts` (5 edges), and
@@ -88,9 +96,14 @@ seam to supply their own key.** Related ruling (§8): with a state store present
 relay access defaults **on** (`ServerSideKeyService.ts:106-108`), so an SDK run would
 silently `fetch` remote.texra.ai. v0 must be BYOK-by-default.
 
-### B3. `@replacement/engine` × 11 — a correction to this program's own premise
+### B3. `@replacement/engine` × 14 — a correction to this program's own premise
 
-All 9 model handlers import the replacement engine inside `extractResponse`
+> _Counts corrected 2026-07-27: 14 sites repo-wide (12 in-candidate), in 7 model handlers
+> plus 2 support modules under `modelHandlers/` — not "all 9 handlers" as first stated. The
+> hot-path call is confirmed at `modelHandlerAnthropic.ts:1224` inside `extractResponse`
+> (`:1194`)._
+
+The model handlers import the replacement engine inside `extractResponse`
 (`modelHandlerAnthropic.ts:46`, `modelHandlerGoogleGenAI.ts:39`, `modelHandlerOpenAI.ts:36`, …),
 plus `TextEditorTool` and `WriteTool`. And `ResponseCycleFlow.ts:25` imports
 `bestConnectionMethod` from `@agent/runtime/textConnection` — core's response cycle calls a
@@ -108,10 +121,34 @@ conditional (or host-injected) is a **behavior ruling**, not a move.
 tsup/api-extractor/dts tooling anywhere; every artifact is an app bundle. Required: per
 entry, an esbuild ESM bundle with deps external **plus** `tsc --emitDeclarationOnly` under
 a new `tsconfig.build.json` (`module: nodenext`; drop `"vscode"` from `types` so a leak is
-a compile error) **plus a flat d.ts rollup** — the 44 path aliases survive verbatim into
-any naive emit, and 6 of them point at _files_, with `@common/*` shadowed by 4
-longer-prefix aliases into the extension. Declaration emit will surface a fresh
-TS4023-class of errors the `--noEmit` experiment did not test.
+a compile error) plus a post-emit alias rewrite (below).
+
+> **Corrected 2026-07-27 — the declaration-emit spike ran, and B4 is confirmed the
+> cheapest blocker, with two changes to the prescription:**
+>
+> - **The feared TS4023/TS2742 class does not exist.** A control emit over all of real
+>   `src/` produced exactly two declaration-specific classes: **TS4094 × 55** (one root
+>   cause — `defineTool` returns an _anonymous_ abstract class whose `execute` is
+>   `protected abstract`, which a `.d.ts` cannot express; fix is either
+>   `protected` → public across 33 files or annotating `defineTool`'s return type) and
+>   **TS2883 × 1** (the FontAwesome leak already slated for deletion). Two mechanical fix
+>   rounds (~57 lines / ~41 files) return emit to the `--noEmit` baseline: **declaration
+>   emit adds zero residual errors.**
+> - **Strike "flat d.ts rollup" — it is neither necessary nor currently possible.** Both
+>   candidate tools fail on TypeScript 6.0.3 (`dts-bundle-generator` crashes;
+>   `api-extractor` bundles TS 5.9 and internal-errors). The working replacement is a
+>   **~40-line post-emit alias→relative rewrite** — 716 alias specifiers survive verbatim
+>   across 308 emitted files, the rewrite resolves 734/735, and a consumer `tsc` compiles
+>   exit 0. Gotcha: it must handle `import('@alias/x')` _type_ syntax, not just
+>   `from '@alias/x'`.
+> - **Prerequisite:** 23 dynamic-`import()` specifiers across 7 files need `.js`
+>   extensions under `nodenext` (this is the whole nodenext delta; includes
+>   `ModelFactory`'s 16-handler switch and the documented B1 lazy import).
+> - Survival verified with negative controls: zod v4 generics, the provider-SDK type
+>   re-exports, and all 20 `AgentEvent` union members emit intact. New trap:
+>   `@openrouter/sdk/models` resolves only via a repo `paths` alias pointing _into_
+>   `node_modules` — a consumer has no such mapping; needs a fix before publish. Full
+>   emit: **~4 s** — fits existing CI shards, no separate job.
 
 **Two latent production bugs found here:** `nunjucks` and `semver` are `devDependencies`
 imported by production code (`agentTemplateRenderer.ts:1`, `utils/prompt/index.ts:3`,
@@ -196,7 +233,8 @@ lifecycle — only a thin entry-point wrapper.
 Of the 13-item backlog between before and after, **only two are blocking**: the
 unattached-interaction ruling (#9256's recommendation stands — reuse the CLI's
 non-interactive policy shape, `approvalPolicyAvailability.ts:8-14`) and the `runtimeHost`
-deletion (§7.1 migration step 5; 267 refs / 63 production files). Everything else is
+deletion (§7.1 migration step 5; re-priced 2026-07-27 to 531 refs / 120 files total —
+#9251, #9272 and #9140 already shaved it). Everything else is
 mechanical or already landed.
 
 ## 5. The three API rulings

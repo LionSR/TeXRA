@@ -35,7 +35,7 @@ export function buildToolUseSection(
   content: TemplateResult | typeof nothing,
 ): TemplateResult {
   // prettier-ignore
-  return html`<div class="tool-use-section"><div class="tool-use-subsection">${label ? html`<span class="tool-use-sublabel">${label}</span>` : nothing}${content}</div></div>`;
+  return html`<div class="tool-use-section">${label ? html`<span class="tool-use-sublabel">${label}</span>` : nothing}${content}</div>`;
 }
 
 // Diff line prefix patterns (longer prefixes first for correct matching)
