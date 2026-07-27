@@ -38,7 +38,15 @@ const LegacyWorkflowJournalEntrySchema = z.strictObject({
 
 const PersistedWorkflowJournalEntrySchema =
   LegacyWorkflowJournalEntrySchema.extend({
-    keyFormat: WorkflowJournalKeyFormatSchema,
+    keyFormat: z.union([
+      WorkflowJournalKeyFormatSchema,
+      z
+        .literal('presentation-independent-v2')
+        .transform(
+          (): z.infer<typeof WorkflowJournalKeyFormatSchema> =>
+            WORKFLOW_JOURNAL_KEY_FORMAT.DEPENDENCY_AWARE_V3,
+        ),
+    ]),
   });
 
 const WorkflowScriptCheckpointV2Schema = z.strictObject({

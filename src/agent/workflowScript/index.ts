@@ -10,6 +10,7 @@ export {
 export type { PersistedWorkflowScriptRunOptions } from './persistence';
 export { WORKFLOW_JOURNAL_KEY_FORMAT, WORKFLOW_SKIPPED_RESULT } from './types';
 export type {
+  WorkflowAgentCallOptions,
   WorkflowAgentInvocation,
   WorkflowAgentRunner,
   WorkflowJournalEntry,

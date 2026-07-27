@@ -137,11 +137,11 @@ before this proposal was written). Version lockstep with the workspace.
 
 **Three entries, no more:**
 
-| Entry             | Consumer imports                                                                | Why it cannot fold                                                                                                                                                                   |
-| ----------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Entry             | Consumer imports                                                                | Why it cannot fold                                                                                                                                                                                                                      |
+| ----------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@texra-ai/agent` | `runAgent`, run handle, `AgentEvent`, `HostInteractions`, `defineTool`, `ITool` | the run surface; must stay `node:`-free (currently `RunContext.ts` imports `node:async_hooks`, and `executeAgent.ts`/`AgentLaunchContext.ts` import `node:path` — these must move behind platform ports or into `/node` before publish) |
-| `/schemas`        | `AgentConfigSchema`, `AgentDefinitionSchema`, ids, result schemas               | **Zod values** consumers `.parse()`/`.extend()`; the only browser-safe entry. Must be a **named subset** — the in-repo barrel re-exports webview wire contracts that are not SDK API |
-| `/node`           | `nodePlatform({...})`                                                           | node defaults would drag `node:fs`/`proper-lockfile` into every consumer if folded                                                                                                   |
+| `/schemas`        | `AgentConfigSchema`, `AgentDefinitionSchema`, ids, result schemas               | **Zod values** consumers `.parse()`/`.extend()`; the only browser-safe entry. Must be a **named subset** — the in-repo barrel re-exports webview wire contracts that are not SDK API                                                    |
+| `/node`           | `nodePlatform({...})`                                                           | node defaults would drag `node:fs`/`proper-lockfile` into every consumer if folded                                                                                                                                                      |
 
 **Dependency ruling:** `zod` is a **peerDependency** — Zod values cross the boundary in
 three places (`AgentConfigSchema`, `AgentDefinitionSchema`, `defineTool`), and two zod

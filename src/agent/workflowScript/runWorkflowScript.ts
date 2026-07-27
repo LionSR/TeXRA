@@ -40,14 +40,23 @@ function journalKey(
   prompt: string,
   options: WorkflowAgentCallOptions,
   keyFormat: WorkflowJournalEntry['keyFormat'],
+  dependencyFingerprint?: string,
 ): string {
   const executionOptions: WorkflowAgentCallOptions = { ...options };
-  if (keyFormat === WORKFLOW_JOURNAL_KEY_FORMAT.PRESENTATION_INDEPENDENT_V2) {
+  if (keyFormat !== WORKFLOW_JOURNAL_KEY_FORMAT.LEGACY_V1) {
     delete executionOptions.label;
     delete executionOptions.phase;
   }
   return createHash('sha256')
-    .update(stableStringify({ options: executionOptions, prompt }))
+    .update(
+      stableStringify({
+        options: executionOptions,
+        prompt,
+        ...(keyFormat === WORKFLOW_JOURNAL_KEY_FORMAT.DEPENDENCY_AWARE_V3 && {
+          dependencyFingerprint,
+        }),
+      }),
+    )
     .digest('hex')
     .slice(0, 16);
 }
@@ -58,6 +67,17 @@ const DEFAULT_MAX_AGENT_CALLS = 200;
 const MAX_FANOUT = 512;
 const DRAIN_GRACE_MS = 5_000;
 const LABEL_EXCERPT_LENGTH = 48;
+const WORKFLOW_AGENT_OPTION_FIELDS = new Set([
+  'id',
+  'label',
+  'phase',
+  'agentName',
+  'model',
+  'schema',
+  'inputFiles',
+  'contextFiles',
+  'mediaFiles',
+]);
 
 type WorkflowScriptFailedEvent = Extract<
   WorkflowScriptEvent,
@@ -69,10 +89,10 @@ type WorkflowScriptFailureAttemptMetadata = Pick<
 >;
 
 /**
- * Fan-out primitives, defined INSIDE the sandbox realm (trusted prelude,
+ * The fan-out primitive, defined INSIDE the sandbox realm (trusted prelude,
  * compiled by the host, run before the script body). They must not live
- * host-side: parallel/pipeline/concat consume script-created arrays,
- * thunks, and promises, and any host code that calls a method on a
+ * host-side: parallel consumes script-created arrays and thunks, and any host
+ * code that calls a method on a
  * sandbox array (`thunks.map(hostCb)`) or awaits a sandbox thenable hands
  * the script a host-realm function whose .constructor is the host's
  * ungated Function constructor. Realm-side, every callback and resolve
@@ -92,18 +112,6 @@ const ORCHESTRATION_PRELUDE = `
       writable: false,
       configurable: false,
     });
-  // The run-stop backstop (call cap, timeout abort) must propagate out of
-  // fan-out instead of degrading into a null slot; matched by name because
-  // the host error arrives as a realm-local copy.
-  const isRunAbort = (error) =>
-    error !== null &&
-    typeof error === 'object' &&
-    error.name === 'WorkflowRunAbortError';
-  const errorText = (error) =>
-    error !== null && typeof error === 'object' && 'message' in error
-      ? String(error.message)
-      : String(error);
-
   define('parallel', async function parallel(thunks) {
     if (!Array.isArray(thunks)) {
       throw new Error(
@@ -114,83 +122,24 @@ const ORCHESTRATION_PRELUDE = `
       throw new Error('parallel() accepts at most ' + MAX_FANOUT + ' items.');
     }
     return Promise.all(
-      thunks.map(async (thunk, i) => {
+      thunks.map((thunk, i) => {
         if (typeof thunk !== 'function') {
           throw new Error('parallel(): item ' + i + ' is not a function.');
         }
-        try {
-          return await thunk();
-        } catch (error) {
-          if (isRunAbort(error)) throw error;
-          // agent() failures already resolve to null with their own event;
-          // anything caught here is a bug in the script's own JS — surface
-          // it so a null slot is debuggable.
-          log('parallel(): item ' + i + ' threw: ' + errorText(error));
-          return null;
-        }
+        return thunk();
       }),
     );
-  });
-
-  define('pipeline', async function pipeline(items, ...stages) {
-    if (!Array.isArray(items)) {
-      throw new Error('pipeline(items, ...stages) requires an items array.');
-    }
-    if (items.length > MAX_FANOUT) {
-      throw new Error('pipeline() accepts at most ' + MAX_FANOUT + ' items.');
-    }
-    if (stages.length === 0 || stages.some((s) => typeof s !== 'function')) {
-      throw new Error('pipeline() requires at least one stage function.');
-    }
-    // No barrier between stages: each item advances through its own chain
-    // independently, so wall-clock is the slowest single-item chain. Note
-    // for resume: agent() calls in stages beyond the first get journal
-    // indices in completion order, which varies run-to-run — the journal's
-    // per-index key check keeps replay safe, at the cost of cache hits.
-    return Promise.all(
-      items.map(async (item, index) => {
-        // The first stage receives (item, item, index): prev is seeded with
-        // the item itself, not undefined.
-        let value = item;
-        for (const stage of stages) {
-          try {
-            value = await stage(value, item, index);
-          } catch (error) {
-            if (isRunAbort(error)) throw error;
-            log('pipeline(): item ' + index + ' threw: ' + errorText(error));
-            return null;
-          }
-        }
-        return value;
-      }),
-    );
-  });
-
-  define('concat', function concat(parts, options) {
-    if (!Array.isArray(parts)) {
-      throw new Error('concat(parts, options?) requires an array.');
-    }
-    const separatorRaw =
-      options !== null && typeof options === 'object'
-        ? options.separator
-        : undefined;
-    const separator = separatorRaw === undefined ? '\\n\\n' : String(separatorRaw);
-    // Zero-token fan-in: drops failed (null) stage results, joins the rest.
-    return parts
-      .filter((part) => part !== null && part !== undefined && part !== '')
-      .map(String)
-      .join(separator);
   });
 })();
 `;
 
 /**
  * Thrown when the whole run must stop (agent-call cap exceeded, wall-clock
- * timeout abort). The realm-side parallel()/pipeline() rethrow it by name
- * instead of converting it to a null slot, so the backstops apply inside
- * fan-out primitives too. Detected by name, not instanceof — the error
- * crosses the sandbox realm boundary as a realm-local copy carrying only
- * name/message.
+ * timeout abort). The realm-side agent() primitive recognizes it by name and
+ * rethrows instead of converting it to null; parallel() then propagates that
+ * rejected call through Promise.all. Detected by name, not instanceof — the
+ * error crosses the sandbox realm boundary as a realm-local copy carrying
+ * only name/message.
  */
 export class WorkflowRunAbortError extends Error {
   constructor(message: string, options?: ErrorOptions) {
@@ -223,7 +172,13 @@ function isWorkflowAbort(error: unknown): boolean {
 export async function runWorkflowScript(
   options: WorkflowScriptRunOptions,
 ): Promise<WorkflowScriptRunResult> {
-  const { runAgent, onEvent, onJournalEntry, onControl } = options;
+  const {
+    runAgent,
+    fingerprintAgentDependencies,
+    onEvent,
+    onJournalEntry,
+    onControl,
+  } = options;
   const concurrency = options.concurrency ?? DEFAULT_CONCURRENCY;
   const maxAgentCalls = options.maxAgentCalls ?? DEFAULT_MAX_AGENT_CALLS;
 
@@ -259,6 +214,10 @@ export async function runWorkflowScript(
   const issuedPlannedTaskIds = new Set<string>();
   let currentPhase: string | undefined;
   let fatalRunError: WorkflowRunAbortError | undefined;
+  // Set only when sandbox settlement itself initiates the run abort. Sibling
+  // rejections caused by this cleanup must not replace the script error that
+  // triggered settlement; independent timeout/cap/checkpoint aborts stay fatal.
+  let cleanupAbortStarted = false;
 
   const emit = (event: WorkflowScriptEvent) => onEvent?.(event);
 
@@ -359,10 +318,15 @@ export async function runWorkflowScript(
           ),
         );
       }
-      if (callOptions.label !== undefined || callOptions.phase !== undefined) {
+      if (
+        (callOptions.label !== undefined &&
+          callOptions.label !== plannedTask.label) ||
+        (callOptions.phase !== undefined &&
+          callOptions.phase !== plannedTask.phase)
+      ) {
         throw rememberFatalRunError(
           new WorkflowRunAbortError(
-            `Task "${callOptions.id}" declares its label and phase in meta.tasks; do not duplicate them in agent() options.`,
+            `Task "${callOptions.id}" must use the label and phase declared in meta.tasks.`,
           ),
         );
       }
@@ -376,10 +340,45 @@ export async function runWorkflowScript(
       plannedTask?.label ??
       callOptions.label ??
       prompt.slice(0, LABEL_EXCERPT_LENGTH).replaceAll(/\s+/g, ' ').trim();
-    const key = journalKey(
+    const hasFileDependencies =
+      (callOptions.inputFiles?.length ?? 0) > 0 ||
+      (callOptions.contextFiles?.length ?? 0) > 0 ||
+      (callOptions.mediaFiles?.length ?? 0) > 0;
+    if (hasFileDependencies && fingerprintAgentDependencies === undefined) {
+      throw rememberFatalRunError(
+        new WorkflowRunAbortError(
+          'The workflow host must fingerprint agent() file dependencies before they can be resumed safely.',
+        ),
+      );
+    }
+    const readDependencyFingerprint = async (): Promise<string> => {
+      try {
+        const fingerprint = await fingerprintAgentDependencies?.(callOptions);
+        if (!isNonEmptyString(fingerprint)) {
+          throw new WorkflowRunAbortError(
+            'The workflow host returned no fingerprint for agent() file dependencies.',
+          );
+        }
+        return fingerprint;
+      } catch (error) {
+        throw rememberFatalRunError(
+          error instanceof WorkflowRunAbortError
+            ? error
+            : new WorkflowRunAbortError(
+                `Workflow agent() file dependencies could not be fingerprinted: ${toErrorMessage(error)}`,
+                { cause: error },
+              ),
+        );
+      }
+    };
+    let dependencyFingerprint = hasFileDependencies
+      ? await readDependencyFingerprint()
+      : undefined;
+    let key = journalKey(
       prompt,
       callOptions,
-      WORKFLOW_JOURNAL_KEY_FORMAT.PRESENTATION_INDEPENDENT_V2,
+      WORKFLOW_JOURNAL_KEY_FORMAT.DEPENDENCY_AWARE_V3,
+      dependencyFingerprint,
     );
     const progressId = plannedTask?.id ?? `call-${index}`;
     if (plannedTask) {
@@ -401,6 +400,30 @@ export async function runWorkflowScript(
       );
     }
     issuedCallKeys.add(key);
+
+    const refreshDependencyIdentity = async (): Promise<void> => {
+      if (!hasFileDependencies) return;
+      const refreshedFingerprint = await readDependencyFingerprint();
+      if (refreshedFingerprint === dependencyFingerprint) return;
+
+      const refreshedKey = journalKey(
+        prompt,
+        callOptions,
+        WORKFLOW_JOURNAL_KEY_FORMAT.DEPENDENCY_AWARE_V3,
+        refreshedFingerprint,
+      );
+      if (issuedCallKeys.has(refreshedKey)) {
+        throw rememberFatalRunError(
+          new WorkflowRunAbortError(
+            'A changed agent() file dependency now conflicts with another call identity; rerun the workflow from its saved script.',
+          ),
+        );
+      }
+      issuedCallKeys.delete(key);
+      issuedCallKeys.add(refreshedKey);
+      dependencyFingerprint = refreshedFingerprint;
+      key = refreshedKey;
+    };
 
     const emitFailedEnd = (
       error: unknown,
@@ -438,10 +461,19 @@ export async function runWorkflowScript(
     };
 
     const prior = priorEntries.get(index);
-    const priorKey =
-      prior === undefined
-        ? undefined
-        : journalKey(prompt, callOptions, prior.keyFormat);
+    let priorKey: string | undefined;
+    if (
+      prior !== undefined &&
+      (!hasFileDependencies ||
+        prior.keyFormat === WORKFLOW_JOURNAL_KEY_FORMAT.DEPENDENCY_AWARE_V3)
+    ) {
+      priorKey = journalKey(
+        prompt,
+        callOptions,
+        prior.keyFormat,
+        dependencyFingerprint,
+      );
+    }
     if (prior && prior.key === priorKey) {
       const { payload, normalizedResult } = journalValue(
         prior.result,
@@ -450,7 +482,7 @@ export async function runWorkflowScript(
       journal.set(index, {
         ...prior,
         key,
-        keyFormat: WORKFLOW_JOURNAL_KEY_FORMAT.PRESENTATION_INDEPENDENT_V2,
+        keyFormat: WORKFLOW_JOURNAL_KEY_FORMAT.DEPENDENCY_AWARE_V3,
         result: normalizedResult,
       });
       emit({
@@ -519,6 +551,9 @@ export async function runWorkflowScript(
           // Re-check after waiting for a slot: a timeout/cap abort while this
           // call was queued must not launch fresh model work.
           if (runAbort.signal.aborted) {
+            if (cleanupAbortStarted) {
+              runAbort.signal.throwIfAborted();
+            }
             throw rememberFatalRunError(
               new WorkflowRunAbortError(
                 'Workflow run aborted while this agent() call was queued.',
@@ -526,16 +561,28 @@ export async function runWorkflowScript(
             );
           }
           callController.signal.throwIfAborted();
-          return runAgent({
-            index,
-            key,
-            prompt,
-            options: callOptions,
-            signal: callController.signal,
-            reportModel: (model) => {
-              resolvedModel = model;
-            },
-          });
+          const launch = () =>
+            runAgent({
+              index,
+              key,
+              ...(dependencyFingerprint !== undefined && {
+                dependencyFingerprint,
+              }),
+              prompt,
+              options: callOptions,
+              signal: callController.signal,
+              reportModel: (model) => {
+                resolvedModel = model;
+              },
+            });
+          // File contents can change while this call waits for a concurrency
+          // slot or between interactive attempts. Refresh the identity before
+          // every physical launch so the journal and stable child id describe
+          // the bytes this attempt is about to consume. Keep no-file launches
+          // synchronous here: orchestration timing is part of abort semantics.
+          return hasFileDependencies
+            ? refreshDependencyIdentity().then(launch)
+            : launch();
           // p-queue types add() as Promise<T | void>; runAgent's result is
           // always present here (the task never returns void), so the cast
           // keeps the value flowing through unchanged.
@@ -573,13 +620,13 @@ export async function runWorkflowScript(
       if (attemptError) {
         // A runner may surface the run abort (its signal cascades from
         // runAbort); that must stop the workflow, not degrade into a null.
-        if (isWorkflowAbort(attemptError.error)) {
+        if (isWorkflowAbort(attemptError.error) && !cleanupAbortStarted) {
           const fatal = rememberFatalRunError(attemptError.error);
           emitFailedEnd(fatal, attemptMetadata());
           throw fatal;
         }
-        // A failed agent resolves to null (callers filter with .filter(Boolean))
-        // and is deliberately NOT journaled, so a resume retries it.
+        // A failed agent resolves to null and is deliberately NOT journaled, so
+        // a resume retries it. Callers also exclude the truthy skip sentinel.
         emitFailedEnd(attemptError.error, attemptMetadata());
         return 'null';
       }
@@ -595,7 +642,7 @@ export async function runWorkflowScript(
         await recordJournalEntry({
           index,
           key,
-          keyFormat: WORKFLOW_JOURNAL_KEY_FORMAT.PRESENTATION_INDEPENDENT_V2,
+          keyFormat: WORKFLOW_JOURNAL_KEY_FORMAT.DEPENDENCY_AWARE_V3,
           result: normalizedResult,
         });
       } catch (error) {
@@ -676,6 +723,7 @@ export async function runWorkflowScript(
     options.signal?.removeEventListener('abort', abortFromParent);
     // Abort unconditionally once the sandbox returns. This stops in-flight
     // work the script abandoned and makes agentPrimitive reject any late call.
+    cleanupAbortStarted = !runAbort.signal.aborted;
     runAbort.abort();
     if (pendingAgentCalls.size > 0) {
       // The script finished (or threw) with agent() calls still in flight
@@ -743,6 +791,14 @@ function normalizeAgentOptions(raw: unknown): WorkflowAgentCallOptions {
   // cheap defensive copy that also keeps this function safe if it is ever
   // called with a value that did not come through the bridge.
   const source = structuredClone(raw ?? {}) as Record<string, unknown>;
+  const unknownField = Object.keys(source).find(
+    (field) => !WORKFLOW_AGENT_OPTION_FIELDS.has(field),
+  );
+  if (unknownField !== undefined) {
+    throw new Error(
+      `agent() option "${unknownField}" is not recognized. Allowed options: ${[...WORKFLOW_AGENT_OPTION_FIELDS].join(', ')}.`,
+    );
+  }
   const common: {
     id?: string;
     label?: string;
@@ -759,7 +815,8 @@ function normalizeAgentOptions(raw: unknown): WorkflowAgentCallOptions {
       const requirement = requiresContent ? 'a non-empty string' : 'a string';
       throw new Error(`agent() option "${field}" must be ${requirement}.`);
     }
-    const normalized = requiresContent ? value.trim() : value;
+    const normalized =
+      requiresContent || field === 'label' ? value.trim() : value;
     common[field] =
       field === 'phase'
         ? normalizeWorkflowScriptPhaseTitle(normalized)

@@ -1,16 +1,22 @@
+// Node imports
+import { createHash } from 'node:crypto';
+
 // Local imports
 import { resolveChildRunOutput } from '@agent/storage';
 import {
   WorkflowRunAbortError,
+  type WorkflowAgentCallOptions,
   type WorkflowAgentInvocation,
   type WorkflowAgentRunner,
 } from '@agent/workflowScript';
+import type { AgentEntry } from '@agent/index/agentRegistry';
 import type { LaunchRunContext } from '@agent/runtime/RunContext';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { formatError } from '@common/errors';
 import { AgentCategory } from '@shared/schemas';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { configureDelegatedChildApprovals } from '@tools/approval';
+import { AbsoluteFS, WorkspaceFS } from '@utils/files';
 import { deriveExecutionId } from '@utils/core/idHash';
 import { runStorageLocationFromAnyAbsolutePath } from '@utils/files/taskRunStorage';
 
@@ -73,6 +79,41 @@ async function resolveInvocationFileList(
   return resolved;
 }
 
+/** Hash the bytes behind every file option used by one workflow agent call. */
+export async function fingerprintWorkflowAgentDependencies(
+  parentExecutionId: LaunchRunContext['runScope']['executionId'],
+  options: WorkflowAgentCallOptions,
+): Promise<string> {
+  const groups = [
+    ['input', options.inputFiles ?? []],
+    ['context', options.contextFiles ?? []],
+    ['media', options.mediaFiles ?? []],
+  ] as const;
+  if (groups.every(([, files]) => files.length === 0)) {
+    throw new WorkflowRunAbortError(
+      'Cannot fingerprint a workflow agent call without file dependencies.',
+    );
+  }
+
+  const hash = createHash('sha256');
+  for (const [label, files] of groups) {
+    const resolved = await resolveInvocationFileList(
+      parentExecutionId,
+      `${label[0]?.toUpperCase()}${label.slice(1)} file`,
+      files,
+    );
+    for (const [index, file] of resolved.entries()) {
+      const bytes =
+        runStorageLocationFromAnyAbsolutePath(file) !== undefined
+          ? await AbsoluteFS.readBytes(file)
+          : await WorkspaceFS.readBytes(file);
+      hash.update(`${label}\0${index}\0${bytes.length}\0`);
+      hash.update(bytes);
+    }
+  }
+  return hash.digest('hex');
+}
+
 async function selectWorkflowScriptModel(
   input: Parameters<typeof selectAvailableDelegationModel>[0],
 ): Promise<string> {
@@ -80,7 +121,7 @@ async function selectWorkflowScriptModel(
     return await selectAvailableDelegationModel(input);
   } catch (error) {
     // A declared model is workflow configuration, so its rejection must not
-    // disappear as a nullable call inside parallel()/pipeline(). When the
+    // disappear as a nullable call inside parallel(). When the
     // script omits the field, preserve the established delegation failure
     // semantics; per-call model routing must not broaden that behavior.
     if (input.requestedModel == null) throw error;
@@ -122,7 +163,7 @@ export interface WorkflowRunIdentity {
 /** Build the production `agent()` adapter for one workflow-script run. */
 export function createWorkflowScriptAgentRunner(
   parent: LaunchRunContext,
-  defaultAgentName: string,
+  defaultAgent: AgentEntry,
   checkpointId: string,
   run: WorkflowRunIdentity,
   hooks?: {
@@ -148,6 +189,29 @@ export function createWorkflowScriptAgentRunner(
   const { runScope } = parent;
 
   return async (invocation) => {
+    if (invocation.dependencyFingerprint !== undefined) {
+      let launchFingerprint: string;
+      try {
+        launchFingerprint = await fingerprintWorkflowAgentDependencies(
+          run.executionId,
+          invocation.options,
+        );
+      } catch (error) {
+        if (error instanceof WorkflowRunAbortError) throw error;
+        throw new WorkflowRunAbortError(
+          formatError(
+            'Workflow agent() file dependencies could not be fingerprinted while the child was launching',
+            error,
+          ),
+          { cause: error },
+        );
+      }
+      if (launchFingerprint !== invocation.dependencyFingerprint) {
+        throw new WorkflowRunAbortError(
+          'Workflow agent() file dependencies changed while the child was launching; rerun the saved workflow script.',
+        );
+      }
+    }
     const logicalExecutionId = deriveExecutionId({
       checkpointId,
       key: invocation.key,
@@ -201,11 +265,14 @@ export function createWorkflowScriptAgentRunner(
               outputSchema: invocation.options.schema,
             };
           } else {
-            const agent = requireVisibleAgent(
-              AgentCategory.Workflow,
-              invocation.options.agentName ?? defaultAgentName,
-              runScope.delegationAgentScope ?? undefined,
-            );
+            const agent =
+              invocation.options.agentName === undefined
+                ? defaultAgent
+                : requireVisibleAgent(
+                    AgentCategory.Workflow,
+                    invocation.options.agentName,
+                    runScope.delegationAgentScope ?? undefined,
+                  );
             // Model resolves before any file I/O so an unavailable/invalid
             // declared model fails the call without touching the filesystem.
             const model = await workflowScriptModelSelection(
@@ -239,7 +306,7 @@ export function createWorkflowScriptAgentRunner(
             // the resolved inputs, not merely the paths supplied by the script,
             // so a stale reference cannot launch a useless empty-envelope run.
             // Run-fatal, not a per-call failure: a plain error would resolve
-            // this agent() to null inside parallel()/pipeline(), silently
+            // this agent() to null inside parallel(), silently
             // filtering away the very misuse this guard exists to surface.
             if (
               inputFiles.length === 0 &&
@@ -301,6 +368,11 @@ export function createWorkflowScriptAgentRunner(
       if (result.outcome !== 'completed') {
         throw new Error(
           `Workflow subagent ended with ${result.outcome} outcome.`,
+        );
+      }
+      if (result.category === 'workflow' && result.outputs.length === 0) {
+        throw new Error(
+          'Workflow subagent completed without producing any output files.',
         );
       }
       return result;
