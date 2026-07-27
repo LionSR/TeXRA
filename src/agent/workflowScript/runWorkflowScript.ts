@@ -214,6 +214,10 @@ export async function runWorkflowScript(
   const issuedPlannedTaskIds = new Set<string>();
   let currentPhase: string | undefined;
   let fatalRunError: WorkflowRunAbortError | undefined;
+  // Set only when sandbox settlement itself initiates the run abort. Sibling
+  // rejections caused by this cleanup must not replace the script error that
+  // triggered settlement; independent timeout/cap/checkpoint aborts stay fatal.
+  let cleanupAbortStarted = false;
 
   const emit = (event: WorkflowScriptEvent) => onEvent?.(event);
 
@@ -547,6 +551,9 @@ export async function runWorkflowScript(
           // Re-check after waiting for a slot: a timeout/cap abort while this
           // call was queued must not launch fresh model work.
           if (runAbort.signal.aborted) {
+            if (cleanupAbortStarted) {
+              runAbort.signal.throwIfAborted();
+            }
             throw rememberFatalRunError(
               new WorkflowRunAbortError(
                 'Workflow run aborted while this agent() call was queued.',
@@ -613,7 +620,7 @@ export async function runWorkflowScript(
       if (attemptError) {
         // A runner may surface the run abort (its signal cascades from
         // runAbort); that must stop the workflow, not degrade into a null.
-        if (isWorkflowAbort(attemptError.error)) {
+        if (isWorkflowAbort(attemptError.error) && !cleanupAbortStarted) {
           const fatal = rememberFatalRunError(attemptError.error);
           emitFailedEnd(fatal, attemptMetadata());
           throw fatal;
@@ -716,6 +723,7 @@ export async function runWorkflowScript(
     options.signal?.removeEventListener('abort', abortFromParent);
     // Abort unconditionally once the sandbox returns. This stops in-flight
     // work the script abandoned and makes agentPrimitive reject any late call.
+    cleanupAbortStarted = !runAbort.signal.aborted;
     runAbort.abort();
     if (pendingAgentCalls.size > 0) {
       // The script finished (or threw) with agent() calls still in flight

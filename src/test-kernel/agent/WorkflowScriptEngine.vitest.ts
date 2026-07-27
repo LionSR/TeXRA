@@ -543,6 +543,37 @@ return await parallel([
     ).rejects.toThrow('thunk boom');
   });
 
+  it('parallel(): keeps a thunk error when cleanup aborts queued siblings', async () => {
+    const runner = vi.fn(
+      (invocation: WorkflowAgentInvocation) =>
+        new Promise<never>((_resolve, reject) => {
+          invocation.signal.addEventListener(
+            'abort',
+            () => {
+              const error = new Error('runner observed cleanup abort');
+              error.name = 'WorkflowRunAbortError';
+              reject(error);
+            },
+            { once: true },
+          );
+        }),
+    );
+
+    await expect(
+      runWorkflowScript({
+        script: `${META}
+return await parallel([
+  () => agent('running'),
+  () => agent('queued'),
+  () => { throw new Error('thunk boom') },
+        ])`,
+        runAgent: runner,
+        concurrency: 1,
+      }),
+    ).rejects.toThrow('thunk boom');
+    expect(runner).toHaveBeenCalledTimes(1);
+  });
+
   it('agent() resolves to null on runner failure and is not journaled', async () => {
     const runner = vi.fn((invocation: WorkflowAgentInvocation) =>
       invocation.prompt === 'boom'
