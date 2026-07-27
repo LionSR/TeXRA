@@ -49,9 +49,21 @@ function createSearchHandle(
 }
 
 function createReleaseSource() {
+  let observer: ((streamId: StreamTabId) => void) | undefined;
   return {
-    onRelease(): () => void {
-      return () => {};
+    source: {
+      onRelease(nextObserver: (streamId: StreamTabId) => void): () => void {
+        observer = nextObserver;
+        return () => {
+          if (observer === nextObserver) observer = undefined;
+        };
+      },
+    },
+    release(stream: StreamTabId): void {
+      observer?.(stream);
+    },
+    hasObserver(): boolean {
+      return observer !== undefined;
     },
   };
 }
@@ -63,9 +75,78 @@ function createLogger() {
   };
 }
 
+function setupBinder(executionId: string) {
+  const registry = new ExecutionRegistry();
+  const releaseSource = createReleaseSource();
+  const logger = createLogger();
+  const explicit = createRecordingHost();
+  const binder = new ExecutionSubscriptionBinder({
+    registry,
+    releaseSource: releaseSource.source,
+    logger,
+  });
+  registry.track(createSearchHandle(executionId, explicit.host));
+  return { registry, releaseSource, logger, binder, executionId };
+}
+
 async function settleDelivery(): Promise<void> {
   await new Promise((resolve) => setImmediate(resolve));
 }
+
+describe('ExecutionSubscriptionBinder lifecycle', () => {
+  it('owns bind and unbind state per stream/execution pair', () => {
+    const { registry, logger, binder, executionId } = setupBinder(
+      'exec-subscription-bind-test',
+    );
+
+    try {
+      binder.bind(streamId, executionId);
+      binder.bind(streamId, executionId);
+
+      expect(binder.unbind(streamId, executionId)).toBe(true);
+      expect(binder.unbind(streamId, executionId)).toBe(false);
+      expect(logger.info).toHaveBeenCalledTimes(1);
+    } finally {
+      binder.dispose();
+      registry.dispose();
+    }
+  });
+
+  it('disposes stream subscriptions when the follow-up queue is released', () => {
+    const { registry, releaseSource, binder, executionId } = setupBinder(
+      'exec-subscription-release-test',
+    );
+
+    try {
+      binder.bind(streamId, executionId);
+
+      releaseSource.release(streamId);
+
+      expect(binder.unbind(streamId, executionId)).toBe(false);
+    } finally {
+      binder.dispose();
+      registry.dispose();
+    }
+  });
+
+  it('unregisters the release observer when disposed', () => {
+    const { registry, releaseSource, binder, executionId } = setupBinder(
+      'exec-subscription-dispose-test',
+    );
+
+    try {
+      binder.bind(streamId, executionId);
+
+      expect(releaseSource.hasObserver()).toBe(true);
+      binder.dispose();
+
+      expect(releaseSource.hasObserver()).toBe(false);
+      expect(binder.unbind(streamId, executionId)).toBe(false);
+    } finally {
+      registry.dispose();
+    }
+  });
+});
 
 describe('ExecutionSubscriptionBinder session routing', () => {
   beforeEach(() => {
@@ -80,7 +161,7 @@ describe('ExecutionSubscriptionBinder session routing', () => {
     const explicit = createRecordingHost();
     const binder = new ExecutionSubscriptionBinder({
       registry,
-      releaseSource: createReleaseSource(),
+      releaseSource: createReleaseSource().source,
       logger: createLogger(),
       session,
     });
@@ -133,7 +214,7 @@ describe('ExecutionSubscriptionBinder session routing', () => {
       const explicit = createRecordingHost();
       const binder = new ExecutionSubscriptionBinder({
         registry,
-        releaseSource: createReleaseSource(),
+        releaseSource: createReleaseSource().source,
         logger: createLogger(),
         session,
       });
@@ -177,7 +258,7 @@ describe('ExecutionSubscriptionBinder session routing', () => {
     const explicit = createRecordingHost();
     const binder = new ExecutionSubscriptionBinder({
       registry,
-      releaseSource: createReleaseSource(),
+      releaseSource: createReleaseSource().source,
       logger: createLogger(),
     });
     const executionId = 'exec-subscription-current-session-test';
@@ -222,7 +303,7 @@ describe('ExecutionSubscriptionBinder session routing', () => {
     const recorded = recordSessionEvents(session.events, { scope: 'session' });
     const binder = new ExecutionSubscriptionBinder({
       registry,
-      releaseSource: createReleaseSource(),
+      releaseSource: createReleaseSource().source,
       logger,
       session,
     });
