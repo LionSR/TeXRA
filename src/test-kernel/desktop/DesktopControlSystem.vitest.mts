@@ -257,6 +257,9 @@ describe('desktop control system', () => {
     expect(electronMain).toContain('confirmDiscardUnsavedEditorChanges(true)');
     expect(electronMain).toContain('allowNextPreventedUnload');
     expect(electronMain).toMatch(
+      /webContents\.on\('did-navigate',[\s\S]*?initialRendererNavigationComplete[\s\S]*?workspaceIpc\.disposeRendererResources\(\)/u,
+    );
+    expect(electronMain).toMatch(
       /workspaceRelaunchInProgress = true;[\s\S]*?window\.close\(\);[\s\S]*?window\.once\('closed',[\s\S]*?app\.relaunch/u,
     );
     expect(electronMain).toMatch(
