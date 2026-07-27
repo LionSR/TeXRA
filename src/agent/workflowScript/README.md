@@ -11,8 +11,8 @@ between steps. Design rationale and the full findings that motivated it:
 ```js
 export const meta = {
   name: 'draft-chapter',
-  description: 'Draft sections in parallel, then merge',
-  phases: [{ title: 'Draft' }, { title: 'Merge' }],
+  description: 'Draft sections in parallel',
+  phases: [{ title: 'Draft' }],
   tasks: [
     { id: 'introduction', label: 'Draft introduction', phase: 'Draft' },
     { id: 'results', label: 'Draft results', phase: 'Draft' },
@@ -23,8 +23,7 @@ const sections = await parallel([
   () => agent('Draft the introduction.', { id: 'introduction' }),
   () => agent('Draft the results.', { id: 'results' }),
 ]);
-phase('Merge');
-return concat(sections, { separator: '\n\n' });
+return sections.filter(Boolean);
 ```
 
 When the task set comes from runtime arguments, the script omits `meta.tasks`
@@ -63,14 +62,8 @@ return await parallel(
   validated object rather than edited files.
 - `parallel(thunks)` — concurrent barrier. Failed `agent()` calls resolve to
   `null`; other thrown errors reject the workflow.
-- `pipeline(items, ...stages)` — per-item stage chains with **no barrier**
-  between stages. Failed `agent()` calls resolve to `null`; other thrown
-  errors reject the workflow. Each stage is called
-  `(prevValue, originalItem, index)`; the first stage's `prevValue` is seeded
-  with the item itself, so later stages can still reach the original item and
-  its index without threading them through return values.
-- `concat(parts, {separator}?)` — zero-token fan-in for text parts;
-  drops `null`/`undefined` (failed stages) and empty strings.
+- Ordinary JavaScript loops and awaited `agent()` calls own sequential stages;
+  array methods such as `.filter(Boolean)` and `.join()` own local fan-in.
 - `log(msg)` / `phase(title)` / `args` — progress + parameterization.
 - `files` — immutable, role-separated workspace files bound to the run:
   `files.inputFiles` are editable, while `files.contextFiles` and
@@ -98,10 +91,11 @@ return await parallel(
   an earlier child cannot hide a later completed result. A parent execution has
   one active runtime owner; the execution KV store is durable state, not a
   cross-process lock. Version-1 journal keys are tagged when loaded and migrate
-  to presentation-independent keys after a verified replay. Because the old
-  format retained only an opaque hash, changing a task label or phase during
-  the same upgrade cannot be proven equivalent and conservatively reruns that
-  call.
+  to dependency-aware keys after a verified replay. Legacy file-backed keys
+  conservatively miss once because they did not record file contents. Because
+  the oldest format retained only an opaque hash, changing a task label or
+  phase during the same upgrade also cannot be proven equivalent and
+  conservatively reruns that call.
 - **Cost ownership**: child costs remain in the persisted typed results. The
   future tool surface must aggregate the final journal at its tool-result
   boundary, rather than mutating parent totals during child launch; this keeps
@@ -119,9 +113,8 @@ return await parallel(
   arrive as JSON revived with the sandbox's own `JSON.parse`; host errors
   are re-thrown as realm-local Errors. The script's own return value is
   reported through a result channel as JSON text rather than awaited
-  host-side. Crucially, the fan-out primitives (`parallel`, `pipeline`,
-  `concat`) run **inside the realm** as a trusted prelude — they consume
-  script-created arrays, thunks, and promises, so running them host-side
+  host-side. Crucially, `parallel()` runs **inside the realm** as a trusted
+  prelude — it consumes script-created arrays and thunks, so running it host-side
   would hand the script a host callback (via an overridden `arr.map`) or a
   host resolve function (via a malicious `thenable.then`) whose
   `.constructor` is the host's ungated `Function`. This closes the classic
@@ -134,26 +127,23 @@ return await parallel(
   them (`new Date(timestamp)` stays usable). Resume relies on replaying the
   same call sequence: each `agent()` call is journaled by (call index,
   prompt/execution-options hash), and a rerun with a prior journal replays
-  matching calls from cache, re-running only edited or new calls. Display
-  labels and phases do not participate in this identity. Failed and cancelled
-  calls are not journaled, so resume retries them. Caveat: `agent()` calls
-  made from `pipeline()` stages beyond the first get indices in completion
-  order, which varies run-to-run — the per-index key check keeps replay safe,
-  but multi-stage pipelines see lower journal cache-hit rates. Durable child
-  identity instead uses the prompt/execution-options hash, so a shifted
-  journal index does not repeat completed model work. Otherwise-identical
-  calls must provide distinct `id` options; ambiguous duplicates fail before
-  launch.
+  matching calls from cache, re-running only edited or new calls. File-backed
+  calls also hash the current bytes of their input, context, and media files,
+  so editing a referenced path invalidates both its cached result and stable
+  child identity. Display labels and phases do not participate in identity.
+  Failed and cancelled calls are not journaled, so resume retries them.
+  Otherwise-identical calls must provide distinct `id` options; ambiguous
+  duplicates fail before launch.
 - **Budgets**: one concurrency semaphore (default 4) across all `agent()`
   calls, a live-call cap (default 200; journal replays are free), a fan-out cap per
-  `parallel()`/`pipeline()` call, and a wall-clock timeout. The cap and
-  timeout raise `WorkflowRunAbortError`, which `parallel()`/`pipeline()` do
+  `parallel()` call, and a wall-clock timeout. The cap and
+  timeout raise `WorkflowRunAbortError`, which `parallel()` does
   not convert to `null` — the whole run fails. On timeout guest execution is
   interrupted, the run's `AbortSignal` (on every
   `runAgent` invocation) fires, and new `agent()` calls are refused; runners
   should cancel in-flight work on it.
-- **Debuggability**: a thrown error inside a `parallel()` thunk or
-  `pipeline()` stage (a script bug, as opposed to an `agent()` failure,
+- **Debuggability**: a thrown error inside a `parallel()` thunk
+  (a script bug, as opposed to an `agent()` failure,
   which already resolves to `null` with its own `agent:end` event) rejects the
   workflow so the saved script can be edited and rerun.
 
@@ -177,7 +167,8 @@ strips `delegate_workflow_script` from every agent's resolved tools when
 switched off, regardless of what any individual agent configuration names —
 and new installs start with the switch off.
 
-Domain-specific structures should travel as JSON output files rather than
-per-call result schemas. Cost settlement covers completed logical calls retained
-in the journal; failed or cancelled attempts can consume additional quota before
-they become durable.
+Use per-call schemas for compact decisions and synthesis inputs; use output
+files when the artifact itself must be edited or passed to another workflow
+agent. Cost settlement covers completed logical calls retained in the journal;
+failed or cancelled attempts can consume additional quota before they become
+durable.

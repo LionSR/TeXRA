@@ -29,6 +29,14 @@ function thinkingFor(
   return (handler as any).getThinkingParameter();
 }
 
+function supportsForcedToolChoice(supportsReasoning: boolean): boolean {
+  return new ModelHandlerDeepSeek({
+    fullName: supportsReasoning ? 'deepseek-v4-pro' : 'deepseek-chat',
+    provider: ModelProvider.DEEPSEEK,
+    capabilities: { ...DEFAULT_MODEL_CAPABILITIES, supportsReasoning },
+  } as ModelConfig).supportsForcedToolChoice;
+}
+
 const DEEPSEEK_TEST_CONFIG = Object.freeze({
   name: 'deepseek-chat',
   fullName: 'deepseek-chat',
@@ -119,6 +127,16 @@ describe('ModelHandlerDeepSeek.getThinkingParameter', () => {
     assert.deepEqual(thinkingFor('deepseek-future', false), {
       type: 'disabled',
     });
+  });
+});
+
+describe('ModelHandlerDeepSeek.supportsForcedToolChoice', () => {
+  it('does not force tools in thinking mode', () => {
+    assert.equal(supportsForcedToolChoice(true), false);
+  });
+
+  it('allows forced tools outside thinking mode', () => {
+    assert.equal(supportsForcedToolChoice(false), true);
   });
 });
 

@@ -165,7 +165,7 @@ describe('workflow-script persistence', () => {
     expect(runner).not.toHaveBeenCalled();
     expect(resumed.journal).toMatchObject([
       {
-        keyFormat: WORKFLOW_JOURNAL_KEY_FORMAT.PRESENTATION_INDEPENDENT_V2,
+        keyFormat: WORKFLOW_JOURNAL_KEY_FORMAT.DEPENDENCY_AWARE_V3,
       },
     ]);
     expect(resumed.journal[0]?.key).not.toBe(LEGACY_PRESENTATION_KEY);
@@ -177,7 +177,7 @@ describe('workflow-script persistence', () => {
       schemaVersion: 2,
       journal: [
         {
-          keyFormat: WORKFLOW_JOURNAL_KEY_FORMAT.PRESENTATION_INDEPENDENT_V2,
+          keyFormat: WORKFLOW_JOURNAL_KEY_FORMAT.DEPENDENCY_AWARE_V3,
         },
       ],
     });
@@ -201,7 +201,7 @@ describe('workflow-script persistence', () => {
     expect(runner).toHaveBeenCalledOnce();
     expect(resumed.journal).toMatchObject([
       {
-        keyFormat: WORKFLOW_JOURNAL_KEY_FORMAT.PRESENTATION_INDEPENDENT_V2,
+        keyFormat: WORKFLOW_JOURNAL_KEY_FORMAT.DEPENDENCY_AWARE_V3,
       },
     ]);
   });

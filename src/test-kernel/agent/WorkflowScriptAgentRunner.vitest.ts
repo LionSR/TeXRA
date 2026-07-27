@@ -5,7 +5,10 @@ import type { AgentEntry } from '@agent/index/agentRegistry';
 import type { LaunchRunContext } from '@agent/runtime/RunContext';
 import type { AgentFinalResult } from '@agent/runtime/AgentFinalResult';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
-import { createWorkflowScriptAgentRunner } from '@tools/delegation/workflowScriptAgentRunner';
+import {
+  createWorkflowScriptAgentRunner,
+  fingerprintWorkflowAgentDependencies,
+} from '@tools/delegation/workflowScriptAgentRunner';
 import {
   SubagentDurabilityError,
   SubagentReconciliationError,
@@ -21,6 +24,8 @@ const mocks = vi.hoisted(() => ({
   assertWorkflowFilesExist: vi.fn(),
   rejectOversizedBibAttachments: vi.fn(),
   configureDelegatedChildApprovals: vi.fn(),
+  workspaceReadBytes: vi.fn(),
+  absoluteReadBytes: vi.fn(),
 }));
 
 vi.mock('@tools/approval', () => ({
@@ -67,6 +72,11 @@ vi.mock('@tools/delegation/workflowFileValidation', () => ({
 
 vi.mock('@tools/delegation/inputFields', () => ({
   rejectOversizedBibAttachments: mocks.rejectOversizedBibAttachments,
+}));
+
+vi.mock('@utils/files', () => ({
+  WorkspaceFS: { readBytes: mocks.workspaceReadBytes },
+  AbsoluteFS: { readBytes: mocks.absoluteReadBytes },
 }));
 
 const parentExecutionId = 'aaaaaa111111' as ExecutionId;
@@ -173,10 +183,50 @@ describe('createWorkflowScriptAgentRunner', () => {
     mocks.assertWorkflowFilesExist.mockResolvedValue(undefined);
     mocks.rejectOversizedBibAttachments.mockResolvedValue(null);
     mocks.runStorageLocationFromAnyAbsolutePath.mockReturnValue(undefined);
+    mocks.workspaceReadBytes.mockResolvedValue(Buffer.from('workspace bytes'));
+    mocks.absoluteReadBytes.mockResolvedValue(Buffer.from('run bytes'));
     mocks.executeStableSubagentInBand.mockImplementation(async (options) => {
       mocks.preparedOptions.push(await options.prepare());
       return { executionId: 'bbbbbb222222', result };
     });
+  });
+
+  it('fingerprints file bytes rather than only their paths', async () => {
+    const options = { inputFiles: ['proof.tex'] };
+    mocks.workspaceReadBytes.mockResolvedValueOnce(Buffer.from('old proof'));
+    const oldFingerprint = await fingerprintWorkflowAgentDependencies(
+      runExecutionId,
+      options,
+    );
+    mocks.workspaceReadBytes.mockResolvedValueOnce(Buffer.from('new proof'));
+    const newFingerprint = await fingerprintWorkflowAgentDependencies(
+      runExecutionId,
+      options,
+    );
+
+    expect(oldFingerprint).not.toBe(newFingerprint);
+    expect(mocks.workspaceReadBytes).toHaveBeenCalledWith('proof.tex');
+  });
+
+  it('keeps dependency fingerprints stable for unchanged binary bytes', async () => {
+    const bytes = Buffer.from([0, 255, 1, 128]);
+    mocks.workspaceReadBytes.mockResolvedValue(bytes);
+    const options = {
+      inputFiles: ['proof.bin'],
+      contextFiles: ['context.bin'],
+    };
+
+    await expect(
+      Promise.all([
+        fingerprintWorkflowAgentDependencies(runExecutionId, options),
+        fingerprintWorkflowAgentDependencies(runExecutionId, options),
+      ]),
+    ).resolves.toEqual([expect.any(String), expect.any(String)]);
+    const [first, second] = await Promise.all([
+      fingerprintWorkflowAgentDependencies(runExecutionId, options),
+      fingerprintWorkflowAgentDependencies(runExecutionId, options),
+    ]);
+    expect(first).toBe(second);
   });
 
   it('uses delegation policy and executes a direct in-band child', async () => {

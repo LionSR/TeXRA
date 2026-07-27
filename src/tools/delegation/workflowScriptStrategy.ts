@@ -42,6 +42,7 @@ import {
   sumCurrentWorkflowRunCost,
   workflowJournalEntryCostIdentity,
 } from './workflowScriptRun';
+import { fingerprintWorkflowAgentDependencies } from './workflowScriptAgentRunner';
 
 const RUN_LOG_MAX_LINES = 80;
 const RUN_LOG_MAX_LINE_LENGTH = 500;
@@ -194,6 +195,8 @@ export function createWorkflowScriptStrategy(
           }),
           signal: abortController.signal,
           runAgent,
+          fingerprintAgentDependencies: (options) =>
+            fingerprintWorkflowAgentDependencies(params.executionId, options),
           getCallCostUsd: (index) => callCostsByIndex.get(index),
           onActivity: runLog.add,
           onControl: (control) => {

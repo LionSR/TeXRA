@@ -68,7 +68,7 @@ recommended groups at the bottom are a good starting point.
   through the immutable `files.inputFiles`, `files.contextFiles`, and
   `files.mediaFiles` arrays. The script begins with an exported `meta` object
   containing `name` and `description`, and can use `agent`, `phase`, `log`,
-  `parallel`, `pipeline`, and `concat`. Workflow-agent calls accept the same
+  `parallel` plus ordinary JavaScript control flow. Workflow-agent calls accept the same
   three file roles. Any call may declare an available model short name with
   `model`; omitted models follow ordinary delegation policy.
   `agent(prompt, { agentName, model, schema })` instead runs a named tool-use

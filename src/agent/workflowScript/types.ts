@@ -171,6 +171,7 @@ export type WorkflowAgentRunner = (
 export const WORKFLOW_JOURNAL_KEY_FORMAT = {
   LEGACY_V1: 'legacy-v1',
   PRESENTATION_INDEPENDENT_V2: 'presentation-independent-v2',
+  DEPENDENCY_AWARE_V3: 'dependency-aware-v3',
 } as const;
 
 export const WorkflowJournalKeyFormatSchema = z.enum(
@@ -183,8 +184,9 @@ export interface WorkflowJournalEntry {
   index: number;
   /**
    * Stable call hash interpreted according to `keyFormat`. Current entries
-   * exclude display labels and phases; migrated v1 entries include them.
-   * A mismatch forces a live re-run.
+   * exclude display labels and phases and include host-resolved dependency
+   * fingerprints; migrated v1 entries include presentation fields. A mismatch
+   * forces a live re-run.
    */
   key: string;
   /** Hash semantics used to verify and migrate this persisted entry. */
@@ -297,6 +299,14 @@ export interface WorkflowScriptRunOptions {
   /** Exposed to the script as the immutable global `files` object. */
   files?: WorkflowScriptFiles;
   runAgent: WorkflowAgentRunner;
+  /**
+   * Host-owned fingerprint for external file dependencies referenced by one
+   * agent() call. Required when the call carries file options: the engine
+   * includes the opaque value in both journal and child execution identity.
+   */
+  fingerprintAgentDependencies?: (
+    options: WorkflowAgentCallOptions,
+  ) => Promise<string | undefined>;
   /** Parent cancellation signal; aborts guest execution and active agents. */
   signal?: AbortSignal;
   /** Max concurrently running agent() calls. Default 4. */

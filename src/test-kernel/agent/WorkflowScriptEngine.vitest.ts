@@ -519,6 +519,7 @@ return await agent('merge', {
           cost: 0,
         };
       },
+      fingerprintAgentDependencies: async () => 'drafted-section-v1',
     });
 
     expect(invocations[1]?.options.inputFiles).toEqual([outputPath]);
@@ -629,47 +630,6 @@ return await parallel([
       name: 'WorkflowRunAbortError',
       message: expect.stringContaining('checkpoint offline'),
     });
-  });
-
-  it('pipeline(): no barrier between stages', async () => {
-    const stage2Order: string[] = [];
-    const events: WorkflowScriptEvent[] = [];
-    const runner = async (invocation: WorkflowAgentInvocation) => {
-      if (invocation.prompt === 'slow') {
-        await delay(40);
-      }
-      return invocation.prompt;
-    };
-    const run = await runWorkflowScript({
-      script: `${META}
-return await pipeline(
-  ['fast', 'slow'],
-  (item) => agent(item),
-  async (prev, item) => { log('stage2:' + item); return prev + '!' },
-)`,
-      runAgent: runner,
-      onEvent: (event) => {
-        events.push(event);
-        if (event.type === 'log') stage2Order.push(event.message);
-      },
-    });
-    expect(run.result).toEqual(['fast!', 'slow!']);
-    // The fast item reached stage 2 while the slow item was still in stage 1.
-    expect(stage2Order).toEqual(['stage2:fast', 'stage2:slow']);
-  });
-
-  it('pipeline(): surfaces script errors instead of dropping the item', async () => {
-    await expect(
-      runWorkflowScript({
-        script: `${META}
-return await pipeline(
-  [1, 2, 3],
-  (item) => { if (item === 2) throw new Error('drop'); return item * 10 },
-  (prev) => prev + 1,
-)`,
-        runAgent: echoRunner,
-      }),
-    ).rejects.toThrow('drop');
   });
 
   it('caps concurrent agent() calls to the concurrency limit over a large fan-out', async () => {
@@ -793,6 +753,90 @@ return await agent('Inspect src', { id: 'inspect' })`,
     });
   });
 
+  it('invalidates cached calls when referenced file contents change', async () => {
+    const script = `${META}return await agent('review', {
+  inputFiles: ['proof.tex'],
+})`;
+    let dependencyFingerprint = 'old-proof';
+    const first = await runWorkflowScript({
+      script,
+      runAgent: async () => 'old result',
+      fingerprintAgentDependencies: async () => dependencyFingerprint,
+    });
+    const runner = vi.fn(async () => 'new result');
+
+    dependencyFingerprint = 'new-proof';
+    const resumed = await runWorkflowScript({
+      script,
+      runAgent: runner,
+      journal: first.journal,
+      fingerprintAgentDependencies: async () => dependencyFingerprint,
+    });
+
+    expect(resumed.result).toBe('new result');
+    expect(runner).toHaveBeenCalledOnce();
+    expect(resumed.journal[0]?.key).not.toBe(first.journal[0]?.key);
+  });
+
+  it('replays file-backed calls only when their dependency fingerprint matches', async () => {
+    const script = `${META}return await agent('review', {
+  inputFiles: ['proof.tex'],
+})`;
+    const fingerprintAgentDependencies = async () => 'same-proof';
+    const first = await runWorkflowScript({
+      script,
+      runAgent: async () => 'saved result',
+      fingerprintAgentDependencies,
+    });
+    const runner = vi.fn(async () => 'must not run');
+
+    const resumed = await runWorkflowScript({
+      script,
+      runAgent: runner,
+      journal: first.journal,
+      fingerprintAgentDependencies,
+    });
+
+    expect(resumed.result).toBe('saved result');
+    expect(runner).not.toHaveBeenCalled();
+  });
+
+  it('does not trust pre-v3 journal keys for file-backed calls', async () => {
+    const script = `${META}return await agent('review', {
+  inputFiles: ['proof.tex'],
+})`;
+    const first = await runWorkflowScript({
+      script,
+      runAgent: async () => 'saved result',
+      fingerprintAgentDependencies: async () => 'proof',
+    });
+    const runner = vi.fn(async () => 'fresh result');
+
+    const resumed = await runWorkflowScript({
+      script,
+      runAgent: runner,
+      journal: first.journal.map((entry) => ({
+        ...entry,
+        keyFormat: WORKFLOW_JOURNAL_KEY_FORMAT.PRESENTATION_INDEPENDENT_V2,
+      })),
+      fingerprintAgentDependencies: async () => 'proof',
+    });
+
+    expect(resumed.result).toBe('fresh result');
+    expect(runner).toHaveBeenCalledOnce();
+  });
+
+  it('requires hosts to fingerprint file-backed calls', async () => {
+    await expect(
+      runWorkflowScript({
+        script: `${META}return await agent('review', {
+  inputFiles: ['proof.tex'],
+})`,
+        runAgent: echoRunner,
+      }),
+    ).rejects.toThrow(/must fingerprint agent\(\) file dependencies/);
+  });
+
   it('ends a cached call with an error when its journal value is invalid', async () => {
     const script = `${META}return await agent('cached')`;
     const first = await runWorkflowScript({ script, runAgent: echoRunner });
@@ -820,14 +864,6 @@ return await agent('Inspect src', { id: 'inspect' })`,
         error: expect.stringMatching(/must be JSON-serializable/i),
       },
     ]);
-  });
-
-  it('concat() joins parts and drops nulls', async () => {
-    const run = await runWorkflowScript({
-      script: `${META}return concat(['a', null, 'b', '', 'c'], { separator: ' | ' })`,
-      runAgent: echoRunner,
-    });
-    expect(run.result).toBe('a | b | c');
   });
 
   it('blocks Date.now() and Math.random() inside scripts', async () => {
@@ -978,12 +1014,6 @@ return await agent('active', { label: 'Active' })`,
     ).rejects.toThrow(/array of zero-arg functions/);
     await expect(
       runWorkflowScript({
-        script: `${META}return await pipeline([1])`,
-        runAgent: echoRunner,
-      }),
-    ).rejects.toThrow(/at least one stage/);
-    await expect(
-      runWorkflowScript({
         script: `${META}return await agent('x', [])`,
         runAgent: echoRunner,
       }),
@@ -1053,24 +1083,6 @@ return await agent('active', { label: 'Active' })`,
       name: 'WorkflowRunAbortError',
       message: expect.stringContaining('must name a tool-use agent'),
     });
-    await expect(
-      runWorkflowScript({
-        script: `${META}return await pipeline(
-  [1],
-  () => agent('x', {
-    agentName: 'assistant',
-    schema: { type: 'object' },
-    inputFiles: ['paper.tex'],
-  }),
-)`,
-        runAgent: echoRunner,
-      }),
-    ).rejects.toMatchObject({
-      name: 'WorkflowRunAbortError',
-      message: expect.stringContaining(
-        'structured-output calls cannot use file options',
-      ),
-    });
   });
 
   it('accepts a schema option and rejects obsolete or misspelled options', async () => {
@@ -1111,8 +1123,8 @@ return await agent('a', { agentName: 'assistant', schema: { type: 'object' } })`
   });
 
   it('does not leak a host Function via a callback passed to parallel()', async () => {
-    // parallel/pipeline/concat run realm-side, so the thunk a script hands
-    // them is only ever invoked by sandbox code: its `this`/args and any
+    // parallel runs realm-side, so the thunk a script hands it is only ever
+    // invoked by sandbox code: its `this`/args and any
     // .constructor it can reach are realm-local and codegen-gated. A host
     // callback would carry the ungated host Function constructor.
     const run = await runWorkflowScript({
@@ -1133,30 +1145,6 @@ return results[0]`,
       runAgent: echoRunner,
     });
     expect(typeof run.result).toBe('string');
-    expect(run.result).toMatch(/^blocked:/);
-  });
-
-  it('does not leak a host Function through an overridden array method', async () => {
-    // The classic escape: override the array's own filter/map so the
-    // dispatcher passes a host callback into it. concat() runs realm-side,
-    // so the override only ever receives realm-local callables.
-    const run = await runWorkflowScript({
-      script: `${META}
-let captured = null
-const parts = ['a', 'b']
-parts.filter = function (cb) {
-  captured = cb
-  return this
-}
-concat(parts)
-try {
-  const escaped = captured.constructor('return typeof process')()
-  return 'leaked:' + escaped
-} catch (error) {
-  return 'blocked:' + (error && error.name)
-}`,
-      runAgent: echoRunner,
-    });
     expect(run.result).toMatch(/^blocked:/);
   });
 
@@ -1902,7 +1890,7 @@ return 'incorrect success'`,
       {
         index: 0,
         key: expect.any(String),
-        keyFormat: WORKFLOW_JOURNAL_KEY_FORMAT.PRESENTATION_INDEPENDENT_V2,
+        keyFormat: WORKFLOW_JOURNAL_KEY_FORMAT.DEPENDENCY_AWARE_V3,
         result: 'attempt-2',
       },
     ]);

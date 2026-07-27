@@ -1,7 +1,11 @@
+// Node imports
+import { createHash } from 'node:crypto';
+
 // Local imports
 import { resolveChildRunOutput } from '@agent/storage';
 import {
   WorkflowRunAbortError,
+  type WorkflowAgentCallOptions,
   type WorkflowAgentInvocation,
   type WorkflowAgentRunner,
 } from '@agent/workflowScript';
@@ -12,6 +16,7 @@ import { formatError } from '@common/errors';
 import { AgentCategory } from '@shared/schemas';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { configureDelegatedChildApprovals } from '@tools/approval';
+import { AbsoluteFS, WorkspaceFS } from '@utils/files';
 import { deriveExecutionId } from '@utils/core/idHash';
 import { runStorageLocationFromAnyAbsolutePath } from '@utils/files/taskRunStorage';
 
@@ -74,6 +79,37 @@ async function resolveInvocationFileList(
   return resolved;
 }
 
+/** Hash the bytes behind every file option used by one workflow agent call. */
+export async function fingerprintWorkflowAgentDependencies(
+  parentExecutionId: LaunchRunContext['runScope']['executionId'],
+  options: WorkflowAgentCallOptions,
+): Promise<string | undefined> {
+  const groups = [
+    ['input', options.inputFiles ?? []],
+    ['context', options.contextFiles ?? []],
+    ['media', options.mediaFiles ?? []],
+  ] as const;
+  if (groups.every(([, files]) => files.length === 0)) return undefined;
+
+  const hash = createHash('sha256');
+  for (const [label, files] of groups) {
+    const resolved = await resolveInvocationFileList(
+      parentExecutionId,
+      `${label[0]?.toUpperCase()}${label.slice(1)} file`,
+      files,
+    );
+    for (const [index, file] of resolved.entries()) {
+      const bytes =
+        runStorageLocationFromAnyAbsolutePath(file) !== undefined
+          ? await AbsoluteFS.readBytes(file)
+          : await WorkspaceFS.readBytes(file);
+      hash.update(`${label}\0${index}\0${bytes.length}\0`);
+      hash.update(bytes);
+    }
+  }
+  return hash.digest('hex');
+}
+
 async function selectWorkflowScriptModel(
   input: Parameters<typeof selectAvailableDelegationModel>[0],
 ): Promise<string> {
@@ -81,7 +117,7 @@ async function selectWorkflowScriptModel(
     return await selectAvailableDelegationModel(input);
   } catch (error) {
     // A declared model is workflow configuration, so its rejection must not
-    // disappear as a nullable call inside parallel()/pipeline(). When the
+    // disappear as a nullable call inside parallel(). When the
     // script omits the field, preserve the established delegation failure
     // semantics; per-call model routing must not broaden that behavior.
     if (input.requestedModel == null) throw error;
@@ -243,7 +279,7 @@ export function createWorkflowScriptAgentRunner(
             // the resolved inputs, not merely the paths supplied by the script,
             // so a stale reference cannot launch a useless empty-envelope run.
             // Run-fatal, not a per-call failure: a plain error would resolve
-            // this agent() to null inside parallel()/pipeline(), silently
+            // this agent() to null inside parallel(), silently
             // filtering away the very misuse this guard exists to surface.
             if (
               inputFiles.length === 0 &&

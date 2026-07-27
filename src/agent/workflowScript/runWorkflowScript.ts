@@ -40,16 +40,33 @@ function journalKey(
   prompt: string,
   options: WorkflowAgentCallOptions,
   keyFormat: WorkflowJournalEntry['keyFormat'],
+  dependencyFingerprint?: string,
 ): string {
   const executionOptions: WorkflowAgentCallOptions = { ...options };
-  if (keyFormat === WORKFLOW_JOURNAL_KEY_FORMAT.PRESENTATION_INDEPENDENT_V2) {
+  if (keyFormat !== WORKFLOW_JOURNAL_KEY_FORMAT.LEGACY_V1) {
     delete executionOptions.label;
     delete executionOptions.phase;
   }
   return createHash('sha256')
-    .update(stableStringify({ options: executionOptions, prompt }))
+    .update(
+      stableStringify({
+        options: executionOptions,
+        prompt,
+        ...(keyFormat === WORKFLOW_JOURNAL_KEY_FORMAT.DEPENDENCY_AWARE_V3 && {
+          dependencyFingerprint,
+        }),
+      }),
+    )
     .digest('hex')
     .slice(0, 16);
+}
+
+function hasAgentFileDependencies(options: WorkflowAgentCallOptions): boolean {
+  return (
+    (options.inputFiles?.length ?? 0) > 0 ||
+    (options.contextFiles?.length ?? 0) > 0 ||
+    (options.mediaFiles?.length ?? 0) > 0
+  );
 }
 
 const DEFAULT_CONCURRENCY = 4;
@@ -80,10 +97,10 @@ type WorkflowScriptFailureAttemptMetadata = Pick<
 >;
 
 /**
- * Fan-out primitives, defined INSIDE the sandbox realm (trusted prelude,
+ * The fan-out primitive, defined INSIDE the sandbox realm (trusted prelude,
  * compiled by the host, run before the script body). They must not live
- * host-side: parallel/pipeline/concat consume script-created arrays,
- * thunks, and promises, and any host code that calls a method on a
+ * host-side: parallel consumes script-created arrays and thunks, and any host
+ * code that calls a method on a
  * sandbox array (`thunks.map(hostCb)`) or awaits a sandbox thenable hands
  * the script a host-realm function whose .constructor is the host's
  * ungated Function constructor. Realm-side, every callback and resolve
@@ -121,56 +138,12 @@ const ORCHESTRATION_PRELUDE = `
       }),
     );
   });
-
-  define('pipeline', async function pipeline(items, ...stages) {
-    if (!Array.isArray(items)) {
-      throw new Error('pipeline(items, ...stages) requires an items array.');
-    }
-    if (items.length > MAX_FANOUT) {
-      throw new Error('pipeline() accepts at most ' + MAX_FANOUT + ' items.');
-    }
-    if (stages.length === 0 || stages.some((s) => typeof s !== 'function')) {
-      throw new Error('pipeline() requires at least one stage function.');
-    }
-    // No barrier between stages: each item advances through its own chain
-    // independently, so wall-clock is the slowest single-item chain. Note
-    // for resume: agent() calls in stages beyond the first get journal
-    // indices in completion order, which varies run-to-run — the journal's
-    // per-index key check keeps replay safe, at the cost of cache hits.
-    return Promise.all(
-      items.map(async (item, index) => {
-        // The first stage receives (item, item, index): prev is seeded with
-        // the item itself, not undefined.
-        let value = item;
-        for (const stage of stages) {
-          value = await stage(value, item, index);
-        }
-        return value;
-      }),
-    );
-  });
-
-  define('concat', function concat(parts, options) {
-    if (!Array.isArray(parts)) {
-      throw new Error('concat(parts, options?) requires an array.');
-    }
-    const separatorRaw =
-      options !== null && typeof options === 'object'
-        ? options.separator
-        : undefined;
-    const separator = separatorRaw === undefined ? '\\n\\n' : String(separatorRaw);
-    // Zero-token fan-in: drops failed (null) stage results, joins the rest.
-    return parts
-      .filter((part) => part !== null && part !== undefined && part !== '')
-      .map(String)
-      .join(separator);
-  });
 })();
 `;
 
 /**
  * Thrown when the whole run must stop (agent-call cap exceeded, wall-clock
- * timeout abort). The realm-side parallel()/pipeline() rethrow it by name
+ * timeout abort). The realm-side parallel() rethrows it by name
  * instead of converting it to a null slot, so the backstops apply inside
  * fan-out primitives too. Detected by name, not instanceof — the error
  * crosses the sandbox realm boundary as a realm-local copy carrying only
@@ -207,7 +180,13 @@ function isWorkflowAbort(error: unknown): boolean {
 export async function runWorkflowScript(
   options: WorkflowScriptRunOptions,
 ): Promise<WorkflowScriptRunResult> {
-  const { runAgent, onEvent, onJournalEntry, onControl } = options;
+  const {
+    runAgent,
+    fingerprintAgentDependencies,
+    onEvent,
+    onJournalEntry,
+    onControl,
+  } = options;
   const concurrency = options.concurrency ?? DEFAULT_CONCURRENCY;
   const maxAgentCalls = options.maxAgentCalls ?? DEFAULT_MAX_AGENT_CALLS;
 
@@ -365,10 +344,35 @@ export async function runWorkflowScript(
       plannedTask?.label ??
       callOptions.label ??
       prompt.slice(0, LABEL_EXCERPT_LENGTH).replaceAll(/\s+/g, ' ').trim();
+    const hasFileDependencies = hasAgentFileDependencies(callOptions);
+    if (hasFileDependencies && fingerprintAgentDependencies === undefined) {
+      throw rememberFatalRunError(
+        new WorkflowRunAbortError(
+          'The workflow host must fingerprint agent() file dependencies before they can be resumed safely.',
+        ),
+      );
+    }
+    let dependencyFingerprint: string | undefined;
+    if (hasFileDependencies) {
+      try {
+        dependencyFingerprint =
+          await fingerprintAgentDependencies?.(callOptions);
+      } catch (error) {
+        throw rememberFatalRunError(
+          error instanceof WorkflowRunAbortError
+            ? error
+            : new WorkflowRunAbortError(
+                `Workflow agent() file dependencies could not be fingerprinted: ${toErrorMessage(error)}`,
+                { cause: error },
+              ),
+        );
+      }
+    }
     const key = journalKey(
       prompt,
       callOptions,
-      WORKFLOW_JOURNAL_KEY_FORMAT.PRESENTATION_INDEPENDENT_V2,
+      WORKFLOW_JOURNAL_KEY_FORMAT.DEPENDENCY_AWARE_V3,
+      dependencyFingerprint,
     );
     const progressId = plannedTask?.id ?? `call-${index}`;
     if (plannedTask) {
@@ -427,10 +431,19 @@ export async function runWorkflowScript(
     };
 
     const prior = priorEntries.get(index);
-    const priorKey =
-      prior === undefined
-        ? undefined
-        : journalKey(prompt, callOptions, prior.keyFormat);
+    let priorKey: string | undefined;
+    if (
+      prior !== undefined &&
+      (!hasFileDependencies ||
+        prior.keyFormat === WORKFLOW_JOURNAL_KEY_FORMAT.DEPENDENCY_AWARE_V3)
+    ) {
+      priorKey = journalKey(
+        prompt,
+        callOptions,
+        prior.keyFormat,
+        dependencyFingerprint,
+      );
+    }
     if (prior && prior.key === priorKey) {
       const { payload, normalizedResult } = journalValue(
         prior.result,
@@ -439,7 +452,7 @@ export async function runWorkflowScript(
       journal.set(index, {
         ...prior,
         key,
-        keyFormat: WORKFLOW_JOURNAL_KEY_FORMAT.PRESENTATION_INDEPENDENT_V2,
+        keyFormat: WORKFLOW_JOURNAL_KEY_FORMAT.DEPENDENCY_AWARE_V3,
         result: normalizedResult,
       });
       emit({
@@ -584,7 +597,7 @@ export async function runWorkflowScript(
         await recordJournalEntry({
           index,
           key,
-          keyFormat: WORKFLOW_JOURNAL_KEY_FORMAT.PRESENTATION_INDEPENDENT_V2,
+          keyFormat: WORKFLOW_JOURNAL_KEY_FORMAT.DEPENDENCY_AWARE_V3,
           result: normalizedResult,
         });
       } catch (error) {
