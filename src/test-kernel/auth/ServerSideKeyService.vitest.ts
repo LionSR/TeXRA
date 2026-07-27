@@ -6,6 +6,8 @@ import { ULTRA_TIER } from '@auth/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { ServerSideKeyService } from '@auth/serverKeys/ServerSideKeyService';
 import type { TierService } from '@auth/serverKeys/TierService';
+import { appSignals } from '@eventBus/AppSignals';
+import type { StateStore } from '@platform/interfaces';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { delay } from '@utils/core';
 
@@ -13,6 +15,7 @@ const USE_INCLUDED_ACCESS_KEY = 'texra.useIncludedModelAccess';
 
 interface FakeTierService {
   clearCacheCalls: number;
+  getConfigCalls: number;
   service: TierService;
 }
 
@@ -21,10 +24,12 @@ function createTierService(
 ): FakeTierService {
   const fake = {
     clearCacheCalls: 0,
+    getConfigCalls: 0,
     clearCache() {
       this.clearCacheCalls += 1;
     },
     async getConfig() {
+      this.getConfigCalls += 1;
       return {
         providers: options.providers ?? [],
         tiers: {
@@ -68,8 +73,25 @@ function createTierService(
     get clearCacheCalls() {
       return fake.clearCacheCalls;
     },
+    get getConfigCalls() {
+      return fake.getConfigCalls;
+    },
     service: fake as unknown as TierService,
   };
+}
+
+function createService(
+  tierService: TierService,
+  state: StateStore | null = null,
+  notifyIncludedModelAccessChanged?: (enabled: boolean) => void,
+): ServerSideKeyService {
+  return new ServerSideKeyService(
+    'https://example.test',
+    tierService,
+    state,
+    undefined,
+    notifyIncludedModelAccessChanged,
+  );
 }
 
 function createQuotaExceededSetup(): {
@@ -85,14 +107,70 @@ function createQuotaExceededSetup(): {
   vi.spyOn(SupabaseClient, 'isAuthenticated').mockResolvedValue(true);
   vi.spyOn(SupabaseClient, 'getUserTier').mockResolvedValue(ULTRA_TIER);
   vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue('token');
-  const service = new ServerSideKeyService(
-    'https://example.test',
-    tier.service,
-    state,
-  );
+  const service = createService(tier.service, state);
 
   return { state, tier, service };
 }
+
+describe('ServerSideKeyService settings', () => {
+  it('reads the included-access setting from host-provided state', () => {
+    const tier = createTierService();
+    const state = new FakeStateStore({ [USE_INCLUDED_ACCESS_KEY]: false });
+    const service = createService(tier.service, state);
+
+    expect(service.getUseIncludedModelAccess()).toBe(false);
+  });
+
+  it('keeps included access off when there is no host state store', () => {
+    const tier = createTierService();
+    const service = createService(tier.service);
+
+    expect(service.getUseIncludedModelAccess()).toBe(false);
+  });
+
+  it('persists setting changes and fires change events', async () => {
+    const tier = createTierService();
+    const state = new FakeStateStore({ [USE_INCLUDED_ACCESS_KEY]: false });
+    const changes: boolean[] = [];
+    const service = createService(tier.service, state, (value) => {
+      changes.push(value);
+    });
+
+    await service.setUseIncludedModelAccess(true);
+
+    expect(state.get(USE_INCLUDED_ACCESS_KEY, false)).toBe(true);
+    expect(changes).toEqual([true]);
+    expect(tier.clearCacheCalls).toBe(1);
+    expect(tier.getConfigCalls).toBe(0);
+  });
+
+  it('continues notifying after a listener fails', async () => {
+    const tier = createTierService();
+    const changes: boolean[] = [];
+    const service = createService(tier.service, null, (value) => {
+      appSignals.emit('includedModelAccessChanged', value);
+    });
+    const disposeFailing = appSignals.on('includedModelAccessChanged', () => {
+      throw new Error('listener failed');
+    });
+    const disposeRecording = appSignals.on(
+      'includedModelAccessChanged',
+      (value) => {
+        changes.push(value);
+      },
+    );
+
+    try {
+      // Stateless services start with included access off, so `true` is the
+      // transition that fires here.
+      await service.setUseIncludedModelAccess(true);
+      expect(changes).toEqual([true]);
+    } finally {
+      disposeFailing();
+      disposeRecording();
+    }
+  });
+});
 
 describe('ServerSideKeyService quota fallback', () => {
   afterEach(() => {
