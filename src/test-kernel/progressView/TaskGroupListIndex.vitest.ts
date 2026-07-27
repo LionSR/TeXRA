@@ -422,7 +422,7 @@ describe('task-group-list status icon (#7993 step 3)', () => {
 
     expect(iconFor('completed-phase')).toBe('check');
     expect(iconFor('cancelled-phase')).toBe('circle-stop');
-    expect(iconFor('failed-phase')).toBe('error');
+    expect(iconFor('failed-phase')).toBe('circle-exclamation');
   });
 });
 
