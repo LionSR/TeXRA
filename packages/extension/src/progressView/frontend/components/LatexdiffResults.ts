@@ -132,7 +132,7 @@ export class LatexdiffResults extends LitElement {
         ${waIcon(icon)} ${this.renderFileLink(baseFile, baseLabel)}
         ${waIcon('arrow-right', { className: 'arrow' })}
         ${this.renderFileLink(revisedFile, revisedLabel)}
-        (${this.renderFileLink(diffFile, 'code-compare')})
+        (${this.renderFileLink(diffFile, 'diff')})
         ${message ? html`<wa-tooltip for=${entryId}>${message}</wa-tooltip>` : nothing}
       </li>
     `;

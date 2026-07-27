@@ -148,7 +148,7 @@ export class ContextManagement extends LitElement {
               ? html`
                   <div class="summary-block">
                     <div class="summary-title">
-                      ${waIcon('note')} Compaction summary
+                      ${waIcon('note-sticky')} Compaction summary
                     </div>
                     <pre class="summary-text">${this.summary}</pre>
                   </div>

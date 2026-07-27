@@ -522,7 +522,7 @@ function getTaskIcon(child: ActiveChildInfo): TeXRAIconName {
  */
 function taskStatusBadge(child: ActiveChildInfo): {
   readonly text: string;
-  readonly variant: 'neutral' | 'triangle-exclamation' | 'success' | 'danger';
+  readonly variant: 'neutral' | 'warning' | 'success' | 'danger';
 } {
   const subagentStatusStillInFlight =
     child.kind === 'subagent' &&
@@ -533,7 +533,7 @@ function taskStatusBadge(child: ActiveChildInfo): {
     return child.status === STREAM_PHASE.WAITING ||
       child.status === DEFAULT_STREAM_METADATA_STATUS
       ? { text: 'waiting', variant: 'neutral' }
-      : { text: 'running', variant: 'triangle-exclamation' };
+      : { text: 'running', variant: 'warning' };
   }
   switch (child.status) {
     case STREAM_PHASE.FAILED:
@@ -547,8 +547,8 @@ function taskStatusBadge(child: ActiveChildInfo): {
 
 function inquiryStatusVariant(
   status: InquiryThreadUpdatedEvent['status'],
-): 'triangle-exclamation' | 'success' | 'neutral' {
-  if (status === 'open') return 'triangle-exclamation';
+): 'warning' | 'success' | 'neutral' {
+  if (status === 'open') return 'warning';
   if (status === 'answered') return 'success';
   return 'neutral';
 }

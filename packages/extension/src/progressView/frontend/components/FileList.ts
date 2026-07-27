@@ -575,7 +575,7 @@ export class FileList extends LitElement {
   private getSourceDisplayPath(source: string | undefined): string {
     if (
       !source ||
-      source === 'terminal' ||
+      source === 'output' ||
       source === 'output.xml' ||
       source === 'output.tex'
     )

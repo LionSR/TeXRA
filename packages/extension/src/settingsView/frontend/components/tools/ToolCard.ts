@@ -232,7 +232,7 @@ export class ToolCard extends LitElement {
     {
       icon: TeXRAIconName;
       variant:
-        'brand' | 'neutral' | 'success' | 'triangle-exclamation' | 'danger';
+        'brand' | 'neutral' | 'success' | 'warning' | 'danger';
     }
   > = {
     available: { icon: 'check', variant: 'success' },
