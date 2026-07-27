@@ -1,15 +1,4 @@
-/**
- * Tool-use follow-up message coordination.
- *
- * Routes follow-up messages to the appropriate session based on state:
- * - Active session: direct append
- * - Resuming session: queue for later
- * - No session: return status (caller handles UI)
- *
- * This module is VS Code-agnostic. Callers are responsible for
- * showing appropriate UI notifications based on the returned result.
- */
-
+/** Tool-use follow-up routing and continuation ownership. */
 import { createChannelTrace } from '@agent/trace';
 import { type ToolUseFollowUpQueueReason } from '@agent/runtime/executionRegistry';
 import {
@@ -22,30 +11,21 @@ import {
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import { platform } from '@platform/platform';
+import type { AgentResumePort } from '@platform/interfaces';
 import type { StreamTabId } from '@shared/schemas';
 import type { FollowUpQueueInput } from './FollowUpQueue';
 
-/**
- * Result of sending a follow-up message to a tool-use session.
- */
-export type SendFollowUpResult =
+export type SubmitFollowUpResult =
   | { status: 'sent' }
   | {
       status: 'queued';
       reason: ToolUseFollowUpQueueReason;
+      continuation: 'live' | 'recovering' | 'resumed' | 'resume_failed';
     }
-  | { status: 'no_session'; streamStatus: string | undefined };
+  | { status: 'no_session'; streamStatus: string | undefined }
+  | { status: 'dropped' };
 
-export type FollowUpWakeResult =
-  | { kind: 'not_required' }
-  | { kind: 'queued_without_wake' }
-  | { kind: 'resumed' }
-  | { kind: 'resume_in_flight' }
-  | { kind: 'active_or_resuming' }
-  | { kind: 'queued_resume_failed' }
-  | { kind: 'dropped' };
-
-export type FollowUpWakePresentation =
+export type FollowUpPresentation =
   | { severity: 'none' }
   | {
       severity: 'info' | 'warning';
@@ -53,115 +33,33 @@ export type FollowUpWakePresentation =
       refreshQueuedFollowUps: boolean;
     };
 
-export interface FollowUpResumePort {
-  tryResumeStream(streamId: StreamTabId): Promise<boolean>;
-  isResumeInFlight?(streamId: StreamTabId): boolean;
+export interface SubmitFollowUpOptions {
+  readonly session?: SessionHandle;
+  readonly resumePort?: Pick<AgentResumePort, 'tryResumeStream'>;
+  /** Notifications never revive a persisted cursor; continuations do. */
+  readonly mode?: 'continuation' | 'live_notification';
 }
 
-/** In-flight resume attempts per stream — see {@link wakeQueuedFollowUpStream}. */
-const wakeAttempts = new Map<StreamTabId, Promise<boolean>>();
-
-/**
- * After a queued delivery, wake a stream whose cycle has exited (WAITING
- * snapshot or disposed-with-children) via the host resume port so the queued
- * item is consumed instead of sitting until the user pokes the stream. When
- * the wake fails and the stream is gone for good (`children_running` on a
- * non-in-flight stream), re-release the force-reopened queue so late
- * deliveries don't leak into the next run on that stream.
- *
- * Returns a declarative outcome so hosts can map queue/wake policy to their
- * own user-facing messages without reconstructing the release rules.
- */
-export async function wakeQueuedFollowUpStream(
-  streamId: StreamTabId,
-  result: SendFollowUpResult,
-  resumePort?: FollowUpResumePort,
-  session?: SessionHandle,
-): Promise<FollowUpWakeResult> {
-  if (
-    result.status !== 'queued' ||
-    (result.reason !== 'waiting' && result.reason !== 'children_running')
-  ) {
-    return result.status === 'queued'
-      ? { kind: 'queued_without_wake' }
-      : { kind: 'not_required' };
+export function presentFollowUpResult(
+  result: SubmitFollowUpResult,
+): FollowUpPresentation {
+  if (result.status === 'dropped') {
+    return {
+      severity: 'warning',
+      message:
+        'Message dropped because no session was available to receive it. Start a new agent task to continue.',
+      refreshQueuedFollowUps: true,
+    };
   }
-  // Serialize wakes per stream: hosts report an already-in-flight resume as
-  // `false`, indistinguishable from "unresumable", and may not have set
-  // RESUMING yet — so a concurrent wake must await the first attempt's
-  // outcome instead of re-poking the port and releasing the queue the
-  // in-flight resume is about to drain.
-  let attempt = wakeAttempts.get(streamId);
-  const port = resumePort ?? platform().agentResume;
-  if (!attempt) {
-    attempt = port.tryResumeStream(streamId).finally(() => {
-      wakeAttempts.delete(streamId);
-    });
-    wakeAttempts.set(streamId, attempt);
+  if (result.status === 'queued' && result.continuation === 'resume_failed') {
+    return {
+      severity: 'info',
+      message:
+        'Message queued. Auto-resume failed; start a new agent task to continue.',
+      refreshQueuedFollowUps: false,
+    };
   }
-  const resumed = await attempt;
-  if (resumed) {
-    return { kind: 'resumed' };
-  }
-  if (port.isResumeInFlight?.(streamId) === true) {
-    return { kind: 'resume_in_flight' };
-  }
-  const ownerSession = session ?? currentSession();
-  if (ownerSession.status.isActiveOrResuming(streamId)) {
-    return { kind: 'active_or_resuming' };
-  }
-  if (result.reason !== 'children_running') {
-    return { kind: 'queued_resume_failed' };
-  }
-  ownerSession.followUps.release(streamId);
-  return { kind: 'dropped' };
-}
-
-/**
- * Shared host-facing presentation for wake outcomes. It intentionally maps
- * only queue/wake policy to UI text; provider/model follow-up construction
- * stays with the caller that owns that context.
- */
-export function presentFollowUpWakeResult(
-  result: FollowUpWakeResult,
-): FollowUpWakePresentation {
-  switch (result.kind) {
-    case 'dropped':
-      return {
-        severity: 'warning',
-        message:
-          'Message dropped because no session was available to receive it. Start a new agent task to continue.',
-        refreshQueuedFollowUps: true,
-      };
-    case 'queued_resume_failed':
-      return {
-        severity: 'info',
-        message:
-          'Message queued. Auto-resume failed; start a new agent task to continue.',
-        refreshQueuedFollowUps: false,
-      };
-    case 'not_required':
-    case 'queued_without_wake':
-    case 'resumed':
-    case 'resume_in_flight':
-    case 'active_or_resuming':
-      return { severity: 'none' };
-  }
-}
-
-/**
- * Compatibility view for tool paths that only need to know whether the queued
- * item survived. UI callers should prefer {@link wakeQueuedFollowUpStream}.
- */
-export async function wakeOrReleaseQueuedStream(
-  streamId: StreamTabId,
-  result: SendFollowUpResult,
-  session?: SessionHandle,
-): Promise<boolean> {
-  return (
-    (await wakeQueuedFollowUpStream(streamId, result, undefined, session))
-      .kind !== 'dropped'
-  );
+  return { severity: 'none' };
 }
 
 const logger = createChannelTrace('ToolUseFollowUp');
@@ -201,74 +99,75 @@ function followUpSentSession(session?: SessionHandle): SessionHandle {
 }
 
 /**
- * Send a follow-up message to a tool-use session.
- *
- * Routes based on session state:
- * 1. Active agent: direct append → { status: 'sent' }
- * 2. Resuming/Waiting session: queue for later → { status: 'queued' }
- * 3. No session found → { status: 'no_session' }
- *
- * Items queued for WAITING sessions are picked up when user resumes.
- *
- * `session` defaults to {@link currentSession} so in-run callers (binder send,
- * bash, delegation, CLI session loop, inquiry continuation) resolve the active
- * run's session via the ALS and stay byte-identical. HOST-PATH callers that
- * run OUTSIDE any run ALS (e.g. the desktop progress-view IPC handler, whose
- * runs are tracked in an explicit process session, not the module default) MUST pass
- * their owning session, or the run's handle is looked up in the wrong registry
- * and a live follow-up is dropped as `no_session`.
+ * Submit visible input or an automatic notification through the stream's sole
+ * continuation boundary. Routing, enqueue, live-owner detection, and persisted
+ * recovery dispatch are one operation; callers never perform a separate wake.
+ * The resume port is invoked before this function's first await, allowing its
+ * synchronous recovery claim to serialize concurrent submissions.
  */
-export function sendFollowUp(
+export async function submitFollowUp(
   streamId: StreamTabId,
-  followUp: FollowUpQueueInput,
-): Promise<SendFollowUpResult>;
-export function sendFollowUp(
-  streamId: StreamTabId,
-  followUp: FollowUpQueueInput,
-  mediaFiles: undefined,
-  displayText: undefined,
-  session?: SessionHandle,
-): Promise<SendFollowUpResult>;
-export function sendFollowUp(
-  streamId: StreamTabId,
-  followUp: string,
-  mediaFiles?: readonly string[],
-  displayText?: string,
-  session?: SessionHandle,
-): Promise<SendFollowUpResult>;
-export async function sendFollowUp(
-  streamId: StreamTabId,
-  followUp: string | FollowUpQueueInput,
-  mediaFiles?: readonly string[],
-  displayText?: string,
-  session?: SessionHandle,
-): Promise<SendFollowUpResult> {
-  const ownerSession = session ?? currentSession();
+  followUp: FollowUpQueueInput | string,
+  options: SubmitFollowUpOptions = {},
+): Promise<SubmitFollowUpResult> {
+  const ownerSession = options.session ?? currentSession();
   const target = ownerSession.executions.getToolUseFollowUpTarget(streamId);
-  const item =
-    typeof followUp === 'string'
-      ? { text: followUp, mediaFiles, displayText }
-      : followUp;
+  const item = typeof followUp === 'string' ? { text: followUp } : followUp;
 
   if (target.kind === 'active') {
+    // A child loop remains the owner during active inner turns, so input joins
+    // its ordered queue rather than creating a second turn driver.
+    const submission = ownerSession.followUps.submit(
+      streamId,
+      item,
+      'live_owner',
+    );
+    if (submission.kind === 'live') {
+      return {
+        status: 'queued',
+        reason: 'waiting',
+        continuation: 'live',
+      };
+    }
+    if (submission.kind !== 'not_owned') return { status: 'dropped' };
     target.context.session.appendFollowUp(item);
     notifyFollowUpSent(streamId, ownerSession);
     return { status: 'sent' };
   }
 
-  if (target.kind === 'queue') {
-    // children_running reopens a queue sealed by session disposal; callers
-    // must auto-resume the parent or release again to avoid stale delivery.
-    ownerSession.followUps.enqueue(streamId, item, {
-      createIfMissing: true,
-      force: target.reason === 'children_running',
-    });
-    return { status: 'queued', reason: target.reason };
+  if (target.kind === 'no_session') {
+    logger.warn(
+      `No active session for follow-up on stream ${streamId}. Status: ${target.streamStatus}`,
+    );
+    return { status: 'no_session', streamStatus: target.streamStatus };
   }
 
-  // No active/waiting session found - caller should handle UI notification
-  logger.warn(
-    `No active session for follow-up on stream ${streamId}. Status: ${target.streamStatus}`,
+  const submission = ownerSession.followUps.submit(
+    streamId,
+    item,
+    options.mode === 'live_notification' ? 'live_owner' : 'recoverable',
   );
-  return { status: 'no_session', streamStatus: target.streamStatus };
+  if (submission.kind === 'unavailable' || submission.kind === 'not_owned') {
+    return { status: 'dropped' };
+  }
+  if (submission.kind === 'live' || submission.kind === 'recovering') {
+    return {
+      status: 'queued',
+      reason: target.reason,
+      continuation: submission.kind,
+    };
+  }
+
+  const recovery = submission.lease;
+  const resume = (options.resumePort ?? platform().agentResume).tryResumeStream(
+    streamId,
+    recovery,
+  );
+  const resumed = await resume;
+  if (!resumed) ownerSession.followUps.release(recovery, 'recoverable');
+  return {
+    status: 'queued',
+    reason: target.reason,
+    continuation: resumed ? 'resumed' : 'resume_failed',
+  };
 }
