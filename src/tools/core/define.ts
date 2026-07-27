@@ -34,6 +34,7 @@ export function toToolParameters(schema: ZodType): Record<string, unknown> {
 export type DefinedToolClass<T> = abstract new (
   override?: Partial<ToolDefinition>,
 ) => BaseTool<T> & {
+  // Keep in sync with `def` parameter flags and the `GeneratedTool` class body below.
   readonly parallelSafe: boolean | undefined;
   readonly requiresApproval: boolean | undefined;
   readonly slow: boolean | undefined;
@@ -79,6 +80,7 @@ export function defineTool<T>(def: {
   });
 
   abstract class GeneratedTool extends BaseTool<T> {
+    // Keep in sync with the `def` parameter flags and `DefinedToolClass<T>` above.
     readonly parallelSafe = def.parallelSafe;
     readonly requiresApproval = def.requiresApproval;
     readonly slow = def.slow;
