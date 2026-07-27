@@ -75,19 +75,19 @@ const WORK_TYPES: ReadonlyArray<{
     presetId: 'cs-ml',
     question: 'Writing a CS or ML paper',
     detail: 'Algorithms, experiments and ablations, tests, review.',
-    icon: 'symbol-method',
+    icon: 'cube',
   },
   {
     presetId: 'lean-project',
     question: 'Formalizing in Lean 4',
     detail: 'Theorem search, tactic simplification, blueprints.',
-    icon: 'symbol-structure',
+    icon: 'diagram-project',
   },
   {
     presetId: 'software-engineer',
     question: 'Building software',
     detail: 'Implementation, review, debugging, and tests across a team.',
-    icon: 'tools',
+    icon: 'screwdriver-wrench',
   },
 ];
 
