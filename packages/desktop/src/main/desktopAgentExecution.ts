@@ -11,10 +11,10 @@ import {
 } from '@agent/core/state/executionRequests';
 import type { TaskState } from '@agent/core/state/TaskState';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
-import { detectWaitingStreams } from '@agent/storage/detectWaitingStreams';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { trackTerminalResultPresentation } from '@agent/runtime/terminalResultToast';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { SessionStores } from '@agent/runtime/SessionStores';
 import {
   notifyFollowUpSent,
   presentFollowUpWakeResult,
@@ -44,11 +44,6 @@ import {
   TEAM_SELECTION_REQUIRED_MESSAGE,
 } from '@common/teams/TeamPlan';
 import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
-import {
-  repairRestartedStreams,
-  RestartRepairRetryScheduler,
-  type RestartRepairResult,
-} from '@controllers/progressView/backend/restartRepair';
 import { replayApprovalRequestHandlers } from '@controllers/progressView/backend/progressBackendUiConfig';
 import { buildStreamInfo } from '@controllers/progressView/backend/streamInfoUtils';
 import { ProgressBackend } from '@controllers/progressView/backend/ProgressBackend';
@@ -75,7 +70,6 @@ import {
   prepareMainViewExecutionRequest,
   prepareMainViewTeamExecutionRequest,
 } from '@controllers/mainView/MainViewExecutionController';
-import type { SessionStores } from '@controllers/progressView/backend/state/SessionStores';
 import {
   runCleanMultiple,
   runCleanRunDir,
@@ -232,11 +226,7 @@ export class DesktopProgressBridge {
   private toolEditApprovals: DesktopToolEditApprovalController | undefined;
   private hostInteractions!: DesktopHostInteractions;
   private fileActions!: DesktopProgressFileActions;
-  private restartRepair: Promise<void> = Promise.resolve();
-  // Restart repair also closes presentation-state running groups, so its retry
-  // timer is deliberately presentation-owned. A window close cancels only the
-  // timer; canonical status is retained and the next window reruns repair.
-  private readonly restartRepairRetry = new RestartRepairRetryScheduler();
+  private readonly initialization: Promise<void>;
   private disposed = false;
   private presentationReady = false;
 
@@ -347,19 +337,18 @@ export class DesktopProgressBridge {
       detachCompletedResult();
       this.detachCompletedResult = () => undefined;
     };
-    this.restartRepair = this.initializeCanonicalState(presentationHost);
+    this.initialization = this.initializeCanonicalState(presentationHost);
   }
 
-  /** Wait until canonical state and restart repair are ready for use. */
+  /** Wait until canonical presentation state is ready for use. */
   waitUntilReady(): Promise<void> {
-    return this.restartRepair;
+    return this.initialization;
   }
 
   private async initializeCanonicalState(
     presentationHost: AgentRuntimeHost,
   ): Promise<void> {
     await this.backend.load();
-    await this.repairOrphanedStreamsAfterRestart();
     if (this.disposed) return;
 
     this.toolEditApprovals = createDesktopToolEditApprovalController({
@@ -1178,7 +1167,6 @@ export class DesktopProgressBridge {
     // the closing BrowserWindow.
     this.disposed = true;
     this.detachCompletedResult();
-    this.restartRepairRetry.dispose();
     // Detaching first advances the session's attachment generation. Any
     // cancellation produced while the old presenters are disposed is stale;
     // the process-owned request remains pending for the next window.
@@ -1209,167 +1197,6 @@ export class DesktopProgressBridge {
       this.state.snapshots.getExecutionId(streamId) ??
       this.state.getStreamMetadata(streamId).executionId
     );
-  }
-
-  private refreshActiveExecutionIds(): {
-    activeExecutionIds: Set<string>;
-    allExecutionIds: ReadonlyMap<StreamTabId, ExecutionId>;
-  } {
-    const activeExecutionIds = new Set(this.session.executions.getActiveIds());
-    const allExecutionIds = this.state.snapshots.getExecutionIdMap();
-    return { activeExecutionIds, allExecutionIds };
-  }
-
-  /**
-   * Detect persisted waiting streams, then recheck live executions so both
-   * primary and degraded restart-repair paths reject resumes won mid-read.
-   */
-  private async detectRaceGuardedWaitingStreams(
-    executionIdMap: ReadonlyMap<StreamTabId, ExecutionId>,
-  ): Promise<{
-    waitingStreams: Set<StreamTabId>;
-    activeExecutionIds: Set<string>;
-    allExecutionIds: ReadonlyMap<StreamTabId, ExecutionId>;
-  }> {
-    const waitingStreams = await detectWaitingStreams(executionIdMap);
-    const { activeExecutionIds, allExecutionIds } =
-      this.refreshActiveExecutionIds();
-    for (const [streamId, executionId] of allExecutionIds) {
-      if (activeExecutionIds.has(executionId)) {
-        waitingStreams.delete(streamId);
-      }
-    }
-    return { waitingStreams, activeExecutionIds, allExecutionIds };
-  }
-
-  private getRestartRepairStreamSet(
-    allExecutionIds: ReadonlyMap<StreamTabId, ExecutionId>,
-    activeExecutionIds: ReadonlySet<string>,
-    waitingStreams: ReadonlySet<StreamTabId>,
-  ): Set<StreamTabId> {
-    const repairStreams = new Set([
-      ...this.streamLogs.getUnfinishedStreamIds(),
-      ...waitingStreams,
-    ]);
-    for (const [streamId, executionId] of allExecutionIds) {
-      if (executionId && activeExecutionIds.has(executionId)) {
-        repairStreams.delete(streamId);
-      }
-    }
-    return repairStreams;
-  }
-
-  private async closeRunningTaskGroupsForStreams(
-    streamIds: readonly StreamTabId[],
-    status: RunOutcome,
-    now: number = Date.now(),
-  ): Promise<StreamTabId[]> {
-    if (streamIds.length === 0) return [];
-    const closedGroups = await this.state.streamLogs.endRunningGroupsForStreams(
-      streamIds,
-      now,
-      status,
-    );
-    if (closedGroups.length > 0) {
-      await this.state.streamLogs.flush();
-    }
-    return closedGroups;
-  }
-
-  private async repairOrphanedStreamsAfterRestart(): Promise<void> {
-    let waitingStreams: Set<StreamTabId>;
-    let repairActiveExecutionIds: Set<string>;
-    let repairAllExecutionIds: ReadonlyMap<StreamTabId, ExecutionId>;
-    try {
-      const { activeExecutionIds, allExecutionIds } =
-        this.refreshActiveExecutionIds();
-      const executionIdMap = new Map(
-        [...allExecutionIds].filter(
-          ([, executionId]) => !activeExecutionIds.has(executionId),
-        ),
-      );
-      ({
-        waitingStreams,
-        activeExecutionIds: repairActiveExecutionIds,
-        allExecutionIds: repairAllExecutionIds,
-      } = await this.detectRaceGuardedWaitingStreams(executionIdMap));
-    } catch (error) {
-      this.logger.warn('Failed to detect resumable desktop streams', {
-        data: toLogData(error),
-      });
-      await this.repairUnmappedUnfinishedStreams();
-      return;
-    }
-
-    const repairStreams = this.getRestartRepairStreamSet(
-      repairAllExecutionIds,
-      repairActiveExecutionIds,
-      waitingStreams,
-    );
-    const repairResult = await repairRestartedStreams({
-      streamStatus: this.session.status,
-      waitingStreams,
-      executionIds: repairAllExecutionIds,
-      repairStreams,
-      closeRunningGroups: (streamIds, status, now) =>
-        this.closeRunningTaskGroupsForStreams(streamIds, status, now),
-      statusEmitOptions: {
-        trace: this.logger,
-      },
-      logger: this.logger,
-    });
-    this.syncAfterRestartRepair(repairResult);
-    this.restartRepairRetry.schedule(repairResult.nextLeaseCheckAt, () => {
-      void this.repairOrphanedStreamsAfterRestart().catch((error: unknown) => {
-        this.logger.warn('Failed delayed restart repair', {
-          data: toLogData(error),
-        });
-      });
-    });
-  }
-
-  /**
-   * If flow-record detection is unavailable, only streams without an execution
-   * mapping are unambiguously crashed. Mapped streams may still be resumable,
-   * so leave them untouched for a later retry instead of guessing.
-   */
-  private async repairUnmappedUnfinishedStreams(): Promise<void> {
-    try {
-      const { allExecutionIds } = this.refreshActiveExecutionIds();
-      const repairStreams = this.streamLogs
-        .getUnfinishedStreamIds()
-        .filter((streamId) => !allExecutionIds.has(streamId));
-      if (repairStreams.length === 0) return;
-
-      const repairResult = await repairRestartedStreams({
-        streamStatus: this.session.status,
-        waitingStreams: new Set(),
-        executionIds: allExecutionIds,
-        repairStreams,
-        closeRunningGroups: (streamIds, status, now) =>
-          this.closeRunningTaskGroupsForStreams(streamIds, status, now),
-        statusEmitOptions: { trace: this.logger },
-        logger: this.logger,
-      });
-      this.syncAfterRestartRepair(repairResult);
-    } catch (error) {
-      this.logger.warn(
-        'Failed to repair unmapped desktop streams after waiting detection failed',
-        { data: toLogData(error) },
-      );
-    }
-  }
-
-  private syncAfterRestartRepair(result: RestartRepairResult): void {
-    if (
-      this.presentationReady &&
-      (result.waitingStreams.length > 0 ||
-        result.failedStreams.length > 0 ||
-        result.closedWaitingGroups.length > 0 ||
-        result.closedFailedGroups.length > 0)
-    ) {
-      this.syncFullView();
-    }
   }
 
   private routeToProgress(): void {
@@ -1445,15 +1272,8 @@ export class DesktopProgressBridge {
     this.syncStreamContent(this.updateStreamMetadata());
   }
 
-  /**
-   * Owns the Progress webview's readiness sequence. Restored streams are
-   * folded into `session.status` by `restartRepair`. Painting the rail before
-   * repair settles would omit canonical restart status from the first paint.
-   * Gating the whole sequence here makes the ordering uniform for every
-   * `webviewReady` caller.
-   */
+  /** Send canonical state and replay pending prompts after attachment. */
   async completeWebviewReady(): Promise<void> {
-    await this.restartRepair;
     this.syncFullView();
     await replayApprovalRequestHandlers(this.backend.approvalHandlers);
   }
@@ -1494,7 +1314,6 @@ export class DesktopProgressBridge {
   }
 
   async revealStream(streamId: StreamTabId): Promise<void> {
-    await this.restartRepair;
     if (!this.streamLogs.has(streamId)) {
       return;
     }
@@ -1544,9 +1363,7 @@ export class DesktopProgressBridge {
   }
 
   tryResumeStream(streamId: StreamTabId): Promise<boolean> {
-    return this.restartRepair.then(() =>
-      platform().agentResume.tryResumeStream(streamId),
-    );
+    return platform().agentResume.tryResumeStream(streamId);
   }
 
   private async runLatexdiffFile(
@@ -1617,7 +1434,6 @@ export class DesktopProgressBridge {
     text: string,
     mediaFiles?: readonly string[],
   ): Promise<void> {
-    await this.restartRepair;
     // Resolve the follow-up target against the process session: the run's
     // handle is tracked in `this.session`, but this IPC path runs outside the
     // run ALS, so the module default (currentSession ⇒ defaultSession) would
@@ -1695,7 +1511,6 @@ export class DesktopProgressBridge {
     return launchDesktopAgent(
       request,
       {
-        ready: this.restartRepair,
         session: this.session,
       },
       options,

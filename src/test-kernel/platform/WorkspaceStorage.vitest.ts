@@ -128,8 +128,14 @@ describe('workspace storage defaults', () => {
     const firstStoragePath = provider.getStoragePath();
 
     workspacePath = '/workspace/b';
+    expect(provider.getStoragePath()).toBe(firstStoragePath);
+    expect(provider.hasPendingWorkspaceStorageChange()).toBe(true);
+    expect(provider.commitWorkspaceStorageChange()).toBe(true);
     const secondStoragePath = provider.getStoragePath();
 
+    expect(provider.hasPendingWorkspaceStorageChange()).toBe(false);
+    provider.finalizeWorkspaceStorageChange();
+    expect(provider.commitWorkspaceStorageChange()).toBe(false);
     expect(provider.getGlobalStoragePath()).toBe(join(root, 'global-storage'));
     expect(firstStoragePath).not.toBe(secondStoragePath);
     await expect(pathExists(firstStoragePath)).resolves.toBe(true);
@@ -140,6 +146,22 @@ describe('workspace storage defaults', () => {
     await expect(readWorkspaceMarker(secondStoragePath)).resolves.toMatchObject(
       { path: '/workspace/b' },
     );
+  });
+
+  it('restores the previous root after a failed workspace replacement', async () => {
+    const root = await makeTempDir();
+    let workspacePath: string | undefined = '/workspace/a';
+    const provider = new WorkspaceStorageProvider(root, () => workspacePath);
+    const firstStoragePath = provider.getStoragePath();
+
+    workspacePath = '/workspace/b';
+    expect(provider.commitWorkspaceStorageChange()).toBe(true);
+    expect(provider.getStoragePath()).not.toBe(firstStoragePath);
+    expect(provider.rollbackWorkspaceStorageChange()).toBe(true);
+
+    expect(provider.getStoragePath()).toBe(firstStoragePath);
+    expect(provider.hasPendingWorkspaceStorageChange()).toBe(true);
+    expect(provider.rollbackWorkspaceStorageChange()).toBe(false);
   });
 
   it('migrates legacy hash-only workspace storage when possible', async () => {

@@ -254,6 +254,7 @@ async function createExecution(options: {
   const session = new SessionHandle({
     transcripts,
     snapshots: progressSnapshotStore,
+    restartRepair: 'deferred',
   });
   options.inspectSession?.(session);
   const processStores = await initializeDesktopProcessStores({
@@ -262,6 +263,7 @@ async function createExecution(options: {
       ? { legacyStreamFilePath: options.legacyStreamFilePath }
       : {}),
   });
+  await session.waitUntilReady();
   let execution: DesktopExecution;
   try {
     execution = await createDesktopAgentExecution({

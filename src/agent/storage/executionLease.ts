@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
 import * as path from 'node:path';
 
+import PQueue from 'p-queue';
 import { z } from 'zod';
 
 import { isFileNotFoundError } from '@common/errors';
@@ -81,6 +82,121 @@ const ownedLeases = new Map<string, OwnedExecutionLease>();
 const executionOwnership = new AsyncLocalStorage<ReadonlyMap<string, string>>();
 const maintenanceExecutions = new AsyncLocalStorage<ReadonlySet<string>>();
 let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
+
+class ExecutionLeaseCoordination {
+  private acquisitionsInFlight = 0;
+  private readonly acquisitionIdleWaiters = new Set<() => void>();
+  private readonly maintenanceQueue = new PQueue({ concurrency: 1 });
+  private pendingMaintenanceCount = 0;
+  private maintenanceBarrier:
+    | { readonly promise: Promise<void>; readonly resolve: () => void }
+    | undefined;
+
+  async enterAcquisition(nested: boolean): Promise<void> {
+    if (!nested) {
+      while (this.maintenanceBarrier) await this.maintenanceBarrier.promise;
+    }
+    this.acquisitionsInFlight += 1;
+  }
+
+  leaveAcquisition(): void {
+    this.acquisitionsInFlight -= 1;
+    if (this.acquisitionsInFlight !== 0) return;
+    for (const resolve of this.acquisitionIdleWaiters) resolve();
+    this.acquisitionIdleWaiters.clear();
+  }
+
+  async waitForAcquisitions(): Promise<void> {
+    if (this.acquisitionsInFlight === 0) return;
+    await new Promise<void>((resolve) =>
+      this.acquisitionIdleWaiters.add(resolve),
+    );
+  }
+
+  runMaintenance<T>(
+    waitForQuiescence: () => Promise<void>,
+    operation: () => T | Promise<T>,
+  ): Promise<T> {
+    this.pendingMaintenanceCount += 1;
+    if (!this.maintenanceBarrier) {
+      let resolve: () => void = () => undefined;
+      const promise = new Promise<void>((settle) => {
+        resolve = settle;
+      });
+      this.maintenanceBarrier = { promise, resolve };
+    }
+    // `add` widens to `T | void` for abort/timeout options; neither is used.
+    const queued = this.maintenanceQueue.add(async () => {
+      await waitForQuiescence();
+      return operation();
+    }) as Promise<T>;
+    return queued.finally(() => {
+      this.pendingMaintenanceCount -= 1;
+      if (this.pendingMaintenanceCount !== 0) return;
+      const barrier = this.maintenanceBarrier;
+      this.maintenanceBarrier = undefined;
+      barrier?.resolve();
+    });
+  }
+
+  assertIdle(): void {
+    if (
+      this.acquisitionsInFlight !== 0 ||
+      this.pendingMaintenanceCount !== 0 ||
+      this.maintenanceQueue.pending !== 0 ||
+      this.maintenanceQueue.size !== 0 ||
+      this.acquisitionIdleWaiters.size !== 0
+    ) {
+      throw new Error('Execution lease coordination is still active.');
+    }
+  }
+}
+
+let leaseCoordination = new ExecutionLeaseCoordination();
+
+/** Replace tested coordination state after every isolated test case. */
+export function resetExecutionLeaseCoordinationForTests(): void {
+  leaseCoordination.assertIdle();
+  leaseCoordination = new ExecutionLeaseCoordination();
+}
+
+async function enterLeaseAcquisition(): Promise<void> {
+  // An existing owned run may need to launch a child before it can settle.
+  // Root launches wait; nested launches remain admitted and are included in
+  // the dynamic quiescence check below.
+  await leaseCoordination.enterAcquisition(
+    (executionOwnership.getStore()?.size ?? 0) > 0,
+  );
+}
+
+function leaveLeaseAcquisition(): void {
+  leaseCoordination.leaveAcquisition();
+}
+
+async function waitForOwnedLeaseQuiescence(): Promise<void> {
+  for (;;) {
+    await leaseCoordination.waitForAcquisitions();
+    const releases = [...ownedLeases.values()].map((lease) => lease.released);
+    if (releases.length === 0) return;
+    await Promise.all(releases);
+  }
+}
+
+/**
+ * Run storage-root maintenance after all execution artifacts are durable.
+ *
+ * New root executions wait outside the barrier. Nested work already owned by
+ * a live execution remains admitted so maintenance cannot deadlock a parent
+ * waiting for its child; the loop includes every such acquisition and lease.
+ */
+export function runWithOwnedExecutionLeaseQuiescence<T>(
+  operation: () => T | Promise<T>,
+): Promise<T> {
+  return leaseCoordination.runMaintenance(
+    waitForOwnedLeaseQuiescence,
+    operation,
+  );
+}
 
 function storageRoot(): string {
   return platform().storage.getStoragePath();
@@ -498,62 +614,70 @@ async function acquireExecutionLease(
   mode: 'fresh' | 'resume',
   canAcquire?: () => boolean | Promise<boolean>,
 ): Promise<'acquired' | 'existing' | 'cancelled'> {
-  const root = storageRoot();
-  const key = ownershipKey(root, executionId);
-  const existingOwnership = ownedLeases.get(key);
-  if (mode === 'resume' && existingOwnership) {
-    let heartbeatResult: Awaited<ReturnType<typeof heartbeat>> | undefined;
-    try {
-      heartbeatResult = await heartbeat(existingOwnership, canAcquire);
-    } catch (error) {
-      if (handleHeartbeatFailure(existingOwnership, error)) throw error;
-      if (
-        ownedLeases.get(key) === existingOwnership &&
-        !existingOwnership.releasing
-      ) {
-        const admitted = await withLeaseLock(
+  await enterLeaseAcquisition();
+  try {
+    const root = storageRoot();
+    const key = ownershipKey(root, executionId);
+    const existingOwnership = ownedLeases.get(key);
+    if (mode === 'resume' && existingOwnership) {
+      let heartbeatResult: Awaited<ReturnType<typeof heartbeat>> | undefined;
+      try {
+        heartbeatResult = await heartbeat(existingOwnership, canAcquire);
+      } catch (error) {
+        if (handleHeartbeatFailure(existingOwnership, error)) throw error;
+        if (
+          ownedLeases.get(key) === existingOwnership &&
+          !existingOwnership.releasing
+        ) {
+          const admitted = await withLeaseLock(
+            executionId,
+            async () => (await canAcquire?.()) !== false,
+            root,
+          );
+          return admitted ? 'existing' : 'cancelled';
+        }
+      }
+      if (heartbeatResult === 'cancelled') return 'cancelled';
+      if (heartbeatResult === 'owned') return 'existing';
+    }
+
+    return await withLeaseLock(
+      executionId,
+      async () => {
+        const now = Date.now();
+        const liveness = await readPersistedExecutionLiveness(
           executionId,
-          async () => (await canAcquire?.()) !== false,
+          root,
+          now,
+        );
+        if (liveness.status === 'active') {
+          throw new ExecutionLeaseActiveError(
+            executionId,
+            liveness.heartbeatAt,
+          );
+        }
+        if ((await canAcquire?.()) === false) return 'cancelled' as const;
+        const acquiredAt = Date.now();
+        const ownerToken = randomUUID();
+        if (existingOwnership) forgetOwnedLease(existingOwnership);
+        await writeLease(
+          {
+            version: 1,
+            executionId,
+            ownerToken,
+            acquiredAt,
+            heartbeatAt: acquiredAt,
+          },
           root,
         );
-        return admitted ? 'existing' : 'cancelled';
-      }
-    }
-    if (heartbeatResult === 'cancelled') return 'cancelled';
-    if (heartbeatResult === 'owned') return 'existing';
+        rememberOwnership(executionId, ownerToken, root);
+        return 'acquired' as const;
+      },
+      root,
+    );
+  } finally {
+    leaveLeaseAcquisition();
   }
-
-  return withLeaseLock(
-    executionId,
-    async () => {
-      const now = Date.now();
-      const liveness = await readPersistedExecutionLiveness(
-        executionId,
-        root,
-        now,
-      );
-      if (liveness.status === 'active') {
-        throw new ExecutionLeaseActiveError(executionId, liveness.heartbeatAt);
-      }
-      if ((await canAcquire?.()) === false) return 'cancelled' as const;
-      const acquiredAt = Date.now();
-      const ownerToken = randomUUID();
-      if (existingOwnership) forgetOwnedLease(existingOwnership);
-      await writeLease(
-        {
-          version: 1,
-          executionId,
-          ownerToken,
-          acquiredAt,
-          heartbeatAt: acquiredAt,
-        },
-        root,
-      );
-      rememberOwnership(executionId, ownerToken, root);
-      return 'acquired' as const;
-    },
-    root,
-  );
 }
 
 /** Acquire a new execution before any execution-scoped data becomes writable. */
@@ -575,11 +699,15 @@ export function acquireResumedExecutionLease(
 export async function releaseOwnedExecutionLease(
   executionId: ExecutionId,
 ): Promise<void> {
-  const ownerships = [...ownedLeases.values()].filter(
+  const ownerships = currentOwnedLeases(executionId);
+  await Promise.all(ownerships.map(releaseOwnership));
+}
+
+function currentOwnedLeases(executionId: ExecutionId): OwnedExecutionLease[] {
+  return [...ownedLeases.values()].filter(
     (lease) =>
       lease.executionId === executionId && currentScopeOwnsLease(lease),
   );
-  await Promise.all(ownerships.map(releaseOwnership));
 }
 
 /**
@@ -588,19 +716,14 @@ export async function releaseOwnedExecutionLease(
  * horizon, but a long-lived host cannot keep the failed lease fresh forever.
  */
 export function abandonOwnedExecutionLease(executionId: ExecutionId): void {
-  const root = storageRoot();
-  const lease = ownedLeases.get(ownershipKey(root, executionId));
-  if (lease && currentScopeOwnsLease(lease)) {
-    forgetOwnedLease(lease);
-  }
+  for (const lease of currentOwnedLeases(executionId)) forgetOwnedLease(lease);
 }
 
 /** Prevent release after a required execution artifact failed to persist. */
 export function markOwnedExecutionLeaseUndurable(
   executionId: ExecutionId,
 ): void {
-  const lease = ownedLeases.get(ownershipKey(storageRoot(), executionId));
-  if (lease && currentScopeOwnsLease(lease)) {
+  for (const lease of currentOwnedLeases(executionId)) {
     lease.durabilityFailed = true;
   }
 }
@@ -609,8 +732,7 @@ export function markOwnedExecutionLeaseUndurable(
 export async function completeOwnedExecutionLease(
   executionId: ExecutionId,
 ): Promise<void> {
-  const lease = ownedLeases.get(ownershipKey(storageRoot(), executionId));
-  if (lease?.durabilityFailed) {
+  if (currentOwnedLeases(executionId).some((lease) => lease.durabilityFailed)) {
     abandonOwnedExecutionLease(executionId);
     return;
   }
