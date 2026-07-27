@@ -170,8 +170,16 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     return tagOpenRouterSdkError;
   }
 
+  /**
+   * OpenRouter preserves the underlying provider identity in `config`.
+   * DeepSeek rejects named tool choice while thinking mode is enabled,
+   * including when the request is routed through OpenRouter.
+   */
   override get supportsForcedToolChoice(): boolean {
-    return true;
+    return !(
+      this.config.provider === ModelProvider.DEEPSEEK &&
+      this.capabilities.supportsReasoning
+    );
   }
 
   /** Creates an OpenRouter response after SDK-boundary error tagging is installed. */

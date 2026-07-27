@@ -1,7 +1,13 @@
 # Workflow script engine: deterministic multi-agent orchestration
 
-Status: proposal + prototype (`src/agent/workflowScript/`)
+Status: implemented (`src/agent/workflowScript/`)
 Date: 2026-07-04
+
+Follow-up, 2026-07-27: `pipeline()` and `concat()` were removed after real
+workflow dogfooding found no production use and exposed unstable resume order
+for multi-stage pipelines. Scripts use `parallel()` plus ordinary JavaScript
+control flow. Structured calls are supported through the shared
+`submit_output` boundary described below.
 
 ## Problem
 
@@ -92,15 +98,11 @@ return await parallel(
   `schema` and a tool-use `agentName`. Otherwise-identical calls require
   distinct `id` values so restart recovery does not depend on scheduling
   order.
-- `parallel(thunks)` → concurrent barrier; failed thunks resolve to `null`.
-- `pipeline(items, ...stages)` → per-item stage chains with **no barrier**
-  between stages (wall-clock = slowest single-item chain, not
-  sum-of-slowest-per-stage). A throwing stage drops that item to `null`.
-- `concat(parts, {separator}?)` → zero-token fan-in for ordered text parts
-  (the common "chapter = N drafted sections" case); drops `null`/`undefined`
-  (failed stages) and empty strings. LLM merge (via a
-  combiner agent such as `merge.yaml`) stays available for reconciliation
-  that genuinely needs a model.
+- `parallel(thunks)` → concurrent barrier. Failed `agent()` calls resolve to
+  `null`; script errors reject the workflow.
+- Ordinary JavaScript loops and awaited calls express sequential chains.
+  Native array methods own local filtering and joining; an agent such as
+  `merge.yaml` owns reconciliation that genuinely needs a model.
 - `log()` / `phase()` / `args` → progress narration, grouping,
   parameterization.
 
@@ -123,16 +125,16 @@ an academic-writing product whose unit of work is a document, not a diff.
   is the declarative exception for assigning lower-cost or specialized work.
 - **No worktree isolation** — TeXRA runs are already execution-scoped in run
   storage (`executions/{id}/`), with lineage instead of git.
-- **`pipeline()` is on probation** — if v1 usage shows document pipelines are
-  served by `parallel()` + sequential `agent()` chains + file lineage, it is
-  dropped. Primitives must earn their keep.
+- **Sequential stages use ordinary JavaScript** — production usage showed that
+  `parallel()` plus directly awaited `agent()` chains and file lineage cover
+  document pipelines without a second orchestration abstraction.
 
 **TeXRA workflow agents are the unit of work.** `agent()` composes the
 existing YAML agents — `merge`, `polish`, `correct`, user-defined agents —
 with their native `inputFiles`/`outputFiles` semantics. Reflection rounds
 stay _inside_ the agent (scripts compose agents; they do not re-implement
-rounds), the `merge` agent is the canonical LLM reduce, `concat()` the
-zero-token reduce, and the engine automates the file hand-off between
+rounds), the `merge` agent is the canonical LLM reduce, native array methods
+own local zero-token fan-in, and the engine automates the file hand-off between
 stages that today costs two orchestrator round-trips per edge.
 
 **Where TeXRA aims to be better, not bigger:**
@@ -176,18 +178,15 @@ artifacts, so a 40-page rewrite or a large data structure never round-trips
 through the script as an inline value. The execution store persists the
 envelope and `/executions/{id}/result` returns it directly for agent runs.
 
-### 2. Fixed envelopes, not model-constrained JSON
+### 2. Fixed envelopes with one structured-output boundary
 
-TeXRA does not expose `schema` or `outputSchema` on workflow-script calls and
-does not add a synthetic structured-output tool or provider-native
-`response_format`/`output_config.format` plumbing. The model continues to
-produce its ordinary response and files; the runtime supplies structure by
-wrapping those existing facts after the run.
-
-An agent that must pass a domain-specific object to another stage writes a
-JSON output file and lists that artifact in `files` or `outputs`. This keeps
-the cross-stage contract fixed while allowing arbitrary application data
-without provider-specific behavior or per-agent result schemas.
+Workflow-agent calls retain one fixed `AgentFinalResult` file envelope.
+For data-dependent mathematical or analytical fan-out, a call may instead
+name a tool-use agent and supply a root-object JSON Schema. That agent
+finishes through the existing shared `submit_output` terminal tool; the
+workflow receives the validated value in the same result envelope's
+`structured` field. Workflow scripts do not add provider-specific
+`response_format` or `output_config.format` plumbing.
 
 ### 3. Deep layers: one parent-child relation
 
@@ -211,13 +210,13 @@ Excess calls queue. A lifetime call cap (default 200) backstops runaway loops,
 and per-call fan-out is bounded.
 The same semaphore should eventually gate LLM-driven delegation too.
 
-### 5. Stage chaining generalizes existing lineage machinery
+### 5. Direct chaining reuses existing lineage machinery
 
 The reflection flow already implements "previous round's outputs become this
 round's base" (`OutputFileProcessor.similarityBaseFiles`,
-`traceFileLineage`) — intra-agent. `pipeline()` generalizes it across
-agents: the edge payload is `OutputFileSummary` records, and the engine
-binds stage N's outputs as stage N+1's `inputFiles` directly from run
+`traceFileLineage`) — intra-agent. Workflow scripts use the same shape across
+agents: one call's `OutputFileSummary` records become the next call's
+`inputFiles` directly from run
 storage (`executions/{id}/r{round}/…`) — no `accept_run_files` workspace
 copy, no LLM involvement. Rounds that emitted nothing leave symlinks
 (`AcceptRunFilesTool` guard); the binding step must skip them.
@@ -233,11 +232,6 @@ so resume retries them. This extends the existing `persistedFlow` checkpoint
 pattern and is why scripts must be deterministic — `Date.now()` and
 `Math.random()` throw inside the sandbox (pass timestamps via `args`).
 Journals persist in the execution KV store alongside the script text.
-Known limitation: `agent()` calls issued from `pipeline()` stages beyond the
-first acquire journal indices in completion order, which varies run-to-run
-with agent latency; the per-index key check keeps replay safe (a mismatch
-forces a live re-run), but multi-stage pipelines see lower resume cache-hit
-rates than sequential scripts.
 
 ### 7. One consolidated delivery; full usage roll-up
 
@@ -288,16 +282,15 @@ consolidated result.
    progress-event bridging onto the existing stream tree (extension board
    already renders arbitrary depth; CLI shows direct children per stream).
 
-## Prototype status
+## Implementation status
 
 `src/agent/workflowScript/` (host-agnostic, VS Code-free; `runAgent`
 injected). Implements: meta parsing/validation (Zod), import ban,
 preemptible QuickJS sandbox with determinism guards, `agent()` / `parallel()` /
-`pipeline()` / `concat()` / `log()` / `phase()` / `args`, concurrency
+`log()` / `phase()` / `args`, concurrency
 semaphore, call cap, fan-out caps, wall-clock timeout, and journal-based
 resume. The Vitest suite in
 `src/test-kernel/agent/WorkflowScriptEngine.vitest.ts` covers parsing,
-no-barrier pipeline semantics, semaphore bounds, failure-to-null, resume
-replay, determinism guards, and sandbox-escape prevention. Not yet wired
-to `executeSubagent` — see
-`src/agent/workflowScript/README.md` for the integration checklist.
+semaphore bounds, failure-to-null, resume replay, determinism guards, and
+sandbox-escape prevention. The production tool composes the engine with
+in-band child execution and the execution store.

@@ -15,6 +15,7 @@
 // which no-ops via the `exiting` guard so the drain / hint / cleanup never run
 // twice.
 
+import { completeOwnedExecutionLease } from '@agent/storage/executionLease';
 import { readCliCwd } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import {
@@ -159,6 +160,18 @@ export function createSessionExitController(
   // Persistent flushes have bounded retries; an explicitly ephemeral session
   // has no disk work to drain.
   const drainPersistence = (): Promise<void> => ctx.flushArtifacts();
+  const persistAndReleaseResumableIdleLease = async (
+    resumableIdle: boolean,
+  ): Promise<void> => {
+    await drainPersistence();
+    if (resumableIdle && session.executionId) {
+      // WAITING deliberately keeps its flow record, but this CLI process is
+      // about to exit and can no longer own the execution. Relinquish the
+      // durable lease after flushing so an immediate `texra resume` continues
+      // the same execution instead of waiting for the stale horizon.
+      await completeOwnedExecutionLease(session.executionId);
+    }
+  };
   // These TUI exit paths call process.exit() directly, so bin/texra.ts's
   // `finally` (which runs platform shutdown) never fires. Run the same
   // shutdown sequence the (suppressed) platform SIGINT/SIGTERM handlers
@@ -169,7 +182,22 @@ export function createSessionExitController(
   // rely on bin/texra.ts's own `finally`.
   const runPlatformShutdown = (): Promise<void> =>
     runCliPlatformShutdownSequence(tryPlatform()?.lifecycle);
+  const persistBeforePlatformShutdown = async (
+    resumableIdle: boolean,
+  ): Promise<void> => {
+    try {
+      await persistAndReleaseResumableIdleLease(resumableIdle);
+    } catch {
+      // Signal exit remains best-effort, but platform shutdown must still run.
+    }
+    try {
+      await runPlatformShutdown();
+    } catch {
+      // process.exit below remains the terminal owner when shutdown fails.
+    }
+  };
   const exitNow = (exitCode: number): void => {
+    const resumableIdle = ctx.isResumableIdle();
     exiting = true;
     ctx.suspendTerminalTitle();
     removeProcessHandlers();
@@ -182,13 +210,11 @@ export function createSessionExitController(
     printResumeHintOnExit();
     // Synchronous signal exits (SIGINT double-tap / SIGTERM / SIGHUP) own the
     // whole teardown here (gracefulTeardown skips when `exiting`), so drain
-    // persistence and run platform shutdown before exiting. allSettled never
-    // rejects, so a flush failure can't become an unhandled rejection under
-    // --unhandled-rejections=strict.
-    void Promise.allSettled([
-      drainPersistence(),
-      runPlatformShutdown(),
-    ]).finally(() => process.exit(exitCode));
+    // persistence and run platform shutdown before exiting. Both steps settle
+    // their own failures so none escape under --unhandled-rejections=strict.
+    void persistBeforePlatformShutdown(resumableIdle).finally(() =>
+      process.exit(exitCode),
+    );
   };
   const armExit = (): void => {
     exitConfirmationExpiresAt = Date.now() + EXIT_CONFIRMATION_TTL_MS;
@@ -314,7 +340,7 @@ export function createSessionExitController(
       // awaiting it would hang the process here.
       await session.runPromise;
     }
-    await drainPersistence();
+    await persistAndReleaseResumableIdleLease(resumableIdle);
     cleanupTerminalModes({ clearItermProgress: ctx.clearItermProgress });
     // Print the resume hint after the terminal modes are restored, but before
     // resetCliState() clears the stream tree the hint is built from.

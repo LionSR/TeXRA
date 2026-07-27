@@ -92,6 +92,15 @@ export class ModelHandlerDeepSeek extends ReasoningModelHandlerOpenAI<DeepSeekTo
   protected override readonly mergeConsecutiveRoles = true;
 
   /**
+   * DeepSeek rejects a named tool choice while thinking mode is enabled.
+   * Tool-use flows can still ask explicitly for the terminal tool in an
+   * unforced follow-up turn.
+   */
+  override get supportsForcedToolChoice(): boolean {
+    return !this.capabilities.supportsReasoning;
+  }
+
+  /**
    * DeepSeek's `thinking` param is only sent when the desired mode differs
    * from the model's API default. `deepseek-chat` defaults OFF; everything
    * else (`deepseek-reasoner`, V4 series) defaults ON.

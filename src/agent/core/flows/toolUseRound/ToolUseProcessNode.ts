@@ -251,18 +251,16 @@ export class ToolUseProcessNode<C> extends BaseNode<
       workspace.resetServerToolContent();
       workspace.resetReasoning();
 
-      if (
-        this.services.finalTool &&
-        modelHandler.supportsForcedToolChoice &&
-        !shared.finalToolAttempted
-      ) {
+      if (this.services.finalTool && !shared.finalToolAttempted) {
         const result = await appendFollowUpAsUserMessage(
           shared.messages,
           { text: FINAL_TOOL_INSTRUCTION, origin: 'synthetic' },
           this.services,
         );
         shared.messages = result.messages;
-        shared.finalTool = this.services.finalTool;
+        if (modelHandler.supportsForcedToolChoice) {
+          shared.finalTool = this.services.finalTool;
+        }
         shared.finalToolAttempted = true;
         shared.toolCalls = undefined;
         advanceRound(shared);

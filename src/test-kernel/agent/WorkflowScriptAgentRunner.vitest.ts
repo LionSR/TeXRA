@@ -1,10 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { WorkflowAgentInvocation } from '@agent/workflowScript';
+import type { AgentEntry } from '@agent/index/agentRegistry';
 import type { LaunchRunContext } from '@agent/runtime/RunContext';
 import type { AgentFinalResult } from '@agent/runtime/AgentFinalResult';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
-import { createWorkflowScriptAgentRunner } from '@tools/delegation/workflowScriptAgentRunner';
+import {
+  createWorkflowScriptAgentRunner,
+  fingerprintWorkflowAgentDependencies,
+} from '@tools/delegation/workflowScriptAgentRunner';
 import {
   SubagentDurabilityError,
   SubagentReconciliationError,
@@ -20,6 +24,8 @@ const mocks = vi.hoisted(() => ({
   assertWorkflowFilesExist: vi.fn(),
   rejectOversizedBibAttachments: vi.fn(),
   configureDelegatedChildApprovals: vi.fn(),
+  workspaceReadBytes: vi.fn(),
+  absoluteReadBytes: vi.fn(),
 }));
 
 vi.mock('@tools/approval', () => ({
@@ -68,6 +74,11 @@ vi.mock('@tools/delegation/inputFields', () => ({
   rejectOversizedBibAttachments: mocks.rejectOversizedBibAttachments,
 }));
 
+vi.mock('@utils/files', () => ({
+  WorkspaceFS: { readBytes: mocks.workspaceReadBytes },
+  AbsoluteFS: { readBytes: mocks.absoluteReadBytes },
+}));
+
 const parentExecutionId = 'aaaaaa111111' as ExecutionId;
 const parentStreamId = 'stream:workflow-script' as StreamTabId;
 // The detached workflow-run's own identity — grandchild agent() calls re-root
@@ -75,10 +86,26 @@ const parentStreamId = 'stream:workflow-script' as StreamTabId;
 const runExecutionId = 'run0run0run0' as ExecutionId;
 const runStreamId = 'workflow-script#run0run0run0' as StreamTabId;
 const run = { executionId: runExecutionId, streamId: runStreamId };
+const defaultAgent = {
+  name: 'correct',
+  source: 'builtInWorkflow',
+  category: 'workflow',
+  path: '/agents/correct.yml',
+} as AgentEntry;
 const result: AgentFinalResult = {
   category: 'workflow',
   outcome: 'completed',
-  outputs: [],
+  outputs: [
+    {
+      round: 0,
+      relativePath: 'r0/draft.tex',
+      absolutePath: '/storage/executions/bbbbbb222222/r0/draft.tex',
+      location: 'runStorage',
+      originalPath: '/workspace/draft.tex',
+      added: 1,
+      removed: 0,
+    },
+  ],
   compileFailures: [],
   diffs: [],
   cost: 0,
@@ -120,7 +147,7 @@ function defaultRunner(
 ): ReturnType<typeof createWorkflowScriptAgentRunner> {
   return createWorkflowScriptAgentRunner(
     parentContext(),
-    'correct',
+    defaultAgent,
     'tool-call-7',
     run,
     hooks,
@@ -156,10 +183,87 @@ describe('createWorkflowScriptAgentRunner', () => {
     mocks.assertWorkflowFilesExist.mockResolvedValue(undefined);
     mocks.rejectOversizedBibAttachments.mockResolvedValue(null);
     mocks.runStorageLocationFromAnyAbsolutePath.mockReturnValue(undefined);
+    mocks.workspaceReadBytes.mockResolvedValue(Buffer.from('workspace bytes'));
+    mocks.absoluteReadBytes.mockResolvedValue(Buffer.from('run bytes'));
     mocks.executeStableSubagentInBand.mockImplementation(async (options) => {
       mocks.preparedOptions.push(await options.prepare());
       return { executionId: 'bbbbbb222222', result };
     });
+  });
+
+  it('fingerprints file bytes rather than only their paths', async () => {
+    const options = { inputFiles: ['proof.tex'] };
+    mocks.workspaceReadBytes.mockResolvedValueOnce(Buffer.from('old proof'));
+    const oldFingerprint = await fingerprintWorkflowAgentDependencies(
+      runExecutionId,
+      options,
+    );
+    mocks.workspaceReadBytes.mockResolvedValueOnce(Buffer.from('new proof'));
+    const newFingerprint = await fingerprintWorkflowAgentDependencies(
+      runExecutionId,
+      options,
+    );
+
+    expect(oldFingerprint).not.toBe(newFingerprint);
+    expect(mocks.workspaceReadBytes).toHaveBeenCalledWith('proof.tex');
+  });
+
+  it('keeps dependency fingerprints stable for unchanged binary bytes', async () => {
+    const bytes = Buffer.from([0, 255, 1, 128]);
+    mocks.workspaceReadBytes.mockResolvedValue(bytes);
+    const options = {
+      inputFiles: ['proof.bin'],
+      contextFiles: ['context.bin'],
+    };
+
+    await expect(
+      Promise.all([
+        fingerprintWorkflowAgentDependencies(runExecutionId, options),
+        fingerprintWorkflowAgentDependencies(runExecutionId, options),
+      ]),
+    ).resolves.toEqual([expect.any(String), expect.any(String)]);
+    const [first, second] = await Promise.all([
+      fingerprintWorkflowAgentDependencies(runExecutionId, options),
+      fingerprintWorkflowAgentDependencies(runExecutionId, options),
+    ]);
+    expect(first).toBe(second);
+  });
+
+  it('rejects dependencies that change between engine hashing and launch', async () => {
+    const options = { inputFiles: ['proof.tex'] };
+    mocks.workspaceReadBytes.mockResolvedValueOnce(Buffer.from('old proof'));
+    const dependencyFingerprint = await fingerprintWorkflowAgentDependencies(
+      runExecutionId,
+      options,
+    );
+    mocks.workspaceReadBytes.mockResolvedValue(Buffer.from('new proof'));
+    const runner = defaultRunner();
+
+    await expect(
+      runner({
+        ...invocation(options),
+        dependencyFingerprint,
+      }),
+    ).rejects.toThrow(/changed while the child was launching/);
+    expect(mocks.executeStableSubagentInBand).not.toHaveBeenCalled();
+  });
+
+  it('makes launch fingerprint read failures run-fatal', async () => {
+    const readError = new Error('proof.tex became unreadable');
+    const runner = defaultRunner();
+    mocks.workspaceReadBytes.mockRejectedValueOnce(readError);
+
+    await expect(
+      runner({
+        ...invocation({ inputFiles: ['proof.tex'] }),
+        dependencyFingerprint: 'old-proof',
+      }),
+    ).rejects.toMatchObject({
+      name: 'WorkflowRunAbortError',
+      message: expect.stringContaining(readError.message),
+      cause: readError,
+    });
+    expect(mocks.executeStableSubagentInBand).not.toHaveBeenCalled();
   });
 
   it('uses delegation policy and executes a direct in-band child', async () => {
@@ -171,14 +275,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     const runner = defaultRunner();
 
     await expect(runner(call)).resolves.toBe(result);
-    expect(mocks.requireVisibleAgent).toHaveBeenCalledWith(
-      'workflow',
-      'correct',
-      {
-        workflowAgentKeys: ['builtInWorkflow:correct'],
-        toolUseAgentKeys: ['builtInToolUse:assistant'],
-      },
-    );
+    expect(mocks.requireVisibleAgent).not.toHaveBeenCalled();
     expect(mocks.assertWorkflowFilesExist).toHaveBeenCalledWith([
       { label: 'Input file', files: ['paper.tex'] },
     ]);
@@ -340,6 +437,14 @@ describe('createWorkflowScriptAgentRunner', () => {
       }),
     );
 
+    expect(mocks.requireVisibleAgent).toHaveBeenCalledWith(
+      'workflow',
+      'merge',
+      {
+        workflowAgentKeys: ['builtInWorkflow:correct'],
+        toolUseAgentKeys: ['builtInToolUse:assistant'],
+      },
+    );
     expect(mocks.resolveChildRunOutput).toHaveBeenNthCalledWith(
       1,
       runExecutionId,
@@ -520,14 +625,12 @@ describe('createWorkflowScriptAgentRunner', () => {
   });
 
   it('allows empty input files when the agent declares default outputs', async () => {
-    mocks.requireVisibleAgent.mockImplementation((_category, name) => ({
-      name,
-      source: 'builtInWorkflow',
-      category: 'workflow',
-      path: `/agents/${name}.yml`,
-      defaultOutputFiles: ['generated.tex'],
-    }));
-    const runner = defaultRunner();
+    const runner = createWorkflowScriptAgentRunner(
+      parentContext(),
+      { ...defaultAgent, defaultOutputFiles: ['generated.tex'] },
+      'tool-call-7',
+      run,
+    );
 
     await expect(runner(invocation({}))).resolves.toBe(result);
   });
@@ -563,6 +666,18 @@ describe('createWorkflowScriptAgentRunner', () => {
 
     await expect(runner(invocation())).rejects.toThrow(
       'Workflow subagent ended with cancelled outcome.',
+    );
+  });
+
+  it('rejects a completed workflow child that produced no output files', async () => {
+    mocks.executeStableSubagentInBand.mockResolvedValueOnce({
+      executionId: 'bbbbbb222222',
+      result: { ...result, outputs: [] },
+    });
+    const runner = defaultRunner();
+
+    await expect(runner(invocation())).rejects.toThrow(
+      'Workflow subagent completed without producing any output files.',
     );
   });
 
