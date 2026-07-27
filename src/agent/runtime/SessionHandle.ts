@@ -160,6 +160,7 @@ export class SessionHandle {
   private restartRepairPromise: Promise<unknown> | undefined;
   private readonly restartRepairQueue = new PQueue({ concurrency: 1 });
   private readonly restartRepairRetry = new RestartRepairRetryScheduler();
+  private readonly restartRepairAbort = new AbortController();
   private storageGeneration = 0;
   constructor(init: SessionHandleInit) {
     if (init.transcripts.mode.kind === 'read-only') {
@@ -235,7 +236,12 @@ export class SessionHandle {
    * session state to a host.
    */
   waitUntilReady(): Promise<void> {
-    if (this.transcripts.mode.kind !== 'persistent') return Promise.resolve();
+    if (
+      this.transcripts.mode.kind !== 'persistent' ||
+      this.restartRepairAbort.signal.aborted
+    ) {
+      return Promise.resolve();
+    }
     if (!this.restartRepairPromise) {
       this.restartRepairPromise = this.enqueueRestartRepair(() =>
         this.repairStoresAfterRestart(this.storageGeneration),
@@ -251,7 +257,10 @@ export class SessionHandle {
    * explicit lifecycle boundary only after a workspace-root change.
    */
   reloadAfterStorageRootChange(): Promise<boolean> {
-    if (this.transcripts.mode.kind !== 'persistent') {
+    if (
+      this.transcripts.mode.kind !== 'persistent' ||
+      this.restartRepairAbort.signal.aborted
+    ) {
       return Promise.resolve(false);
     }
     if (platform().storage.hasPendingWorkspaceStorageChange?.() === false) {
@@ -277,6 +286,7 @@ export class SessionHandle {
     reloadTranscripts = false,
   ): Promise<boolean> {
     try {
+      if (this.restartRepairAbort.signal.aborted) return false;
       if (reloadTranscripts) {
         return await runWithOwnedExecutionLeaseQuiescence(() =>
           this.replaceStoresAfterStorageRootChange(generation),
@@ -286,7 +296,12 @@ export class SessionHandle {
         if (generation !== this.storageGeneration) return false;
         const streamIds = this.transcripts.keys();
         await this.snapshots.load(streamIds);
-        if (generation !== this.storageGeneration) return false;
+        if (
+          generation !== this.storageGeneration ||
+          this.restartRepairAbort.signal.aborted
+        ) {
+          return false;
+        }
         for (const streamId of this.transcripts.getUnfinishedStreamIds()) {
           this.status.transition(
             streamId,
@@ -373,7 +388,12 @@ export class SessionHandle {
   }
 
   private async runRestartRepair(generation: number): Promise<void> {
-    if (generation !== this.storageGeneration) return;
+    if (
+      generation !== this.storageGeneration ||
+      this.restartRepairAbort.signal.aborted
+    ) {
+      return;
+    }
     const snapshotExecutionIds = this.snapshots.getExecutionIdMap();
     const executionIds = new Map(snapshotExecutionIds);
     for (const streamId of this.transcripts.keys()) {
@@ -400,7 +420,12 @@ export class SessionHandle {
           .filter((streamId) => !snapshotExecutionIds.has(streamId)),
       );
     }
-    if (generation !== this.storageGeneration) return;
+    if (
+      generation !== this.storageGeneration ||
+      this.restartRepairAbort.signal.aborted
+    ) {
+      return;
+    }
 
     const result = await repairRestartedStreams({
       streamStatus: this.status,
@@ -421,7 +446,9 @@ export class SessionHandle {
       },
       statusEmitOptions: { trace: logger },
       logger,
+      signal: this.restartRepairAbort.signal,
     });
+    if (this.restartRepairAbort.signal.aborted) return;
     this.restartRepairRetry.schedule(result.nextLeaseCheckAt, () => {
       void this.enqueueRestartRepair(() =>
         this.runRestartRepair(generation),
@@ -659,6 +686,7 @@ export class SessionHandle {
 
   /** Dispose the runtime owners and drop result listeners. */
   private teardownOwners(): void {
+    this.restartRepairAbort.abort();
     this.restartRepairRetry.dispose();
     this.subscriptions.dispose();
     this.executions.dispose();

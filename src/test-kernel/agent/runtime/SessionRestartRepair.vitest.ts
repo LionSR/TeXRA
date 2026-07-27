@@ -52,6 +52,43 @@ afterEach(async () => {
 });
 
 describe('SessionHandle restart repair', () => {
+  it('stops in-flight restart repair when the session is disposed', async () => {
+    const transcripts = await StreamLogStore.open();
+    transcripts.append(streamId, {
+      id: 'disposed-running-group',
+      type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
+      level: LOG_LEVELS.INFO,
+      timestamp: 1_000,
+      data: { status: STREAM_PHASE.RUNNING },
+    });
+    await transcripts.flush();
+
+    let finishDetection: ((streams: Set<StreamTabId>) => void) | undefined;
+    const detectionBlocked = new Promise<Set<StreamTabId>>((resolve) => {
+      finishDetection = resolve;
+    });
+    vi.spyOn(waitingDetection, 'detectWaitingStreams').mockReturnValue(
+      detectionBlocked,
+    );
+
+    const session = new SessionHandle({
+      transcripts,
+      restartRepair: 'deferred',
+    });
+    const readiness = session.waitUntilReady();
+    await vi.waitFor(() => {
+      expect(waitingDetection.detectWaitingStreams).toHaveBeenCalledOnce();
+    });
+
+    session.dispose();
+    finishDetection?.(new Set());
+    await expect(readiness).resolves.toBeUndefined();
+
+    expect(session.status.get(streamId)).toBe(STREAM_PHASE.RUNNING);
+    expect(transcripts.get(streamId)?.getRange(0)).toHaveLength(1);
+    await expect(getExecutionStore(executionId).readMeta()).resolves.toBeNull();
+  });
+
   it('repairs a crashed run before a host is attached', async () => {
     const transcripts = await StreamLogStore.open();
     transcripts.append(streamId, {

@@ -64,6 +64,8 @@ export interface RestartRepairOptions {
   >;
   logger?: RestartRepairLogger;
   now?: number;
+  /** Stop before beginning another repair mutation after session teardown. */
+  signal?: AbortSignal;
 }
 
 export interface RestartRepairResult {
@@ -74,6 +76,16 @@ export interface RestartRepairResult {
   terminalStatusUpdated: ExecutionId[];
   /** Earliest time a fresh lease skipped at startup can be checked again. */
   nextLeaseCheckAt?: number;
+}
+
+function createRestartRepairResult(): RestartRepairResult {
+  return {
+    waitingStreams: [],
+    failedStreams: [],
+    closedWaitingGroups: [],
+    closedFailedGroups: [],
+    terminalStatusUpdated: [],
+  };
 }
 
 /** Owns the single delayed retry used to revisit leases left fresh by a crash. */
@@ -242,6 +254,7 @@ async function writeFailedTerminalStatuses(
     outcome: RunOutcome,
   ) => Promise<void>,
   logger: RestartRepairLogger | undefined,
+  signal: AbortSignal | undefined,
 ): Promise<ExecutionId[]> {
   const status = projectRunOutcome(RUN_OUTCOME.FAILED).executionStatus;
   const writes = streamIds.flatMap((streamId) => {
@@ -289,6 +302,7 @@ async function writeFailedTerminalStatuses(
     });
   }
 
+  if (signal?.aborted) return updated;
   const synchronizationResults = await Promise.allSettled(
     synchronizationWrites.map(({ executionId }) =>
       synchronizeResultOutcome(executionId, RUN_OUTCOME.FAILED),
@@ -314,19 +328,14 @@ async function writeFailedTerminalStatuses(
 export async function repairRestartedStreams(
   options: RestartRepairOptions,
 ): Promise<RestartRepairResult> {
-  const result: RestartRepairResult = {
-    waitingStreams: [],
-    failedStreams: [],
-    closedWaitingGroups: [],
-    closedFailedGroups: [],
-    terminalStatusUpdated: [],
-  };
+  const result = createRestartRepairResult();
   const now = options.now ?? Date.now();
 
   for (const streamId of repairCandidates(
     options.streamStatus,
     options.repairStreams,
   )) {
+    if (options.signal?.aborted) break;
     const executionId =
       options.executionIds.get(streamId) ?? executionIdFromStream(streamId);
     let repairStarted = false;
@@ -335,6 +344,9 @@ export async function repairRestartedStreams(
         if (executionId) {
           repairStarted = true;
           const settlement = await readExecutionSettlement(executionId);
+          if (options.signal?.aborted) {
+            return { kind: 'cancelled' as const };
+          }
           if (settlement.settled) {
             synchronizeSettledPhase(
               options.streamStatus,
@@ -351,6 +363,9 @@ export async function repairRestartedStreams(
           }
         }
         repairStarted = true;
+        if (options.signal?.aborted) {
+          return { kind: 'cancelled' as const };
+        }
         return {
           kind: 'repaired' as const,
           result: await repairRestartedStream(
@@ -379,6 +394,7 @@ export async function repairRestartedStreams(
         );
         continue;
       }
+      if (repaired.value.kind === 'cancelled') break;
       if (repaired.value.kind === 'settled') {
         options.logger?.debug(
           `Skipped restart repair for terminal execution ${executionId}`,
@@ -417,6 +433,7 @@ async function repairRestartedStream(
   const failedStreams: StreamTabId[] = [];
   const waitingGroupStreams: StreamTabId[] = [];
   const failedGroupStreams: StreamTabId[] = [];
+  if (options.signal?.aborted) return createRestartRepairResult();
   const currentStatus = options.streamStatus.get(streamId);
   const isWaitingStream = options.waitingStreams.has(streamId);
 
@@ -474,6 +491,7 @@ async function repairRestartedStream(
     options.logger?.warn(`Failed to repair stream ${streamId} after restart`);
   }
 
+  if (options.signal?.aborted) return createRestartRepairResult();
   const closedWaitingGroups = waitingGroupStreams.length
     ? await options.closeRunningGroups(
         waitingGroupStreams,
@@ -481,6 +499,7 @@ async function repairRestartedStream(
         now,
       )
     : [];
+  if (options.signal?.aborted) return createRestartRepairResult();
   const closedFailedGroups = failedGroupStreams.length
     ? await options.closeRunningGroups(
         failedGroupStreams,
@@ -488,6 +507,7 @@ async function repairRestartedStream(
         now,
       )
     : [];
+  if (options.signal?.aborted) return createRestartRepairResult();
   const terminalStatusUpdated = await writeFailedTerminalStatuses(
     failedStreams,
     executionId
@@ -496,6 +516,7 @@ async function repairRestartedStream(
     options.finalizeExecution ?? defaultFinalizeExecution,
     options.synchronizeResultOutcome ?? defaultSynchronizeResultOutcome,
     options.logger,
+    options.signal,
   );
   return {
     waitingStreams,
