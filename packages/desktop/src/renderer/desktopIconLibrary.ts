@@ -79,7 +79,7 @@ const LUCIDE_NAME_BY_TEXRA_NAME: Readonly<Record<string, string>> = {
   'trash-can': 'trash-2',
   'chart-line': 'chart-line',
   'chart-pie': 'chart-pie',
-  'clock-rotate-left': 'history',
+  'clock-rotate-left': 'clock-arrow-left',
   'right-left': 'arrow-left-right',
   'code-branch': 'git-branch',
   'code-commit': 'git-commit-horizontal',
