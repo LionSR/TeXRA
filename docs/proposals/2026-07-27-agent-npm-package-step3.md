@@ -68,13 +68,21 @@ product-line rulings in §8, not by writing code.
 
 ### B1. The tool registry is closed _and_ cyclic — one problem, not two
 
-Per-tool transitive closures are **byte-identical for all 54 tools: 654 files /
-135,668 LoC**. The cycle:
-`bash.ts:67 → childStream.ts:6 → AgentRunLifecycle.ts:47 → AgentLaunchContext.ts:26 →
-agentLoad.ts:22 → @tools/registry → ArxivDownloadTool.ts:4 → @latex/arxivProcessor` —
+> **Corrected 2026-07-27 (issue-filing re-census at `ee08bb9c24`).** The cut experiment's
+> "byte-identical for all 54 tools: 654 files" does **not** reproduce. Measured over all 50
+> `defineTool()` modules: **19 share one identical 630-file closure** (these include `bash`
+> and the delegation tools — the ones an embedder wants most); the other **31 cap at ~150
+> files with zero LaTeX/Lean/arxiv/Zotero** (`ReadTool` 122, `grep` 120, `glob` 119). The
+> problem is real but narrower and more tractable than first stated. Cycle line numbers
+> below are each off by one at HEAD (`bash.ts:68`, …); the corrected table lives in #9327.
+
+The cycle:
+`bash.ts → childStream.ts → AgentRunLifecycle.ts → AgentLaunchContext.ts →
+agentLoad.ts → @tools/registry → ArxivDownloadTool.ts → @latex/arxivProcessor` —
 already documented in-code at `subagentExecution.ts:41-46` and worked around with lazy
-imports. **Every consumer of `bash` installs LaTeX, Lean, Zotero and arxiv.** Opening the
-registry (§5b) without severing the cycle changes nothing about the install.
+imports. **Every consumer of `bash` still installs LaTeX, Lean, Zotero and arxiv** (bash is
+in the 19). Opening the registry (§5b) without severing the cycle changes nothing about the
+install.
 
 The split itself is clean: **20 generic tools (18,649 LoC) vs 34 domain tools
 (14,834 LoC)**, connected only through `registry.ts`, `externalToolDefs.ts` (5 edges), and
@@ -88,9 +96,14 @@ seam to supply their own key.** Related ruling (§8): with a state store present
 relay access defaults **on** (`ServerSideKeyService.ts:106-108`), so an SDK run would
 silently `fetch` remote.texra.ai. v0 must be BYOK-by-default.
 
-### B3. `@replacement/engine` × 11 — a correction to this program's own premise
+### B3. `@replacement/engine` × 14 — a correction to this program's own premise
 
-All 9 model handlers import the replacement engine inside `extractResponse`
+> _Counts corrected 2026-07-27: 14 sites repo-wide (12 in-candidate), in 7 model handlers
+> plus 2 support modules under `modelHandlers/` — not "all 9 handlers" as first stated. The
+> hot-path call is confirmed at `modelHandlerAnthropic.ts:1224` inside `extractResponse`
+> (`:1194`)._
+
+The model handlers import the replacement engine inside `extractResponse`
 (`modelHandlerAnthropic.ts:46`, `modelHandlerGoogleGenAI.ts:39`, `modelHandlerOpenAI.ts:36`, …),
 plus `TextEditorTool` and `WriteTool`. And `ResponseCycleFlow.ts:25` imports
 `bestConnectionMethod` from `@agent/runtime/textConnection` — core's response cycle calls a
@@ -196,7 +209,8 @@ lifecycle — only a thin entry-point wrapper.
 Of the 13-item backlog between before and after, **only two are blocking**: the
 unattached-interaction ruling (#9256's recommendation stands — reuse the CLI's
 non-interactive policy shape, `approvalPolicyAvailability.ts:8-14`) and the `runtimeHost`
-deletion (§7.1 migration step 5; 267 refs / 63 production files). Everything else is
+deletion (§7.1 migration step 5; re-priced 2026-07-27 to 531 refs / 120 files total —
+#9251, #9272 and #9140 already shaved it). Everything else is
 mechanical or already landed.
 
 ## 5. The three API rulings
