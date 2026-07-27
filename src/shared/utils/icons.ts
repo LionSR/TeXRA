@@ -1,4 +1,4 @@
-import type { TeXRAIconName } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
 
 /**
  * Model provider decorator configuration - single source of truth for provider indicators.

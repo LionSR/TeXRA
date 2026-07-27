@@ -31,7 +31,8 @@ import {
 } from '@progressView/frontend/formatters/constants';
 import { toolDisplayKind } from '@shared/tools/toolKind';
 import { EXECUTIONS_DEFAULT_ACTION } from '@shared/tools/executionsDisplay';
-import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 import {
   DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
   DELEGATION_TOOLS,

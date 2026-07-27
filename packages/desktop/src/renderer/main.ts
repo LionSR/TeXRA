@@ -74,7 +74,8 @@ import {
   renderIconActionButton,
   renderLabeledActionButton,
 } from '@shared/wa/actionButtons';
-import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 import {
   DesktopSaveFileMessageSchema,

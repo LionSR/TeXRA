@@ -19,7 +19,7 @@ import {
   type ContextManagementData,
   type LogMessageData,
 } from '@shared/schemas';
-import type { TeXRAIconName } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { formatCompactTokenCount } from '@utils/core';
 
 // Local imports - formatter helpers

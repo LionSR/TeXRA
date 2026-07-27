@@ -18,7 +18,8 @@ import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderLoadingState } from '@shared/wa/loadingState';
 import { renderSettingsBanner } from '@shared/wa/settingsBanner';
 import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
-import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - shared schemas
 import type {
