@@ -439,7 +439,12 @@ if (HARNESS_MEMORY_FILES.length > 0) {
   });
 }
 initializeDefaultSession({ transcripts: await StreamLogStore.open() });
-const harnessFollowUpQueue = defaultSession().followUps.acquire(STREAM_ID);
+const harnessFollowUpLease = defaultSession().followUps.claimLive(
+  STREAM_ID,
+  'flow',
+)!;
+const harnessFollowUpQueue =
+  defaultSession().followUps.queue(harnessFollowUpLease);
 for (const followUp of QUEUED_FOLLOW_UPS) {
   harnessFollowUpQueue.enqueue({ text: followUp });
 }
@@ -2266,7 +2271,7 @@ function appendHarnessStatus(): void {
 function resetHarnessForClear(): void {
   const meta = sessionMeta.get();
   clearApprovals();
-  defaultSession().followUps.drain(STREAM_ID);
+  harnessFollowUpQueue.drain();
   void GoalStore.forget(STREAM_ID);
   const store = defaultSession().transcripts;
   for (const streamId of streams.get().keys()) {

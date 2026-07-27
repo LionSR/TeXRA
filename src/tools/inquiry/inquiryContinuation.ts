@@ -14,9 +14,8 @@
 
 import { createChannelTrace } from '@agent/trace';
 import {
-  sendFollowUp,
-  wakeQueuedFollowUpStream,
-  type FollowUpWakeResult,
+  submitFollowUp,
+  type SubmitFollowUpResult,
 } from '@agent/followUp/ToolUseFollowUp';
 import {
   getRunContextSession,
@@ -129,22 +128,14 @@ async function emitInquiryThreadUpdate(
   });
 }
 
-function mapWakeResultToInquiryOutcome(
-  result: FollowUpWakeResult,
+function mapSubmissionToInquiryOutcome(
+  result: SubmitFollowUpResult,
 ): InjectionOutcome {
-  switch (result.kind) {
-    case 'not_required':
-      return 'sent';
-    case 'resumed':
-      return 'resumed';
-    case 'dropped':
-      return 'archived';
-    case 'queued_without_wake':
-    case 'resume_in_flight':
-    case 'active_or_resuming':
-    case 'queued_resume_failed':
-      return 'queued';
+  if (result.status === 'sent') return 'sent';
+  if (result.status === 'dropped' || result.status === 'no_session') {
+    return 'archived';
   }
+  return result.continuation === 'resumed' ? 'resumed' : 'queued';
 }
 
 function mapInjectionOutcomeToResumeOutcome(
@@ -159,13 +150,9 @@ async function deliverContinuation(params: {
   threadId: ExternalInquiryThreadId;
   session?: SessionHandle;
 }): Promise<InjectionOutcome> {
-  const result = await sendFollowUp(
-    params.parentStreamId,
-    params.text,
-    undefined,
-    undefined,
-    params.session,
-  );
+  const result = await submitFollowUp(params.parentStreamId, params.text, {
+    session: params.session,
+  });
 
   if (result.status === 'no_session') {
     logger.warn(
@@ -179,14 +166,7 @@ async function deliverContinuation(params: {
     return 'archived';
   }
 
-  const outcome = mapWakeResultToInquiryOutcome(
-    await wakeQueuedFollowUpStream(
-      params.parentStreamId,
-      result,
-      undefined,
-      params.session,
-    ),
-  );
+  const outcome = mapSubmissionToInquiryOutcome(result);
 
   await emitInquiryThreadUpdate(
     params.threadId,
