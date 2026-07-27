@@ -185,10 +185,16 @@ export function createSessionExitController(
   const persistBeforePlatformShutdown = async (
     resumableIdle: boolean,
   ): Promise<void> => {
-    await Promise.allSettled([
-      persistAndReleaseResumableIdleLease(resumableIdle),
-    ]);
-    await Promise.allSettled([runPlatformShutdown()]);
+    try {
+      await persistAndReleaseResumableIdleLease(resumableIdle);
+    } catch {
+      // Signal exit remains best-effort, but platform shutdown must still run.
+    }
+    try {
+      await runPlatformShutdown();
+    } catch {
+      // process.exit below remains the terminal owner when shutdown fails.
+    }
   };
   const exitNow = (exitCode: number): void => {
     const resumableIdle = ctx.isResumableIdle();
@@ -204,9 +210,8 @@ export function createSessionExitController(
     printResumeHintOnExit();
     // Synchronous signal exits (SIGINT double-tap / SIGTERM / SIGHUP) own the
     // whole teardown here (gracefulTeardown skips when `exiting`), so drain
-    // persistence and run platform shutdown before exiting. allSettled never
-    // rejects, so a flush failure can't become an unhandled rejection under
-    // --unhandled-rejections=strict.
+    // persistence and run platform shutdown before exiting. Both steps settle
+    // their own failures so none escape under --unhandled-rejections=strict.
     void persistBeforePlatformShutdown(resumableIdle).finally(() =>
       process.exit(exitCode),
     );

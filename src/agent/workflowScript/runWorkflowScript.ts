@@ -135,11 +135,11 @@ const ORCHESTRATION_PRELUDE = `
 
 /**
  * Thrown when the whole run must stop (agent-call cap exceeded, wall-clock
- * timeout abort). The realm-side parallel() rethrows it by name
- * instead of converting it to a null slot, so the backstops apply inside
- * fan-out primitives too. Detected by name, not instanceof — the error
- * crosses the sandbox realm boundary as a realm-local copy carrying only
- * name/message.
+ * timeout abort). The realm-side agent() primitive recognizes it by name and
+ * rethrows instead of converting it to null; parallel() then propagates that
+ * rejected call through Promise.all. Detected by name, not instanceof — the
+ * error crosses the sandbox realm boundary as a realm-local copy carrying
+ * only name/message.
  */
 export class WorkflowRunAbortError extends Error {
   constructor(message: string, options?: ErrorOptions) {

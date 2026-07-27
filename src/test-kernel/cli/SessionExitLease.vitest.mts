@@ -141,4 +141,27 @@ describe('CLI session exit lease ownership', () => {
     });
     expect(order).toEqual(['flush', 'release', 'shutdown']);
   });
+
+  it('still shuts down and exits when signal persistence fails', async () => {
+    const order: string[] = [];
+    const exitController = controller({
+      resumableIdle: true,
+      flushArtifacts: async () => {
+        order.push('flush');
+        throw new Error('flush failed');
+      },
+    });
+    mocks.runCliPlatformShutdownSequence.mockImplementation(async () => {
+      order.push('shutdown');
+    });
+    exitSpy.mockImplementation((() => undefined) as typeof process.exit);
+
+    exitController.handleSigint();
+
+    await vi.waitFor(() => {
+      expect(exitSpy).toHaveBeenCalledWith(0);
+    });
+    expect(order).toEqual(['flush', 'shutdown']);
+    expect(completeLeaseSpy).not.toHaveBeenCalled();
+  });
 });
