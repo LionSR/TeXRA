@@ -9,7 +9,7 @@
 
 import { z } from 'zod';
 
-import type { TeXRAIconName } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
 
 const AGENT_MODE_PRESET_ICON_NAMES = [
   'bookmark',
