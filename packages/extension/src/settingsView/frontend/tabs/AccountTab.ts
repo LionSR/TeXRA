@@ -89,27 +89,11 @@ export class AccountTab extends LitElement {
   }
 
   private renderUsage(): TemplateResult {
-    if (!this.authenticated) {
-      return html`
-        <div class="account-empty">
-          Sign in to monitor your included TeXRA usage and monthly relay quota.
-        </div>
-      `;
-    }
-    // After a quota-exhaustion auto-switch (included -> personal) the meter
-    // stays visible: it carries the "switched you to your own keys" notice.
-    if (this.apiAccessMode !== 'included' && !this.quotaAutoSwitched) {
-      return html`
-        <div class="account-empty">
-          Included model access is not enabled. Switch to included access in
-          Providers &amp; Models to see usage data.
-        </div>
-      `;
-    }
-    // Surface session-expired and spend-check errors ahead of any cached
-    // spending-status snapshot. TierService only updates spendingStatus on
-    // authenticated fetches, so a stale non-null value can outlive the
-    // session that produced it and mask the real error state.
+    // Surface session-expired and spend-check errors ahead of everything —
+    // they explain WHY usage data is unavailable and take priority over the
+    // plain unauthenticated / not-enabled copy. sessionExpired implies
+    // !authenticated (a zombie stored session whose refresh is dead), so
+    // this check must come before the authenticated guard.
     if (this.sessionExpired) {
       return html`
         <div class="account-empty">
@@ -125,6 +109,23 @@ export class AccountTab extends LitElement {
           (${this.spendingStatusError.failureReason ?? 'unknown reason'}).
           Included access is temporarily unavailable; switch to your own
           provider API keys or try again later.
+        </div>
+      `;
+    }
+    if (!this.authenticated) {
+      return html`
+        <div class="account-empty">
+          Sign in to monitor your included TeXRA usage and monthly relay quota.
+        </div>
+      `;
+    }
+    // After a quota-exhaustion auto-switch (included -> personal) the meter
+    // stays visible: it carries the "switched you to your own keys" notice.
+    if (this.apiAccessMode !== 'included' && !this.quotaAutoSwitched) {
+      return html`
+        <div class="account-empty">
+          Included model access is not enabled. Switch to included access in
+          Providers &amp; Models to see usage data.
         </div>
       `;
     }
@@ -144,10 +145,12 @@ export class AccountTab extends LitElement {
   }
 
   private renderIdentityBanner(): TemplateResult {
-    const title = this.authenticated
+    const expired = this.sessionExpired;
+    // When the session expired we still have the email from a previous
+    // authenticated refresh; otherwise this is a clean signed-out state.
+    const title = this.authenticated || expired
       ? this.userEmail || 'TeXRA account'
       : 'TeXRA account';
-    const expired = this.authenticated && this.sessionExpired;
     let description: TemplateResult | string =
       'Sign in to use included access and monitor usage.';
     if (expired) {
@@ -156,7 +159,10 @@ export class AccountTab extends LitElement {
     } else if (this.authenticated) {
       description = html`<span class="account-tier">${this.tier}</span> plan`;
     }
-    const actions = this.authenticated
+    // Enter the authenticated-like branch for both live and expired sessions
+    // so the Sign out button stays available for cleaning up the stored
+    // zombie session.
+    const actions = this.authenticated || expired
       ? html`
           ${
             expired
