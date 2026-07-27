@@ -125,8 +125,8 @@ const LUCIDE_NAME_BY_TEXRA_NAME: Readonly<Record<string, string>> = {
   comment: 'message-circle',
   // Codicon-style symbol aliases used by the agent-team presets.
   'symbol-structure': 'boxes',
-  'symbol-operator': 'sigma',
-  'symbol-number': 'hash',
+  cube: 'sigma',
+  hashtag: 'hash',
   hashtag: 'hash',
   'symbol-method': 'braces',
   'symbol-namespace': 'box',
