@@ -277,6 +277,24 @@ describe('desktop workspace IPC', () => {
     expect(onEditorDirtyChange).toHaveBeenCalledWith(true);
   });
 
+  it('disposes terminal and browser resources at a renderer boundary', () => {
+    const ptyHost = createPtyHost();
+    const browserViews = createBrowserViews();
+    const ipc = createDesktopWorkspaceIpc(
+      { postToRenderer: vi.fn() },
+      {
+        ptyHost,
+        browserViews,
+        toWindowBounds: (bounds) => bounds,
+      },
+    );
+
+    ipc.disposeRendererResources();
+
+    expect(ptyHost.disposeAll).toHaveBeenCalledOnce();
+    expect(browserViews.disposeAll).toHaveBeenCalledOnce();
+  });
+
   it('posts environment state and clears loading state after host failures', async () => {
     const environment: DesktopEnvironmentSummary = {
       isGitRepository: true,
