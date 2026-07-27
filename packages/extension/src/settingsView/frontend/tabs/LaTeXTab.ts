@@ -321,7 +321,7 @@ export class LaTeXTab extends LitElement {
           title="${dep.actionLabel ?? 'Install'}"
           @click=${() => postMessage(dep.actionCommand!)}
         >
-          ${waIcon('cloud-download', { slot: 'start' })}
+          ${waIcon('cloud-arrow-down', { slot: 'start' })}
           ${dep.actionLabel ?? 'Install'}
         </wa-button>
       `;
@@ -334,7 +334,7 @@ export class LaTeXTab extends LitElement {
     return html`
       <div class="dependency-card">
         <div class="dependency-row">
-          ${waIcon(installed ? 'check' : 'warning', {
+          ${waIcon(installed ? 'check' : 'triangle-exclamation', {
             className: `dependency-icon ${installed ? 'installed' : 'missing'}`,
           })}
           <div class="dependency-info">
@@ -454,7 +454,7 @@ export class LaTeXTab extends LitElement {
           title: 'Dependencies',
           description:
             'TeXRA checks the local tools used for compilation, diffs, formatting, and document analysis.',
-          icon: 'package',
+          icon: 'box',
         })}
         ${this.renderPrerequisiteHint()}
         ${dependencies.map((dep) => this.renderDependencyCard(dep))}
@@ -473,13 +473,13 @@ export class LaTeXTab extends LitElement {
           <span class="settings-row-help">${info.description}</span>
         </div>
         <div class="settings-row-control">
-          ${waIcon(isSet ? 'check' : 'warning', {
+          ${waIcon(isSet ? 'check' : 'triangle-exclamation', {
             className: `setting-status-icon ${isSet ? 'is-set' : 'not-set'}`,
           })}
           ${
             isSet
               ? renderLabeledActionButton({
-                  icon: 'discard',
+                  icon: 'arrow-rotate-left',
                   text: 'Reset',
                   kind: 'secondary',
                   appearance: 'outlined',
@@ -522,7 +522,7 @@ export class LaTeXTab extends LitElement {
                     title="Apply all recommended settings"
                     @click=${() => this.handleApply()}
                   >
-                    ${waIcon('check-all', { slot: 'start' })} Apply All
+                    ${waIcon('check-double', { slot: 'start' })} Apply All
                   </wa-button>
                 </div>
               `
@@ -538,7 +538,7 @@ export class LaTeXTab extends LitElement {
                     title: 'Recommended settings',
                     description:
                       'Keep generated files out of the VS Code sidebar and reduce noise during agent runs.',
-                    icon: 'settings-gear',
+                    icon: 'gear',
                   })}
                   ${RECOMMENDED_SETTINGS.map((info) =>
                     this.renderSettingCard(info),
@@ -563,7 +563,7 @@ export class LaTeXTab extends LitElement {
           title: 'Inline criticism',
           description:
             'Control how TeXRA surfaces structured review annotations in LaTeX documents.',
-          icon: 'comment-discussion',
+          icon: 'comments',
         })}
         <div class="settings-row">
           <div class="settings-row-text">
@@ -576,7 +576,7 @@ export class LaTeXTab extends LitElement {
             </span>
           </div>
           <div class="settings-row-control">
-            ${waIcon(this.inlineCriticismEnabled ? 'check' : 'circle-slash', {
+            ${waIcon(this.inlineCriticismEnabled ? 'check' : 'circle-xmark', {
               className: `setting-status-icon ${
                 this.inlineCriticismEnabled ? 'is-set' : 'not-set'
               }`,
@@ -612,7 +612,7 @@ export class LaTeXTab extends LitElement {
           title: 'Compile and diff',
           description:
             'Workspace-specific compilation, review, and formatting behavior.',
-          icon: 'zap',
+          icon: 'bolt',
         })}
         ${this.renderBooleanSetting({
           field: 'workflowAutoCompile',
@@ -713,7 +713,7 @@ export class LaTeXTab extends LitElement {
           <span class="settings-row-help">${opts.description}</span>
         </div>
         <div class="settings-row-control">
-          ${waIcon(effective ? 'check' : 'circle-slash', {
+          ${waIcon(effective ? 'check' : 'circle-xmark', {
             className: `setting-status-icon ${effective ? 'is-set' : 'not-set'}`,
           })}
           <wa-switch
@@ -743,7 +743,7 @@ export class LaTeXTab extends LitElement {
    * Red is reserved for booleans that are Off, where it carries meaning.
    */
   private renderSettingStatusIcon(isCustom: boolean): TemplateResult {
-    return waIcon(isCustom ? 'edit' : 'gear', {
+    return waIcon(isCustom ? 'pencil' : 'gear', {
       className: `setting-status-icon ${isCustom ? 'is-set' : 'is-default'}`,
       title: isCustom ? 'Customized' : 'Using default',
     });
@@ -762,7 +762,7 @@ export class LaTeXTab extends LitElement {
       title="Reset to default (${defaultDisplay})"
       @click=${() => this.dispatchSetConfigValue(field, undefined)}
     >
-      ${waIcon('discard')}
+      ${waIcon('arrow-rotate-left')}
     </wa-button>`;
   }
 

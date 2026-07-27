@@ -46,7 +46,7 @@ interface DiffActionSpec {
 const EDITED_REVIEW_ACTIONS: readonly DiffActionSpec[] = [
   {
     id: 'latexdiffButton',
-    icon: 'diff-single',
+    icon: 'plus-minus',
     label: 'Diff',
     tooltip:
       'Run latexdiff on the base and edited files and open the marked-up result',
@@ -54,7 +54,7 @@ const EDITED_REVIEW_ACTIONS: readonly DiffActionSpec[] = [
   },
   {
     id: 'compareButton',
-    icon: 'diff',
+    icon: 'code-compare',
     label: 'Compare',
     tooltip: 'Open the base and edited files side by side in the diff editor',
     action: 'compare',
@@ -65,7 +65,7 @@ const EDITED_REVIEW_ACTIONS: readonly DiffActionSpec[] = [
 const EDITED_APPLY_ACTIONS: readonly DiffActionSpec[] = [
   {
     id: 'mergeButton',
-    icon: 'merge',
+    icon: 'code-merge',
     label: 'Merge',
     tooltip:
       'Create a new version of the base file by merging the edits suggested by the edited file',
@@ -85,7 +85,7 @@ const EDITED_APPLY_ACTIONS: readonly DiffActionSpec[] = [
 const COMMIT_DIFF_ACTIONS: readonly DiffActionSpec[] = [
   {
     id: 'latexdiffvcButton',
-    icon: 'diff-single',
+    icon: 'plus-minus',
     label: 'Diff',
     tooltip:
       'Run latexdiff-vc on the base file against its version at the selected commit',
@@ -97,7 +97,7 @@ const COMMIT_DIFF_ACTIONS: readonly DiffActionSpec[] = [
 const COMMIT_MANAGE_ACTIONS: readonly DiffActionSpec[] = [
   {
     id: 'packLatexdiffvcButton',
-    icon: 'archive',
+    icon: 'box-archive',
     label: 'Pack',
     tooltip: 'Pack the latexdiff-vc output into the History folder',
     action: 'packLatexdiffvc',
@@ -335,7 +335,7 @@ export class LatexDiffsSection extends LitElement {
         @wa-hide=${(event: Event) => this.handleDetailsOpenChange(event, false)}
       >
         <span slot="summary" class="latexdiffs-summary">
-          ${waIcon('source-control')} LaTeXDiffs
+          ${waIcon('code-branch')} LaTeXDiffs
         </span>
         <div id="latexdiffsContent">
           <div class="file-select">
@@ -356,7 +356,7 @@ export class LatexDiffsSection extends LitElement {
                 })}
                 ${renderIconActionButton({
                   id: 'emptyBaseFileButton',
-                  icon: 'close',
+                  icon: 'xmark',
                   label: 'Clear base file',
                   tooltip: 'Clear base file',
                   onClick: () =>
@@ -380,7 +380,7 @@ export class LatexDiffsSection extends LitElement {
               <div class="file-select-label-group">
                 ${renderIconActionButton({
                   id: 'refreshEditedFileButton',
-                  icon: 'edit',
+                  icon: 'pencil',
                   label: 'Refresh edited files',
                   tooltip: 'Refresh edited files',
                   onClick: this.handleRefreshEditedFiles,
@@ -403,7 +403,7 @@ export class LatexDiffsSection extends LitElement {
                 })}
                 ${renderIconActionButton({
                   id: 'emptyEditedFileButton',
-                  icon: 'close',
+                  icon: 'xmark',
                   label: 'Clear edited file',
                   tooltip: 'Clear edited file',
                   onClick: () =>
@@ -437,7 +437,7 @@ export class LatexDiffsSection extends LitElement {
               <div class="file-select-label-group">
                 ${renderIconActionButton({
                   id: 'refreshCommitsButton',
-                  icon: 'git-commit',
+                  icon: 'circle-dot',
                   label: 'Refresh commit list',
                   tooltip: 'Refresh commit list',
                   onClick: this.handleRefreshCommits,

@@ -388,7 +388,7 @@ export class BackgroundTasksPanel extends LitElement {
     return html`
       <wa-details class="collapsible-quiet">
         <div slot="summary" class="section-label">
-          ${waIcon('server-process')}
+          ${waIcon('server')}
           <span
             >Subagents${
               activeCount ? html` &middot; ${activeCount} active` : nothing
@@ -511,7 +511,7 @@ function getTaskIcon(child: ActiveChildInfo): TeXRAIconName {
   if (isAgentTool(child)) return 'robot';
   // Subagents (delegation, workflow) default to server-process;
   // processes without a toolName fall back to terminal.
-  return child.kind === 'subagent' ? 'server-process' : 'terminal';
+  return child.kind === 'subagent' ? 'server' : 'terminal';
 }
 
 /**
@@ -522,7 +522,7 @@ function getTaskIcon(child: ActiveChildInfo): TeXRAIconName {
  */
 function taskStatusBadge(child: ActiveChildInfo): {
   readonly text: string;
-  readonly variant: 'neutral' | 'warning' | 'success' | 'danger';
+  readonly variant: 'neutral' | 'triangle-exclamation' | 'success' | 'danger';
 } {
   const subagentStatusStillInFlight =
     child.kind === 'subagent' &&
@@ -533,7 +533,7 @@ function taskStatusBadge(child: ActiveChildInfo): {
     return child.status === STREAM_PHASE.WAITING ||
       child.status === DEFAULT_STREAM_METADATA_STATUS
       ? { text: 'waiting', variant: 'neutral' }
-      : { text: 'running', variant: 'warning' };
+      : { text: 'running', variant: 'triangle-exclamation' };
   }
   switch (child.status) {
     case STREAM_PHASE.FAILED:
@@ -547,8 +547,8 @@ function taskStatusBadge(child: ActiveChildInfo): {
 
 function inquiryStatusVariant(
   status: InquiryThreadUpdatedEvent['status'],
-): 'warning' | 'success' | 'neutral' {
-  if (status === 'open') return 'warning';
+): 'triangle-exclamation' | 'success' | 'neutral' {
+  if (status === 'open') return 'triangle-exclamation';
   if (status === 'answered') return 'success';
   return 'neutral';
 }

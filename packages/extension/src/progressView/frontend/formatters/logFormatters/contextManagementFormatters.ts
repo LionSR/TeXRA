@@ -45,7 +45,7 @@ const ACTION_CONFIG: Record<
   { icon: TeXRAIconName; label: string; color: string }
 > = {
   compaction: {
-    icon: 'fold',
+    icon: 'compress',
     label: 'Compacted',
     color: 'var(--wa-color-chart-blue)',
   },
@@ -65,7 +65,7 @@ const ACTION_CONFIG: Record<
     color: 'var(--wa-color-chart-orange)',
   },
   max_tokens_reduced: {
-    icon: 'arrow-small-down',
+    icon: 'caret-down',
     label: 'Max Tokens Reduced',
     color: 'var(--wa-color-chart-yellow)',
   },
@@ -80,7 +80,7 @@ function buildContextManagementItems(data: ContextManagementData): {
   const { action } = data;
 
   const config: ActionConfig = ACTION_CONFIG[action] ?? {
-    icon: 'history',
+    icon: 'clock-rotate-left',
     label: action || 'Context Management',
     color: 'var(--wa-color-text-normal)',
   };
@@ -107,7 +107,7 @@ function buildContextManagementItems(data: ContextManagementData): {
     const tokensFreed = data.tokensBefore - data.tokensAfter;
     if (tokensFreed > 0) {
       items.push({
-        icon: 'dash',
+        icon: 'minus',
         label: 'Tokens freed',
         value: formatCompactTokenCount(tokensFreed),
       });
@@ -120,20 +120,20 @@ function buildContextManagementItems(data: ContextManagementData): {
       ? `${data.utilizationBefore.toFixed(1)}% → ${data.utilizationAfter.toFixed(1)}%`
       : `${data.utilizationBefore.toFixed(1)}%`;
   items.push({
-    icon: 'pie-chart',
+    icon: 'chart-pie',
     label: 'Context utilization',
     value: utilizationDisplay,
   });
 
   items.push({
-    icon: 'window',
+    icon: 'window-maximize',
     label: 'Context window',
     value: formatCompactTokenCount(data.contextWindow),
   });
 
   if (data.details) {
     items.push({
-      icon: 'info',
+      icon: 'circle-info',
       label: 'Details',
       value: data.details,
     });

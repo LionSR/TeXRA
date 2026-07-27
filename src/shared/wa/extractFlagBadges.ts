@@ -32,7 +32,7 @@ export function renderWorkflowExtractFlagBadges(
     (flag) => flag,
     (flag) =>
       html`<wa-badge variant="neutral" appearance="filled"
-        >${waIcon('file-media')} ${flag}</wa-badge
+        >${waIcon('image')} ${flag}</wa-badge
       >`,
   )}`;
 }

@@ -17,10 +17,10 @@ import type { TeXRAIconName } from '@shared/wa/iconNames';
  * in logEntryStyles.
  */
 export const ICON_BY_LEVEL: Record<LogLevel, TeXRAIconName> = {
-  error: 'error',
-  warn: 'warning',
-  info: 'info',
-  debug: 'search',
+  error: 'circle-exclamation',
+  warn: 'triangle-exclamation',
+  info: 'circle-info',
+  debug: 'magnifying-glass',
 };
 
 // DateTimeFormat options for consistent timestamp formatting
@@ -135,75 +135,75 @@ export const TOOL_LABEL_MAP: Record<string, string> = {
 export const TOOL_ICON_MAP: Record<string, TeXRAIconName> = {
   // File operations
   read_file: 'file',
-  write_file: 'new-file',
-  edit_file: 'edit',
-  str_replace_editor: 'edit',
+  write_file: 'file-circle-plus',
+  edit_file: 'pencil',
+  str_replace_editor: 'pencil',
 
   // Search/find
-  glob: 'search',
-  grep: 'search',
+  glob: 'magnifying-glass',
+  grep: 'magnifying-glass',
   // These tools are no longer registered, but persisted progress entries from
   // past runs still reference them — keep their icons so historical runs
   // render with the right glyphs instead of the generic fallback.
-  apply_path: 'diff',
-  crossref_doi: 'references',
-  ls: 'folder-opened',
+  apply_path: 'code-compare',
+  crossref_doi: 'link',
+  ls: 'folder-open',
 
   // Shell
   bash: 'terminal',
-  wolfram: 'symbol-operator',
+  wolfram: 'cube',
 
   // Web/research
   web_fetch: 'globe',
   web_search: 'globe',
   arxiv_search: 'book',
   arxiv_metadata: 'book',
-  download_arxiv_source: 'cloud-download',
-  crossref_search: 'references',
+  download_arxiv_source: 'cloud-arrow-down',
+  crossref_search: 'link',
 
   // LaTeX
-  texcount: 'symbol-numeric',
-  extract_figures: 'file-media',
-  extract_tikz_figures: 'file-media',
-  extract_bib_entries: 'library',
+  texcount: 'hashtag',
+  extract_figures: 'image',
+  extract_tikz_figures: 'image',
+  extract_bib_entries: 'book',
 
   // Diagnostics
-  diagnostics: 'checklist',
+  diagnostics: 'list-check',
 
   // Task management
-  todo_write: 'tasklist',
+  todo_write: 'list-check',
 
   // Memory
   memory: 'database',
 
   // Zotero
-  zotero_add: 'library',
-  zotero_search: 'library',
-  zotero_export: 'library',
+  zotero_add: 'book',
+  zotero_search: 'book',
+  zotero_export: 'book',
 
   // Lean 4
-  lean_diagnostics: 'warning',
+  lean_diagnostics: 'triangle-exclamation',
   lean_file: 'file-code',
-  lean_project: 'folder-library',
-  lean_inspect: 'inspect',
-  lean_loogle: 'search',
+  lean_project: 'folder-tree',
+  lean_inspect: 'magnifying-glass-chart',
+  lean_loogle: 'magnifying-glass',
 
   // Workflow/delegation (includes legacy names for historical log entries)
-  delegate_workflow: 'list-tree',
-  delegate_workflow_script: 'list-tree',
-  delegate_agent: 'account',
-  propose_workflow: 'list-tree',
-  propose_agent: 'account',
+  delegate_workflow: 'list-ul',
+  delegate_workflow_script: 'list-ul',
+  delegate_agent: 'circle-user',
+  propose_workflow: 'list-ul',
+  propose_agent: 'circle-user',
 
   // Execution history
-  executions: 'history',
-  runs: 'history',
+  executions: 'clock-rotate-left',
+  runs: 'clock-rotate-left',
   accept_run_files: 'check',
 
   // External agents
   codex: 'robot',
-  codex_patch: 'diff',
-  codex_thread: 'comment-discussion',
-  codex_todo: 'checklist',
-  codex_turn: 'check-all',
+  codex_patch: 'code-compare',
+  codex_thread: 'comments',
+  codex_todo: 'list-check',
+  codex_turn: 'check-double',
 };

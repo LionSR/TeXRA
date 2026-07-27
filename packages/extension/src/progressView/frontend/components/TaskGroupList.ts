@@ -73,13 +73,13 @@ function getStatusIcon(status: string): TeXRAIconName | null {
     case STREAM_PHASE.RUNNING:
       return null;
     case STREAM_PHASE.FAILED:
-      return 'error';
+      return 'circle-exclamation';
     case STREAM_PHASE.COMPLETED:
       return 'check';
     case STREAM_PHASE.CANCELLED:
       return 'circle-stop';
     default:
-      return 'circle-outline';
+      return 'circle';
   }
 }
 

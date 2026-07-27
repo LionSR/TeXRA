@@ -139,7 +139,7 @@ export class ModelsTab extends LitElement {
       <nav class="models-jump-links" aria-label="Model settings sections">
         ${accessJump}
         ${renderLabeledActionButton({
-          icon: 'comment-discussion',
+          icon: 'comments',
           text: 'ChatGPT Subscription',
           kind: 'secondary',
           appearance: 'outlined',
@@ -287,7 +287,7 @@ export class ModelsTab extends LitElement {
                         postMessage(SETTINGS_VIEW_COMMANDS.SIGN_OUT_CHATGPT),
                     })
                   : renderLabeledActionButton({
-                      icon: 'comment-discussion',
+                      icon: 'comments',
                       text: 'Sign in with ChatGPT',
                       kind: 'primary',
                       appearance: 'filled',
@@ -367,7 +367,7 @@ export class ModelsTab extends LitElement {
         ${
           unavailableCount > 0 && !consentModel
             ? html`<p class="keyless-source__limit">
-                ${waIcon('warning')}
+                ${waIcon('triangle-exclamation')}
                 <span>
                   Check Copilot availability and Language Models access in VS
                   Code before trying again.

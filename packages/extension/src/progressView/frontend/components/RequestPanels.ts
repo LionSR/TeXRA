@@ -70,7 +70,7 @@ interface SectionConfig {
 const SECTION_CONFIGS: Record<string, SectionConfig> = {
   approval: {
     cssClass: 'approval-requests',
-    icon: 'diff',
+    icon: 'code-compare',
     title: 'Tool edit approval',
     renderPanel: (p) =>
       html`<tool-edit-request-panel
@@ -86,7 +86,7 @@ const SECTION_CONFIGS: Record<string, SectionConfig> = {
   },
   retry: {
     cssClass: 'retry-requests',
-    icon: 'refresh',
+    icon: 'rotate-right',
     title: 'Retry request',
     renderPanel: (p) =>
       html`<retry-request-panel .permission=${p}></retry-request-panel>`,
@@ -100,7 +100,7 @@ const SECTION_CONFIGS: Record<string, SectionConfig> = {
   },
   planApproval: {
     cssClass: 'plan-approval-requests',
-    icon: 'checklist',
+    icon: 'list-check',
     title: 'Plan approval',
     renderPanel: (p) =>
       html`<plan-approval-request-panel

@@ -14,11 +14,11 @@ import type { TeXRAIconName } from '@shared/wa/iconNames';
 const AGENT_MODE_PRESET_ICON_NAMES = [
   'bookmark',
   'rocket',
-  'symbol-structure',
-  'symbol-operator',
-  'symbol-number',
-  'symbol-method',
-  'tools',
+  'diagram-project',
+  'cube',
+  'hashtag',
+  'cube',
+  'screwdriver-wrench',
 ] as const satisfies readonly TeXRAIconName[];
 
 type AgentModePresetIconName = (typeof AGENT_MODE_PRESET_ICON_NAMES)[number];
@@ -111,7 +111,7 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
     name: 'Lean Project',
     description:
       'For Lean 4 projects -- theorem search, tactic simplification, and blueprints.',
-    icon: 'symbol-structure',
+    icon: 'diagram-project',
     workflowAgents: [],
     toolUseAgents: [
       'lean',
@@ -136,7 +136,7 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
     name: 'Physicist',
     description:
       'For physics papers -- analytical derivations, numerical experiments, literature search, slides, and critical review.',
-    icon: 'symbol-operator',
+    icon: 'cube',
     workflowAgents: [
       'correct',
       'polish',
@@ -154,7 +154,7 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
       'simplifier',
       'latexFixer',
       'progressCheck',
-      'search',
+      'magnifying-glass',
     ],
     texraHostedAgents: [
       'generic',
@@ -165,7 +165,7 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
       'presenter',
       'simplifier',
       'progressCheck',
-      'search',
+      'magnifying-glass',
     ],
   },
   {
@@ -173,7 +173,7 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
     name: 'Mathematician',
     description:
       'For math research -- attacking open problems, proofs, Lean 4 formalization, and LaTeX correction.',
-    icon: 'symbol-number',
+    icon: 'hashtag',
     workflowAgents: [
       'correct',
       'polish',
@@ -209,7 +209,7 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
     name: 'Computer Scientist',
     description:
       'For CS papers -- algorithm design, code-driven experiments and ablations, tests for reproducibility, literature search, and critical review.',
-    icon: 'symbol-method',
+    icon: 'cube',
     workflowAgents: ['criticize', 'generic', 'devise', 'apply', 'polish'],
     toolUseAgents: [
       'orchestrator',
@@ -217,7 +217,7 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
       'numerics',
       'coder',
       'testEngineer',
-      'search',
+      'magnifying-glass',
       'review',
       'presenter',
       'simplifier',
@@ -230,7 +230,7 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
       'devise',
       'apply',
       'orchestrator',
-      'search',
+      'magnifying-glass',
       'presenter',
       'simplifier',
       'progressCheck',
@@ -241,7 +241,7 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
     name: 'Software Engineer',
     description:
       "For a project's code -- the engineer lead delegates implementation, review, debugging, and testing across a team of specialists.",
-    icon: 'tools',
+    icon: 'screwdriver-wrench',
     workflowAgents: [],
     toolUseAgents: [
       'engineer',
