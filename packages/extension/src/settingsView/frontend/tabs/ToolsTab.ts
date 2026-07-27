@@ -287,7 +287,7 @@ export class ToolsTab extends LitElement {
                 variant=${
                   this.desktopCrashReportingConfigured
                     ? 'success'
-                    : 'triangle-exclamation'
+                    : 'warning'
                 }
                 size="s"
               >

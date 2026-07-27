@@ -541,7 +541,7 @@ export class MainApp extends MainAppBase {
                       visibleFileCount === 0
                         ? 'Add files'
                         : `${visibleFileCount} ${
-                            visibleFileCount === 1 ? 'file' : 'copy'
+                            visibleFileCount === 1 ? 'file' : 'files'
                           }`
                     }
                   </span>

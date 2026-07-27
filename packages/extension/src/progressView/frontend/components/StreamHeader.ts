@@ -493,7 +493,7 @@ export class StreamHeader extends LitElement {
     return html`<wa-badge
         id=${ELEMENT_IDS.GOAL_CHIP}
         class="goal-chip"
-        variant=${isPaused ? 'triangle-exclamation' : 'brand'}
+        variant=${isPaused ? 'warning' : 'brand'}
         appearance="filled"
         aria-label=${tooltip}
       >

@@ -284,8 +284,29 @@ function dataUri(svg: string): string {
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 
+/**
+ * Legacy codicon-to-canonical aliases for backward compatibility with persisted
+ * icon names (e.g. in localStorage, settings files, or telemetry events that
+ * may still reference the old names). The static migration handled the source
+ * code; this map handles data that lives outside the repo.
+ */
+const LEGACY_ICON_ALIASES: Readonly<Record<string, keyof typeof icons>> =
+  Object.freeze({
+    close: 'xmark',
+    diff: 'code-compare',
+    edit: 'pencil',
+    error: 'circle-exclamation',
+    refresh: 'rotate-right',
+    save: 'floppy-disk',
+    search: 'magnifying-glass',
+    'settings-gear': 'gear',
+    tools: 'screwdriver-wrench',
+    warning: 'triangle-exclamation',
+  });
+
 function resolveIcon(name: string): FontAwesomeIconDefinition | undefined {
-  return icons[name as keyof typeof icons];
+  const canonical = LEGACY_ICON_ALIASES[name] ?? name;
+  return icons[canonical as keyof typeof icons];
 }
 
 function texraIconResolver(name: string): string {
