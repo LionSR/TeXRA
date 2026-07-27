@@ -67,42 +67,33 @@ const WorkflowScriptCommonInputFields = {
   ),
 };
 
-const WorkflowScriptToolInputSchema = z.discriminatedUnion('scriptInput', [
-  z.strictObject({
+const WorkflowScriptToolInputSchema = z
+  .strictObject({
     ...WorkflowScriptCommonInputFields,
-    scriptInput: z
-      .literal('source')
-      .describe('Run newly submitted script source.'),
     script: z
       .string()
       .min(1)
+      .nullish()
       .describe(
-        'Complete workflow script source beginning with an export const meta object.',
+        'Complete newly submitted workflow script source beginning with an export const meta object. Provide exactly one of script or scriptPath.',
       ),
     scriptPath: z
       .string()
       .min(1)
       .nullish()
-      .describe('Omit when scriptInput is source.'),
-  }),
-  z.strictObject({
-    ...WorkflowScriptCommonInputFields,
-    scriptInput: z
-      .literal('file')
-      .describe('Run a previously saved editable script file.'),
-    script: z
-      .string()
-      .min(1)
-      .nullish()
-      .describe('Omit when scriptInput is file.'),
-    scriptPath: z
-      .string()
-      .min(1)
       .describe(
-        'Path to a workflow script file resolved by the normal tool path policy.',
+        'Path to a previously saved editable workflow script file, resolved by the normal tool path policy. Provide exactly one of script or scriptPath.',
       ),
-  }),
-]);
+  })
+  .superRefine((input, ctx) => {
+    if ((input.script == null) === (input.scriptPath == null)) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Provide exactly one of script or scriptPath.',
+        path: ['script'],
+      });
+    }
+  });
 
 type WorkflowScriptToolInput = z.infer<typeof WorkflowScriptToolInputSchema>;
 
@@ -188,9 +179,9 @@ export class WorkflowScriptTool extends defineTool({
   slow: true,
   description: `Run a deterministic JavaScript workflow that coordinates workflow agents. Workflow agents edit or produce FILES: each agent() call resolves to a result envelope { category: 'workflow', outcome, outputs, diffs, compileFailures, cost } listing the files it produced, never prose. Use this when the complete fan-out and join structure is known in advance and should resume safely after interruption.
 
-Script input: use scriptInput: 'source' with script for newly generated source, or scriptInput: 'file' with scriptPath to run an existing file. Every source submission is saved immediately as a unique, non-overwriting draft under .texra/workflow-scripts/. Every result returns that editable path; on an error, edit the file and retry in file mode instead of rewriting the source.
+Script input: provide exactly one of script (newly generated source) or scriptPath (an existing saved file). Every source submission is saved immediately as a unique, non-overwriting draft under .texra/workflow-scripts/. Every result returns that editable path; on an error, edit the file and retry with scriptPath instead of rewriting the source.
 
-Script rules: start with an export const meta object containing name and description; no imports or require (only the injected primitives exist: agent, phase, log, parallel, args, and files). Metadata and agent() options reject unknown fields so typos fail at the saved script instead of being ignored. meta.phases accepts title strings such as ['Draft', 'Merge'] or objects such as [{ title: 'Draft' }]. When the calls are known in advance, declare meta.tasks as { id, label, phase? } records so progress shows the pending plan before execution. A task phase must name a title in meta.phases. Every agent() call must then reference one declared task with { id }; omit label and phase from the call because meta.tasks owns them (exact matching duplicates are accepted, but conflicts fail). Omit meta.tasks when the call set is data-dependent. The tool's files field binds workspace files to the whole run as files.inputFiles (editable), files.contextFiles (read-only documents), and files.mediaFiles (read-only visual or audio inputs). agent() and parallel() return Promises: ALWAYS await them. Use ordinary JavaScript loops and awaited calls for sequential stages. A workflow agent() call may use inputFiles, contextFiles, and mediaFiles; inputFiles is REQUIRED unless the agent declares default outputs. Paths may name workspace files, launch files, or a previous call's outputs. Every call may use agentName (another visible workflow agent; defaults to this tool's agent field) and model (an available model short name for this call). A call without meta.tasks may also use id, label, and phase. Omit model to follow ordinary delegation policy. A failed agent call, including a workflow agent that produces no output files, resolves to null; filter with .filter(Boolean). JavaScript errors in parallel() thunks fail the workflow and preserve the editable script path rather than being silently converted to null.
+Script rules: start with an export const meta object containing name and description; no imports or require (only the injected primitives exist: agent, phase, log, parallel, args, and files). Metadata and agent() options reject unknown fields so typos fail at the saved script instead of being ignored. meta.phases accepts title strings such as ['Draft', 'Merge'] or objects such as [{ title: 'Draft' }]. When the calls are known in advance, declare meta.tasks as { id, label, phase? } records so progress shows the pending plan before execution. A task phase must name a title in meta.phases. Every agent() call must then reference one declared task with { id }; omit label and phase from the call because meta.tasks owns them (exact matching duplicates are accepted, but conflicts fail). Omit meta.tasks when the call set is data-dependent. The tool's files field binds workspace files to the whole run as files.inputFiles (editable), files.contextFiles (read-only documents), and files.mediaFiles (read-only visual or audio inputs). agent() and parallel() return Promises: ALWAYS await them. Use ordinary JavaScript loops and awaited calls for sequential stages. A workflow agent() call may use inputFiles, contextFiles, and mediaFiles; inputFiles is REQUIRED unless the agent declares default outputs. Paths may name workspace files, launch files, or a previous call's outputs. Every call may use agentName (another visible workflow agent; defaults to this tool's agent field) and model (an available model short name for this call). A call without meta.tasks may also use id, label, and phase. Omit model to follow ordinary delegation policy. A failed agent call, including a workflow agent that produces no output files, resolves to null. An interactive skip resolves to the truthy '__WORKFLOW_SKIPPED__' sentinel; exclude both non-results before synthesis. JavaScript errors in parallel() thunks fail the workflow and preserve the editable script path rather than being silently converted to null.
 
 Structured output: agent(prompt, { agentName, model, schema }) runs a tool-use agent that finishes by calling submit_output with a value matching the JSON Schema. Structured calls do not accept file options and must name the tool-use agent explicitly; model remains optional. The call resolves to an envelope whose .structured is the validated object rather than edited files.
 
@@ -218,7 +209,7 @@ const results = await parallel(files.inputFiles.slice(0, 2).map((file, index) =>
   })
 ))
 const correctedFiles = results
-  .filter(Boolean)
+  .filter((result) => result != null && result !== '__WORKFLOW_SKIPPED__')
   .flatMap((result) => result.outputs.map((output) => output.absolutePath))
 phase('Merge')
 return await agent('Merge the corrected drafts.', {
@@ -246,7 +237,7 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
     // keep replays honest when the script evolves.
     let scriptPath: string;
     let script: string;
-    if (input.scriptInput === 'file') {
+    if (input.scriptPath != null) {
       const resolved = resolveWorkspaceRelativePath(
         input.scriptPath,
         runScope.workingDirectory,
@@ -255,15 +246,14 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
       try {
         script = await WorkspaceFS.read(resolved.fsPath);
       } catch (error) {
-        throw workflowScriptToolError(
-          new ToolError(
-            `Unable to read workflow script '${input.scriptPath}': ${toErrorMessage(error)}`,
-          ),
-          scriptPath,
+        throw new ToolError(
+          `Unable to read workflow script '${input.scriptPath}': ${toErrorMessage(error)}`,
+          { cause: error },
         );
       }
     } else {
-      script = input.script;
+      // The schema's exactly-one refinement guarantees source here.
+      script = input.script as string;
       const submissionId =
         callContext.toolCallId ??
         deriveExecutionId({
@@ -396,13 +386,19 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
     const runWithOwnership = captureOwnedExecutionLease(runExecutionId);
 
     const runResult = runWithOwnership(async () => {
-      // createChildStream is inside the lease-protected try: it runs after the
-      // deterministic run lease is held, so a throw here (missing subscribers,
-      // duplicate stream tab) must release the lease — otherwise the lease
-      // survives to its heartbeat timeout and a prompt relaunch is refused.
+      // Attempt-scoped setup is inside the lease-protected try: it runs after
+      // the deterministic run lease is held, so a throw here must release the
+      // lease — otherwise it survives to its heartbeat timeout and a prompt
+      // relaunch is refused.
       let runChildStreamId: StreamTabId;
       let runCompletion: Promise<void>;
       try {
+        const runStore = getExecutionStore(runExecutionId);
+        // A deterministic execution id may retain the prior attempt's report.
+        // Clear it before starting this attempt so an interruption before
+        // delivery cannot be mistaken for a newly persisted result.
+        await runStore.delete('report');
+
         // meta.name deliberately reuses one deterministic stream across
         // launches. Reserve its writer while rehydrating so transcript
         // eviction cannot race a resumed run.
@@ -448,7 +444,9 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
             files,
             name: meta.name,
             workflowControls: runScope.session.workflowControls,
-            deliverToParent: parent.stopAfterCycle !== true,
+            ...(parent.stopAfterCycle && {
+              deliveryMode: 'persistOnly' as const,
+            }),
             createRunAgent: (hooks) =>
               createWorkflowScriptAgentRunner(
                 parent,
@@ -460,6 +458,17 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
           }),
           recordCost,
         }).completion;
+        if (!parent.stopAfterCycle) {
+          // Detached callers do not await completion. Own late finalization
+          // failures here as trace diagnostics; the child loop already owns
+          // its one user-facing result/error delivery.
+          void runCompletion.catch((error: unknown) => {
+            childStream.logger.error(
+              `Workflow script '${meta.name}' run loop failed after launch`,
+              { data: error },
+            );
+          });
+        }
       } catch (error) {
         throw await releaseOwnedExecutionLeaseAfterFailure(
           runExecutionId,
@@ -469,9 +478,10 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
 
       if (parent.stopAfterCycle) {
         await runCompletion;
+        const runStore = getExecutionStore(runExecutionId);
         const [report, runMeta] = await Promise.all([
-          getExecutionStore(runExecutionId).readReport(),
-          getExecutionStore(runExecutionId).readMeta(),
+          runStore.readReport(),
+          runStore.readMeta(),
         ]);
         if (!report) {
           throw new Error(

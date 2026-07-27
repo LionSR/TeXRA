@@ -801,31 +801,6 @@ return await agent('Inspect src', { id: 'inspect' })`,
     expect(runner).not.toHaveBeenCalled();
   });
 
-  it('does not trust pre-v3 journal keys for file-backed calls', async () => {
-    const script = `${META}return await agent('review', {
-  inputFiles: ['proof.tex'],
-})`;
-    const first = await runWorkflowScript({
-      script,
-      runAgent: async () => 'saved result',
-      fingerprintAgentDependencies: async () => 'proof',
-    });
-    const runner = vi.fn(async () => 'fresh result');
-
-    const resumed = await runWorkflowScript({
-      script,
-      runAgent: runner,
-      journal: first.journal.map((entry) => ({
-        ...entry,
-        keyFormat: WORKFLOW_JOURNAL_KEY_FORMAT.PRESENTATION_INDEPENDENT_V2,
-      })),
-      fingerprintAgentDependencies: async () => 'proof',
-    });
-
-    expect(resumed.result).toBe('fresh result');
-    expect(runner).toHaveBeenCalledOnce();
-  });
-
   it('requires hosts to fingerprint file-backed calls', async () => {
     await expect(
       runWorkflowScript({
@@ -847,6 +822,28 @@ return await agent('Inspect src', { id: 'inspect' })`,
         fingerprintAgentDependencies: async () => undefined as never,
       }),
     ).rejects.toThrow(/returned no fingerprint/);
+  });
+
+  it('makes initial dependency fingerprint failures run-fatal', async () => {
+    const fingerprintError = new Error('proof.tex became unreadable');
+    const runner = vi.fn(echoRunner);
+
+    await expect(
+      runWorkflowScript({
+        script: `${META}return await agent('review', {
+  inputFiles: ['proof.tex'],
+})`,
+        runAgent: runner,
+        fingerprintAgentDependencies: async () => {
+          throw fingerprintError;
+        },
+      }),
+    ).rejects.toMatchObject({
+      name: 'WorkflowRunAbortError',
+      message: expect.stringContaining(fingerprintError.message),
+      cause: fingerprintError,
+    });
+    expect(runner).not.toHaveBeenCalled();
   });
 
   it('refreshes file identity after waiting in the concurrency queue', async () => {
@@ -1089,6 +1086,12 @@ return await agent('active', { label: 'Active' })`,
         runAgent: echoRunner,
       }),
     ).rejects.toThrow(/array of zero-arg functions/);
+    await expect(
+      runWorkflowScript({
+        script: `${META}return await parallel([() => agent('x'), 42])`,
+        runAgent: echoRunner,
+      }),
+    ).rejects.toThrow(/parallel\(\): item 1 is not a function/);
     await expect(
       runWorkflowScript({
         script: `${META}return await agent('x', [])`,

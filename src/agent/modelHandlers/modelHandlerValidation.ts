@@ -172,7 +172,6 @@ export class ModelHandlerValidation extends ModelHandler<
       toolCalls = [
         validationToolCall('delegate_workflow_script', {
           agent: 'correct',
-          scriptInput: 'source',
           script: WORKFLOW_SCRIPT_VALIDATION_SOURCE,
         }),
       ];

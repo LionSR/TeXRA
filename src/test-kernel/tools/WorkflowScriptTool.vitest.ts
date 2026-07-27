@@ -35,6 +35,7 @@ const mocks = vi.hoisted(() => ({
   createChildStream: vi.fn(),
   configureDelegatedChildApprovals: vi.fn(),
   requireVisibleAgent: vi.fn(),
+  childLoggerError: vi.fn(),
 }));
 
 // Spread the real storage module so `getExecutionStore` stays authentic;
@@ -119,7 +120,6 @@ async function callTool(
   return callToolInput(
     {
       agent,
-      scriptInput: 'source',
       script: overrideScript ?? script,
       ...(files ? { files } : {}),
     },
@@ -130,7 +130,6 @@ async function callTool(
 async function callToolInput(
   input: {
     agent: string;
-    scriptInput: 'source' | 'file';
     script?: string | null;
     scriptPath?: string | null;
     files?: WorkflowScriptFiles;
@@ -173,14 +172,20 @@ beforeEach(async () => {
       path: `/agents/${name}.yaml`,
     };
   });
-  mocks.createChildStream.mockImplementation((runId: ExecutionId): unknown => ({
-    childStreamId: `workflow-script#${runId}` as StreamTabId,
-    logger: new TraceEmitter(),
-    waitForInput: vi.fn(),
-    beginTurn: vi.fn(),
-    failTurn: vi.fn(),
-    finalize: vi.fn(),
-  }));
+  mocks.createChildStream.mockImplementation(
+    async (runId: ExecutionId): Promise<unknown> => {
+      const logger = new TraceEmitter();
+      vi.spyOn(logger, 'error').mockImplementation(mocks.childLoggerError);
+      return {
+        childStreamId: `workflow-script#${runId}` as StreamTabId,
+        logger,
+        waitForInput: vi.fn(),
+        beginTurn: vi.fn(),
+        failTurn: vi.fn(),
+        finalize: vi.fn(),
+      };
+    },
+  );
 });
 
 describe('WorkflowScriptTool', () => {
@@ -204,18 +209,52 @@ describe('WorkflowScriptTool', () => {
     );
   });
 
+  it('owns a detached run completion rejection without delivering a second error', async () => {
+    const lateFailure = new Error('late finalization failed');
+    mocks.startChildRunLoop.mockReturnValueOnce({
+      completion: Promise.reject(lateFailure),
+    });
+
+    const result = await callTool();
+
+    expect(result).toMatchObject({
+      status: 'executed',
+      summary: "Launched workflow script 'tool-test' (async)",
+    });
+    await vi.waitFor(() => {
+      expect(mocks.childLoggerError).toHaveBeenCalledWith(
+        "Workflow script 'tool-test' run loop failed after launch",
+        { data: lateFailure },
+      );
+    });
+    // The detached completion owner logs only; it does not manufacture a
+    // second parent follow-up or replace the already returned launch result.
+    expect(mocks.startChildRunLoop).toHaveBeenCalledTimes(1);
+  });
+
   it('declares the task-plan contract at the model-facing boundary', () => {
     const definition = new WorkflowScriptTool().definition;
     const description = definition.description;
     const providerSchema = convertToolSchema(definition);
+    const providerProperties = providerSchema?.properties as
+      Record<string, { description?: string }> | undefined;
 
     expect(providerSchema).toMatchObject({
       type: 'object',
       properties: {
-        scriptInput: { enum: ['source', 'file'] },
+        script: expect.any(Object),
+        scriptPath: expect.any(Object),
       },
     });
-    expect(providerSchema?.required).toContain('scriptInput');
+    expect(providerProperties).not.toHaveProperty('scriptInput');
+    expect(providerSchema?.required).not.toContain('script');
+    expect(providerSchema?.required).not.toContain('scriptPath');
+    expect(providerProperties?.script?.description).toContain(
+      'Provide exactly one of script or scriptPath',
+    );
+    expect(providerProperties?.scriptPath?.description).toContain(
+      'Provide exactly one of script or scriptPath',
+    );
     expect(description).toContain(
       'declare meta.tasks as { id, label, phase? } records',
     );
@@ -245,8 +284,8 @@ describe('WorkflowScriptTool', () => {
   it('rejects invalid JSON arguments at the schema boundary', async () => {
     const result = await new WorkflowScriptTool().call({
       agent: 'correct',
-      scriptInput: 'source',
       script,
+      scriptPath: null,
       args: { invalid: undefined },
     });
 
@@ -258,8 +297,8 @@ describe('WorkflowScriptTool', () => {
   it('requires a launched tool context', async () => {
     const outside = await new WorkflowScriptTool().call({
       agent: 'correct',
-      scriptInput: 'source',
       script,
+      scriptPath: null,
     });
     expect(outside).toMatchObject({
       status: 'error',
@@ -365,7 +404,7 @@ describe('WorkflowScriptTool', () => {
 
     const result = await callToolInput({
       agent: 'correct',
-      scriptInput: 'file',
+      script: null,
       scriptPath,
     });
 
@@ -406,7 +445,6 @@ describe('WorkflowScriptTool', () => {
 
     const result = await callToolInput({
       agent: 'correct',
-      scriptInput: 'file',
       scriptPath,
     });
 
@@ -414,20 +452,44 @@ describe('WorkflowScriptTool', () => {
       status: 'error',
       error: expect.stringContaining(`Script file: ${scriptPath}`),
     });
-    expect(result.error).toContain("scriptInput: 'file'");
+    expect(result.error).toContain('with scriptPath:');
   });
 
-  it('requires the script field selected by scriptInput', async () => {
+  it('requires exactly one script source', async () => {
     for (const input of [
-      { agent: 'correct', scriptInput: 'source' },
-      { agent: 'correct', scriptInput: 'file' },
+      { agent: 'correct' },
+      {
+        agent: 'correct',
+        script,
+        scriptPath: '.texra/workflow-scripts/stale.mjs',
+      },
     ]) {
       const result = await new WorkflowScriptTool().call(input);
       expect(result).toMatchObject({
         status: 'error',
         diagnostics: { type: 'validation_error' },
       });
+      expect(result.error).toContain(
+        'Provide exactly one of script or scriptPath',
+      );
     }
+  });
+
+  it('does not offer an edit-and-retry hint when the script file is unreadable', async () => {
+    const scriptPath = '.texra/workflow-scripts/missing.mjs';
+
+    const result = await callToolInput({
+      agent: 'correct',
+      scriptPath,
+    });
+
+    expect(result).toMatchObject({
+      status: 'error',
+      error: expect.stringContaining(
+        `Unable to read workflow script '${scriptPath}'`,
+      ),
+    });
+    expect(result.error).not.toContain('To revise and rerun it');
   });
 
   it('waits for the workflow report in a one-cycle headless run', async () => {
@@ -479,6 +541,32 @@ describe('WorkflowScriptTool', () => {
       ),
     });
     expect(result.error?.split(scriptReference)).toHaveLength(2);
+  });
+
+  it('does not return a prior report when a resumed headless run is interrupted before delivery', async () => {
+    const resumedScript = script.replace(
+      "name: 'tool-test'",
+      "name: 'interrupted-resume'",
+    );
+    const runExecutionId = runExecutionIdFor('interrupted-resume');
+    const store = getExecutionStore(runExecutionId);
+    await store.writeReport('stale success from the prior attempt');
+    vi.spyOn(store, 'readMeta').mockResolvedValue({
+      terminalStatus: EXECUTION_STATUS.ERROR,
+    } as never);
+
+    // The default resolved completion writes no report, matching an
+    // interruption before childRunLoop reaches deliverTurn.
+    const result = await callTool(resumedScript, undefined, 'correct', true);
+
+    expect(result).toMatchObject({
+      status: 'error',
+      error: expect.stringContaining(
+        "Workflow script 'interrupted-resume' completed without a persisted report.",
+      ),
+    });
+    expect(result.error).not.toContain('stale success from the prior attempt');
+    await expect(store.readReport()).resolves.toBeNull();
   });
 
   it('rejects an unknown default agent before registering a detached run', async () => {

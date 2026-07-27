@@ -23,7 +23,9 @@ const sections = await parallel([
   () => agent('Draft the introduction.', { id: 'introduction' }),
   () => agent('Draft the results.', { id: 'results' }),
 ]);
-return sections.filter(Boolean);
+return sections.filter(
+  (result) => result !== null && result !== '__WORKFLOW_SKIPPED__',
+);
 ```
 
 When the task set comes from runtime arguments, the script omits `meta.tasks`
@@ -51,7 +53,9 @@ return await parallel(
   show pending work before execution and update one task record in place.
   Scripts whose call set is data-dependent may omit the plan.
 - `agent(prompt, opts?)` — one subagent run; resolves to the host runner's
-  typed result, or `null` on failure (filter with `.filter(Boolean)`).
+  typed result, `null` on failure, or the truthy
+  `'__WORKFLOW_SKIPPED__'` sentinel when an interactive user skips it. Exclude
+  both non-results before synthesis.
   Set `opts.model` to an available model short name when a call needs a
   different cost or capability profile; otherwise ordinary delegation policy
   chooses the model. An explicitly selected model that is unavailable aborts
@@ -63,7 +67,7 @@ return await parallel(
 - `parallel(thunks)` — concurrent barrier. Failed `agent()` calls resolve to
   `null`; other thrown errors reject the workflow.
 - Ordinary JavaScript loops and awaited `agent()` calls own sequential stages;
-  array methods such as `.filter(Boolean)` and `.join()` own local fan-in.
+  array methods such as `.filter()` and `.join()` own local fan-in.
 - `log(msg)` / `phase(title)` / `args` — progress + parameterization.
 - `files` — immutable, role-separated workspace files bound to the run:
   `files.inputFiles` are editable, while `files.contextFiles` and
@@ -152,8 +156,8 @@ return await parallel(
 The opt-in `delegate_workflow_script` tool composes the production in-band
 subagent runner, durable checkpoint store, task-run file hand-off, progress
 projection, parent cancellation, and completed-journal cost settlement. It
-accepts either newly submitted source or an existing script path. New source is
-saved immediately as a non-overwriting draft under
+accepts exactly one of newly submitted `script` source or an existing
+`scriptPath`. New source is saved immediately as a non-overwriting draft under
 `.texra/workflow-scripts/`; every result reports that path so a model can edit
 and rerun the file instead of reproducing the full script. Phase metadata
 accepts both title strings and `{ title, detail? }` objects and normalizes them

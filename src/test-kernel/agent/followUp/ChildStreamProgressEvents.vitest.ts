@@ -325,13 +325,11 @@ describe('child stream progress events', () => {
 
   it('rolls back a failed rehydrated setup so the same stream can retry', async () => {
     const active = createRecordingHost();
-    const assertSubscribers = vi
-      .spyOn(
-        defaultSession().events,
-        'assertRunSubscribersAttachedBeforeActivation',
-      )
+    const recorded = recordSessionEvents(defaultSession().events);
+    const trackExecution = vi
+      .spyOn(defaultSession().executions, 'trackAgentExecution')
       .mockImplementationOnce(() => {
-        throw new Error('subscriber setup failed');
+        throw new Error('execution setup failed');
       });
     const options = {
       runtimeHost: active.host,
@@ -351,7 +349,15 @@ describe('child stream progress events', () => {
           parentStreamId,
           options,
         ),
-      ).rejects.toThrow('subscriber setup failed');
+      ).rejects.toThrow('execution setup failed');
+      expect(
+        sessionFactPayloads(recorded.events, 'removeStream'),
+      ).not.toContainEqual({ streamId: setupRetryChildStreamId });
+      expect(
+        sessionFactPayloads(recorded.events, 'setActiveStream'),
+      ).not.toContainEqual(
+        expect.objectContaining({ streamId: setupRetryChildStreamId }),
+      );
 
       const retried = await createRehydratedChildStream(
         setupRetryExecutionId,
@@ -359,9 +365,15 @@ describe('child stream progress events', () => {
         options,
       );
       expect(retried.childStreamId).toBe(setupRetryChildStreamId);
+      expect(
+        sessionFactPayloads(recorded.events, 'setActiveStream'),
+      ).toContainEqual(
+        expect.objectContaining({ streamId: setupRetryChildStreamId }),
+      );
       await retried.finalize();
     } finally {
-      assertSubscribers.mockRestore();
+      trackExecution.mockRestore();
+      recorded.detach();
     }
   });
 

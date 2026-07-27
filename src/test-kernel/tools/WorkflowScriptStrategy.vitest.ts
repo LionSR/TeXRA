@@ -100,7 +100,7 @@ describe('createWorkflowScriptStrategy', () => {
     const strategy = createWorkflowScriptStrategy(
       strategyParams({
         name: 'strategy-test',
-        deliverToParent: false,
+        deliveryMode: 'persistOnly',
         createRunAgent: (hooks) => billingRunAgent(hooks),
       }),
     );
@@ -132,7 +132,7 @@ describe('createWorkflowScriptStrategy', () => {
     expect(delivery).toContain(
       'Script file: .texra/workflow-scripts/draft-strategy.mjs',
     );
-    expect(delivery).toContain("scriptInput: 'file'");
+    expect(delivery).toContain('with scriptPath:');
   });
 
   it('replays a named checkpoint and settles zero for a pure resume', async () => {
@@ -279,7 +279,7 @@ throw new Error('script failed after replay')`;
     expect(errText).toContain(
       'Script file: .texra/workflow-scripts/draft-strategy.mjs',
     );
-    expect(errText).toContain("scriptInput: 'file'");
+    expect(errText).toContain('with scriptPath:');
   });
 
   it('fails closed on a malformed journal cost without recording a scalar', async () => {

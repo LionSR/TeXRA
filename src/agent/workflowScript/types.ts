@@ -172,7 +172,6 @@ export type WorkflowAgentRunner = (
 /** Hash semantics carried by each journal entry across checkpoint migrations. */
 export const WORKFLOW_JOURNAL_KEY_FORMAT = {
   LEGACY_V1: 'legacy-v1',
-  PRESENTATION_INDEPENDENT_V2: 'presentation-independent-v2',
   DEPENDENCY_AWARE_V3: 'dependency-aware-v3',
 } as const;
 

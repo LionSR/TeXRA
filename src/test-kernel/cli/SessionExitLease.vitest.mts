@@ -129,6 +129,9 @@ describe('CLI session exit lease ownership', () => {
     completeLeaseSpy.mockImplementation(async () => {
       order.push('release');
     });
+    mocks.runCliPlatformShutdownSequence.mockImplementation(async () => {
+      order.push('shutdown');
+    });
     exitSpy.mockImplementation((() => undefined) as typeof process.exit);
 
     exitController.handleSigint();
@@ -136,6 +139,6 @@ describe('CLI session exit lease ownership', () => {
     await vi.waitFor(() => {
       expect(exitSpy).toHaveBeenCalledWith(0);
     });
-    expect(order).toEqual(['flush', 'release']);
+    expect(order).toEqual(['flush', 'release', 'shutdown']);
   });
 });

@@ -182,6 +182,14 @@ export function createSessionExitController(
   // rely on bin/texra.ts's own `finally`.
   const runPlatformShutdown = (): Promise<void> =>
     runCliPlatformShutdownSequence(tryPlatform()?.lifecycle);
+  const persistBeforePlatformShutdown = async (
+    resumableIdle: boolean,
+  ): Promise<void> => {
+    await Promise.allSettled([
+      persistAndReleaseResumableIdleLease(resumableIdle),
+    ]);
+    await Promise.allSettled([runPlatformShutdown()]);
+  };
   const exitNow = (exitCode: number): void => {
     const resumableIdle = ctx.isResumableIdle();
     exiting = true;
@@ -199,10 +207,9 @@ export function createSessionExitController(
     // persistence and run platform shutdown before exiting. allSettled never
     // rejects, so a flush failure can't become an unhandled rejection under
     // --unhandled-rejections=strict.
-    void Promise.allSettled([
-      persistAndReleaseResumableIdleLease(resumableIdle),
-      runPlatformShutdown(),
-    ]).finally(() => process.exit(exitCode));
+    void persistBeforePlatformShutdown(resumableIdle).finally(() =>
+      process.exit(exitCode),
+    );
   };
   const armExit = (): void => {
     exitConfirmationExpiresAt = Date.now() + EXIT_CONFIRMATION_TTL_MS;

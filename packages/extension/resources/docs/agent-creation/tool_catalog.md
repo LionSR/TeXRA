@@ -60,10 +60,10 @@ recommended groups at the bottom are a good starting point.
   asynchronously via the follow-up queue.
 - `delegate_workflow_script` — advanced opt-in tool for a durable sequence of
   workflow-agent calls with predetermined branching and fan-out. Pass a default
-  `agent` and either `scriptInput: "source"` with the complete `script`, or
-  `scriptInput: "file"` with `scriptPath`. Submitted source is saved as an
+  `agent` and exactly one of the complete `script` source or an existing
+  `scriptPath`. Submitted source is saved as an
   editable, non-overwriting workspace draft and its path is returned for later
-  file-mode retries. Optional JSON `args` and role-separated `files` apply in
+  path-based retries. Optional JSON `args` and role-separated `files` apply in
   either mode. The selected workspace files are fixed for the run and available
   through the immutable `files.inputFiles`, `files.contextFiles`, and
   `files.mediaFiles` arrays. The script begins with an exported `meta` object

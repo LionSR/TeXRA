@@ -33,7 +33,7 @@ function entry(
   return {
     index,
     key: entryKey,
-    keyFormat: WORKFLOW_JOURNAL_KEY_FORMAT.PRESENTATION_INDEPENDENT_V2,
+    keyFormat: WORKFLOW_JOURNAL_KEY_FORMAT.DEPENDENCY_AWARE_V3,
     result,
   };
 }

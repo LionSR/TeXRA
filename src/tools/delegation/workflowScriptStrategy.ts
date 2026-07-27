@@ -51,7 +51,7 @@ const RUN_LOG_MAX_LINE_LENGTH = 500;
 export function formatWorkflowScriptReference(scriptPath: string): string {
   return [
     `Script file: ${scriptPath}`,
-    `To revise and rerun it, edit that file and call ${DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME} with scriptInput: 'file' and scriptPath: '${scriptPath}'.`,
+    `To revise and rerun it, edit that file and call ${DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME} with scriptPath: '${scriptPath}'.`,
   ].join('\n');
 }
 
@@ -110,8 +110,8 @@ export interface WorkflowScriptStrategyParams {
    * on while the run is in flight, so a host can target a focused grandchild.
    */
   readonly workflowControls: WorkflowControlRegistry;
-  /** False when a headless caller awaits and returns the persisted report itself. */
-  readonly deliverToParent?: boolean;
+  /** Persist-only when a headless caller awaits and returns the report itself. */
+  readonly deliveryMode?: ChildRunStrategy<WorkflowScriptRunResult>['deliveryMode'];
   /**
    * Build the `agent()` adapter bound to the run's ancestry, wired to the
    * supplied per-live-child cost hook so delta accounting stays local to this
@@ -144,9 +144,7 @@ export function createWorkflowScriptStrategy(
 
   return {
     stageLabel: `Workflow script '${params.name}'`,
-    ...(params.deliverToParent === false && {
-      deliveryMode: 'persistOnly' as const,
-    }),
+    ...(params.deliveryMode && { deliveryMode: params.deliveryMode }),
 
     launch: async (ports, abortController) => {
       // The stable child runner's native cost callback fires only for work

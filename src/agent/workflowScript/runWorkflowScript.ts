@@ -61,14 +61,6 @@ function journalKey(
     .slice(0, 16);
 }
 
-function hasAgentFileDependencies(options: WorkflowAgentCallOptions): boolean {
-  return (
-    (options.inputFiles?.length ?? 0) > 0 ||
-    (options.contextFiles?.length ?? 0) > 0 ||
-    (options.mediaFiles?.length ?? 0) > 0
-  );
-}
-
 const DEFAULT_CONCURRENCY = 4;
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
 const DEFAULT_MAX_AGENT_CALLS = 200;
@@ -344,7 +336,10 @@ export async function runWorkflowScript(
       plannedTask?.label ??
       callOptions.label ??
       prompt.slice(0, LABEL_EXCERPT_LENGTH).replaceAll(/\s+/g, ' ').trim();
-    const hasFileDependencies = hasAgentFileDependencies(callOptions);
+    const hasFileDependencies =
+      (callOptions.inputFiles?.length ?? 0) > 0 ||
+      (callOptions.contextFiles?.length ?? 0) > 0 ||
+      (callOptions.mediaFiles?.length ?? 0) > 0;
     if (hasFileDependencies && fingerprintAgentDependencies === undefined) {
       throw rememberFatalRunError(
         new WorkflowRunAbortError(
@@ -352,16 +347,15 @@ export async function runWorkflowScript(
         ),
       );
     }
-    let dependencyFingerprint: string | undefined;
-    if (hasFileDependencies) {
+    const readDependencyFingerprint = async (): Promise<string> => {
       try {
-        dependencyFingerprint =
-          await fingerprintAgentDependencies?.(callOptions);
-        if (!isNonEmptyString(dependencyFingerprint)) {
+        const fingerprint = await fingerprintAgentDependencies?.(callOptions);
+        if (!isNonEmptyString(fingerprint)) {
           throw new WorkflowRunAbortError(
             'The workflow host returned no fingerprint for agent() file dependencies.',
           );
         }
+        return fingerprint;
       } catch (error) {
         throw rememberFatalRunError(
           error instanceof WorkflowRunAbortError
@@ -372,7 +366,10 @@ export async function runWorkflowScript(
               ),
         );
       }
-    }
+    };
+    let dependencyFingerprint = hasFileDependencies
+      ? await readDependencyFingerprint()
+      : undefined;
     let key = journalKey(
       prompt,
       callOptions,
@@ -402,25 +399,7 @@ export async function runWorkflowScript(
 
     const refreshDependencyIdentity = async (): Promise<void> => {
       if (!hasFileDependencies) return;
-      let refreshedFingerprint: string | undefined;
-      try {
-        refreshedFingerprint =
-          await fingerprintAgentDependencies?.(callOptions);
-        if (!isNonEmptyString(refreshedFingerprint)) {
-          throw new WorkflowRunAbortError(
-            'The workflow host returned no fingerprint for agent() file dependencies.',
-          );
-        }
-      } catch (error) {
-        throw rememberFatalRunError(
-          error instanceof WorkflowRunAbortError
-            ? error
-            : new WorkflowRunAbortError(
-                `Workflow agent() file dependencies could not be fingerprinted: ${toErrorMessage(error)}`,
-                { cause: error },
-              ),
-        );
-      }
+      const refreshedFingerprint = await readDependencyFingerprint();
       if (refreshedFingerprint === dependencyFingerprint) return;
 
       const refreshedKey = journalKey(
@@ -639,8 +618,8 @@ export async function runWorkflowScript(
           emitFailedEnd(fatal, attemptMetadata());
           throw fatal;
         }
-        // A failed agent resolves to null (callers filter with .filter(Boolean))
-        // and is deliberately NOT journaled, so a resume retries it.
+        // A failed agent resolves to null and is deliberately NOT journaled, so
+        // a resume retries it. Callers also exclude the truthy skip sentinel.
         emitFailedEnd(attemptError.error, attemptMetadata());
         return 'null';
       }

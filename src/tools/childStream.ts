@@ -116,20 +116,6 @@ export function createChildStream(
     };
     session.events.assertRunSubscribersAttachedBeforeActivation(childStreamId);
 
-    // Register the child stream (state, logs, hints) without switching the
-    // active tab. Background child streams (bash, codex) shouldn't yank the
-    // user away from whatever they're viewing — the tab simply appears.
-    session.events.emit({
-      scope: 'session',
-      event: {
-        type: 'setActiveStream',
-        payload: {
-          streamId: childStreamId,
-          agentCategory: options.streamCategory,
-          suppressViewSwitch: true,
-        },
-      },
-    });
     runTrace.trace.emit({
       type: 'run.start',
       descriptor: buildRunDescriptor({
@@ -178,6 +164,22 @@ export function createChildStream(
     // canonical state loading (#8258).
     session.executions.trackAgentExecution(handle, {
       status: STREAM_PHASE.RUNNING,
+    });
+
+    // Make the child visible only after every fallible setup step succeeds.
+    // removeStream permanently tombstones deterministic IDs in the CLI, so a
+    // presentation rollback cannot safely clean up a partially created tab.
+    // Background child streams appear without switching the active tab.
+    session.events.emit({
+      scope: 'session',
+      event: {
+        type: 'setActiveStream',
+        payload: {
+          streamId: childStreamId,
+          agentCategory: options.streamCategory,
+          suppressViewSwitch: true,
+        },
+      },
     });
 
     return {

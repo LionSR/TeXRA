@@ -248,6 +248,24 @@ describe('createWorkflowScriptAgentRunner', () => {
     expect(mocks.executeStableSubagentInBand).not.toHaveBeenCalled();
   });
 
+  it('makes launch fingerprint read failures run-fatal', async () => {
+    const readError = new Error('proof.tex became unreadable');
+    const runner = defaultRunner();
+    mocks.workspaceReadBytes.mockRejectedValueOnce(readError);
+
+    await expect(
+      runner({
+        ...invocation({ inputFiles: ['proof.tex'] }),
+        dependencyFingerprint: 'old-proof',
+      }),
+    ).rejects.toMatchObject({
+      name: 'WorkflowRunAbortError',
+      message: expect.stringContaining(readError.message),
+      cause: readError,
+    });
+    expect(mocks.executeStableSubagentInBand).not.toHaveBeenCalled();
+  });
+
   it('uses delegation policy and executes a direct in-band child', async () => {
     const call = invocation({
       inputFiles: ['paper.tex'],

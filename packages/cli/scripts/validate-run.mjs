@@ -1043,7 +1043,9 @@ prompts:
       'workflow-script run should persist its terminal child report',
     );
     assert(
-      reports.includes('det(I+A)=4') && reports.includes('1/4'),
+      reports.includes('(±23,±22)') &&
+        reports.includes('det(I+A)=4') &&
+        reports.includes('1/4'),
       'workflow-script run should contain all structured mathematical results',
     );
   } finally {

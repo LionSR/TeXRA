@@ -190,10 +190,22 @@ export function createWorkflowScriptAgentRunner(
 
   return async (invocation) => {
     if (invocation.dependencyFingerprint !== undefined) {
-      const launchFingerprint = await fingerprintWorkflowAgentDependencies(
-        run.executionId,
-        invocation.options,
-      );
+      let launchFingerprint: string;
+      try {
+        launchFingerprint = await fingerprintWorkflowAgentDependencies(
+          run.executionId,
+          invocation.options,
+        );
+      } catch (error) {
+        if (error instanceof WorkflowRunAbortError) throw error;
+        throw new WorkflowRunAbortError(
+          formatError(
+            'Workflow agent() file dependencies could not be fingerprinted while the child was launching',
+            error,
+          ),
+          { cause: error },
+        );
+      }
       if (launchFingerprint !== invocation.dependencyFingerprint) {
         throw new WorkflowRunAbortError(
           'Workflow agent() file dependencies changed while the child was launching; rerun the saved workflow script.',
