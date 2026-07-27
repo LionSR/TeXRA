@@ -26,6 +26,7 @@ export interface MainViewExecutionFormState {
   readonly session?: {
     readonly launchTarget: LaunchTarget;
     readonly teamId?: string | undefined;
+    readonly workingDirectory?: string | undefined;
   };
 }
 

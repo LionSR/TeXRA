@@ -4,6 +4,8 @@ import {
   closeTexraApp,
   dismissOnboarding,
   launchTexraApp,
+  setRoute,
+  setSettingsTab,
   type LaunchedApp,
 } from './electronApp.js';
 
@@ -29,8 +31,10 @@ const SETTINGS_TAB_INDEX = {
   AGENTS: 3,
   MULTI_AGENT: 4,
   TOOLS: 5,
-  GIT: 6,
-  LATEX: 7,
+  AI_AGENTS: 6,
+  GIT: 7,
+  LATEX: 8,
+  ACCOUNT: 10,
 } as const;
 
 let launched: LaunchedApp;
@@ -45,44 +49,6 @@ test.afterAll(async () => {
   if (launched) await closeTexraApp(launched);
 });
 
-async function setRoute(
-  route: 'main' | 'progress' | 'settings' | 'logs',
-): Promise<void> {
-  await launched.page.evaluate((next) => {
-    window.postMessage({ command: 'desktop:setRoute', route: next }, '*');
-  }, route);
-  await launched.page.waitForFunction(
-    (target) => {
-      if (document.body.dataset.desktopRoute !== target) return false;
-      if (target === 'main') {
-        const launcher = document.querySelector<HTMLElement>(
-          '.desktop-pane[data-pane="launcher"]',
-        );
-        return launcher != null && launcher.hidden === false;
-      }
-      return true;
-    },
-    route,
-    { timeout: 5000 },
-  );
-}
-
-async function setSettingsTab(tabIndex: number): Promise<void> {
-  await setRoute('settings');
-  await launched.page.evaluate((idx) => {
-    window.postMessage({ command: 'setTab', tabIndex: idx }, '*');
-  }, tabIndex);
-  // Best-effort: wait for the settings-app shadow DOM to mount.
-  await launched.page.waitForFunction(
-    () => {
-      const settingsApp = document.querySelector('settings-app');
-      return settingsApp?.shadowRoot != null;
-    },
-    undefined,
-    { timeout: 10_000 },
-  );
-}
-
 /**
  * Wait until the named settings panel (or its tab) reports `active`. Without
  * this confirmation a test can catch the previous tab's render and report a
@@ -93,11 +59,10 @@ async function waitForActiveSettingsPanel(panel: string): Promise<void> {
     (name) => {
       const settingsApp = document.querySelector('settings-app');
       const root = settingsApp?.shadowRoot;
-      const activePanel = root?.querySelector(
-        `wa-tab-panel[name="${name}"][active]`,
+      const activePage = root?.querySelector(
+        `.settings-page-button[data-panel="${name}"][data-active="true"]`,
       );
-      const activeTab = root?.querySelector(`wa-tab[panel="${name}"][active]`);
-      return activeTab != null || activePanel != null;
+      return activePage != null;
     },
     panel,
     { timeout: 10_000 },
@@ -109,49 +74,64 @@ async function waitForActiveSettingsPanel(panel: string): Promise<void> {
  * The launcher (main route) must mount without crashing the renderer.
  */
 test('first launch shows a usable launcher chrome', async () => {
-  await setRoute('main');
+  await setRoute(launched, 'main');
   // The workspace directory and command palette button must be reachable.
   const workspaceDirectory =
     launched.workspacePath.split(/[\\/]/).at(-1) ?? launched.workspacePath;
   const directoryLabel = await launched.page
-    .locator('.desktop-workspace-directory')
+    .locator('.task-project-copy strong')
     .first()
     .innerText();
   expect(directoryLabel).toContain(workspaceDirectory);
-  await expect(launched.page.locator('.desktop-command-button')).toBeVisible();
-  await expect(launched.page.locator('.desktop-folder-button')).toHaveCount(0);
+  await expect(
+    launched.page.locator('.task-header-button[aria-label="Open commands"]'),
+  ).toBeVisible();
   // The main view itself either renders <main-app> or the no-workspace empty
   // state — both are valid first-launch outcomes. The audit doc tracks which
   // one each user actually hits.
   const mainSection = launched.page.locator(
-    '.desktop-pane[data-pane="launcher"]',
+    '.task-conversation-pane[data-pane="launcher"]',
   );
   await expect(mainSection).toBeVisible();
 });
 
 /**
- * Trajectory 2 — Settings: Models tab carries the auth banner + provider grid.
+ * Trajectory 2 — Settings: Models tab carries model access + provider keys.
  *
- * In the standalone Electron build the Researcher Access (auth) banner is
- * rendered inside the Models settings tab (not the launcher). The walkthrough
- * dismissal above means we land on the launcher, then jump to settings.
+ * Account identity and usage live in their own page; Models remains the single
+ * home for configuring model access and provider credentials.
  */
-test('settings → models tab mounts and the auth surface is reachable', async () => {
-  await setSettingsTab(SETTINGS_TAB_INDEX.MODELS);
+test('settings → models tab mounts and provider settings are reachable', async () => {
+  await setSettingsTab(launched, SETTINGS_TAB_INDEX.MODELS);
   // Confirm the Models panel actually activated; without this we may catch
   // the previous tab's render and report a false positive.
   await waitForActiveSettingsPanel('models');
-  // Sanity: the panel mounted a child custom element (the profile/models
-  // surface). The actual auth banner text and provider list live one or
-  // two shadow roots deep, so we only assert structural presence here.
+  // Sanity: the panel mounted its child custom element. The provider list lives
+  // another shadow root deep, so structural presence is sufficient here.
   const panelHasChild = await launched.page.evaluate(() => {
     const settingsApp = document.querySelector('settings-app');
-    const panel = settingsApp?.shadowRoot?.querySelector(
-      'wa-tab-panel[name="models"][active]',
-    );
-    return panel != null && panel.children.length > 0;
+    return settingsApp?.shadowRoot?.querySelector('models-tab') != null;
   });
   expect(panelHasChild).toBe(true);
+});
+
+test('account and usage lives in its own settings panel', async () => {
+  await setSettingsTab(launched, SETTINGS_TAB_INDEX.ACCOUNT);
+  await waitForActiveSettingsPanel('account');
+
+  const structure = await launched.page.evaluate(() => {
+    const root = document.querySelector('settings-app')?.shadowRoot;
+    const account = root?.querySelector('account-tab');
+    return {
+      accountPage: account?.shadowRoot?.querySelector('.account-page') != null,
+      persistentHeader: root?.querySelector('.settings-header') != null,
+    };
+  });
+
+  expect(structure).toEqual({
+    accountPage: true,
+    persistentHeader: false,
+  });
 });
 
 /**
@@ -160,7 +140,7 @@ test('settings → models tab mounts and the auth surface is reachable', async (
  * the desktop app on a shared Electron user-data directory.
  */
 test('settings → memory tab mounts', async () => {
-  await setSettingsTab(SETTINGS_TAB_INDEX.MEMORY);
+  await setSettingsTab(launched, SETTINGS_TAB_INDEX.MEMORY);
   await waitForActiveSettingsPanel('memory');
 });
 
@@ -170,7 +150,7 @@ test('settings → memory tab mounts', async () => {
  * may be empty on a fresh run, so we only assert structural surfaces.
  */
 test('logs route renders the desktop log viewer', async () => {
-  await setRoute('logs');
+  await setRoute(launched, 'logs');
   const header = launched.page.locator('.desktop-log-viewer-header');
   await expect(header).toBeVisible();
   // Header has Refresh / Copy / Export / Open Folder buttons.
@@ -178,6 +158,48 @@ test('logs route renders the desktop log viewer', async () => {
     '.desktop-log-viewer-actions wa-button',
   );
   await expect(actions).toHaveCount(4);
+
+  await launched.page.evaluate(() => {
+    window.postMessage(
+      {
+        command: 'desktop:setLog',
+        log: {
+          path: '/tmp/texra-desktop.log',
+          text: '2026-07-26T12:00:00.000Z [info] Geometry check',
+          truncated: false,
+        },
+      },
+      '*',
+    );
+  });
+  const infoSurface = launched.page.locator(
+    '.desktop-log-entry[data-level="info"] .desktop-log-entry-level-icon',
+  );
+  await expect(infoSurface).toBeVisible();
+  const iconOffset = await infoSurface.evaluate((surface) => {
+    const icon = surface.querySelector<HTMLElement>('wa-icon');
+    const svg = icon?.shadowRoot?.querySelector<SVGElement>('svg');
+    if (!icon || !svg) throw new Error('Log info icon was not rendered.');
+    const surfaceRect = surface.getBoundingClientRect();
+    const iconRect = icon.getBoundingClientRect();
+    const svgRect = svg.getBoundingClientRect();
+    const centerOffset = (rect: DOMRect) => ({
+      x:
+        (rect.left + rect.right) / 2 -
+        (surfaceRect.left + surfaceRect.right) / 2,
+      y:
+        (rect.top + rect.bottom) / 2 -
+        (surfaceRect.top + surfaceRect.bottom) / 2,
+    });
+    return {
+      host: centerOffset(iconRect),
+      svg: centerOffset(svgRect),
+    };
+  });
+  expect(iconOffset).toEqual({
+    host: { x: 0, y: 0 },
+    svg: { x: 0, y: 0 },
+  });
 });
 
 /**
@@ -187,7 +209,7 @@ test('logs route renders the desktop log viewer', async () => {
  * surfaces a copy-the-command dialog rather than running it for the user).
  */
 test('settings → tools tab mounts', async () => {
-  await setSettingsTab(SETTINGS_TAB_INDEX.TOOLS);
+  await setSettingsTab(launched, SETTINGS_TAB_INDEX.TOOLS);
   await waitForActiveSettingsPanel('tools');
 });
 
@@ -205,41 +227,36 @@ test('rapid settings-tab switching does not crash the renderer', async () => {
     SETTINGS_TAB_INDEX.MULTI_AGENT,
     SETTINGS_TAB_INDEX.LATEX,
   ]) {
-    await setSettingsTab(idx);
+    await setSettingsTab(launched, idx);
   }
   // The chrome must still be alive after the burst.
   await expect(
-    launched.page.locator('.desktop-workspace-directory'),
+    launched.page.locator('.task-project-copy strong'),
   ).toBeVisible();
+  await expect(launched.page.locator('.task-conversation')).toBeVisible();
 });
 
 /**
- * Trajectory 18 — in-app diff overlay (audit item C).
+ * Trajectory 18 — in-app Review workbench.
  *
  * `desktopDiffHost` posts `desktop:showDiff` to the renderer; the renderer
- * lazy-creates a wa-dialog overlay containing `<texra-diff-view>`. We
- * simulate the IPC by `window.postMessage`-ing the same payload and assert
- * the dialog opens and carries the supplied title + content.
+ * opens a persistent Review tab containing `<texra-diff-view>` and a changed
+ * file tree. We simulate the IPC by `window.postMessage`-ing the same payload
+ * and assert the workbench opens and carries the supplied title + content.
  *
  * Monaco is heavy (workers + WASM) so we don't wait for the editor to
- * finish loading — only that the dialog and the `<texra-diff-view>`
+ * finish loading — only that the workbench and the `<texra-diff-view>`
  * element exist with the right props.
  */
-test('desktop:showDiff opens the in-app diff overlay', async () => {
-  // Reset chrome to a known state — the previous test may have left
-  // settings open.
-  await launched.page.evaluate(() => {
-    const dialogs = document.querySelectorAll('wa-dialog');
-    dialogs.forEach((d) => {
-      (d as unknown as { open: boolean }).open = false;
-    });
-  });
-
+test('desktop:showDiff opens the in-app Review workbench', async () => {
   const payload = {
     command: 'desktop:showDiff',
     title: 'Compare paper.tex',
+    displayPath: 'paper.tex',
     originalText: '\\documentclass{article}\nold body\n',
     proposedText: '\\documentclass{article}\nnew body\n',
+    additions: 1,
+    deletions: 1,
     language: 'latex',
     originalPath: '/tmp/original/paper.tex',
     proposedPath: '/tmp/proposed/paper.tex',
@@ -249,34 +266,25 @@ test('desktop:showDiff opens the in-app diff overlay', async () => {
     window.postMessage(message, '*');
   }, payload);
 
-  // Wait for the dialog to appear and open. wa-dialog reflects `open` as
-  // an attribute when set; check both since timing of wa internals
-  // varies.
-  await launched.page.waitForFunction(
-    () => {
-      const dialog = document.querySelector('wa-dialog.desktop-diff-overlay');
-      if (!dialog) return false;
-      const open = (dialog as unknown as { open: boolean }).open === true;
-      return open || dialog.hasAttribute('open');
-    },
-    undefined,
-    { timeout: 5000 },
+  const reviewTab = launched.page.locator(
+    '.task-workbench-tab[data-kind="review"][data-active="true"]',
   );
-
-  const dialog = launched.page.locator('wa-dialog.desktop-diff-overlay');
-  await expect(dialog).toHaveCount(1);
-  // Title + subtitle are populated from the payload.
-  await expect(dialog.locator('.desktop-diff-title')).toHaveText(
+  await expect(reviewTab).toBeVisible();
+  const review = launched.page.locator('.desktop-review-pane');
+  await expect(review).toBeVisible();
+  await expect(review.locator('.desktop-review-summary strong')).toHaveText(
     'Compare paper.tex',
   );
-  await expect(dialog.locator('.desktop-diff-subtitle')).toHaveText(
-    '/tmp/proposed/paper.tex',
+  await expect(review.locator('.desktop-review-file')).toContainText(
+    'paper.tex',
   );
+  await expect(review.locator('.desktop-review-counts')).toContainText('+1');
+  await expect(review.locator('.desktop-review-counts')).toContainText('-1');
   // The diff component element exists with the right props (we don't
   // wait for Monaco to finish loading — verifying the contract is enough).
   const diffViewProps = await launched.page.evaluate(() => {
     const el = document.querySelector(
-      'wa-dialog.desktop-diff-overlay texra-diff-view',
+      '.desktop-review-pane texra-diff-view',
     ) as
       | (HTMLElement & {
           originalText: string;
@@ -296,19 +304,13 @@ test('desktop:showDiff opens the in-app diff overlay', async () => {
   expect(diffViewProps?.proposedText).toContain('new body');
   expect(diffViewProps?.language).toBe('latex');
 
-  // Close via desktop:closeDiff — the dialog should close.
+  // Close via desktop:closeDiff — the Review tab should close.
   await launched.page.evaluate(() => {
     window.postMessage({ command: 'desktop:closeDiff' }, '*');
   });
-  await launched.page.waitForFunction(
-    () => {
-      const dialog = document.querySelector('wa-dialog.desktop-diff-overlay');
-      if (!dialog) return true;
-      return (dialog as unknown as { open: boolean }).open === false;
-    },
-    undefined,
-    { timeout: 5000 },
-  );
+  await expect(
+    launched.page.locator('.task-workbench-tab[data-kind="review"]'),
+  ).toHaveCount(0);
 });
 
 /**

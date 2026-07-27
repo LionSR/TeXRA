@@ -38,6 +38,7 @@ import type {
   OnboardingFunnelState,
   SingleFiles,
   TeamOptionData,
+  WorkspaceRootOptionData,
 } from '@shared/schemas';
 
 // Local imports - main view
@@ -84,6 +85,9 @@ export const launchTarget$ = trackedSignal<LaunchTarget>(
 );
 export const selectedTeamId$ = trackedSignal(
   () => DEFAULT_STATE.selectedTeamId,
+);
+export const workingDirectory$ = trackedSignal(
+  () => DEFAULT_STATE.workingDirectory,
 );
 export const workflowAgent$ = trackedSignal(() => DEFAULT_STATE.workflowAgent);
 export const toolUseAgent$ = trackedSignal(() => DEFAULT_STATE.toolUseAgent);
@@ -140,6 +144,9 @@ export const toolUseModelOptions$ = trackedSignal<
 export const workflowAgentOptions$ = trackedSignal<AgentOptionData[]>(() => []);
 export const toolUseAgentOptions$ = trackedSignal<AgentOptionData[]>(() => []);
 export const teamOptions$ = trackedSignal<TeamOptionData[]>(() => []);
+export const workspaceRootOptions$ = trackedSignal<WorkspaceRootOptionData[]>(
+  () => [],
+);
 
 // ---------------------------------------------------------------------------
 // Chat / voice state
@@ -244,6 +251,8 @@ export const sessionContext$ = new Signal.Computed((): SessionContextValue => ({
   toolUseAgentOptions: toolUseAgentOptions$.get(),
   modelOptions: getModelOptionsForSession(sessionType$.get()),
   teamOptions: teamOptions$.get(),
+  workspaceRootOptions: workspaceRootOptions$.get(),
+  workingDirectory: workingDirectory$.get(),
   isRecording: isRecording$.get(),
   isPolishing: isPolishing$.get(),
   debugMode: debugMode$.get(),

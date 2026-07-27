@@ -1,68 +1,35 @@
 import { css, type CSSResult } from 'lit';
 
-import { compactFormControlStyles } from './selectStyles';
+import {
+  buttonStyles,
+  focusRingStyles,
+  formControlStyles,
+  iconSurfaceStyles,
+  settingsRowStyles,
+} from './controlStyles';
 
 /**
- * Header action button — `<wa-button class="header-action">` in view headers.
- * Prevents the button from shrinking and pins its minimum hit area to the
- * shared `--height-control` token. Both the main webview and the progress view
- * root components share this pattern.
+ * Header action button. Kept as a named export because two root components
+ * compose it without the full common sheet; the skin itself now lives in
+ * `buttonStyles` (`.header-action` is one of its `.btn-ghost` aliases), so
+ * this is the button layer scoped down, not a second definition.
  */
 export const headerActionStyles: CSSResult = css`
-  .header-action {
-    flex-shrink: 0;
-  }
-
-  .header-action::part(base) {
-    min-height: var(--height-control, 24px);
-  }
+  ${buttonStyles}
 `;
 
 /**
- * Compact icon-only action button — stricter minimalism.
- * 20×20, no hover fill, opacity-driven hover/disabled.
+ * Compact icon-only action button, for components that pull just the
+ * icon-button rules without the full common sheet (file-select rows, the
+ * user-message toolbar).
  *
- * Exported as a focused subset so file-select/main-view components can pull
- * just the icon-button rules without inheriting the full common view sheet.
- * `commonViewStyles` below interpolates this block to keep a single source
- * of truth for the selectors.
+ * The 20×20 opacity-driven skin this used to declare is gone: hover is now a
+ * background fill from `--surface-hover` (opacity could not compose with the
+ * surface ladder, so the same button read differently on each surface), and
+ * the geometry comes off the `--control-size` scale.
  */
 export const compactIconActionButtonStyles: CSSResult = css`
-  .action-icon-button {
-    flex-shrink: 0;
-  }
-
-  .action-icon-button::part(base) {
-    width: 20px;
-    min-width: 0;
-    height: 20px;
-    min-height: 0;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: var(--wa-color-text-quiet, var(--wa-color-text-normal));
-    opacity: var(--opacity-subtle);
-    transition: opacity var(--transition-fast);
-  }
-
-  .action-icon-button::part(base):hover {
-    opacity: var(--opacity-full);
-    background: transparent;
-  }
-
-  .action-icon-button:focus-visible::part(base) {
-    outline: var(--border-thin) solid var(--wa-color-focus);
-    outline-offset: var(--border-thin);
-  }
-
-  .action-icon-button[disabled]::part(base) {
-    opacity: var(--opacity-faint);
-    background: transparent;
-  }
-
-  .action-icon-button wa-icon {
-    font-size: 13px;
-  }
+  ${buttonStyles}
 `;
 
 /**
@@ -97,8 +64,9 @@ const busyIconButtonStyles: CSSResult = css`
 
 /**
  * Single-line text truncation declarations (no selector). Interpolate this
- * into a rule when the truncated target is a shadow part (e.g.
- * `::part(label)`) that can't take the `.truncate` class directly.
+ * into a rule; the 14 call sites that need it are all shadow parts (e.g.
+ * `::part(label)`) or already-classed elements, which is why there is no
+ * companion utility class.
  */
 export const truncateTextRule: CSSResult = css`
   overflow: hidden;
@@ -140,6 +108,93 @@ export const commonViewStyles: CSSResult = css`
 
   .list-item:focus-within {
     outline: var(--border-thin) solid var(--wa-color-focus);
+  }
+
+  .settings-disclosure-list {
+    display: grid;
+    gap: var(--wa-space-2xs);
+  }
+
+  .settings-disclosure {
+    overflow: hidden;
+    border: var(--border-thin) solid var(--color-border);
+    border-radius: var(--border-radius);
+    background: var(--wa-color-surface-default);
+  }
+
+  .settings-disclosure-summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    min-height: var(--control-size-l);
+    color: var(--wa-color-text-normal);
+    transition: background-color var(--transition-fast);
+  }
+
+  .settings-disclosure-summary:hover {
+    background: var(--surface-hover);
+  }
+
+  .settings-disclosure-toggle {
+    display: block;
+    min-width: 0;
+  }
+
+  .settings-disclosure-toggle::part(base) {
+    justify-content: flex-start;
+    width: 100%;
+    min-height: var(--control-size-l);
+    padding: var(--wa-space-xs);
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+  }
+
+  .settings-disclosure-toggle::part(label) {
+    display: flex;
+    align-items: center;
+    gap: var(--wa-space-2xs);
+    width: 100%;
+    min-width: 0;
+  }
+
+  .settings-disclosure-toggle:hover::part(base) {
+    background: transparent;
+  }
+
+  .settings-disclosure-chevron {
+    display: grid;
+    width: 1em;
+    height: 1em;
+    flex: 0 0 1em;
+    place-items: center;
+    color: var(--color-text-secondary);
+    transition: transform var(--transition-fast);
+  }
+
+  .settings-disclosure-toggle[aria-expanded='true']
+    .settings-disclosure-chevron {
+    transform: rotate(90deg);
+  }
+
+  .settings-disclosure-status,
+  .settings-disclosure-actions {
+    padding-inline-end: var(--wa-space-xs);
+    white-space: nowrap;
+  }
+
+  .settings-disclosure-actions {
+    display: flex;
+    align-items: center;
+  }
+
+  .settings-disclosure-content {
+    padding: var(--wa-space-xs);
+    border-top: var(--border-thin) solid var(--color-border);
+    background: var(--wa-color-surface-lowered);
   }
 
   .list-item-header {
@@ -231,30 +286,12 @@ export const commonViewStyles: CSSResult = css`
     flex-wrap: nowrap;
   }
 
-  /* Compact action button (with text) — stricter IDE-density chrome.
-   * Borderless default; hover adds a subtle border (no fill swap). */
-  .action-button::part(base) {
-    gap: var(--wa-space-2xs);
-    min-height: var(--height-control-compact);
-    padding: 0 6px;
-    border: var(--border-thin) solid transparent;
-    background: transparent;
-    font-size: var(--font-size-sm);
-  }
-
-  .action-button::part(base):hover {
-    background: transparent;
-    border-color: var(--wa-color-surface-border, var(--color-border));
-  }
-
-  .action-button wa-icon {
-    font-size: var(--font-size-sm);
-  }
-
-  ${headerActionStyles}
-  ${compactIconActionButtonStyles}
+  ${buttonStyles}
+  ${iconSurfaceStyles}
   ${busyIconButtonStyles}
-  ${compactFormControlStyles}
+  ${formControlStyles}
+  ${focusRingStyles}
+  ${settingsRowStyles}
 
   /* Stricter compactness for wa-checkbox / wa-radio — smaller label,
    * tighter gap between control and label. */
@@ -276,6 +313,10 @@ export const commonViewStyles: CSSResult = css`
 
   .clickable-link {
     cursor: pointer;
+    /* No fill or border to round — this is here so the shared focus ring,
+       which follows the element's own radius, doesn't draw a hard rectangle
+       around a text link. */
+    border-radius: var(--border-radius);
     color: var(--color-text-link);
     text-decoration: none;
     transition: color var(--transition-fast);
@@ -284,12 +325,6 @@ export const commonViewStyles: CSSResult = css`
   .clickable-link:hover {
     color: var(--color-text-link-active);
     text-decoration: underline;
-  }
-
-  .clickable-link:focus-visible {
-    outline: var(--border-thin) solid var(--wa-color-focus);
-    outline-offset: var(--border-thin);
-    border-radius: var(--border-radius-small);
   }
 
   .detail-list {
@@ -308,15 +343,10 @@ export const commonViewStyles: CSSResult = css`
     align-items: center;
     gap: var(--wa-space-2xs);
     padding: var(--wa-space-3xs) 0;
+    border-radius: var(--border-radius);
     cursor: pointer;
     list-style: none;
     user-select: none;
-  }
-
-  .details-summary:focus-visible {
-    outline: var(--border-thin) solid var(--wa-color-focus);
-    outline-offset: var(--border-thin);
-    border-radius: var(--border-radius-small);
   }
 
   /* Compact banner variant used by progress-view custom-element panels. */
@@ -393,105 +423,83 @@ export const commonViewStyles: CSSResult = css`
 
   /* Shared tab content container — consistent max-width and centering for all settings tabs */
   .tab-content-container {
+    box-sizing: border-box;
+    width: 100%;
     max-width: 1000px;
     margin: 0 auto;
   }
 
-  /* Shared settings reminder for compact informational panels at the top of tabs */
-  .settings-reminder {
+  .settings-section-heading {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    column-gap: var(--wa-space-xs);
-    row-gap: var(--wa-space-2xs);
-    padding: var(--wa-space-2xs) var(--wa-space-xs);
-    margin-bottom: var(--wa-space-s);
-    border: var(--border-thin) solid var(--wa-color-focus);
-    border-radius: var(--border-radius);
-    background: var(--wa-color-surface-default);
+    gap: var(--wa-space-3xs);
+    margin: var(--wa-space-l) 0 var(--wa-space-xs);
+    padding-bottom: var(--wa-space-xs);
+    border-bottom: var(--border-thin) solid var(--color-border);
   }
 
-  .settings-reminder-icon {
-    grid-row: 1 / -1;
-    margin-top: 2px;
-    font-size: var(--font-size-lg);
-    color: var(--wa-color-focus);
-  }
-
-  .settings-reminder-title {
-    font-weight: var(--font-weight-medium);
-    color: var(--wa-color-text-normal);
-  }
-
-  .settings-reminder-description {
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-sm);
-    line-height: var(--line-height-normal);
-  }
-
-  .settings-reminder-body {
+  .settings-section-heading-row {
     display: flex;
-    flex-direction: column;
+    align-items: center;
     gap: var(--wa-space-2xs);
     min-width: 0;
   }
 
-  .settings-reminder-actions {
+  .settings-section-heading-icon {
+    display: grid;
+    width: 1em;
+    height: 1em;
+    flex: 0 0 auto;
+    place-items: center;
+    color: var(--wa-color-text-quiet);
+    font-size: var(--font-size);
+  }
+
+  .settings-section-heading-title {
+    margin: 0;
+    color: var(--wa-color-text-normal);
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-semibold);
+    line-height: var(--line-height-tight);
+  }
+
+  .settings-section-heading-description {
+    max-width: 72ch;
+    margin: 0;
+    color: var(--wa-color-text-quiet);
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-relaxed);
+  }
+
+  .settings-section-heading-actions {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: var(--wa-space-2xs);
+    margin-inline-start: auto;
   }
 
-  .settings-reminder-list {
-    display: flex;
-    flex-direction: column;
-    gap: var(--wa-space-2xs);
-    margin: 0;
-    padding: 0;
-    list-style: none;
+  .category-section {
+    margin-bottom: var(--wa-space-s);
   }
 
-  .settings-reminder-list li {
-    display: flex;
-    align-items: flex-start;
-    gap: var(--wa-space-2xs);
-  }
+  @container settings (max-width: 520px) {
+    .settings-section-heading-row {
+      flex-wrap: wrap;
+    }
 
-  .settings-reminder-step {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 18px;
-    height: 18px;
-    flex: 0 0 18px;
-    border-radius: 50%;
-    color: var(--wa-color-surface-default);
-    background: var(--wa-color-focus);
-    font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-bold);
-    line-height: var(--line-height-tight);
-  }
+    .settings-section-heading-actions {
+      width: 100%;
+      margin-inline-start: 0;
+    }
 
-  /* Shared section header — uppercase divider used across settings tabs.
-     LaTeXTab uses .section-header; ToolsTab uses .category-header. Both
-     resolve to identical chrome here. */
-  .section-header,
-  .category-header {
-    display: flex;
-    align-items: center;
-    gap: var(--wa-space-2xs);
-    padding-bottom: var(--wa-space-2xs);
-    margin-bottom: var(--wa-space-xs);
-    border-bottom: var(--border-thin) solid var(--color-border);
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium);
-    color: var(--color-text-secondary);
-    text-transform: uppercase;
-    letter-spacing: var(--letter-spacing-caps);
-  }
+    .settings-row {
+      align-items: stretch;
+      flex-direction: column;
+      gap: var(--wa-space-xs);
+    }
 
-  /* Utility: single-line text truncation with ellipsis */
-  .truncate {
-    ${truncateTextRule}
+    .settings-row-control {
+      justify-content: flex-start;
+    }
   }
 `;

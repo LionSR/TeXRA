@@ -1,4 +1,7 @@
+import PQueue from 'p-queue';
+
 import { RUN_FACT_EVENT_TYPES } from '@agent/trace';
+import type { SessionStores } from '@agent/storage';
 import type { HostApprovalBypassStateUpdate } from '@agent/runtime/HostInteractions';
 import {
   defaultSession,
@@ -31,8 +34,6 @@ import type {
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { isInFlightPhase } from '@shared/streams/streamStatus';
 import { canUseStreamDataDir } from '@transcript/streamDataPaths';
-import type { SessionStores } from './state/SessionStores';
-
 type ProgressBackendApprovalOptions = Omit<
   BuildApprovalRequestHandlerSetParams,
   'webviewUpdater'
@@ -104,6 +105,8 @@ export class ProgressBackend {
     payload: SetActiveStreamPayload,
   ) => void;
   private readonly stateOwnership: 'backend' | 'session';
+  private readonly storageRootQueue = new PQueue({ concurrency: 1 });
+  private presentationReloadPending = false;
   private disposed = false;
 
   constructor(options: ProgressBackendOptions) {
@@ -285,8 +288,50 @@ export class ProgressBackend {
     }
   }
 
-  async load(): Promise<void> {
-    await this.state.load(this.stateOwnership);
+  load(): Promise<void> {
+    return this.enqueueStorageRootWork(async () => {
+      await this.session.waitUntilReady();
+      await this.state.load(this.stateOwnership);
+    });
+  }
+
+  /** Replace session stores and presentation caches after a workspace move. */
+  reloadAfterStorageRootChange(): Promise<void> {
+    const reload = async () => {
+      let sessionReloadError: unknown;
+      let storageRootReplaced = false;
+      try {
+        storageRootReplaced = await this.session.reloadAfterStorageRootChange();
+      } catch (error) {
+        sessionReloadError = error;
+      }
+      if (sessionReloadError || storageRootReplaced) {
+        this.presentationReloadPending = true;
+      }
+      if (!this.presentationReloadPending) return;
+      this.state.resetAfterStorageRootChange();
+      this.webviewBridge.clearAll();
+      try {
+        await this.state.load(this.stateOwnership);
+        this.presentationReloadPending = false;
+      } catch (presentationReloadError) {
+        if (sessionReloadError) {
+          throw new AggregateError(
+            [sessionReloadError, presentationReloadError],
+            'Failed to replace session storage and reload its presentation',
+          );
+        }
+        throw presentationReloadError;
+      }
+      if (sessionReloadError) throw sessionReloadError;
+    };
+    return this.enqueueStorageRootWork(reload);
+  }
+
+  private enqueueStorageRootWork(work: () => Promise<void>): Promise<void> {
+    // `add` widens to `void | undefined` for abort/timeout options; neither is
+    // used, so every enqueued operation runs and resolves with `void`.
+    return this.storageRootQueue.add(work) as Promise<void>;
   }
 
   setupEventListeners(): ProgressEventSubscription {

@@ -1,13 +1,7 @@
 // Agent imports
 import { createChannelTrace } from '@agent/trace';
+import { SessionStores } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-
-// Controller imports
-import { SessionStores } from '@controllers/progressView/backend/state/SessionStores';
-
-// Shared imports
-import { STREAM_PHASE } from '@shared/schemas';
-import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 
 // Tool imports
 import { releaseStreamResources } from '@tools/approval';
@@ -77,19 +71,6 @@ export async function initializeDesktopProcessStores(options: {
     },
   });
   await stores.sweepOrphanedStreams(new Set(canonicalStreamIds));
-  await snapshots.load(canonicalStreamIds);
-  // An unfinished canonical transcript is the process-restart evidence that
-  // the prior process owned an in-flight run. Restore that provisional phase
-  // before the presentation's lease/resume repair classifies it as waiting or
-  // failed; otherwise a failed group closure would still render as READY.
-  for (const streamId of transcripts.getUnfinishedStreamIds()) {
-    session.status.transition(
-      streamId,
-      STREAM_PHASE.RUNNING,
-      STREAM_TRANSITION_CAUSE.LIFECYCLE,
-    );
-  }
-
   if (legacyImport) {
     try {
       await legacyImport.commit(legacyImport.claims);

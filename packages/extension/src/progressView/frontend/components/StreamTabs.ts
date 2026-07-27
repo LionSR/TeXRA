@@ -173,7 +173,7 @@ export class StreamTab extends LitElement {
                   class="action-icon-button tab-expand"
                   appearance="plain"
                   variant="neutral"
-                  size="small"
+                  size="s"
                   type="button"
                   data-stream=${stream.name}
                   data-action="toggle-children"
@@ -285,7 +285,7 @@ export class StreamTab extends LitElement {
           class="action-icon-button tab-delete"
           appearance="plain"
           variant="neutral"
-          size="small"
+          size="s"
           type="button"
           aria-label="Delete stream"
           data-stream=${stream.name}
@@ -315,6 +315,8 @@ export class StreamTabs extends LitElement {
 
   @property({ attribute: false }) streams: StreamTabInfo[] = [];
   @property({ type: Boolean, reflect: true }) compact = false;
+  @property({ type: String }) presentation: 'progress' | 'orchestration' =
+    'progress';
   /** Optional rail-header title. Empty (default) renders no header band. */
   @property({ type: String }) heading = '';
   @property({ attribute: false }) activeStreamId: string | null = null;
@@ -474,7 +476,9 @@ export class StreamTabs extends LitElement {
           )}
         </div>
         ${
-          this.compact || (this.streams.length === 0 && this.filter === 'all')
+          this.presentation === 'orchestration' ||
+          this.compact ||
+          (this.streams.length === 0 && this.filter === 'all')
             ? nothing
             : html`<div class="stream-list-footer">
                 <div class="stream-list-controls">

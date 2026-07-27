@@ -13,6 +13,7 @@ import {
   renderSetStatusIcon,
   statusCheckIconStyles,
 } from '@shared/wa/statusIcons';
+import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
 
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -276,30 +277,31 @@ export class ModelSelectionList extends LitElement {
       : nothing;
 
     return html`
-      <div class="provider-group">
-        <div class="provider-group-header">
+      <section class="provider-group settings-disclosure">
+        <div class="provider-group-header settings-disclosure-summary">
           <wa-button
-            class="provider-group-toggle"
+            class="provider-group-toggle settings-disclosure-toggle"
             appearance="plain"
             variant="neutral"
+            aria-expanded=${String(isExpanded)}
             @click=${() => this.toggleProvider(group.provider)}
           >
             ${waIcon('chevron-right', {
-              className: isExpanded
-                ? 'provider-group-chevron expanded'
-                : 'provider-group-chevron',
+              className: 'settings-disclosure-chevron',
             })}
             <span class="provider-group-name">${group.displayName}</span>
             <span class="provider-group-count">
               ${enabledCount}/${totalCount} enabled
             </span>
           </wa-button>
-          <div class="provider-group-actions">${providerKeyStatus}</div>
+          <div class="provider-group-actions settings-disclosure-actions">
+            ${providerKeyStatus}
+          </div>
         </div>
         ${
           isExpanded
             ? html`
-                <div class="provider-group-content">
+                <div class="provider-group-content settings-disclosure-content">
                   ${group.current.map((m) => this.renderModelRow(m))}
                   ${
                     group.deprecated.length > 0
@@ -310,7 +312,7 @@ export class ModelSelectionList extends LitElement {
               `
             : nothing
         }
-      </div>
+      </section>
     `;
   }
 
@@ -321,7 +323,7 @@ export class ModelSelectionList extends LitElement {
       <wa-button
         class="deprecated-toggle"
         appearance="plain"
-        size="small"
+        size="s"
         @click=${() => this.toggleDeprecated(group.provider)}
       >
         ${waIcon('chevron-right', {
@@ -369,7 +371,12 @@ export class ModelSelectionList extends LitElement {
 
     return html`
       <div class="model-selection-section">
-        <h2>Model Selection</h2>
+        ${renderSettingsSectionHeading({
+          title: 'Model selection',
+          description:
+            'Choose the models exposed to agents and the default helper model used for lightweight tasks.',
+          icon: 'server',
+        })}
         ${this.renderHelperModelDropdown()}
         <div class="short-names-toggle">
           <wa-switch
@@ -387,7 +394,9 @@ export class ModelSelectionList extends LitElement {
             Send unpinned names (e.g. gpt-5.5 instead of gpt-5.5-2026-04-15)
           </span>
         </div>
-        ${groups.map((g) => this.renderProviderGroup(g))}
+        <div class="settings-disclosure-list">
+          ${groups.map((g) => this.renderProviderGroup(g))}
+        </div>
       </div>
     `;
   }

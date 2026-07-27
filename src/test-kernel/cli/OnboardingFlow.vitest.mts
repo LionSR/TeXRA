@@ -1,9 +1,9 @@
 import { Console } from 'node:console';
-import { EventEmitter } from 'node:events';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { waitForCondition } from '@test/support/asyncTestUtils';
+import { FakeStdin, FakeStdout } from '@test/support/inkTestHarness.mts';
 
 const mocks = vi.hoisted(() => ({
   updateCliModelAccess: vi.fn(),
@@ -37,60 +37,6 @@ vi.mock('@platform/platform', () => ({
     },
   }),
 }));
-
-class FakeOutput extends EventEmitter {
-  readonly isTTY = true;
-  readonly columns = 100;
-  readonly rows = 30;
-  readonly fd = 1;
-  readonly destroyed = false;
-  output = '';
-
-  write(chunk: string | Uint8Array, ...args: unknown[]): boolean {
-    this.output += Buffer.isBuffer(chunk)
-      ? chunk.toString('utf8')
-      : String(chunk);
-    const callback = args.findLast(
-      (arg): arg is () => void => typeof arg === 'function',
-    );
-    callback?.();
-    return true;
-  }
-
-  getColorDepth(): number {
-    return 24;
-  }
-}
-
-class FakeInput extends EventEmitter {
-  readonly isTTY = true;
-  readonly fd = 0;
-  private readonly chunks: string[] = [];
-
-  write(chunk: string): void {
-    this.chunks.push(chunk);
-    this.emit('readable');
-  }
-
-  read(): string | null {
-    return this.chunks.shift() ?? null;
-  }
-
-  ref(): void {}
-  unref(): void {}
-  pause(): this {
-    return this;
-  }
-  resume(): this {
-    return this;
-  }
-  setEncoding(): this {
-    return this;
-  }
-  setRawMode(): this {
-    return this;
-  }
-}
 
 const ONBOARDING_WAIT_OPTIONS = Object.freeze({
   timeoutMs: 15_000,
@@ -145,9 +91,9 @@ describe('provider-key onboarding flow', () => {
       value: Console,
       configurable: true,
     });
-    const stdin = new FakeInput();
-    const stdout = new FakeOutput();
-    const stderr = new FakeOutput();
+    const stdin = new FakeStdin();
+    const stdout = new FakeStdout(100, 30);
+    const stderr = new FakeStdout(100, 30);
     Object.defineProperties(process, {
       stdin: { value: stdin, configurable: true },
       stdout: { value: stdout, configurable: true },

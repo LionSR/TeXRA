@@ -12,6 +12,7 @@ import {
   changeLaunchTarget,
   changeSessionType,
   changeTeam,
+  changeWorkingDirectory,
   validateTeamSelection,
 } from '@webview/frontend/mainViewActions';
 import { catalogHandlers } from '@webview/frontend/slices/catalogSlice';
@@ -27,6 +28,8 @@ import {
   toolUseAgent$,
   toolUseInstruction$,
   workflowInstruction$,
+  workingDirectory$,
+  workspaceRootOptions$,
 } from '@webview/frontend/mainViewState';
 
 const mocks = vi.hoisted(() => ({
@@ -65,6 +68,15 @@ function setTeamOptions(optionsData: TeamOptionData[]): void {
   });
 }
 
+function setWorkspaceRoots(
+  optionsData: Array<{ label: string; value: string }>,
+): void {
+  catalogHandlers[MAIN_VIEW_COMMANDS.SET_WORKSPACE_ROOTS]({
+    command: MAIN_VIEW_COMMANDS.SET_WORKSPACE_ROOTS,
+    optionsData,
+  });
+}
+
 /** Flush the microtask queue so `announce`'s clear-then-set lands. */
 async function flushAnnouncements(): Promise<void> {
   await Promise.resolve();
@@ -83,6 +95,7 @@ describe('main-view launch target', () => {
 
       expect(parsed.launchTarget).toBe('agent');
       expect(parsed.selectedTeamId).toBe('');
+      expect(parsed.workingDirectory).toBe('');
     });
 
     it('round-trips a team launcher selection through the persisted-state schema', () => {
@@ -264,6 +277,40 @@ describe('main-view launch target', () => {
     });
   });
 
+  describe('working directory selection', () => {
+    it('defaults to the first open root and preserves a valid selection', () => {
+      setWorkspaceRoots([
+        { label: 'paper', value: '/workspace/paper' },
+        { label: 'figures', value: '/workspace/figures' },
+      ]);
+
+      expect(workspaceRootOptions$.get()).toHaveLength(2);
+      expect(workingDirectory$.get()).toBe('/workspace/paper');
+
+      changeWorkingDirectory('/workspace/figures');
+      mocks.saveState.mockClear();
+      setWorkspaceRoots([
+        { label: 'paper', value: '/workspace/paper' },
+        { label: 'figures', value: '/workspace/figures' },
+      ]);
+
+      expect(workingDirectory$.get()).toBe('/workspace/figures');
+      expect(mocks.saveState).not.toHaveBeenCalled();
+    });
+
+    it('falls back when the persisted root is no longer open', () => {
+      workingDirectory$.set('/workspace/removed');
+
+      setWorkspaceRoots([
+        { label: 'paper', value: '/workspace/paper' },
+        { label: 'figures', value: '/workspace/figures' },
+      ]);
+
+      expect(workingDirectory$.get()).toBe('/workspace/paper');
+      expect(mocks.saveState).toHaveBeenCalledOnce();
+    });
+  });
+
   describe('validateTeamSelection', () => {
     it('does nothing while the agent launcher is active', () => {
       selectedTeamId$.set('physicist');
@@ -427,6 +474,15 @@ describe('main-view launch target', () => {
       // the planned team root at the execution boundary.
       expect(message.agent).toBe('orchestrator');
       expect(message.isToolUseAgent).toBe(true);
+    });
+
+    it('sends the selected working directory through the existing session payload', () => {
+      workingDirectory$.set('/workspace/paper');
+
+      expect(buildExecuteMessage().session).toMatchObject({
+        launchTarget: 'agent',
+        workingDirectory: '/workspace/paper',
+      });
     });
 
     it('sends no team identity for the agent launcher', () => {

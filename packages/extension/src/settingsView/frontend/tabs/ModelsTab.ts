@@ -7,6 +7,8 @@ import { customElement, property } from 'lit/decorators.js';
 import { commonViewStyles, designTokens } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
+import { renderLabeledActionButton } from '@shared/wa/actionButtons';
+import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Web Awesome icon bundle (side-effect import)
@@ -22,7 +24,6 @@ import type {
   NumberVscodeSetting,
   ProviderKeyStatus,
 } from '@shared/schemas/settingsViewMessages';
-import type { SpendingStatus } from '@shared/schemas/spendingStatus';
 import { CHATGPT_TOOL_USE_ONLY_DESCRIPTION } from '@shared/schemas/coreSettings';
 
 // Local imports - utilities
@@ -30,7 +31,6 @@ import { pluralize } from '@utils/text/stringUtils';
 
 // Local imports - settings view components (side-effect: register)
 import '../components/profile/ApiAccessSection';
-import '../components/profile/RelayQuotaMeter';
 import '../components/profile/ProviderKeyList';
 import '../components/profile/ModelSelectionList';
 import '../components/profile/ReliabilitySettingsSection';
@@ -48,24 +48,13 @@ export class ModelsTab extends LitElement {
 
       /* max-width and centering provided by .tab-content-container */
 
-      .keyless-source {
-        margin-top: var(--wa-space-l, 1rem);
-        padding-top: var(--wa-space-m, 0.75rem);
-        border-top: 1px solid var(--wa-color-surface-border);
-      }
-      .keyless-source__header {
+      .models-jump-links {
         display: flex;
-        align-items: center;
-        gap: var(--wa-space-xs);
+        flex-wrap: wrap;
+        gap: var(--wa-space-2xs);
+        margin-bottom: var(--wa-space-s);
       }
-      .keyless-source__title {
-        font-weight: var(--font-weight-semibold);
-      }
-      .keyless-source__hint {
-        margin: var(--wa-space-2xs) 0 var(--wa-space-xs);
-        opacity: 0.8;
-        font-size: var(--font-size-sm);
-      }
+
       .keyless-source__limit {
         display: flex;
         align-items: flex-start;
@@ -78,28 +67,12 @@ export class ModelsTab extends LitElement {
         flex: 0 0 auto;
         margin-top: var(--wa-space-3xs);
       }
-      .keyless-source__row {
-        display: flex;
-        align-items: center;
-        gap: var(--wa-space-s);
-        flex-wrap: wrap;
-      }
-      .keyless-source__setting {
-        margin-bottom: var(--wa-space-xs);
-      }
-      .keyless-source__account {
-        display: inline-flex;
-        align-items: center;
-        gap: var(--wa-space-2xs);
-      }
     `,
   ];
 
   @property({ attribute: false }) authenticated = false;
   @property({ attribute: false }) apiAccessMode: 'included' | 'personal' =
     'personal';
-  @property({ attribute: false }) spendingStatus: SpendingStatus | null = null;
-  @property({ type: Boolean }) quotaAutoSwitched = false;
   @property({ attribute: false }) providerKeyStatuses: ProviderKeyStatus[] = [];
   @property({ attribute: false }) chatgptAuth: ChatGptAuthStatus | null = null;
   @property({ attribute: false }) globalStreamingDefault = true;
@@ -148,66 +121,49 @@ export class ModelsTab extends LitElement {
     });
   };
 
-  private renderTabHint(): TemplateResult {
+  private renderSectionLinks(): TemplateResult {
     const copilotAvailable = this.modelSelectionItems.some(
       (model) => model.provider === 'copilot',
     );
-    const description =
-      this.apiAccessMode === 'included'
-        ? 'Use included access, ChatGPT subscription for Codex models, or personal provider API keys.'
-        : 'Use ChatGPT subscription for Codex models, or configure personal API keys for OpenAI, Anthropic, Google, and other providers.';
 
     const accessJump = this.authenticated
-      ? html`<wa-button
-          appearance="outlined"
-          variant="neutral"
-          size="small"
-          @click=${this.handleScrollToApiAccess}
-        >
-          Model Access
-        </wa-button>`
+      ? renderLabeledActionButton({
+          text: 'Model Access',
+          kind: 'secondary',
+          appearance: 'outlined',
+          onClick: this.handleScrollToApiAccess,
+        })
       : nothing;
 
     return html`
-      <div class="settings-reminder">
-        ${waIcon('info', { className: 'settings-reminder-icon' })}
-        <div class="settings-reminder-body">
-          <div class="settings-reminder-title">Model credentials</div>
-          <div class="settings-reminder-description">${description}</div>
-          <div class="settings-reminder-actions">
-            ${accessJump}
-            <wa-button
-              appearance="outlined"
-              variant="neutral"
-              size="small"
-              @click=${this.handleScrollToChatGpt}
-            >
-              ${waIcon('comment-discussion', { slot: 'start' })} ChatGPT
-              Subscription
-            </wa-button>
-            ${
-              copilotAvailable
-                ? html`<wa-button
-                    appearance="outlined"
-                    variant="neutral"
-                    size="s"
-                    @click=${() => this.scrollToSection('#copilot-access')}
-                  >
-                    ${waIcon('shield', { slot: 'start' })} Copilot in VS Code
-                  </wa-button>`
-                : nothing
-            }
-            <wa-button
-              appearance="outlined"
-              variant="neutral"
-              size="small"
-              @click=${this.handleScrollToApiConfig}
-            >
-              ${waIcon('key', { slot: 'start' })} Jump to API Configuration
-            </wa-button>
-          </div>
-        </div>
-      </div>
+      <nav class="models-jump-links" aria-label="Model settings sections">
+        ${accessJump}
+        ${renderLabeledActionButton({
+          icon: 'comment-discussion',
+          text: 'ChatGPT Subscription',
+          kind: 'secondary',
+          appearance: 'outlined',
+          onClick: this.handleScrollToChatGpt,
+        })}
+        ${
+          copilotAvailable
+            ? renderLabeledActionButton({
+                icon: 'shield',
+                text: 'Copilot in VS Code',
+                kind: 'secondary',
+                appearance: 'outlined',
+                onClick: () => this.scrollToSection('#copilot-access'),
+              })
+            : nothing
+        }
+        ${renderLabeledActionButton({
+          icon: 'key',
+          text: 'Jump to API Configuration',
+          kind: 'secondary',
+          appearance: 'outlined',
+          onClick: this.handleScrollToApiConfig,
+        })}
+      </nav>
     `;
   }
 
@@ -218,17 +174,9 @@ export class ModelsTab extends LitElement {
         ></api-access-section>`
       : nothing;
 
-    const quotaMeter =
-      this.authenticated && this.spendingStatus
-        ? html`<relay-quota-meter
-            .status=${this.spendingStatus}
-            .autoSwitched=${this.quotaAutoSwitched}
-          ></relay-quota-meter>`
-        : nothing;
-
     return html`
       <div class="models-container tab-content-container">
-        ${this.renderTabHint()} ${apiAccessSection} ${quotaMeter}
+        ${this.renderSectionLinks()} ${apiAccessSection}
         ${this.renderChatGptSection()} ${this.renderCopilotSection()}
         <provider-key-list
           .providerKeyStatuses=${this.providerKeyStatuses}
@@ -261,15 +209,15 @@ export class ModelsTab extends LitElement {
     const account =
       this.chatgptAuth?.email ?? this.chatgptAuth?.accountId ?? 'your account';
     return html`
-      <section id="chatgpt-subscription" class="keyless-source">
-        <div class="keyless-source__header">
-          <span class="keyless-source__title">ChatGPT subscription</span>
-          <wa-tag variant="neutral" size="small">experimental</wa-tag>
-        </div>
-        <p class="keyless-source__hint">
-          Use OpenAI models through your ChatGPT Plus, Pro, or Team
-          subscription. No OpenAI API key is needed.
-        </p>
+      <section id="chatgpt-subscription">
+        ${renderSettingsSectionHeading({
+          title: 'ChatGPT subscription',
+          description:
+            'Use OpenAI models through your ChatGPT Plus, Pro, or Team subscription. No OpenAI API key is needed.',
+          actions: html`<wa-tag variant="neutral" size="s"
+            >Experimental</wa-tag
+          >`,
+        })}
         <p class="keyless-source__limit">
           ${waIcon('circle-info')}
           <span>
@@ -277,48 +225,79 @@ export class ModelsTab extends LitElement {
             cap, not the full 1,000,000-token API context.
           </span>
         </p>
-        <div class="keyless-source__setting">
-          <wa-switch
-            ?checked=${preferSubscription}
-            @change=${this.handlePreferSubscriptionChange}
-          >
-            Prefer ChatGPT subscription
-          </wa-switch>
+        <div class="settings-section">
+          <div class="settings-row">
+            <div class="settings-row-text">
+              <span class="settings-row-label">
+                Prefer ChatGPT subscription
+              </span>
+              <span class="settings-row-help">
+                Route eligible Codex models through your subscription.
+              </span>
+            </div>
+            <wa-switch
+              class="settings-row-control"
+              aria-label="Prefer ChatGPT subscription"
+              ?checked=${preferSubscription}
+              @change=${this.handlePreferSubscriptionChange}
+            ></wa-switch>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-text">
+              <span class="settings-row-label">
+                Use subscription for tool-use agents only
+              </span>
+              <span class="settings-row-help">
+                ${CHATGPT_TOOL_USE_ONLY_DESCRIPTION}
+              </span>
+            </div>
+            <wa-switch
+              class="settings-row-control"
+              aria-label="Use subscription for tool-use agents only"
+              ?checked=${subscriptionToolUseOnly}
+              ?disabled=${!preferSubscription}
+              @change=${this.handleSubscriptionToolUseOnlyChange}
+            ></wa-switch>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-text">
+              <span class="settings-row-label">
+                ${
+                  signedIn
+                    ? html`${waIcon('circle-check')} Signed in as ${account}`
+                    : 'ChatGPT account'
+                }
+              </span>
+              <span class="settings-row-help">
+                ${
+                  signedIn
+                    ? 'Your subscription is ready to use.'
+                    : 'Connect the ChatGPT account that owns your subscription.'
+                }
+              </span>
+            </div>
+            <div class="settings-row-control">
+              ${
+                signedIn
+                  ? renderLabeledActionButton({
+                      text: 'Sign out',
+                      kind: 'secondary',
+                      appearance: 'outlined',
+                      onClick: () =>
+                        postMessage(SETTINGS_VIEW_COMMANDS.SIGN_OUT_CHATGPT),
+                    })
+                  : renderLabeledActionButton({
+                      icon: 'comment-discussion',
+                      text: 'Sign in with ChatGPT',
+                      kind: 'primary',
+                      appearance: 'filled',
+                      onClick: () =>
+                        postMessage(SETTINGS_VIEW_COMMANDS.SIGN_IN_CHATGPT),
+                    })
+              }
+            </div>
+          </div>
         </div>
-        <div class="keyless-source__setting">
-          <wa-switch
-            ?checked=${subscriptionToolUseOnly}
-            ?disabled=${!preferSubscription}
-            hint=${CHATGPT_TOOL_USE_ONLY_DESCRIPTION}
-            @change=${this.handleSubscriptionToolUseOnlyChange}
-          >
-            Use subscription for tool-use agents only
-          </wa-switch>
-        </div>
-        ${
-          signedIn
-            ? html`<div class="keyless-source__row">
-                <span class="keyless-source__account">
-                  ${waIcon('circle-check')} Signed in as ${account}
-                </span>
-                <wa-button
-                  appearance="outlined"
-                  size="s"
-                  @click=${() =>
-                    postMessage(SETTINGS_VIEW_COMMANDS.SIGN_OUT_CHATGPT)}
-                >
-                  Sign out
-                </wa-button>
-              </div>`
-            : html`<wa-button
-                variant="brand"
-                size="small"
-                @click=${() =>
-                  postMessage(SETTINGS_VIEW_COMMANDS.SIGN_IN_CHATGPT)}
-              >
-                Sign in with ChatGPT
-              </wa-button>`
-        }
       </section>
     `;
   }
@@ -348,33 +327,42 @@ export class ModelsTab extends LitElement {
     }
 
     return html`
-      <section id="copilot-access" class="keyless-source">
-        <div class="keyless-source__header">
-          <span class="keyless-source__title">Copilot in VS Code</span>
-          <wa-tag variant="neutral" size="small">keyless</wa-tag>
-        </div>
-        <p class="keyless-source__hint">
-          Use models supplied by your GitHub Copilot subscription. No provider
-          API key is needed.
-        </p>
-        <div class="keyless-source__row">
-          <span class="keyless-source__account">
-            ${waIcon(readyCount > 0 ? 'circle-check' : 'circle-info')} ${status}
-          </span>
-          ${
-            consentModel
-              ? html`<wa-button
-                  variant="brand"
-                  size="s"
-                  @click=${() =>
-                    postMessage(SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS, {
-                      modelName: consentModel.name,
-                    })}
-                >
-                  ${waIcon('shield', { slot: 'start' })} Grant access
-                </wa-button>`
-              : nothing
-          }
+      <section id="copilot-access">
+        ${renderSettingsSectionHeading({
+          title: 'Copilot in VS Code',
+          description:
+            'Use models supplied by your GitHub Copilot subscription. No provider API key is needed.',
+          actions: html`<wa-tag variant="neutral" size="s">Keyless</wa-tag>`,
+        })}
+        <div class="settings-section">
+          <div class="settings-row">
+            <div class="settings-row-text">
+              <span class="settings-row-label">
+                ${waIcon(readyCount > 0 ? 'circle-check' : 'circle-info')}
+                ${status}
+              </span>
+              <span class="settings-row-help">
+                Access is managed by VS Code and GitHub Copilot.
+              </span>
+            </div>
+            <div class="settings-row-control">
+              ${
+                consentModel
+                  ? renderLabeledActionButton({
+                      icon: 'shield',
+                      text: 'Grant access',
+                      kind: 'primary',
+                      appearance: 'filled',
+                      onClick: () =>
+                        postMessage(
+                          SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS,
+                          { modelName: consentModel.name },
+                        ),
+                    })
+                  : nothing
+              }
+            </div>
+          </div>
         </div>
         ${
           unavailableCount > 0 && !consentModel

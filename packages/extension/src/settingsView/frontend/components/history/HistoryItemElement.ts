@@ -313,7 +313,7 @@ export class HistoryItemElement extends LitElement {
 
     const metaParts: Array<string | TemplateResult> = [
       presentation.timestamp,
-      html`<wa-tag variant=${categoryVariant} size="small">
+      html`<wa-tag variant=${categoryVariant} size="s">
         ${
           presentation.decorator.icon
             ? waIcon(presentation.decorator.icon)

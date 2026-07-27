@@ -7,7 +7,10 @@ interface WorkspacePathOptions {
 }
 
 const WORKSPACE_PRESENT_ARG = '--texra-has-workspace=';
-const NEW_WINDOW_ARG = '--texra-new-window';
+// Strip the retired separate-process flag from relaunch arguments. Electron's
+// single-instance lifecycle cannot safely host a second process that shares
+// the same profile and application state.
+const LEGACY_NEW_WINDOW_ARG = '--texra-new-window';
 const WORKSPACE_PATH_FLAGS = [
   '--texra-workspace-path',
   '--texra-workspace',
@@ -45,7 +48,7 @@ export function withWorkspacePathArg(
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg == null) continue;
-    if (arg === NEW_WINDOW_ARG) continue;
+    if (arg === LEGACY_NEW_WINDOW_ARG) continue;
     if (isDesktopProtocolUrl(arg)) continue;
     if (isWorkspacePathFlag(arg)) {
       const value = argv[index + 1];
@@ -59,22 +62,6 @@ export function withWorkspacePathArg(
   }
   nextArgs.push(`${CANONICAL_WORKSPACE_PATH_FLAG}=${workspacePath}`);
   return nextArgs;
-}
-
-export function withNewWindowWorkspaceArgs(
-  argv: readonly string[],
-  workspacePath: string,
-): string[] {
-  const nextArgs = withWorkspacePathArg(argv, workspacePath);
-  nextArgs.push(NEW_WINDOW_ARG);
-  return nextArgs;
-}
-
-export function isNewWindowLaunch(
-  options: Pick<WorkspacePathOptions, 'argv'> = {},
-): boolean {
-  const argv = options.argv ?? process.argv.slice(1);
-  return argv.includes(NEW_WINDOW_ARG);
 }
 
 export function hasResolvedWorkspacePath(

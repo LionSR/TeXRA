@@ -106,7 +106,7 @@ export const instructionPanelStyles: CSSResult = css`
     padding: var(--wa-space-3xs) var(--wa-space-2xs);
     font-size: var(--font-size-sm);
     line-height: var(--line-height-relaxed);
-    animation: session-hint-fade 150ms ease;
+    animation: session-hint-fade var(--transition-fast);
   }
 
   .session-hint::part(message) {
@@ -146,15 +146,14 @@ export const instructionPanelStyles: CSSResult = css`
     margin-left: var(--wa-space-3xs);
   }
 
+  /* Sizing, font, and padding come from formControlStyles' wa-textarea rules;
+     only the growth cap is local (this is the composer, so it grows further
+     than a settings field). */
   wa-textarea#instruction {
     width: 100%;
     margin: var(--wa-space-3xs) 0;
-    font-family: var(--wa-font-family-mono);
-    font-size: var(--font-size);
-  }
-
-  wa-textarea#instruction::part(textarea) {
-    max-height: var(--height-xlarge);
+    --textarea-min-height: var(--textarea-h-s);
+    --textarea-max-height: var(--height-xlarge);
   }
 
   .instruction-controls {
@@ -184,6 +183,17 @@ export const instructionPanelStyles: CSSResult = css`
 
   .model-selection-footer .launch-target-group {
     flex: 0 0 auto;
+  }
+
+  .model-selection-footer .workspace-root-control {
+    flex: 1 1 12rem;
+    max-width: 20rem;
+  }
+
+  .workspace-root-select {
+    width: 100%;
+    min-width: 0;
+    font-size: var(--font-size-sm);
   }
 
   .launch-target-group wa-radio-group {
@@ -224,7 +234,7 @@ export const instructionPanelStyles: CSSResult = css`
     display: flex;
     align-items: center;
     gap: var(--wa-space-2xs);
-    transition: opacity 150ms ease;
+    transition: opacity var(--transition-fast);
   }
 
   .team-picker-pane {
@@ -268,18 +278,19 @@ export const instructionPanelStyles: CSSResult = css`
     display: flex;
     align-items: center;
     flex: 0 0 auto;
-    line-height: 1;
+    line-height: var(--line-height-tight);
   }
 
-  .model-selection-footer wa-button {
+  .model-selection-footer wa-button:not(.action-icon-button) {
     min-width: var(--height-control);
     height: var(--height-control);
   }
 
   /*
-   * Execute is the primary action of the entire UI, so it gets a
-   * slightly larger, more distinctive treatment than the other
-   * footer wa-buttons (which are 24x24 icon-only controls).
+   * Execute is the primary action of the entire UI and the one place in this
+   * view that spends the accent budget. It carries .btn-primary, so the fill,
+   * radius, weight, hover, and focus ring all come from the shared skin; only
+   * the footer placement and the label floor are local.
    */
   wa-button.execute-button {
     min-width: auto;
@@ -290,22 +301,6 @@ export const instructionPanelStyles: CSSResult = css`
 
   wa-button.execute-button::part(base) {
     min-width: 64px;
-    min-height: 24px;
-    height: 24px;
-    padding: 0 var(--wa-space-s);
-    gap: var(--wa-space-2xs);
-    border-radius: var(--wa-border-radius-m);
-    background: var(--wa-color-brand-fill-loud);
-    color: var(--wa-color-brand-on-loud);
-    border: var(--border-thin) solid
-      color-mix(in srgb, black 8%, var(--wa-color-brand-fill-loud));
-    font-weight: var(--font-weight-semibold, 600);
-    letter-spacing: 0.01em;
-  }
-
-  wa-button.execute-button:focus-visible::part(base) {
-    outline: 2px solid var(--wa-color-focus, var(--wa-color-brand-fill-loud));
-    outline-offset: 2px;
   }
 
   wa-button.execute-button wa-icon {
@@ -314,7 +309,7 @@ export const instructionPanelStyles: CSSResult = css`
 
   .execute-button__label {
     font-size: var(--font-size-sm);
-    line-height: 1;
+    line-height: var(--line-height-tight);
   }
 
   /* Lock both selects to identical fixed width. Without flex: 0 0, the
@@ -342,6 +337,206 @@ export const instructionPanelStyles: CSSResult = css`
     top: auto;
   }
 
+  /* Electron opts into a conversation-first composer while the extension
+     retains the compact form above. The outer card owns the visual boundary;
+     the textarea becomes a quiet, borderless writing surface inside it. */
+  :host([desktop-host]) {
+    width: 100%;
+    container-name: desktop-composer;
+    container-type: inline-size;
+    --desktop-send-size: var(--control-size-l);
+    --agent-model-listbox-max-width: min(24rem, calc(100vw - 3rem));
+  }
+
+  :host([desktop-host]) .instruction-box {
+    gap: var(--wa-space-2xs);
+    margin: 0;
+    padding: var(--wa-space-xs);
+    border-color: var(--border-hairline-strong);
+    border-radius: var(--border-radius-large);
+    background: var(--wa-color-surface-raised);
+    transition: border-color var(--transition-fast);
+  }
+
+  :host([desktop-host]) .instruction-box:focus-within {
+    border-color: color-mix(
+      in srgb,
+      var(--wa-color-focus) 55%,
+      var(--border-hairline-strong)
+    );
+    box-shadow: 0 0 0 2px var(--wa-color-brand-fill-quiet);
+  }
+
+  :host([desktop-host]) .instruction-box.drop-active::after {
+    inset: var(--wa-space-2xs);
+    border-radius: var(--border-radius-large);
+    background: color-mix(
+      in srgb,
+      var(--wa-color-surface-raised) 92%,
+      transparent
+    );
+  }
+
+  :host([desktop-host]) .session-hint {
+    /* Desktop gives the same guidance through the mode tooltips and the
+       launcher welcome copy; keeping the full IDE callout inside a compact
+       composer would push the prompt away from the bottom edge. */
+    display: none;
+  }
+
+  :host([desktop-host]) wa-textarea#instruction {
+    order: 1;
+    margin: 0;
+    color: var(--wa-color-text-normal);
+    font-family: var(--wa-font-family-body);
+    font-size: var(--font-size-prose, var(--font-size-lg));
+    line-height: var(--line-height-relaxed);
+    --wa-form-control-background-color: transparent;
+    --wa-form-control-border-color: transparent;
+    --wa-form-control-border-width: 0;
+    --wa-form-control-padding-block: 0.55rem;
+    --wa-form-control-padding-inline: 0.45rem;
+  }
+
+  :host([desktop-host]) wa-textarea#instruction::part(base) {
+    border: 0;
+    background: transparent;
+    outline: 0;
+  }
+
+  :host([desktop-host]) wa-textarea#instruction::part(textarea) {
+    min-height: 96px;
+    max-height: min(36vh, 240px);
+  }
+
+  :host([desktop-host]) .instruction-header {
+    order: 2;
+    justify-content: flex-start;
+    min-height: var(--control-size-m);
+    margin: 0;
+    padding: 0;
+    flex-wrap: nowrap;
+  }
+
+  :host([desktop-host]) .instruction-header-leading {
+    flex: 0 0 auto;
+    min-width: 0;
+    flex-wrap: nowrap;
+  }
+
+  :host([desktop-host]) .desktop-drop-affordance {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--wa-space-3xs);
+    min-width: 0;
+    color: var(--wa-color-text-quiet);
+    font-size: var(--font-size-sm);
+  }
+
+  :host([desktop-host])
+    :is(.instruction-header-actions, .model-selection-footer)
+    .action-icon-button {
+    --control-size: var(--control-size-m);
+  }
+
+  :host([desktop-host]) .desktop-drop-affordance .icon-surface wa-icon,
+  :host([desktop-host]) wa-button.execute-button wa-icon {
+    display: block;
+    flex: 0 0 auto;
+    width: 1em;
+    height: 1em;
+    font-size: var(--font-size-icon-sm);
+    line-height: var(--line-height-tight);
+  }
+
+  :host([desktop-host]) .instruction-header-actions {
+    flex: 0 0 auto;
+    gap: var(--wa-space-3xs);
+  }
+
+  :host([desktop-host]) .instruction-controls {
+    order: 3;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) max-content;
+    align-items: end;
+    gap: var(--wa-space-2xs);
+    min-height: var(--desktop-send-size);
+  }
+
+  :host([desktop-host]) .model-selection-footer {
+    display: grid;
+    grid-template-columns:
+      minmax(7rem, 0.6fr) minmax(7.5rem, 1fr)
+      minmax(7.5rem, 1fr);
+    align-items: center;
+    gap: var(--wa-space-2xs);
+    min-width: 0;
+  }
+
+  :host([desktop-host]) .desktop-mode-controls {
+    min-width: 0;
+  }
+
+  :host([desktop-host]) .workspace-root-control {
+    grid-column: 1 / -1;
+    max-width: none;
+  }
+
+  :host([desktop-host]) .desktop-launch-mode {
+    width: 100%;
+  }
+
+  :host([desktop-host]) .model-selection-footer .select-group {
+    gap: var(--wa-space-3xs);
+  }
+
+  :host([desktop-host]) .model-selection-footer .agent-select-group,
+  :host([desktop-host]) .model-selection-footer .model-select-group {
+    max-width: none;
+  }
+
+  :host([desktop-host])
+    .model-selection-footer
+    :is(.agent-select-group, .model-select-group)
+    wa-select {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+  }
+
+  :host([desktop-host]) wa-button.execute-button {
+    align-self: end;
+    justify-self: end;
+    margin: 0;
+  }
+
+  :host([desktop-host]) wa-button.execute-button::part(base) {
+    min-height: var(--desktop-send-size);
+    padding-inline: var(--wa-space-s);
+  }
+
+  :host([desktop-host]) wa-button.execute-button::part(label) {
+    display: flex;
+    align-items: center;
+    gap: var(--wa-space-2xs);
+  }
+
+  :host([desktop-host]) .execute-button__key {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    padding: 2px 4px;
+    border: var(--border-thin) solid
+      color-mix(in srgb, currentColor 24%, transparent);
+    border-radius: var(--border-radius);
+    background: color-mix(in srgb, currentColor 10%, transparent);
+    font-family: var(--wa-font-family-code);
+    font-size: var(--font-size-xs);
+    line-height: 1;
+  }
+
   .visually-hidden {
     position: absolute;
     width: 1px;
@@ -365,9 +560,38 @@ export const instructionPanelStyles: CSSResult = css`
     }
   }
 
+  /* The conversation can be narrower than the window when a workbench is
+     open, so responsive composition follows this component's own width. */
+  @container desktop-composer (max-width: 640px) {
+    :host([desktop-host]) .model-selection-footer {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    :host([desktop-host]) .model-select-group {
+      grid-column: 1 / -1;
+    }
+  }
+
+  @container desktop-composer (max-width: 460px) {
+    :host([desktop-host]) .model-selection-footer {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    :host([desktop-host])
+      .model-selection-footer
+      :is(.agent-select-group, .model-select-group) {
+      gap: var(--wa-space-3xs);
+    }
+
+    :host([desktop-host]) .model-select-group {
+      grid-column: auto;
+    }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .session-hint,
-    .launcher-picker-pane {
+    .launcher-picker-pane,
+    :host([desktop-host]) .instruction-box {
       transition: none;
     }
   }

@@ -86,7 +86,6 @@ const mocks = vi.hoisted(() => ({
   initializeNodeGoalPrompts: vi.fn(),
   initializeNodeRuntimeSkills: vi.fn(),
   initNodeAgentRuntime: vi.fn(),
-  initializeServerSideKeyAccess: vi.fn(),
   serverSideKeyService: {
     setUseIncludedModelAccess: vi.fn(),
   },
@@ -109,7 +108,6 @@ vi.mock('@platform/defaults/longRunningModelTransport', () => ({
 
 vi.mock('@auth/serverKeys', () => ({
   getServerSideKeyService: () => mocks.serverSideKeyService,
-  initializeServerSideKeyAccess: mocks.initializeServerSideKeyAccess,
 }));
 
 vi.mock('@cli/runtime/supabaseAuth', () => ({

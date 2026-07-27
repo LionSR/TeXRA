@@ -86,7 +86,6 @@ async function createShellHarness(
       openExternalUrl: vi.fn(async () => {}),
       openLogFolder: vi.fn(async () => {}),
       openPath: vi.fn(async () => {}),
-      openWorkspaceInNewWindow: vi.fn(async () => {}),
       openWorkspaceFolder: vi.fn(async () => {}),
       signIn: vi.fn(async () => {}),
       getRecentCommits: async () => ({ commits: [], isGitRepo: false }),
@@ -319,6 +318,20 @@ describe('desktop IPC adapters', () => {
       command: SETTINGS_VIEW_COMMANDS.SET_TAB,
       tabIndex: SETTINGS_TAB.AGENTS,
     });
+  });
+
+  it('forwards native layout commands to the renderer', async () => {
+    const { actions, postToRenderer } = await createShellHarness();
+
+    actions.toggleSummaryBar?.();
+    actions.toggleBottomBar?.();
+    actions.toggleSidePanel?.();
+
+    expect(postToRenderer.mock.calls.map(([message]) => message)).toEqual([
+      { command: 'desktop:toggleLayout', panel: 'summaryBar' },
+      { command: 'desktop:toggleLayout', panel: 'bottomBar' },
+      { command: 'desktop:toggleLayout', panel: 'sidePanel' },
+    ]);
   });
 
   it('forwards real recent commits when a git host is wired', async () => {

@@ -3,7 +3,9 @@ import path from 'node:path';
 
 import type { AgentTrace } from '@agent/trace';
 
+import { computeAgentOptionsData, getAgent } from '@agent/index';
 import { createChannelTrace } from '@agent/trace';
+import type { SessionStores } from '@agent/storage';
 import {
   validateExecutionRequest,
   type ValidatedExecutionRequest,
@@ -15,6 +17,7 @@ import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { trackTerminalResultPresentation } from '@agent/runtime/terminalResultToast';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
+  notifyFollowUpSent,
   presentFollowUpWakeResult,
   sendFollowUp,
   wakeQueuedFollowUpStream,
@@ -24,6 +27,11 @@ import type {
   RuntimePresentationEventPayloads,
 } from '@agent/runtime/runtimePresentationEvents';
 import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
+import { getServerSideKeyService } from '@auth/serverKeys';
+import {
+  isPreferCodexSubscription,
+  setPreferCodexSubscription,
+} from '@auth/codex/codexPreference';
 import {
   getFileListConfig,
   loadFileListSettings,
@@ -37,15 +45,26 @@ import {
   resolveTeamLaunch,
   TEAM_SELECTION_REQUIRED_MESSAGE,
 } from '@common/teams/TeamPlan';
-import {
-  repairRestartedStreams,
-  RestartRepairRetryScheduler,
-  type RestartRepairResult,
-} from '@controllers/progressView/backend/restartRepair';
+import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
 import { replayApprovalRequestHandlers } from '@controllers/progressView/backend/progressBackendUiConfig';
 import { buildStreamInfo } from '@controllers/progressView/backend/streamInfoUtils';
 import { ProgressBackend } from '@controllers/progressView/backend/ProgressBackend';
 import { getProgressStreamControls } from '@controllers/progressView/progressStreamControls';
+import { ProgressApiKeyRetryController } from '@controllers/progressView/ProgressApiKeyRetryController';
+import {
+  ProgressFollowUpController,
+  type ProgressFollowUpPlan,
+} from '@controllers/progressView/ProgressFollowUpController';
+import {
+  ProgressFollowUpPolishController,
+  type ProgressFollowUpPolishResult,
+} from '@controllers/progressView/ProgressFollowUpPolishController';
+import {
+  ProgressWorkflowActionsController,
+  type WorkflowDiffRequest,
+  type WorkflowFileOperation,
+  type WorkflowFileOperationRequest,
+} from '@controllers/progressView/ProgressWorkflowActionsController';
 import { ProgressViewHost } from '@controllers/progressView/ProgressViewHost';
 import { buildMainViewState } from '@controllers/mainView/MainViewStateRestoreController';
 import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
@@ -53,16 +72,39 @@ import {
   prepareMainViewExecutionRequest,
   prepareMainViewTeamExecutionRequest,
 } from '@controllers/mainView/MainViewExecutionController';
-import type { SessionStores } from '@controllers/progressView/backend/state/SessionStores';
-import { platform } from '@platform/platform';
-import { PROGRESS_VIEW_COMMANDS, COMMON_COMMANDS } from '@shared/ipc';
 import {
+  runCleanMultiple,
+  runCleanRunDir,
+  runCleanSingle,
+  runPack,
+  runPackRunDir,
+} from '@housekeeping';
+import {
+  API_PROVIDERS,
+  hasUsableApiKey,
+  isApiProvider,
+  lookupApiKey,
+} from '@model/apiProviders';
+import {
+  computeModelOptionsData,
+  invalidateModelOptionsCache,
+} from '@model/computeModelOptions';
+import { platform } from '@platform/platform';
+import {
+  COMMON_COMMANDS,
+  MAIN_VIEW_COMMANDS,
+  PROGRESS_VIEW_COMMANDS,
+} from '@shared/ipc';
+import {
+  AgentCategory,
+  SETTINGS_TAB,
   type RunOutcome,
   type AgentCategoryFilter,
   type MainViewPersistedState,
   type ProgressViewOutboundMessage,
   type ExecutionId,
   type RequestOpenFilePayload,
+  type SettingsTab,
   type StreamTabId,
 } from '@shared/schemas';
 import { unsupported, unsupportedCommands } from '@shared/utils/dispatcher';
@@ -71,10 +113,18 @@ import {
   formatStreamDeletionRetention,
 } from '@shared/copy/executionHistory';
 import type { MainViewExecuteMessage } from '@shared/schemas/mainView/executeMessage';
+import {
+  mergeRunDirAndWorkspaceResult,
+  type FileOpResult,
+} from '@shared/schemas/opResults';
+import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { cleanupUnscopedApprovals } from '@tools/approval';
+import { startRecording, stopRecordingAndTranscribe } from '@tools/media/audio';
+import { WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
+import { buildDesktopSettingsTabMessage } from '../desktopCommandSurface.js';
 import { buildDesktopOnboardingSetStateMessage } from '../desktopOnboardingMessages.js';
 import { DESKTOP_SHELL_COMMANDS } from '../desktopShellMessages.js';
 import {
@@ -159,6 +209,19 @@ export class DesktopProgressBridge {
   private agentProposalController!: ProgressViewHost['agentProposalController'];
   private workflowFileActions!: ProgressViewHost['workflowFileActionsController'];
   /**
+   * Stream-toolbar diff/pack/clean. The controller is host-neutral: it resolves
+   * each run's agent/model/input/output configuration from the shared snapshot
+   * store and calls back into the two host-supplied operations below.
+   */
+  private workflowActions!: ProgressWorkflowActionsController;
+  /** Plans tool-use follow-up runs and compile-fix runs for a finished stream. */
+  private followUpController!: ProgressFollowUpController;
+  /** Rewrites follow-up text with the helper model ("Polish" in the follow-up box). */
+  private readonly followUpPolishController =
+    new ProgressFollowUpPolishController();
+  /** Switches a credit/limit-exhausted run onto the user's own API key. */
+  private apiKeyRetryController!: ProgressApiKeyRetryController;
+  /**
    * Pending approval prompts, one {@link ApprovalRequestHandler}
    * per kind. These back the shared pending-permissions guard against view
    * switches and the pending-proposal lookup — the same host-agnostic
@@ -169,11 +232,7 @@ export class DesktopProgressBridge {
   private toolEditApprovals: DesktopToolEditApprovalController | undefined;
   private hostInteractions!: DesktopHostInteractions;
   private fileActions!: DesktopProgressFileActions;
-  private restartRepair: Promise<void> = Promise.resolve();
-  // Restart repair also closes presentation-state running groups, so its retry
-  // timer is deliberately presentation-owned. A window close cancels only the
-  // timer; canonical status is retained and the next window reruns repair.
-  private readonly restartRepairRetry = new RestartRepairRetryScheduler();
+  private readonly initialization: Promise<void>;
   private disposed = false;
   private presentationReady = false;
 
@@ -215,9 +274,22 @@ export class DesktopProgressBridge {
         canSend: () => true,
         logger: this.logger,
         overrides: {
+          // Route retry requests to the renderer's RetryRequestPanel, as the
+          // extension does. These were no-ops while `requestRetry` auto-cancelled;
+          // now that it parks the request for the user, the card has to be shown
+          // or the run would block forever. Both are arrow functions, so
+          // `this.backend` is already assigned by the time either runs.
           retry: {
-            show: () => undefined,
-            dismiss: () => undefined,
+            show: (permission) =>
+              this.backend.webviewUpdater.showPermission({
+                kind: PERMISSION_KIND.RETRY,
+                data: permission,
+              }),
+            dismiss: (id) =>
+              this.backend.webviewUpdater.resolvePermission(
+                PERMISSION_KIND.RETRY,
+                id,
+              ),
           },
         },
       },
@@ -271,20 +343,24 @@ export class DesktopProgressBridge {
       detachCompletedResult();
       this.detachCompletedResult = () => undefined;
     };
-    this.restartRepair = this.initializeCanonicalState(presentationHost);
+    this.initialization = this.initializeCanonicalState(presentationHost);
   }
 
-  /** Wait until canonical state and restart repair are ready for use. */
+  /** Wait until canonical presentation state is ready for use. */
   waitUntilReady(): Promise<void> {
-    return this.restartRepair;
+    return this.initialization;
   }
 
   private async initializeCanonicalState(
     presentationHost: AgentRuntimeHost,
   ): Promise<void> {
     await this.backend.load();
-    await this.repairOrphanedStreamsAfterRestart();
     if (this.disposed) return;
+
+    // Orchestration rail shows all sessions regardless of category — clear any
+    // persisted filter from a previous session so every top-level stream is
+    // visible in the rail and selectable without a stale-filter mismatch.
+    this.state.agentCategoryFilter = 'all';
 
     this.toolEditApprovals = createDesktopToolEditApprovalController({
       runtimeHost: presentationHost,
@@ -335,6 +411,9 @@ export class DesktopProgressBridge {
     this.progressHost = this.createProgressViewHost();
     this.workflowFileActions = this.progressHost.workflowFileActionsController;
     this.agentProposalController = this.progressHost.agentProposalController;
+    this.workflowActions = this.createWorkflowActionsController();
+    this.followUpController = this.createFollowUpController();
+    this.apiKeyRetryController = this.createApiKeyRetryController();
     this.progressViewInboundHandlers = this.createProgressViewInboundHandlers();
     const backendSubscription = this.backend.setupEventListeners();
     this.unsubscribe = () => backendSubscription.dispose();
@@ -386,6 +465,315 @@ export class DesktopProgressBridge {
       }
     }
     this.presentationReady = true;
+  }
+
+  /**
+   * Mirrors the extension's `createWorkflowActionsController`
+   * (`progressView/ProgressViewMessageHandler.ts`). The controller itself is
+   * host-neutral; it reads each run's configuration from the same
+   * `StreamSnapshotStore` both hosts share, so only the two terminal operations
+   * differ per host. The extension routes them through `texra.runLatexdiff` /
+   * `texra.pack` / `texra.clean` commands; the desktop calls the same
+   * host-agnostic cores directly.
+   */
+  private createWorkflowActionsController(): ProgressWorkflowActionsController {
+    return new ProgressWorkflowActionsController({
+      state: {
+        getTaskState: (stream) => this.state.snapshots.getTaskState(stream),
+        getExecutionId: (stream) => this.getStreamExecutionId(stream),
+        getOutputFiles: (stream) => this.state.snapshots.getOutputFiles(stream),
+        getKnownWorkspaceOutputPaths: (stream) =>
+          this.state.snapshots.getKnownFilePaths(stream, {
+            workspaceOnly: true,
+          }),
+      },
+      runDiff: (request) => this.runWorkflowDiff(request),
+      runFileOperation: (operation, request) =>
+        this.runWorkflowFileOperation(operation, request),
+    });
+  }
+
+  /**
+   * Mirrors the extension's `createApiKeyRetryController`. Every credential and
+   * routing rule stays in the host-neutral controller; only the "ask the user
+   * for a key" step is host-specific, and on the desktop that means opening the
+   * Models tab rather than a modal prompt. The controller re-reads the secret
+   * store after this returns, so a key entered there is picked up.
+   */
+  private createApiKeyRetryController(): ProgressApiKeyRetryController {
+    return new ProgressApiKeyRetryController({
+      providers: API_PROVIDERS,
+      readKey: (provider) => lookupApiKey(platform().secrets, provider),
+      hasUsableKey: (provider) => hasUsableApiKey(platform().secrets, provider),
+      promptForApiKey: async () => {
+        this.routeToSettings(SETTINGS_TAB.MODELS);
+        await this.options.host.showInfoMessage(
+          'Add a provider API key in Models, then use "Retry" on the request.',
+        );
+      },
+      getUseIncludedModelAccess: () =>
+        getServerSideKeyService().getUseIncludedModelAccess(),
+      setUseIncludedModelAccess: async (enabled) => {
+        await getServerSideKeyService().setUseIncludedModelAccess(enabled);
+      },
+      getPreferChatGptSubscription: isPreferCodexSubscription,
+      setPreferChatGptSubscription: async (enabled) => {
+        await setPreferCodexSubscription(enabled);
+      },
+      invalidateModelOptionsCache,
+      isRetryPending: (stream, requestId) =>
+        this.hostInteractions.isRetryPending(stream, requestId),
+      triggerRetry: (stream, requestId) =>
+        this.hostInteractions.submitRetryDecision(stream, requestId, {
+          action: 'retry',
+        }),
+    });
+  }
+
+  /**
+   * Mirrors the extension's `createFollowUpController`. The controller decides
+   * what a follow-up or compile-fix run should be; the desktop only supplies the
+   * catalog lookups and the same snapshot-store reads.
+   */
+  private createFollowUpController(): ProgressFollowUpController {
+    return new ProgressFollowUpController({
+      getAgentCategory: (agent) =>
+        getAgent(agent, AgentCategory.ToolUse)?.category,
+      loadModelOptions: () => computeModelOptionsData(),
+      state: {
+        getTaskState: (stream) => this.state.snapshots.getTaskState(stream),
+        getOutputFiles: (stream) => this.state.snapshots.getOutputFiles(stream),
+        getCompileFailures: (stream) =>
+          this.state.snapshots.getCompileFailures(stream),
+        getExecutionId: (stream) => this.getStreamExecutionId(stream),
+      },
+      workspace: {
+        locatePath: (candidate) => WorkspaceFS.locatePath(candidate),
+        exists: (relativePath) => WorkspaceFS.exists(relativePath),
+      },
+    });
+  }
+
+  private postRecordingStatus(
+    status:
+      { status: 'started' | 'stopped' } | { status: 'error'; error: string },
+  ): void {
+    this.postToRenderer({
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_RECORDING,
+      ...status,
+    });
+  }
+
+  /** Surface a dictation failure both to the renderer's mic button and the user. */
+  private async reportRecordingError(message: string): Promise<void> {
+    this.logger.error(`Recording failed: ${message}`);
+    this.postRecordingStatus({ status: 'error', error: message });
+    await this.options.host.showErrorMessage(message);
+  }
+
+  /** Desktop counterpart of the extension's `applyFollowUpPolishResult`. */
+  private async applyFollowUpPolishResult(
+    result: ProgressFollowUpPolishResult,
+  ): Promise<void> {
+    switch (result.kind) {
+      case 'skipped':
+        return;
+      case 'updated':
+        this.postToRenderer(result.update);
+        return;
+      case 'failed':
+        this.postToRenderer(result.update);
+        await this.options.host.showErrorMessage(result.userMessage);
+        return;
+      case 'exception':
+        this.postToRenderer(result.update);
+        this.logger.error(result.logMessage, {
+          data: result.logData ? toLogData(result.logData) : undefined,
+        });
+        await this.options.host.showErrorMessage(result.userMessage);
+    }
+  }
+
+  private async processToolUseFollowUp(
+    data: {
+      stream: StreamTabId;
+      agent: string;
+      model: string;
+      initialQuestion?: string;
+    },
+    executeImmediately: boolean,
+  ): Promise<void> {
+    await this.applyFollowUpPlan(
+      await this.followUpController.planToolUseFollowUpForStream({
+        streamId: data.stream,
+        agent: data.agent,
+        model: data.model,
+        initialQuestion: data.initialQuestion,
+        executeImmediately,
+      }),
+    );
+  }
+
+  /**
+   * Carry out a plan from `ProgressFollowUpController`, the desktop counterpart
+   * of the extension's `applyFollowUpPlan`. As documented on the plan type, the
+   * only `execute` producer is the compile fixer, so those runs opt into the
+   * configured helper model.
+   */
+  private async applyFollowUpPlan(plan: ProgressFollowUpPlan): Promise<void> {
+    switch (plan.kind) {
+      case 'warning':
+      case 'info':
+        await this.options.host.showInfoMessage(plan.message);
+        return;
+      case 'restoreState': {
+        const restored = this.restoreTaskState(plan.taskState);
+        if (!restored) {
+          await this.options.host.showErrorMessage('Failed to restore state');
+          return;
+        }
+        if (!plan.executeImmediately) return;
+
+        const validated = validateExecutionRequest({
+          config: plan.taskState.agentConfig,
+        });
+        if (!validated.valid) {
+          this.logger.error('Invalid desktop follow-up execution request', {
+            data: validated.issue,
+          });
+          await this.options.host.showErrorMessage(validated.message);
+          return;
+        }
+        await this.runExecution(validated.request);
+        return;
+      }
+      case 'execute': {
+        const validated = validateExecutionRequest(plan.request);
+        if (!validated.valid) {
+          this.logger.error('Invalid desktop follow-up execution request', {
+            data: validated.issue,
+          });
+          await this.options.host.showErrorMessage(validated.message);
+          return;
+        }
+        await this.runExecution(validated.request, {
+          preferHelperModel: true,
+        });
+      }
+    }
+  }
+
+  /** Stream-toolbar diff: delegate to the shared round-aware latexdiff core. */
+  private async runWorkflowDiff(request: WorkflowDiffRequest): Promise<void> {
+    if (!request.agent || !request.model || !request.inputFile) {
+      await this.options.host.showErrorMessage(
+        'Missing required configuration parameters for the diff.',
+      );
+      return;
+    }
+
+    await this.fileActions.runLatexdiffForStream({
+      outputsByRound: request.outputsByRound ?? {},
+      ...(request.runId && { executionId: request.runId }),
+      workspaceScan: {
+        agent: request.agent,
+        model: request.model,
+        inputFile: request.inputFile,
+        outputFiles: request.outputFiles,
+      },
+    });
+  }
+
+  /**
+   * Stream-toolbar pack/clean. Toolbar invocations always carry an
+   * `executionId`, so — exactly as the extension's handlers document — both the
+   * run directory and the workspace are swept: the workspace pass is a no-op for
+   * new runs whose outputs live only inside the run directory, but it catches
+   * legacy runs whose outputs still sit beside the source.
+   */
+  private async runWorkflowFileOperation(
+    operation: WorkflowFileOperation,
+    request: WorkflowFileOperationRequest,
+  ): Promise<void> {
+    const { agent, model, inputFile, outputFiles, executionId } = request;
+    if (!agent || !model || !inputFile) {
+      await this.options.host.showErrorMessage(
+        `Missing required parameters for ${operation}.`,
+      );
+      return;
+    }
+
+    const runWorkspaceOperation = (): Promise<FileOpResult> => {
+      if (operation === 'pack') {
+        return runPack(model, inputFile, agent, outputFiles);
+      }
+      return outputFiles.length > 0
+        ? runCleanMultiple(model, inputFile, agent, outputFiles)
+        : runCleanSingle(model, inputFile, agent);
+    };
+
+    let result: FileOpResult;
+    try {
+      if (executionId) {
+        const runDirResult =
+          operation === 'pack'
+            ? await runPackRunDir(
+                executionId as ExecutionId,
+                agent,
+                model,
+                inputFile,
+              )
+            : await runCleanRunDir(executionId as ExecutionId);
+        const workspaceResult = await runWorkspaceOperation();
+        result = mergeRunDirAndWorkspaceResult(runDirResult, workspaceResult);
+      } else {
+        result = await runWorkspaceOperation();
+      }
+    } catch (error) {
+      this.logger.error(`Desktop ${operation} operation failed`, {
+        data: toLogData(error),
+      });
+      await this.options.host.showErrorMessage(
+        `Error during ${operation}: ${toErrorMessage(error)}`,
+      );
+      return;
+    }
+
+    await this.reportFileOperationResult(operation, result, inputFile);
+  }
+
+  private async reportFileOperationResult(
+    operation: WorkflowFileOperation,
+    result: FileOpResult,
+    inputFile: string,
+  ): Promise<void> {
+    switch (result.status) {
+      case 'success': {
+        const folder = result.outputFolder;
+        const packedMessage = folder
+          ? `Files packed into ${folder}`
+          : 'Files packed.';
+        await this.options.host.showInfoMessage(
+          operation === 'pack' ? packedMessage : 'Output files cleaned.',
+        );
+        return;
+      }
+      case 'noFiles':
+        await this.options.host.showInfoMessage(
+          `No files found to ${operation} for ${inputFile}`,
+        );
+        return;
+      case 'missingParams':
+        await this.options.host.showErrorMessage(
+          `Missing required parameters for ${operation}.`,
+        );
+        return;
+      case 'error':
+        await this.options.host.showErrorMessage(
+          `Error during ${operation}: ${result.error}`,
+        );
+        return;
+    }
   }
 
   private createProgressViewHost(): ProgressViewHost {
@@ -594,54 +982,189 @@ export class DesktopProgressBridge {
           await this.options.host.showErrorMessage('Failed to restore state');
         }
       },
-      compactResponse: unsupported(
-        'Compacting a response is not available in the desktop app yet.',
-      ),
-      diffStream: unsupported(
-        'Viewing a diff for this stream is not available in the desktop app yet.',
-      ),
-      packStream: unsupported(
-        'Packing output files is not available in the desktop app yet.',
-      ),
-      cleanStream: unsupported(
-        'Cleaning output files is not available in the desktop app yet.',
-      ),
-      retryStreamRequest: unsupported(
-        'Retrying with a new API key is not available in the desktop app yet.',
-      ),
-      cancelRetryRequest: unsupported(
-        'Canceling a retry request is not available in the desktop app yet.',
-      ),
-      useOwnApiKey: unsupported(
-        'Using your own API key is not available in the desktop app yet.',
-      ),
-      polishFollowUp: unsupported(
-        'Polishing follow-up text is not available in the desktop app yet.',
-      ),
-      setupFollowup: unsupported(
-        'Follow-up agent selection is not available in the desktop app yet.',
-      ),
-      runFollowup: unsupported(
-        'Follow-up agent selection is not available in the desktop app yet.',
-      ),
-      getFollowupOptions: unsupported(
-        'Follow-up agent selection is not available in the desktop app yet.',
-      ),
-      startRecording: unsupported(
-        'Voice dictation is not available in the desktop app yet.',
-      ),
-      stopRecording: unsupported(
-        'Voice dictation is not available in the desktop app yet.',
-      ),
-      runCompileFixer: unsupported(
-        'The compile fixer is not available in the desktop app yet.',
-      ),
-      openMemoryView: unsupported(
-        'Opening the memory view from a stream is not available in the desktop app yet.',
-      ),
-      openProfile: unsupported(
-        'Opening the profile view from a stream is not available in the desktop app yet.',
-      ),
+      // Mirrors the extension's `texra.compactResponse` command
+      // (`commands/agent/agentCommands.ts`): the decision is made by the
+      // host-agnostic execution registry; only the three user-facing messages
+      // are host-specific.
+      compactResponse: async (data) => {
+        const result = this.session.executions.requestManualCompaction(
+          data.stream,
+        );
+        switch (result.kind) {
+          case 'no_active_tool_use':
+            await this.options.host.showInfoMessage(
+              'No active tool-use session found for this stream.',
+            );
+            return;
+          case 'unsupported':
+            await this.options.host.showInfoMessage(
+              'Manual context compaction is not yet available for this model. Stay tuned!',
+            );
+            return;
+          case 'requested':
+            notifyFollowUpSent(result.streamId, result.session);
+            await this.options.host.showInfoMessage(
+              'Context compaction requested. The agent will process it on the next model call.',
+            );
+            return;
+        }
+      },
+      // diff/pack/clean all resolve their run configuration from the shared
+      // snapshot store through the host-neutral
+      // `ProgressWorkflowActionsController`, exactly as the extension's
+      // ProgressViewMessageHandler does.
+      diffStream: (data) => this.workflowActions.diffStream(data.stream),
+      packStream: (data) =>
+        this.workflowActions.runFileOperation(data.stream, 'pack'),
+      cleanStream: (data) =>
+        this.workflowActions.runFileOperation(data.stream, 'clean'),
+      // Mirrors the extension's handleRetryStreamRequest /
+      // handleCancelRetryRequest: settle the pending retry card on the shared
+      // approval handler.
+      retryStreamRequest: async (data) => {
+        const resolved = this.hostInteractions.submitRetryDecision(
+          data.stream,
+          data.requestId,
+          { action: 'retry', feedback: data.feedback },
+        );
+        if (!resolved) {
+          await this.options.host.showInfoMessage(
+            'No retryable request is available for this stream yet.',
+          );
+        }
+      },
+      cancelRetryRequest: (data) => {
+        this.hostInteractions.submitRetryDecision(data.stream, data.requestId, {
+          action: 'cancel',
+        });
+      },
+      // Mirrors the extension's handleUseOwnApiKey. The credential and routing
+      // rules live in the host-neutral controller; the desktop differs only in
+      // how it asks for a missing key — it opens the Models tab, which is this
+      // host's key-entry surface, rather than a modal input box.
+      useOwnApiKey: async (data) => {
+        const provider =
+          data.provider !== undefined && isApiProvider(data.provider)
+            ? data.provider
+            : undefined;
+        const result = await this.apiKeyRetryController.useOwnApiKey({
+          stream: data.stream,
+          requestId: data.requestId,
+          provider,
+          exhaustionReason: data.exhaustionReason,
+          viaRelay: data.viaRelay,
+        });
+        if (result.proceeded && !result.retried) {
+          await this.options.host.showInfoMessage(
+            'Switched to your own API key. No pending retry to resume — run the agent again when ready.',
+          );
+        }
+      },
+      // Mirrors the extension's handlePolishFollowUp. The desktop has no
+      // progress-notification affordance, so the run is unannounced; every
+      // outcome still reaches the renderer through the same
+      // UPDATE_FOLLOW_UP_TEXT message the controller builds.
+      polishFollowUp: async (data) => {
+        const taskState = this.state.snapshots.getTaskState(data.stream);
+        if (!taskState) return;
+        try {
+          const result = await this.followUpPolishController.polishFollowUp({
+            stream: data.stream,
+            text: data.text,
+            taskState,
+          });
+          await this.applyFollowUpPolishResult(result);
+        } catch (error) {
+          const message = toErrorMessage(error);
+          this.postToRenderer({
+            command: PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT,
+            stream: data.stream,
+            kind: 'polishError',
+            text: null,
+            error: message,
+          });
+          this.logger.error(`Error polishing follow-up: ${message}`, {
+            data: toLogData(error),
+          });
+          await this.options.host.showErrorMessage(
+            `Error polishing follow-up: ${message}`,
+          );
+        }
+      },
+      // `setupFollowup` stages the follow-up in the launcher for review;
+      // `runFollowup` starts it immediately. Both go through the same planner,
+      // exactly as the extension's `processToolUseFollowup(data, immediate)`.
+      setupFollowup: (data) => this.processToolUseFollowUp(data, false),
+      runFollowup: (data) => this.processToolUseFollowUp(data, true),
+      getFollowupOptions: async (data) => {
+        const [agentOptions, modelOptionsData] = await Promise.all([
+          computeAgentOptionsData(),
+          computeModelOptionsData(undefined, undefined, {
+            agentCategory: AgentCategory.ToolUse,
+          }),
+        ]);
+        this.postToRenderer({
+          command: PROGRESS_VIEW_COMMANDS.SET_FOLLOWUP_OPTIONS,
+          stream: data.stream,
+          toolUseAgentsData: agentOptions.toolUse,
+          modelOptionsData,
+        });
+      },
+      // Voice dictation for the follow-up box. The recording and transcription
+      // core (`@tools/media/audio`: sox + a transcription model) is
+      // host-agnostic; the extension wraps it in a webview-bound
+      // `RecordingManager`, so the desktop drives the same two calls and posts
+      // the same UPDATE_RECORDING / UPDATE_FOLLOW_UP_TEXT messages.
+      startRecording: async () => {
+        try {
+          const result = await startRecording();
+          if (result.success) {
+            this.postRecordingStatus({ status: 'started' });
+          } else if (result.error) {
+            await this.reportRecordingError(result.error);
+          }
+        } catch (error) {
+          await this.reportRecordingError(toErrorMessage(error));
+        }
+      },
+      stopRecording: async () => {
+        try {
+          const transcription = stopRecordingAndTranscribe();
+          // Acknowledge before awaiting so the mic button leaves its recording
+          // state while transcription is still running, as in the extension.
+          this.postRecordingStatus({ status: 'stopped' });
+          const result = await transcription;
+          if (result.success) {
+            this.postToRenderer({
+              command: PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT,
+              kind: 'transcribed',
+              text: result.text,
+            });
+          } else if (result.error) {
+            await this.reportRecordingError(result.error);
+          }
+        } catch (error) {
+          await this.reportRecordingError(toErrorMessage(error));
+          this.postRecordingStatus({ status: 'stopped' });
+        }
+      },
+      runCompileFixer: async (data) => {
+        await this.applyFollowUpPlan(
+          await this.followUpController.planCompileFixerForStream(data.stream),
+        );
+      },
+      // The extension routes these through `texra.showMemory` /
+      // `texra.auth.viewProfile`, both of which open the settings view (the
+      // former on its Memory tab). The desktop's settings surface is an overlay
+      // reached by the same route + tab messages `desktopShellIpc` posts.
+      openMemoryView: () => {
+        this.routeToSettings(SETTINGS_TAB.MEMORY);
+      },
+      // Profile is the settings header rather than a tab, so — as in the
+      // extension's `viewProfile()` — opening the view is the whole action.
+      openProfile: () => {
+        this.routeToSettings();
+      },
       // Pop-out-to-editor is a VS Code editor-tab concept; the desktop app is
       // a single window.
       popOut: unsupported('Pop-out to editor is a VS Code-only feature.'),
@@ -655,7 +1178,6 @@ export class DesktopProgressBridge {
     // the closing BrowserWindow.
     this.disposed = true;
     this.detachCompletedResult();
-    this.restartRepairRetry.dispose();
     // Detaching first advances the session's attachment generation. Any
     // cancellation produced while the old presenters are disposed is stale;
     // the process-owned request remains pending for the next window.
@@ -688,172 +1210,25 @@ export class DesktopProgressBridge {
     );
   }
 
-  private refreshActiveExecutionIds(): {
-    activeExecutionIds: Set<string>;
-    allExecutionIds: ReadonlyMap<StreamTabId, ExecutionId>;
-  } {
-    const activeExecutionIds = new Set(this.session.executions.getActiveIds());
-    const allExecutionIds = this.state.snapshots.getExecutionIdMap();
-    return { activeExecutionIds, allExecutionIds };
-  }
-
-  /**
-   * Detect persisted waiting streams, then recheck live executions so both
-   * primary and degraded restart-repair paths reject resumes won mid-read.
-   */
-  private async detectRaceGuardedWaitingStreams(
-    executionIdMap: ReadonlyMap<StreamTabId, ExecutionId>,
-  ): Promise<{
-    waitingStreams: Set<StreamTabId>;
-    activeExecutionIds: Set<string>;
-    allExecutionIds: ReadonlyMap<StreamTabId, ExecutionId>;
-  }> {
-    const waitingStreams = await detectWaitingStreams(executionIdMap);
-    const { activeExecutionIds, allExecutionIds } =
-      this.refreshActiveExecutionIds();
-    for (const [streamId, executionId] of allExecutionIds) {
-      if (activeExecutionIds.has(executionId)) {
-        waitingStreams.delete(streamId);
-      }
-    }
-    return { waitingStreams, activeExecutionIds, allExecutionIds };
-  }
-
-  private getRestartRepairStreamSet(
-    allExecutionIds: ReadonlyMap<StreamTabId, ExecutionId>,
-    activeExecutionIds: ReadonlySet<string>,
-    waitingStreams: ReadonlySet<StreamTabId>,
-  ): Set<StreamTabId> {
-    const repairStreams = new Set([
-      ...this.streamLogs.getUnfinishedStreamIds(),
-      ...waitingStreams,
-    ]);
-    for (const [streamId, executionId] of allExecutionIds) {
-      if (executionId && activeExecutionIds.has(executionId)) {
-        repairStreams.delete(streamId);
-      }
-    }
-    return repairStreams;
-  }
-
-  private async closeRunningTaskGroupsForStreams(
-    streamIds: readonly StreamTabId[],
-    status: RunOutcome,
-    now: number = Date.now(),
-  ): Promise<StreamTabId[]> {
-    if (streamIds.length === 0) return [];
-    const closedGroups = await this.state.streamLogs.endRunningGroupsForStreams(
-      streamIds,
-      now,
-      status,
-    );
-    if (closedGroups.length > 0) {
-      await this.state.streamLogs.flush();
-    }
-    return closedGroups;
-  }
-
-  private async repairOrphanedStreamsAfterRestart(): Promise<void> {
-    let waitingStreams: Set<StreamTabId>;
-    let repairActiveExecutionIds: Set<string>;
-    let repairAllExecutionIds: ReadonlyMap<StreamTabId, ExecutionId>;
-    try {
-      const { activeExecutionIds, allExecutionIds } =
-        this.refreshActiveExecutionIds();
-      const executionIdMap = new Map(
-        [...allExecutionIds].filter(
-          ([, executionId]) => !activeExecutionIds.has(executionId),
-        ),
-      );
-      ({
-        waitingStreams,
-        activeExecutionIds: repairActiveExecutionIds,
-        allExecutionIds: repairAllExecutionIds,
-      } = await this.detectRaceGuardedWaitingStreams(executionIdMap));
-    } catch (error) {
-      this.logger.warn('Failed to detect resumable desktop streams', {
-        data: toLogData(error),
-      });
-      await this.repairUnmappedUnfinishedStreams();
-      return;
-    }
-
-    const repairStreams = this.getRestartRepairStreamSet(
-      repairAllExecutionIds,
-      repairActiveExecutionIds,
-      waitingStreams,
-    );
-    const repairResult = await repairRestartedStreams({
-      streamStatus: this.session.status,
-      waitingStreams,
-      executionIds: repairAllExecutionIds,
-      repairStreams,
-      closeRunningGroups: (streamIds, status, now) =>
-        this.closeRunningTaskGroupsForStreams(streamIds, status, now),
-      statusEmitOptions: {
-        trace: this.logger,
-      },
-      logger: this.logger,
-    });
-    this.syncAfterRestartRepair(repairResult);
-    this.restartRepairRetry.schedule(repairResult.nextLeaseCheckAt, () => {
-      void this.repairOrphanedStreamsAfterRestart().catch((error: unknown) => {
-        this.logger.warn('Failed delayed restart repair', {
-          data: toLogData(error),
-        });
-      });
-    });
-  }
-
-  /**
-   * If flow-record detection is unavailable, only streams without an execution
-   * mapping are unambiguously crashed. Mapped streams may still be resumable,
-   * so leave them untouched for a later retry instead of guessing.
-   */
-  private async repairUnmappedUnfinishedStreams(): Promise<void> {
-    try {
-      const { allExecutionIds } = this.refreshActiveExecutionIds();
-      const repairStreams = this.streamLogs
-        .getUnfinishedStreamIds()
-        .filter((streamId) => !allExecutionIds.has(streamId));
-      if (repairStreams.length === 0) return;
-
-      const repairResult = await repairRestartedStreams({
-        streamStatus: this.session.status,
-        waitingStreams: new Set(),
-        executionIds: allExecutionIds,
-        repairStreams,
-        closeRunningGroups: (streamIds, status, now) =>
-          this.closeRunningTaskGroupsForStreams(streamIds, status, now),
-        statusEmitOptions: { trace: this.logger },
-        logger: this.logger,
-      });
-      this.syncAfterRestartRepair(repairResult);
-    } catch (error) {
-      this.logger.warn(
-        'Failed to repair unmapped desktop streams after waiting detection failed',
-        { data: toLogData(error) },
-      );
-    }
-  }
-
-  private syncAfterRestartRepair(result: RestartRepairResult): void {
-    if (
-      this.presentationReady &&
-      (result.waitingStreams.length > 0 ||
-        result.failedStreams.length > 0 ||
-        result.closedWaitingGroups.length > 0 ||
-        result.closedFailedGroups.length > 0)
-    ) {
-      this.syncFullView();
-    }
-  }
-
   private routeToProgress(): void {
     this.postToRenderer({
       command: DESKTOP_SHELL_COMMANDS.SET_ROUTE,
       route: 'progress',
     });
+  }
+
+  /**
+   * Open the settings overlay, optionally on a specific tab. Same two-message
+   * sequence `desktopShellIpc.postSettingsRoute` uses, so a stream-initiated
+   * navigation lands identically to one from the rail or a menu command.
+   */
+  private routeToSettings(tabIndex?: SettingsTab): void {
+    this.postToRenderer({
+      command: DESKTOP_SHELL_COMMANDS.SET_ROUTE,
+      route: 'settings',
+    });
+    if (tabIndex == null) return;
+    this.postToRenderer(buildDesktopSettingsTabMessage(tabIndex));
   }
 
   private handlePresentationEvent<K extends RuntimePresentationEvent>(
@@ -877,6 +1252,16 @@ export class DesktopProgressBridge {
         void this.options.host.showErrorMessage(message);
         return;
       }
+      case 'showAgentConfigBanner': {
+        const { agentName } =
+          payload as RuntimePresentationEventPayloads['showAgentConfigBanner'];
+        this.postToRenderer({
+          command: MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER,
+          agentName,
+          customDirSet: true,
+        });
+        return;
+      }
       case 'requestOpenFile': {
         // The extension previews via its LaTeX-Workshop build+view flow
         // (openBuildDisplayIfTex); desktop has no such editor integration,
@@ -892,8 +1277,11 @@ export class DesktopProgressBridge {
           });
         return;
       }
-      default:
+      default: {
+        const _exhaustive: never = event;
+        void _exhaustive;
         return;
+      }
     }
   }
 
@@ -908,15 +1296,8 @@ export class DesktopProgressBridge {
     this.syncStreamContent(this.updateStreamMetadata());
   }
 
-  /**
-   * Owns the Progress webview's readiness sequence. Restored streams are
-   * folded into `session.status` by `restartRepair`. Painting the rail before
-   * repair settles would omit canonical restart status from the first paint.
-   * Gating the whole sequence here makes the ordering uniform for every
-   * `webviewReady` caller.
-   */
+  /** Send canonical state and replay pending prompts after attachment. */
   async completeWebviewReady(): Promise<void> {
-    await this.restartRepair;
     this.syncFullView();
     await replayApprovalRequestHandlers(this.backend.approvalHandlers);
   }
@@ -947,8 +1328,16 @@ export class DesktopProgressBridge {
    * session still matches the current filter instead of unconditionally
    * resetting it to 'all' (#7851).
    */
+  /**
+   * Display label for a stream, the desktop counterpart of the extension's
+   * `getProgressStreamLabel`. Read with the `'all'` filter so a label is
+   * returned regardless of which category filter the board currently shows.
+   */
+  getStreamLabel(streamId: StreamTabId): string | undefined {
+    return buildStreamInfo(this.state, streamId, 'all')?.label;
+  }
+
   async revealStream(streamId: StreamTabId): Promise<void> {
-    await this.restartRepair;
     if (!this.streamLogs.has(streamId)) {
       return;
     }
@@ -998,9 +1387,7 @@ export class DesktopProgressBridge {
   }
 
   tryResumeStream(streamId: StreamTabId): Promise<boolean> {
-    return this.restartRepair.then(() =>
-      platform().agentResume.tryResumeStream(streamId),
-    );
+    return platform().agentResume.tryResumeStream(streamId);
   }
 
   private async runLatexdiffFile(
@@ -1071,7 +1458,6 @@ export class DesktopProgressBridge {
     text: string,
     mediaFiles?: readonly string[],
   ): Promise<void> {
-    await this.restartRepair;
     // Resolve the follow-up target against the process session: the run's
     // handle is tracked in `this.session`, but this IPC path runs outside the
     // run ALS, so the module default (currentSession ⇒ defaultSession) would
@@ -1149,7 +1535,6 @@ export class DesktopProgressBridge {
     return launchDesktopAgent(
       request,
       {
-        ready: this.restartRepair,
         session: this.session,
       },
       options,

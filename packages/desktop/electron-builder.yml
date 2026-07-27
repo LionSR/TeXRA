@@ -15,6 +15,9 @@ asar: true
 asarUnpack:
   - '**/node_modules/@openai/codex/**'
   - '**/node_modules/@openai/codex-*/**'
+  # node-pty loads a native .node binary at runtime, which cannot be read from
+  # inside an asar archive.
+  - '**/node_modules/node-pty/**'
 npmRebuild: false
 afterPack: ./scripts/prune-desktop-codex-payload.mjs
 directories:
@@ -26,6 +29,9 @@ files:
     filter:
       - '**/*'
   - package.json
+  # The main bundle keeps node-pty external (see esbuild.main.mjs), so the real
+  # package has to ship alongside it.
+  - '**/node_modules/node-pty/**'
 extraResources:
   - from: ../extension/resources
     to: resources

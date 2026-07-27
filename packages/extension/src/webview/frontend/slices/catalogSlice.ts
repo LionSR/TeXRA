@@ -20,12 +20,15 @@ import {
   workflowAgent$,
   workflowAgentOptions$,
   workflowModelOptions$,
+  workingDirectory$,
+  workspaceRootOptions$,
 } from '../mainViewState';
 import {
   enterToolUseSession,
   refreshModelSelectionForActiveSession,
   validateTeamSelection,
 } from '../mainViewActions';
+import { saveState } from '../persistence';
 
 /**
  * Exact value match first, then plain-name match (source changes and
@@ -128,5 +131,15 @@ export const catalogHandlers = {
     // selection be checked — the initially empty async list is not proof
     // the team vanished. Validates + persists inside.
     validateTeamSelection();
+  },
+
+  [MAIN_VIEW_COMMANDS.SET_WORKSPACE_ROOTS]: (message) => {
+    workspaceRootOptions$.set(message.optionsData);
+    const selectedRoot = workingDirectory$.get();
+    if (message.optionsData.some((option) => option.value === selectedRoot)) {
+      return;
+    }
+    workingDirectory$.set(message.optionsData.at(0)?.value ?? '');
+    saveState();
   },
 } satisfies Partial<MainViewHandlerRegistry>;

@@ -273,6 +273,29 @@
   --wa-border-radius-circle: 50%;
   --wa-border-radius-square: 0px;
 
+  /* ==========================================================================
+     Shared control layer — the extension's density for the tokens declared in
+     src/shared/styles/litStyles.ts.
+     --------------------------------------------------------------------------
+     These are the `--wa-*` bridge names, not the shared names themselves. All
+     three webviews are a single Lit root, so `litStyles`' `:host` block wins
+     over anything declared here under the shared name — a `--row-height: 24px`
+     at `:root` would never reach a component. The shared sheet reads each
+     host-varying step through a `--wa-*` indirection, which inherits, so this
+     is the only shape that actually changes the rendered density.
+
+     Tighter than the desktop's: this is a sidebar-width panel, and the
+     row/control scale is what keeps it reading as editor chrome rather than a
+     web page embedded in one.
+     ========================================================================== */
+  --wa-control-size-s: 20px;
+  --wa-control-size-m: 22px;
+  --wa-control-size-l: 24px;
+  --wa-row-height: 24px;
+  --wa-row-padding: 2px 6px;
+  --wa-height-option: 22px;
+  --letter-spacing-tight: -0.005em;
+
   /* Web Awesome canonical space scale. Mirrors the values from the WA default
      theme so consumers can rely on --wa-space-* even if the WA color-scheme
      class hasn't been mounted yet. */
@@ -319,11 +342,12 @@ body {
   }
 }
 
-/* VS Code-compact dropdown items. WA defaults to ~0.5em padding which makes
-   each option ~32px tall; VS Code menus run ~22-24px. */
+/* Option-row height for light DOM. The rule itself lives once in
+   `formControlStyles` (src/shared/styles/controlStyles.ts) and reads this
+   token; it was previously declared three times at three different heights. */
 wa-option::part(base),
 wa-dropdown-item::part(base) {
+  min-height: var(--wa-height-option);
   padding: var(--wa-space-3xs) var(--wa-space-xs);
-  min-height: 0;
   line-height: var(--wa-line-height-condensed);
 }

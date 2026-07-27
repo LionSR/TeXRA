@@ -90,7 +90,7 @@ export class LoginBanner extends LitElement {
               id="loginBannerButton"
               appearance="filled"
               variant="brand"
-              size="small"
+              size="s"
               @click=${this.handleSignIn}
             >
               Sign In
@@ -98,7 +98,7 @@ export class LoginBanner extends LitElement {
             <wa-button
               id="loginBannerDismissButton"
               appearance="plain"
-              size="small"
+              size="s"
               title="Dismiss (can be re-enabled in settings)"
               aria-label="Dismiss login banner"
               @click=${this.handleDismiss}

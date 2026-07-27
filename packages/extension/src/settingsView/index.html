@@ -9,6 +9,23 @@
     />
     <link rel="stylesheet" href="${commonStyleUri}" />
     <link rel="stylesheet" href="${settingsStyleUri}" />
+    <style nonce="${nonce}">
+      html,
+      body {
+        height: 100%;
+      }
+
+      body {
+        display: flex;
+        overflow: hidden;
+      }
+
+      settings-app {
+        flex: 1;
+        min-width: 0;
+        min-height: 0;
+      }
+    </style>
     <title>TeXRA Settings</title>
   </head>
 

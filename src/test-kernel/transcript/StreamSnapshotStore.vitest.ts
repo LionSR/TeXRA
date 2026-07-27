@@ -174,6 +174,35 @@ describe('StreamSnapshotStore', () => {
     );
   });
 
+  it('discards a malformed usage delta LOUDLY instead of silently zeroing accumulated cost', async () => {
+    const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
+    const writer = new StreamSnapshotStore();
+
+    void writer.addUsage(STREAM, RUN, usage(100, 20, 0.5));
+    // A delta with an uncoercible numeric field must not wipe out the
+    // already-accumulated cost, and must warn rather than fail silently.
+    void writer.addUsage(STREAM, RUN, {
+      ...usage(50, 10, 0.25),
+      inputTokens: 'not-a-number' as unknown as number,
+    });
+
+    await writer.flush();
+
+    const reader = new StreamSnapshotStore();
+    const snap = await reader.read(STREAM);
+    expect(snap.runUsage[RUN]).toMatchObject({
+      inputTokens: 100,
+      outputTokens: 20,
+      cost: 0.5,
+    });
+    expect(warnSpy).toHaveBeenCalledWith(
+      'StreamSnapshotStore',
+      expect.stringContaining('Discarding malformed usage delta'),
+      expect.anything(),
+    );
+    warnSpy.mockRestore();
+  });
+
   it('persists durable run facts directly from session events and ignores goalPaused', async () => {
     const events = new SessionEventHub();
     const writer = new StreamSnapshotStore();

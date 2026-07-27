@@ -35,7 +35,7 @@ export function renderSetStatusIcon<Status extends string>({
       title=${title ?? 'Set'}
     ></wa-icon>`;
   }
-  return html`<wa-tag variant=${fallback.variant ?? 'neutral'} size="small"
+  return html`<wa-tag variant=${fallback.variant ?? 'neutral'} size="s"
     >${fallback.label}</wa-tag
   >`;
 }

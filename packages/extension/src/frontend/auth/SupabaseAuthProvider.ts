@@ -25,6 +25,7 @@ import {
 } from '@auth/SupabaseSession';
 import { fetchWithTimeout } from '@auth/fetchWithTimeout';
 import * as logger from '@logger/logUtils';
+import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { platform } from '@platform/platform';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { SupabaseUriHandler } from './UriHandler';
@@ -96,6 +97,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     await this.sessionCoordinator.storeSession(session);
     if (notify) {
       getServerSideKeyService().clearAllCaches({ resetQuotaFlip: true });
+      invalidateModelOptionsCache();
       this._onDidChangeSessions.fire({
         added: [this.toVSCodeSession(session)],
         removed: [],
@@ -483,6 +485,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       await this.sessionCoordinator.clearSession();
       // Clear server-side key cache when session is removed (handles automatic invalidation)
       getServerSideKeyService().clearAllCaches({ resetQuotaFlip: true });
+      invalidateModelOptionsCache();
       await invalidateRemoteAgentsAfterSignOut().catch((error: unknown) => {
         logger.warn(
           'SupabaseAuthProvider',

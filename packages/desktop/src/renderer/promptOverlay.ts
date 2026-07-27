@@ -36,13 +36,13 @@ export function createDesktopPromptOverlay(
   actions.classList.add('desktop-prompt-actions');
 
   const cancelButton = document.createElement('wa-button');
-  cancelButton.classList.add('desktop-prompt-cancel');
+  cancelButton.classList.add('desktop-prompt-cancel', 'btn-secondary');
   cancelButton.setAttribute('appearance', 'outlined');
   cancelButton.setAttribute('type', 'button');
   cancelButton.textContent = 'Cancel';
 
   const submitButton = document.createElement('wa-button');
-  submitButton.classList.add('desktop-prompt-submit');
+  submitButton.classList.add('desktop-prompt-submit', 'btn-primary');
   submitButton.setAttribute('appearance', 'filled');
   submitButton.setAttribute('variant', 'brand');
   submitButton.setAttribute('type', 'submit');

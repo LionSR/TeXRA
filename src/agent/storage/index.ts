@@ -49,3 +49,8 @@ export {
   type ResumabilityDecision,
 } from './resumability';
 export { resolveChildRunOutput } from './childRunOutput';
+export {
+  SessionStores,
+  type DeleteAllStreamsResult,
+  type DeleteStreamResult,
+} from './SessionStores';

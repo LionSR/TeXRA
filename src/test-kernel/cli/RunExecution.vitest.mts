@@ -632,6 +632,10 @@ describe('executeCliRequest', () => {
 
         handleProgressEvent = vi.fn();
 
+        load = vi.fn(async () => undefined);
+
+        getExecutionIdMap = vi.fn(() => new Map());
+
         flush = vi.fn(async () => {
           throw flushError;
         });
@@ -734,7 +738,7 @@ describe('executeCliRequest', () => {
     const run = executeCliRequest(baseRequest(), cliContext(), {
       registerExecution: true,
     });
-    await Promise.resolve();
+    await vi.waitFor(() => expect(mocks.runAgent).toHaveBeenCalledOnce());
     await platform.lifecycle.runShutdown();
     expect(mocks.finalizeExecution).not.toHaveBeenCalled();
 
@@ -775,7 +779,7 @@ describe('executeCliRequest', () => {
     const run = executeCliRequest(baseRequest(), cliContext(), {
       registerExecution: true,
     });
-    await Promise.resolve();
+    await vi.waitFor(() => expect(mocks.runAgent).toHaveBeenCalledOnce());
     await platform.lifecycle.runShutdown();
     expect(mocks.emit).toHaveBeenCalledExactlyOnceWith('requestShowError', {
       message:

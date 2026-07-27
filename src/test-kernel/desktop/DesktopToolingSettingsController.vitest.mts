@@ -52,6 +52,7 @@ type ControllerOptions = ConstructorParameters<
 
 function createFixture(overrides: Partial<ControllerOptions> = {}) {
   const posted: unknown[] = [];
+  const reportedErrors: unknown[] = [];
   const commands: string[] = [];
   const openedUrls: string[] = [];
   const presentedExtensions: string[] = [];
@@ -66,6 +67,7 @@ function createFixture(overrides: Partial<ControllerOptions> = {}) {
     ...overrides.dashboard,
   };
   const controller = new DefaultDesktopToolingSettingsController({
+    onError: (error) => reportedErrors.push(error),
     globalState,
     workspaceState,
     renderer: {
@@ -107,6 +109,7 @@ function createFixture(overrides: Partial<ControllerOptions> = {}) {
     openedUrls,
     posted,
     presentedExtensions,
+    reportedErrors,
     workspaceState,
   };
 }
@@ -116,8 +119,24 @@ function commandOf(message: unknown): string | undefined {
 }
 
 describe('DefaultDesktopToolingSettingsController', () => {
-  it('posts the initial dashboard and LaTeX status', async () => {
-    const { controller, posted } = createFixture();
+  it('posts cached startup data before refreshing external tools', async () => {
+    let finishRefresh: (() => void) | undefined;
+    const refreshPending = new Promise<void>((resolve) => {
+      finishRefresh = resolve;
+    });
+    const buildInputs: (ExternalToolCheckResult[] | undefined)[] = [];
+    const { controller, posted } = createFixture({
+      dashboard: {
+        buildItems: async (results) => {
+          buildInputs.push(results);
+          return [DASHBOARD_ITEM];
+        },
+        getCachedCheckResults: async () => undefined,
+        refreshAvailability: () => refreshPending,
+        refreshDisabledCache: async () => undefined,
+        findCommand: async () => undefined,
+      },
+    });
 
     controller.postLatexConfigValues();
     await controller.postStartupData();
@@ -127,6 +146,38 @@ describe('DefaultDesktopToolingSettingsController', () => {
       SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
       SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS,
     ]);
+    expect(buildInputs).toEqual([[]]);
+
+    finishRefresh?.();
+    await vi.waitFor(() => {
+      expect(posted.map(commandOf)).toEqual([
+        SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES,
+        SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
+        SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS,
+        SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
+      ]);
+    });
+  });
+
+  it('reports a background tool refresh failure without blocking startup', async () => {
+    const refreshError = new Error('tool probe failed');
+    const { controller, reportedErrors } = createFixture({
+      dashboard: {
+        buildItems: async () => [DASHBOARD_ITEM],
+        getCachedCheckResults: async () => [],
+        refreshAvailability: async () => {
+          throw refreshError;
+        },
+        refreshDisabledCache: async () => undefined,
+        findCommand: async () => undefined,
+      },
+    });
+
+    await controller.postStartupData();
+
+    await vi.waitFor(() => {
+      expect(reportedErrors).toEqual([refreshError]);
+    });
   });
 
   it('persists a toggle before refreshing caches and posting cached data', async () => {

@@ -2,13 +2,13 @@ import { z } from 'zod';
 
 import { getBasename } from '@utils/core';
 
-// IPC plumbing for the in-app diff overlay (audit item C, trajectory #18).
+// IPC plumbing for the in-app Review workbench.
 //
 // The desktop main process used to satisfy `DiffViewHost.openDiff` by
 // generating a `.diff` patch file and opening it in the OS default editor
 // (`desktopDiffHost.ts`). With #3801's three-pane shell landed, the
 // renderer can now mount `<texra-diff-view>` (Monaco-backed) inside a
-// `wa-dialog` overlay — the same pattern as the settings overlay.
+// persistent Review tab beside a hierarchical changed-file index.
 //
 // `desktop:showDiff` carries the original/proposed text + a hint language
 // for Monaco's tokenizer, so the renderer never has to read disk. The
@@ -22,12 +22,15 @@ export const DESKTOP_DIFF_COMMANDS = {
 export const DesktopShowDiffMessageSchema = z.object({
   command: z.literal(DESKTOP_DIFF_COMMANDS.SHOW_DIFF),
   title: z.string(),
+  displayPath: z.string().optional(),
   originalText: z.string(),
   proposedText: z.string(),
+  additions: z.int().nonnegative().prefault(0),
+  deletions: z.int().nonnegative().prefault(0),
   // Monaco language id (e.g. 'plaintext', 'typescript', 'latex'). The
   // renderer falls back to 'plaintext' on unknown values.
   language: z.string().default('plaintext'),
-  // File hints purely for the dialog header / a11y label. Not used to
+  // File hints purely for the review header / a11y label. Not used to
   // re-read content — the text is already in the payload.
   originalPath: z.string().optional(),
   proposedPath: z.string().optional(),

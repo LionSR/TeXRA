@@ -7,7 +7,6 @@ import {
   ExecutionIdSchema,
   FileLocationSchema,
 } from '@shared/schemas';
-import type { FileOpResult } from '@shared/schemas/opResults';
 
 /** Non-empty string for the required file-operation identity fields. */
 const RequiredString = z.string().min(1);
@@ -102,20 +101,3 @@ export const AcceptEditedCommandArgsSchema = z
       inputLocation != null || baseLocation != null,
     { error: 'inputLocation or baseLocation required' },
   );
-
-/**
- * Merges the runDir and workspace legs of an executionId-driven pack/clean
- * operation. Surfaces an error from either leg — a failed runDir
- * removal/snapshot must not be masked by a successful workspace sweep/pack —
- * and otherwise prefers the workspace result, falling back to the runDir
- * result only when the workspace leg found nothing (legacy runs whose
- * outputs still sit beside the source rather than inside the runDir).
- */
-export function mergeRunDirAndWorkspaceResult(
-  runDirResult: FileOpResult,
-  workspaceResult: FileOpResult,
-): FileOpResult {
-  if (runDirResult.status === 'error') return runDirResult;
-  if (workspaceResult.status === 'error') return workspaceResult;
-  return workspaceResult.status !== 'noFiles' ? workspaceResult : runDirResult;
-}

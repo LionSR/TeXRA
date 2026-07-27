@@ -34,6 +34,16 @@ export interface DesktopMainViewIpcOptions {
   settings: DesktopSettingsIpc;
   progress: DesktopProgressIpc;
   onboarding: DesktopMessageHandler;
+  /**
+   * Editor file I/O, terminal pty sessions, and embedded browser control.
+   * Owned by the caller because the pty host and browser views outlive a single
+   * IPC install and need window-level disposal.
+   *
+   * Optional: these surfaces are additive, and a harness exercising only the
+   * main-view message flow shouldn't have to stand up a pty host and a
+   * WebContentsView factory to do it.
+   */
+  workspace?: DesktopMessageHandler;
   logs: DesktopLogIpcOptions;
   shellActions: DesktopShellActions;
   modelListRefresh?: PromiseLike<void>;
@@ -92,6 +102,9 @@ export function installDesktopMainViewIpc(
     options.settings,
     options.progress,
     options.onboarding,
+    // Filtered because `workspace` is optional; an undefined entry in the chain
+    // would throw on the first message dispatched.
+    ...(options.workspace ? [options.workspace] : []),
     viewState,
     logs,
     shell,

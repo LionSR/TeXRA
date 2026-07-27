@@ -1,6 +1,7 @@
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { _electron as electron } from 'playwright';
 import type { ElectronApplication, Page } from 'playwright';
@@ -32,12 +33,15 @@ export interface LaunchedApp {
   app: ElectronApplication;
   page: Page;
   workspacePath: string;
+  userDataPath: string;
   /**
    * True when `launchTexraApp()` allocated a temp workspace itself (caller
    * did not supply one). `closeTexraApp()` cleans this up so repeated CI
    * runs do not litter the system temp directory.
    */
   ownsWorkspace: boolean;
+  /** True when `launchTexraApp()` allocated an isolated desktop profile. */
+  ownsUserData: boolean;
 }
 
 /**
@@ -65,6 +69,9 @@ export async function launchTexraApp(
   const ownsWorkspace = options.workspacePath === undefined;
   const workspacePath =
     options.workspacePath ?? mkdtempSync(join(tmpdir(), 'texra-e2e-'));
+  const ownsUserData = options.userDataPath === undefined;
+  const userDataPath =
+    options.userDataPath ?? mkdtempSync(join(tmpdir(), 'texra-e2e-user-data-'));
 
   const app = await electron.launch({
     args: [MAIN_ENTRY, '--texra-workspace', workspacePath],
@@ -73,29 +80,67 @@ export async function launchTexraApp(
       ...process.env,
       // Hint to platform/secrets layer to avoid the macOS keychain prompt.
       TEXRA_DISABLE_KEYCHAIN: '1',
-      ...(options.userDataPath
-        ? { TEXRA_DESKTOP_E2E_USER_DATA_PATH: options.userDataPath }
-        : {}),
+      TEXRA_DESKTOP_E2E_USER_DATA_PATH: userDataPath,
       NODE_ENV: 'production',
       ...options.env,
     },
   });
 
   const page = await app.firstWindow();
-  await page.setViewportSize({ width: 1280, height: 800 });
-  // Wait for the renderer root to mount before tests interact.
+  // Resize the native window, not Playwright's renderer viewport. Calling
+  // page.setViewportSize() installs a fixed emulation viewport in Electron:
+  // the BrowserWindow can then grow while CSS `vw`/`vh` stay frozen at the
+  // original size, leaving a dead white region on the right and bottom.
+  // Keeping the canonical capture size at the BrowserWindow layer preserves
+  // deterministic screenshots while exercising real desktop resize behavior.
+  await app.evaluate(({ BrowserWindow }) => {
+    const window = BrowserWindow.getAllWindows().at(0);
+    if (!window) throw new Error('TeXRA window was not found.');
+    window.setContentSize(1280, 800);
+  });
+  // `firstWindow()` resolves when Electron creates BrowserWindow, before the
+  // main process's did-finish-load presentation fallback necessarily runs.
+  // Wait for the renderer's explicit ready marker, then assert native
+  // visibility so this remains a real blank/hidden-window regression guard
+  // instead of a race against the first frame.
   await page.waitForSelector('#app', { state: 'attached' });
-  return { app, page, workspacePath, ownsWorkspace };
+  await page.waitForFunction(
+    () => document.body.dataset.desktopReady === 'true',
+    undefined,
+    { timeout: 20_000 },
+  );
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    const visible = await app.evaluate(
+      ({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows().at(0)?.isVisible() ?? false,
+    );
+    if (visible) {
+      return {
+        app,
+        page,
+        workspacePath,
+        userDataPath,
+        ownsWorkspace,
+        ownsUserData,
+      };
+    }
+    await sleep(50);
+  }
+  throw new Error('TeXRA window finished loading without being presented.');
 }
 
 export async function closeTexraApp(launched: LaunchedApp): Promise<void> {
   await launched.app.close();
-  // Clean up the auto-allocated temp workspace so repeated test runs do not
-  // accumulate `/tmp/texra-e2e-*` directories. If the caller supplied a
-  // workspace path, leave it alone — the caller owns its lifecycle.
-  if (launched.ownsWorkspace) {
+  // Clean up only auto-allocated directories. Caller-supplied workspace and
+  // profile paths may be reused across relaunches and remain caller-owned.
+  const ownedPaths = [
+    launched.ownsWorkspace ? launched.workspacePath : undefined,
+    launched.ownsUserData ? launched.userDataPath : undefined,
+  ];
+  for (const path of ownedPaths) {
+    if (!path) continue;
     try {
-      rmSync(launched.workspacePath, { recursive: true, force: true });
+      rmSync(path, { recursive: true, force: true });
     } catch {
       // Best-effort cleanup. A stale temp dir is preferable to a noisy
       // teardown failure that masks the real test outcome.
@@ -107,8 +152,9 @@ export async function dismissOnboarding(page: Page): Promise<void> {
   const hasDismissButton = await page
     .waitForFunction(
       () => {
-        const btn = Array.from(document.querySelectorAll('wa-button')).find(
-          (b) => b.textContent?.trim() === 'Got it',
+        const panel = document.querySelector('.desktop-startup-panel');
+        const btn = Array.from(panel?.querySelectorAll('wa-button') ?? []).find(
+          (button) => button.textContent?.trim() === 'Skip for now',
         );
         return btn instanceof HTMLElement;
       },
@@ -118,15 +164,139 @@ export async function dismissOnboarding(page: Page): Promise<void> {
     .then(() => true)
     .catch(() => false);
 
-  if (!hasDismissButton) return;
-
-  await page.evaluate(() => {
-    const btn = Array.from(document.querySelectorAll('wa-button')).find(
-      (b) => b.textContent?.trim() === 'Got it',
+  if (hasDismissButton) {
+    await page.evaluate(() => {
+      const panel = document.querySelector('.desktop-startup-panel');
+      const btn = Array.from(panel?.querySelectorAll('wa-button') ?? []).find(
+        (button) => button.textContent?.trim() === 'Skip for now',
+      );
+      if (btn instanceof HTMLElement) btn.click();
+    });
+    await page.waitForFunction(
+      () => document.querySelector('.desktop-startup-panel') == null,
+      undefined,
+      { timeout: 5000 },
     );
-    if (btn instanceof HTMLElement) btn.click();
-  });
+  }
+
+  // A fresh profile can also show the credential welcome card inside
+  // <main-app>'s shadow tree. Skipping it is separate from dismissing the shell
+  // startup panel above; without both, E2E tests exercise onboarding instead of
+  // the launcher and can miss task-composer regressions.
   await page
-    .locator('wa-dialog.desktop-onboarding')
-    .waitFor({ state: 'hidden', timeout: 5000 });
+    .waitForFunction(
+      () => {
+        const root = document.querySelector('main-app')?.shadowRoot;
+        return (
+          root?.querySelector('onboarding-welcome-card, instruction-panel') !=
+          null
+        );
+      },
+      undefined,
+      { timeout: 15_000 },
+    )
+    .catch(() => undefined);
+  const skip = page.locator('onboarding-welcome-card #onboardingSkipButton');
+  const canSkip = await skip.isVisible().catch(() => false);
+  if (canSkip) {
+    // Programmatic activation avoids a closing walkthrough backdrop briefly
+    // intercepting the pointer between the two independent onboarding steps.
+    await skip.evaluate((button: HTMLElement) => button.click());
+    await skip.waitFor({ state: 'detached', timeout: 5000 });
+  }
+
+  // The launcher can render before main.ts has finished registering its
+  // desktop:setRoute listener. Wait for the renderer's explicit readiness
+  // marker so the first command after onboarding is never dropped.
+  await page.waitForFunction(
+    () => document.body.dataset.desktopReady === 'true',
+    undefined,
+    { timeout: 10_000 },
+  );
+}
+
+export type DesktopRoute = 'main' | 'progress' | 'settings' | 'logs';
+
+/**
+ * Send a legacy `desktop:setRoute` IPC message through the task-centric shell
+ * and wait until the route is fully applied. Main and progress keep the
+ * permanent conversation surface; Settings and Logs activate their
+ * corresponding right-workbench tabs. The wait asserts both the route marker
+ * and the target surface so callers never race the first frame.
+ */
+export async function setRoute(
+  launched: LaunchedApp,
+  route: DesktopRoute,
+): Promise<void> {
+  await launched.page.evaluate((next) => {
+    window.postMessage({ command: 'desktop:setRoute', route: next }, '*');
+  }, route);
+  await launched.page.waitForFunction(
+    (targetRoute) => {
+      if (document.body.dataset.desktopRoute !== targetRoute) return false;
+      const shell = document.querySelector<HTMLElement>('.task-shell');
+      if (!shell) return false;
+      switch (targetRoute) {
+        case 'main':
+        case 'progress': {
+          const pane = document.querySelector<HTMLElement>(
+            '.task-conversation-pane[data-pane="launcher"]',
+          );
+          return pane != null && pane.hidden === false;
+        }
+        case 'settings': {
+          const tab = document.querySelector<HTMLElement>(
+            '.task-workbench-tab[data-kind="settings"][data-active="true"]',
+          );
+          const settings = document.querySelector<HTMLElement>(
+            '.task-workbench-surface settings-app[data-desktop-view="settings"]',
+          );
+          return (
+            shell.dataset.workbenchOpen === 'true' &&
+            tab != null &&
+            settings != null
+          );
+        }
+        case 'logs': {
+          const tab = document.querySelector<HTMLElement>(
+            '.task-workbench-tab[data-kind="logs"][data-active="true"]',
+          );
+          const logs = document.querySelector<HTMLElement>(
+            '.task-workbench-surface [data-desktop-view="logs"]',
+          );
+          return (
+            shell.dataset.workbenchOpen === 'true' &&
+            tab != null &&
+            logs != null
+          );
+        }
+        default:
+          return true;
+      }
+    },
+    route,
+    { timeout: 5000 },
+  );
+}
+
+/**
+ * Route to Settings and activate the tab at `tabIndex`, waiting for the
+ * settings-app shadow root to mount so the target panel can be inspected.
+ */
+export async function setSettingsTab(
+  launched: LaunchedApp,
+  tabIndex: number,
+): Promise<void> {
+  await setRoute(launched, 'settings');
+  await launched.page.evaluate((idx) => {
+    window.postMessage({ command: 'setTab', tabIndex: idx }, '*');
+  }, tabIndex);
+  await launched.page.waitForFunction(
+    () => {
+      const settingsApp = document.querySelector('settings-app');
+      return settingsApp?.shadowRoot != null;
+    },
+    undefined,
+    { timeout: 10_000 },
+  );
 }

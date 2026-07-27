@@ -15,15 +15,19 @@ import {
   dispatchCommandFromRegistry,
   type CommandHandler,
 } from '@shared/commands/registry';
+import type { TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 import type { MenuItemConstructorOptions } from 'electron';
 
 import type { DesktopRoute } from './desktopShellMessages.js';
 
 export const DESKTOP_LOCAL_COMMANDS = {
   SHOW_LOGS: 'texra.desktop.showLogs',
+  TOGGLE_BOTTOM_BAR: 'texra.desktop.toggleBottomBar',
+  TOGGLE_SIDE_PANEL: 'texra.desktop.toggleSidePanel',
+  TOGGLE_SUMMARY_BAR: 'texra.desktop.toggleSummaryBar',
   OPEN_LOG_FOLDER: 'texra.desktop.openLogFolder',
   OPEN_WORKSPACE_FOLDER: 'texra.desktop.openWorkspaceFolder',
-  OPEN_WORKSPACE_IN_NEW_WINDOW: 'texra.desktop.openWorkspaceInNewWindow',
+  SAVE_FILE: 'texra.desktop.saveFile',
   SHOW_FIRST_RUN_WALKTHROUGH: 'texra.desktop.showFirstRunWalkthrough',
   OPEN_DESKTOP_DOCS: 'texra.desktop.openDesktopDocs',
 } as const;
@@ -40,6 +44,9 @@ const DESKTOP_MENU_GROUPS = [
     DESKTOP_LOCAL_COMMANDS.SHOW_LOGS,
     DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER,
     'texra.openSettings',
+    DESKTOP_LOCAL_COMMANDS.TOGGLE_SUMMARY_BAR,
+    DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR,
+    DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL,
     'texra.mainView.reset',
   ],
   [
@@ -62,8 +69,8 @@ const DESKTOP_MENU_GROUPS = [
 )[])[];
 
 const DESKTOP_FILE_COMMANDS = [
+  DESKTOP_LOCAL_COMMANDS.SAVE_FILE,
   DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
-  DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_IN_NEW_WINDOW,
 ] as const satisfies readonly DesktopLocalCommandId[];
 
 const DESKTOP_HELP_COMMANDS = [
@@ -83,10 +90,40 @@ export const DESKTOP_COMMAND_IDS: readonly DesktopCommandId[] = [
   ...DESKTOP_HELP_COMMANDS,
 ];
 
+const DESKTOP_COMMAND_ICONS = {
+  [DESKTOP_LOCAL_COMMANDS.SAVE_FILE]: 'floppy-disk',
+  [DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER]: 'folder-open',
+  'texra.showMainView': 'pencil',
+  'texra.showProgressView': 'eye',
+  [DESKTOP_LOCAL_COMMANDS.SHOW_LOGS]: 'file-lines',
+  [DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER]: 'folder',
+  'texra.openSettings': 'gear',
+  [DESKTOP_LOCAL_COMMANDS.TOGGLE_SUMMARY_BAR]: 'list-ul',
+  [DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR]: 'window-maximize',
+  [DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL]: 'picture-in-picture',
+  'texra.mainView.reset': 'file-circle-plus',
+  'texra.execute': 'play',
+  'texra.runSetupAssistant': 'rocket',
+  'texra.showImportOptions': 'download',
+  'texra.showMemory': 'database',
+  'texra.showAgentHistory': 'clock-rotate-left',
+  'texra.showModels': 'server',
+  'texra.showAgents': 'robot',
+  'texra.showTools': 'screwdriver-wrench',
+  'texra.showMultiAgent': 'diagram-project',
+  'texra.showGitSettings': 'code-branch',
+  'texra.openGettingStarted': 'graduation-cap',
+  'texra.cleanOutput': 'eraser',
+  'texra.cleanBuild': 'trash',
+  [DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH]: 'users',
+  [DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS]: 'book',
+} as const satisfies Record<DesktopCommandId, TeXRAIconName>;
+
 export interface DesktopCommandMenuEntry {
   id: DesktopCommandId;
   label: string;
   category: string;
+  icon: TeXRAIconName;
   accelerator?: string;
   enabled: boolean;
   unavailableReason?: string;
@@ -108,9 +145,12 @@ export interface DesktopCommandActions {
   openDesktopDocs?(): void;
   openLogFolder?(): void;
   openWorkspaceFolder?(): void;
-  openWorkspaceInNewWindow?(): void;
+  saveFile?(): void;
   showFirstRunWalkthrough?(): void;
   resetMainView?(): void;
+  toggleBottomBar?(): void;
+  toggleSidePanel?(): void;
+  toggleSummaryBar?(): void;
 }
 
 export interface DesktopSettingsTabMessage {
@@ -127,8 +167,18 @@ export interface DesktopMainViewResetMessage {
 
 const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
   DesktopLocalCommandId,
-  DesktopCommandMenuEntry
+  Omit<DesktopCommandMenuEntry, 'icon'>
 >([
+  [
+    DESKTOP_LOCAL_COMMANDS.SAVE_FILE,
+    {
+      id: DESKTOP_LOCAL_COMMANDS.SAVE_FILE,
+      label: 'Save',
+      category: 'File',
+      accelerator: 'CommandOrControl+S',
+      enabled: true,
+    },
+  ],
   [
     DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS,
     {
@@ -148,22 +198,42 @@ const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
     },
   ],
   [
+    DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR,
+    {
+      id: DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR,
+      label: 'Toggle Bottom Bar',
+      category: 'View',
+      accelerator: 'CommandOrControl+J',
+      enabled: true,
+    },
+  ],
+  [
+    DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL,
+    {
+      id: DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL,
+      label: 'Toggle Side Panel',
+      category: 'View',
+      accelerator: 'CommandOrControl+Alt+B',
+      enabled: true,
+    },
+  ],
+  [
+    DESKTOP_LOCAL_COMMANDS.TOGGLE_SUMMARY_BAR,
+    {
+      id: DESKTOP_LOCAL_COMMANDS.TOGGLE_SUMMARY_BAR,
+      label: 'Toggle Summary Bar',
+      category: 'View',
+      accelerator: 'CommandOrControl+Alt+S',
+      enabled: true,
+    },
+  ],
+  [
     DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
     {
       id: DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
       label: 'Open Folder',
       category: 'File',
       accelerator: 'CommandOrControl+O',
-      enabled: true,
-    },
-  ],
-  [
-    DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_IN_NEW_WINDOW,
-    {
-      id: DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_IN_NEW_WINDOW,
-      label: 'New Window',
-      category: 'File',
-      accelerator: 'CommandOrControl+Shift+N',
       enabled: true,
     },
   ],
@@ -180,7 +250,7 @@ const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
     DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH,
     {
       id: DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH,
-      label: 'Show First-Run Walkthrough',
+      label: 'Show Startup Team Chooser',
       category: 'Help',
       enabled: true,
     },
@@ -233,6 +303,7 @@ export function getDesktopCommandMenuEntries(
       if (!localEntry) throw new Error(`Missing desktop command entry: ${id}`);
       return {
         ...localEntry,
+        icon: DESKTOP_COMMAND_ICONS[id],
         accelerator: toPlatformAccelerator(localEntry.accelerator, platform),
       };
     }
@@ -249,6 +320,7 @@ export function getDesktopCommandMenuEntries(
       id,
       label: entry.shortTitle ?? entry.title,
       category: entry.category,
+      icon: DESKTOP_COMMAND_ICONS[id],
       ...(accelerator && { accelerator }),
       enabled: unavailableReason == null,
       ...(unavailableReason && { unavailableReason }),
@@ -287,6 +359,15 @@ const DESKTOP_COMMAND_HANDLERS = {
   [DESKTOP_LOCAL_COMMANDS.SHOW_LOGS]: requiredAction((a) =>
     a.showRoute('logs'),
   ),
+  [DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR]: optionalAction(
+    (a) => a.toggleBottomBar,
+  ),
+  [DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL]: optionalAction(
+    (a) => a.toggleSidePanel,
+  ),
+  [DESKTOP_LOCAL_COMMANDS.TOGGLE_SUMMARY_BAR]: optionalAction(
+    (a) => a.toggleSummaryBar,
+  ),
   'texra.openSettings': requiredAction((a) => a.showSettings()),
   'texra.mainView.reset': optionalAction((a) => a.resetMainView),
   'texra.showMemory': requiredAction((a) =>
@@ -314,9 +395,7 @@ const DESKTOP_COMMAND_HANDLERS = {
   [DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER]: optionalAction(
     (a) => a.openWorkspaceFolder,
   ),
-  [DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_IN_NEW_WINDOW]: optionalAction(
-    (a) => a.openWorkspaceInNewWindow,
-  ),
+  [DESKTOP_LOCAL_COMMANDS.SAVE_FILE]: optionalAction((a) => a.saveFile),
   [DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH]: optionalAction(
     (a) => a.showFirstRunWalkthrough,
   ),
@@ -392,7 +471,6 @@ export function buildDesktopMenuTemplate(
     if (!entry) throw new Error(`Missing desktop menu entry: ${id}`);
     return {
       label: entry.label,
-      ...(entry.accelerator && { accelerator: entry.accelerator }),
       ...(entry.unavailableReason && { toolTip: entry.unavailableReason }),
       enabled: entry.enabled,
       click: () => {

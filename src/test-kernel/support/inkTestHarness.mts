@@ -141,6 +141,8 @@ export class FakeStdin extends EventEmitter {
 
   ref(): void {}
   unref(): void {}
+  // Unlike real tty.ReadStream, these return void rather than `this` — a
+  // chained call (e.g. `stdin.setRawMode(true).resume()`) will throw here.
   pause(): void {}
   resume(): void {}
   setEncoding(): void {}
