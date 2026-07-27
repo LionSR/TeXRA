@@ -36,7 +36,10 @@ import type {
   ProviderKeyStatus,
   ModelSelectionItem,
 } from '@shared/schemas';
-import type { SpendingStatus } from '@shared/schemas/spendingStatus';
+import type {
+  SpendingStatus,
+  SpendingStatusError,
+} from '@shared/schemas/spendingStatus';
 import {
   type AgentSelectionItem,
   type ClaudeAgentEffort,
@@ -106,7 +109,11 @@ export const tier = trackedSignal(() => 'free');
 export const apiAccessMode = trackedSignal<'included' | 'personal'>(
   () => 'personal',
 );
+export const sessionExpired = trackedSignal(() => false);
 export const spendingStatus = trackedSignal<SpendingStatus | null>(() => null);
+export const spendingStatusError = trackedSignal<SpendingStatusError | null>(
+  () => null,
+);
 export const quotaAutoSwitched = trackedSignal(() => false);
 export const providerKeyStatuses = trackedSignal<ProviderKeyStatus[]>(() => []);
 export const globalStreamingDefault = trackedSignal(() => true);

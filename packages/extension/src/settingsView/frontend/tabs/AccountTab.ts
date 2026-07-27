@@ -14,7 +14,10 @@ import {
   designTokens,
   settingsBannerStyles,
 } from '@shared/styles';
-import type { SpendingStatus } from '@shared/schemas/spendingStatus';
+import type {
+  SpendingStatus,
+  SpendingStatusError,
+} from '@shared/schemas/spendingStatus';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderSettingsBanner } from '@shared/wa/settingsBanner';
 import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
@@ -55,7 +58,10 @@ export class AccountTab extends LitElement {
   @property({ type: Boolean }) authenticated = false;
   @property({ attribute: false }) userEmail = '';
   @property({ attribute: false }) tier = 'free';
+  @property({ type: Boolean }) sessionExpired = false;
   @property({ attribute: false }) spendingStatus: SpendingStatus | null = null;
+  @property({ attribute: false })
+  spendingStatusError: SpendingStatusError | null = null;
   @property({ type: Boolean }) quotaAutoSwitched = false;
   @property({ type: Boolean }) vscodeSettingsAvailable = false;
   @property({ attribute: false }) apiAccessMode: 'included' | 'personal' =
@@ -101,6 +107,24 @@ export class AccountTab extends LitElement {
       `;
     }
     if (this.spendingStatus == null) {
+      if (this.sessionExpired) {
+        return html`
+          <div class="account-empty">
+            Usage data can't load because your session has expired. Sign in
+            again to reconnect.
+          </div>
+        `;
+      }
+      if (this.spendingStatusError != null) {
+        return html`
+          <div class="account-empty">
+            Usage check failed on the server
+            (${this.spendingStatusError.failureReason ?? 'unknown reason'}).
+            Your access still works; usage data will return once the server
+            recovers.
+          </div>
+        `;
+      }
       return html`
         <div class="account-empty">
           Usage data is not available for this account.
@@ -119,12 +143,33 @@ export class AccountTab extends LitElement {
     const title = this.authenticated
       ? this.userEmail || 'TeXRA account'
       : 'TeXRA account';
-    const description = this.authenticated
-      ? html`<span class="account-tier">${this.tier}</span> plan`
-      : 'Sign in to use included access and monitor usage.';
+    const expired = this.authenticated && this.sessionExpired;
+    let description: TemplateResult | string =
+      'Sign in to use included access and monitor usage.';
+    if (expired) {
+      description =
+        'Your session has expired. Sign in again to restore included access and usage data.';
+    } else if (this.authenticated) {
+      description = html`<span class="account-tier">${this.tier}</span> plan`;
+    }
     const actions = this.authenticated
       ? html`
-          <wa-tag variant="success">Connected</wa-tag>
+          ${
+            expired
+              ? html`<wa-tag variant="warning">Session expired</wa-tag>`
+              : html`<wa-tag variant="success">Connected</wa-tag>`
+          }
+          ${
+            expired
+              ? renderLabeledActionButton({
+                  icon: 'user',
+                  text: 'Sign in',
+                  kind: 'primary',
+                  appearance: 'filled',
+                  onClick: this.handleSignIn,
+                })
+              : nothing
+          }
           ${renderLabeledActionButton({
             icon: 'right-from-bracket',
             text: 'Sign out',

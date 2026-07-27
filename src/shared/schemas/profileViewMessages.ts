@@ -10,7 +10,10 @@ import { PROFILE_VIEW_COMMANDS } from '@shared/ipc';
 import { ProviderVscodeSettingDefSchema } from '@shared/constants/providers';
 import { AgentMetadataBaseSchema } from './agent';
 import { commandOnly } from './messageFactories';
-import { SpendingStatusSchema } from './spendingStatus';
+import {
+  SpendingStatusErrorSchema,
+  SpendingStatusSchema,
+} from './spendingStatus';
 
 // ============================================================
 // Data schemas
@@ -105,7 +108,13 @@ export const UpdateProfileMessageSchema = z.object({
   apiAccessMode: ApiAccessModeSchema,
   tierConstants: TierConstantsSchema,
   accessExpiresAt: z.string().nullish(),
+  /**
+   * True when a stored session exists but its refresh is dead (relay access
+   * token unavailable) — the UI should prompt a re-sign-in, not say Connected.
+   */
+  sessionExpired: z.boolean().prefault(false),
   spendingStatus: SpendingStatusSchema.nullish(),
+  spendingStatusError: SpendingStatusErrorSchema.nullish(),
   quotaAutoSwitched: z.boolean().prefault(false),
   providerKeyStatuses: z.array(ProviderKeyStatusSchema).prefault([]),
   globalStreamingDefault: z.boolean().prefault(true),
