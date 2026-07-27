@@ -99,6 +99,8 @@ export interface WorkflowScriptStrategyParams {
    * on while the run is in flight, so a host can target a focused grandchild.
    */
   readonly workflowControls: WorkflowControlRegistry;
+  /** False when a headless caller awaits and returns the persisted report itself. */
+  readonly deliverToParent?: boolean;
   /**
    * Build the `agent()` adapter bound to the run's ancestry, wired to the
    * supplied per-live-child cost hook so delta accounting stays local to this
@@ -131,6 +133,9 @@ export function createWorkflowScriptStrategy(
 
   return {
     stageLabel: `Workflow script '${params.name}'`,
+    ...(params.deliverToParent === false && {
+      resolveDeliveryTarget: () => undefined,
+    }),
 
     launch: async (ports, abortController) => {
       // The stable child runner's native cost callback fires only for work

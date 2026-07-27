@@ -19,7 +19,11 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import { startChildRunLoop } from '@agent/runtime/childRunLoop';
 import { getCurrentToolContexts } from '@agent/followUp/ToolFileInteractionContext';
-import { AgentCategory, type StreamTabId } from '@shared/schemas';
+import {
+  AgentCategory,
+  EXECUTION_STATUS,
+  type StreamTabId,
+} from '@shared/schemas';
 import { WorkflowScriptFilesSchema } from '@shared/schemas/workflowScriptFiles';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME } from '@shared/constants/delegationTools';
@@ -34,6 +38,7 @@ import { deriveExecutionId } from '@utils/core/idHash';
 import { createWorkflowScriptAgentRunner } from './workflowScriptAgentRunner';
 import { createWorkflowScriptStrategy } from './workflowScriptStrategy';
 import { rejectOversizedBibAttachments } from './inputFields';
+import { requireVisibleAgent } from './proposalFlow';
 import { assertWorkflowFilesExist } from './workflowFileValidation';
 
 const WorkflowScriptToolInputSchema = z.strictObject({
@@ -105,6 +110,11 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
     }
     const { runContext: parent, callContext } = contexts;
     const { runScope } = parent;
+    const defaultAgent = requireVisibleAgent(
+      AgentCategory.Workflow,
+      input.agent,
+      runScope.delegationAgentScope ?? undefined,
+    );
 
     // Named checkpoint, not content- or toolCallId-keyed: a retrying model
     // rewrites its script, so any key derived from call identity or source
@@ -114,7 +124,7 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
     const { meta } = parseWorkflowScript(input.script);
     const checkpointId = deriveWorkflowScriptCheckpointId({
       name: meta.name,
-      defaultAgent: input.agent,
+      defaultAgent: defaultAgent.name,
       parentExecutionId: runScope.executionId,
     });
     const store = getExecutionStore(runScope.executionId);
@@ -152,7 +162,8 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
     };
 
     const runConfigPayload: AgentConfigPayload = {
-      agent: input.agent,
+      agent: defaultAgent.name,
+      agentSource: defaultAgent.source,
       agentCategory: AgentCategory.Workflow,
       model: parent.model ?? DEFAULT_AGENT_MODEL,
       instruction: `Workflow script '${meta.name}'`,
@@ -200,6 +211,7 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
       // duplicate stream tab) must release the lease — otherwise the lease
       // survives to its heartbeat timeout and a prompt relaunch is refused.
       let runChildStreamId: StreamTabId;
+      let runCompletion: Promise<void>;
       try {
         const childStream = createChildStream(
           runExecutionId,
@@ -226,7 +238,7 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
           runScope.session,
         );
 
-        startChildRunLoop({
+        runCompletion = startChildRunLoop({
           childStream,
           childStreamId: runChildStreamId,
           parentStreamId: runScope.streamId,
@@ -242,22 +254,48 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
             files,
             name: meta.name,
             workflowControls: runScope.session.workflowControls,
+            deliverToParent: parent.stopAfterCycle !== true,
             createRunAgent: (hooks) =>
               createWorkflowScriptAgentRunner(
                 parent,
-                input.agent,
+                defaultAgent,
                 checkpointId,
                 { executionId: runExecutionId, streamId: runChildStreamId },
                 hooks,
               ),
           }),
           recordCost,
-        });
+        }).completion;
       } catch (error) {
         throw await releaseOwnedExecutionLeaseAfterFailure(
           runExecutionId,
           error,
         );
+      }
+
+      if (parent.stopAfterCycle) {
+        await runCompletion;
+        const [report, runMeta] = await Promise.all([
+          getExecutionStore(runExecutionId).readReport(),
+          getExecutionStore(runExecutionId).readMeta(),
+        ]);
+        if (!report) {
+          throw new Error(
+            `Workflow script '${meta.name}' completed without a persisted report.`,
+          );
+        }
+        if (runMeta?.terminalStatus !== EXECUTION_STATUS.COMPLETED) {
+          return {
+            status: 'error',
+            summary: `Workflow script '${meta.name}' failed`,
+            error: report,
+          };
+        }
+        return {
+          status: 'executed',
+          summary: `Completed workflow script '${meta.name}'`,
+          output: report,
+        };
       }
 
       return {

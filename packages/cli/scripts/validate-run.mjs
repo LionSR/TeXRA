@@ -3,8 +3,10 @@
 import {
   chmodSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   realpathSync,
   rmSync,
   statSync,
@@ -106,6 +108,17 @@ function assertSuccess(result, label) {
     result.status === 0,
     `${label} failed with exit ${result.status}${result.signal ? ` signal ${result.signal}` : ''}${result.error ? ` error ${result.error}` : ''}\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
   );
+}
+
+function readNamedFiles(root, name) {
+  if (!existsSync(root)) return [];
+  return readdirSync(root, { withFileTypes: true }).flatMap((entry) => {
+    const entryPath = path.join(root, entry.name);
+    if (entry.isDirectory()) return readNamedFiles(entryPath, name);
+    return entry.isFile() && entry.name === name
+      ? [readFileSync(entryPath, 'utf8')]
+      : [];
+  });
 }
 
 function assertUsageError(result, label, expectedText) {
@@ -942,6 +955,102 @@ function validateToolUseAgentRunCommand() {
   }
 }
 
+function validateWorkflowScriptAgentRunCommand() {
+  const cwd = mkdtempSync(
+    path.join(tmpdir(), 'texra-cli-workflow-script-run-'),
+  );
+  try {
+    const home = path.join(cwd, 'home');
+    const globalStorage = path.join(home, '.texra', 'global-storage');
+    const customAgents = path.join(globalStorage, 'custom_agents');
+    const validationFlagPath = path.join(
+      cwd,
+      '.texra-internal-validation-model-handler',
+    );
+    mkdirSync(customAgents, { recursive: true });
+    writeFileSync(
+      path.join(globalStorage, 'state.json'),
+      JSON.stringify({
+        'texra.cli.bundledAgents.lastKnownVersion': 'validation',
+      }),
+    );
+    writeFileSync(
+      path.join(customAgents, 'workflow-script-validation.yaml'),
+      `name: workflow_script_validation
+description: Exercise workflow-script dispatch from the headless CLI.
+
+settings:
+  agentCategory: toolUse
+  tools:
+    - delegate_workflow_script
+
+prompts:
+  systemPrompt: |
+    Call the requested workflow script exactly once, then finish.
+  userRequest: |
+    {{ INSTRUCTION }}
+`,
+    );
+    writeFileSync(validationFlagPath, validationFlagContent);
+
+    const result = run(
+      process.execPath,
+      [
+        binaryPath,
+        'agents',
+        'run',
+        'workflow_script_validation',
+        '--model',
+        'gpt56',
+        '--instruction',
+        'Solve the validation problems through workflow-script dispatch.',
+        '--cwd',
+        cwd,
+        '--approval-policy',
+        'never',
+        '--output-format',
+        'ndjson',
+        '--print',
+      ],
+      {
+        cwd: repoRoot,
+        validationModel: true,
+        validationFlagPath,
+        env: isolatedCliHomeEnv(home, {
+          TEXRA_INTERNAL_VALIDATE_WORKFLOW_SCRIPT: '1',
+        }),
+      },
+    );
+    assertSuccess(result, 'texra agents run workflow script NDJSON');
+    const records = parseNdjson(result.stdout, 'workflow-script run NDJSON');
+    const workflowCompletedIndex = records.findIndex(
+      (record) =>
+        record.kind === 'progress' &&
+        record.event === 'updateStreamStatus' &&
+        record.payload?.streamId?.startsWith('workflow-script#') &&
+        record.payload?.status === 'completed',
+    );
+    const parentResultIndex = records.findIndex(
+      (record) => record.kind === 'agent-result',
+    );
+    assert(
+      workflowCompletedIndex >= 0 && parentResultIndex > workflowCompletedIndex,
+      'workflow-script run should wait for and return the terminal child report to the headless parent',
+    );
+    const reports = readNamedFiles(home, 'report.json').join('\n');
+    assert(
+      reports.includes('<workflow-script-result'),
+      'workflow-script run should persist its terminal child report',
+    );
+    assert(
+      reports.includes('det(I+A)=4') && reports.includes('1/4'),
+      'workflow-script run should contain all structured mathematical results',
+    );
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+}
+
 function validateMultiAgentRunCommand() {
   const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-multi-agent-run-'));
   // This preset has a local built-in delegating root; relay-only teams such as
@@ -1070,6 +1179,7 @@ async function validateCliRunArtifacts(options = {}) {
   await validateOrchestrateOnboardingPickers();
   validateRunCommand();
   validateToolUseAgentRunCommand();
+  validateWorkflowScriptAgentRunCommand();
   validateMultiAgentRunCommand();
   console.log('CLI run validation passed');
 }

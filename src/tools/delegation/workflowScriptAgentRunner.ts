@@ -5,6 +5,7 @@ import {
   type WorkflowAgentInvocation,
   type WorkflowAgentRunner,
 } from '@agent/workflowScript';
+import type { AgentEntry } from '@agent/index/agentRegistry';
 import type { LaunchRunContext } from '@agent/runtime/RunContext';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { formatError } from '@common/errors';
@@ -122,7 +123,7 @@ export interface WorkflowRunIdentity {
 /** Build the production `agent()` adapter for one workflow-script run. */
 export function createWorkflowScriptAgentRunner(
   parent: LaunchRunContext,
-  defaultAgentName: string,
+  defaultAgent: AgentEntry,
   checkpointId: string,
   run: WorkflowRunIdentity,
   hooks?: {
@@ -201,11 +202,14 @@ export function createWorkflowScriptAgentRunner(
               outputSchema: invocation.options.schema,
             };
           } else {
-            const agent = requireVisibleAgent(
-              AgentCategory.Workflow,
-              invocation.options.agentName ?? defaultAgentName,
-              runScope.delegationAgentScope ?? undefined,
-            );
+            const agent =
+              invocation.options.agentName === undefined
+                ? defaultAgent
+                : requireVisibleAgent(
+                    AgentCategory.Workflow,
+                    invocation.options.agentName,
+                    runScope.delegationAgentScope ?? undefined,
+                  );
             // Model resolves before any file I/O so an unavailable/invalid
             // declared model fails the call without touching the filesystem.
             const model = await workflowScriptModelSelection(

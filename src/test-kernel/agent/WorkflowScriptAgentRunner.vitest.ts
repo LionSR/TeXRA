@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { WorkflowAgentInvocation } from '@agent/workflowScript';
+import type { AgentEntry } from '@agent/index/agentRegistry';
 import type { LaunchRunContext } from '@agent/runtime/RunContext';
 import type { AgentFinalResult } from '@agent/runtime/AgentFinalResult';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
@@ -75,6 +76,12 @@ const parentStreamId = 'stream:workflow-script' as StreamTabId;
 const runExecutionId = 'run0run0run0' as ExecutionId;
 const runStreamId = 'workflow-script#run0run0run0' as StreamTabId;
 const run = { executionId: runExecutionId, streamId: runStreamId };
+const defaultAgent = {
+  name: 'correct',
+  source: 'builtInWorkflow',
+  category: 'workflow',
+  path: '/agents/correct.yml',
+} as AgentEntry;
 const result: AgentFinalResult = {
   category: 'workflow',
   outcome: 'completed',
@@ -120,7 +127,7 @@ function defaultRunner(
 ): ReturnType<typeof createWorkflowScriptAgentRunner> {
   return createWorkflowScriptAgentRunner(
     parentContext(),
-    'correct',
+    defaultAgent,
     'tool-call-7',
     run,
     hooks,
@@ -171,14 +178,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     const runner = defaultRunner();
 
     await expect(runner(call)).resolves.toBe(result);
-    expect(mocks.requireVisibleAgent).toHaveBeenCalledWith(
-      'workflow',
-      'correct',
-      {
-        workflowAgentKeys: ['builtInWorkflow:correct'],
-        toolUseAgentKeys: ['builtInToolUse:assistant'],
-      },
-    );
+    expect(mocks.requireVisibleAgent).not.toHaveBeenCalled();
     expect(mocks.assertWorkflowFilesExist).toHaveBeenCalledWith([
       { label: 'Input file', files: ['paper.tex'] },
     ]);
@@ -340,6 +340,14 @@ describe('createWorkflowScriptAgentRunner', () => {
       }),
     );
 
+    expect(mocks.requireVisibleAgent).toHaveBeenCalledWith(
+      'workflow',
+      'merge',
+      {
+        workflowAgentKeys: ['builtInWorkflow:correct'],
+        toolUseAgentKeys: ['builtInToolUse:assistant'],
+      },
+    );
     expect(mocks.resolveChildRunOutput).toHaveBeenNthCalledWith(
       1,
       runExecutionId,
@@ -520,14 +528,12 @@ describe('createWorkflowScriptAgentRunner', () => {
   });
 
   it('allows empty input files when the agent declares default outputs', async () => {
-    mocks.requireVisibleAgent.mockImplementation((_category, name) => ({
-      name,
-      source: 'builtInWorkflow',
-      category: 'workflow',
-      path: `/agents/${name}.yml`,
-      defaultOutputFiles: ['generated.tex'],
-    }));
-    const runner = defaultRunner();
+    const runner = createWorkflowScriptAgentRunner(
+      parentContext(),
+      { ...defaultAgent, defaultOutputFiles: ['generated.tex'] },
+      'tool-call-7',
+      run,
+    );
 
     await expect(runner(invocation({}))).resolves.toBe(result);
   });

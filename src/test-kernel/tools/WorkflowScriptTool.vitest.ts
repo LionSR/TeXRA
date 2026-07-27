@@ -12,7 +12,11 @@ import { ExecutionLeaseActiveError } from '@agent/storage/executionLease';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
 import type { LaunchRunContext } from '@agent/runtime/RunContext';
 import { withRunContext } from '@agent/runtime/RunContext';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import {
+  EXECUTION_STATUS,
+  type ExecutionId,
+  type StreamTabId,
+} from '@shared/schemas';
 import type { WorkflowScriptFiles } from '@shared/schemas/workflowScriptFiles';
 import {
   DELEGATION_AVAILABILITY_CATEGORY,
@@ -29,6 +33,7 @@ const mocks = vi.hoisted(() => ({
   startChildRunLoop: vi.fn(),
   createChildStream: vi.fn(),
   configureDelegatedChildApprovals: vi.fn(),
+  requireVisibleAgent: vi.fn(),
 }));
 
 // Spread the real storage module so `getExecutionStore` stays authentic;
@@ -59,6 +64,11 @@ vi.mock('@tools/approval', () => ({
   configureDelegatedChildApprovals: mocks.configureDelegatedChildApprovals,
 }));
 
+vi.mock('@tools/delegation/proposalFlow', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@tools/delegation/proposalFlow')>()),
+  requireVisibleAgent: mocks.requireVisibleAgent,
+}));
+
 import { WorkflowScriptTool } from '@tools/delegation/WorkflowScriptTool';
 import { getDefaultToolRegistry } from '@tools/registry';
 
@@ -70,10 +80,11 @@ const script = `export const meta = {
 }
 return await agent('saved call')`;
 
-function parentContext(): LaunchRunContext {
+function parentContext(stopAfterCycle = false): LaunchRunContext {
   return {
     kind: 'launch',
     model: 'parent-model',
+    stopAfterCycle,
     runScope: {
       executionId,
       streamId,
@@ -98,8 +109,13 @@ function runExecutionIdFor(name: string): ExecutionId {
   return deriveExecutionId({ checkpointId: checkpointIdFor(name) });
 }
 
-async function callTool(overrideScript?: string, files?: WorkflowScriptFiles) {
-  return withRunContext(parentContext(), () =>
+async function callTool(
+  overrideScript?: string,
+  files?: WorkflowScriptFiles,
+  agent = 'correct',
+  stopAfterCycle = false,
+) {
+  return withRunContext(parentContext(stopAfterCycle), () =>
     withToolFileInteractionContext(
       {
         tracker: {} as never,
@@ -109,7 +125,7 @@ async function callTool(overrideScript?: string, files?: WorkflowScriptFiles) {
       },
       () =>
         new WorkflowScriptTool().call({
-          agent: 'correct',
+          agent,
           script: overrideScript ?? script,
           ...(files ? { files } : {}),
         }),
@@ -124,6 +140,22 @@ beforeEach(async () => {
   await WorkspaceFS.write('references.bib', '@book{example}');
   await WorkspaceFS.write('figure.pdf', 'pdf');
   mocks.registerExecution.mockResolvedValue(undefined);
+  mocks.startChildRunLoop.mockReturnValue({
+    completion: Promise.resolve(),
+  });
+  mocks.requireVisibleAgent.mockImplementation((_category, name) => {
+    if (name === 'missing-agent') {
+      throw new Error(
+        "Unknown workflow agent 'missing-agent'. Available: correct",
+      );
+    }
+    return {
+      name,
+      source: 'builtInWorkflow',
+      category: 'workflow',
+      path: `/agents/${name}.yaml`,
+    };
+  });
   mocks.createChildStream.mockImplementation((runId: ExecutionId): unknown => ({
     childStreamId: `workflow-script#${runId}` as StreamTabId,
     logger: new TraceEmitter(),
@@ -203,7 +235,11 @@ describe('WorkflowScriptTool', () => {
     // still works (#8712).
     expect(mocks.registerExecution).toHaveBeenCalledWith(
       runExecutionId,
-      expect.objectContaining({ agentCategory: 'workflow', agent: 'correct' }),
+      expect.objectContaining({
+        agentCategory: 'workflow',
+        agent: 'correct',
+        agentSource: 'builtInWorkflow',
+      }),
       'tool-test',
       executionId,
     );
@@ -248,6 +284,39 @@ describe('WorkflowScriptTool', () => {
     });
     expect(result.output).toContain(`Execution ID: ${runExecutionId}`);
     expect(result.output).toContain('same meta.name');
+  });
+
+  it('waits for the workflow report in a one-cycle headless run', async () => {
+    const runExecutionId = runExecutionIdFor('tool-test');
+    const store = getExecutionStore(runExecutionId);
+    vi.spyOn(store, 'readReport').mockResolvedValue(
+      '<workflow-script-result>solved</workflow-script-result>',
+    );
+    vi.spyOn(store, 'readMeta').mockResolvedValue({
+      terminalStatus: EXECUTION_STATUS.COMPLETED,
+    } as never);
+
+    const result = await callTool(undefined, undefined, 'correct', true);
+
+    const loopParams = mocks.startChildRunLoop.mock.calls[0]?.[0];
+    expect(loopParams.strategy.resolveDeliveryTarget()).toBeUndefined();
+    expect(result).toMatchObject({
+      status: 'executed',
+      summary: "Completed workflow script 'tool-test'",
+      output: '<workflow-script-result>solved</workflow-script-result>',
+    });
+  });
+
+  it('rejects an unknown default agent before registering a detached run', async () => {
+    const result = await callTool(undefined, undefined, 'missing-agent');
+
+    expect(result).toMatchObject({
+      status: 'error',
+      error: expect.stringContaining("Unknown workflow agent 'missing-agent'"),
+    });
+    expect(mocks.registerExecution).not.toHaveBeenCalled();
+    expect(mocks.createChildStream).not.toHaveBeenCalled();
+    expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
   });
 
   it('validates and persists files bound to the workflow run', async () => {

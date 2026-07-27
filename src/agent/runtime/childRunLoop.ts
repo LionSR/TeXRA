@@ -208,6 +208,11 @@ export interface ChildRunLoopParams<TTurn> {
   readonly recordCost?: (totalCostUsd: number | undefined) => void;
 }
 
+export interface ChildRunLoopHandle {
+  /** Settles after terminal delivery, finalization, and artifact release. */
+  readonly completion: Promise<void>;
+}
+
 /**
  * Interrupt handler attached to the child's execution handle for the child's
  * whole lifetime, so the stop button always finds a live target — including
@@ -499,7 +504,7 @@ export function isChildRunLoopActive(streamId: StreamTabId): boolean {
  */
 export function startChildRunLoop<TTurn>(
   params: ChildRunLoopParams<TTurn>,
-): void {
+): ChildRunLoopHandle {
   const {
     childStream,
     childStreamId,
@@ -617,7 +622,7 @@ export function startChildRunLoop<TTurn>(
   // (#8093). Interim (non-terminal) turns wake inline, immediately, since no
   // finalize is pending for them.
   let pendingDelivery: PendingChildDelivery | undefined;
-  void runWithOwnedExecutionLease(executionId, async () => {
+  const run = async (): Promise<void> => {
     let runner: (ac: AbortController) => Promise<TTurn> = (ac) =>
       strategy.launch(ports, ac);
     try {
@@ -807,5 +812,9 @@ export function startChildRunLoop<TTurn>(
         }
       }
     }
-  });
+  };
+  const completion = Promise.resolve(
+    runWithOwnedExecutionLease(executionId, run),
+  );
+  return { completion };
 }
