@@ -507,6 +507,62 @@ readers, and `setApprovalBypassState` — is optional
 forces you to write `{ cancel: … }` — the trap is not a badly-typed object, it
 is **never calling `useHostInteractions` at all**, which no type can catch.
 
+### The headless embedder contract (issue #9256)
+
+Issue #9256 asked what a session should do when no interaction host is ever
+attached at all. The ruling: **no runtime semantic change.** Parking (above)
+stays — it is what lets a desktop per-window reattach pick up a request that
+parked before it attached — and the runtime installs no default attachment.
+Instead, the ruling names the mechanism above as the contract: attach at
+least `{ cancel: () => {} }`, and use `approvalPromptsUnavailable: true` to
+remove the most common case that is reachable without any attachment at all
+(a headless run without `approvalPromptsUnavailable` can also reach
+`requestRetry` without an attachment; both gaps are closed by the flag).
+
+**`approvalPromptsUnavailable: true` is the real headless answer for that
+case**, not merely a partial mitigation: an agent that cannot be asked simply
+is not given the tools that require asking, which is a defined, loud
+degradation instead of a hang. Trace the wiring end to end:
+
+- `executeAgent` threads `options.approvalPromptsUnavailable` into the run
+  context on both a fresh launch and a resume
+  (`src/agent/runtime/executeAgent.ts:392-396`, `:547-550`).
+- The tool-use flow reads it back off the run context and forwards it to tool
+  resolution (`src/agent/implementations/flows/tooluse/runToolUseFlow.ts:199`).
+- `resolveAgentTools`'s shared gate drops any tool with
+  `requiresApproval: true` once the flag is set, before the model ever sees it
+  in its tool list (`src/agent/runtime/agentToolResolution.ts:150-157`).
+
+The worked example is the CLI's own headless path: it derives the flag from
+policy and mode (`packages/cli/src/runtime/approvalPolicyAvailability.ts:8-14`)
+and passes it straight into the real `runAgent` call
+(`packages/cli/src/runtime/runExecution.ts:264`). As the "Escape hatches"
+note above says, the flag does not touch `requestRetry` or `askUserQuestion`
+dispatch — it only narrows which tools can raise the approval kinds that were
+the reachable hang.
+
+**The diagnostic for getting it wrong anyway:** #9225 made an unattached
+`dispatch` log a warning before returning, naming the parked request kind and
+stream and prescribing the `{ cancel: () => {} }` minimum
+(`src/agent/runtime/HostInteractions.ts:654-659` calls `warnParked`, defined
+at `:685-696`).
+
+**Why there is no runtime default.** `activeAttachment` is the most recently
+attached host (`this.attachments.at(-1)`,
+`src/agent/runtime/HostInteractions.ts:573-575`); detaching reactivates
+whatever is left, or re-parks anything still pending if nothing is
+(`:381-389`, `:603-626`). A permanent default-denier occupying that stack
+would instead settle every live approval the instant the real host detached —
+and desktop attaches and detaches per window, one `DesktopProgressBridge`
+per `BrowserWindow` calling `useHostInteractions` on the one process-owned
+session and disposing it on close
+(`packages/desktop/src/main/desktopAgentExecution.ts:420-429`;
+`packages/desktop/src/main/index.ts:583-621`). Closing one window would
+silently deny a pending tool-edit diff. A latch that auto-denies before any
+host has ever attached fares no better: the runtime cannot know whether a
+UI is coming; the caller can, and `approvalPromptsUnavailable` is how it
+says so.
+
 ---
 
 ## 4. What degrades gracefully (safe to skip)
