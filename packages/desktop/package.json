@@ -24,12 +24,12 @@
     "test:e2e": "playwright test"
   },
   "devDependencies": {
-    "@playwright/test": "^1.61.1",
+    "@playwright/test": "^1.62.0",
     "@types/semver": "^7.7.1",
     "electron": "^43.2.0",
     "electron-builder": "^26.15.3",
     "esbuild": "^0.28.1",
-    "playwright": "^1.61.1",
+    "playwright": "^1.62.0",
     "typescript": "^6.0.3",
     "vite": "^8.1.5"
   },
