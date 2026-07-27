@@ -15,11 +15,6 @@ import {
   defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import {
-  SessionStores,
-  type DeleteAllStreamsResult,
-  type DeleteStreamResult,
-} from '@agent/runtime/SessionStores';
 import type { StateStore } from '@platform/interfaces';
 import {
   AgentCategoryFilterSchema,
