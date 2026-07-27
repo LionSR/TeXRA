@@ -29,7 +29,7 @@ refactoring is warranted this pass.** The core-shape conclusion every checkpoint
 `-06-26` has reconverged on holds unchanged.
 
 **The one genuinely new fact vs. every prior checkpoint:** the strategic /
-foundation-gap items that earlier passes recorded as *"gated, not applied unattended"*
+foundation-gap items that earlier passes recorded as _"gated, not applied unattended"_
 are **no longer purely deferred**. A large fraction of the `-07-26` foundation-gap §6
 absorption sequence and §7 acceptance criteria **landed in reviewed PRs** during the
 142-commit window. Prior checkpoints could only say "recorded, not applied"; this one
@@ -58,19 +58,19 @@ system working as the `-07-22` lesson intended.
 
 Verified present at HEAD (commit refs from `git log 5fc03f9..HEAD`):
 
-| Foundation-gap item | Landed as | Verified at HEAD |
-| --- | --- | --- |
-| §6.1 — declare `runScope` on the flow-services type (kill the ambient `RunContext` erasure) | `b114d5b` (#9267) | `BaseFlowServices.runScope` (`:21`); `CommonCycleTypes`/`ModelInvocationNode`/`RetryState` read `services.runScope`. **Ambient ALS reads inside `core`/`flows` collapsed from 11 → effectively 1** (only `RoundPersistedFlow`'s log-grouping `set`, not a `runScope` read). This was the highest-value single item in the foundation-gap doc. |
-| §6 / §7-row-6 — repair runs when the store opens (closes CLI parity hole) | `3809b6e` (#9273), `ec18ad6` (#9295) | crash-repair now fires on session/stream open; CLI no longer blind. |
-| §7.1 step 1 — delete the 5 producerless `show*` arms | `96831e6` | `runtimeInteractionEvents.ts` **deleted**; 0 `show*` arms in `src/agent/runtime/`. |
-| §7.1 step 2 — one approval-bypass rail | `4279d90` | bypass notifications unified. |
-| §7.1 step 3 — tool-edit prompts become host-local | `8e3d367` (#9272) | `RuntimeInteractionEventPayloads` tool-edit arms gone from runtime. |
-| §7.1 step 4 / row 7 — implement `AgentRuntimeHost.emit`, delete the extension presentation bus | `9a12686` (#9251/#9262) | `emit` implemented on the extension host and `extensionPresentationEvents.ts` **deleted** — verified absent at HEAD; no `presentationEvents`/`PresentationBus` remnants remain. |
-| §7 row 5 — one status rail (13 → 10 apply-sites) | `5007b29` (#9250), `917f7c7` | status collapsed onto one rail via the mechanism the `-07-26` §7 correction prescribed (hub at `StreamStatusMachine` construction), not the disproven guard-drop; `SessionHandleInit.status` seam dropped. |
-| Acceptance row 1 — `SessionHandle` owns its snapshot store | `8ed6ae3` (#9234) | `StreamSnapshotStore` now attached/flushed via `SessionHandle`. |
-| Engine hygiene — move `RoundPersistedFlow` out of the generic node engine | `4f93ae2` (#9238) | done. |
-| Bootstrap — CLI registers agent shutdown handlers | `cdb891c` (#9229) | done. |
-| Cleanup — delete leaky pass-through barrels / dead re-exports / abstraction bypasses | `5bc5789`, `d0398ff` (#9221), `98ead4e` | done. |
+| Foundation-gap item                                                                            | Landed as                               | Verified at HEAD                                                                                                                                                                                                                                                                                                                              |
+| ---------------------------------------------------------------------------------------------- | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| §6.1 — declare `runScope` on the flow-services type (kill the ambient `RunContext` erasure)    | `b114d5b` (#9267)                       | `BaseFlowServices.runScope` (`:21`); `CommonCycleTypes`/`ModelInvocationNode`/`RetryState` read `services.runScope`. **Ambient ALS reads inside `core`/`flows` collapsed from 11 → effectively 1** (only `RoundPersistedFlow`'s log-grouping `set`, not a `runScope` read). This was the highest-value single item in the foundation-gap doc. |
+| §6 / §7-row-6 — repair runs when the store opens (closes CLI parity hole)                      | `3809b6e` (#9273), `ec18ad6` (#9295)    | crash-repair now fires on session/stream open; CLI no longer blind.                                                                                                                                                                                                                                                                           |
+| §7.1 step 1 — delete the 5 producerless `show*` arms                                           | `96831e6`                               | `runtimeInteractionEvents.ts` **deleted**; 0 `show*` arms in `src/agent/runtime/`.                                                                                                                                                                                                                                                            |
+| §7.1 step 2 — one approval-bypass rail                                                         | `4279d90`                               | bypass notifications unified.                                                                                                                                                                                                                                                                                                                 |
+| §7.1 step 3 — tool-edit prompts become host-local                                              | `8e3d367` (#9272)                       | `RuntimeInteractionEventPayloads` tool-edit arms gone from runtime.                                                                                                                                                                                                                                                                           |
+| §7.1 step 4 / row 7 — implement `AgentRuntimeHost.emit`, delete the extension presentation bus | `9a12686` (#9251/#9262)                 | `emit` implemented on the extension host and `extensionPresentationEvents.ts` **deleted** — verified absent at HEAD; no `presentationEvents`/`PresentationBus` remnants remain.                                                                                                                                                               |
+| §7 row 5 — one status rail (13 → 10 apply-sites)                                               | `5007b29` (#9250), `917f7c7`            | status collapsed onto one rail via the mechanism the `-07-26` §7 correction prescribed (hub at `StreamStatusMachine` construction), not the disproven guard-drop; `SessionHandleInit.status` seam dropped.                                                                                                                                    |
+| Acceptance row 1 — `SessionHandle` owns its snapshot store                                     | `8ed6ae3` (#9234)                       | `StreamSnapshotStore` now attached/flushed via `SessionHandle`.                                                                                                                                                                                                                                                                               |
+| Engine hygiene — move `RoundPersistedFlow` out of the generic node engine                      | `4f93ae2` (#9238)                       | done.                                                                                                                                                                                                                                                                                                                                         |
+| Bootstrap — CLI registers agent shutdown handlers                                              | `cdb891c` (#9229)                       | done.                                                                                                                                                                                                                                                                                                                                         |
+| Cleanup — delete leaky pass-through barrels / dead re-exports / abstraction bypasses           | `5bc5789`, `d0398ff` (#9221), `98ead4e` | done.                                                                                                                                                                                                                                                                                                                                         |
 
 Net effect: the interaction-surface redesign (foundation-gap §7.1) and the ambient-context
 erasure (§6.1) — the two items the `-07-26` checkpoint flagged as the highest-value,
@@ -82,7 +82,7 @@ principle now has real teeth rather than being a design on paper.
 None of the landed work touches the product-out-of-runtime split, which the
 foundation-gap §9 correctly names as the ceiling. Re-verified present at HEAD:
 
-1. **Tool registry is still closed — the one place the surface must *grow*.**
+1. **Tool registry is still closed — the one place the surface must _grow_.**
    `IToolRegistry = { get, has }` (`ToolTypes.ts:41-44`), no public `register`; tools
    are hard-coded in `createDefaultTools()` (`src/tools/registry.ts`). An embedder cannot
    add a tool. Unchanged; correctly last on LoC, first on foundation.
@@ -161,5 +161,5 @@ parameter are removed from `AgentLaunchContext.ts`. The "no longer a clean 0 set
 case" framing and the `:459` line-number reference are stale as of the merge commit.
 The checkpoint's broader principle — that unattended passes should not apply structural
 changes without out-of-pass review — is affirmed by this outcome: the change landed
-*only* after re-derivation by a maintainer in an attended PR, which is exactly the
+_only_ after re-derivation by a maintainer in an attended PR, which is exactly the
 safeguard the `-07-22` revert mandated.
