@@ -17,10 +17,15 @@ const mocks = vi.hoisted(() => ({
   registerExecution: vi.fn(),
   tryUseRunContext: vi.fn(),
   getCurrentToolCallContext: vi.fn(),
+  childLoopError: vi.fn(),
 }));
 
 vi.mock('@agent/runtime/childRunLoop', () => ({
   startChildRunLoop: mocks.startChildRunLoop,
+}));
+
+vi.mock('@agent/trace', () => ({
+  createChannelTrace: () => ({ error: mocks.childLoopError }),
 }));
 
 vi.mock('@agent/storage', () => ({
@@ -60,6 +65,9 @@ describe('executeSubagent childStreamId derivation', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.startChildRunLoop.mockReturnValue({
+      completion: Promise.resolve(),
+    });
     mocks.registerExecution.mockResolvedValue(undefined);
     mocks.tryUseRunContext.mockReturnValue({
       executionId: 'parent-exec',
@@ -142,5 +150,30 @@ describe('executeSubagent childStreamId derivation', () => {
         executionId: loopParams.executionId as never,
       }),
     );
+  });
+
+  it('logs a detached run-loop rejection through the runtime trace', async () => {
+    const lateFailure = new Error('late subagent finalization failed');
+    mocks.startChildRunLoop.mockReturnValue({
+      completion: Promise.reject(lateFailure),
+    });
+
+    await expect(
+      executeSubagent(
+        {
+          agent: 'proof-checker',
+          model: 'gpt5',
+          agentCategory: 'toolUse',
+        } as never,
+        'proof-checker',
+        orchestratorStreamId,
+      ),
+    ).resolves.toMatchObject({ status: 'executed' });
+    await vi.waitFor(() => {
+      expect(mocks.childLoopError).toHaveBeenCalledWith(
+        "Subagent 'proof-checker' run loop failed after launch",
+        { data: lateFailure },
+      );
+    });
   });
 });
