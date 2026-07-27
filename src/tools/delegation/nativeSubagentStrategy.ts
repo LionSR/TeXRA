@@ -244,16 +244,13 @@ export function createNativeSubagentStrategy(
           },
           onRun,
         };
-        return params.executionMode === 'single-cycle'
-          ? await executeAgent(params.config, params.executionId, {
-              ...executeOptions,
-              allowWaitingResult: true,
-              stopAfterCycle: true,
-            })
-          : await executeAgent(params.config, params.executionId, {
-              ...executeOptions,
-              allowWaitingResult: true,
-            });
+        return executeAgent(params.config, params.executionId, {
+          ...executeOptions,
+          allowWaitingResult: true,
+          ...(params.executionMode === 'single-cycle'
+            ? { stopAfterCycle: true }
+            : {}),
+        });
       }),
 
     runTurn: (followUps, ports, abortController) =>
