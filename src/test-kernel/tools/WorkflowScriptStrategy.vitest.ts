@@ -120,9 +120,8 @@ describe('createWorkflowScriptStrategy', () => {
 
     const turn = await strategy.launch(ports, new AbortController());
 
-    // Journal-based settlement of the one live call.
-    expect(ports.recordCost).toHaveBeenCalledTimes(1);
-    expect(ports.recordCost).toHaveBeenCalledWith(0.42);
+    // The live-attempt candidate and final journal agree on the total.
+    expect(ports.recordCost.mock.calls).toEqual([[0.42], [0.42]]);
 
     const delivery = await strategy.formatDelivery(turn, 0);
     expect(delivery).toContain('"category": "workflow"');
@@ -135,7 +134,7 @@ describe('createWorkflowScriptStrategy', () => {
     expect(delivery).toContain('with scriptPath:');
   });
 
-  it('replays a named checkpoint and settles zero for a pure resume', async () => {
+  it('settles zero for a pure checkpoint replay', async () => {
     await runPersistedWorkflowScript({
       store: getExecutionStore(executionId),
       checkpointId: checkpointIdFor('strategy-test'),
@@ -157,7 +156,7 @@ describe('createWorkflowScriptStrategy', () => {
 
     const turn = await strategy.launch(ports, new AbortController());
 
-    // Delta accounting: replayed entries were billed by the executing attempt.
+    expect(ports.recordCost).toHaveBeenCalledOnce();
     expect(ports.recordCost).toHaveBeenCalledWith(0);
     const delivery = await strategy.formatDelivery(turn, 0);
     expect(delivery).toContain('Using saved result');
@@ -268,7 +267,7 @@ throw new Error('script failed after replay')`;
     await expect(strategy.launch(ports, new AbortController())).rejects.toThrow(
       'script failed after replay',
     );
-    // The seeding attempt billed the entry; this attempt only replays it.
+    // Failure recovery excludes the pre-run journal from this invocation.
     expect(ports.recordCost).toHaveBeenCalledWith(0);
 
     const errText = await strategy.formatError(null, new Error('boom'));
@@ -282,32 +281,28 @@ throw new Error('script failed after replay')`;
     expect(errText).toContain('with scriptPath:');
   });
 
-  it('fails closed on a malformed journal cost without recording a scalar', async () => {
+  it('retains live spend when the completed journal result is malformed', async () => {
     const malformedScript = `export const meta = {
   name: 'malformed-cost',
   description: 'tests malformed journal cost settlement',
 }
 return await agent('saved call')`;
-    await runPersistedWorkflowScript({
-      store: getExecutionStore(executionId),
-      checkpointId: checkpointIdFor('malformed-cost'),
-      script: malformedScript,
-      runAgent: async () => ({ not: 'an agent result' }),
-    });
-    clearStoreCache();
     const ports = fakePorts();
     const strategy = createWorkflowScriptStrategy(
       strategyParams({
         name: 'malformed-cost',
         script: malformedScript,
-        createRunAgent: () => async () => finalResult,
+        createRunAgent: (hooks) => async (invocation) => {
+          hooks.onCost(invocation, 0.2);
+          return { not: 'an agent result' };
+        },
       }),
     );
 
     await expect(strategy.launch(ports, new AbortController())).rejects.toThrow(
       'Workflow journal entry 0 is not an agent final result',
     );
-    expect(ports.recordCost).not.toHaveBeenCalled();
+    expect(ports.recordCost.mock.calls).toEqual([[0.2]]);
   });
 });
 
@@ -437,6 +432,7 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
         }
       }
     });
+    const ports = fakePorts();
     const strategy = createWorkflowScriptStrategy(
       strategyParams({
         name: 'strategy-test',
@@ -445,7 +441,7 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
       }),
     );
 
-    const launch = strategy.launch(fakePorts(), new AbortController());
+    const launch = strategy.launch(ports, new AbortController());
     await fake.attemptStarted(1);
     workflowControls.retry(grandchildExecutionId);
 
@@ -455,6 +451,7 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
     expect(fake.attempts()).toBe(2);
     expect(completedTaskCosts).toHaveLength(1);
     expect(completedTaskCosts[0]).toBeCloseTo(0.6);
+    expect(ports.recordCost.mock.calls).toEqual([[0.1], [0.6], [0.6]]);
   });
 
   it('targets the attempt-specific execution id after a durable retry advances it', async () => {
@@ -499,7 +496,7 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
     expect(fake.attempts()).toBe(2);
   });
 
-  it('bills a skipped attempt that consumed cost to the parent exactly once', async () => {
+  it('reports skipped-attempt spend before the empty final journal', async () => {
     const fake = controllableRunAgent({
       attemptExecutionIds: [grandchildExecutionId],
     });
@@ -519,8 +516,6 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
 
     const turn = await launch;
     expect(turn.result).toBe(WORKFLOW_SKIPPED_RESULT);
-    // The discarded attempt is billed once even though it was never journaled.
-    expect(ports.recordCost).toHaveBeenCalledTimes(1);
-    expect(ports.recordCost).toHaveBeenCalledWith(0.42);
+    expect(ports.recordCost.mock.calls).toEqual([[0.42], [0.42]]);
   });
 });
