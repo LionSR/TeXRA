@@ -473,6 +473,55 @@ describe('repairRestartedStreams', () => {
     expect(finalizeExecution).not.toHaveBeenCalled();
   });
 
+  it('finishes one stream atomically when teardown begins during repair', async () => {
+    const firstStream = 'stream-abort-first' as StreamTabId;
+    const secondStream = 'stream-abort-second' as StreamTabId;
+    const firstExecution = 'execution-abort-first' as ExecutionId;
+    const secondExecution = 'execution-abort-second' as ExecutionId;
+    const streamStatus = new StreamStatusMachine();
+    seedRunning(streamStatus, firstStream);
+    seedRunning(streamStatus, secondStream);
+    const abort = new AbortController();
+    const closeRunningGroups = vi.fn(async (streamIds: StreamTabId[]) => {
+      abort.abort();
+      return streamIds;
+    });
+    const finalizeExecution = createDurableFinalizer();
+    const synchronizeResultOutcome = vi.fn(async () => undefined);
+
+    const result = await repairRestartedStreams({
+      streamStatus,
+      waitingStreams: new Set(),
+      executionIds: new Map([
+        [firstStream, firstExecution],
+        [secondStream, secondExecution],
+      ]),
+      repairStreams: [firstStream, secondStream],
+      closeRunningGroups,
+      finalizeExecution,
+      synchronizeResultOutcome,
+      signal: abort.signal,
+      runWithInactiveExecutionLease: vi.fn(async (_id, operation) => ({
+        status: 'performed' as const,
+        value: await operation(),
+      })),
+    });
+
+    expect(streamStatus.get(firstStream)).toBe(STREAM_PHASE.FAILED);
+    expect(finalizeExecution).toHaveBeenCalledWith({
+      executionId: firstExecution,
+      terminalStatus: EXECUTION_STATUS.ERROR,
+      flowRecord: 'delete',
+    });
+    expect(synchronizeResultOutcome).toHaveBeenCalledWith(
+      firstExecution,
+      RUN_OUTCOME.FAILED,
+    );
+    expect(result.failedStreams).toEqual([firstStream]);
+    expect(streamStatus.get(secondStream)).toBe(STREAM_PHASE.RUNNING);
+    expect(finalizeExecution).toHaveBeenCalledOnce();
+  });
+
   it('writes failed terminal meta when retrying an already failed repair', async () => {
     const streamId = 'stream-failed-retry' as StreamTabId;
     const executionId = 'execution-failed-retry' as ExecutionId;

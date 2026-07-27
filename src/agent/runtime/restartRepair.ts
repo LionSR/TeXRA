@@ -254,7 +254,6 @@ async function writeFailedTerminalStatuses(
     outcome: RunOutcome,
   ) => Promise<void>,
   logger: RestartRepairLogger | undefined,
-  signal: AbortSignal | undefined,
 ): Promise<ExecutionId[]> {
   const status = projectRunOutcome(RUN_OUTCOME.FAILED).executionStatus;
   const writes = streamIds.flatMap((streamId) => {
@@ -302,7 +301,6 @@ async function writeFailedTerminalStatuses(
     });
   }
 
-  if (signal?.aborted) return updated;
   const synchronizationResults = await Promise.allSettled(
     synchronizationWrites.map(({ executionId }) =>
       synchronizeResultOutcome(executionId, RUN_OUTCOME.FAILED),
@@ -491,7 +489,6 @@ async function repairRestartedStream(
     options.logger?.warn(`Failed to repair stream ${streamId} after restart`);
   }
 
-  if (options.signal?.aborted) return createRestartRepairResult();
   const closedWaitingGroups = waitingGroupStreams.length
     ? await options.closeRunningGroups(
         waitingGroupStreams,
@@ -499,7 +496,6 @@ async function repairRestartedStream(
         now,
       )
     : [];
-  if (options.signal?.aborted) return createRestartRepairResult();
   const closedFailedGroups = failedGroupStreams.length
     ? await options.closeRunningGroups(
         failedGroupStreams,
@@ -507,7 +503,6 @@ async function repairRestartedStream(
         now,
       )
     : [];
-  if (options.signal?.aborted) return createRestartRepairResult();
   const terminalStatusUpdated = await writeFailedTerminalStatuses(
     failedStreams,
     executionId
@@ -516,7 +511,6 @@ async function repairRestartedStream(
     options.finalizeExecution ?? defaultFinalizeExecution,
     options.synchronizeResultOutcome ?? defaultSynchronizeResultOutcome,
     options.logger,
-    options.signal,
   );
   return {
     waitingStreams,
