@@ -305,6 +305,13 @@ export class ProgressBackend {
       } catch (error) {
         sessionReloadError = error;
       }
+      if (sessionReloadError && !storageRootReplaced) {
+        // Session reload failed without replacing the storage root — the
+        // bridge is still intact. Re-throw without tearing down the bridge
+        // or resetting state, so the existing presentation keeps working.
+        if (sessionReloadError instanceof Error) throw sessionReloadError;
+        throw new Error('Session reload failed', { cause: sessionReloadError });
+      }
       if (sessionReloadError || storageRootReplaced) {
         this.presentationReloadPending = true;
       }
