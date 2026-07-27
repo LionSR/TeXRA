@@ -33,6 +33,15 @@ import type { TierService } from './TierService';
 
 const CHANNEL = 'ServerSideKeyService';
 
+/**
+ * When the last access fetch was anonymous (dead session), the authenticated
+ * cache gate discards it and every model-dispatch call retries the full relay
+ * fetch + token-refresh attempt with no backoff — a retry storm. This short
+ * backoff gates anonymous refetches so a dead-session window doesn't hammer
+ * the relay and GoTrue on the model hot path.
+ */
+const ANONYMOUS_FETCH_BACKOFF_MS = 30_000;
+
 /** Path suffixes for relay URLs, matching SDK expectations. */
 const RELAY_PATH_SUFFIXES: Partial<Record<ServerSideProvider, string>> = {
   openai: '/v1',
@@ -251,15 +260,26 @@ export class ServerSideKeyService {
       return false;
     }
 
-    // An anonymous cached fetch never satisfies this check — see
-    // lastFetchAuthenticated. Refetching picks up a token that has become
-    // valid since (e.g. the user signed in again after a dead refresh).
+    // Authenticated cache: full TTL, plus the access/tier-config gate.
     if (
       this.isAccessCacheValid() &&
       this.lastFetchAuthenticated &&
       (this.hasFullAccess() || this.tierService.getConfigSync() !== null)
     ) {
       return this.accessFetchPromise!;
+    }
+
+    // Anonymous-fetch backoff: when the session is dead, every call on the
+    // model-dispatch hot path would otherwise retry the full relay fetch +
+    // token-refresh attempt with no backoff. A short negative-cache keeps
+    // the retry storm bounded while still picking up a re-sign-in promptly.
+    if (
+      this.accessFetchPromise !== null &&
+      this.accessTimestamp > 0 &&
+      !this.lastFetchAuthenticated &&
+      Date.now() - this.accessTimestamp < ANONYMOUS_FETCH_BACKOFF_MS
+    ) {
+      return this.accessFetchPromise;
     }
 
     // Start the fetch and store the promise synchronously so that
@@ -305,9 +325,12 @@ export class ServerSideKeyService {
       if (this._activeFetchToken !== fetchToken) return accessGranted;
 
       this.lastFetchAuthenticated = thisFetchAuthenticated;
+      // Always timestamp the fetch — anonymous/denied fetches need a
+      // timestamp for the short backoff gate above, otherwise every
+      // model-dispatch call retries with no bound.
+      this.accessTimestamp = Date.now();
 
       if (accessGranted) {
-        this.accessTimestamp = Date.now();
         this._isCachePrimed = true;
       }
 
