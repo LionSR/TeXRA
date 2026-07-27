@@ -20,10 +20,6 @@ export const bashRequestPanelStyles: CSSResult = css`
     color: var(--color-text-secondary);
   }
 
-  .bash-approval-request__command .code-block {
-    border-left: var(--border-medium) solid var(--wa-color-terminal-ansi-yellow);
-  }
-
   .bash-approval-request__command .code-block pre {
     white-space: pre-wrap;
     word-break: break-word;

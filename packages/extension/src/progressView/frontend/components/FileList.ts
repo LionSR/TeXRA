@@ -264,7 +264,6 @@ export class FileList extends LitElement {
     string,
     CompileFailure[]
   > = {};
-  @property({ attribute: false }) showRoundHeaders = true;
   /**
    * Progress-view commands the active host's registry declares
    * `unsupported(...)` (see StreamHeader's `unsupportedCommands` for the
@@ -378,12 +377,16 @@ export class FileList extends LitElement {
   };
 
   private renderRound(round: number, files: OutputFileInfo[]): TemplateResult {
-    if (!this.showRoundHeaders) {
-      return html`${repeat(
-        files,
-        (file, index) => `${round}-${file.location?.absolutePath ?? index}`,
-        (file, index) => this.renderFileItem(file, round, index),
-      )}`;
+    const rows = repeat(
+      files,
+      (file, index) => `${round}-${file.location?.absolutePath ?? index}`,
+      (file, index) => this.renderFileItem(file, round, index),
+    );
+
+    // A per-round disclosure only earns its chrome when there are multiple
+    // rounds to tell apart; a single round renders its files directly.
+    if (this.sortedRounds.length === 1) {
+      return html`${rows}`;
     }
 
     return html`
@@ -392,13 +395,7 @@ export class FileList extends LitElement {
         summary=${`r${round}`}
         open
       >
-        <div class="round-content">
-          ${repeat(
-            files,
-            (file, index) => `${round}-${file.location?.absolutePath ?? index}`,
-            (file, index) => this.renderFileItem(file, round, index),
-          )}
-        </div>
+        ${rows}
       </wa-details>
     `;
   }
