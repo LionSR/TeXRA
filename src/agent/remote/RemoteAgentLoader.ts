@@ -18,8 +18,8 @@ import { resolveToolDefinitions, type RawToolConfig } from '@tools/registry';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import { fetchRemoteAgentConfigYaml } from './remoteAgentConfigClient';
-import type { RemoteAgentConfig } from './types';
 import { CHANNEL } from './remoteAgentList';
+import type { RemoteAgentConfig } from './types';
 
 /** Load a remote agent configuration by name. */
 export async function loadRemoteAgent(
