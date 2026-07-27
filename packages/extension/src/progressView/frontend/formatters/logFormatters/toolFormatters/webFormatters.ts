@@ -25,7 +25,7 @@ import {
 } from '@shared/schemas';
 import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
 import { tryParseUrl } from '@utils/core';
-import { buildBannerContent, joinWithSeparator } from './helpers';
+import { buildBannerContent } from './helpers';
 
 /** Wrap formatted tool content in the shared collapsible banner shell. */
 function buildToolUseDetails(opts: {
@@ -111,7 +111,7 @@ export function formatWebSearchTemplate(
   const contentTemplate =
     sections.length === 0
       ? html`<pre>Web search executed</pre>`
-      : joinWithSeparator(sections);
+      : html`${sections}`;
 
   return buildToolUseDetails({
     message,
@@ -178,7 +178,7 @@ export function formatWebFetchTemplate(
   const contentTemplate =
     sections.length === 0
       ? html`<pre>Web fetch executed</pre>`
-      : joinWithSeparator(sections);
+      : html`${sections}`;
 
   return buildToolUseDetails({
     message,

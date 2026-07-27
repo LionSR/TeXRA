@@ -106,12 +106,8 @@ export class ContextManagement extends LitElement {
   /** Log ID for tracking */
   @property({ attribute: false }) logId = '';
 
-  /** Action configuration (icon, label, color) */
-  @property({ attribute: false }) config: ActionConfig = {
-    icon: 'history',
-    label: 'Context Management',
-    color: 'var(--wa-color-text-normal)',
-  };
+  /** Action configuration (icon, label, color) — every call site supplies one. */
+  @property({ attribute: false }) config!: ActionConfig;
 
   /** Statistics items to display */
   @property({ attribute: false }) items: StatItem[] = [];
