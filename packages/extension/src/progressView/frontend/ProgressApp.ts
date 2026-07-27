@@ -3,7 +3,6 @@ import { html, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 
-import { z } from 'zod';
 import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
 import '@awesome.me/webawesome/dist/components/split-panel/split-panel.js';
 
@@ -14,12 +13,10 @@ import { postMessage } from '@shared/hostBridge';
 
 // Local imports - shared schemas
 import {
-  AgentCategoryFilterSchema,
   type ProgressViewOutboundMessage,
 } from '@shared/schemas';
 import { SignalWatcher } from '@shared/signals';
 import { designTokens, viewTabStyles } from '@shared/styles';
-import { PersistedState } from '@shared/state/PersistedState';
 import { registerTeXRAWebAwesomeIcons } from '@shared/wa/webAwesomeIcons';
 import { renderEmptyState } from '@shared/wa/emptyState';
 import { renderViewHeader } from '@shared/wa/viewHeader';
@@ -28,7 +25,6 @@ import type { MutableWaTabGroup, WaTabShowEvent } from '@shared/wa/tabs';
 
 // Local imports - progress view frontend
 import { progressAppStyles } from './progressAppStyles';
-import { webviewStorage } from './webviewStorage';
 import {
   activeStreamId$,
   appState,
@@ -67,11 +63,6 @@ import './components/UserMessage';
 import './components/LatexdiffResults';
 import './components/ContextManagement';
 
-/** Schema for persisted preferences. */
-const ProgressViewPrefsSchema = z.object({
-  streamFilter: AgentCategoryFilterSchema.catch('all'),
-});
-
 registerTeXRAWebAwesomeIcons();
 
 // Cast: BaseWebviewApp is abstract, but SignalWatcher expects a concrete constructor.
@@ -99,18 +90,8 @@ export class ProgressApp extends ProgressAppBase {
     narrowLayout.set(width < 500);
   });
 
-  private prefsManager = new PersistedState(
-    webviewStorage,
-    'progressViewPrefs',
-    ProgressViewPrefsSchema,
-  );
-
   constructor() {
     super();
-    // Module-level state is shared across remounts in the same JS context
-    // (tests, hot reload). Reset writable signals + the approval-id memo,
-    // then layer the persisted streamFilter pref on top of the post-reset
-    // appState — keeps the constructor to one `appState.set` instead of two.
     resetProgressState();
     appState.set({
       ...appState.get(),
