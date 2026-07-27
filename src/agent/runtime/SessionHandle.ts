@@ -4,7 +4,9 @@
  * SDK Step 7d composition root. It is a **composition record**, not a facade:
  * it re-exposes no per-concern methods, so callers keep the existing instance
  * vocabulary they already use after 7a–c landed (`session.interactions.x(...)`,
- * `session.executions.y(...)`). It composes the landed runtime owners —
+ * `session.executions.y(...)`). Its sole lifecycle gate,
+ * {@link SessionHandle.waitUntilReady}, ensures persistent restart repair has
+ * settled before a host exposes the session. It composes the landed runtime owners —
  * {@link ExecutionRegistry}, {@link ExecutionSubscriptionBinder},
  * {@link SessionHostInteractions} — plus the other session-scoped owners.
  *
@@ -28,10 +30,17 @@
  * session is justified only as the ownership container.
  */
 
+import PQueue from 'p-queue';
+
 import type { AgentEvent, AgentTrace, ResultEvent } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
-import type { StreamTabId } from '@shared/schemas';
+import { detectWaitingStreams } from '@agent/storage/detectWaitingStreams';
+import { executionIdFromStream } from '@agent/storage/executionIdFromStream';
+import { runWithOwnedExecutionLeaseQuiescence } from '@agent/storage/executionLease';
+import { platform } from '@platform/platform';
+import { STREAM_PHASE, type StreamTabId } from '@shared/schemas';
+import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import type { RunTraceFlushEntry } from '@transcript/runTrace';
 import type { StreamLogStore } from '@transcript/StreamLogStore';
 import { StreamSnapshotStore } from '@transcript/StreamSnapshotStore';
@@ -51,6 +60,10 @@ import {
 } from './streamApprovalQueue';
 import { WorkflowControlRegistry } from './workflowControlRegistry';
 import { releaseExecutionLeaseAfterArtifacts } from './executionOwnership';
+import {
+  repairRestartedStreams,
+  RestartRepairRetryScheduler,
+} from './restartRepair';
 
 const logger = createChannelTrace('sessionHandle');
 
@@ -89,8 +102,13 @@ function isReplayableTerminalResult(event: ResultEvent): boolean {
  * could be bound to a different hub than `events` and silently drop every
  * status fact. The session always co-constructs the pair instead.
  */
-export type SessionHandleInit = Pick<SessionHandle, 'transcripts'> &
-  Partial<
+export type SessionHandleInit = Pick<SessionHandle, 'transcripts'> & {
+  /**
+   * Delay store repair until {@link SessionHandle.waitUntilReady} is called.
+   * Desktop uses this while claiming legacy stream identities.
+   */
+  restartRepair?: 'deferred';
+} & Partial<
     Pick<
       SessionHandle,
       | 'executions'
@@ -139,6 +157,11 @@ export class SessionHandle {
    * to skip/retry a focused grandchild `agent()` call.
    */
   readonly workflowControls: WorkflowControlRegistry;
+  private restartRepairPromise: Promise<unknown> | undefined;
+  private readonly restartRepairQueue = new PQueue({ concurrency: 1 });
+  private readonly restartRepairRetry = new RestartRepairRetryScheduler();
+  private readonly restartRepairAbort = new AbortController();
+  private storageGeneration = 0;
   constructor(init: SessionHandleInit) {
     if (init.transcripts.mode.kind === 'read-only') {
       throw new Error(
@@ -193,6 +216,253 @@ export class SessionHandle {
       releaseExecutionLeaseAfterArtifacts(this, executionId),
     );
     liveSessions.add(this);
+    if (
+      this.transcripts.mode.kind === 'persistent' &&
+      init.restartRepair !== 'deferred'
+    ) {
+      const startupRepair = this.enqueueRestartRepair(() =>
+        this.repairStoresAfterRestart(this.storageGeneration),
+      );
+      this.restartRepairPromise = startupRepair;
+      // Construction cannot be awaited. Hosts observe the same promise
+      // through waitUntilReady(); this branch only prevents a rejection from
+      // becoming unhandled before the host reaches that boundary.
+      void startupRepair.catch(() => undefined);
+    }
+  }
+
+  /**
+   * Wait for canonical stores and restart repair before exposing restored
+   * session state to a host.
+   */
+  waitUntilReady(): Promise<void> {
+    if (
+      this.transcripts.mode.kind !== 'persistent' ||
+      this.restartRepairAbort.signal.aborted
+    ) {
+      return Promise.resolve();
+    }
+    if (!this.restartRepairPromise) {
+      this.restartRepairPromise = this.enqueueRestartRepair(() =>
+        this.repairStoresAfterRestart(this.storageGeneration),
+      );
+    }
+    return this.restartRepairPromise.then(() => undefined);
+  }
+
+  /**
+   * Replace session persistence after the host's workspace storage root moves.
+   *
+   * Ordinary view loads must not reopen these live stores. The host calls this
+   * explicit lifecycle boundary only after a workspace-root change.
+   */
+  reloadAfterStorageRootChange(): Promise<boolean> {
+    if (
+      this.transcripts.mode.kind !== 'persistent' ||
+      this.restartRepairAbort.signal.aborted
+    ) {
+      return Promise.resolve(false);
+    }
+    if (platform().storage.hasPendingWorkspaceStorageChange?.() === false) {
+      return Promise.resolve(false);
+    }
+    this.storageGeneration += 1;
+    const generation = this.storageGeneration;
+    this.restartRepairRetry.cancel();
+    const repair = this.enqueueRestartRepair(() =>
+      this.repairStoresAfterRestart(generation, true),
+    );
+    this.restartRepairPromise = repair;
+    return repair;
+  }
+
+  private enqueueRestartRepair<T>(work: () => Promise<T>): Promise<T> {
+    // `add` widens to `T | void` for abort/timeout options; neither is used.
+    return this.restartRepairQueue.add(work) as Promise<T>;
+  }
+
+  private async repairStoresAfterRestart(
+    generation: number,
+    reloadTranscripts = false,
+  ): Promise<boolean> {
+    try {
+      if (this.restartRepairAbort.signal.aborted) return false;
+      if (reloadTranscripts) {
+        return await runWithOwnedExecutionLeaseQuiescence(async () => {
+          if (this.restartRepairAbort.signal.aborted) return false;
+          return this.replaceStoresAfterStorageRootChange(generation);
+        });
+      }
+      const repair = async () => {
+        if (generation !== this.storageGeneration) return false;
+        const streamIds = this.transcripts.keys();
+        await this.snapshots.load(streamIds);
+        if (
+          generation !== this.storageGeneration ||
+          this.restartRepairAbort.signal.aborted
+        ) {
+          return false;
+        }
+        for (const streamId of this.transcripts.getUnfinishedStreamIds()) {
+          this.status.transition(
+            streamId,
+            STREAM_PHASE.RUNNING,
+            STREAM_TRANSITION_CAUSE.LIFECYCLE,
+          );
+        }
+        await this.runRestartRepair(generation);
+        return true;
+      };
+      return await repair();
+    } catch (error) {
+      logger.warn('Failed to repair session stores after restart', {
+        data: error,
+      });
+      throw error;
+    }
+  }
+
+  private async replaceStoresAfterStorageRootChange(
+    generation: number,
+  ): Promise<boolean> {
+    if (generation !== this.storageGeneration) return false;
+    await Promise.all([this.transcripts.flush(), this.snapshots.flush()]);
+    if (
+      generation !== this.storageGeneration ||
+      this.restartRepairAbort.signal.aborted
+    ) {
+      return false;
+    }
+    const storage = platform().storage;
+    if (storage.commitWorkspaceStorageChange?.() === false) return false;
+    const previousStatus = this.status.getAllStreamStates();
+    try {
+      await this.transcripts.reload();
+      this.status.clearAll();
+      const streamIds = this.transcripts.keys();
+      await this.snapshots.load(streamIds);
+      for (const streamId of this.transcripts.getUnfinishedStreamIds()) {
+        this.status.transition(
+          streamId,
+          STREAM_PHASE.RUNNING,
+          STREAM_TRANSITION_CAUSE.LIFECYCLE,
+        );
+      }
+      await this.runRestartRepair(generation);
+      storage.finalizeWorkspaceStorageChange?.();
+      return true;
+    } catch (replacementError) {
+      if (storage.rollbackWorkspaceStorageChange?.() !== true) {
+        throw replacementError;
+      }
+      try {
+        await this.transcripts.reload({ discardPendingWrites: true });
+        this.snapshots.evictAll();
+        await this.snapshots.load(this.transcripts.keys());
+        this.status.clearAll();
+        for (const [streamId, state] of previousStatus) {
+          if (state.phase === STREAM_PHASE.WAITING) {
+            this.status.transitionToWaiting(
+              streamId,
+              STREAM_TRANSITION_CAUSE.RESTART_REPAIR,
+              { substate: state.substate },
+            );
+          } else if (
+            state.phase === STREAM_PHASE.COMPLETED ||
+            state.phase === STREAM_PHASE.FAILED ||
+            state.phase === STREAM_PHASE.CANCELLED
+          ) {
+            this.status.transitionToTerminal(streamId, state.phase, {
+              substate: state.substate,
+            });
+          } else {
+            this.status.transition(
+              streamId,
+              state.phase,
+              STREAM_TRANSITION_CAUSE.LIFECYCLE,
+              { substate: state.substate },
+            );
+          }
+        }
+      } catch (rollbackError) {
+        throw new AggregateError(
+          [replacementError, rollbackError],
+          'Workspace storage replacement and rollback both failed',
+        );
+      }
+      throw replacementError;
+    }
+  }
+
+  private async runRestartRepair(generation: number): Promise<void> {
+    if (
+      generation !== this.storageGeneration ||
+      this.restartRepairAbort.signal.aborted
+    ) {
+      return;
+    }
+    const snapshotExecutionIds = this.snapshots.getExecutionIdMap();
+    const executionIds = new Map(snapshotExecutionIds);
+    for (const streamId of this.transcripts.keys()) {
+      if (executionIds.has(streamId)) continue;
+      const derived = executionIdFromStream(streamId);
+      if (derived) executionIds.set(streamId, derived);
+    }
+    let waitingStreams: Set<StreamTabId>;
+    let repairStreams: Set<StreamTabId>;
+    try {
+      waitingStreams = await detectWaitingStreams(executionIds);
+      repairStreams = new Set([
+        ...this.transcripts.getUnfinishedStreamIds(),
+        ...waitingStreams,
+      ]);
+    } catch (error) {
+      logger.warn('Failed to detect resumable streams during restart repair', {
+        data: error,
+      });
+      waitingStreams = new Set();
+      repairStreams = new Set(
+        this.transcripts
+          .getUnfinishedStreamIds()
+          .filter((streamId) => !snapshotExecutionIds.has(streamId)),
+      );
+    }
+    if (
+      generation !== this.storageGeneration ||
+      this.restartRepairAbort.signal.aborted
+    ) {
+      return;
+    }
+
+    const result = await repairRestartedStreams({
+      streamStatus: this.status,
+      waitingStreams,
+      executionIds,
+      repairStreams,
+      closeRunningGroups: async (streamIds, status, now) => {
+        // StreamLogStore commits each settlement through its onChange channel;
+        // attached progress bridges therefore receive dirty-entry deltas
+        // without a host-specific full-view refresh.
+        const closed = await this.transcripts.endRunningGroupsForStreams(
+          streamIds,
+          now,
+          status,
+        );
+        if (closed.length > 0) await this.transcripts.flush();
+        return closed;
+      },
+      statusEmitOptions: { trace: logger },
+      logger,
+      signal: this.restartRepairAbort.signal,
+    });
+    if (this.restartRepairAbort.signal.aborted) return;
+    this.restartRepairRetry.schedule(result.nextLeaseCheckAt, () => {
+      void this.enqueueRestartRepair(() =>
+        this.runRestartRepair(generation),
+      ).catch((error: unknown) => {
+        logger.warn('Failed delayed restart repair', { data: error });
+      });
+    });
   }
 
   useHostInteractions(interactions: HostInteractions): () => void {
@@ -423,6 +693,8 @@ export class SessionHandle {
 
   /** Dispose the runtime owners and drop result listeners. */
   private teardownOwners(): void {
+    this.restartRepairAbort.abort();
+    this.restartRepairRetry.dispose();
     this.subscriptions.dispose();
     this.executions.dispose();
     // Drop bypass state before the interaction slot settles pending approvals.

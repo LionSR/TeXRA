@@ -21,7 +21,10 @@ export interface CliTranscriptSession {
 
 type OpenPersistentStore = () => Promise<StreamLogStore>;
 
-function persistentSession(session: SessionHandle): CliTranscriptSession {
+async function persistentSession(
+  session: SessionHandle,
+): Promise<CliTranscriptSession> {
+  await session.waitUntilReady();
   if (session.transcripts.mode.kind !== 'persistent') {
     const detail =
       session.transcripts.mode.kind === 'ephemeral'
@@ -55,6 +58,7 @@ export async function initializeInteractiveTranscriptSession(
 ): Promise<CliTranscriptSession> {
   const existing = tryDefaultSession();
   if (existing) {
+    await existing.waitUntilReady();
     if (existing.transcripts.mode.kind === 'persistent') {
       return { session: existing, canResume: true };
     }
@@ -80,6 +84,7 @@ export async function initializeInteractiveTranscriptSession(
     const session = initializeDefaultSession({
       transcripts: StreamLogStore.ephemeral(reason),
     });
+    await session.waitUntilReady();
     policy.showPersistentWarning(warning);
     return { session, canResume: false, warning };
   }

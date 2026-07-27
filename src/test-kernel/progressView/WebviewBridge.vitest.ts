@@ -7,7 +7,9 @@ import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   LOG_LEVELS,
   MESSAGE_TYPES,
+  RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
+  STREAM_PHASE,
   type StreamTabId,
 } from '@shared/schemas';
 import { StreamLogStore, type StreamLogAppendInput } from '@transcript';
@@ -67,6 +69,47 @@ describe('WebviewBridge', () => {
         }),
       ],
       updates: [],
+      textDeltas: [],
+    });
+
+    bridge.dispose();
+  });
+
+  it('pushes restart-repair group settlements through log deltas', async () => {
+    const store = StreamLogStore.ephemeral('test');
+    const activeStream = 'active-repair' as StreamTabId;
+    const sendMessage = vi.fn(() => true);
+    const bridge = new WebviewBridge(store, sendMessage, () => activeStream);
+
+    store.append(activeStream, {
+      id: 'running-group',
+      type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
+      level: LOG_LEVELS.INFO,
+      timestamp: 100,
+      data: { status: STREAM_PHASE.RUNNING },
+    });
+    bridge.syncStream(activeStream);
+    await vi.advanceTimersByTimeAsync(20);
+    sendMessage.mockClear();
+
+    await store.endRunningGroupsForStreams(
+      [activeStream],
+      200,
+      RUN_OUTCOME.FAILED,
+    );
+    await vi.advanceTimersByTimeAsync(20);
+
+    expect(sendMessage).toHaveBeenCalledWith({
+      command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
+      streamId: activeStream,
+      entries: [],
+      updates: [
+        expect.objectContaining({
+          id: 'running-group',
+          type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
+          data: expect.objectContaining({ status: RUN_OUTCOME.FAILED }),
+        }),
+      ],
       textDeltas: [],
     });
 
