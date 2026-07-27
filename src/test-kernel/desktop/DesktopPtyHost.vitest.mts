@@ -2,28 +2,29 @@
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { createDesktopPtyHost } from '@desktop/main/desktopPtyHost';
+import {
+  createDesktopPtyHost,
+  type DesktopPtyHostOptions,
+} from '@desktop/main/desktopPtyHost';
+
+type LoadPty = NonNullable<DesktopPtyHostOptions['loadPty']>;
+type PtyModule = Awaited<ReturnType<LoadPty>>;
+type SpawnPty = PtyModule['spawn'];
+type PtyProcess = ReturnType<SpawnPty>;
 
 interface FakePty {
   emitData(data: string): void;
   emitExit(exitCode: number): void;
-  kill: ReturnType<typeof vi.fn>;
 }
 
-function createFakePty(pid: number): FakePty & {
-  onData(listener: (data: string) => void): void;
-  onExit(listener: (event: { exitCode: number }) => void): void;
-  write: ReturnType<typeof vi.fn>;
-  resize: ReturnType<typeof vi.fn>;
-  readonly pid: number;
-} {
+function createFakePty(pid: number): FakePty & PtyProcess {
   let dataListener = (_data: string): void => {};
-  let exitListener = (_event: { exitCode: number }): void => {};
+  let exitListener: Parameters<PtyProcess['onExit']>[0] = () => {};
   return {
     pid,
-    write: vi.fn(),
-    resize: vi.fn(),
-    kill: vi.fn(),
+    write: vi.fn<(data: string) => void>(),
+    resize: vi.fn<(cols: number, rows: number) => void>(),
+    kill: vi.fn<(signal?: string) => void>(),
     onData(listener) {
       dataListener = listener;
     },
@@ -35,29 +36,41 @@ function createFakePty(pid: number): FakePty & {
   };
 }
 
+function loadFakePty(spawn: SpawnPty): LoadPty {
+  return async () => ({ spawn });
+}
+
 describe('desktop pty host', () => {
   it('ignores callbacks from a disposed session after its id is reused', async () => {
     const oldPty = createFakePty(101);
     const replacementPty = createFakePty(102);
     const spawnPty = vi
-      .fn()
+      .fn<SpawnPty>()
       .mockReturnValueOnce(oldPty)
       .mockReturnValueOnce(replacementPty);
     const onData = vi.fn();
     const onExit = vi.fn();
-    const host = createDesktopPtyHost({ onData, onExit, spawnPty });
+    const host = createDesktopPtyHost({
+      onData,
+      onExit,
+      loadPty: loadFakePty(spawnPty),
+    });
 
     const oldSession = await host.create({
       id: 'workbench:terminal:1',
       cols: 80,
       rows: 24,
     });
+    if (!oldSession) throw new Error('Expected the old session to start.');
     oldSession.dispose();
     const replacementSession = await host.create({
       id: 'workbench:terminal:1',
       cols: 100,
       rows: 30,
     });
+    if (!replacementSession) {
+      throw new Error('Expected the replacement session to start.');
+    }
 
     expect(replacementSession).not.toBe(oldSession);
     expect(spawnPty).toHaveBeenCalledTimes(2);
@@ -74,5 +87,44 @@ describe('desktop pty host', () => {
     expect(onData).toHaveBeenCalledWith('workbench:terminal:1', 'new output');
     expect(onExit).toHaveBeenCalledWith('workbench:terminal:1', 7);
     expect(host.get('workbench:terminal:1')).toBeUndefined();
+  });
+
+  it('abandons a session creation invalidated while its module loads', async () => {
+    const pty = createFakePty(201);
+    const spawnPty = vi.fn<SpawnPty>(() => pty);
+    let finishLoading = (_module: PtyModule): void => {};
+    const firstLoad = new Promise<PtyModule>((resolve) => {
+      finishLoading = resolve;
+    });
+    const loadPty = vi
+      .fn<LoadPty>()
+      .mockReturnValueOnce(firstLoad)
+      .mockResolvedValue({ spawn: spawnPty });
+    const host = createDesktopPtyHost({
+      onData: vi.fn(),
+      onExit: vi.fn(),
+      loadPty,
+    });
+
+    const staleCreation = host.create({
+      id: 'workbench:terminal:1',
+      cols: 80,
+      rows: 24,
+    });
+    host.disposeAll();
+    finishLoading({ spawn: spawnPty });
+
+    expect(await staleCreation).toBeUndefined();
+    expect(spawnPty).not.toHaveBeenCalled();
+    expect(host.get('workbench:terminal:1')).toBeUndefined();
+
+    const replacement = await host.create({
+      id: 'workbench:terminal:1',
+      cols: 100,
+      rows: 30,
+    });
+    expect(replacement).toBeDefined();
+    expect(spawnPty).toHaveBeenCalledOnce();
+    expect(host.get('workbench:terminal:1')).toBe(replacement);
   });
 });

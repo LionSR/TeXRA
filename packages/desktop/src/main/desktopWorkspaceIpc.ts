@@ -272,6 +272,7 @@ export function createDesktopWorkspaceIpc(
         cols,
         rows,
       });
+      if (!session) return;
       if (initialCommand) {
         session.write(`${initialCommand}\r`);
       }

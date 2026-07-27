@@ -61,8 +61,8 @@ export interface DesktopPtyHostOptions {
   /** Reports process exit so the UI can mark the session finished. */
   onExit(sessionId: string, exitCode: number): void;
   onError?(error: unknown): void;
-  /** Overrides native process creation for a controlled host environment. */
-  spawnPty?: NodePtyModule['spawn'];
+  /** Overrides native-module loading for a controlled host environment. */
+  loadPty?: () => Promise<NodePtyModule>;
 }
 
 export interface DesktopPtyHost {
@@ -76,7 +76,7 @@ export interface DesktopPtyHost {
     cols: number;
     rows: number;
     cwd?: string;
-  }): Promise<PtySessionHandle>;
+  }): Promise<PtySessionHandle | undefined>;
   get(id: string): PtySessionHandle | undefined;
   disposeAll(): void;
 }
@@ -170,14 +170,24 @@ export function createDesktopPtyHost(
   options: DesktopPtyHostOptions,
 ): DesktopPtyHost {
   const sessions = new Map<string, PtySessionHandle>();
+  let generation = 0;
 
   return {
     async create({ id, cols, rows, cwd }) {
       const existing = sessions.get(id);
       if (existing) return existing;
 
-      const spawnPty = options.spawnPty ?? (await loadNodePty()).spawn;
-      const child = spawnPty(defaultShell(), [], {
+      const creationGeneration = generation;
+      const pty = await (options.loadPty?.() ?? loadNodePty());
+      // disposeAll marks every request begun by the old renderer as stale,
+      // including requests that had not yet reached the sessions map.
+      if (creationGeneration !== generation) return undefined;
+      // Two starts for the same renderer ID can share the module-load await.
+      // Whichever resumes second adopts the handle installed by the first.
+      const loadedExisting = sessions.get(id);
+      if (loadedExisting) return loadedExisting;
+
+      const child = pty.spawn(defaultShell(), [], {
         name: 'xterm-256color',
         // A pty spawned at 0 columns makes shells emit unusable line wrapping,
         // so clamp to a sane minimum until the renderer reports real bounds.
@@ -224,6 +234,7 @@ export function createDesktopPtyHost(
     get: (id) => sessions.get(id),
 
     disposeAll() {
+      generation += 1;
       // Copy first: dispose() mutates the map through the shared handle.
       for (const handle of [...sessions.values()]) handle.dispose();
       sessions.clear();
