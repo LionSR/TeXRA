@@ -12,7 +12,7 @@ import {
   type Part,
   type UploadFileParameters,
 } from '@google/genai';
-import { describe, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { type ModelConfig, ModelProvider } from 'llm-zoo';
 
 // Local imports
@@ -21,6 +21,7 @@ import { validateGoogleMessageHistory } from '@agent/modelHandlers/google/google
 import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/google/modelHandlerGoogleGenAI';
 import { extractToolAttachments } from '@agent/core/tools/toolAttachmentExtraction';
 import { MediaEntry } from '@agent/utils/mediaTypes';
+import { detectPartialText } from '@common/errors/sdkErrorUtils';
 import type { FileLocation } from '@shared/schemas';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { pathToLocation } from '@utils/files';
@@ -71,6 +72,73 @@ function createGoogleGenAIHandler(): ModelHandlerGoogleGenAI {
   const { logger } = createLogRecorder();
   handler.setLogger(logger);
   return handler;
+}
+
+class StreamingGoogleHandler extends ModelHandlerGoogleGenAI {
+  override getStreamingConfig(): boolean {
+    return true;
+  }
+}
+
+function createStreamingGoogleHandler(): ModelHandlerGoogleGenAI {
+  const handler = new StreamingGoogleHandler(
+    buildTestModelConfig({
+      name: 'test-google-model',
+      label: 'Test Google Model',
+      fullName: 'google/test',
+      shortName: 'google/test',
+      provider: ModelProvider.GOOGLE,
+      contextWindow: 4096,
+      capabilities: { supportsTokenCounting: false },
+    }),
+  );
+  handler.setLogger({
+    ...noopTrace,
+    openStream: () => ({
+      id: 'stream-1',
+      append: () => undefined,
+      finalize: (text?: string) => text ?? '',
+    }),
+  });
+  handler.setOutputStreaming(true);
+  return handler;
+}
+
+/**
+ * Creates a stream that yields visible text, then fails as a dropped
+ * connection would after content has already been produced.
+ */
+function createClientWithMidStreamFailure(
+  visibleText: string,
+  failure: Error,
+): any {
+  return {
+    chats: {
+      create: () => ({
+        sendMessageStream: async () =>
+          (async function* () {
+            const chunk: any = {
+              candidates: [
+                {
+                  content: {
+                    role: 'model',
+                    parts: [createPartFromText(visibleText)],
+                  },
+                },
+              ],
+            };
+            yield chunk;
+            throw failure;
+          })(),
+        sendMessage: async () => {
+          throw new Error(
+            'sendMessage should not be called when streaming is enabled',
+          );
+        },
+      }),
+    },
+    models: {},
+  };
 }
 
 class GoogleHandlerTestDouble extends ModelHandlerGoogleGenAI {
@@ -526,5 +594,32 @@ describe('ModelHandlerGoogleGenAI tool attachments', () => {
       attachmentParts[0].inlineData?.data,
       Buffer.from(attachmentBytes).toString('base64'),
     );
+  });
+});
+
+describe('ModelHandlerGoogleGenAI streaming failure diagnostics', () => {
+  it('retains partial text from a mid-stream failure', async () => {
+    const handler = createStreamingGoogleHandler();
+    const failure = new Error('relay connection dropped mid-stream');
+    const messages: Content[] = [
+      { role: 'user', parts: [createPartFromText('Hi there')] },
+    ];
+
+    let caught: unknown;
+    try {
+      await handler.createResponse({
+        client: createClientWithMidStreamFailure(
+          'partial text before the drop',
+          failure,
+        ),
+        messages,
+        temperature: 0,
+      });
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBe(failure);
+    expect(detectPartialText(failure)).toBe('partial text before the drop');
   });
 });
