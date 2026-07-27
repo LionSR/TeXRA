@@ -53,6 +53,14 @@ export async function buildProfileMessage(
     globalStreamingDefault,
   };
 
+  // A stored session can be a zombie: the access token expired and the
+  // refresh token was revoked (e.g. another host rotated it and gotrue
+  // reuse-detection killed ours). isAuthenticated() returns false in that
+  // case (the token-refresh fails), but a stored session exists in the
+  // keychain — detect it with hasStoredSession() so the UI can surface
+  // "Session expired" instead of treating this as a plain signed-out state.
+  const sessionExpired = !authenticated && (await SupabaseClient.hasStoredSession());
+
   if (!authenticated) {
     return {
       ...base,
@@ -62,7 +70,7 @@ export async function buildProfileMessage(
       remoteAgents: [],
       apiAccessMode: 'personal',
       accessExpiresAt: null,
-      sessionExpired: false,
+      sessionExpired,
       spendingStatus: null,
       spendingStatusError: null,
       quotaAutoSwitched: false,
@@ -70,13 +78,6 @@ export async function buildProfileMessage(
   }
 
   const user = await SupabaseClient.getUser();
-
-  // A stored session can be a zombie: the access token expired and the
-  // refresh token was revoked (e.g. another host rotated it and gotrue
-  // reuse-detection killed ours). getRelayAccessToken() then resolves null
-  // even though isAuthenticated() is true — surface that instead of showing
-  // "Connected" over a usage panel that can never load.
-  const sessionExpired = (await SupabaseClient.getRelayAccessToken()) == null;
 
   let tier = FREE_TIER;
   try {
