@@ -58,6 +58,8 @@ export class AccountTab extends LitElement {
   @property({ attribute: false }) spendingStatus: SpendingStatus | null = null;
   @property({ type: Boolean }) quotaAutoSwitched = false;
   @property({ type: Boolean }) vscodeSettingsAvailable = false;
+  @property({ attribute: false }) apiAccessMode: 'included' | 'personal' =
+    'personal';
 
   private readonly handleSignIn = (): void => {
     postMessage(SETTINGS_VIEW_COMMANDS.SIGN_IN);
@@ -85,6 +87,14 @@ export class AccountTab extends LitElement {
       return html`
         <div class="account-empty">
           Sign in to monitor your included TeXRA usage and monthly relay quota.
+        </div>
+      `;
+    }
+    if (this.apiAccessMode !== 'included') {
+      return html`
+        <div class="account-empty">
+          Included model access is not enabled. Switch to included access in
+          Providers &amp; Models to see usage data.
         </div>
       `;
     }
