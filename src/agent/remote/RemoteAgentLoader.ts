@@ -274,7 +274,7 @@ async function fetchAgentConfig(agentName: string): Promise<{
   const resolvedSettings = Array.isArray(settings.tools)
     ? {
         ...settings,
-        tools: resolveToolDefinitions(
+        tools: await resolveToolDefinitions(
           settings.tools as RawToolConfig[],
           (name) =>
             logger.warn(CHANNEL, `Tool "${name}" not found in registry`),

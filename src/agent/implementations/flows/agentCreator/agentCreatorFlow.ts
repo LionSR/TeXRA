@@ -339,7 +339,7 @@ async function generateAgentYaml(
         const extracted = extractTextFromTag(text, 'yaml');
         const candidate = (extracted || text).trim();
         try {
-          validateAgentYamlContent(candidate);
+          await validateAgentYamlContent(candidate);
         } catch (error) {
           lastValidationError = toErrorMessage(error);
           throw new Error(`Generated YAML was invalid: ${lastValidationError}`);

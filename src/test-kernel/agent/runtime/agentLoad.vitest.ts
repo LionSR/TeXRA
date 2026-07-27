@@ -21,8 +21,8 @@ vi.mock('@agent/index', async () => {
 });
 
 describe('validateAgentYamlContent', () => {
-  it('rejects root settings that only satisfy the partial YAML schema', () => {
-    assert.throws(() =>
+  it('rejects root settings that only satisfy the partial YAML schema', async () => {
+    await assert.rejects(() =>
       validateAgentYamlContent({
         name: 'bad_tool_use_root',
         settings: {
@@ -33,8 +33,8 @@ describe('validateAgentYamlContent', () => {
     );
   });
 
-  it('keeps inherited child settings partial before parent merging', () => {
-    const result = validateAgentYamlContent({
+  it('keeps inherited child settings partial before parent merging', async () => {
+    const result = await validateAgentYamlContent({
       name: 'child',
       inherits: 'parent',
       settings: {
@@ -51,8 +51,8 @@ describe('validateAgentYamlContent', () => {
     });
   });
 
-  it('validates root agents after resolving raw tool names', () => {
-    const result = validateAgentYamlContent({
+  it('validates root agents after resolving raw tool names', async () => {
+    const result = await validateAgentYamlContent({
       name: 'root_tool_use',
       settings: {
         agentCategory: AgentCategory.ToolUse,
@@ -63,8 +63,8 @@ describe('validateAgentYamlContent', () => {
     assert.deepStrictEqual(result.settings.tools, ['grep']);
   });
 
-  it('wraps malformed YAML text through the shared parse boundary', () => {
-    assert.throws(
+  it('wraps malformed YAML text through the shared parse boundary', async () => {
+    await assert.rejects(
       () => validateAgentYamlContent('name: "unterminated'),
       (error: unknown) =>
         error instanceof Error &&

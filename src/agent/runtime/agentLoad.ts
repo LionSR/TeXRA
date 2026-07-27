@@ -40,9 +40,9 @@ export interface AgentYamlValidationResult extends ValidAgentDefinition {
  * and prompts so callers can reuse consistent schema checks across string and
  * file based workflows.
  */
-export function validateAgentYamlContent(
+export async function validateAgentYamlContent(
   content: string | object,
-): AgentYamlValidationResult {
+): Promise<AgentYamlValidationResult> {
   let data: ReturnType<(typeof AgentDefinitionSchema)['parse']>;
   if (typeof content === 'string') {
     const parsed = parseYamlWith(content, AgentDefinitionSchema);
@@ -62,7 +62,7 @@ export function validateAgentYamlContent(
   }
 
   if (!data.inherits) {
-    AgentSettingSchema.parse(resolveAgentSettingTools(data.settings));
+    AgentSettingSchema.parse(await resolveAgentSettingTools(data.settings));
     AgentPromptSchema.parse(data.prompts);
   }
 
@@ -99,12 +99,15 @@ function ensureAgentCategoryForSource<
   return settings;
 }
 
-function resolveAgentSettingTools(settings: AgentSettingInput): object {
+async function resolveAgentSettingTools(
+  settings: AgentSettingInput,
+): Promise<object> {
   if (!Array.isArray(settings.tools)) return settings;
   return {
     ...settings,
-    tools: resolveToolDefinitions(settings.tools as RawToolConfig[], (name) =>
-      logger.warn(CHANNEL, `Tool "${name}" not found in registry`),
+    tools: await resolveToolDefinitions(
+      settings.tools as RawToolConfig[],
+      (name) => logger.warn(CHANNEL, `Tool "${name}" not found in registry`),
     ),
   };
 }
@@ -174,7 +177,7 @@ export async function loadAgentSettingAndPrompts(
 
   settings = ensureAgentCategoryForSource(settings, entry.source);
 
-  const resolvedSettings = resolveAgentSettingTools(settings);
+  const resolvedSettings = await resolveAgentSettingTools(settings);
 
   // Apply defaults and validate the final settings and prompts
   return [

@@ -11,7 +11,7 @@ import {
   type CanonicalDelegationToolName,
 } from '@shared/constants/delegationTools';
 
-// Local file imports
+// Local file imports — core tools (no domain-subsystem imports)
 import { BashTool } from './bash';
 import { DiagnosticsTool } from './DiagnosticsTool';
 import { InlineCommentTool } from './comment/InlineCommentTool';
@@ -19,47 +19,21 @@ import { ReportReviewIssueTool } from './ReportReviewIssueTool';
 import { EditFileTool } from './EditTool';
 import { GlobTool } from './glob';
 import { GrepTool } from './grep';
-import {
-  ExtractBibliographyTool,
-  ExtractLatexFiguresTool,
-  ExtractTikzFiguresTool,
-} from './latex';
-import { ArxivDownloadTool } from './arxiv/ArxivDownloadTool';
-import { ArxivMetadataTool } from './arxiv/ArxivMetadataTool';
-import { ArxivSearchTool } from './arxiv/ArxivSearchTool';
 import { ReadFileTool } from './ReadTool';
 import { TextEditorTool } from './TextEditorTool';
 import { WriteFileTool } from './WriteTool';
 import { WebFetchTool } from './web/WebFetchTool';
 import { WebSearchTool } from './web/WebSearchTool';
-import { WolframTool } from './wolfram/WolframTool';
-import { TexcountTool } from './texcount/TexcountTool';
-import { CrossrefSearchTool } from './citation/CrossrefSearchTool';
-import { PlanTool } from './plan/PlanTool';
 import { TodoWriteTool } from './todo/TodoTool';
 import { MemoryTool } from './memory/MemoryTool';
-import { OpenPdfTool } from './OpenPdfTool';
-import { ZoteroAddTool } from './zotero/ZoteroAddTool';
-import { ZoteroCollectionsTool } from './zotero/ZoteroCollectionsTool';
-import { ZoteroExportTool } from './zotero/ZoteroExportTool';
-import { ZoteroSearchTool } from './zotero/ZoteroSearchTool';
 import { CodexTool } from './codex';
 import { ClaudeAgentTool } from './claudeAgent';
 import { CLAUDE_AGENT_NAME } from './claudeAgentShared';
-import {
-  LeanDiagnosticsTool,
-  LeanFileTool,
-  LeanProjectTool,
-  LeanInspectTool,
-  LeanLoogleTool,
-} from './lean';
 import { WorkflowAgentTool, DelegateAgentTool } from './DelegationTools';
 import { WorkflowScriptTool } from './delegation/WorkflowScriptTool';
 import { ExecutionsTool } from './ExecutionsTool';
-import { AcceptRunFilesTool } from './AcceptRunFilesTool';
 import { ExternalInquiryTool } from './inquiry';
 import { AskUserQuestionTool } from './userQuestion';
-import { GitHubSubscriptionTool } from './github';
 import {
   ProbeEnvironmentTool,
   VerifySetupTool,
@@ -73,20 +47,52 @@ import {
   ApplyTeamTool,
 } from './setup';
 
+// Domain-tool names — kept in sync with registry-domain.ts's createDomainTools().
+// Defined here as a string literal union rather than imported from registry-domain
+// to avoid TypeScript resolving the full domain-tool module graph to compute the
+// `keyof ReturnType<typeof createDomainTools>` type (#9327).
+type DomainToolName =
+  | 'download_arxiv_source'
+  | 'arxiv_metadata'
+  | 'arxiv_search'
+  | 'extract_figures'
+  | 'extract_bib_entries'
+  | 'extract_tikz_figures'
+  | 'crossref_search'
+  | 'zotero_add'
+  | 'zotero_collections'
+  | 'zotero_search'
+  | 'zotero_export'
+  | 'wolfram'
+  | 'texcount'
+  | 'lean_diagnostics'
+  | 'lean_file'
+  | 'lean_project'
+  | 'lean_inspect'
+  | 'lean_loogle'
+  | 'github_subscription'
+  | 'plan'
+  | 'open_pdf'
+  | 'accept_run_files';
+
+// ============================================================================
+// Registry
+// ============================================================================
+
 /** Singleton IToolRegistry instance for the default tools. */
 let defaultRegistryInstance: IToolRegistry | null = null;
 
+/** Whether domain tools have been loaded into the default registry. */
+let domainToolsRegistered = false;
+
 /**
- * Canonical tool factory — single source of truth for all registered tools.
- * `RegisteredToolName` is derived from the return-type keys, so adding/renaming
- * a tool here automatically propagates to the dashboard and availability
- * checks at compile time.
+ * Core-tool factory — tools whose transitive imports do not include
+ * `@latex/`, `src/tools/lean/`, `src/tools/arxiv/`, or `src/tools/zotero/`.
  *
- * Defined as a function (not a module-scope const) so tool constructors
- * run lazily on first `getDefaultToolRegistry()` call rather than eagerly
- * on import. This keeps imports side-effect-free.
+ * Domain tools live in {@link createDomainTools} (`./registry-domain`)
+ * and are loaded lazily through {@link ensureDomainToolsRegistered}.
  */
-function createDefaultTools() {
+function createCoreTools() {
   return {
     str_replace_editor: new TextEditorTool(),
     diagnostics: new DiagnosticsTool(),
@@ -98,40 +104,18 @@ function createDefaultTools() {
     edit_file: new EditFileTool(),
     glob: new GlobTool(),
     grep: new GrepTool(),
-    download_arxiv_source: new ArxivDownloadTool(),
-    arxiv_metadata: new ArxivMetadataTool(),
-    arxiv_search: new ArxivSearchTool(),
-    extract_figures: new ExtractLatexFiguresTool(),
-    extract_bib_entries: new ExtractBibliographyTool(),
-    extract_tikz_figures: new ExtractTikzFiguresTool(),
-    crossref_search: new CrossrefSearchTool(),
-    zotero_add: new ZoteroAddTool(),
-    zotero_collections: new ZoteroCollectionsTool(),
-    zotero_search: new ZoteroSearchTool(),
-    zotero_export: new ZoteroExportTool(),
-    wolfram: new WolframTool(),
-    texcount: new TexcountTool(),
     web_fetch: new WebFetchTool(),
     web_search: new WebSearchTool(),
     todo_write: new TodoWriteTool(),
-    plan: new PlanTool(),
     memory: new MemoryTool(),
-    open_pdf: new OpenPdfTool(),
-    lean_diagnostics: new LeanDiagnosticsTool(),
-    lean_file: new LeanFileTool(),
-    lean_project: new LeanProjectTool(),
-    lean_inspect: new LeanInspectTool(),
-    lean_loogle: new LeanLoogleTool(),
     codex: new CodexTool(),
     [CLAUDE_AGENT_NAME]: new ClaudeAgentTool(),
     delegate_workflow: new WorkflowAgentTool(),
     [DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME]: new WorkflowScriptTool(),
     delegate_agent: new DelegateAgentTool(),
     executions: new ExecutionsTool(),
-    accept_run_files: new AcceptRunFilesTool(),
     inquiry: new ExternalInquiryTool(),
     ask_user_question: new AskUserQuestionTool(),
-    github_subscription: new GitHubSubscriptionTool(),
     probe_environment: new ProbeEnvironmentTool(),
     verify_setup: new VerifySetupTool(),
     unset_api_key: new UnsetApiKeyTool(),
@@ -145,8 +129,15 @@ function createDefaultTools() {
   } satisfies Record<string, ITool>;
 }
 
-/** Union of all tool names registered in the default registry. */
-export type RegisteredToolName = keyof ReturnType<typeof createDefaultTools>;
+/** Canonical tool names from core tools. */
+type CoreToolName = keyof ReturnType<typeof createCoreTools>;
+
+/**
+ * Union of every tool name registered in the default registry —
+ * core (eager) + domain (lazy). `DomainToolName` is a type-only import
+ * so the bundle graph does not include domain-tool modules.
+ */
+export type RegisteredToolName = CoreToolName | DomainToolName;
 
 /**
  * Compile-time guard: every canonical tool with specialized display treatment
@@ -162,6 +153,43 @@ type _CanonicalDisplayNamesAreRegistered = AssertNever<
 type _CanonicalDelegationNamesAreRegistered = AssertNever<
   Exclude<CanonicalDelegationToolName, RegisteredToolName>
 >;
+
+// ============================================================================
+// Domain-tool lazy registration
+// ============================================================================
+
+/**
+ * Dynamically import domain tools and merge them into the default registry.
+ * Idempotent — subsequent calls are no-ops.
+ *
+ * Domain tools are those whose module graphs pull in `@latex/`, `src/tools/lean/`,
+ * `src/tools/arxiv/`, or `src/tools/zotero/`. Keeping them out of the eager
+ * module body breaks the import cycle described in #9327, shrinking every
+ * generic tool's transitive closure from ~630 files to ~150 files.
+ */
+export async function ensureDomainToolsRegistered(): Promise<void> {
+  if (domainToolsRegistered) return;
+  const { createDomainTools } = await import('./registry-domain');
+  const coreTools = createCoreTools();
+  const domainTools = createDomainTools();
+  defaultRegistryInstance = new MapToolRegistry({
+    ...coreTools,
+    ...domainTools,
+  });
+  domainToolsRegistered = true;
+}
+
+// ============================================================================
+// Public API
+// ============================================================================
+
+/** Lazy singleton accessor for the default tool registry. */
+export function getDefaultToolRegistry(): IToolRegistry {
+  if (!defaultRegistryInstance) {
+    defaultRegistryInstance = new MapToolRegistry(createCoreTools());
+  }
+  return defaultRegistryInstance;
+}
 
 /**
  * Legacy tool-name aliases — keep prior YAML configs working when a tool is
@@ -180,14 +208,6 @@ function canonicalToolName(name: string): string {
   return TOOL_ALIASES[name] ?? name;
 }
 
-/** Lazy singleton accessor for the default tool registry. */
-export function getDefaultToolRegistry(): IToolRegistry {
-  if (!defaultRegistryInstance) {
-    defaultRegistryInstance = new MapToolRegistry(createDefaultTools());
-  }
-  return defaultRegistryInstance;
-}
-
 /** Valid tool name pattern: starts with letter/underscore, followed by alphanumeric/underscores. */
 const VALID_TOOL_NAME = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
@@ -202,14 +222,21 @@ export type RawToolConfig =
  * Resolve raw tool configurations to ToolDefinition objects.
  * Handles both string names (resolved from registry) and partial definitions.
  *
+ * Domain tools are loaded lazily on first call — the dynamic import of
+ * `./registry-domain` is a code-splitting point that breaks the cycle
+ * described in #9327, keeping domain subsystems out of generic tools'
+ * transitive closures.
+ *
  * @param tools - Array of raw tool configs (strings or objects with name)
  * @param warnOnMissing - Optional callback for logging warnings about missing/invalid tools
  * @returns Array of resolved ToolDefinition objects
  */
-export function resolveToolDefinitions(
+export async function resolveToolDefinitions(
   tools: RawToolConfig[],
   warnOnMissing?: (toolName: string) => void,
-): ToolDefinition[] {
+): Promise<ToolDefinition[]> {
+  await ensureDomainToolsRegistered();
+
   const registry = getDefaultToolRegistry();
   const seenNames = new Set<string>();
 
