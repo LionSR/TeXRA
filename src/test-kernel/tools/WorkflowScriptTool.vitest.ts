@@ -58,7 +58,7 @@ vi.mock('@agent/runtime/childRunLoop', () => ({
 }));
 
 vi.mock('@tools/childStream', () => ({
-  createChildStream: mocks.createChildStream,
+  createRehydratedChildStream: mocks.createChildStream,
 }));
 
 vi.mock('@tools/approval', () => ({
@@ -191,6 +191,17 @@ describe('WorkflowScriptTool', () => {
       'workflow',
     );
     expect(DELEGATION_TOOL_CATEGORY.delegate_workflow_script).toBeUndefined();
+  });
+
+  it('launches its deterministic stream through transcript rehydration', async () => {
+    await callTool();
+
+    const runExecutionId = runExecutionIdFor('tool-test');
+    expect(mocks.createChildStream).toHaveBeenCalledWith(
+      runExecutionId,
+      streamId,
+      expect.objectContaining({ streamPrefix: 'workflow-script' }),
+    );
   });
 
   it('declares the task-plan contract at the model-facing boundary', () => {

@@ -23,6 +23,7 @@ import type {
 } from '@shared/schemas';
 import { deriveRunOutcome } from '@shared/streams/streamStatus';
 import { createRunTrace } from '@transcript';
+import type { TranscriptWriter } from '@transcript/StreamLogStore';
 import { formatDuration } from '@utils/core';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -37,6 +38,8 @@ interface CreateChildStreamOptions {
   config: AgentConfig;
   /** Tool that spawned this child (e.g. "bash", "codex"). Used for icon selection in the UI. */
   toolName?: string;
+  /** Writer atomically reserved by createRehydratedChildStream. */
+  reservedWriter?: TranscriptWriter;
 }
 
 /**
@@ -102,112 +105,160 @@ export function createChildStream(
     session.transcripts,
     session.flushers,
     executionId,
+    options.reservedWriter,
   );
-  const detachSessionTrace = session.attachRunTrace(
-    runTrace.trace,
-    childStreamId,
-  );
-  const disposeTrace = () => {
-    detachSessionTrace();
-    runTrace.dispose();
-  };
-  session.events.assertRunSubscribersAttachedBeforeActivation(childStreamId);
+  let detachSessionTrace: (() => void) | undefined;
+  try {
+    detachSessionTrace = session.attachRunTrace(runTrace.trace, childStreamId);
+    const disposeTrace = () => {
+      detachSessionTrace?.();
+      runTrace.dispose();
+    };
+    session.events.assertRunSubscribersAttachedBeforeActivation(childStreamId);
 
-  // Register the child stream (state, logs, hints) without switching the
-  // active tab. Background child streams (bash, codex) shouldn't yank the
-  // user away from whatever they're viewing — the tab simply appears.
-  session.events.emit({
-    scope: 'session',
-    event: {
-      type: 'setActiveStream',
-      payload: {
-        streamId: childStreamId,
-        agentCategory: options.streamCategory,
-        suppressViewSwitch: true,
+    // Register the child stream (state, logs, hints) without switching the
+    // active tab. Background child streams (bash, codex) shouldn't yank the
+    // user away from whatever they're viewing — the tab simply appears.
+    session.events.emit({
+      scope: 'session',
+      event: {
+        type: 'setActiveStream',
+        payload: {
+          streamId: childStreamId,
+          agentCategory: options.streamCategory,
+          suppressViewSwitch: true,
+        },
       },
-    },
-  });
-  runTrace.trace.emit({
-    type: 'run.start',
-    descriptor: buildRunDescriptor({
+    });
+    runTrace.trace.emit({
+      type: 'run.start',
+      descriptor: buildRunDescriptor({
+        streamId: childStreamId,
+        executionId,
+        agent: options.agentName,
+        category: options.streamCategory,
+        kind: options.runKind,
+      }),
+    });
+    runTrace.trace.emit({
+      type: 'run.config',
       streamId: childStreamId,
       executionId,
-      agent: options.agentName,
-      category: options.streamCategory,
-      kind: options.runKind,
-    }),
-  });
-  runTrace.trace.emit({
-    type: 'run.config',
-    streamId: childStreamId,
-    executionId,
-    config: options.config,
-  });
-  const description = truncateWithEllipsis(options.description, 80);
-  session.events.emit({
-    scope: 'session',
-    event: {
-      type: 'updateStreamDescription',
-      payload: {
-        streamId: childStreamId,
-        description,
+      config: options.config,
+    });
+    const description = truncateWithEllipsis(options.description, 80);
+    session.events.emit({
+      scope: 'session',
+      event: {
+        type: 'updateStreamDescription',
+        payload: {
+          streamId: childStreamId,
+          description,
+        },
       },
-    },
-  });
+    });
 
-  const handle = new AgentExecutionHandle(
-    executionId,
-    parentStreamId,
-    childStreamId,
-    options.agentName,
-    options.streamCategory,
-    runtimeHost,
-    runTrace.trace,
-  );
-  const executionLeaseScope = captureOwnedExecutionLeaseIfPresent(executionId);
-  if (executionLeaseScope) {
-    handle.attachExecutionLeaseScope(executionLeaseScope);
+    const handle = new AgentExecutionHandle(
+      executionId,
+      parentStreamId,
+      childStreamId,
+      options.agentName,
+      options.streamCategory,
+      runtimeHost,
+      runTrace.trace,
+    );
+    const executionLeaseScope =
+      captureOwnedExecutionLeaseIfPresent(executionId);
+    if (executionLeaseScope) {
+      handle.attachExecutionLeaseScope(executionLeaseScope);
+    }
+    if (options.toolName) handle.toolName = options.toolName;
+    // The process-owned snapshot listener persists both facts before handle
+    // tracking; a later presentation replays them from the snapshot store during
+    // canonical state loading (#8258).
+    session.executions.trackAgentExecution(handle, {
+      status: STREAM_PHASE.RUNNING,
+    });
+
+    return {
+      childStreamId,
+      logger: runTrace.trace,
+      // Mid-run status updates are intentionally best-effort. Explicit stops and
+      // stale handles are ignored by the registry; finalize owns terminal status.
+      waitForInput: () => {
+        session.executions.updateAgentExecutionStatus(
+          handle,
+          STREAM_PHASE.WAITING,
+        );
+      },
+      beginTurn: () => {
+        session.executions.updateAgentExecutionStatus(
+          handle,
+          STREAM_PHASE.RUNNING,
+        );
+      },
+      failTurn: () => {
+        session.executions.updateAgentExecutionStatus(
+          handle,
+          STREAM_PHASE.FAILED,
+        );
+      },
+      finalize: (finalizeOptions) =>
+        finalizeChildStream({
+          handle,
+          session,
+          logger: runTrace.trace,
+          disposeTrace,
+          options: finalizeOptions,
+        }),
+    };
+  } catch (error) {
+    const failures = [error];
+    try {
+      detachSessionTrace?.();
+    } catch (cleanupError) {
+      failures.push(cleanupError);
+    }
+    try {
+      runTrace.dispose();
+    } catch (cleanupError) {
+      failures.push(cleanupError);
+    }
+    if (failures.length > 1) {
+      throw new AggregateError(
+        failures,
+        'Child stream setup and cleanup failed',
+      );
+    }
+    throw error;
   }
-  if (options.toolName) handle.toolName = options.toolName;
-  // The process-owned snapshot listener persists both facts before handle
-  // tracking; a later presentation replays them from the snapshot store during
-  // canonical state loading (#8258).
-  session.executions.trackAgentExecution(handle, {
-    status: STREAM_PHASE.RUNNING,
-  });
+}
 
-  return {
+/**
+ * Reactivate a deterministic child stream whose prior trace may have released
+ * its persisted transcript. Writer reservation and loading are atomic with
+ * respect to eviction.
+ */
+export async function createRehydratedChildStream(
+  executionId: ExecutionId,
+  parentStreamId: StreamTabId,
+  options: CreateChildStreamOptions,
+): Promise<ChildStream> {
+  const session = currentSession();
+  const childStreamId = `${options.streamPrefix}#${executionId}` as StreamTabId;
+  const writer = await session.transcripts.loadAndAcquireWriter(
     childStreamId,
-    logger: runTrace.trace,
-    // Mid-run status updates are intentionally best-effort. Explicit stops and
-    // stale handles are ignored by the registry; finalize owns terminal status.
-    waitForInput: () => {
-      session.executions.updateAgentExecutionStatus(
-        handle,
-        STREAM_PHASE.WAITING,
-      );
-    },
-    beginTurn: () => {
-      session.executions.updateAgentExecutionStatus(
-        handle,
-        STREAM_PHASE.RUNNING,
-      );
-    },
-    failTurn: () => {
-      session.executions.updateAgentExecutionStatus(
-        handle,
-        STREAM_PHASE.FAILED,
-      );
-    },
-    finalize: (finalizeOptions) =>
-      finalizeChildStream({
-        handle,
-        session,
-        logger: runTrace.trace,
-        disposeTrace,
-        options: finalizeOptions,
-      }),
-  };
+    executionId,
+  );
+  try {
+    return createChildStream(executionId, parentStreamId, {
+      ...options,
+      reservedWriter: writer,
+    });
+  } catch (error) {
+    writer.close();
+    throw error;
+  }
 }
 
 interface FinalizeChildStreamArgs {

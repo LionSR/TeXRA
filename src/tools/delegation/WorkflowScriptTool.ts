@@ -33,7 +33,7 @@ import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME } from '@shared/constants/delegationTools';
 import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
 import { configureDelegatedChildApprovals } from '@tools/approval';
-import { createChildStream } from '@tools/childStream';
+import { createRehydratedChildStream } from '@tools/childStream';
 import {
   assertWritable,
   resolveWorkspaceRelativePath,
@@ -403,7 +403,10 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
       let runChildStreamId: StreamTabId;
       let runCompletion: Promise<void>;
       try {
-        const childStream = createChildStream(
+        // meta.name deliberately reuses one deterministic stream across
+        // launches. Reserve its writer while rehydrating so transcript
+        // eviction cannot race a resumed run.
+        const childStream = await createRehydratedChildStream(
           runExecutionId,
           runScope.streamId,
           {

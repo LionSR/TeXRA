@@ -15,6 +15,7 @@
 // which no-ops via the `exiting` guard so the drain / hint / cleanup never run
 // twice.
 
+import { completeOwnedExecutionLease } from '@agent/storage/executionLease';
 import { readCliCwd } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import {
@@ -159,6 +160,18 @@ export function createSessionExitController(
   // Persistent flushes have bounded retries; an explicitly ephemeral session
   // has no disk work to drain.
   const drainPersistence = (): Promise<void> => ctx.flushArtifacts();
+  const persistAndReleaseResumableIdleLease = async (
+    resumableIdle: boolean,
+  ): Promise<void> => {
+    await drainPersistence();
+    if (resumableIdle && session.executionId) {
+      // WAITING deliberately keeps its flow record, but this CLI process is
+      // about to exit and can no longer own the execution. Relinquish the
+      // durable lease after flushing so an immediate `texra resume` continues
+      // the same execution instead of waiting for the stale horizon.
+      await completeOwnedExecutionLease(session.executionId);
+    }
+  };
   // These TUI exit paths call process.exit() directly, so bin/texra.ts's
   // `finally` (which runs platform shutdown) never fires. Run the same
   // shutdown sequence the (suppressed) platform SIGINT/SIGTERM handlers
@@ -170,6 +183,7 @@ export function createSessionExitController(
   const runPlatformShutdown = (): Promise<void> =>
     runCliPlatformShutdownSequence(tryPlatform()?.lifecycle);
   const exitNow = (exitCode: number): void => {
+    const resumableIdle = ctx.isResumableIdle();
     exiting = true;
     ctx.suspendTerminalTitle();
     removeProcessHandlers();
@@ -186,7 +200,7 @@ export function createSessionExitController(
     // rejects, so a flush failure can't become an unhandled rejection under
     // --unhandled-rejections=strict.
     void Promise.allSettled([
-      drainPersistence(),
+      persistAndReleaseResumableIdleLease(resumableIdle),
       runPlatformShutdown(),
     ]).finally(() => process.exit(exitCode));
   };
@@ -314,7 +328,7 @@ export function createSessionExitController(
       // awaiting it would hang the process here.
       await session.runPromise;
     }
-    await drainPersistence();
+    await persistAndReleaseResumableIdleLease(resumableIdle);
     cleanupTerminalModes({ clearItermProgress: ctx.clearItermProgress });
     // Print the resume hint after the terminal modes are restored, but before
     // resetCliState() clears the stream tree the hint is built from.
