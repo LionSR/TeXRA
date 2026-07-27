@@ -61,6 +61,8 @@ export interface DesktopPtyHostOptions {
   /** Reports process exit so the UI can mark the session finished. */
   onExit(sessionId: string, exitCode: number): void;
   onError?(error: unknown): void;
+  /** Overrides native process creation for a controlled host environment. */
+  spawnPty?: NodePtyModule['spawn'];
 }
 
 export interface DesktopPtyHost {
@@ -174,8 +176,8 @@ export function createDesktopPtyHost(
       const existing = sessions.get(id);
       if (existing) return existing;
 
-      const pty = await loadNodePty();
-      const child = pty.spawn(defaultShell(), [], {
+      const spawnPty = options.spawnPty ?? (await loadNodePty()).spawn;
+      const child = spawnPty(defaultShell(), [], {
         name: 'xterm-256color',
         // A pty spawned at 0 columns makes shells emit unusable line wrapping,
         // so clamp to a sane minimum until the renderer reports real bounds.
@@ -183,12 +185,6 @@ export function createDesktopPtyHost(
         rows: Math.max(rows, 5),
         cwd: cwd ?? options.cwd ?? process.cwd(),
         env: ptyEnvironment(),
-      });
-
-      child.onData((data) => options.onData(id, data));
-      child.onExit(({ exitCode }) => {
-        sessions.delete(id);
-        options.onExit(id, exitCode);
       });
 
       const handle: PtySessionHandle = {
@@ -204,7 +200,7 @@ export function createDesktopPtyHost(
           }
         },
         dispose: () => {
-          sessions.delete(id);
+          if (sessions.get(id) === handle) sessions.delete(id);
           try {
             child.kill();
           } catch (error) {
@@ -212,6 +208,15 @@ export function createDesktopPtyHost(
           }
         },
       };
+      child.onData((data) => {
+        if (sessions.get(id) !== handle) return;
+        options.onData(id, data);
+      });
+      child.onExit(({ exitCode }) => {
+        if (sessions.get(id) !== handle) return;
+        sessions.delete(id);
+        options.onExit(id, exitCode);
+      });
       sessions.set(id, handle);
       return handle;
     },
