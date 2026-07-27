@@ -525,13 +525,19 @@ function startClaudeAgentLoop(params: {
     },
   };
 
-  startChildRunLoop({
+  const handle = startChildRunLoop({
     childStream,
     childStreamId,
     parentStreamId,
     executionId,
     agentName: CLAUDE_AGENT_NAME,
     strategy,
+  });
+  void handle.completion.catch((error: unknown) => {
+    childStream.logger.error(
+      `Claude Agent run loop failed after launch`,
+      { data: error },
+    );
   });
 }
 

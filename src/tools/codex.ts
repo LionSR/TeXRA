@@ -493,13 +493,19 @@ function startCodexLoop(params: {
     },
   };
 
-  startChildRunLoop({
+  const handle = startChildRunLoop({
     childStream,
     childStreamId,
     parentStreamId,
     executionId,
     agentName: 'codex',
     strategy,
+  });
+  void handle.completion.catch((error: unknown) => {
+    childStream.logger.error(
+      `Codex run loop failed after launch`,
+      { data: error },
+    );
   });
 }
 
