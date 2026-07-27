@@ -17,6 +17,7 @@ export const DESKTOP_WORKSPACE_COMMANDS = {
   WRITE_FILE: 'desktop:workspace:writeFile',
   FILE_WRITTEN: 'desktop:workspace:fileWritten',
   FILE_ERROR: 'desktop:workspace:fileError',
+  EDITOR_DIRTY_STATE: 'desktop:workspace:editorDirtyState',
   // Terminal
   TERMINAL_START: 'desktop:terminal:start',
   TERMINAL_INPUT: 'desktop:terminal:input',
@@ -80,6 +81,11 @@ const DesktopWriteFileMessageSchema = z.object({
   command: z.literal(DESKTOP_WORKSPACE_COMMANDS.WRITE_FILE),
   path: z.string(),
   contents: z.string(),
+});
+
+const DesktopEditorDirtyStateMessageSchema = z.object({
+  command: z.literal(DESKTOP_WORKSPACE_COMMANDS.EDITOR_DIRTY_STATE),
+  dirty: z.boolean(),
 });
 
 export const DesktopFileWrittenMessageSchema = z.object({
@@ -246,6 +252,7 @@ export const DesktopWorkspaceInboundMessageSchema = z.discriminatedUnion(
     DesktopListFilesMessageSchema,
     DesktopReadFileMessageSchema,
     DesktopWriteFileMessageSchema,
+    DesktopEditorDirtyStateMessageSchema,
     DesktopTerminalStartMessageSchema,
     DesktopTerminalInputMessageSchema,
     DesktopTerminalResizeMessageSchema,
