@@ -17,6 +17,7 @@ import {
   startChildRunLoop,
 } from '@agent/runtime/childRunLoop';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { AgentFlowError } from '@agent/runtime/AgentFlowResult';
 import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import {
@@ -183,6 +184,230 @@ describe('NativeSubagentStrategy', () => {
     );
     liveHandle.deliveryTargetStreamId = undefined;
     expect(strategy.resolveDeliveryTarget?.()).toBeUndefined();
+  });
+
+  it('uses the same launch primitive in durable single-cycle mode', async () => {
+    const params = {
+      ...baseParams(),
+      executionMode: 'single-cycle' as const,
+      workflowPhase: 'review',
+    };
+    const strategy = createNativeSubagentStrategy(params);
+    const ports = fakePorts();
+    const progress = { message: 'Reading proof' };
+
+    mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
+      options.onStreamResolved?.('child-stream');
+      options.onProgress?.(progress);
+      return {
+        category: 'toolUse',
+        outcome: 'completed',
+        executionId: params.executionId,
+        streamId: 'child-stream' as StreamTabId,
+        totalCostUsd: 0.17,
+      };
+    });
+
+    await strategy.launch(ports, new AbortController());
+
+    expect(mocks.executeAgent).toHaveBeenCalledWith(
+      params.config,
+      params.executionId,
+      expect.objectContaining({
+        allowWaitingResult: true,
+        enforceCategory: true,
+        parentStreamId: params.orchestratorStreamId,
+        stopAfterCycle: true,
+        workflowPhase: 'review',
+      }),
+    );
+    expect(params.onStreamResolved).toHaveBeenCalledWith('child-stream');
+    expect(ports.notify).toHaveBeenCalledWith(progress);
+    expect(ports.recordCost).toHaveBeenCalledWith(0.17);
+  });
+
+  it('records a thrown AgentFlowError cost once through interactive loop settlement', async () => {
+    const params = baseParams();
+    const recordCost = vi.fn();
+    mocks.executeAgent.mockRejectedValueOnce(
+      new AgentFlowError('provider failed', {
+        category: 'toolUse',
+        outcome: 'failed',
+        executionId: params.executionId,
+        streamId: 'child-stream',
+        totalCostUsd: 0.29,
+      }),
+    );
+
+    const { completion } = startChildRunLoop({
+      childStreamId: 'child-stream',
+      parentStreamId: params.orchestratorStreamId,
+      executionId: params.executionId,
+      agentName: params.agentName,
+      strategy: createNativeSubagentStrategy(params),
+      recordCost,
+    });
+    await completion;
+
+    expect(recordCost).toHaveBeenCalledOnce();
+    expect(recordCost).toHaveBeenCalledWith(0.29);
+    expect(mocks.persistChildRunResultMeta).toHaveBeenCalledWith(
+      params.executionId,
+      expect.objectContaining({
+        result: expect.objectContaining({ cost: 0.29, outcome: 'failed' }),
+      }),
+    );
+  });
+
+  it('interrupts when the turn aborts before launch publishes its handle', async () => {
+    const turn = new AbortController();
+    turn.abort();
+    const interrupt = vi.fn();
+    const strategy = createNativeSubagentStrategy(baseParams());
+    mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
+      options.onRun?.({ interrupt } as never);
+      return {
+        category: 'toolUse',
+        outcome: 'cancelled',
+        executionId: 'exec-1',
+        streamId: 'child-stream',
+      };
+    });
+
+    await strategy.launch(fakePorts(), turn);
+
+    expect(interrupt).toHaveBeenCalledOnce();
+  });
+
+  it('interrupts once for an already-aborted external signal', async () => {
+    const external = new AbortController();
+    external.abort();
+    const interrupt = vi.fn();
+    const strategy = createNativeSubagentStrategy({
+      ...baseParams(),
+      signal: external.signal,
+    });
+    mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
+      options.onRun?.({ interrupt } as never);
+      return {
+        category: 'toolUse',
+        outcome: 'cancelled',
+        executionId: 'exec-1',
+        streamId: 'child-stream',
+      };
+    });
+
+    await strategy.launch(fakePorts(), new AbortController());
+
+    expect(interrupt).toHaveBeenCalledOnce();
+  });
+
+  it('deduplicates the same external and per-turn abort signal', async () => {
+    const controller = new AbortController();
+    const interrupt = vi.fn();
+    const strategy = createNativeSubagentStrategy({
+      ...baseParams(),
+      signal: controller.signal,
+    });
+    mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
+      options.onRun?.({ interrupt } as never);
+      controller.abort();
+      return {
+        category: 'toolUse',
+        outcome: 'cancelled',
+        executionId: 'exec-1',
+        streamId: 'child-stream',
+      };
+    });
+
+    await strategy.launch(fakePorts(), controller);
+
+    expect(interrupt).toHaveBeenCalledOnce();
+  });
+
+  it('removes abort listeners after launch and ignores later aborts', async () => {
+    const controller = new AbortController();
+    const addListener = vi.spyOn(controller.signal, 'addEventListener');
+    const removeListener = vi.spyOn(controller.signal, 'removeEventListener');
+    const interrupt = vi.fn();
+    const strategy = createNativeSubagentStrategy(baseParams());
+    mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
+      options.onRun?.({ interrupt } as never);
+      return {
+        category: 'toolUse',
+        outcome: 'completed',
+        executionId: 'exec-1',
+        streamId: 'child-stream',
+      };
+    });
+
+    await strategy.launch(fakePorts(), controller);
+    controller.abort();
+
+    expect(addListener).toHaveBeenCalledOnce();
+    expect(removeListener).toHaveBeenCalledOnce();
+    expect(interrupt).not.toHaveBeenCalled();
+  });
+
+  it('binds resumed-turn cancellation to the replacement run handle', async () => {
+    const params = baseParams();
+    const childStreamId = 'child-stream' as StreamTabId;
+    const initialHandle = {
+      childStreamId,
+      deliveryTargetStreamId: params.orchestratorStreamId,
+      interrupt: vi.fn(),
+    };
+    mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
+      options.onRun?.(initialHandle as never);
+      return {
+        category: 'toolUse',
+        outcome: STREAM_PHASE.WAITING,
+        executionId: params.executionId,
+        streamId: childStreamId,
+      };
+    });
+    const strategy = createNativeSubagentStrategy(params);
+    await strategy.launch(fakePorts(), new AbortController());
+
+    mocks.readConfig.mockResolvedValue({ agentCategory: 'toolUse' });
+    mocks.retrieveSessionResumeData.mockResolvedValue(
+      createToolUseResumeData({ executionId: params.executionId }),
+    );
+    const turn = new AbortController();
+    const replacementInterrupt = vi.fn();
+    let replacementReady!: () => void;
+    const ready = new Promise<void>((resolve) => {
+      replacementReady = resolve;
+    });
+    mocks.resumeToolUseFromResumeData.mockImplementationOnce(
+      async (_resume, _host, options) => {
+        options.onRun?.({
+          childStreamId,
+          deliveryTargetStreamId: params.orchestratorStreamId,
+          interrupt: replacementInterrupt,
+        } as never);
+        replacementReady();
+        await new Promise<void>((resolve) =>
+          turn.signal.addEventListener('abort', () => resolve(), {
+            once: true,
+          }),
+        );
+        return {
+          category: 'toolUse',
+          outcome: 'cancelled',
+          executionId: params.executionId,
+          streamId: childStreamId,
+        };
+      },
+    );
+
+    const resumed = strategy.runTurn!([], fakePorts(), turn);
+    await ready;
+    turn.abort();
+    await resumed;
+
+    expect(initialHandle.interrupt).not.toHaveBeenCalled();
+    expect(replacementInterrupt).toHaveBeenCalledOnce();
   });
 
   it('formatDelivery folds a WAITING turn into a completed-shaped delivery', async () => {

@@ -46,7 +46,7 @@ const ActiveChildInfoBaseSchema = z.object({
    * Workflow-script phase that owns this child, when its parent is a
    * workflow-script run. This is the only join key between a grandchild's
    * roster row (which knows tokens/elapsed) and the run's task cards (which
-   * know `phase`) — `WorkflowTaskIdentity` carries no execution or stream id.
+   * know `phase`) — `WorkflowCallIdentity` carries no execution or stream id.
    * Immutable per attempt: it is stamped on the handle before the first
    * `child.activity` emission, so retained (finished) rows keep it. Optional
    * so persisted rosters written before this field still parse.
