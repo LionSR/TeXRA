@@ -114,7 +114,7 @@ export function parseWorkflowScript(source: string): ParsedWorkflowScript {
 
   if (rejectsModuleLoading(program)) {
     throw new WorkflowScriptParseError(
-      'Workflow scripts cannot import modules; use only the injected primitives (agent, parallel, pipeline, concat, log, phase, args, files).',
+      'Workflow scripts cannot import modules; use only the injected primitives (agent, parallel, log, phase, args, files).',
     );
   }
 

@@ -23,7 +23,11 @@ import {
   seedStreamStatusForTest,
 } from '@test/helpers/streamStatusTestUtils';
 import { launchAgentCliSession } from '@tools/agentCliShared';
-import { createChildStream, type ChildStream } from '@tools/childStream';
+import {
+  createChildStream,
+  createRehydratedChildStream,
+  type ChildStream,
+} from '@tools/childStream';
 
 // Local file imports
 import {
@@ -52,6 +56,8 @@ const noProjectionAutoCloseExecutionId = 'c11118' as ExecutionId;
 const noProjectionAutoCloseChildStreamId = 'bash#c11118' as StreamTabId;
 const workflowRelaunchExecutionId = 'c11119' as ExecutionId;
 const workflowRelaunchChildStreamId = 'workflow-script#c11119' as StreamTabId;
+const setupRetryExecutionId = 'c11120' as ExecutionId;
+const setupRetryChildStreamId = 'workflow-script#c11120' as StreamTabId;
 const config = {
   agentCategory: AgentCategory.ToolUse,
   model: 'test-model',
@@ -102,6 +108,7 @@ describe('child stream progress events', () => {
       normalizedErrorChildStreamId,
       noProjectionAutoCloseChildStreamId,
       workflowRelaunchChildStreamId,
+      setupRetryChildStreamId,
     ]) {
       clearStreamStatusForTest(defaultSession().status, streamId);
     }
@@ -274,7 +281,7 @@ describe('child stream progress events', () => {
     );
 
     const recorded = recordSessionEvents(defaultSession().events);
-    const relaunched = createChildStream(
+    const relaunched = await createRehydratedChildStream(
       workflowRelaunchExecutionId,
       parentStreamId,
       {
@@ -312,6 +319,60 @@ describe('child stream progress events', () => {
       );
     } finally {
       await relaunched.finalize();
+      recorded.detach();
+    }
+  });
+
+  it('rolls back a failed rehydrated setup so the same stream can retry', async () => {
+    const active = createRecordingHost();
+    const recorded = recordSessionEvents(defaultSession().events);
+    const trackExecution = vi
+      .spyOn(defaultSession().executions, 'trackAgentExecution')
+      .mockImplementationOnce(() => {
+        throw new Error('execution setup failed');
+      });
+    const options = {
+      runtimeHost: active.host,
+      streamPrefix: 'workflow-script',
+      streamCategory: AgentCategory.Workflow,
+      runKind: 'workflowScript' as const,
+      agentName: 'retry-setup',
+      description: 'Retry a failed child stream setup',
+      config,
+      toolName: DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
+    };
+
+    try {
+      await expect(
+        createRehydratedChildStream(
+          setupRetryExecutionId,
+          parentStreamId,
+          options,
+        ),
+      ).rejects.toThrow('execution setup failed');
+      expect(
+        sessionFactPayloads(recorded.events, 'removeStream'),
+      ).not.toContainEqual({ streamId: setupRetryChildStreamId });
+      expect(
+        sessionFactPayloads(recorded.events, 'setActiveStream'),
+      ).not.toContainEqual(
+        expect.objectContaining({ streamId: setupRetryChildStreamId }),
+      );
+
+      const retried = await createRehydratedChildStream(
+        setupRetryExecutionId,
+        parentStreamId,
+        options,
+      );
+      expect(retried.childStreamId).toBe(setupRetryChildStreamId);
+      expect(
+        sessionFactPayloads(recorded.events, 'setActiveStream'),
+      ).toContainEqual(
+        expect.objectContaining({ streamId: setupRetryChildStreamId }),
+      );
+      await retried.finalize();
+    } finally {
+      trackExecution.mockRestore();
       recorded.detach();
     }
   });
