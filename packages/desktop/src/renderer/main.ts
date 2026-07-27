@@ -747,9 +747,7 @@ function environmentPopoverTemplate(
       </div>
       <div class="task-environment-section">
         <div class="task-environment-row">
-          <span class="task-environment-row-icon"
-            >${waIcon('diff-multiple')}</span
-          >
+          <span class="task-environment-row-icon">${waIcon('plus-minus')}</span>
           <span>Changes</span>
           <span class="task-environment-trailing task-environment-diff">
             <span class="is-added">+${environmentSummary?.additions ?? 0}</span>
