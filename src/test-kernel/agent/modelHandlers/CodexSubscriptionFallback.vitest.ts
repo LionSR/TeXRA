@@ -4,10 +4,7 @@ import { ModelProvider, ReasoningEffort, type ModelConfig } from 'llm-zoo';
 
 import { ModelHandlerCodex } from '@agent/modelHandlers/openai/modelHandlerCodex';
 import type { ModelCredentialRoute } from '@agent/types/ModelHandlerContracts';
-import {
-  CODEX_BACKEND_BASE_URL,
-  resetCodexCoordinator,
-} from '@auth/codex';
+import { CODEX_BACKEND_BASE_URL, resetCodexCoordinator } from '@auth/codex';
 import { setServerSideKeyService } from '@auth/serverKeys';
 import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
 import {

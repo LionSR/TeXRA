@@ -1,8 +1,5 @@
 // Local imports
-import {
-  codexCoordinator,
-  loginWithLoopback,
-} from '@auth/codex';
+import { codexCoordinator, loginWithLoopback } from '@auth/codex';
 import { getChatGptAuthStatus } from '@controllers/modelAccess/chatGptAuthStatus';
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
