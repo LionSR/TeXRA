@@ -16,6 +16,7 @@ import {
   type AgentPromptInput,
 } from '@agent/core/definition/AgentDataclass';
 import { mergeInheritedAgentObject } from '@agent/core/definition/agentDefinitionInheritance';
+import { inlineAgentDefinition } from '@agent/index/inlineAgents';
 import { loadRemoteAgent } from '@agent/remote/RemoteAgentLoader';
 import { parseYamlWith, safeParseYaml } from '@common/parsing/safeParseYaml';
 import * as logger from '@logger/logUtils';
@@ -115,6 +116,30 @@ export async function loadAgentSettingAndPrompts(
 ): Promise<[AgentSetting, AgentPrompt]> {
   const { entry } = resolution;
 
+  // Handle inline agents: the definition was supplied as a value and validated
+  // at registration, so there is nothing to read from disk. Tools and defaults
+  // still go through the same resolution the YAML path uses below.
+  if (entry.source === 'inline') {
+    // Prefer the definition carried in the resolution — it's the exact one
+    // the resolver selected, not whatever a concurrent re-registration may
+    // have replaced (Fix #9). Fall back to the live lookup for callers that
+    // construct a ResolvedAgent without the field.
+    const definition =
+      resolution.inlineDefinition ??
+      inlineAgentDefinition(resolution.resolvedName);
+    const settings =
+      entry.category === AgentCategory.ToolUse
+        ? toToolUseSettings(definition.settings)
+        : {
+            ...definition.settings,
+            agentCategory: AgentCategory.Workflow,
+          };
+    return [
+      AgentSettingSchema.parse(resolveAgentSettingTools(settings)),
+      AgentPromptSchema.parse(definition.prompts),
+    ];
+  }
+
   // Handle remote agents
   if (entry.source === 'remote') {
     const remoteConfig = await loadRemoteAgent(resolution.resolvedName);
@@ -179,4 +204,16 @@ export async function loadAgentSettingAndPrompts(
     AgentSettingSchema.parse(resolvedSettings),
     AgentPromptSchema.parse(prompts),
   ];
+}
+
+function toToolUseSettings(settings: AgentSettingInput): AgentSettingInput {
+  const {
+    rounds: _rounds,
+    isRewrite: _isRewrite,
+    ...sharedSettings
+  } = settings;
+  return {
+    ...sharedSettings,
+    agentCategory: AgentCategory.ToolUse,
+  };
 }
