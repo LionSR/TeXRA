@@ -8,9 +8,12 @@ import { minimatch } from 'minimatch';
 import pDefer from 'p-defer';
 
 // Local imports
-import type { AgentDirectoryEntry, AgentSource } from '@agent/index';
+import type {
+  AgentDirectoryEntry,
+  AgentDirectoryService,
+  AgentSource,
+} from '@agent/index';
 import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
-import type { AgentDirectoryService } from '@agent/index/AgentDirectoryService';
 import { GlobalStateKey, globalSM } from '@common/state';
 import { showLoggedMessageWithDocs } from '@frontend/ui/errorHandlingUtils';
 import { selectFolder } from '@frontend/ui/dialogs';
