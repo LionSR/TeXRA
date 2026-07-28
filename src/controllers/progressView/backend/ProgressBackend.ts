@@ -291,7 +291,7 @@ export class ProgressBackend {
   load(): Promise<void> {
     return this.enqueueStorageRootWork(async () => {
       await this.session.waitUntilReady();
-      await this.state.load(this.stateOwnership);
+      await this.loadPresentationState();
     });
   }
 
@@ -312,7 +312,7 @@ export class ProgressBackend {
       this.state.resetAfterStorageRootChange();
       this.webviewBridge.clearAll();
       try {
-        await this.state.load(this.stateOwnership);
+        await this.loadPresentationState();
         this.presentationReloadPending = false;
       } catch (presentationReloadError) {
         if (sessionReloadError) {
@@ -326,6 +326,13 @@ export class ProgressBackend {
       if (sessionReloadError) throw sessionReloadError;
     };
     return this.enqueueStorageRootWork(reload);
+  }
+
+  private async loadPresentationState(): Promise<void> {
+    await this.state.load(this.stateOwnership);
+    // The category control no longer exists, so legacy preferences must not
+    // constrain active-stream selection or hide sessions.
+    this.state.agentCategoryFilter = 'all';
   }
 
   private enqueueStorageRootWork(work: () => Promise<void>): Promise<void> {

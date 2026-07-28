@@ -244,7 +244,7 @@ function emitRunFact<K extends RunFactEventName>(
 }
 
 describe('ProgressBackend', () => {
-  it('waits for session readiness without reloading its live transcript', async () => {
+  it('loads an unfiltered presentation without reloading its live transcript', async () => {
     const transcripts = await StreamLogStore.open();
     const session = new SessionHandle({
       transcripts,
@@ -253,12 +253,14 @@ describe('ProgressBackend', () => {
     const waitUntilReady = vi.spyOn(session, 'waitUntilReady');
     const reload = vi.spyOn(transcripts, 'reload');
     const { backend } = createIsolatedRecordingBackend(session);
+    backend.state.agentCategoryFilter = AgentCategory.Workflow;
 
     try {
       await backend.load();
 
       expect(waitUntilReady).toHaveBeenCalledOnce();
       expect(reload).not.toHaveBeenCalled();
+      expect(backend.state.agentCategoryFilter).toBe('all');
     } finally {
       backend.dispose();
       session.dispose();
@@ -281,6 +283,7 @@ describe('ProgressBackend', () => {
       'resetAfterStorageRootChange',
     );
     const clearBridge = vi.spyOn(backend.webviewBridge, 'clearAll');
+    backend.state.agentCategoryFilter = AgentCategory.Workflow;
 
     try {
       await backend.reloadAfterStorageRootChange();
@@ -289,6 +292,7 @@ describe('ProgressBackend', () => {
       expect(resetPresentation).toHaveBeenCalledOnce();
       expect(clearBridge).toHaveBeenCalledOnce();
       expect(transcriptReload).not.toHaveBeenCalled();
+      expect(backend.state.agentCategoryFilter).toBe('all');
     } finally {
       backend.dispose();
       session.dispose();
