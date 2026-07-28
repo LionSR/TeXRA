@@ -1,7 +1,10 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-import { MainViewMessageSchema } from '@shared/schemas/mainView';
+import {
+  MainViewMessageSchema,
+  type MainViewMessage,
+} from '@shared/schemas/mainView';
 import { assertOutboundMessage } from '@shared/utils/dispatcher';
 
 /**
@@ -22,10 +25,7 @@ export abstract class BaseWebviewManager {
   }
 
   /** Post a message to the webview if attached */
-  protected postMessage(message: {
-    command: string;
-    [key: string]: unknown;
-  }): void {
+  protected postMessage(message: MainViewMessage): void {
     // Dev/test-only: every BaseWebviewManager subclass sends MainView
     // outbound messages exclusively, so a shape mismatch here is always a
     // real drift between the schema and the producer, not an out-of-scope

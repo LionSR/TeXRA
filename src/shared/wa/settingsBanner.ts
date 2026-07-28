@@ -3,7 +3,8 @@ import { html, nothing, type TemplateResult } from 'lit';
 
 // Local imports - Web Awesome
 import { renderBannerFrame } from './bannerFrame';
-import { type TeXRAIconName, waIcon } from './webAwesomeIcons';
+import { waIcon } from './webAwesomeIcons';
+import type { TeXRAIconName } from './iconNames';
 
 export interface SettingsBannerOptions {
   readonly id: string;
@@ -36,7 +37,7 @@ export function renderSettingsBanner(
     body: html`
       <div class="settings-banner-layout">
         <span class="settings-banner-icon icon-surface is-size-m">
-          ${waIcon(options.icon ?? 'info')}
+          ${waIcon(options.icon ?? 'circle-info')}
         </span>
         <div class="settings-banner-body">
           <div class="settings-banner-title">${options.title}</div>

@@ -96,7 +96,7 @@ return { papers, question: args.question };`;
     );
 
     expect(details?.open).toBe(true);
-    expect(container.querySelector('wa-icon[name="list-tree"]')).not.toBeNull();
+    expect(container.querySelector('wa-icon[name="list-ul"]')).not.toBeNull();
     expect(labels).toEqual(['Agent:', 'Script:', 'Args:', 'Files:', 'Result:']);
     expect(container.textContent).toContain('research');
     expect(scriptBlock?.querySelector('code')?.textContent).toBe(script);

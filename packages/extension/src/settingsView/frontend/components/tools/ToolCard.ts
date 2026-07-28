@@ -16,7 +16,8 @@ import { commonViewStyles, designTokens } from '@shared/styles';
 // Local imports - shared webview
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
-import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - shared schemas
 import type {
@@ -235,11 +236,11 @@ export class ToolCard extends LitElement {
   > = {
     available: { icon: 'check', variant: 'success' },
     'not-found': {
-      icon: 'warning',
+      icon: 'triangle-exclamation',
       variant: 'danger',
     },
     unknown: {
-      icon: 'question',
+      icon: 'circle-question',
       variant: 'neutral',
     },
     'coming-soon': {
