@@ -100,7 +100,7 @@ describe('background-tasks-panel', () => {
     const badges = [...shadow.querySelectorAll('wa-badge.task-status')].map(
       (node) => node.textContent,
     );
-    expect(badges).toEqual(['running', 'completed']);
+    expect(badges).toEqual(['Running', 'Finished']);
     expect(shadow.textContent).not.toContain('completed</em>');
     expect(shadow.textContent).not.toMatch(/All \d+ subagents completed/);
 
@@ -176,7 +176,7 @@ describe('background-tasks-panel', () => {
     await element.updateComplete;
 
     const badge = element.shadowRoot?.querySelector('wa-badge.task-status');
-    expect(badge?.textContent).toBe('running');
+    expect(badge?.textContent).toBe('Running');
     expect(badge?.getAttribute('variant')).toBe('warning');
 
     element.remove();

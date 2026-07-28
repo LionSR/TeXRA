@@ -18,12 +18,12 @@ import {
 import {
   formatPhaseStageLabel,
   formatRoundStageLabel,
-  formatStreamStatusLabel,
 } from '@shared/streams/streamStatusDisplay';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 // Local imports - TUI rendering
 import { truncateSummaryToWidth } from '../render/terminalText';
+import { formatCliStatusLabel } from '../sessionStatus';
 
 // Local imports - TUI state and controls
 import { childElapsed } from '../state/childControls';
@@ -132,11 +132,12 @@ function SessionRow({
   readonly session: StreamView;
 }): React.JSX.Element {
   const status = session.slice?.status;
-  const statusLabel = formatStreamStatusLabel(status, {
-    style: 'cli',
-    isChildStream: session.parentId !== undefined,
-    ...(session.slice?.substate ? { substate: session.slice.substate } : {}),
-  });
+  const substate = session.slice?.substate;
+  const statusLabel = formatCliStatusLabel(
+    status,
+    substate,
+    session.parentId !== undefined,
+  );
   const elapsed = childElapsed(
     {
       status,
