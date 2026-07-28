@@ -49,7 +49,8 @@ export function getConfiguredRelayToken(
 
 const TierConfigUserStatusSchema = z.object({
   userStatus: z
-    .object({ tier: UserTierSchema.catch('free') })
+    // A present malformed tier is a relay contract failure, not a free tier.
+    .object({ tier: UserTierSchema })
     .loose()
     .nullish(),
 });
