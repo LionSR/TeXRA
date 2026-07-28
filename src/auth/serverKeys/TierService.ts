@@ -18,8 +18,10 @@ import { LRUCache } from 'lru-cache';
 import { z } from 'zod';
 import {
   isSpendingQuotaExceeded,
+  SpendingStatusErrorSchema,
   SpendingStatusSchema,
   type SpendingStatus,
+  type SpendingStatusError,
 } from '@shared/schemas/spendingStatus';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
@@ -48,6 +50,7 @@ interface TierFetchResult {
   config: TierModelConfig | null;
   userStatus: UserAccessStatus | null;
   spendingStatus: SpendingStatus | null;
+  spendingStatusError: SpendingStatusError | null;
 }
 
 /**
@@ -82,6 +85,9 @@ export class TierService {
   /** Latest relay spend snapshot (populated when fetching with auth). */
   private spendingStatus: SpendingStatus | null = null;
 
+  /** Latest relay spend-check failure (populated when fetching with auth). */
+  private spendingStatusError: SpendingStatusError | null = null;
+
   /**
    * Create a new TierService.
    * @param baseUrl - The base URL for the relay server (e.g., "https://remote.texra.ai")
@@ -111,6 +117,15 @@ export class TierService {
         if (key === 'auth') {
           this.userStatus = result.userStatus;
           this.spendingStatus = result.spendingStatus;
+          this.spendingStatusError = result.spendingStatusError;
+          if (result.spendingStatusError) {
+            this.logger.warn?.(CHANNEL, 'Relay spend check failed', {
+              data: {
+                failureReason:
+                  result.spendingStatusError.failureReason ?? 'unknown reason',
+              },
+            });
+          }
         }
         if (result.config === null) {
           // Throw so lru-cache drops the entry and the next call retries,
@@ -134,6 +149,7 @@ export class TierService {
     this.configSnapshot = null;
     this.userStatus = null;
     this.spendingStatus = null;
+    this.spendingStatusError = null;
   }
 
   /**
@@ -238,6 +254,11 @@ export class TierService {
       SpendingStatusSchema,
       'spendingStatus',
     );
+    const spendingStatusError = this.parseOptionalBlock(
+      record.spendingStatusError,
+      SpendingStatusErrorSchema,
+      'spendingStatusError',
+    );
 
     const parsed = TierModelConfigSchema.safeParse(data);
     if (!parsed.success) {
@@ -245,10 +266,15 @@ export class TierService {
         CHANNEL,
         `Invalid tier config response: ${z.prettifyError(parsed.error)}`,
       );
-      return { config: null, userStatus, spendingStatus };
+      return { config: null, userStatus, spendingStatus, spendingStatusError };
     }
 
-    return { config: parsed.data, userStatus, spendingStatus };
+    return {
+      config: parsed.data,
+      userStatus,
+      spendingStatus,
+      spendingStatusError,
+    };
   }
 
   /**
@@ -368,6 +394,16 @@ export class TierService {
    */
   getSpendingStatus(): SpendingStatus | null {
     return this.spendingStatus;
+  }
+
+  /**
+   * Latest relay spend-check failure for the authenticated user, or null when
+   * the last authenticated /tier-config fetch computed spend successfully (or
+   * hasn't happened yet). Lets the UI say "the server failed to check usage"
+   * instead of the generic "no usage data".
+   */
+  getSpendingStatusError(): SpendingStatusError | null {
+    return this.spendingStatusError;
   }
 
   /**

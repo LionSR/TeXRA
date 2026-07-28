@@ -28,9 +28,12 @@ vi.mock('@auth/codex', async (importActual) => {
   const actual = await importActual<typeof import('@auth/codex')>();
   return {
     ...actual,
-    isPreferCodexSubscription: () => mocks.preferSubscription,
   };
 });
+
+vi.mock('@model/codex/codexPreference', () => ({
+  isPreferCodexSubscription: () => mocks.preferSubscription,
+}));
 
 vi.mock('@cli/chat/tui/notifications/terminalNotifier', () => ({
   notify: mocks.notify,

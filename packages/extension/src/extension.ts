@@ -32,6 +32,7 @@ import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProj
 import { tryResumeFromResumeData } from '@commands/agent/resumeFromResumeData';
 import { globalSM, initializeStateManagers, workspaceSM } from '@common/state';
 import { SIDEBAR_VIEWS, setActiveSidebarView } from '@common/webview';
+import { installTexraModelAccess } from '@controllers/modelAccess/installTexraModelAccess';
 import { appSignals } from '@eventBus/AppSignals';
 import { SecretManager } from '@frontend/secretManager';
 import {
@@ -257,6 +258,9 @@ export async function activate(context: vscode.ExtensionContext) {
       }
     },
   });
+  // TeXRA's account plane (subscription relay + ChatGPT sign-in). Without this
+  // the model layer is bring-your-own-key. See installTexraModelAccess.
+  installTexraModelAccess();
   const invalidateLanguageModels = () => {
     invalidateRuntimeModelRegistry();
     invalidateModelOptionsCache();
