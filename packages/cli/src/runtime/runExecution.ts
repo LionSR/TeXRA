@@ -189,6 +189,7 @@ export async function executeCliRequest(
   const detachHostInteractions = session.useHostInteractions(
     createHeadlessCliHostInteractions(runContext, {
       beforePrompt: () => presentationHost.prepareInteractivePrompt?.(),
+      emit: (event, payload) => presentationHost.emit(event, payload),
       setApprovalBypassState: (update) =>
         presentationHost.emitApprovalBypassState(update),
     }),
