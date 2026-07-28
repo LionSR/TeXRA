@@ -93,7 +93,6 @@ function baseParams(
     agentName: 'review',
     orchestratorStreamId: 'orchestrator-stream' as StreamTabId,
     parentSession,
-    interactions: { emit: vi.fn() } as never,
     startedAt: Date.now(),
     onStreamResolved: vi.fn(),
   };

@@ -16,7 +16,6 @@ const mocks = vi.hoisted(() => ({
   startChildRunLoop: vi.fn(),
   registerExecution: vi.fn(),
   tryUseRunContext: vi.fn(),
-  currentSession: vi.fn(),
   getCurrentToolCallContext: vi.fn(),
 }));
 
@@ -41,14 +40,10 @@ vi.mock('@agent/runtime/RunContext', () => {
     tryUseRunContext: mocks.tryUseRunContext,
     getRunContextExecutionId: (context: any) =>
       readRunContextField(context, 'executionId'),
-    getRunContextInteractions: (context: any) =>
-      readRunContextField(context, 'interactions'),
+    getRunContextSession: (context: any) =>
+      readRunContextField(context, 'session'),
   };
 });
-
-vi.mock('@agent/runtime/SessionHandle', () => ({
-  currentSession: mocks.currentSession,
-}));
 
 vi.mock('@agent/followUp/ToolFileInteractionContext', () => ({
   getCurrentToolCallContext: mocks.getCurrentToolCallContext,
@@ -67,14 +62,39 @@ describe('executeSubagent childStreamId derivation', () => {
     vi.clearAllMocks();
     mocks.registerExecution.mockResolvedValue(undefined);
     mocks.tryUseRunContext.mockReturnValue({
-      interactions: { emit: vi.fn() },
+      executionId: 'parent-exec',
+      session: { tag: 'parent-session' },
+      approvalPromptsUnavailable: false,
+      runtimeUnavailableTools: [],
+      stopAfterCycle: false,
+    });
+    mocks.getCurrentToolCallContext.mockReturnValue(undefined);
+  });
+
+  it('requires the run context to carry its owning session', async () => {
+    mocks.tryUseRunContext.mockReturnValue({
       executionId: 'parent-exec',
       approvalPromptsUnavailable: false,
       runtimeUnavailableTools: [],
       stopAfterCycle: false,
     });
-    mocks.currentSession.mockReturnValue({ tag: 'parent-session' });
-    mocks.getCurrentToolCallContext.mockReturnValue(undefined);
+
+    await expect(
+      executeSubagent(
+        {
+          agent: 'proof-checker',
+          model: 'gpt5',
+          agentCategory: 'toolUse',
+        } as never,
+        'proof-checker',
+        orchestratorStreamId,
+      ),
+    ).resolves.toMatchObject({
+      status: 'error',
+      summary: 'Delegation session unavailable',
+      diagnostics: { type: 'missing_session' },
+    });
+    expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
   });
 
   it('derives childStreamId from configPayload.agent, not the (possibly different) agentName parameter', async () => {
