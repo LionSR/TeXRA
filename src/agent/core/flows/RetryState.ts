@@ -195,9 +195,9 @@ export abstract class RetryableInvocationNode<
     }
 
     // Proactive relay token refresh before the request. Only relay-route
-    // clients present the Supabase session token, so only they consult the
-    // expiry clock — personal-key / openrouter / subscription clients must
-    // never rebuild for a credential the call doesn't use.
+    // clients present a relay session token, so only they consult the expiry
+    // clock — personal-key / openrouter / subscription clients must never
+    // rebuild for a credential the call doesn't use.
     const includedAccess = includedModelAccess();
     if (
       services.clientCredentialRoute === 'relay' &&
