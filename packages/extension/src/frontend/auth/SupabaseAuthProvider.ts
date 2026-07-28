@@ -482,34 +482,49 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   async removeSession(sessionId: string): Promise<void> {
     try {
       await SupabaseClient.getClient().auth.signOut();
-      await this.sessionCoordinator.clearSession();
-      // Clear server-side key cache when session is removed (handles automatic invalidation)
-      getServerSideKeyService().clearAllCaches({ resetQuotaFlip: true });
-      invalidateModelOptionsCache();
-      await invalidateRemoteAgentsAfterSignOut().catch((error: unknown) => {
-        logger.warn(
-          'SupabaseAuthProvider',
-          `Local agent catalog refresh failed after sign-out: ${toErrorMessage(error)}`,
-        );
-      });
-      this._onDidChangeSessions.fire({
-        added: [],
-        removed: [
-          {
-            id: sessionId,
-            accessToken: '',
-            account: { id: '', label: '' },
-            scopes: [],
-          },
-        ],
-        changed: [],
-      });
     } catch (error) {
       logger.error(
         'SupabaseAuthProvider',
-        `Error removing session: ${toErrorMessage(error)}`,
+        `Remote sign-out failed; clearing local session: ${toErrorMessage(error)}`,
       );
     }
+    await this.clearLocalSession(sessionId);
+  }
+
+  /**
+   * Remove a stored session without first asking VS Code to resolve it.
+   * Used for an already-invalid credential, where `getSessions()` would start
+   * its own sign-in prompt and duplicate the caller's authentication action.
+   */
+  async clearStoredSession(): Promise<boolean> {
+    const session = await this.sessionCoordinator.loadSession();
+    if (!session) return false;
+    await this.clearLocalSession(session.id);
+    return true;
+  }
+
+  private async clearLocalSession(sessionId: string): Promise<void> {
+    await this.sessionCoordinator.clearSession();
+    getServerSideKeyService().clearAllCaches({ resetQuotaFlip: true });
+    invalidateModelOptionsCache();
+    await invalidateRemoteAgentsAfterSignOut().catch((error: unknown) => {
+      logger.warn(
+        'SupabaseAuthProvider',
+        `Local agent catalog refresh failed after sign-out: ${toErrorMessage(error)}`,
+      );
+    });
+    this._onDidChangeSessions.fire({
+      added: [],
+      removed: [
+        {
+          id: sessionId,
+          accessToken: '',
+          account: { id: '', label: '' },
+          scopes: [],
+        },
+      ],
+      changed: [],
+    });
   }
 
   /**

@@ -109,7 +109,9 @@ export const tier = trackedSignal(() => 'free');
 export const apiAccessMode = trackedSignal<'included' | 'personal'>(
   () => 'personal',
 );
-export const sessionExpired = trackedSignal(() => false);
+export const sessionProblem = trackedSignal<'expired' | 'unavailable' | null>(
+  () => null,
+);
 export const spendingStatus = trackedSignal<SpendingStatus | null>(() => null);
 export const spendingStatusError = trackedSignal<SpendingStatusError | null>(
   () => null,

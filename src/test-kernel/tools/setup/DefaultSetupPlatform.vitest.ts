@@ -109,6 +109,7 @@ describe('shared setup capabilities', () => {
       }),
       hasStoredSession: async () => true,
       getStoredAccountLabel: async () => null,
+      getLastRefreshFailure: () => null,
     });
     vi.spyOn(SupabaseClient, 'getUser').mockResolvedValue({
       email: 'researcher@example.com',

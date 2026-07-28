@@ -333,7 +333,11 @@ export class ServerSideKeyService {
         this.accessResult = accessGranted;
         this.userTier = accessStatus.userTier;
         this.lastFetchAuthenticated = thisFetchAuthenticated;
-        this.accessTimestamp = Date.now();
+        // Successful results use the normal TTL. Anonymous denials use the
+        // intentional short backoff. An authenticated transport/config
+        // failure remains immediately retryable.
+        this.accessTimestamp =
+          accessGranted || !thisFetchAuthenticated ? Date.now() : 0;
         this._isCachePrimed = accessGranted;
       }
 

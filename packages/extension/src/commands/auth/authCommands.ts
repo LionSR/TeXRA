@@ -108,7 +108,22 @@ export async function signIn(): Promise<boolean> {
       return false;
     }
 
-    const existing = await getExistingSession(authReady);
+    const hasStoredSession = await SupabaseClient.hasStoredSession();
+    const authenticated = await SupabaseClient.isAuthenticated();
+    if (hasStoredSession && !authenticated) {
+      if (SupabaseClient.getLastSessionRefreshFailure() !== 'invalid') {
+        void showLoggedMessage(
+          CHANNEL,
+          'The authentication service is temporarily unavailable. Your stored session has not been removed; try again later.',
+        );
+        return false;
+      }
+      await SupabaseAuthProvider.getInstance()?.clearStoredSession();
+    }
+
+    const existing = authenticated
+      ? await getExistingSession(authReady)
+      : undefined;
     if (existing) {
       await showSignedInMessage('Already signed in as', false);
       return true;
@@ -183,8 +198,24 @@ async function signInWithEmail(): Promise<void> {
 
 export async function signOut(): Promise<void> {
   try {
-    const session = await getExistingSession();
+    const hasStoredSession = await SupabaseClient.hasStoredSession();
+    const authenticated = await SupabaseClient.isAuthenticated();
+    const session = authenticated ? await getExistingSession() : undefined;
     if (!session) {
+      if (hasStoredSession) {
+        const confirm = await vscode.window.showWarningMessage(
+          'Clear the stored TeXRA session?',
+          { modal: true },
+          'Clear Session',
+        );
+        if (confirm !== 'Clear Session') return;
+        const cleared =
+          await SupabaseAuthProvider.getInstance()?.clearStoredSession();
+        void vscode.window.showInformationMessage(
+          cleared ? 'Stored session cleared' : 'No stored session found',
+        );
+        return;
+      }
       void vscode.window.showInformationMessage('Not signed in');
       return;
     }
