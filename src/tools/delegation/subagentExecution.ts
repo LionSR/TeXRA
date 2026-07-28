@@ -185,7 +185,7 @@ export async function executeSubagent(
 
     try {
       const { createNativeSubagentStrategy } =
-        await import('./nativeSubagentStrategy');
+        await import('./nativeSubagentStrategy.js');
       const { completion } = startChildRunLoop({
         childStreamId,
         parentStreamId: orchestratorStreamId,

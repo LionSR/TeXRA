@@ -18,7 +18,7 @@ import type { FileLockProvider, StateStore } from '../interfaces';
  */
 let jsonStoreFileLocksPromise: Promise<FileLockProvider> | undefined;
 function getJsonStoreFileLocks(): Promise<FileLockProvider> {
-  jsonStoreFileLocksPromise ??= import('./fileLocks').then(
+  jsonStoreFileLocksPromise ??= import('./fileLocks.js').then(
     ({ createNodeFileLocks }) =>
       createNodeFileLocks({
         staleMs: 10_000,

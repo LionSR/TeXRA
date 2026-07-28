@@ -1,0 +1,40 @@
+import { build } from 'esbuild';
+import { fileURLToPath } from 'node:url';
+
+const packageRoot = new URL('..', import.meta.url);
+const quickJsWasmSpecifier = '@jitl/quickjs-wasmfile-release-sync/wasm';
+
+await build({
+  absWorkingDir: packageRoot.pathname,
+  bundle: true,
+  entryPoints: {
+    index: 'src/index.ts',
+    schemas: 'src/schemas.ts',
+    node: 'src/node.ts',
+  },
+  format: 'esm',
+  logLevel: 'info',
+  outdir: 'dist',
+  packages: 'external',
+  platform: 'neutral',
+  plugins: [
+    {
+      name: 'quickjs-wasm',
+      setup(buildContext) {
+        buildContext.onResolve(
+          { filter: /^@jitl\/quickjs-wasmfile-release-sync\/wasm$/ },
+          () => ({
+            path: fileURLToPath(import.meta.resolve(quickJsWasmSpecifier)),
+          }),
+        );
+      },
+    },
+  ],
+  loader: {
+    '.wasm': 'binary',
+  },
+  sourcemap: false,
+  splitting: true,
+  target: 'es2022',
+  tsconfig: '../../tsconfig.json',
+});

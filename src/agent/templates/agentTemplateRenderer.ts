@@ -1,4 +1,4 @@
-import * as nunjucks from 'nunjucks';
+import nunjucks from 'nunjucks';
 
 import { buildUserVarPassthrough } from '@agent/utils/userVars';
 
