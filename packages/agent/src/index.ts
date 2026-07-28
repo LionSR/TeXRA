@@ -12,11 +12,8 @@ import { loadAgents, resolveAgent } from '@agent/index/agentRegistry';
 import { SessionHandle as RuntimeSessionHandle } from '@agent/runtime/SessionHandle';
 import { runAgent as runValidatedAgent } from '@agent/runtime/runAgent';
 import type { Platform } from '@platform/platform';
+import { initNodeAgentRuntime } from '@platform/defaults/nodeHost';
 import { StreamLogStore } from '@transcript/StreamLogStore';
-import {
-  PACKAGE_RUNTIME_INITIALIZER,
-  type PackageRuntimePlatform,
-} from './runtimeInitializer.js';
 
 export type { AgentEvent } from '@agent/trace';
 export type { ITool, IToolRegistry } from '@agent/core/tools/ToolTypes';
@@ -63,11 +60,19 @@ export interface RunAgentInput {
   readonly tools?: readonly ITool[];
 }
 
-/** A running agent's event stream and eventual terminal result. */
+/**
+ * A running agent's single-consumer event stream and eventual terminal result.
+ *
+ * Event delivery begins with the iterator's first `next()` call. Awaiting only
+ * `result` does not retain trace events, and ending iteration detaches the
+ * event source while the run itself continues.
+ */
 export interface AgentRun extends AsyncIterable<AgentEvent> {
   readonly result: Promise<AgentFlowResult>;
   interrupt(): void;
 }
+
+let runtimeInitialized = false;
 
 class AgentRunStream implements AgentRun {
   private readonly events: AgentEvent[] = [];
@@ -77,7 +82,11 @@ class AgentRunStream implements AgentRun {
   }> = [];
   private liveHandle: RuntimeAgentRunHandle | undefined;
   private detachEvents: (() => void) | undefined;
+  private eventSource:
+    { readonly session: SessionHandle; readonly streamId: string } | undefined;
   private ended = false;
+  private iteratorClosed = false;
+  private iteratorStarted = false;
   private failed = false;
   private failure: unknown;
   private interruptPending = false;
@@ -97,6 +106,20 @@ class AgentRunStream implements AgentRun {
   }
 
   attachEvents(session: SessionHandle, streamId: string): void {
+    this.eventSource = { session, streamId };
+    this.subscribeToEvents();
+  }
+
+  private subscribeToEvents(): void {
+    if (
+      !this.iteratorStarted ||
+      this.iteratorClosed ||
+      this.detachEvents ||
+      !this.eventSource
+    ) {
+      return;
+    }
+    const { session, streamId } = this.eventSource;
     this.detachEvents = session.events.subscribe(
       (event) => {
         if (event.scope === 'run') this.push(event.event);
@@ -116,6 +139,13 @@ class AgentRunStream implements AgentRun {
   [Symbol.asyncIterator](): AsyncIterator<AgentEvent> {
     return {
       next: () => {
+        if (!this.iteratorStarted) {
+          this.iteratorStarted = true;
+          this.subscribeToEvents();
+        }
+        if (this.iteratorClosed) {
+          return Promise.resolve({ done: true, value: undefined });
+        }
         const event = this.events.shift();
         if (event) return Promise.resolve({ done: false, value: event });
         if (this.failed) return Promise.reject(this.failure);
@@ -126,15 +156,31 @@ class AgentRunStream implements AgentRun {
           this.readers.push({ resolve, reject }),
         );
       },
+      return: () => {
+        this.closeIterator();
+        return Promise.resolve({ done: true, value: undefined });
+      },
     };
   }
 
   private push(event: AgentEvent): void {
+    if (this.iteratorClosed) return;
     const reader = this.readers.shift();
     if (reader) {
       reader.resolve({ done: false, value: event });
     } else {
       this.events.push(event);
+    }
+  }
+
+  private closeIterator(): void {
+    this.iteratorClosed = true;
+    this.events.splice(0);
+    this.detachEvents?.();
+    this.detachEvents = undefined;
+    this.eventSource = undefined;
+    for (const reader of this.readers.splice(0)) {
+      reader.resolve({ done: true, value: undefined });
     }
   }
 
@@ -144,6 +190,7 @@ class AgentRunStream implements AgentRun {
     this.failure = failure?.error;
     this.detachEvents?.();
     this.detachEvents = undefined;
+    this.eventSource = undefined;
     for (const reader of this.readers.splice(0)) {
       if (this.failed) reader.reject(this.failure);
       else reader.resolve({ done: true, value: undefined });
@@ -167,8 +214,10 @@ export function runAgent(input: RunAgentInput): AgentRun {
       );
     }
     if (!activePlatform) initPlatform(input.platform);
-    const packagePlatform = input.platform as PackageRuntimePlatform;
-    packagePlatform[PACKAGE_RUNTIME_INITIALIZER]?.();
+    if (!runtimeInitialized) {
+      initNodeAgentRuntime(input.platform.lifecycle);
+      runtimeInitialized = true;
+    }
 
     const session = new RuntimeSessionHandle({
       transcripts: StreamLogStore.ephemeral('npm package consumer'),
