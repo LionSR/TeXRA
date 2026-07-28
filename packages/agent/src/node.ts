@@ -79,7 +79,9 @@ const environmentSecrets: PlatformSecrets = {
   set: async () => {
     throw new Error('The default Node platform does not persist secrets.');
   },
-  delete: async () => {},
+  delete: async () => {
+    throw new Error('The default Node platform does not persist secrets.');
+  },
   listStoredKeys: async () => [],
   getEnv: (name) => process.env[name],
 };

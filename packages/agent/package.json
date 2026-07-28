@@ -3,6 +3,9 @@
   "version": "0.39.10",
   "description": "Embeddable TeXRA agent runtime",
   "type": "module",
+  "engines": {
+    "node": ">=22.9.0"
+  },
   "publishConfig": {
     "access": "public"
   },

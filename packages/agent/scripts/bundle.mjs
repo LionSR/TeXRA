@@ -5,7 +5,7 @@ const packageRoot = new URL('..', import.meta.url);
 const quickJsWasmSpecifier = '@jitl/quickjs-wasmfile-release-sync/wasm';
 
 await build({
-  absWorkingDir: packageRoot.pathname,
+  absWorkingDir: fileURLToPath(packageRoot),
   bundle: true,
   entryPoints: {
     index: 'src/index.ts',

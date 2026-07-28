@@ -1,4 +1,4 @@
-import { access, readFile, readdir, stat } from 'node:fs/promises';
+import { readFile, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -23,12 +23,12 @@ async function filesBelow(directory) {
   return nested.flat();
 }
 
-async function exists(filePath) {
+async function isFile(filePath) {
   try {
-    await access(filePath);
-    return true;
-  } catch {
-    return false;
+    return (await stat(filePath)).isFile();
+  } catch (error) {
+    if (error?.code === 'ENOENT' || error?.code === 'ENOTDIR') return false;
+    throw error;
   }
 }
 
@@ -69,6 +69,18 @@ if (allFiles.some((file) => file.endsWith('.map'))) {
 const moduleSpecifier =
   /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)(?<quote>['"])(?<specifier>[^'"]+)\k<quote>/gu;
 
+for (const declaration of declarationFiles) {
+  const source = await readFile(declaration, 'utf8');
+  for (const match of source.matchAll(moduleSpecifier)) {
+    const specifier = match.groups?.specifier;
+    if (specifier?.startsWith('.') && !specifier.endsWith('.js')) {
+      throw new Error(
+        `NodeNext declaration specifier lacks a .js extension: ${declaration}: ${specifier}`,
+      );
+    }
+  }
+}
+
 async function reachableDeclarations(entry) {
   const pending = [entry];
   const visited = new Set();
@@ -84,13 +96,10 @@ async function reachableDeclarations(entry) {
         path.dirname(declaration),
         specifier.replace(/\.js$/u, '.d.ts'),
       );
-      if (!(await exists(target)) && path.extname(target) === '') {
+      if (!(await isFile(target)) && path.extname(target) === '') {
         target = `${target}.d.ts`;
       }
-      if ((await exists(target)) && (await stat(target)).isDirectory()) {
-        target = path.join(target, 'index.d.ts');
-      }
-      if (!(await exists(target))) {
+      if (!(await isFile(target))) {
         throw new Error(
           `Declaration ${declaration} refers to missing target ${specifier}`,
         );

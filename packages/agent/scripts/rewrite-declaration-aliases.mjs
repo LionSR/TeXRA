@@ -1,4 +1,4 @@
-import { access, readFile, readdir, writeFile } from 'node:fs/promises';
+import { readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -14,12 +14,12 @@ const aliases = Object.entries(tsconfig.compilerOptions.paths)
   )
   .toSorted(([left], [right]) => right.length - left.length);
 
-async function exists(filePath) {
+async function isFile(filePath) {
   try {
-    await access(filePath);
-    return true;
-  } catch {
-    return false;
+    return (await stat(filePath)).isFile();
+  } catch (error) {
+    if (error?.code === 'ENOENT' || error?.code === 'ENOTDIR') return false;
+    throw error;
   }
 }
 
@@ -44,7 +44,7 @@ async function resolveSource(specifier) {
         path.join(candidate, 'index.ts'),
         path.join(candidate, 'index.tsx'),
       ]) {
-        if (await exists(source)) return source;
+        if (await isFile(source)) return source;
       }
     }
   }
@@ -75,7 +75,34 @@ async function declarationFiles(directory) {
 }
 
 const moduleSpecifier =
-  /(?<prefix>\bfrom\s*|\bimport\s*\(\s*|\bimport\s+|\bexport\s+\*\s+from\s*)(?<quote>['"])(?<specifier>@[^'"]+)\k<quote>/gu;
+  /(?<prefix>\bfrom\s*|\bimport\s*\(\s*|\bimport\s+|\bexport\s+\*\s+from\s*)(?<quote>['"])(?<specifier>[^'"]+)\k<quote>/gu;
+
+async function resolveDeclarationSpecifier(specifier, declaration) {
+  let emitted;
+  if (specifier.startsWith('.')) {
+    const candidate = path.resolve(
+      path.dirname(declaration),
+      specifier.replace(/\.js$/u, '.d.ts'),
+    );
+    emitted = (await isFile(candidate))
+      ? candidate
+      : (await isFile(`${candidate}.d.ts`))
+        ? `${candidate}.d.ts`
+        : path.join(candidate, 'index.d.ts');
+  } else {
+    const source = await resolveSource(specifier);
+    if (!source) return undefined;
+    emitted = emittedPath(source);
+  }
+  if (!(await isFile(emitted))) {
+    throw new Error(
+      `Declaration target for ${specifier} was not emitted: ${emitted}`,
+    );
+  }
+  let relative = path.relative(path.dirname(declaration), emitted);
+  relative = relative.replaceAll(path.sep, '/').replace(/\.d\.ts$/u, '.js');
+  return relative.startsWith('.') ? relative : `./${relative}`;
+}
 
 for (const declaration of await declarationFiles(outputRoot)) {
   const original = await readFile(declaration, 'utf8');
@@ -84,17 +111,8 @@ for (const declaration of await declarationFiles(outputRoot)) {
   for (const match of original.matchAll(moduleSpecifier)) {
     const specifier = match.groups?.specifier;
     if (!specifier || match.index == null) continue;
-    const source = await resolveSource(specifier);
-    if (!source) continue;
-    const emitted = emittedPath(source);
-    if (!(await exists(emitted))) {
-      throw new Error(
-        `Declaration target for ${specifier} was not emitted: ${emitted}`,
-      );
-    }
-    let relative = path.relative(path.dirname(declaration), emitted);
-    relative = relative.replaceAll(path.sep, '/').replace(/\.d\.ts$/u, '.js');
-    if (!relative.startsWith('.')) relative = `./${relative}`;
+    const relative = await resolveDeclarationSpecifier(specifier, declaration);
+    if (!relative) continue;
     const specifierOffset = match[0].indexOf(specifier);
     const start = match.index + specifierOffset;
     rewritten += original.slice(cursor, start) + relative;
