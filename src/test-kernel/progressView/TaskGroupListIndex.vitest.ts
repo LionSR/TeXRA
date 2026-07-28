@@ -403,8 +403,12 @@ describe('task-group-list status icon (#7993 step 3)', () => {
     const title = list.shadowRoot
       ?.querySelector(`#${GROUP_DOM_IDS.HEADER_PREFIX}round-0 .group-title`)
       ?.textContent?.trim();
+    const statusLabel = list.shadowRoot
+      ?.querySelector(`#${GROUP_DOM_IDS.HEADER_PREFIX}round-0 wa-icon`)
+      ?.getAttribute('label');
 
     expect(title).toBe('r1/3');
+    expect(statusLabel).toBe('Running');
   });
 
   it('renders a distinct icon for completed, cancelled, and failed groups', async () => {

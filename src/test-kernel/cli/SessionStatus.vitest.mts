@@ -288,6 +288,7 @@ describe('CLI session status formatter', () => {
   it('uses the footer label for an idle waiting stream', () => {
     expect(formatCliStatusLabel(STREAM_PHASE.WAITING)).toBe('idle');
     expect(formatCliStatusLabel(undefined, undefined, true)).toBe('');
+    expect(formatCliStatusLabel('stopped', undefined, true)).toBe('Cancelled');
     expect(
       formatCliSessionStatus({
         agent: 'research',

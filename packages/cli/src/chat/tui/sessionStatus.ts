@@ -4,6 +4,8 @@ import {
 } from '@cli/runtime/modelAccessRoute';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import {
+  STREAM_PHASE,
+  STREAM_STATUS,
   WORKFLOW_TASK_STATUS_LABEL,
   type StreamSubstate,
 } from '@shared/schemas';
@@ -50,6 +52,9 @@ export function formatCliStatusLabel(
   substate?: StreamSubstate,
   isChildStream?: boolean,
 ): string {
+  if (isChildStream && status === STREAM_STATUS.STOPPED) {
+    return WORKFLOW_TASK_STATUS_LABEL[STREAM_PHASE.CANCELLED];
+  }
   const statusKey = streamStatusDisplayKey(status, substate);
   if (isChildStream && statusKey === undefined) return '';
   if (
