@@ -43,6 +43,13 @@ describe('relay shared configuration parity', () => {
     }
   });
 
+  it('defaults only an absent spending tier to free', () => {
+    expect(getRelaySpendingLimit(undefined)).toBe(
+      TIER_SPENDING_LIMITS[FREE_TIER],
+    );
+    expect(() => getRelaySpendingLimit('corrupted')).toThrow();
+  });
+
   it('keeps the workspace llm-zoo range floor in sync with the relay deno.json pin', () => {
     const workspacePackageJson = JSON.parse(
       readFileSync(resolve(REPO_ROOT, 'package.json'), 'utf8'),
