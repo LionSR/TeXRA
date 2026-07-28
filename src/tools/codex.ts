@@ -28,7 +28,6 @@ import {
   type AgentTrace,
   type ToolUseCardRef,
 } from '@agent/trace';
-import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
 import {
   getRunContextExecutionId,
@@ -394,7 +393,6 @@ function startCodexLoop(params: {
   parentStreamId: StreamTabId;
   executionId: ExecutionId;
   initialPrompt: string;
-  interactions: SessionHostInteractions;
   /**
    * The disk-based fallback thread id claimed synchronously in execute(). The
    * loop promotes that reservation after its first turn succeeds.
@@ -403,14 +401,8 @@ function startCodexLoop(params: {
   /** Release the fallback claim if the loop exits before promoting it. */
   releaseFallbackClaim: (() => void) | undefined;
 }): void {
-  const {
-    thread,
-    childStream,
-    parentStreamId,
-    executionId,
-    initialPrompt,
-    interactions,
-  } = params;
+  const { thread, childStream, parentStreamId, executionId, initialPrompt } =
+    params;
   const { childStreamId, logger } = childStream;
   const fallbackThreadId = params.resumeThreadId;
 
@@ -573,16 +565,12 @@ export class CodexTool extends defineTool({
           },
           launch: (releaseClaim) => {
             // A missing in-memory entry denotes a disk-based SDK fallback.
-            const { streamId, interactions } = requireRunStream(
-              'codex',
-              runContext,
-            );
+            const { streamId } = requireRunStream('codex', runContext);
             return launchCodexSession(
               input,
               streamId,
               getRunContextExecutionId(runContext),
               getRunContextWorkingDirectory(runContext),
-              interactions,
               releaseClaim,
             );
           },
@@ -597,7 +585,6 @@ async function launchCodexSession(
   parentStreamId: StreamTabId,
   parentExecutionId: ExecutionId | undefined,
   parentWorkingDirectory: string | undefined,
-  interactions: SessionHostInteractions,
   releaseFallbackClaim: (() => void) | undefined,
 ): Promise<ToolResult> {
   const workingDir = parseWorkingDirectory(parentWorkingDirectory);
@@ -608,7 +595,6 @@ async function launchCodexSession(
   return launchAgentCliSession({
     parentStreamId,
     parentExecutionId,
-    interactions,
     agentName: 'codex',
     streamPrefix: 'codex@codex-sdk',
     description: input.prompt,
@@ -621,7 +607,6 @@ async function launchCodexSession(
         parentStreamId,
         executionId,
         initialPrompt: input.prompt,
-        interactions,
         resumeThreadId: input.thread_id ?? undefined,
         releaseFallbackClaim,
       }),

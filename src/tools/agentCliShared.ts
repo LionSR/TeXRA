@@ -9,7 +9,6 @@ import {
 } from '@agent/storage/executionLease';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import { getCurrentToolContexts } from '@agent/followUp/ToolFileInteractionContext';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
@@ -155,7 +154,6 @@ export async function resumeOrLaunchAgentCliSession(
 export interface AgentCliLaunchParams {
   parentStreamId: StreamTabId;
   parentExecutionId: ExecutionId | undefined;
-  interactions: SessionHostInteractions;
   agentName: string;
   streamPrefix: string;
   description: string;
@@ -202,7 +200,6 @@ export async function launchAgentCliSession(
         description: params.description,
         config: params.config,
         toolName: params.agentName,
-        interactions: params.interactions,
       });
       await params.startLoop({ childStream, executionId });
     } catch (error) {
