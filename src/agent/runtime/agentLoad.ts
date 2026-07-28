@@ -127,8 +127,15 @@ export async function loadAgentSettingAndPrompts(
     const definition =
       resolution.inlineDefinition ??
       inlineAgentDefinition(resolution.resolvedName);
+    const settings =
+      entry.category === AgentCategory.ToolUse
+        ? toToolUseSettings(definition.settings)
+        : {
+            ...definition.settings,
+            agentCategory: AgentCategory.Workflow,
+          };
     return [
-      AgentSettingSchema.parse(resolveAgentSettingTools(definition.settings)),
+      AgentSettingSchema.parse(resolveAgentSettingTools(settings)),
       AgentPromptSchema.parse(definition.prompts),
     ];
   }
@@ -197,4 +204,16 @@ export async function loadAgentSettingAndPrompts(
     AgentSettingSchema.parse(resolvedSettings),
     AgentPromptSchema.parse(prompts),
   ];
+}
+
+function toToolUseSettings(settings: AgentSettingInput): AgentSettingInput {
+  const {
+    rounds: _rounds,
+    isRewrite: _isRewrite,
+    ...sharedSettings
+  } = settings;
+  return {
+    ...sharedSettings,
+    agentCategory: AgentCategory.ToolUse,
+  };
 }
