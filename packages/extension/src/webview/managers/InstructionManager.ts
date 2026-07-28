@@ -95,12 +95,6 @@ export class InstructionManager extends BaseWebviewManager {
     return context;
   }
 
-  handleTranscribeInstruction(): void {
-    vscode.window.showInformationMessage(
-      'Please use the new recording interface with start/stop controls.',
-    );
-  }
-
   async handleClipboardImage(message: ClipboardImageMessage): Promise<void> {
     if (!this.getWebview()) {
       return;
