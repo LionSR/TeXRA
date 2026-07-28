@@ -10,6 +10,7 @@ import {
   ServerSideKeyService,
   setServerSideKeyService,
 } from '@auth/serverKeys';
+import { installTexraModelAccess } from '@controllers/modelAccess/installTexraModelAccess';
 import {
   computeModelOptionsData,
   getModelUnavailableReason,
@@ -117,6 +118,9 @@ describe('computeModelOptionsData relay quota state', () => {
     invalidateApiKeyCache();
     invalidateModelOptionsCache();
     resetCodexCoordinator();
+    // The picker reads the app's account plane through the model layer's
+    // seam; install the same provider the three hosts install.
+    installTexraModelAccess();
   });
 
   it('shows relay quota exhaustion while included access remains selected', async () => {

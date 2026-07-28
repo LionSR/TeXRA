@@ -1,8 +1,8 @@
+import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import {
   setPreferCodexSubscription,
   type CodexSubscriptionPreferenceUpdate,
-} from '@auth/codex';
-import { invalidateModelOptionsCache } from '@model/computeModelOptions';
+} from '@model/codex/codexPreference';
 
 import { bumpCodexPreferenceVersion } from './cliState';
 

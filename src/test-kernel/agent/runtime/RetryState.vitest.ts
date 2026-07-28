@@ -51,6 +51,8 @@ import {
   attachContextWindowError,
   attachSdkErrorMetadata,
 } from '@common/errors/sdkErrorUtils';
+import { installTexraModelAccess } from '@controllers/modelAccess/installTexraModelAccess';
+import { setIncludedModelAccess } from '@model/includedModelAccess';
 import {
   STREAM_PHASE,
   STREAM_STATUS,
@@ -321,11 +323,13 @@ function createAuthTokenProvider(
 describe('RetryState', () => {
   beforeEach(() => {
     vi.stubEnv(RELAY_TOKEN_ENV_VAR, '');
+    installTexraModelAccess();
   });
 
   afterEach(() => {
     vi.unstubAllEnvs();
     resetRelayTokenTierCacheForTests();
+    setIncludedModelAccess(null);
     SupabaseClient.resetForTests();
   });
 
