@@ -1,10 +1,10 @@
-import {
-  getCodexStatus,
-  isPreferCodexSubscription,
-  setPreferCodexSubscription,
-} from '@auth/codex';
+import { getCodexStatus } from '@auth/codex';
 import { apiKeyExists } from '@model/apiProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
+import {
+  isPreferCodexSubscription,
+  setPreferCodexSubscription,
+} from '@model/codex/codexPreference';
 import { platform } from '@platform/platform';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import {

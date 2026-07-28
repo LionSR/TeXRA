@@ -11,6 +11,7 @@ import type {
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import * as serverKeysModule from '@auth/serverKeys';
+import { installTexraModelAccess } from '@controllers/modelAccess/installTexraModelAccess';
 import { KIMI_CODE_BASE_URL } from '@model/kimiCodeSubscriptionRouting';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
@@ -206,6 +207,7 @@ describe('OpenAI-compatible client diagnostics', () => {
     } as unknown as ReturnType<
       typeof serverKeysModule.getServerSideKeyService
     >);
+    installTexraModelAccess();
     const messages = await clientDiagnostics(
       buildTestModelConfig(KIMI_DIAGNOSTICS_CONFIG, {
         name: 'gpt-test',
