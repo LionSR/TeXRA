@@ -41,6 +41,17 @@ import { requireField } from './utils';
 const CHANNEL = 'TextEditorTool';
 const SNIPPET_LINES = 4;
 
+/** Columns a literal tab expands to when normalizing text for display and matching. */
+const TAB_WIDTH = 4;
+
+/**
+ * Expand tabs to spaces so file views and `str_replace`/`insert` matching stay
+ * consistent regardless of whether the file uses tabs or spaces.
+ */
+function expandTabs(text: string): string {
+  return text.replaceAll('\t', ' '.repeat(TAB_WIDTH));
+}
+
 /** Rethrow ToolError as-is; wrap other errors with context message */
 function rethrowWithContext(error: unknown, context: string): never {
   if (error instanceof ToolError) {
@@ -299,11 +310,7 @@ export class TextEditorTool extends defineTool({
         };
       }
 
-      // Expand tabs to 4 spaces for consistent display
-      const fileContent = (await WorkspaceFS.read(filePath)).replaceAll(
-        '\t',
-        '    ',
-      );
+      const fileContent = expandTabs(await WorkspaceFS.read(filePath));
       const lines = splitContentLines(fileContent);
       const totalLines = lines.length;
 
@@ -405,10 +412,10 @@ export class TextEditorTool extends defineTool({
         return loaded.blocked;
       }
       const fileContent = loaded.originalContent;
-      const expandedFileContent = fileContent.replaceAll('\t', '    ');
+      const expandedFileContent = expandTabs(fileContent);
 
-      const expandedOldStr = oldStr.replaceAll('\t', '    ');
-      const expandedNewStr = newStr.replaceAll('\t', '    ');
+      const expandedOldStr = expandTabs(oldStr);
+      const expandedNewStr = expandTabs(newStr);
 
       if (expandedOldStr.length === 0) {
         throw new ToolError(
@@ -476,9 +483,9 @@ export class TextEditorTool extends defineTool({
         return loaded.blocked;
       }
       const fileContent = loaded.originalContent;
-      const expandedFileContent = fileContent.replaceAll('\t', '    ');
+      const expandedFileContent = expandTabs(fileContent);
 
-      const expandedNewStr = newStr.replaceAll('\t', '    ');
+      const expandedNewStr = expandTabs(newStr);
 
       const fileLines = expandedFileContent.split('\n');
       const numLines = fileLines.length;
