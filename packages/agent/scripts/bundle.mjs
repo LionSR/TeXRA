@@ -26,6 +26,7 @@ await build({
       setup(buildContext) {
         buildContext.onResolve({ filter: /^openai(?:\/|$)/ }, ({ path }) => ({
           path: fileURLToPath(import.meta.resolve(path)),
+          external: false,
         }));
       },
     },
