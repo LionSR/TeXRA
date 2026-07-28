@@ -67,7 +67,6 @@ function startPlanUpdate(streamId: StreamTabId, objective: string) {
   const resultPromise = withToolEnvironment(
     {
       run: {
-        interactions: host,
         streamId,
         session,
       },
@@ -131,12 +130,12 @@ describe('PlanTool — update (plan approval)', () => {
     const workPlanState = new WorkPlanState();
 
     try {
-      setDelegatedWorkApprovalBypasses(streamId, true, host, session);
+      setDelegatedWorkApprovalBypasses(streamId, true, session);
       expect(proposalApprovals(session).isBypassed(streamId)).toBe(true);
 
       const resultPromise = withToolEnvironment(
         {
-          run: { runtimeHost: host, streamId, session },
+          run: { streamId, session },
           call: {
             tracker: new FileInteractionState(),
             workPlanState,
@@ -299,7 +298,7 @@ describe('PlanTool — pause/complete (goal lifecycle)', () => {
     const tool = new PlanTool();
     return withToolEnvironment(
       {
-        run: { runtimeHost: host, streamId: STREAM_ID },
+        run: { streamId: STREAM_ID },
         call: { tracker: new FileInteractionState() },
       },
       () => tool.call(input),

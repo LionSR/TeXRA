@@ -81,7 +81,7 @@ function createHandle(
   executionId: string,
   parentStreamId: StreamTabId,
   childStreamId: StreamTabId,
-  runtimeHost: SessionHostInteractions,
+  interactions: SessionHostInteractions,
   overrides: {
     agentName?: string;
     category?: AgentCategory;
@@ -95,7 +95,6 @@ function createHandle(
     childStreamId,
     overrides.agentName ?? 'test-subagent',
     overrides.category ?? AgentCategory.ToolUse,
-    runtimeHost,
     overrides.trace,
   );
   handle.attachExecutionLeaseScope(
@@ -1515,7 +1514,6 @@ describe('executionRegistry', () => {
       modelHandler: {
         supportsManualCompaction: true,
       },
-      runtimeHost: explicit.host,
       requestImmediateCompaction: vi.fn(),
       modelSwitchDisabledReason: vi.fn(),
       switchModel: vi.fn(),
@@ -1561,7 +1559,6 @@ describe('executionRegistry', () => {
       modelHandler: {
         supportsManualCompaction: true,
       },
-      runtimeHost: explicit.host,
       requestImmediateCompaction,
       modelSwitchDisabledReason: vi.fn(),
       switchModel: vi.fn(),
@@ -1640,7 +1637,6 @@ describe('executionRegistry', () => {
       modelHandler: {
         supportsManualCompaction: true,
       },
-      runtimeHost: explicit.host,
       requestImmediateCompaction: vi.fn(),
       modelSwitchDisabledReason: vi.fn(),
       switchModel: vi.fn(),

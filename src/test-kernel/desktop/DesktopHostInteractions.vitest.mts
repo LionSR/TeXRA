@@ -72,7 +72,7 @@ interface DesktopHostInteractions {
 
 interface DesktopHostInteractionsModule {
   createDesktopHostInteractions(options: {
-    runtimeHost: { emit: (event: string, payload: unknown) => void };
+    interactions: { emit: (event: string, payload: unknown) => void };
     session: SessionHandle;
     showInfoMessage(message: string): Promise<void> | void;
     getApprovalHandlers(): ApprovalRequestHandlerSet;
@@ -187,7 +187,7 @@ async function createInteractions(handlers = createHandlers()) {
   const { createDesktopHostInteractions } = (await import(
     moduleFileUrl(desktopSourcePath('main', 'desktopHostInteractions.ts'))
   )) as DesktopHostInteractionsModule;
-  const runtimeHost = { emit: vi.fn() };
+  const presentationSink = { emit: vi.fn() };
   const session = createTestSession();
   const toolEditApprovals = {
     approvePendingForStream: vi.fn(async (): Promise<void> => {}),
@@ -201,14 +201,14 @@ async function createInteractions(handlers = createHandlers()) {
 
   return {
     interactions: createDesktopHostInteractions({
-      runtimeHost,
+      interactions: presentationSink,
       session,
       showInfoMessage: vi.fn(),
       getApprovalHandlers: () => handlers,
       getToolEditApprovals: () => toolEditApprovals,
     }),
     handlers,
-    runtimeHost,
+    presentationSink,
     sessionEvents,
     session,
     toolEditApprovals,
@@ -312,7 +312,7 @@ describe('createDesktopHostInteractions', () => {
 
   it('rejects a plan decision for a pending bash request', async () => {
     const handlers = createHandlers();
-    const { interactions, runtimeHost, sessionEvents } =
+    const { interactions, presentationSink, sessionEvents } =
       await createInteractions(handlers);
 
     const resultPromise = interactions.requestBashApproval({
@@ -329,11 +329,11 @@ describe('createDesktopHostInteractions', () => {
       interactions.submitBashDecision(requestId, { action: 'approve' }),
     ).toBe(true);
     await expect(resultPromise).resolves.toEqual({ accepted: true });
-    expect(runtimeHost.emit).toHaveBeenCalledWith(
+    expect(presentationSink.emit).toHaveBeenCalledWith(
       'requestEnsureProgressView',
       {},
     );
-    expect(runtimeHost.emit).not.toHaveBeenCalledWith(
+    expect(presentationSink.emit).not.toHaveBeenCalledWith(
       'setActiveStream',
       expect.anything(),
     );

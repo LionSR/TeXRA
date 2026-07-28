@@ -1,8 +1,13 @@
-import { isFileNotFoundError } from '@common/errors/errorPredicates';
+import {
+  isFileNotFoundError,
+  isNotADirectoryError,
+} from '@common/errors/errorPredicates';
 import * as logger from '@logger/logUtils';
 import { platform } from '@platform/platform';
-import type { AgentDirectoriesPort } from '@platform/interfaces';
-import { AgentDirectoryService } from './AgentDirectoryService';
+import {
+  AgentDirectoryService,
+  type AgentDirectoryIssueReporter,
+} from './AgentDirectoryService';
 import {
   BundledAgentDirectorySync,
   GlobalStorageAgentDirectoryStorage,
@@ -13,6 +18,9 @@ import {
 interface PlatformAgentDirectoryOptions {
   channel: string;
   customDirectoryStore: { get(): string | undefined };
+  /** Defaults to logging the issue at `warn`; hosts with an interactive
+   * notification surface (e.g. the VS Code extension) can override it. */
+  issueReporter?: AgentDirectoryIssueReporter;
 }
 
 export interface PlatformAgentDirectoryBootstrapOptions {
@@ -24,7 +32,7 @@ export interface PlatformAgentDirectoryBootstrapOptions {
 
 export function createPlatformAgentDirectories(
   options: PlatformAgentDirectoryOptions,
-): AgentDirectoriesPort {
+): AgentDirectoryService {
   return new AgentDirectoryService({
     storage: new GlobalStorageAgentDirectoryStorage(),
     customDirectoryStore: options.customDirectoryStore,
@@ -34,13 +42,18 @@ export function createPlatformAgentDirectories(
           await platform().fs.stat(target);
           return true;
         } catch (error) {
-          if (isFileNotFoundError(error)) return false;
+          // Match AbsoluteFS/BaseFS.statIfExists: an ancestor path component
+          // that turned out to be a file (ENOTDIR) means "does not exist"
+          // here too, not an error to propagate.
+          if (isFileNotFoundError(error) || isNotADirectoryError(error)) {
+            return false;
+          }
           throw error;
         }
       },
       ensureDir: (target) => platform().fs.createDirectory(target),
     },
-    issueReporter: {
+    issueReporter: options.issueReporter ?? {
       report: async (message, docsId) =>
         logger.warn(
           options.channel,

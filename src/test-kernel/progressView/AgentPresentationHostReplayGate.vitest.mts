@@ -198,7 +198,7 @@ describe('extension presentation-event emit port (#9251 replay gate)', () => {
         {} as unknown as ProgressViewProvider,
       );
       const interactions = createExtensionHostInteractions({
-        runtimeHost: presentationHost,
+        interactions: presentationHost,
         session,
         getApprovalHandlers: () => createApprovalHandlers(),
         setApprovalBypassState: vi.fn(),

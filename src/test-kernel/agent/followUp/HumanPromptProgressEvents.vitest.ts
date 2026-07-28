@@ -219,7 +219,7 @@ describe('human prompt progress events', () => {
     const detach = defaultSession().useHostInteractions(explicit.interactions);
 
     try {
-      setToolEditApprovalSessionBypass(streamId, true, explicit.host);
+      setToolEditApprovalSessionBypass(streamId, true);
 
       expect(explicit.events).toEqual([
         {
@@ -238,7 +238,7 @@ describe('human prompt progress events', () => {
     const detach = defaultSession().useHostInteractions(explicit.interactions);
 
     try {
-      setBashApprovalSessionBypass(streamId, true, explicit.host);
+      setBashApprovalSessionBypass(streamId, true);
 
       expect(explicit.events).toEqual([
         {
@@ -256,7 +256,7 @@ describe('human prompt progress events', () => {
     const streamId = 'stream:bypass-independence' as StreamTabId;
 
     try {
-      setToolEditApprovalSessionBypass(streamId, true, explicit.host, {
+      setToolEditApprovalSessionBypass(streamId, true, {
         silent: true,
       });
 
@@ -281,7 +281,7 @@ describe('human prompt progress events', () => {
       expect(show.payload.command).toBe('echo still asks');
 
       explicit.events.length = 0;
-      setBashApprovalSessionBypass(streamId, true, explicit.host, {
+      setBashApprovalSessionBypass(streamId, true, {
         silent: true,
       });
 
@@ -295,7 +295,7 @@ describe('human prompt progress events', () => {
       expect(bypassed).toEqual({ accepted: true });
       expect(explicit.events).toEqual([]);
 
-      setToolEditApprovalSessionBypass(streamId, false, explicit.host, {
+      setToolEditApprovalSessionBypass(streamId, false, {
         silent: true,
       });
 
@@ -335,7 +335,7 @@ describe('human prompt progress events', () => {
     const detach = defaultSession().useHostInteractions(explicit.interactions);
 
     try {
-      proposalApprovals().setBypass(streamId, true, explicit.host);
+      proposalApprovals().setBypass(streamId, true);
 
       expect(explicit.events).toEqual([
         {

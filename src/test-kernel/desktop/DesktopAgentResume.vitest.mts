@@ -229,18 +229,17 @@ describe('desktop process resume owner', () => {
       createToolUseResumeData({ streamId: stream, executionId }),
     );
     const harness = createResumeHarness();
-    harness.session.followUps.acquire(stream);
-    harness.session.followUps.enqueue(stream, { text: 'keep this queued' });
-    resumeToolUseFromResumeData.mockImplementation(
-      async (_resume, _runtimeHost, options) => {
-        await options?.onRun?.({} as never);
-        harness.session.publishRunEvent(
-          stream,
-          failedResult('toolUse', 'tool-use lifecycle failed'),
-        );
-        throw new Error('tool-use lifecycle failed');
-      },
-    );
+    const flow = harness.session.followUps.claimLive(stream, 'flow')!;
+    harness.session.followUps.queue(flow).enqueue({ text: 'keep this queued' });
+    harness.session.followUps.release(flow, 'recoverable');
+    resumeToolUseFromResumeData.mockImplementation(async (_resume, options) => {
+      await options?.onRun?.({} as never);
+      harness.session.publishRunEvent(
+        stream,
+        failedResult('toolUse', 'tool-use lifecycle failed'),
+      );
+      throw new Error('tool-use lifecycle failed');
+    });
     const presenter = attachResultPresenter(harness.session);
 
     try {

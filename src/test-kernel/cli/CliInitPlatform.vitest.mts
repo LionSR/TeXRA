@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { resolveAndResumeStream } from '@agent/runtime/resolveAndResumeStream';
+import { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { setCliAgentResumeHandler } from '@cli/runtime/agentResume';
 import { initCliPlatform } from '@cli/runtime/initPlatform';
@@ -330,8 +331,10 @@ describe('CLI platform init', () => {
 
     type NodePlatformOptions = {
       readonly agentResume: {
-        tryResumeStream(streamId: StreamTabId): Promise<boolean>;
-        isResumeInFlight(streamId: StreamTabId): boolean;
+        tryResumeStream(
+          streamId: StreamTabId,
+          recovery?: unknown,
+        ): Promise<boolean>;
       };
     };
     const createNodePlatformCalls = mocks.createNodePlatform.mock
@@ -346,16 +349,12 @@ describe('CLI platform init', () => {
       releaseResumeState = () => resolve(undefined);
     });
     const pendingResume = resolveAndResumeStream(streamId, {
-      runtimeHost: { emit: vi.fn() },
+      interactions: new SessionHostInteractions(),
       streamStatus: { isActiveOrResuming: () => false },
       resolveResumeState: () => pendingResumeState,
       resumeToolUse: vi.fn(async () => false),
       executeWorkflow: vi.fn(async () => {}),
     });
-
-    expect(nodePlatformOptions.agentResume.isResumeInFlight(streamId)).toBe(
-      false,
-    );
 
     const tryResumeStream = vi.fn(async () => true);
     const dispose = setCliAgentResumeHandler({
@@ -366,10 +365,7 @@ describe('CLI platform init', () => {
       await expect(
         nodePlatformOptions.agentResume.tryResumeStream(streamId),
       ).resolves.toBe(true);
-      expect(tryResumeStream).toHaveBeenCalledWith(streamId);
-      expect(nodePlatformOptions.agentResume.isResumeInFlight(streamId)).toBe(
-        true,
-      );
+      expect(tryResumeStream).toHaveBeenCalledWith(streamId, undefined);
     } finally {
       dispose();
       releaseResumeState();

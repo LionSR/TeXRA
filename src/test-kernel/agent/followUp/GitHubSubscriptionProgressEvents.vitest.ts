@@ -6,12 +6,12 @@ import '@test/support/defaultSessionTestSetup';
 // Third-party imports
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const sendFollowUpMock = vi.hoisted(() =>
+const submitFollowUpMock = vi.hoisted(() =>
   vi.fn(async () => ({ status: 'sent' as const })),
 );
 
 vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
-  sendFollowUp: sendFollowUpMock,
+  submitFollowUp: submitFollowUpMock,
 }));
 
 // Local imports
@@ -129,8 +129,8 @@ class RegistryTestSource {
 
 describe('GitHub subscription app signals and follow-ups', () => {
   beforeEach(() => {
-    sendFollowUpMock.mockReset();
-    sendFollowUpMock.mockResolvedValue({ status: 'sent' as const });
+    submitFollowUpMock.mockReset();
+    submitFollowUpMock.mockResolvedValue({ status: 'sent' as const });
   });
 
   it('publishes binding changes through app signals', () => {
@@ -257,12 +257,11 @@ describe('GitHub subscription app signals and follow-ups', () => {
       keyOf: (input) => input,
       bindingsChangedEvent: 'repoSubscriptionBindingsChanged',
     });
-    sendFollowUpMock.mockClear();
+    submitFollowUpMock.mockClear();
 
     try {
       withRunContext(
         createRunContext({
-          runtimeHost: host.host,
           streamId,
           session,
         }),
@@ -271,12 +270,10 @@ describe('GitHub subscription app signals and follow-ups', () => {
 
       source.emit('owner/repo', 'new github event');
 
-      expect(sendFollowUpMock).toHaveBeenCalledWith(
+      expect(submitFollowUpMock).toHaveBeenCalledWith(
         streamId,
         'new github event',
-        undefined,
-        undefined,
-        session,
+        { session, mode: 'live_notification' },
       );
     } finally {
       session.dispose();
@@ -299,7 +296,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
       bindingsChangedEvent: 'repoSubscriptionBindingsChanged',
     });
     const unhandledRejection = vi.fn();
-    sendFollowUpMock.mockRejectedValueOnce(new Error('delivery failed'));
+    submitFollowUpMock.mockRejectedValueOnce(new Error('delivery failed'));
 
     try {
       process.once('unhandledRejection', unhandledRejection);

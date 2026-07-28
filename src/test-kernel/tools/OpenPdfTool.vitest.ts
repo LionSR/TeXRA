@@ -71,7 +71,7 @@ describe('OpenPdfTool', () => {
 
     const result = await withRunContext(
       createRunContext({
-executionId: 'run-1',
+        executionId: 'run-1',
       }),
       () =>
         tool.call({
@@ -103,7 +103,7 @@ executionId: 'run-1',
 
     const result = await withRunContext(
       createRunContext({
-executionId: 'run-1',
+        executionId: 'run-1',
         workingDirectory: 'relative-path',
       }),
       () => tool.call({ path: '/storage/executions/run-1/output.pdf' }),
@@ -123,7 +123,7 @@ executionId: 'run-1',
 
     const result = await withRunContext(
       createRunContext({
-workingDirectory: '/workspace',
+        workingDirectory: '/workspace',
       }),
       () => tool.call({ path: '/run/paper.pdf' }),
     );
@@ -151,4 +151,3 @@ workingDirectory: '/workspace',
     expect(openPdf).not.toHaveBeenCalled();
   });
 });
-

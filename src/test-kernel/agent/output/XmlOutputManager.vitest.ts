@@ -794,7 +794,7 @@ Appendix.
     const processor = new OutputFileProcessor({
       baseFiles: [],
       streamId: 'stream',
-      runtimeHost: { emit: vi.fn() } as unknown as SessionHostInteractions,
+      interactions: { emit: vi.fn() } as unknown as SessionHostInteractions,
       logger: { debug: vi.fn() } as unknown as AgentTrace,
       xmlManager: manager,
       setRoundOutputs: (_round, outputs) => {
@@ -1652,7 +1652,7 @@ Appendix.
         createExternalLocation('/tmp/run/cost_section.tex'),
       ],
       streamId: 'stream',
-      runtimeHost: { emit: vi.fn() } as unknown as SessionHostInteractions,
+      interactions: { emit: vi.fn() } as unknown as SessionHostInteractions,
       logger: {
         debug: vi.fn(),
         info: vi.fn(),

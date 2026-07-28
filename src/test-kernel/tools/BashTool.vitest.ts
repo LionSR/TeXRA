@@ -638,8 +638,8 @@ describe('BashTool', () => {
       },
     );
 
-    const sendFollowUpSpy = vi
-      .spyOn(toolUseFollowUp, 'sendFollowUp')
+    const submitFollowUpSpy = vi
+      .spyOn(toolUseFollowUp, 'submitFollowUp')
       .mockResolvedValue({ status: 'sent' });
 
     const parentStreamId = 'bash-tool-bg-parent' as StreamTabId;
@@ -650,7 +650,7 @@ describe('BashTool', () => {
     try {
       const launchResult = await withToolEnvironment(
         {
-          run: { interactions: host, streamId: parentStreamId },
+          run: { streamId: parentStreamId },
           call: { tracker: new FileInteractionState() },
         },
         () =>
@@ -665,7 +665,7 @@ describe('BashTool', () => {
       // once the (mocked) process settles.
       await vi.waitFor(() => {
         assert.ok(
-          sendFollowUpSpy.mock.calls.length > 0,
+          submitFollowUpSpy.mock.calls.length > 0,
           'Background bash should deliver a follow-up once the run completes',
         );
       });
@@ -676,7 +676,7 @@ describe('BashTool', () => {
     // sendFollowUp is overloaded (string | FollowUpQueueInput); bash.ts always
     // calls the object form, but Parameters<> on an overloaded function type
     // resolves to the last signature, so assert the concrete shape here.
-    const followUpArg = sendFollowUpSpy.mock.calls[0]?.[1] as unknown as
+    const followUpArg = submitFollowUpSpy.mock.calls[0]?.[1] as unknown as
       { text: string } | undefined;
     const deliveredText = followUpArg?.text;
     assert.ok(
@@ -730,7 +730,7 @@ describe('BashTool', () => {
     try {
       const launchResult = await withToolEnvironment(
         {
-          run: { interactions: host, streamId: parentStreamId },
+          run: { streamId: parentStreamId },
           call: { tracker: new FileInteractionState() },
         },
         () =>
@@ -754,7 +754,7 @@ describe('BashTool', () => {
     } finally {
       recorded.detach();
       clearStreamStatusForTest(defaultSession().status, parentStreamId);
-      defaultSession().followUps.release(parentStreamId);
+      defaultSession().followUps.terminalize(parentStreamId);
     }
   });
 
@@ -807,7 +807,7 @@ describe('BashTool', () => {
     try {
       const launchResult = await withToolEnvironment(
         {
-          run: { interactions: host, streamId: parentStreamId },
+          run: { streamId: parentStreamId },
           call: { tracker: new FileInteractionState() },
         },
         () =>
@@ -844,7 +844,7 @@ describe('BashTool', () => {
       releaseResume?.();
       recorded.detach();
       clearStreamStatusForTest(defaultSession().status, parentStreamId);
-      defaultSession().followUps.release(parentStreamId);
+      defaultSession().followUps.terminalize(parentStreamId);
     }
   });
 
@@ -866,7 +866,7 @@ describe('BashTool', () => {
 
     const launchResult = await withToolEnvironment(
       {
-        run: { runtimeHost: host, streamId: parentStreamId },
+        run: { streamId: parentStreamId },
         call: { tracker: new FileInteractionState() },
       },
       () =>
@@ -899,7 +899,7 @@ describe('BashTool', () => {
       );
     });
     recorded.detach();
-    defaultSession().followUps.release(parentStreamId);
+    defaultSession().followUps.terminalize(parentStreamId);
   });
 
   it('accepts optional command descriptions without passing them to the shell', async () => {

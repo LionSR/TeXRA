@@ -85,7 +85,7 @@ vi.mock('@agent/storage', async (importOriginal) => ({
   finalizeExecution: mocks.finalizeExecution,
 }));
 
-vi.mock('@cli/runtime/runtimeHost', () => ({
+vi.mock('@cli/runtime/cliPresentationHost', () => ({
   createCliRuntimeHost: mocks.createCliRuntimeHost,
 }));
 

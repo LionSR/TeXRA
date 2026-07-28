@@ -27,7 +27,9 @@ export function requireInteractions(
 ): SessionHostInteractions {
   const interactions = getRunContextInteractions(context);
   if (!interactions) {
-    throw new ToolError(`${toolName} requires a session with host interactions.`);
+    throw new ToolError(
+      `${toolName} requires a session with host interactions.`,
+    );
   }
   return interactions;
 }

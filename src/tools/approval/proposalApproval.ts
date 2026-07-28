@@ -1,4 +1,3 @@
-import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import {
   currentSession,
   type SessionHandle,
@@ -33,7 +32,6 @@ export function proposalApprovals(
 export function setDelegatedWorkApprovalBypasses(
   streamId: StreamTabId,
   enabled: boolean,
-  interactions: SessionHostInteractions,
   session: SessionHandle = currentSession(),
 ): void {
   const { proposal, toolEdit, bash } = session.approvals;

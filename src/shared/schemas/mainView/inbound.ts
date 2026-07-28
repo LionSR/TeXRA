@@ -181,7 +181,6 @@ const FileOperationMessages = [
 ] as const;
 
 const InstructionMessages = [
-  commandOnly(MAIN_VIEW_COMMANDS.TRANSCRIBE_INSTRUCTION),
   z.object({
     command: z.literal(MAIN_VIEW_COMMANDS.POLISH_INSTRUCTION_TEXT),
     text: z.string(),

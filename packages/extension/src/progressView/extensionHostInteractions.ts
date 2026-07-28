@@ -48,7 +48,7 @@ import type {
 import type { AgentProposalPermission, StreamTabId } from '@shared/schemas';
 
 export interface ExtensionHostInteractionsOptions {
-  runtimeHost: Pick<SessionHostInteractions, 'emit'>;
+  interactions: Pick<SessionHostInteractions, 'emit'>;
   session: SessionHandle;
   getApprovalHandlers(): ApprovalRequestHandlerSet;
   setApprovalBypassState(update: HostApprovalBypassStateUpdate): void;
@@ -94,7 +94,7 @@ export function createExtensionHostInteractions(
   // `suppressViewSwitch` registers the stream so that row exists without
   // yanking the active tab away from whatever the user is inspecting (#8246).
   const revealStream = (streamId?: StreamTabId | null) => {
-    options.runtimeHost.emit('requestEnsureProgressView', {});
+    options.interactions.emit('requestEnsureProgressView', {});
     if (streamId) {
       options.session.events.emit({
         scope: 'session',
@@ -181,7 +181,7 @@ export function createExtensionHostInteractions(
       event: K,
       payload: RuntimePresentationEventPayloads[K],
     ): void {
-      options.runtimeHost.emit(event, payload);
+      options.interactions.emit(event, payload);
     },
     readDiagnostics: getLinterMessages,
     addCriticism: (payload) => {

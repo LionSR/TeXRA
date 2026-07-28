@@ -217,12 +217,7 @@ describe('Tool edit approval gating', () => {
       return { accepted: true };
     };
 
-    setToolEditApprovalSessionBypass(
-      TEST_STREAM_ID,
-      true,
-      defaultSession().interactions,
-      { silent: true },
-    );
+    setToolEditApprovalSessionBypass(TEST_STREAM_ID, true, { silent: true });
 
     // The bypass check requires a streamId on the request; the approval layer
     // picks it up from the active run context.
@@ -268,12 +263,7 @@ describe('Tool edit approval gating', () => {
     await firstPrompted.promise;
 
     assert.strictEqual(handlerCalls, 1);
-    setToolEditApprovalSessionBypass(
-      TEST_STREAM_ID,
-      true,
-      defaultSession().interactions,
-      { silent: true },
-    );
+    setToolEditApprovalSessionBypass(TEST_STREAM_ID, true, { silent: true });
     firstApproval.resolve({ accepted: true });
 
     const results = await Promise.all([firstRequest, secondRequest]);

@@ -6,6 +6,7 @@ import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirect
 import { registerAgentShutdownHandlers } from '@agent/runtime/agentShutdown';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { SupabaseClient } from '@auth/SupabaseClient';
+import { installTexraModelAccess } from '@controllers/modelAccess/installTexraModelAccess';
 import { setOutputChannelFactory } from '@logger/logUtils';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
@@ -34,7 +35,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { applyCliGitAuthorConfig } from './gitAuthor';
-import { isCliResumeInFlight, tryResumeCliStream } from './agentResume';
+import { tryResumeCliStream } from './agentResume';
 import { getCliSecrets } from './cliSecrets';
 import { isTexraCliEntrypointPath, readCliEntrypointPath } from './cliContext';
 import { flushNdjsonStdout, writeTextStderr } from './logSinks';
@@ -285,7 +286,6 @@ export async function initCliPlatform(
         lifecycle,
         agentResume: {
           tryResumeStream: tryResumeCliStream,
-          isResumeInFlight: isCliResumeInFlight,
         },
         agentDirectories,
         getWorkspacePath: () => cliWorkspaceCwd,
@@ -295,6 +295,9 @@ export async function initCliPlatform(
         },
       }),
     );
+    // TeXRA's account plane (subscription relay + ChatGPT sign-in). Without
+    // this the model layer is bring-your-own-key. See installTexraModelAccess.
+    installTexraModelAccess();
 
     // Seed first-install defaults (e.g. disabled tools) before anything
     // writes CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION (the bundled-agent sync

@@ -41,7 +41,6 @@ export const REVEAL_TIMEOUT_MS = 1500;
 export function setToolEditApprovalSessionBypass(
   streamId: StreamTabId,
   enabled: boolean,
-  interactions: SessionHostInteractions,
   options?: { silent?: boolean; session?: SessionHandle },
 ): void {
   (options?.session ?? currentSession()).approvals.toolEdit.bypass.setBypass(
