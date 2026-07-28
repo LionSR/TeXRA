@@ -164,6 +164,11 @@ if (missingPackages.length > 0) {
     `Bundled entries import undeclared packages: ${missingPackages.join(', ')}`,
   );
 }
+if (externalPackages.has('openai')) {
+  throw new Error(
+    'The agent bundle must carry the repository-patched OpenAI runtime.',
+  );
+}
 
 console.log(
   `Validated ${declarationFiles.length} declarations and ${externalPackages.size} external packages.`,

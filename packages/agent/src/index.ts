@@ -71,17 +71,24 @@ export interface AgentRun extends AsyncIterable<AgentEvent> {
 
 class AgentRunStream implements AgentRun {
   private readonly events: AgentEvent[] = [];
-  private readonly readers: Array<
-    (result: IteratorResult<AgentEvent>) => void
-  > = [];
+  private readonly readers: Array<{
+    readonly resolve: (result: IteratorResult<AgentEvent>) => void;
+    readonly reject: (reason?: unknown) => void;
+  }> = [];
   private liveHandle: RuntimeAgentRunHandle | undefined;
   private detachEvents: (() => void) | undefined;
   private ended = false;
+  private failed = false;
+  private failure: unknown;
   private interruptPending = false;
   readonly result: Promise<AgentFlowResult>;
 
   constructor(start: (stream: AgentRunStream) => Promise<AgentFlowResult>) {
-    this.result = start(this).finally(() => this.end());
+    this.result = start(this);
+    void this.result.then(
+      () => this.end(),
+      (error: unknown) => this.end({ error }),
+    );
   }
 
   attachHandle(handle: RuntimeAgentRunHandle): void {
@@ -111,10 +118,13 @@ class AgentRunStream implements AgentRun {
       next: () => {
         const event = this.events.shift();
         if (event) return Promise.resolve({ done: false, value: event });
+        if (this.failed) return Promise.reject(this.failure);
         if (this.ended) {
           return Promise.resolve({ done: true, value: undefined });
         }
-        return new Promise((resolve) => this.readers.push(resolve));
+        return new Promise((resolve, reject) =>
+          this.readers.push({ resolve, reject }),
+        );
       },
     };
   }
@@ -122,18 +132,21 @@ class AgentRunStream implements AgentRun {
   private push(event: AgentEvent): void {
     const reader = this.readers.shift();
     if (reader) {
-      reader({ done: false, value: event });
+      reader.resolve({ done: false, value: event });
     } else {
       this.events.push(event);
     }
   }
 
-  private end(): void {
+  private end(failure?: { readonly error: unknown }): void {
     this.ended = true;
+    this.failed = failure !== undefined;
+    this.failure = failure?.error;
     this.detachEvents?.();
     this.detachEvents = undefined;
     for (const reader of this.readers.splice(0)) {
-      reader({ done: true, value: undefined });
+      if (this.failed) reader.reject(this.failure);
+      else reader.resolve({ done: true, value: undefined });
     }
   }
 }

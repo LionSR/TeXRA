@@ -19,6 +19,17 @@ await build({
   platform: 'neutral',
   plugins: [
     {
+      // The repository patches OpenAI's response accumulator for provider
+      // metadata events. Consumers do not inherit pnpm patches, so the package
+      // must carry the tested realization instead of loading vanilla OpenAI.
+      name: 'bundle-patched-openai',
+      setup(buildContext) {
+        buildContext.onResolve({ filter: /^openai(?:\/|$)/ }, ({ path }) => ({
+          path: fileURLToPath(import.meta.resolve(path)),
+        }));
+      },
+    },
+    {
       name: 'external-node-jsonrpc',
       setup(buildContext) {
         buildContext.onResolve(

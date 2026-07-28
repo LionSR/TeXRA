@@ -103,6 +103,7 @@
     "vscode-jsonrpc": "^9.0.1",
     "which": "^5.0.0",
     "write-file-atomic": "^7.0.1",
+    "ws": "^8.21.1",
     "yaml": "^2.9.0"
   },
   "peerDependencies": {
