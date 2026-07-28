@@ -426,7 +426,7 @@ export class FollowUpInput extends LitElement {
                 ? nothing
                 : renderIconActionButton({
                     id: ELEMENT_IDS.POLISH_FOLLOW_UP_BTN,
-                    icon: 'sparkle',
+                    icon: 'wand-magic-sparkles',
                     label: 'Polish follow-up',
                     tooltip: 'Polish follow-up with AI',
                     busy: this.polishing,

@@ -167,7 +167,7 @@ describe('stream meta frontend state', () => {
       subagents: [],
     });
     expect(getState().activeStreamId).toBe(siblingId);
-    expect(getState().streamFilter).toBe('toolUse');
+    expect(getState().streamFilter).toBe('workflow');
     expect([...getState().streamById.keys()]).toEqual([siblingId, streamId]);
   });
 
@@ -210,6 +210,7 @@ describe('stream meta frontend state', () => {
     const streamId = 'stream-a' as StreamTabId;
     const state = createInitialState();
     state.activeStreamId = streamId;
+    state.streamFilter = 'workflow';
     registerWorkflowStream(state, streamId);
     state.streamStates.set(
       streamId,
@@ -249,6 +250,7 @@ describe('stream meta frontend state', () => {
     expect(getState().streamStates.get(streamId)?.status).toBe(
       STREAM_PHASE.COMPLETED,
     );
+    expect(getState().streamFilter).toBe('workflow');
     expect(getState().streamStates.get(streamId)?.substate).toBeUndefined();
   });
 

@@ -7,7 +7,8 @@ import { html, nothing, type TemplateResult } from 'lit';
 import { ifDefined } from 'lit/directives/if-defined.js';
 
 // Local imports - Web Awesome
-import { type TeXRAIconName, waIcon } from './webAwesomeIcons';
+import { waIcon } from './webAwesomeIcons';
+import type { TeXRAIconName } from './iconNames';
 
 type ActionButtonAppearance = 'filled' | 'outlined' | 'plain';
 type ActionButtonVariant = 'brand' | 'neutral';

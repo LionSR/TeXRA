@@ -102,7 +102,6 @@ export type ManualCompactionRequestResult =
  */
 export class ExecutionRegistry {
   private readonly handles = new Map<string, ExecutionHandle>();
-  private readonly activeChildRunLoops = new Set<StreamTabId>();
   private disposed = false;
   private readonly changeCallbacks = new Map<string, Array<() => void>>();
   private readonly disposeStatusListener: () => void;
@@ -191,7 +190,6 @@ export class ExecutionRegistry {
     this.disposeStatusListener();
     const executionIds = [...this.handles.keys()];
     this.handles.clear();
-    this.activeChildRunLoops.clear();
     for (const executionId of executionIds) {
       this.notifyRegistrationListeners(executionId, undefined);
       this.notifyWaiters(executionId);
@@ -199,20 +197,6 @@ export class ExecutionRegistry {
     this.changeCallbacks.clear();
     this.persistentListeners.clear();
     this.registrationListeners.clear();
-  }
-
-  /** Register a live child-run loop and return its lifecycle disposer. */
-  registerChildRunLoop(streamId: StreamTabId): () => void {
-    this.assertActive();
-    this.activeChildRunLoops.add(streamId);
-    return () => {
-      this.activeChildRunLoops.delete(streamId);
-    };
-  }
-
-  /** True while this session owns a live child-run loop for `streamId`. */
-  isChildRunLoopActive(streamId: StreamTabId): boolean {
-    return this.activeChildRunLoops.has(streamId);
   }
 
   /** Register an execution handle. */
@@ -716,7 +700,7 @@ export class ExecutionRegistry {
     return result;
   }
 
-  private hasActiveChildren(parentStreamId: StreamTabId): boolean {
+  hasActiveChildren(parentStreamId: StreamTabId): boolean {
     for (const handle of this.handles.values()) {
       if (isChildExecution(handle, parentStreamId)) return true;
     }

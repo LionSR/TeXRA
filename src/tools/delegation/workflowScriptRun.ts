@@ -3,6 +3,7 @@ import type { AgentTrace, StageHandle } from '@agent/trace';
 import {
   runPersistedWorkflowScript,
   type PersistedWorkflowScriptRunOptions,
+  type WorkflowAgentInvocation,
   type WorkflowJournalEntry,
   type WorkflowScriptEvent,
   type WorkflowScriptProgressId,
@@ -12,9 +13,9 @@ import { AgentFinalResultSchema } from '@agent/runtime/AgentFinalResult';
 import {
   RUN_OUTCOME,
   type RunOutcome,
-  type WorkflowTaskProgress,
+  type WorkflowCallProgress,
 } from '@shared/schemas';
-import { formatWorkflowTaskLine } from '@shared/copy/workflowTask';
+import { formatWorkflowCallLine } from '@shared/copy/workflowCall';
 import { assertNever, generateShortId } from '@utils/core';
 
 type WorkflowScriptRunWithProgressOptions = Omit<
@@ -36,10 +37,10 @@ interface PhaseStage {
   failed: boolean;
 }
 
-interface ProjectedWorkflowTask {
+interface ProjectedWorkflowCall {
   readonly logId: string;
-  readonly definition: Pick<WorkflowTaskProgress, 'id' | 'label' | 'phase'>;
-  status: WorkflowTaskProgress['status'];
+  readonly definition: Pick<WorkflowCallProgress, 'id' | 'label' | 'phase'>;
+  status: WorkflowCallProgress['status'];
 }
 
 export class WorkflowJournalCostError extends Error {
@@ -50,15 +51,6 @@ export class WorkflowJournalCostError extends Error {
     );
     this.name = 'WorkflowJournalCostError';
   }
-}
-
-/**
- * Stable identity for excluding a previously settled journal entry.
- */
-export function workflowJournalEntryCostIdentity(
-  entry: Pick<WorkflowJournalEntry, 'index' | 'key'>,
-): string {
-  return `${entry.index}:${entry.key}`;
 }
 
 function workflowJournalEntryCost(entry: WorkflowJournalEntry): number {
@@ -85,30 +77,67 @@ export function sumCompletedWorkflowJournalCost(
   return total;
 }
 
+type WorkflowAttemptIdentity = Pick<WorkflowAgentInvocation, 'index' | 'key'>;
+
+function workflowAttemptIdentity(invocation: WorkflowAttemptIdentity): string {
+  return `${invocation.index}:${invocation.key}`;
+}
+
+export interface WorkflowAttemptCostTracker {
+  /** Record one physical child attempt and return this tool invocation's live total. */
+  record(invocation: WorkflowAttemptIdentity, costUsd: number): number;
+  /**
+   * Return this tool invocation's final total. Replayed/recovered journal
+   * entries with no physical-attempt callback contribute zero.
+   */
+  total(finalJournal: readonly WorkflowJournalEntry[]): number;
+}
+
 /**
- * Sum cost attributable to the current run, including attempts discarded by
- * skip/retry/failure. The journal supplies an authoritative completed-attempt
- * cost when an observer reports no value; taking the per-call maximum avoids
- * counting the completed attempt twice when both sources report it.
+ * Track one tool invocation's physical attempts in callback order per journal
+ * index+key identity. The production child runner emits exactly one callback for every
+ * physical attempt, including `undefined` cost (normalized to zero), and emits
+ * none for replay or stable recovery. For a completed key, all callbacks but
+ * the last are discarded retries; only the last can correspond to the journal
+ * result, so its charge is `max(observer, journal)` rather than another sum.
+ * `record` and `total` therefore return comparable attempt-scoped USD totals
+ * for the loop-owned best-value latch without charging historical entries.
  */
-export function sumCurrentWorkflowRunCost(
-  journal: readonly WorkflowJournalEntry[],
-  observedCosts: ReadonlyMap<string, number>,
-): number {
-  const unjournaledCosts = new Map(observedCosts);
-  let total = 0;
-  for (const entry of journal) {
-    const journalCost = workflowJournalEntryCost(entry);
-    const identity = workflowJournalEntryCostIdentity(entry);
-    if (unjournaledCosts.has(identity)) {
-      total += Math.max(journalCost, unjournaledCosts.get(identity) ?? 0);
-      unjournaledCosts.delete(identity);
-    }
-  }
-  for (const observedCost of unjournaledCosts.values()) {
-    total += observedCost;
-  }
-  return total;
+export function createWorkflowAttemptCostTracker(): WorkflowAttemptCostTracker {
+  const attemptsByIdentity = new Map<string, number[]>();
+  let observedTotalUsd = 0;
+
+  return {
+    record: (invocation, costUsd) => {
+      observedTotalUsd += costUsd;
+      const identity = workflowAttemptIdentity(invocation);
+      const attempts = attemptsByIdentity.get(identity) ?? [];
+      attempts.push(costUsd);
+      attemptsByIdentity.set(identity, attempts);
+      return observedTotalUsd;
+    },
+    total: (finalJournal) => {
+      const journalIdentities = new Set<string>();
+      let totalUsd = 0;
+      for (const entry of finalJournal) {
+        const identity = workflowAttemptIdentity(entry);
+        journalIdentities.add(identity);
+        const journalCostUsd = workflowJournalEntryCost(entry);
+        const attempts = attemptsByIdentity.get(identity);
+        if (!attempts || attempts.length === 0) continue;
+        for (const discardedCostUsd of attempts.slice(0, -1)) {
+          totalUsd += discardedCostUsd;
+        }
+        totalUsd += Math.max(attempts.at(-1) ?? 0, journalCostUsd);
+      }
+      for (const [identity, attempts] of attemptsByIdentity) {
+        if (!journalIdentities.has(identity)) {
+          totalUsd += attempts.reduce((sum, costUsd) => sum + costUsd, 0);
+        }
+      }
+      return totalUsd;
+    },
+  };
 }
 
 /** Run a durable workflow script and project its progress onto the parent trace. */
@@ -122,9 +151,9 @@ export async function runPersistedWorkflowScriptWithProgress(
   const phaseStageIds = new Map<string, string>();
   const callPhases = new Map<WorkflowScriptProgressId, string | undefined>();
   const callIndexes = new Map<WorkflowScriptProgressId, number>();
-  const projectedTasks = new Map<
+  const projectedCalls = new Map<
     WorkflowScriptProgressId,
-    ProjectedWorkflowTask
+    ProjectedWorkflowCall
   >();
   let currentPhase: string | undefined;
   let closed = false;
@@ -169,7 +198,7 @@ export async function runPersistedWorkflowScriptWithProgress(
   /**
    * Open a phase stage once the run reaches it and answer the stage rows
    * emitted from there belong to. Callers that only need the phase opened
-   * ignore the return: `emitTask` resolves a card's group itself.
+   * ignore the return: `emitCall` resolves a card's group itself.
    */
   const openPhaseStage = (
     phase: string | undefined,
@@ -183,51 +212,51 @@ export async function runPersistedWorkflowScriptWithProgress(
     onActivity?.(message);
   };
   const recordTerminalActivity = (
-    task: Extract<
-      WorkflowTaskProgress,
+    call: Extract<
+      WorkflowCallProgress,
       { readonly status: 'completed' | 'failed' | 'skipped' }
     >,
   ): void => {
-    onActivity?.(formatWorkflowTaskLine(task));
+    onActivity?.(formatWorkflowCallLine(call));
   };
   /**
-   * The phase recorded on a task's first emission is the single owner of
-   * "which phase is this task in", and it stamps both halves of that answer:
+   * The phase recorded on a call's first emission is the single owner of
+   * "which phase is this call in", and it stamps both halves of that answer:
    * the `stageId` its card is grouped under, and the `phase` on the emitted
    * payload that hosts fold `done/total` by. A later update carrying the phase
    * active at call time never overrides it, so the group and the fold cannot
    * drift apart, and the same card cannot land in two groups — host progress
    * trees classify a card once and cannot move it afterwards.
    */
-  const emitTask = (task: WorkflowTaskProgress): void => {
-    let projected = projectedTasks.get(task.id);
+  const emitCall = (call: WorkflowCallProgress): void => {
+    let projected = projectedCalls.get(call.id);
     if (!projected) {
       projected = {
         logId: `workflow-task-${generateShortId()}`,
         definition: {
-          id: task.id,
-          label: task.label,
-          ...(task.phase !== undefined ? { phase: task.phase } : {}),
+          id: call.id,
+          label: call.label,
+          ...(call.phase !== undefined ? { phase: call.phase } : {}),
         },
-        status: task.status,
+        status: call.status,
       };
-      projectedTasks.set(task.id, projected);
+      projectedCalls.set(call.id, projected);
     } else {
-      projected.status = task.status;
+      projected.status = call.status;
     }
     const phase = projected.definition.phase;
     trace.emit({
       type: 'workflow.task',
       logId: projected.logId,
-      task: { ...task, phase },
+      task: { ...call, phase },
       stageId: phase === undefined ? parentStageId : phaseStageIdFor(phase),
     });
   };
-  const recordedTaskPhase = (
-    task: Pick<WorkflowTaskProgress, 'id' | 'phase'>,
+  const recordedCallPhase = (
+    call: Pick<WorkflowCallProgress, 'id' | 'phase'>,
   ): string | undefined => {
-    const projected = projectedTasks.get(task.id);
-    return projected ? projected.definition.phase : task.phase;
+    const projected = projectedCalls.get(call.id);
+    return projected ? projected.definition.phase : call.phase;
   };
   const markPhaseFailed = (
     title: string | undefined,
@@ -244,7 +273,7 @@ export async function runPersistedWorkflowScriptWithProgress(
     switch (event.type) {
       case 'plan':
         for (const task of event.tasks) {
-          emitTask({ ...task, status: 'planned' });
+          emitCall({ ...task, status: 'planned' });
         }
         break;
       case 'phase':
@@ -259,10 +288,10 @@ export async function runPersistedWorkflowScriptWithProgress(
         const phaseTitle = event.phase ?? currentPhase;
         callPhases.set(event.progressId, phaseTitle);
         callIndexes.set(event.progressId, event.index);
-        // Open the phase the moment the run reaches it; `emitTask` resolves
+        // Open the phase the moment the run reaches it; `emitCall` resolves
         // the card's group on its own from the task's recorded phase.
         openPhaseStage(phaseTitle, event.phaseIndex, event.phaseTotal);
-        emitTask({
+        emitCall({
           id: event.progressId,
           label: event.label,
           ...(phaseTitle !== undefined ? { phase: phaseTitle } : {}),
@@ -303,7 +332,7 @@ export async function runPersistedWorkflowScriptWithProgress(
         });
         switch (event.outcome) {
           case 'failed': {
-            const task: WorkflowTaskProgress = {
+            const call: WorkflowCallProgress = {
               id: event.progressId,
               label: event.label,
               ...(phaseTitle !== undefined ? { phase: phaseTitle } : {}),
@@ -312,16 +341,16 @@ export async function runPersistedWorkflowScriptWithProgress(
               ...terminalMetadata(event),
             };
             markPhaseFailed(
-              recordedTaskPhase(task),
+              recordedCallPhase(call),
               event.phaseIndex,
               event.phaseTotal,
             );
-            emitTask(task);
-            recordTerminalActivity(task);
+            emitCall(call);
+            recordTerminalActivity(call);
             break;
           }
           case 'cached':
-            emitTask({
+            emitCall({
               id: event.progressId,
               label: event.label,
               ...(phaseTitle !== undefined ? { phase: phaseTitle } : {}),
@@ -330,7 +359,7 @@ export async function runPersistedWorkflowScriptWithProgress(
             onActivity?.(`Using saved result: ${event.label}`);
             break;
           case 'skipped': {
-            const task: WorkflowTaskProgress = {
+            const call: WorkflowCallProgress = {
               id: event.progressId,
               label: event.label,
               ...(phaseTitle !== undefined ? { phase: phaseTitle } : {}),
@@ -338,20 +367,20 @@ export async function runPersistedWorkflowScriptWithProgress(
               reason: event.reason,
               ...terminalMetadata(event),
             };
-            emitTask(task);
-            recordTerminalActivity(task);
+            emitCall(call);
+            recordTerminalActivity(call);
             break;
           }
           case 'completed': {
-            const task: WorkflowTaskProgress = {
+            const call: WorkflowCallProgress = {
               id: event.progressId,
               label: event.label,
               ...(phaseTitle !== undefined ? { phase: phaseTitle } : {}),
               status: 'completed',
               ...terminalMetadata(event),
             };
-            emitTask(task);
-            recordTerminalActivity(task);
+            emitCall(call);
+            recordTerminalActivity(call);
             break;
           }
           default:
@@ -371,32 +400,32 @@ export async function runPersistedWorkflowScriptWithProgress(
     return result;
   } finally {
     closed = true;
-    for (const { definition: task, status } of projectedTasks.values()) {
+    for (const { definition: call, status } of projectedCalls.values()) {
       if (status === 'planned') {
         // Open the declared phase the run never reached so its skipped cards
         // still land under a header; the loop below then closes it.
-        openPhaseStage(task.phase);
-        const skippedTask: WorkflowTaskProgress = {
-          ...task,
+        openPhaseStage(call.phase);
+        const skippedCall: WorkflowCallProgress = {
+          ...call,
           status: 'skipped',
           reason: 'not-reached',
         };
-        emitTask(skippedTask);
-        recordTerminalActivity(skippedTask);
+        emitCall(skippedCall);
+        recordTerminalActivity(skippedCall);
       } else if (status === 'running') {
-        markPhaseFailed(task.phase);
-        const error = 'The workflow ended before this task completed.';
-        const callIndex = callIndexes.get(task.id);
+        markPhaseFailed(call.phase);
+        const error = 'The workflow ended before this call completed.';
+        const callIndex = callIndexes.get(call.id);
         const totalCostUsd =
           callIndex === undefined ? undefined : getCallCostUsd?.(callIndex);
-        const failedTask: WorkflowTaskProgress = {
-          ...task,
+        const failedCall: WorkflowCallProgress = {
+          ...call,
           status: 'failed',
           error,
           ...(totalCostUsd !== undefined ? { totalCostUsd } : {}),
         };
-        emitTask(failedTask);
-        recordTerminalActivity(failedTask);
+        emitCall(failedCall);
+        recordTerminalActivity(failedCall);
       }
     }
     for (const phase of phases.values()) {
