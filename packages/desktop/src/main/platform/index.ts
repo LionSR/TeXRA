@@ -8,6 +8,7 @@ import { app } from 'electron';
 // Local imports
 import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
 import { isFileNotFoundError } from '@common/errors';
+import { installTexraModelAccess } from '@controllers/modelAccess/installTexraModelAccess';
 import { DESKTOP_WORKSPACE_PATH_STATE_KEY } from '@desktop/workspacePath.js';
 import { initPlatform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
@@ -289,6 +290,9 @@ export async function initializeElectronPlatform(
           : [],
     }),
   );
+  // TeXRA's account plane (subscription relay + ChatGPT sign-in). Without this
+  // the model layer is bring-your-own-key. See installTexraModelAccess.
+  installTexraModelAccess();
 
   // Capture the prior-install signal BEFORE bootstrapNodeAgentDirectories
   // (below) writes LAST_KNOWN_VERSION via the bundled-agent directory sync.

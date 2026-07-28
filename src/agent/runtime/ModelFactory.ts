@@ -12,10 +12,10 @@ import {
   formatCodexAuthUnavailableMessage,
   isCodexSessionRoutable,
 } from '@auth/codex';
-import { getServerSideKeyService } from '@auth/serverKeys';
 import { AgentError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { apiKeyExists } from '@model/apiProviders';
+import { includedModelAccess } from '@model/includedModelAccess';
 import { resolveCodexSubscriptionCapabilitiesForAgentCategory } from '@model/providerCapabilities';
 import {
   isKimiCodeExclusiveModel,
@@ -555,12 +555,12 @@ async function createModelHandlerForResolvedCompatibilityKey(
     compatibilityKey === 'ModelHandlerKimi' &&
     isKimiSubscriptionEligible(config)
   ) {
-    const serverSideKeyService = getServerSideKeyService();
+    const included = includedModelAccess();
     // The relay only owns the model when included access is on AND the account
     // can actually use it — a signed-out user with the default-on toggle must
     // still reach their Kimi Code key, matching picker availability.
-    const includedAccess = serverSideKeyService.getUseIncludedModelAccess()
-      ? await serverSideKeyService.canUseServerSideKeys()
+    const includedAccess = included.getUseIncludedModelAccess()
+      ? await included.canUseServerSideKeys()
       : false;
     const keySet = await apiKeyExists(platform().secrets, 'kimiCode');
     const route = resolveKimiCodeRoute(

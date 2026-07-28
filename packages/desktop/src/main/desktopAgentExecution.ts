@@ -26,10 +26,6 @@ import type {
 } from '@agent/runtime/runtimePresentationEvents';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import {
-  isPreferCodexSubscription,
-  setPreferCodexSubscription,
-} from '@auth/codex/codexPreference';
-import {
   getFileListConfig,
   loadFileListSettings,
   type ListableFileType,
@@ -86,6 +82,10 @@ import {
   computeModelOptionsData,
   invalidateModelOptionsCache,
 } from '@model/computeModelOptions';
+import {
+  isPreferCodexSubscription,
+  setPreferCodexSubscription,
+} from '@model/codex/codexPreference';
 import { platform } from '@platform/platform';
 import {
   COMMON_COMMANDS,
