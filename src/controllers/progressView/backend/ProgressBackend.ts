@@ -292,6 +292,9 @@ export class ProgressBackend {
     return this.enqueueStorageRootWork(async () => {
       await this.session.waitUntilReady();
       await this.state.load(this.stateOwnership);
+      // The category control no longer exists, so legacy preferences must not
+      // constrain active-stream selection or hide sessions.
+      this.state.agentCategoryFilter = 'all';
     });
   }
 
