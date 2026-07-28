@@ -66,7 +66,7 @@ export function defineInlineAgents(
   for (const inline of validated) {
     inlineAgents.set(inline.entry.name, inline);
   }
-  return validated.map((inline) => ({ ...inline.entry }));
+  return validated.map((inline) => clonePlainContainers(inline.entry));
 }
 
 /** Registry entries for every currently registered inline definition. */
@@ -74,7 +74,9 @@ export function inlineAgentEntries(): AgentEntry[] {
   // Return a fresh copy of every entry: `doLoad` mutates `entry.category` and
   // `entry.rounds` for tool-use overrides, and those mutations must not
   // permanently corrupt the stored definition (Fix #1/#8).
-  return [...inlineAgents.values()].map((inline) => ({ ...inline.entry }));
+  return [...inlineAgents.values()].map((inline) =>
+    clonePlainContainers(inline.entry),
+  );
 }
 
 /**
