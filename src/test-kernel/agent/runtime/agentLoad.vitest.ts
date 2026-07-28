@@ -6,6 +6,7 @@ import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { beforeAll, describe, it, beforeEach, afterEach, vi } from 'vitest';
+import { z } from 'zod';
 
 // Local imports - agent runtime
 import {
@@ -397,6 +398,12 @@ describe('inline agent definitions', () => {
     const entry = getAgent('inline:lateOverride');
     assert.strictEqual(entry?.category, AgentCategory.ToolUse);
     assert.strictEqual(entry.rounds, undefined);
+
+    await useAgentDirectories(emptyDir);
+    await refresh({ includeRemote: false });
+    const restored = getAgent('inline:lateOverride');
+    assert.strictEqual(restored?.category, AgentCategory.Workflow);
+    assert.strictEqual(restored.rounds, 3);
   });
 
   it('removes cleared definitions from the live registry immediately', () => {
@@ -473,6 +480,34 @@ describe('inline agent definitions', () => {
       settings.tools.map((tool) => tool.name),
       ['grep'],
     );
+  });
+
+  it('preserves runtime schemas in object-form tool definitions', async () => {
+    const runtimeSchema = z.strictObject({ query: z.string() });
+    registerInlineAgents([
+      {
+        name: 'runtimeToolSchema',
+        settings: {
+          agentCategory: AgentCategory.ToolUse,
+          tools: [
+            {
+              name: 'runtimeTool',
+              parameters: { type: 'object' },
+              zodSchema: runtimeSchema,
+            },
+          ],
+        },
+        prompts: {},
+      },
+    ]);
+
+    const resolution = resolveAgentForLaunch(
+      AgentCategory.ToolUse,
+      'inline:runtimeToolSchema',
+    );
+    assert.ok(resolution);
+    const [settings] = await loadAgentSettingAndPrompts(resolution);
+    assert.strictEqual(settings.tools[0]?.zodSchema, runtimeSchema);
   });
 
   it('fails loudly when the load path names an unregistered inline agent', async () => {
