@@ -91,6 +91,30 @@ describe('auth commands for unavailable stored sessions', () => {
     );
   });
 
+  it('uses a replacement session installed during invalid cleanup', async () => {
+    vi.spyOn(SupabaseClient, 'isReady').mockResolvedValue(true);
+    vi.spyOn(SupabaseClient, 'getStoredSessionState')
+      .mockResolvedValueOnce('invalid')
+      .mockResolvedValueOnce('authenticated');
+    authMocks.clearStoredSession.mockResolvedValueOnce(false);
+    authMocks.getSession.mockResolvedValue({
+      id: 'replacement',
+      account: { id: 'user-id', label: 'user@example.com' },
+    });
+    vi.spyOn(SupabaseClient, 'getUser').mockResolvedValue({
+      email: 'user@example.com',
+    } as never);
+
+    await expect(signIn()).resolves.toBe(true);
+
+    expect(authMocks.clearStoredSession).toHaveBeenCalledOnce();
+    expect(authMocks.getSession).toHaveBeenCalledOnce();
+    expect(authMocks.showQuickPick).not.toHaveBeenCalled();
+    expect(authMocks.showInformationMessage).toHaveBeenCalledWith(
+      'Already signed in as user@example.com',
+    );
+  });
+
   it('defers sign-in when secondary validation cannot resolve a healthy session', async () => {
     vi.spyOn(SupabaseClient, 'isReady').mockResolvedValue(true);
     vi.spyOn(SupabaseClient, 'getStoredSessionState').mockResolvedValue(
