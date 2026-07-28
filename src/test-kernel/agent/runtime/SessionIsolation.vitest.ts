@@ -76,9 +76,7 @@ function createLifecycleContext(
   });
   const prompt = AgentPromptSchema.parse({});
   const storageKey = executionId as StorageKey;
-  const runtimeHost = explicit.host;
   const runScope = createRunScope({
-    runtimeHost,
     streamId,
     executionId,
     agentName: config.agent,
@@ -133,7 +131,6 @@ describe('session isolation (SDK Step 7d PR 2)', () => {
     try {
       expect(currentSession()).toBe(defaultSession());
       const ctx = createRunContext({
-        runtimeHost: createRecordingHost().host,
         session: sessionB,
       });
       withRunContext(ctx, () => {
@@ -158,7 +155,6 @@ describe('session isolation (SDK Step 7d PR 2)', () => {
         streamId,
         'assistant',
         'toolUse',
-        createRecordingHost().host,
       );
       handle.attachInterruptHandler({ interrupt });
       sessionB.executions.track(handle);

@@ -140,11 +140,10 @@ function resumeDesktopStream(
       { replayWhenAttached: true },
     );
   };
-  const runtimeHost = context.session.interactions;
   return resolveAndResumeStream(
     streamId,
     {
-      runtimeHost,
+      interactions: context.session.interactions,
       streamStatus: context.session.status,
       resolveResumeState: async (id) => {
         const resumeState = await resolveDesktopResumeState(id, context);
@@ -172,19 +171,14 @@ function resumeDesktopStream(
         };
       },
       resumeToolUse: (snapshot, claimedRecovery) =>
-        resumeQueuedToolUseFromResumeData(
-          snapshot.streamId,
-          snapshot,
-          runtimeHost,
-          {
-            session: context.session,
-            recovery: claimedRecovery,
-            runtimeUnavailableTools: DESKTOP_UNAVAILABLE_TOOLS,
-            canAcquireResumeLease,
-            isCancellationRequested: isResumeInvalidated,
-            onError: (error) => reportUnhandledFailure(streamId, error),
-          },
-        ),
+        resumeQueuedToolUseFromResumeData(snapshot.streamId, snapshot, {
+          session: context.session,
+          recovery: claimedRecovery,
+          runtimeUnavailableTools: DESKTOP_UNAVAILABLE_TOOLS,
+          canAcquireResumeLease,
+          isCancellationRequested: isResumeInvalidated,
+          onError: (error) => reportUnhandledFailure(streamId, error),
+        }),
       executeWorkflow: (config, executionId, modelHandlerCompatibilityKey) =>
         launchDesktopAgent(
           { config, executionId },

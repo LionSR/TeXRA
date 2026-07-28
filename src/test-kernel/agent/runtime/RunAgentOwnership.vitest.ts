@@ -45,7 +45,6 @@ const CONFIG = AgentConfigSchema.parse({
   agentCategory: 'toolUse',
   model: 'test-model',
 });
-const RUNTIME_HOST = { emit: vi.fn() } as never;
 const flushArtifacts = vi.fn();
 const SESSION = { flushArtifacts } as never;
 
@@ -73,7 +72,7 @@ describe('runAgent execution ownership', () => {
   it('registers and releases an explicitly identified fresh run', async () => {
     await runAgent(
       { config: CONFIG, executionId: EXECUTION_ID },
-      { runtimeHost: RUNTIME_HOST, session: SESSION, registerExecution: true },
+      { session: SESSION, registerExecution: true },
     );
 
     expect(mocks.registerExecution).toHaveBeenCalledOnce();
@@ -86,7 +85,7 @@ describe('runAgent execution ownership', () => {
   it('acquires and releases ownership for an existing execution', async () => {
     await runAgent(
       { config: CONFIG, executionId: EXECUTION_ID },
-      { runtimeHost: RUNTIME_HOST, session: SESSION },
+      { session: SESSION },
     );
 
     expect(mocks.registerExecution).not.toHaveBeenCalled();
@@ -111,7 +110,6 @@ describe('runAgent execution ownership', () => {
       runAgent(
         { config: CONFIG, executionId: EXECUTION_ID },
         {
-          runtimeHost: RUNTIME_HOST,
           session: SESSION,
           canAcquireResumeLease: () => canonical,
         },
@@ -144,7 +142,6 @@ describe('runAgent execution ownership', () => {
       runAgent(
         { config: CONFIG, executionId: EXECUTION_ID },
         {
-          runtimeHost: RUNTIME_HOST,
           session: SESSION,
           registerExecution: true,
         },
@@ -170,7 +167,6 @@ describe('runAgent execution ownership', () => {
       runAgent(
         { config: CONFIG, executionId: EXECUTION_ID },
         {
-          runtimeHost: RUNTIME_HOST,
           session: SESSION,
           registerExecution: true,
         },
@@ -197,7 +193,6 @@ describe('runAgent execution ownership', () => {
     const failure = await runAgent(
       { config: CONFIG, executionId: EXECUTION_ID },
       {
-        runtimeHost: RUNTIME_HOST,
         session: SESSION,
         registerExecution: true,
       },
@@ -230,7 +225,6 @@ describe('runAgent execution ownership', () => {
     await runAgent(
       { config: CONFIG, executionId: EXECUTION_ID },
       {
-        runtimeHost: RUNTIME_HOST,
         session: SESSION,
         registerExecution: true,
         beforeLeaseRelease: async () => {
@@ -258,7 +252,6 @@ describe('runAgent execution ownership', () => {
     const failure = await runAgent(
       { config: CONFIG, executionId: EXECUTION_ID },
       {
-        runtimeHost: RUNTIME_HOST,
         session: SESSION,
         registerExecution: true,
         beforeLeaseRelease: async () => {

@@ -199,7 +199,6 @@ describe('ExecutionsTool', () => {
       childStreamId,
       'review',
       'toolUse',
-      explicit.host,
     );
 
     try {
@@ -220,7 +219,6 @@ describe('ExecutionsTool', () => {
 
       const parentWaitResult = await withRunContext(
         createRunContext({
-          runtimeHost: explicit.host,
           streamId: parentStreamId,
           session,
         }),
@@ -232,7 +230,6 @@ describe('ExecutionsTool', () => {
       );
       const crossTreeWaitResult = await withRunContext(
         createRunContext({
-          runtimeHost: explicit.host,
           streamId: otherStreamId,
           session,
         }),

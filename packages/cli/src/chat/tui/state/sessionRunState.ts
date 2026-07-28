@@ -1,5 +1,5 @@
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { CliExitCode } from '@cli/runtime/exitCodes';
+import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import {
   STREAM_PHASE,
   type StreamPhase,
@@ -18,7 +18,7 @@ export interface ClearableTuiSessionState {
   /** Root conversation that remains recoverable after an interrupted turn. */
   interruptedStreamId: StreamTabId | undefined;
   executionId: string | undefined;
-  runtimeHost?: AgentRuntimeHost;
+  presentationHost?: CliRuntimeHost;
   runPromise: Promise<void> | undefined;
   runExitCode: CliExitCode;
   runCompleted: boolean;
@@ -48,7 +48,7 @@ export function clearTuiSessionRunState(
   session.streamId = undefined;
   session.interruptedStreamId = undefined;
   session.executionId = undefined;
-  session.runtimeHost = undefined;
+  session.presentationHost = undefined;
   session.runPromise = undefined;
   session.runExitCode = CliExitCode.Success;
   session.runCompleted = false;
@@ -59,10 +59,10 @@ export function clearTuiSessionRunState(
 export function markChatTuiRunPending(
   session: ClearableTuiSessionState,
   runPromise: Promise<void>,
-  runtimeHost?: AgentRuntimeHost,
+  presentationHost?: CliRuntimeHost,
 ): void {
   session.streamId = undefined;
-  session.runtimeHost = runtimeHost;
+  session.presentationHost = presentationHost;
   session.runPromise = runPromise;
   session.runExitCode = CliExitCode.Success;
   session.runCompleted = false;
@@ -92,10 +92,10 @@ export function markChatTuiRunCompleted(
 export function tryClaimRootRunSlot(
   session: ClearableTuiSessionState,
   runPromise: Promise<void>,
-  runtimeHost?: AgentRuntimeHost,
+  presentationHost?: CliRuntimeHost,
 ): boolean {
   if (!chatTuiCanStartRootRun(session)) return false;
-  markChatTuiRunPending(session, runPromise, runtimeHost);
+  markChatTuiRunPending(session, runPromise, presentationHost);
   return true;
 }
 

@@ -30,7 +30,7 @@ describe('child subagent stream approval inheritance', () => {
     const { host } = createRecordingHost();
     const parent = 'stream:parent-bash' as StreamTabId;
     const child = 'stream:child-bash' as StreamTabId;
-    setBashApprovalSessionBypass(parent, true, host, { silent: true });
+    setBashApprovalSessionBypass(parent, true, { silent: true });
     // Sanity: the parent bypass round-trips through the public barrel.
     expect(isBashApprovalBypassedForStream(parent)).toBe(true);
 
@@ -43,7 +43,7 @@ describe('child subagent stream approval inheritance', () => {
     const { host } = createRecordingHost();
     const parent = 'stream:parent-edit' as StreamTabId;
     const child = 'stream:child-edit' as StreamTabId;
-    setToolEditApprovalSessionBypass(parent, true, host, { silent: true });
+    setToolEditApprovalSessionBypass(parent, true, { silent: true });
 
     configureDelegatedChildApprovals(child, parent);
 
@@ -69,7 +69,7 @@ describe('child subagent stream approval inheritance', () => {
     const { host } = createRecordingHost();
     const parent = 'stream:parent-bash-only' as StreamTabId;
     const child = 'stream:child-bash-only' as StreamTabId;
-    setBashApprovalSessionBypass(parent, true, host, { silent: true });
+    setBashApprovalSessionBypass(parent, true, { silent: true });
 
     configureDelegatedChildApprovals(child, parent);
 
@@ -90,7 +90,7 @@ describe('child subagent stream approval inheritance', () => {
     configureDelegatedChildApprovals(child, parent);
     expect(isBashApprovalBypassedForStream(child)).toBe(false);
 
-    setBashApprovalSessionBypass(parent, true, host, { silent: true });
+    setBashApprovalSessionBypass(parent, true, { silent: true });
 
     expect(isBashApprovalBypassedForStream(child)).toBe(true);
   });
@@ -108,12 +108,12 @@ describe('child subagent stream approval inheritance', () => {
     configureDelegatedChildApprovals(child, parent);
     expect(isApprovalBypassedForStream(child)).toBe(false);
 
-    setToolEditApprovalSessionBypass(parent, true, host, { silent: true });
+    setToolEditApprovalSessionBypass(parent, true, { silent: true });
     expect(isApprovalBypassedForStream(child)).toBe(true);
 
     // And back off: the child follows the parent's current state, not a
     // snapshot taken at delegation time.
-    setToolEditApprovalSessionBypass(parent, false, host, { silent: true });
+    setToolEditApprovalSessionBypass(parent, false, { silent: true });
     expect(isApprovalBypassedForStream(child)).toBe(false);
   });
 
@@ -124,14 +124,14 @@ describe('child subagent stream approval inheritance', () => {
     const child = 'stream:visible-child' as StreamTabId;
     const grandchild = 'stream:visible-grandchild' as StreamTabId;
     const pinnedChild = 'stream:pinned-child' as StreamTabId;
-    setToolEditApprovalSessionBypass(parent, true, host, { silent: true });
+    setToolEditApprovalSessionBypass(parent, true, { silent: true });
     configureDelegatedChildApprovals(child, parent);
     configureDelegatedChildApprovals(grandchild, child);
     configureDelegatedChildApprovals(pinnedChild, parent);
-    setToolEditApprovalSessionBypass(pinnedChild, true, host, { silent: true });
+    setToolEditApprovalSessionBypass(pinnedChild, true, { silent: true });
 
     try {
-      setToolEditApprovalSessionBypass(parent, false, host);
+      setToolEditApprovalSessionBypass(parent, false);
 
       expect(
         events.filter(({ event }) => event === 'setApprovalBypassState'),
@@ -176,7 +176,7 @@ describe('child subagent stream approval inheritance', () => {
     const roundOne = 'stream:round-1' as StreamTabId;
     const roundTwo = 'stream:round-2' as StreamTabId;
 
-    setDelegatedWorkApprovalBypasses(roundOne, true, host);
+    setDelegatedWorkApprovalBypasses(roundOne, true);
     currentSession().approvals.registerStreamParent(roundTwo, roundOne);
 
     expect(proposalApprovals().isBypassed(roundTwo)).toBe(true);
@@ -184,7 +184,7 @@ describe('child subagent stream approval inheritance', () => {
     expect(isBashApprovalBypassedForStream(roundTwo)).toBe(true);
 
     // An explicit toggle on the later round still wins over the inherited one.
-    setBashApprovalSessionBypass(roundTwo, false, host, { silent: true });
+    setBashApprovalSessionBypass(roundTwo, false, { silent: true });
     expect(isBashApprovalBypassedForStream(roundTwo)).toBe(false);
     expect(isBashApprovalBypassedForStream(roundOne)).toBe(true);
     expect(proposalApprovals().isBypassed(roundTwo)).toBe(true);
@@ -195,11 +195,11 @@ describe('child subagent stream approval inheritance', () => {
     const { host } = createRecordingHost();
     const parent = 'stream:parent-toggle' as StreamTabId;
     const child = 'stream:child-toggle' as StreamTabId;
-    setBashApprovalSessionBypass(parent, true, host, { silent: true });
+    setBashApprovalSessionBypass(parent, true, { silent: true });
     configureDelegatedChildApprovals(child, parent);
     expect(isBashApprovalBypassedForStream(child)).toBe(true);
 
-    setBashApprovalSessionBypass(child, false, host);
+    setBashApprovalSessionBypass(child, false);
     expect(isBashApprovalBypassedForStream(child)).toBe(false);
     // The parent's own bypass is untouched by the child's explicit value.
     expect(isBashApprovalBypassedForStream(parent)).toBe(true);
@@ -209,14 +209,14 @@ describe('child subagent stream approval inheritance', () => {
     const { host } = createRecordingHost();
     const parent = 'stream:parent-torn-down' as StreamTabId;
     const child = 'stream:child-survives-parent' as StreamTabId;
-    setBashApprovalSessionBypass(parent, true, host, { silent: true });
+    setBashApprovalSessionBypass(parent, true, { silent: true });
     configureDelegatedChildApprovals(child, parent);
     expect(isBashApprovalBypassedForStream(child)).toBe(true);
 
     cleanupApprovalsForStream(parent);
 
     expect(isBashApprovalBypassedForStream(child)).toBe(true);
-    setBashApprovalSessionBypass(parent, false, host, { silent: true });
+    setBashApprovalSessionBypass(parent, false, { silent: true });
     expect(isBashApprovalBypassedForStream(child)).toBe(true);
   });
 
@@ -235,8 +235,8 @@ describe('child subagent stream approval inheritance', () => {
     const editParent = 'stream:edit-parent-cleanup' as StreamTabId;
     const bashParent = 'stream:bash-parent-survives' as StreamTabId;
     const child = 'stream:split-ancestry-child' as StreamTabId;
-    setToolEditApprovalSessionBypass(editParent, true, host, { silent: true });
-    setBashApprovalSessionBypass(bashParent, true, host, { silent: true });
+    setToolEditApprovalSessionBypass(editParent, true, { silent: true });
+    setBashApprovalSessionBypass(bashParent, true, { silent: true });
     currentSession().approvals.registerStreamParent(child, editParent, [
       'toolEdit',
     ]);
@@ -245,7 +245,7 @@ describe('child subagent stream approval inheritance', () => {
     ]);
 
     cleanupApprovalsForStream(editParent);
-    setBashApprovalSessionBypass(bashParent, false, host, { silent: true });
+    setBashApprovalSessionBypass(bashParent, false, { silent: true });
 
     expect(isApprovalBypassedForStream(child)).toBe(true);
     expect(isBashApprovalBypassedForStream(child)).toBe(false);
@@ -259,12 +259,12 @@ describe('child subagent stream approval inheritance', () => {
     const { host } = createRecordingHost();
     const parent = 'stream:parent-pin' as StreamTabId;
     const child = 'stream:child-pin' as StreamTabId;
-    setToolEditApprovalSessionBypass(parent, true, host, { silent: true });
+    setToolEditApprovalSessionBypass(parent, true, { silent: true });
     configureDelegatedChildApprovals(child, parent);
     expect(isApprovalBypassedForStream(child)).toBe(true);
 
-    setDelegatedWorkApprovalBypasses(child, true, host);
-    setToolEditApprovalSessionBypass(parent, false, host, { silent: true });
+    setDelegatedWorkApprovalBypasses(child, true);
+    setToolEditApprovalSessionBypass(parent, false, { silent: true });
 
     expect(isApprovalBypassedForStream(child)).toBe(true);
     expect(isApprovalBypassedForStream(parent)).toBe(false);
@@ -275,7 +275,7 @@ describe('child subagent stream approval inheritance', () => {
     const parent = 'stream:parent-super-yolo' as StreamTabId;
     const child = 'stream:child-orchestrator' as StreamTabId;
     const grandchild = 'stream:grandchild-orchestrator' as StreamTabId;
-    proposalApprovals().setBypass(parent, true, host);
+    proposalApprovals().setBypass(parent, true);
 
     configureDelegatedChildApprovals(child, parent);
     configureDelegatedChildApprovals(grandchild, child);
@@ -293,8 +293,8 @@ describe('child subagent stream approval inheritance', () => {
     const { host } = createRecordingHost();
     const parent = 'stream:parent-toolEdit-on' as StreamTabId;
     const child = 'stream:child-bash-only-ancestry' as StreamTabId;
-    setToolEditApprovalSessionBypass(parent, true, host, { silent: true });
-    setBashApprovalSessionBypass(parent, true, host, { silent: true });
+    setToolEditApprovalSessionBypass(parent, true, { silent: true });
+    setBashApprovalSessionBypass(parent, true, { silent: true });
 
     currentSession().approvals.registerStreamParent(child, parent, ['bash']);
 

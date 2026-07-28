@@ -9,7 +9,6 @@ import pDefer from 'p-defer';
 
 import type { AgentTrace, ResultEvent } from '@agent/trace';
 import type { OwnedExecutionLeaseScope } from '@agent/storage/executionLease';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { FollowUpQueueInput } from '@agent/followUp/FollowUpQueue';
 import {
@@ -30,7 +29,6 @@ export interface ExecutionHandle {
   readonly category: AgentCategory;
   readonly agentName: string;
   readonly startedAt: number;
-  readonly runtimeHost: AgentRuntimeHost;
 }
 
 /** Live run-owned capability that can receive a user stop request. */
@@ -55,7 +53,6 @@ export interface LiveToolUseFlowContext {
   readonly modelHandler: {
     readonly supportsManualCompaction: boolean;
   };
-  readonly runtimeHost?: AgentRuntimeHost;
 
   requestImmediateCompaction(): void;
   modelSwitchDisabledReason(model: string): string | undefined;
@@ -118,7 +115,6 @@ export class AgentExecutionHandle implements ExecutionHandle {
     readonly childStreamId: StreamTabId,
     readonly agentName: string,
     readonly category: AgentCategory,
-    readonly runtimeHost: AgentRuntimeHost,
     /** The run's discriminated-event channel, for run-scoped subscribers. */
     readonly trace?: AgentTrace,
   ) {
@@ -333,7 +329,6 @@ export type AgentRunHandle = Pick<
   | 'category'
   | 'agentName'
   | 'startedAt'
-  | 'runtimeHost'
   | 'trace'
   | 'result'
   | 'deliveryTargetStreamId'

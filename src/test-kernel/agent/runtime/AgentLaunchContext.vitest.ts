@@ -54,7 +54,6 @@ describe('AgentLaunchContext', () => {
       await expect(
         buildAgentLaunchContext({
           config: AgentConfigSchema.parse({ agent: '', model: '' }),
-          runtimeHost: createRecordingHost().host,
           session,
         }),
       ).rejects.toMatchObject({
@@ -91,7 +90,6 @@ describe('AgentLaunchContext', () => {
     const session = {} as SessionHandle;
     const executionId = 'launch-context-execution';
     const runScope = createRunScope({
-      runtimeHost: explicit.host,
       streamId: 'launch-context-stream',
       executionId,
       agentName: 'chat',
@@ -178,7 +176,6 @@ describe('AgentLaunchContext', () => {
             agentCategory: AgentCategory.ToolUse,
             delegationAgentScope,
           }),
-          runtimeHost: createRecordingHost().host,
           session,
           streamTabIdOverride: 'late-assembly-stream',
           suppressErrorNotification: true,

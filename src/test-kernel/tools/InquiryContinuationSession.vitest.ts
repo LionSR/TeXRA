@@ -155,7 +155,6 @@ describe('external inquiry continuation session routing', () => {
     try {
       await withRunContext(
         createRunContext({
-          runtimeHost: host,
           session,
         }),
         () => injectContinuationForAnsweredThread(THREAD, answeredManifest()),
@@ -196,7 +195,6 @@ describe('external inquiry continuation session routing', () => {
     try {
       await withRunContext(
         createRunContext({
-          runtimeHost: host,
           session: runSession,
         }),
         () =>

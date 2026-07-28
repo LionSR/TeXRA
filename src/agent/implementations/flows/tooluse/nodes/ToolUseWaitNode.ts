@@ -59,7 +59,7 @@ export class ToolUseWaitNode<C> extends Node<
   async exec(prepRes: WaitPrepResult): Promise<WaitExecResult> {
     const { checkInterruption, session, isSubagent } = this.services;
     const { runScope, stopAfterCycle } = useLaunchRunContext();
-    const { streamId, runtimeHost, session: ownerSession } = runScope;
+    const { streamId, session: ownerSession } = runScope;
 
     if (checkInterruption()) {
       return { kind: 'stop' };
@@ -83,7 +83,7 @@ export class ToolUseWaitNode<C> extends Node<
       const goal = GoalStore.getForStream(streamId);
       if (goal?.status === 'active') {
         await GoalStore.setStatus(streamId, 'paused');
-        await setGoalSessionBashAutoApproval(streamId, false, runtimeHost);
+        await setGoalSessionBashAutoApproval(streamId, false);
         emitRunFact(this.services.logger, 'goalPaused', { streamId });
       }
     } else if (!isSubagent) {

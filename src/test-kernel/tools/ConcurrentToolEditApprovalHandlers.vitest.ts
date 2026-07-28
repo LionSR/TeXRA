@@ -12,7 +12,6 @@ import * as assert from 'node:assert';
 import { describe, it, beforeEach, afterEach } from 'vitest';
 
 // Local imports
-import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { StreamTabId } from '@shared/schemas';
@@ -80,12 +79,10 @@ describe('Concurrent session tool edit approval handlers', () => {
     });
 
     const contextA = createRunContext({
-      runtimeHost: noopAgentRuntimeHost,
       streamId: 'windowA@model: test.tex' as StreamTabId,
       session: sessionA,
     });
     const contextB = createRunContext({
-      runtimeHost: noopAgentRuntimeHost,
       streamId: 'windowB@model: test.tex' as StreamTabId,
       session: sessionB,
     });

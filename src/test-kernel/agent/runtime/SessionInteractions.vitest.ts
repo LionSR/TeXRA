@@ -16,7 +16,6 @@ import {
   type ProposalResult,
   type RetryResult,
 } from '@agent/runtime/HostInteractions';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { ApprovalRequestHandler } from '@controllers/progressView/backend/ApprovalRequestHandler';
 import type { ApprovalRequestHandlerSet } from '@controllers/progressView/backend/progressBackendUiConfig';
 import {
@@ -121,14 +120,14 @@ function createPortSession(): {
 } {
   const uiEvents: UiEvent[] = [];
   const emitted: string[] = [];
-  const runtimeHost: AgentRuntimeHost = {
+  const presentationSink: Required<Pick<HostInteractions, 'emit'>> = {
     emit: (event) => emitted.push(event),
   };
   const handlers = createHandlerSet(uiEvents);
   const session = createTestSession();
   const setApprovalBypassState = vi.fn();
   const interactions = createDesktopHostInteractions({
-    runtimeHost,
+    interactions: presentationSink,
     session,
     setApprovalBypassState,
     showInfoMessage: vi.fn(),

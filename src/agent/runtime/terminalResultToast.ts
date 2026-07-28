@@ -12,14 +12,13 @@
  * preserving the lifecycle's `!isSubagent` gating.
  *
  * `attachTerminalResultToast` wires that mapper to a session for hosts that
- * present through an {@link AgentRuntimeHost} (CLI, desktop, extension). The
+ * present through {@link SessionHostInteractions} (CLI, desktop, extension). The
  * `session` is load-bearing: desktop passes its process session, while
  * CLI/extension pass the process {@link defaultSession}. A helper that
  * hard-coded the default would route desktop to the wrong session and never
- * see its results. Every host presents through its `runtimeHost`; in the
- * extension, that's `session.interactions`, which forwards to whatever
- * `HostInteractions` is currently attached (`ProgressViewProvider`'s
- * presentation dispatch).
+ * see its results. Every host presents through its `session.interactions`,
+ * which forwards to whatever `HostInteractions` is currently attached
+ * (`ProgressViewProvider`'s presentation dispatch).
  */
 import type { ResultEvent } from '@agent/trace';
 import {
@@ -28,7 +27,7 @@ import {
   type RequestShowInstructionPayload,
 } from '@shared/schemas';
 
-import type { AgentRuntimeHost } from './AgentRuntimeHost';
+import type { SessionHostInteractions } from './HostInteractions';
 import type { SessionHandle } from './SessionHandle';
 
 export type TerminalResultToast =
@@ -122,16 +121,16 @@ export function trackTerminalResultPresentation(
 /** Returns a detach disposer; callers detach when the run/host tears down. */
 export function attachTerminalResultToast(
   session: SessionHandle,
-  runtimeHost: AgentRuntimeHost,
+  interactions: SessionHostInteractions,
   options: { replayWhenAttached?: boolean } = {},
 ): () => void {
   return session.onResult(
     (event) => {
       const toast = terminalResultToast(event);
       if (toast?.type === 'instruction') {
-        runtimeHost.emit('requestShowInstruction', toast.payload, options);
+        interactions.emit('requestShowInstruction', toast.payload, options);
       } else if (toast?.type === 'error') {
-        runtimeHost.emit('requestShowError', toast.payload, options);
+        interactions.emit('requestShowError', toast.payload, options);
       }
     },
     options.replayWhenAttached ? { replayMissed: true } : undefined,

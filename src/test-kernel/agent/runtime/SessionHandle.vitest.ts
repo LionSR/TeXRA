@@ -9,7 +9,7 @@ import '@test/support/defaultSessionTestSetup';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import {
   SessionHandle,
   defaultSession,
@@ -32,7 +32,7 @@ function activeTraceFlusher(flush: () => void): RunTraceFlushEntry {
 
 function trackAgent(
   session: SessionHandle,
-  host: AgentRuntimeHost,
+  host: SessionHostInteractions,
   executionId: string,
   streamId: StreamTabId,
 ): AgentExecutionHandle {
@@ -42,7 +42,6 @@ function trackAgent(
     streamId,
     'orchestrator',
     'toolUse',
-    host,
   );
   session.executions.track(handle);
   return handle;

@@ -39,7 +39,6 @@ import {
   resumeToolUseFromResumeData,
 } from '@agent/runtime/executeAgent';
 import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentRunHandle } from '@agent/runtime/ExecutionHandle';
 import type {
@@ -70,7 +69,6 @@ export interface NativeSubagentStrategyParams {
   readonly agentName: string;
   readonly orchestratorStreamId: StreamTabId;
   readonly parentSession: SessionHandle;
-  readonly runtimeHost: AgentRuntimeHost;
   readonly startedAt: number;
   readonly workingDirectory?: string;
   readonly approvalPromptsUnavailable?: boolean;
@@ -228,7 +226,6 @@ export function createNativeSubagentStrategy(
     launch: (ports, abortController) =>
       runNative(ports, abortController, async (onRun) => {
         const executeOptions = {
-          runtimeHost: params.runtimeHost,
           session: params.parentSession,
           isSubagent: true,
           enforceCategory: params.agentCategoryExplicit,
@@ -291,7 +288,7 @@ export function createNativeSubagentStrategy(
           STREAM_TRANSITION_CAUSE.RESUME,
           { substate: STREAM_SUBSTATE.RESUMING },
         );
-        return await resumeToolUseFromResumeData(resume, params.runtimeHost, {
+        return await resumeToolUseFromResumeData(resume, {
           session: params.parentSession,
           approvalPromptsUnavailable: params.approvalPromptsUnavailable,
           runtimeUnavailableTools: params.runtimeUnavailableTools,

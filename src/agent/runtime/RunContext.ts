@@ -3,7 +3,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import type { RunScope } from './RunScope';
 
-import type { AgentRuntimeHost } from './AgentRuntimeHost';
+import type { SessionHostInteractions } from './HostInteractions';
 import type { SessionHandle } from './SessionHandle';
 
 interface RunContextCommon {
@@ -21,7 +21,6 @@ export interface LaunchRunContext extends RunContextCommon {
 
 interface BareRunContext extends RunContextCommon {
   readonly kind: 'bare';
-  readonly runtimeHost: AgentRuntimeHost;
   readonly streamId?: StreamTabId;
   readonly executionId?: ExecutionId;
   /** Agent name (e.g. "orchestrator", "search-agent"). */
@@ -36,7 +35,8 @@ interface BareRunContext extends RunContextCommon {
  *
  * The `launch` variant is projected from AgentLaunchContext and guarantees the
  * run-identifying fields. The `bare` variant is for manually constructed test
- * and one-shot tool contexts where only a runtime host is required.
+ * and one-shot tool contexts whose available run fields are explicitly
+ * supplied.
  */
 export type RunContext = LaunchRunContext | BareRunContext;
 
@@ -53,7 +53,6 @@ interface CreateRunContextCommon {
 }
 
 interface CreateBareRunContextOptions extends CreateRunContextCommon {
-  runtimeHost: AgentRuntimeHost;
   streamId?: StreamTabId;
   executionId?: ExecutionId;
   agentName?: string;
@@ -120,15 +119,10 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
     });
   }
 
-  if (options.runtimeHost == null) {
-    throw new Error('createRunContext requires an explicit runtimeHost');
-  }
-
   const { model } = options;
   return Object.freeze({
     kind: 'bare',
     ...commonRunContextFields(options),
-    runtimeHost: options.runtimeHost,
     streamId: options.streamId,
     executionId: options.executionId,
     agentName: options.agentName,
@@ -186,11 +180,11 @@ function getRunContextField<K extends keyof RunScope & keyof BareRunContext>(
     : context?.[field];
 }
 
-/** Return the runtime host for a context, reading launch contexts through RunScope. */
-export function getRunContextRuntimeHost(
+/** Return the session's host interactions for a context, reading launch contexts through RunScope. */
+export function getRunContextInteractions(
   context: RunContext | undefined = tryUseRunContext(),
-): AgentRuntimeHost | undefined {
-  return getRunContextField('runtimeHost', context);
+): SessionHostInteractions | undefined {
+  return getRunContextSession(context)?.interactions;
 }
 
 /** Return the stream id for a context, reading launch contexts through RunScope. */
@@ -230,7 +224,7 @@ export function getRunContextSession(
 
 /**
  * Return the active run context, asserting it is a `launch` context (i.e.
- * `streamId`/`executionId`/`runtimeHost` are guaranteed present).
+ * `streamId`/`executionId`/`session` are guaranteed present).
  *
  * Flow nodes only ever execute inside `withExecutionRunContext` (in
  * `AgentLaunchContext.ts`), which always projects a `launch` context — the

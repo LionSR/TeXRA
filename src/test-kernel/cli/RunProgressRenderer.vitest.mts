@@ -11,7 +11,7 @@ import {
   createRunProgressRenderer,
   shouldRenderRunProgress,
 } from '@cli/runtime/runProgressRenderer';
-import { createCliRuntimeHost } from '@cli/runtime/runtimeHost';
+import { createCliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import { attachCliSessionProgressProjection } from '@cli/runtime/sessionProgressSubscription';
 import type { CliContext } from '@cli/runtime/cliContext';
 import {

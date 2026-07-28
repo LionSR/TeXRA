@@ -14,7 +14,7 @@ import {
   type LiveToolUseFlowContext,
 } from '@agent/runtime/ExecutionHandle';
 import { ExecutionRegistry } from '@agent/runtime/executionRegistry';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import {
   SessionEventHub,
   type SessionEvent,
@@ -81,7 +81,7 @@ function createHandle(
   executionId: string,
   parentStreamId: StreamTabId,
   childStreamId: StreamTabId,
-  runtimeHost: AgentRuntimeHost,
+  interactions: SessionHostInteractions,
   overrides: {
     agentName?: string;
     category?: AgentCategory;
@@ -95,7 +95,6 @@ function createHandle(
     childStreamId,
     overrides.agentName ?? 'test-subagent',
     overrides.category ?? AgentCategory.ToolUse,
-    runtimeHost,
     overrides.trace,
   );
   handle.attachExecutionLeaseScope(
@@ -105,6 +104,38 @@ function createHandle(
 }
 
 describe('executionRegistry', () => {
+  it('promotes a pending child activation without an ownership gap', () => {
+    const registry = new ExecutionRegistry();
+    const interactions = createRecordingHost().host;
+    const activationEvents: boolean[] = [];
+    const executionId = 'pending-child-exec' as ExecutionId;
+    const parentStreamId = 'pending-parent' as StreamTabId;
+    const childStreamId = 'pending-child' as StreamTabId;
+    const detach = registry.addChildActivationListener((_activation, active) =>
+      activationEvents.push(active),
+    );
+
+    try {
+      const release = registry.reserveChildActivation({
+        executionId,
+        parentStreamId,
+        childStreamId,
+      });
+      expect(activationEvents).toEqual([true]);
+
+      registry.track(
+        createHandle(executionId, parentStreamId, childStreamId, interactions),
+      );
+      expect(activationEvents).toEqual([true, false]);
+
+      release();
+      expect(activationEvents).toEqual([true, false]);
+    } finally {
+      detach();
+      registry.dispose();
+    }
+  });
+
   it('retains an in-progress waiting cleanup after registrations are cleared', async () => {
     const handle = createHandle(
       'exec-waiting-cleanup-completion',
@@ -1515,7 +1546,6 @@ describe('executionRegistry', () => {
       modelHandler: {
         supportsManualCompaction: true,
       },
-      runtimeHost: explicit.host,
       requestImmediateCompaction: vi.fn(),
       modelSwitchDisabledReason: vi.fn(),
       switchModel: vi.fn(),
@@ -1561,7 +1591,6 @@ describe('executionRegistry', () => {
       modelHandler: {
         supportsManualCompaction: true,
       },
-      runtimeHost: explicit.host,
       requestImmediateCompaction,
       modelSwitchDisabledReason: vi.fn(),
       switchModel: vi.fn(),
@@ -1640,7 +1669,6 @@ describe('executionRegistry', () => {
       modelHandler: {
         supportsManualCompaction: true,
       },
-      runtimeHost: explicit.host,
       requestImmediateCompaction: vi.fn(),
       modelSwitchDisabledReason: vi.fn(),
       switchModel: vi.fn(),

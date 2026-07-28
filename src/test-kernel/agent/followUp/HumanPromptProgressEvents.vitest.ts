@@ -7,7 +7,7 @@ import '@test/support/defaultSessionTestSetup';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
@@ -55,7 +55,7 @@ function installTestPlatform(): Promise<void> {
 }
 
 async function inToolContext<T>(
-  host: AgentRuntimeHost,
+  host: SessionHostInteractions,
   interactions: ReturnType<typeof createRecordingHost>['interactions'],
   streamId: StreamTabId,
   run: () => T,
@@ -64,7 +64,6 @@ async function inToolContext<T>(
   try {
     return await withRunContext(
       createRunContext({
-        runtimeHost: host,
         streamId,
         session: defaultSession(),
       }),
@@ -220,7 +219,7 @@ describe('human prompt progress events', () => {
     const detach = defaultSession().useHostInteractions(explicit.interactions);
 
     try {
-      setToolEditApprovalSessionBypass(streamId, true, explicit.host);
+      setToolEditApprovalSessionBypass(streamId, true);
 
       expect(explicit.events).toEqual([
         {
@@ -239,7 +238,7 @@ describe('human prompt progress events', () => {
     const detach = defaultSession().useHostInteractions(explicit.interactions);
 
     try {
-      setBashApprovalSessionBypass(streamId, true, explicit.host);
+      setBashApprovalSessionBypass(streamId, true);
 
       expect(explicit.events).toEqual([
         {
@@ -257,7 +256,7 @@ describe('human prompt progress events', () => {
     const streamId = 'stream:bypass-independence' as StreamTabId;
 
     try {
-      setToolEditApprovalSessionBypass(streamId, true, explicit.host, {
+      setToolEditApprovalSessionBypass(streamId, true, {
         silent: true,
       });
 
@@ -282,7 +281,7 @@ describe('human prompt progress events', () => {
       expect(show.payload.command).toBe('echo still asks');
 
       explicit.events.length = 0;
-      setBashApprovalSessionBypass(streamId, true, explicit.host, {
+      setBashApprovalSessionBypass(streamId, true, {
         silent: true,
       });
 
@@ -296,7 +295,7 @@ describe('human prompt progress events', () => {
       expect(bypassed).toEqual({ accepted: true });
       expect(explicit.events).toEqual([]);
 
-      setToolEditApprovalSessionBypass(streamId, false, explicit.host, {
+      setToolEditApprovalSessionBypass(streamId, false, {
         silent: true,
       });
 
@@ -310,7 +309,7 @@ describe('human prompt progress events', () => {
       };
 
       const editApproval = await withRunContext(
-        createRunContext({ runtimeHost: explicit.host, streamId }),
+        createRunContext({ streamId }),
         () =>
           requestToolEditApproval({
             path: 'draft.tex',
@@ -336,7 +335,7 @@ describe('human prompt progress events', () => {
     const detach = defaultSession().useHostInteractions(explicit.interactions);
 
     try {
-      proposalApprovals().setBypass(streamId, true, explicit.host);
+      proposalApprovals().setBypass(streamId, true);
 
       expect(explicit.events).toEqual([
         {

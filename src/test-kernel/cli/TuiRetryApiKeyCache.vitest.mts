@@ -20,7 +20,7 @@ vi.mock('@cli/runtime/apiAccessMode', async (importActual) => {
 
 import { clearApprovals } from '@cli/chat/tui/state/approvalQueue';
 import { createTuiHostInteractions } from '@cli/chat/tui/state/subscribeApprovals';
-import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
+import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import {
   apiKeySecretName,
   invalidateApiKeyCache,

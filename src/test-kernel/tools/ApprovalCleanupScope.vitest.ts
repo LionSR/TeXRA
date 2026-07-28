@@ -9,7 +9,7 @@ import '@test/support/defaultSessionTestSetup';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import type { StreamTabId } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import {
@@ -27,10 +27,10 @@ describe('approval cleanup scope (SDK Step 7d residue #5)', () => {
   it("per-stream cleanup leaves another stream's approval state intact", () => {
     const a = sid('s:appr-scope-a');
     const b = sid('s:appr-scope-b');
-    setBashApprovalSessionBypass(a, true, noopAgentRuntimeHost, {
+    setBashApprovalSessionBypass(a, true, {
       silent: true,
     });
-    setBashApprovalSessionBypass(b, true, noopAgentRuntimeHost, {
+    setBashApprovalSessionBypass(b, true, {
       silent: true,
     });
 
@@ -166,12 +166,7 @@ describe('session-owned approval state (#8144)', () => {
     const streamId = sid('s:delegated-approval-same-id');
 
     try {
-      setDelegatedWorkApprovalBypasses(
-        streamId,
-        true,
-        noopAgentRuntimeHost,
-        sessionA,
-      );
+      setDelegatedWorkApprovalBypasses(streamId, true, sessionA);
 
       expect(proposalApprovals(sessionA).isBypassed(streamId)).toBe(true);
       expect(sessionA.approvals.toolEdit.bypass.isBypassed(streamId)).toBe(
@@ -199,7 +194,7 @@ describe('session-owned approval state (#8144)', () => {
     const streamId = sid('s:appr-same-id');
 
     try {
-      setBashApprovalSessionBypass(streamId, true, noopAgentRuntimeHost, {
+      setBashApprovalSessionBypass(streamId, true, {
         silent: true,
         session: sessionA,
       });
@@ -251,7 +246,7 @@ describe('session-owned approval state (#8144)', () => {
       sourceTool: 'edit_file',
       streamId,
     });
-    setBashApprovalSessionBypass(streamId, true, noopAgentRuntimeHost, {
+    setBashApprovalSessionBypass(streamId, true, {
       silent: true,
       session,
     });
