@@ -243,6 +243,68 @@ function emitRunFact<K extends RunFactEventName>(
   });
 }
 
+async function expectDeletionBeforeStorageRootReplacement(
+  deletionKind: 'one-stream' | 'all-streams',
+): Promise<void> {
+  const transcripts = await StreamLogStore.open();
+  const session = new SessionHandle({
+    transcripts,
+    restartRepair: 'deferred',
+  });
+  const { backend } = createIsolatedRecordingBackend(session);
+  const stream = `${deletionKind}-before-root-move` as StreamTabId;
+  const operations: string[] = [];
+  let finishDeletion: (() => void) | undefined;
+  const deletionBlocked = new Promise<void>((resolve) => {
+    finishDeletion = resolve;
+  });
+  if (deletionKind === 'one-stream') {
+    vi.spyOn(backend.state, 'clearStream').mockImplementation(async () => {
+      operations.push('delete:start');
+      await deletionBlocked;
+      operations.push('delete:end');
+      return 'deleted';
+    });
+  } else {
+    vi.spyOn(backend.state, 'clearAll').mockImplementation(async () => {
+      operations.push('delete:start');
+      await deletionBlocked;
+      operations.push('delete:end');
+      return { active: new Set(), failed: new Set() };
+    });
+  }
+  const reloadAfterStorageRootChange = vi
+    .spyOn(session, 'reloadAfterStorageRootChange')
+    .mockImplementation(async () => {
+      operations.push('reload');
+      return true;
+    });
+  backend.state.streamLogs.ensureStream(stream);
+
+  try {
+    const deletion =
+      deletionKind === 'one-stream'
+        ? backend.deleteStream(stream)
+        : backend.deleteAllStreams();
+    await vi.waitFor(() => {
+      expect(operations).toEqual(['delete:start']);
+    });
+    const workspaceMove = backend.reloadAfterStorageRootChange();
+    await Promise.resolve();
+
+    expect(reloadAfterStorageRootChange).not.toHaveBeenCalled();
+    finishDeletion?.();
+    await deletion;
+    await workspaceMove;
+
+    expect(operations).toEqual(['delete:start', 'delete:end', 'reload']);
+  } finally {
+    finishDeletion?.();
+    backend.dispose();
+    session.dispose();
+  }
+}
+
 describe('ProgressBackend', () => {
   it('loads an unfiltered presentation without reloading its live transcript', async () => {
     const transcripts = await StreamLogStore.open();
@@ -461,6 +523,14 @@ describe('ProgressBackend', () => {
       backend.dispose();
       session.dispose();
     }
+  });
+
+  it('finishes a one-stream deletion before replacing the storage root', async () => {
+    await expectDeletionBeforeStorageRootReplacement('one-stream');
+  });
+
+  it('finishes an all-stream deletion before replacing the storage root', async () => {
+    await expectDeletionBeforeStorageRootReplacement('all-streams');
   });
 
   it('projects every approval bypass kind through one backend port', () => {
