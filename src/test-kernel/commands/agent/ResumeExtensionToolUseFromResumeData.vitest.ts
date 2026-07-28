@@ -73,6 +73,7 @@ describe('resumeExtensionToolUseFromResumeData', () => {
     await expect(
       resumeExtensionToolUseFromResumeData(
         snapshot(),
+        undefined,
         'typed alongside resume',
       ),
     ).resolves.toBe(true);
