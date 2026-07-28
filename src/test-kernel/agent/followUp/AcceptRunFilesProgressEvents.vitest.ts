@@ -92,12 +92,10 @@ function runAccept(
   files: { path: string; original: string }[],
   tracker = new FileInteractionState(),
 ) {
-  return withRunContext(
-    createRunContext({ streamId, executionId }),
-    () =>
-      withToolFileInteractionContext({ tracker }, () =>
-        tool.call({ execution_id: executionId, files }),
-      ),
+  return withRunContext(createRunContext({ streamId, executionId }), () =>
+    withToolFileInteractionContext({ tracker }, () =>
+      tool.call({ execution_id: executionId, files }),
+    ),
   );
 }
 

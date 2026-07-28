@@ -22,7 +22,7 @@ const mocks = vi.hoisted(() => ({
   importCodexClass: vi.fn(),
   findCodexBinaryPath: vi.fn(),
   resumeThread: vi.fn(),
-  enqueueFollowUp: vi.fn(),
+  submitFollowUp: vi.fn(async () => ({ status: 'sent' as const })),
 }));
 
 vi.mock('@tools/approval/bashApproval', () => ({
@@ -34,11 +34,15 @@ vi.mock('@agent/followUp/ToolFileInteractionContext', () => ({
   getCurrentToolContexts: mocks.getCurrentToolContexts,
 }));
 
+vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
+  submitFollowUp: mocks.submitFollowUp,
+}));
+
 vi.mock('@agent/runtime/RunContext', () => ({
   getRunContextExecutionId: (ctx: any) => ctx?.executionId,
   getRunContextStreamId: (ctx: any) => ctx?.streamId,
   getRunContextWorkingDirectory: (ctx: any) => ctx?.workingDirectory,
-  getRunContextRuntimeHost: (ctx: any) => ctx?.runtimeHost,
+  getRunContextRuntimeHost: (ctx: any) => ctx?.interactions,
 }));
 
 vi.mock('@agent/runtime/SessionHandle', () => ({
@@ -110,7 +114,7 @@ describe('codex tool - atomic resume fallback', () => {
         streamId: parentStreamId,
         executionId,
         workingDirectory: undefined,
-        runtimeHost: { name: 'fake-runtime-host' },
+        interactions: { name: 'fake-runtime-host' },
       },
       callContext: { tracker: {}, hooks: {} },
     });
@@ -122,7 +126,7 @@ describe('codex tool - atomic resume fallback', () => {
       createFakeAgentCliChildStream(childStreamId),
     );
     mocks.currentSession.mockReturnValue({
-      followUps: { acquire: () => ({ enqueue: mocks.enqueueFollowUp }) },
+      followUps: { acquire: () => ({ enqueue: vi.fn() }) },
     });
   }
 
@@ -182,10 +186,12 @@ describe('codex tool - atomic resume fallback', () => {
     expect(mocks.resumeThread).toHaveBeenCalledOnce();
     expect(mocks.resumeThread).toHaveBeenCalledWith('stale-thread');
     expect(mocks.startChildRunLoop).toHaveBeenCalledTimes(1);
-    expect(mocks.enqueueFollowUp).toHaveBeenCalledOnce();
-    expect(mocks.enqueueFollowUp).toHaveBeenCalledWith({
-      text: 'also update the tests',
-    });
+    expect(mocks.submitFollowUp).toHaveBeenCalledOnce();
+    expect(mocks.submitFollowUp).toHaveBeenCalledWith(
+      childStreamId,
+      'also update the tests',
+      expect.objectContaining({ session: expect.anything() }),
+    );
 
     strategy?.releaseSessionOwnership?.();
     expect(CodexThreads.lookup('stale-thread')).toBeUndefined();

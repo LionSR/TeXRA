@@ -199,7 +199,6 @@ describe('ExecutionsTool', () => {
       childStreamId,
       'review',
       'toolUse',
-      explicit.host,
     );
 
     try {

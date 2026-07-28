@@ -27,8 +27,12 @@ import type {
   AgentExecutionHandle,
   ExecutionInterruptHandler,
 } from '@agent/runtime/ExecutionHandle';
-import type { FollowUpQueue } from '@agent/followUp/FollowUpQueue';
-import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
+import type {
+  FollowUpQueue,
+  FollowUpQueueBatchItem,
+  FollowUpQueueInput,
+} from '@agent/followUp/FollowUpQueue';
+import type { FollowUpConsumerLease } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { classifyAgentError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkErrorUtils';
 import {
@@ -40,11 +44,9 @@ import {
 import { deriveRunOutcome } from '@shared/streams/streamStatus';
 
 import {
-  enqueueChildRunFollowUp,
-  wakeChildRunFollowUp,
+  deliverChildRunFollowUp,
   persistChildRunReport,
   persistChildRunResultMeta,
-  type ChildRunEnqueueResult,
 } from '@tools/childRunDelivery';
 import { formatSubagentProgress } from '@tools/subagentResults';
 import type { ChildStream, ChildStreamOutcome } from '@tools/childStream';
@@ -229,8 +231,8 @@ export interface ChildRunLoopHandle {
  *
  * Does NOT implement the session duck-type (no `session.appendFollowUp`), so
  * flow-only commands such as context compaction ignore it. Follow-ups route
- * through the WAITING state queue path: `sendFollowUp()` → stream is WAITING →
- * `session.followUps.enqueue()`.
+ * through the queue-owned submission path, which joins this loop's live lease
+ * instead of creating a competing continuation.
  *
  * `interrupt()` additionally delegates into a live native turn's flow
  * context, when one is currently attached. `handle.getToolUseFlow()` is the
@@ -383,7 +385,7 @@ async function persistResultMetaBestEffort(
  */
 interface PendingChildDelivery {
   readonly targetStreamId: StreamTabId;
-  readonly enqueueResult: ChildRunEnqueueResult;
+  readonly followUp: FollowUpQueueInput;
 }
 
 /**
@@ -398,7 +400,6 @@ async function deliverTurn<TTurn>(params: {
   strategy: ChildRunStrategy<TTurn>;
   executionId: ExecutionId;
   parentStreamId: StreamTabId;
-  session: SessionHandle;
   logger: AgentTrace;
   turn: TTurn | null;
   err: unknown;
@@ -410,7 +411,6 @@ async function deliverTurn<TTurn>(params: {
     strategy,
     executionId,
     parentStreamId,
-    session,
     logger,
     turn,
     err,
@@ -451,59 +451,42 @@ async function deliverTurn<TTurn>(params: {
     return undefined;
   }
   if (prepareParentDelivery?.() === false) return undefined;
-  const enqueueResult = await enqueueChildRunFollowUp({
+  return {
     targetStreamId,
     followUp: { text: msg, origin: 'subagent_result' },
-    session,
-  });
-  if (enqueueResult.kind === 'no_session') {
-    logger.warn(
-      'Turn result not delivered: parent stream has no active session. The result remains in the execution report.',
-      {
-        data: {
-          executionId,
-          parentStreamId: targetStreamId,
-          streamStatus: enqueueResult.streamStatus ?? 'unknown',
-        },
-      },
-    );
-  }
-  return { targetStreamId, enqueueResult };
+  };
 }
 
 /**
  * Resolve a pending delivery's wake step (no-op when there is nothing to
  * wake, or the enqueue itself found no session — already logged above).
  */
-async function wakePendingDelivery(
+async function submitPendingDelivery(
   pending: PendingChildDelivery | undefined,
   session: SessionHandle,
   executionId: ExecutionId,
   logger: AgentTrace,
 ): Promise<void> {
-  if (!pending || pending.enqueueResult.kind === 'no_session') return;
-  const delivery = await wakeChildRunFollowUp(
-    pending.targetStreamId,
-    pending.enqueueResult,
+  if (!pending) return;
+  const delivery = await deliverChildRunFollowUp({
+    targetStreamId: pending.targetStreamId,
+    followUp: pending.followUp,
     session,
-  );
-  if (delivery.kind === 'dropped') {
+  });
+  if (delivery.kind !== 'delivered') {
     logger.warn(
-      'Turn result dropped: parent stream is gone and could not be resumed. The result remains in the execution report.',
-      { data: { executionId, parentStreamId: pending.targetStreamId } },
+      'Turn result not delivered: parent stream is unavailable. The result remains in the execution report.',
+      {
+        data: {
+          executionId,
+          parentStreamId: pending.targetStreamId,
+          ...(delivery.kind === 'no_session' && {
+            streamStatus: delivery.streamStatus ?? 'unknown',
+          }),
+        },
+      },
     );
   }
-}
-
-/**
- * True when this session owns a live child-run loop for `streamId`. Enqueueing
- * into that loop's `FollowUpQueue` either wakes its pending wait or leaves the
- * item for its next wait boundary, so callers avoid racing a second host-level
- * resume. A genuine restart has no registered loop and still needs the generic
- * wake path.
- */
-export function isChildRunLoopActive(streamId: StreamTabId): boolean {
-  return currentSession().executions.isChildRunLoopActive(streamId);
 }
 
 /**
@@ -544,7 +527,7 @@ export function startChildRunLoop<TTurn>(
   const loop = new ChildRunInterruptible(runSession, childStreamId);
   let stopWatchingLease: (() => void) | undefined;
   let queue!: FollowUpQueue;
-  let queueAcquired = false;
+  let queueLease: FollowUpConsumerLease | undefined;
   let attachedHandle: AgentExecutionHandle | undefined;
   let detachLoopInterrupt: (() => void) | undefined;
   const attachLoopInterrupt = (): void => {
@@ -554,7 +537,6 @@ export function startChildRunLoop<TTurn>(
     attachedHandle = handle;
     detachLoopInterrupt = handle.attachInterruptHandler(loop);
   };
-  let unregisterChildRunLoop: (() => void) | undefined;
   let sessionStage: StageHandle | undefined;
 
   try {
@@ -565,12 +547,15 @@ export function startChildRunLoop<TTurn>(
       });
       loop.interrupt();
     });
-    queue = runSession.followUps.acquire(childStreamId);
-    queueAcquired = true;
+    queueLease = runSession.followUps.claimLive(childStreamId, 'child');
+    if (!queueLease) {
+      throw new Error(
+        `Follow-up continuation already has an owner for child ${childStreamId}.`,
+      );
+    }
+    queue = runSession.followUps.queue(queueLease);
     loop.setQueue(queue);
     attachLoopInterrupt();
-    unregisterChildRunLoop =
-      runSession.executions.registerChildRunLoop(childStreamId);
     sessionStage = childStream
       ? logger.openStage(strategy.stageLabel)
       : undefined;
@@ -585,10 +570,9 @@ export function startChildRunLoop<TTurn>(
       }
     };
     cleanup(() => sessionStage?.end(RUN_OUTCOME.FAILED));
-    cleanup(() => unregisterChildRunLoop?.());
     cleanup(() => detachLoopInterrupt?.());
     cleanup(() => {
-      if (queueAcquired) runSession.followUps.release(childStreamId);
+      if (queueLease) runSession.followUps.release(queueLease, 'terminal');
     });
     cleanup(() => stopWatchingLease?.());
     cleanup(releaseSessionOwnershipOnce);
@@ -610,14 +594,11 @@ export function startChildRunLoop<TTurn>(
         : parentStreamId;
       if (!targetStreamId) return; // Detached — see deliverTurn for the same guard.
       const msg = formatSubagentProgress(executionId, agentName, update);
-      // Enqueue-only — intentional. A live progress notification should
-      // never wake a WAITING/detached parent stream just to deliver an
-      // interim update; only a turn's own delivery (deliverTurn, below)
-      // wakes the parent.
-      void enqueueChildRunFollowUp({
+      void deliverChildRunFollowUp({
         targetStreamId,
         followUp: { text: msg, origin: 'subagent_result' },
         session: runSession,
+        mode: 'live_notification',
       });
     },
     recordCost: (totalCostUsd) => {
@@ -669,7 +650,6 @@ export function startChildRunLoop<TTurn>(
           strategy,
           executionId,
           parentStreamId,
-          session: runSession,
           logger,
           turn,
           err,
@@ -716,7 +696,7 @@ export function startChildRunLoop<TTurn>(
         // the instant this turn settled) — then just drain the next batch. A
         // follow-up already raced into the queue resumes immediately instead
         // of genuinely waiting.
-        await wakePendingDelivery(delivery, runSession, executionId, logger);
+        await submitPendingDelivery(delivery, runSession, executionId, logger);
         childStream?.waitForInput();
         if (loop.isInterrupted()) break;
 
@@ -729,8 +709,7 @@ export function startChildRunLoop<TTurn>(
       }
     } finally {
       detachLoopInterrupt?.();
-      unregisterChildRunLoop?.();
-      runSession.followUps.release(childStreamId);
+      if (queueLease) runSession.followUps.release(queueLease, 'terminal');
       releaseSessionOwnershipOnce();
       try {
         try {
@@ -815,7 +794,7 @@ export function startChildRunLoop<TTurn>(
         // so a resumed parent turn that immediately waits on this execution
         // (e.g. `executions` tool with `action=wait`) always observes it
         // terminal instead of racing its own wake (#8093).
-        await wakePendingDelivery(
+        await submitPendingDelivery(
           pendingDelivery,
           runSession,
           executionId,

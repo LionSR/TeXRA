@@ -166,13 +166,13 @@ function firstShowRequestId(show: ReturnType<typeof vi.fn>): string {
 }
 
 function createInteractions(options: {
-  runtimeHost?: ReturnType<typeof createRuntimeHost>;
+  presentationSink?: ReturnType<typeof createRuntimeHost>;
   handlers?: ApprovalRequestHandlerSet;
   setApprovalBypassState?: (update: HostApprovalBypassStateUpdate) => void;
   session: SessionHandle;
 }) {
   return createExtensionHostInteractions({
-    runtimeHost: options.runtimeHost ?? createRuntimeHost(),
+    interactions: options.presentationSink ?? createRuntimeHost(),
     session: options.session,
     getApprovalHandlers: () => options.handlers ?? createHandlers(),
     setApprovalBypassState: options.setApprovalBypassState ?? vi.fn(),
@@ -189,13 +189,13 @@ function recordSessionEvents(session: SessionHandle): SessionEvent[] {
 
 describe('createExtensionHostInteractions', () => {
   it('forwards emit to the caller-supplied runtime host (#9251)', () => {
-    const runtimeHost = createRuntimeHost();
+    const presentationSink = createRuntimeHost();
     const session = createTestSession();
-    const interactions = createInteractions({ runtimeHost, session });
+    const interactions = createInteractions({ presentationSink, session });
 
     interactions.emit?.('requestShowError', { message: 'boom' });
 
-    expect(runtimeHost.emit).toHaveBeenCalledWith('requestShowError', {
+    expect(presentationSink.emit).toHaveBeenCalledWith('requestShowError', {
       message: 'boom',
     });
   });
@@ -374,12 +374,12 @@ describe('createExtensionHostInteractions', () => {
   });
 
   it('shows and resolves plan approvals through existing handlers', async () => {
-    const runtimeHost = createRuntimeHost();
+    const presentationSink = createRuntimeHost();
     const handlers = createHandlers();
     const session = createTestSession();
     const sessionEvents = recordSessionEvents(session);
     const interactions = createInteractions({
-      runtimeHost,
+      presentationSink,
       handlers,
       session,
     });
@@ -392,11 +392,11 @@ describe('createExtensionHostInteractions', () => {
     });
 
     expect(resultPromise).toBeDefined();
-    expect(runtimeHost.emit).toHaveBeenCalledWith(
+    expect(presentationSink.emit).toHaveBeenCalledWith(
       'requestEnsureProgressView',
       {},
     );
-    expect(runtimeHost.emit).not.toHaveBeenCalledWith(
+    expect(presentationSink.emit).not.toHaveBeenCalledWith(
       'setActiveStream',
       expect.anything(),
     );
@@ -544,10 +544,10 @@ describe('createExtensionHostInteractions', () => {
   });
 
   it('cancels pending retry requests for a removed stream', async () => {
-    const runtimeHost = createRuntimeHost();
+    const presentationSink = createRuntimeHost();
     const handlers = createHandlers();
     const interactions = createInteractions({
-      runtimeHost,
+      presentationSink,
       handlers,
       session: createTestSession(),
     });
@@ -672,10 +672,10 @@ describe('createExtensionHostInteractions', () => {
   });
 
   it('shows external inquiries without waiting for a user decision', async () => {
-    const runtimeHost = createRuntimeHost();
+    const presentationSink = createRuntimeHost();
     const handlers = createHandlers();
     const interactions = createInteractions({
-      runtimeHost,
+      presentationSink,
       handlers,
       session: createTestSession(),
     });

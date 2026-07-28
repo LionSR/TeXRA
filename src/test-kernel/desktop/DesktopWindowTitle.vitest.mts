@@ -7,7 +7,10 @@ import { describe, expect, it, vi } from 'vitest';
 // Local imports
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
-import { defaultSession, type SessionHandle } from '@agent/runtime/SessionHandle';
+import {
+  defaultSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
 import {
   getDesktopSessionActivity,
   getDesktopWindowTitle,
@@ -25,7 +28,6 @@ function createAgentHandle(id: string, streamId: StreamTabId) {
     streamId,
     'test-agent',
     AgentCategory.ToolUse,
-    defaultSession().interactions,
   );
 }
 

@@ -19,7 +19,7 @@ import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   notifyFollowUpSent,
   onFollowUpSent,
-  sendFollowUp,
+  submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
 import { STREAM_PHASE, STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 import {
@@ -62,13 +62,11 @@ describe('tool-use follow-up progress events', () => {
 
   function trackToolUseFlow({
     stream = streamId,
-    interactions = defaultSession().interactions,
     appendFollowUp,
     executionId = `exec-${stream}`,
     session,
   }: {
     readonly stream?: StreamTabId;
-    readonly interactions?: SessionHostInteractions;
     readonly appendFollowUp: LiveToolUseFlowContext['session']['appendFollowUp'];
     readonly executionId?: string;
     readonly session?: SessionHandle;
@@ -108,15 +106,11 @@ describe('tool-use follow-up progress events', () => {
     });
     const appendFollowUp = vi.fn();
 
-    trackToolUseFlow({ interactions, appendFollowUp, session });
+    trackToolUseFlow({ appendFollowUp, session });
 
-    const result = await sendFollowUp(
-      streamId,
-      'please continue',
-      undefined,
-      undefined,
+    const result = await submitFollowUp(streamId, 'please continue', {
       session,
-    );
+    });
     detachFacts();
 
     expect(result).toEqual({ status: 'sent' });
@@ -219,7 +213,6 @@ describe('tool-use follow-up progress events', () => {
     try {
       withRunContext(
         createRunContext({
-          runtimeHost: run.host,
           session: {} as SessionHandle,
         }),
         () => notifyFollowUpSent(streamId),
@@ -249,11 +242,11 @@ describe('tool-use follow-up progress events', () => {
       }),
     );
 
-    trackToolUseFlow({ interactions, appendFollowUp: vi.fn() });
+    trackToolUseFlow({ appendFollowUp: vi.fn() });
 
-    await sendFollowUp(streamId, 'break wait');
+    await submitFollowUp(streamId, 'break wait');
     unsubscribeFollowUpObservers.pop()?.();
-    await sendFollowUp(streamId, 'after unsubscribe');
+    await submitFollowUp(streamId, 'after unsubscribe');
 
     expect(observed).toEqual([streamId]);
   });
@@ -281,13 +274,9 @@ describe('tool-use follow-up progress events', () => {
         session,
       });
 
-      const result = await sendFollowUp(
-        streamId,
-        'observer ordering',
-        undefined,
-        undefined,
+      const result = await submitFollowUp(streamId, 'observer ordering', {
         session,
-      );
+      });
 
       expect(result).toEqual({ status: 'sent' });
       expect(order).toEqual([
@@ -309,9 +298,9 @@ describe('tool-use follow-up progress events', () => {
       streamId,
       STREAM_PHASE.COMPLETED,
     );
-    trackToolUseFlow({ interactions, appendFollowUp });
+    trackToolUseFlow({ appendFollowUp });
 
-    const result = await sendFollowUp(streamId, 'late follow-up');
+    const result = await submitFollowUp(streamId, 'late follow-up');
 
     expect(result).toEqual({
       status: 'no_session',
@@ -329,12 +318,10 @@ describe('tool-use follow-up progress events', () => {
     });
 
     try {
-      const result = await sendFollowUp(
+      const result = await submitFollowUp(
         'stream:no-follow-up-session' as StreamTabId,
         'cannot deliver',
-        undefined,
-        undefined,
-        session,
+        { session },
       );
 
       expect(result).toEqual({
@@ -357,7 +344,7 @@ describe('tool-use follow-up progress events', () => {
     );
 
     try {
-      const result = await sendFollowUp(
+      const result = await submitFollowUp(
         resumingStreamId,
         'queued while resuming',
       );
@@ -365,12 +352,13 @@ describe('tool-use follow-up progress events', () => {
       expect(result).toEqual({
         status: 'queued',
         reason: 'resuming',
+        continuation: 'resume_failed',
       });
       expect(defaultSession().followUps.getAll(resumingStreamId)).toEqual([
         'queued while resuming',
       ]);
     } finally {
-      defaultSession().followUps.release(resumingStreamId);
+      defaultSession().followUps.terminalize(resumingStreamId);
     }
   });
 
@@ -394,18 +382,19 @@ describe('tool-use follow-up progress events', () => {
     defaultSession().executions.track(handle);
 
     try {
-      const result = await sendFollowUp(parentStreamId, 'continue child');
+      const result = await submitFollowUp(parentStreamId, 'continue child');
 
       expect(result).toEqual({
         status: 'queued',
         reason: 'children_running',
+        continuation: 'resume_failed',
       });
       expect(defaultSession().followUps.getAll(parentStreamId)).toEqual([
         'continue child',
       ]);
     } finally {
       defaultSession().executions.untrack(executionId);
-      defaultSession().followUps.release(parentStreamId);
+      defaultSession().followUps.terminalize(parentStreamId);
     }
   });
 });

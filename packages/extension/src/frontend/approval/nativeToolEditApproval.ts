@@ -80,7 +80,7 @@ const pendingApprovals = new Map<string, PendingApprovalEntry>();
 const initializingApprovals = new Map<string, InitializingNativeApproval>();
 const diffViewHost: DiffViewHost = new VscodeDiffViewHost();
 let storageDirectory: string | undefined;
-let runtimeHost: Pick<SessionHostInteractions, 'emit'> | undefined;
+let interactions: Pick<SessionHostInteractions, 'emit'> | undefined;
 let showToolEditPermission: (payload: ToolEditPermission) => void;
 let resolveToolEditPermission: (requestId: string) => void;
 
@@ -172,12 +172,12 @@ function getStorageDir(): string {
 }
 
 function getRuntimeHost(): Pick<SessionHostInteractions, 'emit'> {
-  if (!runtimeHost) {
+  if (!interactions) {
     throw new Error(
       'Tool edit approval runtime host has not been initialized.',
     );
   }
-  return runtimeHost;
+  return interactions;
 }
 
 async function ensureStorageDir(): Promise<string> {
@@ -577,7 +577,7 @@ export function initializeNativeToolEditApproval(
 ): void {
   const baseDir = context.storageUri ?? context.globalStorageUri;
   storageDirectory = path.join(baseDir.fsPath, 'tool-edit-previews');
-  runtimeHost = host;
+  interactions = host;
   showToolEditPermission = callbacks.showToolEditPermission;
   resolveToolEditPermission = callbacks.resolveToolEditPermission;
 }

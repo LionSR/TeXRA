@@ -29,12 +29,10 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import { hasAnyUsableSetupCredential } from '@commands/setup/setupAssistantCommand';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
-import {
-  isResumeInFlight,
-  tryResumeFromResumeData,
-} from '@commands/agent/resumeFromResumeData';
+import { tryResumeFromResumeData } from '@commands/agent/resumeFromResumeData';
 import { globalSM, initializeStateManagers, workspaceSM } from '@common/state';
 import { SIDEBAR_VIEWS, setActiveSidebarView } from '@common/webview';
+import { installTexraModelAccess } from '@controllers/modelAccess/installTexraModelAccess';
 import { appSignals } from '@eventBus/AppSignals';
 import { SecretManager } from '@frontend/secretManager';
 import {
@@ -241,8 +239,8 @@ export async function activate(context: vscode.ExtensionContext) {
     lifecycle,
     agentDirectories,
     agentResume: {
-      tryResumeStream: (streamId) => tryResumeFromResumeData(streamId),
-      isResumeInFlight: (streamId) => isResumeInFlight(streamId),
+      tryResumeStream: (streamId, recovery) =>
+        tryResumeFromResumeData(streamId, recovery),
     },
     toolAvailability: {
       ...NO_TOOL_AVAILABILITY_HOST,
@@ -260,6 +258,9 @@ export async function activate(context: vscode.ExtensionContext) {
       }
     },
   });
+  // TeXRA's account plane (subscription relay + ChatGPT sign-in). Without this
+  // the model layer is bring-your-own-key. See installTexraModelAccess.
+  installTexraModelAccess();
   const invalidateLanguageModels = () => {
     invalidateRuntimeModelRegistry();
     invalidateModelOptionsCache();

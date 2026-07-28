@@ -150,7 +150,6 @@ export const streamLifecycleHandlers = {
     appState.set(
       create(updated, (draft) => {
         draft.activeStreamId = nextActiveStreamId;
-        draft.streamFilter = data.agentFilter;
       }),
     );
   },

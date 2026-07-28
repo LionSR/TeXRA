@@ -30,7 +30,6 @@ import {
   type ProposalResult,
   type RetryResult,
 } from '@agent/runtime/HostInteractions';
-import { isPreferCodexSubscription } from '@auth/codex';
 import { getCliApiMode, setCliApiMode } from '@cli/runtime/apiAccessMode';
 import {
   askUserQuestionDenial,
@@ -42,13 +41,14 @@ import {
 } from '@cli/runtime/approvalAdapter';
 import { denyExternalInquiryIfNoHumanInput } from '@cli/runtime/approval/humanInputHandlers';
 import type { CliContext } from '@cli/runtime/cliContext';
-import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
+import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import {
   apiKeyExistsUncached,
   hasUsableApiKey,
   invalidateApiKeyCache,
   isApiProvider,
 } from '@model/apiProviders';
+import { isPreferCodexSubscription } from '@model/codex/codexPreference';
 import { platform } from '@platform/platform';
 import {
   isUpstreamCreditDepletedError,
@@ -148,7 +148,7 @@ export function createTuiHostInteractions(
         decision.bypass === 'toolEdit' &&
         request.streamId
       ) {
-        setToolEditApprovalSessionBypass(request.streamId, true, host);
+        setToolEditApprovalSessionBypass(request.streamId, true);
       }
       return decision.accepted
         ? { accepted: true, appliedContent: request.proposedContent }
@@ -387,7 +387,7 @@ async function requestBashInteraction(
   };
   const decision = await decideWithPolicy(context, 'bash', payload);
   if (decision.accepted && decision.bypass === 'bash' && request.streamId) {
-    setBashApprovalSessionBypass(request.streamId, true, host);
+    setBashApprovalSessionBypass(request.streamId, true);
   }
   return {
     accepted: decision.accepted,
@@ -417,7 +417,7 @@ async function requestProposalInteraction(
     decision.bypass === 'superYolo' &&
     request.streamId
   ) {
-    setDelegatedWorkApprovalBypasses(request.streamId, true, host);
+    setDelegatedWorkApprovalBypasses(request.streamId, true);
     approveQueuedDelegatedWorkForStream(request.streamId);
   }
   const feedback = feedbackOnReject(decision);

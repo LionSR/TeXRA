@@ -43,10 +43,21 @@ const modelMocks = vi.hoisted(() => ({
 vi.mock('@auth/codex', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@auth/codex')>()),
   codexCoordinator: () => ({ signOut: codexMocks.signOut }),
-  getChatGptAuthStatus: codexMocks.getStatus,
   loginWithLoopback: codexMocks.login,
+}));
+
+vi.mock('@controllers/modelAccess/chatGptAuthStatus', () => ({
+  getChatGptAuthStatus: codexMocks.getStatus,
+}));
+
+vi.mock('@model/codex/codexPreference', () => ({
+  isCodexSubscriptionToolUseOnly: () => false,
+  isPreferCodexSubscription: () => false,
   setCodexSubscriptionToolUseOnly: codexMocks.setSubscriptionToolUseOnly,
   setPreferCodexSubscription: codexMocks.setPreferSubscription,
+  CODEX_PREFER_SUBSCRIPTION_KEY: 'texra.chatgptCodex.preferSubscription',
+  CODEX_SUBSCRIPTION_TOOL_USE_ONLY_KEY:
+    'texra.chatgptCodex.subscriptionToolUseOnly',
 }));
 
 vi.mock('@model/computeModelOptions', async (importOriginal) => ({

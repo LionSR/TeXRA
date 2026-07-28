@@ -625,16 +625,15 @@ export async function runToolUseFlow<C = unknown>(
     // AgentRunLifecycle applies this policy with terminal metadata through one
     // storage finalization after the flow reports its outcome.
 
-    // Recovery failures preserve the unread record but release the rebuilt
-    // live queue. The resume wrapper owns the drained batch and restores it
-    // after rejection; retaining both copies here would replay it twice.
-    //
-    // WAITING retains its existing stronger property: the live lifecycle
-    // remains attached to the queue so a racing follow-up, a genuine kill,
-    // or the next resume observes the same queue instance.
-    if (!preserveFollowUpQueue) {
-      sessionLifecycle.dispose();
-    }
+    // A suspended cursor and a completed parent with live children remain
+    // explicitly recoverable. Every other exit is terminal. The lifecycle's
+    // generation-scoped release is a no-op for an inner native-child turn,
+    // whose child loop retains the sole consumer lease across turns.
+    sessionLifecycle.release(
+      preserveFollowUpQueue || runSession.executions.hasActiveChildren(streamId)
+        ? 'recoverable'
+        : 'terminal',
+    );
     runSession.interactions.cancel({ streamId, cause: 'Run ended.' });
     for (const handler of switchedHandlers) {
       handler.dispose();

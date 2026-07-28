@@ -48,10 +48,10 @@ describe('ToolUseRoundPrepNode follow-up transcript logging (regression: #7508 p
     ).mockRejectedValue(new Error('follow-up append failed'));
     const node = new ToolUseRoundPrepNode().setServices(services);
     const shared = buildShared();
-    const runtimeHost = { emit: vi.fn() };
+    const interactions = { emit: vi.fn() };
 
     await expect(
-      withTestRunContext(runtimeHost, 'test-stream', () =>
+      withTestRunContext(interactions, 'test-stream', () =>
         node.post(shared, {
           interrupted: false,
           queuedFollowUps: [{ text: 'Do the thing.', origin: 'user' }],
@@ -73,10 +73,10 @@ describe('ToolUseRoundPrepNode follow-up transcript logging (regression: #7508 p
       ...buildShared(),
       currentUserInstruction: 'initial request',
     };
-    const runtimeHost = { emit: vi.fn() };
+    const interactions = { emit: vi.fn() };
 
     const transition = await withTestRunContext(
-      runtimeHost,
+      interactions,
       'test-stream',
       () =>
         node.post(shared, {
@@ -106,10 +106,10 @@ describe('ToolUseRoundPrepNode follow-up transcript logging (regression: #7508 p
     ).mockRejectedValue(new Error('boom'));
     const node = new ToolUseRoundPrepNode().setServices(services);
     const shared = buildShared();
-    const runtimeHost = { emit: vi.fn() };
+    const interactions = { emit: vi.fn() };
 
     await expect(
-      withTestRunContext(runtimeHost, 'test-stream', () =>
+      withTestRunContext(interactions, 'test-stream', () =>
         node.post(shared, {
           interrupted: false,
           queuedFollowUps: [{ text: 'synthesized', origin: 'user' }],

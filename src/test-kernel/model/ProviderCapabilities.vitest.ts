@@ -12,6 +12,7 @@ import {
   resetCodexCoordinator,
   type CodexSession,
 } from '@auth/codex';
+import { installTexraModelAccess } from '@controllers/modelAccess/installTexraModelAccess';
 import {
   CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT,
   CODEX_DEFAULT_SUBSCRIPTION_CONTEXT_WINDOW,
@@ -78,6 +79,8 @@ async function installSubscriptionPlatform(options?: {
         ? {}
         : { [CODEX_SESSION_SECRET_KEY]: JSON.stringify(signedInSession) },
   });
+  // Sign-in state reaches the model layer through the seam the hosts install.
+  installTexraModelAccess();
 }
 
 describe('provider capabilities', () => {

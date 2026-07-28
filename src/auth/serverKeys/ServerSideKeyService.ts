@@ -16,7 +16,10 @@
 
 import type { StateStore } from '@platform/interfaces';
 import type { ServerSideProvider } from '@shared/constants/providers';
-import type { SpendingStatus } from '@shared/schemas/spendingStatus';
+import type {
+  SpendingStatus,
+  SpendingStatusError,
+} from '@shared/schemas/spendingStatus';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { SupabaseClient } from '../SupabaseClient';
 import {
@@ -29,6 +32,15 @@ import type { SupabaseSessionLog } from '../supabaseSessionTypes';
 import type { TierService } from './TierService';
 
 const CHANNEL = 'ServerSideKeyService';
+
+/**
+ * When the last access fetch was anonymous (dead session), the authenticated
+ * cache gate discards it and every model-dispatch call retries the full relay
+ * fetch + token-refresh attempt with no backoff — a retry storm. This short
+ * backoff gates anonymous refetches so a dead-session window doesn't hammer
+ * the relay and GoTrue on the model hot path.
+ */
+const ANONYMOUS_FETCH_BACKOFF_MS = 30_000;
 
 /** Path suffixes for relay URLs, matching SDK expectations. */
 const RELAY_PATH_SUFFIXES: Partial<Record<ServerSideProvider, string>> = {
@@ -43,6 +55,11 @@ const RELAY_PATH_SUFFIXES: Partial<Record<ServerSideProvider, string>> = {
 
 /** Global state key for the "use included model access" preference. */
 const USE_INCLUDED_ACCESS_KEY = 'texra.useIncludedModelAccess';
+
+interface AccessStatus {
+  hasAccess: boolean;
+  userTier: UserTier | null;
+}
 
 export interface ClearServerSideKeyCachesOptions {
   /**
@@ -74,6 +91,22 @@ export class ServerSideKeyService {
   private accessTimestamp = 0;
   private accessFetchPromise: Promise<boolean> | null = null;
   private userTier: UserTier | null = null;
+
+  /**
+   * Whether the last access fetch carried a relay auth token. An anonymous
+   * fetch (dead session refresh at the time) must not satisfy a later check
+   * via the cache: the tier config it produced has no user blocks, so we fall
+   * through and refetch, picking up a now-valid token.
+   */
+  private lastFetchAuthenticated = false;
+
+  /**
+   * Sentry token that changes each time a new access-fetch promise is
+   * installed. The completion handler of a previous fetch checks this
+   * against its captured token to avoid committing side-effects after a
+   * later overlapping call has superseded it.
+   */
+  private _activeFetchToken: object | null = null;
 
   // Cache state tracking
   private _isCachePrimed = false;
@@ -132,6 +165,10 @@ export class ServerSideKeyService {
     return this.tierService.getSpendingStatus();
   }
 
+  getSpendingStatusError(): SpendingStatusError | null {
+    return this.tierService.getSpendingStatusError();
+  }
+
   async setUseIncludedModelAccess(
     value: boolean,
     cacheOptions: ClearServerSideKeyCachesOptions = {},
@@ -172,6 +209,8 @@ export class ServerSideKeyService {
     this.accessTimestamp = 0;
     this.accessFetchPromise = null;
     this.userTier = null;
+    this.lastFetchAuthenticated = false;
+    this._activeFetchToken = null;
     if (options.resetQuotaFlip) {
       this.quotaFlipApplied = false;
       this.quotaAutoSwitchActive = false;
@@ -190,15 +229,19 @@ export class ServerSideKeyService {
     );
   }
 
-  private async fetchAccessStatus(): Promise<boolean> {
+  /**
+   * Compute the account access status without changing cached service state.
+   * The calling fetch commits this result only if it is still the most recent
+   * request, so an older anonymous request cannot erase a later authenticated
+   * result.
+   */
+  private async fetchAccessStatus(): Promise<AccessStatus> {
     try {
       if (!(await SupabaseClient.isAuthenticated())) {
-        return this.setAccessDenied();
+        return { hasAccess: false, userTier: null };
       }
       const tier = await SupabaseClient.getUserTier();
-      this.accessResult = true;
-      this.userTier = tier || FREE_TIER;
-      return true;
+      return { hasAccess: true, userTier: tier || FREE_TIER };
     } catch (error) {
       // Denied by error (auth/network failure), not by policy — log so the two
       // are distinguishable.
@@ -206,14 +249,8 @@ export class ServerSideKeyService {
         CHANNEL,
         `Access check failed, treating as denied: ${toErrorMessage(error)}`,
       );
-      return this.setAccessDenied();
+      return { hasAccess: false, userTier: null };
     }
-  }
-
-  private setAccessDenied(): false {
-    this.accessResult = false;
-    this.userTier = null;
-    return false;
   }
 
   /**
@@ -226,44 +263,86 @@ export class ServerSideKeyService {
       return false;
     }
 
+    // Authenticated cache: full TTL, plus the access/tier-config gate.
     if (
       this.isAccessCacheValid() &&
+      this.lastFetchAuthenticated &&
       (this.hasFullAccess() || this.tierService.getConfigSync() !== null)
     ) {
       return this.accessFetchPromise!;
     }
 
+    // Anonymous-fetch backoff: when the session is dead AND access was
+    // denied, every call on the model-dispatch hot path would otherwise
+    // retry the full relay fetch + token-refresh attempt with no backoff.
+    // A short negative-cache keeps the retry storm bounded while still
+    // picking up a re-sign-in promptly.
+    //
+    // The backoff only applies to denied anonymous fetches (!accessResult).
+    // A granted anonymous fetch (hasAccess && providers available) means
+    // the only missing piece is the relay auth token, which may be
+    // available on the next attempt — those are allowed to retry.
+    if (
+      this.accessFetchPromise !== null &&
+      this.accessTimestamp > 0 &&
+      !this.lastFetchAuthenticated &&
+      !this.accessResult &&
+      Date.now() - this.accessTimestamp < ANONYMOUS_FETCH_BACKOFF_MS
+    ) {
+      return this.accessFetchPromise;
+    }
+
+    // Start the fetch and store the promise synchronously so that
+    // overlapping calls see it. A sentinel token lets the completion
+    // handler detect whether the stored promise has been replaced by a
+    // later overlapping call; this avoids committing authentication
+    // metadata from a stale fetch.
+    const fetchToken = {};
+    this._activeFetchToken = fetchToken;
     this.accessFetchPromise = (async () => {
       const authToken =
         (await SupabaseClient.getRelayAccessToken()) ?? undefined;
+      const thisFetchAuthenticated = authToken !== undefined;
 
-      const [hasAccess, tierConfig] = await Promise.all([
+      const [accessStatus, tierConfig] = await Promise.all([
         this.fetchAccessStatus(),
         this.tierService.getConfig(authToken),
       ]);
 
+      const hasFullAccess = accessStatus.userTier === ULTRA_TIER;
+      const providers =
+        tierConfig?.providers ?? this.tierService.getProviders();
+      let accessGranted = accessStatus.hasAccess && providers.length > 0;
+
       if (this.tierService.isAccessExpired()) {
         this.logger.info?.(CHANNEL, 'User access has expired');
-        this.accessResult = false;
-        return false;
-      }
-
-      if (!this.hasFullAccess() && tierConfig === null) {
+        accessGranted = false;
+      } else if (!hasFullAccess && tierConfig === null) {
         this.logger.info?.(
           CHANNEL,
           'Tier config unavailable for non-Ultra user, denying access',
         );
-        this.accessResult = false;
-        return false;
+        accessGranted = false;
       }
 
-      const providers = this.tierService.getProviders();
-      const accessGranted = hasAccess && providers.length > 0;
-
-      if (accessGranted) {
-        this.accessTimestamp = Date.now();
-        this._isCachePrimed = true;
+      // Commit the complete access snapshot at one boundary. A superseded
+      // fetch may return its own result to its caller, but it must not alter
+      // the canonical tier, access decision, or authentication metadata.
+      const isLatest = this._activeFetchToken === fetchToken;
+      if (isLatest) {
+        this.accessResult = accessGranted;
+        this.userTier = accessStatus.userTier;
+        this.lastFetchAuthenticated = thisFetchAuthenticated;
+        // Successful results use the normal TTL. Anonymous denials use the
+        // intentional short backoff. An authenticated transport/config
+        // failure remains immediately retryable.
+        this.accessTimestamp =
+          accessGranted || !thisFetchAuthenticated ? Date.now() : 0;
+        this._isCachePrimed = accessGranted;
       }
+
+      if (!isLatest) return accessGranted;
+      if (!accessGranted) return false;
 
       // Auto-flip useIncludedModelAccess to false when the user's
       // monthly relay quota is exhausted. The toggle change is visible
@@ -272,7 +351,7 @@ export class ServerSideKeyService {
       // and surface the relay's 402 error directly.
       if (
         !this.quotaFlipApplied &&
-        hasAccess &&
+        accessStatus.hasAccess &&
         this.tierService.isQuotaExceeded()
       ) {
         this.quotaFlipApplied = true;

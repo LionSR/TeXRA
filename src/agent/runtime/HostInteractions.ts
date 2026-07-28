@@ -338,9 +338,7 @@ interface PendingSessionInteraction {
  * object once, while hosts may attach and detach presentation adapters without
  * cancelling requests owned by a still-running session.
  */
-export class SessionHostInteractions
-  implements HostInteractions
-{
+export class SessionHostInteractions implements HostInteractions {
   private readonly attachments: HostInteractionAttachment[] = [];
   private readonly pending = new Set<PendingSessionInteraction>();
   private readonly pendingCountListeners = new Set<(count: number) => void>();
