@@ -1,9 +1,11 @@
-// Local imports
-import { isResumeInFlight } from '@agent/runtime/resolveAndResumeStream';
+import type { RecoveryContinuation } from '@platform/interfaces';
 import type { StreamTabId } from '@shared/schemas';
 
 export interface CliAgentResumeHandler {
-  tryResumeStream(streamId: StreamTabId): Promise<boolean>;
+  tryResumeStream(
+    streamId: StreamTabId,
+    recovery?: RecoveryContinuation,
+  ): Promise<boolean>;
 }
 
 let activeHandler: CliAgentResumeHandler | undefined;
@@ -13,18 +15,13 @@ export function setCliAgentResumeHandler(
 ): () => void {
   activeHandler = handler;
   return () => {
-    if (activeHandler === handler) {
-      activeHandler = undefined;
-    }
+    if (activeHandler === handler) activeHandler = undefined;
   };
 }
 
 export async function tryResumeCliStream(
   streamId: StreamTabId,
+  recovery?: RecoveryContinuation,
 ): Promise<boolean> {
-  return activeHandler?.tryResumeStream(streamId) ?? false;
-}
-
-export function isCliResumeInFlight(streamId: StreamTabId): boolean {
-  return activeHandler != null && isResumeInFlight(streamId);
+  return activeHandler?.tryResumeStream(streamId, recovery) ?? false;
 }

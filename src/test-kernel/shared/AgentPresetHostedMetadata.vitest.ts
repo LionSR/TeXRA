@@ -78,12 +78,13 @@ describe('parseAgentModePresets icon degradation', () => {
     ]);
   });
 
-  it('still normalizes codicon-prefixed known icons without warning', () => {
+  it('degrades codicon-prefixed obsolete icons with a warning', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     const presets = parseAgentModePresets([customPreset('codicon-tools')]);
 
-    expect(presets[0]?.icon).toBe('tools');
-    expect(warn).not.toHaveBeenCalled();
+    // 'tools' was removed from canonical icons — falls back to bookmark with warning
+    expect(presets[0]?.icon).toBe('bookmark');
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('tools'));
   });
 });

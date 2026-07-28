@@ -11,16 +11,17 @@ export interface NormalizeOpenAIMessageContentOptions {
   convertContentToString?: boolean;
 }
 
+/** Minimal structural view of a chat content part (text or media). */
+type ChatContentPart = { type: string; text?: string };
+
 type MessageLike = {
   role?: string;
-  content?: unknown;
+  content?: string | ChatContentPart[] | null;
   tool_calls?: unknown;
   tool_call_id?: unknown;
   /** Tracked so merging assistant messages preserves DeepSeek-style reasoning that must round-trip to the API. */
   reasoning_content?: unknown;
 };
-
-type ContentArray = Record<string, unknown>[];
 
 /** Type guard for text content items in message content arrays. */
 function isTextContentItem(
@@ -93,10 +94,7 @@ function mergeMessageContent(
   // Previous array + current string: append non-empty string as text item
   if (Array.isArray(prevContent) && typeof currContent === 'string') {
     if (currContent.length > 0) {
-      previous.content = [
-        ...(prevContent as ContentArray),
-        { type: 'text', text: currContent },
-      ];
+      previous.content = [...prevContent, { type: 'text', text: currContent }];
     }
     return;
   }
@@ -178,7 +176,7 @@ export function normalizeOpenAIMessageContent<T extends MessageLike>(
     for (const message of working) {
       if (Array.isArray(message.content)) {
         // Extract text from content array items and join with newlines
-        message.content = (message.content as unknown[])
+        message.content = message.content
           .filter(isTextContentItem)
           .map((item) => item.text)
           .join('\n');
@@ -188,9 +186,6 @@ export function normalizeOpenAIMessageContent<T extends MessageLike>(
 
   return working;
 }
-
-/** Minimal structural view of a chat content part (text or media). */
-type ChatContentPart = { type: string; text?: string };
 
 /**
  * Prepend `text` to the last user message in a chat-shaped conversation.
@@ -309,7 +304,7 @@ export async function initializeChatMessages<T extends MessageLike>(
   // Append content to last user message, or create new user message
   const lastMsg = messages.at(-1);
   if (lastMsg?.role === 'user' && Array.isArray(lastMsg.content)) {
-    (lastMsg.content as ChatContentPart[]).push(...userMessageContent);
+    lastMsg.content.push(...userMessageContent);
   } else {
     messages.push({ role: 'user', content: userMessageContent } as T);
   }
@@ -323,7 +318,7 @@ export async function initializeChatMessages<T extends MessageLike>(
     lastMessage?.role === 'user' &&
     Array.isArray(lastMessage.content)
   ) {
-    (lastMessage.content as ChatContentPart[]).push({
+    lastMessage.content.push({
       type: 'text',
       text: userRequest,
     });
@@ -390,11 +385,10 @@ export function extractChatAssistantText<T extends MessageLike>(
   if (typeof content === 'string') return content;
   if (!Array.isArray(content)) return undefined;
   return joinNonEmpty(
-    (content as ChatContentPart[])
+    content
       .filter(
         (p): p is { type: 'text'; text: string } =>
-          p.type === 'text' &&
-          typeof (p as { text?: unknown }).text === 'string',
+          p.type === 'text' && typeof p.text === 'string',
       )
       .map((p) => p.text),
   );
@@ -420,7 +414,7 @@ export function appendUserTextToChatMessages<T extends MessageLike>(
 
   const lastMessage = messages.at(-1);
   if (lastMessage && Array.isArray(lastMessage.content)) {
-    (lastMessage.content as ChatContentPart[]).push({ type: 'text', text });
+    lastMessage.content.push({ type: 'text', text });
     return;
   }
   if (lastMessage && typeof lastMessage.content === 'string') {

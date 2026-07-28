@@ -17,8 +17,7 @@ const mocks = vi.hoisted(() => ({
   synchronizeAgentResultOutcome: vi.fn(),
   persistChildRunReport: vi.fn(),
   persistChildRunResultMeta: vi.fn(),
-  enqueueChildRunFollowUp: vi.fn(),
-  wakeChildRunFollowUp: vi.fn(),
+  deliverChildRunFollowUp: vi.fn(),
   runWithOwnedExecutionLease: vi.fn(
     (_executionId: ExecutionId, operation: () => unknown) => operation(),
   ),
@@ -54,13 +53,15 @@ vi.mock('@agent/runtime/executionOwnership', () => ({
 vi.mock('@tools/childRunDelivery', () => ({
   persistChildRunReport: mocks.persistChildRunReport,
   persistChildRunResultMeta: mocks.persistChildRunResultMeta,
-  enqueueChildRunFollowUp: mocks.enqueueChildRunFollowUp,
-  wakeChildRunFollowUp: mocks.wakeChildRunFollowUp,
+  deliverChildRunFollowUp: mocks.deliverChildRunFollowUp,
 }));
 
 import {
+  WORKFLOW_JOURNAL_KEY_FORMAT,
+  type WorkflowJournalEntry,
+} from '@agent/workflowScript';
+import {
   startChildRunLoop,
-  isChildRunLoopActive,
   type ChildRunPorts,
   type ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
@@ -80,6 +81,7 @@ import {
   ClaudeAgentSessions,
   CodexThreads,
 } from '@tools/agentCliSessionStores';
+import { createWorkflowAttemptCostTracker } from '@tools/delegation/workflowScriptRun';
 
 let session: SessionHandle;
 const trackedExecutionIds = new Set<string>();
@@ -189,11 +191,7 @@ beforeEach(() => {
     return { kind: 'persisted' as const, msg };
   });
   mocks.persistChildRunResultMeta.mockResolvedValue({ kind: 'skipped' });
-  mocks.enqueueChildRunFollowUp.mockResolvedValue({
-    kind: 'enqueued',
-    sendResult: { status: 'sent' },
-  });
-  mocks.wakeChildRunFollowUp.mockResolvedValue({ kind: 'delivered' });
+  mocks.deliverChildRunFollowUp.mockResolvedValue({ kind: 'delivered' });
 });
 
 afterEach(() => {
@@ -221,7 +219,7 @@ describe('childRunLoop E2E fixtures', () => {
       }),
     ).toThrow('lease generation lost');
 
-    expect(isChildRunLoopActive(childStreamId)).toBe(false);
+    expect(session.followUps.hasLiveOwner(childStreamId)).toBe(false);
     expect(mocks.leaseLossListener).toBeUndefined();
     expect(callCount()).toBe(0);
   });
@@ -237,7 +235,7 @@ describe('childRunLoop E2E fixtures', () => {
     const handle = trackChildHandle(executionId, parentStreamId, childStreamId);
     const interruptHandle = vi.spyOn(handle, 'interrupt');
     const registerLoop = vi
-      .spyOn(session.executions, 'registerChildRunLoop')
+      .spyOn(session.followUps, 'claimLive')
       .mockImplementationOnce(() => {
         throw new Error('loop registration failed');
       });
@@ -265,72 +263,17 @@ describe('childRunLoop E2E fixtures', () => {
       ).toThrow('loop registration failed');
 
       expect(releaseSessionOwnership).toHaveBeenCalledOnce();
-      expect(isChildRunLoopActive(childStreamId)).toBe(false);
+      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(false);
       expect(mocks.leaseLossListener).toBeUndefined();
       expect(handle.interrupt()).toBe(false);
       interruptHandle.mockClear();
       registry.interruptAll();
       expect(interruptHandle).not.toHaveBeenCalled();
-      expect(
-        session.followUps.enqueue(
-          childStreamId,
-          { text: 'must stay released' },
-          { createIfMissing: true },
-        ),
-      ).toBe(false);
+      expect(session.followUps.getAll(childStreamId)).toEqual([]);
     } finally {
       registerLoop.mockRestore();
       interruptHandle.mockRestore();
       registry.releaseByExecutionId(executionId);
-    }
-  });
-
-  it('reports rollback failures after completing later cleanup actions', () => {
-    const childStreamId = uniqueStreamId('setup-rollback-failure');
-    const parentStreamId = 'parent' as StreamTabId;
-    const executionId = 'exec-setup-rollback-failure' as ExecutionId;
-    const setupError = new Error('loop registration failed');
-    const cleanupError = new Error('queue release failed');
-    const releaseSessionOwnership = vi.fn();
-    const handle = trackChildHandle(executionId, parentStreamId, childStreamId);
-    const registerLoop = vi
-      .spyOn(session.executions, 'registerChildRunLoop')
-      .mockImplementationOnce(() => {
-        throw setupError;
-      });
-    const releaseQueue = vi
-      .spyOn(session.followUps, 'release')
-      .mockImplementationOnce(() => {
-        throw cleanupError;
-      });
-    const { strategy } = createFakeStrategy();
-    let thrown: unknown;
-
-    try {
-      try {
-        startChildRunLoop({
-          childStreamId,
-          parentStreamId,
-          executionId,
-          agentName: 'fake-cli',
-          strategy: { ...strategy, releaseSessionOwnership },
-        });
-      } catch (error) {
-        thrown = error;
-      }
-
-      expect(thrown).toBeInstanceOf(AggregateError);
-      expect((thrown as AggregateError).errors).toEqual([
-        setupError,
-        cleanupError,
-      ]);
-      expect(releaseSessionOwnership).toHaveBeenCalledOnce();
-      expect(mocks.leaseLossListener).toBeUndefined();
-      expect(handle.interrupt()).toBe(false);
-    } finally {
-      registerLoop.mockRestore();
-      releaseQueue.mockRestore();
-      session.followUps.release(childStreamId);
     }
   });
 
@@ -425,12 +368,12 @@ describe('childRunLoop E2E fixtures', () => {
         });
 
         expect(events).toEqual(['registered', 'launch']);
-        expect(isChildRunLoopActive(childStreamId)).toBe(true);
+        expect(session.followUps.hasLiveOwner(childStreamId)).toBe(true);
         interruptAll();
 
         await vi.waitFor(() => {
           expect(aborted).toHaveBeenCalledOnce();
-          expect(isChildRunLoopActive(childStreamId)).toBe(false);
+          expect(session.followUps.hasLiveOwner(childStreamId)).toBe(false);
         });
         expect(releaseSessionOwnership).toHaveBeenCalledOnce();
         expect(session.executions.getHandle(executionId)).toBeUndefined();
@@ -461,9 +404,9 @@ describe('childRunLoop E2E fixtures', () => {
     await rejectTurn(1, abortError);
 
     await vi.waitFor(() =>
-      expect(isChildRunLoopActive(childStreamId)).toBe(false),
+      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(false),
     );
-    expect(mocks.enqueueChildRunFollowUp).not.toHaveBeenCalled();
+    expect(mocks.deliverChildRunFollowUp).not.toHaveBeenCalled();
   });
 
   it('persists without parent delivery in persist-only mode', async () => {
@@ -485,8 +428,8 @@ describe('childRunLoop E2E fixtures', () => {
       executionId,
       'delivered:saved',
     );
-    expect(mocks.enqueueChildRunFollowUp).not.toHaveBeenCalled();
-    expect(mocks.wakeChildRunFollowUp).not.toHaveBeenCalled();
+    expect(mocks.deliverChildRunFollowUp).not.toHaveBeenCalled();
+    expect(mocks.deliverChildRunFollowUp).not.toHaveBeenCalled();
   });
 
   it('releases session ownership before delivering a failed turn', async () => {
@@ -494,9 +437,9 @@ describe('childRunLoop E2E fixtures', () => {
     const parentStreamId = 'parent' as StreamTabId;
     const { strategy, rejectTurn } = createFakeStrategy();
     const releaseSessionOwnership = vi.fn();
-    mocks.enqueueChildRunFollowUp.mockImplementation(async () => {
+    mocks.deliverChildRunFollowUp.mockImplementation(async () => {
       expect(releaseSessionOwnership).toHaveBeenCalledOnce();
-      return { kind: 'enqueued', sendResult: { status: 'sent' } };
+      return { kind: 'delivered' };
     });
 
     startChildRunLoop({
@@ -508,11 +451,11 @@ describe('childRunLoop E2E fixtures', () => {
     });
 
     await vi.waitFor(() =>
-      expect(isChildRunLoopActive(childStreamId)).toBe(true),
+      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(true),
     );
     await rejectTurn(1, new Error('initial turn failed'));
     await vi.waitFor(() =>
-      expect(isChildRunLoopActive(childStreamId)).toBe(false),
+      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(false),
     );
     expect(releaseSessionOwnership).toHaveBeenCalledOnce();
   });
@@ -535,7 +478,7 @@ describe('childRunLoop E2E fixtures', () => {
     // Give the loop's async IIFE a tick to attach its interrupt handler and
     // call launch().
     await vi.waitFor(() =>
-      expect(isChildRunLoopActive(childStreamId)).toBe(true),
+      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(true),
     );
 
     expect(handle.interrupt()).toBe(true);
@@ -546,10 +489,10 @@ describe('childRunLoop E2E fixtures', () => {
     await rejectTurn(1, abortError);
 
     await vi.waitFor(() =>
-      expect(isChildRunLoopActive(childStreamId)).toBe(false),
+      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(false),
     );
-    expect(mocks.enqueueChildRunFollowUp).not.toHaveBeenCalled();
-    expect(mocks.wakeChildRunFollowUp).not.toHaveBeenCalled();
+    expect(mocks.deliverChildRunFollowUp).not.toHaveBeenCalled();
+    expect(mocks.deliverChildRunFollowUp).not.toHaveBeenCalled();
     expect(session.executions.getHandle(executionId)).toBeUndefined();
   });
 
@@ -561,7 +504,7 @@ describe('childRunLoop E2E fixtures', () => {
     const onTurnSuccess = vi.fn();
     const parentWake = vi.fn();
     const deliveryCompleted = pDefer<{ kind: 'delivered' }>();
-    mocks.wakeChildRunFollowUp.mockImplementation(async () => {
+    mocks.deliverChildRunFollowUp.mockImplementation(async () => {
       parentWake();
       return deliveryCompleted.promise;
     });
@@ -577,12 +520,12 @@ describe('childRunLoop E2E fixtures', () => {
     expect(onLoopStart).toHaveBeenCalledOnce();
     expect(onLoopStart).toHaveBeenCalledWith(session);
     await vi.waitFor(() =>
-      expect(isChildRunLoopActive(childStreamId)).toBe(true),
+      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(true),
     );
     await resolveTurn(1, { kind: 'interim', value: 'first' });
 
     await vi.waitFor(() => {
-      expect(mocks.enqueueChildRunFollowUp).toHaveBeenCalledWith(
+      expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledWith(
         expect.objectContaining({
           targetStreamId: parentStreamId,
           followUp: expect.objectContaining({ text: 'delivered:first' }),
@@ -593,7 +536,7 @@ describe('childRunLoop E2E fixtures', () => {
     // N+1. Even input already queued during delivery must not begin another
     // model turn until the parent has received this result.
     await vi.waitFor(() =>
-      expect(mocks.wakeChildRunFollowUp).toHaveBeenCalled(),
+      expect(mocks.deliverChildRunFollowUp).toHaveBeenCalled(),
     );
     expect(onTurnSuccess).toHaveBeenCalledOnce();
     expect(onTurnSuccess.mock.invocationCallOrder[0]).toBeLessThan(
@@ -601,9 +544,13 @@ describe('childRunLoop E2E fixtures', () => {
     );
 
     // Enqueue a follow-up on the same queue the loop is now blocked on.
-    session.followUps
-      .acquire(childStreamId)
-      .enqueue({ text: 'keep going', origin: 'user' });
+    expect(
+      session.followUps.submit(
+        childStreamId,
+        { text: 'keep going', origin: 'user' },
+        'live_owner',
+      ),
+    ).toEqual({ kind: 'live' });
     expect(callCount()).toBe(1);
 
     deliveryCompleted.resolve({ kind: 'delivered' });
@@ -616,14 +563,14 @@ describe('childRunLoop E2E fixtures', () => {
     await resolveTurn(2, { kind: 'terminal', value: 'final' });
 
     await vi.waitFor(() => {
-      expect(mocks.enqueueChildRunFollowUp).toHaveBeenCalledWith(
+      expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledWith(
         expect.objectContaining({
           followUp: expect.objectContaining({ text: 'delivered:final' }),
         }),
       );
     });
     await vi.waitFor(() =>
-      expect(isChildRunLoopActive(childStreamId)).toBe(false),
+      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(false),
     );
   });
 
@@ -643,7 +590,7 @@ describe('childRunLoop E2E fixtures', () => {
     });
 
     await vi.waitFor(() =>
-      expect(isChildRunLoopActive(childStreamId)).toBe(true),
+      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(true),
     );
     // Interrupt the loop, then let the in-flight turn resolve normally
     // (not aborted) — mirrors a turn that was already past its own
@@ -652,15 +599,15 @@ describe('childRunLoop E2E fixtures', () => {
     await resolveTurn(1, { kind: 'terminal', value: 'late' });
 
     await vi.waitFor(() =>
-      expect(isChildRunLoopActive(childStreamId)).toBe(false),
+      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(false),
     );
     expect(mocks.persistChildRunReport).toHaveBeenCalledWith(
       executionId,
       'delivered:late',
     );
     expect(releaseSessionOwnership).toHaveBeenCalledOnce();
-    expect(mocks.enqueueChildRunFollowUp).not.toHaveBeenCalled();
-    expect(mocks.wakeChildRunFollowUp).not.toHaveBeenCalled();
+    expect(mocks.deliverChildRunFollowUp).not.toHaveBeenCalled();
+    expect(mocks.deliverChildRunFollowUp).not.toHaveBeenCalled();
   });
 
   it('kill during WAITING: interrupting the loop while it is blocked between turns ends the run without a hang', async () => {
@@ -679,22 +626,22 @@ describe('childRunLoop E2E fixtures', () => {
     });
 
     await vi.waitFor(() =>
-      expect(isChildRunLoopActive(childStreamId)).toBe(true),
+      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(true),
     );
     await resolveTurn(1, { kind: 'interim', value: 'first' });
 
     await vi.waitFor(() => {
-      expect(mocks.enqueueChildRunFollowUp).toHaveBeenCalled();
+      expect(mocks.deliverChildRunFollowUp).toHaveBeenCalled();
     });
     // The loop is now blocked in queue.waitAndDrainAll; the loop's handler on
     // the run handle is the live stop target.
     expect(handle.interrupt()).toBe(true);
 
     await vi.waitFor(() =>
-      expect(isChildRunLoopActive(childStreamId)).toBe(false),
+      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(false),
     );
     // Only the one interim delivery — the kill did not spawn another turn.
-    expect(mocks.enqueueChildRunFollowUp).toHaveBeenCalledTimes(1);
+    expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledTimes(1);
   });
 
   it('stop between turns settles without result sync when terminal metadata fails', async () => {
@@ -727,7 +674,7 @@ describe('childRunLoop E2E fixtures', () => {
     });
 
     await vi.waitFor(() =>
-      expect(isChildRunLoopActive(childStreamId)).toBe(true),
+      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(true),
     );
 
     // Mirrors what a real native turn's runFlowWithLifecycle does: track a
@@ -742,14 +689,14 @@ describe('childRunLoop E2E fixtures', () => {
 
     await resolveTurn(1, { kind: 'interim', value: 'first' });
     await vi.waitFor(() =>
-      expect(mocks.enqueueChildRunFollowUp).toHaveBeenCalledTimes(1),
+      expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledTimes(1),
     );
 
     // Loop is now between turns. Interrupt it through the run handle.
     expect(handle.interrupt()).toBe(true);
 
     await vi.waitFor(() =>
-      expect(isChildRunLoopActive(childStreamId)).toBe(false),
+      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(false),
     );
 
     // Settled: handle.result resolves instead of hanging forever.
@@ -774,10 +721,10 @@ describe('childRunLoop E2E fixtures', () => {
     const executionId = 'exec-reregister-before-delivery' as ExecutionId;
     const handle = trackChildHandle(executionId, parentStreamId, childStreamId);
     let deliveryGate: DeferredPromise<void> | undefined;
-    mocks.enqueueChildRunFollowUp.mockImplementation(async () => {
+    mocks.deliverChildRunFollowUp.mockImplementation(async () => {
       deliveryGate = pDefer<void>();
       await deliveryGate.promise;
-      return { kind: 'enqueued', sendResult: { status: 'sent' } };
+      return { kind: 'delivered' };
     });
 
     const strategy: ChildRunStrategy<FakeTurn> = {
@@ -800,20 +747,20 @@ describe('childRunLoop E2E fixtures', () => {
     // window the review flagged as unprotected.
     await vi.waitFor(() => expect(deliveryGate).toBeDefined());
 
-    // The loop's own interrupt handler must already be back in place here,
-    // even though delivery has not finished.
-    expect(handle.interrupt()).toBe(true);
+    // Terminal delivery starts only after child finalization and lease release,
+    // so there is no longer a live child continuation to interrupt here.
+    expect(handle.interrupt()).toBe(false);
 
     deliveryGate?.resolve();
     await vi.waitFor(() =>
-      expect(isChildRunLoopActive(childStreamId)).toBe(false),
+      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(false),
     );
   });
 
   it('#8093 regression: a terminal turn finalizes this child before its wake step is even reached, so a resumed parent never self-stalls waiting on it', async () => {
-    // Regression: `wakeChildRunFollowUp` can await the ENTIRE resumed parent
+    // Regression: parent continuation submission can await the ENTIRE resumed
     // turn (`agentResume.tryResumeStream` → … → `resumeToolUseFromResumeData`).
-    // Before #8093, the loop awaited enqueue-and-wake together, inline in the
+    // Before #8093, the loop awaited split enqueue/wake work inline in the
     // turn loop, and only finalized this child (untracking its execution
     // handle) afterward in the outer `finally` — so a resumed parent that
     // immediately calls `executions` with action=wait on this same execution
@@ -829,7 +776,7 @@ describe('childRunLoop E2E fixtures', () => {
 
     let releaseWake: (() => void) | undefined;
     let handleAtWakeTime: unknown;
-    mocks.wakeChildRunFollowUp.mockImplementation(async () => {
+    mocks.deliverChildRunFollowUp.mockImplementation(async () => {
       // Snapshot registry state the instant the wake step is reached — the
       // same moment a resumed parent's own turn would begin running.
       handleAtWakeTime = session.executions.getHandle(executionId);
@@ -861,7 +808,7 @@ describe('childRunLoop E2E fixtures', () => {
 
     releaseWake?.();
     await vi.waitFor(() =>
-      expect(isChildRunLoopActive(childStreamId)).toBe(false),
+      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(false),
     );
   });
 
@@ -879,22 +826,26 @@ describe('childRunLoop E2E fixtures', () => {
     });
 
     await vi.waitFor(() =>
-      expect(isChildRunLoopActive(childStreamId)).toBe(true),
+      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(true),
     );
     await resolveTurn(1, { kind: 'interim', value: 'first' });
     await vi.waitFor(() => {
-      expect(mocks.enqueueChildRunFollowUp).toHaveBeenCalledTimes(1);
+      expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledTimes(1);
     });
 
-    session.followUps
-      .acquire(childStreamId)
-      .enqueue({ text: 'resume please', origin: 'user' });
+    expect(
+      session.followUps.submit(
+        childStreamId,
+        { text: 'resume please', origin: 'user' },
+        'live_owner',
+      ),
+    ).toEqual({ kind: 'live' });
 
     const resumeFailure = new Error('resume storage unreadable');
     await rejectTurn(2, resumeFailure);
 
     await vi.waitFor(() => {
-      expect(mocks.enqueueChildRunFollowUp).toHaveBeenCalledWith(
+      expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledWith(
         expect.objectContaining({
           followUp: expect.objectContaining({ text: 'error:thrown' }),
         }),
@@ -902,7 +853,7 @@ describe('childRunLoop E2E fixtures', () => {
     });
     expect(errors).toContain(resumeFailure);
     await vi.waitFor(() =>
-      expect(isChildRunLoopActive(childStreamId)).toBe(false),
+      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(false),
     );
   });
 
@@ -920,19 +871,19 @@ describe('childRunLoop E2E fixtures', () => {
     });
 
     await vi.waitFor(() =>
-      expect(isChildRunLoopActive(childStreamId)).toBe(true),
+      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(true),
     );
     await resolveTurn(1, { kind: 'error-turn', value: 'oops' });
 
     await vi.waitFor(() => {
-      expect(mocks.enqueueChildRunFollowUp).toHaveBeenCalledWith(
+      expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledWith(
         expect.objectContaining({
           followUp: expect.objectContaining({ text: 'error:oops' }),
         }),
       );
     });
     await vi.waitFor(() =>
-      expect(isChildRunLoopActive(childStreamId)).toBe(false),
+      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(false),
     );
   });
 
@@ -951,7 +902,7 @@ describe('childRunLoop E2E fixtures', () => {
     });
 
     await vi.waitFor(() =>
-      expect(isChildRunLoopActive(childStreamId)).toBe(true),
+      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(true),
     );
 
     const handle = trackChildHandle(
@@ -964,7 +915,7 @@ describe('childRunLoop E2E fixtures', () => {
     await resolveTurn(1, { kind: 'error-turn', value: 'oops' });
 
     await vi.waitFor(() =>
-      expect(isChildRunLoopActive(childStreamId)).toBe(false),
+      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(false),
     );
     await expect(handle.result).resolves.toMatchObject({
       outcome: 'failed',
@@ -976,7 +927,7 @@ describe('childRunLoop E2E fixtures', () => {
     expect(session.executions.getHandle(executionId)).toBeUndefined();
   });
 
-  it('recordCost commits exactly once, with the last observed value, when the run ends', async () => {
+  it('recordCost commits exactly once with the greatest observed value', async () => {
     const childStreamId = uniqueStreamId('record-cost');
     const parentStreamId = 'parent' as StreamTabId;
     let launchResolve: ((turn: FakeTurn) => void) | undefined;
@@ -989,7 +940,7 @@ describe('childRunLoop E2E fixtures', () => {
       launch: (ports: ChildRunPorts) =>
         new Promise<FakeTurn>((resolve) => {
           launchResolve = (turn) => {
-            ports.recordCost(0.1);
+            ports.recordCost(0.2);
             resolve(turn);
           };
         }),
@@ -997,7 +948,8 @@ describe('childRunLoop E2E fixtures', () => {
         new Promise<FakeTurn>((resolve) => {
           calls += 1;
           runTurnResolve = (turn) => {
-            ports.recordCost(0.2);
+            ports.recordCost(undefined);
+            ports.recordCost(0.1);
             resolve(turn);
           };
         }),
@@ -1016,16 +968,20 @@ describe('childRunLoop E2E fixtures', () => {
     });
 
     await vi.waitFor(() =>
-      expect(isChildRunLoopActive(childStreamId)).toBe(true),
+      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(true),
     );
     launchResolve?.({ kind: 'interim', value: 'first' });
     await vi.waitFor(() =>
-      expect(mocks.enqueueChildRunFollowUp).toHaveBeenCalledTimes(1),
+      expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledTimes(1),
     );
 
-    session.followUps
-      .acquire(childStreamId)
-      .enqueue({ text: 'go on', origin: 'user' });
+    expect(
+      session.followUps.submit(
+        childStreamId,
+        { text: 'go on', origin: 'user' },
+        'live_owner',
+      ),
+    ).toEqual({ kind: 'live' });
     // Waits for the loop to have actually invoked runTurn (calls increments
     // synchronously inside it) — not for the queue to read empty, which can
     // happen before the loop's own continuation runs (see the "delegate →
@@ -1034,9 +990,119 @@ describe('childRunLoop E2E fixtures', () => {
     runTurnResolve?.({ kind: 'terminal', value: 'final' });
 
     await vi.waitFor(() =>
-      expect(isChildRunLoopActive(childStreamId)).toBe(false),
+      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(false),
     );
     expect(recordCost).toHaveBeenCalledTimes(1);
     expect(recordCost).toHaveBeenCalledWith(0.2);
+  });
+
+  it('settles mixed workflow attempt spend to the parent once', async () => {
+    const entry = (
+      index: number,
+      key: string,
+      cost: number,
+    ): WorkflowJournalEntry => ({
+      index,
+      key,
+      keyFormat: WORKFLOW_JOURNAL_KEY_FORMAT.DEPENDENCY_AWARE_V3,
+      result: {
+        category: 'workflow',
+        outcome: 'completed',
+        outputs: [],
+        compileFailures: [],
+        diffs: [],
+        cost,
+      },
+    });
+    const historical = entry(0, 'historical', 0.8);
+    const completed = entry(1, 'completed', 0.5);
+    const recovered = entry(2, 'recovered', 0.5);
+    const tracker = createWorkflowAttemptCostTracker();
+    const recordCost = vi.fn();
+    const strategy: ChildRunStrategy<FakeTurn> = {
+      stageLabel: 'Workflow attempt cost',
+      launch: async (ports) => {
+        ports.recordCost(tracker.record(completed, 0.1));
+        ports.recordCost(tracker.record(completed, 0));
+        ports.recordCost(tracker.record({ index: 3, key: 'skipped' }, 0.2));
+        ports.recordCost(tracker.record({ index: 4, key: 'failed' }, 0.15));
+        ports.recordCost(tracker.total([historical, completed, recovered]));
+        return { kind: 'terminal', value: 'done' };
+      },
+      isTerminal: () => true,
+      formatDelivery: () => 'delivered',
+      formatError: () => 'error',
+    };
+
+    const { completion } = startChildRunLoop({
+      childStreamId: uniqueStreamId('workflow-attempt-cost'),
+      parentStreamId: 'parent' as StreamTabId,
+      executionId: 'exec-workflow-attempt-cost' as ExecutionId,
+      agentName: 'fake',
+      strategy,
+      recordCost,
+    });
+
+    await expect(completion).resolves.toBeUndefined();
+    expect(recordCost).toHaveBeenCalledOnce();
+    expect(recordCost.mock.calls[0]?.[0]).toBeCloseTo(0.95);
+  });
+
+  it('finalizes and wakes when the parent cost observer throws', async () => {
+    const strategy: ChildRunStrategy<FakeTurn> = {
+      stageLabel: 'Throwing cost observer',
+      launch: async (ports) => {
+        ports.recordCost(0.4);
+        return { kind: 'terminal', value: 'done' };
+      },
+      isTerminal: () => true,
+      formatDelivery: () => 'delivered',
+      formatError: () => 'error',
+    };
+    const recordCost = vi.fn(() => {
+      throw new Error('observer failed');
+    });
+
+    const { completion } = startChildRunLoop({
+      childStreamId: uniqueStreamId('throwing-cost-observer'),
+      parentStreamId: 'parent' as StreamTabId,
+      executionId: 'exec-throwing-cost-observer' as ExecutionId,
+      agentName: 'fake',
+      strategy,
+      recordCost,
+    });
+
+    await expect(completion).resolves.toBeUndefined();
+    expect(recordCost).toHaveBeenCalledOnce();
+    expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledOnce();
+  });
+
+  it('finalizes and wakes when the parent cost observer rejects', async () => {
+    const strategy: ChildRunStrategy<FakeTurn> = {
+      stageLabel: 'Rejecting cost observer',
+      launch: async (ports) => {
+        ports.recordCost(0.4);
+        return { kind: 'terminal', value: 'done' };
+      },
+      isTerminal: () => true,
+      formatDelivery: () => 'delivered',
+      formatError: () => 'error',
+    };
+    const recordCost = vi.fn(() =>
+      Promise.reject(new Error('observer failed')),
+    );
+
+    const { completion } = startChildRunLoop({
+      childStreamId: uniqueStreamId('rejecting-cost-observer'),
+      parentStreamId: 'parent' as StreamTabId,
+      executionId: 'exec-rejecting-cost-observer' as ExecutionId,
+      agentName: 'fake',
+      strategy,
+      recordCost,
+    });
+
+    await expect(completion).resolves.toBeUndefined();
+    await vi.waitFor(() => expect(recordCost).toHaveBeenCalledOnce());
+    expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledOnce();
   });
 });
