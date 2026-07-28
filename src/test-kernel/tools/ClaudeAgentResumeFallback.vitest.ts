@@ -102,6 +102,10 @@ const parentStreamId = 'stream:parent' as StreamTabId;
 const childStreamId = 'stream:claude-child' as StreamTabId;
 const executionId = 'parent-exec' as ExecutionId;
 
+function completedChildRunLoop(): { completion: Promise<void> } {
+  return { completion: Promise.resolve() };
+}
+
 async function* streamMessages(messages: unknown[]): AsyncGenerator<unknown> {
   for (const message of messages) {
     yield message;
@@ -118,6 +122,7 @@ describe('claude_agent tool — resume fallback for a torn-down registry', () =>
 
   function setupCommonMocks(): void {
     mocks.startChildRunLoop.mockReset();
+    mocks.startChildRunLoop.mockReturnValue(completedChildRunLoop());
     mocks.buildClaudeAgentEnv.mockReset();
     mocks.findClaudeBinaryPath.mockReset();
     mocks.requestBashApproval.mockResolvedValue({ accepted: true });
@@ -162,6 +167,7 @@ describe('claude_agent tool — resume fallback for a torn-down registry', () =>
         startupEvents.push('startLoop');
         params.strategy.onLoopStart?.({ executions } as any);
         startupEvents.push('startLoopReturned');
+        return completedChildRunLoop();
       },
     );
 
@@ -214,6 +220,29 @@ describe('claude_agent tool — resume fallback for a torn-down registry', () =>
     expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
   });
 
+  it('logs a detached run-loop rejection through the child trace', async () => {
+    setupCommonMocks();
+    const childStream = createFakeAgentCliChildStream(childStreamId);
+    const error = vi
+      .spyOn(childStream.logger, 'error')
+      .mockImplementation(() => {});
+    const lateFailure = new Error('late Claude finalization failed');
+    mocks.createChildStream.mockReturnValue(childStream);
+    mocks.startChildRunLoop.mockReturnValue({
+      completion: Promise.reject(lateFailure),
+    });
+
+    await expect(
+      new ClaudeAgentTool().call({ prompt: 'launch Claude' }),
+    ).resolves.toMatchObject({ status: 'executed' });
+    await vi.waitFor(() => {
+      expect(error).toHaveBeenCalledWith(
+        'Claude Agent run loop failed after launch',
+        { data: lateFailure },
+      );
+    });
+  });
+
   it('seeds the fallback launch with the stale session_id so the SDK resumes from disk', async () => {
     setupCommonMocks();
     mocks.query.mockReturnValue(
@@ -260,6 +289,7 @@ describe('claude_agent tool — resume fallback for a torn-down registry', () =>
     mocks.startChildRunLoop.mockImplementation(
       (params: { strategy: ChildRunStrategy<unknown> }) => {
         strategy = params.strategy;
+        return completedChildRunLoop();
       },
     );
 
@@ -307,6 +337,7 @@ describe('claude_agent tool — resume fallback for a torn-down registry', () =>
     mocks.startChildRunLoop.mockImplementation(
       (params: { strategy: ChildRunStrategy<unknown> }) => {
         strategy = params.strategy;
+        return completedChildRunLoop();
       },
     );
 
@@ -338,6 +369,7 @@ describe('claude_agent tool — resume fallback for a torn-down registry', () =>
     mocks.startChildRunLoop.mockImplementation(
       (params: { strategy: ChildRunStrategy<unknown> }) => {
         strategy = params.strategy;
+        return completedChildRunLoop();
       },
     );
 

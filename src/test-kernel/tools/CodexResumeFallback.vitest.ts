@@ -97,6 +97,10 @@ const parentStreamId = 'stream:parent' as StreamTabId;
 const childStreamId = 'stream:codex-child' as StreamTabId;
 const executionId = 'parent-exec' as ExecutionId;
 
+function completedChildRunLoop(): { completion: Promise<void> } {
+  return { completion: Promise.resolve() };
+}
+
 describe('codex tool - atomic resume fallback', () => {
   afterEach(() => {
     vi.clearAllMocks();
@@ -106,6 +110,7 @@ describe('codex tool - atomic resume fallback', () => {
 
   function setupCommonMocks(): void {
     mocks.startChildRunLoop.mockReset();
+    mocks.startChildRunLoop.mockReturnValue(completedChildRunLoop());
     mocks.importCodexClass.mockReset();
     mocks.findCodexBinaryPath.mockReset();
     mocks.requestBashApproval.mockResolvedValue({ accepted: true });
@@ -130,6 +135,41 @@ describe('codex tool - atomic resume fallback', () => {
     });
   }
 
+  it('logs a detached run-loop rejection through the child trace', async () => {
+    setupCommonMocks();
+    const childStream = createFakeAgentCliChildStream(childStreamId);
+    const error = vi
+      .spyOn(childStream.logger, 'error')
+      .mockImplementation(() => {});
+    const lateFailure = new Error('late Codex finalization failed');
+    mocks.createChildStream.mockReturnValue(childStream);
+    mocks.startChildRunLoop.mockReturnValue({
+      completion: Promise.reject(lateFailure),
+    });
+    mocks.importCodexClass.mockResolvedValue(
+      class MockCodex {
+        startThread(): {
+          id: undefined;
+          runStreamed: ReturnType<typeof vi.fn>;
+        } {
+          return { id: undefined, runStreamed: vi.fn() };
+        }
+      },
+    );
+
+    await expect(
+      new CodexTool().call({
+        prompt: 'launch Codex',
+        sandbox_mode: 'workspace-write',
+      }),
+    ).resolves.toMatchObject({ status: 'executed' });
+    await vi.waitFor(() => {
+      expect(error).toHaveBeenCalledWith('Codex run loop failed after launch', {
+        data: lateFailure,
+      });
+    });
+  });
+
   it('launches one fallback loop when concurrent calls use the same stale thread_id', async () => {
     setupCommonMocks();
     const sdkImportStarted = pDefer<void>();
@@ -148,6 +188,7 @@ describe('codex tool - atomic resume fallback', () => {
     mocks.startChildRunLoop.mockImplementation(
       (params: { strategy: ChildRunStrategy<unknown> }) => {
         strategy = params.strategy;
+        return completedChildRunLoop();
       },
     );
 
@@ -212,6 +253,7 @@ describe('codex tool - atomic resume fallback', () => {
     mocks.startChildRunLoop.mockImplementation(
       (params: { strategy: ChildRunStrategy<unknown> }) => {
         strategy = params.strategy;
+        return completedChildRunLoop();
       },
     );
 
@@ -251,6 +293,7 @@ describe('codex tool - atomic resume fallback', () => {
     mocks.startChildRunLoop.mockImplementation(
       (params: { strategy: ChildRunStrategy<unknown> }) => {
         strategy = params.strategy;
+        return completedChildRunLoop();
       },
     );
 
