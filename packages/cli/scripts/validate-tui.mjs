@@ -3055,7 +3055,7 @@ const SCENARIOS = [
     frame: 'viewport',
     expect: [
       '› ✓ ● strategy Cancelled',
-      '◆ stopped',
+      '◆ Cancelled',
       'root active',
       STOPPED_SUBAGENT_INPUT_MESSAGE_START,
       'Ctrl-C stop root',
@@ -3075,7 +3075,7 @@ const SCENARIOS = [
     frame: 'viewport',
     expect: [
       '✓ ● leanSolver Waiting for follow-up',
-      '◆ waiting for you',
+      '◆ Waiting for follow-up',
       'root active',
     ],
     unexpect: [
@@ -3106,7 +3106,7 @@ const SCENARIOS = [
     frame: 'viewport',
     expect: [
       '› ✓ ● strategy Cancelled',
-      '◆ stopped',
+      '◆ Cancelled',
       'root active',
       STOPPED_SUBAGENT_INPUT_MESSAGE_START,
     ],

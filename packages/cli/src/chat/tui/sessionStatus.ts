@@ -3,9 +3,15 @@ import {
   type CliModelAccessRoute,
 } from '@cli/runtime/modelAccessRoute';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
-import type { StreamSubstate } from '@shared/schemas';
+import {
+  WORKFLOW_TASK_STATUS_LABEL,
+  type StreamSubstate,
+} from '@shared/schemas';
 import { summarizeFollowupMessage } from '@shared/subagentFollowup';
-import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
+import {
+  formatStreamStatusLabel,
+  streamStatusDisplayKey,
+} from '@shared/streams/streamStatusDisplay';
 import { truncateSummary } from '@utils/text/stringUtils';
 
 import { formatResumeCommand } from './state/resumeHint';
@@ -44,6 +50,16 @@ export function formatCliStatusLabel(
   substate?: StreamSubstate,
   isChildStream?: boolean,
 ): string {
+  const statusKey = streamStatusDisplayKey(status, substate);
+  if (
+    isChildStream &&
+    statusKey !== undefined &&
+    Object.hasOwn(WORKFLOW_TASK_STATUS_LABEL, statusKey)
+  ) {
+    return WORKFLOW_TASK_STATUS_LABEL[
+      statusKey as keyof typeof WORKFLOW_TASK_STATUS_LABEL
+    ];
+  }
   return formatStreamStatusLabel(status, {
     style: 'cli',
     missingLabel: '—',
