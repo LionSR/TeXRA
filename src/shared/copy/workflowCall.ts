@@ -1,6 +1,6 @@
 import {
   isTerminalWorkflowCallProgress,
-  WORKFLOW_CALL_STATUS_LABEL,
+  WORKFLOW_TASK_STATUS_LABEL,
   type WorkflowCallProgress,
 } from '@shared/schemas';
 import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
@@ -96,5 +96,5 @@ export function formatWorkflowCallLine(call: WorkflowCallProgress): string {
   const suffix = metadata.length > 0 ? ` · ${metadata.join(' · ')}` : '';
   const detail = workflowCallDetail(call);
   const explanation = detail ? ` — ${detail.text}` : '';
-  return `${WORKFLOW_CALL_STATUS_LABEL[call.status]}: ${call.label}${suffix}${explanation}`;
+  return `${WORKFLOW_TASK_STATUS_LABEL[call.status]}: ${call.label}${suffix}${explanation}`;
 }

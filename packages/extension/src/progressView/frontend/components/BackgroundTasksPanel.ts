@@ -36,6 +36,7 @@ import '@awesome.me/webawesome/dist/components/badge/badge.js';
 import {
   DEFAULT_STREAM_METADATA_STATUS,
   STREAM_PHASE,
+  WORKFLOW_TASK_STATUS_LABEL,
   type ActiveChildInfo,
   type InquiryThreadUpdatedEvent,
 } from '@shared/schemas';
@@ -532,16 +533,31 @@ function taskStatusBadge(child: ActiveChildInfo): {
   if (child.finishedAt === undefined || subagentStatusStillInFlight) {
     return child.status === STREAM_PHASE.WAITING ||
       child.status === DEFAULT_STREAM_METADATA_STATUS
-      ? { text: 'waiting', variant: 'neutral' }
-      : { text: 'running', variant: 'warning' };
+      ? {
+          text: WORKFLOW_TASK_STATUS_LABEL.waiting,
+          variant: 'neutral',
+        }
+      : {
+          text: WORKFLOW_TASK_STATUS_LABEL.running,
+          variant: 'warning',
+        };
   }
   switch (child.status) {
     case STREAM_PHASE.FAILED:
-      return { text: STREAM_PHASE.FAILED, variant: 'danger' };
+      return {
+        text: WORKFLOW_TASK_STATUS_LABEL.failed,
+        variant: 'danger',
+      };
     case STREAM_PHASE.CANCELLED:
-      return { text: STREAM_PHASE.CANCELLED, variant: 'neutral' };
+      return {
+        text: WORKFLOW_TASK_STATUS_LABEL.cancelled,
+        variant: 'neutral',
+      };
     default:
-      return { text: STREAM_PHASE.COMPLETED, variant: 'success' };
+      return {
+        text: WORKFLOW_TASK_STATUS_LABEL.completed,
+        variant: 'success',
+      };
   }
 }
 
