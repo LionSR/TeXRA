@@ -155,7 +155,7 @@ import { resolveCliResourcesPath } from '../src/runtime/resourcesPath';
 import {
   createCliRuntimeHost,
   type CliRuntimeHost,
-} from '../src/runtime/runtimeHost';
+} from '../src/runtime/cliPresentationHost';
 import { setCliToolEnabled } from '../src/runtime/tools';
 import type { CliContext } from '../src/runtime/cliContext';
 import type { CliModelAccess } from '../src/runtime/modelAccess';

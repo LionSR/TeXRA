@@ -12,8 +12,8 @@ import {
 } from '@agent/core/state/executionRequests';
 import type { TaskState } from '@agent/core/state/TaskState';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { trackTerminalResultPresentation } from '@agent/runtime/terminalResultToast';
+import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   notifyFollowUpSent,
@@ -197,7 +197,7 @@ export class DesktopProgressBridge {
   private disposed = false;
   private presentationReady = false;
 
-  readonly runtimeHost: AgentRuntimeHost;
+  readonly interactions: SessionHostInteractions;
   progressViewInboundHandlers!: DesktopProgressInboundHandlerRegistry;
 
   private readonly session: SessionHandle;
@@ -209,11 +209,11 @@ export class DesktopProgressBridge {
     private readonly options: DesktopProgressBridgeOptions,
   ) {
     this.logger = options.logger ?? createChannelTrace('DesktopProgressBridge');
-    const presentationHost: AgentRuntimeHost = {
+    const presentationHost: Pick<SessionHostInteractions, 'emit'> = {
       emit: (event, payload) => this.handlePresentationEvent(event, payload),
     };
     this.session = options.session;
-    this.runtimeHost = this.session.interactions;
+    this.interactions = this.session.interactions;
     const syncRenderedStreams = (): void =>
       this.syncStreamContent(this.updateStreamMetadata());
 
@@ -313,13 +313,13 @@ export class DesktopProgressBridge {
   }
 
   private async initializeCanonicalState(
-    presentationHost: AgentRuntimeHost,
+    presentationHost: Pick<SessionHostInteractions, 'emit'>,
   ): Promise<void> {
     await this.backend.load();
     if (this.disposed) return;
 
     this.toolEditApprovals = createDesktopToolEditApprovalController({
-      runtimeHost: presentationHost,
+      interactions: presentationHost,
       session: this.session,
       ui: this.options.host,
       showToolEditPermission: (payload) =>
@@ -328,7 +328,7 @@ export class DesktopProgressBridge {
         this.backend.approvalHandlers.toolEdit.dismiss(requestId),
     });
     this.hostInteractions = createDesktopHostInteractions({
-      runtimeHost: presentationHost,
+      interactions: presentationHost,
       session: this.session,
       getApprovalHandlers: () => this.backend.approvalHandlers,
       getToolEditApprovals: () => this.toolEditApprovals!,
@@ -338,7 +338,6 @@ export class DesktopProgressBridge {
     this.fileActions = new DesktopProgressFileActions(this.options.host, {
       startExecution: (request) => {
         const logger = this.logger;
-        const runtimeHost = this.runtimeHost;
         let executionId: string | undefined;
         const terminalResult = trackTerminalResultPresentation(
           this.session,
@@ -355,7 +354,7 @@ export class DesktopProgressBridge {
               data: toLogData(error),
             });
             if (!terminalResult.isHandled()) {
-              runtimeHost.emit('requestShowError', {
+              this.session.interactions.emit('requestShowError', {
                 message: `Merge failed: ${toErrorMessage(error)}`,
               });
             }
@@ -849,7 +848,6 @@ export class DesktopProgressBridge {
           },
         },
         bypass: {
-          runtimeHost: this.runtimeHost,
           session: this.session,
         },
         file: {

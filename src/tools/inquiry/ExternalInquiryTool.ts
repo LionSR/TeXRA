@@ -36,7 +36,7 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
-import { requireRuntimeHost } from '@tools/contextHelpers';
+import { requireInteractions } from '@tools/contextHelpers';
 import { defineTool } from '@tools/core/define';
 import { formatResultCount } from '@utils/text/stringUtils';
 
@@ -367,11 +367,11 @@ export class ExternalInquiryTool extends defineTool({
     // and stay usable in contexts without a wired runtime host.
     switch (input.command) {
       case 'ask': {
-        const runtimeHost = requireRuntimeHost('inquiry', context);
+        const interactions = requireInteractions('inquiry', context);
         return this.executeAsk({
           input,
           streamId,
-          runtimeHost,
+          interactions,
           executionId,
           session: getRunContextSession(context),
         });
@@ -386,11 +386,11 @@ export class ExternalInquiryTool extends defineTool({
   private async executeAsk(args: {
     input: Extract<InquiryInput, { command: 'ask' }>;
     streamId: StreamTabId | undefined;
-    runtimeHost: ReturnType<typeof requireRuntimeHost>;
+    interactions: ReturnType<typeof requireInteractions>;
     executionId?: string;
     session?: SessionHandle;
   }): Promise<ToolResult> {
-    const { input, streamId, runtimeHost, executionId, session } = args;
+    const { input, streamId, interactions, executionId, session } = args;
     if (!streamId) {
       throw new ToolError(
         'inquiry { command: "ask" } requires an active stream context.',
@@ -432,7 +432,7 @@ export class ExternalInquiryTool extends defineTool({
     // Register the asking stream without switching the active view: hosts
     // own presentation focus (the extension/desktop progress views badge the
     // stream row, the CLI TUI activates on modal present) — #8246.
-    runtimeHost.emit('requestEnsureProgressView', {});
+    interactions.emit('requestEnsureProgressView', {});
     ownerSession.events.emit({
       scope: 'session',
       event: {

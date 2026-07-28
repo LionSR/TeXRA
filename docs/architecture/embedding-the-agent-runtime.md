@@ -25,10 +25,11 @@ an intended future shape.
 
 The sections below separate minimum launch requirements from shipped-feature
 parity. A raw agent loop needs an initialized platform, usable credentials,
-agent directories, a session, a populated registry, an interactions
-attachment, and an explicit runtime host. `initNodeAgentRuntime` supplies the
-memory/plan injections and Lean integration used by the shipped Node hosts, but
-the raw loop can run without those optional features.
+agent directories, a session, and a populated registry. When response-bearing
+interactions are possible, the session also needs an interactions attachment;
+there is no separate presentation-host argument. `initNodeAgentRuntime`
+supplies the memory/plan injections and Lean integration used by the shipped
+Node hosts, but the raw loop can run without those optional features.
 
 ### Step 1 — `initPlatform(createNodePlatform(...))`
 
@@ -183,7 +184,7 @@ Two ways out:
 
 The registry is **not** lazily populated on the run path.
 `getAgentPath` → `resolveAgentForLaunch` is a synchronous read of already-loaded
-state (`src/agent/index/agentRegistry.ts:740-750`); when it misses,
+state (`src/agent/index/agentRegistry.ts`); when it misses,
 `AgentLaunchContext` emits `showAgentConfigBanner` and throws
 `Could not find agent: <name>` (`src/agent/runtime/AgentLaunchContext.ts:158-159`).
 
@@ -193,15 +194,17 @@ registry, so the caller must ensure that loading has happened before launch.
 Pass `{ includeRemote: false }` unless you want the Supabase remote-agent
 catalog.
 
-### Per-call — `runtimeHost` is a required option
+### Per-session — attach host interactions when presentation is required
 
-`executeAgent` throws `'executeAgent requires an explicit runtimeHost'` when it
-is absent (`src/agent/runtime/executeAgent.ts:373-375`), and `runAgent`
-forwards its options verbatim.
-
-`noopAgentRuntimeHost` (`src/agent/runtime/AgentRuntimeHost.ts:41-43`) is an
-explicitly sanctioned host — the interface doc calls a partial host a valid
-headless implementation (`src/agent/runtime/AgentRuntimeHost.ts:19-31`).
+`runAgent` and `executeAgent` obtain presentation and approval behavior from
+the selected session's stable `SessionHostInteractions` object. A host attaches
+its adapter with `session.useHostInteractions(...)` and detaches that adapter
+when the host presentation lifetime ends. An embedder that is certain no
+response-bearing interaction can occur may leave the session unattached.
+Otherwise, a non-interactive embedder must attach an explicit rejection policy;
+the minimal `{ cancel: () => {} }` adapter in the example below causes
+unsupported requests to receive their typed cancellation result instead of
+remaining parked.
 
 ### Putting it together
 
@@ -225,7 +228,6 @@ import { initializeDefaultSession } from '@agent/runtime/SessionHandle';
 import { StreamLogStore } from '@transcript';
 import { runAgent } from '@agent/runtime/runAgent';
 import { validateExecutionRequest } from '@agent/core/state/executionRequests';
-import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { AgentCategory } from '@shared/schemas/agent';
 
 const agentDirectories = createPlatformAgentDirectories({
@@ -261,10 +263,7 @@ const validated = validateExecutionRequest({
 if (!validated.valid) throw new Error(validated.message);
 
 try {
-  await runAgent(validated.request, {
-    runtimeHost: noopAgentRuntimeHost,
-    session,
-  });
+  await runAgent(validated.request, { session });
 } finally {
   detachHostInteractions();
 }

@@ -130,7 +130,6 @@ function createLifecycleContext({
   const storageKey = executionId as StorageKey;
   const session = defaultSession();
   const runScope = createRunScope({
-    runtimeHost: explicit.host,
     streamId,
     executionId,
     agentName: config.agent,
@@ -1063,7 +1062,6 @@ describe('finalizeRunTerminal', () => {
       streamId,
       'test-agent',
       'toolUse',
-      explicit.host,
       noopTrace,
     );
     const untrack = vi.fn();
@@ -1141,7 +1139,6 @@ describe('finalizeRunTerminal', () => {
       streamId,
       'test-agent',
       'toolUse',
-      createRecordingHost().host,
       noopTrace,
     );
     const untrack = vi.fn();

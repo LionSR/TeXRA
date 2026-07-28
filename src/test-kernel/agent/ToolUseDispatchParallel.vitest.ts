@@ -15,7 +15,7 @@ import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionCo
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { SdkToolCall } from '@agent/types/ModelHandlerContracts';
-import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import type { StreamTabId } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas/toolResult';
 import { createFakePlatform } from '@test/support/FakePlatform';
@@ -119,10 +119,13 @@ async function runDispatch(
   const prepped = await (
     node as unknown as { prep(s: unknown): Promise<SdkToolCall[]> }
   ).prep(shared);
-  return await withTestRunContext(noopAgentRuntimeHost, 'dispatch-test', () =>
-    (node as unknown as { _exec(items: unknown[]): Promise<unknown[]> })._exec(
-      prepped,
-    ),
+  return await withTestRunContext(
+    new SessionHostInteractions(),
+    'dispatch-test',
+    () =>
+      (
+        node as unknown as { _exec(items: unknown[]): Promise<unknown[]> }
+      )._exec(prepped),
   );
 }
 
@@ -250,7 +253,7 @@ describe('ToolUseDispatchNode parallel dispatch', () => {
         node as unknown as { prep(s: unknown): Promise<SdkToolCall[]> }
       ).prep(shared);
       const results = await withTestRunContext(
-        noopAgentRuntimeHost,
+        new SessionHostInteractions(),
         'dispatch-test',
         () =>
           (
@@ -405,7 +408,7 @@ describe('ToolUseDispatchNode parallel dispatch', () => {
       // Interrupt lands after planning but before anything executes.
       interrupted = true;
       const results = (await withTestRunContext(
-        noopAgentRuntimeHost,
+        new SessionHostInteractions(),
         'dispatch-test',
         () =>
           (

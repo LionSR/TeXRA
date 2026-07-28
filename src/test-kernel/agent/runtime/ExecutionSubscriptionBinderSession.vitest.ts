@@ -17,7 +17,7 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
 }));
 
 // Local imports
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { ExecutionSubscriptionBinder } from '@agent/runtime/ExecutionSubscriptionBinder';
@@ -36,7 +36,7 @@ const childStreamId = 'child:subscription-session' as StreamTabId;
 /** Builds a toolUse `search` handle on the shared stream/child stream. */
 function createSearchHandle(
   executionId: string,
-  runtimeHost: AgentRuntimeHost,
+  interactions: SessionHostInteractions,
 ): AgentExecutionHandle {
   return new AgentExecutionHandle(
     executionId,
@@ -44,7 +44,6 @@ function createSearchHandle(
     childStreamId,
     'search',
     'toolUse',
-    runtimeHost,
   );
 }
 
@@ -266,7 +265,6 @@ describe('ExecutionSubscriptionBinder session routing', () => {
       registry.track(handle);
       withRunContext(
         createRunContext({
-          runtimeHost: explicit.host,
           session,
         }),
         () => {

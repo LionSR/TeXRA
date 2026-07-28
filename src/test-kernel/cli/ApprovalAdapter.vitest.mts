@@ -157,6 +157,19 @@ describe('approval prompt hooks', () => {
     agentCategory: AgentCategory.ToolUse,
   };
 
+  it('forwards presentation events to the attached CLI presenter', () => {
+    const emit = vi.fn();
+    const interactions = createHeadlessCliHostInteractions(context(), {
+      emit,
+    });
+
+    interactions.emit?.('requestShowError', { message: 'Run failed.' });
+
+    expect(emit).toHaveBeenCalledWith('requestShowError', {
+      message: 'Run failed.',
+    });
+  });
+
   it('runs the before-prompt hook for interactive approval events', async () => {
     const events: string[] = [];
     const result = await createHeadlessCliHostInteractions(

@@ -64,7 +64,7 @@ vi.mock('@agent/implementations/flows/tooluse/runToolUseFlow', () => ({
 // Local imports
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import { resumeToolUseFromResumeData } from '@agent/runtime/executeAgent';
 import { ResumeAdmissionCancelledError } from '@agent/runtime/resumeAdmission';
 import {
@@ -97,16 +97,18 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
 
   it('resolves execution lineage before activating the resume stream', async () => {
     const storageError = new Error('execution metadata unavailable');
-    const runtimeHost = { emit: vi.fn() } as unknown as AgentRuntimeHost;
+    const interactions = {
+      emit: vi.fn(),
+    } as unknown as SessionHostInteractions;
     const snapshot = createToolUseResumeData({
       executionId: 'e8048' as ExecutionId,
       streamId: 'stream-8048' as StreamTabId,
     });
     mocks.hasPersistedParent.mockRejectedValueOnce(storageError);
 
-    await expect(
-      resumeToolUseFromResumeData(snapshot, runtimeHost),
-    ).rejects.toBe(storageError);
+    await expect(resumeToolUseFromResumeData(snapshot)).rejects.toBe(
+      storageError,
+    );
 
     expect(mocks.buildAgentLaunchContext).not.toHaveBeenCalled();
     expect(mocks.releaseOwnedExecutionLeaseAfterFailure).toHaveBeenCalledWith(
@@ -126,7 +128,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     );
 
     await expect(
-      resumeToolUseFromResumeData(snapshot, {} as AgentRuntimeHost, {
+      resumeToolUseFromResumeData(snapshot, {
         canAcquireResumeLease: () => canonical,
       }),
     ).rejects.toBeInstanceOf(ResumeAdmissionCancelledError);
@@ -146,9 +148,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
       },
     } as unknown as AgentLaunchContext);
 
-    await expect(
-      resumeToolUseFromResumeData(resume, {} as AgentRuntimeHost),
-    ).rejects.toThrow(
+    await expect(resumeToolUseFromResumeData(resume)).rejects.toThrow(
       'Attempted to resume a non tool-use agent with resumeToolUseFromSnapshot.',
     );
   });
@@ -156,7 +156,9 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
   it('interrupts at flow attachment before substantive work starts', async () => {
     const executionId = 'e8049' as ExecutionId;
     const streamId = 'stream-8049' as StreamTabId;
-    const runtimeHost = { emit: vi.fn() } as unknown as AgentRuntimeHost;
+    const interactions = {
+      emit: vi.fn(),
+    } as unknown as SessionHostInteractions;
     const context = {
       setting: { agentCategory: AgentCategory.ToolUse },
       runScope: {
@@ -223,7 +225,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
       streamId,
     });
 
-    const result = await resumeToolUseFromResumeData(snapshot, runtimeHost, {
+    const result = await resumeToolUseFromResumeData(snapshot, {
       takePendingFollowUps: () => {
         order.push('take');
         return [];

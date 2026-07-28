@@ -8,7 +8,6 @@ import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting'
 
 function worktreeContext(session: SessionHandle) {
   return createRunContext({
-    runtimeHost: { emit: vi.fn() },
     workingDirectory: '/worktree',
     session,
   });

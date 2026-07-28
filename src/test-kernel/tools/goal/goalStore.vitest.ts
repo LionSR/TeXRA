@@ -149,7 +149,6 @@ describe('GoalStore.forget (abandon-on-delete contract)', () => {
     try {
       await withRunContext(
         createRunContext({
-          runtimeHost: createRecordingHost().host,
           session: runSession,
         }),
         async () => {
@@ -162,7 +161,6 @@ describe('GoalStore.forget (abandon-on-delete contract)', () => {
 
       await withRunContext(
         createRunContext({
-          runtimeHost: createRecordingHost().host,
           session: runSession,
         }),
         async () => {
@@ -319,7 +317,6 @@ describe('subscribeGoalStateChanges', () => {
     try {
       await withRunContext(
         createRunContext({
-          runtimeHost: createRecordingHost().host,
           session: runSession,
         }),
         async () => {

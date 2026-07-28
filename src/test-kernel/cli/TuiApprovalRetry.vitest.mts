@@ -87,7 +87,7 @@ import {
 } from '@cli/chat/tui/state/cliState';
 import { createTuiHostInteractions } from '@cli/chat/tui/state/subscribeApprovals';
 import type { CliContext } from '@cli/runtime/cliContext';
-import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
+import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import type { ApiProvider } from '@model/apiProviders';
 import { AgentCategory, type RetryPermission } from '@shared/schemas';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
@@ -117,15 +117,18 @@ function host(): CliRuntimeHost {
   } as unknown as CliRuntimeHost;
 }
 
-function tui(runtimeHost = host()): {
-  readonly runtimeHost: CliRuntimeHost;
+function tui(presentationHost = host()): {
+  readonly presentationHost: CliRuntimeHost;
   readonly cliContext: CliContext;
   readonly interactions: HostInteractions;
   readonly prepareRetry: ReturnType<typeof vi.fn>;
   readonly dispose: () => void;
 } {
   const cliContext = context();
-  const hostInteractions = createTuiHostInteractions(runtimeHost, cliContext);
+  const hostInteractions = createTuiHostInteractions(
+    presentationHost,
+    cliContext,
+  );
   const prepareRetry = vi.fn(async () => undefined);
   const interactions: HostInteractions = {
     ...hostInteractions,
@@ -145,7 +148,7 @@ function tui(runtimeHost = host()): {
   };
   onTestFinished(dispose);
   return {
-    runtimeHost,
+    presentationHost,
     cliContext,
     interactions,
     prepareRetry,
@@ -261,14 +264,14 @@ afterEach(() => {
 
 describe('TUI retry approvals', () => {
   it('does not mutate the runtime host emitter', () => {
-    const runtimeHost = host();
-    const originalEmit = runtimeHost.emit;
-    tui(runtimeHost);
-    expect(runtimeHost.emit).toBe(originalEmit);
+    const presentationHost = host();
+    const originalEmit = presentationHost.emit;
+    tui(presentationHost);
+    expect(presentationHost.emit).toBe(originalEmit);
   });
 
   it('updates TUI bash bypass state at the approval decision site', async () => {
-    const { runtimeHost, interactions } = tui();
+    const { presentationHost, interactions } = tui();
     const result = interactions.requestBashApproval?.({
       command: 'echo ok',
       streamId: 'bash-bypass-stream',
@@ -287,7 +290,7 @@ describe('TUI retry approvals', () => {
       userMessage: undefined,
     });
     expect(streams.get().get('bash-bypass-stream')?.bypass.bash).toBe(true);
-    expect(runtimeHost.emitApprovalBypassState).toHaveBeenCalledWith({
+    expect(presentationHost.emitApprovalBypassState).toHaveBeenCalledWith({
       streamId: 'bash-bypass-stream',
       kind: 'bash',
       bypassActive: true,
@@ -295,26 +298,18 @@ describe('TUI retry approvals', () => {
   });
 
   it('updates TUI bash bypass state when goal auto-approval is enabled and cleared', async () => {
-    const { runtimeHost } = tui();
-    await setGoalSessionBashAutoApproval(
-      'goal-bypass-stream',
-      true,
-      runtimeHost,
-    );
+    const { presentationHost } = tui();
+    await setGoalSessionBashAutoApproval('goal-bypass-stream', true);
     expect(streams.get().get('goal-bypass-stream')?.bypass.bash).toBe(true);
-    expect(runtimeHost.emitApprovalBypassState).toHaveBeenCalledWith({
+    expect(presentationHost.emitApprovalBypassState).toHaveBeenCalledWith({
       streamId: 'goal-bypass-stream',
       kind: 'bash',
       bypassActive: true,
     });
 
-    await setGoalSessionBashAutoApproval(
-      'goal-bypass-stream',
-      false,
-      runtimeHost,
-    );
+    await setGoalSessionBashAutoApproval('goal-bypass-stream', false);
     expect(streams.get().get('goal-bypass-stream')?.bypass.bash).toBe(false);
-    expect(runtimeHost.emitApprovalBypassState).toHaveBeenCalledWith({
+    expect(presentationHost.emitApprovalBypassState).toHaveBeenCalledWith({
       streamId: 'goal-bypass-stream',
       kind: 'bash',
       bypassActive: false,
@@ -322,7 +317,7 @@ describe('TUI retry approvals', () => {
   });
 
   it('updates TUI edit bypass state at the approval decision site', async () => {
-    const { runtimeHost, interactions } = tui();
+    const { presentationHost, interactions } = tui();
     const result = interactions.requestToolEditApproval?.({
       path: '/work/main.tex',
       originalContent: 'old',
@@ -344,7 +339,7 @@ describe('TUI retry approvals', () => {
       appliedContent: 'new',
     });
     expect(streams.get().get('edit-bypass-stream')?.bypass.toolEdit).toBe(true);
-    expect(runtimeHost.emitApprovalBypassState).toHaveBeenCalledWith({
+    expect(presentationHost.emitApprovalBypassState).toHaveBeenCalledWith({
       streamId: 'edit-bypass-stream',
       kind: 'toolEdit',
       bypassActive: true,
@@ -352,7 +347,7 @@ describe('TUI retry approvals', () => {
   });
 
   it('enables the complete delegated-task approval mode at the proposal decision site', async () => {
-    const { runtimeHost, interactions } = tui();
+    const { presentationHost, interactions } = tui();
     const result = interactions.requestAgentProposal?.({
       proposalId: 'proposal-bypass',
       streamId: 'proposal-bypass-stream',
@@ -387,17 +382,17 @@ describe('TUI retry approvals', () => {
     expect(isBashApprovalBypassedForStream('proposal-bypass-stream')).toBe(
       true,
     );
-    expect(runtimeHost.emitApprovalBypassState).toHaveBeenCalledWith({
+    expect(presentationHost.emitApprovalBypassState).toHaveBeenCalledWith({
       streamId: 'proposal-bypass-stream',
       kind: 'superYolo',
       bypassActive: true,
     });
-    expect(runtimeHost.emitApprovalBypassState).toHaveBeenCalledWith({
+    expect(presentationHost.emitApprovalBypassState).toHaveBeenCalledWith({
       streamId: 'proposal-bypass-stream',
       kind: 'toolEdit',
       bypassActive: true,
     });
-    expect(runtimeHost.emitApprovalBypassState).toHaveBeenCalledWith({
+    expect(presentationHost.emitApprovalBypassState).toHaveBeenCalledWith({
       streamId: 'proposal-bypass-stream',
       kind: 'bash',
       bypassActive: true,

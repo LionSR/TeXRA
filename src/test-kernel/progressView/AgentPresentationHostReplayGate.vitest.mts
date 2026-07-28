@@ -29,7 +29,7 @@ import { createTestSession } from '@test/support/sessionTestUtils';
 /**
  * #9251 behavioral gate: the extension's `HostInteractions.emit` now routes
  * presentation and progress-view interaction events the way desktop's does
- * (a thin pass-through to a caller-supplied `AgentRuntimeHost`), replacing a
+ * (a thin pass-through to a caller-supplied presentation host), replacing a
  * deleted per-host presentation-event bus and its 1000-event replay buffer.
  * These tests pin the two things that buffer used to guarantee and that must
  * still hold true with it gone:
@@ -198,7 +198,7 @@ describe('extension presentation-event emit port (#9251 replay gate)', () => {
         {} as unknown as ProgressViewProvider,
       );
       const interactions = createExtensionHostInteractions({
-        runtimeHost: presentationHost,
+        interactions: presentationHost,
         session,
         getApprovalHandlers: () => createApprovalHandlers(),
         setApprovalBypassState: vi.fn(),

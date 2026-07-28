@@ -2,10 +2,6 @@
 import type { AgentEvent } from '@agent/trace';
 import type { ToolUseRunShared } from '@agent/implementations/flows/tooluse/nodes/types';
 import {
-  noopAgentRuntimeHost,
-  type AgentRuntimeHost,
-} from '@agent/runtime/AgentRuntimeHost';
-import {
   matchesCancelSelector,
   SessionHostInteractions,
   type BashSettlement,
@@ -58,8 +54,6 @@ export interface RecordingHostDecisions {
     decision: UserQuestionSettlement,
   ): boolean;
 }
-
-const interactionsByHost = new WeakMap<AgentRuntimeHost, HostInteractions>();
 
 export function recordSessionEvents(
   hub: SessionEventHub,
@@ -114,7 +108,7 @@ export function createRecordingHost(): {
   events: RecordedProgressEvent[];
   interactions: HostInteractions;
   decisions: RecordingHostDecisions;
-  host: AgentRuntimeHost & RecordingProgressSink;
+  host: SessionHostInteractions & RecordingProgressSink;
 } {
   const events: RecordedProgressEvent[] = [];
   const pendingPlans = new Map<
@@ -218,6 +212,7 @@ export function createRecordingHost(): {
     },
   };
   const interactions: HostInteractions = {
+    emit: (event, payload) => events.push({ event, payload }),
     setApprovalBypassState: (update) =>
       events.push({ event: 'setApprovalBypassState', payload: update }),
     requestBashApproval: (request) => {
@@ -345,10 +340,9 @@ export function createRecordingHost(): {
       pending.settle({ submitted: false });
     }
   }
-  const host = {
-    emit: (event: string, payload: unknown) => events.push({ event, payload }),
-  } as AgentRuntimeHost & RecordingProgressSink;
-  interactionsByHost.set(host, interactions);
+  const host = new SessionHostInteractions() as SessionHostInteractions &
+    RecordingProgressSink;
+  host.use(interactions);
   return {
     events,
     decisions,
@@ -365,11 +359,24 @@ export function createRecordingHost(): {
  * instances.
  */
 export function sessionWithInteractions(
-  interactions: HostInteractions | undefined,
+  interactions:
+    | HostInteractions
+    | SessionHostInteractions
+    | Pick<SessionHostInteractions, 'emit'>
+    | undefined,
   status = new StreamStatusMachine(),
 ): SessionHandle {
-  const owner = new SessionHostInteractions();
-  if (interactions) owner.use(interactions);
+  const owner =
+    interactions instanceof SessionHostInteractions
+      ? interactions
+      : new SessionHostInteractions();
+  if (interactions && !(interactions instanceof SessionHostInteractions)) {
+    owner.use(
+      'cancel' in interactions
+        ? interactions
+        : { ...interactions, cancel: () => {} },
+    );
+  }
   return {
     interactions: owner,
     approvals: createSessionApprovals(owner),
@@ -388,23 +395,21 @@ export function testRunScope(
   streamId: string,
   options: {
     session?: SessionHandle;
-    runtimeHost?: AgentRuntimeHost;
+    interactions?:
+      SessionHostInteractions | Pick<SessionHostInteractions, 'emit'>;
   } = {},
 ): RunScope {
-  const runtimeHost = options.runtimeHost ?? noopAgentRuntimeHost;
+  const interactions = options.interactions ?? new SessionHostInteractions();
   return createRunScope({
-    runtimeHost,
     streamId: streamId as StreamTabId,
     executionId: 'deadbeef' as ExecutionId,
     agentName: 'test-agent',
-    session:
-      options.session ??
-      sessionWithInteractions(interactionsByHost.get(runtimeHost)),
+    session: options.session ?? sessionWithInteractions(interactions),
   });
 }
 
 /**
- * Run `fn` inside a launch `RunContext` carrying `runtimeHost`/`streamId`.
+ * Run `fn` inside a launch `RunContext` carrying `interactions`/`streamId`.
  *
  * Most flow nodes now read run identity from `services.runScope`; the reads
  * still on the ambient context need the launch scope installed — production
@@ -413,7 +418,7 @@ export function testRunScope(
  * same scope. Pass `session` so it matches the one on the services bag.
  */
 export function withTestRunContext<T>(
-  runtimeHost: AgentRuntimeHost,
+  interactions: SessionHostInteractions | Pick<SessionHostInteractions, 'emit'>,
   streamId: string,
   fn: () => Promise<T>,
   options: {
@@ -426,7 +431,7 @@ export function withTestRunContext<T>(
   const { session, ...contextOptions } = options;
   return withRunContext(
     createRunContext({
-      runScope: testRunScope(streamId, { runtimeHost, session }),
+      runScope: testRunScope(streamId, { interactions, session }),
       modelSource: 'live',
       getModel: () => undefined,
       ...contextOptions,

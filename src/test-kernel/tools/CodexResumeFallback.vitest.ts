@@ -42,7 +42,7 @@ vi.mock('@agent/runtime/RunContext', () => ({
   getRunContextExecutionId: (ctx: any) => ctx?.executionId,
   getRunContextStreamId: (ctx: any) => ctx?.streamId,
   getRunContextWorkingDirectory: (ctx: any) => ctx?.workingDirectory,
-  getRunContextRuntimeHost: (ctx: any) => ctx?.runtimeHost,
+  getRunContextInteractions: (ctx: any) => ctx?.interactions,
 }));
 
 vi.mock('@agent/runtime/SessionHandle', () => ({
@@ -114,7 +114,7 @@ describe('codex tool - atomic resume fallback', () => {
         streamId: parentStreamId,
         executionId,
         workingDirectory: undefined,
-        runtimeHost: { name: 'fake-runtime-host' },
+        interactions: { name: 'fake-runtime-host' },
       },
       callContext: { tracker: {}, hooks: {} },
     });

@@ -1,5 +1,4 @@
 // Local imports - runtime
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type {
   RuntimePresentationEvent,
   RuntimePresentationEventPayloads,
@@ -27,12 +26,16 @@ import {
 } from './runProgressRenderer';
 import type { CliContext } from './cliContext';
 
-export type CliRuntimeHost = AgentRuntimeHost & {
+export interface CliRuntimeHost {
+  emit<K extends RuntimePresentationEvent>(
+    event: K,
+    payload: RuntimePresentationEventPayloads[K],
+  ): void;
   attachRunProgressRenderer(events: SessionEventHub): () => void;
   prepareInteractivePrompt?: () => void;
   emitApprovalBypassState(update: HostApprovalBypassStateUpdate): void;
   close(): Promise<void>;
-};
+}
 
 const ApprovalBypassNdjsonEvent = {
   bash: 'updateBashApprovalBypassState',

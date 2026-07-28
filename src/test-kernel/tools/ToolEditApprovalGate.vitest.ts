@@ -11,7 +11,6 @@ import pDefer from 'p-defer';
 import { describe, it, beforeEach, afterEach } from 'vitest';
 
 // Local imports
-import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import type { StreamTabId } from '@shared/schemas';
@@ -66,7 +65,6 @@ async function callTextEditorInRun(
 ) {
   return withRunContext(
     createRunContext({
-      runtimeHost: noopAgentRuntimeHost,
       streamId: `stream:${executionId}` as StreamTabId,
       executionId,
     }),
@@ -219,18 +217,12 @@ describe('Tool edit approval gating', () => {
       return { accepted: true };
     };
 
-    setToolEditApprovalSessionBypass(
-      TEST_STREAM_ID,
-      true,
-      noopAgentRuntimeHost,
-      { silent: true },
-    );
+    setToolEditApprovalSessionBypass(TEST_STREAM_ID, true, { silent: true });
 
     // The bypass check requires a streamId on the request; the approval layer
     // picks it up from the active run context.
     const result = await withRunContext(
       createRunContext({
-        runtimeHost: noopAgentRuntimeHost,
         streamId: TEST_STREAM_ID,
       }),
       () => tool.call({ path: 'doc.txt', content: 'auto' }),
@@ -255,7 +247,6 @@ describe('Tool edit approval gating', () => {
     const requestInStream = (path: string) =>
       withRunContext(
         createRunContext({
-          runtimeHost: noopAgentRuntimeHost,
           streamId: TEST_STREAM_ID,
         }),
         () =>
@@ -272,12 +263,7 @@ describe('Tool edit approval gating', () => {
     await firstPrompted.promise;
 
     assert.strictEqual(handlerCalls, 1);
-    setToolEditApprovalSessionBypass(
-      TEST_STREAM_ID,
-      true,
-      noopAgentRuntimeHost,
-      { silent: true },
-    );
+    setToolEditApprovalSessionBypass(TEST_STREAM_ID, true, { silent: true });
     firstApproval.resolve({ accepted: true });
 
     const results = await Promise.all([firstRequest, secondRequest]);

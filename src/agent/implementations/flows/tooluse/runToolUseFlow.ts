@@ -13,7 +13,7 @@ import { inferAndLogPersistedModelHandlerCompatibilityKey } from '@agent/runtime
 import type { ModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityKey';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { useLaunchRunContext } from '@agent/runtime/RunContext';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import {
   PersistedFlow,
   PersistedFlowStateError,
@@ -146,7 +146,7 @@ interface ToolUseFlowContext {
   readonly ownerSession: SessionHandle;
   readonly session: ToolUseSessionLifecycle;
   readonly modelHandler: ToolUseServices['modelHandler'];
-  readonly runtimeHost: AgentRuntimeHost;
+  readonly interactions: SessionHostInteractions;
   readonly model: string;
   interrupt(): void;
   requestImmediateCompaction(): void;
@@ -183,7 +183,7 @@ export async function runToolUseFlow<C = unknown>(
   const { logger, setting, onInterrupt } = input;
   const runContext = useLaunchRunContext();
   const { runScope } = runContext;
-  const { runtimeHost, streamId, executionId, session: runSession } = runScope;
+  const { streamId, executionId, session: runSession } = runScope;
   // Capture the run's scope at setup. The interrupt closure below fires from
   // the host thread outside the ALS, so it must use this captured session
   // handle instead of asking for an ambient current session later.
@@ -340,7 +340,7 @@ export async function runToolUseFlow<C = unknown>(
     get modelHandler() {
       return services.modelHandler;
     },
-    runtimeHost,
+    interactions: runSession.interactions,
     get model() {
       return services.config.model;
     },

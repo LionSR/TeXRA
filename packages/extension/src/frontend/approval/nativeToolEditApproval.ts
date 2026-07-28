@@ -14,7 +14,7 @@ import * as path from 'node:path';
 import { nanoid } from 'nanoid';
 import * as vscode from 'vscode';
 
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import {
   matchesCancelSelector,
   type HostInteractionCancelSelector,
@@ -80,7 +80,7 @@ const pendingApprovals = new Map<string, PendingApprovalEntry>();
 const initializingApprovals = new Map<string, InitializingNativeApproval>();
 const diffViewHost: DiffViewHost = new VscodeDiffViewHost();
 let storageDirectory: string | undefined;
-let runtimeHost: AgentRuntimeHost | undefined;
+let interactions: Pick<SessionHostInteractions, 'emit'> | undefined;
 let showToolEditPermission: (payload: ToolEditPermission) => void;
 let resolveToolEditPermission: (requestId: string) => void;
 
@@ -171,13 +171,13 @@ function getStorageDir(): string {
   return storageDirectory;
 }
 
-function getRuntimeHost(): AgentRuntimeHost {
-  if (!runtimeHost) {
+function getRuntimeHost(): Pick<SessionHostInteractions, 'emit'> {
+  if (!interactions) {
     throw new Error(
       'Tool edit approval runtime host has not been initialized.',
     );
   }
-  return runtimeHost;
+  return interactions;
 }
 
 async function ensureStorageDir(): Promise<string> {
@@ -569,7 +569,7 @@ export async function handleProgressViewToolEditApprovalAction(
  */
 export function initializeNativeToolEditApproval(
   context: vscode.ExtensionContext,
-  host: AgentRuntimeHost,
+  host: Pick<SessionHostInteractions, 'emit'>,
   callbacks: {
     showToolEditPermission(payload: ToolEditPermission): void;
     resolveToolEditPermission(requestId: string): void;
@@ -577,7 +577,7 @@ export function initializeNativeToolEditApproval(
 ): void {
   const baseDir = context.storageUri ?? context.globalStorageUri;
   storageDirectory = path.join(baseDir.fsPath, 'tool-edit-previews');
-  runtimeHost = host;
+  interactions = host;
   showToolEditPermission = callbacks.showToolEditPermission;
   resolveToolEditPermission = callbacks.resolveToolEditPermission;
 }
