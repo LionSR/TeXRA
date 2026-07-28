@@ -7,7 +7,7 @@ import {
 } from '@agent/core/flows/ToolUseRoundFlow';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
-import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import type { CreateResponseOptions } from '@agent/types/ModelHandlerContracts';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import { createRunTrace, StreamLogStore } from '@transcript';
@@ -93,7 +93,7 @@ describe('final-tool synthesis turn', () => {
   it('keeps exploration unforced, then forces exactly one final turn', async () => {
     const { requests, services, shared } = buildRound(true);
 
-    await withTestRunContext(noopAgentRuntimeHost, 'final-tool-synthesis', () =>
+    await withTestRunContext(new SessionHostInteractions(), 'final-tool-synthesis', () =>
       createToolUseRoundFlow().setServices(services).run(shared),
     );
 
@@ -113,7 +113,7 @@ describe('final-tool synthesis turn', () => {
   it('asks once without forcing when the provider cannot force tools', async () => {
     const { requests, services, shared } = buildRound(false);
 
-    await withTestRunContext(noopAgentRuntimeHost, 'final-tool-floor', () =>
+    await withTestRunContext(new SessionHostInteractions(), 'final-tool-floor', () =>
       createToolUseRoundFlow().setServices(services).run(shared),
     );
 

@@ -133,7 +133,6 @@ describe('session isolation (SDK Step 7d PR 2)', () => {
     try {
       expect(currentSession()).toBe(defaultSession());
       const ctx = createRunContext({
-        runtimeHost: createRecordingHost().host,
         session: sessionB,
       });
       withRunContext(ctx, () => {

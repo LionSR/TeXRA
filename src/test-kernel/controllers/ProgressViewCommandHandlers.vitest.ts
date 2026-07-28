@@ -113,7 +113,7 @@ function createActions(
 
 function createRecordingRuntimeHost(): {
   events: Array<{ event: string; payload: unknown }>;
-  host: AgentRuntimeHost;
+  host: SessionHostInteractions;
 } {
   const events: Array<{ event: string; payload: unknown }> = [];
   return {
@@ -387,7 +387,7 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
     const showInfo = vi.fn();
     const handlers = createProgressViewCommandHandlers(
       createActions({
-        bypass: { runtimeHost: host, session, showInfo },
+        bypass: { interactions: host, session, showInfo },
       }),
     );
 
@@ -438,7 +438,7 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
     const { host } = createRecordingRuntimeHost();
     const showInfo = vi.fn();
     const handlers = createProgressViewCommandHandlers(
-      createActions({ bypass: { runtimeHost: host, showInfo } }),
+      createActions({ bypass: { interactions: host, showInfo } }),
     );
 
     setToolEditApprovalSessionBypass(stream, true, host);
@@ -469,7 +469,7 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
     });
     const showInfo = vi.fn();
     const actions = createActions({
-      bypass: { runtimeHost: host, session, showInfo },
+      bypass: { interactions: host, session, showInfo },
     });
     const handlers = createProgressViewCommandHandlers(actions);
 

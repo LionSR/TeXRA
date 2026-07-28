@@ -1008,7 +1008,7 @@ describe('BashTool', () => {
     try {
       node.setServices(options);
       const result = await withTestRunContext(
-        noopAgentRuntimeHost,
+        defaultSession().interactions,
         'bash-tool',
         () => node.exec(call),
         { session: options.runScope.session },

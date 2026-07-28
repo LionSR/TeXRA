@@ -98,7 +98,7 @@ function baseParams(
     agentName: 'review',
     orchestratorStreamId: 'orchestrator-stream' as StreamTabId,
     parentSession,
-    runtimeHost: { emit: vi.fn() } as never,
+    interactions: { emit: vi.fn() } as never,
     startedAt: Date.now(),
     onStreamResolved: vi.fn(),
   };
@@ -380,7 +380,7 @@ describe('NativeSubagentStrategy', () => {
       replacementReady = resolve;
     });
     mocks.resumeToolUseFromResumeData.mockImplementationOnce(
-      async (_resume, _host, options) => {
+      async (_resume, options) => {
         options.onRun?.({
           childStreamId,
           deliveryTargetStreamId: params.orchestratorStreamId,
@@ -520,7 +520,6 @@ describe('NativeSubagentStrategy', () => {
     );
     expect(mocks.resumeToolUseFromResumeData).toHaveBeenCalledWith(
       snapshot,
-      params.runtimeHost,
       expect.objectContaining({
         approvalPromptsUnavailable: true,
         parentStreamId: params.orchestratorStreamId,
@@ -573,20 +572,19 @@ describe('NativeSubagentStrategy', () => {
     const childStreamId = 'native-follow-up-loop-child' as StreamTabId;
     const parentStreamId = 'native-follow-up-loop-parent' as StreamTabId;
     const executionId = 'native-follow-up-loop-exec' as ExecutionId;
-    const runtimeHost = { emit: vi.fn() } as never;
+    const interactions = { emit: vi.fn() } as never;
     const handle = new AgentExecutionHandle(
       executionId,
       parentStreamId,
       childStreamId,
       'review',
       'toolUse',
-      runtimeHost,
     );
     const params = {
       ...baseParams(session),
       executionId,
       orchestratorStreamId: parentStreamId,
-      runtimeHost,
+      interactions,
     };
     const waitingTurn = (lastResponse: string) => ({
       category: 'toolUse' as const,
@@ -625,7 +623,7 @@ describe('NativeSubagentStrategy', () => {
     mocks.readConfig.mockResolvedValue(config);
     mocks.retrieveSessionResumeData.mockResolvedValue(resume);
     mocks.resumeToolUseFromResumeData.mockImplementation(
-      async (_snapshot, _host, options) => {
+      async (_snapshot, options) => {
         if (mocks.resumeToolUseFromResumeData.mock.calls.length > 1) {
           throw new Error('the same follow-up batch resumed more than once');
         }
@@ -668,7 +666,7 @@ describe('NativeSubagentStrategy', () => {
         resume,
       );
       expect(
-        mocks.resumeToolUseFromResumeData.mock.calls[0]?.[2].drainedFollowUps,
+        mocks.resumeToolUseFromResumeData.mock.calls[0]?.[1].drainedFollowUps,
       ).toEqual([
         {
           text: 'Also state exactly where finiteness is used.',
@@ -751,12 +749,12 @@ describe('NativeSubagentStrategy', () => {
     const childStreamId = 'native-workflow-loop-child' as StreamTabId;
     const parentStreamId = 'native-workflow-loop-parent' as StreamTabId;
     const executionId = 'native-workflow-loop-exec' as ExecutionId;
-    const runtimeHost = { emit: vi.fn() } as never;
+    const interactions = { emit: vi.fn() } as never;
     const params = {
       ...baseParams(session, 'workflow'),
       executionId,
       orchestratorStreamId: parentStreamId,
-      runtimeHost,
+      interactions,
     };
 
     mocks.executeAgent.mockResolvedValueOnce({
