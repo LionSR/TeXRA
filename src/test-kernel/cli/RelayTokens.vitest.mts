@@ -147,6 +147,18 @@ describe('TEXRA_RELAY_TOKEN consumption (CI relay tokens)', () => {
     expect(getCachedRelayTokenState(`${TOKEN}5`)).toBeUndefined();
   });
 
+  it('treats a null relay tier as valid free access', async () => {
+    const { fetchImpl } = singleFetch(
+      jsonResponse({ userStatus: { tier: null } }),
+    );
+
+    expect(await fetchRelayTokenStatus(`${TOKEN}6`, fetchImpl)).toEqual({
+      state: 'valid',
+      tier: 'free',
+    });
+    expect(getCachedRelayTokenState(`${TOKEN}6`)).toBe('valid');
+  });
+
   it('caches a rejection so synchronous credential checks can see it', async () => {
     const { fetchImpl, calls } = singleFetch(jsonResponse({ tiers: {} }));
     expect(await fetchRelayTokenStatus(TOKEN, fetchImpl)).toEqual({

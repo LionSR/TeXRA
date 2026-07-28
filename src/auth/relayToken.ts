@@ -13,6 +13,7 @@ import { LRUCache } from 'lru-cache';
 import { z } from 'zod';
 
 import {
+  FREE_TIER,
   RELAY_TIER_CONFIG_URL,
   SERVER_SIDE_CACHE_TTL_MS,
   UserTierSchema,
@@ -50,7 +51,9 @@ export function getConfiguredRelayToken(
 const TierConfigUserStatusSchema = z.object({
   userStatus: z
     // A present malformed tier is a relay contract failure, not a free tier.
-    .object({ tier: UserTierSchema })
+    .object({
+      tier: UserTierSchema.nullable().transform((tier) => tier ?? FREE_TIER),
+    })
     .loose()
     .nullish(),
 });
