@@ -164,7 +164,9 @@ export async function loadAgents(
  * immediately and are re-merged by every subsequent load or refresh.
  */
 export function registerInlineAgents(definitions: readonly unknown[]): void {
+  const toolUseOverrides = getToolUseOverrides();
   for (const entry of defineInlineAgents(definitions)) {
+    applyToolUseOverride(entry, toolUseOverrides);
     cache.set(agentKeyOf(entry), entry);
   }
 }
@@ -220,21 +222,13 @@ async function doLoad(
   migrateFilenameAgentNameKeys(allEntries);
 
   // Apply category overrides from config
-  const toolUseOverrides = new Set(
-    platform().workspaceState.get<string[]>(
-      WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
-      [],
-    ),
-  );
+  const toolUseOverrides = getToolUseOverrides();
 
   if (loadEpoch !== registryEpoch) return false;
 
   cache.clear();
   for (const entry of allEntries) {
-    if (toolUseOverrides.has(entry.name)) {
-      entry.category = AgentCategory.ToolUse;
-      entry.rounds = undefined;
-    }
+    applyToolUseOverride(entry, toolUseOverrides);
     cache.set(agentKeyOf(entry), entry);
   }
 
@@ -248,6 +242,25 @@ async function doLoad(
     `Loaded ${cache.size} agents in ${Date.now() - startTime}ms`,
   );
   return true;
+}
+
+function getToolUseOverrides(): Set<string> {
+  return new Set(
+    platform().workspaceState.get<string[]>(
+      WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
+      [],
+    ),
+  );
+}
+
+function applyToolUseOverride(
+  entry: AgentEntry,
+  toolUseOverrides: ReadonlySet<string>,
+): void {
+  if (toolUseOverrides.has(entry.name)) {
+    entry.category = AgentCategory.ToolUse;
+    entry.rounds = undefined;
+  }
 }
 
 /**
