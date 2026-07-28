@@ -97,8 +97,8 @@ export class AccountTab extends LitElement {
     if (this.sessionExpired) {
       return html`
         <div class="account-empty">
-          Usage data can't load because your session has expired. Sign in
-          again to reconnect.
+          Usage data can't load because your session has expired. Sign in again
+          to reconnect.
         </div>
       `;
     }
@@ -148,9 +148,10 @@ export class AccountTab extends LitElement {
     const expired = this.sessionExpired;
     // When the session expired we still have the email from a previous
     // authenticated refresh; otherwise this is a clean signed-out state.
-    const title = this.authenticated || expired
-      ? this.userEmail || 'TeXRA account'
-      : 'TeXRA account';
+    const title =
+      this.authenticated || expired
+        ? this.userEmail || 'TeXRA account'
+        : 'TeXRA account';
     let description: TemplateResult | string =
       'Sign in to use included access and monitor usage.';
     if (expired) {
@@ -162,39 +163,40 @@ export class AccountTab extends LitElement {
     // Enter the authenticated-like branch for both live and expired sessions
     // so the Sign out button stays available for cleaning up the stored
     // zombie session.
-    const actions = this.authenticated || expired
-      ? html`
-          ${
-            expired
-              ? html`<wa-tag variant="warning">Session expired</wa-tag>`
-              : html`<wa-tag variant="success">Connected</wa-tag>`
-          }
-          ${
-            expired
-              ? renderLabeledActionButton({
-                  icon: 'user',
-                  text: 'Sign in',
-                  kind: 'primary',
-                  appearance: 'filled',
-                  onClick: this.handleSignIn,
-                })
-              : nothing
-          }
-          ${renderLabeledActionButton({
-            icon: 'right-from-bracket',
-            text: 'Sign out',
-            kind: 'secondary',
-            appearance: 'outlined',
-            onClick: this.handleSignOut,
-          })}
-        `
-      : renderLabeledActionButton({
-          icon: 'user',
-          text: 'Sign in',
-          kind: 'primary',
-          appearance: 'filled',
-          onClick: this.handleSignIn,
-        });
+    const actions =
+      this.authenticated || expired
+        ? html`
+            ${
+              expired
+                ? html`<wa-tag variant="warning">Session expired</wa-tag>`
+                : html`<wa-tag variant="success">Connected</wa-tag>`
+            }
+            ${
+              expired
+                ? renderLabeledActionButton({
+                    icon: 'user',
+                    text: 'Sign in',
+                    kind: 'primary',
+                    appearance: 'filled',
+                    onClick: this.handleSignIn,
+                  })
+                : nothing
+            }
+            ${renderLabeledActionButton({
+              icon: 'right-from-bracket',
+              text: 'Sign out',
+              kind: 'secondary',
+              appearance: 'outlined',
+              onClick: this.handleSignOut,
+            })}
+          `
+        : renderLabeledActionButton({
+            icon: 'user',
+            text: 'Sign in',
+            kind: 'primary',
+            appearance: 'filled',
+            onClick: this.handleSignIn,
+          });
     return renderSettingsBanner({
       id: 'account-identity-banner',
       icon: 'circle-user',
