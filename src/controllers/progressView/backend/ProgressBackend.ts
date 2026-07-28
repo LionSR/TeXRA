@@ -172,23 +172,23 @@ export class ProgressBackend {
     );
   }
 
-  deleteStream(stream: StreamTabId): Promise<void> {
-    return this.enqueueStorageOperation(() => this.deleteStreamNow(stream));
+  async deleteStream(stream: StreamTabId): Promise<void> {
+    const wasActive = this.state.activeStream === stream;
+    const retained = await this.enqueuePreparedStorageOperation(
+      () => this.prepareStreamDeletion(stream),
+      () => this.deleteStreamNow(stream, wasActive),
+    );
+    if (retained) await this.notifyDeletionRetained(retained);
   }
 
-  private async deleteStreamNow(stream: StreamTabId): Promise<void> {
+  private async prepareStreamDeletion(stream: StreamTabId): Promise<void> {
     if (!canUseStreamDataDir(stream)) return;
 
     const hasStream =
       this.state.streamLogs.has(stream) ||
       Boolean(this.state.snapshots.getTaskState(stream));
-    if (!hasStream) {
-      const deletion = await this.state.clearStream(stream);
-      if (deletion !== 'deleted') await this.notifyDeletionRetained(deletion);
-      return;
-    }
+    if (!hasStream) return;
 
-    const wasActive = this.state.activeStream === stream;
     const ownedLocally =
       this.session.executions.getAgentHandleByStream(stream) !== undefined;
     if (ownedLocally && isInFlightPhase(this.session.status.get(stream))) {
@@ -199,12 +199,26 @@ export class ProgressBackend {
     // execution lease. Auto-close can land in that interval, so the handle is
     // not a reliable indication that local durable writes have finished.
     await this.state.waitForOwnedExecutionRelease(stream);
+  }
+
+  private async deleteStreamNow(
+    stream: StreamTabId,
+    wasActive: boolean,
+  ): Promise<'active' | 'failed' | undefined> {
+    if (!canUseStreamDataDir(stream)) return undefined;
+
+    const hasStream =
+      this.state.streamLogs.has(stream) ||
+      Boolean(this.state.snapshots.getTaskState(stream));
+    if (!hasStream) {
+      const deletion = await this.state.clearStream(stream);
+      return deletion === 'deleted' ? undefined : deletion;
+    }
 
     const deletion = await this.state.clearStream(stream);
     if (deletion !== 'deleted') {
       this.lifecycle.rebuildRenderedStreams({ syncActiveStream: true });
-      await this.notifyDeletionRetained(deletion);
-      return;
+      return deletion;
     }
 
     this.lifecycle.cleanupDeletedStream(stream);
@@ -243,13 +257,23 @@ export class ProgressBackend {
     } else {
       this.lifecycle.refreshRenderedStreamsAfterDeletion?.();
     }
+    return undefined;
   }
 
-  deleteAllStreams(): Promise<void> {
-    return this.enqueueStorageOperation(() => this.deleteAllStreamsNow());
+  async deleteAllStreams(): Promise<void> {
+    const retained = await this.enqueuePreparedStorageOperation(
+      () => this.prepareAllStreamDeletions(),
+      () => this.deleteAllStreamsNow(),
+    );
+    if (retained) {
+      await this.lifecycle.notifyDeletionRetained(
+        retained.activeCount,
+        retained.failedCount,
+      );
+    }
   }
 
-  private async deleteAllStreamsNow(): Promise<void> {
+  private async prepareAllStreamDeletions(): Promise<void> {
     const streamIds = this.state.streamLogs.keys();
     const locallyOwnedStreams = streamIds.filter(
       (stream) =>
@@ -267,7 +291,12 @@ export class ProgressBackend {
         this.state.waitForOwnedExecutionRelease(stream),
       ),
     );
+  }
 
+  private async deleteAllStreamsNow(): Promise<
+    { activeCount: number; failedCount: number } | undefined
+  > {
+    const streamIds = this.state.streamLogs.keys();
     const retained = await this.state.clearAll();
     const retainedStreams = new Set([...retained.active, ...retained.failed]);
     const deleted = streamIds.filter((stream) => !retainedStreams.has(stream));
@@ -288,12 +317,12 @@ export class ProgressBackend {
       }
     }
     this.lifecycle.rebuildRenderedStreams({ syncActiveStream: !allDeleted });
-    if (!allDeleted) {
-      await this.lifecycle.notifyDeletionRetained(
-        retained.active.size,
-        retained.failed.size,
-      );
-    }
+    return allDeleted
+      ? undefined
+      : {
+          activeCount: retained.active.size,
+          failedCount: retained.failed.size,
+        };
   }
 
   load(): Promise<void> {
@@ -347,10 +376,35 @@ export class ProgressBackend {
    * Serialize operations whose filesystem work must observe one workspace
    * root from beginning to end.
    */
-  private enqueueStorageOperation(work: () => Promise<void>): Promise<void> {
-    // `add` widens to `void | undefined` for abort/timeout options; neither is
-    // used, so every enqueued operation runs and resolves with `void`.
-    return this.storageOperationQueue.add(work) as Promise<void>;
+  private enqueueStorageOperation<T>(work: () => Promise<T>): Promise<T> {
+    // `add` widens to `T | void` for abort/timeout options; neither is used,
+    // so every enqueued operation runs and resolves with its result.
+    return this.storageOperationQueue.add(work) as Promise<T>;
+  }
+
+  /**
+   * Reserve queue order before stopping executions, but perform that
+   * preparation outside the queue. An earlier root replacement may be waiting
+   * for the same execution leases and must be able to observe their release.
+   */
+  private enqueuePreparedStorageOperation<T>(
+    prepare: () => Promise<void>,
+    work: () => Promise<T>,
+  ): Promise<T> {
+    let publishPreparation!: (value: PromiseLike<void>) => void;
+    const preparation = new Promise<void>((resolve) => {
+      publishPreparation = resolve;
+    });
+    const operation = this.enqueueStorageOperation(async () => {
+      await preparation;
+      return work();
+    });
+    const pendingPreparation = prepare();
+    // If an earlier queue entry is still running, attach a rejection handler
+    // until this operation reaches the same promise.
+    void preparation.catch(() => undefined);
+    publishPreparation(pendingPreparation);
+    return operation;
   }
 
   setupEventListeners(): ProgressEventSubscription {
