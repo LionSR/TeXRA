@@ -133,7 +133,9 @@ const RELAY_TIER_SPENDING_LIMITS: Record<UserTier, number> = {
 };
 
 export function getRelaySpendingLimit(tier: string | undefined): number {
-  const parsedTier = UserTierSchema.catch(FREE_TIER).parse(tier);
+  // An absent tier denotes an unauthenticated/free request. A present but
+  // malformed tier is accounting data corruption and must fail validation.
+  const parsedTier = UserTierSchema.prefault(FREE_TIER).parse(tier);
   return RELAY_TIER_SPENDING_LIMITS[parsedTier];
 }
 
