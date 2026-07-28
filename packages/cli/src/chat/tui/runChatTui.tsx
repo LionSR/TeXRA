@@ -18,9 +18,8 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
-  presentFollowUpWakeResult,
-  sendFollowUp,
-  wakeQueuedFollowUpStream,
+  presentFollowUpResult,
+  submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
 import { setCliAgentResumeHandler } from '@cli/runtime/agentResume';
 import { type CliContext, readCliVersion } from '@cli/runtime/cliContext';
@@ -504,7 +503,8 @@ export async function runChat(
   });
   disposers.push(
     setCliAgentResumeHandler({
-      tryResumeStream: (streamId) => chatController.tryResumeStream(streamId),
+      tryResumeStream: (streamId, recovery) =>
+        chatController.tryResumeStream(streamId, recovery),
     }),
   );
 
@@ -739,25 +739,17 @@ export async function runChat(
           followUpTarget = session.streamId;
         }
         if (!followUpTarget || session.stopRequested) return;
-        const result = await sendFollowUp(
-          followUpTarget,
-          prepared.instruction,
+        const result = await submitFollowUp(followUpTarget, {
+          text: prepared.instruction,
           mediaFiles,
-          prepared.displayInstruction,
-        );
+          displayText: prepared.displayInstruction,
+        });
         if (result.status === 'sent') {
           emitQueuedFollowUpsChanged(followUpTarget);
           delivered = true;
         } else if (result.status === 'queued') {
           emitQueuedFollowUpsChanged(followUpTarget);
-          if (
-            defaultSession().executions.isChildRunLoopActive(followUpTarget)
-          ) {
-            delivered = true;
-            return;
-          }
-          const wake = await wakeQueuedFollowUpStream(followUpTarget, result);
-          const presentation = presentFollowUpWakeResult(wake);
+          const presentation = presentFollowUpResult(result);
           if (presentation.severity !== 'none') {
             if (presentation.refreshQueuedFollowUps) {
               emitQueuedFollowUpsChanged(followUpTarget);
@@ -767,10 +759,9 @@ export async function runChat(
               followUpTarget,
             );
           }
-          delivered =
-            wake.kind !== 'dropped' && wake.kind !== 'queued_resume_failed';
+          delivered = result.continuation !== 'resume_failed';
         }
-        if (result.status === 'no_session') {
+        if (result.status === 'no_session' || result.status === 'dropped') {
           // Child stream ids are keys in parentStream; the root session id is not.
           if (followUpTarget === session.streamId) {
             session.stopRequested = true;
