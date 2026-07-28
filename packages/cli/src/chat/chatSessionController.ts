@@ -313,6 +313,7 @@ export function createChatSessionController(
   } => {
     const interactionOwner = {};
     const ownedExecutionIds = new Set<string>();
+    const pendingActivationIds = new Set<string>();
     const presentationHost = createCliRuntimeHost(sessionContext);
     const detachHostInteractions = defaultSession().useHostInteractions(
       createTuiHostInteractions(presentationHost, sessionContext),
@@ -332,7 +333,13 @@ export function createChatSessionController(
     let rootExecutionId: ExecutionId | undefined;
     const executions = defaultSession().executions;
     const releaseIfUnused = (): void => {
-      if (rootFinalized && ownedExecutionIds.size === 0) releaseHost();
+      if (
+        rootFinalized &&
+        ownedExecutionIds.size === 0 &&
+        pendingActivationIds.size === 0
+      ) {
+        releaseHost();
+      }
     };
     const observeExecution = (
       executionId: string,
@@ -363,10 +370,49 @@ export function createChatSessionController(
     };
     const detachExecutionListener =
       executions.addRegistrationListener(observeExecution);
+    const detachChildActivationListener = executions.addChildActivationListener(
+      (activation, active) => {
+        if (active) {
+          if (
+            streamInteractionOwners.get(activation.parentStreamId) !==
+            interactionOwner
+          ) {
+            return;
+          }
+          pendingActivationIds.add(activation.executionId);
+          executionInteractionOwners.set(
+            activation.executionId,
+            interactionOwner,
+          );
+          streamInteractionOwners.set(
+            activation.childStreamId,
+            interactionOwner,
+          );
+          return;
+        }
+
+        pendingActivationIds.delete(activation.executionId);
+        if (
+          !executions.getHandle(activation.executionId) &&
+          executionInteractionOwners.get(activation.executionId) ===
+            interactionOwner
+        ) {
+          executionInteractionOwners.delete(activation.executionId);
+          if (
+            streamInteractionOwners.get(activation.childStreamId) ===
+            interactionOwner
+          ) {
+            streamInteractionOwners.delete(activation.childStreamId);
+          }
+        }
+        releaseIfUnused();
+      },
+    );
     const releaseHost = (): void => {
       if (released) return;
       released = true;
       detachExecutionListener();
+      detachChildActivationListener();
       for (const [executionId, owner] of executionInteractionOwners) {
         if (owner === interactionOwner) {
           executionInteractionOwners.delete(executionId);
