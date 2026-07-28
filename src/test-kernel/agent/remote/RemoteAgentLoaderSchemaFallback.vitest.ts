@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { loadRemoteAgent } from '@agent/remote/RemoteAgentLoader';
 import {
   isMissingRemoteAgentToolsColumnError,
-  RemoteAgentLoader,
-} from '@agent/remote/RemoteAgentLoader';
+  listRemoteAgents,
+} from '@agent/remote/remoteAgentList';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { SUPABASE_CONFIG } from '@auth/config';
 
@@ -101,7 +102,7 @@ describe('remote agent schema compatibility', () => {
       },
     );
 
-    const agents = await RemoteAgentLoader.listRemoteAgents();
+    const agents = await listRemoteAgents();
 
     expect(agents).toHaveLength(1);
     expect(agents[0]?.name).toBe('legacy-agent');
@@ -136,7 +137,7 @@ describe('remote agent schema compatibility', () => {
       },
     );
 
-    const agents = await RemoteAgentLoader.listRemoteAgents();
+    const agents = await listRemoteAgents();
 
     expect(agents).toHaveLength(1);
     expect(agents[0]?.name).toBe('nullable-error-agent');
@@ -169,7 +170,7 @@ describe('remote agent schema compatibility', () => {
       error: null,
     });
 
-    const agents = await RemoteAgentLoader.listRemoteAgents();
+    const agents = await listRemoteAgents();
 
     expect(agents.map((agent) => agent.name)).toEqual(['review']);
   });
@@ -183,7 +184,7 @@ describe('remote agent schema compatibility', () => {
       },
     });
 
-    const agents = await RemoteAgentLoader.listRemoteAgents();
+    const agents = await listRemoteAgents();
 
     expect(agents).toEqual([]);
     expect(selectedColumns).toEqual([
@@ -217,8 +218,8 @@ describe('remote agent config parsing', () => {
       }),
     );
 
-    await expect(
-      RemoteAgentLoader.loadRemoteAgent('broken-agent'),
-    ).rejects.toThrow('Failed to parse YAML for remote agent "broken-agent"');
+    await expect(loadRemoteAgent('broken-agent')).rejects.toThrow(
+      'Failed to parse YAML for remote agent "broken-agent"',
+    );
   });
 });

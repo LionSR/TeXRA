@@ -24,7 +24,7 @@ import {
   type TaskGroup,
   type TodoItem,
   type TokenUsageStats,
-  type WorkflowTaskProgress,
+  type WorkflowCallProgress,
 } from '@shared/schemas';
 import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
 import { isActivePhase } from '@shared/streams/streamStatus';
@@ -100,8 +100,8 @@ export type ConversationEntry = ConversationEntryOrigin &
       })
     | (ConversationEntryBase & {
         readonly role: 'workflowTask';
-        /** Parsed task state retained for semantic settlement and styling. */
-        readonly task: WorkflowTaskProgress;
+        /** Parsed workflow-call state retained for semantic settlement and styling. */
+        readonly task: WorkflowCallProgress;
       })
     | (ConversationEntryBase & {
         readonly role: 'phase';

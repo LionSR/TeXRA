@@ -942,7 +942,7 @@ describe('CLI child list display model', () => {
     expect(narrowOutput).toContain(`${freeFormPhase} (1/2) · 1/1`);
     expect(narrowOutput).toContain('Reduce (2/2) · 0/1');
     // Two attempt rows remain visible, but progress counts the one logical
-    // workflow task from the transcript rather than the retry rows.
+    // workflow call from the transcript rather than the retry rows.
     expect(wideOutput.split(freeFormPhase)).toHaveLength(2);
     expect(wideOutput).toContain('writer-retry');
     expect(wideOutput).toContain('writer-attempt');

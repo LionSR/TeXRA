@@ -10,9 +10,8 @@ import {
 import { RUN_OUTCOME, type ExecutionId } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
+  createWorkflowAttemptCostTracker,
   sumCompletedWorkflowJournalCost,
-  sumCurrentWorkflowRunCost,
-  workflowJournalEntryCostIdentity,
   WorkflowJournalCostError,
 } from '@tools/delegation/workflowScriptRun';
 
@@ -61,6 +60,79 @@ function toolUseResult(cost: number): unknown {
 
 beforeEach(() => clearStoreCache());
 
+describe('workflow attempt cost', () => {
+  it('adds discarded retry cost before an undefined final observer fallback', () => {
+    const completed = entry(0, workflowResult(0.5), 'completed');
+    const tracker = createWorkflowAttemptCostTracker();
+
+    expect(tracker.record(completed, 0.1)).toBe(0.1);
+    // Production normalizes the final attempt's undefined callback to zero.
+    expect(tracker.record(completed, 0)).toBe(0.1);
+    expect(tracker.record({ index: 1, key: 'skipped' }, 0.2)).toBeCloseTo(0.3);
+    expect(tracker.record({ index: 2, key: 'failed' }, 0.15)).toBeCloseTo(0.45);
+    expect(tracker.total([completed])).toBeCloseTo(0.95);
+  });
+
+  it('adds discarded retry cost before a lower final observer fallback', () => {
+    const completed = entry(0, workflowResult(0.5), 'completed');
+    const tracker = createWorkflowAttemptCostTracker();
+
+    tracker.record(completed, 0.1);
+    tracker.record(completed, 0.2);
+    expect(tracker.total([completed])).toBeCloseTo(0.6);
+  });
+
+  it('separates sequential duplicate keys when only the first call is live', () => {
+    const live = entry(0, workflowResult(0.4), 'duplicate');
+    const recovered = entry(1, workflowResult(0.7), 'duplicate');
+    const tracker = createWorkflowAttemptCostTracker();
+
+    tracker.record(live, 0.4);
+    expect(tracker.total([live, recovered])).toBe(0.4);
+  });
+
+  it('separates parallel duplicate keys when only one call retries', () => {
+    const retried = entry(0, workflowResult(0.5), 'duplicate');
+    const singleAttempt = entry(1, workflowResult(0.4), 'duplicate');
+    const tracker = createWorkflowAttemptCostTracker();
+
+    // Interleaved callback order models parallel calls. Only index 0 retries.
+    tracker.record(retried, 0.1);
+    tracker.record(singleAttempt, 0.4);
+    tracker.record(retried, 0);
+    expect(tracker.total([retried, singleAttempt])).toBeCloseTo(1);
+  });
+
+  it('settles zero for empty-baseline stable recovery with no callback', () => {
+    const recovered = entry(0, workflowResult(0.5), 'recovered');
+    const tracker = createWorkflowAttemptCostTracker();
+
+    expect(tracker.total([recovered])).toBe(0);
+  });
+
+  it('settles zero for replay and stable recovery after reordering', () => {
+    const first = entry(0, workflowResult(0.4), 'first');
+    const second = entry(1, workflowResult(0.6), 'second');
+    const tracker = createWorkflowAttemptCostTracker();
+
+    expect(
+      tracker.total([
+        entry(0, second.result, second.key),
+        entry(1, first.result, first.key),
+      ]),
+    ).toBe(0);
+  });
+
+  it('retains live spend when the final journal is malformed', () => {
+    const tracker = createWorkflowAttemptCostTracker();
+
+    expect(tracker.record({ index: 0, key: 'live' }, 0.2)).toBe(0.2);
+    expect(() => tracker.total([entry(0, { cost: 1 }, 'live')])).toThrow(
+      WorkflowJournalCostError,
+    );
+  });
+});
+
 describe('workflow-script completed journal cost', () => {
   it('sums canonical workflow and tool-use results independent of entry order', () => {
     const journal = [
@@ -77,53 +149,6 @@ describe('workflow-script completed journal cost', () => {
     delete result.cost;
 
     expect(sumCompletedWorkflowJournalCost([entry(0, result)])).toBe(0);
-  });
-
-  it('charges a live replacement but not stable recoveries moved to new indices', () => {
-    const priorA = entry(2, workflowResult(1), 'aaaaaaaaaaaaaaaa');
-    const priorB = entry(3, workflowResult(0.8), 'bbbbbbbbbbbbbbbb');
-    const priorReplaced = entry(4, workflowResult(0.6), 'dddddddddddddddd');
-    const recoveredAfterReorder = [
-      entry(priorA.index, priorB.result, priorB.key),
-      entry(priorB.index, priorA.result, priorA.key),
-    ];
-    const liveReplacement = entry(
-      priorReplaced.index,
-      workflowResult(0.45),
-      'cccccccccccccccc',
-    );
-    const retry = [...recoveredAfterReorder, liveReplacement];
-
-    expect(
-      sumCurrentWorkflowRunCost(
-        retry,
-        new Map([[workflowJournalEntryCostIdentity(liveReplacement), 0.45]]),
-      ),
-    ).toBe(0.45);
-  });
-
-  it('includes discarded attempts without double-counting completed calls', () => {
-    const retried = entry(0, workflowResult(0.4), 'aaaaaaaaaaaaaaaa');
-    const missingObservedCost = entry(
-      1,
-      workflowResult(0.5),
-      'bbbbbbbbbbbbbbbb',
-    );
-    const skippedIdentity = workflowJournalEntryCostIdentity({
-      index: 2,
-      key: 'cccccccccccccccc',
-    });
-
-    expect(
-      sumCurrentWorkflowRunCost(
-        [retried, missingObservedCost],
-        new Map([
-          [workflowJournalEntryCostIdentity(retried), 0.7],
-          [workflowJournalEntryCostIdentity(missingObservedCost), 0],
-          [skippedIdentity, 0.2],
-        ]),
-      ),
-    ).toBeCloseTo(1.4);
   });
 
   it.each([

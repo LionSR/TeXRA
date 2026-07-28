@@ -3305,7 +3305,8 @@ describe('subscribeRuntimeHost run facts', () => {
     const hub = new SessionEventHub();
     const detach = attachTuiRunFactSubscription(hub);
     patchStream(root, (s) => ({ ...s, status: STREAM_PHASE.RUNNING }));
-    const queue = defaultSession().followUps.acquire(root);
+    const lease = defaultSession().followUps.claimLive(root, 'flow')!;
+    const queue = defaultSession().followUps.queue(lease);
 
     try {
       queue.enqueue({ text: 'Keep the proof under one page.' });
@@ -3335,7 +3336,7 @@ describe('subscribeRuntimeHost run facts', () => {
       expect(slice?.queuedFollowUpMessages).toEqual([]);
     } finally {
       detach();
-      defaultSession().followUps.release(root);
+      defaultSession().followUps.terminalize(root);
     }
   });
 

@@ -49,7 +49,6 @@ export const MAIN_VIEW_COMMANDS = {
   ADD_OPENED_FILES: 'addOpenedFiles',
   ATTACH_DROPPED_FILES: 'attachDroppedFiles',
   POLISH_INSTRUCTION_TEXT: 'polishInstructionText',
-  TRANSCRIBE_INSTRUCTION: 'transcribeInstruction',
   START_RECORDING: 'startRecording',
   STOP_RECORDING: 'stopRecording',
   RECORDING_STOPPED: 'recordingStopped',
