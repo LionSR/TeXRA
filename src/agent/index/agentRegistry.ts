@@ -30,6 +30,12 @@ import {
   TOOL_USE_LOOKUP_PRIORITY,
 } from './agentRegistryConstants';
 import { scanDirectory } from './agentYamlScanner';
+import {
+  clearInlineAgentDefinitions,
+  defineInlineAgents,
+  inlineAgentDefinition,
+  inlineAgentEntries,
+} from './inlineAgents';
 import { loadRemoteAgents, persistRemoteAgentMeta } from './remoteAgentMeta';
 import {
   entriesToOptionData,
@@ -147,6 +153,35 @@ export async function loadAgents(
   return initPromise;
 }
 
+/**
+ * Register agent definitions supplied as values, so an embedder can hand the
+ * runtime an agent without writing a YAML file. Each definition is validated
+ * here (throwing on a malformed one) and published under `inline:<name>` — a
+ * namespace of its own, so an inline agent can never collide with a same-named
+ * `custom` entry, only outrank it in bare-name lookups.
+ *
+ * Safe before or after {@link loadAgents}: entries land in the live cache
+ * immediately and are re-merged by every subsequent load or refresh.
+ */
+export function registerInlineAgents(definitions: readonly unknown[]): void {
+  const toolUseOverrides = getToolUseOverrides();
+  for (const entry of defineInlineAgents(definitions)) {
+    applyToolUseOverride(entry, toolUseOverrides);
+    cache.set(agentKeyOf(entry), entry);
+  }
+}
+
+/**
+ * Remove all inline definitions and their corresponding live registry entries.
+ * The two stores form one public registration state and must change together.
+ */
+export function clearInlineAgents(): void {
+  clearInlineAgentDefinitions();
+  for (const [key, entry] of cache) {
+    if (entry.source === 'inline') cache.delete(key);
+  }
+}
+
 async function doLoad(
   includeRemote: boolean,
   loadEpoch: number,
@@ -172,8 +207,12 @@ async function doLoad(
       includeRemote ? loadRemoteAgents() : Promise.resolve([]),
     ]);
 
-  // Register all entries
+  // Register all entries. Inline definitions were normalized at registration
+  // and live outside the directory scan, so they are re-merged on every load —
+  // a catalog refresh rebuilds the cache from scratch and would otherwise drop
+  // them.
   const allEntries = [
+    ...inlineAgentEntries(),
     ...customEntries,
     ...builtInEntries,
     ...toolUseEntries,
@@ -183,21 +222,13 @@ async function doLoad(
   migrateFilenameAgentNameKeys(allEntries);
 
   // Apply category overrides from config
-  const toolUseOverrides = new Set(
-    platform().workspaceState.get<string[]>(
-      WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
-      [],
-    ),
-  );
+  const toolUseOverrides = getToolUseOverrides();
 
   if (loadEpoch !== registryEpoch) return false;
 
   cache.clear();
   for (const entry of allEntries) {
-    if (toolUseOverrides.has(entry.name)) {
-      entry.category = AgentCategory.ToolUse;
-      entry.rounds = undefined;
-    }
+    applyToolUseOverride(entry, toolUseOverrides);
     cache.set(agentKeyOf(entry), entry);
   }
 
@@ -211,6 +242,25 @@ async function doLoad(
     `Loaded ${cache.size} agents in ${Date.now() - startTime}ms`,
   );
   return true;
+}
+
+function getToolUseOverrides(): Set<string> {
+  return new Set(
+    platform().workspaceState.get<string[]>(
+      WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
+      [],
+    ),
+  );
+}
+
+function applyToolUseOverride(
+  entry: AgentEntry,
+  toolUseOverrides: ReadonlySet<string>,
+): void {
+  if (toolUseOverrides.has(entry.name)) {
+    entry.category = AgentCategory.ToolUse;
+    entry.rounds = undefined;
+  }
 }
 
 /**
@@ -444,7 +494,19 @@ export function resolveAgent(identifier: string): ResolvedAgent | undefined {
 }
 
 function toResolvedAgent(entry: AgentEntry): ResolvedAgent {
-  return { entry, definitionPath: entry.path, resolvedName: entry.name };
+  const resolved: ResolvedAgent = {
+    entry,
+    definitionPath: entry.path,
+    resolvedName: entry.name,
+  };
+  // Carry the inline definition in the resolution so the load path doesn't
+  // re-lookup mutable global state — a re-registration between resolution
+  // and load could otherwise pair a stale entry with a replaced definition
+  // (Fix #9).
+  if (entry.source === 'inline') {
+    resolved.inlineDefinition = inlineAgentDefinition(entry.name);
+  }
+  return resolved;
 }
 
 /**
