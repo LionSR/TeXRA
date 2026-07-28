@@ -137,6 +137,7 @@ export async function resumeQueuedToolUseFromResumeData(
     // cursor accepts either route; the handoff works for both.
     const result = await resumeToolUseFromResumeData(resume, {
       session: options.session,
+      tools: options.tools,
       approvalPromptsUnavailable: options.approvalPromptsUnavailable,
       runtimeUnavailableTools: options.runtimeUnavailableTools,
       parentStreamId:

@@ -75,7 +75,7 @@ describe('run-scoped tool overlay', () => {
     });
     const warn = vi.fn<typeof noopTrace.warn>();
     const logger = { ...noopTrace, warn };
-    const observedToolNames: string[][] = [];
+    const observedTools: { name: string; forceFunctionCall?: boolean }[][] = [];
     const stopAfterObservation = Object.assign(
       new Error('Tool list observed'),
       {
@@ -95,8 +95,10 @@ describe('run-scoped tool overlay', () => {
       getWireRouteKey: () => 'test',
       getModelRetryRouteKey: () => 'test:model',
       extractAssistantText: () => undefined,
-      createResponse: async (options: { tools?: { name: string }[] }) => {
-        observedToolNames.push(options.tools?.map(({ name }) => name) ?? []);
+      createResponse: async (options: {
+        tools?: { name: string; forceFunctionCall?: boolean }[];
+      }) => {
+        observedTools.push(options.tools ?? []);
         throw stopAfterObservation;
       },
     } as unknown as RunToolUseFlowInput['modelHandler'];
@@ -127,7 +129,14 @@ describe('run-scoped tool overlay', () => {
         ),
       ).rejects.toThrow('Tool list observed');
 
-      expect(observedToolNames).toEqual([['first', 'second', 'submit_output']]);
+      expect(observedTools[0]?.map(({ name }) => name)).toEqual([
+        'first',
+        'second',
+        'submit_output',
+      ]);
+      expect(
+        observedTools[0]?.every(({ forceFunctionCall }) => forceFunctionCall),
+      ).toBe(true);
       expect(warn).toHaveBeenCalledWith(
         'Run-scoped tool "first" shadows an existing tool.',
       );

@@ -185,6 +185,23 @@ describe('OpenAI tool conversion', () => {
 });
 
 describe('Anthropic tool conversion', () => {
+  it('keeps a shadowing provider-native name as a function tool', () => {
+    const tools = toAnthropicTools([
+      {
+        name: 'bash',
+        description: 'Caller-supplied bash',
+        forceFunctionCall: true,
+      },
+    ]);
+
+    expect(tools[0]).toMatchObject({
+      name: 'bash',
+      description: 'Caller-supplied bash',
+      input_schema: { type: 'object' },
+    });
+    expect(tools[0]).not.toHaveProperty('type');
+  });
+
   it('uses an empty object input schema when parameters are omitted', () => {
     const tools = toAnthropicTools([
       {
@@ -519,6 +536,23 @@ describe('toOpenAIResponseTools', () => {
     const tool = tools[0] as FunctionTool;
     assert.equal(tool.type, 'function');
     assert.equal(tool.name, def.name);
+  });
+
+  it('keeps a shadowing web_search definition as a function tool', () => {
+    const tools = toOpenAIResponseTools(
+      [
+        {
+          name: 'web_search',
+          description: 'Caller-supplied search',
+          forceFunctionCall: true,
+        },
+      ],
+      { supportsNativeWebSearch: true },
+    );
+
+    assert.equal(tools.length, 1);
+    assert.equal(tools[0].type, 'function');
+    assert.equal((tools[0] as FunctionTool).name, 'web_search');
   });
 
   it('filters out function tools when supportsFunctionCalling is false', () => {
