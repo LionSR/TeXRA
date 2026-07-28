@@ -678,7 +678,6 @@ function expectWorkflowResume(
       executionId,
     },
     expect.objectContaining({
-      interactions: expect.objectContaining({ emit: expect.any(Function) }),
       openWorkflowOutput: expect.any(Function),
     }),
   );
@@ -2296,7 +2295,9 @@ describe('DesktopProgressBridge', () => {
     expect(runAgent).toHaveBeenCalledWith(
       { config: expect.objectContaining(taskState.agentConfig) },
       expect.objectContaining({
-        interactions: expect.objectContaining({ emit: expect.any(Function) }),
+        session: expect.objectContaining({
+          interactions: expect.objectContaining({ emit: expect.any(Function) }),
+        }),
       }),
     );
   });
@@ -2368,7 +2369,7 @@ describe('DesktopProgressBridge', () => {
     );
     let pendingAtAttachment: readonly { text: string; origin?: string }[] = [];
     const resumeToolUseFromResumeData = vi.fn(async (...args: unknown[]) => {
-      const options = args[2] as {
+      const options = args[1] as {
         onFollowUpConsumed?: () => void;
         takePendingFollowUps(): readonly { text: string; origin?: string }[];
       };
@@ -2408,14 +2409,12 @@ describe('DesktopProgressBridge', () => {
           streamId: 'stream-1',
           parentStreamId,
         }),
-        expect.objectContaining({ emit: expect.any(Function) }),
         expect.objectContaining({
           takePendingFollowUps: expect.any(Function),
         }),
       );
-      const [, , resumeOptions] = resumeToolUseFromResumeData.mock
+      const [, resumeOptions] = resumeToolUseFromResumeData.mock
         .calls[0] as unknown as [
-        unknown,
         unknown,
         {
           drainedFollowUps?: readonly { text: string; origin?: string }[];

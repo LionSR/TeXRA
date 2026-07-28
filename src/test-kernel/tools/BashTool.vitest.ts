@@ -650,7 +650,7 @@ describe('BashTool', () => {
     try {
       const launchResult = await withToolEnvironment(
         {
-          run: { streamId: parentStreamId },
+          run: { streamId: parentStreamId, session: defaultSession() },
           call: { tracker: new FileInteractionState() },
         },
         () =>
@@ -730,7 +730,7 @@ describe('BashTool', () => {
     try {
       const launchResult = await withToolEnvironment(
         {
-          run: { streamId: parentStreamId },
+          run: { streamId: parentStreamId, session: defaultSession() },
           call: { tracker: new FileInteractionState() },
         },
         () =>
@@ -807,7 +807,7 @@ describe('BashTool', () => {
     try {
       const launchResult = await withToolEnvironment(
         {
-          run: { streamId: parentStreamId },
+          run: { streamId: parentStreamId, session: defaultSession() },
           call: { tracker: new FileInteractionState() },
         },
         () =>
@@ -866,7 +866,7 @@ describe('BashTool', () => {
 
     const launchResult = await withToolEnvironment(
       {
-        run: { streamId: parentStreamId },
+        run: { streamId: parentStreamId, session: defaultSession() },
         call: { tracker: new FileInteractionState() },
       },
       () =>

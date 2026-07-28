@@ -47,7 +47,7 @@ vi.mock('@agent/runtime/RunContext', () => ({
   getRunContextExecutionId: (ctx: any) => ctx?.executionId,
   getRunContextStreamId: (ctx: any) => ctx?.streamId,
   getRunContextWorkingDirectory: (ctx: any) => ctx?.workingDirectory,
-  getRunContextRuntimeHost: (ctx: any) => ctx?.interactions,
+  getRunContextInteractions: (ctx: any) => ctx?.interactions,
 }));
 
 vi.mock('@agent/runtime/SessionHandle', () => ({

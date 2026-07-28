@@ -111,6 +111,7 @@ function parentRunContext(
     streamId: 'parent-stream',
     executionId: 'parent-exec',
     model: 'deepseekT',
+    session: defaultSession(),
     ...overrides,
   });
 }
