@@ -88,11 +88,11 @@ import {
 // Third-party imports
 import type { Options as ClaudeAgentSdkOptions } from '@anthropic-ai/claude-agent-sdk';
 
-let _configModule: typeof import('./claudeAgentConfig') | null = null;
+let _configModule: typeof import('./claudeAgentConfig.js') | null = null;
 async function getClaudeAgentConfig(): Promise<
-  typeof import('./claudeAgentConfig')
+  typeof import('./claudeAgentConfig.js')
 > {
-  return (_configModule ??= await import('./claudeAgentConfig'));
+  return (_configModule ??= await import('./claudeAgentConfig.js'));
 }
 
 // ============================================================================

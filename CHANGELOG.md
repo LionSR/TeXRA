@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Shared (all surfaces)
+
+#### New Features
+
+- **Embeddable agent package** — Node applications can install
+  `@texra-ai/agent`, load agents from a chosen directory, stream run events,
+  and await the final result.
+
 ## [0.39.9] - 2026-07-26
 
 ### Shared (all surfaces)

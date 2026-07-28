@@ -7,7 +7,7 @@
     "packages/*"
   ],
   "scripts": {
-    "lint": "node --max-old-space-size=6144 ./node_modules/eslint/bin/eslint.js src packages/extension/src packages/desktop/src packages/cli/src \"packages/cli/scripts/**/*.{ts,tsx}\"",
+    "lint": "node --max-old-space-size=6144 ./node_modules/eslint/bin/eslint.js src packages/agent/src packages/agent/scripts packages/extension/src packages/desktop/src packages/cli/src \"packages/cli/scripts/**/*.{ts,tsx}\"",
     "test": "vitest run --config vitest.config.mjs",
     "test:watch": "vitest --config vitest.config.mjs",
     "desktop:build": "corepack pnpm --filter @texra/trace-viewer run build && corepack pnpm --filter @texra/desktop build",
@@ -22,7 +22,7 @@
     "capture:walkthrough-media": "node scripts/capture-walkthrough-media.mjs",
     "smoke:webviews": "corepack pnpm run vite:webviews && corepack pnpm run smoke:webviews:run",
     "smoke:webviews:run": "node scripts/smoke-webviews-electron.mjs",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test-kernel.json && corepack pnpm --filter texra typecheck && corepack pnpm --filter @texra-ai/cli typecheck && corepack pnpm --filter @texra/trace-viewer run typecheck && corepack pnpm --filter @texra/desktop typecheck",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test-kernel.json && corepack pnpm --filter @texra-ai/agent build && corepack pnpm --filter texra typecheck && corepack pnpm --filter @texra-ai/cli typecheck && corepack pnpm --filter @texra/trace-viewer run typecheck && corepack pnpm --filter @texra/desktop typecheck",
     "compile:fast": "corepack pnpm --filter texra compile:fast",
     "compile:safe": "npm run typecheck && npm run compile:fast",
     "watch:fast": "corepack pnpm --filter texra watch:fast",

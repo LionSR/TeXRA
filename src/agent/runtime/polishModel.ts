@@ -1,4 +1,4 @@
-import * as nunjucks from 'nunjucks';
+import nunjucks from 'nunjucks';
 import { z } from 'zod';
 
 import { parseYamlWith } from '@common/parsing/safeParseYaml';

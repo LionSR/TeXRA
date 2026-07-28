@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import * as nunjucks from 'nunjucks';
+import nunjucks from 'nunjucks';
 import pRetry from 'p-retry';
 import { z } from 'zod';
 
