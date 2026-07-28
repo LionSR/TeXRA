@@ -31,7 +31,7 @@ canonical host-agnostic collaborator outside `core` directly instead of
 injecting a second reference to the same run-owned service. For example,
 `RetryState.ts` reads the current session through `@agent/runtime/RunContext`,
 `ResponseCycleFlow.ts` calls `@agent/runtime/textConnection`, and
-`RetryState.ts` calls `@auth/SupabaseClient` for relay-401 token refresh. This
+`RetryState.ts` calls `includedModelAccess()` for relay-401 token refresh. This
 is the same pattern `@agent/modelHandlers` already uses, not a `core`-specific
 exception. None of this pulls in `vscode` or `packages/*`; it's still
 host-agnostic, just not self-contained within `core`'s own module boundaries.

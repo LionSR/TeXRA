@@ -171,4 +171,40 @@ describe('TierService', () => {
     expect(service.getConfigSync()).toBeNull();
     expect(service.getSpendingStatus()).toBeNull();
   });
+
+  it('parses and reports an authenticated spend-check failure', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(
+          jsonResponse(
+            tierConfig({
+              spendingStatus: null,
+              spendingStatusError: {
+                spendCheckFailed: true,
+                failureReason: 'usage query unavailable',
+                limit: 300,
+              },
+            }),
+          ),
+        ),
+      ),
+    );
+    const warn = vi.fn();
+    const service = new TierService('https://example.test', { warn });
+
+    expect(await service.getConfig('token')).not.toBeNull();
+
+    expect(service.getSpendingStatus()).toBeNull();
+    expect(service.getSpendingStatusError()).toEqual({
+      spendCheckFailed: true,
+      failureReason: 'usage query unavailable',
+      limit: 300,
+    });
+    expect(warn).toHaveBeenCalledWith(
+      'TierService',
+      'Relay spend check failed',
+      { data: { failureReason: 'usage query unavailable' } },
+    );
+  });
 });
