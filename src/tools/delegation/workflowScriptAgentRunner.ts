@@ -11,7 +11,6 @@ import {
 } from '@agent/workflowScript';
 import type { AgentEntry } from '@agent/index/agentRegistry';
 import type { LaunchRunContext } from '@agent/runtime/RunContext';
-import { getStreamTabId } from '@agent/runtime/streamTab';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { formatError } from '@common/errors';
 import { AgentCategory } from '@shared/schemas';
@@ -335,18 +334,6 @@ export function createWorkflowScriptAgentRunner(
           // Surface the resolved child model so the engine can attach it to
           // this call's `agent:end` progress event.
           invocation.reportModel?.(configPayload.model);
-          if (invocation.reportChildStream !== undefined) {
-            if (activeExecutionId === undefined) {
-              throw new Error(
-                'Workflow child execution identity was not resolved before launch preparation.',
-              );
-            }
-            invocation.reportChildStream(
-              getStreamTabId(configPayload.agent, configPayload.model, {
-                executionId: activeExecutionId,
-              }),
-            );
-          }
           return {
             configPayload,
             agentName,
@@ -366,6 +353,7 @@ export function createWorkflowScriptAgentRunner(
             // inherits from the orchestrator, so nested delegation remains
             // transitive.
             onStreamResolved: (resolvedStreamId) => {
+              invocation.reportChildStream?.(resolvedStreamId);
               configureDelegatedChildApprovals(
                 resolvedStreamId,
                 run.streamId,
@@ -381,11 +369,16 @@ export function createWorkflowScriptAgentRunner(
         activeExecutionId === undefined &&
         invocation.reportChildStream !== undefined
       ) {
-        const recoveredStreamId = (
-          await getExecutionStore(completed.executionId).readMeta()
-        )?.streamId;
-        if (recoveredStreamId !== undefined) {
-          invocation.reportChildStream(recoveredStreamId);
+        try {
+          const recoveredStreamId = (
+            await getExecutionStore(completed.executionId).readMeta()
+          )?.streamId;
+          if (recoveredStreamId !== undefined) {
+            invocation.reportChildStream(recoveredStreamId);
+          }
+        } catch {
+          // A recovered result is authoritative. Navigation metadata is
+          // optional and must not invalidate the completed computation.
         }
       }
       const { result } = completed;
