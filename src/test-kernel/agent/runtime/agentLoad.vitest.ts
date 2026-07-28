@@ -490,6 +490,31 @@ describe('inline agent definitions', () => {
     );
   });
 
+  it('does not expose stored entry arrays through the live registry', async () => {
+    registerInlineAgents([
+      {
+        name: 'immutableEntry',
+        settings: {
+          agentCategory: AgentCategory.ToolUse,
+          tools: ['grep'],
+          defaultOutputFiles: ['report.md'],
+        },
+        prompts: {},
+      },
+    ]);
+
+    const first = getAgent('inline:immutableEntry');
+    assert.ok(first?.tools);
+    assert.ok(first.defaultOutputFiles);
+    first.tools.push('bash');
+    first.defaultOutputFiles.push('mutated.md');
+
+    await refresh({ includeRemote: false });
+    const restored = getAgent('inline:immutableEntry');
+    assert.deepStrictEqual(restored?.tools, ['grep']);
+    assert.deepStrictEqual(restored?.defaultOutputFiles, ['report.md']);
+  });
+
   it('preserves runtime schemas in object-form tool definitions', async () => {
     const runtimeSchema = z.strictObject({ query: z.string() });
     const parameters = {
