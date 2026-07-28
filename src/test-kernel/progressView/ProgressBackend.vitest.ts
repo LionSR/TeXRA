@@ -305,6 +305,128 @@ async function expectDeletionBeforeStorageRootReplacement(
   }
 }
 
+async function expectDeletionCanReleaseRootReplacement(
+  deletionKind: 'one-stream' | 'all-streams',
+): Promise<void> {
+  const session = createTestSession();
+  const stream = `${deletionKind}-releases-root-move` as StreamTabId;
+  const operations: string[] = [];
+  let releaseReload: (() => void) | undefined;
+  const reloadBlocked = new Promise<void>((resolve) => {
+    releaseReload = resolve;
+  });
+  const reloadAfterStorageRootChange = vi
+    .spyOn(session, 'reloadAfterStorageRootChange')
+    .mockImplementation(async () => {
+      operations.push('reload:start');
+      await reloadBlocked;
+      operations.push('reload:end');
+      return false;
+    });
+  const lifecycle = createLifecycleOptions({
+    stopStream: vi.fn(() => {
+      operations.push('stop');
+      releaseReload?.();
+    }),
+  });
+  const { backend } = createIsolatedRecordingBackend(session, lifecycle);
+  backend.state.streamLogs.ensureStream(stream);
+  session.status.transition(
+    stream,
+    STREAM_PHASE.RUNNING,
+    STREAM_TRANSITION_CAUSE.LIFECYCLE,
+  );
+  vi.spyOn(session.executions, 'getAgentHandleByStream').mockReturnValue(
+    {} as never,
+  );
+  vi.spyOn(backend.state, 'waitForOwnedExecutionRelease').mockResolvedValue();
+  if (deletionKind === 'one-stream') {
+    vi.spyOn(backend.state, 'clearStream').mockImplementation(async () => {
+      operations.push('delete');
+      return 'deleted';
+    });
+  } else {
+    vi.spyOn(backend.state, 'clearAll').mockImplementation(async () => {
+      operations.push('delete');
+      return { active: new Set(), failed: new Set() };
+    });
+  }
+
+  try {
+    const workspaceMove = backend.reloadAfterStorageRootChange();
+    await vi.waitFor(() =>
+      expect(reloadAfterStorageRootChange).toHaveBeenCalledOnce(),
+    );
+    const deletion =
+      deletionKind === 'one-stream'
+        ? backend.deleteStream(stream)
+        : backend.deleteAllStreams();
+
+    await deletion;
+    await workspaceMove;
+
+    expect(operations).toEqual([
+      'reload:start',
+      'stop',
+      'reload:end',
+      'delete',
+    ]);
+  } finally {
+    releaseReload?.();
+    backend.dispose();
+    session.dispose();
+  }
+}
+
+async function expectRetentionNoticeDoesNotBlockStorageRootReplacement(
+  deletionKind: 'one-stream' | 'all-streams',
+): Promise<void> {
+  let finishNotice: (() => void) | undefined;
+  const noticeBlocked = new Promise<void>((resolve) => {
+    finishNotice = resolve;
+  });
+  const lifecycle = createLifecycleOptions({
+    notifyDeletionRetained: vi.fn(() => noticeBlocked),
+  });
+  const session = createTestSession();
+  const reloadAfterStorageRootChange = vi
+    .spyOn(session, 'reloadAfterStorageRootChange')
+    .mockResolvedValue(false);
+  const { backend } = createIsolatedRecordingBackend(session, lifecycle);
+  const stream = `${deletionKind}-retained-before-root-move` as StreamTabId;
+  backend.state.streamLogs.ensureStream(stream);
+  if (deletionKind === 'one-stream') {
+    vi.spyOn(backend.state, 'clearStream').mockResolvedValue('active');
+  } else {
+    vi.spyOn(backend.state, 'clearAll').mockResolvedValue({
+      active: new Set([stream]),
+      failed: new Set(),
+    });
+  }
+
+  try {
+    const deletion =
+      deletionKind === 'one-stream'
+        ? backend.deleteStream(stream)
+        : backend.deleteAllStreams();
+    await vi.waitFor(() =>
+      expect(lifecycle.notifyDeletionRetained).toHaveBeenCalled(),
+    );
+    const workspaceMove = backend.reloadAfterStorageRootChange();
+
+    await vi.waitFor(() =>
+      expect(reloadAfterStorageRootChange).toHaveBeenCalledOnce(),
+    );
+    finishNotice?.();
+    await deletion;
+    await workspaceMove;
+  } finally {
+    finishNotice?.();
+    backend.dispose();
+    session.dispose();
+  }
+}
+
 describe('ProgressBackend', () => {
   it('loads an unfiltered presentation without reloading its live transcript', async () => {
     const transcripts = await StreamLogStore.open();
@@ -531,6 +653,24 @@ describe('ProgressBackend', () => {
 
   it('finishes an all-stream deletion before replacing the storage root', async () => {
     await expectDeletionBeforeStorageRootReplacement('all-streams');
+  });
+
+  it('lets one-stream deletion release a root replacement ahead of it', async () => {
+    await expectDeletionCanReleaseRootReplacement('one-stream');
+  });
+
+  it('lets all-stream deletion release a root replacement ahead of it', async () => {
+    await expectDeletionCanReleaseRootReplacement('all-streams');
+  });
+
+  it('does not retain the storage queue for a one-stream notice', async () => {
+    await expectRetentionNoticeDoesNotBlockStorageRootReplacement('one-stream');
+  });
+
+  it('does not retain the storage queue for an all-stream notice', async () => {
+    await expectRetentionNoticeDoesNotBlockStorageRootReplacement(
+      'all-streams',
+    );
   });
 
   it('projects every approval bypass kind through one backend port', () => {
