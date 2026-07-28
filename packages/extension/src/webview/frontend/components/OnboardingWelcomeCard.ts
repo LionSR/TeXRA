@@ -299,7 +299,7 @@ export class OnboardingWelcomeCard extends LitElement {
                 size="m"
                 @click=${this.handleChatGpt}
               >
-                ${waIcon('comment-discussion', { slot: 'start' })}
+                ${waIcon('comments', { slot: 'start' })}
                 ${ONBOARDING_CHOICE_CHATGPT.label}
               </wa-button>
               <span class="choice-description">

@@ -74,7 +74,8 @@ import {
   renderIconActionButton,
   renderLabeledActionButton,
 } from '@shared/wa/actionButtons';
-import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 import {
   DesktopSaveFileMessageSchema,
@@ -741,14 +742,12 @@ function environmentPopoverTemplate(
           ?disabled=${environmentLoading}
           @click=${requestEnvironmentSummary}
         >
-          ${waIcon(environmentLoading ? 'spinner' : 'refresh')}
+          ${waIcon(environmentLoading ? 'spinner' : 'rotate-right')}
         </wa-button>
       </div>
       <div class="task-environment-section">
         <div class="task-environment-row">
-          <span class="task-environment-row-icon"
-            >${waIcon('diff-multiple')}</span
-          >
+          <span class="task-environment-row-icon">${waIcon('plus-minus')}</span>
           <span>Changes</span>
           <span class="task-environment-trailing task-environment-diff">
             <span class="is-added">+${environmentSummary?.additions ?? 0}</span>
@@ -776,7 +775,7 @@ function environmentPopoverTemplate(
           ${environmentSyncTemplate(environmentSummary)}
         </div>
         <div class="task-environment-row">
-          <span class="task-environment-row-icon">${waIcon('git-commit')}</span>
+          <span class="task-environment-row-icon">${waIcon('circle-dot')}</span>
           <span>Commit or push</span>
           <span class="task-environment-trailing">
             ${

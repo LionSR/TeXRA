@@ -521,7 +521,7 @@ export class MainApp extends MainAppBase {
                 aria-labelledby="desktopLauncherTitle"
               >
                 <div class="desktop-launcher-mark" aria-hidden="true">
-                  ${waIcon('sparkle')}
+                  ${waIcon('wand-magic-sparkles')}
                 </div>
                 <h1 id="desktopLauncherTitle">What are you working on?</h1>
                 <p>

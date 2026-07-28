@@ -8,6 +8,7 @@
 import PQueue from 'p-queue';
 
 import { getExecutionStore } from '@agent/storage';
+import type { FollowUpRecoveryLease } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -36,6 +37,7 @@ import {
 } from '@cli/runtime/sessionResume';
 import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
 import { CLI_UNAVAILABLE_TOOLS } from '@cli/runtime/unavailableTools';
+import type { RecoveryContinuation } from '@platform/interfaces';
 import {
   RUN_OUTCOME,
   STREAM_PHASE,
@@ -101,8 +103,9 @@ interface SupersededInterruptedRecovery {
 }
 
 interface AutoResumeOptions {
+  readonly recovery?: RecoveryContinuation;
   readonly extraFollowUps?: readonly InterruptedFollowUp[];
-  readonly onFollowUpQueueReady?: () => void;
+  readonly onFollowUpQueueReady?: (recovery: FollowUpRecoveryLease) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -152,7 +155,10 @@ export interface ChatSessionController {
    * Attempt to resume a queued follow-up target from the CLI platform port.
    * Returns true only when this controller accepts the target resume.
    */
-  tryResumeStream(streamId: StreamTabId): Promise<boolean>;
+  tryResumeStream(
+    streamId: StreamTabId,
+    recovery?: RecoveryContinuation,
+  ): Promise<boolean>;
 
   /** Whether a new root run can be started right now. */
   canStartRootRun(): boolean;
@@ -233,19 +239,17 @@ export function createChatSessionController(
     return streamId ? { streamId, followUps } : undefined;
   };
 
-  const enqueueRecoveryFollowUps = (
+  const restoreRecoveryFollowUps = (
     recovery: SupersededInterruptedRecovery | undefined,
-    streamId: StreamTabId,
+    lease: FollowUpRecoveryLease,
   ): void => {
-    for (const followUp of recovery?.followUps ?? []) {
-      defaultSession().followUps.enqueue(streamId, followUp, { force: true });
-    }
+    defaultSession().followUps.restore(lease, recovery?.followUps ?? []);
     if (recovery?.followUps.length) {
       defaultSession().events.emit({
         scope: 'session',
         event: {
           type: 'updateQueuedFollowUps',
-          payload: { streamId },
+          payload: { streamId: lease.streamId },
         },
       });
     }
@@ -574,8 +578,12 @@ export function createChatSessionController(
 
   const tryResumeStream = (
     streamId: StreamTabId,
-    options: AutoResumeOptions = {},
+    recoveryOrOptions: RecoveryContinuation | AutoResumeOptions = {},
   ): Promise<boolean> => {
+    const options: AutoResumeOptions =
+      'kind' in recoveryOrOptions
+        ? { recovery: recoveryOrOptions }
+        : recoveryOrOptions;
     let resolveRun: (resumed: boolean) => void = () => {};
     let rejectRun: (error: unknown) => void = () => {};
     const runPromise = new Promise<boolean>((resolve, reject) => {
@@ -631,48 +639,58 @@ export function createChatSessionController(
         let resumedOutcome: Parameters<typeof runOutcomeExitCode>[0] =
           RUN_OUTCOME.COMPLETED;
         const resumed = await setCliHelperModel(currentModel).then(() =>
-          resolveAndResumeStream(streamId, {
-            runtimeHost,
-            streamStatus: defaultSession().status,
-            isCancellationRequested: () => session.stopRequested,
-            resolveResumeState: async () => ({
-              runState: config,
-              executionId,
-              parentStreamId,
-            }),
-            resumeToolUse: (resume) =>
-              resumeQueuedToolUseFromResumeData(streamId, resume, runtimeHost, {
-                session: defaultSession(),
-                approvalPromptsUnavailable: approvalsUnavailable,
-                runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
-                extraFollowUps: options.extraFollowUps,
-                onFollowUpQueueReady: () => {
-                  if (options.onFollowUpQueueReady) {
-                    options.onFollowUpQueueReady();
-                  } else {
-                    const recovery = supersedeInterruptedRecovery();
-                    enqueueRecoveryFollowUps(recovery, streamId);
-                  }
-                },
-                isCancellationRequested: () => session.stopRequested,
-                onResult: (result) => {
-                  resumedOutcome = result.outcome;
-                },
-                onError: reportRunFailure,
+          resolveAndResumeStream(
+            streamId,
+            {
+              runtimeHost,
+              streamStatus: defaultSession().status,
+              isCancellationRequested: () => session.stopRequested,
+              resolveResumeState: async () => ({
+                runState: config,
+                executionId,
+                parentStreamId,
               }),
-            executeWorkflow: async () => {
-              throw new Error(
-                'CLI chat cannot auto-resume workflow streams from follow-up wake.',
-              );
+              resumeToolUse: (resume, claimedRecovery) =>
+                resumeQueuedToolUseFromResumeData(
+                  streamId,
+                  resume,
+                  runtimeHost,
+                  {
+                    session: defaultSession(),
+                    recovery: claimedRecovery,
+                    approvalPromptsUnavailable: approvalsUnavailable,
+                    runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
+                    extraFollowUps: options.extraFollowUps,
+                    onFollowUpQueueReady: (lease) => {
+                      if (options.onFollowUpQueueReady) {
+                        options.onFollowUpQueueReady(lease);
+                      } else {
+                        const recovery = supersedeInterruptedRecovery();
+                        restoreRecoveryFollowUps(recovery, lease);
+                      }
+                    },
+                    isCancellationRequested: () => session.stopRequested,
+                    onResult: (result) => {
+                      resumedOutcome = result.outcome;
+                    },
+                    onError: reportRunFailure,
+                  },
+                ),
+              executeWorkflow: async () => {
+                throw new Error(
+                  'CLI chat cannot auto-resume workflow streams from follow-up wake.',
+                );
+              },
+              reportNoResumableSession: () => {
+                appendLocalAssistantTranscript(
+                  'Message queued. Auto-resume found no resumable session state; resume the session manually or start a new agent task.',
+                  streamId,
+                );
+              },
+              reportFailure: (_failedStream, error) => reportRunFailure(error),
             },
-            reportNoResumableSession: () => {
-              appendLocalAssistantTranscript(
-                'Message queued. Auto-resume found no resumable session state; resume the session manually or start a new agent task.',
-                streamId,
-              );
-            },
-            reportFailure: (_failedStream, error) => reportRunFailure(error),
-          }),
+            options.recovery,
+          ),
         );
 
         if (resumed) {

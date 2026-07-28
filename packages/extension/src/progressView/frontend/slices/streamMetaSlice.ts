@@ -97,9 +97,6 @@ export const streamMetaHandlers = {
         if (data.activeStream !== undefined) {
           draft.activeStreamId = data.activeStream || null;
         }
-        if (data.agentFilter !== undefined) {
-          draft.streamFilter = data.agentFilter;
-        }
       }),
     );
   },

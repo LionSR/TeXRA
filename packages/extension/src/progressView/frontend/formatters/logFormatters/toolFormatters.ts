@@ -24,7 +24,8 @@ import {
   DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
   DELEGATION_TOOL_CATEGORY,
 } from '@shared/constants/delegationTools';
-import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { toolDisplayKind } from '@shared/tools/toolKind';
 import { deriveToolInputPreview } from '@shared/tools/toolInputPreview';
 import {
