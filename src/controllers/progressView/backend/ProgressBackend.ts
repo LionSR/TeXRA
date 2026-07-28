@@ -106,6 +106,7 @@ export class ProgressBackend {
   ) => void;
   private readonly stateOwnership: 'backend' | 'session';
   private readonly storageOperationQueue = new PQueue({ concurrency: 1 });
+  private storageGeneration = 0;
   private presentationReloadPending = false;
   private disposed = false;
 
@@ -174,9 +175,13 @@ export class ProgressBackend {
 
   async deleteStream(stream: StreamTabId): Promise<void> {
     const wasActive = this.state.activeStream === stream;
+    const storageGeneration = this.storageGeneration;
     const retained = await this.enqueuePreparedStorageOperation(
       () => this.prepareStreamDeletion(stream),
-      () => this.deleteStreamNow(stream, wasActive),
+      () =>
+        storageGeneration === this.storageGeneration
+          ? this.deleteStreamNow(stream, wasActive)
+          : Promise.resolve(undefined),
     );
     if (retained) await this.notifyDeletionRetained(retained);
   }
@@ -261,9 +266,13 @@ export class ProgressBackend {
   }
 
   async deleteAllStreams(): Promise<void> {
+    const storageGeneration = this.storageGeneration;
     const retained = await this.enqueuePreparedStorageOperation(
       () => this.prepareAllStreamDeletions(),
-      () => this.deleteAllStreamsNow(),
+      () =>
+        storageGeneration === this.storageGeneration
+          ? this.deleteAllStreamsNow()
+          : Promise.resolve(undefined),
     );
     if (retained) {
       await this.lifecycle.notifyDeletionRetained(
@@ -343,6 +352,7 @@ export class ProgressBackend {
         sessionReloadError = error;
       }
       if (sessionReloadError || storageRootReplaced) {
+        this.storageGeneration += 1;
         this.presentationReloadPending = true;
       }
       if (!this.presentationReloadPending) return;
