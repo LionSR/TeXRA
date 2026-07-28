@@ -409,7 +409,7 @@ export class ProgressBackend {
       await preparation;
       return work();
     });
-    const pendingPreparation = prepare();
+    const pendingPreparation = Promise.resolve().then(prepare);
     // If an earlier queue entry is still running, attach a rejection handler
     // until this operation reaches the same promise.
     void preparation.catch(() => undefined);
