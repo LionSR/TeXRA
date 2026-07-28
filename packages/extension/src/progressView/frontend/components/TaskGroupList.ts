@@ -29,6 +29,7 @@ import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 import { isInFlightPhase } from '@shared/streams/streamStatus';
+import { formatRoundStageLabel } from '@shared/streams/streamStatusDisplay';
 import { parseWorkflowOutputRoundDir } from '@shared/constants/workflowOutput';
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 import { scrollToBottom } from '@shared/utils/dom';
@@ -523,9 +524,16 @@ export class TaskGroupList extends LitElement {
       group.index !== undefined && group.total !== undefined
         ? ` (${group.index + 1}/${group.total})`
         : '';
+    const title =
+      group.kind === 'round' && group.index !== undefined
+        ? formatRoundStageLabel({
+            index: group.index,
+            total: group.total,
+          })
+        : `${group.name}${positionText}`;
     return html`
       <span class="group-status-icon"> ${waIcon(statusIcon)} </span>
-      <span class="group-title">${group.name}${positionText}</span>
+      <span class="group-title">${title}</span>
       ${this.renderGroupProgress(group, messages)}
       <span class="group-time">
         <span class="group-start-time" data-start=${String(group.startTime)}>

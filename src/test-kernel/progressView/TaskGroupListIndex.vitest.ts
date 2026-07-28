@@ -381,6 +381,32 @@ describe('task-group-list orphan re-rooting', () => {
 // STOPPED default, and a cancelled group no longer renders identically to a
 // completed one.
 describe('task-group-list status icon (#7993 step 3)', () => {
+  it('formats round group titles with the shared one-based label', async () => {
+    const parent: TaskGroup = {
+      id: 'run',
+      name: 'Run: reflection',
+      startTime: 1,
+      status: STREAM_PHASE.RUNNING,
+    };
+    const round: TaskGroup = {
+      id: 'round-0',
+      name: 'r0',
+      kind: 'round',
+      index: 0,
+      total: 3,
+      startTime: 2,
+      status: STREAM_PHASE.RUNNING,
+      parentGroupId: 'run',
+    };
+
+    const list = await renderList([parent, round], []);
+    const title = list.shadowRoot
+      ?.querySelector(`#${GROUP_DOM_IDS.HEADER_PREFIX}round-0 .group-title`)
+      ?.textContent?.trim();
+
+    expect(title).toBe('r1/3');
+  });
+
   it('renders a distinct icon for completed, cancelled, and failed groups', async () => {
     const parent: TaskGroup = {
       id: 'run',

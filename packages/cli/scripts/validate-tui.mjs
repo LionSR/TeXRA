@@ -153,7 +153,7 @@ const SCENARIOS = [
     bootExpect: 'Tab children',
     keys: ['\t', DOWN, '\r'],
     expect: [
-      'repositoryAudit completed',
+      'repositoryAudit Finished',
       'Generated files',
       'paper.tex',
       'Compile check failed',

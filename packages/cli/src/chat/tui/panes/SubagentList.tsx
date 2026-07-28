@@ -7,6 +7,7 @@ import { useMemo } from 'react';
 // Local imports - shared stream state
 import {
   AgentCategory,
+  WORKFLOW_TASK_STATUS_LABEL,
   type StreamTabId,
   type WorkflowCallProgress,
 } from '@shared/schemas';
@@ -19,6 +20,7 @@ import {
   formatPhaseStageLabel,
   formatRoundStageLabel,
   formatStreamStatusLabel,
+  streamStatusDisplayKey,
 } from '@shared/streams/streamStatusDisplay';
 import { formatResultCount } from '@utils/text/stringUtils';
 
@@ -132,11 +134,23 @@ function SessionRow({
   readonly session: StreamView;
 }): React.JSX.Element {
   const status = session.slice?.status;
-  const statusLabel = formatStreamStatusLabel(status, {
-    style: 'cli',
-    isChildStream: session.parentId !== undefined,
-    ...(session.slice?.substate ? { substate: session.slice.substate } : {}),
-  });
+  const substate = session.slice?.substate;
+  const statusKey = streamStatusDisplayKey(status, substate);
+  const childStatusLabel =
+    session.parentId !== undefined &&
+    statusKey !== undefined &&
+    Object.hasOwn(WORKFLOW_TASK_STATUS_LABEL, statusKey)
+      ? WORKFLOW_TASK_STATUS_LABEL[
+          statusKey as keyof typeof WORKFLOW_TASK_STATUS_LABEL
+        ]
+      : undefined;
+  const statusLabel =
+    childStatusLabel ??
+    formatStreamStatusLabel(status, {
+      style: 'cli',
+      isChildStream: session.parentId !== undefined,
+      ...(substate ? { substate } : {}),
+    });
   const elapsed = childElapsed(
     {
       status,

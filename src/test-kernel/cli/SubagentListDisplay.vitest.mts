@@ -579,9 +579,9 @@ describe('CLI child list display model', () => {
 
     expect(sessions.find(({ id }) => id === bash)?.toolName).toBe('bash');
     expect(sessions.find(({ id }) => id === agent)?.toolName).toBeUndefined();
-    expect(output.match(/bash running/g)).toHaveLength(2);
+    expect(output.match(/bash Running/g)).toHaveLength(2);
     expect(output).not.toContain('gemini35f');
-    expect(output).toContain('bash running · gpt56');
+    expect(output).toContain('bash Running · gpt56');
     expect(output).toContain('5 tool calls');
     expect(output).toContain('↓40k');
   });
@@ -615,6 +615,48 @@ describe('CLI child list display model', () => {
     expect(output).toContain('devise completed');
     expect(output).not.toContain('in:2');
     expect(output).not.toContain('ctx:1');
+  });
+
+  it('uses canonical task status labels for child rows', async () => {
+    const { ink, React } = await loadInk();
+    const root = 'root' as StreamTabId;
+    const output = await renderOutputAtTerminalSize(
+      ink,
+      React.createElement(SubagentList, {
+        maxRows: 5,
+        sessions: [
+          {
+            id: 'done' as StreamTabId,
+            label: 'reviewer',
+            parentId: root,
+            slice: workflowAgentSlice('done', {
+              status: STREAM_PHASE.COMPLETED,
+            }),
+          },
+          {
+            id: 'failed' as StreamTabId,
+            label: 'critic',
+            parentId: root,
+            slice: workflowAgentSlice('failed', {
+              status: STREAM_PHASE.FAILED,
+            }),
+          },
+          {
+            id: 'waiting' as StreamTabId,
+            label: 'editor',
+            parentId: root,
+            slice: workflowAgentSlice('waiting', {
+              status: STREAM_PHASE.WAITING,
+            }),
+          },
+        ],
+      }),
+      100,
+    );
+
+    expect(output).toContain('reviewer Finished');
+    expect(output).toContain('critic Failed');
+    expect(output).toContain('editor Waiting for follow-up');
   });
 
   it.each([120, 80, 64, 56])(
@@ -737,23 +779,23 @@ describe('CLI child list display model', () => {
 
     expect(output).toContain('◆ Map');
     expect(output).toContain('◆ Reduce');
-    expect(output).toContain('loose-agent running');
+    expect(output).toContain('loose-agent Running');
     // The phase-less row sits above every header, so no header can be read as
     // owning it.
-    expect(output.indexOf('loose-agent running')).toBeLessThan(
+    expect(output.indexOf('loose-agent Running')).toBeLessThan(
       output.indexOf('◆'),
     );
     // One header per phase, and each group's rows still follow its own header.
     expect(output.split('◆ Map')).toHaveLength(2);
     expect(output.split('◆ Reduce')).toHaveLength(2);
     expect(output.indexOf('◆ Map')).toBeLessThan(
-      output.indexOf('map-agent running'),
+      output.indexOf('map-agent Running'),
     );
-    expect(output.indexOf('map-agent running')).toBeLessThan(
+    expect(output.indexOf('map-agent Running')).toBeLessThan(
       output.indexOf('◆ Reduce'),
     );
     expect(output.indexOf('◆ Reduce')).toBeLessThan(
-      output.indexOf('reduce-agent running'),
+      output.indexOf('reduce-agent Running'),
     );
   });
 
@@ -1039,7 +1081,7 @@ describe('CLI child list display model', () => {
         { until: (frame) => frame.includes('writer') },
       );
 
-      expect(output).toContain('writer running');
+      expect(output).toContain('writer Running');
       expect(output.includes('5 tool calls · ↓40k')).toBe(metadataColumn);
     },
   );
