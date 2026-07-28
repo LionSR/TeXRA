@@ -690,6 +690,7 @@ if (HARNESS_AUTHENTICATED === '1' || HARNESS_AUTHENTICATED === '0') {
         : null,
     hasStoredSession: async () => accessToken !== null,
     getStoredAccountLabel: async () => null,
+    getLastRefreshFailure: () => null,
   });
 }
 

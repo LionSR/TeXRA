@@ -1,0 +1,64 @@
+// Third-party imports
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('@agent/index', () => ({
+  getAgentsBySource: vi.fn(() => []),
+  loadAgents: vi.fn(async () => {}),
+  toRemoteAgentProfileData: vi.fn(),
+}));
+
+vi.mock('@utils/config/providerConfig', () => ({
+  getGlobalStreaming: () => true,
+}));
+
+// Local imports
+import { SupabaseClient } from '@auth/SupabaseClient';
+import { buildProfileMessage } from '@controllers/settingsView/ProfileMessageBuilder';
+
+describe('ProfileMessageBuilder session problems', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('marks an authoritatively rejected stored session as expired', async () => {
+    vi.spyOn(SupabaseClient, 'isAuthenticated').mockResolvedValue(false);
+    vi.spyOn(SupabaseClient, 'hasStoredSession').mockResolvedValue(true);
+    vi.spyOn(SupabaseClient, 'getStoredAccountLabel').mockResolvedValue(
+      'researcher@example.com',
+    );
+    vi.spyOn(SupabaseClient, 'getLastSessionRefreshFailure').mockReturnValue(
+      'invalid',
+    );
+
+    const message = await buildProfileMessage({
+      getProviderKeyStatuses: async () => [],
+    });
+
+    expect(message).toMatchObject({
+      authenticated: false,
+      sessionProblem: 'expired',
+      user: { email: 'researcher@example.com' },
+    });
+  });
+
+  it('preserves a stored session during a transient refresh outage', async () => {
+    vi.spyOn(SupabaseClient, 'isAuthenticated').mockResolvedValue(false);
+    vi.spyOn(SupabaseClient, 'hasStoredSession').mockResolvedValue(true);
+    vi.spyOn(SupabaseClient, 'getStoredAccountLabel').mockResolvedValue(
+      'researcher@example.com',
+    );
+    vi.spyOn(SupabaseClient, 'getLastSessionRefreshFailure').mockReturnValue(
+      'transient',
+    );
+
+    const message = await buildProfileMessage({
+      getProviderKeyStatuses: async () => [],
+    });
+
+    expect(message).toMatchObject({
+      authenticated: false,
+      sessionProblem: 'unavailable',
+      user: { email: 'researcher@example.com' },
+    });
+  });
+});

@@ -17,7 +17,11 @@ import {
   type SupabaseSessionLog,
   type SupabaseSessionStorage,
 } from './supabaseSessionTypes';
-import type { AuthTokenProvider, SessionTokens } from './TokenProvider';
+import type {
+  AuthTokenProvider,
+  SessionRefreshFailure,
+  SessionTokens,
+} from './TokenProvider';
 import type { SupabaseClient as Client } from '@supabase/supabase-js';
 
 // Public entry point for the session value-object helpers and coordinator.
@@ -63,6 +67,7 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
   private sessionMutationVersion = 0;
   private lastStoredSession: SupabaseSession | null = null;
   private lastStoredSessionVersion = 0;
+  private lastRefreshFailure: SessionRefreshFailure | null = null;
   private readonly sessionMutex = new Mutex();
 
   constructor(private readonly options: SupabaseSessionCoordinatorOptions) {}
@@ -118,6 +123,10 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
   async getStoredAccountLabel(): Promise<string | null> {
     const session = await this.loadSession();
     return session?.account.label ?? null;
+  }
+
+  getLastRefreshFailure(): SessionRefreshFailure | null {
+    return this.lastRefreshFailure;
   }
 
   /** Get access and refresh tokens from secure storage. */
@@ -219,6 +228,7 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
       return this.refreshPromise;
     }
 
+    this.lastRefreshFailure = null;
     this.refreshPromise = (
       session.useCustomRefresh
         ? this.refreshViaCustomEndpoint(session)
@@ -230,6 +240,7 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
           : null,
       )
       .catch((error) => {
+        this.lastRefreshFailure = 'transient';
         this.options.log?.error?.(
           'SupabaseSession',
           `Error refreshing session: ${toErrorMessage(error)}`,
@@ -251,9 +262,14 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
     });
 
     if (error || !data.session) {
+      this.lastRefreshFailure =
+        error?.status === 400 || error?.status === 401
+          ? 'invalid'
+          : 'transient';
       return null;
     }
 
+    this.lastRefreshFailure = null;
     return toStorableSupabaseSession(data.session);
   }
 
@@ -289,8 +305,10 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
         }
       }
 
+      this.lastRefreshFailure = null;
       return session;
     } catch (error) {
+      this.lastRefreshFailure = 'transient';
       this.options.log?.error?.(
         'SupabaseSession',
         `Error loading fresh session: ${toErrorMessage(error)}`,
@@ -395,6 +413,10 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
     );
 
     if (!response.ok) {
+      this.lastRefreshFailure =
+        response.status >= 400 && response.status < 500
+          ? 'invalid'
+          : 'transient';
       this.options.log?.warn?.(
         'SupabaseSession',
         `Token refresh failed: ${response.status}`,
@@ -403,6 +425,7 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
     }
 
     const data = await parseTokenExchangeResponse(response, this.options.log);
+    this.lastRefreshFailure = null;
     return toStorableSupabaseSession(data, {
       fallbackLabel: session.account.label,
       defaultExpiryMs: this.options.defaultSessionExpiryMs,

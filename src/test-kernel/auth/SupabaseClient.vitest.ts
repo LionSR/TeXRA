@@ -41,6 +41,7 @@ function createTokenProvider(
     getSessionTokens: async () => null,
     hasStoredSession: async () => false,
     getStoredAccountLabel: async () => null,
+    getLastRefreshFailure: () => null,
     ...overrides,
   };
 }
