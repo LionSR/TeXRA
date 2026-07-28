@@ -159,11 +159,11 @@ const SCENARIOS = [
       'Compile check failed',
       'paper.log',
     ],
-    expectPatterns: [/r0.*completed/, /r1.*completed/],
+    expectPatterns: [/r1\/2.*Finished/, /r2\/2.*Finished/],
     ordered: [
-      { before: 'r0', after: 'Generated files' },
+      { before: 'r1/2 Finished', after: 'Generated files' },
       { before: 'Generated files', after: 'Compile check failed' },
-      { before: 'Compile check failed', after: 'r1 (2/2) completed' },
+      { before: 'Compile check failed', after: 'r2/2 Finished' },
     ],
   },
   {
