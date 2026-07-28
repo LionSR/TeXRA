@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
   getActiveExecutionIds: vi.fn(),
   getExecutionHandle: vi.fn(),
   addExecutionRegistrationListener: vi.fn(),
+  addChildActivationListener: vi.fn(),
   detachHostInteractions: vi.fn(),
   attachTerminalResultToast: vi.fn(),
   attachTuiRunFactSubscription: vi.fn(),
@@ -447,6 +448,8 @@ describe('createChatSessionController', () => {
     mocks.getExecutionHandle.mockReset();
     mocks.addExecutionRegistrationListener.mockReset();
     mocks.addExecutionRegistrationListener.mockReturnValue(vi.fn());
+    mocks.addChildActivationListener.mockReset();
+    mocks.addChildActivationListener.mockReturnValue(vi.fn());
     mocks.detachHostInteractions.mockReset();
     mocks.attachTerminalResultToast.mockReset();
     mocks.attachTerminalResultToast.mockReturnValue(vi.fn());
@@ -465,6 +468,7 @@ describe('createChatSessionController', () => {
         getActiveIds: mocks.getActiveExecutionIds,
         getHandle: mocks.getExecutionHandle,
         addRegistrationListener: mocks.addExecutionRegistrationListener,
+        addChildActivationListener: mocks.addChildActivationListener,
       },
       transcripts: { ensureLoaded: vi.fn(async () => undefined) },
     });
@@ -957,6 +961,99 @@ describe('createChatSessionController', () => {
     await vi.waitFor(() => {
       expect(hostA.close).toHaveBeenCalledOnce();
       expect(disposeAdapterA).toHaveBeenCalledOnce();
+    });
+    executions.dispose();
+  });
+
+  it('retains a root host while a child is activating', async () => {
+    const events = new SessionEventHub();
+    const status = new StreamStatusMachine();
+    const executions = new ExecutionRegistry({ events, streamStatus: status });
+    const interactions = new SessionHostInteractions();
+    const presentationHost = { emit: vi.fn(), close: vi.fn() };
+    const disposeAdapter = vi.fn();
+    const rootStream = 'activation-root' as StreamTabId;
+    const childStream = 'activation-child' as StreamTabId;
+    const childExecutionId = 'activation-child-exec' as ExecutionId;
+
+    mocks.defaultSession.mockReturnValue({
+      useHostInteractions: (adapter: Parameters<typeof interactions.use>[0]) =>
+        interactions.use(adapter),
+      interactions,
+      events,
+      followUps: { restore: mocks.followUpEnqueue },
+      approvals: { registerStreamParent: vi.fn() },
+      status,
+      executions,
+      transcripts: { ensureLoaded: vi.fn(async () => undefined) },
+    });
+    mocks.createCliRuntimeHost.mockReturnValue(presentationHost);
+    mocks.createTuiHostInteractions.mockReturnValue({
+      cancel: vi.fn(),
+      dispose: disposeAdapter,
+    });
+    mocks.executeAgent.mockImplementationOnce(
+      async (
+        _config: unknown,
+        executionId: ExecutionId,
+        options: { readonly onStreamResolved?: (id: StreamTabId) => void },
+      ) => {
+        executions.trackAgentExecution(
+          new AgentExecutionHandle(
+            executionId,
+            rootStream,
+            rootStream,
+            'root',
+            'toolUse',
+          ),
+          { status: STREAM_PHASE.RUNNING },
+        );
+        options.onStreamResolved?.(rootStream);
+        executions.reserveChildActivation({
+          executionId: childExecutionId,
+          parentStreamId: rootStream,
+          childStreamId: childStream,
+        });
+        executions.untrack(executionId);
+        return {
+          category: 'toolUse',
+          executionId,
+          outcome: RUN_OUTCOME.COMPLETED,
+          streamId: rootStream,
+        };
+      },
+    );
+
+    const session = makeSession();
+    const ctrl = createChatSessionController(makeInit({ session }));
+    ctrl.startRootRun({
+      agent: 'chat',
+      model: 'gpt54',
+      instruction: 'Start a child and finish immediately.',
+      workingDirectory: '/tmp/test',
+      agentCategory: 'toolUse',
+    });
+    await session.runPromise;
+
+    expect(presentationHost.close).not.toHaveBeenCalled();
+    expect(disposeAdapter).not.toHaveBeenCalled();
+
+    executions.trackAgentExecution(
+      new AgentExecutionHandle(
+        childExecutionId,
+        rootStream,
+        childStream,
+        'child',
+        'toolUse',
+      ),
+      { status: STREAM_PHASE.RUNNING },
+    );
+    expect(presentationHost.close).not.toHaveBeenCalled();
+
+    executions.untrack(childExecutionId);
+    await vi.waitFor(() => {
+      expect(presentationHost.close).toHaveBeenCalledOnce();
+      expect(disposeAdapter).toHaveBeenCalledOnce();
     });
     executions.dispose();
   });
