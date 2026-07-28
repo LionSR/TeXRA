@@ -67,4 +67,18 @@ describe('agent option labels', () => {
     expect(option?.value).toBe('custom:myPaperHelper');
     expect(option?.label).toBe('myPaperHelper');
   });
+
+  it('marks inline agents with their launcher provenance', () => {
+    const [option] = entriesToOptionData([
+      toolUseAgent('embeddedHelper', 'inline'),
+    ]);
+
+    expect(option).toMatchObject({
+      value: 'inline:embeddedHelper',
+      label: 'embeddedHelper',
+      isInline: true,
+      isCustom: false,
+      isRemote: false,
+    });
+  });
 });
