@@ -234,8 +234,6 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
 
       [MAIN_VIEW_COMMANDS.POLISH_INSTRUCTION_TEXT]: (m) =>
         this.instructionManager.handlePolishInstructionText(m),
-      [MAIN_VIEW_COMMANDS.TRANSCRIBE_INSTRUCTION]: () =>
-        this.instructionManager.handleTranscribeInstruction(),
       [MAIN_VIEW_COMMANDS.CLIPBOARD_IMAGE]: (m) =>
         this.instructionManager.handleClipboardImage(m),
 
