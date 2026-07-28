@@ -318,11 +318,6 @@ export class DesktopProgressBridge {
     await this.backend.load();
     if (this.disposed) return;
 
-    // Orchestration rail shows all sessions regardless of category — clear any
-    // persisted filter from a previous session so every top-level stream is
-    // visible in the rail and selectable without a stale-filter mismatch.
-    this.state.agentCategoryFilter = 'all';
-
     this.toolEditApprovals = createDesktopToolEditApprovalController({
       runtimeHost: presentationHost,
       session: this.session,
