@@ -12,6 +12,11 @@ All notable changes to this project will be documented in this file.
   `@texra-ai/agent`, load agents from a chosen directory, stream run events,
   and await the final result.
 
+#### Bug Fixes
+
+- **Consistent workflow progress** — workflow rounds and task states now use
+  the same numbering and wording in the terminal, desktop, and VS Code.
+
 ## [0.39.9] - 2026-07-26
 
 ### Shared (all surfaces)

@@ -822,10 +822,24 @@ describe('CLI StatusBar display model', () => {
       }),
     );
     expect(childDisplay.left.map(statusBarSegmentText)).toContain(
-      'waiting for you',
+      'Waiting for follow-up',
     );
     expect(childDisplay.left.map(statusBarSegmentText)).not.toContain('idle');
   });
+
+  it.each([
+    [STREAM_PHASE.FAILED, 'Failed'],
+    [STREAM_PHASE.CANCELLED, 'Cancelled'],
+  ] as const)(
+    'uses the canonical %s label for a focused child',
+    (status, label) => {
+      const display = buildStatusBarDisplay(
+        statusInput({ status, isChildStream: true }),
+      );
+
+      expect(display.left.map(statusBarSegmentText)).toContain(label);
+    },
+  );
 
   it('derives isChildStream for statusBarStreamTarget from whichever stream is actually displayed', () => {
     const root = 'root';

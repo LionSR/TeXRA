@@ -8,11 +8,12 @@ import { Box, Text } from 'ink';
 
 import {
   STREAM_PHASE,
+  WORKFLOW_TASK_STATUS_LABEL,
   roundIndexedEntries,
   type TaskGroup,
   type TaskGroupStatus,
 } from '@shared/schemas';
-import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
+import { formatRoundStageLabel } from '@shared/streams/streamStatusDisplay';
 import { formatDuration } from '@utils/text/stringUtils';
 
 import { safeTerminalText } from '../render/terminalText';
@@ -83,16 +84,10 @@ function taskGroupLine(group: TaskGroup, label: string): WorkflowRunDetailLine {
       : '';
   return {
     key: `group:${group.id}`,
-    text: `${appearance.marker} ${safeTerminalText(label)} ${formatStreamStatusLabel(group.status, { style: 'cli' })}${duration}`,
+    text: `${appearance.marker} ${safeTerminalText(label)} ${WORKFLOW_TASK_STATUS_LABEL[group.status]}${duration}`,
     tone: appearance.tone,
     role: 'lifecycle',
   };
-}
-
-function roundLabel(round: number, total: number | undefined): string {
-  return total === undefined
-    ? `r${round}`
-    : `r${round} (${round + 1}/${total})`;
 }
 
 function lifecyclePriority(
@@ -163,11 +158,16 @@ function workflowRunDetailGroups(
     const planned = group === undefined && round < plannedTotal;
     const lines: WorkflowRunDetailLine[] = [];
     if (group) {
-      lines.push(taskGroupLine(group, roundLabel(round, group.total)));
+      lines.push(
+        taskGroupLine(
+          group,
+          formatRoundStageLabel({ index: round, total: group.total }),
+        ),
+      );
     } else {
       const label = planned
-        ? `${roundLabel(round, plannedTotal)} planned`
-        : `${roundLabel(round, undefined)} results`;
+        ? `${formatRoundStageLabel({ index: round, total: plannedTotal })} ${WORKFLOW_TASK_STATUS_LABEL.planned}`
+        : `${formatRoundStageLabel({ index: round })} results`;
       lines.push({
         key: `round:${round}`,
         text: `${TODO_PENDING} ${label}`,
@@ -206,7 +206,7 @@ function workflowRunDetailGroups(
     ).entries()) {
       lines.push({
         key: `missing:${round}:${path}:${index}`,
-        text: `  ${WARNING} r${round} · Missing expected output: ${safeTerminalText(path)}`,
+        text: `  ${WARNING} ${formatRoundStageLabel({ index: round })} · Missing expected output: ${safeTerminalText(path)}`,
         tone: 'warning',
         role: 'alert',
       });
@@ -216,7 +216,7 @@ function workflowRunDetailGroups(
     ).entries()) {
       lines.push({
         key: `compile:${round}:${failure.log.absolutePath}:${index}`,
-        text: `  ${CROSS} r${round} · Compile check failed: ${safeTerminalText(failure.displayName)} · ${safeTerminalText(failure.logRelativePath)}`,
+        text: `  ${CROSS} ${formatRoundStageLabel({ index: round })} · Compile check failed: ${safeTerminalText(failure.displayName)} · ${safeTerminalText(failure.logRelativePath)}`,
         tone: 'error',
         role: 'alert',
       });

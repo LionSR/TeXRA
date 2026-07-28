@@ -99,7 +99,7 @@ export const logEntryStyles = css`
     margin-top: 0.1em;
   }
 
-  .workflow-task-icon :is(wa-icon, wa-spinner) {
+  .workflow-task-icon wa-icon {
     font-size: 1em;
   }
 
