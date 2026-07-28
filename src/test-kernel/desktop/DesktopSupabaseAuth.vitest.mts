@@ -165,12 +165,13 @@ function installAuthenticatedSupabaseProvider() {
     accessToken: 'fresh-access-token',
     refreshToken: 'refresh-token',
   }));
+  const getStoredSessionState = vi.fn(async () => 'authenticated' as const);
   SupabaseClient.initialize('https://example.supabase.co', 'public-key');
   SupabaseClient.setAuthProvider({
     whenReady: vi.fn(async () => {}),
     ensureFreshToken,
     getSessionTokens,
-    hasStoredSession: vi.fn(async () => true),
+    getStoredSessionState,
     getStoredAccountLabel: vi.fn(async () => null),
     getLastRefreshFailure: vi.fn(() => null),
   });
@@ -179,7 +180,7 @@ function installAuthenticatedSupabaseProvider() {
     email: 'user@example.com',
   } as never);
   vi.spyOn(SupabaseClient, 'getUserTier').mockResolvedValue('free');
-  return { ensureFreshToken, getSessionTokens };
+  return { ensureFreshToken, getSessionTokens, getStoredSessionState };
 }
 
 describe('desktop Supabase auth', () => {
@@ -1097,7 +1098,7 @@ describe('desktop Supabase auth', () => {
 
   it('refreshes desktop session state and exposes remote agents in profile data', async () => {
     const router = createDesktopProtocolCallbackRouter();
-    const { ensureFreshToken, getSessionTokens } =
+    const { ensureFreshToken, getSessionTokens, getStoredSessionState } =
       installAuthenticatedSupabaseProvider();
     const loadAgents = vi
       .spyOn(agentRegistry, 'loadAgents')
@@ -1124,7 +1125,8 @@ describe('desktop Supabase auth', () => {
       getProviderKeyStatuses: async () => [],
     });
 
-    expect(getSessionTokens).toHaveBeenCalledOnce();
+    expect(getStoredSessionState).toHaveBeenCalledOnce();
+    expect(getSessionTokens).not.toHaveBeenCalled();
     expect(ensureFreshToken).not.toHaveBeenCalled();
     expect(loadAgents).toHaveBeenCalled();
     expect(message).toMatchObject({

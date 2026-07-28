@@ -39,7 +39,7 @@ function createTokenProvider(
     whenReady: async () => {},
     ensureFreshToken: async () => 'access-token',
     getSessionTokens: async () => null,
-    hasStoredSession: async () => false,
+    getStoredSessionState: async () => 'none',
     getStoredAccountLabel: async () => null,
     getLastRefreshFailure: () => null,
     ...overrides,
@@ -109,7 +109,7 @@ describe('SupabaseClient', () => {
     const provider = createTokenProvider({
       ensureFreshToken: async () => null,
       getSessionTokens: async () => null,
-      hasStoredSession: async () => true,
+      getStoredSessionState: async () => 'invalid',
       getLastRefreshFailure: () => 'invalid',
     });
 
