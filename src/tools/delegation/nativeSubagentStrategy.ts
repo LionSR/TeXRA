@@ -5,9 +5,12 @@
  * whether it ever produces a WAITING turn differ, and both of those are
  * already category-derived data rather than category-specific code paths.
  *
- * `launch` is the first turn: `executeAgent` with `allowWaitingResult`,
- * capturing the live run handle via `onRun`. `runTurn` is every following
- * turn: resolve the persisted flow-record cursor for this execution
+ * `launch` is the standard native child-execution primitive. Both detached
+ * delegation (through `childRunLoop`) and durable in-band workflow calls invoke
+ * it, so launch options, progress, stream identity, approval inheritance,
+ * cancellation, failure capture, and cost observation cannot drift between
+ * those callers. `runTurn` is every following interactive turn: resolve the
+ * persisted flow-record cursor for this execution
  * (`retrieveSessionResumeData`) and drive it to the next WAITING/terminal
  * boundary via `resumeToolUseFromResumeData`, handing it the batch already
  * consumed by `childRunLoop`. `runTurn` is unreachable for a workflow child —
@@ -26,6 +29,7 @@
 import type { ResultMeta } from '@agent/storage';
 import { getExecutionStore } from '@agent/storage';
 import {
+  getAgentFlowErrorResult,
   isWaitingFlowResult,
   type AgentFlowResult,
   type AgentRuntimeFlowResult,
@@ -71,6 +75,11 @@ export interface NativeSubagentStrategyParams {
   readonly workingDirectory?: string;
   readonly approvalPromptsUnavailable?: boolean;
   readonly runtimeUnavailableTools?: readonly string[];
+  readonly workflowPhase?: string;
+  /** Omit for ordinary interactive delegation; durable calls end after one cycle. */
+  readonly executionMode?: 'single-cycle';
+  /** Caller cancellation for a durable in-band launch. */
+  readonly signal?: AbortSignal;
   /** Fires with the resolved child stream id — the caller inherits approvals onto it. */
   readonly onStreamResolved: (streamId: StreamTabId) => void;
 }
@@ -96,9 +105,44 @@ function toDeliveryResult(
   };
 }
 
+/** Bind every distinct caller/turn cancellation source to one live run handle. */
+function bindAbortSignals(
+  signals: readonly (AbortSignal | undefined)[],
+  handle: AgentRunHandle,
+): () => void {
+  const uniqueSignals = new Set(
+    signals.filter((signal): signal is AbortSignal => signal !== undefined),
+  );
+  let interrupted = false;
+  const interrupt = (): void => {
+    if (interrupted) return;
+    interrupted = true;
+    handle.interrupt();
+  };
+  for (const signal of uniqueSignals) {
+    if (signal.aborted) {
+      interrupt();
+      return () => {};
+    }
+  }
+  for (const signal of uniqueSignals) {
+    signal.addEventListener('abort', interrupt, { once: true });
+  }
+  return () => {
+    for (const signal of uniqueSignals) {
+      signal.removeEventListener('abort', interrupt);
+    }
+  };
+}
+
 export function createNativeSubagentStrategy(
   params: NativeSubagentStrategyParams,
-): ChildRunStrategy<AgentRuntimeFlowResult> {
+): ChildRunStrategy<AgentRuntimeFlowResult> & {
+  /** Underlying application error captured for the most recent turn. */
+  readonly getTurnError: () => unknown;
+  /** Terminal-shaped result captured from a return or thrown AgentFlowError. */
+  readonly getTurnResult: () => AgentFlowResult | undefined;
+} {
   let runHandle: AgentRunHandle | undefined;
   // Captured for the turn currently in flight; read once the call resolves.
   // `executeAgent`/`resumeToolUseFromResumeData` never reject for a
@@ -106,6 +150,7 @@ export function createNativeSubagentStrategy(
   // terminal failed result instead) — the real underlying error is only
   // observable through this callback.
   let lastErr: unknown;
+  let lastResult: AgentFlowResult | undefined;
   // formatDelivery always runs before buildResultMeta for the same turn (see
   // childRunLoop's deliverTurn) — cache the one diff-computing pass here so
   // the subagent's diffs are written once per turn, not twice.
@@ -116,16 +161,38 @@ export function createNativeSubagentStrategy(
 
   const runNative = async (
     ports: ChildRunPorts,
-    call: () => Promise<AgentRuntimeFlowResult>,
+    abortController: AbortController,
+    call: (
+      onRun: (handle: AgentRunHandle) => void,
+    ) => Promise<AgentRuntimeFlowResult>,
   ): Promise<AgentRuntimeFlowResult> => {
     lastErr = undefined;
+    lastResult = undefined;
     cachedDelivery = undefined;
-    const result = await call();
-    // Every turn's totalCostUsd is the run's cumulative cost to date, not a
-    // per-turn delta — recordCost just tracks the latest value; the loop
-    // commits it to the parent exactly once, when the child's run ends.
-    ports.recordCost(result.totalCostUsd);
-    return result;
+    let detachAbort = (): void => {};
+    try {
+      const result = await call((handle) => {
+        detachAbort();
+        runHandle = handle;
+        detachAbort = bindAbortSignals(
+          [params.signal, abortController.signal],
+          handle,
+        );
+      });
+      lastResult = toDeliveryResult(result, params.executionId);
+      // Every turn's totalCostUsd is the run's cumulative cost to date, not a
+      // per-turn delta. The loop retains the best value and commits it to the
+      // parent exactly once, when the child's run ends.
+      ports.recordCost(result.totalCostUsd);
+      return result;
+    } catch (error) {
+      const result = getAgentFlowErrorResult(error);
+      lastResult = result;
+      if (result) ports.recordCost(result.totalCostUsd);
+      throw error;
+    } finally {
+      detachAbort();
+    }
   };
 
   const buildDelivery = async (
@@ -158,9 +225,9 @@ export function createNativeSubagentStrategy(
         ? 'Native tool-use subagent'
         : 'Native workflow subagent',
 
-    launch: (ports) =>
-      runNative(ports, () =>
-        executeAgent(params.config, params.executionId, {
+    launch: (ports, abortController) =>
+      runNative(ports, abortController, async (onRun) => {
+        const executeOptions = {
           runtimeHost: params.runtimeHost,
           session: params.parentSession,
           isSubagent: true,
@@ -168,24 +235,26 @@ export function createNativeSubagentStrategy(
           parentStreamId: params.orchestratorStreamId,
           approvalPromptsUnavailable: params.approvalPromptsUnavailable,
           runtimeUnavailableTools: params.runtimeUnavailableTools,
-          // Inert for a workflow child — `isWaitingFlowResult` requires
-          // `category === 'toolUse'`, so a workflow result can never satisfy
-          // it. Kept unconditional rather than gated on category: gating it
-          // would reintroduce the branch this strategy merge deletes.
-          allowWaitingResult: true,
+          workflowPhase: params.workflowPhase,
           onStreamResolved: params.onStreamResolved,
-          onProgress: (update) => ports.notify(update),
-          onRunError: (err) => {
+          onProgress: (update: Parameters<ChildRunPorts['notify']>[0]) =>
+            ports.notify(update),
+          onRunError: (err: unknown) => {
             lastErr = err;
           },
-          onRun: (handle) => {
-            runHandle = handle;
-          },
-        }),
-      ),
+          onRun,
+        };
+        return executeAgent(params.config, params.executionId, {
+          ...executeOptions,
+          allowWaitingResult: true,
+          ...(params.executionMode === 'single-cycle'
+            ? { stopAfterCycle: true }
+            : {}),
+        });
+      }),
 
-    runTurn: (followUps, ports) =>
-      runNative(ports, async () => {
+    runTurn: (followUps, ports, abortController) =>
+      runNative(ports, abortController, async (onRun) => {
         const streamId = runHandle?.childStreamId;
         if (!streamId) {
           throw new Error(
@@ -241,14 +310,14 @@ export function createNativeSubagentStrategy(
           onRunError: (err) => {
             lastErr = err;
           },
-          onRun: (handle) => {
-            runHandle = handle;
-          },
+          onRun,
         });
       }),
 
     isTerminal: (turn) => !isWaitingFlowResult(turn),
     isTurnError: () => lastErr !== undefined,
+    getTurnError: () => lastErr,
+    getTurnResult: () => lastResult,
 
     resolveDeliveryTarget,
 
@@ -258,7 +327,7 @@ export function createNativeSubagentStrategy(
       const wallTimeMs = Date.now() - params.startedAt;
       const result = turn
         ? toDeliveryResult(turn, params.executionId)
-        : undefined;
+        : lastResult;
       return formatSubagentError(
         params.executionId,
         params.agentName,
@@ -277,7 +346,7 @@ export function createNativeSubagentStrategy(
         // /executions/{id}/result never claims success for a failed run.
         const result = turn
           ? toDeliveryResult(turn, params.executionId)
-          : undefined;
+          : lastResult;
         return buildSubagentFailureResultMeta(
           params.agentName,
           params.config.agentCategory,

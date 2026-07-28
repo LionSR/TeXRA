@@ -6,6 +6,18 @@ writes a small JS script **once**, and this engine executes its control flow
 between steps. Design rationale and the full findings that motivated it:
 `docs/proposals/2026-07-05-workflow-script-engine.md`.
 
+## Glossary
+
+A **workflow agent** is the agent category whose output is organized into
+workflow output rounds. A **workflow script** is the deterministic program run
+under `runKind: 'workflowScript'`; each `agent()` invocation in that script is
+a **workflow call**. A **task run** is the host's stored execution record (and a
+**background task** is host-managed asynchronous work), not a workflow call.
+A trace **stage** is a generic grouping construct. Script **phases** and
+reflection **rounds** are distinct typed stage kinds with different semantics:
+phases group calls for progress display, while rounds delimit repeated
+reflection iterations.
+
 ## Shape
 
 ```js
@@ -50,7 +62,8 @@ return await parallel(
 - `meta.tasks` — optional declarative task plan. When present, each
   `agent()` call must reference exactly one task with `{ id }`; its display
   label and phase come only from the plan. Progress surfaces can therefore
-  show pending work before execution and update one task record in place.
+  show pending work before execution and update one call progress record in
+  place.
   Scripts whose call set is data-dependent may omit the plan.
 - `agent(prompt, opts?)` — one subagent run; resolves to the host runner's
   typed result, `null` on failure, or the truthy
@@ -66,8 +79,8 @@ return await parallel(
   validated object rather than edited files.
 - `parallel(thunks)` — concurrent barrier. Failed `agent()` calls resolve to
   `null`; other thrown errors reject the workflow.
-- Ordinary JavaScript loops and awaited `agent()` calls own sequential stages;
-  array methods such as `.filter()` and `.join()` own local fan-in.
+- Ordinary JavaScript loops and awaited `agent()` calls own sequential control
+  flow; array methods such as `.filter()` and `.join()` own local fan-in.
 - `log(msg)` / `phase(title)` / `args` — progress + parameterization.
 - `files` — immutable, role-separated workspace files bound to the run:
   `files.inputFiles` are editable, while `files.contextFiles` and
@@ -82,7 +95,7 @@ return await parallel(
   subagent execution path, so the engine consumes the post-flow
   `AgentFinalResult` envelope — never the XML follow-up delivery string. It
   also verifies task-run inputs against persisted child lineage and result
-  manifests before passing them to a later stage.
+  manifests before passing them to a later workflow step.
 - **Restart-safe checkpoints**: one strict, versioned execution-KV record per
   tool call stores the script, arguments, and journal atomically. Successful
   live calls are checkpointed before their results return to the script;

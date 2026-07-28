@@ -30,7 +30,7 @@ import {
 } from '@shared/utils/string';
 import { getLightweightMd } from '@shared/highlighting/lightweightMd';
 import { renderIconActionButtonParts } from '@shared/wa/actionButtons';
-import type { TeXRAIconName } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { metaStripStyles, renderDotMeta } from '@shared/wa/metaStrip';
 
 @customElement('memory-item')

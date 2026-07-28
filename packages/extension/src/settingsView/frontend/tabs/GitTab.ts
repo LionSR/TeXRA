@@ -279,7 +279,7 @@ export class GitTab extends LitElement {
                           : nothing
                       }
                       ${renderLabeledActionButton({
-                        icon: 'github',
+                        icon: 'code-branch',
                         text: 'Create on GitHub…',
                         kind: 'secondary',
                         appearance: 'outlined',
@@ -333,7 +333,7 @@ export class GitTab extends LitElement {
                     title: 'Active GitHub subscriptions',
                     description:
                       'Agents monitoring repositories, pull requests, or issues for new activity.',
-                    icon: 'comment-discussion',
+                    icon: 'comments',
                   })}
                   <ul class="subscriptions-list">
                     ${this.prSubscriptions.map(
@@ -355,7 +355,7 @@ export class GitTab extends LitElement {
                                               >${owner.label}</span
                                             >
                                             ${renderLabeledActionButton({
-                                              icon: 'comment-discussion',
+                                              icon: 'comments',
                                               text: 'Jump to agent',
                                               kind: 'secondary',
                                               appearance: 'outlined',
@@ -378,7 +378,7 @@ export class GitTab extends LitElement {
                             }
                           </div>
                           ${renderLabeledActionButton({
-                            icon: 'debug-stop',
+                            icon: 'circle-stop',
                             text: 'Stop',
                             kind: 'secondary',
                             appearance: 'outlined',
@@ -399,7 +399,7 @@ export class GitTab extends LitElement {
             title: 'Agent commit attribution',
             description:
               'Keep agent-authored commits distinguishable from your personal Git identity.',
-            icon: 'git-commit',
+            icon: 'circle-dot',
           })}
           <div class="settings-row">
             <div class="settings-row-text">
