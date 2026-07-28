@@ -108,16 +108,21 @@ export async function signIn(): Promise<boolean> {
       return false;
     }
 
-    const storedSessionState = await SupabaseClient.getStoredSessionState();
+    let storedSessionState = await SupabaseClient.getStoredSessionState();
+    if (storedSessionState === 'invalid') {
+      const cleared =
+        (await SupabaseAuthProvider.getInstance()?.clearStoredSession()) ??
+        false;
+      storedSessionState = cleared
+        ? 'none'
+        : await SupabaseClient.getStoredSessionState();
+    }
     if (storedSessionState === 'transient') {
       void showLoggedMessage(
         CHANNEL,
         'The authentication service is temporarily unavailable. Your stored session has not been removed; try again later.',
       );
       return false;
-    }
-    if (storedSessionState === 'invalid') {
-      await SupabaseAuthProvider.getInstance()?.clearStoredSession();
     }
 
     if (storedSessionState === 'authenticated') {
