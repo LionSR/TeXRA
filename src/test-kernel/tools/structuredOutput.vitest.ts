@@ -7,8 +7,8 @@ import { MapToolRegistry, type ITool } from '@agent/core/tools/ToolTypes';
 
 // Local imports - tools
 import {
+  buildOverlayToolRegistry,
   buildTerminalTool,
-  buildTerminalToolRegistry,
   normalizeStructuredOutputSchema,
 } from '@tools/structuredOutput';
 
@@ -237,7 +237,7 @@ describe('buildTerminalTool', () => {
   });
 });
 
-describe('buildTerminalToolRegistry', () => {
+describe('buildOverlayToolRegistry', () => {
   const schema = z.strictObject({ title: z.string() });
   const tool = (name: string) =>
     ({
@@ -252,7 +252,7 @@ describe('buildTerminalToolRegistry', () => {
     const first = tool('first');
     const second = tool('second');
     const terminalTool = buildTerminalTool(schema, vi.fn());
-    const overlay = buildTerminalToolRegistry(base, [
+    const overlay = buildOverlayToolRegistry(base, [
       first,
       second,
       terminalTool,
@@ -269,8 +269,8 @@ describe('buildTerminalToolRegistry', () => {
   it('isolates concurrent overlays without mutating the shared base', () => {
     const first = tool('first');
     const second = tool('second');
-    const firstRun = buildTerminalToolRegistry(base, [first]);
-    const secondRun = buildTerminalToolRegistry(base, [second]);
+    const firstRun = buildOverlayToolRegistry(base, [first]);
+    const secondRun = buildOverlayToolRegistry(base, [second]);
 
     expect(firstRun.get('first')).toBe(first);
     expect(firstRun.get('second')).toBeUndefined();
@@ -283,7 +283,7 @@ describe('buildTerminalToolRegistry', () => {
   it('lets the last run-scoped tool win a name collision', () => {
     const first = tool('read_file');
     const second = tool('read_file');
-    const overlay = buildTerminalToolRegistry(base, [first, second]);
+    const overlay = buildOverlayToolRegistry(base, [first, second]);
 
     expect(overlay.get('read_file')).toBe(second);
   });
