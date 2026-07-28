@@ -95,6 +95,7 @@ export const AgentOptionDataSchema = PickerOptionBaseSchema.extend({
   isOrchestrator: z.boolean().optional(),
   isRemote: z.boolean().optional(),
   isCustom: z.boolean().optional(),
+  isInline: z.boolean().optional(),
 });
 export type AgentOptionData = z.infer<typeof AgentOptionDataSchema>;
 

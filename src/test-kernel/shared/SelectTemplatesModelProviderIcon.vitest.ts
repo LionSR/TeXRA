@@ -91,6 +91,27 @@ describe('renderModelOption uses wa-icon, matching renderAgentOption', () => {
     expect(agentIconSpan?.getAttribute('slot')).toBeNull();
   });
 
+  it('renders inline provenance in the launcher option', async () => {
+    const { renderAgentOptions } =
+      await import('@shared/utils/selectTemplates');
+    const { render } = await import('lit');
+
+    const container = document.createElement('div');
+    render(
+      renderAgentOptions([
+        { value: 'inline:helper', label: 'helper', isInline: true },
+      ]),
+      container,
+    );
+
+    const option = container.querySelector('wa-option');
+    expect(option?.getAttribute('data-inline')).toBe('true');
+    expect(option?.getAttribute('title')).toContain(
+      'Definition supplied directly by the embedding application',
+    );
+    expect(option?.querySelector('wa-icon')?.getAttribute('name')).toBe('code');
+  });
+
   it('falls back to the neutral "robot" icon for an unmapped provider', async () => {
     const { renderModelOptions } =
       await import('@shared/utils/selectTemplates');
