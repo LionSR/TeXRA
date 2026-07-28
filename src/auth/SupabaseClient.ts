@@ -347,7 +347,9 @@ export class SupabaseClient {
         return defaultTier;
       }
 
-      return UserTierSchema.catch('free').parse(data.tier);
+      // A present malformed tier is profile corruption. Let the outer error
+      // path log it before conservatively returning the default tier.
+      return UserTierSchema.parse(data.tier);
     } catch (error) {
       logger.error(
         'SupabaseClient',
