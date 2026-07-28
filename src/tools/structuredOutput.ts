@@ -224,7 +224,7 @@ export function buildTerminalTool(
  * overlay. Concurrent runs can therefore share `base` without seeing one
  * another's injected or structured-output tools.
  */
-export function buildTerminalToolRegistry(
+export function buildOverlayToolRegistry(
   base: IToolRegistry,
   tools: readonly ITool[],
 ): IToolRegistry {

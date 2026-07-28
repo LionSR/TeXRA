@@ -46,8 +46,8 @@ import {
 import { deriveRunOutcome } from '@shared/streams/streamStatus';
 import { getDefaultToolRegistry } from '@tools/registry';
 import {
+  buildOverlayToolRegistry,
   buildTerminalTool,
-  buildTerminalToolRegistry,
 } from '@tools/structuredOutput';
 import { TaskRunFileService } from '@utils/files';
 
@@ -242,7 +242,7 @@ export async function runToolUseFlow<C = unknown>(
     appendOverlayTool(terminalTool);
   }
   const registry = overlayTools.length
-    ? buildTerminalToolRegistry(baseRegistry, overlayTools)
+    ? buildOverlayToolRegistry(baseRegistry, overlayTools)
     : baseRegistry;
 
   const kv = getExecutionStore(executionId);
