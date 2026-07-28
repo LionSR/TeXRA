@@ -44,7 +44,7 @@ interface ProjectedWorkflowCall {
 }
 
 /** Stable trace identity for one workflow call within its run stream. */
-export function workflowCallLogId(id: WorkflowScriptProgressId): string {
+function workflowCallLogId(id: WorkflowScriptProgressId): string {
   return `workflow-task-${id}`;
 }
 

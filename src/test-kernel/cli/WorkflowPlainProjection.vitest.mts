@@ -194,6 +194,12 @@ describe('attachWorkflowPlainProjection', () => {
       task: { id: 'loose', label: 'Loose check', status: 'planned' },
     });
     emit(events, {
+      type: 'log',
+      stageId: 'run',
+      level: 'info',
+      message: 'Preparing the phase-less check.',
+    });
+    emit(events, {
       type: 'workflow.task',
       stageId: 'phase-write',
       logId: 'draft',
@@ -216,6 +222,7 @@ describe('attachWorkflowPlainProjection', () => {
 
     expect(lines).toEqual([
       'Planned: Loose check',
+      'Preparing the phase-less check.',
       '◆ Write',
       'Planned: Draft proof',
       'Cancelled: proof-workflow',

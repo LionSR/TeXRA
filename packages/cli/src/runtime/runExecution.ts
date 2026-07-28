@@ -187,6 +187,7 @@ export async function executeCliRequest(
   const presentationHost = createCliRuntimeHost(runContext);
   const workflowPlainExecutionId =
     runContext.outputFormat === 'text' &&
+    runContext.renderRunProgress === true &&
     request.config.agentCategory === AgentCategory.Workflow &&
     request.executionId !== undefined
       ? request.executionId

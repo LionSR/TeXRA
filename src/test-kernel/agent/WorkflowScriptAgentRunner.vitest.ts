@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   configureDelegatedChildApprovals: vi.fn(),
   workspaceReadBytes: vi.fn(),
   absoluteReadBytes: vi.fn(),
+  readExecutionMeta: vi.fn(),
 }));
 
 vi.mock('@tools/approval', () => ({
@@ -58,6 +59,7 @@ vi.mock('@tools/delegation/proposalFlow', () => ({
 }));
 
 vi.mock('@agent/storage', () => ({
+  getExecutionStore: vi.fn(() => ({ readMeta: mocks.readExecutionMeta })),
   resolveChildRunOutput: mocks.resolveChildRunOutput,
 }));
 
@@ -184,6 +186,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     mocks.runStorageLocationFromAnyAbsolutePath.mockReturnValue(undefined);
     mocks.workspaceReadBytes.mockResolvedValue(Buffer.from('workspace bytes'));
     mocks.absoluteReadBytes.mockResolvedValue(Buffer.from('run bytes'));
+    mocks.readExecutionMeta.mockResolvedValue(undefined);
     mocks.executeStableSubagentInBand.mockImplementation(async (options) => {
       options.onActiveExecutionId?.(options.executionId);
       mocks.preparedOptions.push(await options.prepare());
@@ -607,15 +610,21 @@ describe('createWorkflowScriptAgentRunner', () => {
 
   it('does not report recovered stable child cost as live execution', async () => {
     const onCost = vi.fn();
+    const reportChildStream = vi.fn();
+    const recoveredStreamId = 'correct@child-model#bbbbbb222222' as StreamTabId;
+    mocks.readExecutionMeta.mockResolvedValueOnce({
+      streamId: recoveredStreamId,
+    });
     mocks.executeStableSubagentInBand.mockResolvedValueOnce({
       executionId: 'bbbbbb222222',
       result: { ...result, cost: 0.25 },
     });
     const runner = defaultRunner({ onCost });
 
-    await runner({ ...invocation(), index: 3 });
+    await runner({ ...invocation(), index: 3, reportChildStream });
 
     expect(onCost).not.toHaveBeenCalled();
+    expect(reportChildStream).toHaveBeenCalledWith(recoveredStreamId);
   });
 
   it('aborts the run when a file-editing agent gets no input files', async () => {

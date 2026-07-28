@@ -122,8 +122,6 @@ export function attachWorkflowPlainProjection(
           break;
         case 'log':
           if (
-            event.stageId !== undefined &&
-            openedPhases.has(event.stageId) &&
             event.level !== 'debug' &&
             event.verbose !== false &&
             event.messageType !== MESSAGE_TYPES.INTERNAL &&

@@ -19,6 +19,7 @@ import './LogList';
 import './UsagePanel';
 import './FileList';
 import './WorkflowToolUseFollowupSection';
+import './BackgroundTasksPanel';
 import './RequestPanels';
 
 @customElement('workflow-stream-content')
@@ -50,6 +51,8 @@ export class WorkflowStreamContent extends BaseStreamContent {
           <request-panels
             .permissions=${this.filteredPermissions}
           ></request-panels>
+
+          <background-tasks-panel scope="inquiries"></background-tasks-panel>
         </div>
 
         <div class="conversation-log"><log-list></log-list></div>

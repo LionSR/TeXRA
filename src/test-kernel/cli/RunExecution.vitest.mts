@@ -238,7 +238,10 @@ describe('executeCliRequest', () => {
       executionId: 'abcdef',
     } as Parameters<typeof executeCliRequest>[0];
 
-    await executeCliRequest(request, cliContext({ outputFormat: 'text' }));
+    await executeCliRequest(
+      request,
+      cliContext({ outputFormat: 'text', renderRunProgress: true }),
+    );
 
     expect(mocks.attachWorkflowPlainProjection).toHaveBeenCalledWith(
       expect.anything(),
@@ -254,6 +257,25 @@ describe('executeCliRequest', () => {
     );
     expect(mocks.attachRunProgressRenderer).not.toHaveBeenCalled();
     expect(mocks.detachWorkflowPlainProjection).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps text workflows quiet when run progress is disabled', async () => {
+    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const request = {
+      config: {
+        agent: 'proof-workflow',
+        model: 'gpt54',
+        agentCategory: 'workflow',
+      },
+      executionId: 'abcdef',
+    } as Parameters<typeof executeCliRequest>[0];
+
+    await executeCliRequest(
+      request,
+      cliContext({ outputFormat: 'text', renderRunProgress: false }),
+    );
+
+    expect(mocks.attachWorkflowPlainProjection).not.toHaveBeenCalled();
   });
 
   it('marks headless never runs as approval-unavailable for agent execution', async () => {
