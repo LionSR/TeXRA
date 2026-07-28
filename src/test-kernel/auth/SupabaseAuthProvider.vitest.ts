@@ -47,6 +47,7 @@ vi.mock('@model/computeModelOptions', () => ({
 
 // Local imports
 import type { SupabaseSessionCoordinator } from '@auth/SupabaseSession';
+import type { StoredSessionState } from '@auth/TokenProvider';
 import { SupabaseAuthProvider } from '@frontend/auth/SupabaseAuthProvider';
 
 function createProvider(options: {
@@ -55,9 +56,13 @@ function createProvider(options: {
 }): {
   provider: SupabaseAuthProvider;
   clearSessionIfCurrent: ReturnType<typeof vi.fn>;
+  getStoredSessionState: ReturnType<typeof vi.fn>;
   showSignInPrompt: ReturnType<typeof vi.fn>;
 } {
   const clearSessionIfCurrent = vi.fn(async () => true);
+  const getStoredSessionState = vi.fn<() => Promise<StoredSessionState>>(
+    async () => 'invalid',
+  );
   const showSignInPrompt = vi.fn();
   const session = {
     id: 'user-id',
@@ -69,6 +74,7 @@ function createProvider(options: {
   const coordinator = {
     loadSession: vi.fn(async () => session),
     refreshSession: vi.fn(async () => null),
+    getStoredSessionState,
     getLastRefreshFailure: vi.fn(() => options.failure ?? null),
     clearSessionIfCurrent,
   };
@@ -87,7 +93,12 @@ function createProvider(options: {
     },
   });
 
-  return { provider, clearSessionIfCurrent, showSignInPrompt };
+  return {
+    provider,
+    clearSessionIfCurrent,
+    getStoredSessionState,
+    showSignInPrompt,
+  };
 }
 
 function createExpiredProvider(
@@ -190,5 +201,17 @@ describe('SupabaseAuthProvider expired-session refresh', () => {
     expect(showSignInPrompt).not.toHaveBeenCalled();
     expect(providerMocks.clearAllCaches).not.toHaveBeenCalled();
     expect(providerMocks.signOut).not.toHaveBeenCalled();
+  });
+
+  it('does not clear a session that revalidates as authenticated', async () => {
+    const { provider, clearSessionIfCurrent, getStoredSessionState } =
+      createProvider({
+        expiresAt: Date.now() + 60_000,
+      });
+    getStoredSessionState.mockResolvedValueOnce('authenticated');
+
+    await expect(provider.clearStoredSession()).resolves.toBe(false);
+
+    expect(clearSessionIfCurrent).not.toHaveBeenCalled();
   });
 });

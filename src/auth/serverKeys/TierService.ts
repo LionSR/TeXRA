@@ -119,10 +119,12 @@ export class TierService {
           this.spendingStatus = result.spendingStatus;
           this.spendingStatusError = result.spendingStatusError;
           if (result.spendingStatusError) {
-            this.logger.warn?.(
-              CHANNEL,
-              `Relay spend check failed: ${result.spendingStatusError.failureReason ?? 'unknown reason'}`,
-            );
+            this.logger.warn?.(CHANNEL, 'Relay spend check failed', {
+              data: {
+                failureReason:
+                  result.spendingStatusError.failureReason ?? 'unknown reason',
+              },
+            });
           }
         }
         if (result.config === null) {
