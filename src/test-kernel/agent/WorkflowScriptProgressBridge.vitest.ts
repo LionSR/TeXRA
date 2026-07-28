@@ -10,6 +10,7 @@ import {
 import {
   RUN_OUTCOME,
   type ExecutionId,
+  type StreamTabId,
   type WorkflowCallProgress,
 } from '@shared/schemas';
 import { workflowPhaseCallProgress } from '@shared/copy/workflowCall';
@@ -559,6 +560,7 @@ return await agent('Second')`;
 return await agent('Draft')`,
       runAgent: async (invocation: WorkflowAgentInvocation) => {
         invocation.reportModel?.('deepseekT');
+        invocation.reportChildStream?.('draft@deepseekT#abcdef' as StreamTabId);
         return 'done';
       },
       getCallCostUsd: () => 0.02,
@@ -568,9 +570,17 @@ return await agent('Draft')`,
     expect(workflowCallEvent(events, 'Draft', 'completed')?.task).toMatchObject(
       {
         model: 'deepseekT',
+        childStreamId: 'draft@deepseekT#abcdef',
         durationMs: expect.any(Number),
         totalCostUsd: 0.02,
       },
+    );
+    const draftEvents = events.filter(
+      (event): event is Extract<AgentEvent, { type: 'workflow.task' }> =>
+        event.type === 'workflow.task' && event.task.label === 'Draft',
+    );
+    expect(new Set(draftEvents.map((event) => event.logId))).toEqual(
+      new Set(['workflow-task-call-0']),
     );
     expect(activities).toContainEqual(
       expect.stringMatching(/^Finished: Draft · deepseekT · .+ · \$0\.020$/),

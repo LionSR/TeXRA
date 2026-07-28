@@ -185,6 +185,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     mocks.workspaceReadBytes.mockResolvedValue(Buffer.from('workspace bytes'));
     mocks.absoluteReadBytes.mockResolvedValue(Buffer.from('run bytes'));
     mocks.executeStableSubagentInBand.mockImplementation(async (options) => {
+      options.onActiveExecutionId?.(options.executionId);
       mocks.preparedOptions.push(await options.prepare());
       return { executionId: 'bbbbbb222222', result };
     });
@@ -271,6 +272,8 @@ describe('createWorkflowScriptAgentRunner', () => {
       contextFiles: ['notes.tex'],
       mediaFiles: ['figure.pdf'],
     });
+    call.reportModel = vi.fn();
+    call.reportChildStream = vi.fn();
     const runner = defaultRunner();
 
     await expect(runner(call)).resolves.toBe(result);
@@ -323,6 +326,10 @@ describe('createWorkflowScriptAgentRunner', () => {
           },
         }),
       }),
+    );
+    expect(call.reportModel).toHaveBeenCalledWith('child-model');
+    expect(call.reportChildStream).toHaveBeenCalledWith(
+      expect.stringMatching(/^correct@child-model#[a-f0-9]{24}$/),
     );
   });
 
@@ -584,6 +591,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     const onCost = vi.fn();
     mocks.executeStableSubagentInBand.mockImplementationOnce(
       async (options) => {
+        options.onActiveExecutionId?.(options.executionId);
         const prepared = await options.prepare();
         await prepared.onCost?.(0.25);
         return { executionId: 'bbbbbb222222', result };
@@ -755,6 +763,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     }));
     mocks.executeStableSubagentInBand.mockImplementationOnce(
       async (options) => {
+        options.onActiveExecutionId?.(options.executionId);
         mocks.preparedOptions.push(await options.prepare());
         return { executionId: 'bbbbbb222222', result: structuredResult };
       },
@@ -804,6 +813,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     }));
     mocks.executeStableSubagentInBand.mockImplementationOnce(
       async (options) => {
+        options.onActiveExecutionId?.(options.executionId);
         mocks.preparedOptions.push(await options.prepare());
         return { executionId: 'bbbbbb222222', result: structuredResult };
       },

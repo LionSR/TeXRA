@@ -9,6 +9,7 @@ import {
   type ValidatedExecutionRequest,
 } from '@agent/core/state/executionRequests';
 import { runAgent, type RunAgentOptions } from '@agent/runtime/runAgent';
+import { getStreamTabId } from '@agent/runtime/streamTab';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { AgentError } from '@common/errors';
 import { tryPlatform } from '@platform/platform';
@@ -34,6 +35,7 @@ import {
   type ExecuteAgentResult,
 } from './terminalStatus';
 import { CLI_UNAVAILABLE_TOOLS } from './unavailableTools';
+import { attachWorkflowPlainProjection } from './workflowPlainProjection';
 import type { CliContext } from './cliContext';
 
 export interface CliExecuteOptions {
@@ -183,9 +185,16 @@ export async function executeCliRequest(
   // This executes before runtime-host construction and before runAgent.
   const { session } = await initializeHeadlessTranscriptSession();
   const presentationHost = createCliRuntimeHost(runContext);
-  const detachRunProgressRenderer = presentationHost.attachRunProgressRenderer(
-    session.events,
-  );
+  const workflowPlainExecutionId =
+    runContext.outputFormat === 'text' &&
+    request.config.agentCategory === AgentCategory.Workflow &&
+    request.executionId !== undefined
+      ? request.executionId
+      : undefined;
+  const detachRunProgressRenderer =
+    workflowPlainExecutionId !== undefined
+      ? () => undefined
+      : presentationHost.attachRunProgressRenderer(session.events);
   const detachHostInteractions = session.useHostInteractions(
     createHeadlessCliHostInteractions(runContext, {
       beforePrompt: () => presentationHost.prepareInteractivePrompt?.(),
@@ -204,6 +213,16 @@ export async function executeCliRequest(
   const detachSessionProgressProjection =
     runContext.outputFormat === 'ndjson'
       ? attachCliSessionProgressProjection(session.events)
+      : () => undefined;
+  const detachWorkflowPlainProjection =
+    workflowPlainExecutionId !== undefined
+      ? attachWorkflowPlainProjection(session.events, {
+          streamId: getStreamTabId(request.config.agent, request.config.model, {
+            executionId: workflowPlainExecutionId,
+          }),
+          beforeWrite: () => presentationHost.prepareInteractivePrompt?.(),
+          writeLine: writeTextStderr,
+        })
       : () => undefined;
   const ownedExecutionId = options.registerExecution
     ? request.executionId
@@ -290,6 +309,7 @@ export async function executeCliRequest(
     detachResultToast();
     detachRunProgressRenderer();
     detachSessionProgressProjection();
+    detachWorkflowPlainProjection();
     detachHostInteractions();
     await presentationHost.close();
   };

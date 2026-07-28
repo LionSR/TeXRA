@@ -13,6 +13,7 @@ import {
   MESSAGE_TYPES,
   STREAM_PHASE,
   type LogMessageData,
+  type StreamTabId,
   type TaskGroup,
 } from '@shared/schemas';
 
@@ -491,6 +492,7 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
           label: 'Review manuscript',
           phase: 'Review',
           status: 'completed',
+          childStreamId: 'reviewer@claude-opus-4#child-1',
           model: 'claude-opus-4',
           durationMs: 12_300,
           totalCostUsd: 0.04,
@@ -592,6 +594,26 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
     expect(userSkipped?.textContent).toContain('Stopped review');
     expect(userSkipped?.textContent).toContain('kimi-k2 · 2s · $0.020');
     expect(userSkipped?.querySelector('.workflow-task-detail')).toBeNull();
+
+    const switchedTo: StreamTabId[] = [];
+    list.addEventListener('stream-switch', (event) => {
+      switchedTo.push(
+        (event as CustomEvent<{ streamId: StreamTabId }>).detail.streamId,
+      );
+    });
+    const linkedTask = content?.querySelector<HTMLElement>(
+      '[data-log-id="agent-a"]',
+    );
+    expect(linkedTask?.getAttribute('role')).toBe('button');
+    expect(linkedTask?.getAttribute('tabindex')).toBe('0');
+    linkedTask?.click();
+    linkedTask?.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
+    );
+    expect(switchedTo).toEqual([
+      'reviewer@claude-opus-4#child-1',
+      'reviewer@claude-opus-4#child-1',
+    ]);
   });
 
   it('omits the (i/n) suffix when a phase group carries no counts', async () => {

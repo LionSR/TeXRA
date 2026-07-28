@@ -11,6 +11,7 @@ import {
 } from '@agent/workflowScript';
 import type { AgentEntry } from '@agent/index/agentRegistry';
 import type { LaunchRunContext } from '@agent/runtime/RunContext';
+import { getStreamTabId } from '@agent/runtime/streamTab';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { formatError } from '@common/errors';
 import { AgentCategory } from '@shared/schemas';
@@ -334,6 +335,18 @@ export function createWorkflowScriptAgentRunner(
           // Surface the resolved child model so the engine can attach it to
           // this call's `agent:end` progress event.
           invocation.reportModel?.(configPayload.model);
+          if (invocation.reportChildStream !== undefined) {
+            if (activeExecutionId === undefined) {
+              throw new Error(
+                'Workflow child execution identity was not resolved before launch preparation.',
+              );
+            }
+            invocation.reportChildStream(
+              getStreamTabId(configPayload.agent, configPayload.model, {
+                executionId: activeExecutionId,
+              }),
+            );
+          }
           return {
             configPayload,
             agentName,

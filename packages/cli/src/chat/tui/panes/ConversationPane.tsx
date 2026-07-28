@@ -9,7 +9,6 @@ import {
   workflowPhaseCallProgress,
 } from '@shared/copy/workflowCall';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
-import { formatResultCount } from '@utils/text/stringUtils';
 
 import {
   activeStreamId as activeStreamIdSignal,
@@ -145,17 +144,9 @@ export function workflowRunStatusSummary(
         )
       : [],
   );
-  const input = slice.files?.input.length ?? 0;
-  const context = slice.files?.context.length ?? 0;
   const segments = [
     ...(phase ? [formatWorkflowPhaseHeading(phase)] : []),
     ...(total > 0 ? [`${done}/${total} done`] : []),
-    ...(input > 0 || context > 0
-      ? [
-          `Input: ${formatResultCount(input, 'file')}`,
-          `Context: ${formatResultCount(context, 'file')}`,
-        ]
-      : []),
   ];
   return segments.length > 0 ? segments.join(' · ') : undefined;
 }

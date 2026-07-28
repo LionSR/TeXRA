@@ -43,6 +43,11 @@ interface ProjectedWorkflowCall {
   status: WorkflowCallProgress['status'];
 }
 
+/** Stable trace identity for one workflow call within its run stream. */
+export function workflowCallLogId(id: WorkflowScriptProgressId): string {
+  return `workflow-task-${id}`;
+}
+
 export class WorkflowJournalCostError extends Error {
   constructor(index: number, options?: ErrorOptions) {
     super(
@@ -232,7 +237,7 @@ export async function runPersistedWorkflowScriptWithProgress(
     let projected = projectedCalls.get(call.id);
     if (!projected) {
       projected = {
-        logId: `workflow-task-${generateShortId()}`,
+        logId: workflowCallLogId(call.id),
         definition: {
           id: call.id,
           label: call.label,
@@ -296,8 +301,24 @@ export async function runPersistedWorkflowScriptWithProgress(
           label: event.label,
           ...(phaseTitle !== undefined ? { phase: phaseTitle } : {}),
           status: 'running',
+          ...(event.childStreamId !== undefined
+            ? { childStreamId: event.childStreamId }
+            : {}),
         });
         onActivity?.(`Running: ${event.label}`);
+        break;
+      }
+      case 'agent:stream': {
+        const phaseTitle = callPhases.has(event.progressId)
+          ? callPhases.get(event.progressId)
+          : (event.phase ?? currentPhase);
+        emitCall({
+          id: event.progressId,
+          label: event.label,
+          ...(phaseTitle !== undefined ? { phase: phaseTitle } : {}),
+          status: 'running',
+          childStreamId: event.childStreamId,
+        });
         break;
       }
       case 'agent:end': {
@@ -338,6 +359,9 @@ export async function runPersistedWorkflowScriptWithProgress(
               ...(phaseTitle !== undefined ? { phase: phaseTitle } : {}),
               status: 'failed',
               error: event.error,
+              ...(event.childStreamId !== undefined
+                ? { childStreamId: event.childStreamId }
+                : {}),
               ...terminalMetadata(event),
             };
             markPhaseFailed(
@@ -355,6 +379,9 @@ export async function runPersistedWorkflowScriptWithProgress(
               label: event.label,
               ...(phaseTitle !== undefined ? { phase: phaseTitle } : {}),
               status: 'cached',
+              ...(event.childStreamId !== undefined
+                ? { childStreamId: event.childStreamId }
+                : {}),
             });
             onActivity?.(`Using saved result: ${event.label}`);
             break;
@@ -365,6 +392,9 @@ export async function runPersistedWorkflowScriptWithProgress(
               ...(phaseTitle !== undefined ? { phase: phaseTitle } : {}),
               status: 'skipped',
               reason: event.reason,
+              ...(event.childStreamId !== undefined
+                ? { childStreamId: event.childStreamId }
+                : {}),
               ...terminalMetadata(event),
             };
             emitCall(call);
@@ -377,6 +407,9 @@ export async function runPersistedWorkflowScriptWithProgress(
               label: event.label,
               ...(phaseTitle !== undefined ? { phase: phaseTitle } : {}),
               status: 'completed',
+              ...(event.childStreamId !== undefined
+                ? { childStreamId: event.childStreamId }
+                : {}),
               ...terminalMetadata(event),
             };
             emitCall(call);

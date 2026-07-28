@@ -28,8 +28,11 @@ import { SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES } from '@tools/setup/platform';
 const mocks = vi.hoisted(() => ({
   close: vi.fn(),
   emit: vi.fn(),
+  attachRunProgressRenderer: vi.fn(),
   detachRunProgressRenderer: vi.fn(),
   detachSessionProgressProjection: vi.fn(),
+  detachWorkflowPlainProjection: vi.fn(),
+  attachWorkflowPlainProjection: vi.fn(),
   createHeadlessCliHostInteractions: vi.fn(),
   createCliRuntimeHost: vi.fn(),
   disposeHostInteractions: vi.fn(),
@@ -105,6 +108,10 @@ vi.mock('@cli/runtime/sessionProgressSubscription', () => ({
   ),
 }));
 
+vi.mock('@cli/runtime/workflowPlainProjection', () => ({
+  attachWorkflowPlainProjection: mocks.attachWorkflowPlainProjection,
+}));
+
 vi.mock('@cli/runtime/logSinks', () => ({
   writeTextStderr: mocks.writeTextStderr,
 }));
@@ -136,6 +143,12 @@ function stubRunExecutionDeps(): void {
   vi.clearAllMocks();
   mocks.close.mockResolvedValue(undefined);
   mocks.detachRunProgressRenderer.mockReturnValue(undefined);
+  mocks.attachRunProgressRenderer.mockReturnValue(
+    mocks.detachRunProgressRenderer,
+  );
+  mocks.attachWorkflowPlainProjection.mockReturnValue(
+    mocks.detachWorkflowPlainProjection,
+  );
   mocks.createHeadlessCliHostInteractions.mockReturnValue({
     emit: mocks.emit,
     pending: vi.fn(() => []),
@@ -146,7 +159,7 @@ function stubRunExecutionDeps(): void {
   mocks.createCliRuntimeHost.mockReturnValue({
     emit: mocks.emit,
     emitApprovalBypassState: vi.fn(),
-    attachRunProgressRenderer: vi.fn(() => mocks.detachRunProgressRenderer),
+    attachRunProgressRenderer: mocks.attachRunProgressRenderer,
     prepareInteractivePrompt: mocks.prepareInteractivePrompt,
     close: mocks.close,
   });
@@ -212,6 +225,35 @@ describe('executeCliRequest', () => {
       mocks.runAgent.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
     );
     expect(mocks.detachSessionProgressProjection).toHaveBeenCalledTimes(1);
+  });
+
+  it('attaches plain workflow progress only for a text workflow run', async () => {
+    const { executeCliRequest } = await import('@cli/runtime/runExecution');
+    const request = {
+      config: {
+        agent: 'proof-workflow',
+        model: 'gpt54',
+        agentCategory: 'workflow',
+      },
+      executionId: 'abcdef',
+    } as Parameters<typeof executeCliRequest>[0];
+
+    await executeCliRequest(request, cliContext({ outputFormat: 'text' }));
+
+    expect(mocks.attachWorkflowPlainProjection).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        streamId: 'proof-workflow@gpt54#abcdef',
+        writeLine: mocks.writeTextStderr,
+      }),
+    );
+    expect(
+      mocks.attachWorkflowPlainProjection.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      mocks.runAgent.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
+    );
+    expect(mocks.attachRunProgressRenderer).not.toHaveBeenCalled();
+    expect(mocks.detachWorkflowPlainProjection).toHaveBeenCalledTimes(1);
   });
 
   it('marks headless never runs as approval-unavailable for agent execution', async () => {
