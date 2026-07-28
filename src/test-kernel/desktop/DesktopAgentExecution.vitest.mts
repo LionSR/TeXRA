@@ -102,6 +102,11 @@ type TestableBridge = Bridge & {
   syncFullView(): void;
   completeWebviewReady(): Promise<void>;
   tryResumeStream(streamId: StreamTabId): Promise<boolean>;
+  sendFollowUp(
+    streamId: StreamTabId,
+    text: string,
+    mediaFiles?: readonly string[],
+  ): Promise<void>;
   setActiveStream(streamId: StreamTabId): void;
   revealStream(streamId: StreamTabId): Promise<void>;
   deleteStream(streamId: StreamTabId): Promise<void>;
@@ -601,6 +606,36 @@ function shownToolEditRequestId(messages: unknown[]): string | undefined {
   }
   return undefined;
 }
+
+describe('desktop follow-up submission', () => {
+  it('does not hold the IPC request open for the resumed turn', async () => {
+    const streamId = 'desktop-detached-follow-up' as StreamTabId;
+    let finishResumeLookup!: (value: null) => void;
+    const resumeLookup = new Promise<null>((resolve) => {
+      finishResumeLookup = resolve;
+    });
+    const bridge = await createBridge([], {
+      retrieveSessionResumeData: vi.fn(() => resumeLookup),
+      configureSession: (session) => {
+        seedStreamStatusForTest(
+          session.status,
+          streamId,
+          STREAM_STATUS.WAITING,
+        );
+      },
+    });
+
+    await expect(bridge.sendFollowUp(streamId, 'continue')).resolves.toBe(
+      undefined,
+    );
+    expect(bridgeFollowUps(bridge).getAll(streamId)).toEqual(['continue']);
+
+    finishResumeLookup(null);
+    await vi.waitFor(() =>
+      expect(bridgeFollowUps(bridge).getAll(streamId)).toEqual(['continue']),
+    );
+  });
+});
 
 function appendRunningGroup(
   store: StreamLogStore,
