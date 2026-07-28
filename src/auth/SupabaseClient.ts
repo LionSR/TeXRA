@@ -366,12 +366,23 @@ export class SupabaseClient {
     // rejected it (status observed by an earlier async check); a known-bad
     // token falls through to the stored session. Cache-only on purpose so
     // this stays cheap and offline-safe.
-    const relayToken = getConfiguredRelayToken();
-    if (relayToken && getCachedRelayTokenState(relayToken) !== 'invalid') {
+    if (this.hasUsableRelayToken()) {
       return true;
     }
     const token = await this.getAccessToken();
     return token !== null;
+  }
+
+  /**
+   * Whether a configured relay token remains usable according to the cached
+   * server verdict. This check never reads or refreshes the stored session.
+   */
+  static hasUsableRelayToken(): boolean {
+    const relayToken = getConfiguredRelayToken();
+    return (
+      relayToken !== undefined &&
+      getCachedRelayTokenState(relayToken) !== 'invalid'
+    );
   }
 
   /**

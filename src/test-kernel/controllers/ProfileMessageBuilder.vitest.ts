@@ -21,10 +21,11 @@ describe('ProfileMessageBuilder session problems', () => {
   });
 
   it('marks an authoritatively rejected stored session as expired', async () => {
-    vi.spyOn(SupabaseClient, 'isAuthenticated').mockResolvedValue(false);
-    vi.spyOn(SupabaseClient, 'getStoredSessionState').mockResolvedValue(
-      'invalid',
-    );
+    const getStoredSessionState = vi
+      .spyOn(SupabaseClient, 'getStoredSessionState')
+      .mockResolvedValue('invalid');
+    const isAuthenticated = vi.spyOn(SupabaseClient, 'isAuthenticated');
+    vi.spyOn(SupabaseClient, 'hasUsableRelayToken').mockReturnValue(false);
     vi.spyOn(SupabaseClient, 'getStoredAccountLabel').mockResolvedValue(
       'researcher@example.com',
     );
@@ -38,13 +39,15 @@ describe('ProfileMessageBuilder session problems', () => {
       sessionProblem: 'expired',
       user: { email: 'researcher@example.com' },
     });
+    expect(getStoredSessionState).toHaveBeenCalledOnce();
+    expect(isAuthenticated).not.toHaveBeenCalled();
   });
 
   it('preserves a stored session during a transient refresh outage', async () => {
-    vi.spyOn(SupabaseClient, 'isAuthenticated').mockResolvedValue(false);
     vi.spyOn(SupabaseClient, 'getStoredSessionState').mockResolvedValue(
       'transient',
     );
+    vi.spyOn(SupabaseClient, 'hasUsableRelayToken').mockReturnValue(false);
     vi.spyOn(SupabaseClient, 'getStoredAccountLabel').mockResolvedValue(
       'researcher@example.com',
     );
@@ -61,10 +64,10 @@ describe('ProfileMessageBuilder session problems', () => {
   });
 
   it('does not let relay authentication mask an invalid stored session', async () => {
-    vi.spyOn(SupabaseClient, 'isAuthenticated').mockResolvedValue(true);
     vi.spyOn(SupabaseClient, 'getStoredSessionState').mockResolvedValue(
       'invalid',
     );
+    vi.spyOn(SupabaseClient, 'hasUsableRelayToken').mockReturnValue(true);
     vi.spyOn(SupabaseClient, 'getStoredAccountLabel').mockResolvedValue(
       'researcher@example.com',
     );
