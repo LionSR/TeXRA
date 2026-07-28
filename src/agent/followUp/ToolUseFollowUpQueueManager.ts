@@ -45,6 +45,7 @@ export type FollowUpSubmission =
   | { readonly kind: 'not_owned' }
   | { readonly kind: 'queued' }
   | { readonly kind: 'live' }
+  | { readonly kind: 'live_flow' }
   | { readonly kind: 'recovering' }
   | { readonly kind: 'recovery'; readonly lease: FollowUpRecoveryLease };
 
@@ -107,33 +108,35 @@ export class ToolUseFollowUpQueue {
   }
 
   /**
-   * Submit through the queue's ownership boundary. `live_owner` joins a child
-   * loop that already owns the stream, or enqueues without claiming when the
-   * entry exists but has no child owner (so live_notification callers can post
-   * progress updates to a WAITING parent queue). `recoverable` admits persisted
-   * WAITING and children-running cursors and synchronously claims their
-   * recovery generation before returning.
+   * Submit through the queue's ownership boundary. `live_owner` joins a live
+   * flow or child consumer, or enqueues without claiming when the entry has no
+   * live owner (so live notifications can reach a WAITING parent queue).
+   * `recoverable` admits a registry-approved persisted cursor and creates its
+   * queue when needed. `existing_recoverable` admits only an already-retained
+   * recoverable queue, which lets a final child result survive child untracking
+   * without reopening an otherwise terminal parent.
    */
   submit(
     streamId: StreamTabId,
     followUp: FollowUpQueueInput,
-    admission: 'live_owner' | 'recoverable',
+    admission: 'live_owner' | 'recoverable' | 'existing_recoverable',
   ): FollowUpSubmission {
     if (this.terminal.has(streamId)) return { kind: 'unavailable' };
 
     let entry = this.entries.get(streamId);
     if (admission === 'live_owner') {
-      if (entry?.owner?.kind !== 'child') {
-        if (!entry) return { kind: 'not_owned' };
-        // Queue exists but has no child owner — enqueue without claiming.
-        // live_notification callers (child progress updates, execution
-        // subscription events) use this to reach WAITING parents whose
-        // queue will be consumed when the stream resumes.
+      if (!entry) return { kind: 'not_owned' };
+      if (!entry.owner) {
+        // Live notifications use this path to reach WAITING parents whose
+        // retained queue will be consumed when the stream resumes.
         entry.queue.enqueue(followUp);
         logger.debug(`Queued follow-up for stream ${streamId}.`);
         return { kind: 'queued' };
       }
     } else {
+      if (!entry && admission === 'existing_recoverable') {
+        return { kind: 'unavailable' };
+      }
       entry ??= this.createEntry(streamId);
       if (!entry.owner) entry.lifecycle = 'recoverable';
     }
@@ -141,9 +144,8 @@ export class ToolUseFollowUpQueue {
     entry.queue.enqueue(followUp);
     logger.debug(`Queued follow-up for stream ${streamId}.`);
     const owner = entry.owner;
-    if (owner?.kind === 'flow' || owner?.kind === 'child') {
-      return { kind: 'live' };
-    }
+    if (owner?.kind === 'flow') return { kind: 'live_flow' };
+    if (owner?.kind === 'child') return { kind: 'live' };
     if (owner?.kind === 'recovery') return { kind: 'recovering' };
 
     const lease = this.claim(entry, streamId, 'recovery');

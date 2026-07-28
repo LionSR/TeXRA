@@ -36,8 +36,11 @@ export type FollowUpPresentation =
 export interface SubmitFollowUpOptions {
   readonly session?: SessionHandle;
   readonly resumePort?: Pick<AgentResumePort, 'tryResumeStream'>;
-  /** Notifications never revive a persisted cursor; continuations do. */
-  readonly mode?: 'continuation' | 'live_notification';
+  /**
+   * Notifications never revive a persisted cursor. Child delivery may revive
+   * only a recoverable queue retained while that child was active.
+   */
+  readonly mode?: 'continuation' | 'live_notification' | 'child_delivery';
 }
 
 export function presentFollowUpResult(
@@ -122,6 +125,17 @@ export async function submitFollowUp(
       item,
       'live_owner',
     );
+    if (submission.kind === 'live_flow') {
+      if (options.mode === 'live_notification') {
+        return {
+          status: 'queued',
+          reason: 'waiting',
+          continuation: 'live',
+        };
+      }
+      notifyFollowUpSent(streamId, ownerSession);
+      return { status: 'sent' };
+    }
     if (submission.kind === 'live' || submission.kind === 'queued') {
       return {
         status: 'queued',
@@ -135,32 +149,39 @@ export async function submitFollowUp(
     return { status: 'sent' };
   }
 
-  if (target.kind === 'no_session') {
+  if (target.kind === 'no_session' && options.mode !== 'child_delivery') {
     logger.warn(
       `No active session for follow-up on stream ${streamId}. Status: ${target.streamStatus}`,
     );
     return { status: 'no_session', streamStatus: target.streamStatus };
   }
 
-  const submission = ownerSession.followUps.submit(
-    streamId,
-    item,
-    options.mode === 'live_notification' ? 'live_owner' : 'recoverable',
-  );
+  let admission: 'live_owner' | 'recoverable' | 'existing_recoverable' =
+    'recoverable';
+  if (options.mode === 'live_notification') {
+    admission = 'live_owner';
+  } else if (target.kind === 'no_session') {
+    admission = 'existing_recoverable';
+  }
+  const submission = ownerSession.followUps.submit(streamId, item, admission);
   if (submission.kind === 'unavailable') return { status: 'dropped' };
   if (submission.kind === 'queued') {
     return {
       status: 'queued',
-      reason: target.reason,
+      reason: target.kind === 'queue' ? target.reason : 'children_running',
       continuation: 'live',
     };
   }
   if (submission.kind === 'not_owned') return { status: 'dropped' };
-  if (submission.kind === 'live' || submission.kind === 'recovering') {
+  if (
+    submission.kind === 'live' ||
+    submission.kind === 'live_flow' ||
+    submission.kind === 'recovering'
+  ) {
     return {
       status: 'queued',
-      reason: target.reason,
-      continuation: submission.kind,
+      reason: target.kind === 'queue' ? target.reason : 'children_running',
+      continuation: submission.kind === 'live_flow' ? 'live' : submission.kind,
     };
   }
 
@@ -173,7 +194,7 @@ export async function submitFollowUp(
   if (!resumed) ownerSession.followUps.release(recovery, 'recoverable');
   return {
     status: 'queued',
-    reason: target.reason,
+    reason: target.kind === 'queue' ? target.reason : 'children_running',
     continuation: resumed ? 'resumed' : 'resume_failed',
   };
 }

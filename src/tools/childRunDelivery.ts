@@ -47,11 +47,11 @@ export async function deliverChildRunFollowUp(params: {
   readonly targetStreamId: StreamTabId;
   readonly followUp: FollowUpQueueInput;
   readonly session: SessionHandle;
-  readonly mode?: 'continuation' | 'live_notification';
+  readonly mode?: 'continuation' | 'live_notification' | 'child_delivery';
 }): Promise<ChildRunDeliveryResult> {
   const result = await submitFollowUp(params.targetStreamId, params.followUp, {
     session: params.session,
-    mode: params.mode,
+    mode: params.mode ?? 'child_delivery',
   });
   if (result.status === 'no_session') {
     return { kind: 'no_session', streamStatus: result.streamStatus };

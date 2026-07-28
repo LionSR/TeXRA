@@ -81,7 +81,7 @@ describe('child run delivery', () => {
     expect(mocks.submitFollowUp).toHaveBeenCalledWith(
       'parent',
       { text: 'done', origin: 'subagent_result' },
-      { session, mode: undefined },
+      { session, mode: 'child_delivery' },
     );
   });
 
