@@ -25,6 +25,7 @@ import {
 } from '@agent/runtime/agentLoad';
 import type { AgentDirectoriesPort } from '@platform/interfaces';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { installPlatform } from '@test/support/setupPlatform';
 import { AbsoluteFS } from '@utils/files';
 
@@ -283,14 +284,17 @@ describe('inline agent definitions', () => {
     prompts: { systemPrompt: 'You are an inline agent.' },
   };
 
-  async function useAgentDirectories(dir: string): Promise<void> {
+  async function useAgentDirectories(
+    dir: string,
+    workspaceState: Record<string, unknown> = {},
+  ): Promise<void> {
     const directories: AgentDirectoriesPort = {
       custom: async () => dir,
       builtIn: async () => dir,
       builtInToolUse: async () => dir,
     };
     await installPlatform(
-      {},
+      { workspaceState },
       { fs: nodeFilesystem, agentDirectories: directories },
     );
   }
@@ -357,6 +361,44 @@ describe('inline agent definitions', () => {
     assert.strictEqual(entry.rounds, 3);
   });
 
+  it('defaults an omitted category to a launchable workflow definition', async () => {
+    registerInlineAgents([
+      {
+        name: 'defaultWorkflow',
+        settings: { rounds: 1 },
+        prompts: { userRequest: 'Do the thing.' },
+      },
+    ]);
+
+    const resolution = resolveAgentForLaunch(
+      AgentCategory.Workflow,
+      'defaultWorkflow',
+    );
+    assert.ok(resolution);
+    const [settings] = await loadAgentSettingAndPrompts(resolution);
+    assert.strictEqual(settings.agentCategory, AgentCategory.Workflow);
+  });
+
+  it('applies a stored tool-use override during late registration', async () => {
+    const emptyDir = await mkdtemp(path.join(tmpdir(), 'texra-empty-agents-'));
+    await useAgentDirectories(emptyDir, {
+      [WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS]: ['lateOverride'],
+    });
+    await refresh({ includeRemote: false });
+
+    registerInlineAgents([
+      {
+        name: 'lateOverride',
+        settings: { agentCategory: AgentCategory.Workflow, rounds: 3 },
+        prompts: {},
+      },
+    ]);
+
+    const entry = getAgent('inline:lateOverride');
+    assert.strictEqual(entry?.category, AgentCategory.ToolUse);
+    assert.strictEqual(entry.rounds, undefined);
+  });
+
   it('removes cleared definitions from the live registry immediately', () => {
     try {
       clearInlineAgents();
@@ -386,6 +428,51 @@ describe('inline agent definitions', () => {
 
   it('rejects a malformed definition at the registration call', () => {
     assert.throws(() => registerInlineAgents([{ name: '' }]));
+  });
+
+  it('rejects every workflow-only setting on a tool-use definition', () => {
+    assert.throws(() =>
+      registerInlineAgents([
+        {
+          name: 'invalidToolUse',
+          settings: {
+            agentCategory: AgentCategory.ToolUse,
+            isRewrite: false,
+          },
+          prompts: {},
+        },
+      ]),
+    );
+  });
+
+  it('does not expose the stored definition through a resolution', async () => {
+    registerInlineAgents([
+      {
+        name: 'immutableResolution',
+        settings: {
+          agentCategory: AgentCategory.ToolUse,
+          tools: ['grep'],
+        },
+        prompts: { userRequest: 'Original request.' },
+      },
+    ]);
+
+    const first = resolveAgent('inline:immutableResolution');
+    assert.ok(first?.inlineDefinition);
+    first.inlineDefinition.prompts.userRequest = 'Mutated request.';
+    first.inlineDefinition.settings.tools?.push('bash');
+
+    const second = resolveAgentForLaunch(
+      AgentCategory.ToolUse,
+      'inline:immutableResolution',
+    );
+    assert.ok(second);
+    const [settings, prompts] = await loadAgentSettingAndPrompts(second);
+    assert.strictEqual(prompts.userRequest, 'Original request.');
+    assert.deepStrictEqual(
+      settings.tools.map((tool) => tool.name),
+      ['grep'],
+    );
   });
 
   it('fails loudly when the load path names an unregistered inline agent', async () => {
