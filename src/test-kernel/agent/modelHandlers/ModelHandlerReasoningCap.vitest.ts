@@ -8,6 +8,8 @@ import { type ModelConfig, ModelProvider, ReasoningEffort } from 'llm-zoo';
 import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative';
 import { FREE_TIER, MAX_TIER, ULTRA_TIER } from '@auth/config';
 import * as serverKeysModule from '@auth/serverKeys';
+import { installTexraModelAccess } from '@controllers/modelAccess/installTexraModelAccess';
+import { setIncludedModelAccess } from '@model/includedModelAccess';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 // Modules to stub via vi.spyOn
@@ -36,6 +38,9 @@ function buildGpt5Config(overrides: Partial<ModelConfig> = {}): ModelConfig {
   );
 }
 
+// The caps are TeXRA's relay pricing policy, so they are asserted through the
+// installed provider the three hosts actually install — the handler itself only
+// asks whether the route is capped.
 describe('ModelHandler.getEffectiveReasoningEffort tier caps', () => {
   function stubServerSideKeys(tier: string | null): void {
     vi.spyOn(providerConfigModule, 'getUseOpenRouter').mockReturnValue(false);
@@ -50,9 +55,11 @@ describe('ModelHandler.getEffectiveReasoningEffort tier caps', () => {
     } as unknown as ReturnType<
       typeof serverKeysModule.getServerSideKeyService
     >);
+    installTexraModelAccess();
   }
 
   afterEach(() => {
+    setIncludedModelAccess(null);
     vi.restoreAllMocks();
   });
 
@@ -91,6 +98,7 @@ describe('ModelHandler.getEffectiveReasoningEffort tier caps', () => {
     } as unknown as ReturnType<
       typeof serverKeysModule.getServerSideKeyService
     >);
+    installTexraModelAccess();
 
     const handler = new ModelHandlerOpenRouterNative(buildGpt5Config());
     assert.equal(

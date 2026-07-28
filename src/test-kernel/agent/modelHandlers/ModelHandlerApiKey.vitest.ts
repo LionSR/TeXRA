@@ -13,6 +13,7 @@ import type {
 } from '@agent/types/ModelHandlerContracts';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import * as serverKeysModule from '@auth/serverKeys';
+import { installTexraModelAccess } from '@controllers/modelAccess/installTexraModelAccess';
 import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -60,6 +61,7 @@ function stubServerSideKeyService(
     shouldUseServerSideKeysSync: () => options.shouldUseServerSideKeys ?? false,
     getRelayBaseUrl: () => 'https://relay.example.test/openai',
   } as unknown as ReturnType<typeof serverKeysModule.getServerSideKeyService>);
+  installTexraModelAccess();
 
   return { canUseServerSideKeys };
 }
