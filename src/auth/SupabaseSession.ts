@@ -414,7 +414,7 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
 
     if (!response.ok) {
       this.lastRefreshFailure =
-        response.status >= 400 && response.status < 500
+        response.status === 400 || response.status === 401
           ? 'invalid'
           : 'transient';
       this.options.log?.warn?.(
