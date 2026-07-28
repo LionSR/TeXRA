@@ -503,7 +503,8 @@ export async function runChat(
   });
   disposers.push(
     setCliAgentResumeHandler({
-      tryResumeStream: (streamId) => chatController.tryResumeStream(streamId),
+      tryResumeStream: (streamId, recovery) =>
+        chatController.tryResumeStream(streamId, recovery),
     }),
   );
 
