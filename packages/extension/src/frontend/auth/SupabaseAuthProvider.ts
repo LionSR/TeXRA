@@ -210,7 +210,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         const refreshed = await this.sessionCoordinator.refreshSession(session);
         if (!refreshed) {
           if (this.sessionCoordinator.getLastRefreshFailure() === 'invalid') {
-            await this.handleInvalidSession(session.id, 'expired');
+            await this.handleInvalidSession(session, 'expired');
           }
           return [];
         }
@@ -222,7 +222,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       );
       if (error) {
         if (classifyAuthFailureStatus(error.status) === 'invalid') {
-          await this.handleInvalidSession(session.id, 'invalid');
+          await this.handleInvalidSession(session, 'invalid');
         }
         return [];
       }
@@ -244,11 +244,17 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
    * Handle invalid session by removing it and prompting user to sign in again.
    */
   private async handleInvalidSession(
-    sessionId: string,
+    session: SupabaseSession,
     reason: 'expired' | 'invalid',
   ): Promise<void> {
-    await this.removeSession(sessionId);
-    await this.notifier.showSignInPrompt(reason);
+    // The rejected credential is already unusable. Do not call the client's
+    // global signOut here: an OAuth callback may have installed a replacement
+    // while validation was in flight, and signOut would target that newer
+    // client state. The conditional local clear below is generation-safe.
+    const cleared = await this.clearLocalSessionIfCurrent(session);
+    if (cleared) {
+      await this.notifier.showSignInPrompt(reason);
+    }
   }
 
   private isWebEnvironment(): boolean {
@@ -507,8 +513,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   async clearStoredSession(): Promise<boolean> {
     const session = await this.sessionCoordinator.loadSession();
     if (!session) return false;
-    await this.clearLocalSession(session.id);
-    return true;
+    return this.clearLocalSessionIfCurrent(session);
   }
 
   /** Revoke and remove the currently stored session without resolving it. */
@@ -521,6 +526,20 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
   private async clearLocalSession(sessionId: string): Promise<void> {
     await this.sessionCoordinator.clearSession();
+    await this.afterLocalSessionCleared(sessionId);
+  }
+
+  private async clearLocalSessionIfCurrent(
+    session: SupabaseSession,
+  ): Promise<boolean> {
+    const cleared =
+      await this.sessionCoordinator.clearSessionIfCurrent(session);
+    if (!cleared) return false;
+    await this.afterLocalSessionCleared(session.id);
+    return true;
+  }
+
+  private async afterLocalSessionCleared(sessionId: string): Promise<void> {
     getServerSideKeyService().clearAllCaches({ resetQuotaFlip: true });
     invalidateModelOptionsCache();
     await invalidateRemoteAgentsAfterSignOut().catch((error: unknown) => {
