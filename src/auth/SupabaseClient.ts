@@ -16,7 +16,13 @@ import {
   getConfiguredRelayToken,
   markRelayTokenRejected,
 } from './relayToken';
-import type { AuthTokenProvider, SessionTokens } from './TokenProvider';
+import type {
+  AuthTokenProvider,
+  SessionTokens,
+  StoredSessionState,
+} from './TokenProvider';
+
+export type { StoredSessionState } from './TokenProvider';
 
 /**
  * Singleton Supabase client with authentication helpers.
@@ -359,12 +365,23 @@ export class SupabaseClient {
     // rejected it (status observed by an earlier async check); a known-bad
     // token falls through to the stored session. Cache-only on purpose so
     // this stays cheap and offline-safe.
-    const relayToken = getConfiguredRelayToken();
-    if (relayToken && getCachedRelayTokenState(relayToken) !== 'invalid') {
+    if (this.hasUsableRelayToken()) {
       return true;
     }
     const token = await this.getAccessToken();
     return token !== null;
+  }
+
+  /**
+   * Whether a configured relay token remains usable according to the cached
+   * server verdict. This check never reads or refreshes the stored session.
+   */
+  static hasUsableRelayToken(): boolean {
+    const relayToken = getConfiguredRelayToken();
+    return (
+      relayToken !== undefined &&
+      getCachedRelayTokenState(relayToken) !== 'invalid'
+    );
   }
 
   /**
@@ -374,5 +391,28 @@ export class SupabaseClient {
    */
   static async canAccessRemoteAgentCatalog(): Promise<boolean> {
     return (await this.getAccessToken()) !== null;
+  }
+
+  /**
+   * Health of the stored GoTrue session, independent of any configured relay
+   * token. This is the canonical classification for account UI and commands.
+   */
+  static async getStoredSessionState(): Promise<StoredSessionState> {
+    if (!this.authProvider) return 'none';
+    return this.authProvider.getStoredSessionState();
+  }
+
+  /**
+   * Read the stored session's account label without attempting a token
+   * refresh. Returns null when no session is stored or no auth provider
+   * is registered.
+   */
+  static async getStoredAccountLabel(): Promise<string | null> {
+    if (!this.authProvider) return null;
+    try {
+      return await this.authProvider.getStoredAccountLabel();
+    } catch {
+      return null;
+    }
   }
 }

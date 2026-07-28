@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest';
 // Local imports
 import { SessionHandle, defaultSession } from '@agent/runtime/SessionHandle';
 import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
-import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
+import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { MESSAGE_TYPES, type Plan, type StreamTabId } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { cleanupAllApprovals } from '@tools/approval';
@@ -112,12 +112,10 @@ describe('session-owned transcripts and follow-up queues (Stage 3a)', () => {
     const streamId = 'stream:session-followups' as StreamTabId;
 
     try {
-      a.followUps.acquire(streamId);
-      b.followUps.acquire(streamId);
-      a.followUps.enqueue(streamId, { text: 'from a' });
-      b.followUps.enqueue(streamId, { text: 'from b' });
+      a.followUps.submit(streamId, { text: 'from a' }, 'recoverable');
+      b.followUps.submit(streamId, { text: 'from b' }, 'recoverable');
 
-      a.followUps.release(streamId);
+      a.followUps.terminalize(streamId);
 
       expect(a.followUps.getAll(streamId)).toEqual([]);
       expect(b.followUps.getAll(streamId)).toEqual(['from b']);
@@ -183,31 +181,31 @@ describe('sendFollowUp host-path session routing (SDK Step 7d PR 4)', () => {
           'stream:fu-child' as StreamTabId,
           'orchestrator',
           'toolUse',
-          host,
         ),
       );
 
       // A host-path caller (outside any run ALS, like the desktop IPC handler)
       // that passes its process session sees the live child and queues.
       await expect(
-        sendFollowUp(
-          parentStream,
-          'continue',
-          undefined,
-          undefined,
-          processSession,
-        ),
-      ).resolves.toEqual({ status: 'queued', reason: 'children_running' });
+        submitFollowUp(parentStream, 'continue', {
+          session: processSession,
+          resumePort: { tryResumeStream: async () => false },
+        }),
+      ).resolves.toEqual({
+        status: 'queued',
+        reason: 'children_running',
+        continuation: 'resume_failed',
+      });
 
       // Without the session it falls back to the default session, which does
       // not track this run — this is the dropped-follow-up regression the
       // session parameter prevents on desktop.
-      await expect(sendFollowUp(parentStream, 'continue')).resolves.toEqual({
+      await expect(submitFollowUp(parentStream, 'continue')).resolves.toEqual({
         status: 'no_session',
         streamStatus: undefined,
       });
     } finally {
-      processSession.followUps.release(parentStream);
+      processSession.followUps.terminalize(parentStream);
       processSession.dispose();
     }
   });

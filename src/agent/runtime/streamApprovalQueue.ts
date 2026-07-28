@@ -14,7 +14,10 @@ import PQueue from 'p-queue';
 
 import type { StreamTabId } from '@shared/schemas';
 
-import { SessionHostInteractions, type ApprovalBypassKind } from './HostInteractions';
+import {
+  SessionHostInteractions,
+  type ApprovalBypassKind,
+} from './HostInteractions';
 
 /** The three independently-tracked bypass kinds `SessionApprovals` owns. */
 type BypassAncestryKind = 'toolEdit' | 'bash' | 'proposal';
@@ -79,8 +82,7 @@ function createStreamApprovalBypass(
     enabled,
     options,
   ) => {
-    const descendants =
-      !options?.silent ? resolveDescendants(streamId) : [];
+    const descendants = !options?.silent ? resolveDescendants(streamId) : [];
     const previousDescendantStates = new Map(
       descendants.map((descendant) => [descendant, resolve(descendant)]),
     );

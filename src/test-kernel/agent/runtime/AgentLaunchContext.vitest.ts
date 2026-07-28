@@ -70,7 +70,7 @@ describe('AgentLaunchContext', () => {
     await expect(
       getAgentPath(
         '__missing_agent_for_launch_context_test__',
-        explicit.interactions,
+        explicit.host,
         AgentCategory.ToolUse,
       ),
     ).rejects.toThrow('Could not find agent');

@@ -89,17 +89,3 @@ export const CODEX_SESSION_SECRET_KEY = 'auth.chatgpt-codex';
  * Zed's 5-minute buffer).
  */
 export const CODEX_TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
-
-/** Config key for the "prefer my ChatGPT subscription" switch (off by default). */
-export const CODEX_PREFER_SUBSCRIPTION_KEY =
-  'texra.chatgptCodex.preferSubscription';
-
-/**
- * Config key for the "subscription for tool-use agents only" switch (off by
- * default). When on, only tool-use agents route through the ChatGPT
- * subscription; workflow agents fall back to the user's API key / relay, because
- * the Codex backend has no background mode (which workflow runs lean on) and is
- * less stable for long runs.
- */
-export const CODEX_SUBSCRIPTION_TOOL_USE_ONLY_KEY =
-  'texra.chatgptCodex.subscriptionToolUseOnly';

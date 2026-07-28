@@ -301,14 +301,14 @@ describe('CLI session status formatter', () => {
 
   it('reads queued follow-ups from the queue manager for status details', () => {
     const queueManager = new ToolUseFollowUpQueue();
-    const queue = queueManager.acquire(STREAM_ID);
-    queueManager.drain(STREAM_ID);
+    const lease = queueManager.claimLive(STREAM_ID, 'flow')!;
+    queueManager.drainItems(lease);
     try {
-      queue.enqueue({ text: 'Fresh queue message' });
+      queueManager.queue(lease).enqueue({ text: 'Fresh queue message' });
 
       expect(queueManager.getAll(STREAM_ID)).toEqual(['Fresh queue message']);
     } finally {
-      queueManager.drain(STREAM_ID);
+      queueManager.drainItems(lease);
     }
   });
 });

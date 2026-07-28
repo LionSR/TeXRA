@@ -901,6 +901,9 @@ describe('routing precedence: compat-key ↔ createModelHandler invariant', () =
       getUseIncludedModelAccess: () => false,
       canUseServerSideKeys: async () => false,
     } as never);
+    const { installTexraModelAccess } =
+      await import('@controllers/modelAccess/installTexraModelAccess');
+    installTexraModelAccess();
 
     const mismatches: string[] = [];
     for (const [name, config] of Object.entries(MODEL_CONFIGS)) {
@@ -950,6 +953,9 @@ describe('Kimi Code reroute under included access', () => {
       getUseIncludedModelAccess: () => options.includedAccess,
       canUseServerSideKeys: async () => options.includedAccess,
     } as never);
+    const { installTexraModelAccess } =
+      await import('@controllers/modelAccess/installTexraModelAccess');
+    installTexraModelAccess();
     invalidateApiKeyCache();
 
     const handler = await create(dualBackendKimi);

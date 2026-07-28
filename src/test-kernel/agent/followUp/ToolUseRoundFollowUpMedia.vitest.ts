@@ -142,8 +142,10 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
     services: ToolUseRoundServices,
     shared: ToolUseRoundShared,
   ): Promise<string | undefined> {
-    return withTestRunContext(defaultSession().interactions, 'test-stream', () =>
-      createToolUseRoundFlow().setServices(services).run(shared),
+    return withTestRunContext(
+      defaultSession().interactions,
+      'test-stream',
+      () => createToolUseRoundFlow().setServices(services).run(shared),
     );
   }
 

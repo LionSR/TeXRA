@@ -139,7 +139,7 @@ async function handleRequestEnsureProgressView(
 
 /**
  * Build the presentation host the extension's `HostInteractions` adapter
- * forwards `emit` calls to (`createExtensionHostInteractions`'s `runtimeHost`
+ * forwards `emit` calls to (`createExtensionHostInteractions`'s `interactions`
  * option, wired in `ProgressViewProvider`'s constructor).
  *
  * The five presentation events below are the extension's own dispatch,

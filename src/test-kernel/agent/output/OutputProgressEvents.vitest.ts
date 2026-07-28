@@ -118,10 +118,9 @@ function createOutputNode(
 ): OutputNode {
   return new OutputNode().setServices({
     streamId,
-    runScope: testRunScope(streamId, { runtimeHost: host }),
+    runScope: testRunScope(streamId, { interactions: host }),
     logger,
     outputState,
-    runtimeHost: host,
     workflowOutputPolicy,
   } as unknown as ReflectionServices);
 }
@@ -341,7 +340,7 @@ describe('output progress events', () => {
     const context: ProcessingContext = {
       baseFiles: [],
       streamId: 'stream:processor',
-      runtimeHost: host,
+      interactions: host,
       logger,
       xmlManager,
       setRoundOutputs,
@@ -378,7 +377,7 @@ describe('output progress events', () => {
     const context: ProcessingContext = {
       baseFiles: [],
       streamId: 'stream:processor',
-      runtimeHost: host,
+      interactions: host,
       logger,
       xmlManager,
       setRoundOutputs,
@@ -428,7 +427,7 @@ describe('output progress events', () => {
       const context: ProcessingContext = {
         baseFiles: [],
         streamId: 'stream:processor',
-        runtimeHost: host,
+        interactions: host,
         logger,
         xmlManager,
         setRoundOutputs,

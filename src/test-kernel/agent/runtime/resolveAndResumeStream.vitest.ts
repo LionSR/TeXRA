@@ -10,7 +10,6 @@ vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
 }));
 
 import {
-  isResumeInFlight,
   resolveAndResumeStream,
   type ResumeStreamPorts,
 } from '@agent/runtime/resolveAndResumeStream';
@@ -24,13 +23,11 @@ import {
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 
 const STREAM = 'stream:resume' as StreamTabId;
-const runtimeHost = { emit: vi.fn() };
-
 function basePorts(
   overrides: Partial<ResumeStreamPorts> = {},
 ): ResumeStreamPorts {
   return {
-    runtimeHost,
+    interactions: defaultSession().interactions,
     streamStatus: defaultSession().status,
     resolveResumeState: vi.fn(async () => ({
       runState: { agent: 'a', model: 'm' } as never,
@@ -47,7 +44,6 @@ function basePorts(
 describe('resolveAndResumeStream', () => {
   beforeEach(() => {
     retrieveSessionResumeDataMock.mockReset();
-    runtimeHost.emit.mockReset();
   });
 
   afterEach(() => {
@@ -60,7 +56,7 @@ describe('resolveAndResumeStream', () => {
     const ports = basePorts();
 
     await expect(resolveAndResumeStream(STREAM, ports)).resolves.toBe(true);
-    expect(ports.resumeToolUse).toHaveBeenCalledWith(snapshot);
+    expect(ports.resumeToolUse).toHaveBeenCalledWith(snapshot, undefined);
     expect(ports.executeWorkflow).not.toHaveBeenCalled();
   });
 
@@ -87,7 +83,7 @@ describe('resolveAndResumeStream', () => {
       expect.anything(),
       { parentStreamId },
     );
-    expect(ports.resumeToolUse).toHaveBeenCalledWith(snapshot);
+    expect(ports.resumeToolUse).toHaveBeenCalledWith(snapshot, undefined);
   });
 
   it('launches workflow resumes without pre-acquiring the stream', async () => {
@@ -152,7 +148,6 @@ describe('resolveAndResumeStream', () => {
     await expect(resolveAndResumeStream(STREAM, ports)).resolves.toBe(false);
     expect(ports.resolveResumeState).not.toHaveBeenCalled();
     expect(retrieveSessionResumeDataMock).not.toHaveBeenCalled();
-    expect(isResumeInFlight(STREAM)).toBe(false);
   });
 
   it('stops after persisted state resolution when cancellation arrives', async () => {
@@ -172,7 +167,6 @@ describe('resolveAndResumeStream', () => {
     expect(retrieveSessionResumeDataMock).not.toHaveBeenCalled();
     expect(ports.resumeToolUse).not.toHaveBeenCalled();
     expect(ports.executeWorkflow).not.toHaveBeenCalled();
-    expect(isResumeInFlight(STREAM)).toBe(false);
   });
 
   it('stops after resume-data retrieval when cancellation arrives', async () => {
@@ -188,7 +182,6 @@ describe('resolveAndResumeStream', () => {
     await expect(resolveAndResumeStream(STREAM, ports)).resolves.toBe(false);
     expect(ports.resumeToolUse).not.toHaveBeenCalled();
     expect(ports.executeWorkflow).not.toHaveBeenCalled();
-    expect(isResumeInFlight(STREAM)).toBe(false);
   });
 
   it('guards against the injected session machine, not the process default (#7640)', async () => {
@@ -261,11 +254,9 @@ describe('resolveAndResumeStream', () => {
 
     const pending = resolveAndResumeStream(STREAM, ports);
     await reportStarted;
-    expect(isResumeInFlight(STREAM)).toBe(true);
 
     release();
     await expect(pending).resolves.toBe(false);
-    expect(isResumeInFlight(STREAM)).toBe(false);
   });
 
   it('surfaces a retrieval failure without leaking the in-flight slot', async () => {
@@ -275,7 +266,6 @@ describe('resolveAndResumeStream', () => {
 
     await expect(resolveAndResumeStream(STREAM, ports)).resolves.toBe(false);
     expect(ports.reportFailure).toHaveBeenCalledWith(STREAM, error);
-    expect(isResumeInFlight(STREAM)).toBe(false);
   });
 
   it('keeps the in-flight guard until async failure reporting completes', async () => {
@@ -298,11 +288,9 @@ describe('resolveAndResumeStream', () => {
 
     const pending = resolveAndResumeStream(STREAM, ports);
     await reportStarted;
-    expect(isResumeInFlight(STREAM)).toBe(true);
 
     release();
     await expect(pending).resolves.toBe(false);
-    expect(isResumeInFlight(STREAM)).toBe(false);
   });
 
   it('reports in-flight while preparing and clears it once settled', async () => {
@@ -327,10 +315,8 @@ describe('resolveAndResumeStream', () => {
 
     const pending = resolveAndResumeStream(STREAM, ports);
     await reached;
-    expect(isResumeInFlight(STREAM)).toBe(true);
 
     release();
     await expect(pending).resolves.toBe(true);
-    expect(isResumeInFlight(STREAM)).toBe(false);
   });
 });

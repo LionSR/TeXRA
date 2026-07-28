@@ -39,6 +39,9 @@ vi.mock('@platform/platform', () => ({
 
 vi.mock('@auth/codex', () => ({
   getCodexStatus: mocks.getCodexStatus,
+}));
+
+vi.mock('@model/codex/codexPreference', () => ({
   isPreferCodexSubscription: mocks.isPreferCodexSubscription,
   setPreferCodexSubscription: mocks.setPreferCodexSubscription,
 }));

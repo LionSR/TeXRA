@@ -38,7 +38,7 @@ type DesktopToolEditApprovalUi = Pick<
 >;
 
 export interface DesktopToolEditApprovalOptions {
-  runtimeHost: Required<Pick<HostInteractions, 'emit'>>;
+  interactions: Required<Pick<HostInteractions, 'emit'>>;
   session: SessionHandle;
   ui: DesktopToolEditApprovalUi;
   showToolEditPermission(payload: ToolEditPermission): void;
@@ -302,7 +302,7 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
       'failed to show approval prompt',
       () =>
         this.options.showToolEditPermission(
-          prepareToolEditApprovalPrompt(this.options.runtimeHost, session, {
+          prepareToolEditApprovalPrompt(this.options.interactions, session, {
             requestId,
             request,
             relativePath: this.relativeDisplayPath(request.path),

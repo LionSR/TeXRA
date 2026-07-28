@@ -83,7 +83,7 @@ export class ToolUseWaitNode<C> extends Node<
       const goal = GoalStore.getForStream(streamId);
       if (goal?.status === 'active') {
         await GoalStore.setStatus(streamId, 'paused');
-        await setGoalSessionBashAutoApproval(streamId, false, ownerSession.interactions);
+        await setGoalSessionBashAutoApproval(streamId, false);
         emitRunFact(this.services.logger, 'goalPaused', { streamId });
       }
     } else if (!isSubagent) {

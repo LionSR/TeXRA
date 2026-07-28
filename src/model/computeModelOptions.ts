@@ -1,7 +1,11 @@
 import { LRUCache } from 'lru-cache';
 
-import { isCodexSignedIn, isPreferCodexSubscription } from '@auth/codex';
-import { getServerSideKeyService } from '@auth/serverKeys';
+import {
+  includedModelAccess,
+  type IncludedModelAccess,
+} from '@model/includedModelAccess';
+import { isCodexSignedIn } from '@model/codex/codexSignedIn';
+import { isPreferCodexSubscription } from '@model/codex/codexPreference';
 import { platform } from '@platform/platform';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { ModelAvailabilityKind, ModelOptionData } from '@shared/schemas';
@@ -50,14 +54,23 @@ import type { ModelConfig } from 'llm-zoo';
 
 type PersonalModelAccessKind = 'provider-key' | 'openrouter-key';
 
-export interface ModelOptionsServerAccess {
-  canUseServerSideKeys(): Promise<boolean>;
-  getUseIncludedModelAccess(): boolean;
-  wasQuotaAutoSwitched(): boolean;
-  isRelayQuotaExceeded(): boolean;
-  isProviderOnServer(provider: string): boolean;
-  canUseModelSync(model: string): boolean;
-}
+/**
+ * The slice of {@link IncludedModelAccess} model availability reads: whether
+ * included access is on, whether the account can use it, and which
+ * providers/models it covers. Derived rather than redeclared so a caller can
+ * always pass the installed provider, while a test — and the picker's own
+ * narrower contract — stays free of the credential and routing members that
+ * only request construction needs.
+ */
+export type ModelOptionsServerAccess = Pick<
+  IncludedModelAccess,
+  | 'canUseServerSideKeys'
+  | 'getUseIncludedModelAccess'
+  | 'wasQuotaAutoSwitched'
+  | 'isRelayQuotaExceeded'
+  | 'isProviderOnServer'
+  | 'canUseModelSync'
+>;
 
 export interface ModelOptionsAccess {
   readonly visibleModels: readonly string[];
@@ -362,7 +375,7 @@ function buildDefaultModelOptionsAccess(
     visibleModels: getVisibleModels(host.globalState),
     secrets: host.secrets,
     useOpenRouter: getUseOpenRouter(),
-    serverSideKeyService: getServerSideKeyService(),
+    serverSideKeyService: includedModelAccess(),
     agentCategory: options.agentCategory,
   };
 }

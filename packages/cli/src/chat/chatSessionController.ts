@@ -8,12 +8,17 @@
 import PQueue from 'p-queue';
 
 import { getExecutionStore } from '@agent/storage';
+import type { FollowUpRecoveryLease } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import {
   AgentConfigSchema,
   type AgentConfig,
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
+import {
+  AgentExecutionHandle,
+  type ExecutionHandle,
+} from '@agent/runtime/ExecutionHandle';
 import { resumeToolUseFromResumeData } from '@agent/runtime/executeAgent';
 import { runAgent } from '@agent/runtime/runAgent';
 import { resolveAndResumeStream } from '@agent/runtime/resolveAndResumeStream';
@@ -28,7 +33,7 @@ import { setCliHelperModel } from '@cli/runtime/initPlatform';
 import {
   createCliRuntimeHost,
   type CliRuntimeHost,
-} from '@cli/runtime/runtimeHost';
+} from '@cli/runtime/cliPresentationHost';
 import {
   explainNonResumable,
   resolveCliResume,
@@ -36,6 +41,7 @@ import {
 } from '@cli/runtime/sessionResume';
 import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
 import { CLI_UNAVAILABLE_TOOLS } from '@cli/runtime/unavailableTools';
+import type { RecoveryContinuation } from '@platform/interfaces';
 import {
   RUN_OUTCOME,
   STREAM_PHASE,
@@ -101,8 +107,9 @@ interface SupersededInterruptedRecovery {
 }
 
 interface AutoResumeOptions {
+  readonly recovery?: RecoveryContinuation;
   readonly extraFollowUps?: readonly InterruptedFollowUp[];
-  readonly onFollowUpQueueReady?: () => void;
+  readonly onFollowUpQueueReady?: (recovery: FollowUpRecoveryLease) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -152,7 +159,10 @@ export interface ChatSessionController {
    * Attempt to resume a queued follow-up target from the CLI platform port.
    * Returns true only when this controller accepts the target resume.
    */
-  tryResumeStream(streamId: StreamTabId): Promise<boolean>;
+  tryResumeStream(
+    streamId: StreamTabId,
+    recovery?: RecoveryContinuation,
+  ): Promise<boolean>;
 
   /** Whether a new root run can be started right now. */
   canStartRootRun(): boolean;
@@ -187,6 +197,8 @@ export function createChatSessionController(
   } = init;
   let interruptedContinuation: InterruptedContinuationBatch | undefined;
   let pendingInterruptedFollowUps: InterruptedFollowUp[] = [];
+  const executionInteractionOwners = new Map<string, object>();
+  const streamInteractionOwners = new Map<StreamTabId, object>();
 
   // Run facts belong to the TUI session, not to any one root turn. A stopped
   // root may leave detached children running, and those children must keep
@@ -233,19 +245,17 @@ export function createChatSessionController(
     return streamId ? { streamId, followUps } : undefined;
   };
 
-  const enqueueRecoveryFollowUps = (
+  const restoreRecoveryFollowUps = (
     recovery: SupersededInterruptedRecovery | undefined,
-    streamId: StreamTabId,
+    lease: FollowUpRecoveryLease,
   ): void => {
-    for (const followUp of recovery?.followUps ?? []) {
-      defaultSession().followUps.enqueue(streamId, followUp, { force: true });
-    }
+    defaultSession().followUps.restore(lease, recovery?.followUps ?? []);
     if (recovery?.followUps.length) {
       defaultSession().events.emit({
         scope: 'session',
         event: {
           type: 'updateQueuedFollowUps',
-          payload: { streamId },
+          payload: { streamId: lease.streamId },
         },
       });
     }
@@ -296,13 +306,16 @@ export function createChatSessionController(
   const setupRunHost = (
     sessionContext: CliContext,
   ): {
-    readonly runtimeHost: CliRuntimeHost;
+    readonly presentationHost: CliRuntimeHost;
     readonly approvalsUnavailable: boolean;
+    readonly ownExecution: (executionId: ExecutionId) => void;
     readonly finalize: () => void;
   } => {
-    const runtimeHost = createCliRuntimeHost(sessionContext);
+    const interactionOwner = {};
+    const ownedExecutionIds = new Set<string>();
+    const presentationHost = createCliRuntimeHost(sessionContext);
     const detachHostInteractions = defaultSession().useHostInteractions(
-      createTuiHostInteractions(runtimeHost, sessionContext),
+      createTuiHostInteractions(presentationHost, sessionContext),
     );
     const detachResultToast = attachTerminalResultToast(
       defaultSession(),
@@ -315,42 +328,77 @@ export function createChatSessionController(
       detachResultToast();
     };
     let released = false;
-    let detachExecutionListener = (): void => {};
+    let rootFinalized = false;
+    let rootExecutionId: ExecutionId | undefined;
+    const executions = defaultSession().executions;
+    const releaseIfUnused = (): void => {
+      if (rootFinalized && ownedExecutionIds.size === 0) releaseHost();
+    };
+    const observeExecution = (
+      executionId: string,
+      handle: ExecutionHandle | undefined,
+    ): void => {
+      if (!handle) {
+        if (executionInteractionOwners.get(executionId) === interactionOwner) {
+          executionInteractionOwners.delete(executionId);
+          ownedExecutionIds.delete(executionId);
+        }
+        releaseIfUnused();
+        return;
+      }
+      const ownsExecution =
+        executionInteractionOwners.get(executionId) === interactionOwner;
+      const ownsParent =
+        streamInteractionOwners.get(handle.parentStreamId) === interactionOwner;
+      if (!ownsExecution && !ownsParent) {
+        ownedExecutionIds.delete(executionId);
+        releaseIfUnused();
+        return;
+      }
+      executionInteractionOwners.set(executionId, interactionOwner);
+      ownedExecutionIds.add(executionId);
+      if (handle instanceof AgentExecutionHandle) {
+        streamInteractionOwners.set(handle.childStreamId, interactionOwner);
+      }
+    };
+    const detachExecutionListener =
+      executions.addRegistrationListener(observeExecution);
     const releaseHost = (): void => {
       if (released) return;
       released = true;
       detachExecutionListener();
+      for (const [executionId, owner] of executionInteractionOwners) {
+        if (owner === interactionOwner) {
+          executionInteractionOwners.delete(executionId);
+        }
+      }
+      for (const [streamId, owner] of streamInteractionOwners) {
+        if (owner === interactionOwner)
+          streamInteractionOwners.delete(streamId);
+      }
       detachResultToastOnce();
       detachHostInteractions();
-      if (session.runtimeHost === runtimeHost) {
-        session.runtimeHost = undefined;
+      if (session.presentationHost === presentationHost) {
+        session.presentationHost = undefined;
       }
-      void runtimeHost.close();
+      void presentationHost.close();
     };
     disposers.push(releaseHost);
 
     const releaseHostWhenUnused = (): void => {
-      if (released) return;
-      const executions = defaultSession().executions;
-      const releaseIfUnused = (): void => {
-        const inUse = executions.getActiveIds().length > 0;
-        if (!inUse) releaseHost();
-      };
-      // Subscribe before the first liveness check. An execution that untracks
-      // at this boundary therefore either fires the listener or is absent from
-      // the check; there is no snapshot-to-wait interval that can lose it.
-      const detach = executions.addRegistrationListener(releaseIfUnused);
-      detachExecutionListener = detach;
-      if (released) {
-        // Defensive against a registration source that invokes synchronously.
-        detach();
-        return;
-      }
+      rootFinalized = true;
       releaseIfUnused();
     };
     return {
-      runtimeHost,
+      presentationHost,
       approvalsUnavailable: approvalPromptsUnavailable(sessionContext),
+      ownExecution: (executionId): void => {
+        rootExecutionId = executionId;
+        executionInteractionOwners.set(executionId, interactionOwner);
+        ownedExecutionIds.add(executionId);
+        const handle = executions.getHandle(executionId);
+        if (handle) observeExecution(executionId, handle);
+      },
       finalize: (): void => {
         // The root terminal result is published before its run promise
         // settles. Children retain `isSubagent: true` and never produce a
@@ -358,6 +406,14 @@ export function createChatSessionController(
         // root finalizes and must not overlap a later root's listener.
         detachResultToastOnce();
         markChatTuiRunCompleted(session);
+        if (
+          rootExecutionId &&
+          !executions.getHandle(rootExecutionId) &&
+          executionInteractionOwners.get(rootExecutionId) === interactionOwner
+        ) {
+          executionInteractionOwners.delete(rootExecutionId);
+          ownedExecutionIds.delete(rootExecutionId);
+        }
         releaseHostWhenUnused();
       },
     };
@@ -372,9 +428,10 @@ export function createChatSessionController(
     const currentModel = config.model;
     const sessionContext = getSessionContext(currentModel);
     activateAgentConfig(config);
-    const { runtimeHost, approvalsUnavailable, finalize } =
+    const { presentationHost, approvalsUnavailable, ownExecution, finalize } =
       setupRunHost(sessionContext);
     const executionId = generateExecutionId();
+    ownExecution(executionId);
     session.executionId = executionId;
 
     const runPromise = Promise.resolve()
@@ -431,7 +488,7 @@ export function createChatSessionController(
       })
       .catch(reportRunFailure)
       .finally(finalize);
-    markChatTuiRunPending(session, runPromise, runtimeHost);
+    markChatTuiRunPending(session, runPromise, presentationHost);
   };
 
   // -----------------------------------------------------------------------
@@ -500,9 +557,10 @@ export function createChatSessionController(
       projectStreamTranscript(resolution.streamId);
       activeStreamId.set(resolution.streamId);
 
-      const { runtimeHost, approvalsUnavailable, finalize } =
+      const { presentationHost, approvalsUnavailable, ownExecution, finalize } =
         setupRunHost(sessionContext);
-      session.runtimeHost = runtimeHost;
+      ownExecution(resolution.executionId);
+      session.presentationHost = presentationHost;
 
       // A Ctrl-C during the rehydration awaits above (`resolveCliResume`,
       // `ensureLoaded`, `snapshotStore.load`/`read`) lands here as
@@ -568,8 +626,12 @@ export function createChatSessionController(
 
   const tryResumeStream = (
     streamId: StreamTabId,
-    options: AutoResumeOptions = {},
+    recoveryOrOptions: RecoveryContinuation | AutoResumeOptions = {},
   ): Promise<boolean> => {
+    const options: AutoResumeOptions =
+      'kind' in recoveryOrOptions
+        ? { recovery: recoveryOrOptions }
+        : recoveryOrOptions;
     let resolveRun: (resumed: boolean) => void = () => {};
     let rejectRun: (error: unknown) => void = () => {};
     const runPromise = new Promise<boolean>((resolve, reject) => {
@@ -610,8 +672,10 @@ export function createChatSessionController(
 
         const runHost = setupRunHost(sessionContext);
         finalize = runHost.finalize;
-        const { runtimeHost, approvalsUnavailable } = runHost;
-        session.runtimeHost = runtimeHost;
+        const { presentationHost, approvalsUnavailable, ownExecution } =
+          runHost;
+        ownExecution(executionId);
+        session.presentationHost = presentationHost;
         session.streamId = streamId;
         session.executionId = executionId;
         if (!parentStreamId) {
@@ -625,48 +689,53 @@ export function createChatSessionController(
         let resumedOutcome: Parameters<typeof runOutcomeExitCode>[0] =
           RUN_OUTCOME.COMPLETED;
         const resumed = await setCliHelperModel(currentModel).then(() =>
-          resolveAndResumeStream(streamId, {
-            interactions: defaultSession().interactions,
-            streamStatus: defaultSession().status,
-            isCancellationRequested: () => session.stopRequested,
-            resolveResumeState: async () => ({
-              runState: config,
-              executionId,
-              parentStreamId,
-            }),
-            resumeToolUse: (resume) =>
-              resumeQueuedToolUseFromResumeData(streamId, resume, {
-                session: defaultSession(),
-                approvalPromptsUnavailable: approvalsUnavailable,
-                runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
-                extraFollowUps: options.extraFollowUps,
-                onFollowUpQueueReady: () => {
-                  if (options.onFollowUpQueueReady) {
-                    options.onFollowUpQueueReady();
-                  } else {
-                    const recovery = supersedeInterruptedRecovery();
-                    enqueueRecoveryFollowUps(recovery, streamId);
-                  }
-                },
-                isCancellationRequested: () => session.stopRequested,
-                onResult: (result) => {
-                  resumedOutcome = result.outcome;
-                },
-                onError: reportRunFailure,
+          resolveAndResumeStream(
+            streamId,
+            {
+              interactions: defaultSession().interactions,
+              streamStatus: defaultSession().status,
+              isCancellationRequested: () => session.stopRequested,
+              resolveResumeState: async () => ({
+                runState: config,
+                executionId,
+                parentStreamId,
               }),
-            executeWorkflow: async () => {
-              throw new Error(
-                'CLI chat cannot auto-resume workflow streams from follow-up wake.',
-              );
+              resumeToolUse: (resume, claimedRecovery) =>
+                resumeQueuedToolUseFromResumeData(streamId, resume, {
+                  session: defaultSession(),
+                  recovery: claimedRecovery,
+                  approvalPromptsUnavailable: approvalsUnavailable,
+                  runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
+                  extraFollowUps: options.extraFollowUps,
+                  onFollowUpQueueReady: (lease) => {
+                    if (options.onFollowUpQueueReady) {
+                      options.onFollowUpQueueReady(lease);
+                    } else {
+                      const recovery = supersedeInterruptedRecovery();
+                      restoreRecoveryFollowUps(recovery, lease);
+                    }
+                  },
+                  isCancellationRequested: () => session.stopRequested,
+                  onResult: (result) => {
+                    resumedOutcome = result.outcome;
+                  },
+                  onError: reportRunFailure,
+                }),
+              executeWorkflow: async () => {
+                throw new Error(
+                  'CLI chat cannot auto-resume workflow streams from follow-up wake.',
+                );
+              },
+              reportNoResumableSession: () => {
+                appendLocalAssistantTranscript(
+                  'Message queued. Auto-resume found no resumable session state; resume the session manually or start a new agent task.',
+                  streamId,
+                );
+              },
+              reportFailure: (_failedStream, error) => reportRunFailure(error),
             },
-            reportNoResumableSession: () => {
-              appendLocalAssistantTranscript(
-                'Message queued. Auto-resume found no resumable session state; resume the session manually or start a new agent task.',
-                streamId,
-              );
-            },
-            reportFailure: (_failedStream, error) => reportRunFailure(error),
-          }),
+            options.recovery,
+          ),
         );
 
         if (resumed) {

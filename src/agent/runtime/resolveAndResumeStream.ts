@@ -10,6 +10,7 @@
  */
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { TaskState } from '@agent/core/state/TaskState';
+import type { RecoveryContinuation } from '@platform/interfaces';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 import {
@@ -48,7 +49,10 @@ export interface ResumeStreamPorts {
     streamId: StreamTabId,
   ): Promise<ResolvedResumeState | undefined>;
   /** Resume canonical tool-use state (host injects its failure surface). */
-  resumeToolUse(resume: ToolUseResumeData): Promise<boolean>;
+  resumeToolUse(
+    resume: ToolUseResumeData,
+    recovery?: RecoveryContinuation,
+  ): Promise<boolean>;
   /**
    * Launch a workflow resume run. The extension re-parses the config and opens
    * the final output; the desktop runs it directly and opens its own preview —
@@ -70,18 +74,6 @@ export interface ResumeStreamPorts {
 }
 
 /**
- * Streams whose resume has been accepted and is still preparing. Module-level so
- * a single host-initiated resume is visible to the queued-delivery wake path
- * (`AgentResumePort.isResumeInFlight`) across every entry point and host, and so
- * a concurrent wake cannot launch a duplicate resume.
- */
-const resumeInFlight = new Set<StreamTabId>();
-
-export function isResumeInFlight(streamId: StreamTabId): boolean {
-  return resumeInFlight.has(streamId);
-}
-
-/**
  * Attempt to resume a WAITING / children-running stream from its persisted
  * state. Returns `true` when the resume reached the run lifecycle, `false`
  * otherwise (already active/resuming, nothing to resume, or a handled failure).
@@ -89,19 +81,18 @@ export function isResumeInFlight(streamId: StreamTabId): boolean {
 export async function resolveAndResumeStream(
   streamId: StreamTabId,
   ports: ResumeStreamPorts,
+  recovery?: RecoveryContinuation,
 ): Promise<boolean> {
   const isCancellationRequested = (): boolean =>
     ports.isCancellationRequested?.() === true;
 
   if (
     isCancellationRequested() ||
-    ports.streamStatus.isActiveOrResuming(streamId) ||
-    resumeInFlight.has(streamId)
+    ports.streamStatus.isActiveOrResuming(streamId)
   ) {
     return false;
   }
 
-  resumeInFlight.add(streamId);
   try {
     const resolved = await ports.resolveResumeState(streamId);
     if (isCancellationRequested()) return false;
@@ -131,7 +122,7 @@ export async function resolveAndResumeStream(
 
     if (resume.type === 'toolUse') {
       // The tool-use helper owns the RESUMING flip + follow-up dance.
-      return await ports.resumeToolUse(resume);
+      return await ports.resumeToolUse(resume, recovery);
     }
 
     // Workflow launch owns stream acquisition and status transitions through
@@ -147,7 +138,5 @@ export async function resolveAndResumeStream(
     if (isCancellationRequested()) return false;
     await ports.reportFailure?.(streamId, error);
     return false;
-  } finally {
-    resumeInFlight.delete(streamId);
   }
 }

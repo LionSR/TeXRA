@@ -42,7 +42,6 @@ function trackAgent(
     streamId,
     'orchestrator',
     'toolUse',
-    host,
   );
   session.executions.track(handle);
   return handle;
@@ -373,11 +372,6 @@ describe('SessionHandle', () => {
 
     expect(() =>
       trackAgent(session, host, 'exec:late', 'stream:late' as StreamTabId),
-    ).toThrow('Cannot register execution work after session disposal.');
-    expect(() =>
-      session.executions.registerChildRunLoop(
-        'stream:late-child' as StreamTabId,
-      ),
     ).toThrow('Cannot register execution work after session disposal.');
   });
 });

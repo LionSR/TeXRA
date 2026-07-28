@@ -92,12 +92,6 @@ vi.mock('@tools/approval', () => ({
   }),
 }));
 
-function runtimeHost(): SessionHostInteractions {
-  return {
-    emit: vi.fn(),
-  };
-}
-
 /** Real session whose interactions slot is the host's fake port. */
 function sessionFor(interactions: HostInteractions): SessionHandle {
   const session = createTestSession();
@@ -149,7 +143,7 @@ function delegationOptions(
     agentName: 'review',
     parentExecutionId: STABLE_PARENT_EXECUTION_ID,
     parentStreamId: 'parent-stream' as StreamTabId,
-    interactions: runtimeHost(),
+    interactions: defaultSession().interactions,
     session: defaultSession(),
     ...overrides,
   };
@@ -287,8 +281,8 @@ describe('headless delegation', () => {
     for (const executionId of defaultSession().executions.getActiveIds()) {
       defaultSession().executions.untrack(executionId);
     }
-    defaultSession().followUps.release('parent-stream' as StreamTabId);
-    defaultSession().followUps.release('child-stream' as StreamTabId);
+    defaultSession().followUps.terminalize('parent-stream' as StreamTabId);
+    defaultSession().followUps.terminalize('child-stream' as StreamTabId);
   });
 
   it('awaits child delegation during one-shot tool-use runs', async () => {
@@ -1093,9 +1087,8 @@ describe('headless delegation', () => {
     } satisfies HostInteractions;
 
     const session = sessionFor(interactions);
-    const result = await withRunContext(
-      parentRunContext({ session }),
-      () => callDelegateReview(),
+    const result = await withRunContext(parentRunContext({ session }), () =>
+      callDelegateReview(),
     );
     session.dispose();
 
@@ -1129,9 +1122,8 @@ describe('headless delegation', () => {
     } satisfies HostInteractions;
 
     const session = sessionFor(interactions);
-    const result = await withRunContext(
-      parentRunContext({ session }),
-      () => callDelegateReview(),
+    const result = await withRunContext(parentRunContext({ session }), () =>
+      callDelegateReview(),
     );
     session.dispose();
 
@@ -1161,9 +1153,8 @@ describe('headless delegation', () => {
     } satisfies HostInteractions;
 
     const session = sessionFor(interactions);
-    const result = await withRunContext(
-      parentRunContext({ session }),
-      () => callDelegateReview(),
+    const result = await withRunContext(parentRunContext({ session }), () =>
+      callDelegateReview(),
     );
     session.dispose();
 
@@ -1240,9 +1231,8 @@ describe('headless delegation', () => {
       },
     );
 
-    await withRunContext(
-      parentRunContext({ streamId: parentStreamId }),
-      () => callDelegateReview(),
+    await withRunContext(parentRunContext({ streamId: parentStreamId }), () =>
+      callDelegateReview(),
     );
 
     await vi.waitFor(() => {
@@ -1287,9 +1277,8 @@ describe('headless delegation', () => {
       },
     );
 
-    await withRunContext(
-      parentRunContext({ streamId: parentStreamId }),
-      () => callDelegateReview(),
+    await withRunContext(parentRunContext({ streamId: parentStreamId }), () =>
+      callDelegateReview(),
     );
 
     await vi.waitFor(() => {

@@ -62,6 +62,22 @@ wa-button[hidden] {
   outline-offset: calc(-1 * var(--focus-ring-offset));
 }
 
+/* Mirrors @shared/styles/litStyles.ts's animationStyles: same keyframe name so
+   a caller can override just the duration, as taskShell.css's
+   .task-environment-refresh does. */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spin {
+  animation: spin 2s linear infinite;
+}
+
 wa-button.btn-primary::part(base),
 wa-button.btn-secondary::part(base) {
   min-height: var(--height-button);

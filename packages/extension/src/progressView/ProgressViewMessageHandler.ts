@@ -7,10 +7,6 @@ import {
 } from '@agent/core/state/executionRequests';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import {
-  isPreferCodexSubscription,
-  setPreferCodexSubscription,
-} from '@auth/codex';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { apiKeyCommands } from '@commands/api/apiKeyCommands';
 import { BaseViewMessageHandler } from '@common/webview';
@@ -34,6 +30,10 @@ import type { PromptHost } from '@hosts/uiHosts';
 import { isApiProvider } from '@model/apiProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { getRuntimeModelDirectFallback } from '@model/runtimeModelRegistry';
+import {
+  isPreferCodexSubscription,
+  setPreferCodexSubscription,
+} from '@model/codex/codexPreference';
 import type { GettingStartedAction, StreamTabId } from '@shared/schemas';
 import { COMMON_COMMANDS, PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { unsupportedCommands } from '@shared/utils/dispatcher';
@@ -482,7 +482,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           },
         },
         bypass: {
-          interactions: defaultSession().interactions,
           showInfo: (message) => this.host.info(message),
         },
         file: {

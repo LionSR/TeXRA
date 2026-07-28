@@ -130,7 +130,6 @@ function createLifecycleContext({
   const storageKey = executionId as StorageKey;
   const session = defaultSession();
   const runScope = createRunScope({
-    runtimeHost: explicit.host,
     streamId,
     executionId,
     agentName: config.agent,
@@ -707,9 +706,9 @@ describe('runFlowWithLifecycle', () => {
     const { executionId, streamId, ctx } = lifecycleFixture(
       'lifecycle-subagent-waiting-kill',
     );
-    const followUpsRelease = vi.spyOn(
+    const followUpsTerminalize = vi.spyOn(
       ctx.runScope.session.followUps,
-      'release',
+      'terminalize',
     );
     const transcriptsUpdate = vi.spyOn(
       ctx.runScope.session.transcripts,
@@ -731,7 +730,7 @@ describe('runFlowWithLifecycle', () => {
 
       expect(result.outcome).toBe(STREAM_PHASE.WAITING);
       expect(defaultSession().executions.getHandle(executionId)).toBeDefined();
-      expect(followUpsRelease).not.toHaveBeenCalled();
+      expect(followUpsTerminalize).not.toHaveBeenCalled();
       expect(storageMocks.finalizeExecution).not.toHaveBeenCalled();
       // The fixture's ctx.logger is noopTrace, and the run handle carries it
       // as its trace channel.
@@ -783,7 +782,7 @@ describe('runFlowWithLifecycle', () => {
       expect(defaultSession().status.get(streamId)).toBe(
         STREAM_PHASE.CANCELLED,
       );
-      expect(followUpsRelease).toHaveBeenCalledWith(streamId);
+      expect(followUpsTerminalize).toHaveBeenCalledWith(streamId);
       await vi.waitFor(() =>
         expect(storageMocks.finalizeExecution).toHaveBeenCalledWith({
           executionId,
@@ -1063,7 +1062,6 @@ describe('finalizeRunTerminal', () => {
       streamId,
       'test-agent',
       'toolUse',
-      explicit.host,
       noopTrace,
     );
     const untrack = vi.fn();
@@ -1141,7 +1139,6 @@ describe('finalizeRunTerminal', () => {
       streamId,
       'test-agent',
       'toolUse',
-      createRecordingHost().host,
       noopTrace,
     );
     const untrack = vi.fn();

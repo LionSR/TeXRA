@@ -12,7 +12,7 @@ afterEach(async () => {
   teardownDefaultSession();
   await cleanupTempDirs(tempDirs);
   vi.doUnmock('@agent/runtime/runAgent');
-  vi.doUnmock('@cli/runtime/runtimeHost');
+  vi.doUnmock('@cli/runtime/cliPresentationHost');
   vi.doUnmock('@cli/runtime/transcriptSession');
   vi.resetModules();
 });
@@ -29,7 +29,9 @@ describe('CLI transcript session policy', () => {
       }),
     }));
     vi.doMock('@agent/runtime/runAgent', () => ({ runAgent }));
-    vi.doMock('@cli/runtime/runtimeHost', () => ({ createCliRuntimeHost }));
+    vi.doMock('@cli/runtime/cliPresentationHost', () => ({
+      createCliRuntimeHost,
+    }));
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
 
     await expect(

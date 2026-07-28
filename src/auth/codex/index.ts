@@ -1,9 +1,13 @@
 /**
- * Experimental "Sign in with ChatGPT" (Codex subscription) auth.
+ * Experimental "Sign in with ChatGPT" (Codex subscription) OAuth session.
  *
- * Public surface for hosts (CLI/extension/desktop login commands), the Codex
- * model handler, and the model-availability gate. Rides an UNOFFICIAL OpenAI
- * endpoint + borrowed client id — opt-in, off by default, personal use only.
+ * Public surface for hosts (CLI/extension/desktop login commands) and the Codex
+ * model handler. Rides an UNOFFICIAL OpenAI endpoint + borrowed client id —
+ * opt-in, off by default, personal use only.
+ *
+ * The "prefer my subscription" switches are NOT here: they are model-selection
+ * preferences, owned by `@model/codex/codexPreference` so the model layer can
+ * read them without depending on this OAuth machinery.
  */
 export {
   CODEX_ACCOUNT_ID_HEADER,
@@ -13,7 +17,6 @@ export {
   CODEX_CALLBACK_PATH,
   CODEX_ORIGINATOR,
   CODEX_ORIGINATOR_HEADER,
-  CODEX_PREFER_SUBSCRIPTION_KEY,
   CODEX_SESSION_SECRET_KEY,
 } from './codexConstants';
 export {
@@ -40,16 +43,7 @@ export {
   codexCoordinator,
   resetCodexCoordinator,
   getCodexStatus,
-  getChatGptAuthStatus,
   isCodexSessionRoutable,
-  isCodexSignedIn,
 } from './codexAuthAccess';
-export {
-  isPreferCodexSubscription,
-  isCodexSubscriptionToolUseOnly,
-  setPreferCodexSubscription,
-  setCodexSubscriptionToolUseOnly,
-  type CodexSubscriptionPreferenceUpdate,
-} from './codexPreference';
 export { loginWithLoopback } from './codexLoopbackLogin';
 export { loginWithDeviceCode } from './codexDeviceLogin';

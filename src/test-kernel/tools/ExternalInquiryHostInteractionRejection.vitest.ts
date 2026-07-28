@@ -22,7 +22,7 @@ function createRuntimeFixture(reason: Error): {
     openExternalInquiry: () => Promise.reject(reason),
   });
   return {
-    interactions: { emit: () => {} } as SessionHostInteractions,
+    interactions: session.interactions,
     session,
   };
 }
@@ -37,14 +37,11 @@ describe('ExternalInquiryTool host interaction dispatch', () => {
     );
 
     const result = await Promise.resolve(
-      withRunContext(
-        createRunContext({ streamId: STREAM, session }),
-        () =>
-          new ExternalInquiryTool().call({
-            command: 'ask',
-            question:
-              'Does a synchronous panel failure surface as a tool error?',
-          }),
+      withRunContext(createRunContext({ streamId: STREAM, session }), () =>
+        new ExternalInquiryTool().call({
+          command: 'ask',
+          question: 'Does a synchronous panel failure surface as a tool error?',
+        }),
       ),
     ).finally(() => session.dispose());
 

@@ -17,7 +17,13 @@ import {
   type SupabaseSessionLog,
   type SupabaseSessionStorage,
 } from './supabaseSessionTypes';
-import type { AuthTokenProvider, SessionTokens } from './TokenProvider';
+import {
+  classifyAuthFailureStatus,
+  type AuthTokenProvider,
+  type SessionRefreshFailure,
+  type SessionTokens,
+  type StoredSessionState,
+} from './TokenProvider';
 import type { SupabaseClient as Client } from '@supabase/supabase-js';
 
 // Public entry point for the session value-object helpers and coordinator.
@@ -63,6 +69,7 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
   private sessionMutationVersion = 0;
   private lastStoredSession: SupabaseSession | null = null;
   private lastStoredSessionVersion = 0;
+  private lastRefreshFailure: SessionRefreshFailure | null = null;
   private readonly sessionMutex = new Mutex();
 
   constructor(private readonly options: SupabaseSessionCoordinatorOptions) {}
@@ -91,6 +98,38 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
   }
 
   /**
+   * Clear the stored session only if it still has the credential pair observed
+   * by the caller. A completed OAuth callback or refresh may replace a session
+   * while an older validation request is in flight; that older result must not
+   * delete the replacement.
+   */
+  async clearSessionIfCurrent(expected: SupabaseSession): Promise<boolean> {
+    let cleared = false;
+    await this.sessionMutex.runExclusive(async () => {
+      const current = await this.loadSession();
+      if (
+        !current ||
+        current.accessToken !== expected.accessToken ||
+        current.refreshToken !== expected.refreshToken
+      ) {
+        return;
+      }
+
+      this.sessionMutationVersion += 1;
+      const mutationVersion = this.sessionMutationVersion;
+      await this.options.storage.delete();
+      this.lastStoredSession = null;
+      this.lastStoredSessionVersion = mutationVersion;
+      cleared = true;
+    });
+
+    if (cleared) {
+      this.options.onTokenExpiryChanged?.(null);
+    }
+    return cleared;
+  }
+
+  /**
    * Ensure the access token is fresh, refreshing proactively if near expiry.
    *
    * @returns Fresh access token, or null if no session or refresh failed.
@@ -98,6 +137,47 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
   async ensureFreshToken(forceRefresh?: boolean): Promise<string | null> {
     const session = await this.getFreshSession(forceRefresh);
     return session?.accessToken ?? null;
+  }
+
+  /**
+   * Classify one stable stored-session generation. A callback may replace the
+   * session while refresh is in flight; in that case retry rather than apply
+   * the old credential's failure to the new one.
+   */
+  async getStoredSessionState(): Promise<StoredSessionState> {
+    try {
+      for (;;) {
+        const before = await this.loadStableSessionSnapshot();
+        if (!before.session) return 'none';
+        if (await this.getSessionTokens()) return 'authenticated';
+
+        const after = await this.loadStableSessionSnapshot();
+        if (!after.session) return 'none';
+        if (after.version !== before.version) continue;
+
+        return this.lastRefreshFailure === 'invalid' ? 'invalid' : 'transient';
+      }
+    } catch (error) {
+      this.options.log?.error?.(
+        'SupabaseSession',
+        `Error classifying stored session: ${toErrorMessage(error)}`,
+      );
+      return 'transient';
+    }
+  }
+
+  /**
+   * Read the stored session's account label without attempting a token
+   * refresh. Returns null when no session is stored or the data is
+   * unreadable — the caller decides whether to surface "N/A".
+   */
+  async getStoredAccountLabel(): Promise<string | null> {
+    const session = await this.loadSession();
+    return session?.account.label ?? null;
+  }
+
+  getLastRefreshFailure(): SessionRefreshFailure | null {
+    return this.lastRefreshFailure;
   }
 
   /** Get access and refresh tokens from secure storage. */
@@ -199,6 +279,7 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
       return this.refreshPromise;
     }
 
+    this.lastRefreshFailure = null;
     this.refreshPromise = (
       session.useCustomRefresh
         ? this.refreshViaCustomEndpoint(session)
@@ -210,6 +291,7 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
           : null,
       )
       .catch((error) => {
+        this.lastRefreshFailure = 'transient';
         this.options.log?.error?.(
           'SupabaseSession',
           `Error refreshing session: ${toErrorMessage(error)}`,
@@ -231,9 +313,11 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
     });
 
     if (error || !data.session) {
+      this.lastRefreshFailure = classifyAuthFailureStatus(error?.status);
       return null;
     }
 
+    this.lastRefreshFailure = null;
     return toStorableSupabaseSession(data.session);
   }
 
@@ -269,8 +353,10 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
         }
       }
 
+      this.lastRefreshFailure = null;
       return session;
     } catch (error) {
+      this.lastRefreshFailure = 'transient';
       this.options.log?.error?.(
         'SupabaseSession',
         `Error loading fresh session: ${toErrorMessage(error)}`,
@@ -375,6 +461,7 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
     );
 
     if (!response.ok) {
+      this.lastRefreshFailure = classifyAuthFailureStatus(response.status);
       this.options.log?.warn?.(
         'SupabaseSession',
         `Token refresh failed: ${response.status}`,
@@ -383,6 +470,7 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
     }
 
     const data = await parseTokenExchangeResponse(response, this.options.log);
+    this.lastRefreshFailure = null;
     return toStorableSupabaseSession(data, {
       fallbackLabel: session.account.label,
       defaultExpiryMs: this.options.defaultSessionExpiryMs,

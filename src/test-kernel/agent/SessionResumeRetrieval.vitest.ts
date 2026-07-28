@@ -24,7 +24,6 @@ import {
   retrieveSessionResumeData,
   type ToolUseResumeData,
 } from '@agent/runtime/SessionResumeRetrieval';
-import { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { createRunScope } from '@agent/runtime/RunScope';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -154,7 +153,6 @@ async function runPersistedFlow(
     transient: {},
   };
   const runScope = createRunScope({
-    runtimeHost: new SessionHostInteractions(),
     streamId,
     executionId,
     agentName: config.agent,
@@ -623,7 +621,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       } finally {
         readSpy.mockRestore();
         deleteSpy.mockRestore();
-        session.followUps.release(streamId);
+        session.followUps.terminalize(streamId);
       }
     }
   });
@@ -756,7 +754,10 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       expect(readSpy).not.toHaveBeenCalled();
       expect(deleteSpy).not.toHaveBeenCalledWith(flowKey(executionId));
       expect(dispositions).toEqual(['delete']);
-      expect(releaseSpy).toHaveBeenCalledWith(streamId);
+      expect(releaseSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ streamId, kind: 'flow' }),
+        'terminal',
+      );
     } finally {
       readSpy.mockRestore();
       deleteSpy.mockRestore();
@@ -943,7 +944,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       ]);
     } finally {
       readSpy.mockRestore();
-      session.followUps.release(streamId);
+      session.followUps.terminalize(streamId);
     }
   });
 
@@ -998,7 +999,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       ]);
     } finally {
       runSpy.mockRestore();
-      session.followUps.release(streamId);
+      session.followUps.terminalize(streamId);
     }
   });
 

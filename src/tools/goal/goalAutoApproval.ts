@@ -1,4 +1,3 @@
-import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import type { StreamTabId } from '@shared/schemas/identifiers';
 
 /**
@@ -24,9 +23,8 @@ import type { StreamTabId } from '@shared/schemas/identifiers';
 export async function setGoalSessionBashAutoApproval(
   streamId: StreamTabId,
   enabled: boolean,
-  interactions: SessionHostInteractions,
 ): Promise<void> {
   const { setBashApprovalSessionBypass } =
     await import('@tools/approval/bashApproval');
-  setBashApprovalSessionBypass(streamId, enabled, interactions);
+  setBashApprovalSessionBypass(streamId, enabled);
 }

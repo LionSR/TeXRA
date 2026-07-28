@@ -42,8 +42,13 @@ export interface BuildProfileMessageDeps {
 export async function buildProfileMessage(
   deps: BuildProfileMessageDeps,
 ): Promise<UpdateProfileMessage> {
-  const authenticated = await SupabaseClient.isAuthenticated();
-  const providerKeyStatuses = await deps.getProviderKeyStatuses();
+  const [storedSessionState, providerKeyStatuses] = await Promise.all([
+    SupabaseClient.getStoredSessionState(),
+    deps.getProviderKeyStatuses(),
+  ]);
+  const authenticated =
+    storedSessionState === 'authenticated' ||
+    SupabaseClient.hasUsableRelayToken();
   const globalStreamingDefault = getGlobalStreaming();
   const tierConstants = { ultra: ULTRA_TIER, max: MAX_TIER };
   const base = {
@@ -53,16 +58,32 @@ export async function buildProfileMessage(
     globalStreamingDefault,
   };
 
+  // Preserve the distinction between an authoritatively rejected refresh
+  // credential and a transient transport/service failure. Both have a stored
+  // account but require different user guidance.
+  const hasStoredSession = storedSessionState !== 'none';
+  let sessionProblem: UpdateProfileMessage['sessionProblem'] = null;
+  if (storedSessionState === 'invalid') {
+    sessionProblem = 'expired';
+  } else if (storedSessionState === 'transient') {
+    sessionProblem = 'unavailable';
+  }
+  const storedEmail = hasStoredSession
+    ? await SupabaseClient.getStoredAccountLabel()
+    : null;
+
   if (!authenticated) {
     return {
       ...base,
       authenticated: false,
-      user: null,
+      user: storedEmail ? { email: storedEmail, id: '' } : null,
       tier: FREE_TIER,
       remoteAgents: [],
       apiAccessMode: 'personal',
       accessExpiresAt: null,
+      sessionProblem,
       spendingStatus: null,
+      spendingStatusError: null,
       quotaAutoSwitched: false,
     };
   }
@@ -79,6 +100,7 @@ export async function buildProfileMessage(
   let apiAccessMode: ApiAccessMode = 'personal';
   let accessExpiresAt: string | null = null;
   let spendingStatus: UpdateProfileMessage['spendingStatus'] = null;
+  let spendingStatusError: UpdateProfileMessage['spendingStatusError'] = null;
   let quotaAutoSwitched = false;
   try {
     const serverSideKeyService = getServerSideKeyService();
@@ -99,6 +121,7 @@ export async function buildProfileMessage(
       serverSideKeyService.getAccessExpirationDate()?.toISOString() ?? null;
     quotaAutoSwitched = serverSideKeyService.wasQuotaAutoSwitched();
     spendingStatus = serverSideKeyService.getSpendingStatus();
+    spendingStatusError = serverSideKeyService.getSpendingStatusError();
   } catch {
     // Server-side key / tier access is optional; personal provider keys work.
   }
@@ -114,12 +137,17 @@ export async function buildProfileMessage(
   return {
     ...base,
     authenticated: true,
-    user: { email: user?.email ?? 'N/A', id: user?.id ?? '' },
+    user: {
+      email: user?.email ?? storedEmail ?? 'N/A',
+      id: user?.id ?? '',
+    },
     tier,
     remoteAgents,
     apiAccessMode,
     accessExpiresAt,
+    sessionProblem,
     spendingStatus,
+    spendingStatusError,
     quotaAutoSwitched,
   };
 }
