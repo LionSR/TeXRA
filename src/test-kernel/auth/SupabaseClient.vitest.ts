@@ -51,6 +51,7 @@ describe('SupabaseClient', () => {
   afterEach(() => {
     SupabaseClient.resetForTests();
     resetRelayTokenTierCacheForTests();
+    vi.restoreAllMocks();
   });
 
   it('reads session tokens through the registered token provider', async () => {
@@ -212,6 +213,32 @@ describe('SupabaseClient', () => {
       'SupabaseClient',
       expect.stringContaining('Error getting user tier:'),
     );
+  });
+
+  it('treats a null profile tier as free without reporting corruption', async () => {
+    SupabaseClient.setAuthProvider(
+      createTokenProvider({
+        getSessionTokens: async () => ({
+          accessToken: 'access-token',
+          refreshToken: 'refresh-token',
+        }),
+      }),
+    );
+    vi.spyOn(SupabaseClient, 'getClient').mockReturnValue({
+      auth: { setSession: vi.fn(async () => {}) },
+      from: vi.fn(() => ({
+        select: vi.fn(() => ({
+          single: vi.fn(async () => ({
+            data: { tier: null },
+            error: null,
+          })),
+        })),
+      })),
+    } as never);
+    const error = vi.spyOn(logger, 'error').mockImplementation(() => {});
+
+    await expect(SupabaseClient.getSessionTier()).resolves.toBe('free');
+    expect(error).not.toHaveBeenCalled();
   });
 
   it('waits for token provider readiness', async () => {
