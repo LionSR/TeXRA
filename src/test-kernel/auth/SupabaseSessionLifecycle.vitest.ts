@@ -695,6 +695,28 @@ describe('SupabaseSession', () => {
       assert.equal(coordinator.getLastRefreshFailure(), 'transient');
     });
 
+    it.each([408, 429])(
+      'classifies custom refresh HTTP %i as transient',
+      async (status) => {
+        const initialSession = makeSession({
+          accessToken: 'old-access',
+          refreshToken: 'old-refresh',
+          expiresAt: Date.now() - 1_000,
+          useCustomRefresh: true,
+        });
+        const { coordinator } = createCoordinator({
+          initialSession,
+          fetch: async () =>
+            new Response(JSON.stringify({ error: 'try again later' }), {
+              status,
+            }),
+        });
+
+        assert.equal(await coordinator.ensureFreshToken(), null);
+        assert.equal(coordinator.getLastRefreshFailure(), 'transient');
+      },
+    );
+
     it('preserves upstream abort signals when adding a timeout', async () => {
       const upstream = new AbortController();
       let fetchSignal: AbortSignal | undefined;
