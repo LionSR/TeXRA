@@ -6,6 +6,7 @@ import {
 } from '@agent/followUp/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type { ToolUseFollowUpTarget } from '@agent/runtime/executionRegistry';
+import type { LiveToolUseFlowContext } from '@agent/runtime/ExecutionHandle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { StreamTabId } from '@shared/schemas';
 
@@ -23,6 +24,22 @@ function fakeSession(target: ToolUseFollowUpTarget): SessionHandle {
     followUps: new ToolUseFollowUpQueue(),
     events: { emit: vi.fn() },
   } as unknown as SessionHandle;
+}
+
+function activeTarget(
+  appendFollowUp: LiveToolUseFlowContext['session']['appendFollowUp'],
+): ToolUseFollowUpTarget {
+  return {
+    kind: 'active',
+    context: {
+      session: { appendFollowUp },
+      modelHandler: { supportsManualCompaction: true },
+      requestImmediateCompaction: () => {},
+      modelSwitchDisabledReason: () => undefined,
+      switchModel: async () => {},
+      interrupt: () => {},
+    },
+  };
 }
 
 const id = (value: string) => value as StreamTabId;
@@ -50,6 +67,56 @@ describe('submitFollowUp', () => {
     expect(
       session.followUps.drainItems(child).map((item) => item.text),
     ).toEqual(['while waiting', 'between turns', 'during turn']);
+  });
+
+  it('reports input admitted by a live flow as sent', async () => {
+    const streamId = id('stream:live-flow');
+    const appendFollowUp = vi.fn();
+    const session = fakeSession(activeTarget(appendFollowUp));
+    const flow = session.followUps.claimLive(streamId, 'flow')!;
+    const tryResumeStream = vi.fn(async () => true);
+
+    await expect(
+      submitFollowUp(streamId, 'during active turn', {
+        session,
+        resumePort: { tryResumeStream },
+      }),
+    ).resolves.toEqual({ status: 'sent' });
+
+    expect(tryResumeStream).not.toHaveBeenCalled();
+    expect(appendFollowUp).not.toHaveBeenCalled();
+    expect(session.followUps.drainItems(flow)).toMatchObject([
+      { text: 'during active turn' },
+    ]);
+    expect(session.events.emit).toHaveBeenCalledWith({
+      scope: 'session',
+      event: {
+        type: 'followUpSent',
+        payload: { streamId },
+      },
+    });
+  });
+
+  it('does not report an automatic live-flow notification as user input', async () => {
+    const streamId = id('stream:live-flow-notification');
+    const session = fakeSession(activeTarget(vi.fn()));
+    const flow = session.followUps.claimLive(streamId, 'flow')!;
+
+    await expect(
+      submitFollowUp(streamId, 'child progress', {
+        session,
+        mode: 'live_notification',
+      }),
+    ).resolves.toEqual({
+      status: 'queued',
+      reason: 'waiting',
+      continuation: 'live',
+    });
+
+    expect(session.followUps.drainItems(flow)).toMatchObject([
+      { text: 'child progress' },
+    ]);
+    expect(session.events.emit).not.toHaveBeenCalled();
   });
 
   it('enqueues live notifications for a waiting parent without child owner', async () => {
@@ -181,6 +248,58 @@ describe('submitFollowUp', () => {
     });
 
     expect(tryResumeStream).toHaveBeenCalledTimes(1);
+  });
+
+  it('delivers a final child result through the retained queue after child untracking', async () => {
+    const streamId = id('stream:final-child-delivery');
+    const session = fakeSession({
+      kind: 'no_session',
+      streamStatus: 'completed',
+    });
+    const parentFlow = session.followUps.claimLive(streamId, 'flow')!;
+    session.followUps.release(parentFlow, 'recoverable');
+    const tryResumeStream = vi.fn(async () => true);
+
+    await expect(
+      submitFollowUp(
+        streamId,
+        { text: 'final child result', origin: 'subagent_result' },
+        {
+          session,
+          resumePort: { tryResumeStream },
+          mode: 'child_delivery',
+        },
+      ),
+    ).resolves.toEqual({
+      status: 'queued',
+      reason: 'children_running',
+      continuation: 'resumed',
+    });
+
+    expect(tryResumeStream).toHaveBeenCalledTimes(1);
+    expect(session.followUps.getAll(streamId)).toEqual(['final child result']);
+  });
+
+  it('does not let child delivery reopen a terminal parent queue', async () => {
+    const streamId = id('stream:terminal-child-delivery');
+    const session = fakeSession({
+      kind: 'no_session',
+      streamStatus: 'completed',
+    });
+    const tryResumeStream = vi.fn(async () => true);
+
+    await expect(
+      submitFollowUp(
+        streamId,
+        { text: 'late child result', origin: 'subagent_result' },
+        {
+          session,
+          resumePort: { tryResumeStream },
+          mode: 'child_delivery',
+        },
+      ),
+    ).resolves.toEqual({ status: 'dropped' });
+    expect(tryResumeStream).not.toHaveBeenCalled();
   });
 
   it('rejects terminal queues and never invokes recovery', async () => {

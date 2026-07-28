@@ -1414,7 +1414,7 @@ export class DesktopProgressBridge {
     };
   }
 
-  private async sendFollowUp(
+  private sendFollowUp(
     streamId: StreamTabId,
     text: string,
     mediaFiles?: readonly string[],
@@ -1423,31 +1423,45 @@ export class DesktopProgressBridge {
     // handle is tracked in `this.session`, but this IPC path runs outside the
     // run ALS, so the module default (currentSession ⇒ defaultSession) would
     // look in the wrong registry and report `no_session` for a live run.
-    const result = await submitFollowUp(
+    // Admission and the recovery claim happen synchronously inside
+    // submitFollowUp. Presentation remains detached because recovery may run a
+    // complete agent turn; closing a desktop window must not await that turn.
+    void submitFollowUp(
       streamId,
       { text, mediaFiles },
       { session: this.session },
-    );
-    if (result.status === 'sent' || result.status === 'queued') {
-      this.session.events.emit({
-        scope: 'session',
-        event: {
-          type: 'updateQueuedFollowUps',
-          payload: { streamId },
-        },
-      });
-      const presentation = presentFollowUpResult(result);
-      if (presentation.severity !== 'none') {
-        await this.session.interactions.showInfoMessage(presentation.message, {
-          replayWhenAttached: true,
-        });
-      }
-      return;
-    }
+    )
+      .then(async (result) => {
+        if (result.status === 'sent' || result.status === 'queued') {
+          this.session.events.emit({
+            scope: 'session',
+            event: {
+              type: 'updateQueuedFollowUps',
+              payload: { streamId },
+            },
+          });
+          const presentation = presentFollowUpResult(result);
+          if (presentation.severity !== 'none') {
+            await this.session.interactions.showInfoMessage(
+              presentation.message,
+              {
+                replayWhenAttached: true,
+              },
+            );
+          }
+          return;
+        }
 
-    await this.options.host.showInfoMessage(
-      'No active session. Start a new agent task to continue.',
-    );
+        await this.options.host.showInfoMessage(
+          'No active session. Start a new agent task to continue.',
+        );
+      })
+      .catch((error: unknown) => {
+        this.logger.warn(`Failed to submit follow-up for stream ${streamId}`, {
+          data: toLogData(error),
+        });
+      });
+    return Promise.resolve();
   }
 
   openFileCompile(filePath: string): Promise<void> {
