@@ -57,6 +57,13 @@ describe('submitFollowUp', () => {
     const session = fakeSession({ kind: 'queue', reason: 'waiting' });
     const tryResumeStream = vi.fn(async () => true);
 
+    // Create a child-owned entry (simulates a running child loop), then
+    // release the lease so the entry exists but has no owner — the exact
+    // state of a WAITING parent queue after a child finishes its turn and
+    // a live_notification (progress update, execution event) arrives.
+    const child = session.followUps.claimLive(streamId, 'child')!;
+    session.followUps.release(child, 'recoverable');
+
     // live_notification on a WAITING queue without child owner should enqueue
     // without claiming recovery or triggering a stream resume.
     const result = await submitFollowUp(streamId, 'child progress', {
