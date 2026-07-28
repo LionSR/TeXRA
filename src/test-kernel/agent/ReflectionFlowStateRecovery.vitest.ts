@@ -23,7 +23,6 @@ import {
   type RunReflectionFlowInput,
 } from '@agent/implementations/flows/reflection/runReflectionFlow';
 import { ReflectionFlowStateCanonicalSchema } from '@agent/implementations/flows/reflection/ReflectionFlowState';
-import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { createRunScope } from '@agent/runtime/RunScope';
 import {
@@ -75,7 +74,6 @@ async function runPersistedReflectionFlow(
 ): Promise<Awaited<ReturnType<typeof runReflectionFlow>>> {
   const session = createTestSession();
   const runScope = createRunScope({
-    runtimeHost: noopAgentRuntimeHost,
     streamId,
     executionId,
     agentName: CONFIG.agent,

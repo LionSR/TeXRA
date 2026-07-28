@@ -6,7 +6,7 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionEvent } from '@agent/runtime/SessionEventHub';
 import type { DiffOptions, DiffSession, DiffSource } from '@hosts/uiHosts';
@@ -28,7 +28,7 @@ const approvalTest = (name: string, fn: () => Promise<void>): void => {
 
 interface DesktopToolEditApprovalModule {
   createDesktopToolEditApprovalController(options: {
-    runtimeHost: AgentRuntimeHost;
+    interactions: Required<Pick<SessionHostInteractions, 'emit'>>;
     session: SessionHandle;
     ui: ReturnType<typeof createStubDesktopAgentExecutionHost>;
     showToolEditPermission(payload: ToolEditPermission): void;
@@ -53,7 +53,7 @@ interface DesktopToolEditApprovalModule {
   };
 }
 
-interface RecordingRuntimeHost extends AgentRuntimeHost {
+interface RecordingRuntimeHost extends Pick<SessionHostInteractions, 'emit'> {
   shownToolEditPermissions: ToolEditPermission[];
   resolvedToolEditPermissions: Array<{ requestId: string }>;
 }
@@ -95,15 +95,15 @@ function createRecordingRuntimeHost(): RecordingRuntimeHost {
   };
 }
 
-function controllerHostCallbacks(runtimeHost: RecordingRuntimeHost): {
+function controllerHostCallbacks(interactions: RecordingRuntimeHost): {
   showToolEditPermission(payload: ToolEditPermission): void;
   resolveToolEditPermission(requestId: string): void;
 } {
   return {
     showToolEditPermission: (payload) =>
-      runtimeHost.shownToolEditPermissions.push(payload),
+      interactions.shownToolEditPermissions.push(payload),
     resolveToolEditPermission: (requestId) =>
-      runtimeHost.resolvedToolEditPermissions.push({ requestId }),
+      interactions.resolvedToolEditPermissions.push({ requestId }),
   };
 }
 
@@ -249,11 +249,11 @@ describe('desktop tool edit approval', () => {
     async () => {
       const tempRoot = await mkdtemp(path.join(tmpdir(), 'texra-approval-'));
       const { desktopModule } = await loadApprovalModules();
-      const runtimeHost = createRecordingRuntimeHost();
+      const interactions = createRecordingRuntimeHost();
       const session = createTestSession();
       const controller = desktopModule.createDesktopToolEditApprovalController({
-        runtimeHost,
-        ...controllerHostCallbacks(runtimeHost),
+        interactions: interactions,
+        ...controllerHostCallbacks(interactions),
         session,
         ui: createStubDesktopAgentExecutionHost(),
         tempRoot,
@@ -275,7 +275,7 @@ describe('desktop tool edit approval', () => {
           streamId: 'stream-other',
         });
         await vi.waitFor(() =>
-          expect(runtimeHost.shownToolEditPermissions).toHaveLength(2),
+          expect(interactions.shownToolEditPermissions).toHaveLength(2),
         );
 
         let targetSettled = false;
@@ -289,7 +289,7 @@ describe('desktop tool edit approval', () => {
           appliedContent: 'new target\n',
         });
 
-        const otherRequest = runtimeHost.shownToolEditPermissions.find(
+        const otherRequest = interactions.shownToolEditPermissions.find(
           (request) => request.streamId === 'stream-other',
         );
         expect(otherRequest).toBeDefined();
@@ -310,11 +310,11 @@ describe('desktop tool edit approval', () => {
     async () => {
       const tempRoot = await mkdtemp(path.join(tmpdir(), 'texra-approval-'));
       const { desktopModule } = await loadApprovalModules();
-      const runtimeHost = createRecordingRuntimeHost();
+      const interactions = createRecordingRuntimeHost();
       const session = createTestSession();
       let shown: ToolEditPermission | undefined;
       const controller = desktopModule.createDesktopToolEditApprovalController({
-        runtimeHost,
+        interactions: interactions,
         session,
         ui: createStubDesktopAgentExecutionHost(),
         tempRoot,
@@ -356,14 +356,14 @@ describe('desktop tool edit approval', () => {
       const tempRoot = await mkdtemp(path.join(tmpdir(), 'texra-approval-'));
       const { requestToolEditApproval, desktopModule } =
         await loadApprovalModules();
-      const runtimeHost = createRecordingRuntimeHost();
-      const emitSpy = vi.spyOn(runtimeHost, 'emit');
+      const interactions = createRecordingRuntimeHost();
+      const emitSpy = vi.spyOn(interactions, 'emit');
       const session = createTestSession();
       const sessionEvents = recordSessionEvents(session);
       const opened: string[] = [];
       const controller = desktopModule.createDesktopToolEditApprovalController({
-        runtimeHost,
-        ...controllerHostCallbacks(runtimeHost),
+        interactions: interactions,
+        ...controllerHostCallbacks(interactions),
         session,
         tempRoot,
         ui: createStubDesktopAgentExecutionHost({
@@ -373,7 +373,7 @@ describe('desktop tool edit approval', () => {
         }),
       });
       useControllerApproval(controller);
-      const { shownToolEditPermissions: shown } = runtimeHost;
+      const { shownToolEditPermissions: shown } = interactions;
 
       try {
         const resultPromise = requestToolEditApproval({
@@ -436,7 +436,7 @@ describe('desktop tool edit approval', () => {
       const tempRoot = await mkdtemp(path.join(tmpdir(), 'texra-approval-'));
       const { requestToolEditApproval, desktopModule } =
         await loadApprovalModules();
-      const runtimeHost = createRecordingRuntimeHost();
+      const interactions = createRecordingRuntimeHost();
       const openPath = vi.fn(async (_filePath: string) => {});
       const openDiff = vi.fn(
         async (
@@ -447,14 +447,14 @@ describe('desktop tool edit approval', () => {
         ): Promise<DiffSession> => ({ original, proposed, title }),
       );
       const controller = desktopModule.createDesktopToolEditApprovalController({
-        runtimeHost,
-        ...controllerHostCallbacks(runtimeHost),
+        interactions: interactions,
+        ...controllerHostCallbacks(interactions),
         session: createTestSession(),
         tempRoot,
         ui: createStubDesktopAgentExecutionHost({ openPath, openDiff }),
       });
       useControllerApproval(controller);
-      const { shownToolEditPermissions: shown } = runtimeHost;
+      const { shownToolEditPermissions: shown } = interactions;
 
       try {
         const resultPromise = requestToolEditApproval({
@@ -497,11 +497,11 @@ describe('desktop tool edit approval', () => {
       const tempRoot = await mkdtemp(path.join(tmpdir(), 'texra-approval-'));
       const { requestToolEditApproval, desktopModule } =
         await loadApprovalModules();
-      const runtimeHost = createRecordingRuntimeHost();
+      const interactions = createRecordingRuntimeHost();
       const opened: string[] = [];
       const controller = desktopModule.createDesktopToolEditApprovalController({
-        runtimeHost,
-        ...controllerHostCallbacks(runtimeHost),
+        interactions: interactions,
+        ...controllerHostCallbacks(interactions),
         session: createTestSession(),
         tempRoot,
         ui: createStubDesktopAgentExecutionHost({
@@ -511,7 +511,7 @@ describe('desktop tool edit approval', () => {
         }),
       });
       useControllerApproval(controller);
-      const { shownToolEditPermissions: shown } = runtimeHost;
+      const { shownToolEditPermissions: shown } = interactions;
 
       try {
         const resultPromise = requestToolEditApproval({
@@ -564,17 +564,17 @@ describe('desktop tool edit approval', () => {
       const tempRoot = await mkdtemp(path.join(tmpdir(), 'texra-approval-'));
       const { requestToolEditApproval, desktopModule } =
         await loadApprovalModules();
-      const runtimeHost = createRecordingRuntimeHost();
+      const interactions = createRecordingRuntimeHost();
       const openBuildDisplay = vi.fn(async () => {});
       const controller = desktopModule.createDesktopToolEditApprovalController({
-        runtimeHost,
-        ...controllerHostCallbacks(runtimeHost),
+        interactions: interactions,
+        ...controllerHostCallbacks(interactions),
         session: createTestSession(),
         tempRoot,
         ui: createStubDesktopAgentExecutionHost({ openBuildDisplay }),
       });
       useControllerApproval(controller);
-      const { shownToolEditPermissions: shown } = runtimeHost;
+      const { shownToolEditPermissions: shown } = interactions;
 
       try {
         const resultPromise = requestToolEditApproval({
@@ -625,15 +625,15 @@ describe('desktop tool edit approval', () => {
       const tempRoot = await mkdtemp(path.join(tmpdir(), 'texra-approval-'));
       const { requestToolEditApproval, desktopModule } =
         await loadApprovalModules(workspaceRoot);
-      const runtimeHost = createRecordingRuntimeHost();
+      const interactions = createRecordingRuntimeHost();
       const displayed: Array<{
         absolutePath: string;
         options?: { preserveFocus?: boolean };
       }> = [];
       const messages: string[] = [];
       const controller = desktopModule.createDesktopToolEditApprovalController({
-        runtimeHost,
-        ...controllerHostCallbacks(runtimeHost),
+        interactions: interactions,
+        ...controllerHostCallbacks(interactions),
         session: createTestSession(),
         tempRoot,
         ui: createStubDesktopAgentExecutionHost({
@@ -646,7 +646,7 @@ describe('desktop tool edit approval', () => {
         }),
       });
       useControllerApproval(controller);
-      const { shownToolEditPermissions: shown } = runtimeHost;
+      const { shownToolEditPermissions: shown } = interactions;
 
       try {
         const resultPromise = requestToolEditApproval({
@@ -695,10 +695,10 @@ describe('desktop tool edit approval', () => {
       const tempRoot = await mkdtemp(path.join(tmpdir(), 'texra-approval-'));
       const { requestToolEditApproval, desktopModule } =
         await loadApprovalModules();
-      const runtimeHost = createRecordingRuntimeHost();
+      const interactions = createRecordingRuntimeHost();
       const controller = desktopModule.createDesktopToolEditApprovalController({
-        runtimeHost,
-        ...controllerHostCallbacks(runtimeHost),
+        interactions: interactions,
+        ...controllerHostCallbacks(interactions),
         session: createTestSession(),
         ui: createStubDesktopAgentExecutionHost(),
         tempRoot,
@@ -723,8 +723,8 @@ describe('desktop tool edit approval', () => {
           accepted: false,
           userMessage: 'Owning execution ended.',
         });
-        expect(runtimeHost.shownToolEditPermissions).toEqual([]);
-        expect(runtimeHost.resolvedToolEditPermissions).toEqual([]);
+        expect(interactions.shownToolEditPermissions).toEqual([]);
+        expect(interactions.resolvedToolEditPermissions).toEqual([]);
         await waitForEmptyDir(tempRoot);
       } finally {
         controller.dispose();
@@ -739,10 +739,10 @@ describe('desktop tool edit approval', () => {
       const tempRoot = await mkdtemp(path.join(tmpdir(), 'texra-approval-'));
       const { requestToolEditApproval, desktopModule } =
         await loadApprovalModules();
-      const runtimeHost = createRecordingRuntimeHost();
+      const interactions = createRecordingRuntimeHost();
       const controller = desktopModule.createDesktopToolEditApprovalController({
-        runtimeHost,
-        ...controllerHostCallbacks(runtimeHost),
+        interactions: interactions,
+        ...controllerHostCallbacks(interactions),
         session: createTestSession(),
         ui: createStubDesktopAgentExecutionHost(),
         tempRoot,
@@ -763,8 +763,8 @@ describe('desktop tool edit approval', () => {
           accepted: false,
           userMessage: 'Desktop presentation detached.',
         });
-        expect(runtimeHost.shownToolEditPermissions).toEqual([]);
-        expect(runtimeHost.resolvedToolEditPermissions).toEqual([]);
+        expect(interactions.shownToolEditPermissions).toEqual([]);
+        expect(interactions.resolvedToolEditPermissions).toEqual([]);
         await waitForEmptyDir(tempRoot);
       } finally {
         controller.dispose();
@@ -779,17 +779,17 @@ describe('desktop tool edit approval', () => {
       const tempRoot = await mkdtemp(path.join(tmpdir(), 'texra-approval-'));
       const { requestToolEditApproval, desktopModule } =
         await loadApprovalModules();
-      const runtimeHost = createRecordingRuntimeHost();
+      const interactions = createRecordingRuntimeHost();
       const controller = desktopModule.createDesktopToolEditApprovalController({
-        runtimeHost,
-        ...controllerHostCallbacks(runtimeHost),
+        interactions: interactions,
+        ...controllerHostCallbacks(interactions),
         session: createTestSession(),
         ui: createStubDesktopAgentExecutionHost(),
         tempRoot,
       });
       useControllerApproval(controller);
-      const { shownToolEditPermissions: shown } = runtimeHost;
-      const { resolvedToolEditPermissions: resolved } = runtimeHost;
+      const { shownToolEditPermissions: shown } = interactions;
+      const { resolvedToolEditPermissions: resolved } = interactions;
 
       try {
         const cancelledPromise = requestToolEditApproval({
@@ -852,11 +852,11 @@ describe('desktop tool edit approval', () => {
       const tempRoot = await mkdtemp(path.join(tmpdir(), 'texra-approval-'));
       const { cleanupApprovalsForStream, desktopModule } =
         await loadApprovalModules();
-      const runtimeHost = createRecordingRuntimeHost();
+      const interactions = createRecordingRuntimeHost();
       const session = createTestSession();
       const controller = desktopModule.createDesktopToolEditApprovalController({
-        runtimeHost,
-        ...controllerHostCallbacks(runtimeHost),
+        interactions: interactions,
+        ...controllerHostCallbacks(interactions),
         session,
         ui: createStubDesktopAgentExecutionHost(),
         tempRoot,
@@ -867,8 +867,8 @@ describe('desktop tool edit approval', () => {
           controller.requestApproval(request),
         cancel: (selector) => controller.cancel(selector),
       });
-      const { shownToolEditPermissions: shown } = runtimeHost;
-      const { resolvedToolEditPermissions: resolved } = runtimeHost;
+      const { shownToolEditPermissions: shown } = interactions;
+      const { resolvedToolEditPermissions: resolved } = interactions;
 
       try {
         const resultPromise = session.interactions.requestToolEditApproval({

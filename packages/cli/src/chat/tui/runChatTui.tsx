@@ -429,7 +429,7 @@ export async function runChat(
     streamId: undefined,
     interruptedStreamId: undefined,
     executionId: undefined,
-    runtimeHost: undefined,
+    presentationHost: undefined,
     runPromise: undefined,
     runExitCode: CliExitCode.Success,
     runCompleted: false,

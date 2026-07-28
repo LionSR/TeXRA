@@ -152,7 +152,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
       },
     );
     const interactions = createExtensionHostInteractions({
-      runtimeHost: createAgentPresentationHost(this),
+      interactions: createAgentPresentationHost(this),
       session: defaultSession(),
       getApprovalHandlers: () => this.backend.approvalHandlers,
       setApprovalBypassState: this.backend.setApprovalBypassState,

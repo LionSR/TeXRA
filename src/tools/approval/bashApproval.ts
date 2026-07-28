@@ -10,11 +10,10 @@ import {
   getRunContextStreamId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { StreamTabIdSchema, type StreamTabId } from '@shared/schemas';
 import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas/agentCliSettings';
 import { type ToolResult } from '@shared/schemas/toolResult';
-import { requireRuntimeHost } from '@tools/contextHelpers';
+import { requireInteractions } from '@tools/contextHelpers';
 import { getConfig } from '@utils/config/configUtils';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
@@ -38,13 +37,11 @@ const DEFAULT_BASH_REJECTION_INSTRUCTION =
 export function setBashApprovalSessionBypass(
   streamId: StreamTabId,
   enabled: boolean,
-  runtimeHost: AgentRuntimeHost,
   options?: { silent?: boolean; session?: SessionHandle },
 ): void {
   (options?.session ?? currentSession()).approvals.bash.bypass.setBypass(
     streamId,
     enabled,
-    runtimeHost,
     options,
   );
 }
@@ -72,7 +69,7 @@ export async function requestBashApproval(
     return { accepted: true };
   }
 
-  requireRuntimeHost('bash approval', context);
+  requireInteractions('bash approval', context);
 
   return session.approvals.bash.enqueue(streamId, () =>
     showApprovalPrompt(request, streamId, session),

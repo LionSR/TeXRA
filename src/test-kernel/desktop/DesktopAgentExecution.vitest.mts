@@ -95,7 +95,7 @@ type TestableBridge = Bridge & {
     ): boolean;
   };
   waitUntilReady(): Promise<void>;
-  runtimeHost: {
+  interactions: {
     emit(event: string, payload: unknown): void;
   };
   handlePresentationEvent(event: string, payload: unknown): void;
@@ -678,7 +678,6 @@ function expectWorkflowResume(
       executionId,
     },
     expect.objectContaining({
-      runtimeHost: expect.objectContaining({ emit: expect.any(Function) }),
       openWorkflowOutput: expect.any(Function),
     }),
   );
@@ -918,9 +917,9 @@ describe('DesktopProgressBridge', () => {
 
     bridge.dispose();
     messages.length = 0;
-    bridge.runtimeHost.emit('requestEnsureProgressView', {});
-    bridge.runtimeHost.emit('requestShowError', { message: 'late error' });
-    bridge.runtimeHost.emit('requestOpenFile', {
+    bridge.interactions?.emit('requestEnsureProgressView', {});
+    bridge.interactions?.emit('requestShowError', { message: 'late error' });
+    bridge.interactions?.emit('requestOpenFile', {
       location: {
         kind: 'runStorage',
         absolutePath: '/workspace/late.tex',
@@ -1572,7 +1571,6 @@ describe('DesktopProgressBridge', () => {
             'bash#attachment-order-child' as StreamTabId,
             'bash',
             AgentCategory.ToolUse,
-            session.interactions,
           ),
         );
 
@@ -2297,7 +2295,9 @@ describe('DesktopProgressBridge', () => {
     expect(runAgent).toHaveBeenCalledWith(
       { config: expect.objectContaining(taskState.agentConfig) },
       expect.objectContaining({
-        runtimeHost: expect.objectContaining({ emit: expect.any(Function) }),
+        session: expect.objectContaining({
+          interactions: expect.objectContaining({ emit: expect.any(Function) }),
+        }),
       }),
     );
   });
@@ -2369,7 +2369,7 @@ describe('DesktopProgressBridge', () => {
     );
     let pendingAtAttachment: readonly { text: string; origin?: string }[] = [];
     const resumeToolUseFromResumeData = vi.fn(async (...args: unknown[]) => {
-      const options = args[2] as {
+      const options = args[1] as {
         onFollowUpConsumed?: () => void;
         takePendingFollowUps(): readonly { text: string; origin?: string }[];
       };
@@ -2409,14 +2409,12 @@ describe('DesktopProgressBridge', () => {
           streamId: 'stream-1',
           parentStreamId,
         }),
-        expect.objectContaining({ emit: expect.any(Function) }),
         expect.objectContaining({
           takePendingFollowUps: expect.any(Function),
         }),
       );
-      const [, , resumeOptions] = resumeToolUseFromResumeData.mock
+      const [, resumeOptions] = resumeToolUseFromResumeData.mock
         .calls[0] as unknown as [
-        unknown,
         unknown,
         {
           drainedFollowUps?: readonly { text: string; origin?: string }[];
@@ -2737,8 +2735,6 @@ describe('DesktopProgressBridge', () => {
       const { AgentExecutionHandle } =
         await import('@agent/runtime/ExecutionHandle');
       const { getExecutionStore } = await import('@agent/storage');
-      const { noopAgentRuntimeHost } =
-        await import('@agent/runtime/AgentRuntimeHost');
       const transcripts = await openTranscripts();
       transcripts.ensureStream(streamId);
       await transcripts.flush();
@@ -2819,10 +2815,9 @@ describe('DesktopProgressBridge', () => {
           options.childStreamId ?? streamId,
           options.agentName ?? agentName,
           options.category ?? category,
-          processSession.interactions,
           nextTrace as unknown as ConstructorParameters<
             typeof AgentExecutionHandle
-          >[6],
+          >[5],
         );
         processSession.attachRunTrace(
           nextTrace as unknown as AgentTrace,
@@ -2892,7 +2887,6 @@ describe('DesktopProgressBridge', () => {
         diffPathsA,
         getExecutionStore,
         handle,
-        noopAgentRuntimeHost,
         processSession,
         progressSnapshotStore,
         sessionStores,
@@ -3088,17 +3082,14 @@ describe('DesktopProgressBridge', () => {
       }
     });
 
-    it('routes a retained handle runtime event only to the current presentation', async () => {
+    it('routes a retained session event only to the current presentation', async () => {
       const streamId = 'process-runtime-host' as StreamTabId;
       const executionId = 'ec00de' as ExecutionId;
       const owner = await createProcessOwner({ streamId, executionId });
       const { bridgeB, errorsB } = await owner.reopen();
 
       try {
-        expect(owner.handle.runtimeHost).toBe(
-          owner.processSession.interactions,
-        );
-        owner.handle.runtimeHost.emit('requestShowError', {
+        owner.processSession.interactions.emit('requestShowError', {
           message: 'Presented after reopen.',
         });
         await vi.waitFor(() =>

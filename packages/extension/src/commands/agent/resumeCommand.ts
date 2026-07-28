@@ -54,18 +54,13 @@ export function resumeExtensionToolUseFromResumeData(
   if (!getToolUsePersistenceEnabled()) {
     return Promise.resolve(false);
   }
-  return resumeQueuedToolUseFromResumeData(
-    resume.streamId,
-    resume,
-    defaultSession().interactions,
-    {
-      recovery,
-      ...(followUp !== undefined && {
-        extraFollowUps: [{ text: followUp, origin: 'user' as const }],
-      }),
-      onError: showResumeError,
-    },
-  );
+  return resumeQueuedToolUseFromResumeData(resume.streamId, resume, {
+    recovery,
+    ...(followUp !== undefined && {
+      extraFollowUps: [{ text: followUp, origin: 'user' as const }],
+    }),
+    onError: showResumeError,
+  });
 }
 
 export function registerResumeAgentCommand(

@@ -181,7 +181,6 @@ describe('sendFollowUp host-path session routing (SDK Step 7d PR 4)', () => {
           'stream:fu-child' as StreamTabId,
           'orchestrator',
           'toolUse',
-          host,
         ),
       );
 

@@ -5,7 +5,7 @@ import '@test/support/defaultSessionTestSetup';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import {
   createRunContext,
   withRunContext,
@@ -92,12 +92,6 @@ vi.mock('@tools/approval', () => ({
   }),
 }));
 
-function runtimeHost(): AgentRuntimeHost {
-  return {
-    emit: vi.fn(),
-  };
-}
-
 /** Real session whose interactions slot is the host's fake port. */
 function sessionFor(interactions: HostInteractions): SessionHandle {
   const session = createTestSession();
@@ -108,17 +102,16 @@ function sessionFor(interactions: HostInteractions): SessionHandle {
 /** The run context shared by nearly every case (host/stopAfterCycle/session vary). */
 function parentRunContext(
   overrides: Partial<{
-    runtimeHost: AgentRuntimeHost;
     streamId: StreamTabId;
     stopAfterCycle: boolean;
     session: SessionHandle;
   }> = {},
 ): RunContext {
   return createRunContext({
-    runtimeHost: runtimeHost(),
     streamId: 'parent-stream',
     executionId: 'parent-exec',
     model: 'deepseekT',
+    session: defaultSession(),
     ...overrides,
   });
 }
@@ -151,7 +144,6 @@ function delegationOptions(
     agentName: 'review',
     parentExecutionId: STABLE_PARENT_EXECUTION_ID,
     parentStreamId: 'parent-stream' as StreamTabId,
-    runtimeHost: runtimeHost(),
     session: defaultSession(),
     ...overrides,
   };
@@ -1089,16 +1081,14 @@ describe('headless delegation', () => {
 
   it('discourages equivalent delegation retries after a no-feedback rejection', async () => {
     mocks.isProposalBypassed.mockReturnValue(false);
-    const host = runtimeHost();
     const interactions = {
       cancel: vi.fn(),
       requestAgentProposal: vi.fn().mockResolvedValue({ action: 'reject' }),
     } satisfies HostInteractions;
 
     const session = sessionFor(interactions);
-    const result = await withRunContext(
-      parentRunContext({ runtimeHost: host, session }),
-      () => callDelegateReview(),
+    const result = await withRunContext(parentRunContext({ session }), () =>
+      callDelegateReview(),
     );
     session.dispose();
 
@@ -1124,7 +1114,6 @@ describe('headless delegation', () => {
         requiresKey: false,
       },
     ]);
-    const host = runtimeHost();
     const interactions = {
       cancel: vi.fn(),
       requestAgentProposal: vi
@@ -1133,9 +1122,8 @@ describe('headless delegation', () => {
     } satisfies HostInteractions;
 
     const session = sessionFor(interactions);
-    const result = await withRunContext(
-      parentRunContext({ runtimeHost: host, session }),
-      () => callDelegateReview(),
+    const result = await withRunContext(parentRunContext({ session }), () =>
+      callDelegateReview(),
     );
     session.dispose();
 
@@ -1157,7 +1145,6 @@ describe('headless delegation', () => {
       },
       { value: 'gpt5', label: 'GPT-5', disabled: false, requiresKey: false },
     ]);
-    const host = runtimeHost();
     const interactions = {
       cancel: vi.fn(),
       requestAgentProposal: vi
@@ -1166,9 +1153,8 @@ describe('headless delegation', () => {
     } satisfies HostInteractions;
 
     const session = sessionFor(interactions);
-    const result = await withRunContext(
-      parentRunContext({ runtimeHost: host, session }),
-      () => callDelegateReview(),
+    const result = await withRunContext(parentRunContext({ session }), () =>
+      callDelegateReview(),
     );
     session.dispose();
 
@@ -1214,7 +1200,6 @@ describe('headless delegation', () => {
   it('includes memory misses in interactive early-delivered reports', async () => {
     const parentStreamId = 'parent-stream' as StreamTabId;
     const childStreamId = 'child-stream' as StreamTabId;
-    const host = runtimeHost();
 
     // Async delegation is now driven by the child-run loop over
     // nativeSubagentStrategy: `executeAgent` (mocked here) is the loop's
@@ -1228,7 +1213,6 @@ describe('headless delegation', () => {
           childStreamId,
           'review',
           'toolUse',
-          host,
         );
         defaultSession().executions.track(handle);
         options.onStreamResolved?.(childStreamId);
@@ -1247,9 +1231,8 @@ describe('headless delegation', () => {
       },
     );
 
-    await withRunContext(
-      parentRunContext({ runtimeHost: host, streamId: parentStreamId }),
-      () => callDelegateReview(),
+    await withRunContext(parentRunContext({ streamId: parentStreamId }), () =>
+      callDelegateReview(),
     );
 
     await vi.waitFor(() => {
@@ -1264,7 +1247,6 @@ describe('headless delegation', () => {
   it('does not deliver detached subagent results back to the released parent', async () => {
     const parentStreamId = 'parent-stream' as StreamTabId;
     const childStreamId = 'child-stream' as StreamTabId;
-    const host = runtimeHost();
     let capturedHandle: AgentExecutionHandle | undefined;
 
     mocks.executeAgent.mockImplementationOnce(
@@ -1275,7 +1257,6 @@ describe('headless delegation', () => {
           childStreamId,
           'review',
           'toolUse',
-          host,
         );
         defaultSession().executions.track(handle);
         capturedHandle = handle;
@@ -1296,9 +1277,8 @@ describe('headless delegation', () => {
       },
     );
 
-    await withRunContext(
-      parentRunContext({ runtimeHost: host, streamId: parentStreamId }),
-      () => callDelegateReview(),
+    await withRunContext(parentRunContext({ streamId: parentStreamId }), () =>
+      callDelegateReview(),
     );
 
     await vi.waitFor(() => {

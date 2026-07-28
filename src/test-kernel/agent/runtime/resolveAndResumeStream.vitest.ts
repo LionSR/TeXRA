@@ -23,13 +23,11 @@ import {
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 
 const STREAM = 'stream:resume' as StreamTabId;
-const runtimeHost = { emit: vi.fn() };
-
 function basePorts(
   overrides: Partial<ResumeStreamPorts> = {},
 ): ResumeStreamPorts {
   return {
-    runtimeHost,
+    interactions: defaultSession().interactions,
     streamStatus: defaultSession().status,
     resolveResumeState: vi.fn(async () => ({
       runState: { agent: 'a', model: 'm' } as never,
@@ -46,7 +44,6 @@ function basePorts(
 describe('resolveAndResumeStream', () => {
   beforeEach(() => {
     retrieveSessionResumeDataMock.mockReset();
-    runtimeHost.emit.mockReset();
   });
 
   afterEach(() => {

@@ -232,7 +232,6 @@ describe('AgentCliSessionRegistry', () => {
       'child-a' as StreamTabId,
       'codex',
       'toolUse',
-      host,
     );
     handleA.attachInterruptHandler({ interrupt: interruptA });
     ownerA.track(handleA);
@@ -242,7 +241,6 @@ describe('AgentCliSessionRegistry', () => {
       'child-b' as StreamTabId,
       'claude',
       'toolUse',
-      host,
     );
     handleB.attachInterruptHandler({ interrupt: interruptB });
     ownerB.track(handleB);

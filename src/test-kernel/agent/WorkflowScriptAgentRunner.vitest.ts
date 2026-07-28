@@ -136,7 +136,6 @@ function parentContext(): LaunchRunContext {
         workflowAgentKeys: ['builtInWorkflow:correct'],
         toolUseAgentKeys: ['builtInToolUse:assistant'],
       },
-      runtimeHost: { emit: vi.fn() } as never,
       session: { id: 'session' } as never,
     },
   };

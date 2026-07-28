@@ -1,5 +1,4 @@
 import { nanoid } from 'nanoid';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type {
   RuntimePresentationEvent,
   RuntimePresentationEventPayloads,
@@ -41,7 +40,7 @@ import type { AgentProposalPermission, StreamTabId } from '@shared/schemas';
 import type { DesktopToolEditApprovalController } from './desktopToolEditApproval.js';
 
 export interface DesktopHostInteractionsOptions {
-  runtimeHost: AgentRuntimeHost;
+  interactions: Required<Pick<HostInteractions, 'emit'>>;
   session: SessionHandle;
   getApprovalHandlers(): ApprovalRequestHandlerSet;
   getToolEditApprovals(): DesktopToolEditApprovalController;
@@ -91,7 +90,7 @@ class DesktopHostInteractionsImpl implements DesktopHostInteractions {
     event: K,
     payload: RuntimePresentationEventPayloads[K],
   ): void {
-    this.options.runtimeHost.emit(event, payload);
+    this.options.interactions.emit(event, payload);
   }
 
   showInfoMessage(message: string): Promise<void> | void {
@@ -289,7 +288,7 @@ class DesktopHostInteractionsImpl implements DesktopHostInteractions {
   // active tab away from whatever the user is inspecting — matches the
   // extension host contract (#8246).
   private revealStream(streamId: StreamTabId | undefined): void {
-    this.options.runtimeHost.emit('requestEnsureProgressView', {});
+    this.options.interactions.emit('requestEnsureProgressView', {});
     if (streamId) {
       this.options.session.events.emit({
         scope: 'session',

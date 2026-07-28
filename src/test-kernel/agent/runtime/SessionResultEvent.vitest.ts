@@ -76,7 +76,6 @@ function createCtx(overrides?: { logger?: TraceEmitter }): {
   const session = defaultSession();
   const streamStatus = session.status;
   const runScope = createRunScope({
-    runtimeHost: explicit.host,
     streamId,
     executionId,
     agentName: config.agent,

@@ -262,7 +262,6 @@ describe('GitHub subscription app signals and follow-ups', () => {
     try {
       withRunContext(
         createRunContext({
-          runtimeHost: host.host,
           streamId,
           session,
         }),

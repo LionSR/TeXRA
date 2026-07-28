@@ -17,10 +17,9 @@ import {
   AgentConfigSchema,
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
-import { currentSession } from '@agent/runtime/SessionHandle';
 import {
   getRunContextExecutionId,
-  getRunContextRuntimeHost,
+  getRunContextSession,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
@@ -74,21 +73,20 @@ export async function executeSubagent(
   options?: { approvalMeta?: ApprovalMeta },
 ): Promise<ToolResult> {
   const parentContext = tryUseRunContext();
-  const runtimeHost = getRunContextRuntimeHost(parentContext);
-  if (!parentContext || !runtimeHost) {
+  const parentSession = getRunContextSession(parentContext);
+  if (!parentContext || !parentSession) {
     return {
       status: 'error',
-      summary: 'Delegation tool runtime host unavailable',
+      summary: 'Delegation session unavailable',
       error:
-        'delegate_agent and delegate_workflow require an active tool runtime host. Run delegation from an active agent session, or ensure the tool run context provides runtimeHost.',
+        'delegate_agent and delegate_workflow require an active agent session. Run delegation from an active agent session, or ensure the tool run context provides its owning session.',
       diagnostics: {
-        type: 'missing_runtime_host',
+        type: 'missing_session',
         tools: ['delegate_agent', 'delegate_workflow'],
       },
     };
   }
   const parentExecutionId = getRunContextExecutionId(parentContext);
-  const parentSession = currentSession();
   // Captured now (while the launching tool call's ALS frame is live) so the
   // child-run loop can still roll the child's cost into the parent run after
   // this tool call has returned. Subagents count toward parent usage totals
@@ -129,7 +127,6 @@ export async function executeSubagent(
         agentName,
         parentExecutionId,
         parentStreamId: orchestratorStreamId,
-        runtimeHost,
         session: parentSession,
         approvalPromptsUnavailable: parentContext.approvalPromptsUnavailable,
         runtimeUnavailableTools: parentContext.runtimeUnavailableTools,
@@ -178,7 +175,6 @@ export async function executeSubagent(
       agentName,
       orchestratorStreamId,
       parentSession,
-      runtimeHost,
       startedAt,
       workingDirectory,
       approvalPromptsUnavailable: parentContext.approvalPromptsUnavailable,
