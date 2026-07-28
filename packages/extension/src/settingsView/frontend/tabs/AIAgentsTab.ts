@@ -259,7 +259,8 @@ export class AIAgentsTab extends LitElement {
           counts['not-found'] > 0
             ? html`
                 <span class="ai-agents-status-stat ai-agents-status-missing">
-                  ${waIcon('warning')} ${counts['not-found']} need setup
+                  ${waIcon('triangle-exclamation')} ${counts['not-found']} need
+                  setup
                 </span>
               `
             : nothing

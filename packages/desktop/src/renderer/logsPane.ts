@@ -6,7 +6,8 @@ import { repeat } from 'lit/directives/repeat.js';
 // Shared imports
 import { postMessage } from '@shared/hostBridge';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
-import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { formatTimestamp, truncateSummary } from '@utils/text/stringUtils';
 
 // Local imports

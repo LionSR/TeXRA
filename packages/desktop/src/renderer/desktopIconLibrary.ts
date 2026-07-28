@@ -14,8 +14,8 @@ import {
 import iconNodes from 'lucide-static/icon-nodes.json';
 
 import {
-  CODICON_ALIASES,
   TEXRA_ICON_LIBRARY,
+  LEGACY_ICON_ALIASES,
 } from '@shared/wa/webAwesomeIcons';
 
 /**
@@ -31,6 +31,7 @@ const LUCIDE_NAME_BY_TEXRA_NAME: Readonly<Record<string, string>> = {
   'circle-xmark': 'circle-x',
   'circle-exclamation': 'circle-alert',
   'circle-question': 'circle-question-mark',
+  pencil: 'pencil',
   'circle-info': 'info',
   'circle-dot': 'circle-dot',
   'circle-stop': 'circle-stop',
@@ -79,7 +80,7 @@ const LUCIDE_NAME_BY_TEXRA_NAME: Readonly<Record<string, string>> = {
   'trash-can': 'trash-2',
   'chart-line': 'chart-line',
   'chart-pie': 'chart-pie',
-  'clock-rotate-left': 'history',
+  'clock-rotate-left': 'clock-arrow-left',
   'right-left': 'arrow-left-right',
   'code-branch': 'git-branch',
   'code-commit': 'git-commit-horizontal',
@@ -128,8 +129,6 @@ const LUCIDE_NAME_BY_TEXRA_NAME: Readonly<Record<string, string>> = {
   comment: 'message-circle',
   // Codicon-style symbol aliases used by the agent-team presets.
   'symbol-structure': 'boxes',
-  'symbol-operator': 'sigma',
-  'symbol-number': 'hash',
   hashtag: 'hash',
   'symbol-method': 'braces',
   'symbol-namespace': 'box',
@@ -193,24 +192,15 @@ function lucideSvg(name: string): string | undefined {
 /**
  * Resolves a TeXRA icon name to Lucide geometry.
  *
- * Three hops, in order, because names reach here from three vocabularies:
- *   1. A codicon-style alias (`settings-gear`, `close`, `refresh`) -> its
- *      canonical shared name. Read from the shared CODICON_ALIASES table rather
- *      than duplicated here, so the two cannot drift.
- *   2. The canonical name -> its Lucide equivalent, where they differ.
- *   3. The name unchanged, when both sets agree.
- *
- * Skipping hop 1 was a real bug: 22 icons (every codicon alias in the shared
- * components) resolved to a name Lucide does not have and rendered as a blank
- * box — visible as an empty pill in the tab strip.
+ * Direct lookup: canonical name → Lucide equivalent → fallback to name.
  */
 function resolveLucideName(name: string): string {
   const canonical =
-    (CODICON_ALIASES as Readonly<Record<string, string>>)[name] ?? name;
+    (LEGACY_ICON_ALIASES as Record<string, string>)[name] ?? name;
   return (
     LUCIDE_NAME_BY_TEXRA_NAME[canonical] ??
     LUCIDE_NAME_BY_TEXRA_NAME[name] ??
-    canonical
+    name
   );
 }
 

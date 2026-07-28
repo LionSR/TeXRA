@@ -18,9 +18,15 @@ export const FILE_SELECTION_COMMAND_IDS = {
  * Commands for multi-file selection operations.
  * Note: 'edited' is in ExtendedDocumentFileType but not here (no multi-select for edited).
  */
+type MultipleFileResponseCommand =
+  | typeof MAIN_VIEW_COMMANDS.SET_INPUT_FILES
+  | typeof MAIN_VIEW_COMMANDS.SET_CONTEXT_FILES
+  | typeof MAIN_VIEW_COMMANDS.SET_MEDIA_FILES
+  | typeof MAIN_VIEW_COMMANDS.SET_OUTPUT_FILES;
+
 export const MULTIPLE_FILE_COMMANDS: ReadonlyMap<
   MultipleDocumentFileType,
-  { selectCommand: string; responseCommand: string }
+  { selectCommand: string; responseCommand: MultipleFileResponseCommand }
 > = new Map([
   [
     'input',

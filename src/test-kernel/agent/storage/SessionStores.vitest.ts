@@ -57,7 +57,7 @@ describe('SessionStores deletion coordination', () => {
     const session = createTestSession();
     const stream = 'tool@test#abc001' as StreamTabId;
     session.transcripts.ensureStream(stream);
-    session.followUps.acquire(stream);
+    session.followUps.claimLive(stream, 'flow');
     let unblockDeletion!: () => void;
     const deletionBlocked = new Promise<void>((resolve) => {
       unblockDeletion = resolve;

@@ -4,7 +4,8 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import { html, nothing, type TemplateResult } from 'lit';
 import { ifDefined } from 'lit/directives/if-defined.js';
 
-import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 /**
  * Shared chrome for every inline banner (agent-config, api-key, dependency,

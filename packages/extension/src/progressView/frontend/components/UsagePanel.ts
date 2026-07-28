@@ -233,7 +233,7 @@ export class UsagePanel extends LitElement {
     const cacheWrite = this.usage.cacheCreationInputTokens ?? 0;
 
     return html`
-      ${waIcon('pie-chart')}
+      ${waIcon('chart-pie')}
       <span class="run-summary__label">Total usage:</span>
       <span class="run-summary__value">
         ${waIcon('arrow-up', { id: 'usage-input-icon' })}${formatCompactTokenCount(inputTokens)}<wa-tooltip
@@ -244,7 +244,7 @@ export class UsagePanel extends LitElement {
           cacheRead > 0,
           () =>
             html` ·
-              ${waIcon('cloud-download', { id: 'usage-cache-read-icon' })}${formatCompactTokenCount(cacheRead)}<wa-tooltip
+              ${waIcon('cloud-arrow-down', { id: 'usage-cache-read-icon' })}${formatCompactTokenCount(cacheRead)}<wa-tooltip
                 for="usage-cache-read-icon"
                 >Cache read tokens (discounted)</wa-tooltip
               >`,
@@ -253,7 +253,7 @@ export class UsagePanel extends LitElement {
           cacheMiss > 0,
           () =>
             html` ·
-              ${waIcon('cloud-upload', { id: 'usage-cache-miss-icon' })}${formatCompactTokenCount(cacheMiss)}<wa-tooltip
+              ${waIcon('cloud-arrow-up', { id: 'usage-cache-miss-icon' })}${formatCompactTokenCount(cacheMiss)}<wa-tooltip
                 for="usage-cache-miss-icon"
                 >Cache miss tokens (full price)</wa-tooltip
               >`,
@@ -305,7 +305,7 @@ export class UsagePanel extends LitElement {
 
     return html`
       <span id="usage-context-gauge" class="context-gauge">
-        ${waIcon('window')}
+        ${waIcon('window-maximize')}
         <span class="context-gauge__track">
           <wa-progress-bar
             class="context-gauge__bar"

@@ -60,7 +60,7 @@ describe('renderEmptyState shared helper', () => {
 
   it('omits the body element entirely when no body is supplied', async () => {
     const container = await renderEmptyStateInto({
-      icon: 'history',
+      icon: 'clock-rotate-left',
       title: 'No history items match your search.',
       className: 'empty-state',
     });
