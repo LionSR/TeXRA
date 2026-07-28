@@ -1,5 +1,5 @@
 import { logMissingOutputs, type AgentTrace } from '@agent/trace';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
 import { replaceInputCommands } from '@agent/output/fileMapping';
 import {
@@ -21,7 +21,7 @@ import type { XmlOutputManager } from './XmlOutputManager';
 export interface ProcessingContext {
   baseFiles: FileLocation[];
   streamId: string;
-  runtimeHost: AgentRuntimeHost;
+  interactions: SessionHostInteractions;
   logger: AgentTrace;
   xmlManager: XmlOutputManager;
   setRoundOutputs: (round: number, outputs: OutputFileInfo[]) => void;

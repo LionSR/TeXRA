@@ -61,14 +61,14 @@ export class OutputNode<C = unknown> extends Node<
   private outputDependencies(): OutputDependencies {
     const { baseFiles, config, fileService, logger, setting, runScope } =
       this.services;
-    const { runtimeHost, streamId } = runScope;
+    const { streamId } = runScope;
 
     return {
       baseFiles,
       config,
       fileService,
       logger,
-      runtimeHost,
+      interactions: runScope.session.interactions,
       setting,
       streamId,
     };
@@ -253,7 +253,7 @@ export class OutputNode<C = unknown> extends Node<
   ): Promise<string | undefined> {
     const { logger, outputState, workflowOutputPolicy } = this.services;
     const outputDependencies = this.outputDependencies();
-    const { runtimeHost, streamId } = outputDependencies;
+    const { interactions, streamId } = outputDependencies;
     const { outputLocation, currentRound, endTurn } = prepRes;
     const { summary } = execRes;
 
@@ -272,20 +272,20 @@ export class OutputNode<C = unknown> extends Node<
 
     // Open files that haven't been opened yet
     for (const location of summary.filesToOpen) {
-      runtimeHost.emit('requestOpenFile', { location, preserveFocus: true });
+      interactions.emit('requestOpenFile', { location, preserveFocus: true });
     }
 
     if (endTurn && workflowOutputPolicy.shouldAutoOpenPdfOrLog()) {
       if (execRes.compileFailures.length > 0) {
         for (const failure of execRes.compileFailures) {
-          runtimeHost.emit('requestOpenFile', {
+          interactions.emit('requestOpenFile', {
             location: failure.log,
             preserveFocus: true,
           });
         }
       } else {
         for (const artifact of execRes.compiledArtifacts) {
-          runtimeHost.emit('requestOpenFile', {
+          interactions.emit('requestOpenFile', {
             location: artifact.latestPdf,
             preserveFocus: true,
           });
@@ -310,7 +310,7 @@ export class OutputNode<C = unknown> extends Node<
         });
 
         if (validationResult.missing.length > 0) {
-          runtimeHost.emit('requestShowInstruction', {
+          interactions.emit('requestShowInstruction', {
             key: 'missingOutputsInfo',
             message: 'Missing output files detected',
           });

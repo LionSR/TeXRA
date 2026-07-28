@@ -30,7 +30,7 @@ export function tryResumeFromResumeData(
   streamId: StreamTabId,
 ): Promise<boolean> {
   return resolveAndResumeStream(streamId, {
-    runtimeHost: defaultSession().interactions,
+    interactions: defaultSession().interactions,
     // The extension runs on the default session for this host-path caller
     // (outside any run ALS), so its status plane is the same one every other
     // unmigrated default-session caller reads through `defaultSession()`.

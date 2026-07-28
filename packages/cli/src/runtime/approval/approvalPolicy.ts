@@ -21,7 +21,7 @@ import { askCliQuestion } from '../logSinks';
  * the TUI discriminate on this set.
  *
  * CLI-owned, not a runtime event vocabulary: nothing emits these names over
- * `AgentRuntimeHost`. They are the discriminator for the CLI's own approval
+ * the runtime host. They are the discriminator for the CLI's own approval
  * prompts, and the payloads are the plain `@shared/schemas` permission shapes
  * the live `HostInteractions` requests already carry.
  */

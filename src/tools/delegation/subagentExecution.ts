@@ -20,7 +20,7 @@ import {
 import { currentSession } from '@agent/runtime/SessionHandle';
 import {
   getRunContextExecutionId,
-  getRunContextRuntimeHost,
+  getRunContextInteractions,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
@@ -74,13 +74,13 @@ export async function executeSubagent(
   options?: { approvalMeta?: ApprovalMeta },
 ): Promise<ToolResult> {
   const parentContext = tryUseRunContext();
-  const runtimeHost = getRunContextRuntimeHost(parentContext);
-  if (!parentContext || !runtimeHost) {
+  const interactions = getRunContextInteractions(parentContext);
+  if (!parentContext || !interactions) {
     return {
       status: 'error',
       summary: 'Delegation tool runtime host unavailable',
       error:
-        'delegate_agent and delegate_workflow require an active tool runtime host. Run delegation from an active agent session, or ensure the tool run context provides runtimeHost.',
+        'delegate_agent and delegate_workflow require an active tool runtime interactions. Run delegation from an active agent session, or ensure the tool run context provides interactions.',
       diagnostics: {
         type: 'missing_runtime_host',
         tools: ['delegate_agent', 'delegate_workflow'],
@@ -129,7 +129,7 @@ export async function executeSubagent(
         agentName,
         parentExecutionId,
         parentStreamId: orchestratorStreamId,
-        runtimeHost,
+        interactions,
         session: parentSession,
         approvalPromptsUnavailable: parentContext.approvalPromptsUnavailable,
         runtimeUnavailableTools: parentContext.runtimeUnavailableTools,
@@ -178,7 +178,7 @@ export async function executeSubagent(
       agentName,
       orchestratorStreamId,
       parentSession,
-      runtimeHost,
+      interactions,
       startedAt,
       workingDirectory,
       approvalPromptsUnavailable: parentContext.approvalPromptsUnavailable,

@@ -30,7 +30,7 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import type { AgentFinalResult } from '@agent/runtime/AgentFinalResult';
 import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { releaseExecutionLeaseAfterArtifacts } from '@agent/runtime/executionOwnership';
 import * as logger from '@logger/logUtils';
@@ -69,7 +69,7 @@ interface InBandSubagentExecutionBaseOptions {
   readonly configPayload: AgentConfigPayload;
   readonly agentName: string;
   readonly parentStreamId: StreamTabId;
-  readonly runtimeHost: AgentRuntimeHost;
+  readonly interactions: SessionHostInteractions;
   readonly session: SessionHandle;
   readonly approvalPromptsUnavailable?: boolean;
   readonly runtimeUnavailableTools?: readonly string[];
@@ -493,7 +493,7 @@ async function executeInBand(
         agentName: options.agentName,
         orchestratorStreamId: options.parentStreamId,
         parentSession: options.session,
-        runtimeHost: options.runtimeHost,
+        interactions: options.interactions,
         startedAt,
         workingDirectory,
         approvalPromptsUnavailable: options.approvalPromptsUnavailable,

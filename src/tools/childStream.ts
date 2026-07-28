@@ -3,7 +3,7 @@ import type { AgentTrace, StageHandle } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { captureOwnedExecutionLeaseIfPresent } from '@agent/storage/executionLease';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import {
   finalizeRunTerminal,
   type RunTerminalPersistence,
@@ -29,7 +29,7 @@ import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 interface CreateChildStreamOptions {
-  runtimeHost: AgentRuntimeHost;
+  interactions: SessionHostInteractions;
   streamPrefix: string;
   streamCategory: AgentCategory;
   runKind: RunKind;
@@ -95,7 +95,7 @@ export function createChildStream(
   options: CreateChildStreamOptions,
 ): ChildStream {
   const childStreamId = `${options.streamPrefix}#${executionId}` as StreamTabId;
-  const { runtimeHost } = options;
+  const { interactions } = options;
 
   // Capture the run's session at creation (inside the parent run's ALS); the
   // status-update and finalize closures below fire later, possibly outside it.
@@ -150,7 +150,6 @@ export function createChildStream(
       childStreamId,
       options.agentName,
       options.streamCategory,
-      runtimeHost,
       runTrace.trace,
     );
     const executionLeaseScope =

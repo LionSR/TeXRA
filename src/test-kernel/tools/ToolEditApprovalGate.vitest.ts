@@ -11,7 +11,6 @@ import pDefer from 'p-defer';
 import { describe, it, beforeEach, afterEach } from 'vitest';
 
 // Local imports
-import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import type { StreamTabId } from '@shared/schemas';
@@ -66,7 +65,6 @@ async function callTextEditorInRun(
 ) {
   return withRunContext(
     createRunContext({
-      runtimeHost: noopAgentRuntimeHost,
       streamId: `stream:${executionId}` as StreamTabId,
       executionId,
     }),
@@ -222,7 +220,7 @@ describe('Tool edit approval gating', () => {
     setToolEditApprovalSessionBypass(
       TEST_STREAM_ID,
       true,
-      noopAgentRuntimeHost,
+      defaultSession().interactions,
       { silent: true },
     );
 
@@ -255,7 +253,6 @@ describe('Tool edit approval gating', () => {
     const requestInStream = (path: string) =>
       withRunContext(
         createRunContext({
-          runtimeHost: noopAgentRuntimeHost,
           streamId: TEST_STREAM_ID,
         }),
         () =>
@@ -275,7 +272,7 @@ describe('Tool edit approval gating', () => {
     setToolEditApprovalSessionBypass(
       TEST_STREAM_ID,
       true,
-      noopAgentRuntimeHost,
+      defaultSession().interactions,
       { silent: true },
     );
     firstApproval.resolve({ accepted: true });

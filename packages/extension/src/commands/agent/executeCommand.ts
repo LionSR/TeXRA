@@ -45,7 +45,6 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
     await runAgent(
       { config, executionId: wrapped?.executionId },
       {
-        runtimeHost: defaultSession().interactions,
         openWorkflowOutput: openFinalOutputIfAvailable,
         // Set only by the "fix LaTeX" actions (see handleFixCompilation and the
         // progress-view compile fixer); a direct main-view launch omits it and

@@ -1,5 +1,4 @@
 import { nanoid } from 'nanoid';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type {
   RuntimePresentationEvent,
   RuntimePresentationEventPayloads,
@@ -41,7 +40,7 @@ import type { AgentProposalPermission, StreamTabId } from '@shared/schemas';
 import type { DesktopToolEditApprovalController } from './desktopToolEditApproval.js';
 
 export interface DesktopHostInteractionsOptions {
-  runtimeHost: AgentRuntimeHost;
+  runtimeHost: Required<Pick<HostInteractions, 'emit'>>;
   session: SessionHandle;
   getApprovalHandlers(): ApprovalRequestHandlerSet;
   getToolEditApprovals(): DesktopToolEditApprovalController;

@@ -134,9 +134,8 @@ function resumeDesktopStream(
       { replayWhenAttached: true },
     );
   };
-  const runtimeHost = context.session.interactions;
   return resolveAndResumeStream(streamId, {
-    runtimeHost,
+    interactions: context.session.interactions,
     streamStatus: context.session.status,
     resolveResumeState: async (id) => {
       const resumeState = await resolveDesktopResumeState(id, context);
@@ -167,7 +166,6 @@ function resumeDesktopStream(
       resumeQueuedToolUseFromResumeData(
         snapshot.streamId,
         snapshot,
-        runtimeHost,
         {
           session: context.session,
           runtimeUnavailableTools: DESKTOP_UNAVAILABLE_TOOLS,

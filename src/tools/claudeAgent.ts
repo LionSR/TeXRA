@@ -31,7 +31,7 @@ import {
   type AgentTrace,
   type ToolUseCardRef,
 } from '@agent/trace';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import {
   startChildRunLoop,
   type ChildRunPorts,
@@ -397,7 +397,7 @@ function startClaudeAgentLoop(params: {
   additionalDirectories: string[] | undefined;
   env: NodeJS.ProcessEnv;
   pathToClaudeCodeExecutable: string | undefined;
-  runtimeHost: AgentRuntimeHost;
+  interactions: SessionHostInteractions;
   /**
    * Set when this launch is the disk-based fallback for a session_id the
    * in-memory registry no longer knows about (extension reload or crash). The
@@ -413,7 +413,7 @@ function startClaudeAgentLoop(params: {
     parentStreamId,
     executionId,
     initialPrompt,
-    runtimeHost,
+    interactions,
   } = params;
   const { childStreamId, logger } = childStream;
 
@@ -573,7 +573,7 @@ export class ClaudeAgentTool extends defineTool({
           },
           launch: (releaseClaim) => {
             // A missing in-memory entry denotes a disk-based SDK fallback.
-            const { streamId, runtimeHost } = requireRunStream(
+            const { streamId, interactions } = requireRunStream(
               CLAUDE_AGENT_NAME,
               runContext,
             );
@@ -585,7 +585,7 @@ export class ClaudeAgentTool extends defineTool({
               streamId,
               getRunContextExecutionId(runContext),
               getRunContextWorkingDirectory(runContext),
-              runtimeHost,
+              interactions,
               releaseClaim,
             );
           },
@@ -603,7 +603,7 @@ async function launchClaudeAgentSession(
   parentStreamId: StreamTabId,
   parentExecutionId: ExecutionId | undefined,
   parentWorkingDirectory: string | undefined,
-  runtimeHost: AgentRuntimeHost,
+  interactions: SessionHostInteractions,
   releaseFallbackClaim: (() => void) | undefined,
 ): Promise<ToolResult> {
   const config = await getClaudeAgentConfig();
@@ -627,7 +627,7 @@ async function launchClaudeAgentSession(
   return launchAgentCliSession({
     parentStreamId,
     parentExecutionId,
-    runtimeHost,
+    interactions,
     agentName: CLAUDE_AGENT_NAME,
     streamPrefix: 'claude@agent-sdk',
     description: input.prompt,
@@ -646,7 +646,7 @@ async function launchClaudeAgentSession(
         additionalDirectories: workspace.additionalDirectories,
         env,
         pathToClaudeCodeExecutable,
-        runtimeHost,
+        interactions,
         resumeSessionId: input.session_id ?? undefined,
         releaseFallbackClaim,
       }),
