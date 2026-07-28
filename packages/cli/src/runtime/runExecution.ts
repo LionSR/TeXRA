@@ -22,7 +22,10 @@ import { createHeadlessCliHostInteractions } from './approvalAdapter';
 import { finalizeCliExecution } from './executionFinalization';
 import { attachCliSessionProgressProjection } from './sessionProgressSubscription';
 import { initializeHeadlessTranscriptSession } from './transcriptSession';
-import { createCliRuntimeHost, type CliRuntimeHost } from './runtimeHost';
+import {
+  createCliRuntimeHost,
+  type CliRuntimeHost,
+} from './cliPresentationHost';
 import { CliExitCode } from './exitCodes';
 import { writeTextStderr } from './logSinks';
 import {
@@ -179,21 +182,24 @@ export async function executeCliRequest(
   // Transcript persistence is a launch prerequisite for every headless run.
   // This executes before runtime-host construction and before runAgent.
   const { session } = await initializeHeadlessTranscriptSession();
-  const runtimeHost = createCliRuntimeHost(runContext);
-  const detachRunProgressRenderer = runtimeHost.attachRunProgressRenderer(
+  const presentationHost = createCliRuntimeHost(runContext);
+  const detachRunProgressRenderer = presentationHost.attachRunProgressRenderer(
     session.events,
   );
   const detachHostInteractions = session.useHostInteractions(
     createHeadlessCliHostInteractions(runContext, {
-      beforePrompt: () => runtimeHost.prepareInteractivePrompt?.(),
+      beforePrompt: () => presentationHost.prepareInteractivePrompt?.(),
       setApprovalBypassState: (update) =>
-        runtimeHost.emitApprovalBypassState(update),
+        presentationHost.emitApprovalBypassState(update),
     }),
   );
   // Present terminal-error toasts from the run's `result` event through the same
-  // runtimeHost path the lifecycle used before (so ndjson / logger output is
+  // presentationHost path the lifecycle used before (so ndjson / logger output is
   // unchanged); the lifecycle no longer emits them directly.
-  const detachResultToast = attachTerminalResultToast(session, session.interactions);
+  const detachResultToast = attachTerminalResultToast(
+    session,
+    session.interactions,
+  );
   const detachSessionProgressProjection =
     runContext.outputFormat === 'ndjson'
       ? attachCliSessionProgressProjection(session.events)
@@ -297,7 +303,7 @@ export async function executeCliRequest(
       await finalizeShutdownStatus();
       await session.flushArtifacts();
     } finally {
-      await runtimeHost.close();
+      await presentationHost.close();
     }
   }
 

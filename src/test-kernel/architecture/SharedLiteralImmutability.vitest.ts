@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import { WORKSPACE_STORAGE_LAYOUT} from '@common/storage/storageLayout';
+import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { LATEXDIFF_CITATION_TEXT_COMMAND_EXCLUSIONS } from '@latex/latexdiff/diffCommandExecutor';
 import { MATH_MARKUP_OPTIONS } from '@latex/latexdiff/mathMarkup';
 import { API_KEY_PROVIDER_IDS } from '@shared/constants/providers';

@@ -14,7 +14,7 @@
 import { createChannelTrace } from '@agent/trace';
 import type { ExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import type { ExecutionRegistry } from '@agent/runtime/executionRegistry';
-import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
+import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import type { StreamTabId } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { wrapAndSanitizeTag } from '@utils/text/sanitizeTag';
@@ -156,13 +156,10 @@ class ExecutionSubscription implements Disposable {
   }
 
   private send(text: string): void {
-    void sendFollowUp(
-      this.streamId,
-      wrapAndSanitizeTag(TAG, text),
-      undefined,
-      undefined,
-      this.session,
-    )
+    void submitFollowUp(this.streamId, wrapAndSanitizeTag(TAG, text), {
+      session: this.session,
+      mode: 'live_notification',
+    })
       .then((result) => {
         if (result.status === 'sent' || result.status === 'queued') {
           emitQueuedFollowUpsChanged(this.streamId, this.session);

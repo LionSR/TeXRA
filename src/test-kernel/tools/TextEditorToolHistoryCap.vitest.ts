@@ -140,7 +140,6 @@ describe('TextEditorTool undo history lifecycle', () => {
       streamId,
       'orchestrator',
       'toolUse',
-      defaultSession().interactions,
     );
     session.executions.track(handle);
 

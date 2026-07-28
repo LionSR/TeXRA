@@ -101,7 +101,7 @@ vi.mock('vscode', () => {
   };
 });
 
-interface RecordingRuntimeHost extends SessionHostInteractions {
+interface RecordingRuntimeHost extends Pick<SessionHostInteractions, 'emit'> {
   readonly shown: ToolEditPermission[];
   readonly resolved: Array<{ requestId: string }>;
 }
@@ -127,17 +127,17 @@ function createRecordingRuntimeHost(): RecordingRuntimeHost {
   };
 }
 
-function initializeRecordingApproval(runtimeHost: RecordingRuntimeHost): void {
+function initializeRecordingApproval(interactions: RecordingRuntimeHost): void {
   initializeNativeToolEditApproval(
     {
       storageUri: { fsPath: storageRoot },
       globalStorageUri: { fsPath: storageRoot },
     } as unknown as VSCode.ExtensionContext,
-    runtimeHost,
+    interactions,
     {
-      showToolEditPermission: (payload) => runtimeHost.shown.push(payload),
+      showToolEditPermission: (payload) => interactions.shown.push(payload),
       resolveToolEditPermission: (requestId) =>
-        runtimeHost.resolved.push({ requestId }),
+        interactions.resolved.push({ requestId }),
     },
   );
 }
@@ -154,10 +154,10 @@ function currentProposedUri(): TestUri {
 }
 
 async function startApproval(): Promise<StartedApproval> {
-  const runtimeHost = createRecordingRuntimeHost();
+  const interactions = createRecordingRuntimeHost();
   const session = createTestSession();
   sessions.push(session);
-  initializeRecordingApproval(runtimeHost);
+  initializeRecordingApproval(interactions);
 
   const approval = nativeRequestApproval(
     {
@@ -171,12 +171,12 @@ async function startApproval(): Promise<StartedApproval> {
   );
   activeApprovals.push(approval);
 
-  await vi.waitFor(() => expect(runtimeHost.shown).toHaveLength(1));
-  const requestId = runtimeHost.shown[0]?.requestId;
+  await vi.waitFor(() => expect(interactions.shown).toHaveLength(1));
+  const requestId = interactions.shown[0]?.requestId;
   if (!requestId) {
     throw new Error('Expected a tool edit approval request ID.');
   }
-  return { approval, requestId, interactions: runtimeHost, session };
+  return { approval, requestId, interactions: interactions, session };
 }
 
 beforeEach(async () => {
@@ -209,10 +209,10 @@ afterEach(async () => {
 
 describe('native tool edit approval', () => {
   it('approves a matching edit while its preview is still initializing', async () => {
-    const runtimeHost = createRecordingRuntimeHost();
+    const interactions = createRecordingRuntimeHost();
     const session = createTestSession();
     sessions.push(session);
-    initializeRecordingApproval(runtimeHost);
+    initializeRecordingApproval(interactions);
     const approval = nativeRequestApproval(
       {
         path: '/workspace/approve-initializing.txt',
@@ -232,7 +232,7 @@ describe('native tool edit approval', () => {
       accepted: true,
       appliedContent: 'new\n',
     });
-    expect(runtimeHost.shown).toEqual([]);
+    expect(interactions.shown).toEqual([]);
   });
 
   it('approves a matching edit whose preview is already pending', async () => {
@@ -248,11 +248,11 @@ describe('native tool edit approval', () => {
   });
 
   it('keeps pending edit approval scoped to both session and stream', async () => {
-    const runtimeHost = createRecordingRuntimeHost();
+    const interactions = createRecordingRuntimeHost();
     const targetSession = createTestSession();
     const otherSession = createTestSession();
     sessions.push(targetSession, otherSession);
-    initializeRecordingApproval(runtimeHost);
+    initializeRecordingApproval(interactions);
     const request = (path: string, streamId: string, session: SessionHandle) =>
       nativeRequestApproval(
         {
@@ -280,7 +280,7 @@ describe('native tool edit approval', () => {
       otherSession,
     );
     activeApprovals.push(target, otherStream, otherSessionRequest);
-    await vi.waitFor(() => expect(runtimeHost.shown).toHaveLength(3));
+    await vi.waitFor(() => expect(interactions.shown).toHaveLength(3));
 
     await approveNativeToolEditApprovals(targetSession, 'stream-target');
     await expect(target).resolves.toMatchObject({ accepted: true });
@@ -298,10 +298,10 @@ describe('native tool edit approval', () => {
   });
 
   it('does not present an approval cancelled during initialization', async () => {
-    const runtimeHost = createRecordingRuntimeHost();
+    const interactions = createRecordingRuntimeHost();
     const session = createTestSession();
     sessions.push(session);
-    initializeRecordingApproval(runtimeHost);
+    initializeRecordingApproval(interactions);
     const approval = nativeRequestApproval(
       {
         path: '/workspace/cancel-initializing.txt',
@@ -324,7 +324,7 @@ describe('native tool edit approval', () => {
       accepted: false,
       userMessage: 'Run ended.',
     });
-    expect(runtimeHost.shown).toEqual([]);
+    expect(interactions.shown).toEqual([]);
   });
 
   it('does not publish a prompt after cancellation while revealing the view', async () => {
@@ -346,10 +346,10 @@ describe('native tool edit approval', () => {
         }
       },
     );
-    const runtimeHost = createRecordingRuntimeHost();
+    const interactions = createRecordingRuntimeHost();
     const session = createTestSession();
     sessions.push(session);
-    initializeRecordingApproval(runtimeHost);
+    initializeRecordingApproval(interactions);
     const approval = nativeRequestApproval(
       {
         path: '/workspace/cancel-reveal.txt',
@@ -372,11 +372,12 @@ describe('native tool edit approval', () => {
 
     await expect(approval).resolves.toMatchObject({ accepted: false });
     await Promise.resolve();
-    expect(runtimeHost.shown).toEqual([]);
+    expect(interactions.shown).toEqual([]);
   });
 
   it('cancels and cleans a selected session approval', async () => {
-    const { approval, requestId, interactions, session } = await startApproval();
+    const { approval, requestId, interactions, session } =
+      await startApproval();
 
     cancelNativeToolEditApprovals(session, {
       kind: 'toolEdit',
@@ -392,7 +393,7 @@ describe('native tool edit approval', () => {
   });
 
   it('isolates host-local prompt failures from the approval result', async () => {
-    const runtimeHost = createRecordingRuntimeHost();
+    const interactions = createRecordingRuntimeHost();
     const session = createTestSession();
     sessions.push(session);
     initializeNativeToolEditApproval(
@@ -400,10 +401,10 @@ describe('native tool edit approval', () => {
         storageUri: { fsPath: storageRoot },
         globalStorageUri: { fsPath: storageRoot },
       } as unknown as VSCode.ExtensionContext,
-      runtimeHost,
+      interactions,
       {
         showToolEditPermission: (payload) => {
-          runtimeHost.shown.push(payload);
+          interactions.shown.push(payload);
           throw new Error('show failed');
         },
         resolveToolEditPermission: () => {
@@ -422,8 +423,8 @@ describe('native tool edit approval', () => {
       { session },
     );
     activeApprovals.push(approval);
-    await vi.waitFor(() => expect(runtimeHost.shown).toHaveLength(1));
-    const requestId = runtimeHost.shown[0]?.requestId;
+    await vi.waitFor(() => expect(interactions.shown).toHaveLength(1));
+    const requestId = interactions.shown[0]?.requestId;
     if (!requestId) {
       throw new Error('Expected a tool edit approval request ID.');
     }

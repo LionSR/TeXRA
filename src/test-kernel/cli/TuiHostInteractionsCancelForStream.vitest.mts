@@ -14,7 +14,7 @@ import {
 } from '@cli/chat/tui/state/approvalQueue';
 import { createTuiHostInteractions } from '@cli/chat/tui/state/subscribeApprovals';
 import type { CliContext } from '@cli/runtime/cliContext';
-import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
+import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import { AgentCategory, type AgentProposal, type Plan } from '@shared/schemas';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 

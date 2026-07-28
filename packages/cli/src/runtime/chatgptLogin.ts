@@ -2,10 +2,12 @@ import {
   codexCoordinator,
   loginWithDeviceCode,
   loginWithLoopback,
-  setPreferCodexSubscription,
   type CodexSession,
-  type CodexSubscriptionPreferenceUpdate,
 } from '@auth/codex';
+import {
+  setPreferCodexSubscription,
+  type CodexSubscriptionPreferenceUpdate,
+} from '@model/codex/codexPreference';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { tryOpenBrowser } from './browser';

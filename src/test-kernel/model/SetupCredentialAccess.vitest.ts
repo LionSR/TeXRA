@@ -33,8 +33,8 @@ vi.mock('@model/apiProviders', () => ({
   lookupApiKey: mocks.lookupApiKey,
 }));
 
-vi.mock('@auth/serverKeys', () => ({
-  getServerSideKeyService: () => ({
+vi.mock('@model/includedModelAccess', () => ({
+  includedModelAccess: () => ({
     canUseServerSideKeys: mocks.canUseServerSideKeys,
   }),
 }));

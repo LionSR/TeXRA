@@ -1,5 +1,4 @@
 // Local imports
-import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentCategoryFilter, StreamTabId } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
@@ -75,7 +74,6 @@ export interface ProgressViewFollowUpCommandActions {
 }
 
 export interface ProgressViewBypassCommandOptions {
-  interactions: SessionHostInteractions;
   /**
    * Session that owns the approval bypass state. Desktop scopes it to its
    * window session; the extension omits it so the default session applies.
@@ -157,7 +155,7 @@ export function createProgressViewCommandHandlers(
   actions: ProgressViewCommandActions,
 ) {
   const { lifecycle, run, file, followUp, approval, externalInquiry } = actions;
-  const { interactions, session, showInfo } = actions.bypass;
+  const { session, showInfo } = actions.bypass;
 
   // Single source of truth for the coupled edit + bash session bypass behind
   // the one edit/command approval concept. The shield toolbar button flips it;
@@ -167,10 +165,10 @@ export function createProgressViewCommandHandlers(
     stream: StreamTabId,
     enabled: boolean,
   ): Promise<void> => {
-    setToolEditApprovalSessionBypass(stream, enabled, interactions, {
+    setToolEditApprovalSessionBypass(stream, enabled, {
       session,
     });
-    setBashApprovalSessionBypass(stream, enabled, interactions, {
+    setBashApprovalSessionBypass(stream, enabled, {
       session,
     });
     await showInfo?.(
@@ -250,19 +248,14 @@ export function createProgressViewCommandHandlers(
       applyCoupledBypass(data.stream, true),
     [PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS]: (data) => {
       const enabled = !proposalApprovals(session).isBypassed(data.stream);
-      setDelegatedWorkApprovalBypasses(
-        data.stream,
-        enabled,
-        interactions,
-        session,
-      );
+      setDelegatedWorkApprovalBypasses(data.stream, enabled, session);
       return reportDelegatedWorkApproval(enabled);
     },
     // The inline proposal action forces the complete delegated-task approval
     // mode on. It is idempotent, so it cannot invert a grant made from the
     // stream header while the proposal was open.
     [PROGRESS_VIEW_COMMANDS.ENABLE_SUPER_YOLO_BYPASS]: async (data) => {
-      setDelegatedWorkApprovalBypasses(data.stream, true, interactions, session);
+      setDelegatedWorkApprovalBypasses(data.stream, true, session);
       await approval.approvePendingDelegatedWork(
         data.stream,
         data.initiatingProposalId,

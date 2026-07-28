@@ -17,19 +17,14 @@ import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   notifyFollowUpSent,
-  presentFollowUpWakeResult,
-  sendFollowUp,
-  wakeQueuedFollowUpStream,
+  presentFollowUpResult,
+  submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
 import type {
   RuntimePresentationEvent,
   RuntimePresentationEventPayloads,
 } from '@agent/runtime/runtimePresentationEvents';
 import { getServerSideKeyService } from '@auth/serverKeys';
-import {
-  isPreferCodexSubscription,
-  setPreferCodexSubscription,
-} from '@auth/codex/codexPreference';
 import {
   getFileListConfig,
   loadFileListSettings,
@@ -87,6 +82,10 @@ import {
   computeModelOptionsData,
   invalidateModelOptionsCache,
 } from '@model/computeModelOptions';
+import {
+  isPreferCodexSubscription,
+  setPreferCodexSubscription,
+} from '@model/codex/codexPreference';
 import { platform } from '@platform/platform';
 import {
   COMMON_COMMANDS,
@@ -160,42 +159,6 @@ export interface DesktopProgressBridgeOptions {
   sessionStores: SessionStores;
   logger?: AgentTrace;
   host: DesktopAgentExecutionHost;
-  wakeQueuedFollowUpStream?: typeof wakeQueuedFollowUpStream;
-}
-
-async function wakeDesktopFollowUp(
-  streamId: StreamTabId,
-  result: Extract<
-    Awaited<ReturnType<typeof sendFollowUp>>,
-    { status: 'sent' | 'queued' }
-  >,
-  session: SessionHandle,
-  wakeFollowUpStream: typeof wakeQueuedFollowUpStream = wakeQueuedFollowUpStream,
-): Promise<void> {
-  // This continuation deliberately accepts only the process SessionHandle.
-  // It may outlive a window, so it must not capture a bridge or BrowserWindow
-  // presentation. Its important failure notice explicitly survives a detached
-  // interval and is delivered once when the next presentation attaches.
-  const wake = await wakeFollowUpStream(
-    streamId,
-    result,
-    platform().agentResume,
-    session,
-  );
-  const presentation = presentFollowUpWakeResult(wake);
-  if (presentation.severity === 'none') return;
-  if (presentation.refreshQueuedFollowUps) {
-    session.events.emit({
-      scope: 'session',
-      event: {
-        type: 'updateQueuedFollowUps',
-        payload: { streamId },
-      },
-    });
-  }
-  await session.interactions.showInfoMessage(presentation.message, {
-    replayWhenAttached: true,
-  });
 }
 
 export class DesktopProgressBridge {
@@ -234,7 +197,7 @@ export class DesktopProgressBridge {
   private disposed = false;
   private presentationReady = false;
 
-  readonly runtimeHost: SessionHostInteractions;
+  readonly interactions: SessionHostInteractions;
   progressViewInboundHandlers!: DesktopProgressInboundHandlerRegistry;
 
   private readonly session: SessionHandle;
@@ -250,7 +213,7 @@ export class DesktopProgressBridge {
       emit: (event, payload) => this.handlePresentationEvent(event, payload),
     };
     this.session = options.session;
-    this.runtimeHost = this.session.interactions;
+    this.interactions = this.session.interactions;
     const syncRenderedStreams = (): void =>
       this.syncStreamContent(this.updateStreamMetadata());
 
@@ -355,13 +318,8 @@ export class DesktopProgressBridge {
     await this.backend.load();
     if (this.disposed) return;
 
-    // Orchestration rail shows all sessions regardless of category — clear any
-    // persisted filter from a previous session so every top-level stream is
-    // visible in the rail and selectable without a stale-filter mismatch.
-    this.state.agentCategoryFilter = 'all';
-
     this.toolEditApprovals = createDesktopToolEditApprovalController({
-      runtimeHost: presentationHost,
+      interactions: presentationHost,
       session: this.session,
       ui: this.options.host,
       showToolEditPermission: (payload) =>
@@ -370,7 +328,7 @@ export class DesktopProgressBridge {
         this.backend.approvalHandlers.toolEdit.dismiss(requestId),
     });
     this.hostInteractions = createDesktopHostInteractions({
-      runtimeHost: presentationHost,
+      interactions: presentationHost,
       session: this.session,
       getApprovalHandlers: () => this.backend.approvalHandlers,
       getToolEditApprovals: () => this.toolEditApprovals!,
@@ -890,7 +848,6 @@ export class DesktopProgressBridge {
           },
         },
         bypass: {
-          interactions: this.runtimeHost,
           session: this.session,
         },
         file: {
@@ -1450,7 +1407,7 @@ export class DesktopProgressBridge {
     };
   }
 
-  private async sendFollowUp(
+  private sendFollowUp(
     streamId: StreamTabId,
     text: string,
     mediaFiles?: readonly string[],
@@ -1459,38 +1416,45 @@ export class DesktopProgressBridge {
     // handle is tracked in `this.session`, but this IPC path runs outside the
     // run ALS, so the module default (currentSession ⇒ defaultSession) would
     // look in the wrong registry and report `no_session` for a live run.
-    const result = await sendFollowUp(
+    // Admission and the recovery claim happen synchronously inside
+    // submitFollowUp. Presentation remains detached because recovery may run a
+    // complete agent turn; closing a desktop window must not await that turn.
+    void submitFollowUp(
       streamId,
-      text,
-      mediaFiles,
-      undefined,
-      this.session,
-    );
-    if (result.status === 'sent' || result.status === 'queued') {
-      this.session.events.emit({
-        scope: 'session',
-        event: {
-          type: 'updateQueuedFollowUps',
-          payload: { streamId },
-        },
-      });
-      const logger = this.logger;
-      void wakeDesktopFollowUp(
-        streamId,
-        result,
-        this.session,
-        this.options.wakeQueuedFollowUpStream,
-      ).catch((error: unknown) => {
-        logger.warn(`Failed to wake follow-up stream ${streamId}`, {
+      { text, mediaFiles },
+      { session: this.session },
+    )
+      .then(async (result) => {
+        if (result.status === 'sent' || result.status === 'queued') {
+          this.session.events.emit({
+            scope: 'session',
+            event: {
+              type: 'updateQueuedFollowUps',
+              payload: { streamId },
+            },
+          });
+          const presentation = presentFollowUpResult(result);
+          if (presentation.severity !== 'none') {
+            await this.session.interactions.showInfoMessage(
+              presentation.message,
+              {
+                replayWhenAttached: true,
+              },
+            );
+          }
+          return;
+        }
+
+        await this.options.host.showInfoMessage(
+          'No active session. Start a new agent task to continue.',
+        );
+      })
+      .catch((error: unknown) => {
+        this.logger.warn(`Failed to submit follow-up for stream ${streamId}`, {
           data: toLogData(error),
         });
       });
-      return;
-    }
-
-    await this.options.host.showInfoMessage(
-      'No active session. Start a new agent task to continue.',
-    );
+    return Promise.resolve();
   }
 
   openFileCompile(filePath: string): Promise<void> {

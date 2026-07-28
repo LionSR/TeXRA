@@ -42,7 +42,7 @@ vi.mock('@agent/runtime/RunContext', () => {
     getRunContextExecutionId: (context: any) =>
       readRunContextField(context, 'executionId'),
     getRunContextRuntimeHost: (context: any) =>
-      readRunContextField(context, 'runtimeHost'),
+      readRunContextField(context, 'interactions'),
   };
 });
 
@@ -67,7 +67,7 @@ describe('executeSubagent childStreamId derivation', () => {
     vi.clearAllMocks();
     mocks.registerExecution.mockResolvedValue(undefined);
     mocks.tryUseRunContext.mockReturnValue({
-      runtimeHost: { emit: vi.fn() },
+      interactions: { emit: vi.fn() },
       executionId: 'parent-exec',
       approvalPromptsUnavailable: false,
       runtimeUnavailableTools: [],

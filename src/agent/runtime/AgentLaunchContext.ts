@@ -140,7 +140,7 @@ export async function withExecutionRunContext<T>(
 
 export async function getAgentPath(
   agentIdentifier: string,
-  interactions: SessionHostInteractions,
+  interactions: Pick<SessionHostInteractions, 'emit'>,
   category: AgentCategory,
   source?: AgentSource | null,
 ): Promise<ResolvedAgent> {
@@ -162,7 +162,7 @@ export async function getAgentPath(
 
 async function validateModelExists(
   modelName: string,
-  interactions: SessionHostInteractions,
+  interactions: Pick<SessionHostInteractions, 'emit'>,
 ): Promise<ModelConfig> {
   const modelConfig = await resolveRuntimeModelConfig(modelName);
   if (modelConfig) return modelConfig;

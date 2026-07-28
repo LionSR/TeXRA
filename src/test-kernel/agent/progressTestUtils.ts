@@ -55,8 +55,6 @@ export interface RecordingHostDecisions {
   ): boolean;
 }
 
-const interactionsByHost = new WeakMap<object, HostInteractions>();
-
 export function recordSessionEvents(
   hub: SessionEventHub,
   filter: SessionEventSubscriptionFilter = {},
@@ -110,7 +108,7 @@ export function createRecordingHost(): {
   events: RecordedProgressEvent[];
   interactions: HostInteractions;
   decisions: RecordingHostDecisions;
-  host: Pick<SessionHostInteractions, 'emit'> & RecordingProgressSink;
+  host: SessionHostInteractions & RecordingProgressSink;
 } {
   const events: RecordedProgressEvent[] = [];
   const pendingPlans = new Map<
@@ -341,10 +339,9 @@ export function createRecordingHost(): {
       pending.settle({ submitted: false });
     }
   }
-  const host = {
-    emit: (event: string, payload: unknown) => events.push({ event, payload }),
-  } as Pick<SessionHostInteractions, 'emit'> & RecordingProgressSink;
-  interactionsByHost.set(host, interactions);
+  const host = new SessionHostInteractions() as SessionHostInteractions &
+    RecordingProgressSink;
+  host.use(interactions);
   return {
     events,
     decisions,
@@ -361,11 +358,24 @@ export function createRecordingHost(): {
  * instances.
  */
 export function sessionWithInteractions(
-  interactions: HostInteractions | undefined,
+  interactions:
+    | HostInteractions
+    | SessionHostInteractions
+    | Pick<SessionHostInteractions, 'emit'>
+    | undefined,
   status = new StreamStatusMachine(),
 ): SessionHandle {
-  const owner = new SessionHostInteractions();
-  if (interactions) owner.use(interactions);
+  const owner =
+    interactions instanceof SessionHostInteractions
+      ? interactions
+      : new SessionHostInteractions();
+  if (interactions && !(interactions instanceof SessionHostInteractions)) {
+    owner.use(
+      'cancel' in interactions
+        ? interactions
+        : { ...interactions, cancel: () => {} },
+    );
+  }
   return {
     interactions: owner,
     approvals: createSessionApprovals(owner),
@@ -384,7 +394,8 @@ export function testRunScope(
   streamId: string,
   options: {
     session?: SessionHandle;
-    interactions?: SessionHostInteractions;
+    interactions?:
+      SessionHostInteractions | Pick<SessionHostInteractions, 'emit'>;
   } = {},
 ): RunScope {
   const interactions = options.interactions ?? new SessionHostInteractions();
@@ -392,14 +403,12 @@ export function testRunScope(
     streamId: streamId as StreamTabId,
     executionId: 'deadbeef' as ExecutionId,
     agentName: 'test-agent',
-    session:
-      options.session ??
-      sessionWithInteractions(interactions),
+    session: options.session ?? sessionWithInteractions(interactions),
   });
 }
 
 /**
- * Run `fn` inside a launch `RunContext` carrying `runtimeHost`/`streamId`.
+ * Run `fn` inside a launch `RunContext` carrying `interactions`/`streamId`.
  *
  * Most flow nodes now read run identity from `services.runScope`; the reads
  * still on the ambient context need the launch scope installed — production
@@ -408,7 +417,7 @@ export function testRunScope(
  * same scope. Pass `session` so it matches the one on the services bag.
  */
 export function withTestRunContext<T>(
-  interactions: SessionHostInteractions,
+  interactions: SessionHostInteractions | Pick<SessionHostInteractions, 'emit'>,
   streamId: string,
   fn: () => Promise<T>,
   options: {

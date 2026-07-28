@@ -72,7 +72,7 @@ const todo: TodoItem = {
 const plan: Plan = {
   objective:
     'Move progress publication behind the runtime host.\n' +
-    'Publish tool-use cycle state through runtimeHost.',
+    'Publish tool-use cycle state through interactions.',
 };
 
 function createPrepResult(
@@ -99,8 +99,7 @@ describe('tool-use progress events', () => {
     const streamId = 'stream:single-shot-final-tool' as StreamTabId;
     const node = new ToolUseCycleNode().setServices({
       streamId,
-      runScope: testRunScope(streamId, { runtimeHost: host }),
-      runtimeHost: host,
+      runScope: testRunScope(streamId, { interactions: host }),
       logger,
       modelHandler: {
         getClient: vi.fn(),
@@ -129,8 +128,7 @@ describe('tool-use progress events', () => {
     const streamId = 'stream:headless-final-tool' as StreamTabId;
     const node = new ToolUseCycleNode().setServices({
       streamId,
-      runScope: testRunScope(streamId, { runtimeHost: host }),
-      runtimeHost: host,
+      runScope: testRunScope(streamId, { interactions: host }),
       logger,
       modelHandler: {
         getClient: vi.fn(),
@@ -169,8 +167,7 @@ describe('tool-use progress events', () => {
 
     const node = new ToolUseCycleNode().setServices({
       streamId,
-      runScope: testRunScope(streamId, { runtimeHost: host }),
-      runtimeHost: host,
+      runScope: testRunScope(streamId, { interactions: host }),
       logger,
       modelHandler: { getClient: vi.fn() },
       onRoundFinalized: vi.fn(),
@@ -314,8 +311,7 @@ describe('tool-use round outcome persistence (#8023)', () => {
       );
       const node = new ToolUseCycleNode().setServices({
         streamId,
-        runScope: testRunScope(streamId, { runtimeHost: host }),
-        runtimeHost: host,
+        runScope: testRunScope(streamId, { interactions: host }),
         logger,
         modelHandler: { getClient: vi.fn() },
         onRoundFinalized: vi.fn(),

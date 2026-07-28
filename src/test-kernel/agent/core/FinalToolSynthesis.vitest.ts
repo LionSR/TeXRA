@@ -93,8 +93,10 @@ describe('final-tool synthesis turn', () => {
   it('keeps exploration unforced, then forces exactly one final turn', async () => {
     const { requests, services, shared } = buildRound(true);
 
-    await withTestRunContext(new SessionHostInteractions(), 'final-tool-synthesis', () =>
-      createToolUseRoundFlow().setServices(services).run(shared),
+    await withTestRunContext(
+      new SessionHostInteractions(),
+      'final-tool-synthesis',
+      () => createToolUseRoundFlow().setServices(services).run(shared),
     );
 
     expect(requests.map((request) => request.finalTool)).toEqual([
@@ -113,8 +115,10 @@ describe('final-tool synthesis turn', () => {
   it('asks once without forcing when the provider cannot force tools', async () => {
     const { requests, services, shared } = buildRound(false);
 
-    await withTestRunContext(new SessionHostInteractions(), 'final-tool-floor', () =>
-      createToolUseRoundFlow().setServices(services).run(shared),
+    await withTestRunContext(
+      new SessionHostInteractions(),
+      'final-tool-floor',
+      () => createToolUseRoundFlow().setServices(services).run(shared),
     );
 
     expect(requests.map((request) => request.finalTool)).toEqual([

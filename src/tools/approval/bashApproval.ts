@@ -10,7 +10,6 @@ import {
   getRunContextStreamId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
-import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import { StreamTabIdSchema, type StreamTabId } from '@shared/schemas';
 import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas/agentCliSettings';
 import { type ToolResult } from '@shared/schemas/toolResult';
@@ -38,7 +37,6 @@ const DEFAULT_BASH_REJECTION_INSTRUCTION =
 export function setBashApprovalSessionBypass(
   streamId: StreamTabId,
   enabled: boolean,
-  interactions: SessionHostInteractions,
   options?: { silent?: boolean; session?: SessionHandle },
 ): void {
   (options?.session ?? currentSession()).approvals.bash.bypass.setBypass(

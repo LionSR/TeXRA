@@ -8,13 +8,13 @@ import type {
   ModelCredentialRoute,
   ModelCredentialSelection,
 } from '@agent/types/ModelHandlerContracts';
-import { SupabaseClient } from '@auth/SupabaseClient';
 import { normalizeProviderError } from '@common/errors';
 import {
   isProviderErrorAutoRetryable,
   isUnauthorizedProviderError,
   isUserAbort,
 } from '@common/errors/sdkErrorUtils';
+import { includedModelAccess } from '@model/includedModelAccess';
 import {
   STREAM_PHASE,
   toRetryErrorInfo,
@@ -140,7 +140,7 @@ export abstract class RetryableInvocationNode<
     this._hasAttemptedTokenRefresh = true;
     services.logger.debug('Relay 401, refreshing token before retry loop');
 
-    const refreshed = await SupabaseClient.getRelayAccessToken(true);
+    const refreshed = await includedModelAccess().getAccessToken(true);
     if (!refreshed) {
       services.logger.debug('Token refresh failed, skipping auto-retries');
       this._persistent401Error = ensureError(originalError);
@@ -195,20 +195,21 @@ export abstract class RetryableInvocationNode<
     }
 
     // Proactive relay token refresh before the request. Only relay-route
-    // clients present the Supabase session token, so only they consult the
-    // expiry clock — personal-key / openrouter / subscription clients must
-    // never rebuild for a credential the call doesn't use.
+    // clients present a relay session token, so only they consult the expiry
+    // clock — personal-key / openrouter / subscription clients must never
+    // rebuild for a credential the call doesn't use.
+    const includedAccess = includedModelAccess();
     if (
       services.clientCredentialRoute === 'relay' &&
-      SupabaseClient.isTokenExpiringSoon()
+      includedAccess.isAccessTokenExpiringSoon()
     ) {
       // Threshold-gated and mutex-deduped: refreshes the session (updating
       // tokenExpiresAt) only when actually near expiry. For a configured CI
       // relay token this is a cache-only read with no side effects.
-      await SupabaseClient.getRelayAccessToken();
+      await includedAccess.getAccessToken();
       // Rebuild only when the token actually rotated — rebuilding with the
       // same JWT changes nothing, and is exactly the loop this branch caused.
-      if (!SupabaseClient.isTokenExpiringSoon()) {
+      if (!includedAccess.isAccessTokenExpiringSoon()) {
         await tryRefreshClient(
           services.refreshClient,
           services.logger,

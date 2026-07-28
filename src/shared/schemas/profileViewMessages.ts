@@ -10,7 +10,10 @@ import { PROFILE_VIEW_COMMANDS } from '@shared/ipc';
 import { ProviderVscodeSettingDefSchema } from '@shared/constants/providers';
 import { AgentMetadataBaseSchema } from './agent';
 import { commandOnly } from './messageFactories';
-import { SpendingStatusSchema } from './spendingStatus';
+import {
+  SpendingStatusErrorSchema,
+  SpendingStatusSchema,
+} from './spendingStatus';
 
 // ============================================================
 // Data schemas
@@ -35,6 +38,8 @@ export type RemoteAgent = z.infer<typeof RemoteAgentSchema>;
 
 const ApiAccessModeSchema = z.enum(['included', 'personal']);
 export type ApiAccessMode = z.infer<typeof ApiAccessModeSchema>;
+const SessionProblemSchema = z.enum(['expired', 'unavailable']);
+export type SessionProblem = z.infer<typeof SessionProblemSchema>;
 export const API_ACCESS_MODE_OPTIONS: readonly {
   readonly value: ApiAccessMode;
   readonly label: string;
@@ -105,7 +110,13 @@ export const UpdateProfileMessageSchema = z.object({
   apiAccessMode: ApiAccessModeSchema,
   tierConstants: TierConstantsSchema,
   accessExpiresAt: z.string().nullish(),
+  /**
+   * Why a stored session could not provide a fresh token. Invalid credentials
+   * require reconnection; transient failures should instead invite a retry.
+   */
+  sessionProblem: SessionProblemSchema.nullable().prefault(null),
   spendingStatus: SpendingStatusSchema.nullish(),
+  spendingStatusError: SpendingStatusErrorSchema.nullish(),
   quotaAutoSwitched: z.boolean().prefault(false),
   providerKeyStatuses: z.array(ProviderKeyStatusSchema).prefault([]),
   globalStreamingDefault: z.boolean().prefault(true),

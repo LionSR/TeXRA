@@ -12,6 +12,7 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import { getCurrentToolContexts } from '@agent/followUp/ToolFileInteractionContext';
+import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import type { RunContext } from '@agent/runtime/RunContext';
 import type {
   ExecutionId,
@@ -71,7 +72,7 @@ export interface AgentCliResumeLabels {
   queuedLabel: string;
 }
 
-function queueAgentCliFollowUp(
+async function queueAgentCliFollowUp(
   stored: ResumableAgentCliSession,
   params: {
     id: string;
@@ -79,7 +80,7 @@ function queueAgentCliFollowUp(
     callerStreamId: StreamTabId | undefined;
     labels: AgentCliResumeLabels;
   },
-): ToolResult {
+): Promise<ToolResult> {
   const { id, prompt, callerStreamId, labels } = params;
   if (callerStreamId && stored.parentStreamId !== callerStreamId) {
     throw new ToolError(
@@ -87,9 +88,14 @@ function queueAgentCliFollowUp(
     );
   }
 
-  currentSession().followUps.acquire(stored.childStreamId).enqueue({
-    text: prompt,
+  const result = await submitFollowUp(stored.childStreamId, prompt, {
+    session: currentSession(),
   });
+  if (result.status === 'no_session' || result.status === 'dropped') {
+    throw new ToolError(
+      `${labels.notActiveLabel} '${id}' no longer has a resumable continuation.`,
+    );
+  }
 
   const preview = truncateWithEllipsis(prompt, 60);
   return {
@@ -137,7 +143,7 @@ export async function resumeOrLaunchAgentCliSession(
 
     const stored = await store.waitForActive(id);
     if (!stored) continue;
-    return queueAgentCliFollowUp(stored, {
+    return await queueAgentCliFollowUp(stored, {
       id,
       prompt: params.prompt,
       callerStreamId: params.callerStreamId,

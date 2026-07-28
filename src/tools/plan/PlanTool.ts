@@ -208,7 +208,7 @@ Best practices:
       getCurrentToolContexts()?.runContext,
     );
     if (interactions) {
-      await setGoalSessionBashAutoApproval(streamId, enabled, interactions);
+      await setGoalSessionBashAutoApproval(streamId, enabled);
     }
   }
 

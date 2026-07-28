@@ -91,7 +91,6 @@ function parentContext(stopAfterCycle = false): LaunchRunContext {
       executionId,
       streamId,
       agentName: 'orchestrator',
-      interactions: { emit: vi.fn() } as never,
       session: { id: 'workflow-script-test' } as never,
     },
   };

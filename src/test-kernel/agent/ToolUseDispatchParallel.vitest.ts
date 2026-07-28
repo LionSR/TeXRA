@@ -119,10 +119,13 @@ async function runDispatch(
   const prepped = await (
     node as unknown as { prep(s: unknown): Promise<SdkToolCall[]> }
   ).prep(shared);
-  return await withTestRunContext(new SessionHostInteractions(), 'dispatch-test', () =>
-    (node as unknown as { _exec(items: unknown[]): Promise<unknown[]> })._exec(
-      prepped,
-    ),
+  return await withTestRunContext(
+    new SessionHostInteractions(),
+    'dispatch-test',
+    () =>
+      (
+        node as unknown as { _exec(items: unknown[]): Promise<unknown[]> }
+      )._exec(prepped),
   );
 }
 

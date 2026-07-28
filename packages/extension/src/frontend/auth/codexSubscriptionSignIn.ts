@@ -6,11 +6,11 @@ import {
   codexCoordinator,
   loginWithDeviceCode,
   loginWithLoopback,
-  setPreferCodexSubscription,
   type CodexSession,
 } from '@auth/codex';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
+import { setPreferCodexSubscription } from '@model/codex/codexPreference';
 
 const OPEN_DEFAULT_BROWSER = 'Open in Default Browser';
 const COPY_SIGN_IN_LINK = 'Copy Sign-in Link';
