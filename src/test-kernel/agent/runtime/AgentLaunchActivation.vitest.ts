@@ -47,7 +47,7 @@ vi.mock('@agent/storage/executionLease', () => ({
 import { noopTrace } from '@agent/trace';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import {
   executeAgent,
   resumeToolUseFromResumeData,
@@ -81,7 +81,7 @@ const config = AgentConfigSchema.parse({
 async function captureActivation(
   run: (
     session: ReturnType<typeof createTestSession>,
-    runtimeHost: AgentRuntimeHost,
+    runtimeHost: SessionHostInteractions,
   ) => Promise<unknown>,
 ): Promise<SetActiveStreamPayload> {
   const session = createTestSession();

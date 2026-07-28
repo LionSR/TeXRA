@@ -24,7 +24,7 @@ import {
   retrieveSessionResumeData,
   type ToolUseResumeData,
 } from '@agent/runtime/SessionResumeRetrieval';
-import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { createRunScope } from '@agent/runtime/RunScope';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -154,7 +154,7 @@ async function runPersistedFlow(
     transient: {},
   };
   const runScope = createRunScope({
-    runtimeHost: noopAgentRuntimeHost,
+    runtimeHost: new SessionHostInteractions(),
     streamId,
     executionId,
     agentName: config.agent,

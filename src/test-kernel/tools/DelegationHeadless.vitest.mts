@@ -1209,7 +1209,6 @@ describe('headless delegation', () => {
   it('includes memory misses in interactive early-delivered reports', async () => {
     const parentStreamId = 'parent-stream' as StreamTabId;
     const childStreamId = 'child-stream' as StreamTabId;
-    const host = runtimeHost();
 
     // Async delegation is now driven by the child-run loop over
     // nativeSubagentStrategy: `executeAgent` (mocked here) is the loop's
@@ -1223,7 +1222,6 @@ describe('headless delegation', () => {
           childStreamId,
           'review',
           'toolUse',
-          host,
         );
         defaultSession().executions.track(handle);
         options.onStreamResolved?.(childStreamId);
@@ -1243,7 +1241,7 @@ describe('headless delegation', () => {
     );
 
     await withRunContext(
-      parentRunContext({ runtimeHost: host, streamId: parentStreamId }),
+      parentRunContext({ streamId: parentStreamId }),
       () => callDelegateReview(),
     );
 
@@ -1259,7 +1257,6 @@ describe('headless delegation', () => {
   it('does not deliver detached subagent results back to the released parent', async () => {
     const parentStreamId = 'parent-stream' as StreamTabId;
     const childStreamId = 'child-stream' as StreamTabId;
-    const host = runtimeHost();
     let capturedHandle: AgentExecutionHandle | undefined;
 
     mocks.executeAgent.mockImplementationOnce(
@@ -1270,7 +1267,6 @@ describe('headless delegation', () => {
           childStreamId,
           'review',
           'toolUse',
-          host,
         );
         defaultSession().executions.track(handle);
         capturedHandle = handle;
@@ -1292,7 +1288,7 @@ describe('headless delegation', () => {
     );
 
     await withRunContext(
-      parentRunContext({ runtimeHost: host, streamId: parentStreamId }),
+      parentRunContext({ streamId: parentStreamId }),
       () => callDelegateReview(),
     );
 

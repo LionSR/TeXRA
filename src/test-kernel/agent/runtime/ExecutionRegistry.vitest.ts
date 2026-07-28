@@ -14,7 +14,7 @@ import {
   type LiveToolUseFlowContext,
 } from '@agent/runtime/ExecutionHandle';
 import { ExecutionRegistry } from '@agent/runtime/executionRegistry';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import {
   SessionEventHub,
   type SessionEvent,
@@ -81,7 +81,7 @@ function createHandle(
   executionId: string,
   parentStreamId: StreamTabId,
   childStreamId: StreamTabId,
-  runtimeHost: AgentRuntimeHost,
+  runtimeHost: SessionHostInteractions,
   overrides: {
     agentName?: string;
     category?: AgentCategory;

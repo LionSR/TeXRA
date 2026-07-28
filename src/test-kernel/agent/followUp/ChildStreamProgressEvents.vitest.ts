@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // Local imports
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   STREAM_PHASE,
@@ -66,11 +66,11 @@ const config = {
 
 function startCodexChild(
   executionId: ExecutionId,
-  host: AgentRuntimeHost,
+  interactions: SessionHostInteractions,
   description: string,
 ) {
   return createChildStream(executionId, parentStreamId, {
-    runtimeHost: host,
+    interactions,
     streamPrefix: 'codex',
     streamCategory: AgentCategory.ToolUse,
     runKind: 'agent',
@@ -136,22 +136,12 @@ describe('child stream progress events', () => {
         sequence.push('fact:setActiveStream');
       }
     });
-    const host = {
-      emit: (event: string, payload: unknown) => {
-        sequence.push(`emit:${event}`);
-        (active.host.emit as (event: string, payload: unknown) => void)(
-          event,
-          payload,
-        );
-      },
-    } as AgentRuntimeHost;
-
     try {
       const childStream = createChildStream(
         orderingExecutionId,
         parentStreamId,
         {
-          runtimeHost: host,
+          interactions: defaultSession().interactions,
           streamPrefix: 'bash',
           streamCategory: AgentCategory.ToolUse,
           runKind: 'process',
@@ -180,7 +170,7 @@ describe('child stream progress events', () => {
 
     try {
       const childStream = createChildStream(executionId, parentStreamId, {
-        runtimeHost: active.host,
+        interactions: defaultSession().interactions,
         streamPrefix: 'bash',
         streamCategory: AgentCategory.ToolUse,
         runKind: 'process',
@@ -265,7 +255,7 @@ describe('child stream progress events', () => {
     const active = createRecordingHost();
     const firstRun = withSessionEventRecording(() =>
       createChildStream(workflowRelaunchExecutionId, parentStreamId, {
-        runtimeHost: active.host,
+        interactions: defaultSession().interactions,
         streamPrefix: 'workflow-script',
         streamCategory: AgentCategory.Workflow,
         runKind: 'workflowScript',
@@ -285,7 +275,7 @@ describe('child stream progress events', () => {
       workflowRelaunchExecutionId,
       parentStreamId,
       {
-        runtimeHost: active.host,
+        interactions: defaultSession().interactions,
         streamPrefix: 'workflow-script',
         streamCategory: AgentCategory.Workflow,
         runKind: 'workflowScript',
@@ -332,7 +322,7 @@ describe('child stream progress events', () => {
         throw new Error('execution setup failed');
       });
     const options = {
-      runtimeHost: active.host,
+      interactions: defaultSession().interactions,
       streamPrefix: 'workflow-script',
       streamCategory: AgentCategory.Workflow,
       runKind: 'workflowScript' as const,
@@ -391,7 +381,7 @@ describe('child stream progress events', () => {
         workflowRelaunchExecutionId,
         parentStreamId,
         {
-          runtimeHost: active.host,
+          interactions: defaultSession().interactions,
           streamPrefix: 'workflow-script',
           streamCategory: AgentCategory.Workflow,
           runKind: 'workflowScript',
@@ -437,7 +427,7 @@ describe('child stream progress events', () => {
 
     try {
       const childStream = createChildStream(executionId, parentStreamId, {
-        runtimeHost: active.host,
+        interactions: defaultSession().interactions,
         streamPrefix: 'bash',
         streamCategory: AgentCategory.ToolUse,
         runKind: 'process',
@@ -482,7 +472,7 @@ describe('child stream progress events', () => {
         noProjectionAutoCloseExecutionId,
         parentStreamId,
         {
-          runtimeHost: active.host,
+          interactions: defaultSession().interactions,
           streamPrefix: 'bash',
           streamCategory: AgentCategory.ToolUse,
           runKind: 'process',
@@ -514,7 +504,7 @@ describe('child stream progress events', () => {
 
     try {
       const childStream = createChildStream(executionId, parentStreamId, {
-        runtimeHost: active.host,
+        interactions: defaultSession().interactions,
         streamPrefix: 'bash',
         streamCategory: AgentCategory.ToolUse,
         runKind: 'process',
@@ -550,7 +540,7 @@ describe('child stream progress events', () => {
         launchAgentCliSession({
           parentStreamId,
           parentExecutionId: undefined,
-          runtimeHost: active.host,
+          interactions: defaultSession().interactions,
           agentName: 'codex',
           streamPrefix: 'codex',
           description: 'Fail during synchronous loop setup',
@@ -600,7 +590,7 @@ describe('child stream progress events', () => {
 
     const childStream = startCodexChild(
       loopExecutionId,
-      active.host,
+      defaultSession().interactions,
       'Run a long-lived Codex child loop',
     );
     const handle =
@@ -649,7 +639,7 @@ describe('child stream progress events', () => {
 
     const childStream = startCodexChild(
       stoppedExecutionId,
-      active.host,
+      defaultSession().interactions,
       'Run a stopped Codex child loop',
     );
     const handle =
@@ -689,7 +679,7 @@ describe('child stream progress events', () => {
     const childStream = withSessionEventRecording(() =>
       startCodexChild(
         cancelledExecutionId,
-        active.host,
+        defaultSession().interactions,
         'Run an interrupted Codex child loop',
       ),
     );
@@ -716,7 +706,7 @@ describe('child stream progress events', () => {
     const childStream = withSessionEventRecording(() =>
       startCodexChild(
         failedExecutionId,
-        active.host,
+        defaultSession().interactions,
         'Run a failing Codex child loop',
       ),
     );
@@ -748,7 +738,7 @@ describe('child stream progress events', () => {
     const childStream = withSessionEventRecording(() =>
       startCodexChild(
         normalizedErrorExecutionId,
-        active.host,
+        defaultSession().interactions,
         'Run a child loop with mismatched finalization inputs',
       ),
     );
