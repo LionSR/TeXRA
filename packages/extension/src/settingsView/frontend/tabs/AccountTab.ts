@@ -110,8 +110,9 @@ export class AccountTab extends LitElement {
     if (this.spendingStatusError != null) {
       return html`
         <div class="account-empty">
-          Usage check failed on the server. Included access is temporarily
-          unavailable; switch to your own provider API keys or try again later.
+          Usage data is temporarily unavailable because the server could not
+          complete the spending check. Included model access may still work; try
+          refreshing this page later.
         </div>
       `;
     }
