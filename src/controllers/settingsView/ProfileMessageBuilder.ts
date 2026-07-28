@@ -42,8 +42,13 @@ export interface BuildProfileMessageDeps {
 export async function buildProfileMessage(
   deps: BuildProfileMessageDeps,
 ): Promise<UpdateProfileMessage> {
-  const authenticated = await SupabaseClient.isAuthenticated();
-  const providerKeyStatuses = await deps.getProviderKeyStatuses();
+  const [storedSessionState, providerKeyStatuses] = await Promise.all([
+    SupabaseClient.getStoredSessionState(),
+    deps.getProviderKeyStatuses(),
+  ]);
+  const authenticated =
+    storedSessionState === 'authenticated' ||
+    SupabaseClient.hasUsableRelayToken();
   const globalStreamingDefault = getGlobalStreaming();
   const tierConstants = { ultra: ULTRA_TIER, max: MAX_TIER };
   const base = {
@@ -56,7 +61,6 @@ export async function buildProfileMessage(
   // Preserve the distinction between an authoritatively rejected refresh
   // credential and a transient transport/service failure. Both have a stored
   // account but require different user guidance.
-  const storedSessionState = await SupabaseClient.getStoredSessionState();
   const hasStoredSession = storedSessionState !== 'none';
   let sessionProblem: UpdateProfileMessage['sessionProblem'] = null;
   if (storedSessionState === 'invalid') {
