@@ -17,8 +17,6 @@ import { ResumeAdmissionCancelledError } from './resumeAdmission';
 import { defaultSession } from './SessionHandle';
 import type { ToolUseResumeData } from './SessionResumeRetrieval';
 
-import type { AgentRuntimeHost } from './AgentRuntimeHost';
-
 export interface ResumeQueuedToolUseOptions extends SubagentRunOptions {
   /** Recheck canonical admission atomically while acquiring the resumed lease. */
   readonly canAcquireResumeLease?: () => boolean | Promise<boolean>;
@@ -70,7 +68,6 @@ export interface ResumeQueuedToolUseOptions extends SubagentRunOptions {
 export async function resumeQueuedToolUseFromResumeData(
   streamId: StreamTabId,
   resume: ToolUseResumeData,
-  runtimeHost: AgentRuntimeHost,
   options: ResumeQueuedToolUseOptions,
 ): Promise<boolean> {
   const session = options.session ?? defaultSession();
@@ -130,7 +127,7 @@ export async function resumeQueuedToolUseFromResumeData(
     // `ToolUseWaitNode` — only its child-run loop's queue wait consumes it),
     // so re-queued items would sit unconsumed until the next wake. A root
     // cursor accepts either route; the handoff works for both.
-    const result = await resumeToolUseFromResumeData(resume, runtimeHost, {
+    const result = await resumeToolUseFromResumeData(resume, {
       session: options.session,
       approvalPromptsUnavailable: options.approvalPromptsUnavailable,
       runtimeUnavailableTools: options.runtimeUnavailableTools,

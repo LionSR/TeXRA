@@ -22,3 +22,8 @@ export interface RuntimePresentationEventPayloads {
 }
 
 export type RuntimePresentationEvent = keyof RuntimePresentationEventPayloads;
+
+export interface AgentRuntimeEmitOptions {
+  /** Retain a presentation event until a temporarily detached UI returns. */
+  readonly replayWhenAttached?: boolean;
+}

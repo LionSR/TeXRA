@@ -314,7 +314,7 @@ export async function runFlowWithLifecycle(
   ) => Promise<AgentRuntimeFlowResult>,
   options?: RunFlowLifecycleOptions,
 ): Promise<AgentRuntimeFlowResult> {
-  const { streamId, executionId, runtimeHost, session } = ctx.runScope;
+  const { streamId, executionId, session } = ctx.runScope;
   const agentIdentifier = ctx.config.agent;
   const category =
     ctx.setting.agentCategory === AgentCategory.ToolUse
@@ -327,7 +327,6 @@ export async function runFlowWithLifecycle(
     streamId,
     agentIdentifier,
     category,
-    runtimeHost,
     ctx.logger,
   );
   const executionLeaseScope = captureOwnedExecutionLeaseIfPresent(executionId);

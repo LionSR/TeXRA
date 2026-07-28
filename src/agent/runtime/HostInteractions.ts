@@ -16,9 +16,6 @@ import type {
 import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
 import type {
   AgentRuntimeEmitOptions,
-  AgentRuntimeHost,
-} from './AgentRuntimeHost';
-import type {
   RuntimePresentationEvent,
   RuntimePresentationEventPayloads,
 } from './runtimePresentationEvents';
@@ -342,7 +339,7 @@ interface PendingSessionInteraction {
  * cancelling requests owned by a still-running session.
  */
 export class SessionHostInteractions
-  implements HostInteractions, AgentRuntimeHost
+  implements HostInteractions
 {
   private readonly attachments: HostInteractionAttachment[] = [];
   private readonly pending = new Set<PendingSessionInteraction>();

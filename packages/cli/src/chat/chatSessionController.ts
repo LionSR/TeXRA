@@ -306,7 +306,7 @@ export function createChatSessionController(
     );
     const detachResultToast = attachTerminalResultToast(
       defaultSession(),
-      runtimeHost,
+      defaultSession().interactions,
     );
     let resultToastAttached = true;
     const detachResultToastOnce = (): void => {
@@ -333,12 +333,7 @@ export function createChatSessionController(
       if (released) return;
       const executions = defaultSession().executions;
       const releaseIfUnused = (): void => {
-        const inUse = executions
-          .getActiveIds()
-          .some(
-            (executionId) =>
-              executions.getHandle(executionId)?.runtimeHost === runtimeHost,
-          );
+        const inUse = executions.getActiveIds().length > 0;
         if (!inUse) releaseHost();
       };
       // Subscribe before the first liveness check. An execution that untracks
@@ -389,7 +384,6 @@ export function createChatSessionController(
           { config: registeredConfig, executionId },
           {
             registerExecution: true,
-            runtimeHost,
             enforceCategory: true,
             approvalPromptsUnavailable: approvalsUnavailable,
             runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
@@ -524,7 +518,7 @@ export function createChatSessionController(
 
       const runChain = setCliHelperModel(currentModel)
         .then(() =>
-          resumeToolUseFromResumeData(resolution, runtimeHost, {
+          resumeToolUseFromResumeData(resolution, {
             approvalPromptsUnavailable: approvalsUnavailable,
             runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
             drainedFollowUps: supersededRecovery?.followUps.map((followUp) => ({
@@ -632,7 +626,7 @@ export function createChatSessionController(
           RUN_OUTCOME.COMPLETED;
         const resumed = await setCliHelperModel(currentModel).then(() =>
           resolveAndResumeStream(streamId, {
-            runtimeHost,
+            interactions: defaultSession().interactions,
             streamStatus: defaultSession().status,
             isCancellationRequested: () => session.stopRequested,
             resolveResumeState: async () => ({
@@ -641,7 +635,7 @@ export function createChatSessionController(
               parentStreamId,
             }),
             resumeToolUse: (resume) =>
-              resumeQueuedToolUseFromResumeData(streamId, resume, runtimeHost, {
+              resumeQueuedToolUseFromResumeData(streamId, resume, {
                 session: defaultSession(),
                 approvalPromptsUnavailable: approvalsUnavailable,
                 runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,

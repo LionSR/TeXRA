@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   approveNativeToolEditApprovals,
@@ -101,7 +101,7 @@ vi.mock('vscode', () => {
   };
 });
 
-interface RecordingRuntimeHost extends AgentRuntimeHost {
+interface RecordingRuntimeHost extends SessionHostInteractions {
   readonly shown: ToolEditPermission[];
   readonly resolved: Array<{ requestId: string }>;
 }
@@ -109,7 +109,7 @@ interface RecordingRuntimeHost extends AgentRuntimeHost {
 interface StartedApproval {
   readonly approval: Promise<ToolEditApprovalResult>;
   readonly requestId: string;
-  readonly runtimeHost: RecordingRuntimeHost;
+  readonly interactions: RecordingRuntimeHost;
   readonly session: SessionHandle;
 }
 
@@ -176,7 +176,7 @@ async function startApproval(): Promise<StartedApproval> {
   if (!requestId) {
     throw new Error('Expected a tool edit approval request ID.');
   }
-  return { approval, requestId, runtimeHost, session };
+  return { approval, requestId, interactions: runtimeHost, session };
 }
 
 beforeEach(async () => {
@@ -376,7 +376,7 @@ describe('native tool edit approval', () => {
   });
 
   it('cancels and cleans a selected session approval', async () => {
-    const { approval, requestId, runtimeHost, session } = await startApproval();
+    const { approval, requestId, interactions, session } = await startApproval();
 
     cancelNativeToolEditApprovals(session, {
       kind: 'toolEdit',
@@ -388,7 +388,7 @@ describe('native tool edit approval', () => {
       accepted: false,
       userMessage: 'Stream resources released.',
     });
-    expect(runtimeHost.resolved).toEqual([{ requestId }]);
+    expect(interactions.resolved).toEqual([{ requestId }]);
   });
 
   it('isolates host-local prompt failures from the approval result', async () => {
@@ -437,7 +437,7 @@ describe('native tool edit approval', () => {
   });
 
   it('restores a failed approval prompt and accepts a later retry', async () => {
-    const { approval, requestId, runtimeHost } = await startApproval();
+    const { approval, requestId, interactions } = await startApproval();
     const proposedUri = currentProposedUri();
     await rm(proposedUri.fsPath);
 
@@ -450,9 +450,9 @@ describe('native tool edit approval', () => {
     expect(vscodeMocks.showErrorMessage).toHaveBeenCalledWith(
       expect.stringContaining('edited document could not be read'),
     );
-    expect(runtimeHost.resolved).toEqual([{ requestId }]);
-    expect(runtimeHost.shown).toHaveLength(2);
-    expect(runtimeHost.shown[1]).toEqual(runtimeHost.shown[0]);
+    expect(interactions.resolved).toEqual([{ requestId }]);
+    expect(interactions.shown).toHaveLength(2);
+    expect(interactions.shown[1]).toEqual(interactions.shown[0]);
 
     const getText = vi.fn(() => 'beta after retry\r\n');
     vscodeMocks.textDocuments.push({ uri: proposedUri, getText });
@@ -466,11 +466,11 @@ describe('native tool edit approval', () => {
       appliedContent: 'beta after retry\n',
     });
     expect(getText).toHaveBeenCalledOnce();
-    expect(runtimeHost.resolved).toEqual([{ requestId }, { requestId }]);
+    expect(interactions.resolved).toEqual([{ requestId }, { requestId }]);
   });
 
   it('accepts the current edited document content', async () => {
-    const { approval, requestId, runtimeHost } = await startApproval();
+    const { approval, requestId, interactions } = await startApproval();
     const getText = vi.fn(() => 'beta edited\r\n');
     vscodeMocks.textDocuments.push({
       uri: currentProposedUri(),
@@ -488,6 +488,6 @@ describe('native tool edit approval', () => {
     });
     expect(getText).toHaveBeenCalledOnce();
     expect(vscodeMocks.showErrorMessage).not.toHaveBeenCalled();
-    expect(runtimeHost.resolved).toHaveLength(1);
+    expect(interactions.resolved).toHaveLength(1);
   });
 });

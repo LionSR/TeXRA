@@ -14,11 +14,7 @@ import PQueue from 'p-queue';
 
 import type { StreamTabId } from '@shared/schemas';
 
-import {
-  type ApprovalBypassKind,
-  SessionHostInteractions,
-} from './HostInteractions';
-import type { AgentRuntimeHost } from './AgentRuntimeHost';
+import { SessionHostInteractions, type ApprovalBypassKind } from './HostInteractions';
 
 /** The three independently-tracked bypass kinds `SessionApprovals` owns. */
 type BypassAncestryKind = 'toolEdit' | 'bash' | 'proposal';
@@ -45,14 +41,13 @@ const ALL_BYPASS_ANCESTRY_KINDS: readonly BypassAncestryKind[] = [
 export interface StreamApprovalBypass {
   isBypassed(streamId: StreamTabId): boolean;
   /**
-   * Set bypass for a stream. Notifies the active host interaction when a
-   * `runtimeHost` is provided (unless `silent`); omit the runtime host for
-   * pre-activation setup where no UI exists yet.
+   * Set bypass for a stream. Notifies the active host interaction (unless
+   * `silent`); omit the interaction host for pre-activation setup where no UI
+   * exists yet.
    */
   setBypass(
     streamId: StreamTabId,
     enabled: boolean,
-    runtimeHost?: AgentRuntimeHost,
     options?: { silent?: boolean },
   ): void;
   clearForStream(streamId: StreamTabId): void;
@@ -82,16 +77,15 @@ function createStreamApprovalBypass(
   const setBypass: StreamApprovalBypass['setBypass'] = (
     streamId,
     enabled,
-    runtimeHost,
     options,
   ) => {
     const descendants =
-      runtimeHost && !options?.silent ? resolveDescendants(streamId) : [];
+      !options?.silent ? resolveDescendants(streamId) : [];
     const previousDescendantStates = new Map(
       descendants.map((descendant) => [descendant, resolve(descendant)]),
     );
     byStream.set(streamId, enabled);
-    if (runtimeHost && !options?.silent) {
+    if (!options?.silent) {
       interactions.setApprovalBypassState({
         streamId,
         kind,
@@ -299,7 +293,7 @@ export function createSessionApprovals(
     const bypass = bypassByKind[kind];
     const effectiveValue = bypass.isBypassed(streamId);
     graph.delete(streamId);
-    bypass.setBypass(streamId, effectiveValue, undefined, { silent: true });
+    bypass.setBypass(streamId, effectiveValue, { silent: true });
   }
 
   function detachStreamFromParent(streamId: StreamTabId): void {

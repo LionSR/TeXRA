@@ -45,7 +45,6 @@ export function configureDelegatedChildApprovals(
     session.approvals.toolEdit.bypass.setBypass(
       childStreamId,
       true,
-      undefined,
       {
         silent: true,
       },

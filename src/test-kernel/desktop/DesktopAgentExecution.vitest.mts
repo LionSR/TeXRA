@@ -97,7 +97,7 @@ type TestableBridge = Bridge & {
     ): boolean;
   };
   waitUntilReady(): Promise<void>;
-  runtimeHost: {
+  interactions: {
     emit(event: string, payload: unknown): void;
   };
   handlePresentationEvent(event: string, payload: unknown): void;
@@ -645,7 +645,7 @@ function expectWorkflowResume(
       executionId,
     },
     expect.objectContaining({
-      runtimeHost: expect.objectContaining({ emit: expect.any(Function) }),
+      interactions: expect.objectContaining({ emit: expect.any(Function) }),
       openWorkflowOutput: expect.any(Function),
     }),
   );
@@ -885,9 +885,9 @@ describe('DesktopProgressBridge', () => {
 
     bridge.dispose();
     messages.length = 0;
-    bridge.runtimeHost.emit('requestEnsureProgressView', {});
-    bridge.runtimeHost.emit('requestShowError', { message: 'late error' });
-    bridge.runtimeHost.emit('requestOpenFile', {
+    bridge.interactions?.emit('requestEnsureProgressView', {});
+    bridge.interactions?.emit('requestShowError', { message: 'late error' });
+    bridge.interactions?.emit('requestOpenFile', {
       location: {
         kind: 'runStorage',
         absolutePath: '/workspace/late.tex',
@@ -2264,7 +2264,7 @@ describe('DesktopProgressBridge', () => {
     expect(runAgent).toHaveBeenCalledWith(
       { config: expect.objectContaining(taskState.agentConfig) },
       expect.objectContaining({
-        runtimeHost: expect.objectContaining({ emit: expect.any(Function) }),
+        interactions: expect.objectContaining({ emit: expect.any(Function) }),
       }),
     );
   });
@@ -2710,8 +2710,6 @@ describe('DesktopProgressBridge', () => {
       const { AgentExecutionHandle } =
         await import('@agent/runtime/ExecutionHandle');
       const { getExecutionStore } = await import('@agent/storage');
-      const { noopAgentRuntimeHost } =
-        await import('@agent/runtime/AgentRuntimeHost');
       const transcripts = await openTranscripts();
       transcripts.ensureStream(streamId);
       await transcripts.flush();
@@ -2866,7 +2864,6 @@ describe('DesktopProgressBridge', () => {
         diffPathsA,
         getExecutionStore,
         handle,
-        noopAgentRuntimeHost,
         processSession,
         progressSnapshotStore,
         sessionStores,
@@ -3128,10 +3125,10 @@ describe('DesktopProgressBridge', () => {
       const { bridgeB, errorsB } = await owner.reopen();
 
       try {
-        expect(owner.handle.runtimeHost).toBe(
+        expect(owner.handle.interactions).toBe(
           owner.processSession.interactions,
         );
-        owner.handle.runtimeHost.emit('requestShowError', {
+        owner.handle.interactions.emit('requestShowError', {
           message: 'Presented after reopen.',
         });
         await vi.waitFor(() =>

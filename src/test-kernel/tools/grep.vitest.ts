@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // Standard library imports
 
 // Local imports
-import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { platform } from '@platform/platform';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -180,7 +179,6 @@ describe('GrepTool execution', () => {
 
     const result = await withRunContext(
       createRunContext({
-        runtimeHost: noopAgentRuntimeHost,
         workingDirectory: '/outside/worktree',
       }),
       () =>

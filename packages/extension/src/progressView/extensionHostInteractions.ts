@@ -1,7 +1,7 @@
 import { nanoid } from 'nanoid';
 import * as vscode from 'vscode';
 
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import type {
   RuntimePresentationEvent,
   RuntimePresentationEventPayloads,
@@ -48,7 +48,7 @@ import type {
 import type { AgentProposalPermission, StreamTabId } from '@shared/schemas';
 
 export interface ExtensionHostInteractionsOptions {
-  runtimeHost: AgentRuntimeHost;
+  runtimeHost: Pick<SessionHostInteractions, 'emit'>;
   session: SessionHandle;
   getApprovalHandlers(): ApprovalRequestHandlerSet;
   setApprovalBypassState(update: HostApprovalBypassStateUpdate): void;

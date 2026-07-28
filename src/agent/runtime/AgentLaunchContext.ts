@@ -65,7 +65,7 @@ import { getStreamTabId } from './streamTab';
 import { currentSession, type SessionHandle } from './SessionHandle';
 import { AgentLaunchResources } from './AgentLaunchResources';
 import type { StreamStatusMachine } from './StreamStatusService';
-import type { AgentRuntimeHost } from './AgentRuntimeHost';
+import type { SessionHostInteractions } from './HostInteractions';
 
 const logger = createChannelTrace('AgentLaunchContext');
 
@@ -86,7 +86,6 @@ export interface AgentLaunchContext extends AgentCore {
 export interface AgentLaunchInput {
   config: AgentConfig;
   executionId?: ExecutionId;
-  runtimeHost: AgentRuntimeHost;
   streamTabIdOverride?: StreamTabId;
   /** Fires after streamId is assigned but before setActiveStream is emitted. */
   onBeforeActivation?: (streamId: StreamTabId) => void;
@@ -141,7 +140,7 @@ export async function withExecutionRunContext<T>(
 
 export async function getAgentPath(
   agentIdentifier: string,
-  runtimeHost: AgentRuntimeHost,
+  interactions: SessionHostInteractions,
   category: AgentCategory,
   source?: AgentSource | null,
 ): Promise<ResolvedAgent> {
@@ -153,7 +152,7 @@ export async function getAgentPath(
   const result = resolveAgentForLaunch(category, agentIdentifier, source);
   if (result) return result;
 
-  runtimeHost.emit(
+  interactions.emit(
     'showAgentConfigBanner',
     { agentName: agentIdentifier },
     { replayWhenAttached: true },
@@ -163,12 +162,12 @@ export async function getAgentPath(
 
 async function validateModelExists(
   modelName: string,
-  runtimeHost: AgentRuntimeHost,
+  interactions: SessionHostInteractions,
 ): Promise<ModelConfig> {
   const modelConfig = await resolveRuntimeModelConfig(modelName);
   if (modelConfig) return modelConfig;
 
-  runtimeHost.emit(
+  interactions.emit(
     'requestShowInstruction',
     {
       key: 'modelNotRecognized',
@@ -236,7 +235,7 @@ async function beginRunStage(
 async function assembleAgentLaunchContext(
   input: AgentLaunchInput,
   executionId: ExecutionId,
-  runtimeHost: AgentRuntimeHost,
+  interactions: SessionHostInteractions,
   reservedStreamId: StreamTabId | undefined,
   resources: AgentLaunchResources,
 ): Promise<AgentLaunchContext> {
@@ -247,7 +246,7 @@ async function assembleAgentLaunchContext(
   // category-scoped rule validation uses — never blind name resolution.
   const resolution = await getAgentPath(
     fullConfig.agent,
-    runtimeHost,
+    interactions,
     fullConfig.agentCategory,
     fullConfig.agentSource,
   );
@@ -278,7 +277,7 @@ async function assembleAgentLaunchContext(
     );
   }
 
-  const modelConfig = await validateModelExists(fullConfig.model, runtimeHost);
+  const modelConfig = await validateModelExists(fullConfig.model, interactions);
 
   const config: AgentConfig = {
     ...fullConfig,
@@ -389,7 +388,6 @@ async function assembleAgentLaunchContext(
   const agentPath = path.dirname(resolution.definitionPath);
   const workingDirectory = config.workingDirectory?.trim() || undefined;
   const runScope = createRunScope({
-    runtimeHost,
     streamId,
     executionId,
     agentName: config.agent,
@@ -548,8 +546,9 @@ function compensateFailedActivation(args: {
 export async function buildAgentLaunchContext(
   input: AgentLaunchInput,
 ): Promise<AgentLaunchContext> {
-  const { config, runtimeHost } = input;
+  const { config } = input;
   const launchSession = input.session ?? currentSession();
+  const interactions = launchSession.interactions;
   const streamStatus = launchSession.status;
   const executionId = input.executionId ?? generateExecutionId();
   if (!input.streamTabIdOverride && (!config.agent || !config.model)) {
@@ -567,7 +566,7 @@ export async function buildAgentLaunchContext(
     const ctx = await assembleAgentLaunchContext(
       { ...input, session: launchSession },
       executionId,
-      runtimeHost,
+      interactions,
       reservedStreamId,
       resources,
     );
@@ -585,7 +584,7 @@ export async function buildAgentLaunchContext(
       });
     });
     if (!input.suppressErrorNotification && !(err instanceof ZodError)) {
-      runtimeHost.emit(
+      interactions.emit(
         'requestShowError',
         { message: toErrorMessage(err) },
         { replayWhenAttached: true },

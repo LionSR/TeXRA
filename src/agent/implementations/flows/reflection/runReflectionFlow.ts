@@ -102,7 +102,8 @@ export async function runReflectionFlow<C = unknown>(
     onRoundFinalized,
     runScope,
   } = input;
-  const { runtimeHost, streamId, executionId, session: runSession } = runScope;
+  const { streamId, executionId, session: runSession } = runScope;
+  const interactions = runSession.interactions;
   // Capture the run's scope at setup; the interrupt closure below fires from
   // the host thread outside the ALS.
 
@@ -176,7 +177,7 @@ export async function runReflectionFlow<C = unknown>(
       logger,
       fileService,
       streamId,
-      runtimeHost,
+      interactions,
     },
     storageKey,
   );

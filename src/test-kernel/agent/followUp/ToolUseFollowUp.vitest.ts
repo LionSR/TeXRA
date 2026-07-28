@@ -12,7 +12,6 @@ import { strict as assert } from 'node:assert';
 import { describe, it, afterEach } from 'vitest';
 
 // Local imports
-import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   AgentExecutionHandle,
