@@ -82,7 +82,6 @@ describe('resumeExtensionToolUseFromResumeData', () => {
     expect(mocks.resumeQueuedToolUseFromResumeData).toHaveBeenCalledWith(
       STREAM,
       snapshot(),
-      expect.any(Object),
       expect.objectContaining({
         extraFollowUps: [{ text: 'typed alongside resume', origin: 'user' }],
       }),
@@ -139,7 +138,6 @@ describe('registerResumeAgentCommand', () => {
     expect(mocks.resumeQueuedToolUseFromResumeData).toHaveBeenCalledWith(
       canonical.streamId,
       canonical,
-      expect.any(Object),
       expect.any(Object),
     );
     statusSpy.mockRestore();
