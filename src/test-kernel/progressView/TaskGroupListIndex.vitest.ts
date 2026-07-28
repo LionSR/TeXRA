@@ -659,11 +659,26 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
     expect(header?.querySelector('.group-progress')?.textContent?.trim()).toBe(
       '1/2',
     );
+    expect(header?.querySelector('wa-spinner')).toBeNull();
+    expect(header?.querySelector('wa-icon')?.getAttribute('name')).toBe(
+      'circle',
+    );
     // The enclosing header is the card's one home for its phase.
     const content = list.shadowRoot?.querySelector(
       `#${GROUP_DOM_IDS.CONTENT_PREFIX}phase-map`,
     );
     expect(content?.querySelector('.workflow-task-phase')).toBeNull();
     expect(content?.querySelector('.workflow-task-details')).toBeNull();
+    expect(content?.querySelector('wa-spinner')).toBeNull();
+    expect(
+      content
+        ?.querySelector('[data-log-id="task-b"] wa-icon')
+        ?.getAttribute('name'),
+    ).toBe('circle');
+    expect(
+      content
+        ?.querySelector('[data-log-id="task-b"] .workflow-task-status')
+        ?.textContent?.trim(),
+    ).toBe('Running');
   });
 });

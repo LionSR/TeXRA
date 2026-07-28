@@ -87,11 +87,16 @@ export function isTerminalWorkflowCallProgress(
   }
 }
 
-export const WORKFLOW_CALL_STATUS_LABEL = {
+export const WORKFLOW_TASK_STATUS_LABEL = {
   planned: 'Planned',
   running: 'Running',
+  waiting: 'Waiting for follow-up',
   completed: 'Finished',
   cached: 'Saved result',
   skipped: 'Skipped',
+  cancelled: 'Cancelled',
   failed: 'Failed',
-} as const satisfies Record<WorkflowCallProgress['status'], string>;
+} as const satisfies Record<
+  WorkflowCallProgress['status'] | 'waiting' | 'cancelled',
+  string
+>;

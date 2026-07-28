@@ -3,7 +3,7 @@ import { html, nothing, type TemplateResult } from 'lit';
 
 // Local imports - shared contracts
 import {
-  WORKFLOW_CALL_STATUS_LABEL,
+  WORKFLOW_TASK_STATUS_LABEL,
   WorkflowCallProgressSchema,
   type LogMessageData,
   type WorkflowCallProgress,
@@ -17,12 +17,10 @@ import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { assertNever } from '@utils/core';
 
 function statusIcon(call: WorkflowCallProgress): TemplateResult {
-  if (call.status === 'running') {
-    return html`<wa-spinner aria-label="Running"></wa-spinner>`;
-  }
   const icon: TeXRAIconName = (() => {
     switch (call.status) {
       case 'planned':
+      case 'running':
         return 'circle';
       case 'completed':
       case 'cached':
@@ -74,7 +72,7 @@ export function formatWorkflowCallTemplate(
         }
       </span>
       <span class="workflow-task-status"
-        >${WORKFLOW_CALL_STATUS_LABEL[call.status]}</span
+        >${WORKFLOW_TASK_STATUS_LABEL[call.status]}</span
       >
     </div>
   `;

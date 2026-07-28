@@ -23,11 +23,10 @@ import { designTokens } from '@shared/styles';
 import { workflowPhaseCallProgress } from '@shared/copy/workflowCall';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 
-// Side-effect imports - register WA icon and spinner components
+// Side-effect imports - register Web Awesome components
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
 
 import { isInFlightPhase } from '@shared/streams/streamStatus';
 import { parseWorkflowOutputRoundDir } from '@shared/constants/workflowOutput';
@@ -63,15 +62,15 @@ const DEFAULT_GROUP_MESSAGE_WINDOW = 400;
 const GROUP_MESSAGE_WINDOW_STEP = 400;
 
 /**
- * Maps group status to a wa-icon name; null indicates an animated spinner.
+ * Maps group status to a steady wa-icon name.
  * `TaskGroup.status` is the native `StreamPhase`/`RunOutcome` vocabulary
  * (#7993 step 3) — `CANCELLED` now renders distinctly from `COMPLETED`
  * instead of folding into one neutral "stopped" icon.
  */
-function getStatusIcon(status: string): TeXRAIconName | null {
+function getStatusIcon(status: string): TeXRAIconName {
   switch (status) {
     case STREAM_PHASE.RUNNING:
-      return null;
+      return 'circle';
     case STREAM_PHASE.FAILED:
       return 'circle-exclamation';
     case STREAM_PHASE.COMPLETED:
@@ -525,13 +524,7 @@ export class TaskGroupList extends LitElement {
         ? ` (${group.index + 1}/${group.total})`
         : '';
     return html`
-      <span class="group-status-icon">
-        ${
-          statusIcon
-            ? html`${waIcon(statusIcon)}`
-            : html`<wa-spinner></wa-spinner>`
-        }
-      </span>
+      <span class="group-status-icon"> ${waIcon(statusIcon)} </span>
       <span class="group-title">${group.name}${positionText}</span>
       ${this.renderGroupProgress(group, messages)}
       <span class="group-time">
