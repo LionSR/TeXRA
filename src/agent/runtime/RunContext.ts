@@ -35,7 +35,8 @@ interface BareRunContext extends RunContextCommon {
  *
  * The `launch` variant is projected from AgentLaunchContext and guarantees the
  * run-identifying fields. The `bare` variant is for manually constructed test
- * and one-shot tool contexts where only a runtime host is required.
+ * and one-shot tool contexts whose available run fields are explicitly
+ * supplied.
  */
 export type RunContext = LaunchRunContext | BareRunContext;
 

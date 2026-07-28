@@ -39,7 +39,6 @@ import {
   resumeToolUseFromResumeData,
 } from '@agent/runtime/executeAgent';
 import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
-import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentRunHandle } from '@agent/runtime/ExecutionHandle';
 import type {
@@ -70,7 +69,6 @@ export interface NativeSubagentStrategyParams {
   readonly agentName: string;
   readonly orchestratorStreamId: StreamTabId;
   readonly parentSession: SessionHandle;
-  readonly interactions: SessionHostInteractions;
   readonly startedAt: number;
   readonly workingDirectory?: string;
   readonly approvalPromptsUnavailable?: boolean;
@@ -228,7 +226,6 @@ export function createNativeSubagentStrategy(
     launch: (ports, abortController) =>
       runNative(ports, abortController, async (onRun) => {
         const executeOptions = {
-          interactions: params.interactions,
           session: params.parentSession,
           isSubagent: true,
           enforceCategory: params.agentCategoryExplicit,

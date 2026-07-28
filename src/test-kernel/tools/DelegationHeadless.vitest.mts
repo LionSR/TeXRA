@@ -144,7 +144,6 @@ function delegationOptions(
     agentName: 'review',
     parentExecutionId: STABLE_PARENT_EXECUTION_ID,
     parentStreamId: 'parent-stream' as StreamTabId,
-    interactions: defaultSession().interactions,
     session: defaultSession(),
     ...overrides,
   };
