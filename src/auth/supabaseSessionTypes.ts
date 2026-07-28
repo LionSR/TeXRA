@@ -52,10 +52,10 @@ export interface SupabaseSessionStorage {
 }
 
 export interface SupabaseSessionLog {
-  debug?(source: string, message: string): void;
-  info?(source: string, message: string): void;
-  warn?(source: string, message: string): void;
-  error?(source: string, message: string): void;
+  debug?(source: string, message: string, options?: { data?: unknown }): void;
+  info?(source: string, message: string, options?: { data?: unknown }): void;
+  warn?(source: string, message: string, options?: { data?: unknown }): void;
+  error?(source: string, message: string, options?: { data?: unknown }): void;
 }
 
 /** Result of converting an auth callback into a stored session. */
