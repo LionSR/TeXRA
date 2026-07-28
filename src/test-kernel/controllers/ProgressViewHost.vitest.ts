@@ -79,7 +79,7 @@ describe('ProgressViewHost', () => {
           reportImageSaveError: vi.fn(),
         },
         bypass: {
-          runtimeHost: { emit: vi.fn() },
+          interactions: { emit: vi.fn() },
         },
         file: {
           openFile: vi.fn(),

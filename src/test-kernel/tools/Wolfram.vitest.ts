@@ -35,7 +35,6 @@ async function dispatchWolfram(streamId: StreamTabId, code: string) {
   const explicit = createRecordingHost();
   const result = withRunContext(
     createRunContext({
-      runtimeHost: explicit.host,
       streamId,
       session: sessionWithInteractions(explicit.interactions),
     }),

@@ -29,7 +29,6 @@ describe('notifyUnavailableTools', () => {
 
       withRunContext(
         createRunContext({
-          runtimeHost: { emit: vi.fn() },
           session: contextualSession,
         }),
         () => {

@@ -228,7 +228,6 @@ describe('Tool edit approval gating', () => {
     // picks it up from the active run context.
     const result = await withRunContext(
       createRunContext({
-        runtimeHost: noopAgentRuntimeHost,
         streamId: TEST_STREAM_ID,
       }),
       () => tool.call({ path: 'doc.txt', content: 'auto' }),
