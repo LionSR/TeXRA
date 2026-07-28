@@ -691,6 +691,28 @@ describe('SupabaseSession', () => {
       assert.deepEqual(read(), replacement);
     });
 
+    it('does not clear a replacement session after stale validation', async () => {
+      const initialSession = makeSession({
+        accessToken: 'old-access',
+        refreshToken: 'old-refresh',
+      });
+      const { coordinator, read } = createCoordinator({ initialSession });
+      const replacement = makeSession({
+        accessToken: 'replacement-access',
+        refreshToken: 'replacement-refresh',
+      });
+
+      await coordinator.storeSession(replacement);
+
+      assert.equal(
+        await coordinator.clearSessionIfCurrent(initialSession),
+        false,
+      );
+      assert.deepEqual(read(), replacement);
+      assert.equal(await coordinator.clearSessionIfCurrent(replacement), true);
+      assert.equal(read(), null);
+    });
+
     it('does not return expired session tokens when refresh fails', async () => {
       const initialSession = makeSession({
         accessToken: 'old-access',

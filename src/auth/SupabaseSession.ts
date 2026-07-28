@@ -98,6 +98,38 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
   }
 
   /**
+   * Clear the stored session only if it still has the credential pair observed
+   * by the caller. A completed OAuth callback or refresh may replace a session
+   * while an older validation request is in flight; that older result must not
+   * delete the replacement.
+   */
+  async clearSessionIfCurrent(expected: SupabaseSession): Promise<boolean> {
+    let cleared = false;
+    await this.sessionMutex.runExclusive(async () => {
+      const current = await this.loadSession();
+      if (
+        !current ||
+        current.accessToken !== expected.accessToken ||
+        current.refreshToken !== expected.refreshToken
+      ) {
+        return;
+      }
+
+      this.sessionMutationVersion += 1;
+      const mutationVersion = this.sessionMutationVersion;
+      await this.options.storage.delete();
+      this.lastStoredSession = null;
+      this.lastStoredSessionVersion = mutationVersion;
+      cleared = true;
+    });
+
+    if (cleared) {
+      this.options.onTokenExpiryChanged?.(null);
+    }
+    return cleared;
+  }
+
+  /**
    * Ensure the access token is fresh, refreshing proactively if near expiry.
    *
    * @returns Fresh access token, or null if no session or refresh failed.
