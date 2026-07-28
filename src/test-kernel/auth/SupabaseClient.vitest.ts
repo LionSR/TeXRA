@@ -39,6 +39,9 @@ function createTokenProvider(
     whenReady: async () => {},
     ensureFreshToken: async () => 'access-token',
     getSessionTokens: async () => null,
+    getStoredSessionState: async () => 'none',
+    getStoredAccountLabel: async () => null,
+    getLastRefreshFailure: () => null,
     ...overrides,
   };
 }
@@ -94,9 +97,27 @@ describe('SupabaseClient', () => {
     await withRelayTokenEnv(relayToken, async () => {
       SupabaseClient.setAuthProvider(provider);
 
+      assert.equal(SupabaseClient.hasUsableRelayToken(), true);
       assert.equal(await SupabaseClient.isAuthenticated(), true);
       assert.equal(await SupabaseClient.getRelayAccessToken(), relayToken);
       assert.equal(await SupabaseClient.canAccessRemoteAgentCatalog(), false);
+    });
+  });
+
+  it('classifies a stored session independently of relay authentication', async () => {
+    const relayToken = `${RELAY_CI_TOKEN_PREFIX}maskedsession`;
+    const provider = createTokenProvider({
+      ensureFreshToken: async () => null,
+      getSessionTokens: async () => null,
+      getStoredSessionState: async () => 'invalid',
+      getLastRefreshFailure: () => 'invalid',
+    });
+
+    await withRelayTokenEnv(relayToken, async () => {
+      SupabaseClient.setAuthProvider(provider);
+
+      assert.equal(await SupabaseClient.isAuthenticated(), true);
+      assert.equal(await SupabaseClient.getStoredSessionState(), 'invalid');
     });
   });
 
