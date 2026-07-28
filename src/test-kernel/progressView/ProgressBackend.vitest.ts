@@ -283,6 +283,7 @@ describe('ProgressBackend', () => {
       'resetAfterStorageRootChange',
     );
     const clearBridge = vi.spyOn(backend.webviewBridge, 'clearAll');
+    backend.state.agentCategoryFilter = AgentCategory.Workflow;
 
     try {
       await backend.reloadAfterStorageRootChange();
@@ -291,6 +292,7 @@ describe('ProgressBackend', () => {
       expect(resetPresentation).toHaveBeenCalledOnce();
       expect(clearBridge).toHaveBeenCalledOnce();
       expect(transcriptReload).not.toHaveBeenCalled();
+      expect(backend.state.agentCategoryFilter).toBe('all');
     } finally {
       backend.dispose();
       session.dispose();
