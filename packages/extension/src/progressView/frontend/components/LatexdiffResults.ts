@@ -14,7 +14,8 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 // Local imports - shared styles
 import { designTokens, commonViewStyles } from '@shared/styles';
 import type { DiffResultDisplay, DiffStatus } from '@shared/schemas';
-import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - progress view events
 import { ProgressEvents } from '../events';
@@ -25,7 +26,7 @@ import { buildDetailsSummary } from '../formatters/htmlBuilders';
 /** Status wa-icon name lookup for latexdiff entries. */
 const LATEXDIFF_STATUS_ICONS: Record<DiffStatus, TeXRAIconName> = {
   success: 'check',
-  error: 'error',
+  error: 'circle-exclamation',
 };
 
 @customElement('latexdiff-results')
@@ -156,7 +157,7 @@ export class LatexdiffResults extends LitElement {
         data-run-id=${ifDefined(this.runId || undefined)}
       >
         ${buildDetailsSummary({
-          iconName: 'diff',
+          iconName: 'code-compare',
           label: summaryText,
         })}
         <ul class="latexdiff-content">

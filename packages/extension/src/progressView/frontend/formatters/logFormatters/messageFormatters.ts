@@ -142,7 +142,7 @@ export function formatErrorTemplate(message: LogMessageData): FormatResult {
   // (::part(icon)); banner-details--no-toggle hides that part when there's
   // nothing to expand, replacing the old inline visibility:hidden style.
   // prettier-ignore
-  const summaryTemplate = html`<div slot="summary" class="details-summary">${waIcon('error', { className: 'icon' })}${labelSpan}${copyButton}</div>`;
+  const summaryTemplate = html`<div slot="summary" class="details-summary">${waIcon('circle-exclamation', { className: 'icon' })}${labelSpan}${copyButton}</div>`;
   // prettier-ignore
   return html`<wa-details appearance="plain" icon-placement="start" class=${classMap({
     'banner-details': true,

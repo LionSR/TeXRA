@@ -17,7 +17,7 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import { mergeInheritedAgentObject } from '@agent/core/definition/agentDefinitionInheritance';
 import { inlineAgentDefinition } from '@agent/index/inlineAgents';
-import { RemoteAgentLoader } from '@agent/remote/RemoteAgentLoader';
+import { loadRemoteAgent } from '@agent/remote/RemoteAgentLoader';
 import { parseYamlWith, safeParseYaml } from '@common/parsing/safeParseYaml';
 import * as logger from '@logger/logUtils';
 import { agentKey } from '@shared/schemas/agent';
@@ -135,9 +135,7 @@ export async function loadAgentSettingAndPrompts(
 
   // Handle remote agents
   if (entry.source === 'remote') {
-    const remoteConfig = await RemoteAgentLoader.loadRemoteAgent(
-      resolution.resolvedName,
-    );
+    const remoteConfig = await loadRemoteAgent(resolution.resolvedName);
 
     // Remote agents are already fully processed (tools resolved, validated)
     return [remoteConfig.settings, remoteConfig.prompts];

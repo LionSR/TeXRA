@@ -143,11 +143,16 @@ function SessionHeaderBlock({
 
   return (
     <Box flexDirection="column">
-      <Box>
-        <Text aria-hidden color={COLOR_HINT}>
-          {'─'.repeat(columns)}
-        </Text>
-      </Box>
+      <Box
+        aria-hidden
+        width={columns}
+        borderStyle="single"
+        borderTop
+        borderBottom={false}
+        borderLeft={false}
+        borderRight={false}
+        borderColor={COLOR_HINT}
+      />
       <Box flexDirection="column" paddingX={1}>
         <Box gap={2}>
           <Text bold color={COLOR_HINT}>

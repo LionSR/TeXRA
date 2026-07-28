@@ -15,7 +15,8 @@ import {
   CodexTodoToolInputSchema,
   CodexTurnToolInputSchema,
 } from '@shared/schemas/codex';
-import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { formatDuration } from '@utils/core';
 
 // Local imports - formatter helpers
@@ -104,9 +105,7 @@ function renderCodexModeSection(input: CodexInputDisplay): RenderableSection {
     input.sandbox_mode
       ? { iconName: 'shield', label: input.sandbox_mode }
       : null,
-    input.thread_id
-      ? { iconName: 'comment-discussion', label: 'follow-up' }
-      : null,
+    input.thread_id ? { iconName: 'comments', label: 'follow-up' } : null,
   ].filter((badge): badge is BadgeData => badge != null);
 
   return renderBadgeSection('Mode:', badges);
@@ -128,7 +127,7 @@ function renderCodexFileStatusSection(patchStatus: string): RenderableSection {
   return patchStatus
     ? renderBadgeSection('Status:', [
         {
-          iconName: patchStatus === 'failed' ? 'error' : 'check',
+          iconName: patchStatus === 'failed' ? 'circle-exclamation' : 'check',
           label: patchStatus,
         },
       ])
@@ -210,7 +209,7 @@ function renderCodexTodoProgressSection(
   return totalCount > 0
     ? renderBadgeSection('Progress:', [
         {
-          iconName: 'checklist',
+          iconName: 'list-check',
           label: `${completedCount}/${totalCount} completed`,
         },
       ])
@@ -223,7 +222,7 @@ function renderCodexTodoItem(item: {
 }): TemplateResult {
   return html`
     <li class="detail-item">
-      ${waIcon(item.completed ? 'pass-filled' : 'circle-large-outline')}
+      ${waIcon(item.completed ? 'circle-check' : 'circle')}
       <span>${item.text}</span>
     </li>
   `;
@@ -271,7 +270,7 @@ function getCodexTurnStateIcon(
 ): TeXRAIconName | typeof SPINNER_ICON_NAME {
   switch (state) {
     case 'failed':
-      return 'error';
+      return 'circle-exclamation';
     case 'running':
       return SPINNER_ICON_NAME;
     default:

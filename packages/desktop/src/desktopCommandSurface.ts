@@ -15,7 +15,7 @@ import {
   dispatchCommandFromRegistry,
   type CommandHandler,
 } from '@shared/commands/registry';
-import type { TeXRAIconName } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
 import type { MenuItemConstructorOptions } from 'electron';
 
 import type { DesktopRoute } from './desktopShellMessages.js';

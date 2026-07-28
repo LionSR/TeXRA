@@ -13,8 +13,6 @@ export {
   type AgentDirectoryServiceLogger,
 } from './AgentDirectoryService';
 
-export { GlobalStorageAgentDirectoryStorage } from './AgentDirectorySync';
-
 export { toRemoteAgentProfileData } from './remoteAgentProfileData';
 
 export {

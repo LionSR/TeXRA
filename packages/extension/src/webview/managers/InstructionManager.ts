@@ -1,5 +1,3 @@
-import * as vscode from 'vscode';
-
 import { polishTextWithAI, FileContext } from '@agent/runtime/textEnhancement';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
@@ -93,12 +91,6 @@ export class InstructionManager extends BaseWebviewManager {
     }
 
     return context;
-  }
-
-  handleTranscribeInstruction(): void {
-    vscode.window.showInformationMessage(
-      'Please use the new recording interface with start/stop controls.',
-    );
   }
 
   async handleClipboardImage(message: ClipboardImageMessage): Promise<void> {
