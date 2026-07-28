@@ -31,7 +31,7 @@ import {
 } from './agentRegistryConstants';
 import { scanDirectory } from './agentYamlScanner';
 import {
-  clearInlineAgents,
+  clearInlineAgentDefinitions,
   defineInlineAgents,
   inlineAgentDefinition,
   inlineAgentEntries,
@@ -50,7 +50,6 @@ const CHANNEL = 'agentRegistry';
 export type { AgentEntry, ResolvedAgent } from './agentEntry';
 export { extractToolNames } from './agentYamlScanner';
 export { BUILTIN_TEAM_ROOT_AGENT_NAMES } from './agentRegistryConstants';
-export { clearInlineAgents } from './inlineAgents';
 export { createKey };
 
 /** Legacy prefix from pre-rename era (builtIn → builtInWorkflow). */
@@ -167,6 +166,17 @@ export async function loadAgents(
 export function registerInlineAgents(definitions: readonly unknown[]): void {
   for (const entry of defineInlineAgents(definitions)) {
     cache.set(agentKeyOf(entry), entry);
+  }
+}
+
+/**
+ * Remove all inline definitions and their corresponding live registry entries.
+ * The two stores form one public registration state and must change together.
+ */
+export function clearInlineAgents(): void {
+  clearInlineAgentDefinitions();
+  for (const [key, entry] of cache) {
+    if (entry.source === 'inline') cache.delete(key);
   }
 }
 

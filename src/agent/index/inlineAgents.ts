@@ -80,7 +80,7 @@ export function inlineAgentEntries(): AgentEntry[] {
  * Remove every registered inline definition so a host or test lifecycle can
  * start from a clean slate (Fix #5).
  */
-export function clearInlineAgents(): void {
+export function clearInlineAgentDefinitions(): void {
   inlineAgents.clear();
 }
 
