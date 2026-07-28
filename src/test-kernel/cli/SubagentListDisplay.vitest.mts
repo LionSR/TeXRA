@@ -649,6 +649,11 @@ describe('CLI child list display model', () => {
               status: STREAM_PHASE.WAITING,
             }),
           },
+          {
+            id: 'attached' as StreamTabId,
+            label: 'attached',
+            parentId: root,
+          },
         ],
       }),
       100,
@@ -657,6 +662,8 @@ describe('CLI child list display model', () => {
     expect(output).toContain('reviewer Finished');
     expect(output).toContain('critic Failed');
     expect(output).toContain('editor Waiting for follow-up');
+    expect(output).toContain('attached');
+    expect(output).not.toContain('attached —');
   });
 
   it.each([120, 80, 64, 56])(

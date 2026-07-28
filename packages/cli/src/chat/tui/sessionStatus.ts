@@ -51,6 +51,7 @@ export function formatCliStatusLabel(
   isChildStream?: boolean,
 ): string {
   const statusKey = streamStatusDisplayKey(status, substate);
+  if (isChildStream && statusKey === undefined) return '';
   if (
     isChildStream &&
     statusKey !== undefined &&
