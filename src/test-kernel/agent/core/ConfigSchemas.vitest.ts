@@ -1,6 +1,7 @@
 // Third-party imports
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
+import { z } from 'zod';
 
 // Standard library imports
 
@@ -12,6 +13,7 @@ import {
   WorkflowAgentConfigSchema,
 } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { AGENT_SOURCE } from '@shared/schemas';
 import { MainViewPersistedStateSchema } from '@shared/schemas/mainView';
 import { ToolConfigSchema } from '@shared/schemas/toolConfig';
 
@@ -108,5 +110,64 @@ describe('AgentConfigSchema', () => {
     assert.deepStrictEqual(parsed.inputFiles, ['main.tex']);
     assert.deepStrictEqual(parsed.contextFiles, ['refs.bib']);
     assert.deepStrictEqual(parsed.mediaFiles, ['figure.png']);
+  });
+});
+
+/**
+ * `agentSource` is persisted (execution `config.json`, trace documents), so
+ * widening `AGENT_SOURCE` is a persisted-schema change in both directions.
+ */
+describe('AgentConfigSchema agentSource compatibility', () => {
+  it('round-trips every current source, including inline', () => {
+    for (const source of Object.values(AGENT_SOURCE)) {
+      const parsed = AgentConfigSchema.parse({
+        agent: 'scratchpad',
+        agentSource: source,
+      });
+      assert.strictEqual(parsed.agentSource, source);
+    }
+  });
+
+  it('reads records persisted before the field existed', () => {
+    assert.strictEqual(AgentConfigSchema.parse({}).agentSource, undefined);
+    assert.strictEqual(
+      AgentConfigSchema.parse({ agentSource: null }).agentSource,
+      null,
+    );
+  });
+
+  it('rejects an unrecognized source loudly instead of defaulting it', () => {
+    const result = AgentConfigSchema.safeParse({ agentSource: 'notASource' });
+
+    assert.strictEqual(result.success, false);
+    assert.deepStrictEqual(result.error?.issues[0]?.path, ['agentSource']);
+  });
+
+  it('makes an older build reject an inline source rather than drop it', () => {
+    // Forward compatibility is a downgrade scenario: only a widened build can
+    // write `inline`, and an older build validates the same field with the
+    // enum as it stood before. `.nullish()` keeps the field optional, but a
+    // *present* unknown value is a parse error — so the older build fails at
+    // its read boundary rather than silently defaulting the source. Every
+    // persisted read is already written for that: `ExecutionKVStore.readConfig`
+    // goes through `readValidated`, which warns and returns null (the same
+    // "corrupt config" path history views already handle), and
+    // `executionListing`'s backfill logs and skips the entry.
+    const olderBuildSourceSchema = z
+      .enum(['custom', 'builtInWorkflow', 'builtInToolUse', 'remote'])
+      .nullish();
+
+    assert.strictEqual(
+      olderBuildSourceSchema.safeParse('inline').success,
+      false,
+    );
+    assert.strictEqual(
+      olderBuildSourceSchema.safeParse(undefined).success,
+      true,
+    );
+    assert.strictEqual(
+      olderBuildSourceSchema.safeParse('custom').success,
+      true,
+    );
   });
 });
