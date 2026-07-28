@@ -122,9 +122,7 @@ export type AgentToolUseSetting = Extract<
 // before the tool-resolution step replaces them with full ToolDefinition objects.
 // ---------------------------------------------------------------------------
 
-/** Partial settings as they appear in YAML before inheritance and defaults. */
-const RawAgentSettingInputSchema = z.strictObject({
-  agentCategory: AgentCategorySchema.optional(),
+const rawAgentSettingBaseFields = {
   temperature: temperatureField.optional(),
   requiredFiles: requiredFilesField.optional(),
   requiredFilesInternal: requiredFilesField.optional(),
@@ -139,6 +137,12 @@ const RawAgentSettingInputSchema = z.strictObject({
     .optional(),
   tools: z.array(AgentToolInputSchema).optional(),
   internal: z.boolean().optional(),
+};
+
+/** Partial settings as they appear in YAML before inheritance and defaults. */
+const RawAgentSettingInputSchema = z.strictObject({
+  ...rawAgentSettingBaseFields,
+  agentCategory: AgentCategorySchema.optional(),
   isRewrite: z.boolean().optional(),
   rounds: z.int().positive().optional(),
 });
@@ -153,6 +157,27 @@ const AgentSettingInputSchema = z.preprocess(
 );
 
 export type AgentSettingInput = z.infer<typeof AgentSettingInputSchema>;
+
+/**
+ * Complete root settings before tool-name resolution. Unlike inherited partial
+ * settings, the category is known here, so category-specific fields can be
+ * checked without importing the tool registry.
+ */
+export const AgentRootSettingInputSchema = z.preprocess(
+  stripLegacySettingFields,
+  z.discriminatedUnion('agentCategory', [
+    z.strictObject({
+      ...rawAgentSettingBaseFields,
+      agentCategory: z.literal(AgentCategory.Workflow),
+      isRewrite: z.boolean().optional(),
+      rounds: z.int().positive().optional(),
+    }),
+    z.strictObject({
+      ...rawAgentSettingBaseFields,
+      agentCategory: z.literal(AgentCategory.ToolUse),
+    }),
+  ]),
+);
 
 /** Whether `fileContent` already contains the protocol's closing tag. */
 export function hasEndTag(fileContent: string): boolean {

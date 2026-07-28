@@ -44,6 +44,7 @@ const SOURCE_DISPLAY_NAMES: Record<string, string> = {
   [AGENT_SOURCE.BUILT_IN_TOOL_USE]: 'Built-in',
   [AGENT_SOURCE.CUSTOM]: 'Custom',
   [AGENT_SOURCE.REMOTE]: 'Remote',
+  [AGENT_SOURCE.INLINE]: 'Inline',
 };
 
 function isBuiltIn(source: string): boolean {
@@ -59,6 +60,7 @@ function sourceBadgeMeta(
 ): { icon: TeXRAIconName; label: string } | undefined {
   if (source === AGENT_SOURCE.CUSTOM) return { icon: 'star', label: 'Custom' };
   if (source === AGENT_SOURCE.REMOTE) return { icon: 'cloud', label: 'Remote' };
+  if (source === AGENT_SOURCE.INLINE) return { icon: 'bolt', label: 'Inline' };
   return undefined;
 }
 
@@ -96,6 +98,7 @@ export class AgentSelectionPanel extends LitElement {
   private displayOrder: AgentSelectionItem[] = [];
 
   private static readonly SOURCE_ORDER = [
+    AGENT_SOURCE.INLINE,
     AGENT_SOURCE.CUSTOM,
     AGENT_SOURCE.REMOTE,
     AGENT_SOURCE.BUILT_IN_WORKFLOW,
@@ -241,11 +244,13 @@ export class AgentSelectionPanel extends LitElement {
     const isSelected = this.selectedKey === key;
     const badge = sourceBadgeMeta(agent.source);
 
-    let sourceTone: 'builtin' | 'custom' | 'remote';
+    let sourceTone: 'builtin' | 'custom' | 'remote' | 'inline';
     if (agent.source === AGENT_SOURCE.CUSTOM) {
       sourceTone = 'custom';
     } else if (agent.source === AGENT_SOURCE.REMOTE) {
       sourceTone = 'remote';
+    } else if (agent.source === AGENT_SOURCE.INLINE) {
+      sourceTone = 'inline';
     } else {
       sourceTone = 'builtin';
     }

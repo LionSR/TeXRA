@@ -89,7 +89,10 @@ export class AgentDirectoryService {
         return this.builtIn();
       case 'builtInToolUse':
         return this.builtInToolUse();
+      // Neither has a local directory: a remote agent lives in Supabase, an
+      // inline one was supplied as a value and was never written to disk.
       case 'remote':
+      case 'inline':
         return undefined;
     }
   }
