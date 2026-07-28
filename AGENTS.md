@@ -367,12 +367,12 @@ For good separation of concerns and platform independence, core business logic s
 
 - Route logging through `@logger/logUtils`. Agent flows should use `AgentTrace` (`@agent/trace`) to get grouped output and tool-use aware channels.
 - Always pass structured payloads via the `data` argument (file lists, missing outputs, latexdiff results, usage statistics) so the progress view can render rich entries without custom parsing.
-- Publish runtime progress through session events and `AgentRuntimeHost.emit`; keep non-agent logs on the shared `TeXRA` output channel.
+- Publish runtime progress through session events and `SessionHandle.interactions.emit`; keep non-agent logs on the shared `TeXRA` output channel.
 
 **Agent execution and tool-use**
 
 - Define agents using `AgentDataclass` and `AgentConfig` (`src/agent/core/`) and compose them via the factories in `src/agent/runtime`.
-- Launch executions from host code (commands, frontend services, desktop IPC) via `runAgent` (`src/agent/runtime/runAgent.ts`) — it assigns an `executionId`, registers the run in storage, and opens workflow output. Only use the lower-level `executeAgent` when you already own the `executionId` (e.g. subagent dispatch in `DelegationTools.ts` or a resume path). Both functions require an explicit `runtimeHost`.
+- Launch executions from host code (commands, frontend services, desktop IPC) via `runAgent` (`src/agent/runtime/runAgent.ts`) — it assigns an `executionId`, registers the run in storage, and opens workflow output. Only use the lower-level `executeAgent` when you already own the `executionId` (e.g. subagent dispatch in `DelegationTools.ts` or a resume path). Attach presentation and approval behavior to the run's `SessionHandle.interactions`.
 - Resume a persisted tool-use session via `resumeToolUseFromResumeData` (`src/agent/runtime/executeAgent.ts`), not `runAgent`.
 - Add new model handlers under `src/agent/modelHandlers/<provider>/` (no barrel — import via the `@agent/modelHandlers/<provider>/<File>` alias, per that directory's `README.md`), and register capabilities/pricing in `src/model/computeModelOptions.ts`.
 

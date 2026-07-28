@@ -9,10 +9,7 @@ import '@test/support/defaultSessionTestSetup';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import {
-  noopAgentRuntimeHost,
-  type AgentRuntimeHost,
-} from '@agent/runtime/AgentRuntimeHost';
+import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import {
   AgentExecutionHandle,
@@ -65,13 +62,11 @@ describe('tool-use follow-up progress events', () => {
 
   function trackToolUseFlow({
     stream = streamId,
-    host = noopAgentRuntimeHost,
     appendFollowUp,
     executionId = `exec-${stream}`,
     session,
   }: {
     readonly stream?: StreamTabId;
-    readonly host?: AgentRuntimeHost;
     readonly appendFollowUp: LiveToolUseFlowContext['session']['appendFollowUp'];
     readonly executionId?: string;
     readonly session?: SessionHandle;
@@ -82,13 +77,11 @@ describe('tool-use follow-up progress events', () => {
       stream,
       'search',
       'toolUse',
-      host,
     );
     handle.attachToolUseFlow({
       ...(session ? { ownerSession: session } : {}),
       session: { appendFollowUp },
       modelHandler: { supportsManualCompaction: true },
-      runtimeHost: host,
       requestImmediateCompaction: () => {},
       modelSwitchDisabledReason: () => undefined,
       switchModel: async () => {},
@@ -104,7 +97,7 @@ describe('tool-use follow-up progress events', () => {
   }
 
   it('publishes sent follow-up events through the owning session fact hub', async () => {
-    const { events, host } = createRecordingHost();
+    const { events, interactions } = createRecordingHost();
     const session = createTestSession();
     sessions.add(session);
     const facts: unknown[] = [];
@@ -113,7 +106,7 @@ describe('tool-use follow-up progress events', () => {
     });
     const appendFollowUp = vi.fn();
 
-    trackToolUseFlow({ host, appendFollowUp, session });
+    trackToolUseFlow({ appendFollowUp, session });
 
     const result = await submitFollowUp(streamId, 'please continue', {
       session,
@@ -156,7 +149,6 @@ describe('tool-use follow-up progress events', () => {
     try {
       withRunContext(
         createRunContext({
-          runtimeHost: run.host,
           session: activeSession,
         }),
         () => notifyFollowUpSent(streamId, explicitSession),
@@ -191,7 +183,6 @@ describe('tool-use follow-up progress events', () => {
     try {
       withRunContext(
         createRunContext({
-          runtimeHost: run.host,
           session,
         }),
         () => notifyFollowUpSent(streamId),
@@ -222,7 +213,6 @@ describe('tool-use follow-up progress events', () => {
     try {
       withRunContext(
         createRunContext({
-          runtimeHost: run.host,
           session: {} as SessionHandle,
         }),
         () => notifyFollowUpSent(streamId),
@@ -244,7 +234,7 @@ describe('tool-use follow-up progress events', () => {
   });
 
   it('notifies local follow-up observers through onFollowUpSent', async () => {
-    const { host } = createRecordingHost();
+    const { interactions } = createRecordingHost();
     const observed: StreamTabId[] = [];
     unsubscribeFollowUpObservers.push(
       onFollowUpSent((observedStreamId) => {
@@ -252,7 +242,7 @@ describe('tool-use follow-up progress events', () => {
       }),
     );
 
-    trackToolUseFlow({ host, appendFollowUp: vi.fn() });
+    trackToolUseFlow({ appendFollowUp: vi.fn() });
 
     await submitFollowUp(streamId, 'break wait');
     unsubscribeFollowUpObservers.pop()?.();
@@ -300,7 +290,7 @@ describe('tool-use follow-up progress events', () => {
   });
 
   it('does not append through stale active contexts after final status', async () => {
-    const { host } = createRecordingHost();
+    const { interactions } = createRecordingHost();
     const appendFollowUp = vi.fn();
 
     seedStreamStatusForTest(
@@ -308,7 +298,7 @@ describe('tool-use follow-up progress events', () => {
       streamId,
       STREAM_PHASE.COMPLETED,
     );
-    trackToolUseFlow({ host, appendFollowUp });
+    trackToolUseFlow({ appendFollowUp });
 
     const result = await submitFollowUp(streamId, 'late follow-up');
 
@@ -382,7 +372,6 @@ describe('tool-use follow-up progress events', () => {
       childStreamId,
       'critic',
       'toolUse',
-      noopAgentRuntimeHost,
     );
 
     seedStreamStatusForTest(

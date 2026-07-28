@@ -46,7 +46,6 @@ function withResponseRunContext<T>(
   return withRunContext(
     createRunContext({
       runScope: createRunScope({
-        runtimeHost: { emit: vi.fn() },
         streamId: 'response-cycle-stream',
         executionId: 'response-cycle-execution',
         agentName: 'response-agent',
@@ -126,7 +125,7 @@ describe('response cycle tool visibility', () => {
         setOutputStreaming: vi.fn(),
       },
       runScope: testRunScope('response-cycle-invocation'),
-      runtimeHost: { emit: vi.fn() },
+      interactions: { emit: vi.fn() },
       setAbortController: vi.fn(),
       setting: {
         temperature: 0,

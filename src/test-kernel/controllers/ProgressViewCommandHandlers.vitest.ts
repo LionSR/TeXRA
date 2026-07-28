@@ -7,7 +7,7 @@ import '@test/support/defaultSessionTestSetup';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import {
   createProgressViewCommandHandlers as createSharedProgressViewCommandHandlers,
   type ProgressViewCommandActions,
@@ -93,9 +93,7 @@ function createActions(
       sendFollowUp: vi.fn(),
       reportImageSaveError: vi.fn(),
     },
-    bypass: {
-      runtimeHost: { emit: vi.fn() } satisfies AgentRuntimeHost,
-    },
+    bypass: {},
     approval: {
       approvePendingDelegatedWork: vi.fn(async () => undefined),
       handleToolEditApprovalAction: vi.fn(),
@@ -111,18 +109,21 @@ function createActions(
   };
 }
 
-function createRecordingRuntimeHost(): {
+function createRecordingInteractions(): {
   events: Array<{ event: string; payload: unknown }>;
-  host: AgentRuntimeHost;
+  host: SessionHostInteractions;
 } {
   const events: Array<{ event: string; payload: unknown }> = [];
+  const host = new SessionHostInteractions();
+  host.use({
+    emit: (event, payload) => {
+      events.push({ event, payload });
+    },
+    cancel: vi.fn(),
+  });
   return {
     events,
-    host: {
-      emit: (event, payload) => {
-        events.push({ event, payload });
-      },
-    },
+    host,
   };
 }
 
@@ -377,7 +378,7 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
 
   it('keeps tool-edit and bash bypass symmetric behind the edit shield', async () => {
     const stream = 'stream:edit-bypass';
-    const { host } = createRecordingRuntimeHost();
+    const { host } = createRecordingInteractions();
     const session = createTestSession();
     const setApprovalBypassState = vi.fn();
     session.useHostInteractions({
@@ -387,7 +388,7 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
     const showInfo = vi.fn();
     const handlers = createProgressViewCommandHandlers(
       createActions({
-        bypass: { runtimeHost: host, session, showInfo },
+        bypass: { session, showInfo },
       }),
     );
 
@@ -435,13 +436,13 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
     // stream where edit-YOLO was granted but bash stayed gated. A toggle would
     // flip edit OFF; ENABLE_APPROVAL_BYPASS must force both ON.
     const stream = 'stream:yolo-enable';
-    const { host } = createRecordingRuntimeHost();
+    const { host } = createRecordingInteractions();
     const showInfo = vi.fn();
     const handlers = createProgressViewCommandHandlers(
-      createActions({ bypass: { runtimeHost: host, showInfo } }),
+      createActions({ bypass: { showInfo } }),
     );
 
-    setToolEditApprovalSessionBypass(stream, true, host);
+    setToolEditApprovalSessionBypass(stream, true);
     expect(isApprovalBypassedForStream(stream)).toBe(true);
     expect(isBashApprovalBypassedForStream(stream)).toBe(false);
 
@@ -460,7 +461,7 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
 
   it('makes delegated task bypass enable edit and bash bypasses', async () => {
     const stream = 'stream:proposal-bypass';
-    const { host } = createRecordingRuntimeHost();
+    const { host } = createRecordingInteractions();
     const session = createTestSession();
     const setApprovalBypassState = vi.fn();
     session.useHostInteractions({
@@ -469,7 +470,7 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
     });
     const showInfo = vi.fn();
     const actions = createActions({
-      bypass: { runtimeHost: host, session, showInfo },
+      bypass: { session, showInfo },
     });
     const handlers = createProgressViewCommandHandlers(actions);
 

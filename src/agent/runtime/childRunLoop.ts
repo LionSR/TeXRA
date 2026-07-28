@@ -517,6 +517,13 @@ export function startChildRunLoop<TTurn>(
   runWithOwnedExecutionLease(executionId, () => undefined);
 
   const runSession = currentSession();
+  const releaseChildActivation = childStream
+    ? () => undefined
+    : runSession.executions.reserveChildActivation({
+        executionId,
+        parentStreamId,
+        childStreamId,
+      });
   let sessionOwnershipReleased = false;
   const releaseSessionOwnershipOnce = (): void => {
     if (sessionOwnershipReleased) return;
@@ -575,6 +582,7 @@ export function startChildRunLoop<TTurn>(
       if (queueLease) runSession.followUps.release(queueLease, 'terminal');
     });
     cleanup(() => stopWatchingLease?.());
+    cleanup(releaseChildActivation);
     cleanup(releaseSessionOwnershipOnce);
     if (cleanupErrors.length > 0) {
       throw new AggregateError(
@@ -809,12 +817,18 @@ export function startChildRunLoop<TTurn>(
           });
         } finally {
           stopWatchingLease?.();
+          releaseChildActivation();
         }
       }
     }
   };
-  const completion = Promise.resolve(
-    runWithOwnedExecutionLease(executionId, run),
-  );
-  return { completion };
+  try {
+    const completion = Promise.resolve(
+      runWithOwnedExecutionLease(executionId, run),
+    );
+    return { completion };
+  } catch (error) {
+    releaseChildActivation();
+    throw error;
+  }
 }

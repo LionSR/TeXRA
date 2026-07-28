@@ -10,7 +10,7 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { defaultSession } from '@agent/runtime/SessionHandle';
@@ -88,16 +88,14 @@ function setRunStorageEntries(
 
 function runAccept(
   tool: AcceptRunFilesTool,
-  host: AgentRuntimeHost,
+  host: SessionHostInteractions,
   files: { path: string; original: string }[],
   tracker = new FileInteractionState(),
 ) {
-  return withRunContext(
-    createRunContext({ runtimeHost: host, streamId, executionId }),
-    () =>
-      withToolFileInteractionContext({ tracker }, () =>
-        tool.call({ execution_id: executionId, files }),
-      ),
+  return withRunContext(createRunContext({ streamId, executionId }), () =>
+    withToolFileInteractionContext({ tracker }, () =>
+      tool.call({ execution_id: executionId, files }),
+    ),
   );
 }
 

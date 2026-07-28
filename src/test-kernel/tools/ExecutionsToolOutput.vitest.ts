@@ -76,7 +76,7 @@ async function launchBackgroundRun(
   try {
     launched = await withToolEnvironment(
       {
-        run: { runtimeHost: host, streamId: PARENT_STREAM_ID },
+        run: { streamId: PARENT_STREAM_ID, session: defaultSession() },
         call: { tracker: new FileInteractionState() },
       },
       () =>

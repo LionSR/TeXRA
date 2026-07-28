@@ -3,13 +3,13 @@
  *
  * These bridge the gap between the agent layer (which must not import from
  * @frontend/) and the VS Code UI. `createAgentPresentationHost` builds the
- * `AgentRuntimeHost` the extension's `HostInteractions` adapter forwards
+ * presentation host the extension's `HostInteractions` adapter forwards
  * `emit` calls to (see `progressView/extensionHostInteractions.ts`); this
  * module performs the actual UI operations for each event.
  */
 import * as vscode from 'vscode';
 
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import type {
   RuntimePresentationEvent,
   RuntimePresentationEventPayloads,
@@ -138,8 +138,8 @@ async function handleRequestEnsureProgressView(
 }
 
 /**
- * Build the `AgentRuntimeHost` the extension's `HostInteractions` adapter
- * forwards `emit` calls to (`createExtensionHostInteractions`'s `runtimeHost`
+ * Build the presentation host the extension's `HostInteractions` adapter
+ * forwards `emit` calls to (`createExtensionHostInteractions`'s `interactions`
  * option, wired in `ProgressViewProvider`'s constructor).
  *
  * The five presentation events below are the extension's own dispatch,
@@ -150,7 +150,7 @@ async function handleRequestEnsureProgressView(
  */
 export function createAgentPresentationHost(
   progressViewProvider: ProgressViewProvider,
-): AgentRuntimeHost {
+): Pick<SessionHostInteractions, 'emit'> {
   return {
     emit<K extends RuntimePresentationEvent>(
       event: K,

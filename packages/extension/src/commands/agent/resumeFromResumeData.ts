@@ -34,7 +34,7 @@ export function tryResumeFromResumeData(
   return resolveAndResumeStream(
     streamId,
     {
-      runtimeHost: session.interactions,
+      interactions: session.interactions,
       // The extension runs on the default session for this host-path caller
       // (outside any run ALS), so its status plane is the same one every other
       // unmigrated default-session caller reads through `defaultSession()`.

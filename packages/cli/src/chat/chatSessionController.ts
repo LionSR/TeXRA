@@ -15,6 +15,10 @@ import {
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
+import {
+  AgentExecutionHandle,
+  type ExecutionHandle,
+} from '@agent/runtime/ExecutionHandle';
 import { resumeToolUseFromResumeData } from '@agent/runtime/executeAgent';
 import { runAgent } from '@agent/runtime/runAgent';
 import { resolveAndResumeStream } from '@agent/runtime/resolveAndResumeStream';
@@ -29,7 +33,7 @@ import { setCliHelperModel } from '@cli/runtime/initPlatform';
 import {
   createCliRuntimeHost,
   type CliRuntimeHost,
-} from '@cli/runtime/runtimeHost';
+} from '@cli/runtime/cliPresentationHost';
 import {
   explainNonResumable,
   resolveCliResume,
@@ -193,6 +197,8 @@ export function createChatSessionController(
   } = init;
   let interruptedContinuation: InterruptedContinuationBatch | undefined;
   let pendingInterruptedFollowUps: InterruptedFollowUp[] = [];
+  const executionInteractionOwners = new Map<string, object>();
+  const streamInteractionOwners = new Map<StreamTabId, object>();
 
   // Run facts belong to the TUI session, not to any one root turn. A stopped
   // root may leave detached children running, and those children must keep
@@ -300,17 +306,21 @@ export function createChatSessionController(
   const setupRunHost = (
     sessionContext: CliContext,
   ): {
-    readonly runtimeHost: CliRuntimeHost;
+    readonly presentationHost: CliRuntimeHost;
     readonly approvalsUnavailable: boolean;
+    readonly ownExecution: (executionId: ExecutionId) => void;
     readonly finalize: () => void;
   } => {
-    const runtimeHost = createCliRuntimeHost(sessionContext);
+    const interactionOwner = {};
+    const ownedExecutionIds = new Set<string>();
+    const pendingActivationIds = new Set<string>();
+    const presentationHost = createCliRuntimeHost(sessionContext);
     const detachHostInteractions = defaultSession().useHostInteractions(
-      createTuiHostInteractions(runtimeHost, sessionContext),
+      createTuiHostInteractions(presentationHost, sessionContext),
     );
     const detachResultToast = attachTerminalResultToast(
       defaultSession(),
-      runtimeHost,
+      defaultSession().interactions,
     );
     let resultToastAttached = true;
     const detachResultToastOnce = (): void => {
@@ -319,47 +329,122 @@ export function createChatSessionController(
       detachResultToast();
     };
     let released = false;
-    let detachExecutionListener = (): void => {};
+    let rootFinalized = false;
+    let rootExecutionId: ExecutionId | undefined;
+    const executions = defaultSession().executions;
+    const releaseIfUnused = (): void => {
+      if (
+        rootFinalized &&
+        ownedExecutionIds.size === 0 &&
+        pendingActivationIds.size === 0
+      ) {
+        releaseHost();
+      }
+    };
+    const observeExecution = (
+      executionId: string,
+      handle: ExecutionHandle | undefined,
+    ): void => {
+      if (!handle) {
+        if (executionInteractionOwners.get(executionId) === interactionOwner) {
+          executionInteractionOwners.delete(executionId);
+          ownedExecutionIds.delete(executionId);
+        }
+        releaseIfUnused();
+        return;
+      }
+      const ownsExecution =
+        executionInteractionOwners.get(executionId) === interactionOwner;
+      const ownsParent =
+        streamInteractionOwners.get(handle.parentStreamId) === interactionOwner;
+      if (!ownsExecution && !ownsParent) {
+        ownedExecutionIds.delete(executionId);
+        releaseIfUnused();
+        return;
+      }
+      executionInteractionOwners.set(executionId, interactionOwner);
+      ownedExecutionIds.add(executionId);
+      if (handle instanceof AgentExecutionHandle) {
+        streamInteractionOwners.set(handle.childStreamId, interactionOwner);
+      }
+    };
+    const detachExecutionListener =
+      executions.addRegistrationListener(observeExecution);
+    const detachChildActivationListener = executions.addChildActivationListener(
+      (activation, active) => {
+        if (active) {
+          if (
+            streamInteractionOwners.get(activation.parentStreamId) !==
+            interactionOwner
+          ) {
+            return;
+          }
+          pendingActivationIds.add(activation.executionId);
+          executionInteractionOwners.set(
+            activation.executionId,
+            interactionOwner,
+          );
+          streamInteractionOwners.set(
+            activation.childStreamId,
+            interactionOwner,
+          );
+          return;
+        }
+
+        pendingActivationIds.delete(activation.executionId);
+        if (
+          !executions.getHandle(activation.executionId) &&
+          executionInteractionOwners.get(activation.executionId) ===
+            interactionOwner
+        ) {
+          executionInteractionOwners.delete(activation.executionId);
+          if (
+            streamInteractionOwners.get(activation.childStreamId) ===
+            interactionOwner
+          ) {
+            streamInteractionOwners.delete(activation.childStreamId);
+          }
+        }
+        releaseIfUnused();
+      },
+    );
     const releaseHost = (): void => {
       if (released) return;
       released = true;
       detachExecutionListener();
+      detachChildActivationListener();
+      for (const [executionId, owner] of executionInteractionOwners) {
+        if (owner === interactionOwner) {
+          executionInteractionOwners.delete(executionId);
+        }
+      }
+      for (const [streamId, owner] of streamInteractionOwners) {
+        if (owner === interactionOwner)
+          streamInteractionOwners.delete(streamId);
+      }
       detachResultToastOnce();
       detachHostInteractions();
-      if (session.runtimeHost === runtimeHost) {
-        session.runtimeHost = undefined;
+      if (session.presentationHost === presentationHost) {
+        session.presentationHost = undefined;
       }
-      void runtimeHost.close();
+      void presentationHost.close();
     };
     disposers.push(releaseHost);
 
     const releaseHostWhenUnused = (): void => {
-      if (released) return;
-      const executions = defaultSession().executions;
-      const releaseIfUnused = (): void => {
-        const inUse = executions
-          .getActiveIds()
-          .some(
-            (executionId) =>
-              executions.getHandle(executionId)?.runtimeHost === runtimeHost,
-          );
-        if (!inUse) releaseHost();
-      };
-      // Subscribe before the first liveness check. An execution that untracks
-      // at this boundary therefore either fires the listener or is absent from
-      // the check; there is no snapshot-to-wait interval that can lose it.
-      const detach = executions.addRegistrationListener(releaseIfUnused);
-      detachExecutionListener = detach;
-      if (released) {
-        // Defensive against a registration source that invokes synchronously.
-        detach();
-        return;
-      }
+      rootFinalized = true;
       releaseIfUnused();
     };
     return {
-      runtimeHost,
+      presentationHost,
       approvalsUnavailable: approvalPromptsUnavailable(sessionContext),
+      ownExecution: (executionId): void => {
+        rootExecutionId = executionId;
+        executionInteractionOwners.set(executionId, interactionOwner);
+        ownedExecutionIds.add(executionId);
+        const handle = executions.getHandle(executionId);
+        if (handle) observeExecution(executionId, handle);
+      },
       finalize: (): void => {
         // The root terminal result is published before its run promise
         // settles. Children retain `isSubagent: true` and never produce a
@@ -367,6 +452,14 @@ export function createChatSessionController(
         // root finalizes and must not overlap a later root's listener.
         detachResultToastOnce();
         markChatTuiRunCompleted(session);
+        if (
+          rootExecutionId &&
+          !executions.getHandle(rootExecutionId) &&
+          executionInteractionOwners.get(rootExecutionId) === interactionOwner
+        ) {
+          executionInteractionOwners.delete(rootExecutionId);
+          ownedExecutionIds.delete(rootExecutionId);
+        }
         releaseHostWhenUnused();
       },
     };
@@ -381,9 +474,10 @@ export function createChatSessionController(
     const currentModel = config.model;
     const sessionContext = getSessionContext(currentModel);
     activateAgentConfig(config);
-    const { runtimeHost, approvalsUnavailable, finalize } =
+    const { presentationHost, approvalsUnavailable, ownExecution, finalize } =
       setupRunHost(sessionContext);
     const executionId = generateExecutionId();
+    ownExecution(executionId);
     session.executionId = executionId;
 
     const runPromise = Promise.resolve()
@@ -393,7 +487,6 @@ export function createChatSessionController(
           { config: registeredConfig, executionId },
           {
             registerExecution: true,
-            runtimeHost,
             enforceCategory: true,
             approvalPromptsUnavailable: approvalsUnavailable,
             runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
@@ -441,7 +534,7 @@ export function createChatSessionController(
       })
       .catch(reportRunFailure)
       .finally(finalize);
-    markChatTuiRunPending(session, runPromise, runtimeHost);
+    markChatTuiRunPending(session, runPromise, presentationHost);
   };
 
   // -----------------------------------------------------------------------
@@ -510,9 +603,10 @@ export function createChatSessionController(
       projectStreamTranscript(resolution.streamId);
       activeStreamId.set(resolution.streamId);
 
-      const { runtimeHost, approvalsUnavailable, finalize } =
+      const { presentationHost, approvalsUnavailable, ownExecution, finalize } =
         setupRunHost(sessionContext);
-      session.runtimeHost = runtimeHost;
+      ownExecution(resolution.executionId);
+      session.presentationHost = presentationHost;
 
       // A Ctrl-C during the rehydration awaits above (`resolveCliResume`,
       // `ensureLoaded`, `snapshotStore.load`/`read`) lands here as
@@ -528,7 +622,7 @@ export function createChatSessionController(
 
       const runChain = setCliHelperModel(currentModel)
         .then(() =>
-          resumeToolUseFromResumeData(resolution, runtimeHost, {
+          resumeToolUseFromResumeData(resolution, {
             approvalPromptsUnavailable: approvalsUnavailable,
             runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
             drainedFollowUps: supersededRecovery?.followUps.map((followUp) => ({
@@ -624,8 +718,10 @@ export function createChatSessionController(
 
         const runHost = setupRunHost(sessionContext);
         finalize = runHost.finalize;
-        const { runtimeHost, approvalsUnavailable } = runHost;
-        session.runtimeHost = runtimeHost;
+        const { presentationHost, approvalsUnavailable, ownExecution } =
+          runHost;
+        ownExecution(executionId);
+        session.presentationHost = presentationHost;
         session.streamId = streamId;
         session.executionId = executionId;
         if (!parentStreamId) {
@@ -642,7 +738,7 @@ export function createChatSessionController(
           resolveAndResumeStream(
             streamId,
             {
-              runtimeHost,
+              interactions: defaultSession().interactions,
               streamStatus: defaultSession().status,
               isCancellationRequested: () => session.stopRequested,
               resolveResumeState: async () => ({
@@ -651,31 +747,26 @@ export function createChatSessionController(
                 parentStreamId,
               }),
               resumeToolUse: (resume, claimedRecovery) =>
-                resumeQueuedToolUseFromResumeData(
-                  streamId,
-                  resume,
-                  runtimeHost,
-                  {
-                    session: defaultSession(),
-                    recovery: claimedRecovery,
-                    approvalPromptsUnavailable: approvalsUnavailable,
-                    runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
-                    extraFollowUps: options.extraFollowUps,
-                    onFollowUpQueueReady: (lease) => {
-                      if (options.onFollowUpQueueReady) {
-                        options.onFollowUpQueueReady(lease);
-                      } else {
-                        const recovery = supersedeInterruptedRecovery();
-                        restoreRecoveryFollowUps(recovery, lease);
-                      }
-                    },
-                    isCancellationRequested: () => session.stopRequested,
-                    onResult: (result) => {
-                      resumedOutcome = result.outcome;
-                    },
-                    onError: reportRunFailure,
+                resumeQueuedToolUseFromResumeData(streamId, resume, {
+                  session: defaultSession(),
+                  recovery: claimedRecovery,
+                  approvalPromptsUnavailable: approvalsUnavailable,
+                  runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
+                  extraFollowUps: options.extraFollowUps,
+                  onFollowUpQueueReady: (lease) => {
+                    if (options.onFollowUpQueueReady) {
+                      options.onFollowUpQueueReady(lease);
+                    } else {
+                      const recovery = supersedeInterruptedRecovery();
+                      restoreRecoveryFollowUps(recovery, lease);
+                    }
                   },
-                ),
+                  isCancellationRequested: () => session.stopRequested,
+                  onResult: (result) => {
+                    resumedOutcome = result.outcome;
+                  },
+                  onError: reportRunFailure,
+                }),
               executeWorkflow: async () => {
                 throw new Error(
                   'CLI chat cannot auto-resume workflow streams from follow-up wake.',

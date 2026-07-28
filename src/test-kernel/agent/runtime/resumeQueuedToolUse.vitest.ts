@@ -12,7 +12,6 @@ vi.mock('@agent/runtime/executeAgent', () => ({
 }));
 
 const STREAM = 'stream:resume-ownership' as StreamTabId;
-const runtimeHost = { emit: vi.fn() };
 const completed = {
   category: 'toolUse' as const,
   outcome: RUN_OUTCOME.COMPLETED,
@@ -40,7 +39,7 @@ describe('resumeQueuedToolUseFromResumeData ownership', () => {
   beforeEach(() => {
     resumeToolUseFromResumeDataMock.mockReset();
     resumeToolUseFromResumeDataMock.mockImplementation(
-      async (_resume: unknown, _host: unknown, options: any) => {
+      async (_resume: unknown, options: any) => {
         options.onFollowUpConsumed?.();
         return completed;
       },
@@ -53,7 +52,7 @@ describe('resumeQueuedToolUseFromResumeData ownership', () => {
 
     try {
       await expect(
-        resumeQueuedToolUseFromResumeData(STREAM, snapshot(), runtimeHost, {
+        resumeQueuedToolUseFromResumeData(STREAM, snapshot(), {
           session,
           onFollowUpQueueReady: () => {
             expect(
@@ -68,7 +67,7 @@ describe('resumeQueuedToolUseFromResumeData ownership', () => {
         }),
       ).resolves.toBe(true);
 
-      const options = resumeToolUseFromResumeDataMock.mock.calls[0]?.[2];
+      const options = resumeToolUseFromResumeDataMock.mock.calls[0]?.[1];
       expect(options.drainedFollowUps.map((item: any) => item.text)).toEqual([
         'first',
         'second',
@@ -91,17 +90,15 @@ describe('resumeQueuedToolUseFromResumeData ownership', () => {
     });
 
     try {
-      const first = resumeQueuedToolUseFromResumeData(
-        STREAM,
-        snapshot(),
-        runtimeHost,
-        { session, onError: vi.fn() },
-      );
+      const first = resumeQueuedToolUseFromResumeData(STREAM, snapshot(), {
+        session,
+        onError: vi.fn(),
+      });
       await vi.waitFor(() =>
         expect(resumeToolUseFromResumeDataMock).toHaveBeenCalledOnce(),
       );
       await expect(
-        resumeQueuedToolUseFromResumeData(STREAM, snapshot(), runtimeHost, {
+        resumeQueuedToolUseFromResumeData(STREAM, snapshot(), {
           session,
           onError: vi.fn(),
         }),
@@ -121,7 +118,7 @@ describe('resumeQueuedToolUseFromResumeData ownership', () => {
 
     try {
       await expect(
-        resumeQueuedToolUseFromResumeData(STREAM, snapshot(), runtimeHost, {
+        resumeQueuedToolUseFromResumeData(STREAM, snapshot(), {
           session,
           onError: vi.fn(),
         }),
@@ -142,12 +139,10 @@ describe('resumeQueuedToolUseFromResumeData ownership', () => {
     resumeToolUseFromResumeDataMock.mockReturnValueOnce(barrier);
 
     try {
-      const resuming = resumeQueuedToolUseFromResumeData(
-        STREAM,
-        snapshot(),
-        runtimeHost,
-        { session, onError: vi.fn() },
-      );
+      const resuming = resumeQueuedToolUseFromResumeData(STREAM, snapshot(), {
+        session,
+        onError: vi.fn(),
+      });
       await vi.waitFor(() =>
         expect(resumeToolUseFromResumeDataMock).toHaveBeenCalledOnce(),
       );
@@ -184,7 +179,7 @@ describe('resumeQueuedToolUseFromResumeData ownership', () => {
 
     try {
       await expect(
-        resumeQueuedToolUseFromResumeData(STREAM, snapshot(), runtimeHost, {
+        resumeQueuedToolUseFromResumeData(STREAM, snapshot(), {
           session,
           recovery,
           onError: vi.fn(),

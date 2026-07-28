@@ -61,7 +61,6 @@ import { flushOwnedExecutionArtifacts } from './executionOwnership';
 import { ResumeAdmissionCancelledError } from './resumeAdmission';
 import type { SessionHandle } from './SessionHandle';
 import type { AgentExecutionHandle, AgentRunHandle } from './ExecutionHandle';
-import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
 import type { ToolUseResumeData } from './SessionResumeRetrieval';
 
@@ -314,8 +313,6 @@ export interface SubagentRunOptions {
 
 /** Options for executeAgent. */
 export interface ExecuteAgentOptions extends SubagentRunOptions {
-  /** Host services used by the runtime to report progress/UI events. */
-  runtimeHost: AgentRuntimeHost;
   /** The caller owns presentation for failures before the run lifecycle. */
   suppressErrorNotification?: boolean;
   /** When true, proposal tools are filtered out to prevent nesting. */
@@ -370,17 +367,11 @@ export async function executeAgent(
   executionId: ExecutionId,
   options: ExecuteAgentOptions,
 ): Promise<AgentRuntimeFlowResult> {
-  if (options == null || options.runtimeHost == null) {
-    throw new Error('executeAgent requires an explicit runtimeHost');
-  }
-
   const runWithOwnership = captureOwnedExecutionLease(executionId);
   return await runWithOwnership(async () => {
-    const { runtimeHost } = options;
     const ctx = await buildAgentLaunchContext({
       config,
       executionId,
-      runtimeHost,
       onBeforeActivation: options.onStreamResolved,
       suppressViewSwitch: options.isSubagent,
       enforceCategory: options.enforceCategory,
@@ -400,7 +391,6 @@ export async function executeAgent(
         streamId: runStreamId,
         executionId: runExecutionId,
         session: runSession,
-        runtimeHost: runRuntimeHost,
       } = ctx.runScope;
       const { isSubagent } = options;
 
@@ -432,7 +422,7 @@ export async function executeAgent(
             // Subagents don't need to force-open the progress board or show notifications —
             // the orchestrator's stream is already visible.
             if (!isSubagent) {
-              runRuntimeHost.emit(
+              runSession.interactions.emit(
                 'requestEnsureProgressView',
                 { fallbackNotification: buildFallbackNotification(config) },
                 { replayWhenAttached: true },
@@ -498,7 +488,6 @@ export interface ResumeToolUseFromResumeDataOptions extends SubagentRunOptions {
  */
 export async function resumeToolUseFromResumeData(
   resume: ToolUseResumeData,
-  runtimeHost: AgentRuntimeHost,
   options: ResumeToolUseFromResumeDataOptions = {},
 ): Promise<AgentRuntimeFlowResult> {
   const lease = options.canAcquireResumeLease
@@ -529,7 +518,6 @@ export async function resumeToolUseFromResumeData(
       ctx = await buildAgentLaunchContext({
         config: resume.agentConfig,
         executionId: resume.executionId,
-        runtimeHost,
         streamTabIdOverride: resume.streamId,
         modelHandlerCompatibilityKey,
         suppressViewSwitch: isSubagent,

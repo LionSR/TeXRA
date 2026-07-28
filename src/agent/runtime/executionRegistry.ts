@@ -57,6 +57,16 @@ export interface TrackAgentExecutionOptions {
   readonly status?: StreamPhase;
 }
 
+/**
+ * A child loop that has started synchronously but whose first run handle is
+ * still being constructed.
+ */
+export interface ChildExecutionActivation {
+  readonly executionId: ExecutionId;
+  readonly parentStreamId: StreamTabId;
+  readonly childStreamId: StreamTabId;
+}
+
 interface TerminateOptions {
   readonly cascadeChildren?: boolean;
 }
@@ -128,6 +138,13 @@ export class ExecutionRegistry {
   private readonly registrationListeners = new Set<
     (executionId: string, handle: ExecutionHandle | undefined) => void
   >();
+  private readonly childActivations = new Map<
+    string,
+    ChildExecutionActivation
+  >();
+  private readonly childActivationListeners = new Set<
+    (activation: ChildExecutionActivation, active: boolean) => void
+  >();
 
   constructor({
     events = new SessionEventHub(),
@@ -194,9 +211,14 @@ export class ExecutionRegistry {
       this.notifyRegistrationListeners(executionId, undefined);
       this.notifyWaiters(executionId);
     }
+    for (const activation of this.childActivations.values()) {
+      this.notifyChildActivationListeners(activation, false);
+    }
+    this.childActivations.clear();
     this.changeCallbacks.clear();
     this.persistentListeners.clear();
     this.registrationListeners.clear();
+    this.childActivationListeners.clear();
   }
 
   /** Register an execution handle. */
@@ -223,6 +245,7 @@ export class ExecutionRegistry {
       });
     }
     this.notifyRegistrationListeners(handle.executionId, handle);
+    this.releaseChildActivation(handle.executionId);
     this.notifyWaiters(handle.executionId);
   }
 
@@ -636,6 +659,35 @@ export class ExecutionRegistry {
     };
   }
 
+  /**
+   * Retain lineage while a newly started child loop is constructing its first
+   * execution handle. Tracking that handle promotes the activation
+   * automatically; the returned disposer covers startup failure.
+   */
+  reserveChildActivation(activation: ChildExecutionActivation): () => void {
+    this.assertActive();
+    if (
+      this.handles.has(activation.executionId) ||
+      this.childActivations.has(activation.executionId)
+    ) {
+      return () => {};
+    }
+    this.childActivations.set(activation.executionId, activation);
+    this.notifyChildActivationListeners(activation, true);
+    return () =>
+      this.releaseChildActivation(activation.executionId, activation);
+  }
+
+  /** Observe child-loop activation reservations and their release/promotion. */
+  addChildActivationListener(
+    cb: (activation: ChildExecutionActivation, active: boolean) => void,
+  ): () => void {
+    this.childActivationListeners.add(cb);
+    return () => {
+      this.childActivationListeners.delete(cb);
+    };
+  }
+
   private emitChildActivity(parentStreamId: StreamTabId): void {
     this.requireSessionEvents().emit({
       scope: 'run',
@@ -1018,6 +1070,25 @@ export class ExecutionRegistry {
   ): void {
     for (const listener of [...this.registrationListeners]) {
       listener(executionId, handle);
+    }
+  }
+
+  private releaseChildActivation(
+    executionId: string,
+    expected?: ChildExecutionActivation,
+  ): void {
+    const activation = this.childActivations.get(executionId);
+    if (!activation || (expected && activation !== expected)) return;
+    this.childActivations.delete(executionId);
+    this.notifyChildActivationListeners(activation, false);
+  }
+
+  private notifyChildActivationListeners(
+    activation: ChildExecutionActivation,
+    active: boolean,
+  ): void {
+    for (const listener of [...this.childActivationListeners]) {
+      listener(activation, active);
     }
   }
 }

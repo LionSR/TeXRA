@@ -14,7 +14,7 @@ import {
 } from '@cli/chat/tui/state/approvalQueue';
 import { createTuiHostInteractions } from '@cli/chat/tui/state/subscribeApprovals';
 import type { CliContext } from '@cli/runtime/cliContext';
-import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
+import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import { AgentCategory, type AgentProposal, type Plan } from '@shared/schemas';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 
@@ -44,7 +44,21 @@ afterEach(() => {
   clearApprovals();
 });
 
-describe('createTuiHostInteractions().cancel', () => {
+describe('createTuiHostInteractions', () => {
+  it('forwards presentation events to the attached CLI presenter', () => {
+    const presentationHost = host();
+    const interactions = createTuiHostInteractions(presentationHost, context());
+    try {
+      interactions.emit?.('requestShowError', { message: 'Run failed.' });
+
+      expect(presentationHost.emit).toHaveBeenCalledWith('requestShowError', {
+        message: 'Run failed.',
+      });
+    } finally {
+      interactions.dispose?.();
+    }
+  });
+
   it('cancels a queued plan approval for the target stream, leaving other streams untouched', async () => {
     const interactions = createTuiHostInteractions(host(), context());
     try {

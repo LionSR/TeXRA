@@ -8,7 +8,7 @@ import {
   getRunContextStreamId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import type {
   ToolEditApprovalRequest,
@@ -41,13 +41,11 @@ export const REVEAL_TIMEOUT_MS = 1500;
 export function setToolEditApprovalSessionBypass(
   streamId: StreamTabId,
   enabled: boolean,
-  runtimeHost: AgentRuntimeHost,
   options?: { silent?: boolean; session?: SessionHandle },
 ): void {
   (options?.session ?? currentSession()).approvals.toolEdit.bypass.setBypass(
     streamId,
     enabled,
-    runtimeHost,
     options,
   );
 }
@@ -72,7 +70,7 @@ export function isApprovalBypassedForStream(
  * revealing the progress view) around this call.
  */
 export function prepareToolEditApprovalPrompt(
-  runtimeHost: AgentRuntimeHost,
+  interactions: Pick<SessionHostInteractions, 'emit'>,
   session: SessionHandle,
   params: {
     requestId: string;
@@ -84,7 +82,7 @@ export function prepareToolEditApprovalPrompt(
   const { requestId, request, relativePath, lineChanges } = params;
   const { streamId } = request;
   if (streamId) {
-    runtimeHost.emit('requestEnsureProgressView', {});
+    interactions.emit('requestEnsureProgressView', {});
     session.events.emit({
       scope: 'session',
       event: {

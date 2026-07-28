@@ -14,7 +14,7 @@
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentWorkflowSetting } from '@agent/core/definition/AgentDataclass';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import { normalizeRunId } from '@common/constants/runIds';
 import {
   OutputXmlSummarySchema,
@@ -45,7 +45,7 @@ export interface OutputDependencies {
   logger: AgentTrace;
   fileService: TaskRunFileService;
   streamId: string;
-  runtimeHost: AgentRuntimeHost;
+  interactions: SessionHostInteractions;
 }
 
 export function createOutputState(

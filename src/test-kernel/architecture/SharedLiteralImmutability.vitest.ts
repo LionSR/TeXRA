@@ -2,7 +2,6 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { LATEXDIFF_CITATION_TEXT_COMMAND_EXCLUSIONS } from '@latex/latexdiff/diffCommandExecutor';
 import { MATH_MARKUP_OPTIONS } from '@latex/latexdiff/mathMarkup';
@@ -24,7 +23,6 @@ import {
 import { CORE_LATEX_TOOLS, IMAGE_TOOLS } from '@tools/setup/toolProbing';
 
 const SHARED_LITERALS = [
-  ['noopAgentRuntimeHost', noopAgentRuntimeHost],
   ['DEFAULT_POLLING_BACKOFF_CONFIG', DEFAULT_POLLING_BACKOFF_CONFIG],
   ['GoalStore', GoalStore],
   ['setupSecrets', setupSecrets],

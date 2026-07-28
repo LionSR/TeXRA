@@ -58,14 +58,14 @@ describe('ToolUseWaitNode follow-up transcript logging (regression: #7508 patter
     ).mockRejectedValue(new Error('follow-up append failed'));
     const node = new ToolUseWaitNode().setServices(services);
     const shared: ToolUseRunShared = toolUseRunShared();
-    const runtimeHost = { emit: vi.fn() };
+    const interactions = { emit: vi.fn() };
     const execRes: WaitExecResult = {
       kind: 'continue',
       followUps: [{ text: 'Do the thing.', origin: 'user' }],
     };
 
     await expect(
-      withTestRunContext(runtimeHost, 'test-stream', () =>
+      withTestRunContext(interactions, 'test-stream', () =>
         node.post(shared, PREP_RES, execRes),
       ),
     ).rejects.toThrow('follow-up append failed');
@@ -89,14 +89,14 @@ describe('ToolUseWaitNode follow-up transcript logging (regression: #7508 patter
     ).mockRejectedValue(new Error('follow-up append failed'));
     const node = new ToolUseWaitNode().setServices(services);
     const shared: ToolUseRunShared = toolUseRunShared();
-    const runtimeHost = { emit: vi.fn() };
+    const interactions = { emit: vi.fn() };
     const execRes: WaitExecResult = {
       kind: 'continue',
       followUps: [{ text: 'Do the thing.', origin: 'user' }],
     };
 
     await expect(
-      withTestRunContext(runtimeHost, 'test-stream', () =>
+      withTestRunContext(interactions, 'test-stream', () =>
         node.post(shared, PREP_RES, execRes),
       ),
     ).rejects.toThrow('follow-up append failed');
@@ -109,13 +109,13 @@ describe('ToolUseWaitNode follow-up transcript logging (regression: #7508 patter
     const services = buildServices({ onFollowUpConsumed });
     const node = new ToolUseWaitNode().setServices(services);
     const shared: ToolUseRunShared = toolUseRunShared();
-    const runtimeHost = { emit: vi.fn() };
+    const interactions = { emit: vi.fn() };
     const execRes: WaitExecResult = {
       kind: 'continue',
       followUps: [{ text: 'Do the thing.', origin: 'user' }],
     };
 
-    await withTestRunContext(runtimeHost, 'test-stream', () =>
+    await withTestRunContext(interactions, 'test-stream', () =>
       node.post(shared, PREP_RES, execRes),
     );
 
@@ -126,13 +126,13 @@ describe('ToolUseWaitNode follow-up transcript logging (regression: #7508 patter
     const services = buildServices();
     const node = new ToolUseWaitNode().setServices(services);
     const shared: ToolUseRunShared = toolUseRunShared();
-    const runtimeHost = { emit: vi.fn() };
+    const interactions = { emit: vi.fn() };
     const execRes: WaitExecResult = {
       kind: 'continue',
       followUps: [{ text: 'Do the thing.', origin: 'user' }],
     };
 
-    await withTestRunContext(runtimeHost, 'test-stream', () =>
+    await withTestRunContext(interactions, 'test-stream', () =>
       node.post(shared, PREP_RES, execRes),
     );
 
@@ -148,7 +148,7 @@ describe('ToolUseWaitNode follow-up transcript logging (regression: #7508 patter
     ).mockRejectedValue(new Error('boom'));
     const node = new ToolUseWaitNode().setServices(services);
     const shared: ToolUseRunShared = toolUseRunShared();
-    const runtimeHost = { emit: vi.fn() };
+    const interactions = { emit: vi.fn() };
     const execRes: WaitExecResult = {
       kind: 'continue',
       followUps: [{ text: 'synthesized', origin: 'user' }],
@@ -156,7 +156,7 @@ describe('ToolUseWaitNode follow-up transcript logging (regression: #7508 patter
     };
 
     await expect(
-      withTestRunContext(runtimeHost, 'test-stream', () =>
+      withTestRunContext(interactions, 'test-stream', () =>
         node.post(shared, PREP_RES, execRes),
       ),
     ).rejects.toThrow('boom');

@@ -47,7 +47,7 @@ vi.mock('@agent/storage/executionLease', () => ({
 import { noopTrace } from '@agent/trace';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import {
   executeAgent,
   resumeToolUseFromResumeData,
@@ -79,14 +79,10 @@ const config = AgentConfigSchema.parse({
 });
 
 async function captureActivation(
-  run: (
-    session: ReturnType<typeof createTestSession>,
-    runtimeHost: AgentRuntimeHost,
-  ) => Promise<unknown>,
+  run: (session: ReturnType<typeof createTestSession>) => Promise<unknown>,
 ): Promise<SetActiveStreamPayload> {
   const session = createTestSession();
   const recordedSession = recordSessionEvents(session.events);
-  const runtimeHost = createRecordingHost().host;
   const trace = { ...noopTrace, subscribe: vi.fn(() => vi.fn()) };
   trace.openStage = vi.fn(() => noopTrace.openStage('Run'));
   const handler = {
@@ -107,7 +103,7 @@ async function captureActivation(
   mocks.buildVars.mockRejectedValueOnce(LAUNCH_FAILURE);
 
   try {
-    await expect(run(session, runtimeHost)).rejects.toBe(LAUNCH_FAILURE);
+    await expect(run(session)).rejects.toBe(LAUNCH_FAILURE);
     const payloads = sessionFactPayloads(
       recordedSession.events,
       'setActiveStream',
@@ -151,9 +147,8 @@ describe('native agent launch activation', () => {
   ])(
     'emits the expected activation payload for a fresh $label launch',
     async ({ isSubagent, suppressViewSwitch }) => {
-      const payload = await captureActivation((session, runtimeHost) =>
+      const payload = await captureActivation((session) =>
         executeAgent(config, 'fresh-launch' as ExecutionId, {
-          runtimeHost,
           session,
           isSubagent,
           modelHandlerCompatibilityKey: MODEL_HANDLER_KEY,
@@ -180,8 +175,8 @@ describe('native agent launch activation', () => {
         shared: { modelHandlerCompatibilityKey: MODEL_HANDLER_KEY },
       });
 
-      const payload = await captureActivation((session, runtimeHost) =>
-        resumeToolUseFromResumeData(resume, runtimeHost, { session }),
+      const payload = await captureActivation((session) =>
+        resumeToolUseFromResumeData(resume, { session }),
       );
 
       expectActivation(payload, suppressViewSwitch);

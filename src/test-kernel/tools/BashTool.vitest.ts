@@ -36,7 +36,6 @@ import type { ToolUseRoundServices } from '@agent/core/flows/CycleServices';
 import { withToolEnvironment } from '@agent/followUp/ToolFileInteractionContext';
 import * as toolUseFollowUp from '@agent/followUp/ToolUseFollowUp';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
-import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import type { SdkToolCall } from '@agent/types/ModelHandlerContracts';
@@ -265,7 +264,7 @@ describe('BashTool', () => {
     const flow = createToolUseRoundFlow();
     flow.setServices(options);
     await withTestRunContext(
-      noopAgentRuntimeHost,
+      defaultSession().interactions,
       'bash-tool',
       () => flow.run(shared),
       { session: options.runScope.session },
@@ -526,7 +525,7 @@ describe('BashTool', () => {
       const node = new ToolUseDispatchNode<OpenAI>();
       node.setServices(options);
       await withTestRunContext(
-        noopAgentRuntimeHost,
+        defaultSession().interactions,
         'tool-status-log',
         () =>
           node.post(
@@ -651,7 +650,7 @@ describe('BashTool', () => {
     try {
       const launchResult = await withToolEnvironment(
         {
-          run: { runtimeHost: host, streamId: parentStreamId },
+          run: { streamId: parentStreamId, session: defaultSession() },
           call: { tracker: new FileInteractionState() },
         },
         () =>
@@ -731,7 +730,7 @@ describe('BashTool', () => {
     try {
       const launchResult = await withToolEnvironment(
         {
-          run: { runtimeHost: host, streamId: parentStreamId },
+          run: { streamId: parentStreamId, session: defaultSession() },
           call: { tracker: new FileInteractionState() },
         },
         () =>
@@ -808,7 +807,7 @@ describe('BashTool', () => {
     try {
       const launchResult = await withToolEnvironment(
         {
-          run: { runtimeHost: host, streamId: parentStreamId },
+          run: { streamId: parentStreamId, session: defaultSession() },
           call: { tracker: new FileInteractionState() },
         },
         () =>
@@ -867,7 +866,7 @@ describe('BashTool', () => {
 
     const launchResult = await withToolEnvironment(
       {
-        run: { runtimeHost: host, streamId: parentStreamId },
+        run: { streamId: parentStreamId, session: defaultSession() },
         call: { tracker: new FileInteractionState() },
       },
       () =>
@@ -1009,7 +1008,7 @@ describe('BashTool', () => {
     try {
       node.setServices(options);
       const result = await withTestRunContext(
-        noopAgentRuntimeHost,
+        defaultSession().interactions,
         'bash-tool',
         () => node.exec(call),
         { session: options.runScope.session },

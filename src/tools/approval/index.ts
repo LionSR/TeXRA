@@ -42,14 +42,9 @@ export function configureDelegatedChildApprovals(
     session.approvals.registerStreamParent(childStreamId, parentStreamId);
   }
   if (policy === 'auto-approved') {
-    session.approvals.toolEdit.bypass.setBypass(
-      childStreamId,
-      true,
-      undefined,
-      {
-        silent: true,
-      },
-    );
+    session.approvals.toolEdit.bypass.setBypass(childStreamId, true, {
+      silent: true,
+    });
   }
 }
 

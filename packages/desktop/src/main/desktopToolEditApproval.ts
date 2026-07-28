@@ -3,11 +3,11 @@ import path from 'node:path';
 
 import { nanoid } from 'nanoid';
 
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   matchesCancelSelector,
   type HostInteractionCancelSelector,
   type HostInteractionOptions,
+  type HostInteractions,
 } from '@agent/runtime/HostInteractions';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { isLatexFile } from '@common/files/fileTypeUtils';
@@ -38,7 +38,7 @@ type DesktopToolEditApprovalUi = Pick<
 >;
 
 export interface DesktopToolEditApprovalOptions {
-  runtimeHost: AgentRuntimeHost;
+  interactions: Required<Pick<HostInteractions, 'emit'>>;
   session: SessionHandle;
   ui: DesktopToolEditApprovalUi;
   showToolEditPermission(payload: ToolEditPermission): void;
@@ -302,7 +302,7 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
       'failed to show approval prompt',
       () =>
         this.options.showToolEditPermission(
-          prepareToolEditApprovalPrompt(this.options.runtimeHost, session, {
+          prepareToolEditApprovalPrompt(this.options.interactions, session, {
             requestId,
             request,
             relativePath: this.relativeDisplayPath(request.path),
