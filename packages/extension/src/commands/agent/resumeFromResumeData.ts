@@ -11,11 +11,9 @@
  * extension supplies only how it resolves persisted state and launches a run.
  */
 import { createChannelTrace } from '@agent/trace';
-import {
-  isResumeInFlight,
-  resolveAndResumeStream,
-} from '@agent/runtime/resolveAndResumeStream';
+import { resolveAndResumeStream } from '@agent/runtime/resolveAndResumeStream';
 import { defaultSession } from '@agent/runtime/SessionHandle';
+import type { RecoveryContinuation } from '@platform/interfaces';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type { StreamTabId } from '@shared/schemas';
 
@@ -24,45 +22,59 @@ import { resumeExtensionToolUseFromResumeData } from './resumeCommand';
 
 const logger = createChannelTrace('resumeFromResumeData');
 
-export { isResumeInFlight };
-
 export function tryResumeFromResumeData(
   streamId: StreamTabId,
+  recovery?: RecoveryContinuation,
 ): Promise<boolean> {
-  return resolveAndResumeStream(streamId, {
-    runtimeHost: defaultSession().interactions,
-    // The extension runs on the default session for this host-path caller
-    // (outside any run ALS), so its status plane is the same one every other
-    // unmigrated default-session caller reads through `defaultSession()`.
-    streamStatus: defaultSession().status,
-    resolveResumeState: async (id) => {
-      const progressState = ProgressViewProvider.getInstance()?.state;
-      if (!progressState) {
-        logger.warn(`No ProgressViewProvider found for stream: ${id}`);
-        return undefined;
-      }
-      const executionId = progressState.snapshots.getExecutionId(id);
-      const taskState = progressState.snapshots.getTaskState(id);
-      if (!executionId) {
-        logger.warn(`No execution ID found for stream: ${id}`);
-        return undefined;
-      }
-      if (!taskState) {
-        logger.warn(`No task state found for stream: ${id}`);
-        return undefined;
-      }
-      const parentStreamId = progressState.snapshots.getParentStreamId(id);
-      return {
-        runState: taskState,
-        executionId,
-        ...(parentStreamId !== undefined && { parentStreamId }),
-      };
+  const session = defaultSession();
+  const claimedRecovery = recovery
+    ? session.followUps.useRecovery(recovery)
+    : session.followUps.claimRecovery(streamId, true);
+  if (!claimedRecovery) return Promise.resolve(false);
+  return resolveAndResumeStream(
+    streamId,
+    {
+      runtimeHost: session.interactions,
+      // The extension runs on the default session for this host-path caller
+      // (outside any run ALS), so its status plane is the same one every other
+      // unmigrated default-session caller reads through `defaultSession()`.
+      streamStatus: session.status,
+      resolveResumeState: async (id) => {
+        const progressState = ProgressViewProvider.getInstance()?.state;
+        if (!progressState) {
+          logger.warn(`No ProgressViewProvider found for stream: ${id}`);
+          return undefined;
+        }
+        const executionId = progressState.snapshots.getExecutionId(id);
+        const taskState = progressState.snapshots.getTaskState(id);
+        if (!executionId) {
+          logger.warn(`No execution ID found for stream: ${id}`);
+          return undefined;
+        }
+        if (!taskState) {
+          logger.warn(`No task state found for stream: ${id}`);
+          return undefined;
+        }
+        const parentStreamId = progressState.snapshots.getParentStreamId(id);
+        return {
+          runState: taskState,
+          executionId,
+          ...(parentStreamId !== undefined && { parentStreamId }),
+        };
+      },
+      resumeToolUse: resumeExtensionToolUseFromResumeData,
+      executeWorkflow: (config, executionId, modelHandlerCompatibilityKey) =>
+        runExecuteCommand({
+          config,
+          executionId,
+          modelHandlerCompatibilityKey,
+        }),
+      reportFailure: (id, error) => {
+        logger.error(`Failed to resume stream: ${id}`, { data: error });
+      },
     },
-    resumeToolUse: resumeExtensionToolUseFromResumeData,
-    executeWorkflow: (config, executionId, modelHandlerCompatibilityKey) =>
-      runExecuteCommand({ config, executionId, modelHandlerCompatibilityKey }),
-    reportFailure: (id, error) => {
-      logger.error(`Failed to resume stream: ${id}`, { data: error });
-    },
+    claimedRecovery,
+  ).finally(() => {
+    session.followUps.release(claimedRecovery, 'recoverable');
   });
 }

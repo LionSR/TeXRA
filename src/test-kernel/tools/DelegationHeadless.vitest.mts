@@ -289,8 +289,8 @@ describe('headless delegation', () => {
     for (const executionId of defaultSession().executions.getActiveIds()) {
       defaultSession().executions.untrack(executionId);
     }
-    defaultSession().followUps.release('parent-stream' as StreamTabId);
-    defaultSession().followUps.release('child-stream' as StreamTabId);
+    defaultSession().followUps.terminalize('parent-stream' as StreamTabId);
+    defaultSession().followUps.terminalize('child-stream' as StreamTabId);
   });
 
   it('awaits child delegation during one-shot tool-use runs', async () => {
