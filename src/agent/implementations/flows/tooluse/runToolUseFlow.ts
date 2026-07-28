@@ -206,17 +206,22 @@ export async function runToolUseFlow<C = unknown>(
   const overlayNames = new Set<string>();
   const appendOverlayTool = (tool: ITool): void => {
     const { name } = tool.definition;
-    if (overlayNames.has(name) || baseRegistry.has(name)) {
-      logger.warn(`Run-scoped tool "${name}" shadows an existing tool.`);
-    }
-    overlayNames.add(name);
     const definitionIndex = resolvedTools.findIndex(
       (definition) => definition.name === name,
     );
+    if (
+      overlayNames.has(name) ||
+      baseRegistry.has(name) ||
+      definitionIndex !== -1
+    ) {
+      logger.warn(`Run-scoped tool "${name}" shadows an existing tool.`);
+    }
+    overlayNames.add(name);
+    const definition = { ...tool.definition, forceFunctionCall: true };
     if (definitionIndex === -1) {
-      resolvedTools.push(tool.definition);
+      resolvedTools.push(definition);
     } else {
-      resolvedTools[definitionIndex] = tool.definition;
+      resolvedTools[definitionIndex] = definition;
     }
     overlayTools.push(tool);
   };

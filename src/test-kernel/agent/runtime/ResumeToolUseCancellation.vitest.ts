@@ -63,6 +63,7 @@ vi.mock('@agent/implementations/flows/tooluse/runToolUseFlow', () => ({
 
 // Local imports
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import { resumeToolUseFromResumeData } from '@agent/runtime/executeAgent';
@@ -78,6 +79,7 @@ interface InterruptibleFlowInput {
   checkInterruption(): boolean;
   onInterrupt?: () => void;
   takePendingFollowUps?: () => readonly unknown[];
+  tools?: readonly ITool[];
 }
 
 interface TestFlowContext {
@@ -175,6 +177,12 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
       usageMonitor: { recordUsage: vi.fn() },
     } as unknown as AgentLaunchContext;
     const order: string[] = [];
+    const tools = [
+      {
+        definition: { name: 'run_scoped' },
+        call: vi.fn(),
+      },
+    ] as unknown as readonly ITool[];
     let attachedContext: TestFlowContext | undefined;
     const handle = {
       attachToolUseFlow: vi.fn((flowContext: TestFlowContext) => {
@@ -201,6 +209,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
         _registry: unknown,
         onSetup: (flowContext: TestFlowContext) => void | (() => void),
       ) => {
+        expect(input.tools).toBe(tools);
         const flowContext: TestFlowContext = {
           session: { appendFollowUp: vi.fn() },
           interrupt: () => {
@@ -226,6 +235,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     });
 
     const result = await resumeToolUseFromResumeData(snapshot, {
+      tools,
       takePendingFollowUps: () => {
         order.push('take');
         return [];
