@@ -381,6 +381,36 @@ describe('task-group-list orphan re-rooting', () => {
 // STOPPED default, and a cancelled group no longer renders identically to a
 // completed one.
 describe('task-group-list status icon (#7993 step 3)', () => {
+  it('formats round group titles with the shared one-based label', async () => {
+    const parent: TaskGroup = {
+      id: 'run',
+      name: 'Run: reflection',
+      startTime: 1,
+      status: STREAM_PHASE.RUNNING,
+    };
+    const round: TaskGroup = {
+      id: 'round-0',
+      name: 'r0',
+      kind: 'round',
+      index: 0,
+      total: 3,
+      startTime: 2,
+      status: STREAM_PHASE.RUNNING,
+      parentGroupId: 'run',
+    };
+
+    const list = await renderList([parent, round], []);
+    const title = list.shadowRoot
+      ?.querySelector(`#${GROUP_DOM_IDS.HEADER_PREFIX}round-0 .group-title`)
+      ?.textContent?.trim();
+    const statusLabel = list.shadowRoot
+      ?.querySelector(`#${GROUP_DOM_IDS.HEADER_PREFIX}round-0 wa-icon`)
+      ?.getAttribute('label');
+
+    expect(title).toBe('r1/3');
+    expect(statusLabel).toBe('Running');
+  });
+
   it('renders a distinct icon for completed, cancelled, and failed groups', async () => {
     const parent: TaskGroup = {
       id: 'run',
@@ -659,11 +689,26 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
     expect(header?.querySelector('.group-progress')?.textContent?.trim()).toBe(
       '1/2',
     );
+    expect(header?.querySelector('wa-spinner')).toBeNull();
+    expect(header?.querySelector('wa-icon')?.getAttribute('name')).toBe(
+      'circle',
+    );
     // The enclosing header is the card's one home for its phase.
     const content = list.shadowRoot?.querySelector(
       `#${GROUP_DOM_IDS.CONTENT_PREFIX}phase-map`,
     );
     expect(content?.querySelector('.workflow-task-phase')).toBeNull();
     expect(content?.querySelector('.workflow-task-details')).toBeNull();
+    expect(content?.querySelector('wa-spinner')).toBeNull();
+    expect(
+      content
+        ?.querySelector('[data-log-id="task-b"] wa-icon')
+        ?.getAttribute('name'),
+    ).toBe('circle');
+    expect(
+      content
+        ?.querySelector('[data-log-id="task-b"] .workflow-task-status')
+        ?.textContent?.trim(),
+    ).toBe('Running');
   });
 });

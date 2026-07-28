@@ -89,13 +89,13 @@ describe('workflowRunDetailLines', () => {
     });
 
     expect(lines.map((line) => line.text)).toEqual([
-      '✓ Repository audit completed · 9s',
-      '✓ r0 (1/2) completed · 7s',
+      '✓ Repository audit Finished · 9s',
+      '✓ r1/2 Finished · 7s',
       '  Generated files',
       '    › output/paper.tex (+12 -3)',
-      '  ⚠ r0 · Missing expected output: appendix.tex',
-      '  ✗ r0 · Compile check failed: paper.pdf · paper.log',
-      '□ r1 (2/2) planned',
+      '  ⚠ r1 · Missing expected output: appendix.tex',
+      '  ✗ r1 · Compile check failed: paper.pdf · paper.log',
+      '□ r2/2 Planned',
     ]);
     expect(lines.map((line) => line.tone)).toEqual([
       'success',
@@ -127,8 +127,8 @@ describe('workflowRunDetailLines', () => {
     });
 
     expect(lines.map((line) => line.text)).toEqual([
-      '● r3 running',
-      '  ⚠ r3 · Missing expected output: bad.tex',
+      '● r4 Running',
+      '  ⚠ r4 · Missing expected output: bad.tex',
     ]);
   });
 
@@ -170,7 +170,7 @@ describe('workflowRunDetailLines', () => {
     );
 
     expect(line?.text).toBe(
-      '  ✗ r0 · Compile check failed: paper.pdf · paper.log',
+      '  ✗ r1 · Compile check failed: paper.pdf · paper.log',
     );
     expect(line?.role).toBe('alert');
   });
@@ -197,9 +197,7 @@ describe('workflowRunDetailLines', () => {
       compileFailuresByRound: {},
     });
 
-    expect(lines.map((line) => line.text)).toEqual([
-      '✓ Round 3 completed · 1s',
-    ]);
+    expect(lines.map((line) => line.text)).toEqual(['✓ Round 3 Finished · 1s']);
   });
 
   it('budgets detail rows together with the live transcript viewport', async () => {
@@ -242,11 +240,11 @@ describe('workflowRunDetailLines', () => {
     const rows = output.split('\n');
 
     expect(rows).toHaveLength(4);
-    expect(output).toContain('r0 (1/4) running');
-    expect(output).toContain('r1 (2/4) planned');
-    expect(output).toContain('r2 (3/4) planned');
+    expect(output).toContain('r1/4 Running');
+    expect(output).toContain('r2/4 Planned');
+    expect(output).toContain('r3/4 Planned');
     expect(output).toContain('live workflow log');
-    expect(output).not.toContain('r3 (4/4) planned');
+    expect(output).not.toContain('r4/4 Planned');
   });
 
   it('keeps warning context ahead of generated files and future plans', () => {
@@ -302,9 +300,9 @@ describe('workflowRunDetailLines', () => {
     );
 
     expect(lines.map((line) => line.text)).toEqual([
-      '✓ r0 (1/2) completed · 1s',
-      '  ✗ r0 · Compile check failed: paper.pdf · paper.log',
-      '□ r1 (2/2) planned',
+      '✓ r1/2 Finished · 1s',
+      '  ✗ r1 · Compile check failed: paper.pdf · paper.log',
+      '□ r2/2 Planned',
     ]);
   });
 });
