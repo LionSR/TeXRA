@@ -53,17 +53,17 @@ export async function buildProfileMessage(
     globalStreamingDefault,
   };
 
-  // A stored session can be a zombie: the access token expired and the
-  // refresh token was revoked (e.g. another host rotated it and gotrue
-  // reuse-detection killed ours). isAuthenticated() returns false in that
-  // case (the token-refresh fails), but a stored session exists in the
-  // keychain — detect it with hasStoredSession() so the UI can surface
-  // "Session expired" instead of treating this as a plain signed-out state.
-  const sessionExpired =
+  // Preserve the distinction between an authoritatively rejected refresh
+  // credential and a transient transport/service failure. Both have a stored
+  // account but require different user guidance.
+  const hasStoredSession =
     !authenticated && (await SupabaseClient.hasStoredSession());
-  // When the session is a zombie we can still read the stored account label
-  // so the identity banner shows the user's email instead of "N/A".
-  const storedEmail = sessionExpired
+  const refreshFailure = SupabaseClient.getLastSessionRefreshFailure();
+  let sessionProblem: UpdateProfileMessage['sessionProblem'] = null;
+  if (hasStoredSession) {
+    sessionProblem = refreshFailure === 'invalid' ? 'expired' : 'unavailable';
+  }
+  const storedEmail = hasStoredSession
     ? await SupabaseClient.getStoredAccountLabel()
     : null;
 
@@ -76,7 +76,7 @@ export async function buildProfileMessage(
       remoteAgents: [],
       apiAccessMode: 'personal',
       accessExpiresAt: null,
-      sessionExpired,
+      sessionProblem,
       spendingStatus: null,
       spendingStatusError: null,
       quotaAutoSwitched: false,
@@ -137,7 +137,7 @@ export async function buildProfileMessage(
     remoteAgents,
     apiAccessMode,
     accessExpiresAt,
-    sessionExpired,
+    sessionProblem,
     spendingStatus,
     spendingStatusError,
     quotaAutoSwitched,

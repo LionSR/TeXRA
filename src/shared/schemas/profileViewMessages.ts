@@ -38,6 +38,8 @@ export type RemoteAgent = z.infer<typeof RemoteAgentSchema>;
 
 const ApiAccessModeSchema = z.enum(['included', 'personal']);
 export type ApiAccessMode = z.infer<typeof ApiAccessModeSchema>;
+const SessionProblemSchema = z.enum(['expired', 'unavailable']);
+export type SessionProblem = z.infer<typeof SessionProblemSchema>;
 export const API_ACCESS_MODE_OPTIONS: readonly {
   readonly value: ApiAccessMode;
   readonly label: string;
@@ -109,10 +111,10 @@ export const UpdateProfileMessageSchema = z.object({
   tierConstants: TierConstantsSchema,
   accessExpiresAt: z.string().nullish(),
   /**
-   * True when a stored session exists but its refresh is dead (relay access
-   * token unavailable) — the UI should prompt a re-sign-in, not say Connected.
+   * Why a stored session could not provide a fresh token. Invalid credentials
+   * require reconnection; transient failures should instead invite a retry.
    */
-  sessionExpired: z.boolean().prefault(false),
+  sessionProblem: SessionProblemSchema.nullable().prefault(null),
   spendingStatus: SpendingStatusSchema.nullish(),
   spendingStatusError: SpendingStatusErrorSchema.nullish(),
   quotaAutoSwitched: z.boolean().prefault(false),

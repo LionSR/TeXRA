@@ -13,7 +13,7 @@ import {
   globalStreamingDefault,
   providerKeyStatuses,
   quotaAutoSwitched,
-  sessionExpired,
+  sessionProblem,
   spendingStatus,
   spendingStatusError,
   tier,
@@ -65,7 +65,7 @@ export const profileHandlers = {
     if (!spendingStatusEqual(spendingStatus.get(), newSpend)) {
       spendingStatus.set(newSpend);
     }
-    sessionExpired.set(data.sessionExpired ?? false);
+    sessionProblem.set(data.sessionProblem ?? null);
     const newSpendError = data.spendingStatusError ?? null;
     if (!spendingStatusErrorEqual(spendingStatusError.get(), newSpendError)) {
       spendingStatusError.set(newSpendError);

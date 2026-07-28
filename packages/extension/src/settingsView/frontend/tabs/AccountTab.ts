@@ -18,6 +18,7 @@ import type {
   SpendingStatus,
   SpendingStatusError,
 } from '@shared/schemas/spendingStatus';
+import type { SessionProblem } from '@shared/schemas/profileViewMessages';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderSettingsBanner } from '@shared/wa/settingsBanner';
 import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
@@ -58,7 +59,7 @@ export class AccountTab extends LitElement {
   @property({ type: Boolean }) authenticated = false;
   @property({ attribute: false }) userEmail = '';
   @property({ attribute: false }) tier = 'free';
-  @property({ type: Boolean }) sessionExpired = false;
+  @property({ attribute: false }) sessionProblem: SessionProblem | null = null;
   @property({ attribute: false }) spendingStatus: SpendingStatus | null = null;
   @property({ attribute: false })
   spendingStatusError: SpendingStatusError | null = null;
@@ -89,12 +90,8 @@ export class AccountTab extends LitElement {
   }
 
   private renderUsage(): TemplateResult {
-    // Surface session-expired and spend-check errors ahead of everything —
-    // they explain WHY usage data is unavailable and take priority over the
-    // plain unauthenticated / not-enabled copy. sessionExpired implies
-    // !authenticated (a zombie stored session whose refresh is dead), so
-    // this check must come before the authenticated guard.
-    if (this.sessionExpired) {
+    // Session and spend-check failures take priority over stale usage data.
+    if (this.sessionProblem === 'expired') {
       return html`
         <div class="account-empty">
           Usage data can't load because your session has expired. Sign in again
@@ -102,13 +99,19 @@ export class AccountTab extends LitElement {
         </div>
       `;
     }
+    if (this.sessionProblem === 'unavailable') {
+      return html`
+        <div class="account-empty">
+          Usage data can't load because the authentication service is
+          temporarily unavailable. Try again later.
+        </div>
+      `;
+    }
     if (this.spendingStatusError != null) {
       return html`
         <div class="account-empty">
-          Usage check failed on the server
-          (${this.spendingStatusError.failureReason ?? 'unknown reason'}).
-          Included access is temporarily unavailable; switch to your own
-          provider API keys or try again later.
+          Usage check failed on the server. Included access is temporarily
+          unavailable; switch to your own provider API keys or try again later.
         </div>
       `;
     }
@@ -145,7 +148,8 @@ export class AccountTab extends LitElement {
   }
 
   private renderIdentityBanner(): TemplateResult {
-    const expired = this.sessionExpired;
+    const expired = this.sessionProblem === 'expired';
+    const unavailable = this.sessionProblem === 'unavailable';
     // When the session expired we still have the email from a previous
     // authenticated refresh; otherwise this is a clean signed-out state.
     const title =
@@ -157,46 +161,53 @@ export class AccountTab extends LitElement {
     if (expired) {
       description =
         'Your session has expired. Sign in again to restore included access and usage data.';
+    } else if (unavailable) {
+      description =
+        'The authentication service is temporarily unavailable. Your stored session has not been removed.';
     } else if (this.authenticated) {
       description = html`<span class="account-tier">${this.tier}</span> plan`;
     }
     // Enter the authenticated-like branch for both live and expired sessions
     // so the Sign out button stays available for cleaning up the stored
     // zombie session.
-    const actions =
-      this.authenticated || expired
-        ? html`
-            ${
-              expired
-                ? html`<wa-tag variant="warning">Session expired</wa-tag>`
-                : html`<wa-tag variant="success">Connected</wa-tag>`
-            }
-            ${
-              expired
-                ? renderLabeledActionButton({
-                    icon: 'user',
-                    text: 'Sign in',
-                    kind: 'primary',
-                    appearance: 'filled',
-                    onClick: this.handleSignIn,
-                  })
-                : nothing
-            }
-            ${renderLabeledActionButton({
-              icon: 'right-from-bracket',
-              text: 'Sign out',
-              kind: 'secondary',
-              appearance: 'outlined',
-              onClick: this.handleSignOut,
-            })}
-          `
-        : renderLabeledActionButton({
-            icon: 'user',
-            text: 'Sign in',
-            kind: 'primary',
-            appearance: 'filled',
-            onClick: this.handleSignIn,
-          });
+    let actions: TemplateResult | typeof nothing;
+    if (this.authenticated || expired) {
+      actions = html`
+        ${
+          expired
+            ? html`<wa-tag variant="warning">Session expired</wa-tag>`
+            : html`<wa-tag variant="success">Connected</wa-tag>`
+        }
+        ${
+          expired
+            ? renderLabeledActionButton({
+                icon: 'user',
+                text: 'Sign in',
+                kind: 'primary',
+                appearance: 'filled',
+                onClick: this.handleSignIn,
+              })
+            : nothing
+        }
+        ${renderLabeledActionButton({
+          icon: 'right-from-bracket',
+          text: 'Sign out',
+          kind: 'secondary',
+          appearance: 'outlined',
+          onClick: this.handleSignOut,
+        })}
+      `;
+    } else if (unavailable) {
+      actions = nothing;
+    } else {
+      actions = renderLabeledActionButton({
+        icon: 'user',
+        text: 'Sign in',
+        kind: 'primary',
+        appearance: 'filled',
+        onClick: this.handleSignIn,
+      });
+    }
     return renderSettingsBanner({
       id: 'account-identity-banner',
       icon: 'circle-user',

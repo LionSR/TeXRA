@@ -673,6 +673,26 @@ describe('SupabaseSession', () => {
       });
 
       assert.equal(await coordinator.getSessionTokens(), null);
+      assert.equal(coordinator.getLastRefreshFailure(), 'invalid');
+    });
+
+    it('classifies a refresh service outage as transient', async () => {
+      const initialSession = makeSession({
+        accessToken: 'old-access',
+        refreshToken: 'old-refresh',
+        expiresAt: Date.now() - 1_000,
+        useCustomRefresh: true,
+      });
+      const { coordinator } = createCoordinator({
+        initialSession,
+        fetch: async () =>
+          new Response(JSON.stringify({ error: 'service unavailable' }), {
+            status: 503,
+          }),
+      });
+
+      assert.equal(await coordinator.ensureFreshToken(), null);
+      assert.equal(coordinator.getLastRefreshFailure(), 'transient');
     });
 
     it('preserves upstream abort signals when adding a timeout', async () => {

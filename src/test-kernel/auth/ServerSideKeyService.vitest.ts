@@ -33,8 +33,21 @@ function deferred<T>(): Deferred<T> {
 }
 
 function createTierService(
-  options: { providers?: string[]; quotaExceeded?: boolean } = {},
+  options: {
+    providers?: string[];
+    quotaExceeded?: boolean;
+    configFailures?: number;
+  } = {},
 ): FakeTierService {
+  const config = {
+    providers: options.providers ?? [],
+    tiers: {
+      free: { models: [] },
+      Max: { models: [] },
+      Ultra: { models: '*' as const },
+    },
+  };
+  let configSnapshot: typeof config | null = null;
   const fake = {
     clearCacheCalls: 0,
     getConfigCalls: 0,
@@ -43,27 +56,15 @@ function createTierService(
     },
     async getConfig() {
       this.getConfigCalls += 1;
-      return {
-        providers: options.providers ?? [],
-        tiers: {
-          free: { models: [] },
-          Max: { models: [] },
-          Ultra: { models: '*' },
-        },
-      };
+      if (this.getConfigCalls <= (options.configFailures ?? 0)) return null;
+      configSnapshot = config;
+      return configSnapshot;
     },
     getConfigSync() {
-      return {
-        providers: options.providers ?? [],
-        tiers: {
-          free: { models: [] },
-          Max: { models: [] },
-          Ultra: { models: '*' },
-        },
-      };
+      return configSnapshot;
     },
     getProviders() {
-      return options.providers ?? [];
+      return configSnapshot?.providers ?? [];
     },
     isAccessExpired() {
       return false;
@@ -282,5 +283,21 @@ describe('ServerSideKeyService anonymous access cache', () => {
 
     expect(service.getUserTier()).toBe(ULTRA_TIER);
     expect(service.shouldUseServerSideKeysSync('openai')).toBe(true);
+  });
+
+  it('retries an authenticated Ultra check after a config fetch fails', async () => {
+    const state = new FakeStateStore({ [USE_INCLUDED_ACCESS_KEY]: true });
+    const tier = createTierService({
+      providers: ['openai'],
+      configFailures: 1,
+    });
+    vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue('token');
+    vi.spyOn(SupabaseClient, 'isAuthenticated').mockResolvedValue(true);
+    vi.spyOn(SupabaseClient, 'getUserTier').mockResolvedValue(ULTRA_TIER);
+    const service = createService(tier.service, state);
+
+    expect(await service.canUseServerSideKeys()).toBe(false);
+    expect(await service.canUseServerSideKeys()).toBe(true);
+    expect(tier.getConfigCalls).toBe(2);
   });
 });

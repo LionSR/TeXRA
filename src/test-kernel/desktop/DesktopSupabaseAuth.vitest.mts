@@ -171,6 +171,7 @@ function installAuthenticatedSupabaseProvider() {
     })),
     hasStoredSession: vi.fn(async () => true),
     getStoredAccountLabel: vi.fn(async () => null),
+    getLastRefreshFailure: vi.fn(() => null),
   });
   vi.spyOn(SupabaseClient, 'getUser').mockResolvedValue({
     id: 'user-1',
