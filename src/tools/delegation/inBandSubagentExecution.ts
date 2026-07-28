@@ -442,7 +442,7 @@ async function executeInBand(
   // Lazy import: the strategy imports executeAgent, whose runtime registry
   // loads delegation tools. Keeping this edge lazy avoids closing that cycle.
   const { createNativeSubagentStrategy } =
-    await import('./nativeSubagentStrategy');
+    await import('./nativeSubagentStrategy.js');
   const config = AgentConfigSchema.parse(options.configPayload);
   const startedAt = Date.now();
   const workingDirectory = config.workingDirectory ?? undefined;

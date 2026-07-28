@@ -145,3 +145,50 @@ jobs:
         env:
           NPM_CONFIG_PROVENANCE: 'false'
         run: npm publish
+
+  publish-agent:
+    name: Publish agent package to npm (Trusted Publishing)
+    if: ${{ !github.event.release.prerelease && startsWith(github.event.release.tag_name, 'cli-v') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Verify release tag matches agent package version
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          version=$(node -p "require('./packages/agent/package.json').version")
+          if [ "$RELEASE_TAG" != "cli-v$version" ]; then
+            echo "::error::Release tag '$RELEASE_TAG' does not match packages/agent/package.json version '$version' (expected 'cli-v$version')"
+            exit 1
+          fi
+
+      - name: Use an npm CLI recent enough for trusted publishing
+        run: npm install -g npm@^11.5.1
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Publish @texra-ai/agent
+        working-directory: packages/agent
+        env:
+          NPM_CONFIG_PROVENANCE: 'false'
+        run: npm publish

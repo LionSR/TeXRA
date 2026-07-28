@@ -3,6 +3,7 @@ import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import stylistic from '@stylistic/eslint-plugin';
 import importPlugin from 'eslint-plugin-import-x';
+import globals from 'globals';
 import unicorn from 'eslint-plugin-unicorn';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -42,6 +43,7 @@ const COMPOSITION_ROOT_FILES = new Set([
   path.join(__dirname, 'packages/extension/src/extension.ts'),
   path.join(__dirname, 'packages/desktop/src/main/platform/index.ts'),
   path.join(__dirname, 'packages/cli/src/runtime/initPlatform.ts'),
+  path.join(__dirname, 'packages/agent/src/index.ts'),
   // The test suite's composition root: the sole place vitest suites swap the
   // fake platform, replacing the per-suite `await import('@platform/platform')`
   // dance every suite used to hand-roll to dodge this same rule.
@@ -65,6 +67,7 @@ const VSCODE_FREE_ZONE_DIRS = [
   'src/replacement',
   'src/eventBus',
   'src/hosts',
+  'packages/agent/src',
   'packages/extension/src/webview/frontend',
   'packages/extension/src/progressView/frontend',
   'packages/extension/src/settingsView/frontend',
@@ -391,11 +394,19 @@ export default tseslint.config(
   // Apply ESLint recommended rules globally
   js.configs.recommended,
 
+  {
+    files: ['packages/agent/scripts/**/*.mjs'],
+    languageOptions: {
+      globals: globals.node,
+    },
+  },
+
   // Configuration for TypeScript files
   {
     files: [
       'src/**/*.ts',
       'src/**/*.mts',
+      'packages/agent/src/**/*.ts',
       'packages/extension/src/**/*.ts',
       'packages/desktop/src/**/*.ts',
       'packages/cli/src/**/*.ts',
@@ -410,6 +421,7 @@ export default tseslint.config(
         project: [
           './tsconfig.json',
           './tsconfig.test-kernel.json',
+          './tsconfig.build.json',
           './packages/desktop/tsconfig.main.json',
           './packages/desktop/tsconfig.preload.json',
           './packages/desktop/tsconfig.renderer.json',
@@ -521,7 +533,10 @@ export default tseslint.config(
   // intentional prose reference in this area is a JSDoc note in
   // src/shared/state/PersistedState.ts; import declarations stay forbidden.
   {
-    files: ['src/**/*.{ts,tsx,mts,cts}'],
+    files: [
+      'src/**/*.{ts,tsx,mts,cts}',
+      'packages/agent/src/**/*.{ts,tsx,mts,cts}',
+    ],
     ignores: ['src/test-kernel/**'],
     rules: {
       'no-restricted-imports': [
