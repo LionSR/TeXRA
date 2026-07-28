@@ -2,7 +2,10 @@
 
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { SettingsViewOutboundHandlerRegistry } from '@shared/schemas';
-import type { SpendingStatus } from '@shared/schemas/spendingStatus';
+import type {
+  SpendingStatus,
+  SpendingStatusError,
+} from '@shared/schemas/spendingStatus';
 
 import {
   apiAccessMode,
@@ -10,7 +13,9 @@ import {
   globalStreamingDefault,
   providerKeyStatuses,
   quotaAutoSwitched,
+  sessionProblem,
   spendingStatus,
+  spendingStatusError,
   tier,
   userEmail,
 } from '../settingsState';
@@ -26,6 +31,19 @@ function spendingStatusEqual(
     a.limit === b.limit &&
     a.remaining === b.remaining &&
     a.percentUsed === b.percentUsed
+  );
+}
+
+function spendingStatusErrorEqual(
+  a: SpendingStatusError | null,
+  b: SpendingStatusError | null,
+): boolean {
+  if (a === b) return true;
+  if (a === null || b === null) return false;
+  return (
+    a.spendCheckFailed === b.spendCheckFailed &&
+    a.failureReason === b.failureReason &&
+    a.limit === b.limit
   );
 }
 
@@ -46,6 +64,11 @@ export const profileHandlers = {
     // JSON parse produced a fresh object reference.
     if (!spendingStatusEqual(spendingStatus.get(), newSpend)) {
       spendingStatus.set(newSpend);
+    }
+    sessionProblem.set(data.sessionProblem ?? null);
+    const newSpendError = data.spendingStatusError ?? null;
+    if (!spendingStatusErrorEqual(spendingStatusError.get(), newSpendError)) {
+      spendingStatusError.set(newSpendError);
     }
     quotaAutoSwitched.set(data.quotaAutoSwitched ?? false);
     apiAccessMode.set(data.apiAccessMode);

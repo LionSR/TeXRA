@@ -19,9 +19,35 @@ interface FakeTierService {
   service: TierService;
 }
 
+interface Deferred<T> {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+}
+
+function deferred<T>(): Deferred<T> {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((settle) => {
+    resolve = settle;
+  });
+  return { promise, resolve };
+}
+
 function createTierService(
-  options: { providers?: string[]; quotaExceeded?: boolean } = {},
+  options: {
+    providers?: string[];
+    quotaExceeded?: boolean;
+    configFailures?: number;
+  } = {},
 ): FakeTierService {
+  const config = {
+    providers: options.providers ?? [],
+    tiers: {
+      free: { models: [] },
+      Max: { models: [] },
+      Ultra: { models: '*' as const },
+    },
+  };
+  let configSnapshot: typeof config | null = null;
   const fake = {
     clearCacheCalls: 0,
     getConfigCalls: 0,
@@ -30,27 +56,15 @@ function createTierService(
     },
     async getConfig() {
       this.getConfigCalls += 1;
-      return {
-        providers: options.providers ?? [],
-        tiers: {
-          free: { models: [] },
-          Max: { models: [] },
-          Ultra: { models: '*' },
-        },
-      };
+      if (this.getConfigCalls <= (options.configFailures ?? 0)) return null;
+      configSnapshot = config;
+      return configSnapshot;
     },
     getConfigSync() {
-      return {
-        providers: options.providers ?? [],
-        tiers: {
-          free: { models: [] },
-          Max: { models: [] },
-          Ultra: { models: '*' },
-        },
-      };
+      return configSnapshot;
     },
     getProviders() {
-      return options.providers ?? [];
+      return configSnapshot?.providers ?? [];
     },
     isAccessExpired() {
       return false;
@@ -209,5 +223,81 @@ describe('ServerSideKeyService quota fallback', () => {
 
     expect(await service.canUseServerSideKeys()).toBe(false);
     expect(tier.clearCacheCalls).toBe(0);
+  });
+});
+
+describe('ServerSideKeyService anonymous access cache', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('refetches instead of serving a cached anonymous fetch', async () => {
+    const state = new FakeStateStore({ [USE_INCLUDED_ACCESS_KEY]: true });
+    const tier = createTierService({ providers: ['openai'] });
+    vi.spyOn(SupabaseClient, 'isAuthenticated').mockResolvedValue(true);
+    vi.spyOn(SupabaseClient, 'getUserTier').mockResolvedValue(ULTRA_TIER);
+    const tokenSpy = vi
+      .spyOn(SupabaseClient, 'getRelayAccessToken')
+      .mockResolvedValue(null);
+    const service = createService(tier.service, state);
+
+    // Session refresh is dead: the fetch runs anonymously.
+    expect(await service.canUseServerSideKeys()).toBe(true);
+    expect(tier.getConfigCalls).toBe(1);
+
+    // The cache is still TTL-valid, but it was populated anonymously — a
+    // repeat check must refetch and pick up the now-valid token rather than
+    // serving a snapshot that has no user spending data.
+    tokenSpy.mockResolvedValue('token');
+    expect(await service.canUseServerSideKeys()).toBe(true);
+    expect(tier.getConfigCalls).toBe(2);
+
+    // Once the cached fetch was authenticated, the TTL cache serves as before.
+    expect(await service.canUseServerSideKeys()).toBe(true);
+    expect(tier.getConfigCalls).toBe(2);
+  });
+
+  it('does not let a stale anonymous fetch erase authenticated access', async () => {
+    const state = new FakeStateStore({ [USE_INCLUDED_ACCESS_KEY]: true });
+    const tier = createTierService({ providers: ['openai'] });
+    const firstAuthentication = deferred<boolean>();
+    vi.spyOn(SupabaseClient, 'getRelayAccessToken')
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce('token');
+    vi.spyOn(SupabaseClient, 'isAuthenticated')
+      .mockReturnValueOnce(firstAuthentication.promise)
+      .mockResolvedValueOnce(true);
+    vi.spyOn(SupabaseClient, 'getUserTier').mockResolvedValue(ULTRA_TIER);
+    const service = createService(tier.service, state);
+
+    const anonymousFetch = service.canUseServerSideKeys();
+    await Promise.resolve();
+    const authenticatedFetch = service.canUseServerSideKeys();
+
+    expect(await authenticatedFetch).toBe(true);
+    expect(service.getUserTier()).toBe(ULTRA_TIER);
+    expect(service.shouldUseServerSideKeysSync('openai')).toBe(true);
+
+    firstAuthentication.resolve(false);
+    expect(await anonymousFetch).toBe(false);
+
+    expect(service.getUserTier()).toBe(ULTRA_TIER);
+    expect(service.shouldUseServerSideKeysSync('openai')).toBe(true);
+  });
+
+  it('retries an authenticated Ultra check after a config fetch fails', async () => {
+    const state = new FakeStateStore({ [USE_INCLUDED_ACCESS_KEY]: true });
+    const tier = createTierService({
+      providers: ['openai'],
+      configFailures: 1,
+    });
+    vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue('token');
+    vi.spyOn(SupabaseClient, 'isAuthenticated').mockResolvedValue(true);
+    vi.spyOn(SupabaseClient, 'getUserTier').mockResolvedValue(ULTRA_TIER);
+    const service = createService(tier.service, state);
+
+    expect(await service.canUseServerSideKeys()).toBe(false);
+    expect(await service.canUseServerSideKeys()).toBe(true);
+    expect(tier.getConfigCalls).toBe(2);
   });
 });

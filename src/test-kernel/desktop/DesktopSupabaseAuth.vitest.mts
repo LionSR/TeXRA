@@ -161,21 +161,26 @@ function nonceFor(oauthClient: ReturnType<typeof createOAuthClient>): string {
 
 function installAuthenticatedSupabaseProvider() {
   const ensureFreshToken = vi.fn(async () => 'fresh-access-token');
+  const getSessionTokens = vi.fn(async () => ({
+    accessToken: 'fresh-access-token',
+    refreshToken: 'refresh-token',
+  }));
+  const getStoredSessionState = vi.fn(async () => 'authenticated' as const);
   SupabaseClient.initialize('https://example.supabase.co', 'public-key');
   SupabaseClient.setAuthProvider({
     whenReady: vi.fn(async () => {}),
     ensureFreshToken,
-    getSessionTokens: vi.fn(async () => ({
-      accessToken: 'fresh-access-token',
-      refreshToken: 'refresh-token',
-    })),
+    getSessionTokens,
+    getStoredSessionState,
+    getStoredAccountLabel: vi.fn(async () => null),
+    getLastRefreshFailure: vi.fn(() => null),
   });
   vi.spyOn(SupabaseClient, 'getUser').mockResolvedValue({
     id: 'user-1',
     email: 'user@example.com',
   } as never);
   vi.spyOn(SupabaseClient, 'getUserTier').mockResolvedValue('free');
-  return { ensureFreshToken };
+  return { ensureFreshToken, getSessionTokens, getStoredSessionState };
 }
 
 describe('desktop Supabase auth', () => {
@@ -1093,7 +1098,8 @@ describe('desktop Supabase auth', () => {
 
   it('refreshes desktop session state and exposes remote agents in profile data', async () => {
     const router = createDesktopProtocolCallbackRouter();
-    const { ensureFreshToken } = installAuthenticatedSupabaseProvider();
+    const { ensureFreshToken, getSessionTokens, getStoredSessionState } =
+      installAuthenticatedSupabaseProvider();
     const loadAgents = vi
       .spyOn(agentRegistry, 'loadAgents')
       .mockResolvedValue(undefined);
@@ -1119,7 +1125,9 @@ describe('desktop Supabase auth', () => {
       getProviderKeyStatuses: async () => [],
     });
 
-    expect(ensureFreshToken).toHaveBeenCalled();
+    expect(getStoredSessionState).toHaveBeenCalledOnce();
+    expect(getSessionTokens).not.toHaveBeenCalled();
+    expect(ensureFreshToken).not.toHaveBeenCalled();
     expect(loadAgents).toHaveBeenCalled();
     expect(message).toMatchObject({
       authenticated: true,

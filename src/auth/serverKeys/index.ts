@@ -30,6 +30,15 @@ export { ServerSideKeyService };
 let _instance: ServerSideKeyService | null = null;
 
 /**
+ * True when `_instance` was built before `initPlatform()` ran (no state
+ * store). Such an instance permanently forces included access off, so if the
+ * platform state store appears later we rebuild rather than serving the
+ * stateless zombie forever. Embedders that never init a platform keep the
+ * stateless instance — `tryGlobalState()` stays null for them.
+ */
+let _constructedStateless = false;
+
+/**
  * Get the singleton ServerSideKeyService instance, constructing it on first
  * use. There is no host bootstrap step: state comes from the platform and the
  * toggle change signal goes onto `appSignals`, both of which every host
@@ -41,9 +50,9 @@ let _instance: ServerSideKeyService | null = null;
  * `ServerSideKeyService` constructor.
  */
 export function getServerSideKeyService(): ServerSideKeyService {
-  if (_instance) return _instance;
-
   const state = tryGlobalState();
+  if (_instance && !(_constructedStateless && state)) return _instance;
+
   if (!state) {
     logger.warn(
       'ServerSideKeyService',
@@ -61,6 +70,7 @@ export function getServerSideKeyService(): ServerSideKeyService {
     logger,
     (enabled) => appSignals.emit('includedModelAccessChanged', enabled),
   );
+  _constructedStateless = !state;
   return _instance;
 }
 
@@ -69,4 +79,13 @@ export function getServerSideKeyService(): ServerSideKeyService {
  */
 export function setServerSideKeyService(service: ServerSideKeyService): void {
   _instance = service;
+  // Injected instances are authoritative — never rebuild them out from under
+  // a test just because a platform state store appears later.
+  _constructedStateless = false;
+}
+
+/** Reset singleton state between unit tests. */
+export function resetServerSideKeyServiceForTests(): void {
+  _instance = null;
+  _constructedStateless = false;
 }
