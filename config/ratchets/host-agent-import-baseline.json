@@ -78,6 +78,7 @@
       "@agent/implementations/flows/agentCreator/agentCreatorFlow",
       "@agent/index",
       "@agent/index/AgentDirectorySync",
+      "@agent/index/platformAgentDirectories",
       "@agent/modelHandlers/openai/modelHandlerOpenAI",
       "@agent/remote/remoteAgentConfigClient",
       "@agent/review/reviewDiff",
