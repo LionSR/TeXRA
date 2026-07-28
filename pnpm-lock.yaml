@@ -422,6 +422,229 @@ importers:
         specifier: ^1.21.3
         version: 1.21.3
 
+  packages/agent:
+    dependencies:
+      '@anthropic-ai/claude-agent-sdk':
+        specifier: ^0.3.220
+        version: 0.3.220(@anthropic-ai/sdk@0.115.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3)
+      '@anthropic-ai/sdk':
+        specifier: ^0.115.0
+        version: 0.115.0(zod@4.4.3)
+      '@cantoo/pdf-lib':
+        specifier: ^2.7.4
+        version: 2.7.4
+      '@google/genai':
+        specifier: ^2.13.0
+        version: 2.13.0(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))
+      '@jamesgopsill/crossref-client':
+        specifier: ^1.1.0
+        version: 1.1.0
+      '@jitl/quickjs-wasmfile-release-sync':
+        specifier: 0.32.0
+        version: 0.32.0
+      '@octokit/request':
+        specifier: ^10.0.11
+        version: 10.0.11
+      '@octokit/request-error':
+        specifier: ^7.1.0
+        version: 7.1.0
+      '@openai/codex-sdk':
+        specifier: ^0.145.0
+        version: 0.145.0
+      '@openrouter/sdk':
+        specifier: ^1.1.13
+        version: 1.1.13
+      '@supabase/supabase-js':
+        specifier: 2.110.9
+        version: 2.110.9
+      acorn:
+        specifier: ^8.18.0
+        version: 8.18.0
+      acorn-walk:
+        specifier: ^8.3.5
+        version: 8.3.5
+      arxiv-client:
+        specifier: ^0.0.9
+        version: 0.0.9
+      async-mutex:
+        specifier: ^0.5.0
+        version: 0.5.0
+      bibtex:
+        specifier: ^0.9.0
+        version: 0.9.0
+      content-disposition:
+        specifier: ^2.0.1
+        version: 2.0.1
+      data-uri-to-buffer:
+        specifier: ^7.0.0
+        version: 7.0.0
+      date-fns:
+        specifier: ^4.4.0
+        version: 4.4.0
+      deepmerge:
+        specifier: ^4.3.1
+        version: 4.3.1
+      delay:
+        specifier: ^7.0.0
+        version: 7.0.0
+      diff-match-patch:
+        specifier: ^1.0.5
+        version: 1.0.5
+      escape-string-regexp:
+        specifier: ^5.0.0
+        version: 5.0.0
+      execa:
+        specifier: ^10.0.0
+        version: 10.0.0
+      fast-json-stable-stringify:
+        specifier: ^2.1.0
+        version: 2.1.0
+      fast-xml-parser:
+        specifier: ^5.10.1
+        version: 5.10.1
+      glob:
+        specifier: ^13.0.6
+        version: 13.0.6
+      http-status-codes:
+        specifier: ^2.3.0
+        version: 2.3.0
+      identifiers-arxiv:
+        specifier: ^0.1.1
+        version: 0.1.1
+      ignore:
+        specifier: ^7.0.6
+        version: 7.0.6
+      image-size:
+        specifier: ^2.0.2
+        version: 2.0.2
+      is-network-error:
+        specifier: ^1.3.2
+        version: 1.3.2
+      is-wsl:
+        specifier: ^3.1.1
+        version: 3.1.1
+      keyv:
+        specifier: ^5.6.0
+        version: 5.6.0
+      ky:
+        specifier: ^2.0.2
+        version: 2.0.2
+      llm-zoo:
+        specifier: ^1.23.0
+        version: 1.23.0(zod@4.4.3)
+      lru-cache:
+        specifier: ^11.5.2
+        version: 11.5.2
+      mime-types:
+        specifier: ^3.0.1
+        version: 3.0.2
+      nanoid:
+        specifier: ^6.0.0
+        version: 6.0.0
+      neverthrow:
+        specifier: ^8.2.0
+        version: 8.2.0
+      nunjucks:
+        specifier: ^3.2.4
+        version: 3.2.4(chokidar@3.6.0)
+      openai:
+        specifier: ^6.46.0
+        version: 6.46.0(patch_hash=0cb4ad59ef11c717ee7f75293ca497ccc244033387f62d1b4b93b6d4aadb949e)(ws@8.21.1)(zod@4.4.3)
+      p-defer:
+        specifier: ^4.0.1
+        version: 4.0.1
+      p-map:
+        specifier: ^7.0.6
+        version: 7.0.6
+      p-queue:
+        specifier: ^9.3.3
+        version: 9.3.3
+      p-retry:
+        specifier: ^8.0.0
+        version: 8.0.0
+      p-throttle:
+        specifier: ^8.1.0
+        version: 8.1.0
+      p-timeout:
+        specifier: ^7.0.1
+        version: 7.0.1
+      pathe:
+        specifier: ^2.0.3
+        version: 2.0.3
+      pdf2pic:
+        specifier: ^3.2.0
+        version: 3.2.0
+      perfect-debounce:
+        specifier: ^2.1.0
+        version: 2.1.0
+      pluralize:
+        specifier: ^8.0.0
+        version: 8.0.0
+      postal-mime:
+        specifier: ^2.7.5
+        version: 2.7.5
+      pretty-bytes:
+        specifier: ^7.1.1
+        version: 7.1.1
+      pretty-ms:
+        specifier: ^9.3.0
+        version: 9.3.0
+      proper-lockfile:
+        specifier: ^4.1.2
+        version: 4.1.2
+      quickjs-emscripten-core:
+        specifier: 0.32.0
+        version: 0.32.0
+      safe-stable-stringify:
+        specifier: ^2.5.0
+        version: 2.5.0
+      serialize-error:
+        specifier: ^13.0.1
+        version: 13.0.1
+      shell-quote:
+        specifier: ^1.10.0
+        version: 1.10.0
+      tar:
+        specifier: ^7.5.22
+        version: 7.5.22
+      tree-kill:
+        specifier: ^1.2.2
+        version: 1.2.2
+      turndown:
+        specifier: ^7.2.4
+        version: 7.2.4
+      turndown-plugin-gfm:
+        specifier: ^1.0.2
+        version: 1.0.2
+      undici:
+        specifier: ^7.29.0
+        version: 7.29.0
+      vscode-jsonrpc:
+        specifier: ^9.0.1
+        version: 9.0.1
+      which:
+        specifier: ^5.0.0
+        version: 5.0.0
+      write-file-atomic:
+        specifier: ^7.0.1
+        version: 7.0.1
+      ws:
+        specifier: ^8.21.1
+        version: 8.21.1
+      yaml:
+        specifier: ^2.9.0
+        version: 2.9.0
+    devDependencies:
+      esbuild:
+        specifier: ^0.28.1
+        version: 0.28.1
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+
   packages/cli:
     dependencies:
       '@inkjs/ui':
@@ -6316,18 +6539,6 @@ packages:
     resolution: {integrity: sha512-OTIk8iR8/aCRWBqvxrzxR0hgxWpnYBblY1S5hDWBQfk/VFmJwzmJgQFN3WsoUKHISv2eAwe+PpbUzyL1CKTLXg==}
     engines: {node: ^20.17.0 || >=22.9.0}
 
-  ws@8.21.0:
-    resolution: {integrity: sha512-Vsp28b7DRcimFQvrqu2Wek3z1iYxDCWqHYB8Qsnk/S4RfaCQzPGPyBNuVjJV3cd6UiKtUtp6sNM77gWvzcCH+g==}
-    engines: {node: '>=10.0.0'}
-    peerDependencies:
-      bufferutil: ^4.0.1
-      utf-8-validate: '>=5.0.2'
-    peerDependenciesMeta:
-      bufferutil:
-        optional: true
-      utf-8-validate:
-        optional: true
-
   ws@8.21.1:
     resolution: {integrity: sha512-+0NTnW77fFN/DjQi6k/Sq/Yvk4Sgajw7urW8V+asjXnRgDs9gyGkdb7EzgfhA4goXsRIZKE28fzIXBHEzhuiWw==}
     engines: {node: '>=10.0.0'}
@@ -10245,7 +10456,7 @@ snapshots:
       type-fest: 5.6.0
       widest-line: 6.0.0
       wrap-ansi: 10.0.0
-      ws: 8.21.0
+      ws: 8.21.1
       yoga-layout: 3.2.1
     optionalDependencies:
       '@types/react': 19.2.17
@@ -12196,8 +12407,6 @@ snapshots:
   write-file-atomic@7.0.1:
     dependencies:
       signal-exit: 4.1.0
-
-  ws@8.21.0: {}
 
   ws@8.21.1: {}
 

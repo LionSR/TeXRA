@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { BibEntry, parseBibFile } from 'bibtex';
+import bibtex from 'bibtex';
 
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
@@ -13,6 +13,9 @@ import {
   collectCommaSeparatedMatches,
   stripLatexComments,
 } from './latexParsingUtils';
+
+// Third-party imports - types
+import type { BibEntry } from 'bibtex';
 
 const CITE_COMMANDS = [
   'cite',
@@ -30,6 +33,7 @@ const CITE_COMMANDS = [
   'Parencite',
   'Footcite',
 ];
+const { parseBibFile } = bibtex;
 
 // Compiled regex patterns (matchAll clones the regex, so module-level is safe)
 const CITATION_PATTERN = new RegExp(

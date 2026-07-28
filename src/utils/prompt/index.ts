@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import * as nunjucks from 'nunjucks';
+import nunjucks from 'nunjucks';
 
 import * as logger from '@logger/logUtils';
 import { filterNotNull } from '@utils/core';
