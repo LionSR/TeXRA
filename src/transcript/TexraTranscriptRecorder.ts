@@ -27,11 +27,11 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
   TOOL_USE_STATUS,
-  isTerminalWorkflowTaskProgress,
+  isTerminalWorkflowCallProgress,
   type LogLevel,
   type MessageType,
   type ToolUseLog,
-  type WorkflowTaskProgress,
+  type WorkflowCallProgress,
 } from '@shared/schemas';
 import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 import { generateShortId } from '@utils/core';
@@ -130,7 +130,7 @@ export function attachTranscriptRecorder(
   // rely on that distinction to tell a root run's terminal status apart from
   // a round's (see toStreamLifecycleStatus in packages/trace-viewer).
   const stageMetadata = new Map<string, StageMetadata>();
-  const workflowTaskEntries = new Set<string>();
+  const workflowCallEntries = new Set<string>();
   const activeToolEntries = new Map<string, ToolUseLog>();
   let transcriptBoundaryClosed = false;
   // Id of the current model invocation's MODEL_RESPONSE stream entry, so a
@@ -355,14 +355,14 @@ export function attachTranscriptRecorder(
             groupId: event.stageId,
             messageType: MESSAGE_TYPES.WORKFLOW_TASK,
             text: event.task.label,
-            data: event.task satisfies WorkflowTaskProgress,
+            data: event.task satisfies WorkflowCallProgress,
           };
-          const terminal = isTerminalWorkflowTaskProgress(event.task);
-          if (workflowTaskEntries.has(event.logId)) {
+          const terminal = isTerminalWorkflowCallProgress(event.task);
+          if (workflowCallEntries.has(event.logId)) {
             if (terminal) writer.settle(event.logId, entry);
             else writer.update(event.logId, entry);
           } else {
-            workflowTaskEntries.add(event.logId);
+            workflowCallEntries.add(event.logId);
             const taskEntry = {
               id: event.logId,
               type: STREAM_LOG_ENTRY_TYPES.LOG,
@@ -401,7 +401,7 @@ export function attachTranscriptRecorder(
           // Status is emitted through AgentTrace before StreamStatusMachine
           // notifies host listeners. Settle recorder-owned source rows here,
           // so every row the CLI may promote at the boundary already has one
-          // durable settlement coordinate. Workflow tasks are deliberately
+          // durable settlement coordinate. Workflow calls are deliberately
           // absent: their typed bridge cleanup owns planned/running terminal
           // transitions and settles them afterward.
           transcriptBoundaryClosed = true;

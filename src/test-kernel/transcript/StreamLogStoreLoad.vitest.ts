@@ -106,7 +106,7 @@ function runningStreamingTextEntry(
   };
 }
 
-function runningWorkflowTaskEntry(
+function runningWorkflowCallEntry(
   streamId: string,
   seqNo: number,
   timestamp: number,
@@ -1028,12 +1028,12 @@ describe('StreamLogStore load', () => {
     });
   });
 
-  it('settles every orphaned nonterminal workflow task during cold recovery', async () => {
+  it('settles every orphaned nonterminal workflow call during cold recovery', async () => {
     const storage = mockStorage({
       logs: {
         workflow: [
-          runningWorkflowTaskEntry('workflow', 1, 100),
-          runningWorkflowTaskEntry('workflow', 2, 101, 'planned'),
+          runningWorkflowCallEntry('workflow', 1, 100),
+          runningWorkflowCallEntry('workflow', 2, 101, 'planned'),
         ],
       },
       summaries: {
@@ -1057,7 +1057,7 @@ describe('StreamLogStore load', () => {
       data: {
         id: 'audit-core',
         status: 'failed',
-        error: 'The previous host stopped before this task completed.',
+        error: 'The previous host stopped before this call completed.',
       },
     });
     expect(entries.at(1)).toMatchObject({
