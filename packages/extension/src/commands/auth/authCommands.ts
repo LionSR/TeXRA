@@ -108,22 +108,22 @@ export async function signIn(): Promise<boolean> {
       return false;
     }
 
-    const hasStoredSession = await SupabaseClient.hasStoredSession();
-    const authenticated = await SupabaseClient.isAuthenticated();
-    if (hasStoredSession && !authenticated) {
-      if (SupabaseClient.getLastSessionRefreshFailure() !== 'invalid') {
-        void showLoggedMessage(
-          CHANNEL,
-          'The authentication service is temporarily unavailable. Your stored session has not been removed; try again later.',
-        );
-        return false;
-      }
+    const storedSessionState = await SupabaseClient.getStoredSessionState();
+    if (storedSessionState === 'transient') {
+      void showLoggedMessage(
+        CHANNEL,
+        'The authentication service is temporarily unavailable. Your stored session has not been removed; try again later.',
+      );
+      return false;
+    }
+    if (storedSessionState === 'invalid') {
       await SupabaseAuthProvider.getInstance()?.clearStoredSession();
     }
 
-    const existing = authenticated
-      ? await getExistingSession(authReady)
-      : undefined;
+    const existing =
+      storedSessionState === 'authenticated'
+        ? await getExistingSession(authReady)
+        : undefined;
     if (existing) {
       await showSignedInMessage('Already signed in as', false);
       return true;
@@ -198,11 +198,13 @@ async function signInWithEmail(): Promise<void> {
 
 export async function signOut(): Promise<void> {
   try {
-    const hasStoredSession = await SupabaseClient.hasStoredSession();
-    const authenticated = await SupabaseClient.isAuthenticated();
-    const session = authenticated ? await getExistingSession() : undefined;
+    const storedSessionState = await SupabaseClient.getStoredSessionState();
+    const session =
+      storedSessionState === 'authenticated'
+        ? await getExistingSession()
+        : undefined;
     if (!session) {
-      if (hasStoredSession) {
+      if (storedSessionState !== 'none') {
         const confirm = await vscode.window.showWarningMessage(
           'Clear the stored TeXRA session?',
           { modal: true },

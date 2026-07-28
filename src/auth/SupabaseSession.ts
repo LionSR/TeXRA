@@ -17,10 +17,11 @@ import {
   type SupabaseSessionLog,
   type SupabaseSessionStorage,
 } from './supabaseSessionTypes';
-import type {
-  AuthTokenProvider,
-  SessionRefreshFailure,
-  SessionTokens,
+import {
+  classifyAuthFailureStatus,
+  type AuthTokenProvider,
+  type SessionRefreshFailure,
+  type SessionTokens,
 } from './TokenProvider';
 import type { SupabaseClient as Client } from '@supabase/supabase-js';
 
@@ -262,10 +263,7 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
     });
 
     if (error || !data.session) {
-      this.lastRefreshFailure =
-        error?.status === 400 || error?.status === 401
-          ? 'invalid'
-          : 'transient';
+      this.lastRefreshFailure = classifyAuthFailureStatus(error?.status);
       return null;
     }
 
@@ -413,10 +411,7 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
     );
 
     if (!response.ok) {
-      this.lastRefreshFailure =
-        response.status === 400 || response.status === 401
-          ? 'invalid'
-          : 'transient';
+      this.lastRefreshFailure = classifyAuthFailureStatus(response.status);
       this.options.log?.warn?.(
         'SupabaseSession',
         `Token refresh failed: ${response.status}`,
