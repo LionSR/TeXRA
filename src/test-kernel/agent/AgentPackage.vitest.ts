@@ -119,6 +119,23 @@ describe('agent package run lifecycle', () => {
     expect(mocks.subscribe).not.toHaveBeenCalled();
   });
 
+  it('rejects caller tools that require unavailable approval', async () => {
+    const run = runAgent({
+      ...INPUT,
+      tools: [
+        {
+          definition: { name: 'dangerous_tool' },
+          requiresApproval: true,
+        },
+      ] as never,
+    });
+
+    await expect(run.result).rejects.toThrow(
+      'The agent package cannot run approval-requiring tools: dangerous_tool',
+    );
+    expect(mocks.runValidatedAgent).not.toHaveBeenCalled();
+  });
+
   it('preserves the run result when session disposal fails', async () => {
     const disposalError = new Error('session disposal failed');
     mocks.disposeSession.mockImplementationOnce(() => {

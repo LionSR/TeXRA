@@ -207,6 +207,16 @@ class AgentRunStream implements AgentRun {
  */
 export function runAgent(input: RunAgentInput): AgentRun {
   return new AgentRunStream(async (stream) => {
+    const approvalToolNames =
+      input.tools
+        ?.filter((tool) => tool.requiresApproval === true)
+        .map((tool) => tool.definition.name) ?? [];
+    if (approvalToolNames.length > 0) {
+      throw new Error(
+        `The agent package cannot run approval-requiring tools: ${approvalToolNames.join(', ')}`,
+      );
+    }
+
     const { initPlatform, tryPlatform } = await import('@platform/platform');
     const activePlatform = tryPlatform();
     if (activePlatform && activePlatform !== input.platform) {
