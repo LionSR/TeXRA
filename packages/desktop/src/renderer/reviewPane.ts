@@ -147,7 +147,7 @@ export function createReviewPane(): ReviewPaneController {
                 ? diffView
                 : html`
                     <div class="desktop-review-empty">
-                      ${waIcon('diff-multiple')}
+                      ${waIcon('plus-minus')}
                       <strong>No changes to review</strong>
                     </div>
                   `

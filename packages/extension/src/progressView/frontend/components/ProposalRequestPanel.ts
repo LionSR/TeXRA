@@ -148,7 +148,7 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
             hasAgentOptions
               ? html`
                   <div class="workflow-proposal__agent-select">
-                    ${waIcon('sparkle')}
+                    ${waIcon('wand-magic-sparkles')}
                     <wa-select
                       class="proposal-agent-dropdown"
                       .value=${currentAgent}

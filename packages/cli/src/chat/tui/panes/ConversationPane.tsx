@@ -6,8 +6,8 @@ import { Box, Text } from 'ink';
 import { AgentCategory } from '@shared/schemas';
 import {
   formatWorkflowPhaseHeading,
-  workflowPhaseTaskProgress,
-} from '@shared/copy/workflowTask';
+  workflowPhaseCallProgress,
+} from '@shared/copy/workflowCall';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { formatResultCount } from '@utils/text/stringUtils';
 
@@ -136,7 +136,7 @@ export function workflowRunStatusSummary(
 ): string | undefined {
   if (slice?.category !== AgentCategory.Workflow) return undefined;
   const phase = slice.entries.findLast((entry) => entry.role === 'phase');
-  const { done, total } = workflowPhaseTaskProgress(
+  const { done, total } = workflowPhaseCallProgress(
     phase
       ? slice.entries.flatMap((entry) =>
           entry.role === 'workflowTask' && entry.task.phase === phase.phaseLabel
