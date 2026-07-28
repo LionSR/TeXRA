@@ -8,13 +8,13 @@ import { useMemo } from 'react';
 import {
   AgentCategory,
   type StreamTabId,
-  type WorkflowTaskProgress,
+  type WorkflowCallProgress,
 } from '@shared/schemas';
 import {
   formatWorkflowPhaseHeading,
-  workflowPhaseTaskProgress,
+  workflowPhaseCallProgress,
   type WorkflowPhaseHeading,
-} from '@shared/copy/workflowTask';
+} from '@shared/copy/workflowCall';
 import {
   formatPhaseStageLabel,
   formatRoundStageLabel,
@@ -257,7 +257,7 @@ export function SubagentList(
         ? rootSession.slice.entries
         : [];
     const phaseHeadings = new Map<string, WorkflowPhaseHeading>();
-    const tasksByPhase = new Map<string, WorkflowTaskProgress[]>();
+    const callsByPhase = new Map<string, WorkflowCallProgress[]>();
     for (const entry of entries) {
       if (entry.role === 'phase') {
         phaseHeadings.set(entry.phaseLabel, {
@@ -269,9 +269,9 @@ export function SubagentList(
         entry.role === 'workflowTask' &&
         entry.task.phase !== undefined
       ) {
-        const tasks = tasksByPhase.get(entry.task.phase);
-        if (tasks) tasks.push(entry.task);
-        else tasksByPhase.set(entry.task.phase, [entry.task]);
+        const calls = callsByPhase.get(entry.task.phase);
+        if (calls) calls.push(entry.task);
+        else callsByPhase.set(entry.task.phase, [entry.task]);
       }
     }
 
@@ -301,8 +301,8 @@ export function SubagentList(
       const phase = session.workflowPhase;
       if (phase !== undefined && phase !== previousPhase) {
         const value = childPhaseListValue(headerOrdinal++);
-        const tasks = tasksByPhase.get(phase) ?? [];
-        const { done, total } = workflowPhaseTaskProgress(tasks);
+        const calls = callsByPhase.get(phase) ?? [];
+        const { done, total } = workflowPhaseCallProgress(calls);
         nextItems.push({ label: phase, value, disabled: true });
         nextHeaders.set(value, {
           ...(phaseHeadings.get(phase) ?? { phaseLabel: phase }),

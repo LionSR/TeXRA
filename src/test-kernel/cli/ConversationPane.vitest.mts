@@ -60,7 +60,7 @@ import {
   type NormalizedToolUse,
   type RunOutcome,
   type StreamTabId,
-  type WorkflowTaskProgress,
+  type WorkflowCallProgress,
 } from '@shared/schemas';
 import { buildChildStreamEntries } from '@test/support/childStreamEntries';
 
@@ -437,8 +437,8 @@ describe('CLI conversation transcript splitting', () => {
     );
   });
 
-  it('gives every workflow-task status its own steady marker', () => {
-    const tasks: readonly WorkflowTaskProgress[] = [
+  it('gives every workflow-call status its own steady marker', () => {
+    const calls: readonly WorkflowCallProgress[] = [
       { id: 'a', label: 'Task', status: 'planned' },
       { id: 'a', label: 'Task', status: 'running' },
       { id: 'a', label: 'Task', status: 'completed' },
@@ -446,7 +446,7 @@ describe('CLI conversation transcript splitting', () => {
       { id: 'a', label: 'Task', status: 'skipped', reason: 'user' },
       { id: 'a', label: 'Task', status: 'failed', error: 'Runner stopped.' },
     ];
-    const firstLines = tasks.map(
+    const firstLines = calls.map(
       (task) =>
         transcriptEntryLayout(
           {
@@ -460,7 +460,7 @@ describe('CLI conversation transcript splitting', () => {
         ).lines[0] ?? '',
     );
 
-    // Every task row nests two columns under the `◆` phase divider heading it.
+    // Every call row nests two columns under the `◆` phase divider heading it.
     expect(firstLines.every((line) => line.startsWith('  '))).toBe(true);
     expect(firstLines.map((line) => line.slice(2, 4))).toEqual([
       '□ ',
@@ -472,7 +472,7 @@ describe('CLI conversation transcript splitting', () => {
     ]);
   });
 
-  it('aligns a wrapped task row under its own marker', () => {
+  it('aligns a wrapped call row under its own marker', () => {
     const layout = transcriptEntryLayout(
       {
         id: 'a',

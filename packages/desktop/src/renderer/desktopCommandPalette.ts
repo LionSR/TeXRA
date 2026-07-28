@@ -12,7 +12,8 @@ import type { StreamTabId, StreamTabInfo } from '@shared/schemas';
 import { SETTINGS_TAB } from '@shared/schemas';
 import { formatDesktopAccelerator } from '@shared/commands/accelerators';
 import type { DesktopShortcutEntry } from '@shared/commands/shortcutPreferences';
-import { type TeXRAIconName, waIcon } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { isThenable } from '@utils/core';
 import {
   dispatchDesktopCommand,
@@ -218,7 +219,7 @@ export function createDesktopCommandPalette({
     render(
       html`
         <div class="desktop-command-palette-search">
-          ${waIcon('search', {
+          ${waIcon('magnifying-glass', {
             className: 'desktop-command-palette-search-icon',
           })}
           <wa-input

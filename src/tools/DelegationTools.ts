@@ -22,11 +22,7 @@ import {
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
-import { isChildRunLoopActive } from '@agent/runtime/childRunLoop';
-import {
-  sendFollowUp,
-  wakeQueuedFollowUpStream,
-} from '@agent/followUp/ToolUseFollowUp';
+import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import * as logger from '@logger/logUtils';
 import {
   AgentCategory,
@@ -90,7 +86,6 @@ async function deliverResumeWakeFailure(
     targetStreamId: handle.parentStreamId,
     followUp: { text: msg, origin: 'subagent_result' },
     session,
-    wake: true,
   });
   if (delivery.kind !== 'delivered') {
     logger.warn(
@@ -317,52 +312,25 @@ Git worktree support: resolved from the active workspace at runtime.`,
     }
 
     const framedInstruction = formatFollowUpInstruction(instruction);
-    const result = await sendFollowUp(handle.childStreamId, framedInstruction);
-
-    // Dispatch the wake without awaiting it: waking a WAITING subagent resumes
-    // its run all the way to the next WAITING/terminal boundary, which can be
-    // an entire child turn. This tool call only hands the follow-up off — the
-    // result (or the wake's own failure) arrives asynchronously via the
-    // follow-up queue, same as the original delegation's async-arrival
-    // contract. Awaiting it here would stall this tool call, and the parent
-    // orchestrator's whole turn with it, for as long as the child keeps
-    // running (see #7289).
-    //
-    // A live child-run loop for this stream is already blocked in
-    // `queue.waitAndDrainAll` on the same `FollowUpQueue` instance
-    // `sendFollowUp` just enqueued into — the enqueue alone resolves that
-    // wait (see `isChildRunLoopActive`), so an additional wake here would
-    // race a second, competing resume through the generic host-level
-    // restart-recovery path against the loop's own in-flight continuation.
-    // Only genuinely wake when no loop is listening — a restarted process,
-    // where the persisted stream is WAITING but nothing in this process is
-    // watching its queue.
-    if (!isChildRunLoopActive(handle.childStreamId)) {
-      // A wake failure (thrown, or a resolved 'queued_resume_failed'/
-      // 'dropped' outcome) means the child will never actually resume and
-      // deliver a result — the orchestrator would otherwise see this tool
-      // call return a normal "queued" success and then silently never hear
-      // back. Deliver a terminal error to the parent on that failure, same
-      // as the deleted NativeSubagentStrategy.wakeQueuedFollowUp used to.
-      wakeQueuedFollowUpStream(handle.childStreamId, result, undefined, session)
-        .then((wakeResult) => {
-          if (
-            wakeResult.kind === 'queued_resume_failed' ||
-            wakeResult.kind === 'dropped'
-          ) {
-            return deliverResumeWakeFailure(
-              handle,
-              session,
-              executionId,
-              new Error(
-                `Resume wake failed (${wakeResult.kind}): the subagent's follow-up could not be delivered to a resumed run.`,
-              ),
-            );
-          }
-        })
-        .catch((err: unknown) =>
-          deliverResumeWakeFailure(handle, session, executionId, err),
-        );
+    const result = await submitFollowUp(
+      handle.childStreamId,
+      framedInstruction,
+      {
+        session,
+      },
+    );
+    if (
+      result.status === 'dropped' ||
+      (result.status === 'queued' && result.continuation === 'resume_failed')
+    ) {
+      void deliverResumeWakeFailure(
+        handle,
+        session,
+        executionId,
+        new Error(
+          'The subagent follow-up could not be delivered to a live or recovered continuation.',
+        ),
+      );
     }
 
     switch (result.status) {
@@ -387,6 +355,10 @@ Git worktree support: resolved from the active workspace at runtime.`,
       case 'no_session':
         throw new Error(
           `No active session for '${handle.agentName}' (stream status: ${result.streamStatus ?? 'unknown'}). The subagent may have stopped or its session expired.`,
+        );
+      case 'dropped':
+        throw new Error(
+          `No continuation owner is available for '${handle.agentName}'.`,
         );
     }
   }

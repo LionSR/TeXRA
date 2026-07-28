@@ -14,13 +14,13 @@ import {
   MESSAGE_TYPES,
   STREAM_PHASE,
   StreamPhaseSchema,
-  WorkflowTaskProgressSchema,
+  WorkflowCallProgressSchema,
   type GettingStartedAction,
   type LogMessageData,
   type TaskGroup,
 } from '@shared/schemas';
 import { designTokens } from '@shared/styles';
-import { workflowPhaseTaskProgress } from '@shared/copy/workflowTask';
+import { workflowPhaseCallProgress } from '@shared/copy/workflowCall';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 
 // Side-effect imports - register WA icon and spinner components
@@ -33,7 +33,8 @@ import { isInFlightPhase } from '@shared/streams/streamStatus';
 import { parseWorkflowOutputRoundDir } from '@shared/constants/workflowOutput';
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 import { scrollToBottom } from '@shared/utils/dom';
-import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderEmptyState } from '@shared/wa/emptyState';
 import { formatDuration } from '@utils/core';
 import { pluralize } from '@utils/text/stringUtils';
@@ -72,13 +73,13 @@ function getStatusIcon(status: string): TeXRAIconName | null {
     case STREAM_PHASE.RUNNING:
       return null;
     case STREAM_PHASE.FAILED:
-      return 'error';
+      return 'circle-exclamation';
     case STREAM_PHASE.COMPLETED:
       return 'check';
     case STREAM_PHASE.CANCELLED:
       return 'circle-stop';
     default:
-      return 'circle-outline';
+      return 'circle';
   }
 }
 
@@ -482,22 +483,22 @@ export class TaskGroupList extends LitElement {
   }
 
   /**
-   * `done/total` for a phase header, folded from the workflow-task cards the
+   * `done/total` for a phase header, folded from the workflow-call cards the
    * group already holds. A malformed row drops out (safeParse), matching how
    * the card formatter guards itself. Nothing renders for a group with no
-   * task cards, so round and run headers are unaffected.
+   * call cards, so round and run headers are unaffected.
    */
   private renderGroupProgress(
     group: TaskGroup,
     messages: readonly LogMessageData[],
   ): TemplateResult | typeof nothing {
     if (group.kind !== 'phase') return nothing;
-    const tasks = messages.flatMap((message) => {
+    const calls = messages.flatMap((message) => {
       if (message.messageType !== MESSAGE_TYPES.WORKFLOW_TASK) return [];
-      const parsed = WorkflowTaskProgressSchema.safeParse(message.data);
+      const parsed = WorkflowCallProgressSchema.safeParse(message.data);
       return parsed.success ? [parsed.data] : [];
     });
-    const { done, total } = workflowPhaseTaskProgress(tasks);
+    const { done, total } = workflowPhaseCallProgress(calls);
     if (total === 0) return nothing;
     return html`<span class="group-progress">${done}/${total}</span>`;
   }
