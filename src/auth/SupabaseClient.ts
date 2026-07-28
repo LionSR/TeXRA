@@ -347,7 +347,10 @@ export class SupabaseClient {
         return defaultTier;
       }
 
-      return UserTierSchema.catch('free').parse(data.tier);
+      // SQL NULL denotes a profile without an assigned paid tier. A present
+      // malformed string is profile corruption: let the outer error path log
+      // it before conservatively returning the default tier.
+      return UserTierSchema.parse(data.tier ?? defaultTier);
     } catch (error) {
       logger.error(
         'SupabaseClient',
