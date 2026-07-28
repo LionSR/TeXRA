@@ -264,7 +264,11 @@ export function toOpenAIResponseTools(
 
   for (const d of defs) {
     // Handle native web search tool (only if model supports it)
-    if (d.name === 'web_search' && supportsNativeWebSearch) {
+    if (
+      d.name === 'web_search' &&
+      supportsNativeWebSearch &&
+      !d.forceFunctionCall
+    ) {
       const webSearchTool: WebSearchTool = { type: 'web_search' };
       tools.push(webSearchTool);
       continue;
@@ -328,7 +332,9 @@ export function toAnthropicTools(
 
   return defs.map<ToolUnion>((d) => {
     // Check for native/server tools
-    const remoteType = ANTHROPIC_TOOL_TYPE_MAP[d.name];
+    const remoteType = d.forceFunctionCall
+      ? undefined
+      : ANTHROPIC_TOOL_TYPE_MAP[d.name];
     if (remoteType) {
       const gated = CONDITIONAL_NATIVE_TOOLS[d.name];
       // If not gated (undefined) or explicitly enabled, use native tool
