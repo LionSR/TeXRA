@@ -18,7 +18,8 @@ import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderLoadingState } from '@shared/wa/loadingState';
 import { renderSettingsBanner } from '@shared/wa/settingsBanner';
 import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
-import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - shared schemas
 import type {
@@ -49,13 +50,13 @@ interface CategoryMeta {
  * is a compile error.
  */
 const CATEGORY_META: Record<ToolCategory, CategoryMeta> = {
-  file: { label: 'File & Shell', icon: 'files' },
+  file: { label: 'File & Shell', icon: 'copy' },
   latex: { label: 'LaTeX', icon: 'file-code' },
-  academic: { label: 'Academic Research', icon: 'mortar-board' },
+  academic: { label: 'Academic Research', icon: 'graduation-cap' },
   web: { label: 'Web', icon: 'globe' },
-  computation: { label: 'Computation', icon: 'symbol-operator' },
-  lean: { label: 'Lean 4', icon: 'beaker' },
-  workflow: { label: 'Memory & Workflow', icon: 'type-hierarchy' },
+  computation: { label: 'Computation', icon: 'cube' },
+  lean: { label: 'Lean 4', icon: 'flask' },
+  workflow: { label: 'Memory & Workflow', icon: 'diagram-project' },
   system: { label: 'System Dependencies', icon: 'gear' },
   // ai-agents lives on its own tab (AIAgentsTab); keep the meta entry so the
   // Record stays exhaustive and the type checker enforces it.
@@ -264,7 +265,7 @@ export class ToolsTab extends LitElement {
     return html`
       <div class="category-section">
         ${renderSettingsSectionHeading({
-          icon: 'desktop-download',
+          icon: 'download',
           title: 'Desktop diagnostics',
         })}
         <div class="settings-section">
@@ -357,7 +358,7 @@ export class ToolsTab extends LitElement {
               missing > 0
                 ? html`
                     <span class="tools-summary-stat tools-stat-missing">
-                      ${waIcon('warning')} ${missing} need setup
+                      ${waIcon('triangle-exclamation')} ${missing} need setup
                     </span>
                   `
                 : nothing
@@ -428,13 +429,13 @@ export class ToolsTab extends LitElement {
       <div class="tools-container tab-content-container">
         ${renderSettingsBanner({
           id: 'tool-availability-banner',
-          icon: 'tools',
+          icon: 'screwdriver-wrench',
           title: 'Tool availability',
           description:
             'Monitor local capabilities and configure the tools agents may use.',
           detail: this.renderSummary(items),
           actions: renderLabeledActionButton({
-            icon: 'refresh',
+            icon: 'rotate-right',
             text: 'Re-check',
             kind: 'secondary',
             appearance: 'outlined',

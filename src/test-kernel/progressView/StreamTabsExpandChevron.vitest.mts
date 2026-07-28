@@ -176,7 +176,7 @@ describe('stream-tab expand chevron', () => {
       (Element & { name?: string }) | null;
 
     expect(model?.textContent?.trim()).toBe('');
-    expect(kindIcon?.name).toBe('list-tree');
+    expect(kindIcon?.name).toBe('list-ul');
     expect(kindIcon?.hasAttribute('title')).toBe(false);
     expect(
       tab?.shadowRoot

@@ -7,9 +7,7 @@ import { describe, it, afterEach, beforeEach, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   tryUseRunContext: vi.fn(),
   currentSession: vi.fn(),
-  sendFollowUp: vi.fn(),
-  wakeQueuedFollowUpStream: vi.fn(),
-  isChildRunLoopActive: vi.fn(),
+  submitFollowUp: vi.fn(),
   deliverChildRunFollowUp: vi.fn(),
 }));
 
@@ -28,12 +26,7 @@ vi.mock('@agent/runtime/SessionHandle', () => ({
 }));
 
 vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
-  sendFollowUp: mocks.sendFollowUp,
-  wakeQueuedFollowUpStream: mocks.wakeQueuedFollowUpStream,
-}));
-
-vi.mock('@agent/runtime/childRunLoop', () => ({
-  isChildRunLoopActive: mocks.isChildRunLoopActive,
+  submitFollowUp: mocks.submitFollowUp,
 }));
 
 vi.mock('@tools/childRunDelivery', () => ({
@@ -42,7 +35,6 @@ vi.mock('@tools/childRunDelivery', () => ({
 
 // Local imports
 import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
-import type { FollowUpWakeResult } from '@agent/followUp/ToolUseFollowUp';
 import { FileType, type FileStat } from '@platform/interfaces';
 import { AgentCategory, type StreamTabId } from '@shared/schemas';
 import {
@@ -142,24 +134,8 @@ describe('DelegationTools', () => {
   });
 });
 
-// Races the tool call's promise against a short timer so a regression that
-// re-introduces blocking (awaiting the resumed child's full turn) fails fast
-// instead of hanging until the child eventually resolves.
-async function raceAgainstBlockingResume<T>(
-  promise: Promise<T>,
-): Promise<{ settled: true; value: T } | { settled: false }> {
-  const TIMEOUT = Symbol('timeout');
-  const outcome = await Promise.race([
-    promise.then((value) => ({ settled: true as const, value })),
-    new Promise<typeof TIMEOUT>((resolve) =>
-      setTimeout(() => resolve(TIMEOUT), 50),
-    ),
-  ]);
-  return outcome === TIMEOUT ? { settled: false } : outcome;
-}
-
-describe('DelegateAgentTool resume (issue #7289)', () => {
-  const executionId = 'exec-resume-issue-7289';
+describe('DelegateAgentTool resume ownership', () => {
+  const executionId = 'exec-resume-ownership';
   const parentStreamId = 'parent-stream' as StreamTabId;
   const childStreamId = 'child-stream' as StreamTabId;
 
@@ -182,109 +158,40 @@ describe('DelegateAgentTool resume (issue #7289)', () => {
     mocks.currentSession.mockReturnValue({
       executions: { getHandle: () => makeHandle() },
     } as never);
-    mocks.sendFollowUp.mockResolvedValue({
-      status: 'queued',
-      reason: 'waiting',
-    });
     mocks.deliverChildRunFollowUp.mockResolvedValue({ kind: 'delivered' });
   });
 
-  it('does not dispatch a wake when a child-run loop is already listening on the resumed stream', async () => {
-    // The loop is already blocked in queue.waitAndDrainAll on the same
-    // FollowUpQueue instance sendFollowUp just enqueued into — the enqueue
-    // alone resolves it, so a wake here would race a second, competing
-    // resume through the generic host resume port (see childRunLoop.ts's
-    // isChildRunLoopActive doc comment).
-    mocks.isChildRunLoopActive.mockReturnValue(true);
-
-    const tool = new DelegateAgentTool();
-    const outcome = await raceAgainstBlockingResume(
-      tool.call({ execution_id: executionId, instruction: 'Keep going.' }),
-    );
-
-    assert.strictEqual(
-      outcome.settled,
-      true,
-      'delegate_agent resume blocked the parent tool call',
-    );
-    if (outcome.settled) {
-      assert.strictEqual(outcome.value.status, 'executed');
-    }
-    assert.strictEqual(mocks.wakeQueuedFollowUpStream.mock.calls.length, 0);
-  });
-
-  it('returns once the follow-up is queued, without waiting for the host resume port when no loop is listening', async () => {
-    mocks.isChildRunLoopActive.mockReturnValue(false);
-    let resolveWake: ((value: FollowUpWakeResult) => void) | undefined;
-    mocks.wakeQueuedFollowUpStream.mockReturnValue(
-      new Promise<FollowUpWakeResult>((resolve) => {
-        resolveWake = resolve;
-      }),
-    );
-
-    const tool = new DelegateAgentTool();
-    const outcome = await raceAgainstBlockingResume(
-      tool.call({ execution_id: executionId, instruction: 'Keep going.' }),
-    );
-
-    assert.strictEqual(
-      outcome.settled,
-      true,
-      'delegate_agent resume blocked the parent tool call on the host resume port',
-    );
-    if (outcome.settled) {
-      assert.strictEqual(outcome.value.status, 'executed');
-    }
-    assert.strictEqual(mocks.wakeQueuedFollowUpStream.mock.calls.length, 1);
-
-    resolveWake?.({ kind: 'resumed' });
-  });
-
-  it('delivers a terminal error to the parent when the wake resolves as failed (no thrown exception)', async () => {
-    // Regression: the removed NativeSubagentStrategy delivered a terminal
-    // error to the orchestrator on this exact wake failure. Without it, this
-    // tool call returns a normal "queued" success and the parent never
-    // hears back — a silent hang, not a visible error.
-    mocks.isChildRunLoopActive.mockReturnValue(false);
-    mocks.wakeQueuedFollowUpStream.mockResolvedValue({
-      kind: 'queued_resume_failed',
+  it('uses the merged submission result without a caller-local owner check', async () => {
+    mocks.submitFollowUp.mockResolvedValue({
+      status: 'queued',
+      reason: 'waiting',
+      continuation: 'live',
     });
 
-    const tool = new DelegateAgentTool();
-    const result = await tool.call({
+    const result = await new DelegateAgentTool().call({
       execution_id: executionId,
       instruction: 'Keep going.',
     });
-    assert.strictEqual(result.status, 'executed');
 
-    await vi.waitFor(() => {
-      assert.strictEqual(mocks.deliverChildRunFollowUp.mock.calls.length, 1);
-    });
-    const [deliveryArgs] = mocks.deliverChildRunFollowUp.mock.calls;
-    assert.strictEqual(deliveryArgs[0].targetStreamId, parentStreamId);
-    assert.match(deliveryArgs[0].followUp.text, /<subagent-error/);
-    assert.strictEqual(deliveryArgs[0].followUp.origin, 'subagent_result');
-    assert.strictEqual(deliveryArgs[0].wake, true);
+    assert.strictEqual(result.status, 'executed');
+    assert.strictEqual(mocks.submitFollowUp.mock.calls.length, 1);
+    assert.strictEqual(mocks.deliverChildRunFollowUp.mock.calls.length, 0);
   });
 
-  it('delivers a terminal error to the parent when the wake itself throws', async () => {
-    mocks.isChildRunLoopActive.mockReturnValue(false);
-    mocks.wakeQueuedFollowUpStream.mockRejectedValue(
-      new Error('resume storage unreadable'),
-    );
+  it('reports a merged recovery failure to the parent', async () => {
+    mocks.submitFollowUp.mockResolvedValue({
+      status: 'queued',
+      reason: 'waiting',
+      continuation: 'resume_failed',
+    });
 
-    const tool = new DelegateAgentTool();
-    const result = await tool.call({
+    await new DelegateAgentTool().call({
       execution_id: executionId,
       instruction: 'Keep going.',
     });
-    assert.strictEqual(result.status, 'executed');
 
-    await vi.waitFor(() => {
-      assert.strictEqual(mocks.deliverChildRunFollowUp.mock.calls.length, 1);
-    });
-    const [deliveryArgs] = mocks.deliverChildRunFollowUp.mock.calls;
-    assert.strictEqual(deliveryArgs[0].targetStreamId, parentStreamId);
-    assert.match(deliveryArgs[0].followUp.text, /resume storage unreadable/);
+    await vi.waitFor(() =>
+      assert.strictEqual(mocks.deliverChildRunFollowUp.mock.calls.length, 1),
+    );
   });
 });

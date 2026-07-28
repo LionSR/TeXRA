@@ -422,16 +422,16 @@ describe('task-group-list status icon (#7993 step 3)', () => {
 
     expect(iconFor('completed-phase')).toBe('check');
     expect(iconFor('cancelled-phase')).toBe('circle-stop');
-    expect(iconFor('failed-phase')).toBe('error');
+    expect(iconFor('failed-phase')).toBe('circle-exclamation');
   });
 });
 
 // #8722 Phase 2b: a focused delegate_workflow_script run projects its phases
 // as `kind: 'phase'` groups with per-agent Running/Finished/Failed lines
-// beneath. The phase header and task cards are both derived from typed state;
+// beneath. The phase header and call cards are both derived from typed state;
 // the renderer does not parse status prefixes from prose.
 describe('task-group-list workflow-script phase rendering (#8722)', () => {
-  it('renders a phase group with its (i/n) header and task cards beneath', async () => {
+  it('renders a phase group with its (i/n) header and call cards beneath', async () => {
     const run: TaskGroup = {
       id: 'run',
       name: 'Run: workflow',
@@ -549,7 +549,7 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
     expect(content?.querySelector('.workflow-task--failed')).not.toBeNull();
     const notReached = content?.querySelector('[data-log-id="agent-c"]');
     expect(notReached?.textContent).toContain(
-      'The workflow ended before this task was reached.',
+      'The workflow ended before this call was reached.',
     );
     expect(
       notReached?.querySelector('.workflow-task-detail--note'),
@@ -588,7 +588,7 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
     expect(header?.querySelector('.group-title')?.textContent?.trim()).toBe(
       'Solo phase',
     );
-    // A phase holding no task cards has nothing to fold.
+    // A phase holding no call cards has nothing to fold.
     expect(header?.querySelector('.group-progress')).toBeNull();
   });
 

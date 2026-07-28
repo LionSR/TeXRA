@@ -89,6 +89,20 @@ type UpdateFilesMessage = MessageFor<
 
 const CHANNEL = 'FileManager';
 
+type SetFilesCommand =
+  | typeof MAIN_VIEW_COMMANDS.SET_INPUT_FILES
+  | typeof MAIN_VIEW_COMMANDS.SET_CONTEXT_FILES
+  | typeof MAIN_VIEW_COMMANDS.SET_MEDIA_FILES
+  | typeof MAIN_VIEW_COMMANDS.SET_OUTPUT_FILES;
+
+const UPDATE_TO_SET_COMMAND = {
+  [MAIN_VIEW_COMMANDS.UPDATE_INPUT_FILES]: MAIN_VIEW_COMMANDS.SET_INPUT_FILES,
+  [MAIN_VIEW_COMMANDS.UPDATE_CONTEXT_FILES]:
+    MAIN_VIEW_COMMANDS.SET_CONTEXT_FILES,
+  [MAIN_VIEW_COMMANDS.UPDATE_MEDIA_FILES]: MAIN_VIEW_COMMANDS.SET_MEDIA_FILES,
+  [MAIN_VIEW_COMMANDS.UPDATE_OUTPUT_FILES]: MAIN_VIEW_COMMANDS.SET_OUTPUT_FILES,
+} as const satisfies Record<UpdateFilesMessage['command'], SetFilesCommand>;
+
 type FileUpdateOptions = {
   notifyWhenEmpty?: boolean;
   /** Only meaningful for `fileType: 'Base'` — see `SET_BASE_FILE`. */
@@ -331,7 +345,7 @@ export class FileManager extends BaseWebviewManager {
       if (droppedFiles.length === 0) continue;
       this.postMessage({
         command: MAIN_VIEW_COMMANDS.SET_OPENED_FILES,
-        files: droppedFiles,
+        files: [...droppedFiles],
         fileType,
         shouldFilter: true,
       });
@@ -341,12 +355,12 @@ export class FileManager extends BaseWebviewManager {
   }
 
   handleUpdateFiles(message: UpdateFilesMessage): void {
-    const fileType = message.command.replace('update', '');
+    const setCommand = UPDATE_TO_SET_COMMAND[message.command];
     logger.debug(
       CHANNEL,
-      `Updating ${fileType} with ${message.files?.length ?? 0} files`,
+      `Updating ${message.fileType} with ${message.files?.length ?? 0} files`,
     );
-    this.postMessage({ command: `set${fileType}`, files: message.files ?? [] });
+    this.postMessage({ command: setCommand, files: message.files ?? [] });
   }
 
   async selectOutputFiles(currentInputFile?: string): Promise<string[] | null> {
@@ -379,7 +393,7 @@ export class FileManager extends BaseWebviewManager {
   }
 
   private postFileUpdate(
-    fileType: string,
+    fileType: 'Edited' | 'Base',
     files: string[],
     options: FileUpdateOptions = {},
   ): void {
@@ -389,11 +403,15 @@ export class FileManager extends BaseWebviewManager {
         `No ${fileType.toLowerCase()} files were found during refresh.`,
       );
     }
-    this.postMessage({
-      command: `set${fileType}File`,
-      files,
-      ...(options.preserveBaseFile ? { preserveBaseFile: true } : {}),
-    });
+    if (fileType === 'Base') {
+      this.postMessage({
+        command: MAIN_VIEW_COMMANDS.SET_BASE_FILE,
+        files,
+        ...(options.preserveBaseFile ? { preserveBaseFile: true } : {}),
+      });
+      return;
+    }
+    this.postMessage({ command: MAIN_VIEW_COMMANDS.SET_EDITED_FILE, files });
   }
 
   /** Post show/hide getting started banner based on condition and setting */

@@ -35,7 +35,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { applyCliGitAuthorConfig } from './gitAuthor';
-import { isCliResumeInFlight, tryResumeCliStream } from './agentResume';
+import { tryResumeCliStream } from './agentResume';
 import { getCliSecrets } from './cliSecrets';
 import { isTexraCliEntrypointPath, readCliEntrypointPath } from './cliContext';
 import { flushNdjsonStdout, writeTextStderr } from './logSinks';
@@ -286,7 +286,6 @@ export async function initCliPlatform(
         lifecycle,
         agentResume: {
           tryResumeStream: tryResumeCliStream,
-          isResumeInFlight: isCliResumeInFlight,
         },
         agentDirectories,
         getWorkspacePath: () => cliWorkspaceCwd,

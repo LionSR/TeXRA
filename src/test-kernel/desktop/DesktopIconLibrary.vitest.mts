@@ -6,8 +6,8 @@ import { getIconLibrary } from '@awesome.me/webawesome/dist/components/icon/libr
 import { beforeAll, describe, expect, it } from 'vitest';
 
 // Local imports - shared icon contract
+import { LEGACY_ICON_ALIASES } from '@shared/wa/webAwesomeIcons';
 import {
-  CODICON_ALIASES,
   TEXRA_ICON_LIBRARY,
   TEXRA_ICON_NAMES,
 } from '@shared/wa/webAwesomeIcons';
@@ -117,7 +117,7 @@ describe('desktop icon library', () => {
       await resolve(texraResolver, 'unexpected-runtime-icon'),
     );
 
-    for (const alias of Object.keys(CODICON_ALIASES)) {
+    for (const alias of Object.keys(LEGACY_ICON_ALIASES)) {
       const svg = decodeSvg(await resolve(texraResolver, alias));
       if (svg === missingSvg && alias !== 'question') unresolved.push(alias);
     }

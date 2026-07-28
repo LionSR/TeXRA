@@ -52,12 +52,12 @@ export class FollowUpQueue {
   private deferred: DeferredPromise<FollowUpQueueItem | null> | null = null;
 
   enqueue(value: FollowUpQueueInput): void {
-    this.enqueueItem({
-      text: value.text,
-      displayText: value.displayText,
-      origin: value.origin ?? 'user',
-      mediaFiles: value.mediaFiles,
-    });
+    this.enqueueItem(this.toItem(value));
+  }
+
+  /** Restore a drained visible batch ahead of input that raced its consumer. */
+  restore(values: readonly FollowUpQueueInput[]): void {
+    this.queued.unshift(...values.map((value) => this.toItem(value)));
   }
 
   enqueueSynthetic(value: string): void {
@@ -72,6 +72,15 @@ export class FollowUpQueue {
     } else {
       this.queued.push(value);
     }
+  }
+
+  private toItem(value: FollowUpQueueInput): FollowUpQueueItem {
+    return {
+      text: value.text,
+      displayText: value.displayText,
+      origin: value.origin ?? 'user',
+      mediaFiles: value.mediaFiles,
+    };
   }
 
   isEmpty(): boolean {
@@ -99,6 +108,9 @@ export class FollowUpQueue {
     }
     if (checkInterruption()) {
       return Promise.resolve(null);
+    }
+    if (this.deferred) {
+      throw new Error('Follow-up queue already has a waiting consumer.');
     }
     const d = pDefer<FollowUpQueueItem | null>();
     this.deferred = d;

@@ -307,6 +307,12 @@ export interface AgentDirectoriesPort {
  * (e.g. the inquiry continuation injector) can trigger auto-resume without
  * importing the host-level command pipeline.
  */
+export interface RecoveryContinuation {
+  readonly streamId: StreamTabId;
+  readonly generation: number;
+  readonly kind: 'recovery';
+}
+
 export interface AgentResumePort {
   /**
    * Attempt to resume a WAITING / children-running stream from its
@@ -317,12 +323,8 @@ export interface AgentResumePort {
    * already active/resuming, etc.) — callers should fall back to leaving
    * the message queued for the next manual resume.
    */
-  tryResumeStream(streamId: StreamTabId): Promise<boolean>;
-
-  /**
-   * Whether the host has already accepted a resume for this stream and is
-   * still preparing it. A queued-delivery wake uses this to avoid releasing a
-   * force-reopened queue while a host-initiated resume is about to drain it.
-   */
-  isResumeInFlight?(streamId: StreamTabId): boolean;
+  tryResumeStream(
+    streamId: StreamTabId,
+    recovery?: RecoveryContinuation,
+  ): Promise<boolean>;
 }

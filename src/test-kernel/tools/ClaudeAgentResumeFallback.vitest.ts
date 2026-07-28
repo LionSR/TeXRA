@@ -27,7 +27,7 @@ const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   buildClaudeAgentEnv: vi.fn(),
   findClaudeBinaryPath: vi.fn(),
-  enqueueFollowUp: vi.fn(),
+  submitFollowUp: vi.fn(async () => ({ status: 'sent' as const })),
 }));
 
 vi.mock('@tools/approval/bashApproval', () => ({
@@ -37,6 +37,10 @@ vi.mock('@tools/approval/bashApproval', () => ({
 
 vi.mock('@agent/followUp/ToolFileInteractionContext', () => ({
   getCurrentToolContexts: mocks.getCurrentToolContexts,
+}));
+
+vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
+  submitFollowUp: mocks.submitFollowUp,
 }));
 
 vi.mock('@agent/runtime/RunContext', () => ({
@@ -135,7 +139,7 @@ describe('claude_agent tool — resume fallback for a torn-down registry', () =>
       createFakeAgentCliChildStream(childStreamId),
     );
     mocks.currentSession.mockReturnValue({
-      followUps: { acquire: () => ({ enqueue: mocks.enqueueFollowUp }) },
+      followUps: { acquire: () => ({ enqueue: vi.fn() }) },
     });
   }
 
@@ -285,10 +289,12 @@ describe('claude_agent tool — resume fallback for a torn-down registry', () =>
     expect(firstResult.status).toBe('executed');
     expect(secondResult.summary).toMatch(/Follow-up queued/);
     expect(mocks.startChildRunLoop).toHaveBeenCalledTimes(1);
-    expect(mocks.enqueueFollowUp).toHaveBeenCalledOnce();
-    expect(mocks.enqueueFollowUp).toHaveBeenCalledWith({
-      text: 'also update the tests',
-    });
+    expect(mocks.submitFollowUp).toHaveBeenCalledOnce();
+    expect(mocks.submitFollowUp).toHaveBeenCalledWith(
+      childStreamId,
+      'also update the tests',
+      expect.objectContaining({ session: expect.anything() }),
+    );
 
     strategy?.releaseSessionOwnership?.();
     expect(ClaudeAgentSessions.lookup('stale-session')).toBeUndefined();
