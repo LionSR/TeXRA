@@ -44,7 +44,21 @@ afterEach(() => {
   clearApprovals();
 });
 
-describe('createTuiHostInteractions().cancel', () => {
+describe('createTuiHostInteractions', () => {
+  it('forwards presentation events to the attached CLI presenter', () => {
+    const presentationHost = host();
+    const interactions = createTuiHostInteractions(presentationHost, context());
+    try {
+      interactions.emit?.('requestShowError', { message: 'Run failed.' });
+
+      expect(presentationHost.emit).toHaveBeenCalledWith('requestShowError', {
+        message: 'Run failed.',
+      });
+    } finally {
+      interactions.dispose?.();
+    }
+  });
+
   it('cancels a queued plan approval for the target stream, leaving other streams untouched', async () => {
     const interactions = createTuiHostInteractions(host(), context());
     try {

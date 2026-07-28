@@ -134,6 +134,7 @@ export function createTuiHostInteractions(
   });
 
   return {
+    emit: (event, payload) => host.emit(event, payload),
     async requestToolEditApproval(request) {
       let decision: ApprovalDecision | undefined = immediateDecision(context);
       if (!decision) {
