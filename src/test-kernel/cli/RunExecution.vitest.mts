@@ -312,6 +312,7 @@ describe('executeCliRequest', () => {
       context,
       expect.objectContaining({
         beforePrompt: expect.any(Function),
+        emit: expect.any(Function),
         setApprovalBypassState: expect.any(Function),
       }),
     );
@@ -319,6 +320,7 @@ describe('executeCliRequest', () => {
     const hooks = mocks.createHeadlessCliHostInteractions.mock
       .calls[0]?.[1] as {
       beforePrompt?: () => void;
+      emit?: (event: 'requestShowError', payload: { message: string }) => void;
       setApprovalBypassState?: (update: {
         streamId: string;
         kind: 'bash';
@@ -327,6 +329,10 @@ describe('executeCliRequest', () => {
     };
     hooks.beforePrompt?.();
     expect(mocks.prepareInteractivePrompt).toHaveBeenCalledTimes(1);
+    hooks.emit?.('requestShowError', { message: 'Run failed.' });
+    expect(mocks.emit).toHaveBeenCalledWith('requestShowError', {
+      message: 'Run failed.',
+    });
     const update = {
       streamId: 'stream:bypass',
       kind: 'bash',

@@ -69,6 +69,7 @@ export {
 } from './approval/approvalSummaries';
 
 interface HeadlessCliHostInteractionHooks extends CliApprovalPromptHooks {
+  readonly emit?: HostInteractions['emit'];
   readonly setApprovalBypassState?: (
     update: HostApprovalBypassStateUpdate,
   ) => void;
@@ -207,6 +208,7 @@ export function createHeadlessCliHostInteractions(
   hooks: HeadlessCliHostInteractionHooks = {},
 ): HostInteractions {
   return {
+    emit: hooks.emit,
     setApprovalBypassState: hooks.setApprovalBypassState,
     requestToolEditApproval(request) {
       return decideToolEdit(request, context, hooks);
