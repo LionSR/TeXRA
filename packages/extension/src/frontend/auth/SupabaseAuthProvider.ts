@@ -513,6 +513,9 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   async clearStoredSession(): Promise<boolean> {
     const session = await this.sessionCoordinator.loadSession();
     if (!session) return false;
+    if ((await this.sessionCoordinator.getStoredSessionState()) !== 'invalid') {
+      return false;
+    }
     return this.clearLocalSessionIfCurrent(session);
   }
 

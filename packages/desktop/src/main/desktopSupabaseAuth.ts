@@ -500,9 +500,13 @@ async function processProtocolCallback(
 
 function createSessionLog(log: DesktopAuthLog): SupabaseSessionLog {
   return {
-    debug: (source, message) => log.debug(`[${source}] ${message}`),
-    info: (source, message) => log.info(`[${source}] ${message}`),
-    warn: (source, message) => log.warn(`[${source}] ${message}`),
-    error: (source, message) => log.error(`[${source}] ${message}`),
+    debug: (source, message, options) =>
+      log.debug(`[${source}] ${message}`, options?.data),
+    info: (source, message, options) =>
+      log.info(`[${source}] ${message}`, options?.data),
+    warn: (source, message, options) =>
+      log.warn(`[${source}] ${message}`, options?.data),
+    error: (source, message, options) =>
+      log.error(`[${source}] ${message}`, options?.data),
   };
 }
