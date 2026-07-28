@@ -212,6 +212,7 @@ export function createRecordingHost(): {
     },
   };
   const interactions: HostInteractions = {
+    emit: (event, payload) => events.push({ event, payload }),
     setApprovalBypassState: (update) =>
       events.push({ event: 'setApprovalBypassState', payload: update }),
     requestBashApproval: (request) => {

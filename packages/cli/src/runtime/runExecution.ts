@@ -282,6 +282,16 @@ export async function executeCliRequest(
   let runResult:
     | { readonly ok: true; readonly result: ExecuteAgentResult }
     | { readonly ok: false } = { ok: false };
+  let presentationAttached = true;
+  const detachPresentation = async (): Promise<void> => {
+    if (!presentationAttached) return;
+    presentationAttached = false;
+    detachResultToast();
+    detachRunProgressRenderer();
+    detachSessionProgressProjection();
+    detachHostInteractions();
+    await presentationHost.close();
+  };
   try {
     const result = await (options.wrap ? options.wrap(invoke) : invoke());
     runResult = { ok: true, result };
@@ -295,15 +305,15 @@ export async function executeCliRequest(
     }
   } finally {
     disposeShutdownStatus?.dispose();
-    detachResultToast();
-    detachRunProgressRenderer();
-    detachSessionProgressProjection();
-    detachHostInteractions();
+    let finalizationCompleted = false;
     try {
       await finalizeShutdownStatus();
       await session.flushArtifacts();
+      finalizationCompleted = true;
     } finally {
-      await presentationHost.close();
+      if (!runResult.ok || !finalizationCompleted) {
+        await detachPresentation();
+      }
     }
   }
 
@@ -318,9 +328,13 @@ export async function executeCliRequest(
     };
   }
 
-  const outcome = await readCliRunOutcome(
-    runResult.result,
-    reportFinalizationFailure,
-  );
-  return { ok: true, result: { ...runResult.result, outcome } };
+  try {
+    const outcome = await readCliRunOutcome(
+      runResult.result,
+      reportFinalizationFailure,
+    );
+    return { ok: true, result: { ...runResult.result, outcome } };
+  } finally {
+    await detachPresentation();
+  }
 }

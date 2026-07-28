@@ -137,6 +137,7 @@ function stubRunExecutionDeps(): void {
   mocks.close.mockResolvedValue(undefined);
   mocks.detachRunProgressRenderer.mockReturnValue(undefined);
   mocks.createHeadlessCliHostInteractions.mockReturnValue({
+    emit: mocks.emit,
     pending: vi.fn(() => []),
     resolve: vi.fn(() => false),
     cancel: vi.fn(),
