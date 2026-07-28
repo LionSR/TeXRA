@@ -688,7 +688,8 @@ if (HARNESS_AUTHENTICATED === '1' || HARNESS_AUTHENTICATED === '0') {
       accessToken
         ? { accessToken, refreshToken: 'harness-refresh-token' }
         : null,
-    hasStoredSession: async () => accessToken !== null,
+    getStoredSessionState: async () =>
+      accessToken === null ? 'none' : 'authenticated',
     getStoredAccountLabel: async () => null,
     getLastRefreshFailure: () => null,
   });
