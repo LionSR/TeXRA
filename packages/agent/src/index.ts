@@ -83,8 +83,7 @@ class AgentRunStream implements AgentRun {
   }> = [];
   private liveHandle: RuntimeAgentRunHandle | undefined;
   private detachEvents: (() => void) | undefined;
-  private eventSource:
-    { readonly session: SessionHandle; readonly streamId: string } | undefined;
+  private streamId: string | undefined;
   private ended = false;
   private iteratorClosed = false;
   private iteratorStarted = false;
@@ -106,27 +105,23 @@ class AgentRunStream implements AgentRun {
     if (this.interruptPending) handle.interrupt();
   }
 
-  attachEvents(session: SessionHandle, streamId: string): void {
-    this.eventSource = { session, streamId };
-    this.subscribeToEvents();
-  }
-
-  private subscribeToEvents(): void {
-    if (
-      !this.iteratorStarted ||
-      this.iteratorClosed ||
-      this.detachEvents ||
-      !this.eventSource
-    ) {
-      return;
-    }
-    const { session, streamId } = this.eventSource;
+  attachEvents(session: SessionHandle): void {
     this.detachEvents = session.events.subscribe(
       (event) => {
-        if (event.scope === 'run') this.push(event.event);
+        if (
+          event.scope === 'run' &&
+          event.streamId === this.streamId &&
+          this.iteratorStarted
+        ) {
+          this.push(event.event);
+        }
       },
-      { scope: 'run', streamId },
+      { scope: 'run' },
     );
+  }
+
+  selectStream(streamId: string): void {
+    this.streamId = streamId;
   }
 
   interrupt(): void {
@@ -142,7 +137,6 @@ class AgentRunStream implements AgentRun {
       next: () => {
         if (!this.iteratorStarted) {
           this.iteratorStarted = true;
-          this.subscribeToEvents();
         }
         if (this.iteratorClosed) {
           return Promise.resolve({ done: true, value: undefined });
@@ -179,7 +173,6 @@ class AgentRunStream implements AgentRun {
     this.events.splice(0);
     this.detachEvents?.();
     this.detachEvents = undefined;
-    this.eventSource = undefined;
     for (const reader of this.readers.splice(0)) {
       reader.resolve({ done: true, value: undefined });
     }
@@ -191,7 +184,6 @@ class AgentRunStream implements AgentRun {
     this.failure = failure?.error;
     this.detachEvents?.();
     this.detachEvents = undefined;
-    this.eventSource = undefined;
     for (const reader of this.readers.splice(0)) {
       if (this.failed) reader.reject(this.failure);
       else reader.resolve({ done: true, value: undefined });
@@ -233,6 +225,7 @@ export function runAgent(input: RunAgentInput): AgentRun {
     const session = new RuntimeSessionHandle({
       transcripts: StreamLogStore.ephemeral('npm package consumer'),
     });
+    stream.attachEvents(session);
     const interactions: RuntimeHostInteractions = {
       cancel: (selector) => input.interactions.cancel(selector),
       requestRetry: async () => ({
@@ -261,8 +254,7 @@ export function runAgent(input: RunAgentInput): AgentRun {
         {
           approvalPromptsUnavailable: true,
           onRun: (handle) => stream.attachHandle(handle),
-          onStreamResolved: (streamId) =>
-            stream.attachEvents(session, streamId),
+          onStreamResolved: (streamId) => stream.selectStream(streamId),
           session,
           stopAfterCycle: true,
           tools: input.tools,

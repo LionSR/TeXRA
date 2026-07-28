@@ -10,7 +10,11 @@ const mocks = vi.hoisted(() => ({
   detachInteractions: vi.fn(),
   disposeSession: vi.fn(),
   eventListener: undefined as
-    | ((event: { readonly scope: string; readonly event: unknown }) => void)
+    | ((event: {
+        readonly scope: string;
+        readonly streamId: string;
+        readonly event: unknown;
+      }) => void)
     | undefined,
   initNodeAgentRuntime: vi.fn(),
   initPlatform: vi.fn(),
@@ -20,6 +24,7 @@ const mocks = vi.hoisted(() => ({
     (
       listener: (event: {
         readonly scope: string;
+        readonly streamId: string;
         readonly event: unknown;
       }) => void,
     ) => {
@@ -113,10 +118,43 @@ describe('agent package run lifecycle', () => {
     expect(mocks.initNodeAgentRuntime).toHaveBeenCalledWith(PLATFORM.lifecycle);
   });
 
-  it('does not subscribe when the caller only awaits the result', async () => {
+  it('attaches a run-event subscriber before starting the runtime', async () => {
     await runAgent(INPUT).result;
 
-    expect(mocks.subscribe).not.toHaveBeenCalled();
+    const subscribeOrder = mocks.subscribe.mock.invocationCallOrder.at(0);
+    const runOrder = mocks.runValidatedAgent.mock.invocationCallOrder.at(0);
+    expect(subscribeOrder).toBeDefined();
+    expect(runOrder).toBeDefined();
+    expect(subscribeOrder ?? Infinity).toBeLessThan(runOrder ?? -Infinity);
+  });
+
+  it('discards trace events when the caller only awaits the result', async () => {
+    mocks.runValidatedAgent.mockImplementationOnce(
+      async (
+        _input: unknown,
+        options: {
+          readonly onStreamResolved?: (streamId: string) => void;
+        },
+      ) => {
+        options.onStreamResolved?.('stream:package');
+        mocks.eventListener?.({
+          scope: 'run',
+          streamId: 'stream:package',
+          event: EVENT,
+        });
+        return RESULT;
+      },
+    );
+
+    const run = runAgent(INPUT);
+    await run.result;
+
+    expect(mocks.subscribe).toHaveBeenCalledOnce();
+    expect(mocks.detachEvents).toHaveBeenCalledOnce();
+    await expect(run[Symbol.asyncIterator]().next()).resolves.toEqual({
+      done: true,
+      value: undefined,
+    });
   });
 
   it('rejects caller tools that require unavailable approval', async () => {
@@ -188,7 +226,11 @@ describe('agent package run lifecycle', () => {
     const iterator = run[Symbol.asyncIterator]();
     const nextEvent = iterator.next();
     await vi.waitFor(() => expect(mocks.subscribe).toHaveBeenCalledOnce());
-    mocks.eventListener?.({ scope: 'run', event: EVENT });
+    mocks.eventListener?.({
+      scope: 'run',
+      streamId: 'stream:package',
+      event: EVENT,
+    });
 
     await expect(nextEvent).resolves.toEqual({ done: false, value: EVENT });
     await iterator.return?.();
