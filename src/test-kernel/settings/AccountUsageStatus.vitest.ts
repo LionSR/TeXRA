@@ -31,7 +31,7 @@ async function mountAccountTab(): Promise<AccountTabElement> {
 describe('account usage status', () => {
   useLitComponentTestDom(loadAccountTab);
 
-  it('limits spend-check failures to usage data', async () => {
+  it('explains that spend-check failures disable included access', async () => {
     const element = await mountAccountTab();
     element.spendingStatusError = {
       spendCheckFailed: true,
@@ -41,9 +41,9 @@ describe('account usage status', () => {
     await element.updateComplete;
 
     const text = element.shadowRoot?.textContent ?? '';
-    expect(text).toContain('Usage data is temporarily unavailable');
-    expect(text).toContain('Included model access may still work');
-    expect(text).not.toContain('switch to your own provider API keys');
+    expect(text).toContain('Usage check failed on the server');
+    expect(text).toContain('Included access is temporarily');
+    expect(text).toContain('switch to your own provider API keys');
     expect(text).not.toContain('Usage data is not available for this account.');
   });
 

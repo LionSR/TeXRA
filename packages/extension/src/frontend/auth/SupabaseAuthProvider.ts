@@ -511,6 +511,14 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     return true;
   }
 
+  /** Revoke and remove the currently stored session without resolving it. */
+  async removeStoredSession(): Promise<boolean> {
+    const session = await this.sessionCoordinator.loadSession();
+    if (!session) return false;
+    await this.removeSession(session.id);
+    return true;
+  }
+
   private async clearLocalSession(sessionId: string): Promise<void> {
     await this.sessionCoordinator.clearSession();
     getServerSideKeyService().clearAllCaches({ resetQuotaFlip: true });

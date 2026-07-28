@@ -4,6 +4,8 @@ export interface SessionTokens {
 }
 
 export type SessionRefreshFailure = 'invalid' | 'transient';
+export type StoredSessionState =
+  'none' | 'authenticated' | SessionRefreshFailure;
 
 /**
  * Classify an authentication HTTP failure conservatively. Only explicit bad
@@ -21,8 +23,8 @@ export interface AuthTokenProvider {
   whenReady(): Promise<void>;
   ensureFreshToken(forceRefresh?: boolean): Promise<string | null>;
   getSessionTokens(): Promise<SessionTokens | null>;
-  /** Whether a previously-stored session exists in storage (no refresh). */
-  hasStoredSession(): Promise<boolean>;
+  /** Classify the stored session while guarding against replacement races. */
+  getStoredSessionState(): Promise<StoredSessionState>;
   /**
    * The account label (email) from the stored session, without attempting a
    * token refresh. Returns null when no session is stored or the stored data
