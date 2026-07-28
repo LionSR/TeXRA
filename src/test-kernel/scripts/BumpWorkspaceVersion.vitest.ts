@@ -11,6 +11,7 @@ const scriptPath = path.join(repoRoot, 'scripts/bump-workspace-version.mjs');
 const workflowPath = path.join(repoRoot, '.github/workflows/version-bump.yml');
 const manifestPaths = [
   'package.json',
+  'packages/agent/package.json',
   'packages/cli/package.json',
   'packages/desktop/package.json',
   'packages/extension/package.json',

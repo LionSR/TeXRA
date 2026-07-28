@@ -19,6 +19,15 @@ await build({
   platform: 'neutral',
   plugins: [
     {
+      name: 'external-node-jsonrpc',
+      setup(buildContext) {
+        buildContext.onResolve(
+          { filter: /^vscode-jsonrpc\/node$/ },
+          ({ path }) => ({ path, external: true }),
+        );
+      },
+    },
+    {
       name: 'quickjs-wasm',
       setup(buildContext) {
         buildContext.onResolve(

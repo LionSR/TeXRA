@@ -2,19 +2,21 @@
 import type { AgentEvent } from '@agent/trace';
 import type { AgentRunHandle as RuntimeAgentRunHandle } from '@agent/runtime/ExecutionHandle';
 import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
+import type { HostInteractions as RuntimeHostInteractions } from '@agent/runtime/HostInteractions';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 
 // Local imports - runtime
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { loadAgents, resolveAgent } from '@agent/index/agentRegistry';
-import {
-  defaultSession,
-  initializeDefaultSession,
-  tryDefaultSession,
-} from '@agent/runtime/SessionHandle';
+import { SessionHandle as RuntimeSessionHandle } from '@agent/runtime/SessionHandle';
 import { runAgent as runValidatedAgent } from '@agent/runtime/runAgent';
 import type { Platform } from '@platform/platform';
 import { StreamLogStore } from '@transcript/StreamLogStore';
+import {
+  PACKAGE_RUNTIME_INITIALIZER,
+  type PackageRuntimePlatform,
+} from './runtimeInitializer.js';
 
 export type { AgentEvent } from '@agent/trace';
 export type { ITool, IToolRegistry } from '@agent/core/tools/ToolTypes';
@@ -73,7 +75,7 @@ class AgentRunStream implements AgentRun {
     (result: IteratorResult<AgentEvent>) => void
   > = [];
   private liveHandle: RuntimeAgentRunHandle | undefined;
-  private detachTrace: (() => void) | undefined;
+  private detachEvents: (() => void) | undefined;
   private ended = false;
   private interruptPending = false;
   readonly result: Promise<AgentFlowResult>;
@@ -82,10 +84,18 @@ class AgentRunStream implements AgentRun {
     this.result = start(this).finally(() => this.end());
   }
 
-  attach(handle: RuntimeAgentRunHandle): void {
+  attachHandle(handle: RuntimeAgentRunHandle): void {
     this.liveHandle = handle;
-    this.detachTrace = handle.trace?.subscribe((event) => this.push(event));
     if (this.interruptPending) handle.interrupt();
+  }
+
+  attachEvents(session: SessionHandle, streamId: string): void {
+    this.detachEvents = session.events.subscribe(
+      (event) => {
+        if (event.scope === 'run') this.push(event.event);
+      },
+      { scope: 'run', streamId },
+    );
   }
 
   interrupt(): void {
@@ -120,8 +130,8 @@ class AgentRunStream implements AgentRun {
 
   private end(): void {
     this.ended = true;
-    this.detachTrace?.();
-    this.detachTrace = undefined;
+    this.detachEvents?.();
+    this.detachEvents = undefined;
     for (const reader of this.readers.splice(0)) {
       reader({ done: true, value: undefined });
     }
@@ -144,14 +154,20 @@ export function runAgent(input: RunAgentInput): AgentRun {
       );
     }
     if (!activePlatform) initPlatform(input.platform);
+    const packagePlatform = input.platform as PackageRuntimePlatform;
+    packagePlatform[PACKAGE_RUNTIME_INITIALIZER]?.();
 
-    if (!tryDefaultSession()) {
-      initializeDefaultSession({
-        transcripts: StreamLogStore.ephemeral('npm package consumer'),
-      });
-    }
-    const session = defaultSession();
-    const detachInteractions = session.useHostInteractions(input.interactions);
+    const session = new RuntimeSessionHandle({
+      transcripts: StreamLogStore.ephemeral('npm package consumer'),
+    });
+    const interactions: RuntimeHostInteractions = {
+      cancel: (selector) => input.interactions.cancel(selector),
+      requestRetry: async () => ({
+        action: 'deny',
+        reason: 'Interactive retries are unavailable in the agent package.',
+      }),
+    };
+    const detachInteractions = session.useHostInteractions(interactions);
     try {
       await loadAgents({ includeRemote: false });
       const resolved = resolveAgent(input.agent);
@@ -171,7 +187,9 @@ export function runAgent(input: RunAgentInput): AgentRun {
         { config },
         {
           approvalPromptsUnavailable: true,
-          onRun: (handle) => stream.attach(handle),
+          onRun: (handle) => stream.attachHandle(handle),
+          onStreamResolved: (streamId) =>
+            stream.attachEvents(session, streamId),
           session,
           stopAfterCycle: true,
           tools: input.tools,
@@ -179,6 +197,7 @@ export function runAgent(input: RunAgentInput): AgentRun {
       );
     } finally {
       detachInteractions();
+      session.dispose();
     }
   });
 }

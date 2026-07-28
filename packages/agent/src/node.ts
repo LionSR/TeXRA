@@ -22,7 +22,14 @@ import {
   DEFAULT_NODE_STORAGE_ROOT,
 } from '@platform/defaults/nodeStorage';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
+import { initNodeAgentRuntime } from '@platform/defaults/nodeHost';
 import { createWatcherRegistry } from '@shared/config/configKeys';
+import {
+  PACKAGE_RUNTIME_INITIALIZER,
+  type PackageRuntimePlatform,
+} from './runtimeInitializer.js';
+
+let runtimeInitialized = false;
 
 /** Filesystem locations used by the default Node platform. */
 export interface NodePlatformOptions {
@@ -103,7 +110,7 @@ export function nodePlatform(options: NodePlatformOptions): Platform {
   });
   const lifecycle = createLifecycleHost();
 
-  return {
+  const result: PackageRuntimePlatform = {
     config: new MemoryConfigProvider(),
     globalState,
     workspaceState,
@@ -123,5 +130,11 @@ export function nodePlatform(options: NodePlatformOptions): Platform {
     },
     languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
     toolAvailability: NO_TOOL_AVAILABILITY_HOST,
+    [PACKAGE_RUNTIME_INITIALIZER]: () => {
+      if (runtimeInitialized) return;
+      initNodeAgentRuntime(lifecycle);
+      runtimeInitialized = true;
+    },
   };
+  return result;
 }

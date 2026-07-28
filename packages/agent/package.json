@@ -31,7 +31,8 @@
     "build:bundle": "node scripts/bundle.mjs",
     "build:types": "tsc -p ../../tsconfig.build.json && node scripts/rewrite-declaration-aliases.mjs",
     "check:artifacts": "node scripts/validate-artifacts.mjs",
-    "clean": "node scripts/clean.mjs"
+    "clean": "node scripts/clean.mjs",
+    "prepack": "npm run build"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.220",
@@ -99,6 +100,7 @@
     "turndown": "^7.2.4",
     "turndown-plugin-gfm": "^1.0.2",
     "undici": "^7.29.0",
+    "vscode-jsonrpc": "^9.0.1",
     "which": "^5.0.0",
     "write-file-atomic": "^7.0.1",
     "yaml": "^2.9.0"
