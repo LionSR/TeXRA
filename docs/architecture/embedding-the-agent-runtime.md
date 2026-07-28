@@ -25,10 +25,11 @@ an intended future shape.
 
 The sections below separate minimum launch requirements from shipped-feature
 parity. A raw agent loop needs an initialized platform, usable credentials,
-agent directories, a session, a populated registry, an interactions
-attachment, and an explicit runtime host. `initNodeAgentRuntime` supplies the
-memory/plan injections and Lean integration used by the shipped Node hosts, but
-the raw loop can run without those optional features.
+agent directories, a session, and a populated registry. When response-bearing
+interactions are possible, the session also needs an interactions attachment;
+there is no separate presentation-host argument. `initNodeAgentRuntime`
+supplies the memory/plan injections and Lean integration used by the shipped
+Node hosts, but the raw loop can run without those optional features.
 
 ### Step 1 — `initPlatform(createNodePlatform(...))`
 
