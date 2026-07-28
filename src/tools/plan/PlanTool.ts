@@ -22,7 +22,7 @@ import { createChannelTrace } from '@agent/trace';
 import type { WorkPlanState } from '@agent/core/state/AgentWorkspaceState';
 import type { PlanApprovalResult } from '@agent/runtime/HostInteractions';
 import {
-  getRunContextRuntimeHost,
+  getRunContextInteractions,
   getRunContextStreamId,
 } from '@agent/runtime/RunContext';
 import { currentSession } from '@agent/runtime/SessionHandle';
@@ -204,11 +204,11 @@ Best practices:
     streamId: string,
     enabled: boolean,
   ): Promise<void> {
-    const runtimeHost = getRunContextRuntimeHost(
+    const interactions = getRunContextInteractions(
       getCurrentToolContexts()?.runContext,
     );
-    if (runtimeHost) {
-      await setGoalSessionBashAutoApproval(streamId, enabled, runtimeHost);
+    if (interactions) {
+      await setGoalSessionBashAutoApproval(streamId, enabled, interactions);
     }
   }
 

@@ -6,7 +6,6 @@ import {
   createRunContext,
   getRunContextAgentName,
   getRunContextExecutionId,
-  getRunContextRuntimeHost,
   getRunContextSession,
   getRunContextStreamId,
   getRunContextWorkingDirectory,
@@ -14,50 +13,13 @@ import {
   withRunContext,
 } from '@agent/runtime/RunContext';
 import { createRunScope } from '@agent/runtime/RunScope';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
-function createRuntimeHost(): AgentRuntimeHost {
-  return {
-    emit: vi.fn(),
-  };
-}
-
 describe('RunContext', () => {
-  it('freezes the context and per-run containers', () => {
-    const context = createRunContext({ runtimeHost: createRuntimeHost() });
-
-    expect(Object.isFrozen(context)).toBe(true);
-
-    expect(() => {
-      (context as { runtimeHost: unknown }).runtimeHost = {};
-    }).toThrow(TypeError);
-  });
-
-  it('requires an explicit runtime host', () => {
-    expect(() =>
-      createRunContext({
-        runtimeHost: undefined as unknown as AgentRuntimeHost,
-      }),
-    ).toThrow(/explicit runtimeHost/);
-  });
-
-  it('exposes the runtime host owned by the active context', () => {
-    const runtimeHost = createRuntimeHost();
-    const context = createRunContext({ runtimeHost });
-
-    const resolved = withRunContext(context, () =>
-      getRunContextRuntimeHost(useRunContext()),
-    );
-
-    expect(resolved).toBe(runtimeHost);
-  });
-
   it('reads the current model from a live provider', () => {
     let currentModel: string | undefined = 'deepseekT';
     const runScope = createRunScope({
-      runtimeHost: createRuntimeHost(),
       streamId: 'live-model-stream' as StreamTabId,
       executionId: 'live-model-execution' as ExecutionId,
       agentName: 'test-agent',
@@ -87,9 +49,7 @@ describe('RunContext', () => {
   });
 
   it('preserves the exact run scope on launch contexts', () => {
-    const runtimeHost = createRuntimeHost();
     const runScope = createRunScope({
-      runtimeHost,
       streamId: 'scoped-stream' as StreamTabId,
       executionId: 'scoped-execution' as ExecutionId,
       agentName: 'scoped-agent',
@@ -108,13 +68,11 @@ describe('RunContext', () => {
       throw new Error('expected launch context');
     }
     expect(context.runScope).toBe(runScope);
-    expect('runtimeHost' in context).toBe(false);
     expect('streamId' in context).toBe(false);
     expect('executionId' in context).toBe(false);
     expect('agentName' in context).toBe(false);
     expect('workingDirectory' in context).toBe(false);
     expect('session' in context).toBe(false);
-    expect(getRunContextRuntimeHost(context)).toBe(runScope.runtimeHost);
     expect(getRunContextStreamId(context)).toBe(runScope.streamId);
     expect(getRunContextExecutionId(context)).toBe(runScope.executionId);
     expect(getRunContextAgentName(context)).toBe(runScope.agentName);

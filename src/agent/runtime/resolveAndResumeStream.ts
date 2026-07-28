@@ -17,7 +17,7 @@ import {
   type ToolUseResumeData,
 } from './SessionResumeRetrieval';
 import type { StreamStatusMachine } from './StreamStatusService';
-import type { AgentRuntimeHost } from './AgentRuntimeHost';
+import type { SessionHostInteractions } from './HostInteractions';
 import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
 
 interface ResolvedResumeState {
@@ -27,8 +27,8 @@ interface ResolvedResumeState {
 }
 
 export interface ResumeStreamPorts {
-  /** Runtime host receiving the RESUMING/WAITING status updates. */
-  readonly runtimeHost: AgentRuntimeHost;
+  /** Session host interactions receiving the RESUMING/WAITING status updates. */
+  readonly interactions: SessionHostInteractions;
   /**
    * The status machine of the session that owns this stream — process-owned on
    * desktop, and the default session's machine in the extension/CLI. The

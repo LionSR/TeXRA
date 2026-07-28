@@ -35,10 +35,7 @@ import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { createRunScope, type RunScope } from '@agent/runtime/RunScope';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
-import {
-  noopAgentRuntimeHost,
-  type AgentRuntimeHost,
-} from '@agent/runtime/AgentRuntimeHost';
+import { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import type { ModelCredentialRoute } from '@agent/types/ModelHandlerContracts';
 import {
   RELAY_CI_TOKEN_PREFIX,
@@ -75,7 +72,7 @@ interface TestRetryServices {
   config: { model: string };
   runScope: RunScope;
   streamId: StreamTabId;
-  runtimeHost: AgentRuntimeHost;
+  interactions: SessionHostInteractions;
   logger: AgentTrace;
   setAbortController: (ac: AbortController | null) => void;
   refreshClient?: (selection?: unknown, signal?: AbortSignal) => Promise<void>;
@@ -150,7 +147,7 @@ function createRetryNode(
     config: { model: 'copilot:sonnet46' },
     runScope: testRunScope(streamId, { session }),
     streamId,
-    runtimeHost: noopAgentRuntimeHost,
+    interactions: new SessionHostInteractions(),
     logger: noopTrace,
     setAbortController: vi.fn(),
     refreshClient,
@@ -168,7 +165,7 @@ async function withRetryRunContext<T>(
     modelSource: 'live',
     getModel: () => undefined,
     runScope: createRunScope({
-      runtimeHost: noopAgentRuntimeHost,
+      interactions: new SessionHostInteractions(),
       streamId,
       executionId: `${streamId}-execution` as ExecutionId,
       agentName: 'retry-test',
@@ -181,14 +178,12 @@ async function withRetryRunContext<T>(
 async function withSessionRetryRunContext<T>(
   streamId: StreamTabId,
   session: SessionHandle,
-  runtimeHost: AgentRuntimeHost,
   fn: () => T | Promise<T>,
 ): Promise<T> {
   const context = createRunContext({
     modelSource: 'live',
     getModel: () => undefined,
     runScope: createRunScope({
-      runtimeHost,
       streamId,
       executionId: `${streamId}-execution` as ExecutionId,
       agentName: 'retry-test',
@@ -455,7 +450,7 @@ describe('RetryState', () => {
         config: { model: 'openai:test' },
         runScope: testRunScope('retry-delay' as StreamTabId),
         streamId: 'retry-delay' as StreamTabId,
-        runtimeHost: noopAgentRuntimeHost,
+        interactions: new SessionHostInteractions(),
         logger: noopTrace,
         setAbortController: vi.fn(),
       });
@@ -501,7 +496,7 @@ describe('RetryState', () => {
         config: { model: 'openai:test' },
         runScope: testRunScope('retry-interrupt' as StreamTabId),
         streamId: 'retry-interrupt' as StreamTabId,
-        runtimeHost: noopAgentRuntimeHost,
+        interactions: new SessionHostInteractions(),
         logger: noopTrace,
         setAbortController: (controller) => {
           activeController.current = controller;
@@ -1070,7 +1065,6 @@ describe('RetryState', () => {
       const prompt = withSessionRetryRunContext(
         streamId,
         session,
-        recording.host,
         () => node.promptFor(new Error('temporary provider failure')),
       );
 

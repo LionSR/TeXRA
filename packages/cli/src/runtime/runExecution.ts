@@ -193,7 +193,7 @@ export async function executeCliRequest(
   // Present terminal-error toasts from the run's `result` event through the same
   // runtimeHost path the lifecycle used before (so ndjson / logger output is
   // unchanged); the lifecycle no longer emits them directly.
-  const detachResultToast = attachTerminalResultToast(session, runtimeHost);
+  const detachResultToast = attachTerminalResultToast(session, session.interactions);
   const detachSessionProgressProjection =
     runContext.outputFormat === 'ndjson'
       ? attachCliSessionProgressProjection(session.events)
@@ -204,7 +204,7 @@ export async function executeCliRequest(
   let shutdownInterrupted = false;
   let shutdownFinalizationFailureReported = false;
   const reportFinalizationFailure = (error: unknown): void => {
-    runtimeHost.emit('requestShowError', {
+    session.interactions.emit('requestShowError', {
       message: toErrorMessage(error),
     });
   };
@@ -251,7 +251,6 @@ export async function executeCliRequest(
   const invoke = async (): Promise<ExecuteAgentResult> => {
     try {
       return await runAgent(request, {
-        runtimeHost,
         session,
         enforceCategory: options.enforceCategory,
         registerExecution: options.registerExecution,

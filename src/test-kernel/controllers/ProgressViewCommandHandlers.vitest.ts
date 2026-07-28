@@ -7,7 +7,7 @@ import '@test/support/defaultSessionTestSetup';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import {
   createProgressViewCommandHandlers as createSharedProgressViewCommandHandlers,
   type ProgressViewCommandActions,
@@ -94,7 +94,7 @@ function createActions(
       reportImageSaveError: vi.fn(),
     },
     bypass: {
-      runtimeHost: { emit: vi.fn() } satisfies AgentRuntimeHost,
+      interactions: { emit: vi.fn() } satisfies SessionHostInteractions,
     },
     approval: {
       approvePendingDelegatedWork: vi.fn(async () => undefined),

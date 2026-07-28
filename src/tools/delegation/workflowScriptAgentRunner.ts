@@ -339,7 +339,7 @@ export function createWorkflowScriptAgentRunner(
             agentName,
             parentExecutionId: run.executionId,
             parentStreamId: run.streamId,
-            runtimeHost: runScope.runtimeHost,
+            interactions: runScope.session.interactions,
             session: runScope.session,
             signal: invocation.signal,
             approvalPromptsUnavailable: parent.approvalPromptsUnavailable,

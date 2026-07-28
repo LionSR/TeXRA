@@ -1,4 +1,4 @@
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import {
   currentSession,
   type SessionHandle,
@@ -33,16 +33,16 @@ export function proposalApprovals(
 export function setDelegatedWorkApprovalBypasses(
   streamId: StreamTabId,
   enabled: boolean,
-  runtimeHost: AgentRuntimeHost,
+  interactions: SessionHostInteractions,
   session: SessionHandle = currentSession(),
 ): void {
   const { proposal, toolEdit, bash } = session.approvals;
 
-  proposal.setBypass(streamId, enabled, runtimeHost);
+  proposal.setBypass(streamId, enabled);
   // Unconditional: write the stream's own explicit tool-edit entry even when
   // `isBypassed` already reports true, because that can be an
   // ancestry-resolved inheritance from the parent — super-YOLO granted here
   // must survive the parent later re-gating its own edits.
-  toolEdit.bypass.setBypass(streamId, enabled, runtimeHost);
-  bash.bypass.setBypass(streamId, enabled, runtimeHost);
+  toolEdit.bypass.setBypass(streamId, enabled);
+  bash.bypass.setBypass(streamId, enabled);
 }

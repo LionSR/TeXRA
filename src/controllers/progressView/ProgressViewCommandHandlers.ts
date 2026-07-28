@@ -1,5 +1,5 @@
 // Local imports
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentCategoryFilter, StreamTabId } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
@@ -75,7 +75,7 @@ export interface ProgressViewFollowUpCommandActions {
 }
 
 export interface ProgressViewBypassCommandOptions {
-  runtimeHost: AgentRuntimeHost;
+  interactions: SessionHostInteractions;
   /**
    * Session that owns the approval bypass state. Desktop scopes it to its
    * window session; the extension omits it so the default session applies.
@@ -157,7 +157,7 @@ export function createProgressViewCommandHandlers(
   actions: ProgressViewCommandActions,
 ) {
   const { lifecycle, run, file, followUp, approval, externalInquiry } = actions;
-  const { runtimeHost, session, showInfo } = actions.bypass;
+  const { interactions, session, showInfo } = actions.bypass;
 
   // Single source of truth for the coupled edit + bash session bypass behind
   // the one edit/command approval concept. The shield toolbar button flips it;
@@ -167,10 +167,10 @@ export function createProgressViewCommandHandlers(
     stream: StreamTabId,
     enabled: boolean,
   ): Promise<void> => {
-    setToolEditApprovalSessionBypass(stream, enabled, runtimeHost, {
+    setToolEditApprovalSessionBypass(stream, enabled, interactions, {
       session,
     });
-    setBashApprovalSessionBypass(stream, enabled, runtimeHost, {
+    setBashApprovalSessionBypass(stream, enabled, interactions, {
       session,
     });
     await showInfo?.(
@@ -253,7 +253,7 @@ export function createProgressViewCommandHandlers(
       setDelegatedWorkApprovalBypasses(
         data.stream,
         enabled,
-        runtimeHost,
+        interactions,
         session,
       );
       return reportDelegatedWorkApproval(enabled);
@@ -262,7 +262,7 @@ export function createProgressViewCommandHandlers(
     // mode on. It is idempotent, so it cannot invert a grant made from the
     // stream header while the proposal was open.
     [PROGRESS_VIEW_COMMANDS.ENABLE_SUPER_YOLO_BYPASS]: async (data) => {
-      setDelegatedWorkApprovalBypasses(data.stream, true, runtimeHost, session);
+      setDelegatedWorkApprovalBypasses(data.stream, true, interactions, session);
       await approval.approvePendingDelegatedWork(
         data.stream,
         data.initiatingProposalId,

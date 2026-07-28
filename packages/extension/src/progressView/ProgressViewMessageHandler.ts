@@ -482,7 +482,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           },
         },
         bypass: {
-          runtimeHost: defaultSession().interactions,
+          interactions: defaultSession().interactions,
           showInfo: (message) => this.host.info(message),
         },
         file: {

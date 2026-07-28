@@ -25,7 +25,6 @@ import type { AgentFlowResult, WorkflowFlowResult } from './AgentFlowResult';
  */
 export interface RunAgentOptions extends Pick<
   ExecuteAgentOptions,
-  | 'runtimeHost'
   | 'suppressErrorNotification'
   | 'enforceCategory'
   | 'stopAfterCycle'

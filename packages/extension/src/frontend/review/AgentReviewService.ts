@@ -345,12 +345,6 @@ class AgentReviewServiceImpl {
       const result = await runAgent(
         { config },
         {
-          // `run.session` is `currentSession()` at review-launch time — the
-          // same session this `runtimeHost` reads through the session's own
-          // interactions attachment, so presentation events reach whatever
-          // host that session has attached (matching every other launch
-          // site's session-routed runtimeHost).
-          runtimeHost: run.session.interactions,
           openWorkflowOutput: openFinalOutputIfAvailable,
           stopAfterCycle: true,
           session: run.session,
