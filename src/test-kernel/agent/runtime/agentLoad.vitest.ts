@@ -398,6 +398,14 @@ describe('inline agent definitions', () => {
     const entry = getAgent('inline:lateOverride');
     assert.strictEqual(entry?.category, AgentCategory.ToolUse);
     assert.strictEqual(entry.rounds, undefined);
+    const overriddenResolution = resolveAgentForLaunch(
+      AgentCategory.ToolUse,
+      'inline:lateOverride',
+    );
+    assert.ok(overriddenResolution);
+    const [overriddenSettings] =
+      await loadAgentSettingAndPrompts(overriddenResolution);
+    assert.strictEqual(overriddenSettings.agentCategory, AgentCategory.ToolUse);
 
     await useAgentDirectories(emptyDir);
     await refresh({ includeRemote: false });
@@ -484,6 +492,10 @@ describe('inline agent definitions', () => {
 
   it('preserves runtime schemas in object-form tool definitions', async () => {
     const runtimeSchema = z.strictObject({ query: z.string() });
+    const parameters = {
+      type: 'object',
+      properties: { query: { type: 'string' } },
+    };
     registerInlineAgents([
       {
         name: 'runtimeToolSchema',
@@ -492,7 +504,7 @@ describe('inline agent definitions', () => {
           tools: [
             {
               name: 'runtimeTool',
-              parameters: { type: 'object' },
+              parameters,
               zodSchema: runtimeSchema,
             },
           ],
@@ -500,6 +512,7 @@ describe('inline agent definitions', () => {
         prompts: {},
       },
     ]);
+    parameters.properties.query.type = 'number';
 
     const resolution = resolveAgentForLaunch(
       AgentCategory.ToolUse,
@@ -508,6 +521,10 @@ describe('inline agent definitions', () => {
     assert.ok(resolution);
     const [settings] = await loadAgentSettingAndPrompts(resolution);
     assert.strictEqual(settings.tools[0]?.zodSchema, runtimeSchema);
+    assert.deepStrictEqual(settings.tools[0]?.parameters, {
+      type: 'object',
+      properties: { query: { type: 'string' } },
+    });
   });
 
   it('fails loudly when the load path names an unregistered inline agent', async () => {

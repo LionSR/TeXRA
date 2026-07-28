@@ -174,7 +174,7 @@ function normalizeInlineAgent(definition: unknown): InlineAgent {
           : undefined,
       internal: settings.internal === true || undefined,
     },
-    definition: { ...parsed, settings },
+    definition: clonePlainContainers({ ...parsed, settings }),
   };
 }
 
