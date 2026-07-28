@@ -5,7 +5,7 @@ import '@test/support/defaultSessionTestSetup';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import {
   createRunContext,
   withRunContext,
@@ -92,7 +92,7 @@ vi.mock('@tools/approval', () => ({
   }),
 }));
 
-function runtimeHost(): AgentRuntimeHost {
+function runtimeHost(): SessionHostInteractions {
   return {
     emit: vi.fn(),
   };
@@ -108,14 +108,12 @@ function sessionFor(interactions: HostInteractions): SessionHandle {
 /** The run context shared by nearly every case (host/stopAfterCycle/session vary). */
 function parentRunContext(
   overrides: Partial<{
-    runtimeHost: AgentRuntimeHost;
     streamId: StreamTabId;
     stopAfterCycle: boolean;
     session: SessionHandle;
   }> = {},
 ): RunContext {
   return createRunContext({
-    runtimeHost: runtimeHost(),
     streamId: 'parent-stream',
     executionId: 'parent-exec',
     model: 'deepseekT',
@@ -151,7 +149,7 @@ function delegationOptions(
     agentName: 'review',
     parentExecutionId: STABLE_PARENT_EXECUTION_ID,
     parentStreamId: 'parent-stream' as StreamTabId,
-    runtimeHost: runtimeHost(),
+    interactions: runtimeHost(),
     session: defaultSession(),
     ...overrides,
   };
@@ -1089,7 +1087,6 @@ describe('headless delegation', () => {
 
   it('discourages equivalent delegation retries after a no-feedback rejection', async () => {
     mocks.isProposalBypassed.mockReturnValue(false);
-    const host = runtimeHost();
     const interactions = {
       cancel: vi.fn(),
       requestAgentProposal: vi.fn().mockResolvedValue({ action: 'reject' }),
@@ -1097,7 +1094,7 @@ describe('headless delegation', () => {
 
     const session = sessionFor(interactions);
     const result = await withRunContext(
-      parentRunContext({ runtimeHost: host, session }),
+      parentRunContext({ session }),
       () => callDelegateReview(),
     );
     session.dispose();
@@ -1124,7 +1121,6 @@ describe('headless delegation', () => {
         requiresKey: false,
       },
     ]);
-    const host = runtimeHost();
     const interactions = {
       cancel: vi.fn(),
       requestAgentProposal: vi
@@ -1134,7 +1130,7 @@ describe('headless delegation', () => {
 
     const session = sessionFor(interactions);
     const result = await withRunContext(
-      parentRunContext({ runtimeHost: host, session }),
+      parentRunContext({ session }),
       () => callDelegateReview(),
     );
     session.dispose();
@@ -1157,7 +1153,6 @@ describe('headless delegation', () => {
       },
       { value: 'gpt5', label: 'GPT-5', disabled: false, requiresKey: false },
     ]);
-    const host = runtimeHost();
     const interactions = {
       cancel: vi.fn(),
       requestAgentProposal: vi
@@ -1167,7 +1162,7 @@ describe('headless delegation', () => {
 
     const session = sessionFor(interactions);
     const result = await withRunContext(
-      parentRunContext({ runtimeHost: host, session }),
+      parentRunContext({ session }),
       () => callDelegateReview(),
     );
     session.dispose();

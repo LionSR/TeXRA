@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
   OpenPdfTool,
@@ -72,8 +71,7 @@ describe('OpenPdfTool', () => {
 
     const result = await withRunContext(
       createRunContext({
-        runtimeHost: createRuntimeHost(),
-        executionId: 'run-1',
+executionId: 'run-1',
       }),
       () =>
         tool.call({
@@ -105,8 +103,7 @@ describe('OpenPdfTool', () => {
 
     const result = await withRunContext(
       createRunContext({
-        runtimeHost: createRuntimeHost(),
-        executionId: 'run-1',
+executionId: 'run-1',
         workingDirectory: 'relative-path',
       }),
       () => tool.call({ path: '/storage/executions/run-1/output.pdf' }),
@@ -126,8 +123,7 @@ describe('OpenPdfTool', () => {
 
     const result = await withRunContext(
       createRunContext({
-        runtimeHost: createRuntimeHost(),
-        workingDirectory: '/workspace',
+workingDirectory: '/workspace',
       }),
       () => tool.call({ path: '/run/paper.pdf' }),
     );
@@ -156,6 +152,3 @@ describe('OpenPdfTool', () => {
   });
 });
 
-function createRuntimeHost(): AgentRuntimeHost {
-  return { emit: vi.fn() };
-}

@@ -55,7 +55,6 @@ export function resumeExtensionToolUseFromResumeData(
   return resumeQueuedToolUseFromResumeData(
     resume.streamId,
     resume,
-    defaultSession().interactions,
     {
       ...(followUp !== undefined && {
         extraFollowUps: [{ text: followUp, origin: 'user' as const }],

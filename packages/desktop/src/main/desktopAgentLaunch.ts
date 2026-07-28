@@ -44,9 +44,7 @@ export async function launchDesktopAgent(
   options: DesktopAgentLaunchOptions = {},
 ): Promise<void> {
   const { runAgent } = await import('@agent/runtime/runAgent');
-  const runtimeHost = context.session.interactions;
   await runAgent(request, {
-    runtimeHost,
     session: context.session,
     runtimeUnavailableTools: DESKTOP_UNAVAILABLE_TOOLS,
     modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
@@ -76,7 +74,7 @@ export async function launchDesktopAgent(
       } else {
         location = { kind: 'external', absolutePath: output.absolutePath };
       }
-      runtimeHost.emit(
+      context.session.interactions.emit(
         'requestOpenFile',
         {
           location,

@@ -3,7 +3,7 @@ import '@test/support/defaultSessionTestSetup';
 
 import { describe, expect, it } from 'vitest';
 
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import type { StreamTabId } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -13,7 +13,7 @@ import { ExternalInquiryTool } from '@tools/inquiry/ExternalInquiryTool';
 const STREAM = 'stream:inquiry-host-interaction' as StreamTabId;
 
 function createRuntimeFixture(reason: Error): {
-  runtimeHost: AgentRuntimeHost;
+  interactions: SessionHostInteractions;
   session: ReturnType<typeof createTestSession>;
 } {
   const session = createTestSession();
@@ -22,7 +22,7 @@ function createRuntimeFixture(reason: Error): {
     openExternalInquiry: () => Promise.reject(reason),
   });
   return {
-    runtimeHost: { emit: () => {} },
+    interactions: { emit: () => {} } as SessionHostInteractions,
     session,
   };
 }
@@ -32,13 +32,13 @@ describe('ExternalInquiryTool host interaction dispatch', () => {
   setupPlatform();
 
   it('surfaces a rejected openExternalInquiry() as a tool error instead of an unhandled rejection', async () => {
-    const { runtimeHost, session } = createRuntimeFixture(
+    const { interactions, session } = createRuntimeFixture(
       new Error('external inquiry panel unavailable'),
     );
 
     const result = await Promise.resolve(
       withRunContext(
-        createRunContext({ runtimeHost, streamId: STREAM, session }),
+        createRunContext({ streamId: STREAM, session }),
         () =>
           new ExternalInquiryTool().call({
             command: 'ask',

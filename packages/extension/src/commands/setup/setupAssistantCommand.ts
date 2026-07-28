@@ -255,9 +255,7 @@ export async function launchSetupAssistant(): Promise<SetupAssistantLaunchResult
     const launch = async () => {
       await runAgent(
         { config },
-        {
-          runtimeHost: defaultSession().interactions,
-        },
+        {},
       );
     };
 

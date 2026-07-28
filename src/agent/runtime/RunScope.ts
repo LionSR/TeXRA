@@ -1,7 +1,6 @@
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
 
-import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { SessionHandle } from './SessionHandle';
 
 /**
@@ -12,7 +11,6 @@ import type { SessionHandle } from './SessionHandle';
  * run identity or the session that owns runtime state.
  */
 export interface RunScope {
-  readonly runtimeHost: AgentRuntimeHost;
   readonly streamId: StreamTabId;
   readonly executionId: ExecutionId;
   /** Agent name (e.g. "orchestrator", "search-agent"). */

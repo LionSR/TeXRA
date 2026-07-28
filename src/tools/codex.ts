@@ -28,7 +28,7 @@ import {
   type AgentTrace,
   type ToolUseCardRef,
 } from '@agent/trace';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
 import {
   getRunContextExecutionId,
@@ -394,7 +394,7 @@ function startCodexLoop(params: {
   parentStreamId: StreamTabId;
   executionId: ExecutionId;
   initialPrompt: string;
-  runtimeHost: AgentRuntimeHost;
+  interactions: SessionHostInteractions;
   /**
    * The disk-based fallback thread id claimed synchronously in execute(). The
    * loop promotes that reservation after its first turn succeeds.
@@ -409,7 +409,7 @@ function startCodexLoop(params: {
     parentStreamId,
     executionId,
     initialPrompt,
-    runtimeHost,
+    interactions,
   } = params;
   const { childStreamId, logger } = childStream;
   const fallbackThreadId = params.resumeThreadId;
@@ -573,7 +573,7 @@ export class CodexTool extends defineTool({
           },
           launch: (releaseClaim) => {
             // A missing in-memory entry denotes a disk-based SDK fallback.
-            const { streamId, runtimeHost } = requireRunStream(
+            const { streamId, interactions } = requireRunStream(
               'codex',
               runContext,
             );
@@ -582,7 +582,7 @@ export class CodexTool extends defineTool({
               streamId,
               getRunContextExecutionId(runContext),
               getRunContextWorkingDirectory(runContext),
-              runtimeHost,
+              interactions,
               releaseClaim,
             );
           },
@@ -597,7 +597,7 @@ async function launchCodexSession(
   parentStreamId: StreamTabId,
   parentExecutionId: ExecutionId | undefined,
   parentWorkingDirectory: string | undefined,
-  runtimeHost: AgentRuntimeHost,
+  interactions: SessionHostInteractions,
   releaseFallbackClaim: (() => void) | undefined,
 ): Promise<ToolResult> {
   const workingDir = parseWorkingDirectory(parentWorkingDirectory);
@@ -608,7 +608,7 @@ async function launchCodexSession(
   return launchAgentCliSession({
     parentStreamId,
     parentExecutionId,
-    runtimeHost,
+    interactions,
     agentName: 'codex',
     streamPrefix: 'codex@codex-sdk',
     description: input.prompt,
@@ -621,7 +621,7 @@ async function launchCodexSession(
         parentStreamId,
         executionId,
         initialPrompt: input.prompt,
-        runtimeHost,
+        interactions,
         resumeThreadId: input.thread_id ?? undefined,
         releaseFallbackClaim,
       }),

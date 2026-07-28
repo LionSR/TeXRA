@@ -8,7 +8,6 @@ import * as assert from 'node:assert';
 import { describe, it, beforeEach, afterEach } from 'vitest';
 
 // Local imports
-import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import {
@@ -61,7 +60,6 @@ async function callTextEditor(
   const executionId = options.executionId ?? EXECUTION_ID;
   return withRunContext(
     createRunContext({
-      runtimeHost: noopAgentRuntimeHost,
       streamId: `stream:${executionId}` as StreamTabId,
       executionId,
       session: options.session,
@@ -142,7 +140,7 @@ describe('TextEditorTool undo history lifecycle', () => {
       streamId,
       'orchestrator',
       'toolUse',
-      noopAgentRuntimeHost,
+      defaultSession().interactions,
     );
     session.executions.track(handle);
 

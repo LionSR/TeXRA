@@ -17,7 +17,7 @@ import {
   TOOL_RESULT_TRUNCATION_HEAD_CHARS,
   TOOL_RESULT_TRUNCATION_TAIL_CHARS,
 } from '@agent/modelHandlers/contextManagementConstants';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import {
   getCurrentToolContexts,
   type ToolCallContext,
@@ -267,7 +267,7 @@ export class BashTool extends defineTool({
     const timeoutMs = input.timeout ?? BASH_TOOL_DEFAULT_TIMEOUT_MS;
 
     if (input.run_in_background) {
-      const { streamId, runtimeHost } = requireRunStream(
+      const { streamId, interactions } = requireRunStream(
         'bash run_in_background',
         runContext,
       );
@@ -276,7 +276,7 @@ export class BashTool extends defineTool({
         timeoutMs,
         streamId,
         getRunContextExecutionId(runContext),
-        runtimeHost,
+        interactions,
         cwd,
       );
     }
@@ -355,7 +355,7 @@ export class BashTool extends defineTool({
     timeoutMs: number,
     parentStreamId: StreamTabId,
     parentExecutionId: ExecutionId | undefined,
-    runtimeHost: AgentRuntimeHost,
+    interactions: SessionHostInteractions,
     cwd?: string,
   ): Promise<ToolResult> {
     const executionId = generateExecutionId();
@@ -388,7 +388,7 @@ export class BashTool extends defineTool({
           description: command,
           config: syntheticConfig,
           toolName: 'bash',
-          runtimeHost,
+          interactions,
         });
       });
     } catch (error) {
