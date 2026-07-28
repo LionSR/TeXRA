@@ -97,6 +97,7 @@ describe('SupabaseClient', () => {
     await withRelayTokenEnv(relayToken, async () => {
       SupabaseClient.setAuthProvider(provider);
 
+      assert.equal(SupabaseClient.hasUsableRelayToken(), true);
       assert.equal(await SupabaseClient.isAuthenticated(), true);
       assert.equal(await SupabaseClient.getRelayAccessToken(), relayToken);
       assert.equal(await SupabaseClient.canAccessRemoteAgentCatalog(), false);
