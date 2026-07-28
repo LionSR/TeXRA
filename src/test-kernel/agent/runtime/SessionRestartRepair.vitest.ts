@@ -598,6 +598,94 @@ describe('SessionHandle restart repair', () => {
     }
   });
 
+  it('restores delayed lease repair after a root replacement rolls back', async () => {
+    vi.useFakeTimers({
+      now: new Date('2026-07-28T12:00:00.000Z'),
+    });
+    const rollbackExecutionId = '9355abcd' as ExecutionId;
+    const rollbackStreamId = `crashed#${rollbackExecutionId}` as StreamTabId;
+    const storage = platform().storage;
+    let activeRoot = 'old';
+    Object.assign(storage, {
+      hasPendingWorkspaceStorageChange: () => true,
+      commitWorkspaceStorageChange: () => {
+        activeRoot = 'new';
+        return true;
+      },
+      rollbackWorkspaceStorageChange: () => {
+        activeRoot = 'old';
+        return true;
+      },
+    });
+    const transcripts = await StreamLogStore.open();
+    transcripts.append(rollbackStreamId, {
+      id: 'rollback-running-group',
+      type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
+      level: LOG_LEVELS.INFO,
+      timestamp: Date.now(),
+      data: { status: STREAM_PHASE.RUNNING },
+    });
+    await transcripts.flush();
+    const executionStore = getExecutionStore(rollbackExecutionId);
+    await executionStore.writeMeta({
+      timestamp: new Date().toISOString(),
+    });
+    await executionStore.write(flowKey(rollbackExecutionId), {
+      invalid: true,
+    });
+    await StorageFS.ensureDir('executionLeases');
+    await StorageFS.writeAtomic(
+      `executionLeases/${rollbackExecutionId}.json`,
+      JSON.stringify({
+        version: 1,
+        executionId: rollbackExecutionId,
+        ownerToken: '00000000-0000-4000-8000-000000000002',
+        acquiredAt: Date.now(),
+        heartbeatAt: Date.now(),
+      }),
+    );
+
+    const session = new SessionHandle({
+      transcripts,
+      restartRepair: 'deferred',
+    });
+
+    try {
+      await session.waitUntilReady();
+      expect(session.status.get(rollbackStreamId)).toBe(STREAM_PHASE.RUNNING);
+
+      const replacementError = new Error('new snapshot root is unreadable');
+      vi.spyOn(transcripts, 'reload').mockResolvedValue();
+      vi.spyOn(session.snapshots, 'load')
+        .mockRejectedValueOnce(replacementError)
+        .mockResolvedValue();
+
+      await expect(session.reloadAfterStorageRootChange()).rejects.toBe(
+        replacementError,
+      );
+      expect(activeRoot).toBe('old');
+      expect(session.status.get(rollbackStreamId)).toBe(STREAM_PHASE.RUNNING);
+
+      await vi.advanceTimersByTimeAsync(EXECUTION_LEASE_STALE_MS + 1);
+      await vi.waitFor(() => {
+        expect(session.status.get(rollbackStreamId)).toBe(STREAM_PHASE.FAILED);
+      });
+
+      await expect(executionStore.readMeta()).resolves.toMatchObject({
+        terminalStatus: EXECUTION_STATUS.ERROR,
+      });
+      expect(
+        transcripts.get(rollbackStreamId)?.getRange(0).at(-1),
+      ).toMatchObject({
+        type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
+        data: { status: RUN_OUTCOME.FAILED },
+      });
+    } finally {
+      session.dispose();
+      vi.useRealTimers();
+    }
+  });
+
   it('skips replacement when the workspace storage root is unchanged', async () => {
     const transcripts = await StreamLogStore.open();
     const session = new SessionHandle({
