@@ -239,29 +239,52 @@ describe('buildTerminalTool', () => {
 
 describe('buildTerminalToolRegistry', () => {
   const schema = z.strictObject({ title: z.string() });
+  const tool = (name: string) =>
+    ({
+      definition: { name, description: name, parameters: {} },
+    }) as ITool;
   const realTool = {
     definition: { name: 'read_file', description: 'read', parameters: {} },
   } as ITool;
   const base = new MapToolRegistry({ read_file: realTool });
 
-  it('overrides submit_output while delegating every other lookup', () => {
+  it('resolves every run-scoped tool while delegating other lookups', () => {
+    const first = tool('first');
+    const second = tool('second');
     const terminalTool = buildTerminalTool(schema, vi.fn());
-    const overlay = buildTerminalToolRegistry(base, terminalTool);
+    const overlay = buildTerminalToolRegistry(base, [
+      first,
+      second,
+      terminalTool,
+    ]);
 
+    expect(overlay.get('first')).toBe(first);
+    expect(overlay.get('second')).toBe(second);
     expect(overlay.get(SUBMIT_OUTPUT_TOOL_NAME)).toBe(terminalTool);
-    expect(overlay.has(SUBMIT_OUTPUT_TOOL_NAME)).toBe(true);
     expect(overlay.get('read_file')).toBe(realTool);
-    expect(overlay.has('read_file')).toBe(true);
     expect(overlay.get('missing')).toBeUndefined();
     expect(overlay.has('missing')).toBe(false);
   });
 
-  it('never mutates the base registry', () => {
-    const terminalTool = buildTerminalTool(schema, vi.fn());
-    buildTerminalToolRegistry(base, terminalTool);
+  it('isolates concurrent overlays without mutating the shared base', () => {
+    const first = tool('first');
+    const second = tool('second');
+    const firstRun = buildTerminalToolRegistry(base, [first]);
+    const secondRun = buildTerminalToolRegistry(base, [second]);
 
-    // The shared default registry must never gain the synthetic tool.
-    expect(base.get(SUBMIT_OUTPUT_TOOL_NAME)).toBeUndefined();
-    expect(base.has(SUBMIT_OUTPUT_TOOL_NAME)).toBe(false);
+    expect(firstRun.get('first')).toBe(first);
+    expect(firstRun.get('second')).toBeUndefined();
+    expect(secondRun.get('second')).toBe(second);
+    expect(secondRun.get('first')).toBeUndefined();
+    expect(base.get('first')).toBeUndefined();
+    expect(base.get('second')).toBeUndefined();
+  });
+
+  it('lets the last run-scoped tool win a name collision', () => {
+    const first = tool('read_file');
+    const second = tool('read_file');
+    const overlay = buildTerminalToolRegistry(base, [first, second]);
+
+    expect(overlay.get('read_file')).toBe(second);
   });
 });

@@ -17,6 +17,7 @@ import {
   type AgentToolUseSetting,
   type AgentWorkflowSetting,
 } from '@agent/core/definition/AgentDataclass';
+import type { ITool } from '@agent/core/tools/ToolTypes';
 import { hasPersistedParent } from '@agent/storage/executionLifecycle';
 import {
   abandonOwnedExecutionLease,
@@ -129,7 +130,7 @@ async function runToolUseAgent(
   setting: AgentToolUseSetting,
   options: Pick<
     ExecuteAgentOptions,
-    'isSubagent' | 'onFollowUpConsumed' | 'onProgress' | 'onIdle'
+    'isSubagent' | 'onFollowUpConsumed' | 'onProgress' | 'onIdle' | 'tools'
   >,
 ): Promise<AgentRuntimeFlowResult> {
   const { streamId: runStreamId, executionId: runExecutionId } = ctx.runScope;
@@ -157,6 +158,7 @@ async function runToolUseAgent(
         ),
         onFlowRecordDisposition: (disposition) =>
           lifecycle.setFlowRecordDisposition(disposition),
+        tools: options.tools,
         onModelChanged: (modelHandler) => {
           // The tool-use flow already wrote services.config.model
           // (=== ctx.config.model, same object), so the live model is updated
@@ -313,6 +315,8 @@ export interface SubagentRunOptions {
 
 /** Options for executeAgent. */
 export interface ExecuteAgentOptions extends SubagentRunOptions {
+  /** Run-scoped tools added to tool-use agents without mutating the default registry. */
+  readonly tools?: readonly ITool[];
   /** The caller owns presentation for failures before the run lifecycle. */
   suppressErrorNotification?: boolean;
   /** When true, proposal tools are filtered out to prevent nesting. */
