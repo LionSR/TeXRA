@@ -19,6 +19,19 @@ interface FakeTierService {
   service: TierService;
 }
 
+interface Deferred<T> {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+}
+
+function deferred<T>(): Deferred<T> {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((settle) => {
+    resolve = settle;
+  });
+  return { promise, resolve };
+}
+
 function createTierService(
   options: { providers?: string[]; quotaExceeded?: boolean } = {},
 ): FakeTierService {
@@ -241,5 +254,33 @@ describe('ServerSideKeyService anonymous access cache', () => {
     // Once the cached fetch was authenticated, the TTL cache serves as before.
     expect(await service.canUseServerSideKeys()).toBe(true);
     expect(tier.getConfigCalls).toBe(2);
+  });
+
+  it('does not let a stale anonymous fetch erase authenticated access', async () => {
+    const state = new FakeStateStore({ [USE_INCLUDED_ACCESS_KEY]: true });
+    const tier = createTierService({ providers: ['openai'] });
+    const firstAuthentication = deferred<boolean>();
+    vi.spyOn(SupabaseClient, 'getRelayAccessToken')
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce('token');
+    vi.spyOn(SupabaseClient, 'isAuthenticated')
+      .mockReturnValueOnce(firstAuthentication.promise)
+      .mockResolvedValueOnce(true);
+    vi.spyOn(SupabaseClient, 'getUserTier').mockResolvedValue(ULTRA_TIER);
+    const service = createService(tier.service, state);
+
+    const anonymousFetch = service.canUseServerSideKeys();
+    await Promise.resolve();
+    const authenticatedFetch = service.canUseServerSideKeys();
+
+    expect(await authenticatedFetch).toBe(true);
+    expect(service.getUserTier()).toBe(ULTRA_TIER);
+    expect(service.shouldUseServerSideKeysSync('openai')).toBe(true);
+
+    firstAuthentication.resolve(false);
+    expect(await anonymousFetch).toBe(false);
+
+    expect(service.getUserTier()).toBe(ULTRA_TIER);
+    expect(service.shouldUseServerSideKeysSync('openai')).toBe(true);
   });
 });
