@@ -187,7 +187,7 @@ export class InstructionPanel extends LitElement {
           </span>
           ${renderIconActionButton({
             id: 'dismissSessionHintButton',
-            icon: 'close',
+            icon: 'xmark',
             label: 'Dismiss this reminder',
             tooltip: 'Dismiss this reminder',
             className: 'session-hint-dismiss',
@@ -466,7 +466,7 @@ export class InstructionPanel extends LitElement {
         <div class="select-group agent-select-group agent-model-select-group">
           ${renderIconActionButton({
             id: 'agentSettingsButton',
-            icon: 'sparkle',
+            icon: 'wand-magic-sparkles',
             label: 'Agent settings',
             tooltip: 'Agent settings',
             className: 'settings-button',
@@ -491,7 +491,7 @@ export class InstructionPanel extends LitElement {
         >
           ${renderIconActionButton({
             id: 'teamSettingsButton',
-            icon: 'organization',
+            icon: 'building',
             label: 'Team settings',
             tooltip: 'Team settings',
             className: 'settings-button',
@@ -519,7 +519,7 @@ export class InstructionPanel extends LitElement {
         >
           ${renderIconActionButton({
             id: 'agentSettingsButton',
-            icon: 'sparkle',
+            icon: 'wand-magic-sparkles',
             label: 'Agent settings',
             tooltip: 'Agent settings',
             className: 'settings-button',
@@ -686,7 +686,7 @@ export class InstructionPanel extends LitElement {
                 ? html`
                     ${renderIconActionButton({
                       id: 'packButton',
-                      icon: 'archive',
+                      icon: 'box-archive',
                       label: 'Pack output to History',
                       tooltip:
                         'Pack the output for this agent into the History folder',
@@ -704,7 +704,7 @@ export class InstructionPanel extends LitElement {
             }
             ${renderIconActionButton({
               id: 'magicPolishButton',
-              icon: 'sparkle',
+              icon: 'wand-magic-sparkles',
               label: 'Polish instruction',
               tooltip: 'Polish instruction text with AI',
               busy: session.isPolishing,
@@ -712,7 +712,7 @@ export class InstructionPanel extends LitElement {
             })}
             ${renderIconActionButton({
               id: 'recordInstructionButton',
-              icon: session.isRecording ? 'stop-circle' : 'mic',
+              icon: session.isRecording ? 'circle-stop' : 'microphone',
               label: 'Record instruction',
               tooltip: session.isRecording
                 ? 'Stop recording'

@@ -100,6 +100,75 @@ import {
 import { formatSizedEntryLines } from './executions/fileListingFormat';
 
 // ============================================================================
+// Resource path catalog
+// ============================================================================
+
+/**
+ * Single source of truth for the virtual resource paths this tool serves.
+ * Both the tool `description` and the "Unknown path" error render from this
+ * list, so the two can no longer drift — previously the error omitted the
+ * `/{path}` sub-reads and the `subscribe`/`unsubscribe` actions the
+ * description documented.
+ */
+const EXECUTION_PATH_CATALOG: ReadonlyArray<{ path: string; summary: string }> =
+  [
+    {
+      path: '/executions',
+      summary: 'List executions (paginated; use offset/limit for pages)',
+    },
+    {
+      path: '/executions/{id}',
+      summary:
+        'Execution summary (agent, model, timestamp, status, children, todos)',
+    },
+    { path: '/executions/{id}/config', summary: 'Agent configuration JSON' },
+    {
+      path: '/executions/{id}/conversation',
+      summary: 'Full message history (subagents)',
+    },
+    {
+      path: '/executions/{id}/todos',
+      summary: 'Task list (tool-use subagents)',
+    },
+    {
+      path: '/executions/{id}/report',
+      summary: 'Result report (persists after context compaction)',
+    },
+    {
+      path: '/executions/{id}/result',
+      summary:
+        'Final result envelope (JSON) for chaining; process result for background commands',
+    },
+    {
+      path: '/executions/{id}/output',
+      summary:
+        'stdout/stderr of a background command, readable WHILE IT RUNS (report/result only exist once it finishes)',
+    },
+    { path: '/executions/{id}/children', summary: 'Child executions' },
+    {
+      path: '/executions/{id}/files',
+      summary: 'Generated files (workflows only)',
+    },
+    {
+      path: '/executions/{id}/files/{path}',
+      summary: 'Read specific generated file (workflows only)',
+    },
+    {
+      path: '/executions/{id}/workspace-files',
+      summary: 'Workspace files edited by tool-use runs',
+    },
+    {
+      path: '/executions/{id}/workspace-files/{path}',
+      summary: 'Read a workspace file edited by a tool-use run',
+    },
+  ];
+
+/** Renders the catalog as a bulleted `- <path> - <summary>` list. */
+const EXECUTION_PATH_LIST = EXECUTION_PATH_CATALOG.map(
+  ({ path: resourcePath, summary }) => `- ${resourcePath} - ${summary}`,
+).join('\n');
+
+// ============================================================================
 // Background command output
 // ============================================================================
 
@@ -269,19 +338,7 @@ export class ExecutionsTool extends defineTool({
   description: `View execution history and manage running executions.
 
 Paths:
-- /executions - List executions (paginated; use offset/limit for pages)
-- /executions/{id} - Execution summary (agent, model, timestamp, status, children, todos)
-- /executions/{id}/config - Agent configuration JSON
-- /executions/{id}/conversation - Full message history (subagents)
-- /executions/{id}/todos - Task list (tool-use subagents)
-- /executions/{id}/report - Result report (persists after context compaction)
-- /executions/{id}/result - Final result envelope (JSON) for chaining; process result for background commands
-- /executions/{id}/output - stdout/stderr of a background command, readable WHILE IT RUNS (report/result only exist once it finishes)
-- /executions/{id}/children - Child executions
-- /executions/{id}/files - Generated files (workflows only)
-- /executions/{id}/files/{path} - Read specific generated file (workflows only)
-- /executions/{id}/workspace-files - Workspace files edited by tool-use runs
-- /executions/{id}/workspace-files/{path} - Read a workspace file edited by a tool-use run
+${EXECUTION_PATH_LIST}
 
 Use "current" as {id} to access the active execution.
 Use offset/limit to paginate the /executions listing (default: offset 0, limit 100).
@@ -374,18 +431,7 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
     }
 
     throw new ToolError(
-      `Unknown path: ${input.path}.\n` +
-        `Valid paths:\n` +
-        `- /executions/{id}              - Summary (status, agent, model)\n` +
-        `- /executions/{id}/config       - Agent configuration\n` +
-        `- /executions/{id}/report       - Result report (prose)\n` +
-        `- /executions/{id}/result       - Final result envelope (JSON) for chaining\n` +
-        `- /executions/{id}/output       - Background command stdout/stderr (readable while running)\n` +
-        `- /executions/{id}/conversation - Message history (subagents)\n` +
-        `- /executions/{id}/todos        - Task list (tool-use subagents)\n` +
-        `- /executions/{id}/children     - Child executions\n` +
-        `- /executions/{id}/files        - Generated files (workflows)\n` +
-        `- /executions/{id}/workspace-files - Workspace files edited by tool-use runs`,
+      `Unknown path: ${input.path}.\nValid paths:\n${EXECUTION_PATH_LIST}`,
     );
   }
 

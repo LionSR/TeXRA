@@ -17,7 +17,7 @@ import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 
 // Local imports - shared schemas
 import type { LogMessageData } from '@shared/schemas';
-import type { TeXRAIconName } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
 
 // Local imports - formatter helpers
 import { formatDisplayTimestamp } from '../timestampUtils';
@@ -111,7 +111,7 @@ export function formatModelResponseTemplate(
 
   // prettier-ignore
   return html`<wa-details appearance="plain" icon-placement="start" class="banner-details" ?open=${shouldOpen} data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)} data-timestamp=${ifDefined(fullTimestamp)}>${buildDetailsSummary({
-    iconName: 'sparkle',
+    iconName: 'wand-magic-sparkles',
     label: 'Assistant',
     timestamp: verbose
       ? { display: `[${timeDisplay}]`, tooltip: tooltipTimestamp }

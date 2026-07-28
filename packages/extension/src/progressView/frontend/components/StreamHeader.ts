@@ -31,7 +31,8 @@ import {
 import { statusIndicatorStyles } from '@shared/styles/statusIndicatorStyles';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
 import { renderIconActionButtonParts } from '@shared/wa/actionButtons';
-import { type TeXRAIconName, waIcon } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -510,7 +511,7 @@ export class StreamHeader extends LitElement {
         variant="neutral"
         size="s"
       >
-        ${waIcon('pulse')}
+        ${waIcon('chart-line')}
         ${renderProgressBadgeContent(this.progress, this.roundStage)}
       </wa-tag>
       ${
