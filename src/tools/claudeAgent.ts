@@ -31,7 +31,6 @@ import {
   type AgentTrace,
   type ToolUseCardRef,
 } from '@agent/trace';
-import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import {
   startChildRunLoop,
   type ChildRunPorts,
@@ -397,7 +396,6 @@ function startClaudeAgentLoop(params: {
   additionalDirectories: string[] | undefined;
   env: NodeJS.ProcessEnv;
   pathToClaudeCodeExecutable: string | undefined;
-  interactions: SessionHostInteractions;
   /**
    * Set when this launch is the disk-based fallback for a session_id the
    * in-memory registry no longer knows about (extension reload or crash). The
@@ -408,13 +406,7 @@ function startClaudeAgentLoop(params: {
   /** Release the fallback claim if the loop exits before promoting it. */
   releaseFallbackClaim: (() => void) | undefined;
 }): void {
-  const {
-    childStream,
-    parentStreamId,
-    executionId,
-    initialPrompt,
-    interactions,
-  } = params;
+  const { childStream, parentStreamId, executionId, initialPrompt } = params;
   const { childStreamId, logger } = childStream;
 
   // The SDK needs the prior session id to resume the same conversation across
@@ -573,7 +565,7 @@ export class ClaudeAgentTool extends defineTool({
           },
           launch: (releaseClaim) => {
             // A missing in-memory entry denotes a disk-based SDK fallback.
-            const { streamId, interactions } = requireRunStream(
+            const { streamId } = requireRunStream(
               CLAUDE_AGENT_NAME,
               runContext,
             );
@@ -585,7 +577,6 @@ export class ClaudeAgentTool extends defineTool({
               streamId,
               getRunContextExecutionId(runContext),
               getRunContextWorkingDirectory(runContext),
-              interactions,
               releaseClaim,
             );
           },
@@ -603,7 +594,6 @@ async function launchClaudeAgentSession(
   parentStreamId: StreamTabId,
   parentExecutionId: ExecutionId | undefined,
   parentWorkingDirectory: string | undefined,
-  interactions: SessionHostInteractions,
   releaseFallbackClaim: (() => void) | undefined,
 ): Promise<ToolResult> {
   const config = await getClaudeAgentConfig();
@@ -627,7 +617,6 @@ async function launchClaudeAgentSession(
   return launchAgentCliSession({
     parentStreamId,
     parentExecutionId,
-    interactions,
     agentName: CLAUDE_AGENT_NAME,
     streamPrefix: 'claude@agent-sdk',
     description: input.prompt,
@@ -646,7 +635,6 @@ async function launchClaudeAgentSession(
         additionalDirectories: workspace.additionalDirectories,
         env,
         pathToClaudeCodeExecutable,
-        interactions,
         resumeSessionId: input.session_id ?? undefined,
         releaseFallbackClaim,
       }),
