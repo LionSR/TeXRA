@@ -120,13 +120,17 @@ export async function signIn(): Promise<boolean> {
       await SupabaseAuthProvider.getInstance()?.clearStoredSession();
     }
 
-    const existing =
-      storedSessionState === 'authenticated'
-        ? await getExistingSession(authReady)
-        : undefined;
-    if (existing) {
-      await showSignedInMessage('Already signed in as', false);
-      return true;
+    if (storedSessionState === 'authenticated') {
+      const existing = await getExistingSession(authReady);
+      if (existing) {
+        await showSignedInMessage('Already signed in as', false);
+        return true;
+      }
+      void showLoggedMessage(
+        CHANNEL,
+        'The authentication service is temporarily unavailable. Your stored session has not been removed; try again later.',
+      );
+      return false;
     }
 
     const selected = await vscode.window.showQuickPick<SignInOption>(
@@ -199,25 +203,7 @@ async function signInWithEmail(): Promise<void> {
 export async function signOut(): Promise<void> {
   try {
     const storedSessionState = await SupabaseClient.getStoredSessionState();
-    const session =
-      storedSessionState === 'authenticated'
-        ? await getExistingSession()
-        : undefined;
-    if (!session) {
-      if (storedSessionState !== 'none') {
-        const confirm = await vscode.window.showWarningMessage(
-          'Clear the stored TeXRA session?',
-          { modal: true },
-          'Clear Session',
-        );
-        if (confirm !== 'Clear Session') return;
-        const cleared =
-          await SupabaseAuthProvider.getInstance()?.clearStoredSession();
-        void vscode.window.showInformationMessage(
-          cleared ? 'Stored session cleared' : 'No stored session found',
-        );
-        return;
-      }
+    if (storedSessionState === 'none') {
       void vscode.window.showInformationMessage('Not signed in');
       return;
     }
@@ -231,8 +217,10 @@ export async function signOut(): Promise<void> {
 
     const authProvider = SupabaseAuthProvider.getInstance();
     if (authProvider) {
-      await authProvider.removeSession(session.id);
-      void vscode.window.showInformationMessage('Signed out successfully');
+      const removed = await authProvider.removeStoredSession();
+      void vscode.window.showInformationMessage(
+        removed ? 'Signed out successfully' : 'No stored session found',
+      );
     } else {
       void showLoggedMessage(CHANNEL, 'Authentication provider not available');
     }
