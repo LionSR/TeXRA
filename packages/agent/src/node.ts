@@ -22,7 +22,11 @@ import {
   DEFAULT_NODE_STORAGE_ROOT,
 } from '@platform/defaults/nodeStorage';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
-import { createWatcherRegistry } from '@shared/config/configKeys';
+import {
+  canonicalConfigKey,
+  configKeyVariants,
+  createWatcherRegistry,
+} from '@shared/config/configKeys';
 
 /** Filesystem locations used by the default Node platform. */
 export interface NodePlatformOptions {
@@ -37,9 +41,12 @@ class MemoryConfigProvider implements ConfigProvider {
   private readonly watchers = createWatcherRegistry();
 
   get<T>(key: string, defaultValue?: T): T {
-    return (this.workspace.get(key) ??
-      this.global.get(key) ??
-      defaultValue) as T;
+    const keys = configKeyVariants(key);
+    const workspaceValue = this.firstStoredValue<T>(this.workspace, keys);
+    if (workspaceValue !== undefined) return workspaceValue;
+    const globalValue = this.firstStoredValue<T>(this.global, keys);
+    if (globalValue !== undefined) return globalValue;
+    return defaultValue as T;
   }
 
   async update<T>(
@@ -48,21 +55,32 @@ class MemoryConfigProvider implements ConfigProvider {
     target: ConfigTarget = 'workspace',
   ): Promise<void> {
     const values = target === 'global' ? this.global : this.workspace;
-    if (value === undefined) values.delete(key);
-    else values.set(key, value);
-    this.watchers.notify(key);
+    const keys = configKeyVariants(key);
+    if (value === undefined) {
+      for (const candidate of keys) values.delete(candidate);
+    } else {
+      const storedKey =
+        keys.find((candidate) => values.has(candidate)) ??
+        canonicalConfigKey(key);
+      values.set(storedKey, value);
+    }
+    this.watchers.notify(canonicalConfigKey(key));
   }
 
   inspect<T = unknown>(key: string): ConfigInspection<T> {
+    const keys = configKeyVariants(key);
     return {
-      globalValue: this.global.get(key) as T | undefined,
-      workspaceValue: this.workspace.get(key) as T | undefined,
+      globalValue: this.firstStoredValue<T>(this.global, keys),
+      workspaceValue: this.firstStoredValue<T>(this.workspace, keys),
       effectiveValue: this.get<T>(key),
     };
   }
 
   isExplicitlySet(key: string): boolean {
-    return this.workspace.has(key) || this.global.has(key);
+    return configKeyVariants(key).some(
+      (candidate) =>
+        this.workspace.has(candidate) || this.global.has(candidate),
+    );
   }
 
   watch(
@@ -70,6 +88,16 @@ class MemoryConfigProvider implements ConfigProvider {
     listener: () => void,
   ): Disposable {
     return this.watchers.add({ key, listener });
+  }
+
+  private firstStoredValue<T>(
+    values: ReadonlyMap<string, unknown>,
+    keys: readonly string[],
+  ): T | undefined {
+    for (const candidate of keys) {
+      if (values.has(candidate)) return values.get(candidate) as T;
+    }
+    return undefined;
   }
 }
 

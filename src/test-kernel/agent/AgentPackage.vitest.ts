@@ -75,6 +75,7 @@ vi.mock('@transcript/StreamLogStore', () => ({
 
 // Local imports - package API under test
 import { runAgent } from '../../../packages/agent/src/index';
+import { nodePlatform } from '../../../packages/agent/src/node';
 
 const PLATFORM = { lifecycle: {} } as unknown as Platform;
 const RESULT = { outcome: 'COMPLETED' } as never;
@@ -178,5 +179,28 @@ describe('agent package run lifecycle', () => {
 
     finishRun?.(RESULT);
     await expect(run.result).resolves.toBe(RESULT);
+  });
+});
+
+describe('agent package Node configuration', () => {
+  it('treats bare and prefixed configuration keys as equivalent', async () => {
+    const config = nodePlatform({
+      agentsDir: '/agents',
+      storageDir: '/storage',
+      workspaceDir: '/workspace',
+    }).config;
+    const listener = vi.fn();
+    config.watch('goal.enabled', listener);
+
+    await config.update('texra.goal.enabled', true, 'global');
+    expect(config.get('goal.enabled')).toBe(true);
+    expect(config.inspect('goal.enabled')?.globalValue).toBe(true);
+    expect(config.isExplicitlySet('goal.enabled')).toBe(true);
+    expect(listener).toHaveBeenCalledOnce();
+
+    await config.update('goal.enabled', undefined, 'global');
+    expect(config.get('texra.goal.enabled', false)).toBe(false);
+    expect(config.isExplicitlySet('texra.goal.enabled')).toBe(false);
+    expect(listener).toHaveBeenCalledTimes(2);
   });
 });
