@@ -67,7 +67,7 @@ async function launchBackgroundRun(
     },
   );
   const followUp = vi
-    .spyOn(toolUseFollowUp, 'sendFollowUp')
+    .spyOn(toolUseFollowUp, 'submitFollowUp')
     .mockResolvedValue({ status: 'sent' });
 
   const { host } = createRecordingHost();

@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
 import {
-  WorkflowTaskIdentitySchema,
-  type WorkflowTaskIdentity,
+  WorkflowCallIdentitySchema,
+  type WorkflowCallIdentity,
 } from '@shared/schemas';
 import type { WorkflowScriptFiles } from '@shared/schemas/workflowScriptFiles';
 
@@ -24,7 +24,7 @@ const WorkflowScriptPhaseSchema = z.union([
   WorkflowScriptPhaseTitleSchema.transform((title) => ({ title })),
 ]);
 
-export type WorkflowScriptTask = WorkflowTaskIdentity;
+export type WorkflowScriptTask = WorkflowCallIdentity;
 
 /**
  * The `export const meta = {...}` block every workflow script must begin
@@ -42,7 +42,7 @@ export const WorkflowScriptMetaSchema = z
      * task by id; label and phase live here rather than being duplicated in
      * executable code.
      */
-    tasks: z.array(WorkflowTaskIdentitySchema).optional(),
+    tasks: z.array(WorkflowCallIdentitySchema).optional(),
     /** Whole-run wall clock, bounded; an explicit run option still wins. */
     timeoutMs: z
       .int()
@@ -204,7 +204,7 @@ export interface WorkflowScriptPhaseContext {
 }
 
 /** Identity used only to correlate one changing progress record in a run. */
-export type WorkflowScriptProgressId = WorkflowTaskIdentity['id'];
+export type WorkflowScriptProgressId = WorkflowCallIdentity['id'];
 
 interface WorkflowScriptAgentEventBase extends WorkflowScriptPhaseContext {
   /**

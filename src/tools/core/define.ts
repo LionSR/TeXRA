@@ -18,6 +18,20 @@ export function toToolParameters(schema: ZodType): Record<string, unknown> {
   >;
 }
 
+const EXECUTION_FLAGS = [
+  'parallelSafe',
+  'requiresApproval',
+  'slow',
+  'deferLogUntilApproval',
+  'streamsOutput',
+] as const;
+
+type ExecutionFlag = (typeof EXECUTION_FLAGS)[number];
+type DefineToolFlags = { [K in ExecutionFlag]?: boolean };
+type DefinedToolFlags = {
+  readonly [K in ExecutionFlag]: boolean | undefined;
+};
+
 /**
  * The abstract class `defineTool` hands back: a `BaseTool<T>` carrying the
  * declared execution flags, constructible only through a subclass that
@@ -33,14 +47,7 @@ export function toToolParameters(schema: ZodType): Record<string, unknown> {
  */
 export type DefinedToolClass<T> = abstract new (
   override?: Partial<ToolDefinition>,
-) => BaseTool<T> & {
-  // Keep in sync with `def` parameter flags and the `GeneratedTool` class body below.
-  readonly parallelSafe: boolean | undefined;
-  readonly requiresApproval: boolean | undefined;
-  readonly slow: boolean | undefined;
-  readonly deferLogUntilApproval: boolean | undefined;
-  readonly streamsOutput: boolean | undefined;
-};
+) => BaseTool<T> & DefinedToolFlags;
 
 /**
  * Define a tool with type-safe schema and either a static or dynamic description.
@@ -49,22 +56,14 @@ export type DefinedToolClass<T> = abstract new (
  * asynchronously (e.g., agent registry) - the function is called lazily when
  * the tool definition is accessed.
  */
-export function defineTool<T>(def: {
-  name: string;
-  /** Static description string or function for lazy evaluation */
-  description: string | (() => string);
-  schema: ZodType<T, T>;
-  /**
-   * Declare the tool side-effect-free and approval-free, allowing parallel
-   * calls in one model response to execute concurrently (see ITool).
-   */
-  parallelSafe?: boolean;
-  /** Execution behavior consumed by tool resolution and dispatch. */
-  requiresApproval?: boolean;
-  slow?: boolean;
-  deferLogUntilApproval?: boolean;
-  streamsOutput?: boolean;
-}): DefinedToolClass<T> {
+export function defineTool<T>(
+  def: {
+    name: string;
+    /** Static description string or function for lazy evaluation */
+    description: string | (() => string);
+    schema: ZodType<T, T>;
+  } & DefineToolFlags,
+): DefinedToolClass<T> {
   const getDescription = (): string =>
     typeof def.description === 'function' ? def.description() : def.description;
 
@@ -80,7 +79,7 @@ export function defineTool<T>(def: {
   });
 
   abstract class GeneratedTool extends BaseTool<T> {
-    // Keep in sync with the `def` parameter flags and `DefinedToolClass<T>` above.
+    // The return annotation checks these fields against EXECUTION_FLAGS.
     readonly parallelSafe = def.parallelSafe;
     readonly requiresApproval = def.requiresApproval;
     readonly slow = def.slow;
