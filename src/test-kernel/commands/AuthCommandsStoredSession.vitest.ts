@@ -51,11 +51,7 @@ import { signIn, signOut } from '@commands/auth/authCommands';
 
 function mockUnavailableStoredSession(failure: 'invalid' | 'transient'): void {
   vi.spyOn(SupabaseClient, 'isReady').mockResolvedValue(true);
-  vi.spyOn(SupabaseClient, 'hasStoredSession').mockResolvedValue(true);
-  vi.spyOn(SupabaseClient, 'isAuthenticated').mockResolvedValue(false);
-  vi.spyOn(SupabaseClient, 'getLastSessionRefreshFailure').mockReturnValue(
-    failure,
-  );
+  vi.spyOn(SupabaseClient, 'getStoredSessionState').mockResolvedValue(failure);
 }
 
 describe('auth commands for unavailable stored sessions', () => {
@@ -66,6 +62,9 @@ describe('auth commands for unavailable stored sessions', () => {
 
   it('clears an invalid session before opening the sign-in chooser', async () => {
     mockUnavailableStoredSession('invalid');
+    const relayAuthentication = vi
+      .spyOn(SupabaseClient, 'isAuthenticated')
+      .mockResolvedValue(true);
     authMocks.showQuickPick.mockResolvedValue(undefined);
 
     await expect(signIn()).resolves.toBe(false);
@@ -73,6 +72,7 @@ describe('auth commands for unavailable stored sessions', () => {
     expect(authMocks.clearStoredSession).toHaveBeenCalledOnce();
     expect(authMocks.getSession).not.toHaveBeenCalled();
     expect(authMocks.showQuickPick).toHaveBeenCalledOnce();
+    expect(relayAuthentication).not.toHaveBeenCalled();
   });
 
   it('preserves the session and defers sign-in during a transient outage', async () => {

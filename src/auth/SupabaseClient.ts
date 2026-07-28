@@ -22,6 +22,9 @@ import type {
   SessionTokens,
 } from './TokenProvider';
 
+export type StoredSessionState =
+  'none' | 'authenticated' | SessionRefreshFailure;
+
 /**
  * Singleton Supabase client with authentication helpers.
  * This is the single source of truth for auth initialization state.
@@ -392,6 +395,19 @@ export class SupabaseClient {
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Health of the stored GoTrue session, independent of any configured relay
+   * token. This is the canonical classification for account UI and commands.
+   */
+  static async getStoredSessionState(): Promise<StoredSessionState> {
+    if (!(await this.hasStoredSession())) return 'none';
+    if (await this.getSessionTokens()) return 'authenticated';
+    if (!(await this.hasStoredSession())) return 'none';
+    return this.getLastSessionRefreshFailure() === 'invalid'
+      ? 'invalid'
+      : 'transient';
   }
 
   /**

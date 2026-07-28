@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const providerMocks = vi.hoisted(() => ({
   clearAllCaches: vi.fn(),
+  getUser: vi.fn(),
   invalidateModelOptionsCache: vi.fn(),
   invalidateRemoteAgentsAfterSignOut: vi.fn(async () => {}),
   setTokenExpiry: vi.fn(),
@@ -21,6 +22,7 @@ vi.mock('@auth/SupabaseClient', () => ({
   SupabaseClient: {
     getClient: () => ({
       auth: {
+        getUser: providerMocks.getUser,
         signOut: providerMocks.signOut,
       },
     }),
@@ -47,7 +49,10 @@ vi.mock('@model/computeModelOptions', () => ({
 import type { SupabaseSessionCoordinator } from '@auth/SupabaseSession';
 import { SupabaseAuthProvider } from '@frontend/auth/SupabaseAuthProvider';
 
-function createExpiredProvider(failure: 'invalid' | 'transient'): {
+function createProvider(options: {
+  expiresAt: number;
+  failure?: 'invalid' | 'transient';
+}): {
   provider: SupabaseAuthProvider;
   clearSession: ReturnType<typeof vi.fn>;
   showSignInPrompt: ReturnType<typeof vi.fn>;
@@ -59,12 +64,12 @@ function createExpiredProvider(failure: 'invalid' | 'transient'): {
     accessToken: 'expired-access',
     refreshToken: 'refresh-token',
     account: { id: 'user-id', label: 'user@example.com' },
-    expiresAt: Date.now() - 1_000,
+    expiresAt: options.expiresAt,
   };
   const coordinator = {
     loadSession: vi.fn(async () => session),
     refreshSession: vi.fn(async () => null),
-    getLastRefreshFailure: vi.fn(() => failure),
+    getLastRefreshFailure: vi.fn(() => options.failure ?? null),
     clearSession,
   };
   const provider = Object.create(
@@ -83,6 +88,15 @@ function createExpiredProvider(failure: 'invalid' | 'transient'): {
   });
 
   return { provider, clearSession, showSignInPrompt };
+}
+
+function createExpiredProvider(
+  failure: 'invalid' | 'transient',
+): ReturnType<typeof createProvider> {
+  return createProvider({
+    expiresAt: Date.now() - 1_000,
+    failure,
+  });
 }
 
 describe('SupabaseAuthProvider expired-session refresh', () => {
@@ -108,5 +122,50 @@ describe('SupabaseAuthProvider expired-session refresh', () => {
 
     expect(clearSession).toHaveBeenCalledOnce();
     expect(showSignInPrompt).toHaveBeenCalledWith('expired');
+  });
+
+  it('preserves an unexpired session when user validation is transient', async () => {
+    providerMocks.getUser.mockResolvedValue({
+      data: { user: null },
+      error: { status: 503 },
+    });
+    const { provider, clearSession, showSignInPrompt } = createProvider({
+      expiresAt: Date.now() + 60_000,
+    });
+
+    await expect(provider.getSessions()).resolves.toEqual([]);
+
+    expect(clearSession).not.toHaveBeenCalled();
+    expect(showSignInPrompt).not.toHaveBeenCalled();
+  });
+
+  it('preserves an unexpired session after an inconclusive user response', async () => {
+    providerMocks.getUser.mockResolvedValue({
+      data: { user: null },
+      error: null,
+    });
+    const { provider, clearSession, showSignInPrompt } = createProvider({
+      expiresAt: Date.now() + 60_000,
+    });
+
+    await expect(provider.getSessions()).resolves.toEqual([]);
+
+    expect(clearSession).not.toHaveBeenCalled();
+    expect(showSignInPrompt).not.toHaveBeenCalled();
+  });
+
+  it('clears an unexpired session rejected during user validation', async () => {
+    providerMocks.getUser.mockResolvedValue({
+      data: { user: null },
+      error: { status: 401 },
+    });
+    const { provider, clearSession, showSignInPrompt } = createProvider({
+      expiresAt: Date.now() + 60_000,
+    });
+
+    await expect(provider.getSessions()).resolves.toEqual([]);
+
+    expect(clearSession).toHaveBeenCalledOnce();
+    expect(showSignInPrompt).toHaveBeenCalledWith('invalid');
   });
 });

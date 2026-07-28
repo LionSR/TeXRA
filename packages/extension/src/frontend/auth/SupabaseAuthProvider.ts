@@ -23,6 +23,7 @@ import {
   toStorableSupabaseSession,
   type SupabaseSession,
 } from '@auth/SupabaseSession';
+import { classifyAuthFailureStatus } from '@auth/TokenProvider';
 import { fetchWithTimeout } from '@auth/fetchWithTimeout';
 import * as logger from '@logger/logUtils';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
@@ -219,8 +220,13 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       const { data, error } = await SupabaseClient.getClient().auth.getUser(
         session.accessToken,
       );
-      if (error || !data.user) {
-        await this.handleInvalidSession(session.id, 'invalid');
+      if (error) {
+        if (classifyAuthFailureStatus(error.status) === 'invalid') {
+          await this.handleInvalidSession(session.id, 'invalid');
+        }
+        return [];
+      }
+      if (!data.user) {
         return [];
       }
 
