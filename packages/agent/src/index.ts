@@ -12,7 +12,7 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { loadAgents, resolveAgent } from '@agent/index/agentRegistry';
 import { SessionHandle as RuntimeSessionHandle } from '@agent/runtime/SessionHandle';
 import { runAgent as runValidatedAgent } from '@agent/runtime/runAgent';
-import type { Platform } from '@platform/platform';
+import { initPlatform, tryPlatform, type Platform } from '@platform/platform';
 import { initNodeAgentRuntime } from '@platform/defaults/nodeHost';
 import { StreamLogStore } from '@transcript/StreamLogStore';
 
@@ -210,7 +210,6 @@ export function runAgent(input: RunAgentInput): AgentRun {
       );
     }
 
-    const { initPlatform, tryPlatform } = await import('@platform/platform');
     const activePlatform = tryPlatform();
     if (activePlatform && activePlatform !== input.platform) {
       throw new Error(

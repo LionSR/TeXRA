@@ -99,6 +99,9 @@ describe('agent package run lifecycle', () => {
     mocks.activePlatform = null;
     mocks.agentCategory = 'toolUse';
     mocks.eventListener = undefined;
+    mocks.initPlatform.mockImplementation((platform: object) => {
+      mocks.activePlatform = platform;
+    });
     mocks.loadAgents.mockResolvedValue(undefined);
     mocks.runValidatedAgent.mockImplementation(
       async (
@@ -113,11 +116,13 @@ describe('agent package run lifecycle', () => {
     );
   });
 
-  it('initializes standard runtime features for a custom platform', async () => {
-    await runAgent(INPUT).result;
+  it('initializes standard runtime features once for concurrent first runs', async () => {
+    await Promise.all([runAgent(INPUT).result, runAgent(INPUT).result]);
 
     expect(mocks.initPlatform).toHaveBeenCalledWith(PLATFORM);
+    expect(mocks.initPlatform).toHaveBeenCalledTimes(1);
     expect(mocks.initNodeAgentRuntime).toHaveBeenCalledWith(PLATFORM.lifecycle);
+    expect(mocks.initNodeAgentRuntime).toHaveBeenCalledTimes(1);
   });
 
   it('attaches a run-event subscriber before starting the runtime', async () => {
