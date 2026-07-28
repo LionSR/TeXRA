@@ -208,7 +208,9 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       if (Date.now() >= session.expiresAt) {
         const refreshed = await this.sessionCoordinator.refreshSession(session);
         if (!refreshed) {
-          await this.handleInvalidSession(session.id, 'expired');
+          if (this.sessionCoordinator.getLastRefreshFailure() === 'invalid') {
+            await this.handleInvalidSession(session.id, 'expired');
+          }
           return [];
         }
         return [this.toVSCodeSession(refreshed)];
