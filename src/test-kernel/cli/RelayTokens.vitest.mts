@@ -136,6 +136,17 @@ describe('TEXRA_RELAY_TOKEN consumption (CI relay tokens)', () => {
     ).toEqual({ state: 'unknown' });
   });
 
+  it('does not turn a malformed relay tier into free access', async () => {
+    const malformed = singleFetch(
+      jsonResponse({ userStatus: { tier: 'corrupted' } }),
+    );
+
+    expect(
+      await fetchRelayTokenStatus(`${TOKEN}5`, malformed.fetchImpl),
+    ).toEqual({ state: 'unknown' });
+    expect(getCachedRelayTokenState(`${TOKEN}5`)).toBeUndefined();
+  });
+
   it('caches a rejection so synchronous credential checks can see it', async () => {
     const { fetchImpl, calls } = singleFetch(jsonResponse({ tiers: {} }));
     expect(await fetchRelayTokenStatus(TOKEN, fetchImpl)).toEqual({
