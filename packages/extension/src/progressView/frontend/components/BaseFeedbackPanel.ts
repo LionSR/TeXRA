@@ -73,7 +73,7 @@ export abstract class BaseFeedbackPanel<
 
   protected renderRejectButton(rejectTitle: string): TemplateResult {
     return renderLabeledActionButton({
-      icon: this.showFeedback ? 'check' : 'close',
+      icon: this.showFeedback ? 'check' : 'xmark',
       text: this.showFeedback ? 'Submit' : 'Reject',
       title: this.showFeedback ? 'Submit rejection (n)' : rejectTitle,
       action: 'reject',

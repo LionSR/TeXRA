@@ -23,7 +23,8 @@ import {
   WebFetchPayloadSchema,
   type LogMessageData,
 } from '@shared/schemas';
-import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { tryParseUrl } from '@utils/core';
 import { buildBannerContent } from './helpers';
 
@@ -55,7 +56,7 @@ const STATUS_SUFFIXES: Record<string, string> = {
 
 // Web search status-based wa-icon names; SPINNER_ICON_NAME triggers a spinner.
 const STATUS_ICONS: Record<string, TeXRAIconName | typeof SPINNER_ICON_NAME> = {
-  failed: 'error',
+  failed: 'circle-exclamation',
   in_progress: SPINNER_ICON_NAME,
 };
 
@@ -150,7 +151,7 @@ export function formatWebFetchTemplate(
   const statusKey = typeof status === 'string' ? status : '';
   const isFailed = statusKey === 'failed';
 
-  const iconName = isFailed ? 'error' : 'cloud-download';
+  const iconName = isFailed ? 'circle-exclamation' : 'cloud-arrow-down';
 
   let titleText = 'Web Fetch';
   if (url) {
