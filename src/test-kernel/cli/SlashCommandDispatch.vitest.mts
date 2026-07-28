@@ -5,7 +5,6 @@ import '@test/support/defaultSessionTestSetup';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import * as codexAuth from '@auth/codex';
 import { handleTuiSlashCommand } from '@cli/chat/tui/commands/handleSlashCommand';
 import { applyCliModelAccessSelection } from '@cli/chat/tui/commands/handlers/apiModeCommands';
 import {
@@ -44,6 +43,7 @@ import * as supabaseAuth from '@cli/runtime/supabaseAuth';
 import type { TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
+import * as codexPreference from '@model/codex/codexPreference';
 import {
   STREAM_PHASE,
   type ExecutionId,
@@ -380,7 +380,7 @@ describe('handleTuiSlashCommand', () => {
       expiresAtMs: Date.now() + 60_000,
       email: 'person@example.com',
     });
-    vi.spyOn(codexAuth, 'setPreferCodexSubscription').mockResolvedValue({
+    vi.spyOn(codexPreference, 'setPreferCodexSubscription').mockResolvedValue({
       effective: true,
       target: 'global',
     });
