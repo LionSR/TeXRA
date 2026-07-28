@@ -564,7 +564,7 @@ export abstract class ModelHandler<
     const apiKey = await this.fetchApiKeyOrThrow(
       provider,
       useOpenRouter
-        ? `Missing API key for OpenRouter. ${INCLUDED_MODEL_ACCESS_REMEDY}`
+        ? `Missing OpenRouter API key. Set an OpenRouter API key in settings.`
         : `Missing API key for ${provider}. ${INCLUDED_MODEL_ACCESS_REMEDY}`,
     );
     return {
