@@ -94,7 +94,7 @@ export async function resumeQueuedToolUseFromResumeData(
 
   const queueLease = options.recovery
     ? followUpsQueue.useRecovery(options.recovery)
-    : followUpsQueue.claimRecovery(streamId);
+    : followUpsQueue.claimRecovery(streamId, true);
   if (!queueLease) return false;
   streamStatus.transition(streamId, STREAM_PHASE.RUNNING, 'resume', {
     substate: STREAM_SUBSTATE.RESUMING,

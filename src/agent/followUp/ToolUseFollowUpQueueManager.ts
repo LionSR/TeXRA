@@ -224,7 +224,15 @@ export class ToolUseFollowUpQueue {
     entry?.queue.dispose();
     this.entries.delete(streamId);
     this.terminal.set(streamId, true);
-    for (const observer of this.releaseObservers) observer(streamId);
+    for (const observer of this.releaseObservers) {
+      try {
+        observer(streamId);
+      } catch (err) {
+        logger.warn(`Release observer threw for stream ${streamId}`, {
+          data: err,
+        });
+      }
+    }
     return true;
   }
 
