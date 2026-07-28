@@ -9,6 +9,7 @@ import { beforeAll, describe, it, beforeEach, afterEach, vi } from 'vitest';
 
 // Local imports - agent runtime
 import {
+  clearInlineAgents,
   getAgent,
   loadAgents,
   refresh,
@@ -354,6 +355,16 @@ describe('inline agent definitions', () => {
     const entry = getAgent('lateComer');
     assert.strictEqual(entry?.source, 'inline');
     assert.strictEqual(entry.rounds, 3);
+  });
+
+  it('removes cleared definitions from the live registry immediately', () => {
+    try {
+      clearInlineAgents();
+      assert.strictEqual(getAgent('scratchpad'), undefined);
+      assert.strictEqual(resolveAgent('inline:scratchpad'), undefined);
+    } finally {
+      registerInlineAgents([SCRATCHPAD]);
+    }
   });
 
   it('rejects a definition that declares inherits', () => {
