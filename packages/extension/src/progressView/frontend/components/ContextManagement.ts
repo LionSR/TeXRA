@@ -12,7 +12,8 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
 import { designTokens, commonViewStyles } from '@shared/styles';
-import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - progress view helpers
 import { buildDetailsSummary } from '../formatters/htmlBuilders';
@@ -147,7 +148,7 @@ export class ContextManagement extends LitElement {
               ? html`
                   <div class="summary-block">
                     <div class="summary-title">
-                      ${waIcon('note')} Compaction summary
+                      ${waIcon('note-sticky')} Compaction summary
                     </div>
                     <pre class="summary-text">${this.summary}</pre>
                   </div>

@@ -332,13 +332,13 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
   /** Stop a tool-use execution after one model/tool cycle instead of waiting for follow-up input. */
   stopAfterCycle?: boolean;
   /**
-   * Allow the promise to resolve with the non-terminal WAITING result. Only
-   * a fresh launch of a persistent native subagent (`isSubagent` without
-   * `stopAfterCycle`) can produce one, so `nativeSubagentStrategy` is the
-   * only caller that opts in — unconditionally, for both agent categories,
-   * since a workflow-category flow can never produce a WAITING result and
-   * the flag is simply inert there (`isWaitingFlowResult` requires
-   * `category === 'toolUse'`). Resume paths have no equivalent flag: whether
+   * Allow the promise to resolve with the non-terminal WAITING result.
+   * `nativeSubagentStrategy` is the only caller that opts in: interactive
+   * launches consume WAITING as a loop turn, while single-cycle launches admit
+   * it so their durability wrapper can persist a meaningful invariant failure
+   * rather than losing the returned turn and cost. The flag is inert for a
+   * workflow-category flow (`isWaitingFlowResult` requires `category ===
+   * 'toolUse'`). Resume paths have no equivalent flag: whether
    * a resumed run is a subagent comes from persisted lineage, so
    * `resumeToolUseFromResumeData` always admits WAITING and callers narrow
    * with `isWaitingFlowResult`.

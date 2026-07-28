@@ -8,7 +8,7 @@
 // This reducer is intentionally host-neutral. Electron resources are created
 // and disposed by the renderer; this module only describes what is visible.
 
-import type { TeXRAIconName } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
 
 export const WORKBENCH_KINDS = [
   'editor',
@@ -54,7 +54,7 @@ export const WORKBENCH_KIND_META: Readonly<
   },
   review: {
     defaultPlacement: 'right',
-    icon: 'diff-multiple',
+    icon: 'plus-minus',
     label: 'Review',
     singleton: true,
   },

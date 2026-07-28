@@ -95,12 +95,9 @@ export async function executeSubagent(
   // only — they never drive the loop.
   const recordSubagentCost =
     getCurrentToolCallContext()?.hooks?.recordSubagentCost;
-  let subagentCostSettled = false;
-  function settleSubagentCost(totalCostUsd: number | undefined): void {
-    if (subagentCostSettled) return;
-    subagentCostSettled = true;
+  const recordCost = (totalCostUsd: number | undefined): void => {
     recordSubagentCost?.(totalCostUsd ?? 0);
-  }
+  };
 
   const delegationAgentScope =
     parentContext.kind === 'launch'
@@ -137,7 +134,7 @@ export async function executeSubagent(
         approvalPromptsUnavailable: parentContext.approvalPromptsUnavailable,
         runtimeUnavailableTools: parentContext.runtimeUnavailableTools,
         onStreamResolved: inheritChildStreamApprovals,
-        onCost: settleSubagentCost,
+        onCost: recordCost,
       });
       return {
         status: 'executed',
@@ -198,7 +195,7 @@ export async function executeSubagent(
         executionId,
         agentName,
         strategy: createNativeSubagentStrategy(strategyParams),
-        recordCost: settleSubagentCost,
+        recordCost,
       });
     } catch (error) {
       throw await releaseOwnedExecutionLeaseAfterFailure(executionId, error);

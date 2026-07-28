@@ -3,14 +3,12 @@ import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import {
-  isResumeInFlight,
-  resolveAndResumeStream,
-} from '@agent/runtime/resolveAndResumeStream';
+import { resolveAndResumeStream } from '@agent/runtime/resolveAndResumeStream';
 import { resumeQueuedToolUseFromResumeData } from '@agent/runtime/resumeQueuedToolUse';
 import { trackTerminalResultPresentation } from '@agent/runtime/terminalResultToast';
 
 // Shared imports
+import type { RecoveryContinuation } from '@platform/interfaces';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -52,14 +50,21 @@ export class DesktopProcessResumeOwner {
     };
   }
 
-  tryResumeStream(streamId: StreamTabId): Promise<boolean> {
-    return this.context
-      ? resumeDesktopStream(streamId, this.context)
-      : Promise.resolve(false);
-  }
-
-  isResumeInFlight(streamId: StreamTabId): boolean {
-    return this.context ? isResumeInFlight(streamId) : false;
+  tryResumeStream(
+    streamId: StreamTabId,
+    recovery?: RecoveryContinuation,
+  ): Promise<boolean> {
+    const context = this.context;
+    if (!context) return Promise.resolve(false);
+    const claimedRecovery = recovery
+      ? context.session.followUps.useRecovery(recovery)
+      : context.session.followUps.claimRecovery(streamId, true);
+    if (!claimedRecovery) return Promise.resolve(false);
+    return resumeDesktopStream(streamId, context, claimedRecovery).finally(
+      () => {
+        context.session.followUps.release(claimedRecovery, 'recoverable');
+      },
+    );
   }
 }
 
@@ -104,6 +109,7 @@ async function resolveDesktopResumeState(
 function resumeDesktopStream(
   streamId: StreamTabId,
   context: DesktopResumeContext,
+  recovery?: RecoveryContinuation,
 ): Promise<boolean> {
   if (!context.session.transcripts.has(streamId)) return Promise.resolve(false);
   const terminalResult = trackTerminalResultPresentation(
@@ -135,65 +141,70 @@ function resumeDesktopStream(
     );
   };
   const runtimeHost = context.session.interactions;
-  return resolveAndResumeStream(streamId, {
-    runtimeHost,
-    streamStatus: context.session.status,
-    resolveResumeState: async (id) => {
-      const resumeState = await resolveDesktopResumeState(id, context);
-      if (isResumeInvalidated()) return undefined;
-      if (!resumeState) {
-        await context.session.interactions.showInfoMessage(
-          'No persisted run state was found for this stream. Start a new run instead.',
+  return resolveAndResumeStream(
+    streamId,
+    {
+      runtimeHost,
+      streamStatus: context.session.status,
+      resolveResumeState: async (id) => {
+        const resumeState = await resolveDesktopResumeState(id, context);
+        if (isResumeInvalidated()) return undefined;
+        if (!resumeState) {
+          await context.session.interactions.showInfoMessage(
+            'No persisted run state was found for this stream. Start a new run instead.',
+            { replayWhenAttached: true },
+          );
+          return undefined;
+        }
+        if (!resumeState.executionId) {
+          await context.session.interactions.showInfoMessage(
+            'This stream has no persisted execution id. Start a new run instead.',
+            { replayWhenAttached: true },
+          );
+          return undefined;
+        }
+        return {
+          runState: resumeState.runState,
+          executionId: resumeState.executionId,
+          ...(resumeState.parentStreamId !== undefined && {
+            parentStreamId: resumeState.parentStreamId,
+          }),
+        };
+      },
+      resumeToolUse: (snapshot, claimedRecovery) =>
+        resumeQueuedToolUseFromResumeData(
+          snapshot.streamId,
+          snapshot,
+          runtimeHost,
+          {
+            session: context.session,
+            recovery: claimedRecovery,
+            runtimeUnavailableTools: DESKTOP_UNAVAILABLE_TOOLS,
+            canAcquireResumeLease,
+            isCancellationRequested: isResumeInvalidated,
+            onError: (error) => reportUnhandledFailure(streamId, error),
+          },
+        ),
+      executeWorkflow: (config, executionId, modelHandlerCompatibilityKey) =>
+        launchDesktopAgent(
+          { config, executionId },
+          {
+            session: context.session,
+            canAcquireResumeLease,
+          },
+          {
+            modelHandlerCompatibilityKey,
+            suppressErrorNotification: true,
+          },
+        ),
+      reportNoResumableSession: () =>
+        context.session.interactions.showInfoMessage(
+          'This run has no resumable session state. Start a new run instead.',
           { replayWhenAttached: true },
-        );
-        return undefined;
-      }
-      if (!resumeState.executionId) {
-        await context.session.interactions.showInfoMessage(
-          'This stream has no persisted execution id. Start a new run instead.',
-          { replayWhenAttached: true },
-        );
-        return undefined;
-      }
-      return {
-        runState: resumeState.runState,
-        executionId: resumeState.executionId,
-        ...(resumeState.parentStreamId !== undefined && {
-          parentStreamId: resumeState.parentStreamId,
-        }),
-      };
+        ),
+      reportFailure: reportUnhandledFailure,
+      isCancellationRequested: isResumeInvalidated,
     },
-    resumeToolUse: (snapshot) =>
-      resumeQueuedToolUseFromResumeData(
-        snapshot.streamId,
-        snapshot,
-        runtimeHost,
-        {
-          session: context.session,
-          runtimeUnavailableTools: DESKTOP_UNAVAILABLE_TOOLS,
-          canAcquireResumeLease,
-          isCancellationRequested: isResumeInvalidated,
-          onError: (error) => reportUnhandledFailure(streamId, error),
-        },
-      ),
-    executeWorkflow: (config, executionId, modelHandlerCompatibilityKey) =>
-      launchDesktopAgent(
-        { config, executionId },
-        {
-          session: context.session,
-          canAcquireResumeLease,
-        },
-        {
-          modelHandlerCompatibilityKey,
-          suppressErrorNotification: true,
-        },
-      ),
-    reportNoResumableSession: () =>
-      context.session.interactions.showInfoMessage(
-        'This run has no resumable session state. Start a new run instead.',
-        { replayWhenAttached: true },
-      ),
-    reportFailure: reportUnhandledFailure,
-    isCancellationRequested: isResumeInvalidated,
-  }).finally(terminalResult.dispose);
+    recovery,
+  ).finally(terminalResult.dispose);
 }

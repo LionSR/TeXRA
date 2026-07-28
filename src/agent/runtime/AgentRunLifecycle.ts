@@ -425,7 +425,7 @@ export async function runFlowWithLifecycle(
       // no-oping — see AgentRunLifecycle/ExecutionRegistry issue #7287.
       const parentStageId = ctx.parentStage.id;
       handle.registerWaitingCleanup(async () => {
-        session.followUps.release(streamId);
+        session.followUps.terminalize(streamId);
         if (handle.executionLeaseLost) return;
         // Close this turn's "Run: ..." transcript group so a killed suspended
         // subagent doesn't leave it stuck at `running` forever (every other
