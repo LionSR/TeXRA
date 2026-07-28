@@ -305,7 +305,7 @@ async function expectDeletionBeforeStorageRootReplacement(
   }
 }
 
-async function expectDeletionCanReleaseRootReplacement(
+async function expectDeletionReleasesEarlierRootReplacement(
   deletionKind: 'one-stream' | 'all-streams',
 ): Promise<void> {
   const session = createTestSession();
@@ -321,7 +321,7 @@ async function expectDeletionCanReleaseRootReplacement(
       operations.push('reload:start');
       await reloadBlocked;
       operations.push('reload:end');
-      return false;
+      return true;
     });
   const lifecycle = createLifecycleOptions({
     stopStream: vi.fn(() => {
@@ -365,12 +365,7 @@ async function expectDeletionCanReleaseRootReplacement(
     await deletion;
     await workspaceMove;
 
-    expect(operations).toEqual([
-      'reload:start',
-      'stop',
-      'reload:end',
-      'delete',
-    ]);
+    expect(operations).toEqual(['reload:start', 'stop', 'reload:end']);
   } finally {
     releaseReload?.();
     backend.dispose();
@@ -655,12 +650,12 @@ describe('ProgressBackend', () => {
     await expectDeletionBeforeStorageRootReplacement('all-streams');
   });
 
-  it('lets one-stream deletion release a root replacement ahead of it', async () => {
-    await expectDeletionCanReleaseRootReplacement('one-stream');
+  it('releases an earlier root replacement without deleting from its new root', async () => {
+    await expectDeletionReleasesEarlierRootReplacement('one-stream');
   });
 
-  it('lets all-stream deletion release a root replacement ahead of it', async () => {
-    await expectDeletionCanReleaseRootReplacement('all-streams');
+  it('releases an earlier root replacement without clearing its new root', async () => {
+    await expectDeletionReleasesEarlierRootReplacement('all-streams');
   });
 
   it('does not retain the storage queue for a one-stream notice', async () => {
