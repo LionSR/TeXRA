@@ -13,7 +13,7 @@
 
 import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
-import { sendFollowUp } from '@agent/followUp/ToolUseFollowUp';
+import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import {
   currentSession,
@@ -110,13 +110,10 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
       session,
     };
     subscription.onEvent = (text: string) => {
-      void sendFollowUp(
-        streamId,
-        text,
-        undefined,
-        undefined,
-        subscription.session,
-      )
+      void submitFollowUp(streamId, text, {
+        session: subscription.session,
+        mode: 'live_notification',
+      })
         .then((result) => {
           if (result.status === 'sent' || result.status === 'queued') {
             subscription.session.events.emit({

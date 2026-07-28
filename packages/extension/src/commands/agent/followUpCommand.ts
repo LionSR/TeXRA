@@ -5,10 +5,9 @@ import * as vscode from 'vscode';
 import { deriveResumability } from '@agent/storage';
 import { createChannelTrace } from '@agent/trace';
 import {
-  presentFollowUpWakeResult,
-  sendFollowUp,
-  wakeQueuedFollowUpStream,
-  type SendFollowUpResult,
+  presentFollowUpResult,
+  submitFollowUp,
+  type SubmitFollowUpResult,
 } from '@agent/followUp/ToolUseFollowUp';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { registerCommands } from '@commands/_shared/registerCommands';
@@ -73,7 +72,7 @@ async function lazyDetectWaitingStatus(
 }
 
 async function handleFollowUpResult(
-  result: SendFollowUpResult,
+  result: SubmitFollowUpResult,
   streamId: StreamTabId,
 ): Promise<void> {
   switch (result.status) {
@@ -83,9 +82,7 @@ async function handleFollowUpResult(
     case 'queued':
       emitQueuedFollowUpsChanged(streamId);
       {
-        const presentation = presentFollowUpWakeResult(
-          await wakeQueuedFollowUpStream(streamId, result),
-        );
+        const presentation = presentFollowUpResult(result);
         if (presentation.severity === 'warning') {
           if (presentation.refreshQueuedFollowUps) {
             emitQueuedFollowUpsChanged(streamId);
@@ -100,6 +97,7 @@ async function handleFollowUpResult(
       }
       break;
     case 'no_session':
+    case 'dropped':
       await vscode.window.showWarningMessage(
         'No active session. Start a new agent task to continue.',
       );
@@ -120,7 +118,10 @@ export function registerFollowUpCommand(context: vscode.ExtensionContext) {
 
         await lazyDetectWaitingStatus(streamId);
 
-        const result = await sendFollowUp(streamId, text, mediaFiles);
+        const result = await submitFollowUp(streamId, {
+          text,
+          mediaFiles,
+        });
         await handleFollowUpResult(result, streamId);
       },
     },

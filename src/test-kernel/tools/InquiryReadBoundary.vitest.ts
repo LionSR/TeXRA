@@ -3,20 +3,14 @@ import '@test/support/defaultSessionTestSetup';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const sendFollowUpMock = vi.hoisted(() =>
+const submitFollowUpMock = vi.hoisted(() =>
   vi.fn<(...args: unknown[]) => Promise<unknown>>(async () => ({
     status: 'sent' as const,
   })),
 );
-const wakeQueuedFollowUpStreamMock = vi.hoisted(() =>
-  vi.fn<(...args: unknown[]) => Promise<unknown>>(async () => ({
-    kind: 'not_required' as const,
-  })),
-);
 
 vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
-  sendFollowUp: sendFollowUpMock,
-  wakeQueuedFollowUpStream: wakeQueuedFollowUpStreamMock,
+  submitFollowUp: submitFollowUpMock,
 }));
 
 import { ExternalInquiryRequestHandler } from '@controllers/progressView/backend/ExternalInquiryRequestHandler';
@@ -167,8 +161,7 @@ describe('external inquiry read boundary', () => {
   setupPlatform();
 
   beforeEach(() => {
-    sendFollowUpMock.mockClear();
-    wakeQueuedFollowUpStreamMock.mockClear();
+    submitFollowUpMock.mockClear();
   });
 
   it('hydrates legacy answers through inquiry read', async () => {
@@ -193,12 +186,10 @@ describe('external inquiry read boundary', () => {
     const outcome = await injectContinuationForAnsweredThread(THREAD);
 
     expect(outcome).toBe('sent');
-    expect(sendFollowUpMock).toHaveBeenCalledWith(
+    expect(submitFollowUpMock).toHaveBeenCalledWith(
       STREAM,
       expect.stringContaining('Legacy A'),
-      undefined,
-      undefined,
-      undefined,
+      { session: undefined },
     );
   });
 

@@ -43,11 +43,7 @@ import {
   deriveRunOutcome,
   projectRunOutcome,
 } from '@shared/streams/streamStatus';
-import {
-  enqueueChildRunFollowUp,
-  wakeChildRunFollowUp,
-  type ChildRunEnqueueResult,
-} from '@tools/childRunDelivery';
+import { deliverChildRunFollowUp } from '@tools/childRunDelivery';
 import { requireRunStream } from '@tools/contextHelpers';
 import {
   formatBashDelivery,
@@ -513,69 +509,28 @@ export class BashTool extends defineTool({
       }
     };
 
-    const enqueueParentFollowUp = async (
-      text: string,
-    ): Promise<ChildRunEnqueueResult | undefined> => {
-      try {
-        return await enqueueChildRunFollowUp({
-          targetStreamId: parentStreamId,
-          followUp: { text, origin: 'subagent_result' },
-          session: runSession,
-        });
-      } catch (err: unknown) {
-        logBackgroundFailure('enqueue', err);
-        return undefined;
-      }
-    };
-
-    // Wake the parent only after this child is finalized (see #8093): waking
-    // a WAITING parent can await its entire resumed turn
-    // (`agentResume.tryResumeStream` → … → `resumeToolUseFromResumeData`), and
-    // that resumed turn may itself wait on this execution — so finalizing
-    // first keeps a self-stall impossible instead of merely unlikely.
-    const wakeParentFollowUp = async (
-      enqueueResult: ChildRunEnqueueResult | undefined,
-    ): Promise<void> => {
-      if (!enqueueResult) return;
-      if (enqueueResult.kind === 'no_session') {
-        logger.debug(
-          'Background bash follow-up dropped: parent stream has no active session.',
-          {
-            data: {
-              parentStreamId,
-              streamStatus: enqueueResult.streamStatus ?? 'unknown',
-            },
-          },
-        );
-        return;
-      }
-      try {
-        const delivery = await wakeChildRunFollowUp(
-          parentStreamId,
-          enqueueResult,
-          runSession,
-        );
-        if (delivery.kind === 'dropped') {
-          logger.warn(
-            'Background bash follow-up dropped: parent stream is gone and could not be resumed.',
-            { data: { parentStreamId } },
-          );
-        }
-      } catch (err: unknown) {
-        logBackgroundFailure('wake', err);
-      }
-    };
-
     const deliverAndFinalize = async (
       text: string,
       finalizeOptions: Parameters<typeof finalizeBackground>[0],
     ): Promise<void> => {
-      // Order matters (see #8093): enqueue the result (fast), finalize this
-      // child so its terminal state is visible in the in-memory execution
-      // registry, then wake the parent — never the other way around.
-      const enqueueResult = await enqueueParentFollowUp(text);
+      // The child is terminal before the continuation is submitted, so a
+      // synchronously claimed parent recovery can never observe it as running.
       await finalizeBackground(finalizeOptions);
-      await wakeParentFollowUp(enqueueResult);
+      try {
+        const delivery = await deliverChildRunFollowUp({
+          targetStreamId: parentStreamId,
+          followUp: { text, origin: 'subagent_result' },
+          session: runSession,
+        });
+        if (delivery.kind !== 'delivered') {
+          logger.warn(
+            'Background bash follow-up dropped: parent stream is unavailable.',
+            { data: { parentStreamId } },
+          );
+        }
+      } catch (err: unknown) {
+        logBackgroundFailure('delivery', err);
+      }
     };
 
     void runWithOwnership(async () => {
