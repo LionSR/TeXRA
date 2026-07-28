@@ -66,7 +66,7 @@ export function defineInlineAgents(
   for (const inline of validated) {
     inlineAgents.set(inline.entry.name, inline);
   }
-  return validated.map((inline) => inline.entry);
+  return validated.map((inline) => ({ ...inline.entry }));
 }
 
 /** Registry entries for every currently registered inline definition. */
@@ -96,7 +96,30 @@ export function inlineAgentDefinition(name: string): AgentDefinition {
       `Inline agent "${name}" is not registered. Call registerInlineAgents before launching it.`,
     );
   }
-  return structuredClone(inline.definition);
+  return clonePlainContainers(inline.definition);
+}
+
+/**
+ * Copy every mutable data container while preserving runtime value objects
+ * such as Zod schemas carried by object-form tool definitions.
+ */
+function clonePlainContainers<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map((item) => clonePlainContainers(item)) as T;
+  }
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    Object.getPrototypeOf(value) !== Object.prototype
+  ) {
+    return value;
+  }
+  return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [
+      key,
+      clonePlainContainers(item),
+    ]),
+  ) as T;
 }
 
 function normalizeInlineAgent(definition: unknown): InlineAgent {
