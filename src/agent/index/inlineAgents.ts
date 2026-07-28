@@ -21,6 +21,7 @@ import {
   AgentCategory,
   AgentDefinitionSchema,
   AgentPromptSchema,
+  AgentRootSettingInputSchema,
   AgentWorkflowSettingSchema,
   type AgentDefinition,
 } from '@agent/core/definition/AgentDataclass';
@@ -95,7 +96,7 @@ export function inlineAgentDefinition(name: string): AgentDefinition {
       `Inline agent "${name}" is not registered. Call registerInlineAgents before launching it.`,
     );
   }
-  return inline.definition;
+  return structuredClone(inline.definition);
 }
 
 function normalizeInlineAgent(definition: unknown): InlineAgent {
@@ -110,8 +111,11 @@ function normalizeInlineAgent(definition: unknown): InlineAgent {
     );
   }
 
-  const settings = parsed.settings;
-  const category = settings.agentCategory ?? AgentCategory.Workflow;
+  const settings = AgentRootSettingInputSchema.parse({
+    ...parsed.settings,
+    agentCategory: parsed.settings.agentCategory ?? AgentCategory.Workflow,
+  });
+  const category = settings.agentCategory;
   const tools = extractToolNames(settings.tools);
   const defaultOutputFiles = settings.defaultOutputFiles;
 
@@ -123,17 +127,6 @@ function normalizeInlineAgent(definition: unknown): InlineAgent {
     throw new Error(
       `Inline agent "${parsed.name}": ${error instanceof Error ? error.message : String(error)}`,
       { cause: error },
-    );
-  }
-
-  // Reject category-incompatible settings at registration time:
-  // `rounds` is workflow-only, and `AgentSettingSchema` (the discriminated
-  // union at load time) rejects it for tool-use agents. Catching it here
-  // lets the embedder fix the error at the registration call rather than at
-  // launch (Fix #6).
-  if (category === AgentCategory.ToolUse && settings.rounds !== undefined) {
-    throw new Error(
-      `Inline agent "${parsed.name}": "rounds" is not valid for tool-use agents.`,
     );
   }
 
@@ -158,7 +151,7 @@ function normalizeInlineAgent(definition: unknown): InlineAgent {
           : undefined,
       internal: settings.internal === true || undefined,
     },
-    definition: parsed,
+    definition: { ...parsed, settings },
   };
 }
 
