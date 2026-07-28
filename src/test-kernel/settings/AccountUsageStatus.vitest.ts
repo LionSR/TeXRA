@@ -6,7 +6,7 @@ import { useLitComponentTestDom } from './litComponentTestUtils';
 
 type AccountTabElement = HTMLElement & {
   authenticated: boolean;
-  sessionExpired: boolean;
+  sessionProblem: 'expired' | 'unavailable' | null;
   spendingStatusError: {
     spendCheckFailed: boolean;
     failureReason: string | null;
@@ -41,15 +41,15 @@ describe('account usage status', () => {
 
     const text = element.shadowRoot?.textContent ?? '';
     expect(text).toContain('Usage check failed on the server');
-    expect(text).toContain('usage query unavailable');
-    expect(text).toContain('Included access is temporarily unavailable');
+    expect(text).toContain('Included access is temporarily');
+    expect(text).toContain('unavailable; switch to your own provider API keys');
     expect(text).not.toContain('Usage data is not available for this account.');
   });
 
   it('gives an expired session precedence over a spend-check failure', async () => {
     const element = await mountAccountTab();
     element.authenticated = false;
-    element.sessionExpired = true;
+    element.sessionProblem = 'expired';
     element.spendingStatusError = {
       spendCheckFailed: true,
       failureReason: 'stale server error',
@@ -62,5 +62,17 @@ describe('account usage status', () => {
       "Usage data can't load because your session has expired.",
     );
     expect(text).not.toContain('Usage check failed on the server');
+  });
+
+  it('does not call a transient refresh failure an expired session', async () => {
+    const element = await mountAccountTab();
+    element.authenticated = false;
+    element.sessionProblem = 'unavailable';
+    await element.updateComplete;
+
+    const text = element.shadowRoot?.textContent ?? '';
+    expect(text).toContain('authentication service is temporarily unavailable');
+    expect(text).not.toContain('session has expired');
+    expect(element.shadowRoot?.textContent).not.toContain('Sign in');
   });
 });

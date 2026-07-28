@@ -103,7 +103,7 @@ import {
   reliabilitySettings,
   resetSettingsState,
   selectedTabIndex,
-  sessionExpired,
+  sessionProblem,
   spendingStatus,
   spendingStatusError,
   tier,
@@ -359,7 +359,7 @@ export class SettingsApp extends SettingsAppBase {
             .authenticated=${authenticated.get()}
             .userEmail=${userEmail.get()}
             .tier=${tier.get()}
-            .sessionExpired=${sessionExpired.get()}
+            .sessionProblem=${sessionProblem.get()}
             .spendingStatus=${spendingStatus.get()}
             .spendingStatusError=${spendingStatusError.get()}
             .quotaAutoSwitched=${quotaAutoSwitched.get()}

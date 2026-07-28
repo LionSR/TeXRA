@@ -16,7 +16,11 @@ import {
   getConfiguredRelayToken,
   markRelayTokenRejected,
 } from './relayToken';
-import type { AuthTokenProvider, SessionTokens } from './TokenProvider';
+import type {
+  AuthTokenProvider,
+  SessionRefreshFailure,
+  SessionTokens,
+} from './TokenProvider';
 
 /**
  * Singleton Supabase client with authentication helpers.
@@ -402,5 +406,9 @@ export class SupabaseClient {
     } catch {
       return null;
     }
+  }
+
+  static getLastSessionRefreshFailure(): SessionRefreshFailure | null {
+    return this.authProvider?.getLastRefreshFailure() ?? null;
   }
 }
