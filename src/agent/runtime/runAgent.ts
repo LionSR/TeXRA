@@ -30,6 +30,7 @@ export interface RunAgentOptions extends Pick<
   | 'stopAfterCycle'
   | 'approvalPromptsUnavailable'
   | 'runtimeUnavailableTools'
+  | 'tools'
   | 'session'
   | 'modelHandlerCompatibilityKey'
   | 'onRun'

@@ -25,7 +25,7 @@ import {
   AgentCategory,
   type AgentToolUseSetting,
 } from '@agent/core/definition/AgentDataclass';
-import type { IToolRegistry } from '@agent/core/tools/ToolTypes';
+import type { ITool, IToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
@@ -46,8 +46,8 @@ import {
 import { deriveRunOutcome } from '@shared/streams/streamStatus';
 import { getDefaultToolRegistry } from '@tools/registry';
 import {
+  buildOverlayToolRegistry,
   buildTerminalTool,
-  buildTerminalToolRegistry,
 } from '@tools/structuredOutput';
 import { TaskRunFileService } from '@utils/files';
 
@@ -102,6 +102,8 @@ export interface RunToolUseFlowInput<
   ) => void;
   /** Runtime feature registry for auto-injected tools. */
   toolInjections?: ToolInjectionRegistry;
+  /** Caller-supplied tools available only to this run. */
+  tools?: readonly ITool[];
   /** Reports whether terminal finalization should retain the resume record. */
   onFlowRecordDisposition?: (disposition: 'preserve' | 'delete') => void;
 }
@@ -200,6 +202,30 @@ export async function runToolUseFlow<C = unknown>(
     runtimeUnavailableTools: runContext.runtimeUnavailableTools,
     toolInjections: input.toolInjections,
   });
+  const overlayTools: ITool[] = [];
+  const overlayNames = new Set<string>();
+  const appendOverlayTool = (tool: ITool): void => {
+    const { name } = tool.definition;
+    const definitionIndex = resolvedTools.findIndex(
+      (definition) => definition.name === name,
+    );
+    if (
+      overlayNames.has(name) ||
+      baseRegistry.has(name) ||
+      definitionIndex !== -1
+    ) {
+      logger.warn(`Run-scoped tool "${name}" shadows an existing tool.`);
+    }
+    overlayNames.add(name);
+    const definition = { ...tool.definition, forceFunctionCall: true };
+    if (definitionIndex === -1) {
+      resolvedTools.push(definition);
+    } else {
+      resolvedTools[definitionIndex] = definition;
+    }
+    overlayTools.push(tool);
+  };
+  for (const tool of input.tools ?? []) appendOverlayTool(tool);
 
   // Unforced structured-output floor: when the config declares an output
   // schema, append a synthetic `submit_output` terminal tool to the
@@ -213,15 +239,16 @@ export async function runToolUseFlow<C = unknown>(
       : undefined;
   let pendingStructuredOutput: ToolUseRunShared['structured'];
   let finalTool: ToolUseServices<C>['finalTool'];
-  let registry = baseRegistry;
   if (outputSchema) {
     const terminalTool = buildTerminalTool(outputSchema, (value) => {
       pendingStructuredOutput = value;
     });
     finalTool = { name: terminalTool.definition.name };
-    resolvedTools.push(terminalTool.definition);
-    registry = buildTerminalToolRegistry(baseRegistry, terminalTool);
+    appendOverlayTool(terminalTool);
   }
+  const registry = overlayTools.length
+    ? buildOverlayToolRegistry(baseRegistry, overlayTools)
+    : baseRegistry;
 
   const kv = getExecutionStore(executionId);
 
