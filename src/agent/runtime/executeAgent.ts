@@ -17,6 +17,7 @@ import {
   type AgentToolUseSetting,
   type AgentWorkflowSetting,
 } from '@agent/core/definition/AgentDataclass';
+import type { ITool } from '@agent/core/tools/ToolTypes';
 import { hasPersistedParent } from '@agent/storage/executionLifecycle';
 import {
   abandonOwnedExecutionLease,
@@ -129,7 +130,7 @@ async function runToolUseAgent(
   setting: AgentToolUseSetting,
   options: Pick<
     ExecuteAgentOptions,
-    'isSubagent' | 'onFollowUpConsumed' | 'onProgress' | 'onIdle'
+    'isSubagent' | 'onFollowUpConsumed' | 'onProgress' | 'onIdle' | 'tools'
   >,
 ): Promise<AgentRuntimeFlowResult> {
   const { streamId: runStreamId, executionId: runExecutionId } = ctx.runScope;
@@ -157,6 +158,7 @@ async function runToolUseAgent(
         ),
         onFlowRecordDisposition: (disposition) =>
           lifecycle.setFlowRecordDisposition(disposition),
+        tools: options.tools,
         onModelChanged: (modelHandler) => {
           // The tool-use flow already wrote services.config.model
           // (=== ctx.config.model, same object), so the live model is updated
@@ -278,6 +280,8 @@ function buildFallbackNotification(config: AgentConfig): FallbackNotification {
  * under a different name.
  */
 export interface SubagentRunOptions {
+  /** Run-scoped tools added to tool-use agents without mutating the default registry. */
+  readonly tools?: readonly ITool[];
   /** Parent stream ID for subagent lineage tracking. Defaults to own streamId. */
   parentStreamId?: StreamTabId;
   /** Fires when a tool-use session consumes queued follow-up instructions. */
@@ -567,6 +571,7 @@ export async function resumeToolUseFromResumeData(
                   onRoundFinalized: createUsageRecordingCallback(ctx),
                   setting,
                   resume,
+                  tools: options.tools,
                   drainedFollowUps: options.drainedFollowUps,
                   takePendingFollowUps: options.takePendingFollowUps,
                   // A persisted parent marks this execution as a subagent. Without

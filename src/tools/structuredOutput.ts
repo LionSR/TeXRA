@@ -219,19 +219,20 @@ export function buildTerminalTool(
 }
 
 /**
- * Wrap a base registry so `submit_output` resolves to the run-scoped terminal
- * tool while every other lookup delegates to `base`. The shared default
- * registry is never mutated, so concurrent runs never see one another's
- * terminal tool. Used by the tool-use flow to make the synthetic tool findable
- * by name (`toolRegistry.get('submit_output')`) alongside the real tools.
+ * Overlay run-scoped tools on a base registry without mutating it. Overlay
+ * tools win name collisions, and later entries win collisions within the
+ * overlay. Concurrent runs can therefore share `base` without seeing one
+ * another's injected or structured-output tools.
  */
-export function buildTerminalToolRegistry(
+export function buildOverlayToolRegistry(
   base: IToolRegistry,
-  terminalTool: ITool,
+  tools: readonly ITool[],
 ): IToolRegistry {
+  const overlay = new Map(
+    tools.map((tool) => [tool.definition.name, tool] as const),
+  );
   return {
-    get: (name) =>
-      name === SUBMIT_OUTPUT_TOOL_NAME ? terminalTool : base.get(name),
-    has: (name) => name === SUBMIT_OUTPUT_TOOL_NAME || base.has(name),
+    get: (name) => overlay.get(name) ?? base.get(name),
+    has: (name) => overlay.has(name) || base.has(name),
   };
 }
