@@ -41,7 +41,7 @@ vi.mock('@agent/runtime/RunContext', () => {
     tryUseRunContext: mocks.tryUseRunContext,
     getRunContextExecutionId: (context: any) =>
       readRunContextField(context, 'executionId'),
-    getRunContextRuntimeHost: (context: any) =>
+    getRunContextInteractions: (context: any) =>
       readRunContextField(context, 'interactions'),
   };
 });
