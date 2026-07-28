@@ -2,6 +2,7 @@
   "name": "@texra-ai/agent",
   "version": "0.39.10",
   "description": "Embeddable TeXRA agent runtime",
+  "license": "SEE LICENSE IN LICENSE.txt",
   "type": "module",
   "engines": {
     "node": ">=22.9.0"
@@ -10,7 +11,8 @@
     "access": "public"
   },
   "files": [
-    "dist"
+    "dist",
+    "LICENSE.txt"
   ],
   "exports": {
     ".": {

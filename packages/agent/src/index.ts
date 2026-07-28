@@ -8,6 +8,7 @@ import type { ITool } from '@agent/core/tools/ToolTypes';
 
 // Local imports - runtime
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { loadAgents, resolveAgent } from '@agent/index/agentRegistry';
 import { SessionHandle as RuntimeSessionHandle } from '@agent/runtime/SessionHandle';
 import { runAgent as runValidatedAgent } from '@agent/runtime/runAgent';
@@ -240,6 +241,15 @@ export function runAgent(input: RunAgentInput): AgentRun {
       if (!resolved) {
         throw new Error(
           `Agent "${input.agent}" was not found in the configured agent directory.`,
+        );
+      }
+      if (
+        input.tools &&
+        input.tools.length > 0 &&
+        resolved.entry.category !== AgentCategory.ToolUse
+      ) {
+        throw new Error(
+          `Custom tools are supported only for tool-use agents; "${input.agent}" is a workflow agent.`,
         );
       }
       const config = AgentConfigSchema.parse({

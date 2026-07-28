@@ -6,6 +6,7 @@ import type { Platform } from '@platform/platform';
 
 const mocks = vi.hoisted(() => ({
   activePlatform: null as object | null,
+  agentCategory: 'toolUse',
   detachEvents: vi.fn(),
   detachInteractions: vi.fn(),
   disposeSession: vi.fn(),
@@ -47,7 +48,7 @@ vi.mock('@agent/trace', () => ({
 vi.mock('@agent/index/agentRegistry', () => ({
   loadAgents: mocks.loadAgents,
   resolveAgent: () => ({
-    entry: { category: 'toolUse', source: 'custom' },
+    entry: { category: mocks.agentCategory, source: 'custom' },
     resolvedName: 'assistant',
   }),
 }));
@@ -96,6 +97,7 @@ describe('agent package run lifecycle', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.activePlatform = null;
+    mocks.agentCategory = 'toolUse';
     mocks.eventListener = undefined;
     mocks.loadAgents.mockResolvedValue(undefined);
     mocks.runValidatedAgent.mockImplementation(
@@ -170,6 +172,24 @@ describe('agent package run lifecycle', () => {
 
     await expect(run.result).rejects.toThrow(
       'The agent package cannot run approval-requiring tools: dangerous_tool',
+    );
+    expect(mocks.runValidatedAgent).not.toHaveBeenCalled();
+  });
+
+  it('rejects custom tools for workflow agents', async () => {
+    mocks.agentCategory = 'workflow';
+    const run = runAgent({
+      ...INPUT,
+      tools: [
+        {
+          definition: { name: 'custom_reader' },
+          requiresApproval: false,
+        },
+      ] as never,
+    });
+
+    await expect(run.result).rejects.toThrow(
+      'Custom tools are supported only for tool-use agents; "assistant" is a workflow agent.',
     );
     expect(mocks.runValidatedAgent).not.toHaveBeenCalled();
   });
