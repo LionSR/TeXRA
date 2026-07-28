@@ -56,6 +56,11 @@ const RELAY_PATH_SUFFIXES: Partial<Record<ServerSideProvider, string>> = {
 /** Global state key for the "use included model access" preference. */
 const USE_INCLUDED_ACCESS_KEY = 'texra.useIncludedModelAccess';
 
+interface AccessStatus {
+  hasAccess: boolean;
+  userTier: UserTier | null;
+}
+
 export interface ClearServerSideKeyCachesOptions {
   /**
    * Reset the per-session quota auto-switch guard. Use this only when the
@@ -224,15 +229,19 @@ export class ServerSideKeyService {
     );
   }
 
-  private async fetchAccessStatus(): Promise<boolean> {
+  /**
+   * Compute the account access status without changing cached service state.
+   * The calling fetch commits this result only if it is still the most recent
+   * request, so an older anonymous request cannot erase a later authenticated
+   * result.
+   */
+  private async fetchAccessStatus(): Promise<AccessStatus> {
     try {
       if (!(await SupabaseClient.isAuthenticated())) {
-        return this.setAccessDenied();
+        return { hasAccess: false, userTier: null };
       }
       const tier = await SupabaseClient.getUserTier();
-      this.accessResult = true;
-      this.userTier = tier || FREE_TIER;
-      return true;
+      return { hasAccess: true, userTier: tier || FREE_TIER };
     } catch (error) {
       // Denied by error (auth/network failure), not by policy — log so the two
       // are distinguishable.
@@ -240,14 +249,8 @@ export class ServerSideKeyService {
         CHANNEL,
         `Access check failed, treating as denied: ${toErrorMessage(error)}`,
       );
-      return this.setAccessDenied();
+      return { hasAccess: false, userTier: null };
     }
-  }
-
-  private setAccessDenied(): false {
-    this.accessResult = false;
-    this.userTier = null;
-    return false;
   }
 
   /**
@@ -301,45 +304,41 @@ export class ServerSideKeyService {
         (await SupabaseClient.getRelayAccessToken()) ?? undefined;
       const thisFetchAuthenticated = authToken !== undefined;
 
-      const [hasAccess, tierConfig] = await Promise.all([
+      const [accessStatus, tierConfig] = await Promise.all([
         this.fetchAccessStatus(),
         this.tierService.getConfig(authToken),
       ]);
 
-      // Commit fetch metadata before any early-return paths so the
-      // anonymous-fetch backoff has a timestamp to gate on even for
-      // denied outcomes (expired access, missing tier config). Only
-      // commit when we are still the canonical call — a superseded fetch
-      // must not overwrite metadata from the later fetch.
-      const isLatest = this._activeFetchToken === fetchToken;
-      if (isLatest) {
-        this.lastFetchAuthenticated = thisFetchAuthenticated;
-        this.accessTimestamp = Date.now();
-      }
+      const hasFullAccess = accessStatus.userTier === ULTRA_TIER;
+      const providers =
+        tierConfig?.providers ?? this.tierService.getProviders();
+      let accessGranted = accessStatus.hasAccess && providers.length > 0;
 
       if (this.tierService.isAccessExpired()) {
         this.logger.info?.(CHANNEL, 'User access has expired');
-        if (isLatest) this.accessResult = false;
-        return false;
-      }
-
-      if (!this.hasFullAccess() && tierConfig === null) {
+        accessGranted = false;
+      } else if (!hasFullAccess && tierConfig === null) {
         this.logger.info?.(
           CHANNEL,
           'Tier config unavailable for non-Ultra user, denying access',
         );
-        if (isLatest) this.accessResult = false;
-        return false;
+        accessGranted = false;
       }
 
-      const providers = this.tierService.getProviders();
-      const accessGranted = hasAccess && providers.length > 0;
+      // Commit the complete access snapshot at one boundary. A superseded
+      // fetch may return its own result to its caller, but it must not alter
+      // the canonical tier, access decision, or authentication metadata.
+      const isLatest = this._activeFetchToken === fetchToken;
+      if (isLatest) {
+        this.accessResult = accessGranted;
+        this.userTier = accessStatus.userTier;
+        this.lastFetchAuthenticated = thisFetchAuthenticated;
+        this.accessTimestamp = Date.now();
+        this._isCachePrimed = accessGranted;
+      }
 
       if (!isLatest) return accessGranted;
-
-      if (accessGranted) {
-        this._isCachePrimed = true;
-      }
+      if (!accessGranted) return false;
 
       // Auto-flip useIncludedModelAccess to false when the user's
       // monthly relay quota is exhausted. The toggle change is visible
@@ -348,7 +347,7 @@ export class ServerSideKeyService {
       // and surface the relay's 402 error directly.
       if (
         !this.quotaFlipApplied &&
-        hasAccess &&
+        accessStatus.hasAccess &&
         this.tierService.isQuotaExceeded()
       ) {
         this.quotaFlipApplied = true;
