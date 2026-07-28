@@ -1,5 +1,5 @@
-// Local imports - types
-import type { AgentEvent } from '@agent/trace';
+// Local imports - trace and types
+import { createChannelTrace, type AgentEvent } from '@agent/trace';
 import type { AgentRunHandle as RuntimeAgentRunHandle } from '@agent/runtime/ExecutionHandle';
 import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import type { HostInteractions as RuntimeHostInteractions } from '@agent/runtime/HostInteractions';
@@ -73,6 +73,7 @@ export interface AgentRun extends AsyncIterable<AgentEvent> {
 }
 
 let runtimeInitialized = false;
+const logger = createChannelTrace('agentPackage');
 
 class AgentRunStream implements AgentRun {
   private readonly events: AgentEvent[] = [];
@@ -258,8 +259,18 @@ export function runAgent(input: RunAgentInput): AgentRun {
         },
       );
     } finally {
-      detachInteractions();
-      session.dispose();
+      try {
+        detachInteractions();
+      } catch (error) {
+        logger.warn('Failed to detach package host interactions', {
+          data: error,
+        });
+      }
+      try {
+        session.dispose();
+      } catch (error) {
+        logger.warn('Failed to dispose package session', { data: error });
+      }
     }
   });
 }

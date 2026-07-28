@@ -28,10 +28,15 @@ const mocks = vi.hoisted(() => ({
     },
   ),
   useHostInteractions: vi.fn(() => mocks.detachInteractions),
+  warn: vi.fn(),
 }));
 
 vi.mock('@agent/core/definition/AgentConfig', () => ({
   AgentConfigSchema: { parse: (value: unknown) => value },
+}));
+
+vi.mock('@agent/trace', () => ({
+  createChannelTrace: () => ({ warn: mocks.warn }),
 }));
 
 vi.mock('@agent/index/agentRegistry', () => ({
@@ -111,6 +116,38 @@ describe('agent package run lifecycle', () => {
     await runAgent(INPUT).result;
 
     expect(mocks.subscribe).not.toHaveBeenCalled();
+  });
+
+  it('preserves the run result when session disposal fails', async () => {
+    const disposalError = new Error('session disposal failed');
+    mocks.disposeSession.mockImplementationOnce(() => {
+      throw disposalError;
+    });
+
+    await expect(runAgent(INPUT).result).resolves.toBe(RESULT);
+    expect(mocks.warn).toHaveBeenCalledWith(
+      'Failed to dispose package session',
+      {
+        data: disposalError,
+      },
+    );
+  });
+
+  it('preserves the run failure when session disposal also fails', async () => {
+    const runError = new Error('run failed');
+    const disposalError = new Error('session disposal failed');
+    mocks.runValidatedAgent.mockRejectedValueOnce(runError);
+    mocks.disposeSession.mockImplementationOnce(() => {
+      throw disposalError;
+    });
+
+    await expect(runAgent(INPUT).result).rejects.toBe(runError);
+    expect(mocks.warn).toHaveBeenCalledWith(
+      'Failed to dispose package session',
+      {
+        data: disposalError,
+      },
+    );
   });
 
   it('detaches the event source when iteration ends early', async () => {
