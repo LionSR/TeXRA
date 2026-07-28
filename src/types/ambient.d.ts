@@ -18,6 +18,11 @@ declare module 'bibtex' {
   }
 
   export function parseBibFile(content: string): BibLibrary;
+
+  const bibtex: {
+    parseBibFile: typeof parseBibFile;
+  };
+  export default bibtex;
 }
 
 /**

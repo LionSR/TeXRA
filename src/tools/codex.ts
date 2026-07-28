@@ -103,9 +103,9 @@ import type {
 // platform/SDK graph into the tool-registration path.
 
 /** Lazy accessor for codexConfig.ts exports (loaded once, cached). */
-let _configModule: typeof import('./codexConfig') | null = null;
-async function getCodexConfig(): Promise<typeof import('./codexConfig')> {
-  return (_configModule ??= await import('./codexConfig'));
+let _configModule: typeof import('./codexConfig.js') | null = null;
+async function getCodexConfig(): Promise<typeof import('./codexConfig.js')> {
+  return (_configModule ??= await import('./codexConfig.js'));
 }
 
 // ============================================================================

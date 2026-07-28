@@ -7,6 +7,7 @@ import semver from 'semver';
 
 const MANIFEST_PATHS = [
   'package.json',
+  'packages/agent/package.json',
   'packages/cli/package.json',
   'packages/desktop/package.json',
   'packages/extension/package.json',
