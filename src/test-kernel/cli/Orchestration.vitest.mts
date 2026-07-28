@@ -90,7 +90,7 @@ function preset(overrides: Partial<CliMultiAgentPreset>): CliMultiAgentPreset {
     id: 'physicist',
     name: 'Physicist',
     description: 'Physics team',
-    icon: 'symbol-operator',
+    icon: 'cube',
     workflowAgents: ['criticize'],
     toolUseAgents: ['orchestrator', 'review'],
     texraHostedAgents: ['orchestrator'],

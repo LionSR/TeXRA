@@ -77,7 +77,7 @@ function PlainEntryRows({
     );
   }
 
-  // Workflow-task rows carry the same status color as their layout marker, so
+  // Workflow-call rows carry the same status color as their layout marker, so
   // the six statuses stay distinguishable at a glance.
   let rowColor: string | undefined;
   if (entry.role === 'error') {

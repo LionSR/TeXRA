@@ -17,8 +17,8 @@ import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   TOOL_USE_STATUS,
-  WorkflowTaskProgressSchema,
-  isTerminalWorkflowTaskProgress,
+  WorkflowCallProgressSchema,
+  isTerminalWorkflowCallProgress,
   type NormalizedToolUse,
   type StreamLogEntry,
   type StreamTabId,
@@ -28,7 +28,7 @@ import {
   summarizeFollowupMessage,
 } from '@shared/subagentFollowup';
 import { normalizeToolUseData } from '@shared/toolUse';
-import { formatWorkflowTaskLine } from '@shared/copy/workflowTask';
+import { formatWorkflowCallLine } from '@shared/copy/workflowCall';
 import { isActivePhase } from '@shared/streams/streamStatus';
 import { projectTaskGroupsFromStreamLog } from '@shared/streams/taskGroupProjection';
 import { createFlushableDebounce } from '@utils/core';
@@ -426,27 +426,27 @@ function renderLogEntry(
   }
 
   if (entry.messageType === MESSAGE_TYPES.WORKFLOW_TASK) {
-    const parsed = WorkflowTaskProgressSchema.safeParse(entry.data);
+    const parsed = WorkflowCallProgressSchema.safeParse(entry.data);
     if (!parsed.success) return null;
-    const task = parsed.data;
+    const call = parsed.data;
     const next: ConversationEntry = {
       id: entry.id,
       sourceSeqNo: entry.seqNo,
       role: 'workflowTask',
-      text: formatWorkflowTaskLine(task),
+      text: formatWorkflowCallLine(call),
       messageType: entry.messageType,
       finalized: computeFinalized(entry, prev),
       ...(entry.settlementSeqNo !== undefined
         ? { settlementSeqNo: entry.settlementSeqNo }
         : {}),
-      task,
+      task: call,
     };
     return prev && entriesEqual(prev, next) ? prev : next;
   }
 
   // A phase header is immutable at GROUP_START and therefore printable
   // immediately. Its source-owned settlement order keeps cold reconstruction
-  // identical to the live append-only transcript even when planned task rows
+  // identical to the live append-only transcript even when planned call rows
   // were recorded earlier.
   const phaseData = phaseGroupData(entry);
   if (phaseData) {
@@ -524,7 +524,7 @@ function renderLogEntry(
 // An entry is "settled" once its content can no longer change, so it is
 // safe to print once into `<Static>` scrollback:
 //   - user / error: fixed the moment they appear.
-//   - workflow task: fixed once its typed state reaches a terminal status.
+//   - workflow call: fixed once its typed state reaches a terminal status.
 //   - assistant: frozen once the model emits a later entry (more text or a
 //     tool call). The trailing block may still be streaming.
 //   - tool: frozen once its result lands (status COMPLETED).
@@ -545,7 +545,7 @@ function isSettledEntry(
         entry.toolUse.status === TOOL_USE_STATUS.FAILED
       );
     case 'workflowTask':
-      return isTerminalWorkflowTaskProgress(entry.task);
+      return isTerminalWorkflowCallProgress(entry.task);
     case 'assistant':
       return (
         !entry.pendingEmbeddedSubagentFollowup && index < entries.length - 1
@@ -560,7 +560,7 @@ function isSettledEntry(
 // prefix is promoted: `<Static>` is append-only, so an entry must not
 // finalize while any earlier entry is still pending, or insertion order
 // would reverse. A final stream status settles trailing assistant/tool rows,
-// but not a workflow task: bridge cleanup may still replace its
+// but not a workflow call: bridge cleanup may still replace its
 // planned/running state after cancellation.
 export function finalizeSettledPrefix(
   entries: readonly ConversationEntry[],

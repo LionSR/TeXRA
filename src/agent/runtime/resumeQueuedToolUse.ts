@@ -2,7 +2,12 @@ import type {
   FollowUpQueueBatchItem,
   FollowUpQueueInput,
 } from '@agent/followUp/FollowUpQueue';
-import type { AgentRuntimeFlowResult } from '@agent/runtime/AgentFlowResult';
+import type { FollowUpRecoveryLease } from '@agent/followUp/ToolUseFollowUpQueueManager';
+import {
+  isWaitingFlowResult,
+  type AgentRuntimeFlowResult,
+} from '@agent/runtime/AgentFlowResult';
+import type { RecoveryContinuation } from '@platform/interfaces';
 import {
   STREAM_PHASE,
   STREAM_SUBSTATE,
@@ -20,6 +25,8 @@ import type { ToolUseResumeData } from './SessionResumeRetrieval';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
 export interface ResumeQueuedToolUseOptions extends SubagentRunOptions {
+  /** Recovery ownership synchronously claimed by the submission boundary. */
+  readonly recovery?: RecoveryContinuation;
   /** Recheck canonical admission atomically while acquiring the resumed lease. */
   readonly canAcquireResumeLease?: () => boolean | Promise<boolean>;
   /** Query a caller-owned stop request at the resumed flow attachment boundary. */
@@ -43,7 +50,7 @@ export interface ResumeQueuedToolUseOptions extends SubagentRunOptions {
    * Fires after the shared stream queue is acquired and marked RESUMING, but
    * before its queued items are drained into the rebuilt session.
    */
-  readonly onFollowUpQueueReady?: () => void;
+  readonly onFollowUpQueueReady?: (recovery: FollowUpRecoveryLease) => void;
   /**
    * Host-specific failure surface (log + toast). Invoked after the stream has
    * been returned to WAITING, so a blocking host dialog cannot strand the
@@ -85,24 +92,25 @@ export async function resumeQueuedToolUseFromResumeData(
     return false;
   }
 
-  followUpsQueue.acquire(streamId);
+  const queueLease = options.recovery
+    ? followUpsQueue.useRecovery(options.recovery)
+    : followUpsQueue.claimRecovery(streamId, true);
+  if (!queueLease) return false;
   streamStatus.transition(streamId, STREAM_PHASE.RUNNING, 'resume', {
     substate: STREAM_SUBSTATE.RESUMING,
   });
 
   const seed = options.extraFollowUps ?? [];
   let followUps: readonly FollowUpQueueInput[] = seed;
-  let followUpBoundaryReached = false;
   let cancelledAtFlowAttachment = false;
   let cancelledBeforeLaunch = false;
   let followUpsRestored = false;
   let resumeError: { error: unknown } | undefined;
+  let runResult: AgentRuntimeFlowResult | undefined;
   const restoreFollowUps = (): void => {
     if (followUpsRestored) return;
     followUpsRestored = true;
-    for (const item of followUps) {
-      followUpsQueue.enqueue(streamId, item, { force: true });
-    }
+    followUpsQueue.restore(queueLease, followUps);
     if (followUps.length > 0) {
       session.events.emit({
         scope: 'session',
@@ -114,8 +122,8 @@ export async function resumeQueuedToolUseFromResumeData(
     }
   };
   try {
-    options.onFollowUpQueueReady?.();
-    followUps = [...seed, ...followUpsQueue.drainItems(streamId)];
+    options.onFollowUpQueueReady?.(queueLease);
+    followUps = [...seed, ...followUpsQueue.drainItems(queueLease)];
     session.events.emit({
       scope: 'session',
       event: {
@@ -158,19 +166,12 @@ export async function resumeQueuedToolUseFromResumeData(
       // this host resume must claim the late batch so input accepted by the
       // live context cannot remain dormant.
       takePendingFollowUps: () => {
-        const isPostParkClaim = followUpBoundaryReached;
-        followUpBoundaryReached = true;
-        if (
-          isPostParkClaim &&
-          session.executions.isChildRunLoopActive(streamId)
-        ) {
-          return [];
-        }
-        const raced = followUpsQueue.drainItems(streamId);
+        const raced = followUpsQueue.drainItems(queueLease);
         followUps = [...followUps, ...raced];
         return raced.map(toFollowUpBatchItem);
       },
     });
+    runResult = result;
     if (followUps.length > 0) restoreFollowUps();
     options.onResult?.(result);
   } catch (error) {
@@ -199,6 +200,12 @@ export async function resumeQueuedToolUseFromResumeData(
     ) {
       streamStatus.transitionToWaiting(streamId, 'wait');
     }
+    followUpsQueue.release(
+      queueLease,
+      !runResult || isWaitingFlowResult(runResult) || followUpsRestored
+        ? 'recoverable'
+        : 'terminal',
+    );
   }
 
   if (cancelledBeforeLaunch) return false;

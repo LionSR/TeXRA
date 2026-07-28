@@ -29,10 +29,7 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import { hasAnyUsableSetupCredential } from '@commands/setup/setupAssistantCommand';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
-import {
-  isResumeInFlight,
-  tryResumeFromResumeData,
-} from '@commands/agent/resumeFromResumeData';
+import { tryResumeFromResumeData } from '@commands/agent/resumeFromResumeData';
 import { globalSM, initializeStateManagers, workspaceSM } from '@common/state';
 import { SIDEBAR_VIEWS, setActiveSidebarView } from '@common/webview';
 import { appSignals } from '@eventBus/AppSignals';
@@ -241,8 +238,8 @@ export async function activate(context: vscode.ExtensionContext) {
     lifecycle,
     agentDirectories,
     agentResume: {
-      tryResumeStream: (streamId) => tryResumeFromResumeData(streamId),
-      isResumeInFlight: (streamId) => isResumeInFlight(streamId),
+      tryResumeStream: (streamId, recovery) =>
+        tryResumeFromResumeData(streamId, recovery),
     },
     toolAvailability: {
       ...NO_TOOL_AVAILABILITY_HOST,

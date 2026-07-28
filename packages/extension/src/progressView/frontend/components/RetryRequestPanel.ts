@@ -129,7 +129,7 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
             }),
           )}
           ${renderLabeledActionButton({
-            icon: 'refresh',
+            icon: 'rotate-right',
             text: copilotQuotaExhausted ? 'Retry Copilot' : 'Retry',
             title: copilotQuotaExhausted ? 'Retry Copilot (r)' : 'Retry (r)',
             action: 'retry',
@@ -137,7 +137,7 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
             onClick: () => this.emitAction({ action: 'retry' }),
           })}
           ${renderLabeledActionButton({
-            icon: 'close',
+            icon: 'xmark',
             text: 'Dismiss',
             title: 'Dismiss (Esc)',
             action: 'cancel',

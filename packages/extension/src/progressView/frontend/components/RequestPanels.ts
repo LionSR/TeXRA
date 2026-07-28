@@ -32,7 +32,8 @@ import {
 } from '@shared/styles';
 
 // Local imports - progress view helpers
-import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 import {
   createEmptyPermissionGroups,
   findPanelForPermission,
@@ -69,7 +70,7 @@ interface SectionConfig {
 const SECTION_CONFIGS: Record<string, SectionConfig> = {
   approval: {
     cssClass: 'approval-requests',
-    icon: 'diff',
+    icon: 'code-compare',
     title: 'Tool edit approval',
     renderPanel: (p) =>
       html`<tool-edit-request-panel
@@ -85,7 +86,7 @@ const SECTION_CONFIGS: Record<string, SectionConfig> = {
   },
   retry: {
     cssClass: 'retry-requests',
-    icon: 'refresh',
+    icon: 'rotate-right',
     title: 'Retry request',
     renderPanel: (p) =>
       html`<retry-request-panel .permission=${p}></retry-request-panel>`,
@@ -99,7 +100,7 @@ const SECTION_CONFIGS: Record<string, SectionConfig> = {
   },
   planApproval: {
     cssClass: 'plan-approval-requests',
-    icon: 'checklist',
+    icon: 'list-check',
     title: 'Plan approval',
     renderPanel: (p) =>
       html`<plan-approval-request-panel

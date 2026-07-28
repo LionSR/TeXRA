@@ -41,7 +41,8 @@ import {
 } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { formatPhaseStageLabel } from '@shared/streams/streamStatusDisplay';
-import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { ProgressEvents } from '../events';
 
 // Local imports - contexts
@@ -387,7 +388,7 @@ export class BackgroundTasksPanel extends LitElement {
     return html`
       <wa-details class="collapsible-quiet">
         <div slot="summary" class="section-label">
-          ${waIcon('server-process')}
+          ${waIcon('server')}
           <span
             >Subagents${
               activeCount ? html` &middot; ${activeCount} active` : nothing
@@ -510,7 +511,7 @@ function getTaskIcon(child: ActiveChildInfo): TeXRAIconName {
   if (isAgentTool(child)) return 'robot';
   // Subagents (delegation, workflow) default to server-process;
   // processes without a toolName fall back to terminal.
-  return child.kind === 'subagent' ? 'server-process' : 'terminal';
+  return child.kind === 'subagent' ? 'server' : 'terminal';
 }
 
 /**
