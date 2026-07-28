@@ -326,7 +326,14 @@ export class SessionHandle {
     generation: number,
   ): Promise<boolean> {
     if (generation !== this.storageGeneration) return false;
-    await Promise.all([this.transcripts.flush(), this.snapshots.flush()]);
+    try {
+      await Promise.all([this.transcripts.flush(), this.snapshots.flush()]);
+    } catch (flushError) {
+      return this.restoreRestartRepairAfterReplacementFailure(
+        generation,
+        flushError,
+      );
+    }
     if (
       generation !== this.storageGeneration ||
       this.restartRepairAbort.signal.aborted
@@ -334,7 +341,10 @@ export class SessionHandle {
       return false;
     }
     const storage = platform().storage;
-    if (storage.commitWorkspaceStorageChange?.() === false) return false;
+    if (storage.commitWorkspaceStorageChange?.() === false) {
+      await this.runRestartRepair(generation);
+      return false;
+    }
     const previousStatus = this.status.getAllStreamStates();
     try {
       await this.transcripts.reload();
@@ -390,8 +400,26 @@ export class SessionHandle {
           'Workspace storage replacement and rollback both failed',
         );
       }
-      throw replacementError;
+      return this.restoreRestartRepairAfterReplacementFailure(
+        generation,
+        replacementError,
+      );
     }
+  }
+
+  private async restoreRestartRepairAfterReplacementFailure(
+    generation: number,
+    replacementError: unknown,
+  ): Promise<never> {
+    try {
+      await this.runRestartRepair(generation);
+    } catch (repairError) {
+      throw new AggregateError(
+        [replacementError, repairError],
+        'Workspace storage replacement failed and restored restart repair also failed',
+      );
+    }
+    throw replacementError;
   }
 
   private async runRestartRepair(generation: number): Promise<void> {
