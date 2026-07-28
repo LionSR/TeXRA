@@ -22,6 +22,7 @@ import {
   type AuthTokenProvider,
   type SessionRefreshFailure,
   type SessionTokens,
+  type StoredSessionState,
 } from './TokenProvider';
 import type { SupabaseClient as Client } from '@supabase/supabase-js';
 
@@ -107,13 +108,30 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
   }
 
   /**
-   * Whether a previously-stored session exists in storage. Loads directly
-   * from the keychain / secure store WITHOUT attempting a token refresh, so
-   * it detects zombie sessions (expired access token + revoked refresh) that
-   * ensureFreshToken() would report as absent.
+   * Classify one stable stored-session generation. A callback may replace the
+   * session while refresh is in flight; in that case retry rather than apply
+   * the old credential's failure to the new one.
    */
-  async hasStoredSession(): Promise<boolean> {
-    return (await this.loadSession()) !== null;
+  async getStoredSessionState(): Promise<StoredSessionState> {
+    try {
+      for (;;) {
+        const before = await this.loadStableSessionSnapshot();
+        if (!before.session) return 'none';
+        if (await this.getSessionTokens()) return 'authenticated';
+
+        const after = await this.loadStableSessionSnapshot();
+        if (!after.session) return 'none';
+        if (after.version !== before.version) continue;
+
+        return this.lastRefreshFailure === 'invalid' ? 'invalid' : 'transient';
+      }
+    } catch (error) {
+      this.options.log?.error?.(
+        'SupabaseSession',
+        `Error classifying stored session: ${toErrorMessage(error)}`,
+      );
+      return 'transient';
+    }
   }
 
   /**

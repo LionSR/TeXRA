@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const authMocks = vi.hoisted(() => ({
   clearStoredSession: vi.fn(async () => true),
   getSession: vi.fn(),
+  removeStoredSession: vi.fn(async () => true),
   showInformationMessage: vi.fn(),
   showLoggedMessage: vi.fn(),
   showQuickPick: vi.fn(),
@@ -32,6 +33,7 @@ vi.mock('@frontend/auth/SupabaseAuthProvider', () => ({
   SupabaseAuthProvider: {
     getInstance: () => ({
       clearStoredSession: authMocks.clearStoredSession,
+      removeStoredSession: authMocks.removeStoredSession,
     }),
   },
 }));
@@ -89,16 +91,33 @@ describe('auth commands for unavailable stored sessions', () => {
     );
   });
 
-  it('clears an unavailable stored session without resolving it first', async () => {
+  it('defers sign-in when secondary validation cannot resolve a healthy session', async () => {
+    vi.spyOn(SupabaseClient, 'isReady').mockResolvedValue(true);
+    vi.spyOn(SupabaseClient, 'getStoredSessionState').mockResolvedValue(
+      'authenticated',
+    );
+    authMocks.getSession.mockResolvedValue(undefined);
+
+    await expect(signIn()).resolves.toBe(false);
+
+    expect(authMocks.clearStoredSession).not.toHaveBeenCalled();
+    expect(authMocks.showQuickPick).not.toHaveBeenCalled();
+    expect(authMocks.showLoggedMessage).toHaveBeenCalledWith(
+      'authCommands',
+      expect.stringContaining('temporarily unavailable'),
+    );
+  });
+
+  it('revokes an unavailable stored session without resolving it first', async () => {
     mockUnavailableStoredSession('invalid');
-    authMocks.showWarningMessage.mockResolvedValue('Clear Session');
+    authMocks.showWarningMessage.mockResolvedValue('Sign Out');
 
     await signOut();
 
     expect(authMocks.getSession).not.toHaveBeenCalled();
-    expect(authMocks.clearStoredSession).toHaveBeenCalledOnce();
+    expect(authMocks.removeStoredSession).toHaveBeenCalledOnce();
     expect(authMocks.showInformationMessage).toHaveBeenCalledWith(
-      'Stored session cleared',
+      'Signed out successfully',
     );
   });
 });

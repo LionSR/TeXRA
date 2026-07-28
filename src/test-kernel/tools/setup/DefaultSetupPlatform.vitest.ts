@@ -107,7 +107,7 @@ describe('shared setup capabilities', () => {
         accessToken: 'session-token',
         refreshToken: 'refresh-token',
       }),
-      hasStoredSession: async () => true,
+      getStoredSessionState: async () => 'authenticated',
       getStoredAccountLabel: async () => null,
       getLastRefreshFailure: () => null,
     });

@@ -657,6 +657,40 @@ describe('SupabaseSession', () => {
       assert.equal(read(), null);
     });
 
+    it('reclassifies when a new session replaces one whose refresh failed', async () => {
+      const initialSession = makeSession({
+        accessToken: 'old-access',
+        refreshToken: 'old-refresh',
+        expiresAt: Date.now() - 1_000,
+        useCustomRefresh: true,
+      });
+      const refreshStarted = createDeferred();
+      const allowRefreshFailure = createDeferred();
+      const { coordinator, read } = createCoordinator({
+        initialSession,
+        fetch: async () => {
+          refreshStarted.resolve();
+          await allowRefreshFailure.promise;
+          return new Response(
+            JSON.stringify({ error: 'invalid refresh token' }),
+            { status: 401 },
+          );
+        },
+      });
+
+      const statePromise = coordinator.getStoredSessionState();
+      await refreshStarted.promise;
+      const replacement = makeSession({
+        accessToken: 'replacement-access',
+        refreshToken: 'replacement-refresh',
+      });
+      await coordinator.storeSession(replacement);
+      allowRefreshFailure.resolve();
+
+      assert.equal(await statePromise, 'authenticated');
+      assert.deepEqual(read(), replacement);
+    });
+
     it('does not return expired session tokens when refresh fails', async () => {
       const initialSession = makeSession({
         accessToken: 'old-access',
