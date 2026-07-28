@@ -56,12 +56,13 @@ export async function buildProfileMessage(
   // Preserve the distinction between an authoritatively rejected refresh
   // credential and a transient transport/service failure. Both have a stored
   // account but require different user guidance.
-  const hasStoredSession =
-    !authenticated && (await SupabaseClient.hasStoredSession());
-  const refreshFailure = SupabaseClient.getLastSessionRefreshFailure();
+  const storedSessionState = await SupabaseClient.getStoredSessionState();
+  const hasStoredSession = storedSessionState !== 'none';
   let sessionProblem: UpdateProfileMessage['sessionProblem'] = null;
-  if (hasStoredSession) {
-    sessionProblem = refreshFailure === 'invalid' ? 'expired' : 'unavailable';
+  if (storedSessionState === 'invalid') {
+    sessionProblem = 'expired';
+  } else if (storedSessionState === 'transient') {
+    sessionProblem = 'unavailable';
   }
   const storedEmail = hasStoredSession
     ? await SupabaseClient.getStoredAccountLabel()
@@ -132,7 +133,10 @@ export async function buildProfileMessage(
   return {
     ...base,
     authenticated: true,
-    user: { email: user?.email ?? 'N/A', id: user?.id ?? '' },
+    user: {
+      email: user?.email ?? storedEmail ?? 'N/A',
+      id: user?.id ?? '',
+    },
     tier,
     remoteAgents,
     apiAccessMode,

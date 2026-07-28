@@ -150,10 +150,9 @@ export class AccountTab extends LitElement {
   private renderIdentityBanner(): TemplateResult {
     const expired = this.sessionProblem === 'expired';
     const unavailable = this.sessionProblem === 'unavailable';
-    // When the session expired we still have the email from a previous
-    // authenticated refresh; otherwise this is a clean signed-out state.
+    // Unavailable and expired sessions retain the stored account label.
     const title =
-      this.authenticated || expired
+      this.authenticated || expired || unavailable
         ? this.userEmail || 'TeXRA account'
         : 'TeXRA account';
     let description: TemplateResult | string =
@@ -167,28 +166,19 @@ export class AccountTab extends LitElement {
     } else if (this.authenticated) {
       description = html`<span class="account-tier">${this.tier}</span> plan`;
     }
-    // Enter the authenticated-like branch for both live and expired sessions
-    // so the Sign out button stays available for cleaning up the stored
-    // zombie session.
+    // An expired session offers explicit recovery and cleanup. A transient
+    // outage offers neither action, because the stored credential is retained.
     let actions: TemplateResult | typeof nothing;
-    if (this.authenticated || expired) {
+    if (expired) {
       actions = html`
-        ${
-          expired
-            ? html`<wa-tag variant="warning">Session expired</wa-tag>`
-            : html`<wa-tag variant="success">Connected</wa-tag>`
-        }
-        ${
-          expired
-            ? renderLabeledActionButton({
-                icon: 'user',
-                text: 'Sign in',
-                kind: 'primary',
-                appearance: 'filled',
-                onClick: this.handleSignIn,
-              })
-            : nothing
-        }
+        <wa-tag variant="warning">Session expired</wa-tag>
+        ${renderLabeledActionButton({
+          icon: 'user',
+          text: 'Sign in',
+          kind: 'primary',
+          appearance: 'filled',
+          onClick: this.handleSignIn,
+        })}
         ${renderLabeledActionButton({
           icon: 'right-from-bracket',
           text: 'Sign out',
@@ -199,6 +189,17 @@ export class AccountTab extends LitElement {
       `;
     } else if (unavailable) {
       actions = nothing;
+    } else if (this.authenticated) {
+      actions = html`
+        <wa-tag variant="success">Connected</wa-tag>
+        ${renderLabeledActionButton({
+          icon: 'right-from-bracket',
+          text: 'Sign out',
+          kind: 'secondary',
+          appearance: 'outlined',
+          onClick: this.handleSignOut,
+        })}
+      `;
     } else {
       actions = renderLabeledActionButton({
         icon: 'user',
