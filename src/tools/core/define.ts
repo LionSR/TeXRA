@@ -28,6 +28,26 @@ const EXECUTION_FLAGS = [
 
 type ExecutionFlag = (typeof EXECUTION_FLAGS)[number];
 type DefineToolFlags = { [K in ExecutionFlag]?: boolean };
+type DefinedToolFlags = {
+  readonly [K in ExecutionFlag]: boolean | undefined;
+};
+
+/**
+ * The abstract class `defineTool` hands back: a `BaseTool<T>` carrying the
+ * declared execution flags, constructible only through a subclass that
+ * implements `execute`.
+ *
+ * Spelling this out is what keeps `defineTool`'s return type *nameable*.
+ * Without it the return type is an anonymous class expression, and every
+ * `class X extends defineTool(...)` becomes undeclarable — TypeScript emits
+ * `TS4094: Property 'execute' of exported anonymous class type may not be
+ * private or protected` for each one, because a `.d.ts` has no syntax for a
+ * protected member on an anonymous class type. Naming the type sidesteps that
+ * without widening `BaseTool.execute` to public.
+ */
+export type DefinedToolClass<T> = abstract new (
+  override?: Partial<ToolDefinition>,
+) => BaseTool<T> & DefinedToolFlags;
 
 /**
  * Define a tool with type-safe schema and either a static or dynamic description.
@@ -43,7 +63,7 @@ export function defineTool<T>(
     description: string | (() => string);
     schema: ZodType<T, T>;
   } & DefineToolFlags,
-) {
+): DefinedToolClass<T> {
   const getDescription = (): string =>
     typeof def.description === 'function' ? def.description() : def.description;
 
@@ -59,6 +79,7 @@ export function defineTool<T>(
   });
 
   abstract class GeneratedTool extends BaseTool<T> {
+    // The return annotation checks these fields against EXECUTION_FLAGS.
     readonly parallelSafe = def.parallelSafe;
     readonly requiresApproval = def.requiresApproval;
     readonly slow = def.slow;
