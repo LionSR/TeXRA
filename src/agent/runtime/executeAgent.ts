@@ -280,6 +280,8 @@ function buildFallbackNotification(config: AgentConfig): FallbackNotification {
  * under a different name.
  */
 export interface SubagentRunOptions {
+  /** Run-scoped tools added to tool-use agents without mutating the default registry. */
+  readonly tools?: readonly ITool[];
   /** Parent stream ID for subagent lineage tracking. Defaults to own streamId. */
   parentStreamId?: StreamTabId;
   /** Fires when a tool-use session consumes queued follow-up instructions. */
@@ -315,8 +317,6 @@ export interface SubagentRunOptions {
 
 /** Options for executeAgent. */
 export interface ExecuteAgentOptions extends SubagentRunOptions {
-  /** Run-scoped tools added to tool-use agents without mutating the default registry. */
-  readonly tools?: readonly ITool[];
   /** The caller owns presentation for failures before the run lifecycle. */
   suppressErrorNotification?: boolean;
   /** When true, proposal tools are filtered out to prevent nesting. */
@@ -571,6 +571,7 @@ export async function resumeToolUseFromResumeData(
                   onRoundFinalized: createUsageRecordingCallback(ctx),
                   setting,
                   resume,
+                  tools: options.tools,
                   drainedFollowUps: options.drainedFollowUps,
                   takePendingFollowUps: options.takePendingFollowUps,
                   // A persisted parent marks this execution as a subagent. Without
