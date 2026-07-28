@@ -27,7 +27,8 @@ import {
   AGENT_MODE_PRESETS,
   type AgentModePreset,
 } from '@shared/schemas/agentPresets';
-import { waIcon, type TeXRAIconName } from '@shared/wa/webAwesomeIcons';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 import type { DesktopRoute } from '../desktopShellMessages';
 
@@ -62,31 +63,31 @@ const WORK_TYPES: ReadonlyArray<{
     presetId: 'physicist',
     question: 'Writing a physics paper',
     detail: 'Derivations, numerical checks, literature search, slides, review.',
-    icon: 'symbol-operator',
+    icon: 'cube',
   },
   {
     presetId: 'mathematician',
     question: 'Proving mathematics',
     detail: 'Open problems, proofs, Lean formalization, LaTeX correction.',
-    icon: 'symbol-number',
+    icon: 'hashtag',
   },
   {
     presetId: 'cs-ml',
     question: 'Writing a CS or ML paper',
     detail: 'Algorithms, experiments and ablations, tests, review.',
-    icon: 'symbol-method',
+    icon: 'cube',
   },
   {
     presetId: 'lean-project',
     question: 'Formalizing in Lean 4',
     detail: 'Theorem search, tactic simplification, blueprints.',
-    icon: 'symbol-structure',
+    icon: 'diagram-project',
   },
   {
     presetId: 'software-engineer',
     question: 'Building software',
     detail: 'Implementation, review, debugging, and tests across a team.',
-    icon: 'tools',
+    icon: 'screwdriver-wrench',
   },
 ];
 

@@ -6,14 +6,14 @@ type MockSendFollowUpResult =
   | { status: 'queued'; reason: 'waiting' }
   | { status: 'no_session'; streamStatus: string | undefined };
 
-const sendFollowUpMock = vi.hoisted(() =>
+const submitFollowUpMock = vi.hoisted(() =>
   vi.fn<(...args: unknown[]) => Promise<MockSendFollowUpResult>>(async () => ({
     status: 'sent',
   })),
 );
 
 vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
-  sendFollowUp: sendFollowUpMock,
+  submitFollowUp: submitFollowUpMock,
 }));
 
 // Local imports
@@ -150,8 +150,8 @@ describe('ExecutionSubscriptionBinder lifecycle', () => {
 
 describe('ExecutionSubscriptionBinder session routing', () => {
   beforeEach(() => {
-    sendFollowUpMock.mockReset();
-    sendFollowUpMock.mockResolvedValue({ status: 'sent' as const });
+    submitFollowUpMock.mockReset();
+    submitFollowUpMock.mockResolvedValue({ status: 'sent' as const });
   });
 
   it('passes the owning session to subscription follow-ups', async () => {
@@ -175,12 +175,10 @@ describe('ExecutionSubscriptionBinder session routing', () => {
       registry.untrack(executionId);
       await settleDelivery();
 
-      expect(sendFollowUpMock).toHaveBeenCalledWith(
+      expect(submitFollowUpMock).toHaveBeenCalledWith(
         streamId,
         expect.stringContaining(executionId),
-        undefined,
-        undefined,
-        session,
+        { session, mode: 'live_notification' },
       );
       expect(recorded.events).toEqual([
         {
@@ -220,7 +218,7 @@ describe('ExecutionSubscriptionBinder session routing', () => {
       });
       const executionId = `exec-subscription-${sendResult.status}-event-test`;
       const handle = createSearchHandle(executionId, explicit.host);
-      sendFollowUpMock.mockResolvedValueOnce(sendResult);
+      submitFollowUpMock.mockResolvedValueOnce(sendResult);
 
       try {
         registry.track(handle);
@@ -310,7 +308,7 @@ describe('ExecutionSubscriptionBinder session routing', () => {
     const executionId = 'exec-subscription-rejection-test';
     const handle = createSearchHandle(executionId, explicit.host);
     const unhandledRejection = vi.fn();
-    sendFollowUpMock.mockRejectedValueOnce(new Error('delivery failed'));
+    submitFollowUpMock.mockRejectedValueOnce(new Error('delivery failed'));
 
     try {
       process.once('unhandledRejection', unhandledRejection);

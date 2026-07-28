@@ -9,7 +9,7 @@ function plan(missing: readonly string[]): CliMultiAgentPresetRunPlan {
       id: 'custom-team',
       name: 'Custom team',
       description: 'Test team',
-      icon: 'tools',
+      icon: 'screwdriver-wrench',
       workflowAgents: [],
       toolUseAgents: ['orchestrator'],
       texraHostedAgents: ['orchestrator'],
