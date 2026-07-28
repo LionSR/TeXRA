@@ -54,10 +54,10 @@ function createProvider(options: {
   failure?: 'invalid' | 'transient';
 }): {
   provider: SupabaseAuthProvider;
-  clearSession: ReturnType<typeof vi.fn>;
+  clearSessionIfCurrent: ReturnType<typeof vi.fn>;
   showSignInPrompt: ReturnType<typeof vi.fn>;
 } {
-  const clearSession = vi.fn();
+  const clearSessionIfCurrent = vi.fn(async () => true);
   const showSignInPrompt = vi.fn();
   const session = {
     id: 'user-id',
@@ -70,7 +70,7 @@ function createProvider(options: {
     loadSession: vi.fn(async () => session),
     refreshSession: vi.fn(async () => null),
     getLastRefreshFailure: vi.fn(() => options.failure ?? null),
-    clearSession,
+    clearSessionIfCurrent,
   };
   const provider = Object.create(
     SupabaseAuthProvider.prototype,
@@ -87,7 +87,7 @@ function createProvider(options: {
     },
   });
 
-  return { provider, clearSession, showSignInPrompt };
+  return { provider, clearSessionIfCurrent, showSignInPrompt };
 }
 
 function createExpiredProvider(
@@ -105,23 +105,24 @@ describe('SupabaseAuthProvider expired-session refresh', () => {
   });
 
   it('preserves a stored session after a transient refresh failure', async () => {
-    const { provider, clearSession, showSignInPrompt } =
+    const { provider, clearSessionIfCurrent, showSignInPrompt } =
       createExpiredProvider('transient');
 
     await expect(provider.getSessions()).resolves.toEqual([]);
 
-    expect(clearSession).not.toHaveBeenCalled();
+    expect(clearSessionIfCurrent).not.toHaveBeenCalled();
     expect(showSignInPrompt).not.toHaveBeenCalled();
   });
 
   it('clears a stored session after an invalid refresh credential', async () => {
-    const { provider, clearSession, showSignInPrompt } =
+    const { provider, clearSessionIfCurrent, showSignInPrompt } =
       createExpiredProvider('invalid');
 
     await expect(provider.getSessions()).resolves.toEqual([]);
 
-    expect(clearSession).toHaveBeenCalledOnce();
+    expect(clearSessionIfCurrent).toHaveBeenCalledOnce();
     expect(showSignInPrompt).toHaveBeenCalledWith('expired');
+    expect(providerMocks.signOut).not.toHaveBeenCalled();
   });
 
   it('preserves an unexpired session when user validation is transient', async () => {
@@ -129,13 +130,14 @@ describe('SupabaseAuthProvider expired-session refresh', () => {
       data: { user: null },
       error: { status: 503 },
     });
-    const { provider, clearSession, showSignInPrompt } = createProvider({
-      expiresAt: Date.now() + 60_000,
-    });
+    const { provider, clearSessionIfCurrent, showSignInPrompt } =
+      createProvider({
+        expiresAt: Date.now() + 60_000,
+      });
 
     await expect(provider.getSessions()).resolves.toEqual([]);
 
-    expect(clearSession).not.toHaveBeenCalled();
+    expect(clearSessionIfCurrent).not.toHaveBeenCalled();
     expect(showSignInPrompt).not.toHaveBeenCalled();
   });
 
@@ -144,13 +146,14 @@ describe('SupabaseAuthProvider expired-session refresh', () => {
       data: { user: null },
       error: null,
     });
-    const { provider, clearSession, showSignInPrompt } = createProvider({
-      expiresAt: Date.now() + 60_000,
-    });
+    const { provider, clearSessionIfCurrent, showSignInPrompt } =
+      createProvider({
+        expiresAt: Date.now() + 60_000,
+      });
 
     await expect(provider.getSessions()).resolves.toEqual([]);
 
-    expect(clearSession).not.toHaveBeenCalled();
+    expect(clearSessionIfCurrent).not.toHaveBeenCalled();
     expect(showSignInPrompt).not.toHaveBeenCalled();
   });
 
@@ -159,13 +162,33 @@ describe('SupabaseAuthProvider expired-session refresh', () => {
       data: { user: null },
       error: { status: 401 },
     });
-    const { provider, clearSession, showSignInPrompt } = createProvider({
-      expiresAt: Date.now() + 60_000,
-    });
+    const { provider, clearSessionIfCurrent, showSignInPrompt } =
+      createProvider({
+        expiresAt: Date.now() + 60_000,
+      });
 
     await expect(provider.getSessions()).resolves.toEqual([]);
 
-    expect(clearSession).toHaveBeenCalledOnce();
+    expect(clearSessionIfCurrent).toHaveBeenCalledOnce();
     expect(showSignInPrompt).toHaveBeenCalledWith('invalid');
+  });
+
+  it('does not prompt or clear caches when validation belongs to a replaced session', async () => {
+    providerMocks.getUser.mockResolvedValue({
+      data: { user: null },
+      error: { status: 401 },
+    });
+    const { provider, clearSessionIfCurrent, showSignInPrompt } =
+      createProvider({
+        expiresAt: Date.now() + 60_000,
+      });
+    clearSessionIfCurrent.mockResolvedValueOnce(false);
+
+    await expect(provider.getSessions()).resolves.toEqual([]);
+
+    expect(clearSessionIfCurrent).toHaveBeenCalledOnce();
+    expect(showSignInPrompt).not.toHaveBeenCalled();
+    expect(providerMocks.clearAllCaches).not.toHaveBeenCalled();
+    expect(providerMocks.signOut).not.toHaveBeenCalled();
   });
 });
