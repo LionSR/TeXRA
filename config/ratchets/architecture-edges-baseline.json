@@ -49,7 +49,6 @@
     { "from": "latex", "to": "utils", "kind": "value" },
     { "from": "logger", "to": "shared", "kind": "value" },
     { "from": "logger", "to": "utils", "kind": "value" },
-    { "from": "model", "to": "auth", "kind": "value" },
     { "from": "model", "to": "platform", "kind": "value" },
     { "from": "model", "to": "shared", "kind": "value" },
     { "from": "model", "to": "utils", "kind": "value" },

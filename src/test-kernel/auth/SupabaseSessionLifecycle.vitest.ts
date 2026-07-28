@@ -657,6 +657,62 @@ describe('SupabaseSession', () => {
       assert.equal(read(), null);
     });
 
+    it('reclassifies when a new session replaces one whose refresh failed', async () => {
+      const initialSession = makeSession({
+        accessToken: 'old-access',
+        refreshToken: 'old-refresh',
+        expiresAt: Date.now() - 1_000,
+        useCustomRefresh: true,
+      });
+      const refreshStarted = createDeferred();
+      const allowRefreshFailure = createDeferred();
+      const { coordinator, read } = createCoordinator({
+        initialSession,
+        fetch: async () => {
+          refreshStarted.resolve();
+          await allowRefreshFailure.promise;
+          return new Response(
+            JSON.stringify({ error: 'invalid refresh token' }),
+            { status: 401 },
+          );
+        },
+      });
+
+      const statePromise = coordinator.getStoredSessionState();
+      await refreshStarted.promise;
+      const replacement = makeSession({
+        accessToken: 'replacement-access',
+        refreshToken: 'replacement-refresh',
+      });
+      await coordinator.storeSession(replacement);
+      allowRefreshFailure.resolve();
+
+      assert.equal(await statePromise, 'authenticated');
+      assert.deepEqual(read(), replacement);
+    });
+
+    it('does not clear a replacement session after stale validation', async () => {
+      const initialSession = makeSession({
+        accessToken: 'old-access',
+        refreshToken: 'old-refresh',
+      });
+      const { coordinator, read } = createCoordinator({ initialSession });
+      const replacement = makeSession({
+        accessToken: 'replacement-access',
+        refreshToken: 'replacement-refresh',
+      });
+
+      await coordinator.storeSession(replacement);
+
+      assert.equal(
+        await coordinator.clearSessionIfCurrent(initialSession),
+        false,
+      );
+      assert.deepEqual(read(), replacement);
+      assert.equal(await coordinator.clearSessionIfCurrent(replacement), true);
+      assert.equal(read(), null);
+    });
+
     it('does not return expired session tokens when refresh fails', async () => {
       const initialSession = makeSession({
         accessToken: 'old-access',
@@ -673,7 +729,49 @@ describe('SupabaseSession', () => {
       });
 
       assert.equal(await coordinator.getSessionTokens(), null);
+      assert.equal(coordinator.getLastRefreshFailure(), 'invalid');
     });
+
+    it('classifies a refresh service outage as transient', async () => {
+      const initialSession = makeSession({
+        accessToken: 'old-access',
+        refreshToken: 'old-refresh',
+        expiresAt: Date.now() - 1_000,
+        useCustomRefresh: true,
+      });
+      const { coordinator } = createCoordinator({
+        initialSession,
+        fetch: async () =>
+          new Response(JSON.stringify({ error: 'service unavailable' }), {
+            status: 503,
+          }),
+      });
+
+      assert.equal(await coordinator.ensureFreshToken(), null);
+      assert.equal(coordinator.getLastRefreshFailure(), 'transient');
+    });
+
+    it.each([408, 429])(
+      'classifies custom refresh HTTP %i as transient',
+      async (status) => {
+        const initialSession = makeSession({
+          accessToken: 'old-access',
+          refreshToken: 'old-refresh',
+          expiresAt: Date.now() - 1_000,
+          useCustomRefresh: true,
+        });
+        const { coordinator } = createCoordinator({
+          initialSession,
+          fetch: async () =>
+            new Response(JSON.stringify({ error: 'try again later' }), {
+              status,
+            }),
+        });
+
+        assert.equal(await coordinator.ensureFreshToken(), null);
+        assert.equal(coordinator.getLastRefreshFailure(), 'transient');
+      },
+    );
 
     it('preserves upstream abort signals when adding a timeout', async () => {
       const upstream = new AbortController();

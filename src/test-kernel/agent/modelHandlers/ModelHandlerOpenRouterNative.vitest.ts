@@ -11,6 +11,7 @@ import { noopTrace } from '@agent/trace';
 import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative';
 import type { ResolvedClientCredential } from '@agent/types/ModelHandlerContracts';
 import * as serverKeysModule from '@auth/serverKeys';
+import { installTexraModelAccess } from '@controllers/modelAccess/installTexraModelAccess';
 import { AgentCategory } from '@shared/schemas/agent';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import * as providerConfigModule from '@utils/config/providerConfig';
@@ -36,6 +37,7 @@ function stubServerSideKeyService(): void {
     getRelayBaseUrl: (provider: string) =>
       `https://relay.example.com/functions/v1/relay/${provider}/v1`,
   } as unknown as ReturnType<typeof serverKeysModule.getServerSideKeyService>);
+  installTexraModelAccess();
 }
 
 describe('ModelHandlerOpenRouterNative routing precedence', () => {

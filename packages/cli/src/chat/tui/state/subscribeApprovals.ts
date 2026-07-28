@@ -30,7 +30,6 @@ import {
   type ProposalResult,
   type RetryResult,
 } from '@agent/runtime/HostInteractions';
-import { isPreferCodexSubscription } from '@auth/codex';
 import { getCliApiMode, setCliApiMode } from '@cli/runtime/apiAccessMode';
 import {
   askUserQuestionDenial,
@@ -49,6 +48,7 @@ import {
   invalidateApiKeyCache,
   isApiProvider,
 } from '@model/apiProviders';
+import { isPreferCodexSubscription } from '@model/codex/codexPreference';
 import { platform } from '@platform/platform';
 import {
   isUpstreamCreditDepletedError,

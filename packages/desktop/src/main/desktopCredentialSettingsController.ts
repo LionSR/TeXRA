@@ -1,11 +1,6 @@
 // Local imports
-import {
-  codexCoordinator,
-  getChatGptAuthStatus,
-  loginWithLoopback,
-  setCodexSubscriptionToolUseOnly,
-  setPreferCodexSubscription,
-} from '@auth/codex';
+import { codexCoordinator, loginWithLoopback } from '@auth/codex';
+import { getChatGptAuthStatus } from '@controllers/modelAccess/chatGptAuthStatus';
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
 import {
@@ -26,6 +21,10 @@ import {
   isApiProvider,
   loadApiKeyStatusMap,
 } from '@model/apiProviders';
+import {
+  setCodexSubscriptionToolUseOnly,
+  setPreferCodexSubscription,
+} from '@model/codex/codexPreference';
 import type { ConfigProvider } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';

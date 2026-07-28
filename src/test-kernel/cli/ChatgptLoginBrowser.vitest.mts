@@ -11,6 +11,9 @@ vi.mock('@auth/codex', () => ({
   codexCoordinator: mocks.codexCoordinator,
   loginWithDeviceCode: mocks.loginWithDeviceCode,
   loginWithLoopback: mocks.loginWithLoopback,
+}));
+
+vi.mock('@model/codex/codexPreference', () => ({
   setPreferCodexSubscription: vi.fn(),
 }));
 

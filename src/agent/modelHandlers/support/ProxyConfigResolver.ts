@@ -1,5 +1,5 @@
 import { ModelProvider } from 'llm-zoo';
-import { getServerSideKeyService } from '@auth/serverKeys';
+import { includedModelAccess } from '@model/includedModelAccess';
 import {
   allowsModelRelay,
   shouldRouteModelThroughOpenRouter,
@@ -117,7 +117,7 @@ export function usesServerSideKeysRoute(
   if (shouldUseOpenRouter(config)) {
     return false;
   }
-  return getServerSideKeyService().shouldUseServerSideKeysSync(
+  return includedModelAccess().shouldUseServerSideKeysSync(
     config.provider,
     config.name,
   );
@@ -155,9 +155,7 @@ export function resolveBaseUrl(config: ProxyConfig): string | null {
     // The caller (ModelHandler.shouldUseServerSideKeys) pre-computes this
     // route to ensure consistency between URL routing and API key retrieval.
     case 'serverSideKeys': {
-      const relayUrl = getServerSideKeyService().getRelayBaseUrl(
-        config.provider,
-      );
+      const relayUrl = includedModelAccess().getRelayBaseUrl(config.provider);
       config.logger?.debug(
         `Using server-side keys relay for ${config.provider}: ${relayUrl}`,
       );
