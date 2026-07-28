@@ -8,11 +8,9 @@ import { minimatch } from 'minimatch';
 import pDefer from 'p-defer';
 
 // Local imports
-import {
-  AgentDirectoryService,
-  GlobalStorageAgentDirectoryStorage,
-} from '@agent/index';
 import type { AgentDirectoryEntry, AgentSource } from '@agent/index';
+import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
+import type { AgentDirectoryService } from '@agent/index/AgentDirectoryService';
 import { GlobalStateKey, globalSM } from '@common/state';
 import { showLoggedMessageWithDocs } from '@frontend/ui/errorHandlingUtils';
 import { selectFolder } from '@frontend/ui/dialogs';
@@ -53,22 +51,14 @@ class AgentDirectoryManager {
 
   initialize(context: vscode.ExtensionContext): void {
     this.context = context;
-    this.directoryService = new AgentDirectoryService({
-      storage: new GlobalStorageAgentDirectoryStorage(),
+    this.directoryService = createPlatformAgentDirectories({
+      channel: CHANNEL,
       customDirectoryStore: {
         get: () => globalSM?.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR, ''),
-      },
-      absoluteDirectories: {
-        exists: (target) => AbsoluteFS.exists(target),
-        ensureDir: (target) => AbsoluteFS.ensureDir(target),
       },
       issueReporter: {
         report: (message, docsId) =>
           showLoggedMessageWithDocs(CHANNEL, message, docsId),
-      },
-      logger: {
-        debug: (message, data) => logger.debug(CHANNEL, message, { data }),
-        error: (message, data) => logger.error(CHANNEL, message, { data }),
       },
     });
   }
