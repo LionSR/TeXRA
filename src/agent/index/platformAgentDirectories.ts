@@ -1,4 +1,7 @@
-import { isFileNotFoundError } from '@common/errors/errorPredicates';
+import {
+  isFileNotFoundError,
+  isNotADirectoryError,
+} from '@common/errors/errorPredicates';
 import * as logger from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import {
@@ -39,7 +42,12 @@ export function createPlatformAgentDirectories(
           await platform().fs.stat(target);
           return true;
         } catch (error) {
-          if (isFileNotFoundError(error)) return false;
+          // Match AbsoluteFS/BaseFS.statIfExists: an ancestor path component
+          // that turned out to be a file (ENOTDIR) means "does not exist"
+          // here too, not an error to propagate.
+          if (isFileNotFoundError(error) || isNotADirectoryError(error)) {
+            return false;
+          }
           throw error;
         }
       },
