@@ -9,6 +9,7 @@
 
 // Local imports
 import { registerExecution } from '@agent/storage';
+import { createChannelTrace } from '@agent/trace';
 import {
   captureOwnedExecutionLease,
   releaseOwnedExecutionLeaseAfterFailure,
@@ -185,13 +186,19 @@ export async function executeSubagent(
     try {
       const { createNativeSubagentStrategy } =
         await import('./nativeSubagentStrategy');
-      startChildRunLoop({
+      const { completion } = startChildRunLoop({
         childStreamId,
         parentStreamId: orchestratorStreamId,
         executionId,
         agentName,
         strategy: createNativeSubagentStrategy(strategyParams),
         recordCost,
+      });
+      void completion.catch((error: unknown) => {
+        createChannelTrace('childRunLoop').error(
+          `Subagent '${agentName}' run loop failed after launch`,
+          { data: error },
+        );
       });
     } catch (error) {
       throw await releaseOwnedExecutionLeaseAfterFailure(executionId, error);
