@@ -413,7 +413,6 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
             description: meta.description,
             config: runConfig,
             toolName: DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME,
-            interactions: runScope.session.interactions,
           },
         );
         runChildStreamId = childStream.childStreamId;
