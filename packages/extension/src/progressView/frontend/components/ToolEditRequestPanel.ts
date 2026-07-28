@@ -101,7 +101,7 @@ export class ToolEditRequestPanel extends BaseBypassApprovalPanel<'toolEdit'> {
       <div class="diff-dropdown split-button">
         ${renderLabeledActionButton({
           id: 'tool-edit-diff-button',
-          icon: 'diff',
+          icon: 'code-compare',
           text: diffLabel,
           tooltip: diffTitle,
           className: 'diff-main-button split-button-main',

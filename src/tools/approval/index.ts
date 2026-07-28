@@ -88,7 +88,7 @@ export function releaseStreamResources(
   session: SessionHandle = defaultSession(),
 ): void {
   cleanupApprovalsForStream(streamId, session);
-  session.followUps.release(streamId);
+  session.followUps.terminalize(streamId);
 }
 
 /**

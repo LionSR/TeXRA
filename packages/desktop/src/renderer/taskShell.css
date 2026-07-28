@@ -578,13 +578,7 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
 }
 
 .task-environment-refresh[disabled] wa-icon {
-  animation: environment-spin 0.9s linear infinite;
-}
-
-@keyframes environment-spin {
-  to {
-    transform: rotate(360deg);
-  }
+  animation: spin 0.9s linear infinite;
 }
 
 .task-environment-section {
