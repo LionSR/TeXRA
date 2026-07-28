@@ -53,7 +53,6 @@ function trackChildHandle(
     childStreamId,
     'test-subagent',
     'toolUse',
-    noopAgentRuntimeHost,
   );
   defaultSession().executions.track(handle);
 }
@@ -79,12 +78,11 @@ describe('ToolUseFollowUp', () => {
       stream,
       'demo-agent',
       'toolUse',
-      noopAgentRuntimeHost,
     );
     handle.attachToolUseFlow({
       session: { appendFollowUp },
       modelHandler: { supportsManualCompaction: true },
-      runtimeHost: noopAgentRuntimeHost,
+      interactions: defaultSession().interactions,
       requestImmediateCompaction: () => {},
       modelSwitchDisabledReason: () => undefined,
       switchModel: async () => {},

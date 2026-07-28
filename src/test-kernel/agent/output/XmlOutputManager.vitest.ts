@@ -5,7 +5,7 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { assignByContentSimilarity } from '@agent/output/extraction/contentSimilarity';
 import { OutputFileProcessor } from '@agent/output/OutputFileProcessor';
 import { XmlOutputManager } from '@agent/output/XmlOutputManager';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import type { OutputFileInfo, RoundOutput } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
 import {
@@ -794,7 +794,7 @@ Appendix.
     const processor = new OutputFileProcessor({
       baseFiles: [],
       streamId: 'stream',
-      runtimeHost: { emit: vi.fn() } as unknown as AgentRuntimeHost,
+      runtimeHost: { emit: vi.fn() } as unknown as SessionHostInteractions,
       logger: { debug: vi.fn() } as unknown as AgentTrace,
       xmlManager: manager,
       setRoundOutputs: (_round, outputs) => {
@@ -1652,7 +1652,7 @@ Appendix.
         createExternalLocation('/tmp/run/cost_section.tex'),
       ],
       streamId: 'stream',
-      runtimeHost: { emit: vi.fn() } as unknown as AgentRuntimeHost,
+      runtimeHost: { emit: vi.fn() } as unknown as SessionHostInteractions,
       logger: {
         debug: vi.fn(),
         info: vi.fn(),

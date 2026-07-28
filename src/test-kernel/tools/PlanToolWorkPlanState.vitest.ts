@@ -67,7 +67,7 @@ function startPlanUpdate(streamId: StreamTabId, objective: string) {
   const resultPromise = withToolEnvironment(
     {
       run: {
-        runtimeHost: host,
+        interactions: host,
         streamId,
         session,
       },

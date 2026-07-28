@@ -45,7 +45,6 @@ const CONFIG = AgentConfigSchema.parse({
   agentCategory: 'toolUse',
   model: 'test-model',
 });
-const RUNTIME_HOST = { emit: vi.fn() } as never;
 const flushArtifacts = vi.fn();
 const SESSION = { flushArtifacts } as never;
 
@@ -111,8 +110,7 @@ describe('runAgent execution ownership', () => {
       runAgent(
         { config: CONFIG, executionId: EXECUTION_ID },
         {
-          runtimeHost: RUNTIME_HOST,
-          session: SESSION,
+                    session: SESSION,
           canAcquireResumeLease: () => canonical,
         },
       ),
@@ -144,8 +142,7 @@ describe('runAgent execution ownership', () => {
       runAgent(
         { config: CONFIG, executionId: EXECUTION_ID },
         {
-          runtimeHost: RUNTIME_HOST,
-          session: SESSION,
+                    session: SESSION,
           registerExecution: true,
         },
       ),
@@ -170,8 +167,7 @@ describe('runAgent execution ownership', () => {
       runAgent(
         { config: CONFIG, executionId: EXECUTION_ID },
         {
-          runtimeHost: RUNTIME_HOST,
-          session: SESSION,
+                    session: SESSION,
           registerExecution: true,
         },
       ),
@@ -197,8 +193,7 @@ describe('runAgent execution ownership', () => {
     const failure = await runAgent(
       { config: CONFIG, executionId: EXECUTION_ID },
       {
-        runtimeHost: RUNTIME_HOST,
-        session: SESSION,
+                session: SESSION,
         registerExecution: true,
       },
     ).catch((error: unknown) => error);
@@ -230,8 +225,7 @@ describe('runAgent execution ownership', () => {
     await runAgent(
       { config: CONFIG, executionId: EXECUTION_ID },
       {
-        runtimeHost: RUNTIME_HOST,
-        session: SESSION,
+                session: SESSION,
         registerExecution: true,
         beforeLeaseRelease: async () => {
           order.push('artifacts');
@@ -258,8 +252,7 @@ describe('runAgent execution ownership', () => {
     const failure = await runAgent(
       { config: CONFIG, executionId: EXECUTION_ID },
       {
-        runtimeHost: RUNTIME_HOST,
-        session: SESSION,
+                session: SESSION,
         registerExecution: true,
         beforeLeaseRelease: async () => {
           throw artifactError;

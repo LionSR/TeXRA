@@ -11,7 +11,7 @@ import {
 } from '@agent/core/flows/ToolUseRoundFlow';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
-import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import { createRunTrace, StreamLogStore } from '@transcript';
 
 // Local file imports
@@ -172,7 +172,7 @@ describe('ToolUseDispatchNode interruption', () => {
       roundNormalizedUsage: undefined,
     };
 
-    await withTestRunContext(noopAgentRuntimeHost, 'test-stream', () =>
+    await withTestRunContext(defaultSession().interactions, 'test-stream', () =>
       createToolUseRoundFlow().setServices(services).run(shared),
     );
 
@@ -349,7 +349,7 @@ describe('ToolUseDispatchNode interruption', () => {
       roundNormalizedUsage: undefined,
     };
 
-    await withTestRunContext(noopAgentRuntimeHost, 'test-stream', () =>
+    await withTestRunContext(defaultSession().interactions, 'test-stream', () =>
       createToolUseRoundFlow().setServices(services).run(shared),
     );
 

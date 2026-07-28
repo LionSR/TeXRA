@@ -96,7 +96,7 @@ describe('resumeQueuedToolUseFromResumeData', () => {
     );
 
     await expect(
-      resumeQueuedToolUseFromResumeData(STREAM, snapshot(), runtimeHost, {
+      resumeQueuedToolUseFromResumeData(STREAM, snapshot(), {
         onError: vi.fn(),
       }),
     ).resolves.toBe(true);
@@ -151,7 +151,7 @@ describe('resumeQueuedToolUseFromResumeData', () => {
       expect(session.executions.kill(executionId)).toBe(true);
       expect(handle.waitingTerminationStarted).toBe(true);
       await expect(
-        resumeQueuedToolUseFromResumeData(STREAM, resume, runtimeHost, {
+        resumeQueuedToolUseFromResumeData(STREAM, resume, {
           session,
           onError: vi.fn(),
         }),
@@ -175,7 +175,7 @@ describe('resumeQueuedToolUseFromResumeData', () => {
       { force: true },
     );
 
-    await resumeQueuedToolUseFromResumeData(STREAM, snapshot(), runtimeHost, {
+    await resumeQueuedToolUseFromResumeData(STREAM, snapshot(), {
       extraFollowUps: [{ text: 'typed alongside resume', origin: 'user' }],
       onError: vi.fn(),
     });
@@ -203,7 +203,7 @@ describe('resumeQueuedToolUseFromResumeData', () => {
       },
     );
 
-    await resumeQueuedToolUseFromResumeData(STREAM, snapshot(), runtimeHost, {
+    await resumeQueuedToolUseFromResumeData(STREAM, snapshot(), {
       onFollowUpQueueReady,
       onError: vi.fn(),
     });
@@ -242,7 +242,7 @@ describe('resumeQueuedToolUseFromResumeData', () => {
     );
 
     await expect(
-      resumeQueuedToolUseFromResumeData(STREAM, snapshot(), runtimeHost, {
+      resumeQueuedToolUseFromResumeData(STREAM, snapshot(), {
         onError: vi.fn(),
       }),
     ).resolves.toBe(true);
@@ -280,7 +280,7 @@ describe('resumeQueuedToolUseFromResumeData', () => {
     );
 
     await expect(
-      resumeQueuedToolUseFromResumeData(STREAM, snapshot(), runtimeHost, {
+      resumeQueuedToolUseFromResumeData(STREAM, snapshot(), {
         onError: vi.fn(),
       }),
     ).resolves.toBe(false);
@@ -313,7 +313,7 @@ describe('resumeQueuedToolUseFromResumeData', () => {
       );
 
       await expect(
-        resumeQueuedToolUseFromResumeData(STREAM, snapshot(), runtimeHost, {
+        resumeQueuedToolUseFromResumeData(STREAM, snapshot(), {
           onError: vi.fn(),
         }),
       ).resolves.toBe(true);
@@ -385,7 +385,7 @@ describe('resumeQueuedToolUseFromResumeData', () => {
     );
 
     await expect(
-      resumeQueuedToolUseFromResumeData(STREAM, snapshot(), runtimeHost, {
+      resumeQueuedToolUseFromResumeData(STREAM, snapshot(), {
         isCancellationRequested,
         onError: vi.fn(),
       }),
@@ -423,7 +423,7 @@ describe('resumeQueuedToolUseFromResumeData', () => {
     );
 
     await expect(
-      resumeQueuedToolUseFromResumeData(STREAM, snapshot(), runtimeHost, {
+      resumeQueuedToolUseFromResumeData(STREAM, snapshot(), {
         isCancellationRequested: () => false,
         onError: vi.fn(),
       }),
@@ -449,7 +449,7 @@ describe('resumeQueuedToolUseFromResumeData', () => {
     );
 
     await expect(
-      resumeQueuedToolUseFromResumeData(STREAM, snapshot(), runtimeHost, {
+      resumeQueuedToolUseFromResumeData(STREAM, snapshot(), {
         isCancellationRequested: () => true,
         onResult: () => {
           throw failure;
@@ -493,7 +493,7 @@ describe('resumeQueuedToolUseFromResumeData', () => {
     );
 
     await expect(
-      resumeQueuedToolUseFromResumeData(STREAM, snapshot(), runtimeHost, {
+      resumeQueuedToolUseFromResumeData(STREAM, snapshot(), {
         isCancellationRequested,
         onResult: () => {
           throw failure;
@@ -573,7 +573,7 @@ describe('resumeQueuedToolUseFromResumeData', () => {
     );
 
     await expect(
-      resumeQueuedToolUseFromResumeData(STREAM, snapshot(), runtimeHost, {
+      resumeQueuedToolUseFromResumeData(STREAM, snapshot(), {
         onError: reportFailure,
       }),
     ).resolves.toBe(false);
@@ -602,7 +602,7 @@ describe('resumeQueuedToolUseFromResumeData', () => {
 
     try {
       await expect(
-        resumeQueuedToolUseFromResumeData(STREAM, snapshot(), runtimeHost, {
+        resumeQueuedToolUseFromResumeData(STREAM, snapshot(), {
           session,
           canAcquireResumeLease: () => false,
           onError: reportFailure,
@@ -626,7 +626,7 @@ describe('resumeQueuedToolUseFromResumeData', () => {
 
     try {
       await expect(
-        resumeQueuedToolUseFromResumeData(STREAM, snapshot(), runtimeHost, {
+        resumeQueuedToolUseFromResumeData(STREAM, snapshot(), {
           session,
           onError: vi.fn(),
         }),
@@ -653,7 +653,7 @@ describe('resumeQueuedToolUseFromResumeData', () => {
       );
 
       await expect(
-        resumeQueuedToolUseFromResumeData(STREAM, snapshot(), runtimeHost, {
+        resumeQueuedToolUseFromResumeData(STREAM, snapshot(), {
           session,
           onError: vi.fn(),
         }),
@@ -678,7 +678,7 @@ describe('resumeQueuedToolUseFromResumeData', () => {
     });
 
     await expect(
-      resumeQueuedToolUseFromResumeData(STREAM, snapshot(), runtimeHost, {
+      resumeQueuedToolUseFromResumeData(STREAM, snapshot(), {
         onError: vi.fn(),
       }),
     ).resolves.toBe(true);
