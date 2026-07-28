@@ -37,7 +37,8 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/relative-time/relative-time.js';
 import './WorktreeChip';
 import { formatRelativeTime } from '@shared/utils/string';
-import { type TeXRAIconName, waIcon } from '@shared/wa/webAwesomeIcons';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
+import { type TeXRAIconName } from '@shared/wa/iconNames';
 import { renderEmptyState } from '@shared/wa/emptyState';
 import { formatResultCount } from '@utils/text/stringUtils';
 import { layoutStyles } from '../styles/logStyles';
@@ -287,7 +288,7 @@ export class StreamTab extends LitElement {
           data-stream=${stream.name}
           data-action="delete"
         >
-          ${waIcon('close')}
+          ${waIcon('xmark')}
         </wa-button>
         <wa-tooltip for="stream-tab-delete-button">Delete stream</wa-tooltip>
       </div>

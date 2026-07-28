@@ -263,7 +263,7 @@ export class HistoryList extends LitElement {
   override render(): TemplateResult {
     if (!this.items.length) {
       return renderEmptyState({
-        icon: 'history',
+        icon: 'clock-rotate-left',
         title: 'No history items found.',
         body: 'History is recorded when you run agent commands. Past results will appear here.',
         headingTag: 'h3',
@@ -283,7 +283,7 @@ export class HistoryList extends LitElement {
     // container with no count or message — show explicit no-results feedback.
     if (this.searchTerm && displayItems.length === 0) {
       return renderEmptyState({
-        icon: 'history',
+        icon: 'clock-rotate-left',
         title: 'No history items match your search.',
         headingTag: 'h3',
         className: 'empty-state',

@@ -133,14 +133,14 @@ export class AgentsTab extends LitElement {
     const actions = createSupported
       ? html`
           ${renderLabeledActionButton({
-            icon: 'new-file',
+            icon: 'file-circle-plus',
             text: 'From template',
             kind: 'secondary',
             appearance: 'outlined',
             onClick: () => this.handleCreateFromTemplate(category),
           })}
           ${renderLabeledActionButton({
-            icon: 'add',
+            icon: 'plus',
             text: 'New agent',
             kind: 'primary',
             appearance: 'filled',
@@ -173,7 +173,7 @@ export class AgentsTab extends LitElement {
           description:
             'Configure workflow and tool-use agents, then save the enabled set as a reusable team.',
           actions: renderLabeledActionButton({
-            icon: 'save',
+            icon: 'floppy-disk',
             text: 'Save team',
             kind: 'secondary',
             appearance: 'outlined',
@@ -200,7 +200,7 @@ export class AgentsTab extends LitElement {
             </div>
             <div class="settings-row-control action-button-group">
               ${renderIconActionButton({
-                icon: 'folder-opened',
+                icon: 'folder-open',
                 label: 'Open custom agents folder',
                 onClick: () => this.handleOpenFolder(),
               })}

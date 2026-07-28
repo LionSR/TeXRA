@@ -299,7 +299,8 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
           slot="summary"
           class="external-inquiry-request__transcript-summary"
         >
-          ${waIcon('history')} Conversation transcript (${answeredTurns.length})
+          ${waIcon('clock-rotate-left')} Conversation transcript
+          (${answeredTurns.length})
         </span>
         <div class="external-inquiry-request__transcript-turns">
           ${repeat(
@@ -383,7 +384,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
     return html`
       <div class="external-inquiry-request__attach-files">
         <div class="external-inquiry-request__attach-label">
-          ${waIcon('cloud-upload')} Files to upload to the external model:
+          ${waIcon('cloud-arrow-up')} Files to upload to the external model:
         </div>
         <div class="external-inquiry-request__file-list">
           ${files.map(

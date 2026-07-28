@@ -8,7 +8,7 @@ export type HistoryConfigValue =
 
 interface HistoryConfigSection {
   readonly label: string;
-  readonly icon?: 'tools';
+  readonly icon?: 'screwdriver-wrench';
   readonly entries: Array<[string, HistoryConfigValue]>;
 }
 
@@ -28,7 +28,7 @@ export function getHistoryItemPresentation(item: HistoryItem) {
     if (config.toolConfig) {
       sections.push({
         label: 'Config',
-        icon: 'tools',
+        icon: 'screwdriver-wrench',
         entries: Object.entries(config.toolConfig),
       });
     }
