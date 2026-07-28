@@ -347,9 +347,10 @@ export class SupabaseClient {
         return defaultTier;
       }
 
-      // A present malformed tier is profile corruption. Let the outer error
-      // path log it before conservatively returning the default tier.
-      return UserTierSchema.parse(data.tier);
+      // SQL NULL denotes a profile without an assigned paid tier. A present
+      // malformed string is profile corruption: let the outer error path log
+      // it before conservatively returning the default tier.
+      return UserTierSchema.parse(data.tier ?? defaultTier);
     } catch (error) {
       logger.error(
         'SupabaseClient',
