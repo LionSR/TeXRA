@@ -105,7 +105,7 @@ export class ProgressBackend {
     payload: SetActiveStreamPayload,
   ) => void;
   private readonly stateOwnership: 'backend' | 'session';
-  private readonly storageRootQueue = new PQueue({ concurrency: 1 });
+  private readonly storageOperationQueue = new PQueue({ concurrency: 1 });
   private presentationReloadPending = false;
   private disposed = false;
 
@@ -172,7 +172,11 @@ export class ProgressBackend {
     );
   }
 
-  async deleteStream(stream: StreamTabId): Promise<void> {
+  deleteStream(stream: StreamTabId): Promise<void> {
+    return this.enqueueStorageOperation(() => this.deleteStreamNow(stream));
+  }
+
+  private async deleteStreamNow(stream: StreamTabId): Promise<void> {
     if (!canUseStreamDataDir(stream)) return;
 
     const hasStream =
@@ -241,7 +245,11 @@ export class ProgressBackend {
     }
   }
 
-  async deleteAllStreams(): Promise<void> {
+  deleteAllStreams(): Promise<void> {
+    return this.enqueueStorageOperation(() => this.deleteAllStreamsNow());
+  }
+
+  private async deleteAllStreamsNow(): Promise<void> {
     const streamIds = this.state.streamLogs.keys();
     const locallyOwnedStreams = streamIds.filter(
       (stream) =>
@@ -289,7 +297,7 @@ export class ProgressBackend {
   }
 
   load(): Promise<void> {
-    return this.enqueueStorageRootWork(async () => {
+    return this.enqueueStorageOperation(async () => {
       await this.session.waitUntilReady();
       await this.loadPresentationState();
     });
@@ -325,7 +333,7 @@ export class ProgressBackend {
       }
       if (sessionReloadError) throw sessionReloadError;
     };
-    return this.enqueueStorageRootWork(reload);
+    return this.enqueueStorageOperation(reload);
   }
 
   private async loadPresentationState(): Promise<void> {
@@ -335,10 +343,14 @@ export class ProgressBackend {
     this.state.agentCategoryFilter = 'all';
   }
 
-  private enqueueStorageRootWork(work: () => Promise<void>): Promise<void> {
+  /**
+   * Serialize operations whose filesystem work must observe one workspace
+   * root from beginning to end.
+   */
+  private enqueueStorageOperation(work: () => Promise<void>): Promise<void> {
     // `add` widens to `void | undefined` for abort/timeout options; neither is
     // used, so every enqueued operation runs and resolves with `void`.
-    return this.storageRootQueue.add(work) as Promise<void>;
+    return this.storageOperationQueue.add(work) as Promise<void>;
   }
 
   setupEventListeners(): ProgressEventSubscription {
