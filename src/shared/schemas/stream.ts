@@ -3,6 +3,32 @@ import { z } from 'zod';
 import { AgentCategorySchema } from './agent';
 import { ExecutionIdSchema, StreamTabIdSchema } from './identifiers';
 
+/**
+ * The retired 7-value live-status vocabulary. **Read-only residue** — no
+ * production code decides anything from it any more (#7993 steps 2-3 moved
+ * every live producer and host reader to `StreamPhase` + `StreamSubstate`).
+ * It survives for exactly three reasons, all of them parse-side:
+ *
+ * 1. `StreamLogStore.parsePersistedEntries` normalizes pre-cutover on-disk
+ *    `GROUP_START`/`GROUP_END` `data.status` rows (§8.3's first permanent
+ *    boundary — released transcripts are never rewritten, so this parse
+ *    never ages out).
+ * 2. The standalone trace-viewer's file import (`replayTrace.ts`) parses
+ *    externally-authored `trace.json` exports through
+ *    `StreamLifecycleStatusSchema` and `StreamSnapshot.status` (§8.3's
+ *    second permanent boundary — a static exported file stays legacy-shaped
+ *    forever).
+ * 3. Display tolerance for those two inputs
+ *    (`@shared/streams/streamStatusDisplay`), plus the frozen CLI headless
+ *    JSON `endGroupStatus` projection whose own removal is dated in the
+ *    #6981 ledger (v0.41 / 2026-08-04, whichever is later).
+ *
+ * The trait table that used to hang off this enum is gone: membership
+ * questions are answered by the `StreamPhase` predicates in
+ * `@shared/streams/streamStatus` (`isActivePhase`, `isInFlightPhase`,
+ * `isTerminalOutcomePhase`). Do not add a new reader here — add a
+ * `StreamPhase` one.
+ */
 export const STREAM_STATUS = {
   RUNNING: 'running',
   ERROR: 'error',
@@ -15,98 +41,6 @@ export const STREAM_STATUS = {
 
 export const StreamStatusSchema = z.enum(STREAM_STATUS);
 export type StreamStatus = z.infer<typeof StreamStatusSchema>;
-
-/**
- * Declarative trait table for the live stream state machine — the single
- * source of truth for every status-membership question. Predicates and sets
- * (here and in `@shared/streams/streamStatus`) are derived from this table;
- * never declare a new status list by hand.
- *
- * Traits:
- * - `active`      — a model/tool cycle is executing right now.
- * - `inFlight`    — a cycle may still append to the stream; the stream must
- *                   not be evicted or acquired by a new run.
- * - `liveElapsed` — elapsed-time displays keep advancing.
- * - `terminal`    — the current execution cycle has ended; resumption needs
- *                   an explicit user action.
- *
- * The table makes the two deliberate oddballs visible:
- * - WAITING is `terminal` AND `inFlight`: the cycle ended (status bar shows
- *   idle) but a follow-up appends to the same log, so the stream is not
- *   acquirable.
- * - INITIALIZING is neither `active` nor `terminal`: a brief pre-start state
- *   that ticks elapsed time and blocks acquisition, but runs no model calls.
- */
-const STREAM_STATUS_TRAITS = {
-  [STREAM_STATUS.RUNNING]: {
-    active: true,
-    inFlight: true,
-    liveElapsed: true,
-    terminal: false,
-  },
-  [STREAM_STATUS.RESUMING]: {
-    active: true,
-    inFlight: true,
-    liveElapsed: true,
-    terminal: false,
-  },
-  [STREAM_STATUS.INITIALIZING]: {
-    active: false,
-    inFlight: true,
-    liveElapsed: true,
-    terminal: false,
-  },
-  [STREAM_STATUS.WAITING]: {
-    active: false,
-    inFlight: true,
-    liveElapsed: false,
-    terminal: true,
-  },
-  [STREAM_STATUS.STOPPED]: {
-    active: false,
-    inFlight: false,
-    liveElapsed: false,
-    terminal: true,
-  },
-  [STREAM_STATUS.ERROR]: {
-    active: false,
-    inFlight: false,
-    liveElapsed: false,
-    terminal: true,
-  },
-  [STREAM_STATUS.READY]: {
-    active: false,
-    inFlight: false,
-    liveElapsed: false,
-    terminal: true,
-  },
-} as const satisfies Record<
-  StreamStatus,
-  {
-    active: boolean;
-    inFlight: boolean;
-    liveElapsed: boolean;
-    terminal: boolean;
-  }
->;
-
-export type StreamStatusTrait =
-  keyof (typeof STREAM_STATUS_TRAITS)[StreamStatus];
-
-/** Derive the set of statuses carrying a trait — the only list constructor. */
-export function streamStatusesWithTrait(
-  trait: StreamStatusTrait,
-): ReadonlySet<StreamStatus> {
-  return new Set(
-    StreamStatusSchema.options.filter(
-      (status) => STREAM_STATUS_TRAITS[status][trait],
-    ),
-  );
-}
-
-/** Statuses whose elapsed display should keep advancing while active. */
-export const LIVE_ELAPSED_STREAM_STATUSES: ReadonlySet<string> =
-  streamStatusesWithTrait('liveElapsed');
 
 export const EXECUTION_STATUS = {
   COMPLETED: 'completed',
