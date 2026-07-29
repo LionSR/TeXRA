@@ -1,8 +1,10 @@
 import { Box, Text } from 'ink';
 
 import { summarizeFollowupMessage } from '@shared/subagentFollowup';
+import { pluralize } from '@utils/text/stringUtils';
 
 import { COLOR_WARNING } from '../ui/colors';
+import { hiddenRowsText } from '../render/overflowText';
 import {
   textDisplayWidth,
   truncateSummaryToWidth,
@@ -74,7 +76,10 @@ export function queuedFollowUpPanelDisplay({
     rows.push({
       kind: 'overflow',
       text: truncateSummaryToWidth(
-        `… +${hiddenCount} more queued`,
+        hiddenRowsText(
+          hiddenCount,
+          pluralize(hiddenCount, 'queued follow-up', 'queued follow-ups'),
+        ),
         contentWidth,
       ),
     });
