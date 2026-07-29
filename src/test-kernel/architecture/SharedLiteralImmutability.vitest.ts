@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { LATEXDIFF_CITATION_TEXT_COMMAND_EXCLUSIONS } from '@latex/latexdiff/diffCommandExecutor';
 import { MATH_MARKUP_OPTIONS } from '@latex/latexdiff/mathMarkup';
+import { CORE_LATEX_TOOLS, IMAGE_TOOLS } from '@shared/constants/latex';
 import { API_KEY_PROVIDER_IDS } from '@shared/constants/providers';
 import { TOOL_JSON_SCHEMA_OPTIONS } from '@shared/tools/toolJsonSchema';
 import { ARXIV_CONSTANTS, CROSSREF_CONSTANTS } from '@tools/citation/constants';
@@ -20,7 +21,6 @@ import {
   setupSecrets,
   texraScopedConfig,
 } from '@tools/setup/platform';
-import { CORE_LATEX_TOOLS, IMAGE_TOOLS } from '@tools/setup/toolProbing';
 
 const SHARED_LITERALS = [
   ['DEFAULT_POLLING_BACKOFF_CONFIG', DEFAULT_POLLING_BACKOFF_CONFIG],

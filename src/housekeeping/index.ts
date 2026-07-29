@@ -10,4 +10,4 @@ export {
   runPackLatexdiffvc,
   runPackLatexdiffvcMultiple,
   type LatexdiffPackResult,
-} from './latexdiff';
+} from './packLatexdiffvc';
