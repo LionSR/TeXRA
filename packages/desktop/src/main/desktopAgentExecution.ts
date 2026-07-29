@@ -17,7 +17,6 @@ import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { polishTextWithAI } from '@agent/runtime/textEnhancement';
 import {
-  notifyFollowUpSent,
   presentFollowUpResult,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
@@ -53,6 +52,10 @@ import {
   type WorkflowFileOperationRequest,
 } from '@controllers/progressView/ProgressWorkflowActionsController';
 import { ProgressViewHost } from '@controllers/progressView/ProgressViewHost';
+import {
+  createProgressViewSecondTierHandlers,
+  type ProgressViewSecondTierActions,
+} from '@controllers/progressView/ProgressViewCommandHandlers';
 import { buildMainViewState } from '@controllers/mainView/MainViewStateRestoreController';
 import {
   runCleanMultiple,
@@ -64,7 +67,6 @@ import {
 import {
   API_PROVIDERS,
   hasUsableApiKey,
-  isApiProvider,
   lookupApiKey,
 } from '@model/apiProviders';
 import {
@@ -541,26 +543,6 @@ export class DesktopProgressBridge {
     }
   }
 
-  private async processToolUseFollowUp(
-    data: {
-      stream: StreamTabId;
-      agent: string;
-      model: string;
-      initialQuestion?: string;
-    },
-    executeImmediately: boolean,
-  ): Promise<void> {
-    await this.applyFollowUpPlan(
-      await this.followUpController.planToolUseFollowUpForStream({
-        streamId: data.stream,
-        agent: data.agent,
-        model: data.model,
-        initialQuestion: data.initialQuestion,
-        executeImmediately,
-      }),
-    );
-  }
-
   /**
    * Carry out a plan from `ProgressFollowUpController`, the desktop counterpart
    * of the extension's `applyFollowUpPlan`. As documented on the plan type, the
@@ -889,8 +871,85 @@ export class DesktopProgressBridge {
   }
 
   private createProgressViewInboundHandlers(): DesktopProgressInboundHandlerRegistry {
+    const secondTierActions: ProgressViewSecondTierActions = {
+      workflowActions: this.workflowActions,
+      apiKeyRetry: this.apiKeyRetryController,
+      followUp: this.followUpController,
+      followUpPolish: this.followUpPolishController,
+      host: {
+        showInfo: async (message) => {
+          await this.options.host.showInfoMessage(message);
+        },
+      },
+      session: this.session,
+      getTaskState: (stream) => this.state.snapshots.getTaskState(stream),
+      restoreTaskState: async (taskState) => {
+        const restored = this.restoreTaskState(taskState);
+        if (!restored) {
+          await this.options.host.showErrorMessage('Failed to restore state');
+        }
+      },
+      applyFollowUpPlan: async (plan) => {
+        await this.applyFollowUpPlan(plan);
+      },
+      applyPolishResult: async (result) => {
+        await this.applyFollowUpPolishResult(result);
+      },
+      onPolishError: async (stream, error) => {
+        const message = error instanceof Error ? error.message : `${error}`;
+        this.postToRenderer({
+          command: PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT,
+          stream,
+          kind: 'polishError',
+          text: null,
+          error: message,
+        });
+        this.logger.error(`Error polishing follow-up: ${message}`, {
+          data: toLogData(error),
+        });
+        await this.options.host.showErrorMessage(
+          `Error polishing follow-up: ${message}`,
+        );
+      },
+      loadFollowUpOptions: async () => {
+        const [agentOptions, modelOptionsData] = await Promise.all([
+          computeAgentOptionsData(),
+          computeModelOptionsData(undefined, undefined, {
+            agentCategory: AgentCategory.ToolUse,
+          }),
+        ]);
+        return {
+          toolUseAgentsData: agentOptions.toolUse,
+          modelOptionsData,
+        };
+      },
+      postToRenderer: (message) => {
+        this.postToRenderer(message);
+      },
+      restoreProposalConfig: async (proposal) => {
+        await this.agentProposalController.restoreProposalConfig(proposal);
+      },
+      retry: {
+        submit: (stream, requestId, feedback) =>
+          this.hostInteractions.submitRetryDecision(stream, requestId, {
+            action: 'retry',
+            feedback,
+          }),
+        cancel: (stream, requestId) =>
+          this.hostInteractions.submitRetryDecision(stream, requestId, {
+            action: 'cancel',
+          }),
+      },
+    };
+
     return {
+      // First-tier shared progress command groups
       ...this.progressHost.commandHandlers,
+
+      // Second-tier shared progress command groups
+      ...createProgressViewSecondTierHandlers(secondTierActions),
+
+      // Host-specific handlers below
       // Getting-started actions from the progress empty-state. openWalkthrough
       // has a desktop equivalent; the remaining four actions are VS Code-only.
       [PROGRESS_VIEW_COMMANDS.GETTING_STARTED_ACTION]: async (data) => {
@@ -908,159 +967,8 @@ export class DesktopProgressBridge {
           `"${labels[data.action]}" requires the VS Code extension.`,
         );
       },
-      // Trivially wireable with existing desktop infrastructure.
-      showInformationMessage: (data) => {
-        void this.options.host.showInfoMessage(data.text);
-      },
-      restoreProposalConfig: async (data) => {
-        await this.agentProposalController.restoreProposalConfig(data.proposal);
-      },
-      // Mirrors the extension's PROGRESS_VIEW_COMMANDS.RESTORE_STATE handler
-      // (`texra.restoreState`): look up the stream's persisted task state and
-      // route the renderer to the main view with it. Surfaces a failure the
-      // same way the extension's `texra.restoreState` command does when
-      // `buildMainViewState` throws on malformed/incompatible persisted data.
-      restoreState: async (data) => {
-        const taskState = this.state.snapshots.getTaskState(data.stream);
-        if (!taskState) return;
-        const restored = this.restoreTaskState(taskState);
-        if (!restored) {
-          await this.options.host.showErrorMessage('Failed to restore state');
-        }
-      },
-      // Mirrors the extension's `texra.compactResponse` command
-      // (`commands/agent/agentCommands.ts`): the decision is made by the
-      // host-agnostic execution registry; only the three user-facing messages
-      // are host-specific.
-      compactResponse: async (data) => {
-        const result = this.session.executions.requestManualCompaction(
-          data.stream,
-        );
-        switch (result.kind) {
-          case 'no_active_tool_use':
-            await this.options.host.showInfoMessage(
-              'No active tool-use session found for this stream.',
-            );
-            return;
-          case 'unsupported':
-            await this.options.host.showInfoMessage(
-              'Manual context compaction is not yet available for this model. Stay tuned!',
-            );
-            return;
-          case 'requested':
-            notifyFollowUpSent(result.streamId, result.session);
-            await this.options.host.showInfoMessage(
-              'Context compaction requested. The agent will process it on the next model call.',
-            );
-            return;
-        }
-      },
-      // diff/pack/clean all resolve their run configuration from the shared
-      // snapshot store through the host-neutral
-      // `ProgressWorkflowActionsController`, exactly as the extension's
-      // ProgressViewMessageHandler does.
-      diffStream: (data) => this.workflowActions.diffStream(data.stream),
-      packStream: (data) =>
-        this.workflowActions.runFileOperation(data.stream, 'pack'),
-      cleanStream: (data) =>
-        this.workflowActions.runFileOperation(data.stream, 'clean'),
-      // Mirrors the extension's handleRetryStreamRequest /
-      // handleCancelRetryRequest: settle the pending retry card on the shared
-      // approval handler.
-      retryStreamRequest: async (data) => {
-        const resolved = this.hostInteractions.submitRetryDecision(
-          data.stream,
-          data.requestId,
-          { action: 'retry', feedback: data.feedback },
-        );
-        if (!resolved) {
-          await this.options.host.showInfoMessage(
-            'No retryable request is available for this stream yet.',
-          );
-        }
-      },
-      cancelRetryRequest: (data) => {
-        this.hostInteractions.submitRetryDecision(data.stream, data.requestId, {
-          action: 'cancel',
-        });
-      },
-      // Mirrors the extension's handleUseOwnApiKey. The credential and routing
-      // rules live in the host-neutral controller; the desktop differs only in
-      // how it asks for a missing key — it opens the Models tab, which is this
-      // host's key-entry surface, rather than a modal input box.
-      useOwnApiKey: async (data) => {
-        const provider =
-          data.provider !== undefined && isApiProvider(data.provider)
-            ? data.provider
-            : undefined;
-        const result = await this.apiKeyRetryController.useOwnApiKey({
-          stream: data.stream,
-          requestId: data.requestId,
-          provider,
-          exhaustionReason: data.exhaustionReason,
-          viaRelay: data.viaRelay,
-        });
-        if (result.proceeded && !result.retried) {
-          await this.options.host.showInfoMessage(
-            'Switched to your own API key. No pending retry to resume — run the agent again when ready.',
-          );
-        }
-      },
-      // Mirrors the extension's handlePolishFollowUp. The desktop has no
-      // progress-notification affordance, so the run is unannounced; every
-      // outcome still reaches the renderer through the same
-      // UPDATE_FOLLOW_UP_TEXT message the controller builds.
-      polishFollowUp: async (data) => {
-        const taskState = this.state.snapshots.getTaskState(data.stream);
-        if (!taskState) return;
-        try {
-          const result = await this.followUpPolishController.polishFollowUp({
-            stream: data.stream,
-            text: data.text,
-            taskState,
-          });
-          await this.applyFollowUpPolishResult(result);
-        } catch (error) {
-          const message = toErrorMessage(error);
-          this.postToRenderer({
-            command: PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT,
-            stream: data.stream,
-            kind: 'polishError',
-            text: null,
-            error: message,
-          });
-          this.logger.error(`Error polishing follow-up: ${message}`, {
-            data: toLogData(error),
-          });
-          await this.options.host.showErrorMessage(
-            `Error polishing follow-up: ${message}`,
-          );
-        }
-      },
-      // `setupFollowup` stages the follow-up in the launcher for review;
-      // `runFollowup` starts it immediately. Both go through the same planner,
-      // exactly as the extension's `processToolUseFollowup(data, immediate)`.
-      setupFollowup: (data) => this.processToolUseFollowUp(data, false),
-      runFollowup: (data) => this.processToolUseFollowUp(data, true),
-      getFollowupOptions: async (data) => {
-        const [agentOptions, modelOptionsData] = await Promise.all([
-          computeAgentOptionsData(),
-          computeModelOptionsData(undefined, undefined, {
-            agentCategory: AgentCategory.ToolUse,
-          }),
-        ]);
-        this.postToRenderer({
-          command: PROGRESS_VIEW_COMMANDS.SET_FOLLOWUP_OPTIONS,
-          stream: data.stream,
-          toolUseAgentsData: agentOptions.toolUse,
-          modelOptionsData,
-        });
-      },
-      // Voice dictation for the follow-up box. The recording and transcription
-      // core (`@tools/media/audio`: sox + a transcription model) is
-      // host-agnostic; the extension wraps it in a webview-bound
-      // `RecordingManager`, so the desktop drives the same two calls and posts
-      // the same UPDATE_RECORDING / UPDATE_FOLLOW_UP_TEXT messages.
+      // Recording: the desktop calls standalone functions and posts status
+      // manually; the extension wraps it in a webview-bound RecordingManager.
       startRecording: async () => {
         try {
           const result = await startRecording();
@@ -1076,8 +984,6 @@ export class DesktopProgressBridge {
       stopRecording: async () => {
         try {
           const transcription = stopRecordingAndTranscribe();
-          // Acknowledge before awaiting so the mic button leaves its recording
-          // state while transcription is still running, as in the extension.
           this.postRecordingStatus({ status: 'stopped' });
           const result = await transcription;
           if (result.success) {
@@ -1094,20 +1000,10 @@ export class DesktopProgressBridge {
           this.postRecordingStatus({ status: 'stopped' });
         }
       },
-      runCompileFixer: async (data) => {
-        await this.applyFollowUpPlan(
-          await this.followUpController.planCompileFixerForStream(data.stream),
-        );
-      },
-      // The extension routes these through `texra.showMemory` /
-      // `texra.auth.viewProfile`, both of which open the settings view (the
-      // former on its Memory tab). The desktop's settings surface is an overlay
-      // reached by the same route + tab messages `desktopShellIpc` posts.
+      // Settings navigation
       openMemoryView: () => {
         this.routeToSettings(SETTINGS_TAB.MEMORY);
       },
-      // Profile is the settings header rather than a tab, so — as in the
-      // extension's `viewProfile()` — opening the view is the whole action.
       openProfile: () => {
         this.routeToSettings();
       },

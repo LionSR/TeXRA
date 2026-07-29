@@ -21,6 +21,10 @@ import {
 } from '@controllers/progressView/ProgressFollowUpController';
 import { ProgressWorkflowActionsController } from '@controllers/progressView/ProgressWorkflowActionsController';
 import { ProgressViewHost } from '@controllers/progressView/ProgressViewHost';
+import {
+  createProgressViewSecondTierHandlers,
+  type ProgressViewSecondTierActions,
+} from '@controllers/progressView/ProgressViewCommandHandlers';
 import { SecretManager } from '@frontend/secretManager';
 import { loadOptions } from '@frontend/agents/optionsLoader';
 import { handleProgressViewToolEditApprovalAction } from '@frontend/approval/nativeToolEditApproval';
@@ -168,6 +172,84 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       };
     };
 
+    const secondTierActions: ProgressViewSecondTierActions = {
+      workflowActions: this.workflowActionsController,
+      apiKeyRetry: this.apiKeyRetryController,
+      followUp: this.followUpController,
+      followUpPolish: this.followUpPolishController,
+      host: {
+        showInfo: async (message) => {
+          await this.host.info(message);
+        },
+      },
+      session: defaultSession(),
+      getTaskState: (stream) =>
+        this.provider.state.snapshots.getTaskState(stream),
+      restoreTaskState: async (taskState) => {
+        await this.runViewCommand('texra.restoreState', [taskState]);
+      },
+      applyFollowUpPlan: async (plan) => {
+        await this.applyFollowUpPlan(plan);
+      },
+      applyPolishResult: async (result) => {
+        await this.applyFollowUpPolishResult(result);
+      },
+      onPolishError: (stream, error) => {
+        const errorMsg = error instanceof Error ? error.message : `${error}`;
+        this.postToActiveView({
+          command: PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT,
+          stream,
+          kind: 'polishError',
+          text: null,
+          error: errorMsg,
+        });
+        void this.host.error(`Error polishing follow-up: ${errorMsg}`);
+        this.logger.error(
+          this.channel,
+          `Error polishing follow-up: ${errorMsg}`,
+          {
+            data: error instanceof Error ? error : undefined,
+          },
+        );
+      },
+      loadFollowUpOptions: async () => {
+        const { agentOptions, modelOptions } = await loadOptions();
+        return {
+          toolUseAgentsData: agentOptions.toolUse,
+          modelOptionsData: modelOptions,
+        };
+      },
+      postToRenderer: (message) => {
+        this.postToActiveView(message);
+      },
+      restoreProposalConfig: async (proposal) => {
+        const restored =
+          await this.agentProposalController.restoreProposalConfig(proposal);
+        if (!restored) return;
+        this.logger.info(
+          this.channel,
+          'Restored proposal config to main view',
+          {
+            data: {
+              agent: proposal.agent,
+              agentCategory: proposal.agentCategory,
+            },
+          },
+        );
+      },
+      retry: {
+        submit: (stream, requestId, feedback) =>
+          this.interactions.submitRetryDecision(stream, requestId, {
+            action: 'retry',
+            feedback,
+          }),
+        cancel: (stream, requestId) =>
+          this.interactions.submitRetryDecision(stream, requestId, {
+            action: 'cancel',
+          }),
+      },
+    };
+
     return {
       // Common handlers - passthrough to webview
       [PROGRESS_VIEW_COMMANDS.WEBVIEW_READY]: async () => {
@@ -183,36 +265,25 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       [PROGRESS_VIEW_COMMANDS.POP_OUT]: () => this.provider.popOutToEditor(),
       [PROGRESS_VIEW_COMMANDS.POP_BACK]: () => this.provider.popBackToSidebar(),
 
-      // Shared progress command groups
+      // First-tier shared progress command groups
       ...this.progressHost.commandHandlers,
-      [PROGRESS_VIEW_COMMANDS.COMPACT_RESPONSE]: async (data) => {
-        await this.runViewCommand('texra.compactResponse', [data.stream]);
-      },
 
-      // Actions
-      [PROGRESS_VIEW_COMMANDS.DIFF_STREAM]: (data) =>
-        this.workflowActionsController.diffStream(data.stream),
-      [PROGRESS_VIEW_COMMANDS.PACK_STREAM]: (data) =>
-        this.workflowActionsController.runFileOperation(data.stream, 'pack'),
-      [PROGRESS_VIEW_COMMANDS.CLEAN_STREAM]: (data) =>
-        this.workflowActionsController.runFileOperation(data.stream, 'clean'),
-      [PROGRESS_VIEW_COMMANDS.RETRY_STREAM_REQUEST]: (data) =>
-        this.handleRetryStreamRequest(data),
-      [PROGRESS_VIEW_COMMANDS.CANCEL_RETRY_REQUEST]: (data) => {
-        this.handleCancelRetryRequest(data);
-      },
+      // Second-tier shared progress command groups
+      ...createProgressViewSecondTierHandlers(secondTierActions),
+
+      // Override USE_OWN_API_KEY: the shared factory handles the generic case;
+      // the extension adds VS Code-specific Copilot-subscription fallback
+      // (`startCopilotFallbackRun`) before delegating to the shared controller.
       [PROGRESS_VIEW_COMMANDS.USE_OWN_API_KEY]: (data) =>
         this.handleUseOwnApiKey(data),
-      [PROGRESS_VIEW_COMMANDS.RESTORE_STATE]: async (data) => {
-        const taskState = this.provider.state.snapshots.getTaskState(
-          data.stream,
-        );
-        if (taskState) {
-          await this.runViewCommand('texra.restoreState', [taskState]);
-        }
-      },
+      // Override POLISH_FOLLOW_UP: the shared factory does the core
+      // controller call and result dispatch; the extension adds a VS Code
+      // progress notification (`vscode.window.withProgress`) around it.
       [PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP]: (data) =>
         this.handlePolishFollowUp(data),
+
+      // Recording (host-specific: extension wraps in a webview-bound
+      // RecordingManager that posts status internally)
       [PROGRESS_VIEW_COMMANDS.START_RECORDING]: async () => {
         const view = this.getActiveView();
         if (view) await this.recordingManager.start(view);
@@ -221,42 +292,12 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         const view = this.getActiveView();
         if (view) await this.recordingManager.stop(view);
       },
-      [PROGRESS_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE]: async (data) => {
-        await this.host.info(data.text);
-      },
-      [PROGRESS_VIEW_COMMANDS.RESTORE_PROPOSAL_CONFIG]: async (data) => {
-        const restored =
-          await this.agentProposalController.restoreProposalConfig(
-            data.proposal,
-          );
-        if (restored) {
-          this.logger.info(
-            this.channel,
-            'Restored proposal config to main view',
-            {
-              data: {
-                agent: data.proposal.agent,
-                agentCategory: data.proposal.agentCategory,
-              },
-            },
-          );
-        }
-      },
+
       // Profile & Memory - direct command execution
       [PROGRESS_VIEW_COMMANDS.OPEN_PROFILE]: runCommand(
         'texra.auth.viewProfile',
       ),
       [PROGRESS_VIEW_COMMANDS.OPEN_MEMORY_VIEW]: runCommand('texra.showMemory'),
-
-      // Followup task
-      [PROGRESS_VIEW_COMMANDS.GET_FOLLOWUP_OPTIONS]: (data) =>
-        this.handleGetFollowupOptions(data.stream),
-      [PROGRESS_VIEW_COMMANDS.SETUP_FOLLOWUP]: (data) =>
-        this.processToolUseFollowup(data, false),
-      [PROGRESS_VIEW_COMMANDS.RUN_FOLLOWUP]: (data) =>
-        this.processToolUseFollowup(data, true),
-      [PROGRESS_VIEW_COMMANDS.RUN_COMPILE_FIXER]: (data) =>
-        this.handleRunCompileFixer(data.stream),
 
       [PROGRESS_VIEW_COMMANDS.GETTING_STARTED_ACTION]: (data) =>
         this.runGettingStartedAction(data.action),
@@ -611,32 +652,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   // Action handlers
   // ============================================================
 
-  private async handleRetryStreamRequest(
-    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.RETRY_STREAM_REQUEST>,
-  ): Promise<void> {
-    const resolved = this.interactions.submitRetryDecision(
-      data.stream,
-      data.requestId,
-      {
-        action: 'retry',
-        feedback: data.feedback,
-      },
-    );
-    if (!resolved) {
-      await this.host.info(
-        'No retryable request is available for this stream yet.',
-      );
-    }
-  }
-
-  private handleCancelRetryRequest(
-    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.CANCEL_RETRY_REQUEST>,
-  ): void {
-    this.interactions.submitRetryDecision(data.stream, data.requestId, {
-      action: 'cancel',
-    });
-  }
-
   private handleBashApprovalAction(
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION>,
   ): void {
@@ -926,39 +941,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         () => settle(false),
       );
     });
-  }
-
-  private async handleGetFollowupOptions(streamId: StreamTabId): Promise<void> {
-    const { agentOptions, modelOptions } = await loadOptions();
-    this.postToActiveView({
-      command: PROGRESS_VIEW_COMMANDS.SET_FOLLOWUP_OPTIONS,
-      stream: streamId,
-      toolUseAgentsData: agentOptions.toolUse,
-      modelOptionsData: modelOptions,
-    });
-  }
-
-  private async processToolUseFollowup(
-    data:
-      | MessageFor<typeof PROGRESS_VIEW_COMMANDS.SETUP_FOLLOWUP>
-      | MessageFor<typeof PROGRESS_VIEW_COMMANDS.RUN_FOLLOWUP>,
-    executeImmediately: boolean,
-  ): Promise<void> {
-    await this.applyFollowUpPlan(
-      await this.followUpController.planToolUseFollowUpForStream({
-        streamId: data.stream,
-        agent: data.agent,
-        model: data.model,
-        initialQuestion: data.initialQuestion,
-        executeImmediately,
-      }),
-    );
-  }
-
-  private async handleRunCompileFixer(streamId: StreamTabId): Promise<void> {
-    await this.applyFollowUpPlan(
-      await this.followUpController.planCompileFixerForStream(streamId),
-    );
   }
 
   private async applyFollowUpPlan(plan: ProgressFollowUpPlan): Promise<void> {
