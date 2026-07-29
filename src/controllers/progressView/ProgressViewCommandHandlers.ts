@@ -460,7 +460,7 @@ export function createProgressViewSecondTierHandlers(
           );
           return;
         case 'requested':
-          notifyFollowUpSent(result.streamId, deps.session);
+          notifyFollowUpSent(result.streamId, result.session);
           await deps.host.showInfo(
             'Context compaction requested. The agent will process it on the next model call.',
           );

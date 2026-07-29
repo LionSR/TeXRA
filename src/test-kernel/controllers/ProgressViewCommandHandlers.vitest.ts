@@ -36,8 +36,12 @@ const externalInquiryMocks = vi.hoisted(() => ({
   continueExternalInquiryAction: vi.fn(),
   persistExternalInquiryAction: vi.fn(),
 }));
+const followUpMocks = vi.hoisted(() => ({
+  notifyFollowUpSent: vi.fn(),
+}));
 
 vi.mock('@tools/inquiry', () => externalInquiryMocks);
+vi.mock('@agent/followUp/ToolUseFollowUp', () => followUpMocks);
 vi.mock('@utils/files/pastedImageUtils', () => ({
   savePastedImageBase64: vi.fn(),
 }));
@@ -919,6 +923,32 @@ describe('createProgressViewSecondTierHandlers', () => {
       }),
     ).rejects.toBe(failure);
     expect(actions.restoreTaskState).toHaveBeenCalledWith(taskState);
+  });
+
+  it('notifies compaction through the execution owner session', async () => {
+    const ownerSession = {};
+    const actions = createSecondTierActions({
+      session: {
+        executions: {
+          requestManualCompaction: vi.fn().mockReturnValue({
+            kind: 'requested',
+            streamId: 'stream-1',
+            session: ownerSession,
+          }),
+        },
+      } as unknown as ProgressViewSecondTierActions['session'],
+    });
+    const handlers = createProgressViewSecondTierHandlers(actions);
+
+    await assertSupported(handlers[PROGRESS_VIEW_COMMANDS.COMPACT_RESPONSE])({
+      command: PROGRESS_VIEW_COMMANDS.COMPACT_RESPONSE,
+      stream: 'stream-1',
+    });
+
+    expect(followUpMocks.notifyFollowUpSent).toHaveBeenCalledWith(
+      'stream-1',
+      ownerSession,
+    );
   });
 
   it('awaits polish error reporting', async () => {
