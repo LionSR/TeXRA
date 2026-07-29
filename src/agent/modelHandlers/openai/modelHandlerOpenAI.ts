@@ -65,6 +65,7 @@ import {
 import {
   extractOpenAIPartialTail,
   extractReasoningDelta as extractReasoningDeltaFromChunk,
+  logOpenAICompatibleClientConfig,
 } from './openAIChatHelpers';
 import { toOpenAITools } from '../toolConversion';
 import { formatToolResultTextWithAttachments } from '../utils/toolAttachmentUtils';
@@ -252,7 +253,13 @@ export class ModelHandlerOpenAI<
       fetch: this.longRunningModelFetch,
       maxRetries: 0,
     });
-    this.logOpenAICompatibleClientConfig(client.baseURL, credential.route);
+    logOpenAICompatibleClientConfig(
+      this.logger,
+      this.config,
+      client.baseURL,
+      credential.route,
+      this.shouldUseServerSideKeys(),
+    );
     return this.rememberClientCredentialRoute(
       client,
       credential.route,
