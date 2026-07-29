@@ -14,8 +14,8 @@ import type {
   ExtractResponseResult,
   SdkToolCall,
 } from '@agent/types/ModelHandlerContracts';
+import type { ResponseTextProcessing } from '@agent/runtime/responseTextProcessing';
 import type { ProviderStopReason } from '@agent/types/StopReasonTypes';
-import replacementEngine from '@replacement/engine';
 import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
 import type {
   ToolFileAttachment,
@@ -132,8 +132,11 @@ export class ModelHandlerValidation extends ModelHandler<
   unknown,
   ValidationResponse
 > {
-  constructor(config: ModelConfig) {
-    super(config);
+  constructor(
+    config: ModelConfig,
+    responseTextProcessing?: ResponseTextProcessing,
+  ) {
+    super(config, responseTextProcessing);
     this.capabilities.supportsVision = false;
     this.capabilities.supportsFunctionCalling = true;
     this.capabilities.supportsAssistantPrefill = false;
@@ -211,12 +214,8 @@ export class ModelHandlerValidation extends ModelHandler<
   }
 
   extractResponse(responseObject: ValidationResponse): ExtractResponseResult {
-    // Apply text cleanup here like every other handler's extractResponse. The
-    // response cycle relies on this single per-handler pass (it no longer
-    // re-applies cleanup itself), so a handler that returned raw text would
-    // silently skip cleanup on the reflection path.
     return {
-      text: replacementEngine.applyAll(responseObject.text),
+      text: this.postProcessResponse(responseObject.text),
       usage: responseObject.usage,
       stopReason: responseObject.stopReason,
     };

@@ -6,7 +6,7 @@
 // Local imports
 import { type AgentTrace } from '@agent/trace';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
-import replacementEngine from '@replacement/engine';
+import type { ResponseTextPostProcessor } from '@agent/runtime/responseTextProcessing';
 import type { FileLocation } from '@shared/schemas';
 import { FlexibleFS } from '@utils/files';
 import { extractScratchpad } from '@utils/text/xmlUtils';
@@ -45,10 +45,11 @@ export async function prepareExistingOutputContent(
   outputLocation: FileLocation,
   workspaceState: AgentWorkspaceState,
   logger: AgentTrace,
+  postProcessResponse: ResponseTextPostProcessor,
 ): Promise<PreparedFileContent> {
   // Read and clean the file content
   let content = await FlexibleFS.read(outputLocation);
-  content = replacementEngine.applyAll(content);
+  content = postProcessResponse(content);
 
   // Extract any existing scratchpad content and log it
   const scratchpad = await extractScratchpad(content, 'scratchpad');

@@ -8,6 +8,7 @@ import type {
   TokenCountOptions,
   VscodeLmToolCall,
 } from '@agent/types/ModelHandlerContracts';
+import type { ResponseTextProcessing } from '@agent/runtime/responseTextProcessing';
 import { OPENAI_CHAT_FINISH } from '@agent/types/StopReasonTypes';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 import type { SdkErrorKind } from '@common/errors/sdkErrorUtils';
@@ -29,7 +30,6 @@ import {
   type LanguageModelToolCallPart,
   type LanguageModelToolResultPart,
 } from '@platform/languageModel';
-import replacementEngine from '@replacement/engine';
 import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
 import type {
   ToolFileAttachment,
@@ -187,8 +187,11 @@ export class ModelHandlerVscodeLm extends ModelHandler<
   VscodeLmResponse,
   LanguageModelDataPart
 > {
-  constructor(config: ModelConfig) {
-    super(config);
+  constructor(
+    config: ModelConfig,
+    responseTextProcessing?: ResponseTextProcessing,
+  ) {
+    super(config, responseTextProcessing);
     this.capabilities.supportsNativeAudio = false;
     this.capabilities.supportsNativePdf = false;
     this.capabilities.supportsAssistantPrefill = false;
@@ -329,7 +332,7 @@ export class ModelHandlerVscodeLm extends ModelHandler<
 
   extractResponse(response: VscodeLmResponse): ExtractResponseResult {
     return {
-      text: replacementEngine.applyAll(response.text.trim()),
+      text: this.postProcessResponse(this.normalizeResponseText(response.text)),
       usage: response.usage,
       stopReason: response.stopReason,
     };

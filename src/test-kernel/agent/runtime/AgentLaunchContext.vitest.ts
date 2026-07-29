@@ -137,7 +137,15 @@ describe('AgentLaunchContext', () => {
       workflowAgentKeys: ['builtInWorkflow:correct'],
       toolUseAgentKeys: ['builtInToolUse:orchestrator'],
     };
-    const session = createTestSession();
+    const postProcessResponse = vi.fn((text: string) => text);
+    const responseTextProcessing = {
+      normalizeResponseText: (text: string) => text,
+      postProcessResponse,
+      connectResponseText: async () => ' ',
+    };
+    const session = createTestSession({
+      responseTextProcessing,
+    });
     const detachEvents = session.events.subscribe(() => undefined);
     const detachStatus = session.status.onDidChange(({ status }) => {
       if (status === STREAM_PHASE.FAILED) order.push('terminal');
@@ -186,6 +194,9 @@ describe('AgentLaunchContext', () => {
       expect(mocks.buildVars.mock.calls.at(-1)?.at(6)).toEqual({
         delegationAgentScope,
       });
+      expect(mocks.createHandler.mock.calls.at(-1)?.at(3)).toBe(
+        responseTextProcessing,
+      );
       expect(endStage).toHaveBeenCalledExactlyOnceWith(RUN_OUTCOME.FAILED);
       expect(handler.dispose).toHaveBeenCalledOnce();
       expect(session.status.get('late-assembly-stream')).toBe(
