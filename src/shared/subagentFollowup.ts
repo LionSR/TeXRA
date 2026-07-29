@@ -19,7 +19,12 @@
 import escapeRegExp from 'escape-string-regexp';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import { DELIVERY_TAG, DELIVERY_TAGS } from '@shared/deliveryTags';
-import { formatResultCount } from '@utils/text/stringUtils';
+import { WorkflowScriptDeliverySummarySchema } from '@shared/schemas';
+import {
+  formatCompactDuration,
+  formatCostUsd,
+  formatResultCount,
+} from '@utils/text/stringUtils';
 
 // Derived from the single owned DELIVERY_TAGS list (@shared/deliveryTags),
 // same derivation pattern UserMessage.ts uses for its structured-delivery
@@ -191,6 +196,44 @@ function resultResponsePreview(response: string): string {
 }
 
 /**
+ * Read the presentation-only facts attached to a workflow delivery. The raw
+ * response remains intact for the invoking model and diagnostic inspection.
+ */
+export function workflowScriptDeliverySummary(xml: string): string | undefined {
+  const rawSummary = innerTag(xml, 'workflow-summary');
+  if (!rawSummary) return undefined;
+  const parsedJson = safeParseJson(decodeXmlEntities(rawSummary));
+  if (parsedJson.isErr()) return undefined;
+  const parsed = WorkflowScriptDeliverySummarySchema.safeParse(
+    parsedJson.value,
+  );
+  if (!parsed.success) return undefined;
+
+  const summary = parsed.data;
+  const marker = summary.outcome === 'completed' ? '✓' : '✗';
+  const status = summary.outcome === 'completed' ? 'completed' : 'failed';
+  const facts = [
+    `${formatResultCount(summary.phaseCount, 'phase')}`,
+    `${summary.taskDone}/${summary.taskTotal} tasks`,
+    formatCostUsd(summary.costUsd),
+    formatCompactDuration(summary.durationMs),
+  ];
+  const fileLines = summary.files.map((file) => {
+    const diffstat =
+      file.added != null && file.removed != null
+        ? ` (+${file.added} -${file.removed})`
+        : '';
+    return `  ${file.path}${diffstat}`;
+  });
+  return [
+    `${marker} ${summary.name} ${status} · ${facts.join(' · ')}`,
+    ...fileLines,
+    `  script: ${summary.scriptPath}`,
+    `  rerun: edit the script, then call delegate_workflow_script with scriptPath`,
+  ].join('\n');
+}
+
+/**
  * Collapse a subagent follow-up XML block into a one-line (or, for results,
  * status + response) human-readable summary. Returns `text` unchanged when it
  * is not a subagent block. Malformed non-string payloads render as a visible
@@ -215,6 +258,10 @@ export function summarizeSubagentFollowup(text: unknown): string {
   // don't set an `agent` attribute, so fall back to the tag's own family name
   // (e.g. `codex-result` → `codex`) rather than the generic `subagent`.
   if (tag.endsWith('-result')) {
+    if (tag === DELIVERY_TAG.workflowScriptResult) {
+      const summary = workflowScriptDeliverySummary(trimmed);
+      if (summary) return summary;
+    }
     const agent = attr(trimmed, 'agent') ?? tag.slice(0, -'-result'.length);
     const status = attr(trimmed, 'status') ?? 'completed';
     const wall = innerTag(trimmed, 'wall-time');
@@ -225,6 +272,10 @@ export function summarizeSubagentFollowup(text: unknown): string {
   }
 
   if (tag.endsWith('-error')) {
+    if (tag === DELIVERY_TAG.workflowScriptError) {
+      const summary = workflowScriptDeliverySummary(trimmed);
+      if (summary) return summary;
+    }
     const agent = attr(trimmed, 'agent') ?? tag.slice(0, -'-error'.length);
     const wall = innerTag(trimmed, 'wall-time');
     const message = innerTag(trimmed, 'message');

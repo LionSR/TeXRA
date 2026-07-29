@@ -29,7 +29,17 @@ return await agent('saved call')`;
 const finalResult: AgentFinalResult = {
   category: 'workflow',
   outcome: 'completed',
-  outputs: [],
+  outputs: [
+    {
+      round: 0,
+      relativePath: 'paper.tex',
+      absolutePath: '/workspace/paper.tex',
+      location: 'workspace',
+      originalPath: '/workspace/paper.tex',
+      added: 12,
+      removed: 8,
+    },
+  ],
   compileFailures: [],
   diffs: [],
   cost: 0.42,
@@ -132,6 +142,13 @@ describe('createWorkflowScriptStrategy', () => {
       'Script file: .texra/workflow-scripts/draft-strategy.mjs',
     );
     expect(delivery).toContain('with scriptPath:');
+    expect(delivery).toContain('<workflow-summary>');
+    expect(delivery).toContain('"outcome":"completed"');
+    expect(delivery).toContain('"taskDone":1');
+    expect(delivery).toContain('"costUsd":0.42');
+    expect(delivery).toContain(
+      '"files":[{"path":"paper.tex","added":12,"removed":8}]',
+    );
   });
 
   it('settles zero for a pure checkpoint replay', async () => {
@@ -279,6 +296,7 @@ throw new Error('script failed after replay')`;
       'Script file: .texra/workflow-scripts/draft-strategy.mjs',
     );
     expect(errText).toContain('with scriptPath:');
+    expect(errText).toContain('"outcome":"failed"');
   });
 
   it('retains live spend when the completed journal result is malformed', async () => {

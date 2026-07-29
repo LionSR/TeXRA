@@ -21,6 +21,7 @@ export * from './roundIndexed';
 export * from './output';
 export * from './progressEvents';
 export * from './workflowCallProgress';
+export * from './workflowScriptDelivery';
 
 // Layer 3: Depends on layer 2
 export * from './log';

@@ -20,6 +20,9 @@ All notable changes to this project will be documented in this file.
   non-interactive runs now print phase, task, and completion progress; workflow
   task cards open their child runs directly without a duplicate background-task
   panel.
+- **Concise workflow results** — completed workflow scripts now render one
+  shared summary of phases, tasks, generated files, cost, duration, and rerun
+  instructions instead of repeating the full run log.
 
 ## [0.39.9] - 2026-07-26
 
