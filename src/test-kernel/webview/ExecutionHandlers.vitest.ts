@@ -6,6 +6,9 @@ import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 
 const mocks = vi.hoisted(() => ({
   executeCommand: vi.fn(),
+  prepareMainViewExecutionLaunch: vi.fn(),
+  showErrorMessage: vi.fn(),
+  showInformationMessage: vi.fn(),
   pathToLocation: vi.fn((absolutePath: string) => ({
     kind: 'external' as const,
     absolutePath,
@@ -14,9 +17,10 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('vscode', () => ({
   commands: { executeCommand: mocks.executeCommand },
+  workspace: {},
   window: {
-    showErrorMessage: vi.fn(),
-    showInformationMessage: vi.fn(),
+    showErrorMessage: mocks.showErrorMessage,
+    showInformationMessage: mocks.showInformationMessage,
     showWarningMessage: vi.fn(),
   },
 }));
@@ -43,18 +47,57 @@ vi.mock('@controllers/mainView/MainViewExecutionController', () => ({
   prepareMainViewExecutionRequest: vi.fn(),
   prepareMainViewTeamExecutionRequest: vi.fn(),
 }));
+vi.mock(
+  '@controllers/mainView/backend/MainViewExecutionLaunchController',
+  () => ({
+    prepareMainViewExecutionLaunch: mocks.prepareMainViewExecutionLaunch,
+  }),
+);
 vi.mock('@frontend/ui/errorHandlingUtils', () => ({
   logErrorMessage: vi.fn(),
 }));
 vi.mock('@logger/logUtils', () => ({ info: vi.fn() }));
 vi.mock('@utils/files', () => ({ pathToLocation: mocks.pathToLocation }));
 
-const { handleFileOperation } =
+const { handleExecute, handleFileOperation } =
   await import('@webview/managers/executionHandlers');
 
 describe('MainView execution handlers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('presents launch errors at the extension boundary', async () => {
+    mocks.prepareMainViewExecutionLaunch.mockResolvedValue({
+      status: 'error',
+      message: 'Team launch failed',
+    });
+
+    await handleExecute({});
+
+    expect(mocks.showErrorMessage).toHaveBeenCalledExactlyOnceWith(
+      'Team launch failed',
+    );
+    expect(mocks.executeCommand).not.toHaveBeenCalled();
+  });
+
+  it('presents launch information before executing the prepared request', async () => {
+    const request = { agentName: 'team-root' };
+    mocks.prepareMainViewExecutionLaunch.mockResolvedValue({
+      status: 'prepared',
+      preparation: { valid: true, request },
+      infoMessage: 'Continuing without writer',
+    });
+
+    await handleExecute({});
+
+    expect(mocks.showInformationMessage).toHaveBeenCalledExactlyOnceWith(
+      'Continuing without writer',
+    );
+    expect(mocks.executeCommand).toHaveBeenCalledExactlyOnceWith(
+      'texra.execute',
+      request,
+    );
   });
 
   it.each([
