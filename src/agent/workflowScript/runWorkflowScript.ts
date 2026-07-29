@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import stableStringify from 'fast-json-stable-stringify';
 import PQueue from 'p-queue';
 import pTimeout from 'p-timeout';
+import type { StreamTabId } from '@shared/schemas';
 import {
   WorkflowScriptFilesSchema,
   type WorkflowScriptFiles,
@@ -503,9 +504,11 @@ export async function runWorkflowScript(
     // attempt's reportModel wins.
     const startedAt = Date.now();
     let resolvedModel: string | undefined;
+    let childStreamId: StreamTabId | undefined;
     let startEmitted = false;
     const attemptMetadata = (): WorkflowScriptFailureAttemptMetadata => ({
       ...(resolvedModel !== undefined ? { model: resolvedModel } : {}),
+      ...(childStreamId !== undefined ? { childStreamId } : {}),
       durationMs: Date.now() - startedAt,
     });
     // Attempt loop: retry() re-enters with a fresh AbortController and a fresh
@@ -574,6 +577,17 @@ export async function runWorkflowScript(
               reportModel: (model) => {
                 resolvedModel = model;
               },
+              reportChildStream: (streamId) => {
+                childStreamId = streamId;
+                emit({
+                  type: 'agent:stream',
+                  progressId,
+                  index,
+                  label,
+                  ...phaseContext,
+                  childStreamId: streamId,
+                });
+              },
             });
           // File contents can change while this call waits for a concurrency
           // slot or between interactive attempts. Refresh the identity before
@@ -611,6 +625,7 @@ export async function runWorkflowScript(
           outcome: 'skipped',
           reason: 'user',
           ...(resolvedModel !== undefined ? { model: resolvedModel } : {}),
+          ...(childStreamId !== undefined ? { childStreamId } : {}),
           durationMs: Date.now() - startedAt,
         });
         // First-class SKIPPED value, not journaled — a resume re-runs it.
@@ -657,6 +672,7 @@ export async function runWorkflowScript(
         ...phaseContext,
         outcome: 'completed',
         ...(resolvedModel !== undefined ? { model: resolvedModel } : {}),
+        ...(childStreamId !== undefined ? { childStreamId } : {}),
         durationMs: Date.now() - startedAt,
       });
       return payload;

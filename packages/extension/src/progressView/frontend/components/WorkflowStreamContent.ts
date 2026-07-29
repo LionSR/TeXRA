@@ -21,7 +21,6 @@ import './FileList';
 import './WorkflowToolUseFollowupSection';
 import './BackgroundTasksPanel';
 import './RequestPanels';
-import './WorkflowHintBanner';
 
 @customElement('workflow-stream-content')
 export class WorkflowStreamContent extends BaseStreamContent {
@@ -49,15 +48,11 @@ export class WorkflowStreamContent extends BaseStreamContent {
 
       <div class="conversation-content">
         <div class="conversation-column conversation-prelude">
-          <workflow-hint-banner></workflow-hint-banner>
-
           <request-panels
             .permissions=${this.filteredPermissions}
           ></request-panels>
 
-          <background-tasks-panel
-            .subagents=${state.subagents}
-          ></background-tasks-panel>
+          <background-tasks-panel scope="inquiries"></background-tasks-panel>
         </div>
 
         <div class="conversation-log"><log-list></log-list></div>

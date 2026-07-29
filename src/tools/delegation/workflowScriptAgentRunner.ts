@@ -2,7 +2,7 @@
 import { createHash } from 'node:crypto';
 
 // Local imports
-import { resolveChildRunOutput } from '@agent/storage';
+import { getExecutionStore, resolveChildRunOutput } from '@agent/storage';
 import {
   WorkflowRunAbortError,
   type WorkflowAgentCallOptions,
@@ -223,7 +223,7 @@ export function createWorkflowScriptAgentRunner(
     // report it — not the logical id — through the control bridge.
     let activeExecutionId: ExecutionId | undefined;
     try {
-      const { result } = await executeStableSubagentInBand({
+      const completed = await executeStableSubagentInBand({
         executionId: logicalExecutionId,
         parentExecutionId: run.executionId,
         signal: invocation.signal,
@@ -353,6 +353,7 @@ export function createWorkflowScriptAgentRunner(
             // inherits from the orchestrator, so nested delegation remains
             // transitive.
             onStreamResolved: (resolvedStreamId) => {
+              invocation.reportChildStream?.(resolvedStreamId);
               configureDelegatedChildApprovals(
                 resolvedStreamId,
                 run.streamId,
@@ -364,6 +365,23 @@ export function createWorkflowScriptAgentRunner(
           };
         },
       });
+      if (
+        activeExecutionId === undefined &&
+        invocation.reportChildStream !== undefined
+      ) {
+        try {
+          const recoveredStreamId = (
+            await getExecutionStore(completed.executionId).readMeta()
+          )?.streamId;
+          if (recoveredStreamId !== undefined) {
+            invocation.reportChildStream(recoveredStreamId);
+          }
+        } catch {
+          // A recovered result is authoritative. Navigation metadata is
+          // optional and must not invalidate the completed computation.
+        }
+      }
+      const { result } = completed;
       if (result.outcome !== 'completed') {
         throw new Error(
           `Workflow subagent ended with ${result.outcome} outcome.`,
