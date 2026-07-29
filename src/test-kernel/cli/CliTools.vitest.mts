@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { formatToolDescriptionForTui } from '@cli/chat/tui/forms/ToolsListForm';
 import {
@@ -13,6 +13,18 @@ import {
   readCliToolGuide,
   type CliToolStatusRecord,
 } from '@cli/runtime/tools';
+
+// The guide assertions below read live tool definitions, which offer a
+// package-manager command when the host has that manager. Today the probe
+// cannot succeed under vitest anyway — setupFakePlatform points every command
+// at a workspace directory that does not exist, so execaSync fails before PATH
+// is consulted — but that is an accident of an unrelated stub, not something
+// these assertions should depend on. Pin the fallback explicitly.
+vi.mock('@utils/system/toolUtils', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@utils/system/toolUtils')>();
+  return { ...actual, hasPackageManager: () => false };
+});
 
 function record(
   overrides: Partial<CliToolStatusRecord> = {},
