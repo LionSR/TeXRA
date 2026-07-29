@@ -4,8 +4,9 @@ import type { AgentEvent } from '@agent/trace';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { attachWorkflowPlainProjection } from '@cli/runtime/workflowPlainProjection';
 import {
+  buildRunDescriptor,
   MESSAGE_TYPES,
-  RUN_OUTCOME,
+  STREAM_PHASE,
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
@@ -22,16 +23,52 @@ function emit(
   events.emit({ scope: 'run', streamId: target, event });
 }
 
+function startWorkflow(
+  events: SessionEventHub,
+  target: StreamTabId = streamId,
+): void {
+  emit(
+    events,
+    {
+      type: 'run.start',
+      descriptor: buildRunDescriptor({
+        streamId: target,
+        executionId,
+        agent: 'proof-workflow',
+        category: 'workflow',
+        kind: 'workflowScript',
+      }),
+    },
+    target,
+  );
+}
+
+function completeWorkflow(
+  events: SessionEventHub,
+  status:
+    | typeof STREAM_PHASE.COMPLETED
+    | typeof STREAM_PHASE.CANCELLED
+    | typeof STREAM_PHASE.FAILED,
+): void {
+  events.emit({
+    scope: 'session',
+    event: {
+      type: 'updateStreamStatus',
+      payload: { streamId, status },
+    },
+  });
+}
+
 describe('attachWorkflowPlainProjection', () => {
   it('writes phase, call, log, and completion lines in stable order', () => {
     const events = new SessionEventHub();
     const lines: string[] = [];
     const beforeWrite = vi.fn();
     const detach = attachWorkflowPlainProjection(events, {
-      streamId,
       writeLine: (line) => lines.push(line),
       beforeWrite,
     });
+    startWorkflow(events);
 
     emit(events, {
       type: 'workflow.task',
@@ -118,15 +155,7 @@ describe('attachWorkflowPlainProjection', () => {
       },
       otherStreamId,
     );
-    emit(events, {
-      type: 'result',
-      outcome: RUN_OUTCOME.COMPLETED,
-      executionId,
-      streamId,
-      agentName: 'proof-workflow',
-      category: 'workflow',
-      isSubagent: false,
-    });
+    completeWorkflow(events, STREAM_PHASE.COMPLETED);
 
     expect(lines).toEqual([
       '◆ Map (1/2)',
@@ -148,32 +177,29 @@ describe('attachWorkflowPlainProjection', () => {
     expect(lines.at(-1)).toBe('Finished: proof-workflow');
   });
 
-  it('ignores root result events from other categories and child runs', () => {
+  it('ignores ordinary workflow-agent streams', () => {
     const events = new SessionEventHub();
     const lines: string[] = [];
     const detach = attachWorkflowPlainProjection(events, {
-      streamId,
       writeLine: (line) => lines.push(line),
     });
 
     emit(events, {
-      type: 'result',
-      outcome: RUN_OUTCOME.FAILED,
-      executionId,
-      streamId,
-      agentName: 'tool',
-      category: 'toolUse',
-      isSubagent: false,
+      type: 'run.start',
+      descriptor: buildRunDescriptor({
+        streamId,
+        executionId,
+        agent: 'ordinary-workflow',
+        category: 'workflow',
+        kind: 'agent',
+      }),
     });
     emit(events, {
-      type: 'result',
-      outcome: RUN_OUTCOME.CANCELLED,
-      executionId,
-      streamId,
-      agentName: 'child',
-      category: 'workflow',
-      isSubagent: true,
+      type: 'workflow.task',
+      logId: 'ordinary-task',
+      task: { id: 'ordinary', label: 'Ordinary task', status: 'running' },
     });
+    completeWorkflow(events, STREAM_PHASE.FAILED);
 
     expect(lines).toEqual([]);
     detach();
@@ -183,9 +209,9 @@ describe('attachWorkflowPlainProjection', () => {
     const events = new SessionEventHub();
     const lines: string[] = [];
     const detach = attachWorkflowPlainProjection(events, {
-      streamId,
       writeLine: (line) => lines.push(line),
     });
+    startWorkflow(events);
 
     emit(events, {
       type: 'workflow.task',
@@ -210,15 +236,7 @@ describe('attachWorkflowPlainProjection', () => {
         status: 'planned',
       },
     });
-    emit(events, {
-      type: 'result',
-      outcome: RUN_OUTCOME.CANCELLED,
-      executionId,
-      streamId,
-      agentName: 'proof-workflow',
-      category: 'workflow',
-      isSubagent: false,
-    });
+    completeWorkflow(events, STREAM_PHASE.CANCELLED);
 
     expect(lines).toEqual([
       'Planned: Loose check',

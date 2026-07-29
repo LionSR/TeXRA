@@ -3,7 +3,9 @@ import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import {
   MESSAGE_TYPES,
   RUN_OUTCOME,
+  STREAM_PHASE,
   WORKFLOW_TASK_STATUS_LABEL,
+  type RunOutcome,
   type StreamTabId,
   type WorkflowCallProgress,
 } from '@shared/schemas';
@@ -14,6 +16,7 @@ import {
 import { assertNever } from '@utils/core';
 
 const WORKFLOW_PLAIN_EVENT_TYPES = [
+  'run.start',
   'stage.start',
   'workflow.task',
   'log',
@@ -21,16 +24,13 @@ const WORKFLOW_PLAIN_EVENT_TYPES = [
 ] as const satisfies readonly AgentEvent['type'][];
 
 export interface WorkflowPlainProjectionOptions {
-  readonly streamId: StreamTabId;
   readonly writeLine: (line: string) => void;
   readonly beforeWrite?: () => void;
 }
 
-function completionLine(
-  event: Extract<AgentEvent, { type: 'result' }>,
-): string {
+function completionLine(outcome: RunOutcome, agentName: string): string {
   const label = (() => {
-    switch (event.outcome) {
+    switch (outcome) {
       case RUN_OUTCOME.COMPLETED:
         return WORKFLOW_TASK_STATUS_LABEL.completed;
       case RUN_OUTCOME.CANCELLED:
@@ -38,24 +38,25 @@ function completionLine(
       case RUN_OUTCOME.FAILED:
         return WORKFLOW_TASK_STATUS_LABEL.failed;
       default:
-        return assertNever(event.outcome, 'Unhandled workflow run outcome');
+        return assertNever(outcome, 'Unhandled workflow run outcome');
     }
   })();
-  return `${label}: ${event.agentName}`;
+  return `${label}: ${agentName}`;
 }
 
-/**
- * Project one root workflow stream onto deterministic, spinner-free text.
- * Declared calls are buffered until their phase opens, preserving the visual
- * hierarchy used by the extension and interactive terminal.
- */
-export function attachWorkflowPlainProjection(
-  events: SessionEventHub,
+interface WorkflowStreamProjection {
+  readonly event: (event: AgentEvent) => void;
+  readonly complete: (outcome: RunOutcome) => void;
+}
+
+function createWorkflowStreamProjection(
+  agentName: string,
   options: WorkflowPlainProjectionOptions,
-): () => void {
+): WorkflowStreamProjection {
   const openedPhases = new Set<string>();
   const pendingCalls = new Map<string, Map<string, WorkflowCallProgress>>();
   const lastCallLines = new Map<string, string>();
+  let completed = false;
 
   const write = (line: string): void => {
     options.beforeWrite?.();
@@ -99,8 +100,8 @@ export function attachWorkflowPlainProjection(
     pendingCalls.clear();
   };
 
-  return events.subscribe(
-    ({ event }) => {
+  return {
+    event: (event) => {
       switch (event.type) {
         case 'stage.start':
           if (event.kind === 'phase') openPhase(event.id, event);
@@ -132,17 +133,83 @@ export function attachWorkflowPlainProjection(
           }
           break;
         case 'result':
-          if (event.category === 'workflow' && !event.isSubagent) {
+          if (!completed) {
+            completed = true;
             flushPendingPhases();
-            write(completionLine(event));
+            write(completionLine(event.outcome, agentName));
           }
           break;
       }
     },
+    complete: (outcome) => {
+      if (completed) return;
+      completed = true;
+      flushPendingPhases();
+      write(completionLine(outcome, agentName));
+    },
+  };
+}
+
+/**
+ * Project every detached workflow-script stream onto deterministic,
+ * spinner-free text. The descriptor emitted during child activation is the
+ * source of truth: ordinary workflow agents retain their usual renderer.
+ */
+export function attachWorkflowPlainProjection(
+  events: SessionEventHub,
+  options: WorkflowPlainProjectionOptions,
+): () => void {
+  const projections = new Map<StreamTabId, WorkflowStreamProjection>();
+  const detachRunEvents = events.subscribe(
+    (sessionEvent) => {
+      if (sessionEvent.scope !== 'run') return;
+      const { streamId, event } = sessionEvent;
+      if (event.type === 'run.start') {
+        if (event.descriptor.kind === 'workflowScript') {
+          projections.set(
+            streamId,
+            createWorkflowStreamProjection(event.descriptor.agent, options),
+          );
+        }
+        return;
+      }
+      projections.get(streamId)?.event(event);
+    },
     {
       scope: 'run',
-      streamId: options.streamId,
       types: WORKFLOW_PLAIN_EVENT_TYPES,
     },
   );
+  const detachSessionEvents = events.subscribe(
+    (sessionEvent) => {
+      if (sessionEvent.scope !== 'session') return;
+      const { event } = sessionEvent;
+      if (event.type === 'removeStream') {
+        projections.delete(event.payload.streamId);
+        return;
+      }
+      if (event.type !== 'updateStreamStatus') return;
+      const projection = projections.get(event.payload.streamId);
+      if (!projection) return;
+      switch (event.payload.status) {
+        case STREAM_PHASE.COMPLETED:
+        case STREAM_PHASE.CANCELLED:
+        case STREAM_PHASE.FAILED:
+          projection.complete(event.payload.status);
+          break;
+        case STREAM_PHASE.RUNNING:
+        case STREAM_PHASE.WAITING:
+          break;
+        default:
+          assertNever(event.payload.status, 'Unhandled workflow stream status');
+      }
+    },
+    { scope: 'session' },
+  );
+
+  return () => {
+    detachSessionEvents();
+    detachRunEvents();
+    projections.clear();
+  };
 }

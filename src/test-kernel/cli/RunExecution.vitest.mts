@@ -227,14 +227,10 @@ describe('executeCliRequest', () => {
     expect(mocks.detachSessionProgressProjection).toHaveBeenCalledTimes(1);
   });
 
-  it('attaches plain workflow progress only for a text workflow run', async () => {
+  it('observes workflow-script children for every visible text run', async () => {
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
     const request = {
-      config: {
-        agent: 'proof-workflow',
-        model: 'gpt54',
-        agentCategory: 'workflow',
-      },
+      config: toolUseConfig(),
       executionId: 'abcdef',
     } as Parameters<typeof executeCliRequest>[0];
 
@@ -246,7 +242,6 @@ describe('executeCliRequest', () => {
     expect(mocks.attachWorkflowPlainProjection).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-        streamId: 'proof-workflow@gpt54#abcdef',
         writeLine: mocks.writeTextStderr,
       }),
     );
@@ -255,11 +250,11 @@ describe('executeCliRequest', () => {
     ).toBeLessThan(
       mocks.runAgent.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
     );
-    expect(mocks.attachRunProgressRenderer).not.toHaveBeenCalled();
+    expect(mocks.attachRunProgressRenderer).toHaveBeenCalledTimes(1);
     expect(mocks.detachWorkflowPlainProjection).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps text workflows quiet when run progress is disabled', async () => {
+  it('keeps workflow-script progress quiet when run progress is disabled', async () => {
     const { executeCliRequest } = await import('@cli/runtime/runExecution');
     const request = {
       config: {

@@ -16,9 +16,10 @@ All notable changes to this project will be documented in this file.
 
 - **Consistent workflow progress** — workflow rounds and task states now use
   the same numbering and wording in the terminal, desktop, and VS Code.
-- **Visible headless workflow progress** — non-interactive workflow runs now
-  print phase, task, and completion progress; workflow task cards open their
-  child runs directly without a duplicate background-task panel.
+- **Visible headless workflow progress** — workflow scripts launched by
+  non-interactive runs now print phase, task, and completion progress; workflow
+  task cards open their child runs directly without a duplicate background-task
+  panel.
 
 ## [0.39.9] - 2026-07-26
 
