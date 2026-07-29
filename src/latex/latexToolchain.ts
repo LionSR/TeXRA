@@ -1,14 +1,22 @@
+import { CORE_LATEX_TOOLS } from '@shared/constants/latex';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 
+// Kept in sync with @shared/constants/latex's CORE_LATEX_TOOLS SSOT: if one
+// of these four names is renamed or removed there, this line fails to
+// typecheck instead of silently drifting. The remaining doctor-only tools
+// (compiler and bibliography alternates) have no equivalent in the
+// setup-assistant probe, so they stay local to this file.
+const SHARED_CORE_TOOLS = [
+  'pdflatex',
+  'latexmk',
+  'latexindent',
+  'latexdiff',
+] as const satisfies readonly (typeof CORE_LATEX_TOOLS)[number][];
+
+const DOCTOR_ONLY_TOOLS = ['xelatex', 'lualatex', 'bibtex', 'biber'] as const;
+
 type LatexToolName =
-  | 'latexmk'
-  | 'pdflatex'
-  | 'xelatex'
-  | 'lualatex'
-  | 'bibtex'
-  | 'biber'
-  | 'latexdiff'
-  | 'latexindent';
+  (typeof SHARED_CORE_TOOLS)[number] | (typeof DOCTOR_ONLY_TOOLS)[number];
 
 interface LatexToolStatus {
   readonly name: LatexToolName;
