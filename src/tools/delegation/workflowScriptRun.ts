@@ -41,6 +41,7 @@ interface ProjectedWorkflowCall {
   readonly logId: string;
   readonly definition: Pick<WorkflowCallProgress, 'id' | 'label' | 'phase'>;
   status: WorkflowCallProgress['status'];
+  childStreamId?: WorkflowCallProgress['childStreamId'];
 }
 
 /** Stable trace identity for one workflow call within its run stream. */
@@ -256,6 +257,9 @@ export async function runPersistedWorkflowScriptWithProgress(
     } else {
       projected.status = call.status;
     }
+    if (call.childStreamId !== undefined) {
+      projected.childStreamId = call.childStreamId;
+    }
     const phase = projected.definition.phase;
     trace.emit({
       type: 'workflow.task',
@@ -440,7 +444,11 @@ export async function runPersistedWorkflowScriptWithProgress(
     return result;
   } finally {
     closed = true;
-    for (const { definition: call, status } of projectedCalls.values()) {
+    for (const {
+      definition: call,
+      status,
+      childStreamId,
+    } of projectedCalls.values()) {
       if (status === 'planned') {
         // Open the declared phase the run never reached so its skipped cards
         // still land under a header; the loop below then closes it.
@@ -462,6 +470,7 @@ export async function runPersistedWorkflowScriptWithProgress(
           ...call,
           status: 'failed',
           error,
+          ...(childStreamId !== undefined ? { childStreamId } : {}),
           ...(totalCostUsd !== undefined ? { totalCostUsd } : {}),
         };
         emitCall(failedCall);

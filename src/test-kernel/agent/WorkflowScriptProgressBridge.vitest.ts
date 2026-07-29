@@ -806,7 +806,10 @@ return await agent('Abort', { phase: 'Execution' })`,
         script: `${meta}
 agent('Orphaned', { phase: 'Execution' })
 return 'guest success'`,
-        runAgent: async () => {
+        runAgent: async (invocation: WorkflowAgentInvocation) => {
+          invocation.reportChildStream?.(
+            'orphaned@model#abcdef' as StreamTabId,
+          );
           markStarted?.();
           return await new Promise<never>(() => undefined);
         },
@@ -824,6 +827,7 @@ return 'guest success'`,
         task: {
           error: 'The workflow ended before this call completed.',
           totalCostUsd: 0.03,
+          childStreamId: 'orphaned@model#abcdef',
         },
       });
       expect(events).toContainEqual({
