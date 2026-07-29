@@ -170,7 +170,10 @@ async function waitForReadiness(application) {
   const page = await application.firstWindow({ timeout: 0 });
   const handle = await page.waitForFunction(
     () => {
-      const shell = document.querySelector('.desktop-shell');
+      // The renderer mounts into `<main id="app">` (renderer/index.html);
+      // there is no `.desktop-shell` element, so keying readiness off one
+      // could never resolve.
+      const shell = document.querySelector('main#app');
       const mainApp = document.querySelector(
         'main-app[data-desktop-view="main"]',
       );
