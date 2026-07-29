@@ -10,7 +10,10 @@ import { readAgentSkillsEnabled } from '@shared/settingsView/handlers/agentSkill
 import { getFirstRunDone } from '@shared/state/onboardingState';
 import { updateConfig } from '@utils/config/configUtils';
 
-import { firstRunSetupAgentOverride } from '../onboarding/setupContinuation';
+import {
+  firstRunSetupAgentOverride,
+  SETUP_AGENT_HANDOFF_NOTICE,
+} from '../onboarding/setupContinuation';
 import { CliExitCode } from '../runtime/exitCodes';
 import { listCliHistoryEntries } from '../runtime/history';
 import { initInteractiveCliPlatform } from '../runtime/initPlatform';
@@ -154,6 +157,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
     const { runChat } = await import('../chat/tui/runChatTui');
     const result = await runChat(context, {
       agentOverride: setupAgentOverride,
+      startupNotice: SETUP_AGENT_HANDOFF_NOTICE,
     });
     return result.exitCode;
   }
