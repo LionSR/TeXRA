@@ -19,10 +19,9 @@ declare module 'bibtex' {
 
   export function parseBibFile(content: string): BibLibrary;
 
-  const bibtex: {
-    parseBibFile: typeof parseBibFile;
-  };
-  export default bibtex;
+  // No default export on purpose: bibtex's UMD bundle sets `__esModule: true`
+  // on its CJS exports, so a default import type-checks but bundles to
+  // `undefined` under esbuild's ESM interop. Named imports only.
 }
 
 /**
