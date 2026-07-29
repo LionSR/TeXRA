@@ -2,7 +2,10 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import bibtex from 'bibtex';
+// Named import only: bibtex's UMD exports carry `__esModule: true`, so a
+// default import bundles to `undefined` under esbuild's ESM interop and the
+// destructure crashes at module init (0.39.10 startup-crash).
+import { parseBibFile } from 'bibtex';
 
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
@@ -33,7 +36,6 @@ const CITE_COMMANDS = [
   'Parencite',
   'Footcite',
 ];
-const { parseBibFile } = bibtex;
 
 // Compiled regex patterns (matchAll clones the regex, so module-level is safe)
 const CITATION_PATTERN = new RegExp(
