@@ -56,11 +56,12 @@ export interface SelectProps<T> {
   readonly wrap?: boolean;
   /** Called when `wrap` is false and a move would cross the top/bottom edge. */
   readonly onBoundaryEscape?: (direction: -1 | 1) => void;
-  /** Defaults to `'single'`: Space and hotkeys select-and-close via `onSelect`.
-   *  In `'multi'`, Space and hotkeys instead toggle membership via `onToggle`
-   *  (caller owns the selected set and reads it back in its own `onSelect`,
-   *  which Enter still calls once to submit); the tick glyph reflects
-   *  `selectedValues` instead of `activeValue`. */
+  /** Defaults to `'single'`: hotkeys (1-9, then a-z) select-and-close via
+   *  `onSelect`; Enter does the same on the highlighted row; Space is
+   *  unhandled. In `'multi'`, Space and hotkeys instead toggle membership via
+   *  `onToggle` (caller owns the selected set and reads it back in its own
+   *  `onSelect`, which Enter still calls once to submit); the tick glyph
+   *  reflects `selectedValues` instead of `activeValue`. */
   readonly mode?: 'single' | 'multi';
   /** Required in `'multi'` mode: the set of currently-toggled-on values. */
   readonly selectedValues?: ReadonlySet<T>;
