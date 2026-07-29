@@ -89,16 +89,19 @@ export const FILE_TYPE_TO_KEY: Record<
   output: 'outputFiles',
 };
 
-/** Reverse of {@link FILE_TYPE_TO_KEY}: maps a `MultiFiles` key back to its file type. */
-export const KEY_TO_FILE_TYPE: Record<
-  keyof MultiFiles,
-  MultipleDocumentFileType
-> = {
-  inputFiles: 'input',
-  contextFiles: 'context',
-  mediaFiles: 'media',
-  outputFiles: 'output',
-};
+/**
+ * Reverse of {@link FILE_TYPE_TO_KEY}: maps a `MultiFiles` key back to its file
+ * type. Derived from `FILE_TYPE_TO_KEY` rather than listed separately, so a
+ * new `MultipleDocumentFileType` only needs updating in one place.
+ */
+export const KEY_TO_FILE_TYPE = Object.fromEntries(
+  (
+    Object.entries(FILE_TYPE_TO_KEY) as [
+      MultipleDocumentFileType,
+      keyof MultiFiles,
+    ][]
+  ).map(([fileType, key]) => [key, fileType]),
+) as Record<keyof MultiFiles, MultipleDocumentFileType>;
 
 /** Maps a single-file selection type (`SET_CURRENT_FILE`'s base/edited slot) to its `FileOptions` key. */
 export const SINGLE_FILE_TYPE_TO_KEY: Record<

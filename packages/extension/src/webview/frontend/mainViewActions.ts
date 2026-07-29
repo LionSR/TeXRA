@@ -233,11 +233,11 @@ export function addOpenedFiles(type: DocumentFileType): void {
 export function getCurrentFile(
   type: DocumentFileType | 'base' | 'edited',
 ): void {
-  const payload: Record<string, unknown> = { fileType: type };
   const sf = singleFiles$.get();
-  if ((type === 'base' || type === 'edited') && sf.baseFile) {
-    payload.baseFile = sf.baseFile;
-  }
+  const payload: { fileType: typeof type; baseFile?: string } =
+    (type === 'base' || type === 'edited') && sf.baseFile
+      ? { fileType: type, baseFile: sf.baseFile }
+      : { fileType: type };
   postMessage(MAIN_VIEW_COMMANDS.GET_CURRENT_FILE, payload);
 }
 

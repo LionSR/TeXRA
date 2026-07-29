@@ -1,4 +1,5 @@
 // Local imports
+import * as logger from '@logger/logUtils';
 import type {
   ConfigProvider,
   ConfigTarget,
@@ -8,6 +9,9 @@ import type {
   SettingStore,
   StateSettingEntry,
 } from '@shared/schemas/stateSettings';
+import { toErrorMessage } from '@utils/errors/errorMessage';
+
+const CHANNEL = 'settingsAccess';
 
 /**
  * Host-aware read/write for {@link StateSettingEntry} rows.
@@ -49,9 +53,11 @@ export function settingDefault(entry: StateSettingEntry): unknown {
 /**
  * Read a state-backed setting, falling back to (and validating against) the
  * entry's schema. A stored value that no longer validates resolves to the
- * default rather than propagating a stale/invalid value. Both `ConfigProvider`
- * and `StateStore` expose the same `get(key, default)`, so the read dispatches
- * uniformly on the resolved slot.
+ * default rather than propagating a stale/invalid value — but only after
+ * warning, matching `getValidatedConfig`'s #7470 fix: an invalid *persisted*
+ * value (as opposed to simply absent, which returns above) must not vanish
+ * without a trace. Both `ConfigProvider` and `StateStore` expose the same
+ * `get(key, default)`, so the read dispatches uniformly on the resolved slot.
  */
 export function readSetting(
   entry: StateSettingEntry,
@@ -65,7 +71,15 @@ export function readSetting(
   const normalized = entry.normalizePersisted
     ? entry.normalizePersisted(raw)
     : raw;
-  return entry.schema.catch(() => settingDefault(entry)).parse(normalized);
+  const result = entry.schema.safeParse(normalized);
+  if (result.success) {
+    return result.data;
+  }
+  logger.warn(
+    CHANNEL,
+    `Ignoring invalid persisted value for setting "${entry.key}": ${toErrorMessage(result.error)}`,
+  );
+  return settingDefault(entry);
 }
 
 /**
