@@ -173,7 +173,7 @@ pdflatex --version
 ### Perl
 
 ::: info OPTIONAL
-Perl backs the `latexindent` and `latexdiff` LaTeX tools (both are Perl scripts). Install it only if you use auto-formatting or LaTeX diffs — it's pre-installed on macOS/Linux and bundled with TeX Live, but **not** with MiKTeX.
+Perl backs the `latexindent` and `latexdiff` LaTeX tools (both are Perl scripts). You only need it if you use auto-formatting or LaTeX diffs. It ships with macOS and with TeX Live, and is present on most Linux installs — but **not** with MiKTeX, and not on minimal or container Linux images. Check with `perl --version` rather than assuming.
 :::
 
 #### Windows

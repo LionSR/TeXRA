@@ -83,15 +83,19 @@ function getExtraDirs(): string[] {
       'C:\\Program Files\\MiKTeX 2.9\\miktex\\bin',
       'C:\\Program Files (x86)\\MiKTeX\\miktex\\bin',
       'C:\\Program Files (x86)\\MiKTeX 2.9\\miktex\\bin',
-      'C:\\Program Files\\gs\\gs9.56.1\\bin',
-      'C:\\Program Files\\gs\\gs9.55.0\\bin',
-      'C:\\Program Files\\gs\\gs9.54.0\\bin',
-      'C:\\Program Files (x86)\\gs\\gs9.56.1\\bin',
-      'C:\\Program Files (x86)\\gs\\gs9.55.0\\bin',
-      'C:\\Program Files (x86)\\gs\\gs9.54.0\\bin',
       // Strawberry Perl (recommended Perl distribution for Windows)
       'C:\\Strawberry\\perl\\bin',
     );
+
+    // Ghostscript installs under a version-stamped directory. This was six
+    // hardcoded 9.54-9.56 paths, so a current 10.x install was invisible unless
+    // it was already on PATH. Descending sort keeps the previous preference
+    // order among 9.x releases (9.56 before 9.55 before 9.54) and treats 10.x as
+    // a fallback, since "gs9" sorts above "gs1" -- any installed version works,
+    // so the ordering is a preference, not a correctness requirement.
+    for (const programFiles of ['C:/Program Files', 'C:/Program Files (x86)']) {
+      dirs.push(...globDescending(`${programFiles}/gs/*/bin`));
+    }
     const localAppData =
       process.env.LOCALAPPDATA ||
       (process.env.USERPROFILE

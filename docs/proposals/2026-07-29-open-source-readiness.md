@@ -9,19 +9,21 @@ licensing and product decisions, not engineering cleanup.
 
 ## Status
 
-| Item                                       | Status                           |
-| ------------------------------------------ | -------------------------------- |
-| §1 Licensing and legal                     | Needs a license choice           |
-| §2 What gets published                     | Needs three product calls        |
-| §3.1 Repo identity                         | Needs the final repo home        |
-| §3.2 `packages/agent` repo metadata        | Done                             |
-| §3.3 Secret scanning                       | Repo admin setting               |
-| §4.1 `SECURITY.md`                         | Done                             |
-| §4.1 `CONTRIBUTING.md` / `CODE_OF_CONDUCT` | Held until the license lands     |
-| §4.2 Telemetry opt-out                     | Done — `texra.telemetry.enabled` |
-| §4.3 `npm test` green on a clean checkout  | Done                             |
-| §4.4 `minimumReleaseAge`                   | Open — documented tradeoff       |
-| §4.5 Stale `.gitignore` comment            | Done                             |
+| Item                                       | Status                            |
+| ------------------------------------------ | --------------------------------- |
+| §1 Licensing and legal                     | Needs a license choice            |
+| §2 What gets published                     | Needs three product calls         |
+| §3.1 Repo identity                         | Needs the final repo home         |
+| §3.2 `packages/agent` repo metadata        | Done                              |
+| §3.3 Secret scanning                       | Repo admin setting                |
+| §4.1 `SECURITY.md`                         | Done                              |
+| §4.1 `CONTRIBUTING.md` / `CODE_OF_CONDUCT` | Held until the license lands      |
+| §4.2 Telemetry opt-out                     | Done — `texra.telemetry.enabled`  |
+| §4.3 `npm test` green on a clean checkout  | Done                              |
+| §4.4 `minimumReleaseAge`                   | Open — documented tradeoff        |
+| §4.5 Stale `.gitignore` comment            | Done                              |
+| §4.6 CI ran only on Linux                  | Done — Windows in the matrix      |
+| §4.7 Windows tool discovery                | Done — Ghostscript, TeX Live Perl |
 
 `CONTRIBUTING.md` and `CODE_OF_CONDUCT.md` are held rather than skipped.
 Soliciting contributions under "all rights reserved" with no CLA or DCO creates
@@ -221,11 +223,11 @@ including that disabling it also stops hosted spend accounting.
 Done. 3 failures out of 7,965 (796 of 800 files passed). CI on `main` was green,
 so all three were specific to a sandboxed or loaded machine.
 
-| Test                                                        | Cause                                                      | Fix                     |
-| ----------------------------------------------------------- | ---------------------------------------------------------- | ----------------------- |
-| `src/test-kernel/desktop/DesktopDevScript.vitest.mts`       | `require('electron')` downloads the binary on demand       | made hermetic           |
-| `src/test-kernel/agent/WorkflowScriptEngine.vitest.ts:1741` | wall-clock assertion `< 3000 ms`; took 9,349 ms under load | budget widened          |
-| `src/test-kernel/utils/system/SystemUtils.vitest.ts:224`    | 1 s budget for process-group teardown                      | budget widened to ~10 s |
+| Test                                                     | Cause                                                      | Fix                                 |
+| -------------------------------------------------------- | ---------------------------------------------------------- | ----------------------------------- |
+| `src/test-kernel/desktop/DesktopDevScript.vitest.mts`    | `require('electron')` downloads the binary on demand       | made hermetic                       |
+| `src/test-kernel/agent/WorkflowScriptEngine.vitest.ts`   | wall-clock assertion `< 3000 ms`; took 9,349 ms under load | assertion removed, per-test timeout |
+| `src/test-kernel/utils/system/SystemUtils.vitest.ts:224` | 1 s budget for process-group teardown                      | ~10 s budget, per-test timeout      |
 
 Electron 43 dropped its `postinstall`; `require('electron')` now downloads the
 platform binary on first call. `dev.mjs` requires it at module load, so the test
@@ -234,10 +236,18 @@ network. It now sets `ELECTRON_OVERRIDE_DIST_PATH`, which short-circuits that
 resolution. The assertions cover spawn arguments, env, and stdio, not the binary
 path, so no coverage is lost.
 
-The other two bounds are hang guards, not latency measurements. The memory
-test's containment is established by its `/memory/` rejection — a failure of the
-memory limit rejects with `/timed out/` instead — so the wall-clock bound only
-needs to catch a wedged process.
+The other two were wall-clock bounds standing in as hang guards. Both needed a
+per-test timeout to have any effect at all, because `vitest.config.mjs` sets
+`testTimeout: 10000` and the widened bounds exceeded it — the runner aborted the
+test before the assertion could run, so the first attempt at this traded an
+assertion failure for a timeout failure.
+
+The memory test then lost its bound entirely. Containment is established by its
+`/memory/` rejection (a failure of the memory limit rejects with `/timed out/`
+instead), and filling the guest heap 1 MB at a time took 78 s during a
+full-suite run on a contended machine — so any bound tight enough to mean
+something is a bound the test trips over. The per-test timeout is the hang
+guard; a redundant assertion measuring machine load is not.
 
 ### 4.4 Supply-chain quarantine is disabled repo-wide
 
@@ -257,6 +267,41 @@ and tool allowlists come from committed history rather than the branch under
 review. The comment now says that.
 
 ---
+
+### 4.6 CI only ever ran on Linux
+
+Done. Every `ci.yml` job was `ubuntu-latest` except the macOS webview smoke, so
+none of the platform-specific code was exercised: tool discovery under
+`Program Files`, the Strawberry/tlperl Perl lookups, path normalization, the
+CLI's `win32` branches. That is how a Ghostscript path list frozen at 9.x and a
+missing TeX Live Perl directory both survived — no test covered them and no
+runner ran them.
+
+`windows-latest` is now in the sharded kernel-test matrix, gating like the Linux
+shards. The shard count is unchanged rather than widened, because Windows
+runners bill at 2x. `timeout-minutes` went 20 → 30 for the slower runner.
+
+Still Linux-only: build, lint, typecheck, and the docs build. Those are
+platform-independent enough not to need duplicating.
+
+### 4.7 Windows tool discovery was frozen to specific versions
+
+Done. Two instances of the same bug, both found by reading the Windows probe
+list rather than by any test:
+
+- **Ghostscript** was six hardcoded `gs9.54`–`gs9.56` directories, so a current
+  10.x install was invisible unless already on `PATH`. Now globbed, with the 9.x
+  preference order preserved.
+- **TeX Live's Perl** (`tlpkg/tlperl/bin`) was not probed at all, so
+  `checkCoreDependencies()` reported Perl missing on a TeX Live box and the
+  Setup Wizard asked for Strawberry Perl the user did not need. `latexindent`
+  and `latexdiff` were unaffected — they resolve to the `.exe` wrappers under
+  `texlive/*/bin/*`, which use tlperl internally.
+
+Neither is covered by a test: `getExtraDirs()` takes no injection and caches at
+module scope, so exercising the win32 branch means faking `process.platform`,
+`globSync`, and the filesystem, and the assertion would restate the glob. §4.6
+is the real mitigation.
 
 ## 5. Verified clean
 

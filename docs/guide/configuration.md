@@ -305,22 +305,46 @@ Dashboard. Click **Change** in the directory info bar to select a new folder, or
 ## Usage Logging
 
 TeXRA records one usage entry per model round and sends it to TeXRA's backend.
-These entries meter relay and subscription usage against your plan.
 
 ```json
 "texra.telemetry.enabled": true
 ```
 
-Each entry contains the model and provider, the agent name and category, the
-input, output, cached, and reasoning token counts, the computed cost, and the
-response time. It contains no prompt text, document content, file names, or
-anything else from your workspace. Entries are sent only while you are signed
-in; signed out, nothing leaves your machine.
+Each entry contains exactly these fields:
 
-Set `texra.telemetry.enabled` to `false` to send nothing. This takes effect
-immediately, and entries already queued are discarded rather than sent. Because
-these entries are what meters hosted usage, disabling them also stops relay and
-subscription spend accounting — leave it on if you rely on hosted access.
+| Field                            | Value                                                                     |
+| -------------------------------- | ------------------------------------------------------------------------- |
+| `model`, `provider`              | which model answered the round                                            |
+| `agentName`, `agentCategory`     | which agent ran it                                                        |
+| `inputTokens`, `outputTokens`    | token counts, excluding cache hits                                        |
+| `cachedInputTokens`              | prompt-cache hits                                                         |
+| `reasoningTokens`                | reasoning tokens, where the provider reports them                         |
+| `cost`                           | the computed cost in USD                                                  |
+| `responseTimeMs`                 | round-trip time                                                           |
+| `usedRelay`, `usageRoute`        | whether the round went through the relay, a subscription, or your own key |
+| `streamId`                       | an opaque id grouping rounds from one session                             |
+| `timestamp`                      | when the round finished                                                   |
+| `extensionVersion`, `editorType` | the TeXRA version and host (`cli`, `Visual Studio Code`, …)               |
+
+No prompt text, document content, file names, or workspace paths are included.
+
+Entries are transmitted only while you are signed in. Rounds recorded while you
+are signed out stay queued in memory, and are uploaded if you sign in later in
+the same session; they are discarded when TeXRA exits.
+
+### Opting out
+
+Set `texra.telemetry.enabled` to `false`. This takes effect immediately, and
+optional entries already queued are dropped rather than sent.
+
+It does not suppress everything. Rounds that ran through the relay or a
+subscription (`usageRoute` of `relay`, `chatgpt-subscription`, or
+`kimi-code-subscription`) are still sent, because those records are what meters
+your hosted usage against your plan's monthly spend limit — they are billing
+data, not analytics. What the setting turns off is logging for rounds billed to
+your own API key (`usageRoute` of `api-key`), which cost TeXRA nothing.
+
+If you use only your own API keys, opting out stops all usage reporting.
 
 In VS Code the setting is under **TeXRA → Privacy**. In the CLI and desktop app,
 set it in `.texra/config.json`:
@@ -330,6 +354,10 @@ set it in `.texra/config.json`:
   "texra.telemetry.enabled": false
 }
 ```
+
+The value must be a JSON boolean. A quoted `"false"` is not a boolean, so TeXRA
+logs a warning and treats the setting as off rather than silently reading it as
+`true`.
 
 ## Logger Configuration
 

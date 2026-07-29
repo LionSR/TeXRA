@@ -54,9 +54,18 @@ anonymous.
 ## API keys
 
 TeXRA runs agents against model providers using either your own API keys or
-TeXRA's hosted relay. Keys you supply are held in the host platform's secret
-store and sent only to the provider, or to the relay when a request is routed
-through it.
+TeXRA's hosted relay. Where a key lives depends on how you supplied it:
+
+- **Entered through TeXRA** (`TeXRA: Set API Key`, the desktop credential
+  settings, or `texra auth`) — stored in the host's secret store: VS Code
+  SecretStorage, the Electron keychain, or the CLI credential store.
+- **Supplied through the environment** — an exported variable, or a workspace
+  `.env` that the extension loads at activation. These are read straight from
+  the environment at request time and never enter any secret store. A `.env` is
+  plain text in your workspace, so keep it out of version control.
+
+Either way the key is sent only to the provider, or to the relay when a request
+is routed through it.
 
 If you think a key of yours has been exposed by TeXRA, rotate it with your
 provider first, then report it.
