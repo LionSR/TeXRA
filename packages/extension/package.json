@@ -811,7 +811,7 @@
           "texra.telemetry.enabled": {
             "type": "boolean",
             "default": true,
-            "description": "Send usage records for each model round to TeXRA. Each record contains the model and provider, the agent name and category, token counts, the computed cost, and the response time — never prompt text, document content, or file names. Records are only transmitted while signed in, and they are what meters relay and subscription usage against your plan, so turning this off also stops that accounting. Set to false to send nothing.",
+            "description": "Send a usage record for each model round to TeXRA: model and provider, agent name and category, token counts, cost, and response time. Never prompt text, document content, or file names. Records are sent only while signed in, and they meter relay and subscription usage against your plan, so turning this off also stops that accounting.",
             "scope": "application"
           }
         }

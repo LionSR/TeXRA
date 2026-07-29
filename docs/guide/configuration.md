@@ -305,30 +305,24 @@ Dashboard. Click **Change** in the directory info bar to select a new folder, or
 ## Usage Logging
 
 TeXRA records one usage entry per model round and sends it to TeXRA's backend.
-This is what meters relay and subscription usage against your plan.
+These entries meter relay and subscription usage against your plan.
 
 ```json
 "texra.telemetry.enabled": true
 ```
 
-Each entry contains only:
+Each entry contains the model and provider, the agent name and category, the
+input, output, cached, and reasoning token counts, the computed cost, and the
+response time. It contains no prompt text, document content, file names, or
+anything else from your workspace. Entries are sent only while you are signed
+in; signed out, nothing leaves your machine.
 
-- the model and provider used
-- the agent name and category
-- input, output, cached, and reasoning token counts
-- the computed cost and the response time
+Set `texra.telemetry.enabled` to `false` to send nothing. This takes effect
+immediately, and entries already queued are discarded rather than sent. Because
+these entries are what meters hosted usage, disabling them also stops relay and
+subscription spend accounting — leave it on if you rely on hosted access.
 
-It does **not** contain prompt text, document content, file names, or anything
-from your workspace. Entries are only transmitted while you are signed in — if
-you are signed out, nothing leaves your machine.
-
-Set `texra.telemetry.enabled` to `false` to send nothing. Turning it off takes
-effect immediately: entries already queued are discarded rather than sent. Note
-that because these entries are what meters hosted usage, disabling them also
-stops relay and subscription spend accounting, so leave it on if you rely on
-hosted access.
-
-In VS Code the setting is under **TeXRA → Privacy**; in the CLI and desktop app
+In VS Code the setting is under **TeXRA → Privacy**. In the CLI and desktop app,
 set it in `.texra/config.json`:
 
 ```json
