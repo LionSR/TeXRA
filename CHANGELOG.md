@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Shared (all surfaces)
+
+#### Improvements
+
+- **Install in Terminal works without Node** — the Codex and Claude Code
+  integration cards now offer the Homebrew command on machines that have
+  Homebrew, instead of a global npm install that fails when Node isn't on
+  PATH. Machines without a package manager that ships the CLI keep the npm
+  command.
+
 ### Desktop
 
 #### Improvements

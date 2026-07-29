@@ -54,7 +54,7 @@ TeXRA spawns each CLI binary directly in the same environment as the extension h
 
 ### Install and Authenticate
 
-- **Install** with `npm install -g @openai/codex`, or use the official installer linked from [developers.openai.com/codex/cli](https://developers.openai.com/codex/cli).
+- **Install** with `npm install -g @openai/codex` — or `brew install codex` (macOS), or the official installer linked from [developers.openai.com/codex/cli](https://developers.openai.com/codex/cli). **Install in Terminal** picks Homebrew automatically when you have it, so the button works without a Node install.
 - **Sign in** with `codex login` to use ChatGPT Plus / Pro — or set `OPENAI_API_KEY` in the shell you launch VS Code from to bill against an API account.
 
 ### Settings

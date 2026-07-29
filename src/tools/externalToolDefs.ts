@@ -40,7 +40,10 @@ import {
 import { getZoteroPort } from '@tools/zotero/bbtClient';
 import { BinaryResolver } from '@utils/system/binaryResolver';
 import { isWSL } from '@utils/system/wslDetect';
-import { checkToolInstalled } from '@utils/system/toolUtils';
+import {
+  checkToolInstalled,
+  detectPackageManager,
+} from '@utils/system/toolUtils';
 import { isGitRepository } from '@utils/system/isGitRepository';
 import { formatResultCount } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -241,6 +244,26 @@ function prerequisitesChecks<T>(config: {
     statusLabel: async (probeResult) => statusLabel(await resolve(probeResult)),
     detailCheck: async (probeResult) => detailCheck(await resolve(probeResult)),
   };
+}
+
+/**
+ * Pick the install command to offer for a CLI on this machine.
+ *
+ * `npm install -g` assumes Node is on PATH, which desktop-app users who
+ * installed TeXRA from a .dmg or .exe often do not have. When the system
+ * package manager also ships the CLI, offer that command instead.
+ *
+ * Definitions call this from an `installCommand` getter so the probe stays
+ * lazy — `detectPackageManager()` runs once per session and caches its result,
+ * so reading the property repeatedly costs nothing after the first access.
+ */
+function preferredInstallCommand(
+  commands: Partial<Record<'brew' | 'apt' | 'scoop', string>> & {
+    default: string;
+  },
+): string {
+  const packageManager = detectPackageManager();
+  return (packageManager && commands[packageManager]) || commands.default;
 }
 
 // ============================================================
@@ -528,7 +551,12 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       '  • codex login        — sign in with ChatGPT account (recommended)\n' +
       '  • OPENAI_API_KEY     — environment variable with API key',
     installUrl: 'https://github.com/openai/codex',
-    installCommand: 'npm install -g @openai/codex',
+    get installCommand() {
+      return preferredInstallCommand({
+        brew: 'brew install codex',
+        default: 'npm install -g @openai/codex',
+      });
+    },
     authCommand: 'codex login',
     configNotes:
       'Requires @openai/codex npm package with platform binaries. Used by @openai/codex-sdk. ' +
@@ -593,7 +621,12 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       '  • claude setup-token    — long-lived OAuth token (CLAUDE_CODE_OAUTH_TOKEN)\n' +
       '  • ANTHROPIC_API_KEY     — environment variable with Console API key',
     installUrl: 'https://code.claude.com/docs/en/setup',
-    installCommand: 'npm install -g @anthropic-ai/claude-code',
+    get installCommand() {
+      return preferredInstallCommand({
+        brew: 'brew install --cask claude-code',
+        default: 'npm install -g @anthropic-ai/claude-code',
+      });
+    },
     authCommand: 'claude login',
     configNotes:
       'Requires the native `claude` binary. Supports OAuth (`claude login`), long-lived tokens (`claude setup-token` → CLAUDE_CODE_OAUTH_TOKEN), or ANTHROPIC_API_KEY (resolved from TeXRA Settings → API Keys or the environment).',
