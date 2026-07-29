@@ -244,12 +244,18 @@ export function resolveToolDefinitions(
       return [tool?.definition ?? { name: canonicalName }];
     }
 
-    // Object items: always parse with schema to validate/merge overrides
-    return [
-      ToolDefinitionSchema.catch({ name: canonicalName }).parse({
-        ...item,
-        name: canonicalName,
-      }),
-    ];
+    // Object items: always parse with schema to validate/merge overrides. A
+    // malformed override (bad `parameters`/`description`) must not silently
+    // drop to a bare-name tool without a trace, so warn like the
+    // missing-tool branch above instead of `.catch()`-ing it away.
+    const parsed = ToolDefinitionSchema.safeParse({
+      ...item,
+      name: canonicalName,
+    });
+    if (parsed.success) {
+      return [parsed.data];
+    }
+    warnOnMissing?.(name);
+    return [{ name: canonicalName }];
   });
 }
