@@ -579,12 +579,43 @@ return await agent('Draft')`,
       (event): event is Extract<AgentEvent, { type: 'workflow.task' }> =>
         event.type === 'workflow.task' && event.task.label === 'Draft',
     );
-    expect(new Set(draftEvents.map((event) => event.logId))).toEqual(
-      new Set(['workflow-task-call-0']),
-    );
+    const logIds = new Set(draftEvents.map((event) => event.logId));
+    expect(logIds.size).toBe(1);
+    expect([...logIds][0]).toMatch(/^workflow-task-.+-call-0$/);
     expect(activities).toContainEqual(
       expect.stringMatching(/^Finished: Draft · deepseekT · .+ · \$0\.020$/),
     );
+  });
+
+  it('uses a new task-card identity for a deterministic relaunch', async () => {
+    const script = `${meta}
+return await agent('Draft')`;
+    const first = recordingTrace();
+    await runPersistedWorkflowScriptWithProgress(first.trace, {
+      store: getExecutionStore(executionId),
+      checkpointId: 'relaunch-card-id',
+      script,
+      runAgent: vi.fn(() => Promise.resolve('done')),
+    });
+
+    clearStoreCache();
+    const second = recordingTrace();
+    await runPersistedWorkflowScriptWithProgress(second.trace, {
+      store: getExecutionStore(executionId),
+      checkpointId: 'relaunch-card-id',
+      script,
+      runAgent: vi.fn(() => Promise.reject(new Error('must not run'))),
+    });
+
+    const firstId = workflowCallEvent(
+      first.events,
+      'Draft',
+      'completed',
+    )?.logId;
+    const secondId = workflowCallEvent(second.events, 'Draft', 'cached')?.logId;
+    expect(firstId).toBeDefined();
+    expect(secondId).toBeDefined();
+    expect(secondId).not.toBe(firstId);
   });
 
   it('preserves live metadata when the user skips a running call', async () => {

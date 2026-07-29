@@ -44,8 +44,11 @@ interface ProjectedWorkflowCall {
 }
 
 /** Stable trace identity for one workflow call within its run stream. */
-function workflowCallLogId(id: WorkflowScriptProgressId): string {
-  return `workflow-task-${id}`;
+function workflowCallLogId(
+  projectionId: string,
+  id: WorkflowScriptProgressId,
+): string {
+  return `workflow-task-${projectionId}-${id}`;
 }
 
 export class WorkflowJournalCostError extends Error {
@@ -154,6 +157,10 @@ export async function runPersistedWorkflowScriptWithProgress(
   const parentStageId = trace.activeStageId();
   const phases = new Map<string, PhaseStage>();
   const phaseStageIds = new Map<string, string>();
+  // A deterministic workflow stream appends every relaunch to one transcript.
+  // Keep one card identity through this projection's state transitions without
+  // colliding with the same logical call in an earlier attempt.
+  const projectionId = generateShortId();
   const callPhases = new Map<WorkflowScriptProgressId, string | undefined>();
   const callIndexes = new Map<WorkflowScriptProgressId, number>();
   const projectedCalls = new Map<
@@ -237,7 +244,7 @@ export async function runPersistedWorkflowScriptWithProgress(
     let projected = projectedCalls.get(call.id);
     if (!projected) {
       projected = {
-        logId: workflowCallLogId(call.id),
+        logId: workflowCallLogId(projectionId, call.id),
         definition: {
           id: call.id,
           label: call.label,
