@@ -285,7 +285,8 @@ export class UserMessage extends LitElement {
               label: copyState.ariaLabel,
               tooltip: copyState.title,
               className: `user-message-copy ${copyState.copied ? copyState.successClass : ''}`,
-              onClick: () => this.copyController.copy(displayText),
+              onClick: () =>
+                this.copyController.copy(workflowSummary || displayText),
             })}
             ${
               hasRawMessage

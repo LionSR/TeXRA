@@ -233,6 +233,19 @@ export function workflowScriptDeliverySummary(xml: string): string | undefined {
   ].join('\n');
 }
 
+/** Retain the cause while excluding the duplicated run log and rerun footer. */
+function workflowScriptErrorCause(xml: string): string | undefined {
+  const message = innerTag(xml, 'message');
+  if (!message) return undefined;
+  let cause = decodeXmlEntities(message);
+  for (const marker of ['\n\n=== Run log', '\n\nScript file:']) {
+    const markerIndex = cause.indexOf(marker);
+    if (markerIndex >= 0) cause = cause.slice(0, markerIndex);
+  }
+  const trimmed = cause.trim();
+  return trimmed ? resultResponsePreview(trimmed) : undefined;
+}
+
 /**
  * Collapse a subagent follow-up XML block into a one-line (or, for results,
  * status + response) human-readable summary. Returns `text` unchanged when it
@@ -274,7 +287,10 @@ export function summarizeSubagentFollowup(text: unknown): string {
   if (tag.endsWith('-error')) {
     if (tag === DELIVERY_TAG.workflowScriptError) {
       const summary = workflowScriptDeliverySummary(trimmed);
-      if (summary) return summary;
+      if (summary) {
+        const cause = workflowScriptErrorCause(trimmed);
+        return cause ? `${summary}\n${cause}` : summary;
+      }
     }
     const agent = attr(trimmed, 'agent') ?? tag.slice(0, -'-error'.length);
     const wall = innerTag(trimmed, 'wall-time');
