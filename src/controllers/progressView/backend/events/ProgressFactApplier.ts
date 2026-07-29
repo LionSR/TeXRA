@@ -43,7 +43,12 @@ import { isGoalInFlight } from '@shared/schemas/goal';
 import { diffActiveChildren } from '@shared/streams/childActivityReducer';
 import { isActivePhase } from '@shared/streams/streamStatus';
 import { GoalStore } from '@tools/goal';
-import { assertNever, mapToRecord } from '@utils/core';
+import {
+  assertNever,
+  createFlushableDebounce,
+  mapToRecord,
+  type FlushableDebounce,
+} from '@utils/core';
 
 import { withEventErrorHandling } from './errorHandling';
 
@@ -98,7 +103,11 @@ function getDefaultProgressStreamControls(): ProgressStreamControls {
 /** Applies session and run facts to progress-view state and webview updates. */
 export class ProgressFactApplier {
   private readonly logger: AgentTrace;
-  private progressThrottleTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly progressDebounce: FlushableDebounce =
+    createFlushableDebounce(
+      () => this.flushProgressUpdates(),
+      PROGRESS_THROTTLE_MS,
+    );
   private pendingProgressUpdates = new Map<StreamTabId, ConversationProgress>();
 
   /**
@@ -213,10 +222,7 @@ export class ProgressFactApplier {
   createLocalSubscription(): ProgressEventSubscription {
     return {
       dispose: () => {
-        if (this.progressThrottleTimer) {
-          clearTimeout(this.progressThrottleTimer);
-          this.progressThrottleTimer = null;
-        }
+        this.progressDebounce.cancel();
         this.pendingProgressUpdates.clear();
         this.webviewBridge.clearAll();
       },
@@ -558,12 +564,7 @@ export class ProgressFactApplier {
 
     // Throttle webview pushes: buffer per-stream, flush on timer
     this.pendingProgressUpdates.set(streamId, progress);
-    if (!this.progressThrottleTimer) {
-      this.progressThrottleTimer = setTimeout(
-        () => this.flushProgressUpdates(),
-        PROGRESS_THROTTLE_MS,
-      );
-    }
+    if (!this.progressDebounce.pending) this.progressDebounce.schedule();
   }
 
   public handleUpdateRoundStage(data: UpdateRoundStagePayload): void {
@@ -605,8 +606,6 @@ export class ProgressFactApplier {
   }
 
   private flushProgressUpdates(): void {
-    this.progressThrottleTimer = null;
-
     const { activeStream } = this.state;
     const progress = activeStream
       ? this.pendingProgressUpdates.get(activeStream)
