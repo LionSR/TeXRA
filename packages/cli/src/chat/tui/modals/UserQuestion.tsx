@@ -14,27 +14,23 @@ import {
   USER_QUESTION_SKIPPED_FEEDBACK,
   userQuestionDecision,
 } from './UserQuestionState';
-import { COLOR_HINT, COLOR_SUCCESS } from '../ui/colors';
+import { COLOR_SUCCESS } from '../ui/colors';
 import {
   clampModalWidth,
   CONFIRM_CARD_HORIZONTAL_DECORATION,
+  isCompactRows,
 } from '../ui/theme';
 import { BaseTextInput } from '../input/BaseTextInput';
-import { isEscapeInput, isPlainReturnInput } from '../input/inputKeys';
+import { isEscapeInput } from '../input/inputKeys';
 import {
   previousRowsText,
   selectVisibleInlineOverflowText,
 } from '../render/overflowText';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
 import { clipToWidth, textDisplayWidth } from '../render/terminalText';
-import {
-  nextWrappingHighlightIndex,
-  Select,
-  visibleSelectRange,
-} from '../ui/Select';
+import { Select } from '../ui/Select';
 import { KeyHints, type KeyHint } from '../ui/KeyHints';
 import { BorderedPanel } from '../ui/BorderedPanel';
-import { POINTER, TICK } from '../ui/glyphs';
 import type { ApprovalDecision } from '../state/approvalQueue';
 
 export interface UserQuestionProps {
@@ -106,10 +102,7 @@ function userQuestionChoiceHints({
 export function isCompactUserQuestionRows(
   availableRows: number | undefined,
 ): boolean {
-  return (
-    availableRows !== undefined &&
-    availableRows <= COMPACT_USER_QUESTION_MAX_ROWS
-  );
+  return isCompactRows(availableRows, COMPACT_USER_QUESTION_MAX_ROWS);
 }
 
 export function userQuestionChoiceRowsBudget({
@@ -330,73 +323,13 @@ interface MultiSelectQuestionProps {
 function MultiSelectQuestion(
   props: MultiSelectQuestionProps,
 ): React.JSX.Element {
-  const [highlight, setHighlight] = useState(0);
   const [selected, setSelected] = useState<readonly string[]>([]);
   const options = props.question.options;
   const maxVisibleOptions = userQuestionChoiceRowsBudget({
     availableRows: props.availableRows,
     optionCount: options.length,
   });
-  const visibleRange = visibleSelectRange({
-    itemCount: options.length,
-    highlight,
-    maxVisibleItems: maxVisibleOptions,
-  });
-  const visibleOptions = options.slice(visibleRange.start, visibleRange.end);
-  const inlineOverflowText = selectVisibleInlineOverflowText({
-    hiddenAfter: options.length - visibleRange.end,
-    hiddenBefore: visibleRange.start,
-    showOverflow: false,
-    visibleItemCount: visibleOptions.length,
-  });
-
-  useInput((input, key) => {
-    // Esc cancels; Ctrl+C is owned by the App's unified handler (exits the app).
-    if (isEscapeInput(input, key)) {
-      props.onCancel();
-      return;
-    }
-    if (key.upArrow) {
-      setHighlight((h) =>
-        nextWrappingHighlightIndex({
-          direction: -1,
-          highlight: h,
-          itemCount: options.length,
-        }),
-      );
-      return;
-    }
-    if (key.downArrow) {
-      setHighlight((h) =>
-        nextWrappingHighlightIndex({
-          direction: 1,
-          highlight: h,
-          itemCount: options.length,
-        }),
-      );
-      return;
-    }
-    if (input === ' ') {
-      const option = options[highlight];
-      if (option) {
-        setSelected((s) => toggleUserQuestionSelection(s, option.label));
-      }
-      return;
-    }
-    if (isPlainReturnInput(input, key)) {
-      props.onSubmit([...selected]);
-      return;
-    }
-    const digit = Number(input);
-    if (Number.isInteger(digit) && digit >= 1 && digit <= options.length) {
-      const index = digit - 1;
-      const option = options[index];
-      setHighlight(index);
-      if (option) {
-        setSelected((s) => toggleUserQuestionSelection(s, option.label));
-      }
-    }
-  });
+  const selectedValues = useMemo(() => new Set(selected), [selected]);
 
   return (
     <QuestionShell
@@ -415,42 +348,21 @@ function MultiSelectQuestion(
         { key: 'Esc', action: 'skip' },
       ]}
     >
-      {visibleOptions.map((option, offset) => {
-        const optionIndex = visibleRange.start + offset;
-        const focused = optionIndex === highlight;
-        const checked = selected.includes(option.label);
-        const showInlineOverflow = focused && inlineOverflowText;
-        return (
-          <Box key={option.label} minWidth={0}>
-            <Box flexShrink={0}>
-              <Text color={focused ? COLOR_HINT : undefined}>
-                {focused ? POINTER : ' '} {checked ? TICK : ' '}{' '}
-                {optionIndex + 1}.{' '}
-              </Text>
-            </Box>
-            <Box flexShrink={0} maxWidth={24}>
-              <Text
-                color={focused ? COLOR_HINT : undefined}
-                wrap="truncate-end"
-              >
-                {option.label}
-              </Text>
-            </Box>
-            {showInlineOverflow ? (
-              <Box flexShrink={0}>
-                <Text dimColor>{` — ${inlineOverflowText}`}</Text>
-              </Box>
-            ) : null}
-            {option.description && !showInlineOverflow ? (
-              <Box minWidth={0} flexShrink={1}>
-                <Text dimColor wrap="truncate-end">
-                  {` — ${option.description}`}
-                </Text>
-              </Box>
-            ) : null}
-          </Box>
-        );
-      })}
+      <Select
+        mode="multi"
+        items={options.map((option) => ({
+          value: option.label,
+          label: option.label,
+          description: option.description ?? undefined,
+        }))}
+        maxVisibleItems={maxVisibleOptions}
+        selectedValues={selectedValues}
+        onToggle={(label) =>
+          setSelected((s) => toggleUserQuestionSelection(s, label))
+        }
+        onSelect={() => props.onSubmit([...selected])}
+        onCancel={props.onCancel}
+      />
     </QuestionShell>
   );
 }
