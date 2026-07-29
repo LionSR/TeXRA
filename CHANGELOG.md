@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.39.10] - 2026-07-29
 
 ### Shared (all surfaces)
 
@@ -26,6 +26,54 @@ All notable changes to this project will be documented in this file.
 - **Concise workflow results** — completed workflow scripts now render one
   shared summary of phases, tasks, generated files, cost, duration, and rerun
   instructions instead of repeating the full run log.
+- **Interrupted runs no longer look stuck** — runs cut off by a crash or
+  force-quit are marked as interrupted when the session reopens, instead of
+  appearing to run forever.
+- **Accurate usage totals** — a malformed usage update can no longer silently
+  reset a run's accumulated token and cost totals to zero.
+
+### CLI
+
+#### New Features
+
+- **First-run handoff explained** — after the initial credential setup, the
+  chat session explains that the setup assistant is guiding the first run and
+  that `/agent` switches to another agent anytime, using the same wording as
+  the setup card in VS Code and the desktop app.
+
+#### Bug Fixes
+
+- **Leftover runs are cleaned up** — opening a CLI session removes runs left
+  behind by earlier interrupted sessions, matching the VS Code and desktop
+  behavior.
+
+### Extension (VS Code) and Desktop
+
+#### New Features
+
+- **Tidier progress view** — stream tabs are denser and the follow-up input is
+  larger, with the unused tab filter and clear-input controls removed; the
+  multi-agent settings now show a single combined Teams block.
+
+#### Bug Fixes
+
+- **Clearer account status** — an expired sign-in no longer shows as
+  "Connected"; the Account settings tab now shows a "Session expired" warning
+  with a sign-in prompt and surfaces server spending-check failures.
+
+### Desktop
+
+#### Bug Fixes
+
+- **Every session appears in the sidebar** — sessions no longer disappear from
+  the desktop sidebar because of a category filter saved in the progress view.
+- **Missing agents are flagged** — the desktop app now shows a banner when a
+  task references an agent that is not configured.
+- **Unsaved edits are protected** — the desktop app asks for confirmation
+  before closing the window or switching workspaces with unsaved file changes,
+  and canceling the close no longer loses those changes.
+- **Reloading the window no longer leaks sessions** — terminal and browser
+  sessions are cleaned up across reloads instead of being left behind.
 
 ## [0.39.9] - 2026-07-26
 
