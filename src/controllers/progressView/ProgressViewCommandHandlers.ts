@@ -1,10 +1,19 @@
 // Local imports
+import type { TaskState } from '@agent/core/state/TaskState';
+import { notifyFollowUpSent } from '@agent/followUp/ToolUseFollowUp';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { AgentCategoryFilter, StreamTabId } from '@shared/schemas';
+import { isApiProvider } from '@model/apiProviders';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
+import type {
+  AgentOptionData,
+  AgentProposal,
+  ModelOptionData,
+} from '@shared/schemas';
+import type { AgentCategoryFilter, StreamTabId } from '@shared/schemas';
 import type {
   ProgressViewInboundHandlerRegistry,
   ProgressViewInboundMessage,
+  ProgressViewOutboundMessage,
 } from '@shared/schemas/progressView';
 import {
   isApprovalBypassedForStream,
@@ -19,6 +28,16 @@ import {
 } from '@tools/inquiry';
 import { persistOpenTurnDraft } from '@tools/inquiry/externalInquiryStorage';
 import { savePastedImageBase64 } from '@utils/files/pastedImageUtils';
+import type { ProgressWorkflowActionsController } from './ProgressWorkflowActionsController';
+import type { ProgressApiKeyRetryController } from './ProgressApiKeyRetryController';
+import type {
+  ProgressFollowUpController,
+  ProgressFollowUpPlan,
+} from './ProgressFollowUpController';
+import type {
+  ProgressFollowUpPolishController,
+  ProgressFollowUpPolishResult,
+} from './ProgressFollowUpPolishController';
 
 type ProgressViewMessage<C extends ProgressViewInboundMessage['command']> =
   Extract<ProgressViewInboundMessage, { command: C }>;
@@ -291,6 +310,233 @@ export function createProgressViewCommandHandlers(
       externalInquiry.dismiss(data.threadId);
       await continueExternalInquiryAction(transition, externalInquiry);
     },
+  } satisfies Partial<ProgressViewInboundHandlerRegistry>;
+}
+
+// ── Second-tier handler deps ──────────────────────────────────────────────
+
+export interface ProgressViewSecondTierActions {
+  /** Shared controllers (host-neutral; created once per host with injected deps). */
+  readonly workflowActions: ProgressWorkflowActionsController;
+  readonly apiKeyRetry: ProgressApiKeyRetryController;
+  readonly followUp: ProgressFollowUpController;
+  readonly followUpPolish: ProgressFollowUpPolishController;
+  /** Host-level user messaging. */
+  readonly host: {
+    readonly showInfo: (message: string) => Promise<void> | void;
+  };
+  /** Session handle (for manual compaction). */
+  readonly session: SessionHandle;
+  /** Look up a stream's task state from persisted snapshots. */
+  readonly getTaskState: (stream: StreamTabId) => TaskState | undefined;
+  /**
+   * Restore task state from a completed run into the main view (the extension
+   * routes through `texra.restoreState`; the desktop calls
+   * `buildMainViewState` / `prepareMainViewExecutionLaunch` directly).
+   * The host owns any failure reporting because the extension command and
+   * desktop state builder have different error paths.
+   */
+  readonly restoreTaskState: (taskState: TaskState) => Promise<void>;
+  /** Resolve a follow-up plan (plan kinds map to host-specific execution). */
+  readonly applyFollowUpPlan: (plan: ProgressFollowUpPlan) => Promise<void>;
+  /** Render a polish result (update renderer + show host messages). */
+  readonly applyPolishResult: (
+    result: ProgressFollowUpPolishResult,
+  ) => Promise<void>;
+  /** Handle a polish controller exception (post error to renderer + log + host message). */
+  readonly onPolishError: (
+    stream: StreamTabId,
+    error: unknown,
+  ) => void | Promise<void>;
+  /** Load follow-up option catalogs (host-specific loading paths). */
+  readonly loadFollowUpOptions: () => Promise<{
+    toolUseAgentsData?: readonly AgentOptionData[];
+    modelOptionsData?: readonly ModelOptionData[];
+  }>;
+  /** Post a message to the renderer. */
+  readonly postToRenderer: (message: ProgressViewOutboundMessage) => void;
+  /** Restore an agent proposal config into the main view (delegates to agentProposalController). */
+  readonly restoreProposalConfig: (proposal: AgentProposal) => Promise<void>;
+  /** Retry request settlement. */
+  readonly retry: {
+    readonly submit: (
+      stream: StreamTabId,
+      requestId: string,
+      feedback?: string,
+    ) => boolean;
+    readonly cancel: (stream: StreamTabId, requestId: string) => void;
+  };
+}
+
+/**
+ * Shared second-tier progress-view command handlers used by both extension and
+ * desktop.
+ *
+ * These handlers wrap shared controllers ({@link ProgressWorkflowActionsController},
+ * {@link ProgressApiKeyRetryController}, {@link ProgressFollowUpController},
+ * {@link ProgressFollowUpPolishController}) plus host-injected callbacks for
+ * messaging, retry settlement, state restoration, plan/polish result
+ * application, follow-up option loading, recording, and proposal restore.
+ *
+ * Hosts create the controllers and callbacks once, call this factory, and
+ * spread the result into their handler registry alongside
+ * {@link createProgressViewCommandHandlers} and host-specific commands.
+ */
+export function createProgressViewSecondTierHandlers(
+  deps: ProgressViewSecondTierActions,
+) {
+  const CMD = PROGRESS_VIEW_COMMANDS;
+
+  return {
+    // ── Workflow toolbar (diff / pack / clean) ──
+    [CMD.DIFF_STREAM]: (data) => deps.workflowActions.diffStream(data.stream),
+    [CMD.PACK_STREAM]: (data) =>
+      deps.workflowActions.runFileOperation(data.stream, 'pack'),
+    [CMD.CLEAN_STREAM]: (data) =>
+      deps.workflowActions.runFileOperation(data.stream, 'clean'),
+
+    // ── Retry ──
+    [CMD.RETRY_STREAM_REQUEST]: async (data) => {
+      const resolved = deps.retry.submit(
+        data.stream,
+        data.requestId,
+        data.feedback,
+      );
+      if (!resolved) {
+        await deps.host.showInfo(
+          'No retryable request is available for this stream yet.',
+        );
+      }
+    },
+    [CMD.CANCEL_RETRY_REQUEST]: (data) => {
+      deps.retry.cancel(data.stream, data.requestId);
+    },
+
+    // ── API key retry ──
+    [CMD.USE_OWN_API_KEY]: async (data) => {
+      // Provider validation: the IPC payload strings / user input must match a
+      // known api provider; silently narrow unknown values so the controller
+      // skips its provider-specific key-lookup branch.
+      const providerArg =
+        data.provider !== undefined && isApiProvider(data.provider)
+          ? data.provider
+          : undefined;
+
+      const result = await deps.apiKeyRetry.useOwnApiKey({
+        stream: data.stream,
+        requestId: data.requestId,
+        provider: providerArg,
+        exhaustionReason: data.exhaustionReason,
+        viaRelay: data.viaRelay,
+      });
+      if (result.proceeded && !result.retried) {
+        await deps.host.showInfo(
+          'Switched to your own API key. No pending retry to resume — run the agent again when ready.',
+        );
+      }
+    },
+
+    // ── State restore ──
+    [CMD.RESTORE_STATE]: async (data) => {
+      const taskState = deps.getTaskState(data.stream);
+      if (!taskState) return;
+      await deps.restoreTaskState(taskState);
+    },
+
+    // ── Manual compaction ──
+    [CMD.COMPACT_RESPONSE]: async (data) => {
+      const result = deps.session.executions.requestManualCompaction(
+        data.stream,
+      );
+      switch (result.kind) {
+        case 'no_active_tool_use':
+          await deps.host.showInfo(
+            'No active tool-use session found for this stream.',
+          );
+          return;
+        case 'unsupported':
+          await deps.host.showInfo(
+            'Manual context compaction is not yet available for this model. Stay tuned!',
+          );
+          return;
+        case 'requested':
+          notifyFollowUpSent(result.streamId, result.session);
+          await deps.host.showInfo(
+            'Context compaction requested. The agent will process it on the next model call.',
+          );
+          return;
+      }
+    },
+
+    // ── Show info ──
+    [CMD.SHOW_INFORMATION_MESSAGE]: async (data) => {
+      await deps.host.showInfo(data.text);
+    },
+
+    // ── Proposal config restore ──
+    [CMD.RESTORE_PROPOSAL_CONFIG]: async (data) => {
+      await deps.restoreProposalConfig(data.proposal);
+    },
+
+    // ── Follow-up polish ──
+    [CMD.POLISH_FOLLOW_UP]: async (data) => {
+      const taskState = deps.getTaskState(data.stream);
+      if (!taskState) return;
+      try {
+        const result = await deps.followUpPolish.polishFollowUp({
+          stream: data.stream,
+          text: data.text,
+          taskState,
+        });
+        await deps.applyPolishResult(result);
+      } catch (error) {
+        await deps.onPolishError(data.stream, error);
+      }
+    },
+
+    // ── Follow-up tasks ──
+    [CMD.SETUP_FOLLOWUP]: async (data) => {
+      await deps.applyFollowUpPlan(
+        await deps.followUp.planToolUseFollowUpForStream({
+          streamId: data.stream,
+          agent: data.agent,
+          model: data.model,
+          initialQuestion: data.initialQuestion,
+          executeImmediately: false,
+        }),
+      );
+    },
+    [CMD.RUN_FOLLOWUP]: async (data) => {
+      await deps.applyFollowUpPlan(
+        await deps.followUp.planToolUseFollowUpForStream({
+          streamId: data.stream,
+          agent: data.agent,
+          model: data.model,
+          initialQuestion: data.initialQuestion,
+          executeImmediately: true,
+        }),
+      );
+    },
+    [CMD.GET_FOLLOWUP_OPTIONS]: async (data) => {
+      const { toolUseAgentsData, modelOptionsData } =
+        await deps.loadFollowUpOptions();
+      deps.postToRenderer({
+        command: CMD.SET_FOLLOWUP_OPTIONS,
+        stream: data.stream,
+        ...(toolUseAgentsData && { toolUseAgentsData }),
+        ...(modelOptionsData && { modelOptionsData }),
+      } as ProgressViewOutboundMessage);
+    },
+    [CMD.RUN_COMPILE_FIXER]: async (data) => {
+      await deps.applyFollowUpPlan(
+        await deps.followUp.planCompileFixerForStream(data.stream),
+      );
+    },
+
+    // Voice recording (START_RECORDING / STOP_RECORDING) is host-specific:
+    // the extension wraps it in a webview-bound RecordingManager that posts
+    // status messages internally; the desktop calls standalone recording
+    // functions and posts status manually. Each host keeps its own pair.
   } satisfies Partial<ProgressViewInboundHandlerRegistry>;
 }
 
