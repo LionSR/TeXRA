@@ -133,7 +133,6 @@ function createSecondTierActions(
     },
     host: {
       showInfo: vi.fn(),
-      showError: vi.fn(),
     },
     session: {
       executions: {
@@ -867,7 +866,6 @@ describe('createProgressViewSecondTierHandlers', () => {
     const actions = createSecondTierActions({
       host: {
         showInfo: vi.fn().mockRejectedValue(failure),
-        showError: vi.fn(),
       },
     });
     const handlers = createProgressViewSecondTierHandlers(actions);
@@ -903,6 +901,24 @@ describe('createProgressViewSecondTierHandlers', () => {
     expect(actions.host.showInfo).toHaveBeenCalledWith(
       'No retryable request is available for this stream yet.',
     );
+  });
+
+  it('leaves restore failure reporting to the host callback', async () => {
+    const failure = new Error('restore failed');
+    const taskState = {};
+    const actions = createSecondTierActions({
+      getTaskState: vi.fn().mockReturnValue(taskState),
+      restoreTaskState: vi.fn().mockRejectedValue(failure),
+    });
+    const handlers = createProgressViewSecondTierHandlers(actions);
+
+    await expect(
+      assertSupported(handlers[PROGRESS_VIEW_COMMANDS.RESTORE_STATE])({
+        command: PROGRESS_VIEW_COMMANDS.RESTORE_STATE,
+        stream: 'stream-1',
+      }),
+    ).rejects.toBe(failure);
+    expect(actions.restoreTaskState).toHaveBeenCalledWith(taskState);
   });
 
   it('awaits polish error reporting', async () => {

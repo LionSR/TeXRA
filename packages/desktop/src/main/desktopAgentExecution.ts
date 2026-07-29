@@ -880,14 +880,14 @@ export class DesktopProgressBridge {
         showInfo: async (message) => {
           await this.options.host.showInfoMessage(message);
         },
-        showError: async (message) => {
-          await this.options.host.showErrorMessage(message);
-        },
       },
       session: this.session,
       getTaskState: (stream) => this.state.snapshots.getTaskState(stream),
       restoreTaskState: async (taskState) => {
-        return this.restoreTaskState(taskState);
+        const restored = this.restoreTaskState(taskState);
+        if (!restored) {
+          await this.options.host.showErrorMessage('Failed to restore state');
+        }
       },
       applyFollowUpPlan: async (plan) => {
         await this.applyFollowUpPlan(plan);

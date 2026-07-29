@@ -324,7 +324,6 @@ export interface ProgressViewSecondTierActions {
   /** Host-level user messaging. */
   readonly host: {
     readonly showInfo: (message: string) => Promise<void> | void;
-    readonly showError: (message: string) => Promise<void> | void;
   };
   /** Session handle (for manual compaction). */
   readonly session: SessionHandle;
@@ -334,9 +333,10 @@ export interface ProgressViewSecondTierActions {
    * Restore task state from a completed run into the main view (the extension
    * routes through `texra.restoreState`; the desktop calls
    * `buildMainViewState` / `prepareMainViewExecutionLaunch` directly).
-   * Returns true when the state was restored and the main view received it.
+   * The host owns any failure reporting because the extension command and
+   * desktop state builder have different error paths.
    */
-  readonly restoreTaskState: (taskState: TaskState) => Promise<boolean>;
+  readonly restoreTaskState: (taskState: TaskState) => Promise<void>;
   /** Resolve a follow-up plan (plan kinds map to host-specific execution). */
   readonly applyFollowUpPlan: (plan: ProgressFollowUpPlan) => Promise<void>;
   /** Render a polish result (update renderer + show host messages). */
@@ -440,10 +440,7 @@ export function createProgressViewSecondTierHandlers(
     [CMD.RESTORE_STATE]: async (data) => {
       const taskState = deps.getTaskState(data.stream);
       if (!taskState) return;
-      const restored = await deps.restoreTaskState(taskState);
-      if (!restored) {
-        await deps.host.showError('Failed to restore state');
-      }
+      await deps.restoreTaskState(taskState);
     },
 
     // ── Manual compaction ──

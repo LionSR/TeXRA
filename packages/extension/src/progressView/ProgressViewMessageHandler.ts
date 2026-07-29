@@ -181,19 +181,12 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         showInfo: async (message) => {
           await this.host.info(message);
         },
-        showError: async (message) => {
-          await this.host.error(message);
-        },
       },
       session: defaultSession(),
       getTaskState: (stream) =>
         this.provider.state.snapshots.getTaskState(stream),
       restoreTaskState: async (taskState) => {
-        return (
-          (await this.runViewCommand<boolean>('texra.restoreState', [
-            taskState,
-          ])) === true
-        );
+        await this.runViewCommand('texra.restoreState', [taskState]);
       },
       applyFollowUpPlan: async (plan) => {
         await this.applyFollowUpPlan(plan);
