@@ -15,7 +15,6 @@ import {
 } from '@agent/storage/executionLease';
 import {
   AgentConfigSchema,
-  type AgentConfig,
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
 import { startChildRunLoop } from '@agent/runtime/childRunLoop';
@@ -25,10 +24,7 @@ import {
   EXECUTION_STATUS,
   type StreamTabId,
 } from '@shared/schemas';
-import {
-  WorkflowScriptFilesSchema,
-  type WorkflowScriptFiles,
-} from '@shared/schemas/workflowScriptFiles';
+import { WorkflowScriptFilesSchema } from '@shared/schemas/workflowScriptFiles';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME } from '@shared/constants/delegationTools';
 import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
@@ -267,49 +263,50 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
       );
     }
 
-    let meta: ReturnType<typeof parseWorkflowScript>['meta'];
-    let defaultAgent: ReturnType<typeof requireVisibleAgent>;
-    try {
-      ({ meta } = parseWorkflowScript(script));
-      defaultAgent = requireVisibleAgent(
+    // Every setup phase below fails with the same annotation: prefix the
+    // underlying error with the saved script reference so the model edits the
+    // file and retries with scriptPath instead of rewriting the source.
+    const runPhase = async <T>(phase: () => T | Promise<T>): Promise<T> => {
+      try {
+        return await phase();
+      } catch (error) {
+        throw workflowScriptToolError(error, scriptPath);
+      }
+    };
+
+    const { meta, defaultAgent } = await runPhase(() => {
+      const { meta } = parseWorkflowScript(script);
+      const defaultAgent = requireVisibleAgent(
         AgentCategory.Workflow,
         input.agent,
         runScope.delegationAgentScope ?? undefined,
       );
-    } catch (error) {
-      throw workflowScriptToolError(error, scriptPath);
-    }
+      return { meta, defaultAgent };
+    });
     const checkpointId = deriveWorkflowScriptCheckpointId({
       name: meta.name,
       defaultAgent: defaultAgent.name,
       parentExecutionId: runScope.executionId,
     });
     const store = getExecutionStore(runScope.executionId);
-    let files: WorkflowScriptFiles;
-    try {
+    const files = await runPhase(async () => {
       const priorCheckpoint =
         input.files == null
           ? await readWorkflowScriptCheckpoint(store, checkpointId)
           : null;
-      files = WorkflowScriptFilesSchema.parse(
+      const parsedFiles = WorkflowScriptFilesSchema.parse(
         input.files ?? priorCheckpoint?.files ?? {},
       );
       await assertWorkflowFilesExist([
-        { label: 'Workflow input file', files: files.inputFiles },
-        { label: 'Workflow context file', files: files.contextFiles },
-        { label: 'Workflow media file', files: files.mediaFiles },
+        { label: 'Workflow input file', files: parsedFiles.inputFiles },
+        { label: 'Workflow context file', files: parsedFiles.contextFiles },
+        { label: 'Workflow media file', files: parsedFiles.mediaFiles },
       ]);
-    } catch (error) {
-      throw workflowScriptToolError(error, scriptPath);
-    }
-    let oversizedBibRejection: ToolResult | null | undefined;
-    try {
-      oversizedBibRejection = await rejectOversizedBibAttachments(
-        files.contextFiles,
-      );
-    } catch (error) {
-      throw workflowScriptToolError(error, scriptPath);
-    }
+      return parsedFiles;
+    });
+    const oversizedBibRejection = await runPhase(() =>
+      rejectOversizedBibAttachments(files.contextFiles),
+    );
     if (oversizedBibRejection) {
       return withScriptReference(oversizedBibRejection, scriptPath);
     }
@@ -343,12 +340,9 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
         workingDirectory: runScope.workingDirectory,
       }),
     };
-    let runConfig: AgentConfig;
-    try {
-      runConfig = AgentConfigSchema.parse(runConfigPayload);
-    } catch (error) {
-      throw workflowScriptToolError(error, scriptPath);
-    }
+    const runConfig = await runPhase(() =>
+      AgentConfigSchema.parse(runConfigPayload),
+    );
 
     try {
       await registerExecution(
