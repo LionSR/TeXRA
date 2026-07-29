@@ -5,7 +5,7 @@ import { LitElement, css, html, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
 import { designTokens, commonViewStyles } from '@shared/styles';
-import { ONBOARDING_NARRATIVE } from '@shared/copy/onboarding';
+import { ONBOARDING_SETUP_HANDOFF } from '@shared/copy/onboarding';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 import { MainViewEvents } from '../events';
@@ -72,7 +72,7 @@ export class OnboardingSetupCard extends LitElement {
       <wa-callout id="onboardingSetupCard" variant="brand">
         ${waIcon('rocket', { slot: 'icon' })}
         <span class="title">Credential ready</span>
-        <p class="copy">${ONBOARDING_NARRATIVE}</p>
+        <p class="copy">${ONBOARDING_SETUP_HANDOFF}</p>
         <div class="actions">
           <wa-button
             id="onboardingRunSetupButton"
