@@ -31,7 +31,7 @@ import {
   type ListableFileType,
 } from '@common/files/fileListingRules';
 import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
-import { prepareMainViewExecutionLaunch } from '@controllers/mainView/MainViewExecutionLaunchController';
+import { prepareMainViewExecutionLaunch } from '@controllers/mainView/backend/MainViewExecutionLaunchController';
 import { replayApprovalRequestHandlers } from '@controllers/progressView/backend/progressBackendUiConfig';
 import { buildStreamInfo } from '@controllers/progressView/backend/streamInfoUtils';
 import { ProgressBackend } from '@controllers/progressView/backend/ProgressBackend';
@@ -1491,11 +1491,19 @@ export class DesktopProgressBridge {
   }
 
   async handleExecute(message: MainViewExecuteMessage): Promise<void> {
-    const preparation = await prepareMainViewExecutionLaunch(
+    const launch = await prepareMainViewExecutionLaunch(
       message,
       this.options.host,
     );
-    if (!preparation) return;
+    if (launch.status === 'cancelled') return;
+    if (launch.status === 'error') {
+      await this.options.host.showErrorMessage(launch.message);
+      return;
+    }
+    if (launch.infoMessage) {
+      await this.options.host.showInfoMessage(launch.infoMessage);
+    }
+    const { preparation } = launch;
     if (!preparation.valid) {
       await this.options.host.showErrorMessage(preparation.message);
       return;

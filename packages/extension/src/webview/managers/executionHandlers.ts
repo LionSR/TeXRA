@@ -9,7 +9,7 @@ import {
   TEAM_LAUNCH_CONTINUE_LABEL,
   TEAM_LAUNCH_SIGN_IN_LABEL,
 } from '@common/teams/TeamPlan';
-import { prepareMainViewExecutionLaunch } from '@controllers/mainView/MainViewExecutionLaunchController';
+import { prepareMainViewExecutionLaunch } from '@controllers/mainView/backend/MainViewExecutionLaunchController';
 import { logErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
@@ -66,7 +66,7 @@ export async function handleExecute(
     return;
   }
 
-  const preparation = await prepareMainViewExecutionLaunch(message, {
+  const launch = await prepareMainViewExecutionLaunch(message, {
     chooseTeamAvailability: async (unavailableNames) => {
       const choice = await vscode.window.showWarningMessage(
         formatUnavailableTeamMembersMessage(unavailableNames),
@@ -82,14 +82,16 @@ export async function handleExecute(
       Boolean(
         await vscode.commands.executeCommand<boolean>(AUTH_COMMANDS.SIGN_IN),
       ),
-    showErrorMessage: async (errorMessage) => {
-      await vscode.window.showErrorMessage(errorMessage);
-    },
-    showInfoMessage: async (infoMessage) => {
-      await vscode.window.showInformationMessage(infoMessage);
-    },
   });
-  if (!preparation) return;
+  if (launch.status === 'cancelled') return;
+  if (launch.status === 'error') {
+    await vscode.window.showErrorMessage(launch.message);
+    return;
+  }
+  if (launch.infoMessage) {
+    await vscode.window.showInformationMessage(launch.infoMessage);
+  }
+  const { preparation } = launch;
   if (!preparation.valid) {
     logErrorMessage(
       CHANNEL,

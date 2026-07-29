@@ -32,14 +32,12 @@ vi.mock('@controllers/mainView/MainViewExecutionController', () => ({
 }));
 
 const { prepareMainViewExecutionLaunch } =
-  await import('@controllers/mainView/MainViewExecutionLaunchController');
+  await import('@controllers/mainView/backend/MainViewExecutionLaunchController');
 
 function createHost() {
   return {
     chooseTeamAvailability: vi.fn(async () => 'continue' as const),
     signInForRemoteAgentCatalog: vi.fn(async () => true),
-    showErrorMessage: vi.fn(async () => undefined),
-    showInfoMessage: vi.fn(async () => undefined),
   };
 }
 
@@ -61,7 +59,7 @@ describe('main-view execution launch controller', () => {
 
     await expect(
       prepareMainViewExecutionLaunch(message, createHost()),
-    ).resolves.toBe(preparation);
+    ).resolves.toEqual({ status: 'prepared', preparation });
     expect(mocks.resolveTeamLaunch).not.toHaveBeenCalled();
   });
 
@@ -70,10 +68,7 @@ describe('main-view execution launch controller', () => {
 
     await expect(
       prepareMainViewExecutionLaunch(teamMessage(''), host),
-    ).resolves.toBeUndefined();
-    expect(host.showErrorMessage).toHaveBeenCalledExactlyOnceWith(
-      'Select a team',
-    );
+    ).resolves.toEqual({ status: 'error', message: 'Select a team' });
     expect(mocks.resolveTeamLaunch).not.toHaveBeenCalled();
   });
 
@@ -94,15 +89,14 @@ describe('main-view execution launch controller', () => {
       expected: 'Unavailable physicist: critic, writer',
     },
   ])(
-    'presents $resolution.status team failures',
+    'returns $resolution.status team failures',
     async ({ resolution, expected }) => {
       const host = createHost();
       mocks.resolveTeamLaunch.mockResolvedValue(resolution);
 
       await expect(
         prepareMainViewExecutionLaunch(teamMessage(), host),
-      ).resolves.toBeUndefined();
-      expect(host.showErrorMessage).toHaveBeenCalledExactlyOnceWith(expected);
+      ).resolves.toEqual({ status: 'error', message: expected });
       expect(mocks.prepareMainViewTeamExecutionRequest).not.toHaveBeenCalled();
     },
   );
@@ -113,12 +107,10 @@ describe('main-view execution launch controller', () => {
 
     await expect(
       prepareMainViewExecutionLaunch(teamMessage(), host),
-    ).resolves.toBeUndefined();
-    expect(host.showErrorMessage).not.toHaveBeenCalled();
-    expect(host.showInfoMessage).not.toHaveBeenCalled();
+    ).resolves.toEqual({ status: 'cancelled' });
   });
 
-  it('presents partial membership and prepares the resolved team fields', async () => {
+  it('returns partial membership and prepares the resolved team fields', async () => {
     const host = createHost();
     const fields = {
       agent: 'team-root',
@@ -138,12 +130,13 @@ describe('main-view execution launch controller', () => {
     mocks.prepareMainViewTeamExecutionRequest.mockReturnValue(preparation);
     const message = teamMessage();
 
-    await expect(prepareMainViewExecutionLaunch(message, host)).resolves.toBe(
+    await expect(
+      prepareMainViewExecutionLaunch(message, host),
+    ).resolves.toEqual({
+      status: 'prepared',
       preparation,
-    );
-    expect(host.showInfoMessage).toHaveBeenCalledExactlyOnceWith(
-      'Partial: writer',
-    );
+      infoMessage: 'Partial: writer',
+    });
     expect(mocks.prepareMainViewTeamExecutionRequest).toHaveBeenCalledWith(
       message,
       fields,
@@ -169,9 +162,9 @@ describe('main-view execution launch controller', () => {
 
     await expect(
       prepareMainViewExecutionLaunch(teamMessage(), host),
-    ).resolves.toBeUndefined();
-    expect(host.showErrorMessage).toHaveBeenCalledExactlyOnceWith(
-      'Team launch failed: catalog unavailable',
-    );
+    ).resolves.toEqual({
+      status: 'error',
+      message: 'Team launch failed: catalog unavailable',
+    });
   });
 });

@@ -19,6 +19,7 @@ import {
 
 // Local imports - shared types and errors
 import type { MainViewExecuteMessage } from '@shared/schemas';
+import { assertNever } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /** Host interactions needed by the shared team-launch decision sequence. */
@@ -27,27 +28,37 @@ export interface MainViewExecutionLaunchHost {
     unavailableNames: readonly string[],
   ): Promise<TeamAvailabilityChoice | undefined>;
   signInForRemoteAgentCatalog(): Promise<boolean>;
-  showErrorMessage(message: string): Promise<void> | void;
-  showInfoMessage(message: string): Promise<void> | void;
 }
+
+/** Host-neutral result of resolving the launch sequence. */
+export type MainViewExecutionLaunchResult =
+  | {
+      status: 'prepared';
+      preparation: MainViewExecutionPreparationResult;
+      infoMessage?: string;
+    }
+  | { status: 'cancelled' }
+  | { status: 'error'; message: string };
 
 /**
  * Resolve an ordinary or team launch into one validated execution request.
- * Host-specific prechecks and invalid-request presentation remain with callers.
+ * Host-specific prechecks and all user-facing presentation remain with callers.
  */
 export async function prepareMainViewExecutionLaunch(
   message: MainViewExecuteMessage,
   host: MainViewExecutionLaunchHost,
-): Promise<MainViewExecutionPreparationResult | undefined> {
+): Promise<MainViewExecutionLaunchResult> {
   if (message.session?.launchTarget !== 'team') {
-    return prepareMainViewExecutionRequest(message);
+    return {
+      status: 'prepared',
+      preparation: prepareMainViewExecutionRequest(message),
+    };
   }
 
   try {
     const teamId = message.session.teamId;
     if (!teamId) {
-      await host.showErrorMessage(TEAM_SELECTION_REQUIRED_MESSAGE);
-      return undefined;
+      return { status: 'error', message: TEAM_SELECTION_REQUIRED_MESSAGE };
     }
 
     const resolution = await resolveTeamLaunch({
@@ -60,30 +71,50 @@ export async function prepareMainViewExecutionLaunch(
 
     switch (resolution.status) {
       case 'cancelled':
-        return undefined;
+        return { status: 'cancelled' };
       case 'unknown-team':
-        await host.showErrorMessage(formatUnknownTeamMessage(teamId));
-        return undefined;
+        return {
+          status: 'error',
+          message: formatUnknownTeamMessage(teamId),
+        };
       case 'blocked':
-        await host.showErrorMessage(
-          formatTeamLaunchBlockedMessage(teamId, resolution.reason),
-        );
-        return undefined;
+        return {
+          status: 'error',
+          message: formatTeamLaunchBlockedMessage(teamId, resolution.reason),
+        };
       case 'unavailable':
-        await host.showErrorMessage(
-          formatTeamUnavailableMessage(teamId, resolution.unavailableNames),
+        return {
+          status: 'error',
+          message: formatTeamUnavailableMessage(
+            teamId,
+            resolution.unavailableNames,
+          ),
+        };
+      case 'ready': {
+        const preparation = prepareMainViewTeamExecutionRequest(
+          message,
+          resolution.fields,
         );
-        return undefined;
-      case 'ready':
-        if (resolution.partial) {
-          await host.showInfoMessage(
-            formatPartialTeamLaunchMessage(resolution.missingNames),
-          );
-        }
-        return prepareMainViewTeamExecutionRequest(message, resolution.fields);
+        return resolution.partial
+          ? {
+              status: 'prepared',
+              preparation,
+              infoMessage: formatPartialTeamLaunchMessage(
+                resolution.missingNames,
+              ),
+            }
+          : { status: 'prepared', preparation };
+      }
+      default:
+        return assertNever(
+          resolution,
+          'Unhandled main-view team launch resolution',
+        );
     }
   } catch (error) {
-    await host.showErrorMessage(`Team launch failed: ${toErrorMessage(error)}`);
-    return undefined;
+    return {
+      status: 'error',
+      message: `Team launch failed: ${toErrorMessage(error)}`,
+    };
   }
 }
