@@ -173,13 +173,22 @@ pdflatex --version
 ### Perl
 
 ::: info OPTIONAL
-Perl backs the `latexindent` and `latexdiff` LaTeX tools (both are Perl scripts). Install it only if you use auto-formatting or LaTeX diffs — it's usually already bundled with MiKTeX/TeX Live and pre-installed on macOS/Linux.
+Perl backs the `latexindent` and `latexdiff` LaTeX tools (both are Perl scripts). Install it only if you use auto-formatting or LaTeX diffs — it's pre-installed on macOS/Linux and bundled with TeX Live, but **not** with MiKTeX.
 :::
 
 #### Windows
 
-- Included with MiKTeX or TeX Live
-- Verify installation by running `perl --version` in Command Prompt
+TeX Live for Windows ships its own Perl, so `latexindent` and `latexdiff` work out of the box. **MiKTeX does not bundle Perl** — if you installed MiKTeX (the option recommended above for beginners), install Perl separately:
+
+1. Download [Strawberry Perl](https://strawberryperl.com/)
+2. Run the installer, which adds Perl to your PATH
+3. Restart VS Code, then verify in Command Prompt or PowerShell:
+
+```bash
+perl --version
+```
+
+If you skip this on MiKTeX, TeXRA still compiles documents; only auto-formatting and LaTeX diffs are unavailable. The Setup Wizard flags the missing dependency and points to the same download.
 
 #### macOS
 
