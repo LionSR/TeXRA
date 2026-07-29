@@ -203,6 +203,54 @@ describe('response cycle continuation phases', () => {
     expect(action).toBe(FlowTransition.COMPLETE);
   });
 
+  it('uses the owning session policy to join continued responses', async () => {
+    const connectResponseText = vi.fn(async () => '\n');
+    const workspace = AgentWorkspaceState.create();
+    workspace.assembly.accumulatedOutput = 'left';
+    workspace.assembly.lastResponse = 'left';
+    const shared = createShared({ responseObject: {} });
+    const services = {
+      runScope: {
+        session: {
+          responseTextProcessing: { connectResponseText },
+        },
+      },
+      round: { responseTimeMs: 0 },
+      workspace,
+      logger: {
+        openStage: () => ({ run: (run: () => unknown) => run() }),
+        debug: vi.fn(),
+        info: vi.fn(),
+      },
+      modelHandler: {
+        processThinkingBlock: vi.fn(() => null),
+        getStreamingConfig: vi.fn(() => false),
+        extractResponse: vi.fn(() => ({
+          text: 'right',
+          usage: {},
+          stopReason: ANTHROPIC_STOP.END_TURN,
+        })),
+        normalizeUsage: vi.fn(() => undefined),
+      },
+    } as unknown as ResponseCycleServices<unknown>;
+    const node = getProcessNode().setServices(services);
+
+    const prepResult = await node.prep(shared);
+    const execResult = await node.exec(prepResult);
+
+    expect(connectResponseText).toHaveBeenCalledExactlyOnceWith(
+      'left',
+      'right',
+    );
+    expect(execResult).toMatchObject({
+      kind: 'success',
+      value: {
+        bestConnector: '\n',
+        updatedAccumulatedOutput: 'left\nright',
+      },
+    });
+  });
+
   it('forces compaction for an Anthropic overflow with empty assistant text', async () => {
     const shared = createShared({
       stopReason: ANTHROPIC_STOP.MODEL_CONTEXT_WINDOW_EXCEEDED,

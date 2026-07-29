@@ -15,6 +15,7 @@ import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import { trackTerminalResultPresentation } from '@agent/runtime/terminalResultToast';
 import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { polishTextWithAI } from '@agent/runtime/textEnhancement';
 import {
   notifyFollowUpSent,
   presentFollowUpResult,
@@ -166,8 +167,7 @@ export class DesktopProgressBridge {
   /** Plans tool-use follow-up runs and compile-fix runs for a finished stream. */
   private followUpController!: ProgressFollowUpController;
   /** Rewrites follow-up text with the helper model ("Polish" in the follow-up box). */
-  private readonly followUpPolishController =
-    new ProgressFollowUpPolishController();
+  private readonly followUpPolishController: ProgressFollowUpPolishController;
   /** Switches a credit/limit-exhausted run onto the user's own API key. */
   private apiKeyRetryController!: ProgressApiKeyRetryController;
   /**
@@ -197,6 +197,10 @@ export class DesktopProgressBridge {
     private readonly options: DesktopProgressBridgeOptions,
   ) {
     this.logger = options.logger ?? createChannelTrace('DesktopProgressBridge');
+    this.followUpPolishController = new ProgressFollowUpPolishController({
+      polishText: (text, fileContext) =>
+        polishTextWithAI(text, fileContext, options.session),
+    });
     const presentationHost: Pick<SessionHostInteractions, 'emit'> = {
       emit: (event, payload) => this.handlePresentationEvent(event, payload),
     };

@@ -47,7 +47,6 @@ import type {
   OpenAIResponseProviderCapabilities,
   ProviderCapabilityProfile,
 } from '@model/providerCapabilities';
-import replacementEngine from '@replacement/engine';
 import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
 import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
 import type {
@@ -2441,11 +2440,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         },
       );
     }
-    let newResponse = responseObject.output_text?.trim() ?? '';
-    if (!newResponse && Array.isArray(responseObject.output)) {
+    const providerOutputText = responseObject.output_text ?? '';
+    let newResponse = this.normalizeResponseText(providerOutputText);
+    if (!providerOutputText.trim() && Array.isArray(responseObject.output)) {
       // Mutates responseObject.output_text from output message parts.
       addOutputText(responseObject);
-      newResponse = responseObject.output_text?.trim() ?? '';
+      newResponse = this.normalizeResponseText(
+        responseObject.output_text ?? '',
+      );
     }
 
     const stopReason =
@@ -2459,7 +2461,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // stripped it. Forging the tag here would be pure speculation that could
     // mask genuinely incomplete output as done; the extraction layer already
     // tolerates a missing end tag.
-    newResponse = replacementEngine.applyAll(newResponse);
+    newResponse = this.postProcessResponse(newResponse);
 
     return { text: newResponse, usage, stopReason };
   }

@@ -236,6 +236,9 @@ describe('SessionHandle', () => {
       expect(fresh.followUps).not.toBe(defaultSession().followUps);
       expect(fresh.approvals).not.toBe(defaultSession().approvals);
       expect(fresh.modelRetries).not.toBe(defaultSession().modelRetries);
+      expect(fresh.responseTextProcessing).not.toBe(
+        defaultSession().responseTextProcessing,
+      );
       expect(fresh.workflowControls).not.toBe(
         defaultSession().workflowControls,
       );
