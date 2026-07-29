@@ -4,6 +4,7 @@ import {
   tryDefaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
+import { texraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { GoalStore } from '@tools/goal';
 import { StreamLogStore } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -43,7 +44,10 @@ async function initializePersistentSession(
   transcripts: StreamLogStore,
 ): Promise<CliTranscriptSession> {
   const result = await persistentSession(
-    initializeDefaultSession({ transcripts }),
+    initializeDefaultSession({
+      transcripts,
+      responseTextProcessing: texraResponseTextProcessing,
+    }),
   );
   const stores = new SessionStores({
     streamLogs: result.session.transcripts,
@@ -103,6 +107,7 @@ export async function initializeInteractiveTranscriptSession(
     const warning = formatEphemeralWarning(reason);
     const session = initializeDefaultSession({
       transcripts: StreamLogStore.ephemeral(reason),
+      responseTextProcessing: texraResponseTextProcessing,
     });
     await session.waitUntilReady();
     policy.showPersistentWarning(warning);

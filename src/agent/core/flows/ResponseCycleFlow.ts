@@ -22,7 +22,6 @@ import {
 import type { ProviderUsage } from '@agent/core/usage/ResponseUsage';
 import { K_SLICE } from '@agent/core/constants';
 import { useLaunchRunContext } from '@agent/runtime/RunContext';
-import { bestConnectionMethod } from '@agent/runtime/textConnection';
 import type { ToolDefinition } from '@model';
 import { MESSAGE_TYPES, AgentFileLocationSchema } from '@shared/schemas';
 import { OUTPUT_END_TAG } from '@shared/schemas/output';
@@ -319,16 +318,16 @@ class ResponseProcessNode<C> extends BaseNode<
         return { kind: 'success', value: { ...common, hasResponse: false } };
       }
 
-      // Text cleanup (replacementEngine.applyAll) is applied once inside each
-      // handler's extractResponse, so newResponse is already cleaned here.
+      // A host-supplied processor is applied once inside each handler's
+      // extractResponse, so newResponse is already in its final form here.
       // Re-applying would run non-idempotent custom replacements twice.
       const processedResponse = newResponse;
 
-      const connector = await bestConnectionMethod(
-        prepRes.lastResponse.slice(-K_SLICE),
-        processedResponse.slice(0, K_SLICE),
-      );
-      const bestConnector = connector.connector;
+      const bestConnector =
+        await this.services.runScope.session.responseTextProcessing.connectResponseText(
+          prepRes.lastResponse.slice(-K_SLICE),
+          processedResponse.slice(0, K_SLICE),
+        );
       const updatedAccumulatedOutput =
         prepRes.accumulatedOutput + bestConnector + processedResponse;
 

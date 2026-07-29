@@ -11,6 +11,9 @@ All notable changes to this project will be documented in this file.
 - **Embeddable agent package** — Node applications can install
   `@texra-ai/agent`, load agents from a chosen directory, stream run events,
   and await the final result.
+- **Predictable embedded model output** — the agent package now returns
+  provider text unchanged and joins continued responses deterministically,
+  while TeXRA applications retain their LaTeX-aware processing.
 
 #### Bug Fixes
 

@@ -36,7 +36,6 @@ import {
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
-import replacementEngine from '@replacement/engine';
 import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
 import type {
   ToolFileAttachment,
@@ -713,10 +712,12 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     // The getter may use cached values that don't reflect mutations we made
     // to the candidates array during streaming (lines 536-550, 577-584).
     // Filter out thought parts and concatenate text from remaining parts.
-    const rawResponseText = extractNonThinkingText(parts, true);
+    const rawResponseText = this.normalizeResponseText(
+      extractNonThinkingText(parts),
+    );
 
     // For TOOL CALL ONLY RESPONSE this happens sometimes, we don't want to log it
-    let responseText = replacementEngine.applyAll(rawResponseText);
+    let responseText = this.postProcessResponse(rawResponseText);
 
     const usage = responseObject.usageMetadata;
     const stopReason: FinishReason =
@@ -726,7 +727,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     if (
       stopReason === FinishReason.STOP &&
       endTag &&
-      !responseText.endsWith(endTag)
+      !responseText.trimEnd().endsWith(endTag)
     ) {
       this.logger.debug(
         `Model stopped naturally but didn't include end tag. Appending ${endTag}.`,

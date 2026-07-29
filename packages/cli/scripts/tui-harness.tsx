@@ -27,6 +27,7 @@ import {
   initializeDefaultSession,
 } from '@agent/runtime/SessionHandle';
 import { SupabaseClient } from '@auth/SupabaseClient';
+import { texraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { platform, tryPlatform } from '@platform/platform';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import {
@@ -438,7 +439,10 @@ if (HARNESS_MEMORY_FILES.length > 0) {
     utimesSync(filePath, mtime, mtime);
   });
 }
-initializeDefaultSession({ transcripts: await StreamLogStore.open() });
+initializeDefaultSession({
+  transcripts: await StreamLogStore.open(),
+  responseTextProcessing: texraResponseTextProcessing,
+});
 const harnessFollowUpLease = defaultSession().followUps.claimLive(
   STREAM_ID,
   'flow',

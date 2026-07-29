@@ -33,7 +33,6 @@ import {
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
 import type { ToolDefinition } from '@model';
-import replacementEngine from '@replacement/engine';
 import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
 import type {
   ToolFileAttachment,
@@ -909,7 +908,7 @@ export class ModelHandlerOpenAI<
       this.logger.warn(
         'Using direct response format (streaming style) as fallback',
       );
-      let newResponse = classified.content.trim();
+      let newResponse = this.normalizeResponseText(classified.content);
       const { stopReason, usage } = classified;
 
       // Only restore the end tag when it was configured as an API-level
@@ -923,7 +922,7 @@ export class ModelHandlerOpenAI<
         stopReason === OPENAI_CHAT_FINISH.STOP &&
           this.configuresEndTagStopSequence,
       );
-      newResponse = replacementEngine.applyAll(newResponse);
+      newResponse = this.postProcessResponse(newResponse);
 
       return { text: newResponse, usage, stopReason };
     }
@@ -934,7 +933,7 @@ export class ModelHandlerOpenAI<
     this.logger.debug(`Stop reason: ${stopReason}`);
     let newResponse = '';
     if (choice.message.content) {
-      newResponse = choice.message.content.trim();
+      newResponse = this.normalizeResponseText(choice.message.content);
     } else if (
       stopReason === OPENAI_CHAT_FINISH.TOOL_CALLS ||
       stopReason === OPENAI_CHAT_FINISH.FUNCTION_CALL ||
@@ -962,7 +961,7 @@ export class ModelHandlerOpenAI<
       stopReason === OPENAI_CHAT_FINISH.STOP &&
         this.configuresEndTagStopSequence,
     );
-    newResponse = replacementEngine.applyAll(newResponse);
+    newResponse = this.postProcessResponse(newResponse);
 
     return { text: newResponse, usage: responseObject.usage, stopReason };
   }

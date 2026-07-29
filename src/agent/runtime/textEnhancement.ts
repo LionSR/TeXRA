@@ -5,6 +5,7 @@ import { isNonEmptyString } from '@utils/core';
 import { extractTextFromTag } from '@utils/text/xmlUtils';
 import { renderPolishPrompt } from './polishModel';
 import { createHelperModelKit, runHelperModelCompletion } from './helperModel';
+import type { SessionHandle } from './SessionHandle';
 
 const CHANNEL = 'TextEnhancement';
 
@@ -48,12 +49,13 @@ function formatFileContext(ctx: FileContext): string {
 export async function polishTextWithAI(
   text: string,
   fileContext?: FileContext,
+  session?: SessionHandle,
 ): Promise<{ success: boolean; text: string; error?: string }> {
   try {
     const fileContextString = fileContext ? formatFileContext(fileContext) : '';
     const prompt = await renderPolishPrompt(fileContextString, text);
 
-    const helperResult = await createHelperModelKit();
+    const helperResult = await createHelperModelKit(session);
     if (!helperResult.kit) {
       throw new Error(helperResult.reason);
     }

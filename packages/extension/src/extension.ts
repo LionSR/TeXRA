@@ -67,6 +67,7 @@ import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { migrateLegacyVscodeStorage } from '@frontend/vscode/sharedStorageRoot';
 import { VscodeSecrets } from '@frontend/vscode/vscodeSecrets';
 import { VscodeConfigProvider } from '@frontend/vscode/vscodeConfig';
+import { texraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import * as logger from '@logger/logUtils';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { refreshModelListStateIfNeeded } from '@model/modelListRefresh';
@@ -272,6 +273,7 @@ export async function activate(context: vscode.ExtensionContext) {
   );
   const runtimeSession = initializeDefaultSession({
     transcripts: await StreamLogStore.open(),
+    responseTextProcessing: texraResponseTextProcessing,
   });
   await runtimeSession.waitUntilReady();
   registerAgentFeatures();
