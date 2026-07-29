@@ -54,6 +54,10 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Type check
+        # tsc on this workspace exceeds Node's default heap on the CI runner
+        # (v0.39.10 release OOMed with exit 134); mirror the lint script's bump.
+        env:
+          NODE_OPTIONS: '--max-old-space-size=6144'
         run: pnpm run typecheck
 
       # Fail the release before building/publishing if the code-generated
@@ -148,7 +152,10 @@ jobs:
 
   publish-agent:
     name: Publish agent package to npm (Trusted Publishing)
-    if: ${{ !github.event.release.prerelease && startsWith(github.event.release.tag_name, 'cli-v') }}
+    # NOT PUBLISHED YET: @texra-ai/agent has no npm package or trusted
+    # publisher configured, so this job 404s on every cli-v* release. To
+    # re-enable, drop the `false &&` once the package is ready to ship.
+    if: ${{ false && !github.event.release.prerelease && startsWith(github.event.release.tag_name, 'cli-v') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
