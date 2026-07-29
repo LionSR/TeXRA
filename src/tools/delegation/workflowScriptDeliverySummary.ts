@@ -22,7 +22,10 @@ export interface WorkflowDeliverySummaryCollector {
     run: Pick<WorkflowScriptRunResult, 'meta' | 'journal'> | undefined,
     costUsd: number,
   ) => void;
-  readonly formatLine: (outcome: 'completed' | 'failed') => string;
+  readonly formatLine: (
+    outcome: 'completed' | 'failed',
+    errorCause?: string,
+  ) => string;
 }
 
 /** Collect presentation facts without changing the model-facing run report. */
@@ -92,7 +95,7 @@ export function createWorkflowDeliverySummaryCollector(
       declaredTaskCount = run.meta.tasks?.length ?? tasks.size;
       collectJournalFiles(run.journal);
     },
-    formatLine: (outcome) => {
+    formatLine: (outcome, errorCause) => {
       const summary: WorkflowScriptDeliverySummary = {
         name,
         outcome,
@@ -105,6 +108,7 @@ export function createWorkflowDeliverySummaryCollector(
         durationMs: Date.now() - startedAt,
         files: [...files.values()],
         scriptPath,
+        errorCause: errorCause ?? null,
       };
       return `<workflow-summary>${escapeText(JSON.stringify(summary))}</workflow-summary>`;
     },

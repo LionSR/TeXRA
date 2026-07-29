@@ -175,7 +175,11 @@ function progressDetail(xml: string): string {
 }
 
 function resultResponsePreview(response: string): string {
-  const decoded = decodeXmlEntities(response).trim();
+  return decodedResultResponsePreview(decodeXmlEntities(response));
+}
+
+function decodedResultResponsePreview(response: string): string {
+  const decoded = response.trim();
   if (decoded === '') return '';
 
   const lines = decoded.split('\n');
@@ -227,6 +231,9 @@ export function workflowScriptDeliverySummary(xml: string): string | undefined {
   });
   return [
     `${marker} ${summary.name} ${status} · ${facts.join(' · ')}`,
+    ...(summary.outcome === 'failed' && summary.errorCause
+      ? [decodedResultResponsePreview(summary.errorCause)]
+      : []),
     ...fileLines,
     `  script: ${summary.scriptPath}`,
     `  rerun: edit the script, then call delegate_workflow_script with scriptPath`,

@@ -1,5 +1,5 @@
 // Third-party imports
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import type { UserMessage } from '@progressView/frontend/components/UserMessage';
@@ -83,6 +83,18 @@ describe('user-message structured delivery', () => {
     expect(raw?.getAttribute('summary')).toBe('Raw result');
     expect(raw?.querySelector('pre')?.textContent).toContain('raw run log');
     expect(content?.querySelector('p')?.textContent).not.toContain('spoof');
+
+    const writeText = vi.fn(async () => undefined);
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    element.shadowRoot
+      ?.querySelector<HTMLElement>('#user-message-copy-button')
+      ?.click();
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledOnce());
+    expect(writeText).toHaveBeenCalledWith(
+      expect.stringContaining('proofread-pipeline completed'),
+    );
+    expect(writeText).not.toHaveBeenCalledWith(expect.stringContaining('<'));
+    vi.unstubAllGlobals();
   });
 
   it('renders plain (non-delivery) text as an unstructured message', async () => {
