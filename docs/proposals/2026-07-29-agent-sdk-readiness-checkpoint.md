@@ -94,7 +94,7 @@ Unchanged in substance from `-07-27`; all still present:
    embedding** remain the standing strategic port-shape item. `IModelHandler` is
    still auto-derived `Pick<ModelHandler>`, so this is a surface-shape
    observation, not drift. The model-handler deep-dive below gives concrete
-   *how* detail (collaborator extractions) under this known *what*.
+   _how_ detail (collaborator extractions) under this known _what_.
 4. **NS-1 host→core public surface.** Hosts still reach `@agent/*` deep
    specifiers frozen by the enforcing ratchet; no Tier-1 manifest yet.
 5. **Partial: `stateOwnership` not fully retired** (see "Movement" above — 7 refs).
@@ -116,7 +116,7 @@ pass; none are applied here.
   `initializeOutputAndPrefill`, which take `AgentRunStateSnapshot`/`AgentConfig`).
   A clean adapter answers "given messages, produce+extract a response"; the rest
   is a `CredentialRouter` collaborator and a `ClientCompactor` collaborator the
-  handler should *hold*, plus flow-layer decisions. This is the concrete
+  handler should _hold_, plus flow-layer decisions. This is the concrete
   decomposition under standing gap §9.3 (port width). **L**, safety-sensitive
   (feeds usage accounting and the fingerprint guard that prevents replaying a
   stale compaction payload and losing a user message). The ~10 single-override
@@ -142,10 +142,10 @@ pass; none are applied here.
 - **[NEW] §New-1 — the inner, non-persisted cycle flows are ceremony over a
   while-loop. (L; the standout structural finding.)** `ResponseCycleFlow.ts`
   (685 LOC) and `ToolUseRoundFlow.ts` + `toolUseRound/*` (~1100 LOC) are each
-  built and run *inside one outer persisted node's `exec()`*
+  built and run _inside one outer persisted node's `exec()`_
   (`ResponseCycleNode.ts:105`, `ToolUseCycleNode.ts:101`) as plain `Flow`, not
   `PersistedFlow`. Their shared objects are **never written to the KV store** —
-  only the *outer* `ReflectionFlowState`/`ToolUseRunShared` persist — so a
+  only the _outer_ `ReflectionFlowState`/`ToolUseRunShared` persist — so a
   mid-cycle crash re-runs the whole cycle. Yet they pay full ceremony: 4–5
   `BaseNode` subclasses each, `FlowTransition` string routing, and dedicated
   "cycle shared" Zod schemas (`CycleFieldsSchema`, `BaseCycleFieldsSchema`,
@@ -157,7 +157,7 @@ pass; none are applied here.
   retry as a helper) removes ~5 node classes + 1 never-parsed schema + two of the
   four services layers (`ResponseCycleServices`/`ToolUseRoundServices`), and cuts
   the snapshot-schema surface substantially. **Important boundary:** this critique
-  applies **only to the inner, non-persisted flows.** The *outer* persisted flows
+  applies **only to the inner, non-persisted flows.** The _outer_ persisted flows
   (reflection round-loop, tool-use WAIT/CONTINUE loop) earn their node graph — the
   per-node cursor is the crash/suspend-resume granularity; do not coarsen it.
   **Caveat:** `createResponseCycleFlow`/`createToolUseRoundFlow` are the codebase's
@@ -170,12 +170,12 @@ pass; none are applied here.
   `ReflectionFlowStateCanonicalSchema` (`ReflectionFlowState.ts:83-86`),
   `StateSlicesCanonicalSchema` (`tooluse/nodes/types.ts:33-35`), plus
   `fromSnapshot` vs `fromCanonicalSnapshot` (`:435,448`). The legacy arm is needed
-  only at the *one* first-hydration boundary. Normalizing the legacy `todos`/`plan`
+  only at the _one_ first-hydration boundary. Normalizing the legacy `todos`/`plan`
   shape once at the storage read boundary (a `.prefault`/`.transform` on read)
   lets the live schema keep a single canonical form and the `*CanonicalSchema` /
   `fromCanonicalSnapshot` twins disappear. This is the house Zod rule
   ("normalize legacy formats once at the entry point") applied. Safest sequencing:
-  do §New-2 *before* §New-1, so the flows aren't touched while the schema twins
+  do §New-2 _before_ §New-1, so the flows aren't touched while the schema twins
   still exist.
 - **[NEW] §New-3 — `Node.retryPrompt`/`execFallback` manual-retry machinery lives
   in the generic engine. (M.)** `node/index.ts:119-224` bakes `retryPrompt`,
@@ -208,7 +208,7 @@ pass; none are applied here.
   stream, not the session. Pairs with the standing observation that two result
   shapes (`AgentFlowResult` vs `AgentFinalResult`, with a rename projector at
   `AgentFinalResult.ts:89` as the drift canary) and two `HostInteractions` shapes
-  sit below the SDK line; unify results *before* freezing a public result type.
+  sit below the SDK line; unify results _before_ freezing a public result type.
 - **[NEW] §New-7 — redaction path-stripping never runs on the primary log sink.
   (S; possible silent-degradation defect — worth a look, not a confirmed leak.)**
   `redactSecrets` accepts `homeDir`/`workspacePath` options to strip filesystem
@@ -216,7 +216,7 @@ pass; none are applied here.
   `redactSecrets(message)` with **no options** (`logUtils.ts:77`), independently
   re-verified this pass, and the CLI stream-log sink does the same
   (`subscribeStreamLog.ts:119` etc.). Only the desktop app-log passes
-  `redactionOptions` (`desktopAppLog.ts:63,71-81`). So secret-token patterns *are*
+  `redactionOptions` (`desktopAppLog.ts:63,71-81`). So secret-token patterns _are_
   stripped everywhere, but **path redaction only runs in the desktop app-log
   export** — the VS Code output channel and CLI transcript get paths un-redacted.
   Either the option is dead on the hot path (remove it) or the main sink should
@@ -276,7 +276,7 @@ answered by naming the existing seams rather than inventing new ones:
 - `SdkToolCall` discriminated union already replaced per-provider type guards.
 - `ChildRunStrategy` unification (one driver, 4 providers, VS Code-free) is the
   model the rest of the runtime should aspire to.
-- `SessionHandle` deliberately is *not* a conversation API and says so, citing the
+- `SessionHandle` deliberately is _not_ a conversation API and says so, citing the
   shipped-then-deleted Anthropic shape (`SessionHandle.ts:26-31`).
 - Single trace emit boundary (`TraceEmitter.emit`) with per-subscriber exception
   isolation; per-instance (not module-singleton) `AsyncLocalStorage` stage scope.
