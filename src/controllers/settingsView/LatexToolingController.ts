@@ -1,7 +1,9 @@
 // Local imports - shared constants
 import {
+  CORE_LATEX_TOOLS,
   DEPENDENCY_INSTALL_COMMANDS,
   HOMEBREW_INSTALL_COMMAND,
+  IMAGE_TOOLS,
   SCOOP_INSTALL_COMMAND,
   type OSPlatform,
 } from '@shared/constants/latex';
@@ -10,17 +12,10 @@ import {
   type LatexSettingsStatus,
 } from '@shared/schemas/settingsViewMessages';
 
-const LATEX_PROBE_TOOLS = [
-  'pdflatex',
-  'latexmk',
-  'latexdiff',
-  'latexindent',
-  'perl',
-  'texcount',
-  'gs',
-  'gm',
-  'magick',
-] as const;
+// `CORE_LATEX_TOOLS`/`IMAGE_TOOLS` (`@shared/constants/latex`) are the
+// single source of truth for the LaTeX toolchain probe set, shared with
+// `probe_environment`/`verify_setup`. Do not re-list tool names here.
+const LATEX_PROBE_TOOLS = [...CORE_LATEX_TOOLS, ...IMAGE_TOOLS] as const;
 
 export type LatexProbeTool = (typeof LATEX_PROBE_TOOLS)[number];
 
