@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.39.11] - 2026-07-29
+
+### Shared (all surfaces)
+
+#### Bug Fixes
+
+- **Fixed a crash on startup** — the CLI no longer exits with a module
+  loading error before running any command; the same defect would have
+  crashed the VS Code extension on activation and the desktop app on launch.
+  The 0.39.10 CLI release is affected; please upgrade.
+
 ## [0.39.10] - 2026-07-29
 
 ### Shared (all surfaces)
