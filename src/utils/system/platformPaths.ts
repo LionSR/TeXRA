@@ -145,6 +145,31 @@ function getExtraDirs(): string[] {
         }
       }
     }
+
+    // TeX Live for Windows bundles its own Perl (tlperl) instead of putting one
+    // on PATH. latexindent/latexdiff still work there because they resolve to
+    // the .exe wrappers under texlive/*/bin/*, which use tlperl internally --
+    // but a bare `perl` does not exist, so checkCoreDependencies() reported
+    // Perl missing and told TeX Live users to install Strawberry Perl they do
+    // not need. Probed after the entries above so a user-installed Perl still
+    // wins; tlperl is the fallback, and it carries the modules latexindent
+    // needs.
+    const tlperlPatterns = ['C:/texlive/*/tlpkg/tlperl/bin'];
+    if (process.env.USERPROFILE) {
+      tlperlPatterns.push(
+        `${normalizeFilePath(process.env.USERPROFILE)}/texlive/*/tlpkg/tlperl/bin`,
+      );
+    }
+    for (const pattern of tlperlPatterns) {
+      for (const dir of globDescending(pattern)) {
+        if (
+          AbsoluteFS.existsSync(path.join(dir, 'perl.exe')) &&
+          !dirs.includes(dir)
+        ) {
+          dirs.push(dir);
+        }
+      }
+    }
   } else {
     // Linux/Unix paths
     dirs.push(
