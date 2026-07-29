@@ -39,6 +39,7 @@ import {
 } from '@tools/lean/leanServerRegistry';
 import { getZoteroPort } from '@tools/zotero/bbtClient';
 import { BinaryResolver } from '@utils/system/binaryResolver';
+import { IS_WINDOWS } from '@utils/system/platformPaths';
 import { isWSL } from '@utils/system/wslDetect';
 import {
   checkToolInstalled,
@@ -253,15 +254,21 @@ function prerequisitesChecks<T>(config: {
  * installed TeXRA from a .dmg or .exe often do not have. When the system
  * package manager also ships the CLI, offer that command instead.
  *
+ * `win32` takes precedence over any package manager: a global npm install
+ * leaves only shell shims on Windows, which TeXRA cannot spawn (see
+ * support/externalBinaryUtils.ts), so a CLI with a Windows installer has to
+ * use it rather than npm.
+ *
  * Definitions call this from an `installCommand` getter so the probe stays
  * lazy — `detectPackageManager()` runs once per session and caches its result,
  * so reading the property repeatedly costs nothing after the first access.
  */
 function preferredInstallCommand(
-  commands: Partial<Record<'brew' | 'apt' | 'scoop', string>> & {
+  commands: Partial<Record<'brew' | 'apt' | 'scoop' | 'win32', string>> & {
     default: string;
   },
 ): string {
+  if (commands.win32 != null && IS_WINDOWS) return commands.win32;
   const packageManager = detectPackageManager();
   return (packageManager && commands[packageManager]) || commands.default;
 }
@@ -624,6 +631,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     get installCommand() {
       return preferredInstallCommand({
         brew: 'brew install --cask claude-code',
+        win32: 'winget install Anthropic.ClaudeCode',
         default: 'npm install -g @anthropic-ai/claude-code',
       });
     },

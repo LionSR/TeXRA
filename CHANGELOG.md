@@ -8,11 +8,15 @@ All notable changes to this project will be documented in this file.
 
 #### Improvements
 
-- **Install in Terminal works without Node** — the Codex and Claude Code
-  integration cards now offer the Homebrew command on machines that have
-  Homebrew, instead of a global npm install that fails when Node isn't on
-  PATH. Machines without a package manager that ships the CLI keep the npm
-  command.
+- **Install in Terminal offers a command that works on your machine** — the
+  Codex and Claude Code integration cards now offer the Homebrew command on
+  machines that have Homebrew, and Claude Code's Windows installer on Windows,
+  instead of a global npm install. Machines without a package manager that
+  ships the CLI keep the npm command.
+- **Claude Code on Windows is no longer detected as a broken install** — a
+  global npm install leaves only shell shims that TeXRA cannot run, so it is
+  now reported as not installed, with setup instructions, rather than
+  appearing available and failing when an agent calls it.
 
 ### Desktop
 

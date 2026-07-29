@@ -8,6 +8,7 @@ import { planToolTerminalAction } from '@settingsView/SettingsViewMessageHandler
 
 const mocks = vi.hoisted(() => ({
   packageManager: null as 'brew' | 'apt' | 'scoop' | null,
+  isWindows: false,
 }));
 
 vi.mock('@utils/system/toolUtils', async (importOriginal) => {
@@ -16,9 +17,21 @@ vi.mock('@utils/system/toolUtils', async (importOriginal) => {
   return { ...actual, detectPackageManager: () => mocks.packageManager };
 });
 
+vi.mock('@utils/system/platformPaths', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@utils/system/platformPaths')>();
+  return {
+    ...actual,
+    get IS_WINDOWS() {
+      return mocks.isWindows;
+    },
+  };
+});
+
 describe('planToolTerminalAction', () => {
   beforeEach(() => {
     mocks.packageManager = null;
+    mocks.isWindows = false;
   });
 
   it('plans install terminal actions from tool definitions', () => {
@@ -55,6 +68,25 @@ describe('planToolTerminalAction', () => {
         kind: 'terminal',
         name: 'TeXRA: Claude Code CLI',
         command: 'brew install --cask claude-code',
+      },
+    );
+  });
+
+  it('offers the Windows installer instead of a global npm install', () => {
+    // A global npm install leaves only shell shims on Windows, which TeXRA
+    // cannot spawn — so Windows wins even when a package manager is present.
+    mocks.isWindows = true;
+    mocks.packageManager = 'brew';
+
+    assert.deepEqual(
+      planToolTerminalAction({
+        toolId: 'claude-agent',
+        commandKind: 'install',
+      }),
+      {
+        kind: 'terminal',
+        name: 'TeXRA: Claude Code CLI',
+        command: 'winget install Anthropic.ClaudeCode',
       },
     );
   });

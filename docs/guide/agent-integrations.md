@@ -44,7 +44,7 @@ Each integration's options live on its card and are scoped to the current worksp
 Both CLIs are installed once per machine and shared by every TeXRA surface — the VS Code extension, the desktop app, and the terminal client all detect the same installation. Neither ships inside TeXRA: each one is a 250-410 MB native binary that Anthropic and OpenAI update on their own schedule, so TeXRA looks for whichever version you have rather than freezing a copy into every release.
 
 ::: warning Windows
-TeXRA spawns each CLI binary directly in the same environment as the extension host and skips `.cmd` / PowerShell shims, so an npm wrapper alone is not enough.
+TeXRA spawns each CLI binary directly in the same environment as the extension host, so it needs a real `.exe` — not one of the `claude` / `.cmd` / `.ps1` shims that a global npm install leaves behind. Claude Code is therefore installed with `winget` (or its native installer) on Windows, which is what **Install in Terminal** offers there. Codex is unaffected: TeXRA resolves its `codex.exe` inside the npm package itself.
 
 - **WSL Remote** — open TeXRA inside the WSL window before installing.
 - **Native Windows** — install the CLI on Windows so the real binary is on PATH.

@@ -137,8 +137,14 @@ export async function resolveBinary(
     for (const hit of pathHits) {
       const p = hit.trim();
       if (!p) continue;
-      // The SDK spawns the binary directly, so skip shell-only npm shims.
-      if (IS_WINDOWS && /\.(cmd|ps1)$/i.test(p)) continue;
+      // The SDK spawns the binary directly, so only a real executable is
+      // usable. `npm install -g` writes three shims next to each other —
+      // `claude`, `claude.cmd` and `claude.ps1` — and none of them can be
+      // spawned on Windows: the first is a POSIX sh script for Git Bash, and
+      // the other two need a shell. Requiring .exe rejects all three, so the
+      // tool reports "not found" with its install guide instead of resolving
+      // to a path that fails at spawn time.
+      if (IS_WINDOWS && !/\.exe$/i.test(p)) continue;
       if (await AbsoluteFS.exists(p)) return p;
     }
   }
