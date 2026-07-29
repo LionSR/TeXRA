@@ -39,3 +39,13 @@ export const ONBOARDING_CHOICE_SKIP_LABEL = 'Skip for now';
  */
 export const ONBOARDING_NARRATIVE =
   'Run setup once: TeXRA checks LaTeX, applies the right agent team, and starts your first polish.';
+
+/**
+ * State 1 handoff sentence: a credential just landed and the setup assistant
+ * owns the next step. The CLI prints it as a transcript notice when the setup
+ * agent takes over the first-run session; the extension/desktop setup card
+ * shows it under the "Credential ready" title. Surface-specific hints (the
+ * CLI's `/agent`, the card's Run-setup button) stay in the surface.
+ */
+export const ONBOARDING_SETUP_HANDOFF =
+  "You're starting with the setup assistant: it checks your environment, applies the right agent team, and helps you run your first task.";
