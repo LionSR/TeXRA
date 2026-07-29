@@ -41,6 +41,8 @@ recheck:
 
 Each integration's options live on its card and are scoped to the current workspace. Per-call approval prompts are governed by the global **Require approval for shell commands & agent sessions** switch under **Dashboard → Tools → Approval & Safety** (on by default); turn it off to let agents call Codex or Claude Code without confirming each time.
 
+Both CLIs are installed once per machine and shared by every TeXRA surface — the VS Code extension, the desktop app, and the terminal client all detect the same installation. Neither ships inside TeXRA: each one is a 250-410 MB native binary that Anthropic and OpenAI update on their own schedule, so TeXRA looks for whichever version you have rather than freezing a copy into every release.
+
 ::: warning Windows
 TeXRA spawns each CLI binary directly in the same environment as the extension host and skips `.cmd` / PowerShell shims, so an npm wrapper alone is not enough.
 

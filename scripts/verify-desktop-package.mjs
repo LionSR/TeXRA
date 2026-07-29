@@ -5,17 +5,6 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 import {
-  codexBinaryPath,
-  codexBinarySubpathCandidates,
-  codexPlatformInfoByKey,
-  collectBundledCodexPackages,
-  describeBundledCodexPackages,
-  expectedCodexPayloadBudgetBytes,
-  formatBytes,
-  inferCodexPlatformKeys,
-  packageNameForCodexPlatformKey,
-} from './desktop-codex-payload.mjs';
-import {
   getDesktopSharedSourceDirs,
   getDesktopVscodeFreeSourceDirs,
   requiredMonacoWorkers,
@@ -44,6 +33,29 @@ const desktopSourceBoundaryDirs = [
   ...new Set([...desktopSharedSourceDirs, ...desktopVscodeFreeSourceDirs]),
 ];
 const bundledRuntimeResourceDirs = ['agents', 'tool_use_agents', 'skills'];
+// The Codex and Claude Code SDKs each pull a per-platform package carrying a
+// 250-410 MiB native CLI binary. The desktop app resolves a user-installed CLI
+// at runtime (src/tools/codexImport.ts, src/tools/claudeAgentImport.ts), so
+// none of these packages may ship inside the app — keeping the SDKs in
+// devDependencies is what stops electron-builder from copying them.
+const forbiddenNativeCliPackages = [
+  {
+    label: 'OpenAI Codex CLI',
+    scope: '@openai',
+    isPackageDirName: (name) => name === 'codex' || name.startsWith('codex-'),
+    pnpmStorePrefix: '@openai+codex',
+  },
+  {
+    label: 'Claude Code CLI',
+    scope: '@anthropic-ai',
+    isPackageDirName: (name) => name.startsWith('claude-agent-sdk'),
+    pnpmStorePrefix: '@anthropic-ai+claude-agent-sdk',
+  },
+];
+const nativeCliNodeModulesRoots = [
+  'node_modules',
+  'app.asar.unpacked/node_modules',
+];
 const desktopStartupForbiddenInputPackages = [
   {
     label: '@google/genai',
@@ -492,115 +504,70 @@ function dependencyPackageJsonPath(name) {
   return join('node_modules', name, 'package.json');
 }
 
-async function checkCodexPayload(app, failures) {
-  const expectedPlatformKeys = inferCodexPlatformKeys({ appPath: app.label });
-  const bundledPackages = await collectBundledCodexPackages(app.fsPath(''));
-  const payloadSizeBytes = bundledPackages.reduce(
-    (sum, pkg) => sum + pkg.sizeBytes,
-    0,
-  );
-  const budgetBytes = expectedCodexPayloadBudgetBytes(expectedPlatformKeys);
-  const bundledPackageSummary = describeBundledCodexPackages(bundledPackages);
+async function checkNoBundledNativeCliPayload(app, failures) {
+  const bundled = [];
 
-  if (expectedPlatformKeys.length === 0) {
-    failures.push(
-      `Could not infer expected Codex CLI platform from packaged app path: ${app.label}`,
-    );
-    return {
-      checked: false,
-      expectedPlatformKeys,
-      bundledPackages,
-      payloadSizeBytes,
-      budgetBytes,
-    };
-  }
-
-  const expectedPlatformKeySet = new Set(expectedPlatformKeys);
-  const extraPackages = bundledPackages.filter(
-    ({ platformKey }) => !expectedPlatformKeySet.has(platformKey),
-  );
-  if (extraPackages.length > 0) {
-    failures.push(
-      `Packaged desktop app bundles extra Codex CLI platform packages for ${expectedPlatformKeys.join(
-        ', ',
-      )}: ${describeBundledCodexPackages(
-        extraPackages,
-      )}. Bundled Codex packages: ${bundledPackageSummary}`,
-    );
-  }
-
-  for (const platformKey of expectedPlatformKeys) {
-    const platformInfo = codexPlatformInfoByKey[platformKey];
-    const bundledPlatformPackages = bundledPackages.filter(
-      (pkg) => pkg.platformKey === platformKey,
-    );
-    const unpackedBinaryPaths = bundledPlatformPackages.flatMap((pkg) =>
-      pkg.locations.flatMap((location) =>
-        codexBinarySubpathCandidates(platformInfo).map((binarySubpath) =>
-          posix.join('app.asar.unpacked', location, binarySubpath),
-        ),
-      ),
-    );
-    const legacyUnpackedBinaryPath = codexBinaryPath(
-      'app.asar.unpacked',
-      platformInfo,
-    );
-    if (unpackedBinaryPaths.length === 0) {
-      unpackedBinaryPaths.push(legacyUnpackedBinaryPath);
-    }
-
-    const existingUnpackedBinaryPaths = [];
-    for (const unpackedBinaryPath of unpackedBinaryPaths) {
-      if (await app.exists(unpackedBinaryPath)) {
-        existingUnpackedBinaryPaths.push(unpackedBinaryPath);
+  for (const nodeModulesRoot of nativeCliNodeModulesRoots) {
+    for (const cli of forbiddenNativeCliPackages) {
+      for (const entry of await app.listDir(
+        posix.join(nodeModulesRoot, cli.scope),
+      )) {
+        if (!cli.isPackageDirName(entry)) continue;
+        bundled.push({
+          cli,
+          path: posix.join(nodeModulesRoot, cli.scope, entry),
+        });
       }
-    }
 
-    if (existingUnpackedBinaryPaths.length === 0) {
-      failures.push(
-        `Packaged desktop app is missing the unpacked Codex CLI binary for ${platformKey}: ${unpackedBinaryPaths.join(
-          ', ',
-        )}`,
-      );
-      continue;
-    }
-
-    for (const unpackedBinaryPath of existingUnpackedBinaryPaths) {
-      const archivedBinaryPath = unpackedBinaryPath.replace(
-        /^app\.asar\.unpacked\//,
-        '',
-      );
-      if (
-        app.isAsar &&
-        (await app.exists(archivedBinaryPath)) &&
-        !(await app.isUnpacked(archivedBinaryPath))
-      ) {
-        failures.push(
-          `Packaged desktop app keeps the Codex CLI binary inside app.asar for ${platformKey}; it must be unpacked: ${archivedBinaryPath}`,
-        );
+      for (const entry of await app.listDir(
+        posix.join(nodeModulesRoot, '.pnpm'),
+      )) {
+        if (!entry.startsWith(cli.pnpmStorePrefix)) continue;
+        bundled.push({
+          cli,
+          path: posix.join(nodeModulesRoot, '.pnpm', entry),
+        });
       }
     }
   }
 
-  if (payloadSizeBytes > budgetBytes) {
-    failures.push(
-      `Packaged desktop app Codex CLI payload is ${formatBytes(
-        payloadSizeBytes,
-      )}, above the ${formatBytes(
-        budgetBytes,
-      )} budget for ${expectedPlatformKeys.join(
-        ', ',
-      )}. Bundled Codex packages: ${bundledPackageSummary}`,
+  if (bundled.length === 0) return;
+
+  const described = [];
+  for (const { cli, path } of bundled) {
+    const sizeBytes = await onDiskSize(app.fsPath(path));
+    described.push(
+      `${cli.label} at ${path}${sizeBytes == null ? '' : ` (${formatBytes(sizeBytes)})`}`,
     );
   }
 
-  return {
-    checked: true,
-    expectedPlatformKeys,
-    bundledPackages,
-    payloadSizeBytes,
-    budgetBytes,
-  };
+  failures.push(
+    'Packaged desktop app bundles native CLI payloads that must be installed ' +
+      'by the user instead. Keep the SDKs in devDependencies so ' +
+      `electron-builder never copies their platform packages: ${described.join('; ')}`,
+  );
+}
+
+async function onDiskSize(path) {
+  let entryStat;
+  try {
+    entryStat = await stat(path);
+  } catch (error) {
+    if (error?.code === 'ENOENT') return null;
+    throw error;
+  }
+  if (!entryStat.isDirectory()) return entryStat.size;
+
+  let total = 0;
+  for (const entry of await readdir(path, { withFileTypes: true })) {
+    const childSize = await onDiskSize(join(path, entry.name));
+    if (childSize != null) total += childSize;
+  }
+  return total;
+}
+
+function formatBytes(bytes) {
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
 }
 
 async function checkRuntimeDependencies(app, appPackageJson, failures) {
@@ -702,7 +669,6 @@ async function checkMacIcon(app, failures) {
 const app = await findPackagedApp();
 const failures = [];
 let checkedMacIcon = false;
-let codexPayloadResult = null;
 
 if (!app) {
   failures.push(`No packaged Electron app found under ${packageRoot}`);
@@ -722,7 +688,7 @@ if (!app) {
   await checkBundledResources(app, failures);
   await checkMonacoWorkerAssets(app, failures);
   checkedMacIcon = await checkMacIcon(app, failures);
-  codexPayloadResult = await checkCodexPayload(app, failures);
+  await checkNoBundledNativeCliPayload(app, failures);
   await checkNoVscodeRuntimeImport(app, failures);
   await checkDesktopMainDynamicRequireShim(app, failures);
   await checkDesktopStartupBundles(app, failures);
@@ -756,6 +722,7 @@ const summary = [
   '- resources/traceViewerStandalone/index.html',
   '- package.json runtime dependencies',
   '- node_modules runtime dependency packages',
+  '- no bundled Codex or Claude Code CLI payload',
   '- no VS Code extension host runtime import',
   '- desktop main dynamic require shim',
   '- desktop startup import graph excludes provider SDKs',
@@ -764,17 +731,5 @@ const summary = [
 ];
 
 if (checkedMacIcon) summary.splice(7, 0, '- macOS app icon');
-if (codexPayloadResult?.checked) {
-  summary.splice(
-    checkedMacIcon ? 8 : 7,
-    0,
-    `- Codex CLI packages: ${codexPayloadResult.bundledPackages
-      .map(({ platformKey }) => packageNameForCodexPlatformKey(platformKey))
-      .join(', ')}`,
-    `- Codex CLI payload size: ${formatBytes(
-      codexPayloadResult.payloadSizeBytes,
-    )} / ${formatBytes(codexPayloadResult.budgetBytes)}`,
-  );
-}
 
 console.log(summary.join('\n'));

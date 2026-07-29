@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Desktop
+
+#### Improvements
+
+- **Much smaller desktop download and install** — the desktop app no longer
+  ships copies of the OpenAI Codex and Claude Code command-line tools, which
+  accounted for well over half of its size. Both integrations now work the
+  same way they always have in VS Code: install the CLI once from
+  **Dashboard → Integrations → Install in Terminal** (or with your usual
+  package manager), and the desktop app finds it automatically. Existing
+  installations of either CLI are picked up with no extra setup.
+
 ## [0.39.11] - 2026-07-29
 
 ### Shared (all surfaces)
