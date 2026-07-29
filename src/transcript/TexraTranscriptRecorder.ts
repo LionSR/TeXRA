@@ -34,7 +34,11 @@ import {
   type WorkflowCallProgress,
 } from '@shared/schemas';
 import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
-import { generateShortId } from '@utils/core';
+import {
+  createFlushableDebounce,
+  generateShortId,
+  type FlushableDebounce,
+} from '@utils/core';
 
 import type { StreamLogAppendInput, StreamLogUpdatePatch } from './StreamLog';
 import type { TranscriptWriter } from './StreamLogStore';
@@ -90,7 +94,7 @@ interface StreamSinkState {
   groupId: string | undefined;
   level: LogLevel;
   messageType: MessageType;
-  updateTimer: ReturnType<typeof setTimeout> | null;
+  updateDebounce: FlushableDebounce;
 }
 
 type StageMetadata = Pick<
@@ -118,8 +122,7 @@ export function attachTranscriptRecorder(
   const recordFailure = (error: unknown): void => {
     pendingFailure ??= error;
     for (const state of streams.values()) {
-      if (state.updateTimer) clearTimeout(state.updateTimer);
-      state.updateTimer = null;
+      state.updateDebounce.cancel();
       state.enabled = false;
     }
   };
@@ -143,10 +146,7 @@ export function attachTranscriptRecorder(
   let pendingModelResponseId: string | undefined;
 
   const flushStream = (state: StreamSinkState, id: string): void => {
-    if (state.updateTimer) {
-      clearTimeout(state.updateTimer);
-      state.updateTimer = null;
-    }
+    state.updateDebounce.cancel();
     const pendingText = state.pending.join('');
     if (state.pending.length > 0) {
       state.buffer += pendingText;
@@ -187,16 +187,8 @@ export function attachTranscriptRecorder(
     }
   };
 
-  const scheduleStreamUpdate = (state: StreamSinkState, id: string): void => {
-    if (state.updateTimer) return;
-    state.updateTimer = setTimeout(() => {
-      state.updateTimer = null;
-      try {
-        flushStream(state, id);
-      } catch (error) {
-        recordFailure(error);
-      }
-    }, STREAM_UPDATE_THROTTLE_MS);
+  const scheduleStreamUpdate = (state: StreamSinkState): void => {
+    if (!state.updateDebounce.pending) state.updateDebounce.schedule();
   };
 
   const flushPending = (): void => {
@@ -454,7 +446,13 @@ export function attachTranscriptRecorder(
             groupId: event.stageId,
             level: 'info',
             messageType: asMessageType(event.kind),
-            updateTimer: null,
+            updateDebounce: createFlushableDebounce(() => {
+              try {
+                flushStream(state, event.id);
+              } catch (error) {
+                recordFailure(error);
+              }
+            }, STREAM_UPDATE_THROTTLE_MS),
           };
           streams.set(event.id, state);
           if (state.messageType === MESSAGE_TYPES.MODEL_RESPONSE) {
@@ -482,7 +480,7 @@ export function attachTranscriptRecorder(
           if (!state.created || state.buffer.length === 0) {
             flushStream(state, event.id);
           } else {
-            scheduleStreamUpdate(state, event.id);
+            scheduleStreamUpdate(state);
           }
           return;
         }
