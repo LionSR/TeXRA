@@ -247,7 +247,9 @@ export function resolveToolDefinitions(
     // Object items: always parse with schema to validate/merge overrides. A
     // malformed override (bad `parameters`/`description`) must not silently
     // drop to a bare-name tool without a trace, so warn like the
-    // missing-tool branch above instead of `.catch()`-ing it away.
+    // missing-tool branch above instead of `.catch()`-ing it away — unless
+    // that branch already warned for this name (tool missing from registry),
+    // which would otherwise fire `warnOnMissing` twice for one bad entry.
     const parsed = ToolDefinitionSchema.safeParse({
       ...item,
       name: canonicalName,
@@ -255,7 +257,9 @@ export function resolveToolDefinitions(
     if (parsed.success) {
       return [parsed.data];
     }
-    warnOnMissing?.(name);
+    if (tool) {
+      warnOnMissing?.(name);
+    }
     return [{ name: canonicalName }];
   });
 }
