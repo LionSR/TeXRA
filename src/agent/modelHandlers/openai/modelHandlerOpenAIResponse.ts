@@ -72,6 +72,7 @@ import {
   normalizeOpenAIResponseUsage,
 } from './openAIUsage';
 import { tagOpenAISdkError } from './openAISdkError';
+import { logOpenAICompatibleClientConfig } from './openAIChatHelpers';
 import { normalizeOpenAIResponseError } from './openAIResponseErrors';
 import {
   formatAttachmentSummary,
@@ -1168,7 +1169,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       fetch: this.longRunningModelFetch,
       maxRetries: 0,
     });
-    this.logOpenAICompatibleClientConfig(client.baseURL, credential.route);
+    logOpenAICompatibleClientConfig(
+      this.logger,
+      this.config,
+      client.baseURL,
+      credential.route,
+      this.shouldUseServerSideKeys(),
+    );
     return this.rememberClientCredentialRoute(
       client,
       credential.route,
