@@ -2,6 +2,38 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Desktop
+
+#### Breaking Changes
+
+- **The Codex and Claude Code CLIs are now installed separately** — the desktop
+  app no longer ships its own copies, which accounted for well over half of its
+  download size. If you used either integration from the desktop app without
+  installing its CLI yourself, it will show as **Not Found** after upgrading
+  until you install it once from **Dashboard → Integrations → Install in
+  Terminal**. Anyone who already has the CLI — including every VS Code and
+  terminal user, which never bundled them — is unaffected and needs no setup.
+
+### Shared (all surfaces)
+
+#### Bug Fixes
+
+- **Install in Terminal now offers a command your machine can run** — the Codex
+  and Claude Code cards offer the Homebrew command where Homebrew is present
+  and Claude Code's Windows installer on Windows, instead of a global npm
+  install that fails without Node. The desktop app's terminal also picks up
+  Homebrew and `~/.local/bin` now, so a command it suggests no longer fails
+  with `command not found` when the app was launched from the Dock or Finder.
+- **Claude Code installed by its native installer is found again** — the
+  desktop app now looks in `~/.local/bin`, where the installer recommended by
+  Anthropic's docs puts it, instead of reporting the CLI as missing.
+- **Claude Code on Windows is no longer detected as a broken install** — a
+  global npm install leaves only shell shims that TeXRA cannot run, so it is
+  now reported as not installed, with setup instructions, rather than
+  appearing available and failing when an agent calls it.
+
 ## [0.39.11] - 2026-07-29
 
 ### Shared (all surfaces)
