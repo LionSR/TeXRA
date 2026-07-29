@@ -12,6 +12,7 @@ import { COLOR_INFO } from '../ui/colors';
 import {
   clampModalWidth,
   CONFIRM_CARD_HORIZONTAL_DECORATION,
+  isCompactRows,
 } from '../ui/theme';
 import { confirmCardCompactChromeRows } from './ConfirmCardState';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
@@ -48,7 +49,7 @@ export function isCompactPlanApprovalRows(
   return (
     availableRows !== undefined &&
     availableRows > 0 &&
-    availableRows <= compactMaxRows
+    isCompactRows(availableRows, compactMaxRows)
   );
 }
 

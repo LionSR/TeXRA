@@ -177,8 +177,14 @@
   gap: var(--wa-space-xs);
 }
 
-.desktop-review-empty wa-icon {
+.desktop-review-empty .empty-state-icon {
   font-size: var(--icon-size-l);
+}
+
+.desktop-review-empty .empty-state-title {
+  margin: 0;
+  font-size: inherit;
+  font-weight: var(--wa-font-weight-bold, bold);
 }
 
 .desktop-review-no-results {
