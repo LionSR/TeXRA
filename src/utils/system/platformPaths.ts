@@ -74,6 +74,10 @@ function getExtraDirs(): string[] {
     const macHome = process.env.HOME;
     if (macHome) {
       dirs.push(path.join(macHome, 'bin'));
+      // Claude Code's native installer — the one its docs recommend — installs
+      // here, and a GUI-launched app does not inherit the shell profile that
+      // would normally put it on PATH.
+      dirs.push(path.join(macHome, '.local', 'bin'));
     }
   } else if (platform === 'win32') {
     dirs.push(
@@ -158,6 +162,10 @@ function getExtraDirs(): string[] {
     const linuxHome = process.env.HOME;
     if (linuxHome) {
       dirs.push(path.join(linuxHome, 'bin'));
+      // Claude Code's native installer — the one its docs recommend — installs
+      // here, and a GUI-launched app does not inherit the shell profile that
+      // would normally put it on PATH.
+      dirs.push(path.join(linuxHome, '.local', 'bin'));
     }
   }
 

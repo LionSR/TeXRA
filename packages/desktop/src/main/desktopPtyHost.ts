@@ -16,6 +16,8 @@ import { createRequire } from 'node:module';
 import { platform as osPlatform } from 'node:os';
 import { dirname, join } from 'node:path';
 
+import { extendEnvPath } from '@utils/system/platformPaths';
+
 /**
  * Structural subset of node-pty we depend on. Declared locally so this module
  * type-checks without the native addon's types resolving at build time, and so
@@ -111,6 +113,16 @@ function ptyEnvironment(): Record<string, string> {
   // Programs branch on TERM for color and cursor support. xterm.js speaks
   // xterm-256color, and without this many tools fall back to dumb output.
   env.TERM = 'xterm-256color';
+  // A Finder- or Dock-launched app inherits a minimal PATH with no Homebrew,
+  // no /usr/local/bin and no ~/.local/bin. TeXRA resolves its own tools
+  // through extendEnvPath(), so without the same extension here the terminal
+  // cannot run the very commands the app tells the user to run — the
+  // Integrations card would offer `brew install ...` to a shell that then
+  // reports `brew: command not found`. Overwrite in place: Windows spells
+  // the variable `Path`, and adding a second `PATH` key would shadow it.
+  const pathKey =
+    Object.keys(env).find((key) => key.toUpperCase() === 'PATH') ?? 'PATH';
+  env[pathKey] = extendEnvPath(env[pathKey]);
   return env;
 }
 
