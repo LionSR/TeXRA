@@ -11,6 +11,33 @@ cleanup.
 
 Sections are ordered by whether they block flipping the switch.
 
+## Status
+
+Everything that needed no decision from the maintainers has been done. What is
+left is genuinely waiting on a choice.
+
+| Item                                       | Status                                          |
+| ------------------------------------------ | ----------------------------------------------- |
+| §3.2 `packages/agent` repo metadata        | **Done**                                        |
+| §4.1 `SECURITY.md`                         | **Done**                                        |
+| §4.2 Telemetry opt-out                     | **Done** — `texra.telemetry.enabled`            |
+| §4.3 `npm test` green on a clean checkout  | **Done**                                        |
+| §4.5 Stale `.gitignore` comment            | **Done**                                        |
+| §1 Licensing and legal                     | Blocked — needs a license choice                |
+| §2 What gets published                     | Blocked — needs three product calls             |
+| §3.1 Repo identity                         | Blocked — needs the final repo home             |
+| §3.3 Secret scanning                       | Blocked — repo admin setting, and a timing call |
+| §4.1 `CONTRIBUTING.md` / `CODE_OF_CONDUCT` | Deliberately held — see below                   |
+| §4.4 `minimumReleaseAge`                   | Held — documented tradeoff, maintainer's call   |
+
+`CONTRIBUTING.md` and `CODE_OF_CONDUCT.md` are held on purpose rather than
+overlooked. Soliciting outside contributions while the repo is still "all rights
+reserved" with no CLA or DCO creates exactly the IP ambiguity §1.4 warns about —
+inbound patches with no clear grant, on a codebase whose copyright may later be
+assigned. They should land together with the license decision, not before it.
+`SECURITY.md` is different: a private path for reporting vulnerabilities is
+worth having under any license, and it invites no code.
+
 ---
 
 ## 1. Blockers — licensing and legal
@@ -130,9 +157,11 @@ so you are not running two trackers.
 
 ### 3.2 `packages/agent` has no repo metadata
 
-`@texra-ai/agent` is published to npm (`private: false`) with **no**
-`repository`, `bugs`, or `homepage` field. Fill these in — it's the package
-most likely to be found by someone who has never heard of TeXRA.
+**Done.** `@texra-ai/agent` is published to npm (`private: false`) and had **no**
+`repository`, `bugs`, `homepage`, or `author` field — the package most likely to
+be found by someone who has never heard of TeXRA. It now carries the same four
+fields as the CLI and extension packages, so it moves with them when §3.1 is
+settled.
 
 ### 3.3 GitHub secret scanning is off
 
@@ -147,17 +176,22 @@ protection is the thing that stops the first contributor accident.
 
 ### 4.1 No community files
 
-Missing: `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`,
-`.github/ISSUE_TEMPLATE/`. `.github/PULL_REQUEST_TEMPLATE.md` exists.
+`SECURITY.md` — **done**. It mattered more than usual here: the project handles
+user API keys, OAuth tokens, and a hosted relay, and there was no published way
+to report a vulnerability privately. It names `contact@texra.ai`, scopes what is
+worth reporting (credential storage, the auth flows, tool-execution approval,
+prompt injection that escalates privilege, relay enforcement, webview and
+renderer isolation), and tells reporters to rotate an exposed key first.
 
-`AGENTS.md` (38 KB) is excellent contributor material but is written for
-agents. A human `CONTRIBUTING.md` should point at it and lead with the single
-highest-value fact in this repo: **builds do not type check — run
-`npm run typecheck` or the `:safe` script variants.**
+Still missing: `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `.github/ISSUE_TEMPLATE/`,
+`.github/CODEOWNERS`. `.github/PULL_REQUEST_TEMPLATE.md` exists. The first two
+are held until the license lands (see **Status** above); the issue templates and
+CODEOWNERS depend on §3.1's repo home and on who is on the team.
 
-`SECURITY.md` matters more than usual here: the project handles user API keys,
-OAuth tokens, and a hosted relay. There is currently no published way to report
-a vulnerability privately.
+When `CONTRIBUTING.md` is written: `AGENTS.md` (38 KB) is excellent contributor
+material but is written for agents. The human version should point at it and
+lead with the single highest-value fact in this repo — **builds do not type
+check; run `npm run typecheck` or the `:safe` script variants.**
 
 ### 4.2 Telemetry has no opt-out
 
@@ -169,28 +203,65 @@ agent name and category, input/output/cached/reasoning token counts, cost, and
 response time to `remote.texra.ai/functions/v1/log-usage`.
 
 It only flushes when signed in — `flushQueuedBatch()` returns early without a
-relay access token — but **signed-in BYOK users are logged too**
-(`usedRelay: false` entries), and there is no key in
-`contributes.configuration` to turn it off.
+relay access token — but **signed-in BYOK users were logged too**
+(`usedRelay: false` entries), and there was no key in
+`contributes.configuration` to turn it off. Invisible in a private repo; in a
+public one it is the first thing people grep for.
 
-That is invisible in a private repo. In a public one it is the first thing
-people grep for. Add a setting, honour it in both hosts, and document what is
-collected.
+**Done.** `texra.telemetry.enabled` (default `true`, so no behaviour change) now
+gates it, added to `CoreSettingsShape` so all three hosts pick it up: VS Code
+surfaces it under **TeXRA → Privacy** at `application` scope — deliberately not
+`resource`, so a workspace cannot re-enable logging a user turned off — and the
+CLI and desktop read it from `.texra/config.json` via `JsonConfigProvider`, with
+`KNOWN_TEXRA_KEYS` picking it up automatically from `CORE_SETTING_PATHS`.
+
+The setting is read **live** on each queue and flush rather than snapshotted at
+`initialize()`, so turning it off takes effect immediately instead of at next
+launch, and the flush path discards rounds recorded before the opt-out rather
+than shipping one last batch.
+
+One trap worth remembering, since it is not obvious from the names: the discard
+is gated on the user setting **alone**, never on `config.enabled`. That field is
+the lifecycle gate, and `dispose()` clears it precisely so no new entry is
+queued while shutdown drains the final batch. Keying the discard off it too
+silently dropped the last flush on every CLI exit — and with it the relay spend
+accounting. The existing "waits for successive active batches during disposal"
+test catches this; it is not redundant.
+
+Reading the setting adds a `telemetry -> platform` subsystem edge, which the
+LAY-1 ratchet correctly flagged as new. It is accepted and recorded in
+`config/ratchets/architecture-edges-baseline.json`: reaching host config through
+the `platform()` port is the sanctioned mechanism, and it is the same edge
+`src/tools/goal/goalFeatureFlag.ts` already relies on for its feature flag.
+
+Documented for users in `docs/guide/configuration.md` under "Usage Logging",
+including the fact that disabling it also stops hosted spend accounting.
 
 ### 4.3 `npm test` is not green on a clean checkout
 
-3 failures out of 7,965 (796 of 800 files pass). All environment-sensitive
-rather than real defects:
+**Done.** 3 failures out of 7,965 (796 of 800 files passed). CI on `main` is
+green, so all three were specific to a sandboxed or loaded machine — but a
+first-time contributor still ran `npm test` and saw red.
 
-| Test                                                        | Cause                                                      |
-| ----------------------------------------------------------- | ---------------------------------------------------------- |
-| `src/test-kernel/agent/WorkflowScriptEngine.vitest.ts:1741` | wall-clock assertion `< 3000 ms`; took 9,349 ms under load |
-| `src/test-kernel/desktop/DesktopDevScript.vitest.mts`       | requires an installed Electron binary                      |
-| `src/test-kernel/utils/system/SystemUtils.vitest.ts:224`    | process-group abort race in a container                    |
+| Test                                                        | Cause                                                      | Fix                     |
+| ----------------------------------------------------------- | ---------------------------------------------------------- | ----------------------- |
+| `src/test-kernel/desktop/DesktopDevScript.vitest.mts`       | `require('electron')` downloads the binary on demand       | made hermetic           |
+| `src/test-kernel/agent/WorkflowScriptEngine.vitest.ts:1741` | wall-clock assertion `< 3000 ms`; took 9,349 ms under load | budget widened          |
+| `src/test-kernel/utils/system/SystemUtils.vitest.ts:224`    | 1 s budget for process-group teardown                      | budget widened to ~10 s |
 
-A first-time contributor runs `npm test` and sees red. Gate each on its
-prerequisite (skip when Electron is absent; make the timing assertions
-tolerant or budget-relative).
+The Electron one was the interesting case. Electron 43 dropped its `postinstall`
+script — `require('electron')` now _downloads_ the platform binary the first
+time it is called. So `dev.mjs`'s module-level require turned a unit test into a
+network fetch on a fresh checkout, and a hard failure with no network. Rather
+than skip it, the test now sets `ELECTRON_OVERRIDE_DIST_PATH`, which
+short-circuits that resolution. No coverage is lost: the assertions only check
+the spawn arguments, env, and stdio, never the binary's location. The test is
+now hermetic everywhere instead of quietly depending on the network in CI.
+
+The other two are pure hang guards, not latency measurements — the memory test's
+containment is already proven by its `/memory/` rejection (a failure of the
+memory limit would reject with `/timed out/` instead), so a tight wall-clock
+bound there bought nothing and flaked whenever the suite saturated every core.
 
 ### 4.4 Supply-chain quarantine is disabled repo-wide
 
@@ -203,11 +274,13 @@ packages that actually need it.
 
 ### 4.5 A stale comment invents a private dependency
 
-`.gitignore`: _"CI checks out a private trusted-actions repo here at runtime;
-never commit it."_ It doesn't. The `.trusted-actions` checkout in
-`claude.yml`, `claude-code-review.yml`, and `issue-tracker.yml` has no
-`repository:` field — it is a self-checkout of this repo's own default branch.
-Outside readers will hunt for a private repo that does not exist.
+**Done.** `.gitignore` claimed _"CI checks out a private trusted-actions repo
+here at runtime; never commit it."_ It doesn't. The `.trusted-actions` checkout
+in `claude.yml`, `claude-code-review.yml`, and `issue-tracker.yml` has no
+`repository:` field — it is a second checkout of _this_ repo at the PR's base
+ref, so the automation prompts and tool allowlists come from trusted committed
+history rather than the branch under review. Outside readers would have hunted
+for a private repo that does not exist; the comment now says what it is for.
 
 ---
 
@@ -279,17 +352,20 @@ alias boundary. Nothing to delete — worth tidying the declarations if the
 
 ## Suggested order
 
+What remains, all of it downstream of a decision:
+
 1. Pick the license → rewrite `LICENSE`, the three `LICENSE.txt`, all
    `license` fields, and the README footer. (§1.1, §1.2)
 2. Split the TOS into Service vs. Software; settle the copyright line and
    DCO/CLA. (§1.3, §1.4)
 3. Decide `prompts/agents/remote/`, `supabase/`, and internal `docs/`. (§2)
-4. Settle the repo home; fix every `repository`/`bugs` link; migrate issues. (§3.1, §3.2)
+4. Settle the repo home; fix every `repository`/`bugs` link; migrate issues. (§3.1)
 5. Enable secret scanning + push protection. (§3.3)
-6. Add the telemetry opt-out. (§4.2)
-7. Add `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, issue
-   templates, `CODEOWNERS`. (§4.1)
-8. Make `npm test` green on a clean checkout. (§4.3)
-9. Housekeeping: `minimumReleaseAge`, the stale `.gitignore` comment. (§4.4, §4.5)
+6. Once 1–2 land: `CONTRIBUTING.md` and `CODE_OF_CONDUCT.md`. Once 4 lands:
+   issue templates and `CODEOWNERS`. (§4.1)
+7. Revisit `minimumReleaseAge` at whatever profile the project ends up with.
+   (§4.4)
 
-Steps 1–5 gate the flip. 6–9 can land in the same week but do not block it.
+Steps 1–5 gate the flip. Step 1 unblocks the most: it is the only thing 6
+waits on, and the licence text is the last piece of the repo that still says
+the opposite of what you intend.

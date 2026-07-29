@@ -11,10 +11,13 @@ import {
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import * as logger from '@logger/logUtils';
+import { platform } from '@platform/platform';
 import {
+  TELEMETRY_ENABLED_KEY,
   USAGE_LOG_FLUSH_OUTCOME,
   UsageLogService,
 } from '@telemetry/UsageLogService';
+import { setupPlatform } from '@test/support/setupPlatform';
 
 function usageEntry(model: string) {
   return {
@@ -318,5 +321,75 @@ describe('UsageLogService', () => {
     ]);
     expect(batchId(batches[1])).toBe(batchId(batches[0]));
     expect(batchId(batches[2])).not.toBe(batchId(batches[0]));
+  });
+
+  describe('texra.telemetry.enabled opt-out', () => {
+    // These tests write to the config provider. Without a per-test platform the
+    // mutation outlives the test — the file-scoped fake from setupFakePlatform
+    // is shared — and a stray `enabled: false` silently disables logging for
+    // every suite that runs afterwards.
+    setupPlatform();
+
+    it('sends nothing while the setting is off', async () => {
+      vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue(
+        'token',
+      );
+      await platform().config.update(TELEMETRY_ENABLED_KEY, false);
+
+      const batches: unknown[] = [];
+      const fetchMock = stubFetch(batches);
+
+      UsageLogService.log(usageEntry('first'));
+      await expect(UsageLogService.flush()).resolves.toBe(
+        USAGE_LOG_FLUSH_OUTCOME.ACCEPTED,
+      );
+
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(batches).toEqual([]);
+    });
+
+    // The setting is read live, so turning it off has to drop rounds already
+    // queued under the old value rather than letting the next flush ship them.
+    it('discards entries queued before the setting was turned off', async () => {
+      vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue(
+        'token',
+      );
+
+      const batches: unknown[] = [];
+      const fetchMock = stubFetch(batches);
+
+      UsageLogService.log(usageEntry('before-opt-out'));
+      await platform().config.update(TELEMETRY_ENABLED_KEY, false);
+
+      await expect(UsageLogService.flush()).resolves.toBe(
+        USAGE_LOG_FLUSH_OUTCOME.PENDING,
+      );
+
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(batches).toEqual([]);
+    });
+
+    it('resumes sending once the setting is turned back on', async () => {
+      vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue(
+        'token',
+      );
+      await platform().config.update(TELEMETRY_ENABLED_KEY, false);
+
+      const batches: unknown[] = [];
+      const fetchMock = stubFetch(batches);
+
+      UsageLogService.log(usageEntry('dropped'));
+      await UsageLogService.flush();
+      expect(fetchMock).not.toHaveBeenCalled();
+
+      await platform().config.update(TELEMETRY_ENABLED_KEY, true);
+      UsageLogService.log(usageEntry('sent'));
+      await expect(UsageLogService.flush()).resolves.toBe(
+        USAGE_LOG_FLUSH_OUTCOME.ACCEPTED,
+      );
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(batches.map(batchModels)).toEqual([['sent']]);
+    });
   });
 });

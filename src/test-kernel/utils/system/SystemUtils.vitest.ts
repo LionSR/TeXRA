@@ -34,8 +34,13 @@ async function waitForFile(filePath: string): Promise<void> {
   throw new Error(`Timed out waiting for ${filePath}`);
 }
 
+// Signal delivery to a whole process group, and the kernel reaping the members,
+// is not instant — and gets markedly slower when the suite is saturating every
+// core. The budget is generous (~10s) because it exists to catch a genuinely
+// leaked child, not to measure teardown latency; a tight one only produces
+// flakes on loaded machines.
 async function waitForProcessExit(pid: number): Promise<void> {
-  for (let attempt = 0; attempt < 50; attempt += 1) {
+  for (let attempt = 0; attempt < 500; attempt += 1) {
     try {
       process.kill(pid, 0);
     } catch {

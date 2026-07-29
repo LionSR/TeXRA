@@ -6,6 +6,8 @@ import pTimeout from 'p-timeout';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { SUPABASE_CUSTOM_DOMAIN } from '@auth/config';
 import * as logger from '@logger/logUtils';
+import { platform } from '@platform/platform';
+import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { UsageLogResponseSchema } from './UsageLogTypes';
@@ -43,6 +45,26 @@ const DEFAULT_CONFIG: UsageLogConfig = {
   enabled: true,
 };
 
+/** Config key backing the usage-logging opt-out. */
+export const TELEMETRY_ENABLED_KEY = 'texra.telemetry.enabled';
+
+/**
+ * The user's usage-logging opt-out, read live rather than snapshotted at
+ * {@link UsageLogServiceImpl.initialize}.
+ *
+ * Reading it on each queue and flush is what makes turning the setting off take
+ * effect immediately instead of at the next launch — and lets the flush path
+ * discard rounds recorded before the opt-out rather than shipping one last
+ * batch. `config.enabled` remains a separate, independent gate so a host (or a
+ * test) can hold the service off regardless of user settings.
+ */
+function isTelemetryEnabledBySetting(): boolean {
+  return platform().config.get<boolean>(
+    TELEMETRY_ENABLED_KEY,
+    DEFAULT_CORE_SETTINGS.telemetry.enabled,
+  );
+}
+
 class UsageLogServiceImpl {
   private queue: UsageLogEntry[] = [];
   private retryBatch: UsageLogBatch | null = null;
@@ -71,7 +93,7 @@ class UsageLogServiceImpl {
   log(
     entry: Omit<UsageLogEntry, 'timestamp' | 'extensionVersion' | 'editorType'>,
   ): void {
-    if (!this.config.enabled) return;
+    if (!this.config.enabled || !isTelemetryEnabledBySetting()) return;
 
     if (this.queue.length >= MAX_QUEUE_SIZE) {
       logger.warn(CHANNEL, 'Queue full, dropping oldest entry');
@@ -124,6 +146,28 @@ class UsageLogServiceImpl {
   }
 
   private async flushQueuedBatch(): Promise<UsageLogFlushOutcome> {
+    // Opting out mid-session must discard what is already queued, not merely
+    // stop new entries — otherwise the timer would still ship the rounds
+    // recorded before the user turned logging off.
+    //
+    // Gated on the user setting ALONE, deliberately. `config.enabled` is the
+    // lifecycle gate, and dispose() clears it precisely so no new entry is
+    // queued while shutdown drains the last batch — treating that as an opt-out
+    // here would discard the final flush on every CLI exit, taking relay spend
+    // accounting with it.
+    if (!isTelemetryEnabledBySetting()) {
+      const discarded = this.queue.length + (this.retryBatch ? 1 : 0);
+      this.queue = [];
+      this.retryBatch = null;
+      if (discarded > 0) {
+        logger.debug(
+          CHANNEL,
+          'Usage logging is disabled; discarded queued entries without sending',
+        );
+      }
+      return USAGE_LOG_FLUSH_OUTCOME.PENDING;
+    }
+
     let batch: UsageLogBatch | null = null;
     try {
       const token = await SupabaseClient.getRelayAccessToken();

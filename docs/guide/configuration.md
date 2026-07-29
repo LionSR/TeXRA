@@ -302,6 +302,41 @@ The custom agents directory can be changed from the **Agents** tab in the TeXRA
 Dashboard. Click **Change** in the directory info bar to select a new folder, or
 **Reset** to return to the default location inside global storage.
 
+## Usage Logging
+
+TeXRA records one usage entry per model round and sends it to TeXRA's backend.
+This is what meters relay and subscription usage against your plan.
+
+```json
+"texra.telemetry.enabled": true
+```
+
+Each entry contains only:
+
+- the model and provider used
+- the agent name and category
+- input, output, cached, and reasoning token counts
+- the computed cost and the response time
+
+It does **not** contain prompt text, document content, file names, or anything
+from your workspace. Entries are only transmitted while you are signed in — if
+you are signed out, nothing leaves your machine.
+
+Set `texra.telemetry.enabled` to `false` to send nothing. Turning it off takes
+effect immediately: entries already queued are discarded rather than sent. Note
+that because these entries are what meters hosted usage, disabling them also
+stops relay and subscription spend accounting, so leave it on if you rely on
+hosted access.
+
+In VS Code the setting is under **TeXRA → Privacy**; in the CLI and desktop app
+set it in `.texra/config.json`:
+
+```json
+{
+  "texra.telemetry.enabled": false
+}
+```
+
 ## Logger Configuration
 
 Control logging behavior:

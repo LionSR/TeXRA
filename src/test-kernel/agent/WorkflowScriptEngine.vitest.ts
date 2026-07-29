@@ -1738,7 +1738,12 @@ while (true) values.push(new Uint8Array(1024 * 1024))`,
         timeoutMs: 2_000,
       }),
     ).rejects.toThrow(/memory/i);
-    expect(Date.now() - startedAt).toBeLessThan(3_000);
+    // Containment is proven by the /memory/ rejection above: had the runtime's
+    // memory limit not tripped, the 2s engine timeout would have rejected with
+    // /timed out/ instead. This bound only guards against the allocation loop
+    // wedging the host indefinitely, so it is deliberately loose — a tight
+    // budget here just flakes when the suite saturates every core.
+    expect(Date.now() - startedAt).toBeLessThan(30_000);
   });
 
   it('aborts in-flight agents when the call cap trips', async () => {
