@@ -202,8 +202,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         await this.applyFollowUpPolishResult(result);
       },
       onPolishError: (stream, error) => {
-        const errorMsg =
-          error instanceof Error ? error.message : `${error}`;
+        const errorMsg = error instanceof Error ? error.message : `${error}`;
         this.postToActiveView({
           command: PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT,
           stream,
@@ -212,9 +211,13 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           error: errorMsg,
         });
         void this.host.error(`Error polishing follow-up: ${errorMsg}`);
-        this.logger.error(this.channel, `Error polishing follow-up: ${errorMsg}`, {
-          data: error instanceof Error ? error : undefined,
-        });
+        this.logger.error(
+          this.channel,
+          `Error polishing follow-up: ${errorMsg}`,
+          {
+            data: error instanceof Error ? error : undefined,
+          },
+        );
       },
       loadFollowUpOptions: async () => {
         const { agentOptions, modelOptions } = await loadOptions();

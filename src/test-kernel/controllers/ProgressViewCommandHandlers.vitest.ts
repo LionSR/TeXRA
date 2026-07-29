@@ -10,7 +10,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import {
   createProgressViewCommandHandlers as createSharedProgressViewCommandHandlers,
+  createProgressViewSecondTierHandlers,
   type ProgressViewCommandActions,
+  type ProgressViewSecondTierActions,
 } from '@controllers/progressView/ProgressViewCommandHandlers';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
@@ -107,6 +109,51 @@ function createActions(
     },
     ...overrides,
   };
+}
+
+function createSecondTierActions(
+  overrides: Partial<ProgressViewSecondTierActions> = {},
+): ProgressViewSecondTierActions {
+  return {
+    workflowActions: {
+      diffStream: vi.fn(),
+      runFileOperation: vi.fn(),
+    },
+    apiKeyRetry: {
+      useOwnApiKey: vi
+        .fn()
+        .mockResolvedValue({ proceeded: false, retried: false }),
+    },
+    followUp: {
+      planToolUseFollowUpForStream: vi.fn(),
+      planCompileFixerForStream: vi.fn(),
+    },
+    followUpPolish: {
+      polishFollowUp: vi.fn(),
+    },
+    host: {
+      showInfo: vi.fn(),
+      showError: vi.fn(),
+    },
+    session: {
+      executions: {
+        requestManualCompaction: vi.fn(),
+      },
+    },
+    getTaskState: vi.fn(),
+    restoreTaskState: vi.fn(),
+    applyFollowUpPlan: vi.fn(),
+    applyPolishResult: vi.fn(),
+    onPolishError: vi.fn(),
+    loadFollowUpOptions: vi.fn().mockResolvedValue({}),
+    postToRenderer: vi.fn(),
+    restoreProposalConfig: vi.fn(),
+    retry: {
+      submit: vi.fn(),
+      cancel: vi.fn(),
+    },
+    ...overrides,
+  } as unknown as ProgressViewSecondTierActions;
 }
 
 function createRecordingInteractions(): {
@@ -786,6 +833,102 @@ describe('external inquiry action schema', () => {
       ).toHaveBeenCalledWith(transition, actions.externalInquiry);
     },
   );
+});
+
+describe('createProgressViewSecondTierHandlers', () => {
+  it('defines the complete shared second-tier command set', () => {
+    const handlers = createProgressViewSecondTierHandlers(
+      createSecondTierActions(),
+    );
+
+    expect(Object.keys(handlers).toSorted()).toEqual(
+      [
+        PROGRESS_VIEW_COMMANDS.DIFF_STREAM,
+        PROGRESS_VIEW_COMMANDS.PACK_STREAM,
+        PROGRESS_VIEW_COMMANDS.CLEAN_STREAM,
+        PROGRESS_VIEW_COMMANDS.RETRY_STREAM_REQUEST,
+        PROGRESS_VIEW_COMMANDS.CANCEL_RETRY_REQUEST,
+        PROGRESS_VIEW_COMMANDS.USE_OWN_API_KEY,
+        PROGRESS_VIEW_COMMANDS.RESTORE_STATE,
+        PROGRESS_VIEW_COMMANDS.COMPACT_RESPONSE,
+        PROGRESS_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE,
+        PROGRESS_VIEW_COMMANDS.RESTORE_PROPOSAL_CONFIG,
+        PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP,
+        PROGRESS_VIEW_COMMANDS.SETUP_FOLLOWUP,
+        PROGRESS_VIEW_COMMANDS.RUN_FOLLOWUP,
+        PROGRESS_VIEW_COMMANDS.GET_FOLLOWUP_OPTIONS,
+        PROGRESS_VIEW_COMMANDS.RUN_COMPILE_FIXER,
+      ].toSorted(),
+    );
+  });
+
+  it('awaits host information messages', async () => {
+    const failure = new Error('message host failed');
+    const actions = createSecondTierActions({
+      host: {
+        showInfo: vi.fn().mockRejectedValue(failure),
+        showError: vi.fn(),
+      },
+    });
+    const handlers = createProgressViewSecondTierHandlers(actions);
+
+    await expect(
+      assertSupported(
+        handlers[PROGRESS_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE],
+      )({
+        command: PROGRESS_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE,
+        text: 'Ready',
+      }),
+    ).rejects.toBe(failure);
+  });
+
+  it('reports an unavailable retry through the host', async () => {
+    const actions = createSecondTierActions();
+    const handlers = createProgressViewSecondTierHandlers(actions);
+
+    await assertSupported(
+      handlers[PROGRESS_VIEW_COMMANDS.RETRY_STREAM_REQUEST],
+    )({
+      command: PROGRESS_VIEW_COMMANDS.RETRY_STREAM_REQUEST,
+      stream: 'stream-1',
+      requestId: 'request-1',
+      feedback: 'Try once more',
+    });
+
+    expect(actions.retry.submit).toHaveBeenCalledWith(
+      'stream-1',
+      'request-1',
+      'Try once more',
+    );
+    expect(actions.host.showInfo).toHaveBeenCalledWith(
+      'No retryable request is available for this stream yet.',
+    );
+  });
+
+  it('awaits polish error reporting', async () => {
+    const polishFailure = new Error('polish failed');
+    const reportingFailure = new Error('reporting failed');
+    const actions = createSecondTierActions({
+      getTaskState: vi.fn().mockReturnValue({}),
+      followUpPolish: {
+        polishFollowUp: vi.fn().mockRejectedValue(polishFailure),
+      } as unknown as ProgressViewSecondTierActions['followUpPolish'],
+      onPolishError: vi.fn().mockRejectedValue(reportingFailure),
+    });
+    const handlers = createProgressViewSecondTierHandlers(actions);
+
+    await expect(
+      assertSupported(handlers[PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP])({
+        command: PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP,
+        stream: 'stream-1',
+        text: 'Improve this',
+      }),
+    ).rejects.toBe(reportingFailure);
+    expect(actions.onPolishError).toHaveBeenCalledWith(
+      'stream-1',
+      polishFailure,
+    );
+  });
 });
 
 describe('user question action schema', () => {

@@ -4,7 +4,11 @@ import { notifyFollowUpSent } from '@agent/followUp/ToolUseFollowUp';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { isApiProvider } from '@model/apiProviders';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
-import type { AgentOptionData, ModelOptionData } from '@shared/schemas';
+import type {
+  AgentOptionData,
+  AgentProposal,
+  ModelOptionData,
+} from '@shared/schemas';
 import type { AgentCategoryFilter, StreamTabId } from '@shared/schemas';
 import type {
   ProgressViewInboundHandlerRegistry,
@@ -352,9 +356,7 @@ export interface ProgressViewSecondTierActions {
   /** Post a message to the renderer. */
   readonly postToRenderer: (message: ProgressViewOutboundMessage) => void;
   /** Restore an agent proposal config into the main view (delegates to agentProposalController). */
-  readonly restoreProposalConfig: (
-    proposal: import('@shared/schemas').AgentProposal,
-  ) => Promise<void>;
+  readonly restoreProposalConfig: (proposal: AgentProposal) => Promise<void>;
   /** Retry request settlement. */
   readonly retry: {
     readonly submit: (
@@ -387,8 +389,7 @@ export function createProgressViewSecondTierHandlers(
 
   return {
     // ── Workflow toolbar (diff / pack / clean) ──
-    [CMD.DIFF_STREAM]: (data) =>
-      deps.workflowActions.diffStream(data.stream),
+    [CMD.DIFF_STREAM]: (data) => deps.workflowActions.diffStream(data.stream),
     [CMD.PACK_STREAM]: (data) =>
       deps.workflowActions.runFileOperation(data.stream, 'pack'),
     [CMD.CLEAN_STREAM]: (data) =>
@@ -471,8 +472,8 @@ export function createProgressViewSecondTierHandlers(
     },
 
     // ── Show info ──
-    [CMD.SHOW_INFORMATION_MESSAGE]: (data) => {
-      void deps.host.showInfo(data.text);
+    [CMD.SHOW_INFORMATION_MESSAGE]: async (data) => {
+      await deps.host.showInfo(data.text);
     },
 
     // ── Proposal config restore ──
@@ -492,7 +493,7 @@ export function createProgressViewSecondTierHandlers(
         });
         await deps.applyPolishResult(result);
       } catch (error) {
-        deps.onPolishError(data.stream, error);
+        await deps.onPolishError(data.stream, error);
       }
     },
 
