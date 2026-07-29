@@ -6,7 +6,11 @@ import * as path from 'node:path';
 import { z } from 'zod';
 
 // Local imports
-import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latex';
+import {
+  CORE_LATEX_TOOLS,
+  IMAGE_TOOLS,
+  LATEX_WORKSHOP_EXT_ID,
+} from '@shared/constants/latex';
 import { type ToolResult } from '@shared/schemas/toolResult';
 import { detectPackageManager } from '@utils/system/toolUtils';
 import { extendEnvPath, safeHomedir } from '@utils/system/platformPaths';
@@ -19,7 +23,7 @@ import {
   getSetupPlatform,
   setupSecrets,
 } from './platform';
-import { CORE_LATEX_TOOLS, IMAGE_TOOLS, locateTool } from './toolProbing';
+import { locateTool } from './toolProbing';
 
 const ProbeEnvironmentInputSchema = z
   .strictObject({})

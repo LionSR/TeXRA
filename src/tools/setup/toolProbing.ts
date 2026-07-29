@@ -3,30 +3,6 @@ import { checkToolInstalled } from '@utils/system/toolUtils';
 import { BinaryResolver } from '@utils/system/binaryResolver';
 
 /**
- * Single source of truth for the core LaTeX toolchain the setup assistant
- * probes and verifies. `pdflatex, latexmk, latexindent, latexdiff, texcount,
- * perl, gs` are checked directly; the image tool is satisfied by *either*
- * `gm` or `magick` (reported as `gm/magick` in user-facing output), so it
- * lives in its own constant.
- *
- * Keep both the tool descriptions (ProbeEnvironmentTool / VerifySetupTool)
- * aligned with these lists — they appear verbatim in the LLM prompt.
- * `LatexToolingController` (settingsView) also derives its probe set from
- * these constants; do not reintroduce a second hand-maintained tool list.
- */
-export const CORE_LATEX_TOOLS = Object.freeze([
-  'pdflatex',
-  'latexmk',
-  'latexindent',
-  'latexdiff',
-  'texcount',
-  'perl',
-  'gs',
-] as const);
-
-export const IMAGE_TOOLS = Object.freeze(['gm', 'magick'] as const);
-
-/**
  * Resolve a tool as installed by (1) the known-tool check which spawns
  * `<tool> --version`, or (2) a PATH search for tools without a config entry
  * (e.g. `node`, `git`, or an arbitrary binary the user asks about).

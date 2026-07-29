@@ -1,6 +1,33 @@
 /** Extension ID for the LaTeX Workshop VS Code extension. */
 export const LATEX_WORKSHOP_EXT_ID = 'James-Yu.latex-workshop';
 
+/**
+ * Single source of truth for the core LaTeX toolchain name list. `pdflatex,
+ * latexmk, latexindent, latexdiff, texcount, perl, gs` are checked directly;
+ * the image tool is satisfied by *either* `gm` or `magick` (reported as
+ * `gm/magick` in user-facing output), so it lives in its own constant.
+ *
+ * Lives in `shared` rather than `tools` or `latex` because the `tools`
+ * subsystem (`probe_environment`/`verify_setup`), the `latex` subsystem
+ * (`latexToolchain.ts`'s doctor-specific probe), and `controllers`
+ * (`LatexToolingController`, the settings-view status) all consume it —
+ * and `tools` already depends on `latex`, so a `latex`-side or `tools`-side
+ * home would create a cross-subsystem cycle the LAY-1 edge ratchet forbids.
+ * Keep the tool descriptions in `ProbeEnvironmentTool`/`VerifySetupTool`
+ * aligned with these lists — they appear verbatim in the LLM prompt.
+ */
+export const CORE_LATEX_TOOLS = Object.freeze([
+  'pdflatex',
+  'latexmk',
+  'latexindent',
+  'latexdiff',
+  'texcount',
+  'perl',
+  'gs',
+] as const);
+
+export const IMAGE_TOOLS = Object.freeze(['gm', 'magick'] as const);
+
 /** Supported OS platform keys for install guides. */
 export type OSPlatform = 'darwin' | 'win32' | 'linux';
 

@@ -2,13 +2,16 @@
 import { z } from 'zod';
 
 // Local imports
-import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latex';
+import {
+  CORE_LATEX_TOOLS,
+  LATEX_WORKSHOP_EXT_ID,
+} from '@shared/constants/latex';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 
 // Local file imports
 import { defineTool } from '../core/define';
 import { getSetupAuthStatus, getSetupPlatform, setupSecrets } from './platform';
-import { CORE_LATEX_TOOLS, isToolPresent } from './toolProbing';
+import { isToolPresent } from './toolProbing';
 
 const VerifySetupInputSchema = z.strictObject({
   tool: z

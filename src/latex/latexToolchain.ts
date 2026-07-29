@@ -1,11 +1,11 @@
-import { CORE_LATEX_TOOLS } from '@tools/setup/toolProbing';
+import { CORE_LATEX_TOOLS } from '@shared/constants/latex';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 
-// Kept in sync with toolProbing.ts's CORE_LATEX_TOOLS SSOT: if one of these
-// four names is renamed or removed there, this line fails to typecheck
-// instead of silently drifting. The remaining doctor-only tools (compiler
-// and bibliography alternates) have no equivalent in the setup-assistant
-// probe, so they stay local to this file.
+// Kept in sync with @shared/constants/latex's CORE_LATEX_TOOLS SSOT: if one
+// of these four names is renamed or removed there, this line fails to
+// typecheck instead of silently drifting. The remaining doctor-only tools
+// (compiler and bibliography alternates) have no equivalent in the
+// setup-assistant probe, so they stay local to this file.
 const SHARED_CORE_TOOLS = [
   'pdflatex',
   'latexmk',
