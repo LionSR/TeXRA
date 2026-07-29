@@ -35,6 +35,11 @@ files:
   # The main bundle keeps node-pty external (see esbuild.main.mjs), so the real
   # package has to ship alongside it.
   - '**/node_modules/node-pty/**'
+  # ...but that leading `**/` also matches the node-pty copy inside an app this
+  # run already wrote to dist-packaged. Without this exclusion the second arch
+  # of a universal build packs the first arch's finished .app inside itself,
+  # and the merge then fails on a Mach-O file count mismatch between arches.
+  - '!dist-packaged/**'
 extraResources:
   - from: ../extension/resources
     to: resources
