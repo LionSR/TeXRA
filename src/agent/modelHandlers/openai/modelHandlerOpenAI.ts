@@ -87,7 +87,6 @@ import type {
   ChatCompletionCreateParamsStreaming,
   ChatCompletionMessageParam,
   ChatCompletionMessageToolCall,
-  ChatCompletionToolMessageParam,
 } from 'openai/resources/chat/completions';
 type ChatCompletionRequestBase = Omit<
   ChatCompletionCreateParamsStreaming,
@@ -1259,24 +1258,13 @@ export class ModelHandlerOpenAI<
     workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<ChatCompletionMessageParam[]> {
-    const toolCall = this.normalizeToolCall(call.raw);
-    const callMsg = this.buildAssistantMessageWithToolCalls(
-      [toolCall],
+    // The single-call path is batched-of-one: identical assistant-turn
+    // construction, tool result formatting, and reasoning reset.
+    return this.createBatchedToolUseFollowUpMessages(
+      [{ call, result, attachments }],
       workspaceState,
       text,
     );
-
-    // Build tool result as plain text - JSON wastes tokens
-    const resultMsg: ChatCompletionToolMessageParam = {
-      role: 'tool',
-      tool_call_id: toolCall.id,
-      content: formatToolResultTextWithAttachments(
-        result,
-        attachments,
-        this.canProcessToolResultAttachments,
-      ),
-    };
-    return [callMsg, resultMsg];
   }
 
   /**

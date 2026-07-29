@@ -647,26 +647,16 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     call: OpenRouterToolCall,
     result: ToolResult,
     attachments: ToolFileAttachment[],
-    _workspaceState?: AgentWorkspaceState,
+    workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<ChatMessages[]> {
-    const callMsg: ChatMessages = {
-      role: 'assistant',
-      toolCalls: [call.raw],
-      ...(text ? { content: text } : {}),
-    } as ChatMessages;
-
-    const resultMsg: ChatMessages = {
-      role: 'tool',
-      toolCallId: call.callId,
-      content: formatToolResultTextWithAttachments(
-        result,
-        attachments,
-        this.canProcessToolResultAttachments,
-      ),
-    } as ChatMessages;
-
-    return [callMsg, resultMsg];
+    // The single-call path is batched-of-one: identical assistant/tool
+    // message construction and tool result formatting.
+    return this.createBatchedToolUseFollowUpMessages(
+      [{ call, result, attachments }],
+      workspaceState,
+      text,
+    );
   }
 
   async createBatchedToolUseFollowUpMessages(
