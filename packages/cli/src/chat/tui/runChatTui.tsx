@@ -25,7 +25,10 @@ import { setCliAgentResumeHandler } from '@cli/runtime/agentResume';
 import { type CliContext, readCliVersion } from '@cli/runtime/cliContext';
 import { type CliToolUseResumeResolution } from '@cli/runtime/sessionResume';
 import { effectiveCliApiMode } from '@cli/runtime/apiAccessMode';
-import { firstRunSetupAgentOverride } from '@cli/onboarding/setupContinuation';
+import {
+  firstRunSetupAgentOverride,
+  SETUP_AGENT_HANDOFF_NOTICE,
+} from '@cli/onboarding/setupContinuation';
 import { resolveChatDefaults } from '@cli/runtime/chatDefaults';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import {
@@ -142,6 +145,12 @@ export interface RunChatInit {
   readonly agentOverride?: string;
   /** `--model` override from the CLI; falls through `resolveChatDefaults`. */
   readonly modelOverride?: string;
+  /**
+   * Display-only transcript notice shown at session start (never sent to the
+   * model). Callers that steer the session themselves — the first-run
+   * setup-agent handoff in `orchestrate` — use it to explain that steering.
+   */
+  readonly startupNotice?: string;
   /** Visible team identity when chat was launched from a multi-agent preset. */
   readonly teamName?: string;
   /** Multi-agent preset id when chat was launched from a team preset. */
@@ -392,6 +401,15 @@ export async function runChat(
   }
   if (modelSelection.notice) {
     appendLocalAssistantTranscript(modelSelection.notice);
+  }
+  // First-run handoff explanation: when the setup agent owns this session
+  // (decided here for `texra chat`, passed in by `orchestrate`), say so —
+  // display-only, so the agent waits for the user's first message.
+  const startupNotice =
+    init.startupNotice ??
+    (setupAgentOverride ? SETUP_AGENT_HANDOFF_NOTICE : undefined);
+  if (startupNotice) {
+    appendLocalAssistantTranscript(startupNotice);
   }
 
   const inputHistory = await loadInputHistory();
