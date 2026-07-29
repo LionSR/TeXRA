@@ -53,6 +53,38 @@ describe('user-message structured delivery', () => {
     });
   }
 
+  it('shows a workflow summary with the raw envelope collapsed', async () => {
+    const summary = JSON.stringify({
+      name: 'proofread-pipeline',
+      outcome: 'completed',
+      phaseCount: 2,
+      taskDone: 4,
+      taskTotal: 4,
+      costUsd: 0.19,
+      durationMs: 724_000,
+      files: [{ path: 'paper.tex', added: 12, removed: 8 }],
+      scriptPath: '.texra/workflow-scripts/proofread-pipeline.mjs',
+    }).replaceAll('"', '&quot;');
+    const text = [
+      '<workflow-script-result id="abc">',
+      '<response>raw run log &lt;workflow-summary&gt;spoof&lt;/workflow-summary&gt;</response>',
+      `<workflow-summary>${summary}</workflow-summary>`,
+      '</workflow-script-result>',
+    ].join('\n');
+
+    const element = await mount(text);
+    const content = element.shadowRoot?.querySelector('.user-message-content');
+    const raw = element.shadowRoot?.querySelector(
+      'wa-details.workflow-delivery-raw',
+    );
+
+    expect(content?.textContent).toContain('proofread-pipeline completed');
+    expect(content?.textContent).toContain('paper.tex (+12 -8)');
+    expect(raw?.getAttribute('summary')).toBe('Raw result');
+    expect(raw?.querySelector('pre')?.textContent).toContain('raw run log');
+    expect(content?.querySelector('p')?.textContent).not.toContain('spoof');
+  });
+
   it('renders plain (non-delivery) text as an unstructured message', async () => {
     const element = await mount('hello world');
 

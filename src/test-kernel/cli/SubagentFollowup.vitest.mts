@@ -231,6 +231,41 @@ describe('summarizeSubagentFollowup', () => {
     );
   });
 
+  it('renders the typed workflow summary instead of its raw run-log tail', () => {
+    const summary = JSON.stringify({
+      name: 'proofread-pipeline',
+      outcome: 'completed',
+      phaseCount: 2,
+      taskDone: 4,
+      taskTotal: 4,
+      costUsd: 0.19,
+      durationMs: 724_000,
+      files: [
+        { path: 'paper_A.tex', added: 120, removed: 80 },
+        { path: 'notes.txt', added: null, removed: null },
+      ],
+      scriptPath: '.texra/workflow-scripts/proofread-pipeline.mjs',
+    }).replaceAll('"', '&quot;');
+    const xml = [
+      '<workflow-script-result id="abc">',
+      '<response>result',
+      '=== Run log ===',
+      'many duplicate lines</response>',
+      `<workflow-summary>${summary}</workflow-summary>`,
+      '</workflow-script-result>',
+    ].join('\n');
+
+    expect(summarizeSubagentFollowup(xml)).toBe(
+      [
+        '✓ proofread-pipeline completed · 2 phases · 4/4 tasks · $0.190 · 12m 4s',
+        '  paper_A.tex (+120 -80)',
+        '  notes.txt',
+        '  script: .texra/workflow-scripts/proofread-pipeline.mjs',
+        '  rerun: edit the script, then call delegate_workflow_script with scriptPath',
+      ].join('\n'),
+    );
+  });
+
   it('decodes only XML entities in a single pass', () => {
     expect(decodeXmlEntities('&quot;&apos;&lt;&gt;&amp;')).toBe('"\'<>&');
     expect(decodeXmlEntities('&amp;lt;')).toBe('&lt;');

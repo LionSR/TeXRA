@@ -339,7 +339,7 @@ function buildDelegationSections(ctx: ToolSectionContext): TemplateResult[] {
 function buildWorkflowScriptSections(
   ctx: ToolSectionContext,
 ): TemplateResult[] {
-  const { input, parsedOutput } = ctx;
+  const { input } = ctx;
   if (!isObject(input)) {
     return [
       buildToolUseSection(
@@ -378,18 +378,6 @@ function buildWorkflowScriptSections(
     ? buildFileGroupsSection(getProposalFileGroups(files.data))
     : undefined;
   if (filesSection !== undefined) sections.push(filesSection);
-
-  const rawResult = isObject(parsedOutput) ? parsedOutput.output : parsedOutput;
-  const { text: resultText, language: resultLanguage } =
-    stringifyWithLanguage(rawResult);
-  if (resultText) {
-    sections.push(
-      buildToolSection('Result:', resultText, {
-        language: resultLanguage,
-        extraClass: 'tool-output-full',
-      }),
-    );
-  }
 
   return sections;
 }
