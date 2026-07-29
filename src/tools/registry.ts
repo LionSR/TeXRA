@@ -203,12 +203,16 @@ export type RawToolConfig =
  * Handles both string names (resolved from registry) and partial definitions.
  *
  * @param tools - Array of raw tool configs (strings or objects with name)
- * @param warnOnMissing - Optional callback for logging warnings about missing/invalid tools
+ * @param warnOnMissing - Optional callback for logging warnings about missing or
+ *   invalid tools. `reason` distinguishes "not in the registry" (undefined,
+ *   callers default it to a not-found message) from other failure modes
+ *   (e.g. a found tool's object-form override failing schema validation) so
+ *   callers don't mislabel a validation failure as a missing tool.
  * @returns Array of resolved ToolDefinition objects
  */
 export function resolveToolDefinitions(
   tools: RawToolConfig[],
-  warnOnMissing?: (toolName: string) => void,
+  warnOnMissing?: (toolName: string, reason?: string) => void,
 ): ToolDefinition[] {
   const registry = getDefaultToolRegistry();
   const seenNames = new Set<string>();
@@ -244,12 +248,24 @@ export function resolveToolDefinitions(
       return [tool?.definition ?? { name: canonicalName }];
     }
 
-    // Object items: always parse with schema to validate/merge overrides
-    return [
-      ToolDefinitionSchema.catch({ name: canonicalName }).parse({
-        ...item,
-        name: canonicalName,
-      }),
-    ];
+    // Object items: always parse with schema to validate/merge overrides. A
+    // malformed override (bad `parameters`/`description`) must not silently
+    // drop to a bare-name tool without a trace, so warn instead of
+    // `.catch()`-ing it away. Only warn here when the tool was actually found
+    // (the override, not the tool, is what's invalid) — otherwise the
+    // missing-tool branch above already warned for this name, and warning
+    // again with the generic not-found reason would fire twice for one bad
+    // entry.
+    const parsed = ToolDefinitionSchema.safeParse({
+      ...item,
+      name: canonicalName,
+    });
+    if (parsed.success) {
+      return [parsed.data];
+    }
+    if (tool) {
+      warnOnMissing?.(name, 'has an invalid tool definition override');
+    }
+    return [{ name: canonicalName }];
   });
 }

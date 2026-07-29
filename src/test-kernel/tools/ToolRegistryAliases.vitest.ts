@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { resolveToolDefinitions } from '@tools/registry';
+import { resolveToolDefinitions, type RawToolConfig } from '@tools/registry';
 
 describe('tool registry aliases', () => {
   it('keeps legacy add_criticism configs on the diagnostics tool', () => {
@@ -45,5 +45,44 @@ describe('tool registry aliases', () => {
         (tool) => tool.name,
       ),
     ).toEqual(['crossref_search']);
+  });
+
+  it('reports an invalid override distinctly from a missing tool', () => {
+    const warn = vi.fn();
+
+    expect(
+      resolveToolDefinitions(
+        [
+          {
+            name: 'crossref_search',
+            description: 42,
+          } as unknown as RawToolConfig,
+        ],
+        warn,
+      ),
+    ).toEqual([{ name: 'crossref_search' }]);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(
+      'crossref_search',
+      'has an invalid tool definition override',
+    );
+  });
+
+  it('warns once when a missing tool also has an invalid override', () => {
+    const warn = vi.fn();
+
+    expect(
+      resolveToolDefinitions(
+        [
+          {
+            name: 'missing_tool',
+            description: 42,
+          } as unknown as RawToolConfig,
+        ],
+        warn,
+      ),
+    ).toEqual([{ name: 'missing_tool' }]);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith('missing_tool');
   });
 });
