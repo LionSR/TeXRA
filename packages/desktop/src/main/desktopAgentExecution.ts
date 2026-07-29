@@ -933,7 +933,7 @@ export class DesktopProgressBridge {
         submit: (stream, requestId, feedback) =>
           this.hostInteractions.submitRetryDecision(stream, requestId, {
             action: 'retry',
-            ...(feedback ? { feedback } : {}),
+            feedback,
           }),
         cancel: (stream, requestId) =>
           this.hostInteractions.submitRetryDecision(stream, requestId, {

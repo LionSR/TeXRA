@@ -241,7 +241,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         submit: (stream, requestId, feedback) =>
           this.interactions.submitRetryDecision(stream, requestId, {
             action: 'retry',
-            ...(feedback ? { feedback } : {}),
+            feedback,
           }),
         cancel: (stream, requestId) =>
           this.interactions.submitRetryDecision(stream, requestId, {
