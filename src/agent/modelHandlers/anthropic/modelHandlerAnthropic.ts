@@ -43,7 +43,6 @@ import {
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
-import replacementEngine from '@replacement/engine';
 import type {
   FileLocation,
   MediaAttachmentKind,
@@ -1221,7 +1220,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       stopReason === ANTHROPIC_STOP.STOP_SEQUENCE,
     );
 
-    newResponse = replacementEngine.applyAll(newResponse);
+    newResponse = this.postProcessResponse(newResponse);
 
     return {
       text: newResponse,

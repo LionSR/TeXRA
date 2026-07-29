@@ -47,7 +47,6 @@ import type {
   OpenAIResponseProviderCapabilities,
   ProviderCapabilityProfile,
 } from '@model/providerCapabilities';
-import replacementEngine from '@replacement/engine';
 import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
 import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
 import type {
@@ -2459,7 +2458,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // stripped it. Forging the tag here would be pure speculation that could
     // mask genuinely incomplete output as done; the extraction layer already
     // tolerates a missing end tag.
-    newResponse = replacementEngine.applyAll(newResponse);
+    newResponse = this.postProcessResponse(newResponse);
 
     return { text: newResponse, usage, stopReason };
   }

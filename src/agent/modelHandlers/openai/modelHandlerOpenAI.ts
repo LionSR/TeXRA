@@ -33,7 +33,6 @@ import {
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
 import type { ToolDefinition } from '@model';
-import replacementEngine from '@replacement/engine';
 import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
 import type {
   ToolFileAttachment,
@@ -923,7 +922,7 @@ export class ModelHandlerOpenAI<
         stopReason === OPENAI_CHAT_FINISH.STOP &&
           this.configuresEndTagStopSequence,
       );
-      newResponse = replacementEngine.applyAll(newResponse);
+      newResponse = this.postProcessResponse(newResponse);
 
       return { text: newResponse, usage, stopReason };
     }
@@ -962,7 +961,7 @@ export class ModelHandlerOpenAI<
       stopReason === OPENAI_CHAT_FINISH.STOP &&
         this.configuresEndTagStopSequence,
     );
-    newResponse = replacementEngine.applyAll(newResponse);
+    newResponse = this.postProcessResponse(newResponse);
 
     return { text: newResponse, usage: responseObject.usage, stopReason };
   }

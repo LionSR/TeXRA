@@ -7,6 +7,7 @@ import {
   internalValidationModelHandlerEnvName,
   shouldUseInternalValidationModelHandler,
 } from '@agent/runtime/internalValidationOverride';
+import type { ResponseTextPostProcessor } from '@agent/runtime/responseTextProcessing';
 import {
   CodexAuthError,
   formatCodexAuthUnavailableMessage,
@@ -48,6 +49,7 @@ const CHANNEL = 'ModelFactory';
 
 type ModelHandlerConstructor = new (
   config: ModelConfig,
+  postProcessResponse?: ResponseTextPostProcessor,
 ) => ModelHandler<ProviderMessage>;
 
 type ProviderHandlerLoader = () => Promise<ModelHandlerConstructor>;
@@ -425,6 +427,7 @@ function withCompatibilityRoutingMode(
 export async function createModelHandler(
   originalConfig: ModelConfig,
   agentCategory?: AgentCategory,
+  postProcessResponse?: ResponseTextPostProcessor,
 ): Promise<ModelHandler> {
   const config = withShortModelName(originalConfig);
   const useOpenRouter = getUseOpenRouter();
@@ -442,6 +445,7 @@ export async function createModelHandler(
     compatibilityKey,
     useOpenRouter,
     { allowCodexSubscriptionOverride: true, agentCategory },
+    postProcessResponse,
   );
 }
 
@@ -454,6 +458,7 @@ export async function createModelHandlerForCompatibilityKey(
   originalConfig: ModelConfig,
   compatibilityKey: ModelHandlerCompatibilityKey,
   agentCategory?: AgentCategory,
+  postProcessResponse?: ResponseTextPostProcessor,
 ): Promise<ModelHandler> {
   const routedConfig = withCompatibilityRoutingMode(
     withShortModelName(originalConfig),
@@ -469,6 +474,7 @@ export async function createModelHandlerForCompatibilityKey(
         compatibilityKey === 'ModelHandlerOpenAIResponse',
       agentCategory,
     },
+    postProcessResponse,
   );
 }
 
@@ -480,6 +486,7 @@ async function createModelHandlerForResolvedCompatibilityKey(
     allowCodexSubscriptionOverride: boolean;
     agentCategory: AgentCategory | undefined;
   },
+  postProcessResponse?: ResponseTextPostProcessor,
 ): Promise<ModelHandler> {
   if (
     compatibilityKey !== 'ModelHandlerValidation' &&
@@ -521,7 +528,7 @@ async function createModelHandlerForResolvedCompatibilityKey(
       const { ModelHandlerCodex } =
         await import('@agent/modelHandlers/openai/modelHandlerCodex');
       return finalizeModelHandler(
-        new ModelHandlerCodex(config),
+        new ModelHandlerCodex(config, postProcessResponse),
         'ModelHandlerOpenAIResponse',
       );
     }
@@ -597,7 +604,7 @@ async function createModelHandlerForResolvedCompatibilityKey(
       const { ModelHandlerValidation } =
         await import('@agent/modelHandlers/modelHandlerValidation');
       return withModelHandlerCompatibilityKey(
-        new ModelHandlerValidation(config),
+        new ModelHandlerValidation(config, postProcessResponse),
         'ModelHandlerValidation',
       );
     }
@@ -607,7 +614,7 @@ async function createModelHandlerForResolvedCompatibilityKey(
       const { ModelHandlerOpenAIResponse } =
         await import('@agent/modelHandlers/openai/modelHandlerOpenAIResponse');
       return finalizeModelHandler(
-        new ModelHandlerOpenAIResponse(config),
+        new ModelHandlerOpenAIResponse(config, postProcessResponse),
         'ModelHandlerOpenAIResponse',
       );
     }
@@ -617,7 +624,7 @@ async function createModelHandlerForResolvedCompatibilityKey(
       const { ModelHandlerGoogleInteractions } =
         await import('@agent/modelHandlers/google/modelHandlerGoogleInteractions');
       return finalizeModelHandler(
-        new ModelHandlerGoogleInteractions(config),
+        new ModelHandlerGoogleInteractions(config, postProcessResponse),
         'ModelHandlerGoogleInteractions',
       );
     }
@@ -631,7 +638,10 @@ async function createModelHandlerForResolvedCompatibilityKey(
       const { ModelHandlerOpenRouterNative } =
         await import('@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative');
       return finalizeModelHandler(
-        new ModelHandlerOpenRouterNative({ ...config, openrouterFullName }),
+        new ModelHandlerOpenRouterNative(
+          { ...config, openrouterFullName },
+          postProcessResponse,
+        ),
         'ModelHandlerOpenRouterNative',
       );
     }
@@ -646,7 +656,7 @@ async function createModelHandlerForResolvedCompatibilityKey(
       const HandlerClass = await route.load();
       logger.debug(CHANNEL, `Using Handler: ${HandlerClass.name}`);
       return finalizeModelHandler(
-        new HandlerClass(config),
+        new HandlerClass(config, postProcessResponse),
         route.compatibilityKey,
       );
     }

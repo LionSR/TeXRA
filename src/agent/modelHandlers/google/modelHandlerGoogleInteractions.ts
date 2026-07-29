@@ -37,7 +37,6 @@ import {
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
 import type { ToolDefinition } from '@model';
-import replacementEngine from '@replacement/engine';
 import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
 import type {
   ToolFileAttachment,
@@ -953,7 +952,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       .map((s) => joinTextContent(s.content ?? []))
       .join('');
 
-    let responseText = replacementEngine.applyAll(rawText);
+    let responseText = this.postProcessResponse(rawText);
     const usage = responseObject.usage;
     // Map the Interactions terminal *status* to the canonical Google chat
     // FinishReason the shared stop/continue logic understands (mirrors the

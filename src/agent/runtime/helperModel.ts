@@ -9,6 +9,7 @@
 import type { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import { auxiliaryRetry } from '@agent/modelHandlers/support/auxiliaryRetry';
 import { createModelHandler } from '@agent/runtime/ModelFactory';
+import { currentSession } from '@agent/runtime/SessionHandle';
 import { getModelUnavailableReason } from '@model/computeModelOptions';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 
@@ -43,7 +44,11 @@ export async function createHelperModelKit(): Promise<HelperModelResult> {
     };
   }
 
-  const handler = await createModelHandler(modelConfig);
+  const handler = await createModelHandler(
+    modelConfig,
+    undefined,
+    currentSession().responseTextProcessing.postProcessResponse,
+  );
   handler.setOutputStreaming(false);
   handler.setProgressViewEnabled(false);
 

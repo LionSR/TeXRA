@@ -37,6 +37,7 @@ import { LatexConfigPersistenceController } from '@controllers/settingsView/Late
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { prepareMainViewExecutionRequest } from '@controllers/mainView/MainViewExecutionController';
 import type { TerminalRunResult } from '@hosts/uiHosts';
+import { texraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { platform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
@@ -1295,6 +1296,7 @@ if (protocolLifecycle.shouldContinue) {
       const processSession = new SessionHandle({
         transcripts,
         restartRepair: 'deferred',
+        responseTextProcessing: texraResponseTextProcessing,
       });
       const detachTerminalResultToast = attachTerminalResultToast(
         processSession,

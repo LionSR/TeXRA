@@ -51,6 +51,10 @@ import type {
   TokenCountOptions,
   TokenValidationResult,
 } from '@agent/types/ModelHandlerContracts';
+import {
+  preserveResponseText,
+  type ResponseTextPostProcessor,
+} from '@agent/runtime/responseTextProcessing';
 import { hasConfigurableReasoningEffort } from '@agent/modelHandlers/support/reasoningEffort';
 import type {
   ServerToolExtractionResult,
@@ -229,6 +233,7 @@ export abstract class ModelHandler<
     MediaAttachmentKind[]
   >();
   private createdMediaEntriesForAttachmentLog: MediaEntry[] = [];
+  protected readonly postProcessResponse: ResponseTextPostProcessor;
 
   /**
    * Whether the handler supports processing attachments in tool results.
@@ -271,8 +276,12 @@ export abstract class ModelHandler<
     return false;
   }
 
-  constructor(config: ResolvedModelConfig) {
+  constructor(
+    config: ResolvedModelConfig,
+    postProcessResponse: ResponseTextPostProcessor = preserveResponseText,
+  ) {
     this.config = { ...config };
+    this.postProcessResponse = postProcessResponse;
     this.capabilities = structuredClone(config.capabilities);
     this.continueLimit = DEFAULT_CONTINUE_LIMIT;
     this.inputTokenLimit = DEFAULT_INPUT_TOKEN_LIMIT;
@@ -1537,6 +1546,7 @@ export abstract class ModelHandler<
       outputLocation,
       workspaceState,
       this.logger,
+      this.postProcessResponse,
     );
 
     messages.push(this.createAssistantMessageForPrefillText(fileContent));

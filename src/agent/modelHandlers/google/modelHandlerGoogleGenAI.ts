@@ -36,7 +36,6 @@ import {
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
-import replacementEngine from '@replacement/engine';
 import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
 import type {
   ToolFileAttachment,
@@ -716,7 +715,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     const rawResponseText = extractNonThinkingText(parts, true);
 
     // For TOOL CALL ONLY RESPONSE this happens sometimes, we don't want to log it
-    let responseText = replacementEngine.applyAll(rawResponseText);
+    let responseText = this.postProcessResponse(rawResponseText);
 
     const usage = responseObject.usageMetadata;
     const stopReason: FinishReason =

@@ -22,7 +22,6 @@ import {
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
-import replacementEngine from '@replacement/engine';
 import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
 import type {
   ToolFileAttachment,
@@ -551,7 +550,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       endTag,
       stopReason === OPENAI_CHAT_FINISH.STOP,
     );
-    newResponse = replacementEngine.applyAll(newResponse);
+    newResponse = this.postProcessResponse(newResponse);
 
     return {
       text: newResponse,

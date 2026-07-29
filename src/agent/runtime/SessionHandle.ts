@@ -64,6 +64,10 @@ import {
   repairRestartedStreams,
   RestartRepairRetryScheduler,
 } from './restartRepair';
+import {
+  createNeutralResponseTextProcessing,
+  type ResponseTextProcessing,
+} from './responseTextProcessing';
 
 const logger = createChannelTrace('sessionHandle');
 
@@ -119,6 +123,7 @@ export type SessionHandleInit = Pick<SessionHandle, 'transcripts'> & {
       | 'flushers'
       | 'interactions'
       | 'modelRetries'
+      | 'responseTextProcessing'
       | 'workflowControls'
     >
   >;
@@ -150,6 +155,8 @@ export class SessionHandle {
   readonly approvals: SessionApprovals;
   /** Coordinates recovery probes for model routes shared by parallel runs. */
   readonly modelRetries: ModelRetryGate;
+  /** Host policy for provider-output cleanup and continuation joining. */
+  readonly responseTextProcessing: ResponseTextProcessing;
   /**
    * Session-owned bridge from a workflow-script grandchild's execution id to
    * its run's engine skip/retry control. Populated by the workflow-script
@@ -207,6 +214,8 @@ export class SessionHandle {
     this.interactions = interactions;
     this.approvals = approvals;
     this.modelRetries = init.modelRetries ?? new ModelRetryGate();
+    this.responseTextProcessing =
+      init.responseTextProcessing ?? createNeutralResponseTextProcessing();
     this.workflowControls =
       init.workflowControls ?? new WorkflowControlRegistry();
     // Every session owns exactly one trace-flusher map. There is no

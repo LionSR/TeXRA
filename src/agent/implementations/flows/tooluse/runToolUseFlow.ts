@@ -316,6 +316,7 @@ export async function runToolUseFlow<C = unknown>(
     const nextHandler = (await createModelHandler(
       nextConfig,
       setting.agentCategory,
+      services.runScope.session.responseTextProcessing.postProcessResponse,
     )) as ToolUseServices<C>['modelHandler'];
     if (!modelHandlersShareConversationFormat(previousHandler, nextHandler)) {
       nextHandler.dispose();

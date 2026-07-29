@@ -284,6 +284,9 @@ async function assembleAgentLaunchContext(
     agentCategory: setting.agentCategory,
   };
 
+  // A delegated launch runs inside the parent run's context and therefore
+  // inherits its session policy; a root launch resolves the process default.
+  const session = input.session ?? currentSession();
   const modelHandlerCompatibilityKey =
     input.modelHandlerCompatibilityKey ??
     (await inferLaunchModelHandlerCompatibilityKey(executionId, config.model));
@@ -293,8 +296,13 @@ async function assembleAgentLaunchContext(
           modelConfig,
           modelHandlerCompatibilityKey,
           setting.agentCategory,
+          session.responseTextProcessing.postProcessResponse,
         )
-      : await createModelHandler(modelConfig, setting.agentCategory),
+      : await createModelHandler(
+          modelConfig,
+          setting.agentCategory,
+          session.responseTextProcessing.postProcessResponse,
+        ),
   );
 
   const streamId =
@@ -302,11 +310,6 @@ async function assembleAgentLaunchContext(
     reservedStreamId ??
     getStreamTabId(config.agent, fullConfig.model, { executionId });
 
-  // `currentSession()` (not `defaultSession()`): a delegated launch runs inside
-  // the parent run's ALS, so it inherits the parent's session; a root launch
-  // runs outside any ALS, so it resolves to the process default. Either way the
-  // child is tracked in the same session as its launcher.
-  const session = input.session ?? currentSession();
   const transcriptWriter = await session.transcripts.loadAndAcquireWriter(
     streamId,
     executionId,
