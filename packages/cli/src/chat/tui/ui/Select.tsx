@@ -383,6 +383,10 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
             highlightRef.current = idx;
             props.onHighlightChange?.(choice.value);
             if (props.mode === 'multi') {
+              // Unlike single-select's onSelect, onToggle doesn't end this
+              // list's lifetime — it keeps rendering, so the visible pointer
+              // and scroll window must actually follow the hotkey press.
+              setHighlight(idx);
               props.onToggle?.(choice.value);
             } else {
               props.onSelect(choice.value);
