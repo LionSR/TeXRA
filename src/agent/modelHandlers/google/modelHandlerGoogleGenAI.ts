@@ -18,7 +18,6 @@ import {
 // Local imports
 import type { StreamHandle } from '@agent/trace';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
-import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import { reportMediaAttachmentFailure } from '@agent/modelHandlers/support/mediaAttachmentPolicy';
 import type { ModelCredentialSelection } from '@agent/types/ModelHandlerContracts';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
@@ -46,12 +45,10 @@ import { getShortDisplayPath } from '@utils/files';
 import { joinNonEmpty, pluralize } from '@utils/text/stringUtils';
 
 // Local file imports
+import { GoogleModelHandlerBase } from './GoogleModelHandlerBase';
 import {
   type GoogleClientCache,
-  isGemini3Model,
-  resolveGeminiThinkingLevel,
   resolveGoogleClient,
-  supportsGoogleFileUploads,
   uploadGoogleMediaEntries,
 } from './googleHandlerShared';
 import { computeGooglePrice, normalizeGoogleUsage } from './googleUsage';
@@ -92,24 +89,29 @@ import type {
  * behavioral parity with the Interactions handler — new Google-facing features
  * land there only, not here.
  */
-export class ModelHandlerGoogleGenAI extends ModelHandler<
+export class ModelHandlerGoogleGenAI extends GoogleModelHandlerBase<
   Content,
   GenerateContentResponseUsageMetadata | null,
   GoogleToolCall,
   GoogleGenAI,
   GenerateContentResponse,
-  Part
+  Part,
+  ThinkingLevel
 > {
-  private static readonly INLINE_MEDIA_LIMIT_BYTES = 20 * 1024 * 1024;
-
   private googleClient: GoogleClientCache | null = null;
 
-  private supportsFileUploads(): boolean {
-    return supportsGoogleFileUploads(this.capabilities);
-  }
-
-  private isGemini3Model(): boolean {
-    return isGemini3Model(this.config.fullName);
+  protected get thinkingLevelConfig(): {
+    levels: { low: ThinkingLevel; medium: ThinkingLevel; high: ThinkingLevel };
+    labels: { low: string; medium: string; high: string };
+  } {
+    return {
+      levels: {
+        low: ThinkingLevel.LOW,
+        medium: ThinkingLevel.MEDIUM,
+        high: ThinkingLevel.HIGH,
+      },
+      labels: { low: 'LOW', medium: 'MEDIUM', high: 'HIGH' },
+    };
   }
 
   /**
@@ -131,25 +133,6 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     }
     // Videos use default which is optimal
     return undefined;
-  }
-
-  private getThinkingLevel(): ThinkingLevel | undefined {
-    return resolveGeminiThinkingLevel({
-      reasoningEffort: this.capabilities.reasoningEffort,
-      isGemini3: this.isGemini3Model(),
-      isPro: this.config.fullName.includes('-pro'),
-      logger: this.logger,
-      levels: {
-        low: ThinkingLevel.LOW,
-        medium: ThinkingLevel.MEDIUM,
-        high: ThinkingLevel.HIGH,
-      },
-      labels: { low: 'LOW', medium: 'MEDIUM', high: 'HIGH' },
-    });
-  }
-
-  protected getInlineUploadLimitBytes(): number {
-    return ModelHandlerGoogleGenAI.INLINE_MEDIA_LIMIT_BYTES;
   }
 
   protected async uploadMediaEntries(entries: MediaEntry[]): Promise<Part[]> {
@@ -1006,30 +989,14 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       throw new Error('Function call id is required for follow-up messages');
     }
 
-    const callPart = this.buildFunctionCallPart(call);
-    const responsePart = await this.buildFunctionResponsePart(
-      call,
-      result,
-      attachments,
+    // The single-call path is batched-of-one: identical function-call/response
+    // part construction and reasoning/server-tool reset. The callId guard above
+    // preserves this method's specific error message.
+    return this.createBatchedToolUseFollowUpMessages(
+      [{ call, result, attachments }],
+      workspaceState,
+      text,
     );
-
-    const callParts: Part[] = [];
-    if (text) {
-      callParts.push(createPartFromText(text));
-    }
-    callParts.push(callPart);
-
-    // Use SDK helpers for Content creation (single source of truth)
-    const callMsg = createModelContent(callParts);
-    const resultMsg = createUserContent(responsePart);
-
-    // Reset ephemeral state after consumption (matches Anthropic pattern)
-    if (workspaceState) {
-      workspaceState.resetServerToolContent();
-      workspaceState.resetReasoning();
-    }
-
-    return [callMsg, resultMsg];
   }
 
   /**

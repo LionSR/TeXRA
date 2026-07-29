@@ -863,11 +863,10 @@ export class ExecutionRegistry {
           try {
             await handle.runWithExecutionLease(async () => {
               markOwnedExecutionLeaseUndurable(handle.executionId);
-              handle.settleResult(cancelledResult);
-              const untracked = this.untrackIfCurrent(handle);
-              if (untracked) {
-                this.cancelStreamStatus(handle.childStreamId, handle);
-              }
+              const untracked = this.settleTerminal(handle, cancelledResult, {
+                publish: false,
+                untrackMode: 'ifCurrent',
+              });
               if (untracked && !handle.isChildExecution) {
                 await this.releaseRootExecutionLease(handle.executionId);
               }
@@ -936,20 +935,20 @@ export class ExecutionRegistry {
         });
         // Settle the in-memory result only: the former owner must not publish or
         // persist a terminal event, but this promise must resolve on every exit.
-        handle.settleResult(cancelledResult);
-        this.untrackHandle(handle);
-        this.cancelStreamStatus(handle.childStreamId, handle);
+        this.settleTerminal(handle, cancelledResult, {
+          publish: false,
+          untrackMode: 'unconditional',
+        });
         return;
       }
 
       // Cleanup closes the suspended run's transcript group. Publish the
       // terminal state only after that owned artifact is settled so every host
       // observes one coherent cancellation boundary.
-      handle.trace?.emit(cancelledResult);
-      this.publishResult?.(cancelledResult, handle.childStreamId);
-      handle.settleResult(cancelledResult);
-      this.untrackHandle(handle);
-      this.cancelStreamStatus(handle.childStreamId, handle);
+      this.settleTerminal(handle, cancelledResult, {
+        publish: true,
+        untrackMode: 'unconditional',
+      });
 
       // No later result write is guaranteed here, including during RESUMING:
       // the resume can fail before installing its own handle, while this method
@@ -997,6 +996,45 @@ export class ExecutionRegistry {
         }
       }
     });
+  }
+
+  /**
+   * Owns the settle -> untrack -> cancel-stream ordering shared by the
+   * waiting-termination arms so every arm settles the terminal envelope, drops
+   * the handle from the registry, and cancels the stream in the same order.
+   *
+   * `publish` prepends the trace emit + `publishResult` fan-out used only by the
+   * happy path, where cleanup has already closed the suspended run's transcript
+   * group so hosts observe one coherent cancellation boundary. The
+   * recovery/lease-lost arms settle the private result without republishing.
+   *
+   * `untrackMode` selects the registry drop: `'unconditional'` uses
+   * `untrackHandle` (the caller has already confirmed this handle still owns the
+   * slot) and always cancels; `'ifCurrent'` uses `untrackIfCurrent` and cancels
+   * only when the drop actually removed this handle. The returned boolean
+   * reports whether the handle was untracked (always true for `'unconditional'`)
+   * so a caller can gate a lease release on it.
+   */
+  private settleTerminal(
+    handle: AgentExecutionHandle,
+    result: ResultEvent,
+    opts: { publish: boolean; untrackMode: 'unconditional' | 'ifCurrent' },
+  ): boolean {
+    if (opts.publish) {
+      handle.trace?.emit(result);
+      this.publishResult?.(result, handle.childStreamId);
+    }
+    handle.settleResult(result);
+    if (opts.untrackMode === 'ifCurrent') {
+      const untracked = this.untrackIfCurrent(handle);
+      if (untracked) {
+        this.cancelStreamStatus(handle.childStreamId, handle);
+      }
+      return untracked;
+    }
+    this.untrackHandle(handle);
+    this.cancelStreamStatus(handle.childStreamId, handle);
+    return true;
   }
 
   private streamStatusEmitOptions(

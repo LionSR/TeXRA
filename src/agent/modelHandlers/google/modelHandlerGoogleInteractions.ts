@@ -14,7 +14,6 @@ import {
 // Local imports
 import { logProgressStatus } from '@agent/trace';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
-import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import { reportMediaAttachmentFailure } from '@agent/modelHandlers/support/mediaAttachmentPolicy';
 import type { ModelCredentialSelection } from '@agent/types/ModelHandlerContracts';
 import { parseToolInputAsObject } from '@agent/core/flows/toolUseRound/toolCallParsing';
@@ -48,12 +47,10 @@ import { joinNonEmpty, pluralize } from '@utils/text/stringUtils';
 import { getConfig } from '@utils/config/configUtils';
 
 // Local file imports
+import { GoogleModelHandlerBase } from './GoogleModelHandlerBase';
 import {
   type GoogleClientCache,
-  isGemini3Model,
-  resolveGeminiThinkingLevel,
   resolveGoogleClient,
-  supportsGoogleFileUploads,
   uploadGoogleMediaEntries,
 } from './googleHandlerShared';
 import {
@@ -284,16 +281,15 @@ type InteractionsRequestOptions = {
   fetchOptions: RequestInit;
 };
 
-export class ModelHandlerGoogleInteractions extends ModelHandler<
+export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
   Step,
   Usage | null,
   GoogleToolCall,
   GoogleGenAI,
   GoogleGenAIInteraction,
-  Content
+  Content,
+  ThinkingLevel
 > {
-  private static readonly INLINE_MEDIA_LIMIT_BYTES = 20 * 1024 * 1024;
-
   // ===========================================================================
   // BACKGROUND mode (background:true + store:true, poll interactions.get)
   // ===========================================================================
@@ -495,12 +491,15 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   // Capability getters / auth (REUSE / PORT from the chat handler)
   // ===========================================================================
 
-  private supportsFileUploads(): boolean {
-    return supportsGoogleFileUploads(this.capabilities);
-  }
-
-  private isGemini3Model(): boolean {
-    return isGemini3Model(this.config.fullName);
+  protected get thinkingLevelConfig(): {
+    levels: { low: ThinkingLevel; medium: ThinkingLevel; high: ThinkingLevel };
+    labels: { low: string; medium: string; high: string };
+  } {
+    // Interactions emits the lowercase `thinking_level` string literals.
+    return {
+      levels: { low: 'low', medium: 'medium', high: 'high' },
+      labels: { low: 'low', medium: 'medium', high: 'high' },
+    };
   }
 
   /**
@@ -516,26 +515,6 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       return { resolution: 'high' };
     }
     return {};
-  }
-
-  /**
-   * Map the model's reasoning effort to an Interactions `thinking_level`.
-   * Mirrors the chat handler's `getThinkingLevel`, but emits the Interactions
-   * `GenerationConfig.thinking_level` lowercase literals.
-   */
-  private getThinkingLevel(): ThinkingLevel | undefined {
-    return resolveGeminiThinkingLevel<ThinkingLevel>({
-      reasoningEffort: this.capabilities.reasoningEffort,
-      isGemini3: this.isGemini3Model(),
-      isPro: this.config.fullName.includes('-pro'),
-      logger: this.logger,
-      levels: { low: 'low', medium: 'medium', high: 'high' },
-      labels: { low: 'low', medium: 'medium', high: 'high' },
-    });
-  }
-
-  protected getInlineUploadLimitBytes(): number {
-    return ModelHandlerGoogleInteractions.INLINE_MEDIA_LIMIT_BYTES;
   }
 
   async getClient(
@@ -1128,29 +1107,15 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       throw new Error('Function call id is required for follow-up messages');
     }
 
-    // Rebuild the model-generated turn (thoughts + the function-call step) ahead
-    // of the local result step — the flow records the assistant turn only through
-    // this return value, so the transcript must carry it (stateless resends it;
-    // chained mode keeps it server-side once sent). Read reasoning BEFORE
-    // resetting it.
-    const assistantSteps = this.buildAssistantTurnSteps(
-      [call],
+    // The single-call path is batched-of-one: identical assistant-turn step
+    // reconstruction (thoughts + function_call) followed by the function_result
+    // step, and identical reasoning/server-tool reset. The callId guard above
+    // preserves this method's specific error message.
+    return this.createBatchedToolUseFollowUpMessages(
+      [{ call, result, attachments }],
       workspaceState,
       text,
     );
-    const resultStep = await this.buildFunctionResultStep(
-      call,
-      result,
-      attachments,
-    );
-
-    // Reset ephemeral state after consumption (matches the chat/Anthropic pattern).
-    if (workspaceState) {
-      workspaceState.resetServerToolContent();
-      workspaceState.resetReasoning();
-    }
-
-    return [...assistantSteps, resultStep];
   }
 
   /**
