@@ -275,16 +275,18 @@ export function createWorkflowScriptStrategy(
         },
       ),
 
-    formatError: (_turn, err) =>
-      formatChildRunError(
+    formatError: (_turn, err) => {
+      const errorCause = toErrorMessage(err);
+      return formatChildRunError(
         {
           tag: DELIVERY_TAG.workflowScriptError,
           executionId: params.executionId,
         },
         {
-          message: `${toErrorMessage(err)}${runLog.format()}\n\n${formatWorkflowScriptReference(params.scriptPath)}\n\nCompleted agent() calls are journaled under meta.name '${params.name}'; rerunning that file resumes without repeating them.`,
-          lines: [summary.formatLine('failed')],
+          message: `${errorCause}${runLog.format()}\n\n${formatWorkflowScriptReference(params.scriptPath)}\n\nCompleted agent() calls are journaled under meta.name '${params.name}'; rerunning that file resumes without repeating them.`,
+          lines: [summary.formatLine('failed', errorCause)],
         },
-      ),
+      );
+    },
   };
 }

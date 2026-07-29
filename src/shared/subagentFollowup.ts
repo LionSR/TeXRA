@@ -175,7 +175,11 @@ function progressDetail(xml: string): string {
 }
 
 function resultResponsePreview(response: string): string {
-  const decoded = decodeXmlEntities(response).trim();
+  return decodedResultResponsePreview(decodeXmlEntities(response));
+}
+
+function decodedResultResponsePreview(response: string): string {
+  const decoded = response.trim();
   if (decoded === '') return '';
 
   const lines = decoded.split('\n');
@@ -227,23 +231,13 @@ export function workflowScriptDeliverySummary(xml: string): string | undefined {
   });
   return [
     `${marker} ${summary.name} ${status} · ${facts.join(' · ')}`,
+    ...(summary.outcome === 'failed' && summary.errorCause
+      ? [decodedResultResponsePreview(summary.errorCause)]
+      : []),
     ...fileLines,
     `  script: ${summary.scriptPath}`,
     `  rerun: edit the script, then call delegate_workflow_script with scriptPath`,
   ].join('\n');
-}
-
-/** Retain the cause while excluding the duplicated run log and rerun footer. */
-function workflowScriptErrorCause(xml: string): string | undefined {
-  const message = innerTag(xml, 'message');
-  if (!message) return undefined;
-  let cause = decodeXmlEntities(message);
-  for (const marker of ['\n\n=== Run log', '\n\nScript file:']) {
-    const markerIndex = cause.indexOf(marker);
-    if (markerIndex >= 0) cause = cause.slice(0, markerIndex);
-  }
-  const trimmed = cause.trim();
-  return trimmed ? resultResponsePreview(trimmed) : undefined;
 }
 
 /**
@@ -287,10 +281,7 @@ export function summarizeSubagentFollowup(text: unknown): string {
   if (tag.endsWith('-error')) {
     if (tag === DELIVERY_TAG.workflowScriptError) {
       const summary = workflowScriptDeliverySummary(trimmed);
-      if (summary) {
-        const cause = workflowScriptErrorCause(trimmed);
-        return cause ? `${summary}\n${cause}` : summary;
-      }
+      if (summary) return summary;
     }
     const agent = attr(trimmed, 'agent') ?? tag.slice(0, -'-error'.length);
     const wall = innerTag(trimmed, 'wall-time');
