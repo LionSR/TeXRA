@@ -429,36 +429,26 @@ export async function checkCoreDependencies(
  * Detect the first available package manager on the system.
  * Returns 'brew', 'apt', 'scoop', or null if none found.
  */
-let cachedPackageManager: 'brew' | 'apt' | 'scoop' | undefined;
+let cachedPackageManager: SystemPackageManager | undefined;
 
-export function detectPackageManager(): 'brew' | 'apt' | 'scoop' | null {
+export function detectPackageManager(): SystemPackageManager | null {
   if (cachedPackageManager !== undefined) return cachedPackageManager;
 
   // Platform-aware order: check the platform's native PM first so that
   // cross-platform installs (e.g. Linuxbrew on Linux) don't shadow the
   // PM that DEPENDENCY_INSTALL_COMMANDS actually uses for that platform.
-  type PM = { name: 'brew' | 'apt' | 'scoop'; args: string[] };
-  const allManagers: PM[] = [
-    { name: 'brew', args: ['--version'] },
-    { name: 'apt', args: ['--version'] },
-    { name: 'scoop', args: ['--version'] },
-  ];
-  const preferred: Record<string, string> = {
+  const preferred: Partial<Record<NodeJS.Platform, SystemPackageManager>> = {
     darwin: 'brew',
     linux: 'apt',
     win32: 'scoop',
   };
   const first = preferred[process.platform];
   const managers = first
-    ? [
-        allManagers.find((m) => m.name === first)!,
-        ...allManagers.filter((m) => m.name !== first),
-      ]
-    : allManagers;
+    ? [first, ...SYSTEM_PACKAGE_MANAGERS.filter((name) => name !== first)]
+    : SYSTEM_PACKAGE_MANAGERS;
 
-  for (const { name, args } of managers) {
-    if (executeCommandSync([name, ...args]).success) {
-      logger.debug(CHANNEL, `Package manager detected: ${name}`);
+  for (const name of managers) {
+    if (hasPackageManager(name)) {
       cachedPackageManager = name;
       return name;
     }
@@ -466,4 +456,35 @@ export function detectPackageManager(): 'brew' | 'apt' | 'scoop' | null {
 
   logger.debug(CHANNEL, 'No package manager detected');
   return null;
+}
+
+/** Package managers TeXRA knows how to install dependencies with. */
+export const SYSTEM_PACKAGE_MANAGERS = ['brew', 'apt', 'scoop'] as const;
+
+export type SystemPackageManager = (typeof SYSTEM_PACKAGE_MANAGERS)[number];
+
+const packageManagerAvailability = new Map<SystemPackageManager, boolean>();
+
+/**
+ * Whether one specific package manager is installed.
+ *
+ * Callers that only have an install command for some managers need this rather
+ * than {@link detectPackageManager}: that one answers "which manager does this
+ * platform use", so on a Linux box with both apt and Linuxbrew it returns
+ * `apt` and a brew-only command map would never match. Each answer is probed
+ * once and cached, including misses.
+ */
+export function hasPackageManager(name: SystemPackageManager): boolean {
+  const cached = packageManagerAvailability.get(name);
+  if (cached !== undefined) return cached;
+
+  const available = executeCommandSync([name, '--version']).success;
+  packageManagerAvailability.set(name, available);
+  logger.debug(
+    CHANNEL,
+    available
+      ? `Package manager detected: ${name}`
+      : `Package manager not found: ${name}`,
+  );
+  return available;
 }

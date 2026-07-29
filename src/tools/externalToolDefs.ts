@@ -43,7 +43,9 @@ import { IS_WINDOWS } from '@utils/system/platformPaths';
 import { isWSL } from '@utils/system/wslDetect';
 import {
   checkToolInstalled,
-  detectPackageManager,
+  hasPackageManager,
+  SYSTEM_PACKAGE_MANAGERS,
+  type SystemPackageManager,
 } from '@utils/system/toolUtils';
 import { isGitRepository } from '@utils/system/isGitRepository';
 import { formatResultCount } from '@utils/text/stringUtils';
@@ -259,18 +261,25 @@ function prerequisitesChecks<T>(config: {
  * support/externalBinaryUtils.ts), so a CLI with a Windows installer has to
  * use it rather than npm.
  *
+ * Only managers this command map actually names are probed, so a Linux box
+ * with both apt and Linuxbrew still gets the brew command rather than falling
+ * through to npm.
+ *
  * Definitions call this from an `installCommand` getter so the probe stays
- * lazy — `detectPackageManager()` runs once per session and caches its result,
- * so reading the property repeatedly costs nothing after the first access.
+ * lazy — `hasPackageManager()` probes once per manager and caches, so reading
+ * the property repeatedly costs nothing after the first access.
  */
 function preferredInstallCommand(
-  commands: Partial<Record<'brew' | 'apt' | 'scoop' | 'win32', string>> & {
+  commands: Partial<Record<SystemPackageManager | 'win32', string>> & {
     default: string;
   },
 ): string {
   if (commands.win32 != null && IS_WINDOWS) return commands.win32;
-  const packageManager = detectPackageManager();
-  return (packageManager && commands[packageManager]) || commands.default;
+  for (const manager of SYSTEM_PACKAGE_MANAGERS) {
+    const command = commands[manager];
+    if (command != null && hasPackageManager(manager)) return command;
+  }
+  return commands.default;
 }
 
 // ============================================================

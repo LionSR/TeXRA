@@ -14,7 +14,10 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@utils/system/toolUtils', async (importOriginal) => {
   const actual =
     await importOriginal<typeof import('@utils/system/toolUtils')>();
-  return { ...actual, detectPackageManager: () => mocks.packageManager };
+  return {
+    ...actual,
+    hasPackageManager: (name: string) => name === mocks.packageManager,
+  };
 });
 
 vi.mock('@utils/system/platformPaths', async (importOriginal) => {
