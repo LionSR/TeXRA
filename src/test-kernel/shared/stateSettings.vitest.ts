@@ -4,10 +4,11 @@ import { resolve } from 'node:path';
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
-import { describe, it } from 'vitest';
+import { describe, it, vi } from 'vitest';
 
 // Local imports
 import { KNOWN_TEXRA_KEYS } from '@cli/schemas/knownKeys';
+import * as logger from '@logger/logUtils';
 import { CORE_SETTING_PATHS } from '@shared/schemas/coreSettings';
 import {
   CLI_STATE_SETTINGS,
@@ -552,12 +553,24 @@ describe('settingsAccess', () => {
   });
 
   it('falls back to the default for a stored value that no longer validates', () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
     const { stores, workspaceState } = makeFakeSettingsStores();
     const entry = entryByKey(WorkspaceStateKey.LATEX_FORMATTER);
     void workspaceState.update(entry.key, 'stale-bogus-value');
-    assert.equal(
-      readSetting(entry, stores, 'extension'),
-      LATEX_CONFIG_DEFAULTS.latexFormatter,
-    );
+    try {
+      assert.equal(
+        readSetting(entry, stores, 'extension'),
+        LATEX_CONFIG_DEFAULTS.latexFormatter,
+      );
+      assert.equal(warn.mock.calls.length, 1);
+      assert.equal(warn.mock.calls[0]?.[0], 'settingsAccess');
+      assert.ok(
+        String(warn.mock.calls[0]?.[1]).startsWith(
+          `Ignoring invalid persisted value for setting "${entry.key}"`,
+        ),
+      );
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
