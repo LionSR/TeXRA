@@ -627,6 +627,26 @@ describe('ModelHandlerGoogleGenAI streaming failure diagnostics', () => {
   });
 });
 
+describe('ModelHandlerGoogleGenAI response extraction', () => {
+  it('preserves trailing whitespace without duplicating an existing end tag', () => {
+    const handler = createGoogleGenAIHandler();
+    const response = new GenerateContentResponse();
+    response.candidates = [
+      {
+        content: {
+          role: 'model',
+          parts: [createPartFromText('answer</documents>\n')],
+        },
+        finishReason: FinishReason.STOP,
+      } as any,
+    ];
+
+    expect(handler.extractResponse(response, '</documents>').text).toBe(
+      'answer</documents>\n',
+    );
+  });
+});
+
 describe('ModelHandlerGoogleGenAI.shouldContinue', () => {
   const handler = createGoogleGenAIHandler();
 

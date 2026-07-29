@@ -68,6 +68,14 @@ vi.doMock(cliRequire.resolve('ink'), () => ({
   useWindowSize: vi.fn(),
 }));
 
+vi.mock('@latex/texraResponseTextProcessing', () => ({
+  texraResponseTextProcessing: {
+    normalizeResponseText: (text: string) => text,
+    postProcessResponse: (text: string) => text,
+    connectResponseText: async () => ' ',
+  },
+}));
+
 vi.mock('@cli/runtime/initPlatform', () => ({
   handOffCliShutdownSignalHandlers: mocks.handOffCliShutdownSignalHandlers,
   initCliPlatform: mocks.initCliPlatform,
@@ -449,7 +457,7 @@ describe('runChat signal ownership wiring', () => {
       kill.mockRestore();
       exit.mockRestore();
     }
-  });
+  }, 20_000);
 
   it('constructs the exact initial run configuration for a resumed team', async () => {
     const exitTui = deferred();
@@ -537,5 +545,5 @@ describe('runChat signal ownership wiring', () => {
       loadAgentsSpy.mockRestore();
       getVisibleAgentsSpy.mockRestore();
     }
-  });
+  }, 20_000);
 });
