@@ -104,8 +104,10 @@ function resolveAgentSettingTools(settings: AgentSettingInput): object {
   if (!Array.isArray(settings.tools)) return settings;
   return {
     ...settings,
-    tools: resolveToolDefinitions(settings.tools as RawToolConfig[], (name) =>
-      logger.warn(CHANNEL, `Tool "${name}" not found in registry`),
+    tools: resolveToolDefinitions(
+      settings.tools as RawToolConfig[],
+      (name, reason) =>
+        logger.warn(CHANNEL, `Tool "${name}" ${reason ?? 'not found in registry'}`),
     ),
   };
 }
