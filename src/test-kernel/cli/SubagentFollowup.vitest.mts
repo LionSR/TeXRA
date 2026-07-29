@@ -266,6 +266,69 @@ describe('summarizeSubagentFollowup', () => {
     );
   });
 
+  it('keeps the workflow failure cause but omits its duplicate run log', () => {
+    const summary = JSON.stringify({
+      name: 'proofread-pipeline',
+      outcome: 'failed',
+      phaseCount: 2,
+      taskDone: 1,
+      taskTotal: 4,
+      costUsd: 0.03,
+      durationMs: 5_000,
+      files: [],
+      scriptPath: '.texra/workflow-scripts/proofread-pipeline.mjs',
+      errorCause: 'Model request failed: quota exhausted',
+    }).replaceAll('"', '&quot;');
+    const xml = [
+      '<workflow-script-error id="abc">',
+      `<workflow-summary>${summary}</workflow-summary>`,
+      '<message>Model request failed: quota exhausted',
+      '',
+      '=== Run log ===',
+      'Finished: earlier task',
+      '',
+      'Script file: .texra/workflow-scripts/proofread-pipeline.mjs</message>',
+      '</workflow-script-error>',
+    ].join('\n');
+
+    const rendered = summarizeSubagentFollowup(xml);
+    expect(rendered).toContain('✗ proofread-pipeline failed');
+    expect(rendered).toContain('Model request failed: quota exhausted');
+    expect(rendered).not.toContain('=== Run log ===');
+    expect(rendered).not.toContain('Finished: earlier task');
+  });
+
+  it('preserves structured failure text without parsing generated suffixes', () => {
+    const summary = JSON.stringify({
+      name: 'proofread-pipeline',
+      outcome: 'failed',
+      phaseCount: 0,
+      taskDone: 0,
+      taskTotal: 0,
+      costUsd: 0,
+      durationMs: 100,
+      files: [],
+      scriptPath: '.texra/workflow-scripts/proofread-pipeline.mjs',
+      errorCause:
+        'Literal &amp;lt;tag&amp;gt;\n\n=== Run log belongs to the error\nScript file: user note',
+    }).replaceAll('"', '&quot;');
+    const xml = [
+      '<workflow-script-error id="abc">',
+      `<workflow-summary>${summary}</workflow-summary>`,
+      '<message>=== Run log ===',
+      'generated entry',
+      '',
+      'Script file: .texra/workflow-scripts/proofread-pipeline.mjs</message>',
+      '</workflow-script-error>',
+    ].join('\n');
+
+    const rendered = summarizeSubagentFollowup(xml);
+    expect(rendered).toContain('Literal &lt;tag&gt;');
+    expect(rendered).toContain('=== Run log belongs to the error');
+    expect(rendered).toContain('Script file: user note');
+    expect(rendered).not.toContain('generated entry');
+  });
+
   it('decodes only XML entities in a single pass', () => {
     expect(decodeXmlEntities('&quot;&apos;&lt;&gt;&amp;')).toBe('"\'<>&');
     expect(decodeXmlEntities('&amp;lt;')).toBe('&lt;');
