@@ -5,6 +5,7 @@ import '@progressView/frontend/components/TexraDiffView';
 import { html, nothing, render, type TemplateResult } from 'lit';
 
 import { DESKTOP_THEME_KIND, type DesktopThemeKind } from '@shared/schemas';
+import { renderEmptyState } from '@shared/wa/emptyState';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 import { buildEditorTree, type EditorTreeNode } from './editorTree';
@@ -145,12 +146,12 @@ export function createReviewPane(): ReviewPaneController {
             ${
               selected
                 ? diffView
-                : html`
-                    <div class="desktop-review-empty">
-                      ${waIcon('plus-minus')}
-                      <strong>No changes to review</strong>
-                    </div>
-                  `
+                : renderEmptyState({
+                    icon: 'plus-minus',
+                    title: 'No changes to review',
+                    headingTag: 'h3',
+                    className: 'desktop-review-empty',
+                  })
             }
           </main>
           <aside class="desktop-review-sidebar" aria-label="Changed files">

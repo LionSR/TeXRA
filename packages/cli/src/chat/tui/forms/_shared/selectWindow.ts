@@ -3,6 +3,8 @@
 // fixed number of chrome rows (border, title, description, key hints). The only
 // per-form difference is that chrome-row count, so the policy lives here once.
 
+import { isCompactRows } from '@cli/chat/tui/ui/theme';
+
 export interface SelectWindowSize {
   readonly maxVisibleItems: number | undefined;
   readonly showOverflow: boolean;
@@ -11,7 +13,7 @@ export interface SelectWindowSize {
 export const COMPACT_FORM_MAX_ROWS = 9;
 
 export function isCompactFormRows(availableRows: number | undefined): boolean {
-  return availableRows !== undefined && availableRows <= COMPACT_FORM_MAX_ROWS;
+  return isCompactRows(availableRows, COMPACT_FORM_MAX_ROWS);
 }
 
 /**

@@ -10,12 +10,13 @@ import {
   type TodoItem,
   type TodoStatus,
 } from '@shared/schemas';
-import { formatResultCount } from '@utils/text/stringUtils';
+import { pluralize } from '@utils/text/stringUtils';
 
 import {
   activeStreamId as activeStreamIdSignal,
   streams as streamsSignal,
 } from '../state/cliState';
+import { hiddenRowsText } from '../render/overflowText';
 import { useSignal } from '../state/useSignal';
 import { COLOR_HINT, COLOR_SUCCESS } from '../ui/colors';
 import { TODO_ACTIVE, TODO_DONE, TODO_PENDING } from '../ui/glyphs';
@@ -211,10 +212,12 @@ export function TodosPlanPanel(
         ))}
         {hiddenCount > 0 && rows.length < rowBudget ? (
           <Box height={1} minWidth={0} overflowY="hidden">
-            <Text
-              dimColor
-              wrap="truncate-end"
-            >{`… +${formatResultCount(hiddenCount, 'more todo/plan item')}`}</Text>
+            <Text dimColor wrap="truncate-end">
+              {hiddenRowsText(
+                hiddenCount,
+                pluralize(hiddenCount, 'todo/plan item', 'todo/plan items'),
+              )}
+            </Text>
           </Box>
         ) : null}
       </Box>

@@ -56,6 +56,17 @@ export interface SelectProps<T> {
   readonly wrap?: boolean;
   /** Called when `wrap` is false and a move would cross the top/bottom edge. */
   readonly onBoundaryEscape?: (direction: -1 | 1) => void;
+  /** Defaults to `'single'`: hotkeys (1-9, then a-z) select-and-close via
+   *  `onSelect`; Enter does the same on the highlighted row; Space is
+   *  unhandled. In `'multi'`, Space and hotkeys instead toggle membership via
+   *  `onToggle` (caller owns the selected set and reads it back in its own
+   *  `onSelect`, which Enter still calls once to submit); the tick glyph
+   *  reflects `selectedValues` instead of `activeValue`. */
+  readonly mode?: 'single' | 'multi';
+  /** Required in `'multi'` mode: the set of currently-toggled-on values. */
+  readonly selectedValues?: ReadonlySet<T>;
+  /** Required in `'multi'` mode: called with the row's value on Space/hotkey. */
+  readonly onToggle?: (value: T) => void;
   readonly renderItem?: (
     item: SelectItem<T>,
     state: {
@@ -346,6 +357,11 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
         cancelAndDrop();
         return;
       }
+      if (props.mode === 'multi' && input === ' ') {
+        const choice = props.items[highlightRef.current];
+        if (choice && !choice.disabled) props.onToggle?.(choice.value);
+        return;
+      }
       if (isPlainReturnInput(input, key)) {
         const choice = props.items[highlightRef.current];
         if (choice && !choice.disabled) props.onSelect(choice.value);
@@ -356,9 +372,10 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
         cancelAndDrop();
         return;
       }
-      // Single-key jumps (1-9, then a-z) for direct selection. Ignore Ctrl
-      // chords: Ctrl+C exits the app through App's unified handler, and other
-      // Ctrl+<letter> chords were never meant as row hotkeys.
+      // Single-key jumps (1-9, then a-z) for direct selection (or, in multi
+      // mode, direct toggle). Ignore Ctrl chords: Ctrl+C exits the app through
+      // App's unified handler, and other Ctrl+<letter> chords were never
+      // meant as row hotkeys.
       if (!key.ctrl && props.hotkeys !== false) {
         const idx = selectIndexForHotkeyInput(input);
         if (idx != null && idx < props.items.length) {
@@ -366,7 +383,15 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
           if (choice && !choice.disabled) {
             highlightRef.current = idx;
             props.onHighlightChange?.(choice.value);
-            props.onSelect(choice.value);
+            if (props.mode === 'multi') {
+              // Unlike single-select's onSelect, onToggle doesn't end this
+              // list's lifetime — it keeps rendering, so the visible pointer
+              // and scroll window must actually follow the hotkey press.
+              setHighlight(idx);
+              props.onToggle?.(choice.value);
+            } else {
+              props.onSelect(choice.value);
+            }
           }
         }
       }
@@ -382,7 +407,10 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
       {visibleItems.map((item, offset) => {
         const i = visibleRange.start + offset;
         const focused = props.highlightedValue !== null && i === highlight;
-        const active = item.value === props.activeValue;
+        const active =
+          props.mode === 'multi'
+            ? (props.selectedValues?.has(item.value) ?? false)
+            : item.value === props.activeValue;
         const pointer = focused ? POINTER : ' ';
         const tick = active ? TICK : ' ';
         const hotkey = selectHotkeyForIndex(i);
