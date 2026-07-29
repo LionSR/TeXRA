@@ -22,7 +22,7 @@ licensing and product decisions, not engineering cleanup.
 | §4.3 `npm test` green on a clean checkout  | Done                              |
 | §4.4 `minimumReleaseAge`                   | Open — documented tradeoff        |
 | §4.5 Stale `.gitignore` comment            | Done                              |
-| §4.6 CI ran only on Linux                  | Done — Windows in the matrix      |
+| §4.6 CI runs only on Linux                 | Blocked — ~10 Windows failures    |
 | §4.7 Windows tool discovery                | Done — Ghostscript, TeX Live Perl |
 
 `CONTRIBUTING.md` and `CODE_OF_CONDUCT.md` are held rather than skipped.
@@ -268,21 +268,37 @@ review. The comment now says that.
 
 ---
 
-### 4.6 CI only ever ran on Linux
+### 4.6 CI only ever runs on Linux
 
-Done. Every `ci.yml` job was `ubuntu-latest` except the macOS webview smoke, so
-none of the platform-specific code was exercised: tool discovery under
-`Program Files`, the Strawberry/tlperl Perl lookups, path normalization, the
-CLI's `win32` branches. That is how a Ghostscript path list frozen at 9.x and a
-missing TeX Live Perl directory both survived — no test covered them and no
-runner ran them.
+Not done — attempted and reverted, with the findings below.
 
-`windows-latest` is now in the sharded kernel-test matrix, gating like the Linux
-shards. The shard count is unchanged rather than widened, because Windows
-runners bill at 2x. `timeout-minutes` went 20 → 30 for the slower runner.
+Every `ci.yml` job is `ubuntu-latest` except the macOS webview smoke, so none of
+the platform-specific code is exercised: tool discovery under `Program Files`,
+the Perl lookups, path normalization, the CLI's `win32` branches. That is how a
+Ghostscript path list frozen at 9.x and a missing TeX Live Perl directory both
+survived — no test covered them and no runner ran them.
 
-Still Linux-only: build, lint, typecheck, and the docs build. Those are
-platform-independent enough not to need duplicating.
+Adding `windows-latest` to the sharded kernel-test matrix works, and immediately
+surfaced **~10 pre-existing Windows failures** (both Linux shards, static checks,
+build, and the macOS smoke stayed green). In three buckets:
+
+| Bucket                 | Where                                                                            | Nature                                                                                   |
+| ---------------------- | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Separator expectations | `CompiledPdfArtifacts.vitest.ts` ×5, `RunStorageEntryInspection.vitest.ts:202`   | `output\r2\paper.pdf` vs `output/r2/paper.pdf`; needs a decision on where to normalize   |
+| Fake-filesystem gaps   | `RunStorageEntryInspection.vitest.ts:77,135,156`, `ExecutionLease.vitest.ts:619` | symlinks report `kind: 'missing'`; chmod-based permission-denied simulation is a no-op   |
+| Real product bug       | `CompiledPdfArtifacts.vitest.ts:194,232,277`                                     | artifact paths carry a **duplicated run segment**: `output\r4\r4\sections\main-diff.pdf` |
+
+The third bucket is the reason this was reverted rather than merged: it is a
+genuine path-joining defect on Windows, not a test artifact, and it wants its own
+change with someone who can iterate against a Windows runner. Landing a gating
+job that cannot pass would have wedged every PR; making it non-gating would have
+been the silent-degradation antipattern.
+
+The matrix change is recorded as a `TODO(windows-ci)` comment above the `test`
+job in `ci.yml`, carrying this inventory so the next attempt starts from it.
+
+Still Linux-only regardless: build, lint, typecheck, and the docs build. Those
+are platform-independent enough not to need duplicating.
 
 ### 4.7 Windows tool discovery was frozen to specific versions
 
