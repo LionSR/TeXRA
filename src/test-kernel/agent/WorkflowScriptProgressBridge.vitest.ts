@@ -10,6 +10,7 @@ import {
 import {
   RUN_OUTCOME,
   type ExecutionId,
+  type StreamTabId,
   type WorkflowCallProgress,
 } from '@shared/schemas';
 import { workflowPhaseCallProgress } from '@shared/copy/workflowCall';
@@ -559,6 +560,7 @@ return await agent('Second')`;
 return await agent('Draft')`,
       runAgent: async (invocation: WorkflowAgentInvocation) => {
         invocation.reportModel?.('deepseekT');
+        invocation.reportChildStream?.('draft@deepseekT#abcdef' as StreamTabId);
         return 'done';
       },
       getCallCostUsd: () => 0.02,
@@ -568,13 +570,52 @@ return await agent('Draft')`,
     expect(workflowCallEvent(events, 'Draft', 'completed')?.task).toMatchObject(
       {
         model: 'deepseekT',
+        childStreamId: 'draft@deepseekT#abcdef',
         durationMs: expect.any(Number),
         totalCostUsd: 0.02,
       },
     );
+    const draftEvents = events.filter(
+      (event): event is Extract<AgentEvent, { type: 'workflow.task' }> =>
+        event.type === 'workflow.task' && event.task.label === 'Draft',
+    );
+    const logIds = new Set(draftEvents.map((event) => event.logId));
+    expect(logIds.size).toBe(1);
+    expect([...logIds][0]).toMatch(/^workflow-task-.+-call-0$/);
     expect(activities).toContainEqual(
       expect.stringMatching(/^Finished: Draft · deepseekT · .+ · \$0\.020$/),
     );
+  });
+
+  it('uses a new task-card identity for a deterministic relaunch', async () => {
+    const script = `${meta}
+return await agent('Draft')`;
+    const first = recordingTrace();
+    await runPersistedWorkflowScriptWithProgress(first.trace, {
+      store: getExecutionStore(executionId),
+      checkpointId: 'relaunch-card-id',
+      script,
+      runAgent: vi.fn(() => Promise.resolve('done')),
+    });
+
+    clearStoreCache();
+    const second = recordingTrace();
+    await runPersistedWorkflowScriptWithProgress(second.trace, {
+      store: getExecutionStore(executionId),
+      checkpointId: 'relaunch-card-id',
+      script,
+      runAgent: vi.fn(() => Promise.reject(new Error('must not run'))),
+    });
+
+    const firstId = workflowCallEvent(
+      first.events,
+      'Draft',
+      'completed',
+    )?.logId;
+    const secondId = workflowCallEvent(second.events, 'Draft', 'cached')?.logId;
+    expect(firstId).toBeDefined();
+    expect(secondId).toBeDefined();
+    expect(secondId).not.toBe(firstId);
   });
 
   it('preserves live metadata when the user skips a running call', async () => {
@@ -765,7 +806,10 @@ return await agent('Abort', { phase: 'Execution' })`,
         script: `${meta}
 agent('Orphaned', { phase: 'Execution' })
 return 'guest success'`,
-        runAgent: async () => {
+        runAgent: async (invocation: WorkflowAgentInvocation) => {
+          invocation.reportChildStream?.(
+            'orphaned@model#abcdef' as StreamTabId,
+          );
           markStarted?.();
           return await new Promise<never>(() => undefined);
         },
@@ -783,6 +827,7 @@ return 'guest success'`,
         task: {
           error: 'The workflow ended before this call completed.',
           totalCostUsd: 0.03,
+          childStreamId: 'orphaned@model#abcdef',
         },
       });
       expect(events).toContainEqual({

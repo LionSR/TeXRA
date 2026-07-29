@@ -34,6 +34,7 @@ import {
   type ExecuteAgentResult,
 } from './terminalStatus';
 import { CLI_UNAVAILABLE_TOOLS } from './unavailableTools';
+import { attachWorkflowPlainProjection } from './workflowPlainProjection';
 import type { CliContext } from './cliContext';
 
 export interface CliExecuteOptions {
@@ -183,6 +184,8 @@ export async function executeCliRequest(
   // This executes before runtime-host construction and before runAgent.
   const { session } = await initializeHeadlessTranscriptSession();
   const presentationHost = createCliRuntimeHost(runContext);
+  const renderWorkflowPlainProgress =
+    runContext.outputFormat === 'text' && runContext.renderRunProgress === true;
   const detachRunProgressRenderer = presentationHost.attachRunProgressRenderer(
     session.events,
   );
@@ -205,6 +208,12 @@ export async function executeCliRequest(
     runContext.outputFormat === 'ndjson'
       ? attachCliSessionProgressProjection(session.events)
       : () => undefined;
+  const detachWorkflowPlainProjection = renderWorkflowPlainProgress
+    ? attachWorkflowPlainProjection(session.events, {
+        beforeWrite: () => presentationHost.prepareInteractivePrompt?.(),
+        writeLine: writeTextStderr,
+      })
+    : () => undefined;
   const ownedExecutionId = options.registerExecution
     ? request.executionId
     : undefined;
@@ -290,6 +299,7 @@ export async function executeCliRequest(
     detachResultToast();
     detachRunProgressRenderer();
     detachSessionProgressProjection();
+    detachWorkflowPlainProjection();
     detachHostInteractions();
     await presentationHost.close();
   };
