@@ -97,7 +97,7 @@ return { papers, question: args.question };`;
 
     expect(details?.open).toBe(true);
     expect(container.querySelector('wa-icon[name="list-ul"]')).not.toBeNull();
-    expect(labels).toEqual(['Agent:', 'Script:', 'Args:', 'Files:', 'Result:']);
+    expect(labels).toEqual(['Agent:', 'Script:', 'Args:', 'Files:']);
     expect(container.textContent).toContain('research');
     expect(scriptBlock?.querySelector('code')?.textContent).toBe(script);
     expect(scriptBlock?.textContent).toContain('JavaScript');
@@ -110,7 +110,7 @@ return { papers, question: args.question };`;
     expect(container.textContent).toContain('(Input)');
     expect(container.textContent).toContain('(Context)');
     expect(container.textContent).toContain('(Media)');
-    expect(container.textContent).toContain('"compared":2');
+    expect(container.textContent).not.toContain('"compared":2');
     expect(container.textContent).not.toContain('journal');
     expect(container.querySelector('.proposal-banner-setup')).toBeNull();
   });
