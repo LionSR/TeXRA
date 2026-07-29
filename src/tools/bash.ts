@@ -92,12 +92,27 @@ function backgroundBashTerminalStatus(success: boolean) {
 interface BoundedOutputCapture {
   append(chunk: string): void;
   text(streamName: 'stdout' | 'stderr'): string | null;
+  /** Retained leading window (up to `headChars`). */
+  readonly head: string;
+  /** Retained trailing window (up to `tailChars`). */
+  readonly tail: string;
+  /** Total characters observed (after whitespace normalization, when enabled). */
+  readonly totalChars: number;
 }
 
+/**
+ * @param options.normalizeWhitespace When true (the default, used by the
+ *   foreground path) leading whitespace is dropped and trailing whitespace is
+ *   deferred so a stream that ends in blank lines is not counted or shown. The
+ *   background path passes false to keep its historical raw byte-for-byte
+ *   head/tail/total tracking exactly.
+ */
 function createBoundedOutputCapture(
   headChars: number,
   tailChars: number,
+  options?: { normalizeWhitespace?: boolean },
 ): BoundedOutputCapture {
+  const normalizeWhitespace = options?.normalizeWhitespace ?? true;
   let head = '';
   let tail = '';
   let totalChars = 0;
@@ -134,7 +149,22 @@ function createBoundedOutputCapture(
   };
 
   return {
+    get head(): string {
+      return head;
+    },
+    get tail(): string {
+      return tail;
+    },
+    get totalChars(): number {
+      return totalChars;
+    },
     append(chunk: string): void {
+      if (!normalizeWhitespace) {
+        if (chunk.length > 0) hasNonWhitespace = true;
+        appendText(chunk);
+        return;
+      }
+
       let text = chunk;
       if (!hasNonWhitespace) {
         text = text.trimStart();
@@ -387,12 +417,20 @@ export class BashTool extends defineTool({
       throw await releaseOwnedExecutionLeaseAfterFailure(executionId, error);
     }
     const { childStreamId, logger } = childStream;
-    let stdoutTail = '';
-    let stderrTail = '';
-    let stdoutHead = '';
-    let stderrHead = '';
-    let stdoutTotalChars = 0;
-    let stderrTotalChars = 0;
+    // Reuse the foreground bounded capture, but with whitespace normalization
+    // disabled so the background head/tail/total tracking stays byte-for-byte
+    // identical to its historical inline math (the two paths keep their own
+    // near-but-not-quite head/tail budgets — see the constants above).
+    const stdout = createBoundedOutputCapture(
+      BACKGROUND_OUTPUT_HEAD_CHARS,
+      BACKGROUND_OUTPUT_TAIL_CHARS,
+      { normalizeWhitespace: false },
+    );
+    const stderr = createBoundedOutputCapture(
+      BACKGROUND_OUTPUT_HEAD_CHARS,
+      BACKGROUND_OUTPUT_TAIL_CHARS,
+      { normalizeWhitespace: false },
+    );
     let loggedChars = 0;
     let logCapReached = false;
     // Capture the run's session inside the tool's ALS; finalizeBackground below
@@ -436,31 +474,11 @@ export class BashTool extends defineTool({
             session.setPid(p);
           },
           onStdout: (chunk) => {
-            stdoutTotalChars += chunk.length;
-            stdoutHead = appendHead(
-              stdoutHead,
-              chunk,
-              BACKGROUND_OUTPUT_HEAD_CHARS,
-            );
-            stdoutTail = appendTail(
-              stdoutTail,
-              chunk,
-              BACKGROUND_OUTPUT_TAIL_CHARS,
-            );
+            stdout.append(chunk);
             logChunk(chunk, 'info');
           },
           onStderr: (chunk) => {
-            stderrTotalChars += chunk.length;
-            stderrHead = appendHead(
-              stderrHead,
-              chunk,
-              BACKGROUND_OUTPUT_HEAD_CHARS,
-            );
-            stderrTail = appendTail(
-              stderrTail,
-              chunk,
-              BACKGROUND_OUTPUT_TAIL_CHARS,
-            );
+            stderr.append(chunk);
             logChunk(chunk, 'warn');
           },
         }),
@@ -550,25 +568,25 @@ export class BashTool extends defineTool({
           // separate head block would just repeat it. When it did, also
           // report how many characters sit in the gap between head and tail,
           // mirroring the foreground `checkToolResultTextLimit` elision note.
-          const stdoutTruncated = stdoutTotalChars > stdoutTail.length;
-          const stderrTruncated = stderrTotalChars > stderrTail.length;
+          const stdoutTruncated = stdout.totalChars > stdout.tail.length;
+          const stderrTruncated = stderr.totalChars > stderr.tail.length;
           const stdoutExcerpt: BashDeliveryStreamExcerpt = {
-            tail: stdoutTail,
-            head: stdoutTruncated ? stdoutHead : '',
+            tail: stdout.tail,
+            head: stdoutTruncated ? stdout.head : '',
             elidedChars: stdoutTruncated
               ? Math.max(
                   0,
-                  stdoutTotalChars - stdoutHead.length - stdoutTail.length,
+                  stdout.totalChars - stdout.head.length - stdout.tail.length,
                 )
               : 0,
           };
           const stderrExcerpt: BashDeliveryStreamExcerpt = {
-            tail: stderrTail,
-            head: stderrTruncated ? stderrHead : '',
+            tail: stderr.tail,
+            head: stderrTruncated ? stderr.head : '',
             elidedChars: stderrTruncated
               ? Math.max(
                   0,
-                  stderrTotalChars - stderrHead.length - stderrTail.length,
+                  stderr.totalChars - stderr.head.length - stderr.tail.length,
                 )
               : 0,
           };
