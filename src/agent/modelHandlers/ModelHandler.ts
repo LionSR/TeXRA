@@ -77,10 +77,7 @@ import {
 } from '@model/includedModelAccess';
 import { getApiKey, type ApiProvider } from '@model/apiProviders';
 import { platform } from '@platform/platform';
-import {
-  composeLongRunningModelDispatcher,
-  longRunningModelFetch,
-} from '@platform/defaults/longRunningModelTransport';
+import { longRunningModelFetch } from '@platform/defaults/longRunningModelTransport';
 import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
 import { MESSAGE_TYPES } from '@shared/schemas';
 import type {
@@ -120,9 +117,6 @@ import {
   type ProxyConfig,
 } from './support/ProxyConfigResolver';
 import { prepareExistingOutputContent } from './utils/fileContentUtils';
-
-// Type imports
-import type { Dispatcher } from 'undici';
 
 /**
  * Generic SDK error tagging wrapper used by the base model handler.
@@ -305,17 +299,6 @@ export abstract class ModelHandler<
   /** Fetch implementation with explicit long-stream inactivity timeouts. */
   protected get longRunningModelFetch(): typeof fetch {
     return longRunningModelFetch;
-  }
-
-  /**
-   * The long-stream dispatcher alone, for SDKs that hardwire native fetch and
-   * only accept per-request `RequestInit` extras (Google Interactions). The
-   * compose wrapper only merges timeout fields into dispatch options, so it
-   * stays interface-transparent even when native fetch's embedded undici
-   * differs from the package version.
-   */
-  protected longRunningModelDispatcher(): Dispatcher {
-    return composeLongRunningModelDispatcher();
   }
 
   public setLogger(logger: AgentTrace): void {
@@ -716,32 +699,6 @@ export abstract class ModelHandler<
   /** Stable endpoint identity used to coordinate retries for one client. */
   public getRetryEndpoint(_client: C): string {
     return this.getBaseUrl() ?? `${this.config.provider}:default`;
-  }
-
-  /** Log the resolved credential route and final wire request config. */
-  protected logOpenAICompatibleClientConfig(
-    baseURL: string,
-    route?: ModelCredentialRoute,
-  ): void {
-    let credential: string;
-    if (
-      route === 'relay' ||
-      (route === undefined && this.shouldUseServerSideKeys())
-    ) {
-      credential = 'TeXRA relay access token';
-    } else if (
-      route === 'openrouter' ||
-      (route === undefined && shouldUseOpenRouter(this.config))
-    ) {
-      credential = 'OpenRouter API key';
-    } else {
-      const provider =
-        resolveDirectModelApiKeyProvider(this.config) ?? this.config.provider;
-      credential = `${provider} API key`;
-    }
-    this.logger.debug(
-      `Using ${credential}. Model: ${this.config.fullName}. Base URL: ${baseURL}`,
-    );
   }
 
   // Provider-identity getters (isAnthropic/isOpenai/isGoogle/isDeepSeek/

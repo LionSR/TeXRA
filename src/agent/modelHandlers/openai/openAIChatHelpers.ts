@@ -1,4 +1,11 @@
+import type { AgentTrace } from '@agent/trace';
+import type { ModelCredentialRoute } from '@agent/types/ModelHandlerContracts';
 import { takeTail } from '@common/errors/sdkErrorUtils';
+import {
+  resolveDirectModelApiKeyProvider,
+  type ResolvedModelConfig,
+} from '@model/openRouterRouting';
+import { shouldUseOpenRouter } from '../support/ProxyConfigResolver';
 import type { ChatCompletionChunk } from 'openai/resources/chat/completions';
 import type { ChatCompletionSnapshot } from 'openai/lib/ChatCompletionStream';
 
@@ -30,4 +37,35 @@ export function extractOpenAIPartialTail(
 ): string {
   const content = snapshot?.choices?.[0]?.message?.content ?? '';
   return takeTail(content, maxChars);
+}
+
+/**
+ * Log the resolved credential route and final wire request config for an
+ * OpenAI-compatible client. OpenAI-subtree handlers only — kept off the base
+ * `ModelHandler` so non-OpenAI providers don't carry OpenAI credential-label
+ * derivation on their surface.
+ */
+export function logOpenAICompatibleClientConfig(
+  logger: AgentTrace,
+  config: ResolvedModelConfig,
+  baseURL: string,
+  route: ModelCredentialRoute | undefined,
+  useServerSideKeys: boolean,
+): void {
+  let credential: string;
+  if (route === 'relay' || (route === undefined && useServerSideKeys)) {
+    credential = 'TeXRA relay access token';
+  } else if (
+    route === 'openrouter' ||
+    (route === undefined && shouldUseOpenRouter(config))
+  ) {
+    credential = 'OpenRouter API key';
+  } else {
+    const provider =
+      resolveDirectModelApiKeyProvider(config) ?? config.provider;
+    credential = `${provider} API key`;
+  }
+  logger.debug(
+    `Using ${credential}. Model: ${config.fullName}. Base URL: ${baseURL}`,
+  );
 }
