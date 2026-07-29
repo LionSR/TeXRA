@@ -19,7 +19,7 @@ export interface ResponseTextProcessing {
 }
 
 /** Preserve provider text when no host-specific post-processor is supplied. */
-export function preserveResponseText(text: string): string {
+function preserveResponseText(text: string): string {
   return text;
 }
 
