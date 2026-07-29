@@ -81,6 +81,8 @@ describe('response text processing', () => {
   });
 
   it('keeps TeXRA replacement behavior in the application adapter', () => {
+    expect(Object.isFrozen(texraResponseTextProcessing)).toBe(true);
+
     const normalized = texraResponseTextProcessing.normalizeResponseText(
       ` ${RAW_PROVIDER_TEXT}\n`,
     );

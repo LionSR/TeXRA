@@ -727,7 +727,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     if (
       stopReason === FinishReason.STOP &&
       endTag &&
-      !responseText.endsWith(endTag)
+      !responseText.trimEnd().endsWith(endTag)
     ) {
       this.logger.debug(
         `Model stopped naturally but didn't include end tag. Appending ${endTag}.`,
