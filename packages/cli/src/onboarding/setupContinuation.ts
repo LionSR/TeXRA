@@ -7,6 +7,7 @@
 // platform global state and pass it in.
 
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
+import { ONBOARDING_SETUP_HANDOFF } from '@shared/copy/onboarding';
 
 export interface FirstRunSetupContinuationInputs {
   /** The first-run picker just configured a credential in this process. */
@@ -30,3 +31,12 @@ export function firstRunSetupAgentOverride(
   if (inputs.pinnedAgent?.trim()) return undefined;
   return SETUP_AGENT_NAME;
 }
+
+/**
+ * Local transcript notice shown when the setup agent takes over a first-run
+ * session. Display-only (appended via `appendLocalAssistantTranscript`) — it
+ * is never sent to the model, so the agent stays reactive instead of speaking
+ * first on its own. Built from the shared State 1 handoff sentence (same
+ * wording as the extension/desktop setup card) plus the CLI's own hint.
+ */
+export const SETUP_AGENT_HANDOFF_NOTICE = `${ONBOARDING_SETUP_HANDOFF} Tell it what you are working on — or switch to another agent anytime with /agent.`;
