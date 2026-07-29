@@ -224,6 +224,9 @@ export class BackgroundTasksPanel extends LitElement {
   /** Live children plus the finished ones retained for display (`finishedAt`). */
   @property({ attribute: false }) subagents: ActiveChildInfo[] = [];
 
+  /** Select the complete background view or the inquiry-only workflow view. */
+  @property() scope: 'all' | 'inquiries' = 'all';
+
   /** Open state — auto-expands when active tasks appear, auto-collapses when all finish. */
   @state() open = false;
 
@@ -247,7 +250,10 @@ export class BackgroundTasksPanel extends LitElement {
   protected override willUpdate(changed: PropertyValues): void {
     super.willUpdate(changed);
     const active =
-      this.subagents.filter((child) => child.finishedAt === undefined).length +
+      (this.scope === 'all'
+        ? this.subagents.filter((child) => child.finishedAt === undefined)
+            .length
+        : 0) +
       this.inquiries.filter((thread) => thread.status === 'open').length;
     // Auto-open when tasks appear (0 → N), auto-close when all finish (N → 0)
     if (this.prevActiveCount === 0 && active > 0) {
@@ -259,25 +265,26 @@ export class BackgroundTasksPanel extends LitElement {
   }
 
   override render(): TemplateResult | typeof nothing {
-    if (this.subagents.length + this.inquiries.length === 0) {
+    const visibleSubagents = this.scope === 'all' ? this.subagents : [];
+    if (visibleSubagents.length + this.inquiries.length === 0) {
       return nothing;
     }
 
     // With a single populated section, the inner disclosure header is pure
     // chrome — render the list directly under the outer panel instead.
     const withSectionHeaders =
-      this.subagents.length > 0 && this.inquiries.length > 0;
+      visibleSubagents.length > 0 && this.inquiries.length > 0;
 
     return html`
       <wa-details
         class="panel-collapsible"
-        summary="Background Tasks"
+        summary=${this.scope === 'inquiries' ? 'Inquiries' : 'Background Tasks'}
         ?open=${this.open}
         @wa-show=${this.handleShow}
         @wa-hide=${this.handleHide}
       >
         <div class="task-list">
-          ${this.renderSection(this.subagents, withSectionHeaders)}
+          ${this.renderSection(visibleSubagents, withSectionHeaders)}
           ${this.renderInquirySection(withSectionHeaders)}
         </div>
       </wa-details>

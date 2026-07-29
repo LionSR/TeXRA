@@ -3,7 +3,10 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import type { BackgroundTasksPanel } from '@progressView/frontend/components/BackgroundTasksPanel';
-import type { phaseStagesContext as PhaseStagesContext } from '@progressView/frontend/contexts/streamContexts';
+import type {
+  inquiryThreadsContext as InquiryThreadsContext,
+  phaseStagesContext as PhaseStagesContext,
+} from '@progressView/frontend/contexts/streamContexts';
 import type { StreamTabId } from '@shared/schemas';
 
 // Local file imports
@@ -20,12 +23,13 @@ interface StyledBackgroundTasksPanelConstructor extends CustomElementConstructor
 // and the context definitions can only be imported after the test DOM globals
 // are installed (that is what useLitComponentTestDom's hook does).
 let ContextProviderCtor: typeof ContextProvider;
+let inquiryThreadsContext: typeof InquiryThreadsContext;
 let phaseStagesContext: typeof PhaseStagesContext;
 
 describe('background-tasks-panel', () => {
   useLitComponentTestDom(async () => {
     ({ ContextProvider: ContextProviderCtor } = await import('@lit/context'));
-    ({ phaseStagesContext } =
+    ({ inquiryThreadsContext, phaseStagesContext } =
       await import('@progressView/frontend/contexts/streamContexts'));
     await import('@progressView/frontend/components/BackgroundTasksPanel');
   });
@@ -180,5 +184,47 @@ describe('background-tasks-panel', () => {
     expect(badge?.getAttribute('variant')).toBe('warning');
 
     element.remove();
+  });
+
+  it('shows inquiries without workflow subagents in inquiry scope', async () => {
+    const element = document.createElement(
+      'background-tasks-panel',
+    ) as BackgroundTasksPanel;
+    element.scope = 'inquiries';
+    element.subagents = [
+      {
+        kind: 'subagent',
+        executionId: 'exec-1',
+        childStreamId: 'child-1',
+        agentName: 'reviewer',
+        status: 'running',
+      },
+    ];
+    const container = document.createElement('div');
+    document.body.append(container);
+    new ContextProviderCtor(container, {
+      context: inquiryThreadsContext,
+      initialValue: [
+        {
+          threadId: 'inquiry-1',
+          parentStreamId: null,
+          status: 'open',
+          lastQuestionPreview: 'Which boundary condition is intended?',
+          lastActivityIso: '2026-07-28T12:00:00.000Z',
+          turnCount: 1,
+        },
+      ],
+    }).hostConnected();
+    container.append(element);
+    await element.updateComplete;
+
+    const shadow = element.shadowRoot!;
+    expect(shadow.querySelector('wa-details')?.getAttribute('summary')).toBe(
+      'Inquiries',
+    );
+    expect(shadow.querySelector('.inquiry-id')?.textContent).toBe('inquiry-1');
+    expect(shadow.querySelector('.task-name')).toBeNull();
+
+    container.remove();
   });
 });

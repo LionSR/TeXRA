@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { StreamTabIdSchema } from './identifiers';
+
 export const WorkflowCallIdentitySchema = z.strictObject({
   id: z
     .string()
@@ -26,17 +28,25 @@ const WorkflowCallTerminalMetadataSchema = z.strictObject({
   totalCostUsd: z.number().nonnegative().optional(),
 });
 
+const WorkflowCallProgressBaseSchema = WorkflowCallIdentitySchema.extend({
+  /**
+   * Live child stream that executes this call. Absent for planned, cached, and
+   * not-yet-launched calls.
+   */
+  childStreamId: StreamTabIdSchema.optional(),
+});
+
 /**
  * Canonical state of one declared or dynamically issued workflow-script call.
  * The status discriminant prevents terminal-only metadata from appearing on a
  * call that has not started.
  */
 const WorkflowCallSkippedProgressSchema = z.discriminatedUnion('reason', [
-  WorkflowCallIdentitySchema.extend({
+  WorkflowCallProgressBaseSchema.extend({
     status: z.literal('skipped'),
     reason: z.literal('not-reached'),
   }),
-  WorkflowCallIdentitySchema.extend({
+  WorkflowCallProgressBaseSchema.extend({
     status: z.literal('skipped'),
     reason: z.literal('user'),
     ...WorkflowCallTerminalMetadataSchema.shape,
@@ -44,21 +54,21 @@ const WorkflowCallSkippedProgressSchema = z.discriminatedUnion('reason', [
 ]);
 
 export const WorkflowCallProgressSchema = z.discriminatedUnion('status', [
-  WorkflowCallIdentitySchema.extend({
+  WorkflowCallProgressBaseSchema.extend({
     status: z.literal('planned'),
   }),
-  WorkflowCallIdentitySchema.extend({
+  WorkflowCallProgressBaseSchema.extend({
     status: z.literal('running'),
   }),
-  WorkflowCallIdentitySchema.extend({
+  WorkflowCallProgressBaseSchema.extend({
     status: z.literal('completed'),
     ...WorkflowCallTerminalMetadataSchema.shape,
   }),
-  WorkflowCallIdentitySchema.extend({
+  WorkflowCallProgressBaseSchema.extend({
     status: z.literal('cached'),
   }),
   WorkflowCallSkippedProgressSchema,
-  WorkflowCallIdentitySchema.extend({
+  WorkflowCallProgressBaseSchema.extend({
     status: z.literal('failed'),
     error: z.string().min(1),
     ...WorkflowCallTerminalMetadataSchema.shape,

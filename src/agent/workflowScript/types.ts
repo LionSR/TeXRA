@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   WorkflowCallIdentitySchema,
   type WorkflowCallIdentity,
+  type StreamTabId,
 } from '@shared/schemas';
 import type { WorkflowScriptFiles } from '@shared/schemas/workflowScriptFiles';
 
@@ -157,6 +158,12 @@ export interface WorkflowAgentInvocation {
    * for progress UIs. Never journaled — it does not affect resume identity.
    */
   reportModel?: (model: string) => void;
+  /**
+   * Reports the live child stream once the host has resolved its agent, model,
+   * and execution identity. Progress renderers use it as the task card's
+   * navigation target; it never affects journal identity.
+   */
+  reportChildStream?: (streamId: StreamTabId) => void;
 }
 
 /**
@@ -214,6 +221,7 @@ interface WorkflowScriptAgentEventBase extends WorkflowScriptPhaseContext {
   progressId: WorkflowScriptProgressId;
   index: number;
   label: string;
+  childStreamId?: StreamTabId;
 }
 
 export type WorkflowScriptEvent =
@@ -232,6 +240,10 @@ export type WorkflowScriptEvent =
   | { type: 'log'; message: string }
   | (WorkflowScriptAgentEventBase & {
       type: 'agent:start';
+    })
+  | (WorkflowScriptAgentEventBase & {
+      type: 'agent:stream';
+      childStreamId: StreamTabId;
     })
   | (WorkflowScriptAgentEventBase & {
       type: 'agent:end';

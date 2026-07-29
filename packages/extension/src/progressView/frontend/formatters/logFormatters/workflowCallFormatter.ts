@@ -1,6 +1,9 @@
 // Third-party imports
 import { html, nothing, type TemplateResult } from 'lit';
 
+// Local imports - progress view
+import { ProgressEvents } from '@progressView/frontend/events';
+
 // Local imports - shared contracts
 import {
   WORKFLOW_TASK_STATUS_LABEL,
@@ -51,12 +54,29 @@ export function formatWorkflowCallTemplate(
 ): TemplateResult {
   const call = WorkflowCallProgressSchema.parse(message.data);
   const detail = workflowCallDetail(call);
+  const openChildStream = (event: Event): void => {
+    if (call.childStreamId === undefined) return;
+    event.currentTarget?.dispatchEvent(
+      ProgressEvents.streamSwitch({ streamId: call.childStreamId }),
+    );
+  };
+  const handleKeydown = (event: KeyboardEvent): void => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    openChildStream(event);
+  };
 
   return html`
     <div
-      class=${`workflow-task workflow-task--${call.status}`}
+      class=${`workflow-task workflow-task--${call.status}${
+        call.childStreamId === undefined ? '' : ' workflow-task--linked'
+      }`}
       data-log-id=${message.id}
       data-group-id=${message.groupId ?? ''}
+      role=${call.childStreamId === undefined ? nothing : 'button'}
+      tabindex=${call.childStreamId === undefined ? nothing : '0'}
+      @click=${call.childStreamId === undefined ? nothing : openChildStream}
+      @keydown=${call.childStreamId === undefined ? nothing : handleKeydown}
     >
       <span class="workflow-task-icon">${statusIcon(call)}</span>
       <span class="workflow-task-body">
