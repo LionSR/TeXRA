@@ -76,7 +76,7 @@ function workflowAgentSlice(
 }
 
 describe('CLI child list display model', () => {
-  it('shows concise input and context metadata only in an active workflow view', () => {
+  it('omits static input and context counts from the live workflow band', () => {
     const workflow = workflowAgentSlice('devise', {
       files: {
         input: ['src/Main.lean', 'src/Lemma.lean'],
@@ -98,9 +98,7 @@ describe('CLI child list display model', () => {
       files: { input: [], context: [], media: [], output: [] },
     });
 
-    expect(workflowRunStatusSummary(workflow)).toBe(
-      'Input: 2 files · Context: 1 file',
-    );
+    expect(workflowRunStatusSummary(workflow)).toBeUndefined();
     expect(workflowRunStatusSummary(toolUse)).toBeUndefined();
     expect(workflowRunStatusSummary(workflowWithoutInputs)).toBeUndefined();
     expect(workflowRunStatusSummary(undefined)).toBeUndefined();
@@ -161,9 +159,7 @@ describe('CLI child list display model', () => {
 
     // Only the current phase's tasks are folded, and the phase segment leads so
     // it survives truncation on a narrow terminal.
-    expect(workflowRunStatusSummary(slice)).toBe(
-      'Map (1/3) · 1/2 done · Input: 1 file · Context: 0 files',
-    );
+    expect(workflowRunStatusSummary(slice)).toBe('Map (1/3) · 1/2 done');
   });
 
   it('does not invent a phase fold for phase-less tasks', () => {
@@ -232,9 +228,7 @@ describe('CLI child list display model', () => {
       ],
     });
 
-    expect(workflowRunStatusSummary(slice)).toBe(
-      'Map (1/2) · 0/1 done · Input: 1 file · Context: 0 files',
-    );
+    expect(workflowRunStatusSummary(slice)).toBe('Map (1/2) · 0/1 done');
   });
 
   it('prioritizes live workflow activity over metadata in a one-row viewport', async () => {
@@ -328,7 +322,7 @@ describe('CLI child list display model', () => {
       expectedActivity: 'Failed',
     },
   ])(
-    'keeps $activityLabel visible below one-row long-file metadata at narrow widths',
+    'keeps $activityLabel visible without a static file-count row at narrow widths',
     async ({ activity, expectedActivity }) => {
       const { ink, React } = await loadInk();
       const streamId = 'devise' as StreamTabId;
@@ -358,8 +352,9 @@ describe('CLI child list display model', () => {
           { columns: 18 },
         );
         const outputLines = output.split('\n');
-        expect(outputLines).toHaveLength(2);
-        expect(outputLines[0]).toBe('Input: 1 file · C…');
+        expect(outputLines.length).toBeLessThanOrEqual(2);
+        expect(output).not.toContain('Input:');
+        expect(output).not.toContain('Context:');
         expect(outputLines.every((line) => textDisplayWidth(line) <= 18)).toBe(
           true,
         );

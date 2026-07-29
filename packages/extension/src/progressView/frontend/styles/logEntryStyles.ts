@@ -76,6 +76,16 @@ export const logEntryStyles = css`
     background: var(--wa-color-neutral-fill-quiet);
   }
 
+  .workflow-task--linked {
+    cursor: pointer;
+  }
+
+  .workflow-task--linked:hover,
+  .workflow-task--linked:focus-visible {
+    border-color: var(--wa-color-focus);
+    outline: none;
+  }
+
   .workflow-task--completed,
   .workflow-task--cached {
     border-left-color: var(--color-success);

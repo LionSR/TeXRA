@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   configureDelegatedChildApprovals: vi.fn(),
   workspaceReadBytes: vi.fn(),
   absoluteReadBytes: vi.fn(),
+  readExecutionMeta: vi.fn(),
 }));
 
 vi.mock('@tools/approval', () => ({
@@ -58,6 +59,7 @@ vi.mock('@tools/delegation/proposalFlow', () => ({
 }));
 
 vi.mock('@agent/storage', () => ({
+  getExecutionStore: vi.fn(() => ({ readMeta: mocks.readExecutionMeta })),
   resolveChildRunOutput: mocks.resolveChildRunOutput,
 }));
 
@@ -184,7 +186,9 @@ describe('createWorkflowScriptAgentRunner', () => {
     mocks.runStorageLocationFromAnyAbsolutePath.mockReturnValue(undefined);
     mocks.workspaceReadBytes.mockResolvedValue(Buffer.from('workspace bytes'));
     mocks.absoluteReadBytes.mockResolvedValue(Buffer.from('run bytes'));
+    mocks.readExecutionMeta.mockResolvedValue(undefined);
     mocks.executeStableSubagentInBand.mockImplementation(async (options) => {
+      options.onActiveExecutionId?.(options.executionId);
       mocks.preparedOptions.push(await options.prepare());
       return { executionId: 'bbbbbb222222', result };
     });
@@ -271,6 +275,20 @@ describe('createWorkflowScriptAgentRunner', () => {
       contextFiles: ['notes.tex'],
       mediaFiles: ['figure.pdf'],
     });
+    call.reportModel = vi.fn();
+    call.reportChildStream = vi.fn();
+    mocks.executeStableSubagentInBand.mockImplementationOnce(
+      async (options) => {
+        options.onActiveExecutionId?.(options.executionId);
+        const prepared = await options.prepare();
+        mocks.preparedOptions.push(prepared);
+        expect(call.reportChildStream).not.toHaveBeenCalled();
+        prepared.onStreamResolved?.(
+          `correct@child-model#${options.executionId}` as StreamTabId,
+        );
+        return { executionId: 'bbbbbb222222', result };
+      },
+    );
     const runner = defaultRunner();
 
     await expect(runner(call)).resolves.toBe(result);
@@ -323,6 +341,10 @@ describe('createWorkflowScriptAgentRunner', () => {
           },
         }),
       }),
+    );
+    expect(call.reportModel).toHaveBeenCalledWith('child-model');
+    expect(call.reportChildStream).toHaveBeenCalledWith(
+      expect.stringMatching(/^correct@child-model#[a-f0-9]{24}$/),
     );
   });
 
@@ -584,6 +606,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     const onCost = vi.fn();
     mocks.executeStableSubagentInBand.mockImplementationOnce(
       async (options) => {
+        options.onActiveExecutionId?.(options.executionId);
         const prepared = await options.prepare();
         await prepared.onCost?.(0.25);
         return { executionId: 'bbbbbb222222', result };
@@ -599,15 +622,38 @@ describe('createWorkflowScriptAgentRunner', () => {
 
   it('does not report recovered stable child cost as live execution', async () => {
     const onCost = vi.fn();
+    const reportChildStream = vi.fn();
+    const recoveredStreamId = 'correct@child-model#bbbbbb222222' as StreamTabId;
+    mocks.readExecutionMeta.mockResolvedValueOnce({
+      streamId: recoveredStreamId,
+    });
     mocks.executeStableSubagentInBand.mockResolvedValueOnce({
       executionId: 'bbbbbb222222',
       result: { ...result, cost: 0.25 },
     });
     const runner = defaultRunner({ onCost });
 
-    await runner({ ...invocation(), index: 3 });
+    await runner({ ...invocation(), index: 3, reportChildStream });
 
     expect(onCost).not.toHaveBeenCalled();
+    expect(reportChildStream).toHaveBeenCalledWith(recoveredStreamId);
+  });
+
+  it('keeps a recovered result when navigation metadata cannot be read', async () => {
+    const reportChildStream = vi.fn();
+    mocks.readExecutionMeta.mockRejectedValueOnce(
+      new Error('metadata unavailable'),
+    );
+    mocks.executeStableSubagentInBand.mockResolvedValueOnce({
+      executionId: 'bbbbbb222222',
+      result,
+    });
+    const runner = defaultRunner();
+
+    await expect(
+      runner({ ...invocation(), index: 3, reportChildStream }),
+    ).resolves.toBe(result);
+    expect(reportChildStream).not.toHaveBeenCalled();
   });
 
   it('aborts the run when a file-editing agent gets no input files', async () => {
@@ -755,6 +801,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     }));
     mocks.executeStableSubagentInBand.mockImplementationOnce(
       async (options) => {
+        options.onActiveExecutionId?.(options.executionId);
         mocks.preparedOptions.push(await options.prepare());
         return { executionId: 'bbbbbb222222', result: structuredResult };
       },
@@ -804,6 +851,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     }));
     mocks.executeStableSubagentInBand.mockImplementationOnce(
       async (options) => {
+        options.onActiveExecutionId?.(options.executionId);
         mocks.preparedOptions.push(await options.prepare());
         return { executionId: 'bbbbbb222222', result: structuredResult };
       },
