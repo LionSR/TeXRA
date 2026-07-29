@@ -30,15 +30,8 @@ import {
   loadFileListSettings,
   type ListableFileType,
 } from '@common/files/fileListingRules';
-import {
-  formatPartialTeamLaunchMessage,
-  formatTeamLaunchBlockedMessage,
-  formatTeamUnavailableMessage,
-  formatUnknownTeamMessage,
-  resolveTeamLaunch,
-  TEAM_SELECTION_REQUIRED_MESSAGE,
-} from '@common/teams/TeamPlan';
 import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
+import { prepareMainViewExecutionLaunch } from '@controllers/mainView/MainViewExecutionLaunchController';
 import { replayApprovalRequestHandlers } from '@controllers/progressView/backend/progressBackendUiConfig';
 import { buildStreamInfo } from '@controllers/progressView/backend/streamInfoUtils';
 import { ProgressBackend } from '@controllers/progressView/backend/ProgressBackend';
@@ -60,11 +53,6 @@ import {
 } from '@controllers/progressView/ProgressWorkflowActionsController';
 import { ProgressViewHost } from '@controllers/progressView/ProgressViewHost';
 import { buildMainViewState } from '@controllers/mainView/MainViewStateRestoreController';
-import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
-import {
-  prepareMainViewExecutionRequest,
-  prepareMainViewTeamExecutionRequest,
-} from '@controllers/mainView/MainViewExecutionController';
 import {
   runCleanMultiple,
   runCleanRunDir,
@@ -1503,63 +1491,11 @@ export class DesktopProgressBridge {
   }
 
   async handleExecute(message: MainViewExecuteMessage): Promise<void> {
-    let preparation;
-    if (message.session?.launchTarget === 'team') {
-      try {
-        const teamId = message.session.teamId;
-        if (!teamId) {
-          await this.options.host.showErrorMessage(
-            TEAM_SELECTION_REQUIRED_MESSAGE,
-          );
-          return;
-        }
-
-        const resolution = await resolveTeamLaunch({
-          teamId,
-          ...createTeamCatalogPorts(),
-          choose: (unavailableNames) =>
-            this.options.host.chooseTeamAvailability(unavailableNames),
-          signIn: () => this.options.host.signInForRemoteAgentCatalog(),
-        });
-
-        if (resolution.status === 'cancelled') return;
-        if (resolution.status === 'unknown-team') {
-          await this.options.host.showErrorMessage(
-            formatUnknownTeamMessage(teamId),
-          );
-          return;
-        }
-        if (resolution.status === 'blocked') {
-          await this.options.host.showErrorMessage(
-            formatTeamLaunchBlockedMessage(teamId, resolution.reason),
-          );
-          return;
-        }
-        if (resolution.status === 'unavailable') {
-          await this.options.host.showErrorMessage(
-            formatTeamUnavailableMessage(teamId, resolution.unavailableNames),
-          );
-          return;
-        }
-
-        if (resolution.partial) {
-          await this.options.host.showInfoMessage(
-            formatPartialTeamLaunchMessage(resolution.missingNames),
-          );
-        }
-        preparation = prepareMainViewTeamExecutionRequest(
-          message,
-          resolution.fields,
-        );
-      } catch (error) {
-        await this.options.host.showErrorMessage(
-          `Team launch failed: ${toErrorMessage(error)}`,
-        );
-        return;
-      }
-    } else {
-      preparation = prepareMainViewExecutionRequest(message);
-    }
+    const preparation = await prepareMainViewExecutionLaunch(
+      message,
+      this.options.host,
+    );
+    if (!preparation) return;
     if (!preparation.valid) {
       await this.options.host.showErrorMessage(preparation.message);
       return;
