@@ -9,6 +9,8 @@ export type ResponseTextPostProcessor = (text: string) => string;
  * by one space. TeXRA hosts may inject their LaTeX-specific behavior.
  */
 export interface ResponseTextProcessing {
+  /** Normalize provider text only when the host explicitly requests it. */
+  readonly normalizeResponseText: ResponseTextPostProcessor;
   readonly postProcessResponse: ResponseTextPostProcessor;
   readonly connectResponseText: (
     previous: string,
@@ -34,6 +36,7 @@ async function connectResponseText(
 /** Create neutral package defaults when a host supplies no text policy. */
 export function createNeutralResponseTextProcessing(): ResponseTextProcessing {
   return {
+    normalizeResponseText: preserveResponseText,
     postProcessResponse: preserveResponseText,
     connectResponseText,
   };

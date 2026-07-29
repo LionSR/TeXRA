@@ -529,13 +529,14 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     let newResponse = '';
     const msg = choice.message;
     if (typeof msg.content === 'string') {
-      newResponse = msg.content.trim();
+      newResponse = this.normalizeResponseText(msg.content);
     } else if (Array.isArray(msg.content)) {
-      newResponse = (msg.content as ChatContentItems[])
-        .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
-        .map((p) => p.text)
-        .join('')
-        .trim();
+      newResponse = this.normalizeResponseText(
+        (msg.content as ChatContentItems[])
+          .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+          .map((p) => p.text)
+          .join(''),
+      );
     } else if (
       stopReason === OPENAI_CHAT_FINISH.TOOL_CALLS ||
       (msg.toolCalls && msg.toolCalls.length > 0)

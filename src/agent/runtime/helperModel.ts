@@ -9,7 +9,10 @@
 import type { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import { auxiliaryRetry } from '@agent/modelHandlers/support/auxiliaryRetry';
 import { createModelHandler } from '@agent/runtime/ModelFactory';
-import { currentSession } from '@agent/runtime/SessionHandle';
+import {
+  currentSession,
+  type SessionHandle,
+} from '@agent/runtime/SessionHandle';
 import { getModelUnavailableReason } from '@model/computeModelOptions';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 
@@ -28,7 +31,9 @@ export type HelperModelResult =
   { kit: HelperModelKit } | { kit: undefined; reason: string };
 
 /** Resolve the configured helper model, create a non-streaming handler, and obtain a client. */
-export async function createHelperModelKit(): Promise<HelperModelResult> {
+export async function createHelperModelKit(
+  session: SessionHandle = currentSession(),
+): Promise<HelperModelResult> {
   const modelName = getHelperModelName();
 
   const reason = await getModelUnavailableReason(modelName);
@@ -47,7 +52,7 @@ export async function createHelperModelKit(): Promise<HelperModelResult> {
   const handler = await createModelHandler(
     modelConfig,
     undefined,
-    currentSession().responseTextProcessing.postProcessResponse,
+    session.responseTextProcessing,
   );
   handler.setOutputStreaming(false);
   handler.setProgressViewEnabled(false);

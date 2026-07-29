@@ -1210,7 +1210,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const stopReason = responseObject.stop_reason;
     let newResponse = responseObject.content
       .filter(isBetaTextBlock)
-      .map((block) => block.text.trim())
+      .map((block) => this.normalizeResponseText(block.text))
       .join('');
 
     // Add end tag if needed

@@ -908,7 +908,7 @@ export class ModelHandlerOpenAI<
       this.logger.warn(
         'Using direct response format (streaming style) as fallback',
       );
-      let newResponse = classified.content.trim();
+      let newResponse = this.normalizeResponseText(classified.content);
       const { stopReason, usage } = classified;
 
       // Only restore the end tag when it was configured as an API-level
@@ -933,7 +933,7 @@ export class ModelHandlerOpenAI<
     this.logger.debug(`Stop reason: ${stopReason}`);
     let newResponse = '';
     if (choice.message.content) {
-      newResponse = choice.message.content.trim();
+      newResponse = this.normalizeResponseText(choice.message.content);
     } else if (
       stopReason === OPENAI_CHAT_FINISH.TOOL_CALLS ||
       stopReason === OPENAI_CHAT_FINISH.FUNCTION_CALL ||

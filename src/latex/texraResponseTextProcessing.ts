@@ -3,6 +3,7 @@ import replacementEngine from '@replacement/engine';
 
 /** TeXRA's LaTeX-aware provider-output policy, injected by application hosts. */
 export const texraResponseTextProcessing: ResponseTextProcessing = {
+  normalizeResponseText: (text) => text.trim(),
   postProcessResponse: (text) => replacementEngine.applyAll(text),
   connectResponseText: async (previous, next) => {
     const { bestConnectionMethod } =

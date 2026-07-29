@@ -8,7 +8,7 @@ import type {
   TokenCountOptions,
   VscodeLmToolCall,
 } from '@agent/types/ModelHandlerContracts';
-import type { ResponseTextPostProcessor } from '@agent/runtime/responseTextProcessing';
+import type { ResponseTextProcessing } from '@agent/runtime/responseTextProcessing';
 import { OPENAI_CHAT_FINISH } from '@agent/types/StopReasonTypes';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 import type { SdkErrorKind } from '@common/errors/sdkErrorUtils';
@@ -189,9 +189,9 @@ export class ModelHandlerVscodeLm extends ModelHandler<
 > {
   constructor(
     config: ModelConfig,
-    postProcessResponse?: ResponseTextPostProcessor,
+    responseTextProcessing?: ResponseTextProcessing,
   ) {
-    super(config, postProcessResponse);
+    super(config, responseTextProcessing);
     this.capabilities.supportsNativeAudio = false;
     this.capabilities.supportsNativePdf = false;
     this.capabilities.supportsAssistantPrefill = false;
@@ -332,7 +332,7 @@ export class ModelHandlerVscodeLm extends ModelHandler<
 
   extractResponse(response: VscodeLmResponse): ExtractResponseResult {
     return {
-      text: this.postProcessResponse(response.text.trim()),
+      text: this.postProcessResponse(this.normalizeResponseText(response.text)),
       usage: response.usage,
       stopReason: response.stopReason,
     };

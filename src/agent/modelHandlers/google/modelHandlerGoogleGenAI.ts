@@ -712,7 +712,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     // The getter may use cached values that don't reflect mutations we made
     // to the candidates array during streaming (lines 536-550, 577-584).
     // Filter out thought parts and concatenate text from remaining parts.
-    const rawResponseText = extractNonThinkingText(parts, true);
+    const rawResponseText = this.normalizeResponseText(
+      extractNonThinkingText(parts),
+    );
 
     // For TOOL CALL ONLY RESPONSE this happens sometimes, we don't want to log it
     let responseText = this.postProcessResponse(rawResponseText);

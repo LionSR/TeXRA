@@ -296,12 +296,12 @@ async function assembleAgentLaunchContext(
           modelConfig,
           modelHandlerCompatibilityKey,
           setting.agentCategory,
-          session.responseTextProcessing.postProcessResponse,
+          session.responseTextProcessing,
         )
       : await createModelHandler(
           modelConfig,
           setting.agentCategory,
-          session.responseTextProcessing.postProcessResponse,
+          session.responseTextProcessing,
         ),
   );
 

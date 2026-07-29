@@ -1,11 +1,14 @@
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
-import { MODEL_CONFIGS } from 'llm-zoo';
+import { MODEL_CONFIGS, ModelProvider } from 'llm-zoo';
 
 // Local imports
+import { noopTrace } from '@agent/trace';
 import { ModelHandlerValidation } from '@agent/modelHandlers/modelHandlerValidation';
+import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
 import { createNeutralResponseTextProcessing } from '@agent/runtime/responseTextProcessing';
 import { texraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 const RAW_PROVIDER_TEXT = '$\\mathrm{Tr}$ remains provider text.';
 const RESPONSE = {
@@ -27,10 +30,11 @@ describe('response text processing', () => {
 
   it('applies an explicitly supplied processor exactly once', () => {
     const postProcessResponse = vi.fn((text: string) => `[${text}]`);
-    const handler = new ModelHandlerValidation(
-      MODEL_CONFIGS.gpt54,
+    const handler = new ModelHandlerValidation(MODEL_CONFIGS.gpt54, {
+      normalizeResponseText: (text) => text,
       postProcessResponse,
-    );
+      connectResponseText: async () => ' ',
+    });
 
     expect(handler.extractResponse(RESPONSE).text).toBe(
       `[${RAW_PROVIDER_TEXT}]`,
@@ -38,6 +42,30 @@ describe('response text processing', () => {
     expect(postProcessResponse).toHaveBeenCalledExactlyOnceWith(
       RAW_PROVIDER_TEXT,
     );
+  });
+
+  it('preserves OpenAI Chat Completions whitespace by default', () => {
+    const handler = new ModelHandlerOpenAI(
+      buildTestModelConfig({
+        provider: ModelProvider.OPENAI,
+        capabilities: { supportsReasoning: true, supportsVision: false },
+      }),
+    );
+    handler.setLogger({ ...noopTrace });
+
+    const result = handler.extractResponse(
+      {
+        choices: [
+          {
+            message: { content: '  indented text\n' },
+            finish_reason: 'stop',
+          },
+        ],
+      },
+      '',
+    );
+
+    expect(result.text).toBe('  indented text\n');
   });
 
   it('joins continuation text deterministically without a helper model', async () => {
@@ -53,8 +81,11 @@ describe('response text processing', () => {
   });
 
   it('keeps TeXRA replacement behavior in the application adapter', () => {
-    expect(
-      texraResponseTextProcessing.postProcessResponse(RAW_PROVIDER_TEXT),
-    ).toBe('$\\Tr$ remains provider text.');
+    const normalized = texraResponseTextProcessing.normalizeResponseText(
+      ` ${RAW_PROVIDER_TEXT}\n`,
+    );
+    expect(texraResponseTextProcessing.postProcessResponse(normalized)).toBe(
+      '$\\Tr$ remains provider text.',
+    );
   });
 });

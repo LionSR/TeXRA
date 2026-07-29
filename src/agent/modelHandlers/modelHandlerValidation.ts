@@ -14,7 +14,7 @@ import type {
   ExtractResponseResult,
   SdkToolCall,
 } from '@agent/types/ModelHandlerContracts';
-import type { ResponseTextPostProcessor } from '@agent/runtime/responseTextProcessing';
+import type { ResponseTextProcessing } from '@agent/runtime/responseTextProcessing';
 import type { ProviderStopReason } from '@agent/types/StopReasonTypes';
 import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
 import type {
@@ -134,9 +134,9 @@ export class ModelHandlerValidation extends ModelHandler<
 > {
   constructor(
     config: ModelConfig,
-    postProcessResponse?: ResponseTextPostProcessor,
+    responseTextProcessing?: ResponseTextProcessing,
   ) {
-    super(config, postProcessResponse);
+    super(config, responseTextProcessing);
     this.capabilities.supportsVision = false;
     this.capabilities.supportsFunctionCalling = true;
     this.capabilities.supportsAssistantPrefill = false;

@@ -2440,11 +2440,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         },
       );
     }
-    let newResponse = responseObject.output_text?.trim() ?? '';
-    if (!newResponse && Array.isArray(responseObject.output)) {
+    const providerOutputText = responseObject.output_text ?? '';
+    let newResponse = this.normalizeResponseText(providerOutputText);
+    if (!providerOutputText.trim() && Array.isArray(responseObject.output)) {
       // Mutates responseObject.output_text from output message parts.
       addOutputText(responseObject);
-      newResponse = responseObject.output_text?.trim() ?? '';
+      newResponse = this.normalizeResponseText(
+        responseObject.output_text ?? '',
+      );
     }
 
     const stopReason =

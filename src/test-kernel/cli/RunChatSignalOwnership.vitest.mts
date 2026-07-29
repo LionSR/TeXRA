@@ -70,6 +70,7 @@ vi.doMock(cliRequire.resolve('ink'), () => ({
 
 vi.mock('@latex/texraResponseTextProcessing', () => ({
   texraResponseTextProcessing: {
+    normalizeResponseText: (text: string) => text,
     postProcessResponse: (text: string) => text,
     connectResponseText: async () => ' ',
   },
