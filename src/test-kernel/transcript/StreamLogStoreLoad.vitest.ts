@@ -47,6 +47,13 @@ function storageFile(dir: string, key: string): string {
   return path.join(dir, `${encodeURIComponent(key)}.json`);
 }
 
+function writtenLog(
+  writes: ReadonlyMap<string, unknown>,
+  streamId: string,
+): StreamLogEntry[] {
+  return writes.get(storageFile(STREAM_LOGS_DIR, streamId)) as StreamLogEntry[];
+}
+
 function streamKeyFromFile(target: string): string {
   return decodeURIComponent(path.basename(target).replace(/\.json$/, ''));
 }
@@ -891,10 +898,11 @@ describe('StreamLogStore load', () => {
 
     const affected = await store.endRunningGroups(300);
     await store.flush();
-    const entry = store.get('alpha')?.getRange(0).at(0);
+    expect(store.get('alpha')).toBeUndefined();
+    expect(storage.fullLogReads()).toBe(1);
+    const entry = writtenLog(storage.writes, 'alpha').at(0);
 
     expect(affected).toEqual(['alpha']);
-    expect(storage.fullLogReads()).toBe(1);
     expect(entry?.type).toBe(STREAM_LOG_ENTRY_TYPES.GROUP_END);
     // endRunningGroups() defaults to RUN_OUTCOME.FAILED (#7993 step 2) — the
     // orphan sweep's caller-classified default, not the folded 'error'
@@ -972,9 +980,9 @@ describe('StreamLogStore load', () => {
 
     expect(affected).toEqual(['alpha']);
     expect(storage.fullLogReads()).toBe(1);
-    expect(store.get('alpha')?.getRange(0).at(0)?.type).toBe(
-      STREAM_LOG_ENTRY_TYPES.GROUP_END,
-    );
+    expect(store.get('alpha')).toBeUndefined();
+    const entry = writtenLog(storage.writes, 'alpha').at(0);
+    expect(entry?.type).toBe(STREAM_LOG_ENTRY_TYPES.GROUP_END);
     expect(store.get('beta')).toBeUndefined();
     expect(
       storage.writes.get(storageFile(STREAM_LOG_SUMMARIES_DIR, 'alpha')),
@@ -987,6 +995,32 @@ describe('StreamLogStore load', () => {
     expect(
       storage.writes.get(storageFile(STREAM_LOG_SUMMARIES_DIR, 'beta')),
     ).toBeUndefined();
+  });
+
+  it('keeps already-resident streams after repairing their running groups', async () => {
+    const storage = mockStorage({
+      logs: {
+        alpha: [runningGroupEntry('alpha', 1, 100)],
+      },
+      summaries: {
+        alpha: {
+          firstTimestamp: 100,
+          lastTimestamp: 100,
+          hasRunningGroup: true,
+        },
+      },
+    });
+    const store = await StreamLogStore.open();
+    await store.ensureLoaded('alpha');
+
+    const affected = await store.endRunningGroupsForStreams(['alpha'], 300);
+    await store.flush();
+
+    expect(affected).toEqual(['alpha']);
+    expect(storage.fullLogReads()).toBe(1);
+    expect(store.get('alpha')?.getRange(0).at(0)?.type).toBe(
+      STREAM_LOG_ENTRY_TYPES.GROUP_END,
+    );
   });
 
   it('finalizes an orphaned streaming-text entry even when its group already closed (#7276)', async () => {
@@ -1013,10 +1047,11 @@ describe('StreamLogStore load', () => {
 
     const affected = await store.endRunningGroupsForStreams(['gamma'], 300);
     await store.flush();
-    const entry = store.get('gamma')?.getRange(0).at(0);
+    expect(store.get('gamma')).toBeUndefined();
+    expect(storage.fullLogReads()).toBe(1);
+    const entry = writtenLog(storage.writes, 'gamma').at(0);
 
     expect(affected).toEqual(['gamma']);
-    expect(storage.fullLogReads()).toBe(1);
     expect(entry?.data).toEqual({ status: 'completed' });
     expect(
       storage.writes.get(storageFile(STREAM_LOG_SUMMARIES_DIR, 'gamma')),
@@ -1048,7 +1083,8 @@ describe('StreamLogStore load', () => {
 
     const affected = await store.endRunningGroupsForStreams(['workflow'], 300);
     await store.flush();
-    const entries = store.get('workflow')?.getRange(0) ?? [];
+    expect(store.get('workflow')).toBeUndefined();
+    const entries = writtenLog(storage.writes, 'workflow');
 
     expect(affected).toEqual(['workflow']);
     expect(entries.at(0)).toMatchObject({
@@ -1106,11 +1142,13 @@ describe('StreamLogStore load', () => {
     await store.flush();
 
     expect(affected).toEqual(['alpha']);
-    expect(store.get('alpha')?.getRange(0).at(0)?.data).toEqual({
+    expect(store.get('alpha')).toBeUndefined();
+    expect(storage.fullLogReads()).toBe(1);
+    const entry = writtenLog(storage.writes, 'alpha').at(0);
+    expect(entry?.data).toEqual({
       status: RUN_OUTCOME.CANCELLED,
       endTime: 300,
     });
-    expect(storage.fullLogReads()).toBe(1);
   });
 
   // §8.3 boundary normalization: the ONE app-side read boundary for legacy
@@ -1205,9 +1243,10 @@ describe('StreamLogStore load', () => {
     expect(affected).toEqual(['beta']);
     expect(storage.fullLogReads()).toBe(1);
     expect(store.get('alpha')).toBeUndefined();
-    expect(store.get('beta')?.getRange(0).at(0)?.type).toBe(
-      STREAM_LOG_ENTRY_TYPES.GROUP_END,
-    );
+
+    expect(store.get('beta')).toBeUndefined();
+    const entry = writtenLog(storage.writes, 'beta').at(0);
+    expect(entry?.type).toBe(STREAM_LOG_ENTRY_TYPES.GROUP_END);
   });
 
   it('bounds stale running group rehydrates', async () => {
