@@ -30,6 +30,8 @@ type WorkflowScriptRunWithProgressOptions = Omit<
    * to the invoking model, which otherwise cannot see any of it.
    */
   readonly onActivity?: (line: string) => void;
+  /** Observe the engine events from which this projection is derived. */
+  readonly onEvent?: (event: WorkflowScriptEvent) => void;
 };
 
 interface PhaseStage {
@@ -154,7 +156,7 @@ export async function runPersistedWorkflowScriptWithProgress(
   trace: AgentTrace,
   options: WorkflowScriptRunWithProgressOptions,
 ): Promise<WorkflowScriptRunResult> {
-  const { getCallCostUsd, onActivity, ...runOptions } = options;
+  const { getCallCostUsd, onActivity, onEvent, ...runOptions } = options;
   const parentStageId = trace.activeStageId();
   const phases = new Map<string, PhaseStage>();
   const phaseStageIds = new Map<string, string>();
@@ -286,6 +288,7 @@ export async function runPersistedWorkflowScriptWithProgress(
 
   const project = (event: WorkflowScriptEvent): void => {
     if (closed) return;
+    onEvent?.(event);
     switch (event.type) {
       case 'plan':
         for (const task of event.tasks) {

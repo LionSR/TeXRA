@@ -13,10 +13,14 @@ import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
+import '@awesome.me/webawesome/dist/components/details/details.js';
 
 // Local imports - shared styles
 import { compactIconActionButtonStyles } from '@shared/styles';
-import { decodeXmlEntities } from '@shared/subagentFollowup';
+import {
+  decodeXmlEntities,
+  workflowScriptDeliverySummary,
+} from '@shared/subagentFollowup';
 import { DELIVERY_TAGS, type DeliveryTagName } from '@shared/deliveryTags';
 import { CopyButtonController } from '@shared/litControllers/CopyButtonController';
 import { designTokens } from '@shared/styles/litStyles';
@@ -136,6 +140,19 @@ export class UserMessage extends LitElement {
         white-space: normal;
       }
 
+      .workflow-delivery-raw {
+        margin-top: var(--wa-space-xs);
+        font-size: var(--font-size-xs);
+      }
+
+      .workflow-delivery-raw pre {
+        max-height: min(34vh, 360px);
+        margin: var(--wa-space-xs) 0 0;
+        overflow: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
       .user-message-timestamp {
         font-size: var(--font-size-xs);
       }
@@ -185,6 +202,7 @@ export class UserMessage extends LitElement {
     isStructuredDelivery: false,
     hasRawMessage: false,
     displayText: '',
+    workflowSummary: '',
     structuredMarkdownHtml: '',
   };
 
@@ -192,6 +210,7 @@ export class UserMessage extends LitElement {
     isStructuredDelivery: boolean;
     hasRawMessage: boolean;
     displayText: string;
+    workflowSummary: string;
     structuredMarkdownHtml: string;
   } {
     if (this.displayCache.text === this.text) {
@@ -204,16 +223,22 @@ export class UserMessage extends LitElement {
     const displayText = hasRawMessage
       ? decodeXmlEntities(this.text)
       : this.text;
+    // Parse presentation metadata before decoding the escaped response body:
+    // model text containing a literal <workflow-summary> must not shadow the
+    // envelope-owned summary element.
+    const workflowSummary = workflowScriptDeliverySummary(this.text) ?? '';
+    const structuredDisplayText = workflowSummary || displayText;
 
     this.displayCache = {
       text: this.text,
       isStructuredDelivery,
       hasRawMessage,
       displayText,
+      workflowSummary,
       // Cached alongside displayText: message text is immutable after
       // creation, so the Markdown parse must not rerun on every render.
       structuredMarkdownHtml: isStructuredDelivery
-        ? processMarkdownContent(displayText)
+        ? processMarkdownContent(structuredDisplayText)
         : '',
     };
     return this.displayCache;
@@ -232,6 +257,7 @@ export class UserMessage extends LitElement {
       isStructuredDelivery,
       hasRawMessage,
       displayText,
+      workflowSummary,
       structuredMarkdownHtml,
     } = this.getDisplayState();
 
@@ -282,6 +308,16 @@ export class UserMessage extends LitElement {
                   data-log-id=${this.logId}
                 >
                   ${unsafeHTML(structuredMarkdownHtml)}
+                  ${
+                    workflowSummary
+                      ? html`<wa-details
+                          class="workflow-delivery-raw"
+                          summary="Raw result"
+                        >
+                          <pre>${displayText}</pre>
+                        </wa-details>`
+                      : nothing
+                  }
                 </div>`
               : html`<div
                   class="user-message-content"

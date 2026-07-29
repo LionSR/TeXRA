@@ -12,7 +12,10 @@
  */
 
 // Local imports
-import { readWorkflowScriptCheckpoint } from '@agent/workflowScript';
+import {
+  parseWorkflowScript,
+  readWorkflowScriptCheckpoint,
+} from '@agent/workflowScript';
 import type {
   WorkflowAgentInvocation,
   WorkflowAgentRunner,
@@ -42,6 +45,7 @@ import {
   runPersistedWorkflowScriptWithProgress,
 } from './workflowScriptRun';
 import { fingerprintWorkflowAgentDependencies } from './workflowScriptAgentRunner';
+import { createWorkflowDeliverySummaryCollector } from './workflowScriptDeliverySummary';
 
 const RUN_LOG_MAX_LINES = 80;
 const RUN_LOG_MAX_LINE_LENGTH = 500;
@@ -140,12 +144,17 @@ export function createWorkflowScriptStrategy(
   params: WorkflowScriptStrategyParams,
 ): ChildRunStrategy<WorkflowScriptRunResult> {
   const runLog = createRunLogCollector();
+  const summary = createWorkflowDeliverySummaryCollector(
+    params.name,
+    params.scriptPath,
+  );
 
   return {
     stageLabel: `Workflow script '${params.name}'`,
     ...(params.deliveryMode && { deliveryMode: params.deliveryMode }),
 
     launch: async (ports, abortController) => {
+      summary.start();
       // Physical-attempt callbacks are the current-invocation boundary: replay
       // and stable recovery emit none, while every model attempt emits one.
       const attemptCost = createWorkflowAttemptCostTracker();
@@ -189,6 +198,7 @@ export function createWorkflowScriptStrategy(
             fingerprintWorkflowAgentDependencies(params.executionId, options),
           getCallCostUsd: (index) => callCostsByIndex.get(index),
           onActivity: runLog.add,
+          onEvent: summary.onEvent,
           onControl: (control) => {
             // Translate an execution-id-keyed host request into an
             // index-keyed engine action; unknown/settled children no-op,
@@ -218,7 +228,17 @@ export function createWorkflowScriptStrategy(
             params.store,
             params.checkpointId,
           );
-          ports.recordCost(attemptCost.total(checkpoint?.journal ?? []));
+          const costUsd = attemptCost.total(checkpoint?.journal ?? []);
+          ports.recordCost(costUsd);
+          summary.settle(
+            checkpoint
+              ? {
+                  meta: parseWorkflowScript(checkpoint.script).meta,
+                  journal: checkpoint.journal,
+                }
+              : undefined,
+            costUsd,
+          );
         } catch {
           // Cost settlement is best-effort on the failure path.
         }
@@ -232,7 +252,9 @@ export function createWorkflowScriptStrategy(
 
       // The final journal supplies only this invocation's missing/lower
       // completed-call fallback; baseline history contributes zero.
-      ports.recordCost(attemptCost.total(run.journal));
+      const costUsd = attemptCost.total(run.journal);
+      ports.recordCost(costUsd);
+      summary.settle(run, costUsd);
       return run;
     },
 
@@ -249,6 +271,7 @@ export function createWorkflowScriptStrategy(
         },
         {
           response: `${formatWorkflowResult(turn.result)}${runLog.format()}\n\n${formatWorkflowScriptReference(params.scriptPath)}`,
+          lines: [summary.formatLine('completed')],
         },
       ),
 
@@ -260,6 +283,7 @@ export function createWorkflowScriptStrategy(
         },
         {
           message: `${toErrorMessage(err)}${runLog.format()}\n\n${formatWorkflowScriptReference(params.scriptPath)}\n\nCompleted agent() calls are journaled under meta.name '${params.name}'; rerunning that file resumes without repeating them.`,
+          lines: [summary.formatLine('failed')],
         },
       ),
   };
