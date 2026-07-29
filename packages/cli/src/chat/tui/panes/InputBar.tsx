@@ -39,6 +39,7 @@ import {
 } from '../commands/slashRegistry';
 import {
   reverseSearchOpen as reverseSearchOpenSignal,
+  setTransientNotice,
   slashPaletteOpen,
 } from '../state/cliState';
 import { useSignal } from '../state/useSignal';
@@ -123,7 +124,6 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
   const keyboardActive = props.keyboardActive ?? true;
   const [value, setValueState] = useState('');
   const reverseSearchOpen = useSignal(reverseSearchOpenSignal);
-  const [attachNotice, setAttachNotice] = useState<string | null>(null);
   const draftValueRef = useRef(value);
   // ↑/↓ history browsing (shell-style). `index` walks the persisted entries,
   // `savedDraft` restores whatever was typed before browsing began, and
@@ -226,7 +226,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
         const result = await attachClipboardImage();
         if (!attempt.isCurrent()) return null;
         if (!result.ok) {
-          setAttachNotice(result.reason);
+          setTransientNotice(result.reason);
           return null;
         }
         return attachmentsRef.current.addPastedImage({
@@ -236,20 +236,13 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
         });
       } catch (error) {
         if (attempt.isCurrent()) {
-          setAttachNotice(`Image paste failed: ${toErrorMessage(error)}`);
+          setTransientNotice(`Image paste failed: ${toErrorMessage(error)}`);
         }
         return null;
       }
     },
     [],
   );
-
-  // Clear the transient paste notice a few seconds after it appears.
-  useEffect(() => {
-    if (attachNotice === null) return;
-    const timer = setTimeout(() => setAttachNotice(null), 4000);
-    return () => clearTimeout(timer);
-  }, [attachNotice]);
 
   // Listen for Ctrl-R *outside* the text input — Ink emits the keystroke
   // to every `useInput` consumer, and BaseTextInput drops unhandled ctrl
@@ -424,7 +417,6 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
           onCancel={() => reverseSearchOpenSignal.set(false)}
         />
       ) : null}
-      {attachNotice ? <Text dimColor>{attachNotice}</Text> : null}
       <Box
         borderStyle="round"
         borderColor={COLOR_BORDER}
@@ -461,7 +453,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
             transformPaste={transformPaste}
             onImagePaste={onImagePaste}
             onImagePasteError={(error) =>
-              setAttachNotice(`Image paste failed: ${toErrorMessage(error)}`)
+              setTransientNotice(`Image paste failed: ${toErrorMessage(error)}`)
             }
             onInputChunkSubmit={handleInputChunkSubmit}
             onSubmit={showPalette ? () => undefined : handleSubmit}
