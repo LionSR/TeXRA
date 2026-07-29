@@ -9,18 +9,12 @@ import {
   DEFAULT_LATEX_SETTINGS_STATUS,
   type LatexSettingsStatus,
 } from '@shared/schemas/settingsViewMessages';
+import { CORE_LATEX_TOOLS, IMAGE_TOOLS } from '@tools/setup/toolProbing';
 
-const LATEX_PROBE_TOOLS = [
-  'pdflatex',
-  'latexmk',
-  'latexdiff',
-  'latexindent',
-  'perl',
-  'texcount',
-  'gs',
-  'gm',
-  'magick',
-] as const;
+// `CORE_LATEX_TOOLS`/`IMAGE_TOOLS` (`src/tools/setup/toolProbing.ts`) are the
+// single source of truth for the LaTeX toolchain probe set, shared with
+// `probe_environment`/`verify_setup`. Do not re-list tool names here.
+const LATEX_PROBE_TOOLS = [...CORE_LATEX_TOOLS, ...IMAGE_TOOLS] as const;
 
 export type LatexProbeTool = (typeof LATEX_PROBE_TOOLS)[number];
 

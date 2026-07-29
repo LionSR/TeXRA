@@ -11,6 +11,8 @@ import { BinaryResolver } from '@utils/system/binaryResolver';
  *
  * Keep both the tool descriptions (ProbeEnvironmentTool / VerifySetupTool)
  * aligned with these lists — they appear verbatim in the LLM prompt.
+ * `LatexToolingController` (settingsView) also derives its probe set from
+ * these constants; do not reintroduce a second hand-maintained tool list.
  */
 export const CORE_LATEX_TOOLS = Object.freeze([
   'pdflatex',
