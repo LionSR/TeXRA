@@ -137,4 +137,30 @@ describe('renderEmptyState shared helper', () => {
 
     expect(container.querySelector('.empty-state-actions')).toBeNull();
   });
+
+  it('wraps the icon in the sized icon-surface box when iconSurfaceSize is set', async () => {
+    const container = await renderEmptyStateInto({
+      icon: 'file-code',
+      title: 'Choose a file',
+      className: 'task-workbench-placeholder',
+      iconSurfaceSize: 'l',
+    });
+
+    const surface = container.querySelector('.empty-state-icon-surface');
+    expect(surface?.classList.contains('icon-surface')).toBe(true);
+    expect(surface?.classList.contains('is-size-l')).toBe(true);
+    expect(
+      surface?.querySelector('.empty-state-icon')?.tagName.toLowerCase(),
+    ).toBe('wa-icon');
+  });
+
+  it('renders a bare icon with no surface wrapper when iconSurfaceSize is omitted', async () => {
+    const container = await renderEmptyStateInto({
+      icon: 'database',
+      title: 'No saved memories yet.',
+      className: 'empty-state',
+    });
+
+    expect(container.querySelector('.empty-state-icon-surface')).toBeNull();
+  });
 });

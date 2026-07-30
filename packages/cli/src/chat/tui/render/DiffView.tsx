@@ -13,6 +13,7 @@ import { wrapAnsiToWidth } from './ansiWrap';
 import { maxScrollableRowOffset, scrollBoundedRows } from './scrollBounds';
 import { clipToWidth, fillRows, textDisplayWidth } from './terminalText';
 import { clampModalWidth } from '../ui/theme';
+import { hiddenRowsText, moreRowsText, previousRowsText } from './overflowText';
 
 type Hunk = StructuredPatchHunk;
 
@@ -224,11 +225,11 @@ function overflowMarkerCandidates(
 ): readonly [string, string] {
   switch (kind) {
     case 'hidden':
-      return [`... ${count} rows hidden`, `... ${count} hidden`];
+      return [hiddenRowsText(count), `... ${count} hidden`];
     case 'previous':
-      return [`... ${count} previous rows`, `... ${count} prev rows`];
+      return [previousRowsText(count), `... ${count} prev rows`];
     case 'more':
-      return [`... ${count} more rows`, `... +${count} rows`];
+      return [moreRowsText(count), `... +${count} rows`];
   }
 }
 
