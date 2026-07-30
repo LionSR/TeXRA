@@ -7,6 +7,7 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
   TOOL_USE_STATUS,
+  type StreamLogEntry,
   type StreamTabId,
 } from '@shared/schemas';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
@@ -14,18 +15,27 @@ import { attachTranscriptRecorder } from '@transcript/TexraTranscriptRecorder';
 import { StreamLogStore } from '@transcript/StreamLogStore';
 import { isObject } from '@utils/core';
 
+/** A recorder attached to a fresh ephemeral store, plus its persisted rows. */
+function attachRecorder(streamId: StreamTabId): {
+  trace: TraceEmitter;
+  rows: () => StreamLogEntry[];
+} {
+  const trace = new TraceEmitter();
+  const store = StreamLogStore.ephemeral('test');
+  store.ensureStream(streamId);
+  attachTranscriptRecorder(trace, store.acquireWriter(streamId, streamId));
+  return { trace, rows: () => store.get(streamId)?.getRange(0) ?? [] };
+}
+
 describe('attachTranscriptRecorder StreamPhase-native group rows (#7993 step 2)', () => {
   it("writes GROUP_START's data.status as StreamPhase.RUNNING", () => {
-    const trace = new TraceEmitter();
-    const store = StreamLogStore.ephemeral('test');
-    const streamId = 'stream:group-start-native' as StreamTabId;
-    store.ensureStream(streamId);
-    attachTranscriptRecorder(trace, store.acquireWriter(streamId, streamId));
+    const { trace, rows } = attachRecorder(
+      'stream:group-start-native' as StreamTabId,
+    );
 
     const stage = trace.openStage('r0', { kind: 'round' });
 
-    const entries = store.get(streamId)?.getRange(0) ?? [];
-    const startEntry = entries.find((e) => e.id === stage.id);
+    const startEntry = rows().find((e) => e.id === stage.id);
 
     expect(startEntry?.type).toBe(STREAM_LOG_ENTRY_TYPES.GROUP_START);
     expect(isObject(startEntry?.data) && startEntry.data.status).toBe(
@@ -34,17 +44,14 @@ describe('attachTranscriptRecorder StreamPhase-native group rows (#7993 step 2)'
   });
 
   it('defaults GROUP_END to the literal RunOutcome.COMPLETED, not a folded EndGroupStatus', () => {
-    const trace = new TraceEmitter();
-    const store = StreamLogStore.ephemeral('test');
-    const streamId = 'stream:group-end-default-outcome' as StreamTabId;
-    store.ensureStream(streamId);
-    attachTranscriptRecorder(trace, store.acquireWriter(streamId, streamId));
+    const { trace, rows } = attachRecorder(
+      'stream:group-end-default-outcome' as StreamTabId,
+    );
 
     const stage = trace.openStage('r0', { kind: 'round' });
     stage.end();
 
-    const entries = store.get(streamId)?.getRange(0) ?? [];
-    const endEntry = entries.find((e) => e.id === stage.id);
+    const endEntry = rows().find((e) => e.id === stage.id);
 
     expect(endEntry?.type).toBe(STREAM_LOG_ENTRY_TYPES.GROUP_END);
     expect(isObject(endEntry?.data) && endEntry.data.status).toBe(
@@ -53,17 +60,14 @@ describe('attachTranscriptRecorder StreamPhase-native group rows (#7993 step 2)'
   });
 
   it('writes an explicit RunOutcome passed to stage.end() verbatim', () => {
-    const trace = new TraceEmitter();
-    const store = StreamLogStore.ephemeral('test');
-    const streamId = 'stream:group-end-explicit-outcome' as StreamTabId;
-    store.ensureStream(streamId);
-    attachTranscriptRecorder(trace, store.acquireWriter(streamId, streamId));
+    const { trace, rows } = attachRecorder(
+      'stream:group-end-explicit-outcome' as StreamTabId,
+    );
 
     const stage = trace.openStage('r0', { kind: 'round' });
     stage.end(RUN_OUTCOME.CANCELLED);
 
-    const entries = store.get(streamId)?.getRange(0) ?? [];
-    const endEntry = entries.find((e) => e.id === stage.id);
+    const endEntry = rows().find((e) => e.id === stage.id);
 
     expect(isObject(endEntry?.data) && endEntry.data.status).toBe(
       RUN_OUTCOME.CANCELLED,
@@ -71,11 +75,9 @@ describe('attachTranscriptRecorder StreamPhase-native group rows (#7993 step 2)'
   });
 
   it('defaults a stage.run() failure to RunOutcome.FAILED', async () => {
-    const trace = new TraceEmitter();
-    const store = StreamLogStore.ephemeral('test');
-    const streamId = 'stream:group-end-run-failure' as StreamTabId;
-    store.ensureStream(streamId);
-    attachTranscriptRecorder(trace, store.acquireWriter(streamId, streamId));
+    const { trace, rows } = attachRecorder(
+      'stream:group-end-run-failure' as StreamTabId,
+    );
 
     const stage = trace.openStage('r0', { kind: 'round' });
     await expect(
@@ -84,8 +86,7 @@ describe('attachTranscriptRecorder StreamPhase-native group rows (#7993 step 2)'
       }),
     ).rejects.toThrow('boom');
 
-    const entries = store.get(streamId)?.getRange(0) ?? [];
-    const endEntry = entries.find((e) => e.id === stage.id);
+    const endEntry = rows().find((e) => e.id === stage.id);
 
     expect(isObject(endEntry?.data) && endEntry.data.status).toBe(
       RUN_OUTCOME.FAILED,
@@ -95,45 +96,37 @@ describe('attachTranscriptRecorder StreamPhase-native group rows (#7993 step 2)'
 
 describe('attachTranscriptRecorder stage kind (issue #7267)', () => {
   it("preserves a round stage's kind onto its persisted GROUP_END row", () => {
-    const trace = new TraceEmitter();
-    const store = StreamLogStore.ephemeral('test');
-    const streamId = 'stream:kind-preserved' as StreamTabId;
-    store.ensureStream(streamId);
-    attachTranscriptRecorder(trace, store.acquireWriter(streamId, streamId));
+    const { trace, rows } = attachRecorder(
+      'stream:kind-preserved' as StreamTabId,
+    );
 
     const round = trace.openStage('r0', { kind: 'round', index: 0 });
     round.end();
 
-    const entries = store.get(streamId)?.getRange(0) ?? [];
-    const roundEntry = entries.find((e) => e.id === round.id);
+    const roundEntry = rows().find((e) => e.id === round.id);
 
     expect(roundEntry?.type).toBe(STREAM_LOG_ENTRY_TYPES.GROUP_END);
     expect(isObject(roundEntry?.data) && roundEntry.data.kind).toBe('round');
   });
 
   it("preserves the root run stage's kind onto its persisted GROUP_END row", () => {
-    const trace = new TraceEmitter();
-    const store = StreamLogStore.ephemeral('test');
-    const streamId = 'stream:run-kind-preserved' as StreamTabId;
-    store.ensureStream(streamId);
-    attachTranscriptRecorder(trace, store.acquireWriter(streamId, streamId));
+    const { trace, rows } = attachRecorder(
+      'stream:run-kind-preserved' as StreamTabId,
+    );
 
     const runStage = trace.openStage('Run: agent', { kind: 'run' });
     runStage.end();
 
-    const entries = store.get(streamId)?.getRange(0) ?? [];
-    const runEntry = entries.find((e) => e.id === runStage.id);
+    const runEntry = rows().find((e) => e.id === runStage.id);
 
     expect(runEntry?.type).toBe(STREAM_LOG_ENTRY_TYPES.GROUP_END);
     expect(isObject(runEntry?.data) && runEntry.data.kind).toBe('run');
   });
 
   it('preserves phase position metadata on the terminal row', () => {
-    const trace = new TraceEmitter();
-    const store = StreamLogStore.ephemeral('test');
-    const streamId = 'stream:phase-position-preserved' as StreamTabId;
-    store.ensureStream(streamId);
-    attachTranscriptRecorder(trace, store.acquireWriter(streamId, streamId));
+    const { trace, rows } = attachRecorder(
+      'stream:phase-position-preserved' as StreamTabId,
+    );
 
     const phase = trace.openStage('Review', {
       kind: 'phase',
@@ -142,10 +135,7 @@ describe('attachTranscriptRecorder stage kind (issue #7267)', () => {
     });
     phase.end();
 
-    const entry = store
-      .get(streamId)
-      ?.getRange(0)
-      .find((candidate) => candidate.id === phase.id);
+    const entry = rows().find((candidate) => candidate.id === phase.id);
     expect(entry).toMatchObject({
       type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
       data: {
@@ -159,11 +149,7 @@ describe('attachTranscriptRecorder stage kind (issue #7267)', () => {
 
 describe('attachTranscriptRecorder response.finalized (issue #7086)', () => {
   it('upserts the round MODEL_RESPONSE stream entry to the authoritative text', () => {
-    const trace = new TraceEmitter();
-    const store = StreamLogStore.ephemeral('test');
-    const streamId = 'stream:upsert' as StreamTabId;
-    store.ensureStream(streamId);
-    attachTranscriptRecorder(trace, store.acquireWriter(streamId, streamId));
+    const { trace, rows } = attachRecorder('stream:upsert' as StreamTabId);
 
     // The round's own stream writes raw provider text in real time...
     const output = trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
@@ -173,8 +159,7 @@ describe('attachTranscriptRecorder response.finalized (issue #7086)', () => {
     // text once `assembly.lastResponse` is set.
     trace.responseFinalized('Done \\checkmark');
 
-    const entries = store.get(streamId)?.getRange(0) ?? [];
-    const modelResponseEntries = entries.filter(
+    const modelResponseEntries = rows().filter(
       (e) => e.messageType === MESSAGE_TYPES.MODEL_RESPONSE,
     );
     expect(modelResponseEntries).toHaveLength(1);
@@ -183,16 +168,11 @@ describe('attachTranscriptRecorder response.finalized (issue #7086)', () => {
   });
 
   it('appends a fresh MODEL_RESPONSE entry when the round never streamed', () => {
-    const trace = new TraceEmitter();
-    const store = StreamLogStore.ephemeral('test');
-    const streamId = 'stream:append' as StreamTabId;
-    store.ensureStream(streamId);
-    attachTranscriptRecorder(trace, store.acquireWriter(streamId, streamId));
+    const { trace, rows } = attachRecorder('stream:append' as StreamTabId);
 
     trace.responseFinalized('The answer is 2.');
 
-    const entries = store.get(streamId)?.getRange(0) ?? [];
-    const modelResponseEntries = entries.filter(
+    const modelResponseEntries = rows().filter(
       (e) => e.messageType === MESSAGE_TYPES.MODEL_RESPONSE,
     );
     expect(modelResponseEntries).toHaveLength(1);
@@ -200,11 +180,7 @@ describe('attachTranscriptRecorder response.finalized (issue #7086)', () => {
   });
 
   it('does not let an earlier round leak its stream id into a later round', () => {
-    const trace = new TraceEmitter();
-    const store = StreamLogStore.ephemeral('test');
-    const streamId = 'stream:round-reset' as StreamTabId;
-    store.ensureStream(streamId);
-    attachTranscriptRecorder(trace, store.acquireWriter(streamId, streamId));
+    const { trace, rows } = attachRecorder('stream:round-reset' as StreamTabId);
 
     const round0 = trace.openStage('r0', { kind: 'round', index: 0 });
     const output = trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
@@ -219,8 +195,7 @@ describe('attachTranscriptRecorder response.finalized (issue #7086)', () => {
     trace.responseFinalized('Final answer.');
     round1.end();
 
-    const entries = store.get(streamId)?.getRange(0) ?? [];
-    const modelResponseEntries = entries.filter(
+    const modelResponseEntries = rows().filter(
       (e) => e.messageType === MESSAGE_TYPES.MODEL_RESPONSE,
     );
     expect(modelResponseEntries.map((e) => e.text)).toEqual([
@@ -232,11 +207,9 @@ describe('attachTranscriptRecorder response.finalized (issue #7086)', () => {
   });
 
   it('does not let an earlier invocation in the same round stage overwrite a later finalized response', () => {
-    const trace = new TraceEmitter();
-    const store = StreamLogStore.ephemeral('test');
-    const streamId = 'stream:inner-round-reset' as StreamTabId;
-    store.ensureStream(streamId);
-    attachTranscriptRecorder(trace, store.acquireWriter(streamId, streamId));
+    const { trace, rows } = attachRecorder(
+      'stream:inner-round-reset' as StreamTabId,
+    );
 
     const round = trace.openStage('r0', { kind: 'round', index: 0 });
     round.run(() => {
@@ -255,8 +228,7 @@ describe('attachTranscriptRecorder response.finalized (issue #7086)', () => {
     });
     round.end();
 
-    const entries = store.get(streamId)?.getRange(0) ?? [];
-    const modelResponseEntries = entries.filter(
+    const modelResponseEntries = rows().filter(
       (e) => e.messageType === MESSAGE_TYPES.MODEL_RESPONSE,
     );
     expect(modelResponseEntries.map((e) => e.text)).toEqual([
@@ -267,26 +239,18 @@ describe('attachTranscriptRecorder response.finalized (issue #7086)', () => {
   });
 
   it('ignores an empty finalized response', () => {
-    const trace = new TraceEmitter();
-    const store = StreamLogStore.ephemeral('test');
-    const streamId = 'stream:empty' as StreamTabId;
-    store.ensureStream(streamId);
-    attachTranscriptRecorder(trace, store.acquireWriter(streamId, streamId));
+    const { trace, rows } = attachRecorder('stream:empty' as StreamTabId);
 
     trace.responseFinalized('');
 
-    const entries = store.get(streamId)?.getRange(0) ?? [];
-    expect(entries).toHaveLength(0);
+    expect(rows()).toHaveLength(0);
   });
 });
 
 describe('attachTranscriptRecorder workflow task state', () => {
   it('assigns source settlement order before terminal status projection', () => {
-    const trace = new TraceEmitter();
-    const store = StreamLogStore.ephemeral('test');
     const streamId = 'stream:terminal-settlement' as StreamTabId;
-    store.ensureStream(streamId);
-    attachTranscriptRecorder(trace, store.acquireWriter(streamId, streamId));
+    const { trace, rows } = attachRecorder(streamId);
 
     const phase = trace.openStage('Audit', { kind: 'phase' });
     const response = trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
@@ -313,15 +277,14 @@ describe('attachTranscriptRecorder workflow task state', () => {
       cause: STREAM_TRANSITION_CAUSE.USER_STOP,
     });
 
-    const entries = store.get(streamId)?.getRange(0) ?? [];
-    expect(entries.find((entry) => entry.id === phase.id)).toMatchObject({
+    expect(rows().find((entry) => entry.id === phase.id)).toMatchObject({
       settlementSeqNo: 1,
     });
-    expect(entries.find((entry) => entry.id === response.id)).toMatchObject({
+    expect(rows().find((entry) => entry.id === response.id)).toMatchObject({
       settlementSeqNo: 2,
       data: { status: 'completed' },
     });
-    expect(entries.find((entry) => entry.id === 'tool:pending')).toMatchObject({
+    expect(rows().find((entry) => entry.id === 'tool:pending')).toMatchObject({
       settlementSeqNo: 3,
       data: {
         status: 'failed',
@@ -330,7 +293,7 @@ describe('attachTranscriptRecorder workflow task state', () => {
       },
     });
     expect(
-      entries.find((entry) => entry.id === 'task:planned'),
+      rows().find((entry) => entry.id === 'task:planned'),
     ).not.toHaveProperty('settlementSeqNo');
 
     // The terminal status is the authoritative boundary for recorder-owned
@@ -351,17 +314,12 @@ describe('attachTranscriptRecorder workflow task state', () => {
       status: TOOL_USE_STATUS.COMPLETED,
       result: { toolName: 'read', output: 'late result' },
     });
-    const afterLateEvents = store.get(streamId)?.getRange(0) ?? [];
-    expect(
-      afterLateEvents.find((entry) => entry.id === response.id),
-    ).toMatchObject({
+    expect(rows().find((entry) => entry.id === response.id)).toMatchObject({
       settlementSeqNo: 2,
       text: 'Partial answer',
       data: { status: 'completed' },
     });
-    expect(
-      afterLateEvents.find((entry) => entry.id === 'tool:pending'),
-    ).toMatchObject({
+    expect(rows().find((entry) => entry.id === 'tool:pending')).toMatchObject({
       settlementSeqNo: 3,
       data: {
         status: 'failed',
@@ -379,12 +337,7 @@ describe('attachTranscriptRecorder workflow task state', () => {
         reason: 'not-reached',
       },
     });
-    expect(
-      store
-        .get(streamId)
-        ?.getRange(0)
-        .find((entry) => entry.id === 'task:planned'),
-    ).toMatchObject({
+    expect(rows().find((entry) => entry.id === 'task:planned')).toMatchObject({
       settlementSeqNo: 4,
       data: { status: 'skipped', reason: 'not-reached' },
     });
@@ -397,13 +350,9 @@ describe('attachTranscriptRecorder workflow task state', () => {
       cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
     });
     trace.responseFinalized('Fresh turn response');
-    const responses =
-      store
-        .get(streamId)
-        ?.getRange(0)
-        .filter(
-          (entry) => entry.messageType === MESSAGE_TYPES.MODEL_RESPONSE,
-        ) ?? [];
+    const responses = rows().filter(
+      (entry) => entry.messageType === MESSAGE_TYPES.MODEL_RESPONSE,
+    );
     expect(responses).toMatchObject([
       {
         id: response.id,
@@ -419,11 +368,8 @@ describe('attachTranscriptRecorder workflow task state', () => {
   });
 
   it('closes source rows at waiting and accepts fresh rows after resume', () => {
-    const trace = new TraceEmitter();
-    const store = StreamLogStore.ephemeral('test');
     const streamId = 'stream:waiting-settlement' as StreamTabId;
-    store.ensureStream(streamId);
-    attachTranscriptRecorder(trace, store.acquireWriter(streamId, streamId));
+    const { trace, rows } = attachRecorder(streamId);
 
     const waitingResponse = trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
     waitingResponse.append('Waiting response');
@@ -439,7 +385,7 @@ describe('attachTranscriptRecorder workflow task state', () => {
       cause: STREAM_TRANSITION_CAUSE.WAIT,
     });
 
-    expect(store.get(streamId)?.getRange(0)).toMatchObject([
+    expect(rows()).toMatchObject([
       {
         id: waitingResponse.id,
         settlementSeqNo: 1,
@@ -474,7 +420,7 @@ describe('attachTranscriptRecorder workflow task state', () => {
       result: { toolName: 'read', output: 'done' },
     });
 
-    expect(store.get(streamId)?.getRange(0)).toMatchObject([
+    expect(rows()).toMatchObject([
       {
         id: waitingResponse.id,
         settlementSeqNo: 1,
@@ -501,11 +447,9 @@ describe('attachTranscriptRecorder workflow task state', () => {
   });
 
   it('updates one typed task entry from planned to completed', () => {
-    const trace = new TraceEmitter();
-    const store = StreamLogStore.ephemeral('test');
-    const streamId = 'stream:workflow-task' as StreamTabId;
-    store.ensureStream(streamId);
-    attachTranscriptRecorder(trace, store.acquireWriter(streamId, streamId));
+    const { trace, rows } = attachRecorder(
+      'stream:workflow-task' as StreamTabId,
+    );
 
     trace.emit({
       type: 'workflow.task',
@@ -532,9 +476,8 @@ describe('attachTranscriptRecorder workflow task state', () => {
       },
     });
 
-    const entries = store.get(streamId)?.getRange(0) ?? [];
-    expect(entries).toHaveLength(1);
-    expect(entries[0]).toMatchObject({
+    expect(rows()).toHaveLength(1);
+    expect(rows()[0]).toMatchObject({
       id: 'task-card',
       type: STREAM_LOG_ENTRY_TYPES.LOG,
       level: 'info',

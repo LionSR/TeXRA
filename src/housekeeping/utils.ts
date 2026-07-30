@@ -199,3 +199,20 @@ export async function* findFilesFromPatterns(
     }
   }
 }
+
+/** Collect {@link findFilesFromPatterns} matches, deduplicated. */
+export async function collectFilesFromPatterns(
+  inputDir: string,
+  patterns: string[],
+  extensions: string[],
+): Promise<Set<string>> {
+  const files = new Set<string>();
+  for await (const file of findFilesFromPatterns(
+    inputDir,
+    patterns,
+    extensions,
+  )) {
+    files.add(file);
+  }
+  return files;
+}

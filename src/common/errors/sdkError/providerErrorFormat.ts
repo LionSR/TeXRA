@@ -15,7 +15,11 @@ import {
   extractErrorMessage,
   toErrorMessage,
 } from '@utils/errors/errorMessage';
-import { findInCauseChain, isDiskFullError } from '../errorPredicates';
+import {
+  causeChain,
+  findInCauseChain,
+  isDiskFullError,
+} from '../errorPredicates';
 import { isContextWindowError, isUserAbort } from './errorPatterns';
 import {
   detectPartialText,
@@ -30,6 +34,7 @@ import {
   detectRequestId,
   detectStatusCode,
   detectStatusText,
+  errorBodyCandidates,
   getErrorClassNames,
   getHeaderValue,
   pickStringField,
@@ -76,14 +81,9 @@ function describeHttpError(
   const fallbackMessage = statusCode
     ? safeGetReasonPhrase(statusCode)
     : undefined;
-  const bodyMessage =
-    pickStringField(rawErrorBody, 'message') ??
-    pickStringField(
-      typeof rawErrorBody === 'object' && rawErrorBody !== null
-        ? (rawErrorBody as { error?: unknown }).error
-        : undefined,
-      'message',
-    );
+  const bodyMessage = errorBodyCandidates(rawErrorBody)
+    .map((candidate) => pickStringField(candidate, 'message'))
+    .find((candidateMessage) => candidateMessage !== undefined);
   // Some SDKs stringify the complete response body into Error.message when
   // the body has no scalar message. Keep that body on rawErrorBody for
   // diagnostics, but do not promote its serialization to user-facing text.
@@ -137,6 +137,27 @@ function describeHttpError(
   return { statusText, message };
 }
 
+/**
+ * Resolve the status code to classify on. A detected non-error code (< 400) is
+ * likely misleading (e.g. an SSE connection reporting 200 while the actual
+ * error sits in the body), so an SDK-class fallback and then the body-inferred
+ * code take precedence over it; the detected code remains the last resort.
+ */
+function resolveErrorStatusCode(
+  detected: number | undefined,
+  rawErrorBody: unknown,
+  fallbackStatusCode?: number,
+): number | undefined {
+  const httpError =
+    detected !== undefined && detected >= 400 ? detected : undefined;
+  return (
+    httpError ??
+    fallbackStatusCode ??
+    inferStatusCodeFromBody(rawErrorBody) ??
+    detected
+  );
+}
+
 function matchLegacySdkError(err: unknown): SdkErrorEntry | undefined {
   const errorClassNames = getErrorClassNames(err);
   return SDK_ERRORS.find(({ classNames }) =>
@@ -171,17 +192,11 @@ function matchSdkError(
   }
 
   // HTTP errors - detect status code from error object, SDK class, or error body.
-  // If detectStatusCode returns a non-error code (< 400), it's likely misleading
-  // (e.g., SSE connection status 200 while the actual error is in the body),
-  // so prefer the body-inferred status code in that case.
-  const rawStatusCode = metadata?.statusCode ?? detectStatusCode(err);
-  const statusCode =
-    (rawStatusCode !== undefined && rawStatusCode >= 400
-      ? rawStatusCode
-      : undefined) ??
-    entry.fallbackStatusCode ??
-    inferStatusCodeFromBody(rawErrorBody) ??
-    rawStatusCode;
+  const statusCode = resolveErrorStatusCode(
+    metadata?.statusCode ?? detectStatusCode(err),
+    rawErrorBody,
+    entry.fallbackStatusCode,
+  );
   const { statusText, message } = describeHttpError(
     err,
     statusCode,
@@ -290,14 +305,10 @@ export function formatProviderHttpError(err: unknown): ProviderError {
   // Guarded on the status code because isContextWindowError also matches by
   // message wording, and a retryable provider error (e.g. a 429 mentioning
   // tokens) must keep its retry affordance.
-  const detectedOverflowStatusCode = detectStatusCode(err);
-  const overflowStatusCode =
-    (detectedOverflowStatusCode !== undefined &&
-    detectedOverflowStatusCode >= 400
-      ? detectedOverflowStatusCode
-      : undefined) ??
-    inferStatusCodeFromBody(rawErrorBody) ??
-    detectedOverflowStatusCode;
+  const overflowStatusCode = resolveErrorStatusCode(
+    detectStatusCode(err),
+    rawErrorBody,
+  );
   if (
     isContextWindowError(err) &&
     (overflowStatusCode === undefined ||
@@ -418,20 +429,6 @@ const TRANSPORT_ERROR_CODES = new Set([
   'UND_ERR_SOCKET',
 ]);
 
-function causeChain(error: unknown): unknown[] {
-  const chain: unknown[] = [];
-  const seen = new Set<unknown>();
-  for (
-    let current: unknown = error;
-    current != null && typeof current === 'object' && !seen.has(current);
-    current = (current as { cause?: unknown }).cause
-  ) {
-    seen.add(current);
-    chain.push(current);
-  }
-  return chain;
-}
-
 function detectRetryAfterMs(chain: readonly unknown[]): number | undefined {
   for (const current of chain) {
     const headers = (current as { headers?: HeaderBag }).headers;
@@ -483,10 +480,7 @@ function detectRateLimitScope(
 
 /** Whether a failure is a model-scoped provider rate limit. */
 export function isModelRateLimitFailure(error: Error): boolean {
-  const chain = causeChain(error);
-  return (
-    detectRateLimitScope(error, detectRouteStatusCode(error, chain)) === 'model'
-  );
+  return classifyModelRateLimitFailure(error) !== undefined;
 }
 
 /** Classifies model-scoped rate limits for their own recovery gate. */

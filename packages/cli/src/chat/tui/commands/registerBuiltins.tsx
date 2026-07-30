@@ -66,32 +66,18 @@ import {
 import { registerSlashCommand, type SlashFormProps } from './slashRegistry';
 import { openCliSlashCommandForm } from './slashForms';
 
-type AgentSelectHandler = (value: string) => void | Promise<void>;
-type ApprovalPolicySelectHandler = (
-  value: CliApprovalPolicy,
-) => void | Promise<void>;
-type ModelSelectHandler = (value: string) => void | Promise<void>;
+type SelectHandler<T> = (value: T) => void | Promise<void>;
 type FormActionResult =
   void | (Promise<void> & { readonly abort?: () => void });
-type ModelAccessSelectHandler = (
-  value: CliModelAccessSelection,
+/** Selection handler that reports progress while the form shows a busy frame. */
+type FormActionHandler<T> = (
+  value: T,
   output: SlashCommandOutput,
 ) => FormActionResult;
 type ApiKeySaveHandler = (
   provider: ApiProvider,
   key: string,
 ) => string | void | Promise<string | void>;
-type LoginSelectHandler = (
-  value: LoginFormValue,
-  output: SlashCommandOutput,
-) => FormActionResult;
-type LogoutSelectHandler = (
-  value: CliLogoutTarget,
-  output: SlashCommandOutput,
-) => FormActionResult;
-type MemorySelectHandler = (storagePath: string) => void | Promise<void>;
-type ResumeSelectHandler = (id: ExecutionId) => void | Promise<void>;
-type SkillSelectHandler = (value: SkillActivation) => void | Promise<void>;
 type ErrorHandler = (error: unknown) => void | Promise<void>;
 type SelectionCompletion = 'afterAction' | 'beforeAction' | 'busy';
 
@@ -261,37 +247,37 @@ function formSelectionHandler<T>({
 }
 
 export function registerBuiltinSlashCommands(options?: {
-  onAgentSelect?: AgentSelectHandler;
+  onAgentSelect?: SelectHandler<string>;
   canSelectAgent?: () => boolean;
   getApprovalPolicy?: () => CliApprovalPolicy;
-  onApprovalPolicySelect?: ApprovalPolicySelectHandler;
-  onModelSelect?: ModelSelectHandler;
+  onApprovalPolicySelect?: SelectHandler<CliApprovalPolicy>;
+  onModelSelect?: SelectHandler<string>;
   canSelectModel?: () => boolean;
   getModelSwitchDisabledReason?: GetModelSwitchDisabledReason;
-  onModelAccessSelect?: ModelAccessSelectHandler;
+  onModelAccessSelect?: FormActionHandler<CliModelAccessSelection>;
   onApiKeySave?: ApiKeySaveHandler;
-  onLoginSelect?: LoginSelectHandler;
-  onLogoutSelect?: LogoutSelectHandler;
-  onMemorySelect?: MemorySelectHandler;
-  onResumeSelect?: ResumeSelectHandler;
-  onSkillSelect?: SkillSelectHandler;
+  onLoginSelect?: FormActionHandler<LoginFormValue>;
+  onLogoutSelect?: FormActionHandler<CliLogoutTarget>;
+  onMemorySelect?: SelectHandler<string>;
+  onResumeSelect?: SelectHandler<ExecutionId>;
+  onSkillSelect?: SelectHandler<SkillActivation>;
   getConfigStores?: () => SettingsStores;
   onError?: ErrorHandler;
 }): void {
-  const onAgentSelect: AgentSelectHandler =
+  const onAgentSelect: SelectHandler<string> =
     options?.onAgentSelect ?? ((agent) => patchSessionMeta({ agent }));
-  const onModelSelect: ModelSelectHandler =
+  const onModelSelect: SelectHandler<string> =
     options?.onModelSelect ?? setCliSessionModelOverride;
-  const onModelAccessSelect: ModelAccessSelectHandler =
+  const onModelAccessSelect: FormActionHandler<CliModelAccessSelection> =
     options?.onModelAccessSelect ??
     ((selection, output) =>
       applyCliModelAccessSelection(selection, undefined, output));
   const onApiKeySave: ApiKeySaveHandler =
     options?.onApiKeySave ?? applyCliProviderApiKey;
-  const onLoginSelect: LoginSelectHandler =
+  const onLoginSelect: FormActionHandler<LoginFormValue> =
     options?.onLoginSelect ??
     ((value, output) => loginFromChat(value, undefined, output));
-  const onLogoutSelect: LogoutSelectHandler =
+  const onLogoutSelect: FormActionHandler<CliLogoutTarget> =
     options?.onLogoutSelect ??
     ((value, output) => logoutFromChat(value, output));
   const canSelectAgent = options?.canSelectAgent ?? (() => true);

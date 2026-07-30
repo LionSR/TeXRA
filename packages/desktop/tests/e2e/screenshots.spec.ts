@@ -60,6 +60,28 @@ async function selectSettingsPage(
   );
 }
 
+/** Count the actionable entries of the command palette, or -1 when unopened. */
+async function commandPaletteEntryCount(): Promise<number> {
+  return launched.page.evaluate(() => {
+    const dialog = document.querySelector<HTMLElement>(
+      '.desktop-command-palette',
+    );
+    if (!dialog) return -1;
+    return dialog.querySelectorAll(
+      'button, [role="option"], .desktop-command-palette-entry',
+    ).length;
+  });
+}
+
+async function commandPaletteIsClosed(): Promise<boolean> {
+  return launched.page.evaluate(() => {
+    const dialog = document.querySelector<HTMLElement>(
+      '.desktop-command-palette',
+    );
+    return dialog == null || dialog.getAttribute('open') == null;
+  });
+}
+
 test('startup team chooser screenshot', async ({}, testInfo) => {
   const panel = launched.page.locator('.desktop-startup-panel');
   await expect(panel).toBeVisible();
@@ -118,49 +140,7 @@ test('command palette opens and dismisses', async () => {
   await launched.page
     .locator('.task-header-button[aria-label="Open commands"]')
     .click();
-  await launched.page.waitForFunction(
-    () => {
-      const dialog = document.querySelector<HTMLElement>(
-        '.desktop-command-palette',
-      );
-      if (!dialog) return false;
-      const entries = dialog.querySelectorAll(
-        'button, [role="option"], .desktop-command-palette-entry',
-      );
-      return entries.length > 0;
-    },
-    undefined,
-    { timeout: 5000 },
-  );
-  const entryCount = await launched.page.evaluate(() => {
-    const dialog = document.querySelector<HTMLElement>(
-      '.desktop-command-palette',
-    );
-    if (!dialog) return -1;
-    const entries = dialog.querySelectorAll(
-      'button, [role="option"], .desktop-command-palette-entry',
-    );
-    return entries.length;
-  });
-  expect(entryCount).toBeGreaterThan(0);
+  await expect.poll(commandPaletteEntryCount).toBeGreaterThan(0);
   await launched.page.keyboard.press('Escape');
-  await launched.page.waitForFunction(
-    () => {
-      const dialog = document.querySelector<HTMLElement>(
-        '.desktop-command-palette',
-      );
-      if (!dialog) return true;
-      return dialog.getAttribute('open') == null;
-    },
-    undefined,
-    { timeout: 5000 },
-  );
-  const closed = await launched.page.evaluate(() => {
-    const dialog = document.querySelector<HTMLElement>(
-      '.desktop-command-palette',
-    );
-    if (!dialog) return true;
-    return dialog.getAttribute('open') == null;
-  });
-  expect(closed).toBe(true);
+  await expect.poll(commandPaletteIsClosed).toBe(true);
 });

@@ -17,34 +17,20 @@ import {
 import type { StreamTabId } from '@shared/schemas';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { TextEditorTool } from '@tools/TextEditorTool';
-import {
-  cleanupAllApprovals,
-  type ToolEditApprovalRequest,
-  type ToolEditApprovalResult,
-} from '@tools/approval';
+import { cleanupAllApprovals } from '@tools/approval';
 import { WorkspaceFS } from '@utils/files';
 
 const EXECUTION_ID = 'history-cap-exec';
 
-let testApprovalHandler:
-  | ((request: ToolEditApprovalRequest) => Promise<ToolEditApprovalResult>)
-  | undefined;
 let detachHostInteractions = (): void => {};
 
 async function installPlatform(
   files: Record<string, string | Uint8Array> = {},
 ) {
-  testApprovalHandler = async () => ({ accepted: true });
   await installFakePlatform({ workspacePath: '/workspace', files });
   detachHostInteractions();
   detachHostInteractions = defaultSession().useHostInteractions({
-    requestToolEditApproval: (request) => {
-      const handler = testApprovalHandler;
-      if (!handler) {
-        throw new Error('No test approval handler configured.');
-      }
-      return handler(request);
-    },
+    requestToolEditApproval: async () => ({ accepted: true }),
     cancel: () => undefined,
   });
 }
@@ -52,17 +38,13 @@ async function installPlatform(
 async function callTextEditor(
   tool: TextEditorTool,
   input: unknown,
-  options: {
-    executionId?: string;
-    session?: SessionHandle;
-  } = {},
+  session?: SessionHandle,
 ) {
-  const executionId = options.executionId ?? EXECUTION_ID;
   return withRunContext(
     createRunContext({
-      streamId: `stream:${executionId}` as StreamTabId,
-      executionId,
-      session: options.session,
+      streamId: `stream:${EXECUTION_ID}` as StreamTabId,
+      executionId: EXECUTION_ID,
+      session,
     }),
     () => tool.call(input),
   );
@@ -84,7 +66,6 @@ describe('TextEditorTool undo history lifecycle', () => {
   });
 
   afterEach(() => {
-    testApprovalHandler = undefined;
     detachHostInteractions();
     detachHostInteractions = () => {};
     cleanupAllApprovals();
@@ -152,7 +133,7 @@ describe('TextEditorTool undo history lifecycle', () => {
           old_str: 'before',
           new_str: 'after',
         },
-        { session },
+        session,
       );
       assert.strictEqual(result.status, 'executed');
 

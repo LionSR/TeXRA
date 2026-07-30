@@ -45,19 +45,13 @@ export interface DeliveryTagEntry {
   readonly escaped: boolean;
 }
 
+/** The tags whose bodies are neutralized rather than XML-entity-escaped. */
+const UNESCAPED_DELIVERY_TAGS = new Set<DeliveryTagName>([
+  DELIVERY_TAG.githubWebhookActivity,
+  DELIVERY_TAG.executionActivity,
+]);
+
 /** Every recognized child-run delivery-envelope tag, in no particular order. */
-export const DELIVERY_TAGS: readonly DeliveryTagEntry[] = [
-  { tag: DELIVERY_TAG.subagentProgress, escaped: true },
-  { tag: DELIVERY_TAG.subagentResult, escaped: true },
-  { tag: DELIVERY_TAG.subagentError, escaped: true },
-  { tag: DELIVERY_TAG.backgroundResult, escaped: true },
-  { tag: DELIVERY_TAG.backgroundError, escaped: true },
-  { tag: DELIVERY_TAG.codexResult, escaped: true },
-  { tag: DELIVERY_TAG.codexError, escaped: true },
-  { tag: DELIVERY_TAG.claudeAgentResult, escaped: true },
-  { tag: DELIVERY_TAG.claudeAgentError, escaped: true },
-  { tag: DELIVERY_TAG.workflowScriptResult, escaped: true },
-  { tag: DELIVERY_TAG.workflowScriptError, escaped: true },
-  { tag: DELIVERY_TAG.githubWebhookActivity, escaped: false },
-  { tag: DELIVERY_TAG.executionActivity, escaped: false },
-];
+export const DELIVERY_TAGS: readonly DeliveryTagEntry[] = Object.values(
+  DELIVERY_TAG,
+).map((tag) => ({ tag, escaped: !UNESCAPED_DELIVERY_TAGS.has(tag) }));

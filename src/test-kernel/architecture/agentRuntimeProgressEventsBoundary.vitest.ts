@@ -162,47 +162,43 @@ describe('agent runtime progress-event vocabulary boundary', () => {
     expect(existsSync(resolve(REPO_ROOT, LEGACY_MODULE))).toBe(false);
   });
 
-  it('removes the agent-runtime CLI progress vocabulary module', () => {
-    expect(existsSync(resolve(REPO_ROOT, OLD_AGENT_RUNTIME_MODULE))).toBe(
-      false,
-    );
+  it.each<{
+    name: string;
+    modulePath: string;
+    exists: boolean;
+    allowedImporters: readonly string[];
+  }>([
+    {
+      name: 'removes the agent-runtime CLI progress vocabulary module',
+      modulePath: OLD_AGENT_RUNTIME_MODULE,
+      exists: false,
+      allowedImporters: [],
+    },
+    {
+      name: 'removes the neutral CLI progress vocabulary module',
+      modulePath: OLD_CLI_MODULE,
+      exists: false,
+      allowedImporters: [],
+    },
+    {
+      name: 'removes the agent-runtime task-state compatibility payload module',
+      modulePath: OLD_TASK_STATE_PAYLOAD_MODULE,
+      exists: false,
+      allowedImporters: [],
+    },
+    {
+      name: 'keeps the CLI compatibility vocabulary NDJSON-projection only',
+      modulePath: CLI_NDJSON_MODULE,
+      exists: true,
+      allowedImporters: ALLOWED_PRODUCTION_IMPORTERS,
+    },
+  ])('$name', ({ modulePath, exists, allowedImporters }) => {
+    expect(existsSync(resolve(REPO_ROOT, modulePath))).toBe(exists);
 
     const importers = SOURCE_FILES.filter((file) =>
-      importsModule(file, OLD_AGENT_RUNTIME_MODULE),
+      importsModule(file, modulePath),
     ).toSorted();
 
-    expect(importers).toEqual([]);
-  });
-
-  it('removes the neutral CLI progress vocabulary module', () => {
-    expect(existsSync(resolve(REPO_ROOT, OLD_CLI_MODULE))).toBe(false);
-
-    const importers = SOURCE_FILES.filter((file) =>
-      importsModule(file, OLD_CLI_MODULE),
-    ).toSorted();
-
-    expect(importers).toEqual([]);
-  });
-
-  it('removes the agent-runtime task-state compatibility payload module', () => {
-    expect(existsSync(resolve(REPO_ROOT, OLD_TASK_STATE_PAYLOAD_MODULE))).toBe(
-      false,
-    );
-
-    const importers = SOURCE_FILES.filter((file) =>
-      importsModule(file, OLD_TASK_STATE_PAYLOAD_MODULE),
-    ).toSorted();
-
-    expect(importers).toEqual([]);
-  });
-
-  it('keeps the CLI compatibility vocabulary NDJSON-projection only', () => {
-    expect(existsSync(resolve(REPO_ROOT, CLI_NDJSON_MODULE))).toBe(true);
-
-    const importers = SOURCE_FILES.filter((file) =>
-      importsModule(file, CLI_NDJSON_MODULE),
-    ).toSorted();
-
-    expect(importers).toEqual([...ALLOWED_PRODUCTION_IMPORTERS].toSorted());
+    expect(importers).toEqual([...allowedImporters].toSorted());
   });
 });

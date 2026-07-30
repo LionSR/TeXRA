@@ -22,12 +22,8 @@ let userDataPath: string | undefined;
 let safeStorageBackend: SafeStorageBackend = DEFAULT_SAFE_STORAGE_BACKEND;
 let safeStorageEncryptionAvailable = true;
 
-function makeDefaultUserDataPath(): string {
-  return mkdtempSync(join(tmpdir(), 'texra-electron-test-'));
-}
-
 function getUserDataPath(): string {
-  userDataPath ??= makeDefaultUserDataPath();
+  userDataPath ??= mkdtempSync(join(tmpdir(), 'texra-electron-test-'));
   return userDataPath;
 }
 

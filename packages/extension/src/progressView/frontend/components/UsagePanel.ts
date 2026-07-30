@@ -1,8 +1,8 @@
 // Third-party imports
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
+import { join } from 'lit/directives/join.js';
 import { styleMap } from 'lit/directives/style-map.js';
-import { when } from 'lit/directives/when.js';
 
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -14,6 +14,7 @@ import type { TokenUsageStats, UsageRoute } from '@shared/schemas';
 
 // Local imports - shared styles
 import { designTokens } from '@shared/styles';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { clamp, formatCompactTokenCount } from '@utils/core';
 import { formatCostUsd } from '@utils/text/stringUtils';
@@ -33,6 +34,21 @@ type UsageRouteBadge = {
   title: string;
   subscription: boolean;
 };
+
+/** One token counter in the usage strip: icon, count, and its tooltip. */
+type TokenStat = {
+  icon: TeXRAIconName;
+  id: string;
+  value: number;
+  tooltip: string;
+  /** Cache counters are hidden when the run never touched the cache. */
+  onlyWhenPositive?: boolean;
+};
+
+function renderTokenStat(stat: TokenStat): TemplateResult {
+  // prettier-ignore
+  return html`${waIcon(stat.icon, { id: stat.id })}${formatCompactTokenCount(stat.value)}<wa-tooltip for=${stat.id}>${stat.tooltip}</wa-tooltip>`;
+}
 
 /** Solid fill color based on context utilization. */
 function fillColor(percent: number): string {
@@ -232,47 +248,52 @@ export class UsagePanel extends LitElement {
     const cacheMiss = this.usage.cacheMissInputTokens ?? 0;
     const cacheWrite = this.usage.cacheCreationInputTokens ?? 0;
 
+    const stats: TokenStat[] = [
+      {
+        icon: 'arrow-up',
+        id: 'usage-input-icon',
+        value: inputTokens,
+        tooltip: 'Input tokens',
+      },
+      {
+        icon: 'cloud-arrow-down',
+        id: 'usage-cache-read-icon',
+        value: cacheRead,
+        tooltip: 'Cache read tokens (discounted)',
+        onlyWhenPositive: true,
+      },
+      {
+        icon: 'cloud-arrow-up',
+        id: 'usage-cache-miss-icon',
+        value: cacheMiss,
+        tooltip: 'Cache miss tokens (full price)',
+        onlyWhenPositive: true,
+      },
+      {
+        icon: 'database',
+        id: 'usage-cache-write-icon',
+        value: cacheWrite,
+        tooltip: 'Cache creation tokens (1.25x cost)',
+        onlyWhenPositive: true,
+      },
+      {
+        icon: 'arrow-down',
+        id: 'usage-output-icon',
+        value: outputTokens,
+        tooltip: 'Output tokens',
+      },
+    ];
+
+    const visible = stats.filter(
+      (stat) => !stat.onlyWhenPositive || stat.value > 0,
+    );
+
     return html`
       ${waIcon('chart-pie')}
       <span class="run-summary__label">Total usage:</span>
       <span class="run-summary__value">
-        ${waIcon('arrow-up', { id: 'usage-input-icon' })}${formatCompactTokenCount(inputTokens)}<wa-tooltip
-          for="usage-input-icon"
-          >Input tokens</wa-tooltip
-        >
-        ${when(
-          cacheRead > 0,
-          () =>
-            html` ·
-              ${waIcon('cloud-arrow-down', { id: 'usage-cache-read-icon' })}${formatCompactTokenCount(cacheRead)}<wa-tooltip
-                for="usage-cache-read-icon"
-                >Cache read tokens (discounted)</wa-tooltip
-              >`,
-        )}
-        ${when(
-          cacheMiss > 0,
-          () =>
-            html` ·
-              ${waIcon('cloud-arrow-up', { id: 'usage-cache-miss-icon' })}${formatCompactTokenCount(cacheMiss)}<wa-tooltip
-                for="usage-cache-miss-icon"
-                >Cache miss tokens (full price)</wa-tooltip
-              >`,
-        )}
-        ${when(
-          cacheWrite > 0,
-          () =>
-            html` ·
-              ${waIcon('database', { id: 'usage-cache-write-icon' })}${formatCompactTokenCount(cacheWrite)}<wa-tooltip
-                for="usage-cache-write-icon"
-                >Cache creation tokens (1.25x cost)</wa-tooltip
-              >`,
-        )}
-        ·
-        ${waIcon('arrow-down', { id: 'usage-output-icon' })}${formatCompactTokenCount(outputTokens)}<wa-tooltip
-          for="usage-output-icon"
-          >Output tokens</wa-tooltip
-        >
-        · ${this.renderCostRoute(cost)}
+        ${join(visible.map(renderTokenStat), ' · ')} ·
+        ${this.renderCostRoute(cost)}
       </span>
     `;
   }

@@ -25,7 +25,6 @@ import { runExecuteCommand } from '@commands/agent/executeCommand';
 import {
   ChatExportController,
   type ChatExportInput,
-  type ExportInputStatus,
 } from '@controllers/settingsView/ChatExportController';
 import { buildHistoryMessage } from '@controllers/settingsView/HistoryMessageBuilder';
 import {
@@ -174,7 +173,10 @@ export class HistoryHandlers {
       );
 
       if (result.status !== 'ok') {
-        this.reportExportInputError(result.status);
+        void showLoggedMessage(
+          this.ctx.channel,
+          exportInputErrorMessage(result.status),
+        );
         return;
       }
 
@@ -200,26 +202,6 @@ export class HistoryHandlers {
   // ==========================================================
   // Private helpers
   // ==========================================================
-
-  /**
-   * Translate the controller's export-input status into a user-visible
-   * error message.
-   */
-  private reportExportInputError(
-    status: Exclude<ExportInputStatus, 'ok'>,
-  ): void {
-    void showLoggedMessage(this.ctx.channel, exportInputErrorMessage(status));
-  }
-
-  /**
-   * Translate assembleTrace's failure statuses (surfaced through
-   * ChatExportController.exportAsHtml) into a user-visible error message.
-   */
-  private reportHtmlExportError(
-    status: 'config_missing' | 'streamLogs_missing',
-  ): void {
-    void showLoggedMessage(this.ctx.channel, htmlExportErrorMessage(status));
-  }
 
   private async exportAndOpenMarkdown(
     historyId: string,
@@ -269,8 +251,12 @@ export class HistoryHandlers {
       this.traceViewerStandaloneTemplate,
     );
 
+    // assembleTrace's failure statuses, surfaced through exportAsHtml.
     if (outcome.status !== 'ok') {
-      this.reportHtmlExportError(outcome.status);
+      void showLoggedMessage(
+        this.ctx.channel,
+        htmlExportErrorMessage(outcome.status),
+      );
       return;
     }
 

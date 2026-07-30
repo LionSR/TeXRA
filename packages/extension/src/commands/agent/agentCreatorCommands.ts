@@ -105,19 +105,15 @@ async function pickToolGroups(
 
   let allSelected =
     initiallySelected.length > 0 && initiallySelected.length === items.length;
-  const selectAllButton: vscode.QuickInputButton = {
-    iconPath: new vscode.ThemeIcon('check-all'),
-    tooltip: 'Select all / clear',
-    location: vscode.QuickInputButtonLocation?.Input,
-  };
   let activeSelectAllButton: vscode.QuickInputButton | undefined;
   const refreshSelectAllButton = () => {
-    const toggleButton: vscode.QuickInputButton = {
-      ...selectAllButton,
+    activeSelectAllButton = {
+      iconPath: new vscode.ThemeIcon('check-all'),
+      tooltip: 'Select all / clear',
+      location: vscode.QuickInputButtonLocation?.Input,
       toggle: { checked: allSelected },
     };
-    activeSelectAllButton = toggleButton;
-    qp.buttons = [toggleButton];
+    qp.buttons = [activeSelectAllButton];
   };
   refreshSelectAllButton();
   qp.onDidChangeSelection((selected) => {

@@ -51,6 +51,12 @@ const MULTI_SET_COMMAND_BY_FILE_TYPE = {
   media: MAIN_VIEW_COMMANDS.SET_MEDIA_FILES,
 } as const;
 
+const MULTI_DIALOG_TITLE_BY_FILE_TYPE = {
+  input: 'Select input files',
+  context: 'Select context files',
+  media: 'Select media files',
+} as const;
+
 type DesktopMultiFileType = keyof typeof MULTI_SET_COMMAND_BY_FILE_TYPE;
 
 async function listFiles(
@@ -150,21 +156,10 @@ export function createDesktopFileSelection(
   function isDesktopMultiFileType(
     value: unknown,
   ): value is DesktopMultiFileType {
-    return value === 'input' || value === 'context' || value === 'media';
-  }
-
-  function getDialogConfig(fileType: DesktopMultiFileType): {
-    title: string;
-    listType: ListableFileType;
-  } {
-    switch (fileType) {
-      case 'context':
-        return { title: 'Select context files', listType: 'context' };
-      case 'media':
-        return { title: 'Select media files', listType: 'media' };
-      case 'input':
-        return { title: 'Select input files', listType: 'input' };
-    }
+    return (
+      typeof value === 'string' &&
+      Object.hasOwn(MULTI_SET_COMMAND_BY_FILE_TYPE, value)
+    );
   }
 
   async function selectMultipleFiles(message: DesktopCommandMessage) {
@@ -177,9 +172,9 @@ export function createDesktopFileSelection(
     const workspacePath = getWorkspacePath();
     if (!workspacePath) return;
 
-    const { title, listType } = getDialogConfig(message.fileType);
+    const fileType = message.fileType;
     const listConfig = getFileListConfig(
-      listType,
+      fileType,
       loadFileListSettings(getConfig),
     );
     const currentFile =
@@ -189,7 +184,7 @@ export function createDesktopFileSelection(
         ? resolveWorkspaceFile(workspacePath, currentFile)
         : workspacePath;
     const selectedFiles = await options.showOpenFileDialog({
-      title,
+      title: MULTI_DIALOG_TITLE_BY_FILE_TYPE[fileType],
       defaultPath,
       allowMultiple: true,
       filters: [
@@ -201,7 +196,7 @@ export function createDesktopFileSelection(
     });
     if (!selectedFiles) return;
     postMultiFileList(
-      message.fileType,
+      fileType,
       selectedFiles.map((file) => toWorkspaceRelative(workspacePath, file)),
     );
   }

@@ -51,6 +51,21 @@ function appProps(
   };
 }
 
+async function renderApp(
+  props: AppProps,
+  stdin: FakeStdin,
+  stdout: FakeStdout,
+) {
+  const { ink, React } = await loadInk();
+  return ink.render(React.createElement(App, props), {
+    stdin,
+    stdout,
+    interactive: true,
+    exitOnCtrlC: false,
+    patchConsole: false,
+  });
+}
+
 function fakeHistory(entries: readonly string[]): InputHistory {
   return {
     push: async () => undefined,
@@ -69,17 +84,11 @@ describe('App foreground Escape ownership', () => {
     seedRootStream();
     openInfoPane('Reference', 'Foreground content');
     const onInterruptStream = vi.fn();
-    const { ink, React } = await loadInk();
     const stdin = new FakeStdin();
-    const instance = ink.render(
-      React.createElement(App, appProps(onInterruptStream)),
-      {
-        stdin,
-        stdout: new FakeStdout(100, 30),
-        interactive: true,
-        exitOnCtrlC: false,
-        patchConsole: false,
-      },
+    const instance = await renderApp(
+      appProps(onInterruptStream),
+      stdin,
+      new FakeStdout(100, 30),
     );
 
     try {
@@ -103,21 +112,15 @@ describe('App foreground Escape ownership', () => {
       }));
       rootRunStartAvailable.set(true);
     });
-    const { ink, React } = await loadInk();
     const stdin = new FakeStdin();
     const stdout = new FakeStdout(100, 30);
-    const instance = ink.render(
-      React.createElement(App, {
+    const instance = await renderApp(
+      {
         ...appProps(onInterruptStream),
         history: fakeHistory(['older prompt', 'latest prompt']),
-      }),
-      {
-        stdin,
-        stdout,
-        interactive: true,
-        exitOnCtrlC: false,
-        patchConsole: false,
       },
+      stdin,
+      stdout,
     );
 
     try {

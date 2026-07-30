@@ -15,15 +15,11 @@
  */
 import { isObject } from '@utils/core';
 
-import { EXECUTIONS_DEFAULT_ACTION } from './executionsDisplay';
+import { executionsAction } from './executionsDisplay';
 
 function executionsInputPreview(input: Record<string, unknown>): string {
-  const action =
-    typeof input.action === 'string' && input.action.trim()
-      ? input.action.trim()
-      : EXECUTIONS_DEFAULT_ACTION;
   const path = typeof input.path === 'string' ? input.path : '';
-  return `${action} ${path}`.trim();
+  return `${executionsAction(input)} ${path}`.trim();
 }
 
 /** Preview field for tools whose most useful "what is this call doing" text

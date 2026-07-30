@@ -32,8 +32,8 @@ function providerApiKeyStatusLabel(
   if (status === 'set') return 'Key set';
   if (status === 'env') return 'Env';
   if (status === 'not-set') return 'Not set';
-  if (view.error) return 'Status unavailable';
-  return view.loading ? 'Checking status' : 'Status unavailable';
+  if (view.loading && !view.error) return 'Checking status';
+  return 'Status unavailable';
 }
 
 export function buildProviderApiKeyItems(view: ProviderApiKeyStatusView) {
@@ -60,8 +60,8 @@ export function formatProviderApiKeySummary(
   view: ProviderApiKeyStatusView,
 ): string {
   if (!view.statuses) {
-    if (view.error) return 'Status unavailable';
-    return view.loading ? 'Checking configured keys' : 'Status unavailable';
+    if (view.loading && !view.error) return 'Checking configured keys';
+    return 'Status unavailable';
   }
   const summary = configuredProviderApiKeySummary(view.statuses);
   if (view.error) return `${summary} · status unavailable`;

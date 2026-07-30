@@ -16,10 +16,7 @@ import {
 import type { TaskState } from '@agent/core/state/TaskState';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import { buildHistoryMessage } from '@controllers/settingsView/HistoryMessageBuilder';
-import type {
-  ChatExportController,
-  ExportInputStatus,
-} from '@controllers/settingsView/ChatExportController';
+import type { ChatExportController } from '@controllers/settingsView/ChatExportController';
 import {
   ACTIVE_EXECUTION_DELETE_BLOCKED_MESSAGE,
   describeClearHistoryResult,
@@ -52,9 +49,6 @@ export interface DesktopHistoryOptions {
 
 const HISTORY_CONFIG_UNREADABLE_MESSAGE =
   'History item not found or unreadable (missing, corrupt, or from an incompatible version)';
-
-type HistoryConfigResult =
-  { status: 'ok'; config: AgentConfig } | { status: 'unreadable' };
 
 export interface DesktopHistorySettingsController {
   readonly actions: SettingsViewCommandActions['history'];
@@ -118,23 +112,23 @@ export class DesktopHistoryHandlers implements DesktopHistorySettingsController 
   // distinguishing them must happen in the storage layer, not here.
   private async readHistoryConfig(
     historyId: string,
-  ): Promise<HistoryConfigResult> {
+  ): Promise<AgentConfig | undefined> {
     const config = await getExecutionStore(
       historyId as ExecutionId,
     ).readConfig();
-    if (!config) return { status: 'unreadable' };
-    return { status: 'ok', config };
-  }
-
-  private async rerun(historyId: string): Promise<void> {
-    const result = await this.readHistoryConfig(historyId);
-    if (result.status === 'unreadable') {
+    if (!config) {
       await this.dependencies.showErrorMessage(
         HISTORY_CONFIG_UNREADABLE_MESSAGE,
       );
-      return;
+      return undefined;
     }
-    const validated = validateExecutionRequest({ config: result.config });
+    return config;
+  }
+
+  private async rerun(historyId: string): Promise<void> {
+    const config = await this.readHistoryConfig(historyId);
+    if (!config) return;
+    const validated = validateExecutionRequest({ config });
     if (!validated.valid) {
       await this.dependencies.showErrorMessage(validated.message);
       return;
@@ -146,15 +140,10 @@ export class DesktopHistoryHandlers implements DesktopHistorySettingsController 
   }
 
   private async restore(historyId: string): Promise<void> {
-    const result = await this.readHistoryConfig(historyId);
-    if (result.status === 'unreadable') {
-      await this.dependencies.showErrorMessage(
-        HISTORY_CONFIG_UNREADABLE_MESSAGE,
-      );
-      return;
-    }
+    const config = await this.readHistoryConfig(historyId);
+    if (!config) return;
     const restored = await this.dependencies.restoreTaskState(
-      agentConfigToTaskState(result.config),
+      agentConfigToTaskState(config),
     );
     if (!restored) {
       await this.dependencies.showErrorMessage(
@@ -184,18 +173,6 @@ export class DesktopHistoryHandlers implements DesktopHistorySettingsController 
     return this.chatExportControllerLoad;
   }
 
-  private async reportExportInputError(
-    status: Exclude<ExportInputStatus, 'ok'>,
-  ): Promise<void> {
-    await this.dependencies.showInfoMessage(exportInputErrorMessage(status));
-  }
-
-  private async reportHtmlExportError(
-    status: 'config_missing' | 'streamLogs_missing',
-  ): Promise<void> {
-    await this.dependencies.showInfoMessage(htmlExportErrorMessage(status));
-  }
-
   private async exportChatHtml(historyId: string): Promise<void> {
     const controller = await this.getChatExportController();
     const outcome = await controller.exportAsHtml(
@@ -207,7 +184,9 @@ export class DesktopHistoryHandlers implements DesktopHistorySettingsController 
       ),
     );
     if (outcome.status !== 'ok') {
-      await this.reportHtmlExportError(outcome.status);
+      await this.dependencies.showInfoMessage(
+        htmlExportErrorMessage(outcome.status),
+      );
       return;
     }
     const { absolutePath, storagePath } = outcome.result;
@@ -227,7 +206,9 @@ export class DesktopHistoryHandlers implements DesktopHistorySettingsController 
     const controller = await this.getChatExportController();
     const result = await controller.buildExportInput(historyId);
     if (result.status !== 'ok') {
-      await this.reportExportInputError(result.status);
+      await this.dependencies.showInfoMessage(
+        exportInputErrorMessage(result.status),
+      );
       return;
     }
     const { exportInput } = result;

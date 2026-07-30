@@ -218,9 +218,9 @@ export function createLogsPane(
     `;
   }
 
-  function viewerTemplate(s: LogViewerState): TemplateResult {
+  function viewerTemplate(): TemplateResult {
     const action = (
-      icon: 'rotate-right' | 'copy' | 'download' | 'folder-open',
+      icon: TeXRAIconName,
       label: string,
       onClick: () => void,
     ): TemplateResult =>
@@ -236,7 +236,7 @@ export function createLogsPane(
         <header class="desktop-log-viewer-header">
           <div>
             <h2>Desktop Logs</h2>
-            <p>${s.meta}</p>
+            <p>${state.meta}</p>
           </div>
           <div class="desktop-log-viewer-actions">
             ${action('rotate-right', 'Refresh', requestSnapshot)}
@@ -257,12 +257,12 @@ export function createLogsPane(
           aria-label="Recent desktop log entries"
         >
           ${
-            s.entries.length === 0
+            state.entries.length === 0
               ? html`<div class="desktop-log-viewer-empty" role="status">
-                  ${s.emptyMessage}
+                  ${state.emptyMessage}
                 </div>`
               : repeat(
-                  s.entries.toReversed(),
+                  state.entries.toReversed(),
                   (entry) => entry.id,
                   entryTemplate,
                 )
@@ -273,7 +273,7 @@ export function createLogsPane(
   }
 
   function rerenderViewer(): void {
-    render(viewerTemplate(state), container);
+    render(viewerTemplate(), container);
   }
 
   function setActive(nextActive: boolean): void {

@@ -126,13 +126,6 @@ export class ToolUseFollowUpQueue {
     let entry = this.entries.get(streamId);
     if (admission === 'live_owner') {
       if (!entry) return { kind: 'not_owned' };
-      if (!entry.owner) {
-        // Live notifications use this path to reach WAITING parents whose
-        // retained queue will be consumed when the stream resumes.
-        entry.queue.enqueue(followUp);
-        logger.debug(`Queued follow-up for stream ${streamId}.`);
-        return { kind: 'queued' };
-      }
     } else {
       if (!entry && admission === 'existing_recoverable') {
         return { kind: 'unavailable' };
@@ -147,6 +140,12 @@ export class ToolUseFollowUpQueue {
     if (owner?.kind === 'flow') return { kind: 'live_flow' };
     if (owner?.kind === 'child') return { kind: 'live' };
     if (owner?.kind === 'recovery') return { kind: 'recovering' };
+
+    if (admission === 'live_owner') {
+      // Live notifications use this path to reach WAITING parents whose
+      // retained queue will be consumed when the stream resumes.
+      return { kind: 'queued' };
+    }
 
     const lease = this.claim(entry, streamId, 'recovery');
     if (!lease) return { kind: 'recovering' };

@@ -1,16 +1,15 @@
-// Third-party imports
+// Node imports
 import { strict as assert } from 'node:assert';
+
+// Third-party imports
 import { describe, it } from 'vitest';
 
-// Standard library imports
-
-// Local imports - agent
+// Local imports
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-
 import type { TaskState } from '@agent/core/state/TaskState';
 
-// Local imports - test support
+// Local file imports
 import {
   createAgentConfig,
   createOutputFile,

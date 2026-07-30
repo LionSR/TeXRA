@@ -14,17 +14,6 @@ function externalLocation(absolutePath: string): FileLocation {
   return { kind: 'external', absolutePath };
 }
 
-function createLogger(): {
-  logger: AgentTrace;
-  warn: ReturnType<typeof vi.fn<AgentTrace['warn']>>;
-} {
-  const warn = vi.fn<AgentTrace['warn']>();
-  return {
-    logger: { ...noopTrace, debug: vi.fn(), warn },
-    warn,
-  };
-}
-
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -95,7 +84,8 @@ describe('replaceInputCommands', () => {
     const output = externalLocation('/run/chapter_r1.tex');
     vi.spyOn(AbsoluteFS, 'read').mockRejectedValue(new Error('read failed'));
     const write = vi.spyOn(AbsoluteFS, 'write').mockResolvedValue();
-    const { logger, warn } = createLogger();
+    const warn = vi.fn<AgentTrace['warn']>();
+    const logger: AgentTrace = { ...noopTrace, debug: vi.fn(), warn };
 
     await expect(
       replaceInputCommands([base], [output], logger),
@@ -112,7 +102,8 @@ describe('replaceInputCommands', () => {
     const output = externalLocation('/run/chapter_r1.tex');
     vi.spyOn(AbsoluteFS, 'read').mockResolvedValue(String.raw`\input{chapter}`);
     vi.spyOn(AbsoluteFS, 'write').mockRejectedValue(new Error('write failed'));
-    const { logger, warn } = createLogger();
+    const warn = vi.fn<AgentTrace['warn']>();
+    const logger: AgentTrace = { ...noopTrace, debug: vi.fn(), warn };
 
     await expect(
       replaceInputCommands([base], [output], logger),

@@ -7,10 +7,9 @@ import '@test/support/defaultSessionTestSetup';
 import * as path from 'node:path';
 
 // Third-party imports
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { defaultSession } from '@agent/runtime/SessionHandle';
@@ -78,17 +77,26 @@ function setRunStorageEntries(
       parent = path.posix.dirname(parent);
     }
   }
-  StorageFS.exists = async (target) => types.has(target);
-  StorageFS.stat = async (target) => {
+  vi.spyOn(StorageFS, 'exists').mockImplementation(async (target) =>
+    types.has(target),
+  );
+  vi.spyOn(StorageFS, 'stat').mockImplementation(async (target) => {
     const type = types.get(target);
     if (type !== undefined) return runStorageStat(type);
     throw Object.assign(new Error(`Missing: ${target}`), { code: 'ENOENT' });
-  };
+  });
+}
+
+/** Stubs the workspace side of an accept and returns the write spy. */
+function stubWorkspaceFiles(exists: boolean, content: string) {
+  vi.spyOn(WorkspaceFS, 'exists').mockResolvedValue(exists);
+  vi.spyOn(WorkspaceFS, 'read').mockResolvedValue(content);
+  vi.spyOn(WorkspaceFS, 'delete').mockResolvedValue(undefined);
+  return vi.spyOn(WorkspaceFS, 'write').mockResolvedValue(undefined);
 }
 
 function runAccept(
   tool: AcceptRunFilesTool,
-  host: SessionHostInteractions,
   files: { path: string; original: string }[],
   tracker = new FileInteractionState(),
 ) {
@@ -100,53 +108,25 @@ function runAccept(
 }
 
 describe('accept_run_files progress events', () => {
-  let originalStorageExists: typeof StorageFS.exists;
-  let originalStorageStat: typeof StorageFS.stat;
-  let originalStorageFullPath: typeof StorageFS.fullPath;
-  let originalWorkspaceLocatePath: typeof WorkspaceFS.locatePath;
-  let originalWorkspaceExists: typeof WorkspaceFS.exists;
-  let originalWorkspaceRead: typeof WorkspaceFS.read;
-  let originalWorkspaceWrite: typeof WorkspaceFS.write;
-  let originalWorkspaceDelete: typeof WorkspaceFS.delete;
-  let originalAbsoluteIsFile: typeof AbsoluteFS.isFile;
-  let originalAbsoluteRead: typeof AbsoluteFS.read;
-
   beforeEach(async () => {
-    originalStorageExists = StorageFS.exists;
-    originalStorageStat = StorageFS.stat;
-    originalStorageFullPath = StorageFS.fullPath;
-    originalWorkspaceLocatePath = WorkspaceFS.locatePath;
-    originalWorkspaceExists = WorkspaceFS.exists;
-    originalWorkspaceRead = WorkspaceFS.read;
-    originalWorkspaceWrite = WorkspaceFS.write;
-    originalWorkspaceDelete = WorkspaceFS.delete;
-    originalAbsoluteIsFile = AbsoluteFS.isFile;
-    originalAbsoluteRead = AbsoluteFS.read;
     testApprovalHandler = undefined;
     await installTestPlatform();
     cleanupAllApprovals();
     // Shared by every test below that stubs the execution/workspace paths;
     // the test that doesn't need it (missing runtime host) fails before
     // reaching either function.
-    StorageFS.fullPath = (target) => `${storagePath}/${target}`;
-    WorkspaceFS.locatePath = (target) => ({
+    vi.spyOn(StorageFS, 'fullPath').mockImplementation(
+      (target) => `${storagePath}/${target}`,
+    );
+    vi.spyOn(WorkspaceFS, 'locatePath').mockImplementation((target) => ({
       kind: 'workspace',
       absolutePath: `${workspacePath}/${target}`,
       relativePath: target,
-    });
+    }));
   });
 
   afterEach(() => {
-    StorageFS.exists = originalStorageExists;
-    StorageFS.stat = originalStorageStat;
-    StorageFS.fullPath = originalStorageFullPath;
-    WorkspaceFS.locatePath = originalWorkspaceLocatePath;
-    WorkspaceFS.exists = originalWorkspaceExists;
-    WorkspaceFS.read = originalWorkspaceRead;
-    WorkspaceFS.write = originalWorkspaceWrite;
-    WorkspaceFS.delete = originalWorkspaceDelete;
-    AbsoluteFS.isFile = originalAbsoluteIsFile;
-    AbsoluteFS.read = originalAbsoluteRead;
+    vi.restoreAllMocks();
     testApprovalHandler = undefined;
     detachHostInteractions();
     detachHostInteractions = () => {};
@@ -168,17 +148,13 @@ describe('accept_run_files progress events', () => {
     setRunStorageEntries({
       [`executions/${executionId}/output.tex`]: FileType.File,
     });
-    WorkspaceFS.exists = async () => false;
-    WorkspaceFS.read = async () => '';
-    WorkspaceFS.write = async () => undefined;
-    WorkspaceFS.delete = async () => undefined;
-    AbsoluteFS.read = async () => 'accepted content';
+    stubWorkspaceFiles(false, '');
+    vi.spyOn(AbsoluteFS, 'read').mockResolvedValue('accepted content');
 
     testApprovalHandler = async () => ({ accepted: true });
 
     const result = await runAccept(
       tool,
-      explicit.host,
       [{ path: 'output.tex', original: 'paper.tex' }],
       tracker,
     );
@@ -192,7 +168,6 @@ describe('accept_run_files progress events', () => {
 
   it('does not require a runtime host to publish accepted workspace files', async () => {
     const tool = new AcceptRunFilesTool();
-    let writes = 0;
     const written: string[][] = [];
     const dispose = appSignals.on(
       'workspaceFilesWritten',
@@ -204,13 +179,8 @@ describe('accept_run_files progress events', () => {
     setRunStorageEntries({
       [`executions/${executionId}/output.tex`]: FileType.File,
     });
-    WorkspaceFS.exists = async () => false;
-    WorkspaceFS.read = async () => '';
-    WorkspaceFS.write = async () => {
-      writes++;
-    };
-    WorkspaceFS.delete = async () => undefined;
-    AbsoluteFS.read = async () => 'accepted content';
+    const write = stubWorkspaceFiles(false, '');
+    vi.spyOn(AbsoluteFS, 'read').mockResolvedValue('accepted content');
     testApprovalHandler = async () => ({ accepted: true });
 
     const result = await tool.call({
@@ -219,38 +189,32 @@ describe('accept_run_files progress events', () => {
     });
 
     expect(result.status).toBe('executed');
-    expect(writes).toBe(1);
+    expect(write).toHaveBeenCalledOnce();
     expect(written).toEqual([[`${workspacePath}/paper.tex`]]);
     dispose();
   });
 
   it('uses the pre-run snapshot for same-path workspace outputs', async () => {
-    const explicit = createRecordingHost();
     const tool = new AcceptRunFilesTool();
     let approvalOriginal = '';
     let approvalProposed = '';
-    let writes = 0;
+    const snapshotPath = `${storagePath}/executions/${executionId}/original/draft.tex`;
 
     setRunStorageEntries();
-    WorkspaceFS.exists = async () => true;
-    WorkspaceFS.read = async () => 'new content';
-    WorkspaceFS.write = async () => {
-      writes++;
-    };
-    WorkspaceFS.delete = async () => undefined;
-    AbsoluteFS.isFile = async (target) =>
-      target === `${storagePath}/executions/${executionId}/original/draft.tex`;
-    AbsoluteFS.read = async (target) =>
-      target === `${storagePath}/executions/${executionId}/original/draft.tex`
-        ? 'old content'
-        : 'new content';
+    const write = stubWorkspaceFiles(true, 'new content');
+    vi.spyOn(AbsoluteFS, 'isFile').mockImplementation(
+      async (target) => target === snapshotPath,
+    );
+    vi.spyOn(AbsoluteFS, 'read').mockImplementation(async (target) =>
+      target === snapshotPath ? 'old content' : 'new content',
+    );
     testApprovalHandler = async (request) => {
       approvalOriginal = request.originalContent;
       approvalProposed = request.proposedContent;
       return { accepted: true };
     };
 
-    const result = await runAccept(tool, explicit.host, [
+    const result = await runAccept(tool, [
       { path: 'draft.tex', original: 'draft.tex' },
     ]);
 
@@ -261,30 +225,24 @@ describe('accept_run_files progress events', () => {
       added: 1,
       removed: 1,
     });
-    expect(writes).toBe(0);
+    expect(write).not.toHaveBeenCalled();
   });
 
   it('reports unchanged same-path fallbacks without approval', async () => {
     const explicit = createRecordingHost();
     const tool = new AcceptRunFilesTool();
     let approvals = 0;
-    let writes = 0;
 
     setRunStorageEntries();
-    WorkspaceFS.exists = async () => true;
-    WorkspaceFS.read = async () => 'same content';
-    WorkspaceFS.write = async () => {
-      writes++;
-    };
-    WorkspaceFS.delete = async () => undefined;
-    AbsoluteFS.isFile = async () => false;
-    AbsoluteFS.read = async () => 'same content';
+    const write = stubWorkspaceFiles(true, 'same content');
+    vi.spyOn(AbsoluteFS, 'isFile').mockResolvedValue(false);
+    vi.spyOn(AbsoluteFS, 'read').mockResolvedValue('same content');
     testApprovalHandler = async () => {
       approvals++;
       return { accepted: true };
     };
 
-    const result = await runAccept(tool, explicit.host, [
+    const result = await runAccept(tool, [
       { path: 'draft.tex', original: 'draft.tex' },
     ]);
 
@@ -292,7 +250,7 @@ describe('accept_run_files progress events', () => {
     expect(result.output).toContain('No changes to accept');
     expect(result.output).toContain('unchanged: draft.tex');
     expect(approvals).toBe(0);
-    expect(writes).toBe(0);
+    expect(write).not.toHaveBeenCalled();
     expect(explicit.events).toEqual([]);
   });
 
@@ -300,24 +258,18 @@ describe('accept_run_files progress events', () => {
     const explicit = createRecordingHost();
     const tool = new AcceptRunFilesTool();
     let approvals = 0;
-    let writes = 0;
 
     setRunStorageEntries({
       [`executions/${executionId}/r1/Draft/appendices.tex`]:
         FileType.SymbolicLink | FileType.File,
     });
-    WorkspaceFS.exists = async () => true;
-    WorkspaceFS.read = async () => '';
-    WorkspaceFS.write = async () => {
-      writes++;
-    };
-    WorkspaceFS.delete = async () => undefined;
+    const write = stubWorkspaceFiles(true, '');
     testApprovalHandler = async () => {
       approvals++;
       return { accepted: true };
     };
 
-    const result = await runAccept(tool, explicit.host, [
+    const result = await runAccept(tool, [
       { path: 'r1/Draft/appendices.tex', original: 'Draft/appendices.tex' },
     ]);
 
@@ -325,7 +277,7 @@ describe('accept_run_files progress events', () => {
     expect(result.error).toContain('symlink');
     expect(result.error).toContain('did not emit');
     expect(approvals).toBe(0);
-    expect(writes).toBe(0);
+    expect(write).not.toHaveBeenCalled();
     expect(explicit.events).toEqual([]);
   });
 });

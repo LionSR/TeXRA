@@ -242,19 +242,17 @@ export class OpenAIResponseWebSocketTransport {
         currentResponseId !== null && response.id === currentResponseId;
 
       const onAbort = (): void => {
-        if (settled) return;
-        settled = true;
-        cleanup();
         // Close the WebSocket on abort to prevent cross-talk on retry.
         // The server runs responses sequentially, so after client-side abort
         // it continues finishing the current response. If we reuse the socket,
         // the new executeViaWebSocket call's listeners would receive stale
         // events (including response.created) from the prior response, causing
         // the new request to resolve with the wrong response.
-        this.closeWebSocket();
-        rejectWithPartial(
-          new DOMException('The operation was aborted', 'AbortError'),
+        const aborted = new DOMException(
+          'The operation was aborted',
+          'AbortError',
         );
+        failRequest(aborted, { closeConnection: true });
       };
       signal?.addEventListener('abort', onAbort, { once: true });
 
@@ -287,14 +285,25 @@ export class OpenAIResponseWebSocketTransport {
         }
       };
 
-      /** Finalize the processor's streams, attach any partial-text tail, then reject. */
-      const rejectWithPartial = (err: unknown): void => {
-        // Finalize the processor's progress streams so a mid-stream WebSocket
-        // failure does not leave the progress view hanging in a loading state.
-        // Unlike the HTTP path (which finalizes via the caller's catch), the
-        // processor is owned here and is never returned to the caller on a
-        // reject, so it must be finalized on this side. `abort()` preserves any
-        // chunks already streamed; `finalize` is idempotent.
+      /**
+       * Settle the request as a failure: detach listeners, optionally drop the
+       * connection, finalize the processor's streams, then reject with any
+       * partial-text tail attached. Finalizing the processor here keeps a
+       * mid-stream failure from leaving the progress view hanging: unlike the
+       * HTTP path (which finalizes via the caller's catch), the processor is
+       * owned here and never reaches the caller on a reject. `abort()`
+       * preserves any chunks already streamed; `finalize` is idempotent.
+       */
+      const failRequest = (
+        err: unknown,
+        options?: { closeConnection?: boolean },
+      ): void => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        if (options?.closeConnection) {
+          this.closeWebSocket();
+        }
         processor.abort();
         if (streamedText) {
           attachPartialText(err, takeTail(streamedText, PARTIAL_TEXT_TAIL_MAX));
@@ -323,8 +332,6 @@ export class OpenAIResponseWebSocketTransport {
       // wording that can drift across model generations.
       const onFailed = (event: ResponseFailedEvent): void => {
         if (settled || !isCurrentResponse(event.response)) return;
-        settled = true;
-        cleanup();
         const responseError = event.response.error;
         const errorMsg =
           responseError?.message ?? 'Response failed without details';
@@ -334,7 +341,7 @@ export class OpenAIResponseWebSocketTransport {
         if (responseError) {
           wrapped.error = responseError;
         }
-        rejectWithPartial(wrapped);
+        failRequest(wrapped);
       };
 
       // Incomplete responses are resolved (not rejected) to match the HTTP
@@ -346,30 +353,24 @@ export class OpenAIResponseWebSocketTransport {
 
       const onWsError = (error: WebSocketError): void => {
         if (settled) return;
-        settled = true;
-        cleanup();
         // The SDK emits both provider error events and socket failures through
         // this channel. Structured provider errors must retain their own code
         // (only an error without an API event is evidence that the route
         // broke), but the connection is invalidated either way: the server may
         // refuse further service on this socket after a structured error
         // (e.g. websocket_connection_limit_reached) without closing it.
-        this.closeWebSocket();
         if (!error.error) {
           attachSdkErrorMetadata(error, {
             provider: 'openai',
             kind: 'connection',
           });
         }
-        rejectWithPartial(error);
+        failRequest(error, { closeConnection: true });
       };
 
       // Handle unexpected socket close during a request
       const onSocketClose = (code: number, reason: Buffer): void => {
         if (settled) return;
-        settled = true;
-        cleanup();
-        this.closeWebSocket();
         const error = new Error(
           `WebSocket closed unexpectedly (code: ${code}, reason: ${reason.toString()})`,
         );
@@ -377,7 +378,7 @@ export class OpenAIResponseWebSocketTransport {
           provider: 'openai',
           kind: 'connection',
         });
-        rejectWithPartial(error);
+        failRequest(error, { closeConnection: true });
       };
 
       const cleanup = (): void => {
@@ -417,10 +418,8 @@ export class OpenAIResponseWebSocketTransport {
       } catch (sendError) {
         // If send() throws synchronously, clean up listeners to prevent leaks
         // on the reused WebSocket connection, and finalize the processor's
-        // streams (via rejectWithPartial) so they do not hang.
-        settled = true;
-        cleanup();
-        rejectWithPartial(sendError);
+        // streams (via failRequest) so they do not hang.
+        failRequest(sendError);
       }
     });
   }

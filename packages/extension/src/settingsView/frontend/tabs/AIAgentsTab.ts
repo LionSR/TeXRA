@@ -135,19 +135,21 @@ export class AIAgentsTab extends LitElement {
   claudeAgentPermissionMode: ClaudeAgentPermissionMode = 'acceptEdits';
   @property({ type: String }) claudeAgentEffort: ClaudeAgentEffort = 'high';
 
-  private postSelect(key: WorkspaceStateKey, e: Event): void {
-    const value = readSelectValue(e);
-    if (value) {
-      postMessage(SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING, { key, value });
-    }
-  }
-
   private renderSelectRow(
     label: string,
+    key: WorkspaceStateKey,
     value: string,
     options: readonly { value: string; label: string }[],
-    onChange: (e: Event) => void,
   ): TemplateResult {
+    const onChange = (e: Event): void => {
+      const selected = readSelectValue(e);
+      if (selected) {
+        postMessage(SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING, {
+          key,
+          value: selected,
+        });
+      }
+    };
     return html`
       <div class="settings-row">
         <div class="settings-row-text">
@@ -179,21 +181,21 @@ export class AIAgentsTab extends LitElement {
       <div class="settings-section">
         ${this.renderSelectRow(
           'Sandbox mode',
+          WorkspaceStateKey.CODEX_SANDBOX_MODE,
           this.codexSandboxMode,
           SANDBOX_MODE_OPTIONS,
-          (e) => this.postSelect(WorkspaceStateKey.CODEX_SANDBOX_MODE, e),
         )}
         ${this.renderSelectRow(
           'Reasoning effort',
+          WorkspaceStateKey.CODEX_REASONING_EFFORT,
           this.codexReasoningEffort,
           REASONING_EFFORT_OPTIONS,
-          (e) => this.postSelect(WorkspaceStateKey.CODEX_REASONING_EFFORT, e),
         )}
         ${this.renderSelectRow(
           'Approval policy',
+          WorkspaceStateKey.CODEX_APPROVAL_POLICY,
           this.codexApprovalPolicy,
           APPROVAL_POLICY_OPTIONS,
-          (e) => this.postSelect(WorkspaceStateKey.CODEX_APPROVAL_POLICY, e),
         )}
       </div>
     `;
@@ -204,22 +206,21 @@ export class AIAgentsTab extends LitElement {
       <div class="settings-section">
         ${this.renderSelectRow(
           'Model',
+          WorkspaceStateKey.CLAUDE_AGENT_MODEL,
           this.claudeAgentModel,
           CLAUDE_MODEL_OPTIONS,
-          (e) => this.postSelect(WorkspaceStateKey.CLAUDE_AGENT_MODEL, e),
         )}
         ${this.renderSelectRow(
           'Reasoning effort',
+          WorkspaceStateKey.CLAUDE_AGENT_EFFORT,
           this.claudeAgentEffort,
           CLAUDE_EFFORT_OPTIONS,
-          (e) => this.postSelect(WorkspaceStateKey.CLAUDE_AGENT_EFFORT, e),
         )}
         ${this.renderSelectRow(
           'Permission mode',
+          WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
           this.claudeAgentPermissionMode,
           CLAUDE_PERMISSION_MODE_OPTIONS,
-          (e) =>
-            this.postSelect(WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE, e),
         )}
       </div>
     `;

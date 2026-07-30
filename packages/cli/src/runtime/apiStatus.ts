@@ -157,8 +157,6 @@ export async function loadCliApiStatus(
 ): Promise<CliApiStatus> {
   const mode = options.apiMode ?? getCliApiMode();
   const profile = await getCliAuthProfile();
-  const supplementalLines: string[] = [];
-  const detailLines: string[] = [];
   let authLine = formatCliAuthStatusLine(profile);
   const configuredPersonalKeyProviders =
     options.includeActionHint === true || profile.authenticated
@@ -169,16 +167,15 @@ export async function loadCliApiStatus(
     ? formatCliApiStatusActionHint(mode, profile, { hasPersonalKey })
     : undefined;
 
-  if (profile.authenticated) {
-    const shadowWarning = formatApiKeyShadowWarning(
-      true,
-      configuredPersonalKeyProviders,
-    );
-    if (shadowWarning) supplementalLines.push(shadowWarning);
-  }
-
-  if (profile.note) supplementalLines.push(profile.note);
-  detailLines.push(...supplementalLines);
+  const shadowWarning = formatApiKeyShadowWarning(
+    profile.authenticated,
+    configuredPersonalKeyProviders,
+  );
+  const supplementalLines = [
+    ...(shadowWarning ? [shadowWarning] : []),
+    ...(profile.note ? [profile.note] : []),
+  ];
+  const detailLines = [...supplementalLines];
   if (profile.authenticated && profile.tier) {
     detailLines.push(`tier: ${profile.tier}`);
     // Usage reads usage_logs via PostgREST with a session token; a

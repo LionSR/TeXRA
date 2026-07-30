@@ -10,6 +10,17 @@ import { noopTrace } from '@agent/trace';
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
+function newHandler(): ModelHandlerOpenAI {
+  const handler = new ModelHandlerOpenAI(
+    buildTestModelConfig({
+      provider: ModelProvider.OPENAI,
+      capabilities: { supportsVision: false },
+    }),
+  );
+  handler.setLogger({ ...noopTrace });
+  return handler;
+}
+
 /** A well-formed completion with a single `function` tool call. */
 function completionWithValidToolCall() {
   return {
@@ -59,15 +70,7 @@ function completionWithMalformedToolCall() {
 
 describe('ModelHandlerOpenAI.extractToolUse', () => {
   it('extracts a well-formed function tool call', () => {
-    const handler = new ModelHandlerOpenAI(
-      buildTestModelConfig({
-        provider: ModelProvider.OPENAI,
-        capabilities: { supportsVision: false },
-      }),
-    );
-    handler.setLogger({ ...noopTrace });
-
-    const result = handler.extractToolUse(completionWithValidToolCall());
+    const result = newHandler().extractToolUse(completionWithValidToolCall());
 
     assert.equal(result.length, 1);
     assert.equal(result[0]?.name, 'do_thing');
@@ -79,13 +82,7 @@ describe('ModelHandlerOpenAI.extractToolUse', () => {
     // "the model made no tool calls" and finalized the run as a successful
     // completion despite the corrupted provider payload. It must now throw
     // so the run fails loudly via the classifyAgentError boundary instead.
-    const handler = new ModelHandlerOpenAI(
-      buildTestModelConfig({
-        provider: ModelProvider.OPENAI,
-        capabilities: { supportsVision: false },
-      }),
-    );
-    handler.setLogger({ ...noopTrace });
+    const handler = newHandler();
 
     assert.throws(() =>
       handler.extractToolUse(completionWithMalformedToolCall()),
@@ -103,17 +100,6 @@ describe('ModelHandlerOpenAI tool-result attachment summaries', () => {
     },
   } as never;
   const result = { status: 'executed', output: 'done' } as const;
-
-  function newHandler() {
-    const handler = new ModelHandlerOpenAI(
-      buildTestModelConfig({
-        provider: ModelProvider.OPENAI,
-        capabilities: { supportsVision: false },
-      }),
-    );
-    handler.setLogger({ ...noopTrace });
-    return handler;
-  }
 
   it('single follow-up path includes the attachment summary', async () => {
     const messages = await newHandler().createToolUseFollowUpMessages(
@@ -137,13 +123,7 @@ describe('ModelHandlerOpenAI tool-result attachment summaries', () => {
 
 describe('ModelHandlerOpenAI forced tool choice', () => {
   it('maps finalTool to a named function choice', async () => {
-    const handler = new ModelHandlerOpenAI(
-      buildTestModelConfig({
-        provider: ModelProvider.OPENAI,
-        capabilities: { supportsVision: false },
-      }),
-    );
-    handler.setLogger({ ...noopTrace });
+    const handler = newHandler();
     handler.getStreamingConfig = () => false;
     let request: Record<string, unknown> | undefined;
 

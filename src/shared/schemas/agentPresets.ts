@@ -17,7 +17,6 @@ const AGENT_MODE_PRESET_ICON_NAMES = [
   'diagram-project',
   'cube',
   'hashtag',
-  'cube',
   'screwdriver-wrench',
 ] as const satisfies readonly TeXRAIconName[];
 

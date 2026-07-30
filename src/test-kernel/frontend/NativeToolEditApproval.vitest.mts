@@ -106,40 +106,90 @@ interface RecordingRuntimeHost extends Pick<SessionHostInteractions, 'emit'> {
   readonly resolved: Array<{ requestId: string }>;
 }
 
-interface StartedApproval {
-  readonly approval: Promise<ToolEditApprovalResult>;
-  readonly requestId: string;
+interface ApprovalHarness {
   readonly interactions: RecordingRuntimeHost;
   readonly session: SessionHandle;
 }
+
+interface StartedApproval extends ApprovalHarness {
+  readonly approval: Promise<ToolEditApprovalResult>;
+  readonly requestId: string;
+}
+
+type ApprovalPrompts = Parameters<typeof initializeNativeToolEditApproval>[2];
 
 const sessions: SessionHandle[] = [];
 const activeApprovals: Promise<ToolEditApprovalResult>[] = [];
 let storageRoot: string;
 
-function createRecordingRuntimeHost(): RecordingRuntimeHost {
-  const shown: ToolEditPermission[] = [];
-  const resolved: Array<{ requestId: string }> = [];
+function recordingPrompts(interactions: RecordingRuntimeHost): ApprovalPrompts {
   return {
-    shown,
-    resolved,
-    emit: vi.fn(),
+    showToolEditPermission: (payload) => interactions.shown.push(payload),
+    resolveToolEditPermission: (requestId) =>
+      interactions.resolved.push({ requestId }),
   };
 }
 
-function initializeRecordingApproval(interactions: RecordingRuntimeHost): void {
+function createApprovalHarness(
+  prompts: (
+    interactions: RecordingRuntimeHost,
+  ) => ApprovalPrompts = recordingPrompts,
+): ApprovalHarness {
+  const interactions: RecordingRuntimeHost = {
+    shown: [],
+    resolved: [],
+    emit: vi.fn(),
+  };
+  const session = createTestSession();
+  sessions.push(session);
   initializeNativeToolEditApproval(
     {
       storageUri: { fsPath: storageRoot },
       globalStorageUri: { fsPath: storageRoot },
     } as unknown as VSCode.ExtensionContext,
     interactions,
-    {
-      showToolEditPermission: (payload) => interactions.shown.push(payload),
-      resolveToolEditPermission: (requestId) =>
-        interactions.resolved.push({ requestId }),
-    },
+    prompts(interactions),
   );
+  return { interactions, session };
+}
+
+function requestApproval(
+  session: SessionHandle,
+  filePath: string,
+  streamId: string,
+): Promise<ToolEditApprovalResult> {
+  const approval = nativeRequestApproval(
+    {
+      path: filePath,
+      originalContent: 'old\n',
+      proposedContent: 'new\n',
+      sourceTool: 'write_file',
+      streamId,
+    },
+    { session },
+  );
+  activeApprovals.push(approval);
+  return approval;
+}
+
+async function firstRequestId(
+  interactions: RecordingRuntimeHost,
+): Promise<string> {
+  await vi.waitFor(() => expect(interactions.shown).toHaveLength(1));
+  const requestId = interactions.shown[0]?.requestId;
+  if (!requestId) {
+    throw new Error('Expected a tool edit approval request ID.');
+  }
+  return requestId;
+}
+
+function recordDiffEditor(command: unknown, args: unknown[]): void {
+  if (command !== 'vscode.diff') return;
+  vscodeMocks.visibleTextEditors.push({
+    document: { uri: args[1] as TestUri },
+    selections: [],
+    revealRange: vi.fn(),
+  });
 }
 
 function currentProposedUri(): TestUri {
@@ -154,29 +204,18 @@ function currentProposedUri(): TestUri {
 }
 
 async function startApproval(): Promise<StartedApproval> {
-  const interactions = createRecordingRuntimeHost();
-  const session = createTestSession();
-  sessions.push(session);
-  initializeRecordingApproval(interactions);
-
-  const approval = nativeRequestApproval(
-    {
-      path: '/workspace/notes.txt',
-      originalContent: 'alpha\n',
-      proposedContent: 'beta\n',
-      sourceTool: 'write_file',
-      streamId: 'stream-approval',
-    },
-    { session },
+  const { interactions, session } = createApprovalHarness();
+  const approval = requestApproval(
+    session,
+    '/workspace/notes.txt',
+    'stream-approval',
   );
-  activeApprovals.push(approval);
-
-  await vi.waitFor(() => expect(interactions.shown).toHaveLength(1));
-  const requestId = interactions.shown[0]?.requestId;
-  if (!requestId) {
-    throw new Error('Expected a tool edit approval request ID.');
-  }
-  return { approval, requestId, interactions: interactions, session };
+  return {
+    approval,
+    requestId: await firstRequestId(interactions),
+    interactions,
+    session,
+  };
 }
 
 beforeEach(async () => {
@@ -185,14 +224,7 @@ beforeEach(async () => {
   vscodeMocks.visibleTextEditors.splice(0);
   vscodeMocks.executeCommand.mockImplementation(
     async (command: unknown, ...args: unknown[]) => {
-      if (command === 'vscode.diff') {
-        const proposedUri = args[1] as TestUri;
-        vscodeMocks.visibleTextEditors.push({
-          document: { uri: proposedUri },
-          selections: [],
-          revealRange: vi.fn(),
-        });
-      }
+      recordDiffEditor(command, args);
       return undefined;
     },
   );
@@ -209,21 +241,12 @@ afterEach(async () => {
 
 describe('native tool edit approval', () => {
   it('approves a matching edit while its preview is still initializing', async () => {
-    const interactions = createRecordingRuntimeHost();
-    const session = createTestSession();
-    sessions.push(session);
-    initializeRecordingApproval(interactions);
-    const approval = nativeRequestApproval(
-      {
-        path: '/workspace/approve-initializing.txt',
-        originalContent: 'old\n',
-        proposedContent: 'new\n',
-        sourceTool: 'write_file',
-        streamId: 'stream-initializing',
-      },
-      { session },
+    const { interactions, session } = createApprovalHarness();
+    const approval = requestApproval(
+      session,
+      '/workspace/approve-initializing.txt',
+      'stream-initializing',
     );
-    activeApprovals.push(approval);
 
     await expect(
       approveNativeToolEditApprovals(session, 'stream-initializing'),
@@ -243,43 +266,29 @@ describe('native tool edit approval', () => {
     ).resolves.toBeUndefined();
     await expect(approval).resolves.toMatchObject({
       accepted: true,
-      appliedContent: 'beta\n',
+      appliedContent: 'new\n',
     });
   });
 
   it('keeps pending edit approval scoped to both session and stream', async () => {
-    const interactions = createRecordingRuntimeHost();
-    const targetSession = createTestSession();
+    const { interactions, session: targetSession } = createApprovalHarness();
     const otherSession = createTestSession();
-    sessions.push(targetSession, otherSession);
-    initializeRecordingApproval(interactions);
-    const request = (path: string, streamId: string, session: SessionHandle) =>
-      nativeRequestApproval(
-        {
-          path,
-          originalContent: 'old\n',
-          proposedContent: 'new\n',
-          sourceTool: 'write_file',
-          streamId,
-        },
-        { session },
-      );
-    const target = request(
+    sessions.push(otherSession);
+    const target = requestApproval(
+      targetSession,
       '/workspace/target.txt',
       'stream-target',
-      targetSession,
     );
-    const otherStream = request(
+    const otherStream = requestApproval(
+      targetSession,
       '/workspace/other-stream.txt',
       'stream-other',
-      targetSession,
     );
-    const otherSessionRequest = request(
+    const otherSessionRequest = requestApproval(
+      otherSession,
       '/workspace/other-session.txt',
       'stream-target',
-      otherSession,
     );
-    activeApprovals.push(target, otherStream, otherSessionRequest);
     await vi.waitFor(() => expect(interactions.shown).toHaveLength(3));
 
     await approveNativeToolEditApprovals(targetSession, 'stream-target');
@@ -298,21 +307,12 @@ describe('native tool edit approval', () => {
   });
 
   it('does not present an approval cancelled during initialization', async () => {
-    const interactions = createRecordingRuntimeHost();
-    const session = createTestSession();
-    sessions.push(session);
-    initializeRecordingApproval(interactions);
-    const approval = nativeRequestApproval(
-      {
-        path: '/workspace/cancel-initializing.txt',
-        originalContent: 'old\n',
-        proposedContent: 'new\n',
-        sourceTool: 'write_file',
-        streamId: 'stream-initializing',
-      },
-      { session },
+    const { interactions, session } = createApprovalHarness();
+    const approval = requestApproval(
+      session,
+      '/workspace/cancel-initializing.txt',
+      'stream-initializing',
     );
-    activeApprovals.push(approval);
 
     cancelNativeToolEditApprovals(session, {
       kind: 'toolEdit',
@@ -331,14 +331,7 @@ describe('native tool edit approval', () => {
     let revealProgress: (() => void) | undefined;
     vscodeMocks.executeCommand.mockImplementation(
       async (command: unknown, ...args: unknown[]) => {
-        if (command === 'vscode.diff') {
-          const proposedUri = args[1] as TestUri;
-          vscodeMocks.visibleTextEditors.push({
-            document: { uri: proposedUri },
-            selections: [],
-            revealRange: vi.fn(),
-          });
-        }
+        recordDiffEditor(command, args);
         if (command === 'texra.showProgressView') {
           await new Promise<void>((resolve) => {
             revealProgress = resolve;
@@ -346,21 +339,12 @@ describe('native tool edit approval', () => {
         }
       },
     );
-    const interactions = createRecordingRuntimeHost();
-    const session = createTestSession();
-    sessions.push(session);
-    initializeRecordingApproval(interactions);
-    const approval = nativeRequestApproval(
-      {
-        path: '/workspace/cancel-reveal.txt',
-        originalContent: 'old\n',
-        proposedContent: 'new\n',
-        sourceTool: 'write_file',
-        streamId: 'stream-reveal',
-      },
-      { session },
+    const { interactions, session } = createApprovalHarness();
+    const approval = requestApproval(
+      session,
+      '/workspace/cancel-reveal.txt',
+      'stream-reveal',
     );
-    activeApprovals.push(approval);
     await vi.waitFor(() => expect(revealProgress).toBeTypeOf('function'));
 
     cancelNativeToolEditApprovals(session, {
@@ -393,44 +377,23 @@ describe('native tool edit approval', () => {
   });
 
   it('isolates host-local prompt failures from the approval result', async () => {
-    const interactions = createRecordingRuntimeHost();
-    const session = createTestSession();
-    sessions.push(session);
-    initializeNativeToolEditApproval(
-      {
-        storageUri: { fsPath: storageRoot },
-        globalStorageUri: { fsPath: storageRoot },
-      } as unknown as VSCode.ExtensionContext,
-      interactions,
-      {
-        showToolEditPermission: (payload) => {
-          interactions.shown.push(payload);
-          throw new Error('show failed');
-        },
-        resolveToolEditPermission: () => {
-          throw new Error('resolve failed');
-        },
+    const { interactions, session } = createApprovalHarness((recorder) => ({
+      showToolEditPermission: (payload) => {
+        recorder.shown.push(payload);
+        throw new Error('show failed');
       },
-    );
-    const approval = nativeRequestApproval(
-      {
-        path: '/workspace/isolated.txt',
-        originalContent: 'old\n',
-        proposedContent: 'new\n',
-        sourceTool: 'write_file',
-        streamId: 'stream-isolated',
+      resolveToolEditPermission: () => {
+        throw new Error('resolve failed');
       },
-      { session },
+    }));
+    const approval = requestApproval(
+      session,
+      '/workspace/isolated.txt',
+      'stream-isolated',
     );
-    activeApprovals.push(approval);
-    await vi.waitFor(() => expect(interactions.shown).toHaveLength(1));
-    const requestId = interactions.shown[0]?.requestId;
-    if (!requestId) {
-      throw new Error('Expected a tool edit approval request ID.');
-    }
 
     await handleProgressViewToolEditApprovalAction({
-      requestId,
+      requestId: await firstRequestId(interactions),
       action: 'reject',
     });
 

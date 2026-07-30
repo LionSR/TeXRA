@@ -42,14 +42,17 @@ function buildGpt5Config(overrides: Partial<ModelConfig> = {}): ModelConfig {
 // installed provider the three hosts actually install — the handler itself only
 // asks whether the route is capped.
 describe('ModelHandler.getEffectiveReasoningEffort tier caps', () => {
-  function stubServerSideKeys(tier: string | null): void {
+  function stubServerSideKeys(
+    tier: string | null,
+    useServerSideKeys = true,
+  ): void {
     vi.spyOn(providerConfigModule, 'getUseOpenRouter').mockReturnValue(false);
 
     vi.spyOn(serverKeysModule, 'getServerSideKeyService').mockReturnValue({
-      shouldUseServerSideKeysSync: () => true,
+      shouldUseServerSideKeysSync: () => useServerSideKeys,
       getUserTier: () => tier,
-      getUseIncludedModelAccess: () => true,
-      canUseServerSideKeys: async () => true,
+      getUseIncludedModelAccess: () => useServerSideKeys,
+      canUseServerSideKeys: async () => useServerSideKeys,
       getRelayBaseUrl: (provider: string) =>
         `https://relay.example.com/functions/v1/relay/${provider}/v1`,
     } as unknown as ReturnType<
@@ -86,19 +89,7 @@ describe('ModelHandler.getEffectiveReasoningEffort tier caps', () => {
   });
 
   it('does not cap when not using server-side keys (free tier, own key)', () => {
-    vi.spyOn(providerConfigModule, 'getUseOpenRouter').mockReturnValue(false);
-
-    vi.spyOn(serverKeysModule, 'getServerSideKeyService').mockReturnValue({
-      shouldUseServerSideKeysSync: () => false,
-      getUserTier: () => FREE_TIER,
-      getUseIncludedModelAccess: () => false,
-      canUseServerSideKeys: async () => false,
-      getRelayBaseUrl: (provider: string) =>
-        `https://relay.example.com/functions/v1/relay/${provider}/v1`,
-    } as unknown as ReturnType<
-      typeof serverKeysModule.getServerSideKeyService
-    >);
-    installTexraModelAccess();
+    stubServerSideKeys(FREE_TIER, false);
 
     const handler = new ModelHandlerOpenRouterNative(buildGpt5Config());
     assert.equal(

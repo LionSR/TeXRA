@@ -252,6 +252,25 @@ export async function handleExternalInquiryAction(
 // Read / list subcommand outputs
 // ============================================================================
 
+/**
+ * Mirror a thread to the execution so the agent can read prior turns via the
+ * executions tool. Best-effort: a mirroring failure must not fail the tool
+ * call, but it is logged rather than swallowed.
+ */
+async function mirrorThreadToExecution(
+  executionId: string,
+  threadId: string,
+): Promise<void> {
+  try {
+    await ensureExternalInquiryThreadMirror({ executionId, threadId });
+  } catch (err) {
+    logger.warn(
+      `Failed to mirror inquiry thread ${threadId} to execution ${executionId}`,
+      { data: err },
+    );
+  }
+}
+
 function buildReadOutput(manifest: ExternalInquiryThreadManifest): ToolResult {
   const lines = [
     `Thread: ${manifest.threadId}`,
@@ -414,19 +433,8 @@ export class ExternalInquiryTool extends defineTool({
       (await readExternalInquiryThread(persisted.threadId)) ??
       persisted.manifest;
 
-    // Mirror to execution so the agent can read prior turns via the executions tool.
     if (executionId) {
-      try {
-        await ensureExternalInquiryThreadMirror({
-          executionId,
-          threadId: persisted.threadId,
-        });
-      } catch (err) {
-        logger.warn(
-          `Failed to mirror inquiry thread ${persisted.threadId} to execution ${executionId}`,
-          { data: err },
-        );
-      }
+      await mirrorThreadToExecution(executionId, persisted.threadId);
     }
 
     // Register the asking stream without switching the active view: hosts
@@ -514,14 +522,7 @@ export class ExternalInquiryTool extends defineTool({
       );
     }
     if (args.executionId) {
-      try {
-        await ensureExternalInquiryThreadMirror({
-          executionId: args.executionId,
-          threadId: manifest.threadId,
-        });
-      } catch {
-        // mirroring is best-effort
-      }
+      await mirrorThreadToExecution(args.executionId, manifest.threadId);
     }
     return buildReadOutput(manifest);
   }

@@ -52,7 +52,7 @@ async function resolveInvocationFileList(
       { cause: error },
     );
   }
-  const resolved = await Promise.all(
+  return await Promise.all(
     references.map(async ({ file, runStorage }) => {
       if (!runStorage) return file;
       let output: Awaited<ReturnType<typeof resolveChildRunOutput>>;
@@ -76,7 +76,6 @@ async function resolveInvocationFileList(
       return output.absolutePath;
     }),
   );
-  return resolved;
 }
 
 /** Hash the bytes behind every file option used by one workflow agent call. */
@@ -85,21 +84,25 @@ export async function fingerprintWorkflowAgentDependencies(
   options: WorkflowAgentCallOptions,
 ): Promise<string> {
   const groups = [
-    ['input', options.inputFiles ?? []],
-    ['context', options.contextFiles ?? []],
-    ['media', options.mediaFiles ?? []],
+    { kind: 'input', label: 'Input file', files: options.inputFiles ?? [] },
+    {
+      kind: 'context',
+      label: 'Context file',
+      files: options.contextFiles ?? [],
+    },
+    { kind: 'media', label: 'Media file', files: options.mediaFiles ?? [] },
   ] as const;
-  if (groups.every(([, files]) => files.length === 0)) {
+  if (groups.every((group) => group.files.length === 0)) {
     throw new WorkflowRunAbortError(
       'Cannot fingerprint a workflow agent call without file dependencies.',
     );
   }
 
   const hash = createHash('sha256');
-  for (const [label, files] of groups) {
+  for (const { kind, label, files } of groups) {
     const resolved = await resolveInvocationFileList(
       parentExecutionId,
-      `${label[0]?.toUpperCase()}${label.slice(1)} file`,
+      label,
       files,
     );
     for (const [index, file] of resolved.entries()) {
@@ -107,7 +110,7 @@ export async function fingerprintWorkflowAgentDependencies(
         runStorageLocationFromAnyAbsolutePath(file) !== undefined
           ? await AbsoluteFS.readBytes(file)
           : await WorkspaceFS.readBytes(file);
-      hash.update(`${label}\0${index}\0${bytes.length}\0`);
+      hash.update(`${kind}\0${index}\0${bytes.length}\0`);
       hash.update(bytes);
     }
   }

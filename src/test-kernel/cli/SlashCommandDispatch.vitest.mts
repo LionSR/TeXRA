@@ -34,6 +34,7 @@ import {
   patchStream,
   streams,
   transientNotice,
+  type ConversationEntry,
 } from '@cli/chat/tui/state/cliState';
 import * as apiStatus from '@cli/runtime/apiStatus';
 import * as chatGptLogin from '@cli/runtime/chatgptLogin';
@@ -94,7 +95,7 @@ function createCliContext(overrides: Partial<CliContext> = {}): CliContext {
 }
 
 function createContext(
-  session: TuiSession,
+  session: TuiSession = createSession(),
   overrides: Partial<SlashCommandContext> = {},
 ): SlashCommandContext {
   let approvalPolicy: CliApprovalPolicy = 'ask';
@@ -124,14 +125,14 @@ function lastEntryText(
   return streams.get().get(streamId)?.entries.at(-1)?.text;
 }
 
-function localEntries() {
+function localEntries(): readonly ConversationEntry[] {
   return streams.get().get(CLI_LOCAL_STREAM_ID)?.entries ?? [];
 }
 
 describe('handleTuiSlashCommand', () => {
   it('opens reference commands without leaving transcript rows', async () => {
     registerBuiltinSlashCommands();
-    const context = createContext(createSession());
+    const context = createContext();
 
     await handleTuiSlashCommand('/tools', context);
     expect(localEntries()).toEqual([]);
@@ -179,7 +180,7 @@ describe('handleTuiSlashCommand', () => {
       echo: 'never',
     });
 
-    await handleTuiSlashCommand('/unavailable', createContext(createSession()));
+    await handleTuiSlashCommand('/unavailable', createContext());
 
     expect(localEntries().map(({ role, text }) => ({ role, text }))).toEqual([
       { role: 'user', text: '/unavailable' },
@@ -198,7 +199,7 @@ describe('handleTuiSlashCommand', () => {
       formComponent: () => null,
     });
 
-    await handleTuiSlashCommand('/custom-form', createContext(createSession()));
+    await handleTuiSlashCommand('/custom-form', createContext());
     const form = activeForm.get()?.render(() => undefined, 20) as {
       props?: { onPersist?: () => void };
     };
@@ -214,10 +215,7 @@ describe('handleTuiSlashCommand', () => {
   it('opens alias-addressed structured forms through the canonical command', async () => {
     registerBuiltinSlashCommands();
 
-    const handled = await handleTuiSlashCommand(
-      '/models',
-      createContext(createSession()),
-    );
+    const handled = await handleTuiSlashCommand('/models', createContext());
 
     expect(handled).toBe(true);
     expect(activeForm.get()?.commandName).toBe('model');
@@ -226,10 +224,7 @@ describe('handleTuiSlashCommand', () => {
   it('opens the login form for bare /login', async () => {
     registerBuiltinSlashCommands();
 
-    const handled = await handleTuiSlashCommand(
-      '/login',
-      createContext(createSession()),
-    );
+    const handled = await handleTuiSlashCommand('/login', createContext());
 
     expect(handled).toBe(true);
     expect(activeForm.get()?.commandName).toBe('login');
@@ -240,7 +235,7 @@ describe('handleTuiSlashCommand', () => {
 
     const handled = await handleTuiSlashCommand(
       '/approval status',
-      createContext(createSession()),
+      createContext(),
     );
 
     expect(handled).toBe(true);
@@ -250,7 +245,7 @@ describe('handleTuiSlashCommand', () => {
 
   it('opens the masked provider-key form through /key and /keys', async () => {
     registerBuiltinSlashCommands();
-    const context = createContext(createSession());
+    const context = createContext();
 
     expect(await handleTuiSlashCommand('/key', context)).toBe(true);
     expect(activeForm.get()?.commandName).toBe('key');
@@ -265,10 +260,7 @@ describe('handleTuiSlashCommand', () => {
     const secret = 'sk-private-test-value';
 
     expect(
-      await handleTuiSlashCommand(
-        `/keys ${secret}`,
-        createContext(createSession()),
-      ),
+      await handleTuiSlashCommand(`/keys ${secret}`, createContext()),
     ).toBe(true);
 
     expect(activeForm.get()?.commandName).toBe('key');
@@ -281,7 +273,7 @@ describe('handleTuiSlashCommand', () => {
 
   it('keeps malformed and mistyped key commands out of the transcript', async () => {
     registerBuiltinSlashCommands();
-    const context = createContext(createSession());
+    const context = createContext();
     const malformedSecrets = [
       'sk-equals-private-value',
       'sk-colon-private-value',
@@ -316,28 +308,19 @@ describe('handleTuiSlashCommand', () => {
   it('leaves path-like equals input for the agent', async () => {
     registerBuiltinSlashCommands();
 
-    expect(
-      await handleTuiSlashCommand(
-        '/tmp=backup',
-        createContext(createSession()),
-      ),
-    ).toBe(false);
-    expect(
-      await handleTuiSlashCommand(
-        '/keynote.tex',
-        createContext(createSession()),
-      ),
-    ).toBe(false);
+    expect(await handleTuiSlashCommand('/tmp=backup', createContext())).toBe(
+      false,
+    );
+    expect(await handleTuiSlashCommand('/keynote.tex', createContext())).toBe(
+      false,
+    );
   });
 
   it('does not mistake ordinary key-prefixed commands for credential input', async () => {
     registerBuiltinSlashCommands();
 
     expect(
-      await handleTuiSlashCommand(
-        '/keyboard shortcuts',
-        createContext(createSession()),
-      ),
+      await handleTuiSlashCommand('/keyboard shortcuts', createContext()),
     ).toBe(true);
     expect(activeForm.get()).toBeUndefined();
     expect(transientNotice.get()?.text).toContain(
@@ -349,9 +332,9 @@ describe('handleTuiSlashCommand', () => {
     registerBuiltinSlashCommands();
     const secret = 'keyArbitraryCredentialValue';
 
-    expect(
-      await handleTuiSlashCommand(`/${secret}`, createContext(createSession())),
-    ).toBe(true);
+    expect(await handleTuiSlashCommand(`/${secret}`, createContext())).toBe(
+      true,
+    );
     expect(activeForm.get()).toBeUndefined();
     expect(JSON.stringify([...streams.get().values()])).not.toContain(secret);
   });
@@ -360,10 +343,7 @@ describe('handleTuiSlashCommand', () => {
     registerBuiltinSlashCommands();
 
     expect(
-      await handleTuiSlashCommand(
-        '/apikey private-value',
-        createContext(createSession()),
-      ),
+      await handleTuiSlashCommand('/apikey private-value', createContext()),
     ).toBe(true);
     expect(activeForm.get()?.commandName).toBe('key');
     expect(JSON.stringify([...streams.get().values()])).not.toContain(
@@ -387,7 +367,7 @@ describe('handleTuiSlashCommand', () => {
 
     const handled = await handleTuiSlashCommand(
       '/login chatgpt',
-      createContext(createSession()),
+      createContext(),
     );
 
     expect(handled).toBe(true);
@@ -459,7 +439,7 @@ describe('handleTuiSlashCommand', () => {
         'included usage this month: 25% used, 75% remaining',
       ],
     });
-    const context = createContext(createSession());
+    const context = createContext();
 
     await handleTuiSlashCommand('/auth', context);
     const authStatusText = lastEntryText();
@@ -543,7 +523,7 @@ describe('handleTuiSlashCommand', () => {
         provider: 'chatgpt',
         state: 'on',
       },
-      createContext(createSession()),
+      createContext(),
       output,
     );
     const rejection = expect(completion).rejects.toMatchObject({
@@ -568,10 +548,7 @@ describe('handleTuiSlashCommand', () => {
       });
     mockModelAccessOverview();
 
-    const handled = await handleTuiSlashCommand(
-      '/logout all',
-      createContext(createSession()),
-    );
+    const handled = await handleTuiSlashCommand('/logout all', createContext());
 
     expect(handled).toBe(true);
     expect(signOutSupabase).toHaveBeenCalledOnce();
@@ -586,10 +563,7 @@ describe('handleTuiSlashCommand', () => {
   it('opens an account-specific sign-out chooser for bare /logout', async () => {
     registerBuiltinSlashCommands();
 
-    const handled = await handleTuiSlashCommand(
-      '/logout',
-      createContext(createSession()),
-    );
+    const handled = await handleTuiSlashCommand('/logout', createContext());
 
     expect(handled).toBe(true);
     expect(activeForm.get()?.commandName).toBe('logout');
@@ -608,18 +582,12 @@ describe('handleTuiSlashCommand', () => {
     mockModelAccessOverview();
     const previousPreferenceVersion = codexPreferenceVersion.get();
 
-    await handleTuiSlashCommand(
-      '/logout texra',
-      createContext(createSession()),
-    );
+    await handleTuiSlashCommand('/logout texra', createContext());
     expect(signOutSupabase).toHaveBeenCalledOnce();
     expect(signOutChatGpt).not.toHaveBeenCalled();
     expect(codexPreferenceVersion.get()).toBe(previousPreferenceVersion + 1);
 
-    await handleTuiSlashCommand(
-      '/logout chatgpt',
-      createContext(createSession()),
-    );
+    await handleTuiSlashCommand('/logout chatgpt', createContext());
     expect(signOutSupabase).toHaveBeenCalledOnce();
     expect(signOutChatGpt).toHaveBeenCalledOnce();
   });
@@ -632,10 +600,7 @@ describe('handleTuiSlashCommand', () => {
     );
     mockModelAccessOverview();
 
-    const handled = await handleTuiSlashCommand(
-      '/logout all',
-      createContext(createSession()),
-    );
+    const handled = await handleTuiSlashCommand('/logout all', createContext());
 
     expect(handled).toBe(true);
     const entry = lastEntryText();
@@ -651,10 +616,7 @@ describe('handleTuiSlashCommand', () => {
     });
     mockModelAccessOverview();
 
-    const handled = await handleTuiSlashCommand(
-      '/logout all',
-      createContext(createSession()),
-    );
+    const handled = await handleTuiSlashCommand('/logout all', createContext());
 
     expect(handled).toBe(true);
     const entry = lastEntryText();

@@ -69,6 +69,10 @@ async function withLatexdiffTool<T>(
   }
 }
 
+type MarkupItem = vscode.QuickPickItem & { value: MathMarkupOption };
+
+// Returns undefined when the user cancels, logging the cancellation so callers
+// only need to bail out.
 async function promptForLatexdiffMathMarkup(): Promise<
   MathMarkupOption | undefined
 > {
@@ -76,26 +80,27 @@ async function promptForLatexdiffMathMarkup(): Promise<
     WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
     DEFAULT_MATH_MARKUP,
   );
-  const items: (vscode.QuickPickItem & { value: MathMarkupOption })[] =
-    MATH_MARKUP_OPTIONS.map((mode) => ({
-      label: mode,
-      description: describeMathMarkupOption(mode),
-      picked: mode === configuredMode,
-      value: mode,
-    }));
+  const items: MarkupItem[] = MATH_MARKUP_OPTIONS.map((mode) => ({
+    label: mode,
+    description: describeMathMarkupOption(mode),
+    picked: mode === configuredMode,
+    value: mode,
+  }));
   // Keep the configured mode first so Enter accepts it immediately.
   const prioritizedItems = [
     ...items.filter((item) => item.value === configuredMode),
     ...items.filter((item) => item.value !== configuredMode),
   ];
 
-  type MarkupItem = vscode.QuickPickItem & { value: MathMarkupOption };
   const pick = await vscode.window.showQuickPick<MarkupItem>(prioritizedItems, {
     title: 'Latexdiff math markup',
     placeHolder: 'Select math markup granularity for this diff run',
     ignoreFocusOut: true,
     prompt: `Saved default: ${configuredMode} — press Enter to accept, or pick another`,
   });
+  if (!pick) {
+    logger.debug(CHANNEL, 'Math markup selection cancelled by user');
+  }
   return pick?.value;
 }
 
@@ -133,10 +138,7 @@ async function runDiffAndOpen(
   runDiff: (mathMarkup: MathMarkupOption) => Promise<LaTeXdiffResult>,
 ): Promise<void> {
   const mathMarkup = await promptForLatexdiffMathMarkup();
-  if (!mathMarkup) {
-    logger.debug(CHANNEL, 'Math markup selection cancelled by user');
-    return;
-  }
+  if (!mathMarkup) return;
   logger.info(
     CHANNEL,
     `Running ${toolLabel} with math markup mode: ${mathMarkup}`,
@@ -347,10 +349,7 @@ async function handleRunLatexdiff(
     }
 
     const mathMarkup = await promptForLatexdiffMathMarkup();
-    if (!mathMarkup) {
-      logger.debug(CHANNEL, 'Math markup selection cancelled by user');
-      return;
-    }
+    if (!mathMarkup) return;
 
     logger.info(
       CHANNEL,

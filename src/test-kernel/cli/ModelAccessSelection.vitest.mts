@@ -79,6 +79,13 @@ vi.mock('@cli/runtime/chatgptLogin', () => ({
 
 const context = createTestCliContext({ apiMode: 'personal' });
 
+function subscriptionPreference(
+  provider: 'chatgpt' | 'kimi-code',
+  state: 'on' | 'off',
+) {
+  return { kind: 'subscription-preference', provider, state } as const;
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.getCodexStatus.mockResolvedValue({ signedIn: false });
@@ -96,31 +103,21 @@ beforeEach(() => {
 
 describe('CLI model access routes', () => {
   it('parses the routes and the compatibility spellings', () => {
-    expect(parseCliModelAccessSelection('chatgpt')).toEqual({
-      kind: 'subscription-preference',
-      provider: 'chatgpt',
-      state: 'on',
-    });
-    expect(parseCliModelAccessSelection('subscription')).toEqual({
-      kind: 'subscription-preference',
-      provider: 'chatgpt',
-      state: 'on',
-    });
-    expect(parseCliModelAccessSelection('kimi')).toEqual({
-      kind: 'subscription-preference',
-      provider: 'kimi-code',
-      state: 'on',
-    });
-    expect(parseCliModelAccessSelection('kimicode')).toEqual({
-      kind: 'subscription-preference',
-      provider: 'kimi-code',
-      state: 'on',
-    });
-    expect(parseCliModelAccessSelection('kimi-code')).toEqual({
-      kind: 'subscription-preference',
-      provider: 'kimi-code',
-      state: 'on',
-    });
+    expect(parseCliModelAccessSelection('chatgpt')).toEqual(
+      subscriptionPreference('chatgpt', 'on'),
+    );
+    expect(parseCliModelAccessSelection('subscription')).toEqual(
+      subscriptionPreference('chatgpt', 'on'),
+    );
+    expect(parseCliModelAccessSelection('kimi')).toEqual(
+      subscriptionPreference('kimi-code', 'on'),
+    );
+    expect(parseCliModelAccessSelection('kimicode')).toEqual(
+      subscriptionPreference('kimi-code', 'on'),
+    );
+    expect(parseCliModelAccessSelection('kimi-code')).toEqual(
+      subscriptionPreference('kimi-code', 'on'),
+    );
     expect(parseCliModelAccessSelection('included')).toEqual(
       cliApiFallbackSelection('included'),
     );
@@ -300,11 +297,7 @@ describe('CLI model access routes', () => {
 
     const result = await updateCliModelAccess(
       context,
-      {
-        kind: 'subscription-preference',
-        provider: 'kimi-code',
-        state: 'on',
-      },
+      subscriptionPreference('kimi-code', 'on'),
       { writeProgress: vi.fn() },
     );
 
@@ -326,11 +319,7 @@ describe('CLI model access routes', () => {
   it('guides to key entry when Kimi Code is selected without a key', async () => {
     const result = await updateCliModelAccess(
       context,
-      {
-        kind: 'subscription-preference',
-        provider: 'kimi-code',
-        state: 'on',
-      },
+      subscriptionPreference('kimi-code', 'on'),
       { writeProgress: vi.fn() },
     );
 
@@ -339,48 +328,6 @@ describe('CLI model access routes', () => {
     expect(result.apiMode).toBe('personal');
     expect(result.message).toContain('No Kimi Code API key configured');
     expect(result.message).toContain('https://www.kimi.com/code/console');
-  });
-
-  it('changes the personal fallback without changing either preference', async () => {
-    await updateCliModelAccess(context, cliApiFallbackSelection('personal'));
-
-    expect(mocks.setPreferKimiCode).not.toHaveBeenCalled();
-    expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
-    expect(mocks.setCliApiMode).toHaveBeenCalledWith('personal');
-  });
-
-  it('preserves the Kimi prefer switch on the key-save path', async () => {
-    // Saving or rotating a key is a credential operation, not an explicit
-    // "Personal API keys" picker choice — it must not clear the preference.
-    await updateCliModelAccess(context, cliApiFallbackSelection('personal'));
-
-    expect(mocks.setPreferKimiCode).not.toHaveBeenCalled();
-    expect(mocks.setCliApiMode).toHaveBeenCalledWith('personal');
-  });
-
-  it('enables Kimi without changing the ChatGPT preference', async () => {
-    mocks.apiKeyExists.mockResolvedValue(true);
-
-    const result = await updateCliModelAccess(
-      context,
-      {
-        kind: 'subscription-preference',
-        provider: 'kimi-code',
-        state: 'on',
-      },
-      { writeProgress: vi.fn() },
-    );
-
-    expect(mocks.setPreferKimiCode).toHaveBeenCalledWith(true);
-    expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
-    expect(result.message).toContain('Kimi Code subscription enabled');
-  });
-
-  it('keeps the Kimi Code prefer switch when included access is chosen', async () => {
-    await updateCliModelAccess(context, cliApiFallbackSelection('included'));
-
-    expect(mocks.setPreferKimiCode).not.toHaveBeenCalled();
-    expect(mocks.setCliApiMode).toHaveBeenCalledWith('included');
   });
 
   it('switches API-based routes through one policy boundary', async () => {
@@ -427,11 +374,7 @@ describe('CLI model access routes', () => {
 
     const result = await updateCliModelAccess(
       context,
-      {
-        kind: 'subscription-preference',
-        provider: 'chatgpt',
-        state: 'on',
-      },
+      subscriptionPreference('chatgpt', 'on'),
       { writeProgress, signal: controller.signal },
     );
 
@@ -464,11 +407,7 @@ describe('CLI model access routes', () => {
 
     const result = await updateCliModelAccess(
       context,
-      {
-        kind: 'subscription-preference',
-        provider: 'chatgpt',
-        state: 'off',
-      },
+      subscriptionPreference('chatgpt', 'off'),
       { writeProgress: vi.fn() },
     );
 
@@ -501,11 +440,7 @@ describe('CLI model access routes', () => {
 
     await updateCliModelAccess(
       context,
-      {
-        kind: 'subscription-preference',
-        provider: 'kimi-code',
-        state: 'off',
-      },
+      subscriptionPreference('kimi-code', 'off'),
       { writeProgress: vi.fn() },
     );
     expect(mocks.setPreferKimiCode).toHaveBeenCalledWith(false);
@@ -523,11 +458,7 @@ describe('CLI model access routes', () => {
     });
     await updateCliModelAccess(
       context,
-      {
-        kind: 'subscription-preference',
-        provider: 'chatgpt',
-        state: 'off',
-      },
+      subscriptionPreference('chatgpt', 'off'),
       { writeProgress: vi.fn() },
     );
     expect(mocks.setPreferCodexSubscription).toHaveBeenCalledWith(false);

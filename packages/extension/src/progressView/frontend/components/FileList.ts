@@ -503,7 +503,12 @@ export class FileList extends LitElement {
    * All data is stored directly on command elements for unified delegation.
    */
   private handleFileClick(event: MouseEvent): void {
-    this.dispatchFileActionFrom(event);
+    const actionEl = getComposedPathElement<HTMLElement>(
+      event,
+      '[data-command]',
+    );
+    if (!(actionEl instanceof HTMLElement)) return;
+    this.dispatchFileAction(actionEl);
   }
 
   // Keyboard activation parity for the clickable file rows (Enter/Space), so
@@ -517,15 +522,6 @@ export class FileList extends LitElement {
     );
     if (!(actionEl instanceof HTMLElement)) return;
     event.preventDefault();
-    this.dispatchFileAction(actionEl);
-  }
-
-  private dispatchFileActionFrom(event: Event): void {
-    const actionEl = getComposedPathElement<HTMLElement>(
-      event,
-      '[data-command]',
-    );
-    if (!(actionEl instanceof HTMLElement)) return;
     this.dispatchFileAction(actionEl);
   }
 

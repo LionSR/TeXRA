@@ -51,11 +51,6 @@ export function createReviewPane(): ReviewPaneController {
   const entries = new Map<string, ReviewEntry>();
   let selectedKey: string | undefined;
   let filter = '';
-  let theme: DesktopThemeKind = DESKTOP_THEME_KIND.DARK;
-
-  function selectedEntry(): ReviewEntry | undefined {
-    return selectedKey ? entries.get(selectedKey) : undefined;
-  }
 
   function visibleEntries(): readonly ReviewEntry[] {
     const query = filter.trim().toLocaleLowerCase();
@@ -118,15 +113,13 @@ export function createReviewPane(): ReviewPaneController {
 
   function rerender(): void {
     const visible = visibleEntries();
-    const selected = selectedEntry();
-    const additions = [...entries.values()].reduce(
-      (total, entry) => total + entry.additions,
-      0,
-    );
-    const deletions = [...entries.values()].reduce(
-      (total, entry) => total + entry.deletions,
-      0,
-    );
+    const selected = selectedKey ? entries.get(selectedKey) : undefined;
+    let additions = 0;
+    let deletions = 0;
+    for (const entry of entries.values()) {
+      additions += entry.additions;
+      deletions += entry.deletions;
+    }
     render(
       html`
         <header class="desktop-review-toolbar">
@@ -212,7 +205,7 @@ export function createReviewPane(): ReviewPaneController {
     );
   }
 
-  diffView.hostTheme = theme;
+  diffView.hostTheme = DESKTOP_THEME_KIND.DARK;
   rerender();
 
   return {
@@ -229,8 +222,7 @@ export function createReviewPane(): ReviewPaneController {
       select(entry);
     },
     setTheme(nextTheme) {
-      theme = nextTheme;
-      diffView.hostTheme = theme;
+      diffView.hostTheme = nextTheme;
     },
   };
 }

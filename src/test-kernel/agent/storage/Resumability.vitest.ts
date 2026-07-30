@@ -46,13 +46,6 @@ describe('deriveResumability', () => {
     );
   }
 
-  async function writeTerminalStatus(
-    executionId: ExecutionId,
-    terminalStatus: string,
-  ): Promise<void> {
-    await writeMeta(executionId, { terminalStatus });
-  }
-
   async function writeMeta(
     executionId: ExecutionId,
     {
@@ -70,7 +63,9 @@ describe('deriveResumability', () => {
 
   it('does not let a stale flow record make completed executions resumable', async () => {
     const executionId = 'completed-with-flow' as ExecutionId;
-    await writeTerminalStatus(executionId, EXECUTION_STATUS.COMPLETED);
+    await writeMeta(executionId, {
+      terminalStatus: EXECUTION_STATUS.COMPLETED,
+    });
     await writeFlow(executionId);
 
     await expect(deriveResumability(executionId)).resolves.toMatchObject({
@@ -82,7 +77,7 @@ describe('deriveResumability', () => {
 
   it('does not let a stale flow record make failed executions resumable', async () => {
     const executionId = 'failed-with-flow' as ExecutionId;
-    await writeTerminalStatus(executionId, EXECUTION_STATUS.ERROR);
+    await writeMeta(executionId, { terminalStatus: EXECUTION_STATUS.ERROR });
     await writeFlow(executionId);
 
     await expect(deriveResumability(executionId)).resolves.toMatchObject({
@@ -149,7 +144,9 @@ describe('deriveResumability', () => {
 
   it('marks interrupted executions with a valid flow record as resumable', async () => {
     const executionId = 'interrupted-with-flow' as ExecutionId;
-    await writeTerminalStatus(executionId, EXECUTION_STATUS.INTERRUPTED);
+    await writeMeta(executionId, {
+      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+    });
     await writeFlow(executionId);
 
     await expect(deriveResumability(executionId)).resolves.toMatchObject({
@@ -316,12 +313,13 @@ describe('deriveResumability', () => {
       outcome: RUN_OUTCOME.CANCELLED,
     });
     await writeFlow(cancelledExecutionId);
-    await writeTerminalStatus(completedExecutionId, EXECUTION_STATUS.COMPLETED);
+    await writeMeta(completedExecutionId, {
+      terminalStatus: EXECUTION_STATUS.COMPLETED,
+    });
     await writeFlow(completedExecutionId);
-    await writeTerminalStatus(
-      missingFlowExecutionId,
-      EXECUTION_STATUS.INTERRUPTED,
-    );
+    await writeMeta(missingFlowExecutionId, {
+      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+    });
 
     const streamIdsByExecutionId = new Map<StreamTabId, ExecutionId>([
       ['crash-stream' as StreamTabId, crashExecutionId],

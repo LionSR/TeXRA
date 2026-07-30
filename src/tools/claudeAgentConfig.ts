@@ -132,18 +132,14 @@ async function hasClaudeOauthCredential(
 }
 
 function resolveClaudeConfigDir(configDirInput: string | undefined): string {
-  const configDir = configDirInput?.trim();
-  if (!configDir) return path.join(safeHomedir() ?? '/nonexistent', '.claude');
-  return expandHomePath(configDir);
-}
-
-function expandHomePath(filePath: string): string {
   const homeDir = safeHomedir() ?? '/nonexistent';
-  if (filePath === '~') return homeDir;
-  if (filePath.startsWith('~/') || filePath.startsWith('~\\')) {
-    return path.join(homeDir, filePath.slice(2));
+  const configDir = configDirInput?.trim();
+  if (!configDir) return path.join(homeDir, '.claude');
+  if (configDir === '~') return homeDir;
+  if (configDir.startsWith('~/') || configDir.startsWith('~\\')) {
+    return path.join(homeDir, configDir.slice(2));
   }
-  return filePath;
+  return configDir;
 }
 
 function claudeKeychainCredentialProbes(configDir: string): string[][] {

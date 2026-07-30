@@ -3,32 +3,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { installPlatform } from '@test/support/setupPlatform';
 
-const originalGitHubToken = process.env.GITHUB_TOKEN;
-const originalGhToken = process.env.GH_TOKEN;
-
 beforeEach(() => {
   vi.resetModules();
-  delete process.env.GITHUB_TOKEN;
-  delete process.env.GH_TOKEN;
+  vi.stubEnv('GITHUB_TOKEN', undefined);
+  vi.stubEnv('GH_TOKEN', undefined);
 });
 
 afterEach(() => {
-  if (originalGitHubToken === undefined) {
-    delete process.env.GITHUB_TOKEN;
-  } else {
-    process.env.GITHUB_TOKEN = originalGitHubToken;
-  }
-  if (originalGhToken === undefined) {
-    delete process.env.GH_TOKEN;
-  } else {
-    process.env.GH_TOKEN = originalGhToken;
-  }
+  vi.unstubAllEnvs();
   vi.resetModules();
 });
 
 describe('getGitHubToken', () => {
   it('uses the GITHUB_TOKEN fallback before platform initialization', async () => {
-    process.env.GITHUB_TOKEN = 'github-env-token';
+    vi.stubEnv('GITHUB_TOKEN', 'github-env-token');
 
     const { getGitHubToken } = await import('@tools/github/githubAuth');
 
@@ -36,7 +24,7 @@ describe('getGitHubToken', () => {
   });
 
   it('uses the GH_TOKEN fallback before platform initialization', async () => {
-    process.env.GH_TOKEN = 'gh-env-token';
+    vi.stubEnv('GH_TOKEN', 'gh-env-token');
 
     const { getGitHubToken } = await import('@tools/github/githubAuth');
 
@@ -44,8 +32,8 @@ describe('getGitHubToken', () => {
   });
 
   it('prefers GH_TOKEN over GITHUB_TOKEN', async () => {
-    process.env.GITHUB_TOKEN = 'github-env-token';
-    process.env.GH_TOKEN = 'gh-env-token';
+    vi.stubEnv('GITHUB_TOKEN', 'github-env-token');
+    vi.stubEnv('GH_TOKEN', 'gh-env-token');
 
     const { getGitHubToken } = await import('@tools/github/githubAuth');
 
@@ -53,8 +41,8 @@ describe('getGitHubToken', () => {
   });
 
   it('ignores blank environment token values', async () => {
-    process.env.GITHUB_TOKEN = '   ';
-    process.env.GH_TOKEN = 'gh-env-token';
+    vi.stubEnv('GITHUB_TOKEN', '   ');
+    vi.stubEnv('GH_TOKEN', 'gh-env-token');
 
     const { getGitHubToken } = await import('@tools/github/githubAuth');
 
@@ -62,8 +50,8 @@ describe('getGitHubToken', () => {
   });
 
   it('prefers the platform secret when the platform is initialized', async () => {
-    process.env.GITHUB_TOKEN = 'github-env-token';
-    process.env.GH_TOKEN = 'gh-env-token';
+    vi.stubEnv('GITHUB_TOKEN', 'github-env-token');
+    vi.stubEnv('GH_TOKEN', 'gh-env-token');
 
     const githubAuth = await import('@tools/github/githubAuth');
 

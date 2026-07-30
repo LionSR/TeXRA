@@ -228,9 +228,9 @@ export function monacoThemeForHostTheme(
  */
 export function monacoLanguageForPath(filePath: string): string {
   const name = filePath.replaceAll('\\', '/').split('/').at(-1) ?? '';
-  const extension = name.includes('.')
-    ? (name.split('.').at(-1) ?? '').toLowerCase()
-    : '';
+  const dotIndex = name.lastIndexOf('.');
+  const extension =
+    dotIndex === -1 ? '' : name.slice(dotIndex + 1).toLowerCase();
   switch (extension) {
     case 'tex':
     case 'sty':

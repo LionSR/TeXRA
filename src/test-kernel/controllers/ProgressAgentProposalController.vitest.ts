@@ -9,9 +9,7 @@ import { ProgressAgentProposalController } from '@controllers/progressView/Progr
 import { AgentCategory, type AgentProposalPermission } from '@shared/schemas';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 
-function createWorkflowProposal(
-  overrides: Partial<AgentProposalPermission> = {},
-): AgentProposalPermission {
+function createWorkflowProposal(): AgentProposalPermission {
   return {
     proposalId: 'proposal-1',
     streamId: 'stream-1',
@@ -19,13 +17,13 @@ function createWorkflowProposal(
     agent: 'proofreader',
     model: 'gemini31p',
     instruction: 'Check the paper.',
+    memories: [],
     inputFiles: ['main.tex', 'appendix.tex'],
     contextFiles: ['refs.bib'],
     mediaFiles: [],
     outputFiles: ['main.review.tex'],
     toolConfig: DEFAULT_TOOL_CONFIG,
-    ...overrides,
-  } as AgentProposalPermission;
+  };
 }
 
 describe('ProgressAgentProposalController', () => {

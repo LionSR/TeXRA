@@ -95,12 +95,7 @@ export const FILE_TYPE_TO_KEY: Record<
  * new `MultipleDocumentFileType` only needs updating in one place.
  */
 export const KEY_TO_FILE_TYPE = Object.fromEntries(
-  (
-    Object.entries(FILE_TYPE_TO_KEY) as [
-      MultipleDocumentFileType,
-      keyof MultiFiles,
-    ][]
-  ).map(([fileType, key]) => [key, fileType]),
+  Object.entries(FILE_TYPE_TO_KEY).map(([fileType, key]) => [key, fileType]),
 ) as Record<keyof MultiFiles, MultipleDocumentFileType>;
 
 /** Maps a single-file selection type (`SET_CURRENT_FILE`'s base/edited slot) to its `FileOptions` key. */

@@ -294,16 +294,14 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
           return;
         }
         const missingTools = await checkCoreDependencies(true);
-        if (missingTools.length === 0) {
-          view.webview.postMessage({
-            command: MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER,
-          });
-          return;
-        }
-        view.webview.postMessage({
-          command: MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER,
-          missingTools: [...missingTools],
-        });
+        view.webview.postMessage(
+          missingTools.length === 0
+            ? { command: MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER }
+            : {
+                command: MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER,
+                missingTools: [...missingTools],
+              },
+        );
       },
       [MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER]: (m) => this.postToActiveView(m),
       [MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER]: (m) => this.postToActiveView(m),

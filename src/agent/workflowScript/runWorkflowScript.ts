@@ -84,9 +84,10 @@ type WorkflowScriptFailedEvent = Extract<
   WorkflowScriptEvent,
   { type: 'agent:end'; outcome: 'failed' }
 >;
-type WorkflowScriptFailureAttemptMetadata = Pick<
-  WorkflowScriptFailedEvent,
-  'durationMs' | 'model'
+/** Progress-only attempt facts shared by every settled `agent:end` outcome. */
+type WorkflowScriptAttemptMetadata = Pick<
+  Extract<WorkflowScriptEvent, { type: 'agent:end'; outcome: 'completed' }>,
+  'durationMs' | 'model' | 'childStreamId'
 >;
 
 /**
@@ -392,7 +393,12 @@ export async function runWorkflowScript(
       }
       issuedPlannedTaskIds.add(progressId);
     }
-    const phaseContext = phaseContextFor(callOptions.phase);
+    const eventBase = {
+      progressId,
+      index,
+      label,
+      ...phaseContextFor(callOptions.phase),
+    };
     if (issuedCallKeys.has(key)) {
       throw rememberFatalRunError(
         new WorkflowRunAbortError(
@@ -428,14 +434,11 @@ export async function runWorkflowScript(
 
     const emitFailedEnd = (
       error: unknown,
-      metadata: WorkflowScriptFailureAttemptMetadata = {},
+      metadata: Partial<WorkflowScriptAttemptMetadata> = {},
     ): void => {
       const event: WorkflowScriptFailedEvent = {
         type: 'agent:end',
-        progressId,
-        index,
-        label,
-        ...phaseContext,
+        ...eventBase,
         outcome: 'failed',
         error: toErrorMessage(error),
         ...metadata,
@@ -450,7 +453,7 @@ export async function runWorkflowScript(
     const journalValue = (
       value: unknown,
       valueLabel: string,
-      metadata?: WorkflowScriptFailureAttemptMetadata,
+      metadata?: Partial<WorkflowScriptAttemptMetadata>,
     ): { payload: string | undefined; normalizedResult: unknown } => {
       try {
         const payload = serializeBridgeValue(value, valueLabel);
@@ -486,14 +489,7 @@ export async function runWorkflowScript(
         keyFormat: WORKFLOW_JOURNAL_KEY_FORMAT.DEPENDENCY_AWARE_V3,
         result: normalizedResult,
       });
-      emit({
-        type: 'agent:end',
-        progressId,
-        index,
-        label,
-        ...phaseContext,
-        outcome: 'cached',
-      });
+      emit({ type: 'agent:end', ...eventBase, outcome: 'cached' });
       return payload;
     }
 
@@ -506,7 +502,7 @@ export async function runWorkflowScript(
     let resolvedModel: string | undefined;
     let childStreamId: StreamTabId | undefined;
     let startEmitted = false;
-    const attemptMetadata = (): WorkflowScriptFailureAttemptMetadata => ({
+    const attemptMetadata = (): WorkflowScriptAttemptMetadata => ({
       ...(resolvedModel !== undefined ? { model: resolvedModel } : {}),
       ...(childStreamId !== undefined ? { childStreamId } : {}),
       durationMs: Date.now() - startedAt,
@@ -538,13 +534,7 @@ export async function runWorkflowScript(
       callControllers.set(index, callController);
       if (!startEmitted) {
         startEmitted = true;
-        emit({
-          type: 'agent:start',
-          progressId,
-          index,
-          label,
-          ...phaseContext,
-        });
+        emit({ type: 'agent:start', ...eventBase });
       }
 
       let result: unknown;
@@ -581,10 +571,7 @@ export async function runWorkflowScript(
                 childStreamId = streamId;
                 emit({
                   type: 'agent:stream',
-                  progressId,
-                  index,
-                  label,
-                  ...phaseContext,
+                  ...eventBase,
                   childStreamId: streamId,
                 });
               },
@@ -618,15 +605,10 @@ export async function runWorkflowScript(
       if (action === 'skip') {
         emit({
           type: 'agent:end',
-          progressId,
-          index,
-          label,
-          ...phaseContext,
+          ...eventBase,
           outcome: 'skipped',
           reason: 'user',
-          ...(resolvedModel !== undefined ? { model: resolvedModel } : {}),
-          ...(childStreamId !== undefined ? { childStreamId } : {}),
-          durationMs: Date.now() - startedAt,
+          ...attemptMetadata(),
         });
         // First-class SKIPPED value, not journaled — a resume re-runs it.
         return JSON.stringify(WORKFLOW_SKIPPED_RESULT);
@@ -666,14 +648,9 @@ export async function runWorkflowScript(
       }
       emit({
         type: 'agent:end',
-        progressId,
-        index,
-        label,
-        ...phaseContext,
+        ...eventBase,
         outcome: 'completed',
-        ...(resolvedModel !== undefined ? { model: resolvedModel } : {}),
-        ...(childStreamId !== undefined ? { childStreamId } : {}),
-        durationMs: Date.now() - startedAt,
+        ...attemptMetadata(),
       });
       return payload;
     }

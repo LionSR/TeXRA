@@ -148,16 +148,17 @@ export function ConfirmCard({
     key: action.key,
     action: action.label,
   }));
-  const compactHintLayout = feedbackMode
-    ? undefined
-    : confirmCardCompactHintLayout({
-        title,
-        approveLabel,
-        rejectLabel,
-        alwaysAllowLabel: alwaysAllow?.label,
-        extraActions: mappedExtraActions,
-        columns,
-      });
+  const compactHintLayout =
+    compact && !feedbackMode
+      ? confirmCardCompactHintLayout({
+          title,
+          approveLabel,
+          rejectLabel,
+          alwaysAllowLabel: alwaysAllow?.label,
+          extraActions: mappedExtraActions,
+          columns,
+        })
+      : undefined;
   let hints: readonly ConfirmCardHintAction[];
   if (feedbackMode) {
     hints = confirmCardFeedbackHints();

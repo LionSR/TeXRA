@@ -55,15 +55,6 @@ export type DesktopProgressIpc = DesktopMessageHandler;
 
 const passThroughCommands: ReadonlySet<string> = new Set(PASS_THROUGH_COMMANDS);
 
-function isProgressWebviewReadyMessage(
-  message: DesktopCommandMessage,
-): boolean {
-  return (
-    message.command === PROGRESS_VIEW_COMMANDS.WEBVIEW_READY &&
-    message.view === 'progress'
-  );
-}
-
 export function createDesktopProgressIpc(
   options: DesktopProgressIpcOptions,
 ): DesktopProgressIpc {
@@ -121,7 +112,7 @@ export function createDesktopProgressIpc(
       // WEBVIEW_READY and pass-through commands return false so sibling
       // handlers in the chain still receive them.
       if (command === PROGRESS_VIEW_COMMANDS.WEBVIEW_READY) {
-        if (!isProgressWebviewReadyMessage(message)) return false;
+        if (message.view !== 'progress') return false;
         withProgress((progress) => {
           void progress.completeWebviewReady().catch(reportAsyncError);
         });

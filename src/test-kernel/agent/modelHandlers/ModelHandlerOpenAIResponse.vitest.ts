@@ -6,7 +6,7 @@ import * as path from 'node:path';
 
 // Third-party imports
 import { describe, it, vi } from 'vitest';
-import { ModelProvider, ReasoningEffort } from 'llm-zoo';
+import { type ModelConfig, ModelProvider, ReasoningEffort } from 'llm-zoo';
 import { APIUserAbortError, OpenAIError } from 'openai';
 
 // Local imports
@@ -63,7 +63,14 @@ const OPENAI_RESPONSE_TEST_CONFIG = Object.freeze({
 
 type TestModelConfigOverrides = Parameters<typeof buildTestModelConfig>[1];
 
-function setupHandler<T extends ModelHandlerOpenAIResponse>(handler: T): T {
+/** A logged handler of the given subclass, pinned to the non-streaming path. */
+function createHandlerOf<T extends ModelHandlerOpenAIResponse>(
+  Handler: new (config: ModelConfig) => T,
+  configOverrides: TestModelConfigOverrides = {},
+): T {
+  const handler = new Handler(
+    buildTestModelConfig(OPENAI_RESPONSE_TEST_CONFIG, configOverrides),
+  );
   handler.setLogger({ ...noopTrace });
   handler.getStreamingConfig = () => false;
   return handler;
@@ -72,11 +79,7 @@ function setupHandler<T extends ModelHandlerOpenAIResponse>(handler: T): T {
 function createHandler(
   configOverrides: TestModelConfigOverrides = {},
 ): ModelHandlerOpenAIResponse {
-  return setupHandler(
-    new ModelHandlerOpenAIResponse(
-      buildTestModelConfig(OPENAI_RESPONSE_TEST_CONFIG, configOverrides),
-    ),
-  );
+  return createHandlerOf(ModelHandlerOpenAIResponse, configOverrides);
 }
 
 class NonChainingResponseHandler extends ModelHandlerOpenAIResponse {
@@ -108,21 +111,7 @@ class ResponseRouteProbe extends ModelHandlerOpenAIResponse {
 function createNonChainingHandler(
   configOverrides: TestModelConfigOverrides = {},
 ): ModelHandlerOpenAIResponse {
-  return setupHandler(
-    new NonChainingResponseHandler(
-      buildTestModelConfig(OPENAI_RESPONSE_TEST_CONFIG, configOverrides),
-    ),
-  );
-}
-
-function createStatelessHandler(
-  configOverrides: TestModelConfigOverrides = {},
-): ModelHandlerOpenAIResponse {
-  return setupHandler(
-    new StatelessResponseHandler(
-      buildTestModelConfig(OPENAI_RESPONSE_TEST_CONFIG, configOverrides),
-    ),
-  );
+  return createHandlerOf(NonChainingResponseHandler, configOverrides);
 }
 
 function createResponse(id: string, usage?: { input_tokens: number }) {
@@ -133,6 +122,84 @@ function createResponse(id: string, usage?: { input_tokens: number }) {
     output_text: 'ok',
     usage,
   };
+}
+
+/** A client that records every `responses.create` request it is sent. */
+function createCapturingClient(responseId: string) {
+  const requests: Record<string, unknown>[] = [];
+  return {
+    requests,
+    client: {
+      responses: {
+        create: async (params: Record<string, unknown>) => {
+          requests.push(params);
+          return createResponse(responseId, { input_tokens: 12 });
+        },
+      },
+    } as unknown as OpenAI,
+  };
+}
+
+/**
+ * A stream that announces its response id and then dies on an unhandled SDK
+ * event, the shape that drives the retrieve-by-id fallback.
+ */
+function createUnhandledEventStream(responseId: string) {
+  return {
+    async *[Symbol.asyncIterator]() {
+      yield { type: 'response.created', response: { id: responseId } };
+      throw new OpenAIError(
+        'Unhandled response stream event: response.keepalive',
+      );
+    },
+    finalResponse: async () => {
+      throw new Error('fallback stream should retrieve by id');
+    },
+  };
+}
+
+/** Replaces the background poller with one that polls without waiting. */
+function installImmediatePoller(handler: ModelHandlerOpenAIResponse): void {
+  backgroundLifecycleInternals(handler).backgroundPoller =
+    new BackgroundPoller<{
+      id?: string;
+      status?: string | null;
+    }>({
+      pollIntervalMs: 0,
+      maxDurationMs: 1000,
+      isPending: (response) =>
+        response.status === 'queued' || response.status === 'in_progress',
+      logger: { ...noopTrace },
+    });
+}
+
+/**
+ * Replaces compaction with one that keeps only the last message and records
+ * the transcript it was handed.
+ */
+function stubCompactionToLastMessage(
+  handler: ModelHandlerOpenAIResponse,
+  compactionResultExtras: { tokensAfter?: number } = {},
+): ResponseInputItem[][] {
+  const compactCalls: ResponseInputItem[][] = [];
+  const target = handler as unknown as {
+    compactConversation: unknown;
+    compactionResult: unknown;
+  };
+  target.compactConversation = async (
+    _client: unknown,
+    msgs: ResponseInputItem[],
+  ) => {
+    compactCalls.push(msgs);
+    const compacted = msgs.slice(-1);
+    target.compactionResult = {
+      sourceMessages: msgs,
+      compactedMessages: compacted,
+      ...compactionResultExtras,
+    };
+    return compacted;
+  };
+  return compactCalls;
 }
 
 function withSdkOptions<T extends { responses: object }>(client: T) {
@@ -264,13 +331,9 @@ describe('ModelHandlerOpenAIResponse.createMediaContent', () => {
 
 describe('ModelHandlerOpenAIResponse.createResponse', () => {
   it('uses the client route instead of mutable OpenRouter configuration during an attempt', async () => {
-    const handler = setupHandler(
-      new ResponseRouteProbe(
-        buildTestModelConfig(OPENAI_RESPONSE_TEST_CONFIG, {
-          openRouterOnly: true,
-        }),
-      ),
-    );
+    const handler = createHandlerOf(ResponseRouteProbe, {
+      openRouterOnly: true,
+    });
     const client = handler.tagClient(
       {
         responses: {
@@ -304,23 +367,15 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
         reasoningMode: 'pro',
       },
     });
-    let request: Record<string, unknown> | undefined;
-    const client = {
-      responses: {
-        create: async (params: Record<string, unknown>) => {
-          request = params;
-          return createResponse('resp-pro-mode', { input_tokens: 12 });
-        },
-      },
-    };
+    const { client, requests } = createCapturingClient('resp-pro-mode');
 
     await handler.createResponse({
-      client: client as any,
+      client,
       messages: createMessages(1),
       temperature: 0,
     });
 
-    const reasoning = request?.reasoning as
+    const reasoning = requests[0]?.reasoning as
       { effort?: string; mode?: string } | undefined;
     assert.equal(reasoning?.mode, 'pro');
     assert.equal(reasoning?.effort, 'medium');
@@ -337,23 +392,15 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
         maxReasoningEffort: ReasoningEffort.MAX,
       },
     });
-    let request: Record<string, unknown> | undefined;
-    const client = {
-      responses: {
-        create: async (params: Record<string, unknown>) => {
-          request = params;
-          return createResponse('resp-max-effort', { input_tokens: 12 });
-        },
-      },
-    };
+    const { client, requests } = createCapturingClient('resp-max-effort');
 
     await handler.createResponse({
-      client: client as any,
+      client,
       messages: createMessages(1),
       temperature: 0,
     });
 
-    const reasoning = request?.reasoning as { effort?: string } | undefined;
+    const reasoning = requests[0]?.reasoning as { effort?: string } | undefined;
     assert.equal(reasoning?.effort, 'max');
   });
 
@@ -368,76 +415,52 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
       },
     });
     handler.capabilities.reasoningEffort = ReasoningEffort.MAX;
-    let request: Record<string, unknown> | undefined;
+    const { client, requests } = createCapturingClient('resp-clamped-override');
 
     await handler.createResponse({
-      client: {
-        responses: {
-          create: async (params: Record<string, unknown>) => {
-            request = params;
-            return createResponse('resp-clamped-override', {
-              input_tokens: 12,
-            });
-          },
-        },
-      } as any,
+      client,
       messages: createMessages(1),
       temperature: 0,
     });
 
-    const reasoning = request?.reasoning as { effort?: string } | undefined;
+    const reasoning = requests[0]?.reasoning as { effort?: string } | undefined;
     assert.equal(reasoning?.effort, 'xhigh');
   });
 
   it('enables parallel tool calls by default', async () => {
     const handler = createHandler();
-    let request: Record<string, unknown> | undefined;
-    const client = {
-      responses: {
-        create: async (params: Record<string, unknown>) => {
-          request = params;
-          return createResponse('resp-parallel-tools', { input_tokens: 12 });
-        },
-      },
-    };
+    const { client, requests } = createCapturingClient('resp-parallel-tools');
     const tools: ToolDefinition[] = [
       { name: 'lookup', description: 'Look up a value' },
     ];
 
     await handler.createResponse({
-      client: client as any,
+      client,
       messages: createMessages(1),
       temperature: 0,
       tools,
     });
 
-    assert.equal(request?.tool_choice, 'auto');
-    assert.equal(request?.parallel_tool_calls, true);
+    assert.equal(requests[0]?.tool_choice, 'auto');
+    assert.equal(requests[0]?.parallel_tool_calls, true);
   });
 
   it('maps finalTool to a named Responses function choice', async () => {
     const handler = createHandler();
-    let request: Record<string, unknown> | undefined;
+    const { client, requests } = createCapturingClient('resp-forced-tool');
     const tools: ToolDefinition[] = [
       { name: 'submit_output', description: 'Submit output' },
     ];
 
     await handler.createResponse({
-      client: {
-        responses: {
-          create: async (params: Record<string, unknown>) => {
-            request = params;
-            return createResponse('resp-forced-tool', { input_tokens: 12 });
-          },
-        },
-      } as any,
+      client,
       messages: createMessages(1),
       temperature: 0,
       tools,
       finalTool: { name: 'submit_output' },
     });
 
-    assert.deepEqual(request?.tool_choice, {
+    assert.deepEqual(requests[0]?.tool_choice, {
       type: 'function',
       name: 'submit_output',
     });
@@ -794,7 +817,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
   });
 
   it('does not retrieve stateless responses after an unhandled stream event', async () => {
-    const handler = createStatelessHandler();
+    const handler = createHandlerOf(StatelessResponseHandler);
     handler.getStreamingConfig = () => true;
 
     let retrieveCalls = 0;
@@ -839,17 +862,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
       },
     });
     handler.getStreamingConfig = () => true;
-    (
-      handler as unknown as {
-        backgroundLifecycle: { backgroundPoller: BackgroundPoller<any> };
-      }
-    ).backgroundLifecycle.backgroundPoller = new BackgroundPoller({
-      pollIntervalMs: 0,
-      maxDurationMs: 1000,
-      isPending: (response: { status?: string | null }) =>
-        response.status === 'queued' || response.status === 'in_progress',
-      logger: { ...noopTrace },
-    });
+    installImmediatePoller(handler);
 
     const retrieveCalls: Array<{
       id: string;
@@ -866,20 +879,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     const retrievedResponses = [pendingResponse, recoveredResponse];
     const client = {
       responses: {
-        stream: () => ({
-          async *[Symbol.asyncIterator]() {
-            yield {
-              type: 'response.created',
-              response: { id: 'resp-stream-fallback' },
-            };
-            throw new OpenAIError(
-              'Unhandled response stream event: response.keepalive',
-            );
-          },
-          finalResponse: async () => {
-            throw new Error('fallback stream should retrieve by id');
-          },
-        }),
+        stream: () => createUnhandledEventStream('resp-stream-fallback'),
         retrieve: async (id: string, params: unknown, options: unknown) => {
           retrieveCalls.push({ id, params, options });
           const response = retrievedResponses.shift();
@@ -932,20 +932,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
         },
         stream: () => {
           streamCalls += 1;
-          return {
-            async *[Symbol.asyncIterator]() {
-              yield {
-                type: 'response.created',
-                response: { id: 'resp-retrieve-retry' },
-              };
-              throw new OpenAIError(
-                'Unhandled response stream event: response.keepalive',
-              );
-            },
-            finalResponse: async () => {
-              throw new Error('fallback stream should retrieve by id');
-            },
-          };
+          return createUnhandledEventStream('resp-retrieve-retry');
         },
         retrieve: async (id: string, params: unknown) => {
           retrieveCalls.push({ id, params });
@@ -997,17 +984,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
       },
     });
     handler.getStreamingConfig = () => true;
-    (
-      handler as unknown as {
-        backgroundLifecycle: { backgroundPoller: BackgroundPoller<any> };
-      }
-    ).backgroundLifecycle.backgroundPoller = new BackgroundPoller({
-      pollIntervalMs: 0,
-      maxDurationMs: 1000,
-      isPending: (response: { status?: string | null }) =>
-        response.status === 'queued' || response.status === 'in_progress',
-      logger: { ...noopTrace },
-    });
+    installImmediatePoller(handler);
 
     let streamCalls = 0;
     const retrieveCalls: Array<{ id: string; params: unknown }> = [];
@@ -1022,20 +999,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
       responses: {
         stream: () => {
           streamCalls += 1;
-          return {
-            async *[Symbol.asyncIterator]() {
-              yield {
-                type: 'response.created',
-                response: { id: 'resp-poll-retry' },
-              };
-              throw new OpenAIError(
-                'Unhandled response stream event: response.keepalive',
-              );
-            },
-            finalResponse: async () => {
-              throw new Error('fallback stream should retrieve by id');
-            },
-          };
+          return createUnhandledEventStream('resp-poll-retry');
         },
         retrieve: async (id: string, params: unknown) => {
           retrieveCalls.push({ id, params });
@@ -1150,7 +1114,9 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
       openRouterOnly: false,
       contextWindow: 200000,
     });
-    const compactCalls: ResponseInputItem[][] = [];
+    const compactCalls = stubCompactionToLastMessage(handler, {
+      tokensAfter: 1000,
+    });
     const requests: any[] = [];
     let tokenCountCalls = 0;
     const client = withSdkOptions({
@@ -1172,21 +1138,6 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
         },
       },
     });
-    (
-      handler as unknown as { compactConversation: unknown }
-    ).compactConversation = async (
-      _client: unknown,
-      msgs: ResponseInputItem[],
-    ) => {
-      compactCalls.push(msgs);
-      const compacted = msgs.slice(-1);
-      (handler as unknown as { compactionResult: unknown }).compactionResult = {
-        sourceMessages: msgs,
-        compactedMessages: compacted,
-        tokensAfter: 1000,
-      };
-      return compacted;
-    };
 
     await handler.createResponse({
       client: client as any,
@@ -1213,7 +1164,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
       openRouterOnly: false,
       contextWindow: 200000,
     });
-    const compactCalls: ResponseInputItem[][] = [];
+    const compactCalls = stubCompactionToLastMessage(handler);
     const requests: any[] = [];
     let tokenCountCalls = 0;
     const client = withSdkOptions({
@@ -1235,23 +1186,6 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
         },
       },
     });
-    (
-      handler as unknown as {
-        compactConversation: unknown;
-        compactionResult: unknown;
-      }
-    ).compactConversation = async (
-      _client: unknown,
-      msgs: ResponseInputItem[],
-    ) => {
-      compactCalls.push(msgs);
-      const compacted = msgs.slice(-1);
-      (handler as unknown as { compactionResult: unknown }).compactionResult = {
-        sourceMessages: msgs,
-        compactedMessages: compacted,
-      };
-      return compacted;
-    };
 
     await handler.createResponse({
       client: client as any,
@@ -1282,15 +1216,13 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     // require hasPreviousResponseId(), so after invalidateChain() or on a
     // non-chaining route an overflow failed hard without ever attempting
     // compaction — a regression vs the old cumulative-threshold trigger.
-    const handler = setupHandler(
-      new NonChainingResponseHandler(
-        buildTestModelConfig(OPENAI_RESPONSE_TEST_CONFIG, {
-          openRouterOnly: false,
-          contextWindow: 200_000,
-        }),
-      ),
-    );
-    const compactCalls: ResponseInputItem[][] = [];
+    const handler = createNonChainingHandler({
+      openRouterOnly: false,
+      contextWindow: 200_000,
+    });
+    const compactCalls = stubCompactionToLastMessage(handler, {
+      tokensAfter: 1000,
+    });
     const requests: any[] = [];
     let tokenCountCalls = 0;
     const client = withSdkOptions({
@@ -1309,21 +1241,6 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
         },
       },
     });
-    (
-      handler as unknown as { compactConversation: unknown }
-    ).compactConversation = async (
-      _client: unknown,
-      msgs: ResponseInputItem[],
-    ) => {
-      compactCalls.push(msgs);
-      const compacted = msgs.slice(-1);
-      (handler as unknown as { compactionResult: unknown }).compactionResult = {
-        sourceMessages: msgs,
-        compactedMessages: compacted,
-        tokensAfter: 1000,
-      };
-      return compacted;
-    };
 
     await handler.createResponse({
       client: client as any,
@@ -1423,15 +1340,11 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
         return true;
       }
     }
-    const handler = setupHandler(
-      new FailOnReducedBudgetHandler(
-        buildTestModelConfig(OPENAI_RESPONSE_TEST_CONFIG, {
-          openRouterOnly: false,
-          maxOutputTokens: 200,
-          contextWindow: 1000,
-        }),
-      ),
-    );
+    const handler = createHandlerOf(FailOnReducedBudgetHandler, {
+      openRouterOnly: false,
+      maxOutputTokens: 200,
+      contextWindow: 1000,
+    });
     (
       handler as unknown as {
         chainState: { setCumulativeInputTokens: (tokens: number) => void };

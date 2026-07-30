@@ -137,6 +137,16 @@ export function createTerminalPane(
     }
   }
 
+  function disposeSession(sessionId: string): void {
+    const session = sessions.get(sessionId);
+    if (!session) return;
+    callbacks.close(sessionId);
+    session.terminal.dispose();
+    session.host.remove();
+    sessions.delete(sessionId);
+    if (activeSessionId === sessionId) activeSessionId = undefined;
+  }
+
   return {
     element,
 
@@ -184,23 +194,12 @@ export function createTerminalPane(
       if (session) fit(session);
     },
 
-    dispose(sessionId) {
-      const session = sessions.get(sessionId);
-      if (!session) return;
-      callbacks.close(sessionId);
-      session.terminal.dispose();
-      session.host.remove();
-      sessions.delete(sessionId);
-      if (activeSessionId === sessionId) activeSessionId = undefined;
-    },
+    dispose: disposeSession,
 
     disposeAll() {
-      for (const [sessionId, session] of [...sessions]) {
-        callbacks.close(sessionId);
-        session.terminal.dispose();
-        session.host.remove();
+      for (const sessionId of [...sessions.keys()]) {
+        disposeSession(sessionId);
       }
-      sessions.clear();
       activeSessionId = undefined;
     },
   };

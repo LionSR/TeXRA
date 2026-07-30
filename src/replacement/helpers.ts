@@ -19,94 +19,6 @@ function createPatterns<T>(items: T[], mapper: PatternMapper<T>): PatternDict {
   return Object.fromEntries(items.flatMap(mapper));
 }
 
-/**
- * Creates a pattern dictionary from a command map.
- */
-function createPatternsFromMap(
-  commandMap: PatternDict,
-  mapper: (key: string, value: string) => [string, string][],
-): PatternDict {
-  return Object.fromEntries(
-    Object.entries(commandMap).flatMap(([k, v]) => mapper(k, v)),
-  );
-}
-
-// ============================================================================
-// Pattern mappers for common transformations
-// ============================================================================
-
-/**
- * Maps commands to backslash fix patterns (\\\\cmd -> \\cmd)
- */
-const backslashFixMapper: PatternMapper<string> = (cmd) => [
-  [`\\\\${cmd}`, `\\${cmd}`],
-];
-
-/**
- * Maps environments to XML-to-LaTeX conversion patterns
- */
-const xmlToLatexMapper: PatternMapper<string> = (env) => [
-  // XML to LaTeX
-  [`<${env}>`, `\\begin{${env}}`],
-  [`</${env}>`, `\\end{${env}}`],
-  // XML with begin to LaTeX
-  [`<begin{${env}}>`, `\\begin{${env}}`],
-  [`</begin{${env}}>`, `\\end{${env}}`],
-  // XML with end to LaTeX
-  [`<end{${env}}>`, `\\end{${env}}`],
-  [`</end{${env}}>`, `\\end{${env}}`],
-  // XML with braces to LaTeX
-  [`<${env}}`, `\\begin{${env}}`],
-  [`</${env}}`, `\\end{${env}}`],
-  [`</${env}\n`, `\\end{${env}}\n`],
-  [`</${env}}\n`, `\\end{${env}}\n`],
-  // XML begin tags incorrectly closed with leading slash
-  [`</begin{${env}}`, `\\begin{${env}}`],
-  [`</begin{${env}}\n`, `\\begin{${env}}\n`],
-  [`</begin{${env}`, `\\begin{${env}}`],
-  // LaTeX with incorrect XML ending
-  [`\\end{${env}>}`, `\\end{${env}}`],
-  [`\\end{${env}>`, `\\end{${env}}`],
-  // LaTeX with incorrect labels
-  [`\\begin{-${env}}`, `\\begin{${env}}`],
-  [`\\end{-${env}}`, `\\end{${env}}`],
-  // LaTeX with incorrect XML ending
-  [`\\begin${env}`, `\\begin{${env}}`],
-  [`\\end${env}`, `\\end{${env}}`],
-  // LaTeX with duplicated begin/end keywords
-  [`\\begin{begin{${env}}`, `\\begin{${env}}`],
-  [`\\begin{begin{${env}}}`, `\\begin{${env}}`],
-  [`\\begin{\\begin{${env}}`, `\\begin{${env}}`],
-  [`\\begin{\\begin{${env}}}`, `\\begin{${env}}`],
-  [`\\end{end{${env}}`, `\\end{${env}}`],
-  [`\\end{end{${env}}}`, `\\end{${env}}`],
-  [`\\end{\\end{${env}}`, `\\end{${env}}`],
-  [`\\end{\\end{${env}}}`, `\\end{${env}}`],
-];
-
-/**
- * Maps tags to LaTeX-to-XML conversion patterns
- */
-const latexToXmlMapper: PatternMapper<string> = (tag) => [
-  // LaTeX to XML
-  [`\\begin{${tag}}`, `<${tag}>`],
-  [`\\end{${tag}}`, `</${tag}>`],
-  // LaTeX with '>' at the end to XML
-  [`\\begin{${tag}>}`, `<${tag}>`],
-  [`\\begin{${tag}>`, `<${tag}>`],
-  [`\\end{${tag}>}`, `</${tag}>`],
-  [`\\end{${tag}>`, `</${tag}>`],
-];
-
-/**
- * Maps environments to linebreak fix patterns
- */
-const linebreakFixMapper: PatternMapper<string> = (env) => [
-  [`\n\n\\end{${env}}`, `\n\\end{${env}}`],
-  [`\n    \n\\end{${env}}`, `\n\\end{${env}}`],
-  [`\n\t\n\\end{${env}}`, `\n\\end{${env}}`],
-];
-
 // ============================================================================
 // Public generator functions
 // ============================================================================
@@ -116,20 +28,7 @@ const linebreakFixMapper: PatternMapper<string> = (env) => [
  * Example: \\\\alpha -> \\alpha
  */
 export function generateBackslashFixes(commands: string[]): PatternDict {
-  return createPatterns(commands, backslashFixMapper);
-}
-
-/**
- * Generates patterns for fixing extra backslashes in LaTeX commands
- * with automatic grouping by command type.
- */
-export function generateGroupedBackslashFixes(commandGroups: {
-  [groupName: string]: string[];
-}): PatternDict {
-  return createPatterns(
-    Object.values(commandGroups).flat(),
-    backslashFixMapper,
-  );
+  return createPatterns(commands, (cmd) => [[`\\\\${cmd}`, `\\${cmd}`]]);
 }
 
 /**
@@ -138,14 +37,60 @@ export function generateGroupedBackslashFixes(commandGroups: {
 export function generateXmlLatexConversions(
   environments: string[],
 ): PatternDict {
-  return createPatterns(environments, xmlToLatexMapper);
+  return createPatterns(environments, (env) => [
+    // XML to LaTeX
+    [`<${env}>`, `\\begin{${env}}`],
+    [`</${env}>`, `\\end{${env}}`],
+    // XML with begin to LaTeX
+    [`<begin{${env}}>`, `\\begin{${env}}`],
+    [`</begin{${env}}>`, `\\end{${env}}`],
+    // XML with end to LaTeX
+    [`<end{${env}}>`, `\\end{${env}}`],
+    [`</end{${env}}>`, `\\end{${env}}`],
+    // XML with braces to LaTeX
+    [`<${env}}`, `\\begin{${env}}`],
+    [`</${env}}`, `\\end{${env}}`],
+    [`</${env}\n`, `\\end{${env}}\n`],
+    [`</${env}}\n`, `\\end{${env}}\n`],
+    // XML begin tags incorrectly closed with leading slash
+    [`</begin{${env}}`, `\\begin{${env}}`],
+    [`</begin{${env}}\n`, `\\begin{${env}}\n`],
+    [`</begin{${env}`, `\\begin{${env}}`],
+    // LaTeX with incorrect XML ending
+    [`\\end{${env}>}`, `\\end{${env}}`],
+    [`\\end{${env}>`, `\\end{${env}}`],
+    // LaTeX with incorrect labels
+    [`\\begin{-${env}}`, `\\begin{${env}}`],
+    [`\\end{-${env}}`, `\\end{${env}}`],
+    // LaTeX with incorrect XML ending
+    [`\\begin${env}`, `\\begin{${env}}`],
+    [`\\end${env}`, `\\end{${env}}`],
+    // LaTeX with duplicated begin/end keywords
+    [`\\begin{begin{${env}}`, `\\begin{${env}}`],
+    [`\\begin{begin{${env}}}`, `\\begin{${env}}`],
+    [`\\begin{\\begin{${env}}`, `\\begin{${env}}`],
+    [`\\begin{\\begin{${env}}}`, `\\begin{${env}}`],
+    [`\\end{end{${env}}`, `\\end{${env}}`],
+    [`\\end{end{${env}}}`, `\\end{${env}}`],
+    [`\\end{\\end{${env}}`, `\\end{${env}}`],
+    [`\\end{\\end{${env}}}`, `\\end{${env}}`],
+  ]);
 }
 
 /**
  * Generates patterns for converting LaTeX environments to XML tags
  */
 export function generateLatexToXmlConversions(tags: string[]): PatternDict {
-  return createPatterns(tags, latexToXmlMapper);
+  return createPatterns(tags, (tag) => [
+    // LaTeX to XML
+    [`\\begin{${tag}}`, `<${tag}>`],
+    [`\\end{${tag}}`, `</${tag}>`],
+    // LaTeX with '>' at the end to XML
+    [`\\begin{${tag}>}`, `<${tag}>`],
+    [`\\begin{${tag}>`, `<${tag}>`],
+    [`\\end{${tag}>}`, `</${tag}>`],
+    [`\\end{${tag}>`, `</${tag}>`],
+  ]);
 }
 
 /**
@@ -220,7 +165,11 @@ export function generateReferenceSpacing(
 export function generateEnvironmentLinebreakFixes(
   environments: string[],
 ): PatternDict {
-  return createPatterns(environments, linebreakFixMapper);
+  return createPatterns(environments, (env) => [
+    [`\n\n\\end{${env}}`, `\n\\end{${env}}`],
+    [`\n    \n\\end{${env}}`, `\n\\end{${env}}`],
+    [`\n\t\n\\end{${env}}`, `\n\\end{${env}}`],
+  ]);
 }
 
 /**
@@ -230,7 +179,7 @@ export function generateEnvironmentLinebreakFixes(
 export function generateMathCommandShortcuts(
   commandMap: PatternDict,
 ): PatternDict {
-  return createPatternsFromMap(commandMap, (fullCmd, shortCmd) => [
+  return createPatterns(Object.entries(commandMap), ([fullCmd, shortCmd]) => [
     [`\\${fullCmd}`, `\\${shortCmd}`],
   ]);
 }
@@ -262,19 +211,6 @@ export function generateMathFontShortcuts(
 ): PatternDict {
   return createPatterns(letters, (letter) => [
     [`\\${fontCmd}{${letter}}`, `\\${shortcutPrefix}${letter}`],
-  ]);
-}
-
-/**
- * Generate patterns for fixing double backslashes in bold symbols
- * Example: \\\\ba -> \\ba (correcting double backslash error)
- */
-export function generateBoldBackslashFixes(
-  prefix: string,
-  letters: string[],
-): PatternDict {
-  return createPatterns(letters, (letter) => [
-    [`\\\\${prefix}${letter}`, `\\${prefix}${letter}`],
   ]);
 }
 
@@ -319,19 +255,6 @@ export function generateNestedDecoratorShortcuts(
 }
 
 /**
- * Generate patterns for vector shortcuts
- * Examples: \vec{x} -> \vx, \vec{p} -> \vp
- */
-export function generateVectorShortcuts(
-  letters: string[],
-  prefix: string = 'v',
-): PatternDict {
-  return createPatterns(letters, (letter) => [
-    [`\\vec{${letter}}`, `\\${prefix}${letter}`],
-  ]);
-}
-
-/**
  * Generate patterns to normalize legacy font commands like {\rm X}, {\bf X},
  * or {\cal X}.
  */
@@ -358,7 +281,7 @@ export function generateLegacyTextCommandNormalization(
 export function generateArrowRelationShortcuts(
   arrowMap: PatternDict,
 ): PatternDict {
-  return createPatternsFromMap(arrowMap, (arrow, shortcut) => [
+  return createPatterns(Object.entries(arrowMap), ([arrow, shortcut]) => [
     [`\\${arrow} `, `\\${shortcut} `],
     [`\\${arrow}\\`, `\\${shortcut}\\`],
   ]);
@@ -384,7 +307,7 @@ export function generateDifferentialSpacing(
  * Examples: \partial -> \der, \nabla -> \na
  */
 export function generateCommandShortcuts(commandMap: PatternDict): PatternDict {
-  return createPatternsFromMap(commandMap, (command, shortcut) => [
+  return createPatterns(Object.entries(commandMap), ([command, shortcut]) => [
     [`\\${command}`, `\\${shortcut}`],
   ]);
 }

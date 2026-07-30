@@ -86,55 +86,58 @@ function captureDoctorStdout(
   return stdout;
 }
 
-async function buildNodeVersionReport(
-  nodeVersion: string,
+type DoctorProbes = NonNullable<Parameters<typeof buildDoctorReport>[1]>;
+
+// A signed-in report on supported Node with no model available and a partially
+// installed LaTeX toolchain; tests override only the probes they care about.
+function buildReport(
+  probes: Partial<DoctorProbes> = {},
+  reportContext: CliContext = context,
 ): Promise<DoctorReport> {
-  return buildDoctorReport(context, {
-    nodeVersion,
+  return buildDoctorReport(reportContext, {
+    nodeVersion: '24.15.0',
     authProfile: async () => ({ authenticated: true }),
     modelAccessList: async () => [],
     latexToolchain: async () => latexProbe,
     pathStat: async () => directory,
     pathAccess: async () => undefined,
+    ...probes,
   });
 }
 
-// A signed-in report on supported Node with one available model and a fully
-// installed LaTeX toolchain; only the auth profile (and optional context) vary.
+// The same report with one available model and a fully installed LaTeX
+// toolchain; only the auth profile (and optional context) vary.
 function buildReadyReport(
-  authProfile: NonNullable<
-    Parameters<typeof buildDoctorReport>[1]
-  >['authProfile'],
+  authProfile: DoctorProbes['authProfile'],
   reportContext: CliContext = context,
 ): Promise<DoctorReport> {
-  return buildDoctorReport(reportContext, {
-    nodeVersion: '24.15.0',
-    authProfile,
-    modelAccessList: async () => availableModels as never,
-    latexToolchain: async () => allInstalledLatexProbe,
-    pathStat: async () => directory,
-    pathAccess: async () => undefined,
-  });
+  return buildReport(
+    {
+      authProfile,
+      modelAccessList: async () => availableModels as never,
+      latexToolchain: async () => allInstalledLatexProbe,
+    },
+    reportContext,
+  );
+}
+
+function checkById(
+  report: DoctorReport,
+  id: string,
+): DoctorReport['checks'][number] | undefined {
+  return report.checks.find((check) => check.id === id);
 }
 
 describe('CLI doctor', () => {
   it('reports failed checks and exits nonzero', async () => {
-    const report = await buildDoctorReport(context, {
+    const report = await buildReport({
       nodeVersion: '20.1.0',
       authProfile: async () => ({ authenticated: false }),
-      modelAccessList: async () => [],
-      latexToolchain: async () => latexProbe,
-      pathStat: async () => directory,
-      pathAccess: async () => undefined,
     });
 
     expect(report.ok).toBe(false);
-    expect(
-      report.checks.map((check) => [check.id, check.status]),
-    ).toContainEqual(['node', 'fail']);
-    expect(
-      report.checks.map((check) => [check.id, check.status]),
-    ).toContainEqual(['latex.latexmk', 'fail']);
+    expect(checkById(report, 'node')?.status).toBe('fail');
+    expect(checkById(report, 'latex.latexmk')?.status).toBe('fail');
     expect(doctorExitCode(report)).toBe(CliExitCode.ModelOrNetworkError);
   });
 
@@ -150,29 +153,20 @@ describe('CLI doctor', () => {
     ];
 
     for (const [nodeVersion, expected] of cases) {
-      const report = await buildNodeVersionReport(nodeVersion);
-      expect(report.checks.find((check) => check.id === 'node')?.status).toBe(
-        expected,
-      );
+      const report = await buildReport({ nodeVersion });
+      expect(checkById(report, 'node')?.status).toBe(expected);
     }
 
-    const unsupportedRelease = await buildNodeVersionReport('21.0.0');
-    expect(
-      unsupportedRelease.checks.find((check) => check.id === 'node')?.message,
-    ).toBe('Node 21.0.0 is outside the supported range.');
-    expect(
-      unsupportedRelease.checks.find((check) => check.id === 'node')?.hint,
-    ).toBe('Install Node >=22.9.0 before running TeXRA CLI.');
+    const unsupportedRelease = await buildReport({ nodeVersion: '21.0.0' });
+    expect(checkById(unsupportedRelease, 'node')).toMatchObject({
+      message: 'Node 21.0.0 is outside the supported range.',
+      hint: 'Install Node >=22.9.0 before running TeXRA CLI.',
+    });
   });
 
   it('keeps human-readable hints in text output', async () => {
-    const report = await buildDoctorReport(context, {
-      nodeVersion: '24.15.0',
+    const report = await buildReport({
       authProfile: async () => ({ authenticated: false }),
-      modelAccessList: async () => [],
-      latexToolchain: async () => latexProbe,
-      pathStat: async () => directory,
-      pathAccess: async () => undefined,
     });
 
     const text = formatDoctorText(report);
@@ -197,9 +191,7 @@ describe('CLI doctor', () => {
       },
     );
 
-    expect(
-      report.checks.map((check) => [check.id, check.status]),
-    ).toContainEqual(['config', 'warn']);
+    expect(checkById(report, 'config')?.status).toBe('warn');
     expect(formatDoctorText(report)).toContain('Ignoring invalid model.');
   });
 
@@ -211,7 +203,7 @@ describe('CLI doctor', () => {
     }));
 
     const text = formatDoctorText(report);
-    const authCheck = report.checks.find((check) => check.id === 'auth');
+    const authCheck = checkById(report, 'auth');
     const records = doctorNdjsonRecords(report, '2026-05-18T00:00:00.000Z');
 
     expect(authCheck?.message).toContain('user@example.edu');
@@ -285,9 +277,7 @@ describe('CLI doctor', () => {
       accountLabel: '',
     }));
 
-    expect(report.checks.find((check) => check.id === 'auth')?.message).toBe(
-      'Signed in as unknown.',
-    );
+    expect(checkById(report, 'auth')?.message).toBe('Signed in as unknown.');
   });
 
   it('emits stable ndjson record kinds', async () => {

@@ -7,7 +7,7 @@ import { defaultSession } from '@agent/runtime/SessionHandle';
  * - `streamConfig` broadcasts to every workflow tab whose taskState matches
  *   the given agent/model/inputFile (command-palette invocations).
  */
-export type ClearMissingOutputsOptions =
+type ClearMissingOutputsOptions =
   | { streamIdOverride: string; streamConfig?: undefined }
   | {
       streamIdOverride?: undefined;

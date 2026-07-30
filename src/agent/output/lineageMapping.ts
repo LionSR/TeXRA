@@ -59,13 +59,6 @@ function invertMapping(
   return result;
 }
 
-function buildBaseEntries(baseFiles: FileLocation[]): BaseEntry[] {
-  return baseFiles.map((loc) => ({
-    loc,
-    ...computePathKeys(getComparablePath(loc)),
-  }));
-}
-
 /**
  * Find the base file matching a model-reported source path.
  * Match full relative paths first, then fall back to basename-only matching for
@@ -105,7 +98,10 @@ export function traceFileLineage(
   const prevOutputs =
     currRound > 0 ? (state.rounds.get(currRound - 1)?.outputs ?? []) : [];
 
-  const baseEntries = buildBaseEntries(baseFiles);
+  const baseEntries: BaseEntry[] = baseFiles.map((loc) => ({
+    loc,
+    ...computePathKeys(getComparablePath(loc)),
+  }));
   const currentLocations = currentOutputs.map((entry) => entry.location);
 
   // 'contains' matches base filenames that appear as substrings of output names

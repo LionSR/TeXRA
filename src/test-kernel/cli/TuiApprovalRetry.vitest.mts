@@ -24,13 +24,6 @@ const mocks = vi.hoisted(() => ({
   setCliCodexSubscription: vi.fn(),
 }));
 
-vi.mock('@auth/codex', async (importActual) => {
-  const actual = await importActual<typeof import('@auth/codex')>();
-  return {
-    ...actual,
-  };
-});
-
 vi.mock('@model/codex/codexPreference', () => ({
   isPreferCodexSubscription: () => mocks.preferSubscription,
 }));
@@ -208,14 +201,12 @@ const PERSONAL_KEY_RETRY: ApprovalDecision = {
   disableChatGptSubscription: true,
 };
 
-async function waitForRetryApproval(
+async function waitForApproval(
+  kind: string,
   payload: Record<string, unknown>,
 ): Promise<void> {
   await vi.waitFor(() => {
-    expect(currentApproval.get()?.payload).toMatchObject({
-      kind: 'retry',
-      payload,
-    });
+    expect(currentApproval.get()?.payload).toMatchObject({ kind, payload });
   });
 }
 
@@ -230,7 +221,7 @@ async function beginSubscriptionSwitch(
     chatGptSubscriptionRetry(streamId),
     options,
   );
-  await waitForRetryApproval({ streamId });
+  await waitForApproval('retry', { streamId });
   decideRetry(PERSONAL_KEY_RETRY);
   return { result };
 }
@@ -277,12 +268,7 @@ describe('TUI retry approvals', () => {
       streamId: 'bash-bypass-stream',
     });
 
-    await vi.waitFor(() => {
-      expect(currentApproval.get()?.payload).toMatchObject({
-        kind: 'bash',
-        payload: { streamId: 'bash-bypass-stream' },
-      });
-    });
+    await waitForApproval('bash', { streamId: 'bash-bypass-stream' });
     currentApproval.get()?.decide({ accepted: true, bypass: 'bash' });
 
     await expect(result).resolves.toEqual({ action: 'approve' });
@@ -323,12 +309,7 @@ describe('TUI retry approvals', () => {
       streamId: 'edit-bypass-stream',
     });
 
-    await vi.waitFor(() => {
-      expect(currentApproval.get()?.payload).toMatchObject({
-        kind: 'toolEdit',
-        payload: { streamId: 'edit-bypass-stream' },
-      });
-    });
+    await waitForApproval('toolEdit', { streamId: 'edit-bypass-stream' });
     currentApproval.get()?.decide({ accepted: true, bypass: 'toolEdit' });
 
     await expect(result).resolves.toEqual({
@@ -357,12 +338,7 @@ describe('TUI retry approvals', () => {
       agentCategory: AgentCategory.ToolUse,
     });
 
-    await vi.waitFor(() => {
-      expect(currentApproval.get()?.payload).toMatchObject({
-        kind: 'proposal',
-        payload: { streamId: 'proposal-bypass-stream' },
-      });
-    });
+    await waitForApproval('proposal', { streamId: 'proposal-bypass-stream' });
     currentApproval.get()?.decide({ accepted: true, bypass: 'superYolo' });
 
     await expect(result).resolves.toEqual({ action: 'approve' });
@@ -473,12 +449,7 @@ describe('TUI retry approvals', () => {
       },
     });
 
-    await vi.waitFor(() => {
-      expect(currentApproval.get()?.payload).toMatchObject({
-        kind: 'proposal',
-        payload: { proposalId: 'proposal-current' },
-      });
-    });
+    await waitForApproval('proposal', { proposalId: 'proposal-current' });
     currentApproval.get()?.decide({ accepted: true, bypass: 'superYolo' });
 
     await expect(proposal).resolves.toEqual({ action: 'approve' });
@@ -531,7 +502,7 @@ describe('TUI retry approvals', () => {
     const { interactions, prepareRetry } = tui();
     const result = interactions.requestRetry?.(relayRetry({ streamId: 's1' }));
 
-    await waitForRetryApproval({
+    await waitForApproval('retry', {
       personalApiKeyAvailable: false,
       missingPersonalApiKeyMessage: expect.stringContaining(
         'provider could not be identified',
@@ -551,16 +522,11 @@ describe('TUI retry approvals', () => {
     const retry = relayRetry({ streamId: 's2', provider: 'openai' });
     void interactions.requestRetry?.(retry);
 
-    await vi.waitFor(() => {
-      expect(currentApproval.get()?.payload).toMatchObject({
-        kind: 'retry',
-        payload: {
-          streamId: 's2',
-          personalApiKeyAvailable: false,
-          missingPersonalApiKeyMessage:
-            'TeXRA could not check whether the OpenAI API key is available. Press n to give up, then use `/key` to try again.',
-        },
-      });
+    await waitForApproval('retry', {
+      streamId: 's2',
+      personalApiKeyAvailable: false,
+      missingPersonalApiKeyMessage:
+        'TeXRA could not check whether the OpenAI API key is available. Press n to give up, then use `/key` to try again.',
     });
   });
 
@@ -574,12 +540,7 @@ describe('TUI retry approvals', () => {
     });
     void interactions.requestRetry?.(retry);
 
-    await vi.waitFor(() => {
-      expect(currentApproval.get()?.payload).toMatchObject({
-        kind: 'retry',
-        payload: { streamId: 'unknown-provider' },
-      });
-    });
+    await waitForApproval('retry', { streamId: 'unknown-provider' });
     expect(mocks.hasUsableApiKey).not.toHaveBeenCalled();
   });
 
@@ -619,15 +580,10 @@ describe('TUI retry approvals', () => {
     const { interactions, prepareRetry } = tui();
     const result = interactions.requestRetry?.(chatGptSubscriptionRetry('s3'));
 
-    await vi.waitFor(() => {
-      expect(currentApproval.get()?.payload).toMatchObject({
-        kind: 'retry',
-        payload: {
-          streamId: 's3',
-          errorMessage: 'ChatGPT subscription usage limit reached.',
-          personalApiKeyAvailable: true,
-        },
-      });
+    await waitForApproval('retry', {
+      streamId: 's3',
+      errorMessage: 'ChatGPT subscription usage limit reached.',
+      personalApiKeyAvailable: true,
     });
     expect(mocks.hasUsableApiKey).toHaveBeenCalledTimes(1);
     expect(mocks.setCliApiMode).not.toHaveBeenCalled();
@@ -661,7 +617,7 @@ describe('TUI retry approvals', () => {
       chatGptSubscriptionRetry('missing-openai-key'),
     );
 
-    await waitForRetryApproval({
+    await waitForApproval('retry', {
       streamId: 'missing-openai-key',
       personalApiKeyAvailable: false,
     });
@@ -793,7 +749,7 @@ describe('TUI retry approvals', () => {
       },
       { prepareRetry: laterPrepare },
     );
-    await waitForRetryApproval({ streamId: 'retry-after-stall' });
+    await waitForApproval('retry', { streamId: 'retry-after-stall' });
     decideRetry({ accepted: true });
 
     await expect(later).resolves.toEqual({
@@ -937,12 +893,7 @@ describe('TUI retry approvals', () => {
       chatGptSubscriptionRetry('subscription-retry'),
     );
 
-    await vi.waitFor(() => {
-      expect(currentApproval.get()?.payload).toMatchObject({
-        kind: 'retry',
-        payload: { streamId: 'subscription-retry' },
-      });
-    });
+    await waitForApproval('retry', { streamId: 'subscription-retry' });
     decideRetry({ accepted: true });
 
     await expect(result).resolves.toEqual({
@@ -979,7 +930,7 @@ describe('TUI retry approvals', () => {
       },
       { prepareRetry: ordinaryPrepare },
     );
-    await waitForRetryApproval({ streamId: 'ordinary-stream' });
+    await waitForApproval('retry', { streamId: 'ordinary-stream' });
     decideRetry({ accepted: true });
 
     await expect(ordinary).resolves.toEqual({
@@ -1025,7 +976,7 @@ describe('TUI retry approvals', () => {
       },
       { prepareRetry: ordinaryPrepare },
     );
-    await waitForRetryApproval({ streamId: 'ordinary-after-rollback' });
+    await waitForApproval('retry', { streamId: 'ordinary-after-rollback' });
     decideRetry({ accepted: true });
     await expect(ordinary).resolves.toEqual({
       action: 'retry',
@@ -1054,7 +1005,7 @@ describe('TUI retry approvals', () => {
       },
       { prepareRetry },
     );
-    await waitForRetryApproval({ streamId: 'ordinary-refresh-failure' });
+    await waitForApproval('retry', { streamId: 'ordinary-refresh-failure' });
     decideRetry({ accepted: true });
 
     await expect(ordinary).resolves.toEqual({
@@ -1083,7 +1034,7 @@ describe('TUI retry approvals', () => {
       },
       { prepareRetry: ordinaryPrepare },
     );
-    await waitForRetryApproval({ streamId: 'cancelled-ordinary' });
+    await waitForApproval('retry', { streamId: 'cancelled-ordinary' });
     decideRetry({ accepted: true });
     await vi.waitFor(() => expect(ordinaryPrepare).toHaveBeenCalledOnce());
     interactions.cancel({
@@ -1151,12 +1102,7 @@ describe('TUI retry approvals', () => {
       relayRetry({ streamId: 'modal-interrupt', provider: 'openai' }),
     );
 
-    await vi.waitFor(() => {
-      expect(currentApproval.get()?.payload).toMatchObject({
-        kind: 'retry',
-        payload: { streamId: 'modal-interrupt' },
-      });
-    });
+    await waitForApproval('retry', { streamId: 'modal-interrupt' });
 
     clearApprovals();
     await expect(result).resolves.toEqual({ action: 'cancel' });
@@ -1190,12 +1136,7 @@ describe('TUI retry approvals', () => {
       }),
     );
 
-    await vi.waitFor(() => {
-      expect(currentApproval.get()?.payload).toMatchObject({
-        kind: 'retry',
-        payload: { errorMessage: 'second retry' },
-      });
-    });
+    await waitForApproval('retry', { errorMessage: 'second retry' });
 
     resolveFirstLookup?.(true);
     await Promise.resolve();
@@ -1217,12 +1158,7 @@ describe('TUI retry approvals', () => {
         message: 'first retry',
       }),
     );
-    await vi.waitFor(() => {
-      expect(currentApproval.get()?.payload).toMatchObject({
-        kind: 'retry',
-        payload: { errorMessage: 'first retry' },
-      });
-    });
+    await waitForApproval('retry', { errorMessage: 'first retry' });
 
     const second = interactions.requestRetry?.(
       relayRetry({
@@ -1252,12 +1188,7 @@ describe('TUI retry approvals', () => {
         message: 'first retry',
       }),
     );
-    await vi.waitFor(() => {
-      expect(currentApproval.get()?.payload).toMatchObject({
-        kind: 'retry',
-        payload: { errorMessage: 'first retry' },
-      });
-    });
+    await waitForApproval('retry', { errorMessage: 'first retry' });
 
     void interactions.requestRetry?.(
       relayRetry({
@@ -1267,12 +1198,7 @@ describe('TUI retry approvals', () => {
       }),
     );
 
-    await vi.waitFor(() => {
-      expect(currentApproval.get()?.payload).toMatchObject({
-        kind: 'retry',
-        payload: { errorMessage: 'second retry' },
-      });
-    });
+    await waitForApproval('retry', { errorMessage: 'second retry' });
   });
 
   it('serializes a newer switch behind stale-switch rollback', async () => {

@@ -18,17 +18,35 @@ import { hasExtension } from '@utils/core/pathCore';
 export type ExtensionCategory =
   'input' | 'context' | 'media' | 'audio' | 'edited';
 
-const INCLUDED_EXTENSION_KEYS: Record<ExtensionCategory, string> = {
-  input: 'texra.files.included.inputExtensions',
-  context: 'texra.files.included.contextExtensions',
-  media: 'texra.files.included.mediaExtensions',
-  audio: 'texra.files.included.audioExtensions',
-  edited: 'texra.files.included.editedExtensions',
+const { included } = DEFAULT_CORE_SETTINGS.files;
+
+/** Settings key and built-in defaults for each configurable file category. */
+const INCLUDED_EXTENSIONS: Record<
+  ExtensionCategory,
+  { key: string; defaults: string[] }
+> = {
+  input: {
+    key: 'texra.files.included.inputExtensions',
+    defaults: included.inputExtensions,
+  },
+  context: {
+    key: 'texra.files.included.contextExtensions',
+    defaults: included.contextExtensions,
+  },
+  media: {
+    key: 'texra.files.included.mediaExtensions',
+    defaults: included.mediaExtensions,
+  },
+  audio: { key: 'texra.files.included.audioExtensions', defaults: [] },
+  edited: {
+    key: 'texra.files.included.editedExtensions',
+    defaults: included.editedExtensions,
+  },
 };
 
 /** Every configurable extension category, for callers that aggregate them all. */
 export const EXTENSION_CATEGORIES = Object.keys(
-  INCLUDED_EXTENSION_KEYS,
+  INCLUDED_EXTENSIONS,
 ) as readonly ExtensionCategory[];
 
 /** Legacy keys preserved so older user customizations carry through the rename. */
@@ -40,25 +58,6 @@ export const LEGACY_AUXILIARY_KEYWORDS_KEY =
   'texra.files.ignored.auxiliaryKeywords';
 
 /**
- * Return the built-in extension defaults for a file category.
- */
-function getDefaultIncludedExtensions(category: ExtensionCategory): string[] {
-  const { included } = DEFAULT_CORE_SETTINGS.files;
-  switch (category) {
-    case 'input':
-      return included.inputExtensions;
-    case 'context':
-      return included.contextExtensions;
-    case 'media':
-      return included.mediaExtensions;
-    case 'edited':
-      return included.editedExtensions;
-    case 'audio':
-      return [];
-  }
-}
-
-/**
  * Retrieve included extensions for the given extension category.
  *
  * Back-compat: for `context`, fall back to the union of legacy
@@ -67,20 +66,15 @@ function getDefaultIncludedExtensions(category: ExtensionCategory): string[] {
  * mask the legacy customization with the new defaults.
  */
 export function getIncludedExtensions(category: ExtensionCategory): string[] {
-  if (
-    category === 'context' &&
-    !isConfigExplicitlySet(INCLUDED_EXTENSION_KEYS.context)
-  ) {
+  const { key, defaults } = INCLUDED_EXTENSIONS[category];
+  if (category === 'context' && !isConfigExplicitlySet(key)) {
     const legacy = unique([
       ...(readUserSetting<string[]>(LEGACY_REFERENCE_EXTENSIONS_KEY) ?? []),
       ...(readUserSetting<string[]>(LEGACY_AUXILIARY_EXTENSIONS_KEY) ?? []),
     ]);
     if (legacy.length > 0) return legacy;
   }
-  return getConfig<string[]>(
-    INCLUDED_EXTENSION_KEYS[category],
-    getDefaultIncludedExtensions(category),
-  );
+  return getConfig<string[]>(key, defaults);
 }
 
 function readUserSetting<T>(key: string): T | undefined {

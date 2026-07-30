@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getExecutionStore } from '@agent/storage';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
@@ -80,8 +80,27 @@ function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
   };
 }
 
+async function persistTranscriptEntry(
+  executionId: ExecutionId,
+  agent: string,
+  model: string,
+): Promise<void> {
+  const store = await StreamLogStore.open();
+  store.append(getStreamTabId(agent, model, { executionId }), {
+    id: 'entry-1',
+    type: STREAM_LOG_ENTRY_TYPES.LOG,
+    level: LOG_LEVELS.INFO,
+    timestamp: 100,
+    messageType: MESSAGE_TYPES.DEFAULT,
+    text: 'hello',
+  });
+  await store.flush();
+}
+
 describe('ChatExportController.exportAsHtml', () => {
   const controller = new ChatExportController({ latexPreamble: '' });
+
+  beforeEach(installStoragePlatform);
 
   afterEach(async () => {
     await Promise.all(
@@ -92,7 +111,6 @@ describe('ChatExportController.exportAsHtml', () => {
   });
 
   it('returns config_missing when nothing is stored', async () => {
-    await installStoragePlatform();
     const templatePath = await writeTemplate();
 
     const outcome = await controller.exportAsHtml('missing', templatePath);
@@ -101,7 +119,6 @@ describe('ChatExportController.exportAsHtml', () => {
   });
 
   it('returns streamLogs_missing when config exists but no transcript was persisted', async () => {
-    await installStoragePlatform();
     const templatePath = await writeTemplate();
     await getExecutionStore('exec-missing-logs' as ExecutionId).writeConfig(
       config(),
@@ -116,7 +133,6 @@ describe('ChatExportController.exportAsHtml', () => {
   });
 
   it('writes a self-contained HTML file with the trace embedded, when everything is present', async () => {
-    await installStoragePlatform();
     const templatePath = await writeTemplate();
     const executionId = 'exec-full' as ExecutionId;
     const executionConfig = config({ agent: 'review', model: 'sonnet46T' });
@@ -125,18 +141,7 @@ describe('ChatExportController.exportAsHtml', () => {
       timestamp: '2026-07-05T00:00:00.000Z',
       outcome: 'completed',
     });
-
-    const streamId = getStreamTabId('review', 'sonnet46T', { executionId });
-    const store = await StreamLogStore.open();
-    store.append(streamId, {
-      id: 'entry-1',
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      level: LOG_LEVELS.INFO,
-      timestamp: 100,
-      messageType: MESSAGE_TYPES.DEFAULT,
-      text: 'hello',
-    });
-    await store.flush();
+    await persistTranscriptEntry(executionId, 'review', 'sonnet46T');
 
     const outcome = await controller.exportAsHtml(executionId, templatePath);
 
@@ -158,22 +163,9 @@ describe('ChatExportController.exportAsHtml', () => {
   });
 
   it('throws when the standalone template bundle is missing', async () => {
-    await installStoragePlatform();
     const executionId = 'exec-missing-template' as ExecutionId;
     await getExecutionStore(executionId).writeConfig(config());
-    const store = await StreamLogStore.open();
-    const streamId = getStreamTabId('orchestrator', 'deepseekT', {
-      executionId,
-    });
-    store.append(streamId, {
-      id: 'entry-1',
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      level: LOG_LEVELS.INFO,
-      timestamp: 100,
-      messageType: MESSAGE_TYPES.DEFAULT,
-      text: 'hello',
-    });
-    await store.flush();
+    await persistTranscriptEntry(executionId, 'orchestrator', 'deepseekT');
 
     await expect(
       controller.exportAsHtml(executionId, '/nonexistent/index.html'),

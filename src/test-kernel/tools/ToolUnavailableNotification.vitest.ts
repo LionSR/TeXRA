@@ -1,5 +1,3 @@
-// Test support imports
-
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 

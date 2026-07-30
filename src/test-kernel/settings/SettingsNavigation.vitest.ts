@@ -11,29 +11,27 @@ vi.mock('@shared/hostBridge', () => ({
   },
 }));
 
+import type { SettingsNavGroup } from '@settingsView/frontend/settingsNav';
 import { SETTINGS_TAB, SETTINGS_TAB_PANEL_BY_NAME } from '@shared/schemas';
 
 import { useLitComponentTestDom } from './litComponentTestUtils';
 
 type LitElementLike = HTMLElement & { updateComplete: Promise<unknown> };
 
-interface NavEntry {
-  readonly name: keyof typeof SETTINGS_TAB;
-  readonly panel: string;
-  readonly icon: string;
-  readonly label: string;
-  readonly description: string;
+let navGroups: readonly SettingsNavGroup[] = [];
+let settingsState: typeof import('@settingsView/frontend/settingsState');
+
+function setSelectedTabIndex(index: number): void {
+  settingsState.selectedTabIndex.set(index);
 }
 
-interface NavGroup {
-  readonly label: string;
-  readonly entries: readonly NavEntry[];
+function getSelectedTabIndex(): number {
+  return settingsState.selectedTabIndex.get();
 }
 
-let navGroups: readonly NavGroup[] = [];
-let setSelectedTabIndex: (index: number) => void = () => {};
-let getSelectedTabIndex: () => number = () => -1;
-let declareAllCommandsSupported: () => void = () => {};
+function declareAllCommandsSupported(): void {
+  settingsState.unsupportedCommands.set(new Set<string>());
+}
 
 async function mountSettingsApp(): Promise<LitElementLike> {
   const app = document.createElement('settings-app') as LitElementLike;
@@ -73,12 +71,8 @@ describe('hierarchical settings navigation', () => {
   useLitComponentTestDom(async () => {
     await import('@settingsView/frontend/SettingsApp');
     const nav = await import('@settingsView/frontend/settingsNav');
-    const state = await import('@settingsView/frontend/settingsState');
-    navGroups = nav.SETTINGS_NAV_GROUPS as typeof navGroups;
-    setSelectedTabIndex = (index) => state.selectedTabIndex.set(index);
-    getSelectedTabIndex = () => state.selectedTabIndex.get();
-    declareAllCommandsSupported = () =>
-      state.unsupportedCommands.set(new Set<string>());
+    settingsState = await import('@settingsView/frontend/settingsState');
+    navGroups = nav.SETTINGS_NAV_GROUPS;
   });
 
   beforeEach(() => {

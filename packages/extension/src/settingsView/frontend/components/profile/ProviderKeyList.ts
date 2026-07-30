@@ -52,17 +52,6 @@ export class ProviderKeyList extends LitElement {
       this.expandedProvider === provider ? null : provider;
   }
 
-  private renderKeyStatus(status: ProviderKeyStatus['status']): TemplateResult {
-    return renderSetStatusIcon({
-      status,
-      title: 'Key set',
-      fallbacks: {
-        env: { label: 'Env' },
-        'not-set': { label: 'Not set' },
-      },
-    });
-  }
-
   private renderActions(entry: ProviderKeyStatus): TemplateResult {
     const { provider } = entry;
     const removeButton =
@@ -214,7 +203,14 @@ export class ProviderKeyList extends LitElement {
             <span class="provider-name">${entry.displayName}</span>
           </wa-button>
           <span class="settings-disclosure-status">
-            ${this.renderKeyStatus(entry.status)}
+            ${renderSetStatusIcon({
+              status: entry.status,
+              title: 'Key set',
+              fallbacks: {
+                env: { label: 'Env' },
+                'not-set': { label: 'Not set' },
+              },
+            })}
           </span>
           <div class="settings-disclosure-actions">
             ${this.renderActions(entry)}

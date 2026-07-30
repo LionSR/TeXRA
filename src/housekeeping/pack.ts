@@ -25,6 +25,7 @@ import {
 } from './constants';
 import {
   generateTimestamp,
+  collectFilesFromPatterns,
   findFilesFromPatterns,
   resolveHousekeepingTargets,
 } from './utils';
@@ -50,14 +51,11 @@ export async function runPackSingle(
   // Pack also matches the input document itself (it is copied, not moved).
   const filePatterns = [...targets.filePatterns, baseName];
 
-  const allFiles = new Set<string>();
-  for await (const file of findFilesFromPatterns(
+  const allFiles = await collectFilesFromPatterns(
     inputDir,
     filePatterns,
     PACK_EXTENSIONS,
-  )) {
-    allFiles.add(file);
-  }
+  );
 
   const movedFiles: string[] = [];
   const copiedFiles: string[] = [];

@@ -187,12 +187,12 @@ export class TaskGroupList extends LitElement {
   }
 
   override willUpdate(changedProperties: Map<string, unknown>): void {
-    if (changedProperties.has('groups')) {
-      this.checkForCompletedRuns();
-    }
-
     const groupsChanged = changedProperties.has('groups');
     const messagesChanged = changedProperties.has('messages');
+
+    if (groupsChanged) {
+      this.checkForCompletedRuns();
+    }
 
     if (this.terminal) {
       const fullText = (): string => this.messages.map((m) => m.text).join('');
@@ -226,17 +226,15 @@ export class TaskGroupList extends LitElement {
       return;
     }
 
-    const prevGroups = groupsChanged
-      ? (changedProperties.get('groups') as TaskGroup[] | undefined)
-      : undefined;
+    const prevGroups = changedProperties.get('groups') as
+      TaskGroup[] | undefined;
     const patchedGroupMetadata =
       groupsChanged && prevGroups
         ? this.index.patchGroupMetadataIfShapeStable(prevGroups, this.groups)
         : false;
 
-    const prevMessages = messagesChanged
-      ? (changedProperties.get('messages') as LogMessageData[] | undefined)
-      : undefined;
+    const prevMessages = changedProperties.get('messages') as
+      LogMessageData[] | undefined;
     const prevCount = prevMessages?.length ?? 0;
     const deltaIndices = this.canUseUpdatedMessageIndices()
       ? (this.updatedMessageIndices ?? [])
@@ -433,10 +431,9 @@ export class TaskGroupList extends LitElement {
 
   private visibleTimelineEntries(): typeof this.index.timeline {
     const timeline = this.index.timeline;
-    if (timeline.length <= this.timelineItemWindow) {
-      return timeline;
-    }
-    return timeline.slice(timeline.length - this.timelineItemWindow);
+    return timeline.length <= this.timelineItemWindow
+      ? timeline
+      : timeline.slice(-this.timelineItemWindow);
   }
 
   /** Check if a group is expanded */
@@ -555,12 +552,24 @@ export class TaskGroupList extends LitElement {
     `;
   }
 
+  /** Messages of a group followed by its child groups. */
+  private renderGroupBody(node: GroupTree): TemplateResult {
+    return html`${this.renderMessageEntries(
+      node.messages,
+      this.groupMessageScope(node.group.id),
+    )}${repeat(
+      node.children,
+      (c) => c.group.id,
+      (c) => this.renderGroupNode(c),
+    )}`;
+  }
+
   /** Render a group node and its children recursively */
   private renderGroupNode(
     node: GroupTree,
     isRoot = false,
   ): TemplateResult | typeof nothing {
-    const { group, children, messages } = node;
+    const { group, messages } = node;
     const detailsId = `${GROUP_DOM_IDS.DETAILS_PREFIX}${group.id}`;
     const contentId = `${GROUP_DOM_IDS.CONTENT_PREFIX}${group.id}`;
 
@@ -573,15 +582,7 @@ export class TaskGroupList extends LitElement {
       return html`
         <div id=${detailsId} class="log-group log-run" data-run-id=${group.id}>
           <div id=${contentId} class="log-group-content">
-            ${this.renderMessageEntries(
-              messages,
-              this.groupMessageScope(group.id),
-            )}
-            ${repeat(
-              children,
-              (c) => c.group.id,
-              (c) => this.renderGroupNode(c),
-            )}
+            ${this.renderGroupBody(node)}
           </div>
         </div>
       `;
@@ -610,18 +611,7 @@ export class TaskGroupList extends LitElement {
           ${this.renderGroupHeader(group, messages)}
         </div>
         <div id=${contentId} class="log-group-content">
-          ${
-            expanded
-              ? html`${this.renderMessageEntries(
-                  messages,
-                  this.groupMessageScope(group.id),
-                )}${repeat(
-                  children,
-                  (c) => c.group.id,
-                  (c) => this.renderGroupNode(c),
-                )}`
-              : nothing
-          }
+          ${expanded ? this.renderGroupBody(node) : nothing}
         </div>
       </wa-details>
     `;
@@ -641,57 +631,60 @@ export class TaskGroupList extends LitElement {
   }
 
   override render(): TemplateResult {
+    return html`
+      <div
+        id=${ELEMENT_IDS.LOG_CONTENT}
+        class="log-container"
+        @scroll=${this.handleScroll}
+      >
+        ${this.renderLogContent()}
+      </div>
+    `;
+  }
+
+  private renderLogContent(): TemplateResult {
     // Show placeholder only when there are no streams in the current filter
     if (!this.hasStreams) {
-      return html`
-        <div
-          id=${ELEMENT_IDS.LOG_CONTENT}
-          class="log-container"
-          @scroll=${this.handleScroll}
-        >
-          ${renderEmptyState({
-            icon: 'terminal',
-            title: 'No runs yet',
-            body: 'Use TeXRA commands to start.',
-            headingTag: 'h3',
-            className: 'log-placeholder',
-            actions: [
-              {
-                label: 'Run setup',
-                icon: 'rocket',
-                size: 's',
-                onClick: () => this.handleGettingStartedAction('runSetup'),
-              },
-              {
-                label: 'Sample project',
-                icon: 'file-circle-plus',
-                size: 's',
-                onClick: () =>
-                  this.handleGettingStartedAction('createSampleProject'),
-              },
-              {
-                label: 'Import Overleaf',
-                icon: 'cloud-arrow-down',
-                size: 's',
-                onClick: () => this.handleGettingStartedAction('cloneOverleaf'),
-              },
-              {
-                label: 'Import arXiv',
-                icon: 'download',
-                size: 's',
-                onClick: () => this.handleGettingStartedAction('downloadArxiv'),
-              },
-              {
-                label: 'Walkthrough',
-                icon: 'book',
-                size: 's',
-                onClick: () =>
-                  this.handleGettingStartedAction('openWalkthrough'),
-              },
-            ],
-          })}
-        </div>
-      `;
+      return renderEmptyState({
+        icon: 'terminal',
+        title: 'No runs yet',
+        body: 'Use TeXRA commands to start.',
+        headingTag: 'h3',
+        className: 'log-placeholder',
+        actions: [
+          {
+            label: 'Run setup',
+            icon: 'rocket',
+            size: 's',
+            onClick: () => this.handleGettingStartedAction('runSetup'),
+          },
+          {
+            label: 'Sample project',
+            icon: 'file-circle-plus',
+            size: 's',
+            onClick: () =>
+              this.handleGettingStartedAction('createSampleProject'),
+          },
+          {
+            label: 'Import Overleaf',
+            icon: 'cloud-arrow-down',
+            size: 's',
+            onClick: () => this.handleGettingStartedAction('cloneOverleaf'),
+          },
+          {
+            label: 'Import arXiv',
+            icon: 'download',
+            size: 's',
+            onClick: () => this.handleGettingStartedAction('downloadArxiv'),
+          },
+          {
+            label: 'Walkthrough',
+            icon: 'book',
+            size: 's',
+            onClick: () => this.handleGettingStartedAction('openWalkthrough'),
+          },
+        ],
+      });
     }
 
     // Pre-output placeholder, including terminal-mode (process-agent) streams:
@@ -701,32 +694,18 @@ export class TaskGroupList extends LitElement {
       const parsedPhase = StreamPhaseSchema.safeParse(this.streamStatus);
       const active = parsedPhase.success && isInFlightPhase(parsedPhase.data);
       return html`
-        <div
-          id=${ELEMENT_IDS.LOG_CONTENT}
-          class="log-container"
-          @scroll=${this.handleScroll}
-        >
-          <div class="log-placeholder">
-            ${
-              active
-                ? 'Run is starting. Progress updates will appear here.'
-                : 'No log output for this stream yet.'
-            }
-          </div>
+        <div class="log-placeholder">
+          ${
+            active
+              ? 'Run is starting. Progress updates will appear here.'
+              : 'No log output for this stream yet.'
+          }
         </div>
       `;
     }
 
     if (this.terminal) {
-      return html`
-        <div
-          id=${ELEMENT_IDS.LOG_CONTENT}
-          class="log-container"
-          @scroll=${this.handleScroll}
-        >
-          ${this.renderTerminalOutput()}
-        </div>
-      `;
+      return this.renderTerminalOutput();
     }
 
     // Interleave ungrouped messages (user input, follow-ups, errors) with run
@@ -738,31 +717,25 @@ export class TaskGroupList extends LitElement {
       this.index.timeline.length - visibleTimeline.length;
 
     return html`
-      <div
-        id=${ELEMENT_IDS.LOG_CONTENT}
-        class="log-container"
-        @scroll=${this.handleScroll}
-      >
-        ${
-          hiddenTimelineCount > 0
-            ? this.renderRevealButton({
-                hiddenCount: hiddenTimelineCount,
-                step: TIMELINE_ITEM_WINDOW_STEP,
-                scope: 'timeline',
-                kind: 'timeline',
-                label: 'item',
-              })
-            : nothing
-        }
-        ${repeat(
-          visibleTimeline,
-          (item) => item.key,
-          (item) =>
-            'msg' in item
-              ? this.renderLogEntry(item.msg)
-              : this.renderGroupNode(item.tree, true),
-        )}
-      </div>
+      ${
+        hiddenTimelineCount > 0
+          ? this.renderRevealButton({
+              hiddenCount: hiddenTimelineCount,
+              step: TIMELINE_ITEM_WINDOW_STEP,
+              scope: 'timeline',
+              kind: 'timeline',
+              label: 'item',
+            })
+          : nothing
+      }
+      ${repeat(
+        visibleTimeline,
+        (item) => item.key,
+        (item) =>
+          'msg' in item
+            ? this.renderLogEntry(item.msg)
+            : this.renderGroupNode(item.tree, true),
+      )}
     `;
   }
 }

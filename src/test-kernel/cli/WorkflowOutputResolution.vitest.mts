@@ -1,5 +1,5 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 import { afterEach, describe, expect, it } from 'vitest';
@@ -27,6 +27,18 @@ async function makeTempDir(): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), 'texra-workflow-output-'));
   tempDirs.push(dir);
   return dir;
+}
+
+/** Writes a generated file under `<cwd>/run/` and returns its absolute path. */
+async function writeRunFile(
+  cwd: string,
+  relativePath: string,
+  content: string,
+): Promise<string> {
+  const absolutePath = join(cwd, 'run', ...relativePath.split('/'));
+  await mkdir(dirname(absolutePath), { recursive: true });
+  await writeFile(absolutePath, content);
+  return absolutePath;
 }
 
 function testContext(cwd: string): CliContext {
@@ -67,9 +79,7 @@ function workflowResult(
 describe('CLI workflow output resolution', () => {
   it('fails --output-dir resolution when an expected multi-input output is missing', async () => {
     const cwd = await makeTempDir();
-    const runOutput = join(cwd, 'run', 'r1', 'a.tex');
-    await mkdir(join(cwd, 'run', 'r1'), { recursive: true });
-    await writeFile(runOutput, 'A');
+    const runOutput = await writeRunFile(cwd, 'r1/a.tex', 'A');
 
     await expect(
       resolveWorkflowOutput(
@@ -108,14 +118,9 @@ describe('CLI workflow output resolution', () => {
 
   it('copies every expected --output-dir workflow output', async () => {
     const cwd = await makeTempDir();
-    const runA1 = join(cwd, 'run', 'r1', 'a.tex');
-    const runA2 = join(cwd, 'run', 'r2', 'a.tex');
-    const runB = join(cwd, 'run', 'r1', 'b.tex');
-    await mkdir(join(cwd, 'run', 'r1'), { recursive: true });
-    await mkdir(join(cwd, 'run', 'r2'), { recursive: true });
-    await writeFile(runA1, 'A1');
-    await writeFile(runA2, 'A2');
-    await writeFile(runB, 'B');
+    const runA1 = await writeRunFile(cwd, 'r1/a.tex', 'A1');
+    const runA2 = await writeRunFile(cwd, 'r2/a.tex', 'A2');
+    const runB = await writeRunFile(cwd, 'r1/b.tex', 'B');
 
     const result = await resolveWorkflowOutput(
       undefined,
@@ -147,9 +152,7 @@ describe('CLI workflow output resolution', () => {
 
   it('uses a stable output name for materialized stdin input', async () => {
     const cwd = await makeTempDir();
-    const runOutput = join(cwd, 'run', 'r1', 'stdin.tex');
-    await mkdir(join(cwd, 'run', 'r1'), { recursive: true });
-    await writeFile(runOutput, 'from stdin');
+    const runOutput = await writeRunFile(cwd, 'r1/stdin.tex', 'from stdin');
 
     const expectedOutputFiles = expectedOutputFilesForOutputDir(undefined, [
       'texra-stdin-123-abc123/stdin.tex',
@@ -190,11 +193,8 @@ describe('CLI workflow output resolution', () => {
 
   it('preserves expected nested input paths when copying flattened workflow outputs', async () => {
     const cwd = await makeTempDir();
-    const runMain = join(cwd, 'run', 'r1', 'main.tex');
-    const runSeries = join(cwd, 'run', 'r1', 'series.tex');
-    await mkdir(join(cwd, 'run', 'r1'), { recursive: true });
-    await writeFile(runMain, 'main');
-    await writeFile(runSeries, 'series');
+    const runMain = await writeRunFile(cwd, 'r1/main.tex', 'main');
+    const runSeries = await writeRunFile(cwd, 'r1/series.tex', 'series');
 
     const result = await resolveWorkflowOutput(
       undefined,
@@ -241,12 +241,8 @@ describe('CLI workflow output resolution', () => {
 
   it('uses original-path lineage before flat generated names when basenames collide', async () => {
     const cwd = await makeTempDir();
-    const runRoot = join(cwd, 'run', 'root', 'main.tex');
-    const runNested = join(cwd, 'run', 'nested', 'main.tex');
-    await mkdir(join(cwd, 'run', 'root'), { recursive: true });
-    await mkdir(join(cwd, 'run', 'nested'), { recursive: true });
-    await writeFile(runRoot, 'root');
-    await writeFile(runNested, 'nested');
+    const runRoot = await writeRunFile(cwd, 'root/main.tex', 'root');
+    const runNested = await writeRunFile(cwd, 'nested/main.tex', 'nested');
 
     const result = await resolveWorkflowOutput(
       undefined,
@@ -293,9 +289,7 @@ describe('CLI workflow output resolution', () => {
 
   it('does not remap arbitrary same-source outputs to an expected input name', async () => {
     const cwd = await makeTempDir();
-    const runDerived = join(cwd, 'run', 'r1', 'derived.tex');
-    await mkdir(join(cwd, 'run', 'r1'), { recursive: true });
-    await writeFile(runDerived, 'derived');
+    const runDerived = await writeRunFile(cwd, 'r1/derived.tex', 'derived');
 
     await expect(
       resolveWorkflowOutput(
@@ -336,9 +330,7 @@ describe('CLI workflow output resolution', () => {
 
   it('does not remap output paths on partial original-path segment matches', async () => {
     const cwd = await makeTempDir();
-    const runSeries = join(cwd, 'run', 'r1', 'series.tex');
-    await mkdir(join(cwd, 'run', 'r1'), { recursive: true });
-    await writeFile(runSeries, 'series');
+    const runSeries = await writeRunFile(cwd, 'r1/series.tex', 'series');
 
     await expect(
       resolveWorkflowOutput(
@@ -368,12 +360,8 @@ describe('CLI workflow output resolution', () => {
 
   it('uses the latest round when --output-dir workflow outputs arrive out of order', async () => {
     const cwd = await makeTempDir();
-    const runA1 = join(cwd, 'run', 'r1', 'a.tex');
-    const runA2 = join(cwd, 'run', 'r2', 'a.tex');
-    await mkdir(join(cwd, 'run', 'r1'), { recursive: true });
-    await mkdir(join(cwd, 'run', 'r2'), { recursive: true });
-    await writeFile(runA1, 'A1');
-    await writeFile(runA2, 'A2');
+    const runA1 = await writeRunFile(cwd, 'r1/a.tex', 'A1');
+    const runA2 = await writeRunFile(cwd, 'r2/a.tex', 'A2');
 
     await resolveWorkflowOutput(
       undefined,
@@ -396,12 +384,8 @@ describe('CLI workflow output resolution', () => {
 
   it('uses the latest round when a single requested output arrives out of order', async () => {
     const cwd = await makeTempDir();
-    const runA1 = join(cwd, 'run', 'r1', 'a.tex');
-    const runA2 = join(cwd, 'run', 'r2', 'a.tex');
-    await mkdir(join(cwd, 'run', 'r1'), { recursive: true });
-    await mkdir(join(cwd, 'run', 'r2'), { recursive: true });
-    await writeFile(runA1, 'A1');
-    await writeFile(runA2, 'A2');
+    const runA1 = await writeRunFile(cwd, 'r1/a.tex', 'A1');
+    const runA2 = await writeRunFile(cwd, 'r2/a.tex', 'A2');
 
     const result = await resolveWorkflowOutput(
       'out/a.tex',

@@ -329,7 +329,7 @@ export async function activate(context: vscode.ExtensionContext) {
     context.globalState.get(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE) ===
     undefined
   ) {
-    await (async () => {
+    try {
       const hasPriorInstall =
         context.globalState.get<string>(GlobalStateKey.LAST_KNOWN_VERSION) !==
         undefined;
@@ -349,12 +349,12 @@ export async function activate(context: vscode.ExtensionContext) {
         hasPriorInstall,
         hasRunHistory,
       });
-    })().catch((err) =>
+    } catch (err) {
       logger.warn(
         'extension',
         `Onboarding firstRunDone backfill failed: ${toErrorMessage(err)}`,
-      ),
-    );
+      );
+    }
   }
 
   // The following startup steps touch independent state, so they run

@@ -70,6 +70,14 @@ const STEPS: readonly Step[] = [
   'gitignore',
 ];
 
+const STEP_TITLES: Record<Step, string> = {
+  agent: 'default agent for texra chat',
+  model: 'default model',
+  approval: 'approval policy',
+  output: 'default output format',
+  gitignore: 'add .texra/ to .gitignore?',
+};
+
 interface Draft {
   agent?: string;
   model?: string;
@@ -182,95 +190,58 @@ function WizardApp(props: WizardAppProps): React.JSX.Element {
     app.exit();
   };
 
-  const stepNumber = index + 1;
-
+  let picker: React.JSX.Element;
   if (step === 'agent') {
-    return (
-      <StepFrame
-        stepNumber={stepNumber}
-        stepCount={stepCount}
-        title="default agent for texra chat"
-      >
-        <Select
-          key={step}
-          initialIndex={initWizardDefaultAgentIndex(props.options.agents)}
-          items={props.options.agents.map((agent) => ({
-            value: agent.name,
-            label: agent.name,
-          }))}
-          onSelect={(agent) => commit({ agent })}
-          onCancel={cancel}
-        />
-      </StepFrame>
+    picker = (
+      <Select
+        key={step}
+        initialIndex={initWizardDefaultAgentIndex(props.options.agents)}
+        items={props.options.agents.map((agent) => ({
+          value: agent.name,
+          label: agent.name,
+        }))}
+        onSelect={(agent) => commit({ agent })}
+        onCancel={cancel}
+      />
     );
-  }
-
-  if (step === 'model') {
-    return (
-      <StepFrame
-        stepNumber={stepNumber}
-        stepCount={stepCount}
-        title="default model"
-      >
-        <Select
-          key={step}
-          initialIndex={firstAvailableIndex(props.options.models)}
-          items={initWizardModelSelectItems(props.options.models)}
-          onSelect={(model) => commit({ model })}
-          onCancel={cancel}
-        />
-      </StepFrame>
+  } else if (step === 'model') {
+    picker = (
+      <Select
+        key={step}
+        initialIndex={firstAvailableIndex(props.options.models)}
+        items={initWizardModelSelectItems(props.options.models)}
+        onSelect={(model) => commit({ model })}
+        onCancel={cancel}
+      />
     );
-  }
-
-  if (step === 'approval') {
-    return (
-      <StepFrame
-        stepNumber={stepNumber}
-        stepCount={stepCount}
-        title="approval policy"
-      >
-        <Select
-          key={step}
-          items={APPROVAL_POLICY_ORDER.map((policy) => ({
-            value: policy,
-            label: policy,
-            description: APPROVAL_DESCRIPTIONS[policy],
-          }))}
-          onSelect={(approvalPolicy) => commit({ approvalPolicy })}
-          onCancel={cancel}
-        />
-      </StepFrame>
+  } else if (step === 'approval') {
+    picker = (
+      <Select
+        key={step}
+        items={APPROVAL_POLICY_ORDER.map((policy) => ({
+          value: policy,
+          label: policy,
+          description: APPROVAL_DESCRIPTIONS[policy],
+        }))}
+        onSelect={(approvalPolicy) => commit({ approvalPolicy })}
+        onCancel={cancel}
+      />
     );
-  }
-
-  if (step === 'output') {
-    return (
-      <StepFrame
-        stepNumber={stepNumber}
-        stepCount={stepCount}
-        title="default output format"
-      >
-        <Select
-          key={step}
-          items={CLI_OUTPUT_FORMATS.map((format) => ({
-            value: format,
-            label: format,
-            description: OUTPUT_DESCRIPTIONS[format],
-          }))}
-          onSelect={(outputFormat) => commit({ outputFormat })}
-          onCancel={cancel}
-        />
-      </StepFrame>
+  } else if (step === 'output') {
+    picker = (
+      <Select
+        key={step}
+        items={CLI_OUTPUT_FORMATS.map((format) => ({
+          value: format,
+          label: format,
+          description: OUTPUT_DESCRIPTIONS[format],
+        }))}
+        onSelect={(outputFormat) => commit({ outputFormat })}
+        onCancel={cancel}
+      />
     );
-  }
-
-  return (
-    <StepFrame
-      stepNumber={stepNumber}
-      stepCount={stepCount}
-      title="add .texra/ to .gitignore?"
-    >
+  } else {
+    picker = (
       <Select
         key={step}
         items={[
@@ -288,6 +259,16 @@ function WizardApp(props: WizardAppProps): React.JSX.Element {
         onSelect={(gitignore) => commit({ gitignore })}
         onCancel={cancel}
       />
+    );
+  }
+
+  return (
+    <StepFrame
+      stepNumber={index + 1}
+      stepCount={stepCount}
+      title={STEP_TITLES[step]}
+    >
+      {picker}
     </StepFrame>
   );
 }

@@ -348,6 +348,10 @@ export class StreamHeader extends LitElement {
     const agentCategory = this.stream.agentCategory;
     const toolbarButtons =
       TOOLBAR_BUTTONS[agentCategory] ?? TOOLBAR_BUTTONS.workflow;
+    const displayKey = streamStatusDisplayKey(status, this.substate);
+    const enabledButtons = displayKey
+      ? ENABLED_BUTTONS_BY_DISPLAY_KEY[displayKey]
+      : undefined;
 
     // Precompute per-button view metadata once so the button-group and the
     // sibling <wa-tooltip> elements share the same active-state-aware title.
@@ -359,10 +363,8 @@ export class StreamHeader extends LitElement {
     const toolbarButtonViews = (toolbarButtons as ToolbarButton[]).map(
       (btn) => {
         const { disabled: computedDisabled, hidden } = this.getButtonState(
-          btn.id,
-          btn.command,
-          status,
-          this.substate,
+          btn,
+          enabledButtons,
           hasExecutionId,
         );
         // Read-only trace-viewer export: no toolbar action reaches a live
@@ -456,23 +458,17 @@ export class StreamHeader extends LitElement {
   }
 
   private getButtonState(
-    buttonId: string,
-    command: string,
-    status: string,
-    substate: StreamSubstate | undefined,
+    button: ToolbarButton,
+    enabledButtons: ReadonlySet<string> | undefined,
     hasExecutionId: boolean,
   ): { disabled: boolean; hidden: boolean } {
-    const displayKey = streamStatusDisplayKey(status, substate);
-    const enabledButtons = displayKey
-      ? ENABLED_BUTTONS_BY_DISPLAY_KEY[displayKey]
-      : undefined;
     // Same treatment as an execution-dependent button with no executionId:
     // hidden, not just disabled, so the toolbar never displays a control the
     // active host's registry has declared unsupported.
     const hidden =
-      (EXECUTION_DEPENDENT_BUTTONS.has(buttonId) && !hasExecutionId) ||
-      isKnownUnsupported(this.unsupportedCommands, command);
-    const disabled = hidden || !enabledButtons?.has(buttonId);
+      (EXECUTION_DEPENDENT_BUTTONS.has(button.id) && !hasExecutionId) ||
+      isKnownUnsupported(this.unsupportedCommands, button.command);
+    const disabled = hidden || !enabledButtons?.has(button.id);
     return { disabled, hidden };
   }
 

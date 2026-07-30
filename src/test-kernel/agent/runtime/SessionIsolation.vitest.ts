@@ -39,9 +39,6 @@ import { installPlatform } from '@test/support/setupPlatform';
 import { clearStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
 import { createTestSession } from '@test/support/sessionTestUtils';
 
-// Local file imports
-import { createRecordingHost } from '../progressTestUtils';
-
 const storageMocks = vi.hoisted(() => ({
   finalizeExecution: vi.fn().mockResolvedValue({
     status: 'durable',
@@ -65,7 +62,6 @@ function createLifecycleContext(
   streamId: StreamTabId,
   session: SessionHandle,
 ): AgentLaunchContext {
-  const explicit = createRecordingHost();
   const config = AgentConfigSchema.parse({
     agent: 'assistant',
     model: 'test-model',

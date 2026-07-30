@@ -227,26 +227,15 @@ function transitionRunStart(ctx: AgentLaunchContext): void {
   const options = {
     trace: ctx.logger,
   };
-  if (
+  const transitioned =
     streamStatus.transition(
       streamId,
       STREAM_PHASE.RUNNING,
       'lifecycle',
       options,
-    )
-  ) {
-    return;
-  }
-  const resumed = streamStatus.transition(
-    streamId,
-    STREAM_PHASE.RUNNING,
-    'resume',
-    options,
-  );
-  if (resumed) {
-    return;
-  }
-  if (streamStatus.get(streamId) === STREAM_PHASE.RUNNING) {
+    ) ||
+    streamStatus.transition(streamId, STREAM_PHASE.RUNNING, 'resume', options);
+  if (transitioned || streamStatus.get(streamId) === STREAM_PHASE.RUNNING) {
     return;
   }
   logger.warn('Failed to transition run to RUNNING', {

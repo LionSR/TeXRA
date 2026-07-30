@@ -164,6 +164,8 @@ async function execSubscribe(
   const target = requirePath(input);
   const minAnnotationLevel =
     input.min_annotation_level ?? DEFAULT_CHECK_ANNOTATION_LEVEL;
+  const annotationLevelDescription =
+    ANNOTATION_LEVEL_DESCRIPTIONS[minAnnotationLevel];
   if (target.kind === 'repo') {
     const created = bindRepoSubscription(streamId, target);
     const slug = `${target.owner}/${target.repo}`;
@@ -183,8 +185,6 @@ async function execSubscribe(
       minAnnotationLevel,
     });
     const slug = `${target.owner}/${target.repo}/pulls/${target.pullNumber}`;
-    const annotationLevelDescription =
-      ANNOTATION_LEVEL_DESCRIPTIONS[minAnnotationLevel];
     return {
       status: 'executed',
       summary: created
@@ -221,13 +221,10 @@ async function execSubscribe(
       pullNumber: target.issueNumber,
       minAnnotationLevel,
     });
-    const wasIssuePath = !knownPR;
-    const annotationLevelDescription =
-      ANNOTATION_LEVEL_DESCRIPTIONS[minAnnotationLevel];
     let summary: string;
     if (!created) {
       summary = `Already subscribed to ${prSlug}`;
-    } else if (wasIssuePath) {
+    } else if (!knownPR) {
       summary = `Subscribed to ${prSlug} (was /issues/${target.issueNumber}; resolved to PR)`;
     } else {
       summary = `Subscribed to ${prSlug}`;

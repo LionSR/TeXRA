@@ -33,8 +33,8 @@ function createServerSideKeyService(options: {
   useIncludedAccess: boolean;
   readonly canUseServerSideKeys?: boolean;
   readonly canUseModelSync?: boolean;
-  readonly relayQuotaExceeded: boolean;
-  readonly quotaAutoSwitched: boolean;
+  readonly relayQuotaExceeded?: boolean;
+  readonly quotaAutoSwitched?: boolean;
   readonly autoSwitchDuringAccessCheck?: boolean;
   readonly onAccessCheck?: () => void;
 }): ModelOptionsServerAccess {
@@ -47,8 +47,8 @@ function createServerSideKeyService(options: {
       return options.canUseServerSideKeys ?? false;
     },
     getUseIncludedModelAccess: () => options.useIncludedAccess,
-    isRelayQuotaExceeded: () => options.relayQuotaExceeded,
-    wasQuotaAutoSwitched: () => options.quotaAutoSwitched,
+    isRelayQuotaExceeded: () => options.relayQuotaExceeded ?? false,
+    wasQuotaAutoSwitched: () => options.quotaAutoSwitched ?? false,
     isProviderOnServer: () => true,
     canUseModelSync: () => options.canUseModelSync ?? false,
   };
@@ -175,8 +175,6 @@ describe('computeModelOptionsData relay quota state', () => {
       {
         useIncludedAccess: true,
         canUseServerSideKeys: true,
-        relayQuotaExceeded: false,
-        quotaAutoSwitched: false,
       },
       { [apiKeySecretName('moonshot')]: 'sk-moonshot' },
     );
@@ -208,11 +206,7 @@ describe('computeModelOptionsData relay quota state', () => {
   });
 
   it('does not treat non-API providers as personal API-key access', async () => {
-    const access = createModelOptionsAccess({
-      useIncludedAccess: false,
-      relayQuotaExceeded: false,
-      quotaAutoSwitched: false,
-    });
+    const access = createModelOptionsAccess({ useIncludedAccess: false });
 
     const [model] = await computeModelOptionsData(['copilot4o'], access);
 
@@ -225,8 +219,6 @@ describe('computeModelOptionsData relay quota state', () => {
       useIncludedAccess: true,
       canUseServerSideKeys: true,
       canUseModelSync: true,
-      relayQuotaExceeded: false,
-      quotaAutoSwitched: false,
     });
 
     const [model] = await computeModelOptionsData(['haiku3'], access);
@@ -244,11 +236,7 @@ describe('computeModelOptionsData relay quota state', () => {
   });
 
   it('does not tell users to configure API keys for keyless providers', async () => {
-    const access = createModelOptionsAccess({
-      useIncludedAccess: false,
-      relayQuotaExceeded: false,
-      quotaAutoSwitched: false,
-    });
+    const access = createModelOptionsAccess({ useIncludedAccess: false });
 
     const reason = await getModelUnavailableReason('copilot4o', access);
 
@@ -259,11 +247,7 @@ describe('computeModelOptionsData relay quota state', () => {
 
   it('does not disable API-key access when ChatGPT subscription is preferred but signed out', async () => {
     await initSubscriptionPlatform();
-    const access = createModelOptionsAccess({
-      useIncludedAccess: false,
-      relayQuotaExceeded: false,
-      quotaAutoSwitched: false,
-    });
+    const access = createModelOptionsAccess({ useIncludedAccess: false });
 
     const [model] = await computeModelOptionsData(['gpt55'], access);
 
@@ -281,14 +265,7 @@ describe('computeModelOptionsData relay quota state', () => {
       },
     });
     const access = {
-      ...createModelOptionsAccess(
-        {
-          useIncludedAccess: false,
-          relayQuotaExceeded: false,
-          quotaAutoSwitched: false,
-        },
-        {},
-      ),
+      ...createModelOptionsAccess({ useIncludedAccess: false }, {}),
       agentCategory: AgentCategory.ToolUse,
     };
 
@@ -304,11 +281,7 @@ describe('computeModelOptionsData relay quota state', () => {
 
   it('marks GPT-5.6 Pro unavailable through OpenRouter', async () => {
     const access = {
-      ...createModelOptionsAccess({
-        useIncludedAccess: false,
-        relayQuotaExceeded: false,
-        quotaAutoSwitched: false,
-      }),
+      ...createModelOptionsAccess({ useIncludedAccess: false }),
       useOpenRouter: true,
     };
 
@@ -369,14 +342,7 @@ describe('computeModelOptionsData relay quota state', () => {
       },
     });
     const access = {
-      ...createModelOptionsAccess(
-        {
-          useIncludedAccess: false,
-          relayQuotaExceeded: false,
-          quotaAutoSwitched: false,
-        },
-        {},
-      ),
+      ...createModelOptionsAccess({ useIncludedAccess: false }, {}),
       visibleModels: ['gemini31p'],
     };
 
@@ -408,11 +374,7 @@ describe('computeModelOptionsData relay quota state', () => {
     await initSubscriptionPlatform({
       [CODEX_SESSION_SECRET_KEY]: JSON.stringify(codexSession()),
     });
-    const access = createModelOptionsAccess({
-      useIncludedAccess: false,
-      relayQuotaExceeded: false,
-      quotaAutoSwitched: false,
-    });
+    const access = createModelOptionsAccess({ useIncludedAccess: false });
 
     const [toolUseModel] = await computeModelOptionsData(['gpt55'], access, {
       agentCategory: AgentCategory.ToolUse,
@@ -429,14 +391,7 @@ describe('computeModelOptionsData relay quota state', () => {
     await initSubscriptionPlatform({
       [CODEX_SESSION_SECRET_KEY]: JSON.stringify(codexSession()),
     });
-    const access = createModelOptionsAccess(
-      {
-        useIncludedAccess: false,
-        relayQuotaExceeded: false,
-        quotaAutoSwitched: false,
-      },
-      {},
-    );
+    const access = createModelOptionsAccess({ useIncludedAccess: false }, {});
 
     const [model] = await computeModelOptionsData(['gpt55'], access);
 
@@ -445,21 +400,10 @@ describe('computeModelOptionsData relay quota state', () => {
   });
 
   it('does not reuse cached provider keys for injected access', async () => {
-    installServerSideKeyService({
-      useIncludedAccess: false,
-      relayQuotaExceeded: false,
-      quotaAutoSwitched: false,
-    });
+    installServerSideKeyService({ useIncludedAccess: false });
     await computeModelOptionsData(['deepseekproT']);
 
-    const access = createModelOptionsAccess(
-      {
-        useIncludedAccess: false,
-        relayQuotaExceeded: false,
-        quotaAutoSwitched: false,
-      },
-      {},
-    );
+    const access = createModelOptionsAccess({ useIncludedAccess: false }, {});
 
     const [model] = await computeModelOptionsData(['deepseekproT'], access);
 
@@ -471,8 +415,6 @@ describe('computeModelOptionsData relay quota state', () => {
     let accessChecks = 0;
     installServerSideKeyService({
       useIncludedAccess: false,
-      relayQuotaExceeded: false,
-      quotaAutoSwitched: false,
       onAccessCheck: () => {
         accessChecks += 1;
       },
@@ -562,11 +504,7 @@ describe('computeModelOptionsData Kimi Code routing (dual-backend kimi3)', () =>
   it('reports OpenRouter without changing the Kimi K3 registry identity', async () => {
     const access = {
       ...createModelOptionsAccess(
-        {
-          useIncludedAccess: false,
-          relayQuotaExceeded: false,
-          quotaAutoSwitched: false,
-        },
+        { useIncludedAccess: false },
         { [apiKeySecretName('openRouter')]: 'sk-openrouter' },
       ),
       useOpenRouter: true,

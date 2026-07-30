@@ -51,19 +51,6 @@ const SharedBackendOwnedFieldsSchema = BackendOwnedFieldsSchema.pick({
 export const STREAM_SNAPSHOT_SCHEMA_VERSION = 1 as const;
 
 // ============================================================================
-// Round / run keyed records (match the on-disk JSON: string keys → arrays)
-// ============================================================================
-
-const OutputFilesByRoundSchema = roundIndexedRecord(
-  OutputFileInfoSchema,
-).prefault({});
-const MissingOutputsByRoundSchema = roundIndexedRecord(z.string()).prefault({});
-const CompileFailuresByRoundSchema = roundIndexedRecord(
-  CompileFailureSchema,
-).prefault({});
-const RunUsageSchema = RunUsageMapSchema.prefault({});
-
-// ============================================================================
 // Persisted workPlan.json — the one NEW durable file
 // ============================================================================
 
@@ -100,10 +87,11 @@ export const StreamSnapshotSchema = SharedBackendOwnedFieldsSchema.extend({
   todos: WorkPlanSnapshotShape.todos.prefault([]),
   plan: WorkPlanSnapshotShape.plan.prefault(null),
   planSummary: WorkPlanSnapshotShape.planSummary.prefault(null),
-  outputFilesByRound: OutputFilesByRoundSchema,
-  missingOutputsByRound: MissingOutputsByRoundSchema,
-  compileFailuresByRound: CompileFailuresByRoundSchema,
-  runUsage: RunUsageSchema,
+  // Round-keyed records match the on-disk JSON: string keys → arrays.
+  outputFilesByRound: roundIndexedRecord(OutputFileInfoSchema).prefault({}),
+  missingOutputsByRound: roundIndexedRecord(z.string()).prefault({}),
+  compileFailuresByRound: roundIndexedRecord(CompileFailureSchema).prefault({}),
+  runUsage: RunUsageMapSchema.prefault({}),
 
   // -- Pointers (resume / lookup) -------------------------------------------
   executionId: ExecutionIdSchema.optional(),

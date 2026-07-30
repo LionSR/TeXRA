@@ -76,7 +76,7 @@ async function loadTrace(): Promise<TraceDocument> {
 }
 
 loadTrace()
-  .then((trace) => replayTrace(trace))
+  .then(replayTrace)
   .catch((err) => {
     console.error('[trace-viewer] failed to load/replay trace', err);
   });

@@ -139,14 +139,22 @@ export type MemoryToolInput = z.infer<typeof MemoryToolInputSchema>;
 /** Canonical pair of display path (`/memories/...`) and storage path. */
 type MemoryLocation = { display: string; storage: string };
 
-/** One row gathered while walking a memory directory for listing. */
-type ListingEntry = {
-  path: string;
-  size: number;
-  mtime: number;
-  isDir: boolean;
-  meta?: MemoryFileMeta | null;
-};
+/** One tab-separated row of a memory directory listing. Directories and files
+ *  without frontmatter pass `meta: null` and render an empty attribution. */
+function formatListingRow(
+  storagePath: string,
+  size: number,
+  mtime: number,
+  meta: MemoryFileMeta | null,
+): string {
+  const display = toDisplayPath(storagePath);
+  return [
+    formatBytes(size),
+    formatRelativeTime(mtime),
+    meta ? formatAttribution(meta) : '-',
+    meta?.pinned ? `${display} [pinned]` : display,
+  ].join('\t');
+}
 
 /**
  * Memory tool for managing persistent context files under /memories.
@@ -530,37 +538,25 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
   }
 
   private async buildDirectoryListing(resolvedPath: string): Promise<string[]> {
-    const entries: ListingEntry[] = [];
     const rootStats = await StorageFS.stat(resolvedPath);
-    entries.push({
-      path: resolvedPath,
-      size: rootStats.size,
-      mtime: rootStats.mtime,
-      isDir: true,
-    });
+    const rows = [
+      formatListingRow(resolvedPath, rootStats.size, rootStats.mtime, null),
+    ];
 
     for await (const entry of walkMemoryDirectory(resolvedPath, '', {
       maxDepth: DIRECTORY_LISTING_DEPTH,
       includeDirs: true,
     })) {
-      entries.push({
-        path: entry.storagePath,
-        size: entry.size,
-        mtime: entry.mtime,
-        isDir: entry.isDir,
-        meta: entry.meta,
-      });
+      rows.push(
+        formatListingRow(
+          entry.storagePath,
+          entry.size,
+          entry.mtime,
+          entry.isDir ? null : entry.meta,
+        ),
+      );
     }
 
-    return entries.map((entry) => {
-      let display = toDisplayPath(entry.path);
-      const age = formatRelativeTime(entry.mtime);
-      let by = '-';
-      if (!entry.isDir && entry.meta) {
-        by = formatAttribution(entry.meta);
-        if (entry.meta.pinned) display += ' [pinned]';
-      }
-      return `${formatBytes(entry.size)}\t${age}\t${by}\t${display}`;
-    });
+    return rows;
   }
 }

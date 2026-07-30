@@ -287,22 +287,14 @@ Useful for finding the right lemma when you know roughly what type it should hav
       queries.map((q) => this.executeSingle(q, limit)),
     );
 
-    const allResults: LoogleHit[] = [];
-    const sections: string[] = [];
-    let errorCount = 0;
-
-    for (const { query: q, result, hits } of results) {
+    const sections = results.map(({ query: q, result }) => {
       const resultText =
         result.status === 'error' ? result.error : (result.output ?? '');
-      sections.push(`## Query: \`${q}\`\n\n${resultText}`);
-      if (result.status === 'error') {
-        errorCount++;
-      }
-      allResults.push(...hits);
-    }
+      return `## Query: \`${q}\`\n\n${resultText}`;
+    });
 
-    const totalHits = allResults.length;
-    const allFailed = errorCount === queries.length;
+    const totalHits = results.reduce((sum, r) => sum + r.hits.length, 0);
+    const allFailed = results.every(({ result }) => result.status === 'error');
     let summary: string;
     if (totalHits > 0) {
       summary = `${formatResultCount(totalHits, 'result')} across ${queries.length} queries`;

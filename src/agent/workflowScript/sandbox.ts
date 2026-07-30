@@ -9,10 +9,12 @@ import {
   type QuickJSDeferredPromise,
   type QuickJSHandle,
   type QuickJSRuntime,
+  type VmFunctionImplementation,
   memoizePromiseFactory,
   newQuickJSWASMModuleFromVariant,
   newVariant,
 } from 'quickjs-emscripten-core';
+import { z } from 'zod';
 
 // Local imports - utilities
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -253,6 +255,13 @@ interface GuestOutcome {
   error?: Error;
 }
 
+/** Error shape the bridge prelude delivers for a rejected guest body. */
+const GuestErrorRecordSchema = z.object({
+  name: z.string(),
+  message: z.string(),
+  stack: z.string().optional(),
+});
+
 type SandboxSettlement =
   | { readonly kind: 'outcome'; readonly outcome: GuestOutcome }
   | { readonly kind: 'host-failure'; readonly error: Error }
@@ -468,127 +477,100 @@ function installHostBridge(
     return parsed;
   };
 
-  const asyncDispatcher = context.newFunction(
-    '__wfHostAsync',
-    (nameHandle, argsHandle) => {
-      const name = context.getString(nameHandle);
-      const argsJson = context.getString(argsHandle);
-      const fn = bridge.asyncFns[name];
-      if (!fn) throw new Error(`Unknown workflow async primitive: ${name}`);
+  const settleHostPromise = (
+    deferred: QuickJSDeferredPromise,
+    payload?: string,
+    rejection?: unknown,
+  ): void => {
+    pending.delete(deferred);
+    if (!isActive() || !deferred.alive) return;
+    try {
+      if (rejection !== undefined) {
+        const errorHandle = context.newError(toErrorRecord(rejection));
+        try {
+          deferred.reject(errorHandle);
+        } finally {
+          errorHandle.dispose();
+        }
+      } else if (payload === undefined) {
+        deferred.resolve();
+      } else {
+        const payloadHandle = context.newString(payload);
+        try {
+          deferred.resolve(payloadHandle);
+        } finally {
+          payloadHandle.dispose();
+        }
+      }
+    } catch (error) {
+      if (deferred.alive) deferred.dispose();
+      fail(error instanceof Error ? error : new Error(toErrorMessage(error)));
+    } finally {
+      wake();
+    }
+  };
 
-      const deferred = context.newPromise();
-      pending.add(deferred);
-      void fn(parseArgs(argsJson)).then(
-        (payload) => {
-          settleHostPromise(
-            context,
-            deferred,
-            pending,
-            isActive,
-            fail,
-            wake,
-            payload,
-          );
-        },
-        (error: unknown) => {
-          settleHostPromise(
-            context,
-            deferred,
-            pending,
-            isActive,
-            fail,
-            wake,
-            undefined,
-            error,
-          );
-        },
-      );
-      return deferred.handle;
-    },
-  );
-  setGlobal(context, '__wfHostAsync', asyncDispatcher);
-  asyncDispatcher.dispose();
+  defineHostGlobal(context, '__wfHostAsync', (nameHandle, argsHandle) => {
+    const name = context.getString(nameHandle);
+    const argsJson = context.getString(argsHandle);
+    const fn = bridge.asyncFns[name];
+    if (!fn) throw new Error(`Unknown workflow async primitive: ${name}`);
 
-  const syncDispatcher = context.newFunction(
-    '__wfHostSync',
-    (nameHandle, argsHandle) => {
-      const name = context.getString(nameHandle);
-      const argsJson = context.getString(argsHandle);
-      const fn = bridge.syncFns[name];
-      if (!fn) throw new Error(`Unknown workflow sync primitive: ${name}`);
-      const result = fn(parseArgs(argsJson));
-      return result === undefined
-        ? context.undefined
-        : context.newString(result);
-    },
-  );
-  setGlobal(context, '__wfHostSync', syncDispatcher);
-  syncDispatcher.dispose();
+    const deferred = context.newPromise();
+    pending.add(deferred);
+    void fn(parseArgs(argsJson)).then(
+      (payload) => {
+        settleHostPromise(deferred, payload);
+      },
+      (error: unknown) => {
+        settleHostPromise(deferred, undefined, error);
+      },
+    );
+    return deferred.handle;
+  });
+
+  defineHostGlobal(context, '__wfHostSync', (nameHandle, argsHandle) => {
+    const name = context.getString(nameHandle);
+    const argsJson = context.getString(argsHandle);
+    const fn = bridge.syncFns[name];
+    if (!fn) throw new Error(`Unknown workflow sync primitive: ${name}`);
+    const result = fn(parseArgs(argsJson));
+    return result === undefined ? context.undefined : context.newString(result);
+  });
 
   const readOptionalString = (handle: QuickJSHandle): string | undefined =>
     context.typeof(handle) === 'string' ? context.getString(handle) : undefined;
 
-  const resultDispatcher = context.newFunction(
-    '__wfHostDeliver',
-    (payloadHandle, errorHandle) => {
-      const payload = readOptionalString(payloadHandle);
-      const errorJson = readOptionalString(errorHandle);
-      deliver(parseOutcome(payload, errorJson));
-      return context.undefined;
-    },
-  );
-  setGlobal(context, '__wfHostDeliver', resultDispatcher);
-  resultDispatcher.dispose();
+  defineHostGlobal(context, '__wfHostDeliver', (payloadHandle, errorHandle) => {
+    deliver(
+      parseOutcome(
+        readOptionalString(payloadHandle),
+        readOptionalString(errorHandle),
+      ),
+    );
+    return context.undefined;
+  });
 
-  const config = context.newString(
-    JSON.stringify({
-      asyncNames: Object.keys(bridge.asyncFns),
-      syncNames: Object.keys(bridge.syncFns),
-      argsJson: bridge.argsJson,
-      filesJson: bridge.filesJson,
-    }),
+  setGlobalAndDispose(
+    context,
+    '__wfBridgeConfig',
+    context.newString(
+      JSON.stringify({
+        asyncNames: Object.keys(bridge.asyncFns),
+        syncNames: Object.keys(bridge.syncFns),
+        argsJson: bridge.argsJson,
+        filesJson: bridge.filesJson,
+      }),
+    ),
   );
-  setGlobal(context, '__wfBridgeConfig', config);
-  config.dispose();
 }
 
-function settleHostPromise(
+function defineHostGlobal(
   context: QuickJSContext,
-  deferred: QuickJSDeferredPromise,
-  pending: Set<QuickJSDeferredPromise>,
-  isActive: () => boolean,
-  fail: (error: Error) => void,
-  wake: () => void,
-  payload?: string,
-  rejection?: unknown,
+  name: string,
+  fn: VmFunctionImplementation<QuickJSHandle>,
 ): void {
-  pending.delete(deferred);
-  if (!isActive() || !deferred.alive) return;
-  try {
-    if (rejection !== undefined) {
-      const error = toErrorRecord(rejection);
-      const errorHandle = context.newError(error);
-      try {
-        deferred.reject(errorHandle);
-      } finally {
-        errorHandle.dispose();
-      }
-    } else if (payload === undefined) {
-      deferred.resolve();
-    } else {
-      const payloadHandle = context.newString(payload);
-      try {
-        deferred.resolve(payloadHandle);
-      } finally {
-        payloadHandle.dispose();
-      }
-    }
-  } catch (error) {
-    if (deferred.alive) deferred.dispose();
-    fail(error instanceof Error ? error : new Error(toErrorMessage(error)));
-  } finally {
-    wake();
-  }
+  setGlobalAndDispose(context, name, context.newFunction(name, fn));
 }
 
 async function pumpJobs(
@@ -643,6 +625,15 @@ function setGlobal(
   context.setProp(context.global, name, value);
 }
 
+function setGlobalAndDispose(
+  context: QuickJSContext,
+  name: string,
+  value: QuickJSHandle,
+): void {
+  setGlobal(context, name, value);
+  value.dispose();
+}
+
 function parseOutcome(payload?: string, errorJson?: string): GuestOutcome {
   if (errorJson !== undefined) {
     let parsed: unknown;
@@ -655,29 +646,22 @@ function parseOutcome(payload?: string, errorJson?: string): GuestOutcome {
         ),
       };
     }
-    if (
-      typeof parsed !== 'object' ||
-      parsed === null ||
-      typeof (parsed as Record<string, unknown>).name !== 'string' ||
-      typeof (parsed as Record<string, unknown>).message !== 'string'
-    ) {
+    const decoded = GuestErrorRecordSchema.safeParse(parsed);
+    if (!decoded.success) {
       return {
         error: new Error(
           'Workflow script returned an invalid error record from the sandbox.',
         ),
       };
     }
-    const record = parsed as { name: string; message: string; stack?: string };
+    const record = decoded.data;
     // Guest stack frames locate the failure inside the script (the only
     // context a caller has for a sandboxed error), so fold them into the
     // message the tool result carries.
-    const frames =
-      typeof record.stack === 'string'
-        ? record.stack
-            .split('\n')
-            .filter((line) => line.trim().startsWith('at '))
-            .slice(0, 3)
-        : [];
+    const frames = (record.stack ?? '')
+      .split('\n')
+      .filter((line) => line.trim().startsWith('at '))
+      .slice(0, 3);
     const error = new Error(
       frames.length > 0
         ? `${record.message}\n${frames.join('\n')}`

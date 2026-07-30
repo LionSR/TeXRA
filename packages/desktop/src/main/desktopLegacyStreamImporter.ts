@@ -89,17 +89,14 @@ export async function prepareDesktopLegacyStreamImport(
     ...(evidence.transcriptStreamIds ?? []),
     ...(evidence.sidecarStreamIds ?? []),
   ]);
-  const claims = Object.freeze(
-    document == null
-      ? []
-      : [
-          ...new Set(
-            document[LEGACY_STREAMS_KEY].streams
-              .map((row) => row.streamId)
-              .filter((streamId) => evidenceIds.has(streamId)),
-          ),
-        ],
-  );
+  const rows = document?.[LEGACY_STREAMS_KEY].streams ?? [];
+  const claims = Object.freeze([
+    ...new Set(
+      rows
+        .map((row) => row.streamId)
+        .filter((streamId) => evidenceIds.has(streamId)),
+    ),
+  ]);
   const claimSet = new Set(claims);
 
   return {

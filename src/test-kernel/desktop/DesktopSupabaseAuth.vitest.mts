@@ -68,6 +68,9 @@ interface DesktopAuthTestOptions extends Partial<DesktopSupabaseAuthHost> {
   log?: ReturnType<typeof createLog>;
 }
 
+/** Auths created by `createTestAuth`, disposed after each test. */
+const testAuths: Array<{ dispose(): void }> = [];
+
 function createTestAuth(options: DesktopAuthTestOptions) {
   const {
     router,
@@ -80,7 +83,7 @@ function createTestAuth(options: DesktopAuthTestOptions) {
     showErrorMessage = vi.fn(),
     onSessionChanged = vi.fn(),
   } = options;
-  return createDesktopSupabaseAuth({
+  const auth = createDesktopSupabaseAuth({
     router,
     coordinator,
     oauthClient,
@@ -93,6 +96,8 @@ function createTestAuth(options: DesktopAuthTestOptions) {
     },
     log,
   });
+  testAuths.push(auth);
+  return auth;
 }
 
 function callbackSessionResult() {
@@ -191,17 +196,17 @@ describe('desktop Supabase auth', () => {
     ).mockResolvedValue(undefined);
   });
   afterEach(() => {
+    for (const auth of testAuths.splice(0)) auth.dispose();
     vi.restoreAllMocks();
     SupabaseClient.resetForTests();
   });
 
   it('opens Supabase OAuth with the desktop texra callback URI', async () => {
-    const router = createDesktopProtocolCallbackRouter();
     const coordinator = createCoordinator();
     const oauthClient = createOAuthClient();
     const openExternalUrl = vi.fn(async () => {});
     const auth = createTestAuth({
-      router,
+      router: createDesktopProtocolCallbackRouter(),
       coordinator,
       oauthClient,
       openExternalUrl,
@@ -220,12 +225,10 @@ describe('desktop Supabase auth', () => {
     expect(openExternalUrl).toHaveBeenCalledWith(
       'https://auth.example.test/start',
     );
-    auth.dispose();
   });
 
   it('persists the nonce before sending it to Supabase', async () => {
     const events: string[] = [];
-    const router = createDesktopProtocolCallbackRouter();
     const coordinator = createCoordinator();
     const callbackState: DesktopAuthCallbackState = {
       hasPendingSignIn: vi.fn(() => false),
@@ -252,7 +255,7 @@ describe('desktop Supabase auth', () => {
       events.push('open');
     });
     const auth = createTestAuth({
-      router,
+      router: createDesktopProtocolCallbackRouter(),
       coordinator,
       oauthClient,
       callbackState,
@@ -262,7 +265,6 @@ describe('desktop Supabase auth', () => {
     await auth.signIn();
 
     expect(events).toEqual(['begin', 'oauth', 'open']);
-    auth.dispose();
   });
 
   it('stores routed callback sessions and refreshes settings profile state', async () => {
@@ -274,7 +276,6 @@ describe('desktop Supabase auth', () => {
       router,
       coordinator,
       oauthClient,
-      openExternalUrl: vi.fn(async () => {}),
       onSessionChanged,
     });
 
@@ -303,7 +304,6 @@ describe('desktop Supabase auth', () => {
     expect(onSessionChanged).toHaveBeenCalled();
 
     expect(await SupabaseClient.isAuthenticated()).toBe(false);
-    auth.dispose();
   });
 
   it('waits for the matching callback before completing sign-in', async () => {
@@ -314,7 +314,6 @@ describe('desktop Supabase auth', () => {
       router,
       coordinator,
       oauthClient,
-      openExternalUrl: vi.fn(async () => {}),
     });
 
     let completed = false;
@@ -339,17 +338,14 @@ describe('desktop Supabase auth', () => {
 
     await expect(completion).resolves.toBe(true);
     expect(coordinator.storeSession).toHaveBeenCalledOnce();
-    auth.dispose();
   });
 
   it('cancels a waiting system-browser sign-in without throwing', async () => {
-    const router = createDesktopProtocolCallbackRouter();
     const oauthClient = createOAuthClient();
     const auth = createTestAuth({
-      router,
+      router: createDesktopProtocolCallbackRouter(),
       coordinator: createCoordinator(),
       oauthClient,
-      openExternalUrl: vi.fn(async () => {}),
     });
     const completion = auth.signInAndWaitForSession(undefined, {
       timeoutMs: 1_000,
@@ -378,7 +374,6 @@ describe('desktop Supabase auth', () => {
       router,
       coordinator,
       oauthClient,
-      openExternalUrl: vi.fn(async () => {}),
       showErrorMessage,
       log,
     });
@@ -400,7 +395,6 @@ describe('desktop Supabase auth', () => {
       'Desktop sign-in was cancelled in the system browser',
     );
     expect(coordinator.storeSession).not.toHaveBeenCalled();
-    auth.dispose();
   });
 
   it('contains a failed cancellation notification without rejecting', async () => {
@@ -415,7 +409,6 @@ describe('desktop Supabase auth', () => {
       router,
       coordinator,
       oauthClient,
-      openExternalUrl: vi.fn(async () => {}),
       showErrorMessage: vi.fn(async () => {
         throw new Error('notification failure');
       }),
@@ -442,7 +435,6 @@ describe('desktop Supabase auth', () => {
         'Desktop sign-in error notification failed: notification failure',
       ),
     );
-    auth.dispose();
   });
 
   it('rejects a foreign callback whose nonce does not match the pending sign-in (login-CSRF)', async () => {
@@ -454,7 +446,6 @@ describe('desktop Supabase auth', () => {
       router,
       coordinator,
       oauthClient,
-      openExternalUrl: vi.fn(async () => {}),
       log,
     });
 
@@ -475,7 +466,6 @@ describe('desktop Supabase auth', () => {
     expect(log.warn).toHaveBeenCalledWith(
       'Desktop auth callback rejected: nonce mismatch (possible login-CSRF or stale callback)',
     );
-    auth.dispose();
   });
 
   it('rejects a callback with no nonce while a sign-in is pending', async () => {
@@ -485,7 +475,6 @@ describe('desktop Supabase auth', () => {
       router,
       coordinator,
       oauthClient: createOAuthClient(),
-      openExternalUrl: vi.fn(async () => {}),
     });
 
     await auth.signIn();
@@ -499,7 +488,6 @@ describe('desktop Supabase auth', () => {
 
     expect(coordinator.createSessionFromCallback).not.toHaveBeenCalled();
     expect(coordinator.storeSession).not.toHaveBeenCalled();
-    auth.dispose();
   });
 
   it('ignores routed callbacks until desktop sign-in starts', async () => {
@@ -510,7 +498,6 @@ describe('desktop Supabase auth', () => {
       router,
       coordinator,
       oauthClient: createOAuthClient(),
-      openExternalUrl: vi.fn(async () => {}),
       log,
     });
 
@@ -525,7 +512,6 @@ describe('desktop Supabase auth', () => {
     expect(log.debug).toHaveBeenCalledWith(
       'Desktop auth callback ignored because no sign-in is in progress',
     );
-    auth.dispose();
   });
 
   it('preserves pending sign-in across desktop auth recreation', async () => {
@@ -538,7 +524,6 @@ describe('desktop Supabase auth', () => {
       router,
       coordinator,
       oauthClient,
-      openExternalUrl: vi.fn(async () => {}),
       callbackState,
     });
 
@@ -557,7 +542,6 @@ describe('desktop Supabase auth', () => {
       router,
       coordinator,
       oauthClient: createOAuthClient(),
-      openExternalUrl: vi.fn(async () => {}),
       callbackState: persistedCallbackState,
     });
 
@@ -569,7 +553,6 @@ describe('desktop Supabase auth', () => {
         }),
       );
     });
-    recreatedAuth.dispose();
   });
 
   it('expires persisted pending sign-in state across recreation', async () => {
@@ -584,7 +567,6 @@ describe('desktop Supabase auth', () => {
         router,
         coordinator,
         oauthClient,
-        openExternalUrl: vi.fn(async () => {}),
         callbackState: createDesktopAuthCallbackState(stateStore),
       });
 
@@ -597,7 +579,6 @@ describe('desktop Supabase auth', () => {
         router,
         coordinator,
         oauthClient: createOAuthClient(),
-        openExternalUrl: vi.fn(async () => {}),
         callbackState: expiredCallbackState,
       });
 
@@ -611,7 +592,6 @@ describe('desktop Supabase auth', () => {
 
       expect(expiredCallbackState.hasPendingSignIn()).toBe(false);
       expect(coordinator.createSessionFromCallback).not.toHaveBeenCalled();
-      recreatedAuth.dispose();
     } finally {
       vi.useRealTimers();
     }
@@ -681,7 +661,6 @@ describe('desktop Supabase auth', () => {
       router,
       coordinator,
       oauthClient,
-      openExternalUrl: vi.fn(async () => {}),
       callbackState,
       log,
     });
@@ -703,7 +682,6 @@ describe('desktop Supabase auth', () => {
     expect(log.debug).toHaveBeenCalledWith(
       'Desktop auth callback ignored because no sign-in is in progress',
     );
-    auth.dispose();
   });
 
   it('claims only the first matching callback for an OAuth attempt', async () => {
@@ -715,7 +693,6 @@ describe('desktop Supabase auth', () => {
       router,
       coordinator,
       oauthClient,
-      openExternalUrl: vi.fn(async () => {}),
       log,
     });
 
@@ -738,7 +715,6 @@ describe('desktop Supabase auth', () => {
     expect(log.debug).toHaveBeenCalledWith(
       'Desktop auth callback ignored because no sign-in is in progress',
     );
-    auth.dispose();
   });
 
   it('does not store a superseded callback or clear the newer sign-in', async () => {
@@ -755,7 +731,6 @@ describe('desktop Supabase auth', () => {
       router,
       coordinator,
       oauthClient,
-      openExternalUrl: vi.fn(async () => {}),
       callbackState,
     });
 
@@ -777,7 +752,6 @@ describe('desktop Supabase auth', () => {
     await new Promise((resolve) => setImmediate(resolve));
     expect(coordinator.storeSession).not.toHaveBeenCalled();
     expect(callbackState.hasPendingSignIn()).toBe(true);
-    auth.dispose();
   });
 
   it('removes a callback session when sign-out begins during storage', async () => {
@@ -796,7 +770,6 @@ describe('desktop Supabase auth', () => {
       router,
       coordinator,
       oauthClient,
-      openExternalUrl: vi.fn(async () => {}),
       onSessionChanged,
       showInfoMessage,
     });
@@ -822,7 +795,6 @@ describe('desktop Supabase auth', () => {
       'Signed in as user@example.com',
     );
     expect(onSessionChanged).toHaveBeenCalledOnce();
-    auth.dispose();
   });
 
   it('removes a stored callback before starting a newer sign-in', async () => {
@@ -842,7 +814,6 @@ describe('desktop Supabase auth', () => {
       coordinator,
       oauthClient,
       callbackState,
-      openExternalUrl: vi.fn(async () => {}),
       onSessionChanged,
     });
 
@@ -886,7 +857,6 @@ describe('desktop Supabase auth', () => {
       accessToken: 'access-token',
       refreshToken: 'refresh-token',
     });
-    auth.dispose();
   });
 
   it.each(['signIn', 'dispose'] as const)(
@@ -903,7 +873,6 @@ describe('desktop Supabase auth', () => {
         router,
         coordinator,
         oauthClient,
-        openExternalUrl: vi.fn(async () => {}),
         onSessionChanged,
       });
 
@@ -930,7 +899,6 @@ describe('desktop Supabase auth', () => {
       expect(await coordinator.loadSession()).toBeNull();
       if (action === 'signIn') {
         expect(oauthClient.auth.signInWithOAuth).toHaveBeenCalledTimes(2);
-        auth.dispose();
       }
     },
   );
@@ -950,7 +918,6 @@ describe('desktop Supabase auth', () => {
         router,
         coordinator,
         oauthClient,
-        openExternalUrl: vi.fn(async () => {}),
       });
 
       await auth.signIn();
@@ -971,7 +938,6 @@ describe('desktop Supabase auth', () => {
       await new Promise((resolve) => setImmediate(resolve));
 
       expect(coordinator.storeSession).not.toHaveBeenCalled();
-      if (action === 'signOut') auth.dispose();
     },
   );
 
@@ -983,7 +949,6 @@ describe('desktop Supabase auth', () => {
       router,
       coordinator,
       oauthClient,
-      openExternalUrl: vi.fn(async () => {}),
     });
 
     const first = auth.signInAndWaitForSession(undefined, { timeoutMs: 10 });
@@ -1006,7 +971,6 @@ describe('desktop Supabase auth', () => {
 
     await expect(second).resolves.toBe(true);
     expect(coordinator.storeSession).toHaveBeenCalledOnce();
-    auth.dispose();
   });
 
   it('surfaces rejected routed callback processing failures', async () => {
@@ -1022,7 +986,6 @@ describe('desktop Supabase auth', () => {
       router,
       coordinator,
       oauthClient,
-      openExternalUrl: vi.fn(async () => {}),
       showErrorMessage,
       log,
     });
@@ -1045,19 +1008,16 @@ describe('desktop Supabase auth', () => {
       'Desktop auth callback failed: network down',
     );
     expect(coordinator.storeSession).not.toHaveBeenCalled();
-    auth.dispose();
   });
 
   it('clears included-access caches on sign-out', async () => {
-    const router = createDesktopProtocolCallbackRouter();
     const coordinator = createCoordinator();
     const clearAllCaches = vi.fn();
     setServerSideKeyService({ clearAllCaches } as never);
     const auth = createTestAuth({
-      router,
+      router: createDesktopProtocolCallbackRouter(),
       coordinator,
       oauthClient: createOAuthClient(),
-      openExternalUrl: vi.fn(async () => {}),
     });
 
     await auth.signOut();
@@ -1067,7 +1027,6 @@ describe('desktop Supabase auth', () => {
     expect(
       agentRegistry.invalidateRemoteAgentsAfterSignOut,
     ).toHaveBeenCalledOnce();
-    auth.dispose();
   });
 
   it('still publishes sign-out when the local catalog rebuild fails', async () => {
@@ -1081,7 +1040,6 @@ describe('desktop Supabase auth', () => {
       router: createDesktopProtocolCallbackRouter(),
       coordinator,
       oauthClient: createOAuthClient(),
-      openExternalUrl: vi.fn(async () => {}),
       onSessionChanged,
       log,
     });
@@ -1093,11 +1051,9 @@ describe('desktop Supabase auth', () => {
     expect(log.warn).toHaveBeenCalledWith(
       'Local agent catalog refresh failed after sign-out: local rebuild failed',
     );
-    auth.dispose();
   });
 
   it('refreshes desktop session state and exposes remote agents in profile data', async () => {
-    const router = createDesktopProtocolCallbackRouter();
     const { ensureFreshToken, getSessionTokens, getStoredSessionState } =
       installAuthenticatedSupabaseProvider();
     const loadAgents = vi
@@ -1115,10 +1071,9 @@ describe('desktop Supabase auth', () => {
       },
     ]);
     const auth = createTestAuth({
-      router,
+      router: createDesktopProtocolCallbackRouter(),
       coordinator: createCoordinator(),
       oauthClient: createOAuthClient(),
-      openExternalUrl: vi.fn(async () => {}),
     });
 
     const message = await buildProfileMessage({
@@ -1143,11 +1098,9 @@ describe('desktop Supabase auth', () => {
         },
       ],
     });
-    auth.dispose();
   });
 
   it('keeps authenticated profile data when remote agent refresh fails', async () => {
-    const router = createDesktopProtocolCallbackRouter();
     installAuthenticatedSupabaseProvider();
     vi.spyOn(agentRegistry, 'loadAgents').mockRejectedValue(
       new Error('agent directory unavailable'),
@@ -1156,10 +1109,9 @@ describe('desktop Supabase auth', () => {
       .spyOn(agentRegistry, 'getAgentsBySource')
       .mockReturnValue([]);
     const auth = createTestAuth({
-      router,
+      router: createDesktopProtocolCallbackRouter(),
       coordinator: createCoordinator(),
       oauthClient: createOAuthClient(),
-      openExternalUrl: vi.fn(async () => {}),
     });
 
     const message = await buildProfileMessage({
@@ -1172,6 +1124,5 @@ describe('desktop Supabase auth', () => {
       remoteAgents: [],
     });
     expect(getAgentsBySource).not.toHaveBeenCalled();
-    auth.dispose();
   });
 });

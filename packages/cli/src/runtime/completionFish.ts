@@ -6,16 +6,39 @@ import {
 
 // Dynamic completion sources, gated on TEXRA_COMPLETION_DYNAMIC so scripts can
 // opt out of shelling back into texra.
-const AGENTS_LIST_SOURCE =
-  '(test "$TEXRA_COMPLETION_DYNAMIC" != 0; and texra agents list --quiet 2>/dev/null | awk "{print \\$2}")';
-const WORKFLOW_AGENTS_LIST_SOURCE =
-  '(test "$TEXRA_COMPLETION_DYNAMIC" != 0; and texra agents list --quiet --all --category workflow 2>/dev/null | awk "{print \\$2}")';
-const TOOL_USE_AGENTS_LIST_SOURCE =
-  '(test "$TEXRA_COMPLETION_DYNAMIC" != 0; and texra agents list --quiet --all --category toolUse 2>/dev/null | awk "{print \\$2}")';
-const MODELS_LIST_SOURCE =
-  '(test "$TEXRA_COMPLETION_DYNAMIC" != 0; and texra models list --quiet 2>/dev/null | awk "{print \\$1}")';
+function dynamicListSource(command: string, column: number): string {
+  return `(test "$TEXRA_COMPLETION_DYNAMIC" != 0; and texra ${command} 2>/dev/null | awk "{print \\$${column}}")`;
+}
+
+const AGENTS_LIST_SOURCE = dynamicListSource('agents list --quiet', 2);
+const WORKFLOW_AGENTS_LIST_SOURCE = dynamicListSource(
+  'agents list --quiet --all --category workflow',
+  2,
+);
+const TOOL_USE_AGENTS_LIST_SOURCE = dynamicListSource(
+  'agents list --quiet --all --category toolUse',
+  2,
+);
+const MODELS_LIST_SOURCE = dynamicListSource('models list --quiet', 1);
 const TOP_LEVEL_RUN_CONDITION =
   "-n '__fish_seen_subcommand_from run; and not __fish_seen_subcommand_from agents; and not __fish_seen_subcommand_from multi-agent'";
+
+// Positional agent/model completions, in emission order.
+const DYNAMIC_POSITIONAL_COMPLETIONS: readonly (readonly [string, string])[] = [
+  [TOP_LEVEL_RUN_CONDITION, WORKFLOW_AGENTS_LIST_SOURCE],
+  [
+    "-n '__fish_seen_subcommand_from agents; and __fish_seen_subcommand_from run'",
+    TOOL_USE_AGENTS_LIST_SOURCE,
+  ],
+  [
+    "-n '__fish_seen_subcommand_from agents; and __fish_seen_subcommand_from show'",
+    AGENTS_LIST_SOURCE,
+  ],
+  [
+    "-n '__fish_seen_subcommand_from models; and __fish_seen_subcommand_from show'",
+    MODELS_LIST_SOURCE,
+  ],
+];
 
 function fishEscape(value: string): string {
   return value.replaceAll('\\', '\\\\').replaceAll("'", "\\'");
@@ -91,30 +114,9 @@ export function fishCompletion(commands: readonly CompletionCommand[]): string {
       `-a '${CLI_COMPLETION_SHELLS.join(' ')}'`,
     ]),
   );
-  lines.push(
-    fishCompleteLine([
-      TOP_LEVEL_RUN_CONDITION,
-      `-a '${WORKFLOW_AGENTS_LIST_SOURCE}'`,
-    ]),
-  );
-  lines.push(
-    fishCompleteLine([
-      "-n '__fish_seen_subcommand_from agents; and __fish_seen_subcommand_from run'",
-      `-a '${TOOL_USE_AGENTS_LIST_SOURCE}'`,
-    ]),
-  );
-  lines.push(
-    fishCompleteLine([
-      "-n '__fish_seen_subcommand_from agents; and __fish_seen_subcommand_from show'",
-      `-a '${AGENTS_LIST_SOURCE}'`,
-    ]),
-  );
-  lines.push(
-    fishCompleteLine([
-      "-n '__fish_seen_subcommand_from models; and __fish_seen_subcommand_from show'",
-      `-a '${MODELS_LIST_SOURCE}'`,
-    ]),
-  );
+  for (const [condition, source] of DYNAMIC_POSITIONAL_COMPLETIONS) {
+    lines.push(fishCompleteLine([condition, `-a '${source}'`]));
+  }
   lines.push(
     fishCompleteLine(['-l model', '-s m', '-r', `-a '${MODELS_LIST_SOURCE}'`]),
   );

@@ -26,17 +26,13 @@ export function clearStreamStatusForTest(
   machine: StreamStatusMachine,
   streamId: StreamTabId,
 ): void {
-  const state = internals(machine);
-  state.reservations.delete(streamId);
-  state.phases.delete(streamId);
+  machine.clearStream(streamId);
 }
 
 export function clearAllStreamStatusesForTest(
   machine: StreamStatusMachine,
 ): void {
-  const state = internals(machine);
-  state.reservations.clear();
-  state.phases.clear();
+  machine.clearAll();
 }
 
 export function seedStreamStatusForTest(

@@ -19,8 +19,7 @@ import type { GhUser } from './prTypes';
 export function shouldDropBotEvent(user: GhUser | null | undefined): boolean {
   if (!user) return false;
   if (user.type === 'Bot') return true;
-  // Catch CI-style logins that post as User but use the [bot] suffix.
-  const login = user.login;
-  if (typeof login === 'string' && login.endsWith('[bot]')) return true;
-  return false;
+  // Catch CI-style logins that post as User but use the [bot] suffix. The
+  // typeof guard holds because some callers hand us unvalidated payloads.
+  return typeof user.login === 'string' && user.login.endsWith('[bot]');
 }

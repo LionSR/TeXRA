@@ -139,12 +139,17 @@ const rawAgentSettingBaseFields = {
   internal: z.boolean().optional(),
 };
 
+/** Workflow-only settings, shared by the partial and root raw input schemas. */
+const rawWorkflowSettingFields = {
+  isRewrite: z.boolean().optional(),
+  rounds: z.int().positive().optional(),
+};
+
 /** Partial settings as they appear in YAML before inheritance and defaults. */
 const RawAgentSettingInputSchema = z.strictObject({
   ...rawAgentSettingBaseFields,
+  ...rawWorkflowSettingFields,
   agentCategory: AgentCategorySchema.optional(),
-  isRewrite: z.boolean().optional(),
-  rounds: z.int().positive().optional(),
 });
 
 /**
@@ -168,9 +173,8 @@ export const AgentRootSettingInputSchema = z.preprocess(
   z.discriminatedUnion('agentCategory', [
     z.strictObject({
       ...rawAgentSettingBaseFields,
+      ...rawWorkflowSettingFields,
       agentCategory: z.literal(AgentCategory.Workflow),
-      isRewrite: z.boolean().optional(),
-      rounds: z.int().positive().optional(),
     }),
     z.strictObject({
       ...rawAgentSettingBaseFields,

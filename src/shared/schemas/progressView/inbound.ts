@@ -34,6 +34,15 @@ function streamScopedCommand<T extends string>(command: T) {
   return StreamScopedBaseSchema.extend({ command: z.literal(command) });
 }
 
+/** File action carrying the output file and an optional diff base. */
+function fileWithBaseCommand<T extends string>(command: T) {
+  return z.object({
+    command: z.literal(command),
+    file: z.string().min(1),
+    base: z.string().min(1).optional(),
+  });
+}
+
 const ThemeSetMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.THEME_SET),
   theme: z.enum(['dark', 'light']),
@@ -245,35 +254,10 @@ const OpenFileCompileMessageSchema = z.object({
   file: z.string().min(1),
 });
 
-const CompareOriginalMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.COMPARE_ORIGINAL),
-  file: z.string().min(1),
-  base: z.string().min(1).optional(),
-});
-
-const ComparePreviousMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.COMPARE_PREVIOUS),
-  file: z.string().min(1),
-  base: z.string().min(1).optional(),
+const ComparePreviousMessageSchema = fileWithBaseCommand(
+  PROGRESS_VIEW_COMMANDS.COMPARE_PREVIOUS,
+).extend({
   prev: z.string().min(1).optional(),
-});
-
-const AcceptFileMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.ACCEPT_FILE),
-  file: z.string().min(1),
-  base: z.string().min(1).optional(),
-});
-
-const MergeFileMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.MERGE_FILE),
-  file: z.string().min(1),
-  base: z.string().min(1).optional(),
-});
-
-const LatexdiffFileMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.LATEXDIFF_FILE),
-  file: z.string().min(1),
-  base: z.string().min(1).optional(),
 });
 
 const OpenLabelMessageSchema = z.object({
@@ -339,11 +323,11 @@ export const ProgressViewInboundMessageSchema = z.discriminatedUnion(
     commandOnly(PROGRESS_VIEW_COMMANDS.OPEN_MEMORY_VIEW),
     OpenFileMessageSchema,
     OpenFileCompileMessageSchema,
-    CompareOriginalMessageSchema,
+    fileWithBaseCommand(PROGRESS_VIEW_COMMANDS.COMPARE_ORIGINAL),
     ComparePreviousMessageSchema,
-    AcceptFileMessageSchema,
-    MergeFileMessageSchema,
-    LatexdiffFileMessageSchema,
+    fileWithBaseCommand(PROGRESS_VIEW_COMMANDS.ACCEPT_FILE),
+    fileWithBaseCommand(PROGRESS_VIEW_COMMANDS.MERGE_FILE),
+    fileWithBaseCommand(PROGRESS_VIEW_COMMANDS.LATEXDIFF_FILE),
     OpenLabelMessageSchema,
     streamScopedCommand(PROGRESS_VIEW_COMMANDS.GET_FOLLOWUP_OPTIONS),
     SetupFollowupMessageSchema,

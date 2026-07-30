@@ -74,29 +74,22 @@ async function resolveDesktopResumeState(
 ): Promise<DesktopResumeState | undefined> {
   let runState = context.session.snapshots.getRunConfig(streamId);
   let executionId = context.session.snapshots.getExecutionId(streamId);
-  if (runState && executionId) {
-    const parentStreamId =
-      context.session.snapshots.getParentStreamId(streamId);
-    return {
-      runState,
-      executionId,
-      ...(parentStreamId !== undefined && { parentStreamId }),
-    };
+  if (!runState || !executionId) {
+    try {
+      await context.session.snapshots.preload([streamId]);
+    } catch (error) {
+      context.logger.warn(
+        `Failed to read persisted resume data for ${streamId}`,
+        { data: toLogData(error) },
+      );
+      return undefined;
+    }
+    runState = context.session.snapshots.getRunConfig(streamId);
+    executionId ??= context.session.snapshots.getExecutionId(streamId);
+    if (!runState || !context.session.transcripts.has(streamId)) {
+      return undefined;
+    }
   }
-
-  try {
-    await context.session.snapshots.preload([streamId]);
-  } catch (error) {
-    context.logger.warn(
-      `Failed to read persisted resume data for ${streamId}`,
-      { data: toLogData(error) },
-    );
-    return undefined;
-  }
-  runState = context.session.snapshots.getRunConfig(streamId);
-  executionId =
-    executionId ?? context.session.snapshots.getExecutionId(streamId);
-  if (!runState || !context.session.transcripts.has(streamId)) return undefined;
 
   const parentStreamId = context.session.snapshots.getParentStreamId(streamId);
   return {

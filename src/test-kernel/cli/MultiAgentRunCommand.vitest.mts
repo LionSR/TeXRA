@@ -114,10 +114,62 @@ const canAccessRemoteAgentCatalogSpy = vi.spyOn(
   'canAccessRemoteAgentCatalog',
 );
 
+const { runMultiAgentPreset } = await import('@cli/commands/multiAgent');
+const { loadCliMultiAgentPresetPlanSet, loadCliMultiAgentRunPlan } =
+  await import('@cli/runtime/multiAgentRunPlan');
+
+type MultiAgentRunInit = Parameters<typeof runMultiAgentPreset>[1];
+
+const ORCHESTRATOR_AGENT = {
+  name: 'orchestrator',
+  category: 'toolUse',
+  source: 'builtInToolUse',
+  path: '/agents/orchestrator.yaml',
+  tools: ['delegate_agent'],
+};
+
+interface TeamPlan {
+  readonly preset: { id: string; name: string; source: string };
+  readonly rootAgent?: typeof ORCHESTRATOR_AGENT;
+  readonly missingWorkflowAgents: string[];
+  readonly missingToolUseAgents: string[];
+  readonly workflowAgentKeys: string[];
+  readonly toolUseAgentKeys: string[];
+}
+
+function teamPlan(overrides: Partial<TeamPlan> = {}): TeamPlan {
+  return {
+    preset: {
+      id: 'mathematician',
+      name: 'Mathematician',
+      source: 'built-in',
+    },
+    rootAgent: ORCHESTRATOR_AGENT,
+    missingWorkflowAgents: [],
+    missingToolUseAgents: [],
+    workflowAgentKeys: [],
+    toolUseAgentKeys: ['builtInToolUse:orchestrator'],
+    ...overrides,
+  };
+}
+
 function cliContext(overrides: Partial<CliContext> = {}): CliContext {
   return createTestCliContext({
     renderRunProgress: true,
     ...overrides,
+  });
+}
+
+function runPreset(
+  init: Partial<MultiAgentRunInit> & Pick<MultiAgentRunInit, 'instruction'>,
+  context: CliContext = cliContext(),
+): Promise<number> {
+  return runMultiAgentPreset(context, {
+    preset: 'mathematician',
+    inputFiles: [],
+    contextFiles: [],
+    model: 'deepseekT',
+    ...init,
   });
 }
 
@@ -166,36 +218,9 @@ describe('CLI multi-agent run command', () => {
       ),
     );
     mocks.getAgentsByCategory.mockImplementation((category: string) =>
-      category === 'toolUse'
-        ? [
-            {
-              name: 'orchestrator',
-              category: 'toolUse',
-              source: 'builtInToolUse',
-              path: '/agents/orchestrator.yaml',
-              tools: ['delegate_agent'],
-            },
-          ]
-        : [],
+      category === 'toolUse' ? [ORCHESTRATOR_AGENT] : [],
     );
-    mocks.planCliMultiAgentPresetRun.mockReturnValue({
-      preset: {
-        id: 'mathematician',
-        name: 'Mathematician',
-        source: 'built-in',
-      },
-      rootAgent: {
-        name: 'orchestrator',
-        category: 'toolUse',
-        source: 'builtInToolUse',
-        path: '/agents/orchestrator.yaml',
-        tools: ['delegate_agent'],
-      },
-      missingWorkflowAgents: [],
-      missingToolUseAgents: [],
-      workflowAgentKeys: [],
-      toolUseAgentKeys: ['builtInToolUse:orchestrator'],
-    });
+    mocks.planCliMultiAgentPresetRun.mockReturnValue(teamPlan());
     isAuthenticatedSpy.mockResolvedValue(false);
     canAccessRemoteAgentCatalogSpy.mockResolvedValue(false);
     mocks.executeCliToolUseConfig.mockResolvedValue({
@@ -213,13 +238,8 @@ describe('CLI multi-agent run command', () => {
   });
 
   it('stops the headless team root after one cycle instead of waiting for a follow-up', async () => {
-    const { runMultiAgentPreset } = await import('@cli/commands/multiAgent');
-
-    const exitCode = await runMultiAgentPreset(cliContext(), {
-      preset: 'mathematician',
+    const exitCode = await runPreset({
       inputFiles: ['problem.tex'],
-      contextFiles: [],
-      model: 'deepseekT',
       instruction: 'Inspect the proof without editing files.',
     });
 
@@ -281,8 +301,6 @@ describe('CLI multi-agent run command', () => {
   });
 
   it('marks run-plan resolution when authenticated gaps triggered a remote load', async () => {
-    const { loadCliMultiAgentRunPlan } =
-      await import('@cli/runtime/multiAgentRunPlan');
     mocks.cliMultiAgentPlanHasGaps.mockReturnValueOnce(true);
     canAccessRemoteAgentCatalogSpy.mockResolvedValueOnce(true);
 
@@ -301,8 +319,6 @@ describe('CLI multi-agent run command', () => {
   });
 
   it('does not load remote agents for relay-token-only model authentication', async () => {
-    const { loadCliMultiAgentRunPlan } =
-      await import('@cli/runtime/multiAgentRunPlan');
     mocks.cliMultiAgentPlanHasGaps.mockReturnValueOnce(true);
     isAuthenticatedSpy.mockResolvedValueOnce(true);
     canAccessRemoteAgentCatalogSpy.mockResolvedValueOnce(false);
@@ -320,8 +336,6 @@ describe('CLI multi-agent run command', () => {
   });
 
   it('marks preset-list resolution when authenticated gaps triggered a remote load', async () => {
-    const { loadCliMultiAgentPresetPlanSet } =
-      await import('@cli/runtime/multiAgentRunPlan');
     mocks.cliMultiAgentPlanHasGaps.mockReturnValueOnce(true);
     canAccessRemoteAgentCatalogSpy.mockResolvedValueOnce(true);
 
@@ -352,13 +366,9 @@ describe('CLI multi-agent run command', () => {
       .mockReturnValueOnce(true)
       .mockReturnValueOnce(false);
     canAccessRemoteAgentCatalogSpy.mockResolvedValueOnce(true);
-    const { runMultiAgentPreset } = await import('@cli/commands/multiAgent');
 
-    const exitCode = await runMultiAgentPreset(cliContext(), {
-      preset: 'mathematician',
+    const exitCode = await runPreset({
       inputFiles: ['problem.tex'],
-      contextFiles: [],
-      model: 'deepseekT',
       instruction: 'Solve the problem with the team.',
     });
 
@@ -370,13 +380,8 @@ describe('CLI multi-agent run command', () => {
   });
 
   it('warns when approval policy never blocks team delegation', async () => {
-    const { runMultiAgentPreset } = await import('@cli/commands/multiAgent');
-
-    const exitCode = await runMultiAgentPreset(cliContext(), {
-      preset: 'mathematician',
+    const exitCode = await runPreset({
       inputFiles: ['problem.tex'],
-      contextFiles: [],
-      model: 'deepseekT',
       instruction: 'Solve the problem with the team.',
     });
 
@@ -387,17 +392,12 @@ describe('CLI multi-agent run command', () => {
   });
 
   it('refuses headless ask before launching a team run', async () => {
-    const { runMultiAgentPreset } = await import('@cli/commands/multiAgent');
-
-    const exitCode = await runMultiAgentPreset(
-      cliContext({ approvalPolicy: 'ask' }),
+    const exitCode = await runPreset(
       {
-        preset: 'mathematician',
         inputFiles: ['problem.tex'],
-        contextFiles: [],
-        model: 'deepseekT',
         instruction: 'Solve the problem with the team.',
       },
+      cliContext({ approvalPolicy: 'ask' }),
     );
 
     expect(exitCode).toBe(2);
@@ -410,17 +410,12 @@ describe('CLI multi-agent run command', () => {
   });
 
   it('does not warn when yolo can auto-approve delegation', async () => {
-    const { runMultiAgentPreset } = await import('@cli/commands/multiAgent');
-
-    const exitCode = await runMultiAgentPreset(
-      cliContext({ approvalPolicy: 'yolo' }),
+    const exitCode = await runPreset(
       {
-        preset: 'mathematician',
         inputFiles: ['problem.tex'],
-        contextFiles: [],
-        model: 'deepseekT',
         instruction: 'Solve the problem with the team.',
       },
+      cliContext({ approvalPolicy: 'yolo' }),
     );
 
     expect(exitCode).toBe(0);
@@ -434,13 +429,8 @@ describe('CLI multi-agent run command', () => {
       inputFiles: [],
       contextFiles: [],
     });
-    const { runMultiAgentPreset } = await import('@cli/commands/multiAgent');
 
-    const exitCode = await runMultiAgentPreset(cliContext(), {
-      preset: 'mathematician',
-      inputFiles: [],
-      contextFiles: [],
-      model: 'deepseekT',
+    const exitCode = await runPreset({
       instruction: 'Prove that every odd square is congruent to 1 modulo 8.',
     });
 
@@ -475,16 +465,14 @@ describe('CLI multi-agent run command', () => {
         path.join(root, 'prompt.txt'),
         'Read the prompt from disk.\n',
       );
-      const { runMultiAgentPreset } = await import('@cli/commands/multiAgent');
 
-      const exitCode = await runMultiAgentPreset(cliContext({ cwd: root }), {
-        preset: 'mathematician',
-        inputFiles: [],
-        contextFiles: [],
-        model: 'deepseekT',
-        instruction: 'Then summarize the plan.',
-        instructionFile: 'prompt.txt',
-      });
+      const exitCode = await runPreset(
+        {
+          instruction: 'Then summarize the plan.',
+          instructionFile: 'prompt.txt',
+        },
+        cliContext({ cwd: root }),
+      );
 
       expect(exitCode).toBe(0);
       expect(mocks.withExpandedRunInputs).toHaveBeenCalledWith(
@@ -510,14 +498,8 @@ describe('CLI multi-agent run command', () => {
   });
 
   it('reports missing instruction files before expanding inputs', async () => {
-    const { runMultiAgentPreset } = await import('@cli/commands/multiAgent');
-
     await expect(
-      runMultiAgentPreset(cliContext(), {
-        preset: 'mathematician',
-        inputFiles: [],
-        contextFiles: [],
-        model: 'deepseekT',
+      runPreset({
         instruction: '',
         instructionFile: 'missing-prompt.txt',
       }),
@@ -528,35 +510,19 @@ describe('CLI multi-agent run command', () => {
   });
 
   it('still requires an input file or instruction text', async () => {
-    const { runMultiAgentPreset } = await import('@cli/commands/multiAgent');
-
-    await expect(
-      runMultiAgentPreset(cliContext(), {
-        preset: 'mathematician',
-        inputFiles: [],
-        contextFiles: [],
-        model: 'deepseekT',
-        instruction: '',
-      }),
-    ).rejects.toThrow(
+    await expect(runPreset({ instruction: '' })).rejects.toThrow(
       /Provide --input, --instruction, or --instruction-file for the team task\. Example: texra multi-agent run physicist --instruction "Check this derivation"/,
     );
     expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
   });
 
   it('refuses built-in presets without a runnable root agent', async () => {
-    const plan = {
-      preset: {
-        id: 'mathematician',
-        name: 'Mathematician',
-        source: 'built-in',
-      },
+    const plan = teamPlan({
       rootAgent: undefined,
       missingWorkflowAgents: ['generic', 'devise', 'apply'],
       missingToolUseAgents: ['simplifier', 'progressCheck', 'orchestrator'],
-      workflowAgentKeys: [],
       toolUseAgentKeys: ['builtInToolUse:lean'],
-    };
+    });
     const message =
       'Multi-agent preset "mathematician" cannot start as a team: no runnable team root. Run `texra multi-agent show mathematician` to see missing agents. Install or sign in for a runnable team root before launching this preset.';
     mocks.cliMultiAgentPresetCanLaunchTeam.mockReturnValueOnce(false);
@@ -564,13 +530,8 @@ describe('CLI multi-agent run command', () => {
       message,
     );
     mocks.planCliMultiAgentPresetRun.mockReturnValue(plan);
-    const { runMultiAgentPreset } = await import('@cli/commands/multiAgent');
 
-    const exitCode = await runMultiAgentPreset(cliContext(), {
-      preset: 'mathematician',
-      inputFiles: [],
-      contextFiles: [],
-      model: 'deepseekT',
+    const exitCode = await runPreset({
       instruction: 'Solve a short math problem.',
     });
 
@@ -593,31 +554,15 @@ describe('CLI multi-agent run command', () => {
     const warning =
       'WARN preset mathematician is degraded; running root agent orchestrator with 1 available team agent.';
     mocks.formatCliMultiAgentPresetRunWarnings.mockReturnValueOnce([warning]);
-    mocks.planCliMultiAgentPresetRun.mockReturnValue({
-      preset: {
-        id: 'mathematician',
-        name: 'Mathematician',
-        source: 'built-in',
-      },
-      rootAgent: {
-        name: 'orchestrator',
-        category: 'toolUse',
-        source: 'builtInToolUse',
-        path: '/agents/orchestrator.yaml',
-        tools: ['delegate_agent'],
-      },
-      missingWorkflowAgents: ['generic'],
-      missingToolUseAgents: ['simplifier'],
-      workflowAgentKeys: ['builtIn:devise'],
-      toolUseAgentKeys: ['builtInToolUse:orchestrator'],
-    });
-    const { runMultiAgentPreset } = await import('@cli/commands/multiAgent');
+    mocks.planCliMultiAgentPresetRun.mockReturnValue(
+      teamPlan({
+        missingWorkflowAgents: ['generic'],
+        missingToolUseAgents: ['simplifier'],
+        workflowAgentKeys: ['builtIn:devise'],
+      }),
+    );
 
-    const exitCode = await runMultiAgentPreset(cliContext(), {
-      preset: 'mathematician',
-      inputFiles: [],
-      contextFiles: [],
-      model: 'deepseekT',
+    const exitCode = await runPreset({
       instruction: 'Solve a short math problem.',
     });
 
@@ -626,24 +571,10 @@ describe('CLI multi-agent run command', () => {
   });
 
   it('refuses a delegating root with no available team members', async () => {
-    const plan = {
-      preset: {
-        id: 'mathematician',
-        name: 'Mathematician',
-        source: 'built-in',
-      },
-      rootAgent: {
-        name: 'orchestrator',
-        category: 'toolUse',
-        source: 'builtInToolUse',
-        path: '/agents/orchestrator.yaml',
-        tools: ['delegate_agent'],
-      },
+    const plan = teamPlan({
       missingWorkflowAgents: ['generic'],
       missingToolUseAgents: ['simplifier'],
-      workflowAgentKeys: [],
-      toolUseAgentKeys: ['builtInToolUse:orchestrator'],
-    };
+    });
     const message =
       'Multi-agent preset "mathematician" cannot start as a team: no available team members. Run `texra multi-agent show mathematician` to see missing agents. Start a single-agent chat with `texra chat --agent orchestrator` if that is what you want.';
     mocks.cliMultiAgentPresetCanLaunchTeam.mockReturnValueOnce(false);
@@ -651,13 +582,8 @@ describe('CLI multi-agent run command', () => {
       message,
     );
     mocks.planCliMultiAgentPresetRun.mockReturnValue(plan);
-    const { runMultiAgentPreset } = await import('@cli/commands/multiAgent');
 
-    const exitCode = await runMultiAgentPreset(cliContext(), {
-      preset: 'mathematician',
-      inputFiles: [],
-      contextFiles: [],
-      model: 'deepseekT',
+    const exitCode = await runPreset({
       instruction: 'Solve a short math problem.',
     });
 

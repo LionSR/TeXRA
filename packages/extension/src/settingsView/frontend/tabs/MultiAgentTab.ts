@@ -317,6 +317,28 @@ export class MultiAgentTab extends LitElement {
     `;
   }
 
+  private renderToggleRow(opts: {
+    label: string;
+    description: string;
+    checked: boolean;
+    onChange: (event: Event) => void;
+  }): TemplateResult {
+    return html`
+      <div class="settings-row">
+        <div class="settings-row-text">
+          <span class="settings-row-label">${opts.label}</span>
+          <span class="settings-row-help">${opts.description}</span>
+        </div>
+        <wa-switch
+          class="settings-row-control"
+          aria-label=${opts.label}
+          ?checked=${opts.checked}
+          @change=${opts.onChange}
+        ></wa-switch>
+      </div>
+    `;
+  }
+
   override render(): TemplateResult {
     return html`
       <div class="multi-agent-container tab-content-container">
@@ -344,68 +366,39 @@ export class MultiAgentTab extends LitElement {
         })}
 
         <div class="settings-section">
-          <div class="settings-row">
-            <div class="settings-row-text">
-              <span class="settings-row-label">
-                Let orchestrator stop agents early
-              </span>
-              <span class="settings-row-help">
-                The orchestrator can cancel agents that are stuck or no longer
-                needed. Turn this off if you want every agent to finish.
-              </span>
-            </div>
-            <wa-switch
-              class="settings-row-control"
-              aria-label="Let orchestrator stop agents early"
-              ?checked=${this.allowOrchestratorKill}
-              @change=${(e: Event) =>
-                this.postToggle(
-                  SETTINGS_VIEW_COMMANDS.SET_ALLOW_ORCHESTRATOR_KILL,
-                  e,
-                )}
-            ></wa-switch>
-          </div>
-          <div class="settings-row">
-            <div class="settings-row-text">
-              <span class="settings-row-label">
-                Keep agents running after I stop the orchestrator
-              </span>
-              <span class="settings-row-help">
-                Let agents that are already mid-task finish independently.
-              </span>
-            </div>
-            <wa-switch
-              class="settings-row-control"
-              aria-label="Keep agents running after I stop the orchestrator"
-              ?checked=${this.detachSubagentsOnStop}
-              @change=${(e: Event) =>
-                this.postToggle(
-                  SETTINGS_VIEW_COMMANDS.SET_DETACH_SUBAGENTS_ON_STOP,
-                  e,
-                )}
-            ></wa-switch>
-          </div>
-          <div class="settings-row">
-            <div class="settings-row-text">
-              <span class="settings-row-label">
-                Allow agents to work in git worktrees
-              </span>
-              <span class="settings-row-help">
-                Delegated agents can use isolated worktrees, with every tool
-                call rooted in that worktree.
-              </span>
-            </div>
-            <wa-switch
-              class="settings-row-control"
-              aria-label="Allow agents to work in git worktrees"
-              ?checked=${this.worktreeSupport}
-              @change=${(e: Event) =>
-                postMessage(SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING, {
-                  key: WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
-                  value: Boolean((e.target as WaSwitch | null)?.checked),
-                })}
-            ></wa-switch>
-          </div>
+          ${this.renderToggleRow({
+            label: 'Let orchestrator stop agents early',
+            description:
+              'The orchestrator can cancel agents that are stuck or no longer needed. Turn this off if you want every agent to finish.',
+            checked: this.allowOrchestratorKill,
+            onChange: (e) =>
+              this.postToggle(
+                SETTINGS_VIEW_COMMANDS.SET_ALLOW_ORCHESTRATOR_KILL,
+                e,
+              ),
+          })}
+          ${this.renderToggleRow({
+            label: 'Keep agents running after I stop the orchestrator',
+            description:
+              'Let agents that are already mid-task finish independently.',
+            checked: this.detachSubagentsOnStop,
+            onChange: (e) =>
+              this.postToggle(
+                SETTINGS_VIEW_COMMANDS.SET_DETACH_SUBAGENTS_ON_STOP,
+                e,
+              ),
+          })}
+          ${this.renderToggleRow({
+            label: 'Allow agents to work in git worktrees',
+            description:
+              'Delegated agents can use isolated worktrees, with every tool call rooted in that worktree.',
+            checked: this.worktreeSupport,
+            onChange: (e) =>
+              postMessage(SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING, {
+                key: WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
+                value: Boolean((e.target as WaSwitch | null)?.checked),
+              }),
+          })}
         </div>
       </div>
     `;

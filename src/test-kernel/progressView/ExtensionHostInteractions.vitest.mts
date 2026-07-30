@@ -1,5 +1,4 @@
-// Test support imports
-
+// Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 

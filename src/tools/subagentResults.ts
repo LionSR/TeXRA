@@ -93,49 +93,23 @@ function formatWorkflowOutputs(
   executionId: ExecutionId,
   diffInfos?: ReadonlyMap<string, ResultDiffSummary>,
 ): string[] {
-  const rounds = new Set(outputs.map((o) => o.round));
-  if (rounds.size <= 1) {
-    return [
-      '<output-files>',
-      ...outputs.map((o) =>
-        formatOutputFile(o, executionId, diffInfos?.get(o.absolutePath)),
-      ),
-      '</output-files>',
-    ];
+  const format = (o: OutputFileSummary): string =>
+    formatOutputFile(o, executionId, diffInfos?.get(o.absolutePath));
+  const rounds = [...new Set(outputs.map((o) => o.round))].sort(
+    (a, b) => a - b,
+  );
+  if (rounds.length <= 1) {
+    return ['<output-files>', ...outputs.map(format), '</output-files>'];
   }
   // Multiple rounds — group files under <round> tags
-  const lines: string[] = ['<output-files>'];
-  for (const round of [...rounds].sort((a, b) => a - b)) {
-    const roundFiles = outputs.filter((o) => o.round === round);
-    lines.push(`<round number="${round}">`);
-    lines.push(
-      ...roundFiles.map((o) =>
-        formatOutputFile(o, executionId, diffInfos?.get(o.absolutePath)),
-      ),
-    );
-    lines.push('</round>');
-  }
-  lines.push('</output-files>');
-  return lines;
-}
-
-function workingDirectoryElement(value: string | undefined): string | null {
-  return value
-    ? `<working-directory>${escapeText(value)}</working-directory>`
-    : null;
-}
-
-function formatMemoryMisses(
-  misses: readonly AttachedMemoryMiss[] = [],
-): string[] {
-  if (misses.length === 0) return [];
   return [
-    '<memory-misses>',
-    ...misses.map(
-      (miss) =>
-        `<memory-miss path="${escapeAttr(miss.path)}" reason="${escapeAttr(miss.reason)}" />`,
-    ),
-    '</memory-misses>',
+    '<output-files>',
+    ...rounds.flatMap((round) => [
+      `<round number="${round}">`,
+      ...outputs.filter((o) => o.round === round).map(format),
+      '</round>',
+    ]),
+    '</output-files>',
   ];
 }
 
@@ -149,9 +123,22 @@ function formatDeliveryPreamble(options: {
   memoryMisses?: readonly AttachedMemoryMiss[];
 }): string[] {
   const lines: string[] = [];
-  const wdElement = workingDirectoryElement(options.workingDirectory);
-  if (wdElement) lines.push(wdElement);
-  lines.push(...formatMemoryMisses(options.memoryMisses));
+  if (options.workingDirectory) {
+    lines.push(
+      `<working-directory>${escapeText(options.workingDirectory)}</working-directory>`,
+    );
+  }
+  const misses = options.memoryMisses ?? [];
+  if (misses.length > 0) {
+    lines.push(
+      '<memory-misses>',
+      ...misses.map(
+        (miss) =>
+          `<memory-miss path="${escapeAttr(miss.path)}" reason="${escapeAttr(miss.reason)}" />`,
+      ),
+      '</memory-misses>',
+    );
+  }
   return lines;
 }
 
@@ -392,39 +379,30 @@ export function formatBashDelivery(
   stdout: BashDeliveryStreamExcerpt,
   stderr: BashDeliveryStreamExcerpt,
 ): string {
-  const outputHead = stdout.head ?? '';
-  const stderrHead = stderr.head ?? '';
-  const outputElidedChars = stdout.elidedChars ?? 0;
-  const stderrElidedChars = stderr.elidedChars ?? 0;
-  const stdoutPreview = lastNLines(stdout.tail, OUTPUT_PREVIEW_LINES);
-  const stderrPreview = lastNLines(stderr.tail, OUTPUT_PREVIEW_LINES);
   const tag = DELIVERY_TAG.backgroundResult;
   const lines = [
     `<${tag} id="${escapeAttr(executionId)}" command="${escapeAttr(command)}">`,
     `<exit-code>${result.exitCode ?? 'unknown'}</exit-code>`,
     `<wall-time>${formatDuration(wallTimeMs)}</wall-time>`,
   ];
-  if (outputHead) {
-    lines.push(`<output-head>${escapeText(outputHead)}</output-head>`);
-    if (outputElidedChars > 0) {
-      lines.push(
-        `<output-elided>${outputElidedChars.toLocaleString()} characters elided</output-elided>`,
-      );
+  const streams = [
+    ['output', stdout],
+    ['stderr', stderr],
+  ] as const;
+  for (const [name, excerpt] of streams) {
+    const elidedChars = excerpt.elidedChars ?? 0;
+    if (excerpt.head) {
+      lines.push(`<${name}-head>${escapeText(excerpt.head)}</${name}-head>`);
+      if (elidedChars > 0) {
+        lines.push(
+          `<${name}-elided>${elidedChars.toLocaleString()} characters elided</${name}-elided>`,
+        );
+      }
     }
-  }
-  if (stdoutPreview) {
-    lines.push(`<output-preview>${escapeText(stdoutPreview)}</output-preview>`);
-  }
-  if (stderrHead) {
-    lines.push(`<stderr-head>${escapeText(stderrHead)}</stderr-head>`);
-    if (stderrElidedChars > 0) {
-      lines.push(
-        `<stderr-elided>${stderrElidedChars.toLocaleString()} characters elided</stderr-elided>`,
-      );
+    const preview = lastNLines(excerpt.tail, OUTPUT_PREVIEW_LINES);
+    if (preview) {
+      lines.push(`<${name}-preview>${escapeText(preview)}</${name}-preview>`);
     }
-  }
-  if (stderrPreview) {
-    lines.push(`<stderr-preview>${escapeText(stderrPreview)}</stderr-preview>`);
   }
   lines.push(`</${tag}>`);
   return lines.join('\n');

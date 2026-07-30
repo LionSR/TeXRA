@@ -95,28 +95,9 @@ export async function deriveResumability(
   executionId: ExecutionId,
 ): Promise<ResumabilityDecision> {
   const store = getExecutionStore(executionId);
-  let meta: ExecutionMeta | null;
+  let rawMeta: unknown;
   try {
-    const rawMeta = await store.read('meta');
-    if (rawMeta == null) {
-      meta = null;
-    } else {
-      const metaResult = ExecutionMetaSchema.safeParse(rawMeta);
-      if (!metaResult.success) {
-        logger.debug(
-          CHANNEL,
-          `Invalid execution metadata for ${executionId}: ${toErrorMessage(
-            metaResult.error,
-          )}`,
-          { data: metaResult.error },
-        );
-        return {
-          resumable: false,
-          cause: RESUMABILITY_CAUSE.INVALID_META,
-        };
-      }
-      meta = metaResult.data;
-    }
+    rawMeta = await store.read('meta');
   } catch (error) {
     logger.debug(
       CHANNEL,
@@ -128,6 +109,25 @@ export async function deriveResumability(
       resumable: false,
       cause: RESUMABILITY_CAUSE.UNREADABLE_META,
     };
+  }
+
+  let meta: ExecutionMeta | null = null;
+  if (rawMeta != null) {
+    const metaResult = ExecutionMetaSchema.safeParse(rawMeta);
+    if (!metaResult.success) {
+      logger.debug(
+        CHANNEL,
+        `Invalid execution metadata for ${executionId}: ${toErrorMessage(
+          metaResult.error,
+        )}`,
+        { data: metaResult.error },
+      );
+      return {
+        resumable: false,
+        cause: RESUMABILITY_CAUSE.INVALID_META,
+      };
+    }
+    meta = metaResult.data;
   }
 
   const metaFields = {

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { BaseNode, Node } from '@agent/node';
 import * as logger from '@logger/logUtils';
@@ -6,6 +6,12 @@ import * as logger from '@logger/logUtils';
 class TestNode extends BaseNode<Record<string, never>> {}
 
 describe('BaseNode.getNextNode', () => {
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -13,7 +19,6 @@ describe('BaseNode.getNextNode', () => {
   it.each(['complete', 'finalize'] as const)(
     "returns undefined silently for the terminal action '%s' when unregistered",
     (action) => {
-      const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
       const node = new TestNode();
       // Register an unrelated successor so `_successors.size > 0`, which is
       // the branch that would otherwise trigger the "Flow ends" warning.
@@ -25,7 +30,6 @@ describe('BaseNode.getNextNode', () => {
   );
 
   it('warns when a non-terminal unregistered action falls through', () => {
-    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
     const node = new TestNode();
     node.on('default', new TestNode());
 
@@ -39,7 +43,6 @@ describe('BaseNode.getNextNode', () => {
   });
 
   it('does not warn when no successors are registered at all', () => {
-    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
     const node = new TestNode();
 
     expect(node.getNextNode('anything')).toBeUndefined();

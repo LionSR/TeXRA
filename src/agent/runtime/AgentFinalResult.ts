@@ -70,14 +70,6 @@ type ToolUseFinalTextFieldsSource = {
   readonly touchedFiles?: readonly string[];
 };
 
-/** First defined array among `arrays`, shallow-copied. */
-function firstDefinedArray(
-  ...arrays: readonly (readonly string[] | undefined)[]
-): string[] | undefined {
-  const first = arrays.find((array) => array !== undefined);
-  return first ? [...first] : undefined;
-}
-
 /**
  * Single source of truth for the ToolUse `AgentFlowResult` -> `AgentFinalResult`
  * field rename (`lastResponse` -> `response`, `touchedFiles` -> `files`),
@@ -91,10 +83,13 @@ export function projectToolUseFinalTextFields(
     ToolUseFinalTextFieldsSource | undefined
   )[]
 ): { response?: string; files?: string[] } {
-  const projected = sourcesInPriorityOrder.map((source) => ({
-    response: source?.response ?? source?.lastResponse,
-    files: firstDefinedArray(source?.files, source?.touchedFiles),
-  }));
+  const projected = sourcesInPriorityOrder.map((source) => {
+    const files = source?.files ?? source?.touchedFiles;
+    return {
+      response: source?.response ?? source?.lastResponse,
+      files: files ? [...files] : undefined,
+    };
+  });
   return {
     response: projected.find((p) => p.response !== undefined)?.response,
     files: projected.find((p) => p.files !== undefined)?.files,

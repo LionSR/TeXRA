@@ -24,6 +24,8 @@ type InteractionPredicate<T> = (
   cancellationScope: object | undefined,
 ) => boolean;
 
+const REPLACED_CAUSE = 'Approval request was replaced.';
+
 /**
  * Owns the complete lifecycle of one progress-view request kind: payload,
  * delivery state, replay, optional response callback, cancellation metadata,
@@ -48,15 +50,8 @@ export class ApprovalRequestHandler<
   /** Present an item that has no response-bearing promise. */
   show(item: T): void {
     const id = this.idFor(item);
-    this.removeExisting(id, 'Approval request was replaced.');
-    const entry: PendingPresentation<T> = { mode: 'presentation', item };
-    this.pending.set(id, entry);
-    try {
-      this.deliver(id, entry);
-    } catch (error) {
-      this.removeEntry(id, entry, false);
-      throw error;
-    }
+    this.removeExisting(id, REPLACED_CAUSE);
+    this.register(id, { mode: 'presentation', item });
   }
 
   /** Present an item and retain its typed completion callback beside it. */
@@ -65,21 +60,18 @@ export class ApprovalRequestHandler<
     options: ApprovalInteractionOptions<Result>,
   ): Promise<Result> {
     const id = this.idFor(item);
-    this.removeExisting(id, 'Approval request was replaced.');
+    this.removeExisting(id, REPLACED_CAUSE);
 
     return new Promise<Result>((complete, reject) => {
-      const entry: PendingInteraction<T, Result> = {
-        mode: 'interaction',
-        item,
-        cancellationScope: options.cancellationScope,
-        cancellationResult: options.cancellationResult,
-        complete,
-      };
-      this.pending.set(id, entry);
       try {
-        this.deliver(id, entry);
+        this.register(id, {
+          mode: 'interaction',
+          item,
+          cancellationScope: options.cancellationScope,
+          cancellationResult: options.cancellationResult,
+          complete,
+        });
       } catch (error) {
-        this.removeEntry(id, entry, false);
         reject(error);
       }
     });
@@ -93,7 +85,7 @@ export class ApprovalRequestHandler<
       this.completeEntry(
         id,
         existing,
-        existing.cancellationResult('Approval request was replaced.'),
+        existing.cancellationResult(REPLACED_CAUSE),
         false,
       );
     }
@@ -194,6 +186,17 @@ export class ApprovalRequestHandler<
 
   private idFor(item: T): string {
     return String(item[this.idField]);
+  }
+
+  /** Track an entry and deliver it, rolling the entry back if delivery throws. */
+  private register(id: string, entry: PendingRequest<T, Result>): void {
+    this.pending.set(id, entry);
+    try {
+      this.deliver(id, entry);
+    } catch (error) {
+      this.removeEntry(id, entry, false);
+      throw error;
+    }
   }
 
   private deliver(id: string, entry: PendingRequest<T, Result>): void {

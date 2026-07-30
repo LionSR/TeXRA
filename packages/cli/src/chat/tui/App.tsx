@@ -210,28 +210,17 @@ export function App(props: AppProps): React.JSX.Element {
     ? 'Session selection active.'
     : childInputDisabledMessage;
   const inputDisabled = appInputDisabled || inputDisabledMessage !== undefined;
-  const escapeInterruptStateRef = useRef<EscapeInterruptState>({
+  const escapeInterruptState: EscapeInterruptState = {
     inputDisabled: appInputDisabled,
     reverseSearchOpen,
     slashPaletteOpen,
     canInterruptStream: props.canInterruptStream,
     onInterruptStream: props.onInterruptStream,
-  });
+  };
+  const escapeInterruptStateRef = useRef(escapeInterruptState);
   useLayoutEffect(() => {
-    escapeInterruptStateRef.current = {
-      inputDisabled: appInputDisabled,
-      reverseSearchOpen,
-      slashPaletteOpen,
-      canInterruptStream: props.canInterruptStream,
-      onInterruptStream: props.onInterruptStream,
-    };
-  }, [
-    appInputDisabled,
-    props.canInterruptStream,
-    props.onInterruptStream,
-    reverseSearchOpen,
-    slashPaletteOpen,
-  ]);
+    escapeInterruptStateRef.current = escapeInterruptState;
+  });
   const inputBarVisible = !foregroundOpen;
 
   // Under the Kitty disambiguate flag (enabled in runChatTui for Shift+Enter),
@@ -447,9 +436,9 @@ export function App(props: AppProps): React.JSX.Element {
   const inputBarRef = useRef<InputBarHandle>(null);
 
   const clearPendingEscapeInterrupt = () => {
-    const pending = pendingEscapeInterrupt.current;
-    if (pending === undefined) return;
-    clearTimeout(pending.timer);
+    const scheduled = pendingEscapeInterrupt.current;
+    if (scheduled === undefined) return;
+    clearTimeout(scheduled.timer);
     pendingEscapeInterrupt.current = undefined;
   };
 

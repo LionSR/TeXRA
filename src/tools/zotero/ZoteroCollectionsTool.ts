@@ -79,11 +79,6 @@ function buildTree(collections: BbtCollection[]): CollectionNode[] {
   return roots;
 }
 
-/** Count all nodes in a collection tree (including nested children). */
-function countNodes(nodes: CollectionNode[]): number {
-  return nodes.reduce((sum, node) => sum + 1 + countNodes(node.children), 0);
-}
-
 /**
  * Format a collection tree as indented text with keys.
  * Uses prefix-passing to correctly indent arbitrarily deep trees.
@@ -208,7 +203,7 @@ export class ZoteroCollectionsTool extends defineTool({
       const tree = displayTree?.tree ?? fullTree;
       if (tree.length === 0) continue;
 
-      totalCollections += displayTree?.matchCount ?? countNodes(fullTree);
+      totalCollections += displayTree?.matchCount ?? collections.length;
       librariesWithResults++;
       outputParts.push(`Library: ${lib.name}`);
       outputParts.push(...formatTree(tree));

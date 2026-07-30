@@ -1,6 +1,4 @@
 // Test composition imports
-
-// Local imports
 import '@test/support/defaultSessionTestSetup';
 
 // Node imports
@@ -16,7 +14,6 @@ import { installPlatform } from '@test/support/setupPlatform';
 import { SendToTerminalTool } from '@tools/setup/SendToTerminalTool';
 import {
   setSetupPlatform,
-  type SetupPlatform,
   type TerminalRunResult,
 } from '@tools/setup/platform';
 
@@ -53,31 +50,24 @@ interface RunRecord {
   timeoutMs: number;
 }
 
-function createPlatform(
+function setupTool(
   result: TerminalRunResult = {
     exitCode: 0,
     output: 'installed perl 5.38.2\n',
     timedOut: false,
   },
-): { platform: SetupPlatform; runs: RunRecord[] } {
+): { tool: SendToTerminalTool; runs: RunRecord[] } {
   const runs: RunRecord[] = [];
-  const platform = createFakeSetupPlatform({
-    terminal: {
-      async runCommand(args) {
-        runs.push(args);
-        return result;
+  setSetupPlatform(
+    createFakeSetupPlatform({
+      terminal: {
+        async runCommand(args) {
+          runs.push(args);
+          return result;
+        },
       },
-    },
-  });
-  return { platform, runs };
-}
-
-function setupTool(result?: TerminalRunResult): {
-  tool: SendToTerminalTool;
-  runs: RunRecord[];
-} {
-  const { platform, runs } = createPlatform(result);
-  setSetupPlatform(platform);
+    }),
+  );
   return { tool: new SendToTerminalTool(), runs };
 }
 

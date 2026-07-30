@@ -44,29 +44,22 @@ export function createFileMapping(
     let bestMatchScore = 0;
 
     for (const sourceFile of sourceFiles) {
-      if (!sourceFile) {
-        continue;
-      }
-
       const sourcePath = getComparablePath(sourceFile);
-      const sourceBaseName = path.basename(sourcePath);
-      const sourceName = path.parse(sourceBaseName).name;
+      const sourceName = path.parse(path.basename(sourcePath)).name;
       const sourceNameNormalized = roundAware
         ? sourceName.split('_r')[0]
         : sourceName;
 
-      let isMatch = false;
       let matchScore = 0;
-
       if (matchStrategy === 'basename') {
-        isMatch = sourceNameNormalized === targetNameNormalized;
-        matchScore = isMatch ? sourceNameNormalized.length : 0;
-      } else if (matchStrategy === 'contains') {
-        isMatch = targetBaseName.includes(sourceName);
-        matchScore = isMatch ? sourceName.length : 0;
+        if (sourceNameNormalized === targetNameNormalized) {
+          matchScore = sourceNameNormalized.length;
+        }
+      } else if (targetBaseName.includes(sourceName)) {
+        matchScore = sourceName.length;
       }
 
-      if (isMatch && matchScore > bestMatchScore) {
+      if (matchScore > bestMatchScore) {
         bestMatchScore = matchScore;
         bestMatchSourcePath = sourcePath;
       }
@@ -117,9 +110,7 @@ export async function replaceInputCommands(
 
   // Build replacement lookup: generates all path suffix variants for flexible matching
   const replacementLookup = new Map<string, string>();
-  for (const [baseFile, outputLoc] of baseToOutputMap.entries()) {
-    if (!baseFile || !outputLoc) continue;
-
+  for (const [baseFile, outputLoc] of baseToOutputMap) {
     const outputFile = getComparablePath(outputLoc);
     const baseSegments = getPathSegments(baseFile);
     const outputSegments = getPathSegments(outputFile);
@@ -166,18 +157,10 @@ export async function replaceInputCommands(
         /\\input{([^}]+)}/g,
         (match, rawPath) => {
           const normalizedPath = normalizeLatexPath(rawPath);
-
-          if (!normalizedPath) {
-            return match;
-          }
-
-          const replacement = replacementLookup.get(normalizedPath);
-
-          if (replacement) {
-            return `\\input{${replacement}}`;
-          }
-
-          return match;
+          const replacement = normalizedPath
+            ? replacementLookup.get(normalizedPath)
+            : undefined;
+          return replacement ? `\\input{${replacement}}` : match;
         },
       );
 

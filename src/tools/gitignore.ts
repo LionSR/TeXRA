@@ -60,21 +60,13 @@ async function readWorkspaceGitignore(
   );
 }
 
-async function readAbsoluteGitignore(
-  absolutePath: string,
-): Promise<GitignoreSource | null> {
-  return readGitignoreFile(absolutePath, () => AbsoluteFS.read(absolutePath));
-}
-
-async function readGlobalGitignore(): Promise<GitignoreSource[]> {
+async function readGlobalGitignore(): Promise<GitignoreSource | null> {
   const homeDirectory = safeHomedir();
   if (!homeDirectory) {
-    return [];
+    return null;
   }
-  const source = await readAbsoluteGitignore(
-    path.join(homeDirectory, '.gitignore_global'),
-  );
-  return source ? [source] : [];
+  const absolutePath = path.join(homeDirectory, '.gitignore_global');
+  return readGitignoreFile(absolutePath, () => AbsoluteFS.read(absolutePath));
 }
 
 async function loadGitignoreMatcher(): Promise<GitignoreMatcher> {
@@ -83,18 +75,13 @@ async function loadGitignoreMatcher(): Promise<GitignoreMatcher> {
     return EMPTY_GITIGNORE_MATCHER;
   }
 
-  const [globalSources, workspaceGlobalSource, workspaceSource] =
+  const sources = (
     await Promise.all([
       readGlobalGitignore(),
       readWorkspaceGitignore('.gitignore_global'),
       readWorkspaceGitignore('.gitignore'),
-    ]);
-
-  const sources = [
-    ...globalSources,
-    workspaceGlobalSource,
-    workspaceSource,
-  ].filter(filterNotNull);
+    ])
+  ).filter(filterNotNull);
 
   if (sources.length === 0) {
     return EMPTY_GITIGNORE_MATCHER;

@@ -18,7 +18,7 @@ import {
 
 export type { ApiProvider };
 
-export interface ApiProviderQuickPickItem extends vscode.QuickPickItem {
+interface ApiProviderQuickPickItem extends vscode.QuickPickItem {
   provider: ApiProvider;
 }
 
@@ -70,7 +70,7 @@ export class SecretManager {
     );
   }
 
-  public static async apiKeyExists(provider: ApiProvider): Promise<boolean> {
+  private static async apiKeyExists(provider: ApiProvider): Promise<boolean> {
     return resolvedApiKeyExists(platform().secrets, provider);
   }
 

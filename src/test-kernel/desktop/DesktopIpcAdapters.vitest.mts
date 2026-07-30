@@ -25,34 +25,16 @@ type DesktopOnboardingMainModule =
   typeof import('@desktop/main/desktopOnboardingIpc');
 type DesktopOnboardingMessagesModule =
   typeof import('@desktop/desktopOnboardingMessages');
-type DesktopOnboardingIpcModule = DesktopOnboardingMainModule &
-  Pick<
-    DesktopOnboardingMessagesModule,
-    'DESKTOP_ONBOARDING_DISMISSED_STATE_KEY'
-  >;
 type DesktopViewStateIpcModule =
   typeof import('@desktop/main/desktopViewStateIpc');
 type DesktopOnboardingOptions = NonNullable<
-  Parameters<DesktopOnboardingIpcModule['createDesktopOnboardingIpc']>[1]
+  Parameters<DesktopOnboardingMainModule['createDesktopOnboardingIpc']>[1]
 >;
 type OnboardingHarnessOptions = Partial<
   Omit<DesktopOnboardingOptions, 'state'>
 > & {
   seed?: Readonly<Record<string, unknown>>;
 };
-
-function createOnboardingCapabilities(): Omit<
-  DesktopOnboardingOptions,
-  'state' | 'readyGate' | 'onAsyncError'
-> {
-  return {
-    hasCredential: () => false,
-    selectSetupAgent: async () => {},
-    kickoffSetup: async () => {},
-    signInWithChatGpt: async () => {},
-    openGettingStarted: async () => {},
-  };
-}
 
 // The WEBVIEW_READY / run-setup handlers trigger refreshOnboardingFunnel as a
 // fire-and-forget task whose chain (readyGate → credential probe →
@@ -67,17 +49,12 @@ async function flushAsync(): Promise<void> {
   }
 }
 
-async function loadDesktopShellIpc(): Promise<DesktopShellIpcModule> {
-  return import(
-    moduleFileUrl(desktopSourcePath('main', 'desktopShellIpc.ts'))
-  ) as Promise<DesktopShellIpcModule>;
-}
-
 async function createShellHarness(
   overrides: Partial<DesktopShellActionFactoryOptions> = {},
 ) {
-  const { createDesktopShellActions, createDesktopShellIpc } =
-    await loadDesktopShellIpc();
+  const { createDesktopShellActions, createDesktopShellIpc } = (await import(
+    moduleFileUrl(desktopSourcePath('main', 'desktopShellIpc.ts'))
+  )) as DesktopShellIpcModule;
   const postToRenderer = vi.fn();
   const actions = createDesktopShellActions(
     { postToRenderer },
@@ -98,43 +75,6 @@ async function createShellHarness(
     postToRenderer,
     shellIpc: createDesktopShellIpc(actions),
   };
-}
-
-async function loadDesktopExecutionIpc(): Promise<DesktopExecutionIpcModule> {
-  return import(
-    moduleFileUrl(desktopSourcePath('main', 'desktopExecutionIpc.ts'))
-  ) as Promise<DesktopExecutionIpcModule>;
-}
-
-async function loadDesktopOnboardingIpc(): Promise<DesktopOnboardingIpcModule> {
-  const [onboardingIpc, onboardingMessages] = await Promise.all([
-    import(
-      moduleFileUrl(desktopSourcePath('main', 'desktopOnboardingIpc.ts'))
-    ) as Promise<DesktopOnboardingMainModule>,
-    import(
-      moduleFileUrl(desktopSourcePath('desktopOnboardingMessages.ts'))
-    ) as Promise<DesktopOnboardingMessagesModule>,
-  ]);
-  return { ...onboardingIpc, ...onboardingMessages };
-}
-
-async function loadDesktopLogIpc(): Promise<DesktopLogIpcModule> {
-  return import(
-    moduleFileUrl(desktopSourcePath('main', 'desktopLogIpc.ts'))
-  ) as Promise<DesktopLogIpcModule>;
-}
-
-async function loadDesktopViewStateIpc(nativeTheme: {
-  shouldUseDarkColors: boolean;
-  shouldUseHighContrastColors: boolean;
-  on(event: 'updated', listener: () => void): void;
-  off(event: 'updated', listener: () => void): void;
-}): Promise<DesktopViewStateIpcModule> {
-  vi.resetModules();
-  vi.doMock('electron', () => ({ nativeTheme }));
-  return import(
-    moduleFileUrl(desktopSourcePath('main', 'desktopViewStateIpc.ts'))
-  ) as Promise<DesktopViewStateIpcModule>;
 }
 
 // Backing store the onboarding adapter reads and writes; `update` is a spy so
@@ -159,8 +99,17 @@ async function createOnboardingHarness({
   seed = {},
   ...options
 }: OnboardingHarnessOptions = {}) {
-  const { DESKTOP_ONBOARDING_DISMISSED_STATE_KEY, createDesktopOnboardingIpc } =
-    await loadDesktopOnboardingIpc();
+  const [
+    { createDesktopOnboardingIpc },
+    { DESKTOP_ONBOARDING_DISMISSED_STATE_KEY },
+  ] = await Promise.all([
+    import(
+      moduleFileUrl(desktopSourcePath('main', 'desktopOnboardingIpc.ts'))
+    ) as Promise<DesktopOnboardingMainModule>,
+    import(
+      moduleFileUrl(desktopSourcePath('desktopOnboardingMessages.ts'))
+    ) as Promise<DesktopOnboardingMessagesModule>,
+  ]);
   const memory = createMemoryState();
   for (const [key, value] of Object.entries(seed)) {
     memory.values.set(key, value);
@@ -169,7 +118,11 @@ async function createOnboardingHarness({
   const onboarding = createDesktopOnboardingIpc(
     { postToRenderer },
     {
-      ...createOnboardingCapabilities(),
+      hasCredential: () => false,
+      selectSetupAgent: async () => {},
+      kickoffSetup: async () => {},
+      signInWithChatGpt: async () => {},
+      openGettingStarted: async () => {},
       ...options,
       state: memory.state,
     },
@@ -207,8 +160,11 @@ describe('desktop IPC adapters', () => {
       }),
       off: vi.fn(),
     };
-    const { createDesktopViewStateIpc } =
-      await loadDesktopViewStateIpc(nativeTheme);
+    vi.resetModules();
+    vi.doMock('electron', () => ({ nativeTheme }));
+    const { createDesktopViewStateIpc } = (await import(
+      moduleFileUrl(desktopSourcePath('main', 'desktopViewStateIpc.ts'))
+    )) as DesktopViewStateIpcModule;
     const postToRenderer = vi.fn();
     const stateIpc = createDesktopViewStateIpc(
       { postToRenderer },
@@ -399,7 +355,9 @@ describe('desktop IPC adapters', () => {
   });
 
   it('keeps execution forwarding in the execution adapter', async () => {
-    const { createDesktopExecutionIpc } = await loadDesktopExecutionIpc();
+    const { createDesktopExecutionIpc } = (await import(
+      moduleFileUrl(desktopSourcePath('main', 'desktopExecutionIpc.ts'))
+    )) as DesktopExecutionIpcModule;
     const executeMessage = {
       command: MAIN_VIEW_COMMANDS.EXECUTE,
       agent: 'direct-agent',
@@ -714,7 +672,9 @@ describe('desktop IPC adapters', () => {
   });
 
   it('serves desktop log snapshots and copy/export actions', async () => {
-    const { createDesktopLogIpc } = await loadDesktopLogIpc();
+    const { createDesktopLogIpc } = (await import(
+      moduleFileUrl(desktopSourcePath('main', 'desktopLogIpc.ts'))
+    )) as DesktopLogIpcModule;
     const postToRenderer = vi.fn();
     const copyLog = vi.fn(async (_text: string) => {});
     const exportLog = vi.fn(async (_text: string) => {});

@@ -13,7 +13,7 @@ import { classMap } from 'lit/directives/class-map.js';
 import { keyed } from 'lit/directives/keyed.js';
 
 // Local imports - shared schemas and types
-import type { LaunchTarget, ModelOptionData } from '@shared/schemas';
+import type { LaunchTarget } from '@shared/schemas';
 
 // Local imports - shared styles
 import { designTokens } from '@shared/styles';
@@ -101,6 +101,12 @@ function isTeamLaunch(
   );
 }
 
+function selectedAgentId(session: SessionContextValue): string {
+  return session.sessionType === SESSION_TYPES.WORKFLOW
+    ? session.workflowAgent
+    : session.toolUseAgent;
+}
+
 function getDesktopLaunchMode(session: SessionContextValue): DesktopLaunchMode {
   if (session.sessionType === SESSION_TYPES.WORKFLOW) return 'workflow';
   return session.launchTarget === 'team' ? 'team' : 'interactive';
@@ -149,14 +155,6 @@ export class InstructionPanel extends LitElement {
   private fileDrop = new FileDropController(this, (paths) =>
     postDroppedFiles(paths),
   );
-
-  /** Get the tooltip for the model dropdown based on the selected model's hint. */
-  private getModelTooltip(
-    options: ModelOptionData[],
-    selectedValue: string,
-  ): string {
-    return options.find((o) => o.value === selectedValue)?.hint ?? '';
-  }
 
   private renderSessionHint(session: SessionContextValue): unknown {
     if (!this.showSessionHint) return nothing;
@@ -219,36 +217,22 @@ export class InstructionPanel extends LitElement {
 
   private handleDesktopLaunchModeChange(event: Event): void {
     const select = event.currentTarget as WaSelect | null;
-    const value = typeof select?.value === 'string' ? select.value : '';
+    const mode = typeof select?.value === 'string' ? select.value : '';
 
-    switch (value) {
-      case 'workflow':
-        this.dispatchEvent(
-          MainViewEvents.sessionTypeChange({
-            value: SESSION_TYPES.WORKFLOW,
-          }),
-        );
-        return;
-      case 'team':
-        this.dispatchEvent(
-          MainViewEvents.sessionTypeChange({
-            value: SESSION_TYPES.TOOL_USE,
-          }),
-        );
-        this.dispatchEvent(
-          MainViewEvents.launchTargetChange({ value: 'team' }),
-        );
-        return;
-      default:
-        this.dispatchEvent(
-          MainViewEvents.sessionTypeChange({
-            value: SESSION_TYPES.TOOL_USE,
-          }),
-        );
-        this.dispatchEvent(
-          MainViewEvents.launchTargetChange({ value: 'agent' }),
-        );
+    if (mode === 'workflow') {
+      this.dispatchEvent(
+        MainViewEvents.sessionTypeChange({ value: SESSION_TYPES.WORKFLOW }),
+      );
+      return;
     }
+    this.dispatchEvent(
+      MainViewEvents.sessionTypeChange({ value: SESSION_TYPES.TOOL_USE }),
+    );
+    this.dispatchEvent(
+      MainViewEvents.launchTargetChange({
+        value: mode === 'team' ? 'team' : 'agent',
+      }),
+    );
   }
 
   private handleAgentChange(event: Event): void {
@@ -329,11 +313,7 @@ export class InstructionPanel extends LitElement {
   private canExecute(session = this.sessionData): boolean {
     if (!session?.instruction.trim() || !session.model) return false;
     if (isTeamLaunch(session)) return Boolean(session.selectedTeamId);
-    return Boolean(
-      session.sessionType === SESSION_TYPES.WORKFLOW
-        ? session.workflowAgent
-        : session.toolUseAgent,
-    );
+    return Boolean(selectedAgentId(session));
   }
 
   private executeTooltip(session: SessionContextValue): string {
@@ -342,11 +322,7 @@ export class InstructionPanel extends LitElement {
     if (isTeamLaunch(session) && !session.selectedTeamId) {
       return 'Choose a team before sending';
     }
-    const agent =
-      session.sessionType === SESSION_TYPES.WORKFLOW
-        ? session.workflowAgent
-        : session.toolUseAgent;
-    if (!agent) return 'Choose an agent before sending';
+    if (!selectedAgentId(session)) return 'Choose an agent before sending';
     return this.desktopHost
       ? 'Send (Enter) · New line (Shift+Enter)'
       : `Execute (${this.executeShortcutLabel})`;
@@ -766,8 +742,8 @@ export class InstructionPanel extends LitElement {
                 size=${this.desktopHost ? 'xs' : nothing}
                 placeholder="Select model…"
                 title=${
-                  this.getModelTooltip(session.modelOptions, session.model) ||
-                  nothing
+                  session.modelOptions.find((o) => o.value === session.model)
+                    ?.hint || nothing
                 }
                 .value=${session.model}
                 @focus=${this.handleModelFocus}

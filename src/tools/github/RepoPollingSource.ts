@@ -194,10 +194,10 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
     // transition tracker is what makes that safe.
     const pullsPath = `/repos/${owner}/${repo}/pulls?state=all&per_page=${PER_PAGE}&sort=updated&direction=desc`;
 
-    const [issueRes, reviewRes, pullsRes] = await Promise.all([
-      ghGet<GhIssueComment[]>(issuePath),
-      ghGet<GhReviewComment[]>(reviewPath),
-      ghGet<GhPullsListEntry[]>(pullsPath),
+    const [rawIssueRes, rawReviewRes, rawPullsRes] = await Promise.all([
+      ghGet<unknown>(issuePath),
+      ghGet<unknown>(reviewPath),
+      ghGet<unknown>(pullsPath),
     ]);
 
     // Non-throwing 200-path validation. A parse failure MUST log + return (skip
@@ -207,33 +207,24 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
     // Skipping is safe because no parsed response has been committed yet: the
     // DedupedResource instances and PR transition/probe maps are untouched, so
     // the same window is re-evaluated idempotently next tick.
-    if (issueRes.status === 200) {
-      const parsed = this.validateOrSkip(
-        issueRes,
-        GhIssueCommentArraySchema,
-        `Skipping ${owner}/${repo} tick: issue-comments payload failed validation`,
-      );
-      if (!parsed) return;
-      issueRes.data = parsed.data;
-    }
-    if (reviewRes.status === 200) {
-      const parsed = this.validateOrSkip(
-        reviewRes,
-        GhReviewCommentArraySchema,
-        `Skipping ${owner}/${repo} tick: review-comments payload failed validation`,
-      );
-      if (!parsed) return;
-      reviewRes.data = parsed.data;
-    }
-    if (pullsRes.status === 200) {
-      const parsed = this.validateOrSkip(
-        pullsRes,
-        GhPullsListEntryArraySchema,
-        `Skipping ${owner}/${repo} tick: pulls-list payload failed validation`,
-      );
-      if (!parsed) return;
-      pullsRes.data = parsed.data;
-    }
+    const issueRes = this.validateOrSkip(
+      rawIssueRes,
+      GhIssueCommentArraySchema,
+      `Skipping ${owner}/${repo} tick: issue-comments payload failed validation`,
+    );
+    if (!issueRes) return;
+    const reviewRes = this.validateOrSkip(
+      rawReviewRes,
+      GhReviewCommentArraySchema,
+      `Skipping ${owner}/${repo} tick: review-comments payload failed validation`,
+    );
+    if (!reviewRes) return;
+    const pullsRes = this.validateOrSkip(
+      rawPullsRes,
+      GhPullsListEntryArraySchema,
+      `Skipping ${owner}/${repo} tick: pulls-list payload failed validation`,
+    );
+    if (!pullsRes) return;
 
     // First tick seeds state but emits nothing — we don't want to replay
     // history when an orchestrator first attaches to a repo.
@@ -265,17 +256,17 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
       for (const pr of sorted) {
         const next = classifyPRState(pr);
         const prev = state.prStateByNumber.get(pr.number);
+        state.prStateByNumber.set(pr.number, next);
+        // Same author gate on both transitions: a bot-authored PR whose
+        // open we suppressed shouldn't surface a close/merge orphan event.
+        if (shouldDropBotEvent(pr.user)) continue;
         const transition = classifyTransition(
           prev,
           next,
           pr,
           state.subscribedAt,
         );
-        // Same author gate on both transitions: a bot-authored PR whose
-        // open we suppressed shouldn't surface a close/merge orphan event.
-        if (shouldDropBotEvent(pr.user)) {
-          // fall through to record state
-        } else if (transition === 'opened') {
+        if (transition === 'opened') {
           this.emit(state, formatRepoPROpened(state.slug, pr));
         } else if (transition === 'closed') {
           this.emit(
@@ -283,7 +274,6 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
             formatRepoPRClosed(state.slug, pr.number, next === 'merged'),
           );
         }
-        state.prStateByNumber.set(pr.number, next);
       }
     }
 

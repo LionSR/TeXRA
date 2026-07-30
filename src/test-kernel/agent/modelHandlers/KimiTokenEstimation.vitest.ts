@@ -26,6 +26,14 @@ function buildHandler(): ModelHandlerKimi {
   return new ModelHandlerKimi(config);
 }
 
+function buildClient(fetchMock: typeof fetch): OpenAI {
+  return new OpenAI({
+    apiKey: 'test-key',
+    baseURL: 'https://api.moonshot.test/v1',
+    fetch: fetchMock,
+  });
+}
+
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -68,11 +76,7 @@ describe('Kimi token estimation', () => {
       jsonResponse({ data: { total_tokens: 41 } }),
     ];
     const fetchMock = vi.fn<typeof fetch>(async () => responses.shift()!);
-    const client = new OpenAI({
-      apiKey: 'test-key',
-      baseURL: 'https://api.moonshot.test/v1',
-      fetch: fetchMock,
-    });
+    const client = buildClient(fetchMock);
 
     assert.equal(
       await buildHandler().estimateTokenCount(
@@ -88,11 +92,7 @@ describe('Kimi token estimation', () => {
     const fetchMock = vi.fn<typeof fetch>(async () =>
       jsonResponse({ error: 'bad request' }, 400),
     );
-    const client = new OpenAI({
-      apiKey: 'test-key',
-      baseURL: 'https://api.moonshot.test/v1',
-      fetch: fetchMock,
-    });
+    const client = buildClient(fetchMock);
 
     await assert.rejects(
       buildHandler().estimateTokenCount(
@@ -128,11 +128,7 @@ describe('Kimi token estimation', () => {
           );
         }),
     );
-    const client = new OpenAI({
-      apiKey: 'test-key',
-      baseURL: 'https://api.moonshot.test/v1',
-      fetch: fetchMock,
-    });
+    const client = buildClient(fetchMock);
     const pending = buildHandler().estimateTokenCount(
       [{ role: 'user', content: 'cancel' }],
       { client, signal: controller.signal },

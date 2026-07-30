@@ -56,6 +56,15 @@ function useCliHostInteractions(
   );
 }
 
+function requestNewProofEdit(): ReturnType<typeof requestToolEditApproval> {
+  return requestToolEditApproval({
+    path: '/tmp/new-proof.tex',
+    originalContent: '',
+    proposedContent: '\\section{Proof}\nA concise proof.\n',
+    sourceTool: 'write_file',
+  });
+}
+
 const credentialExhaustedRetry: RetryPermission = {
   requestId: 'relay-limit-retry',
   streamId: 'test-stream' as RetryPermission['streamId'],
@@ -311,12 +320,7 @@ describe('formatToolEditApprovalSummary', () => {
       }),
     );
 
-    const result = await requestToolEditApproval({
-      path: '/tmp/new-proof.tex',
-      originalContent: '',
-      proposedContent: '\\section{Proof}\nA concise proof.\n',
-      sourceTool: 'write_file',
-    });
+    const result = await requestNewProofEdit();
 
     expect(result.accepted).toBe(false);
     expect(promptSummary).toContain('Tool edit requested by write_file');
@@ -340,12 +344,7 @@ describe('formatToolEditApprovalSummary', () => {
       },
     );
 
-    const result = await requestToolEditApproval({
-      path: '/tmp/new-proof.tex',
-      originalContent: '',
-      proposedContent: '\\section{Proof}\nA concise proof.\n',
-      sourceTool: 'write_file',
-    });
+    const result = await requestNewProofEdit();
 
     expect(result.accepted).toBe(true);
     expect(events).toEqual(['before', 'prompt']);
@@ -358,12 +357,7 @@ describe('formatToolEditApprovalSummary', () => {
       }),
     );
 
-    const result = await requestToolEditApproval({
-      path: '/tmp/new-proof.tex',
-      originalContent: '',
-      proposedContent: '\\section{Proof}\nA concise proof.\n',
-      sourceTool: 'write_file',
-    });
+    const result = await requestNewProofEdit();
 
     expect(result).toMatchObject({
       accepted: false,
@@ -385,12 +379,7 @@ describe('formatToolEditApprovalSummary', () => {
       }),
     );
 
-    const result = await requestToolEditApproval({
-      path: '/tmp/new-proof.tex',
-      originalContent: '',
-      proposedContent: '\\section{Proof}\nA concise proof.\n',
-      sourceTool: 'write_file',
-    });
+    const result = await requestNewProofEdit();
 
     expect(prompts).toEqual([
       'Approve? [y/N, or n <feedback>] ',

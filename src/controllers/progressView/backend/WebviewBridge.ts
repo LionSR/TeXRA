@@ -110,12 +110,9 @@ export class WebviewBridge {
     this.flushInProgress = true;
     const delivered = await this.flush();
     this.flushInProgress = false;
-    if (delivered && this.flushRequested) {
-      this.flushRequested = false;
-      this.scheduleFlush();
-    } else if (!delivered) {
-      this.flushRequested = false;
-    }
+    const reflush = delivered && this.flushRequested;
+    this.flushRequested = false;
+    if (reflush) this.scheduleFlush();
   }
 
   private async flush(): Promise<boolean> {

@@ -18,14 +18,17 @@ function makeStream(name: string): StreamTabInfo {
   };
 }
 
-async function mountTabs(): Promise<StreamTabs> {
+/** Let the nested <stream-tab> finish its own first render. */
+function settleChildRender(): Promise<unknown> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+async function mountTabs(props: Partial<StreamTabs>): Promise<StreamTabs> {
   const element = document.createElement('stream-tabs') as StreamTabs;
-  element.streams = [makeStream('parent')];
-  element.childStreamsByParent = new Map([['parent', [makeStream('child')]]]);
+  Object.assign(element, props);
   document.body.append(element);
   await element.updateComplete;
-  // Let the nested <stream-tab> finish its own first render.
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await settleChildRender();
   return element;
 }
 
@@ -43,7 +46,10 @@ describe('stream-tab expand chevron', () => {
   );
 
   it('renders the expand toggle as a wa-button carrying the delegated-click contract', async () => {
-    const tabs = await mountTabs();
+    const tabs = await mountTabs({
+      streams: [makeStream('parent')],
+      childStreamsByParent: new Map([['parent', [makeStream('child')]]]),
+    });
     const parentTab = tabs.shadowRoot?.querySelector('stream-tab');
     expect(parentTab).toBeTruthy();
 
@@ -66,11 +72,9 @@ describe('stream-tab expand chevron', () => {
   });
 
   it('identifies an unlabeled stream by name in the select aria-label', async () => {
-    const tabs = document.createElement('stream-tabs') as StreamTabs;
-    tabs.streams = [{ ...makeStream('unlabeled-stream'), label: '' }];
-    document.body.append(tabs);
-    await tabs.updateComplete;
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    const tabs = await mountTabs({
+      streams: [{ ...makeStream('unlabeled-stream'), label: '' }],
+    });
 
     const ariaLabel = tabs.shadowRoot
       ?.querySelector('stream-tab')
@@ -80,41 +84,35 @@ describe('stream-tab expand chevron', () => {
   });
 
   it('omits the session footer in the orchestration presentation', async () => {
-    const tabs = document.createElement('stream-tabs') as StreamTabs;
-    tabs.presentation = 'orchestration';
-    tabs.streams = [makeStream('session')];
-    document.body.append(tabs);
-    await tabs.updateComplete;
+    const tabs = await mountTabs({
+      presentation: 'orchestration',
+      streams: [makeStream('session')],
+    });
 
     expect(tabs.shadowRoot?.querySelector('.stream-list-footer')).toBeNull();
     expect(tabs.shadowRoot?.querySelector('stream-tab')).toBeTruthy();
   });
 
   it('renders no session footer in the progress presentation either', async () => {
-    const tabs = document.createElement('stream-tabs') as StreamTabs;
-    tabs.streams = [makeStream('session')];
-    document.body.append(tabs);
-    await tabs.updateComplete;
+    const tabs = await mountTabs({ streams: [makeStream('session')] });
 
     expect(tabs.shadowRoot?.querySelector('.stream-list-footer')).toBeNull();
     expect(tabs.shadowRoot?.querySelector('stream-tab')).toBeTruthy();
   });
 
   it('anchors the general hint to the title, not an ancestor of specific hints', async () => {
-    const tabs = document.createElement('stream-tabs') as StreamTabs;
-    tabs.streams = [
-      {
-        ...makeStream('remote'),
-        isRemote: true,
-        worktree: {
-          workingDirectory: '/tmp/texra/remote',
-          branch: 'remote',
+    const tabs = await mountTabs({
+      streams: [
+        {
+          ...makeStream('remote'),
+          isRemote: true,
+          worktree: {
+            workingDirectory: '/tmp/texra/remote',
+            branch: 'remote',
+          },
         },
-      },
-    ];
-    document.body.append(tabs);
-    await tabs.updateComplete;
-    await new Promise((resolve) => setTimeout(resolve, 0));
+      ],
+    });
 
     const tab = tabs.shadowRoot?.querySelector('stream-tab');
     const shadow = tab?.shadowRoot;
@@ -143,7 +141,7 @@ describe('stream-tab expand chevron', () => {
       ['remote', [makeStream('remote-child')]],
     ]);
     await tabs.updateComplete;
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await settleChildRender();
 
     const compactShadow =
       tabs.shadowRoot?.querySelector('stream-tab')?.shadowRoot;
@@ -155,20 +153,18 @@ describe('stream-tab expand chevron', () => {
   });
 
   it('renders workflow scripts as orchestration streams without a model', async () => {
-    const tabs = document.createElement('stream-tabs') as StreamTabs;
-    tabs.streams = [
-      {
-        kind: 'workflowScript',
-        name: 'workflow-script#abc123',
-        label: 'repo-cleanup-readonly-pilot-2026-07-24',
-        workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
-        agentCategory: AgentCategory.Workflow,
-        creationTimestamp: 1,
-      },
-    ];
-    document.body.append(tabs);
-    await tabs.updateComplete;
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    const tabs = await mountTabs({
+      streams: [
+        {
+          kind: 'workflowScript',
+          name: 'workflow-script#abc123',
+          label: 'repo-cleanup-readonly-pilot-2026-07-24',
+          workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
+          agentCategory: AgentCategory.Workflow,
+          creationTimestamp: 1,
+        },
+      ],
+    });
 
     const tab = tabs.shadowRoot?.querySelector('stream-tab');
     const model = tab?.shadowRoot?.querySelector('.model');

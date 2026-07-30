@@ -8,17 +8,16 @@
 import type { Theme } from '@shared/schemas/commonViewMessages';
 import { setWaColorScheme } from './waColorScheme';
 
-const VSCODE_THEME_CLASSES = [
-  'vscode-light',
-  'vscode-dark',
-  'vscode-high-contrast',
-] as const;
+const THEME_KINDS = [
+  'light',
+  'dark',
+  'high-contrast',
+] as const satisfies readonly Theme[];
 
-const TEXRA_THEME_CLASSES = [
-  'texra-light',
-  'texra-dark',
-  'texra-high-contrast',
-] as const;
+const THEME_CLASSES = THEME_KINDS.flatMap((kind) => [
+  `vscode-${kind}`,
+  `texra-${kind}`,
+]);
 
 /**
  * Convert a `Theme` kind to whether it should render as dark.
@@ -43,7 +42,7 @@ export function applyHostBodyTheme(theme: Theme): void {
   if (typeof document === 'undefined') return;
   const body = document.body;
   if (!body) return;
-  body.classList.remove(...VSCODE_THEME_CLASSES, ...TEXRA_THEME_CLASSES);
+  body.classList.remove(...THEME_CLASSES);
   body.classList.add(`vscode-${theme}`, `texra-${theme}`);
   body.dataset.vscodeThemeKind = theme;
   setWaColorScheme(themeIsDark(theme));

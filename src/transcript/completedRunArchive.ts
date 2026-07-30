@@ -357,13 +357,6 @@ function streamLogEntriesToConversation(
   );
 }
 
-/** Legacy `conversation.json` read; `null` when missing or empty. */
-async function readLegacyConversationMessages(
-  executionId: ExecutionId,
-): Promise<unknown[] | null> {
-  return getExecutionStore(executionId).readConversation();
-}
-
 /** Reconstruct one stream's conversation; `[]` when the log is absent/empty. */
 async function conversationFromStream(
   streamLogStore: StreamLogStore,
@@ -477,20 +470,19 @@ export async function readCompletedRunConversation(
   options: CompletedRunConversationReaderOptions = {},
 ): Promise<CompletedRunConversationReadResult> {
   const snapshotStore = options.snapshotStore ?? new StreamSnapshotStore();
-  let streamLogStore = options.streamLogStore;
-  if (!streamLogStore) {
-    streamLogStore = await StreamLogStore.openReadOnly();
-  }
-  const loadedStreamLogStore = streamLogStore;
+  const streamLogStore =
+    options.streamLogStore ?? (await StreamLogStore.openReadOnly());
 
   const resolved = await resolvePersistedStreamIdForExecution(executionId, {
     snapshotStore,
     streamLogStore,
   });
 
+  // Legacy `conversation.json`; `null` when missing or empty.
   const tryLegacy =
     async (): Promise<CompletedRunConversationReadResult | null> => {
-      const conversation = await readLegacyConversationMessages(executionId);
+      const conversation =
+        await getExecutionStore(executionId).readConversation();
       return conversation ? { conversation, source: 'legacyKV' } : null;
     };
   const trySidecar =
@@ -500,7 +492,7 @@ export async function readCompletedRunConversation(
             executionId,
             resolved.streamId,
             snapshotStore,
-            loadedStreamLogStore,
+            streamLogStore,
           )
         : null;
 

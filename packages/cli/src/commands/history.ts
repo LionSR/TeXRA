@@ -225,23 +225,17 @@ async function runHistoryDelete(
   // JSON/NDJSON consumers get the structured result (including `found:false`)
   // so scripts can branch on it; text consumers get a stderr error + Usage
   // exit because the human-readable path can't render "not found" usefully.
-  if (
-    result.deleted === 'one' &&
-    result.status === 'not-found' &&
-    context.outputFormat === 'text'
-  ) {
-    writeTextStderr(formatCliHistoryNotFoundText(result.id, context.cwd));
-    return CliExitCode.Usage;
-  }
-  if (
-    result.deleted === 'one' &&
-    result.status === 'active' &&
-    context.outputFormat === 'text'
-  ) {
-    writeTextStderr(
-      `Execution ${result.id} is active in TeXRA and was not deleted.`,
-    );
-    return CliExitCode.Usage;
+  if (result.deleted === 'one' && context.outputFormat === 'text') {
+    if (result.status === 'not-found') {
+      writeTextStderr(formatCliHistoryNotFoundText(result.id, context.cwd));
+      return CliExitCode.Usage;
+    }
+    if (result.status === 'active') {
+      writeTextStderr(
+        `Execution ${result.id} is active in TeXRA and was not deleted.`,
+      );
+      return CliExitCode.Usage;
+    }
   }
 
   let text: string;

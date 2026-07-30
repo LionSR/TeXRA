@@ -14,9 +14,7 @@ import {
  * `buttonStyles` (`.header-action` is one of its `.btn-ghost` aliases), so
  * this is the button layer scoped down, not a second definition.
  */
-export const headerActionStyles: CSSResult = css`
-  ${buttonStyles}
-`;
+export const headerActionStyles: CSSResult = buttonStyles;
 
 /**
  * Compact icon-only action button, for components that pull just the
@@ -28,9 +26,7 @@ export const headerActionStyles: CSSResult = css`
  * surface ladder, so the same button read differently on each surface), and
  * the geometry comes off the `--control-size` scale.
  */
-export const compactIconActionButtonStyles: CSSResult = css`
-  ${buttonStyles}
-`;
+export const compactIconActionButtonStyles: CSSResult = buttonStyles;
 
 /**
  * Busy state for an icon action button: a spinner overlays the button while

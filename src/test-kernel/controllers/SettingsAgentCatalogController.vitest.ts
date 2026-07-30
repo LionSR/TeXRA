@@ -1,8 +1,8 @@
-// Third-party imports
-import { strict as assert } from 'node:assert';
-import { describe, it } from 'vitest';
-
 // Standard library imports
+import { strict as assert } from 'node:assert';
+
+// Third-party imports
+import { describe, it } from 'vitest';
 
 // Local imports - shared
 import {
@@ -19,8 +19,6 @@ import {
   AGENT_MODE_PRESETS_BY_ID,
   type AgentModePreset,
 } from '@shared/schemas/agentPresets';
-
-// Local imports - controllers
 
 const AGENTS: Record<AgentCategory, SettingsAgentCatalogEntry[]> = {
   workflow: [

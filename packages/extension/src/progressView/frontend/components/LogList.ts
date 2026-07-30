@@ -94,7 +94,6 @@ export class LogList extends LitElement {
   private readonly streamCache = new LRUCache<string, CachedStream>({
     max: LogList.MAX_CACHED_STREAMS,
   });
-  private storage = webviewStorage;
   private activeStreamId: string | null = null;
   private shouldScrollToBottom = false;
 
@@ -212,7 +211,7 @@ export class LogList extends LitElement {
     }
 
     const stateManager = new PersistedState(
-      this.storage,
+      webviewStorage,
       logListStateKey(streamId),
       LogListStateSchema,
     );

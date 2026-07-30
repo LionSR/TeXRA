@@ -54,6 +54,18 @@ function singleFetch(response: Response): {
   return { fetchImpl, calls };
 }
 
+function pendingFetch(): {
+  fetchImpl: typeof fetch;
+  resolveFetch: (response: Response) => void;
+} {
+  let resolveFetch!: (response: Response) => void;
+  const fetchImpl = (() =>
+    new Promise<Response>((resolve) => {
+      resolveFetch = resolve;
+    })) as unknown as typeof fetch;
+  return { fetchImpl, resolveFetch: (response) => resolveFetch(response) };
+}
+
 describe('TEXRA_RELAY_TOKEN consumption (CI relay tokens)', () => {
   afterEach(() => {
     resetRelayTokenTierCacheForTests();
@@ -179,11 +191,7 @@ describe('TEXRA_RELAY_TOKEN consumption (CI relay tokens)', () => {
     // 'valid' from data fetched before the rejection. The stale 'valid' must
     // not clobber the fresher 'invalid': invalid is sticky until an explicit
     // refresh (cache reset) or TTL expiry.
-    let resolveFetch!: (response: Response) => void;
-    const fetchImpl = (() =>
-      new Promise<Response>((resolve) => {
-        resolveFetch = resolve;
-      })) as unknown as typeof fetch;
+    const { fetchImpl, resolveFetch } = pendingFetch();
 
     const pending = fetchRelayTokenStatus(TOKEN, fetchImpl);
 
@@ -215,11 +223,7 @@ describe('TEXRA_RELAY_TOKEN consumption (CI relay tokens)', () => {
     // sticky guard for settled results would return 'unknown' here even
     // though the cache already holds the fresher 'invalid' — exactly the
     // return-value/cache inconsistency this guard exists to prevent.
-    let resolveFetch!: (response: Response) => void;
-    const fetchImpl = (() =>
-      new Promise<Response>((resolve) => {
-        resolveFetch = resolve;
-      })) as unknown as typeof fetch;
+    const { fetchImpl, resolveFetch } = pendingFetch();
 
     const pending = fetchRelayTokenStatus(TOKEN, fetchImpl);
 

@@ -7,13 +7,7 @@
  */
 export function playCompletionSound(): void {
   try {
-    const AudioCtx =
-      window.AudioContext ||
-      (window as Window & { webkitAudioContext?: typeof AudioContext })
-        .webkitAudioContext;
-    if (!AudioCtx) return;
-
-    const ctx = new AudioCtx();
+    const ctx = new AudioContext();
     const osc = ctx.createOscillator();
     osc.type = 'sine';
     osc.frequency.value = 880;

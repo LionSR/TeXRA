@@ -339,8 +339,8 @@ export async function repairRestartedStreams(
     let repairStarted = false;
     try {
       const repair = async () => {
+        repairStarted = true;
         if (executionId) {
-          repairStarted = true;
           const settlement = await readExecutionSettlement(executionId);
           if (options.signal?.aborted) {
             return { kind: 'cancelled' as const };
@@ -360,7 +360,6 @@ export async function repairRestartedStreams(
             return { kind: 'settled' as const, settlement };
           }
         }
-        repairStarted = true;
         if (options.signal?.aborted) {
           return { kind: 'cancelled' as const };
         }
@@ -399,17 +398,12 @@ export async function repairRestartedStreams(
         );
         continue;
       }
-      result.waitingStreams.push(...repaired.value.result.waitingStreams);
-      result.failedStreams.push(...repaired.value.result.failedStreams);
-      result.closedWaitingGroups.push(
-        ...repaired.value.result.closedWaitingGroups,
-      );
-      result.closedFailedGroups.push(
-        ...repaired.value.result.closedFailedGroups,
-      );
-      result.terminalStatusUpdated.push(
-        ...repaired.value.result.terminalStatusUpdated,
-      );
+      const streamResult = repaired.value.result;
+      result.waitingStreams.push(...streamResult.waitingStreams);
+      result.failedStreams.push(...streamResult.failedStreams);
+      result.closedWaitingGroups.push(...streamResult.closedWaitingGroups);
+      result.closedFailedGroups.push(...streamResult.closedFailedGroups);
+      result.terminalStatusUpdated.push(...streamResult.terminalStatusUpdated);
     } catch (error) {
       if (repairStarted) throw error;
       options.logger?.warn(

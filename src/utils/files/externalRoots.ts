@@ -79,9 +79,7 @@ const roots = new Map<ExternalRootKind, ExternalRoot>();
 function canonicalise(p: string): string {
   const resolved = path.resolve(p);
   try {
-    return fs.realpathSync.native
-      ? fs.realpathSync.native(resolved)
-      : fs.realpathSync(resolved);
+    return fs.realpathSync.native(resolved);
   } catch (err) {
     if (!isFileNotFoundError(err) && !isNotADirectoryError(err)) {
       throw err;
@@ -150,13 +148,13 @@ export function findExternalRoot(
 
   let best: MatchedExternalRoot | null = null;
   for (const root of roots.values()) {
-    const relativePath = path.relative(root.absolutePath, resolved);
-    const contained = isPathWithin(root.absolutePath, resolved);
-    if (!contained) continue;
+    if (!isPathWithin(root.absolutePath, resolved)) continue;
 
     const candidate: MatchedExternalRoot = {
       ...root,
-      relative: relativePath.replaceAll(path.sep, '/'),
+      relative: path
+        .relative(root.absolutePath, resolved)
+        .replaceAll(path.sep, '/'),
     };
 
     // Prefer the most-specific (longest) match; on ties, prefer read-only so a

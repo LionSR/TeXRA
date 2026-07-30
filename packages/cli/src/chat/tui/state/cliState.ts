@@ -268,7 +268,8 @@ function emptySlice(streamId: StreamTabId): StreamSlice {
 // behind this one map, patched immutably so `useSignal` subscribers only
 // re-render on an actual change.
 
-const STREAMS = signal<ReadonlyMap<StreamTabId, StreamSlice>>(new Map());
+/** Per-stream state map, keyed by `StreamTabId`. */
+export const streams = signal<ReadonlyMap<StreamTabId, StreamSlice>>(new Map());
 const RETIRED_STREAMS = new Set<StreamTabId>();
 const STREAM_ARTIFACT_REVISIONS = new Map<
   StreamTabId,
@@ -301,9 +302,6 @@ export function recordMissingOutputsReset(streamId: StreamTabId): void {
   });
 }
 
-/** Per-stream state map, keyed by `StreamTabId`. */
-export const streams = STREAMS;
-
 /** Whether reset retired this stream identity from the current state lifetime. */
 export function isCliStreamRetired(streamId: StreamTabId): boolean {
   return RETIRED_STREAMS.has(streamId);
@@ -314,13 +312,13 @@ export function patchStream(
   update: (slice: StreamSlice) => StreamSlice,
 ): void {
   RETIRED_STREAMS.delete(streamId);
-  const current = STREAMS.get();
+  const current = streams.get();
   const slice = current.get(streamId) ?? emptySlice(streamId);
   const next = update(slice);
   if (next === slice) return;
   const out = new Map(current);
   out.set(streamId, next);
-  STREAMS.set(out);
+  streams.set(out);
 }
 
 function streamSliceWithStatus(
@@ -367,7 +365,7 @@ export function setStreamStatusInCliState({
   if (isChildStreamRemoved(streamId) || RETIRED_STREAMS.has(streamId)) {
     return false;
   }
-  const current = STREAMS.get();
+  const current = streams.get();
   const existingSlice = current.get(streamId);
   const targetSlice = streamSliceWithStatus(
     existingSlice ?? emptySlice(streamId),
@@ -378,7 +376,7 @@ export function setStreamStatusInCliState({
   if (targetSlice === existingSlice) return true;
   const out = new Map(current);
   out.set(streamId, targetSlice);
-  STREAMS.set(out);
+  streams.set(out);
   return true;
 }
 
@@ -402,13 +400,11 @@ const EMPTY_SESSION_META: SessionMeta = {
   version: '',
 };
 
-const SESSION_META = signal<SessionMeta>(EMPTY_SESSION_META);
-
 /** Agent/model/cwd/approval snapshot for the current CLI session. */
-export const sessionMeta = SESSION_META;
+export const sessionMeta = signal<SessionMeta>(EMPTY_SESSION_META);
 
 export function patchSessionMeta(patch: Partial<SessionMeta>): void {
-  SESSION_META.set({ ...SESSION_META.get(), ...patch });
+  sessionMeta.set({ ...sessionMeta.get(), ...patch });
 }
 
 export function setCliSessionModelOverride(model: string): void {
@@ -417,7 +413,7 @@ export function setCliSessionModelOverride(model: string): void {
 
 /** Preserve process-session properties across conversation resets. */
 function defaultSessionMeta(): SessionMeta {
-  const current = SESSION_META.get();
+  const current = sessionMeta.get();
   return {
     ...EMPTY_SESSION_META,
     transcriptMode: current.transcriptMode,
@@ -434,27 +430,21 @@ function defaultSessionMeta(): SessionMeta {
 // stream-lifecycle side effects that touch these signals alongside others
 // (e.g. `removeStream`) live in `./removeStream`.
 
-const ACTIVE_STREAM_ID = signal<StreamTabId | undefined>(undefined);
-const ROOT_STREAM_ID = signal<StreamTabId | undefined>(undefined);
-const ROOT_RUN_START_AVAILABLE = signal<boolean>(true);
-const ROOT_RUN_PENDING = signal<boolean>(false);
-const ROOT_RUN_STREAM_ID = signal<StreamTabId | undefined>(undefined);
-
 /** The stream currently focused in the transcript / status bar. */
-export const activeStreamId = ACTIVE_STREAM_ID;
+export const activeStreamId = signal<StreamTabId | undefined>(undefined);
 /** The top-level stream the current session rooted at. */
-export const rootStreamId = ROOT_STREAM_ID;
+export const rootStreamId = signal<StreamTabId | undefined>(undefined);
 /** Whether starting a new root run is currently available. */
-export const rootRunStartAvailable = ROOT_RUN_START_AVAILABLE;
+export const rootRunStartAvailable = signal<boolean>(true);
 /** Whether the root session holds an unfinished run claim (run promise
  *  pending). Published only by `publishChatTuiRunState`, so renders read the
  *  session run-state reactively instead of calling impure session closures
  *  that memoized renders would cache stale (#8273). */
-export const rootRunPending = ROOT_RUN_PENDING;
+export const rootRunPending = signal<boolean>(false);
 /** Run-control mirror of `TuiSession.streamId` — cleared while a new run is
  *  pending, unlike `rootStreamId`, which stays put as the transcript anchor
  *  across pending windows. Published only by `publishChatTuiRunState`. */
-export const rootRunStreamId = ROOT_RUN_STREAM_ID;
+export const rootRunStreamId = signal<StreamTabId | undefined>(undefined);
 
 // ---------------------------------------------------------------------------
 // foregroundOverlaySlice
@@ -478,11 +468,9 @@ interface ActiveSlashForm {
     availableRows: number,
   ) => React.ReactNode;
 }
-const ACTIVE_FORM: Signal.State<ActiveSlashForm | undefined> = signal<
+export const activeForm: Signal.State<ActiveSlashForm | undefined> = signal<
   ActiveSlashForm | undefined
 >(undefined);
-/** Active inline slash form, or `undefined` when the chat input owns the screen. */
-export const activeForm = ACTIVE_FORM;
 
 interface InfoPaneContent {
   readonly title: string;
@@ -510,10 +498,8 @@ export function closeInfoPane(): void {
 /** True while the slash-command palette is mounted in the InputBar. App-level
  *  Tab handlers gate on this so palette-Tab (accept selection) doesn't double
  *  with stream-focus Tab. */
-const SLASH_PALETTE_OPEN = signal<boolean>(false);
-export const slashPaletteOpen = SLASH_PALETTE_OPEN;
-const REVERSE_SEARCH_OPEN = signal<boolean>(false);
-export const reverseSearchOpen = REVERSE_SEARCH_OPEN;
+export const slashPaletteOpen = signal<boolean>(false);
+export const reverseSearchOpen = signal<boolean>(false);
 
 // ---------------------------------------------------------------------------
 // transientNoticeSlice
@@ -543,11 +529,9 @@ type TransientNoticeOptions =
 
 const DEFAULT_TRANSIENT_NOTICE_TTL_MS = 4_000;
 
-const TRANSIENT_NOTICE = signal<TransientNotice | undefined>(undefined);
-let transientNoticeTimer: ReturnType<typeof setTimeout> | undefined;
-
 /** Single status-bar notice slot; later notices replace earlier ones. */
-export const transientNotice = TRANSIENT_NOTICE;
+export const transientNotice = signal<TransientNotice | undefined>(undefined);
+let transientNoticeTimer: ReturnType<typeof setTimeout> | undefined;
 
 /** Show a regenerable status-bar notice for a bounded interval. */
 export function setTransientNotice(
@@ -567,10 +551,10 @@ export function setTransientNotice(
         }
       : { kind: 'message', text: singleLineText, expiresAt };
   if (transientNoticeTimer) clearTimeout(transientNoticeTimer);
-  TRANSIENT_NOTICE.set(notice);
+  transientNotice.set(notice);
   transientNoticeTimer = setTimeout(() => {
-    if (TRANSIENT_NOTICE.get() === notice) {
-      TRANSIENT_NOTICE.set(undefined);
+    if (transientNotice.get() === notice) {
+      transientNotice.set(undefined);
       transientNoticeTimer = undefined;
     }
   }, ttlMs);
@@ -581,7 +565,7 @@ export function setTransientNotice(
 export function clearTransientNotice(): void {
   if (transientNoticeTimer) clearTimeout(transientNoticeTimer);
   transientNoticeTimer = undefined;
-  TRANSIENT_NOTICE.set(undefined);
+  transientNotice.set(undefined);
 }
 
 // ---------------------------------------------------------------------------
@@ -593,13 +577,11 @@ export function clearTransientNotice(): void {
 // External changes (extension/desktop/config edits) are still picked up by that
 // poll.
 
-const CODEX_PREFERENCE_VERSION = signal<number>(0);
-
-export const codexPreferenceVersion = CODEX_PREFERENCE_VERSION;
+export const codexPreferenceVersion = signal<number>(0);
 
 /** Signal the status bar to re-read the ChatGPT-subscription preference now. */
 export function bumpCodexPreferenceVersion(): void {
-  CODEX_PREFERENCE_VERSION.set(CODEX_PREFERENCE_VERSION.get() + 1);
+  codexPreferenceVersion.set(codexPreferenceVersion.get() + 1);
 }
 
 // ---------------------------------------------------------------------------
@@ -659,9 +641,8 @@ export interface FormProgress {
   readonly dismiss: () => void;
 }
 
-const FORM_PROGRESS = signal<FormProgress | undefined>(undefined);
-export const formProgress = FORM_PROGRESS;
-registerCliStateResetHook(() => FORM_PROGRESS.set(undefined));
+export const formProgress = signal<FormProgress | undefined>(undefined);
+registerCliStateResetHook(() => formProgress.set(undefined));
 
 export function resetCliState(
   nextSessionMeta: SessionMeta = defaultSessionMeta(),

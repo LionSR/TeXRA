@@ -138,12 +138,12 @@ export class SessionEventHub {
       types: filter.types ? new Set(filter.types) : undefined,
     };
     this.subscribers.add(registration);
-    if (registration.scope !== 'session') {
-      if (registration.streamId) {
+    const { scope, streamId } = registration;
+    if (scope !== 'session') {
+      if (streamId) {
         this.runScopeSubscriberCountsByStream.set(
-          registration.streamId,
-          (this.runScopeSubscriberCountsByStream.get(registration.streamId) ??
-            0) + 1,
+          streamId,
+          (this.runScopeSubscriberCountsByStream.get(streamId) ?? 0) + 1,
         );
       } else {
         this.runScopeSubscriberCount += 1;
@@ -152,20 +152,17 @@ export class SessionEventHub {
 
     return () => {
       if (!this.subscribers.delete(registration)) return;
-      if (registration.scope !== 'session' && registration.streamId) {
-        const nextCount =
-          (this.runScopeSubscriberCountsByStream.get(registration.streamId) ??
-            1) - 1;
-        if (nextCount > 0) {
-          this.runScopeSubscriberCountsByStream.set(
-            registration.streamId,
-            nextCount,
-          );
-        } else {
-          this.runScopeSubscriberCountsByStream.delete(registration.streamId);
-        }
-      } else if (registration.scope !== 'session') {
+      if (scope === 'session') return;
+      if (!streamId) {
         this.runScopeSubscriberCount -= 1;
+        return;
+      }
+      const nextCount =
+        (this.runScopeSubscriberCountsByStream.get(streamId) ?? 1) - 1;
+      if (nextCount > 0) {
+        this.runScopeSubscriberCountsByStream.set(streamId, nextCount);
+      } else {
+        this.runScopeSubscriberCountsByStream.delete(streamId);
       }
     };
   }

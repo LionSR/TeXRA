@@ -46,9 +46,7 @@ export async function setToolEnabled(
   toolId: string,
   enabled: boolean,
 ): Promise<void> {
-  const current =
-    tryGlobalState()?.get<string[]>(GlobalStateKey.DISABLED_TOOLS, []) ?? [];
-  const set = new Set(current);
+  const set = new Set(getDisabledToolIds());
   if (enabled) {
     set.delete(toolId);
   } else {

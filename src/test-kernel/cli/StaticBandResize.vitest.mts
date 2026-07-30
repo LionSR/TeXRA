@@ -20,12 +20,16 @@ import { afterAll, describe, expect, it } from 'vitest';
 
 // Local imports
 import type { TuiRepaintOptions } from '@cli/chat/tui/render/tuiViewportController';
-import type { ConversationEntry } from '@cli/chat/tui/state/cliState';
+import type {
+  ConversationEntry,
+  SessionMeta,
+} from '@cli/chat/tui/state/cliState';
 import { AgentCategory, type StreamTabId } from '@shared/schemas';
 import {
   FakeStdin,
   FakeStdout,
   loadInk,
+  renderWithTerminalSize,
 } from '@test/support/inkTestHarness.mts';
 import { pollForCondition } from '@test/support/asyncTestUtils';
 
@@ -35,6 +39,25 @@ afterAll(() => {
     else process.env[name] = value;
   }
 });
+
+const TRANSCRIPT_SESSION: Omit<SessionMeta, 'cwd'> = {
+  agent: 'research',
+  category: AgentCategory.ToolUse,
+  model: 'test-model',
+  modelSource: 'builtin-default',
+  apiMode: 'personal',
+  approvalPolicy: 'ask',
+  canDelegate: false,
+  transcriptMode: 'persistent',
+  version: '0.0.0-test',
+};
+
+/** Poll until the frame under test appears, asserting it arrived in time. */
+async function expectEventually(check: () => boolean): Promise<void> {
+  expect(
+    await pollForCondition(check, { timeoutMs: 5000, intervalMs: 25 }),
+  ).toBe(true);
+}
 
 function inverseBandWidths(output: string, text: string): readonly number[] {
   const widths: number[] = [];
@@ -116,18 +139,7 @@ describe('Static band resize', () => {
       },
     };
 
-    resetCliState({
-      agent: 'research',
-      category: AgentCategory.ToolUse,
-      model: 'test-model',
-      modelSource: 'builtin-default',
-      cwd: '/tmp/resize-proof',
-      apiMode: 'personal',
-      approvalPolicy: 'ask',
-      canDelegate: false,
-      transcriptMode: 'persistent',
-      version: '0.0.0-test',
-    });
+    resetCliState({ ...TRANSCRIPT_SESSION, cwd: '/tmp/resize-proof' });
     patchStream(streamId, (slice) => ({
       ...slice,
       entries: [finalizedUser, liveAssistant, tool],
@@ -151,25 +163,20 @@ describe('Static band resize', () => {
       });
     }
 
-    const out = new FakeStdout(40, 12);
-    const inst = ink.render(createElement(App), {
-      stdout: out,
-      stdin: new FakeStdin(false),
-      interactive: true,
-      exitOnCtrlC: false,
-      patchConsole: false,
-    });
+    const { instance: inst, stdout: out } = renderWithTerminalSize(
+      ink,
+      createElement(App),
+      40,
+      12,
+    );
 
     try {
-      expect(
-        await pollForCondition(
-          () =>
-            horizontalRuleWidths(out.output).includes(40) &&
-            inverseBandWidths(out.output, prompt).includes(38) &&
-            out.output.includes(hiddenPrintLine),
-          { timeoutMs: 5000, intervalMs: 25 },
-        ),
-      ).toBe(true);
+      await expectEventually(
+        () =>
+          horizontalRuleWidths(out.output).includes(40) &&
+          inverseBandWidths(out.output, prompt).includes(38) &&
+          out.output.includes(hiddenPrintLine),
+      );
 
       // Widen: bump columns and fire the resize the patched Ink handler listens
       // for. Clear the recording so the final frame cannot pass using initial
@@ -178,12 +185,7 @@ describe('Static band resize', () => {
       out.columns = 80;
       out.emit('resize');
 
-      expect(
-        await pollForCondition(() => out.output.includes(clearTerminal), {
-          timeoutMs: 5000,
-          intervalMs: 25,
-        }),
-      ).toBe(true);
+      await expectEventually(() => out.output.includes(clearTerminal));
       const frame = latestRepaintFrame(out.output, clearTerminal);
       const ruleWidths = horizontalRuleWidths(frame);
       const bandWidths = inverseBandWidths(frame, prompt);
@@ -234,18 +236,7 @@ describe('Static band resize', () => {
       },
     };
 
-    resetCliState({
-      agent: 'research',
-      category: AgentCategory.ToolUse,
-      model: 'test-model',
-      modelSource: 'builtin-default',
-      cwd: '/tmp/execution-label-proof',
-      apiMode: 'personal',
-      approvalPolicy: 'ask',
-      canDelegate: false,
-      transcriptMode: 'persistent',
-      version: '0.0.0-test',
-    });
+    resetCliState({ ...TRANSCRIPT_SESSION, cwd: '/tmp/execution-label-proof' });
     patchStream(streamId, (slice) => ({
       ...slice,
       entries: [executionEntry],
@@ -271,23 +262,16 @@ describe('Static band resize', () => {
       });
     }
 
-    const out = new FakeStdout(80, 12);
-    const inst = ink.render(createElement(App, { labels: new Map() }), {
-      stdout: out,
-      stdin: new FakeStdin(false),
-      interactive: true,
-      exitOnCtrlC: false,
-      patchConsole: false,
-    });
+    const { instance: inst, stdout: out } = renderWithTerminalSize(
+      ink,
+      createElement(App, { labels: new Map() }),
+      80,
+      12,
+    );
     inkRef.current = inst;
 
     try {
-      expect(
-        await pollForCondition(() => out.output.includes(executionPath), {
-          timeoutMs: 5000,
-          intervalMs: 25,
-        }),
-      ).toBe(true);
+      await expectEventually(() => out.output.includes(executionPath));
 
       out.output = '';
       inst.rerender(
@@ -296,12 +280,7 @@ describe('Static band resize', () => {
         }),
       );
 
-      expect(
-        await pollForCondition(() => out.output.includes(clearTerminal), {
-          timeoutMs: 5000,
-          intervalMs: 25,
-        }),
-      ).toBe(true);
+      await expectEventually(() => out.output.includes(clearTerminal));
       const frame = stripAnsi(latestRepaintFrame(out.output, clearTerminal));
       expect(frame).toContain('executions (view: reviewer/report)');
       expect(frame).not.toContain(executionPath);
@@ -341,18 +320,7 @@ describe('Static band resize', () => {
       }),
     );
 
-    resetCliState({
-      agent: 'research',
-      category: AgentCategory.ToolUse,
-      model: 'test-model',
-      modelSource: 'builtin-default',
-      cwd: '/tmp/listener-proof',
-      apiMode: 'personal',
-      approvalPolicy: 'ask',
-      canDelegate: false,
-      transcriptMode: 'persistent',
-      version: '0.0.0-test',
-    });
+    resetCliState({ ...TRANSCRIPT_SESSION, cwd: '/tmp/listener-proof' });
     patchStream(streamId, (slice) => ({ ...slice, entries: toolEntries }));
 
     function App(): unknown {
@@ -383,12 +351,7 @@ describe('Static band resize', () => {
     });
 
     try {
-      expect(
-        await pollForCondition(() => out.output.includes('result 69'), {
-          timeoutMs: 5000,
-          intervalMs: 25,
-        }),
-      ).toBe(true);
+      await expectEventually(() => out.output.includes('result 69'));
       // One listener belongs to Ink's renderer and one to the App-level
       // useWindowSize subscription. Transcript length must not affect it.
       expect(peakResizeListeners).toBe(2);

@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -9,6 +9,7 @@ import {
   launchTexraApp,
   type LaunchedApp,
 } from './electronApp.js';
+import { cleanupDirectory } from './workspaceStorageFixture.js';
 
 let launched: LaunchedApp | undefined;
 let userDataPath: string | undefined;
@@ -16,11 +17,7 @@ let userDataPath: string | undefined;
 test.afterEach(async () => {
   if (launched) await closeTexraApp(launched);
   launched = undefined;
-  try {
-    if (userDataPath) rmSync(userDataPath, { recursive: true, force: true });
-  } catch {
-    // Best-effort cleanup must not hide the lifetime assertion that failed.
-  }
+  if (userDataPath) cleanupDirectory(userDataPath);
   userDataPath = undefined;
 });
 

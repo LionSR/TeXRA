@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -9,6 +9,7 @@ import {
   launchTexraApp,
   type LaunchedApp,
 } from './electronApp.js';
+import { cleanupDirectory } from './workspaceStorageFixture.js';
 
 test('desktop main bundle completes its locked startup write', async () => {
   const workspacePath = mkdtempSync(join(tmpdir(), 'texra-e2e-workspace-'));
@@ -27,12 +28,7 @@ test('desktop main bundle completes its locked startup write', async () => {
     expect(globalState.lastKnownVersion).toEqual(expect.any(String));
   } finally {
     if (launched) await closeTexraApp(launched);
-    for (const path of [workspacePath, userDataPath]) {
-      try {
-        rmSync(path, { recursive: true, force: true });
-      } catch {
-        // Best-effort cleanup must not hide the startup assertion failure.
-      }
-    }
+    cleanupDirectory(workspacePath);
+    cleanupDirectory(userDataPath);
   }
 });

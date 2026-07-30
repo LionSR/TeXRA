@@ -27,7 +27,6 @@ describe('child subagent stream approval inheritance', () => {
   });
 
   it('mirrors the parent bash bypass onto the child stream', () => {
-    const { host } = createRecordingHost();
     const parent = 'stream:parent-bash' as StreamTabId;
     const child = 'stream:child-bash' as StreamTabId;
     setBashApprovalSessionBypass(parent, true, { silent: true });
@@ -40,7 +39,6 @@ describe('child subagent stream approval inheritance', () => {
   });
 
   it('mirrors the parent tool-edit bypass onto the child stream', () => {
-    const { host } = createRecordingHost();
     const parent = 'stream:parent-edit' as StreamTabId;
     const child = 'stream:child-edit' as StreamTabId;
     setToolEditApprovalSessionBypass(parent, true, { silent: true });
@@ -66,7 +64,6 @@ describe('child subagent stream approval inheritance', () => {
     // The bug this guards against: a parent with bash auto-approved but edits
     // still gated must propagate bash to the child without also granting the
     // child tool-edit YOLO.
-    const { host } = createRecordingHost();
     const parent = 'stream:parent-bash-only' as StreamTabId;
     const child = 'stream:child-bash-only' as StreamTabId;
     setBashApprovalSessionBypass(parent, true, { silent: true });
@@ -83,7 +80,6 @@ describe('child subagent stream approval inheritance', () => {
     // used to be a one-shot copy taken at child-creation time, so a bypass
     // enabled on the parent afterwards never reached an already-running
     // child. It must now resolve live off the ancestry link.
-    const { host } = createRecordingHost();
     const parent = 'stream:parent-late-toggle' as StreamTabId;
     const child = 'stream:child-late-toggle' as StreamTabId;
 
@@ -101,7 +97,6 @@ describe('child subagent stream approval inheritance', () => {
     // exactly like it reaches their bash. Tool-edit inheritance used to be a
     // one-shot grant at delegation launch, so a mid-run toggle left children
     // prompting for every edit.
-    const { host } = createRecordingHost();
     const parent = 'stream:parent-late-edit' as StreamTabId;
     const child = 'stream:child-late-edit' as StreamTabId;
 
@@ -118,7 +113,7 @@ describe('child subagent stream approval inheritance', () => {
   });
 
   it('announces inherited edit-bypass changes for visible descendants', () => {
-    const { events, host, interactions } = createRecordingHost();
+    const { events, interactions } = createRecordingHost();
     const detach = currentSession().useHostInteractions(interactions);
     const parent = 'stream:visible-parent' as StreamTabId;
     const child = 'stream:visible-child' as StreamTabId;
@@ -172,7 +167,6 @@ describe('child subagent stream approval inheritance', () => {
     // so bypass must be carried forward explicitly (see
     // chatSessionController.ts's onStreamResolved) rather than assumed to
     // survive on the same stream id.
-    const { host } = createRecordingHost();
     const roundOne = 'stream:round-1' as StreamTabId;
     const roundTwo = 'stream:round-2' as StreamTabId;
 
@@ -192,7 +186,6 @@ describe('child subagent stream approval inheritance', () => {
   });
 
   it('an explicit child value overrides inherited bypass without touching the parent', () => {
-    const { host } = createRecordingHost();
     const parent = 'stream:parent-toggle' as StreamTabId;
     const child = 'stream:child-toggle' as StreamTabId;
     setBashApprovalSessionBypass(parent, true, { silent: true });
@@ -206,7 +199,6 @@ describe('child subagent stream approval inheritance', () => {
   });
 
   it('preserves a surviving child state when its parent is torn down', () => {
-    const { host } = createRecordingHost();
     const parent = 'stream:parent-torn-down' as StreamTabId;
     const child = 'stream:child-survives-parent' as StreamTabId;
     setBashApprovalSessionBypass(parent, true, { silent: true });
@@ -231,7 +223,6 @@ describe('child subagent stream approval inheritance', () => {
   });
 
   it('preserves independent ancestry when one kind loses its parent', () => {
-    const { host } = createRecordingHost();
     const editParent = 'stream:edit-parent-cleanup' as StreamTabId;
     const bashParent = 'stream:bash-parent-survives' as StreamTabId;
     const child = 'stream:split-ancestry-child' as StreamTabId;
@@ -256,7 +247,6 @@ describe('child subagent stream approval inheritance', () => {
     // tool-edit entry even when `isBypassed` already reports true via
     // ancestry — otherwise the grant silently evaporates when the parent
     // later re-gates its own edits while the child's proposal/bash stay on.
-    const { host } = createRecordingHost();
     const parent = 'stream:parent-pin' as StreamTabId;
     const child = 'stream:child-pin' as StreamTabId;
     setToolEditApprovalSessionBypass(parent, true, { silent: true });
@@ -271,7 +261,6 @@ describe('child subagent stream approval inheritance', () => {
   });
 
   it('propagates delegated-task approval through nested orchestrators', () => {
-    const { host } = createRecordingHost();
     const parent = 'stream:parent-super-yolo' as StreamTabId;
     const child = 'stream:child-orchestrator' as StreamTabId;
     const grandchild = 'stream:grandchild-orchestrator' as StreamTabId;
@@ -290,7 +279,6 @@ describe('child subagent stream approval inheritance', () => {
     // linking a child for bash inheritance silently let it inherit tool-edit
     // YOLO too whenever the parent had it on. Each kind must resolve through
     // its own graph: a bash-only link must not leak tool-edit bypass.
-    const { host } = createRecordingHost();
     const parent = 'stream:parent-toolEdit-on' as StreamTabId;
     const child = 'stream:child-bash-only-ancestry' as StreamTabId;
     setToolEditApprovalSessionBypass(parent, true, { silent: true });

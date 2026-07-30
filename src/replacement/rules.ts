@@ -6,9 +6,9 @@ import {
   SECTION_TYPES,
 } from '@replacement/constants';
 import {
+  generateBackslashFixes,
   generateEnvironmentBracesFixes,
   generateEnvironmentLinebreakFixes,
-  generateGroupedBackslashFixes,
   generateInvalidSectionEndingFixes,
   generateLatexToXmlConversions,
   generateReferenceSpacing,
@@ -67,8 +67,8 @@ export const EQUATION_REPLACEMENTS: NonRegexReplacementCategory = {
     ]);
 
     // ===== Grouped backslash fixes =====
-    // Use the new grouped helper to organize the backslash fixes logically
-    const groupedBackslashPatterns = generateGroupedBackslashFixes({
+    // Grouped only for readability; every group is fixed the same way.
+    const backslashCommandGroups = {
       mathOperators: [...MATH_OPERATORS, 'pi', 'bna'],
       greekLetters: [
         ...GREEK_LETTERS,
@@ -96,7 +96,10 @@ export const EQUATION_REPLACEMENTS: NonRegexReplacementCategory = {
       `
         .trim()
         .split(/\s+/),
-    });
+    };
+    const groupedBackslashPatterns = generateBackslashFixes(
+      Object.values(backslashCommandGroups).flat(),
+    );
 
     // Greek letter notation fixes
     // Examples: \a_ -> a_, \a^ -> a^
@@ -120,53 +123,51 @@ export const EQUATION_REPLACEMENTS: NonRegexReplacementCategory = {
     // Examples: {\align} -> {align}
     const bracesFixes = generateEnvironmentBracesFixes(environments);
 
-    // Initialize patterns object with all generated patterns
-    const patterns: { [key: string]: string } = {
+    return {
       ...linebreakFixesPatterns,
       ...referencePatterns,
       ...groupedBackslashPatterns,
       ...letterNotationFixes,
       ...envEndFixes,
       ...bracesFixes,
+
+      // =================================================================
+      // Manual replacements - for cases that need special handling
+      // =================================================================
+
+      // Note: latexdiff compatibility fixes moved to dedicated LATEXDIFF_REPLACEMENTS category
+
+      // Additional specific Greek letter fixes
+      '\\\\\\rho': '\\rho',
+      '\\\\\\delta': '\\delta',
+
+      // Additional specific fixes for rho
+      '\\\\rho_': '\\rho_',
+      '\\\\rho^': '\\rho^',
+      '\\\\rho\\': '\\rho\\',
+
+      // Fix line breaks in delimiters
+      '\\right\n)': '\\right)',
+      '\\right\n]': '\\right]',
+      '\\right\n}': '\\right}',
+      '\\left\n(': '\\left(',
+      '\\left\n[': '\\left[',
+      '\\left\n{': '\\left{',
+
+      // Fix variable notations with wrong backslashes
+      '\\\\e^': 'e^',
+
+      // Label spacing fixes
+      ',    \\label{': ',\\label{',
+      ',  \\label{': ',\\label{',
+      ',        \\label{': ',\\label{',
+      '\\\nlabel{': '\\label{',
+
+      // Environment name fixes
+      '\\end{Galign}': '\\end{align}',
+
+      ':\\colon': '\\colon',
     };
-
-    // ===================================================================
-    // Manual replacements - for specific cases that need special handling
-    // ===================================================================
-
-    // Note: latexdiff compatibility fixes moved to dedicated LATEXDIFF_REPLACEMENTS category
-
-    // Additional specific Greek letter fixes
-    patterns['\\\\\\rho'] = '\\rho';
-    patterns['\\\\\\delta'] = '\\delta';
-
-    // Additional specific fixes for rho
-    patterns['\\\\rho_'] = '\\rho_';
-    patterns['\\\\rho^'] = '\\rho^';
-    patterns['\\\\rho\\'] = '\\rho\\';
-
-    // Fix line breaks in delimiters
-    patterns['\\right\n)'] = '\\right)';
-    patterns['\\right\n]'] = '\\right]';
-    patterns['\\right\n}'] = '\\right}';
-    patterns['\\left\n('] = '\\left(';
-    patterns['\\left\n['] = '\\left[';
-    patterns['\\left\n{'] = '\\left{';
-
-    // Fix variable notations with wrong backslashes
-    patterns['\\\\e^'] = 'e^';
-
-    // Label spacing fixes
-    patterns[',    \\label{'] = ',\\label{';
-    patterns[',  \\label{'] = ',\\label{';
-    patterns[',        \\label{'] = ',\\label{';
-    patterns['\\\nlabel{'] = '\\label{';
-
-    // Environment name fixes
-    patterns['\\end{Galign}'] = '\\end{align}';
-
-    patterns[':\\colon'] = '\\colon';
-    return patterns;
   })(),
 };
 
@@ -174,24 +175,25 @@ export const FONT_COMMAND_REPLACEMENTS: NonRegexReplacementCategory = {
   name: 'font_commands' satisfies NonRegexReplacementCategoryName,
   description: 'Normalize deprecated font commands to modern equivalents',
   isRegex: false,
-  patterns: (() => {
-    const patterns: { [key: string]: string } = {};
-    const letters = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'];
-    letters.forEach((letter) => {
-      patterns[`{\\rm ${letter}}`] = `\\mathrm{${letter}}`;
-      patterns[`{\\bf ${letter}}`] = `\\mathbf{${letter}}`;
-      patterns[`{\\it ${letter}}`] = `\\mathit{${letter}}`;
-      patterns[`{\\sf ${letter}}`] = `\\mathsf{${letter}}`;
-      patterns[`{\\tt ${letter}}`] = `\\mathtt{${letter}}`;
-    });
-
-    const uppercase = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'];
-    uppercase.forEach((letter) => {
-      patterns[`{\\cal ${letter}}`] = `\\mathcal{${letter}}`;
-    });
-
-    return patterns;
-  })(),
+  patterns: {
+    ...Object.fromEntries(
+      [...'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'].flatMap(
+        (letter) => [
+          [`{\\rm ${letter}}`, `\\mathrm{${letter}}`],
+          [`{\\bf ${letter}}`, `\\mathbf{${letter}}`],
+          [`{\\it ${letter}}`, `\\mathit{${letter}}`],
+          [`{\\sf ${letter}}`, `\\mathsf{${letter}}`],
+          [`{\\tt ${letter}}`, `\\mathtt{${letter}}`],
+        ],
+      ),
+    ),
+    ...Object.fromEntries(
+      [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'].map((letter) => [
+        `{\\cal ${letter}}`,
+        `\\mathcal{${letter}}`,
+      ]),
+    ),
+  },
 };
 
 export const LATEX_FORBIDDEN_REPLACEMENTS: NonRegexReplacementCategory = {
@@ -456,9 +458,6 @@ export const LATEX_XML_REPLACEMENTS: NonRegexReplacementCategory = {
     // Auto-generated replacements - for easily maintainable pattern groups
     // ====================================================================
 
-    // Lists of environment/tag names
-    const latexEnvironments = LATEX_ENVIRONMENTS;
-
     // Pure XML tags that should not be treated as LaTeX environments.
     const pureXmlTags = [
       'revised_statement',
@@ -470,68 +469,66 @@ export const LATEX_XML_REPLACEMENTS: NonRegexReplacementCategory = {
       'beamer_poster',
     ];
 
-    // ===== XML to LaTeX conversions =====
-    // Examples:
-    // <align> -> \begin{align}
-    // </tikzpicture> -> \end{tikzpicture}
-    // <figure}> -> \begin{figure}
-    const xmlToLatexPatterns = generateXmlLatexConversions(latexEnvironments);
+    return {
+      // ===== XML to LaTeX conversions =====
+      // Examples:
+      // <align> -> \begin{align}
+      // </tikzpicture> -> \end{tikzpicture}
+      // <figure}> -> \begin{figure}
+      ...generateXmlLatexConversions(LATEX_ENVIRONMENTS),
 
-    // ===== LaTeX to XML conversions =====
-    // Examples:
-    // \begin{scratchpad} -> <scratchpad>
-    // \end{scratchpad} -> </scratchpad>
-    const latexToXmlPatterns = generateLatexToXmlConversions(pureXmlTags);
+      // ===== LaTeX to XML conversions =====
+      // Examples:
+      // \begin{scratchpad} -> <scratchpad>
+      // \end{scratchpad} -> </scratchpad>
+      ...generateLatexToXmlConversions(pureXmlTags),
 
-    // Initialize patterns object with generated conversions
-    const patterns: { [key: string]: string } = {
-      ...xmlToLatexPatterns,
-      ...latexToXmlPatterns,
+      // =================================================================
+      // Manual replacements - for cases that need special handling
+      // =================================================================
+
+      // ===== 1. LATEX TAG ENDING FIXES =====
+      // Fix LaTeX tags with incorrect XML-style ending (with '>')
+      ...Object.fromEntries(
+        LATEX_ENVIRONMENTS.flatMap((env) => [
+          [`\\end{${env}>}`, `\\end{${env}}`],
+          [`\\end{${env}>`, `\\end{${env}}`],
+          [`</end{${env}>`, `\\end{${env}}`],
+        ]),
+      ),
+
+      // ===== 2. XML BRACE FIXES =====
+      // Fix XML tags with extra braces that remain as XML
+      ...Object.fromEntries(
+        pureXmlTags.flatMap((tag) => [
+          [`<${tag}}`, `<${tag}>`],
+          [`</${tag}}`, `</${tag}>`],
+        ]),
+      ),
+
+      // ===== 3. Special Case Handling =====
+      // Special cases for minipage
+      '\\minipage}': '\\end{minipage}',
+      '\\n\\minipage}': '\\n\\end{minipage}',
+
+      // Special case for item tag
+      '<item>': '\\item',
+      '</item>': '',
+
+      // ===== 6. LATEX BRACE FIXES =====
+      // Fix extra braces in LaTeX environment tags
+      '\\begin{figure*}}': '\\begin{figure*}',
+      '\\begin{figure}}': '\\begin{figure}',
+
+      // ===== 7. Unified <documents><document name="..."> hygiene =====
+      // Empty name attribute breaks the named-document fallback in extraction.
+      '<document name="">': '<document name="unknown">',
+
+      // ===== 8. Stray XML noise emitted by some models =====
+      '<?xml version="1.0" encoding="UTF-8"?>': '',
+      '```xml\n': '',
+      '</xml>': '',
     };
-
-    // ===================================================================
-    // Manual replacements - for specific cases that need special handling
-    // ===================================================================
-
-    // ===== 1. LATEX TAG ENDING FIXES =====
-    // Fix LaTeX tags with incorrect XML-style ending (with '>')
-    latexEnvironments.forEach((env) => {
-      patterns[`\\end{${env}>}`] = `\\end{${env}}`;
-      patterns[`\\end{${env}>`] = `\\end{${env}}`;
-      patterns[`</end{${env}>`] = `\\end{${env}}`;
-    });
-
-    // ===== 2. XML BRACE FIXES =====
-    // Fix XML tags with extra braces that remain as XML
-    pureXmlTags.forEach((tag) => {
-      patterns[`<${tag}}`] = `<${tag}>`;
-      patterns[`</${tag}}`] = `</${tag}>`;
-    });
-
-    // ===== 3. Special Case Handling =====
-    // Special cases for minipage
-    patterns['\\minipage}'] = '\\end{minipage}';
-    patterns['\\n\\minipage}'] = '\\n\\end{minipage}';
-
-    // Special case for item tag
-    patterns['<item>'] = '\\item';
-    patterns['</item>'] = '';
-
-    // ===== 6. LATEX BRACE FIXES =====
-    // Fix extra braces in LaTeX environment tags
-    patterns['\\begin{figure*}}'] = '\\begin{figure*}';
-    patterns['\\begin{figure}}'] = '\\begin{figure}';
-
-    // ===== 7. Unified <documents><document name="..."> hygiene =====
-    // Empty name attribute breaks the named-document fallback in extraction.
-    patterns['<document name="">'] = '<document name="unknown">';
-
-    // ===== 8. Stray XML noise emitted by some models =====
-    patterns['<?xml version="1.0" encoding="UTF-8"?>'] = '';
-    patterns['```xml\n'] = '';
-    patterns['</xml>'] = '';
-
-    return patterns;
   })(),
 };
 

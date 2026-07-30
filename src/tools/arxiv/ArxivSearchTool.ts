@@ -91,31 +91,28 @@ export class ArxivSearchTool extends defineTool({
     let query = termQueries.length === 1 ? termQueries[0] : and(...termQueries);
 
     // Add category filters if provided
-    if (input.categories && input.categories.length > 0) {
-      const categoryFilters: ReturnType<typeof catQuery>[] = [];
-      for (const cat of input.categories) {
-        const trimmed = cat.trim();
-        if (trimmed.length > 0) {
-          try {
-            // catQuery expects a strict Category union ("cs.AI", "math.CO", ...).
-            // User input is unconstrained string — cast to the expected type
-            // and rely on the library's runtime validation (caught below).
-            categoryFilters.push(catQuery(trimmed as Category));
-          } catch (error) {
-            // Skip invalid categories — log so a silently-dropped filter is
-            // traceable rather than mysteriously absent from the query.
-            warn(
-              'arxiv.search',
-              `Ignoring invalid arxiv category filter "${trimmed}"`,
-              { data: error },
-            );
-          }
-        }
+    const categoryFilters: ReturnType<typeof catQuery>[] = [];
+    for (const cat of input.categories ?? []) {
+      const trimmed = cat.trim();
+      if (!trimmed) continue;
+      try {
+        // catQuery expects a strict Category union ("cs.AI", "math.CO", ...).
+        // User input is unconstrained string — cast to the expected type
+        // and rely on the library's runtime validation (caught below).
+        categoryFilters.push(catQuery(trimmed as Category));
+      } catch (error) {
+        // Skip invalid categories — log so a silently-dropped filter is
+        // traceable rather than mysteriously absent from the query.
+        warn(
+          'arxiv.search',
+          `Ignoring invalid arxiv category filter "${trimmed}"`,
+          { data: error },
+        );
       }
+    }
 
-      if (categoryFilters.length > 0) {
-        query = and(query, ...categoryFilters);
-      }
+    if (categoryFilters.length > 0) {
+      query = and(query, ...categoryFilters);
     }
 
     let client = createArxivClient()

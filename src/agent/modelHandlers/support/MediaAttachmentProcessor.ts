@@ -53,6 +53,10 @@ type ProcessAudioResult = {
 
 type ProcessedMediaResult = ProcessImageResult | ProcessAudioResult;
 
+type MediaLoadOutcome =
+  | { ok: true; entry?: MediaEntry | MediaEntry[]; result: MediaFileResult }
+  | { ok: false; location: FileLocation; reason: unknown };
+
 interface MediaAttachmentProcessorOptions {
   getCapabilities: () => ModelCapabilities;
   isOpenAIProvider: () => boolean;
@@ -80,47 +84,45 @@ export class MediaAttachmentProcessor {
     mediaFile: string,
     ext: string,
   ): Promise<ProcessImageResult> {
-    let mediaType: string;
-    let mediaData: string | string[];
-
-    if (ext === '.pdf') {
-      const pageCount = await countPdfPages(mediaFile);
-      if (pageCount === 0) {
-        throw new Error(`Failed to process PDF file as image: ${mediaFile}`);
-      }
-
-      if (this.capabilities.supportsNativePdf) {
-        this.logger.debug('Using native PDF', {
-          data: { mediaFile, pageCount },
-        });
-        mediaType = 'application/pdf';
-        mediaData = await getBase64EncodedMedia(mediaFile);
-        return { kind: 'image', mediaType, data: mediaData };
-      }
-
-      mediaType = 'image/png';
-      this.logger.debug(`Converting PDF to PNG: ${mediaFile}`);
-      const pdfResult = await processPdf2Png(mediaFile);
-      if (pdfResult === null) {
-        throw new Error(`Failed to process PDF file as image: ${mediaFile}`);
-      }
-      mediaData = pdfResult;
-    } else {
+    if (ext !== '.pdf') {
       const mimeType = getMimeType(mediaFile);
-      if (mimeType?.startsWith('image/')) {
-        mediaType = mimeType;
-        this.logger.debug('Processing as image', {
-          data: { mediaFile, mediaType },
-        });
-        mediaData = await getBase64EncodedMedia(mediaFile);
-      } else {
+      if (!mimeType?.startsWith('image/')) {
         throw new Error(
           `Unsupported image extension: ${ext}. Image support: ${this.capabilities.supportsVision}`,
         );
       }
+      this.logger.debug('Processing as image', {
+        data: { mediaFile, mediaType: mimeType },
+      });
+      return {
+        kind: 'image',
+        mediaType: mimeType,
+        data: await getBase64EncodedMedia(mediaFile),
+      };
     }
 
-    return { kind: 'image', mediaType, data: mediaData };
+    const pageCount = await countPdfPages(mediaFile);
+    if (pageCount === 0) {
+      throw new Error(`Failed to process PDF file as image: ${mediaFile}`);
+    }
+
+    if (this.capabilities.supportsNativePdf) {
+      this.logger.debug('Using native PDF', {
+        data: { mediaFile, pageCount },
+      });
+      return {
+        kind: 'image',
+        mediaType: 'application/pdf',
+        data: await getBase64EncodedMedia(mediaFile),
+      };
+    }
+
+    this.logger.debug(`Converting PDF to PNG: ${mediaFile}`);
+    const pdfResult = await processPdf2Png(mediaFile);
+    if (pdfResult === null) {
+      throw new Error(`Failed to process PDF file as image: ${mediaFile}`);
+    }
+    return { kind: 'image', mediaType: 'image/png', data: pdfResult };
   }
 
   private async processAudio(
@@ -161,19 +163,9 @@ export class MediaAttachmentProcessor {
 
     const loadResults = await pMap(
       mediaFiles,
-      async (
-        location,
-      ): Promise<
-        | {
-            ok: true;
-            entry: MediaEntry | MediaEntry[] | undefined;
-            result: MediaFileResult;
-          }
-        | { ok: false; location: FileLocation; reason: unknown }
-      > => {
+      async (location): Promise<MediaLoadOutcome> => {
         try {
-          const { entry, result } = await this.loadMediaEntry(location);
-          return { ok: true, entry, result };
+          return { ok: true, ...(await this.loadMediaEntry(location)) };
         } catch (reason) {
           return { ok: false, location, reason };
         }
@@ -185,24 +177,21 @@ export class MediaAttachmentProcessor {
     const results: MediaFileResult[] = [];
 
     for (const loadResult of loadResults) {
-      if (loadResult.ok) {
-        const { entry, result } = loadResult;
-        results.push(result);
-
-        if (entry) {
-          const entryList = ensureArray(entry);
-          entries.push(...entryList);
-        }
-      } else {
-        const { location, reason } = loadResult;
-        const displayPath = getComparablePath(location);
+      if (!loadResult.ok) {
+        const displayPath = getComparablePath(loadResult.location);
         this.logger.error(
-          `Failed to load media entry for ${displayPath}: ${getSdkErrorMessage(reason)}`,
+          `Failed to load media entry for ${displayPath}: ${getSdkErrorMessage(loadResult.reason)}`,
           {
-            data: { path: displayPath, error: reason },
+            data: { path: displayPath, error: loadResult.reason },
           },
         );
         results.push({ path: displayPath, ok: false });
+        continue;
+      }
+
+      results.push(loadResult.result);
+      if (loadResult.entry) {
+        entries.push(...ensureArray(loadResult.entry));
       }
     }
 
@@ -297,31 +286,24 @@ export class MediaAttachmentProcessor {
     }
   }
 
-  private shouldReturnNativePdf(
-    processed: ProcessImageResult,
-    fileExtension: string,
-  ): boolean {
-    return (
-      fileExtension === '.pdf' &&
-      processed.mediaType === 'application/pdf' &&
-      this.isOpenAIProvider &&
-      this.capabilities.supportsVision &&
-      this.capabilities.supportsNativePdf
-    );
-  }
-
   private createEntriesForProcessedMedia(
     mediaFile: string,
     absolutePath: string,
     fileExtension: string,
     processed: ProcessedMediaResult,
   ): MediaEntry | MediaEntry[] {
+    const baseName = path.basename(mediaFile);
+    const isPdf = processed.kind === 'image' && fileExtension === '.pdf';
+
     if (
-      processed.kind === 'image' &&
-      this.shouldReturnNativePdf(processed, fileExtension)
+      isPdf &&
+      processed.mediaType === 'application/pdf' &&
+      this.isOpenAIProvider &&
+      this.capabilities.supportsVision &&
+      this.capabilities.supportsNativePdf
     ) {
       const entry = this.createEntry(
-        path.basename(mediaFile),
+        baseName,
         Array.isArray(processed.data) ? processed.data[0] : processed.data,
         processed.mediaType,
         processed.kind,
@@ -333,15 +315,11 @@ export class MediaAttachmentProcessor {
     }
 
     const dataParts = ensureArray(processed.data);
-    const isImage = processed.kind === 'image';
     const derivedFromConversion =
-      isImage &&
-      fileExtension === '.pdf' &&
-      processed.mediaType !== 'application/pdf';
-    const baseName = path.basename(mediaFile);
+      isPdf && processed.mediaType !== 'application/pdf';
+    const matchesSource = !derivedFromConversion && dataParts.length === 1;
 
     const entries = dataParts.map((data, index) => {
-      const matchesSource = !derivedFromConversion && dataParts.length === 1;
       const fileName =
         dataParts.length === 1 ? baseName : `${baseName}_page_${index + 1}`;
       return this.createEntry(

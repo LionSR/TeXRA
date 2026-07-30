@@ -150,33 +150,27 @@ export class ModelHandlerValidation extends ModelHandler<
   ): Promise<
     CreateResponseResult<ValidationResponse, ChatCompletionMessageParam>
   > {
-    const workflowValidation =
-      process.env.TEXRA_INTERNAL_VALIDATE_WORKFLOW_SCRIPT === '1';
-    const hasToolResult = options.messages.some(
-      (message) => message.role === 'tool',
-    );
     let toolCalls: SdkToolCall[] | undefined;
-    if (
-      workflowValidation &&
-      options.tools?.some((tool) => tool.name === 'submit_output')
-    ) {
-      toolCalls = [
-        validationToolCall(
-          'submit_output',
-          mathematicalValidationOutput(options.messages),
-        ),
-      ];
-    } else if (
-      workflowValidation &&
-      !hasToolResult &&
-      options.tools?.some((tool) => tool.name === 'delegate_workflow_script')
-    ) {
-      toolCalls = [
-        validationToolCall('delegate_workflow_script', {
-          agent: 'correct',
-          script: WORKFLOW_SCRIPT_VALIDATION_SOURCE,
-        }),
-      ];
+    if (process.env.TEXRA_INTERNAL_VALIDATE_WORKFLOW_SCRIPT === '1') {
+      const toolNames = new Set(options.tools?.map((tool) => tool.name));
+      const hasToolResult = options.messages.some(
+        (message) => message.role === 'tool',
+      );
+      if (toolNames.has('submit_output')) {
+        toolCalls = [
+          validationToolCall(
+            'submit_output',
+            mathematicalValidationOutput(options.messages),
+          ),
+        ];
+      } else if (!hasToolResult && toolNames.has('delegate_workflow_script')) {
+        toolCalls = [
+          validationToolCall('delegate_workflow_script', {
+            agent: 'correct',
+            script: WORKFLOW_SCRIPT_VALIDATION_SOURCE,
+          }),
+        ];
+      }
     }
     return {
       response: {

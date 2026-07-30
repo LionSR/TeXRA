@@ -330,10 +330,9 @@ export async function nativeRequestApproval(
   );
   const { added, removed } = lineChanges;
   const totalChanged = added + removed;
-  const changeParts = [
-    added > 0 && `+${added}`,
-    removed > 0 && `-${removed}`,
-  ].filter(Boolean);
+  const changeParts: string[] = [];
+  if (added > 0) changeParts.push(`+${added}`);
+  if (removed > 0) changeParts.push(`-${removed}`);
   const lineWord = pluralize(totalChanged, 'line');
   const changeSuffix = changeParts.length
     ? ` · ${changeParts.join(' / ')} ${lineWord}`

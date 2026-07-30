@@ -47,8 +47,7 @@ function formatOutputText(content: unknown): string {
   if (content === undefined || content === null) return '';
   if (isObject(content) && Object.keys(content).length === 0) return '';
   try {
-    const yamlString = yaml.stringify(content);
-    return typeof yamlString === 'string' ? yamlString.trimEnd() : '';
+    return yaml.stringify(content).trimEnd();
   } catch {
     return String(content);
   }

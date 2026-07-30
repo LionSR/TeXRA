@@ -31,6 +31,7 @@ import {
 } from '@agent/storage/executionLease';
 import { platform } from '@platform/platform';
 import { EXECUTION_STATUS, type ExecutionId } from '@shared/schemas';
+import { createDeferred } from '@test/support/asyncTestUtils';
 import { StorageFS } from '@utils/files';
 
 const ownedExecutionIds = new Set<ExecutionId>();
@@ -144,19 +145,13 @@ describe('cross-process execution leases', () => {
 
   it('holds the execution lock while awaiting canonical resume admission', async () => {
     const executionId = 'd8644f' as ExecutionId;
-    let finishAdmission!: (admitted: boolean) => void;
-    let markAdmissionStarted!: () => void;
-    const admissionStarted = new Promise<void>((resolve) => {
-      markAdmissionStarted = resolve;
-    });
-    const admission = new Promise<boolean>((resolve) => {
-      finishAdmission = resolve;
-    });
+    const admissionStarted = createDeferred();
+    const admission = createDeferred<boolean>();
     const acquisition = acquireResumedExecutionLease(executionId, () => {
-      markAdmissionStarted();
-      return admission;
+      admissionStarted.resolve();
+      return admission.promise;
     });
-    await admissionStarted;
+    await admissionStarted.promise;
 
     let maintenanceEntered = false;
     const maintenance = runWithInactiveExecutionLease(executionId, async () => {
@@ -165,7 +160,7 @@ describe('cross-process execution leases', () => {
     await Promise.resolve();
     expect(maintenanceEntered).toBe(false);
 
-    finishAdmission(false);
+    admission.resolve(false);
     await expect(acquisition).resolves.toBe('cancelled');
     await maintenance;
     expect(maintenanceEntered).toBe(true);
@@ -347,13 +342,10 @@ describe('cross-process execution leases', () => {
   it('does not let a displaced continuation borrow a successor lease', async () => {
     const executionId = 'e86444' as ExecutionId;
     await acquire(executionId);
-    let startLateWrite = (): void => undefined;
-    const lateWriteGate = new Promise<void>((resolve) => {
-      startLateWrite = resolve;
-    });
+    const lateWriteGate = createDeferred();
     const lateWrite = Promise.resolve(
       runWithOwnedExecutionLease(executionId, async () => {
-        await lateWriteGate;
+        await lateWriteGate.promise;
         expect(ownsExecutionLease(executionId)).toBe(false);
         markOwnedExecutionLeaseUndurable(executionId);
         abandonOwnedExecutionLease(executionId);
@@ -373,7 +365,7 @@ describe('cross-process execution leases', () => {
     );
     await acquireResumedExecutionLease(executionId);
 
-    startLateWrite();
+    lateWriteGate.resolve();
     await expect(lateWrite).rejects.toBeInstanceOf(ExecutionLeaseLostError);
 
     await runWithOwnedExecutionLease(executionId, () =>
@@ -392,13 +384,10 @@ describe('cross-process execution leases', () => {
     const executionId = 'e86445' as ExecutionId;
     await acquire(executionId);
     const runWithFirstOwner = captureOwnedExecutionLease(executionId);
-    let resumeFirstOwner = (): void => undefined;
-    const firstOwnerPaused = new Promise<void>((resolve) => {
-      resumeFirstOwner = resolve;
-    });
+    const firstOwnerPaused = createDeferred();
     const delayedCapture = Promise.resolve(
       runWithFirstOwner(async () => {
-        await firstOwnerPaused;
+        await firstOwnerPaused.promise;
         return captureOwnedExecutionLeaseIfPresent(executionId);
       }),
     );
@@ -409,7 +398,7 @@ describe('cross-process execution leases', () => {
     );
     await acquireResumedExecutionLease(executionId);
 
-    resumeFirstOwner();
+    firstOwnerPaused.resolve();
     await expect(delayedCapture).rejects.toBeInstanceOf(
       ExecutionLeaseLostError,
     );
@@ -430,19 +419,16 @@ describe('cross-process execution leases', () => {
   it('never overlaps heartbeat work for the same execution', async () => {
     const executionId = 'e86441' as ExecutionId;
     vi.useFakeTimers();
-    let releaseHeartbeat = (): void => undefined;
+    const heartbeatGate = createDeferred();
     try {
       await acquire(executionId);
       const originalRunExclusive = platform().fileLocks.runExclusive.bind(
         platform().fileLocks,
       );
-      const heartbeatGate = new Promise<void>((resolve) => {
-        releaseHeartbeat = resolve;
-      });
       const runExclusive = vi
         .spyOn(platform().fileLocks, 'runExclusive')
         .mockImplementation(async (lockPath, operation) => {
-          await heartbeatGate;
+          await heartbeatGate.promise;
           return originalRunExclusive(lockPath, operation);
         });
 
@@ -453,7 +439,7 @@ describe('cross-process execution leases', () => {
       await vi.advanceTimersByTimeAsync(45_000);
       expect(runExclusive).toHaveBeenCalledOnce();
     } finally {
-      releaseHeartbeat();
+      heartbeatGate.resolve();
       vi.useRealTimers();
     }
   });
@@ -477,26 +463,20 @@ describe('cross-process execution leases', () => {
     const originalRunExclusive = platform().fileLocks.runExclusive.bind(
       platform().fileLocks,
     );
-    let markHeartbeatStarted = (): void => undefined;
-    const heartbeatStarted = new Promise<void>((resolve) => {
-      markHeartbeatStarted = resolve;
-    });
-    let releaseHeartbeat = (): void => undefined;
-    const heartbeatGate = new Promise<void>((resolve) => {
-      releaseHeartbeat = resolve;
-    });
+    const heartbeatStarted = createDeferred();
+    const heartbeatGate = createDeferred();
     vi.spyOn(platform().fileLocks, 'runExclusive').mockImplementationOnce(
       async (lockPath, operation) => {
-        markHeartbeatStarted();
-        await heartbeatGate;
+        heartbeatStarted.resolve();
+        await heartbeatGate.promise;
         return originalRunExclusive(lockPath, operation);
       },
     );
 
     const renewal = renewOwnedExecutionLease(executionId);
-    await heartbeatStarted;
+    await heartbeatStarted.promise;
     const release = releaseOwnedExecutionLease(executionId);
-    releaseHeartbeat();
+    heartbeatGate.resolve();
 
     await expect(renewal).rejects.toBeInstanceOf(ExecutionLeaseLostError);
     await release;
@@ -505,26 +485,20 @@ describe('cross-process execution leases', () => {
 
   it('serializes deletion with a racing lease acquisition', async () => {
     const executionId = 'f8644f' as ExecutionId;
-    let allowDeletion: (() => void) | undefined;
-    const deletionPaused = new Promise<void>((resolve) => {
-      allowDeletion = resolve;
-    });
-    let deletionStarted: (() => void) | undefined;
-    const started = new Promise<void>((resolve) => {
-      deletionStarted = resolve;
-    });
+    const deletionPaused = createDeferred();
+    const deletionStarted = createDeferred();
     const deletion = runWithInactiveExecutionLease(executionId, async () => {
-      deletionStarted?.();
-      await deletionPaused;
+      deletionStarted.resolve();
+      await deletionPaused.promise;
       return 'removed';
     });
-    await started;
+    await deletionStarted.promise;
 
     const acquisition = acquire(executionId);
     await Promise.resolve();
     expect(await StorageFS.exists(leasePath(executionId))).toBe(false);
 
-    allowDeletion?.();
+    deletionPaused.resolve();
     await expect(deletion).resolves.toEqual({
       status: 'performed',
       value: 'removed',

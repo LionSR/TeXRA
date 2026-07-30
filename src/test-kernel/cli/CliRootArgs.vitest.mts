@@ -121,6 +121,16 @@ async function withTempDir<T>(
   }
 }
 
+async function withExternalDirs(
+  run: (root: string, externalDir: string) => Promise<void>,
+): Promise<void> {
+  await withTempDir('texra-cli-inputs-', async (root) => {
+    await withTempDir('texra-cli-external-', async (externalDir) => {
+      await run(root, externalDir);
+    });
+  });
+}
+
 describe('CLI root argument routing', () => {
   it('routes top-level --logout to the logout subcommand', () => {
     expect(normalizeRootShortcuts(['--logout'])).toEqual(['logout']);
@@ -721,46 +731,28 @@ describe('CLI root argument routing', () => {
   });
 
   it('rejects external files when tool-use runs require workspace files', async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-inputs-'));
-    const externalDir = await fs.mkdtemp(
-      path.join(os.tmpdir(), 'texra-cli-external-'),
-    );
-    try {
+    await withExternalDirs(async (root, externalDir) => {
       const external = path.join(externalDir, 'problem.md');
       await fs.writeFile(external, 'outside');
 
       await expect(
         expandRunInputs([external], [], root, { requireWorkspaceFiles: true }),
       ).rejects.toThrow(/--input: file is outside --cwd:/);
-    } finally {
-      await fs.rm(root, { recursive: true, force: true });
-      await fs.rm(externalDir, { recursive: true, force: true });
-    }
+    });
   });
 
   it('rejects external directories before globbing their contents', async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-inputs-'));
-    const externalDir = await fs.mkdtemp(
-      path.join(os.tmpdir(), 'texra-cli-external-'),
-    );
-    try {
+    await withExternalDirs(async (root, externalDir) => {
       await expect(
         expandRunInputs([externalDir], [], root, {
           requireWorkspaceFiles: true,
         }),
       ).rejects.toThrow(/--input: file is outside --cwd:/);
-    } finally {
-      await fs.rm(root, { recursive: true, force: true });
-      await fs.rm(externalDir, { recursive: true, force: true });
-    }
+    });
   });
 
   it('uses the caller flag label when rejecting external stdin materialization', async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-inputs-'));
-    const externalDir = await fs.mkdtemp(
-      path.join(os.tmpdir(), 'texra-cli-external-'),
-    );
-    try {
+    await withExternalDirs(async (root, externalDir) => {
       const external = path.join(externalDir, 'stdin.md');
       await fs.writeFile(external, 'outside');
 
@@ -770,10 +762,7 @@ describe('CLI root argument routing', () => {
           stdinInputFile: async () => external,
         }),
       ).rejects.toThrow(/--context: file is outside --cwd:/);
-    } finally {
-      await fs.rm(root, { recursive: true, force: true });
-      await fs.rm(externalDir, { recursive: true, force: true });
-    }
+    });
   });
 
   it('attributes the missing-path error to the caller-supplied flag label', async () => {
@@ -810,22 +799,22 @@ describe('CLI root argument routing', () => {
   (skipPermissionTest ? it.skip : it)(
     'propagates non-ENOENT stat errors instead of misreporting as not-found',
     async () => {
-      const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-perm-'));
-      const blocked = path.join(root, 'blocked');
-      const inner = path.join(blocked, 'paper.tex');
-      try {
-        await fs.mkdir(blocked, { recursive: true });
-        await fs.writeFile(inner, 'draft');
-        // Strip search/execute permission on the parent so stat(inner) fails
-        // with EACCES. The not-found fast path must not swallow this.
-        await fs.chmod(blocked, 0o000);
-        await expect(expandWorkflowInputSpecs([inner], root)).rejects.toThrow(
-          /(EACCES|permission)/i,
-        );
-      } finally {
-        await fs.chmod(blocked, 0o755).catch(() => undefined);
-        await fs.rm(root, { recursive: true, force: true });
-      }
+      await withTempDir('texra-cli-perm-', async (root) => {
+        const blocked = path.join(root, 'blocked');
+        const inner = path.join(blocked, 'paper.tex');
+        try {
+          await fs.mkdir(blocked, { recursive: true });
+          await fs.writeFile(inner, 'draft');
+          // Strip search/execute permission on the parent so stat(inner) fails
+          // with EACCES. The not-found fast path must not swallow this.
+          await fs.chmod(blocked, 0o000);
+          await expect(expandWorkflowInputSpecs([inner], root)).rejects.toThrow(
+            /(EACCES|permission)/i,
+          );
+        } finally {
+          await fs.chmod(blocked, 0o755).catch(() => undefined);
+        }
+      });
     },
   );
 

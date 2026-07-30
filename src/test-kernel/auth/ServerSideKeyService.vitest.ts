@@ -8,6 +8,7 @@ import { ServerSideKeyService } from '@auth/serverKeys/ServerSideKeyService';
 import type { TierService } from '@auth/serverKeys/TierService';
 import { appSignals } from '@eventBus/AppSignals';
 import type { StateStore } from '@platform/interfaces';
+import { createDeferred } from '@test/support/asyncTestUtils';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { delay } from '@utils/core';
 
@@ -17,19 +18,6 @@ interface FakeTierService {
   clearCacheCalls: number;
   getConfigCalls: number;
   service: TierService;
-}
-
-interface Deferred<T> {
-  promise: Promise<T>;
-  resolve: (value: T) => void;
-}
-
-function deferred<T>(): Deferred<T> {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((settle) => {
-    resolve = settle;
-  });
-  return { promise, resolve };
 }
 
 function createTierService(
@@ -260,7 +248,7 @@ describe('ServerSideKeyService anonymous access cache', () => {
   it('does not let a stale anonymous fetch erase authenticated access', async () => {
     const state = new FakeStateStore({ [USE_INCLUDED_ACCESS_KEY]: true });
     const tier = createTierService({ providers: ['openai'] });
-    const firstAuthentication = deferred<boolean>();
+    const firstAuthentication = createDeferred<boolean>();
     vi.spyOn(SupabaseClient, 'getRelayAccessToken')
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce('token');

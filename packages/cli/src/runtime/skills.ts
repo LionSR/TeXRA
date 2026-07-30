@@ -56,9 +56,9 @@ export function formatCliSkillIssue(issue: SkillLoadIssue): string {
 export function formatCliSkillList(skills: readonly SourcedSkill[]): string {
   if (skills.length === 0) return 'No skills found.';
   return skills
-    .map((entry) => {
-      const record = skillListRecord(entry);
-      return `${record.scope}\t${record.name}\t${record.description}`;
-    })
+    .map(
+      (entry) =>
+        `${entry.source.scope}\t${entry.skill.name}\t${entry.skill.description}`,
+    )
     .join('\n');
 }

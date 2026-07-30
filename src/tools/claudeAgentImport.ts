@@ -24,8 +24,6 @@ import { resolveBinary } from './support/externalBinaryUtils';
 // Mirror the native `query` signature exactly (no hand-rolled structural copy).
 type QueryFn = typeof import('@anthropic-ai/claude-agent-sdk').query;
 
-type PlatformInfo = { pkgs: readonly string[] };
-
 // ---------------------------------------------------------------------------
 // SDK import
 // ---------------------------------------------------------------------------
@@ -80,23 +78,19 @@ export async function importClaudeAgentSdk(): Promise<QueryFn> {
  * Linux has separate glibc and musl packages; trying both keeps the resolver
  * independent of libc detection.
  */
-const PLATFORM_INFO: Record<string, PlatformInfo> = {
-  'linux-x64': {
-    pkgs: [
-      '@anthropic-ai/claude-agent-sdk-linux-x64',
-      '@anthropic-ai/claude-agent-sdk-linux-x64-musl',
-    ],
-  },
-  'linux-arm64': {
-    pkgs: [
-      '@anthropic-ai/claude-agent-sdk-linux-arm64',
-      '@anthropic-ai/claude-agent-sdk-linux-arm64-musl',
-    ],
-  },
-  'darwin-x64': { pkgs: ['@anthropic-ai/claude-agent-sdk-darwin-x64'] },
-  'darwin-arm64': { pkgs: ['@anthropic-ai/claude-agent-sdk-darwin-arm64'] },
-  'win32-x64': { pkgs: ['@anthropic-ai/claude-agent-sdk-win32-x64'] },
-  'win32-arm64': { pkgs: ['@anthropic-ai/claude-agent-sdk-win32-arm64'] },
+const PLATFORM_PACKAGES: Record<string, readonly string[]> = {
+  'linux-x64': [
+    '@anthropic-ai/claude-agent-sdk-linux-x64',
+    '@anthropic-ai/claude-agent-sdk-linux-x64-musl',
+  ],
+  'linux-arm64': [
+    '@anthropic-ai/claude-agent-sdk-linux-arm64',
+    '@anthropic-ai/claude-agent-sdk-linux-arm64-musl',
+  ],
+  'darwin-x64': ['@anthropic-ai/claude-agent-sdk-darwin-x64'],
+  'darwin-arm64': ['@anthropic-ai/claude-agent-sdk-darwin-arm64'],
+  'win32-x64': ['@anthropic-ai/claude-agent-sdk-win32-x64'],
+  'win32-arm64': ['@anthropic-ai/claude-agent-sdk-win32-arm64'],
 };
 
 /** Native CLI binary filename for the current platform. */
@@ -116,8 +110,9 @@ let cachedBinaryPath: string | undefined;
 export async function findClaudeBinaryPath(): Promise<string | undefined> {
   if (cachedBinaryPath !== undefined) return cachedBinaryPath;
 
-  const info = PLATFORM_INFO[`${process.platform}-${process.arch}`];
-  if (!info) return undefined;
+  const platformPackages =
+    PLATFORM_PACKAGES[`${process.platform}-${process.arch}`];
+  if (!platformPackages) return undefined;
 
   // The platform binary sits directly in the platform-package directory.
   const binaryInPlatformPackage = async (
@@ -128,7 +123,7 @@ export async function findClaudeBinaryPath(): Promise<string | undefined> {
   };
 
   const result = await resolveBinary({
-    platformPackages: info.pkgs,
+    platformPackages,
     binaryInPlatformPackage,
     // The npm global prefix hosts the `@anthropic-ai/claude-agent-sdk`
     // package; the platform packages resolve relative to those roots.

@@ -158,7 +158,6 @@ describe('child stream progress events', () => {
   });
 
   it('publishes child stream lifecycle events through the session hub', async () => {
-    const active = createRecordingHost();
     const recorded = recordSessionEvents(defaultSession().events);
 
     try {
@@ -244,7 +243,6 @@ describe('child stream progress events', () => {
   });
 
   it('marks a deterministic child-stream relaunch as running', async () => {
-    const active = createRecordingHost();
     const firstRun = withSessionEventRecording(() =>
       createChildStream(workflowRelaunchExecutionId, parentStreamId, {
         streamPrefix: 'workflow-script',
@@ -304,7 +302,6 @@ describe('child stream progress events', () => {
   });
 
   it('rolls back a failed rehydrated setup so the same stream can retry', async () => {
-    const active = createRecordingHost();
     const recorded = recordSessionEvents(defaultSession().events);
     const trackExecution = vi
       .spyOn(defaultSession().executions, 'trackAgentExecution')
@@ -357,7 +354,6 @@ describe('child stream progress events', () => {
   });
 
   it('emits workflow-script identity independently of its worker config', async () => {
-    const active = createRecordingHost();
     const recorded = recordSessionEvents(defaultSession().events);
     const workerConfig = {
       ...config,
@@ -485,7 +481,6 @@ describe('child stream progress events', () => {
   });
 
   it('emits removeStream for child stream auto-close', async () => {
-    const active = createRecordingHost();
     const recorded = recordSessionEvents(defaultSession().events);
 
     try {
@@ -512,7 +507,6 @@ describe('child stream progress events', () => {
   });
 
   it('finalizes a child stream when agent CLI loop setup fails synchronously', async () => {
-    const active = createRecordingHost();
     const setupError = new Error('child loop setup failed');
     const session = defaultSession();
     const recorded = recordSessionEvents(session.events);
@@ -569,7 +563,6 @@ describe('child stream progress events', () => {
   });
 
   it('publishes child loop status changes through the child stream owner', async () => {
-    const active = createRecordingHost();
     const recorded = recordSessionEvents(defaultSession().events);
 
     const childStream = startCodexChild(
@@ -617,7 +610,6 @@ describe('child stream progress events', () => {
   });
 
   it('preserves explicit user stops during child loop status changes', async () => {
-    const active = createRecordingHost();
     const recorded = recordSessionEvents(defaultSession().events);
 
     const childStream = startCodexChild(
@@ -656,8 +648,6 @@ describe('child stream progress events', () => {
   });
 
   it('settles child handle results as cancelled for stopped finalization', async () => {
-    const active = createRecordingHost();
-
     const childStream = withSessionEventRecording(() =>
       startCodexChild(
         cancelledExecutionId,
@@ -682,8 +672,6 @@ describe('child stream progress events', () => {
   });
 
   it('settles failed child handle results with error details', async () => {
-    const active = createRecordingHost();
-
     const childStream = withSessionEventRecording(() =>
       startCodexChild(failedExecutionId, 'Run a failing Codex child loop'),
     );
@@ -710,8 +698,6 @@ describe('child stream progress events', () => {
   });
 
   it('fails finalization when the outcome carries an errorMessage', async () => {
-    const active = createRecordingHost();
-
     const childStream = withSessionEventRecording(() =>
       startCodexChild(
         normalizedErrorExecutionId,

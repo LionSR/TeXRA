@@ -89,13 +89,6 @@ function expectDescribedParameters(
   }
 }
 
-function expectDescribedProperties(
-  definition: ToolDefinition,
-  paths: readonly DescriptionPath[],
-): void {
-  expectDescribedParameters(definition.name, definition.parameters, paths);
-}
-
 function descriptionPaths(testCase: ToolDescriptionCase): DescriptionPath[] {
   return [
     ...testCase.fields.map((field) => [field] as const),
@@ -350,13 +343,6 @@ describe('tool schema descriptions', () => {
       },
     ];
 
-    for (const testCase of cases) {
-      expectDescribedProperties(
-        testCase.definition,
-        descriptionPaths(testCase),
-      );
-    }
-
     const definitions = cases.map(({ definition }) => definition);
     const anthropicByName = new Map(
       toAnthropicTools(definitions).flatMap((tool) =>
@@ -380,6 +366,7 @@ describe('tool schema descriptions', () => {
       const { definition } = testCase;
       const paths = descriptionPaths(testCase);
 
+      expectDescribedParameters(definition.name, definition.parameters, paths);
       expectDescribedParameters(
         `${definition.name} anthropic`,
         anthropicByName.get(definition.name),

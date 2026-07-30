@@ -76,6 +76,10 @@ function isDesktopProcessStoresSource(specifier: string): boolean {
   return /(?:^|\/)desktopProcessStores(?:\.js)?$/u.test(specifier);
 }
 
+function readDesktopPlatformIndex(): Promise<string> {
+  return readFile(desktopSourcePath('main', 'platform', 'index.ts'), 'utf8');
+}
+
 function trackedTypeScriptConsumers(identifier: string): string[] {
   const pathspecs = ['src', 'packages'].flatMap((root) =>
     ['ts', 'tsx', 'mts', 'cts'].map(
@@ -107,7 +111,7 @@ describe('desktop composition root and launch environment', () => {
 
   it('owns one process session and flushes it before shutdown disposal', async () => {
     const source = await readFile(
-      repoPath('packages', 'desktop', 'src', 'main', 'index.ts'),
+      desktopSourcePath('main', 'index.ts'),
       'utf8',
     );
 
@@ -293,10 +297,7 @@ describe('desktop composition root and launch environment', () => {
   });
 
   it('installs the long-running model fetch in the desktop process only', async () => {
-    const desktopPlatformSource = await readFile(
-      repoPath('packages', 'desktop', 'src', 'main', 'platform', 'index.ts'),
-      'utf8',
-    );
+    const desktopPlatformSource = await readDesktopPlatformIndex();
     const extensionSource = await readFile(
       repoPath('packages', 'extension', 'src', 'extension.ts'),
       'utf8',
@@ -310,10 +311,7 @@ describe('desktop composition root and launch environment', () => {
   });
 
   it('repairs PATH before platform services and bundled agents are initialized', async () => {
-    const source = await readFile(
-      repoPath('packages', 'desktop', 'src', 'main', 'platform', 'index.ts'),
-      'utf8',
-    );
+    const source = await readDesktopPlatformIndex();
 
     expect(source.indexOf('repairLaunchPath();')).toBeGreaterThanOrEqual(0);
     expect(source.indexOf('repairLaunchPath();')).toBeLessThan(
@@ -325,10 +323,7 @@ describe('desktop composition root and launch environment', () => {
   });
 
   it('initializes desktop runtime skills from the resolved resource bundle', async () => {
-    const source = await readFile(
-      repoPath('packages', 'desktop', 'src', 'main', 'platform', 'index.ts'),
-      'utf8',
-    );
+    const source = await readDesktopPlatformIndex();
 
     expect(
       source.indexOf('const resourcesPath = resolveResourcesPath'),
@@ -342,10 +337,7 @@ describe('desktop composition root and launch environment', () => {
   });
 
   it('uses the home directory as the no-workspace skill discovery fallback', async () => {
-    const source = await readFile(
-      repoPath('packages', 'desktop', 'src', 'main', 'platform', 'index.ts'),
-      'utf8',
-    );
+    const source = await readDesktopPlatformIndex();
 
     expect(source).toContain("cwd: workspacePath ?? app.getPath('home'),");
     expect(source).not.toContain('cwd: workspacePath ?? userDataPath,');

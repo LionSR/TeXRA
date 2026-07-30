@@ -14,39 +14,36 @@ import { logErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import type { MainViewExecuteMessage } from '@shared/schemas/mainView/executeMessage';
-import type { FileOperationMessage } from '@shared/schemas/mainView/inbound';
+import type {
+  FileOperationMessage,
+  MainViewInboundMessage,
+} from '@shared/schemas/mainView/inbound';
 import { pathToLocation } from '@utils/files';
 
 const CHANNEL = 'ExecutionHandlers';
 
+type MessageFor<C extends MainViewInboundMessage['command']> = Extract<
+  MainViewInboundMessage,
+  { command: C }
+>;
+
 /** Housekeeping commands take no payload beyond the command itself. */
-export interface HousekeepingMessage {
-  command:
-    | typeof MAIN_VIEW_COMMANDS.CLEAN_OUTPUT
-    | typeof MAIN_VIEW_COMMANDS.CLEAN_BUILD
-    | typeof MAIN_VIEW_COMMANDS.INDENT_TEX;
-}
+type HousekeepingMessage = MessageFor<
+  | typeof MAIN_VIEW_COMMANDS.CLEAN_OUTPUT
+  | typeof MAIN_VIEW_COMMANDS.CLEAN_BUILD
+  | typeof MAIN_VIEW_COMMANDS.INDENT_TEX
+>;
 
 /** Single-file pack/clean commands: the file plus the agent/model to run it with. */
-export interface SingleOperationMessage {
-  command:
-    | typeof MAIN_VIEW_COMMANDS.PACK_SINGLE
-    | typeof MAIN_VIEW_COMMANDS.CLEAN_SINGLE;
-  inputFile: string;
-  agent: string;
-  model: string;
-}
+type SingleOperationMessage = MessageFor<
+  typeof MAIN_VIEW_COMMANDS.PACK_SINGLE | typeof MAIN_VIEW_COMMANDS.CLEAN_SINGLE
+>;
 
 /** Multi-file pack/clean commands: same as single-file, plus the extra file batch. */
-export interface MultipleOperationMessage {
-  command:
-    | typeof MAIN_VIEW_COMMANDS.PACK_MULTIPLE
-    | typeof MAIN_VIEW_COMMANDS.CLEAN_MULTIPLE;
-  inputFile: string;
-  agent: string;
-  model: string;
-  inputFiles?: string[];
-}
+type MultipleOperationMessage = MessageFor<
+  | typeof MAIN_VIEW_COMMANDS.PACK_MULTIPLE
+  | typeof MAIN_VIEW_COMMANDS.CLEAN_MULTIPLE
+>;
 
 export async function handleExecute(
   message: MainViewExecuteMessage,

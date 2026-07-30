@@ -7,6 +7,17 @@ import {
   type LogMessageData,
 } from '@shared/schemas';
 
+// Loaded after the jsdom globals are installed: lit and the formatters both
+// capture `document` at import time.
+let formatLogEntry: typeof import('@progressView/frontend/formatters').formatLogEntry;
+let render: typeof import('lit').render;
+
+function renderEntry(message: LogMessageData): Element {
+  const container = document.createElement('div');
+  render(formatLogEntry(message), container);
+  return container;
+}
+
 /**
  * Regression coverage for #7276: a thinking/scratchpad/model-response entry
  * that's still streaming in (`data.status: 'running'`) must render through
@@ -17,7 +28,7 @@ import {
 describe('progress view live activity rendering', () => {
   let dom: JSDOM;
 
-  beforeAll(() => {
+  beforeAll(async () => {
     dom = new JSDOM('<!doctype html><html><body></body></html>');
     Object.assign(globalThis, {
       window: dom.window,
@@ -26,17 +37,15 @@ describe('progress view live activity rendering', () => {
       Element: dom.window.Element,
       DocumentFragment: dom.window.DocumentFragment,
     });
+    ({ formatLogEntry } = await import('@progressView/frontend/formatters'));
+    ({ render } = await import('lit'));
   });
 
   afterAll(() => {
     dom.window.close();
   });
 
-  it('renders a banner-details shell, not a plain log line, while the stream is running', async () => {
-    const { formatLogEntry } =
-      await import('@progressView/frontend/formatters');
-    const { render } = await import('lit');
-
+  it('renders a banner-details shell, not a plain log line, while the stream is running', () => {
     const message: LogMessageData = {
       id: 'think-1',
       text: '**bold** reasoning in progress',
@@ -46,8 +55,7 @@ describe('progress view live activity rendering', () => {
       data: { status: 'running' },
     };
 
-    const container = document.createElement('div');
-    render(formatLogEntry(message), container);
+    const container = renderEntry(message);
 
     const details = container.querySelector('wa-details.banner-details');
     expect(details).not.toBeNull();
@@ -64,11 +72,7 @@ describe('progress view live activity rendering', () => {
     ).not.toBeNull();
   });
 
-  it('does not render ephemeral context-compaction activity', async () => {
-    const { formatLogEntry } =
-      await import('@progressView/frontend/formatters');
-    const { render } = await import('lit');
-
+  it('does not render ephemeral context-compaction activity', () => {
     const message: LogMessageData = {
       id: 'compaction-1',
       text: 'Compacting conversation context',
@@ -81,18 +85,13 @@ describe('progress view live activity rendering', () => {
       },
     };
 
-    const container = document.createElement('div');
-    render(formatLogEntry(message), container);
+    const container = renderEntry(message);
 
     expect(container.textContent).toBe('');
     expect(container.childElementCount).toBe(0);
   });
 
-  it('preserves newlines in raw text while streaming', async () => {
-    const { formatLogEntry } =
-      await import('@progressView/frontend/formatters');
-    const { render } = await import('lit');
-
+  it('preserves newlines in raw text while streaming', () => {
     const message: LogMessageData = {
       id: 'think-multiline',
       text: 'line one\nline two',
@@ -102,18 +101,13 @@ describe('progress view live activity rendering', () => {
       data: { status: 'running' },
     };
 
-    const container = document.createElement('div');
-    render(formatLogEntry(message), container);
+    const container = renderEntry(message);
 
     const content = container.querySelector('.banner-content--streaming');
     expect(content?.textContent).toBe('line one\nline two');
   });
 
-  it('upgrades to rendered markdown once the stream finalizes, inside the same banner shell', async () => {
-    const { formatLogEntry } =
-      await import('@progressView/frontend/formatters');
-    const { render } = await import('lit');
-
+  it('upgrades to rendered markdown once the stream finalizes, inside the same banner shell', () => {
     const message: LogMessageData = {
       id: 'think-1',
       text: '**bold** reasoning done',
@@ -123,8 +117,7 @@ describe('progress view live activity rendering', () => {
       data: { status: 'completed' },
     };
 
-    const container = document.createElement('div');
-    render(formatLogEntry(message), container);
+    const container = renderEntry(message);
 
     const details = container.querySelector('wa-details.banner-details');
     expect(details).not.toBeNull();
@@ -134,11 +127,7 @@ describe('progress view live activity rendering', () => {
     expect(details?.hasAttribute('open')).toBe(false);
   });
 
-  it('applies the same running/finalized behavior to model-response entries', async () => {
-    const { formatLogEntry } =
-      await import('@progressView/frontend/formatters');
-    const { render } = await import('lit');
-
+  it('applies the same running/finalized behavior to model-response entries', () => {
     const runningMessage: LogMessageData = {
       id: 'resp-1',
       text: '**bold** answer in progress',
@@ -148,8 +137,7 @@ describe('progress view live activity rendering', () => {
       data: { status: 'running' },
     };
 
-    const runningContainer = document.createElement('div');
-    render(formatLogEntry(runningMessage), runningContainer);
+    const runningContainer = renderEntry(runningMessage);
 
     const runningDetails = runningContainer.querySelector(
       'wa-details.banner-details',
@@ -160,11 +148,7 @@ describe('progress view live activity rendering', () => {
     expect(runningDetails?.hasAttribute('open')).toBe(true);
   });
 
-  it('resolves the scratchpad banner config (pencil icon, "Scratchpad" label), not the thinking default', async () => {
-    const { formatLogEntry } =
-      await import('@progressView/frontend/formatters');
-    const { render } = await import('lit');
-
+  it('resolves the scratchpad banner config (pencil icon, "Scratchpad" label), not the thinking default', () => {
     const message: LogMessageData = {
       id: 'scratch-1',
       text: 'jotting down a formula',
@@ -174,8 +158,7 @@ describe('progress view live activity rendering', () => {
       data: { status: 'running' },
     };
 
-    const container = document.createElement('div');
-    render(formatLogEntry(message), container);
+    const container = renderEntry(message);
 
     const details = container.querySelector('wa-details.banner-details');
     expect(details).not.toBeNull();

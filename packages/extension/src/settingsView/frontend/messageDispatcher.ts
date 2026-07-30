@@ -7,7 +7,11 @@
  * is no bespoke `dispatchMessage()` here because that generic mechanism
  * already exists and SettingsApp already used it before this migration.
  * Handlers are organized into domain-specific slices under ./slices/, one per
- * section of `SettingsApp`'s state (see `settingsState.ts`).
+ * section of `SettingsApp`'s state (see `settingsState.ts`). Each slice owns
+ * only its own commands and is typed `satisfies Partial<...>`; the composed
+ * registry below is the checkpoint where TypeScript enforces exhaustiveness
+ * (every SettingsView outbound command needs a real handler or
+ * `unsupported(...)` — see `@shared/utils/dispatcher`).
  */
 import type { SettingsViewOutboundHandlerRegistry } from '@shared/schemas';
 

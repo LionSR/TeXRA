@@ -182,8 +182,9 @@ function collectWebSearchPairedBlocks(
   const blocks: ServerToolContentBlock[] = [];
   for (const [i, item] of output.entries()) {
     if (!isOpenAIWebSearchCall(item)) continue;
-    if (i > 0 && isOpenAIReasoningItem(output[i - 1])) {
-      blocks.push(output[i - 1] as ResponseReasoningItem);
+    const previous = i > 0 ? output[i - 1] : undefined;
+    if (previous && isOpenAIReasoningItem(previous)) {
+      blocks.push(previous);
     }
     blocks.push(item);
   }
@@ -1363,18 +1364,18 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * instead of sending a request that the backend will reject opaquely.
    */
   protected shouldFailWhenFallbackOutputBudgetIsReduced(
-    _inputEstimate: number,
+    inputEstimate: number,
     _maxOutputTokens: number,
-    _contextWindow: number,
-    _buffer: number,
+    contextWindow: number,
+    buffer: number,
   ): boolean {
     if (
-      this.getOpenAIResponseCapabilities()
+      !this.getOpenAIResponseCapabilities()
         ?.failWhenFallbackOutputBudgetIsReduced
     ) {
-      return _inputEstimate + _buffer >= _contextWindow;
+      return false;
     }
-    return false;
+    return inputEstimate + buffer >= contextWindow;
   }
 
   /**
@@ -1444,13 +1445,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       contextWindow,
       buffer,
     );
-    const validationAdjustedMaxTokens = Math.min(
-      validation.adjustedMaxTokens,
+    const capped = clamp(
+      Math.min(validation.adjustedMaxTokens, bufferedMaxTokens),
+      0,
       maxOutputTokens,
-    );
-    const capped = Math.min(
-      clamp(validationAdjustedMaxTokens, 0, maxOutputTokens),
-      clamp(bufferedMaxTokens, 0, maxOutputTokens),
     );
     if (capped === maxOutputTokens) return maxOutputTokens;
 
@@ -1639,20 +1637,18 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     let compactedThisCall = false;
     // Store compacted messages for return value (captured when compaction succeeds)
     let compactedMessages: ResponseInputItem[] | undefined;
-    if (
-      this.compactionResult?.sourceMessages === messages &&
-      this.compactionResult.sourceFingerprint ===
-        this.messagesTailFingerprint(messages)
-    ) {
+    const reusableCompaction = this.compactionResult;
+    if (reusableCompaction) {
+      // Anything surviving the staleness check above compacted this exact input.
       // Same-turn retry of an input that already compacted successfully on a
       // prior attempt (see the cache check above): reuse it instead of
       // hitting the compact endpoint again. Re-running compaction here would
       // be a silent no-op from the caller's perspective but a real, wasted
       // API round trip, since chainState's anchor clear already committed
       // permanently and doesn't need redoing.
-      effectiveMessages = this.compactionResult.compactedMessages;
+      effectiveMessages = reusableCompaction.compactedMessages;
       compactedThisCall = true;
-      compactedMessages = this.compactionResult.compactedMessages;
+      compactedMessages = reusableCompaction.compactedMessages;
     } else if (this.shouldCompact()) {
       // Capture whether this was a manual request before clearing the flag.
       const wasManualRequest = this.compactionRequested;
@@ -2553,7 +2549,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     if (options.afterContinuationPrompt) {
       if (!isMessageItem(trailingMessage)) return false;
-      const lastContent = this.getMessageContent(trailingMessage);
+      const lastContent = trailingMessage.content;
       if (!lastContent || !this.containCutOffMessage(lastContent)) {
         return false;
       }
@@ -2854,13 +2850,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     messages: ResponseInputItem[],
     userMessage: string,
   ): Promise<ResponseInputItem[]> {
-    messages.push({
+    const followUpMessage: ResponseInputItem.Message = {
       type: 'message',
       role: 'user',
-      content: [
-        createInputText(userMessage),
-      ] as ResponseInputMessageContentList,
-    } as ResponseInputItem);
+      content: [createInputText(userMessage)],
+    };
+    messages.push(followUpMessage);
     return messages;
   }
 
@@ -2893,15 +2888,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     return undefined;
-  }
-
-  private getMessageContent(
-    item?: ResponseInputItem,
-  ): ResponseInputMessageContentList | string | undefined {
-    if (!isMessageItem(item)) {
-      return undefined;
-    }
-    return item.content;
   }
 
   private appendInputText(message: ResponseInputItem, text: string): void {
