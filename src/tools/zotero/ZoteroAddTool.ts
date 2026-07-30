@@ -223,14 +223,38 @@ const CROSSREF_TYPE_MAP: Record<string, string> = {
   other: 'document',
 };
 
+/** A Zotero Connector `saveItems` creator entry: a parsed given/family name,
+ *  or a single opaque name for organizations and unparsed CSL literals. */
+type ZoteroCreator =
+  | { firstName: string; lastName: string; creatorType: 'author' }
+  | { name: string; creatorType: 'author' };
+
+/**
+ * Canonical shape of a Zotero Connector `saveItems` item. Both `resolveDOI`
+ * (Crossref-derived) and `toZoteroItem` (manual metadata) build this same
+ * shape from different sources — sharing the type keeps a field renamed in
+ * one path from silently drifting out of sync with the other.
+ */
+interface ZoteroConnectorItem {
+  itemType: string;
+  title?: string;
+  DOI?: string;
+  url?: string;
+  creators?: ZoteroCreator[];
+  date?: string;
+  abstractNote?: string;
+  publicationTitle?: string;
+  volume?: string;
+  issue?: string;
+  pages?: string;
+}
+
 /**
  * Resolve a DOI to full metadata via the Crossref API.
  * Uses the shared CrossrefClient and rate limiter from @tools/citation.
  * Returns a Zotero-format item object, or null if resolution fails.
  */
-async function resolveDOI(
-  doi: string,
-): Promise<Record<string, unknown> | null> {
+async function resolveDOI(doi: string): Promise<ZoteroConnectorItem | null> {
   try {
     await waitForRateLimit('crossref', CROSSREF_CONSTANTS.RATE_LIMIT_DELAY_MS);
 
@@ -244,19 +268,19 @@ async function resolveDOI(
 
     const work: Work = response.content.message;
 
-    const creators = work.author?.length
+    const creators: ZoteroCreator[] | undefined = work.author?.length
       ? work.author.map((a: CslCreator) => {
           if (a.given && a.family) {
             return {
               firstName: a.given,
               lastName: a.family,
-              creatorType: 'author',
+              creatorType: 'author' as const,
             };
           }
           // name = Crossref org author, literal = CSL unparsed name
           return {
             name: a.name || a.literal || a.family || 'Unknown',
-            creatorType: 'author',
+            creatorType: 'author' as const,
           };
         })
       : undefined;
@@ -272,20 +296,20 @@ async function resolveDOI(
     const containerTitle =
       rawContainer != null ? String(rawContainer) : undefined;
 
-    return {
+    const item: ZoteroConnectorItem = {
       itemType: CROSSREF_TYPE_MAP[work.type || ''] || 'journalArticle',
-      ...(work.title?.[0] && { title: work.title[0] }),
       DOI: doi,
-      ...(creators?.length && { creators }),
-
-      ...(year != null && { date: String(year) }),
-      ...(containerTitle && { publicationTitle: containerTitle }),
-      ...(work.volume && { volume: String(work.volume) }),
-      ...(work.issue && { issue: String(work.issue) }),
-      ...(work.page && { pages: String(work.page) }),
-      ...(work.abstract && { abstractNote: work.abstract }),
-      ...(work.resource?.primary?.URL && { url: work.resource.primary.URL }),
     };
+    if (work.title?.[0]) item.title = work.title[0];
+    if (creators?.length) item.creators = creators;
+    if (year != null) item.date = String(year);
+    if (containerTitle) item.publicationTitle = containerTitle;
+    if (work.volume) item.volume = String(work.volume);
+    if (work.issue) item.issue = String(work.issue);
+    if (work.page) item.pages = String(work.page);
+    if (work.abstract) item.abstractNote = work.abstract;
+    if (work.resource?.primary?.URL) item.url = work.resource.primary.URL;
+    return item;
   } catch {
     return null;
   }
@@ -294,33 +318,36 @@ async function resolveDOI(
 /**
  * Convert our item schema to Zotero Connector format.
  */
-function toZoteroItem(item: z.infer<typeof ZoteroItemSchema>): object {
+function toZoteroItem(
+  item: z.infer<typeof ZoteroItemSchema>,
+): ZoteroConnectorItem {
   // Parse authors into Zotero creator format
-  const creators = item.authors?.length
+  const creators: ZoteroCreator[] | undefined = item.authors?.length
     ? item.authors.map((name) => {
         const parts = name.trim().split(/\s+/);
         if (parts.length === 1) {
-          return { name: parts[0], creatorType: 'author' };
+          return { name: parts[0], creatorType: 'author' as const };
         }
-        const lastName = parts.pop();
+        const lastName = parts.pop() as string;
         const firstName = parts.join(' ');
-        return { firstName, lastName, creatorType: 'author' };
+        return { firstName, lastName, creatorType: 'author' as const };
       })
     : undefined;
 
-  return {
+  const result: ZoteroConnectorItem = {
     itemType: item.itemType || 'journalArticle',
-    ...(item.title && { title: item.title }),
-    ...(item.doi && { DOI: item.doi }),
-    ...(item.url && { url: item.url }),
-    ...(creators && { creators }),
-    ...(item.year && { date: item.year }),
-    ...(item.abstract && { abstractNote: item.abstract }),
-    ...(item.publicationTitle && { publicationTitle: item.publicationTitle }),
-    ...(item.volume && { volume: item.volume }),
-    ...(item.issue && { issue: item.issue }),
-    ...(item.pages && { pages: item.pages }),
   };
+  if (item.title) result.title = item.title;
+  if (item.doi) result.DOI = item.doi;
+  if (item.url) result.url = item.url;
+  if (creators) result.creators = creators;
+  if (item.year) result.date = item.year;
+  if (item.abstract) result.abstractNote = item.abstract;
+  if (item.publicationTitle) result.publicationTitle = item.publicationTitle;
+  if (item.volume) result.volume = item.volume;
+  if (item.issue) result.issue = item.issue;
+  if (item.pages) result.pages = item.pages;
+  return result;
 }
 
 export class ZoteroAddTool extends defineTool({
