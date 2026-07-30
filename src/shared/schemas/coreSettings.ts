@@ -258,6 +258,9 @@ export const DEFAULT_CORE_SETTINGS = {
   logger: {
     debugMode: false,
   },
+  telemetry: {
+    enabled: true,
+  },
   debug: {
     saveDebugObjects: false,
     saveInputPrompt: false,
@@ -620,6 +623,14 @@ export const CoreSettingsShape = {
       ),
     })
     .prefault(DEFAULT_CORE_SETTINGS.logger),
+  telemetry: z
+    .strictObject({
+      enabled: boolField(
+        DEFAULT_CORE_SETTINGS.telemetry.enabled,
+        'Send a usage record for each model round to TeXRA: model and provider, agent name and category, token counts, cost, response time, route, stream id, and the TeXRA version and host. Never prompt text, document content, or file names. Records are sent only while signed in. Turning this off stops reporting for rounds billed to your own API key; rounds that went through the relay or a subscription are still recorded, because they meter your hosted usage against your plan.',
+      ),
+    })
+    .prefault(DEFAULT_CORE_SETTINGS.telemetry),
   debug: z
     .strictObject({
       saveDebugObjects: boolField(
@@ -764,6 +775,7 @@ export const CORE_SETTING_PATHS = [
   'agentReview.model',
   'audio.soxPath',
   'logger.debugMode',
+  'telemetry.enabled',
   'debug.saveDebugObjects',
   'debug.saveInputPrompt',
   'skills.enabled',

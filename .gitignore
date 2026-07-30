@@ -50,7 +50,11 @@ packages/desktop/extension/
 references/openrouter-skills/
 
 .pnpm-store/
-# CI checks out a private trusted-actions repo here at runtime; never commit it.
+# The bot workflows (claude.yml, claude-code-review.yml, issue-tracker.yml)
+# check this repo out a second time here at the PR's *base* ref, so the
+# automation prompts and tool allowlists they run with come from trusted
+# committed history rather than the PR branch under review. Runtime-only;
+# never commit it.
 .trusted-actions/
 
 # Generated TypeScript compiler output

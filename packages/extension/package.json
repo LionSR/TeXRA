@@ -806,6 +806,17 @@
         }
       },
       {
+        "title": "Privacy",
+        "properties": {
+          "texra.telemetry.enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Send a usage record for each model round to TeXRA: model and provider, agent name and category, token counts, cost, response time, route, stream id, and the TeXRA version and host. Never prompt text, document content, or file names. Records are sent only while signed in. Turning this off stops reporting for rounds billed to your own API key; rounds that went through the relay or a subscription are still recorded, because they meter your hosted usage against your plan.",
+            "scope": "application"
+          }
+        }
+      },
+      {
         "title": "Logger",
         "properties": {
           "texra.logger.debugMode": {
