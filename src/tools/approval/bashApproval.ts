@@ -89,11 +89,11 @@ async function showApprovalPrompt(
 
 export function buildBashApprovalRejectedResult(
   command: string,
-  userMessage?: string,
+  rejectionFeedback?: string,
 ): ToolResult {
   const preview = truncateWithEllipsis(command, 60);
   const message = `User rejected command: ${preview}`;
-  const feedback = userMessage?.trim();
+  const feedback = rejectionFeedback?.trim();
   return {
     status: 'error',
     summary: message,
