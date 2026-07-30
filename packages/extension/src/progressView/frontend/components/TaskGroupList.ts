@@ -7,8 +7,6 @@ import { classMap } from 'lit/directives/class-map.js';
 import { guard } from 'lit/directives/guard.js';
 import { repeat } from 'lit/directives/repeat.js';
 
-// Local imports - stream state
-
 // Local imports - shared schemas
 import {
   MESSAGE_TYPES,

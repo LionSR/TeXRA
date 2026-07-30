@@ -208,15 +208,7 @@ export class ToolUseFollowUpQueue {
     this.entries.delete(lease.streamId);
     this.terminal.set(lease.streamId, true);
     logger.debug(`Terminalized follow-up queue for stream ${lease.streamId}.`);
-    for (const observer of this.releaseObservers) {
-      try {
-        observer(lease.streamId);
-      } catch (err) {
-        logger.warn(`Release observer threw for stream ${lease.streamId}`, {
-          data: err,
-        });
-      }
-    }
+    this.notifyReleaseObservers(lease.streamId);
     return true;
   }
 
@@ -226,6 +218,11 @@ export class ToolUseFollowUpQueue {
     entry?.queue.dispose();
     this.entries.delete(streamId);
     this.terminal.set(streamId, true);
+    this.notifyReleaseObservers(streamId);
+    return true;
+  }
+
+  private notifyReleaseObservers(streamId: StreamTabId): void {
     for (const observer of this.releaseObservers) {
       try {
         observer(streamId);
@@ -235,7 +232,6 @@ export class ToolUseFollowUpQueue {
         });
       }
     }
-    return true;
   }
 
   /** Presentation-only snapshot; does not grant consumption rights. */

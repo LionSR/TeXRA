@@ -73,8 +73,7 @@ export function keyboardEventToAccelerator(
 
   const parts: string[] = [];
   if (platform === 'darwin' && event.metaKey) parts.push('Command');
-  if (platform !== 'darwin' && event.ctrlKey) parts.push('Control');
-  if (platform === 'darwin' && event.ctrlKey) parts.push('Control');
+  if (event.ctrlKey) parts.push('Control');
   if (event.altKey) parts.push(platform === 'darwin' ? 'Option' : 'Alt');
   if (event.shiftKey) parts.push('Shift');
   if (platform !== 'darwin' && event.metaKey) parts.push('Super');
@@ -82,24 +81,25 @@ export function keyboardEventToAccelerator(
   return [...parts, key].join('+');
 }
 
+const SUPPORTED_NAMED_KEYS: Record<string, string> = {
+  ArrowDown: 'Down',
+  ArrowLeft: 'Left',
+  ArrowRight: 'Right',
+  ArrowUp: 'Up',
+  Backspace: 'Backspace',
+  Delete: 'Delete',
+  End: 'End',
+  Enter: 'Enter',
+  Escape: 'Escape',
+  Home: 'Home',
+  PageDown: 'PageDown',
+  PageUp: 'PageUp',
+  Tab: 'Tab',
+};
+
 function normalizeKeyboardKey(key: string): string | undefined {
   if (key === ' ') return 'Space';
   if (key.length === 1) return key.toUpperCase();
   if (/^F\d{1,2}$/i.test(key)) return key.toUpperCase();
-  const supported: Record<string, string> = {
-    ArrowDown: 'Down',
-    ArrowLeft: 'Left',
-    ArrowRight: 'Right',
-    ArrowUp: 'Up',
-    Backspace: 'Backspace',
-    Delete: 'Delete',
-    End: 'End',
-    Enter: 'Enter',
-    Escape: 'Escape',
-    Home: 'Home',
-    PageDown: 'PageDown',
-    PageUp: 'PageUp',
-    Tab: 'Tab',
-  };
-  return supported[key];
+  return SUPPORTED_NAMED_KEYS[key];
 }

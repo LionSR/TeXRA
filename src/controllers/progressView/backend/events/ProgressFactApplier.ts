@@ -108,7 +108,10 @@ export class ProgressFactApplier {
       () => this.flushProgressUpdates(),
       PROGRESS_THROTTLE_MS,
     );
-  private pendingProgressUpdates = new Map<StreamTabId, ConversationProgress>();
+  private readonly pendingProgressUpdates = new Map<
+    StreamTabId,
+    ConversationProgress
+  >();
 
   /**
    * Run-fact dispatch table (see `RUN_FACT_EVENT_TYPES`); keys stay exhaustive.
@@ -177,9 +180,9 @@ export class ProgressFactApplier {
   };
 
   constructor(
-    private state: ProgressViewState,
-    private webviewUpdater: WebviewUpdater,
-    private webviewBridge: WebviewBridge,
+    private readonly state: ProgressViewState,
+    private readonly webviewUpdater: WebviewUpdater,
+    private readonly webviewBridge: WebviewBridge,
     private readonly hasPendingPermissions: (streamId: string) => boolean,
     private readonly deleteStream: (
       stream: StreamTabId,

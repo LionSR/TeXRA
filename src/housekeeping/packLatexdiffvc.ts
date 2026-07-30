@@ -68,10 +68,8 @@ export async function runPackLatexdiffvc(
   }
 
   if (clean) {
-    for (const files of [mainFiles, tempFiles]) {
-      for (const file of files) {
-        await WorkspaceFS.delete(file);
-      }
+    for (const file of [...mainFiles, ...tempFiles]) {
+      await WorkspaceFS.delete(file);
     }
     logger.info(CHANNEL, 'Cleanup complete.');
     return { status: 'cleaned', inputFile };

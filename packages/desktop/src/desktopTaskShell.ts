@@ -236,7 +236,7 @@ export function openWorkbenchTab(
       : state.workbenchTabs;
   const activeWorkbenchTabIds = { ...state.activeWorkbenchTabIds };
   if (request.kind === 'editor' && request.target) {
-    for (const placement of ['right', 'bottom'] as const) {
+    for (const placement of WORKBENCH_PLACEMENTS) {
       if (activeWorkbenchTabIds[placement] === 'workbench:editor') {
         activeWorkbenchTabIds[placement] = undefined;
       }
@@ -486,6 +486,5 @@ export function workspaceInitials(workspacePath: string | undefined): string {
 
 export function workspaceName(workspacePath: string | undefined): string {
   if (!workspacePath) return 'No project open';
-  const normalized = workspacePath.replaceAll('\\', '/').replace(/\/+$/, '');
-  return normalized.split('/').findLast(Boolean) ?? workspacePath;
+  return basename(workspacePath);
 }

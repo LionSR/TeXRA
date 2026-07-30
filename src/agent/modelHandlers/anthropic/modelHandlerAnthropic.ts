@@ -1464,10 +1464,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     const toolUseBlocks = responseObject.content.filter(isBetaToolUseBlock);
 
-    if (toolUseBlocks.length === 0) {
-      return [];
-    }
-
     return toolUseBlocks
       .filter((b) => b.id && b.name)
       .map(

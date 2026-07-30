@@ -1011,10 +1011,9 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
 
   extractToolUse(responseObject: GoogleGenAIInteraction): GoogleToolCall[] {
     const steps = responseObject?.steps ?? [];
-    const results: GoogleToolCall[] = [];
-    for (const step of steps) {
-      if (step.type !== 'function_call') continue;
-      results.push({
+    return steps
+      .filter((s): s is FunctionCallStep => s.type === 'function_call')
+      .map((step): GoogleToolCall => ({
         provider: 'google',
         callId: step.id ?? generateShortId(),
         name: step.name,
@@ -1022,9 +1021,7 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
         // GoogleToolCall.raw is a chat `FunctionCall`; reconstruct the shape the
         // downstream code reads (name/args/id) from the Interactions step.
         raw: { id: step.id, name: step.name, args: step.arguments },
-      });
-    }
-    return results;
+      }));
   }
 
   // ===========================================================================

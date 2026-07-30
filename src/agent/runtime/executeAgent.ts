@@ -561,7 +561,7 @@ export async function resumeToolUseFromResumeData(
 
           await runSession.transcripts.ensureLoaded(runStreamId);
 
-          const result = await runFlowWithLifecycle(
+          return await runFlowWithLifecycle(
             ctx,
             async (handle, lifecycle) => {
               const result = await runToolUseFlow(
@@ -612,7 +612,6 @@ export async function resumeToolUseFromResumeData(
               onRun: options.onRun,
             },
           );
-          return result;
         },
       );
       if (!isWaitingFlowResult(result)) {

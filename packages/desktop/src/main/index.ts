@@ -36,7 +36,6 @@ import {
 import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { prepareMainViewExecutionRequest } from '@controllers/mainView/MainViewExecutionController';
-import type { TerminalRunResult } from '@hosts/uiHosts';
 import { texraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { platform } from '@platform/platform';
@@ -304,15 +303,23 @@ function createWindow(options: {
   const ipcRef: {
     current?: ReturnType<typeof installDesktopMainViewIpc>;
   } = {};
+  // `installDesktopHostBridge.postToRenderer` is itself a no-op when
+  // `webContents.isDestroyed()`. Without checking that here too, callers would
+  // falsely report success and skip their external-viewer fallback. Bot
+  // review (#3816) caught it. Shared by the prompt controller, preview host,
+  // agent-execution wiring, and the pty/browser-view workspace IPC below; the
+  // diff host keeps its own narrower check (no `webContents.isDestroyed()`)
+  // per bot review #3815, so it is not folded in.
+  const postToRendererIfAlive = (message: unknown): boolean => {
+    const ipc = ipcRef.current;
+    if (!ipc || window.isDestroyed() || window.webContents.isDestroyed()) {
+      return false;
+    }
+    ipc.postToRenderer(message);
+    return true;
+  };
   const promptController = new DesktopPromptController({
-    postToRenderer: (message) => {
-      const ipc = ipcRef.current;
-      if (!ipc || window.isDestroyed() || window.webContents.isDestroyed()) {
-        return false;
-      }
-      ipc.postToRenderer(message);
-      return true;
-    },
+    postToRenderer: postToRendererIfAlive,
   });
   const settingsIpcRef: {
     current?: ReturnType<typeof createDesktopSettingsIpc>;
@@ -387,20 +394,6 @@ function createWindow(options: {
       },
     }).catch(reportAsyncError);
   }
-  // `installDesktopHostBridge.postToRenderer` is itself a no-op when
-  // `webContents.isDestroyed()`. Without checking that here too, callers would
-  // falsely report success and skip their external-viewer fallback. Bot
-  // review (#3816) caught it. Shared by the preview host and agent-execution
-  // wiring below; the diff host keeps its own narrower check (no
-  // `webContents.isDestroyed()`) per bot review #3815, so it is not folded in.
-  const postToRendererIfAlive = (message: unknown): boolean => {
-    const ipc = ipcRef.current;
-    if (!ipc || window.isDestroyed() || window.webContents.isDestroyed()) {
-      return false;
-    }
-    ipc.postToRenderer(message);
-    return true;
-  };
   /**
    * Fire-and-forget post for controllers that don't act on delivery. The
    * bridge's own `webContents.isDestroyed()` no-op (see above) is the guard
@@ -1091,20 +1084,16 @@ function createWindow(options: {
   // Interactive terminals and embedded browser tabs. Both stream to the
   // renderer through the IPC bridge installed just below, so they post via
   // `ipcRef.current` rather than capturing a bridge that doesn't exist yet.
-  const postWorkspaceMessage = (message: unknown): void => {
-    if (window.isDestroyed() || window.webContents.isDestroyed()) return;
-    ipcRef.current?.postToRenderer(message);
-  };
   const ptyHost = createDesktopPtyHost({
     cwd: options.workspacePath,
     onData: (sessionId, data) =>
-      postWorkspaceMessage({
+      postToRendererIfAlive({
         command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_DATA,
         sessionId,
         data,
       }),
     onExit: (sessionId, exitCode) =>
-      postWorkspaceMessage({
+      postToRendererIfAlive({
         command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_EXIT,
         sessionId,
         exitCode,
@@ -1115,14 +1104,14 @@ function createWindow(options: {
     getWindow: () => (window.isDestroyed() ? undefined : window),
     openExternalUrl: (url) => previewHost.openExternal(url),
     onNavigated: (state) =>
-      postWorkspaceMessage({
+      postToRendererIfAlive({
         command: DESKTOP_WORKSPACE_COMMANDS.BROWSER_STATE,
         ...state,
       }),
     onError: reportAsyncError,
   });
   const workspaceIpc = createDesktopWorkspaceIpc(
-    { postToRenderer: postWorkspaceMessage },
+    { postToRenderer: postToRendererIfAlive },
     {
       ptyHost,
       browserViews,

@@ -186,13 +186,17 @@ export class ProgressBackend {
     if (retained) await this.notifyDeletionRetained(retained);
   }
 
+  /** Whether local durable state exists for `stream` (log or task snapshot). */
+  private hasDeletableStreamData(stream: StreamTabId): boolean {
+    return (
+      this.state.streamLogs.has(stream) ||
+      Boolean(this.state.snapshots.getTaskState(stream))
+    );
+  }
+
   private async prepareStreamDeletion(stream: StreamTabId): Promise<void> {
     if (!canUseStreamDataDir(stream)) return;
-
-    const hasStream =
-      this.state.streamLogs.has(stream) ||
-      Boolean(this.state.snapshots.getTaskState(stream));
-    if (!hasStream) return;
+    if (!this.hasDeletableStreamData(stream)) return;
 
     const ownedLocally =
       this.session.executions.getAgentHandleByStream(stream) !== undefined;
@@ -212,10 +216,7 @@ export class ProgressBackend {
   ): Promise<'active' | 'failed' | undefined> {
     if (!canUseStreamDataDir(stream)) return undefined;
 
-    const hasStream =
-      this.state.streamLogs.has(stream) ||
-      Boolean(this.state.snapshots.getTaskState(stream));
-    if (!hasStream) {
+    if (!this.hasDeletableStreamData(stream)) {
       const deletion = await this.state.clearStream(stream);
       return deletion === 'deleted' ? undefined : deletion;
     }

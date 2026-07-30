@@ -63,7 +63,7 @@ export function renderEmptyState({
   kicker,
   kickerIcon,
 }: EmptyStateOptions): TemplateResult {
-  const tag = HEADING_TAGS[headingTag] ?? HEADING_TAGS.h2;
+  const tag = HEADING_TAGS[headingTag];
   // staticHtml + literal lets the heading element stay parameterizable
   // (semantic outline) while keeping interpolated children type-checked.
   return staticHtml`

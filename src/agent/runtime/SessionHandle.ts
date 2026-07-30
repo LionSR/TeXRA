@@ -312,13 +312,7 @@ export class SessionHandle {
         ) {
           return false;
         }
-        for (const streamId of this.transcripts.getUnfinishedStreamIds()) {
-          this.status.transition(
-            streamId,
-            STREAM_PHASE.RUNNING,
-            STREAM_TRANSITION_CAUSE.LIFECYCLE,
-          );
-        }
+        this.markUnfinishedStreamsRunning();
         await this.runRestartRepair(generation);
         return true;
       };
@@ -360,13 +354,7 @@ export class SessionHandle {
       this.status.clearAll();
       const streamIds = this.transcripts.keys();
       await this.snapshots.load(streamIds);
-      for (const streamId of this.transcripts.getUnfinishedStreamIds()) {
-        this.status.transition(
-          streamId,
-          STREAM_PHASE.RUNNING,
-          STREAM_TRANSITION_CAUSE.LIFECYCLE,
-        );
-      }
+      this.markUnfinishedStreamsRunning();
       await this.runRestartRepair(generation);
       storage.finalizeWorkspaceStorageChange?.();
       return true;
@@ -429,6 +417,17 @@ export class SessionHandle {
       );
     }
     throw replacementError;
+  }
+
+  /** Transition every transcript-unfinished stream to RUNNING ahead of restart repair. */
+  private markUnfinishedStreamsRunning(): void {
+    for (const streamId of this.transcripts.getUnfinishedStreamIds()) {
+      this.status.transition(
+        streamId,
+        STREAM_PHASE.RUNNING,
+        STREAM_TRANSITION_CAUSE.LIFECYCLE,
+      );
+    }
   }
 
   private async runRestartRepair(generation: number): Promise<void> {
