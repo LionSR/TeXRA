@@ -696,10 +696,6 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   // Stop / continue logic
   // ---------------------------------------------------------------------------
 
-  protected override get shouldPrependPrefillOnResumeWithoutAssistantPrefill(): boolean {
-    return true;
-  }
-
   protected appendUserText(
     messages: ChatMessages[],
     text: string,
