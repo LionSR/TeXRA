@@ -35,6 +35,9 @@ async function runDoctor(context: CliContext): Promise<number> {
             modelAccessList: async () => {
               throw initError;
             },
+            usageLoggingOptOut: () => {
+              throw initError;
+            },
           },
     ),
   );
