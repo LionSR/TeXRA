@@ -7,8 +7,9 @@
 
 import * as path from 'node:path';
 
-import pMap from 'p-map';
+import { pMapIterable, pMapSkip } from 'p-map';
 
+import { debug } from '@logger/logUtils';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import type { MemoryPreview, MemoryViewItem } from '@shared/schemas';
 import {
@@ -17,7 +18,11 @@ import {
   shouldSkipEntry,
 } from '@tools/memory/constants';
 import { relativeToDisplayPath } from '@tools/memory/memoryUtils';
-import { parseFrontmatter, formatAttribution } from '@tools/memory/memoryMeta';
+import {
+  parseFrontmatter,
+  formatAttribution,
+  type MemoryFileMeta,
+} from '@tools/memory/memoryMeta';
 import { StorageFS } from '@utils/files';
 import { isDirectory, isSymlink } from '@utils/files/fsEntryType';
 import {
@@ -29,9 +34,47 @@ const FRONTMATTER_SCAN_BYTES = 16 * 1024;
 const PREVIEW_SCAN_BYTES = 64 * 1024;
 const MEMORY_LISTING_CONCURRENCY = 8;
 
-interface DirectoryToWalk {
+/** Options controlling how far and how much {@link walkMemoryDirectory} descends. */
+export interface MemoryWalkOptions {
+  /** Number of levels below the walk root to include. Unlimited when omitted. */
+  maxDepth?: number;
+  /** Include directory entries themselves in the yielded results. */
+  includeDirs?: boolean;
+}
+
+/** One filesystem entry discovered while walking the memory tree. */
+export interface MemoryWalkEntry {
+  /** Path relative to the walk root (matches the `relativeRoot` passed in). */
+  relativePath: string;
   storagePath: string;
-  relativeRoot: string;
+  size: number;
+  mtime: number;
+  isDir: boolean;
+  /** Frontmatter metadata for files; always null for directories. */
+  meta: MemoryFileMeta | null;
+}
+
+type WalkTaskRunner = <T>(task: () => Promise<T>) => Promise<T>;
+
+function createWalkTaskRunner(concurrency: number): WalkTaskRunner {
+  let activeTasks = 0;
+  const waiters: Array<() => void> = [];
+
+  return async <T>(task: () => Promise<T>): Promise<T> => {
+    if (activeTasks >= concurrency) {
+      await new Promise<void>((resolve) => {
+        waiters.push(resolve);
+      });
+    }
+
+    activeTasks++;
+    try {
+      return await task();
+    } finally {
+      activeTasks--;
+      waiters.shift()?.();
+    }
+  };
 }
 
 async function readStoragePrefix(
@@ -89,12 +132,23 @@ function buildPreview(
 }
 
 async function readMemoryMeta(storagePath: string, stats: { size: number }) {
-  const { text: raw } = await readStoragePrefix(
-    storagePath,
-    FRONTMATTER_SCAN_BYTES,
-    stats,
-  );
-  return parseFrontmatter(raw).meta;
+  try {
+    const { text: raw } = await readStoragePrefix(
+      storagePath,
+      FRONTMATTER_SCAN_BYTES,
+      stats,
+    );
+    return parseFrontmatter(raw).meta;
+  } catch (error) {
+    // Unreadable file (race deletion, permission error) — skip attribution
+    // rather than failing the whole walk; the entry itself still lists.
+    debug(
+      'memory',
+      `Skipping attribution for unreadable memory file ${storagePath}`,
+      { data: error },
+    );
+    return null;
+  }
 }
 
 export async function loadMemoryPreview(
@@ -111,81 +165,100 @@ export async function loadMemoryPreview(
   };
 }
 
-/**
- * Walks the memory directory and collects all memory items.
- * @param storagePath - Current directory path to walk
- * @param relativeRoot - Path relative to MEMORY_STORAGE_DIR for display
- * @returns Array of memory items found in the directory
- */
-export async function walkMemoryDirectory(
+async function* walkDir(
   storagePath: string,
-  relativeRoot = '',
-): Promise<MemoryViewItem[]> {
-  const items: MemoryViewItem[] = [];
-  const pendingDirectories: DirectoryToWalk[] = [{ storagePath, relativeRoot }];
+  relativeRoot: string,
+  depth: number,
+  options: MemoryWalkOptions,
+  runTask: WalkTaskRunner,
+): AsyncGenerator<MemoryWalkEntry> {
+  const entries = await StorageFS.readDir(storagePath);
 
-  for (let index = 0; index < pendingDirectories.length; index++) {
-    const directory = pendingDirectories[index];
-    const entries = await StorageFS.readDir(directory.storagePath);
+  const results = pMapIterable(
+    entries,
+    async ([name, type]): Promise<MemoryWalkEntry | typeof pMapSkip> => {
+      if (shouldSkipEntry(name)) {
+        return pMapSkip;
+      }
 
-    const results = await pMap(
-      entries,
-      async ([name, type]): Promise<{
-        item?: MemoryViewItem;
-        directory?: DirectoryToWalk;
-      } | null> => {
-        if (shouldSkipEntry(name)) {
-          return null;
-        }
+      // Skip symlinks to avoid cycles; we have no realpath/visited guard.
+      if (isSymlink(type)) {
+        return pMapSkip;
+      }
 
-        // Skip symlinks to avoid cycles; we have no realpath/visited guard.
-        if (isSymlink(type)) {
-          return null;
-        }
-
-        const nextRelative = directory.relativeRoot
-          ? path.join(directory.relativeRoot, name)
+      return runTask(async () => {
+        const nextRelative = relativeRoot
+          ? path.join(relativeRoot, name)
           : name;
-        const nextStoragePath = path.join(MEMORY_STORAGE_DIR, nextRelative);
+        const nextStoragePath = path.join(storagePath, name);
+        const stats = await StorageFS.stat(nextStoragePath);
 
         if (isDirectory(type)) {
           return {
-            directory: {
-              storagePath: nextStoragePath,
-              relativeRoot: nextRelative,
-            },
+            relativePath: nextRelative,
+            storagePath: nextStoragePath,
+            size: stats.size,
+            mtime: stats.mtime,
+            isDir: true,
+            meta: null,
           };
         }
 
-        const stats = await StorageFS.stat(nextStoragePath);
         const meta = await readMemoryMeta(nextStoragePath, stats);
-        const displayPath = relativeToDisplayPath(nextRelative);
-
         return {
-          item: {
-            displayPath,
-            storagePath: nextStoragePath,
-            size: stats.size,
-            mtime: new Date(stats.mtime).toISOString(),
-            modifiedBy: meta ? formatAttribution(meta) : undefined,
-            pinned: meta?.pinned,
-          },
+          relativePath: nextRelative,
+          storagePath: nextStoragePath,
+          size: stats.size,
+          mtime: stats.mtime,
+          isDir: false,
+          meta,
         };
-      },
-      { concurrency: MEMORY_LISTING_CONCURRENCY },
-    );
+      });
+    },
+    { concurrency: MEMORY_LISTING_CONCURRENCY },
+  );
 
-    for (const result of results) {
-      if (result?.directory) {
-        pendingDirectories.push(result.directory);
+  for await (const entry of results) {
+    if (entry.isDir) {
+      if (options.includeDirs) {
+        yield entry;
       }
-      if (result?.item) {
-        items.push(result.item);
+      if (options.maxDepth === undefined || depth + 1 < options.maxDepth) {
+        yield* walkDir(
+          entry.storagePath,
+          entry.relativePath,
+          depth + 1,
+          options,
+          runTask,
+        );
       }
+    } else {
+      yield entry;
     }
   }
+}
 
-  return items;
+/**
+ * Walks the memory directory tree in depth-first order, skipping dotfiles,
+ * `node_modules`, and symlinks (no realpath/visited guard, so a symlink is
+ * never followed rather than risking a cycle).
+ * @param storagePath - Directory to start walking from
+ * @param relativeRoot - Path prefix used to build each entry's relativePath
+ * @param options - `maxDepth` (levels below the root; unlimited if omitted)
+ *   and `includeDirs` (whether directory entries themselves are yielded)
+ */
+export function walkMemoryDirectory(
+  storagePath: string,
+  relativeRoot = '',
+  options: MemoryWalkOptions = {},
+): AsyncGenerator<MemoryWalkEntry> {
+  return walkDir(
+    storagePath,
+    relativeRoot,
+    0,
+    options,
+    createWalkTaskRunner(MEMORY_LISTING_CONCURRENCY),
+  );
 }
 
 /**
@@ -198,9 +271,37 @@ export async function loadMemoryItems(): Promise<MemoryViewItem[]> {
     return [];
   }
 
-  const items = await walkMemoryDirectory(MEMORY_STORAGE_DIR);
+  const items: MemoryViewItem[] = [];
+  for await (const entry of walkMemoryDirectory(MEMORY_STORAGE_DIR)) {
+    items.push({
+      displayPath: relativeToDisplayPath(entry.relativePath),
+      storagePath: entry.storagePath,
+      size: entry.size,
+      mtime: new Date(entry.mtime).toISOString(),
+      modifiedBy: entry.meta ? formatAttribution(entry.meta) : undefined,
+      pinned: entry.meta?.pinned,
+    });
+  }
   return items.toSorted(
     (a, b) =>
       (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.mtime.localeCompare(a.mtime),
   );
+}
+
+/**
+ * Count pinned memory files under MEMORY_STORAGE_DIR.
+ * Short-circuits once `limit` is reached to avoid unnecessary reads.
+ * Returns 0 if the storage root does not exist.
+ */
+export async function countPinnedMemories(limit?: number): Promise<number> {
+  const exists = await StorageFS.exists(MEMORY_STORAGE_DIR);
+  if (!exists) return 0;
+
+  const cap = limit ?? Infinity;
+  let count = 0;
+  for await (const entry of walkMemoryDirectory(MEMORY_STORAGE_DIR)) {
+    if (entry.meta?.pinned) count++;
+    if (count >= cap) break;
+  }
+  return count;
 }

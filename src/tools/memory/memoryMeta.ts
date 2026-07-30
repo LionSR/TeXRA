@@ -6,17 +6,10 @@
  * no locking, no orphan cleanup — delete/rename just works.
  */
 
-import * as path from 'node:path';
-
 import * as yaml from 'yaml';
 import { z } from 'zod';
 
 import { parseYamlWith } from '@common/parsing/safeParseYaml';
-import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
-import { StorageFS } from '@utils/files';
-import { isDirectory } from '@utils/files/fsEntryType';
-
-import { shouldSkipEntry } from './constants';
 
 /**
  * Attribution metadata schema. Source of truth for the {@link MemoryFileMeta}
@@ -144,38 +137,6 @@ export function setPinnedMeta(
     ...base,
     pinned: pinned ? true : undefined,
   };
-}
-
-/**
- * Count pinned memory files under MEMORY_STORAGE_DIR.
- * Short-circuits once `limit` is reached to avoid unnecessary reads.
- * Returns 0 if the storage root does not exist.
- */
-export async function countPinnedMemories(limit?: number): Promise<number> {
-  const exists = await StorageFS.exists(MEMORY_STORAGE_DIR);
-  if (!exists) return 0;
-  return countPinnedInDir(MEMORY_STORAGE_DIR, limit ?? Infinity);
-}
-
-async function countPinnedInDir(
-  dirPath: string,
-  limit: number,
-): Promise<number> {
-  let count = 0;
-  const children = await StorageFS.readDir(dirPath);
-  for (const [name, type] of children) {
-    if (shouldSkipEntry(name)) continue;
-    const childPath = path.join(dirPath, name);
-    if (isDirectory(type)) {
-      count += await countPinnedInDir(childPath, limit - count);
-    } else {
-      const raw = await StorageFS.read(childPath);
-      const { meta } = parseFrontmatter(raw);
-      if (meta?.pinned) count++;
-    }
-    if (count >= limit) break;
-  }
-  return count;
 }
 
 // ── Display ────────────────────────────────────────────────────────
