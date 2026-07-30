@@ -1,7 +1,7 @@
 import { StatusCodes } from 'http-status-codes';
 import { isObject, isString } from '@utils/core';
 
-import { pickStringField } from './errorInspection';
+import { errorBodyCandidates, pickStringField } from './errorInspection';
 
 /**
  * Maps provider error type/code strings to their corresponding HTTP status
@@ -34,11 +34,9 @@ const ERROR_TYPE_OR_CODE_TO_STATUS: Record<string, number> = {
 export function inferStatusCodeFromBody(
   rawErrorBody: unknown,
 ): number | undefined {
-  if (!isObject(rawErrorBody)) {
-    return undefined;
-  }
-  const body = rawErrorBody as { error?: unknown };
-  const candidates = [body.error, rawErrorBody];
+  // Nested-first, per the docstring above (reversed from errorBodyCandidates'
+  // direct-first default).
+  const candidates = [...errorBodyCandidates(rawErrorBody)].reverse();
   for (const candidate of candidates) {
     if (!isObject(candidate)) continue;
     for (const field of ['type', 'code'] as const) {
@@ -52,26 +50,14 @@ export function inferStatusCodeFromBody(
 }
 
 export function isRelayError(rawErrorBody: unknown): boolean {
-  if (!isObject(rawErrorBody)) {
-    return false;
-  }
-  // Direct check (OpenAI/Anthropic SDKs extract the error object)
-  if ('_relay' in rawErrorBody) {
-    return true;
-  }
-  // Nested check (Google GenAI may preserve full response body)
-  const nested = (rawErrorBody as { error?: unknown }).error;
-  return isObject(nested) && '_relay' in nested;
+  return errorBodyCandidates(rawErrorBody).some(
+    (candidate) => isObject(candidate) && '_relay' in candidate,
+  );
 }
 
 function hasRelayBooleanFlag(rawErrorBody: unknown, field: string): boolean {
-  if (!isObject(rawErrorBody)) return false;
-  if ((rawErrorBody as Record<string, unknown>)[field] === true) {
-    return true;
-  }
-  const nested = (rawErrorBody as { error?: unknown }).error;
-  return (
-    isObject(nested) && (nested as Record<string, unknown>)[field] === true
+  return errorBodyCandidates(rawErrorBody).some(
+    (candidate) => isObject(candidate) && candidate[field] === true,
   );
 }
 
@@ -91,12 +77,7 @@ export function isRelayRequestLimitBody(rawErrorBody: unknown): boolean {
 export function getRelayRequestLimitReason(
   rawErrorBody: unknown,
 ): 'concurrency' | 'rate' | undefined {
-  if (!isObject(rawErrorBody)) return undefined;
-  const candidates = [
-    rawErrorBody,
-    (rawErrorBody as { error?: unknown }).error,
-  ];
-  for (const candidate of candidates) {
+  for (const candidate of errorBodyCandidates(rawErrorBody)) {
     if (!isObject(candidate)) continue;
     const reason = candidate.reason;
     if (reason === 'concurrency' || reason === 'rate') return reason;
@@ -108,12 +89,7 @@ export function getRelayRequestLimitReason(
 export function getRelayRequestLimitRetryAfterMs(
   rawErrorBody: unknown,
 ): number | undefined {
-  if (!isObject(rawErrorBody)) return undefined;
-  const candidates = [
-    rawErrorBody,
-    (rawErrorBody as { error?: unknown }).error,
-  ];
-  for (const candidate of candidates) {
+  for (const candidate of errorBodyCandidates(rawErrorBody)) {
     if (!isObject(candidate)) continue;
     const seconds = candidate.retryAfterSeconds;
     if (
@@ -129,13 +105,7 @@ export function getRelayRequestLimitRetryAfterMs(
 
 /** True only when a provider body explicitly identifies a model-scoped limit. */
 export function isModelScopedRateLimitBody(rawErrorBody: unknown): boolean {
-  if (!isObject(rawErrorBody)) return false;
-  const candidates = [
-    rawErrorBody,
-    (rawErrorBody as { error?: unknown }).error,
-  ];
-  return candidates.some((candidate) => {
-    if (!isObject(candidate)) return false;
+  return errorBodyCandidates(rawErrorBody).some((candidate) => {
     const scope =
       pickStringField(candidate, 'scope') ??
       pickStringField(candidate, 'rate_limit_scope') ??
@@ -157,13 +127,7 @@ export function isRelayMonthlyLimitMessage(
  *  part of the signal; OpenAI may report `insufficient_quota` directly.
  *  Covers both the direct format and the enveloped format. */
 export function isUpstreamCreditDepletedBody(rawErrorBody: unknown): boolean {
-  if (!isObject(rawErrorBody)) return false;
-  const candidates = [
-    rawErrorBody,
-    (rawErrorBody as { error?: unknown }).error,
-  ];
-  return candidates.some((c) => {
-    if (!isObject(c)) return false;
+  return errorBodyCandidates(rawErrorBody).some((c) => {
     const type = pickStringField(c, 'type');
     const code = pickStringField(c, 'code');
     const message = pickStringField(c, 'message')?.toLowerCase();
