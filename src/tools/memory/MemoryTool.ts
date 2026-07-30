@@ -10,11 +10,14 @@ import {
   getRunContextExecutionId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
-import { debug } from '@logger/logUtils';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { formatBytes, formatRelativeTime } from '@shared/utils/string';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { replaceLiteralMatches } from '@tools/fileEditFlow';
+import {
+  countPinnedMemories,
+  walkMemoryDirectory,
+} from '@tools/memory/memoryFileSystem';
 import { StorageFS } from '@utils/files';
 import { isDirectory } from '@utils/files/fsEntryType';
 import { splitContentLines } from '@utils/text/stringUtils';
@@ -37,7 +40,6 @@ import {
   MAX_PINNED_MEMORIES,
   DIRECTORY_LISTING_DEPTH,
   MEMORY_DISPLAY_ROOT,
-  shouldSkipEntry,
 } from './constants';
 import { displayToStoragePath, toDisplayPath } from './memoryUtils';
 import {
@@ -46,7 +48,6 @@ import {
   createMeta,
   formatAttribution,
   setPinnedMeta,
-  countPinnedMemories,
   type MemoryFileMeta,
 } from './memoryMeta';
 
@@ -145,6 +146,7 @@ type ListingEntry = {
   size: number;
   mtime: number;
   isDir: boolean;
+  meta?: MemoryFileMeta | null;
 };
 
 /**
@@ -546,57 +548,28 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
       isDir: true,
     });
 
-    await this.walkDirectory(resolvedPath, 0, entries);
-
-    return Promise.all(
-      entries.map(async (entry) => {
-        let display = toDisplayPath(entry.path);
-        const age = formatRelativeTime(entry.mtime);
-        let by = '-';
-        if (!entry.isDir) {
-          try {
-            const { meta } = await this.readMemoryFile(entry.path);
-            if (meta) {
-              by = formatAttribution(meta);
-              if (meta.pinned) display += ' [pinned]';
-            }
-          } catch (error) {
-            // Unreadable file — skip attribution (benign: listing still works)
-            debug(
-              'memory',
-              `Skipping attribution for unreadable memory file ${entry.path}`,
-              { data: error },
-            );
-          }
-        }
-        return `${formatBytes(entry.size)}\t${age}\t${by}\t${display}`;
-      }),
-    );
-  }
-
-  private async walkDirectory(
-    currentPath: string,
-    depth: number,
-    entries: ListingEntry[],
-  ): Promise<void> {
-    if (depth >= DIRECTORY_LISTING_DEPTH) return;
-
-    const children = await StorageFS.readDir(currentPath);
-    for (const [name, type] of children) {
-      if (shouldSkipEntry(name)) continue;
-      const childPath = path.join(currentPath, name);
-      const stats = await StorageFS.stat(childPath);
-      const isDir = isDirectory(type);
+    for await (const entry of walkMemoryDirectory(resolvedPath, '', {
+      maxDepth: DIRECTORY_LISTING_DEPTH,
+      includeDirs: true,
+    })) {
       entries.push({
-        path: childPath,
-        size: stats.size,
-        mtime: stats.mtime,
-        isDir,
+        path: entry.storagePath,
+        size: entry.size,
+        mtime: entry.mtime,
+        isDir: entry.isDir,
+        meta: entry.meta,
       });
-
-      if (isDir) {
-        await this.walkDirectory(childPath, depth + 1, entries);
-      }
     }
+
+    return entries.map((entry) => {
+      let display = toDisplayPath(entry.path);
+      const age = formatRelativeTime(entry.mtime);
+      let by = '-';
+      if (!entry.isDir && entry.meta) {
+        by = formatAttribution(entry.meta);
+        if (entry.meta.pinned) display += ' [pinned]';
+      }
+      return `${formatBytes(entry.size)}\t${age}\t${by}\t${display}`;
+    });
   }
 }

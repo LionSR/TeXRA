@@ -11,12 +11,12 @@ import type {
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { MAX_PINNED_MEMORIES } from '@tools/memory/constants';
 import {
+  countPinnedMemories,
   loadMemoryItems,
   loadMemoryPreview,
 } from '@tools/memory/memoryFileSystem';
 import {
   buildFile,
-  countPinnedMemories,
   parseFrontmatter,
   setPinnedMeta,
 } from '@tools/memory/memoryMeta';
