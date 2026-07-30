@@ -13,14 +13,17 @@ import { debug } from '@logger/logUtils';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import type { MemoryPreview, MemoryViewItem } from '@shared/schemas';
 import {
+  MAX_PINNED_MEMORIES,
   MAX_PREVIEW_LINES,
   MAX_PREVIEW_CHARS,
   shouldSkipEntry,
 } from '@tools/memory/constants';
 import { relativeToDisplayPath } from '@tools/memory/memoryUtils';
 import {
+  buildFile,
   parseFrontmatter,
   formatAttribution,
+  setPinnedMeta,
   type MemoryFileMeta,
 } from '@tools/memory/memoryMeta';
 import { StorageFS } from '@utils/files';
@@ -304,4 +307,34 @@ export async function countPinnedMemories(limit?: number): Promise<number> {
     if (count >= cap) break;
   }
   return count;
+}
+
+export type SetMemoryPinnedResult = 'changed' | 'already' | 'cap-reached';
+
+/**
+ * Pin or unpin a memory file in place, the one mutation shared by the
+ * MemoryTool `pin`/`unpin` commands and the settings-view pin toggle.
+ * Returns 'already' when the file's pinned flag already matches the
+ * requested state, 'cap-reached' when pinning would exceed
+ * MAX_PINNED_MEMORIES, or 'changed' after writing the update. Each caller
+ * formats its own surface message from the returned status.
+ */
+export async function setMemoryPinned(
+  storagePath: string,
+  pinned: boolean,
+): Promise<SetMemoryPinnedResult> {
+  const raw = await StorageFS.read(storagePath);
+  const { meta, content } = parseFrontmatter(raw);
+
+  const alreadyInState = pinned ? !!meta?.pinned : !meta?.pinned;
+  if (alreadyInState) return 'already';
+
+  if (pinned) {
+    const pinnedCount = await countPinnedMemories(MAX_PINNED_MEMORIES);
+    if (pinnedCount >= MAX_PINNED_MEMORIES) return 'cap-reached';
+  }
+
+  const updatedMeta = setPinnedMeta(meta, pinned);
+  await StorageFS.write(storagePath, buildFile(content, updatedMeta));
+  return 'changed';
 }

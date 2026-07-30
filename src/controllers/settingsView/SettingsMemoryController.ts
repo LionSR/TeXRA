@@ -1,39 +1,23 @@
 // Local imports
 import type { PromptHost } from '@hosts/uiHosts';
+import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   MemoryPreview,
   MemoryViewItem,
 } from '@shared/schemas/settingsViewMessages';
-import type { MemoryFileMeta } from '@tools/memory/memoryMeta';
-
-export interface SettingsMemoryStorage {
-  delete(path: string, options?: { recursive?: boolean }): Promise<void>;
-  read(path: string): Promise<string>;
-  write(path: string, content: string): Promise<void>;
-}
-
-export type SettingsMemoryMeta = MemoryFileMeta;
+import { MAX_PINNED_MEMORIES } from '@tools/memory/constants';
+import {
+  loadMemoryItems,
+  loadMemoryPreview,
+  setMemoryPinned,
+} from '@tools/memory/memoryFileSystem';
+import { StorageFS } from '@utils/files';
 
 export interface SettingsMemoryControllerDeps {
   prompt: Pick<PromptHost, 'confirm' | 'warning'>;
-  loadMemoryItems(): Promise<MemoryViewItem[]>;
-  loadMemoryPreview(storagePath: string): Promise<MemoryPreview>;
   isMemoryEnabled(): boolean;
   setMemoryEnabled(enabled: boolean): Promise<void>;
-  memoryStoragePath(storagePath: string): string;
-  storage: SettingsMemoryStorage;
-  maxPinnedMemories: number;
-  parseMemoryFile(raw: string): {
-    meta: SettingsMemoryMeta | null;
-    content: string;
-  };
-  buildMemoryFile(content: string, meta: SettingsMemoryMeta | null): string;
-  setPinnedMeta(
-    meta: SettingsMemoryMeta | null,
-    pinned: boolean,
-  ): SettingsMemoryMeta;
-  countPinnedMemories(maxCount: number): Promise<number>;
 }
 
 export type SettingsMemoryMessage =
@@ -56,17 +40,17 @@ export class SettingsMemoryController {
   async getMemoryDataMessage(): Promise<SettingsMemoryMessage> {
     return {
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY,
-      items: await this.deps.loadMemoryItems(),
+      items: await loadMemoryItems(),
     };
   }
 
   async getMemoryPreviewMessage(
     storagePath: string,
   ): Promise<SettingsMemoryMessage> {
-    const resolvedPath = this.deps.memoryStoragePath(storagePath);
+    const resolvedPath = resolveMemoryStoragePath(storagePath);
     return {
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_PREVIEW,
-      preview: await this.deps.loadMemoryPreview(resolvedPath),
+      preview: await loadMemoryPreview(resolvedPath),
     };
   }
 
@@ -74,7 +58,7 @@ export class SettingsMemoryController {
     return {
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_PREVIEW,
       preview: {
-        storagePath: this.deps.memoryStoragePath(storagePath),
+        storagePath: resolveMemoryStoragePath(storagePath),
         error: true,
       },
     };
@@ -100,12 +84,9 @@ export class SettingsMemoryController {
     );
     if (!confirmed) return null;
 
-    await this.deps.storage.delete(
-      this.deps.memoryStoragePath(input.storagePath),
-      {
-        recursive: true,
-      },
-    );
+    await StorageFS.delete(resolveMemoryStoragePath(input.storagePath), {
+      recursive: true,
+    });
     return this.getMemoryDataMessage();
   }
 
@@ -115,45 +96,27 @@ export class SettingsMemoryController {
   }
 
   async pinMemory(storagePath: string): Promise<SettingsMemoryMessage | null> {
-    return this.setMemoryPinned(storagePath, true);
+    return this.updatePinned(storagePath, true);
   }
 
   async unpinMemory(
     storagePath: string,
   ): Promise<SettingsMemoryMessage | null> {
-    return this.setMemoryPinned(storagePath, false);
+    return this.updatePinned(storagePath, false);
   }
 
-  private async setMemoryPinned(
+  private async updatePinned(
     storagePath: string,
     pinned: boolean,
   ): Promise<SettingsMemoryMessage | null> {
-    const resolvedPath = this.deps.memoryStoragePath(storagePath);
-    const raw = await this.deps.storage.read(resolvedPath);
-    const { meta, content } = this.deps.parseMemoryFile(raw);
-
-    const alreadyInState = pinned ? !!meta?.pinned : !meta?.pinned;
-    if (alreadyInState) {
-      return this.getMemoryDataMessage();
-    }
-
-    if (pinned) {
-      const pinnedCount = await this.deps.countPinnedMemories(
-        this.deps.maxPinnedMemories,
+    const resolvedPath = resolveMemoryStoragePath(storagePath);
+    const result = await setMemoryPinned(resolvedPath, pinned);
+    if (result === 'cap-reached') {
+      await this.deps.prompt.warning(
+        `Cannot pin: maximum of ${MAX_PINNED_MEMORIES} pinned memories reached. Unpin an existing memory first.`,
       );
-      if (pinnedCount >= this.deps.maxPinnedMemories) {
-        await this.deps.prompt.warning(
-          `Cannot pin: maximum of ${this.deps.maxPinnedMemories} pinned memories reached. Unpin an existing memory first.`,
-        );
-        return null;
-      }
+      return null;
     }
-
-    const updatedMeta = this.deps.setPinnedMeta(meta, pinned);
-    await this.deps.storage.write(
-      resolvedPath,
-      this.deps.buildMemoryFile(content, updatedMeta),
-    );
     return this.getMemoryDataMessage();
   }
 }

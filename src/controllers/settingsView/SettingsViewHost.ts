@@ -1,4 +1,3 @@
-import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   SettingsMessageFor,
@@ -9,18 +8,6 @@ import type {
   SettingsStatePorts,
 } from '@shared/settingsView/types';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { MAX_PINNED_MEMORIES } from '@tools/memory/constants';
-import {
-  countPinnedMemories,
-  loadMemoryItems,
-  loadMemoryPreview,
-} from '@tools/memory/memoryFileSystem';
-import {
-  buildFile,
-  parseFrontmatter,
-  setPinnedMeta,
-} from '@tools/memory/memoryMeta';
-import { StorageFS } from '@utils/files';
 
 import {
   buildModelSelectionMessage,
@@ -75,8 +62,6 @@ export class SettingsViewHost {
       options.controllers?.memory ??
       new SettingsMemoryController({
         prompt: options.memoryPrompt,
-        loadMemoryItems,
-        loadMemoryPreview,
         isMemoryEnabled: () =>
           options.state.globalState.get<boolean>(
             GlobalStateKey.MEMORY_ENABLED,
@@ -90,13 +75,6 @@ export class SettingsViewHost {
               enabled,
             );
           }),
-        memoryStoragePath: resolveMemoryStoragePath,
-        storage: StorageFS,
-        maxPinnedMemories: MAX_PINNED_MEMORIES,
-        parseMemoryFile: parseFrontmatter,
-        buildMemoryFile: buildFile,
-        setPinnedMeta,
-        countPinnedMemories,
       });
     this.modelSelectionController =
       options.controllers?.modelSelection ??
