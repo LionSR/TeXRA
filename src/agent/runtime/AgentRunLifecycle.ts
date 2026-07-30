@@ -1,4 +1,4 @@
-import { finalizeExecution, type FinalizeExecutionInput } from '@agent/storage';
+import type { FinalizeExecutionInput } from '@agent/storage';
 import {
   logSdkError,
   type AgentTrace,
@@ -7,7 +7,6 @@ import {
 } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import {
-  markOwnedExecutionLeaseUndurable,
   onOwnedExecutionLeaseLost,
   captureOwnedExecutionLeaseIfPresent,
 } from '@agent/storage/executionLease';
@@ -34,9 +33,9 @@ import {
 } from '@shared/state/onboardingState';
 import { agentName as baseAgentName } from '@shared/schemas/agent';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
-import { projectRunOutcome } from '@shared/streams/streamStatus';
 
 import { AgentExecutionHandle, type AgentRunHandle } from './ExecutionHandle';
+import { persistTerminalExecution } from './persistTerminalExecution';
 import {
   getAgentFlowErrorResult,
   buildTerminalFlowResult,
@@ -149,35 +148,16 @@ export async function finalizeRunTerminal(
   handle.clearWaitingCleanup();
   let terminalStatusPersisted = false;
   if (params.persistence.kind === 'finalize') {
-    try {
-      const finalization = await finalizeExecution({
-        executionId: handle.executionId,
-        terminalStatus: projectRunOutcome(outcome).executionStatus,
-        flowRecord: params.persistence.flowRecord,
-      });
-      if (finalization.status === 'failed') {
-        markOwnedExecutionLeaseUndurable(handle.executionId);
-        logger.warn('Failed to finalize durable execution state', {
-          data: {
-            agentIdentifier: handle.agentName,
-            executionId: handle.executionId,
-            stage: finalization.stage,
-            terminalStatusPersisted: finalization.terminalStatusPersisted,
-            error: finalization.error,
-          },
-        });
-      }
-      terminalStatusPersisted = finalization.terminalStatusPersisted;
-    } catch (error) {
-      markOwnedExecutionLeaseUndurable(handle.executionId);
-      logger.warn('Execution finalizer rejected unexpectedly', {
-        data: {
-          agentIdentifier: handle.agentName,
-          executionId: handle.executionId,
-          error,
-        },
-      });
-    }
+    const persisted = await persistTerminalExecution({
+      executionId: handle.executionId,
+      agentName: handle.agentName,
+      outcome,
+      flowRecord: params.persistence.flowRecord,
+      logger,
+      failedMessage: 'Failed to finalize durable execution state',
+      rejectedMessage: 'Execution finalizer rejected unexpectedly',
+    });
+    terminalStatusPersisted = persisted.terminalStatusPersisted;
   }
   if (params.stage) {
     try {
