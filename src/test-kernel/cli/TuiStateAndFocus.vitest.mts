@@ -3554,29 +3554,30 @@ describe('child-stream ordered transition matrix', () => {
     ]);
   });
 
-  it('5b. elapsed-only roster ticks are dropped while running, captured once terminal', () => {
-    // While the child is live (status undefined or running), an elapsed-only
-    // delta must not force a `CHILD_STREAMS.set` — the display derives
-    // elapsed from `startedAt` instead. But once the roster tick lands after
-    // the child goes terminal, the freshest `elapsed` must be captured, not
-    // frozen at whichever value happened to be cached from an earlier tick
-    // (the roster row is a model-facing consumer via
-    // `formatPostCompactionContext`, and the retained-row display falls back
-    // to the cached string once the child is no longer live).
+  it('5b. a live roster tick with only elapsed changed still updates the retained summary', () => {
+    // AgentRunLifecycle untracks a finishing child (so it drops out of the
+    // next roster) *before* transitioning its stream to a terminal phase, so
+    // production never sends a roster tick that carries both a terminal
+    // status and a fresh elapsed for this child - the last roster snapshot
+    // it ever appears in is always `running`. An elapsed-only delta must
+    // therefore still count as a change while the child is running, or the
+    // cached summary freezes at whichever tick happened to settle first
+    // (typically the very first one) instead of the last live value before
+    // removal - the value the retained row and `formatPostCompactionContext`
+    // read verbatim once the child is gone from the roster.
     patchStream(kid, (s) => ({ ...s, status: STREAM_PHASE.RUNNING }));
     applySubagentRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING, '0s')]);
     setParentStream(kid, parentP);
 
-    // A later live tick changes only `elapsed`; must not overwrite the cache.
     applySubagentRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING, '5s')]);
-    expect(retainedRows(parentP)).toMatchObject([{ elapsed: '0s' }]);
+    applySubagentRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING, '41s')]);
 
-    // The child goes terminal, then one final roster tick reports its true
-    // final elapsed time. This must land in the retained summary.
+    // The child is untracked (dropped from the roster) with its last-known
+    // elapsed already captured; the terminal status lands separately.
+    applySubagentRoster(parentP, []);
     patchStream(kid, (s) => ({ ...s, status: STREAM_PHASE.COMPLETED }));
-    applySubagentRoster(parentP, [rosterRow(STREAM_PHASE.COMPLETED, '42s')]);
 
-    expect(retainedRows(parentP)).toMatchObject([{ elapsed: '42s' }]);
+    expect(retainedRows(parentP)).toMatchObject([{ elapsed: '41s' }]);
   });
 
   it('6. promotion with stale roster: A, S(running), R_P+, E_P+, E0, R_P+', () => {

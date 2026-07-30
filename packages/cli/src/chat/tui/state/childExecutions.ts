@@ -10,11 +10,10 @@
 // transition/selector semantics this module implements.
 
 import { computed, signal, type Signal } from '@lit-labs/signals';
-import {
-  STREAM_PHASE,
-  type ActiveChildInfo,
-  type StreamTabId,
-  type SubagentChildInfo,
+import type {
+  ActiveChildInfo,
+  StreamTabId,
+  SubagentChildInfo,
 } from '@shared/schemas';
 
 import type { StreamSlice } from './cliState';
@@ -196,18 +195,20 @@ export function setParentStream(
  *  spurious `changed` on a same-content roster snapshot the runtime resends
  *  as a fresh array/object on every poll.
  *
- *  `elapsed` is compared only when `skipElapsed` is false. While a child is
- *  live (status undefined or `running`), `childElapsed` derives the display
- *  from `startedAt` and ignores the cached formatted string, so a
- *  formatted-time-only delta there is safe to drop — otherwise every roster
- *  tick would force a `CHILD_STREAMS.set`. Once the child is no longer live,
- *  the cached `elapsed` string becomes the value of record (terminal display,
- *  `formatPostCompactionContext`), so a delta there must still count as a
- *  change or the retained row freezes at a stale, often near-zero, elapsed. */
+ *  `elapsed` is compared like every other field: `AgentRunLifecycle`
+ *  untracks a finishing child (omitting it from the next roster) *before*
+ *  transitioning its stream to a terminal phase, so a roster tick carrying
+ *  both a terminal `status` and a fresh `elapsed` never happens in practice —
+ *  the last roster snapshot this child appears in is always `running`. If
+ *  `elapsed` were dropped from this comparison while the child is running,
+ *  the cached summary would freeze at whichever tick happened to be the
+ *  first one where the other fields settled (typically the very first
+ *  tick), not the last live value before removal, and that stale, near-zero
+ *  duration is what the retained row and `formatPostCompactionContext` would
+ *  read verbatim. */
 function summaryUnchanged(
   a: LiveChildStreamEntry['summary'],
   b: LiveChildStreamEntry['summary'],
-  skipElapsed: boolean,
 ): boolean {
   if (a === b) return true;
   if (!a || !b) return false;
@@ -215,26 +216,22 @@ function summaryUnchanged(
     a.agentName === b.agentName &&
     a.executionId === b.executionId &&
     a.startedAt === b.startedAt &&
-    (skipElapsed || a.elapsed === b.elapsed) &&
+    a.elapsed === b.elapsed &&
     a.toolName === b.toolName &&
     a.workflowPhase === b.workflowPhase
   );
 }
 
-/** Whether applying `nextEntry` over `entry` would be a no-op. `childStatus`
- *  decides whether an `elapsed`-only delta counts (see `summaryUnchanged`). */
+/** Whether applying `nextEntry` over `entry` would be a no-op. */
 function subagentEntryUnchanged(
   entry: LiveChildStreamEntry | undefined,
   nextEntry: LiveChildStreamEntry,
-  childStatus: ActiveChildInfo['status'],
 ): boolean {
-  const skipElapsed =
-    childStatus === undefined || childStatus === STREAM_PHASE.RUNNING;
   return (
     entry !== undefined &&
     entry.active === nextEntry.active &&
     entry.parent === nextEntry.parent &&
-    summaryUnchanged(entry.summary, nextEntry.summary, skipElapsed)
+    summaryUnchanged(entry.summary, nextEntry.summary)
   );
 }
 
@@ -319,7 +316,7 @@ export function applySubagentRoster(
       active: true,
       parent,
     };
-    if (subagentEntryUnchanged(entry, nextEntry, child.status)) continue;
+    if (subagentEntryUnchanged(entry, nextEntry)) continue;
     out.set(childStreamId, nextEntry);
     changed = true;
   }
