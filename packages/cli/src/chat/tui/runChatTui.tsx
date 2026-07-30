@@ -367,12 +367,12 @@ export async function runChat(
     initialAgent: agent,
     initialModel: model,
     interruptActive,
-    requestInputExit: () => exitController.requestInputExit(),
+    requestInputExit: exitController.requestInputExit,
     getApprovalPolicy,
     setApprovalPolicy,
     canSelectModel: canSelectCurrentModel,
     resetSession: resetSessionForClear,
-    resumeExecution: (id: ExecutionId) => chatController.resume(id),
+    resumeExecution: chatController.resume,
   });
   const initialPresetId = initialResume
     ? (initialResume.resolution.agentConfig.cliMultiAgentPresetId ?? undefined)
@@ -521,8 +521,7 @@ export async function runChat(
   });
   disposers.push(
     setCliAgentResumeHandler({
-      tryResumeStream: (streamId, recovery) =>
-        chatController.tryResumeStream(streamId, recovery),
+      tryResumeStream: chatController.tryResumeStream,
     }),
   );
 
@@ -593,7 +592,7 @@ export async function runChat(
     onLogoutSelect: (value, output) => logoutFromChat(value, output),
     onMemorySelect: showCliMemoryPreview,
     onSkillSelect: activateSkillForNextMessage,
-    onResumeSelect: (id: ExecutionId) => chatController.resume(id),
+    onResumeSelect: chatController.resume,
     getConfigStores: cliSettingsStores,
     onError: (error) => {
       appendLocalAssistantTranscript(toErrorMessage(error));

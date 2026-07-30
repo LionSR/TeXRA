@@ -103,8 +103,9 @@ export class FollowUpQueue {
   waitForNext(
     checkInterruption: () => boolean,
   ): Promise<FollowUpQueueItem | null> {
-    if (this.queued.length > 0) {
-      return Promise.resolve(this.queued.shift()!);
+    const next = this.queued.shift();
+    if (next) {
+      return Promise.resolve(next);
     }
     if (checkInterruption()) {
       return Promise.resolve(null);

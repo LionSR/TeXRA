@@ -114,6 +114,21 @@ function updateStreamInfo(
   });
 }
 
+/**
+ * Resolve the next active stream id for an incoming `activeStream` value:
+ * an explicit empty string means "no selection", a known stream id is kept
+ * as-is, and anything else (unset or no-longer-present) falls back to the
+ * first available stream.
+ */
+function resolveActiveStreamId(
+  activeStream: StreamTabId | '',
+  streamById: Map<StreamTabId, StreamTabInfo>,
+): StreamTabId | null {
+  if (activeStream === '') return null;
+  if (activeStream && streamById.has(activeStream)) return activeStream;
+  return firstStreamId(streamById);
+}
+
 // ============================================================
 // Handlers
 // ============================================================
@@ -138,14 +153,10 @@ export const streamLifecycleHandlers = {
     // when the current filter excludes every stream. Since the backend now
     // emits all streams unfiltered, falling back to firstStreamId would
     // re-pick a filtered-out tab and render hidden-category content.
-    let nextActiveStreamId: StreamTabId | null;
-    if (data.activeStream === '') {
-      nextActiveStreamId = null;
-    } else if (data.activeStream && updated.streamById.has(data.activeStream)) {
-      nextActiveStreamId = data.activeStream;
-    } else {
-      nextActiveStreamId = firstStreamId(updated.streamById);
-    }
+    const nextActiveStreamId = resolveActiveStreamId(
+      data.activeStream,
+      updated.streamById,
+    );
 
     appState.set(
       create(updated, (draft) => {
@@ -156,14 +167,10 @@ export const streamLifecycleHandlers = {
 
   [PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM]: (data) => {
     const prev = appState.get();
-    let nextActiveStreamId: StreamTabId | null;
-    if (data.activeStream === '') {
-      nextActiveStreamId = null;
-    } else if (data.activeStream && prev.streamById.has(data.activeStream)) {
-      nextActiveStreamId = data.activeStream;
-    } else {
-      nextActiveStreamId = firstStreamId(prev.streamById);
-    }
+    const nextActiveStreamId = resolveActiveStreamId(
+      data.activeStream,
+      prev.streamById,
+    );
     if (nextActiveStreamId === prev.activeStreamId) return;
     appState.set(
       create(prev, (draft) => {

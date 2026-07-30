@@ -387,6 +387,26 @@ export function createProgressViewSecondTierHandlers(
 ) {
   const CMD = PROGRESS_VIEW_COMMANDS;
 
+  const planFollowUp = async (
+    data: {
+      stream: StreamTabId;
+      agent: string;
+      model: string;
+      initialQuestion?: string;
+    },
+    executeImmediately: boolean,
+  ): Promise<void> => {
+    await deps.applyFollowUpPlan(
+      await deps.followUp.planToolUseFollowUpForStream({
+        streamId: data.stream,
+        agent: data.agent,
+        model: data.model,
+        initialQuestion: data.initialQuestion,
+        executeImmediately,
+      }),
+    );
+  };
+
   return {
     // ── Workflow toolbar (diff / pack / clean) ──
     [CMD.DIFF_STREAM]: (data) => deps.workflowActions.diffStream(data.stream),
@@ -495,28 +515,8 @@ export function createProgressViewSecondTierHandlers(
     },
 
     // ── Follow-up tasks ──
-    [CMD.SETUP_FOLLOWUP]: async (data) => {
-      await deps.applyFollowUpPlan(
-        await deps.followUp.planToolUseFollowUpForStream({
-          streamId: data.stream,
-          agent: data.agent,
-          model: data.model,
-          initialQuestion: data.initialQuestion,
-          executeImmediately: false,
-        }),
-      );
-    },
-    [CMD.RUN_FOLLOWUP]: async (data) => {
-      await deps.applyFollowUpPlan(
-        await deps.followUp.planToolUseFollowUpForStream({
-          streamId: data.stream,
-          agent: data.agent,
-          model: data.model,
-          initialQuestion: data.initialQuestion,
-          executeImmediately: true,
-        }),
-      );
-    },
+    [CMD.SETUP_FOLLOWUP]: (data) => planFollowUp(data, false),
+    [CMD.RUN_FOLLOWUP]: (data) => planFollowUp(data, true),
     [CMD.GET_FOLLOWUP_OPTIONS]: async (data) => {
       const { toolUseAgentsData, modelOptionsData } =
         await deps.loadFollowUpOptions();

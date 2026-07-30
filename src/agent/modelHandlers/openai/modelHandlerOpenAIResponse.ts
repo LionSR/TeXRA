@@ -1688,11 +1688,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           )
         : await this.compactConversationClientSide(client, messages, signal);
       // compactionResult is set if compaction succeeded
-      compactedThisCall = this.compactionResult !== undefined;
-      if (compactedThisCall) {
+      const { compactionResult } = this;
+      compactedThisCall = compactionResult !== undefined;
+      if (compactionResult) {
         // Note: the chain anchor is already cleared inside compactConversation()
         // immediately after the compact endpoint succeeds (before token counting).
-        compactedMessages = this.compactionResult!.compactedMessages;
+        compactedMessages = compactionResult.compactedMessages;
       }
     }
 

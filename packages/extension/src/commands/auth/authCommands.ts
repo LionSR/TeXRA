@@ -108,6 +108,12 @@ export async function signIn(): Promise<boolean> {
       return false;
     }
 
+    const showAuthServiceUnavailable = () =>
+      showLoggedMessage(
+        CHANNEL,
+        'The authentication service is temporarily unavailable. Your stored session has not been removed; try again later.',
+      );
+
     let storedSessionState = await SupabaseClient.getStoredSessionState();
     if (storedSessionState === 'invalid') {
       const cleared =
@@ -118,10 +124,7 @@ export async function signIn(): Promise<boolean> {
         : await SupabaseClient.getStoredSessionState();
     }
     if (storedSessionState === 'transient') {
-      void showLoggedMessage(
-        CHANNEL,
-        'The authentication service is temporarily unavailable. Your stored session has not been removed; try again later.',
-      );
+      void showAuthServiceUnavailable();
       return false;
     }
 
@@ -131,10 +134,7 @@ export async function signIn(): Promise<boolean> {
         await showSignedInMessage('Already signed in as', false);
         return true;
       }
-      void showLoggedMessage(
-        CHANNEL,
-        'The authentication service is temporarily unavailable. Your stored session has not been removed; try again later.',
-      );
+      void showAuthServiceUnavailable();
       return false;
     }
 

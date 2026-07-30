@@ -11,7 +11,6 @@ import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   UserQuestionAnswersSchema,
   UserQuestionPromptSchema,
-  type UserQuestionAnswers,
 } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas/toolResult';
 import { requireInteractions } from '@tools/contextHelpers';

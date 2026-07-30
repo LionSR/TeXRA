@@ -54,6 +54,7 @@ export function formatWorkflowCallTemplate(
 ): TemplateResult {
   const call = WorkflowCallProgressSchema.parse(message.data);
   const detail = workflowCallDetail(call);
+  const hasChildStream = call.childStreamId !== undefined;
   const openChildStream = (event: Event): void => {
     if (call.childStreamId === undefined) return;
     event.currentTarget?.dispatchEvent(
@@ -69,14 +70,14 @@ export function formatWorkflowCallTemplate(
   return html`
     <div
       class=${`workflow-task workflow-task--${call.status}${
-        call.childStreamId === undefined ? '' : ' workflow-task--linked'
+        hasChildStream ? ' workflow-task--linked' : ''
       }`}
       data-log-id=${message.id}
       data-group-id=${message.groupId ?? ''}
-      role=${call.childStreamId === undefined ? nothing : 'button'}
-      tabindex=${call.childStreamId === undefined ? nothing : '0'}
-      @click=${call.childStreamId === undefined ? nothing : openChildStream}
-      @keydown=${call.childStreamId === undefined ? nothing : handleKeydown}
+      role=${hasChildStream ? 'button' : nothing}
+      tabindex=${hasChildStream ? '0' : nothing}
+      @click=${hasChildStream ? openChildStream : nothing}
+      @keydown=${hasChildStream ? handleKeydown : nothing}
     >
       <span class="workflow-task-icon">${statusIcon(call)}</span>
       <span class="workflow-task-body">

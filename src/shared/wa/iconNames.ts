@@ -143,6 +143,4 @@ export const TEXRA_ICON_CANONICAL_NAMES = [
   'xmark',
 ] as const;
 
-type TeXRACanonicalIconName = (typeof TEXRA_ICON_CANONICAL_NAMES)[number];
-
-export type TeXRAIconName = TeXRACanonicalIconName;
+export type TeXRAIconName = (typeof TEXRA_ICON_CANONICAL_NAMES)[number];
