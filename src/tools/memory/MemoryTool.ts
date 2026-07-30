@@ -52,8 +52,16 @@ import {
 
 const MEMORY_PATH_DESCRIPTION = `Path under ${MEMORY_DISPLAY_ROOT} (e.g. ${MEMORY_DISPLAY_ROOT}/notes.md).`;
 
+// Branches use looseObject (not strictObject): after flattenTopLevelUnion()
+// merges every branch's properties into one JSON schema for OpenAI/Gemini/
+// Anthropic tool-calling, some OpenAI-compatible providers (DeepSeek, Kimi,
+// ...) fill every advertised property — including ones only relevant to a
+// different command — with null rather than omitting them. A strictObject
+// branch rejects that as an unrecognized key regardless of nullability;
+// looseObject tolerates the cross-branch leakage while still enforcing each
+// branch's own required fields. See AGENTS.md "Tool input schemas".
 const MemoryToolInputSchema = z.discriminatedUnion('command', [
-  z.strictObject({
+  z.looseObject({
     command: z.literal('view'),
     path: z
       .string()
@@ -80,44 +88,46 @@ const MemoryToolInputSchema = z.discriminatedUnion('command', [
         'Max entries to return from directory listing. Default: 100, max: 200.',
       ),
   }),
-  z.strictObject({
+  z.looseObject({
     command: z.literal('create'),
     path: z.string().describe(MEMORY_PATH_DESCRIPTION),
     file_text: z.string(),
   }),
-  z.strictObject({
+  z.looseObject({
     command: z.literal('str_replace'),
     path: z.string().describe(MEMORY_PATH_DESCRIPTION),
     old_str: z.string(),
     new_str: z.string(),
   }),
-  z.strictObject({
-    command: z.literal('insert'),
-    path: z.string().describe(MEMORY_PATH_DESCRIPTION),
-    insert_line: z.int().min(0),
-    insert_text: z
-      .string()
-      .nullish()
-      .describe('Text to insert. Aliased by `new_str` if omitted.'),
-    new_str: z.string().nullish(),
-  }).refine((data) => data.insert_text != null || data.new_str != null, {
-    message: 'insert_text is required for command="insert".',
-    path: ['insert_text'],
-  }),
-  z.strictObject({
+  z
+    .looseObject({
+      command: z.literal('insert'),
+      path: z.string().describe(MEMORY_PATH_DESCRIPTION),
+      insert_line: z.int().min(0),
+      insert_text: z
+        .string()
+        .nullish()
+        .describe('Text to insert. Aliased by `new_str` if omitted.'),
+      new_str: z.string().nullish(),
+    })
+    .refine((data) => data.insert_text != null || data.new_str != null, {
+      message: 'insert_text is required for command="insert".',
+      path: ['insert_text'],
+    }),
+  z.looseObject({
     command: z.literal('delete'),
     path: z.string().describe(MEMORY_PATH_DESCRIPTION),
   }),
-  z.strictObject({
+  z.looseObject({
     command: z.literal('rename'),
     old_path: z.string().describe(MEMORY_PATH_DESCRIPTION),
     new_path: z.string().describe(MEMORY_PATH_DESCRIPTION),
   }),
-  z.strictObject({
+  z.looseObject({
     command: z.literal('pin'),
     path: z.string().describe(MEMORY_PATH_DESCRIPTION),
   }),
-  z.strictObject({
+  z.looseObject({
     command: z.literal('unpin'),
     path: z.string().describe(MEMORY_PATH_DESCRIPTION),
   }),
@@ -180,13 +190,10 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
           input.new_str,
         );
       case 'insert': {
-        // Zod .refine() guarantees at least one is non-null; `new_str` is the
-        // canonical field for TextEditorTool parity, `insert_text` is an alias.
-        return this.insert(
-          locate(input.path),
-          input.insert_line,
-          input.insert_text ?? input.new_str!,
-        );
+        // Schema-enforced: the branch's .refine() rejects insert_text and
+        // new_str both being absent before execute() is ever reached.
+        const insertText = (input.insert_text ?? input.new_str)!;
+        return this.insert(locate(input.path), input.insert_line, insertText);
       }
       case 'delete':
         return this.delete(locate(input.path));
@@ -294,10 +301,10 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
         limit,
       );
 
-      const header = `Contents of ${inputPath} (showing ${start}–${end} of ${total}, up to 2 levels deep):`;
+      const header = `Contents of ${inputPath} (showing ${start}\u2013${end} of ${total}, up to 2 levels deep):`;
       return {
         status: 'executed',
-        summary: `Listed directory: ${inputPath} (${start}–${end} of ${total})`,
+        summary: `Listed directory: ${inputPath} (${start}\u2013${end} of ${total})`,
         output: `${header}\nSIZE\tMODIFIED\tBY\tPATH\n${page.join('\n')}${formatPaginationHint(end, total)}`,
       };
     }

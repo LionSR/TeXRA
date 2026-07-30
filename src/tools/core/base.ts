@@ -59,27 +59,10 @@ export abstract class BaseTool<T> implements ITool {
    */
   async call(rawInput: unknown): Promise<ToolResult> {
     try {
-      // Strip null-valued keys from object inputs before validation. Providers
-      // that null-fill every known field across discriminated-union variants
-      // (OpenAI-compatible APIs) will otherwise trip z.strictObject rejections
-      // for keys that belong to other variants. Null ↔ undefined are equivalent
-      // under the repo's .nullish() convention.
-      const input =
-        rawInput !== null &&
-        typeof rawInput === 'object' &&
-        !Array.isArray(rawInput)
-          ? (() => {
-              const sanitized = { ...(rawInput as Record<string, unknown>) };
-              for (const key of Object.keys(sanitized)) {
-                if (sanitized[key] === null) delete sanitized[key];
-              }
-              return sanitized;
-            })()
-          : rawInput;
-      const validated = this.validate(input);
-      const parsed = validated instanceof Promise ? await validated : validated;
+      const validated = this.validate(rawInput);
+      const input = validated instanceof Promise ? await validated : validated;
       // await is required here - without it, rejections bypass the catch block
-      return await this.execute(parsed);
+      return await this.execute(input);
     } catch (err) {
       if (err instanceof ZodError) {
         return {
