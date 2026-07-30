@@ -2515,10 +2515,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     return usageRoute == null ? usage : { ...usage, usageRoute };
   }
 
-  protected override get shouldPrependPrefillOnResumeWithoutAssistantPrefill(): boolean {
-    return true;
-  }
-
   protected appendUserText(
     messages: ResponseInputItem[],
     text: string,

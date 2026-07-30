@@ -47,8 +47,8 @@ async function withMissingOutput<T>(
   }
 }
 
-describe('model handler empty prefill behavior', () => {
-  it('OpenAI chat preserves user content when prefill is empty', async () => {
+describe('model handler output initialization with no output file', () => {
+  it('OpenAI chat preserves user content when no output file exists', async () => {
     await withMissingOutput(async (outputLocation) => {
       const handler = new ModelHandlerOpenAI(
         buildTestModelConfig({
@@ -71,7 +71,6 @@ describe('model handler empty prefill behavior', () => {
           messages,
           AgentWorkspaceState.create(),
           outputLocation,
-          '',
         );
 
       assert.equal(isComplete, false);
@@ -84,7 +83,7 @@ describe('model handler empty prefill behavior', () => {
     });
   });
 
-  it('Google GenAI preserves user parts when prefill is empty', async () => {
+  it('Google GenAI preserves user parts when no output file exists', async () => {
     await withMissingOutput(async (outputLocation) => {
       const handler = new ModelHandlerGoogleGenAI(
         buildTestModelConfig({
@@ -108,7 +107,6 @@ describe('model handler empty prefill behavior', () => {
           messages,
           workspaceState,
           outputLocation,
-          '',
         );
 
       assert.equal(isComplete, false);
@@ -122,7 +120,7 @@ describe('model handler empty prefill behavior', () => {
     });
   });
 
-  it('OpenRouter native preserves user content when prefill is empty', async () => {
+  it('OpenRouter native preserves user content when no output file exists', async () => {
     await withMissingOutput(async (outputLocation) => {
       const handler = new ModelHandlerOpenRouterNative(
         buildTestModelConfig({
@@ -146,7 +144,6 @@ describe('model handler empty prefill behavior', () => {
           messages,
           AgentWorkspaceState.create(),
           outputLocation,
-          '',
         );
 
       assert.equal(isComplete, false);

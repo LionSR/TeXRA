@@ -1028,14 +1028,6 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
   // Stop / continue (PORT — keyed on Interaction status, not FinishReason)
   // ===========================================================================
 
-  protected override get shouldStorePseudoPrefillAsOutput(): boolean {
-    return true;
-  }
-
-  protected override createPseudoPrefillPrompt(prefill: string): string {
-    return `Organize your response with XML tags. Start your response with:\n${prefill}`;
-  }
-
   protected appendUserText(
     messages: Step[],
     text: string,
