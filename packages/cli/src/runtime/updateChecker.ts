@@ -15,9 +15,9 @@ import {
   UPDATE_CHECK_SKIP_ENV,
 } from '@utils/system/semverUpdateCheck';
 import { executeCommand } from '@utils/system/execUtils';
+import { isEnvFlagEnabled } from '@utils/system/envFlags';
 
 import {
-  cliEnvValue,
   readCliAmbientState,
   readCliEntrypointPath,
   resolveCliCwd,
@@ -378,7 +378,7 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
   notified = true;
 
   const ambient = readCliAmbientState();
-  if (cliEnvValue(UPDATE_CHECK_SKIP_ENV)) return;
+  if (isEnvFlagEnabled(UPDATE_CHECK_SKIP_ENV)) return;
   if (ambient.isCi) return;
   // Require all three standard streams to be a TTY. stdout matters even though
   // the prompt uses stdin/stderr: a half-redirected invocation like

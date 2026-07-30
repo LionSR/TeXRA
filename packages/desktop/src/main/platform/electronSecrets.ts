@@ -4,6 +4,7 @@ import type { PlatformSecrets } from '@platform/secrets';
 import type { JsonStore } from '@platform/defaults/jsonStore';
 import { assertNever } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { isEnvFlagEnabled } from '@utils/system/envFlags';
 
 type StoredSecret = { encrypted: true; value: string };
 type SecretStorageMode = 'encrypted' | 'basic_text' | 'unavailable';
@@ -28,10 +29,7 @@ const SAFE_STORAGE_UNAVAILABLE_MESSAGE =
  * API keys still work via the existing override in `ElectronSecrets.get()`.
  */
 function isKeychainDisabled(): boolean {
-  return (
-    process.env.TEXRA_DISABLE_KEYCHAIN === '1' ||
-    process.env.TEXRA_DISABLE_KEYCHAIN === 'true'
-  );
+  return isEnvFlagEnabled('TEXRA_DISABLE_KEYCHAIN');
 }
 
 let warnedAboutKeychainDisabled = false;

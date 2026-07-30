@@ -82,6 +82,7 @@ describe('UsageLogService', () => {
   afterEach(async () => {
     await UsageLogService.dispose();
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
     vi.restoreAllMocks();
   });
 
@@ -465,6 +466,74 @@ describe('UsageLogService', () => {
       await expect(flush).resolves.toBe(USAGE_LOG_FLUSH_OUTCOME.ACCEPTED);
       expect(fetchMock).not.toHaveBeenCalled();
       expect(batches).toEqual([]);
+    });
+
+    // The environment kill switch is what a user has when editing settings is
+    // awkward: a CI job, a shared machine, or a one-off `TEXRA_NO_TELEMETRY=1
+    // texra run`. It overrides a stored `true` and cannot re-enable logging.
+    it.each([
+      ['TEXRA_NO_TELEMETRY', '1'],
+      ['TEXRA_NO_TELEMETRY', 'true'],
+      ['DO_NOT_TRACK', '1'],
+    ])('sends nothing while %s=%s is set', async (name, value) => {
+      vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue(
+        'token',
+      );
+      await platform().config.update(TELEMETRY_ENABLED_KEY, true);
+      vi.stubEnv(name, value);
+
+      const batches: unknown[] = [];
+      const fetchMock = stubFetch(batches);
+
+      UsageLogService.log(usageEntry('optional'));
+      await expect(UsageLogService.flush()).resolves.toBe(
+        USAGE_LOG_FLUSH_OUTCOME.ACCEPTED,
+      );
+
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(batches).toEqual([]);
+    });
+
+    it.each([['0'], ['false'], ['']])(
+      'ignores TEXRA_NO_TELEMETRY=%p',
+      async (value) => {
+        vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue(
+          'token',
+        );
+        await platform().config.update(TELEMETRY_ENABLED_KEY, true);
+        vi.stubEnv('TEXRA_NO_TELEMETRY', value);
+
+        const batches: unknown[] = [];
+        const fetchMock = stubFetch(batches);
+
+        UsageLogService.log(usageEntry('optional'));
+        await expect(UsageLogService.flush()).resolves.toBe(
+          USAGE_LOG_FLUSH_OUTCOME.ACCEPTED,
+        );
+
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(batches.map(batchModels)).toEqual([['optional']]);
+      },
+    );
+
+    // Same carve-out as the setting: the spend cap is enforced from these
+    // records, so the environment switch must not suppress them either.
+    it('still sends relay usage while TEXRA_NO_TELEMETRY is set', async () => {
+      vi.spyOn(SupabaseClient, 'getRelayAccessToken').mockResolvedValue(
+        'token',
+      );
+      vi.stubEnv('TEXRA_NO_TELEMETRY', '1');
+
+      const batches: unknown[] = [];
+      const fetchMock = stubFetch(batches);
+
+      UsageLogService.log({ ...usageEntry('hosted'), usageRoute: 'relay' });
+      await expect(UsageLogService.flush()).resolves.toBe(
+        USAGE_LOG_FLUSH_OUTCOME.ACCEPTED,
+      );
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(batches.map(batchModels)).toEqual([['hosted']]);
     });
 
     // JsonConfigProvider returns raw JSON from a hand-edited .texra/config.json,
