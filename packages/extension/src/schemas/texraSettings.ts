@@ -58,23 +58,6 @@ export const TEXRA_SETTING_KEYS = TEXRA_SETTING_PATHS.map(
 );
 const TEXRA_SETTING_KEY_SET = new Set<TexraSettingKey>(TEXRA_SETTING_KEYS);
 
-interface TexraPackageConfigurationProperty {
-  type?: string;
-  items?: unknown;
-  additionalProperties?: unknown;
-  default?: unknown;
-  enum?: unknown[];
-  minimum?: number;
-  maximum?: number;
-  [key: string]: unknown;
-}
-
-export interface TexraPackageConfigurationSection {
-  title?: string;
-  properties?: Record<string, TexraPackageConfigurationProperty>;
-  [key: string]: unknown;
-}
-
 type JsonSchemaObject = {
   type?: string;
   properties?: Record<string, JsonSchemaObject>;
@@ -88,17 +71,51 @@ type JsonSchemaObject = {
   enumDescriptions?: unknown[];
 };
 
-const GENERATED_PACKAGE_SCHEMA_FIELDS = [
-  'type',
-  'items',
-  'additionalProperties',
-  'default',
-  'enum',
-  'minimum',
-  'maximum',
-  'description',
-  'enumDescriptions',
-] as const;
+/**
+ * A single package.json configuration property: every {@link JsonSchemaObject}
+ * field except `properties` (which only appears on schema container nodes,
+ * not on a leaf setting's package.json entry), plus an index signature so an
+ * `existing` untyped package.json property can be spread in as a starting
+ * point. Derived from `JsonSchemaObject` instead of hand-duplicated so a
+ * field added there can't silently go missing here.
+ */
+type TexraPackageConfigurationProperty = Omit<
+  JsonSchemaObject,
+  'properties'
+> & {
+  [key: string]: unknown;
+};
+
+export interface TexraPackageConfigurationSection {
+  title?: string;
+  properties?: Record<string, TexraPackageConfigurationProperty>;
+  [key: string]: unknown;
+}
+
+type GeneratedSchemaField = Exclude<keyof JsonSchemaObject, 'properties'>;
+
+/**
+ * Every field this module regenerates from the Zod-derived JSON schema, as a
+ * `Record` rather than a hand-typed array literal: adding a field to
+ * {@link JsonSchemaObject} makes this object fail to type-check until the new
+ * field is listed here, so the two can't drift out of sync silently.
+ */
+const GENERATED_PACKAGE_SCHEMA_FIELD_FLAGS: Record<GeneratedSchemaField, true> =
+  {
+    type: true,
+    items: true,
+    additionalProperties: true,
+    default: true,
+    enum: true,
+    minimum: true,
+    maximum: true,
+    description: true,
+    enumDescriptions: true,
+  };
+
+const GENERATED_PACKAGE_SCHEMA_FIELDS = Object.keys(
+  GENERATED_PACKAGE_SCHEMA_FIELD_FLAGS,
+) as GeneratedSchemaField[];
 
 let texraSettingsJsonSchema: JsonSchemaObject | undefined;
 let parsedDefaultTexraSettings: TexraSettings | undefined;

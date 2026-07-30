@@ -1,9 +1,12 @@
 import prettyMilliseconds from 'pretty-ms';
 
-import { isObject } from '@utils/core';
 import { capitalize } from '@utils/text/stringUtils';
 
-import { pickNumberField, pickStringField } from './errorInspection';
+import {
+  errorBodyCandidates,
+  pickNumberField,
+  pickStringField,
+} from './errorInspection';
 
 /**
  * Detection + formatting for the ChatGPT-subscription (Codex backend) usage
@@ -34,9 +37,7 @@ export interface ChatGptSubscriptionLimit {
 export function parseChatGptSubscriptionLimit(
   rawErrorBody: unknown,
 ): ChatGptSubscriptionLimit | null {
-  if (!isObject(rawErrorBody)) return null;
-  const candidates = [rawErrorBody, rawErrorBody.error];
-  for (const candidate of candidates) {
+  for (const candidate of errorBodyCandidates(rawErrorBody)) {
     if (pickStringField(candidate, 'type') !== 'usage_limit_reached') continue;
     return {
       planType: pickStringField(candidate, 'plan_type'),
