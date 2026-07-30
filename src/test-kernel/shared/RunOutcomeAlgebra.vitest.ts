@@ -4,12 +4,9 @@ import { describe, expect, it } from 'vitest';
 // Local imports
 import {
   EXECUTION_STATUS,
-  LIVE_ELAPSED_STREAM_STATUSES,
   RUN_OUTCOME,
   STREAM_PHASE,
-  STREAM_STATUS,
   StreamPhaseSchema,
-  streamStatusesWithTrait,
   type RunOutcome,
   type StreamPhase,
 } from '@shared/schemas';
@@ -17,7 +14,9 @@ import {
   canAcquireStreamReservation,
   canTransitionStreamPhase,
   deriveRunOutcome,
-  groupEndStatusForOutcome,
+  isActivePhase,
+  isInFlightPhase,
+  isTerminalOutcomePhase,
   legacyEndGroupStatusForOutcome,
   projectRunOutcome,
   RUN_OUTCOME_PROJECTION,
@@ -62,15 +61,14 @@ describe('run outcome algebra', () => {
   // sweep to write the literal RunOutcome), nor from logSlice.ts's read side
   // (#7993 step 3 retypes TaskGroup.status to the native StreamPhase/
   // RunOutcome vocabulary, so that reader no longer needs to fold a
-  // canonical value down to a legacy bucket). It survives as a Tier-4-only
-  // read-side derive helper for the frozen CLI headless JSON's
-  // `endGroupStatus` projection (packages/cli/src/runtime/terminalStatus.ts)
-  // — the algebra itself is unchanged, so it still needs to stay correct.
-  it('derives folded legacy group-end projections from one helper', () => {
-    expect(groupEndStatusForOutcome(RUN_OUTCOME.COMPLETED)).toBe('ok');
-    expect(groupEndStatusForOutcome(RUN_OUTCOME.CANCELLED)).toBe('ok');
-    expect(groupEndStatusForOutcome(RUN_OUTCOME.FAILED)).toBe('error');
-
+  // canonical value down to a legacy bucket). Its single remaining caller is
+  // the frozen CLI headless JSON's `endGroupStatus` projection
+  // (packages/cli/src/runtime/terminalStatus.ts), whose own removal is dated
+  // in the #6981 ledger — the fold itself is unchanged, so it still needs to
+  // stay correct until then. The intermediate `groupEndStatusForOutcome`
+  // ('ok' | 'error') hop was deleted with the rest of the legacy vocabulary
+  // production surface (#7993 step 4): it had no caller but this one.
+  it('folds each outcome into the frozen 2-value legacy projection', () => {
     expect(legacyEndGroupStatusForOutcome(RUN_OUTCOME.COMPLETED)).toBe(
       'stopped',
     );
@@ -181,33 +179,66 @@ describe('stream phase transition table', () => {
   });
 });
 
-describe('stream status trait table', () => {
-  it('derives the historical membership sets from traits', () => {
-    expect(streamStatusesWithTrait('active')).toEqual(
-      new Set([STREAM_STATUS.RUNNING, STREAM_STATUS.RESUMING]),
+// The membership sets these three predicates answer used to be derived from
+// the legacy 7-value STREAM_STATUS_TRAITS table, deleted with the rest of the
+// legacy vocabulary's production surface (#7993 step 4). They are now the only
+// enumeration of "which phases are active / in flight / terminal", so pin them
+// exhaustively over the phase vocabulary rather than by example.
+describe('stream phase membership predicates', () => {
+  const membership: Record<
+    StreamPhase,
+    { active: boolean; inFlight: boolean; terminalOutcome: boolean }
+  > = {
+    [STREAM_PHASE.RUNNING]: {
+      active: true,
+      inFlight: true,
+      terminalOutcome: false,
+    },
+    // WAITING is the deliberate oddball the old trait table also made
+    // visible: the cycle ended, but a follow-up appends to the same stream,
+    // so it is not acquirable and not a terminal outcome either.
+    [STREAM_PHASE.WAITING]: {
+      active: false,
+      inFlight: true,
+      terminalOutcome: false,
+    },
+    [STREAM_PHASE.COMPLETED]: {
+      active: false,
+      inFlight: false,
+      terminalOutcome: true,
+    },
+    [STREAM_PHASE.CANCELLED]: {
+      active: false,
+      inFlight: false,
+      terminalOutcome: true,
+    },
+    [STREAM_PHASE.FAILED]: {
+      active: false,
+      inFlight: false,
+      terminalOutcome: true,
+    },
+  };
+
+  it('classifies every phase, and treats absence as no-run-yet', () => {
+    for (const phase of StreamPhaseSchema.options) {
+      expect(isActivePhase(phase)).toBe(membership[phase].active);
+      expect(isInFlightPhase(phase)).toBe(membership[phase].inFlight);
+      expect(isTerminalOutcomePhase(phase)).toBe(
+        membership[phase].terminalOutcome,
+      );
+    }
+
+    expect(isActivePhase(undefined)).toBe(false);
+    expect(isInFlightPhase(undefined)).toBe(false);
+    expect(isTerminalOutcomePhase(undefined)).toBe(false);
+  });
+
+  it('makes every terminal outcome phase a RunOutcome', () => {
+    const terminalPhases = StreamPhaseSchema.options.filter(
+      isTerminalOutcomePhase,
     );
-    expect(streamStatusesWithTrait('inFlight')).toEqual(
-      new Set([
-        STREAM_STATUS.RUNNING,
-        STREAM_STATUS.RESUMING,
-        STREAM_STATUS.INITIALIZING,
-        STREAM_STATUS.WAITING,
-      ]),
-    );
-    expect(LIVE_ELAPSED_STREAM_STATUSES).toEqual(
-      new Set([
-        STREAM_STATUS.RUNNING,
-        STREAM_STATUS.RESUMING,
-        STREAM_STATUS.INITIALIZING,
-      ]),
-    );
-    expect(streamStatusesWithTrait('terminal')).toEqual(
-      new Set([
-        STREAM_STATUS.WAITING,
-        STREAM_STATUS.STOPPED,
-        STREAM_STATUS.ERROR,
-        STREAM_STATUS.READY,
-      ]),
+    expect(new Set<string>(terminalPhases)).toEqual(
+      new Set<string>(Object.values(RUN_OUTCOME)),
     );
   });
 });
