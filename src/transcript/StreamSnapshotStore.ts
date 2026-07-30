@@ -23,6 +23,11 @@ import pMap from 'p-map';
 import { z } from 'zod';
 
 import { getExecutionStore } from '@agent/storage';
+import {
+  runFactEventTypesExcept,
+  type AgentEvent,
+  type RunFactEventType,
+} from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { TaskStateSchema, type TaskState } from '@agent/core/state/TaskState';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
@@ -62,7 +67,7 @@ import {
 } from '@shared/schemas';
 import { getCleanAgentName } from '@shared/schemas/agent';
 import { isProcessAgent } from '@shared/streams/agentKind';
-import { mapToRecord, normalizeFilePath } from '@utils/core';
+import { assertNever, mapToRecord, normalizeFilePath } from '@utils/core';
 import { StorageFS } from '@utils/files';
 import { isDirectory } from '@utils/files/fsEntryType';
 
@@ -295,6 +300,37 @@ interface StreamRecord {
   writeKv: KVStore | undefined;
 }
 
+/**
+ * Run facts the snapshot store deliberately does not persist: each is transient
+ * run progress reconstructed from the trace on load, not durable state. Listing
+ * them (rather than omitting them from a hand-written subscription array) keeps
+ * the opt-out visible and makes every other arm mandatory.
+ */
+const SNAPSHOT_TRANSIENT_RUN_FACTS = [
+  'conversation.progress',
+  'stage.start',
+  'child.activity',
+] as const satisfies readonly RunFactEventType[];
+
+const SNAPSHOT_RUN_FACT_TYPES = runFactEventTypesExcept(
+  SNAPSHOT_TRANSIENT_RUN_FACTS,
+);
+
+type SnapshotRunFactEvent = Extract<
+  AgentEvent,
+  { type: (typeof SNAPSHOT_RUN_FACT_TYPES)[number] }
+>;
+
+const SNAPSHOT_RUN_FACT_TYPE_SET: ReadonlySet<string> = new Set(
+  SNAPSHOT_RUN_FACT_TYPES,
+);
+
+function isSnapshotRunFactEvent(
+  event: AgentEvent,
+): event is SnapshotRunFactEvent {
+  return SNAPSHOT_RUN_FACT_TYPE_SET.has(event.type);
+}
+
 type StagedDeletionPhase = 'live' | 'transitioning' | 'staged' | 'unavailable';
 type StagedRecoveryOutcome = 'discarded' | 'restored' | 'unchanged';
 
@@ -437,6 +473,7 @@ export class StreamSnapshotStore {
       (sessionEvent) => {
         if (sessionEvent.scope !== 'run') return;
         const { event } = sessionEvent;
+        if (!isSnapshotRunFactEvent(event)) return;
 
         switch (event.type) {
           case 'run.start':
@@ -468,23 +505,16 @@ export class StreamSnapshotStore {
             this.updateCompileFailures(event.streamId, event.filesByRound);
             return;
           case 'goalPaused':
-          default:
+            // Subscribed but not persisted: pause state is reconstructed from
+            // the run's status rail on load, not from a stored snapshot field.
             return;
+          default:
+            assertNever(event, 'Unhandled snapshot-store run fact');
         }
       },
       {
         scope: 'run',
-        types: [
-          'run.start',
-          'run.config',
-          'usage',
-          'updateTodos',
-          'updatePlan',
-          'addOutputFiles',
-          'updateMissingOutputs',
-          'updateCompileFailures',
-          'goalPaused',
-        ],
+        types: SNAPSHOT_RUN_FACT_TYPES,
       },
     );
     const detachSessionEvents = events.subscribe(

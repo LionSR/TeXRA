@@ -385,3 +385,28 @@ export const RUN_FACT_EVENT_TYPES = Object.freeze([
   'stage.start',
   'child.activity',
 ] as const satisfies readonly AgentEvent['type'][]);
+
+export type RunFactEventType = (typeof RUN_FACT_EVENT_TYPES)[number];
+
+/**
+ * The run-fact vocabulary minus the arms a consumer deliberately does not
+ * project.
+ *
+ * Consumers subscribe through this instead of hand-listing types, so a new arm
+ * added to `RUN_FACT_EVENT_TYPES` reaches every consumer by default and opting
+ * out is an explicit, named decision rather than an omission nobody notices.
+ * Pair it with an exhaustive switch over
+ * `Exclude<RunFactEventType, TExcluded[number]>` so an unhandled new arm is a
+ * build break rather than a silently dropped event.
+ */
+export function runFactEventTypesExcept<
+  const TExcluded extends readonly RunFactEventType[],
+>(
+  excluded: TExcluded,
+): readonly Exclude<RunFactEventType, TExcluded[number]>[] {
+  const skipped: ReadonlySet<string> = new Set(excluded);
+  return RUN_FACT_EVENT_TYPES.filter(
+    (type): type is Exclude<RunFactEventType, TExcluded[number]> =>
+      !skipped.has(type),
+  );
+}

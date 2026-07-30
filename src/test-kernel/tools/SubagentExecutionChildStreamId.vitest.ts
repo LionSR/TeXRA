@@ -24,7 +24,12 @@ vi.mock('@agent/runtime/childRunLoop', () => ({
   startChildRunLoop: mocks.startChildRunLoop,
 }));
 
-vi.mock('@agent/trace', () => ({
+// Partial mock: only `createChannelTrace` is stubbed. Spreading the real module
+// keeps module-load-time helpers (e.g. `runFactEventTypesExcept`) available to
+// transitively imported modules, so adding a `@agent/trace` export does not
+// break this suite.
+vi.mock('@agent/trace', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agent/trace')>()),
   createChannelTrace: () => ({ error: mocks.childLoopError }),
 }));
 

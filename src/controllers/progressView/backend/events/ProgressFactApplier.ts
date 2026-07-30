@@ -1,8 +1,8 @@
 import {
   createChannelTrace,
-  RUN_FACT_EVENT_TYPES,
   type AgentEvent,
   type AgentTrace,
+  type RunFactEventType,
 } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { SessionFact } from '@agent/runtime/SessionEventHub';
@@ -82,10 +82,8 @@ export type GetProgressStreamControls = (
   stream: StreamTabId,
 ) => ProgressStreamControls;
 
-type RunFactType = (typeof RUN_FACT_EVENT_TYPES)[number];
-
 type RunFactHandlers = {
-  [K in RunFactType]: (
+  [K in RunFactEventType]: (
     streamId: StreamTabId,
     event: Extract<AgentEvent, { type: K }>,
   ) => void | Promise<void>;

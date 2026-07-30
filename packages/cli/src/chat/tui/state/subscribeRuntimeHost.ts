@@ -1,6 +1,10 @@
 // Project durable session and run facts into the local TUI state.
 
-import type { AgentEvent } from '@agent/trace';
+import {
+  runFactEventTypesExcept,
+  type AgentEvent,
+  type RunFactEventType,
+} from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
@@ -234,47 +238,70 @@ function applyClearMissingOutputs(
   }
 }
 
+/**
+ * Run facts the TUI deliberately does not project. `run.start` carries stream
+ * metadata the TUI instead reads from `run.config`; listing it here (rather
+ * than omitting it from a hand-written subscription array) keeps the opt-out
+ * visible and makes every other arm mandatory.
+ */
+const TUI_UNPROJECTED_RUN_FACTS = [
+  'run.start',
+] as const satisfies readonly RunFactEventType[];
+
+const TUI_RUN_FACT_TYPES = runFactEventTypesExcept(TUI_UNPROJECTED_RUN_FACTS);
+
+type TuiRunFactEvent = Extract<
+  AgentEvent,
+  { type: (typeof TUI_RUN_FACT_TYPES)[number] }
+>;
+
+const TUI_RUN_FACT_TYPE_SET: ReadonlySet<string> = new Set(TUI_RUN_FACT_TYPES);
+
+function isTuiRunFactEvent(event: AgentEvent): event is TuiRunFactEvent {
+  return TUI_RUN_FACT_TYPE_SET.has(event.type);
+}
+
 function applyDirectTuiRunEvent(
-  event: AgentEvent,
+  event: TuiRunFactEvent,
   fallbackStreamId: StreamTabId,
-): boolean {
+): void {
   switch (event.type) {
     case 'run.config':
       applyRunConfig(event.streamId, event.config);
-      return true;
+      return;
     case 'usage':
       applyUsageUpdate(event.payload);
-      return true;
+      return;
     case 'conversation.progress':
       patchStream(fallbackStreamId, (s) => ({
         ...s,
         conversation: event.progress,
       }));
-      return true;
+      return;
     case 'updateTodos':
       patchStream(event.streamId, (s) => ({
         ...s,
         todos: event.todos,
       }));
-      return true;
+      return;
     case 'updatePlan':
       patchStream(event.streamId, (s) => ({
         ...s,
         plan: event.plan,
       }));
-      return true;
+      return;
     case 'goalPaused':
       appendGoalPausedTranscriptNotice(event);
-      return true;
+      return;
     case 'addOutputFiles':
       applyOutputFiles(event);
-      return true;
+      return;
     case 'updateMissingOutputs':
       applyMissingOutputs(event);
-      return true;
+      return;
     case 'updateCompileFailures':
       applyCompileFailures(event);
-      return true;
+      return;
     case 'stage.start':
       if (event.kind === 'phase') {
         applyPhaseStage({
@@ -287,9 +314,9 @@ function applyDirectTuiRunEvent(
               : {}),
           },
         });
-        return true;
+        return;
       }
-      if (event.kind !== 'round') return false;
+      if (event.kind !== 'round') return;
       applyRoundStage({
         streamId: fallbackStreamId,
         roundStage: {
@@ -299,15 +326,15 @@ function applyDirectTuiRunEvent(
             : {}),
         },
       });
-      return true;
+      return;
     case 'child.activity':
       applyActiveSubagents({
         parentStreamId: event.parentStreamId,
         children: [...event.items],
       });
-      return true;
+      return;
     default:
-      return false;
+      assertNever(event, 'Unhandled TUI run fact');
   }
 }
 
@@ -384,25 +411,12 @@ export function attachTuiRunFactSubscription(
       if (sessionEvent.scope !== 'run') return;
       if (isChildStreamRemoved(sessionEvent.streamId)) return;
       const { event } = sessionEvent;
-      if (applyDirectTuiRunEvent(event, sessionEvent.streamId)) {
-        return;
-      }
+      if (!isTuiRunFactEvent(event)) return;
+      applyDirectTuiRunEvent(event, sessionEvent.streamId);
     },
     {
       scope: 'run',
-      types: [
-        'conversation.progress',
-        'updateTodos',
-        'updatePlan',
-        'addOutputFiles',
-        'updateMissingOutputs',
-        'updateCompileFailures',
-        'goalPaused',
-        'run.config',
-        'usage',
-        'stage.start',
-        'child.activity',
-      ],
+      types: TUI_RUN_FACT_TYPES,
     },
   );
   return () => {
