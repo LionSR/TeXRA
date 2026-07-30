@@ -73,6 +73,7 @@ import {
   renderIconActionButton,
   renderLabeledActionButton,
 } from '@shared/wa/actionButtons';
+import { renderEmptyState } from '@shared/wa/emptyState';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
@@ -602,20 +603,14 @@ function openTerminalCommand(initialCommand: string): void {
  * node rather than duplicating it.
  */
 function workbenchPlaceholderTemplate(): TemplateResult {
-  return html`
-    <div class="task-workbench-placeholder">
-      <div class="task-workbench-placeholder-content">
-        <div class="task-workbench-placeholder-icon icon-surface is-size-l">
-          ${waIcon('file-code')}
-        </div>
-        <h2>Choose a file</h2>
-        <p>
-          Open a file from the project list to inspect or edit it beside this
-          task.
-        </p>
-      </div>
-    </div>
-  `;
+  return renderEmptyState({
+    icon: 'file-code',
+    title: 'Choose a file',
+    body: 'Open a file from the project list to inspect or edit it beside this task.',
+    headingTag: 'h2',
+    className: 'task-workbench-placeholder',
+    iconSurfaceSize: 'l',
+  });
 }
 
 function workbenchContentTemplate(tab: WorkbenchTab): TemplateResult {

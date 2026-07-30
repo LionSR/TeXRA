@@ -10,6 +10,7 @@ import {
   clampModalWidth,
   CONFIRM_CARD_HORIZONTAL_DECORATION,
   EDIT_DIFF_PADDING,
+  isCompactRows,
   MIN_MODAL_CONTENT_WIDTH,
 } from '../ui/theme';
 import { confirmCardContentRowsBudget } from './confirmCardRowsBudget';
@@ -191,9 +192,10 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
     resetKey: scrollResetKey,
   });
   const compactDiffLayout = maxDiffLines <= COMPACT_DIFF_DISPLAY_LINES;
-  const compactCard =
-    props.availableRows !== undefined &&
-    props.availableRows <= COMPACT_EDIT_APPROVAL_MAX_ROWS;
+  const compactCard = isCompactRows(
+    props.availableRows,
+    COMPACT_EDIT_APPROVAL_MAX_ROWS,
+  );
 
   return (
     <ConfirmCard
