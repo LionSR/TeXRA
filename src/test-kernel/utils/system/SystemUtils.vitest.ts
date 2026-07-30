@@ -34,8 +34,19 @@ async function waitForFile(filePath: string): Promise<void> {
   throw new Error(`Timed out waiting for ${filePath}`);
 }
 
+// Signal delivery to a whole process group, and the kernel reaping the members,
+// is not instant — and gets markedly slower when the suite is saturating every
+// core. The budget is generous (~10s) because it exists to catch a genuinely
+// leaked child, not to measure teardown latency; a tight one only produces
+// flakes on loaded machines.
+//
+// It exceeds the suite-wide `testTimeout: 10000` in vitest.config.mjs, so every
+// test calling this must pass PROCESS_EXIT_TEST_TIMEOUT_MS. Without it the
+// runner aborts the test mid-poll and the extra budget buys nothing.
+const PROCESS_EXIT_TEST_TIMEOUT_MS = 30_000;
+
 async function waitForProcessExit(pid: number): Promise<void> {
-  for (let attempt = 0; attempt < 50; attempt += 1) {
+  for (let attempt = 0; attempt < 500; attempt += 1) {
     try {
       process.kill(pid, 0);
     } catch {
@@ -197,67 +208,75 @@ describe('executeCommand', () => {
     assert.match(result.stderr ?? '', /maxBuffer exceeded/i);
   });
 
-  it('aborts shell command process groups including children', async () => {
-    if (process.platform === 'win32') return;
+  it(
+    'aborts shell command process groups including children',
+    async () => {
+      if (process.platform === 'win32') return;
 
-    const dir = mkdtempSync(join(tmpdir(), 'texra-exec-abort-'));
-    tempDirs.push(dir);
-    const pidFile = join(dir, 'sleep.pid');
-    const controller = new AbortController();
-    const promise = executeCommand('sleep 60 & echo $! > "$PID_FILE"; wait', {
-      cwd: dir,
-      env: { PID_FILE: pidFile },
-      signal: controller.signal,
-      timeout: 60_000,
-    });
-
-    await waitForFile(pidFile);
-    const childPid = Number.parseInt(readFileSync(pidFile, 'utf8'), 10);
-    assert.ok(Number.isInteger(childPid) && childPid > 0);
-
-    controller.abort();
-    const result = await promise;
-
-    assert.equal(result.success, false);
-    assert.equal(result.timedOut, false);
-    assert.equal(result.stderr, 'Command aborted by user');
-    await waitForProcessExit(childPid);
-  });
-
-  it('aborts array-form commands via execa native cancelSignal', async () => {
-    if (process.platform === 'win32') return;
-
-    const controller = new AbortController();
-    let childPid: number | undefined;
-    const promise = executeCommand(
-      [process.execPath, '-e', 'setTimeout(() => {}, 60000)'],
-      {
+      const dir = mkdtempSync(join(tmpdir(), 'texra-exec-abort-'));
+      tempDirs.push(dir);
+      const pidFile = join(dir, 'sleep.pid');
+      const controller = new AbortController();
+      const promise = executeCommand('sleep 60 & echo $! > "$PID_FILE"; wait', {
+        cwd: dir,
+        env: { PID_FILE: pidFile },
         signal: controller.signal,
         timeout: 60_000,
-        onPid: (pid) => {
-          childPid = pid;
+      });
+
+      await waitForFile(pidFile);
+      const childPid = Number.parseInt(readFileSync(pidFile, 'utf8'), 10);
+      assert.ok(Number.isInteger(childPid) && childPid > 0);
+
+      controller.abort();
+      const result = await promise;
+
+      assert.equal(result.success, false);
+      assert.equal(result.timedOut, false);
+      assert.equal(result.stderr, 'Command aborted by user');
+      await waitForProcessExit(childPid);
+    },
+    PROCESS_EXIT_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'aborts array-form commands via execa native cancelSignal',
+    async () => {
+      if (process.platform === 'win32') return;
+
+      const controller = new AbortController();
+      let childPid: number | undefined;
+      const promise = executeCommand(
+        [process.execPath, '-e', 'setTimeout(() => {}, 60000)'],
+        {
+          signal: controller.signal,
+          timeout: 60_000,
+          onPid: (pid) => {
+            childPid = pid;
+          },
         },
-      },
-    );
+      );
 
-    for (
-      let attempt = 0;
-      attempt < 50 && childPid === undefined;
-      attempt += 1
-    ) {
-      await sleep(20);
-    }
-    assert.ok(childPid && childPid > 0);
+      for (
+        let attempt = 0;
+        attempt < 50 && childPid === undefined;
+        attempt += 1
+      ) {
+        await sleep(20);
+      }
+      assert.ok(childPid && childPid > 0);
 
-    controller.abort();
-    const result = await promise;
+      controller.abort();
+      const result = await promise;
 
-    assert.equal(result.success, false);
-    assert.equal(result.timedOut, false);
-    assert.equal(result.exitCode, 130);
-    assert.equal(result.stderr, 'Command aborted by user');
-    await waitForProcessExit(childPid!);
-  });
+      assert.equal(result.success, false);
+      assert.equal(result.timedOut, false);
+      assert.equal(result.exitCode, 130);
+      assert.equal(result.stderr, 'Command aborted by user');
+      await waitForProcessExit(childPid!);
+    },
+    PROCESS_EXIT_TEST_TIMEOUT_MS,
+  );
 
   it('unblocks aborted array-form await when a descendant holds stdio', async () => {
     if (process.platform === 'win32') return;
