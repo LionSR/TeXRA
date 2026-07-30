@@ -1617,7 +1617,7 @@ describe('ModelHandlerOpenAIResponse.extractAssistantText', () => {
 });
 
 describe('ModelHandlerOpenAIResponse.initializeOutputAndPrefill', () => {
-  it('skips pseudo-prefill instruction when prefill is empty', async () => {
+  it('preserves user content when no output file exists', async () => {
     const tempDir = fs.mkdtempSync(
       path.join(os.tmpdir(), 'openai-response-prefill-empty-'),
     );
@@ -1643,7 +1643,6 @@ describe('ModelHandlerOpenAIResponse.initializeOutputAndPrefill', () => {
           messages,
           workspaceState,
           pathToLocation(outputPath),
-          '',
         );
 
       assert.equal(isComplete, false);

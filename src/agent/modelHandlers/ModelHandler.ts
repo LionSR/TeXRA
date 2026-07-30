@@ -1,6 +1,5 @@
 // Node imports
 import { createHash } from 'node:crypto';
-import { dirname } from 'node:path';
 
 // Third-party imports
 import {
@@ -85,7 +84,7 @@ import type {
   ToolResult,
 } from '@shared/schemas/toolResult';
 import { OUTPUT_END_TAG } from '@shared/schemas/output';
-import { AbsoluteFS, FlexibleFS } from '@utils/files';
+import { FlexibleFS } from '@utils/files';
 import {
   getProviderStreaming,
   getGlobalStreaming,
@@ -1451,7 +1450,7 @@ export abstract class ModelHandler<
   }
 
   /**
-   * Sets up output file and handles content prefilling.
+   * Sets up output file and resumes generation from any existing content.
    * @returns Promise resolving to [isComplete: generation complete, messages: updated message array]
    */
   async initializeOutputAndPrefill(
@@ -1460,44 +1459,8 @@ export abstract class ModelHandler<
     messages: M[],
     workspaceState: AgentWorkspaceState,
     outputLocation: FileLocation,
-    prefill: string,
   ): Promise<[boolean, M[]]> {
     if (!(await FlexibleFS.existsAndNonTrivial(outputLocation))) {
-      if (this.capabilities.supportsAssistantPrefill) {
-        if (prefill.length === 0) {
-          this.logger.debug(
-            'No prefill provided; skipping assistant prefill message',
-          );
-          return [false, messages];
-        }
-
-        this.logger.debug('Adding prefill message', { data: prefill });
-        workspaceState.assembly.accumulatedOutput = `${prefill}\n`;
-        await AbsoluteFS.ensureDir(dirname(outputLocation.absolutePath));
-        await FlexibleFS.write(
-          outputLocation,
-          workspaceState.assembly.accumulatedOutput,
-        );
-        messages.push(this.createAssistantMessageForPrefillText(prefill));
-        return [false, messages];
-      }
-
-      if (this.shouldStorePseudoPrefillAsOutput) {
-        workspaceState.assembly.accumulatedOutput = prefill;
-      }
-
-      if (prefill.length === 0) {
-        this.logger.debug(
-          'No prefill provided; skipping pseudo-prefill instruction',
-        );
-        return [false, messages];
-      }
-
-      const pseudoPrefill = this.createPseudoPrefillPrompt(prefill);
-      this.appendUserText(messages, pseudoPrefill, 'last-user');
-      this.logger.debug('Added pseudo-prefill message', {
-        data: pseudoPrefill,
-      });
       return [false, messages];
     }
 
@@ -1520,18 +1483,6 @@ export abstract class ModelHandler<
     this.logger.debug(
       'Output file exists but no end tag found - continuing from file',
     );
-
-    if (
-      !this.capabilities.supportsAssistantPrefill &&
-      this.shouldPrependPrefillOnResumeWithoutAssistantPrefill &&
-      !fileContent.includes(prefill)
-    ) {
-      workspaceState.assembly.accumulatedOutput = prefill + fileContent;
-      await FlexibleFS.write(
-        outputLocation,
-        workspaceState.assembly.accumulatedOutput,
-      );
-    }
 
     this.addContinueMessage(messages, workspaceState, agentSetting);
 
@@ -1619,60 +1570,6 @@ export abstract class ModelHandler<
         : `Should not continue: StopReason='${stopReason}', HasEndTag='${hasResponseEndTag}'.`,
     );
     return shouldContinue;
-  }
-
-  /** Provider hook for pseudo-prefill prompt wording. */
-  protected createPseudoPrefillPrompt(prefill: string): string {
-    return `Organize your response with xml tags. Start your response with:\n${prefill}`;
-  }
-
-  /**
-   * Whether pseudo-prefill should seed accumulated output before the model call.
-   * Only consulted on a fresh generation (no existing output file) when the
-   * model lacks native assistant-prefill support (`capabilities.supportsAssistantPrefill`
-   * is false) — the prefill text is only ever sent as a *user*-turn instruction
-   * (see {@link createPseudoPrefillPrompt}), never as an actual assistant-turn
-   * prefix, so this getter decides whether `workspaceState.assembly.accumulatedOutput`
-   * should be seeded with it anyway ahead of the first response.
-   *
-   * Not foldable into a single capability read (#7101 triage): overridden `true`
-   * only by the two Google handlers (`ModelHandlerGoogleGenAI`,
-   * `ModelHandlerGoogleInteractions`). Every other provider that reaches this
-   * branch — the OpenAI-wire-format family via `ModelHandlerOpenAI`,
-   * `ModelHandlerOpenRouterNative`, and Anthropic's
-   * `supportsAssistantPrefill: false` thinking variants — leaves this at the
-   * `false` default and instead either resolves the analogous resume-time need
-   * via {@link shouldPrependPrefillOnResumeWithoutAssistantPrefill} (OpenAI
-   * family, OpenRouterNative) or needs neither (Anthropic thinking variants).
-   * The two getters gate two different lifecycle points (fresh start vs.
-   * resume) and no provider needs both, so no single llm-zoo /
-   * `ProviderCapabilityProfile` flag produces the right value on both axes
-   * across all three provider shapes. Stays an overridable getter: genuinely
-   * per-provider behavior, not a foldable predicate.
-   */
-  protected get shouldStorePseudoPrefillAsOutput(): boolean {
-    return false;
-  }
-
-  /**
-   * Whether resume should rewrite missing prefill into existing output files.
-   * Only consulted when resuming a truncated generation (an existing output
-   * file with no end tag) on a model that lacks native assistant-prefill
-   * support, in case the on-disk content is missing the intended prefix.
-   *
-   * Not foldable into a single capability read (#7101 triage): overridden
-   * `true` by `ModelHandlerOpenAI` — inherited by every OpenAI-wire-format
-   * subclass (XAI, DashScope, and the `ReasoningModelHandlerOpenAI` family:
-   * DeepSeek/Kimi/GLM/MiniMax) — and independently by
-   * `ModelHandlerOpenAIResponse` (inherited by Codex) and
-   * `ModelHandlerOpenRouterNative`. The two Google handlers and Anthropic's
-   * thinking-variant models leave this at the `false` default; see
-   * {@link shouldStorePseudoPrefillAsOutput} for why the split can't collapse
-   * into one flag. Stays an overridable getter: genuinely per-provider
-   * behavior, not a foldable predicate.
-   */
-  protected get shouldPrependPrefillOnResumeWithoutAssistantPrefill(): boolean {
-    return false;
   }
 
   /** Provider hook for fresh assistant turns after a no-prefill response. */

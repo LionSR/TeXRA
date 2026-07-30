@@ -87,7 +87,6 @@ export class ResponseCycleNode<C = unknown> extends Node<
         context.messages,
         prepRes.workspace,
         prepRes.outputLocation,
-        '',
       );
 
     if (outputAlreadyComplete) {
