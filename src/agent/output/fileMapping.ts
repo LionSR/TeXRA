@@ -6,7 +6,7 @@ import type { AgentTrace } from '@agent/trace/AgentTrace';
 import type { FileLocation } from '@shared/schemas';
 import { normalizeLatexPath, getPathSegments } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { FlexibleFS } from '@utils/files/flexibleFS';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { getComparablePath } from '@utils/files/taskRunStorage';
 
 /**
@@ -161,7 +161,7 @@ export async function replaceInputCommands(
     const outputPath = getComparablePath(outputLocation);
 
     try {
-      const content = await FlexibleFS.read(outputLocation);
+      const content = await AbsoluteFS.read(outputLocation.absolutePath);
       const newContent = content.replaceAll(
         /\\input{([^}]+)}/g,
         (match, rawPath) => {
@@ -182,7 +182,7 @@ export async function replaceInputCommands(
       );
 
       if (newContent !== content) {
-        await FlexibleFS.write(outputLocation, newContent);
+        await AbsoluteFS.write(outputLocation.absolutePath, newContent);
         logger?.debug(`Updated input commands in ${outputPath}`);
       }
     } catch (err) {

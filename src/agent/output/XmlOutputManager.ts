@@ -25,12 +25,12 @@ import {
 } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
+import { addCdataToTagsMultiple } from '@utils/text/xmlCdata';
 import {
-  addCdataToTagsMultiple,
   DOCUMENT_NAME_REGEX,
   extractContentFromXMLbyTagMultiple,
   extractDocuments,
-} from '@utils/text/xmlUtils';
+} from '@utils/text/xmlExtraction';
 
 import {
   assignByContentSimilarity,

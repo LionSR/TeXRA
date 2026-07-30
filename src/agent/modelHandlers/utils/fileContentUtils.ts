@@ -8,8 +8,8 @@ import { type AgentTrace } from '@agent/trace';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { ResponseTextPostProcessor } from '@agent/runtime/responseTextProcessing';
 import type { FileLocation } from '@shared/schemas';
-import { FlexibleFS } from '@utils/files';
-import { extractScratchpad } from '@utils/text/xmlUtils';
+import { AbsoluteFS } from '@utils/files';
+import { extractScratchpad } from '@utils/text/xmlExtraction';
 
 /**
  * Result of preparing file content for a model handler.
@@ -48,7 +48,7 @@ export async function prepareExistingOutputContent(
   postProcessResponse: ResponseTextPostProcessor,
 ): Promise<PreparedFileContent> {
   // Read and clean the file content
-  let content = await FlexibleFS.read(outputLocation);
+  let content = await AbsoluteFS.read(outputLocation.absolutePath);
   content = postProcessResponse(content);
 
   // Extract any existing scratchpad content and log it
@@ -56,7 +56,7 @@ export async function prepareExistingOutputContent(
   if (scratchpad) logger.domain({ key: 'scratchpad', text: scratchpad });
 
   // Write cleaned content back to file
-  await FlexibleFS.write(outputLocation, content);
+  await AbsoluteFS.write(outputLocation.absolutePath, content);
 
   // Update workspace state - critical for multi-round agents on resume
   // so that subsequent rounds have correct context

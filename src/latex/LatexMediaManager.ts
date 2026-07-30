@@ -9,7 +9,7 @@ import type { AgentTrace } from '@agent/trace/AgentTrace';
 import { platform } from '@platform/platform';
 import type { FileLocation } from '@shared/schemas';
 import { ToolConfig } from '@shared/schemas/toolConfig';
-import { TaskRunFileService, FlexibleFS, pathToLocation } from '@utils/files';
+import { TaskRunFileService, AbsoluteFS, pathToLocation } from '@utils/files';
 import { filterNotNullish } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isFile } from '@utils/files/fsEntryType';
@@ -125,7 +125,7 @@ export class LatexMediaManager {
       async (file): Promise<FileLocation | undefined> => {
         try {
           const buildDir = path.join(path.dirname(file.absolutePath), 'build');
-          await FlexibleFS.ensureDir(pathToLocation(buildDir));
+          await AbsoluteFS.ensureDir(buildDir);
           const compiled = await compileLatex2Pdf(file, {
             outputDirectory: buildDir,
           });
@@ -147,17 +147,20 @@ export class LatexMediaManager {
             path.basename(file.absolutePath).replace(/\.tex$/, '.pdf'),
           );
           const pdfLocation = pathToLocation(pdfFile);
-          if (!(await FlexibleFS.exists(pdfLocation))) return undefined;
+          if (!(await AbsoluteFS.exists(pdfLocation.absolutePath)))
+            return undefined;
 
           // Stat failures are noisier than other compile failures because an
           // existing-but-unreadable PDF likely indicates a permissions/IO bug.
-          const stats = await FlexibleFS.stat(pdfLocation).catch((err) => {
-            this.logger.error(
-              `Failed to stat compiled PDF ${pdfLocation.absolutePath}: ${toErrorMessage(err)}`,
-              { data: { path: pdfLocation.absolutePath, error: err } },
-            );
-            return undefined;
-          });
+          const stats = await AbsoluteFS.stat(pdfLocation.absolutePath).catch(
+            (err) => {
+              this.logger.error(
+                `Failed to stat compiled PDF ${pdfLocation.absolutePath}: ${toErrorMessage(err)}`,
+                { data: { path: pdfLocation.absolutePath, error: err } },
+              );
+              return undefined;
+            },
+          );
           if (!stats) return undefined;
           if (stats.size === 0) {
             this.logger.warn('Compiled PDF is empty', {
@@ -294,7 +297,7 @@ export class LatexMediaManager {
 
     try {
       const realPath = await platform().fs.realPath(latexFile.absolutePath);
-      const content = await FlexibleFS.read(latexFile);
+      const content = await AbsoluteFS.read(latexFile.absolutePath);
       const uncommented = stripLatexComments(content);
       const baseDir = path.dirname(realPath);
 
@@ -304,12 +307,7 @@ export class LatexMediaManager {
       );
       for (const name of packageNames) {
         const candidate = path.join(baseDir, `${name}.sty`);
-        if (
-          await FlexibleFS.exists({
-            kind: 'external',
-            absolutePath: candidate,
-          })
-        ) {
+        if (await AbsoluteFS.exists(candidate)) {
           found.add(candidate);
         }
       }
@@ -447,7 +445,10 @@ export class LatexMediaManager {
 
       const existenceChecks = await pMap(
         fileLocations,
-        async (loc) => ({ loc, exists: await FlexibleFS.exists(loc) }),
+        async (loc) => ({
+          loc,
+          exists: await AbsoluteFS.exists(loc.absolutePath),
+        }),
         { concurrency: LATEX_CONCURRENCY, stopOnError: false },
       );
 
@@ -534,7 +535,10 @@ export class LatexMediaManager {
 
     const existingFilesInfo = await pMap(
       files,
-      async (file) => ({ file, exists: await FlexibleFS.exists(file) }),
+      async (file) => ({
+        file,
+        exists: await AbsoluteFS.exists(file.absolutePath),
+      }),
       { concurrency: LATEX_CONCURRENCY, stopOnError: false },
     );
     const existingFiles = existingFilesInfo
