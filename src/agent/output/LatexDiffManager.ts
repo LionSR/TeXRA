@@ -16,8 +16,8 @@ import {
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
+  AbsoluteFS,
   createRunStorageLocation,
-  FlexibleFS,
   TaskRunFileService,
 } from '@utils/files';
 import { checkToolInstalled } from '@utils/system/toolUtils';
@@ -100,7 +100,10 @@ export class LatexDiffManager {
   private async ensureWorkspaceDependency(
     targetLocation: FileLocation | null | undefined,
   ): Promise<void> {
-    if (!targetLocation || !(await FlexibleFS.exists(targetLocation))) {
+    if (
+      !targetLocation ||
+      !(await AbsoluteFS.exists(targetLocation.absolutePath))
+    ) {
       return;
     }
 

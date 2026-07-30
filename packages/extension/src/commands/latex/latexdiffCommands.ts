@@ -35,7 +35,7 @@ import {
 import * as logger from '@logger/logUtils';
 import type { FileLocation } from '@shared/schemas';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
-import { FlexibleFS, pathToLocation } from '@utils/files';
+import { AbsoluteFS, pathToLocation } from '@utils/files';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 
 // Local file imports
@@ -110,7 +110,7 @@ async function openLatexdiffResult(
 
   const diffLocation = pathToLocation(diffFilePath);
 
-  if (!(await FlexibleFS.exists(diffLocation))) {
+  if (!(await AbsoluteFS.exists(diffLocation.absolutePath))) {
     await showLoggedMessage(
       CHANNEL,
       `Diff file could not be found. Expected path: ${diffFilePath}`,

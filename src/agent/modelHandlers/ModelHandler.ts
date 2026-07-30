@@ -84,7 +84,7 @@ import type {
   ToolResult,
 } from '@shared/schemas/toolResult';
 import { OUTPUT_END_TAG } from '@shared/schemas/output';
-import { FlexibleFS } from '@utils/files';
+import { AbsoluteFS } from '@utils/files';
 import {
   getProviderStreaming,
   getGlobalStreaming,
@@ -185,6 +185,23 @@ function mediaAttachmentKindsFromEntries(
       ? 'image'
       : 'document',
   );
+}
+
+/**
+ * Check whether a file exists and contains more than a minimal amount of data.
+ *
+ * Files shorter than the threshold (15 bytes) are considered trivial and
+ * treated as empty artifacts. The value loosely matches the size of empty
+ * LaTeX scaffolds produced by latexindent so we can quickly skip placeholder
+ * outputs without scanning their contents.
+ */
+async function existsAndNonTrivial(target: FileLocation): Promise<boolean> {
+  if (!(await AbsoluteFS.exists(target.absolutePath))) {
+    return false;
+  }
+
+  const stats = await AbsoluteFS.stat(target.absolutePath);
+  return stats.size > 15;
 }
 
 /**
@@ -1460,7 +1477,7 @@ export abstract class ModelHandler<
     workspaceState: AgentWorkspaceState,
     outputLocation: FileLocation,
   ): Promise<[boolean, M[]]> {
-    if (!(await FlexibleFS.existsAndNonTrivial(outputLocation))) {
+    if (!(await existsAndNonTrivial(outputLocation))) {
       return [false, messages];
     }
 

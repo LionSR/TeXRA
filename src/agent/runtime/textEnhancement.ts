@@ -2,7 +2,7 @@ import { getSdkErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { isNonEmptyString } from '@utils/core';
 
-import { extractTextFromTag } from '@utils/text/xmlUtils';
+import { extractTextFromTag } from '@utils/text/xmlExtraction';
 import { renderPolishPrompt } from './polishModel';
 import { createHelperModelKit, runHelperModelCompletion } from './helperModel';
 import type { SessionHandle } from './SessionHandle';

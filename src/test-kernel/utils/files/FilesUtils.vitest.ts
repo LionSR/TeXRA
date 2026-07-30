@@ -1,4 +1,4 @@
-// Suites for src/utils/files (workspaceFS, mime, paths, flexibleFS,
+// Suites for src/utils/files (workspaceFS, mime, paths, absoluteFS,
 // relativeFS JSON, pasted images).
 
 import * as assert from 'node:assert';
@@ -22,7 +22,6 @@ import { setupPlatform } from '@test/support/setupPlatform';
 import { getMimeType } from '@utils/files';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/taskRunStorage';
-import { FlexibleFS } from '@utils/files/flexibleFS';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { RelativeFS } from '@utils/files/relativeFS';
 import { pastedImageFileName } from '@utils/files/pastedImageUtils';
@@ -169,10 +168,12 @@ describe('pathUtils Test Suite', () => {
 });
 
 // ---------------------------------------------------------------------------
-// flexibleFS
+// AbsoluteFS.write
 // ---------------------------------------------------------------------------
 
-describe('FlexibleFS.write', () => {
+describe('AbsoluteFS.write', () => {
+  setupPlatform();
+
   it('propagates ELOOP without deleting the path or retrying', async () => {
     const location = pathToLocation('file.tex');
     const expectedPath = WorkspaceFS.toAbsolute('file.tex');
@@ -183,12 +184,17 @@ describe('FlexibleFS.write', () => {
     loopError.code = 'ELOOP';
     loopError.path = expectedPath;
 
-    const write = vi.spyOn(AbsoluteFS, 'write').mockRejectedValue(loopError);
+    // Mock the platform fs layer underneath AbsoluteFS.write, not
+    // AbsoluteFS.write itself, so this exercises the real BaseFS.write/delete
+    // code path rather than asserting on a stub of the method under test.
+    const writeFile = vi
+      .spyOn(platform().fs, 'writeFile')
+      .mockRejectedValue(loopError);
     const deletePath = vi.spyOn(AbsoluteFS, 'delete').mockResolvedValue();
 
     try {
       await assert.rejects(
-        () => FlexibleFS.write(location, 'content'),
+        () => AbsoluteFS.write(location.absolutePath, 'content'),
         (error: unknown) => {
           assert.strictEqual(error, loopError);
           assert.strictEqual((error as NodeJS.ErrnoException).code, 'ELOOP');
@@ -201,11 +207,10 @@ describe('FlexibleFS.write', () => {
         },
       );
 
-      expect(write).toHaveBeenCalledOnce();
-      expect(write).toHaveBeenCalledWith(expectedPath, 'content');
+      expect(writeFile).toHaveBeenCalledOnce();
       expect(deletePath).not.toHaveBeenCalled();
     } finally {
-      write.mockRestore();
+      writeFile.mockRestore();
       deletePath.mockRestore();
     }
   });

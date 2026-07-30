@@ -24,7 +24,7 @@ import type {
   RoundOutput,
   StreamTabId,
 } from '@shared/schemas';
-import { FlexibleFS } from '@utils/files';
+import { AbsoluteFS } from '@utils/files';
 import {
   createRecordingHost,
   recordSessionEvents,
@@ -409,7 +409,7 @@ describe('output progress events', () => {
     // silently with only the raw output. It must now surface a warning. Stub
     // the read so the model output is treated as non-empty.
     const readSpy = vi
-      .spyOn(FlexibleFS, 'read')
+      .spyOn(AbsoluteFS, 'read')
       .mockResolvedValue('% chunk.tex\n\\section{Untagged content}\n');
     const projected = createRecordedRuntime('stream:processor');
     const { events, host, logger } = projected;
