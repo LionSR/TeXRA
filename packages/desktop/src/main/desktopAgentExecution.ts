@@ -11,7 +11,6 @@ import {
   type ValidatedExecutionRequest,
 } from '@agent/core/state/executionRequests';
 import type { TaskState } from '@agent/core/state/TaskState';
-import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import { trackTerminalResultPresentation } from '@agent/runtime/terminalResultToast';
 import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -255,9 +254,7 @@ export class DesktopProgressBridge {
             kind: 'retry',
             cause: 'Retry request cleared.',
           });
-          this.session.executions.stopAgentStream(stream, {
-            detachActiveChildren: detachSubagentsOnStop(),
-          });
+          this.session.executions.stopAgentStream(stream);
         },
         cleanupDeletedStream: (stream) => {
           this.releaseApprovalsForStream(stream);

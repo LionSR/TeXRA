@@ -44,12 +44,23 @@ import {
   AgentExecutionHandle,
   isChildExecution,
 } from './ExecutionHandle';
+import { detachSubagentsOnStop } from './detachSubagentsOnStop';
 import { SessionEventHub } from './SessionEventHub';
 
 const logger = createChannelTrace('executionRegistry');
 
 /** Child policy shared by `kill()` and `stopAgentStream()`. */
 export interface ExecutionStopOptions {
+  /**
+   * Whether to detach active children instead of cascading termination to
+   * them.
+   *
+   * Omit it: every user-initiated stop wants the `detachSubagentsOnStop`
+   * workspace policy, which this registry resolves live at stop time. Pass an
+   * explicit boolean only to *override* that policy for a caller that must not
+   * consult it. Threading the policy in from each host was how one CLI stop
+   * path silently hardcoded `true` and ignored the user's setting.
+   */
   readonly detachActiveChildren?: boolean;
 }
 
@@ -446,19 +457,25 @@ export class ExecutionRegistry {
     return { kind: 'no_session', streamStatus: status };
   }
 
+  /**
+   * The one place the detach-vs-cascade policy is decided. An explicit option
+   * overrides; otherwise the live workspace setting applies.
+   */
+  private resolveDetachActiveChildren(options: ExecutionStopOptions): boolean {
+    return options.detachActiveChildren ?? detachSubagentsOnStop();
+  }
+
   /** Terminate an execution via its handle. Returns true on success. */
   kill(executionId: string, options: ExecutionStopOptions = {}): boolean {
     const handle = this.handles.get(executionId);
     if (!handle) return false;
     const visited = new Set<string>();
-    if (
-      options.detachActiveChildren === true &&
-      handle instanceof AgentExecutionHandle
-    ) {
+    const detachChildren = this.resolveDetachActiveChildren(options);
+    if (detachChildren && handle instanceof AgentExecutionHandle) {
       this.detachActiveChildren(handle.childStreamId);
     }
     const result = this.terminate(handle, visited, {
-      cascadeChildren: options.detachActiveChildren !== true,
+      cascadeChildren: !detachChildren,
     });
     // Always notify waiters — even if terminate() returned false (e.g. PID not
     // yet assigned), callers blocking on this execution should be unblocked.
@@ -597,8 +614,9 @@ export class ExecutionRegistry {
     // Shared across the child sweep and the root cascade so each execution in
     // the chain is interrupted exactly once.
     const visited = new Set<string>();
+    const detachChildren = this.resolveDetachActiveChildren(options);
 
-    if (options.detachActiveChildren === true) {
+    if (detachChildren) {
       this.detachActiveChildren(streamId);
     } else {
       this.interruptActiveChildren(streamId, visited, {
@@ -608,7 +626,7 @@ export class ExecutionRegistry {
 
     const stopped = rootHandle
       ? this.terminate(rootHandle, visited, {
-          cascadeChildren: options.detachActiveChildren !== true,
+          cascadeChildren: !detachChildren,
         })
       : false;
     // `terminate()` already publishes CANCELLED for a stream it owned; an

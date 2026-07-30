@@ -63,7 +63,7 @@ as work.
 | --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1   | 5 of 12 providers have no icon → generic robot glyph in every model dropdown                                                                                                            | `src/shared/utils/icons.ts:23-63` (8 entries) vs `src/shared/constants/providers.ts:56-231` (12 ids)                                         |
 | 2   | CLI validation env allowlist missing `META_API_KEY` and `KIMI_CODE_API_KEY`                                                                                                             | `packages/cli/scripts/validate-run.mjs:42-52` (10 entries)                                                                                   |
-| 3   | `stopStream` hardcodes `detachActiveChildren: true`, ignoring the user setting honored 600 lines above it                                                                               | `packages/cli/src/chat/chatSessionController.ts:883` vs `:285`                                                                               |
+| 3   | ~~`stopStream` hardcodes `detachActiveChildren: true`, ignoring the user setting~~ **WITHDRAWN on implementation** — deliberate, merely undocumented (§3.3)                             | `packages/cli/src/chat/chatSessionController.ts:883` vs `:285`                                                                               |
 | 4   | desktop `openExternalInquiry` does not `revealStream`; extension does                                                                                                                   | `packages/desktop/src/main/desktopHostInteractions.ts:190-197` vs `packages/extension/src/progressView/extensionHostInteractions.ts:292-296` |
 | 5   | desktop `requestRetry` used to resolve `{action:'cancel'}` immediately, killing runs the user was never asked about — fixed, root cause (the clone) still present                       | `packages/desktop/src/main/desktopHostInteractions.ts:156-164` (in-code postmortem)                                                          |
 | 6   | `activeForm` silently stripped on every `readTodos()`                                                                                                                                   | `src/agent/storage/ExecutionKVStore.ts:83-86` vs `src/shared/schemas/todo.ts:16-23`                                                          |
@@ -86,12 +86,12 @@ Sorted by wasted effort eliminated (`today − after`).
 | --- | ------------------------------------------------ | --------------------------------------------------------- | ----------- | ----------- | ------ | ---------------------------------- |
 | 1   | Approval / host-interaction kind vocabulary      | add one tool with its own approval card                   | 31          | 12          | L      | [NEW]                              |
 | 2   | Per-run runtime flags (`RunFlags`)               | add one per-run flag settable by SDK + CLI + VS Code      | 17          | 7           | M      | [EXTENDS-TRACKED]                  |
-| 3   | `detachActiveChildren` threading                 | add one stop/kill surface                                 | 7           | 1           | S      | [NEW]                              |
+| 3   | `detachActiveChildren` threading                 | add one stop/kill surface                                 | 7           | 2           | S      | [NEW] **[SHIPPED]**                |
 | 4   | Provider identity restatement                    | add one provider                                          | 9           | 5           | M      | [NEW]                              |
 | 5   | `modelHandlerCompatibilityKey` backfill          | change how a persisted conversation's format is recovered | 6           | 2           | M      | [NEW]                              |
 | 6   | Per-provider China/region toggle                 | add a region toggle to a 5th provider                     | 5           | 1           | M      | [NEW]                              |
 | 7   | extension/desktop host-interaction twins         | change any approval-request behavior                      | 4           | 1           | M      | [NEW]                              |
-| 8   | Run-fact subscription filters                    | add one run fact and have it reach every consumer         | 3           | 1           | S      | [NEW]                              |
+| 8   | Run-fact subscription filters                    | add one run fact and have it reach every consumer         | 3           | 1           | S      | [NEW] **[SHIPPED]**                |
 | 9   | Todo list persisted three times                  | add one persisted todo attribute                          | 3           | 1           | M      | [NEW]                              |
 | 10  | `WebviewUpdater` pass-through methods            | send one new webview message                              | 2           | 1           | M+     | [NEW]                              |
 | 11  | Run-fact → wire → renderer census                | add one rendered run fact                                 | 21          | 20          | —      | census only, **collapse rejected** |
@@ -324,9 +324,25 @@ option. Six repeat the identical two-token incantation
 intentional. Test sites: 4 explicit passes out of 32 total
 kill/stopAgentStream test calls.
 
+> **Correction, applied 2026-07-30.** The claim that `:883` is _drift_ is
+> **withdrawn**. Implementing this finding surfaced
+> `src/test-kernel/cli/chatSessionController.vitest.mts` asserting
+> `expect(mocks.workspaceGet).not.toHaveBeenCalled()` for `stopStream`, under
+> test names "stops the focused root **while preserving its agent children**"
+> and "stops one focused child without stopping the root session". That is a
+> deliberate, test-pinned decision: stopping ONE stream in a multi-stream TUI
+> always preserves that stream's children, which own their own tabs; only a
+> whole-session stop consults the setting. The finding was right that the
+> policy was threaded redundantly through 6 hosts, and right that `:883` lacked
+> a justifying comment — but wrong that it ignored user intent. Shipped as
+> recommended below: registry resolves the default, `:883` keeps its literal
+> with a comment naming it an override. Amplification is 7 → 2, not 7 → 1.
+
 **Why it exists.** `src/agent/runtime/detachSubagentsOnStop.ts:9-13` claims the
 policy "has one source of truth" and the `-07-29` checkpoint (`:248-249`) cites
-it in the **strengths** section. Both are falsified by `:883`.
+it in the **strengths** section. The doc comment overstated it — the policy was
+resolved at 6 host call sites, not one — but the checkpoint's "split point"
+framing survives.
 
 Worse, the default is silently wrong: `ExecutionStopOptions.detachActiveChildren`
 is optional (`executionRegistry.ts:52-54`) and all three reads are `=== true` /

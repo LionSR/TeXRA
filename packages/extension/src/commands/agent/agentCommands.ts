@@ -2,15 +2,12 @@
 import * as vscode from 'vscode';
 
 // Local imports - agent
-import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { notifyFollowUpSent } from '@agent/followUp/ToolUseFollowUp';
 import type { StreamTabId } from '@shared/schemas';
 
 export function stopAgent(streamId: StreamTabId): void {
-  defaultSession().executions.stopAgentStream(streamId, {
-    detachActiveChildren: detachSubagentsOnStop(),
-  });
+  defaultSession().executions.stopAgentStream(streamId);
 }
 
 export async function compactResponse(streamId: StreamTabId): Promise<void> {

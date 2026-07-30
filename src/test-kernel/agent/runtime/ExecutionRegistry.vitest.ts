@@ -1,5 +1,5 @@
 // Third-party imports
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { getExecutionStore } from '@agent/storage';
@@ -49,6 +49,12 @@ const storageMocks = vi.hoisted(() => ({
 const channelTraceMocks = vi.hoisted(() => ({
   warn: vi.fn(),
 }));
+
+const detachPolicyMocks = vi.hoisted(() => ({
+  detachSubagentsOnStop: vi.fn(() => false),
+}));
+
+vi.mock('@agent/runtime/detachSubagentsOnStop', () => detachPolicyMocks);
 
 vi.mock('@agent/storage', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@agent/storage')>();
@@ -1185,6 +1191,83 @@ describe('executionRegistry', () => {
       registry.dispose();
       recorded.detach();
     }
+  });
+
+  describe('resolves the detach policy', () => {
+    /**
+     * Builds a root with one child and stops the root, returning whether the
+     * child survived (detached) or was interrupted (cascaded).
+     */
+    function stopRootAndReportChildDetached(
+      label: string,
+      options?: { detachActiveChildren: boolean },
+    ): boolean {
+      const explicit = createRecordingHost();
+      const streamStatus = new StreamStatusMachine();
+      const registry = new ExecutionRegistry({ streamStatus });
+      const rootStreamId = `root-${label}` as StreamTabId;
+      const childStreamId = `child-${label}` as StreamTabId;
+      const childInterrupt = vi.fn();
+
+      try {
+        const rootHandle = createHandle(
+          `exec-root-${label}`,
+          rootStreamId,
+          rootStreamId,
+          explicit.host,
+          { agentName: 'test-root' },
+        );
+        rootHandle.attachInterruptHandler({ interrupt: vi.fn() });
+        registry.track(rootHandle);
+        const childHandle = createHandle(
+          `exec-child-${label}`,
+          rootStreamId,
+          childStreamId,
+          explicit.host,
+        );
+        childHandle.attachInterruptHandler({ interrupt: childInterrupt });
+        registry.track(childHandle);
+
+        registry.stopAgentStream(rootStreamId, options);
+
+        return !childInterrupt.mock.calls.length;
+      } finally {
+        registry.dispose();
+      }
+    }
+
+    afterEach(() => {
+      detachPolicyMocks.detachSubagentsOnStop.mockReturnValue(false);
+    });
+
+    it('applies the workspace policy when the caller omits the option', () => {
+      detachPolicyMocks.detachSubagentsOnStop.mockReturnValue(true);
+
+      expect(stopRootAndReportChildDetached('policy-on')).toBe(true);
+      expect(detachPolicyMocks.detachSubagentsOnStop).toHaveBeenCalled();
+    });
+
+    it('cascades when the workspace policy is off and the caller omits the option', () => {
+      detachPolicyMocks.detachSubagentsOnStop.mockReturnValue(false);
+
+      expect(stopRootAndReportChildDetached('policy-off')).toBe(false);
+    });
+
+    it('lets an explicit option override the workspace policy in both directions', () => {
+      detachPolicyMocks.detachSubagentsOnStop.mockReturnValue(true);
+      expect(
+        stopRootAndReportChildDetached('override-off', {
+          detachActiveChildren: false,
+        }),
+      ).toBe(false);
+
+      detachPolicyMocks.detachSubagentsOnStop.mockReturnValue(false);
+      expect(
+        stopRootAndReportChildDetached('override-on', {
+          detachActiveChildren: true,
+        }),
+      ).toBe(true);
+    });
   });
 
   it('stops one child while preserving its owner, sibling, and agent descendants', () => {

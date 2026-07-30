@@ -15,7 +15,6 @@ import PQueue from 'p-queue';
 
 import { getVisibleAgents, loadAgents } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   presentFollowUpResult,
@@ -818,9 +817,7 @@ export async function runChat(
       onSuspend={() => exitController.handleSigtstp()}
       onKillExecution={(executionId) => {
         clearApprovals();
-        defaultSession().executions.kill(executionId, {
-          detachActiveChildren: detachSubagentsOnStop(),
-        });
+        defaultSession().executions.kill(executionId);
       }}
       onSkipExecution={(executionId) => {
         defaultSession().workflowControls.skip(executionId as ExecutionId);

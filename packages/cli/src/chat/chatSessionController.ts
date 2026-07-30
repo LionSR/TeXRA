@@ -14,7 +14,6 @@ import {
   type AgentConfig,
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
-import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import {
   AgentExecutionHandle,
   type ExecutionHandle,
@@ -281,9 +280,7 @@ export function createChatSessionController(
     clearApprovals();
     if (!session.streamId) return;
     session.interruptedStreamId = session.streamId;
-    defaultSession().executions.stopAgentStream(session.streamId, {
-      detachActiveChildren: detachSubagentsOnStop(),
-    });
+    defaultSession().executions.stopAgentStream(session.streamId);
   };
 
   // Shared tail of the run/resume `.catch()` handlers: surface the error to
@@ -877,6 +874,10 @@ export function createChatSessionController(
       session.stopRequested = true;
       session.interruptedStreamId = streamId;
     }
+    // Deliberate override of the `detachSubagentsOnStop` policy: stopping ONE
+    // focused stream in a multi-stream TUI always preserves that stream's
+    // children, which own their own tabs. Only a whole-session stop
+    // (`interruptActiveRun`) consults the user's setting.
     current.executions.stopAgentStream(streamId, {
       detachActiveChildren: true,
     });

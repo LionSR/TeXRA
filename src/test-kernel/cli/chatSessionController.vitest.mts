@@ -613,7 +613,7 @@ describe('createChatSessionController', () => {
     expect(ctrl.canStartRootRun()).toBe(false); // runPromise still pending
   });
 
-  it('reads the shared detach-subagents setting key when stopping an active stream', () => {
+  it('defers the detach-subagents policy to the registry when stopping an active stream', () => {
     const presentationHost = {
       emit: vi.fn(),
     } as unknown as CliRuntimeHost;
@@ -626,13 +626,16 @@ describe('createChatSessionController', () => {
     mocks.workspaceGet.mockReturnValue(true);
     ctrl.stop();
 
-    expect(mocks.workspaceGet).toHaveBeenCalledWith(
+    // A whole-session stop carries no `detachActiveChildren` override, so
+    // `ExecutionRegistry` resolves `detachSubagentsOnStop()` itself. The host
+    // must not read the setting — threading it from each host is what let one
+    // stop path hardcode the flag. Registry-side coverage:
+    // ExecutionRegistry.vitest.ts "resolves the detach policy".
+    expect(mocks.stopAgentStream).toHaveBeenCalledWith('stream-1');
+    expect(mocks.workspaceGet).not.toHaveBeenCalledWith(
       WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
       false,
     );
-    expect(mocks.stopAgentStream).toHaveBeenCalledWith('stream-1', {
-      detachActiveChildren: true,
-    });
   });
 
   it('stops the focused root while preserving its agent children', () => {

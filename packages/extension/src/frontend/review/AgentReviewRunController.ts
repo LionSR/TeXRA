@@ -1,6 +1,5 @@
 // Local imports
 import type { AgentRunHandle } from '@agent/runtime/ExecutionHandle';
-import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 
 export interface AgentReviewRunToken {
@@ -59,8 +58,6 @@ export class AgentReviewRunController {
     const handle = run.handle;
     if (!handle) return;
     if (run.session.executions.getHandle(handle.executionId) !== handle) return;
-    run.session.executions.stopAgentStream(handle.childStreamId, {
-      detachActiveChildren: detachSubagentsOnStop(),
-    });
+    run.session.executions.stopAgentStream(handle.childStreamId);
   }
 }

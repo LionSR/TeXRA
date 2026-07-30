@@ -21,7 +21,6 @@ import {
 } from '@agent/storage';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
-import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import {
   getRunContextExecutionId,
   getRunContextStreamId,
@@ -708,9 +707,7 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
       };
     }
 
-    const success = currentSession().executions.kill(executionId, {
-      detachActiveChildren: detachSubagentsOnStop(),
-    });
+    const success = currentSession().executions.kill(executionId);
     if (success) {
       return {
         status: 'executed',
