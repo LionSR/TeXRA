@@ -8,6 +8,14 @@ import {
   type CliAgentRosterRecord,
 } from '@cli/runtime/agentRoster';
 import { setWorkspaceCliChatAgent } from '@cli/runtime/cliConfig';
+import { COLOR_ERROR, COLOR_WARNING } from '@cli/tui/ui/colors';
+import { TICK } from '@cli/tui/ui/glyphs';
+import { KeyHints } from '@cli/tui/ui/KeyHints';
+import { Select, type SelectItem } from '@cli/tui/ui/Select';
+import {
+  computeSelectWindowSize,
+  type SelectWindowSize,
+} from '@cli/tui/selectWindow';
 import { platform } from '@platform/platform';
 import {
   agentKeyOf,
@@ -23,15 +31,7 @@ import {
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { COLOR_ERROR, COLOR_WARNING } from '../ui/colors';
-import { TICK } from '../ui/glyphs';
-import { KeyHints } from '../ui/KeyHints';
-import { Select, type SelectItem } from '../ui/Select';
 import { FormFrame, renderAsyncListFormTransient } from './_shared/FormFrame';
-import {
-  computeSelectWindowSize,
-  type SelectWindowSize,
-} from './_shared/selectWindow';
 
 type AgentRosterFormMode =
   | 'overview'

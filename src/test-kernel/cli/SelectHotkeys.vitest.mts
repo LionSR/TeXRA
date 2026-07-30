@@ -7,7 +7,7 @@ import {
   selectHotkeyForIndex,
   selectIndexForHotkey,
   selectIndexForHotkeyInput,
-} from '@cli/chat/tui/ui/Select';
+} from '@cli/tui/ui/Select';
 
 describe('Select hotkeys', () => {
   it('numbers the first nine rows 1-9, then letters a-z for 10-35', () => {

@@ -5,6 +5,9 @@
 import { Box, Text, useInput } from 'ink';
 import { useState } from 'react';
 
+import { COLOR_ERROR } from '@cli/tui/ui/colors';
+import { KeyHints } from '@cli/tui/ui/KeyHints';
+import { POINTER } from '@cli/tui/ui/glyphs';
 import { apiKeyEnvName, type ApiProvider } from '@model/apiProviders';
 import {
   PROVIDER_DISPLAY_NAMES,
@@ -12,9 +15,6 @@ import {
 } from '@shared/constants/providers';
 
 import { BaseTextInput } from '../input/BaseTextInput';
-import { COLOR_ERROR } from '../ui/colors';
-import { KeyHints } from '../ui/KeyHints';
-import { POINTER } from '../ui/glyphs';
 import { FormFrame } from './_shared/FormFrame';
 
 export interface ApiKeyEntryFormProps {

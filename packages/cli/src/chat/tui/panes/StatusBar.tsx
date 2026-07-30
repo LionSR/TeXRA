@@ -3,6 +3,8 @@ import { Badge } from '@inkjs/ui';
 import { useEffect, useState } from 'react';
 
 import { resolveCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
+import { COLOR_ERROR } from '@cli/tui/ui/colors';
+import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
 import {
   isCodexSubscriptionActive,
   isKimiCodeSubscriptionActive,
@@ -29,8 +31,6 @@ import {
   visibleSubagentRows,
 } from '../state/childExecutions';
 import { useLiveNowMs } from '../state/useLiveNowMs';
-import { COLOR_ERROR } from '../ui/colors';
-import { loadingFrameAt } from '../ui/LoadingIndicator';
 import { useSignal } from '../state/useSignal';
 import {
   buildStatusBarDisplay,

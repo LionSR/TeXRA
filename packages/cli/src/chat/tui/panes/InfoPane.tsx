@@ -3,10 +3,10 @@ import { useLayoutEffect } from 'react';
 import { useInput, useWindowSize } from 'ink';
 
 // Local imports - TUI layout, input, and markdown rendering
+import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import { FormFrame, formFrameWidth } from '../forms/_shared/FormFrame';
 import { isEscapeInput } from '../input/inputKeys';
 import { renderAnsiMarkdown } from '../render/ansiMarkdown';
-import { wrapAnsiToWidth } from '../render/ansiWrap';
 import { Markdown } from '../render/Markdown';
 
 const INFO_PANE_FIXED_CHROME_ROWS = 4;

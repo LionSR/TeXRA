@@ -4,20 +4,20 @@
 import { Box, Text } from 'ink';
 
 import { computeAgentOptionsData } from '@agent/index';
+import { KeyHints } from '@cli/tui/ui/KeyHints';
+import { Select } from '@cli/tui/ui/Select';
+import {
+  computeSelectWindowSize,
+  isCompactFormRows,
+} from '@cli/tui/selectWindow';
 import type { AgentOptionData } from '@shared/schemas';
 import { agentName } from '@shared/schemas/agent';
 
-import { KeyHints } from '../ui/KeyHints';
-import { Select } from '../ui/Select';
 import {
   CompactFormKeyHints,
   FormFrame,
   renderAsyncListFormTransient,
 } from './_shared/FormFrame';
-import {
-  computeSelectWindowSize,
-  isCompactFormRows,
-} from './_shared/selectWindow';
 import { useAsyncListForm } from './_shared/useAsyncListForm';
 import { usePendingListFormSelection } from './_shared/ListForm';
 

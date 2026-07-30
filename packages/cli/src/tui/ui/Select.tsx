@@ -13,14 +13,16 @@ import { Box, Text, useInput } from 'ink';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 // Local imports - shared utilities
+import {
+  isEscapeInput,
+  isPlainReturnInput,
+} from '@cli/chat/tui/input/inputKeys';
+import { selectVisibleInlineOverflowText } from '@cli/chat/tui/render/overflowText';
 import { clamp, clampIndex } from '@utils/core';
 
 // Local imports - TUI input and presentation
 import { COLOR_HINT } from './colors';
 import { POINTER, TICK } from './glyphs';
-
-import { isEscapeInput, isPlainReturnInput } from '../input/inputKeys';
-import { selectVisibleInlineOverflowText } from '../render/overflowText';
 
 const SELECT_LABEL_MAX_COLS = 24;
 

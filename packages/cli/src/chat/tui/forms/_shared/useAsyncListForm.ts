@@ -11,7 +11,7 @@ import {
   isPlainReturnInput,
   type ReturnKeyInput,
 } from '@cli/chat/tui/input/inputKeys';
-import { useCancellableEffect } from '@cli/chat/tui/state/useCancellableEffect';
+import { useCancellableEffect } from '@cli/tui/useCancellableEffect';
 
 export interface AsyncListFormState<T> {
   readonly data: T | undefined;

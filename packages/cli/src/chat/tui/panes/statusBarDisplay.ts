@@ -10,6 +10,10 @@ import {
   defaultShortcutModifierLabel,
   metaChordLabel,
 } from '@cli/runtime/shortcutLabels';
+import { COLOR_ERROR, COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
+import { STATUS_DIAMOND } from '@cli/tui/ui/glyphs';
+import { KEY_HINT_SEPARATOR, keyHintText } from '@cli/tui/ui/KeyHints';
+import { STATUS_BAR_HORIZONTAL_PADDING } from '@cli/tui/ui/theme';
 import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import { resolveProviderCapabilities } from '@model/providerCapabilities';
 import {
@@ -34,10 +38,6 @@ import {
   truncateSummaryToWidth,
 } from '../render/terminalText';
 import { formatCliStatusLabel } from '../sessionStatus';
-import { COLOR_ERROR, COLOR_HINT, COLOR_WARNING } from '../ui/colors';
-import { STATUS_DIAMOND } from '../ui/glyphs';
-import { KEY_HINT_SEPARATOR, keyHintText } from '../ui/KeyHints';
-import { STATUS_BAR_HORIZONTAL_PADDING } from '../ui/theme';
 import { formatResumeCommand } from '../state/resumeHint';
 import {
   type BypassState,

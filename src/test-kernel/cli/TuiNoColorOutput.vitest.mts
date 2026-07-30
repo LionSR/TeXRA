@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   sgrStrippingWriteStream,
   stripAnsiSgrChunk,
-} from '@cli/chat/tui/render/noColorOutput';
+} from '@cli/tui/noColorOutput';
 
 describe('TUI no-color output', () => {
   function fakeWriteStream(): { stream: NodeJS.WriteStream; writes: string[] } {

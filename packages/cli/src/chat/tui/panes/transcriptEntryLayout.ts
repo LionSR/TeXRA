@@ -1,17 +1,13 @@
 // Declarative conversation-entry geometry shared by Ink renderers, viewport
 // budgeting, static scrollback, and print-once full output.
 
-import type { WorkflowCallProgress } from '@shared/schemas';
-import { formatWorkflowPhaseHeading } from '@shared/copy/workflowCall';
-import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
-import { renderAnsiMarkdown } from '../render/ansiMarkdown';
-import { wrapAnsiToWidth } from '../render/ansiWrap';
+import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import {
   COLOR_BORDER,
   COLOR_ERROR,
   COLOR_HINT,
   COLOR_SUCCESS,
-} from '../ui/colors';
+} from '@cli/tui/ui/colors';
 import {
   CROSS,
   ERROR_ENTRY_PREFIX,
@@ -23,7 +19,11 @@ import {
   TODO_PENDING,
   TOOL_OUTPUT_CORNER,
   USER_ENTRY_PREFIX,
-} from '../ui/glyphs';
+} from '@cli/tui/ui/glyphs';
+import type { WorkflowCallProgress } from '@shared/schemas';
+import { formatWorkflowPhaseHeading } from '@shared/copy/workflowCall';
+import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
+import { renderAnsiMarkdown } from '../render/ansiMarkdown';
 import { isInquiryContinuationText } from './transcriptEntries';
 import { loadedImageDisplayLines } from './loadedImageDisplay';
 import { toolUseDisplayLines, toolUseMarginBottomRows } from './toolRenderers';

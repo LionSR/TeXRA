@@ -1,24 +1,24 @@
 import { Box, Text } from 'ink';
 import { useEffect, useRef, type ReactNode } from 'react';
 
-import { COLOR_WARNING } from '@cli/chat/tui/ui/colors';
-import { KeyHints } from '@cli/chat/tui/ui/KeyHints';
+import { COLOR_WARNING } from '@cli/tui/ui/colors';
+import { KeyHints } from '@cli/tui/ui/KeyHints';
 import {
   Select,
   selectIndexForHotkeyInput,
   type SelectItem,
-} from '@cli/chat/tui/ui/Select';
+} from '@cli/tui/ui/Select';
 
+import {
+  computeSelectWindowSize,
+  isCompactFormRows,
+  type SelectWindowSize,
+} from '@cli/tui/selectWindow';
 import {
   CompactFormKeyHints,
   FormFrame,
   renderAsyncListFormTransient,
 } from './FormFrame';
-import {
-  computeSelectWindowSize,
-  isCompactFormRows,
-  type SelectWindowSize,
-} from './selectWindow';
 import { useAsyncListForm } from './useAsyncListForm';
 
 const LIST_FORM_FRAME_ROWS = 3;

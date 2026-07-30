@@ -1,8 +1,8 @@
 import { render, useApp, useWindowSize } from 'ink';
 
+import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
+import { clearTerminalVisibleScreen } from '@cli/tui/terminalCleanup';
 import { CliConfigForm } from '../chat/tui/forms/CliConfigForm';
-import { tuiOutputStreamForColor } from '../chat/tui/render/noColorOutput';
-import { clearTerminalVisibleScreen } from '../chat/tui/terminalCleanup';
 
 export function ConfigApp(props: {
   readonly onError?: (error: unknown) => void;

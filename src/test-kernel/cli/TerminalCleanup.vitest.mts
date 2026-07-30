@@ -17,7 +17,7 @@ import {
   installTerminalRestoreOnExit,
   supportsTerminalJobControl,
   tuiInputModeRestoreSequence,
-} from '@cli/chat/tui/terminalCleanup';
+} from '@cli/tui/terminalCleanup';
 import {
   installTerminalTitleUpdates,
   terminalTitleText,

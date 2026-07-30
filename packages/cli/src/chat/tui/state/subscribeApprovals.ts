@@ -42,6 +42,7 @@ import {
 import { denyExternalInquiryIfNoHumanInput } from '@cli/runtime/approval/humanInputHandlers';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
+import { missingApiKeyRetryMessage } from '@cli/tui/ui/retryCopy';
 import {
   apiKeyExistsUncached,
   hasUsableApiKey,
@@ -81,7 +82,6 @@ import {
   type ApprovalPayload,
   type TuiRetryRequest,
 } from './approvalQueue';
-import { missingApiKeyRetryMessage } from '../ui/retryCopy';
 
 // =========================================================================
 // Retry auto-switch: skip the modal when a usable personal key exists
