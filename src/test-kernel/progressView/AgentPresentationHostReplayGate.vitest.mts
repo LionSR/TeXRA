@@ -4,11 +4,11 @@ import * as vscode from 'vscode';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type {
-  HostBashApprovalResult,
-  HostUserQuestionResult,
+  BashSettlement,
   PlanApprovalResult,
   ProposalResult,
   RetryResult,
+  UserQuestionSettlement,
 } from '@agent/runtime/HostInteractions';
 import { ApprovalRequestHandler } from '@controllers/progressView/backend/ApprovalRequestHandler';
 import type { ApprovalRequestHandlerSet } from '@controllers/progressView/backend/progressBackendUiConfig';
@@ -95,9 +95,7 @@ function createApprovalHandlers(
 ): ApprovalRequestHandlerSet {
   return {
     toolEdit,
-    bash: noopHandler<BashPermission, 'requestId', HostBashApprovalResult>(
-      'requestId',
-    ),
+    bash: noopHandler<BashPermission, 'requestId', BashSettlement>('requestId'),
     retry: noopHandler<RetryPermission, 'streamId', RetryResult>('streamId'),
     agentProposal: noopHandler<
       AgentProposalPermission,
@@ -115,7 +113,7 @@ function createApprovalHandlers(
     userQuestion: noopHandler<
       UserQuestionPermission,
       'requestId',
-      HostUserQuestionResult
+      UserQuestionSettlement
     >('requestId'),
   };
 }

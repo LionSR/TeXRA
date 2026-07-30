@@ -7,14 +7,12 @@ import {
   cancellationResultFor,
   type BashSettlement,
   type HostBashApprovalRequest,
-  type HostBashApprovalResult,
   type HostApprovalBypassStateUpdate,
   type HostInteractionCancelSelector,
   type HostInteractionOptions,
   type HostInteractions,
   type HostPlanApprovalRequest,
   type HostRetryRequest,
-  type HostUserQuestionResult,
   type PlanApprovalResult,
   type ProposalResult,
   type RetryResult,
@@ -22,10 +20,6 @@ import {
   type SettledInteractionKind,
   type UserQuestionSettlement,
 } from '@agent/runtime/HostInteractions';
-import {
-  toBashApprovalResult,
-  toUserQuestionResult,
-} from '@agent/runtime/hostInteractionResultMappers';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   cancelApprovalRequestHandlers,
@@ -114,7 +108,7 @@ class DesktopHostInteractionsImpl implements DesktopHostInteractions {
   requestBashApproval(
     request: HostBashApprovalRequest,
     options?: HostInteractionOptions,
-  ): Promise<HostBashApprovalResult> {
+  ): Promise<BashSettlement> {
     const requestId = `desktop-bash-${nanoid()}`;
     const streamId = request.streamId ?? undefined;
     const payload = {
@@ -177,7 +171,7 @@ class DesktopHostInteractionsImpl implements DesktopHostInteractions {
   askUserQuestion(
     request: Parameters<NonNullable<HostInteractions['askUserQuestion']>>[0],
     options?: HostInteractionOptions,
-  ): Promise<HostUserQuestionResult> {
+  ): Promise<UserQuestionSettlement> {
     const streamId = request.streamId || undefined;
     this.revealStream(streamId);
     return this.options.getApprovalHandlers().userQuestion.request(request, {
@@ -222,7 +216,7 @@ class DesktopHostInteractionsImpl implements DesktopHostInteractions {
   submitBashDecision(requestId: string, decision: BashSettlement): boolean {
     return this.options
       .getApprovalHandlers()
-      .bash.complete(requestId, toBashApprovalResult(decision));
+      .bash.complete(requestId, decision);
   }
 
   submitPlanDecision(requestId: string, decision: PlanApprovalResult): boolean {
@@ -243,7 +237,7 @@ class DesktopHostInteractionsImpl implements DesktopHostInteractions {
   ): boolean {
     return this.options
       .getApprovalHandlers()
-      .userQuestion.complete(requestId, toUserQuestionResult(decision));
+      .userQuestion.complete(requestId, decision);
   }
 
   dismissExternalInquiry(requestId: string): void {
@@ -255,10 +249,9 @@ class DesktopHostInteractionsImpl implements DesktopHostInteractions {
     initiatingProposalId: string,
   ): Promise<void> {
     const handlers = this.options.getApprovalHandlers();
-    handlers.bash.completeWhere(
-      (request) => request.streamId === streamId,
-      toBashApprovalResult({ action: 'approve' }),
-    );
+    handlers.bash.completeWhere((request) => request.streamId === streamId, {
+      action: 'approve',
+    });
     handlers.agentProposal.completeWhere(
       (request) =>
         request.streamId === streamId &&

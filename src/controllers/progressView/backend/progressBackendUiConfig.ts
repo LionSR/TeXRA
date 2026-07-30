@@ -1,10 +1,10 @@
 import type { AgentTrace } from '@agent/trace';
 import {
-  type HostBashApprovalResult,
+  type BashSettlement,
   type HostApprovalBypassStateUpdate,
   matchesCancelSelector,
   type HostInteractionCancelSelector,
-  type HostUserQuestionResult,
+  type UserQuestionSettlement,
   type PlanApprovalResult,
   type ProposalResult,
   type RetryResult,
@@ -35,11 +35,7 @@ import type { WebviewUpdater } from './WebviewUpdater';
  */
 export interface ApprovalRequestHandlerSet {
   toolEdit: ApprovalRequestHandler<ToolEditPermission, 'requestId'>;
-  bash: ApprovalRequestHandler<
-    BashPermission,
-    'requestId',
-    HostBashApprovalResult
-  >;
+  bash: ApprovalRequestHandler<BashPermission, 'requestId', BashSettlement>;
   retry: ApprovalRequestHandler<RetryPermission, 'streamId', RetryResult>;
   agentProposal: ApprovalRequestHandler<
     AgentProposalPermission,
@@ -58,7 +54,7 @@ export interface ApprovalRequestHandlerSet {
   userQuestion: ApprovalRequestHandler<
     UserQuestionPermission,
     'requestId',
-    HostUserQuestionResult
+    UserQuestionSettlement
   >;
 }
 
@@ -207,7 +203,7 @@ export function buildApprovalRequestHandlerSet(
     bash: webviewPermissionHandler<
       typeof PERMISSION_KIND.BASH,
       'requestId',
-      HostBashApprovalResult
+      BashSettlement
     >(webviewUpdater, canSend, PERMISSION_KIND.BASH, 'requestId'),
     planApproval: webviewPermissionHandler<
       typeof PERMISSION_KIND.PLAN_APPROVAL,
@@ -229,7 +225,7 @@ export function buildApprovalRequestHandlerSet(
     userQuestion: webviewPermissionHandler<
       typeof PERMISSION_KIND.USER_QUESTION,
       'requestId',
-      HostUserQuestionResult
+      UserQuestionSettlement
     >(webviewUpdater, canSend, PERMISSION_KIND.USER_QUESTION, 'requestId'),
     retry: new ApprovalRequestHandler<RetryPermission, 'streamId', RetryResult>(
       'streamId',

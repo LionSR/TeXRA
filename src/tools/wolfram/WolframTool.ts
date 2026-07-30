@@ -61,8 +61,8 @@ export class WolframTool extends defineTool({
   protected async execute(input: WolframInput): Promise<ToolResult> {
     const command = wolframApprovalCommand(input.code);
     const approval = await requestBashApproval({ command });
-    if (!approval.accepted) {
-      return buildBashApprovalRejectedResult(command, approval.userMessage);
+    if (approval.action !== 'approve') {
+      return buildBashApprovalRejectedResult(command, approval.feedback);
     }
 
     getCurrentToolContexts()?.callContext?.hooks?.onExecutionReady?.();
