@@ -34,7 +34,6 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 // Local imports
 import '@awesome.me/webawesome/dist/components/badge/badge.js';
 import {
-  DEFAULT_STREAM_METADATA_STATUS,
   STREAM_PHASE,
   WORKFLOW_TASK_STATUS_LABEL,
   type ActiveChildInfo,
@@ -535,11 +534,9 @@ function taskStatusBadge(child: ActiveChildInfo): {
   const subagentStatusStillInFlight =
     child.kind === 'subagent' &&
     (child.status === STREAM_PHASE.RUNNING ||
-      child.status === STREAM_PHASE.WAITING ||
-      child.status === DEFAULT_STREAM_METADATA_STATUS);
+      child.status === STREAM_PHASE.WAITING);
   if (child.finishedAt === undefined || subagentStatusStillInFlight) {
-    return child.status === STREAM_PHASE.WAITING ||
-      child.status === DEFAULT_STREAM_METADATA_STATUS
+    return child.status === STREAM_PHASE.WAITING
       ? {
           text: WORKFLOW_TASK_STATUS_LABEL.waiting,
           variant: 'neutral',
