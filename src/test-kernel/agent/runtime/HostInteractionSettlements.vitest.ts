@@ -5,8 +5,6 @@ import { expect, expectTypeOf, it } from 'vitest';
 import {
   type BashSettlement,
   cancellationResultFor,
-  type HostBashApprovalResult,
-  type HostUserQuestionResult,
   type PlanApprovalResult,
   type ProposalResult,
   type RetryResult,
@@ -24,15 +22,6 @@ it('makes contradictory interaction decisions unrepresentable', () => {
     IsAssignable<
       { action: 'reject'; answers: { choice: string } },
       UserQuestionSettlement
-    >
-  >().toEqualTypeOf<false>();
-  expectTypeOf<
-    IsAssignable<{ submitted: true }, HostUserQuestionResult>
-  >().toEqualTypeOf<false>();
-  expectTypeOf<
-    IsAssignable<
-      { submitted: false; answers: { choice: string } },
-      HostUserQuestionResult
     >
   >().toEqualTypeOf<false>();
   expectTypeOf<
@@ -59,15 +48,10 @@ it('makes contradictory interaction decisions unrepresentable', () => {
   expectTypeOf<
     IsAssignable<{ action: 'timeout' }, BashSettlement>
   >().toEqualTypeOf<false>();
-  expectTypeOf<
-    'timedOut' extends keyof HostBashApprovalResult ? true : false
-  >().toEqualTypeOf<false>();
 });
 
 it("returns each interaction kind's exact cancellation result", () => {
-  expectTypeOf(
-    cancellationResultFor('bash'),
-  ).toEqualTypeOf<HostBashApprovalResult>();
+  expectTypeOf(cancellationResultFor('bash')).toEqualTypeOf<BashSettlement>();
   expectTypeOf(
     cancellationResultFor('plan'),
   ).toEqualTypeOf<PlanApprovalResult>();
@@ -77,12 +61,12 @@ it("returns each interaction kind's exact cancellation result", () => {
   expectTypeOf(cancellationResultFor('retry')).toEqualTypeOf<RetryResult>();
   expectTypeOf(
     cancellationResultFor('userQuestion'),
-  ).toEqualTypeOf<HostUserQuestionResult>();
+  ).toEqualTypeOf<UserQuestionSettlement>();
 });
 
 it('normalizes bash cancellation feedback like an explicit rejection', () => {
   expect(cancellationResultFor('bash', '  reason  ')).toEqual({
-    accepted: false,
-    userMessage: 'reason',
+    action: 'reject',
+    feedback: 'reason',
   });
 });

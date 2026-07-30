@@ -285,10 +285,7 @@ describe('TUI retry approvals', () => {
     });
     currentApproval.get()?.decide({ accepted: true, bypass: 'bash' });
 
-    await expect(result).resolves.toEqual({
-      accepted: true,
-      userMessage: undefined,
-    });
+    await expect(result).resolves.toEqual({ action: 'approve' });
     expect(streams.get().get('bash-bypass-stream')?.bypass.bash).toBe(true);
     expect(presentationHost.emitApprovalBypassState).toHaveBeenCalledWith({
       streamId: 'bash-bypass-stream',
@@ -489,10 +486,7 @@ describe('TUI retry approvals', () => {
       accepted: true,
       appliedContent: 'new',
     });
-    await expect(bash).resolves.toEqual({
-      accepted: true,
-      userMessage: undefined,
-    });
+    await expect(bash).resolves.toEqual({ action: 'approve' });
     expect(pendingApprovalSummaries.get()).toEqual([
       { streamKey: streamId, kind: 'plan' },
       { streamKey: streamId, kind: 'retry' },

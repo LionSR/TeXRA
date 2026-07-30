@@ -112,7 +112,7 @@ describe('human prompt progress events', () => {
       }),
     ).toBe(true);
 
-    await expect(approval).resolves.toMatchObject({ accepted: true });
+    await expect(approval).resolves.toMatchObject({ action: 'approve' });
 
     expect(explicit.events).toEqual([
       { event: 'requestEnsureProgressView', payload: {} },
@@ -276,7 +276,7 @@ describe('human prompt progress events', () => {
           action: 'approve',
         }),
       ).toBe(true);
-      await expect(approval).resolves.toMatchObject({ accepted: true });
+      await expect(approval).resolves.toMatchObject({ action: 'approve' });
 
       expect(show.payload.command).toBe('echo still asks');
 
@@ -292,7 +292,7 @@ describe('human prompt progress events', () => {
         () => requestBashApproval({ command: 'echo bypassed' }),
       );
 
-      expect(bypassed).toEqual({ accepted: true });
+      expect(bypassed).toEqual({ action: 'approve' });
       expect(explicit.events).toEqual([]);
 
       setToolEditApprovalSessionBypass(streamId, false, {
