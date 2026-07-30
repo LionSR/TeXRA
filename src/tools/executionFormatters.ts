@@ -2,7 +2,6 @@ import type { ExecutionListingEntry, TodoEntry } from '@agent/storage';
 import type { ExecutionStatusInfo } from '@agent/runtime/ExecutionHandle';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import {
-  EXECUTION_STATUS,
   ExecutionStatusSchema,
   STATUS_DISPLAY,
   TODO_STATUS,
@@ -90,14 +89,9 @@ export function getExecutionStatusInfo(
   if (handle) return session.executions.getStatus(handle);
 
   const persistedStatus = ExecutionStatusSchema.safeParse(terminalStatus);
-  let status: ExecutionStatusInfo['status'];
-  if (persistedStatus.success) {
-    status = persistedStatus.data;
-  } else if (terminalStatus === undefined) {
-    status = EXECUTION_STATUS.COMPLETED;
-  } else {
-    status = 'unknown';
-  }
+  const status: ExecutionStatusInfo['status'] = persistedStatus.success
+    ? persistedStatus.data
+    : 'unknown';
   return { status, elapsed: null };
 }
 
