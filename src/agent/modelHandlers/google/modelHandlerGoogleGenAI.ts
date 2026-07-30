@@ -739,14 +739,6 @@ export class ModelHandlerGoogleGenAI extends GoogleModelHandlerBase<
     );
   }
 
-  protected override get shouldStorePseudoPrefillAsOutput(): boolean {
-    return true;
-  }
-
-  protected override createPseudoPrefillPrompt(prefill: string): string {
-    return `Organize your response with XML tags. Start your response with:\n${prefill}`;
-  }
-
   protected appendUserText(
     messages: Content[],
     text: string,

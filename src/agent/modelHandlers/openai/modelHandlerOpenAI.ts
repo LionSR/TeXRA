@@ -972,10 +972,6 @@ export class ModelHandlerOpenAI<
     return { text: newResponse, usage: responseObject.usage, stopReason };
   }
 
-  protected override get shouldPrependPrefillOnResumeWithoutAssistantPrefill(): boolean {
-    return true;
-  }
-
   protected appendUserText(
     messages: ChatCompletionMessageParam[],
     text: string,

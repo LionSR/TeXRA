@@ -2423,9 +2423,9 @@ describe('ModelHandlerAnthropic message guards', () => {
 });
 
 /**
- * Creates a fresh temp directory with an `r0/output.xml` path for prefill
- * tests, invokes `run` with that path, and removes the directory afterward
- * regardless of outcome.
+ * Creates a fresh temp directory with an `r0/output.xml` path for output
+ * initialization tests, invokes `run` with that path, and removes the
+ * directory afterward regardless of outcome.
  */
 async function withTempOutputPath(
   prefix: string,
@@ -2440,59 +2440,22 @@ async function withTempOutputPath(
   }
 }
 
-/** Build the workflow AgentSetting shared by the prefill tests. */
-function createPrefillAgentSetting(): AgentSetting {
+/** Build the workflow AgentSetting shared by the output initialization tests. */
+function createOutputInitAgentSetting(): AgentSetting {
   return AgentSettingSchema.parse({
     agentCategory: AgentCategory.Workflow,
   });
 }
 
-describe('ModelHandlerAnthropic output prefill initialization', () => {
-  it('writes assistant prefills for non-XML workflow outputs', async () => {
-    await withTempOutputPath('anthropic-prefill-', async (outputPath) => {
+describe('ModelHandlerAnthropic output initialization', () => {
+  it('leaves messages untouched when no output file exists', async () => {
+    await withTempOutputPath('anthropic-output-init-', async (outputPath) => {
       const handler = createAnthropicHandler({
         supportsAssistantPrefill: true,
       });
       stubHandlerForTest(handler);
 
-      const agentSetting = createPrefillAgentSetting();
-      const messages: MessageParam[] = [
-        {
-          role: 'user',
-          content: [{ type: 'text', text: 'revise the document' }],
-        },
-      ];
-      const prefill = '<latex_document>';
-      const workspaceState = AgentWorkspaceState.create();
-
-      const [isComplete, updatedMessages] =
-        await handler.initializeOutputAndPrefill(
-          {} as AgentConfig,
-          agentSetting,
-          messages,
-          workspaceState,
-          pathToLocation(outputPath),
-          prefill,
-        );
-
-      assert.equal(isComplete, false);
-      assert.equal(fs.readFileSync(outputPath, 'utf8'), `${prefill}\n`);
-      assert.equal(workspaceState.assembly.accumulatedOutput, `${prefill}\n`);
-      assert.equal(updatedMessages.at(-1)?.role, 'assistant');
-      assert.deepEqual(updatedMessages.at(-1)?.content, [
-        { type: 'text', text: prefill },
-      ]);
-    });
-  });
-
-  it('skips assistant prefill message when prefill is empty', async () => {
-    await withTempOutputPath('anthropic-prefill-empty-', async (outputPath) => {
-      const handler = createAnthropicHandler({
-        supportsAssistantPrefill: true,
-      });
-      stubHandlerForTest(handler);
-
-      const agentSetting = createPrefillAgentSetting();
+      const agentSetting = createOutputInitAgentSetting();
       const userMessage: MessageParam = {
         role: 'user',
         content: [{ type: 'text', text: 'revise the document' }],
@@ -2507,7 +2470,6 @@ describe('ModelHandlerAnthropic output prefill initialization', () => {
           messages,
           workspaceState,
           pathToLocation(outputPath),
-          '',
         );
 
       assert.equal(isComplete, false);
@@ -2518,14 +2480,14 @@ describe('ModelHandlerAnthropic output prefill initialization', () => {
     });
   });
 
-  it('skips pseudo-prefill instruction when prefill is empty (thinking-only models)', async () => {
-    await withTempOutputPath('anthropic-pseudo-empty-', async (outputPath) => {
+  it('leaves messages untouched for models without assistant prefill', async () => {
+    await withTempOutputPath('anthropic-no-prefill-', async (outputPath) => {
       const handler = createAnthropicHandler({
         supportsAssistantPrefill: false,
       });
       stubHandlerForTest(handler);
 
-      const agentSetting = createPrefillAgentSetting();
+      const agentSetting = createOutputInitAgentSetting();
       const userText = 'revise the document';
       const messages: MessageParam[] = [
         {
@@ -2541,7 +2503,6 @@ describe('ModelHandlerAnthropic output prefill initialization', () => {
         messages,
         workspaceState,
         pathToLocation(outputPath),
-        '',
       );
 
       assert.equal(updatedMessages.length, 1);
