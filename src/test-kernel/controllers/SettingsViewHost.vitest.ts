@@ -27,31 +27,10 @@ function createMemoryController() {
         confirm: async () => true,
         warning: async () => undefined,
       },
-      loadMemoryItems: async () => [],
-      loadMemoryPreview: async (storagePath) => ({
-        storagePath,
-        lineCount: 1,
-        preview: 'remember',
-      }),
       isMemoryEnabled: () => enabled,
       setMemoryEnabled: async (next) => {
         enabled = next;
       },
-      memoryStoragePath: (storagePath) => `mem/${storagePath}`,
-      storage: {
-        delete: async () => undefined,
-        read: async () => '',
-        write: async () => undefined,
-      },
-      maxPinnedMemories: 3,
-      parseMemoryFile: (raw) => ({ meta: null, content: raw }),
-      buildMemoryFile: (content) => content,
-      setPinnedMeta: (meta, pinned) => ({
-        modifiedBy: meta?.modifiedBy ?? 'codex',
-        modifiedAt: meta?.modifiedAt ?? '2026-07-07T00:00:00.000Z',
-        pinned,
-      }),
-      countPinnedMemories: async () => 0,
     }),
     isEnabled: () => enabled,
   };
