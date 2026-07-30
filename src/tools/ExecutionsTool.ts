@@ -671,26 +671,21 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
     const callerStreamId = getRunContextStreamId(ctx);
 
     if (getRunContextExecutionId(ctx) === executionId) {
-      return {
-        status: 'error',
-        error: `Cannot kill your own execution (${executionId}).`,
-      };
+      throw new ToolError(`Cannot kill your own execution (${executionId}).`);
     }
 
     const target = currentSession().executions.getHandle(executionId);
     if (!target) {
-      return {
-        status: 'error',
-        error: `Execution ${executionId} not found or already completed.`,
-      };
+      throw new ToolError(
+        `Execution ${executionId} not found or already completed.`,
+      );
     }
 
     // Scope: can only kill your own children. Deny if no context.
     if (!callerStreamId || target.parentStreamId !== callerStreamId) {
-      return {
-        status: 'error',
-        error: `Cannot kill execution ${executionId}: not a child of this session.`,
-      };
+      throw new ToolError(
+        `Cannot kill execution ${executionId}: not a child of this session.`,
+      );
     }
 
     // Only block subagent kills when the toggle is disabled; process kills are always allowed.
@@ -701,11 +696,9 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
         true,
       )
     ) {
-      return {
-        status: 'error',
-        error:
-          'Killing subagents is disabled. Enable it in Settings > Multi-Agent.',
-      };
+      throw new ToolError(
+        'Killing subagents is disabled. Enable it in Settings > Multi-Agent.',
+      );
     }
 
     const success = currentSession().executions.kill(executionId, {
@@ -717,10 +710,7 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
         output: `Execution ${executionId} terminated.`,
       };
     }
-    return {
-      status: 'error',
-      error: `Execution ${executionId} could not be terminated.`,
-    };
+    throw new ToolError(`Execution ${executionId} could not be terminated.`);
   }
 
   private handleSubscribe(executionId: ExecutionId): ToolResult {

@@ -20,11 +20,9 @@ import {
   PersistedFlowStateError,
   readPersistedFlowRecord,
 } from '@agent/node/persistedFlow';
-import { attachProviderError } from '@common/errors/sdkErrorUtils';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
 import {
   RUN_OUTCOME,
-  toProviderErrorFromRetry,
   type AgentFileLocation,
   type RoundOutput,
   type RunOutcome,
@@ -50,6 +48,7 @@ import {
   type ReflectionFlowShared,
 } from './ReflectionFlowState';
 import { RoundPersistedFlow } from './RoundPersistedFlow';
+import { throwFlowLastError } from '../flowLastError';
 import type {
   ReflectionServices,
   WorkflowOutputPolicy,
@@ -331,12 +330,7 @@ export async function runReflectionFlow<C = unknown>(
       outcome = RUN_OUTCOME.FAILED;
       // Re-throw so runFlowWithLifecycle logs the error and shows
       // the user notification. State was already projected per-step.
-      // Attach the full structured provider error so downstream error
-      // formatters can surface statusCode, provider, etc. without
-      // sniffing the message string.
-      const err = new Error(shared.lastError.message);
-      attachProviderError(err, toProviderErrorFromRetry(shared.lastError));
-      throw err;
+      throwFlowLastError(new Error(shared.lastError.message), shared.lastError);
     }
     outcome = flowOutcome;
   } catch (error) {

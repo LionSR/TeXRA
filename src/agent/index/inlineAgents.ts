@@ -25,6 +25,7 @@ import {
   AgentWorkflowSettingSchema,
   type AgentDefinition,
 } from '@agent/core/definition/AgentDataclass';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { extractToolNames } from './agentYamlScanner';
 import type { AgentEntry } from './agentEntry';
 
@@ -149,10 +150,9 @@ function normalizeInlineAgent(definition: unknown): InlineAgent {
   try {
     AgentPromptSchema.parse(parsed.prompts);
   } catch (error) {
-    throw new Error(
-      `Inline agent "${parsed.name}": ${error instanceof Error ? error.message : String(error)}`,
-      { cause: error },
-    );
+    throw new Error(`Inline agent "${parsed.name}": ${toErrorMessage(error)}`, {
+      cause: error,
+    });
   }
 
   return {
