@@ -355,6 +355,14 @@ export class AgentHandlers {
         return;
       }
 
+      const deleteChoice = 'Delete';
+      const confirmed = await vscode.window.showWarningMessage(
+        `Delete "${data.agentName}"? This cannot be undone.`,
+        { modal: true },
+        deleteChoice,
+      );
+      if (confirmed !== deleteChoice) return;
+
       await AbsoluteFS.delete(result.plan.path, { recursive: false });
 
       void vscode.window.showInformationMessage(
