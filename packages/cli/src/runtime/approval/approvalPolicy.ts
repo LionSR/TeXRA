@@ -1,3 +1,5 @@
+import PQueue from 'p-queue';
+
 import type { HostUserQuestionResult } from '@agent/runtime/HostInteractions';
 import { isRelayMonthlyLimitMessage } from '@common/errors/sdkErrorUtils';
 import {
@@ -51,7 +53,7 @@ export interface CliApprovalPromptHooks {
 }
 
 const deniedApprovalContexts = new WeakSet<CliContext>();
-const cliPromptQueues = new WeakMap<CliContext, Promise<unknown>>();
+const cliPromptQueues = new WeakMap<CliContext, PQueue>();
 
 function denyMessage(policy: CliContext['approvalPolicy']): string {
   return policy === 'ask'
@@ -105,13 +107,12 @@ function enqueueCliPrompt<T>(
   context: CliContext,
   prompt: () => Promise<T>,
 ): Promise<T> {
-  const previous = cliPromptQueues.get(context) ?? Promise.resolve();
-  const next = previous.catch(() => undefined).then(prompt);
-  cliPromptQueues.set(
-    context,
-    next.catch(() => undefined),
-  );
-  return next;
+  let queue = cliPromptQueues.get(context);
+  if (!queue) {
+    queue = new PQueue({ concurrency: 1 });
+    cliPromptQueues.set(context, queue);
+  }
+  return queue.add(prompt);
 }
 
 async function askCliApprovalQuestion(
