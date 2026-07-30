@@ -164,6 +164,96 @@ async function tryExeca(
   }
 }
 
+/** Whether a probe result carries a version-like pattern (e.g., "3.7.1"). */
+function hasVersionOutput(result: {
+  stdout?: string;
+  stderr?: string;
+}): boolean {
+  return (
+    /\d+\.\d+/.test(result.stdout ?? '') || /\d+\.\d+/.test(result.stderr ?? '')
+  );
+}
+
+/** Split a probe command string into an executable and its arguments. */
+function parseCommand(cmd: string): { cmdName: string; args: string[] } | null {
+  const parts = shellParse(cmd).filter(
+    (arg): arg is string => typeof arg === 'string',
+  );
+  if (parts.length === 0) return null;
+  const [cmdName, ...args] = parts;
+  return { cmdName, args };
+}
+
+/**
+ * Probe one command, falling back to a BinaryResolver-resolved path when the
+ * direct spawn neither exits 0 nor prints version-like output.
+ */
+async function executeWithFallback(
+  cmd: string,
+  args: string[],
+  execEnv: NodeJS.ProcessEnv,
+): Promise<boolean> {
+  logger.debug(
+    CHANNEL,
+    `Checking tool '${cmd}' with args [${args.join(', ')}]`,
+  );
+
+  let result = await tryExeca(cmd, args, '', execEnv);
+  if (!result) return false;
+  logger.debug(
+    CHANNEL,
+    `Initial check for '${cmd}': exitCode=${result.exitCode}, ` +
+      `stdout=${result.stdout?.slice(0, 100) || '(empty)'}, ` +
+      `stderr=${result.stderr?.slice(0, 100) || '(empty)'}`,
+  );
+
+  // Accept if exit code is 0, OR if we got version-like output
+  // (some tools return non-zero for --version but still output version info)
+  if (result.exitCode === 0 || hasVersionOutput(result)) {
+    logger.debug(CHANNEL, `Tool '${cmd}' detected successfully`);
+    return true;
+  }
+
+  const fallback = BinaryResolver.resolveOptionalCommand(cmd, args);
+  logger.debug(
+    CHANNEL,
+    `Fallback search for '${cmd}': ${fallback?.resolvedPath ?? 'not found'}`,
+  );
+
+  if (fallback) {
+    logger.debug(
+      CHANNEL,
+      `Running fallback '${fallback.command}' with args [${fallback.args.join(', ')}]`,
+    );
+    result = await tryExeca(
+      fallback.command,
+      fallback.args,
+      'fallback ',
+      execEnv,
+    );
+    if (!result) return false;
+    logger.debug(
+      CHANNEL,
+      `Fallback result: exitCode=${result.exitCode}, ` +
+        `stdout=${result.stdout?.slice(0, 100) || '(empty)'}, ` +
+        `stderr=${result.stderr?.slice(0, 100) || '(empty)'}`,
+    );
+
+    if (result.exitCode === 0 || hasVersionOutput(result)) {
+      return true;
+    }
+  }
+
+  // Log at info level so it shows in output channel by default
+  logger.info(
+    CHANNEL,
+    `Tool '${cmd}' not detected. Last result: exitCode=${result.exitCode}, ` +
+      `stdout=${result.stdout?.slice(0, 200) || '(empty)'}, ` +
+      `stderr=${result.stderr?.slice(0, 200) || '(empty)'}`,
+  );
+  return false;
+}
+
 /**
  * Generic function to check if a tool is installed
  * @param toolOrConfig Tool name (string) or tool configuration object
@@ -210,91 +300,12 @@ export async function checkToolInstalled(
         `includes /usr/bin: ${extendedPath.includes('/usr/bin')}`,
     );
 
-    // Check if output contains version-like pattern (e.g., "3.7.1")
-    const hasVersionOutput = (result: { stdout?: string; stderr?: string }) =>
-      /\d+\.\d+/.test(result.stdout ?? '') ||
-      /\d+\.\d+/.test(result.stderr ?? '');
-
-    const executeWithFallback = async (
-      cmd: string,
-      args: string[],
-    ): Promise<boolean> => {
-      logger.debug(
-        CHANNEL,
-        `Checking tool '${cmd}' with args [${args.join(', ')}]`,
-      );
-
-      let result = await tryExeca(cmd, args, '', execEnv);
-      if (!result) return false;
-      logger.debug(
-        CHANNEL,
-        `Initial check for '${cmd}': exitCode=${result.exitCode}, ` +
-          `stdout=${result.stdout?.slice(0, 100) || '(empty)'}, ` +
-          `stderr=${result.stderr?.slice(0, 100) || '(empty)'}`,
-      );
-
-      // Accept if exit code is 0, OR if we got version-like output
-      // (some tools return non-zero for --version but still output version info)
-      if (result.exitCode === 0 || hasVersionOutput(result)) {
-        logger.debug(CHANNEL, `Tool '${cmd}' detected successfully`);
-        return true;
-      }
-
-      const fallback = BinaryResolver.resolveOptionalCommand(cmd, args);
-      logger.debug(
-        CHANNEL,
-        `Fallback search for '${cmd}': ${fallback?.resolvedPath ?? 'not found'}`,
-      );
-
-      if (fallback) {
-        logger.debug(
-          CHANNEL,
-          `Running fallback '${fallback.command}' with args [${fallback.args.join(', ')}]`,
-        );
-        result = await tryExeca(
-          fallback.command,
-          fallback.args,
-          'fallback ',
-          execEnv,
-        );
-        if (!result) return false;
-        logger.debug(
-          CHANNEL,
-          `Fallback result: exitCode=${result.exitCode}, ` +
-            `stdout=${result.stdout?.slice(0, 100) || '(empty)'}, ` +
-            `stderr=${result.stderr?.slice(0, 100) || '(empty)'}`,
-        );
-
-        if (result.exitCode === 0 || hasVersionOutput(result)) {
-          return true;
-        }
-      }
-
-      // Log at info level so it shows in output channel by default
-      logger.info(
-        CHANNEL,
-        `Tool '${cmd}' not detected. Last result: exitCode=${result.exitCode}, ` +
-          `stdout=${result.stdout?.slice(0, 200) || '(empty)'}, ` +
-          `stderr=${result.stderr?.slice(0, 200) || '(empty)'}`,
-      );
-      return false;
-    };
-
-    const parseCommand = (cmd: string) => {
-      const parts = shellParse(cmd).filter(
-        (arg): arg is string => typeof arg === 'string',
-      );
-      if (parts.length === 0) return null;
-      const [cmdName, ...args] = parts;
-      return { cmdName, args };
-    };
-
     if (Array.isArray(command)) {
       // Try each command in the array until one succeeds
       for (const cmd of command) {
         const parsed = parseCommand(cmd);
         if (!parsed) continue;
-        if (await executeWithFallback(parsed.cmdName, parsed.args)) {
+        if (await executeWithFallback(parsed.cmdName, parsed.args, execEnv)) {
           isInstalled = true;
           break;
         }
@@ -305,7 +316,11 @@ export async function checkToolInstalled(
       if (!parsed) {
         throw new Error('Invalid command: no executable found');
       }
-      isInstalled = await executeWithFallback(parsed.cmdName, parsed.args);
+      isInstalled = await executeWithFallback(
+        parsed.cmdName,
+        parsed.args,
+        execEnv,
+      );
     }
 
     if (!isInstalled && showError) {
@@ -425,12 +440,17 @@ export async function checkCoreDependencies(
   }
 }
 
+/** Package managers TeXRA knows how to install dependencies with. */
+export const SYSTEM_PACKAGE_MANAGERS = ['brew', 'apt', 'scoop'] as const;
+
+export type SystemPackageManager = (typeof SYSTEM_PACKAGE_MANAGERS)[number];
+
+let cachedPackageManager: SystemPackageManager | undefined;
+
 /**
  * Detect the first available package manager on the system.
  * Returns 'brew', 'apt', 'scoop', or null if none found.
  */
-let cachedPackageManager: SystemPackageManager | undefined;
-
 export function detectPackageManager(): SystemPackageManager | null {
   if (cachedPackageManager !== undefined) return cachedPackageManager;
 
@@ -457,11 +477,6 @@ export function detectPackageManager(): SystemPackageManager | null {
   logger.debug(CHANNEL, 'No package manager detected');
   return null;
 }
-
-/** Package managers TeXRA knows how to install dependencies with. */
-export const SYSTEM_PACKAGE_MANAGERS = ['brew', 'apt', 'scoop'] as const;
-
-export type SystemPackageManager = (typeof SYSTEM_PACKAGE_MANAGERS)[number];
 
 const packageManagerAvailability = new Map<SystemPackageManager, boolean>();
 

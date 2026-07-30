@@ -25,7 +25,7 @@ import {
   scrollStatusText,
 } from '../render/overflowText';
 import {
-  maxScrollableRowOffset,
+  compactAwareMaxScrollOffset,
   scrollBoundedRows,
 } from '../render/scrollBounds';
 import type { ApprovalDecision } from '../state/approvalQueue';
@@ -81,53 +81,46 @@ export function externalInquiryKeyHintsForWidth({
   readonly maxColumns: number;
   readonly questionScrollable: boolean;
 }): readonly KeyHint[] {
+  const scrollHint = (action: string, key = 'PgUp/PgDn'): KeyHint[] =>
+    questionScrollable ? [{ key, action }] : [];
   const actionHints: readonly KeyHint[] = [
     { key: 'Enter', action: 'submit answer' },
     { key: 'Ctrl-R', action: 'reject with note' },
     { key: 'Esc', action: 'skip' },
   ];
-  const fullHints = [
-    ...(questionScrollable ? [{ key: 'PgUp/PgDn', action: 'question' }] : []),
-    { key: 'Ctrl-Y', action: 'copy question' },
-    ...actionHints,
-  ];
-  if (keyHintsFit(fullHints, maxColumns)) return fullHints;
-
-  const compactScrollHints = [
-    ...(questionScrollable ? [{ key: 'PgUp/PgDn', action: 'scroll' }] : []),
-    { key: 'Ctrl-Y', action: 'copy' },
-    ...actionHints,
-  ];
-  if (keyHintsFit(compactScrollHints, maxColumns)) return compactScrollHints;
-
   const compactTailHints: readonly KeyHint[] = [
     { key: 'Ctrl-Y', action: 'copy' },
     { key: 'Enter', action: 'submit' },
     { key: 'Ctrl-R', action: 'reject' },
     { key: 'Esc', action: 'skip' },
   ];
-  const compactAllHints = [
-    ...(questionScrollable ? [{ key: 'PgUp/PgDn', action: 'scroll' }] : []),
-    ...compactTailHints,
-  ];
-  if (keyHintsFit(compactAllHints, maxColumns)) return compactAllHints;
 
-  const shortScrollHints = [
-    ...(questionScrollable ? [{ key: 'PgUp/Dn', action: 'scroll' }] : []),
-    ...compactTailHints,
+  // Widest layout first; the first one that fits wins.
+  const candidates: readonly (readonly KeyHint[])[] = [
+    [
+      ...scrollHint('question'),
+      { key: 'Ctrl-Y', action: 'copy question' },
+      ...actionHints,
+    ],
+    [
+      ...scrollHint('scroll'),
+      { key: 'Ctrl-Y', action: 'copy' },
+      ...actionHints,
+    ],
+    [...scrollHint('scroll'), ...compactTailHints],
+    [...scrollHint('scroll', 'PgUp/Dn'), ...compactTailHints],
+    compactTailHints,
+    [
+      { key: 'Ctrl-Y', action: 'copy' },
+      { key: 'Enter', action: 'submit' },
+      { key: 'Esc', action: 'skip' },
+    ],
   ];
-  if (keyHintsFit(shortScrollHints, maxColumns)) return shortScrollHints;
-
-  if (keyHintsFit(compactTailHints, maxColumns)) return compactTailHints;
-
-  const minimumHints: readonly KeyHint[] = [
-    { key: 'Ctrl-Y', action: 'copy' },
-    { key: 'Enter', action: 'submit' },
-    { key: 'Esc', action: 'skip' },
-  ];
-  return keyHintsFit(minimumHints, maxColumns)
-    ? minimumHints
-    : [{ key: 'Esc', action: 'skip' }];
+  return (
+    candidates.find((hints) => keyHintsFit(hints, maxColumns)) ?? [
+      { key: 'Esc', action: 'skip' },
+    ]
+  );
 }
 
 export function externalInquiryAnswerRowsBudget(
@@ -163,22 +156,6 @@ function externalInquiryQuestionLines({
       .split('\n')
       .map((text): ExternalInquiryDisplayLine => ({ kind: 'question', text })),
   );
-}
-
-function maxExternalInquiryQuestionScrollOffset(
-  totalLines: number,
-  maxDisplayLines: number,
-): number {
-  if (maxDisplayLines <= 0) return 0;
-  if (totalLines <= maxDisplayLines) return 0;
-  if (maxDisplayLines <= COMPACT_EXTERNAL_INQUIRY_QUESTION_ROWS) {
-    return Math.max(0, totalLines - Math.max(1, maxDisplayLines - 1));
-  }
-  return maxScrollableRowOffset({
-    compactRows: COMPACT_EXTERNAL_INQUIRY_QUESTION_ROWS,
-    maxDisplayLines,
-    totalLines,
-  });
 }
 
 function overflowLine(text: string): ExternalInquiryDisplayLine {
@@ -256,10 +233,11 @@ export function ExternalInquiry(
       }).length,
     [contentWidth, props.payload.question],
   );
-  const maxQuestionOffset = maxExternalInquiryQuestionScrollOffset(
-    questionLineCount,
-    questionRows,
-  );
+  const maxQuestionOffset = compactAwareMaxScrollOffset({
+    compactRows: COMPACT_EXTERNAL_INQUIRY_QUESTION_ROWS,
+    maxDisplayLines: questionRows,
+    totalLines: questionLineCount,
+  });
   const questionScrollable = maxQuestionOffset > 0;
   const pageRows = Math.max(1, questionRows - 2);
   const questionDisplayLines = boundedExternalInquiryQuestionLines({

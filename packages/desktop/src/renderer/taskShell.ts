@@ -263,12 +263,11 @@ export function workbenchTabsTemplate(
 ): TemplateResult {
   const hideDirection =
     placement === 'right' ? 'chevron-right' : 'chevron-down';
-  const placementLabel = placement === 'right' ? 'right' : 'bottom';
   return html`
     <div
       class="task-workbench-tabs"
       role="tablist"
-      aria-label=${`${placementLabel} workbench tabs`}
+      aria-label=${`${placement} workbench tabs`}
     >
       <div class="task-workbench-tabs-scroll">
         ${tabs.map((tab) => {
@@ -362,8 +361,8 @@ export function workbenchTabsTemplate(
         class="task-workbench-close icon-button is-size-m focus-ring-inset"
         appearance="plain"
         size="s"
-        aria-label=${`Hide ${placementLabel} panel`}
-        title=${`Hide ${placementLabel} panel`}
+        aria-label=${`Hide ${placement} panel`}
+        title=${`Hide ${placement} panel`}
         @click=${callbacks.onHide}
       >
         ${waIcon(hideDirection)}

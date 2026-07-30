@@ -34,6 +34,17 @@ export interface CleanupTerminalModesOptions {
   readonly clearItermProgress?: boolean;
 }
 
+// The terminal may be gone (exit paths, a suspend, a closed window) and no
+// caller can surface a failed restore usefully, so every mode write is
+// best-effort.
+function writeTerminalSequence(sequence: string): void {
+  try {
+    writeSync(1, sequence);
+  } catch {
+    // Nothing to do.
+  }
+}
+
 export function supportsTerminalJobControl(
   platform: NodeJS.Platform = process.platform,
 ): boolean {
@@ -43,12 +54,11 @@ export function supportsTerminalJobControl(
 export function cleanupTerminalModes(
   options: CleanupTerminalModesOptions = {},
 ): void {
-  try {
-    writeSync(1, RESET_TERMINAL_MODES);
-    if (options.clearItermProgress) writeSync(1, CLEAR_ITERM_PROGRESS);
-  } catch {
-    // Exit paths cannot surface cleanup failures usefully.
-  }
+  writeTerminalSequence(
+    options.clearItermProgress
+      ? `${RESET_TERMINAL_MODES}${CLEAR_ITERM_PROGRESS}`
+      : RESET_TERMINAL_MODES,
+  );
 }
 
 /**
@@ -80,25 +90,13 @@ export function tuiInputModeRestoreSequence(options: {
 export function restoreTuiInputModes(options: {
   readonly kittyKeyboard: boolean;
 }): void {
-  try {
-    writeSync(1, tuiInputModeRestoreSequence(options));
-  } catch {
-    // The terminal may have gone away across the suspend; nothing to do.
-  }
+  writeTerminalSequence(tuiInputModeRestoreSequence(options));
 }
 
 export function clearTerminalScrollback(): void {
-  try {
-    writeSync(1, CLEAR_SCREEN_AND_SCROLLBACK);
-  } catch {
-    // The terminal may have been closed mid-clear; nothing to do.
-  }
+  writeTerminalSequence(CLEAR_SCREEN_AND_SCROLLBACK);
 }
 
 export function clearTerminalVisibleScreen(): void {
-  try {
-    writeSync(1, CLEAR_VISIBLE_SCREEN);
-  } catch {
-    // The terminal may have been closed mid-clear; nothing to do.
-  }
+  writeTerminalSequence(CLEAR_VISIBLE_SCREEN);
 }

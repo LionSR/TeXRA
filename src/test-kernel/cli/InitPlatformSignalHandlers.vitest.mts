@@ -11,6 +11,21 @@ vi.mock('@cli/runtime/logSinks', () => ({
   writeTextStderr: vi.fn(),
 }));
 
+/** Captures the SIGINT/SIGTERM listeners the runtime installs via `process.once`. */
+function captureSignalHandlers(): Map<string, (...args: unknown[]) => void> {
+  const handlers = new Map<string, (...args: unknown[]) => void>();
+  vi.spyOn(process, 'once').mockImplementation(((
+    event: string | symbol,
+    listener: (...args: unknown[]) => void,
+  ) => {
+    if (event === 'SIGINT' || event === 'SIGTERM') {
+      handlers.set(event, listener);
+    }
+    return process;
+  }) as typeof process.once);
+  return handlers;
+}
+
 describe('CLI platform signal handlers', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -19,16 +34,7 @@ describe('CLI platform signal handlers', () => {
 
   it('exits with signal codes after shutdown instead of re-emitting signals', async () => {
     vi.resetModules();
-    const handlers = new Map<string, () => unknown>();
-    vi.spyOn(process, 'once').mockImplementation(((
-      event: string | symbol,
-      listener: (...args: unknown[]) => void,
-    ) => {
-      if (event === 'SIGINT' || event === 'SIGTERM') {
-        handlers.set(event, () => listener());
-      }
-      return process;
-    }) as typeof process.once);
+    const handlers = captureSignalHandlers();
     const events: string[] = [];
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation(((code) => {
       events.push(`exit:${code}`);
@@ -70,16 +76,7 @@ describe('CLI platform signal handlers', () => {
 
   it('handOffCliShutdownSignalHandlers removes exactly the listeners it installed', async () => {
     vi.resetModules();
-    const handlers = new Map<string, (...args: unknown[]) => void>();
-    vi.spyOn(process, 'once').mockImplementation(((
-      event: string | symbol,
-      listener: (...args: unknown[]) => void,
-    ) => {
-      if (event === 'SIGINT' || event === 'SIGTERM') {
-        handlers.set(event, listener);
-      }
-      return process;
-    }) as typeof process.once);
+    const handlers = captureSignalHandlers();
     const removed: Array<[string | symbol, unknown]> = [];
     vi.spyOn(process, 'removeListener').mockImplementation(((
       event: string | symbol,

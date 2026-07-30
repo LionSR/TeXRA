@@ -63,10 +63,8 @@ export const ReflectionFlowStateSchema = z.object({
   compileRepairRoundGranted: z.boolean().optional(),
 });
 
-type ReflectionFlowState = z.infer<typeof ReflectionFlowStateSchema>;
-
 /** Shared state type for reflection flow nodes. */
-export type ReflectionFlowShared = ReflectionFlowState;
+export type ReflectionFlowShared = z.infer<typeof ReflectionFlowStateSchema>;
 
 /**
  * Same shape as `ReflectionFlowStateSchema`, but `workspaceSnapshot` is

@@ -111,6 +111,7 @@ import {
   clearApprovalsWhere,
   enqueueApproval,
   type ApprovalDecision,
+  type ApprovalPayload,
 } from '../src/chat/tui/state/approvalQueue';
 import { syncStreamLog } from '../src/chat/tui/state/subscribeStreamLog';
 import { attachTuiRunFactSubscription } from '../src/chat/tui/state/subscribeRuntimeHost';
@@ -1108,20 +1109,28 @@ function makeUserQuestionPayload(): UserQuestionPermission {
   };
 }
 
+function enqueueHarnessApproval(
+  payload: ApprovalPayload,
+  onDecision: (decision: ApprovalDecision) => void | Promise<void>,
+): void {
+  void enqueueApproval(payload, {
+    onPresent: () => notify({ kind: 'approvalNeeded' }),
+  }).then(onDecision);
+}
+
 function applyHarnessApprovalDecision(decision: ApprovalDecision): void {
-  if (decision.accepted && decision.bypass === 'bash') {
+  if (!decision.accepted) return;
+  if (decision.bypass === 'bash') {
     patchStream(STREAM_ID, (slice) => ({
       ...slice,
       bypass: { ...slice.bypass, bash: true },
     }));
-  }
-  if (decision.accepted && decision.bypass === 'toolEdit') {
+  } else if (decision.bypass === 'toolEdit') {
     patchStream(STREAM_ID, (slice) => ({
       ...slice,
       bypass: { ...slice.bypass, toolEdit: true },
     }));
-  }
-  if (decision.accepted && decision.bypass === 'superYolo') {
+  } else if (decision.bypass === 'superYolo') {
     patchStream(STREAM_ID, (slice) => ({
       ...slice,
       bypass: { bash: true, superYolo: true, toolEdit: true },
@@ -1850,13 +1859,10 @@ if (SHOW_TODOS) {
 
 if (SHOW_EDIT_APPROVAL) {
   const showApproval = () =>
-    void enqueueApproval(
-      {
-        kind: 'toolEdit',
-        payload: makeEditApprovalRequest(),
-      },
-      { onPresent: () => notify({ kind: 'approvalNeeded' }) },
-    ).then(applyHarnessApprovalDecision);
+    enqueueHarnessApproval(
+      { kind: 'toolEdit', payload: makeEditApprovalRequest() },
+      applyHarnessApprovalDecision,
+    );
 
   if (EDIT_APPROVAL_DELAY_MS > 0) {
     setTimeout(showApproval, EDIT_APPROVAL_DELAY_MS);
@@ -1874,24 +1880,23 @@ if (SHOW_BASH_APPROVAL) {
       },
       { onPresent: () => notify({ kind: 'approvalNeeded' }) },
     );
-  const showRepeatedApprovals = () =>
-    void showApproval(1)
-      .then((decision) => {
-        applyHarnessApprovalDecision(decision);
-        if (!decision.accepted) return decision;
-        return showApproval(2).then((secondDecision) => {
-          applyHarnessApprovalDecision(secondDecision);
-          appendHarnessAssistantTranscript(
-            secondDecision.accepted
-              ? 'SECOND-BASH-APPROVED'
-              : 'SECOND-BASH-REJECTED',
-          );
-          return secondDecision;
-        });
-      })
-      .catch(() => undefined);
-  const showSingleApproval = () =>
+  const showRepeatedApprovals = async (): Promise<void> => {
+    const decision = await showApproval(1);
+    applyHarnessApprovalDecision(decision);
+    if (!decision.accepted) return;
+    const secondDecision = await showApproval(2);
+    applyHarnessApprovalDecision(secondDecision);
+    appendHarnessAssistantTranscript(
+      secondDecision.accepted ? 'SECOND-BASH-APPROVED' : 'SECOND-BASH-REJECTED',
+    );
+  };
+  const startApprovals = () => {
+    if (SHOW_REPEATED_BASH_APPROVAL) {
+      void showRepeatedApprovals().catch(() => undefined);
+      return;
+    }
     void showApproval(1).then(applyHarnessApprovalDecision);
+  };
 
   if (SHOW_BASH_APPROVAL_AFTER_CHILD_FOCUS) {
     let pollCount = 0;
@@ -1903,13 +1908,11 @@ if (SHOW_BASH_APPROVAL) {
         return;
       }
       clearInterval(timer);
-      if (SHOW_REPEATED_BASH_APPROVAL) showRepeatedApprovals();
-      else showSingleApproval();
+      startApprovals();
     }, 25);
     timer.unref?.();
   } else {
-    if (SHOW_REPEATED_BASH_APPROVAL) showRepeatedApprovals();
-    else showSingleApproval();
+    startApprovals();
   }
 }
 
@@ -1933,7 +1936,7 @@ if (SHOW_RETRY_APPROVAL) {
 }
 
 if (SHOW_EXTERNAL_INQUIRY) {
-  void enqueueApproval(
+  enqueueHarnessApproval(
     {
       kind: 'externalInquiry',
       payload: {
@@ -1945,38 +1948,29 @@ if (SHOW_EXTERNAL_INQUIRY) {
         streamId: STREAM_ID,
       },
     },
-    { onPresent: () => notify({ kind: 'approvalNeeded' }) },
-  ).then(appendHarnessExternalInquiryDecision);
+    appendHarnessExternalInquiryDecision,
+  );
 }
 
 if (SHOW_USER_QUESTION) {
-  void enqueueApproval(
-    {
-      kind: 'userQuestion',
-      payload: makeUserQuestionPayload(),
-    },
-    { onPresent: () => notify({ kind: 'approvalNeeded' }) },
-  ).then(applyHarnessApprovalDecision);
+  enqueueHarnessApproval(
+    { kind: 'userQuestion', payload: makeUserQuestionPayload() },
+    applyHarnessApprovalDecision,
+  );
 }
 
 if (SHOW_PLAN_APPROVAL) {
-  void enqueueApproval(
-    {
-      kind: 'plan',
-      payload: makePlanApprovalPayload(),
-    },
-    { onPresent: () => notify({ kind: 'approvalNeeded' }) },
-  ).then(appendHarnessPlanDecision);
+  enqueueHarnessApproval(
+    { kind: 'plan', payload: makePlanApprovalPayload() },
+    appendHarnessPlanDecision,
+  );
 }
 
 if (SHOW_AGENT_PROPOSAL) {
-  void enqueueApproval(
-    {
-      kind: 'proposal',
-      payload: makeAgentProposalPayload(),
-    },
-    { onPresent: () => notify({ kind: 'approvalNeeded' }) },
-  ).then(applyHarnessApprovalDecision);
+  enqueueHarnessApproval(
+    { kind: 'proposal', payload: makeAgentProposalPayload() },
+    applyHarnessApprovalDecision,
+  );
 }
 
 function markHarnessInterrupted(): void {

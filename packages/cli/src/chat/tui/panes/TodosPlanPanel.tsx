@@ -30,14 +30,6 @@ const TODO_STATUS_DISPLAY: Partial<
   [TODO_STATUS.IN_PROGRESS]: { marker: TODO_ACTIVE, color: COLOR_HINT },
 };
 
-function todoMarker(status: TodoStatus): string {
-  return TODO_STATUS_DISPLAY[status]?.marker ?? TODO_PENDING;
-}
-
-function todoColor(status: TodoStatus): string | undefined {
-  return TODO_STATUS_DISPLAY[status]?.color;
-}
-
 function TodoRow({
   compact = false,
   todo,
@@ -47,6 +39,7 @@ function TodoRow({
 }): React.JSX.Element {
   const label =
     todo.status === TODO_STATUS.IN_PROGRESS ? todo.activeForm : todo.content;
+  const display = TODO_STATUS_DISPLAY[todo.status];
   return (
     <Box
       height={compact ? 1 : undefined}
@@ -54,7 +47,7 @@ function TodoRow({
       overflowY={compact ? 'hidden' : undefined}
     >
       <Box flexShrink={0}>
-        <Text color={todoColor(todo.status)}>{todoMarker(todo.status)} </Text>
+        <Text color={display?.color}>{display?.marker ?? TODO_PENDING} </Text>
       </Box>
       <Text
         dimColor={todo.status === TODO_STATUS.COMPLETED}

@@ -9,8 +9,6 @@
  * the storage port moves — Memento state, secrets, and `.vscode/settings.json`
  * config stay VS Code-native.
  */
-// VS Code imports
-
 // Third-party imports
 import * as vscode from 'vscode';
 
@@ -20,12 +18,12 @@ import type { StorageProvider } from '@platform/interfaces';
 import {
   mergeLegacyStorageBucket,
   mergeLegacyWorkspaceStorageBucket,
+  type LegacyDataMigrationLogger,
 } from '@platform/defaults/legacyDataMigration';
 import {
   CUSTOM_AGENTS_STORAGE_DIR,
   EXTERNAL_INQUIRY_THREADS_DIR,
 } from '@platform/defaults/globalStorage';
-import type { LegacyDataMigrationLogger } from '@platform/defaults/legacyDataMigration';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 type BucketMigration = (

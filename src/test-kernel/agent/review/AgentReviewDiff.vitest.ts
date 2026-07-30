@@ -118,15 +118,22 @@ describe('collectReviewDiff (real git repository)', () => {
     );
   }
 
-  /** Runs `collectReviewDiff` against the fixture repo and unwraps a success. */
-  async function collectDiffOrFail(
+  /** Runs `collectReviewDiff` against the fixture repo. */
+  async function collectDiff(
     options: Partial<CollectReviewDiffOptions> & { includeUntracked: boolean },
   ) {
-    const result = await collectReviewDiff({
+    return collectReviewDiff({
       cwd: repo,
       includeSubmodules: true,
       ...options,
     });
+  }
+
+  /** Runs `collectReviewDiff` against the fixture repo and unwraps a success. */
+  async function collectDiffOrFail(
+    options: Partial<CollectReviewDiffOptions> & { includeUntracked: boolean },
+  ) {
+    const result = await collectDiff(options);
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error('expected collectReviewDiff to succeed');
     return result.value;
@@ -170,11 +177,7 @@ describe('collectReviewDiff (real git repository)', () => {
       fsError('EACCES', 'untracked file is unreadable'),
     );
 
-    const result = await collectReviewDiff({
-      cwd: repo,
-      includeUntracked: true,
-      includeSubmodules: true,
-    });
+    const result = await collectDiff({ includeUntracked: true });
 
     expect(result).toEqual({
       ok: false,
@@ -240,11 +243,7 @@ describe('collectReviewDiff (real git repository)', () => {
       fsError('EISDIR', 'untracked path resolves to a directory'),
     );
 
-    const result = await collectReviewDiff({
-      cwd: repo,
-      includeUntracked: true,
-      includeSubmodules: true,
-    });
+    const result = await collectDiff({ includeUntracked: true });
 
     expect(result).toEqual({
       ok: false,
@@ -384,10 +383,8 @@ describe('collectReviewDiff (real git repository)', () => {
 
   it('fails clearly when the chosen base branch does not exist', async () => {
     await git('checkout', '-b', 'feature');
-    const result = await collectReviewDiff({
-      cwd: repo,
+    const result = await collectDiff({
       includeUntracked: false,
-      includeSubmodules: true,
       baseBranch: 'no-such-branch',
     });
     expect(result.ok).toBe(false);
@@ -425,11 +422,7 @@ describe('collectReviewDiff (real git repository)', () => {
   it('fails with a reason outside a git repository', async () => {
     const plain = await mkdtemp(path.join(tmpdir(), 'texra-plain-'));
     try {
-      const result = await collectReviewDiff({
-        cwd: plain,
-        includeUntracked: true,
-        includeSubmodules: true,
-      });
+      const result = await collectDiff({ cwd: plain, includeUntracked: true });
       expect(result).toEqual({
         ok: false,
         reason: 'The workspace is not a git repository.',

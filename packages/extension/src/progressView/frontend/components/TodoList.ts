@@ -168,7 +168,7 @@ export class TodoList extends LitElement {
         ${
           isInProgress
             ? html`<wa-spinner class="todo-item__icon"></wa-spinner>`
-            : html`${waIcon(icon, { className: 'todo-item__icon' })}`
+            : waIcon(icon, { className: 'todo-item__icon' })
         }
         <span class="todo-item__content">${content}</span>
       </div>

@@ -1,5 +1,13 @@
 // Third-party imports
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type MockInstance,
+} from 'vitest';
 import { z } from 'zod';
 
 // Local imports - shared state
@@ -17,12 +25,18 @@ describe('PersistedState loading', () => {
     delete: vi.fn(),
   };
 
+  let warn: MockInstance<typeof console.warn>;
+
   beforeEach(() => {
     vi.clearAllMocks();
+    warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    warn.mockRestore();
   });
 
   it('uses schema defaults silently when the key has never been stored', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     storage.get.mockReturnValue(undefined);
 
     const state = new PersistedState(storage, 'viewPrefs', StateSchema);
@@ -30,11 +44,9 @@ describe('PersistedState loading', () => {
     expect(state.getState()).toEqual({ density: 'comfortable' });
     expect(set).not.toHaveBeenCalled();
     expect(warn).not.toHaveBeenCalled();
-    warn.mockRestore();
   });
 
   it('warns and replaces a malformed stored value', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     storage.get.mockReturnValue({ density: 'broken' });
 
     const state = new PersistedState(storage, 'viewPrefs', StateSchema);
@@ -44,6 +56,5 @@ describe('PersistedState loading', () => {
       density: 'comfortable',
     });
     expect(warn).toHaveBeenCalledOnce();
-    warn.mockRestore();
   });
 });

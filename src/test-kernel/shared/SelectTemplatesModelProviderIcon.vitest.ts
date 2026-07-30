@@ -2,6 +2,7 @@ import { JSDOM } from 'jsdom';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import type { ModelOptionData } from '@shared/schemas';
+import type { TemplateResult } from 'lit';
 
 /**
  * Regression coverage for #8157: the model-option dropdown used to bake a
@@ -13,8 +14,16 @@ import type { ModelOptionData } from '@shared/schemas';
  */
 describe('renderModelOption uses wa-icon, matching renderAgentOption', () => {
   let dom: JSDOM;
+  let templates: typeof import('@shared/utils/selectTemplates');
+  let renderTemplate: typeof import('lit').render;
 
-  beforeAll(() => {
+  function renderOptions(template: TemplateResult): HTMLElement {
+    const container = document.createElement('div');
+    renderTemplate(template, container);
+    return container;
+  }
+
+  beforeAll(async () => {
     dom = new JSDOM('<!doctype html><html><body></body></html>');
     Object.assign(globalThis, {
       window: dom.window,
@@ -25,25 +34,23 @@ describe('renderModelOption uses wa-icon, matching renderAgentOption', () => {
       customElements: dom.window.customElements,
       HTMLElement: dom.window.HTMLElement,
     });
+
+    templates = await import('@shared/utils/selectTemplates');
+    ({ render: renderTemplate } = await import('lit'));
   });
 
   afterAll(() => {
     dom.window.close();
   });
 
-  it('renders a wa-icon for the provider, not a unicode glyph in the label text', async () => {
-    const { renderModelOptions } =
-      await import('@shared/utils/selectTemplates');
-    const { render } = await import('lit');
-
+  it('renders a wa-icon for the provider, not a unicode glyph in the label text', () => {
     const options: ModelOptionData[] = [
       { value: 'claude-x', label: 'Claude X', provider: 'anthropic' },
     ];
 
-    const container = document.createElement('div');
-    render(renderModelOptions(options), container);
-
-    const option = container.querySelector('wa-option');
+    const option = renderOptions(
+      templates.renderModelOptions(options),
+    ).querySelector('wa-option');
     expect(option).not.toBeNull();
 
     const icon = option?.querySelector('wa-icon');
@@ -59,52 +66,31 @@ describe('renderModelOption uses wa-icon, matching renderAgentOption', () => {
     );
   });
 
-  it('mirrors renderAgentOption: icon lives inside an .agent-icon span, not a slot', async () => {
-    const { renderModelOptions, renderAgentOptions } =
-      await import('@shared/utils/selectTemplates');
-    const { render } = await import('lit');
-
-    const modelContainer = document.createElement('div');
-    render(
-      renderModelOptions([
+  it('mirrors renderAgentOption: icon lives inside an .agent-icon span, not a slot', () => {
+    const modelIconSpan = renderOptions(
+      templates.renderModelOptions([
         { value: 'gpt-x', label: 'GPT X', provider: 'openai' },
       ]),
-      modelContainer,
-    );
-    const modelIconSpan = modelContainer.querySelector(
-      'wa-option .agent-icon wa-icon',
-    );
+    ).querySelector('wa-option .agent-icon wa-icon');
     expect(modelIconSpan).not.toBeNull();
     expect(modelIconSpan?.getAttribute('slot')).toBeNull();
 
-    const agentContainer = document.createElement('div');
-    render(
-      renderAgentOptions([
+    const agentIconSpan = renderOptions(
+      templates.renderAgentOptions([
         { value: 'orchestrator', label: 'Orchestrator', isOrchestrator: true },
       ]),
-      agentContainer,
-    );
-    const agentIconSpan = agentContainer.querySelector(
-      'wa-option .agent-icon wa-icon',
-    );
+    ).querySelector('wa-option .agent-icon wa-icon');
     expect(agentIconSpan).not.toBeNull();
     expect(agentIconSpan?.getAttribute('slot')).toBeNull();
   });
 
-  it('renders inline provenance in the launcher option', async () => {
-    const { renderAgentOptions } =
-      await import('@shared/utils/selectTemplates');
-    const { render } = await import('lit');
-
-    const container = document.createElement('div');
-    render(
-      renderAgentOptions([
+  it('renders inline provenance in the launcher option', () => {
+    const option = renderOptions(
+      templates.renderAgentOptions([
         { value: 'inline:helper', label: 'helper', isInline: true },
       ]),
-      container,
-    );
+    ).querySelector('wa-option');
 
-    const option = container.querySelector('wa-option');
     expect(option?.getAttribute('data-inline')).toBe('true');
     expect(option?.getAttribute('title')).toContain(
       'Definition supplied directly by the embedding application',
@@ -112,24 +98,17 @@ describe('renderModelOption uses wa-icon, matching renderAgentOption', () => {
     expect(option?.querySelector('wa-icon')?.getAttribute('name')).toBe('code');
   });
 
-  it('falls back to the neutral "robot" icon for an unmapped provider', async () => {
-    const { renderModelOptions } =
-      await import('@shared/utils/selectTemplates');
-    const { render } = await import('lit');
-
-    const container = document.createElement('div');
-    render(
-      renderModelOptions([
+  it('falls back to the neutral "robot" icon for an unmapped provider', () => {
+    const icon = renderOptions(
+      templates.renderModelOptions([
         {
           value: 'mystery',
           label: 'Mystery Model',
           provider: 'some-unknown-provider',
         },
       ]),
-      container,
-    );
+    ).querySelector('wa-option wa-icon');
 
-    const icon = container.querySelector('wa-option wa-icon');
     expect(icon?.getAttribute('name')).toBe('robot');
   });
 });

@@ -343,10 +343,11 @@ export class AnthropicStreamHandler {
       thinking.finalize();
       this.thinkingStreams.delete(event.index);
     }
-    if (this.compactionBlocks.delete(event.index)) {
-      if (this.compactionBlocks.size === 0) {
-        logCompactionActivity(this.logger, 'finished');
-      }
+    if (
+      this.compactionBlocks.delete(event.index) &&
+      this.compactionBlocks.size === 0
+    ) {
+      logCompactionActivity(this.logger, 'finished');
     }
     // Text streams: don't finalize here - wait for non-text block or end
   }

@@ -126,7 +126,10 @@ vi.mock('@cli/runtime/sessionResume', () => ({
   ): string => `not resumable (${resolution.type}): ${id}`,
 }));
 
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import type {
+  AgentConfig,
+  AgentConfigPayload,
+} from '@agent/core/definition/AgentConfig';
 import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import { SessionHostInteractions } from '@agent/runtime/HostInteractions';
@@ -200,54 +203,22 @@ function makeSessionContext(): CliContext {
   });
 }
 
-describe('CLI terminal outcome resolution', () => {
-  beforeEach(() => {
-    mocks.getExecutionStore.mockReset();
-  });
+function makeRunRequest(instruction: string): AgentConfigPayload {
+  return {
+    agent: 'chat',
+    model: 'gpt54',
+    instruction,
+    workingDirectory: '/tmp/test',
+    agentCategory: 'toolUse',
+  };
+}
 
-  it('prefers the persisted post-shutdown outcome', async () => {
-    mocks.getExecutionStore.mockReturnValue({
-      readMeta: vi.fn().mockResolvedValue({
-        outcome: RUN_OUTCOME.CANCELLED,
-      }),
-    });
-
-    await expect(
-      readCliRunOutcome({
-        category: 'toolUse',
-        executionId: 'shutdown-race',
-        outcome: RUN_OUTCOME.COMPLETED,
-        streamId: 'shutdown-race',
-      } as Parameters<typeof readCliRunOutcome>[0]),
-    ).resolves.toBe(RUN_OUTCOME.CANCELLED);
-  });
-
-  it('reports an outcome read failure and retains the completed run', async () => {
-    const reportReadFailure = vi.fn();
-    mocks.getExecutionStore.mockReturnValue({
-      readMeta: vi.fn().mockRejectedValue(new Error('metadata read failed')),
-    });
-
-    await expect(
-      readCliRunOutcome(
-        {
-          category: 'toolUse',
-          executionId: 'broken-storage',
-          outcome: RUN_OUTCOME.COMPLETED,
-          streamId: 'broken-storage',
-        } as Parameters<typeof readCliRunOutcome>[0],
-        reportReadFailure,
-      ),
-    ).resolves.toBe(RUN_OUTCOME.COMPLETED);
-    expect(reportReadFailure).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({
-        message:
-          'Could not verify the persisted outcome for execution broken-storage; using the current run outcome: metadata read failed',
-        cause: expect.any(Error),
-      }),
-    );
-  });
-});
+type ToolUseRunResult<Outcome> = {
+  category: 'toolUse';
+  executionId: ExecutionId;
+  outcome: Outcome;
+  streamId: StreamTabId;
+};
 
 function makeInit(
   overrides: Partial<ChatSessionControllerInit> = {},
@@ -372,6 +343,55 @@ async function expectInterruptedRetry(
   );
 }
 
+describe('CLI terminal outcome resolution', () => {
+  beforeEach(() => {
+    mocks.getExecutionStore.mockReset();
+  });
+
+  it('prefers the persisted post-shutdown outcome', async () => {
+    mocks.getExecutionStore.mockReturnValue({
+      readMeta: vi.fn().mockResolvedValue({
+        outcome: RUN_OUTCOME.CANCELLED,
+      }),
+    });
+
+    await expect(
+      readCliRunOutcome({
+        category: 'toolUse',
+        executionId: 'shutdown-race',
+        outcome: RUN_OUTCOME.COMPLETED,
+        streamId: 'shutdown-race',
+      } as Parameters<typeof readCliRunOutcome>[0]),
+    ).resolves.toBe(RUN_OUTCOME.CANCELLED);
+  });
+
+  it('reports an outcome read failure and retains the completed run', async () => {
+    const reportReadFailure = vi.fn();
+    mocks.getExecutionStore.mockReturnValue({
+      readMeta: vi.fn().mockRejectedValue(new Error('metadata read failed')),
+    });
+
+    await expect(
+      readCliRunOutcome(
+        {
+          category: 'toolUse',
+          executionId: 'broken-storage',
+          outcome: RUN_OUTCOME.COMPLETED,
+          streamId: 'broken-storage',
+        } as Parameters<typeof readCliRunOutcome>[0],
+        reportReadFailure,
+      ),
+    ).resolves.toBe(RUN_OUTCOME.COMPLETED);
+    expect(reportReadFailure).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        message:
+          'Could not verify the persisted outcome for execution broken-storage; using the current run outcome: metadata read failed',
+        cause: expect.any(Error),
+      }),
+    );
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Predicate: chatTuiCanStartRootRun
 // ---------------------------------------------------------------------------
@@ -410,14 +430,14 @@ describe('chatTuiCanStartRootRun', () => {
 
 describe('createChatSessionController', () => {
   beforeEach(() => {
-    mocks.executeAgent.mockReset();
+    for (const mock of Object.values(mocks)) mock.mockReset();
+
     mocks.executeAgent.mockResolvedValue({
       category: 'toolUse',
       executionId: 'exec-start',
       outcome: RUN_OUTCOME.COMPLETED,
       streamId: 'stream-start',
     });
-    mocks.runAgent.mockReset();
     mocks.runAgent.mockImplementation(
       async (
         request: { config: unknown; executionId: ExecutionId },
@@ -426,36 +446,19 @@ describe('createChatSessionController', () => {
         return mocks.executeAgent(request.config, request.executionId, options);
       },
     );
-    mocks.stopAgentStream.mockReset();
-    mocks.cancelInteractions.mockReset();
-    mocks.workspaceGet.mockReset();
     mocks.workspaceGet.mockReturnValue(false);
-    mocks.getExecutionStore.mockReset();
-    mocks.setCliHelperModel.mockReset();
     mocks.setCliHelperModel.mockResolvedValue(undefined);
-    mocks.createCliRuntimeHost.mockReset();
-    mocks.presentationHostClose.mockReset();
     mocks.presentationHostClose.mockResolvedValue(undefined);
     mocks.createCliRuntimeHost.mockReturnValue({
       close: mocks.presentationHostClose,
       emit: vi.fn(),
     });
-    mocks.defaultSession.mockReset();
-    mocks.streamIsActiveOrResuming.mockReset();
     mocks.streamIsActiveOrResuming.mockReturnValue(false);
-    mocks.getActiveExecutionIds.mockReset();
     mocks.getActiveExecutionIds.mockReturnValue([]);
-    mocks.getExecutionHandle.mockReset();
-    mocks.addExecutionRegistrationListener.mockReset();
     mocks.addExecutionRegistrationListener.mockReturnValue(vi.fn());
-    mocks.addChildActivationListener.mockReset();
     mocks.addChildActivationListener.mockReturnValue(vi.fn());
-    mocks.detachHostInteractions.mockReset();
-    mocks.attachTerminalResultToast.mockReset();
     mocks.attachTerminalResultToast.mockReturnValue(vi.fn());
-    mocks.attachTuiRunFactSubscription.mockReset();
     mocks.attachTuiRunFactSubscription.mockReturnValue(vi.fn());
-    mocks.createTuiHostInteractions.mockReset();
     mocks.createTuiHostInteractions.mockReturnValue({});
     mocks.defaultSession.mockReturnValue({
       useHostInteractions: vi.fn(() => mocks.detachHostInteractions),
@@ -472,9 +475,7 @@ describe('createChatSessionController', () => {
       },
       transcripts: { ensureLoaded: vi.fn(async () => undefined) },
     });
-    mocks.resolveAndResumeStream.mockReset();
     mocks.resolveAndResumeStream.mockResolvedValue(true);
-    mocks.resumeQueuedToolUseFromResumeData.mockReset();
     mocks.resumeQueuedToolUseFromResumeData.mockImplementation(
       async (...args: unknown[]) => {
         const options = args[2] as ResumeQueuedToolUseOptions;
@@ -486,17 +487,6 @@ describe('createChatSessionController', () => {
         return true;
       },
     );
-    mocks.projectStreamTranscript.mockReset();
-    mocks.notify.mockReset();
-    mocks.appendLocalAssistantTranscript.mockReset();
-    mocks.appendLocalErrorTranscript.mockReset();
-    mocks.appendLocalUserTranscript.mockReset();
-    mocks.clearLocalTranscript.mockReset();
-    mocks.moveLocalTranscriptToStream.mockReset();
-    mocks.resolveCliResume.mockReset();
-    mocks.followUpEnqueue.mockReset();
-    mocks.sessionEventEmit.mockReset();
-    mocks.resumeToolUseFromResumeData.mockReset();
     mocks.resumeToolUseFromResumeData.mockResolvedValue({
       category: 'toolUse',
       outcome: RUN_OUTCOME.COMPLETED,
@@ -524,13 +514,7 @@ describe('createChatSessionController', () => {
     mocks.executeAgent.mockReturnValueOnce(run.promise);
     const ctrl = createChatSessionController(makeInit({ session }));
 
-    ctrl.startRootRun({
-      agent: 'chat',
-      model: 'gpt54',
-      instruction: 'Check the draft.',
-      workingDirectory: '/tmp/test',
-      agentCategory: 'toolUse',
-    });
+    ctrl.startRootRun(makeRunRequest('Check the draft.'));
     await vi.waitFor(() => expect(mocks.executeAgent).toHaveBeenCalledOnce());
     ctrl.stop();
     run.reject(new Error('run stopped'));
@@ -554,13 +538,7 @@ describe('createChatSessionController', () => {
     );
     const ctrl = createChatSessionController(makeInit({ session }));
 
-    ctrl.startRootRun({
-      agent: 'chat',
-      model: 'gpt54',
-      instruction: 'Continue the recoverable proof.',
-      workingDirectory: '/tmp/test',
-      agentCategory: 'toolUse',
-    });
+    ctrl.startRootRun(makeRunRequest('Continue the recoverable proof.'));
     await session.runPromise;
 
     expect(mocks.appendLocalErrorTranscript).toHaveBeenCalledWith(
@@ -720,12 +698,7 @@ describe('createChatSessionController', () => {
     mocks.attachTerminalResultToast.mockReturnValue(detachResultToast);
     mocks.attachTuiRunFactSubscription.mockReturnValue(detachRunFacts);
 
-    const rootRun = pDefer<{
-      category: 'toolUse';
-      executionId: ExecutionId;
-      outcome: typeof RUN_OUTCOME.CANCELLED;
-      streamId: StreamTabId;
-    }>();
+    const rootRun = pDefer<ToolUseRunResult<typeof RUN_OUTCOME.CANCELLED>>();
     mocks.executeAgent.mockImplementationOnce(
       async (
         _config: unknown,
@@ -771,13 +744,7 @@ describe('createChatSessionController', () => {
     const session = makeSession();
     const disposers: Array<() => void> = [];
     const ctrl = createChatSessionController(makeInit({ session, disposers }));
-    ctrl.startRootRun({
-      agent: 'chat',
-      model: 'gpt54',
-      instruction: 'Delegate the calculation.',
-      workingDirectory: '/tmp/test',
-      agentCategory: 'toolUse',
-    });
+    ctrl.startRootRun(makeRunRequest('Delegate the calculation.'));
     await vi.waitFor(() => expect(session.streamId).toBe(rootStream));
 
     ctrl.stopStream(rootStream);
@@ -822,18 +789,8 @@ describe('createChatSessionController', () => {
     const hostB = { emit: vi.fn(), close: vi.fn() };
     const disposeAdapterA = vi.fn();
     const disposeAdapterB = vi.fn();
-    const runA = pDefer<{
-      category: 'toolUse';
-      executionId: ExecutionId;
-      outcome: typeof RUN_OUTCOME.COMPLETED;
-      streamId: StreamTabId;
-    }>();
-    const runB = pDefer<{
-      category: 'toolUse';
-      executionId: ExecutionId;
-      outcome: typeof RUN_OUTCOME.COMPLETED;
-      streamId: StreamTabId;
-    }>();
+    const runA = pDefer<ToolUseRunResult<typeof RUN_OUTCOME.COMPLETED>>();
+    const runB = pDefer<ToolUseRunResult<typeof RUN_OUTCOME.COMPLETED>>();
     const rootAStream = 'root-a' as StreamTabId;
     const childAStream = 'child-a' as StreamTabId;
     const rootBStream = 'root-b' as StreamTabId;
@@ -921,13 +878,7 @@ describe('createChatSessionController', () => {
 
     const session = makeSession();
     const ctrl = createChatSessionController(makeInit({ session }));
-    const config = {
-      agent: 'chat',
-      model: 'gpt54',
-      instruction: 'Check interaction ownership.',
-      workingDirectory: '/tmp/test',
-      agentCategory: 'toolUse' as const,
-    };
+    const config = makeRunRequest('Check interaction ownership.');
 
     ctrl.startRootRun(config);
     await vi.waitFor(() => expect(rootAExecutionId).toBeDefined());
@@ -1026,13 +977,7 @@ describe('createChatSessionController', () => {
 
     const session = makeSession();
     const ctrl = createChatSessionController(makeInit({ session }));
-    ctrl.startRootRun({
-      agent: 'chat',
-      model: 'gpt54',
-      instruction: 'Start a child and finish immediately.',
-      workingDirectory: '/tmp/test',
-      agentCategory: 'toolUse',
-    });
+    ctrl.startRootRun(makeRunRequest('Start a child and finish immediately.'));
     await session.runPromise;
 
     expect(presentationHost.close).not.toHaveBeenCalled();
@@ -1073,31 +1018,15 @@ describe('createChatSessionController', () => {
       resultPresenters.add(present);
       return () => resultPresenters.delete(present);
     });
-    const runA = pDefer<{
-      category: 'toolUse';
-      executionId: ExecutionId;
-      outcome: typeof RUN_OUTCOME.CANCELLED;
-      streamId: StreamTabId;
-    }>();
-    const runB = pDefer<{
-      category: 'toolUse';
-      executionId: ExecutionId;
-      outcome: typeof RUN_OUTCOME.FAILED;
-      streamId: StreamTabId;
-    }>();
+    const runA = pDefer<ToolUseRunResult<typeof RUN_OUTCOME.CANCELLED>>();
+    const runB = pDefer<ToolUseRunResult<typeof RUN_OUTCOME.FAILED>>();
     mocks.runAgent
       .mockReturnValueOnce(runA.promise)
       .mockReturnValueOnce(runB.promise);
 
     const session = makeSession();
     const ctrl = createChatSessionController(makeInit({ session }));
-    const config = {
-      agent: 'chat',
-      model: 'gpt54',
-      instruction: 'Check presenter ownership.',
-      workingDirectory: '/tmp/test',
-      agentCategory: 'toolUse' as const,
-    };
+    const config = makeRunRequest('Check presenter ownership.');
     ctrl.startRootRun(config);
     session.streamId = 'root-a' as StreamTabId;
     ctrl.stopStream('root-a' as StreamTabId);
@@ -1164,13 +1093,7 @@ describe('createChatSessionController', () => {
 
     const session = makeSession();
     const ctrl = createChatSessionController(makeInit({ session }));
-    ctrl.startRootRun({
-      agent: 'chat',
-      model: 'gpt54',
-      instruction: 'Check listener registration.',
-      workingDirectory: '/tmp/test',
-      agentCategory: 'toolUse',
-    });
+    ctrl.startRootRun(makeRunRequest('Check listener registration.'));
     await session.runPromise;
 
     expect(session.runCompleted).toBe(true);

@@ -103,8 +103,6 @@ export async function runReflectionFlow<C = unknown>(
   } = input;
   const { streamId, executionId, session: runSession } = runScope;
   const interactions = runSession.interactions;
-  // Capture the run's scope at setup; the interrupt closure below fires from
-  // the host thread outside the ALS.
 
   let outcome: RunOutcome = RUN_OUTCOME.CANCELLED;
   let shared: ReflectionFlowShared | undefined;
@@ -327,15 +325,11 @@ export async function runReflectionFlow<C = unknown>(
     shared = await pf.getShared();
 
     if (shared?.lastError) {
-      outcome = RUN_OUTCOME.FAILED;
       // Re-throw so runFlowWithLifecycle logs the error and shows
       // the user notification. State was already projected per-step.
       throwFlowLastError(new Error(shared.lastError.message), shared.lastError);
     }
     outcome = flowOutcome;
-  } catch (error) {
-    outcome = RUN_OUTCOME.FAILED;
-    throw error;
   } finally {
     // AgentRunLifecycle owns terminal metadata and flow-record disposition as
     // one storage finalization. This flow only determines its outcome.

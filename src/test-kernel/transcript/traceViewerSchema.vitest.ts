@@ -4,7 +4,6 @@ import { getExecutionStore } from '@agent/storage';
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import type { Platform } from '@platform/platform';
 import {
   EXECUTION_STATUS,
   LOG_LEVELS,
@@ -27,10 +26,6 @@ import {
 
 const tempDirs: string[] = [];
 
-function buildStoragePlatform(): Promise<Platform> {
-  return createTempDirPlatform('texra-trace-viewer-', tempDirs);
-}
-
 function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
   return {
     inputFiles: [],
@@ -52,8 +47,24 @@ function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
   };
 }
 
+/** A parseable trace payload; overrides shape each legacy/malformed case. */
+function trace(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    executionId: 'abcdef',
+    streamId: 'stream-1',
+    config: config(),
+    meta: null,
+    entries: [],
+    snapshot: { streamId: 'stream-1' },
+    terminalStatus: null,
+    ...overrides,
+  };
+}
+
 describe('trace-viewer TraceDataSchema', () => {
-  setupPlatform(buildStoragePlatform);
+  setupPlatform(() => createTempDirPlatform('texra-trace-viewer-', tempDirs));
 
   afterEach(async () => {
     await cleanupTempDirs(tempDirs);
@@ -114,15 +125,7 @@ describe('trace-viewer TraceDataSchema', () => {
     delete legacyConfig.model;
     delete legacyConfig.instruction;
 
-    const parsed = TraceDataSchema.parse({
-      executionId: 'abcdef',
-      streamId: 'stream-1',
-      config: legacyConfig,
-      meta: null,
-      entries: [],
-      snapshot: { streamId: 'stream-1' },
-      terminalStatus: null,
-    });
+    const parsed = TraceDataSchema.parse(trace({ config: legacyConfig }));
 
     expect(parsed.config.agent).toBe('correct');
     expect(parsed.config.model).toBe(DEFAULT_AGENT_MODEL);
@@ -130,21 +133,15 @@ describe('trace-viewer TraceDataSchema', () => {
   });
 
   it('normalizes legacy execution metadata', () => {
-    const legacyTrace = {
-      executionId: 'abcdef',
-      streamId: 'stream-1',
-      config: config(),
-      meta: {
-        timestamp: '2026-07-05T00:00:00.000Z',
-        terminalStatus: EXECUTION_STATUS.ERROR,
-        delegationDepth: 2,
-      },
-      entries: [],
-      snapshot: { streamId: 'stream-1' },
-      terminalStatus: null,
-    };
-
-    const parsed = TraceDataSchema.parse(legacyTrace);
+    const parsed = TraceDataSchema.parse(
+      trace({
+        meta: {
+          timestamp: '2026-07-05T00:00:00.000Z',
+          terminalStatus: EXECUTION_STATUS.ERROR,
+          delegationDepth: 2,
+        },
+      }),
+    );
     expect(parsed.meta).not.toHaveProperty('delegationDepth');
     expect(parsed.meta?.outcome).toBe('failed');
   });
@@ -158,12 +155,7 @@ describe('trace-viewer TraceDataSchema', () => {
   });
 
   it('rejects a trace snapshot stamped with an incompatible schema version', () => {
-    const incompatible = {
-      executionId: 'abcdef',
-      streamId: 'stream-1',
-      config: config(),
-      meta: null,
-      entries: [],
+    const incompatible = trace({
       snapshot: {
         schemaVersion: 999,
         streamId: 'stream-1',
@@ -171,8 +163,7 @@ describe('trace-viewer TraceDataSchema', () => {
         missingOutputsByRound: {},
         compileFailuresByRound: {},
       },
-      terminalStatus: null,
-    };
+    });
 
     const result = TraceDataSchema.safeParse(incompatible);
     expect(result.success).toBe(false);
@@ -182,17 +173,9 @@ describe('trace-viewer TraceDataSchema', () => {
   });
 
   it('rejects a trace whose entries are not an array of StreamLogEntry', () => {
-    const malformed = {
-      executionId: 'abcdef',
-      streamId: 'stream-1',
-      config: config(),
-      meta: null,
-      entries: [{ notAStreamLogEntry: true }],
-      snapshot: { streamId: 'stream-1' },
-      terminalStatus: null,
-    };
-
-    const result = TraceDataSchema.safeParse(malformed);
+    const result = TraceDataSchema.safeParse(
+      trace({ entries: [{ notAStreamLogEntry: true }] }),
+    );
     expect(result.success).toBe(false);
   });
 
@@ -208,24 +191,18 @@ describe('trace-viewer TraceDataSchema', () => {
     // process roster (`processes`). Neither schema on this path is strict, so
     // those keys are stripped rather than rejected — and no data is lost,
     // because they were always written at their prefault values.
-    const legacy = {
-      executionId: 'abcdef',
-      streamId: 'stream-1',
-      config: config(),
-      meta: null,
-      entries: [],
-      snapshot: {
-        streamId: 'stream-1',
-        activeSubagents: [],
-        activeProcesses: [],
-        processes: [],
-        finishedSubagentCount: 3,
-        finishedProcessCount: 2,
-      },
-      terminalStatus: null,
-    };
-
-    const parsed = parseTraceData(legacy);
+    const parsed = parseTraceData(
+      trace({
+        snapshot: {
+          streamId: 'stream-1',
+          activeSubagents: [],
+          activeProcesses: [],
+          processes: [],
+          finishedSubagentCount: 3,
+          finishedProcessCount: 2,
+        },
+      }),
+    );
     expect(parsed.snapshot.subagents).toEqual([]);
     expect(parsed.snapshot).not.toHaveProperty('processes');
     expect(parsed.snapshot).not.toHaveProperty('finishedSubagentCount');

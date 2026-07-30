@@ -33,6 +33,8 @@ import {
 } from './executionLease';
 import { ResultMetaSchema } from './resultMeta';
 
+const CHANNEL = 'ExecutionLifecycle';
+
 /**
  * Tool-driven executions (e.g. the `bash` background tool) persist a synthetic
  * config tagged `agentCategory: ToolUse` with a name that is not a real
@@ -203,7 +205,7 @@ async function persistSupplementaryMetaFieldsBestEffort(
   } catch (err) {
     // Swallow and log — don't let storage I/O errors disrupt execution lifecycle.
     logger.debug(
-      'ExecutionLifecycle',
+      CHANNEL,
       `Failed to persist ${what} for ${executionId}: ${toErrorMessage(err)}`,
     );
   }
@@ -241,7 +243,7 @@ export async function synchronizeAgentResultOutcome(
     // Terminal cleanup stays non-throwing, but this leaves the public result
     // stale and must remain visible to operators.
     logger.warn(
-      'ExecutionLifecycle',
+      CHANNEL,
       `Failed to synchronize result outcome for ${executionId}: ${toErrorMessage(err)}`,
       { data: err },
     );

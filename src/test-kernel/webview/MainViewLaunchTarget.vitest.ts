@@ -77,6 +77,11 @@ function setWorkspaceRoots(
   });
 }
 
+const OPEN_ROOTS = [
+  { label: 'paper', value: '/workspace/paper' },
+  { label: 'figures', value: '/workspace/figures' },
+];
+
 /** Flush the microtask queue so `announce`'s clear-then-set lands. */
 async function flushAnnouncements(): Promise<void> {
   await Promise.resolve();
@@ -279,20 +284,14 @@ describe('main-view launch target', () => {
 
   describe('working directory selection', () => {
     it('defaults to the first open root and preserves a valid selection', () => {
-      setWorkspaceRoots([
-        { label: 'paper', value: '/workspace/paper' },
-        { label: 'figures', value: '/workspace/figures' },
-      ]);
+      setWorkspaceRoots(OPEN_ROOTS);
 
       expect(workspaceRootOptions$.get()).toHaveLength(2);
       expect(workingDirectory$.get()).toBe('/workspace/paper');
 
       changeWorkingDirectory('/workspace/figures');
       mocks.saveState.mockClear();
-      setWorkspaceRoots([
-        { label: 'paper', value: '/workspace/paper' },
-        { label: 'figures', value: '/workspace/figures' },
-      ]);
+      setWorkspaceRoots(OPEN_ROOTS);
 
       expect(workingDirectory$.get()).toBe('/workspace/figures');
       expect(mocks.saveState).not.toHaveBeenCalled();
@@ -301,10 +300,7 @@ describe('main-view launch target', () => {
     it('falls back when the persisted root is no longer open', () => {
       workingDirectory$.set('/workspace/removed');
 
-      setWorkspaceRoots([
-        { label: 'paper', value: '/workspace/paper' },
-        { label: 'figures', value: '/workspace/figures' },
-      ]);
+      setWorkspaceRoots(OPEN_ROOTS);
 
       expect(workingDirectory$.get()).toBe('/workspace/paper');
       expect(mocks.saveState).toHaveBeenCalledOnce();

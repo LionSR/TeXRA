@@ -8,6 +8,7 @@
 import * as path from 'node:path';
 
 import { pMapIterable, pMapSkip } from 'p-map';
+import PQueue from 'p-queue';
 
 import { debug } from '@logger/logUtils';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
@@ -55,29 +56,6 @@ export interface MemoryWalkEntry {
   isDir: boolean;
   /** Frontmatter metadata for files; always null for directories. */
   meta: MemoryFileMeta | null;
-}
-
-type WalkTaskRunner = <T>(task: () => Promise<T>) => Promise<T>;
-
-function createWalkTaskRunner(concurrency: number): WalkTaskRunner {
-  let activeTasks = 0;
-  const waiters: Array<() => void> = [];
-
-  return async <T>(task: () => Promise<T>): Promise<T> => {
-    while (activeTasks >= concurrency) {
-      await new Promise<void>((resolve) => {
-        waiters.push(resolve);
-      });
-    }
-
-    activeTasks++;
-    try {
-      return await task();
-    } finally {
-      activeTasks--;
-      waiters.shift()?.();
-    }
-  };
 }
 
 async function readStoragePrefix(
@@ -173,7 +151,7 @@ async function* walkDir(
   relativeRoot: string,
   depth: number,
   options: MemoryWalkOptions,
-  runTask: WalkTaskRunner,
+  queue: PQueue,
 ): AsyncGenerator<MemoryWalkEntry> {
   const entries = await StorageFS.readDir(storagePath);
 
@@ -189,7 +167,7 @@ async function* walkDir(
         return pMapSkip;
       }
 
-      return runTask(async () => {
+      return queue.add(async () => {
         const nextRelative = relativeRoot
           ? path.join(relativeRoot, name)
           : name;
@@ -216,7 +194,7 @@ async function* walkDir(
           isDir: false,
           meta,
         };
-      });
+      }) as Promise<MemoryWalkEntry>;
     },
     { concurrency: MEMORY_LISTING_CONCURRENCY },
   );
@@ -232,7 +210,7 @@ async function* walkDir(
           entry.relativePath,
           depth + 1,
           options,
-          runTask,
+          queue,
         );
       }
     } else {
@@ -260,7 +238,7 @@ export function walkMemoryDirectory(
     relativeRoot,
     0,
     options,
-    createWalkTaskRunner(MEMORY_LISTING_CONCURRENCY),
+    new PQueue({ concurrency: MEMORY_LISTING_CONCURRENCY }),
   );
 }
 

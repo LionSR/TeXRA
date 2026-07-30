@@ -92,14 +92,6 @@ const STREAM_STATUS_LABELS = {
 
 export type StreamStatusLabelStyle = keyof typeof STREAM_STATUS_LABELS;
 
-function legacyStatusLabel(
-  status: string | undefined,
-  style: StreamStatusLabelStyle,
-): string | undefined {
-  if (status !== STREAM_STATUS.STOPPED) return undefined;
-  return style === 'progressHeader' ? 'Stopped' : 'stopped';
-}
-
 // A child/subagent stream suspended at WAITING is stalled awaiting a
 // reply-or-stop decision from whoever is looking at it — a different
 // situation from the root session's ordinary idle-between-turns WAITING, so
@@ -140,8 +132,9 @@ export function formatStreamStatusLabel(
   if (status == null) return options.missingLabel;
   const state = streamStatusDisplayState(status, options.substate);
   const style = options.style ?? 'progressHeader';
-  const legacyLabel = legacyStatusLabel(state.legacyStatus, style);
-  if (legacyLabel) return legacyLabel;
+  if (state.legacyStatus === STREAM_STATUS.STOPPED) {
+    return style === 'progressHeader' ? 'Stopped' : 'stopped';
+  }
   const key = state.key;
   if (!key) return status;
   if (

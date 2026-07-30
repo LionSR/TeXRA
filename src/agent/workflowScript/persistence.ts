@@ -293,12 +293,14 @@ async function runPersistedWorkflowScriptLocked(
   const journalByIndex = new Map(
     (prior?.journal ?? []).map((entry) => [entry.index, entry]),
   );
-  await writeWorkflowScriptCheckpoint(store, checkpointId, {
-    script,
-    args,
-    files,
-    journal: orderedJournal(journalByIndex.values()),
-  });
+  const persistJournal = (journal: WorkflowJournalEntry[]): Promise<void> =>
+    writeWorkflowScriptCheckpoint(store, checkpointId, {
+      script,
+      args,
+      files,
+      journal,
+    });
+  await persistJournal(orderedJournal(journalByIndex.values()));
 
   let acceptingEntries = true;
   const writeQueue = new PQueue({ concurrency: 1 });
@@ -306,14 +308,7 @@ async function runPersistedWorkflowScriptLocked(
     if (!acceptingEntries) return;
     journalByIndex.set(entry.index, entry);
     const snapshot = orderedJournal(journalByIndex.values());
-    await writeQueue.add(() =>
-      writeWorkflowScriptCheckpoint(store, checkpointId, {
-        script,
-        args,
-        files,
-        journal: snapshot,
-      }),
-    );
+    await writeQueue.add(() => persistJournal(snapshot));
   };
 
   try {
@@ -327,12 +322,7 @@ async function runPersistedWorkflowScriptLocked(
     });
     acceptingEntries = false;
     await writeQueue.onIdle();
-    await writeWorkflowScriptCheckpoint(store, checkpointId, {
-      script,
-      args,
-      files,
-      journal: result.journal,
-    });
+    await persistJournal(result.journal);
     return result;
   } catch (error) {
     acceptingEntries = false;

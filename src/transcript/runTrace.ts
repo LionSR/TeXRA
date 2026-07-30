@@ -31,6 +31,22 @@ export type RunTraceFlushEntry =
       readonly flush: () => void;
     };
 
+/** Run `action`, collecting any throw so every cleanup step still runs. */
+function collectFailure(failures: unknown[], action: () => void): void {
+  try {
+    action();
+  } catch (error) {
+    failures.push(error);
+  }
+}
+
+/** Reduce a non-empty failure list to the lone failure, or an aggregate of all. */
+function toFailure(failures: unknown[], message: string): unknown {
+  return failures.length === 1
+    ? failures[0]
+    : new AggregateError(failures, message);
+}
+
 /**
  * Produce a trace wired with the standard agent-run subscribers: per-channel
  * channel output AND the transcript recorder.
@@ -50,18 +66,11 @@ export function createRunTrace(
   const writer = reservedWriter ?? store.acquireWriter(streamId, ownerKey);
   const previousEntry = flushers.get(ownerKey);
   if (previousEntry?.state === 'active') {
-    const ownershipError = new Error(
-      `Execution ${ownerKey} already owns a run trace.`,
-    );
-    try {
-      writer.close();
-    } catch (cleanupError) {
-      throw new AggregateError(
-        [ownershipError, cleanupError],
-        'Duplicate run trace setup and cleanup failed',
-      );
-    }
-    throw ownershipError;
+    const failures: unknown[] = [
+      new Error(`Execution ${ownerKey} already owns a run trace.`),
+    ];
+    collectFailure(failures, () => writer.close());
+    throw toFailure(failures, 'Duplicate run trace setup and cleanup failed');
   }
   const trace = new TraceEmitter();
   let unsubscribeChannel: (() => void) | undefined;
@@ -74,20 +83,9 @@ export function createRunTrace(
     transcript = attachTranscriptRecorder(trace, writer);
   } catch (error) {
     const failures = [error];
-    try {
-      unsubscribeChannel?.();
-    } catch (cleanupError) {
-      failures.push(cleanupError);
-    }
-    try {
-      writer.close();
-    } catch (cleanupError) {
-      failures.push(cleanupError);
-    }
-    if (failures.length > 1) {
-      throw new AggregateError(failures, 'Run trace setup and cleanup failed');
-    }
-    throw error;
+    collectFailure(failures, () => unsubscribeChannel?.());
+    collectFailure(failures, () => writer.close());
+    throw toFailure(failures, 'Run trace setup and cleanup failed');
   }
 
   const pendingFailures =
@@ -96,18 +94,13 @@ export function createRunTrace(
     state: 'active',
     flush: () => {
       const failures: unknown[] = [];
-      try {
-        transcript.flushPending();
-      } catch (error) {
-        failures.push(error);
-      }
+      collectFailure(failures, () => transcript.flushPending());
       if (pendingFailures.length > 0) {
         failures.push(...pendingFailures);
         pendingFailures.length = 0;
       }
-      if (failures.length === 1) throw failures[0];
-      if (failures.length > 1) {
-        throw new AggregateError(failures, 'Run trace flush failed');
+      if (failures.length > 0) {
+        throw toFailure(failures, 'Run trace flush failed');
       }
     },
   };
@@ -124,31 +117,16 @@ export function createRunTrace(
       if (disposed) return;
       disposed = true;
       const failures: unknown[] = [];
-      try {
-        transcript.unsubscribe();
-      } catch (error) {
-        failures.push(error);
-      }
-      try {
-        unsubscribeChannel();
-      } catch (error) {
-        failures.push(error);
-      }
-      try {
-        writer.close();
-      } catch (error) {
-        failures.push(error);
-      }
+      collectFailure(failures, () => transcript.unsubscribe());
+      collectFailure(failures, () => unsubscribeChannel());
+      collectFailure(failures, () => writer.close());
       if (flushers.get(ownerKey) !== activeEntry) return;
       failures.unshift(...pendingFailures);
       if (failures.length === 0) {
         flushers.delete(ownerKey);
         return;
       }
-      const failure =
-        failures.length === 1
-          ? failures[0]
-          : new AggregateError(failures, 'Run trace cleanup failed');
+      const failure = toFailure(failures, 'Run trace cleanup failed');
       const failedEntry: RunTraceFlushEntry = {
         state: 'failed',
         error: failure,

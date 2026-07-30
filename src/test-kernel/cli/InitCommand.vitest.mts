@@ -1,5 +1,4 @@
 import * as fs from 'node:fs/promises';
-import * as os from 'node:os';
 import * as path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -46,6 +45,7 @@ import {
 } from '@cli/init/runInitWizard';
 import type { CliModelAccess } from '@cli/runtime/modelAccess';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
+import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 
 function modelAccess(
   value: string,
@@ -57,17 +57,6 @@ function modelAccess(
     status: 'available',
     ...overrides,
   };
-}
-
-async function withTempProject<T>(
-  run: (root: string) => Promise<T>,
-): Promise<T> {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-init-test-'));
-  try {
-    return await run(root);
-  } finally {
-    await fs.rm(root, { recursive: true, force: true });
-  }
 }
 
 function expectUnavailableDefaultRecovery(output: string): void {
@@ -85,6 +74,8 @@ function expectUnavailableDefaultRecovery(output: string): void {
     'Next: run `texra` for the launcher, or `texra chat` to start.',
   );
 }
+
+const tempDirs: string[] = [];
 
 describe('CLI init command', () => {
   let stdout = '';
@@ -113,9 +104,10 @@ describe('CLI init command', () => {
     });
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     stdoutSpy.mockRestore();
     stderrSpy.mockRestore();
+    await cleanupTempDirs(tempDirs);
   });
 
   it('accepts global CLI flags while keeping init-specific cwd help', () => {
@@ -235,87 +227,85 @@ describe('CLI init command', () => {
   });
 
   it('emits valid NDJSON for non-interactive init', async () => {
-    await withTempProject(async (root) => {
-      const workspaceRoot = await fs.realpath(root);
-      const result = await runCli([
-        '--cwd',
-        root,
-        'init',
-        '--print',
-        '--api-mode',
-        'personal',
-        '--output-format',
-        'ndjson',
-        '--gitignore',
-        '--no-color',
-      ]);
+    const root = await makeTempDir('texra-init-test-', tempDirs);
+    const workspaceRoot = await fs.realpath(root);
+    const result = await runCli([
+      '--cwd',
+      root,
+      'init',
+      '--print',
+      '--api-mode',
+      'personal',
+      '--output-format',
+      'ndjson',
+      '--gitignore',
+      '--no-color',
+    ]);
 
-      expect(result.exitCode).toBe(0);
-      expect(stderr).toBe('');
-      expect(stdout).not.toContain('Wrote ');
-      expect(stdout).not.toContain('Created .gitignore');
-      const lines = stdout.trimEnd().split('\n');
-      expect(lines).toHaveLength(1);
-      const record = JSON.parse(lines[0] ?? '{}') as {
-        readonly kind?: string;
-        readonly ts?: string;
-        readonly init?: {
-          readonly path?: string;
-          readonly agent?: string;
-          readonly model?: string;
-          readonly approvalPolicy?: string;
-          readonly outputFormat?: string;
-          readonly gitignore?: string;
-          readonly config?: unknown;
-        };
+    expect(result.exitCode).toBe(0);
+    expect(stderr).toBe('');
+    expect(stdout).not.toContain('Wrote ');
+    expect(stdout).not.toContain('Created .gitignore');
+    const lines = stdout.trimEnd().split('\n');
+    expect(lines).toHaveLength(1);
+    const record = JSON.parse(lines[0] ?? '{}') as {
+      readonly kind?: string;
+      readonly ts?: string;
+      readonly init?: {
+        readonly path?: string;
+        readonly agent?: string;
+        readonly model?: string;
+        readonly approvalPolicy?: string;
+        readonly outputFormat?: string;
+        readonly gitignore?: string;
+        readonly config?: unknown;
       };
-      expect(record).toMatchObject({
-        kind: 'init-config',
-        init: {
-          path: path.join(workspaceRoot, '.texra', 'config.json'),
-          agent: 'assistant',
+    };
+    expect(record).toMatchObject({
+      kind: 'init-config',
+      init: {
+        path: path.join(workspaceRoot, '.texra', 'config.json'),
+        agent: 'assistant',
+        model: 'deepseekproT',
+        approvalPolicy: 'ask',
+        outputFormat: 'text',
+        gitignore: 'created',
+        config: {
           model: 'deepseekproT',
-          approvalPolicy: 'ask',
           outputFormat: 'text',
-          gitignore: 'created',
-          config: {
-            model: 'deepseekproT',
-            outputFormat: 'text',
-            approvalPolicy: 'ask',
-            chat: { agent: 'assistant', model: 'deepseekproT' },
-          },
+          approvalPolicy: 'ask',
+          chat: { agent: 'assistant', model: 'deepseekproT' },
         },
-      });
-      expect(record.ts).toEqual(expect.any(String));
-      await expect(
-        fs.readFile(path.join(root, '.gitignore'), 'utf8'),
-      ).resolves.toBe('.texra/\n');
+      },
     });
+    expect(record.ts).toEqual(expect.any(String));
+    await expect(
+      fs.readFile(path.join(root, '.gitignore'), 'utf8'),
+    ).resolves.toBe('.texra/\n');
   });
 
   it('keeps the legacy text init summary for human output', async () => {
-    await withTempProject(async (root) => {
-      const workspaceRoot = await fs.realpath(root);
-      const result = await runCli([
-        '--cwd',
-        root,
-        'init',
-        '--print',
-        '--api-mode',
-        'personal',
-        '--gitignore',
-        '--no-color',
-      ]);
+    const root = await makeTempDir('texra-init-test-', tempDirs);
+    const workspaceRoot = await fs.realpath(root);
+    const result = await runCli([
+      '--cwd',
+      root,
+      'init',
+      '--print',
+      '--api-mode',
+      'personal',
+      '--gitignore',
+      '--no-color',
+    ]);
 
-      expect(result.exitCode).toBe(0);
-      expect(stderr).toBe('');
-      expect(stdout).toContain('Created .gitignore (.texra/ ignored).');
-      expect(stdout).toContain(
-        `Wrote ${path.join(workspaceRoot, '.texra', 'config.json')}`,
-      );
-      expect(stdout).toContain('  agent: assistant');
-      expect(stdout).toContain('Next: run `texra` for the launcher');
-    });
+    expect(result.exitCode).toBe(0);
+    expect(stderr).toBe('');
+    expect(stdout).toContain('Created .gitignore (.texra/ ignored).');
+    expect(stdout).toContain(
+      `Wrote ${path.join(workspaceRoot, '.texra', 'config.json')}`,
+    );
+    expect(stdout).toContain('  agent: assistant');
+    expect(stdout).toContain('Next: run `texra` for the launcher');
   });
 
   it('points non-interactive init at model recovery when the default model is unavailable', async () => {
@@ -331,22 +321,21 @@ describe('CLI init command', () => {
         },
       }),
     ]);
-    await withTempProject(async (root) => {
-      const result = await runCli([
-        '--cwd',
-        root,
-        'init',
-        '--print',
-        '--api-mode',
-        'personal',
-        '--gitignore',
-        '--no-color',
-      ]);
+    const root = await makeTempDir('texra-init-test-', tempDirs);
+    const result = await runCli([
+      '--cwd',
+      root,
+      'init',
+      '--print',
+      '--api-mode',
+      'personal',
+      '--gitignore',
+      '--no-color',
+    ]);
 
-      expect(result.exitCode).toBe(0);
-      expect(stderr).toBe('');
-      expectUnavailableDefaultRecovery(stdout);
-    });
+    expect(result.exitCode).toBe(0);
+    expect(stderr).toBe('');
+    expectUnavailableDefaultRecovery(stdout);
   });
 
   it('points init at model recovery when the fallback default has no access entry', async () => {
@@ -362,21 +351,20 @@ describe('CLI init command', () => {
         },
       }),
     ]);
-    await withTempProject(async (root) => {
-      const result = await runCli([
-        '--cwd',
-        root,
-        'init',
-        '--print',
-        '--api-mode',
-        'personal',
-        '--gitignore',
-        '--no-color',
-      ]);
+    const root = await makeTempDir('texra-init-test-', tempDirs);
+    const result = await runCli([
+      '--cwd',
+      root,
+      'init',
+      '--print',
+      '--api-mode',
+      'personal',
+      '--gitignore',
+      '--no-color',
+    ]);
 
-      expect(result.exitCode).toBe(0);
-      expect(stderr).toBe('');
-      expectUnavailableDefaultRecovery(stdout);
-    });
+    expect(result.exitCode).toBe(0);
+    expect(stderr).toBe('');
+    expectUnavailableDefaultRecovery(stdout);
   });
 });

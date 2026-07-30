@@ -1,8 +1,7 @@
 // Test composition imports
 import '@test/support/defaultSessionTestSetup';
 
-// Test support imports
-
+// Node imports
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
@@ -29,8 +28,6 @@ import { createTestSession } from '@test/support/sessionTestUtils';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { StreamSnapshotStore, streamDataDir } from '@transcript';
 import { StorageFS } from '@utils/files';
-
-import { createRecordingHost } from '../agent/progressTestUtils';
 
 const mocks = vi.hoisted(() => ({
   readConfig: vi.fn(),
@@ -107,11 +104,12 @@ async function withTempStorage(run: () => Promise<void>): Promise<void> {
   }
 }
 
+/** Writes a stream sidecar work plan for the run and returns its stream id. */
 async function writeSidecarTodos(
-  streamId: StreamTabId,
   executionId: ExecutionId,
   todos: TodoItem[],
-): Promise<void> {
+): Promise<StreamTabId> {
+  const streamId = `codex#${executionId}` as StreamTabId;
   const snapshots = new StreamSnapshotStore();
   snapshots.setTodos(streamId, todos);
   await snapshots.flush();
@@ -122,6 +120,7 @@ async function writeSidecarTodos(
       executionId,
     }),
   );
+  return streamId;
 }
 
 /** Mocks the storage reads for a completed, non-subagent toolUse execution. */
@@ -187,7 +186,6 @@ describe('ExecutionsTool', () => {
   });
 
   it('does not duplicate auto-delivered live subagent reports for the parent stream', async () => {
-    const explicit = createRecordingHost();
     const session = createTestSession();
     const executionId = 'abc123';
     const parentStreamId = 'stream:parent-report-suppression' as StreamTabId;
@@ -354,8 +352,7 @@ describe('ExecutionsTool', () => {
   it('reads completed summary todos from stream sidecars before legacy KV todos', async () => {
     await withTempStorage(async () => {
       const executionId = 'abc123' as ExecutionId;
-      const streamId = `codex#${executionId}` as StreamTabId;
-      await writeSidecarTodos(streamId, executionId, [
+      await writeSidecarTodos(executionId, [
         {
           content: 'Read the sidecar work plan',
           status: 'in_progress',
@@ -399,8 +396,7 @@ describe('ExecutionsTool', () => {
   it('agrees with the completed summary when reading /executions/{id}/todos', async () => {
     await withTempStorage(async () => {
       const executionId = 'abc123' as ExecutionId;
-      const streamId = `codex#${executionId}` as StreamTabId;
-      await writeSidecarTodos(streamId, executionId, [
+      await writeSidecarTodos(executionId, [
         {
           content: 'Read the sidecar work plan',
           status: 'in_progress',
@@ -424,68 +420,50 @@ describe('ExecutionsTool', () => {
   // Regression for #7301: a stale-but-present sidecar used to be treated as
   // authoritative even when a final todo_write had already landed a fresher
   // legacy write, hiding completed tasks as still pending.
-  it('prefers a fresher legacy KV write over a stale sidecar in the completed summary', async () => {
-    await withTempStorage(async () => {
-      const executionId = 'abc123' as ExecutionId;
-      const streamId = `codex#${executionId}` as StreamTabId;
-      await writeSidecarTodos(streamId, executionId, [
-        {
-          content: 'Stale sidecar todo',
-          status: 'pending',
-          activeForm: 'Doing the stale sidecar todo',
-        },
-      ]);
-      mockCompletedExecution();
-      mocks.readTodos.mockResolvedValue([
-        { content: 'Fresher legacy todo', status: 'completed' },
-      ]);
-      // Simulate a final todo_write flushing to legacy KV after the sidecar's
-      // own asynchronous write already landed.
-      mocks.todosModifiedAt.mockResolvedValue(Date.now() + 60_000);
-
-      const result = await new ExecutionsTool().call({
-        path: `/executions/${executionId}`,
-      });
-
-      expect(result.output).toContain('Fresher legacy todo');
-      expect(result.output).not.toContain('Stale sidecar todo');
-    });
-  });
-
-  // Regression for #7404: a legacy write landing after the sidecar write but
-  // rounding to the same millisecond tick (the VS Code filesystem adapter's
+  // Regression for #7404: a legacy write that lands after the sidecar write
+  // but rounds to the same millisecond tick (the VS Code filesystem adapter's
   // mtime resolution) used to lose to the strict `>` comparison, reproducing
-  // the #7301 staleness regression on every tie.
-  it('prefers the legacy KV write when its mtime ties the sidecar mtime', async () => {
-    await withTempStorage(async () => {
-      const executionId = 'abc123' as ExecutionId;
-      const streamId = `codex#${executionId}` as StreamTabId;
-      await writeSidecarTodos(streamId, executionId, [
-        {
-          content: 'Stale sidecar todo',
-          status: 'pending',
-          activeForm: 'Doing the stale sidecar todo',
-        },
-      ]);
-      const sidecarMtime = (
-        await StorageFS.stat(`${streamDataDir(streamId)}/workPlan.json`)
-      ).mtime;
-      mockCompletedExecution();
-      mocks.readTodos.mockResolvedValue([
-        { content: 'Fresher legacy todo', status: 'completed' },
-      ]);
-      // Simulate a final todo_write that lands after the sidecar write but
-      // rounds to the exact same millisecond tick.
-      mocks.todosModifiedAt.mockResolvedValue(sidecarMtime);
+  // #7301 on every tie.
+  it.each([
+    {
+      label: 'is fresher than',
+      legacyModifiedAt: async (_streamId: StreamTabId) => Date.now() + 60_000,
+    },
+    {
+      label: 'ties',
+      legacyModifiedAt: async (streamId: StreamTabId) =>
+        (await StorageFS.stat(`${streamDataDir(streamId)}/workPlan.json`))
+          .mtime,
+    },
+  ])(
+    'prefers the legacy KV write when its mtime $label the sidecar mtime',
+    async ({ legacyModifiedAt }) => {
+      await withTempStorage(async () => {
+        const executionId = 'abc123' as ExecutionId;
+        const streamId = await writeSidecarTodos(executionId, [
+          {
+            content: 'Stale sidecar todo',
+            status: 'pending',
+            activeForm: 'Doing the stale sidecar todo',
+          },
+        ]);
+        mockCompletedExecution();
+        mocks.readTodos.mockResolvedValue([
+          { content: 'Fresher legacy todo', status: 'completed' },
+        ]);
+        mocks.todosModifiedAt.mockResolvedValue(
+          await legacyModifiedAt(streamId),
+        );
 
-      const result = await new ExecutionsTool().call({
-        path: `/executions/${executionId}`,
+        const result = await new ExecutionsTool().call({
+          path: `/executions/${executionId}`,
+        });
+
+        expect(result.output).toContain('Fresher legacy todo');
+        expect(result.output).not.toContain('Stale sidecar todo');
       });
-
-      expect(result.output).toContain('Fresher legacy todo');
-      expect(result.output).not.toContain('Stale sidecar todo');
-    });
-  });
+    },
+  );
 
   it('lists and reads persisted workspace files for tool-use executions', async () => {
     await withTempWorkspace(async (workspace) => {

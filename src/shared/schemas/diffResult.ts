@@ -231,16 +231,15 @@ const DiffResultEntrySchema = z.union([
 ]);
 
 /** Parse a diff result entry from either new or legacy format, or null if neither matches. */
-function parseDiffResultEntry(data: unknown): DiffResultDisplay | null {
-  return DiffResultEntrySchema.nullable().catch(null).parse(data);
-}
+const ParsedDiffResultEntrySchema =
+  DiffResultEntrySchema.nullable().catch(null);
 
 /** Parse an array of diff result entries, skipping invalid ones */
 export function parseDiffResultEntries(data: unknown): DiffResultDisplay[] {
   if (!Array.isArray(data)) return [];
 
   return data.flatMap((entry) => {
-    const parsed = parseDiffResultEntry(entry);
+    const parsed = ParsedDiffResultEntrySchema.parse(entry);
     return parsed ? [parsed] : [];
   });
 }

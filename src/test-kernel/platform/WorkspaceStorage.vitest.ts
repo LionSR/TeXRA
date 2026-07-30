@@ -1,13 +1,5 @@
 // Node imports
-import {
-  mkdir,
-  mkdtemp,
-  readFile,
-  rm,
-  stat,
-  writeFile,
-} from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 // Third-party imports
@@ -29,6 +21,7 @@ import {
   RUNS_STORAGE_DIR,
   workspaceStorageId,
 } from '@platform/defaults/workspaceStorage';
+import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 
 async function pathExists(path: string): Promise<boolean> {
   try {
@@ -40,31 +33,19 @@ async function pathExists(path: string): Promise<boolean> {
   }
 }
 
-async function readJsonFile<T>(path: string): Promise<T> {
-  return JSON.parse(await readFile(path, 'utf8')) as T;
-}
-
 async function readWorkspaceMarker(
   storagePath: string,
 ): Promise<{ path: string }> {
-  return readJsonFile<{ path: string }>(join(storagePath, '_workspace.json'));
+  const marker = await readFile(join(storagePath, '_workspace.json'), 'utf8');
+  return JSON.parse(marker) as { path: string };
 }
 
 describe('workspace storage defaults', () => {
   const tempDirs: string[] = [];
 
   afterEach(async () => {
-    const paths = tempDirs.splice(0);
-    await Promise.all(
-      paths.map((path) => rm(path, { recursive: true, force: true })),
-    );
+    await cleanupTempDirs(tempDirs);
   });
-
-  async function makeTempDir(): Promise<string> {
-    const path = await mkdtemp(join(tmpdir(), 'texra-workspace-storage-'));
-    tempDirs.push(path);
-    return path;
-  }
 
   it('computes a stable workspace storage identity', () => {
     expect(workspaceStorageId('/workspace/a')).toMatch(/^a-[0-9a-f]{8}$/);
@@ -80,7 +61,7 @@ describe('workspace storage defaults', () => {
   });
 
   it('snapshots global, workspace, memory, and run storage layout paths', async () => {
-    const root = await makeTempDir();
+    const root = await makeTempDir('texra-workspace-storage-', tempDirs);
     const workspacePath = '/workspace/a';
     const existingCurrent = await resolveExistingRunStoragePath(
       ['run-1', 'result.json'],
@@ -122,7 +103,7 @@ describe('workspace storage defaults', () => {
   });
 
   it('creates workspace-scoped storage roots on demand', async () => {
-    const root = await makeTempDir();
+    const root = await makeTempDir('texra-workspace-storage-', tempDirs);
     let workspacePath: string | undefined = '/workspace/a';
     const provider = new WorkspaceStorageProvider(root, () => workspacePath);
     const firstStoragePath = provider.getStoragePath();
@@ -149,7 +130,7 @@ describe('workspace storage defaults', () => {
   });
 
   it('restores the previous root after a failed workspace replacement', async () => {
-    const root = await makeTempDir();
+    const root = await makeTempDir('texra-workspace-storage-', tempDirs);
     let workspacePath: string | undefined = '/workspace/a';
     const provider = new WorkspaceStorageProvider(root, () => workspacePath);
     const firstStoragePath = provider.getStoragePath();
@@ -165,7 +146,7 @@ describe('workspace storage defaults', () => {
   });
 
   it('migrates legacy hash-only workspace storage when possible', async () => {
-    const root = await makeTempDir();
+    const root = await makeTempDir('texra-workspace-storage-', tempDirs);
     const workspacePath = '/workspace/Legacy Project';
     const legacyStoragePath = join(
       root,
@@ -193,7 +174,7 @@ describe('workspace storage defaults', () => {
   });
 
   it('uses the same workspace storage rule for node hosts', async () => {
-    const root = await makeTempDir();
+    const root = await makeTempDir('texra-workspace-storage-', tempDirs);
     const workspacePath = '/workspace/a';
     const provider = createNodeStorageProvider({
       storageRoot: root,

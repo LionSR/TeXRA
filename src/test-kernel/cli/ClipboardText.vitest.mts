@@ -69,30 +69,36 @@ describe('CLI clipboard text writer', () => {
     expect(execFileMock).not.toHaveBeenCalled();
   });
 
-  it('reports failure instead of hanging when the write never settles', async () => {
-    vi.useFakeTimers();
-    try {
+  describe('when the write never settles', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    // Drives a wedged `clipboardy.write` past the 5s deadline and asserts the
+    // reported timeout; per-test expectations then cover the helper reaping.
+    async function expectWriteToTimeOut(
+      platform: NodeJS.Platform,
+    ): Promise<void> {
       writeMock.mockReturnValue(new Promise<void>(() => {}));
 
-      const resultPromise = writeClipboardText('question', {
-        platform: 'darwin',
-      });
+      const resultPromise = writeClipboardText('question', { platform });
       await vi.advanceTimersByTimeAsync(6_000);
-      const result = await resultPromise;
 
-      expect(result).toEqual({
+      expect(await resultPromise).toEqual({
         ok: false,
         reason: 'Clipboard write timed out after 5000ms',
       });
-    } finally {
-      vi.useRealTimers();
     }
-  });
 
-  it('kills wedged copy helpers it spawned on timeout, and only those', async () => {
-    vi.useFakeTimers();
-    try {
-      writeMock.mockReturnValue(new Promise<void>(() => {}));
+    it('reports failure instead of hanging', async () => {
+      await expectWriteToTimeOut('darwin');
+    });
+
+    it('kills wedged copy helpers it spawned on timeout, and only those', async () => {
       execFileMock.mockResolvedValueOnce({
         stdout: [
           '  101      1 /usr/bin/pbcopy', // someone else's child
@@ -105,16 +111,8 @@ describe('CLI clipboard text writer', () => {
       });
       execFileMock.mockResolvedValue({ stdout: '', stderr: '' });
 
-      const resultPromise = writeClipboardText('question', {
-        platform: 'darwin',
-      });
-      await vi.advanceTimersByTimeAsync(6_000);
-      const result = await resultPromise;
+      await expectWriteToTimeOut('darwin');
 
-      expect(result).toEqual({
-        ok: false,
-        reason: 'Clipboard write timed out after 5000ms',
-      });
       expect(execFileMock).toHaveBeenCalledWith(
         'ps',
         ['-Ao', 'pid=,ppid=,comm='],
@@ -124,15 +122,9 @@ describe('CLI clipboard text writer', () => {
       expect(process.kill).toHaveBeenCalledWith(303, 'SIGKILL');
       expect(process.kill).toHaveBeenCalledWith(404, 'SIGKILL');
       expect(process.kill).toHaveBeenCalledWith(505, 'SIGKILL');
-    } finally {
-      vi.useRealTimers();
-    }
-  });
+    });
 
-  it('sweeps again after a delay to catch the fallback helper a kill can spawn', async () => {
-    vi.useFakeTimers();
-    try {
-      writeMock.mockReturnValue(new Promise<void>(() => {}));
+    it('sweeps again after a delay to catch the fallback helper a kill can spawn', async () => {
       execFileMock.mockResolvedValueOnce({
         stdout: `  303 ${process.pid} xsel`, // wedged system helper
         stderr: '',
@@ -144,40 +136,17 @@ describe('CLI clipboard text writer', () => {
         stderr: '',
       });
 
-      const resultPromise = writeClipboardText('question', {
-        platform: 'linux',
-      });
-      await vi.advanceTimersByTimeAsync(6_000);
-      const result = await resultPromise;
+      await expectWriteToTimeOut('linux');
 
-      expect(result).toEqual({
-        ok: false,
-        reason: 'Clipboard write timed out after 5000ms',
-      });
       expect(execFileMock).toHaveBeenCalledTimes(2);
       expect(process.kill).toHaveBeenCalledTimes(2);
       expect(process.kill).toHaveBeenCalledWith(303, 'SIGKILL');
       expect(process.kill).toHaveBeenCalledWith(606, 'SIGKILL');
-    } finally {
-      vi.useRealTimers();
-    }
-  });
+    });
 
-  it('reaps Windows copy helpers through a parent-pid-bounded Stop-Process', async () => {
-    vi.useFakeTimers();
-    try {
-      writeMock.mockReturnValue(new Promise<void>(() => {}));
+    it('reaps Windows copy helpers through a parent-pid-bounded Stop-Process', async () => {
+      await expectWriteToTimeOut('win32');
 
-      const resultPromise = writeClipboardText('question', {
-        platform: 'win32',
-      });
-      await vi.advanceTimersByTimeAsync(6_000);
-      const result = await resultPromise;
-
-      expect(result).toEqual({
-        ok: false,
-        reason: 'Clipboard write timed out after 5000ms',
-      });
       // One sweep for the wedged helper, one for the fallback a kill spawns.
       expect(execFileMock).toHaveBeenCalledTimes(2);
       const [command, args] = execFileMock.mock.calls[0] as [
@@ -193,29 +162,12 @@ describe('CLI clipboard text writer', () => {
       expect(script).toContain('$_.ProcessId -ne $PID');
       expect(script).not.toContain('-EncodedCommand');
       expect(process.kill).not.toHaveBeenCalled();
-    } finally {
-      vi.useRealTimers();
-    }
-  });
+    });
 
-  it('still reports the timeout when helper reaping itself fails', async () => {
-    vi.useFakeTimers();
-    try {
-      writeMock.mockReturnValue(new Promise<void>(() => {}));
+    it('still reports the timeout when helper reaping itself fails', async () => {
       execFileMock.mockRejectedValue(new Error('ps exploded'));
 
-      const resultPromise = writeClipboardText('question', {
-        platform: 'darwin',
-      });
-      await vi.advanceTimersByTimeAsync(6_000);
-      const result = await resultPromise;
-
-      expect(result).toEqual({
-        ok: false,
-        reason: 'Clipboard write timed out after 5000ms',
-      });
-    } finally {
-      vi.useRealTimers();
-    }
+      await expectWriteToTimeOut('darwin');
+    });
   });
 });

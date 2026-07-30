@@ -41,7 +41,7 @@ export function getOriginalSnapshotPath(
   );
 }
 
-export async function findExistingRunStoragePath(
+export function findExistingRunStoragePath(
   ...segments: string[]
 ): Promise<string | undefined> {
   return resolveExistingRunStoragePath(
@@ -231,6 +231,14 @@ export async function snapshotExists(absolutePath: string): Promise<boolean> {
   }
 }
 
+/** Errno codes for which symlink creation is unavailable and a copy is used instead. */
+const SYMLINK_UNSUPPORTED_CODES = new Set([
+  'EPERM',
+  'EACCES',
+  'EINVAL',
+  'ENOTSUP',
+]);
+
 export async function createSymlink(
   sourceAbsolute: string,
   destination: string,
@@ -245,10 +253,7 @@ export async function createSymlink(
       await fs.symlink(sourceAbsolute, destination);
       return;
     }
-    if (
-      err.code &&
-      ['EPERM', 'EACCES', 'EINVAL', 'ENOTSUP'].includes(err.code)
-    ) {
+    if (err.code && SYMLINK_UNSUPPORTED_CODES.has(err.code)) {
       logger.warn(
         CHANNEL,
         `Falling back to copy ${sourceAbsolute} -> ${destination} due to ${err.code}`,

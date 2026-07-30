@@ -9,7 +9,7 @@
  * VS Code extensions use opaque origins (sent as null).
  * Codespaces uses *.github.dev domains.
  */
-export const ALLOWED_ORIGINS: (string | RegExp)[] = [
+const ALLOWED_ORIGINS: (string | RegExp)[] = [
   // VS Code and forks (opaque origins, sent as null in most browsers)
   'vscode://',
   'vscode-insiders://',
@@ -29,23 +29,19 @@ export const ALLOWED_ORIGINS: (string | RegExp)[] = [
  * Check if origin is allowed for CORS.
  * @returns The origin if allowed, '*' for null origins (VS Code), null otherwise.
  */
-export function getAllowedOrigin(origin: string | null): string | null {
+function getAllowedOrigin(origin: string | null): string | null {
   if (!origin) {
     // Null origin (from opaque origins like vscode://) - allow for VS Code extensions
     return '*';
   }
 
-  for (const allowed of ALLOWED_ORIGINS) {
-    if (typeof allowed === 'string') {
-      if (origin.startsWith(allowed)) {
-        return origin;
-      }
-    } else if (allowed.test(origin)) {
-      return origin;
-    }
-  }
+  const isAllowed = ALLOWED_ORIGINS.some((allowed) =>
+    typeof allowed === 'string'
+      ? origin.startsWith(allowed)
+      : allowed.test(origin),
+  );
 
-  return null;
+  return isAllowed ? origin : null;
 }
 
 /**

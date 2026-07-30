@@ -160,19 +160,6 @@ export function resetExecutionLeaseCoordinationForTests(): void {
   leaseCoordination = new ExecutionLeaseCoordination();
 }
 
-async function enterLeaseAcquisition(): Promise<void> {
-  // An existing owned run may need to launch a child before it can settle.
-  // Root launches wait; nested launches remain admitted and are included in
-  // the dynamic quiescence check below.
-  await leaseCoordination.enterAcquisition(
-    (executionOwnership.getStore()?.size ?? 0) > 0,
-  );
-}
-
-function leaveLeaseAcquisition(): void {
-  leaseCoordination.leaveAcquisition();
-}
-
 async function waitForOwnedLeaseQuiescence(): Promise<void> {
   for (;;) {
     await leaseCoordination.waitForAcquisitions();
@@ -538,10 +525,8 @@ export function captureOwnedExecutionLeaseIfPresent(
   executionId: ExecutionId,
 ): OwnedExecutionLeaseScope | undefined {
   const key = ownershipKey(storageRoot(), executionId);
-  if (executionOwnership.getStore()?.has(key)) {
-    return captureOwnedExecutionLease(executionId);
-  }
-  return ownsExecutionLease(executionId)
+  const hasAmbientOwnership = executionOwnership.getStore()?.has(key) ?? false;
+  return hasAmbientOwnership || ownsExecutionLease(executionId)
     ? captureOwnedExecutionLease(executionId)
     : undefined;
 }
@@ -614,7 +599,12 @@ async function acquireExecutionLease(
   mode: 'fresh' | 'resume',
   canAcquire?: () => boolean | Promise<boolean>,
 ): Promise<'acquired' | 'existing' | 'cancelled'> {
-  await enterLeaseAcquisition();
+  // An existing owned run may need to launch a child before it can settle.
+  // Root launches wait; nested launches remain admitted and are included in
+  // the dynamic quiescence check in waitForOwnedLeaseQuiescence.
+  await leaseCoordination.enterAcquisition(
+    (executionOwnership.getStore()?.size ?? 0) > 0,
+  );
   try {
     const root = storageRoot();
     const key = ownershipKey(root, executionId);
@@ -676,7 +666,7 @@ async function acquireExecutionLease(
       root,
     );
   } finally {
-    leaveLeaseAcquisition();
+    leaseCoordination.leaveAcquisition();
   }
 }
 

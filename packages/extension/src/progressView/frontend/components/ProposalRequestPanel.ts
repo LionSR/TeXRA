@@ -333,17 +333,15 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
   };
 
   private get proposalOverrides(): { model?: string; agent?: string } {
-    const data = this.permission.data;
-    const pickIfChanged = (
-      selected: string | null,
-      original: string,
-    ): string | undefined =>
-      selected && selected !== original ? selected : undefined;
-    const model = pickIfChanged(this.selectedModel, data.model);
-    const agent = pickIfChanged(this.selectedAgent, data.agent);
+    const { model, agent } = this.permission.data;
+    const { selectedModel, selectedAgent } = this;
     return {
-      ...(model ? { model } : {}),
-      ...(agent ? { agent } : {}),
+      ...(selectedModel && selectedModel !== model
+        ? { model: selectedModel }
+        : {}),
+      ...(selectedAgent && selectedAgent !== agent
+        ? { agent: selectedAgent }
+        : {}),
     };
   }
 

@@ -20,6 +20,7 @@ import escapeRegExp from 'escape-string-regexp';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import { DELIVERY_TAG, DELIVERY_TAGS } from '@shared/deliveryTags';
 import { WorkflowScriptDeliverySummarySchema } from '@shared/schemas';
+import { isObject } from '@utils/core';
 import {
   formatCompactDuration,
   formatCostUsd,
@@ -141,18 +142,14 @@ function progressDetail(xml: string): string {
       if (parsed.isErr() || !Array.isArray(parsed.value)) {
         return 'todos updated';
       }
-      let done = 0;
-      let inProgress = 0;
-      let todo = 0;
-      for (const item of parsed.value) {
-        const status =
-          typeof item === 'object' && item !== null && 'status' in item
-            ? item.status
-            : undefined;
-        if (status === 'completed') done += 1;
-        else if (status === 'in_progress') inProgress += 1;
-        else todo += 1;
-      }
+      const statuses = parsed.value.map((item) =>
+        isObject(item) ? item.status : undefined,
+      );
+      const done = statuses.filter((status) => status === 'completed').length;
+      const inProgress = statuses.filter(
+        (status) => status === 'in_progress',
+      ).length;
+      const todo = statuses.length - done - inProgress;
       return `todos · ${done} done, ${inProgress} active, ${todo} pending`;
     }
     case 'conversations': {

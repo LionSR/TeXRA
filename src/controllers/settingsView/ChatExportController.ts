@@ -113,11 +113,11 @@ export class ChatExportController {
     historyId: string,
     exportInput: ChatExportInput,
   ): Promise<ChatExportResult> {
-    const filename = generateExportFilename(exportInput, 'md');
-    const storagePath = `executions/${historyId}/${filename}`;
-    const content = formatChatAsMarkdown(exportInput);
-    await StorageFS.write(storagePath, content);
-    return { storagePath, absolutePath: StorageFS.fullPath(storagePath) };
+    return this.writeExport(
+      historyId,
+      generateExportFilename(exportInput, 'md'),
+      formatChatAsMarkdown(exportInput),
+    );
   }
 
   /**
@@ -131,12 +131,12 @@ export class ChatExportController {
     historyId: string,
     exportInput: ChatExportInput,
   ): Promise<LatexExportResult> {
-    const filename = generateExportFilename(exportInput, 'tex');
-    const storagePath = `executions/${historyId}/${filename}`;
-    const content = formatChatAsLatex(exportInput, this.deps.latexPreamble);
-    await StorageFS.write(storagePath, content);
+    const { storagePath, absolutePath } = await this.writeExport(
+      historyId,
+      generateExportFilename(exportInput, 'tex'),
+      formatChatAsLatex(exportInput, this.deps.latexPreamble),
+    );
 
-    const absolutePath = StorageFS.fullPath(storagePath);
     const location = pathToLocation(absolutePath);
     const compiled = await compileLatex2Pdf(location);
 
@@ -187,15 +187,20 @@ export class ChatExportController {
       },
       'html',
     );
-    const storagePath = `executions/${historyId}/${filename}`;
-    await StorageFS.write(storagePath, html);
-
     return {
       status: 'ok',
-      result: {
-        storagePath,
-        absolutePath: StorageFS.fullPath(storagePath),
-      },
+      result: await this.writeExport(historyId, filename, html),
     };
+  }
+
+  /** Write an export payload into the execution's storage directory. */
+  private async writeExport(
+    historyId: string,
+    filename: string,
+    content: string,
+  ): Promise<ChatExportResult> {
+    const storagePath = `executions/${historyId}/${filename}`;
+    await StorageFS.write(storagePath, content);
+    return { storagePath, absolutePath: StorageFS.fullPath(storagePath) };
   }
 }

@@ -2,6 +2,12 @@ import { isObject } from '@utils/core';
 
 export const EXECUTIONS_DEFAULT_ACTION = 'view';
 
+/** The executions action a call is performing, defaulted when absent or blank. */
+export function executionsAction(input: Record<string, unknown>): string {
+  const action = typeof input.action === 'string' ? input.action.trim() : '';
+  return action || EXECUTIONS_DEFAULT_ACTION;
+}
+
 export type ExecutionLabels = ReadonlyMap<string, string>;
 
 interface ExecutionPathTarget {
@@ -57,8 +63,5 @@ export function executionsSubagentSummary(
   });
   if (!matchedSubagent) return undefined;
 
-  const trimmedAction =
-    typeof input.action === 'string' ? input.action.trim() : '';
-  const action = trimmedAction || EXECUTIONS_DEFAULT_ACTION;
-  return `${action}: ${displayTargets.join(', ')}`;
+  return `${executionsAction(input)}: ${displayTargets.join(', ')}`;
 }

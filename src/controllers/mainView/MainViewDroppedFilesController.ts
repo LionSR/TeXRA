@@ -83,27 +83,29 @@ function resolveDroppedFileCategory(
   allowedExtensions: MainViewAllowedDropExtensions,
   target?: MultipleDocumentFileType,
 ): MainViewAttachableDropCategory | null {
+  const extension = normalizeMainViewFileExtension(filePath);
+  if (!extension) return null;
+
   if (target) {
     return isAttachableDropCategory(target) &&
-      isExtensionAllowed(target, filePath, allowedExtensions)
+      isExtensionAllowed(target, extension, allowedExtensions)
       ? target
       : null;
   }
 
-  const extension = normalizeMainViewFileExtension(filePath);
-  if (isExtensionAllowed('media', filePath, allowedExtensions)) {
+  if (isExtensionAllowed('media', extension, allowedExtensions)) {
     return 'media';
   }
   if (
     ['bib', 'bbl', 'cls', 'sty'].includes(extension) &&
-    isExtensionAllowed('context', filePath, allowedExtensions)
+    isExtensionAllowed('context', extension, allowedExtensions)
   ) {
     return 'context';
   }
-  if (isExtensionAllowed('input', filePath, allowedExtensions)) {
+  if (isExtensionAllowed('input', extension, allowedExtensions)) {
     return 'input';
   }
-  if (isExtensionAllowed('context', filePath, allowedExtensions)) {
+  if (isExtensionAllowed('context', extension, allowedExtensions)) {
     return 'context';
   }
   return null;
@@ -117,11 +119,9 @@ function isAttachableDropCategory(
 
 function isExtensionAllowed(
   category: MainViewAttachableDropCategory,
-  filePath: string,
+  extension: string,
   allowedExtensions: MainViewAllowedDropExtensions,
 ): boolean {
-  const extension = normalizeMainViewFileExtension(filePath);
-  if (!extension) return false;
   return allowedExtensions[category].some(
     (candidate) => normalizeMainViewFileExtension(candidate) === extension,
   );

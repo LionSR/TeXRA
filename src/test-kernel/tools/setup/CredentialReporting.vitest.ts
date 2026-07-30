@@ -29,23 +29,7 @@ vi.mock('@tools/setup/platform', async (importOriginal) => {
   };
 });
 
-function installSetupPlatformWithSecrets(options: {
-  apiKeyOrigin?: () => Promise<'secret' | 'env' | 'none' | 'unknown'>;
-  anyUsableCredentialExists?: () => Promise<boolean>;
-}): void {
-  setSetupPlatform(createFakeSetupPlatform());
-  if (options.apiKeyOrigin) {
-    mocks.apiKeyOrigin.mockImplementation(options.apiKeyOrigin);
-  }
-  if (options.anyUsableCredentialExists) {
-    mocks.anyUsableCredentialExists.mockImplementation(
-      options.anyUsableCredentialExists,
-    );
-  }
-}
-
 function installChatGptOnlySetupPlatform(): void {
-  setSetupPlatform(createFakeSetupPlatform());
   mocks.anyUsableCredentialExists.mockResolvedValue(true);
   vi.spyOn(
     setupPlatformModule,
@@ -57,7 +41,6 @@ async function assertAuthPrecedesCredentialProbe(
   run: () => Promise<unknown>,
 ): Promise<void> {
   const calls: string[] = [];
-  setSetupPlatform(createFakeSetupPlatform());
   vi.spyOn(setupPlatformModule, 'getSetupAuthStatus').mockImplementation(
     async () => {
       calls.push('auth');
@@ -78,6 +61,7 @@ async function assertAuthPrecedesCredentialProbe(
 }
 
 beforeEach(() => {
+  setSetupPlatform(createFakeSetupPlatform());
   mocks.apiKeyOrigin.mockReset().mockResolvedValue('none');
   mocks.anyUsableCredentialExists.mockReset().mockResolvedValue(false);
 });
@@ -88,11 +72,7 @@ afterEach(() => {
 
 describe('setup credential reporting', () => {
   it('reports the active host and provider-key origin without secret values', async () => {
-    installSetupPlatformWithSecrets({
-      async apiKeyOrigin() {
-        return 'env';
-      },
-    });
+    mocks.apiKeyOrigin.mockResolvedValue('env');
 
     const result = await new ProbeEnvironmentTool().call({});
 
@@ -125,14 +105,10 @@ describe('setup credential reporting', () => {
   });
 
   it('keeps probing when one provider key origin is unavailable', async () => {
-    installSetupPlatformWithSecrets({
-      async apiKeyOrigin() {
-        throw new Error('Keychain unavailable');
-      },
-      async anyUsableCredentialExists() {
-        throw new Error('Credential scan unavailable');
-      },
-    });
+    mocks.apiKeyOrigin.mockRejectedValue(new Error('Keychain unavailable'));
+    mocks.anyUsableCredentialExists.mockRejectedValue(
+      new Error('Credential scan unavailable'),
+    );
 
     const result = await new ProbeEnvironmentTool().call({});
 
@@ -144,11 +120,9 @@ describe('setup credential reporting', () => {
   });
 
   it('reports when aggregate credential readiness is unavailable', async () => {
-    installSetupPlatformWithSecrets({
-      async anyUsableCredentialExists() {
-        throw new Error('Credential scan unavailable');
-      },
-    });
+    mocks.anyUsableCredentialExists.mockRejectedValue(
+      new Error('Credential scan unavailable'),
+    );
 
     const result = await new ProbeEnvironmentTool().call({});
 

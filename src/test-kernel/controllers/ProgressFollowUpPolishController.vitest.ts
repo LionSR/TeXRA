@@ -15,9 +15,7 @@ import type { FileContext } from '@agent/runtime/textEnhancement';
 import { ProgressFollowUpPolishController } from '@controllers/progressView/ProgressFollowUpPolishController';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 
-function createWorkflowTaskState(
-  overrides: Omit<Partial<AgentConfig>, 'agentCategory'> = {},
-): WorkflowTaskState {
+function createWorkflowTaskState(): WorkflowTaskState {
   return {
     agentConfig: AgentConfigSchema.parse({
       agent: 'writer',
@@ -27,7 +25,6 @@ function createWorkflowTaskState(
       mediaFiles: [],
       outputFiles: ['answer.tex'],
       agentCategory: AgentCategory.Workflow,
-      ...overrides,
     }) as AgentConfig & { agentCategory: typeof AgentCategory.Workflow },
     activeFiles: {
       input: true,

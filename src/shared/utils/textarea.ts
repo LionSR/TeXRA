@@ -1,7 +1,7 @@
 type TextareaTarget = HTMLElement | HTMLTextAreaElement | null;
 
 interface TextareaResolution {
-  host: HTMLElement | null;
+  host: VscodeTextarea | null;
   textarea: HTMLTextAreaElement | null;
 }
 
@@ -31,7 +31,7 @@ function resolveTextareaTarget(target: TextareaTarget): TextareaResolution {
 
   const host = target as VscodeTextarea;
   if (host.wrappedElement instanceof HTMLTextAreaElement) {
-    return { host: target, textarea: host.wrappedElement };
+    return { host, textarea: host.wrappedElement };
   }
 
   // wa-textarea (and similar shadow-DOM-based hosts) keep the underlying
@@ -39,18 +39,10 @@ function resolveTextareaTarget(target: TextareaTarget): TextareaResolution {
   const shadowTextarea =
     host.shadowRoot?.querySelector<HTMLTextAreaElement>('textarea') ?? null;
   if (shadowTextarea) {
-    return { host: target, textarea: shadowTextarea };
+    return { host, textarea: shadowTextarea };
   }
 
   return { host: null, textarea: null };
-}
-
-function syncHostValue(host: HTMLElement | null, value: string): void {
-  if (!host) return;
-  const vscodeHost = host as VscodeTextarea;
-  if (vscodeHost.value !== value) {
-    vscodeHost.value = value;
-  }
 }
 
 /** Get .value from a vscode-textarea or HTMLTextAreaElement. */
@@ -67,5 +59,7 @@ export function insertTextAtCursor(target: TextareaTarget, text: string): void {
   const { selectionStart: start, selectionEnd: end, value } = textarea;
   textarea.value = value.slice(0, start) + text + value.slice(end);
   textarea.selectionStart = textarea.selectionEnd = start + text.length;
-  syncHostValue(host, textarea.value);
+  if (host && host.value !== textarea.value) {
+    host.value = textarea.value;
+  }
 }

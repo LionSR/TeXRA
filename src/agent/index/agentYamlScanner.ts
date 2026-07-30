@@ -90,17 +90,15 @@ function entriesWithUniqueNames(
 
   const unique: ParsedAgentYaml[] = [];
   for (const [name, matches] of byName) {
-    const only = matches.at(0);
-    if (matches.length === 1 && only) {
-      unique.push(only);
+    if (matches.length > 1) {
+      const paths = matches.map((entry) => entry.path).join(', ');
+      logger.warn(
+        CHANNEL,
+        `Duplicate agent name "${name}" in ${paths}; skipping all duplicates.`,
+      );
       continue;
     }
-
-    const paths = matches.map((entry) => entry.path).join(', ');
-    logger.warn(
-      CHANNEL,
-      `Duplicate agent name "${name}" in ${paths}; skipping all duplicates.`,
-    );
+    unique.push(...matches);
   }
   return unique;
 }

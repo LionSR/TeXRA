@@ -71,15 +71,6 @@ interface PendingDraftSave extends InquiryPermissionIds {
   draft: InquiryDraft | null;
 }
 
-function getRequestId(permission: ExternalInquiryPermissionState): string {
-  return permission.data.requestId;
-}
-
-function getThreadId(permission: ExternalInquiryPermissionState): string {
-  const { data } = permission;
-  return data.threadId ?? data.requestId;
-}
-
 function safeHttpUrl(link: string): string | undefined {
   const url = tryParseUrl(link);
   return url && (url.protocol === 'http:' || url.protocol === 'https:')
@@ -143,7 +134,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
     if (!this.draftRestored) {
       this.draftRestored = true;
       const data = this.permission.data;
-      const draft = draftCache.get(getRequestId(this.permission)) ?? data.draft;
+      const draft = draftCache.get(data.requestId) ?? data.draft;
       if (draft) {
         this.answerText = draft.answer;
         this.sessionLinksText = draft.sessionLinks;
@@ -162,9 +153,10 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
   private getPermissionIds(
     permission: ExternalInquiryPermissionState = this.permission,
   ): InquiryPermissionIds {
+    const { data } = permission;
     return {
-      requestId: getRequestId(permission),
-      threadId: getThreadId(permission),
+      requestId: data.requestId,
+      threadId: data.threadId ?? data.requestId,
     };
   }
 
@@ -542,7 +534,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
     const answer = this.answerText.trim();
     const sessionLinks = this.normalizedSessionLinks;
 
-    clearInquiryDraft(getRequestId(this.permission));
+    clearInquiryDraft(this.permission.data.requestId);
 
     this.emitAction({
       action: INQUIRY_SUBMIT_ACTION,

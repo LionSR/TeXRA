@@ -194,14 +194,13 @@ export class SessionHandle {
     executions.attachSessionApprovals(approvals);
 
     this.executions = executions;
-    const subscriptions =
+    this.subscriptions =
       init.subscriptions ??
       new ExecutionSubscriptionBinder({
         registry: executions,
         releaseSource: followUps,
         session: this,
       });
-    this.subscriptions = subscriptions;
     this.events = events;
     this.status = status;
     this.transcripts = transcripts;
@@ -302,21 +301,17 @@ export class SessionHandle {
           return this.replaceStoresAfterStorageRootChange(generation);
         });
       }
-      const repair = async () => {
-        if (generation !== this.storageGeneration) return false;
-        const streamIds = this.transcripts.keys();
-        await this.snapshots.load(streamIds);
-        if (
-          generation !== this.storageGeneration ||
-          this.restartRepairAbort.signal.aborted
-        ) {
-          return false;
-        }
-        this.markUnfinishedStreamsRunning();
-        await this.runRestartRepair(generation);
-        return true;
-      };
-      return await repair();
+      if (generation !== this.storageGeneration) return false;
+      await this.snapshots.load(this.transcripts.keys());
+      if (
+        generation !== this.storageGeneration ||
+        this.restartRepairAbort.signal.aborted
+      ) {
+        return false;
+      }
+      this.markUnfinishedStreamsRunning();
+      await this.runRestartRepair(generation);
+      return true;
     } catch (error) {
       logger.warn('Failed to repair session stores after restart', {
         data: error,
@@ -719,7 +714,7 @@ export class SessionHandle {
     } catch (error) {
       failures.push(error);
     } finally {
-      this.deregisterSession();
+      liveSessions.delete(this);
     }
     if (failures.length === 1) throw failures[0];
     if (failures.length > 1) {
@@ -741,11 +736,6 @@ export class SessionHandle {
     this.artifactFlushers.clear();
     this.resultListeners.clear();
     this.missedTerminalResults.clear();
-  }
-
-  /** Leave the live-session registry. */
-  private deregisterSession(): void {
-    liveSessions.delete(this);
   }
 }
 

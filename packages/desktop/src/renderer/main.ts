@@ -207,13 +207,15 @@ shortcutAcceleratorsById.set(
   rendererPlatform === 'darwin' ? 'Command+K' : 'Control+K',
 );
 
-function shortcutTitle(label: string, accelerator: string | undefined): string {
-  const shortcut = formatDesktopAccelerator(accelerator, rendererPlatform);
+function commandTitle(
+  commandId: DesktopCommandId | typeof DESKTOP_COMMAND_PALETTE_ID,
+  label: string,
+): string {
+  const shortcut = formatDesktopAccelerator(
+    shortcutAcceleratorsById.get(commandId),
+    rendererPlatform,
+  );
   return shortcut ? `${label} - ${shortcut}` : label;
-}
-
-function commandTitle(commandId: DesktopCommandId, label: string): string {
-  return shortcutTitle(label, shortcutAcceleratorsById.get(commandId));
 }
 
 function setRouteState(route: DesktopRoute): void {
@@ -399,10 +401,10 @@ const promptOverlay = createDesktopPromptOverlay(appRoot, (message) =>
 // helpers turn the fire-and-forget message pairs into promises the editor pane
 // can await, keyed by path so concurrent reads don't cross-resolve.
 
-type PendingFileRequest = {
+interface PendingFileRequest {
   resolve(contents: string): void;
   reject(error: Error): void;
-};
+}
 
 interface PendingFileListRequest {
   readonly promise: Promise<readonly EditorFileEntry[]>;
@@ -712,6 +714,7 @@ function environmentPopoverTemplate(
   );
   const branchLabel =
     environmentSummary?.branch ?? (environmentLoading ? 'Loading…' : 'Local');
+  const changedFiles = environmentSummary?.changedFiles ?? 0;
 
   return html`
     <wa-popover
@@ -758,7 +761,7 @@ function environmentPopoverTemplate(
             >${workspaceName(workspacePath)}</span
           >
           <span class="task-environment-trailing">
-            ${environmentSummary?.changedFiles ?? 0} changed
+            ${changedFiles} changed
           </span>
         </div>
         <div class="task-environment-row">
@@ -772,11 +775,7 @@ function environmentPopoverTemplate(
           <span class="task-environment-row-icon">${waIcon('circle-dot')}</span>
           <span>Commit or push</span>
           <span class="task-environment-trailing">
-            ${
-              (environmentSummary?.changedFiles ?? 0) === 0
-                ? 'Clean'
-                : `${environmentSummary?.changedFiles ?? 0} pending`
-            }
+            ${changedFiles === 0 ? 'Clean' : `${changedFiles} pending`}
           </span>
         </div>
       </div>
@@ -882,6 +881,9 @@ function taskConversationTemplate(): TemplateResult {
   const activeId = activeStreamId$.get();
   const showConversation = activeId != null && hasAnyStreams$.get();
   const startupPanelVisible = startupTeamPanel.isVisible();
+  const sidebarToggleLabel = shellState.sidebarCollapsed
+    ? 'Show sidebar'
+    : 'Hide sidebar';
   return html`
     <main class="task-conversation" aria-label="Task conversation">
       <header class="task-header">
@@ -890,10 +892,8 @@ function taskConversationTemplate(): TemplateResult {
           class="task-header-button icon-button is-size-l"
           appearance="plain"
           size="s"
-          aria-label=${
-            shellState.sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'
-          }
-          title=${shellState.sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
+          aria-label=${sidebarToggleLabel}
+          title=${sidebarToggleLabel}
           @click=${() => updateShell(toggleSidebar(shellState))}
         >
           ${waIcon(
@@ -927,10 +927,7 @@ function taskConversationTemplate(): TemplateResult {
           appearance="plain"
           size="s"
           aria-label="Open commands"
-          title=${shortcutTitle(
-            'Commands',
-            shortcutAcceleratorsById.get(DESKTOP_COMMAND_PALETTE_ID),
-          )}
+          title=${commandTitle(DESKTOP_COMMAND_PALETTE_ID, 'Commands')}
           @click=${openCommandPalette}
         >
           ${waIcon('ellipsis')}

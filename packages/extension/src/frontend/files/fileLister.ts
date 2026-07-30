@@ -5,7 +5,7 @@ import {
   getFileListConfig,
   loadFileListSettings,
   matchesEditedFile,
-  type FileListSettings,
+  type FileListConfig,
   type ListableFileType,
 } from '@common/files/fileListingRules';
 import * as logger from '@logger/logUtils';
@@ -36,62 +36,35 @@ export class FileLister {
     return this.instance;
   }
 
-  private workspacePath: string | undefined;
-  private settings: FileListSettings = loadFileListSettings(
-    (_key, fallback) => fallback,
-  );
+  private workspacePath = WorkspaceFS.getPath();
+  private settings = loadFileListSettings(getConfig);
 
-  private constructor() {
-    this.refresh();
-  }
+  private constructor() {}
 
   public refresh(): void {
     this.workspacePath = WorkspaceFS.getPath();
-    this.settings = loadFileListSettings((key, fallback) =>
-      getConfig(key, fallback),
-    );
+    this.settings = loadFileListSettings(getConfig);
   }
 
   public async list(fileType: ListableFileType): Promise<string[]> {
-    if (!this.workspacePath) {
-      logger.warn(CHANNEL, 'No workspace folder found');
-      return [];
-    }
-
     const config = getFileListConfig(fileType, this.settings);
     if (!config) {
       return [];
     }
-
-    return getFilesRecursively(
-      this.workspacePath,
-      this.workspacePath,
-      config.extensions,
-      config.ignoredExtensions,
-      config.ignoredDirs,
-      config.ignoredKeywords,
-      config.ignoredFiles,
-    );
+    return this.listFiles(config);
   }
 
   public async listEditedFiles(baseFileName: string): Promise<string[]> {
+    const files = await this.listFiles(getEditedFileListConfig(this.settings));
+    return files.filter((file) => matchesEditedFile(file, baseFileName));
+  }
+
+  private async listFiles(config: FileListConfig): Promise<string[]> {
     if (!this.workspacePath) {
       logger.warn(CHANNEL, 'No workspace folder found');
       return [];
     }
-
-    const config = getEditedFileListConfig(this.settings);
-    const files = await getFilesRecursively(
-      this.workspacePath,
-      this.workspacePath,
-      config.extensions,
-      config.ignoredExtensions,
-      config.ignoredDirs,
-      config.ignoredKeywords,
-      config.ignoredFiles,
-    );
-
-    return files.filter((file) => matchesEditedFile(file, baseFileName));
+    return getFilesRecursively(this.workspacePath, config);
   }
 }
 

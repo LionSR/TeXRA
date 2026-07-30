@@ -122,11 +122,8 @@ Optional:
   protected async execute(input: AcceptRunFilesInput): Promise<ToolResult> {
     const { execution_id: executionId, files, strip_criticize } = input;
 
-    const runDir = await findExistingRunStoragePath(executionId);
-    const runDirExists = runDir !== undefined;
-
     // Verify execution exists — run dir may not exist in workspace storage mode
-    if (!runDirExists) {
+    if ((await findExistingRunStoragePath(executionId)) === undefined) {
       const exists = await getExecutionStore(executionId as ExecutionId).exists(
         'meta',
       );

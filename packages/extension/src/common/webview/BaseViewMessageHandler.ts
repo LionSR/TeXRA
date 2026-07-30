@@ -105,17 +105,6 @@ export abstract class BaseViewMessageHandler<
     }
   }
 
-  /**
-   * Track the active webview reference for custom handlers.
-   */
-  protected async withActiveView(
-    webviewView: T,
-    handler: () => Promise<void> | void,
-  ): Promise<void> {
-    this.setActiveView(webviewView);
-    await handler();
-  }
-
   /** Post a message to the tracked active view, if one is available. */
   protected postToActiveView(message: unknown): void {
     this._activeView?.webview.postMessage(message);
@@ -149,32 +138,31 @@ export abstract class BaseViewMessageHandler<
     dispatcher: DispatcherFn<TMessage>,
     handlers: HandlerRegistry<TMessage>,
   ): Promise<void> {
-    await this.withActiveView(webviewView, () => {
-      this.onDispatch?.(webviewView);
+    this.setActiveView(webviewView);
+    this.onDispatch?.(webviewView);
 
-      let unsupported = false;
-      const handled = dispatcher(message, handlers, (error) => {
-        if (error instanceof ZodError) {
-          this.logger.debug(this.channel, 'Message validation failed', {
-            data: error,
-          });
-        } else if (error instanceof UnsupportedCommandError) {
-          // Declared `unsupported(...)` in this host's registry: visible
-          // feedback (toast), not a silent drop or an error-level log.
-          unsupported = true;
-          this.logger.debug(this.channel, error.message);
-          void vscode.window.showInformationMessage(error.reason);
-        } else {
-          this.logger.error(this.channel, 'Error handling message', {
-            data: error,
-          });
-        }
-      });
-
-      if (!handled && !unsupported && isCommandMessage(message)) {
-        this.logger.warn(this.channel, `Unhandled command: ${message.command}`);
+    let unsupported = false;
+    const handled = dispatcher(message, handlers, (error) => {
+      if (error instanceof ZodError) {
+        this.logger.debug(this.channel, 'Message validation failed', {
+          data: error,
+        });
+      } else if (error instanceof UnsupportedCommandError) {
+        // Declared `unsupported(...)` in this host's registry: visible
+        // feedback (toast), not a silent drop or an error-level log.
+        unsupported = true;
+        this.logger.debug(this.channel, error.message);
+        void vscode.window.showInformationMessage(error.reason);
+      } else {
+        this.logger.error(this.channel, 'Error handling message', {
+          data: error,
+        });
       }
     });
+
+    if (!handled && !unsupported && isCommandMessage(message)) {
+      this.logger.warn(this.channel, `Unhandled command: ${message.command}`);
+    }
   }
 
   /**

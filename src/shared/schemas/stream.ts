@@ -94,9 +94,7 @@ const ExecutionMetaBaseSchema = z.object({
 });
 
 export const ExecutionMetaSchema = ExecutionMetaBaseSchema.transform(
-  (
-    meta,
-  ): z.infer<typeof ExecutionMetaBaseSchema> & { outcome?: RunOutcome } => {
+  (meta): z.infer<typeof ExecutionMetaBaseSchema> => {
     const outcome =
       meta.outcome ?? executionStatusToRunOutcome(meta.terminalStatus);
     return outcome ? { ...meta, outcome } : meta;

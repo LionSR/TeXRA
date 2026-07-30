@@ -185,7 +185,9 @@ function requireStdinWorkflowInputFile(
 
 /**
  * Expand a single user-supplied path spec into the absolute / cwd-relative
- * paths it resolves to.
+ * paths it resolves to. The stdin token is resolved by
+ * `prepareWorkflowInputExpansion` before it gets here, so it never reaches
+ * this function.
  *
  * `flagLabel` is the CLI flag name (e.g. `--input`, `--context`) used in
  * Usage-error messages so a missing file is attributed to the right flag.
@@ -207,18 +209,6 @@ async function expandWorkflowInputSpec(
       .map((match) =>
         normalizeCliInputPathForRun(match, cwd, flagLabel, options),
       );
-
-  if (trimmed === STDIN_INPUT_TOKEN) {
-    const stdinInputFile = requireStdinWorkflowInputFile(flagLabel, options);
-    return [
-      normalizeCliInputPathForRun(
-        await stdinInputFile(),
-        cwd,
-        flagLabel,
-        options,
-      ),
-    ];
-  }
 
   if (hasMagic(trimmed)) {
     const isAbsolute = path.isAbsolute(trimmed);

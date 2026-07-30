@@ -336,8 +336,10 @@ function migrateFilenameAgentNameKeys(entries: readonly AgentEntry[]): void {
     currentKeys.add(agentKeyOf(entry));
     currentNames.add(entry.name);
   }
-  const qualifiedCandidates = new Map<string, Set<string>>();
-  const bareCandidates = new Map<string, Set<string>>();
+  // `null` marks an old name that several agents claim; ambiguous names are
+  // left untouched.
+  const qualified = new Map<string, string | null>();
+  const bare = new Map<string, string | null>();
 
   for (const entry of entries) {
     if (!entry.path) continue;
@@ -346,21 +348,12 @@ function migrateFilenameAgentNameKeys(entries: readonly AgentEntry[]): void {
 
     const oldKey = createKey(entry.source, oldName);
     if (!currentKeys.has(oldKey)) {
-      const targets = qualifiedCandidates.get(oldKey) ?? new Set<string>();
-      targets.add(agentKeyOf(entry));
-      qualifiedCandidates.set(oldKey, targets);
+      recordRenameTarget(qualified, oldKey, agentKeyOf(entry));
     }
     if (!currentNames.has(oldName)) {
-      const targets = bareCandidates.get(oldName) ?? new Set<string>();
-      targets.add(entry.name);
-      bareCandidates.set(oldName, targets);
+      recordRenameTarget(bare, oldName, entry.name);
     }
   }
-
-  const qualified = singleTargetMappings(qualifiedCandidates);
-  const bare = singleTargetMappings(bareCandidates);
-
-  if (qualified.size === 0 && bare.size === 0) return;
 
   for (const stateKey of Object.values(ENABLED_AGENTS_STATE_KEY)) {
     rewriteEnabledAgentKeys(
@@ -370,24 +363,24 @@ function migrateFilenameAgentNameKeys(entries: readonly AgentEntry[]): void {
         const name = agentName(key);
         // A source-qualified key differs from its bare name; match it in full,
         // otherwise map the bare name.
-        if (key !== name) return qualified.get(key) ?? key;
-        return bare.get(name) ?? key;
+        const target = key !== name ? qualified.get(key) : bare.get(name);
+        return target ?? key;
       },
     );
   }
 }
 
-function singleTargetMappings(
-  candidates: ReadonlyMap<string, ReadonlySet<string>>,
-): Map<string, string> {
-  const mappings = new Map<string, string>();
-  for (const [oldName, targets] of candidates) {
-    if (targets.size === 1) {
-      const target = targets.values().next().value;
-      if (target) mappings.set(oldName, target);
-    }
+function recordRenameTarget(
+  targets: Map<string, string | null>,
+  oldName: string,
+  target: string,
+): void {
+  const existing = targets.get(oldName);
+  if (existing === undefined) {
+    targets.set(oldName, target);
+  } else if (existing !== target) {
+    targets.set(oldName, null);
   }
-  return mappings;
 }
 
 /**
@@ -616,28 +609,6 @@ export function getRosterAgent(
   return entry?.category === category && !entry.internal ? entry : undefined;
 }
 
-/**
- * Resolve a delegation scope's agent keys to roster entries, deduped by
- * canonical key. Internal to `resolveDelegationScopeAgents` below, which is
- * the single exported entry point for scope resolution.
- */
-function resolveScopedAgentKeys(
-  keys: readonly string[],
-  category: AgentCategoryType,
-): AgentEntry[] {
-  const resolved: AgentEntry[] = [];
-  const seen = new Set<string>();
-  for (const key of keys) {
-    const entry = getRosterAgent(category, key);
-    if (!entry) continue;
-    const canonicalKey = agentKeyOf(entry);
-    if (seen.has(canonicalKey)) continue;
-    seen.add(canonicalKey);
-    resolved.push(entry);
-  }
-  return resolved;
-}
-
 // =============================================================================
 // SOURCE HELPERS
 // =============================================================================
@@ -700,7 +671,15 @@ export function resolveDelegationScopeAgents(
     category === AgentCategory.Workflow
       ? scope.workflowAgentKeys
       : scope.toolUseAgentKeys;
-  return resolveScopedAgentKeys(keys, category);
+
+  // Deduplicated by canonical key: two identifiers that resolve to the same
+  // entry contribute it once.
+  const byKey = new Map<string, AgentEntry>();
+  for (const key of keys) {
+    const entry = getRosterAgent(category, key);
+    if (entry) byKey.set(agentKeyOf(entry), entry);
+  }
+  return [...byKey.values()];
 }
 
 /**

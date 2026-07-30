@@ -76,6 +76,14 @@ export interface AgentRun extends AsyncIterable<AgentEvent> {
 let runtimeInitialized = false;
 const logger = createChannelTrace('agentPackage');
 
+function releaseOrWarn(message: string, release: () => void): void {
+  try {
+    release();
+  } catch (error) {
+    logger.warn(message, { data: error });
+  }
+}
+
 class AgentRunStream implements AgentRun {
   private readonly events: AgentEvent[] = [];
   private readonly readers: Array<{
@@ -88,8 +96,7 @@ class AgentRunStream implements AgentRun {
   private ended = false;
   private iteratorClosed = false;
   private iteratorStarted = false;
-  private failed = false;
-  private failure: unknown;
+  private failure: { readonly error: unknown } | undefined;
   private interruptPending = false;
   readonly result: Promise<AgentFlowResult>;
 
@@ -136,15 +143,13 @@ class AgentRunStream implements AgentRun {
   [Symbol.asyncIterator](): AsyncIterator<AgentEvent> {
     return {
       next: () => {
-        if (!this.iteratorStarted) {
-          this.iteratorStarted = true;
-        }
+        this.iteratorStarted = true;
         if (this.iteratorClosed) {
           return Promise.resolve({ done: true, value: undefined });
         }
         const event = this.events.shift();
         if (event) return Promise.resolve({ done: false, value: event });
-        if (this.failed) return Promise.reject(this.failure);
+        if (this.failure) return Promise.reject(this.failure.error);
         if (this.ended) {
           return Promise.resolve({ done: true, value: undefined });
         }
@@ -169,11 +174,15 @@ class AgentRunStream implements AgentRun {
     }
   }
 
+  private detach(): void {
+    this.detachEvents?.();
+    this.detachEvents = undefined;
+  }
+
   private closeIterator(): void {
     this.iteratorClosed = true;
     this.events.splice(0);
-    this.detachEvents?.();
-    this.detachEvents = undefined;
+    this.detach();
     for (const reader of this.readers.splice(0)) {
       reader.resolve({ done: true, value: undefined });
     }
@@ -181,12 +190,10 @@ class AgentRunStream implements AgentRun {
 
   private end(failure?: { readonly error: unknown }): void {
     this.ended = true;
-    this.failed = failure !== undefined;
-    this.failure = failure?.error;
-    this.detachEvents?.();
-    this.detachEvents = undefined;
+    this.failure = failure;
+    this.detach();
     for (const reader of this.readers.splice(0)) {
-      if (this.failed) reader.reject(this.failure);
+      if (failure) reader.reject(failure.error);
       else reader.resolve({ done: true, value: undefined });
     }
   }
@@ -270,18 +277,13 @@ export function runAgent(input: RunAgentInput): AgentRun {
         },
       );
     } finally {
-      try {
-        detachInteractions();
-      } catch (error) {
-        logger.warn('Failed to detach package host interactions', {
-          data: error,
-        });
-      }
-      try {
-        session.dispose();
-      } catch (error) {
-        logger.warn('Failed to dispose package session', { data: error });
-      }
+      releaseOrWarn(
+        'Failed to detach package host interactions',
+        detachInteractions,
+      );
+      releaseOrWarn('Failed to dispose package session', () =>
+        session.dispose(),
+      );
     }
   });
 }

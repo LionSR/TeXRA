@@ -3,13 +3,10 @@
 // Node imports
 import { strict as assert } from 'node:assert';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
-import * as os from 'node:os';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import * as path from 'node:path';
 import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
-import * as fs from 'node:fs/promises';
-import { mkdtemp, rm } from 'node:fs/promises';
 
 // Third-party imports
 import { afterEach, describe, expect, expectTypeOf, it } from 'vitest';
@@ -59,6 +56,10 @@ async function waitForProcessExit(pid: number): Promise<void> {
 
 type ExecuteCommandOptions = NonNullable<Parameters<typeof executeCommand>[1]>;
 
+// Backgrounds a long sleep, records its pid, then blocks on `wait` so the
+// tracked shell keeps running while the descendant holds the inherited stdio.
+const SLEEPER_SCRIPT = 'sleep 60 & echo $! > "$PID_FILE"; wait';
+
 describe('executeCommand', () => {
   const tempDirs: string[] = [];
 
@@ -86,6 +87,31 @@ describe('executeCommand', () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  // Runs SLEEPER_SCRIPT in a scratch directory and resolves once the
+  // backgrounded sleep has published its pid, so callers can assert on the
+  // descendant's fate after an abort or timeout.
+  async function startSleeper(
+    command: string | string[],
+    options: ExecuteCommandOptions,
+  ): Promise<{
+    promise: ReturnType<typeof executeCommand>;
+    childPid: number;
+  }> {
+    const dir = mkdtempSync(join(tmpdir(), 'texra-exec-sleeper-'));
+    tempDirs.push(dir);
+    const pidFile = join(dir, 'sleep.pid');
+    const promise = executeCommand(command, {
+      ...options,
+      cwd: dir,
+      env: { PID_FILE: pidFile },
+    });
+
+    await waitForFile(pidFile);
+    const childPid = Number.parseInt(readFileSync(pidFile, 'utf8'), 10);
+    assert.ok(Number.isInteger(childPid) && childPid > 0);
+    return { promise, childPid };
+  }
 
   it('runs string commands with shell operators intact', async () => {
     const result = await executeCommand(
@@ -213,20 +239,11 @@ describe('executeCommand', () => {
     async () => {
       if (process.platform === 'win32') return;
 
-      const dir = mkdtempSync(join(tmpdir(), 'texra-exec-abort-'));
-      tempDirs.push(dir);
-      const pidFile = join(dir, 'sleep.pid');
       const controller = new AbortController();
-      const promise = executeCommand('sleep 60 & echo $! > "$PID_FILE"; wait', {
-        cwd: dir,
-        env: { PID_FILE: pidFile },
+      const { promise, childPid } = await startSleeper(SLEEPER_SCRIPT, {
         signal: controller.signal,
         timeout: 60_000,
       });
-
-      await waitForFile(pidFile);
-      const childPid = Number.parseInt(readFileSync(pidFile, 'utf8'), 10);
-      assert.ok(Number.isInteger(childPid) && childPid > 0);
 
       controller.abort();
       const result = await promise;
@@ -281,26 +298,14 @@ describe('executeCommand', () => {
   it('unblocks aborted array-form await when a descendant holds stdio', async () => {
     if (process.platform === 'win32') return;
 
-    const dir = mkdtempSync(join(tmpdir(), 'texra-exec-abort-array-'));
-    tempDirs.push(dir);
-    const pidFile = join(dir, 'sleep.pid');
     const controller = new AbortController();
     // The backgrounded sleep inherits stdout/stderr; execa's cancelSignal
     // only kills the tracked bash pid, so without the stream-teardown
     // backstop this await would hang until the descendant exits.
-    const promise = executeCommand(
-      ['bash', '-c', 'sleep 60 & echo $! > "$PID_FILE"; wait'],
-      {
-        cwd: dir,
-        env: { PID_FILE: pidFile },
-        signal: controller.signal,
-        timeout: 60_000,
-      },
+    const { promise, childPid } = await startSleeper(
+      ['bash', '-c', SLEEPER_SCRIPT],
+      { signal: controller.signal, timeout: 60_000 },
     );
-
-    await waitForFile(pidFile);
-    const childPid = Number.parseInt(readFileSync(pidFile, 'utf8'), 10);
-    assert.ok(Number.isInteger(childPid) && childPid > 0);
 
     controller.abort();
     const result = await promise;
@@ -318,21 +323,10 @@ describe('executeCommand', () => {
   it('unblocks timed-out array-form await when a descendant holds stdio', async () => {
     if (process.platform === 'win32') return;
 
-    const dir = mkdtempSync(join(tmpdir(), 'texra-exec-timeout-array-'));
-    tempDirs.push(dir);
-    const pidFile = join(dir, 'sleep.pid');
-    const promise = executeCommand(
-      ['bash', '-c', 'sleep 60 & echo $! > "$PID_FILE"; wait'],
-      {
-        cwd: dir,
-        env: { PID_FILE: pidFile },
-        timeout: 50,
-      },
+    const { promise, childPid } = await startSleeper(
+      ['bash', '-c', SLEEPER_SCRIPT],
+      { timeout: 50 },
     );
-
-    await waitForFile(pidFile);
-    const childPid = Number.parseInt(readFileSync(pidFile, 'utf8'), 10);
-    assert.ok(Number.isInteger(childPid) && childPid > 0);
 
     const result = await promise;
 
@@ -344,21 +338,19 @@ describe('executeCommand', () => {
 });
 
 // ---------------------------------------------------------------------------
-// ExecUtils
+// executeCommandSync
 // ---------------------------------------------------------------------------
 
 describe('executeCommandSync', () => {
   let platformStorageRoot = '';
 
   setupPlatform(async () => {
-    platformStorageRoot = await fs.mkdtemp(
-      path.join(os.tmpdir(), 'texra-exec-utils-'),
-    );
+    platformStorageRoot = await mkdtemp(join(tmpdir(), 'texra-exec-utils-'));
     return createFakePlatform(
       {
         workspacePath: process.cwd(),
-        storagePath: path.join(platformStorageRoot, 'storage'),
-        globalStoragePath: path.join(platformStorageRoot, 'global-storage'),
+        storagePath: join(platformStorageRoot, 'storage'),
+        globalStoragePath: join(platformStorageRoot, 'global-storage'),
       },
       { fs: nodeFilesystem },
     );
@@ -366,7 +358,7 @@ describe('executeCommandSync', () => {
 
   afterEach(async () => {
     if (platformStorageRoot) {
-      await fs.rm(platformStorageRoot, { recursive: true, force: true });
+      await rm(platformStorageRoot, { recursive: true, force: true });
       platformStorageRoot = '';
     }
   });

@@ -392,14 +392,13 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
       });
     }
 
+    const viewRange = input.view_range ?? undefined;
+
     switch (resource) {
       case 'config':
         return this.showConfig(executionId);
       case 'conversation':
-        return this.showConversation(
-          executionId,
-          input.view_range ?? undefined,
-        );
+        return this.showConversation(executionId, viewRange);
       case 'todos':
         return this.showTodos(executionId);
       case 'report':
@@ -409,25 +408,17 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
       case 'children':
         return this.showChildren(executionId);
       case 'output':
-        return this.showOutput(executionId, input.view_range ?? undefined);
+        return this.showOutput(executionId, viewRange);
       case 'files':
         if (rest.length === 0) {
           return this.listFiles(executionId);
         }
-        return this.readFile(
-          executionId,
-          rest.join('/'),
-          input.view_range ?? undefined,
-        );
+        return this.readFile(executionId, rest.join('/'), viewRange);
       case 'workspace-files':
         if (rest.length === 0) {
           return this.listWorkspaceFiles(executionId);
         }
-        return this.readWorkspaceFile(
-          executionId,
-          rest.join('/'),
-          input.view_range ?? undefined,
-        );
+        return this.readWorkspaceFile(executionId, rest.join('/'), viewRange);
     }
 
     throw new ToolError(
@@ -634,7 +625,11 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
     report: string | null,
     options: { readonly suppressReport?: boolean } = {},
   ): Promise<void> {
-    await this.appendChildren(lines, children);
+    if (children.length > 0) {
+      lines.push('', `Children (${children.length}):`);
+      const formatted = await this.formatChildren(children);
+      lines.push(...formatted.map((line) => `  ${line}`));
+    }
     lines.push(
       ...buildSummaryTailLines(
         executionId,
@@ -653,17 +648,6 @@ Use action: "subscribe" on /executions/{id} to receive future status and termina
       children.map((c) => getExecutionStore(c.id).readMeta()),
     );
     return children.map((child, i) => formatChildLine(child, metas[i]));
-  }
-
-  /** Append formatted child entries to output lines. */
-  private async appendChildren(
-    lines: string[],
-    children: ChildRecord[],
-  ): Promise<void> {
-    if (children.length === 0) return;
-    lines.push('', `Children (${children.length}):`);
-    const formatted = await this.formatChildren(children);
-    lines.push(...formatted.map((line) => `  ${line}`));
   }
 
   private handleKill(executionId: ExecutionId): ToolResult {

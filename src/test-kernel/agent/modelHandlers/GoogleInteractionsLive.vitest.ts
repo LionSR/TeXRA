@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 import { GoogleGenAI } from '@google/genai';
 
-import type { AgentTrace } from '@agent/trace';
+import { noopTrace, type AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
@@ -97,21 +97,6 @@ function liveConfig(): ModelConfig {
   });
 }
 
-function logger(): AgentTrace {
-  return {
-    debug: () => undefined,
-    info: () => undefined,
-    warn: () => undefined,
-    error: () => undefined,
-    domain: () => undefined,
-    openStream: () => ({
-      id: 's',
-      append: () => undefined,
-      finalize: (t?: string) => t ?? '',
-    }),
-  } as unknown as AgentTrace;
-}
-
 function mockConfig(background: boolean): void {
   const orig = configModule.getConfig;
   vi.spyOn(configModule, 'getConfig').mockImplementation(
@@ -161,7 +146,7 @@ describe.skipIf(!LIVE)(`LIVE Google Interactions (${MODEL})`, () => {
     const { client, calls } = recordingClient(real);
 
     const handler = new ModelHandlerGoogleInteractions(liveConfig());
-    handler.setLogger(logger());
+    handler.setLogger({ ...noopTrace });
     handler.setAgentCategory(AgentCategory.ToolUse); // non-workflow ⇒ no background
 
     // Turn 1 — full send, store:true, no chain.
@@ -215,7 +200,7 @@ describe.skipIf(!LIVE)(`LIVE Google Interactions (${MODEL})`, () => {
     const { client, calls } = recordingClient(real);
 
     const handler = new ModelHandlerGoogleInteractions(liveConfig());
-    handler.setLogger(logger());
+    handler.setLogger({ ...noopTrace });
     handler.setAgentCategory(AgentCategory.Workflow); // ⇒ background eligible
 
     const r = await handler.createResponse({
@@ -247,7 +232,7 @@ describe.skipIf(!LIVE)(`LIVE Google Interactions (${MODEL})`, () => {
     const { client, calls } = recordingClient(real);
 
     const handler = new ModelHandlerGoogleInteractions(liveConfig());
-    handler.setLogger(logger());
+    handler.setLogger({ ...noopTrace });
     handler.setAgentCategory(AgentCategory.ToolUse);
 
     const tools = [
@@ -329,7 +314,7 @@ describe.skipIf(!LIVE)(`LIVE Google Interactions (${MODEL})`, () => {
     // Capture streamed output appends to confirm the SSE path actually streamed.
     const appends: string[] = [];
     const streamLogger = {
-      ...logger(),
+      ...noopTrace,
       openStream: () => ({
         id: 's',
         append: (t: string) => appends.push(t),
@@ -363,6 +348,5 @@ describe.skipIf(!LIVE)(`LIVE Google Interactions (${MODEL})`, () => {
     // arrive without incremental text deltas, which is model-dependent.)
     expect(r.response.status).toBe('completed');
     expect(t.text.length).toBeGreaterThan(0);
-    void appends;
   }, 120_000);
 });

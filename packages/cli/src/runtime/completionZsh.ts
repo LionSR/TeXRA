@@ -25,6 +25,14 @@ function zshFlagValueSuffix(
   return `:${variant.valueKind ?? 'value'}:`;
 }
 
+const POSITIONAL_SPECS: Readonly<Record<string, string>> = {
+  completion: `1:shell:(${CLI_COMPLETION_SHELLS.join(' ')})`,
+  run: `1:agent:($(_texra_workflow_agents))`,
+  'agents show': `1:agent:($(_texra_agents))`,
+  'agents run': `1:agent:($(_texra_tool_use_agents))`,
+  'models show': `1:model:($(_texra_models))`,
+};
+
 function zshFlagSpec(flag: CompletionFlag): string[] {
   return completionFlagVariants(flag).flatMap((variant) => {
     const names = [
@@ -45,14 +53,7 @@ export function zshCompletion(commands: readonly CompletionCommand[]): string {
       const subs = command.subcommands.length
         ? `_values 'subcommands' ${quote(command.subcommands)}`
         : 'true';
-      const positionalSpecs: Record<string, string> = {
-        completion: `1:shell:(${CLI_COMPLETION_SHELLS.join(' ')})`,
-        run: `1:agent:($(_texra_workflow_agents))`,
-        'agents show': `1:agent:($(_texra_agents))`,
-        'agents run': `1:agent:($(_texra_tool_use_agents))`,
-        'models show': `1:model:($(_texra_models))`,
-      };
-      const positionalSpec = positionalSpecs[key];
+      const positionalSpec = POSITIONAL_SPECS[key];
       const specs = [
         ...command.flags.flatMap(zshFlagSpec),
         ...(positionalSpec ? [positionalSpec] : []),

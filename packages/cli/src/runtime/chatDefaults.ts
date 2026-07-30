@@ -199,9 +199,7 @@ export async function resolveChatDefaults(
   const envAgent = usableConfiguredAgent(init.envAgent);
   const envModel = init.envModel?.trim();
   let agent = overrideAgent || envAgent;
-  let model: string | undefined;
   let agentSource = sourceForOverride(overrideAgent, envAgent);
-  let modelSource: ChatDefaultValueSource | undefined;
   const directModel = overrideModel || envModel;
   const skipDefaultTierIo = Boolean(agent && directModel);
 
@@ -242,17 +240,13 @@ export async function resolveChatDefaults(
     { model: history.model, reason: 'history' },
     { model: BUILTIN_DEFAULT_CHAT_MODEL, reason: 'builtin-default' },
   ]);
-  if (!model && modelDecision) {
-    model = modelDecision.model;
-    // The candidate list above only uses reasons in ChatDefaultValueSource.
-    modelSource = modelDecision.reason as ChatDefaultValueSource;
-  }
 
   return buildChatDefaults({
     agent,
-    model,
+    model: modelDecision?.model,
     agentSource,
-    modelSource,
+    // The candidate list above only uses reasons in ChatDefaultValueSource.
+    modelSource: modelDecision?.reason as ChatDefaultValueSource | undefined,
     visibleToolUseAgents: init.visibleToolUseAgents,
   });
 }

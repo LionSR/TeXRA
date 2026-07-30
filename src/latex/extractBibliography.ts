@@ -124,21 +124,17 @@ function formatBibEntry(
     return null;
   }
 
-  const lines: string[] = [`@${type}{${key},`];
-  const fieldNames = Object.keys(rawEntry.fields);
+  const fields = Object.entries(rawEntry.fields).map(
+    ([fieldName, rawValue]) => {
+      const processedValue = processedEntry?.getField(fieldName) ?? rawValue;
+      return `  ${fieldName} = ${formatFieldValue(processedValue)}`;
+    },
+  );
 
-  for (const fieldName of fieldNames) {
-    const processedValue =
-      processedEntry?.getField(fieldName) ?? rawEntry.fields[fieldName];
-    const serialized = formatFieldValue(processedValue);
-    lines.push(`  ${fieldName} = ${serialized},`);
+  const lines = [`@${type}{${key},`];
+  if (fields.length > 0) {
+    lines.push(fields.join(',\n'));
   }
-
-  if (fieldNames.length > 0) {
-    const lastIndex = lines.length - 1;
-    lines[lastIndex] = lines[lastIndex].replace(/,$/, '');
-  }
-
   lines.push('}');
   return lines.join('\n');
 }
@@ -167,16 +163,12 @@ export async function loadBibliographyEntries(
   bibliographyFiles: string[],
   citationKeys: string[],
 ): Promise<BibliographyEntriesResult> {
-  const entries = new Map<string, string>();
-  const hasWildcard = citationKeys.includes('*');
-  const filteredKeys = citationKeys.filter((key) => key !== '*');
-  const includeAll = hasWildcard || filteredKeys.length === 0;
+  // Citation keys are matched case-insensitively; the first definition of a
+  // key across the bibliography files wins.
   const parsedEntries = new Map<string, { key: string; value: string }>();
-
   for (const filePath of bibliographyFiles) {
     const content = await WorkspaceFS.read(filePath);
-    const parsed = parseBibEntries(content);
-    for (const [key, value] of parsed.entries()) {
+    for (const [key, value] of parseBibEntries(content)) {
       const normalizedKey = key.toLowerCase();
       if (!parsedEntries.has(normalizedKey)) {
         parsedEntries.set(normalizedKey, { key, value });
@@ -184,30 +176,28 @@ export async function loadBibliographyEntries(
     }
   }
 
+  const requestedKeys = citationKeys.filter((key) => key !== '*');
+  const includeAll = citationKeys.includes('*') || requestedKeys.length === 0;
+
+  const entries = new Map<string, string>();
   if (includeAll) {
     for (const { key, value } of parsedEntries.values()) {
-      if (!entries.has(key)) {
-        entries.set(key, value);
-      }
+      entries.set(key, value);
     }
-  } else {
-    for (const originalKey of filteredKeys) {
-      const normalizedKey = originalKey.toLowerCase();
-      const matched = parsedEntries.get(normalizedKey);
-      if (matched && !entries.has(originalKey)) {
-        entries.set(originalKey, matched.value);
-      }
+    return { entries, missingKeys: [] };
+  }
+
+  const missingKeys: string[] = [];
+  for (const requestedKey of requestedKeys) {
+    const matched = parsedEntries.get(requestedKey.toLowerCase());
+    if (matched) {
+      entries.set(requestedKey, matched.value);
+    } else {
+      missingKeys.push(requestedKey);
     }
   }
 
-  const missingKeys = includeAll
-    ? []
-    : filteredKeys.filter((key) => !parsedEntries.has(key.toLowerCase()));
-
-  return {
-    entries,
-    missingKeys,
-  };
+  return { entries, missingKeys };
 }
 
 export function summarizeBibliographyEntries(

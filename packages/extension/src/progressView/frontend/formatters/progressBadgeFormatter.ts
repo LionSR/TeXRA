@@ -12,10 +12,11 @@ export function renderProgressBadgeContent(
 ): TemplateResult | typeof nothing {
   const round = formatRoundStageLabel(roundStage);
   const tools = progress?.toolCallCount ?? 0;
-  if (!round && tools <= 0) return nothing;
-  if (round && tools > 0) return html`${round}, ${tools} tool calls`;
-  if (round) return html`${round}`;
-  return html`${tools} tool calls`;
+  const parts = [round ?? '', tools > 0 ? `${tools} tool calls` : ''].filter(
+    Boolean,
+  );
+  if (parts.length === 0) return nothing;
+  return html`${parts.join(', ')}`;
 }
 
 export function getProgressBadgeTitle(
@@ -33,5 +34,5 @@ export function getProgressBadgeTitle(
   if (progress?.toolCallCount) {
     parts.push(`Tool calls: ${progress.toolCallCount}`);
   }
-  return parts.length ? parts.join(', ') : undefined;
+  return parts.length > 0 ? parts.join(', ') : undefined;
 }

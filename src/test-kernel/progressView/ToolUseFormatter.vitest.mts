@@ -352,6 +352,57 @@ function dispatchActivationKeydown(target: EventTarget, key: 'Enter' | ' ') {
   );
 }
 
+const ACTIVATION_KEYS = ['Enter', ' '] as const;
+
+const SUMMARY_CONTROL_CASES = [
+  {
+    control: 'proposal-restore-link',
+    detailsSelector: 'wa-details.tool-use-details',
+    controlSelector: 'button.proposal-restore-link',
+    buildTemplate: () =>
+      formatToolUseTemplate({
+        id: 'proposal-2',
+        text: '',
+        level: LOG_LEVELS.INFO,
+        timestamp: 1,
+        messageType: 'toolUse',
+        data: {
+          toolName: 'propose_agent',
+          input: { agent: 'assistant', instruction: 'do the thing' },
+          output: 'proposed',
+        },
+      }),
+  },
+  {
+    control: 'copy button',
+    detailsSelector: 'wa-details.banner-details',
+    controlSelector: 'wa-button.banner-content-copy',
+    buildTemplate: () =>
+      formatBannerContentTemplate({
+        id: 'thinking-1',
+        text: 'some thinking content',
+        level: LOG_LEVELS.INFO,
+        timestamp: 1,
+        messageType: 'thinking',
+        data: {},
+      }),
+  },
+  {
+    control: 'error banner copy button',
+    detailsSelector: 'wa-details.banner-details--error',
+    controlSelector: 'wa-button.banner-content-copy',
+    buildTemplate: () =>
+      formatErrorTemplate({
+        id: 'error-1',
+        text: 'something failed',
+        level: LOG_LEVELS.ERROR,
+        timestamp: 1,
+        messageType: 'error',
+        data: { operation: 'test-op' },
+      }),
+  },
+];
+
 describe('wa-details summary controls: activation does not toggle the panel', () => {
   it('clicking the proposal-restore-link ("Setup") button does not toggle the panel, and the click still bubbles to an outer delegated handler', async () => {
     const message: LogMessageData = {
@@ -395,107 +446,30 @@ describe('wa-details summary controls: activation does not toggle the panel', ()
     expect(ancestorSawClick).toBe(true);
   });
 
-  it.each(['Enter', ' '] as const)(
-    'keydown %j on the proposal-restore-link does not toggle the panel',
-    async (key) => {
-      const message: LogMessageData = {
-        id: 'proposal-2',
-        text: '',
-        level: LOG_LEVELS.INFO,
-        timestamp: 1,
-        messageType: 'toolUse',
-        data: {
-          toolName: 'propose_agent',
-          input: { agent: 'assistant', instruction: 'do the thing' },
-          output: 'proposed',
-        },
-      };
-
+  it.each(
+    SUMMARY_CONTROL_CASES.flatMap((summaryCase) =>
+      ACTIVATION_KEYS.map((key) => ({ ...summaryCase, key })),
+    ),
+  )(
+    'keydown $key on the $control does not toggle the panel',
+    async ({ detailsSelector, controlSelector, buildTemplate, key }) => {
       const container = document.createElement('div');
       document.body.appendChild(container);
-      render(formatToolUseTemplate(message), container);
+      render(buildTemplate(), container);
 
       const waDetails = container.querySelector(
-        'wa-details.tool-use-details',
-      ) as WaDetailsElement | null;
-      await waDetails!.updateComplete;
-      const setupButton = container.querySelector(
-        'button.proposal-restore-link',
-      ) as HTMLButtonElement | null;
-      expect(setupButton).not.toBeNull();
-
-      expect(waDetails!.open).toBe(false);
-      dispatchActivationKeydown(setupButton!, key);
-      await new Promise((resolve) => setTimeout(resolve, 20));
-      expect(waDetails!.open).toBe(false);
-    },
-  );
-
-  it.each(['Enter', ' '] as const)(
-    'keydown %j on the copy button does not toggle the panel',
-    async (key) => {
-      const message: LogMessageData = {
-        id: 'thinking-1',
-        text: 'some thinking content',
-        level: LOG_LEVELS.INFO,
-        timestamp: 1,
-        messageType: 'thinking',
-        data: {},
-      };
-
-      const container = document.createElement('div');
-      document.body.appendChild(container);
-      render(formatBannerContentTemplate(message), container);
-
-      const waDetails = container.querySelector(
-        'wa-details.banner-details',
+        detailsSelector,
       ) as WaDetailsElement | null;
       expect(waDetails).not.toBeNull();
       await waDetails!.updateComplete;
 
-      const copyButton = container.querySelector(
-        'wa-button.banner-content-copy',
-      ) as (HTMLElement & { updateComplete?: Promise<boolean> }) | null;
-      expect(copyButton).not.toBeNull();
-      if (copyButton!.updateComplete) await copyButton!.updateComplete;
+      const control = container.querySelector(controlSelector) as
+        (HTMLElement & { updateComplete?: Promise<boolean> }) | null;
+      expect(control).not.toBeNull();
+      if (control!.updateComplete) await control!.updateComplete;
 
       expect(waDetails!.open).toBe(false);
-      dispatchActivationKeydown(copyButton!, key);
-      await new Promise((resolve) => setTimeout(resolve, 20));
-      expect(waDetails!.open).toBe(false);
-    },
-  );
-
-  it.each(['Enter', ' '] as const)(
-    'keydown %j on the error banner copy button does not toggle the panel',
-    async (key) => {
-      const message: LogMessageData = {
-        id: 'error-1',
-        text: 'something failed',
-        level: LOG_LEVELS.ERROR,
-        timestamp: 1,
-        messageType: 'error',
-        data: { operation: 'test-op' },
-      };
-
-      const container = document.createElement('div');
-      document.body.appendChild(container);
-      render(formatErrorTemplate(message), container);
-
-      const waDetails = container.querySelector(
-        'wa-details.banner-details--error',
-      ) as WaDetailsElement | null;
-      expect(waDetails).not.toBeNull();
-      await waDetails!.updateComplete;
-
-      const copyButton = container.querySelector(
-        'wa-button.banner-content-copy',
-      ) as (HTMLElement & { updateComplete?: Promise<boolean> }) | null;
-      expect(copyButton).not.toBeNull();
-      if (copyButton!.updateComplete) await copyButton!.updateComplete;
-
-      expect(waDetails!.open).toBe(false);
-      dispatchActivationKeydown(copyButton!, key);
+      dispatchActivationKeydown(control!, key);
       await new Promise((resolve) => setTimeout(resolve, 20));
       expect(waDetails!.open).toBe(false);
     },

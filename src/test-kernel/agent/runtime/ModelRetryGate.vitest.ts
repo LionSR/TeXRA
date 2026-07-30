@@ -1,5 +1,13 @@
 // Third-party imports
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type Mock,
+} from 'vitest';
 
 // Local imports
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
@@ -20,7 +28,10 @@ const UNAUTHORIZED = Object.assign(new Error('relay token expired'), {
   status: 401,
 });
 
-function options(signal: AbortSignal, baseBackoffMs = 1000) {
+function options(
+  signal: AbortSignal = new AbortController().signal,
+  baseBackoffMs = 1000,
+) {
   return {
     signal,
     baseBackoffMs,
@@ -28,55 +39,97 @@ function options(signal: AbortSignal, baseBackoffMs = 1000) {
   };
 }
 
+async function throwTransient(): Promise<never> {
+  throw TRANSIENT;
+}
+
+async function throwRelayLimit(): Promise<never> {
+  throw RELAY_LIMIT;
+}
+
+/** Holds the gate's probe open until `complete()` is called. */
+function pendingOperation() {
+  let settle = (): void => undefined;
+  const result = new Promise<void>((resolve) => {
+    settle = resolve;
+  });
+  return {
+    operation: vi.fn(() => result),
+    complete(): void {
+      settle();
+    },
+  };
+}
+
 async function openGate(gate: ModelRetryGate): Promise<void> {
-  const controller = new AbortController();
+  await expect(gate.run(ROUTE, options(), throwTransient)).rejects.toBe(
+    TRANSIENT,
+  );
+}
+
+/** Fails the relay route once so it enters its shared cooldown. */
+async function openRelayGate(
+  gate: ModelRetryGate,
+  relayPolicy: {
+    classifyFailure: (
+      error: Error,
+    ) =>
+      | { retryAfterMs?: number; releaseProbeBeforeOperation?: boolean }
+      | undefined;
+  },
+): Promise<void> {
   await expect(
-    gate.run(ROUTE, options(controller.signal), async () => {
-      throw TRANSIENT;
-    }),
-  ).rejects.toBe(TRANSIENT);
+    gate.run(
+      RELAY_ROUTE,
+      { ...options(), classifyFailure: relayPolicy.classifyFailure },
+      throwRelayLimit,
+    ),
+  ).rejects.toBe(RELAY_LIMIT);
+}
+
+/** Asserts the pending call stays queued until exactly `delayMs` elapses. */
+async function expectAdmittedAfter(
+  pending: Promise<unknown>,
+  operation: Mock,
+  delayMs: number,
+): Promise<void> {
+  await vi.advanceTimersByTimeAsync(delayMs - 1);
+  expect(operation).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(1);
+  await pending;
+  expect(operation).toHaveBeenCalledOnce();
 }
 
 describe('ModelRetryGate', () => {
+  let gate: ModelRetryGate;
+
   beforeEach(() => {
     vi.useFakeTimers();
     vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    gate = new ModelRetryGate();
   });
 
   afterEach(() => {
+    gate.dispose();
     vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
   it('admits one recovery probe and releases siblings after success', async () => {
-    const gate = new ModelRetryGate();
     await openGate(gate);
 
-    let resolveProbe = (): void => undefined;
-    const probeResult = new Promise<void>((resolve) => {
-      resolveProbe = resolve;
-    });
-    const probeOperation = vi.fn(() => probeResult);
+    const probe = pendingOperation();
     const siblingOperation = vi.fn(async () => undefined);
-    const first = gate.run(
-      ROUTE,
-      options(new AbortController().signal),
-      probeOperation,
-    );
-    const sibling = gate.run(
-      ROUTE,
-      options(new AbortController().signal),
-      siblingOperation,
-    );
+    const first = gate.run(ROUTE, options(), probe.operation);
+    const sibling = gate.run(ROUTE, options(), siblingOperation);
 
     await vi.advanceTimersByTimeAsync(1000);
-    expect(probeOperation).toHaveBeenCalledOnce();
+    expect(probe.operation).toHaveBeenCalledOnce();
     expect(siblingOperation).not.toHaveBeenCalled();
 
-    resolveProbe();
+    probe.complete();
     await Promise.all([first, sibling]);
     expect(siblingOperation).toHaveBeenCalledOnce();
-    gate.dispose();
   });
 
   it('grows the shared backoff when the released herd re-fails after a probe', async () => {
@@ -84,23 +137,12 @@ describe('ModelRetryGate', () => {
     // backoff at its base forever on capacity-limited (429) routes — the rate
     // window fits one probe, the released herd re-fails, and the counter
     // restarts from zero every round.
-    const gate = new ModelRetryGate();
     await openGate(gate);
 
     const probeOperation = vi.fn(async () => undefined);
-    const probe = gate.run(
-      ROUTE,
-      options(new AbortController().signal),
-      probeOperation,
-    );
-    const herdOperation = vi.fn(async () => {
-      throw TRANSIENT;
-    });
-    const herd = gate.run(
-      ROUTE,
-      options(new AbortController().signal),
-      herdOperation,
-    );
+    const probe = gate.run(ROUTE, options(), probeOperation);
+    const herdOperation = vi.fn(throwTransient);
+    const herd = gate.run(ROUTE, options(), herdOperation);
 
     const herdResult = expect(herd).rejects.toBe(TRANSIENT);
     await vi.advanceTimersByTimeAsync(1000);
@@ -111,44 +153,21 @@ describe('ModelRetryGate', () => {
 
     // Second failure on the route: backoff must now be 2x the base, not base.
     const nextOperation = vi.fn(async () => undefined);
-    const next = gate.run(
-      ROUTE,
-      options(new AbortController().signal),
-      nextOperation,
-    );
-    await vi.advanceTimersByTimeAsync(1999);
-    expect(nextOperation).not.toHaveBeenCalled();
-    await vi.advanceTimersByTimeAsync(1);
-    await next;
-    expect(nextOperation).toHaveBeenCalledOnce();
+    const next = gate.run(ROUTE, options(), nextOperation);
+    await expectAdmittedAfter(next, nextOperation, 2000);
 
     // Third failure keeps growing: 4x the base.
-    const thirdFailure = gate.run(
-      ROUTE,
-      options(new AbortController().signal),
-      async () => {
-        throw TRANSIENT;
-      },
+    await expect(gate.run(ROUTE, options(), throwTransient)).rejects.toBe(
+      TRANSIENT,
     );
-    await expect(thirdFailure).rejects.toBe(TRANSIENT);
     const finalOperation = vi.fn(async () => undefined);
-    const final = gate.run(
-      ROUTE,
-      options(new AbortController().signal),
-      finalOperation,
-    );
-    await vi.advanceTimersByTimeAsync(3999);
-    expect(finalOperation).not.toHaveBeenCalled();
-    await vi.advanceTimersByTimeAsync(1);
-    await final;
-    gate.dispose();
+    const final = gate.run(ROUTE, options(), finalOperation);
+    await expectAdmittedAfter(final, finalOperation, 4000);
   });
 
   it('keeps model rate limits off the shared wire route', async () => {
-    const gate = new ModelRetryGate();
     const modelOptions = (modelRoute: string) => ({
-      signal: new AbortController().signal,
-      baseBackoffMs: 1000,
+      ...options(),
       classifyFailure: () => undefined,
       isReachableFailure: (error: Error) => error === RATE_LIMIT,
       additionalRoutes: [
@@ -180,14 +199,11 @@ describe('ModelRetryGate', () => {
     await vi.advanceTimersByTimeAsync(1000);
     await limited;
     expect(limitedOperation).toHaveBeenCalledOnce();
-    gate.dispose();
   });
 
   it('does not reserve the wire probe while waiting for a model cooldown', async () => {
-    const gate = new ModelRetryGate();
     const modelOptions = (modelRoute: string, modelRetryAfterMs?: number) => ({
-      signal: new AbortController().signal,
-      baseBackoffMs: 1000,
+      ...options(),
       classifyFailure: (error: Error) => (error === TRANSIENT ? {} : undefined),
       isReachableFailure: (error: Error) => error === RATE_LIMIT,
       additionalRoutes: [
@@ -207,9 +223,7 @@ describe('ModelRetryGate', () => {
       }),
     ).rejects.toBe(RATE_LIMIT);
     await expect(
-      gate.run(ROUTE, modelOptions(OTHER_MODEL_ROUTE), async () => {
-        throw TRANSIENT;
-      }),
+      gate.run(ROUTE, modelOptions(OTHER_MODEL_ROUTE), throwTransient),
     ).rejects.toBe(TRANSIENT);
 
     const limitedOperation = vi.fn(async () => undefined);
@@ -233,14 +247,11 @@ describe('ModelRetryGate', () => {
     await vi.advanceTimersByTimeAsync(9000);
     await limited;
     expect(limitedOperation).toHaveBeenCalledOnce();
-    gate.dispose();
   });
 
   it('does not reserve the relay probe while waiting for a wire cooldown', async () => {
-    const gate = new ModelRetryGate();
     const wireOptions = {
-      signal: new AbortController().signal,
-      baseBackoffMs: 1000,
+      ...options(),
       classifyFailure: (error: Error) =>
         error === TRANSIENT ? { retryAfterMs: 10_000 } : undefined,
     };
@@ -250,24 +261,10 @@ describe('ModelRetryGate', () => {
         error === RELAY_LIMIT ? { retryAfterMs: 1000 } : undefined,
     };
 
-    await expect(
-      gate.run(
-        RELAY_ROUTE,
-        {
-          signal: new AbortController().signal,
-          baseBackoffMs: 1000,
-          classifyFailure: relayPolicy.classifyFailure,
-        },
-        async () => {
-          throw RELAY_LIMIT;
-        },
-      ),
-    ).rejects.toBe(RELAY_LIMIT);
-    await expect(
-      gate.run(ROUTE, wireOptions, async () => {
-        throw TRANSIENT;
-      }),
-    ).rejects.toBe(TRANSIENT);
+    await openRelayGate(gate, relayPolicy);
+    await expect(gate.run(ROUTE, wireOptions, throwTransient)).rejects.toBe(
+      TRANSIENT,
+    );
 
     const blockedWireOperation = vi.fn(async () => undefined);
     const blockedWire = gate.run(
@@ -278,10 +275,7 @@ describe('ModelRetryGate', () => {
     const healthyWireOperation = vi.fn(async () => undefined);
     const healthyWire = gate.run(
       OTHER_ROUTE,
-      {
-        ...wireOptions,
-        trailingRoutes: [relayPolicy],
-      },
+      { ...wireOptions, trailingRoutes: [relayPolicy] },
       healthyWireOperation,
     );
 
@@ -293,14 +287,11 @@ describe('ModelRetryGate', () => {
     await vi.advanceTimersByTimeAsync(9000);
     await blockedWire;
     expect(blockedWireOperation).toHaveBeenCalledOnce();
-    gate.dispose();
   });
 
   it('hands an earlier recovery probe to its cohort while waiting for admission', async () => {
-    const gate = new ModelRetryGate();
     const wireOptions = {
-      signal: new AbortController().signal,
-      baseBackoffMs: 1000,
+      ...options(),
       classifyFailure: (error: Error) =>
         error === TRANSIENT ? { retryAfterMs: 1000 } : undefined,
     };
@@ -313,24 +304,10 @@ describe('ModelRetryGate', () => {
       releaseEarlierProbesBeforeWait: true,
     };
 
-    await expect(
-      gate.run(
-        RELAY_ROUTE,
-        {
-          signal: new AbortController().signal,
-          baseBackoffMs: 1000,
-          classifyFailure: relayPolicy.classifyFailure,
-        },
-        async () => {
-          throw RELAY_LIMIT;
-        },
-      ),
-    ).rejects.toBe(RELAY_LIMIT);
-    await expect(
-      gate.run(ROUTE, wireOptions, async () => {
-        throw TRANSIENT;
-      }),
-    ).rejects.toBe(TRANSIENT);
+    await openRelayGate(gate, relayPolicy);
+    await expect(gate.run(ROUTE, wireOptions, throwTransient)).rejects.toBe(
+      TRANSIENT,
+    );
 
     const admittedOperation = vi.fn(async () => undefined);
     const admitted = gate.run(
@@ -338,33 +315,27 @@ describe('ModelRetryGate', () => {
       { ...wireOptions, trailingRoutes: [relayPolicy] },
       admittedOperation,
     );
-    let resolveWireProbe = (): void => undefined;
-    const wireProbeResult = new Promise<void>((resolve) => {
-      resolveWireProbe = resolve;
-    });
-    const wireProbeOperation = vi.fn(() => wireProbeResult);
-    const wireProbe = gate.run(ROUTE, wireOptions, wireProbeOperation);
+    const wireProbe = pendingOperation();
+    const wireProbePending = gate.run(ROUTE, wireOptions, wireProbe.operation);
     const wireSiblingOperation = vi.fn(async () => undefined);
     const wireSibling = gate.run(ROUTE, wireOptions, wireSiblingOperation);
 
     await vi.advanceTimersByTimeAsync(1000);
     await vi.advanceTimersByTimeAsync(1);
     expect(admittedOperation).not.toHaveBeenCalled();
-    expect(wireProbeOperation).toHaveBeenCalledOnce();
+    expect(wireProbe.operation).toHaveBeenCalledOnce();
     expect(wireSiblingOperation).not.toHaveBeenCalled();
 
-    resolveWireProbe();
-    await Promise.all([wireProbe, wireSibling]);
+    wireProbe.complete();
+    await Promise.all([wireProbePending, wireSibling]);
     expect(wireSiblingOperation).toHaveBeenCalledOnce();
 
     await vi.advanceTimersByTimeAsync(8999);
     await admitted;
     expect(admittedOperation).toHaveBeenCalledOnce();
-    gate.dispose();
   });
 
   it('releases a request-admission cohort when its probe begins', async () => {
-    const gate = new ModelRetryGate();
     const relayPolicy = {
       key: RELAY_ROUTE,
       classifyFailure: (error: Error) =>
@@ -374,41 +345,23 @@ describe('ModelRetryGate', () => {
       releaseEarlierProbesBeforeWait: true,
     };
 
-    await expect(
-      gate.run(
-        RELAY_ROUTE,
-        {
-          signal: new AbortController().signal,
-          baseBackoffMs: 1000,
-          classifyFailure: relayPolicy.classifyFailure,
-        },
-        async () => {
-          throw RELAY_LIMIT;
-        },
-      ),
-    ).rejects.toBe(RELAY_LIMIT);
+    await openRelayGate(gate, relayPolicy);
 
-    let resolveProbe = (): void => undefined;
-    const probeResult = new Promise<void>((resolve) => {
-      resolveProbe = resolve;
-    });
-    const probeOperation = vi.fn(() => probeResult);
+    const probe = pendingOperation();
     const siblingOperation = vi.fn(async () => undefined);
-    const probe = gate.run(
+    const pendingProbe = gate.run(
       ROUTE,
       {
-        signal: new AbortController().signal,
-        baseBackoffMs: 1000,
+        ...options(),
         classifyFailure: () => undefined,
         trailingRoutes: [relayPolicy],
       },
-      probeOperation,
+      probe.operation,
     );
     const sibling = gate.run(
       OTHER_ROUTE,
       {
-        signal: new AbortController().signal,
-        baseBackoffMs: 1000,
+        ...options(),
         classifyFailure: () => undefined,
         trailingRoutes: [relayPolicy],
       },
@@ -416,16 +369,14 @@ describe('ModelRetryGate', () => {
     );
 
     await vi.advanceTimersByTimeAsync(1000);
-    expect(probeOperation).toHaveBeenCalledOnce();
+    expect(probe.operation).toHaveBeenCalledOnce();
     expect(siblingOperation).toHaveBeenCalledOnce();
 
-    resolveProbe();
-    await Promise.all([probe, sibling]);
-    gate.dispose();
+    probe.complete();
+    await Promise.all([pendingProbe, sibling]);
   });
 
   it('keeps a concurrency-admission cohort behind its probe', async () => {
-    const gate = new ModelRetryGate();
     const relayPolicy = {
       key: RELAY_ROUTE,
       classifyFailure: (error: Error) =>
@@ -433,41 +384,23 @@ describe('ModelRetryGate', () => {
       releaseEarlierProbesBeforeWait: true,
     };
 
-    await expect(
-      gate.run(
-        RELAY_ROUTE,
-        {
-          signal: new AbortController().signal,
-          baseBackoffMs: 1000,
-          classifyFailure: relayPolicy.classifyFailure,
-        },
-        async () => {
-          throw RELAY_LIMIT;
-        },
-      ),
-    ).rejects.toBe(RELAY_LIMIT);
+    await openRelayGate(gate, relayPolicy);
 
-    let resolveProbe = (): void => undefined;
-    const probeResult = new Promise<void>((resolve) => {
-      resolveProbe = resolve;
-    });
-    const probeOperation = vi.fn(() => probeResult);
+    const probe = pendingOperation();
     const siblingOperation = vi.fn(async () => undefined);
-    const probe = gate.run(
+    const pendingProbe = gate.run(
       ROUTE,
       {
-        signal: new AbortController().signal,
-        baseBackoffMs: 1000,
+        ...options(),
         classifyFailure: () => undefined,
         trailingRoutes: [relayPolicy],
       },
-      probeOperation,
+      probe.operation,
     );
     const sibling = gate.run(
       OTHER_ROUTE,
       {
-        signal: new AbortController().signal,
-        baseBackoffMs: 1000,
+        ...options(),
         classifyFailure: () => undefined,
         trailingRoutes: [relayPolicy],
       },
@@ -475,17 +408,15 @@ describe('ModelRetryGate', () => {
     );
 
     await vi.advanceTimersByTimeAsync(1000);
-    expect(probeOperation).toHaveBeenCalledOnce();
+    expect(probe.operation).toHaveBeenCalledOnce();
     expect(siblingOperation).not.toHaveBeenCalled();
 
-    resolveProbe();
-    await Promise.all([probe, sibling]);
+    probe.complete();
+    await Promise.all([pendingProbe, sibling]);
     expect(siblingOperation).toHaveBeenCalledOnce();
-    gate.dispose();
   });
 
   it('closes a request-admission route again after a rejected probe', async () => {
-    const gate = new ModelRetryGate();
     const relayPolicy = {
       key: RELAY_ROUTE,
       classifyFailure: (error: Error) =>
@@ -495,31 +426,16 @@ describe('ModelRetryGate', () => {
       releaseEarlierProbesBeforeWait: true,
     };
 
-    await expect(
-      gate.run(
-        RELAY_ROUTE,
-        {
-          signal: new AbortController().signal,
-          baseBackoffMs: 1000,
-          classifyFailure: relayPolicy.classifyFailure,
-        },
-        async () => {
-          throw RELAY_LIMIT;
-        },
-      ),
-    ).rejects.toBe(RELAY_LIMIT);
+    await openRelayGate(gate, relayPolicy);
 
     const rejectedProbe = gate.run(
       ROUTE,
       {
-        signal: new AbortController().signal,
-        baseBackoffMs: 1000,
+        ...options(),
         classifyFailure: () => undefined,
         trailingRoutes: [relayPolicy],
       },
-      async () => {
-        throw RELAY_LIMIT;
-      },
+      throwRelayLimit,
     );
     const rejectedProbeResult = expect(rejectedProbe).rejects.toBe(RELAY_LIMIT);
     await vi.advanceTimersByTimeAsync(1000);
@@ -529,113 +445,66 @@ describe('ModelRetryGate', () => {
     const next = gate.run(
       ROUTE,
       {
-        signal: new AbortController().signal,
-        baseBackoffMs: 1000,
+        ...options(),
         classifyFailure: () => undefined,
         trailingRoutes: [relayPolicy],
       },
       nextOperation,
     );
-    await vi.advanceTimersByTimeAsync(1999);
-    expect(nextOperation).not.toHaveBeenCalled();
-    await vi.advanceTimersByTimeAsync(1);
-    await next;
-    expect(nextOperation).toHaveBeenCalledOnce();
-    gate.dispose();
+    await expectAdmittedAfter(next, nextOperation, 2000);
   });
 
   it('ends the failure streak after a clean round-trip on the healthy route', async () => {
-    const gate = new ModelRetryGate();
     await openGate(gate);
 
     // Recover the route via a successful probe (streak carries over)...
-    const probe = gate.run(
-      ROUTE,
-      options(new AbortController().signal),
-      async () => undefined,
-    );
+    const probe = gate.run(ROUTE, options(), async () => undefined);
     await vi.advanceTimersByTimeAsync(1000);
     await probe;
 
     // ...then a success admitted while the route is already healthy resets it.
-    await gate.run(
-      ROUTE,
-      options(new AbortController().signal),
-      async () => undefined,
-    );
+    await gate.run(ROUTE, options(), async () => undefined);
 
-    await expect(
-      gate.run(ROUTE, options(new AbortController().signal), async () => {
-        throw TRANSIENT;
-      }),
-    ).rejects.toBe(TRANSIENT);
+    await expect(gate.run(ROUTE, options(), throwTransient)).rejects.toBe(
+      TRANSIENT,
+    );
 
     // Cooling restarts at the base backoff, not the previous streak's tier.
     const nextOperation = vi.fn(async () => undefined);
-    const next = gate.run(
-      ROUTE,
-      options(new AbortController().signal),
-      nextOperation,
-    );
+    const next = gate.run(ROUTE, options(), nextOperation);
     await vi.advanceTimersByTimeAsync(1000);
     await next;
     expect(nextOperation).toHaveBeenCalledOnce();
-    gate.dispose();
   });
 
   it('honors an explicitly disabled shared backoff', async () => {
-    const gate = new ModelRetryGate();
     const controller = new AbortController();
     await expect(
-      gate.run(ROUTE, options(controller.signal, 0), async () => {
-        throw TRANSIENT;
-      }),
+      gate.run(ROUTE, options(controller.signal, 0), throwTransient),
     ).rejects.toBe(TRANSIENT);
 
     const operation = vi.fn(async () => undefined);
-    const retry = gate.run(
-      ROUTE,
-      options(new AbortController().signal, 0),
-      operation,
-    );
+    const retry = gate.run(ROUTE, options(undefined, 0), operation);
     expect(operation).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(0);
     await retry;
     expect(operation).toHaveBeenCalledOnce();
-    gate.dispose();
   });
 
   it('increases the shared backoff after a failed probe', async () => {
-    const gate = new ModelRetryGate();
     await openGate(gate);
 
-    const failedProbe = gate.run(
-      ROUTE,
-      options(new AbortController().signal),
-      async () => {
-        throw TRANSIENT;
-      },
-    );
+    const failedProbe = gate.run(ROUTE, options(), throwTransient);
     const failedProbeResult = expect(failedProbe).rejects.toBe(TRANSIENT);
     await vi.advanceTimersByTimeAsync(1000);
     await failedProbeResult;
 
     const nextOperation = vi.fn(async () => undefined);
-    const next = gate.run(
-      ROUTE,
-      options(new AbortController().signal),
-      nextOperation,
-    );
-    await vi.advanceTimersByTimeAsync(1999);
-    expect(nextOperation).not.toHaveBeenCalled();
-    await vi.advanceTimersByTimeAsync(1);
-    await next;
-    expect(nextOperation).toHaveBeenCalledOnce();
-    gate.dispose();
+    const next = gate.run(ROUTE, options(), nextOperation);
+    await expectAdmittedAfter(next, nextOperation, 2000);
   });
 
   it('keeps peers queued after an unclassified probe failure', async () => {
-    const gate = new ModelRetryGate();
     await openGate(gate);
 
     let rejectProbe = (_error: Error): void => undefined;
@@ -645,7 +514,7 @@ describe('ModelRetryGate', () => {
     const failedProbe = gate.run(
       ROUTE,
       {
-        ...options(new AbortController().signal),
+        ...options(),
         classifyFailure: (error: Error) =>
           error === TRANSIENT ? {} : undefined,
       },
@@ -653,17 +522,9 @@ describe('ModelRetryGate', () => {
     );
     const failedProbeResult = expect(failedProbe).rejects.toBe(UNAUTHORIZED);
     const firstPeerOperation = vi.fn(async () => undefined);
-    const firstPeer = gate.run(
-      ROUTE,
-      options(new AbortController().signal),
-      firstPeerOperation,
-    );
+    const firstPeer = gate.run(ROUTE, options(), firstPeerOperation);
     const secondPeerOperation = vi.fn(async () => undefined);
-    const secondPeer = gate.run(
-      ROUTE,
-      options(new AbortController().signal),
-      secondPeerOperation,
-    );
+    const secondPeer = gate.run(ROUTE, options(), secondPeerOperation);
 
     await vi.advanceTimersByTimeAsync(1000);
     rejectProbe(UNAUTHORIZED);
@@ -675,14 +536,12 @@ describe('ModelRetryGate', () => {
     await Promise.all([firstPeer, secondPeer]);
     expect(firstPeerOperation).toHaveBeenCalledOnce();
     expect(secondPeerOperation).toHaveBeenCalledOnce();
-    gate.dispose();
   });
 
   it('resets an old failure streak after a healthy unclassified failure', async () => {
-    const gate = new ModelRetryGate();
     await openGate(gate);
     const scopedOptions = {
-      ...options(new AbortController().signal),
+      ...options(),
       classifyFailure: (error: Error) => (error === TRANSIENT ? {} : undefined),
     };
 
@@ -696,144 +555,78 @@ describe('ModelRetryGate', () => {
     await probe;
     await healthyFailureResult;
 
-    await expect(
-      gate.run(ROUTE, scopedOptions, async () => {
-        throw TRANSIENT;
-      }),
-    ).rejects.toBe(TRANSIENT);
+    await expect(gate.run(ROUTE, scopedOptions, throwTransient)).rejects.toBe(
+      TRANSIENT,
+    );
     const recoveredOperation = vi.fn(async () => undefined);
     const recovered = gate.run(ROUTE, scopedOptions, recoveredOperation);
-    await vi.advanceTimersByTimeAsync(999);
-    expect(recoveredOperation).not.toHaveBeenCalled();
-    await vi.advanceTimersByTimeAsync(1);
-    await recovered;
-    expect(recoveredOperation).toHaveBeenCalledOnce();
-    gate.dispose();
+    await expectAdmittedAfter(recovered, recoveredOperation, 1000);
   });
 
   it('preserves a route streak when admission rejects before the route', async () => {
-    const gate = new ModelRetryGate();
     const scopedOptions = {
-      signal: new AbortController().signal,
-      baseBackoffMs: 1000,
+      ...options(),
       classifyFailure: (error: Error) => (error === TRANSIENT ? {} : undefined),
       isUnobservedFailure: (error: Error) => error === RELAY_LIMIT,
     };
 
-    await expect(
-      gate.run(ROUTE, scopedOptions, async () => {
-        throw TRANSIENT;
-      }),
-    ).rejects.toBe(TRANSIENT);
+    await expect(gate.run(ROUTE, scopedOptions, throwTransient)).rejects.toBe(
+      TRANSIENT,
+    );
     const probe = gate.run(ROUTE, scopedOptions, async () => undefined);
     await vi.advanceTimersByTimeAsync(1000);
     await probe;
 
-    await expect(
-      gate.run(ROUTE, scopedOptions, async () => {
-        throw RELAY_LIMIT;
-      }),
-    ).rejects.toBe(RELAY_LIMIT);
-    await expect(
-      gate.run(ROUTE, scopedOptions, async () => {
-        throw TRANSIENT;
-      }),
-    ).rejects.toBe(TRANSIENT);
+    await expect(gate.run(ROUTE, scopedOptions, throwRelayLimit)).rejects.toBe(
+      RELAY_LIMIT,
+    );
+    await expect(gate.run(ROUTE, scopedOptions, throwTransient)).rejects.toBe(
+      TRANSIENT,
+    );
 
     const recoveredOperation = vi.fn(async () => undefined);
     const recovered = gate.run(ROUTE, scopedOptions, recoveredOperation);
-    await vi.advanceTimersByTimeAsync(1999);
-    expect(recoveredOperation).not.toHaveBeenCalled();
-    await vi.advanceTimersByTimeAsync(1);
-    await recovered;
-    expect(recoveredOperation).toHaveBeenCalledOnce();
-    gate.dispose();
+    await expectAdmittedAfter(recovered, recoveredOperation, 2000);
   });
 
   it('does not let a stale success erase a newer failed probe', async () => {
-    const gate = new ModelRetryGate();
-    let resolveStale = (): void => undefined;
-    const staleResult = new Promise<void>((resolve) => {
-      resolveStale = resolve;
-    });
-    const stale = gate.run(
-      ROUTE,
-      options(new AbortController().signal),
-      () => staleResult,
-    );
+    const stale = pendingOperation();
+    const stalePending = gate.run(ROUTE, options(), stale.operation);
     await openGate(gate);
 
-    const failedProbe = gate.run(
-      ROUTE,
-      options(new AbortController().signal),
-      async () => {
-        throw TRANSIENT;
-      },
-    );
+    const failedProbe = gate.run(ROUTE, options(), throwTransient);
     const failedProbeResult = expect(failedProbe).rejects.toBe(TRANSIENT);
     await vi.advanceTimersByTimeAsync(1000);
     await failedProbeResult;
 
     const currentProbe = vi.fn(async () => undefined);
-    const current = gate.run(
-      ROUTE,
-      options(new AbortController().signal),
-      currentProbe,
-    );
-    resolveStale();
-    await stale;
-    await vi.advanceTimersByTimeAsync(1999);
-    expect(currentProbe).not.toHaveBeenCalled();
-    await vi.advanceTimersByTimeAsync(1);
-    await current;
-    expect(currentProbe).toHaveBeenCalledOnce();
-    gate.dispose();
+    const current = gate.run(ROUTE, options(), currentProbe);
+    stale.complete();
+    await stalePending;
+    await expectAdmittedAfter(current, currentProbe, 2000);
   });
 
   it('does not let a stale healthy success reset recovered backoff', async () => {
-    const gate = new ModelRetryGate();
-    let resolveStale = (): void => undefined;
-    const staleResult = new Promise<void>((resolve) => {
-      resolveStale = resolve;
-    });
-    const stale = gate.run(
-      ROUTE,
-      options(new AbortController().signal),
-      () => staleResult,
-    );
+    const stale = pendingOperation();
+    const stalePending = gate.run(ROUTE, options(), stale.operation);
     await openGate(gate);
 
-    const probe = gate.run(
-      ROUTE,
-      options(new AbortController().signal),
-      async () => undefined,
-    );
+    const probe = gate.run(ROUTE, options(), async () => undefined);
     await vi.advanceTimersByTimeAsync(1000);
     await probe;
 
-    resolveStale();
-    await stale;
-    await expect(
-      gate.run(ROUTE, options(new AbortController().signal), async () => {
-        throw TRANSIENT;
-      }),
-    ).rejects.toBe(TRANSIENT);
+    stale.complete();
+    await stalePending;
+    await expect(gate.run(ROUTE, options(), throwTransient)).rejects.toBe(
+      TRANSIENT,
+    );
 
     const nextOperation = vi.fn(async () => undefined);
-    const next = gate.run(
-      ROUTE,
-      options(new AbortController().signal),
-      nextOperation,
-    );
-    await vi.advanceTimersByTimeAsync(1999);
-    expect(nextOperation).not.toHaveBeenCalled();
-    await vi.advanceTimersByTimeAsync(1);
-    await next;
-    gate.dispose();
+    const next = gate.run(ROUTE, options(), nextOperation);
+    await expectAdmittedAfter(next, nextOperation, 2000);
   });
 
   it('hands an abandoned probe to the next waiting call', async () => {
-    const gate = new ModelRetryGate();
     await openGate(gate);
 
     const firstController = new AbortController();
@@ -850,11 +643,7 @@ describe('ModelRetryGate', () => {
         }),
     );
     const nextOperation = vi.fn(async () => undefined);
-    const next = gate.run(
-      ROUTE,
-      options(new AbortController().signal),
-      nextOperation,
-    );
+    const next = gate.run(ROUTE, options(), nextOperation);
 
     await vi.advanceTimersByTimeAsync(1000);
     firstController.abort(new DOMException('cancelled', 'AbortError'));
@@ -862,18 +651,12 @@ describe('ModelRetryGate', () => {
     await vi.advanceTimersByTimeAsync(0);
     await next;
     expect(nextOperation).toHaveBeenCalledOnce();
-    gate.dispose();
   });
 
   it('rejects calls waiting when the session is disposed', async () => {
-    const gate = new ModelRetryGate();
     await openGate(gate);
 
-    const waiting = gate.run(
-      ROUTE,
-      options(new AbortController().signal),
-      async () => undefined,
-    );
+    const waiting = gate.run(ROUTE, options(), async () => undefined);
     gate.dispose();
 
     await expect(waiting).rejects.toMatchObject({
@@ -883,7 +666,6 @@ describe('ModelRetryGate', () => {
   });
 
   it('cancels the cooldown timer when its final waiter aborts', async () => {
-    const gate = new ModelRetryGate();
     await openGate(gate);
     const controller = new AbortController();
     const waiting = gate.run(
@@ -897,6 +679,5 @@ describe('ModelRetryGate', () => {
 
     await expect(waiting).rejects.toMatchObject({ name: 'AbortError' });
     expect(vi.getTimerCount()).toBe(0);
-    gate.dispose();
   });
 });

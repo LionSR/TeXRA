@@ -217,16 +217,11 @@ async function runInit(
   }
 
   const config = buildInitConfig(answers);
-  try {
-    await writeInitConfig(filePath, config);
-  } catch (error: unknown) {
-    throw error;
-  }
+  await writeInitConfig(filePath, config);
 
-  let gitignoreOutcome: GitignoreOutcome | undefined;
-  if (gitignore) {
-    gitignoreOutcome = await ensureTexraGitignored(context.cwd);
-  }
+  const gitignoreOutcome: GitignoreOutcome | undefined = gitignore
+    ? await ensureTexraGitignored(context.cwd)
+    : undefined;
 
   emitInitSummary(
     context,

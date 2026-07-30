@@ -25,16 +25,6 @@ vi.mock('@tools/setup/platform', async (importOriginal) => {
   };
 });
 
-function installPlatform(
-  listStoredKeys: () => Promise<readonly string[]>,
-): void {
-  mocks.listStoredKeys.mockImplementation(listStoredKeys);
-}
-
-function installPlatformWithKeys(keys: readonly string[]): void {
-  installPlatform(async () => keys);
-}
-
 const tool = new ListApiKeysTool();
 
 beforeEach(() => {
@@ -43,7 +33,7 @@ beforeEach(() => {
 
 describe('list_api_keys tool', () => {
   it('reports an empty credential store', async () => {
-    installPlatformWithKeys([]);
+    mocks.listStoredKeys.mockResolvedValue([]);
     const result = await tool.call({});
     assert.equal(result.status, 'executed');
     assert.equal(result.summary, 'No secrets stored');
@@ -51,9 +41,9 @@ describe('list_api_keys tool', () => {
   });
 
   it('reports unsupported enumeration instead of an empty store', async () => {
-    installPlatform(async () => {
-      throw new Error('SecretStorage key enumeration is not supported');
-    });
+    mocks.listStoredKeys.mockRejectedValue(
+      new Error('SecretStorage key enumeration is not supported'),
+    );
 
     const result = await tool.call({});
 
@@ -63,7 +53,7 @@ describe('list_api_keys tool', () => {
   });
 
   it('shows known provider keys by provider name, not raw storage key', async () => {
-    installPlatformWithKeys([apiKeySecretName('anthropic')]);
+    mocks.listStoredKeys.mockResolvedValue([apiKeySecretName('anthropic')]);
     const result = await tool.call({});
     assert.equal(result.status, 'executed');
     assert.match(result.output ?? '', /Provider API keys stored/);
@@ -72,7 +62,7 @@ describe('list_api_keys tool', () => {
   });
 
   it('lists providers without a stored key', async () => {
-    installPlatformWithKeys([apiKeySecretName('anthropic')]);
+    mocks.listStoredKeys.mockResolvedValue([apiKeySecretName('anthropic')]);
     const result = await tool.call({});
     assert.equal(result.status, 'executed');
     assert.match(
@@ -83,14 +73,14 @@ describe('list_api_keys tool', () => {
   });
 
   it('recognises the GitHub token', async () => {
-    installPlatformWithKeys([GITHUB_TOKEN_STORAGE_KEY]);
+    mocks.listStoredKeys.mockResolvedValue([GITHUB_TOKEN_STORAGE_KEY]);
     const result = await tool.call({});
     assert.equal(result.status, 'executed');
     assert.match(result.output ?? '', /GitHub token: stored/);
   });
 
   it('reports stale apiKey.* entries as diagnostic rather than removable providers', async () => {
-    installPlatformWithKeys(['apiKey.oldprovider']);
+    mocks.listStoredKeys.mockResolvedValue(['apiKey.oldprovider']);
     const result = await tool.call({});
     assert.equal(result.status, 'executed');
     assert.match(result.output ?? '', /diagnostic only/);
@@ -99,7 +89,7 @@ describe('list_api_keys tool', () => {
   });
 
   it('redacts non-provider non-github secret key names under Other', async () => {
-    installPlatformWithKeys(['texra.supabase.session']);
+    mocks.listStoredKeys.mockResolvedValue(['texra.supabase.session']);
     const result = await tool.call({});
     assert.equal(result.status, 'executed');
     assert.match(
@@ -110,7 +100,7 @@ describe('list_api_keys tool', () => {
   });
 
   it('categorises all key types simultaneously', async () => {
-    installPlatformWithKeys([
+    mocks.listStoredKeys.mockResolvedValue([
       apiKeySecretName('anthropic'),
       GITHUB_TOKEN_STORAGE_KEY,
       'apiKey.oldprovider',
@@ -129,7 +119,7 @@ describe('list_api_keys tool', () => {
   });
 
   it('summary counts reflect platform.secrets.providers, not the global import', async () => {
-    installPlatformWithKeys([apiKeySecretName('anthropic')]);
+    mocks.listStoredKeys.mockResolvedValue([apiKeySecretName('anthropic')]);
     const result = await tool.call({});
     assert.equal(result.status, 'executed');
     assert.equal(
@@ -139,7 +129,7 @@ describe('list_api_keys tool', () => {
   });
 
   it('summary uses plural form for multiple secrets', async () => {
-    installPlatformWithKeys([
+    mocks.listStoredKeys.mockResolvedValue([
       apiKeySecretName('anthropic'),
       apiKeySecretName('openai'),
     ]);
@@ -152,7 +142,7 @@ describe('list_api_keys tool', () => {
   });
 
   it('shows missing providers even when no provider keys are stored', async () => {
-    installPlatformWithKeys([GITHUB_TOKEN_STORAGE_KEY]);
+    mocks.listStoredKeys.mockResolvedValue([GITHUB_TOKEN_STORAGE_KEY]);
     const result = await tool.call({});
     assert.equal(result.status, 'executed');
     assert.match(
@@ -168,7 +158,7 @@ describe('list_api_keys tool', () => {
   });
 
   it('summary reads "no provider keys" when only non-provider secrets are stored', async () => {
-    installPlatformWithKeys(['texra.supabase.session']);
+    mocks.listStoredKeys.mockResolvedValue(['texra.supabase.session']);
     const result = await tool.call({});
     assert.equal(result.status, 'executed');
     assert.match(result.summary ?? '', /no persisted provider API keys/);

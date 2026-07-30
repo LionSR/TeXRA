@@ -63,7 +63,6 @@ interface TestDedupedResource<T> {
 
 const SHA = 'abcdef1234567890';
 const OLD_SHA = '1234567890abcdef';
-let emitCiStartedEvents = false;
 
 function testDedupedResource<T>(): TestDedupedResource<T> {
   return {
@@ -168,7 +167,7 @@ async function createHarness(
   source: CiStartedSource;
 }> {
   vi.resetModules();
-  emitCiStartedEvents = options.emitCiStartedEvents ?? false;
+  const emitCiStartedEvents = options.emitCiStartedEvents ?? false;
   const ghGet = vi.fn();
   vi.doMock('@utils/config/configUtils', () => ({
     getConfig: vi.fn((_key: string, defaultValue: unknown) =>
@@ -200,7 +199,6 @@ describe('PRPollingSource CI-started events', () => {
   afterEach(() => {
     vi.doUnmock('@tools/github/githubClient');
     vi.doUnmock('@utils/config/configUtils');
-    emitCiStartedEvents = false;
     vi.resetModules();
   });
 

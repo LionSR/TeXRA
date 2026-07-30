@@ -158,9 +158,31 @@ function createMessages(count: number): ResponseInputItem[] {
   })) as ResponseInputItem[];
 }
 
+function userTextMessage(text: string): ResponseInputItem {
+  return {
+    type: 'message',
+    role: 'user',
+    content: [{ type: 'input_text', text }],
+  } as unknown as ResponseInputItem;
+}
+
 function withSdkOptions<T extends { responses: object }>(client: T) {
   return Object.assign(client, {
     withOptions: vi.fn(() => client),
+  });
+}
+
+function sendTurn(
+  handler: ModelHandlerOpenAIResponse,
+  client: unknown,
+  messages: ResponseInputItem[],
+  signal?: AbortSignal,
+) {
+  return handler.createResponse({
+    client: client as any,
+    messages,
+    temperature: 0,
+    signal,
   });
 }
 
@@ -170,13 +192,7 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
     const requests: any[] = [];
     const compactRequests: any[] = [];
     const compactOptions: any[] = [];
-    const compactedMessages = [
-      {
-        type: 'message',
-        role: 'user',
-        content: [{ type: 'input_text', text: 'compacted state' }],
-      },
-    ] as unknown as ResponseInputItem[];
+    const compactedMessages = [userTextMessage('compacted state')];
     const client = withSdkOptions({
       responses: {
         inputTokens: {
@@ -205,17 +221,13 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
     const secondTurnMessages = createMessages(3);
     const controller = new AbortController();
 
-    await handler.createResponse({
-      client: client as any,
-      messages: firstTurnMessages,
-      temperature: 0,
-    });
-    const result = await handler.createResponse({
-      client: client as any,
-      messages: secondTurnMessages,
-      temperature: 0,
-      signal: controller.signal,
-    });
+    await sendTurn(handler, client, firstTurnMessages);
+    const result = await sendTurn(
+      handler,
+      client,
+      secondTurnMessages,
+      controller.signal,
+    );
 
     expect(compactRequests).toHaveLength(1);
     expect(client.withOptions).toHaveBeenCalledWith({ maxRetries: 2 });
@@ -247,18 +259,9 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
       },
     });
 
-    await handler.createResponse({
-      client: client as any,
-      messages: createMessages(2),
-      temperature: 0,
-    });
+    await sendTurn(handler, client, createMessages(2));
     await expect(
-      handler.createResponse({
-        client: client as any,
-        messages: createMessages(3),
-        temperature: 0,
-        signal: controller.signal,
-      }),
+      sendTurn(handler, client, createMessages(3), controller.signal),
     ).rejects.toMatchObject({ name: 'AbortError' });
 
     expect(requests).toHaveLength(1);
@@ -274,13 +277,7 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
     const handler = createHandler();
     const requests: any[] = [];
     const compactRequests: any[] = [];
-    const compactedMessages = [
-      {
-        type: 'message',
-        role: 'user',
-        content: [{ type: 'input_text', text: 'compacted state' }],
-      },
-    ] as unknown as ResponseInputItem[];
+    const compactedMessages = [userTextMessage('compacted state')];
     const client = withSdkOptions({
       responses: {
         inputTokens: {
@@ -312,26 +309,14 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
     const firstTurnMessages = createMessages(2);
     const secondTurnMessages = createMessages(3);
 
-    await handler.createResponse({
-      client: client as any,
-      messages: firstTurnMessages,
-      temperature: 0,
-    });
+    await sendTurn(handler, client, firstTurnMessages);
 
-    await expect(
-      handler.createResponse({
-        client: client as any,
-        messages: secondTurnMessages,
-        temperature: 0,
-      }),
-    ).rejects.toThrow('transient network failure');
+    await expect(sendTurn(handler, client, secondTurnMessages)).rejects.toThrow(
+      'transient network failure',
+    );
 
     // Same-turn retry: identical `messages` reference as the failed attempt.
-    const result = await handler.createResponse({
-      client: client as any,
-      messages: secondTurnMessages,
-      temperature: 0,
-    });
+    const result = await sendTurn(handler, client, secondTurnMessages);
 
     // The /responses/compact endpoint must be hit only once across both
     // attempts — the retry reuses the already-computed compaction instead of
@@ -357,13 +342,7 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
     const handler = createHandler();
     const requests: any[] = [];
     const compactRequests: any[] = [];
-    const compactedMessages = [
-      {
-        type: 'message',
-        role: 'user',
-        content: [{ type: 'input_text', text: 'compacted state' }],
-      },
-    ] as unknown as ResponseInputItem[];
+    const compactedMessages = [userTextMessage('compacted state')];
     let tokenCountCalls = 0;
     const client = withSdkOptions({
       responses: {
@@ -399,11 +378,7 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
     const sharedMessages = createMessages(2);
 
     // Turn 1: below threshold, no compaction.
-    await handler.createResponse({
-      client: client as any,
-      messages: sharedMessages,
-      temperature: 0,
-    });
+    await sendTurn(handler, client, sharedMessages);
 
     // Turn 2 begins: a new message arrives, appended onto the SAME array
     // (mirrors ToolUseDispatchNode / a new user turn `.push()`-ing onto
@@ -413,11 +388,7 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
 
     // Turn 2's live pre-flight count crosses the compaction threshold
     // (800 > 750), so turn 2 compacts.
-    const turn2Result = await handler.createResponse({
-      client: client as any,
-      messages: sharedMessages,
-      temperature: 0,
-    });
+    const turn2Result = await sendTurn(handler, client, sharedMessages);
     expect(compactRequests).toHaveLength(1);
     expect(turn2Result.updatedMessages).toEqual(compactedMessages);
 
@@ -436,11 +407,7 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
     // NOT compact again and must send only what's new since the chain
     // anchor (the single message appended after turn 2), not turn 2's stale
     // compacted payload.
-    const turn3Result = await handler.createResponse({
-      client: client as any,
-      messages: sharedMessages,
-      temperature: 0,
-    });
+    const turn3Result = await sendTurn(handler, client, sharedMessages);
 
     expect(compactRequests).toHaveLength(1);
     expect(requests).toHaveLength(3);
@@ -476,16 +443,8 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
     const firstTurnMessages = createMessages(2);
     const secondTurnMessages = createMessages(3);
 
-    await handler.createResponse({
-      client: client as any,
-      messages: firstTurnMessages,
-      temperature: 0,
-    });
-    const result = await handler.createResponse({
-      client: client as any,
-      messages: secondTurnMessages,
-      temperature: 0,
-    });
+    await sendTurn(handler, client, firstTurnMessages);
+    const result = await sendTurn(handler, client, secondTurnMessages);
 
     expect(compactRequests).toHaveLength(0);
     expect(requests).toHaveLength(2);
@@ -545,16 +504,8 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
     const firstTurnMessages = createMessages(2);
     const secondTurnMessages = createMessages(3);
 
-    await handler.createResponse({
-      client: client as any,
-      messages: firstTurnMessages,
-      temperature: 0,
-    });
-    const result = await handler.createResponse({
-      client: client as any,
-      messages: secondTurnMessages,
-      temperature: 0,
-    });
+    await sendTurn(handler, client, firstTurnMessages);
+    const result = await sendTurn(handler, client, secondTurnMessages);
 
     // The stateful endpoint is never reached for this backend.
     expect(compactRequests).toHaveLength(0);
@@ -565,25 +516,12 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
     expect(streamRequests[0].instructions).toBe(COMPACTION_SYSTEM_PROMPT);
     expect(streamRequests[0].input).toEqual([
       ...secondTurnMessages,
-      {
-        type: 'message',
-        role: 'user',
-        content: [{ type: 'input_text', text: COMPACTION_USER_PROMPT }],
-      },
+      userTextMessage(COMPACTION_USER_PROMPT),
     ]);
 
-    const expectedCompactedMessages = [
-      {
-        type: 'message',
-        role: 'user',
-        content: [
-          {
-            type: 'input_text',
-            text: '[Previous conversation summary]\n\nconcise summary of the prior turns',
-          },
-        ],
-      },
-    ];
+    const resentText =
+      '[Previous conversation summary]\n\nconcise summary of the prior turns';
+    const expectedCompactedMessages = [userTextMessage(resentText)];
     expect(requests).toHaveLength(2);
     expect(requests[1].previous_response_id).toBeUndefined();
     expect(requests[1].input).toEqual(expectedCompactedMessages);
@@ -593,8 +531,6 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
     // resending the compacted payload, not the summarization call's output
     // tokens (42). The Codex profile disables token counting, so this falls
     // back to a text-length estimate over exactly what gets resent.
-    const resentText =
-      '[Previous conversation summary]\n\nconcise summary of the prior turns';
     expect(tokensAfterDuringCall).toBe(estimateTokensFromText(resentText));
     expect(tokensAfterDuringCall).not.toBe(42);
 
@@ -645,16 +581,8 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
       },
     });
 
-    await handler.createResponse({
-      client: client as any,
-      messages: createMessages(2),
-      temperature: 0,
-    });
-    await handler.createResponse({
-      client: client as any,
-      messages: createMessages(3),
-      temperature: 0,
-    });
+    await sendTurn(handler, client, createMessages(2));
+    await sendTurn(handler, client, createMessages(3));
 
     // The handler aborted the stream instead of draining it to completion, and
     // never fell back to finalResponse() on the capped path.
@@ -713,30 +641,15 @@ describe('ModelHandlerOpenAIResponse automatic compaction', () => {
       },
     });
 
-    await handler.createResponse({
-      client: client as any,
-      messages: createMessages(2),
-      temperature: 0,
-    });
-    const result = await handler.createResponse({
-      client: client as any,
-      messages: createMessages(3),
-      temperature: 0,
-    });
+    await sendTurn(handler, client, createMessages(2));
+    const result = await sendTurn(handler, client, createMessages(3));
 
     // Compaction happened (not skipped) and the resent summary is the streamed
     // text, not the empty finalResponse extraction.
     const expectedCompactedMessages = [
-      {
-        type: 'message',
-        role: 'user',
-        content: [
-          {
-            type: 'input_text',
-            text: '[Previous conversation summary]\n\nstreamed summary from the deltas',
-          },
-        ],
-      },
+      userTextMessage(
+        '[Previous conversation summary]\n\nstreamed summary from the deltas',
+      ),
     ];
     expect(requests).toHaveLength(2);
     expect(requests[1].input).toEqual(expectedCompactedMessages);

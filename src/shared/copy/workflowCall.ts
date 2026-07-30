@@ -3,6 +3,7 @@ import {
   WORKFLOW_TASK_STATUS_LABEL,
   type WorkflowCallProgress,
 } from '@shared/schemas';
+import { filterNotNullish } from '@utils/core';
 import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
 
 /**
@@ -26,7 +27,7 @@ export function formatWorkflowCallMetadataParts(
     call.totalCostUsd === undefined
       ? undefined
       : formatCostUsd(call.totalCostUsd),
-  ].filter((part): part is string => part !== undefined);
+  ].filter(filterNotNullish);
 }
 
 /**

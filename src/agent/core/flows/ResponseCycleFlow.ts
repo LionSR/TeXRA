@@ -132,8 +132,9 @@ class ResponsePrepNode<C> extends BaseNode<
     shared: ResponseCycleShared,
     prepRes: ResponsePrepResult,
   ): Promise<string | undefined> {
+    resetCycleState(shared, ['responseObject', 'processedResponse']);
+
     if (prepRes.interrupted) {
-      resetCycleState(shared, ['responseObject', 'processedResponse']);
       shared.shouldStop = true;
       return FlowTransition.COMPLETE;
     }
@@ -141,7 +142,6 @@ class ResponsePrepNode<C> extends BaseNode<
     const { round } = this.services;
     shared.outputExists = prepRes.exists;
     shared.systemPrompt = prepRes.systemPrompt;
-    resetCycleState(shared, ['responseObject', 'processedResponse']);
 
     await saveCycleDebug(shared.messages, 'messages', this.services, {
       continuationCount: round.continuationCount,

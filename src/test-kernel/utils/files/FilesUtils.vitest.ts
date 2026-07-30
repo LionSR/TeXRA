@@ -7,7 +7,7 @@ import * as os from 'node:os';
 import { promises as fs } from 'node:fs';
 import {
   afterAll,
-  beforeAll,
+  afterEach,
   beforeEach,
   describe,
   expect,
@@ -33,6 +33,10 @@ import { pastedImageFileName } from '@utils/files/pastedImageUtils';
 describe('BaseFS stat predicates', () => {
   setupPlatform();
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('returns ordinary predicate results for present and missing paths', async () => {
     await AbsoluteFS.write('/present.txt', 'content');
 
@@ -56,13 +60,9 @@ describe('BaseFS stat predicates', () => {
     const error = Object.assign(new Error('parent path is not a directory'), {
       code: 'ENOTDIR',
     });
-    const stat = vi.spyOn(platform().fs, 'stat').mockRejectedValueOnce(error);
+    vi.spyOn(platform().fs, 'stat').mockRejectedValueOnce(error);
 
-    try {
-      await expect(run()).resolves.toBe(false);
-    } finally {
-      stat.mockRestore();
-    }
+    await expect(run()).resolves.toBe(false);
   });
 
   it.each([
@@ -73,13 +73,9 @@ describe('BaseFS stat predicates', () => {
     const error = Object.assign(new Error('path is unreadable'), {
       code: 'EACCES',
     });
-    const stat = vi.spyOn(platform().fs, 'stat').mockRejectedValueOnce(error);
+    vi.spyOn(platform().fs, 'stat').mockRejectedValueOnce(error);
 
-    try {
-      await expect(run()).rejects.toBe(error);
-    } finally {
-      stat.mockRestore();
-    }
+    await expect(run()).rejects.toBe(error);
   });
 });
 
@@ -174,6 +170,10 @@ describe('pathUtils Test Suite', () => {
 describe('AbsoluteFS.write', () => {
   setupPlatform();
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('propagates ELOOP without deleting the path or retrying', async () => {
     const location = pathToLocation('file.tex');
     const expectedPath = WorkspaceFS.toAbsolute('file.tex');
@@ -192,27 +192,19 @@ describe('AbsoluteFS.write', () => {
       .mockRejectedValue(loopError);
     const deletePath = vi.spyOn(AbsoluteFS, 'delete').mockResolvedValue();
 
-    try {
-      await assert.rejects(
-        () => AbsoluteFS.write(location.absolutePath, 'content'),
-        (error: unknown) => {
-          assert.strictEqual(error, loopError);
-          assert.strictEqual((error as NodeJS.ErrnoException).code, 'ELOOP');
-          assert.strictEqual(
-            (error as NodeJS.ErrnoException).path,
-            expectedPath,
-          );
-          assert.strictEqual((error as Error).cause, cause);
-          return true;
-        },
-      );
+    await assert.rejects(
+      () => AbsoluteFS.write(location.absolutePath, 'content'),
+      (error: unknown) => {
+        assert.strictEqual(error, loopError);
+        assert.strictEqual((error as NodeJS.ErrnoException).code, 'ELOOP');
+        assert.strictEqual((error as NodeJS.ErrnoException).path, expectedPath);
+        assert.strictEqual((error as Error).cause, cause);
+        return true;
+      },
+    );
 
-      expect(writeFile).toHaveBeenCalledOnce();
-      expect(deletePath).not.toHaveBeenCalled();
-    } finally {
-      writeFile.mockRestore();
-      deletePath.mockRestore();
-    }
+    expect(writeFile).toHaveBeenCalledOnce();
+    expect(deletePath).not.toHaveBeenCalled();
   });
 });
 
@@ -232,13 +224,6 @@ describe('RelativeFS JSON helpers', () => {
   // RelativeFS goes through the platform filesystem; back it with the real
   // node filesystem since this suite writes to a real temp directory.
   setupPlatform({}, { fs: nodeFilesystem });
-
-  beforeAll(async () => {
-    await fs
-      .rm(BASE_DIR, { recursive: true, force: true })
-      .catch(() => undefined);
-    await fs.mkdir(BASE_DIR, { recursive: true });
-  });
 
   beforeEach(async () => {
     // Ensure each test starts with a clean directory

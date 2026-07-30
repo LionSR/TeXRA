@@ -3,11 +3,9 @@
 import { Node } from '@agent/node';
 import { logErrorData, logProgressStatus, type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import type { RefreshModelClient } from '@agent/core/flows/CycleServices';
 import type { RunScope } from '@agent/runtime/RunScope';
-import type {
-  ModelCredentialRoute,
-  ModelCredentialSelection,
-} from '@agent/types/ModelHandlerContracts';
+import type { ModelCredentialRoute } from '@agent/types/ModelHandlerContracts';
 import { normalizeProviderError } from '@common/errors';
 import {
   isProviderErrorAutoRetryable,
@@ -62,10 +60,7 @@ interface RetryableNodeServices {
   logger: AgentTrace;
   readonly runScope: RunScope;
   setAbortController: (ac: AbortController | null) => void;
-  refreshClient?: (
-    selection?: ModelCredentialSelection,
-    signal?: AbortSignal,
-  ) => Promise<void>;
+  refreshClient?: RefreshModelClient;
   readonly clientCredentialRoute?: ModelCredentialRoute;
 }
 
@@ -74,12 +69,7 @@ interface RetryableNodeServices {
  * Logs success or failure; returns true if refresh was attempted and succeeded.
  */
 async function tryRefreshClient(
-  refreshClient:
-    | ((
-        selection?: ModelCredentialSelection,
-        signal?: AbortSignal,
-      ) => Promise<void>)
-    | undefined,
+  refreshClient: RefreshModelClient | undefined,
   logger: AgentTrace,
   context: string,
   signal?: AbortSignal,

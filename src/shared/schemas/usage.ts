@@ -89,9 +89,7 @@ export function sumUsageStats(
   items: Iterable<TokenUsageStats>,
 ): TokenUsageStats {
   const total = emptyUsageStats();
-  let sawUsageActivity = false;
   let commonUsageRoute: UsageRoute | undefined;
-  let sawUsageRoute = false;
   let hasMixedOrMissingUsageRoute = false;
   for (const usage of items) {
     total.inputTokens += usage.inputTokens;
@@ -105,26 +103,17 @@ export function sumUsageStats(
       (total.cacheCreationInputTokens ?? 0) +
       (usage.cacheCreationInputTokens ?? 0);
     if (hasUsageActivity(usage)) {
-      sawUsageActivity = true;
-
       const usageRoute = usage.usageRoute;
       if (usageRoute == null) {
         hasMixedOrMissingUsageRoute = true;
-      } else if (!sawUsageRoute) {
+      } else if (commonUsageRoute == null) {
         commonUsageRoute = usageRoute;
-        sawUsageRoute = true;
       } else if (commonUsageRoute !== usageRoute) {
         hasMixedOrMissingUsageRoute = true;
-        commonUsageRoute = undefined;
       }
     }
   }
-  if (
-    sawUsageActivity &&
-    sawUsageRoute &&
-    !hasMixedOrMissingUsageRoute &&
-    commonUsageRoute
-  ) {
+  if (commonUsageRoute && !hasMixedOrMissingUsageRoute) {
     total.usageRoute = commonUsageRoute;
   }
   return total;

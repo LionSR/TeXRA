@@ -36,21 +36,27 @@ async function loadShortcutRegistry(): Promise<ShortcutRegistryModule> {
   return import('@desktop/renderer/desktopShortcutRegistry') as unknown as Promise<ShortcutRegistryModule>;
 }
 
+async function createRegistry(
+  openCommands: () => void = vi.fn(),
+): Promise<ShortcutRegistry> {
+  const { createDesktopShortcutRegistry } = await loadShortcutRegistry();
+  return createDesktopShortcutRegistry({
+    document,
+    actions: {
+      showRoute: vi.fn(),
+      showSettings: vi.fn(),
+    },
+    openCommands,
+    platform: 'darwin',
+  });
+}
+
 describe('desktop shortcut registry', () => {
   useLitComponentTestDom(loadShortcutRegistry);
 
   it('keeps ordinary typing inside text fields and dispatches modified shortcuts', async () => {
-    const { createDesktopShortcutRegistry } = await loadShortcutRegistry();
     const openCommands = vi.fn();
-    const registry = createDesktopShortcutRegistry({
-      document,
-      actions: {
-        showRoute: vi.fn(),
-        showSettings: vi.fn(),
-      },
-      openCommands,
-      platform: 'darwin',
-    });
+    const registry = await createRegistry(openCommands);
     const input = document.createElement('input');
     document.body.append(input);
 
@@ -75,20 +81,11 @@ describe('desktop shortcut registry', () => {
   });
 
   it('backs up malformed persisted preferences before an explicit update', async () => {
-    const { createDesktopShortcutRegistry } = await loadShortcutRegistry();
     const malformed = '{"texra.desktop.showCommands":42}';
     const storage = document.defaultView?.localStorage;
     if (!storage) throw new Error('Test DOM localStorage is unavailable.');
     storage.setItem(DESKTOP_SHORTCUT_STORAGE_KEY, malformed);
-    const registry = createDesktopShortcutRegistry({
-      document,
-      actions: {
-        showRoute: vi.fn(),
-        showSettings: vi.fn(),
-      },
-      openCommands: vi.fn(),
-      platform: 'darwin',
-    });
+    const registry = await createRegistry();
 
     expect(
       registry
@@ -109,16 +106,7 @@ describe('desktop shortcut registry', () => {
   });
 
   it('installs one shared service and removes it on disposal', async () => {
-    const { createDesktopShortcutRegistry } = await loadShortcutRegistry();
-    const registry = createDesktopShortcutRegistry({
-      document,
-      actions: {
-        showRoute: vi.fn(),
-        showSettings: vi.fn(),
-      },
-      openCommands: vi.fn(),
-      platform: 'darwin',
-    });
+    const registry = await createRegistry();
 
     expect(getDesktopShortcutService()).toBe(registry);
     registry.dispose();

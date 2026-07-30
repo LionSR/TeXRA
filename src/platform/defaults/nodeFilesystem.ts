@@ -145,13 +145,14 @@ export const nodeFilesystem: FileSystemProvider = {
     options?: { overwrite?: boolean },
   ): Promise<void> {
     if (!options?.overwrite) {
-      try {
-        await fs.promises.lstat(dest);
+      const existing = await fs.promises.lstat(dest).catch((err: unknown) => {
+        if (!isFileNotFoundError(err)) throw err;
+        return undefined;
+      });
+      if (existing) {
         throw Object.assign(new Error(`Target already exists: ${dest}`), {
           code: 'EEXIST',
         });
-      } catch (err) {
-        if (!isFileNotFoundError(err)) throw err;
       }
     }
     await fs.promises.rename(source, dest);

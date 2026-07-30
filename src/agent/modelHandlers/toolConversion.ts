@@ -56,33 +56,31 @@ function flattenTopLevelUnion(schema: JSONSchemaObject): JSONSchemaObject {
   if (!variantKey) return schema;
 
   const rawVariants = schema[variantKey] as unknown[];
-  const variants: JSONSchemaObject[] = [];
-  for (const v of rawVariants) {
-    if (typeof v !== 'object' || v === null) return schema;
-    const rec = v as JSONSchemaObject;
-    if (rec.type !== 'object') return schema;
-    variants.push(rec);
+  const variants = rawVariants.filter(
+    (v): v is JSONSchemaObject =>
+      typeof v === 'object' &&
+      v !== null &&
+      (v as JSONSchemaObject).type === 'object',
+  );
+  if (variants.length === 0 || variants.length !== rawVariants.length) {
+    return schema;
   }
-  if (variants.length === 0) return schema;
 
   const variantProperties: JSONSchemaObject[] = variants.map(
     (v) => (v.properties as JSONSchemaObject | undefined) ?? {},
   );
 
-  const allPropNames = new Set<string>();
-  for (const props of variantProperties) {
-    for (const name of Object.keys(props)) allPropNames.add(name);
-  }
+  const allPropNames = new Set(
+    variantProperties.flatMap((props) => Object.keys(props)),
+  );
 
   const mergedProperties: JSONSchemaObject = {};
   for (const name of allPropNames) {
-    const branchSchemas: JSONSchemaObject[] = [];
-    for (const props of variantProperties) {
-      const s = props[name];
-      if (s && typeof s === 'object') {
-        branchSchemas.push(s as JSONSchemaObject);
-      }
-    }
+    const branchSchemas = variantProperties
+      .map((props) => props[name])
+      .filter(
+        (s): s is JSONSchemaObject => typeof s === 'object' && s !== null,
+      );
     if (branchSchemas.length === 1) {
       mergedProperties[name] = branchSchemas[0];
       continue;

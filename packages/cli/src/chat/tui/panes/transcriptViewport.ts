@@ -10,9 +10,16 @@ import type { ConversationEntry } from '../state/cliState';
 
 const FAILED_ENTRY_ESTIMATE_ROWS = 1;
 
-function estimateEntryRows(computeRows: () => number): number {
+function estimateEntryRows(
+  entry: ConversationEntry,
+  mode: 'live' | undefined,
+  width: number | undefined,
+  executionLabels: ExecutionLabels | undefined,
+): number {
   try {
-    return computeRows();
+    return transcriptEntryLayoutRows(
+      transcriptEntryLayout(entry, { executionLabels, mode, width }),
+    );
   } catch {
     return FAILED_ENTRY_ESTIMATE_ROWS;
   }
@@ -23,30 +30,18 @@ export function estimateTranscriptEntryRows(
   width?: number,
   executionLabels?: ExecutionLabels,
 ): number {
-  return estimateEntryRows(() =>
-    transcriptEntryLayoutRows(
-      transcriptEntryLayout(entry, { executionLabels, width }),
-    ),
-  );
+  return estimateEntryRows(entry, undefined, width, executionLabels);
 }
 
+// Live mode captures the pending-pane paint contract: assistant text uses its
+// capped raw tail, while rich tool rows keep one descriptor line per terminal
+// row instead of being reflowed like plain projections.
 export function estimateLiveTranscriptEntryRows(
   entry: ConversationEntry,
   width?: number,
   executionLabels?: ExecutionLabels,
 ): number {
-  // Live mode captures the pending-pane paint contract: assistant text uses
-  // its capped raw tail, while rich tool rows keep one descriptor
-  // line per terminal row instead of being reflowed like plain projections.
-  return estimateEntryRows(() =>
-    transcriptEntryLayoutRows(
-      transcriptEntryLayout(entry, {
-        executionLabels,
-        mode: 'live',
-        width,
-      }),
-    ),
-  );
+  return estimateEntryRows(entry, 'live', width, executionLabels);
 }
 
 export interface TranscriptEntrySelection {

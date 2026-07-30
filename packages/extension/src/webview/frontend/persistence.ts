@@ -21,7 +21,6 @@ import {
   MainViewPersistedStateSchema,
   type MainViewPersistedState,
 } from '@shared/schemas';
-import type { MultiFiles } from '@shared/schemas';
 import {
   createWebviewStorage,
   PersistedState,
@@ -30,9 +29,8 @@ import type { StateRestoreMessage } from '@shared/schemas/commonViewMessages';
 import { createFlushableDebounce } from '@utils/core';
 
 // Local imports - main view
-import { MULTIPLE_DOCUMENT_FILE_TYPES, SESSION_TYPES } from './constants';
+import { SESSION_TYPES } from './constants';
 import { SESSION_DEFAULTS } from './sessionDefaults';
-import { DEFAULT_MULTI_FILES, FILE_TYPE_TO_KEY } from './store';
 import {
   checkboxValues$,
   commit$,
@@ -198,7 +196,12 @@ function applyState(state: MainViewPersistedState): void {
     editedFile: state.editedFile,
     baseFile: state.baseFile,
   });
-  restoreFileArrays(state);
+  multiFiles$.set({
+    inputFiles: state.inputFiles,
+    contextFiles: state.contextFiles,
+    mediaFiles: state.mediaFiles,
+    outputFiles: [],
+  });
   latexdiffsVisible$.set(state.latexdiffsVisible);
   checkboxValues$.set({
     autoExtractFigure: state.autoExtractFigure,
@@ -206,20 +209,6 @@ function applyState(state: MainViewPersistedState): void {
     autoCompileInputPdf: state.autoCompileInputPdf,
     attachTeXCount: state.attachTeXCount,
   });
-}
-
-function restoreFileArrays(state: MainViewPersistedState): void {
-  const next = MULTIPLE_DOCUMENT_FILE_TYPES.reduce<MultiFiles>(
-    (acc, type) => {
-      const key = FILE_TYPE_TO_KEY[type];
-      const files =
-        type === 'output' ? [] : state[key as keyof MainViewPersistedState];
-      acc[key] = Array.isArray(files) ? files : [];
-      return acc;
-    },
-    { ...DEFAULT_MULTI_FILES },
-  );
-  multiFiles$.set(next);
 }
 
 function clearForNewSession(): void {

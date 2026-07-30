@@ -199,7 +199,7 @@ export class SettingsViewHost {
     await options?.afterPost?.();
   }
 
-  protected async post(
+  private async post(
     message: unknown,
     respond = this.options.respond,
   ): Promise<void> {

@@ -48,20 +48,16 @@ function cliContext(overrides: Partial<CliContext> = {}): CliContext {
   });
 }
 
-function resumableResolution() {
-  return createToolUseResumeData();
-}
-
 describe('runResumeExecution', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.initInteractiveCliPlatform.mockResolvedValue(undefined);
-    mocks.resolveCliResume.mockResolvedValue(resumableResolution());
+    mocks.resolveCliResume.mockResolvedValue(createToolUseResumeData());
     mocks.runChat.mockResolvedValue({ exitCode: 0 });
   });
 
   it('uses the CLI context TTY snapshot before reopening chat', async () => {
-    const resolution = resumableResolution();
+    const resolution = createToolUseResumeData();
     mocks.resolveCliResume.mockResolvedValueOnce(resolution);
     const { runResumeExecution } = await import('@cli/runtime/resumeExecution');
 

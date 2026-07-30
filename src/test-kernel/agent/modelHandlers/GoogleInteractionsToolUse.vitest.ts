@@ -29,6 +29,8 @@ function disableServerState(): void {
 }
 
 type Step = Interactions.Step;
+type SSEEvent = Interactions.InteractionSSEEvent;
+type CreateParams = Interactions.CreateModelInteractionParamsStreaming;
 
 /**
  * Minimal workspace stub exposing the reasoning cache + reset hooks the handler
@@ -71,15 +73,73 @@ function createHandler(): ModelHandlerGoogleInteractions {
   return handler;
 }
 
-function fakeClient(events: Interactions.InteractionSSEEvent[]): unknown {
+/** Fake client yielding a canned SSE stream, recording each request into
+ * `calls` so tests can assert the wire shape the handler sent. */
+function fakeClient(events: SSEEvent[], calls: CreateParams[] = []): unknown {
   return {
     interactions: {
-      create: async () =>
-        (async function* () {
+      create: async (params: CreateParams) => {
+        calls.push(params);
+        return (async function* () {
           for (const event of events) yield event;
-        })(),
+        })();
+      },
     },
     models: {},
+  };
+}
+
+/** A signed thought step: summary text then its signature. */
+function thoughtEvents(index: number, signature: string): SSEEvent[] {
+  return [
+    { event_type: 'step.start', index, step: { type: 'thought' } },
+    {
+      event_type: 'step.delta',
+      index,
+      delta: {
+        type: 'thought_summary',
+        content: { type: 'text', text: 'plan' },
+      },
+    },
+    {
+      event_type: 'step.delta',
+      index,
+      delta: { type: 'thought_signature', signature },
+    },
+    { event_type: 'step.stop', index },
+  ];
+}
+
+/** A function_call step whose arguments arrive as one or more streamed deltas. */
+function callEvents(
+  index: number,
+  id: string,
+  name: string,
+  ...argumentDeltas: string[]
+): SSEEvent[] {
+  return [
+    {
+      event_type: 'step.start',
+      index,
+      step: { type: 'function_call', id, name, arguments: {} },
+    },
+    ...argumentDeltas.map((args): SSEEvent => ({
+      event_type: 'step.delta',
+      index,
+      delta: { type: 'arguments_delta', arguments: args },
+    })),
+    { event_type: 'step.stop', index },
+  ];
+}
+
+function completedEvent(
+  id: string,
+  status: 'completed' | 'requires_action',
+  steps?: Step[],
+): SSEEvent {
+  return {
+    event_type: 'interaction.completed',
+    interaction: { id, status, ...(steps ? { steps } : {}) },
   };
 }
 
@@ -88,7 +148,7 @@ function fakeClient(events: Interactions.InteractionSSEEvent[]): unknown {
  * sends. */
 function createGoResponse(
   handler: ModelHandlerGoogleInteractions,
-  events: Interactions.InteractionSSEEvent[],
+  events: SSEEvent[],
 ) {
   return handler.createResponse({
     client: fakeClient(events) as never,
@@ -106,24 +166,11 @@ describe('ModelHandlerGoogleInteractions tool use', () => {
   it('maps finalTool to the Interactions generation config', async () => {
     disableServerState();
     const handler = createHandler();
-    let captured:
-      Interactions.CreateModelInteractionParamsStreaming | undefined;
-    const client = {
-      interactions: {
-        create: async (
-          params: Interactions.CreateModelInteractionParamsStreaming,
-        ) => {
-          captured = params;
-          return (async function* () {
-            yield {
-              event_type: 'interaction.completed',
-              interaction: { id: 'int_final', status: 'completed', steps: [] },
-            } as Interactions.InteractionSSEEvent;
-          })();
-        },
-      },
-      models: {},
-    };
+    const calls: CreateParams[] = [];
+    const client = fakeClient(
+      [completedEvent('int_final', 'completed', [])],
+      calls,
+    );
 
     await handler.createResponse({
       client: client as never,
@@ -135,60 +182,22 @@ describe('ModelHandlerGoogleInteractions tool use', () => {
       finalTool: { name: 'submit_output' },
     });
 
-    expect(captured?.generation_config?.tool_choice).toBe('submit_output');
+    expect(calls[0]?.generation_config?.tool_choice).toBe('submit_output');
     expect(handler.supportsForcedToolChoice).toBe(true);
   });
 
   it('accumulates parallel arguments_delta chunks and extracts tool calls', async () => {
     const handler = createHandler();
 
-    const events: Interactions.InteractionSSEEvent[] = [
-      {
-        event_type: 'step.start',
-        index: 0,
-        step: {
-          type: 'function_call',
-          id: 'call_1',
-          name: 'search',
-          arguments: {},
-        },
-      },
-      {
-        event_type: 'step.delta',
-        index: 0,
-        delta: { type: 'arguments_delta', arguments: '{"q":' },
-      },
-      {
-        event_type: 'step.delta',
-        index: 0,
-        delta: { type: 'arguments_delta', arguments: '"x"}' },
-      },
-      { event_type: 'step.stop', index: 0 },
-      {
-        event_type: 'step.start',
-        index: 1,
-        step: {
-          type: 'function_call',
-          id: 'call_2',
-          name: 'fetch',
-          arguments: {},
-        },
-      },
-      {
-        event_type: 'step.delta',
-        index: 1,
-        delta: { type: 'arguments_delta', arguments: '{"u":"y"}' },
-      },
-      { event_type: 'step.stop', index: 1 },
+    const events: SSEEvent[] = [
+      ...callEvents(0, 'call_1', 'search', '{"q":', '"x"}'),
+      ...callEvents(1, 'call_2', 'fetch', '{"u":"y"}'),
       {
         event_type: 'interaction.status_update',
         interaction_id: 'int_1',
         status: 'requires_action',
       },
-      {
-        event_type: 'interaction.completed',
-        interaction: { id: 'int_1', status: 'requires_action' },
-      },
+      completedEvent('int_1', 'requires_action'),
     ];
 
     const result = await createGoResponse(handler, events);
@@ -211,42 +220,10 @@ describe('ModelHandlerGoogleInteractions tool use', () => {
     const handler = createHandler();
 
     // A real streamed turn: a signed thought, then a function call.
-    const events: Interactions.InteractionSSEEvent[] = [
-      { event_type: 'step.start', index: 0, step: { type: 'thought' } },
-      {
-        event_type: 'step.delta',
-        index: 0,
-        delta: {
-          type: 'thought_summary',
-          content: { type: 'text', text: 'plan' },
-        },
-      },
-      {
-        event_type: 'step.delta',
-        index: 0,
-        delta: { type: 'thought_signature', signature: 'sig_abc' },
-      },
-      { event_type: 'step.stop', index: 0 },
-      {
-        event_type: 'step.start',
-        index: 1,
-        step: {
-          type: 'function_call',
-          id: 'call_1',
-          name: 'search',
-          arguments: {},
-        },
-      },
-      {
-        event_type: 'step.delta',
-        index: 1,
-        delta: { type: 'arguments_delta', arguments: '{"q":"x"}' },
-      },
-      { event_type: 'step.stop', index: 1 },
-      {
-        event_type: 'interaction.completed',
-        interaction: { id: 'int_1', status: 'requires_action' },
-      },
+    const events: SSEEvent[] = [
+      ...thoughtEvents(0, 'sig_abc'),
+      ...callEvents(1, 'call_1', 'search', '{"q":"x"}'),
+      completedEvent('int_1', 'requires_action'),
     ];
 
     const workspace = fakeWorkspace();
@@ -376,27 +353,9 @@ describe('ModelHandlerGoogleInteractions tool use', () => {
 
   it('returns empty arguments when streamed tool args are malformed JSON', async () => {
     const handler = createHandler();
-    const events: Interactions.InteractionSSEEvent[] = [
-      {
-        event_type: 'step.start',
-        index: 0,
-        step: {
-          type: 'function_call',
-          id: 'call_x',
-          name: 'bad',
-          arguments: {},
-        },
-      },
-      {
-        event_type: 'step.delta',
-        index: 0,
-        delta: { type: 'arguments_delta', arguments: 'not json {' },
-      },
-      { event_type: 'step.stop', index: 0 },
-      {
-        event_type: 'interaction.completed',
-        interaction: { id: 'int_1', status: 'requires_action' },
-      },
+    const events: SSEEvent[] = [
+      ...callEvents(0, 'call_x', 'bad', 'not json {'),
+      completedEvent('int_1', 'requires_action'),
     ];
 
     const result = await createGoResponse(handler, events);
@@ -413,57 +372,19 @@ describe('ModelHandlerGoogleInteractions tool use', () => {
 
   it('prefers streamed steps when completed steps omit delta-only fields', async () => {
     const handler = createHandler();
-    const events: Interactions.InteractionSSEEvent[] = [
-      { event_type: 'step.start', index: 0, step: { type: 'thought' } },
-      {
-        event_type: 'step.delta',
-        index: 0,
-        delta: {
-          type: 'thought_summary',
-          content: { type: 'text', text: 'plan' },
-        },
-      },
-      {
-        event_type: 'step.delta',
-        index: 0,
-        delta: { type: 'thought_signature', signature: 'sig_streamed' },
-      },
-      { event_type: 'step.stop', index: 0 },
-      {
-        event_type: 'step.start',
-        index: 1,
-        step: {
+    const events: SSEEvent[] = [
+      ...thoughtEvents(0, 'sig_streamed'),
+      ...callEvents(1, 'call_1', 'search', '{"q":"streamed"}'),
+      // The completed steps omit the signature and the streamed arguments.
+      completedEvent('int_1', 'requires_action', [
+        { type: 'thought', summary: [{ type: 'text', text: 'plan' }] },
+        {
           type: 'function_call',
           id: 'call_1',
           name: 'search',
           arguments: {},
         },
-      },
-      {
-        event_type: 'step.delta',
-        index: 1,
-        delta: { type: 'arguments_delta', arguments: '{"q":"streamed"}' },
-      },
-      { event_type: 'step.stop', index: 1 },
-      {
-        event_type: 'interaction.completed',
-        interaction: {
-          id: 'int_1',
-          status: 'requires_action',
-          steps: [
-            {
-              type: 'thought',
-              summary: [{ type: 'text', text: 'plan' }],
-            },
-            {
-              type: 'function_call',
-              id: 'call_1',
-              name: 'search',
-              arguments: {},
-            },
-          ],
-        },
-      },
+      ]),
     ];
 
     const response = (await createGoResponse(handler, events)).response;
@@ -488,42 +409,10 @@ describe('ModelHandlerGoogleInteractions tool use', () => {
     const workspace = fakeWorkspace();
 
     // --- Turn 1: a signed thought + a function call. ---
-    const turn1: Interactions.InteractionSSEEvent[] = [
-      { event_type: 'step.start', index: 0, step: { type: 'thought' } },
-      {
-        event_type: 'step.delta',
-        index: 0,
-        delta: {
-          type: 'thought_summary',
-          content: { type: 'text', text: 'plan' },
-        },
-      },
-      {
-        event_type: 'step.delta',
-        index: 0,
-        delta: { type: 'thought_signature', signature: 'sig_abc' },
-      },
-      { event_type: 'step.stop', index: 0 },
-      {
-        event_type: 'step.start',
-        index: 1,
-        step: {
-          type: 'function_call',
-          id: 'call_1',
-          name: 'search',
-          arguments: {},
-        },
-      },
-      {
-        event_type: 'step.delta',
-        index: 1,
-        delta: { type: 'arguments_delta', arguments: '{"q":"x"}' },
-      },
-      { event_type: 'step.stop', index: 1 },
-      {
-        event_type: 'interaction.completed',
-        interaction: { id: 'int_1', status: 'requires_action' },
-      },
+    const turn1: SSEEvent[] = [
+      ...thoughtEvents(0, 'sig_abc'),
+      ...callEvents(1, 'call_1', 'search', '{"q":"x"}'),
+      completedEvent('int_1', 'requires_action'),
     ];
 
     const messages: Step[] = [
@@ -553,33 +442,15 @@ describe('ModelHandlerGoogleInteractions tool use', () => {
     messages.push(...followUp);
 
     // --- Turn 2: capture exactly what the handler sends. ---
-    let captured:
-      Interactions.CreateModelInteractionParamsStreaming | undefined;
-    const capturingClient = {
-      interactions: {
-        create: async (
-          params: Interactions.CreateModelInteractionParamsStreaming,
-        ) => {
-          captured = params;
-          return (async function* () {
-            yield {
-              event_type: 'interaction.completed',
-              interaction: {
-                id: 'int_2',
-                status: 'completed',
-                steps: [
-                  {
-                    type: 'model_output',
-                    content: [{ type: 'text', text: 'done' }],
-                  },
-                ],
-              },
-            } as Interactions.InteractionSSEEvent;
-          })();
-        },
-      },
-      models: {},
-    };
+    const calls: CreateParams[] = [];
+    const capturingClient = fakeClient(
+      [
+        completedEvent('int_2', 'completed', [
+          { type: 'model_output', content: [{ type: 'text', text: 'done' }] },
+        ]),
+      ],
+      calls,
+    );
 
     await handler.createResponse({
       client: capturingClient as never,
@@ -588,15 +459,16 @@ describe('ModelHandlerGoogleInteractions tool use', () => {
       tools: [],
     });
 
+    const captured = calls[0];
     expect(captured).toBeDefined();
-    expect(captured!.store).toBe(false);
+    expect(captured.store).toBe(false);
     expect(
       (captured as { previous_interaction_id?: string })
         .previous_interaction_id,
     ).toBeUndefined();
 
     // The entire prior transcript is resent verbatim as `input`.
-    const input = captured!.input as Step[];
+    const input = captured.input as Step[];
     expect(input.map((s) => s.type)).toEqual([
       'user_input',
       'thought',

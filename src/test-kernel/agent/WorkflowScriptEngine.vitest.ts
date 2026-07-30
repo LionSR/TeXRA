@@ -9,6 +9,7 @@ import {
   type WorkflowAgentInvocation,
   type WorkflowScriptControl,
   type WorkflowScriptEvent,
+  type WorkflowScriptRunResult,
 } from '@agent/workflowScript';
 import { runScriptInSandbox } from '@agent/workflowScript/sandbox';
 import { delay } from '@utils/core';
@@ -21,6 +22,29 @@ const META = `export const meta = {
 
 function echoRunner(invocation: WorkflowAgentInvocation): Promise<string> {
   return Promise.resolve(`result:${invocation.prompt}`);
+}
+
+/** Runs `body` under the shared META header, echoing prompts by default. */
+function runScript(
+  body: string,
+  overrides: Partial<Parameters<typeof runWorkflowScript>[0]> = {},
+): Promise<WorkflowScriptRunResult> {
+  return runWorkflowScript({
+    script: `${META}${body}`,
+    runAgent: echoRunner,
+    ...overrides,
+  });
+}
+
+function rejectOnAbort(
+  invocation: WorkflowAgentInvocation,
+  reject: (error: Error) => void,
+): void {
+  invocation.signal.addEventListener(
+    'abort',
+    () => reject(new Error('aborted')),
+    { once: true },
+  );
 }
 
 describe('parseWorkflowScript', () => {
@@ -293,14 +317,13 @@ return await agent('inspect', {
   });
 
   it('runs a script end-to-end with agent calls and args', async () => {
-    const run = await runWorkflowScript({
-      script: `${META}
+    const run = await runScript(
+      `
 const a = await agent('alpha')
 const b = await agent('beta:' + args.suffix)
 return [a, b]`,
-      args: { suffix: 'S' },
-      runAgent: echoRunner,
-    });
+      { args: { suffix: 'S' } },
+    );
     expect(run.result).toEqual(['result:alpha', 'result:beta:S']);
     expect(run.agentCalls).toBe(2);
     expect(run.journal).toHaveLength(2);
@@ -398,25 +421,18 @@ return [routine, difficult]`,
 
   it('rejects a non-object schema option', async () => {
     await expect(
-      runWorkflowScript({
-        script: `${META}return await agent('draft', { schema: 'nope' })`,
-        runAgent: echoRunner,
-      }),
+      runScript(`return await agent('draft', { schema: 'nope' })`),
     ).rejects.toThrow(/schema.*must be a plain JSON Schema object/i);
   });
 
   it('rejects an empty or regex-bearing structured-output schema', async () => {
     await expect(
-      runWorkflowScript({
-        script: `${META}return await agent('draft', { schema: {} })`,
-        runAgent: echoRunner,
-      }),
+      runScript(`return await agent('draft', { schema: {} })`),
     ).rejects.toThrow(/schema.*object-root JSON Schema/i);
     await expect(
-      runWorkflowScript({
-        script: `${META}return await agent('draft', { schema: { type: 'object', properties: { value: { type: 'string', pattern: '(a+)+$' } } } })`,
-        runAgent: echoRunner,
-      }),
+      runScript(
+        `return await agent('draft', { schema: { type: 'object', properties: { value: { type: 'string', pattern: '(a+)+$' } } } })`,
+      ),
     ).rejects.toThrow(/cannot use pattern/i);
   });
 
@@ -465,23 +481,17 @@ return await parallel([
     ).toEqual(['call-0', 'call-1']);
 
     await expect(
-      runWorkflowScript({
-        script: `${META}return await parallel([
+      runScript(`return await parallel([
   () => agent('same'),
   () => agent('same'),
-])`,
-        runAgent: echoRunner,
-      }),
+])`),
     ).rejects.toThrow(/require distinct non-empty "id" options/i);
 
     await expect(
-      runWorkflowScript({
-        script: `${META}return await parallel([
+      runScript(`return await parallel([
   () => agent('same', { id: 'same-id' }),
   () => agent('same', { id: ' same-id ' }),
-        ])`,
-        runAgent: echoRunner,
-      }),
+        ])`),
     ).rejects.toThrow(/require distinct non-empty "id" options/i);
   });
 
@@ -531,15 +541,12 @@ return await agent('merge', {
 
   it('parallel(): surfaces script errors instead of converting them to null', async () => {
     await expect(
-      runWorkflowScript({
-        script: `${META}
+      runScript(`
 return await parallel([
   () => agent('ok-1'),
   () => { throw new Error('thunk boom') },
   () => agent('ok-2'),
-])`,
-        runAgent: echoRunner,
-      }),
+])`),
     ).rejects.toThrow('thunk boom');
   });
 
@@ -560,16 +567,15 @@ return await parallel([
     );
 
     await expect(
-      runWorkflowScript({
-        script: `${META}
+      runScript(
+        `
 return await parallel([
   () => agent('running'),
   () => agent('queued'),
   () => { throw new Error('thunk boom') },
         ])`,
-        runAgent: runner,
-        concurrency: 1,
-      }),
+        { runAgent: runner, concurrency: 1 },
+      ),
     ).rejects.toThrow('thunk boom');
     expect(runner).toHaveBeenCalledTimes(1);
   });
@@ -580,10 +586,10 @@ return await parallel([
         ? Promise.reject(new Error('runner failed'))
         : echoRunner(invocation),
     );
-    const run = await runWorkflowScript({
-      script: `${META}return [await agent('boom'), await agent('fine')]`,
-      runAgent: runner,
-    });
+    const run = await runScript(
+      `return [await agent('boom'), await agent('fine')]`,
+      { runAgent: runner },
+    );
     expect(run.result).toEqual([null, 'result:fine']);
     // Only the successful call is journaled, so a resume retries the failure.
     expect(run.journal.map((entry) => entry.index)).toEqual([1]);
@@ -675,14 +681,13 @@ return await parallel([
       completed += 1;
       return invocation.prompt;
     };
-    const run = await runWorkflowScript({
-      script: `${META}
+    const run = await runScript(
+      `
 const items = Array.from({ length: 100 }, (_, i) => i)
 const out = await parallel(items.map((n) => () => agent('call-' + n)))
 return out.length`,
-      runAgent: runner,
-      concurrency: 4,
-    });
+      { runAgent: runner, concurrency: 4 },
+    );
     expect(maxInFlight).toBeLessThanOrEqual(4);
     expect(completed).toBe(100);
     expect(run.result).toBe(100);
@@ -699,12 +704,11 @@ return out.length`,
       inFlight -= 1;
       return invocation.prompt;
     };
-    await runWorkflowScript({
-      script: `${META}
+    await runScript(
+      `
 return await parallel([1, 2, 3, 4, 5, 6].map((n) => () => agent('call-' + n)))`,
-      runAgent: runner,
-      concurrency: 2,
-    });
+      { runAgent: runner, concurrency: 2 },
+    );
     expect(maxInFlight).toBe(2);
   });
 
@@ -728,14 +732,13 @@ return b`;
 
     // Edited second call: first replays from cache, second runs live.
     const editedRunner = vi.fn(echoRunner);
-    const edited = await runWorkflowScript({
-      script: `${META}
+    const edited = await runScript(
+      `
 const a = await agent('stage-a')
 const b = await agent('stage-b-EDITED:' + a)
 return b`,
-      runAgent: editedRunner,
-      journal: first.journal,
-    });
+      { runAgent: editedRunner, journal: first.journal },
+    );
     expect(edited.result).toBe('result:stage-b-EDITED:result:stage-a');
     expect(editedRunner).toHaveBeenCalledTimes(1);
     expect(editedRunner.mock.calls[0][0].prompt).toBe(
@@ -834,24 +837,20 @@ return await agent('Inspect src', { id: 'inspect' })`,
 
   it('requires hosts to fingerprint file-backed calls', async () => {
     await expect(
-      runWorkflowScript({
-        script: `${META}return await agent('review', {
+      runScript(`return await agent('review', {
   inputFiles: ['proof.tex'],
-})`,
-        runAgent: echoRunner,
-      }),
+})`),
     ).rejects.toThrow(/must fingerprint agent\(\) file dependencies/);
   });
 
   it('rejects an empty host fingerprint for file-backed calls', async () => {
     await expect(
-      runWorkflowScript({
-        script: `${META}return await agent('review', {
+      runScript(
+        `return await agent('review', {
   inputFiles: ['proof.tex'],
 })`,
-        runAgent: echoRunner,
-        fingerprintAgentDependencies: async () => undefined as never,
-      }),
+        { fingerprintAgentDependencies: async () => undefined as never },
+      ),
     ).rejects.toThrow(/returned no fingerprint/);
   });
 
@@ -914,11 +913,7 @@ return await agent('Inspect src', { id: 'inspect' })`,
       new Promise<string>((resolve, reject) => {
         invocations.push(invocation);
         if (invocations.length === 2) resolve('fresh result');
-        invocation.signal.addEventListener(
-          'abort',
-          () => reject(new Error('aborted')),
-          { once: true },
-        );
+        rejectOnAbort(invocation, reject);
       });
     const runPromise = runWorkflowScript({
       script: `${META}return await agent('review', {
@@ -972,29 +967,22 @@ return await agent('Inspect src', { id: 'inspect' })`,
   });
 
   it('blocks Date.now() and Math.random() inside scripts', async () => {
-    await expect(
-      runWorkflowScript({
-        script: `${META}return Date.now()`,
-        runAgent: echoRunner,
-      }),
-    ).rejects.toThrow(/Date\.now\(\) is unavailable/);
-    await expect(
-      runWorkflowScript({
-        script: `${META}return Math.random()`,
-        runAgent: echoRunner,
-      }),
-    ).rejects.toThrow(/Math\.random\(\) is unavailable/);
+    await expect(runScript(`return Date.now()`)).rejects.toThrow(
+      /Date\.now\(\) is unavailable/,
+    );
+    await expect(runScript(`return Math.random()`)).rejects.toThrow(
+      /Math\.random\(\) is unavailable/,
+    );
   });
 
   it('enforces the lifetime agent-call cap', async () => {
     await expect(
-      runWorkflowScript({
-        script: `${META}
+      runScript(
+        `
 for (let i = 0; i < 10; i++) await agent('call-' + i)
 return 'done'`,
-        runAgent: echoRunner,
-        maxAgentCalls: 3,
-      }),
+        { maxAgentCalls: 3 },
+      ),
     ).rejects.toThrow(/agent-call cap/);
   });
 
@@ -1105,91 +1093,55 @@ return await agent('active', { label: 'Active' })`,
   });
 
   it('rejects invalid primitive usage with clear errors', async () => {
+    await expect(runScript(`return await agent('')`)).rejects.toThrow(
+      /non-empty string prompt/,
+    );
+    await expect(runScript(`return await parallel('nope')`)).rejects.toThrow(
+      /array of zero-arg functions/,
+    );
     await expect(
-      runWorkflowScript({
-        script: `${META}return await agent('')`,
-        runAgent: echoRunner,
-      }),
-    ).rejects.toThrow(/non-empty string prompt/);
-    await expect(
-      runWorkflowScript({
-        script: `${META}return await parallel('nope')`,
-        runAgent: echoRunner,
-      }),
-    ).rejects.toThrow(/array of zero-arg functions/);
-    await expect(
-      runWorkflowScript({
-        script: `${META}return await parallel([() => agent('x'), 42])`,
-        runAgent: echoRunner,
-      }),
+      runScript(`return await parallel([() => agent('x'), 42])`),
     ).rejects.toThrow(/parallel\(\): item 1 is not a function/);
+    await expect(runScript(`return await agent('x', [])`)).rejects.toThrow(
+      /must be a plain object/,
+    );
     await expect(
-      runWorkflowScript({
-        script: `${META}return await agent('x', [])`,
-        runAgent: echoRunner,
-      }),
-    ).rejects.toThrow(/must be a plain object/);
-    await expect(
-      runWorkflowScript({
-        script: `${META}return await agent('x', { inputFiles: [''] })`,
-        runAgent: echoRunner,
-      }),
+      runScript(`return await agent('x', { inputFiles: [''] })`),
     ).rejects.toThrow(/inputFiles.*arrays of non-empty strings/);
     await expect(
-      runWorkflowScript({
-        script: `${META}return await agent('x', { inputFiles: ['   '] })`,
-        runAgent: echoRunner,
-      }),
+      runScript(`return await agent('x', { inputFiles: ['   '] })`),
     ).rejects.toThrow(/inputFiles.*arrays of non-empty strings/);
     await expect(
-      runWorkflowScript({
-        script: `${META}return await agent('x', { model: '  ' })`,
-        runAgent: echoRunner,
-      }),
+      runScript(`return await agent('x', { model: '  ' })`),
     ).rejects.toThrow(/option "model" must be a non-empty string/);
+    await expect(runScript(`phase('   ')\nreturn null`)).rejects.toThrow(
+      /Workflow phase title must not be blank/,
+    );
     await expect(
-      runWorkflowScript({
-        script: `${META}phase('   ')\nreturn null`,
-        runAgent: echoRunner,
-      }),
-    ).rejects.toThrow(/Workflow phase title must not be blank/);
-    await expect(
-      runWorkflowScript({
-        script: `${META}return await agent('work', { phase: '   ' })`,
-        runAgent: echoRunner,
-      }),
+      runScript(`return await agent('work', { phase: '   ' })`),
     ).rejects.toThrow(/option "phase" must be a non-empty string/);
   });
 
   it('separates workflow file options from structured tool-use calls', async () => {
     await expect(
-      runWorkflowScript({
-        script: `${META}return await agent('x', {
+      runScript(`return await agent('x', {
   agentName: 'assistant',
   schema: { type: 'object' },
   contextFiles: ['notes.tex'],
-})`,
-        runAgent: echoRunner,
-      }),
+})`),
     ).rejects.toThrow(/structured-output calls cannot use file options/);
     await expect(
-      runWorkflowScript({
-        script: `${META}return await agent('x', {
+      runScript(`return await agent('x', {
   schema: { type: 'object' },
-})`,
-        runAgent: echoRunner,
-      }),
+})`),
     ).rejects.toThrow(/must name a tool-use agent/);
   });
 
   it('does not let fan-out swallow invalid structured-call declarations', async () => {
     await expect(
-      runWorkflowScript({
-        script: `${META}return await parallel([
+      runScript(`return await parallel([
   () => agent('x', { schema: { type: 'object' } }),
-])`,
-        runAgent: echoRunner,
-      }),
+])`),
     ).rejects.toMatchObject({
       name: 'WorkflowRunAbortError',
       message: expect.stringContaining('must name a tool-use agent'),
@@ -1202,23 +1154,23 @@ return await agent('active', { label: 'Active' })`,
       seen.push(invocation);
       return echoRunner(invocation);
     });
-    await runWorkflowScript({
-      script: `${META}
+    await runScript(
+      `
 return await agent('a', { agentName: 'assistant', schema: { type: 'object' } })`,
-      runAgent: runner,
-    });
+      { runAgent: runner },
+    );
 
     expect(seen[0]?.options.schema).toMatchObject({
       type: 'object',
       properties: {},
     });
     await expect(
-      runWorkflowScript({
-        script: `${META}return await agent('b', {
+      runScript(
+        `return await agent('b', {
   outputSchema: { type: 'object' },
 })`,
-        runAgent: runner,
-      }),
+        { runAgent: runner },
+      ),
     ).rejects.toThrow(/option "outputSchema" is not recognized/);
   });
 
@@ -1226,10 +1178,7 @@ return await agent('a', { agentName: 'assistant', schema: { type: 'object' } })`
     // agent is a realm-local wrapper, so its .constructor is the sandbox's
     // codeGeneration-gated (Async)Function — compiling from strings throws.
     await expect(
-      runWorkflowScript({
-        script: `${META}return agent.constructor('return process')()`,
-        runAgent: echoRunner,
-      }),
+      runScript(`return agent.constructor('return process')()`),
     ).rejects.toThrow(/disallowed/i);
   });
 
@@ -1238,8 +1187,7 @@ return await agent('a', { agentName: 'assistant', schema: { type: 'object' } })`
     // invoked by sandbox code: its `this`/args and any
     // .constructor it can reach are realm-local and codegen-gated. A host
     // callback would carry the ungated host Function constructor.
-    const run = await runWorkflowScript({
-      script: `${META}
+    const run = await runScript(`
 const results = await parallel([
   () => {
     try {
@@ -1252,9 +1200,7 @@ const results = await parallel([
     }
   },
 ])
-return results[0]`,
-      runAgent: echoRunner,
-    });
+return results[0]`);
     expect(typeof run.result).toBe('string');
     expect(run.result).toMatch(/^blocked:/);
   });
@@ -1276,8 +1222,7 @@ return results[0]`,
     // receives a realm-created resolve callback — its .constructor is the
     // sandbox's codegen-gated Function, so the escape attempt throws and
     // the thenable can only resolve with data.
-    const run = await runWorkflowScript({
-      script: `${META}
+    const run = await runScript(`
 const results = await parallel([
   () => ({
     then(resolve) {
@@ -1289,9 +1234,7 @@ const results = await parallel([
     },
   }),
 ])
-return results[0]`,
-      runAgent: echoRunner,
-    });
+return results[0]`);
     expect(run.result).toMatch(/^blocked:/);
   });
 
@@ -1299,13 +1242,9 @@ return results[0]`,
     // A BigInt (or circular object) cannot be JSON-encoded; the realm-side
     // deliver must route that through the error path immediately instead of
     // throwing and leaving the host promise to hang until the wall clock.
-    await expect(
-      runWorkflowScript({
-        script: `${META}return 1n`,
-        runAgent: echoRunner,
-        timeoutMs: 5_000,
-      }),
-    ).rejects.toThrow(/not JSON-serializable/i);
+    await expect(runScript(`return 1n`, { timeoutMs: 5_000 })).rejects.toThrow(
+      /not JSON-serializable/i,
+    );
   });
 
   it('carries guest stack frames on script errors', async () => {
@@ -1313,13 +1252,12 @@ return results[0]`,
     // parallel() returns. The bare QuickJS message ("value is not iterable")
     // is useless without the frame locating it inside the script.
     await expect(
-      runWorkflowScript({
-        script: `${META}
+      runScript(
+        `
 const [a, b] = parallel([() => agent('x'), () => agent('y')])
 return a`,
-        runAgent: echoRunner,
-        timeoutMs: 5_000,
-      }),
+        { timeoutMs: 5_000 },
+      ),
     ).rejects.toThrow(/is not iterable[\s\S]*at .*test-flow\.workflow\.js:\d+/);
   });
 
@@ -1328,39 +1266,30 @@ return a`,
     // script that tries to reassign then (to invoke the kickoff's delivery
     // callback with a forged value) gets a real result — the reassignment
     // throws under strict mode, or is simply ignored — not a forged success.
-    const run = await runWorkflowScript({
-      script: `${META}
+    const run = await runScript(`
 try {
   Promise.prototype.then = function () { return this }
 } catch (error) {
   // strict-mode assignment to a non-writable property throws; swallow it
 }
-return 'real-result'`,
-      runAgent: echoRunner,
-    });
+return 'real-result'`);
     expect(run.result).toBe('real-result');
   });
 
   it('does not expose the result delivery channel to scripts', async () => {
     // The kickoff captures and deletes __wfDeliver/__wfBody before the body
     // runs, so a script cannot forge an early result through them.
-    const run = await runWorkflowScript({
-      script: `${META}
-return [typeof globalThis.__wfDeliver, typeof globalThis.__wfBody]`,
-      runAgent: echoRunner,
-    });
+    const run = await runScript(`
+return [typeof globalThis.__wfDeliver, typeof globalThis.__wfBody]`);
     expect(run.result).toEqual(['undefined', 'undefined']);
   });
 
   it('keeps a delivered result when a later guest microtask throws', async () => {
-    const run = await runWorkflowScript({
-      script: `${META}
+    const run = await runScript(`
 Promise.resolve().then(() => {
   Promise.resolve().then(() => { throw new Error('late rejection') })
 })
-return 'delivered'`,
-      runAgent: echoRunner,
-    });
+return 'delivered'`);
 
     expect(run.result).toBe('delivered');
   });
@@ -1402,28 +1331,28 @@ return 'delivered'`,
           resolve('aborted');
         });
       });
-    const run = await runWorkflowScript({
-      script: `${META}
+    const run = await runScript(
+      `
 agent('detached')
 return 'done'`,
-      runAgent: runner,
-    });
+      { runAgent: runner },
+    );
     expect(run.result).toBe('done');
     expect(sawAbort).toBe(true);
   });
 
   it('gives scripts realm-local agent results, not host objects', async () => {
     const runner = () => Promise.resolve({ nested: { data: 42 } });
-    const run = await runWorkflowScript({
-      script: `${META}
+    const run = await runScript(
+      `
 const r = await agent('x')
 try {
   return r.constructor.constructor('return typeof process')()
 } catch {
   return 'blocked:' + r.nested.data
 }`,
-      runAgent: runner,
-    });
+      { runAgent: runner },
+    );
     expect(run.result).toBe('blocked:42');
   });
 
@@ -1446,57 +1375,41 @@ return note`);
   it('keeps determinism guards non-writable and blocks argless new Date()', async () => {
     // Strict mode makes assignment to the non-writable guard throw outright.
     await expect(
-      runWorkflowScript({
-        script: `${META}
+      runScript(`
 Math.random = () => 0.5
-return Math.random()`,
-        runAgent: echoRunner,
-      }),
+return Math.random()`),
     ).rejects.toThrow(/read.?only|unavailable/i);
-    await expect(
-      runWorkflowScript({
-        script: `${META}return new Date()`,
-        runAgent: echoRunner,
-      }),
-    ).rejects.toThrow(/new Date\(\) without arguments/);
-    const explicit = await runWorkflowScript({
-      script: `${META}return new Date(0).getTime()`,
-      runAgent: echoRunner,
-    });
+    await expect(runScript(`return new Date()`)).rejects.toThrow(
+      /new Date\(\) without arguments/,
+    );
+    const explicit = await runScript(`return new Date(0).getTime()`);
     expect(explicit.result).toBe(0);
     // Date.prototype.constructor is locked too, so a script cannot reassign
     // it to smuggle the unguarded constructor back onto instances.
     await expect(
-      runWorkflowScript({
-        script: `${META}
+      runScript(`
 Date.prototype.constructor = function () { return { now: () => 1 } }
-return 'reassigned'`,
-        runAgent: echoRunner,
-      }),
+return 'reassigned'`),
     ).rejects.toThrow(/read.?only|Cannot assign/i);
   });
 
   it('does not let parallel() swallow the agent-call cap', async () => {
     await expect(
-      runWorkflowScript({
-        script: `${META}
+      runScript(
+        `
 return await parallel([1, 2, 3, 4, 5].map((n) => () => agent('call-' + n)))`,
-        runAgent: echoRunner,
-        maxAgentCalls: 3,
-      }),
+        { maxAgentCalls: 3 },
+      ),
     ).rejects.toThrow(/agent-call cap/);
   });
 
   it('lets parallel() surface script bugs to the editable-file retry path', async () => {
     await expect(
-      runWorkflowScript({
-        script: `${META}
+      runScript(`
 return await parallel([
   () => agent('ok'),
   () => { throw new Error('script bug here') },
-])`,
-        runAgent: echoRunner,
-      }),
+])`),
     ).rejects.toThrow('script bug here');
   });
 
@@ -1515,13 +1428,12 @@ return await parallel([
       return invocation.prompt;
     };
     await expect(
-      runWorkflowScript({
-        script: `${META}
+      runScript(
+        `
 await agent('one')
 return await agent('two')`,
-        runAgent: runner,
-        timeoutMs: 50,
-      }),
+        { runAgent: runner, timeoutMs: 50 },
+      ),
     ).rejects.toThrow(/timed out/);
     // Let the orphaned continuation reach its second agent() call.
     await delay(250);
@@ -1569,13 +1481,12 @@ return await agent('one')`,
   it('preempts a CPU loop reached after an agent await', async () => {
     const startedAt = Date.now();
     await expect(
-      runWorkflowScript({
-        script: `${META}
+      runScript(
+        `
 await agent('one')
 while (true) {}`,
-        runAgent: echoRunner,
-        timeoutMs: 40,
-      }),
+        { timeoutMs: 40 },
+      ),
     ).rejects.toThrow(/timed out/);
     expect(Date.now() - startedAt).toBeLessThan(1_000);
   });
@@ -1583,13 +1494,12 @@ while (true) {}`,
   it('preempts a CPU loop reached through the guest microtask queue', async () => {
     const startedAt = Date.now();
     await expect(
-      runWorkflowScript({
-        script: `${META}
+      runScript(
+        `
 await Promise.resolve()
 while (true) {}`,
-        runAgent: echoRunner,
-        timeoutMs: 40,
-      }),
+        { timeoutMs: 40 },
+      ),
     ).rejects.toThrow(/timed out/);
     expect(Date.now() - startedAt).toBeLessThan(1_000);
   });
@@ -1622,10 +1532,7 @@ while (true) {}`,
     await delay(0);
     expect(onTimeout).toHaveBeenCalledTimes(1);
 
-    const nextRun = await runWorkflowScript({
-      script: `${META}return 7`,
-      runAgent: echoRunner,
-    });
+    const nextRun = await runScript(`return 7`);
     expect(nextRun.result).toBe(7);
   });
 
@@ -1680,11 +1587,7 @@ while (true) {}`,
 
   it('rejects explicitly supplied non-serializable workflow args', async () => {
     await expect(
-      runWorkflowScript({
-        script: `${META}return args`,
-        args: Symbol('not-json'),
-        runAgent: echoRunner,
-      }),
+      runScript(`return args`, { args: Symbol('not-json') }),
     ).rejects.toThrow(/Workflow args must be JSON-serializable/i);
   });
 
@@ -1714,15 +1617,14 @@ while (true) {}`,
       });
 
     await expect(
-      runWorkflowScript({
-        script: `${META}
+      runScript(
+        `
 return await parallel([
   () => agent('waiting-sibling'),
   async () => { await Promise.resolve(); while (true) {} },
 ])`,
-        runAgent: runner,
-        timeoutMs: 40,
-      }),
+        { runAgent: runner, timeoutMs: 40 },
+      ),
     ).rejects.toThrow(/timed out/);
     expect(sawAbort).toBe(true);
   });
@@ -1739,13 +1641,12 @@ return await parallel([
   // exceeds the suite-wide `testTimeout: 10000` in vitest.config.mjs.
   it('contains guest memory exhaustion inside the QuickJS runtime', async () => {
     await expect(
-      runWorkflowScript({
-        script: `${META}
+      runScript(
+        `
 const values = []
 while (true) values.push(new Uint8Array(1024 * 1024))`,
-        runAgent: echoRunner,
-        timeoutMs: 2_000,
-      }),
+        { timeoutMs: 2_000 },
+      ),
     ).rejects.toThrow(/memory/i);
   }, 150_000);
 
@@ -1759,12 +1660,11 @@ while (true) values.push(new Uint8Array(1024 * 1024))`,
       return invocation.prompt;
     };
     await expect(
-      runWorkflowScript({
-        script: `${META}
+      runScript(
+        `
 return await parallel([1, 2, 3, 4, 5].map((n) => () => agent('call-' + n)))`,
-        runAgent: runner,
-        maxAgentCalls: 3,
-      }),
+        { runAgent: runner, maxAgentCalls: 3 },
+      ),
     ).rejects.toThrow(/agent-call cap/);
     expect(sawAbort).toBe(true);
   });
@@ -1773,17 +1673,14 @@ return await parallel([1, 2, 3, 4, 5].map((n) => () => agent('call-' + n)))`,
     // Thunks run realm-side and sandbox bodies are forced into strict mode,
     // so arguments.callee.caller is unavailable even without this guard —
     // this covers non-strict callables a script might still construct.
-    const run = await runWorkflowScript({
-      script: `${META}
+    const run = await runScript(`
 return await parallel([function () {
   try {
     return arguments.callee.caller.constructor('return typeof process')()
   } catch {
     return 'blocked'
   }
-}])`,
-      runAgent: echoRunner,
-    });
+}])`);
     expect(run.result).toEqual(['blocked']);
   });
 
@@ -1798,12 +1695,12 @@ return await parallel([function () {
       settled += 1;
       return invocation.prompt;
     };
-    const run = await runWorkflowScript({
-      script: `${META}
+    const run = await runScript(
+      `
 const abandoned = agent('slow')
 return 'done'`,
-      runAgent: runner,
-    });
+      { runAgent: runner },
+    );
     expect(run.result).toBe('done');
     // The run waited for the straggler to settle (journal is final)...
     expect(settled).toBe(1);
@@ -1821,12 +1718,11 @@ return 'done'`,
       return Promise.reject(abortError);
     };
     await expect(
-      runWorkflowScript({
-        script: `${META}
+      runScript(
+        `
 return await parallel([() => agent('x')])`,
-        runAgent: runner,
-        onEvent: (event) => events.push(event),
-      }),
+        { runAgent: runner, onEvent: (event) => events.push(event) },
+      ),
     ).rejects.toThrow(/runner observed abort/);
     expect(events).toContainEqual({
       type: 'agent:end',
@@ -1852,14 +1748,14 @@ return await parallel([() => agent('x')])`,
     };
 
     await expect(
-      runWorkflowScript({
-        script: `${META}
+      runScript(
+        `
 try {
   await agent('x')
 } catch {}
 return 'incorrect success'`,
-        runAgent: runner,
-      }),
+        { runAgent: runner },
+      ),
     ).rejects.toMatchObject({
       name: 'WorkflowRunAbortError',
       message: 'durable manifest unavailable',
@@ -1906,11 +1802,7 @@ return 'incorrect success'`,
         release.set(invocation.index, () =>
           resolve(`done:${invocation.index}`),
         );
-        invocation.signal.addEventListener(
-          'abort',
-          () => reject(new Error('aborted')),
-          { once: true },
-        );
+        rejectOnAbort(invocation, reject);
       });
 
     const runPromise = runWorkflowScript({
@@ -1981,11 +1873,7 @@ return 'incorrect success'`,
         const attempt = (attemptByIndex.get(invocation.index) ?? 0) + 1;
         attemptByIndex.set(invocation.index, attempt);
         releases.push(() => resolve(`attempt-${attempt}`));
-        invocation.signal.addEventListener(
-          'abort',
-          () => reject(new Error('aborted')),
-          { once: true },
-        );
+        rejectOnAbort(invocation, reject);
       });
 
     const runPromise = runWorkflowScript({
@@ -2021,11 +1909,7 @@ return 'incorrect success'`,
     const runner = vi.fn((invocation: WorkflowAgentInvocation) => {
       invocation.reportModel?.('retry-model');
       return new Promise<never>((_resolve, reject) => {
-        invocation.signal.addEventListener(
-          'abort',
-          () => reject(new Error('aborted')),
-          { once: true },
-        );
+        rejectOnAbort(invocation, reject);
       });
     });
     const run = runWorkflowScript({
@@ -2078,15 +1962,13 @@ return 'incorrect success'`,
         );
       });
 
-    const runPromise = runWorkflowScript({
-      script: `${META}return await parallel([
+    const runPromise = runScript(
+      `return await parallel([
   () => agent('a', { id: 'a' }),
   () => agent('b', { id: 'b' }),
 ])`,
-      runAgent: runner,
-      concurrency: 2,
-      signal: parent.signal,
-    });
+      { runAgent: runner, concurrency: 2, signal: parent.signal },
+    );
 
     await vi.waitFor(() => expect(started.size).toBe(2));
     parent.abort(new DOMException('parent stopped', 'AbortError'));
@@ -2097,10 +1979,7 @@ return 'incorrect success'`,
 
   it('removes Intl so scripts cannot read the wall clock implicitly', async () => {
     await expect(
-      runWorkflowScript({
-        script: `${META}return new Intl.DateTimeFormat().format()`,
-        runAgent: echoRunner,
-      }),
+      runScript(`return new Intl.DateTimeFormat().format()`),
     ).rejects.toThrow();
   });
 });

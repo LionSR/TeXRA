@@ -79,23 +79,20 @@ async function handleFollowUpResult(
     case 'sent':
       emitQueuedFollowUpsChanged(streamId);
       break;
-    case 'queued':
+    case 'queued': {
       emitQueuedFollowUpsChanged(streamId);
-      {
-        const presentation = presentFollowUpResult(result);
-        if (presentation.severity === 'warning') {
-          if (presentation.refreshQueuedFollowUps) {
-            emitQueuedFollowUpsChanged(streamId);
-          }
-          await vscode.window.showWarningMessage(presentation.message);
-        } else if (presentation.severity === 'info') {
-          if (presentation.refreshQueuedFollowUps) {
-            emitQueuedFollowUpsChanged(streamId);
-          }
-          await vscode.window.showInformationMessage(presentation.message);
-        }
+      const presentation = presentFollowUpResult(result);
+      if (presentation.severity === 'none') break;
+      if (presentation.refreshQueuedFollowUps) {
+        emitQueuedFollowUpsChanged(streamId);
+      }
+      if (presentation.severity === 'warning') {
+        await vscode.window.showWarningMessage(presentation.message);
+      } else {
+        await vscode.window.showInformationMessage(presentation.message);
       }
       break;
+    }
     case 'no_session':
     case 'dropped':
       await vscode.window.showWarningMessage(

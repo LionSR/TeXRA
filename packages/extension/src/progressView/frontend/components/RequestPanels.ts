@@ -255,7 +255,7 @@ export class RequestPanels extends LitElement {
           appearance="plain"
           size="s"
           ?disabled=${index === 0}
-          @click=${this._eiPrev}
+          @click=${this.showPreviousInquiry}
         >
           ${waIcon('chevron-left')}
         </wa-button>
@@ -268,7 +268,7 @@ export class RequestPanels extends LitElement {
           appearance="plain"
           size="s"
           ?disabled=${index === perms.length - 1}
-          @click=${this._eiNext}
+          @click=${this.showNextInquiry}
         >
           ${waIcon('chevron-right')}
         </wa-button>
@@ -294,23 +294,21 @@ export class RequestPanels extends LitElement {
     return Math.max(index, 0);
   }
 
-  private selectExternalInquiry(index: number): void {
-    const permission = this.permissionGroups.externalInquiry[index];
+  /** Move the carousel selection by `delta`, clamped by the group bounds. */
+  private stepExternalInquiry(delta: number): void {
+    const permission =
+      this.permissionGroups.externalInquiry[this.externalInquiryIndex + delta];
     if (permission) {
       this.selectedExternalInquiryKey = getPermissionKey(permission);
     }
   }
 
-  private _eiPrev(): void {
-    const index = this.externalInquiryIndex;
-    if (index > 0) this.selectExternalInquiry(index - 1);
+  private showPreviousInquiry(): void {
+    this.stepExternalInquiry(-1);
   }
 
-  private _eiNext(): void {
-    const index = this.externalInquiryIndex;
-    if (index < this.permissionGroups.externalInquiry.length - 1) {
-      this.selectExternalInquiry(index + 1);
-    }
+  private showNextInquiry(): void {
+    this.stepExternalInquiry(1);
   }
 
   // ===========================================================================
@@ -340,12 +338,12 @@ export class RequestPanels extends LitElement {
       })
     ) {
       if (key === 'arrowleft') {
-        this._eiPrev();
+        this.showPreviousInquiry();
         event.preventDefault();
         return;
       }
       if (key === 'arrowright') {
-        this._eiNext();
+        this.showNextInquiry();
         event.preventDefault();
         return;
       }

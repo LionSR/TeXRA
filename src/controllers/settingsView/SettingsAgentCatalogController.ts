@@ -77,11 +77,6 @@ function enabledKeysIncludeAgent(
   );
 }
 
-/**
- * Minimal catalog surface needed to apply a preset roster. Structurally a
- * subset of {@link SettingsAgentCatalogState}, so the controller's state port
- * satisfies it directly.
- */
 export class SettingsAgentCatalogController {
   constructor(private readonly deps: SettingsAgentCatalogControllerDeps) {}
 
@@ -168,10 +163,10 @@ export class SettingsAgentCatalogController {
   }
 
   async applyPreset(presetId: string): Promise<SettingsAgentPresetApplyResult> {
-    const preset = this.getPreset(presetId);
-    if (!preset) return { ok: false, reason: 'unknownPreset' };
+    const resolved = this.resolvePreset(presetId);
+    if (!resolved.ok) return resolved;
 
-    const resolution = resolveTeamRoster(this.deps.state, preset);
+    const { preset, resolution } = resolved;
     await this.commitPresetResolution(preset, resolution);
 
     return { ok: true, preset, unresolvedNames: resolution.unresolvedNames };

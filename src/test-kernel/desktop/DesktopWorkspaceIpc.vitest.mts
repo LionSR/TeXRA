@@ -54,6 +54,21 @@ function createBrowserViews(): DesktopBrowserViews {
   };
 }
 
+type WorkspaceIpcOptions = Parameters<typeof createDesktopWorkspaceIpc>[1];
+
+function createIpc(
+  postToRenderer: (message: unknown) => void,
+  overrides: Partial<WorkspaceIpcOptions> = {},
+) {
+  const options: WorkspaceIpcOptions = {
+    ptyHost: createPtyHost(),
+    browserViews: createBrowserViews(),
+    toWindowBounds: (bounds) => bounds,
+    ...overrides,
+  };
+  return createDesktopWorkspaceIpc({ postToRenderer }, options);
+}
+
 describe('desktop workspace IPC', () => {
   beforeEach(async () => {
     fixtureRoot = mkdtempSync(join(tmpdir(), 'texra-workspace-ipc-'));
@@ -96,14 +111,7 @@ describe('desktop workspace IPC', () => {
 
   it('lists only direct children and loads nested directories on demand', async () => {
     const postToRenderer = vi.fn();
-    const ipc = createDesktopWorkspaceIpc(
-      { postToRenderer },
-      {
-        ptyHost: createPtyHost(),
-        browserViews: createBrowserViews(),
-        toWindowBounds: (bounds) => bounds,
-      },
-    );
+    const ipc = createIpc(postToRenderer);
 
     ipc.handleMessage({
       command: DESKTOP_WORKSPACE_COMMANDS.LIST_FILES,
@@ -145,15 +153,7 @@ describe('desktop workspace IPC', () => {
   it('reads regular workspace files but rejects symlink targets outside the workspace', async () => {
     const postToRenderer = vi.fn();
     const onAsyncError = vi.fn();
-    const ipc = createDesktopWorkspaceIpc(
-      { postToRenderer },
-      {
-        ptyHost: createPtyHost(),
-        browserViews: createBrowserViews(),
-        toWindowBounds: (bounds) => bounds,
-        onAsyncError,
-      },
-    );
+    const ipc = createIpc(postToRenderer, { onAsyncError });
 
     ipc.handleMessage({
       command: DESKTOP_WORKSPACE_COMMANDS.READ_FILE,
@@ -201,14 +201,7 @@ describe('desktop workspace IPC', () => {
 
   it('recreates a workspace file deleted after the editor loaded it', async () => {
     const postToRenderer = vi.fn();
-    const ipc = createDesktopWorkspaceIpc(
-      { postToRenderer },
-      {
-        ptyHost: createPtyHost(),
-        browserViews: createBrowserViews(),
-        toWindowBounds: (bounds) => bounds,
-      },
-    );
+    const ipc = createIpc(postToRenderer);
     rmSync(join(workspacePath, 'paper.tex'));
 
     ipc.handleMessage({
@@ -230,14 +223,7 @@ describe('desktop workspace IPC', () => {
 
   it('reports a clear error when the deleted file parent is also gone', async () => {
     const postToRenderer = vi.fn();
-    const ipc = createDesktopWorkspaceIpc(
-      { postToRenderer },
-      {
-        ptyHost: createPtyHost(),
-        browserViews: createBrowserViews(),
-        toWindowBounds: (bounds) => bounds,
-      },
-    );
+    const ipc = createIpc(postToRenderer);
     rmSync(join(workspacePath, 'src'), { recursive: true });
 
     ipc.handleMessage({
@@ -258,15 +244,7 @@ describe('desktop workspace IPC', () => {
 
   it('reports renderer editor dirty state to the window lifecycle', () => {
     const onEditorDirtyChange = vi.fn();
-    const ipc = createDesktopWorkspaceIpc(
-      { postToRenderer: vi.fn() },
-      {
-        ptyHost: createPtyHost(),
-        browserViews: createBrowserViews(),
-        toWindowBounds: (bounds) => bounds,
-        onEditorDirtyChange,
-      },
-    );
+    const ipc = createIpc(vi.fn(), { onEditorDirtyChange });
 
     expect(
       ipc.handleMessage({
@@ -280,14 +258,7 @@ describe('desktop workspace IPC', () => {
   it('disposes terminal and browser resources at a renderer boundary', () => {
     const ptyHost = createPtyHost();
     const browserViews = createBrowserViews();
-    const ipc = createDesktopWorkspaceIpc(
-      { postToRenderer: vi.fn() },
-      {
-        ptyHost,
-        browserViews,
-        toWindowBounds: (bounds) => bounds,
-      },
-    );
+    const ipc = createIpc(vi.fn(), { ptyHost, browserViews });
 
     ipc.disposeRendererResources();
 
@@ -308,16 +279,10 @@ describe('desktop workspace IPC', () => {
     };
     const postToRenderer = vi.fn();
     const onAsyncError = vi.fn();
-    const success = createDesktopWorkspaceIpc(
-      { postToRenderer },
-      {
-        ptyHost: createPtyHost(),
-        browserViews: createBrowserViews(),
-        toWindowBounds: (bounds) => bounds,
-        getEnvironmentSummary: async () => environment,
-        onAsyncError,
-      },
-    );
+    const success = createIpc(postToRenderer, {
+      getEnvironmentSummary: async () => environment,
+      onAsyncError,
+    });
 
     success.handleMessage({
       command: DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_REQUEST,
@@ -330,18 +295,12 @@ describe('desktop workspace IPC', () => {
     );
 
     const failure = new Error('git unavailable');
-    const failed = createDesktopWorkspaceIpc(
-      { postToRenderer },
-      {
-        ptyHost: createPtyHost(),
-        browserViews: createBrowserViews(),
-        toWindowBounds: (bounds) => bounds,
-        getEnvironmentSummary: async () => {
-          throw failure;
-        },
-        onAsyncError,
+    const failed = createIpc(postToRenderer, {
+      getEnvironmentSummary: async () => {
+        throw failure;
       },
-    );
+      onAsyncError,
+    });
     failed.handleMessage({
       command: DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_REQUEST,
     });
@@ -361,18 +320,9 @@ describe('desktop workspace IPC', () => {
       resize: vi.fn(),
       dispose: vi.fn(),
     }));
-    const ipc = createDesktopWorkspaceIpc(
-      { postToRenderer: vi.fn() },
-      {
-        ptyHost: {
-          create,
-          get: vi.fn(() => undefined),
-          disposeAll: vi.fn(),
-        },
-        browserViews: createBrowserViews(),
-        toWindowBounds: (bounds) => bounds,
-      },
-    );
+    const ipc = createIpc(vi.fn(), {
+      ptyHost: { create, get: vi.fn(() => undefined), disposeAll: vi.fn() },
+    });
 
     expect(
       ipc.handleMessage({

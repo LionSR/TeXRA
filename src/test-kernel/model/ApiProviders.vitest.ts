@@ -155,28 +155,14 @@ describe('API provider key caches', () => {
 
   it('does not let in-flight stale lookups repopulate the cache after invalidation', async () => {
     const firstLookup = createDeferred<string | undefined>();
-    const store = new Map<string, string>();
+    const { secrets: backing, store } = createSecrets();
     let reads = 0;
     const secrets: PlatformSecrets = {
+      ...backing,
       async get(key) {
         reads += 1;
         if (reads === 1) return firstLookup.promise;
         return store.get(key);
-      },
-      async getStored(key) {
-        return store.get(key);
-      },
-      async set(key, value) {
-        store.set(key, value);
-      },
-      async delete(key) {
-        store.delete(key);
-      },
-      async listStoredKeys() {
-        return [...store.keys()];
-      },
-      getEnv() {
-        return undefined;
       },
     };
 

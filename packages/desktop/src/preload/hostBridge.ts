@@ -21,24 +21,18 @@ export interface ElectronHostBridgeInstallOptions {
   ): void;
 }
 
-function createElectronHostBridge(
-  sendToMain: ElectronHostBridgeInstallOptions['sendToMain'],
+export function installElectronHostBridge(
+  options: ElectronHostBridgeInstallOptions,
 ): HostBridgeApi {
   let state: unknown;
-  return {
+  const bridge: HostBridgeApi = {
     postMessage: (message) =>
-      sendToMain(ELECTRON_WEBVIEW_MESSAGE_CHANNEL, message),
+      options.sendToMain(ELECTRON_WEBVIEW_MESSAGE_CHANNEL, message),
     getState: () => state,
     setState: (nextState) => {
       state = nextState;
     },
   };
-}
-
-export function installElectronHostBridge(
-  options: ElectronHostBridgeInstallOptions,
-): HostBridgeApi {
-  const bridge = createElectronHostBridge(options.sendToMain);
   options.exposeInMainWorld(HOST_BRIDGE_API_KEY, bridge);
   options.onHostMessage(ELECTRON_WEBVIEW_PUSH_CHANNEL, options.postToRenderer);
   return bridge;

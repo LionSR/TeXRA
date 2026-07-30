@@ -1,7 +1,11 @@
 import { StatusCodes } from 'http-status-codes';
 import { isObject, isString } from '@utils/core';
 
-import { errorBodyCandidates, pickStringField } from './errorInspection';
+import {
+  errorBodyCandidates,
+  pickNumberField,
+  pickStringField,
+} from './errorInspection';
 
 /**
  * Maps provider error type/code strings to their corresponding HTTP status
@@ -78,8 +82,7 @@ export function getRelayRequestLimitReason(
   rawErrorBody: unknown,
 ): 'concurrency' | 'rate' | undefined {
   for (const candidate of errorBodyCandidates(rawErrorBody)) {
-    if (!isObject(candidate)) continue;
-    const reason = candidate.reason;
+    const reason = pickStringField(candidate, 'reason');
     if (reason === 'concurrency' || reason === 'rate') return reason;
   }
   return undefined;
@@ -90,15 +93,8 @@ export function getRelayRequestLimitRetryAfterMs(
   rawErrorBody: unknown,
 ): number | undefined {
   for (const candidate of errorBodyCandidates(rawErrorBody)) {
-    if (!isObject(candidate)) continue;
-    const seconds = candidate.retryAfterSeconds;
-    if (
-      typeof seconds === 'number' &&
-      Number.isFinite(seconds) &&
-      seconds >= 0
-    ) {
-      return seconds * 1000;
-    }
+    const seconds = pickNumberField(candidate, 'retryAfterSeconds');
+    if (seconds !== undefined && seconds >= 0) return seconds * 1000;
   }
   return undefined;
 }

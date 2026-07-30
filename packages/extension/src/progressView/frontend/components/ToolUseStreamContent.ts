@@ -12,8 +12,6 @@ import { conversationContentStyles } from './ConversationContent.styles';
 import { renderStreamHeader } from './streamHeaderView';
 import { isToolUseState, type ToolUseStreamState } from '../store';
 
-// Local imports - components
-
 // Side-effect imports - sibling components
 import './RequestPanels';
 import './TodoList';

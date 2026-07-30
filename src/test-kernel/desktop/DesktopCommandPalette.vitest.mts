@@ -151,45 +151,53 @@ describe('desktop command palette', () => {
   // wa-dialog + wa-input wiring (Lit-rendered web components). The DOM
   // polyfills installed by useLitComponentTestDom above let those WA
   // components register and animate inside jsdom.
-  function findInputElement(
-    element: HTMLElement & { open: boolean },
-  ): HTMLInputElement | null {
-    // wa-input wraps a native <input> in shadow DOM. Look it up via the host
-    // wa-input tag, then descend into its shadow root for the real input.
-    const waInput = element.querySelector(
-      'wa-input.desktop-command-palette-input',
-    );
-    return (
-      waInput?.shadowRoot?.querySelector<HTMLInputElement>('input') ?? null
-    );
+  function paletteInput(
+    element: HTMLElement,
+  ): HTMLElement & { value: string | null } {
+    const waInput = element.querySelector<
+      HTMLElement & { value: string | null }
+    >('wa-input.desktop-command-palette-input');
+    if (!waInput) throw new Error('wa-input not found');
+    return waInput;
   }
 
-  function setWaInputValue(
-    element: HTMLElement & { open: boolean },
-    value: string,
-  ): void {
-    const waInput = element.querySelector(
-      'wa-input.desktop-command-palette-input',
-    ) as (HTMLElement & { value: string | null }) | null;
-    if (!waInput) throw new Error('wa-input not found');
+  function paletteCommandIds(element: HTMLElement): (string | undefined)[] {
+    return [
+      ...element.querySelectorAll<HTMLButtonElement>(
+        '.desktop-command-palette-item',
+      ),
+    ].map((item) => item.dataset.commandId);
+  }
+
+  async function mountPalette(
+    options: Partial<
+      Parameters<DesktopCommandPaletteModule['createDesktopCommandPalette']>[0]
+    > = {},
+  ): Promise<DesktopCommandPaletteController> {
+    const { createDesktopCommandPalette } = await loadDesktopCommandPalette();
+    const controller = createDesktopCommandPalette({
+      document,
+      actions: { showRoute: vi.fn(), showSettings: vi.fn() },
+      platform: 'darwin',
+      ...options,
+    });
+    document.body.append(controller.element);
+    await flushDialogTicks();
+    return controller;
+  }
+
+  function setWaInputValue(element: HTMLElement, value: string): void {
+    const waInput = paletteInput(element);
     waInput.value = value;
     waInput.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
   it('renders catalog entries and dispatches the active command on Enter', async () => {
-    const { createDesktopCommandPalette } = await loadDesktopCommandPalette();
     const actions = {
       showRoute: vi.fn(),
       showSettings: vi.fn(),
     };
-    const controller = createDesktopCommandPalette({
-      document,
-      actions,
-      platform: 'darwin',
-    });
-
-    document.body.append(controller.element);
-    await flushDialogTicks();
+    const controller = await mountPalette({ actions });
 
     expect(controller.element.getAttribute('aria-label')).toBe(
       'Command palette',
@@ -199,28 +207,16 @@ describe('desktop command palette', () => {
     await flushDialogTicks();
 
     expect(controller.element.open).toBe(true);
-    const initialItems = controller.element.querySelectorAll<HTMLButtonElement>(
-      '.desktop-command-palette-item',
-    );
-    expect(initialItems.length).toBeGreaterThan(1);
+    expect(paletteCommandIds(controller.element).length).toBeGreaterThan(1);
 
     setWaInputValue(controller.element, 'models');
     await flushDialogTicks();
 
-    const filteredItems =
-      controller.element.querySelectorAll<HTMLButtonElement>(
-        '.desktop-command-palette-item',
-      );
-    expect([...filteredItems].map((item) => item.dataset.commandId)).toEqual([
-      'texra.showModels',
-    ]);
+    expect(paletteCommandIds(controller.element)).toEqual(['texra.showModels']);
 
     // Enter on the wa-input forwards the keydown to the palette's keydown
     // handler, which dispatches the active command and closes the dialog.
-    const waInput = controller.element.querySelector(
-      'wa-input.desktop-command-palette-input',
-    )!;
-    pressKey(waInput, { key: 'Enter' });
+    pressKey(paletteInput(controller.element), { key: 'Enter' });
     await flushDialogTicks();
 
     expect(actions.showSettings).toHaveBeenCalledWith(SETTINGS_TAB.MODELS);
@@ -228,22 +224,16 @@ describe('desktop command palette', () => {
   });
 
   it('adds current streams as switch commands when opened', async () => {
-    const { createDesktopCommandPalette } = await loadDesktopCommandPalette();
     const actions = {
       showRoute: vi.fn(),
       showSettings: vi.fn(),
       showStream: vi.fn(),
     };
     let streams: DesktopPaletteStream[] = [];
-    const controller = createDesktopCommandPalette({
-      document,
+    const controller = await mountPalette({
       actions,
       getStreams: () => streams,
-      platform: 'darwin',
     });
-
-    document.body.append(controller.element);
-    await flushDialogTicks();
 
     streams = [
       {
@@ -260,18 +250,11 @@ describe('desktop command palette', () => {
     setWaInputValue(controller.element, 'spectral lemma');
     await flushDialogTicks();
 
-    const filteredItems =
-      controller.element.querySelectorAll<HTMLButtonElement>(
-        '.desktop-command-palette-item',
-      );
-    expect([...filteredItems].map((item) => item.dataset.commandId)).toEqual([
+    expect(paletteCommandIds(controller.element)).toEqual([
       'texra.desktop.switchStream:stream-proof',
     ]);
 
-    const waInput = controller.element.querySelector(
-      'wa-input.desktop-command-palette-input',
-    )!;
-    pressKey(waInput, { key: 'Enter' });
+    pressKey(paletteInput(controller.element), { key: 'Enter' });
     await flushDialogTicks();
 
     expect(actions.showStream).toHaveBeenCalledWith('stream-proof');
@@ -279,17 +262,11 @@ describe('desktop command palette', () => {
   });
 
   it('clicking an item dispatches its command and closes the dialog', async () => {
-    const { createDesktopCommandPalette } = await loadDesktopCommandPalette();
     const actions = {
       showRoute: vi.fn(),
       showSettings: vi.fn(),
     };
-    const controller = createDesktopCommandPalette({
-      document,
-      actions,
-      platform: 'darwin',
-    });
-    document.body.append(controller.element);
+    const controller = await mountPalette({ actions });
     controller.open();
     await flushDialogTicks();
 
@@ -305,30 +282,20 @@ describe('desktop command palette', () => {
   });
 
   it('arrow keys advance the active selection through filtered entries', async () => {
-    const { createDesktopCommandPalette } = await loadDesktopCommandPalette();
-    const controller = createDesktopCommandPalette({
-      document,
-      actions: { showRoute: vi.fn(), showSettings: vi.fn() },
-      platform: 'darwin',
-    });
-    document.body.append(controller.element);
+    const controller = await mountPalette();
     controller.open();
     await flushDialogTicks();
 
-    const items = () =>
-      controller.element.querySelectorAll<HTMLButtonElement>(
-        '.desktop-command-palette-item',
-      );
     const selectedIndex = () =>
-      [...items()].findIndex(
-        (item) => item.getAttribute('aria-selected') === 'true',
-      );
+      [
+        ...controller.element.querySelectorAll<HTMLButtonElement>(
+          '.desktop-command-palette-item',
+        ),
+      ].findIndex((item) => item.getAttribute('aria-selected') === 'true');
 
     expect(selectedIndex()).toBe(0);
 
-    const waInput = controller.element.querySelector(
-      'wa-input.desktop-command-palette-input',
-    )!;
+    const waInput = paletteInput(controller.element);
     pressKey(waInput, { key: 'ArrowDown' });
     await flushDialogTicks();
     expect(selectedIndex()).toBe(1);
@@ -339,16 +306,16 @@ describe('desktop command palette', () => {
   });
 
   it('exposes the wa-input value through the shadow-root native input', async () => {
-    const { createDesktopCommandPalette } = await loadDesktopCommandPalette();
-    const controller = createDesktopCommandPalette({
-      document,
-      actions: { showRoute: vi.fn(), showSettings: vi.fn() },
-      platform: 'darwin',
-    });
-    document.body.append(controller.element);
+    const controller = await mountPalette();
     controller.open();
     await flushDialogTicks();
 
-    expect(findInputElement(controller.element)).not.toBeNull();
+    // wa-input wraps a native <input> in shadow DOM. Look it up via the host
+    // wa-input tag, then descend into its shadow root for the real input.
+    expect(
+      paletteInput(
+        controller.element,
+      ).shadowRoot?.querySelector<HTMLInputElement>('input') ?? null,
+    ).not.toBeNull();
   });
 });

@@ -16,16 +16,20 @@ function testSession(): CodexSession {
   };
 }
 
+function loopbackRequest(port: number): CodexAuthorizeRequest {
+  return {
+    url: 'https://auth.example.test/oauth/authorize',
+    verifier: 'verifier',
+    state: 'state',
+    redirectUri: `http://127.0.0.1:${port}${CODEX_CALLBACK_PATH}`,
+  };
+}
+
 describe('Codex loopback login', () => {
   it('closes the callback wait when its host cancels', async () => {
     const controller = new AbortController();
     const coordinator = {
-      buildAuthorizeRequest: (port: number): CodexAuthorizeRequest => ({
-        url: 'https://auth.example.test/oauth/authorize',
-        verifier: 'verifier',
-        state: 'state',
-        redirectUri: `http://127.0.0.1:${port}${CODEX_CALLBACK_PATH}`,
-      }),
+      buildAuthorizeRequest: loopbackRequest,
     } as unknown as CodexSessionCoordinator;
     const completion = loginWithLoopback({
       coordinator,
@@ -40,12 +44,7 @@ describe('Codex loopback login', () => {
     const controller = new AbortController();
     let finishBrowserLaunch!: () => void;
     const coordinator = {
-      buildAuthorizeRequest: (port: number): CodexAuthorizeRequest => ({
-        url: 'https://auth.example.test/oauth/authorize',
-        verifier: 'verifier',
-        state: 'state',
-        redirectUri: `http://127.0.0.1:${port}${CODEX_CALLBACK_PATH}`,
-      }),
+      buildAuthorizeRequest: loopbackRequest,
     } as unknown as CodexSessionCoordinator;
     const completion = loginWithLoopback({
       coordinator,
@@ -71,12 +70,7 @@ describe('Codex loopback login', () => {
     const completeLoginWithCode = vi.fn();
     const coordinator = {
       buildAuthorizeRequest: (port: number): CodexAuthorizeRequest => {
-        request = {
-          url: 'https://auth.example.test/oauth/authorize',
-          verifier: 'verifier',
-          state: 'state',
-          redirectUri: `http://127.0.0.1:${port}${CODEX_CALLBACK_PATH}`,
-        };
+        request = loopbackRequest(port);
         return request;
       },
       completeLoginWithCode,

@@ -173,12 +173,16 @@ export function createDesktopCommandPalette({
     if (executeCommandPaletteEntry(entry, onExecute)) close();
   };
 
-  const handleFilterInput = (event: Event): void => {
-    const target = event.target as WaInput | null;
-    query = target?.value ?? '';
+  const applyQuery = (nextQuery: string): void => {
+    query = nextQuery;
     visibleEntries = visibleCommandPaletteEntries(allEntries, query);
     activeIndex = visibleEntries.length > 0 ? 0 : -1;
     renderTemplate();
+  };
+
+  const handleFilterInput = (event: Event): void => {
+    const target = event.target as WaInput | null;
+    applyQuery(target?.value ?? '');
   };
 
   const handleFilterKeydown = (event: KeyboardEvent): void => {
@@ -343,10 +347,7 @@ export function createDesktopCommandPalette({
     if (canOpen?.() === false) return;
     if (dialog.open) return;
     allEntries = getEntries();
-    query = '';
-    visibleEntries = visibleCommandPaletteEntries(allEntries, query);
-    activeIndex = visibleEntries.length > 0 ? 0 : -1;
-    renderTemplate();
+    applyQuery('');
     dialog.open = true;
   };
 

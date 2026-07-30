@@ -42,6 +42,18 @@ vi.mock('@utils/system/execUtils', async (importOriginal) => ({
 
 const { runCli } = await import('@cli/commands/root');
 
+async function withProcessCwd<T>(
+  cwd: string,
+  run: () => Promise<T>,
+): Promise<T> {
+  const cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(cwd);
+  try {
+    return await run();
+  } finally {
+    cwdSpy.mockRestore();
+  }
+}
+
 describe('CLI Overleaf clone command', () => {
   let workspacePath: string;
   let stdout: string;
@@ -123,21 +135,16 @@ describe('CLI Overleaf clone command', () => {
 
   it('creates and clones into a relative positional destination', async () => {
     const destination = path.join(workspacePath, 'resobabce');
-    const cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(workspacePath);
-    const result = await (async () => {
-      try {
-        return await runCli([
-          'clone',
-          'https://git@git.overleaf.com/0123456789abcdef01234567',
-          'resobabce',
-          '--output-format',
-          'json',
-          '--no-input',
-        ]);
-      } finally {
-        cwdSpy.mockRestore();
-      }
-    })();
+    const result = await withProcessCwd(workspacePath, () =>
+      runCli([
+        'clone',
+        'https://git@git.overleaf.com/0123456789abcdef01234567',
+        'resobabce',
+        '--output-format',
+        'json',
+        '--no-input',
+      ]),
+    );
     const canonicalDestination = await realpath(destination);
 
     expect(result.exitCode).toBe(CliExitCode.Success);
@@ -162,19 +169,16 @@ describe('CLI Overleaf clone command', () => {
   it('does not create a positional destination when the token is missing', async () => {
     mocks.getSecret.mockResolvedValue(undefined);
     const destination = path.join(workspacePath, 'missing-token');
-    const cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(workspacePath);
-    try {
-      const result = await runCli([
+    const result = await withProcessCwd(workspacePath, () =>
+      runCli([
         'clone',
         '0123456789abcdef01234567',
         'missing-token',
         '--no-input',
-      ]);
-      expect(result.exitCode).toBe(CliExitCode.Usage);
-    } finally {
-      cwdSpy.mockRestore();
-    }
+      ]),
+    );
 
+    expect(result.exitCode).toBe(CliExitCode.Usage);
     await expect(access(destination)).rejects.toMatchObject({ code: 'ENOENT' });
     expect(mocks.execa).not.toHaveBeenCalled();
   });
@@ -187,20 +191,17 @@ describe('CLI Overleaf clone command', () => {
       stderr: 'git not found',
     });
     const destination = path.join(workspacePath, 'missing-git');
-    const cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(workspacePath);
-    try {
-      const result = await runCli([
+    const result = await withProcessCwd(workspacePath, () =>
+      runCli([
         'clone',
         '0123456789abcdef01234567',
         'missing-git',
         '--no-input',
-      ]);
-      expect(result.exitCode).toBe(CliExitCode.AgentError);
-      expect(stderr).toContain('Git is not installed or is not on PATH.');
-    } finally {
-      cwdSpy.mockRestore();
-    }
+      ]),
+    );
 
+    expect(result.exitCode).toBe(CliExitCode.AgentError);
+    expect(stderr).toContain('Git is not installed or is not on PATH.');
     await expect(access(destination)).rejects.toMatchObject({ code: 'ENOENT' });
     expect(mocks.execa).not.toHaveBeenCalled();
   });

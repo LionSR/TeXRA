@@ -82,26 +82,29 @@ function createStreamApprovalBypass(
     enabled,
     options,
   ) => {
-    const descendants = !options?.silent ? resolveDescendants(streamId) : [];
+    if (options?.silent) {
+      byStream.set(streamId, enabled);
+      return;
+    }
+
+    const descendants = resolveDescendants(streamId);
     const previousDescendantStates = new Map(
       descendants.map((descendant) => [descendant, resolve(descendant)]),
     );
     byStream.set(streamId, enabled);
-    if (!options?.silent) {
-      interactions.setApprovalBypassState({
-        streamId,
-        kind,
-        bypassActive: enabled,
-      });
-      for (const descendant of descendants) {
-        const bypassActive = resolve(descendant);
-        if (previousDescendantStates.get(descendant) !== bypassActive) {
-          interactions.setApprovalBypassState({
-            streamId: descendant,
-            kind,
-            bypassActive,
-          });
-        }
+    interactions.setApprovalBypassState({
+      streamId,
+      kind,
+      bypassActive: enabled,
+    });
+    for (const descendant of descendants) {
+      const bypassActive = resolve(descendant);
+      if (previousDescendantStates.get(descendant) !== bypassActive) {
+        interactions.setApprovalBypassState({
+          streamId: descendant,
+          kind,
+          bypassActive,
+        });
       }
     }
   };

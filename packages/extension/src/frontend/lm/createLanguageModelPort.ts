@@ -13,7 +13,6 @@ import {
   type LanguageModelRequestOptions,
   type LanguageModelReference,
   type LanguageModelResponsePart,
-  type LanguageModelTokenCountInput,
 } from '@platform/languageModel';
 
 function translateLanguageModelError(
@@ -146,21 +145,15 @@ function toVscodeOptions(
   };
 }
 
-async function findModel(
-  selectChatModels: typeof vscode.lm.selectChatModels,
-  reference: LanguageModelReference,
-): Promise<vscode.LanguageModelChat | undefined> {
-  const models = await selectChatModels(reference);
-  return models.find(
-    (model) => model.id === reference.id && model.vendor === reference.vendor,
-  );
-}
-
 async function requireModel(
   selectChatModels: typeof vscode.lm.selectChatModels,
   reference: LanguageModelReference,
 ): Promise<vscode.LanguageModelChat> {
-  const model = await findModel(selectChatModels, reference);
+  const models = await selectChatModels(reference);
+  const model = models.find(
+    (candidate) =>
+      candidate.id === reference.id && candidate.vendor === reference.vendor,
+  );
   if (!model) {
     throw new LanguageModelPortError(
       LANGUAGE_MODEL_PORT_ERROR_CODE.MODEL_UNAVAILABLE,
@@ -242,12 +235,6 @@ async function* streamResponse(
   }
 }
 
-function toVscodeTokenCountInput(
-  input: LanguageModelTokenCountInput,
-): string | vscode.LanguageModelChatMessage {
-  return typeof input === 'string' ? input : toVscodeMessage(input);
-}
-
 /** Create the VS Code language-model implementation. */
 export function createLanguageModelPort(
   context: vscode.ExtensionContext,
@@ -289,7 +276,7 @@ export function createLanguageModelPort(
         cancellation.throwIfCancelled();
         const model = await requireModel(selectChatModels, reference);
         const count = await model.countTokens(
-          toVscodeTokenCountInput(input),
+          typeof input === 'string' ? input : toVscodeMessage(input),
           cancellation.token,
         );
         cancellation.throwIfCancelled();

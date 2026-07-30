@@ -33,6 +33,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { setCliSessionApiMode } from './apiModeCommands';
 import {
+  abortableSlashCommand,
   type SlashCommandOutput,
   transcriptSlashCommandOutput,
 } from './slashContext';
@@ -112,48 +113,37 @@ async function loginToTexraIncludedAccess(
   );
 }
 
-async function loginFromChatWithSignal(
-  input: string,
-  context: CliContext | undefined,
-  output: SlashCommandOutput,
-  signal: AbortSignal,
-): Promise<void> {
-  const args = parseChatLoginSlashArgs(input);
-  if (!args) {
-    output.setNotice(CHAT_LOGIN_USAGE);
-    return;
-  }
-
-  // Match the CLI `login` guard: reject `--device` + `--no-browser` from the
-  // user's parsed flags before the ChatGPT path can auto-resolve `device`.
-  if (hasLoginTransportConflict(args)) {
-    output.setNotice(LOGIN_TRANSPORT_CONFLICT_MESSAGE);
-    return;
-  }
-
-  const loginArgs =
-    args.target === 'chatgpt' && context
-      ? { ...args, device: shouldUseChatGptDeviceCode(context, args) }
-      : args;
-  output.writeProgress(loginStartMessage(loginArgs));
-
-  if (loginArgs.target === 'chatgpt') {
-    await loginToChatGptSubscription(loginArgs, output, signal);
-    return;
-  }
-  await loginToTexraIncludedAccess(loginArgs, output, signal);
-}
-
 export function loginFromChat(
   input: string,
   context?: CliContext,
   output: SlashCommandOutput = transcriptSlashCommandOutput,
 ): Promise<void> & { readonly abort: () => void } {
-  const controller = new AbortController();
-  return Object.assign(
-    loginFromChatWithSignal(input, context, output, controller.signal),
-    { abort: () => controller.abort() },
-  );
+  return abortableSlashCommand(async (signal) => {
+    const args = parseChatLoginSlashArgs(input);
+    if (!args) {
+      output.setNotice(CHAT_LOGIN_USAGE);
+      return;
+    }
+
+    // Match the CLI `login` guard: reject `--device` + `--no-browser` from the
+    // user's parsed flags before the ChatGPT path can auto-resolve `device`.
+    if (hasLoginTransportConflict(args)) {
+      output.setNotice(LOGIN_TRANSPORT_CONFLICT_MESSAGE);
+      return;
+    }
+
+    const loginArgs =
+      args.target === 'chatgpt' && context
+        ? { ...args, device: shouldUseChatGptDeviceCode(context, args) }
+        : args;
+    output.writeProgress(loginStartMessage(loginArgs));
+
+    if (loginArgs.target === 'chatgpt') {
+      await loginToChatGptSubscription(loginArgs, output, signal);
+      return;
+    }
+    await loginToTexraIncludedAccess(loginArgs, output, signal);
+  });
 }
 
 export async function logoutFromChat(

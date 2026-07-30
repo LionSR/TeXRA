@@ -22,6 +22,7 @@ import {
   LanguageModelPortError,
   type LanguageModelMessage,
   type LanguageModelPort,
+  type LanguageModelPortErrorCode,
   type LanguageModelResponsePart,
 } from '@platform/languageModel';
 import { isCredentialExhausted, type FileLocation } from '@shared/schemas';
@@ -97,6 +98,23 @@ function fakePort(
     countTokens,
     onDidChangeAccess: () => ({ dispose() {} }),
   };
+}
+
+function portThrowing(
+  code: LanguageModelPortErrorCode,
+  message: string,
+): ReturnType<typeof fakePort> {
+  const port = fakePort();
+  port.sendRequest.mockImplementation(() => ({
+    [Symbol.asyncIterator]() {
+      return {
+        next: async () => {
+          throw new LanguageModelPortError(code, message);
+        },
+      };
+    },
+  }));
+  return port;
 }
 
 describe('ModelHandlerVscodeLm messages', () => {
@@ -469,19 +487,10 @@ describe('ModelHandlerVscodeLm streaming and tools', () => {
 
 describe('ModelHandlerVscodeLm port errors', () => {
   it('tags coded cancellation errors as user aborts', async () => {
-    const port = fakePort();
-    port.sendRequest.mockImplementation(() => ({
-      [Symbol.asyncIterator]() {
-        return {
-          next: async () => {
-            throw new LanguageModelPortError(
-              LANGUAGE_MODEL_PORT_ERROR_CODE.CANCELLED,
-              'cancelled',
-            );
-          },
-        };
-      },
-    }));
+    const port = portThrowing(
+      LANGUAGE_MODEL_PORT_ERROR_CODE.CANCELLED,
+      'cancelled',
+    );
     const handler = new ModelHandlerVscodeLm(modelConfig());
 
     const response = handler.createResponse({
@@ -496,19 +505,10 @@ describe('ModelHandlerVscodeLm port errors', () => {
   });
 
   it('classifies Copilot quota exhaustion without automatic retry', async () => {
-    const port = fakePort();
-    port.sendRequest.mockImplementation(() => ({
-      [Symbol.asyncIterator]() {
-        return {
-          next: async () => {
-            throw new LanguageModelPortError(
-              LANGUAGE_MODEL_PORT_ERROR_CODE.QUOTA_EXCEEDED,
-              'Copilot quota exceeded',
-            );
-          },
-        };
-      },
-    }));
+    const port = portThrowing(
+      LANGUAGE_MODEL_PORT_ERROR_CODE.QUOTA_EXCEEDED,
+      'Copilot quota exceeded',
+    );
     const handler = new ModelHandlerVscodeLm(modelConfig());
 
     const response = handler.createResponse({

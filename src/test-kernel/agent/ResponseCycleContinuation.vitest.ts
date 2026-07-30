@@ -53,6 +53,17 @@ function getContinuationNode() {
   return continuationNode;
 }
 
+async function runContinuationNode(
+  shared: ResponseCycleShared,
+  services: ResponseCycleServices<unknown>,
+) {
+  const node = getContinuationNode().setServices(services);
+  const prepResult = await node.prep(shared);
+  const execResult = await node.exec(prepResult);
+  const action = await node.post(shared, prepResult, execResult);
+  return { prepResult, execResult, action };
+}
+
 async function processEmptyResponse(stopReason: ProviderStopReason) {
   const shared = createShared({ responseObject: {} });
   const services = {
@@ -125,11 +136,11 @@ describe('response cycle continuation phases', () => {
   it('skips before interruption checks when no processed response is ready', async () => {
     const shared = createShared();
     const harness = createServices();
-    const node = getContinuationNode().setServices(harness.services);
 
-    const prepResult = await node.prep(shared);
-    const execResult = await node.exec(prepResult);
-    const action = await node.post(shared, prepResult, execResult);
+    const { prepResult, execResult, action } = await runContinuationNode(
+      shared,
+      harness.services,
+    );
 
     expect(prepResult).toEqual({ kind: 'skipped' });
     expect(execResult).toEqual({ kind: 'skipped' });
@@ -144,11 +155,11 @@ describe('response cycle continuation phases', () => {
       processedResponse: 'partial response',
     });
     const harness = createServices();
-    const node = getContinuationNode().setServices(harness.services);
 
-    const prepResult = await node.prep(shared);
-    const execResult = await node.exec(prepResult);
-    const action = await node.post(shared, prepResult, execResult);
+    const { prepResult, action } = await runContinuationNode(
+      shared,
+      harness.services,
+    );
 
     expect(prepResult).toEqual({
       kind: 'success',
@@ -257,11 +268,8 @@ describe('response cycle continuation phases', () => {
       processedResponse: '',
     });
     const harness = createServices(false, true);
-    const node = getContinuationNode().setServices(harness.services);
 
-    const prepResult = await node.prep(shared);
-    const execResult = await node.exec(prepResult);
-    const action = await node.post(shared, prepResult, execResult);
+    const { action } = await runContinuationNode(shared, harness.services);
 
     expect(harness.requestCompaction).toHaveBeenCalledOnce();
     expect(action).toBe(FlowTransition.CONTINUE);
@@ -273,11 +281,8 @@ describe('response cycle continuation phases', () => {
       processedResponse: 'partial response',
     });
     const harness = createServices(false, true);
-    const node = getContinuationNode().setServices(harness.services);
 
-    const prepResult = await node.prep(shared);
-    const execResult = await node.exec(prepResult);
-    const action = await node.post(shared, prepResult, execResult);
+    const { action } = await runContinuationNode(shared, harness.services);
 
     expect(harness.requestCompaction).toHaveBeenCalledOnce();
     expect(shared.contextWindowRecoveryRequestId).toBe(7);
@@ -292,11 +297,8 @@ describe('response cycle continuation phases', () => {
       processedResponse: 'partial response',
     });
     const harness = createServices();
-    const node = getContinuationNode().setServices(harness.services);
 
-    const prepResult = await node.prep(shared);
-    const execResult = await node.exec(prepResult);
-    const action = await node.post(shared, prepResult, execResult);
+    const { action } = await runContinuationNode(shared, harness.services);
 
     expect(harness.requestCompaction).not.toHaveBeenCalled();
     expect(harness.round.continuationCount).toBe(0);
@@ -312,11 +314,8 @@ describe('response cycle continuation phases', () => {
       contextWindowRecoveryAttempted: true,
     });
     const harness = createServices(false, true);
-    const node = getContinuationNode().setServices(harness.services);
 
-    const prepResult = await node.prep(shared);
-    const execResult = await node.exec(prepResult);
-    const action = await node.post(shared, prepResult, execResult);
+    const { action } = await runContinuationNode(shared, harness.services);
 
     expect(harness.requestCompaction).not.toHaveBeenCalled();
     expect(harness.round.continuationCount).toBe(0);
@@ -331,11 +330,8 @@ describe('response cycle continuation phases', () => {
       processedResponse: 'complete response',
     });
     const harness = createServices(true);
-    const node = getContinuationNode().setServices(harness.services);
 
-    const prepResult = await node.prep(shared);
-    const execResult = await node.exec(prepResult);
-    const action = await node.post(shared, prepResult, execResult);
+    const { action } = await runContinuationNode(shared, harness.services);
 
     expect(harness.checkStopConditions).not.toHaveBeenCalled();
     expect(harness.shouldContinue).not.toHaveBeenCalled();

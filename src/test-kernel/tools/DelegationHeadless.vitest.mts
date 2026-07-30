@@ -5,7 +5,6 @@ import '@test/support/defaultSessionTestSetup';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import {
   createRunContext,
   withRunContext,
@@ -92,6 +91,9 @@ vi.mock('@tools/approval', () => ({
   }),
 }));
 
+const PARENT_STREAM_ID = 'parent-stream' as StreamTabId;
+const CHILD_STREAM_ID = 'child-stream' as StreamTabId;
+
 /** Real session whose interactions slot is the host's fake port. */
 function sessionFor(interactions: HostInteractions): SessionHandle {
   const session = createTestSession();
@@ -108,7 +110,7 @@ function parentRunContext(
   }> = {},
 ): RunContext {
   return createRunContext({
-    streamId: 'parent-stream',
+    streamId: PARENT_STREAM_ID,
     executionId: 'parent-exec',
     model: 'deepseekT',
     session: defaultSession(),
@@ -143,7 +145,7 @@ function delegationOptions(
     },
     agentName: 'review',
     parentExecutionId: STABLE_PARENT_EXECUTION_ID,
-    parentStreamId: 'parent-stream' as StreamTabId,
+    parentStreamId: PARENT_STREAM_ID,
     session: defaultSession(),
     ...overrides,
   };
@@ -180,6 +182,42 @@ function mockExecuteAgentErrorOnce(totalCostUsd: number): void {
   });
 }
 
+/**
+ * One-shot executeAgent mock that tracks a live child handle and returns the
+ * WAITING result the child-run loop delivers from.
+ */
+function mockWaitingChildOnce(
+  options: {
+    memoryMisses?: ReadonlyArray<{ path: string; reason: string }>;
+    afterRun?: (handle: AgentExecutionHandle) => void;
+  } = {},
+): void {
+  mocks.executeAgent.mockImplementationOnce(
+    async (_config, executionId: string, runOptions) => {
+      const handle = new AgentExecutionHandle(
+        executionId,
+        PARENT_STREAM_ID,
+        CHILD_STREAM_ID,
+        'review',
+        'toolUse',
+      );
+      defaultSession().executions.track(handle);
+      runOptions.onStreamResolved?.(CHILD_STREAM_ID);
+      runOptions.onRun?.(handle);
+      options.afterRun?.(handle);
+      return {
+        category: 'toolUse',
+        outcome: STREAM_PHASE.WAITING,
+        lastResponse: 'The proof is correct.',
+        touchedFiles: [],
+        executionId,
+        streamId: CHILD_STREAM_ID,
+        ...(options.memoryMisses ? { memoryMisses: options.memoryMisses } : {}),
+      };
+    },
+  );
+}
+
 function stableAttempt(
   logicalExecutionId: ExecutionId,
   phase: 'reserved' | 'launched' | 'retryable' = 'launched',
@@ -205,6 +243,43 @@ function memoryExecutionStore() {
     writeReport: mocks.writeReport,
     writeResultMeta: mocks.writeResultMeta,
   };
+}
+
+/** Child store with nothing persisted: what a fresh attempt starts from. */
+function emptyChildStore() {
+  return {
+    listKeys: vi.fn().mockResolvedValue([]),
+    read: vi.fn().mockResolvedValue(undefined),
+    readResultMeta: vi.fn().mockResolvedValue(null),
+  };
+}
+
+/** Child store holding a launched attempt marker and its result manifest. */
+function completedChildStore(
+  logicalExecutionId: ExecutionId,
+  result: unknown,
+  parentExecutionId: string = STABLE_PARENT_EXECUTION_ID,
+) {
+  return {
+    listKeys: vi
+      .fn()
+      .mockResolvedValue(['stable-subagent-attempt', 'result-meta']),
+    read: vi.fn().mockResolvedValue(stableAttempt(logicalExecutionId)),
+    readResultMeta: vi.fn().mockResolvedValue({
+      producer: 'subagent',
+      agentName: 'review',
+      parentExecutionId,
+      wallTimeMs: 100,
+      result,
+    }),
+  };
+}
+
+/** Route parent reads to the sequence store and every child read elsewhere. */
+function useStableStores(sequenceStore: unknown, childStore: unknown): void {
+  mocks.getExecutionStore.mockImplementation((executionId: ExecutionId) =>
+    executionId === STABLE_PARENT_EXECUTION_ID ? sequenceStore : childStore,
+  );
 }
 
 function stableSequenceStore(logicalExecutionId: ExecutionId, nextAttempt = 0) {
@@ -281,8 +356,8 @@ describe('headless delegation', () => {
     for (const executionId of defaultSession().executions.getActiveIds()) {
       defaultSession().executions.untrack(executionId);
     }
-    defaultSession().followUps.terminalize('parent-stream' as StreamTabId);
-    defaultSession().followUps.terminalize('child-stream' as StreamTabId);
+    defaultSession().followUps.terminalize(PARENT_STREAM_ID);
+    defaultSession().followUps.terminalize(CHILD_STREAM_ID);
   });
 
   it('awaits child delegation during one-shot tool-use runs', async () => {
@@ -450,21 +525,9 @@ describe('headless delegation', () => {
       cost: 0,
     };
     const sequenceStore = stableSequenceStore(stableExecutionId, 1);
-    const childStore = {
-      listKeys: vi
-        .fn()
-        .mockResolvedValue(['stable-subagent-attempt', 'result-meta']),
-      read: vi.fn().mockResolvedValue(stableAttempt(stableExecutionId)),
-      readResultMeta: vi.fn().mockResolvedValue({
-        producer: 'subagent',
-        agentName: 'review',
-        parentExecutionId: STABLE_PARENT_EXECUTION_ID,
-        wallTimeMs: 100,
-        result: persistedResult,
-      }),
-    };
-    mocks.getExecutionStore.mockImplementation((executionId: ExecutionId) =>
-      executionId === STABLE_PARENT_EXECUTION_ID ? sequenceStore : childStore,
+    useStableStores(
+      sequenceStore,
+      completedChildStore(stableExecutionId, persistedResult),
     );
     const prepare = vi.fn(() =>
       Promise.reject(new Error('current agent is unavailable')),
@@ -496,24 +559,11 @@ describe('headless delegation', () => {
       cost: 0,
     };
     const sequenceStore = stableSequenceStore(logicalExecutionId, 2);
-    const missingStore = {
-      listKeys: vi.fn().mockResolvedValue([]),
-      read: vi.fn().mockResolvedValue(undefined),
-      readResultMeta: vi.fn().mockResolvedValue(null),
-    };
-    const completedStore = {
-      listKeys: vi
-        .fn()
-        .mockResolvedValue(['stable-subagent-attempt', 'result-meta']),
-      read: vi.fn().mockResolvedValue(stableAttempt(logicalExecutionId)),
-      readResultMeta: vi.fn().mockResolvedValue({
-        producer: 'subagent',
-        agentName: 'review',
-        parentExecutionId: STABLE_PARENT_EXECUTION_ID,
-        wallTimeMs: 100,
-        result: persistedResult,
-      }),
-    };
+    const missingStore = emptyChildStore();
+    const completedStore = completedChildStore(
+      logicalExecutionId,
+      persistedResult,
+    );
     mocks.getExecutionStore.mockImplementation((executionId: ExecutionId) => {
       if (executionId === STABLE_PARENT_EXECUTION_ID) return sequenceStore;
       return executionId === logicalExecutionId ? missingStore : completedStore;
@@ -535,27 +585,19 @@ describe('headless delegation', () => {
   it('rejects a result manifest with different parent lineage', async () => {
     const stableExecutionId = 'cccccc555555' as ExecutionId;
     const sequenceStore = stableSequenceStore(stableExecutionId, 1);
-    const childStore = {
-      listKeys: vi
-        .fn()
-        .mockResolvedValue(['stable-subagent-attempt', 'result-meta']),
-      read: vi.fn().mockResolvedValue(stableAttempt(stableExecutionId)),
-      readResultMeta: vi.fn().mockResolvedValue({
-        producer: 'subagent',
-        agentName: 'review',
-        parentExecutionId: 'deadbeef',
-        wallTimeMs: 100,
-        result: {
+    useStableStores(
+      sequenceStore,
+      completedChildStore(
+        stableExecutionId,
+        {
           category: 'toolUse',
           outcome: 'completed',
           response: 'Wrong workflow.',
           files: [],
           cost: 0,
         },
-      }),
-    };
-    mocks.getExecutionStore.mockImplementation((executionId: ExecutionId) =>
-      executionId === STABLE_PARENT_EXECUTION_ID ? sequenceStore : childStore,
+        'deadbeef',
+      ),
     );
 
     await expect(
@@ -572,14 +614,10 @@ describe('headless delegation', () => {
   it('refuses to repeat an incomplete stable child', async () => {
     const logicalExecutionId = 'dddddd444444' as ExecutionId;
     const sequenceStore = stableSequenceStore(logicalExecutionId, 1);
-    const childStore = {
+    useStableStores(sequenceStore, {
+      ...emptyChildStore(),
       listKeys: vi.fn().mockResolvedValue(['meta']),
-      read: vi.fn().mockResolvedValue(undefined),
-      readResultMeta: vi.fn().mockResolvedValue(null),
-    };
-    mocks.getExecutionStore.mockImplementation((executionId: ExecutionId) =>
-      executionId === STABLE_PARENT_EXECUTION_ID ? sequenceStore : childStore,
-    );
+    });
 
     await expect(
       runInBand(delegationOptions(), logicalExecutionId),
@@ -601,18 +639,16 @@ describe('headless delegation', () => {
         store =
           id === logicalExecutionId
             ? {
+                ...emptyChildStore(),
                 listKeys: vi
                   .fn()
                   .mockResolvedValue(['stable-subagent-attempt', 'config']),
                 read: vi
                   .fn()
                   .mockResolvedValue(stableAttempt(logicalExecutionId, phase)),
-                readResultMeta: vi.fn().mockResolvedValue(null),
               }
             : {
-                listKeys: vi.fn().mockResolvedValue([]),
-                read: vi.fn().mockResolvedValue(undefined),
-                readResultMeta: vi.fn().mockResolvedValue(null),
+                ...emptyChildStore(),
                 write: vi.fn().mockResolvedValue(undefined),
                 writeResultMeta: mocks.writeResultMeta,
               };
@@ -638,16 +674,13 @@ describe('headless delegation', () => {
       if (key === 'stable-subagent-attempt') marker = value;
     });
     mocks.writeResultMeta.mockRejectedValueOnce(new Error('storage offline'));
-    const childStore = {
+    useStableStores(sequenceStore, {
+      ...emptyChildStore(),
       listKeys: vi.fn(async () => (marker ? ['stable-subagent-attempt'] : [])),
       read: vi.fn(async () => marker),
-      readResultMeta: vi.fn().mockResolvedValue(null),
       write,
       writeResultMeta: mocks.writeResultMeta,
-    };
-    mocks.getExecutionStore.mockImplementation((executionId: ExecutionId) =>
-      executionId === STABLE_PARENT_EXECUTION_ID ? sequenceStore : childStore,
-    );
+    });
     const options = delegationOptions();
 
     await expect(runInBand(options, logicalExecutionId)).rejects.toBeInstanceOf(
@@ -675,29 +708,15 @@ describe('headless delegation', () => {
       if (store) return store;
       const priorOutcome = priorOutcomes[stores.size];
       store = priorOutcome
-        ? {
-            listKeys: vi
-              .fn()
-              .mockResolvedValue(['stable-subagent-attempt', 'result-meta']),
-            read: vi.fn().mockResolvedValue(stableAttempt(logicalExecutionId)),
-            readResultMeta: vi.fn().mockResolvedValue({
-              producer: 'subagent',
-              agentName: 'review',
-              parentExecutionId: STABLE_PARENT_EXECUTION_ID,
-              wallTimeMs: 100,
-              result: {
-                category: 'toolUse',
-                outcome: priorOutcome,
-                response: '',
-                files: [],
-                cost: 0,
-              },
-            }),
-          }
+        ? completedChildStore(logicalExecutionId, {
+            category: 'toolUse',
+            outcome: priorOutcome,
+            response: '',
+            files: [],
+            cost: 0,
+          })
         : {
-            listKeys: vi.fn().mockResolvedValue([]),
-            read: vi.fn().mockResolvedValue(undefined),
-            readResultMeta: vi.fn().mockResolvedValue(null),
+            ...emptyChildStore(),
             write: vi.fn().mockResolvedValue(undefined),
             writeResultMeta: mocks.writeResultMeta,
           };
@@ -1198,40 +1217,17 @@ describe('headless delegation', () => {
   });
 
   it('includes memory misses in interactive early-delivered reports', async () => {
-    const parentStreamId = 'parent-stream' as StreamTabId;
-    const childStreamId = 'child-stream' as StreamTabId;
-
     // Async delegation is now driven by the child-run loop over
     // nativeSubagentStrategy: `executeAgent` (mocked here) is the loop's
     // `launch` turn, and a returned WAITING result is the loop's one
     // delivery site's input — there is no more onBeforeWaiting callback.
-    mocks.executeAgent.mockImplementationOnce(
-      async (_config, executionId: string, options) => {
-        const handle = new AgentExecutionHandle(
-          executionId,
-          parentStreamId,
-          childStreamId,
-          'review',
-          'toolUse',
-        );
-        defaultSession().executions.track(handle);
-        options.onStreamResolved?.(childStreamId);
-        options.onRun?.(handle);
-        return {
-          category: 'toolUse',
-          outcome: STREAM_PHASE.WAITING,
-          lastResponse: 'The proof is correct.',
-          touchedFiles: [],
-          executionId,
-          streamId: childStreamId,
-          memoryMisses: [
-            { path: '/memories/missing.md', reason: 'not found & unreadable' },
-          ],
-        };
-      },
-    );
+    mockWaitingChildOnce({
+      memoryMisses: [
+        { path: '/memories/missing.md', reason: 'not found & unreadable' },
+      ],
+    });
 
-    await withRunContext(parentRunContext({ streamId: parentStreamId }), () =>
+    await withRunContext(parentRunContext({ streamId: PARENT_STREAM_ID }), () =>
       callDelegateReview(),
     );
 
@@ -1245,39 +1241,19 @@ describe('headless delegation', () => {
   });
 
   it('does not deliver detached subagent results back to the released parent', async () => {
-    const parentStreamId = 'parent-stream' as StreamTabId;
-    const childStreamId = 'child-stream' as StreamTabId;
     let capturedHandle: AgentExecutionHandle | undefined;
 
-    mocks.executeAgent.mockImplementationOnce(
-      async (_config, executionId: string, options) => {
-        const handle = new AgentExecutionHandle(
-          executionId,
-          parentStreamId,
-          childStreamId,
-          'review',
-          'toolUse',
-        );
-        defaultSession().executions.track(handle);
+    mockWaitingChildOnce({
+      // Detach happens between the loop capturing the handle (onRun) and the
+      // loop delivering this turn's result (after the mock resolves) — the
+      // same ordering a real stop-with-detach produces mid-turn.
+      afterRun: (handle) => {
         capturedHandle = handle;
-        options.onStreamResolved?.(childStreamId);
-        options.onRun?.(handle);
-        // Detach happens between the loop capturing the handle (onRun, above)
-        // and the loop delivering this turn's result (after this resolves) —
-        // the same ordering a real stop-with-detach produces mid-turn.
-        defaultSession().executions.detachActiveChildren(parentStreamId);
-        return {
-          category: 'toolUse',
-          outcome: STREAM_PHASE.WAITING,
-          lastResponse: 'The proof is correct.',
-          touchedFiles: [],
-          executionId,
-          streamId: childStreamId,
-        };
+        defaultSession().executions.detachActiveChildren(PARENT_STREAM_ID);
       },
-    );
+    });
 
-    await withRunContext(parentRunContext({ streamId: parentStreamId }), () =>
+    await withRunContext(parentRunContext({ streamId: PARENT_STREAM_ID }), () =>
       callDelegateReview(),
     );
 
@@ -1287,7 +1263,7 @@ describe('headless delegation', () => {
       );
     });
     expect(capturedHandle?.deliveryTargetStreamId).toBeUndefined();
-    expect(defaultSession().followUps.getAll(parentStreamId)).toEqual([]);
-    expect(defaultSession().followUps.getAll(childStreamId)).toEqual([]);
+    expect(defaultSession().followUps.getAll(PARENT_STREAM_ID)).toEqual([]);
+    expect(defaultSession().followUps.getAll(CHILD_STREAM_ID)).toEqual([]);
   });
 });

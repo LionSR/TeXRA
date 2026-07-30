@@ -207,6 +207,20 @@ function resolveBooleanProbe(probeResult: unknown): boolean | undefined {
   return typeof probeResult === 'boolean' ? probeResult : undefined;
 }
 
+/** True when an SDK import failure means the package simply isn't installed. */
+function isMissingPackageError(message: string): boolean {
+  return (
+    message.includes('not found') ||
+    message.includes('MODULE_NOT_FOUND') ||
+    message.includes('Cannot find package')
+  );
+}
+
+/** Appended to install hints when running under WSL, where side matters. */
+function wslInstallHint(): string {
+  return isWSL() ? ' (run this inside WSL, not on the Windows side)' : '';
+}
+
 /**
  * Availability check shared by the SDK-backed CLI integrations (Codex, Claude
  * Code): the dependency is present when its SDK imports and the native binary
@@ -586,11 +600,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
         await importCodexClass();
       } catch (err: unknown) {
         const msg = toErrorMessage(err);
-        if (
-          msg.includes('not found') ||
-          msg.includes('MODULE_NOT_FOUND') ||
-          msg.includes('Cannot find package')
-        ) {
+        if (isMissingPackageError(msg)) {
           return '@openai/codex-sdk not found. Install with: npm install -g @openai/codex';
         }
         if (msg.includes('Unsupported platform')) {
@@ -605,7 +615,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
         return (
           'Codex SDK loaded but native binary not found. ' +
           'Install with: npm install -g @openai/codex' +
-          (isWSL() ? ' (run this inside WSL, not on the Windows side)' : '')
+          wslInstallHint()
         );
       }
 
@@ -656,11 +666,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
         await importClaudeAgentSdk();
       } catch (err: unknown) {
         const msg = toErrorMessage(err);
-        if (
-          msg.includes('not found') ||
-          msg.includes('MODULE_NOT_FOUND') ||
-          msg.includes('Cannot find package')
-        ) {
+        if (isMissingPackageError(msg)) {
           return '@anthropic-ai/claude-agent-sdk not found. Reinstall TeXRA or run: npm install @anthropic-ai/claude-agent-sdk';
         }
         return `Claude Code SDK import failed: ${msg}`;
@@ -671,7 +677,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
         return (
           'Claude Code SDK loaded but native `claude` binary not found. ' +
           'Install via: npm install -g @anthropic-ai/claude-code' +
-          (isWSL() ? ' (run this inside WSL, not on the Windows side)' : '')
+          wslInstallHint()
         );
       }
 

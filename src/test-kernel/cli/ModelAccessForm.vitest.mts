@@ -18,27 +18,34 @@ vi.mock('@cli/runtime/apiStatus', async (importOriginal) => ({
 
 afterEach(() => vi.clearAllMocks());
 
+async function renderModelAccessForm(apiMode: 'included' | 'personal') {
+  const { ink, React } = await loadInk();
+  const stdin = new FakeStdin();
+  const stdout = new FakeStdout(120);
+  const onSelect = vi.fn();
+  const instance = ink.render(
+    React.createElement(ModelAccessForm, {
+      apiMode,
+      onSelect,
+      onCancel: () => undefined,
+    }),
+    {
+      stdin,
+      stdout,
+      interactive: true,
+      exitOnCtrlC: false,
+      patchConsole: false,
+    },
+  );
+
+  return { instance, onSelect, stdin, stdout };
+}
+
 describe('ModelAccessForm status', () => {
   it('keeps preference actions disabled while status is loading', async () => {
     loadCliModelAccessOverview.mockReturnValue(new Promise(() => undefined));
-    const { ink, React } = await loadInk();
-    const stdin = new FakeStdin();
-    const stdout = new FakeStdout(120);
-    const onSelect = vi.fn();
-    const instance = ink.render(
-      React.createElement(ModelAccessForm, {
-        apiMode: 'included',
-        onSelect,
-        onCancel: () => undefined,
-      }),
-      {
-        stdin,
-        stdout,
-        interactive: true,
-        exitOnCtrlC: false,
-        patchConsole: false,
-      },
-    );
+    const { instance, onSelect, stdin, stdout } =
+      await renderModelAccessForm('included');
 
     try {
       await waitFor(() => stdout.output.includes('Loading current preference'));
@@ -62,24 +69,8 @@ describe('ModelAccessForm status', () => {
     loadCliModelAccessOverview.mockRejectedValue(
       new Error('model access unavailable'),
     );
-    const { ink, React } = await loadInk();
-    const stdin = new FakeStdin();
-    const stdout = new FakeStdout(120);
-    const onSelect = vi.fn();
-    const instance = ink.render(
-      React.createElement(ModelAccessForm, {
-        apiMode: 'included',
-        onSelect,
-        onCancel: () => undefined,
-      }),
-      {
-        stdin,
-        stdout,
-        interactive: true,
-        exitOnCtrlC: false,
-        patchConsole: false,
-      },
-    );
+    const { instance, onSelect, stdin, stdout } =
+      await renderModelAccessForm('included');
 
     try {
       await waitFor(() => loadCliModelAccessOverview.mock.calls.length > 0);
@@ -115,24 +106,8 @@ describe('ModelAccessForm status', () => {
       },
       lines: [],
     });
-    const { ink, React } = await loadInk();
-    const stdin = new FakeStdin();
-    const stdout = new FakeStdout(120);
-    const onSelect = vi.fn();
-    const instance = ink.render(
-      React.createElement(ModelAccessForm, {
-        apiMode: 'personal',
-        onSelect,
-        onCancel: () => undefined,
-      }),
-      {
-        stdin,
-        stdout,
-        interactive: true,
-        exitOnCtrlC: false,
-        patchConsole: false,
-      },
-    );
+    const { instance, onSelect, stdin, stdout } =
+      await renderModelAccessForm('personal');
 
     try {
       await waitFor(() => stdout.output.includes('On · user@example.com'));

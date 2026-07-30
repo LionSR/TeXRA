@@ -465,50 +465,49 @@ export async function runToolUseFlow<C = unknown>(
         throw new PersistedFlowStateError(executionId, 'invalid-shared', {
           cause: migrationResult.error,
         });
-      } else {
-        // Defensive fallback only: no resume handoff means the resume
-        // boundary above was never consulted for this call (e.g. a fresh
-        // launch that happens to find a leftover record for its execution
-        // id). Migrate/backfill here so PersistedFlow.ensureRecord never sees
-        // a stale legacy shape.
-        let migratedData = migrationResult.data;
-        let shouldWriteShared = migrationResult.migrated;
-        const sharedModel = migratedData.stateSlices
-          ? (currentModelFromUserChannels(
-              migratedData.stateSlices.userChannels,
-            ) ?? services.config.model)
-          : services.config.model;
-        const backfillCompatibilityKey =
-          migratedData.modelHandlerCompatibilityKey ??
-          inferAndLogPersistedModelHandlerCompatibilityKey(
-            sharedModel,
-            migratedData.messages,
-            logger,
-          ) ??
-          compatibilityKey;
-        if (
-          !migratedData.modelHandlerCompatibilityKey &&
-          backfillCompatibilityKey
-        ) {
-          logger.debug(
-            'Backfilled tool-use model-handler compatibility key in shared state.',
-          );
-          migratedData = {
-            ...migratedData,
-            modelHandlerCompatibilityKey: backfillCompatibilityKey,
-          };
-          shouldWriteShared = true;
+      }
+      // Defensive fallback only: no resume handoff means the resume
+      // boundary above was never consulted for this call (e.g. a fresh
+      // launch that happens to find a leftover record for its execution
+      // id). Migrate/backfill here so PersistedFlow.ensureRecord never sees
+      // a stale legacy shape.
+      let migratedData = migrationResult.data;
+      let shouldWriteShared = migrationResult.migrated;
+      const sharedModel = migratedData.stateSlices
+        ? (currentModelFromUserChannels(
+            migratedData.stateSlices.userChannels,
+          ) ?? services.config.model)
+        : services.config.model;
+      const backfillCompatibilityKey =
+        migratedData.modelHandlerCompatibilityKey ??
+        inferAndLogPersistedModelHandlerCompatibilityKey(
+          sharedModel,
+          migratedData.messages,
+          logger,
+        ) ??
+        compatibilityKey;
+      if (
+        !migratedData.modelHandlerCompatibilityKey &&
+        backfillCompatibilityKey
+      ) {
+        logger.debug(
+          'Backfilled tool-use model-handler compatibility key in shared state.',
+        );
+        migratedData = {
+          ...migratedData,
+          modelHandlerCompatibilityKey: backfillCompatibilityKey,
+        };
+        shouldWriteShared = true;
+      }
+      if (shouldWriteShared) {
+        if (migrationResult.migrated) {
+          logger.debug('Migrated legacy shared state to flat format');
         }
-        if (shouldWriteShared) {
-          if (migrationResult.migrated) {
-            logger.debug('Migrated legacy shared state to flat format');
-          }
-          flowRecord.shared = migratedData;
-          await kv.write(
-            flowKey(executionId),
-            stampFlowRecordSchemaVersion(flowRecord),
-          );
-        }
+        flowRecord.shared = migratedData;
+        await kv.write(
+          flowKey(executionId),
+          stampFlowRecordSchemaVersion(flowRecord),
+        );
       }
     }
     // Cleanup may delete a terminal flow record only after absence was

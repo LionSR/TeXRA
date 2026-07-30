@@ -59,6 +59,26 @@ function activeWorkbenchTab(kind: string): string {
   return `.task-workbench-tab[data-kind="${kind}"][data-active="true"]`;
 }
 
+const BOTTOM_PANE = 'xpath=ancestor::aside[@data-placement="bottom"]';
+const BOTTOM_WORKBENCH_TABS =
+  '.task-workbench[data-placement="bottom"] .task-workbench-tab';
+
+/** Resize the native window and report the resulting content bounds. */
+async function setContentSize(
+  width: number,
+  height: number,
+): Promise<{ width: number; height: number }> {
+  return launched.app.evaluate(
+    ({ BrowserWindow }, size) => {
+      const window = BrowserWindow.getAllWindows().at(0);
+      if (!window) throw new Error('TeXRA window was not found.');
+      window.setContentSize(size.width, size.height);
+      return window.getContentBounds();
+    },
+    { width, height },
+  );
+}
+
 test('opens with a permanent task conversation and no workbench', async () => {
   const { page } = launched;
 
@@ -124,14 +144,9 @@ test('loads the project tree before an editor panel is opened', async () => {
 });
 
 test('resizes the window canvas, project sidebar, and project/task sections', async () => {
-  const { app, page } = launched;
+  const { page } = launched;
 
-  const contentBounds = await app.evaluate(({ BrowserWindow }) => {
-    const window = BrowserWindow.getAllWindows().at(0);
-    if (!window) throw new Error('TeXRA window was not found.');
-    window.setContentSize(1500, 900);
-    return window.getContentBounds();
-  });
+  const contentBounds = await setContentSize(1500, 900);
 
   await expect
     .poll(() => page.evaluate(() => window.innerWidth))
@@ -232,14 +247,9 @@ test('uses normal macOS workspace and stacking behavior', async () => {
 });
 
 test('keeps the composer grouped and centered at compact widths', async () => {
-  const { app, page } = launched;
+  const { page } = launched;
 
-  const contentBounds = await app.evaluate(({ BrowserWindow }) => {
-    const window = BrowserWindow.getAllWindows().at(0);
-    if (!window) throw new Error('TeXRA window was not found.');
-    window.setContentSize(1000, 760);
-    return window.getContentBounds();
-  });
+  const contentBounds = await setContentSize(1000, 760);
   await expect
     .poll(() => page.evaluate(() => window.innerWidth))
     .toBe(contentBounds.width);
@@ -329,9 +339,7 @@ test('keeps the composer grouped and centered at compact widths', async () => {
   expect(layout.settingsHostOffset).toEqual({ x: 0, y: 0 });
   expect(layout.settingsIconOffset).toEqual({ x: 0, y: 0 });
 
-  await app.evaluate(({ BrowserWindow }) => {
-    BrowserWindow.getAllWindows().at(0)?.setContentSize(1500, 900);
-  });
+  await setContentSize(1500, 900);
 });
 
 test('uses one rectangular hover surface for workbench tabs', async () => {
@@ -441,9 +449,7 @@ test('moves tabs between Bottom and Right from the context menu', async () => {
   await bottomToggle.click();
   const terminalTab = page.locator(activeWorkbenchTab('terminal'));
   await expect(terminalTab).toBeVisible();
-  await expect(
-    terminalTab.locator('xpath=ancestor::aside[@data-placement="bottom"]'),
-  ).toBeVisible();
+  await expect(terminalTab.locator(BOTTOM_PANE)).toBeVisible();
 
   await terminalTab.click({ button: 'right' });
   const contextMenu = terminalTab.locator('.task-workbench-tab-menu');
@@ -456,15 +462,11 @@ test('moves tabs between Bottom and Right from the context menu', async () => {
 
   await terminalTab.click({ button: 'right' });
   await terminalTab.locator('wa-dropdown-item[value="move-bottom"]').click();
-  await expect(
-    terminalTab.locator('xpath=ancestor::aside[@data-placement="bottom"]'),
-  ).toBeVisible();
+  await expect(terminalTab.locator(BOTTOM_PANE)).toBeVisible();
   await expect(page.locator(activeWorkbenchTab('settings'))).toBeVisible();
 
   await openSidebarWorkbench('Terminal');
-  const bottomTabs = page.locator(
-    '.task-workbench[data-placement="bottom"] .task-workbench-tab',
-  );
+  const bottomTabs = page.locator(BOTTOM_WORKBENCH_TABS);
   const countBeforeContextClose = await bottomTabs.count();
   const closeCandidate = page.locator(activeWorkbenchTab('terminal'));
   await closeCandidate.click({ button: 'right' });
@@ -701,15 +703,13 @@ test('runs an interactive shell in a terminal workbench tab', async () => {
   await openSidebarWorkbench('Terminal');
   const terminalTab = page.locator(activeWorkbenchTab('terminal'));
   await expect(terminalTab).toBeVisible();
-  await expect(
-    terminalTab.locator('xpath=ancestor::aside[@data-placement="bottom"]'),
-  ).toBeVisible();
+  await expect(terminalTab.locator(BOTTOM_PANE)).toBeVisible();
 
   // xterm renders rows into .xterm-rows. A prompt appearing at all proves the
   // pty spawned, node-pty loaded under Electron's ABI, and output streamed back
   // through IPC.
   const terminalSurface = terminalTab
-    .locator('xpath=ancestor::aside[@data-placement="bottom"]')
+    .locator(BOTTOM_PANE)
     .locator('.desktop-terminal-surface:not([hidden])');
   const rows = terminalSurface.locator('.xterm-rows');
   await expect(rows).toBeVisible({ timeout: 20_000 });
@@ -724,9 +724,7 @@ test('runs an interactive shell in a terminal workbench tab', async () => {
 
 test('runs host-requested setup commands in a new bottom terminal', async () => {
   const { page } = launched;
-  const bottomTabs = page.locator(
-    '.task-workbench[data-placement="bottom"] .task-workbench-tab',
-  );
+  const bottomTabs = page.locator(BOTTOM_WORKBENCH_TABS);
   const before = await bottomTabs.count();
 
   await page.evaluate(() => {
@@ -742,7 +740,7 @@ test('runs host-requested setup commands in a new bottom terminal', async () => 
   await expect(bottomTabs).toHaveCount(before + 1);
   const activeTerminal = page
     .locator(activeWorkbenchTab('terminal'))
-    .locator('xpath=ancestor::aside[@data-placement="bottom"]')
+    .locator(BOTTOM_PANE)
     .locator('.desktop-terminal-surface:not([hidden])');
   await expect(activeTerminal.locator('.xterm-rows')).toContainText(
     'texra-integrated-command-ok',
@@ -758,9 +756,7 @@ test('closes a bottom tab and falls back within the same pane', async () => {
   await openSidebarWorkbench('Terminal');
   await openSidebarWorkbench('Terminal');
 
-  const tabs = page.locator(
-    '.task-workbench[data-placement="bottom"] .task-workbench-tab',
-  );
+  const tabs = page.locator(BOTTOM_WORKBENCH_TABS);
   const before = await tabs.count();
   const terminalTab = page.locator(activeWorkbenchTab('terminal'));
   const fallbackLabel = await tabs

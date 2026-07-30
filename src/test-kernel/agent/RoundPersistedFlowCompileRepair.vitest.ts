@@ -8,7 +8,6 @@ import {
   RoundPersistedFlow,
   type RoundAwareState,
 } from '@agent/implementations/flows/reflection/RoundPersistedFlow';
-import type { ExecutionKVStore } from '@agent/storage/ExecutionKVStore';
 import {
   RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
@@ -68,9 +67,9 @@ class FakeRoundNode extends BaseNode<FakeShared> {
   }
 }
 
-function makeFlow(kv: ExecutionKVStore) {
+function makeFlow() {
   const node = new FakeRoundNode();
-  return new RoundPersistedFlow<FakeShared>(node, kv, {
+  return new RoundPersistedFlow<FakeShared>(node, createFakeKv(), {
     callbacks: {
       grantExtraRound: (s) => {
         if (
@@ -102,8 +101,7 @@ function initialShared(overrides: Partial<FakeShared>): FakeShared {
 
 describe('RoundPersistedFlow bounded compile-repair round (#7077)', () => {
   it('grants exactly one extra round when the final configured round fails to compile', async () => {
-    const kv = createFakeKv();
-    const flow = makeFlow(kv);
+    const flow = makeFlow();
     // totalRounds: 2 (rounds 0 and 1 configured); round 1 (the last one) fails.
     const shared = initialShared({ totalRounds: 2, failingRounds: [1] });
 
@@ -118,8 +116,7 @@ describe('RoundPersistedFlow bounded compile-repair round (#7077)', () => {
   });
 
   it('does not grant an extra round when a clean final round has no failure context', async () => {
-    const kv = createFakeKv();
-    const flow = makeFlow(kv);
+    const flow = makeFlow();
     const shared = initialShared({ totalRounds: 2, failingRounds: [] });
 
     await flow.run(shared);
@@ -130,8 +127,7 @@ describe('RoundPersistedFlow bounded compile-repair round (#7077)', () => {
   });
 
   it('does not grant an extra round when rejectOnCompileFailure is off', async () => {
-    const kv = createFakeKv();
-    const flow = makeFlow(kv);
+    const flow = makeFlow();
     const shared = initialShared({
       totalRounds: 2,
       failingRounds: [1],
@@ -146,8 +142,7 @@ describe('RoundPersistedFlow bounded compile-repair round (#7077)', () => {
   });
 
   it('does not chain a second repair round when the repair round itself fails again', async () => {
-    const kv = createFakeKv();
-    const flow = makeFlow(kv);
+    const flow = makeFlow();
     // Both the configured final round (1) and the granted repair round (2) fail.
     const shared = initialShared({ totalRounds: 2, failingRounds: [1, 2] });
 

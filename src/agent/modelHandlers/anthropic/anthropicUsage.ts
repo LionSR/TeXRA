@@ -98,35 +98,27 @@ export function computeAnthropicPrice(
     if (usageTotals.cacheCreationTokens > 0) {
       const pricedBreakdownTokens =
         usageTotals.cacheCreation5mTokens + usageTotals.cacheCreation1hTokens;
+      // Tokens the API left unattributed to a TTL bucket bill at the 5m rate.
+      const unclassifiedCacheCreationTokens = Math.max(
+        usageTotals.cacheCreationTokens - pricedBreakdownTokens,
+        0,
+      );
 
-      if (pricedBreakdownTokens > 0) {
-        basePrice +=
-          (usageTotals.cacheCreation5mTokens *
-            inputPrice *
-            CACHE_CREATION_COST_MULTIPLIER_5M) /
-          1e6;
-        basePrice +=
-          (usageTotals.cacheCreation1hTokens *
-            inputPrice *
-            CACHE_CREATION_COST_MULTIPLIER_1H) /
-          1e6;
-
-        const unclassifiedCacheCreationTokens = Math.max(
-          usageTotals.cacheCreationTokens - pricedBreakdownTokens,
-          0,
-        );
-        basePrice +=
-          (unclassifiedCacheCreationTokens *
-            inputPrice *
-            CACHE_CREATION_COST_MULTIPLIER_5M) /
-          1e6;
-      } else {
-        basePrice +=
-          (usageTotals.cacheCreationTokens *
-            inputPrice *
-            CACHE_CREATION_COST_MULTIPLIER_5M) /
-          1e6;
-      }
+      basePrice +=
+        (usageTotals.cacheCreation5mTokens *
+          inputPrice *
+          CACHE_CREATION_COST_MULTIPLIER_5M) /
+        1e6;
+      basePrice +=
+        (usageTotals.cacheCreation1hTokens *
+          inputPrice *
+          CACHE_CREATION_COST_MULTIPLIER_1H) /
+        1e6;
+      basePrice +=
+        (unclassifiedCacheCreationTokens *
+          inputPrice *
+          CACHE_CREATION_COST_MULTIPLIER_5M) /
+        1e6;
     }
     if (usageTotals.cacheReadTokens > 0) {
       basePrice +=

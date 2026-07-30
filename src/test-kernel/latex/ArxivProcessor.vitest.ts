@@ -1,5 +1,4 @@
 import * as fs from 'node:fs/promises';
-import * as os from 'node:os';
 import * as path from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -8,22 +7,14 @@ import {
   ArxivProcessor,
   resolveArxivPaperDirectoryRelative,
 } from '@latex/arxivProcessor';
+import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 
 const tempDirs: string[] = [];
 
 afterEach(async () => {
   vi.unstubAllGlobals();
-  await Promise.all(
-    tempDirs.map((dir) => fs.rm(dir, { recursive: true, force: true })),
-  );
-  tempDirs.length = 0;
+  await cleanupTempDirs(tempDirs);
 });
-
-async function makeTempDir(): Promise<string> {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-arxiv-'));
-  tempDirs.push(dir);
-  return dir;
-}
 
 describe('arXiv processor paths', () => {
   it('keeps custom arxiv destinations id-specific', () => {
@@ -57,7 +48,7 @@ describe('arXiv processor logger channel', () => {
 
 describe('arXiv source download filenames', () => {
   it('does not infer a missing header filename when it matches the base path', async () => {
-    const dir = await makeTempDir();
+    const dir = await makeTempDir('texra-arxiv-', tempDirs);
     const destBasePath = path.join(dir, 'source');
     const fetchMock = vi.fn(
       async (_url: RequestInfo | URL, _init?: RequestInit) =>

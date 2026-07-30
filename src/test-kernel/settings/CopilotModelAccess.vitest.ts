@@ -34,6 +34,16 @@ const copilotModel: ModelSelectionItem = {
   requiresKey: false,
 };
 
+async function renderModelsTab(
+  modelSelectionItems: ModelSelectionItem[],
+): Promise<ModelsTabElement> {
+  const tab = document.createElement('models-tab') as ModelsTabElement;
+  tab.modelSelectionItems = modelSelectionItems;
+  document.body.append(tab);
+  await tab.updateComplete;
+  return tab;
+}
+
 describe('Copilot model access settings', () => {
   useLitComponentTestDom(() => import('@settingsView/frontend/tabs/ModelsTab'));
 
@@ -42,10 +52,7 @@ describe('Copilot model access settings', () => {
   });
 
   it('shows a keyless consent action only when VS Code discovers Copilot models', async () => {
-    const tab = document.createElement('models-tab') as ModelsTabElement;
-    tab.modelSelectionItems = [copilotModel];
-    document.body.append(tab);
-    await tab.updateComplete;
+    const tab = await renderModelsTab([copilotModel]);
 
     const section = tab.shadowRoot?.querySelector('#copilot-access');
     expect(section?.textContent).toContain('Copilot in VS Code');
@@ -63,10 +70,7 @@ describe('Copilot model access settings', () => {
   });
 
   it('omits the Copilot section when the host discovers no models', async () => {
-    const tab = document.createElement('models-tab') as ModelsTabElement;
-    tab.modelSelectionItems = [];
-    document.body.append(tab);
-    await tab.updateComplete;
+    const tab = await renderModelsTab([]);
 
     expect(tab.shadowRoot?.querySelector('#copilot-access')).toBeNull();
   });

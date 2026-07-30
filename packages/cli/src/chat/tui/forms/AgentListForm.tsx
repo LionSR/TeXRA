@@ -210,14 +210,16 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
   });
   if (transient) return transient;
 
+  const currentAgentHintRow = currentAgentHint ? (
+    <Text dimColor wrap="truncate-end">
+      {currentAgentHint}
+    </Text>
+  ) : null;
+
   if (isCompactFormRows(props.availableRows)) {
     return (
       <FormFrame title="/agent" showCloseHint={false}>
-        {currentAgentHint ? (
-          <Text dimColor wrap="truncate-end">
-            {currentAgentHint}
-          </Text>
-        ) : null}
+        {currentAgentHintRow}
         <Text bold>{primarySectionTitle}</Text>
         <Select
           items={items}
@@ -245,11 +247,7 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
           ? 'Choose the root agent for this chat.'
           : 'Viewing agents. Use texra chat --agent <name> to switch in a new chat.'}
       </Text>
-      {currentAgentHint ? (
-        <Text dimColor wrap="truncate-end">
-          {currentAgentHint}
-        </Text>
-      ) : null}
+      {currentAgentHintRow}
       <Box marginTop={1} flexDirection="column">
         <Text bold>{primarySectionTitle}</Text>
         <Select

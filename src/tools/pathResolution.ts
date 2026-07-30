@@ -9,7 +9,10 @@ import {
 import { ToolError } from '@shared/schemas/toolResult';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { WorkspaceFS } from '@utils/files';
-import { findExternalRoot } from '@utils/files/externalRoots';
+import {
+  findExternalRoot,
+  type MatchedExternalRoot,
+} from '@utils/files/externalRoots';
 import { locatePathInRoot } from '@utils/files/workspaceRoot';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 import {
@@ -100,22 +103,45 @@ export function resolveWorkspaceRelativePath(
     return restrictPaths;
   };
 
+  /**
+   * Resolve an absolute path that sits outside the containing root: honour a
+   * registered external root when one matches, pass the path through when
+   * containment is switched off, and otherwise reject with `outsideMessage`.
+   *
+   * `relative` is set to the full absolute path so the display (rendered via
+   * `toPosixPath(relative)`) unambiguously signals an external operation —
+   * agents and users should never confuse an external write with a workspace
+   * write, even when file basenames collide.
+   */
+  const resolveOutsideRoot = (
+    absolutePath: string,
+    match: MatchedExternalRoot | null | undefined,
+    outsideMessage: string,
+  ): WorkspacePathResolution => {
+    if (!match && pathsAreRestricted()) {
+      throw new ToolError(outsideMessage);
+    }
+    return {
+      relative: absolutePath,
+      absolute: absolutePath,
+      fsPath: absolutePath,
+      ...(match ? { external: externalInfo(match) } : {}),
+    };
+  };
+
   if (root) {
     // Absolute paths need special handling — locatePathInRoot only works with relative paths.
     if (input && path.isAbsolute(input)) {
+      if (!isPathWithin(root, input)) {
+        return resolveOutsideRoot(
+          input,
+          findExternalRoot(input),
+          'Path must stay within the working directory.',
+        );
+      }
       // Normalize to POSIX separators so .relative is consistent across platforms
       // (locatePathInRoot and WorkspaceFS.locatePath already do this).
       const relative = path.relative(root, input).replaceAll('\\', '/');
-      if (!isPathWithin(root, input)) {
-        const external = externalAllowance(input);
-        if (external) {
-          return external;
-        }
-        if (!pathsAreRestricted()) {
-          return unrestrictedExternalResolution(input);
-        }
-        throw new ToolError('Path must stay within the working directory.');
-      }
       return annotateExternalPermission({
         relative: relative || '.',
         absolute: input,
@@ -126,13 +152,11 @@ export function resolveWorkspaceRelativePath(
     if (resolved.kind === 'external') {
       // `annotateExternal` in `locatePathInRoot` already consulted the
       // registry, so reuse that match instead of paying for a second lookup.
-      if (resolved.allowed) {
-        return externalResolution(resolved.absolutePath, resolved.allowed);
-      }
-      if (!pathsAreRestricted()) {
-        return unrestrictedExternalResolution(resolved.absolutePath);
-      }
-      throw new ToolError('Path must stay within the working directory.');
+      return resolveOutsideRoot(
+        resolved.absolutePath,
+        resolved.allowed,
+        'Path must stay within the working directory.',
+      );
     }
     const relative = resolved.relativePath || '.';
     return annotateExternalPermission({
@@ -145,13 +169,11 @@ export function resolveWorkspaceRelativePath(
   if (!WorkspaceFS.getPath()) {
     // No workspace — fall back to the allowlist so agent-dir calls still work.
     if (input && path.isAbsolute(input)) {
-      const external = externalAllowance(input);
-      if (external) {
-        return external;
-      }
-      if (!pathsAreRestricted()) {
-        return unrestrictedExternalResolution(input);
-      }
+      return resolveOutsideRoot(
+        input,
+        findExternalRoot(input),
+        'Workspace path is not available.',
+      );
     }
     throw new ToolError('Workspace path is not available.');
   }
@@ -159,65 +181,26 @@ export function resolveWorkspaceRelativePath(
   const resolved = WorkspaceFS.locatePath(input);
 
   if (resolved.kind === 'external') {
-    if (resolved.allowed) {
-      return externalResolution(resolved.absolutePath, resolved.allowed);
-    }
-    if (!pathsAreRestricted()) {
-      return unrestrictedExternalResolution(resolved.absolutePath);
-    }
-    throw new ToolError('Path must stay within the workspace.');
+    return resolveOutsideRoot(
+      resolved.absolutePath,
+      resolved.allowed,
+      'Path must stay within the workspace.',
+    );
   }
 
   const relative = resolved.relativePath || '.';
   return { relative, absolute: resolved.absolutePath, fsPath: relative };
 }
 
-/** Build the ordinary external-path shape when containment is explicitly off. */
-function unrestrictedExternalResolution(
-  absolutePath: string,
-): WorkspacePathResolution {
+/** Permission metadata carried for a path inside a registered external root. */
+function externalInfo(
+  match: MatchedExternalRoot,
+): NonNullable<WorkspacePathResolution['external']> {
   return {
-    relative: absolutePath,
-    absolute: absolutePath,
-    fsPath: absolutePath,
+    root: match.absolutePath,
+    writable: match.writable,
+    label: match.label,
   };
-}
-
-/**
- * Build a WorkspacePathResolution for an absolute path that sits inside a
- * registered external root, using a pre-resolved allowlist match.
- *
- * `relative` is set to the full absolute path so the display (rendered via
- * `toPosixPath(relative)`) unambiguously signals an external operation —
- * agents and users should never confuse an external write with a workspace
- * write, even when file basenames collide.
- */
-function externalResolution(
-  absolutePath: string,
-  match: { absolutePath: string; writable: boolean; label: string },
-): WorkspacePathResolution {
-  return {
-    relative: absolutePath,
-    absolute: absolutePath,
-    fsPath: absolutePath,
-    external: {
-      root: match.absolutePath,
-      writable: match.writable,
-      label: match.label,
-    },
-  };
-}
-
-/**
- * Build a WorkspacePathResolution for an absolute path that sits inside a
- * registered external root. Returns undefined when no root matches.
- */
-function externalAllowance(
-  absolutePath: string,
-): WorkspacePathResolution | undefined {
-  const match = findExternalRoot(absolutePath);
-  if (!match) return undefined;
-  return externalResolution(absolutePath, match);
 }
 
 /**
@@ -238,14 +221,7 @@ function annotateExternalPermission(
   if (resolution.external) return resolution;
   const match = findExternalRoot(resolution.absolute);
   if (!match) return resolution;
-  return {
-    ...resolution,
-    external: {
-      root: match.absolutePath,
-      writable: match.writable,
-      label: match.label,
-    },
-  };
+  return { ...resolution, external: externalInfo(match) };
 }
 
 /**

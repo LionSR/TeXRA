@@ -64,6 +64,21 @@ function encryptedRecordStore(): { get<T>(key: string): T | undefined } {
   };
 }
 
+/** An ElectronSecrets over one encrypted record, with its warnings captured. */
+async function secretsWithWarningLog(): Promise<{
+  secrets: InstanceType<ElectronSecretsModule['ElectronSecrets']>;
+  warnings: string[];
+}> {
+  const { ElectronSecrets } = await loadElectronSecrets();
+  const warnings: string[] = [];
+  const secrets = new ElectronSecrets(encryptedRecordStore(), {
+    showWarningMessage: (message: string) => {
+      warnings.push(message);
+    },
+  });
+  return { secrets, warnings };
+}
+
 function loadRendererMain(): string {
   return readFileSync(
     repoPath('packages/desktop/src/renderer/main.ts'),
@@ -89,13 +104,7 @@ describe('ElectronSecrets keychain-denial bootstrap recovery', () => {
         throw new Error('User denied keychain access');
       });
 
-    const { ElectronSecrets } = await loadElectronSecrets();
-    const warnings: string[] = [];
-    const secrets = new ElectronSecrets(encryptedRecordStore(), {
-      showWarningMessage: (message: string) => {
-        warnings.push(message);
-      },
-    });
+    const { secrets, warnings } = await secretsWithWarningLog();
 
     const value = await secrets.get('texra.api.openai');
 
@@ -111,13 +120,7 @@ describe('ElectronSecrets keychain-denial bootstrap recovery', () => {
       .mockImplementation(() => {
         throw new Error('denied');
       });
-    const { ElectronSecrets } = await loadElectronSecrets();
-    const warnings: string[] = [];
-    const secrets = new ElectronSecrets(encryptedRecordStore(), {
-      showWarningMessage: (message: string) => {
-        warnings.push(message);
-      },
-    });
+    const { secrets, warnings } = await secretsWithWarningLog();
 
     await secrets.get('a');
     await secrets.get('b');

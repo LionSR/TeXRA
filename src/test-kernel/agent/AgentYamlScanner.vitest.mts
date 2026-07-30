@@ -11,6 +11,27 @@ import { scanDirectory } from '@agent/index/agentYamlScanner';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createFakePlatform } from '@test/support/FakePlatform';
 
+/** Create a temp agent directory holding the given YAML files, given as lines. */
+async function createAgentDir(
+  files: Record<string, readonly string[]>,
+): Promise<string> {
+  const agentDir = await mkdtemp(resolve(tmpdir(), 'texra-agent-scan-'));
+  for (const [fileName, lines] of Object.entries(files)) {
+    await writeFile(resolve(agentDir, fileName), `${lines.join('\n')}\n`);
+  }
+  return agentDir;
+}
+
+function toolUseAgent(name: string, systemPrompt: string): string[] {
+  return [
+    `name: ${name}`,
+    'settings:',
+    '  agentCategory: toolUse',
+    'prompts:',
+    `  systemPrompt: ${systemPrompt}`,
+  ];
+}
+
 describe('agent YAML scanner', () => {
   beforeAll(async () => {
     const { initPlatform } = await import('@platform/platform');
@@ -18,54 +39,36 @@ describe('agent YAML scanner', () => {
   });
 
   it('derives workflow round counts from inherited settings and prompts', async () => {
-    const agentDir = await mkdtemp(resolve(tmpdir(), 'texra-agent-scan-'));
-    await writeFile(
-      resolve(agentDir, 'base.yaml'),
-      [
+    const agentDir = await createAgentDir({
+      'base.yaml': [
         'name: base',
         'settings:',
         '  agentCategory: workflow',
         '  rounds: 4',
         'prompts:',
         '  userRequest: base',
-        '',
-      ].join('\n'),
-    );
-    await writeFile(
-      resolve(agentDir, 'child.yaml'),
-      [
+      ],
+      'child.yaml': [
         'name: child',
         'inherits: base',
         'prompts:',
         '  userRequest: child',
-        '',
-      ].join('\n'),
-    );
-    await writeFile(
-      resolve(agentDir, 'assistant.yaml'),
-      [
+      ],
+      'assistant.yaml': [
         'name: assistant',
         'settings:',
         '  agentCategory: workflow',
         '  rounds: 5',
         'prompts:',
         '  userRequest: assistant',
-        '',
-      ].join('\n'),
-    );
-    await writeFile(
-      resolve(agentDir, 'alias-child.yaml'),
-      [
+      ],
+      'alias-child.yaml': [
         'name: alias-child',
         'inherits: chat',
         'prompts:',
         '  userRequest: alias child',
-        '',
-      ].join('\n'),
-    );
-    await writeFile(
-      resolve(agentDir, 'prompt-base.yaml'),
-      [
+      ],
+      'prompt-base.yaml': [
         'name: prompt-base',
         'settings:',
         '  agentCategory: workflow',
@@ -75,17 +78,13 @@ describe('agent YAML scanner', () => {
         '    - first',
         '    - second',
         '    - third',
-        '',
-      ].join('\n'),
-    );
-    await writeFile(
-      resolve(agentDir, 'prompt-child.yaml'),
-      ['name: prompt-child', 'inherits: prompt-base', ''].join('\n'),
-    );
-    await writeFile(
-      resolve(agentDir, 'missing-parent.yaml'),
-      ['name: missing-parent', 'inherits: no-such-parent', ''].join('\n'),
-    );
+      ],
+      'prompt-child.yaml': ['name: prompt-child', 'inherits: prompt-base'],
+      'missing-parent.yaml': [
+        'name: missing-parent',
+        'inherits: no-such-parent',
+      ],
+    });
 
     const entries = await scanDirectory(agentDir, 'custom');
 
@@ -102,18 +101,9 @@ describe('agent YAML scanner', () => {
   });
 
   it('uses the YAML name as the canonical registry name', async () => {
-    const agentDir = await mkdtemp(resolve(tmpdir(), 'texra-agent-scan-'));
-    await writeFile(
-      resolve(agentDir, 'Readable Helper.yaml'),
-      [
-        'name: helper',
-        'settings:',
-        '  agentCategory: toolUse',
-        'prompts:',
-        '  systemPrompt: help',
-        '',
-      ].join('\n'),
-    );
+    const agentDir = await createAgentDir({
+      'Readable Helper.yaml': toolUseAgent('helper', 'help'),
+    });
 
     const entries = await scanDirectory(agentDir, 'custom');
 
@@ -121,19 +111,16 @@ describe('agent YAML scanner', () => {
   });
 
   it('skips agent names that are not identifiers', async () => {
-    const agentDir = await mkdtemp(resolve(tmpdir(), 'texra-agent-scan-'));
-    await writeFile(
-      resolve(agentDir, 'review.yaml'),
-      [
+    const agentDir = await createAgentDir({
+      'review.yaml': [
         'name: review team',
         'description: Verifies manuscripts.',
         'settings:',
         '  agentCategory: toolUse',
         'prompts:',
         '  systemPrompt: review',
-        '',
-      ].join('\n'),
-    );
+      ],
+    });
 
     const entries = await scanDirectory(agentDir, 'custom');
 
@@ -141,40 +128,11 @@ describe('agent YAML scanner', () => {
   });
 
   it('skips duplicate YAML names instead of returning colliding entries', async () => {
-    const agentDir = await mkdtemp(resolve(tmpdir(), 'texra-agent-scan-'));
-    await writeFile(
-      resolve(agentDir, 'first.yaml'),
-      [
-        'name: shared',
-        'settings:',
-        '  agentCategory: toolUse',
-        'prompts:',
-        '  systemPrompt: first',
-        '',
-      ].join('\n'),
-    );
-    await writeFile(
-      resolve(agentDir, 'second.yaml'),
-      [
-        'name: shared',
-        'settings:',
-        '  agentCategory: toolUse',
-        'prompts:',
-        '  systemPrompt: second',
-        '',
-      ].join('\n'),
-    );
-    await writeFile(
-      resolve(agentDir, 'unique.yaml'),
-      [
-        'name: unique',
-        'settings:',
-        '  agentCategory: toolUse',
-        'prompts:',
-        '  systemPrompt: unique',
-        '',
-      ].join('\n'),
-    );
+    const agentDir = await createAgentDir({
+      'first.yaml': toolUseAgent('shared', 'first'),
+      'second.yaml': toolUseAgent('shared', 'second'),
+      'unique.yaml': toolUseAgent('unique', 'unique'),
+    });
 
     const entries = await scanDirectory(agentDir, 'custom');
 
@@ -182,19 +140,10 @@ describe('agent YAML scanner', () => {
   });
 
   it('skips a file with malformed YAML instead of throwing', async () => {
-    const agentDir = await mkdtemp(resolve(tmpdir(), 'texra-agent-scan-'));
-    await writeFile(resolve(agentDir, 'broken.yaml'), 'name: "unterminated\n');
-    await writeFile(
-      resolve(agentDir, 'valid.yaml'),
-      [
-        'name: valid',
-        'settings:',
-        '  agentCategory: toolUse',
-        'prompts:',
-        '  systemPrompt: hi',
-        '',
-      ].join('\n'),
-    );
+    const agentDir = await createAgentDir({
+      'broken.yaml': ['name: "unterminated'],
+      'valid.yaml': toolUseAgent('valid', 'hi'),
+    });
 
     const entries = await scanDirectory(agentDir, 'custom');
 

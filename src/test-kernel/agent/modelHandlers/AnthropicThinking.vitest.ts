@@ -18,93 +18,32 @@ type AdaptiveFixture = readonly [
   onXhigh: 'xhigh' | 'max',
 ];
 
+// The two official Anthropic effort vocabularies: entries without an `xhigh`
+// tier normalize an `xhigh` request up to `max` instead.
+const EFFORTS_WITHOUT_XHIGH = [
+  ReasoningEffort.LOW,
+  ReasoningEffort.MEDIUM,
+  ReasoningEffort.HIGH,
+  ReasoningEffort.MAX,
+] as const;
+
+const EFFORTS_WITH_XHIGH = [
+  ReasoningEffort.LOW,
+  ReasoningEffort.MEDIUM,
+  ReasoningEffort.HIGH,
+  ReasoningEffort.XHIGH,
+  ReasoningEffort.MAX,
+] as const;
+
 const ADAPTIVE_MODELS: readonly AdaptiveFixture[] = [
-  [
-    MODEL_CONFIGS.opus46T,
-    [
-      ReasoningEffort.LOW,
-      ReasoningEffort.MEDIUM,
-      ReasoningEffort.HIGH,
-      ReasoningEffort.MAX,
-    ],
-    'max',
-  ],
-  [
-    MODEL_CONFIGS.opus47T,
-    [
-      ReasoningEffort.LOW,
-      ReasoningEffort.MEDIUM,
-      ReasoningEffort.HIGH,
-      ReasoningEffort.XHIGH,
-      ReasoningEffort.MAX,
-    ],
-    'xhigh',
-  ],
-  [
-    MODEL_CONFIGS.opus48T,
-    [
-      ReasoningEffort.LOW,
-      ReasoningEffort.MEDIUM,
-      ReasoningEffort.HIGH,
-      ReasoningEffort.XHIGH,
-      ReasoningEffort.MAX,
-    ],
-    'xhigh',
-  ],
-  [
-    MODEL_CONFIGS.opus5T,
-    [
-      ReasoningEffort.LOW,
-      ReasoningEffort.MEDIUM,
-      ReasoningEffort.HIGH,
-      ReasoningEffort.XHIGH,
-      ReasoningEffort.MAX,
-    ],
-    'xhigh',
-  ],
-  [
-    MODEL_CONFIGS.sonnet46T,
-    [
-      ReasoningEffort.LOW,
-      ReasoningEffort.MEDIUM,
-      ReasoningEffort.HIGH,
-      ReasoningEffort.MAX,
-    ],
-    'max',
-  ],
-  [
-    MODEL_CONFIGS.sonnet5T,
-    [
-      ReasoningEffort.LOW,
-      ReasoningEffort.MEDIUM,
-      ReasoningEffort.HIGH,
-      ReasoningEffort.XHIGH,
-      ReasoningEffort.MAX,
-    ],
-    'xhigh',
-  ],
-  [
-    MODEL_CONFIGS.fable5,
-    [
-      ReasoningEffort.LOW,
-      ReasoningEffort.MEDIUM,
-      ReasoningEffort.HIGH,
-      ReasoningEffort.XHIGH,
-      ReasoningEffort.MAX,
-    ],
-    'xhigh',
-  ],
-  [
-    MODEL_CONFIGS.mythos5,
-    [
-      ReasoningEffort.LOW,
-      ReasoningEffort.MEDIUM,
-      ReasoningEffort.HIGH,
-      ReasoningEffort.XHIGH,
-      ReasoningEffort.MAX,
-    ],
-    'xhigh',
-  ],
+  [MODEL_CONFIGS.opus46T, EFFORTS_WITHOUT_XHIGH, 'max'],
+  [MODEL_CONFIGS.opus47T, EFFORTS_WITH_XHIGH, 'xhigh'],
+  [MODEL_CONFIGS.opus48T, EFFORTS_WITH_XHIGH, 'xhigh'],
+  [MODEL_CONFIGS.opus5T, EFFORTS_WITH_XHIGH, 'xhigh'],
+  [MODEL_CONFIGS.sonnet46T, EFFORTS_WITHOUT_XHIGH, 'max'],
+  [MODEL_CONFIGS.sonnet5T, EFFORTS_WITH_XHIGH, 'xhigh'],
+  [MODEL_CONFIGS.fable5, EFFORTS_WITH_XHIGH, 'xhigh'],
+  [MODEL_CONFIGS.mythos5, EFFORTS_WITH_XHIGH, 'xhigh'],
 ];
 
 function thinkingConfig(

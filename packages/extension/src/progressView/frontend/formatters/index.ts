@@ -75,10 +75,7 @@ function formatRenderError(label: string, errorMsg: string): TemplateResult {
  * message (e.g. naming the tool in a tool-use error card).
  */
 function wrapWithErrorHandling(
-  fn: (
-    m: LogMessageData,
-    opts?: FormatOptions & { isRunning?: boolean },
-  ) => FormatResult,
+  fn: TemplateFormatterFn,
   label: string | ((message: LogMessageData) => string),
 ): TemplateFormatterFn {
   return (message, options) => {
@@ -110,7 +107,7 @@ function getToolUseRenderLabel(message: LogMessageData): string {
 }
 
 /** Map of message types to their formatter functions. */
-const TEMPLATE_FORMATTERS: Record<string, TemplateFormatterFn | null> = {
+const TEMPLATE_FORMATTERS: Partial<Record<MessageType, TemplateFormatterFn>> = {
   // Collapsible content banners
   thinking: wrapWithErrorHandling(formatBannerContentTemplate, 'thinking'),
   scratchpad: wrapWithErrorHandling(formatBannerContentTemplate, 'scratchpad'),
@@ -177,9 +174,9 @@ export function formatLogEntry(
     isRunning: isStreamingTextLogMessage(logMessage),
   };
 
-  const formatter = messageType ? TEMPLATE_FORMATTERS[messageType] : null;
+  const formatter = messageType ? TEMPLATE_FORMATTERS[messageType] : undefined;
 
-  if (messageType && typeof formatter === 'function') {
+  if (messageType && formatter) {
     const result = formatter(logMessage, templateOptions);
     if (result) return result;
     if (NULLABLE_TYPES.has(messageType)) return nothing;

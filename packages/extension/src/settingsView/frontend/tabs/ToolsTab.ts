@@ -201,28 +201,29 @@ export class ToolsTab extends LitElement {
     postMessage(SETTINGS_VIEW_COMMANDS.SET_DESKTOP_CRASH_REPORTING_DSN);
   };
 
-  private renderApprovalSettings(): TemplateResult {
+  /** Section holding a single labelled toggle. */
+  private renderToggleSection(opts: {
+    icon: TeXRAIconName;
+    title: string;
+    label: string;
+    description: string;
+    checked: boolean;
+    onChange: (event: Event) => void;
+  }): TemplateResult {
     return html`
       <div class="category-section">
-        ${renderSettingsSectionHeading({
-          icon: 'shield',
-          title: 'Approval & safety',
-        })}
+        ${renderSettingsSectionHeading({ icon: opts.icon, title: opts.title })}
         <div class="settings-section">
           <div class="settings-row">
             <div class="settings-row-text">
-              <span class="settings-row-label">
-                Require approval for shell commands and agent sessions
-              </span>
-              <span class="settings-row-help">
-                Pause before potentially consequential local actions.
-              </span>
+              <span class="settings-row-label">${opts.label}</span>
+              <span class="settings-row-help">${opts.description}</span>
             </div>
             <wa-switch
               class="settings-row-control"
-              aria-label="Require approval for shell commands and agent sessions"
-              ?checked=${this.bashApprovalEnabled}
-              @change=${this.handleBashApprovalToggle}
+              aria-label=${opts.label}
+              ?checked=${opts.checked}
+              @change=${opts.onChange}
             ></wa-switch>
           </div>
         </div>
@@ -230,34 +231,27 @@ export class ToolsTab extends LitElement {
     `;
   }
 
+  private renderApprovalSettings(): TemplateResult {
+    return this.renderToggleSection({
+      icon: 'shield',
+      title: 'Approval & safety',
+      label: 'Require approval for shell commands and agent sessions',
+      description: 'Pause before potentially consequential local actions.',
+      checked: this.bashApprovalEnabled,
+      onChange: this.handleBashApprovalToggle,
+    });
+  }
+
   private renderAgentSkillsSettings(): TemplateResult | typeof nothing {
     if (!this.showAgentSkillsSettings) return nothing;
-    return html`
-      <div class="category-section">
-        ${renderSettingsSectionHeading({
-          icon: 'robot',
-          title: 'Agent skills',
-        })}
-        <div class="settings-section">
-          <div class="settings-row">
-            <div class="settings-row-text">
-              <span class="settings-row-label">
-                Make skills available to tool-use agents
-              </span>
-              <span class="settings-row-help">
-                Includes built-in TeXRA skills and imported skills.
-              </span>
-            </div>
-            <wa-switch
-              class="settings-row-control"
-              aria-label="Make skills available to tool-use agents"
-              ?checked=${this.agentSkillsEnabled}
-              @change=${this.handleAgentSkillsToggle}
-            ></wa-switch>
-          </div>
-        </div>
-      </div>
-    `;
+    return this.renderToggleSection({
+      icon: 'robot',
+      title: 'Agent skills',
+      label: 'Make skills available to tool-use agents',
+      description: 'Includes built-in TeXRA skills and imported skills.',
+      checked: this.agentSkillsEnabled,
+      onChange: this.handleAgentSkillsToggle,
+    });
   }
 
   private renderDesktopCrashReporting(): TemplateResult | typeof nothing {

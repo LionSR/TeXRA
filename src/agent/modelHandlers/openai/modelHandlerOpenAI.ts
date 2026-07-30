@@ -82,7 +82,6 @@ import type {
   ChatCompletion,
   ChatCompletionChunk,
   ChatCompletionContentPart,
-  ChatCompletionContentPartInputAudio,
   ChatCompletionAssistantMessageParam,
   ChatCompletionCreateParamsNonStreaming,
   ChatCompletionCreateParamsStreaming,
@@ -212,10 +211,10 @@ export class ModelHandlerOpenAI<
         // summarization system prompt. Apply provider-specific normalization
         // (e.g. DeepSeek's convertContentToString, mergeConsecutiveRoles) so
         // the compaction call doesn't get rejected.
-        const normOptions = this.getMessageNormalizationOptions();
-        const normalizedConversation = normOptions
-          ? this.prepareNormalizedMessages(conversationMessages, normOptions)
-          : conversationMessages;
+        const normalizedConversation = this.prepareNormalizedMessages(
+          conversationMessages,
+          this.getMessageNormalizationOptions(),
+        );
 
         const summaryParams = this.buildCompactionSummaryParams(
           normalizedConversation,
@@ -668,10 +667,10 @@ export class ModelHandlerOpenAI<
     const updatedMessages = didCompact ? compactedMessages : undefined;
 
     // Apply message normalization if subclass specifies options
-    const normOptions = this.getMessageNormalizationOptions();
-    const messages = normOptions
-      ? this.prepareNormalizedMessages(messagesToUse, normOptions)
-      : messagesToUse;
+    const messages = this.prepareNormalizedMessages(
+      messagesToUse,
+      this.getMessageNormalizationOptions(),
+    );
 
     // Phase 1: BUILD - Construct provider-specific request parameters
     const useStreaming = this.getStreamingConfig();
@@ -842,30 +841,18 @@ export class ModelHandlerOpenAI<
         // Currently OpenRouter's OpenAI-compatible audio branch is the only consumer
         // Extract format from mime type (e.g., 'wav' from 'audio/wav')
         const audioFormat = extractMimeSubtype(media.media_type).toLowerCase();
-        const supportedFormats = ['wav', 'mp3'] as const;
-
-        if (
-          !supportedFormats.includes(
-            audioFormat as (typeof supportedFormats)[number],
-          )
-        ) {
+        if (audioFormat !== 'wav' && audioFormat !== 'mp3') {
           throw new Error(
-            `Unsupported audio format "${audioFormat}". Valid formats: ${supportedFormats.join(', ')}`,
+            `Unsupported audio format "${audioFormat}". Valid formats: wav, mp3`,
           );
         }
 
-        const typedAudioFormat = audioFormat as 'wav' | 'mp3';
-
-        const audioContent: ChatCompletionContentPartInputAudio = {
-          type: 'input_audio',
-          input_audio: {
-            data: media.data,
-            format: typedAudioFormat,
-          },
-        };
         return [
           { type: 'text', text: `Audio: ${media.file_name}` },
-          audioContent,
+          {
+            type: 'input_audio',
+            input_audio: { data: media.data, format: audioFormat },
+          },
         ];
       } else if (media.media_category === 'audio') {
         this.logger.warn(
@@ -882,15 +869,10 @@ export class ModelHandlerOpenAI<
   /**
    * Extracts response text and usage statistics from an API response.
    *
-   * `responseObject` is intentionally `any`: ModelHandlerOpenAI is the shared
-   * base for every OpenAI-compatible provider (DeepSeek, Kimi, GLM, MiniMax,
-   * xAI, DashScope, …), which in practice don't all return a strict
-   * `ChatCompletion`. The reasoning stream aggregator finalizes to a
-   * streaming-style `{ role, content }` object with no `choices`, and some
-   * relays return a bare `{ error }` payload. `classifyOpenAIResponse` sniffs
-   * the raw shape exactly once and returns a tagged union, so the rest of
-   * this method reads typed fields instead of re-checking `any` properties
-   * per branch.
+   * `responseObject` is intentionally `any` for the reasons documented on
+   * {@link OpenAIClassifiedResponse}; `classifyOpenAIResponse` sniffs the raw
+   * shape exactly once so the body below reads typed fields instead of
+   * re-checking `any` properties per branch.
    */
   extractResponse(responseObject: any, endTag: string): ExtractResponseResult {
     const classified = classifyOpenAIResponse(responseObject);
@@ -909,51 +891,38 @@ export class ModelHandlerOpenAI<
       throw new Error(errorMsg);
     }
 
+    let content: string;
+    let stopReason: ExtractResponseResult['stopReason'];
+    let usage: ExtractResponseResult['usage'];
+
     if (classified.kind === 'streamingFallback') {
       this.logger.debug('Response object', { data: responseObject });
       this.logger.warn(
         'Using direct response format (streaming style) as fallback',
       );
-      let newResponse = this.normalizeResponseText(classified.content);
-      const { stopReason, usage } = classified;
-
-      // Only restore the end tag when it was configured as an API-level
-      // stop sequence (see `configuresEndTagStopSequence`). o-series/Grok
-      // reasoning models never set `stop`, so a natural STOP there doesn't
-      // imply the provider stripped the tag — forging it could mask
-      // incomplete output as complete.
-      newResponse = this.appendEndTagIfNeeded(
-        newResponse,
-        endTag,
-        stopReason === OPENAI_CHAT_FINISH.STOP &&
-          this.configuresEndTagStopSequence,
-      );
-      newResponse = this.postProcessResponse(newResponse);
-
-      return { text: newResponse, usage, stopReason };
-    }
-
-    // Extract base response
-    const { choice } = classified;
-    const stopReason = choice.finish_reason;
-    this.logger.debug(`Stop reason: ${stopReason}`);
-    let newResponse = '';
-    if (choice.message.content) {
-      newResponse = this.normalizeResponseText(choice.message.content);
-    } else if (
-      stopReason === OPENAI_CHAT_FINISH.TOOL_CALLS ||
-      stopReason === OPENAI_CHAT_FINISH.FUNCTION_CALL ||
-      Array.isArray(choice.message.tool_calls) ||
-      choice.message.function_call
-    ) {
-      // Other provider SDKs (Anthropic, Google, etc.) keep a placeholder
-      // message when a tool is invoked. OpenAI omits `content` entirely,
-      // so lack of content is not an error in this case.
-
-      this.logger.debug('Received tool call without message content');
+      ({ content, stopReason, usage } = classified);
     } else {
-      this.logger.error('Response object', { data: responseObject });
-      this.logger.error('content is empty');
+      const { choice } = classified;
+      stopReason = choice.finish_reason;
+      usage = responseObject.usage;
+      content = choice.message.content ?? '';
+      this.logger.debug(`Stop reason: ${stopReason}`);
+      if (!content) {
+        if (
+          stopReason === OPENAI_CHAT_FINISH.TOOL_CALLS ||
+          stopReason === OPENAI_CHAT_FINISH.FUNCTION_CALL ||
+          Array.isArray(choice.message.tool_calls) ||
+          choice.message.function_call
+        ) {
+          // Other provider SDKs (Anthropic, Google, etc.) keep a placeholder
+          // message when a tool is invoked. OpenAI omits `content` entirely,
+          // so lack of content is not an error in this case.
+          this.logger.debug('Received tool call without message content');
+        } else {
+          this.logger.error('Response object', { data: responseObject });
+          this.logger.error('content is empty');
+        }
+      }
     }
 
     // Only restore the end tag when it was configured as an API-level stop
@@ -961,15 +930,14 @@ export class ModelHandlerOpenAI<
     // models never set `stop`, so a natural STOP there doesn't imply the
     // provider stripped the tag — forging it could mask incomplete output as
     // complete.
-    newResponse = this.appendEndTagIfNeeded(
-      newResponse,
+    const withEndTag = this.appendEndTagIfNeeded(
+      content ? this.normalizeResponseText(content) : '',
       endTag,
       stopReason === OPENAI_CHAT_FINISH.STOP &&
         this.configuresEndTagStopSequence,
     );
-    newResponse = this.postProcessResponse(newResponse);
 
-    return { text: newResponse, usage: responseObject.usage, stopReason };
+    return { text: this.postProcessResponse(withEndTag), usage, stopReason };
   }
 
   protected appendUserText(

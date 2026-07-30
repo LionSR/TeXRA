@@ -31,6 +31,27 @@ const REPO_ROOT = resolve(
 
 const require = createRequire(import.meta.url);
 
+const RELAY_DENO_JSON_PATH = 'supabase/functions/relay/deno.json';
+
+function readJsonFile<T>(relativePath: string): T {
+  return JSON.parse(
+    readFileSync(resolve(REPO_ROOT, relativePath), 'utf8'),
+  ) as T;
+}
+
+/** The relay's exact npm specifier for llm-zoo (e.g. "npm:llm-zoo@1.12.0"). */
+function readRelayLlmZooSpecifier(): string {
+  const relayDenoJson = readJsonFile<{ imports?: Record<string, string> }>(
+    RELAY_DENO_JSON_PATH,
+  );
+  const relaySpecifier = relayDenoJson.imports?.['llm-zoo'];
+  expect(
+    relaySpecifier,
+    `${RELAY_DENO_JSON_PATH} is missing an llm-zoo import`,
+  ).toBeDefined();
+  return relaySpecifier!;
+}
+
 describe('relay shared configuration parity', () => {
   it('keeps client and relay tier strings identical', () => {
     expect(RELAY_TIERS).toEqual(CLIENT_TIERS);
@@ -51,9 +72,9 @@ describe('relay shared configuration parity', () => {
   });
 
   it('keeps the workspace llm-zoo range floor in sync with the relay deno.json pin', () => {
-    const workspacePackageJson = JSON.parse(
-      readFileSync(resolve(REPO_ROOT, 'package.json'), 'utf8'),
-    ) as { dependencies?: Record<string, string> };
+    const workspacePackageJson = readJsonFile<{
+      dependencies?: Record<string, string>;
+    }>('package.json');
     const workspaceRange = workspacePackageJson.dependencies?.['llm-zoo'];
     expect(
       workspaceRange,
@@ -66,19 +87,8 @@ describe('relay shared configuration parity', () => {
     // catches.
     const workspaceVersion = workspaceRange!.replace(/^[\^~]/, '');
 
-    const relayDenoJson = JSON.parse(
-      readFileSync(
-        resolve(REPO_ROOT, 'supabase/functions/relay/deno.json'),
-        'utf8',
-      ),
-    ) as { imports?: Record<string, string> };
-    const relaySpecifier = relayDenoJson.imports?.['llm-zoo'];
-    expect(
-      relaySpecifier,
-      'supabase/functions/relay/deno.json is missing an llm-zoo import',
-    ).toBeDefined();
-    // Relay pin is an exact npm specifier (e.g. "npm:llm-zoo@1.12.0").
-    const relayVersion = relaySpecifier!.replace(/^npm:llm-zoo@/, '');
+    const relaySpecifier = readRelayLlmZooSpecifier();
+    const relayVersion = relaySpecifier.replace(/^npm:llm-zoo@/, '');
 
     expect(
       relayVersion,
@@ -143,18 +153,8 @@ describe('relay shared configuration parity', () => {
         'installed llm-zoo/package.json version',
     ).toBe(resolvedVersion);
 
-    const relayDenoJson = JSON.parse(
-      readFileSync(
-        resolve(REPO_ROOT, 'supabase/functions/relay/deno.json'),
-        'utf8',
-      ),
-    ) as { imports?: Record<string, string> };
-    const relaySpecifier = relayDenoJson.imports?.['llm-zoo'];
-    expect(
-      relaySpecifier,
-      'supabase/functions/relay/deno.json is missing an llm-zoo import',
-    ).toBeDefined();
-    const relayVersion = relaySpecifier!.replace(/^npm:llm-zoo@/, '');
+    const relaySpecifier = readRelayLlmZooSpecifier();
+    const relayVersion = relaySpecifier.replace(/^npm:llm-zoo@/, '');
 
     expect(
       relayVersion,

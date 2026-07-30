@@ -4,35 +4,31 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // Local imports - types
 import type { Platform } from '@platform/platform';
 
+interface RunEventEnvelope {
+  readonly scope: string;
+  readonly streamId: string;
+  readonly event: unknown;
+}
+
+interface RunAgentOptions {
+  readonly onStreamResolved?: (streamId: string) => void;
+}
+
 const mocks = vi.hoisted(() => ({
   activePlatform: null as object | null,
   agentCategory: 'toolUse',
   detachEvents: vi.fn(),
   detachInteractions: vi.fn(),
   disposeSession: vi.fn(),
-  eventListener: undefined as
-    | ((event: {
-        readonly scope: string;
-        readonly streamId: string;
-        readonly event: unknown;
-      }) => void)
-    | undefined,
+  eventListener: undefined as ((event: RunEventEnvelope) => void) | undefined,
   initNodeAgentRuntime: vi.fn(),
   initPlatform: vi.fn(),
   loadAgents: vi.fn(),
   runValidatedAgent: vi.fn(),
-  subscribe: vi.fn(
-    (
-      listener: (event: {
-        readonly scope: string;
-        readonly streamId: string;
-        readonly event: unknown;
-      }) => void,
-    ) => {
-      mocks.eventListener = listener;
-      return mocks.detachEvents;
-    },
-  ),
+  subscribe: vi.fn((listener: (event: RunEventEnvelope) => void) => {
+    mocks.eventListener = listener;
+    return mocks.detachEvents;
+  }),
   useHostInteractions: vi.fn(() => mocks.detachInteractions),
   warn: vi.fn(),
 }));
@@ -104,12 +100,7 @@ describe('agent package run lifecycle', () => {
     });
     mocks.loadAgents.mockResolvedValue(undefined);
     mocks.runValidatedAgent.mockImplementation(
-      async (
-        _input: unknown,
-        options: {
-          readonly onStreamResolved?: (streamId: string) => void;
-        },
-      ) => {
+      async (_input: unknown, options: RunAgentOptions) => {
         options.onStreamResolved?.('stream:package');
         return RESULT;
       },
@@ -137,12 +128,7 @@ describe('agent package run lifecycle', () => {
 
   it('discards trace events when the caller only awaits the result', async () => {
     mocks.runValidatedAgent.mockImplementationOnce(
-      async (
-        _input: unknown,
-        options: {
-          readonly onStreamResolved?: (streamId: string) => void;
-        },
-      ) => {
+      async (_input: unknown, options: RunAgentOptions) => {
         options.onStreamResolved?.('stream:package');
         mocks.eventListener?.({
           scope: 'run',
@@ -234,12 +220,7 @@ describe('agent package run lifecycle', () => {
   it('detaches the event source when iteration ends early', async () => {
     let finishRun: ((result: typeof RESULT) => void) | undefined;
     mocks.runValidatedAgent.mockImplementationOnce(
-      async (
-        _input: unknown,
-        options: {
-          readonly onStreamResolved?: (streamId: string) => void;
-        },
-      ) => {
+      async (_input: unknown, options: RunAgentOptions) => {
         options.onStreamResolved?.('stream:package');
         return await new Promise<typeof RESULT>((resolve) => {
           finishRun = resolve;

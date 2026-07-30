@@ -75,6 +75,24 @@ export type CrossrefSearchInput = z.infer<typeof CrossrefSearchInputSchema>;
  */
 type ExtendedQueryWorksParams = QueryWorksParams & { filter?: string };
 
+/** Rate-limited, cancellable Crossref call with uniform error wrapping. */
+function crossrefRequest<T>(
+  label: string,
+  failureMessage: string,
+  request: () => Promise<T>,
+): Promise<T> {
+  return wrapApiCall(
+    () =>
+      rateLimitedRequest(
+        'crossref',
+        CROSSREF_CONSTANTS.RATE_LIMIT_DELAY_MS,
+        label,
+        request,
+      ),
+    failureMessage,
+  );
+}
+
 export class CrossrefSearchTool extends defineTool({
   name: 'crossref_search',
   parallelSafe: true,
@@ -86,15 +104,10 @@ export class CrossrefSearchTool extends defineTool({
     if (input.command === 'doi') {
       const trimmedDoi = requireNonEmptyString(input.doi, 'DOI');
 
-      const response = await wrapApiCall(
-        () =>
-          rateLimitedRequest(
-            'crossref',
-            CROSSREF_CONSTANTS.RATE_LIMIT_DELAY_MS,
-            'Crossref DOI lookup',
-            () => CrossrefClient.work(trimmedDoi),
-          ),
+      const response = await crossrefRequest(
+        'Crossref DOI lookup',
         'Crossref lookup failed',
+        () => CrossrefClient.work(trimmedDoi),
       );
 
       if (!response.ok || !response.content?.message) {
@@ -138,15 +151,10 @@ export class CrossrefSearchTool extends defineTool({
       ...(input.filter && { filter: input.filter }),
     };
 
-    const response = await wrapApiCall(
-      () =>
-        rateLimitedRequest(
-          'crossref',
-          CROSSREF_CONSTANTS.RATE_LIMIT_DELAY_MS,
-          'Crossref search',
-          () => CrossrefClient.works(options),
-        ),
+    const response = await crossrefRequest(
+      'Crossref search',
       'Crossref search failed',
+      () => CrossrefClient.works(options),
     );
 
     if (!response.ok || !response.content?.message) {

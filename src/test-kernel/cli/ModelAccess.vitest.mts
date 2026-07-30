@@ -55,6 +55,17 @@ function model(
   };
 }
 
+function modelOption(
+  value: string,
+  overrides: Partial<ModelOptionData> = {},
+): ModelOptionData {
+  return {
+    value,
+    label: value,
+    ...overrides,
+  };
+}
+
 type ResolveCliRunnableModelOptions = Parameters<
   typeof selectCliRunnableModel
 >[1];
@@ -1412,14 +1423,3 @@ describe('CLI model access resolution', () => {
     );
   });
 });
-
-function modelOption(
-  value: string,
-  overrides: Partial<ModelOptionData> = {},
-): ModelOptionData {
-  return {
-    value,
-    label: value,
-    ...overrides,
-  };
-}

@@ -170,6 +170,31 @@ function invocation(
   };
 }
 
+interface InBandRunOptions {
+  executionId: string;
+  onActiveExecutionId?: (executionId: string) => void;
+  prepare: () => Promise<unknown>;
+}
+
+// Stable in-band execution that runs the child's prepare step and records the
+// options it produced, as the real executor does.
+function inBandRunReturning(finalResult: AgentFinalResult) {
+  return async (options: InBandRunOptions) => {
+    options.onActiveExecutionId?.(options.executionId);
+    mocks.preparedOptions.push(await options.prepare());
+    return { executionId: 'bbbbbb222222', result: finalResult };
+  };
+}
+
+function useToolUseAgentEntries(): void {
+  mocks.requireVisibleAgent.mockImplementation((_category, name) => ({
+    name,
+    source: 'builtInToolUse',
+    category: 'toolUse',
+    path: `/agents/${name}.yml`,
+  }));
+}
+
 describe('createWorkflowScriptAgentRunner', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -187,11 +212,9 @@ describe('createWorkflowScriptAgentRunner', () => {
     mocks.workspaceReadBytes.mockResolvedValue(Buffer.from('workspace bytes'));
     mocks.absoluteReadBytes.mockResolvedValue(Buffer.from('run bytes'));
     mocks.readExecutionMeta.mockResolvedValue(undefined);
-    mocks.executeStableSubagentInBand.mockImplementation(async (options) => {
-      options.onActiveExecutionId?.(options.executionId);
-      mocks.preparedOptions.push(await options.prepare());
-      return { executionId: 'bbbbbb222222', result };
-    });
+    mocks.executeStableSubagentInBand.mockImplementation(
+      inBandRunReturning(result),
+    );
   });
 
   it('fingerprints file bytes rather than only their paths', async () => {
@@ -793,18 +816,9 @@ describe('createWorkflowScriptAgentRunner', () => {
   });
 
   it('routes an agent({ schema }) call to a tool-use agent with an output schema', async () => {
-    mocks.requireVisibleAgent.mockImplementation((_category, name) => ({
-      name,
-      source: 'builtInToolUse',
-      category: 'toolUse',
-      path: `/agents/${name}.yml`,
-    }));
+    useToolUseAgentEntries();
     mocks.executeStableSubagentInBand.mockImplementationOnce(
-      async (options) => {
-        options.onActiveExecutionId?.(options.executionId);
-        mocks.preparedOptions.push(await options.prepare());
-        return { executionId: 'bbbbbb222222', result: structuredResult };
-      },
+      inBandRunReturning(structuredResult),
     );
     const schema = {
       type: 'object',
@@ -843,18 +857,9 @@ describe('createWorkflowScriptAgentRunner', () => {
   });
 
   it('exempts a schema call from the workflow empty-files guard', async () => {
-    mocks.requireVisibleAgent.mockImplementation((_category, name) => ({
-      name,
-      source: 'builtInToolUse',
-      category: 'toolUse',
-      path: `/agents/${name}.yml`,
-    }));
+    useToolUseAgentEntries();
     mocks.executeStableSubagentInBand.mockImplementationOnce(
-      async (options) => {
-        options.onActiveExecutionId?.(options.executionId);
-        mocks.preparedOptions.push(await options.prepare());
-        return { executionId: 'bbbbbb222222', result: structuredResult };
-      },
+      inBandRunReturning(structuredResult),
     );
     const schema = { type: 'object', additionalProperties: false };
     const runner = defaultRunner();

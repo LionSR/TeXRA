@@ -78,25 +78,18 @@ export function resolveMemoryStoragePath(
   storagePath: string = MEMORY_STORAGE_DIR,
 ): string {
   const normalized = normalize(storagePath);
-  const memoryRelative = relative(MEMORY_STORAGE_DIR, normalized);
   if (!isPathWithin(MEMORY_STORAGE_DIR, normalized)) {
     throw new Error(`Invalid memory path: ${storagePath}`);
   }
-  return memoryRelative
-    ? join(MEMORY_STORAGE_DIR, memoryRelative)
-    : MEMORY_STORAGE_DIR;
+  return join(MEMORY_STORAGE_DIR, relative(MEMORY_STORAGE_DIR, normalized));
 }
 
 export function resolveRunStoragePath(...segments: string[]): string {
-  return segments.length
-    ? join(RUNS_STORAGE_DIR, ...segments)
-    : RUNS_STORAGE_DIR;
+  return join(RUNS_STORAGE_DIR, ...segments);
 }
 
 export function resolveLegacyRunStoragePath(...segments: string[]): string {
-  return segments.length
-    ? join(LEGACY_RUNS_STORAGE_DIR, ...segments)
-    : LEGACY_RUNS_STORAGE_DIR;
+  return join(LEGACY_RUNS_STORAGE_DIR, ...segments);
 }
 
 export function resolveRunOriginalSnapshotPath(
@@ -114,12 +107,10 @@ export function resolveRunStorageRelativePath(
   absolutePath: string,
   runDirectory: string,
 ): string | undefined {
-  const relativePath = relative(runDirectory, absolutePath).replaceAll(
-    '\\',
-    '/',
-  );
   if (!isPathWithin(runDirectory, absolutePath)) return undefined;
-  return relativePath || undefined;
+  return (
+    relative(runDirectory, absolutePath).replaceAll('\\', '/') || undefined
+  );
 }
 
 export async function resolveExistingRunStoragePath(
@@ -202,13 +193,14 @@ export class WorkspaceStorageProvider implements StorageProvider {
     this.activeWorkspacePath = this.getWorkspacePath();
   }
 
+  private storagePathFor(workspacePath: string | undefined): string {
+    return resolveWorkspaceStoragePath(this.storageRoot, workspacePath);
+  }
+
   getStoragePath(): string {
     const workspacePath = this.activeWorkspacePath;
     migrateLegacyWorkspaceStorage(this.storageRoot, workspacePath);
-    const storagePath = resolveWorkspaceStoragePath(
-      this.storageRoot,
-      workspacePath,
-    );
+    const storagePath = this.storagePathFor(workspacePath);
     mkdirSync(storagePath, { recursive: true });
     writeWorkspaceSidecar(storagePath, workspacePath);
     return storagePath;
@@ -216,19 +208,16 @@ export class WorkspaceStorageProvider implements StorageProvider {
 
   hasPendingWorkspaceStorageChange(): boolean {
     return (
-      resolveWorkspaceStoragePath(
-        this.storageRoot,
-        this.activeWorkspacePath,
-      ) !==
-      resolveWorkspaceStoragePath(this.storageRoot, this.getWorkspacePath())
+      this.storagePathFor(this.activeWorkspacePath) !==
+      this.storagePathFor(this.getWorkspacePath())
     );
   }
 
   commitWorkspaceStorageChange(): boolean {
     const workspacePath = this.getWorkspacePath();
     if (
-      resolveWorkspaceStoragePath(this.storageRoot, workspacePath) ===
-      resolveWorkspaceStoragePath(this.storageRoot, this.activeWorkspacePath)
+      this.storagePathFor(workspacePath) ===
+      this.storagePathFor(this.activeWorkspacePath)
     ) {
       return false;
     }

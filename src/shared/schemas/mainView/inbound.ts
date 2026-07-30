@@ -88,17 +88,20 @@ const MergeMessageSchema = z.object({
 });
 export type MergeMessage = z.infer<typeof MergeMessageSchema>;
 
-const CompareMessageSchema = z.object({
-  command: z.literal(MAIN_VIEW_COMMANDS.COMPARE),
+const baseEditedPairFields = {
   baseFile: z.string(),
   editedFile: z.string(),
+};
+
+const CompareMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.COMPARE),
+  ...baseEditedPairFields,
 });
 export type CompareMessage = z.infer<typeof CompareMessageSchema>;
 
 const AcceptEditedMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.ACCEPT_EDITED),
-  baseFile: z.string(),
-  editedFile: z.string(),
+  ...baseEditedPairFields,
 });
 type AcceptEditedMessage = z.infer<typeof AcceptEditedMessageSchema>;
 

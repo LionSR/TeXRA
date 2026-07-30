@@ -6,6 +6,7 @@ import * as vscode from 'vscode';
 
 import * as logger from '@logger/logUtils';
 import { SettingsViewMessageHandler } from '@settingsView/SettingsViewMessageHandler';
+import { createDeferred } from '@test/support/asyncTestUtils';
 import { StorageFS } from '@utils/files';
 
 type WatcherHarness = {
@@ -22,14 +23,6 @@ function createHandlerHarness(): WatcherHarness {
   Reflect.set(handler, 'channel', 'SettingsViewMessageHandler');
   Reflect.set(handler, 'executionsWatcherGeneration', 0);
   return handler as WatcherHarness;
-}
-
-function deferred(): { promise: Promise<void>; resolve: () => void } {
-  let resolve = () => {};
-  const promise = new Promise<void>((done) => {
-    resolve = done;
-  });
-  return { promise, resolve };
 }
 
 function watcher(): vscode.FileSystemWatcher {
@@ -61,8 +54,8 @@ describe('settings execution history watcher', () => {
   });
 
   it('keeps the newest watcher when setup completes out of order', async () => {
-    const firstSetup = deferred();
-    const secondSetup = deferred();
+    const firstSetup = createDeferred();
+    const secondSetup = createDeferred();
     vi.spyOn(StorageFS, 'ensureDir')
       .mockImplementationOnce(() => firstSetup.promise)
       .mockImplementationOnce(() => secondSetup.promise);
@@ -107,7 +100,7 @@ describe('settings execution history watcher', () => {
   });
 
   it('invalidates setup still pending during teardown', async () => {
-    const setup = deferred();
+    const setup = createDeferred();
     vi.spyOn(StorageFS, 'ensureDir').mockReturnValue(setup.promise);
     const createWatcher = vi.spyOn(vscode.workspace, 'createFileSystemWatcher');
     const handler = createHandlerHarness();

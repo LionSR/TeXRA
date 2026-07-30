@@ -47,18 +47,19 @@ function FormBusyFrame(props: {
       const width = textDisplayWidth(line.replaceAll('\t', '    '));
       return rows + Math.max(1, Math.ceil(width / innerWidth));
     }, 0);
+  // Border rows plus the title, message, copyable block, and key hints.
+  const requiredRows = (copyableMessage: string): number =>
+    3 +
+    wrappedRows(title) +
+    wrappedRows(progress.message ?? 'working...') +
+    (copyableMessage === progress.message
+      ? 0
+      : 1 + wrappedRows(copyableMessage)) +
+    wrappedRows(settled ? 'any key close' : 'Esc cancel');
   const copyableDoesNotFit =
     progress.copyableMessage !== undefined &&
     props.availableRows !== undefined &&
-    2 +
-      wrappedRows(title) +
-      wrappedRows(progress.message ?? 'working...') +
-      (progress.copyableMessage === progress.message
-        ? 0
-        : 1 + wrappedRows(progress.copyableMessage)) +
-      1 +
-      wrappedRows(settled ? 'any key close' : 'Esc cancel') >
-      props.availableRows;
+    requiredRows(progress.copyableMessage) > props.availableRows;
   useLayoutEffect(() => {
     if (copyableDoesNotFit) progress.archiveCopyable?.();
   }, [copyableDoesNotFit, progress]);

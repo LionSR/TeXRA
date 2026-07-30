@@ -6,8 +6,8 @@ import { getIconLibrary } from '@awesome.me/webawesome/dist/components/icon/libr
 import { beforeAll, describe, expect, it } from 'vitest';
 
 // Local imports - shared icon contract
-import { LEGACY_ICON_ALIASES } from '@shared/wa/webAwesomeIcons';
 import {
+  LEGACY_ICON_ALIASES,
   TEXRA_ICON_LIBRARY,
   TEXRA_ICON_NAMES,
 } from '@shared/wa/webAwesomeIcons';
@@ -88,57 +88,46 @@ describe('desktop icon library', () => {
     expect(unknownSvg).toContain('stroke-width="1.75"');
   });
 
-  it('maps every renamed icon to a Lucide name the pinned release actually has', async () => {
-    // A mapping whose target Lucide dropped or renamed would silently become
-    // the unknown-icon marker. Walking the map catches that drift at build time.
-    const unresolved: string[] = [];
-    const renamedIconNames = readRenamedIconNames();
-    const missingSvg = decodeSvg(
-      await resolve(texraResolver, 'unexpected-runtime-icon'),
-    );
+  it.each([
+    {
+      // A mapping whose target Lucide dropped or renamed would silently become
+      // the unknown-icon marker. Walking the map catches that drift.
+      table: 'renamed icon',
+      readNames: readRenamedIconNames,
+      unmapped: 'circle-question',
+      // Guards the parse itself: an empty list would make the walk vacuous.
+      minimumSize: 50,
+    },
+    {
+      // Aliases take an extra hop (alias -> canonical -> Lucide). Skipping that
+      // hop previously blanked 22 icons, so the whole table is walked.
+      table: 'codicon alias',
+      readNames: () => Object.keys(LEGACY_ICON_ALIASES),
+      unmapped: 'question',
+      minimumSize: 0,
+    },
+    {
+      table: 'canonical TeXRA name',
+      readNames: () => TEXRA_ICON_NAMES,
+      unmapped: 'circle-question',
+      minimumSize: 100,
+    },
+  ])(
+    'resolves every $table to a pinned Lucide glyph',
+    async ({ readNames, unmapped, minimumSize }) => {
+      const names = readNames();
+      const unresolved: string[] = [];
+      const missingSvg = decodeSvg(
+        await resolve(texraResolver, 'unexpected-runtime-icon'),
+      );
 
-    for (const name of renamedIconNames) {
-      const svg = decodeSvg(await resolve(texraResolver, name));
-      if (svg === missingSvg && name !== 'circle-question') {
-        unresolved.push(name);
+      for (const name of names) {
+        const svg = decodeSvg(await resolve(texraResolver, name));
+        if (svg === missingSvg && name !== unmapped) unresolved.push(name);
       }
-    }
 
-    expect(unresolved).toEqual([]);
-    // Guards the parse itself: an empty list would make the loop above vacuous.
-    expect(renamedIconNames.length).toBeGreaterThan(50);
-  });
-
-  it('resolves every codicon alias through to a stroke glyph', async () => {
-    // Aliases take an extra hop (alias -> canonical -> Lucide). Skipping that
-    // hop previously blanked 22 icons, so the whole table is walked.
-    const unresolved: string[] = [];
-    const missingSvg = decodeSvg(
-      await resolve(texraResolver, 'unexpected-runtime-icon'),
-    );
-
-    for (const alias of Object.keys(LEGACY_ICON_ALIASES)) {
-      const svg = decodeSvg(await resolve(texraResolver, alias));
-      if (svg === missingSvg && alias !== 'question') unresolved.push(alias);
-    }
-
-    expect(unresolved).toEqual([]);
-  });
-
-  it('resolves every canonical TeXRA name to a pinned Lucide glyph', async () => {
-    const unresolved: string[] = [];
-    const missingSvg = decodeSvg(
-      await resolve(texraResolver, 'unexpected-runtime-icon'),
-    );
-
-    for (const name of TEXRA_ICON_NAMES) {
-      const svg = decodeSvg(await resolve(texraResolver, name));
-      if (svg === missingSvg && name !== 'circle-question') {
-        unresolved.push(name);
-      }
-    }
-
-    expect(unresolved).toEqual([]);
-    expect(TEXRA_ICON_NAMES.length).toBeGreaterThan(100);
-  });
+      expect(unresolved).toEqual([]);
+      expect(names.length).toBeGreaterThan(minimumSize);
+    },
+  );
 });

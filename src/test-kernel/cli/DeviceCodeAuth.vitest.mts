@@ -64,12 +64,26 @@ function fakeClock(): {
   };
 }
 
-/** Bundles the queued fetch + fake clock into the poll dependency shape. */
-function pollDeps(
-  clock: ReturnType<typeof fakeClock>,
-  fetchImpl: typeof fetch,
-): Parameters<typeof pollForDeviceSession>[1] {
-  return { fetchImpl, sleep: clock.sleep, now: clock.now };
+/** Starts a poll over a queued fetch driven by a fresh deterministic clock. */
+function pollWithQueue(
+  queue: Array<Response | Error>,
+  authorization: Parameters<typeof pollForDeviceSession>[0] = AUTHORIZATION,
+): {
+  completion: ReturnType<typeof pollForDeviceSession>;
+  clock: ReturnType<typeof fakeClock>;
+  calls: Array<{ url: string; body: unknown }>;
+} {
+  const clock = fakeClock();
+  const { fetchImpl, calls } = queuedFetch(queue);
+  return {
+    completion: pollForDeviceSession(authorization, {
+      fetchImpl,
+      sleep: clock.sleep,
+      now: clock.now,
+    }),
+    clock,
+    calls,
+  };
 }
 
 describe('CLI device-code sign-in (texra login --device)', () => {
@@ -111,17 +125,13 @@ describe('CLI device-code sign-in (texra login --device)', () => {
   });
 
   it('polls through pending and slow_down, honoring the growing interval', async () => {
-    const clock = fakeClock();
-    const { fetchImpl, calls } = queuedFetch([
+    const { completion, clock, calls } = pollWithQueue([
       jsonResponse({ error: 'authorization_pending' }, 400),
       jsonResponse({ error: 'slow_down' }, 400),
       jsonResponse(SESSION_PAYLOAD),
     ]);
 
-    const exchange = await pollForDeviceSession(
-      AUTHORIZATION,
-      pollDeps(clock, fetchImpl),
-    );
+    const exchange = await completion;
 
     expect(exchange.access_token).toBe('access-token');
     expect(exchange.user.email).toBe('user@example.edu');
@@ -134,76 +144,48 @@ describe('CLI device-code sign-in (texra login --device)', () => {
   });
 
   it('surfaces a denial from the browser as a clear error', async () => {
-    const clock = fakeClock();
-    const { fetchImpl } = queuedFetch([
-      jsonResponse({ error: 'access_denied' }, 400),
-    ]);
     await expect(
-      pollForDeviceSession(AUTHORIZATION, pollDeps(clock, fetchImpl)),
+      pollWithQueue([jsonResponse({ error: 'access_denied' }, 400)]).completion,
     ).rejects.toThrow('Sign-in was denied in the browser.');
   });
 
   it('maps expired_token to a fresh-code suggestion', async () => {
-    const clock = fakeClock();
-    const { fetchImpl } = queuedFetch([
-      jsonResponse({ error: 'expired_token' }, 400),
-    ]);
     await expect(
-      pollForDeviceSession(AUTHORIZATION, pollDeps(clock, fetchImpl)),
+      pollWithQueue([jsonResponse({ error: 'expired_token' }, 400)]).completion,
     ).rejects.toThrow(/expired before it was approved/);
   });
 
   it('stops polling when the code expires locally', async () => {
-    const clock = fakeClock();
-    const { fetchImpl, calls } = queuedFetch([
-      jsonResponse({ error: 'authorization_pending' }, 400),
-    ]);
-    await expect(
-      pollForDeviceSession(
-        { ...AUTHORIZATION, expires_in: 10 },
-        pollDeps(clock, fetchImpl),
-      ),
-    ).rejects.toThrow(/expired before it was approved/);
+    const { completion, calls } = pollWithQueue(
+      [jsonResponse({ error: 'authorization_pending' }, 400)],
+      { ...AUTHORIZATION, expires_in: 10 },
+    );
+    await expect(completion).rejects.toThrow(/expired before it was approved/);
     expect(calls).toHaveLength(1);
   });
 
   it('tolerates transient poll failures but not persistent ones', async () => {
-    const clock = fakeClock();
-    const { fetchImpl } = queuedFetch([
+    const transient = await pollWithQueue([
       new Error('socket hang up'),
       new Error('socket hang up'),
       jsonResponse(SESSION_PAYLOAD),
-    ]);
-    const exchange = await pollForDeviceSession(
-      AUTHORIZATION,
-      pollDeps(clock, fetchImpl),
-    );
-    expect(exchange.access_token).toBe('access-token');
+    ]).completion;
+    expect(transient.access_token).toBe('access-token');
 
-    const persistent = queuedFetch([
-      new Error('socket hang up'),
-      new Error('socket hang up'),
-      new Error('socket hang up'),
-    ]);
-    const failingClock = fakeClock();
     await expect(
-      pollForDeviceSession(
-        AUTHORIZATION,
-        pollDeps(failingClock, persistent.fetchImpl),
-      ),
+      pollWithQueue([
+        new Error('socket hang up'),
+        new Error('socket hang up'),
+        new Error('socket hang up'),
+      ]).completion,
     ).rejects.toThrow('socket hang up');
   });
 
   it('treats rate-limited poll responses as transient', async () => {
-    const clock = fakeClock();
-    const { fetchImpl } = queuedFetch([
+    const exchange = await pollWithQueue([
       jsonResponse({ error: 'rate_limited' }, 429),
       jsonResponse(SESSION_PAYLOAD),
-    ]);
-    const exchange = await pollForDeviceSession(
-      AUTHORIZATION,
-      pollDeps(clock, fetchImpl),
-    );
+    ]).completion;
     expect(exchange.access_token).toBe('access-token');
   });
 

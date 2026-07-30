@@ -10,6 +10,7 @@ import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles and utilities
 import { designTokens, commonViewStyles } from '@shared/styles';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { createEvent } from '@shared/utils/events';
 import { clamp } from '@utils/core';
@@ -99,32 +100,39 @@ export class Pagination extends LitElement {
     return Math.min((this.page + 1) * this.pageSize, this.totalItems);
   }
 
-  private emitPageChange(page: number): void {
+  private goTo(target: number): void {
+    const page = clamp(target, 0, this.totalPages - 1);
+    if (page === this.page) return;
     this.dispatchEvent(createEvent<PageChangeDetail>('page-change', { page }));
   }
 
-  private goFirst(): void {
-    if (this.page > 0) this.emitPageChange(0);
-  }
-
-  private goPrev(): void {
-    if (this.page > 0) this.emitPageChange(this.page - 1);
-  }
-
-  private goNext(): void {
-    if (this.page < this.totalPages - 1) this.emitPageChange(this.page + 1);
-  }
-
-  private goLast(): void {
-    if (this.page < this.totalPages - 1)
-      this.emitPageChange(this.totalPages - 1);
+  private renderNavButton(
+    icon: TeXRAIconName,
+    label: string,
+    page: number,
+    disabled: boolean,
+  ): TemplateResult {
+    return html`
+      <wa-button
+        appearance="outlined"
+        variant="neutral"
+        size="s"
+        aria-label=${label}
+        title=${label}
+        ?disabled=${disabled}
+        @click=${() => this.goTo(page)}
+      >
+        ${waIcon(icon)}
+      </wa-button>
+    `;
   }
 
   override render(): TemplateResult | typeof nothing {
-    if (this.totalPages <= 1) return nothing;
+    const { totalPages, page } = this;
+    if (totalPages <= 1) return nothing;
 
-    const atFirst = this.page === 0;
-    const atLast = this.page >= this.totalPages - 1;
+    const atFirst = page === 0;
+    const atLast = page >= totalPages - 1;
 
     return html`
       <div class="pagination-bar">
@@ -132,53 +140,21 @@ export class Pagination extends LitElement {
           ${this.rangeStart}–${this.rangeEnd} of ${this.totalItems}
         </span>
         <div class="pagination-controls">
-          <wa-button
-            appearance="outlined"
-            variant="neutral"
-            size="s"
-            aria-label="First page"
-            title="First page"
-            ?disabled=${atFirst}
-            @click=${this.goFirst}
-          >
-            ${waIcon('backward-step')}
-          </wa-button>
-          <wa-button
-            appearance="outlined"
-            variant="neutral"
-            size="s"
-            aria-label="Previous page"
-            title="Previous page"
-            ?disabled=${atFirst}
-            @click=${this.goPrev}
-          >
-            ${waIcon('chevron-left')}
-          </wa-button>
-          <span class="pagination-status">
-            ${this.page + 1}/${this.totalPages}
-          </span>
-          <wa-button
-            appearance="outlined"
-            variant="neutral"
-            size="s"
-            aria-label="Next page"
-            title="Next page"
-            ?disabled=${atLast}
-            @click=${this.goNext}
-          >
-            ${waIcon('chevron-right')}
-          </wa-button>
-          <wa-button
-            appearance="outlined"
-            variant="neutral"
-            size="s"
-            aria-label="Last page"
-            title="Last page"
-            ?disabled=${atLast}
-            @click=${this.goLast}
-          >
-            ${waIcon('forward-step')}
-          </wa-button>
+          ${this.renderNavButton('backward-step', 'First page', 0, atFirst)}
+          ${this.renderNavButton(
+            'chevron-left',
+            'Previous page',
+            page - 1,
+            atFirst,
+          )}
+          <span class="pagination-status"> ${page + 1}/${totalPages} </span>
+          ${this.renderNavButton('chevron-right', 'Next page', page + 1, atLast)}
+          ${this.renderNavButton(
+            'forward-step',
+            'Last page',
+            totalPages - 1,
+            atLast,
+          )}
         </div>
       </div>
     `;

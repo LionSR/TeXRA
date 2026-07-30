@@ -3,12 +3,12 @@ import '@test/support/defaultSessionTestSetup';
 
 /* eslint-disable import/order -- Vitest mocks must be declared before importing the runtime under test. */
 
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
@@ -83,6 +83,7 @@ import { parseHistoryListLimit, runHistoryExport } from '@cli/commands/history';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
+import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import type { TraceDocument } from '@transcript';
 import {
   cliHistoryNdjsonRecords,
@@ -116,20 +117,7 @@ const config = {
   toolConfig: DEFAULT_TOOL_CONFIG,
 } as AgentConfig;
 
-let historyStoragePath: string | undefined;
-
-/** Creates a temp dir for the test body, then removes it (recursively) after. */
-async function withTempDir(
-  prefix: string,
-  fn: (dir: string) => Promise<void>,
-): Promise<void> {
-  const dir = await mkdtemp(path.join(tmpdir(), prefix));
-  try {
-    await fn(dir);
-  } finally {
-    await rm(dir, { recursive: true, force: true });
-  }
-}
+const tempDirs: string[] = [];
 
 describe('CLI history runtime', () => {
   beforeEach(async () => {
@@ -139,8 +127,9 @@ describe('CLI history runtime', () => {
         import('@platform/defaults/nodeFilesystem'),
         import('@test/support/FakePlatform'),
       ]);
-    historyStoragePath = await mkdtemp(
-      path.join(tmpdir(), 'texra-history-storage-'),
+    const historyStoragePath = await makeTempDir(
+      'texra-history-storage-',
+      tempDirs,
     );
     initPlatform(
       createFakePlatform(
@@ -168,9 +157,7 @@ describe('CLI history runtime', () => {
   });
 
   afterEach(async () => {
-    if (!historyStoragePath) return;
-    await rm(historyStoragePath, { recursive: true, force: true });
-    historyStoragePath = undefined;
+    await cleanupTempDirs(tempDirs);
   });
 
   it('formats history list rows with the stable tab-separated text shape', async () => {
@@ -501,6 +488,7 @@ describe('CLI history runtime', () => {
     ]);
 
     const details = await readCliHistoryDetails('a1' as ExecutionId);
+    const text = formatCliHistoryDetailsText(details!);
 
     expect(details?.conversationPreview).toEqual({
       messageCount: 5,
@@ -513,7 +501,7 @@ describe('CLI history runtime', () => {
         },
       ],
     });
-    expect(formatCliHistoryDetailsText(details!)).toContain(
+    expect(text).toContain(
       [
         'Conversation (5 messages; showing assistant message 4):',
         '',
@@ -521,12 +509,8 @@ describe('CLI history runtime', () => {
         'Final proof analysis.',
       ].join('\n'),
     );
-    expect(formatCliHistoryDetailsText(details!)).not.toContain(
-      'problem.tex contents',
-    );
-    expect(formatCliHistoryDetailsText(details!)).not.toContain(
-      '[tool_use: read_file]',
-    );
+    expect(text).not.toContain('problem.tex contents');
+    expect(text).not.toContain('[tool_use: read_file]');
   });
 
   it('omits provider thinking blocks from history previews', async () => {
@@ -803,208 +787,202 @@ describe('CLI history runtime', () => {
   });
 
   it('surfaces persisted workspace files without parsing provider messages', async () => {
-    await withTempDir('texra-history-', async (workspace) => {
-      await writeFile(path.join(workspace, 'durable.md'), '# durable');
-      mocks.readConfig.mockResolvedValue({
-        ...config,
-        agentCategory: 'toolUse',
-        workingDirectory: workspace,
-      });
-      mocks.readWorkspaceFiles.mockResolvedValue(['durable.md']);
-      mocks.readConversation.mockResolvedValue([
-        {
-          role: 'assistant',
-          tool_calls: [
-            {
-              type: 'function',
-              function: {
-                name: 'write_file',
-                arguments: JSON.stringify({ path: 'legacy.md' }),
-              },
-            },
-          ],
-        },
-      ]);
-
-      const details = await readCliHistoryDetails('a1' as ExecutionId);
-
-      expect(details?.files).toEqual([
-        { path: 'workspace/durable.md', size: 9, isDirectory: false },
-      ]);
+    const workspace = await makeTempDir('texra-history-', tempDirs);
+    await writeFile(path.join(workspace, 'durable.md'), '# durable');
+    mocks.readConfig.mockResolvedValue({
+      ...config,
+      agentCategory: 'toolUse',
+      workingDirectory: workspace,
     });
+    mocks.readWorkspaceFiles.mockResolvedValue(['durable.md']);
+    mocks.readConversation.mockResolvedValue([
+      {
+        role: 'assistant',
+        tool_calls: [
+          {
+            type: 'function',
+            function: {
+              name: 'write_file',
+              arguments: JSON.stringify({ path: 'legacy.md' }),
+            },
+          },
+        ],
+      },
+    ]);
+
+    const details = await readCliHistoryDetails('a1' as ExecutionId);
+
+    expect(details?.files).toEqual([
+      { path: 'workspace/durable.md', size: 9, isDirectory: false },
+    ]);
   });
 
   it('preserves persisted paths inside a top-level workspace directory', async () => {
-    await withTempDir('texra-history-', async (workspace) => {
-      await mkdir(path.join(workspace, 'workspace'));
-      await writeFile(path.join(workspace, 'review.md'), 'wrong');
-      await writeFile(path.join(workspace, 'workspace', 'review.md'), 'nested');
-      mocks.readConfig.mockResolvedValue({
-        ...config,
-        agentCategory: 'toolUse',
-        workingDirectory: workspace,
-      });
-      mocks.readWorkspaceFiles.mockResolvedValue(['workspace/review.md']);
-
-      const details = await readCliHistoryDetails('a1' as ExecutionId);
-
-      expect(details?.files).toEqual([
-        { path: 'workspace/workspace/review.md', size: 6, isDirectory: false },
-      ]);
+    const workspace = await makeTempDir('texra-history-', tempDirs);
+    await mkdir(path.join(workspace, 'workspace'));
+    await writeFile(path.join(workspace, 'review.md'), 'wrong');
+    await writeFile(path.join(workspace, 'workspace', 'review.md'), 'nested');
+    mocks.readConfig.mockResolvedValue({
+      ...config,
+      agentCategory: 'toolUse',
+      workingDirectory: workspace,
     });
+    mocks.readWorkspaceFiles.mockResolvedValue(['workspace/review.md']);
+
+    const details = await readCliHistoryDetails('a1' as ExecutionId);
+
+    expect(details?.files).toEqual([
+      { path: 'workspace/workspace/review.md', size: 6, isDirectory: false },
+    ]);
   });
 
   it('surfaces workspace files written by tool-use calls', async () => {
-    await withTempDir('texra-history-', async (workspace) => {
-      await writeFile(path.join(workspace, 'review.md'), '# report');
-      await writeFile(path.join(workspace, 'draft.tex'), 'old text');
-      mocks.readConfig.mockResolvedValue({
-        ...config,
-        agentCategory: 'toolUse',
-        workingDirectory: workspace,
-      });
-      mocks.readConversation.mockResolvedValue([
-        {
-          role: 'assistant',
-          tool_calls: [
-            {
-              type: 'function',
-              function: {
-                name: 'write_file',
-                arguments: JSON.stringify({
-                  path: 'review.md',
-                  content: '# report',
-                }),
-              },
-            },
-            {
-              type: 'function',
-              function: {
-                name: 'edit_file',
-                arguments: {
-                  path: 'draft.tex',
-                  old_str: 'old',
-                  new_str: 'new',
-                },
-              },
-            },
-          ],
-        },
-      ]);
-
-      const details = await readCliHistoryDetails('a1' as ExecutionId);
-
-      expect(details?.files).toEqual([
-        { path: 'workspace/draft.tex', size: 8, isDirectory: false },
-        { path: 'workspace/review.md', size: 8, isDirectory: false },
-      ]);
-      expect(formatCliHistoryDetailsText(details!)).toContain(
-        '8\tworkspace/review.md',
-      );
+    const workspace = await makeTempDir('texra-history-', tempDirs);
+    await writeFile(path.join(workspace, 'review.md'), '# report');
+    await writeFile(path.join(workspace, 'draft.tex'), 'old text');
+    mocks.readConfig.mockResolvedValue({
+      ...config,
+      agentCategory: 'toolUse',
+      workingDirectory: workspace,
     });
+    mocks.readConversation.mockResolvedValue([
+      {
+        role: 'assistant',
+        tool_calls: [
+          {
+            type: 'function',
+            function: {
+              name: 'write_file',
+              arguments: JSON.stringify({
+                path: 'review.md',
+                content: '# report',
+              }),
+            },
+          },
+          {
+            type: 'function',
+            function: {
+              name: 'edit_file',
+              arguments: {
+                path: 'draft.tex',
+                old_str: 'old',
+                new_str: 'new',
+              },
+            },
+          },
+        ],
+      },
+    ]);
+
+    const details = await readCliHistoryDetails('a1' as ExecutionId);
+
+    expect(details?.files).toEqual([
+      { path: 'workspace/draft.tex', size: 8, isDirectory: false },
+      { path: 'workspace/review.md', size: 8, isDirectory: false },
+    ]);
+    expect(formatCliHistoryDetailsText(details!)).toContain(
+      '8\tworkspace/review.md',
+    );
   });
 
   it('surfaces workspace files from Responses function call records', async () => {
-    await withTempDir('texra-history-', async (workspace) => {
-      await writeFile(path.join(workspace, 'response.md'), 'response');
-      mocks.readConfig.mockResolvedValue({
-        ...config,
-        agentCategory: 'toolUse',
-        workingDirectory: workspace,
-      });
-      mocks.readConversation.mockResolvedValue([
-        {
-          type: 'function_call',
-          call_id: 'call_1',
-          name: 'write_file',
-          arguments: JSON.stringify({ path: 'response.md' }),
-        },
-      ]);
-
-      const details = await readCliHistoryDetails('a1' as ExecutionId);
-
-      expect(details?.files).toEqual([
-        { path: 'workspace/response.md', size: 8, isDirectory: false },
-      ]);
+    const workspace = await makeTempDir('texra-history-', tempDirs);
+    await writeFile(path.join(workspace, 'response.md'), 'response');
+    mocks.readConfig.mockResolvedValue({
+      ...config,
+      agentCategory: 'toolUse',
+      workingDirectory: workspace,
     });
+    mocks.readConversation.mockResolvedValue([
+      {
+        type: 'function_call',
+        call_id: 'call_1',
+        name: 'write_file',
+        arguments: JSON.stringify({ path: 'response.md' }),
+      },
+    ]);
+
+    const details = await readCliHistoryDetails('a1' as ExecutionId);
+
+    expect(details?.files).toEqual([
+      { path: 'workspace/response.md', size: 8, isDirectory: false },
+    ]);
   });
 
   it('surfaces workspace files from Google functionCall parts', async () => {
-    await withTempDir('texra-history-', async (workspace) => {
-      await mkdir(path.join(workspace, 'subdir'));
-      await writeFile(path.join(workspace, 'subdir', 'gemini.md'), 'gemini');
-      mocks.readConfig.mockResolvedValue({
-        ...config,
-        agentCategory: 'toolUse',
-        workingDirectory: workspace,
-      });
-      mocks.readConversation.mockResolvedValue([
-        {
-          role: 'model',
-          parts: [
-            {
-              functionCall: {
-                id: 'call_1',
-                name: 'edit_file',
-                args: { path: 'subdir/gemini.md' },
-              },
-            },
-          ],
-        },
-      ]);
-
-      const details = await readCliHistoryDetails('a1' as ExecutionId);
-
-      expect(details?.files).toEqual([
-        { path: 'workspace/subdir/gemini.md', size: 6, isDirectory: false },
-      ]);
+    const workspace = await makeTempDir('texra-history-', tempDirs);
+    await mkdir(path.join(workspace, 'subdir'));
+    await writeFile(path.join(workspace, 'subdir', 'gemini.md'), 'gemini');
+    mocks.readConfig.mockResolvedValue({
+      ...config,
+      agentCategory: 'toolUse',
+      workingDirectory: workspace,
     });
+    mocks.readConversation.mockResolvedValue([
+      {
+        role: 'model',
+        parts: [
+          {
+            functionCall: {
+              id: 'call_1',
+              name: 'edit_file',
+              args: { path: 'subdir/gemini.md' },
+            },
+          },
+        ],
+      },
+    ]);
+
+    const details = await readCliHistoryDetails('a1' as ExecutionId);
+
+    expect(details?.files).toEqual([
+      { path: 'workspace/subdir/gemini.md', size: 6, isDirectory: false },
+    ]);
   });
 
   it('does not surface missing files or tool paths outside the workspace', async () => {
-    await withTempDir('texra-history-root-', async (root) => {
-      const workspace = path.join(root, 'workspace');
-      const outsidePath = path.join(root, 'outside.md');
-      await mkdir(workspace);
-      await writeFile(outsidePath, 'outside');
-      mocks.readConfig.mockResolvedValue({
-        ...config,
-        agentCategory: 'toolUse',
-        workingDirectory: workspace,
-      });
-      mocks.readConversation.mockResolvedValue([
-        {
-          role: 'assistant',
-          tool_calls: [
-            {
-              type: 'function',
-              function: {
-                name: 'write_file',
-                arguments: JSON.stringify({ path: '../outside.md' }),
-              },
-            },
-            {
-              type: 'function',
-              function: {
-                name: 'edit_file',
-                arguments: JSON.stringify({ path: outsidePath }),
-              },
-            },
-            {
-              type: 'function',
-              function: {
-                name: 'write_file',
-                arguments: JSON.stringify({ path: 'missing.md' }),
-              },
-            },
-          ],
-        },
-      ]);
-
-      const details = await readCliHistoryDetails('a1' as ExecutionId);
-
-      expect(details?.files).toEqual([]);
+    const root = await makeTempDir('texra-history-root-', tempDirs);
+    const workspace = path.join(root, 'workspace');
+    const outsidePath = path.join(root, 'outside.md');
+    await mkdir(workspace);
+    await writeFile(outsidePath, 'outside');
+    mocks.readConfig.mockResolvedValue({
+      ...config,
+      agentCategory: 'toolUse',
+      workingDirectory: workspace,
     });
+    mocks.readConversation.mockResolvedValue([
+      {
+        role: 'assistant',
+        tool_calls: [
+          {
+            type: 'function',
+            function: {
+              name: 'write_file',
+              arguments: JSON.stringify({ path: '../outside.md' }),
+            },
+          },
+          {
+            type: 'function',
+            function: {
+              name: 'edit_file',
+              arguments: JSON.stringify({ path: outsidePath }),
+            },
+          },
+          {
+            type: 'function',
+            function: {
+              name: 'write_file',
+              arguments: JSON.stringify({ path: 'missing.md' }),
+            },
+          },
+        ],
+      },
+    ]);
+
+    const details = await readCliHistoryDetails('a1' as ExecutionId);
+
+    expect(details?.files).toEqual([]);
   });
 
   it('reports not-found deletion through the structured result', async () => {
@@ -1240,115 +1218,110 @@ describe('CLI history runtime', () => {
     });
 
     it('stages the bundled trace-viewer shared bundle into the destination directory', async () => {
-      await withTempDir('texra-history-export-src-', async (resourcesPath) => {
-        await withTempDir('texra-history-export-dest-', async (cwd) => {
-          const traceViewerDir = path.join(resourcesPath, 'traceViewer');
-          await mkdir(traceViewerDir, { recursive: true });
-          await writeFile(
-            path.join(traceViewerDir, 'index.html'),
-            '<html></html>',
-          );
+      const resourcesPath = await makeTempDir(
+        'texra-history-export-src-',
+        tempDirs,
+      );
+      const cwd = await makeTempDir('texra-history-export-dest-', tempDirs);
+      const traceViewerDir = path.join(resourcesPath, 'traceViewer');
+      await mkdir(traceViewerDir, { recursive: true });
+      await writeFile(path.join(traceViewerDir, 'index.html'), '<html></html>');
 
-          const destDir = path.join(cwd, 'shared-assets');
-          const result = await stageCliHistoryTraceViewerAssets({
-            resourcesPath,
-            destDir,
-          });
-
-          expect(result).toBe('staged');
-          expect(await readFile(path.join(destDir, 'index.html'), 'utf8')).toBe(
-            '<html></html>',
-          );
-        });
+      const destDir = path.join(cwd, 'shared-assets');
+      const result = await stageCliHistoryTraceViewerAssets({
+        resourcesPath,
+        destDir,
       });
+
+      expect(result).toBe('staged');
+      expect(await readFile(path.join(destDir, 'index.html'), 'utf8')).toBe(
+        '<html></html>',
+      );
     });
 
     it('reports "missing" instead of throwing when the bundled trace-viewer assets are absent', async () => {
-      await withTempDir(
+      const resourcesPath = await makeTempDir(
         'texra-history-export-empty-',
-        async (resourcesPath) => {
-          await withTempDir('texra-history-export-dest-', async (cwd) => {
-            const result = await stageCliHistoryTraceViewerAssets({
-              resourcesPath,
-              destDir: path.join(cwd, 'shared-assets'),
-            });
-
-            expect(result).toBe('missing');
-          });
-        },
+        tempDirs,
       );
+      const cwd = await makeTempDir('texra-history-export-dest-', tempDirs);
+
+      const result = await stageCliHistoryTraceViewerAssets({
+        resourcesPath,
+        destDir: path.join(cwd, 'shared-assets'),
+      });
+
+      expect(result).toBe('missing');
     });
 
     it('merges into a pre-existing destination directory instead of nesting under it', async () => {
       // A repeat export pointed at the same --assets-dir must not turn
       // `<dir>/assets/index-xxx.js` into `<dir>/traceViewer/assets/index-xxx.js`.
-      await withTempDir('texra-history-export-src-', async (resourcesPath) => {
-        await withTempDir('texra-history-export-dest-', async (cwd) => {
-          const traceViewerDir = path.join(resourcesPath, 'traceViewer');
-          await mkdir(path.join(traceViewerDir, 'assets'), {
-            recursive: true,
-          });
-          await writeFile(
-            path.join(traceViewerDir, 'index.html'),
-            '<html></html>',
-          );
-          await writeFile(
-            path.join(traceViewerDir, 'assets', 'index.js'),
-            'js-bytes',
-          );
+      const resourcesPath = await makeTempDir(
+        'texra-history-export-src-',
+        tempDirs,
+      );
+      const cwd = await makeTempDir('texra-history-export-dest-', tempDirs);
+      const traceViewerDir = path.join(resourcesPath, 'traceViewer');
+      await mkdir(path.join(traceViewerDir, 'assets'), { recursive: true });
+      await writeFile(path.join(traceViewerDir, 'index.html'), '<html></html>');
+      await writeFile(
+        path.join(traceViewerDir, 'assets', 'index.js'),
+        'js-bytes',
+      );
 
-          const destDir = path.join(cwd, 'shared-assets');
-          await mkdir(destDir, { recursive: true });
-          await writeFile(
-            path.join(destDir, 'trace.json'),
-            'pre-existing trace data',
-          );
+      const destDir = path.join(cwd, 'shared-assets');
+      await mkdir(destDir, { recursive: true });
+      await writeFile(
+        path.join(destDir, 'trace.json'),
+        'pre-existing trace data',
+      );
 
-          await stageCliHistoryTraceViewerAssets({ resourcesPath, destDir });
-          // Stage again — the common "many exports, one shared dir" case.
-          const result = await stageCliHistoryTraceViewerAssets({
-            resourcesPath,
-            destDir,
-          });
-
-          expect(result).toBe('staged');
-          expect(await readFile(path.join(destDir, 'index.html'), 'utf8')).toBe(
-            '<html></html>',
-          );
-          expect(
-            await readFile(path.join(destDir, 'assets', 'index.js'), 'utf8'),
-          ).toBe('js-bytes');
-          expect(await readFile(path.join(destDir, 'trace.json'), 'utf8')).toBe(
-            'pre-existing trace data',
-          );
-        });
+      await stageCliHistoryTraceViewerAssets({ resourcesPath, destDir });
+      // Stage again — the common "many exports, one shared dir" case.
+      const result = await stageCliHistoryTraceViewerAssets({
+        resourcesPath,
+        destDir,
       });
+
+      expect(result).toBe('staged');
+      expect(await readFile(path.join(destDir, 'index.html'), 'utf8')).toBe(
+        '<html></html>',
+      );
+      expect(
+        await readFile(path.join(destDir, 'assets', 'index.js'), 'utf8'),
+      ).toBe('js-bytes');
+      expect(await readFile(path.join(destDir, 'trace.json'), 'utf8')).toBe(
+        'pre-existing trace data',
+      );
     });
 
     it('reads the bundled trace-viewer standalone template', async () => {
-      await withTempDir('texra-history-standalone-', async (resourcesPath) => {
-        const standaloneDir = path.join(resourcesPath, 'traceViewerStandalone');
-        await mkdir(standaloneDir, { recursive: true });
-        await writeFile(
-          path.join(standaloneDir, 'index.html'),
-          '<html>standalone</html>',
-        );
+      const resourcesPath = await makeTempDir(
+        'texra-history-standalone-',
+        tempDirs,
+      );
+      const standaloneDir = path.join(resourcesPath, 'traceViewerStandalone');
+      await mkdir(standaloneDir, { recursive: true });
+      await writeFile(
+        path.join(standaloneDir, 'index.html'),
+        '<html>standalone</html>',
+      );
 
-        await expect(
-          readCliHistoryStandaloneTemplate(resourcesPath),
-        ).resolves.toBe('<html>standalone</html>');
-      });
+      await expect(
+        readCliHistoryStandaloneTemplate(resourcesPath),
+      ).resolves.toBe('<html>standalone</html>');
     });
 
     it('returns null instead of throwing when the standalone template is absent', async () => {
-      await withTempDir(
+      const resourcesPath = await makeTempDir(
         'texra-history-standalone-empty-',
-        async (resourcesPath) => {
-          await expect(
-            readCliHistoryStandaloneTemplate(resourcesPath),
-          ).resolves.toBeNull();
-        },
+        tempDirs,
       );
+
+      await expect(
+        readCliHistoryStandaloneTemplate(resourcesPath),
+      ).resolves.toBeNull();
     });
 
     describe('runHistoryExport --assets-dir', () => {
@@ -1384,18 +1357,12 @@ describe('CLI history runtime', () => {
         stdout = '';
         stderr = '';
         mocks.assembleTrace.mockResolvedValue({ status: 'ok', trace });
-        stdoutSpy = vi
-          .spyOn(process.stdout, 'write')
-          .mockImplementation((chunk: unknown) => {
-            stdout += String(chunk);
-            return true;
-          }) as unknown as ReturnType<typeof vi.spyOn>;
-        stderrSpy = vi
-          .spyOn(process.stderr, 'write')
-          .mockImplementation((chunk: unknown) => {
-            stderr += String(chunk);
-            return true;
-          }) as unknown as ReturnType<typeof vi.spyOn>;
+        stdoutSpy = spyOnStreamWrite(process.stdout, (chunk) => {
+          stdout += chunk;
+        });
+        stderrSpy = spyOnStreamWrite(process.stderr, (chunk) => {
+          stderr += chunk;
+        });
       });
 
       afterEach(() => {
@@ -1403,123 +1370,113 @@ describe('CLI history runtime', () => {
         stderrSpy.mockRestore();
       });
 
-      it('returns a non-zero exit code (but still writes the trace JSON) when the bundled assets are missing', async () => {
-        await withTempDir(
-          'texra-history-export-missing-src-',
-          async (resourcesPath) => {
-            await withTempDir(
-              'texra-history-export-missing-dest-',
-              async (cwd) => {
-                const destDir = path.join(cwd, 'shared-assets');
-                const exitCode = await runHistoryExport(
-                  makeContext(resourcesPath),
-                  'a1' as ExecutionId,
-                  'html',
-                  { assetsDir: destDir },
-                );
-
-                expect(exitCode).toBe(CliExitCode.Usage);
-                expect(stdout).toBe(JSON.stringify(trace));
-                expect(stderr).toContain('were not found in this CLI install');
-              },
-            );
-          },
+      /** Temp resources dir holding the bundled trace-viewer assets. */
+      async function makeStagedResources(prefix: string): Promise<string> {
+        const resourcesPath = await makeTempDir(prefix, tempDirs);
+        const traceViewerDir = path.join(resourcesPath, 'traceViewer');
+        await mkdir(traceViewerDir, { recursive: true });
+        await writeFile(
+          path.join(traceViewerDir, 'index.html'),
+          '<html></html>',
         );
+        return resourcesPath;
+      }
+
+      it('returns a non-zero exit code (but still writes the trace JSON) when the bundled assets are missing', async () => {
+        const resourcesPath = await makeTempDir(
+          'texra-history-export-missing-src-',
+          tempDirs,
+        );
+        const cwd = await makeTempDir(
+          'texra-history-export-missing-dest-',
+          tempDirs,
+        );
+        const destDir = path.join(cwd, 'shared-assets');
+
+        const exitCode = await runHistoryExport(
+          makeContext(resourcesPath),
+          'a1' as ExecutionId,
+          'html',
+          { assetsDir: destDir },
+        );
+
+        expect(exitCode).toBe(CliExitCode.Usage);
+        expect(stdout).toBe(JSON.stringify(trace));
+        expect(stderr).toContain('were not found in this CLI install');
       });
 
       it('returns success and writes a concrete (non-placeholder) instruction when assets stage correctly', async () => {
-        await withTempDir(
+        const resourcesPath = await makeStagedResources(
           'texra-history-export-staged-src-',
-          async (resourcesPath) => {
-            const traceViewerDir = path.join(resourcesPath, 'traceViewer');
-            await mkdir(traceViewerDir, { recursive: true });
-            await writeFile(
-              path.join(traceViewerDir, 'index.html'),
-              '<html></html>',
-            );
+        );
+        const cwd = await makeTempDir(
+          'texra-history-export-staged-dest-',
+          tempDirs,
+        );
+        const destDir = path.join(cwd, 'shared-assets');
 
-            await withTempDir(
-              'texra-history-export-staged-dest-',
-              async (cwd) => {
-                const destDir = path.join(cwd, 'shared-assets');
-                const exitCode = await runHistoryExport(
-                  makeContext(resourcesPath),
-                  'a1' as ExecutionId,
-                  'html',
-                  { assetsDir: destDir },
-                );
+        const exitCode = await runHistoryExport(
+          makeContext(resourcesPath),
+          'a1' as ExecutionId,
+          'html',
+          { assetsDir: destDir },
+        );
 
-                expect(exitCode).toBe(CliExitCode.Success);
-                expect(stdout).toBe(JSON.stringify(trace));
-                // Must not contain the old literal placeholder tokens, which
-                // read like an unresolved template rather than instructions.
-                expect(stderr).not.toContain('<redirected-path>');
-                expect(stderr).not.toContain(
-                  '<relative-path-to-the-redirected-file>',
-                );
-                expect(stderr).toContain(
-                  `Wrote trace JSON for a1 to stdout. Save the output to ` +
-                    `${path.join(destDir, 'a1.json')}, then open ` +
-                    `${destDir}/index.html?trace=a1.json.`,
-                );
-              },
-            );
-          },
+        expect(exitCode).toBe(CliExitCode.Success);
+        expect(stdout).toBe(JSON.stringify(trace));
+        // Must not contain the old literal placeholder tokens, which read like
+        // an unresolved template rather than instructions.
+        expect(stderr).not.toContain('<redirected-path>');
+        expect(stderr).not.toContain('<relative-path-to-the-redirected-file>');
+        expect(stderr).toContain(
+          `Wrote trace JSON for a1 to stdout. Save the output to ` +
+            `${path.join(destDir, 'a1.json')}, then open ` +
+            `${destDir}/index.html?trace=a1.json.`,
         );
       });
 
       it('uses execution-specific trace filenames for repeat exports into the same assets directory', async () => {
-        await withTempDir(
+        const resourcesPath = await makeStagedResources(
           'texra-history-export-repeat-src-',
-          async (resourcesPath) => {
-            const traceViewerDir = path.join(resourcesPath, 'traceViewer');
-            await mkdir(traceViewerDir, { recursive: true });
-            await writeFile(
-              path.join(traceViewerDir, 'index.html'),
-              '<html></html>',
-            );
-
-            await withTempDir(
-              'texra-history-export-repeat-dest-',
-              async (cwd) => {
-                const destDir = path.join(cwd, 'shared-assets');
-                const firstTrace = makeTrace('abc123');
-                const secondTrace = makeTrace('def456');
-                mocks.assembleTrace
-                  .mockResolvedValueOnce({ status: 'ok', trace: firstTrace })
-                  .mockResolvedValueOnce({ status: 'ok', trace: secondTrace });
-
-                const firstExit = await runHistoryExport(
-                  makeContext(resourcesPath),
-                  'abc123' as ExecutionId,
-                  'html',
-                  { assetsDir: destDir },
-                );
-                const secondExit = await runHistoryExport(
-                  makeContext(resourcesPath),
-                  'def456' as ExecutionId,
-                  'html',
-                  { assetsDir: destDir },
-                );
-
-                expect(firstExit).toBe(CliExitCode.Success);
-                expect(secondExit).toBe(CliExitCode.Success);
-                expect(stdout).toBe(
-                  JSON.stringify(firstTrace) + JSON.stringify(secondTrace),
-                );
-                expect(stderr).toContain(
-                  `${path.join(destDir, 'abc123.json')}, then open ` +
-                    `${destDir}/index.html?trace=abc123.json.`,
-                );
-                expect(stderr).toContain(
-                  `${path.join(destDir, 'def456.json')}, then open ` +
-                    `${destDir}/index.html?trace=def456.json.`,
-                );
-                expect(stderr).not.toContain('trace=trace.json');
-              },
-            );
-          },
         );
+        const cwd = await makeTempDir(
+          'texra-history-export-repeat-dest-',
+          tempDirs,
+        );
+        const destDir = path.join(cwd, 'shared-assets');
+        const firstTrace = makeTrace('abc123');
+        const secondTrace = makeTrace('def456');
+        mocks.assembleTrace
+          .mockResolvedValueOnce({ status: 'ok', trace: firstTrace })
+          .mockResolvedValueOnce({ status: 'ok', trace: secondTrace });
+
+        const firstExit = await runHistoryExport(
+          makeContext(resourcesPath),
+          'abc123' as ExecutionId,
+          'html',
+          { assetsDir: destDir },
+        );
+        const secondExit = await runHistoryExport(
+          makeContext(resourcesPath),
+          'def456' as ExecutionId,
+          'html',
+          { assetsDir: destDir },
+        );
+
+        expect(firstExit).toBe(CliExitCode.Success);
+        expect(secondExit).toBe(CliExitCode.Success);
+        expect(stdout).toBe(
+          JSON.stringify(firstTrace) + JSON.stringify(secondTrace),
+        );
+        expect(stderr).toContain(
+          `${path.join(destDir, 'abc123.json')}, then open ` +
+            `${destDir}/index.html?trace=abc123.json.`,
+        );
+        expect(stderr).toContain(
+          `${path.join(destDir, 'def456.json')}, then open ` +
+            `${destDir}/index.html?trace=def456.json.`,
+        );
+        expect(stderr).not.toContain('trace=trace.json');
       });
     });
   });

@@ -35,31 +35,20 @@ const SEVERITY_WARNING = 1;
 const SEVERITY_INFO = 2;
 const SEVERITY_HINT = 3;
 
-/** Unified severity metadata for labels, counting, and formatting */
+/**
+ * Unified severity metadata for labels, counting, and formatting. The
+ * `countKey` doubles as the plural label ('info' stays 'info'), and numeric
+ * keys iterate in ascending order so `Object.values` gives formatting order.
+ */
 const SEVERITY_CONFIG: Record<
   number,
-  { label: string; countKey: keyof SeverityCounts; plural: string }
+  { label: string; countKey: keyof SeverityCounts }
 > = {
-  [SEVERITY_ERROR]: { label: 'error', countKey: 'errors', plural: 'errors' },
-  [SEVERITY_WARNING]: {
-    label: 'warning',
-    countKey: 'warnings',
-    plural: 'warnings',
-  },
-  [SEVERITY_INFO]: { label: 'info', countKey: 'info', plural: 'info' },
-  [SEVERITY_HINT]: { label: 'hint', countKey: 'hints', plural: 'hints' },
+  [SEVERITY_ERROR]: { label: 'error', countKey: 'errors' },
+  [SEVERITY_WARNING]: { label: 'warning', countKey: 'warnings' },
+  [SEVERITY_INFO]: { label: 'info', countKey: 'info' },
+  [SEVERITY_HINT]: { label: 'hint', countKey: 'hints' },
 };
-
-/** Ordered formatting config for consistent output, derived from SEVERITY_CONFIG. */
-const COUNT_FORMAT_ORDER: Array<{
-  key: keyof SeverityCounts;
-  label: string;
-  plural: string;
-}> = Object.values(SEVERITY_CONFIG).map(({ countKey, label, plural }) => ({
-  key: countKey,
-  label,
-  plural,
-}));
 
 /** Get the string label for a severity level. */
 export function getSeverityLabel(severity: number): string {
@@ -83,12 +72,11 @@ export function countBySeverity(
  * Example: "3 errors, 2 warnings, 1 hint"
  */
 export function formatCounts(counts: SeverityCounts): string {
-  const parts = COUNT_FORMAT_ORDER.filter(({ key }) => counts[key] > 0).map(
-    ({ key, label, plural }) => {
-      const count = counts[key];
-      return formatResultCount(count, label, plural);
-    },
-  );
+  const parts = Object.values(SEVERITY_CONFIG)
+    .filter(({ countKey }) => counts[countKey] > 0)
+    .map(({ label, countKey }) =>
+      formatResultCount(counts[countKey], label, countKey),
+    );
   return parts.length > 0 ? parts.join(', ') : 'No issues';
 }
 
@@ -119,33 +107,24 @@ export function formatMessageList(diagnostics: GenericDiagnostic[]): string {
 export function formatGroupedSections(
   diagnostics: GenericDiagnostic[],
 ): string {
-  const formatSection = (title: string, items: GenericDiagnostic[]): string => {
-    if (items.length === 0) return '';
-    const lines = items
-      .map((d) => `**Line ${d.range.start.line + 1}:** ${d.message}`)
-      .join('\n\n');
-    return `## ${title} (${items.length})\n\n${lines}`;
-  };
-
-  const sections: Array<{
-    title: string;
-    match: (severity: number) => boolean;
-  }> = [
-    { title: 'Errors', match: (s) => s === SEVERITY_ERROR },
-    { title: 'Warnings', match: (s) => s === SEVERITY_WARNING },
-    {
-      title: 'Info/Hints',
-      match: (s) => s === SEVERITY_INFO || s === SEVERITY_HINT,
-    },
+  const sections: Array<[title: string, items: GenericDiagnostic[]]> = [
+    ['Errors', diagnostics.filter((d) => d.severity === SEVERITY_ERROR)],
+    ['Warnings', diagnostics.filter((d) => d.severity === SEVERITY_WARNING)],
+    [
+      'Info/Hints',
+      diagnostics.filter(
+        (d) => d.severity === SEVERITY_INFO || d.severity === SEVERITY_HINT,
+      ),
+    ],
   ];
 
   return sections
-    .map(({ title, match }) =>
-      formatSection(
-        title,
-        diagnostics.filter((d) => match(d.severity)),
-      ),
-    )
-    .filter(Boolean)
+    .filter(([, items]) => items.length > 0)
+    .map(([title, items]) => {
+      const lines = items
+        .map((d) => `**Line ${d.range.start.line + 1}:** ${d.message}`)
+        .join('\n\n');
+      return `## ${title} (${items.length})\n\n${lines}`;
+    })
     .join('\n\n');
 }

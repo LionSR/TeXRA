@@ -118,19 +118,19 @@ export async function generateSessionDescription(
       systemPrompt: SYSTEM_PROMPT,
     });
 
-    if (isNonEmptyString(text)) {
-      const description = cleanSessionDescription(text);
-      if (!description) return;
-      await writeSessionDescription(executionId, description);
-      session.events.emit({
-        scope: 'session',
-        event: {
-          type: 'updateStreamDescription',
-          payload: { streamId, description },
-        },
-      });
-      logger.info(CHANNEL, `Generated session description for ${executionId}`);
-    }
+    if (!isNonEmptyString(text)) return;
+    const description = cleanSessionDescription(text);
+    if (!description) return;
+
+    await writeSessionDescription(executionId, description);
+    session.events.emit({
+      scope: 'session',
+      event: {
+        type: 'updateStreamDescription',
+        payload: { streamId, description },
+      },
+    });
+    logger.info(CHANNEL, `Generated session description for ${executionId}`);
   } catch (err) {
     warnWithoutRejecting(
       `Failed to generate session description: ${getSdkErrorMessage(err)}`,

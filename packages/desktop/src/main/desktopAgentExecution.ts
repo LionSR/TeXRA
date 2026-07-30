@@ -86,10 +86,8 @@ import {
 import {
   AgentCategory,
   SETTINGS_TAB,
-  type RunOutcome,
   type AgentCategoryFilter,
   type MainViewPersistedState,
-  type ProgressViewOutboundMessage,
   type ExecutionId,
   type RequestOpenFilePayload,
   type SettingsTab,
@@ -156,7 +154,7 @@ export class DesktopProgressBridge {
   private readonly logger: AgentTrace;
   private readonly backend: ProgressBackend;
   private readonly state: ProgressBackend['state'];
-  readonly streamLogs: ProgressBackend['state']['streamLogs'];
+  private readonly streamLogs: ProgressBackend['state']['streamLogs'];
   private progressHost!: ProgressViewHost;
   private agentProposalController!: ProgressViewHost['agentProposalController'];
   private workflowFileActions!: ProgressViewHost['workflowFileActionsController'];
@@ -187,7 +185,6 @@ export class DesktopProgressBridge {
   private disposed = false;
   private presentationReady = false;
 
-  readonly interactions: SessionHostInteractions;
   progressViewInboundHandlers!: DesktopProgressInboundHandlerRegistry;
 
   private readonly session: SessionHandle;
@@ -207,7 +204,6 @@ export class DesktopProgressBridge {
       emit: (event, payload) => this.handlePresentationEvent(event, payload),
     };
     this.session = options.session;
-    this.interactions = this.session.interactions;
     const syncRenderedStreams = (): void =>
       this.syncStreamContent(this.updateStreamMetadata());
 
@@ -1041,10 +1037,6 @@ export class DesktopProgressBridge {
     }
   }
 
-  private send(message: ProgressViewOutboundMessage): void {
-    this.postToRenderer(message);
-  }
-
   private getStreamExecutionId(streamId: StreamTabId): ExecutionId | undefined {
     return (
       this.state.snapshots.getExecutionId(streamId) ??
@@ -1134,7 +1126,7 @@ export class DesktopProgressBridge {
     );
   }
 
-  syncFullView(): void {
+  private syncFullView(): void {
     this.syncStreamContent(this.updateStreamMetadata());
   }
 
@@ -1144,7 +1136,7 @@ export class DesktopProgressBridge {
     await replayApprovalRequestHandlers(this.backend.approvalHandlers);
   }
 
-  setActiveStream(streamId: StreamTabId): void {
+  private setActiveStream(streamId: StreamTabId): void {
     if (!this.streamLogs.has(streamId)) {
       return;
     }
@@ -1159,6 +1151,15 @@ export class DesktopProgressBridge {
   }
 
   /**
+   * Display label for a stream, the desktop counterpart of the extension's
+   * `getProgressStreamLabel`. Read with the `'all'` filter so a label is
+   * returned regardless of which category filter the board currently shows.
+   */
+  getStreamLabel(streamId: StreamTabId): string | undefined {
+    return buildStreamInfo(this.state, streamId, 'all')?.label;
+  }
+
+  /**
    * Route this window to the progress view and select the given stream.
    * Mirrors the extension's `revealProgressStream` for the desktop Settings
    * Goals panel (issue #7751 FS6) so jumping from a goal entry to its owning
@@ -1170,15 +1171,6 @@ export class DesktopProgressBridge {
    * session still matches the current filter instead of unconditionally
    * resetting it to 'all' (#7851).
    */
-  /**
-   * Display label for a stream, the desktop counterpart of the extension's
-   * `getProgressStreamLabel`. Read with the `'all'` filter so a label is
-   * returned regardless of which category filter the board currently shows.
-   */
-  getStreamLabel(streamId: StreamTabId): string | undefined {
-    return buildStreamInfo(this.state, streamId, 'all')?.label;
-  }
-
   async revealStream(streamId: StreamTabId): Promise<void> {
     if (!this.streamLogs.has(streamId)) {
       return;
@@ -1228,7 +1220,7 @@ export class DesktopProgressBridge {
       });
   }
 
-  tryResumeStream(streamId: StreamTabId): Promise<boolean> {
+  private tryResumeStream(streamId: StreamTabId): Promise<boolean> {
     return platform().agentResume.tryResumeStream(streamId);
   }
 

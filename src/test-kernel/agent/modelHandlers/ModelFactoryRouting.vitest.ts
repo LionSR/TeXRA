@@ -40,8 +40,11 @@ import {
 } from '@platform/languageModel';
 import { AgentCategory } from '@shared/schemas/agent';
 import { installPlatform } from '@test/support/setupPlatform';
-import type { FakePlatformOptions } from '@test/support/FakePlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
+
+// installPlatform dynamically imports @platform/platform at call time, so
+// every call below also re-resolves it after this file's vi.resetModules()
+// calls, keeping it on the instance the factory reads.
 
 function modelConfig(
   provider: ModelProvider,
@@ -60,13 +63,6 @@ function modelConfig(
     capabilities: caps,
     openRouterOnly: false,
   });
-}
-
-// installPlatform dynamically imports @platform/platform at call time, so
-// this also re-resolves it after this file's vi.resetModules() calls,
-// keeping it on the instance the factory reads.
-function initFakePlatform(options?: FakePlatformOptions): Promise<void> {
-  return installPlatform(options);
 }
 
 const AVAILABLE_LANGUAGE_MODEL_PORT: LanguageModelPort = {
@@ -93,7 +89,7 @@ describe('Copilot model handler routing', () => {
   });
 
   it('fails clearly when the host language-model port is unavailable', async () => {
-    await initFakePlatform();
+    await installPlatform();
 
     await expect(createModelHandler(copilotConfig)).rejects.toMatchObject({
       name: 'LanguageModelPortError',
@@ -131,7 +127,7 @@ describe('OpenAI model handler routing', () => {
   });
 
   it('routes switchable OpenAI models to Responses when the setting is unset', async () => {
-    await initFakePlatform();
+    await installPlatform();
 
     expect(
       shouldUseResponsesAPI(modelConfig(ModelProvider.OPENAI), false),
@@ -217,7 +213,7 @@ describe('OpenAI model handler routing', () => {
   });
 
   it('uses short-name routing when computing compatibility keys', async () => {
-    await initFakePlatform({
+    await installPlatform({
       config: { 'texra.model.useOpenAIResponsesAPI': false },
     });
 
@@ -238,7 +234,7 @@ describe('OpenAI model handler routing', () => {
   });
 
   it('preserves the GPT-5.6 Pro wire id when short names are preferred', async () => {
-    await initFakePlatform({
+    await installPlatform({
       globalState: { 'texra.preferShortModelNames': true },
     });
 
@@ -252,7 +248,7 @@ describe('OpenAI model handler routing', () => {
   });
 
   it('rejects GPT-5.6 Pro when OpenRouter routing is enabled', async () => {
-    await initFakePlatform({
+    await installPlatform({
       globalState: { 'texra.useOpenRouter': true },
     });
 
@@ -262,7 +258,7 @@ describe('OpenAI model handler routing', () => {
   });
 
   it('tags created handlers with a minifier-safe compatibility key', async () => {
-    await initFakePlatform();
+    await installPlatform();
 
     const handler = await createModelHandler(MODEL_CONFIGS.gpt54);
     try {
@@ -299,7 +295,7 @@ describe('OpenAI model handler routing', () => {
   const initializePreferredCodexRelay = async (
     extraConfig: Record<string, unknown> = {},
   ): Promise<void> =>
-    initFakePlatform({
+    installPlatform({
       config: {
         'texra.chatgptCodex.preferSubscription': true,
         ...extraConfig,
@@ -325,7 +321,7 @@ describe('OpenAI model handler routing', () => {
   };
 
   it('keeps Codex-eligible subscription models on the Responses compatibility key', async () => {
-    await initFakePlatform({
+    await installPlatform({
       config: { 'texra.chatgptCodex.preferSubscription': true },
     });
 
@@ -338,7 +334,7 @@ describe('OpenAI model handler routing', () => {
 
   it('keeps Codex-eligible models on the API-key Responses path when the switch is off', async () => {
     // The model requires Responses independently of the user-facing toggle.
-    await initFakePlatform();
+    await installPlatform();
 
     expect(
       modelHandlerCompatibilityKey(codexEligibleConfig, false, false),
@@ -346,7 +342,7 @@ describe('OpenAI model handler routing', () => {
   });
 
   it('falls back to the API-key Responses handler when the subscription switch is on but signed out', async () => {
-    await initFakePlatform({
+    await installPlatform({
       config: { 'texra.chatgptCodex.preferSubscription': true },
     });
 
@@ -362,7 +358,7 @@ describe('OpenAI model handler routing', () => {
 
   it('preserves the API fullName on Codex handler config even when shortName is absent', async () => {
     const codexSession = signedInCodexSession();
-    await initFakePlatform({
+    await installPlatform({
       config: { 'texra.chatgptCodex.preferSubscription': true },
       secrets: {
         [CODEX_SESSION_SECRET_KEY]: JSON.stringify(codexSession),
@@ -492,7 +488,7 @@ describe('OpenAI model handler routing', () => {
 
   it('does not let the Codex subscription override an explicit legacy OpenAI compatibility key', async () => {
     const codexSession = signedInCodexSession();
-    await initFakePlatform({
+    await installPlatform({
       config: { 'texra.chatgptCodex.preferSubscription': true },
       secrets: {
         [CODEX_SESSION_SECRET_KEY]: JSON.stringify(codexSession),
@@ -515,7 +511,7 @@ describe('OpenAI model handler routing', () => {
 
   it('keeps Responses-compatible resumes on the Codex endpoint when subscription access is preferred', async () => {
     const codexSession = signedInCodexSession();
-    await initFakePlatform({
+    await installPlatform({
       config: { 'texra.chatgptCodex.preferSubscription': true },
       globalState: {
         'texra.useIncludedModelAccess': true,
@@ -602,7 +598,7 @@ describe('Google Interactions API routing', () => {
     useInteractions?: boolean,
     useOpenRouter = false,
   ): Promise<typeof import('@agent/runtime/ModelFactory')> {
-    await initFakePlatform({
+    await installPlatform({
       config:
         useInteractions === undefined
           ? {}

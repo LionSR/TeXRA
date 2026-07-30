@@ -32,6 +32,8 @@ import { platform } from '@platform/platform';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { SupabaseUriHandler } from './UriHandler';
 
+const CHANNEL = 'SupabaseAuthProvider';
+
 const AUTH_URI_HANDLER_NOT_INITIALIZED =
   'OAuth handler not initialized. Restart the extension.';
 
@@ -160,17 +162,11 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
       if (!result.success) {
         if (result.isAuthError) {
-          logger.error(
-            'SupabaseAuthProvider',
-            `Sign-in failed: ${result.error}`,
-          );
+          logger.error(CHANNEL, `Sign-in failed: ${result.error}`);
           this.notifier.showError(`Sign-in failed: ${result.error}`);
         } else {
           // Log non-auth errors for debugging (e.g., missing tokens from non-auth callbacks)
-          logger.debug(
-            'SupabaseAuthProvider',
-            `Magic link callback ignored: ${result.error}`,
-          );
+          logger.debug(CHANNEL, `Magic link callback ignored: ${result.error}`);
         }
         return;
       }
@@ -178,12 +174,12 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       await this.storeSession(result.session, true);
       this.notifier.showInfo(`Signed in as ${result.session.account.label}`);
       logger.info(
-        'SupabaseAuthProvider',
+        CHANNEL,
         `Magic link sign-in successful for ${result.session.account.label}`,
       );
     } catch (error) {
       logger.error(
-        'SupabaseAuthProvider',
+        CHANNEL,
         `Error processing magic link callback: ${toErrorMessage(error)}`,
       );
       this.notifier.showError(`Sign-in failed: ${toErrorMessage(error)}`);
@@ -233,10 +229,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
       return [this.toVSCodeSession(session)];
     } catch (error) {
-      logger.error(
-        'SupabaseAuthProvider',
-        `Error loading session: ${toErrorMessage(error)}`,
-      );
+      logger.error(CHANNEL, `Error loading session: ${toErrorMessage(error)}`);
       return [];
     }
   }
@@ -258,19 +251,10 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     }
   }
 
-  private isWebEnvironment(): boolean {
-    return vscode.env.uiKind === vscode.UIKind.Web;
-  }
-
-  private async buildOAuthOptions(
-    isWeb: boolean,
-  ): Promise<{ redirectTo: string; queryParams?: Record<string, string> }> {
-    if (isWeb) {
+  private async buildOAuthOptions(): Promise<{ redirectTo: string }> {
+    if (vscode.env.uiKind === vscode.UIKind.Web) {
       const callbackInfo = await getExternalAuthCallbackInfo();
-      logger.info(
-        'SupabaseAuthProvider',
-        `OAuth callback URI (web): ${callbackInfo.fullUrl}`,
-      );
+      logger.info(CHANNEL, `OAuth callback URI (web): ${callbackInfo.fullUrl}`);
       // In Codespaces/web the tunnel routing token must ride on redirect_to
       // (fullUrl already carries ?state=TUNNEL). Passing it as queryParams.state
       // instead overwrites GoTrue's own OAuth state on /authorize, which makes
@@ -291,10 +275,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     const redirectTo =
       `${AUTH_BRIDGE_URL}/${encodeURIComponent(vscode.env.uriScheme)}` +
       `/${encodeURIComponent(getExtensionId())}`;
-    logger.info(
-      'SupabaseAuthProvider',
-      `OAuth callback URI (desktop): ${redirectTo}`,
-    );
+    logger.info(CHANNEL, `OAuth callback URI (desktop): ${redirectTo}`);
     return { redirectTo };
   }
 
@@ -325,7 +306,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     // Route to appropriate auth flow based on provider
     if (requestedProvider === 'github-browser') {
       logger.info(
-        'SupabaseAuthProvider',
+        CHANNEL,
         'Using browser-based GitHub auth (Supabase OAuth flow)',
       );
       return this.createSessionViaSupabaseOAuth('github');
@@ -334,7 +315,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     if (!requestedProvider || requestedProvider === 'github') {
       // Default to VS Code's built-in GitHub auth - works everywhere and is simpler
       logger.info(
-        'SupabaseAuthProvider',
+        CHANNEL,
         'Using VS Code GitHub auth (works on desktop and Codespaces)',
       );
       return this.createSessionViaVSCodeGitHub();
@@ -371,7 +352,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       const tokenType = GITHUB_TOKEN_TYPE_MAP[tokenPrefix] ?? 'unknown format';
 
       logger.info(
-        'SupabaseAuthProvider',
+        CHANNEL,
         `Got VS Code GitHub session for ${githubSession.account.label} (scopes: ${githubSession.scopes.join(', ') || 'default'}, token type: ${tokenType})`,
       );
 
@@ -394,7 +375,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         const errorMsg =
           errorData.error || `Token exchange failed: ${response.status}`;
         logger.error(
-          'SupabaseAuthProvider',
+          CHANNEL,
           `GitHub token exchange failed (${response.status}): ${errorMsg} [token type: ${tokenType}]`,
         );
         // Provide user-friendly error messages for common issues
@@ -415,7 +396,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       await this.storeSession(session, true);
       this.notifier.showInfo(`Signed in as ${session.account.label}`);
       logger.info(
-        'SupabaseAuthProvider',
+        CHANNEL,
         `VS Code GitHub auth successful for ${session.account.label}`,
       );
 
@@ -436,15 +417,11 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     provider: OAuthProvider,
   ): Promise<vscode.AuthenticationSession> {
     try {
-      const supabase = SupabaseClient.getClient();
-      const isWeb = this.isWebEnvironment();
-
-      const oauthOptions = await this.buildOAuthOptions(isWeb);
-
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider,
-        options: oauthOptions,
-      });
+      const { data, error } =
+        await SupabaseClient.getClient().auth.signInWithOAuth({
+          provider,
+          options: await this.buildOAuthOptions(),
+        });
 
       if (error || !data.url) {
         throw new Error(
@@ -499,7 +476,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       await SupabaseClient.getClient().auth.signOut();
     } catch (error) {
       logger.error(
-        'SupabaseAuthProvider',
+        CHANNEL,
         `Remote sign-out failed; clearing local session: ${toErrorMessage(error)}`,
       );
     }
@@ -548,7 +525,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     invalidateModelOptionsCache();
     await refreshRemoteAgentCatalogAfterSignOut(
       invalidateRemoteAgentsAfterSignOut,
-      (message) => logger.warn('SupabaseAuthProvider', message),
+      (message) => logger.warn(CHANNEL, message),
     );
     this._onDidChangeSessions.fire({
       added: [],
@@ -604,7 +581,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
           if (!result.success) {
             if (result.error === 'Missing tokens in callback') {
               logger.error(
-                'SupabaseAuthProvider',
+                CHANNEL,
                 `Missing tokens in OAuth callback. Has fragment: ${!!uri.fragment}, Has query: ${!!uri.query}`,
               );
             }
@@ -615,7 +592,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
           resolve(result.session);
         } catch (error) {
           logger.error(
-            'SupabaseAuthProvider',
+            CHANNEL,
             `Error processing OAuth callback: ${toErrorMessage(error)}`,
           );
           reject(error);

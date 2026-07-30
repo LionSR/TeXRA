@@ -55,6 +55,11 @@ const MODEL_ROUTING_SETTING_KEYS: ReadonlySet<string> = new Set([
   GlobalStateKey.KIMI_CODE_PREFER,
 ]);
 
+const INITIAL_API_KEY_STATUS_VIEW: ProviderApiKeyStatusView = {
+  loading: true,
+  error: false,
+};
+
 /**
  * Construct the canonical CLI configuration interface. Both the standalone
  * command and the in-chat form use this function, so persistence and runtime
@@ -64,10 +69,8 @@ export function createCliConfigFormProps(
   props: CreateCliConfigFormPropsInput,
 ): ConfigFormProps {
   const { stores } = props;
-  const apiKeyStatusView = props.apiKeyStatusView ?? {
-    loading: true,
-    error: false,
-  };
+  const apiKeyStatusView =
+    props.apiKeyStatusView ?? INITIAL_API_KEY_STATUS_VIEW;
   return {
     availableRows: props.availableRows,
     entries: CLI_STATE_SETTINGS,
@@ -138,11 +141,6 @@ export function createCliConfigFormProps(
     onError: props.onError,
   };
 }
-
-const INITIAL_API_KEY_STATUS_VIEW: ProviderApiKeyStatusView = {
-  loading: true,
-  error: false,
-};
 
 /** Canonical CLI configuration form, shared by `texra config` and `/config`. */
 export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {

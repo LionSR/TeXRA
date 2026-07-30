@@ -1,5 +1,3 @@
-// Desktop imports
-
 // Local imports
 import { createModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionControllerFactory';
 import type { DesktopAgentSettingsController } from '@desktop/main/desktopAgentSettingsController';
@@ -13,10 +11,6 @@ import type { DesktopSettingsUiHost } from '@desktop/main/desktopSettingsIpc';
 import type { DesktopToolingSettingsController } from '@desktop/main/desktopToolingSettingsController';
 import { unsupported } from '@shared/utils/dispatcher';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
-
-// Shared imports - settings controllers
-
-// Shared imports
 
 // Local file imports
 import { repoPath } from './desktopTestPaths.mjs';

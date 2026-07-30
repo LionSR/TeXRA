@@ -1,4 +1,4 @@
-import { isObject, isString } from '@utils/core';
+import { isObject } from '@utils/core';
 
 import {
   detectSdkErrorMetadata,
@@ -25,26 +25,30 @@ export function isUserAbort(err: unknown): boolean {
 }
 
 /**
+ * True when `err` carries a provider's own native error field with `expected`,
+ * checked directly off the error and off a nested raw body (covers
+ * `WebSocketError#error` and any wrapper that preserves the response's `error`
+ * object). Reading the provider's structured contract this way survives
+ * changes to the prose it puts in `error.message`.
+ */
+function hasNativeErrorField(
+  err: unknown,
+  field: 'code' | 'param',
+  expected: string,
+): boolean {
+  const read = (source: unknown): unknown =>
+    isObject(source) ? (source as Record<string, unknown>)[field] : undefined;
+
+  if (!isObject(err)) return false;
+  return read(err) === expected || read(detectRawErrorBody(err)) === expected;
+}
+
+/**
  * OpenAI's own error code for a prompt that overflows the model's context
  * window — a stable, versioned field of its API error contract (`error.code`
  * in the JSON body, flattened onto `APIError#code` by the SDK), not prose.
- * Checked directly off the error and off a nested raw body (covers
- * `WebSocketError#error.code` and any wrapper that preserves the response's
- * `error` object) so this survives even if the wording OpenAI puts in
- * `error.message` changes between model generations.
  */
 const OPENAI_CONTEXT_WINDOW_ERROR_CODE = 'context_length_exceeded';
-
-function hasOpenAIContextWindowErrorCode(err: unknown): boolean {
-  const isMatch = (code: unknown): boolean =>
-    isString(code) && code === OPENAI_CONTEXT_WINDOW_ERROR_CODE;
-
-  if (!isObject(err)) return false;
-  if (isMatch((err as { code?: unknown }).code)) return true;
-
-  const body = detectRawErrorBody(err);
-  return isObject(body) && isMatch((body as { code?: unknown }).code);
-}
 
 // Message wordings for providers (Anthropic, Google) whose SDKs expose no
 // finer-grained error code for this failure than a generic 400 — the message
@@ -72,7 +76,7 @@ export function isContextWindowError(err: unknown): boolean {
   if (hasContextWindowErrorMarker(err)) {
     return true;
   }
-  if (hasOpenAIContextWindowErrorCode(err)) {
+  if (hasNativeErrorField(err, 'code', OPENAI_CONTEXT_WINDOW_ERROR_CODE)) {
     return true;
   }
   if (!(err instanceof Error)) {
@@ -91,36 +95,20 @@ export function isMissingFinishReasonError(err: unknown): boolean {
 }
 
 /**
- * True when `err` (or a nested `error` body, e.g. `WebSocketError#error`)
- * carries OpenAI's native `param` field naming `previous_response_id` — the
- * SDK flattens this from the JSON body onto `APIError#param` for any 4xx
- * response, and `ResponseErrorEvent#param` carries it for the WebSocket
- * transport's connection-level `error` event. This identifies the invalid
- * parameter directly instead of pattern-matching for its name inside prose.
- */
-function hasPreviousResponseIdErrorParam(err: unknown): boolean {
-  const isMatch = (param: unknown): boolean =>
-    isString(param) && param === 'previous_response_id';
-
-  if (!isObject(err)) return false;
-  if (isMatch((err as { param?: unknown }).param)) return true;
-
-  const body = detectRawErrorBody(err);
-  return isObject(body) && isMatch((body as { param?: unknown }).param);
-}
-
-/**
  * Checks if an error indicates the previous_response_id is invalid or expired
  * (OpenAI Responses API): the stored id is unusable and the chain must be
  * rebuilt from local history.
  *
- * Prefers the native `param` field (see {@link hasPreviousResponseIdErrorParam}).
- * Where that isn't available — e.g. a 404 "not found" response, which OpenAI
- * reports without a `param` since no parameter name applies to a missing
- * resource — falls back to matching the user-facing message text.
+ * Prefers OpenAI's native `param` field, which the SDK flattens from the JSON
+ * body onto `APIError#param` for any 4xx response and which
+ * `ResponseErrorEvent#param` carries for the WebSocket transport's
+ * connection-level `error` event. Where that isn't available — e.g. a 404
+ * "not found" response, which OpenAI reports without a `param` since no
+ * parameter name applies to a missing resource — falls back to matching the
+ * user-facing message text.
  */
 export function isPreviousResponseIdError(err: unknown): boolean {
-  if (hasPreviousResponseIdErrorParam(err)) return true;
+  if (hasNativeErrorField(err, 'param', 'previous_response_id')) return true;
   if (!(err instanceof Error)) return false;
   const m = err.message.toLowerCase();
   return (

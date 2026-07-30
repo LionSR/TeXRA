@@ -29,17 +29,19 @@ import {
 
 const tempDirs: string[] = [];
 
-async function makeTempDir(prefix: string): Promise<string> {
-  const dir = await mkdtemp(path.join(os.tmpdir(), prefix));
-  tempDirs.push(dir);
-  return dir;
-}
+/**
+ * Creates a temp workspace + storage pair backed by the real node filesystem
+ * and installs a platform pointing at it. Returns the workspace directory.
+ */
+async function installTempWorkspace(prefix: string): Promise<string> {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), prefix));
+  tempDirs.push(tempDir);
 
-function installPlatform(
-  workspaceDir: string,
-  storageRoot: string,
-): Promise<void> {
-  return installFakePlatform(
+  const workspaceDir = path.join(tempDir, 'workspace');
+  const storageRoot = path.join(tempDir, 'storage');
+  await mkdir(workspaceDir, { recursive: true });
+
+  await installFakePlatform(
     { workspacePath: workspaceDir },
     {
       fs: nodeFilesystem,
@@ -49,6 +51,8 @@ function installPlatform(
       workspaceState: new MemoryStateStore(),
     },
   );
+
+  return workspaceDir;
 }
 
 describe('round-dir ownership and editable .tex inheritance', () => {
@@ -57,17 +61,13 @@ describe('round-dir ownership and editable .tex inheritance', () => {
   });
 
   it('snapshots editable .tex on mirror, points r<N>/ symlinks at the snapshot, and the round-output write replaces the symlink with a real file leaving snapshot and workspace untouched', async () => {
-    const tempDir = await makeTempDir('texra-round-ownership-');
-    const workspaceDir = path.join(tempDir, 'workspace');
-    const storageRoot = path.join(tempDir, 'storage');
+    const workspaceDir = await installTempWorkspace('texra-round-ownership-');
     const draftDir = path.join(workspaceDir, 'Draft');
     const draftAbsolute = path.join(draftDir, 'Draft.tex');
     const workspaceOriginal =
       '\\documentclass{article}\\begin{document}original\\end{document}\n';
     await mkdir(draftDir, { recursive: true });
     await writeFile(draftAbsolute, workspaceOriginal);
-
-    await installPlatform(workspaceDir, storageRoot);
 
     const fileService = new TaskRunFileService('run-1');
 
@@ -123,14 +123,9 @@ describe('round-dir ownership and editable .tex inheritance', () => {
   });
 
   it('falls through to the workspace symlink for non-snapshotted (read-only) deps', async () => {
-    const tempDir = await makeTempDir('texra-readonly-mirror-');
-    const workspaceDir = path.join(tempDir, 'workspace');
-    const storageRoot = path.join(tempDir, 'storage');
+    const workspaceDir = await installTempWorkspace('texra-readonly-mirror-');
     const stylePath = path.join(workspaceDir, 'macros.sty');
-    await mkdir(workspaceDir, { recursive: true });
     await writeFile(stylePath, '\\newcommand{\\RR}{\\mathbb{R}}\n');
-
-    await installPlatform(workspaceDir, storageRoot);
 
     const fileService = new TaskRunFileService('run-2');
 
@@ -157,14 +152,9 @@ describe('round-dir ownership and editable .tex inheritance', () => {
   // shared workflowOutputRoundDir helper (@shared/constants/workflowOutput)
   // instead of an inlined path.dirname(workflowOutputPath(...)).
   it('mirrors into diff/r<N>/ for the latexdiff round directory', async () => {
-    const tempDir = await makeTempDir('texra-diff-round-dir-');
-    const workspaceDir = path.join(tempDir, 'workspace');
-    const storageRoot = path.join(tempDir, 'storage');
+    const workspaceDir = await installTempWorkspace('texra-diff-round-dir-');
     const stylePath = path.join(workspaceDir, 'macros.sty');
-    await mkdir(workspaceDir, { recursive: true });
     await writeFile(stylePath, '\\newcommand{\\RR}{\\mathbb{R}}\n');
-
-    await installPlatform(workspaceDir, storageRoot);
 
     const fileService = new TaskRunFileService('run-3');
 

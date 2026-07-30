@@ -1,15 +1,15 @@
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
-// Local imports - shared schemas
+// Local imports - CLI TUI rendering
 import {
   toolHeaderPreviewBudget,
   toolUseDisplayLines,
   toolUseStyledLines,
 } from '@cli/chat/tui/panes/toolRenderers';
-import { TOOL_USE_STATUS, type NormalizedToolUse } from '@shared/schemas';
 
-// Local imports - CLI TUI rendering
+// Local imports - shared schemas
+import { TOOL_USE_STATUS, type NormalizedToolUse } from '@shared/schemas';
 
 function toolUse(
   toolName: string,
