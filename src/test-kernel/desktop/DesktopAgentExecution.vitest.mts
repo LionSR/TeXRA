@@ -1315,6 +1315,13 @@ describe('DesktopProgressBridge', () => {
       new Map([[waitingStream, executionId]]),
     );
     expect(bridgeStatus(second).get(waitingStream)).toBe(STREAM_PHASE.WAITING);
+    expect(second.streamLogs.get(waitingStream)).toBeUndefined();
+    expect(second.streamLogs.get(orphanedStream)).toBeUndefined();
+
+    await Promise.all([
+      second.streamLogs.ensureLoaded(waitingStream),
+      second.streamLogs.ensureLoaded(orphanedStream),
+    ]);
     expect(
       second.streamLogs.get(waitingStream)?.getRange(0).at(-1),
     ).toMatchObject({
