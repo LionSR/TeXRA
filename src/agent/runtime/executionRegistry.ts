@@ -12,7 +12,7 @@ import {
   ExecutionLeaseLostError,
   markOwnedExecutionLeaseUndurable,
 } from '@agent/storage/executionLease';
-import { persistTerminalExecution } from '@agent/runtime/AgentRunLifecycle';
+import { persistTerminalExecution } from '@agent/runtime/persistTerminalExecution';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionApprovals } from '@agent/runtime/streamApprovalQueue';
 import {

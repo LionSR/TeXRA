@@ -38,6 +38,7 @@ import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { projectRunOutcome } from '@shared/streams/streamStatus';
 
 import { AgentExecutionHandle, type AgentRunHandle } from './ExecutionHandle';
+import { persistTerminalExecution } from './persistTerminalExecution';
 import {
   getAgentFlowErrorResult,
   buildTerminalFlowResult,
@@ -120,79 +121,6 @@ export interface FinalizeRunTerminalParams {
 export interface FinalizeRunTerminalResult {
   readonly event: ResultEvent;
   readonly terminalStatusPersisted: boolean;
-}
-
-export interface PersistTerminalExecutionParams {
-  readonly executionId: ExecutionId;
-  /** Included in warn-log `data` only when the caller has one to report. */
-  readonly agentName?: string;
-  readonly outcome: RunOutcome;
-  readonly flowRecord: FinalizeExecutionInput['flowRecord'];
-  /** Caller's own channel trace, so warn logs keep their originating channel. */
-  readonly logger: AgentTrace;
-  /** Message text differs per call site and is asserted verbatim by existing tests. */
-  readonly failedMessage: string;
-  readonly rejectedMessage: string;
-}
-
-export interface PersistTerminalExecutionResult {
-  readonly terminalStatusPersisted: boolean;
-}
-
-/**
- * Shared `finalizeExecution` try/catch used by both terminal-persistence
- * sites: `finalizeRunTerminal`'s finalize arm below and
- * `ExecutionRegistry.finishWaitingTermination`'s waiting-stop arm. Both sides
- * previously duplicated this exactly: call `finalizeExecution`, mark the
- * owned lease undurable and warn on either a `'failed'` result or a rejected
- * promise, and hand back whether the terminal status reached disk. The
- * caller keeps everything this helper does not own: the registry keeps its
- * `synchronizeAgentResultOutcome` follow-up and root-lease release in its own
- * `finally`; this function never throws, so a caller-side `catch` is
- * unnecessary and would be dead code.
- */
-export async function persistTerminalExecution(
-  params: PersistTerminalExecutionParams,
-): Promise<PersistTerminalExecutionResult> {
-  const {
-    executionId,
-    agentName,
-    outcome,
-    flowRecord,
-    logger: callerLogger,
-    failedMessage,
-    rejectedMessage,
-  } = params;
-  try {
-    const finalization = await finalizeExecution({
-      executionId,
-      terminalStatus: projectRunOutcome(outcome).executionStatus,
-      flowRecord,
-    });
-    if (finalization.status === 'failed') {
-      markOwnedExecutionLeaseUndurable(executionId);
-      callerLogger.warn(failedMessage, {
-        data: {
-          ...(agentName ? { agentIdentifier: agentName } : {}),
-          executionId,
-          stage: finalization.stage,
-          terminalStatusPersisted: finalization.terminalStatusPersisted,
-          error: finalization.error,
-        },
-      });
-    }
-    return { terminalStatusPersisted: finalization.terminalStatusPersisted };
-  } catch (error) {
-    markOwnedExecutionLeaseUndurable(executionId);
-    callerLogger.warn(rejectedMessage, {
-      data: {
-        ...(agentName ? { agentIdentifier: agentName } : {}),
-        executionId,
-        error,
-      },
-    });
-    return { terminalStatusPersisted: false };
-  }
 }
 
 /**
