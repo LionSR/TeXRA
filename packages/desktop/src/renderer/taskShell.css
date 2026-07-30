@@ -907,21 +907,19 @@ body[data-desktop-platform='darwin'] .task-shell-collapsed .task-header {
   text-align: center;
 }
 
-.task-workbench-placeholder-content {
-  max-width: 300px;
-}
-
-.task-workbench-placeholder-icon {
+.task-workbench-placeholder .empty-state-icon {
   margin: 0 auto 12px;
 }
 
-.task-workbench-placeholder h2 {
+.task-workbench-placeholder .empty-state-title {
+  max-width: 300px;
   margin: 0 0 5px;
   color: var(--wa-color-text-normal);
   font-size: var(--font-size-lg);
 }
 
-.task-workbench-placeholder p {
+.task-workbench-placeholder .empty-state-body {
+  max-width: 300px;
   margin: 0;
   font-size: var(--font-size-sm);
   line-height: var(--line-height-relaxed);
