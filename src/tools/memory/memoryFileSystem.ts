@@ -61,7 +61,7 @@ function createWalkTaskRunner(concurrency: number): WalkTaskRunner {
   const waiters: Array<() => void> = [];
 
   return async <T>(task: () => Promise<T>): Promise<T> => {
-    if (activeTasks >= concurrency) {
+    while (activeTasks >= concurrency) {
       await new Promise<void>((resolve) => {
         waiters.push(resolve);
       });
