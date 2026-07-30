@@ -6,6 +6,9 @@ import pTimeout from 'p-timeout';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { SUPABASE_CUSTOM_DOMAIN } from '@auth/config';
 import * as logger from '@logger/logUtils';
+import { platform } from '@platform/platform';
+import type { UsageRoute } from '@shared/schemas';
+import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { UsageLogResponseSchema } from './UsageLogTypes';
@@ -43,6 +46,63 @@ const DEFAULT_CONFIG: UsageLogConfig = {
   enabled: true,
 };
 
+/** Config key backing the usage-logging opt-out. */
+export const TELEMETRY_ENABLED_KEY = 'texra.telemetry.enabled';
+
+/**
+ * Routes whose records meter what the user consumed against their plan.
+ *
+ * The relay reads a database aggregate populated by `log-usage` to enforce the
+ * monthly spend cap, and the subscription routes are accounted the same way. A
+ * record on one of these routes is therefore not telemetry — dropping it lets
+ * hosted calls continue against a stale total, past the cap. They are sent
+ * regardless of {@link TELEMETRY_ENABLED_KEY}; the opt-out governs the
+ * `api-key` (bring-your-own-key) rounds, which cost TeXRA nothing and exist
+ * only as analytics.
+ */
+const PLAN_ACCOUNTING_ROUTES = new Set<UsageRoute>([
+  'relay',
+  'chatgpt-subscription',
+  'kimi-code-subscription',
+]);
+
+function isPlanAccounting(
+  entry: Pick<UsageLogEntry, 'usedRelay' | 'usageRoute'>,
+): boolean {
+  return (
+    entry.usedRelay === true ||
+    (entry.usageRoute != null && PLAN_ACCOUNTING_ROUTES.has(entry.usageRoute))
+  );
+}
+
+/**
+ * The user's usage-logging opt-out, read live rather than snapshotted at
+ * {@link UsageLogServiceImpl.initialize}.
+ *
+ * Reading it on each queue and send is what makes turning the setting off take
+ * effect immediately instead of at the next launch — and lets the flush path
+ * drop optional rounds recorded before the opt-out rather than shipping one last
+ * batch. `config.enabled` remains a separate, independent gate so a host (or a
+ * test) can hold the service off regardless of user settings.
+ */
+function isTelemetryEnabledBySetting(): boolean {
+  const raw = platform().config.get<unknown>(
+    TELEMETRY_ENABLED_KEY,
+    DEFAULT_CORE_SETTINGS.telemetry.enabled,
+  );
+  if (typeof raw === 'boolean') return raw;
+  // `.texra/config.json` is hand-edited and JsonConfigProvider hands back raw
+  // JSON, so a mistyped `"false"` would arrive as a truthy string and quietly
+  // re-enable the very thing the user tried to switch off. Treat any non-boolean
+  // as opted out and say so. Failing closed is safe here precisely because plan
+  // accounting does not go through this gate.
+  logger.warn(
+    CHANNEL,
+    `Ignoring non-boolean ${TELEMETRY_ENABLED_KEY} (got ${typeof raw}); treating optional usage logging as disabled`,
+  );
+  return false;
+}
+
 class UsageLogServiceImpl {
   private queue: UsageLogEntry[] = [];
   private retryBatch: UsageLogBatch | null = null;
@@ -72,6 +132,7 @@ class UsageLogServiceImpl {
     entry: Omit<UsageLogEntry, 'timestamp' | 'extensionVersion' | 'editorType'>,
   ): void {
     if (!this.config.enabled) return;
+    if (!isPlanAccounting(entry) && !isTelemetryEnabledBySetting()) return;
 
     if (this.queue.length >= MAX_QUEUE_SIZE) {
       logger.warn(CHANNEL, 'Queue full, dropping oldest entry');
@@ -144,6 +205,28 @@ class UsageLogServiceImpl {
           entries,
           batchId: randomUUID(),
         };
+      }
+
+      // Re-read the setting here rather than on entry: the token lookup above is
+      // an await, so a user who opts out while it is in flight would otherwise
+      // have this continuation ship the batch anyway. Applied after the batch is
+      // taken so it also drops optional rounds queued before the opt-out instead
+      // of leaving the timer to send them.
+      if (!isTelemetryEnabledBySetting()) {
+        const kept = batch.entries.filter(isPlanAccounting);
+        const dropped = batch.entries.length - kept.length;
+        if (dropped > 0) {
+          logger.debug(
+            CHANNEL,
+            `Usage logging is disabled; dropped ${dropped} optional ${dropped === 1 ? 'entry' : 'entries'} without sending`,
+          );
+        }
+        if (kept.length === 0) {
+          // ACCEPTED, not PENDING: these entries are gone for good, and PENDING
+          // means "kept for a later retry" to every caller that inspects it.
+          return USAGE_LOG_FLUSH_OUTCOME.ACCEPTED;
+        }
+        batch = { ...batch, entries: kept };
       }
 
       logger.debug(

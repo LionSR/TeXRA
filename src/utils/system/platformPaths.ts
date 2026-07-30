@@ -87,15 +87,19 @@ function getExtraDirs(): string[] {
       'C:\\Program Files\\MiKTeX 2.9\\miktex\\bin',
       'C:\\Program Files (x86)\\MiKTeX\\miktex\\bin',
       'C:\\Program Files (x86)\\MiKTeX 2.9\\miktex\\bin',
-      'C:\\Program Files\\gs\\gs9.56.1\\bin',
-      'C:\\Program Files\\gs\\gs9.55.0\\bin',
-      'C:\\Program Files\\gs\\gs9.54.0\\bin',
-      'C:\\Program Files (x86)\\gs\\gs9.56.1\\bin',
-      'C:\\Program Files (x86)\\gs\\gs9.55.0\\bin',
-      'C:\\Program Files (x86)\\gs\\gs9.54.0\\bin',
       // Strawberry Perl (recommended Perl distribution for Windows)
       'C:\\Strawberry\\perl\\bin',
     );
+
+    // Ghostscript installs under a version-stamped directory. This was six
+    // hardcoded 9.54-9.56 paths, so a current 10.x install was invisible unless
+    // it was already on PATH. Descending sort keeps the previous preference
+    // order among 9.x releases (9.56 before 9.55 before 9.54) and treats 10.x as
+    // a fallback, since "gs9" sorts above "gs1" -- any installed version works,
+    // so the ordering is a preference, not a correctness requirement.
+    for (const programFiles of ['C:/Program Files', 'C:/Program Files (x86)']) {
+      dirs.push(...globDescending(`${programFiles}/gs/*/bin`));
+    }
     const localAppData =
       process.env.LOCALAPPDATA ||
       (process.env.USERPROFILE
@@ -141,6 +145,31 @@ function getExtraDirs(): string[] {
     for (const root of msysRoots) {
       for (const sub of MSYS_SUBDIRS) {
         const dir = path.join(root, sub);
+        if (
+          AbsoluteFS.existsSync(path.join(dir, 'perl.exe')) &&
+          !dirs.includes(dir)
+        ) {
+          dirs.push(dir);
+        }
+      }
+    }
+
+    // TeX Live for Windows bundles its own Perl (tlperl) instead of putting one
+    // on PATH. latexindent/latexdiff still work there because they resolve to
+    // the .exe wrappers under texlive/*/bin/*, which use tlperl internally --
+    // but a bare `perl` does not exist, so checkCoreDependencies() reported
+    // Perl missing and told TeX Live users to install Strawberry Perl they do
+    // not need. Probed after the entries above so a user-installed Perl still
+    // wins; tlperl is the fallback, and it carries the modules latexindent
+    // needs.
+    const tlperlPatterns = ['C:/texlive/*/tlpkg/tlperl/bin'];
+    if (process.env.USERPROFILE) {
+      tlperlPatterns.push(
+        `${normalizeFilePath(process.env.USERPROFILE)}/texlive/*/tlpkg/tlperl/bin`,
+      );
+    }
+    for (const pattern of tlperlPatterns) {
+      for (const dir of globDescending(pattern)) {
         if (
           AbsoluteFS.existsSync(path.join(dir, 'perl.exe')) &&
           !dirs.includes(dir)

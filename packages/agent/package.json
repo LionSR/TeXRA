@@ -3,6 +3,15 @@
   "version": "0.40.0",
   "description": "Embeddable TeXRA agent runtime",
   "license": "SEE LICENSE IN LICENSE.txt",
+  "author": "TeXRA.ai",
+  "homepage": "https://texra.ai",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/texra-ai/texra-issues.git"
+  },
+  "bugs": {
+    "url": "https://github.com/texra-ai/texra-issues/issues"
+  },
   "type": "module",
   "engines": {
     "node": ">=22.9.0"

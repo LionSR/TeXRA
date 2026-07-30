@@ -29,6 +29,7 @@ class FakeChild extends EventEmitter {
 
 const originalArgv = [...process.argv];
 const originalNpmExecPath = process.env.npm_execpath;
+const originalElectronDistPath = process.env.ELECTRON_OVERRIDE_DIST_PATH;
 const originalSigintListeners = new Set(process.listeners('SIGINT'));
 const originalSigtermListeners = new Set(process.listeners('SIGTERM'));
 
@@ -38,6 +39,11 @@ afterEach(() => {
     delete process.env.npm_execpath;
   } else {
     process.env.npm_execpath = originalNpmExecPath;
+  }
+  if (originalElectronDistPath == null) {
+    delete process.env.ELECTRON_OVERRIDE_DIST_PATH;
+  } else {
+    process.env.ELECTRON_OVERRIDE_DIST_PATH = originalElectronDistPath;
   }
   for (const listener of process.listeners('SIGINT')) {
     if (!originalSigintListeners.has(listener)) {
@@ -119,6 +125,13 @@ describe('desktop development launcher', () => {
       setTimeout: vi.fn(async () => {}),
     }));
     vi.stubGlobal('fetch', fetch);
+    // dev.mjs resolves the Electron binary at module load (`require('electron')`),
+    // and electron's index.js *downloads* the platform binary on demand when it
+    // is missing. That turned this unit test into a network fetch on a fresh
+    // checkout — and a hard failure with no network. The override short-circuits
+    // that resolution to a fixed path; the assertions below only check the spawn
+    // arguments, env, and stdio, never the binary's location.
+    process.env.ELECTRON_OVERRIDE_DIST_PATH = '/test/electron-dist';
     process.env.npm_execpath = '/test/pnpm.cjs';
     process.argv = [
       process.execPath,
