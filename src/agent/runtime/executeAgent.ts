@@ -20,10 +20,8 @@ import {
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { hasPersistedParent } from '@agent/storage/executionLifecycle';
 import {
-  abandonOwnedExecutionLease,
   acquireResumedExecutionLease,
   captureOwnedExecutionLease,
-  completeOwnedExecutionLease,
   releaseOwnedExecutionLeaseAfterFailure,
 } from '@agent/storage/executionLease';
 import { AgentError, getSdkErrorMessage } from '@common/errors';
@@ -47,6 +45,7 @@ import {
 import {
   runFlowWithLifecycle,
   type FlowLifecycleControl,
+  type RunFlowLifecycleOptions,
 } from './AgentRunLifecycle';
 import {
   AgentFlowError,
@@ -58,7 +57,7 @@ import {
 } from './AgentFlowResult';
 import { createInterruptCallbacks } from './InterruptManager';
 import { generateSessionDescription } from './sessionDescription';
-import { flushOwnedExecutionArtifacts } from './executionOwnership';
+import { releaseExecutionLeaseAfterArtifacts } from './executionOwnership';
 import { ResumeAdmissionCancelledError } from './resumeAdmission';
 import type { SessionHandle } from './SessionHandle';
 import type { AgentExecutionHandle, AgentRunHandle } from './ExecutionHandle';
@@ -116,49 +115,75 @@ function wrapOnFollowUpConsumed(
 }
 
 /**
- * Run the tool-use flow for a single agent execution.
+ * The wiring the two tool-use entry points genuinely do not share. Everything
+ * outside this union is assembled once in {@link launchToolUseRun}, so a field
+ * added for one entry point cannot go missing on the other.
+ */
+type ToolUseLaunchVariant =
+  | {
+      readonly kind: 'fresh';
+      /** Root-run-only; resume has no caller-supplied equivalent. */
+      readonly onIdle?: (lastResponse: string | undefined) => void;
+    }
+  | {
+      readonly kind: 'resume';
+      readonly resume: ToolUseResumeData;
+      readonly drainedFollowUps?: readonly FollowUpQueueBatchItem[];
+      readonly takePendingFollowUps?: () => readonly FollowUpQueueBatchItem[];
+      /** Queried once the resumed flow is attached and interruptible. */
+      readonly isCancellationRequested?: () => boolean;
+      readonly onCancellationAtFlowAttachment?: () => void;
+    };
+
+/**
+ * Run the tool-use flow for a single agent execution, fresh or resumed.
  *
  * Owns all tool-use-specific wiring: progress counters, follow-up queuing,
  * model-change side effects, and error wrapping into `AgentFlowError`.
- * The caller (`executeAgent`) owns lifecycle and stream-status; this function
- * owns only what is specific to the ToolUse category.
+ * The callers (`executeAgent`, `resumeToolUseFromResumeData`) own lifecycle and
+ * stream-status; this function owns only what is specific to the ToolUse
+ * category.
  */
-async function runToolUseAgent(
+async function launchToolUseRun(
   ctx: AgentLaunchContext,
   handle: AgentExecutionHandle,
   lifecycle: FlowLifecycleControl,
-  setting: AgentToolUseSetting,
-  options: Pick<
-    ExecuteAgentOptions,
-    'isSubagent' | 'onFollowUpConsumed' | 'onProgress' | 'onIdle' | 'tools'
-  >,
+  shared: SubagentRunOptions & {
+    readonly setting: AgentToolUseSetting;
+    /**
+     * Fresh launches take this from the caller; resume derives it from
+     * persisted lineage, because the rebuilt system prompt would otherwise drop
+     * subagent-specific instructions (e.g. the shared /memories protocol) that
+     * the fresh run had included.
+     */
+    readonly isSubagent?: boolean;
+  },
+  variant: ToolUseLaunchVariant,
 ): Promise<AgentRuntimeFlowResult> {
   const { streamId: runStreamId, executionId: runExecutionId } = ctx.runScope;
-  const onRoundFinalized = createUsageRecordingCallback(ctx);
   try {
     const result = await runToolUseFlow(
       {
         ...ctx,
         ...createInterruptCallbacks(),
-        onRoundFinalized,
-        setting,
-        isSubagent: options.isSubagent,
-        onIdle: options.onIdle,
+        onRoundFinalized: createUsageRecordingCallback(ctx),
+        setting: shared.setting,
+        isSubagent: shared.isSubagent,
+        tools: shared.tools,
         onProgress: (update) => {
           if (update.kind === 'overview') {
             logConversationProgress(ctx.logger, {
               toolCallCount: update.toolCallCount,
             });
           }
-          options.onProgress?.(update);
+          shared.onProgress?.(update);
         },
         onFollowUpConsumed: wrapOnFollowUpConsumed(
           ctx,
-          options.onFollowUpConsumed,
+          shared.onFollowUpConsumed,
         ),
         onFlowRecordDisposition: (disposition) =>
           lifecycle.setFlowRecordDisposition(disposition),
-        tools: options.tools,
         onModelChanged: (modelHandler) => {
           // The tool-use flow already wrote services.config.model
           // (=== ctx.config.model, same object), so the live model is updated
@@ -168,10 +193,21 @@ async function runToolUseAgent(
             config: modelHandler.config,
           });
         },
+        ...(variant.kind === 'fresh'
+          ? { onIdle: variant.onIdle }
+          : {
+              resume: variant.resume,
+              drainedFollowUps: variant.drainedFollowUps,
+              takePendingFollowUps: variant.takePendingFollowUps,
+            }),
       },
       undefined,
       (flowContext) => {
         handle.attachToolUseFlow(flowContext);
+        if (variant.kind === 'resume' && variant.isCancellationRequested?.()) {
+          variant.onCancellationAtFlowAttachment?.();
+          flowContext.interrupt();
+        }
         return () => handle.detachToolUseFlow(flowContext);
       },
     );
@@ -193,6 +229,24 @@ async function runToolUseAgent(
     if (isWaitingFlowResult(result)) throw err;
     throw new AgentFlowError(getSdkErrorMessage(err), result, { cause: err });
   }
+}
+
+/**
+ * The lifecycle options every entry point that drives one run passes.
+ * `isSubagent` stays a separate argument because resume derives it from
+ * persisted lineage rather than from the caller's options.
+ */
+function buildLifecycleOptions(
+  options: SubagentRunOptions,
+  isSubagent: boolean | undefined,
+): RunFlowLifecycleOptions {
+  return {
+    isSubagent,
+    parentStreamId: options.parentStreamId,
+    workflowPhase: options.workflowPhase,
+    onError: options.onRunError,
+    onRun: options.onRun,
+  };
 }
 
 /**
@@ -437,17 +491,17 @@ export async function executeAgent(
             });
 
             if (setting.agentCategory === AgentCategory.ToolUse) {
-              return runToolUseAgent(ctx, handle, lifecycle, setting, options);
+              return launchToolUseRun(
+                ctx,
+                handle,
+                lifecycle,
+                { ...options, setting, isSubagent },
+                { kind: 'fresh', onIdle: options.onIdle },
+              );
             }
             return runReflectionAgent(ctx, handle, setting);
           },
-          {
-            isSubagent,
-            parentStreamId: options.parentStreamId,
-            workflowPhase: options.workflowPhase,
-            onError: options.onRunError,
-            onRun: options.onRun,
-          },
+          buildLifecycleOptions(options, isSubagent),
         );
         if (
           isWaitingFlowResult(result) &&
@@ -541,14 +595,13 @@ export async function resumeToolUseFromResumeData(
       runtimeUnavailableTools: options.runtimeUnavailableTools,
     };
     const { setting } = ctx;
-    const {
-      streamId: runStreamId,
-      executionId: runExecutionId,
-      session: runSession,
-    } = ctx.runScope;
+    const { streamId: runStreamId, session: runSession } = ctx.runScope;
 
+    // Only the run itself is guarded here. The release below is deliberately
+    // outside: a release that fails must not be retried by the catch arm.
+    let result: AgentRuntimeFlowResult;
     try {
-      const result = await withExecutionRunContext(
+      result = await withExecutionRunContext(
         ctx,
         runContextOptions,
         async () => {
@@ -563,101 +616,46 @@ export async function resumeToolUseFromResumeData(
 
           return await runFlowWithLifecycle(
             ctx,
-            async (handle, lifecycle) => {
-              try {
-                const result = await runToolUseFlow(
-                  {
-                    ...ctx,
-                    ...createInterruptCallbacks(),
-                    onRoundFinalized: createUsageRecordingCallback(ctx),
-                    setting,
-                    resume,
-                    tools: options.tools,
-                    drainedFollowUps: options.drainedFollowUps,
-                    takePendingFollowUps: options.takePendingFollowUps,
-                    // A persisted parent marks this execution as a subagent. Without
-                    // this, the rebuilt system prompt would drop subagent-specific
-                    // instructions (e.g. the shared /memories protocol) that the fresh
-                    // run had included.
-                    isSubagent,
-                    onProgress: options.onProgress,
-                    onFollowUpConsumed: wrapOnFollowUpConsumed(
-                      ctx,
-                      options.onFollowUpConsumed,
-                    ),
-                    onFlowRecordDisposition: (disposition) =>
-                      lifecycle.setFlowRecordDisposition(disposition),
-                    onModelChanged: (modelHandler) => {
-                      // The tool-use flow already wrote services.config.model
-                      // (=== ctx.config.model, same object), so the live model is
-                      // updated before this fires; only the usage side-effect is
-                      // left to do here. A resumed run reaches `switchModel` the
-                      // same way a fresh one does — through the flow context this
-                      // path attaches to the handle — so it needs the same wiring.
-                      ctx.usageMonitor.setModelInfo({
-                        capabilities: modelHandler.capabilities,
-                        config: modelHandler.config,
-                      });
-                    },
-                  },
-                  undefined,
-                  (flowContext) => {
-                    handle.attachToolUseFlow(flowContext);
-                    if (options.isCancellationRequested?.()) {
-                      options.onCancellationAtFlowAttachment?.();
-                      flowContext.interrupt();
-                    }
-                    return () => handle.detachToolUseFlow(flowContext);
-                  },
-                );
-                return buildToolUseFlowResult(
-                  result,
-                  runExecutionId,
-                  runStreamId,
-                  ctx.attachedMemoryMisses,
-                );
-              } catch (err) {
-                const failedResult = getToolUseFlowErrorResult(err);
-                if (!failedResult) throw err;
-                const result = buildToolUseFlowResult(
-                  failedResult,
-                  runExecutionId,
-                  runStreamId,
-                  ctx.attachedMemoryMisses,
-                );
-                if (isWaitingFlowResult(result)) throw err;
-                throw new AgentFlowError(getSdkErrorMessage(err), result, {
-                  cause: err,
-                });
-              }
-            },
-            {
-              isSubagent,
-              parentStreamId: options.parentStreamId,
-              workflowPhase: options.workflowPhase,
-              onError: options.onRunError,
-              onRun: options.onRun,
-            },
+            async (handle, lifecycle) =>
+              launchToolUseRun(
+                ctx,
+                handle,
+                lifecycle,
+                { ...options, setting, isSubagent },
+                {
+                  kind: 'resume',
+                  resume,
+                  drainedFollowUps: options.drainedFollowUps,
+                  takePendingFollowUps: options.takePendingFollowUps,
+                  isCancellationRequested: options.isCancellationRequested,
+                  onCancellationAtFlowAttachment:
+                    options.onCancellationAtFlowAttachment,
+                },
+              ),
+            buildLifecycleOptions(options, isSubagent),
           );
         },
       );
-      if (!isWaitingFlowResult(result)) {
-        await flushOwnedExecutionArtifacts(runSession, resume.executionId);
-        await completeOwnedExecutionLease(resume.executionId);
-      }
-      return result;
     } catch (error) {
+      // The run's own failure is the one the caller must see; a release failure
+      // on top of it is additional information, not a replacement.
       try {
-        await flushOwnedExecutionArtifacts(runSession, resume.executionId);
-      } catch (artifactError) {
-        abandonOwnedExecutionLease(resume.executionId);
+        await releaseExecutionLeaseAfterArtifacts(
+          runSession,
+          resume.executionId,
+        );
+      } catch (releaseError) {
         throw new AggregateError(
-          [error, artifactError],
+          [error, releaseError],
           `Execution ${resume.executionId} failed and its final artifacts could not be persisted`,
         );
       }
-      await completeOwnedExecutionLease(resume.executionId);
       throw error;
     }
+    // A WAITING result keeps the lease: the next resume owns this execution.
+    if (!isWaitingFlowResult(result)) {
+      await releaseExecutionLeaseAfterArtifacts(runSession, resume.executionId);
+    }
+    return result;
   });
 }
