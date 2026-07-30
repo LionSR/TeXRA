@@ -120,11 +120,11 @@ pass; none are applied here.
 - **[TRACKED] Model-handler base → collaborator extractions (standing §9.3).**
   Re-verified. **Honesty correction to the "2068-LOC god class" framing:** the
   file is 2025 LOC at HEAD, but **~39% (~785 lines) is comment/blank** — chiefly
-  the `#7101`-triage doc blocks that record *why* each capability getter stays
-  overridable. The *logical* class is ~1200 lines. The clearest genuine
+  the `#7101`-triage doc blocks that record _why_ each capability getter stays
+  overridable. The _logical_ class is ~1200 lines. The clearest genuine
   extraction remains the **credential/route cluster** (`ModelHandler.ts:208-702`:
   a `WeakMap` + two route fields + ~13 methods operating only on those fields and
-  `this.config`) into a `ClientCredentialRouter` collaborator the handler *holds*.
+  `this.config`) into a `ClientCredentialRouter` collaborator the handler _holds_.
   Caveat that keeps it off the mechanical-lift list: the credential state is
   threaded into the `createResponse` template (`:1130-1136`, `getBaseUrl` reads
   the active route at `:687`), so the collaborator must expose an active-route
@@ -177,7 +177,7 @@ pass; none are applied here.
   (1) the `MODEL_HANDLER_COMPATIBILITY_KEYS` enum
   (`modelHandlerCompatibilityKey.ts:3-19`); (2) the `PROVIDER_HANDLER_ROUTES`
   record's `compatibilityKey` fields + lazy `load` loaders
-  (`ModelFactory.ts:73-147`), which also encode routing *precedence* at `:328`;
+  (`ModelFactory.ts:73-147`), which also encode routing _precedence_ at `:328`;
   and (3) the `switch (compatibilityKey)` at `ModelFactory.ts:595-663`, which
   special-cases `ModelHandlerOpenAIResponse` / `ModelHandlerGoogleInteractions` /
   `ModelHandlerOpenRouterNative` / `ModelHandlerValidation` outside the record and
@@ -190,7 +190,7 @@ pass; none are applied here.
   "run the async Codex/Kimi/vscodelm-availability overrides, then
   `new (await ROUTES_BY_KEY[key].load())(…)`". Payoff is moderate (the switch is
   ~70 lines) — SDK-surface tidiness, not urgent. Distinct from §New-5, which is
-  about the two *entrypoints*; this is about the *dispatch table* behind them.
+  about the two _entrypoints_; this is about the _dispatch table_ behind them.
   Sibling note under standing §9.3: this is the same "the handler surface is wide
   because the runtime asks a lot of it" theme as the port width — the SDK lever is
   narrowing the demand, not the derived surfaces.
@@ -200,7 +200,7 @@ pass; none are applied here.
   `AgentEvent` on the run trace (`:316`); (2) an `updateStreamStatus` `SessionFact`
   on the session hub (`:319-325`); (3) the direct `statusListeners` callback set
   (`:326-328`). Because the `attachRunTrace` bridge re-broadcasts every run
-  `AgentEvent` onto the hub, the `status` event *also* reaches the hub — where the
+  `AgentEvent` onto the hub, the `status` event _also_ reaches the hub — where the
   progress projectors filter it out (`status` is deliberately excluded from
   `RUN_FACT_EVENT_TYPES`) — while the semantically identical `updateStreamStatus`
   fact is separately published. So one transition has four representations. It
@@ -214,7 +214,7 @@ pass; none are applied here.
   highest-value dedup in the observability surface, and `conversation.progress`
   (already single-rail via a session projector, `helpers.ts:200-215`) is the
   pattern to follow.
-- **[NEW → RETRACTED] §New-10 — `polishModel.ts` is *not* a naked single-caller
+- **[NEW → RETRACTED] §New-10 — `polishModel.ts` is _not_ a naked single-caller
   extraction; do not merge it. (Corrected 2026-07-30 by a live-authorized census
   — see "Follow-up" below.)** The `-07-29` framing and the runtime deep-dive both
   read this as "`renderPolishPrompt` has one consumer (`textEnhancement`), so
@@ -230,7 +230,7 @@ pass; none are applied here.
   separately-tested concern into its consumer. **Net-neutral-to-negative churn —
   leave `polishModel.ts` as its own file.** The broader placement observation (the
   runtime "content helpers" cluster is one-shot content generation that an SDK
-  boundary would lift out of the launch layer) still stands as a *directional*
+  boundary would lift out of the launch layer) still stands as a _directional_
   note, but it is a deliberate relocation, not a file merge.
 - **[NEW] §New-11 — `setLogger` mutable injection could be ambient trace via
   `RunScope`. (M; pairs with §New-4.)** The run trace is pushed into the model
@@ -242,7 +242,7 @@ pass; none are applied here.
   this). The run already executes inside a `withExecutionRunContext`
   `AsyncLocalStorage` scope whose `RunScope` carries `session` but not `trace`.
   Adding the trace to `RunScope` and resolving `this.logger ?? ambientTrace() ??
-  noopTrace` per emit deletes `setLogger`, the `MediaAttachmentProcessor.setLogger`
+noopTrace` per emit deletes `setLogger`, the `MediaAttachmentProcessor.setLogger`
   re-wrap, the constructor placeholder, and the model-switch re-wire — **and**
   fixes the standing gap (audit `-05-29`) where `createHelperModelKit()` handlers
   never get a logger at all. Cost: emit-site reads must be per-call (the handler
@@ -390,7 +390,7 @@ not-yet-clean. The census is the deliverable:
 do" subset empty of clean mechanical wins. This is the strongest available
 confirmation of the standing verdict: the remaining items are design-judgment or
 deliberate-sequencing work, not drive-by simplifications. The genuinely safe next
-steps are the *additive* SDK-surface exposures the subagent-boundaries section names
+steps are the _additive_ SDK-surface exposures the subagent-boundaries section names
 (publish `ChildRunStrategy`; expose the helper-model one-shots as a headless
 sub-task API), which add capability without touching the tested invariants above —
 those are the right candidates for the next attended change.
@@ -405,7 +405,7 @@ those are the right candidates for the next attended change.
   to file:line; the two headline claims (§New-8's triple encoding, §New-9's
   four-way status emission) plus the §New-1 never-parsed schemas and §New-7
   un-optioned redact call were independently re-verified this pass by direct grep
-  at HEAD. The four-way *count* in §New-9 relies on the deep-dive's reading of the
+  at HEAD. The four-way _count_ in §New-9 relies on the deep-dive's reading of the
   `attachRunTrace` bridge's re-broadcast; the three primary emit sites
   (`StreamStatusService.ts:316,319,326`) were verified directly. Re-derive before
   any edit, per the standing rule.
