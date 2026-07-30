@@ -130,8 +130,16 @@ class ExecutionFileHistory {
   }
 }
 
+// Branches use looseObject (not strictObject): after flattenTopLevelUnion()
+// merges every branch's properties into one JSON schema for OpenAI/Gemini/
+// Anthropic tool-calling, some OpenAI-compatible providers (DeepSeek, Kimi,
+// ...) fill every advertised property — including ones only relevant to a
+// different command — with null rather than omitting them. A strictObject
+// branch rejects that as an unrecognized key regardless of nullability;
+// looseObject tolerates the cross-branch leakage while still enforcing each
+// branch's own required fields. See AGENTS.md "Tool input schemas".
 const TextEditorInputSchema = z.discriminatedUnion('command', [
-  z.strictObject({
+  z.looseObject({
     command: z.literal('view'),
     path: z.string(),
     view_range: z
@@ -140,24 +148,24 @@ const TextEditorInputSchema = z.discriminatedUnion('command', [
       .nullish()
       .describe('1-indexed. Use -1 for EOF.'),
   }),
-  z.strictObject({
+  z.looseObject({
     command: z.literal('create'),
     path: z.string(),
     file_text: z.string(),
   }),
-  z.strictObject({
+  z.looseObject({
     command: z.literal('str_replace'),
     path: z.string(),
     old_str: z.string(),
     new_str: z.string().nullish(),
   }),
-  z.strictObject({
+  z.looseObject({
     command: z.literal('insert'),
     path: z.string(),
     insert_line: z.number().describe('1-indexed.'),
     new_str: z.string(),
   }),
-  z.strictObject({
+  z.looseObject({
     command: z.literal('undo_edit'),
     path: z.string(),
   }),
