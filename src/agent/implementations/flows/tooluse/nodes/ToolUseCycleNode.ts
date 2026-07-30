@@ -8,9 +8,11 @@ import {
   createToolUseRoundFlow,
   type ToolUseRoundShared,
 } from '@agent/core/flows/ToolUseRoundFlow';
-import { withModelClient } from '@agent/core/flows/CycleServices';
+import {
+  buildFailedCycleOutcome,
+  withModelClient,
+} from '@agent/core/flows/CycleServices';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
-import { buildFailedRetryInfo } from '@common/errors';
 import {
   MESSAGE_TYPES,
   RUN_OUTCOME,
@@ -190,8 +192,7 @@ export class ToolUseCycleNode<C> extends Node<
     return {
       outcome: 'failed',
       message: error.message,
-      failureLogEmitted: false,
-      ...buildFailedRetryInfo(error),
+      ...buildFailedCycleOutcome(error),
     };
   }
 
