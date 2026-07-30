@@ -93,6 +93,7 @@ import {
   type ExecutionId,
   type Plan,
   type StorageKey,
+  type StreamPhase,
   type StreamTabId,
   type TodoItem,
 } from '@shared/schemas';
@@ -3460,13 +3461,14 @@ describe('child-stream ordered transition matrix', () => {
   const parentQ = 'parent-q' as StreamTabId;
   const kid = 'kid' as StreamTabId;
 
-  function rosterRow(status?: string) {
+  function rosterRow(status?: StreamPhase, elapsed?: string) {
     return {
       kind: 'subagent' as const,
       executionId: 'kid-exec',
       agentName: 'kid-agent',
       childStreamId: kid,
       status,
+      elapsed,
     };
   }
 
@@ -3550,6 +3552,32 @@ describe('child-stream ordered transition matrix', () => {
     expect(retainedRows(parentP)).toMatchObject([
       { status: STREAM_PHASE.COMPLETED },
     ]);
+  });
+
+  it('5b. a live roster tick with only elapsed changed still updates the retained summary', () => {
+    // AgentRunLifecycle untracks a finishing child (so it drops out of the
+    // next roster) *before* transitioning its stream to a terminal phase, so
+    // production never sends a roster tick that carries both a terminal
+    // status and a fresh elapsed for this child - the last roster snapshot
+    // it ever appears in is always `running`. An elapsed-only delta must
+    // therefore still count as a change while the child is running, or the
+    // cached summary freezes at whichever tick happened to settle first
+    // (typically the very first one) instead of the last live value before
+    // removal - the value the retained row and `formatPostCompactionContext`
+    // read verbatim once the child is gone from the roster.
+    patchStream(kid, (s) => ({ ...s, status: STREAM_PHASE.RUNNING }));
+    applySubagentRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING, '0s')]);
+    setParentStream(kid, parentP);
+
+    applySubagentRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING, '5s')]);
+    applySubagentRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING, '41s')]);
+
+    // The child is untracked (dropped from the roster) with its last-known
+    // elapsed already captured; the terminal status lands separately.
+    applySubagentRoster(parentP, []);
+    patchStream(kid, (s) => ({ ...s, status: STREAM_PHASE.COMPLETED }));
+
+    expect(retainedRows(parentP)).toMatchObject([{ elapsed: '41s' }]);
   });
 
   it('6. promotion with stale roster: A, S(running), R_P+, E_P+, E0, R_P+', () => {
@@ -3645,14 +3673,14 @@ describe('child-stream ordered transition matrix', () => {
   it('10. two-child retention keeps stable order across reordering and shrinking rosters', () => {
     const kidA = 'kid-a' as StreamTabId;
     const kidB = 'kid-b' as StreamTabId;
-    const rowA = (status?: string) => ({
+    const rowA = (status?: StreamPhase) => ({
       kind: 'subagent' as const,
       executionId: 'exec-a',
       agentName: 'a',
       childStreamId: kidA,
       status,
     });
-    const rowB = (status?: string) => ({
+    const rowB = (status?: StreamPhase) => ({
       kind: 'subagent' as const,
       executionId: 'exec-b',
       agentName: 'b',
