@@ -79,14 +79,22 @@ export function runOutcomeToExecutionStatus(
   return projectRunOutcome(outcome).executionStatus;
 }
 
-export function groupEndStatusForOutcome(outcome: RunOutcome): 'ok' | 'error' {
-  return outcome === RUN_OUTCOME.FAILED ? 'error' : 'ok';
-}
-
+/**
+ * The frozen 2-value `EndGroupStatus` fold, kept for the one external
+ * contract that still publishes it: the CLI headless JSON's deprecated
+ * `endGroupStatus` field (`packages/cli/src/runtime/terminalStatus.ts`),
+ * whose removal is dated in the #6981 ledger (v0.41 / 2026-08-04, whichever
+ * is later). No transcript writer calls this any more — every `GROUP_END`
+ * producer emits the literal `RunOutcome` (#8087 / §8.2).
+ *
+ * `cancelled` folds to `'stopped'` alongside `completed` because that is what
+ * the frozen field has always published; the distinction lives on `outcome`,
+ * which is what consumers were told to migrate to.
+ */
 export function legacyEndGroupStatusForOutcome(
   outcome: RunOutcome,
 ): 'error' | 'stopped' {
-  return groupEndStatusForOutcome(outcome) === 'error' ? 'error' : 'stopped';
+  return outcome === RUN_OUTCOME.FAILED ? 'error' : 'stopped';
 }
 
 // ============================================================================
