@@ -21,11 +21,15 @@ export function createInterruptCallbacks(): InterruptCallbacks {
 
   return {
     checkInterruption: () => isInterrupted,
+    // Nodes null the slot in their `finally`, so an interrupt can land while
+    // it is empty. Delivery is therefore level-triggered on both edges: the
+    // latch aborts whatever registers next, and `onInterrupt` stays callable
+    // so a second press still reaches a controller registered after the first.
     setAbortController: (controller) => {
       abortController = controller;
+      if (isInterrupted) controller?.abort();
     },
     onInterrupt: () => {
-      if (isInterrupted) return;
       isInterrupted = true;
       abortController?.abort();
     },
