@@ -87,6 +87,13 @@ export function isGenerationRequest(url: string): boolean {
  *  otherwise. */
 export const CODEX_DEFAULT_INSTRUCTIONS = 'You are a helpful assistant.';
 
+/** Shape of one `input` array entry that {@link rewriteCodexRequestBody}
+ *  reads. Named once here instead of an inline cast per field read. */
+interface CodexInputItem {
+  role?: unknown;
+  content?: unknown;
+}
+
 /**
  * Rewrite a parsed Responses request body for the (unofficial) Codex backend.
  * Pure: returns a new top-level object and never mutates `body`, so the
@@ -142,14 +149,10 @@ export function rewriteCodexRequestBody(
   if (Array.isArray(rewritten.input)) {
     const kept: unknown[] = [];
     for (const item of rewritten.input) {
-      const role =
-        item && typeof item === 'object'
-          ? (item as { role?: unknown }).role
-          : undefined;
-      if (role === 'system' || role === 'developer') {
-        const text = partsToText(
-          (item as { content?: unknown }).content,
-        ).trim();
+      const record: CodexInputItem | undefined =
+        item && typeof item === 'object' ? (item as CodexInputItem) : undefined;
+      if (record?.role === 'system' || record?.role === 'developer') {
+        const text = partsToText(record.content).trim();
         if (
           text &&
           !instructions.some((instruction) => instruction.includes(text))

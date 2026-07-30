@@ -56,7 +56,9 @@ export class ModelHandlerMiniMax extends ReasoningModelHandlerOpenAI {
     );
 
     if (this.capabilities.supportsReasoning) {
-      (params as Record<string, unknown>).reasoning_split = true;
+      // MiniMax-only field, not part of the OpenAI SDK's typed request params.
+      (params as typeof params & { reasoning_split: boolean }).reasoning_split =
+        true;
     }
 
     return params;

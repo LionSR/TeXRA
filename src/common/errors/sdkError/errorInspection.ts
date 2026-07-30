@@ -4,6 +4,16 @@ import { isObject, isString } from '@utils/core';
 
 import { pickStatus } from './sdkErrorKinds';
 
+/** Direct-or-enveloped candidate objects for a raw provider error body: the
+ *  body itself, then its nested `.error` (some SDKs preserve the full
+ *  `{ error: {...} }` envelope, others unwrap it before it reaches us).
+ *  Shared by every relay/ChatGPT-subscription/credit-depletion body detector,
+ *  each of which must check both forms. Returns `[]` for a non-object body. */
+export function errorBodyCandidates(rawErrorBody: unknown): unknown[] {
+  if (!isObject(rawErrorBody)) return [];
+  return [rawErrorBody, (rawErrorBody as { error?: unknown }).error];
+}
+
 /** Pick a non-blank string field off an error-body object. Shared by the
  *  relay/ChatGPT-subscription/credit-depletion body detectors, which all read
  *  loosely-typed provider JSON. */
@@ -46,12 +56,25 @@ export function getErrorClassNames(err: unknown): string[] {
   return [...classNames];
 }
 
-type StatusCarrier = {
-  status?: number;
-  statusCode?: number;
-  code?: number;
-  response?: { status?: number };
-  error?: { status?: number };
+/** Field aliases across thrown SDK/provider error shapes — the only fields
+ *  `detectStatusCode`/`detectStatusText`/`detectRequestId`/`detectRawErrorBody`
+ *  read. Kept in one type so a new alias lands in a single place instead of
+ *  redeclared per detector. Nested carriers (`response`, `error`) are left
+ *  as loose records since each detector reads a different field off them. */
+type SdkErrorLike = {
+  status?: unknown;
+  statusCode?: unknown;
+  code?: unknown;
+  statusText?: unknown;
+  request_id?: unknown;
+  requestId?: unknown;
+  requestID?: unknown;
+  message?: unknown;
+  headers?: HeaderBag;
+  response?: Record<string, unknown>;
+  error?: Record<string, unknown>;
+  body?: unknown;
+  data?: unknown;
 };
 
 /** Canonical HTTP status extractor for thrown SDK/provider errors. The only
@@ -62,7 +85,7 @@ export function detectStatusCode(err: unknown): number | undefined {
     return undefined;
   }
 
-  const candidate = err as StatusCarrier;
+  const candidate = err as SdkErrorLike;
   return (
     pickStatus(candidate.status) ??
     pickStatus(candidate.statusCode) ??
@@ -77,16 +100,12 @@ export function detectStatusText(
   statusCode?: number,
 ): string | undefined {
   if (isObject(err)) {
-    const candidate = err as {
-      statusText?: string;
-      response?: { statusText?: string };
-      error?: { statusText?: string };
-    };
+    const candidate = err as SdkErrorLike;
     const explicit =
       candidate.statusText ??
       candidate.response?.statusText ??
       candidate.error?.statusText;
-    if (explicit) return explicit;
+    if (isString(explicit) && explicit) return explicit;
   }
   return statusCode ? safeGetReasonPhrase(statusCode) : undefined;
 }
@@ -175,12 +194,7 @@ function detectProviderFromText(text: string): string | undefined {
 export function detectRequestId(err: unknown): string | undefined {
   if (!isObject(err)) return undefined;
 
-  const candidate = err as {
-    request_id?: string;
-    requestId?: string;
-    requestID?: string;
-    headers?: HeaderBag;
-  };
+  const candidate = err as SdkErrorLike;
 
   const relayRequestId = getHeaderValue(
     candidate.headers,
@@ -207,13 +221,7 @@ export function detectRawErrorBody(err: unknown): unknown {
     return undefined;
   }
 
-  const candidate = err as {
-    error?: unknown;
-    body?: unknown;
-    data?: unknown;
-    response?: { data?: unknown };
-    message?: string;
-  };
+  const candidate = err as SdkErrorLike;
 
   const directBody =
     candidate.error ??
@@ -225,7 +233,7 @@ export function detectRawErrorBody(err: unknown): unknown {
   }
 
   // Google GenAI SDK may embed JSON in the error message
-  if (candidate.message && candidate.message.startsWith('{')) {
+  if (isString(candidate.message) && candidate.message.startsWith('{')) {
     return safeParseJson(candidate.message).unwrapOr(undefined);
   }
 
