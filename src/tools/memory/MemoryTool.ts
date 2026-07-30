@@ -15,7 +15,6 @@ import { formatBytes, formatRelativeTime } from '@shared/utils/string';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { replaceLiteralMatches } from '@tools/fileEditFlow';
 import {
-  countPinnedMemories,
   setMemoryPinned,
   walkMemoryDirectory,
 } from '@tools/memory/memoryFileSystem';
@@ -490,24 +489,23 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     await this.requireEditableFile(resolvedPath, inputPath);
 
     const result = await setMemoryPinned(resolvedPath, true);
-    if (result === 'already') {
+    if (result.status === 'already') {
       return {
         status: 'executed',
         summary: `Already pinned: ${inputPath}`,
         output: `The memory file ${inputPath} is already pinned.`,
       };
     }
-    if (result === 'cap-reached') {
+    if (result.status === 'cap-reached') {
       throw new ToolError(
         `Cannot pin ${inputPath}: maximum of ${MAX_PINNED_MEMORIES} pinned memories reached. Unpin an existing memory first.`,
       );
     }
 
-    const pinnedCount = await countPinnedMemories();
     return {
       status: 'executed',
       summary: `Pinned memory: ${inputPath}`,
-      output: `Successfully pinned ${inputPath} as a core long-term memory. (${pinnedCount}/${MAX_PINNED_MEMORIES} pinned)`,
+      output: `Successfully pinned ${inputPath} as a core long-term memory. (${result.pinnedCount}/${MAX_PINNED_MEMORIES} pinned)`,
     };
   }
 
@@ -516,7 +514,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     await this.requireEditableFile(resolvedPath, inputPath);
 
     const result = await setMemoryPinned(resolvedPath, false);
-    if (result === 'already') {
+    if (result.status === 'already') {
       return {
         status: 'executed',
         summary: `Not pinned: ${inputPath}`,

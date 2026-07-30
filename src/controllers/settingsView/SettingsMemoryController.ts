@@ -111,7 +111,7 @@ export class SettingsMemoryController {
   ): Promise<SettingsMemoryMessage | null> {
     const resolvedPath = resolveMemoryStoragePath(storagePath);
     const result = await setMemoryPinned(resolvedPath, pinned);
-    if (result === 'cap-reached') {
+    if (result.status === 'cap-reached') {
       await this.deps.prompt.warning(
         `Cannot pin: maximum of ${MAX_PINNED_MEMORIES} pinned memories reached. Unpin an existing memory first.`,
       );

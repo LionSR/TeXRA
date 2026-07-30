@@ -309,15 +309,23 @@ export async function countPinnedMemories(limit?: number): Promise<number> {
   return count;
 }
 
-export type SetMemoryPinnedResult = 'changed' | 'already' | 'cap-reached';
+export type SetMemoryPinnedResult =
+  | { readonly status: 'changed'; readonly pinnedCount: number }
+  | { readonly status: 'already' }
+  | { readonly status: 'cap-reached' };
 
 /**
  * Pin or unpin a memory file in place, the one mutation shared by the
  * MemoryTool `pin`/`unpin` commands and the settings-view pin toggle.
- * Returns 'already' when the file's pinned flag already matches the
+ * Reports 'already' when the file's pinned flag already matches the
  * requested state, 'cap-reached' when pinning would exceed
  * MAX_PINNED_MEMORIES, or 'changed' after writing the update. Each caller
  * formats its own surface message from the returned status.
+ *
+ * `pinnedCount` on a successful pin is the post-write total, derived from
+ * the cap-check walk this function already performs. Callers must not walk
+ * the tree again to display it: a second `countPinnedMemories()` without a
+ * limit loses the early exit and rescans every file.
  */
 export async function setMemoryPinned(
   storagePath: string,
@@ -327,14 +335,16 @@ export async function setMemoryPinned(
   const { meta, content } = parseFrontmatter(raw);
 
   const alreadyInState = pinned ? !!meta?.pinned : !meta?.pinned;
-  if (alreadyInState) return 'already';
+  if (alreadyInState) return { status: 'already' };
 
+  let pinnedCount = 0;
   if (pinned) {
-    const pinnedCount = await countPinnedMemories(MAX_PINNED_MEMORIES);
-    if (pinnedCount >= MAX_PINNED_MEMORIES) return 'cap-reached';
+    const priorPinned = await countPinnedMemories(MAX_PINNED_MEMORIES);
+    if (priorPinned >= MAX_PINNED_MEMORIES) return { status: 'cap-reached' };
+    pinnedCount = priorPinned + 1;
   }
 
   const updatedMeta = setPinnedMeta(meta, pinned);
   await StorageFS.write(storagePath, buildFile(content, updatedMeta));
-  return 'changed';
+  return { status: 'changed', pinnedCount };
 }

@@ -166,7 +166,10 @@ describe('SettingsMemoryController', () => {
   });
 
   it('pins memory files and returns refreshed data', async () => {
-    mocks.setMemoryPinned.mockResolvedValue('changed');
+    mocks.setMemoryPinned.mockResolvedValue({
+      status: 'changed',
+      pinnedCount: 1,
+    });
     mocks.loadMemoryItems.mockResolvedValue([]);
     const { controller } = createController();
 
@@ -180,7 +183,10 @@ describe('SettingsMemoryController', () => {
   });
 
   it('unpins memory files and returns refreshed data', async () => {
-    mocks.setMemoryPinned.mockResolvedValue('changed');
+    mocks.setMemoryPinned.mockResolvedValue({
+      status: 'changed',
+      pinnedCount: 1,
+    });
     mocks.loadMemoryItems.mockResolvedValue([]);
     const { controller } = createController();
 
@@ -193,8 +199,19 @@ describe('SettingsMemoryController', () => {
     assert.equal(message?.command, SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY);
   });
 
+  it('refreshes without warning when the file is already in the requested state', async () => {
+    mocks.setMemoryPinned.mockResolvedValue({ status: 'already' });
+    mocks.loadMemoryItems.mockResolvedValue([]);
+    const { controller, hosts } = createController();
+
+    const message = await controller.pinMemory('item.md');
+
+    assert.equal(message?.command, SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY);
+    assert.equal(hosts.prompt.messages.length, 0);
+  });
+
   it('warns and returns null when the pinned memory limit is reached', async () => {
-    mocks.setMemoryPinned.mockResolvedValue('cap-reached');
+    mocks.setMemoryPinned.mockResolvedValue({ status: 'cap-reached' });
     const { controller, hosts } = createController();
 
     assert.equal(await controller.pinMemory('item.md'), null);
