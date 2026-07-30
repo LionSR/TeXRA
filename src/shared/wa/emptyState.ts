@@ -45,6 +45,10 @@ export interface EmptyStateOptions {
   // Icon used inside the kicker. Defaults to the main `icon` prop so the
   // helper stays minimal when callers want a simple eyebrow.
   readonly kickerIcon?: TeXRAIconName;
+  // Wraps the main icon in the shared `.icon-surface` decorative box (same
+  // contract as settingsBanner.ts) at the given size, instead of the bare
+  // glyph. Omit for the default bare-icon treatment.
+  readonly iconSurfaceSize?: 's' | 'm' | 'l';
 }
 
 const HEADING_TAGS = {
@@ -62,24 +66,34 @@ export function renderEmptyState({
   headingTag = 'h2',
   kicker,
   kickerIcon,
+  iconSurfaceSize,
 }: EmptyStateOptions): TemplateResult {
   const tag = HEADING_TAGS[headingTag];
+  const iconGlyph = waIcon(icon, { className: 'empty-state-icon' });
+  const surfacedIcon = iconSurfaceSize
+    ? html`
+        <span
+          class="empty-state-icon-surface icon-surface is-size-${iconSurfaceSize}"
+        >
+          ${iconGlyph}
+        </span>
+      `
+    : iconGlyph;
+  const iconLeader = kicker
+    ? html`
+        <div class="empty-state-kicker">
+          ${waIcon(kickerIcon ?? icon, {
+            className: 'empty-state-kicker-icon',
+          })}
+          <span>${kicker}</span>
+        </div>
+      `
+    : surfacedIcon;
   // staticHtml + literal lets the heading element stay parameterizable
   // (semantic outline) while keeping interpolated children type-checked.
   return staticHtml`
     <section class=${ifDefined(className)}>
-      ${
-        kicker
-          ? html`
-              <div class="empty-state-kicker">
-                ${waIcon(kickerIcon ?? icon, {
-                  className: 'empty-state-kicker-icon',
-                })}
-                <span>${kicker}</span>
-              </div>
-            `
-          : waIcon(icon, { className: 'empty-state-icon' })
-      }
+      ${iconLeader}
       <${tag} class="empty-state-title">${title}</${tag}>
       ${body ? html`<p class="empty-state-body">${body}</p>` : nothing}
       ${

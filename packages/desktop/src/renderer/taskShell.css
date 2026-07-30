@@ -901,13 +901,14 @@ body[data-desktop-platform='darwin'] .task-shell-collapsed .task-header {
 
 .task-workbench-placeholder {
   display: grid;
+  align-content: center;
   place-items: center;
   padding: 32px;
   color: var(--wa-color-text-quiet);
   text-align: center;
 }
 
-.task-workbench-placeholder .empty-state-icon {
+.task-workbench-placeholder .empty-state-icon-surface {
   margin: 0 auto 12px;
 }
 

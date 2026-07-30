@@ -609,6 +609,7 @@ function workbenchPlaceholderTemplate(): TemplateResult {
     body: 'Open a file from the project list to inspect or edit it beside this task.',
     headingTag: 'h2',
     className: 'task-workbench-placeholder',
+    iconSurfaceSize: 'l',
   });
 }
 
