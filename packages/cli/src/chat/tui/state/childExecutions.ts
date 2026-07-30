@@ -204,7 +204,6 @@ function summaryUnchanged(
     a.agentName === b.agentName &&
     a.executionId === b.executionId &&
     a.startedAt === b.startedAt &&
-    a.elapsed === b.elapsed &&
     a.toolName === b.toolName &&
     a.workflowPhase === b.workflowPhase
   );

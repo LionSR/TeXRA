@@ -7,7 +7,10 @@ import { roundIndexedRecord } from './roundIndexed';
 import {
   STREAM_STATUS,
   StreamLifecycleStatusSchema,
+  StreamPhaseSchema,
+  StreamStatusSchema,
   StreamSubstateSchema,
+  streamStatusToPhase,
 } from './stream';
 import { TaskGroupSchema } from './taskGroup';
 import { PlanSchema } from './plan';
@@ -26,8 +29,18 @@ import { RunUsageMapSchema, TokenUsageStatsSchema } from './usage';
 const ActiveChildInfoBaseSchema = z.object({
   executionId: z.string(),
   agentName: z.string(),
-  /** Current execution status (e.g. "running", "waiting"). Defaults to "running". */
-  status: z.string().optional(),
+  /**
+   * Current execution phase. Persisted rosters written before the
+   * `StreamPhase` cutover carry the retired 7-value `StreamStatus` vocabulary
+   * instead; the legacy union member below maps those to their `StreamPhase`
+   * equivalent on read.
+   */
+  status: z
+    .union([
+      StreamPhaseSchema,
+      StreamStatusSchema.transform(streamStatusToPhase),
+    ])
+    .optional(),
   /** Epoch milliseconds when the child execution began. */
   startedAt: z.int().positive().optional(),
   /**

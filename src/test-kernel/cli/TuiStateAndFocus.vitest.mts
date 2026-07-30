@@ -93,6 +93,7 @@ import {
   type ExecutionId,
   type Plan,
   type StorageKey,
+  type StreamPhase,
   type StreamTabId,
   type TodoItem,
 } from '@shared/schemas';
@@ -3460,7 +3461,7 @@ describe('child-stream ordered transition matrix', () => {
   const parentQ = 'parent-q' as StreamTabId;
   const kid = 'kid' as StreamTabId;
 
-  function rosterRow(status?: string) {
+  function rosterRow(status?: StreamPhase) {
     return {
       kind: 'subagent' as const,
       executionId: 'kid-exec',
@@ -3645,14 +3646,14 @@ describe('child-stream ordered transition matrix', () => {
   it('10. two-child retention keeps stable order across reordering and shrinking rosters', () => {
     const kidA = 'kid-a' as StreamTabId;
     const kidB = 'kid-b' as StreamTabId;
-    const rowA = (status?: string) => ({
+    const rowA = (status?: StreamPhase) => ({
       kind: 'subagent' as const,
       executionId: 'exec-a',
       agentName: 'a',
       childStreamId: kidA,
       status,
     });
-    const rowB = (status?: string) => ({
+    const rowB = (status?: StreamPhase) => ({
       kind: 'subagent' as const,
       executionId: 'exec-b',
       agentName: 'b',
