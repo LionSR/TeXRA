@@ -816,7 +816,13 @@ export class StreamLogStore {
     status: RunOutcome = RUN_OUTCOME.FAILED,
   ): Promise<StreamTabId[]> {
     this.assertWritableStore('finalize running transcript groups');
-    const streamsToLoad = new Set(streamIds);
+    const streamsToLoad = new Set<StreamTabId>();
+    for (const streamId of streamIds) {
+      const state = this.streams.get(streamId);
+      if (state?.log === undefined || state.loadFailed === true) {
+        streamsToLoad.add(streamId);
+      }
+    }
     for (const [streamId, summary] of this.summaries) {
       if (
         hasSomethingRunning(summary) &&
@@ -836,6 +842,11 @@ export class StreamLogStore {
     const affected = this.endRunningEntriesInLoadedLogs(now, undefined, status);
     if (affected.length > 0) {
       void this.save();
+    }
+    // Recovery borrowed these logs only to repair stale entries. Return them
+    // to cold storage; requestEviction waits for any repair write to finish.
+    for (const streamId of streamsToLoad) {
+      this.requestEviction(streamId);
     }
 
     return affected;
@@ -867,6 +878,11 @@ export class StreamLogStore {
     );
     if (affected.length > 0) {
       void this.save();
+    }
+    // Preserve logs that were resident before this call; only release the
+    // cold logs loaded specifically for recovery.
+    for (const streamId of streamsToLoad) {
+      this.requestEviction(streamId);
     }
 
     return affected;
