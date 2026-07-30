@@ -1,6 +1,6 @@
 import PQueue from 'p-queue';
 
-import type { HostUserQuestionResult } from '@agent/runtime/HostInteractions';
+import type { UserQuestionSettlement } from '@agent/runtime/HostInteractions';
 import { isRelayMonthlyLimitMessage } from '@common/errors/sdkErrorUtils';
 import {
   isChatGptSubscriptionLimitError,
@@ -276,10 +276,10 @@ export function humanInputDenialFeedback(
  */
 export function askUserQuestionDenial(
   context: CliContext,
-): HostUserQuestionResult | undefined {
+): UserQuestionSettlement | undefined {
   if (approvalPromptAllowed(context)) return undefined;
   return {
-    submitted: false,
+    action: 'reject',
     feedback: humanInputDenialFeedback(
       context,
       'User question requires human input; yolo mode cannot synthesize an answer.',

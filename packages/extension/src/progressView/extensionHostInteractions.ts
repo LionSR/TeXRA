@@ -10,14 +10,12 @@ import {
   cancellationResultFor,
   type BashSettlement,
   type HostBashApprovalRequest,
-  type HostBashApprovalResult,
   type HostApprovalBypassStateUpdate,
   type HostInteractionCancelSelector,
   type HostInteractionOptions,
   type HostInteractions,
   type HostPlanApprovalRequest,
   type HostRetryRequest,
-  type HostUserQuestionResult,
   type PlanApprovalResult,
   type ProposalResult,
   type RetryResult,
@@ -25,10 +23,6 @@ import {
   type SettledInteractionKind,
   type UserQuestionSettlement,
 } from '@agent/runtime/HostInteractions';
-import {
-  toBashApprovalResult,
-  toUserQuestionResult,
-} from '@agent/runtime/hostInteractionResultMappers';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   cancelApprovalRequestHandlers,
@@ -125,10 +119,9 @@ export function createExtensionHostInteractions(
     streamId: StreamTabId,
     initiatingProposalId: string,
   ): Promise<void> => {
-    handlers().bash.completeWhere(
-      (item) => item.streamId === streamId,
-      toBashApprovalResult({ action: 'approve' }),
-    );
+    handlers().bash.completeWhere((item) => item.streamId === streamId, {
+      action: 'approve',
+    });
     handlers().agentProposal.completeWhere(
       (item) =>
         item.streamId === streamId && item.proposalId !== initiatingProposalId,
@@ -156,8 +149,7 @@ export function createExtensionHostInteractions(
   const submitBashDecision = (
     requestId: string,
     decision: BashSettlement,
-  ): boolean =>
-    handlers().bash.complete(requestId, toBashApprovalResult(decision));
+  ): boolean => handlers().bash.complete(requestId, decision);
 
   const submitPlanDecision = (
     requestId: string,
@@ -172,8 +164,7 @@ export function createExtensionHostInteractions(
   const submitUserQuestionDecision = (
     requestId: string,
     decision: UserQuestionSettlement,
-  ): boolean =>
-    handlers().userQuestion.complete(requestId, toUserQuestionResult(decision));
+  ): boolean => handlers().userQuestion.complete(requestId, decision);
 
   return {
     // Thin pass-through to the caller-supplied presentation dispatcher.
@@ -225,7 +216,7 @@ export function createExtensionHostInteractions(
     requestBashApproval(
       request: HostBashApprovalRequest,
       interactionOptions?: HostInteractionOptions,
-    ): Promise<HostBashApprovalResult> {
+    ): Promise<BashSettlement> {
       const requestId = `bash-${nanoid()}`;
       const streamId = request.streamId ?? '';
       revealStream(request.streamId);
@@ -280,7 +271,7 @@ export function createExtensionHostInteractions(
     askUserQuestion(
       request: Parameters<NonNullable<HostInteractions['askUserQuestion']>>[0],
       interactionOptions?: HostInteractionOptions,
-    ): Promise<HostUserQuestionResult> {
+    ): Promise<UserQuestionSettlement> {
       revealStream(request.streamId || undefined);
       return handlers().userQuestion.request(request, {
         cancellationScope: interactionOptions?.cancellationScope,

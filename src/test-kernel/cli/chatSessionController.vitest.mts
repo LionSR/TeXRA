@@ -689,7 +689,7 @@ describe('createChatSessionController', () => {
     const status = new StreamStatusMachine();
     const executions = new ExecutionRegistry({ events, streamStatus: status });
     const interactions = new SessionHostInteractions();
-    const adapterDecision = pDefer<{ accepted: boolean }>();
+    const adapterDecision = pDefer<{ action: 'approve' | 'reject' }>();
     const requestBashApproval = vi.fn(() => adapterDecision.promise);
     const disposeAdapter = vi.fn();
     const detachResultToast = vi.fn();
@@ -796,8 +796,8 @@ describe('createChatSessionController', () => {
       streamId: childStream,
     });
     await vi.waitFor(() => expect(requestBashApproval).toHaveBeenCalledOnce());
-    adapterDecision.resolve({ accepted: true });
-    await expect(approval).resolves.toEqual({ accepted: true });
+    adapterDecision.resolve({ action: 'approve' });
+    await expect(approval).resolves.toEqual({ action: 'approve' });
 
     executions.untrack('child-exec');
     await vi.waitFor(() => {

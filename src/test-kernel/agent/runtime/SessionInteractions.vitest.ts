@@ -6,15 +6,15 @@ import { describe, expect, it, vi } from 'vitest';
 // Local imports
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
-  type HostBashApprovalResult,
+  type BashSettlement,
   matchesCancelSelector,
   type HostInteractionOptions,
   HostInteractions,
   type HostPlanApprovalRequest,
-  type HostUserQuestionResult,
   type PlanApprovalResult,
   type ProposalResult,
   type RetryResult,
+  type UserQuestionSettlement,
 } from '@agent/runtime/HostInteractions';
 import { ApprovalRequestHandler } from '@controllers/progressView/backend/ApprovalRequestHandler';
 import type { ApprovalRequestHandlerSet } from '@controllers/progressView/backend/progressBackendUiConfig';
@@ -81,7 +81,7 @@ function createHandlerSet(events: UiEvent[]): ApprovalRequestHandlerSet {
     );
   return {
     toolEdit: handler<ToolEditPermission, 'requestId'>('toolEdit', 'requestId'),
-    bash: handler<BashPermission, 'requestId', HostBashApprovalResult>(
+    bash: handler<BashPermission, 'requestId', BashSettlement>(
       'bash',
       'requestId',
     ),
@@ -106,7 +106,7 @@ function createHandlerSet(events: UiEvent[]): ApprovalRequestHandlerSet {
     userQuestion: handler<
       UserQuestionPermission,
       'requestId',
-      HostUserQuestionResult
+      UserQuestionSettlement
     >('userQuestion', 'requestId'),
   };
 }
@@ -819,7 +819,7 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
     });
 
     await expect(pending).resolves.toEqual({
-      submitted: false,
+      action: 'reject',
       feedback: 'No stream owns this question.',
     });
     session.dispose();
