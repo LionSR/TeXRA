@@ -9,6 +9,8 @@
 // block that renders beyond its plain-text projection.
 
 // Local imports - shared schemas and utilities
+import { COLOR_ERROR, COLOR_HINT, COLOR_SUCCESS } from '@cli/tui/ui/colors';
+import { STATUS_DOT, TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
 import { TOOL_USE_STATUS, type NormalizedToolUse } from '@shared/schemas';
 import {
   executionsSubagentSummary,
@@ -33,8 +35,6 @@ import {
   textDisplayWidth,
   truncateSummaryToWidth,
 } from '../render/terminalText';
-import { COLOR_ERROR, COLOR_HINT, COLOR_SUCCESS } from '../ui/colors';
-import { STATUS_DOT, TOOL_OUTPUT_CORNER } from '../ui/glyphs';
 
 const MAX_HEADER_PREVIEW = 80;
 const MAX_ERROR_PREVIEW = 240;

@@ -15,6 +15,7 @@ import { LRUCache } from 'lru-cache';
 import Token from 'markdown-it/lib/token.mjs';
 import pico from 'picocolors';
 
+import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import {
   createMarkdownProcessor,
   type MarkdownProcessorRenderEnv,
@@ -24,7 +25,6 @@ import {
   createMarkdownRenderer,
   type MarkdownItInstance,
 } from '@shared/markdown/createMarkdownRenderer';
-import { wrapAnsiToWidth } from './ansiWrap';
 import { normalizeKnownHtmlForCliMarkdown } from './htmlMarkdownNormalize';
 import { textDisplayWidth } from './terminalText';
 

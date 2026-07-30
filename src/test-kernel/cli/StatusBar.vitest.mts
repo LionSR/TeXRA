@@ -10,7 +10,7 @@ import {
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import { shortCliApiMode } from '@cli/runtime/apiAccessMode';
 import { resolveCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
-import { KEY_HINT_SEPARATOR } from '@cli/chat/tui/ui/KeyHints';
+import { KEY_HINT_SEPARATOR } from '@cli/tui/ui/KeyHints';
 import {
   NO_BYPASS,
   streamAccessTarget,

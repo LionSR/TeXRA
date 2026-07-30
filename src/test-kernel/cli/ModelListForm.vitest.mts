@@ -11,13 +11,13 @@ import {
 import {
   COMPACT_FORM_MAX_ROWS,
   isCompactFormRows,
-} from '@cli/chat/tui/forms/_shared/selectWindow';
+} from '@cli/tui/selectWindow';
 import {
   nextSelectHighlightIndex,
   selectInitialHighlightIndex,
   selectItemRenderKey,
   visibleSelectRange,
-} from '@cli/chat/tui/ui/Select';
+} from '@cli/tui/ui/Select';
 import { selectVisibleInlineOverflowText } from '@cli/chat/tui/render/overflowText';
 
 describe('CLI ModelListForm empty state', () => {

@@ -4,14 +4,14 @@ import {
   isCliApiSwitchableRetry,
   isCliChatGptSubscriptionRetry,
 } from '@cli/runtime/approvalAdapter';
+import { COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
+import { missingApiKeyRetryMessage } from '@cli/tui/ui/retryCopy';
 import { isApiProvider } from '@model/apiProviders';
 import { ConfirmCard } from './ConfirmCard';
-import { COLOR_HINT, COLOR_WARNING } from '../ui/colors';
 import {
   type ApprovalDecision,
   type TuiRetryRequest,
 } from '../state/approvalQueue';
-import { missingApiKeyRetryMessage } from '../ui/retryCopy';
 
 export interface RetryRequestProps {
   readonly payload: TuiRetryRequest;

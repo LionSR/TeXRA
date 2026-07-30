@@ -13,7 +13,7 @@ import {
   _resetAnsiMarkdownForTests,
   renderAnsiMarkdown,
 } from '@cli/chat/tui/render/ansiMarkdown';
-import { wrapAnsiToWidth } from '@cli/chat/tui/render/ansiWrap';
+import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 
 const ANSI_SGR_PATTERN = new RegExp(
   `${String.fromCharCode(27)}\\[[0-9;]*m`,

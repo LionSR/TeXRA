@@ -7,12 +7,12 @@
 import { Box, Text } from 'ink';
 import { structuredPatch, type StructuredPatchHunk } from 'diff';
 
+import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
+import { clampModalWidth } from '@cli/tui/ui/theme';
 import { clamp, filterNotNullish, isObject } from '@utils/core';
 
-import { wrapAnsiToWidth } from './ansiWrap';
 import { maxScrollableRowOffset, scrollBoundedRows } from './scrollBounds';
 import { clipToWidth, fillRows, textDisplayWidth } from './terminalText';
-import { clampModalWidth } from '../ui/theme';
 import { hiddenRowsText, moreRowsText, previousRowsText } from './overflowText';
 
 type Hunk = StructuredPatchHunk;

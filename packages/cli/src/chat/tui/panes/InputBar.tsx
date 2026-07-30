@@ -9,6 +9,8 @@ import { Box, Text, useInput } from 'ink';
 
 import { writeTextStderr } from '@cli/runtime/logSinks';
 import { attachClipboardImage } from '@cli/runtime/clipboardImage';
+import { COLOR_BORDER, COLOR_HINT } from '@cli/tui/ui/colors';
+import { POINTER } from '@cli/tui/ui/glyphs';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { BaseTextInput } from '../input/BaseTextInput';
 import {
@@ -26,8 +28,6 @@ import {
   openRegisteredCliSlashForm,
 } from '../commands/slashForms';
 import { SlashPalette, slashPaletteOwnsArrows } from '../commands/SlashPalette';
-import { COLOR_BORDER, COLOR_HINT } from '../ui/colors';
-import { POINTER } from '../ui/glyphs';
 import {
   matchSlashCommands,
   parseSlashInput,

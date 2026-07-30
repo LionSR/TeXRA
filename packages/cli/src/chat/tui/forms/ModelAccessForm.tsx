@@ -13,8 +13,8 @@ import {
   type CliModelAccessSelection,
 } from '@cli/runtime/modelAccessRoute';
 
-import { useCancellableEffect } from '../state/useCancellableEffect';
-import { LoadingIndicator } from '../ui/LoadingIndicator';
+import { useCancellableEffect } from '@cli/tui/useCancellableEffect';
+import { LoadingIndicator } from '@cli/tui/ui/LoadingIndicator';
 import { ListForm } from './_shared/ListForm';
 
 interface ModelAccessFormProps {

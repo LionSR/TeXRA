@@ -6,7 +6,7 @@ import {
   slashPaletteOwnsArrows,
   slashPaletteWindow,
 } from '@cli/chat/tui/commands/SlashPalette';
-import { nextWrappingHighlightIndex } from '@cli/chat/tui/ui/Select';
+import { nextWrappingHighlightIndex } from '@cli/tui/ui/Select';
 
 describe('SlashPalette navigation', () => {
   it('continues down into commands hidden behind the overflow marker', () => {

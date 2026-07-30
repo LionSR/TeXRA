@@ -1,4 +1,5 @@
 // Local imports - shared formatting
+import { POINTER } from '@cli/tui/ui/glyphs';
 import { formatBytes } from '@shared/utils/string';
 import { collapseWhitespace } from '@utils/text/stringUtils';
 
@@ -11,7 +12,6 @@ import {
 } from '../render/terminalText';
 
 // Local imports - CLI TUI glyphs
-import { POINTER } from '../ui/glyphs';
 import type { LoadedImage } from '../state/cliState';
 
 /** The one terminal-text representation of an image prepared as context media. */

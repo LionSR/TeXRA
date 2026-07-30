@@ -1,16 +1,16 @@
 // Local imports - shared formatting
-import { formatCompactTokenCount } from '@utils/core';
-import { formatResultCount } from '@utils/text/stringUtils';
-
-// Local imports - TUI state and presentation
-import { isChildExecutionErrorStatus } from '../state/childExecutionStatus';
 import {
   COLOR_BORDER,
   COLOR_ERROR,
   COLOR_SUCCESS,
   COLOR_WARNING,
-} from '../ui/colors';
-import { STATUS_DOT, TOKENS_GENERATED } from '../ui/glyphs';
+} from '@cli/tui/ui/colors';
+import { STATUS_DOT, TOKENS_GENERATED } from '@cli/tui/ui/glyphs';
+import { formatCompactTokenCount } from '@utils/core';
+import { formatResultCount } from '@utils/text/stringUtils';
+
+// Local imports - TUI state and presentation
+import { isChildExecutionErrorStatus } from '../state/childExecutionStatus';
 import type { PendingApprovalKind } from '../state/approvalQueue';
 
 export function childStatusColor(status: string | undefined): string {
