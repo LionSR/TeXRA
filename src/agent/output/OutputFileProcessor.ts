@@ -9,11 +9,11 @@ import {
 } from '@shared/schemas';
 import { OUTPUT_DOCUMENTS_TAG } from '@shared/schemas/output';
 import { normalizeFilePath } from '@utils/core';
-import { FlexibleFS } from '@utils/files';
+import { AbsoluteFS } from '@utils/files';
 import {
   extractMultipleTextFromTag,
   extractTextFromTag,
-} from '@utils/text/xmlUtils';
+} from '@utils/text/xmlExtraction';
 
 import { tryOperation } from './outputOperations';
 import type { XmlOutputManager } from './XmlOutputManager';
@@ -141,7 +141,9 @@ export class OutputFileProcessor {
     // it almost always means it did not wrap each file in
     // `<document name="…">`. Surface that as a warning so the round is not a
     // silent "success" that writes no files; the raw response is kept for recovery.
-    const rawText = await FlexibleFS.read(outputLocation).catch(() => '');
+    const rawText = await AbsoluteFS.read(outputLocation.absolutePath).catch(
+      () => '',
+    );
     if (rawText.trim().length > 0) {
       this.ctx.logger.warn(
         `The model returned output but no files could be extracted from it — it likely did not wrap each document in <${OUTPUT_DOCUMENTS_TAG}>. The raw response was kept at ${outputLocation.absolutePath} for recovery.`,
@@ -194,7 +196,7 @@ export class OutputFileProcessor {
 
     await tryOperation(
       async () => {
-        const rawContent = await FlexibleFS.read(rawOutput);
+        const rawContent = await AbsoluteFS.read(rawOutput.absolutePath);
         const tagContents: Record<string, string[]> = {};
 
         const documentEntries = extractMultipleTextFromTag(

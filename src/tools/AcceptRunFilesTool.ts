@@ -32,12 +32,7 @@ import {
   getApprovedContent,
   writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
-import {
-  AbsoluteFS,
-  WorkspaceFS,
-  FlexibleFS,
-  createWorkspaceLocation,
-} from '@utils/files';
+import { AbsoluteFS, WorkspaceFS, createWorkspaceLocation } from '@utils/files';
 import { filterNotNull } from '@utils/core';
 import { formatResultCount, pluralize } from '@utils/text/stringUtils';
 import {
@@ -160,7 +155,7 @@ Optional:
           );
         }
 
-        const rawContent = await FlexibleFS.read(sourceLocation);
+        const rawContent = await AbsoluteFS.read(sourceLocation.absolutePath);
         const { content: proposedContent, count: strippedCount } =
           strip_criticize
             ? stripCriticizeAnnotations(rawContent)

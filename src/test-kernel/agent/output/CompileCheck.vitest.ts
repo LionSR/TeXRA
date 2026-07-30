@@ -19,8 +19,7 @@ import { spiedTrace } from '@test/support/spiedTrace';
 import {
   TaskRunFileService,
   createRunStorageLocation,
-  FlexibleFS,
-  pathToLocation,
+  AbsoluteFS,
 } from '@utils/files';
 
 interface FakeCompileOptions {
@@ -109,7 +108,7 @@ describe('runCompileCheck', () => {
 
   it('counts a per-file exception as a failure, never a silent skip', async () => {
     const executionId = 'compile-exception';
-    // No file is seeded at the tex path, so FlexibleFS.read throws ENOENT
+    // No file is seeded at the tex path, so AbsoluteFS.read throws ENOENT
     // before compileLatex2Pdf is ever invoked.
     await initLatexPlatform({});
 
@@ -137,7 +136,9 @@ describe('runCompileCheck', () => {
 
     // The synthetic excerpt is persisted like a real failure so it stays
     // discoverable on disk, not just in-memory.
-    const persisted = await FlexibleFS.read(result.failures[0].log);
+    const persisted = await AbsoluteFS.read(
+      result.failures[0].log.absolutePath,
+    );
     expect(persisted).toContain('Compile check errored for main.tex');
   });
 
@@ -279,7 +280,7 @@ describe('runCompileCheck', () => {
     const firstResult = await runCompileCheck(ctx, 0);
     expect(firstResult.compileResult?.status).toBe('failed');
     const logLocation = firstResult.failures[0].log;
-    await expect(FlexibleFS.read(logLocation)).resolves.toContain(
+    await expect(AbsoluteFS.read(logLocation.absolutePath)).resolves.toContain(
       'Compile check failed for main.tex',
     );
 
@@ -291,7 +292,7 @@ describe('runCompileCheck', () => {
 
     // The stale failure log from the first attempt must be gone -- otherwise
     // "no compile/*.log = success" would still find leftover failure evidence.
-    await expect(FlexibleFS.read(logLocation)).rejects.toThrow();
+    await expect(AbsoluteFS.read(logLocation.absolutePath)).rejects.toThrow();
   });
 
   it('clears a pre-hash-suffix legacy log left over from before this fix', async () => {
@@ -324,9 +325,7 @@ describe('runCompileCheck', () => {
     );
 
     expect(result.compileResult?.status).toBe('ok');
-    await expect(
-      FlexibleFS.read(pathToLocation(legacyLogPath)),
-    ).rejects.toThrow();
+    await expect(AbsoluteFS.read(legacyLogPath)).rejects.toThrow();
   });
 
   it('gives colliding-after-sanitization paths distinct, non-clobbering log slots', async () => {
@@ -371,8 +370,8 @@ describe('runCompileCheck', () => {
     expect(failureA.logRelativePath).not.toBe(failureB.logRelativePath);
     expect(failureA.log.absolutePath).not.toBe(failureB.log.absolutePath);
 
-    const persistedA = await FlexibleFS.read(failureA.log);
-    const persistedB = await FlexibleFS.read(failureB.log);
+    const persistedA = await AbsoluteFS.read(failureA.log.absolutePath);
+    const persistedB = await AbsoluteFS.read(failureB.log.absolutePath);
     expect(persistedA).toContain(`LOG MARKER FOR ${texPathA}`);
     expect(persistedA).not.toContain(texPathB);
     expect(persistedB).toContain(`LOG MARKER FOR ${texPathB}`);

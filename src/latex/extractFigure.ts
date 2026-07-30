@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 import type { FileLocation } from '@shared/schemas';
-import { FlexibleFS } from '@utils/files';
+import { AbsoluteFS } from '@utils/files';
 import { joinLatexPath } from '@utils/core/pathCore';
 
 import {
@@ -81,7 +81,7 @@ export async function extractFigurePathsFromLatex(
     /\\begin\{overpic\}(?:\[.*?\])?\{(.+?)\}/g,
   ];
 
-  const content = await FlexibleFS.read(latexFileLocation);
+  const content = await AbsoluteFS.read(latexFileLocation.absolutePath);
 
   // Pre-process content to remove commented-out text (including inline
   // comments and escaped `\%`, unlike a naive whole-line strip).

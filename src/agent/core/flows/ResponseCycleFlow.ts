@@ -25,9 +25,9 @@ import { useLaunchRunContext } from '@agent/runtime/RunContext';
 import type { ToolDefinition } from '@model';
 import { MESSAGE_TYPES, AgentFileLocationSchema } from '@shared/schemas';
 import { OUTPUT_END_TAG } from '@shared/schemas/output';
-import { AbsoluteFS, FlexibleFS } from '@utils/files';
+import { AbsoluteFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { extractScratchpad } from '@utils/text/xmlUtils';
+import { extractScratchpad } from '@utils/text/xmlExtraction';
 
 import { FlowTransition } from './FlowTransitions';
 import { ModelInvocationNode } from './ModelInvocationNode';
@@ -117,7 +117,7 @@ class ResponsePrepNode<C> extends BaseNode<
   async prep(shared: ResponseCycleShared): Promise<ResponsePrepResult> {
     const { prompt, userVarChannels, checkInterruption } = this.services;
     const interrupted = checkInterruption();
-    const exists = await FlexibleFS.exists(shared.outputLocation);
+    const exists = await AbsoluteFS.exists(shared.outputLocation.absolutePath);
     const systemPrompt = interrupted
       ? undefined
       : await getSystemPromptWithRules(prompt.systemPrompt, {
@@ -402,8 +402,8 @@ class ResponseProcessNode<C> extends BaseNode<
       logger.debug(
         `Appending to existing file: ${outputLocation.absolutePath}`,
       );
-      await FlexibleFS.appendFile(
-        outputLocation,
+      await AbsoluteFS.appendFile(
+        outputLocation.absolutePath,
         connector + result.processedResponse,
       );
     }

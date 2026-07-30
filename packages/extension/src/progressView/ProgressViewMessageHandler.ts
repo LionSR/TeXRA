@@ -51,12 +51,7 @@ import {
   cleanupUnscopedApprovals,
   releaseStreamResources,
 } from '@tools/approval';
-import {
-  createExternalLocation,
-  FlexibleFS,
-  pathToLocation,
-  WorkspaceFS,
-} from '@utils/files';
+import { AbsoluteFS, pathToLocation, WorkspaceFS } from '@utils/files';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -432,7 +427,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
               ])) ?? false
             );
           },
-          readFile: (file) => FlexibleFS.read(createExternalLocation(file)),
+          readFile: (file) => AbsoluteFS.read(file),
           showInfo: async (message) => {
             await this.host.info(message);
           },

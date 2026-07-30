@@ -1,6 +1,6 @@
 import replacementEngine from '@replacement/engine';
 import type { FileLocation } from '@shared/schemas';
-import { FlexibleFS } from '@utils/files';
+import { AbsoluteFS } from '@utils/files';
 
 /** LaTeX starred math environments that need label removal during diff processing. */
 const STAR_ENVIRONMENTS = [
@@ -58,9 +58,9 @@ export class DiffFileProcessor {
     diffFileLocation: FileLocation,
     editedFileLocation?: FileLocation,
   ): Promise<void> {
-    const content = await FlexibleFS.read(diffFileLocation);
+    const content = await AbsoluteFS.read(diffFileLocation.absolutePath);
     const editedContent = editedFileLocation
-      ? await FlexibleFS.read(editedFileLocation)
+      ? await AbsoluteFS.read(editedFileLocation.absolutePath)
       : undefined;
     let processedContent = this.restoreFlattenedBibliography(
       content,
@@ -72,7 +72,7 @@ export class DiffFileProcessor {
     for (const [pattern, replacement] of DOCUMENT_END_FIXES) {
       processedContent = processedContent.replace(pattern, replacement);
     }
-    await FlexibleFS.write(diffFileLocation, processedContent);
+    await AbsoluteFS.write(diffFileLocation.absolutePath, processedContent);
   }
 
   private restoreFlattenedBibliography(

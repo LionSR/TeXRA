@@ -8,7 +8,7 @@ import {
   replaceInputCommands,
 } from '@agent/output/fileMapping';
 import type { FileLocation } from '@shared/schemas';
-import { FlexibleFS } from '@utils/files/flexibleFS';
+import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 function externalLocation(absolutePath: string): FileLocation {
   return { kind: 'external', absolutePath };
@@ -67,15 +67,15 @@ describe('replaceInputCommands', () => {
     const outputMain = externalLocation('/run/main_r1.tex');
     const outputSection = externalLocation('/run/sections/method_r1.tex');
     const read = vi
-      .spyOn(FlexibleFS, 'read')
-      .mockImplementation((location) =>
+      .spyOn(AbsoluteFS, 'read')
+      .mockImplementation((target) =>
         Promise.resolve(
-          location === outputMain
+          target === outputMain.absolutePath
             ? String.raw`\input{sections/method}`
             : 'Section content',
         ),
       );
-    const write = vi.spyOn(FlexibleFS, 'write').mockResolvedValue();
+    const write = vi.spyOn(AbsoluteFS, 'write').mockResolvedValue();
 
     await replaceInputCommands(
       [baseMain, baseSection],
@@ -85,7 +85,7 @@ describe('replaceInputCommands', () => {
     expect(read).toHaveBeenCalledTimes(2);
     expect(write).toHaveBeenCalledOnce();
     expect(write).toHaveBeenCalledWith(
-      outputMain,
+      outputMain.absolutePath,
       String.raw`\input{sections/method_r1}`,
     );
   });
@@ -93,8 +93,8 @@ describe('replaceInputCommands', () => {
   it('logs a read failure and leaves the output unchanged', async () => {
     const base = externalLocation('/workspace/chapter.tex');
     const output = externalLocation('/run/chapter_r1.tex');
-    vi.spyOn(FlexibleFS, 'read').mockRejectedValue(new Error('read failed'));
-    const write = vi.spyOn(FlexibleFS, 'write').mockResolvedValue();
+    vi.spyOn(AbsoluteFS, 'read').mockRejectedValue(new Error('read failed'));
+    const write = vi.spyOn(AbsoluteFS, 'write').mockResolvedValue();
     const { logger, warn } = createLogger();
 
     await expect(
@@ -110,8 +110,8 @@ describe('replaceInputCommands', () => {
   it('logs a write failure without rejecting the replacement pass', async () => {
     const base = externalLocation('/workspace/chapter.tex');
     const output = externalLocation('/run/chapter_r1.tex');
-    vi.spyOn(FlexibleFS, 'read').mockResolvedValue(String.raw`\input{chapter}`);
-    vi.spyOn(FlexibleFS, 'write').mockRejectedValue(new Error('write failed'));
+    vi.spyOn(AbsoluteFS, 'read').mockResolvedValue(String.raw`\input{chapter}`);
+    vi.spyOn(AbsoluteFS, 'write').mockRejectedValue(new Error('write failed'));
     const { logger, warn } = createLogger();
 
     await expect(

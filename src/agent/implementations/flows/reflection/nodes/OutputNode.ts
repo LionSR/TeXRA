@@ -34,7 +34,7 @@ import {
   type CompileResult,
   type FileLocation,
 } from '@shared/schemas';
-import { FlexibleFS } from '@utils/files';
+import { AbsoluteFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
@@ -365,7 +365,7 @@ export class OutputNode<C = unknown> extends Node<
     const { logger } = this.services;
 
     const existingBase = await Promise.all(
-      baseFiles.map((base) => FlexibleFS.exists(base)),
+      baseFiles.map((base) => AbsoluteFS.exists(base.absolutePath)),
     );
     if (!existingBase.some(Boolean)) {
       logger.debug('No base files found for latexdiff');

@@ -8,10 +8,10 @@ import { describe, it, vi } from 'vitest';
 import {
   addCdataToTags,
   addCdataToTagsMultiple,
-  extractScratchpad,
-  formatContent,
   removeCDATA,
-} from '@utils/text/xmlUtils';
+} from '@utils/text/xmlCdata';
+import { formatContent } from '@utils/text/xmlConversion';
+import { extractScratchpad } from '@utils/text/xmlExtraction';
 
 // Pin the deterministic Turndown/regex fallback path: Pandoc availability is
 // environment-dependent, so the conversion tests below would otherwise assert
