@@ -32,7 +32,6 @@ import {
   paginateToolListing,
   ViewRangeSchema,
 } from '../formatting';
-import { requireField } from '../utils';
 import {
   MAX_VIEW_LINES,
   MAX_PINNED_MEMORIES,
@@ -51,51 +50,75 @@ import {
   type MemoryFileMeta,
 } from './memoryMeta';
 
-const MemoryToolInputSchema = z.strictObject({
-  command: z.enum([
-    'view',
-    'create',
-    'str_replace',
-    'insert',
-    'delete',
-    'rename',
-    'pin',
-    'unpin',
-  ]),
-  path: z
-    .string()
-    .nullish()
-    .describe(
-      `Path under ${MEMORY_DISPLAY_ROOT} (e.g. ${MEMORY_DISPLAY_ROOT}/notes.md). Required for every command except \`view\` (which defaults to the ${MEMORY_DISPLAY_ROOT} root directory listing when omitted) and \`rename\` (which uses \`old_path\`/\`new_path\` instead).`,
-    ),
-  file_text: z.string().nullish(),
-  view_range: ViewRangeSchema.nullish(),
-  old_str: z.string().nullish(),
-  new_str: z.string().nullish(),
-  insert_line: z.int().min(0).nullish(),
-  insert_text: z.string().nullish(),
-  old_path: z.string().nullish(),
-  new_path: z.string().nullish(),
+const MEMORY_PATH_DESCRIPTION = `Path under ${MEMORY_DISPLAY_ROOT} (e.g. ${MEMORY_DISPLAY_ROOT}/notes.md).`;
 
-  /** Zero-based offset for paginating directory listings (command="view" on a directory). */
-  offset: z
-    .int()
-    .min(0)
-    .nullish()
-    .describe(
-      'Zero-based offset into the directory listing. Use with limit for pagination. Default: 0.',
-    ),
-
-  /** Maximum entries to return from a directory listing (command="view" on a directory). */
-  limit: z
-    .int()
-    .min(1)
-    .max(200)
-    .nullish()
-    .describe(
-      'Max entries to return from directory listing. Default: 100, max: 200.',
-    ),
-});
+const MemoryToolInputSchema = z.discriminatedUnion('command', [
+  z.strictObject({
+    command: z.literal('view'),
+    path: z
+      .string()
+      .nullish()
+      .describe(
+        `${MEMORY_PATH_DESCRIPTION} Defaults to the ${MEMORY_DISPLAY_ROOT} root directory listing when omitted.`,
+      ),
+    view_range: ViewRangeSchema.nullish(),
+    /** Zero-based offset for paginating directory listings (path points to a directory). */
+    offset: z
+      .int()
+      .min(0)
+      .nullish()
+      .describe(
+        'Zero-based offset into the directory listing. Use with limit for pagination. Default: 0.',
+      ),
+    /** Maximum entries to return from a directory listing (path points to a directory). */
+    limit: z
+      .int()
+      .min(1)
+      .max(200)
+      .nullish()
+      .describe(
+        'Max entries to return from directory listing. Default: 100, max: 200.',
+      ),
+  }),
+  z.strictObject({
+    command: z.literal('create'),
+    path: z.string().describe(MEMORY_PATH_DESCRIPTION),
+    file_text: z.string(),
+  }),
+  z.strictObject({
+    command: z.literal('str_replace'),
+    path: z.string().describe(MEMORY_PATH_DESCRIPTION),
+    old_str: z.string(),
+    new_str: z.string(),
+  }),
+  z.strictObject({
+    command: z.literal('insert'),
+    path: z.string().describe(MEMORY_PATH_DESCRIPTION),
+    insert_line: z.int().min(0),
+    insert_text: z
+      .string()
+      .nullish()
+      .describe('Text to insert. Aliased by `new_str` if omitted.'),
+    new_str: z.string().nullish(),
+  }),
+  z.strictObject({
+    command: z.literal('delete'),
+    path: z.string().describe(MEMORY_PATH_DESCRIPTION),
+  }),
+  z.strictObject({
+    command: z.literal('rename'),
+    old_path: z.string().describe(MEMORY_PATH_DESCRIPTION),
+    new_path: z.string().describe(MEMORY_PATH_DESCRIPTION),
+  }),
+  z.strictObject({
+    command: z.literal('pin'),
+    path: z.string().describe(MEMORY_PATH_DESCRIPTION),
+  }),
+  z.strictObject({
+    command: z.literal('unpin'),
+    path: z.string().describe(MEMORY_PATH_DESCRIPTION),
+  }),
+]);
 
 /** Derived from MemoryToolInputSchema - single source of truth */
 export type MemoryToolInput = z.infer<typeof MemoryToolInputSchema>;
@@ -129,13 +152,8 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     // Normalize a raw display path into a `{ display, storage }` pair at the
     // dispatch boundary so ops never need to call `resolveMemoryPath`
     // themselves. Throws ToolError if the path is outside `/memories`.
-    const locate = (
-      raw: string | undefined | null,
-      field: string,
-    ): MemoryLocation => {
-      const storage = this.resolveMemoryPath(
-        requireField(raw, field, input.command),
-      );
+    const locate = (raw: string): MemoryLocation => {
+      const storage = this.resolveMemoryPath(raw);
       return { display: toDisplayPath(storage), storage };
     };
 
@@ -145,45 +163,34 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
         // /memories instead of erroring - the model's first call in a
         // fresh session is reliably a bare `view` with no path.
         return this.view(
-          locate(input.path ?? MEMORY_DISPLAY_ROOT, 'path'),
+          locate(input.path ?? MEMORY_DISPLAY_ROOT),
           input.view_range ?? undefined,
           input.offset ?? 0,
           input.limit ?? 100,
         );
       case 'create':
-        return this.create(
-          locate(input.path, 'path'),
-          requireField(input.file_text, 'file_text', input.command),
-        );
+        return this.create(locate(input.path), input.file_text);
       case 'str_replace':
         return this.strReplace(
-          locate(input.path, 'path'),
-          requireField(input.old_str, 'old_str', input.command),
-          requireField(input.new_str, 'new_str', input.command),
+          locate(input.path),
+          input.old_str,
+          input.new_str,
         );
-      case 'insert':
-        return this.insert(
-          locate(input.path, 'path'),
-          requireField(input.insert_line, 'insert_line', input.command),
-          requireField(
-            input.insert_text ?? input.new_str,
-            'insert_text',
-            input.command,
-          ),
-        );
+      case 'insert': {
+        const insertText = input.insert_text ?? input.new_str;
+        if (insertText == null) {
+          throw new ToolError('insert_text is required for command="insert".');
+        }
+        return this.insert(locate(input.path), input.insert_line, insertText);
+      }
       case 'delete':
-        return this.delete(locate(input.path, 'path'));
+        return this.delete(locate(input.path));
       case 'rename':
-        return this.rename(
-          locate(input.old_path, 'old_path'),
-          locate(input.new_path, 'new_path'),
-        );
+        return this.rename(locate(input.old_path), locate(input.new_path));
       case 'pin':
-        return this.pin(locate(input.path, 'path'));
+        return this.pin(locate(input.path));
       case 'unpin':
-        return this.unpin(locate(input.path, 'path'));
-      default:
-        throw new ToolError(`Unrecognized command: ${input.command}`);
+        return this.unpin(locate(input.path));
     }
   }
 

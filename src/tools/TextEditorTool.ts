@@ -35,7 +35,6 @@ import {
   resolveAndFormat,
   currentToolRoot,
 } from './pathResolution';
-import { requireField } from './utils';
 
 // Constants
 const CHANNEL = 'TextEditorTool';
@@ -131,19 +130,38 @@ class ExecutionFileHistory {
   }
 }
 
-const TextEditorInputSchema = z.strictObject({
-  command: z.enum(['view', 'create', 'str_replace', 'insert', 'undo_edit']),
-  path: z.string(),
-  file_text: z.string().nullish(),
-  view_range: z
-    .array(z.number())
-    .length(2)
-    .nullish()
-    .describe('1-indexed. Use -1 for EOF.'),
-  old_str: z.string().nullish(),
-  new_str: z.string().nullish(),
-  insert_line: z.number().nullish().describe('1-indexed.'),
-});
+const TextEditorInputSchema = z.discriminatedUnion('command', [
+  z.strictObject({
+    command: z.literal('view'),
+    path: z.string(),
+    view_range: z
+      .array(z.number())
+      .length(2)
+      .nullish()
+      .describe('1-indexed. Use -1 for EOF.'),
+  }),
+  z.strictObject({
+    command: z.literal('create'),
+    path: z.string(),
+    file_text: z.string(),
+  }),
+  z.strictObject({
+    command: z.literal('str_replace'),
+    path: z.string(),
+    old_str: z.string(),
+    new_str: z.string().nullish(),
+  }),
+  z.strictObject({
+    command: z.literal('insert'),
+    path: z.string(),
+    insert_line: z.number().describe('1-indexed.'),
+    new_str: z.string(),
+  }),
+  z.strictObject({
+    command: z.literal('undo_edit'),
+    path: z.string(),
+  }),
+]);
 
 /** Derived from TextEditorInputSchema - single source of truth */
 export type TextEditorInput = z.infer<typeof TextEditorInputSchema>;
@@ -206,31 +224,31 @@ export class TextEditorTool extends defineTool({
     switch (command) {
       case 'view':
         return this.view(filePath, displayPath, input.view_range ?? undefined);
-      case 'create': {
-        const fileText = requireField(input.file_text, 'file_text', command);
+      case 'create':
         logger.info(CHANNEL, `create: ${displayPath}`);
-        return this.create(filePath, displayPath, fileText);
-      }
-      case 'str_replace': {
-        const oldStr = requireField(input.old_str, 'old_str', command);
-        logger.info(CHANNEL, `str_replace: ${oldStr} -> ${input.new_str}`);
+        return this.create(filePath, displayPath, input.file_text);
+      case 'str_replace':
+        logger.info(
+          CHANNEL,
+          `str_replace: ${input.old_str} -> ${input.new_str}`,
+        );
         return this.strReplace(
           filePath,
           displayPath,
-          oldStr,
+          input.old_str,
           input.new_str ?? '',
         );
-      }
-      case 'insert': {
-        const insertLine = requireField(
-          input.insert_line,
-          'insert_line',
-          command,
+      case 'insert':
+        logger.info(
+          CHANNEL,
+          `insert: ${input.insert_line} -> ${input.new_str}`,
         );
-        const newStr = requireField(input.new_str, 'new_str', command);
-        logger.info(CHANNEL, `insert: ${insertLine} -> ${newStr}`);
-        return this.insert(filePath, displayPath, insertLine, newStr);
-      }
+        return this.insert(
+          filePath,
+          displayPath,
+          input.insert_line,
+          input.new_str,
+        );
       case 'undo_edit':
         // Claude 4 models don't support undo_edit command
         if (this.apiType === 'text_editor_20250429') {
