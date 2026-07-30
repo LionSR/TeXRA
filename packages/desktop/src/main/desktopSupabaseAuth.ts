@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto';
 import PQueue from 'p-queue';
 import { z } from 'zod';
 
+import { invalidateRemoteAgentsAfterSignOut } from '@agent/index';
 import {
   DEFAULT_OAUTH_PROVIDER,
   getAuthCallbackUri,
@@ -392,8 +393,9 @@ export function createDesktopSupabaseAuth(
       });
       SupabaseClient.setTokenExpiry(null);
       clearDesktopServerSideKeyCaches(log);
-      await refreshRemoteAgentCatalogAfterSignOut((message) =>
-        log.warn(message),
+      await refreshRemoteAgentCatalogAfterSignOut(
+        invalidateRemoteAgentsAfterSignOut,
+        (message) => log.warn(message),
       );
       await host.onSessionChanged();
     },

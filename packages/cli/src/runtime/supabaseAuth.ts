@@ -1,4 +1,5 @@
 // Local imports
+import { invalidateRemoteAgentsAfterSignOut } from '@agent/index';
 import { DEFAULT_OAUTH_PROVIDER, type OAuthProvider } from '@auth/config';
 import {
   refreshRemoteAgentCatalogAfterSignOut,
@@ -217,8 +218,9 @@ export async function signOutCliSupabase(): Promise<void> {
     await serverSideKeyService.setUseIncludedModelAccess(false);
   }
   serverSideKeyService.clearAllCaches({ resetQuotaFlip: true });
-  await refreshRemoteAgentCatalogAfterSignOut((message) =>
-    activeAuthLog?.warn('cli-auth', message),
+  await refreshRemoteAgentCatalogAfterSignOut(
+    invalidateRemoteAgentsAfterSignOut,
+    (message) => activeAuthLog?.warn('cli-auth', message),
   );
 }
 

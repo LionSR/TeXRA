@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { invalidateRemoteAgentsAfterSignOut } from '@agent/index';
 import { refreshRemoteAgentCatalogAfterSignOut } from '@auth/authFlowEffects';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import {
@@ -545,8 +546,9 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   private async afterLocalSessionCleared(sessionId: string): Promise<void> {
     getServerSideKeyService().clearAllCaches({ resetQuotaFlip: true });
     invalidateModelOptionsCache();
-    await refreshRemoteAgentCatalogAfterSignOut((message) =>
-      logger.warn('SupabaseAuthProvider', message),
+    await refreshRemoteAgentCatalogAfterSignOut(
+      invalidateRemoteAgentsAfterSignOut,
+      (message) => logger.warn('SupabaseAuthProvider', message),
     );
     this._onDidChangeSessions.fire({
       added: [],
