@@ -5,16 +5,14 @@
  * notification, and subagent lineage tracking in a single module.
  */
 
-import {
-  finalizeExecution,
-  synchronizeAgentResultOutcome,
-} from '@agent/storage';
+import { synchronizeAgentResultOutcome } from '@agent/storage';
 import { createChannelTrace, type ResultEvent } from '@agent/trace';
 import {
   completeOwnedExecutionLease,
   ExecutionLeaseLostError,
   markOwnedExecutionLeaseUndurable,
 } from '@agent/storage/executionLease';
+import { persistTerminalExecution } from '@agent/runtime/AgentRunLifecycle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionApprovals } from '@agent/runtime/streamApprovalQueue';
 import {
@@ -34,7 +32,6 @@ import {
   isActivePhase,
   isInFlightPhase,
   isTerminalOutcomePhase,
-  projectRunOutcome,
 } from '@shared/streams/streamStatus';
 import { formatDuration } from '@utils/core';
 import {
@@ -956,34 +953,20 @@ export class ExecutionRegistry {
       // after durable terminal metadata exists. A turn that does continue will
       // replace it with its own result.
       try {
-        const result = await finalizeExecution({
+        const result = await persistTerminalExecution({
           executionId: handle.executionId,
-          terminalStatus: projectRunOutcome(RUN_OUTCOME.CANCELLED)
-            .executionStatus,
+          outcome: RUN_OUTCOME.CANCELLED,
           flowRecord: 'delete',
+          logger,
+          failedMessage: 'Failed to finalize stopped waiting execution',
+          rejectedMessage: 'Waiting-execution finalizer rejected unexpectedly',
         });
-        if (result.status === 'failed') {
-          markOwnedExecutionLeaseUndurable(handle.executionId);
-          logger.warn('Failed to finalize stopped waiting execution', {
-            data: {
-              executionId: handle.executionId,
-              stage: result.stage,
-              terminalStatusPersisted: result.terminalStatusPersisted,
-              error: result.error,
-            },
-          });
-        }
         if (result.terminalStatusPersisted) {
           await synchronizeAgentResultOutcome(
             handle.executionId,
             RUN_OUTCOME.CANCELLED,
           );
         }
-      } catch (error) {
-        markOwnedExecutionLeaseUndurable(handle.executionId);
-        logger.warn('Waiting-execution finalizer rejected unexpectedly', {
-          data: { executionId: handle.executionId, error },
-        });
       } finally {
         if (!handle.isChildExecution) {
           try {
