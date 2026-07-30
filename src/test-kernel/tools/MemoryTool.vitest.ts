@@ -1,3 +1,8 @@
+// Node imports
+import { Buffer } from 'node:buffer';
+import * as path from 'node:path';
+import { Readable } from 'node:stream';
+
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -15,6 +20,15 @@ const TEST_FRONTMATTER = [
   'modifiedAt: 2026-01-01T00:00:00.000Z',
   '---',
   'note body',
+].join('\n');
+const PINNED_FRONTMATTER = [
+  '---',
+  'modifiedBy: pin-agent',
+  'modifiedAt: 2026-01-01T00:00:00.000Z',
+  'executionId: run-7',
+  'pinned: true',
+  '---',
+  'pinned body',
 ].join('\n');
 
 function dirStat(): FileStat {
@@ -37,6 +51,7 @@ function fileStat(size: number): FileStat {
 
 describe('MemoryTool view with an omitted path', () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
@@ -68,6 +83,12 @@ describe('MemoryTool view with an omitted path', () => {
       target === MEMORY_STORAGE_DIR ? [['notes.md', FileType.File]] : [],
     );
     vi.spyOn(StorageFS, 'read').mockResolvedValue(TEST_FRONTMATTER);
+    vi.spyOn(StorageFS, 'createReadStream').mockImplementation(
+      () =>
+        Readable.from([Buffer.from(TEST_FRONTMATTER)]) as unknown as ReturnType<
+          typeof StorageFS.createReadStream
+        >,
+    );
 
     const omitted = await new MemoryTool().call({ command: 'view' });
     const explicitRoot = await new MemoryTool().call({
@@ -91,5 +112,103 @@ describe('MemoryTool view with an omitted path', () => {
       status: 'error',
       error: expect.stringContaining('path'),
     });
+  });
+
+  it('preserves the model-facing directory listing bytes and depth limit', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-01-02T00:00:00.000Z'));
+
+    const alphaPath = path.join(MEMORY_STORAGE_DIR, 'alpha');
+    const betaPath = path.join(alphaPath, 'beta');
+    const pinnedPath = path.join(alphaPath, 'pinned.md');
+    const rootFilePath = path.join(MEMORY_STORAGE_DIR, 'root.md');
+
+    vi.spyOn(StorageFS, 'exists').mockResolvedValue(true);
+    vi.spyOn(StorageFS, 'readDir').mockImplementation(async (target) => {
+      if (target === MEMORY_STORAGE_DIR) {
+        return [
+          ['alpha', FileType.Directory],
+          ['root.md', FileType.File],
+        ];
+      }
+      if (target === alphaPath) {
+        return [
+          ['pinned.md', FileType.File],
+          ['beta', FileType.Directory],
+        ];
+      }
+      if (target === betaPath) {
+        throw new Error('The depth-2 directory must not be traversed');
+      }
+      throw new Error(`Unexpected readDir target: ${target}`);
+    });
+    vi.spyOn(StorageFS, 'stat').mockImplementation(async (target) => {
+      if (target === pinnedPath) {
+        return fileStat(Buffer.byteLength(PINNED_FRONTMATTER));
+      }
+      if (target === rootFilePath) {
+        return fileStat(Buffer.byteLength(TEST_FRONTMATTER));
+      }
+      return dirStat();
+    });
+    vi.spyOn(StorageFS, 'createReadStream').mockImplementation(
+      (target) =>
+        Readable.from([
+          Buffer.from(
+            target === pinnedPath ? PINNED_FRONTMATTER : TEST_FRONTMATTER,
+          ),
+        ]) as unknown as ReturnType<typeof StorageFS.createReadStream>,
+    );
+
+    const result = await new MemoryTool().call({
+      command: 'view',
+      path: MEMORY_DISPLAY_ROOT,
+    });
+
+    expect(result).toEqual({
+      status: 'executed',
+      summary: 'Listed directory: /memories (1–5 of 5)',
+      output: [
+        'Contents of /memories (showing 1–5 of 5, up to 2 levels deep):',
+        'SIZE\tMODIFIED\tBY\tPATH',
+        '0 B\tyesterday\t-\t/memories',
+        '0 B\tyesterday\t-\t/memories/alpha',
+        `${Buffer.byteLength(PINNED_FRONTMATTER)} B\tyesterday\tpin-agent (run-7)\t/memories/alpha/pinned.md [pinned]`,
+        '0 B\tyesterday\t-\t/memories/alpha/beta',
+        `${Buffer.byteLength(TEST_FRONTMATTER)} B\tyesterday\ttest-agent\t/memories/root.md`,
+      ].join('\n'),
+    });
+  });
+
+  it('skips a symlink cycle when listing memory directories', async () => {
+    const cyclePath = path.join(MEMORY_STORAGE_DIR, 'cycle');
+
+    vi.spyOn(StorageFS, 'exists').mockResolvedValue(true);
+    vi.spyOn(StorageFS, 'readDir').mockImplementation(async (target) => {
+      if (target === MEMORY_STORAGE_DIR) {
+        return [['cycle', FileType.Directory | FileType.SymbolicLink]];
+      }
+      if (target === cyclePath) {
+        throw new Error('The symlink cycle must not be traversed');
+      }
+      throw new Error(`Unexpected readDir target: ${target}`);
+    });
+    vi.spyOn(StorageFS, 'stat').mockImplementation(async (target) => {
+      if (target === cyclePath) {
+        throw new Error('The symlink cycle must not be statted');
+      }
+      return dirStat();
+    });
+
+    const result = await new MemoryTool().call({
+      command: 'view',
+      path: MEMORY_DISPLAY_ROOT,
+    });
+
+    expect(result).toMatchObject({
+      status: 'executed',
+      summary: 'Listed directory: /memories (1–1 of 1)',
+    });
+    expect(result.output).not.toContain('cycle');
   });
 });

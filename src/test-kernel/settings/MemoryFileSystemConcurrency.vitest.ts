@@ -9,7 +9,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // Local imports
 import { FileType, type FileStat } from '@platform/interfaces';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
-import { walkMemoryDirectory } from '@tools/memory/memoryFileSystem';
+import {
+  countPinnedMemories,
+  walkMemoryDirectory,
+} from '@tools/memory/memoryFileSystem';
 import { StorageFS } from '@utils/files';
 import { delay } from '@utils/core';
 
@@ -88,12 +91,52 @@ describe('memory filesystem listing', () => {
       readStreamFromText(TEST_FRONTMATTER),
     );
 
-    const items = await walkMemoryDirectory(MEMORY_STORAGE_DIR);
+    const items = [];
+    for await (const item of walkMemoryDirectory(MEMORY_STORAGE_DIR)) {
+      items.push(item);
+    }
 
     expect(items).toHaveLength(FILE_COUNT_PER_DIRECTORY * 2);
     expect(maxActiveMetadataReads).toBeGreaterThan(1);
     expect(maxActiveMetadataReads).toBeLessThanOrEqual(
       MEMORY_LISTING_CONCURRENCY,
     );
+  });
+
+  it('stops metadata reads once the pinned-memory limit is reached', async () => {
+    const cyclePath = path.join(MEMORY_STORAGE_DIR, 'cycle');
+    const files: [string, number][] = [
+      ['cycle', FileType.Directory | FileType.SymbolicLink],
+      ...Array.from({ length: 100 }, (_, index): [string, number] => [
+        `pinned-${index}.md`,
+        FileType.File,
+      ]),
+    ];
+    const pinnedFrontmatter = [
+      '---',
+      'modifiedBy: test-agent',
+      'modifiedAt: 2026-01-01T00:00:00.000Z',
+      'pinned: true',
+      '---',
+      'body',
+    ].join('\n');
+
+    vi.spyOn(StorageFS, 'exists').mockResolvedValue(true);
+    vi.spyOn(StorageFS, 'readDir').mockResolvedValue(files);
+    vi.spyOn(StorageFS, 'stat').mockImplementation(async (target) => {
+      if (target === cyclePath) {
+        throw new Error('The symlink cycle must not be statted');
+      }
+      return {
+        ...testFileStat(),
+        size: Buffer.byteLength(pinnedFrontmatter),
+      };
+    });
+    const readStream = vi
+      .spyOn(StorageFS, 'createReadStream')
+      .mockImplementation(() => readStreamFromText(pinnedFrontmatter));
+
+    await expect(countPinnedMemories(1)).resolves.toBe(1);
+    expect(readStream.mock.calls.length).toBeLessThan(files.length);
   });
 });
