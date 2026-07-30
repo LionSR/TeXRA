@@ -153,7 +153,7 @@ const SCENARIOS = [
     bootExpect: 'Tab children',
     keys: ['\t', DOWN, '\r'],
     expect: [
-      'repositoryAudit Finished',
+      'repositoryAudit completed',
       'Generated files',
       'paper.tex',
       'Compile check failed',
@@ -182,7 +182,7 @@ const SCENARIOS = [
       'Running: Proofread paper B',
       'live-workflow-validation running',
       'Proofread (1/1)',
-      'correct Running',
+      'correct running',
       '2 subagents',
     ],
   },
@@ -2413,10 +2413,10 @@ const SCENARIOS = [
         unexpect: ['Tab children', '1 sub', 'orderChecker'],
       },
       {
-        expect: ['Tab children', '1 sub', 'orderChecker Running'],
+        expect: ['Tab children', '1 sub', 'orderChecker running'],
       },
       {
-        expect: ['1 sub', 'orderChecker Running'],
+        expect: ['1 sub', 'orderChecker running'],
       },
     ],
     expect: ['orderChecker', '1 sub', 'Tab children'],
@@ -2440,13 +2440,13 @@ const SCENARIOS = [
       },
       {
         expect: ['Tab children', 'orderChecker'],
-        unexpect: ['orderChecker Running'],
+        unexpect: ['orderChecker running'],
       },
       {
-        expect: ['orderChecker Running'],
+        expect: ['orderChecker running'],
       },
       {
-        expect: ['orderChecker Running'],
+        expect: ['orderChecker running'],
       },
     ],
     expect: ['orderChecker', '1 sub', 'Tab children'],
@@ -2483,7 +2483,7 @@ const SCENARIOS = [
         unexpect: ['1 sub', 'orderChecker'],
       },
       {
-        expect: ['1 sub', 'orderChecker Running'],
+        expect: ['1 sub', 'orderChecker running'],
       },
     ],
     expect: ['orderChecker', '1 sub', 'Tab children'],
@@ -2522,7 +2522,7 @@ const SCENARIOS = [
         unexpect: ['1 sub', 'orderChecker'],
       },
       {
-        expect: ['1 sub', 'orderChecker Running'],
+        expect: ['1 sub', 'orderChecker running'],
       },
     ],
     expect: ['orderChecker', '1 sub', 'Tab children'],
@@ -2543,8 +2543,8 @@ const SCENARIOS = [
     checkpoints: [
       { unexpect: ['Tab children', '1 sub', 'orderChecker'] },
       { unexpect: ['Tab children', '1 sub', 'orderChecker'] },
-      { expect: ['1 sub', 'orderChecker Running'] },
-      { expect: ['1 sub', 'orderChecker Running'] },
+      { expect: ['1 sub', 'orderChecker running'] },
+      { expect: ['1 sub', 'orderChecker running'] },
       {
         // Promoted to top-level: no longer active under root. The historical
         // relationship still contributes to the retained subagent count, but
@@ -2587,12 +2587,12 @@ const SCENARIOS = [
         unexpect: ['1 sub', 'orderChecker'],
       },
       {
-        expect: ['1 sub', 'orderChecker Running'],
+        expect: ['1 sub', 'orderChecker running'],
       },
       {
         // A late, stale roster from the child's former parent must not erase
         // active membership under the new (root) parent.
-        expect: ['1 sub', 'orderChecker Running'],
+        expect: ['1 sub', 'orderChecker running'],
       },
     ],
     // Prove the TUI is still interactive by focusing the reattached child.
@@ -2639,16 +2639,16 @@ const SCENARIOS = [
     checkpoints: [
       { unexpect: ['Tab children', '1 sub', 'orderChecker'] },
       { unexpect: ['Tab children', '1 sub', 'orderChecker'] },
-      { expect: ['1 sub', 'orderChecker Running'] },
-      { expect: ['1 sub', 'orderChecker Running'] },
+      { expect: ['1 sub', 'orderChecker running'] },
+      { expect: ['1 sub', 'orderChecker running'] },
       {
         // Untrack (roster omission) arrives before the terminal status: the
         // retained/historical row survives, but active membership does not.
-        expect: ['orderChecker Running', '1 sub'],
+        expect: ['orderChecker running', '1 sub'],
       },
       {
-        expect: ['orderChecker Finished', '1 sub'],
-        unexpect: ['orderChecker Running'],
+        expect: ['orderChecker completed', '1 sub'],
+        unexpect: ['orderChecker running'],
       },
       {
         // Removal scrubs every trace, including the retained/historical row.
@@ -2692,13 +2692,13 @@ const SCENARIOS = [
     },
     bootExpect: 'Tab children',
     expect: [
-      'strategy Running',
-      'leanSolver Waiting for follow-up',
-      'reviewer Failed',
+      'strategy running',
+      'leanSolver waiting for you',
+      'reviewer error',
       '3 sub',
       'Tab children',
     ],
-    unexpect: ['reviewer Running'],
+    unexpect: ['reviewer running'],
   },
   {
     name: 'subagents-with-todos-compact',
@@ -2772,7 +2772,7 @@ const SCENARIOS = [
     keys: ['\t', DOWN, DOWN, DOWN, '\r'],
     expect: [
       'strategy is checking the harness-child-strategy details',
-      '✓ ● strategy Running',
+      '✓ ● strategy running',
     ],
     unexpect: [
       'agent: chat · model: harness-model',
@@ -2795,7 +2795,7 @@ const SCENARIOS = [
     keys: ['\t', DOWN, DOWN],
     resizes: [{ cols: 44, rows: 7 }],
     expect: ['leanSolver w', '+3 sessions'],
-    maxOccurrences: [{ text: 'leanSolver Waiting for follow-up', max: 1 }],
+    maxOccurrences: [{ text: 'leanSolver waiting for you', max: 1 }],
   },
   {
     name: 'subagent-list-remembers-selection',
@@ -2808,7 +2808,7 @@ const SCENARIOS = [
     },
     bootExpect: 'Tab children',
     keys: ['\t', DOWN, DOWN, DOWN, ESC, '\t'],
-    expect: ['›   ● strategy Running', 'Tab input', 'Esc input'],
+    expect: ['›   ● strategy running', 'Tab input', 'Esc input'],
     unexpect: ['signal read during notification phase', 'ERROR'],
   },
   {
@@ -2869,7 +2869,7 @@ const SCENARIOS = [
     expect: [
       'strategy detail line 15',
       'strategy detail line 18',
-      '✓ ● strategy Running',
+      '✓ ● strategy running',
     ],
     unexpect: [
       'strategy detail line 01',
@@ -2893,7 +2893,7 @@ const SCENARIOS = [
     },
     bootExpect: 'Tab children',
     keys: ['\t', DOWN, DOWN, DOWN, '\r'],
-    expect: ['1 subagent', 'localChecker Running'],
+    expect: ['1 subagent', 'localChecker running'],
     unexpect: [
       'leanSolver',
       'reviewer',
@@ -2961,7 +2961,7 @@ const SCENARIOS = [
     bootExpect: 'Tab children',
     keys: ['\t', DOWN, DOWN, DOWN, 'v'],
     expect: [
-      '›   ● strategy Running',
+      '›   ● strategy running',
       'Session selection active.',
       'v full output',
       'Esc input',
@@ -3032,7 +3032,7 @@ const SCENARIOS = [
     bootExpect: 'Tab children',
     keys: ['\t', DOWN, DOWN, DOWN, 'k'],
     expect: [
-      '›   ● strategy Cancelled',
+      '›   ● strategy stopped',
       'Enter focus',
       'v full output',
       'Tab input',
@@ -3054,8 +3054,8 @@ const SCENARIOS = [
     keys: ['\t', DOWN, DOWN, DOWN, 'k', '\r'],
     frame: 'viewport',
     expect: [
-      '› ✓ ● strategy Cancelled',
-      '◆ Cancelled',
+      '› ✓ ● strategy stopped',
+      '◆ stopped',
       'root active',
       STOPPED_SUBAGENT_INPUT_MESSAGE_START,
       'Ctrl-C stop root',
@@ -3074,14 +3074,14 @@ const SCENARIOS = [
     keys: ['\t', DOWN, DOWN, DOWN, 'k', '\r', '\t', UP, '\r'],
     frame: 'viewport',
     expect: [
-      '✓ ● leanSolver Waiting for follow-up',
-      '◆ Waiting for follow-up',
+      '✓ ● leanSolver waiting for you',
+      '◆ waiting for you',
       'root active',
     ],
     unexpect: [
       'Harness interrupt requested.',
       STOPPED_SUBAGENT_INPUT_MESSAGE_START,
-      '› ✓ ● strategy Cancelled',
+      '› ✓ ● strategy stopped',
     ],
   },
   {
@@ -3105,8 +3105,8 @@ const SCENARIOS = [
     ],
     frame: 'viewport',
     expect: [
-      '› ✓ ● strategy Cancelled',
-      '◆ Cancelled',
+      '› ✓ ● strategy stopped',
+      '◆ stopped',
       'root active',
       STOPPED_SUBAGENT_INPUT_MESSAGE_START,
     ],
@@ -3204,9 +3204,9 @@ const SCENARIOS = [
     expect: [
       'Harness focused interrupt requested for harness-stream-1.',
       '› ✓ ● main stopped',
-      'strategy Running',
-      'leanSolver Waiting for follow-up',
-      'reviewer Running',
+      'strategy running',
+      'leanSolver waiting for you',
+      'reviewer running',
       '3 sub',
       'Session selection active.',
     ],
@@ -3232,9 +3232,9 @@ const SCENARIOS = [
     ],
     frame: 'viewport',
     expect: [
-      'strategy Cancelled',
-      'leanSolver Waiting for follow-up',
-      'reviewer Running',
+      'strategy stopped',
+      'leanSolver waiting for you',
+      'reviewer running',
       '3 subagents',
       'Session selection active.',
     ],
@@ -3252,9 +3252,9 @@ const SCENARIOS = [
     keys: ['\t', DOWN, DOWN, DOWN, '\r', { input: ESC, delayMs: 700 }],
     frame: 'viewport',
     expect: [
-      'strategy Cancelled',
-      '› ✓ ● reviewer Running',
-      'leanSolver Waiting for follow-up',
+      'strategy stopped',
+      '› ✓ ● reviewer running',
+      'leanSolver waiting for you',
       'Ctrl-C stop root',
     ],
     unexpect: ['Harness interrupt requested.', '› ✓ ● main stopped'],
@@ -3270,7 +3270,7 @@ const SCENARIOS = [
     bootExpect: 'Run command?',
     keys: [{ input: ESC, delayMs: 700 }],
     frame: 'viewport',
-    expect: ['› ✓ ● main running', 'strategy Running', '3 sub'],
+    expect: ['› ✓ ● main running', 'strategy running', '3 sub'],
     unexpect: [
       'Run command?',
       'Harness focused interrupt requested',
@@ -3287,7 +3287,7 @@ const SCENARIOS = [
     bootExpect: 'Tab children',
     keys: [{ input: ESC, delayMs: 80 }, '2'],
     frame: 'viewport',
-    expect: ['› ✓ ● leanSolver Waiting for follow-up', 'root active'],
+    expect: ['› ✓ ● leanSolver waiting for you', 'root active'],
     unexpect: [
       'Harness focused interrupt requested',
       'Harness interrupt requested.',
