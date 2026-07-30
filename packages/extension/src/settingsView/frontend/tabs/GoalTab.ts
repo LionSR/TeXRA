@@ -134,7 +134,7 @@ export class GoalTab extends LitElement {
     ];
     return html`
       <div
-        class=${'goal-row' + (inFlight ? ' is-clickable' : '')}
+        class=${`goal-row${inFlight ? ' is-clickable' : ''}`}
         @click=${inFlight ? () => this.handleReveal(item.streamId) : null}
         @keydown=${
           inFlight

@@ -12,7 +12,7 @@ import { BaseWebviewApp } from '@shared/BaseWebviewApp';
 import { postMessage } from '@shared/hostBridge';
 
 // Local imports - shared schemas
-import { type ProgressViewOutboundMessage } from '@shared/schemas';
+import type { ProgressViewOutboundMessage } from '@shared/schemas';
 import { SignalWatcher } from '@shared/signals';
 import { designTokens, viewTabStyles } from '@shared/styles';
 import { registerTeXRAWebAwesomeIcons } from '@shared/wa/webAwesomeIcons';

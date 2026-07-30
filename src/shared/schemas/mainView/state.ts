@@ -115,7 +115,7 @@ export type WorkspaceRootOptionData = z.infer<
 export const TeamOptionDataSchema = PickerOptionBaseSchema.extend({
   /** Provenance uses the shared `'built-in' | 'custom'` team vocabulary. */
   source: z.enum(['built-in', 'custom']),
-  /** Web Awesome icon name registered in `src/shared/wa/webAwesomeIcons.ts`. */
+  /** Web Awesome icon name registered in `src/shared/wa/iconNames.ts`. */
   icon: z.string(),
   /** Preset description, surfaced as the option `title`. */
   description: z.string().prefault(''),

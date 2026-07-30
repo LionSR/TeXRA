@@ -6,7 +6,6 @@ import { z, ZodError } from 'zod';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { ModelHandlerCompatibilityKeySchema } from '@agent/runtime/modelHandlerCompatibilityKey';
 import { runAgent } from '@agent/runtime/runAgent';
-import { defaultSession } from '@agent/runtime/SessionHandle';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import * as logger from '@logger/logUtils';
 import type { ExecutionId } from '@shared/schemas';

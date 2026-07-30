@@ -277,12 +277,10 @@ export class SessionStores {
     const streamIds = unique([...snapshotStreams, ...canonicalStreams]);
     const executionIdsByStream = new Map(this.snapshots.getExecutionIdMap());
     for (const stream of snapshotStreams) {
-      const executionId = await this.snapshots.readPersistedExecutionId(stream);
+      const executionId =
+        (await this.snapshots.readPersistedExecutionId(stream)) ??
+        executionIdFromStream(stream);
       if (executionId) executionIdsByStream.set(stream, executionId);
-      else {
-        const derived = executionIdFromStream(stream);
-        if (derived) executionIdsByStream.set(stream, derived);
-      }
     }
     for (const stream of streamIds) {
       if (executionIdsByStream.has(stream)) continue;

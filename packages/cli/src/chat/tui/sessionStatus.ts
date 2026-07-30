@@ -52,19 +52,17 @@ export function formatCliStatusLabel(
   substate?: StreamSubstate,
   isChildStream?: boolean,
 ): string {
-  if (isChildStream && status === STREAM_STATUS.STOPPED) {
-    return WORKFLOW_TASK_STATUS_LABEL[STREAM_PHASE.CANCELLED];
-  }
-  const statusKey = streamStatusDisplayKey(status, substate);
-  if (isChildStream && statusKey === undefined) return '';
-  if (
-    isChildStream &&
-    statusKey !== undefined &&
-    Object.hasOwn(WORKFLOW_TASK_STATUS_LABEL, statusKey)
-  ) {
-    return WORKFLOW_TASK_STATUS_LABEL[
-      statusKey as keyof typeof WORKFLOW_TASK_STATUS_LABEL
-    ];
+  if (isChildStream) {
+    if (status === STREAM_STATUS.STOPPED) {
+      return WORKFLOW_TASK_STATUS_LABEL[STREAM_PHASE.CANCELLED];
+    }
+    const statusKey = streamStatusDisplayKey(status, substate);
+    if (statusKey === undefined) return '';
+    if (Object.hasOwn(WORKFLOW_TASK_STATUS_LABEL, statusKey)) {
+      return WORKFLOW_TASK_STATUS_LABEL[
+        statusKey as keyof typeof WORKFLOW_TASK_STATUS_LABEL
+      ];
+    }
   }
   return formatStreamStatusLabel(status, {
     style: 'cli',

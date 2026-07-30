@@ -408,20 +408,18 @@ export function createChatSessionController(
         releaseIfUnused();
       },
     );
+    const deleteOwnedEntries = <K>(map: Map<K, object>): void => {
+      for (const [key, owner] of map) {
+        if (owner === interactionOwner) map.delete(key);
+      }
+    };
     const releaseHost = (): void => {
       if (released) return;
       released = true;
       detachExecutionListener();
       detachChildActivationListener();
-      for (const [executionId, owner] of executionInteractionOwners) {
-        if (owner === interactionOwner) {
-          executionInteractionOwners.delete(executionId);
-        }
-      }
-      for (const [streamId, owner] of streamInteractionOwners) {
-        if (owner === interactionOwner)
-          streamInteractionOwners.delete(streamId);
-      }
+      deleteOwnedEntries(executionInteractionOwners);
+      deleteOwnedEntries(streamInteractionOwners);
       detachResultToastOnce();
       detachHostInteractions();
       if (session.presentationHost === presentationHost) {

@@ -112,7 +112,7 @@ import {
   scheduleInstructionSave,
 } from './persistence';
 import { mainViewMessageHandlers } from './messageDispatcher';
-import { FILE_SELECT_CONFIGS } from './store';
+import { FILE_SELECT_CONFIGS, FILE_TYPE_TO_KEY } from './store';
 import { mainViewStyles } from './styles';
 
 registerTeXRAWebAwesomeIcons();
@@ -376,12 +376,10 @@ export class MainApp extends MainAppBase {
     const sf = singleFiles$.get();
     const fo = fileOptions$.get();
     const files = multiFiles$.get();
-    const visibleFileCount = visibleFileConfigs.reduce((count, config) => {
-      if (config.type === 'input') return count + files.inputFiles.length;
-      if (config.type === 'context') return count + files.contextFiles.length;
-      if (config.type === 'media') return count + files.mediaFiles.length;
-      return count + files.outputFiles.length;
-    }, 0);
+    const visibleFileCount = visibleFileConfigs.reduce(
+      (count, config) => count + files[FILE_TYPE_TO_KEY[config.type]].length,
+      0,
+    );
 
     const setupCard =
       onboardingState === 'setup'
