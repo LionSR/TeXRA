@@ -19,7 +19,6 @@ import { clearInquiryDraft } from './components/ExternalInquiryPanel';
 import {
   APPROVE_SESSION_ACTION,
   APPROVE_ALL_DELEGATED_WORK_ACTION,
-  type FollowUpClearDetail,
   type FollowupCommandDetail,
   type FollowUpChangeDetail,
   type FollowUpSendDetail,
@@ -159,18 +158,6 @@ export function handleFollowUpPolish(): void {
     stream: result.streamId,
     text: result.text,
   });
-}
-
-export function handleFollowUpClear(
-  event: CustomEvent<FollowUpClearDetail>,
-): void {
-  const streamId = event.detail.streamId;
-  if (!appState.get().streamStates.has(streamId)) return;
-  updateToolUseState(streamId, (prev) =>
-    create(prev, (draft) => {
-      draft.ui.followUpText = '';
-    }),
-  );
 }
 
 /**

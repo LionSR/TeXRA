@@ -240,8 +240,7 @@ export async function activate(context: vscode.ExtensionContext) {
     lifecycle,
     agentDirectories,
     agentResume: {
-      tryResumeStream: (streamId, recovery) =>
-        tryResumeFromResumeData(streamId, recovery),
+      tryResumeStream: tryResumeFromResumeData,
     },
     toolAvailability: {
       ...NO_TOOL_AVAILABILITY_HOST,

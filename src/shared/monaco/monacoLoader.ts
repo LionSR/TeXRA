@@ -245,13 +245,11 @@ export function monacoLanguageForPath(filePath: string): string {
     case 'ts':
     case 'mts':
     case 'cts':
-      return 'typescript';
     case 'tsx':
       return 'typescript';
     case 'js':
     case 'mjs':
     case 'cjs':
-      return 'javascript';
     case 'jsx':
       return 'javascript';
     case 'json':

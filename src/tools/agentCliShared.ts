@@ -142,7 +142,7 @@ export async function resumeOrLaunchAgentCliSession(
 
     const stored = await store.waitForActive(id);
     if (!stored) continue;
-    return await queueAgentCliFollowUp(stored, {
+    return queueAgentCliFollowUp(stored, {
       id,
       prompt: params.prompt,
       callerStreamId: params.callerStreamId,
@@ -189,7 +189,7 @@ export async function launchAgentCliSession(
   }
   const runWithOwnership = captureOwnedExecutionLease(executionId);
 
-  return await runWithOwnership(async () => {
+  return runWithOwnership(async () => {
     let childStream: ChildStream | undefined;
     try {
       childStream = createChildStream(executionId, params.parentStreamId, {

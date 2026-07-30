@@ -444,9 +444,10 @@ export class ToolsTab extends LitElement {
         })}
         ${this.renderAgentSkillsSettings()} ${this.renderApprovalSettings()}
         ${this.renderDesktopCrashReporting()}
-        ${CATEGORY_ORDER.filter((cat) => groups.has(cat)).map((cat) =>
-          this.renderCategory(cat, groups.get(cat)!),
-        )}
+        ${CATEGORY_ORDER.flatMap((cat) => {
+          const catItems = groups.get(cat);
+          return catItems ? [this.renderCategory(cat, catItems)] : [];
+        })}
       </div>
     `;
   }

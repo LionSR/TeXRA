@@ -429,9 +429,8 @@ export function StaticConversationTranscript({
   const sessionMeta = useSignal(sessionMetaSignal);
   const parentStream = useSignal(parentStreamSignal);
   const childStreamEntries = useSignal(childStreamEntriesSignal);
-  const [state, setState] = useState<StaticTranscriptState>(() => ({
-    ownerKey,
-    items: appendStaticTranscriptItems({
+  const buildFreshItems = (): readonly StaticTranscriptItem[] =>
+    appendStaticTranscriptItems({
       currentItems: [],
       streams,
       childStreamEntries,
@@ -442,24 +441,13 @@ export function StaticConversationTranscript({
       printRequests,
       scrollbackStreamId,
       width: normalizedWidth,
-    }),
+    });
+  const [state, setState] = useState<StaticTranscriptState>(() => ({
+    ownerKey,
+    items: buildFreshItems(),
   }));
 
-  const items =
-    state.ownerKey === ownerKey
-      ? state.items
-      : appendStaticTranscriptItems({
-          currentItems: [],
-          streams,
-          childStreamEntries,
-          executionLabels: subagentExecutionLabels,
-          meta: sessionMeta,
-          maxRows,
-          parentStream,
-          printRequests,
-          scrollbackStreamId,
-          width: normalizedWidth,
-        });
+  const items = state.ownerKey === ownerKey ? state.items : buildFreshItems();
 
   useEffect(() => {
     // On a hard reset (e.g. /clear, picker-to-chat handoff) start the

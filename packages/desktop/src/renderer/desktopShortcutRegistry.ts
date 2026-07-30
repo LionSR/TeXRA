@@ -86,8 +86,11 @@ export function createDesktopShortcutRegistry(
   }
 
   function update(id: string, accelerator: string | undefined): void {
-    if (!availableEntries.some((entry) => entry.id === id)) {
-      if (id !== DESKTOP_COMMAND_PALETTE_ID) return;
+    if (
+      !availableEntries.some((entry) => entry.id === id) &&
+      id !== DESKTOP_COMMAND_PALETTE_ID
+    ) {
+      return;
     }
     overrides = {
       ...overrides,

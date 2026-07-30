@@ -174,10 +174,6 @@ function progressDetail(xml: string): string {
   }
 }
 
-function resultResponsePreview(response: string): string {
-  return decodedResultResponsePreview(decodeXmlEntities(response));
-}
-
 function decodedResultResponsePreview(response: string): string {
   const decoded = response.trim();
   if (decoded === '') return '';
@@ -259,30 +255,32 @@ export function summarizeSubagentFollowup(text: unknown): string {
     return `⟳ ${agent} · ${progressDetail(trimmed)}`;
   }
 
+  if (
+    tag === DELIVERY_TAG.workflowScriptResult ||
+    tag === DELIVERY_TAG.workflowScriptError
+  ) {
+    const summary = workflowScriptDeliverySummary(trimmed);
+    if (summary) return summary;
+  }
+
   // Result/error envelopes share one shape across families
   // (formatChildRunDelivery/formatChildRunError): subagent-*, background-*,
   // codex-*, claude-agent-*. Agent-CLI producers (codex.ts, claudeAgent.ts)
   // don't set an `agent` attribute, so fall back to the tag's own family name
   // (e.g. `codex-result` → `codex`) rather than the generic `subagent`.
   if (tag.endsWith('-result')) {
-    if (tag === DELIVERY_TAG.workflowScriptResult) {
-      const summary = workflowScriptDeliverySummary(trimmed);
-      if (summary) return summary;
-    }
     const agent = attr(trimmed, 'agent') ?? tag.slice(0, -'-result'.length);
     const status = attr(trimmed, 'status') ?? 'completed';
     const wall = innerTag(trimmed, 'wall-time');
     const response = innerTag(trimmed, 'response');
     const head = `✓ ${agent} ${status}${wall ? ` · ${wall}` : ''}`;
-    const preview = response ? resultResponsePreview(response) : '';
+    const preview = response
+      ? decodedResultResponsePreview(decodeXmlEntities(response))
+      : '';
     return preview ? `${head}\n${preview}` : head;
   }
 
   if (tag.endsWith('-error')) {
-    if (tag === DELIVERY_TAG.workflowScriptError) {
-      const summary = workflowScriptDeliverySummary(trimmed);
-      if (summary) return summary;
-    }
     const agent = attr(trimmed, 'agent') ?? tag.slice(0, -'-error'.length);
     const wall = innerTag(trimmed, 'wall-time');
     const message = innerTag(trimmed, 'message');

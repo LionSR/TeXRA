@@ -156,6 +156,7 @@ export async function submitFollowUp(
     return { status: 'no_session', streamStatus: target.streamStatus };
   }
 
+  const reason = target.kind === 'queue' ? target.reason : 'children_running';
   let admission: 'live_owner' | 'recoverable' | 'existing_recoverable' =
     'recoverable';
   if (options.mode === 'live_notification') {
@@ -166,11 +167,7 @@ export async function submitFollowUp(
   const submission = ownerSession.followUps.submit(streamId, item, admission);
   if (submission.kind === 'unavailable') return { status: 'dropped' };
   if (submission.kind === 'queued') {
-    return {
-      status: 'queued',
-      reason: target.kind === 'queue' ? target.reason : 'children_running',
-      continuation: 'live',
-    };
+    return { status: 'queued', reason, continuation: 'live' };
   }
   if (submission.kind === 'not_owned') return { status: 'dropped' };
   if (
@@ -180,7 +177,7 @@ export async function submitFollowUp(
   ) {
     return {
       status: 'queued',
-      reason: target.kind === 'queue' ? target.reason : 'children_running',
+      reason,
       continuation: submission.kind === 'live_flow' ? 'live' : submission.kind,
     };
   }
@@ -194,7 +191,7 @@ export async function submitFollowUp(
   if (!resumed) ownerSession.followUps.release(recovery, 'recoverable');
   return {
     status: 'queued',
-    reason: target.kind === 'queue' ? target.reason : 'children_running',
+    reason,
     continuation: resumed ? 'resumed' : 'resume_failed',
   };
 }

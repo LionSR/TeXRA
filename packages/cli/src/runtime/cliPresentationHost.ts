@@ -100,17 +100,10 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
     return logger;
   }
 
-  function prepareInteractivePrompt(): void {
-    runProgress?.preserve();
-  }
-
-  function attachProgressRenderer(events: SessionEventHub): () => void {
-    return attachRunProgressRenderer(events, runProgress);
-  }
-
   return {
-    attachRunProgressRenderer: attachProgressRenderer,
-    prepareInteractivePrompt,
+    attachRunProgressRenderer: (events) =>
+      attachRunProgressRenderer(events, runProgress),
+    prepareInteractivePrompt: () => runProgress?.preserve(),
     emitApprovalBypassState({ streamId, kind, bypassActive }) {
       if (closed || context.outputFormat !== 'ndjson') return;
       const record: CliNdjsonRecord = {
