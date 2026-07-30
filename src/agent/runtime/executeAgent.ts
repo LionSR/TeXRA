@@ -564,45 +564,72 @@ export async function resumeToolUseFromResumeData(
           return await runFlowWithLifecycle(
             ctx,
             async (handle, lifecycle) => {
-              const result = await runToolUseFlow(
-                {
-                  ...ctx,
-                  ...createInterruptCallbacks(),
-                  onRoundFinalized: createUsageRecordingCallback(ctx),
-                  setting,
-                  resume,
-                  tools: options.tools,
-                  drainedFollowUps: options.drainedFollowUps,
-                  takePendingFollowUps: options.takePendingFollowUps,
-                  // A persisted parent marks this execution as a subagent. Without
-                  // this, the rebuilt system prompt would drop subagent-specific
-                  // instructions (e.g. the shared /memories protocol) that the fresh
-                  // run had included.
-                  isSubagent,
-                  onProgress: options.onProgress,
-                  onFollowUpConsumed: wrapOnFollowUpConsumed(
-                    ctx,
-                    options.onFollowUpConsumed,
-                  ),
-                  onFlowRecordDisposition: (disposition) =>
-                    lifecycle.setFlowRecordDisposition(disposition),
-                },
-                undefined,
-                (flowContext) => {
-                  handle.attachToolUseFlow(flowContext);
-                  if (options.isCancellationRequested?.()) {
-                    options.onCancellationAtFlowAttachment?.();
-                    flowContext.interrupt();
-                  }
-                  return () => handle.detachToolUseFlow(flowContext);
-                },
-              );
-              return buildToolUseFlowResult(
-                result,
-                runExecutionId,
-                runStreamId,
-                ctx.attachedMemoryMisses,
-              );
+              try {
+                const result = await runToolUseFlow(
+                  {
+                    ...ctx,
+                    ...createInterruptCallbacks(),
+                    onRoundFinalized: createUsageRecordingCallback(ctx),
+                    setting,
+                    resume,
+                    tools: options.tools,
+                    drainedFollowUps: options.drainedFollowUps,
+                    takePendingFollowUps: options.takePendingFollowUps,
+                    // A persisted parent marks this execution as a subagent. Without
+                    // this, the rebuilt system prompt would drop subagent-specific
+                    // instructions (e.g. the shared /memories protocol) that the fresh
+                    // run had included.
+                    isSubagent,
+                    onProgress: options.onProgress,
+                    onFollowUpConsumed: wrapOnFollowUpConsumed(
+                      ctx,
+                      options.onFollowUpConsumed,
+                    ),
+                    onFlowRecordDisposition: (disposition) =>
+                      lifecycle.setFlowRecordDisposition(disposition),
+                    onModelChanged: (modelHandler) => {
+                      // The tool-use flow already wrote services.config.model
+                      // (=== ctx.config.model, same object), so the live model is
+                      // updated before this fires; only the usage side-effect is
+                      // left to do here. A resumed run reaches `switchModel` the
+                      // same way a fresh one does — through the flow context this
+                      // path attaches to the handle — so it needs the same wiring.
+                      ctx.usageMonitor.setModelInfo({
+                        capabilities: modelHandler.capabilities,
+                        config: modelHandler.config,
+                      });
+                    },
+                  },
+                  undefined,
+                  (flowContext) => {
+                    handle.attachToolUseFlow(flowContext);
+                    if (options.isCancellationRequested?.()) {
+                      options.onCancellationAtFlowAttachment?.();
+                      flowContext.interrupt();
+                    }
+                    return () => handle.detachToolUseFlow(flowContext);
+                  },
+                );
+                return buildToolUseFlowResult(
+                  result,
+                  runExecutionId,
+                  runStreamId,
+                  ctx.attachedMemoryMisses,
+                );
+              } catch (err) {
+                const failedResult = getToolUseFlowErrorResult(err);
+                if (!failedResult) throw err;
+                const result = buildToolUseFlowResult(
+                  failedResult,
+                  runExecutionId,
+                  runStreamId,
+                  ctx.attachedMemoryMisses,
+                );
+                if (isWaitingFlowResult(result)) throw err;
+                throw new AgentFlowError(getSdkErrorMessage(err), result, {
+                  cause: err,
+                });
+              }
             },
             {
               isSubagent,
