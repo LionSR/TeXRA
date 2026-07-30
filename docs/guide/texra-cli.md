@@ -406,3 +406,13 @@ included hosted access. `--api-mode included` keeps the default hosted behavior
 when the account is signed in. The accepted aliases match the TUI `/api`
 command: for example, `direct`, `api`, and `byok` select personal API keys,
 while `included` selects hosted access.
+
+Two switches are environment-only:
+
+| Variable                              | Effect                                                                                                        |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `TEXRA_NO_TELEMETRY` / `DO_NOT_TRACK` | Turn off usage logging for rounds billed to your own API key ([Usage Logging](./configuration#usage-logging)) |
+| `TEXRA_NO_UPDATE_CHECK`               | Skip the daily check for a newer `texra` release                                                              |
+
+Both take `1`, `true`, or any other value; `0`, `false`, `no`, `off`, empty,
+and unset mean "leave it on".

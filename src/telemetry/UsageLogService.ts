@@ -10,6 +10,7 @@ import { platform } from '@platform/platform';
 import type { UsageRoute } from '@shared/schemas';
 import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { isEnvFlagEnabled } from '@utils/system/envFlags';
 
 import { UsageLogResponseSchema } from './UsageLogTypes';
 import type {
@@ -50,6 +51,24 @@ const DEFAULT_CONFIG: UsageLogConfig = {
 export const TELEMETRY_ENABLED_KEY = 'texra.telemetry.enabled';
 
 /**
+ * Environment variables that switch usage logging off without editing config.
+ *
+ * `TEXRA_NO_TELEMETRY` is ours; `DO_NOT_TRACK` is the cross-tool console
+ * convention, honoured so a user who exports it once opts out of every tool
+ * that respects it. Either one overrides {@link TELEMETRY_ENABLED_KEY} — an
+ * environment that says "do not send" wins over a stored `true`, never the
+ * reverse, so neither can be used to force logging back on.
+ */
+const TELEMETRY_OPT_OUT_ENV_VARS = [
+  'TEXRA_NO_TELEMETRY',
+  'DO_NOT_TRACK',
+] as const;
+
+function isTelemetryDisabledByEnv(): boolean {
+  return TELEMETRY_OPT_OUT_ENV_VARS.some((name) => isEnvFlagEnabled(name));
+}
+
+/**
  * Routes whose records meter what the user consumed against their plan.
  *
  * The relay reads a database aggregate populated by `log-usage` to enforce the
@@ -86,6 +105,10 @@ function isPlanAccounting(
  * test) can hold the service off regardless of user settings.
  */
 function isTelemetryEnabledBySetting(): boolean {
+  // Checked before the config read so the kill switch also holds on a host that
+  // has not initialized its platform yet.
+  if (isTelemetryDisabledByEnv()) return false;
+
   const raw = platform().config.get<unknown>(
     TELEMETRY_ENABLED_KEY,
     DEFAULT_CORE_SETTINGS.telemetry.enabled,
@@ -101,6 +124,25 @@ function isTelemetryEnabledBySetting(): boolean {
     `Ignoring non-boolean ${TELEMETRY_ENABLED_KEY} (got ${typeof raw}); treating optional usage logging as disabled`,
   );
   return false;
+}
+
+/** Why optional usage logging is off, or `null` when it is on. */
+export type UsageLoggingOptOut =
+  | { readonly source: 'environment'; readonly envVar: string }
+  | { readonly source: 'setting' }
+  | null;
+
+/**
+ * The opt-out as a user-facing fact, for surfaces that report what TeXRA is
+ * doing (`texra doctor`). Derived from the same gate the send path uses, so a
+ * report of "off" cannot drift from the behaviour.
+ */
+export function usageLoggingOptOut(): UsageLoggingOptOut {
+  const envVar = TELEMETRY_OPT_OUT_ENV_VARS.find((name) =>
+    isEnvFlagEnabled(name),
+  );
+  if (envVar) return { source: 'environment', envVar };
+  return isTelemetryEnabledBySetting() ? null : { source: 'setting' };
 }
 
 class UsageLogServiceImpl {
@@ -121,6 +163,13 @@ class UsageLogServiceImpl {
     this.extensionVersion = extensionVersion;
     this.editorType = editorType;
     this.startFlushTimer();
+
+    if (isTelemetryDisabledByEnv()) {
+      logger.info(
+        CHANNEL,
+        `Optional usage logging is disabled by the environment (${TELEMETRY_OPT_OUT_ENV_VARS.join(' / ')}); only plan-accounting rounds are reported`,
+      );
+    }
 
     logger.debug(
       CHANNEL,
