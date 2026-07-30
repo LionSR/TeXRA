@@ -302,6 +302,63 @@ The custom agents directory can be changed from the **Agents** tab in the TeXRA
 Dashboard. Click **Change** in the directory info bar to select a new folder, or
 **Reset** to return to the default location inside global storage.
 
+## Usage Logging
+
+TeXRA records one usage entry per model round and sends it to TeXRA's backend.
+
+```json
+"texra.telemetry.enabled": true
+```
+
+Each entry contains exactly these fields:
+
+| Field                            | Value                                                                     |
+| -------------------------------- | ------------------------------------------------------------------------- |
+| `model`, `provider`              | which model answered the round                                            |
+| `agentName`, `agentCategory`     | which agent ran it                                                        |
+| `inputTokens`, `outputTokens`    | token counts, excluding cache hits                                        |
+| `cachedInputTokens`              | prompt-cache hits                                                         |
+| `reasoningTokens`                | reasoning tokens, where the provider reports them                         |
+| `cost`                           | the computed cost in USD                                                  |
+| `responseTimeMs`                 | round-trip time                                                           |
+| `usedRelay`, `usageRoute`        | whether the round went through the relay, a subscription, or your own key |
+| `streamId`                       | an opaque id grouping rounds from one session                             |
+| `timestamp`                      | when the round finished                                                   |
+| `extensionVersion`, `editorType` | the TeXRA version and host (`cli`, `Visual Studio Code`, …)               |
+
+No prompt text, document content, file names, or workspace paths are included.
+
+Entries are transmitted only while you are signed in. Rounds recorded while you
+are signed out stay queued in memory, and are uploaded if you sign in later in
+the same session; they are discarded when TeXRA exits.
+
+### Opting out
+
+Set `texra.telemetry.enabled` to `false`. This takes effect immediately, and
+optional entries already queued are dropped rather than sent.
+
+It does not suppress everything. Rounds that ran through the relay or a
+subscription (`usageRoute` of `relay`, `chatgpt-subscription`, or
+`kimi-code-subscription`) are still sent, because those records are what meters
+your hosted usage against your plan's monthly spend limit — they are billing
+data, not analytics. What the setting turns off is logging for rounds billed to
+your own API key (`usageRoute` of `api-key`), which cost TeXRA nothing.
+
+If you use only your own API keys, opting out stops all usage reporting.
+
+In VS Code the setting is under **TeXRA → Privacy**. In the CLI and desktop app,
+set it in `.texra/config.json`:
+
+```json
+{
+  "texra.telemetry.enabled": false
+}
+```
+
+The value must be a JSON boolean. A quoted `"false"` is not a boolean, so TeXRA
+logs a warning and treats the setting as off rather than silently reading it as
+`true`.
+
 ## Logger Configuration
 
 Control logging behavior:
