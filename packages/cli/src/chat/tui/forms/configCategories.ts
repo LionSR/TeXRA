@@ -2,7 +2,6 @@ import type { SelectItem } from '@cli/tui/ui/Select';
 import type { StateSettingEntry } from '@shared/schemas/stateSettings';
 import { formatResultCount } from '@utils/text/stringUtils';
 
-
 const CONFIG_CATEGORY_LABELS: Readonly<Record<string, string>> = {
   git: 'Git and worktrees',
   'ai-agents': 'AI agents',

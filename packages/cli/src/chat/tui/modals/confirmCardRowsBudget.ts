@@ -1,4 +1,3 @@
-
 import {
   clampModalWidth,
   CONFIRM_CARD_HORIZONTAL_DECORATION,

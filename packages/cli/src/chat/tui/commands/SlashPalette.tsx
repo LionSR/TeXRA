@@ -3,8 +3,6 @@
 import { Box, Text, useInput } from 'ink';
 import { useState, useEffect } from 'react';
 
-
-
 import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { KeyHints } from '@cli/tui/ui/KeyHints';
 import { POINTER } from '@cli/tui/ui/glyphs';

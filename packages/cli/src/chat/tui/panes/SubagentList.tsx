@@ -7,7 +7,11 @@ import { useMemo } from 'react';
 // Local imports - shared stream state
 import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { POINTER, STATUS_DIAMOND, TICK } from '@cli/tui/ui/glyphs';
-import { Select, visibleSelectRange, type SelectItem } from '@cli/tui/ui/Select';
+import {
+  Select,
+  visibleSelectRange,
+  type SelectItem,
+} from '@cli/tui/ui/Select';
 import {
   AgentCategory,
   type StreamTabId,

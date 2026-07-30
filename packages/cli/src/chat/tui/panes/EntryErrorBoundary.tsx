@@ -20,7 +20,6 @@ import * as logUtils from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
-
 interface EntryErrorBoundaryProps {
   // Names the failed entry in the inline marker and the log line (e.g. its
   // role or "session header"). Falls back to "entry" when omitted.

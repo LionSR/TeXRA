@@ -8,7 +8,11 @@ import {
   CONFIRM_CARD_HORIZONTAL_DECORATION,
 } from '@cli/tui/ui/theme';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
-import { KEY_HINT_SEPARATOR, KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
+import {
+  KEY_HINT_SEPARATOR,
+  KeyHints,
+  type KeyHint,
+} from '@cli/tui/ui/KeyHints';
 import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
 import type { ExternalInquiryPermission } from '@shared/schemas';
 import { clamp } from '@utils/core';
