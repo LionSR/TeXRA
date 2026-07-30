@@ -104,7 +104,7 @@ const child = {
   executionId: childExecutionId,
   childStreamId,
   agentName: 'review',
-  status: 'running',
+  status: STREAM_PHASE.RUNNING,
 };
 const PROGRESS_PROJECTION_CASES = {
   setActiveStream: {
