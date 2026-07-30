@@ -193,7 +193,19 @@ export function setParentStream(
 
 /** Field-by-field comparison of the persisted roster summary — avoids a
  *  spurious `changed` on a same-content roster snapshot the runtime resends
- *  as a fresh array/object on every poll. */
+ *  as a fresh array/object on every poll.
+ *
+ *  `elapsed` is compared like every other field: `AgentRunLifecycle`
+ *  untracks a finishing child (omitting it from the next roster) *before*
+ *  transitioning its stream to a terminal phase, so a roster tick carrying
+ *  both a terminal `status` and a fresh `elapsed` never happens in practice —
+ *  the last roster snapshot this child appears in is always `running`. If
+ *  `elapsed` were dropped from this comparison while the child is running,
+ *  the cached summary would freeze at whichever tick happened to be the
+ *  first one where the other fields settled (typically the very first
+ *  tick), not the last live value before removal, and that stale, near-zero
+ *  duration is what the retained row and `formatPostCompactionContext` would
+ *  read verbatim. */
 function summaryUnchanged(
   a: LiveChildStreamEntry['summary'],
   b: LiveChildStreamEntry['summary'],
