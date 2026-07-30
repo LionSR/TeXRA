@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import type { ToolResult } from '@shared/schemas/toolResult';
+import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { defineTool } from '@tools/core/define';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
@@ -165,11 +165,10 @@ Tips:
         diagnostics: { ...baseDiagnostics, details: diagnostics },
       };
     } catch (error) {
-      return {
-        status: 'error',
-        summary: 'Failed to get diagnostics',
-        error: `Error: ${toErrorMessage(error)}\n\nIn VS Code: install the Lean 4 extension (leanprover.lean4). In CLI/desktop: install elan so that \`lake\` is on PATH, and make sure the file is inside a Lake project (lakefile.lean / lakefile.toml).`,
-      };
+      throw new ToolError(
+        `Error: ${toErrorMessage(error)}\n\nIn VS Code: install the Lean 4 extension (leanprover.lean4). In CLI/desktop: install elan so that \`lake\` is on PATH, and make sure the file is inside a Lake project (lakefile.lean / lakefile.toml).`,
+        { cause: error, summary: 'Failed to get diagnostics' },
+      );
     }
   }
 }
@@ -207,11 +206,10 @@ Requires: Lean 4 VS Code extension installed and active.`,
         output: `Executed "${command}" on ${file}`,
       };
     } catch (error) {
-      return {
-        status: 'error',
+      throw new ToolError(`Error: ${toErrorMessage(error)}`, {
+        cause: error,
         summary: 'Command failed',
-        error: `Error: ${toErrorMessage(error)}`,
-      };
+      });
     }
   }
 }
@@ -260,11 +258,13 @@ In VS Code, these commands use the Lean 4 extension. CLI and desktop provide the
         output: `Executed "${command}" successfully`,
       };
     } catch (error) {
-      return {
-        status: 'error',
-        summary: 'Command failed',
-        error: `Error executing "${command}": ${toErrorMessage(error)}`,
-      };
+      throw new ToolError(
+        `Error executing "${command}": ${toErrorMessage(error)}`,
+        {
+          cause: error,
+          summary: 'Command failed',
+        },
+      );
     }
   }
 }
@@ -304,11 +304,10 @@ Requires: Lean 4 VS Code extension installed and active.`,
           return this.executeHover(file, line0, col0, location);
       }
     } catch (error) {
-      return {
-        status: 'error',
+      throw new ToolError(`Error: ${toErrorMessage(error)}`, {
+        cause: error,
         summary: `Failed to get ${type}`,
-        error: `Error: ${toErrorMessage(error)}`,
-      };
+      });
     }
   }
 

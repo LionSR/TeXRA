@@ -195,7 +195,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         await this.applyFollowUpPolishResult(result);
       },
       onPolishError: (stream, error) => {
-        const errorMsg = error instanceof Error ? error.message : `${error}`;
+        const errorMsg = toErrorMessage(error);
         this.postToActiveView({
           command: PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT,
           stream,

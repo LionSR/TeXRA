@@ -344,7 +344,7 @@ describe('CLI Supabase auth', () => {
     expect(mocks.authCoordinator.clearSession).toHaveBeenCalledOnce();
     expect(warn).toHaveBeenCalledWith(
       'cli-auth',
-      'Local agent catalog refresh failed after sign-out: Error: local rebuild failed',
+      'Local agent catalog refresh failed after sign-out: local rebuild failed',
     );
   });
 });
