@@ -1,6 +1,12 @@
 import { useState } from 'react';
 import { Box, Text, useWindowSize } from 'ink';
 
+import { COLOR_ACCENT } from '@cli/tui/ui/colors';
+import {
+  clampModalWidth,
+  CONFIRM_CARD_HORIZONTAL_DECORATION,
+} from '@cli/tui/ui/theme';
+import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import {
   agentProposalCategoryLabel,
   getProposalFileGroups,
@@ -13,12 +19,6 @@ import {
   ScrollableModalText,
   scrollableModalTextRowsBudget,
 } from './ScrollableModalText';
-import { COLOR_ACCENT } from '../ui/colors';
-import {
-  clampModalWidth,
-  CONFIRM_CARD_HORIZONTAL_DECORATION,
-} from '../ui/theme';
-import { wrapAnsiToWidth } from '../render/ansiWrap';
 import type { ApprovalDecision } from '../state/approvalQueue';
 
 export interface AgentProposalProps {

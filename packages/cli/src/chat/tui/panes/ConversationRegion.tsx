@@ -7,6 +7,7 @@ import { Box } from 'ink';
 import { useLayoutEffect, useMemo, type ReactNode } from 'react';
 
 // Local imports - shared constants and schemas
+import { clampModalWidth } from '@cli/tui/ui/theme';
 import { type StreamTabId } from '@shared/schemas';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { clamp } from '@utils/core';
@@ -24,7 +25,6 @@ import {
   isScopedTranscriptViewport,
   transcriptViewportKey,
 } from '../state/transcriptViewportMode';
-import { clampModalWidth } from '../ui/theme';
 import { ConversationPane } from './ConversationPane';
 import {
   QueuedFollowUpsPanel,

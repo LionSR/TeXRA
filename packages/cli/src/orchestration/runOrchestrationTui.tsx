@@ -1,12 +1,12 @@
 import { render, Box, Text, useApp, useInput, useWindowSize } from 'ink';
 import { useState } from 'react';
 
-import { Select } from '../chat/tui/ui/Select';
-import { KeyHints, type KeyHint } from '../chat/tui/ui/KeyHints';
-import { tuiOutputStreamForColor } from '../chat/tui/render/noColorOutput';
-import { wrapAnsiToWidth } from '../chat/tui/render/ansiWrap';
-import { clearTerminalVisibleScreen } from '../chat/tui/terminalCleanup';
-import { computeSelectWindowSize } from '../chat/tui/forms/_shared/selectWindow';
+import { Select } from '@cli/tui/ui/Select';
+import { KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
+import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
+import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
+import { clearTerminalVisibleScreen } from '@cli/tui/terminalCleanup';
+import { computeSelectWindowSize } from '@cli/tui/selectWindow';
 import {
   isCliOrchestrationModelPickAction,
   orchestrationModelAccessView,

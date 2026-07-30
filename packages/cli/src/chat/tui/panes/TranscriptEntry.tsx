@@ -5,12 +5,12 @@
 // Third-party imports
 import { memo } from 'react';
 import { Box, Text } from 'ink';
+import { COLOR_ERROR, COLOR_HINT } from '@cli/tui/ui/colors';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 
 // Local imports - CLI TUI rendering
 import { Markdown } from '../render/Markdown';
 import { fillRows } from '../render/terminalText';
-import { COLOR_ERROR, COLOR_HINT } from '../ui/colors';
 import { ToolUseRow } from './ToolUseRow';
 import {
   LIVE_TAIL_ROWS,

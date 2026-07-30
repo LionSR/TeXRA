@@ -31,7 +31,7 @@ vi.mock('@cli/chat/tui/state/cliState', () => ({
   setTransientNotice: vi.fn(),
   streams: { get: () => ({}) },
 }));
-vi.mock('@cli/chat/tui/terminalCleanup', () => ({
+vi.mock('@cli/tui/terminalCleanup', () => ({
   cleanupTerminalModes: mocks.cleanupTerminalModes,
   restoreTuiInputModes: vi.fn(),
   supportsTerminalJobControl: () => false,

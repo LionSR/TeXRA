@@ -24,6 +24,11 @@ import {
 } from '@cli/runtime/initPlatform';
 import { writeTextStdout } from '@cli/runtime/logSinks';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
+import {
+  cleanupTerminalModes,
+  restoreTuiInputModes,
+  supportsTerminalJobControl,
+} from '@cli/tui/terminalCleanup';
 import { tryPlatform } from '@platform/platform';
 import { assertNever } from '@utils/core';
 
@@ -40,11 +45,6 @@ import {
   formatResumeHint,
 } from './state/resumeHint';
 import { chatTuiSigintAction, type TuiSession } from './state/sessionRunState';
-import {
-  cleanupTerminalModes,
-  restoreTuiInputModes,
-  supportsTerminalJobControl,
-} from './terminalCleanup';
 import type PQueue from 'p-queue';
 import type { Instance as InkInstance } from 'ink';
 

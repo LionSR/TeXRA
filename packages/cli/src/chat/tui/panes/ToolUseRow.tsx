@@ -5,12 +5,12 @@
 import { memo } from 'react';
 import { Box, Text } from 'ink';
 
+import { TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
 import { type NormalizedToolUse } from '@shared/schemas';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 
 import { DiffView } from '../render/DiffView';
 import { clipToWidth } from '../render/terminalText';
-import { TOOL_OUTPUT_CORNER } from '../ui/glyphs';
 import {
   toolUseMarginBottomRows,
   toolUseStyledLines,

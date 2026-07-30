@@ -3,6 +3,8 @@
 
 import { Box, Text } from 'ink';
 
+import { COLOR_HINT, COLOR_SUCCESS } from '@cli/tui/ui/colors';
+import { TODO_ACTIVE, TODO_DONE, TODO_PENDING } from '@cli/tui/ui/glyphs';
 import {
   TODO_STATUS,
   planSummaryLine,
@@ -18,8 +20,6 @@ import {
 } from '../state/cliState';
 import { hiddenRowsText } from '../render/overflowText';
 import { useSignal } from '../state/useSignal';
-import { COLOR_HINT, COLOR_SUCCESS } from '../ui/colors';
-import { TODO_ACTIVE, TODO_DONE, TODO_PENDING } from '../ui/glyphs';
 
 // Marker glyph + color per todo status; statuses absent here (e.g. PENDING)
 // fall back to the default empty box with no color.

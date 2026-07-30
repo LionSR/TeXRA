@@ -7,6 +7,20 @@
 import { Box, Text } from 'ink';
 
 import {
+  COLOR_BORDER,
+  COLOR_ERROR,
+  COLOR_SUCCESS,
+  COLOR_WARNING,
+} from '@cli/tui/ui/colors';
+import {
+  CROSS,
+  SKIP_CIRCLE,
+  STATUS_DOT,
+  TICK,
+  TODO_PENDING,
+  WARNING,
+} from '@cli/tui/ui/glyphs';
+import {
   STREAM_PHASE,
   WORKFLOW_TASK_STATUS_LABEL,
   roundIndexedEntries,
@@ -17,20 +31,6 @@ import { formatRoundStageLabel } from '@shared/streams/streamStatusDisplay';
 import { formatDuration } from '@utils/text/stringUtils';
 
 import { safeTerminalText } from '../render/terminalText';
-import {
-  COLOR_BORDER,
-  COLOR_ERROR,
-  COLOR_SUCCESS,
-  COLOR_WARNING,
-} from '../ui/colors';
-import {
-  CROSS,
-  SKIP_CIRCLE,
-  STATUS_DOT,
-  TICK,
-  TODO_PENDING,
-  WARNING,
-} from '../ui/glyphs';
 import type { StreamSlice } from '../state/cliState';
 
 type WorkflowRunDetailTone =

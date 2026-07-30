@@ -5,6 +5,7 @@
 import { Text } from 'ink';
 
 import { readCliRuntimeSkills, skillListRecord } from '@cli/runtime/skills';
+import type { SelectItem } from '@cli/tui/ui/Select';
 import { escapeText } from '@shared/utils/xmlEscape';
 import { formatRuntimeSkillActivation } from '@skills/runtimeSkills';
 import type {
@@ -14,7 +15,6 @@ import type {
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import { AsyncListForm } from './_shared/ListForm';
-import type { SelectItem } from '../ui/Select';
 
 export interface SkillsListFormProps {
   readonly availableRows?: number;

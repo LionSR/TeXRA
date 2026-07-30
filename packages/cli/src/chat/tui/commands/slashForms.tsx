@@ -1,14 +1,14 @@
 import { Box, Text, useInput, useWindowSize } from 'ink';
 import { useLayoutEffect } from 'react';
 
+import { COLOR_ERROR } from '@cli/tui/ui/colors';
+import { KeyHints } from '@cli/tui/ui/KeyHints';
+import { LoadingIndicator } from '@cli/tui/ui/LoadingIndicator';
 import { isEscapeInput } from '../input/inputKeys';
 import { FormFrame, formFrameWidth } from '../forms/_shared/FormFrame';
 import { textDisplayWidth } from '../render/terminalText';
 import { activeForm, formProgress, type FormProgress } from '../state/cliState';
 import { appendLocalUserTranscript } from '../state/transcript';
-import { COLOR_ERROR } from '../ui/colors';
-import { KeyHints } from '../ui/KeyHints';
-import { LoadingIndicator } from '../ui/LoadingIndicator';
 
 import {
   findSlashCommand,
