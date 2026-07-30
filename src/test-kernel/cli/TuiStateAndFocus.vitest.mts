@@ -3461,13 +3461,14 @@ describe('child-stream ordered transition matrix', () => {
   const parentQ = 'parent-q' as StreamTabId;
   const kid = 'kid' as StreamTabId;
 
-  function rosterRow(status?: StreamPhase) {
+  function rosterRow(status?: StreamPhase, elapsed?: string) {
     return {
       kind: 'subagent' as const,
       executionId: 'kid-exec',
       agentName: 'kid-agent',
       childStreamId: kid,
       status,
+      elapsed,
     };
   }
 
@@ -3551,6 +3552,31 @@ describe('child-stream ordered transition matrix', () => {
     expect(retainedRows(parentP)).toMatchObject([
       { status: STREAM_PHASE.COMPLETED },
     ]);
+  });
+
+  it('5b. elapsed-only roster ticks are dropped while running, captured once terminal', () => {
+    // While the child is live (status undefined or running), an elapsed-only
+    // delta must not force a `CHILD_STREAMS.set` — the display derives
+    // elapsed from `startedAt` instead. But once the roster tick lands after
+    // the child goes terminal, the freshest `elapsed` must be captured, not
+    // frozen at whichever value happened to be cached from an earlier tick
+    // (the roster row is a model-facing consumer via
+    // `formatPostCompactionContext`, and the retained-row display falls back
+    // to the cached string once the child is no longer live).
+    patchStream(kid, (s) => ({ ...s, status: STREAM_PHASE.RUNNING }));
+    applySubagentRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING, '0s')]);
+    setParentStream(kid, parentP);
+
+    // A later live tick changes only `elapsed`; must not overwrite the cache.
+    applySubagentRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING, '5s')]);
+    expect(retainedRows(parentP)).toMatchObject([{ elapsed: '0s' }]);
+
+    // The child goes terminal, then one final roster tick reports its true
+    // final elapsed time. This must land in the retained summary.
+    patchStream(kid, (s) => ({ ...s, status: STREAM_PHASE.COMPLETED }));
+    applySubagentRoster(parentP, [rosterRow(STREAM_PHASE.COMPLETED, '42s')]);
+
+    expect(retainedRows(parentP)).toMatchObject([{ elapsed: '42s' }]);
   });
 
   it('6. promotion with stale roster: A, S(running), R_P+, E_P+, E0, R_P+', () => {

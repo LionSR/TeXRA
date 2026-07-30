@@ -10,10 +10,11 @@
 // transition/selector semantics this module implements.
 
 import { computed, signal, type Signal } from '@lit-labs/signals';
-import type {
-  ActiveChildInfo,
-  StreamTabId,
-  SubagentChildInfo,
+import {
+  STREAM_PHASE,
+  type ActiveChildInfo,
+  type StreamTabId,
+  type SubagentChildInfo,
 } from '@shared/schemas';
 
 import type { StreamSlice } from './cliState';
@@ -193,10 +194,20 @@ export function setParentStream(
 
 /** Field-by-field comparison of the persisted roster summary — avoids a
  *  spurious `changed` on a same-content roster snapshot the runtime resends
- *  as a fresh array/object on every poll. */
+ *  as a fresh array/object on every poll.
+ *
+ *  `elapsed` is compared only when `skipElapsed` is false. While a child is
+ *  live (status undefined or `running`), `childElapsed` derives the display
+ *  from `startedAt` and ignores the cached formatted string, so a
+ *  formatted-time-only delta there is safe to drop — otherwise every roster
+ *  tick would force a `CHILD_STREAMS.set`. Once the child is no longer live,
+ *  the cached `elapsed` string becomes the value of record (terminal display,
+ *  `formatPostCompactionContext`), so a delta there must still count as a
+ *  change or the retained row freezes at a stale, often near-zero, elapsed. */
 function summaryUnchanged(
   a: LiveChildStreamEntry['summary'],
   b: LiveChildStreamEntry['summary'],
+  skipElapsed: boolean,
 ): boolean {
   if (a === b) return true;
   if (!a || !b) return false;
@@ -204,21 +215,26 @@ function summaryUnchanged(
     a.agentName === b.agentName &&
     a.executionId === b.executionId &&
     a.startedAt === b.startedAt &&
+    (skipElapsed || a.elapsed === b.elapsed) &&
     a.toolName === b.toolName &&
     a.workflowPhase === b.workflowPhase
   );
 }
 
-/** Whether applying `nextEntry` over `entry` would be a no-op. */
+/** Whether applying `nextEntry` over `entry` would be a no-op. `childStatus`
+ *  decides whether an `elapsed`-only delta counts (see `summaryUnchanged`). */
 function subagentEntryUnchanged(
   entry: LiveChildStreamEntry | undefined,
   nextEntry: LiveChildStreamEntry,
+  childStatus: ActiveChildInfo['status'],
 ): boolean {
+  const skipElapsed =
+    childStatus === undefined || childStatus === STREAM_PHASE.RUNNING;
   return (
     entry !== undefined &&
     entry.active === nextEntry.active &&
     entry.parent === nextEntry.parent &&
-    summaryUnchanged(entry.summary, nextEntry.summary)
+    summaryUnchanged(entry.summary, nextEntry.summary, skipElapsed)
   );
 }
 
@@ -303,7 +319,7 @@ export function applySubagentRoster(
       active: true,
       parent,
     };
-    if (subagentEntryUnchanged(entry, nextEntry)) continue;
+    if (subagentEntryUnchanged(entry, nextEntry, child.status)) continue;
     out.set(childStreamId, nextEntry);
     changed = true;
   }
