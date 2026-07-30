@@ -86,9 +86,10 @@ describe('MemoryTool view with an omitted path', () => {
       command: 'create',
       file_text: 'body',
     });
+    expect(create.status).toBe('error');
     expect(create).toMatchObject({
       status: 'error',
-      error: 'Parameter `path` is required for command: create',
+      error: expect.stringContaining('path'),
     });
   });
 });

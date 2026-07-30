@@ -195,8 +195,15 @@ export const ToolResultSchema = z.discriminatedUnion('status', [
 export type ToolResult = z.infer<typeof ToolResultSchema>;
 
 export class ToolError extends Error {
-  constructor(message: string, options?: { cause?: unknown }) {
+  /** Brief human-facing summary carried through to the ToolResult, when set. */
+  readonly summary?: string;
+
+  constructor(
+    message: string,
+    options?: { cause?: unknown; summary?: string },
+  ) {
     super(message, options);
     this.name = 'ToolError';
+    this.summary = options?.summary;
   }
 }
