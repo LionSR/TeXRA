@@ -31,18 +31,12 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
 import type { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
-import { attachProviderError } from '@common/errors/sdkErrorUtils';
 import {
   getRuntimeModelConfig,
   resolveRuntimeModelConfig,
 } from '@model/runtimeModelRegistry';
 import type { SubagentProgressUpdate } from '@shared/schemas';
-import {
-  RUN_OUTCOME,
-  STREAM_PHASE,
-  toProviderErrorFromRetry,
-  type RunOutcome,
-} from '@shared/schemas';
+import { RUN_OUTCOME, STREAM_PHASE, type RunOutcome } from '@shared/schemas';
 import { deriveRunOutcome } from '@shared/streams/streamStatus';
 import { getDefaultToolRegistry } from '@tools/registry';
 import {
@@ -68,6 +62,7 @@ import {
   setToolUseSharedModel,
 } from './modelSwitchState';
 import { ToolUseSessionLifecycle } from './ToolUseSessionLifecycle';
+import { throwFlowLastError } from '../flowLastError';
 import type { ToolUseServices } from './ToolUseServices';
 
 export interface RunToolUseFlowInput<
@@ -613,17 +608,13 @@ export async function runToolUseFlow<C = unknown>(
     if (shared.lastError) {
       // Re-throw so runFlowWithLifecycle logs the error and shows
       // the user notification, while preserving terminal run accounting.
-      // Attach the full structured provider error so downstream error
-      // formatters can surface statusCode, provider, etc. without
-      // sniffing the message string.
       const err = new ToolUseFlowError(shared.lastError.message, {
         outcome,
         lastResponse,
         touchedFiles,
         totalCostUsd,
       });
-      attachProviderError(err, toProviderErrorFromRetry(shared.lastError));
-      throw err;
+      throwFlowLastError(err, shared.lastError);
     }
   } finally {
     activePersistedFlow = undefined;

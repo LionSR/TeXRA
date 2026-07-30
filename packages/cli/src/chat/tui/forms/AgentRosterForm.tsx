@@ -21,6 +21,7 @@ import {
   type AgentModePreset,
 } from '@shared/schemas/agentPresets';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { COLOR_ERROR, COLOR_WARNING } from '../ui/colors';
 import { TICK } from '../ui/glyphs';
@@ -147,7 +148,7 @@ export function AgentRosterForm(
         setError(undefined);
       })
       .catch((reason: unknown) => {
-        setError(reason instanceof Error ? reason.message : String(reason));
+        setError(toErrorMessage(reason));
         props.onError?.(reason);
       });
   };
@@ -161,7 +162,7 @@ export function AgentRosterForm(
         refresh();
       })
       .catch((reason: unknown) => {
-        setError(reason instanceof Error ? reason.message : String(reason));
+        setError(toErrorMessage(reason));
         props.onError?.(reason);
       });
   };

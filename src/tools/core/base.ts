@@ -7,6 +7,7 @@ import type { ToolDefinition } from '@model/ToolDefinition';
 import {
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,
   formatZodIssuesForDiagnostics,
+  ToolError,
   type ToolResult,
 } from '@shared/schemas/toolResult';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -77,9 +78,11 @@ export abstract class BaseTool<T> implements ITool {
       const message = toErrorMessage(err).trim();
       // Only include error name - stack traces waste tokens and aren't actionable by models
       const diagnostics = err instanceof Error ? { name: err.name } : undefined;
+      const summary = err instanceof ToolError ? err.summary : undefined;
       return {
         status: 'error',
         error: message || 'Tool execution failed.',
+        ...(summary !== undefined ? { summary } : {}),
         ...(diagnostics !== undefined ? { diagnostics } : {}),
       };
     }

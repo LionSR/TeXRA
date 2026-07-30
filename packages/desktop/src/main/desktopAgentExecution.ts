@@ -896,7 +896,7 @@ export class DesktopProgressBridge {
         await this.applyFollowUpPolishResult(result);
       },
       onPolishError: async (stream, error) => {
-        const message = error instanceof Error ? error.message : `${error}`;
+        const message = toErrorMessage(error);
         this.postToRenderer({
           command: PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT,
           stream,

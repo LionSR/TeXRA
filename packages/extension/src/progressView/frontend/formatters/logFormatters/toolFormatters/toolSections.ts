@@ -47,8 +47,6 @@ import {
 } from '@shared/schemas/proposalFields';
 import { WorkflowScriptFilesSchema } from '@shared/schemas/workflowScriptFiles';
 import type { ExecutionsToolInput } from '@tools/ExecutionsTool';
-import type { EditInput } from '@tools/EditTool';
-import type { TextEditorInput } from '@tools/TextEditorTool';
 import type { ReadInput } from '@tools/ReadTool';
 import type { WriteInput } from '@tools/WriteTool';
 import type {
@@ -89,10 +87,13 @@ function buildFileGroupsSection(
   );
 }
 
+/** Common shape of the edit_file and str_replace_editor tool inputs, for display purposes only. */
+type EditDiffLikeInput = { old_str?: unknown; new_str?: unknown };
+
 function buildEditDiffInputSections(ctx: ToolSectionContext): TemplateResult[] {
   const { input, filePath, parsedOutput } = ctx;
   if (!isObject(input)) return [];
-  const editInput = input as EditInput | TextEditorInput;
+  const editInput = input as EditDiffLikeInput;
   if (
     typeof editInput.old_str !== 'string' ||
     typeof editInput.new_str !== 'string'
@@ -158,8 +159,7 @@ function buildMemorySections(ctx: ToolSectionContext): TemplateResult[] {
   const { input } = ctx;
   if (!isObject(input)) return [];
   const memInput = input as MemoryToolInput;
-  const command = memInput.command;
-  const memPath = memInput.path ?? '';
+  const memPath = memInput.command === 'rename' ? '' : (memInput.path ?? '');
   const sections: TemplateResult[] = [];
 
   if (memPath) {
@@ -169,7 +169,7 @@ function buildMemorySections(ctx: ToolSectionContext): TemplateResult[] {
   }
 
   if (
-    command === 'str_replace' &&
+    memInput.command === 'str_replace' &&
     memInput.old_str != null &&
     memInput.new_str != null
   ) {
@@ -179,7 +179,7 @@ function buildMemorySections(ctx: ToolSectionContext): TemplateResult[] {
         buildEditDiffSection(memInput.old_str, memInput.new_str),
       ),
     );
-  } else if (command === 'create' && memInput.file_text != null) {
+  } else if (memInput.command === 'create' && memInput.file_text != null) {
     const contentLanguage = memPath
       ? getLanguageFromPath(memPath)
       : 'plaintext';
@@ -188,7 +188,7 @@ function buildMemorySections(ctx: ToolSectionContext): TemplateResult[] {
         language: contentLanguage,
       }),
     );
-  } else if (command === 'insert') {
+  } else if (memInput.command === 'insert') {
     const insertText = memInput.insert_text ?? memInput.new_str;
     if (insertText != null) {
       const lineLabel =
@@ -204,7 +204,7 @@ function buildMemorySections(ctx: ToolSectionContext): TemplateResult[] {
         }),
       );
     }
-  } else if (command === 'rename') {
+  } else if (memInput.command === 'rename') {
     const oldPath = memInput.old_path;
     const newPath = memInput.new_path;
     if (oldPath != null && newPath != null) {

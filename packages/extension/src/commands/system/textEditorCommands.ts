@@ -70,14 +70,14 @@ export async function handleTestTextEditor(): Promise<void> {
       `Created TextEditorTool instance with command: ${command}`,
     );
 
-    // Type assertion is safe because showQuickPick options match EditorCommand values
-    const input: TextEditorInput = {
-      command: command as EditorCommand,
-      path: filePath,
-    };
+    // Each branch builds its own fully-formed discriminated-union variant
+    // rather than mutating a shared object, since TextEditorInput no longer
+    // admits partial cross-command assignment.
+    let input: TextEditorInput;
 
-    switch (command) {
-      case 'view':
+    switch (command as EditorCommand) {
+      case 'view': {
+        let view_range: [number, number] | undefined;
         const useRange = await vscode.window.showQuickPick(['Yes', 'No'], {
           placeHolder: 'Specify a line range?',
         });
@@ -95,15 +95,17 @@ export async function handleTestTextEditor(): Promise<void> {
           );
 
           if (startLine && endLine) {
-            input.view_range = [
+            view_range = [
               Number.parseInt(startLine, 10),
               Number.parseInt(endLine, 10),
             ];
           }
         }
+        input = { command: 'view', path: filePath, view_range };
         break;
+      }
 
-      case 'str_replace':
+      case 'str_replace': {
         const oldStr = await vscode.window.showInputBox({
           prompt: 'Enter text to replace',
         });
@@ -117,11 +119,16 @@ export async function handleTestTextEditor(): Promise<void> {
           prompt: 'Enter replacement text',
         });
 
-        input.old_str = oldStr;
-        input.new_str = newStr ?? '';
+        input = {
+          command: 'str_replace',
+          path: filePath,
+          old_str: oldStr,
+          new_str: newStr ?? '',
+        };
         break;
+      }
 
-      case 'insert':
+      case 'insert': {
         const insertLine = await promptLineNumber(
           'Enter line number to insert at',
           'Please enter a valid line number (0 or greater)',
@@ -141,11 +148,16 @@ export async function handleTestTextEditor(): Promise<void> {
           return;
         }
 
-        input.insert_line = Number.parseInt(insertLine, 10);
-        input.new_str = textToInsert;
+        input = {
+          command: 'insert',
+          path: filePath,
+          insert_line: Number.parseInt(insertLine, 10),
+          new_str: textToInsert,
+        };
         break;
+      }
 
-      case 'create':
+      case 'create': {
         const newFilePath = await vscode.window.showInputBox({
           prompt: 'Enter path for new file (relative to workspace)',
           value: 'new_file.txt',
@@ -164,12 +176,16 @@ export async function handleTestTextEditor(): Promise<void> {
           return;
         }
 
-        input.path = newFilePath;
-        input.file_text = fileContent;
+        input = {
+          command: 'create',
+          path: newFilePath,
+          file_text: fileContent,
+        };
         break;
+      }
 
       case 'undo_edit':
-        // No additional input needed
+        input = { command: 'undo_edit', path: filePath };
         break;
 
       default:
