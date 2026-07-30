@@ -5,6 +5,13 @@ import { Box, Text, useInput, useWindowSize } from 'ink';
 import { useMemo } from 'react';
 
 // Local imports - shared stream state
+import { COLOR_HINT } from '@cli/tui/ui/colors';
+import { POINTER, STATUS_DIAMOND, TICK } from '@cli/tui/ui/glyphs';
+import {
+  Select,
+  visibleSelectRange,
+  type SelectItem,
+} from '@cli/tui/ui/Select';
 import {
   AgentCategory,
   type StreamTabId,
@@ -34,9 +41,6 @@ import {
   type ChildListValue,
 } from '../state/childListSelection';
 import { useLiveNowMs } from '../state/useLiveNowMs';
-import { COLOR_HINT } from '../ui/colors';
-import { POINTER, STATUS_DIAMOND, TICK } from '../ui/glyphs';
-import { Select, visibleSelectRange, type SelectItem } from '../ui/Select';
 import {
   CHILD_ROW_METADATA_MIN_COLUMNS,
   CHILD_STATUS_MARKER,

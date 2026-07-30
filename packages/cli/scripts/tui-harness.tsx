@@ -27,6 +27,7 @@ import {
   initializeDefaultSession,
 } from '@agent/runtime/SessionHandle';
 import { SupabaseClient } from '@auth/SupabaseClient';
+import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { texraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { platform, tryPlatform } from '@platform/platform';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
@@ -103,7 +104,6 @@ import {
 } from '../src/chat/tui/state/focusedChildFollowUp';
 import { formatCliSessionStatus } from '../src/chat/tui/sessionStatus';
 import { notify } from '../src/chat/tui/notifications/terminalNotifier';
-import { tuiOutputStreamForColor } from '../src/chat/tui/render/noColorOutput';
 import { createTuiViewportController } from '../src/chat/tui/render/tuiViewportController';
 import {
   approvalPayloadStreamId,

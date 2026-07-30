@@ -7,7 +7,7 @@ import {
   type ChildListValue,
 } from '@cli/chat/tui/state/childListSelection';
 import type { StreamView } from '@cli/chat/tui/state/streamViews';
-import { POINTER } from '@cli/chat/tui/ui/glyphs';
+import { POINTER } from '@cli/tui/ui/glyphs';
 import type { StreamTabId } from '@shared/schemas';
 import {
   FakeStdin,

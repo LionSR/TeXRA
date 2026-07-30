@@ -7,9 +7,10 @@
 import { useMemo } from 'react';
 import { Box, Text } from 'ink';
 
+import { clampModalWidth, MIN_MODAL_CONTENT_WIDTH } from '@cli/tui/ui/theme';
+import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
+import { KeyHints } from '@cli/tui/ui/KeyHints';
 import { confirmCardContentRowsBudget } from './confirmCardRowsBudget';
-import { clampModalWidth, MIN_MODAL_CONTENT_WIDTH } from '../ui/theme';
-import { wrapAnsiToWidth } from '../render/ansiWrap';
 import {
   boundedScrollableLines,
   compactAwareMaxScrollOffset,
@@ -17,7 +18,6 @@ import {
   type ScrollableDisplayLine,
 } from '../render/scrollBounds';
 import { fillRows } from '../render/terminalText';
-import { KeyHints } from '../ui/KeyHints';
 import { useScrollableOffset } from '../state/useScrollableOffset';
 
 type ModalTextDisplayLine = ScrollableDisplayLine<'text'>;

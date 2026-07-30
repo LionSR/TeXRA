@@ -2,6 +2,16 @@ import { useMemo, useState } from 'react';
 import { Box, Text, useInput, useWindowSize } from 'ink';
 
 import { parseUserQuestionAnswer } from '@cli/runtime/userQuestionAnswer';
+import { COLOR_SUCCESS } from '@cli/tui/ui/colors';
+import {
+  clampModalWidth,
+  CONFIRM_CARD_HORIZONTAL_DECORATION,
+  isCompactRows,
+} from '@cli/tui/ui/theme';
+import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
+import { Select } from '@cli/tui/ui/Select';
+import { KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
+import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
 import type {
   UserQuestionAnswers,
   UserQuestionPermission,
@@ -14,23 +24,13 @@ import {
   USER_QUESTION_SKIPPED_FEEDBACK,
   userQuestionDecision,
 } from './UserQuestionState';
-import { COLOR_SUCCESS } from '../ui/colors';
-import {
-  clampModalWidth,
-  CONFIRM_CARD_HORIZONTAL_DECORATION,
-  isCompactRows,
-} from '../ui/theme';
 import { BaseTextInput } from '../input/BaseTextInput';
 import { isEscapeInput } from '../input/inputKeys';
 import {
   previousRowsText,
   selectVisibleInlineOverflowText,
 } from '../render/overflowText';
-import { wrapAnsiToWidth } from '../render/ansiWrap';
 import { clipToWidth, textDisplayWidth } from '../render/terminalText';
-import { Select } from '../ui/Select';
-import { KeyHints, type KeyHint } from '../ui/KeyHints';
-import { BorderedPanel } from '../ui/BorderedPanel';
 import type { ApprovalDecision } from '../state/approvalQueue';
 
 export interface UserQuestionProps {

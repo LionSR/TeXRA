@@ -27,7 +27,7 @@ import {
   selectControlledHighlightIndex,
   visibleSelectRange,
   type SelectItem,
-} from '@cli/chat/tui/ui/Select';
+} from '@cli/tui/ui/Select';
 import { AgentCategory, STREAM_PHASE, type StreamTabId } from '@shared/schemas';
 import { buildChildStreamEntries } from '@test/support/childStreamEntries';
 import {

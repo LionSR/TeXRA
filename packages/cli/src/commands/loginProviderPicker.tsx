@@ -2,10 +2,10 @@ import { render, Box, Text, useApp } from 'ink';
 
 import { DEFAULT_OAUTH_PROVIDER, type OAuthProvider } from '@auth/config';
 
-import { tuiOutputStreamForColor } from '../chat/tui/render/noColorOutput';
-import { clearTerminalVisibleScreen } from '../chat/tui/terminalCleanup';
-import { KeyHints } from '../chat/tui/ui/KeyHints';
-import { Select, type SelectItem } from '../chat/tui/ui/Select';
+import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
+import { clearTerminalVisibleScreen } from '@cli/tui/terminalCleanup';
+import { KeyHints } from '@cli/tui/ui/KeyHints';
+import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import { isLikelyRemoteSession } from '../runtime/remoteSession';
 import { CLI_OAUTH_PROVIDER_ITEMS } from '../runtime/oauthProviderDisplay';
 

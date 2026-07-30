@@ -4,11 +4,11 @@
 
 import { Text, useWindowSize } from 'ink';
 
-import { KeyHints, type KeyHint } from '@cli/chat/tui/ui/KeyHints';
-import { BorderedPanel } from '@cli/chat/tui/ui/BorderedPanel';
-import { COLOR_ERROR, COLOR_HINT } from '@cli/chat/tui/ui/colors';
-import { LoadingIndicator } from '@cli/chat/tui/ui/LoadingIndicator';
-import { FORM_FRAME_MAX_WIDTH } from '@cli/chat/tui/ui/theme';
+import { KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
+import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
+import { COLOR_ERROR, COLOR_HINT } from '@cli/tui/ui/colors';
+import { LoadingIndicator } from '@cli/tui/ui/LoadingIndicator';
+import { FORM_FRAME_MAX_WIDTH } from '@cli/tui/ui/theme';
 import { clamp } from '@utils/core';
 
 export interface FormFrameProps {

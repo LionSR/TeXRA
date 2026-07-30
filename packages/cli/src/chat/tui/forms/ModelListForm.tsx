@@ -15,19 +15,19 @@ import {
 } from '@cli/runtime/modelAccess';
 import type { CliApiMode } from '@cli/runtime/apiAccessMode';
 import { formatCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
+import { Select } from '@cli/tui/ui/Select';
+import { KeyHints } from '@cli/tui/ui/KeyHints';
+import {
+  computeSelectWindowSize,
+  isCompactFormRows,
+  type SelectWindowSize,
+} from '@cli/tui/selectWindow';
 import type { AgentCategory } from '@shared/schemas/agent';
-import { Select } from '../ui/Select';
-import { KeyHints } from '../ui/KeyHints';
 import {
   CompactFormKeyHints,
   FormFrame,
   renderAsyncListFormTransient,
 } from './_shared/FormFrame';
-import {
-  computeSelectWindowSize,
-  isCompactFormRows,
-  type SelectWindowSize,
-} from './_shared/selectWindow';
 import { useAsyncListForm } from './_shared/useAsyncListForm';
 import { usePendingListFormSelection } from './_shared/ListForm';
 import { isPlainReturnInput } from '../input/inputKeys';

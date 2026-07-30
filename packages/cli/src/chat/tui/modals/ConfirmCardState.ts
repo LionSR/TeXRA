@@ -1,10 +1,10 @@
+import { KEY_HINT_SEPARATOR, keyHintText } from '@cli/tui/ui/KeyHints';
+import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
+import { APPROVAL_PULSE_FRAMES } from '@cli/tui/ui/glyphs';
 import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
 
-import { KEY_HINT_SEPARATOR, keyHintText } from '../ui/KeyHints';
 import { isEscapeInput } from '../input/inputKeys';
 import { textDisplayWidth } from '../render/terminalText';
-import { loadingFrameAt } from '../ui/LoadingIndicator';
-import { APPROVAL_PULSE_FRAMES } from '../ui/glyphs';
 
 export type ConfirmCardKeyAction =
   'approve' | 'reject' | 'approveAlways' | 'feedback' | 'ignore';
