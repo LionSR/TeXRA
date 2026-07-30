@@ -836,23 +836,23 @@ export class ModelHandlerGoogleGenAI extends GoogleModelHandlerBase<
     const parts = responseObject?.candidates?.[0]?.content?.parts;
     if (!Array.isArray(parts)) return [];
 
-    const results: GoogleToolCall[] = [];
-    for (const part of parts) {
+    return parts.flatMap((part): GoogleToolCall[] => {
       const call = part.functionCall;
-      if (!call?.name) continue;
-      results.push({
-        provider: 'google',
-        callId: call.id ?? generateShortId(),
-        name: call.name,
-        input: call.args,
-        raw: call,
-        thoughtSignature:
-          typeof part.thoughtSignature === 'string'
-            ? part.thoughtSignature
-            : undefined,
-      });
-    }
-    return results;
+      if (!call?.name) return [];
+      return [
+        {
+          provider: 'google',
+          callId: call.id ?? generateShortId(),
+          name: call.name,
+          input: call.args,
+          raw: call,
+          thoughtSignature:
+            typeof part.thoughtSignature === 'string'
+              ? part.thoughtSignature
+              : undefined,
+        },
+      ];
+    });
   }
 
   /**

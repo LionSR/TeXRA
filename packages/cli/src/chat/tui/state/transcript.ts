@@ -35,10 +35,6 @@ export function isFinalTranscriptStatus(
 
 let localEntrySeq = 0;
 
-function normalizeTranscriptText(text: string): string {
-  return text.trim();
-}
-
 export function appendLocalAssistantTranscript(
   text: string,
   streamId?: StreamTabId,
@@ -59,7 +55,7 @@ function appendLocalTranscriptEntry(
   text: string,
   explicitStreamId?: StreamTabId,
 ): void {
-  const normalized = normalizeTranscriptText(text);
+  const normalized = text.trim();
   if (!normalized) return;
 
   const streamId = explicitStreamId ?? defaultLocalTranscriptStreamId();

@@ -69,18 +69,23 @@ function formatRenderError(label: string, errorMsg: string): TemplateResult {
   return html`<div class="log-line log-line--render-error"><span class="render-error-icon">${waIcon('triangle-exclamation')}</span><span class="render-error-text">Failed to render ${label}: ${errorMsg}</span></div>`;
 }
 
-/** Wrap a formatter function with error handling for graceful degradation. */
+/**
+ * Wrap a formatter function with error handling for graceful degradation.
+ * `label` may be a fixed string or a function deriving the label from the
+ * message (e.g. naming the tool in a tool-use error card).
+ */
 function wrapWithErrorHandling(
   fn: (
     m: LogMessageData,
     opts?: FormatOptions & { isRunning?: boolean },
   ) => FormatResult,
-  label: string,
+  label: string | ((message: LogMessageData) => string),
 ): TemplateFormatterFn {
   return (message, options) => {
-    const result = safeFormat(() => fn(message, options), label);
+    const resolvedLabel = typeof label === 'function' ? label(message) : label;
+    const result = safeFormat(() => fn(message, options), resolvedLabel);
     if (!result.ok) {
-      return formatRenderError(label, result.error);
+      return formatRenderError(resolvedLabel, result.error);
     }
     return result.value;
   };
@@ -111,17 +116,7 @@ const TEMPLATE_FORMATTERS: Record<string, TemplateFormatterFn | null> = {
   scratchpad: wrapWithErrorHandling(formatBannerContentTemplate, 'scratchpad'),
 
   // Tool/search/fetch results
-  toolUse: (message, options) => {
-    const label = getToolUseRenderLabel(message);
-    const result = safeFormat(
-      () => formatToolUseTemplate(message, options),
-      label,
-    );
-    if (!result.ok) {
-      return formatRenderError(label, result.error);
-    }
-    return result.value;
-  },
+  toolUse: wrapWithErrorHandling(formatToolUseTemplate, getToolUseRenderLabel),
   webSearch: wrapWithErrorHandling(formatWebSearchTemplate, 'web search'),
   webFetch: wrapWithErrorHandling(formatWebFetchTemplate, 'web fetch'),
 

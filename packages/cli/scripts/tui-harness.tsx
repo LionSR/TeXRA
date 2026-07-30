@@ -920,13 +920,6 @@ function makeChildEntries(agent: string, action: string): ConversationEntry[] {
   ];
 }
 
-function isDifferentExecution(
-  child: ActiveChildInfo,
-  executionId: string,
-): boolean {
-  return child.executionId !== executionId;
-}
-
 function harnessMessageEntry(
   id: string,
   text: string,
@@ -1141,7 +1134,8 @@ function applyHarnessApprovalDecision(decision: ApprovalDecision): void {
 function appendHarnessExternalInquiryDecision(
   decision: ApprovalDecision,
 ): void {
-  appendHarnessUserTranscript(
+  appendHarnessTranscript(
+    'user',
     buildContinuationText({
       event: decision.accepted && decision.userMessage ? 'answered' : 'dropped',
       threadId: EXTERNAL_INQUIRY_THREAD_ID,
@@ -2093,10 +2087,6 @@ function appendHarnessChildSubmitAck(
   appendHarnessTranscript('assistant', text, streamId, { finalized: !isLive });
 }
 
-function appendHarnessUserTranscript(text: string): void {
-  appendHarnessTranscript('user', text);
-}
-
 function appendHarnessTranscript(
   role: 'assistant' | 'error' | 'user',
   text: string,
@@ -2127,12 +2117,6 @@ function defaultHarnessTranscriptStreamId(): StreamTabId {
   });
 }
 
-function formatHarnessSlashHelp(): string {
-  return formatSlashCommandHelp(listSlashCommands(), {
-    shortcutModifierLabel: defaultShortcutModifierLabel(),
-  });
-}
-
 function setHarnessApprovalPolicy(policy: CliApprovalPolicy): void {
   harnessApprovalPolicy = policy;
   sessionMeta.set({
@@ -2152,17 +2136,13 @@ function getHarnessModelSwitchDisabledReason(
     : undefined;
 }
 
-function openHarnessApprovalPolicyForm(remainder: string): boolean {
-  return openCliSlashCommandForm('approval', remainder);
-}
-
 function applyHarnessApprovalPolicySelection(
   input: string,
   usage: string,
 ): void {
   const normalized = input.trim().toLowerCase();
   if (!normalized || normalized === 'status') {
-    if (openHarnessApprovalPolicyForm(input)) return;
+    if (openCliSlashCommandForm('approval', input)) return;
   }
 
   const policy = parseCliApprovalPolicy(normalized);
@@ -2195,9 +2175,7 @@ function markHarnessExecutionStopped(executionId: string): void {
   const messageId = `harness-killed-${executionId}-${Date.now()}`;
   applySubagentRoster(
     STREAM_ID,
-    activeSubagentRows.filter((child) =>
-      isDifferentExecution(child, executionId),
-    ),
+    activeSubagentRows.filter((child) => child.executionId !== executionId),
   );
   patchStream(STREAM_ID, (slice) => ({
     ...slice,
@@ -2306,7 +2284,11 @@ function handleHarnessSlashCommand(line: string): boolean {
   const rest = parsed.remainder.trim();
   switch (commandName) {
     case 'help':
-      appendHarnessAssistantTranscript(formatHarnessSlashHelp());
+      appendHarnessAssistantTranscript(
+        formatSlashCommandHelp(listSlashCommands(), {
+          shortcutModifierLabel: defaultShortcutModifierLabel(),
+        }),
+      );
       return true;
     case 'status':
       appendHarnessStatus();

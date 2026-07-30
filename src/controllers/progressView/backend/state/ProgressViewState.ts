@@ -154,11 +154,11 @@ export class ProgressViewState {
   readonly stores: SessionStores;
 
   // -- Preferences ------------------------------------------------------------
-  private _prefs!: PersistedState<ProgressViewPrefs>;
+  private readonly _prefs: PersistedState<ProgressViewPrefs>;
 
   // -- Ephemeral state (session-only, not persisted) --------------------------
-  private _streamStates = new Map<StreamTabId, StreamExecutionState>();
-  private _sessionState = new Map<StreamTabId, StreamSessionState>();
+  private readonly _streamStates = new Map<StreamTabId, StreamExecutionState>();
+  private readonly _sessionState = new Map<StreamTabId, StreamSessionState>();
 
   readonly streamStatus: StreamStatusMachine;
   readonly followUps: ToolUseFollowUpQueue;
@@ -498,7 +498,7 @@ export class ProgressViewState {
       ...this.streamLogs.keys(),
       ...this._sessionState.keys(),
       ...this._streamStates.keys(),
-      ...[...this.streamStatus.entries()].map(([stream]) => stream),
+      ...Array.from(this.streamStatus.entries(), ([stream]) => stream),
     ]);
     const deletion = await this.stores.deleteAll();
     const retainedStreams = new Set([...deletion.active, ...deletion.failed]);

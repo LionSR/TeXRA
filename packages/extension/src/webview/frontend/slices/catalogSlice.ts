@@ -41,17 +41,16 @@ function validateAgentSelection(
   currentValue: string,
   preferredFallback: readonly string[] = [],
 ): string {
-  if (options.some((opt) => opt.value === currentValue)) {
-    return currentValue;
-  }
-  // Match by name: handles source changes, plain-name defaults, and remote
-  // rows whose value still carries legacy decorated storage names.
-  const name = agentName(currentValue);
-  const byName = options.find((opt) => agentName(opt.value) === name);
-  if (byName) return byName.value;
+  // Exact match, then match by name: handles source changes, plain-name
+  // defaults, and remote rows whose value still carries legacy decorated
+  // storage names.
+  const match = findAgentSelection(options, currentValue);
+  if (match) return match;
   for (const preferred of preferredFallback) {
-    const match = options.find((opt) => agentName(opt.value) === preferred);
-    if (match) return match.value;
+    const fallbackMatch = options.find(
+      (opt) => agentName(opt.value) === preferred,
+    );
+    if (fallbackMatch) return fallbackMatch.value;
   }
   // No match — keep stale value so the UI shows no selection.
   // Execution will error with "unknown agent" if the user proceeds.

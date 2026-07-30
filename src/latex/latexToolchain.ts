@@ -55,15 +55,14 @@ const REQUIRED_TOOLS = new Set<LatexToolName>(['latexmk']);
 /** Probe the LaTeX tools used by both the extension and CLI surfaces. */
 export async function probeLatexToolchain(): Promise<LatexToolchainProbe> {
   const toolNames = Object.keys(TOOL_PURPOSES) as LatexToolName[];
-  const installed = await Promise.all(
-    toolNames.map((tool) => checkToolInstalled(tool, false)),
+  const tools = await Promise.all(
+    toolNames.map(async (name): Promise<LatexToolStatus> => ({
+      name,
+      installed: await checkToolInstalled(name, false),
+      required: REQUIRED_TOOLS.has(name),
+      purpose: TOOL_PURPOSES[name],
+    })),
   );
-  const tools = toolNames.map((name, index): LatexToolStatus => ({
-    name,
-    installed: installed[index] ?? false,
-    required: REQUIRED_TOOLS.has(name),
-    purpose: TOOL_PURPOSES[name],
-  }));
   return {
     tools,
     hasCompiler: tools.some(

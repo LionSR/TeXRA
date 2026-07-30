@@ -123,9 +123,7 @@ function safeWorkflowOperationalSummary(text: string): string | undefined {
 function workflowOperationalDescription(
   entries: readonly ConversationEntry[],
 ): string | undefined {
-  for (let index = entries.length - 1; index >= 0; index -= 1) {
-    const entry = entries[index];
-    if (!entry) continue;
+  for (const entry of entries.toReversed()) {
     if (entry.role === 'tool') {
       const description =
         safeWorkflowOperationalSummary(entry.toolUse.headerSummary) ??
@@ -177,17 +175,14 @@ function logEntryStreamIsRunning(entry: StreamLogEntry): boolean {
 function latestLogActivityIsThinking(
   entries: readonly StreamLogEntry[],
 ): boolean {
-  for (let index = entries.length - 1; index >= 0; index -= 1) {
-    const entry = entries[index];
-    if (!entry || !LIVE_ACTIVITY_MESSAGE_TYPES.has(entry.messageType ?? '')) {
-      continue;
-    }
-    return (
-      entry.messageType === MESSAGE_TYPES.THINKING &&
-      logEntryStreamIsRunning(entry)
-    );
-  }
-  return false;
+  const entry = entries.findLast((candidate) =>
+    LIVE_ACTIVITY_MESSAGE_TYPES.has(candidate.messageType ?? ''),
+  );
+  if (!entry) return false;
+  return (
+    entry.messageType === MESSAGE_TYPES.THINKING &&
+    logEntryStreamIsRunning(entry)
+  );
 }
 
 function latestCompactionActivityIsRunning(
