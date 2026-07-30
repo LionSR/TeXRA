@@ -168,7 +168,6 @@ describe('cleanupAllApprovals scope (SDK Step 7d PR 3)', () => {
 describe('sendFollowUp host-path session routing (SDK Step 7d PR 4)', () => {
   it('resolves the follow-up target against the passed session, not the process default', async () => {
     const processSession = createTestSession();
-    const { host } = createRecordingHost();
     const parentStream = 'stream:fu-parent' as StreamTabId;
 
     try {

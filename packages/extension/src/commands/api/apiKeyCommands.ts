@@ -129,18 +129,15 @@ async function pickApiProvider(
  * optional `provider` is parsed at the dispatch boundary.
  */
 export async function setApiKey(provider?: ApiProvider): Promise<void> {
-  if (provider) {
-    await setApiKeyForProvider(provider);
-    return;
-  }
+  const target =
+    provider ??
+    (await pickApiProvider(
+      'Select API provider',
+      "Keys are stored in VS Code's encrypted secret store, never on disk.",
+    ));
 
-  const picked = await pickApiProvider(
-    'Select API provider',
-    "Keys are stored in VS Code's encrypted secret store, never on disk.",
-  );
-
-  if (picked) {
-    await setApiKeyForProvider(picked);
+  if (target) {
+    await setApiKeyForProvider(target);
   }
 }
 

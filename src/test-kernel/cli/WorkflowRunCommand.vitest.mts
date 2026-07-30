@@ -98,6 +98,30 @@ function cliContext(overrides: Partial<CliContext> = {}): CliContext {
   });
 }
 
+/** Runs `body` against a fresh temp workspace, removed afterwards. */
+async function withTempRoot(
+  body: (root: string) => Promise<void>,
+): Promise<void> {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-workflow-'));
+  try {
+    await body(root);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+}
+
+function runOutputSummary(absolutePath: string, originalPath: string) {
+  return {
+    round: 1,
+    relativePath: 'r1/paper.tex',
+    absolutePath,
+    location: 'runStorage',
+    originalPath,
+    added: null,
+    removed: null,
+  } as const;
+}
+
 function mockWorkflowExecution(
   result: CliConfigExecuteResult<typeof AgentCategory.Workflow>,
   once = false,
@@ -287,8 +311,7 @@ describe('CLI workflow run command', () => {
   });
 
   it('passes instruction file contents before inline workflow instructions', async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-workflow-'));
-    try {
+    await withTempRoot(async (root) => {
       await fs.writeFile(
         path.join(root, 'prompt.md'),
         'Read this prompt from disk.\n',
@@ -316,9 +339,7 @@ describe('CLI workflow run command', () => {
       expect(config?.instruction).toBe(
         'Read this prompt from disk.\n\nThen keep the final response concise.',
       );
-    } finally {
-      await fs.rm(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('enforces workflow results at the shared execution boundary', async () => {
@@ -340,18 +361,12 @@ describe('CLI workflow run command', () => {
   });
 
   it('keeps the single-output copy target separate from workflow output names', async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-workflow-'));
-    try {
+    await withTempRoot(async (root) => {
       const generated = path.join(root, 'run', 'r1', 'paper.tex');
-      const outputSummary = {
-        round: 1,
-        relativePath: 'r1/paper.tex',
-        absolutePath: generated,
-        location: 'runStorage',
-        originalPath: path.join(root, 'paper.tex'),
-        added: null,
-        removed: null,
-      } as const;
+      const outputSummary = runOutputSummary(
+        generated,
+        path.join(root, 'paper.tex'),
+      );
       const compileFailure = {
         round: 1,
         displayName: 'paper.tex',
@@ -437,24 +452,16 @@ describe('CLI workflow run command', () => {
         kind: 'result',
         result: emission.json,
       });
-    } finally {
-      await fs.rm(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('persists copied output-dir paths for history details', async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-workflow-'));
-    try {
+    await withTempRoot(async (root) => {
       const generated = path.join(root, 'run', 'r1', 'paper.tex');
-      const outputSummary = {
-        round: 1,
-        relativePath: 'r1/paper.tex',
-        absolutePath: generated,
-        location: 'runStorage',
-        originalPath: path.join(root, 'paper.tex'),
-        added: null,
-        removed: null,
-      } as const;
+      const outputSummary = runOutputSummary(
+        generated,
+        path.join(root, 'paper.tex'),
+      );
       await fs.mkdir(path.dirname(generated), { recursive: true });
       await fs.writeFile(generated, 'polished');
       mockWorkflowExecution(
@@ -499,14 +506,11 @@ describe('CLI workflow run command', () => {
           cost: 0,
         },
       });
-    } finally {
-      await fs.rm(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('does not fail a completed workflow when copied output metadata cannot be persisted', async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-workflow-'));
-    try {
+    await withTempRoot(async (root) => {
       const generated = path.join(root, 'run', 'r1', 'paper.tex');
       await fs.mkdir(path.dirname(generated), { recursive: true });
       await fs.writeFile(generated, 'polished');
@@ -520,15 +524,7 @@ describe('CLI workflow run command', () => {
             streamId: 'stream-output-meta-fail',
             outcome: RUN_OUTCOME.COMPLETED,
             outputs: [
-              {
-                round: 1,
-                relativePath: 'r1/paper.tex',
-                absolutePath: generated,
-                location: 'runStorage',
-                originalPath: path.join(root, 'paper.tex'),
-                added: null,
-                removed: null,
-              },
+              runOutputSummary(generated, path.join(root, 'paper.tex')),
             ],
             compileFailures: [],
           },
@@ -561,21 +557,14 @@ describe('CLI workflow run command', () => {
           }),
         }),
       );
-    } finally {
-      await fs.rm(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('persists a failed runtime envelope when copying the requested output fails', async () => {
-    const outputSummary = {
-      round: 1,
-      relativePath: 'r1/paper.tex',
-      absolutePath: '/missing/run/r1/paper.tex',
-      location: 'runStorage',
-      originalPath: '/workspace/paper.tex',
-      added: null,
-      removed: null,
-    } as const;
+    const outputSummary = runOutputSummary(
+      '/missing/run/r1/paper.tex',
+      '/workspace/paper.tex',
+    );
     mockWorkflowExecution(
       {
         ok: true,
@@ -631,15 +620,10 @@ describe('CLI workflow run command', () => {
           streamId: 'stream-copy-fail',
           outcome: RUN_OUTCOME.COMPLETED,
           outputs: [
-            {
-              round: 1,
-              relativePath: 'r1/paper.tex',
-              absolutePath: '/missing/run/r1/paper.tex',
-              location: 'runStorage',
-              originalPath: '/workspace/paper.tex',
-              added: null,
-              removed: null,
-            },
+            runOutputSummary(
+              '/missing/run/r1/paper.tex',
+              '/workspace/paper.tex',
+            ),
           ],
           compileFailures: [],
         },

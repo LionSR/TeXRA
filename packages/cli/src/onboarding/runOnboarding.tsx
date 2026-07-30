@@ -206,8 +206,7 @@ async function runOnboardingFlow(options: {
   readonly apiMode?: CliApiMode;
   readonly colorEnabled?: boolean;
 }): Promise<CliOnboardingResult> {
-  const pickerSubtitle = onboardingPickerSubtitle(options);
-  const pickerItems = onboardingPickerItems(onboardingSetupPaths(options));
+  const picker = onboardingPicker(options);
   const resolution = await new Promise<OnboardingResolution>((resolve) => {
     let chosen: OnboardingResolution = NO_ONBOARDING_RESULT;
     const record = (next: OnboardingResolution): void => {
@@ -215,8 +214,8 @@ async function runOnboardingFlow(options: {
     };
     const instance = render(
       <OnboardingApp
-        pickerSubtitle={pickerSubtitle}
-        pickerItems={pickerItems}
+        pickerSubtitle={picker.subtitle}
+        pickerItems={picker.items}
         onResolve={record}
       />,
       {
@@ -462,22 +461,6 @@ function OnboardingFrame(props: {
   );
 }
 
-function onboardingPickerSubtitle(props: {
-  readonly firstRun: boolean;
-  readonly apiMode?: CliApiMode;
-}): string {
-  if (!props.firstRun) {
-    return 'Choose how to power model calls — use ChatGPT, sign in, or add a provider API key:';
-  }
-  if (props.apiMode === 'included') {
-    return 'Subscription or included access needs sign-in for this run:';
-  }
-  if (props.apiMode === 'personal') {
-    return 'Personal mode needs ChatGPT sign-in or a provider key for this run:';
-  }
-  return 'Not signed in, and no provider API key is configured. Choose how to power model calls:';
-}
-
 type OnboardingChoice = 'relay' | 'chatgpt' | 'key' | 'skip';
 type OnboardingSetupPath = Exclude<OnboardingChoice, 'skip'>;
 type OnboardingPickerItem = SelectItem<OnboardingChoice>;
@@ -509,23 +492,49 @@ const SKIP_PICKER_ITEM: OnboardingPickerItem = {
   description: 'set up later: texra setup (ChatGPT, Researcher, key)',
 };
 
-function onboardingSetupPaths(props: {
-  readonly firstRun: boolean;
-  readonly apiMode?: CliApiMode;
-}): readonly OnboardingSetupPath[] {
-  if (!props.firstRun) return ['chatgpt', 'relay', 'key'];
-  if (props.apiMode === 'included') return ['chatgpt', 'relay'];
-  if (props.apiMode === 'personal') return ['chatgpt', 'key'];
-  return ['chatgpt', 'relay', 'key'];
+interface OnboardingPicker {
+  readonly subtitle: string;
+  readonly items: readonly OnboardingPickerItem[];
 }
 
-function onboardingPickerItems(
-  setupPaths: readonly OnboardingSetupPath[],
-): readonly OnboardingPickerItem[] {
-  return [
-    ...setupPaths.map((path) => SETUP_PATH_PICKER_ITEMS[path]),
-    SKIP_PICKER_ITEM,
-  ];
+/** Picker copy and the credential paths offered, for one entry point. */
+function onboardingPicker(props: {
+  readonly firstRun: boolean;
+  readonly apiMode?: CliApiMode;
+}): OnboardingPicker {
+  const picker = (
+    subtitle: string,
+    setupPaths: readonly OnboardingSetupPath[],
+  ): OnboardingPicker => ({
+    subtitle,
+    items: [
+      ...setupPaths.map((path) => SETUP_PATH_PICKER_ITEMS[path]),
+      SKIP_PICKER_ITEM,
+    ],
+  });
+
+  if (!props.firstRun) {
+    return picker(
+      'Choose how to power model calls — use ChatGPT, sign in, or add a provider API key:',
+      ['chatgpt', 'relay', 'key'],
+    );
+  }
+  if (props.apiMode === 'included') {
+    return picker(
+      'Subscription or included access needs sign-in for this run:',
+      ['chatgpt', 'relay'],
+    );
+  }
+  if (props.apiMode === 'personal') {
+    return picker(
+      'Personal mode needs ChatGPT sign-in or a provider key for this run:',
+      ['chatgpt', 'key'],
+    );
+  }
+  return picker(
+    'Not signed in, and no provider API key is configured. Choose how to power model calls:',
+    ['chatgpt', 'relay', 'key'],
+  );
 }
 
 /** Screen each non-skip picker choice opens (skip resolves the gate instead). */

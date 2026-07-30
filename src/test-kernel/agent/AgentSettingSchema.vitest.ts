@@ -29,15 +29,28 @@ describe('AgentSettingSchema', () => {
     expect(Object.hasOwn(setting, 'outputExt')).toBe(false);
   });
 
-  it('ignores default legacy documentTag/endTag without warning', () => {
+  it.each([
+    {
+      scenario: 'ignores default legacy documentTag/endTag without warning',
+      documentTag: 'documents',
+      endTag: '</documents>',
+      expectedWarnings: 0,
+    },
+    {
+      scenario: 'warns when stripping bespoke legacy documentTag/endTag values',
+      documentTag: 'latex_document',
+      endTag: '</latex_document>',
+      expectedWarnings: 1,
+    },
+  ])('$scenario', ({ documentTag, endTag, expectedWarnings }) => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     let setting!: ReturnType<typeof AgentSettingSchema.parse>;
     let warningCount = 0;
     try {
       setting = AgentSettingSchema.parse({
         agentCategory: AgentCategory.Workflow,
-        documentTag: 'documents',
-        endTag: '</documents>',
+        documentTag,
+        endTag,
       });
       warningCount = warnSpy.mock.calls.length;
     } finally {
@@ -47,28 +60,7 @@ describe('AgentSettingSchema', () => {
     expect(setting.agentCategory).toBe(AgentCategory.Workflow);
     expect(Object.hasOwn(setting, 'documentTag')).toBe(false);
     expect(Object.hasOwn(setting, 'endTag')).toBe(false);
-    expect(warningCount).toBe(0);
-  });
-
-  it('warns when stripping bespoke legacy documentTag/endTag values', () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    let setting!: ReturnType<typeof AgentSettingSchema.parse>;
-    let warningCount = 0;
-    try {
-      setting = AgentSettingSchema.parse({
-        agentCategory: AgentCategory.Workflow,
-        documentTag: 'latex_document',
-        endTag: '</latex_document>',
-      });
-      warningCount = warnSpy.mock.calls.length;
-    } finally {
-      warnSpy.mockRestore();
-    }
-
-    expect(setting.agentCategory).toBe(AgentCategory.Workflow);
-    expect(Object.hasOwn(setting, 'documentTag')).toBe(false);
-    expect(Object.hasOwn(setting, 'endTag')).toBe(false);
-    expect(warningCount).toBe(1);
+    expect(warningCount).toBe(expectedWarnings);
   });
 
   it('regression #7497: public remote agent YAML no longer carries documentTag/endTag', () => {

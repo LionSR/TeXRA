@@ -122,23 +122,22 @@ async function ensureCredentialOrPrompt(): Promise<boolean> {
 
   // Each credential path runs its action then re-checks for a usable
   // credential; only the walkthrough leaves setup un-launched.
-  const credentialActions: Partial<
-    Record<typeof picked.id, () => PromiseLike<unknown>>
-  > = {
-    chatgpt: () => signInWithChatGptSubscription(CHANNEL),
-    signIn: () => vscode.commands.executeCommand(AUTH_COMMANDS.SIGN_IN),
-    apiKey: () => vscode.commands.executeCommand(apiKeyCommands.setApiKey),
-  };
-
-  const action = credentialActions[picked.id];
-  if (action) {
-    await action();
-    return hasAnyUsableSetupCredential();
+  switch (picked.id) {
+    case 'chatgpt':
+      await signInWithChatGptSubscription(CHANNEL);
+      break;
+    case 'signIn':
+      await vscode.commands.executeCommand(AUTH_COMMANDS.SIGN_IN);
+      break;
+    case 'apiKey':
+      await vscode.commands.executeCommand(apiKeyCommands.setApiKey);
+      break;
+    case 'walkthrough':
+      await vscode.commands.executeCommand('texra.openGettingStarted');
+      return false;
   }
 
-  // walkthrough
-  await vscode.commands.executeCommand('texra.openGettingStarted');
-  return false;
+  return hasAnyUsableSetupCredential();
 }
 
 // Routing is fine when the current configuration resolves any setup model.

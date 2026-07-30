@@ -9,7 +9,6 @@ import '@test/support/defaultSessionTestSetup';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import {
   SessionHandle,
   defaultSession,
@@ -32,7 +31,6 @@ function activeTraceFlusher(flush: () => void): RunTraceFlushEntry {
 
 function trackAgent(
   session: SessionHandle,
-  host: SessionHostInteractions,
   executionId: string,
   streamId: StreamTabId,
 ): AgentExecutionHandle {
@@ -251,11 +249,9 @@ describe('SessionHandle', () => {
   it('keeps execution tracking isolated between sessions', () => {
     const a = createTestSession();
     const b = createTestSession();
-    const { host } = createRecordingHost();
     try {
       const handle = trackAgent(
         a,
-        host,
         'exec:isolated',
         'stream:isolated' as StreamTabId,
       );
@@ -263,7 +259,7 @@ describe('SessionHandle', () => {
       expect(b.executions.getHandle('exec:isolated')).toBeUndefined();
 
       // Disposing A leaves B's separate registry untouched.
-      const handleB = trackAgent(b, host, 'exec:b', 'stream:b' as StreamTabId);
+      const handleB = trackAgent(b, 'exec:b', 'stream:b' as StreamTabId);
       a.dispose();
       expect(a.executions.getHandle('exec:isolated')).toBeUndefined();
       expect(b.executions.getHandle('exec:b')).toBe(handleB);
@@ -370,11 +366,10 @@ describe('SessionHandle', () => {
 
   it('rejects execution work registered after disposal', () => {
     const session = createTestSession();
-    const { host } = createRecordingHost();
     session.dispose();
 
     expect(() =>
-      trackAgent(session, host, 'exec:late', 'stream:late' as StreamTabId),
+      trackAgent(session, 'exec:late', 'stream:late' as StreamTabId),
     ).toThrow('Cannot register execution work after session disposal.');
   });
 });

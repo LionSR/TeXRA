@@ -1,8 +1,6 @@
 /**
  * Follow-up handlers: UPDATE_FOLLOW_UP_TEXT, UPDATE_RECORDING,
  * UPDATE_QUEUED_FOLLOW_UPS.
- *
- * Owns setActiveStreamRecording helper.
  */
 
 import { create } from 'mutative';
@@ -12,24 +10,6 @@ import type { ProgressViewOutboundHandlerRegistry } from '@shared/schemas';
 
 import { appState } from '../progressState';
 import { updateToolUseState } from '../stateUtils';
-
-// ============================================================
-// Helpers
-// ============================================================
-
-function setActiveStreamRecording(recording: boolean): void {
-  const streamId = appState.get().activeStreamId;
-  if (!streamId) return;
-  updateToolUseState(streamId, (prev) =>
-    create(prev, (draft) => {
-      draft.ui.recording = recording;
-    }),
-  );
-}
-
-// ============================================================
-// Handlers
-// ============================================================
 
 // The composed registry is exhaustive (every ProgressView outbound command
 // needs a real handler or `unsupported(...)` — see `@shared/utils/dispatcher`).
@@ -70,8 +50,15 @@ export const followUpHandlers = {
     );
   },
 
-  [PROGRESS_VIEW_COMMANDS.UPDATE_RECORDING]: (data) =>
-    setActiveStreamRecording(data.status === 'started'),
+  [PROGRESS_VIEW_COMMANDS.UPDATE_RECORDING]: (data) => {
+    const streamId = appState.get().activeStreamId;
+    if (!streamId) return;
+    updateToolUseState(streamId, (prev) =>
+      create(prev, (draft) => {
+        draft.ui.recording = data.status === 'started';
+      }),
+    );
+  },
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_QUEUED_FOLLOW_UPS]: (data) => {
     updateToolUseState(data.stream, (prev) =>

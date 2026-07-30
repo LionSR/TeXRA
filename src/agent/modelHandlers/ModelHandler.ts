@@ -131,24 +131,6 @@ interface ClientCompactionResult<M> {
   didCompact: boolean;
 }
 
-/**
- * Wraps a promise so that any rejection is tagged via the supplied tagger
- * before being re-thrown. Centralizes the common SDK-boundary catch pattern
- * while preserving the original error object.
- */
-async function withSdkErrorTag<T>(
-  tagger: SdkErrorTagger,
-  provider: string,
-  fn: () => Promise<T>,
-): Promise<T> {
-  try {
-    return await fn();
-  } catch (err) {
-    tagger(err, provider);
-    throw err;
-  }
-}
-
 // Default continuation limits
 const DEFAULT_CONTINUE_LIMIT = 10;
 
@@ -1142,14 +1124,17 @@ export abstract class ModelHandler<
     if (typeof options.client === 'object' && options.client !== null) {
       credentialRoute = this.clientWireIdentities.get(options.client)?.route;
     }
-    return this.withCreateResponseGuard(() => {
+    return this.withCreateResponseGuard(async () => {
       this.activeAttemptCredentialRoute = credentialRoute;
       this.lastAttemptCredentialRoute = credentialRoute;
-      return withSdkErrorTag(this.sdkErrorTagger, this.config.provider, () =>
-        this.createResponseImpl(options),
-      ).finally(() => {
+      try {
+        return await this.createResponseImpl(options);
+      } catch (err) {
+        this.sdkErrorTagger(err, this.config.provider);
+        throw err;
+      } finally {
         this.activeAttemptCredentialRoute = undefined;
-      });
+      }
     }).then((result) => {
       // The caller can now commit result.updatedMessages. Retaining the
       // pending payload beyond this point could reuse it for a later turn if
@@ -1540,26 +1525,19 @@ export abstract class ModelHandler<
     _responseObject?: Resp,
   ): void {
     const text = bestConnector + newResponse;
-
-    if (this.capabilities.supportsAssistantPrefill) {
-      if (
-        this.appendTextToLastAssistantMessage(messages, text, {
-          fallbackText: workspaceState.assembly.accumulatedOutput,
-        })
-      ) {
-        return;
-      }
-
-      messages.push(this.createAssistantMessageForPrefillText(text));
-      return;
-    }
+    const supportsPrefill = this.capabilities.supportsAssistantPrefill;
 
     if (
       this.appendTextToLastAssistantMessage(messages, text, {
-        afterContinuationPrompt: true,
+        afterContinuationPrompt: !supportsPrefill,
         fallbackText: workspaceState.assembly.accumulatedOutput,
       })
     ) {
+      return;
+    }
+
+    if (supportsPrefill) {
+      messages.push(this.createAssistantMessageForPrefillText(text));
       return;
     }
 

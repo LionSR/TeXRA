@@ -6,14 +6,6 @@ import { peekWorktreeInfo, resolveWorktreeInfo } from '@utils/git/worktreeInfo';
 import { buildStreamTabInfo } from './streamTabInfo';
 import type { ProgressViewState } from './state/ProgressViewState';
 
-function ensureWorktreeProbe(workingDirectory: string): void {
-  // Fire-and-forget; the resolver owns TTL/in-flight de-duplication. Calling
-  // it on each render lets branch/dirty state refresh after the cache expires.
-  void resolveWorktreeInfo(workingDirectory).catch(() => {
-    /* best-effort chip enrichment */
-  });
-}
-
 /**
  * Check if a session category matches the given filter.
  * Returns the resolved category (defaulting to Workflow) or null if filtered out.
@@ -53,7 +45,11 @@ export function buildStreamInfo(
   let worktreeInfo;
   if (workingDirectory) {
     worktreeInfo = peekWorktreeInfo(workingDirectory);
-    ensureWorktreeProbe(workingDirectory);
+    // Fire-and-forget; the resolver owns TTL/in-flight de-duplication. Calling
+    // it on each render lets branch/dirty state refresh after the cache expires.
+    void resolveWorktreeInfo(workingDirectory).catch(() => {
+      /* best-effort chip enrichment */
+    });
   }
 
   return buildStreamTabInfo({

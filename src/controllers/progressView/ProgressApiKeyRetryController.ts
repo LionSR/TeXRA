@@ -97,25 +97,20 @@ export class ProgressApiKeyRetryController {
     //   direct key is enough consent to retry outside the relay.
     // Do not use "any API key exists" here; that also treats relay access as a
     // credential, which would allow retrying without a usable direct key.
-    let shouldProceed: boolean;
     if (requireChange) {
       const before = await this.readKeys(providersToCheck);
       await this.deps.promptForApiKey(request.provider);
-      shouldProceed = await this.hasChangedUsableKey(providersToCheck, before);
-    } else {
-      // Relay/subscription exhaustion does not break the stored direct key, so
-      // if a usable one already exists, switch to it and retry without
-      // re-prompting, since the user has already provided a key. Only prompt when
-      // none exists yet, and only re-check the keys after that prompt (so the
-      // common already-set path reads the secret store once, not twice).
-      shouldProceed = await this.hasAnyUsableKey(providersToCheck);
-      if (!shouldProceed) {
-        await this.deps.promptForApiKey(request.provider);
-        shouldProceed = await this.hasAnyUsableKey(providersToCheck);
-      }
+      return this.hasChangedUsableKey(providersToCheck, before);
     }
 
-    return shouldProceed;
+    // Relay/subscription exhaustion does not break the stored direct key, so
+    // if a usable one already exists, switch to it and retry without
+    // re-prompting, since the user has already provided a key. Only prompt when
+    // none exists yet, and only re-check the keys after that prompt (so the
+    // common already-set path reads the secret store once, not twice).
+    if (await this.hasAnyUsableKey(providersToCheck)) return true;
+    await this.deps.promptForApiKey(request.provider);
+    return this.hasAnyUsableKey(providersToCheck);
   }
 
   async applyOwnApiKeyRouting(

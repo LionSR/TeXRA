@@ -264,16 +264,6 @@ function logPersistenceFailure(
   );
 }
 
-async function persistResultMetaBestEffort(
-  executionId: ExecutionId,
-  resultMeta: ResultMeta,
-): Promise<void> {
-  const result = await persistChildRunResultMeta(executionId, resultMeta);
-  if (result.kind === 'failed') {
-    logPersistenceFailure('result manifest', executionId, result.err);
-  }
-}
-
 async function persistResultMetaRequired(
   executionId: ExecutionId,
   resultMeta: ResultMeta,
@@ -515,6 +505,12 @@ async function executeInBand(
             `Single-cycle subagent ${executionId} unexpectedly suspended.`,
           );
         }
+        if (turn.outcome === 'failed') {
+          throw (
+            strategy.getTurnError() ??
+            new Error('Subagent ended with failed outcome.')
+          );
+        }
         flowResult = turn;
       } catch (error) {
         await persistFailure(
@@ -526,25 +522,6 @@ async function executeInBand(
           config.agentCategory,
           error,
           strategy.getTurnResult(),
-          startedAt,
-          workingDirectory,
-        );
-        throw error;
-      }
-
-      if (flowResult.outcome === 'failed') {
-        const error =
-          strategy.getTurnError() ??
-          new Error('Subagent ended with failed outcome.');
-        await persistFailure(
-          mode,
-          executionId,
-          stableAttempt,
-          options.agentName,
-          options.parentExecutionId,
-          config.agentCategory,
-          error,
-          flowResult,
           startedAt,
           workingDirectory,
         );
@@ -597,14 +574,14 @@ async function executeInBand(
             workingDirectory,
           );
         } catch (error) {
-          await persistResultMetaBestEffort(executionId, built.resultMeta);
-          await persistReportBestEffort(
+          await persistDeliveryBestEffort(
             executionId,
             formatSubagentError(executionId, options.agentName, error, {
               wallTimeMs: built.wallTimeMs,
               workingDirectory,
               memoryMisses: flowResult.memoryMisses,
             }),
+            built.resultMeta,
           );
           throw error;
         }

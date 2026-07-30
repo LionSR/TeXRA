@@ -3,20 +3,8 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { refreshModelListStateIfNeeded } from '@model/modelListRefresh';
 
-import type { StateStore } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-
-function fakeStateStore(initial: Record<string, unknown> = {}): StateStore {
-  const store = new Map<string, unknown>(Object.entries(initial));
-  return {
-    get<T>(key: string, defaultValue?: T): T {
-      return (store.has(key) ? store.get(key) : defaultValue) as T;
-    },
-    async update(key: string, value: unknown): Promise<void> {
-      store.set(key, value);
-    },
-  };
-}
+import { FakeStateStore } from '@test/support/FakePlatform';
 
 /**
  * #7216 review: the retired-model sweep in `reconcileEnabledModels` used to
@@ -34,7 +22,7 @@ describe('refreshModelListStateIfNeeded', () => {
   it('strips a retired model even when previousVersion is already a hash-derived value past the legacy migration threshold', async () => {
     expect(MODEL_CONFIGS.grok4?.retired).toBe(true);
 
-    const state = fakeStateStore({
+    const state = new FakeStateStore({
       // Simulates a user who already reconciled once under the hash-based
       // scheme (any value > 21, e.g. MODEL_LIST_HASH_BASE + some hash).
       [GlobalStateKey.MODEL_LIST_VERSION]: 5000,

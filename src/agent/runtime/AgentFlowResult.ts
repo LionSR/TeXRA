@@ -71,7 +71,7 @@ export type WaitingToolUseFlowResult = z.infer<
 export type AgentRuntimeFlowResult = AgentFlowResult | WaitingToolUseFlowResult;
 
 export function isWaitingFlowResult(
-  result: AgentRuntimeFlowResult | unknown,
+  result: unknown,
 ): result is WaitingToolUseFlowResult {
   if (!result || typeof result !== 'object') return false;
   const candidate = result as { category?: unknown; outcome?: unknown };

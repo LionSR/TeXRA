@@ -139,57 +139,48 @@ type TestableBridge = Bridge & {
   };
 };
 
-type BridgeWithSession = TestableBridge & {
-  session: {
-    executions: SessionHandle['executions'];
-    interactions: {
-      cancel(selector?: { cause?: string }): void;
-      requestPlanApproval?: (request: {
-        approvalId: string;
-        streamId: StreamTabId;
-        plan: { objective: string };
-        goalEnabled: boolean;
-      }) => Promise<unknown>;
-      requestAgentProposal?: (request: unknown) => Promise<unknown>;
-      requestRetry?: (request: {
-        requestId: string;
-        streamId: StreamTabId;
-        operation: string;
-      }) => Promise<unknown>;
-      requestBashApproval?: (request: {
-        command: string;
-        streamId?: StreamTabId;
-      }) => Promise<unknown>;
-      requestToolEditApproval?: (request: {
-        path: string;
-        originalContent: string;
-        proposedContent: string;
-        sourceTool: string;
-        streamId?: StreamTabId;
-      }) => Promise<unknown>;
-    };
-    status: StreamStatusMachine;
-    events: SessionHandle['events'];
-    followUps: SessionHandle['followUps'];
-  };
+/** The request shapes these tests drive through the session's host
+ * interactions, kept structural so tests can post plain fixture objects. */
+type BridgeInteractions = {
+  requestPlanApproval?: (request: {
+    approvalId: string;
+    streamId: StreamTabId;
+    plan: { objective: string };
+    goalEnabled: boolean;
+  }) => Promise<unknown>;
+  requestAgentProposal?: (request: unknown) => Promise<unknown>;
+  requestRetry?: (request: {
+    requestId: string;
+    streamId: StreamTabId;
+    operation: string;
+  }) => Promise<unknown>;
+  requestBashApproval?: (request: {
+    command: string;
+    streamId?: StreamTabId;
+  }) => Promise<unknown>;
+  requestToolEditApproval?: (request: {
+    path: string;
+    originalContent: string;
+    proposedContent: string;
+    sourceTool: string;
+    streamId?: StreamTabId;
+  }) => Promise<unknown>;
 };
 
-function bridgeInteractions(
-  bridge: TestableBridge,
-): BridgeWithSession['session']['interactions'] {
-  return (bridge as BridgeWithSession).session.interactions;
+function bridgeSession(bridge: TestableBridge): SessionHandle {
+  return (bridge as unknown as { session: SessionHandle }).session;
 }
 
-function bridgeStatus(
-  bridge: TestableBridge,
-): BridgeWithSession['session']['status'] {
-  return (bridge as BridgeWithSession).session.status;
+function bridgeInteractions(bridge: TestableBridge): BridgeInteractions {
+  return bridgeSession(bridge).interactions as unknown as BridgeInteractions;
 }
 
-function bridgeFollowUps(
-  bridge: TestableBridge,
-): BridgeWithSession['session']['followUps'] {
-  return (bridge as BridgeWithSession).session.followUps;
+function bridgeStatus(bridge: TestableBridge): StreamStatusMachine {
+  return bridgeSession(bridge).status;
+}
+
+function bridgeFollowUps(bridge: TestableBridge): SessionHandle['followUps'] {
+  return bridgeSession(bridge).followUps;
 }
 
 function seedBridgeFollowUp(
@@ -566,7 +557,12 @@ function progressMessages(
   );
 }
 
-function shownRetryRequestId(messages: unknown[]): string | undefined {
+type PermissionKind = (typeof PERMISSION_KIND)[keyof typeof PERMISSION_KIND];
+
+function shownPermissionRequestId(
+  messages: unknown[],
+  kind: PermissionKind,
+): string | undefined {
   for (const message of progressMessages(
     messages,
     PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
@@ -575,36 +571,33 @@ function shownRetryRequestId(messages: unknown[]): string | undefined {
       action?: string;
       permission?: { kind?: string; data?: { requestId?: string } };
     };
-    if (
-      update.action === 'show' &&
-      update.permission?.kind === PERMISSION_KIND.RETRY
-    ) {
+    if (update.action === 'show' && update.permission?.kind === kind) {
       return update.permission.data?.requestId;
     }
   }
   return undefined;
 }
 
-function shownToolEditRequestId(messages: unknown[]): string | undefined {
-  for (const message of progressMessages(
-    messages,
-    PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
-  )) {
-    const update = message as ProgressMessage & {
-      action?: string;
-      permission?: {
-        kind?: string;
-        data?: { requestId?: string };
-      };
-    };
-    if (
-      update.action === 'show' &&
-      update.permission?.kind === PERMISSION_KIND.TOOL_EDIT
-    ) {
-      return update.permission.data?.requestId;
-    }
+/** Waits for the renderer to be shown a matching pending permission. */
+async function waitForShownPermission(
+  messages: unknown[],
+  match: { kind?: PermissionKind; data?: Record<string, unknown> },
+): Promise<void> {
+  const permission: Record<string, unknown> = {};
+  if (match.kind !== undefined) permission.kind = match.kind;
+  if (match.data !== undefined) {
+    permission.data = expect.objectContaining(match.data);
   }
-  return undefined;
+  await vi.waitFor(() => {
+    expect(
+      progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION),
+    ).toContainEqual(
+      expect.objectContaining({
+        action: 'show',
+        permission: expect.objectContaining(permission),
+      }),
+    );
+  });
 }
 
 describe('desktop follow-up submission', () => {
@@ -693,7 +686,7 @@ function emitSessionFact<K extends SessionFact['type']>(
   type: K,
   payload: Extract<SessionFact, { type: K }>['payload'],
 ): void {
-  (bridge as BridgeWithSession).session.events.emit({
+  bridgeSession(bridge).events.emit({
     scope: 'session',
     event: { type, payload } as Extract<SessionFact, { type: K }>,
   });
@@ -704,7 +697,7 @@ function emitRunEvent(
   streamId: StreamTabId,
   event: AgentEvent,
 ): void {
-  (bridge as BridgeWithSession).session.events.emit({
+  bridgeSession(bridge).events.emit({
     scope: 'run',
     streamId,
     event,
@@ -813,7 +806,7 @@ describe('DesktopProgressBridge', () => {
     });
     await initializationStarted;
 
-    const session = (bridge as unknown as { session: SessionHandle }).session;
+    const session = bridgeSession(bridge);
     session.publishRunEvent(
       'onboarding-completed',
       completedRootResult('onboarding-completed-1' as ExecutionId),
@@ -847,7 +840,7 @@ describe('DesktopProgressBridge', () => {
     await initializationStarted;
 
     bridge.dispose();
-    const session = (bridge as unknown as { session: SessionHandle }).session;
+    const session = bridgeSession(bridge);
     session.publishRunEvent(
       'onboarding-completed',
       completedRootResult('onboarding-completed-2' as ExecutionId),
@@ -973,20 +966,9 @@ describe('DesktopProgressBridge', () => {
       goalEnabled: false,
     });
 
-    await vi.waitFor(() => {
-      expect(
-        progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION),
-      ).toContainEqual(
-        expect.objectContaining({
-          action: 'show',
-          permission: expect.objectContaining({
-            kind: PERMISSION_KIND.PLAN_APPROVAL,
-            data: expect.objectContaining({
-              approvalId: 'plan-host-interaction',
-            }),
-          }),
-        }),
-      );
+    await waitForShownPermission(messages, {
+      kind: PERMISSION_KIND.PLAN_APPROVAL,
+      data: { approvalId: 'plan-host-interaction' },
     });
 
     const handlePlan = assertSupported(
@@ -1032,20 +1014,9 @@ describe('DesktopProgressBridge', () => {
       toolConfig: DEFAULT_TOOL_CONFIG,
     });
 
-    await vi.waitFor(() => {
-      expect(
-        progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION),
-      ).toContainEqual(
-        expect.objectContaining({
-          action: 'show',
-          permission: expect.objectContaining({
-            kind: PERMISSION_KIND.PROPOSAL,
-            data: expect.objectContaining({
-              proposalId: 'proposal-host-interaction',
-            }),
-          }),
-        }),
-      );
+    await waitForShownPermission(messages, {
+      kind: PERMISSION_KIND.PROPOSAL,
+      data: { proposalId: 'proposal-host-interaction' },
     });
 
     const handleProposal = assertSupported(
@@ -1086,23 +1057,12 @@ describe('DesktopProgressBridge', () => {
       operation: 'model request',
     });
 
-    await vi.waitFor(() => {
-      expect(
-        progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION),
-      ).toContainEqual(
-        expect.objectContaining({
-          action: 'show',
-          permission: expect.objectContaining({
-            kind: PERMISSION_KIND.RETRY,
-          }),
-        }),
-      );
-    });
+    await waitForShownPermission(messages, { kind: PERMISSION_KIND.RETRY });
 
     // A cancel decision from the renderer still resolves it the same way.
     bridge.hostInteractions.submitRetryDecision(
       'stream-retry' as StreamTabId,
-      shownRetryRequestId(messages) ?? '',
+      shownPermissionRequestId(messages, PERMISSION_KIND.RETRY) ?? '',
       { action: 'cancel' },
     );
     await expect(pending).resolves.toEqual({ action: 'cancel' });
@@ -1276,8 +1236,7 @@ describe('DesktopProgressBridge', () => {
     const executionId = 'ec0e57a7' as ExecutionId;
     const kvStoreBacking = new Map<string, unknown>();
     const first = await createBridge([], { kvStoreBacking });
-    const firstSession = (first as unknown as { session: SessionHandle })
-      .session;
+    const firstSession = bridgeSession(first);
     const firstSnapshots = (
       first as unknown as {
         state: { snapshots: ProgressSnapshotStore };
@@ -1306,8 +1265,7 @@ describe('DesktopProgressBridge', () => {
       kvStoreBacking,
       detectWaitingStreams,
     });
-    const secondSession = (second as unknown as { session: SessionHandle })
-      .session;
+    const secondSession = bridgeSession(second);
 
     expect(secondSession).not.toBe(firstSession);
     expect(secondSession.executions).not.toBe(firstSession.executions);
@@ -1963,20 +1921,9 @@ describe('DesktopProgressBridge', () => {
       goalEnabled: false,
     });
 
-    await vi.waitFor(() => {
-      expect(
-        progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION),
-      ).toContainEqual(
-        expect.objectContaining({
-          action: 'show',
-          permission: expect.objectContaining({
-            kind: PERMISSION_KIND.PLAN_APPROVAL,
-            data: expect.objectContaining({
-              approvalId: 'plan-cancel-on-delete',
-            }),
-          }),
-        }),
-      );
+    await waitForShownPermission(messages, {
+      kind: PERMISSION_KIND.PLAN_APPROVAL,
+      data: { approvalId: 'plan-cancel-on-delete' },
     });
 
     await bridge.deleteStream('plan-delete-stream' as StreamTabId);
@@ -2012,28 +1959,15 @@ describe('DesktopProgressBridge', () => {
       retrieveSessionResumeData,
     });
 
-    (bridge as BridgeWithSession).session.events.emit({
-      scope: 'run',
-      streamId: 'stream-1',
-      event: {
-        type: 'run.config',
-        streamId: 'stream-1',
-        executionId: 'ec1001',
-        config: taskState.agentConfig,
-      } as any,
-    });
+    const runConfig = {
+      streamId: 'stream-1' as StreamTabId,
+      executionId: 'ec1001' as ExecutionId,
+      taskState,
+    };
+    emitRunConfigFact(bridge, runConfig);
 
     await bridge.deleteStream('stream-1');
-    (bridge as BridgeWithSession).session.events.emit({
-      scope: 'run',
-      streamId: 'stream-1',
-      event: {
-        type: 'run.config',
-        streamId: 'stream-1',
-        executionId: 'ec1001',
-        config: taskState.agentConfig,
-      } as any,
-    });
+    emitRunConfigFact(bridge, runConfig);
     await expect(bridge.tryResumeStream('stream-1')).resolves.toBe(false);
     expect(retrieveSessionResumeData).not.toHaveBeenCalled();
   });
@@ -2140,10 +2074,7 @@ describe('DesktopProgressBridge', () => {
     vi.spyOn(Date, 'now').mockReturnValue(1_000);
     const messages: unknown[] = [];
     const bridge = await createBridge(messages);
-    const cancel = vi.spyOn(
-      (bridge as BridgeWithSession).session.interactions,
-      'cancel',
-    );
+    const cancel = vi.spyOn(bridgeSession(bridge).interactions, 'cancel');
 
     emitSessionFact(bridge, 'setActiveStream', {
       streamId: 'active',
@@ -2215,18 +2146,7 @@ describe('DesktopProgressBridge', () => {
       streamId: 'bash-delete-all-stream' as StreamTabId,
     });
 
-    await vi.waitFor(() => {
-      expect(
-        progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION),
-      ).toContainEqual(
-        expect.objectContaining({
-          action: 'show',
-          permission: expect.objectContaining({
-            kind: PERMISSION_KIND.BASH,
-          }),
-        }),
-      );
-    });
+    await waitForShownPermission(messages, { kind: PERMISSION_KIND.BASH });
 
     await bridge.deleteAllStreams();
 
@@ -2699,9 +2619,7 @@ describe('DesktopProgressBridge', () => {
       text: 'persist me before quit',
     });
 
-    await (
-      bridge as unknown as { session: SessionHandle }
-    ).session.flushArtifacts();
+    await bridgeSession(bridge).flushArtifacts();
     bridge.streamLogs.requestEviction(streamId);
     await bridge.streamLogs.reload();
     await bridge.streamLogs.ensureLoaded(streamId);
@@ -3052,21 +2970,9 @@ describe('DesktopProgressBridge', () => {
         expect(planPromise).toBeDefined();
 
         // Its presentation moves to the currently attached window.
-        await vi.waitFor(() => {
-          expect(
-            progressMessages(
-              messagesB,
-              PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
-            ),
-          ).toContainEqual(
-            expect.objectContaining({
-              action: 'show',
-              permission: expect.objectContaining({
-                kind: PERMISSION_KIND.PLAN_APPROVAL,
-                data: expect.objectContaining({ approvalId: 'plan-rebound' }),
-              }),
-            }),
-          );
+        await waitForShownPermission(messagesB, {
+          kind: PERMISSION_KIND.PLAN_APPROVAL,
+          data: { approvalId: 'plan-rebound' },
         });
         expect(
           progressMessages(messagesA, PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION),
@@ -3163,7 +3069,8 @@ describe('DesktopProgressBridge', () => {
       expect(approvalPromise).toBeDefined();
       let oldRequestId = '';
       await vi.waitFor(() => {
-        oldRequestId = shownToolEditRequestId(messagesA) ?? '';
+        oldRequestId =
+          shownPermissionRequestId(messagesA, PERMISSION_KIND.TOOL_EDIT) ?? '';
         expect(oldRequestId).not.toBe('');
       });
       const handleOldToolEdit = assertSupported(
@@ -3189,7 +3096,9 @@ describe('DesktopProgressBridge', () => {
         });
         let newRequestId = '';
         await vi.waitFor(() => {
-          newRequestId = shownToolEditRequestId(messagesB) ?? '';
+          newRequestId =
+            shownPermissionRequestId(messagesB, PERMISSION_KIND.TOOL_EDIT) ??
+            '';
           expect(newRequestId).not.toBe('');
         });
         expect(newRequestId).not.toBe(oldRequestId);
@@ -3242,19 +3151,8 @@ describe('DesktopProgressBridge', () => {
         goalEnabled: false,
       });
       expect(approval).toBeDefined();
-      await vi.waitFor(() => {
-        expect(
-          progressMessages(messagesB, PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION),
-        ).toContainEqual(
-          expect.objectContaining({
-            action: 'show',
-            permission: expect.objectContaining({
-              data: expect.objectContaining({
-                approvalId: 'plan-second-window-close',
-              }),
-            }),
-          }),
-        );
+      await waitForShownPermission(messagesB, {
+        data: { approvalId: 'plan-second-window-close' },
       });
 
       const staleInteractionsB = bridgeB.hostInteractions;
@@ -3263,22 +3161,8 @@ describe('DesktopProgressBridge', () => {
       const { bridgeB: bridgeC } = await owner.reopen(messagesC);
       try {
         await bridgeC.waitUntilReady();
-        await vi.waitFor(() => {
-          expect(
-            progressMessages(
-              messagesC,
-              PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
-            ),
-          ).toContainEqual(
-            expect.objectContaining({
-              action: 'show',
-              permission: expect.objectContaining({
-                data: expect.objectContaining({
-                  approvalId: 'plan-second-window-close',
-                }),
-              }),
-            }),
-          );
+        await waitForShownPermission(messagesC, {
+          data: { approvalId: 'plan-second-window-close' },
         });
         let settled = false;
         void approval?.then(() => {
@@ -3321,19 +3205,8 @@ describe('DesktopProgressBridge', () => {
         goalEnabled: false,
       });
       expect(pendingBeforeClose).toBeDefined();
-      await vi.waitFor(() => {
-        expect(
-          progressMessages(messagesA, PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION),
-        ).toContainEqual(
-          expect.objectContaining({
-            action: 'show',
-            permission: expect.objectContaining({
-              data: expect.objectContaining({
-                approvalId: 'plan-before-close',
-              }),
-            }),
-          }),
-        );
+      await waitForShownPermission(messagesA, {
+        data: { approvalId: 'plan-before-close' },
       });
 
       owner.close();
@@ -3369,22 +3242,9 @@ describe('DesktopProgressBridge', () => {
           true,
         );
 
-        await vi.waitFor(() => {
-          const approvals = progressMessages(
-            messagesB,
-            PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
-          );
-          for (const approvalId of ['plan-before-close', 'plan-while-closed']) {
-            expect(approvals).toContainEqual(
-              expect.objectContaining({
-                action: 'show',
-                permission: expect.objectContaining({
-                  data: expect.objectContaining({ approvalId }),
-                }),
-              }),
-            );
-          }
-        });
+        for (const approvalId of ['plan-before-close', 'plan-while-closed']) {
+          await waitForShownPermission(messagesB, { data: { approvalId } });
+        }
 
         for (const approvalId of ['plan-before-close', 'plan-while-closed']) {
           expect(
@@ -3421,22 +3281,8 @@ describe('DesktopProgressBridge', () => {
           goalEnabled: false,
         });
         expect(planPromise).toBeDefined();
-        await vi.waitFor(() => {
-          expect(
-            progressMessages(
-              messagesB,
-              PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
-            ),
-          ).toContainEqual(
-            expect.objectContaining({
-              action: 'show',
-              permission: expect.objectContaining({
-                data: expect.objectContaining({
-                  approvalId: 'plan-rebound-delete',
-                }),
-              }),
-            }),
-          );
+        await waitForShownPermission(messagesB, {
+          data: { approvalId: 'plan-rebound-delete' },
         });
 
         await bridgeB.deleteStream(streamId);

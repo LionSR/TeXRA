@@ -55,25 +55,27 @@ export function resolveStateSettingWrite(
   if (!entry) return null;
   const parsed = entry.schema.safeParse(value);
   if (!parsed.success) return null;
-  if (entry.category === 'git') {
-    return { family: 'git', key: key as WorkspaceStateKey, value: parsed.data };
+  switch (entry.category) {
+    case 'git':
+      return {
+        family: 'git',
+        key: key as WorkspaceStateKey,
+        value: parsed.data,
+      };
+    case 'ai-agents':
+      return {
+        family: 'agent',
+        key: key as WorkspaceStateKey,
+        value: parsed.data as string,
+      };
+    case 'tools':
+      if (key !== WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED) return null;
+      return {
+        family: 'tool-safety',
+        key: WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
+        value: parsed.data as boolean,
+      };
+    default:
+      return null;
   }
-  if (entry.category === 'ai-agents') {
-    return {
-      family: 'agent',
-      key: key as WorkspaceStateKey,
-      value: parsed.data as string,
-    };
-  }
-  if (
-    entry.category === 'tools' &&
-    key === WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED
-  ) {
-    return {
-      family: 'tool-safety',
-      key: WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
-      value: parsed.data as boolean,
-    };
-  }
-  return null;
 }

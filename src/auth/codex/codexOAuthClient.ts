@@ -184,11 +184,6 @@ export async function requestDeviceUserCode(
   );
 }
 
-/** The display user code from a device-code response (field name varies). */
-export function deviceUserCode(resp: CodexDeviceUserCode): string | undefined {
-  return resp.user_code ?? resp.usercode ?? undefined;
-}
-
 /**
  * Poll once for the device authorization result. Resolves to the authorization
  * code + verifier on success, or throws a CodexAuthError('pending') while the

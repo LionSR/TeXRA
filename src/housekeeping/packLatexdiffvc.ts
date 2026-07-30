@@ -4,7 +4,7 @@ import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { findFilesFromPatterns, generateTimestamp } from './utils';
+import { collectFilesFromPatterns, generateTimestamp } from './utils';
 import { TEMP_EXTENSIONS } from './constants';
 
 const CHANNEL = 'Housekeeping';
@@ -45,22 +45,15 @@ export async function runPackLatexdiffvc(
   const inputDir = path.dirname(inputFile);
   const filePatterns = [`${baseName}-diff${commitHash}`];
 
-  const mainFiles = new Set<string>();
-  for await (const file of findFilesFromPatterns(inputDir, filePatterns, [
+  const mainFiles = await collectFilesFromPatterns(inputDir, filePatterns, [
     '.tex',
     '.pdf',
-  ])) {
-    mainFiles.add(file);
-  }
-
-  const tempFiles = new Set<string>();
-  for await (const file of findFilesFromPatterns(
+  ]);
+  const tempFiles = await collectFilesFromPatterns(
     inputDir,
     filePatterns,
     TEMP_EXTENSIONS,
-  )) {
-    tempFiles.add(file);
-  }
+  );
 
   if (mainFiles.size === 0 && tempFiles.size === 0) {
     logger.warn(CHANNEL, 'No LaTeX diff files found to process');
@@ -82,23 +75,21 @@ export async function runPackLatexdiffvc(
     `${now}_${baseName}_${commitHash}`,
   );
 
-  let dirCreated = false;
-  for (const file of mainFiles) {
-    if (!dirCreated) {
-      await WorkspaceFS.createDir(outputFolder);
-      dirCreated = true;
+  if (mainFiles.size > 0) {
+    await WorkspaceFS.createDir(outputFolder);
+    for (const file of mainFiles) {
+      await WorkspaceFS.rename(
+        file,
+        path.join(outputFolder, path.basename(file)),
+      );
     }
-    await WorkspaceFS.rename(
-      file,
-      path.join(outputFolder, path.basename(file)),
-    );
   }
 
   for (const file of tempFiles) {
     await WorkspaceFS.delete(file);
   }
 
-  if (dirCreated) {
+  if (mainFiles.size > 0) {
     logger.info(CHANNEL, `Files packed into ${outputFolder}`);
     return { status: 'packed', inputFile, outputFolder };
   }

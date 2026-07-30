@@ -31,7 +31,6 @@ vi.mock('@tools/inquiry/externalInquiryStorage', () => ({
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import type { ExternalInquiryThreadId, StreamTabId } from '@shared/schemas';
-import { createRecordingHost } from '@test/agent/progressTestUtils';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import {
   injectContinuationForAnsweredThread,
@@ -41,6 +40,18 @@ import type { ExternalInquiryThreadManifest } from '@tools/inquiry/externalInqui
 
 const THREAD = 'ei_aabbccdd0011' as ExternalInquiryThreadId;
 const STREAM = 'stream:desktop-parent' as StreamTabId;
+
+/** Collects the session facts emitted on a hub until detached. */
+function captureFacts(session: SessionHandle): {
+  facts: unknown[];
+  detach: () => void;
+} {
+  const facts: unknown[] = [];
+  const detach = session.events.subscribe((event) => {
+    facts.push(event);
+  });
+  return { facts, detach };
+}
 
 function answeredManifest(): ExternalInquiryThreadManifest {
   return {
@@ -99,14 +110,8 @@ describe('external inquiry continuation session routing', () => {
 
   it('emits inquiry thread updates through the explicit session hub', async () => {
     const session = createTestSession();
-    const explicitFacts: unknown[] = [];
-    const defaultFacts: unknown[] = [];
-    const detachExplicitFacts = session.events.subscribe((event) => {
-      explicitFacts.push(event);
-    });
-    const detachDefaultFacts = defaultSession().events.subscribe((event) => {
-      defaultFacts.push(event);
-    });
+    const explicit = captureFacts(session);
+    const fallback = captureFacts(defaultSession());
 
     try {
       await injectContinuationForAnsweredThread(
@@ -115,7 +120,7 @@ describe('external inquiry continuation session routing', () => {
         session,
       );
 
-      expect(explicitFacts).toEqual([
+      expect(explicit.facts).toEqual([
         {
           scope: 'session',
           event: {
@@ -132,25 +137,18 @@ describe('external inquiry continuation session routing', () => {
           },
         },
       ]);
-      expect(defaultFacts).toEqual([]);
+      expect(fallback.facts).toEqual([]);
     } finally {
-      detachExplicitFacts();
-      detachDefaultFacts();
+      explicit.detach();
+      fallback.detach();
       session.dispose();
     }
   });
 
   it("emits inquiry thread updates through the active run's session when no explicit session is provided", async () => {
-    const { host } = createRecordingHost();
     const session = createTestSession();
-    const runFacts: unknown[] = [];
-    const defaultFacts: unknown[] = [];
-    const detachRunFacts = session.events.subscribe((event) => {
-      runFacts.push(event);
-    });
-    const detachDefaultFacts = defaultSession().events.subscribe((event) => {
-      defaultFacts.push(event);
-    });
+    const run = captureFacts(session);
+    const fallback = captureFacts(defaultSession());
 
     try {
       await withRunContext(
@@ -160,7 +158,7 @@ describe('external inquiry continuation session routing', () => {
         () => injectContinuationForAnsweredThread(THREAD, answeredManifest()),
       );
 
-      expect(runFacts).toEqual([
+      expect(run.facts).toEqual([
         {
           scope: 'session',
           event: {
@@ -172,25 +170,18 @@ describe('external inquiry continuation session routing', () => {
           },
         },
       ]);
-      expect(defaultFacts).toEqual([]);
+      expect(fallback.facts).toEqual([]);
     } finally {
-      detachRunFacts();
-      detachDefaultFacts();
+      run.detach();
+      fallback.detach();
       session.dispose();
     }
   });
 
   it('falls back to the default session when the selected session has no event hub', async () => {
-    const { host } = createRecordingHost();
     const runSession = createTestSession();
-    const runFacts: unknown[] = [];
-    const defaultFacts: unknown[] = [];
-    const detachRunFacts = runSession.events.subscribe((event) => {
-      runFacts.push(event);
-    });
-    const detachDefaultFacts = defaultSession().events.subscribe((event) => {
-      defaultFacts.push(event);
-    });
+    const run = captureFacts(runSession);
+    const fallback = captureFacts(defaultSession());
 
     try {
       await withRunContext(
@@ -205,8 +196,8 @@ describe('external inquiry continuation session routing', () => {
           ),
       );
 
-      expect(runFacts).toEqual([]);
-      expect(defaultFacts).toEqual([
+      expect(run.facts).toEqual([]);
+      expect(fallback.facts).toEqual([
         {
           scope: 'session',
           event: {
@@ -219,18 +210,15 @@ describe('external inquiry continuation session routing', () => {
         },
       ]);
     } finally {
-      detachRunFacts();
-      detachDefaultFacts();
+      run.detach();
+      fallback.detach();
       runSession.dispose();
     }
   });
 
   it('does not emit an inquiry thread update when no summary is returned', async () => {
     const session = createTestSession();
-    const facts: unknown[] = [];
-    const detachFacts = session.events.subscribe((event) => {
-      facts.push(event);
-    });
+    const { facts, detach } = captureFacts(session);
     getThreadSummaryMock.mockResolvedValueOnce(null);
 
     try {
@@ -242,7 +230,7 @@ describe('external inquiry continuation session routing', () => {
 
       expect(facts).toEqual([]);
     } finally {
-      detachFacts();
+      detach();
       session.dispose();
     }
   });

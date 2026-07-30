@@ -111,18 +111,20 @@ function runExecutionIdFor(name: string): ExecutionId {
 }
 
 async function callTool(
-  overrideScript?: string,
-  files?: WorkflowScriptFiles,
-  agent = 'correct',
-  stopAfterCycle = false,
+  options: {
+    script?: string;
+    files?: WorkflowScriptFiles;
+    agent?: string;
+    stopAfterCycle?: boolean;
+  } = {},
 ) {
   return callToolInput(
     {
-      agent,
-      script: overrideScript ?? script,
-      ...(files ? { files } : {}),
+      agent: options.agent ?? 'correct',
+      script: options.script ?? script,
+      ...(options.files ? { files: options.files } : {}),
     },
-    stopAfterCycle,
+    options.stopAfterCycle ?? false,
   );
 }
 
@@ -423,7 +425,7 @@ describe('WorkflowScriptTool', () => {
   it('saves invalid submitted source and returns its editable draft path', async () => {
     const invalidScript = 'return await agent("missing meta")';
 
-    const result = await callTool(invalidScript);
+    const result = await callTool({ script: invalidScript });
 
     expect(result).toMatchObject({
       status: 'error',
@@ -503,7 +505,7 @@ describe('WorkflowScriptTool', () => {
       terminalStatus: EXECUTION_STATUS.COMPLETED,
     } as never);
 
-    const result = await callTool(undefined, undefined, 'correct', true);
+    const result = await callTool({ stopAfterCycle: true });
 
     const loopParams = mocks.startChildRunLoop.mock.calls[0]?.[0];
     expect(loopParams.strategy.deliveryMode).toBe('persistOnly');
@@ -530,7 +532,7 @@ describe('WorkflowScriptTool', () => {
       terminalStatus: EXECUTION_STATUS.ERROR,
     } as never);
 
-    const result = await callTool(undefined, undefined, 'correct', true);
+    const result = await callTool({ stopAfterCycle: true });
 
     expect(result).toMatchObject({
       status: 'error',
@@ -556,7 +558,10 @@ describe('WorkflowScriptTool', () => {
 
     // The default resolved completion writes no report, matching an
     // interruption before childRunLoop reaches deliverTurn.
-    const result = await callTool(resumedScript, undefined, 'correct', true);
+    const result = await callTool({
+      script: resumedScript,
+      stopAfterCycle: true,
+    });
 
     expect(result).toMatchObject({
       status: 'error',
@@ -569,7 +574,7 @@ describe('WorkflowScriptTool', () => {
   });
 
   it('rejects an unknown default agent before registering a detached run', async () => {
-    const result = await callTool(undefined, undefined, 'missing-agent');
+    const result = await callTool({ agent: 'missing-agent' });
 
     expect(result).toMatchObject({
       status: 'error',
@@ -587,7 +592,7 @@ describe('WorkflowScriptTool', () => {
       contextFiles: ['references.bib'],
       mediaFiles: ['figure.pdf'],
     } as const satisfies WorkflowScriptFiles;
-    const result = await callTool(undefined, files);
+    const result = await callTool({ files });
 
     expect(result.status).toBe('executed');
     expect(mocks.registerExecution).toHaveBeenCalledWith(
@@ -605,10 +610,12 @@ describe('WorkflowScriptTool', () => {
   it('rejects an oversized bibliography bound as workflow context', async () => {
     await WorkspaceFS.write('large.bib', 'x'.repeat(100 * 1024 + 1));
 
-    const result = await callTool(undefined, {
-      inputFiles: ['paper.tex'],
-      contextFiles: ['large.bib'],
-      mediaFiles: [],
+    const result = await callTool({
+      files: {
+        inputFiles: ['paper.tex'],
+        contextFiles: ['large.bib'],
+        mediaFiles: [],
+      },
     });
 
     expect(result).toMatchObject({
@@ -643,7 +650,7 @@ describe('WorkflowScriptTool', () => {
       },
     );
 
-    const result = await callTool(resumeScript);
+    const result = await callTool({ script: resumeScript });
 
     expect(result.status).toBe('executed');
     expect(mocks.registerExecution).toHaveBeenCalledWith(
@@ -664,7 +671,7 @@ describe('WorkflowScriptTool', () => {
     mocks.startChildRunLoop.mockClear();
     // A retrying model rewrites its source; the deterministic run id and the
     // meta.name-anchored checkpoint keep resume intact.
-    await callTool(`${script}\n// retry rewrote me`);
+    await callTool({ script: `${script}\n// retry rewrote me` });
     const second = mocks.startChildRunLoop.mock.calls[0]?.[0].executionId;
 
     expect(first).toBe(runExecutionIdFor('tool-test'));

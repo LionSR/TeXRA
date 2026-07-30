@@ -13,10 +13,10 @@ import { isCodexSubscriptionEligible } from './providerCapabilities';
  * not the source of truth for whether that model is still servable: a
  * provider can retire the pinned model at any time (this has already
  * happened live for `xai: 'grok4'`), which would otherwise make the setup
- * assistant silently probe a dead model forever. {@link resolveWithPreferred}
- * below validates each preference through the runtime model registry and
- * substitutes a still-usable model for that provider when the pin has gone
- * stale, so {@link SETUP_MODEL_BY_PROVIDER} always resolves to a servable
+ * assistant silently probe a dead model forever.
+ * {@link SETUP_MODEL_BY_PROVIDER} below validates each preference through the
+ * runtime model registry and substitutes a still-usable model for that
+ * provider when the pin has gone stale, so it always resolves to a servable
  * model without needing this table hand-updated on every retirement.
  */
 const PREFERRED_SETUP_MODEL_BY_PROVIDER: Readonly<Record<string, string>> = {
@@ -92,30 +92,11 @@ function fallbackSetupModel(setupProvider: string): string | undefined {
 }
 
 /**
- * Resolve `setupProvider`'s `preferred` pick if it is still live, otherwise a
- * usable fallback model this provider currently has in the registry. Takes
- * `preferred` as a parameter (rather than looking it up) so callers that
- * already know it holds a real value — like {@link SETUP_MODEL_BY_PROVIDER}
- * below, iterating its own preference table — get back a plain `string`
- * with no unresolved-provider case to handle.
- */
-function resolveWithPreferred(
-  setupProvider: string,
-  preferred: string,
-): string {
-  if (isUsableSetupModel(getRuntimeModelConfig(preferred), setupProvider)) {
-    return preferred;
-  }
-  return fallbackSetupModel(setupProvider) ?? preferred;
-}
-
-/**
  * Provider-specific models the setup assistant can use when that provider is
  * the only known usable credential. Kept with model metadata so hosts do not
  * each define their own setup routing truth. Resolved once at module load —
- * the static model catalog is fixed per process — via
- * {@link resolveWithPreferred}, so
- * a provider's curated pick going stale (retired or OpenRouter-only) degrades
+ * the static model catalog is fixed per process — keeping each curated pick
+ * that is still live and degrading a stale one (retired or OpenRouter-only)
  * to a live fallback instead of hard-failing the setup probe.
  */
 export const SETUP_MODEL_BY_PROVIDER: Readonly<Record<string, string>> =
@@ -123,7 +104,9 @@ export const SETUP_MODEL_BY_PROVIDER: Readonly<Record<string, string>> =
     Object.entries(PREFERRED_SETUP_MODEL_BY_PROVIDER).map(
       ([provider, preferred]) => [
         provider,
-        resolveWithPreferred(provider, preferred),
+        isUsableSetupModel(getRuntimeModelConfig(preferred), provider)
+          ? preferred
+          : (fallbackSetupModel(provider) ?? preferred),
       ],
     ),
   );

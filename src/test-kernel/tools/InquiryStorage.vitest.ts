@@ -6,6 +6,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import * as logUtils from '@logger/logUtils';
+import { platform } from '@platform/platform';
 import {
   ExternalInquiryPermissionSchema,
   type ExternalInquiryThreadId,
@@ -45,6 +46,48 @@ function captureLogLines(): string[] {
   return lines;
 }
 
+function threadDirFor(threadId: string): string {
+  return `${platform().storage.getGlobalStoragePath()}/ei_threads/${threadId}`;
+}
+
+async function writeTextFile(target: string, text: string): Promise<void> {
+  await platform().fs.writeFile(target, Buffer.from(text, 'utf8'));
+}
+
+async function readTextFile(target: string): Promise<string> {
+  return Buffer.from(await platform().fs.readFile(target)).toString('utf8');
+}
+
+/**
+ * Seeds a legacy manifest shape — pre-async storage, so no schemaVersion,
+ * status, or parentStreamId — with one answered turn on disk. Returns the
+ * manifest path.
+ */
+async function seedLegacyThread(threadId: string): Promise<string> {
+  const dir = threadDirFor(threadId);
+  await platform().fs.createDirectory(dir);
+  await platform().fs.createDirectory(`${dir}/t1`);
+  await writeTextFile(`${dir}/t1/answer.txt`, 'Legacy A');
+  await writeTextFile(
+    `${dir}/manifest.json`,
+    JSON.stringify({
+      threadId,
+      createdAt: '2025-01-01T00:00:00.000Z',
+      updatedAt: '2025-01-02T00:00:00.000Z',
+      turns: [
+        {
+          turnIndex: 1,
+          timestamp: '2025-01-01T00:00:00.000Z',
+          question: 'Legacy Q',
+          questionRelativePath: 't1/question.txt',
+          answerRelativePath: 't1/answer.txt',
+        },
+      ],
+    }),
+  );
+  return `${dir}/manifest.json`;
+}
+
 describe('InquiryStorage', () => {
   // Each test seeds threads against a fresh platform: state must not leak
   // between tests in this file, so this installs (and resets) per test
@@ -60,10 +103,9 @@ describe('InquiryStorage', () => {
   });
 
   it('surfaces inquiry history directory read failures', async () => {
-    const platform = (await import('@platform/platform')).platform();
-    const threadsDir = `${platform.storage.getGlobalStoragePath()}/ei_threads`;
+    const threadsDir = `${platform().storage.getGlobalStoragePath()}/ei_threads`;
     const readDirectorySpy = vi
-      .spyOn(platform.fs, 'readDirectory')
+      .spyOn(platform().fs, 'readDirectory')
       .mockRejectedValueOnce(
         Object.assign(new Error('inquiry history is unreadable'), {
           code: 'EACCES',
@@ -282,33 +324,7 @@ describe('InquiryStorage', () => {
   });
 
   it('parses a legacy manifest (no status/parentStreamId) as answered with null parent', async () => {
-    const platform = (await import('@platform/platform')).platform();
-    const threadDir = `${platform.storage.getGlobalStoragePath()}/ei_threads/ei_aabbccdd0011`;
-    // Legacy manifest shape — pre-async storage.
-    const legacy = {
-      threadId: 'ei_aabbccdd0011',
-      createdAt: '2025-01-01T00:00:00.000Z',
-      updatedAt: '2025-01-02T00:00:00.000Z',
-      turns: [
-        {
-          turnIndex: 1,
-          timestamp: '2025-01-01T00:00:00.000Z',
-          question: 'Legacy Q',
-          questionRelativePath: 't1/question.txt',
-          answerRelativePath: 't1/answer.txt',
-        },
-      ],
-    };
-    await platform.fs.createDirectory(threadDir);
-    await platform.fs.createDirectory(`${threadDir}/t1`);
-    await platform.fs.writeFile(
-      `${threadDir}/t1/answer.txt`,
-      Buffer.from('Legacy A', 'utf8'),
-    );
-    await platform.fs.writeFile(
-      `${threadDir}/manifest.json`,
-      Buffer.from(JSON.stringify(legacy), 'utf8'),
-    );
+    const manifestPath = await seedLegacyThread('ei_aabbccdd0011');
 
     const manifest = await readExternalInquiryThread('ei_aabbccdd0011');
     expect(manifest).not.toBeNull();
@@ -318,11 +334,9 @@ describe('InquiryStorage', () => {
       { turnIndex: 1, question: 'Legacy Q', answer: 'Legacy A' },
     ]);
 
-    const persisted = JSON.parse(
-      Buffer.from(
-        await platform.fs.readFile(`${threadDir}/manifest.json`),
-      ).toString('utf8'),
-    ) as { turns: Array<{ answer?: string }> };
+    const persisted = JSON.parse(await readTextFile(manifestPath)) as {
+      turns: Array<{ answer?: string }>;
+    };
     expect(persisted.turns[0]?.answer).toBe('Legacy A');
   });
 
@@ -332,23 +346,18 @@ describe('InquiryStorage', () => {
       question: 'Q1',
     });
 
-    const platform = (await import('@platform/platform')).platform();
-    const manifestPath = `${platform.storage.getGlobalStoragePath()}/ei_threads/${t.threadId}/manifest.json`;
-    const persisted = JSON.parse(
-      Buffer.from(await platform.fs.readFile(manifestPath)).toString('utf8'),
-    ) as { schemaVersion?: number };
+    const manifestPath = `${threadDirFor(t.threadId)}/manifest.json`;
+    const persisted = JSON.parse(await readTextFile(manifestPath)) as {
+      schemaVersion?: number;
+    };
     expect(persisted.schemaVersion).toBe(1);
   });
 
   it('treats a corrupt manifest as missing (loud read) without clobbering it', async () => {
-    const platform = (await import('@platform/platform')).platform();
-    const threadDir = `${platform.storage.getGlobalStoragePath()}/ei_threads/ei_aabbccdd0033`;
+    const threadDir = threadDirFor('ei_aabbccdd0033');
     const manifestPath = `${threadDir}/manifest.json`;
-    await platform.fs.createDirectory(threadDir);
-    await platform.fs.writeFile(
-      manifestPath,
-      Buffer.from('{ not valid json', 'utf8'),
-    );
+    await platform().fs.createDirectory(threadDir);
+    await writeTextFile(manifestPath, '{ not valid json');
     const logLines = captureLogLines();
 
     await expect(
@@ -367,19 +376,15 @@ describe('InquiryStorage', () => {
         question: 'Q?',
       }),
     ).rejects.toBeInstanceOf(ToolError);
-    const stillOnDisk = Buffer.from(
-      await platform.fs.readFile(manifestPath),
-    ).toString('utf8');
-    expect(stillOnDisk).toBe('{ not valid json');
+    expect(await readTextFile(manifestPath)).toBe('{ not valid json');
   });
 
   it('treats a schema-invalid manifest as missing (loud read)', async () => {
-    const platform = (await import('@platform/platform')).platform();
-    const threadDir = `${platform.storage.getGlobalStoragePath()}/ei_threads/ei_aabbccdd0044`;
-    await platform.fs.createDirectory(threadDir);
-    await platform.fs.writeFile(
+    const threadDir = threadDirFor('ei_aabbccdd0044');
+    await platform().fs.createDirectory(threadDir);
+    await writeTextFile(
       `${threadDir}/manifest.json`,
-      Buffer.from(JSON.stringify({ threadId: 42, turns: 'nope' }), 'utf8'),
+      JSON.stringify({ threadId: 42, turns: 'nope' }),
     );
     const logLines = captureLogLines();
 
@@ -392,8 +397,7 @@ describe('InquiryStorage', () => {
   });
 
   it('treats an unknown schemaVersion as unreadable, never as legacy data', async () => {
-    const platform = (await import('@platform/platform')).platform();
-    const threadDir = `${platform.storage.getGlobalStoragePath()}/ei_threads/ei_aabbccdd0055`;
+    const threadDir = threadDirFor('ei_aabbccdd0055');
     const manifestPath = `${threadDir}/manifest.json`;
     // Legacy-shaped body stamped with a future version: without the version
     // gate this would fail the canonical arm and silently parse as a legacy
@@ -413,11 +417,8 @@ describe('InquiryStorage', () => {
         },
       ],
     });
-    await platform.fs.createDirectory(threadDir);
-    await platform.fs.writeFile(
-      manifestPath,
-      Buffer.from(futureManifest, 'utf8'),
-    );
+    await platform().fs.createDirectory(threadDir);
+    await writeTextFile(manifestPath, futureManifest);
     const logLines = captureLogLines();
 
     await expect(
@@ -428,31 +429,24 @@ describe('InquiryStorage', () => {
     );
 
     // The on-disk file is preserved byte-for-byte for the newer writer.
-    const stillOnDisk = Buffer.from(
-      await platform.fs.readFile(manifestPath),
-    ).toString('utf8');
-    expect(stillOnDisk).toBe(futureManifest);
+    expect(await readTextFile(manifestPath)).toBe(futureManifest);
   });
 
   it('never legacy-parses a version-stamped manifest whose canonical shape is invalid', async () => {
-    const platform = (await import('@platform/platform')).platform();
-    const threadDir = `${platform.storage.getGlobalStoragePath()}/ei_threads/ei_aabbccdd0077`;
+    const threadDir = threadDirFor('ei_aabbccdd0077');
     // schemaVersion present (current) but `status`/`parentStreamId` missing:
     // the canonical arm rejects it, and the legacy arm must too — legacy is
     // reserved for version-ABSENT manifests.
-    await platform.fs.createDirectory(threadDir);
-    await platform.fs.writeFile(
+    await platform().fs.createDirectory(threadDir);
+    await writeTextFile(
       `${threadDir}/manifest.json`,
-      Buffer.from(
-        JSON.stringify({
-          schemaVersion: 1,
-          threadId: 'ei_aabbccdd0077',
-          createdAt: '2025-01-01T00:00:00.000Z',
-          updatedAt: '2025-01-02T00:00:00.000Z',
-          turns: [],
-        }),
-        'utf8',
-      ),
+      JSON.stringify({
+        schemaVersion: 1,
+        threadId: 'ei_aabbccdd0077',
+        createdAt: '2025-01-01T00:00:00.000Z',
+        updatedAt: '2025-01-02T00:00:00.000Z',
+        turns: [],
+      }),
     );
     const logLines = captureLogLines();
 
@@ -465,38 +459,12 @@ describe('InquiryStorage', () => {
   });
 
   it('returns a hydrated legacy manifest when write-back fails', async () => {
-    const platform = (await import('@platform/platform')).platform();
-    const threadDir = `${platform.storage.getGlobalStoragePath()}/ei_threads/ei_aabbccdd0022`;
-    const manifestPath = `${threadDir}/manifest.json`;
-    const legacy = {
-      threadId: 'ei_aabbccdd0022',
-      createdAt: '2025-01-01T00:00:00.000Z',
-      updatedAt: '2025-01-02T00:00:00.000Z',
-      turns: [
-        {
-          turnIndex: 1,
-          timestamp: '2025-01-01T00:00:00.000Z',
-          question: 'Legacy Q',
-          questionRelativePath: 't1/question.txt',
-          answerRelativePath: 't1/answer.txt',
-        },
-      ],
-    };
-    await platform.fs.createDirectory(threadDir);
-    await platform.fs.createDirectory(`${threadDir}/t1`);
-    await platform.fs.writeFile(
-      `${threadDir}/t1/answer.txt`,
-      Buffer.from('Legacy A', 'utf8'),
-    );
-    await platform.fs.writeFile(
-      manifestPath,
-      Buffer.from(JSON.stringify(legacy), 'utf8'),
-    );
-    const originalWriteFileAtomic = platform.fs.writeFileAtomic.bind(
-      platform.fs,
+    const manifestPath = await seedLegacyThread('ei_aabbccdd0022');
+    const originalWriteFileAtomic = platform().fs.writeFileAtomic.bind(
+      platform().fs,
     );
     const writeFileAtomicSpy = vi
-      .spyOn(platform.fs, 'writeFileAtomic')
+      .spyOn(platform().fs, 'writeFileAtomic')
       .mockImplementation(async (target, content) => {
         if (target === manifestPath) {
           throw new Error('metadata disk full');
@@ -518,9 +486,9 @@ describe('InquiryStorage', () => {
       writeFileAtomicSpy.mockRestore();
     }
 
-    const persisted = JSON.parse(
-      Buffer.from(await platform.fs.readFile(manifestPath)).toString('utf8'),
-    ) as { turns: Array<{ answer?: string }> };
+    const persisted = JSON.parse(await readTextFile(manifestPath)) as {
+      turns: Array<{ answer?: string }>;
+    };
     expect(persisted.turns[0]?.answer).toBeUndefined();
   });
 });

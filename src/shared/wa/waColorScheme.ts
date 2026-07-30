@@ -14,51 +14,51 @@
  * mid-session (e.g. user toggles VS Code light/dark).
  */
 
+const DARK_BODY_CLASSES: readonly string[] = [
+  'vscode-dark',
+  'vscode-high-contrast',
+  'texra-dark',
+  'texra-high-contrast',
+];
+
+const LIGHT_BODY_CLASSES: readonly string[] = [
+  'vscode-light',
+  'vscode-high-contrast-light',
+  'texra-light',
+];
+
+const DARK_THEME_KINDS: readonly string[] = [
+  'vscode-dark',
+  'vscode-high-contrast',
+  'dark',
+  'high-contrast',
+];
+
 let observer: MutationObserver | null = null;
 
 function isDarkTheme(): boolean {
   const body = document.body;
-  if (!body) {
-    return window.matchMedia('(prefers-color-scheme: dark)').matches;
-  }
-  if (
-    body.classList.contains('vscode-dark') ||
-    body.classList.contains('vscode-high-contrast') ||
-    body.classList.contains('texra-dark') ||
-    body.classList.contains('texra-high-contrast')
-  ) {
-    return true;
-  }
-  if (
-    body.classList.contains('vscode-light') ||
-    body.classList.contains('vscode-high-contrast-light') ||
-    body.classList.contains('texra-light')
-  ) {
-    return false;
-  }
-  const kind = body.dataset.vscodeThemeKind;
-  if (kind) {
-    return (
-      kind === 'vscode-dark' ||
-      kind === 'vscode-high-contrast' ||
-      kind === 'dark' ||
-      kind === 'high-contrast'
-    );
+  if (body) {
+    if (DARK_BODY_CLASSES.some((name) => body.classList.contains(name))) {
+      return true;
+    }
+    if (LIGHT_BODY_CLASSES.some((name) => body.classList.contains(name))) {
+      return false;
+    }
+    const kind = body.dataset.vscodeThemeKind;
+    if (kind) {
+      return DARK_THEME_KINDS.includes(kind);
+    }
   }
   return window.matchMedia('(prefers-color-scheme: dark)').matches;
 }
 
 function syncWaClass(): void {
-  const root = document.documentElement;
   const dark = isDarkTheme();
   // Only mutate when needed to avoid layout thrash when other observers run.
-  if (dark && !root.classList.contains('wa-dark')) {
-    root.classList.remove('wa-light');
-    root.classList.add('wa-dark');
-  } else if (!dark && !root.classList.contains('wa-light')) {
-    root.classList.remove('wa-dark');
-    root.classList.add('wa-light');
-  }
+  const current = dark ? 'wa-dark' : 'wa-light';
+  if (document.documentElement.classList.contains(current)) return;
+  setWaColorScheme(dark);
 }
 
 /**
@@ -94,10 +94,7 @@ export function applyInitialWaColorScheme(): void {
   };
   start();
   // Also react to OS-level dark-mode changes when the host hasn't set a class.
-  if (window.matchMedia) {
-    const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    if (typeof mq.addEventListener === 'function') {
-      mq.addEventListener('change', syncWaClass);
-    }
-  }
+  window
+    .matchMedia('(prefers-color-scheme: dark)')
+    .addEventListener('change', syncWaClass);
 }

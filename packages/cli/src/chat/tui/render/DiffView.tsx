@@ -9,7 +9,7 @@ import { structuredPatch, type StructuredPatchHunk } from 'diff';
 
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import { clampModalWidth } from '@cli/tui/ui/theme';
-import { clamp, filterNotNullish, isObject } from '@utils/core';
+import { clamp, isObject } from '@utils/core';
 
 import { maxScrollableRowOffset, scrollBoundedRows } from './scrollBounds';
 import { clipToWidth, fillRows, textDisplayWidth } from './terminalText';
@@ -106,7 +106,7 @@ export function editPatchGroups(
     : [editCandidate(input, fileLabel)];
 
   const groups = candidates.flatMap((candidate) => {
-    if (!filterNotNullish(candidate)) return [];
+    if (candidate === undefined) return [];
     const hunks = buildHunks(
       candidate.fileLabel,
       candidate.oldText,

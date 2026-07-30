@@ -55,22 +55,10 @@ export class BinaryResolverService {
   ): ResolvedBinaryCommand | null {
     const resolvedPath = commandOptions.resolvedPath ?? this.findPath(toolName);
     if (!resolvedPath) return null;
-    return this.toCommand(toolName, resolvedPath, args);
-  }
-
-  private toCommand(
-    toolName: string,
-    resolvedPath: string,
-    args: string[],
-  ): ResolvedBinaryCommand {
     if (this.needsPerlLauncher(toolName, resolvedPath)) {
       return { command: 'perl', args: [resolvedPath, ...args], resolvedPath };
     }
-    return {
-      command: resolvedPath,
-      args,
-      resolvedPath,
-    };
+    return { command: resolvedPath, args, resolvedPath };
   }
 
   private needsPerlLauncher(toolName: string, resolvedPath: string): boolean {

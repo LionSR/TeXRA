@@ -125,11 +125,7 @@ function installDialogPolyfill(window: JSDOM['window']): void {
   }
 }
 
-const ATTACH_INTERNALS_PATCHED = Symbol.for(
-  'texra.test.attachInternalsPatched',
-);
-
-export function installAttachInternalsFallback(window: TestDomWindow): void {
+function installAttachInternalsFallback(window: TestDomWindow): void {
   // jsdom's attachInternals() exists but returns an ElementInternals stub
   // without setValidity / setFormValue / etc. Web Awesome's
   // WebAwesomeFormAssociatedElement (used by wa-button etc.) calls
@@ -142,11 +138,7 @@ export function installAttachInternalsFallback(window: TestDomWindow): void {
   }
   const proto = HTMLElementCtor.prototype as unknown as HTMLElement & {
     attachInternals?: () => ElementInternals;
-    [ATTACH_INTERNALS_PATCHED]?: boolean;
   };
-  if (proto[ATTACH_INTERNALS_PATCHED]) {
-    return;
-  }
   proto.attachInternals = function attachInternals() {
     return {
       setValidity: () => {},
@@ -161,12 +153,6 @@ export function installAttachInternalsFallback(window: TestDomWindow): void {
       states: new Set<string>(),
     } as unknown as ElementInternals;
   };
-  Object.defineProperty(proto, ATTACH_INTERNALS_PATCHED, {
-    configurable: true,
-    enumerable: false,
-    writable: false,
-    value: true,
-  });
 }
 
 function defineGetterIfMissing(

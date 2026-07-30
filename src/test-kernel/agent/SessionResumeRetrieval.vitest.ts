@@ -84,6 +84,55 @@ const VALID_TOOL_USE_SHARED = {
 };
 type ToolUseSetupContext = Parameters<ToolUseFlowSetupCallback>[0];
 
+// A record parked on the wait node, as a resumable turn leaves it.
+const WAITING_AT_START = {
+  cursor: { nextNodeId: WAIT_NODE_CURSOR },
+  nodes: [
+    { action: 'default', nodeId: 'start' },
+    { action: 'default', nodeId: 'start/default' },
+  ],
+};
+
+async function writeFlowRecord(
+  executionId: ExecutionId,
+  shared: unknown,
+  overrides: Record<string, unknown> = {},
+): Promise<void> {
+  await getExecutionStore(executionId).write(flowKey(executionId), {
+    flowName: 'texra',
+    params: {},
+    shared,
+    createdAt: new Date().toISOString(),
+    nodes: [],
+    ...overrides,
+  });
+}
+
+function readFlowRecord(
+  executionId: ExecutionId,
+): Promise<FlowRecord | undefined> {
+  return getExecutionStore(executionId).read<FlowRecord>(flowKey(executionId));
+}
+
+async function retrieveToolUseResume(
+  streamId: StreamTabId,
+  executionId: ExecutionId,
+  config: AgentConfig = CONFIG,
+  options?: Parameters<typeof retrieveSessionResumeData>[3],
+): Promise<ToolUseResumeData> {
+  const resume = await retrieveSessionResumeData(
+    streamId,
+    executionId,
+    agentConfigToTaskState(config),
+    options,
+  );
+  expect(resume?.type).toBe('toolUse');
+  if (resume?.type !== 'toolUse') {
+    throw new Error(`Expected tool-use resume data for stream: ${streamId}`);
+  }
+  return resume;
+}
+
 // Most flow-record fixtures below persist a fresh run/workspace snapshot
 // with only the current model and (occasionally) a transient override
 // varying between cases.
@@ -243,26 +292,14 @@ describe('retrieveSessionResumeData', () => {
   it('uses the persisted current model while preserving the original stream id', async () => {
     const executionId = 'abc123' as ExecutionId;
     const streamId = 'chat@gpt54#abc123' as StreamTabId;
-    await getExecutionStore(executionId).write(flowKey(executionId), {
-      flowName: 'texra',
-      params: {},
-      shared: {
-        messages: [],
-        shouldSkipCycle: false,
-        stateSlices: defaultStateSlices('gpt54', { MODEL: 'gpt55' }),
-      },
-      createdAt: new Date().toISOString(),
-      nodes: [],
+    await writeFlowRecord(executionId, {
+      messages: [],
+      shouldSkipCycle: false,
+      stateSlices: defaultStateSlices('gpt54', { MODEL: 'gpt55' }),
     });
 
-    const resume = await retrieveSessionResumeData(
-      streamId,
-      executionId,
-      agentConfigToTaskState(CONFIG),
-    );
+    const resume = await retrieveToolUseResume(streamId, executionId);
 
-    expect(resume?.type).toBe('toolUse');
-    if (resume?.type !== 'toolUse') return;
     expect(resume.streamId).toBe(streamId);
     expect(resume.agentConfig.model).toBe('gpt55');
   });
@@ -271,58 +308,39 @@ describe('retrieveSessionResumeData', () => {
     const executionId = 'abc131' as ExecutionId;
     const streamId = 'chat@gpt54#abc131-child' as StreamTabId;
     const parentStreamId = 'chat@gpt54#abc131-parent' as StreamTabId;
-    await getExecutionStore(executionId).write(flowKey(executionId), {
-      flowName: 'texra',
-      params: {},
-      shared: {
-        messages: [],
-        shouldSkipCycle: false,
-        stateSlices: defaultStateSlices(),
-      },
-      createdAt: new Date().toISOString(),
-      nodes: [],
+    await writeFlowRecord(executionId, {
+      messages: [],
+      shouldSkipCycle: false,
+      stateSlices: defaultStateSlices(),
     });
 
-    const resume = await retrieveSessionResumeData(
-      streamId,
-      executionId,
-      agentConfigToTaskState(CONFIG),
-      { parentStreamId },
-    );
+    const resume = await retrieveToolUseResume(streamId, executionId, CONFIG, {
+      parentStreamId,
+    });
 
-    expect(resume?.type).toBe('toolUse');
-    if (resume?.type !== 'toolUse') return;
     expect(resume.parentStreamId).toBe(parentStreamId);
   });
 
   it('infers the legacy Google GenAI handler for old Google Content transcripts', async () => {
     const executionId = 'abc124' as ExecutionId;
     const streamId = 'chat@gemini35f#abc124' as StreamTabId;
-    await getExecutionStore(executionId).write(flowKey(executionId), {
-      flowName: 'texra',
-      params: {},
-      shared: {
-        messages: [
-          {
-            role: 'user',
-            parts: [{ text: 'Continue the old chat transcript.' }],
-          },
-        ],
-        shouldSkipCycle: false,
-        stateSlices: defaultStateSlices('gemini35f'),
-      },
-      createdAt: new Date().toISOString(),
-      nodes: [],
+    await writeFlowRecord(executionId, {
+      messages: [
+        {
+          role: 'user',
+          parts: [{ text: 'Continue the old chat transcript.' }],
+        },
+      ],
+      shouldSkipCycle: false,
+      stateSlices: defaultStateSlices('gemini35f'),
     });
 
-    const resume = await retrieveSessionResumeData(
+    const resume = await retrieveToolUseResume(
       streamId,
       executionId,
-      agentConfigToTaskState(GOOGLE_CONFIG),
+      GOOGLE_CONFIG,
     );
 
-    expect(resume?.type).toBe('toolUse');
-    if (resume?.type !== 'toolUse') return;
     expect(resume.shared.modelHandlerCompatibilityKey).toBe(
       'ModelHandlerGoogleGenAI',
     );
@@ -331,33 +349,21 @@ describe('retrieveSessionResumeData', () => {
   it('normalizes legacy nested conversation shared state for tool-use resume', async () => {
     const executionId = 'abc128' as ExecutionId;
     const streamId = 'chat@gpt54#abc128' as StreamTabId;
-    await getExecutionStore(executionId).write(flowKey(executionId), {
-      flowName: 'texra',
-      params: {},
-      shared: {
-        state: {
-          conversation: [
-            {
-              role: 'user',
-              content: 'Continue the legacy conversation.',
-            },
-          ],
-          shouldSkipCycle: false,
-          stateSlices: defaultStateSlices(),
-        },
+    await writeFlowRecord(executionId, {
+      state: {
+        conversation: [
+          {
+            role: 'user',
+            content: 'Continue the legacy conversation.',
+          },
+        ],
+        shouldSkipCycle: false,
+        stateSlices: defaultStateSlices(),
       },
-      createdAt: new Date().toISOString(),
-      nodes: [],
     });
 
-    const resume = await retrieveSessionResumeData(
-      streamId,
-      executionId,
-      agentConfigToTaskState(CONFIG),
-    );
+    const resume = await retrieveToolUseResume(streamId, executionId);
 
-    expect(resume?.type).toBe('toolUse');
-    if (resume?.type !== 'toolUse') return;
     expect(resume.shared.messages).toEqual([
       {
         role: 'user',
@@ -372,29 +378,17 @@ describe('retrieveSessionResumeData', () => {
     // of `shared`, never renamed to `messages`.
     const executionId = 'abc133' as ExecutionId;
     const streamId = 'chat@gpt54#abc133' as StreamTabId;
-    await getExecutionStore(executionId).write(flowKey(executionId), {
-      flowName: 'texra',
-      params: {},
-      shared: {
-        messages: null,
-        conversation: [
-          { role: 'user', content: 'Continue the flat legacy conversation.' },
-        ],
-        shouldSkipCycle: false,
-        stateSlices: defaultStateSlices(),
-      },
-      createdAt: new Date().toISOString(),
-      nodes: [],
+    await writeFlowRecord(executionId, {
+      messages: null,
+      conversation: [
+        { role: 'user', content: 'Continue the flat legacy conversation.' },
+      ],
+      shouldSkipCycle: false,
+      stateSlices: defaultStateSlices(),
     });
 
-    const resume = await retrieveSessionResumeData(
-      streamId,
-      executionId,
-      agentConfigToTaskState(CONFIG),
-    );
+    const resume = await retrieveToolUseResume(streamId, executionId);
 
-    expect(resume?.type).toBe('toolUse');
-    if (resume?.type !== 'toolUse') return;
     expect(resume.shared.messages).toEqual([
       { role: 'user', content: 'Continue the flat legacy conversation.' },
     ]);
@@ -404,16 +398,10 @@ describe('retrieveSessionResumeData', () => {
     const executionId = 'abc129' as ExecutionId;
     const streamId = 'chat@gpt54#abc129' as StreamTabId;
     const store = getExecutionStore(executionId);
-    await store.write(flowKey(executionId), {
-      flowName: 'texra',
-      params: {},
-      shared: {
-        messages: [],
-        shouldSkipCycle: false,
-        stateSlices: defaultStateSlices(),
-      },
-      createdAt: new Date().toISOString(),
-      nodes: [],
+    await writeFlowRecord(executionId, {
+      messages: [],
+      shouldSkipCycle: false,
+      stateSlices: defaultStateSlices(),
     });
     const originalRead = store.read.bind(store);
     const readSpy = vi.spyOn(store, 'read').mockImplementation(async (key) => {
@@ -446,16 +434,10 @@ describe('retrieveSessionResumeData', () => {
       schemaVersion: 999,
       timestamp: '2026-07-05T00:00:00.000Z',
     });
-    await store.write(flowKey(executionId), {
-      flowName: 'texra',
-      params: {},
-      shared: {
-        messages: [],
-        shouldSkipCycle: false,
-        stateSlices: defaultStateSlices(),
-      },
-      createdAt: new Date().toISOString(),
-      nodes: [],
+    await writeFlowRecord(executionId, {
+      messages: [],
+      shouldSkipCycle: false,
+      stateSlices: defaultStateSlices(),
     });
 
     await expect(
@@ -472,21 +454,15 @@ describe('retrieveSessionResumeData', () => {
   it('infers the legacy Google GenAI handler for old workflow transcripts', async () => {
     const executionId = 'abc125' as ExecutionId;
     const streamId = 'workflow@gemini35f#abc125' as StreamTabId;
-    await getExecutionStore(executionId).write(flowKey(executionId), {
-      flowName: 'texra',
-      params: {},
-      shared: {
-        currentRound: 1,
-        totalRounds: 2,
-        conversation: [
-          {
-            role: 'user',
-            parts: [{ text: 'Continue the old workflow transcript.' }],
-          },
-        ],
-      },
-      createdAt: new Date().toISOString(),
-      nodes: [],
+    await writeFlowRecord(executionId, {
+      currentRound: 1,
+      totalRounds: 2,
+      conversation: [
+        {
+          role: 'user',
+          parts: [{ text: 'Continue the old workflow transcript.' }],
+        },
+      ],
     });
 
     const resume = await retrieveSessionResumeData(
@@ -503,21 +479,15 @@ describe('retrieveSessionResumeData', () => {
   it('normalizes legacy workflow messages shared state for resume routing', async () => {
     const executionId = 'abc132' as ExecutionId;
     const streamId = 'workflow@gemini35f#abc132' as StreamTabId;
-    await getExecutionStore(executionId).write(flowKey(executionId), {
-      flowName: 'texra',
-      params: {},
-      shared: {
-        currentRound: 1,
-        totalRounds: 2,
-        messages: [
-          {
-            role: 'user',
-            parts: [{ text: 'Continue the old workflow messages.' }],
-          },
-        ],
-      },
-      createdAt: new Date().toISOString(),
-      nodes: [],
+    await writeFlowRecord(executionId, {
+      currentRound: 1,
+      totalRounds: 2,
+      messages: [
+        {
+          role: 'user',
+          parts: [{ text: 'Continue the old workflow messages.' }],
+        },
+      ],
     });
 
     const resume = await retrieveSessionResumeData(
@@ -543,9 +513,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const result = await runPersistedFlow(executionId, streamId, snapshot);
 
     expect(result.outcome).toBe(STREAM_PHASE.WAITING);
-    const stored = await getExecutionStore(executionId).read<FlowRecord>(
-      flowKey(executionId),
-    );
+    const stored = await readFlowRecord(executionId);
     expect(ToolUseRunSharedCanonicalSchema.parse(stored?.shared)).toMatchObject(
       {
         messages: snapshot.shared.messages,
@@ -831,7 +799,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     );
 
     expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-    expect(await store.read<FlowRecord>(flowKey(executionId))).toMatchObject({
+    expect(await readFlowRecord(executionId)).toMatchObject({
       cursor: { nextNodeId: 'start' },
       shared: { shouldSkipCycle: true },
     });
@@ -842,22 +810,16 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const streamId = 'chat@gpt54#abc-interrupted-provider' as StreamTabId;
     const store = getExecutionStore(executionId);
     let flowContext: ToolUseSetupContext | undefined;
-    const stored = {
-      flowName: 'texra',
-      params: {},
-      shared: {
-        ...VALID_TOOL_USE_SHARED,
-        modelHandlerCompatibilityKey: ACTIVE_COMPATIBILITY_KEY,
-      },
-      createdAt: new Date().toISOString(),
-      nodes: [],
+    const storedShared = {
+      ...VALID_TOOL_USE_SHARED,
+      modelHandlerCompatibilityKey: ACTIVE_COMPATIBILITY_KEY,
     };
     const snapshot = buildToolUseResumeData(
       executionId,
       streamId,
-      stored.shared,
+      storedShared,
     );
-    await store.write(flowKey(executionId), stored);
+    await writeFlowRecord(executionId, storedShared);
     const abortError = new DOMException(
       'This operation was aborted',
       'AbortError',
@@ -886,7 +848,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       ).rejects.toBe(abortError);
       expect(deleteSpy).not.toHaveBeenCalledWith(flowKey(executionId));
       expect(dispositions).toEqual(['preserve']);
-      expect(await store.read<FlowRecord>(flowKey(executionId))).toMatchObject({
+      expect(await readFlowRecord(executionId)).toMatchObject({
         cursor: { nextNodeId: 'start' },
         shared: { shouldSkipCycle: true },
       });
@@ -952,22 +914,16 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const executionId = 'abc-cancel-active-followup' as ExecutionId;
     const streamId = 'chat@gpt54#abc-cancel-active-followup' as StreamTabId;
     const session = createTestSession();
-    const stored = {
-      flowName: 'texra',
-      params: {},
-      shared: {
-        ...VALID_TOOL_USE_SHARED,
-        modelHandlerCompatibilityKey: ACTIVE_COMPATIBILITY_KEY,
-      },
-      createdAt: new Date().toISOString(),
-      nodes: [],
+    const storedShared = {
+      ...VALID_TOOL_USE_SHARED,
+      modelHandlerCompatibilityKey: ACTIVE_COMPATIBILITY_KEY,
     };
     const snapshot = buildToolUseResumeData(
       executionId,
       streamId,
-      stored.shared,
+      storedShared,
     );
-    await getExecutionStore(executionId).write(flowKey(executionId), stored);
+    await writeFlowRecord(executionId, storedShared);
     let flowContext: ToolUseSetupContext | undefined;
     const abortError = new DOMException(
       'This operation was aborted',
@@ -1017,32 +973,14 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
         stateSlices: defaultStateSlices(),
       },
     };
-    await getExecutionStore(executionId).write(flowKey(executionId), {
-      flowName: 'texra',
-      params: {},
-      shared: legacyShared,
-      createdAt: new Date().toISOString(),
-      cursor: { nextNodeId: WAIT_NODE_CURSOR },
-      nodes: [
-        { action: 'default', nodeId: 'start' },
-        { action: 'default', nodeId: 'start/default' },
-      ],
-    });
+    await writeFlowRecord(executionId, legacyShared, WAITING_AT_START);
 
-    const resume = await retrieveSessionResumeData(
-      streamId,
-      executionId,
-      agentConfigToTaskState(CONFIG),
-    );
-    expect(resume?.type).toBe('toolUse');
-    if (resume?.type !== 'toolUse') return;
+    const resume = await retrieveToolUseResume(streamId, executionId);
     expect(resume.shared.modelHandlerCompatibilityKey).toBeUndefined();
 
     await runResumedFlowToWaiting(executionId, streamId, resume);
 
-    const healedRecord = await getExecutionStore(executionId).read<FlowRecord>(
-      flowKey(executionId),
-    );
+    const healedRecord = await readFlowRecord(executionId);
 
     expect(healedRecord?.shared).toMatchObject({
       messages: resume.shared.messages,
@@ -1060,30 +998,18 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     // write for a no-op overwrite of identical bytes.
     const executionId = 'abc143' as ExecutionId;
     const streamId = 'chat@gpt54#abc143' as StreamTabId;
-    await getExecutionStore(executionId).write(flowKey(executionId), {
-      flowName: 'texra',
-      params: {},
-      shared: {
+    await writeFlowRecord(
+      executionId,
+      {
         messages: [{ role: 'user', content: 'Continue.' }],
         modelHandlerCompatibilityKey: ACTIVE_COMPATIBILITY_KEY,
         shouldSkipCycle: false,
         stateSlices: defaultStateSlices(),
       },
-      createdAt: new Date().toISOString(),
-      cursor: { nextNodeId: WAIT_NODE_CURSOR },
-      nodes: [
-        { action: 'default', nodeId: 'start' },
-        { action: 'default', nodeId: 'start/default' },
-      ],
-    });
-
-    const resume = await retrieveSessionResumeData(
-      streamId,
-      executionId,
-      agentConfigToTaskState(CONFIG),
+      WAITING_AT_START,
     );
-    expect(resume?.type).toBe('toolUse');
-    if (resume?.type !== 'toolUse') return;
+
+    const resume = await retrieveToolUseResume(streamId, executionId);
     expect(resume.shared.modelHandlerCompatibilityKey).toBe(
       ACTIVE_COMPATIBILITY_KEY,
     );
@@ -1116,39 +1042,25 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const executionId = 'abc142' as ExecutionId;
     const streamId = 'chat@gpt54#abc142' as StreamTabId;
     const persistedCompatibilityKey = 'ModelHandlerAnthropic';
-    await getExecutionStore(executionId).write(flowKey(executionId), {
-      flowName: 'texra',
-      params: {},
-      shared: {
+    await writeFlowRecord(
+      executionId,
+      {
         messages: [{ role: 'user', content: 'Continue.' }],
         modelHandlerCompatibilityKey: persistedCompatibilityKey,
         shouldSkipCycle: false,
         stateSlices: defaultStateSlices(),
       },
-      createdAt: new Date().toISOString(),
-      cursor: { nextNodeId: WAIT_NODE_CURSOR },
-      nodes: [
-        { action: 'default', nodeId: 'start' },
-        { action: 'default', nodeId: 'start/default' },
-      ],
-    });
-
-    const resume = await retrieveSessionResumeData(
-      streamId,
-      executionId,
-      agentConfigToTaskState(CONFIG),
+      WAITING_AT_START,
     );
-    expect(resume?.type).toBe('toolUse');
-    if (resume?.type !== 'toolUse') return;
+
+    const resume = await retrieveToolUseResume(streamId, executionId);
     expect(resume.shared.modelHandlerCompatibilityKey).toBe(
       persistedCompatibilityKey,
     );
 
     await runResumedFlowToWaiting(executionId, streamId, resume);
 
-    const healedRecord = await getExecutionStore(executionId).read<FlowRecord>(
-      flowKey(executionId),
-    );
+    const healedRecord = await readFlowRecord(executionId);
     expect(healedRecord?.shared).toMatchObject({
       modelHandlerCompatibilityKey: persistedCompatibilityKey,
     });
@@ -1173,10 +1085,9 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
         ],
         plan: { objective: 'Migrate legacy workspace snapshots on resume' },
       };
-      await getExecutionStore(executionId).write(flowKey(executionId), {
-        flowName: 'texra',
-        params: {},
-        shared: {
+      await writeFlowRecord(
+        executionId,
+        {
           messages: [{ role: 'user', content: 'Continue.' }],
           shouldSkipCycle: true,
           stateSlices: {
@@ -1188,26 +1099,19 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
             },
           },
         },
-        createdAt: new Date().toISOString(),
-        cursor: { nextNodeId: 'start/default' },
-        nodes: [{ action: 'default', nodeId: 'start' }],
-      });
+        {
+          cursor: { nextNodeId: 'start/default' },
+          nodes: [{ action: 'default', nodeId: 'start' }],
+        },
+      );
 
-      const retrieved = withResume
-        ? await retrieveSessionResumeData(
-            streamId,
-            executionId,
-            agentConfigToTaskState(CONFIG),
-          )
+      const resume = withResume
+        ? await retrieveToolUseResume(streamId, executionId)
         : undefined;
-      const resume = retrieved?.type === 'toolUse' ? retrieved : undefined;
-      if (withResume) expect(resume).toBeDefined();
       const result = await runPersistedFlow(executionId, streamId, resume);
       expect(result.outcome).toBe(STREAM_PHASE.WAITING);
 
-      const healedRecord = await getExecutionStore(
-        executionId,
-      ).read<FlowRecord>(flowKey(executionId));
+      const healedRecord = await readFlowRecord(executionId);
       const healedShared = ToolUseRunSharedCanonicalSchema.parse(
         healedRecord?.shared,
       );

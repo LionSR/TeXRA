@@ -15,6 +15,7 @@ import {
   slashPickIntent,
   suggestSlashCommand,
   unregisterSlashCommand,
+  type SlashCommand,
 } from '@cli/chat/tui/commands/slashRegistry';
 import { registerBuiltinSlashCommands } from '@cli/chat/tui/commands/registerBuiltins';
 import {
@@ -43,7 +44,10 @@ import {
   FakeStdout,
   loadInk,
 } from '@test/support/inkTestHarness.mts';
-import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
+import {
+  createDeferred,
+  waitForCondition as waitFor,
+} from '@test/support/asyncTestUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const INCLUDED_CHAT_SESSION: SessionMeta = {
@@ -82,15 +86,10 @@ describe('slashRegistry', () => {
     }
   }
 
-  function deferredSelection(): {
-    readonly promise: Promise<void>;
-    readonly resolve: () => void;
-  } {
-    let resolveSelection: () => void = () => {};
-    const promise = new Promise<void>((resolve) => {
-      resolveSelection = resolve;
-    });
-    return { promise, resolve: resolveSelection };
+  function requireSlashCommand(name: string): SlashCommand {
+    const command = findSlashCommand(name);
+    if (!command) throw new Error(`Expected /${name} to be registered`);
+    return command;
   }
 
   function renderOpenForm<TProps>(): {
@@ -131,59 +130,39 @@ describe('slashRegistry', () => {
         'compact',
       ]),
     );
-    expect(
-      listSlashCommands().find((cmd) => cmd.name === 'model'),
-    ).toMatchObject({
-      description: 'List available models',
-    });
-    expect(listSlashCommands().find((cmd) => cmd.name === 'agent')).toEqual(
-      expect.objectContaining({
-        description: 'List or choose the root agent',
-        formComponent: expect.any(Function),
-      }),
-    );
-    expect(listSlashCommands().find((cmd) => cmd.name === 'approval')).toEqual(
-      expect.objectContaining({
-        description: 'Switch approval policy',
-        formComponent: expect.any(Function),
-      }),
-    );
-    expect(listSlashCommands().find((cmd) => cmd.name === 'memory')).toEqual(
-      expect.objectContaining({
-        description: 'List stored memories',
-        formComponent: expect.any(Function),
-      }),
-    );
-    expect(listSlashCommands().find((cmd) => cmd.name === 'resume')).toEqual(
-      expect.objectContaining({
-        description: 'Resume a previous session',
-        formComponent: expect.any(Function),
-      }),
-    );
-    expect(listSlashCommands().find((cmd) => cmd.name === 'tools')).toEqual(
-      expect.objectContaining({
-        description: 'List or toggle external integrations',
-        formComponent: expect.any(Function),
-      }),
-    );
-    expect(listSlashCommands().find((cmd) => cmd.name === 'skills')).toEqual(
-      expect.objectContaining({
-        description: 'List available skills',
-        aliases: ['skill'],
-        formComponent: expect.any(Function),
-      }),
-    );
-    expect(listSlashCommands().find((cmd) => cmd.name === 'login')).toEqual(
-      expect.objectContaining({
-        description: 'Sign in to ChatGPT or Researcher Access',
-        formComponent: expect.any(Function),
-      }),
-    );
-    expect(listSlashCommands().find((cmd) => cmd.name === 'compact')).toEqual(
-      expect.objectContaining({
-        description: 'Request context compaction',
-      }),
-    );
+    const withForm = {
+      formComponent: expect.any(Function),
+    };
+    const expectedShapes: ReadonlyArray<readonly [string, object]> = [
+      ['model', { description: 'List available models' }],
+      ['agent', { description: 'List or choose the root agent', ...withForm }],
+      ['approval', { description: 'Switch approval policy', ...withForm }],
+      ['memory', { description: 'List stored memories', ...withForm }],
+      ['resume', { description: 'Resume a previous session', ...withForm }],
+      [
+        'tools',
+        { description: 'List or toggle external integrations', ...withForm },
+      ],
+      [
+        'skills',
+        {
+          description: 'List available skills',
+          aliases: ['skill'],
+          ...withForm,
+        },
+      ],
+      [
+        'login',
+        {
+          description: 'Sign in to ChatGPT or Researcher Access',
+          ...withForm,
+        },
+      ],
+      ['compact', { description: 'Request context compaction' }],
+    ];
+    for (const [name, shape] of expectedShapes) {
+      expect(requireSlashCommand(name)).toEqual(expect.objectContaining(shape));
+    }
   });
 
   it('keeps ChatGPT subscription first in the login picker', () => {
@@ -197,10 +176,7 @@ describe('slashRegistry', () => {
 
   it('opens registered structured forms through the shared form opener', () => {
     registerBuiltinSlashCommands();
-    const tools = listSlashCommands().find((cmd) => cmd.name === 'tools');
-
-    if (!tools) throw new Error('Expected /tools to be registered');
-
+    const tools = requireSlashCommand('tools');
     expect(openRegisteredCliSlashForm(tools, '')).toBe(true);
     expect(activeForm.get()?.commandName).toBe('tools');
   });
@@ -218,25 +194,22 @@ describe('slashRegistry', () => {
   it('chains selectable agent picks into the API-mode-aware model picker', async () => {
     resetCliState(INCLUDED_CHAT_SESSION);
     registerBuiltinSlashCommands();
-    const agent = listSlashCommands().find((cmd) => cmd.name === 'agent');
-
-    if (!agent) throw new Error('Expected /agent to be registered');
-
+    const agent = requireSlashCommand('agent');
     expect(openRegisteredCliSlashForm(agent, '')).toBe(true);
 
-    const agentNode = renderFormAdapter<{
+    const agentNode = renderOpenForm<{
       onSelect?: (value: string) => void;
-    }>(activeForm.get()?.render(() => {}, 20));
+    }>();
     agentNode.props?.onSelect?.('review');
     await settleFormSelection();
 
     expect(sessionMeta.get().agent).toBe('review');
     expect(activeForm.get()?.commandName).toBe('model');
 
-    const modelNode = renderFormAdapter<{
+    const modelNode = renderOpenForm<{
       apiMode?: string;
       selectable?: boolean;
-    }>(activeForm.get()?.render(() => {}, 20));
+    }>();
     expect(modelNode.props).toMatchObject({
       apiMode: 'included',
       selectable: true,
@@ -248,10 +221,7 @@ describe('slashRegistry', () => {
     registerBuiltinSlashCommands({
       canSelectModel: () => false,
     });
-    const agent = listSlashCommands().find((cmd) => cmd.name === 'agent');
-
-    if (!agent) throw new Error('Expected /agent to be registered');
-
+    const agent = requireSlashCommand('agent');
     expect(openRegisteredCliSlashForm(agent, '')).toBe(true);
 
     const agentNode = renderOpenForm<{
@@ -271,15 +241,12 @@ describe('slashRegistry', () => {
       canSelectAgent: () => false,
       canSelectModel: () => true,
     });
-    const agent = listSlashCommands().find((cmd) => cmd.name === 'agent');
-
-    if (!agent) throw new Error('Expected /agent to be registered');
-
+    const agent = requireSlashCommand('agent');
     expect(openRegisteredCliSlashForm(agent, '')).toBe(true);
 
-    const agentNode = renderFormAdapter<{
+    const agentNode = renderOpenForm<{
       selectable?: boolean;
-    }>(activeForm.get()?.render(() => {}, 20));
+    }>();
 
     expect(agentNode.props).toMatchObject({ selectable: false });
     expect(activeForm.get()?.commandName).toBe('agent');
@@ -291,16 +258,13 @@ describe('slashRegistry', () => {
       canSelectAgent: () => false,
       canSelectModel: () => true,
     });
-    const model = listSlashCommands().find((cmd) => cmd.name === 'model');
-
-    if (!model) throw new Error('Expected /model to be registered');
-
+    const model = requireSlashCommand('model');
     expect(openRegisteredCliSlashForm(model, '')).toBe(true);
 
-    const modelNode = renderFormAdapter<{
+    const modelNode = renderOpenForm<{
       onSelect?: (value: string) => void;
       selectable?: boolean;
-    }>(activeForm.get()?.render(() => {}, 20));
+    }>();
     modelNode.props?.onSelect?.('gpt55');
 
     expect(modelNode.props).toMatchObject({ selectable: true });
@@ -330,15 +294,12 @@ describe('slashRegistry', () => {
           ? 'different conversation format; start new chat'
           : undefined,
     });
-    const model = listSlashCommands().find((cmd) => cmd.name === 'model');
-
-    if (!model) throw new Error('Expected /model to be registered');
-
+    const model = requireSlashCommand('model');
     expect(openRegisteredCliSlashForm(model, '')).toBe(true);
 
-    const modelNode = renderFormAdapter<{
+    const modelNode = renderOpenForm<{
       getModelSwitchDisabledReason?: (model: string) => string | undefined;
-    }>(activeForm.get()?.render(() => {}, 20));
+    }>();
 
     expect(modelNode.props?.getModelSwitchDisabledReason?.('sonnet46T')).toBe(
       'different conversation format; start new chat',
@@ -349,14 +310,11 @@ describe('slashRegistry', () => {
   });
 
   it('keeps the model picker open until model selection commits', async () => {
-    const selection = deferredSelection();
+    const selection = createDeferred<void>();
     registerBuiltinSlashCommands({
       onModelSelect: () => selection.promise,
     });
-    const model = listSlashCommands().find((cmd) => cmd.name === 'model');
-
-    if (!model) throw new Error('Expected /model to be registered');
-
+    const model = requireSlashCommand('model');
     expect(openRegisteredCliSlashForm(model, '')).toBe(true);
 
     const modelNode = renderOpenForm<{
@@ -380,9 +338,7 @@ describe('slashRegistry', () => {
         events.push('outcome');
       },
     });
-    const model = listSlashCommands().find((cmd) => cmd.name === 'model');
-    if (!model) throw new Error('Expected /model to be registered');
-
+    const model = requireSlashCommand('model');
     openRegisteredCliSlashForm(model, '', () => events.push('echo'));
     expect(events).toEqual([]);
 
@@ -423,10 +379,7 @@ describe('slashRegistry', () => {
         errors.push(toErrorMessage(error));
       },
     });
-    const model = listSlashCommands().find((cmd) => cmd.name === 'model');
-
-    if (!model) throw new Error('Expected /model to be registered');
-
+    const model = requireSlashCommand('model');
     expect(openRegisteredCliSlashForm(model, '')).toBe(true);
 
     const modelNode = renderOpenForm<{
@@ -450,10 +403,7 @@ describe('slashRegistry', () => {
         errors.push(toErrorMessage(error));
       },
     });
-    const api = listSlashCommands().find((cmd) => cmd.name === 'api');
-
-    if (!api) throw new Error('Expected /api to be registered');
-
+    const api = requireSlashCommand('api');
     expect(openRegisteredCliSlashForm(api, '')).toBe(true);
 
     const apiNode = renderOpenForm<{
@@ -468,14 +418,11 @@ describe('slashRegistry', () => {
 
   it('keeps model-access selection in a busy form until it settles', async () => {
     resetCliState(INCLUDED_CHAT_SESSION);
-    const selection = deferredSelection();
+    const selection = createDeferred<void>();
     registerBuiltinSlashCommands({
       onModelAccessSelect: () => selection.promise,
     });
-    const api = listSlashCommands().find((cmd) => cmd.name === 'api');
-
-    if (!api) throw new Error('Expected /api to be registered');
-
+    const api = requireSlashCommand('api');
     expect(openRegisteredCliSlashForm(api, '')).toBe(true);
 
     const apiNode = renderOpenForm<{
@@ -504,9 +451,7 @@ describe('slashRegistry', () => {
         saves.push({ provider, key });
       },
     });
-    const keyCommand = findSlashCommand('keys');
-
-    if (!keyCommand) throw new Error('Expected /key to be registered');
+    const keyCommand = requireSlashCommand('keys');
     expect(keyCommand.formEscapeAction).toBe('close');
 
     expect(openRegisteredCliSlashForm(keyCommand, '')).toBe(true);
@@ -535,10 +480,7 @@ describe('slashRegistry', () => {
         selected.push(value);
       },
     });
-    const login = listSlashCommands().find((cmd) => cmd.name === 'login');
-
-    if (!login) throw new Error('Expected /login to be registered');
-
+    const login = requireSlashCommand('login');
     expect(openRegisteredCliSlashForm(login, '')).toBe(true);
 
     const loginNode = renderFormAdapter<{
@@ -564,8 +506,7 @@ describe('slashRegistry', () => {
         });
       },
     });
-    const login = findSlashCommand('login');
-    if (!login) throw new Error('Expected /login to be registered');
+    const login = requireSlashCommand('login');
 
     expect(openRegisteredCliSlashForm(login, '')).toBe(true);
     const loginNode = renderOpenForm<{
@@ -593,8 +534,7 @@ describe('slashRegistry', () => {
         output.writeProgress(instruction, { copyable: true });
       },
     });
-    const login = findSlashCommand('login');
-    if (!login) throw new Error('Expected /login to be registered');
+    const login = requireSlashCommand('login');
 
     expect(openRegisteredCliSlashForm(login, '')).toBe(true);
     const loginNode = renderOpenForm<{
@@ -641,7 +581,7 @@ describe('slashRegistry', () => {
   });
 
   it('detaches a busy login and ignores its late completion', async () => {
-    const selection = deferredSelection();
+    const selection = createDeferred<void>();
     registerBuiltinSlashCommands({
       onLoginSelect: (_value, output) => {
         output.writeProgress('Open https://example.test/device', {
@@ -650,8 +590,7 @@ describe('slashRegistry', () => {
         return selection.promise;
       },
     });
-    const login = findSlashCommand('login');
-    if (!login) throw new Error('Expected /login to be registered');
+    const login = requireSlashCommand('login');
 
     expect(openRegisteredCliSlashForm(login, '')).toBe(true);
     const loginNode = renderOpenForm<{
@@ -682,8 +621,7 @@ describe('slashRegistry', () => {
         errors.push(toErrorMessage(error));
       },
     });
-    const login = findSlashCommand('login');
-    if (!login) throw new Error('Expected /login to be registered');
+    const login = requireSlashCommand('login');
 
     expect(openRegisteredCliSlashForm(login, '')).toBe(true);
     const loginNode = renderOpenForm<{
@@ -703,7 +641,7 @@ describe('slashRegistry', () => {
   });
 
   it('drops a busy form completion after CLI state reset', async () => {
-    const selection = deferredSelection();
+    const selection = createDeferred<void>();
     const outcomes: string[] = [];
     registerBuiltinSlashCommands({
       onModelAccessSelect: async (_value, output) => {
@@ -712,8 +650,7 @@ describe('slashRegistry', () => {
         outcomes.push('action settled');
       },
     });
-    const api = findSlashCommand('api');
-    if (!api) throw new Error('Expected /api to be registered');
+    const api = requireSlashCommand('api');
 
     expect(openRegisteredCliSlashForm(api, '')).toBe(true);
     const apiNode = renderOpenForm<{
@@ -731,7 +668,7 @@ describe('slashRegistry', () => {
 
   it('calls an available abort hook when a busy form is cancelled', () => {
     let aborted = false;
-    const selection = deferredSelection();
+    const selection = createDeferred<void>();
     const completion = selection.promise as Promise<void> & {
       abort?: () => void;
     };
@@ -741,8 +678,7 @@ describe('slashRegistry', () => {
     registerBuiltinSlashCommands({
       onLogoutSelect: () => completion,
     });
-    const logout = findSlashCommand('logout');
-    if (!logout) throw new Error('Expected /logout to be registered');
+    const logout = requireSlashCommand('logout');
 
     expect(openRegisteredCliSlashForm(logout, '')).toBe(true);
     const logoutNode = renderOpenForm<{
@@ -763,10 +699,7 @@ describe('slashRegistry', () => {
         sawClosedBeforePolicySelect = closed;
       },
     });
-    const approval = listSlashCommands().find((cmd) => cmd.name === 'approval');
-
-    if (!approval) throw new Error('Expected /approval to be registered');
-
+    const approval = requireSlashCommand('approval');
     expect(openRegisteredCliSlashForm(approval, '')).toBe(true);
 
     const approvalNode = renderFormAdapter<{
@@ -791,10 +724,7 @@ describe('slashRegistry', () => {
         sawClosedBeforeResume = closed;
       },
     });
-    const resume = listSlashCommands().find((cmd) => cmd.name === 'resume');
-
-    if (!resume) throw new Error('Expected /resume to be registered');
-
+    const resume = requireSlashCommand('resume');
     expect(openRegisteredCliSlashForm(resume, '')).toBe(true);
 
     const resumeNode = renderFormAdapter<{
@@ -821,10 +751,7 @@ describe('slashRegistry', () => {
         selected.push(value.activationPrompt);
       },
     });
-    const skills = listSlashCommands().find((cmd) => cmd.name === 'skills');
-
-    if (!skills) throw new Error('Expected /skills to be registered');
-
+    const skills = requireSlashCommand('skills');
     expect(openRegisteredCliSlashForm(skills, '')).toBe(true);
 
     const skillsNode = renderFormAdapter<{

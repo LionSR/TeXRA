@@ -1,5 +1,5 @@
 // Third-party imports
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 // Local imports
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
@@ -27,6 +27,13 @@ describe('OpenPdfTool', () => {
     setOpenPdfOpener(undefined);
   });
 
+  function installOpener(): Mock<(request: OpenPdfRequest) => Promise<void>> {
+    const openPdf = vi.fn<(request: OpenPdfRequest) => Promise<void>>();
+    openPdf.mockResolvedValue(undefined);
+    setOpenPdfOpener(openPdf);
+    return openPdf;
+  }
+
   it('reports that PDF opening is unavailable when no host callback is registered', async () => {
     const tool = new OpenPdfTool();
 
@@ -39,9 +46,7 @@ describe('OpenPdfTool', () => {
   });
 
   it('opens an existing PDF through the registered host callback', async () => {
-    const openPdf = vi.fn<(request: OpenPdfRequest) => Promise<void>>();
-    openPdf.mockResolvedValue(undefined);
-    setOpenPdfOpener(openPdf);
+    const openPdf = installOpener();
     const tool = new OpenPdfTool();
 
     const result = await tool.call({
@@ -64,9 +69,7 @@ describe('OpenPdfTool', () => {
   });
 
   it('allows absolute paths inside active run storage', async () => {
-    const openPdf = vi.fn<(request: OpenPdfRequest) => Promise<void>>();
-    openPdf.mockResolvedValue(undefined);
-    setOpenPdfOpener(openPdf);
+    const openPdf = installOpener();
     const tool = new OpenPdfTool();
 
     const result = await withRunContext(
@@ -96,9 +99,7 @@ describe('OpenPdfTool', () => {
   });
 
   it('does not parse working_directory before checking absolute run-storage paths', async () => {
-    const openPdf = vi.fn<(request: OpenPdfRequest) => Promise<void>>();
-    openPdf.mockResolvedValue(undefined);
-    setOpenPdfOpener(openPdf);
+    const openPdf = installOpener();
     const tool = new OpenPdfTool();
 
     const result = await withRunContext(
@@ -117,8 +118,7 @@ describe('OpenPdfTool', () => {
   });
 
   it('rejects arbitrary absolute paths outside the allowed roots', async () => {
-    const openPdf = vi.fn<(request: OpenPdfRequest) => Promise<void>>();
-    setOpenPdfOpener(openPdf);
+    const openPdf = installOpener();
     const tool = new OpenPdfTool();
 
     const result = await withRunContext(
@@ -138,8 +138,7 @@ describe('OpenPdfTool', () => {
   });
 
   it('rejects non-PDF files before invoking the host callback', async () => {
-    const openPdf = vi.fn<(request: OpenPdfRequest) => Promise<void>>();
-    setOpenPdfOpener(openPdf);
+    const openPdf = installOpener();
     const tool = new OpenPdfTool();
 
     const result = await tool.call({ path: 'paper.tex' });

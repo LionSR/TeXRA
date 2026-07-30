@@ -86,18 +86,16 @@ export function attachRunProgressRenderer(
 ): () => void {
   if (!renderer) return () => undefined;
 
-  const detachSessionFacts = events.subscribe(
-    (event) => {
-      renderer.handleSessionEvent(event);
-    },
-    { scope: 'session' },
-  );
-  const detachRunFacts = events.subscribe(
-    (event) => {
-      renderer.handleSessionEvent(event);
-    },
-    { scope: 'run', types: RUN_PROGRESS_RUN_FACT_TYPES },
-  );
+  const handleEvent = (event: SessionEvent): void => {
+    renderer.handleSessionEvent(event);
+  };
+  const detachSessionFacts = events.subscribe(handleEvent, {
+    scope: 'session',
+  });
+  const detachRunFacts = events.subscribe(handleEvent, {
+    scope: 'run',
+    types: RUN_PROGRESS_RUN_FACT_TYPES,
+  });
 
   return () => {
     detachRunFacts();

@@ -4,7 +4,6 @@ import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { AgentCliSessionRegistry } from '@tools/agentCliSessionRegistry';
-import { createRecordingHost } from '../agent/progressTestUtils';
 
 describe('AgentCliSessionRegistry', () => {
   it('logs a rejected session mapping write once without awaiting registration', async () => {
@@ -224,7 +223,6 @@ describe('AgentCliSessionRegistry', () => {
     const ownerB = new ExecutionRegistry();
     const interruptA = vi.fn();
     const interruptB = vi.fn();
-    const host = createRecordingHost().host;
 
     const handleA = new AgentExecutionHandle(
       'execution-a',

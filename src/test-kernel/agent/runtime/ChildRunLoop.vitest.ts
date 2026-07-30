@@ -177,6 +177,44 @@ function createFakeStrategy(): FakeStrategyHandle {
   };
 }
 
+/** The AbortError shape a real strategy's abortController rejection carries. */
+function createAbortError(): Error {
+  const error = new Error('Aborted');
+  error.name = 'AbortError';
+  return error;
+}
+
+/** A strategy whose very first turn is already terminal. */
+function createTerminalStrategy(
+  stageLabel: string,
+  launch: ChildRunStrategy<FakeTurn>['launch'] = async () => ({
+    kind: 'terminal',
+    value: 'done',
+  }),
+  formatDelivery: ChildRunStrategy<FakeTurn>['formatDelivery'] = (turn) =>
+    `delivered:${turn.value}`,
+): ChildRunStrategy<FakeTurn> {
+  return {
+    stageLabel,
+    launch,
+    isTerminal: () => true,
+    formatDelivery,
+    formatError: () => 'error',
+  };
+}
+
+async function waitForLiveOwner(childStreamId: StreamTabId): Promise<void> {
+  await vi.waitFor(() =>
+    expect(session.followUps.hasLiveOwner(childStreamId)).toBe(true),
+  );
+}
+
+async function waitForLoopEnd(childStreamId: StreamTabId): Promise<void> {
+  await vi.waitFor(() =>
+    expect(session.followUps.hasLiveOwner(childStreamId)).toBe(false),
+  );
+}
+
 beforeEach(() => {
   session = defaultSession();
   vi.clearAllMocks();
@@ -336,9 +374,7 @@ describe('childRunLoop E2E fixtures', () => {
           return new Promise((_resolve, reject) => {
             const rejectAbort = () => {
               aborted();
-              const error = new Error('Aborted');
-              error.name = 'AbortError';
-              reject(error);
+              reject(createAbortError());
             };
             if (abortController.signal.aborted) rejectAbort();
             else {
@@ -399,13 +435,9 @@ describe('childRunLoop E2E fixtures', () => {
     await vi.waitFor(() => expect(mocks.leaseLossListener).toBeDefined());
 
     mocks.leaseLossListener?.();
-    const abortError = new Error('Aborted');
-    abortError.name = 'AbortError';
-    await rejectTurn(1, abortError);
+    await rejectTurn(1, createAbortError());
 
-    await vi.waitFor(() =>
-      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(false),
-    );
+    await waitForLoopEnd(childStreamId);
     expect(mocks.deliverChildRunFollowUp).not.toHaveBeenCalled();
   });
 
@@ -429,7 +461,6 @@ describe('childRunLoop E2E fixtures', () => {
       'delivered:saved',
     );
     expect(mocks.deliverChildRunFollowUp).not.toHaveBeenCalled();
-    expect(mocks.deliverChildRunFollowUp).not.toHaveBeenCalled();
   });
 
   it('releases session ownership before delivering a failed turn', async () => {
@@ -450,13 +481,9 @@ describe('childRunLoop E2E fixtures', () => {
       strategy: { ...strategy, releaseSessionOwnership },
     });
 
-    await vi.waitFor(() =>
-      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(true),
-    );
+    await waitForLiveOwner(childStreamId);
     await rejectTurn(1, new Error('initial turn failed'));
-    await vi.waitFor(() =>
-      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(false),
-    );
+    await waitForLoopEnd(childStreamId);
     expect(releaseSessionOwnership).toHaveBeenCalledOnce();
   });
 
@@ -477,21 +504,14 @@ describe('childRunLoop E2E fixtures', () => {
 
     // Give the loop's async IIFE a tick to attach its interrupt handler and
     // call launch().
-    await vi.waitFor(() =>
-      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(true),
-    );
+    await waitForLiveOwner(childStreamId);
 
     expect(handle.interrupt()).toBe(true);
     // Simulate the in-flight call rejecting with an AbortError-shaped
     // rejection, matching what a real strategy's abortController produces.
-    const abortError = new Error('Aborted');
-    abortError.name = 'AbortError';
-    await rejectTurn(1, abortError);
+    await rejectTurn(1, createAbortError());
 
-    await vi.waitFor(() =>
-      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(false),
-    );
-    expect(mocks.deliverChildRunFollowUp).not.toHaveBeenCalled();
+    await waitForLoopEnd(childStreamId);
     expect(mocks.deliverChildRunFollowUp).not.toHaveBeenCalled();
     expect(session.executions.getHandle(executionId)).toBeUndefined();
   });
@@ -519,9 +539,7 @@ describe('childRunLoop E2E fixtures', () => {
 
     expect(onLoopStart).toHaveBeenCalledOnce();
     expect(onLoopStart).toHaveBeenCalledWith(session);
-    await vi.waitFor(() =>
-      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(true),
-    );
+    await waitForLiveOwner(childStreamId);
     await resolveTurn(1, { kind: 'interim', value: 'first' });
 
     await vi.waitFor(() => {
@@ -569,9 +587,7 @@ describe('childRunLoop E2E fixtures', () => {
         }),
       );
     });
-    await vi.waitFor(() =>
-      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(false),
-    );
+    await waitForLoopEnd(childStreamId);
   });
 
   it('late result after parent stop: a turn that resolves after interruption is persisted but not delivered', async () => {
@@ -589,24 +605,19 @@ describe('childRunLoop E2E fixtures', () => {
       strategy: { ...strategy, releaseSessionOwnership },
     });
 
-    await vi.waitFor(() =>
-      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(true),
-    );
+    await waitForLiveOwner(childStreamId);
     // Interrupt the loop, then let the in-flight turn resolve normally
     // (not aborted) — mirrors a turn that was already past its own
     // interruption checkpoints when the stop landed.
     expect(handle.interrupt()).toBe(true);
     await resolveTurn(1, { kind: 'terminal', value: 'late' });
 
-    await vi.waitFor(() =>
-      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(false),
-    );
+    await waitForLoopEnd(childStreamId);
     expect(mocks.persistChildRunReport).toHaveBeenCalledWith(
       executionId,
       'delivered:late',
     );
     expect(releaseSessionOwnership).toHaveBeenCalledOnce();
-    expect(mocks.deliverChildRunFollowUp).not.toHaveBeenCalled();
     expect(mocks.deliverChildRunFollowUp).not.toHaveBeenCalled();
   });
 
@@ -625,9 +636,7 @@ describe('childRunLoop E2E fixtures', () => {
       strategy,
     });
 
-    await vi.waitFor(() =>
-      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(true),
-    );
+    await waitForLiveOwner(childStreamId);
     await resolveTurn(1, { kind: 'interim', value: 'first' });
 
     await vi.waitFor(() => {
@@ -637,9 +646,7 @@ describe('childRunLoop E2E fixtures', () => {
     // the run handle is the live stop target.
     expect(handle.interrupt()).toBe(true);
 
-    await vi.waitFor(() =>
-      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(false),
-    );
+    await waitForLoopEnd(childStreamId);
     // Only the one interim delivery — the kill did not spawn another turn.
     expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledTimes(1);
   });
@@ -673,9 +680,7 @@ describe('childRunLoop E2E fixtures', () => {
       strategy,
     });
 
-    await vi.waitFor(() =>
-      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(true),
-    );
+    await waitForLiveOwner(childStreamId);
 
     // Mirrors what a real native turn's runFlowWithLifecycle does: track a
     // fresh handle for this executionId/childStreamId, WAITING, once the
@@ -695,9 +700,7 @@ describe('childRunLoop E2E fixtures', () => {
     // Loop is now between turns. Interrupt it through the run handle.
     expect(handle.interrupt()).toBe(true);
 
-    await vi.waitFor(() =>
-      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(false),
-    );
+    await waitForLoopEnd(childStreamId);
 
     // Settled: handle.result resolves instead of hanging forever.
     await expect(handle.result).resolves.toMatchObject({
@@ -727,13 +730,7 @@ describe('childRunLoop E2E fixtures', () => {
       return { kind: 'delivered' };
     });
 
-    const strategy: ChildRunStrategy<FakeTurn> = {
-      stageLabel: 'Reregister test',
-      launch: async () => ({ kind: 'terminal', value: 'done' }),
-      isTerminal: () => true,
-      formatDelivery: (turn) => `delivered:${turn.value}`,
-      formatError: () => 'error',
-    };
+    const strategy = createTerminalStrategy('Reregister test');
 
     startChildRunLoop({
       childStreamId,
@@ -752,9 +749,7 @@ describe('childRunLoop E2E fixtures', () => {
     expect(handle.interrupt()).toBe(false);
 
     deliveryGate?.resolve();
-    await vi.waitFor(() =>
-      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(false),
-    );
+    await waitForLoopEnd(childStreamId);
   });
 
   it('#8093 regression: a terminal turn finalizes this child before its wake step is even reached, so a resumed parent never self-stalls waiting on it', async () => {
@@ -786,13 +781,7 @@ describe('childRunLoop E2E fixtures', () => {
       return { kind: 'delivered' };
     });
 
-    const strategy: ChildRunStrategy<FakeTurn> = {
-      stageLabel: 'Finalize-before-wake test',
-      launch: async () => ({ kind: 'terminal', value: 'done' }),
-      isTerminal: () => true,
-      formatDelivery: (turn) => `delivered:${turn.value}`,
-      formatError: () => 'error',
-    };
+    const strategy = createTerminalStrategy('Finalize-before-wake test');
 
     startChildRunLoop({
       childStreamId,
@@ -807,9 +796,7 @@ describe('childRunLoop E2E fixtures', () => {
     expect(session.executions.getHandle(executionId)).toBeUndefined();
 
     releaseWake?.();
-    await vi.waitFor(() =>
-      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(false),
-    );
+    await waitForLoopEnd(childStreamId);
   });
 
   it('preserves #7491: a failed runTurn (thrown, not a value) delivers formatError to the parent', async () => {
@@ -825,9 +812,7 @@ describe('childRunLoop E2E fixtures', () => {
       strategy,
     });
 
-    await vi.waitFor(() =>
-      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(true),
-    );
+    await waitForLiveOwner(childStreamId);
     await resolveTurn(1, { kind: 'interim', value: 'first' });
     await vi.waitFor(() => {
       expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledTimes(1);
@@ -852,9 +837,7 @@ describe('childRunLoop E2E fixtures', () => {
       );
     });
     expect(errors).toContain(resumeFailure);
-    await vi.waitFor(() =>
-      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(false),
-    );
+    await waitForLoopEnd(childStreamId);
   });
 
   it('an application-level failure (isTurnError, not thrown) also delivers formatError and stops the run', async () => {
@@ -870,9 +853,7 @@ describe('childRunLoop E2E fixtures', () => {
       strategy,
     });
 
-    await vi.waitFor(() =>
-      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(true),
-    );
+    await waitForLiveOwner(childStreamId);
     await resolveTurn(1, { kind: 'error-turn', value: 'oops' });
 
     await vi.waitFor(() => {
@@ -882,9 +863,7 @@ describe('childRunLoop E2E fixtures', () => {
         }),
       );
     });
-    await vi.waitFor(() =>
-      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(false),
-    );
+    await waitForLoopEnd(childStreamId);
   });
 
   it('finalizes a dangling native handle with non-null error metadata after a non-throwing turn failure', async () => {
@@ -901,9 +880,7 @@ describe('childRunLoop E2E fixtures', () => {
       strategy,
     });
 
-    await vi.waitFor(() =>
-      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(true),
-    );
+    await waitForLiveOwner(childStreamId);
 
     const handle = trackChildHandle(
       executionId,
@@ -914,9 +891,7 @@ describe('childRunLoop E2E fixtures', () => {
 
     await resolveTurn(1, { kind: 'error-turn', value: 'oops' });
 
-    await vi.waitFor(() =>
-      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(false),
-    );
+    await waitForLoopEnd(childStreamId);
     await expect(handle.result).resolves.toMatchObject({
       outcome: 'failed',
       executionId,
@@ -967,9 +942,7 @@ describe('childRunLoop E2E fixtures', () => {
       recordCost,
     });
 
-    await vi.waitFor(() =>
-      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(true),
-    );
+    await waitForLiveOwner(childStreamId);
     launchResolve?.({ kind: 'interim', value: 'first' });
     await vi.waitFor(() =>
       expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledTimes(1),
@@ -989,9 +962,7 @@ describe('childRunLoop E2E fixtures', () => {
     await vi.waitFor(() => expect(calls).toBe(1));
     runTurnResolve?.({ kind: 'terminal', value: 'final' });
 
-    await vi.waitFor(() =>
-      expect(session.followUps.hasLiveOwner(childStreamId)).toBe(false),
-    );
+    await waitForLoopEnd(childStreamId);
     expect(recordCost).toHaveBeenCalledTimes(1);
     expect(recordCost).toHaveBeenCalledWith(0.2);
   });
@@ -1019,9 +990,9 @@ describe('childRunLoop E2E fixtures', () => {
     const recovered = entry(2, 'recovered', 0.5);
     const tracker = createWorkflowAttemptCostTracker();
     const recordCost = vi.fn();
-    const strategy: ChildRunStrategy<FakeTurn> = {
-      stageLabel: 'Workflow attempt cost',
-      launch: async (ports) => {
+    const strategy = createTerminalStrategy(
+      'Workflow attempt cost',
+      async (ports) => {
         ports.recordCost(tracker.record(completed, 0.1));
         ports.recordCost(tracker.record(completed, 0));
         ports.recordCost(tracker.record({ index: 3, key: 'skipped' }, 0.2));
@@ -1029,10 +1000,8 @@ describe('childRunLoop E2E fixtures', () => {
         ports.recordCost(tracker.total([historical, completed, recovered]));
         return { kind: 'terminal', value: 'done' };
       },
-      isTerminal: () => true,
-      formatDelivery: () => 'delivered',
-      formatError: () => 'error',
-    };
+      () => 'delivered',
+    );
 
     const { completion } = startChildRunLoop({
       childStreamId: uniqueStreamId('workflow-attempt-cost'),
@@ -1049,16 +1018,14 @@ describe('childRunLoop E2E fixtures', () => {
   });
 
   it('finalizes and wakes when the parent cost observer throws', async () => {
-    const strategy: ChildRunStrategy<FakeTurn> = {
-      stageLabel: 'Throwing cost observer',
-      launch: async (ports) => {
+    const strategy = createTerminalStrategy(
+      'Throwing cost observer',
+      async (ports) => {
         ports.recordCost(0.4);
         return { kind: 'terminal', value: 'done' };
       },
-      isTerminal: () => true,
-      formatDelivery: () => 'delivered',
-      formatError: () => 'error',
-    };
+      () => 'delivered',
+    );
     const recordCost = vi.fn(() => {
       throw new Error('observer failed');
     });
@@ -1078,16 +1045,14 @@ describe('childRunLoop E2E fixtures', () => {
   });
 
   it('finalizes and wakes when the parent cost observer rejects', async () => {
-    const strategy: ChildRunStrategy<FakeTurn> = {
-      stageLabel: 'Rejecting cost observer',
-      launch: async (ports) => {
+    const strategy = createTerminalStrategy(
+      'Rejecting cost observer',
+      async (ports) => {
         ports.recordCost(0.4);
         return { kind: 'terminal', value: 'done' };
       },
-      isTerminal: () => true,
-      formatDelivery: () => 'delivered',
-      formatError: () => 'error',
-    };
+      () => 'delivered',
+    );
     const recordCost = vi.fn(() =>
       Promise.reject(new Error('observer failed')),
     );

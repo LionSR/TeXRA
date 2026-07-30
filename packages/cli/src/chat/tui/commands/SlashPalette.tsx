@@ -131,13 +131,8 @@ export function SlashPalette(
   // Whenever the match list resizes (user kept typing), clamp the cursor
   // so it doesn't point past the end.
   useEffect(() => {
-    if (matchCount === 0) {
-      if (highlight !== 0) setHighlight(0);
-      return;
-    }
-    if (highlight < 0 || highlight >= matchCount) {
-      setHighlight(clamp(highlight, 0, matchCount - 1));
-    }
+    const clamped = matchCount === 0 ? 0 : clamp(highlight, 0, matchCount - 1);
+    if (clamped !== highlight) setHighlight(clamped);
   }, [matchCount, highlight]);
 
   useInput(
@@ -157,15 +152,13 @@ export function SlashPalette(
         );
         return;
       }
-      if (isPlainReturnInput(input, key) || key.tab || input === '\t') {
+      const returnPressed = isPlainReturnInput(input, key);
+      if (returnPressed || key.tab || input === '\t') {
         const chosen = matches[highlight];
         if (chosen) {
           props.onPick(
             chosen,
-            slashPickIntent(
-              chosen,
-              isPlainReturnInput(input, key) ? 'enter' : 'tab',
-            ),
+            slashPickIntent(chosen, returnPressed ? 'enter' : 'tab'),
           );
         }
       }

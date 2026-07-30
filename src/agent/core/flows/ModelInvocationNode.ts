@@ -10,11 +10,7 @@ import type {
   AgentCore,
   BaseFlowContextInit,
 } from '@agent/core/flows/BaseFlowServices';
-import type {
-  FinalTool,
-  ModelCredentialRoute,
-  ModelCredentialSelection,
-} from '@agent/types/ModelHandlerContracts';
+import type { FinalTool } from '@agent/types/ModelHandlerContracts';
 import {
   classifyModelRateLimitFailure,
   classifyRelayRequestLimitFailure,
@@ -32,6 +28,7 @@ import {
   RetryableInvocationNode,
   handleInvocationResult,
 } from './RetryState';
+import type { ModelClientServices } from './CycleServices';
 
 const RELAY_USER_REQUEST_GATE_ROUTE = 'relay:user-request-gate';
 
@@ -76,14 +73,8 @@ type InvocationServices = Pick<
   AgentCore,
   'modelHandler' | 'logger' | 'setting' | 'config' | 'runScope'
 > &
-  Pick<BaseFlowContextInit, 'setAbortController'> & {
-    readonly client: unknown;
-    readonly clientCredentialRoute?: ModelCredentialRoute;
-    readonly refreshClient?: (
-      selection?: ModelCredentialSelection,
-      signal?: AbortSignal,
-    ) => Promise<void>;
-  };
+  Pick<BaseFlowContextInit, 'setAbortController'> &
+  ModelClientServices;
 
 export class ModelInvocationNode<
   TShared extends BaseCycleFields,

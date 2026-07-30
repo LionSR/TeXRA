@@ -152,9 +152,8 @@ export async function runLatexdiffFromMetadata(params: {
   if (generateBetweenRoundDiffs) {
     for (const group of groupedBySource.values()) {
       group.sort((a, b) => a.round - b.round);
-      for (let index = 1; index < group.length; index += 1) {
-        const previous = group[index - 1];
-        const current = group[index];
+      for (const [index, current] of group.slice(1).entries()) {
+        const previous = group[index];
         const base = previous.info.location;
         const revised = current.info.location;
         const description = `${getCanonicalSource(current.info)} (r${previous.round}→r${current.round})`;
@@ -213,11 +212,10 @@ export async function runLatexdiffViaWorkspaceScan(params: {
 
   logger.debug(CHANNEL, `Input files: ${configuredInputFiles.join(', ')}`);
 
-  interface RoundOutput {
-    round: number;
-    path: string;
-  }
-  const inputToOutputsMap = new Map<string, RoundOutput[]>();
+  // Per input file: round number → workspace-relative output path. A round
+  // matched more than once (e.g. two legacy files matching the same round
+  // regex) keeps a single entry, last match wins.
+  const inputToOutputsMap = new Map<string, Map<number, string>>();
 
   for (const candidateInput of configuredInputFiles) {
     const outputDirPath = path.dirname(candidateInput);
@@ -229,20 +227,7 @@ export async function runLatexdiffViaWorkspaceScan(params: {
     const absoluteDir = path.join(workspacePath, outputDirPath);
     const dirEntries = await fs.readDirectory(absoluteDir);
 
-    const roundOutputs: RoundOutput[] = [];
-    const hasRound = (round: number): boolean =>
-      roundOutputs.some((entry) => entry.round === round);
-    // Upsert so a round matched more than once (e.g. two legacy files
-    // matching the same round regex) keeps a single entry — the last match
-    // wins, same as the prior `Map<number, string>.set()` semantics.
-    const setRoundOutput = (round: number, filePath: string): void => {
-      const existing = roundOutputs.find((entry) => entry.round === round);
-      if (existing) {
-        existing.path = filePath;
-      } else {
-        roundOutputs.push({ round, path: filePath });
-      }
-    };
+    const roundOutputs = new Map<number, string>();
 
     // Legacy flat layout: files sit directly under outputDirPath as
     // `<base>_<chunk>_r{round}_<normalizedModel>.tex`.
@@ -267,7 +252,7 @@ export async function runLatexdiffViaWorkspaceScan(params: {
       if (!match) continue;
       const round = RoundKeySchema.safeParse(match[1]);
       if (!round.success) continue;
-      setRoundOutput(round.data, path.join(outputDirPath, fileName));
+      roundOutputs.set(round.data, path.join(outputDirPath, fileName));
     }
 
     // Mid-era layout: outputs under `r{round}/<base>_<cleanAgent>_<model>.tex`.
@@ -282,7 +267,7 @@ export async function runLatexdiffViaWorkspaceScan(params: {
       if (!isDirectory(entryType) || isSymlink(entryType)) continue;
       const round = parseWorkflowOutputRoundDir(entryName);
       if (round == null) continue;
-      if (hasRound(round)) continue;
+      if (roundOutputs.has(round)) continue;
 
       const roundAbsoluteDir = path.join(absoluteDir, entryName);
       let roundEntries: [string, number][];
@@ -304,7 +289,7 @@ export async function runLatexdiffViaWorkspaceScan(params: {
           fileName === midEraFilename,
       );
       if (!match) continue;
-      setRoundOutput(
+      roundOutputs.set(
         round,
         path.join(outputDirPath, entryName, midEraFilename),
       );
@@ -316,11 +301,11 @@ export async function runLatexdiffViaWorkspaceScan(params: {
     // via `runLatexdiffFromMetadata`; the workspace scan here only covers
     // pre-refactor files.
 
-    if (roundOutputs.length > 0) {
+    if (roundOutputs.size > 0) {
       inputToOutputsMap.set(candidateInput, roundOutputs);
       logger.debug(
         CHANNEL,
-        `Found ${roundOutputs.length} matching outputs for ${candidateInput}`,
+        `Found ${roundOutputs.size} matching outputs for ${candidateInput}`,
       );
     } else {
       logger.debug(CHANNEL, `No matching outputs found for ${candidateInput}`);
@@ -334,9 +319,9 @@ export async function runLatexdiffViaWorkspaceScan(params: {
   const operations: DiffOperation[] = [];
 
   for (const [baseFile, roundOutputs] of inputToOutputsMap.entries()) {
-    const sorted = [...roundOutputs].sort((a, b) => a.round - b.round);
+    const sorted = [...roundOutputs].sort(([a], [b]) => a - b);
 
-    for (const { round, path: outputPath } of sorted) {
+    for (const [round, outputPath] of sorted) {
       const resolvedOutput = toAbsolute(outputPath);
 
       operations.push({
@@ -349,20 +334,19 @@ export async function runLatexdiffViaWorkspaceScan(params: {
       });
     }
 
-    if (generateBetweenRoundDiffs && sorted.length > 1) {
-      for (let index = 0; index < sorted.length - 1; index += 1) {
-        const previous = sorted[index];
-        const current = sorted[index + 1];
-        const resolvedPrevious = toAbsolute(previous.path);
+    if (generateBetweenRoundDiffs) {
+      for (const [index, [toRound, currentPath]] of sorted.slice(1).entries()) {
+        const [fromRound, previousPath] = sorted[index];
+        const resolvedPrevious = toAbsolute(previousPath);
 
         operations.push({
           type: 'between-rounds',
           base: pathToLocation(resolvedPrevious),
-          revised: pathToLocation(toAbsolute(current.path)),
-          description: `${path.basename(previous.path)} (r${previous.round}→r${current.round})`,
+          revised: pathToLocation(toAbsolute(currentPath)),
+          description: `${path.basename(previousPath)} (r${fromRound}→r${toRound})`,
           cwd: path.dirname(resolvedPrevious),
-          fromRound: previous.round,
-          toRound: current.round,
+          fromRound,
+          toRound,
         });
       }
     }

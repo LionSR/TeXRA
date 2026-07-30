@@ -7,6 +7,20 @@ import * as config from '@utils/config/configUtils';
 
 const SECRET = 'sk-proj-redaction-example-1234567890abcdef';
 
+/** Installs a capturing sink and returns the lines it receives. */
+function captureLines(options?: { trusted: boolean }): string[] {
+  const lines: string[] = [];
+  logger.setOutputChannelFactory(
+    () => ({
+      appendLine(message: string) {
+        lines.push(message);
+      },
+    }),
+    options,
+  );
+  return lines;
+}
+
 describe('logUtils', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -15,12 +29,7 @@ describe('logUtils', () => {
 
   it('serializes self-referential array log data without recursing forever', () => {
     vi.spyOn(config, 'getConfig').mockReturnValue(true);
-    const lines: string[] = [];
-    logger.setOutputChannelFactory(() => ({
-      appendLine(message: string) {
-        lines.push(message);
-      },
-    }));
+    const lines = captureLines();
 
     const data: unknown[] = [];
     data.push(data);
@@ -32,12 +41,7 @@ describe('logUtils', () => {
 
   it('does not mark repeated acyclic references as circular', () => {
     vi.spyOn(config, 'getConfig').mockReturnValue(true);
-    const lines: string[] = [];
-    logger.setOutputChannelFactory(() => ({
-      appendLine(message: string) {
-        lines.push(message);
-      },
-    }));
+    const lines = captureLines();
 
     const shared = { value: 1 };
 
@@ -52,12 +56,7 @@ describe('logUtils', () => {
   });
 
   it('redacts lines sent to an output sink by default', () => {
-    const lines: string[] = [];
-    logger.setOutputChannelFactory(() => ({
-      appendLine(message: string) {
-        lines.push(message);
-      },
-    }));
+    const lines = captureLines();
 
     logger.info('test', `OPENAI_API_KEY=${SECRET}`);
 
@@ -67,15 +66,7 @@ describe('logUtils', () => {
   });
 
   it('preserves the raw line for an explicitly trusted sink', () => {
-    const lines: string[] = [];
-    logger.setOutputChannelFactory(
-      () => ({
-        appendLine(message: string) {
-          lines.push(message);
-        },
-      }),
-      { trusted: true },
-    );
+    const lines = captureLines({ trusted: true });
 
     const rawMessage = `OPENAI_API_KEY=${SECRET}`;
     logger.info('test', rawMessage);
@@ -99,12 +90,7 @@ describe('logUtils', () => {
 
   it('redacts serialized debug data before sending it to the sink', () => {
     vi.spyOn(config, 'getConfig').mockReturnValue(true);
-    const lines: string[] = [];
-    logger.setOutputChannelFactory(() => ({
-      appendLine(message: string) {
-        lines.push(message);
-      },
-    }));
+    const lines = captureLines();
 
     logger.debug('test', 'request metadata', {
       data: {

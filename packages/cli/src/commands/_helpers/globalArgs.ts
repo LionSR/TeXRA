@@ -291,43 +291,22 @@ function requireSeparateStringFlagValue(
   return value;
 }
 
+// Single-valued flag: the last occurrence wins.
 export function optionalStringFlagValue(
   rawArgs: readonly string[],
   longName: string,
 ): string | undefined {
-  const longFlag = `--${longName}`;
-  const inlineLongPrefix = `${longFlag}=`;
-  let value: string | undefined;
-
-  for (let i = 0; i < rawArgs.length; i += 1) {
-    const arg = rawArgs[i];
-    if (arg === undefined || arg === '--') break;
-
-    if (arg.startsWith(inlineLongPrefix)) {
-      value = requireInlineStringFlagValue(
-        longFlag,
-        arg.slice(inlineLongPrefix.length),
-      );
-      continue;
-    }
-
-    if (arg === longFlag) {
-      value = requireSeparateStringFlagValue(longFlag, rawArgs[i + 1]);
-      i += 1;
-    }
-  }
-
-  return value;
+  return collectStringFlagValues(rawArgs, longName).at(-1);
 }
 
 export function collectStringFlagValues(
   rawArgs: readonly string[],
   longName: string,
-  shortName: string,
+  shortName?: string,
 ): string[] {
   const longFlag = `--${longName}`;
   const inlineLongPrefix = `${longFlag}=`;
-  const shortFlag = `-${shortName}`;
+  const shortFlag = shortName === undefined ? undefined : `-${shortName}`;
   const values: string[] = [];
 
   for (let i = 0; i < rawArgs.length; i += 1) {

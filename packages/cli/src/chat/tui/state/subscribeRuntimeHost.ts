@@ -5,9 +5,7 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import {
-  type ActiveChildInfo,
   type ClearMissingOutputsPayload,
-  type GoalPausedPayload,
   type SetActiveStreamPayload,
   type StreamTabId,
   type UpdatePhaseStagePayload,
@@ -36,15 +34,6 @@ import { appendLocalAssistantTranscript } from './transcript';
 
 const GOAL_PAUSED_TRANSCRIPT_NOTICE =
   'Goal paused after a failed cycle. Review the error before starting a new goal.';
-
-function appendGoalPausedTranscriptNotice(payload: GoalPausedPayload): void {
-  // Without a transcript line, an auto-paused goal is indistinguishable
-  // from a hang: the agent simply stops mid-objective.
-  appendLocalAssistantTranscript(
-    GOAL_PAUSED_TRANSCRIPT_NOTICE,
-    payload.streamId,
-  );
-}
 
 function applyUsageUpdate(payload: UpdateStreamUsagePayload): void {
   patchStream(payload.streamId, (s) => ({
@@ -156,56 +145,6 @@ function applyPhaseStage(payload: UpdatePhaseStagePayload): void {
   });
 }
 
-function applyOutputFiles(
-  event: Extract<AgentEvent, { type: 'addOutputFiles' }>,
-): void {
-  patchStream(event.streamId, (s) => {
-    const outputFilesByRound = {
-      ...s.outputFilesByRound,
-      ...event.filesByRound,
-    };
-    return { ...s, outputFilesByRound };
-  });
-}
-
-function applyMissingOutputs(
-  event: Extract<AgentEvent, { type: 'updateMissingOutputs' }>,
-): void {
-  patchStream(event.streamId, (s) => ({
-    ...s,
-    missingOutputsByRound: {
-      ...s.missingOutputsByRound,
-      ...event.filesByRound,
-    },
-  }));
-}
-
-function applyCompileFailures(
-  event: Extract<AgentEvent, { type: 'updateCompileFailures' }>,
-): void {
-  patchStream(event.streamId, (s) => ({
-    ...s,
-    compileFailuresByRound: {
-      ...s.compileFailuresByRound,
-      ...event.filesByRound,
-    },
-  }));
-}
-
-function applyActiveSubagents(payload: {
-  parentStreamId: StreamTabId;
-  children: readonly ActiveChildInfo[];
-}): void {
-  applySubagentRoster(payload.parentStreamId, payload.children);
-}
-
-function applyParentStream(payload: {
-  childStreamId: StreamTabId;
-  parentStreamId: StreamTabId | null;
-}): void {
-  setParentStream(payload.childStreamId, payload.parentStreamId);
-}
-
 type MissingOutputTargetResolver = Pick<
   StreamSnapshotStore,
   'findWorkflowStreamsMatching'
@@ -237,44 +176,64 @@ function applyClearMissingOutputs(
 function applyDirectTuiRunEvent(
   event: AgentEvent,
   fallbackStreamId: StreamTabId,
-): boolean {
+): void {
   switch (event.type) {
     case 'run.config':
       applyRunConfig(event.streamId, event.config);
-      return true;
+      return;
     case 'usage':
       applyUsageUpdate(event.payload);
-      return true;
+      return;
     case 'conversation.progress':
       patchStream(fallbackStreamId, (s) => ({
         ...s,
         conversation: event.progress,
       }));
-      return true;
+      return;
     case 'updateTodos':
       patchStream(event.streamId, (s) => ({
         ...s,
         todos: event.todos,
       }));
-      return true;
+      return;
     case 'updatePlan':
       patchStream(event.streamId, (s) => ({
         ...s,
         plan: event.plan,
       }));
-      return true;
+      return;
     case 'goalPaused':
-      appendGoalPausedTranscriptNotice(event);
-      return true;
+      // Without a transcript line, an auto-paused goal is indistinguishable
+      // from a hang: the agent simply stops mid-objective.
+      appendLocalAssistantTranscript(
+        GOAL_PAUSED_TRANSCRIPT_NOTICE,
+        event.streamId,
+      );
+      return;
     case 'addOutputFiles':
-      applyOutputFiles(event);
-      return true;
+      patchStream(event.streamId, (s) => ({
+        ...s,
+        outputFilesByRound: { ...s.outputFilesByRound, ...event.filesByRound },
+      }));
+      return;
     case 'updateMissingOutputs':
-      applyMissingOutputs(event);
-      return true;
+      patchStream(event.streamId, (s) => ({
+        ...s,
+        missingOutputsByRound: {
+          ...s.missingOutputsByRound,
+          ...event.filesByRound,
+        },
+      }));
+      return;
     case 'updateCompileFailures':
-      applyCompileFailures(event);
-      return true;
+      patchStream(event.streamId, (s) => ({
+        ...s,
+        compileFailuresByRound: {
+          ...s.compileFailuresByRound,
+          ...event.filesByRound,
+        },
+      }));
+      return;
     case 'stage.start':
       if (event.kind === 'phase') {
         applyPhaseStage({
@@ -287,9 +246,9 @@ function applyDirectTuiRunEvent(
               : {}),
           },
         });
-        return true;
+        return;
       }
-      if (event.kind !== 'round') return false;
+      if (event.kind !== 'round') return;
       applyRoundStage({
         streamId: fallbackStreamId,
         roundStage: {
@@ -299,15 +258,10 @@ function applyDirectTuiRunEvent(
             : {}),
         },
       });
-      return true;
+      return;
     case 'child.activity':
-      applyActiveSubagents({
-        parentStreamId: event.parentStreamId,
-        children: [...event.items],
-      });
-      return true;
-    default:
-      return false;
+      applySubagentRoster(event.parentStreamId, event.items);
+      return;
   }
 }
 
@@ -352,7 +306,10 @@ export function attachTuiRunFactSubscription(
           return;
         }
         case 'setParentStream':
-          applyParentStream(fact.payload);
+          setParentStream(
+            fact.payload.childStreamId,
+            fact.payload.parentStreamId,
+          );
           return;
         case 'removeStream':
           removeStream(fact.payload.streamId);
@@ -383,10 +340,7 @@ export function attachTuiRunFactSubscription(
       if (generation !== getCliStateGeneration()) return;
       if (sessionEvent.scope !== 'run') return;
       if (isChildStreamRemoved(sessionEvent.streamId)) return;
-      const { event } = sessionEvent;
-      if (applyDirectTuiRunEvent(event, sessionEvent.streamId)) {
-        return;
-      }
+      applyDirectTuiRunEvent(sessionEvent.event, sessionEvent.streamId);
     },
     {
       scope: 'run',

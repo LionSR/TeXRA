@@ -84,25 +84,21 @@ function texLiveGuide(
 function combineGuides(
   ...sections: Array<[label: string, guide: Guide]>
 ): Guide {
-  const platforms: OSPlatform[] = ['darwin', 'linux', 'win32'];
-  return Object.fromEntries(
-    platforms.map((p) => {
-      // Extract just the install command (first paragraph) from each guide
-      const body = sections
-        .map(([label, g]) => {
-          const command = g[p].split('\n\n')[0].split('\n  ')[1];
-          return `${label}:\n  ${command}`;
-        })
-        .join('\n\n');
-      // Append a single Homebrew note for macOS instead of repeating per-section
-      return [
-        p,
-        p === 'darwin'
-          ? body + '\n\n"brew" requires Homebrew (https://brew.sh).'
-          : body,
-      ];
-    }),
-  ) as Guide;
+  // Extract just the install command (first paragraph) from each guide
+  const commandsFor = (platform: OSPlatform): string =>
+    sections
+      .map(
+        ([label, guide]) =>
+          `${label}:\n  ${guide[platform].split('\n\n')[0].split('\n  ')[1]}`,
+      )
+      .join('\n\n');
+  return {
+    // A single Homebrew note for macOS instead of repeating it per-section
+    darwin:
+      commandsFor('darwin') + '\n\n"brew" requires Homebrew (https://brew.sh).',
+    linux: commandsFor('linux'),
+    win32: commandsFor('win32'),
+  };
 }
 
 // ============================================================
@@ -431,7 +427,7 @@ export function normalizePlatform(raw: string): OSPlatform {
  * Falls back to linux if the platform is unrecognized.
  */
 export function getInstallGuide(guide: Guide, platform: string): string {
-  return guide[normalizePlatform(platform)] ?? guide.linux;
+  return guide[normalizePlatform(platform)];
 }
 
 // ============================================================

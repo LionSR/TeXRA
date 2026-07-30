@@ -85,7 +85,7 @@ export interface LanguageModelRequestOptions {
 export type LanguageModelResponsePart =
   LanguageModelTextPart | LanguageModelToolCallPart;
 
-export type LanguageModelTokenCountInput = string | LanguageModelMessage;
+type LanguageModelTokenCountInput = string | LanguageModelMessage;
 
 export const LANGUAGE_MODEL_PORT_ERROR_CODE = {
   HOST_UNAVAILABLE: 'host_unavailable',
@@ -141,28 +141,23 @@ export interface LanguageModelPort {
 const UNAVAILABLE_MESSAGE =
   'Language models supplied by the editor are unavailable in this host.';
 
-function unavailableRequest(): AsyncIterable<LanguageModelResponsePart> {
-  return {
-    [Symbol.asyncIterator]() {
-      return {
-        next: async () => {
-          throw new LanguageModelPortError(
-            LANGUAGE_MODEL_PORT_ERROR_CODE.HOST_UNAVAILABLE,
-            UNAVAILABLE_MESSAGE,
-          );
-        },
-      };
-    },
-  };
-}
-
 /** Shared implementation for CLI, desktop, tests, and unsupported editors. */
 export const UNAVAILABLE_LANGUAGE_MODEL_PORT: LanguageModelPort = Object.freeze(
   {
     isAvailable: () => false,
     selectModels: async () => [],
     onDidChangeModels: () => ({ dispose() {} }),
-    sendRequest: unavailableRequest,
+    sendRequest: (): AsyncIterable<LanguageModelResponsePart> => ({
+      [Symbol.asyncIterator]: () => ({
+        next: (): Promise<IteratorResult<LanguageModelResponsePart>> =>
+          Promise.reject(
+            new LanguageModelPortError(
+              LANGUAGE_MODEL_PORT_ERROR_CODE.HOST_UNAVAILABLE,
+              UNAVAILABLE_MESSAGE,
+            ),
+          ),
+      }),
+    }),
     countTokens: async () => {
       throw new LanguageModelPortError(
         LANGUAGE_MODEL_PORT_ERROR_CODE.HOST_UNAVAILABLE,

@@ -364,28 +364,29 @@ export function buildApprovalRejectedResult(
   return result;
 }
 
-interface ApprovedEditContent {
+interface WrittenApprovedEdit extends WriteApprovedContentResult {
   approval: ToolEditApprovalResult;
-  /** Content to write: the user's adjustments if any, else the proposal. */
-  finalContent: string;
 }
 
 /**
- * Run the tool-edit approval handshake for a proposed edit.
+ * Full approve-then-write handshake for a proposed edit: request approval,
+ * then write the resolved content (the user's adjustments if any, else the
+ * proposal). Combines the exact pairing every straight-through edit call site
+ * previously hand-rolled, so `sourceTool` is named once and the rejection
+ * message stays uniform.
  *
  * Returns `{ rejected }` (a {@link ToolResult} to return directly) when the
- * user declines, otherwise the approval plus the resolved `finalContent`.
- * Centralizes the request → reject → resolve sequence shared by every edit
- * tool so `sourceTool` is named once and the rejection message stays uniform.
- * Callers own the write/record/post-processing steps, which vary per tool.
+ * user declines. `beforeWrite` covers work that must happen only after
+ * acceptance, such as creating a new file's parent directory.
  */
-async function requestApprovedEditContent(request: {
+export async function requestAndWriteApprovedEdit(request: {
   path: string;
   displayPath: string;
   originalContent: string;
   proposedContent: string;
   sourceTool: string;
-}): Promise<{ rejected: ToolResult } | ApprovedEditContent> {
+  beforeWrite?: () => void | Promise<void>;
+}): Promise<{ rejected: ToolResult } | WrittenApprovedEdit> {
   const { path, displayPath, originalContent, proposedContent, sourceTool } =
     request;
 
@@ -406,43 +407,12 @@ async function requestApprovedEditContent(request: {
     };
   }
 
-  return {
-    approval,
-    finalContent: getApprovedContent(approval, proposedContent),
-  };
-}
-
-interface WrittenApprovedEdit extends WriteApprovedContentResult {
-  approval: ToolEditApprovalResult;
-}
-
-/**
- * Full approve-then-write handshake for a proposed edit: request approval,
- * then write the resolved content. Combines the exact pairing every
- * straight-through edit call site previously hand-rolled.
- * `beforeWrite` covers work that must happen only after acceptance, such as
- * creating a new file's parent directory.
- */
-export async function requestAndWriteApprovedEdit(request: {
-  path: string;
-  displayPath: string;
-  originalContent: string;
-  proposedContent: string;
-  sourceTool: string;
-  beforeWrite?: () => void | Promise<void>;
-}): Promise<{ rejected: ToolResult } | WrittenApprovedEdit> {
-  const outcome = await requestApprovedEditContent(request);
-  if ('rejected' in outcome) {
-    return outcome;
-  }
-  const { approval, finalContent } = outcome;
-
   await request.beforeWrite?.();
 
   const written = await writeApprovedContent(
-    request.path,
-    request.originalContent,
-    finalContent,
+    path,
+    originalContent,
+    getApprovedContent(approval, proposedContent),
   );
   return { approval, ...written };
 }

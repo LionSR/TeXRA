@@ -1,5 +1,5 @@
 // Third-party imports
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 // Local imports
 import { platform } from '@platform/platform';
@@ -15,46 +15,41 @@ const EXPECTED_DEFAULTS = EXTERNAL_TOOL_DEFS.filter(
 ).map((def) => def.id);
 
 describe('seedDisabledToolDefaults', () => {
+  afterEach(async () => {
+    await installPlatform();
+  });
+
   it('seeds every toggleable tool as disabled on a genuinely fresh install', async () => {
     await installPlatform({ globalState: {} });
-    try {
-      await seedDisabledToolDefaults(VERSION_KEY);
 
-      expect(platform().globalState.get(GlobalStateKey.DISABLED_TOOLS)).toEqual(
-        EXPECTED_DEFAULTS,
-      );
-    } finally {
-      await installPlatform();
-    }
+    await seedDisabledToolDefaults(VERSION_KEY);
+
+    expect(platform().globalState.get(GlobalStateKey.DISABLED_TOOLS)).toEqual(
+      EXPECTED_DEFAULTS,
+    );
   });
 
   it('does not seed for a host with a prior-install version marker', async () => {
     await installPlatform({
       globalState: { [VERSION_KEY]: '1.2.3' },
     });
-    try {
-      await seedDisabledToolDefaults(VERSION_KEY);
 
-      expect(
-        platform().globalState.get(GlobalStateKey.DISABLED_TOOLS),
-      ).toBeUndefined();
-    } finally {
-      await installPlatform();
-    }
+    await seedDisabledToolDefaults(VERSION_KEY);
+
+    expect(
+      platform().globalState.get(GlobalStateKey.DISABLED_TOOLS),
+    ).toBeUndefined();
   });
 
   it('never overwrites an already-seeded DISABLED_TOOLS list, even an empty one', async () => {
     await installPlatform({
       globalState: { [GlobalStateKey.DISABLED_TOOLS]: [] },
     });
-    try {
-      await seedDisabledToolDefaults(VERSION_KEY);
 
-      expect(platform().globalState.get(GlobalStateKey.DISABLED_TOOLS)).toEqual(
-        [],
-      );
-    } finally {
-      await installPlatform();
-    }
+    await seedDisabledToolDefaults(VERSION_KEY);
+
+    expect(platform().globalState.get(GlobalStateKey.DISABLED_TOOLS)).toEqual(
+      [],
+    );
   });
 });

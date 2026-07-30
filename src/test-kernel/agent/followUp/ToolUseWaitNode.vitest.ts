@@ -99,6 +99,10 @@ function createWaitNodeServices(
   } as unknown as ToolUseServices;
 }
 
+function waitPrep(afterError = false) {
+  return { afterError, lastResponse: undefined, touchedFiles: [] };
+}
+
 describe('ToolUseWaitNode', () => {
   it('always suspends a subagent cycle at WAITING, carrying its turn facts', async () => {
     const shared: ToolUseRunShared = toolUseRunShared();
@@ -333,24 +337,16 @@ describe('ToolUseWaitNode', () => {
       interactions,
       'test-stream',
       () =>
-        node.post(
-          shared,
-          {
-            afterError: false,
-            lastResponse: undefined,
-            touchedFiles: [],
-          },
-          {
-            followUps: [
-              {
-                text: 'please inspect this figure',
-                mediaFiles: ['/tmp/figure.png'],
-                origin: 'user',
-              },
-            ],
-            kind: 'continue',
-          },
-        ),
+        node.post(shared, waitPrep(), {
+          followUps: [
+            {
+              text: 'please inspect this figure',
+              mediaFiles: ['/tmp/figure.png'],
+              origin: 'user',
+            },
+          ],
+          kind: 'continue',
+        }),
     );
 
     expect(transition).toBe(FlowTransition.CONTINUE);
@@ -389,24 +385,16 @@ describe('ToolUseWaitNode', () => {
 
     const node = new ToolUseWaitNode().setServices(services);
     await withTestRunContext(interactions, 'test-stream', () =>
-      node.post(
-        shared,
-        {
-          afterError: false,
-          lastResponse: undefined,
-          touchedFiles: [],
-        },
-        {
-          followUps: [
-            {
-              text: 'please inspect this figure',
-              mediaFiles: ['/tmp/figure.png', '/tmp/missing.pdf'],
-              origin: 'user',
-            },
-          ],
-          kind: 'continue',
-        },
-      ),
+      node.post(shared, waitPrep(), {
+        followUps: [
+          {
+            text: 'please inspect this figure',
+            mediaFiles: ['/tmp/figure.png', '/tmp/missing.pdf'],
+            origin: 'user',
+          },
+        ],
+        kind: 'continue',
+      }),
     );
 
     expect(info).toHaveBeenCalledWith('please inspect this figure', {
@@ -450,12 +438,7 @@ describe('ToolUseWaitNode', () => {
       const exec = await withTestRunContext(
         interactions,
         streamId,
-        () =>
-          node.exec({
-            afterError: true,
-            lastResponse: undefined,
-            touchedFiles: [],
-          }),
+        () => node.exec(waitPrep(true)),
         { session, stopAfterCycle: true },
       );
 
@@ -666,11 +649,7 @@ describe('ToolUseWaitNode', () => {
 
     try {
       const exec = await withTestRunContext(interactions, streamId, () =>
-        node.exec({
-          afterError: false,
-          lastResponse: undefined,
-          touchedFiles: [],
-        }),
+        node.exec(waitPrep()),
       );
 
       expect(waitForFollowUp).toHaveBeenCalledOnce();
@@ -708,11 +687,7 @@ describe('ToolUseWaitNode', () => {
 
     try {
       const exec = await withTestRunContext(interactions, streamId, () =>
-        node.exec({
-          afterError: false,
-          lastResponse: undefined,
-          touchedFiles: [],
-        }),
+        node.exec(waitPrep()),
       );
 
       expect(waitForFollowUp).not.toHaveBeenCalled();
@@ -799,12 +774,7 @@ describe('ToolUseWaitNode', () => {
       const exec = await withTestRunContext(
         interactions,
         streamId,
-        () =>
-          node.exec({
-            afterError: true,
-            lastResponse: undefined,
-            touchedFiles: [],
-          }),
+        () => node.exec(waitPrep(true)),
         { session: ownerSession },
       );
 

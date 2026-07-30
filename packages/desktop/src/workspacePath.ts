@@ -79,15 +79,12 @@ export function hasResolvedWorkspacePath(
 export function parseWorkspacePathFromArgv(
   argv: readonly string[],
 ): string | undefined {
-  for (let index = 0; index < argv.length; index += 1) {
-    const arg = argv[index];
-    if (arg == null) continue;
+  for (const [index, arg] of argv.entries()) {
     if (isWorkspacePathFlag(arg)) {
       return getPositionalWorkspacePathArg(argv[index + 1]);
     }
     if (isWorkspacePathAssignment(arg)) {
-      const eqIndex = arg.indexOf('=');
-      return getPositionalWorkspacePathArg(arg.slice(eqIndex + 1));
+      return getPositionalWorkspacePathArg(arg.slice(arg.indexOf('=') + 1));
     }
   }
   return undefined;
@@ -104,9 +101,7 @@ function getPositionalWorkspacePathArg(
 }
 
 function isWorkspacePathFlag(arg: string): boolean {
-  return WORKSPACE_PATH_FLAGS.includes(
-    arg as (typeof WORKSPACE_PATH_FLAGS)[number],
-  );
+  return (WORKSPACE_PATH_FLAGS as readonly string[]).includes(arg);
 }
 
 function isWorkspacePathAssignment(arg: string): boolean {

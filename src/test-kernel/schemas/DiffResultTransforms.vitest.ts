@@ -47,34 +47,28 @@ const canonicalDiffResult = {
   },
 } as const;
 
+const canonicalDisplay = {
+  baseFile: '/repo/main.tex',
+  revisedFile: '/tmp/texra/abcdef/r2/main.tex',
+  diffFile: '/tmp/texra/abcdef/diff/main-diff.tex',
+  displayName: 'main.tex',
+  baseRound: 1,
+  revisedRound: 2,
+  status: 'success',
+  message: undefined,
+  runId: 'abcdef',
+};
+
 describe('DiffResult transforms', () => {
   it('derives display data from the canonical schema', () => {
-    expect(DiffResultDisplaySchema.parse(canonicalDiffResult)).toEqual({
-      baseFile: '/repo/main.tex',
-      revisedFile: '/tmp/texra/abcdef/r2/main.tex',
-      diffFile: '/tmp/texra/abcdef/diff/main-diff.tex',
-      displayName: 'main.tex',
-      baseRound: 1,
-      revisedRound: 2,
-      status: 'success',
-      message: undefined,
-      runId: 'abcdef',
-    });
+    expect(DiffResultDisplaySchema.parse(canonicalDiffResult)).toEqual(
+      canonicalDisplay,
+    );
   });
 
   it('parses canonical entries through the public parser', () => {
     expect(parseDiffResultEntries([canonicalDiffResult])).toEqual([
-      {
-        baseFile: '/repo/main.tex',
-        revisedFile: '/tmp/texra/abcdef/r2/main.tex',
-        diffFile: '/tmp/texra/abcdef/diff/main-diff.tex',
-        displayName: 'main.tex',
-        baseRound: 1,
-        revisedRound: 2,
-        status: 'success',
-        message: undefined,
-        runId: 'abcdef',
-      },
+      canonicalDisplay,
     ]);
   });
 

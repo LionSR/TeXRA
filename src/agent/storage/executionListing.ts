@@ -189,12 +189,10 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
     { concurrency: EXECUTION_STORAGE_CONCURRENCY },
   );
 
-  const listing = toNewestFirstByTimestamp(
+  return toNewestFirstByTimestamp(
     results.filter(filterNotNull),
     (item) => item.timestamp,
   );
-
-  return listing;
 }
 
 /**

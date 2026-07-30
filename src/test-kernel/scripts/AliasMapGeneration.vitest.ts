@@ -35,27 +35,21 @@ const SAMPLE_ROOT_PATHS = {
 };
 
 describe('aliasUtils deriveExtensionPaths', () => {
-  it('rewrites packages/extension/-prefixed values as extension-relative', () => {
-    const result = deriveExtensionPaths(SAMPLE_ROOT_PATHS);
+  const result = deriveExtensionPaths(SAMPLE_ROOT_PATHS);
 
+  it('rewrites packages/extension/-prefixed values as extension-relative', () => {
     expect(result['@commands/*']).toEqual(['src/commands/*']);
   });
 
   it('prepends ../../ to repo-root-relative values', () => {
-    const result = deriveExtensionPaths(SAMPLE_ROOT_PATHS);
-
     expect(result['@shared/*']).toEqual(['../../src/shared/*']);
   });
 
   it('rewrites each entry of a multi-value alias independently', () => {
-    const result = deriveExtensionPaths(SAMPLE_ROOT_PATHS);
-
     expect(result['@/*']).toEqual(['src/*', '../../src/*']);
   });
 
   it('drops every deliberately excluded alias and keeps everything else', () => {
-    const result = deriveExtensionPaths(SAMPLE_ROOT_PATHS);
-
     for (const excluded of EXTENSION_EXCLUDED_ALIASES) {
       expect(result).not.toHaveProperty(excluded);
     }
@@ -64,13 +58,13 @@ describe('aliasUtils deriveExtensionPaths', () => {
 });
 
 describe('aliasUtils deriveDesktopPaths', () => {
+  const result = deriveDesktopPaths(SAMPLE_ROOT_PATHS);
+
   it('returns the root paths unchanged (desktop baseUrl is already the repo root)', () => {
-    expect(deriveDesktopPaths(SAMPLE_ROOT_PATHS)).toEqual(SAMPLE_ROOT_PATHS);
+    expect(result).toEqual(SAMPLE_ROOT_PATHS);
   });
 
   it('excludes nothing, unlike deriveExtensionPaths', () => {
-    const result = deriveDesktopPaths(SAMPLE_ROOT_PATHS);
-
     for (const excluded of EXTENSION_EXCLUDED_ALIASES) {
       expect(result).toHaveProperty(excluded);
     }

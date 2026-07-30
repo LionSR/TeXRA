@@ -248,7 +248,6 @@ describe('GitHub subscription app signals and follow-ups', () => {
 
   it('passes the bind-time session to detached subscription follow-ups', () => {
     const streamId = 'stream-a' as StreamTabId;
-    const host = createRecordingHost();
     const source = new RegistryTestSource();
     const session = createTestSession();
     const registry = new StreamSubscriptionRegistry<string, string>({
@@ -282,7 +281,6 @@ describe('GitHub subscription app signals and follow-ups', () => {
 
   it('warns instead of leaking an unhandled rejection when delivery fails', async () => {
     const streamId = 'stream-a' as StreamTabId;
-    const host = createRecordingHost();
     const source = new RegistryTestSource();
     const logger = {
       info: vi.fn(),

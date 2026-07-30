@@ -155,22 +155,19 @@ function renderCodexFileChangeItem(
 function renderCodexFileListSection(
   changes: CodexFileChangeToolInput['changes'],
 ): RenderableSection {
-  return when(
-    changes.length > 0,
-    () => html`
-      ${buildToolUseSection(
-        'Files:',
-        html`
-          <ul class="detail-list">
-            ${repeat(
-              changes,
-              (change) => `${change.kind}:${change.path}`,
-              renderCodexFileChangeItem,
-            )}
-          </ul>
-        `,
-      )}
-    `,
+  return when(changes.length > 0, () =>
+    buildToolUseSection(
+      'Files:',
+      html`
+        <ul class="detail-list">
+          ${repeat(
+            changes,
+            (change) => `${change.kind}:${change.path}`,
+            renderCodexFileChangeItem,
+          )}
+        </ul>
+      `,
+    ),
   );
 }
 
@@ -231,22 +228,19 @@ function renderCodexTodoItem(item: {
 function renderCodexTodoListSection(
   items: CodexTodoToolInput['items'],
 ): RenderableSection {
-  return when(
-    items.length > 0,
-    () => html`
-      ${buildToolUseSection(
-        'Checklist:',
-        html`
-          <ul class="detail-list">
-            ${repeat(
-              items,
-              (item, index) => `${index}:${item.text}:${item.completed}`,
-              renderCodexTodoItem,
-            )}
-          </ul>
-        `,
-      )}
-    `,
+  return when(items.length > 0, () =>
+    buildToolUseSection(
+      'Checklist:',
+      html`
+        <ul class="detail-list">
+          ${repeat(
+            items,
+            (item, index) => `${index}:${item.text}:${item.completed}`,
+            renderCodexTodoItem,
+          )}
+        </ul>
+      `,
+    ),
   );
 }
 

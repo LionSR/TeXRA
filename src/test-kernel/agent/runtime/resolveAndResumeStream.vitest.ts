@@ -20,6 +20,7 @@ import {
   clearStreamStatusForTest,
   seedStreamStatusForTest,
 } from '@test/helpers/streamStatusTestUtils';
+import { createDeferred } from '@test/support/asyncTestUtils';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 
 const STREAM = 'stream:resume' as StreamTabId;
@@ -237,25 +238,19 @@ describe('resolveAndResumeStream', () => {
 
   it('keeps the in-flight guard until async no-session reporting completes', async () => {
     retrieveSessionResumeDataMock.mockResolvedValue(null);
-    let release!: () => void;
-    const gate = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    let markReportStarted!: () => void;
-    const reportStarted = new Promise<void>((resolve) => {
-      markReportStarted = resolve;
-    });
+    const gate = createDeferred();
+    const reportStarted = createDeferred();
     const ports = basePorts({
       reportNoResumableSession: vi.fn(async () => {
-        markReportStarted();
-        await gate;
+        reportStarted.resolve();
+        await gate.promise;
       }),
     });
 
     const pending = resolveAndResumeStream(STREAM, ports);
-    await reportStarted;
+    await reportStarted.promise;
 
-    release();
+    gate.resolve();
     await expect(pending).resolves.toBe(false);
   });
 
@@ -271,52 +266,40 @@ describe('resolveAndResumeStream', () => {
   it('keeps the in-flight guard until async failure reporting completes', async () => {
     const error = new Error('kv boom');
     retrieveSessionResumeDataMock.mockRejectedValue(error);
-    let release!: () => void;
-    const gate = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    let markReportStarted!: () => void;
-    const reportStarted = new Promise<void>((resolve) => {
-      markReportStarted = resolve;
-    });
+    const gate = createDeferred();
+    const reportStarted = createDeferred();
     const ports = basePorts({
       reportFailure: vi.fn(async () => {
-        markReportStarted();
-        await gate;
+        reportStarted.resolve();
+        await gate.promise;
       }),
     });
 
     const pending = resolveAndResumeStream(STREAM, ports);
-    await reportStarted;
+    await reportStarted.promise;
 
-    release();
+    gate.resolve();
     await expect(pending).resolves.toBe(false);
   });
 
   it('reports in-flight while preparing and clears it once settled', async () => {
-    let release!: () => void;
-    const gate = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    let reachedPort!: () => void;
-    const reached = new Promise<void>((resolve) => {
-      reachedPort = resolve;
-    });
+    const gate = createDeferred();
+    const reached = createDeferred();
     retrieveSessionResumeDataMock.mockResolvedValue(
       createToolUseResumeData({ streamId: STREAM }),
     );
     const ports = basePorts({
       resumeToolUse: vi.fn(async () => {
-        reachedPort();
-        await gate;
+        reached.resolve();
+        await gate.promise;
         return true;
       }),
     });
 
     const pending = resolveAndResumeStream(STREAM, ports);
-    await reached;
+    await reached.promise;
 
-    release();
+    gate.resolve();
     await expect(pending).resolves.toBe(true);
   });
 });

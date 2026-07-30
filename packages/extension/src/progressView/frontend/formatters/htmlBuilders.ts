@@ -66,15 +66,6 @@ function isDiffContent(text: string): boolean {
   return diffMarkers >= DIFF_MARKER_THRESHOLD;
 }
 
-/** Build line info suffix for file links. */
-function buildLineInfo(startLine?: number, endLine?: number): string {
-  if (!startLine) return '';
-  if (endLine && endLine !== startLine) {
-    return `:${startLine}-${endLine}`;
-  }
-  return `:${startLine}`;
-}
-
 /** Wrap text in a pre element with optional class and diff highlighting. */
 export function wrapInPre(text: string, className = ''): TemplateResult {
   if (!isDiffContent(text)) {
@@ -240,11 +231,6 @@ const LANGUAGE_LABELS: Record<string, string> = {
   plaintext: 'Text',
 };
 
-/** Get display label for a language. */
-function getLanguageLabel(language: string): string {
-  return LANGUAGE_LABELS[language] ?? (language || 'Text');
-}
-
 /** Apply syntax highlighting to code if language is supported. Returns HTML string for unsafeHTML. */
 function highlightCode(text: string, language: string): string {
   const isHighlightable = language && language !== 'plaintext';
@@ -286,7 +272,7 @@ export function buildCodeBlock(
   // unwanted spaces in rendered output. Use single-line templates with prettier-ignore.
   // Build modular template parts to keep individual lines readable.
   // prettier-ignore
-  const languageBadge = showLanguage ? html`<span class="code-block-language">${getLanguageLabel(language)}</span>` : nothing;
+  const languageBadge = showLanguage ? html`<span class="code-block-language">${LANGUAGE_LABELS[language] ?? (language || 'Text')}</span>` : nothing;
   // prettier-ignore
   const copyButton = showCopy ? html`<wa-button class="code-block-copy" appearance="plain" variant="neutral" size="s" type="button" title="Copy to clipboard" aria-label="Copy to clipboard" data-copy-id=${registerCopyContent(text)} data-copy-type="code-block">${waIcon('copy')}</wa-button>` : nothing;
   // prettier-ignore
@@ -309,9 +295,13 @@ export function buildFileLinkWithLines(
   if (!filePath) return nothing;
 
   const { startLine, endLine } = options;
-  const fileName = getBasename(filePath) || filePath;
-  const lineInfo = buildLineInfo(startLine, endLine);
-  const displayText = fileName + lineInfo;
+  let displayText = getBasename(filePath) || filePath;
+  if (startLine) {
+    displayText +=
+      endLine && endLine !== startLine
+        ? `:${startLine}-${endLine}`
+        : `:${startLine}`;
+  }
 
   // prettier-ignore
   return html`<span class="file-link clickable-link" data-file=${filePath} data-file-line=${ifDefined(startLine)} role="button" tabindex="0">${waIcon('file')} ${displayText}</span>`;

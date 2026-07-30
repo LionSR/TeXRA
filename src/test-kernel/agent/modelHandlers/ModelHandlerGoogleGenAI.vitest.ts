@@ -34,8 +34,8 @@ interface LogRecorder extends AgentTrace {
   warnMessages: string[];
 }
 
-function createLogRecorder(): { logger: AgentTrace; stub: LogRecorder } {
-  const stub: LogRecorder = {
+function createLogRecorder(): LogRecorder {
+  return {
     ...noopTrace,
     fileListEntries: [],
     warnMessages: [],
@@ -51,8 +51,6 @@ function createLogRecorder(): { logger: AgentTrace; stub: LogRecorder } {
       }
     },
   };
-
-  return { logger: stub, stub };
 }
 
 const GOOGLE_TEST_CONFIG = Object.freeze({
@@ -72,67 +70,35 @@ function createGoogleGenAIHandler(): ModelHandlerGoogleGenAI {
   const handler = new ModelHandlerGoogleGenAI(
     buildTestModelConfig(GOOGLE_TEST_CONFIG),
   );
-  const { logger } = createLogRecorder();
-  handler.setLogger(logger);
-  return handler;
-}
-
-class StreamingGoogleHandler extends ModelHandlerGoogleGenAI {
-  override getStreamingConfig(): boolean {
-    return true;
-  }
-}
-
-function createStreamingGoogleHandler(): ModelHandlerGoogleGenAI {
-  const handler = new StreamingGoogleHandler(
-    buildTestModelConfig({
-      name: 'test-google-model',
-      label: 'Test Google Model',
-      fullName: 'google/test',
-      shortName: 'google/test',
-      provider: ModelProvider.GOOGLE,
-      contextWindow: 4096,
-      capabilities: { supportsTokenCounting: false },
-    }),
-  );
-  handler.setLogger({
-    ...noopTrace,
-    openStream: () => ({
-      id: 'stream-1',
-      append: () => undefined,
-      finalize: (text?: string) => text ?? '',
-    }),
-  });
-  handler.setOutputStreaming(true);
+  handler.setLogger(createLogRecorder());
   return handler;
 }
 
 /**
- * Creates a stream that yields visible text, then fails as a dropped
- * connection would after content has already been produced.
+ * A handler wired for `createResponse` tests: token counting off (no client
+ * round-trip for a token count), a silent logger, and the streaming decision
+ * pinned instead of read from configuration.
  */
-function createClientWithMidStreamFailure(
-  visibleText: string,
-  failure: Error,
-): any {
+function createGoogleGenAIHandlerForRequests(
+  streaming: boolean,
+): ModelHandlerGoogleGenAI {
+  const handler = new ModelHandlerGoogleGenAI(
+    buildTestModelConfig(GOOGLE_TEST_CONFIG, {
+      capabilities: { supportsTokenCounting: false },
+    }),
+  );
+  handler.setLogger({ ...noopTrace });
+  handler.setOutputStreaming(streaming);
+  (handler as any).getStreamingConfig = () => streaming;
+  return handler;
+}
+
+/** A chat client whose stream yields the chunks produced by `chunks`. */
+function createStreamingClient(chunks: () => AsyncGenerator<unknown>): any {
   return {
     chats: {
       create: () => ({
-        sendMessageStream: async () =>
-          (async function* () {
-            const chunk: any = {
-              candidates: [
-                {
-                  content: {
-                    role: 'model',
-                    parts: [createPartFromText(visibleText)],
-                  },
-                },
-              ],
-            };
-            yield chunk;
-            throw failure;
-          })(),
+        sendMessageStream: async () => chunks(),
         sendMessage: async () => {
           throw new Error(
             'sendMessage should not be called when streaming is enabled',
@@ -161,6 +127,13 @@ class GoogleHandlerTestDouble extends ModelHandlerGoogleGenAI {
   }
 }
 
+/** Forces every payload past the inline limit so uploads take the files API. */
+class LimitedInlineHandler extends GoogleHandlerTestDouble {
+  protected override getInlineUploadLimitBytes(): number {
+    return 1;
+  }
+}
+
 describe('ModelHandlerGoogleGenAI media uploads', () => {
   it('creates inline parts when base64 media is provided', async () => {
     const uploadCalls: UploadFileParameters[] = [];
@@ -183,8 +156,7 @@ describe('ModelHandlerGoogleGenAI media uploads', () => {
       buildTestModelConfig(GOOGLE_TEST_CONFIG),
       clientStub,
     );
-    const { logger } = createLogRecorder();
-    handler.setLogger(logger);
+    handler.setLogger(createLogRecorder());
 
     const entry: MediaEntry = {
       file_name: 'sample.pdf',
@@ -215,8 +187,8 @@ describe('ModelHandlerGoogleGenAI media uploads', () => {
       buildTestModelConfig(GOOGLE_TEST_CONFIG),
       clientStub,
     );
-    const { logger, stub } = createLogRecorder();
-    handler.setLogger(logger);
+    const recorder = createLogRecorder();
+    handler.setLogger(recorder);
 
     const entry: MediaEntry = {
       file_name: 'sample.pdf',
@@ -228,7 +200,7 @@ describe('ModelHandlerGoogleGenAI media uploads', () => {
     await handler.invokeUpload([entry]);
 
     assert.equal(
-      stub.fileListEntries.length,
+      recorder.fileListEntries.length,
       0,
       'uploadMediaEntries should not emit fileList logs',
     );
@@ -250,18 +222,11 @@ describe('ModelHandlerGoogleGenAI media uploads', () => {
       },
     };
 
-    class LimitedInlineHandler extends GoogleHandlerTestDouble {
-      protected override getInlineUploadLimitBytes(): number {
-        return 1;
-      }
-    }
-
     const handler = new LimitedInlineHandler(
       buildTestModelConfig(GOOGLE_TEST_CONFIG),
       clientStub,
     );
-    const { logger } = createLogRecorder();
-    handler.setLogger(logger);
+    handler.setLogger(createLogRecorder());
 
     const oversized = Buffer.from([0, 1]).toString('base64');
     const entry: MediaEntry = {
@@ -289,18 +254,12 @@ describe('ModelHandlerGoogleGenAI media uploads', () => {
       },
     };
 
-    class LimitedInlineHandler extends GoogleHandlerTestDouble {
-      protected override getInlineUploadLimitBytes(): number {
-        return 1;
-      }
-    }
-
     const handler = new LimitedInlineHandler(
       buildTestModelConfig(GOOGLE_TEST_CONFIG),
       clientStub,
     );
-    const { logger, stub } = createLogRecorder();
-    handler.setLogger(logger);
+    const recorder = createLogRecorder();
+    handler.setLogger(recorder);
 
     const oversized = Buffer.from([0, 1]).toString('base64');
     const entry: MediaEntry = {
@@ -314,9 +273,9 @@ describe('ModelHandlerGoogleGenAI media uploads', () => {
     const parts = await handler.invokeUpload([entry]);
 
     assert.deepEqual(parts, []);
-    assert.equal(stub.warnMessages.length, 1);
-    assert.match(stub.warnMessages[0] ?? '', /large\.pdf/);
-    assert.match(stub.warnMessages[0] ?? '', /provider quota exhausted/);
+    assert.equal(recorder.warnMessages.length, 1);
+    assert.match(recorder.warnMessages[0] ?? '', /large\.pdf/);
+    assert.match(recorder.warnMessages[0] ?? '', /provider quota exhausted/);
   });
 
   it('builds media entries once and delegates upload inside createMediaMessage', async () => {
@@ -340,8 +299,8 @@ describe('ModelHandlerGoogleGenAI media uploads', () => {
     const handler = new RecordingHandler(
       buildTestModelConfig(GOOGLE_TEST_CONFIG),
     );
-    const { logger, stub } = createLogRecorder();
-    handler.setLogger(logger);
+    const recorder = createLogRecorder();
+    handler.setLogger(recorder);
 
     const handlerMediaProcessor = handler as unknown as {
       mediaProcessor: {
@@ -399,7 +358,11 @@ describe('ModelHandlerGoogleGenAI media uploads', () => {
     ]);
     assert.equal(uploadedEntries.length, 1, 'uploads should run once');
     assert.equal(uploadedEntries[0][0].file_name, 'doc.pdf');
-    assert.equal(stub.fileListEntries.length, 1, 'should log processed media');
+    assert.equal(
+      recorder.fileListEntries.length,
+      1,
+      'should log processed media',
+    );
     assert.deepEqual(loggedResults, [[{ path: 'doc.pdf', ok: true }]]);
 
     handlerMediaProcessor.mediaProcessor.loadEntries = originalLoadEntries;
@@ -602,19 +565,30 @@ describe('ModelHandlerGoogleGenAI tool attachments', () => {
 
 describe('ModelHandlerGoogleGenAI streaming failure diagnostics', () => {
   it('retains partial text from a mid-stream failure', async () => {
-    const handler = createStreamingGoogleHandler();
+    const handler = createGoogleGenAIHandlerForRequests(true);
     const failure = new Error('relay connection dropped mid-stream');
     const messages: Content[] = [
       { role: 'user', parts: [createPartFromText('Hi there')] },
     ];
 
+    // The stream yields visible text, then fails as a dropped connection would
+    // after content has already been produced.
     let caught: unknown;
     try {
       await handler.createResponse({
-        client: createClientWithMidStreamFailure(
-          'partial text before the drop',
-          failure,
-        ),
+        client: createStreamingClient(async function* () {
+          yield {
+            candidates: [
+              {
+                content: {
+                  role: 'model',
+                  parts: [createPartFromText('partial text before the drop')],
+                },
+              },
+            ],
+          };
+          throw failure;
+        }),
         messages,
         temperature: 0,
       });
@@ -757,17 +731,7 @@ describe('ModelHandlerGoogleGenAI.createResponse aggregation', () => {
   // forwards prior turns to the chat session unchanged, splitting off only
   // the final user message which is sent via sendMessage.
   it('forwards prior turns as chat history with SDK function-call ids intact', async () => {
-    const handler = createGoogleGenAIHandler();
-
-    (handler as any).capabilities.supportsTokenCounting = false;
-    (handler as any).logger = {
-      debug: () => {},
-      info: () => {},
-      warn: () => {},
-      error: () => {},
-      statistics: () => {},
-    };
-    (handler as any).getStreamingConfig = () => false;
+    const handler = createGoogleGenAIHandlerForRequests(false);
 
     const capturedHistory: Content[][] = [];
     const fakeClient = {
@@ -833,23 +797,7 @@ describe('ModelHandlerGoogleGenAI.createResponse aggregation', () => {
   });
 
   it('aggregates streamed chunks without relying on SDK response promises', async () => {
-    const handler = createGoogleGenAIHandler();
-
-    (handler as any).capabilities.supportsTokenCounting = false;
-    handler.setOutputStreaming(true);
-    (handler as any).logger = {
-      debug: () => {},
-      info: () => {},
-      warn: () => {},
-      error: () => {},
-      statistics: () => {},
-      openStream: () => ({
-        id: 'test-stream',
-        append: () => {},
-        finalize: () => '',
-      }),
-    };
-    (handler as any).getStreamingConfig = () => true;
+    const handler = createGoogleGenAIHandlerForRequests(true);
 
     const chunkOne = new GenerateContentResponse();
     chunkOne.candidates = [
@@ -876,30 +824,15 @@ describe('ModelHandlerGoogleGenAI.createResponse aggregation', () => {
       totalTokenCount: 3,
     } as any;
 
-    const fakeClient = {
-      chats: {
-        create: () => ({
-          sendMessageStream: async () =>
-            (async function* () {
-              yield chunkOne;
-              yield chunkTwo;
-            })(),
-          sendMessage: async () => {
-            throw new Error(
-              'sendMessage should not be called when streaming is enabled',
-            );
-          },
-        }),
-      },
-      models: {},
-    } as any;
-
     const messages: Content[] = [
       { role: 'user', parts: [createPartFromText('Hi there')] },
     ];
 
     const response = await handler.createResponse({
-      client: fakeClient,
+      client: createStreamingClient(async function* () {
+        yield chunkOne;
+        yield chunkTwo;
+      }),
       messages,
       temperature: 0,
     });
@@ -918,23 +851,7 @@ describe('ModelHandlerGoogleGenAI.createResponse aggregation', () => {
   });
 
   it('concatenates automaticFunctionCallingHistory across streamed chunks', async () => {
-    const handler = createGoogleGenAIHandler();
-
-    (handler as any).capabilities.supportsTokenCounting = false;
-    handler.setOutputStreaming(true);
-    (handler as any).logger = {
-      debug: () => {},
-      info: () => {},
-      warn: () => {},
-      error: () => {},
-      statistics: () => {},
-      openStream: () => ({
-        id: 'test-stream',
-        append: () => {},
-        finalize: () => '',
-      }),
-    };
-    (handler as any).getStreamingConfig = () => true;
+    const handler = createGoogleGenAIHandlerForRequests(true);
 
     const chunkOne = new GenerateContentResponse();
     chunkOne.candidates = [
@@ -958,30 +875,15 @@ describe('ModelHandlerGoogleGenAI.createResponse aggregation', () => {
     ];
     chunkTwo.automaticFunctionCallingHistory = [{ name: 'callTwo' } as any];
 
-    const fakeClient = {
-      chats: {
-        create: () => ({
-          sendMessageStream: async () =>
-            (async function* () {
-              yield chunkOne;
-              yield chunkTwo;
-            })(),
-          sendMessage: async () => {
-            throw new Error(
-              'sendMessage should not be called when streaming is enabled',
-            );
-          },
-        }),
-      },
-      models: {},
-    } as any;
-
     const messages: Content[] = [
       { role: 'user', parts: [createPartFromText('Hi there')] },
     ];
 
     const response = await handler.createResponse({
-      client: fakeClient,
+      client: createStreamingClient(async function* () {
+        yield chunkOne;
+        yield chunkTwo;
+      }),
       messages,
       temperature: 0,
     });

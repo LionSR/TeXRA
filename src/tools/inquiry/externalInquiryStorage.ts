@@ -259,13 +259,6 @@ export interface PersistedAnsweredTurn {
 
 const threadMutex = new KeyedMutex<string>();
 
-function withThreadLock<T>(
-  threadId: string,
-  operation: () => Promise<T>,
-): Promise<T> {
-  return threadMutex.runExclusive(threadId, operation);
-}
-
 // ============================================================================
 // Path helpers
 // ============================================================================
@@ -472,6 +465,12 @@ function normalizeSessionLinks(links?: string[] | null): string[] | undefined {
 // Open / answer / drop helpers
 // ============================================================================
 
+interface OpenTurnUpdate<T> {
+  manifest: ExternalInquiryThreadManifest;
+  result: T;
+  afterWrite?: () => Promise<void>;
+}
+
 /**
  * Read a thread manifest under its lock, require the last turn to be open,
  * and replace it via `update`. Returns null without calling `update` if the
@@ -490,20 +489,9 @@ async function withOpenTurnUpdate<T>(
     existing: ExternalInquiryThreadManifest,
     lastTurn: OpenInquiryTurn,
     timestamp: string,
-  ) =>
-    | Promise<{
-        manifest: ExternalInquiryThreadManifest;
-        result: T;
-        afterWrite?: () => Promise<void>;
-      } | null>
-    | {
-        manifest: ExternalInquiryThreadManifest;
-        result: T;
-        afterWrite?: () => Promise<void>;
-      }
-    | null,
+  ) => Promise<OpenTurnUpdate<T> | null> | OpenTurnUpdate<T> | null,
 ): Promise<{ manifest: ExternalInquiryThreadManifest; result: T } | null> {
-  return withThreadLock(threadId, async () => {
+  return threadMutex.runExclusive(threadId, async () => {
     const existing = await readThreadManifest(threadId);
     if (!existing || existing.status !== 'open' || existing.turns.length === 0)
       return null;
@@ -544,7 +532,7 @@ export async function recordOpenQuestion(params: {
   const threadId =
     params.threadId ?? (`ei_${hexId12()}` as ExternalInquiryThreadId);
 
-  return withThreadLock(threadId, async () => {
+  return threadMutex.runExclusive(threadId, async () => {
     const existing = await readThreadManifest(threadId);
 
     if (params.threadId && !existing) {
@@ -662,15 +650,10 @@ export async function recordAnswerForOpenTurn(params: {
         params.answer,
       );
 
+      // `draft` is open-turn-only state and must not survive the transition.
+      const { draft: _draft, ...openFields } = lastTurn;
       const answeredTurn: AnsweredInquiryTurn = {
-        turnIndex: lastTurn.turnIndex,
-        timestamp: lastTurn.timestamp,
-        question: lastTurn.question,
-        context: lastTurn.context,
-        questionRelativePath: lastTurn.questionRelativePath,
-        contextRelativePath: lastTurn.contextRelativePath,
-        suggestSearch: lastTurn.suggestSearch,
-        attachFiles: lastTurn.attachFiles,
+        ...openFields,
         kind: 'answered',
         answer: params.answer,
         answeredAt: timestamp,
@@ -730,7 +713,7 @@ export async function recordAnswerForOpenTurn(params: {
 export async function markDropped(params: {
   threadId: ExternalInquiryThreadId;
 }): Promise<ExternalInquiryThreadManifest | null> {
-  return withThreadLock(params.threadId, async () => {
+  return threadMutex.runExclusive(params.threadId, async () => {
     const existing = await readThreadManifest(params.threadId);
     if (!existing) return null;
     if (existing.status !== 'open') return null;
@@ -813,7 +796,7 @@ export async function readExternalInquiryThread(
 ): Promise<ExternalInquiryThreadManifest | null> {
   const parsed = ExternalInquiryThreadIdSchema.safeParse(threadId);
   if (!parsed.success) return null;
-  return withThreadLock(parsed.data, async () => {
+  return threadMutex.runExclusive(parsed.data, async () => {
     const manifest = await readThreadManifest(parsed.data);
     if (!manifest) return null;
     const hydrated = await hydrateAnswersFromDisk(parsed.data, manifest);

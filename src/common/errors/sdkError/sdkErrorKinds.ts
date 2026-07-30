@@ -23,21 +23,6 @@ export interface SdkErrorMetadata {
   exhaustionReason?: ExhaustionReason;
 }
 
-const SDK_ERROR_KINDS: ReadonlySet<SdkErrorKind> = new Set([
-  'connection_timeout',
-  'connection',
-  'user_abort',
-  'bad_request',
-  'authentication',
-  'permission_denied',
-  'not_found',
-  'conflict',
-  'unprocessable_entity',
-  'rate_limit',
-  'internal_server',
-  'api_error',
-]);
-
 export function isSdkErrorMetadata(value: unknown): value is SdkErrorMetadata {
   if (!isObject(value)) return false;
   const candidate = value as {
@@ -48,7 +33,7 @@ export function isSdkErrorMetadata(value: unknown): value is SdkErrorMetadata {
   };
   return (
     isString(candidate.provider) &&
-    SDK_ERROR_KINDS.has(candidate.kind as SdkErrorKind) &&
+    SDK_ERRORS_BY_KIND.has(candidate.kind as SdkErrorKind) &&
     (candidate.statusCode === undefined ||
       pickStatus(candidate.statusCode) !== undefined) &&
     (candidate.exhaustionReason === undefined ||

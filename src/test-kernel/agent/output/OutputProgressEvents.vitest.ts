@@ -109,6 +109,23 @@ function createRoundDataStore() {
   return { roundData, ensureRoundData, setRoundOutputs };
 }
 
+function createProcessingContext(
+  host: ReturnType<typeof createRecordingHost>['host'],
+  logger: AgentTrace,
+  xmlManager: XmlOutputManager,
+  store: ReturnType<typeof createRoundDataStore>,
+): ProcessingContext {
+  return {
+    baseFiles: [],
+    streamId: 'stream:processor',
+    interactions: host,
+    logger,
+    xmlManager,
+    setRoundOutputs: store.setRoundOutputs,
+    ensureRoundData: store.ensureRoundData,
+  };
+}
+
 function createOutputNode(
   streamId: string,
   host: ReturnType<typeof createRecordingHost>['host'],
@@ -327,77 +344,45 @@ describe('output progress events', () => {
     expect(shared.compileFailureContext).toBeUndefined();
   });
 
-  it('publishes missing-output processing events through the runtime host', async () => {
-    const projected = createRecordedRuntime('stream:processor');
-    const { events, host, logger } = projected;
-    const { roundData, ensureRoundData, setRoundOutputs } =
-      createRoundDataStore();
-    const xmlManager = {
-      splitScratchpadMultipleOutputXml: async () => {
+  it.each([
+    {
+      name: 'publishes missing-output processing events through the runtime host',
+      split: async () => {
         throw new Error('invalid xml');
       },
-    } as unknown as XmlOutputManager;
-    const context: ProcessingContext = {
-      baseFiles: [],
-      streamId: 'stream:processor',
-      interactions: host,
-      logger,
-      xmlManager,
-      setRoundOutputs,
-      ensureRoundData,
-    };
-
-    try {
-      await new OutputFileProcessor(context).processMultipleOutputs(
-        createLocation('/tmp/broken-output.xml'),
-        3,
-        createLocation('/tmp/raw-output.xml'),
-      );
-
-      expect(runEventsOfType(events, 'updateMissingOutputs')).toMatchObject([
-        {
-          streamId: 'stream:processor',
-          filesByRound: { 3: [] },
-        },
-      ]);
-      expect(roundData.get(3)?.outputs).toEqual([]);
-    } finally {
-      projected.dispose();
-    }
-  });
-
-  it('emits missing-output events when extraction yields no files (no exception)', async () => {
+      outputPath: '/tmp/broken-output.xml',
+      round: 3,
+    },
+    {
+      name: 'emits missing-output events when extraction yields no files (no exception)',
+      split: async () => [],
+      outputPath: '/tmp/empty-output.xml',
+      round: 4,
+    },
+  ])('$name', async ({ split, outputPath, round }) => {
     const projected = createRecordedRuntime('stream:processor');
     const { events, host, logger } = projected;
-    const { roundData, ensureRoundData, setRoundOutputs } =
-      createRoundDataStore();
+    const store = createRoundDataStore();
     const xmlManager = {
-      splitScratchpadMultipleOutputXml: async () => [],
+      splitScratchpadMultipleOutputXml: split,
     } as unknown as XmlOutputManager;
-    const context: ProcessingContext = {
-      baseFiles: [],
-      streamId: 'stream:processor',
-      interactions: host,
-      logger,
-      xmlManager,
-      setRoundOutputs,
-      ensureRoundData,
-    };
 
     try {
-      await new OutputFileProcessor(context).processMultipleOutputs(
-        createLocation('/tmp/empty-output.xml'),
-        4,
+      await new OutputFileProcessor(
+        createProcessingContext(host, logger, xmlManager, store),
+      ).processMultipleOutputs(
+        createLocation(outputPath),
+        round,
         createLocation('/tmp/raw-output.xml'),
       );
 
       expect(runEventsOfType(events, 'updateMissingOutputs')).toMatchObject([
         {
           streamId: 'stream:processor',
-          filesByRound: { 4: [] },
+          filesByRound: { [round]: [] },
         },
       ]);
-      expect(roundData.get(4)?.outputs).toEqual([]);
+      expect(store.roundData.get(round)?.outputs).toEqual([]);
     } finally {
       projected.dispose();
     }
@@ -420,21 +405,18 @@ describe('output progress events', () => {
       }
     });
     try {
-      const { ensureRoundData, setRoundOutputs } = createRoundDataStore();
       const xmlManager = {
         splitScratchpadMultipleOutputXml: async () => [],
       } as unknown as XmlOutputManager;
-      const context: ProcessingContext = {
-        baseFiles: [],
-        streamId: 'stream:processor',
-        interactions: host,
-        logger,
-        xmlManager,
-        setRoundOutputs,
-        ensureRoundData,
-      };
 
-      await new OutputFileProcessor(context).processMultipleOutputs(
+      await new OutputFileProcessor(
+        createProcessingContext(
+          host,
+          logger,
+          xmlManager,
+          createRoundDataStore(),
+        ),
+      ).processMultipleOutputs(
         createLocation('/tmp/output.xml'),
         5,
         createLocation('/tmp/output.xml'),

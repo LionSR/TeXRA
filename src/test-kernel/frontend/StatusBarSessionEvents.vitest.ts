@@ -1,26 +1,46 @@
-// Test support imports
-
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { StatusBarUsageTracker } from '@frontend/statusBar/StatusBarUsageTracker';
 import { subscribeStatusBarSessionEvents } from '@frontend/statusBar/statusBarSessionEvents';
 import { STREAM_PHASE, type StorageKey } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
 
+function subscribeOverTestSession() {
+  const session = createTestSession();
+  const tracker = new StatusBarUsageTracker(session.status);
+  const onStatusChanged = vi.fn();
+  const onUsageChanged = vi.fn();
+  const dispose = subscribeStatusBarSessionEvents({
+    session,
+    tracker,
+    onStatusChanged,
+    onUsageChanged,
+  });
+  return { session, tracker, onStatusChanged, onUsageChanged, dispose };
+}
+
+function emitUsage(session: SessionHandle): void {
+  session.events.emit({
+    scope: 'run',
+    streamId: 'stream-a',
+    event: {
+      type: 'usage',
+      payload: {
+        streamId: 'stream-a',
+        storageKey: 'run-a' as StorageKey,
+        usage: { inputTokens: 10, outputTokens: 20, cost: 0.01 },
+      },
+    },
+  });
+}
+
 describe('subscribeStatusBarSessionEvents', () => {
   it('tracks stream status changes from the session status plane', () => {
-    const session = createTestSession();
-    const tracker = new StatusBarUsageTracker(session.status);
-    const onStatusChanged = vi.fn();
-    const onUsageChanged = vi.fn();
-    const dispose = subscribeStatusBarSessionEvents({
-      session,
-      tracker,
-      onStatusChanged,
-      onUsageChanged,
-    });
+    const { session, tracker, onStatusChanged, onUsageChanged, dispose } =
+      subscribeOverTestSession();
 
     session.status.transition('stream-a', STREAM_PHASE.RUNNING, 'lifecycle');
 
@@ -38,30 +58,11 @@ describe('subscribeStatusBarSessionEvents', () => {
   });
 
   it('records valid run usage events after an in-flight status', () => {
-    const session = createTestSession();
-    const tracker = new StatusBarUsageTracker(session.status);
-    const onStatusChanged = vi.fn();
-    const onUsageChanged = vi.fn();
-    const dispose = subscribeStatusBarSessionEvents({
-      session,
-      tracker,
-      onStatusChanged,
-      onUsageChanged,
-    });
+    const { session, tracker, onUsageChanged, dispose } =
+      subscribeOverTestSession();
 
     session.status.transition('stream-a', STREAM_PHASE.RUNNING, 'lifecycle');
-    session.events.emit({
-      scope: 'run',
-      streamId: 'stream-a',
-      event: {
-        type: 'usage',
-        payload: {
-          streamId: 'stream-a',
-          storageKey: 'run-a' as StorageKey,
-          usage: { inputTokens: 10, outputTokens: 20, cost: 0.01 },
-        },
-      },
-    });
+    emitUsage(session);
 
     expect(tracker.totalUsage).toEqual({
       inputTokens: 10,
@@ -74,29 +75,10 @@ describe('subscribeStatusBarSessionEvents', () => {
   });
 
   it('ignores usage for unknown streams', () => {
-    const session = createTestSession();
-    const tracker = new StatusBarUsageTracker(session.status);
-    const onStatusChanged = vi.fn();
-    const onUsageChanged = vi.fn();
-    const dispose = subscribeStatusBarSessionEvents({
-      session,
-      tracker,
-      onStatusChanged,
-      onUsageChanged,
-    });
+    const { session, tracker, onUsageChanged, dispose } =
+      subscribeOverTestSession();
 
-    session.events.emit({
-      scope: 'run',
-      streamId: 'stream-a',
-      event: {
-        type: 'usage',
-        payload: {
-          streamId: 'stream-a',
-          storageKey: 'run-a' as StorageKey,
-          usage: { inputTokens: 10, outputTokens: 20, cost: 0.01 },
-        },
-      },
-    });
+    emitUsage(session);
 
     expect(tracker.totalUsage).toEqual({
       inputTokens: 0,

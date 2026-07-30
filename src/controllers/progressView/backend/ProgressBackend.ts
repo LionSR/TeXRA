@@ -164,15 +164,6 @@ export class ProgressBackend {
     });
   }
 
-  private async notifyDeletionRetained(
-    deletion: 'active' | 'failed',
-  ): Promise<void> {
-    await this.lifecycle.notifyDeletionRetained(
-      deletion === 'active' ? 1 : 0,
-      deletion === 'failed' ? 1 : 0,
-    );
-  }
-
   async deleteStream(stream: StreamTabId): Promise<void> {
     const wasActive = this.state.activeStream === stream;
     const storageGeneration = this.storageGeneration;
@@ -183,7 +174,12 @@ export class ProgressBackend {
           ? this.deleteStreamNow(stream, wasActive)
           : Promise.resolve(undefined),
     );
-    if (retained) await this.notifyDeletionRetained(retained);
+    if (retained) {
+      await this.lifecycle.notifyDeletionRetained(
+        retained === 'active' ? 1 : 0,
+        retained === 'failed' ? 1 : 0,
+      );
+    }
   }
 
   /** Whether local durable state exists for `stream` (log or task snapshot). */
@@ -216,16 +212,15 @@ export class ProgressBackend {
   ): Promise<'active' | 'failed' | undefined> {
     if (!canUseStreamDataDir(stream)) return undefined;
 
-    if (!this.hasDeletableStreamData(stream)) {
-      const deletion = await this.state.clearStream(stream);
-      return deletion === 'deleted' ? undefined : deletion;
-    }
-
+    const hadDeletableData = this.hasDeletableStreamData(stream);
     const deletion = await this.state.clearStream(stream);
     if (deletion !== 'deleted') {
-      this.lifecycle.rebuildRenderedStreams({ syncActiveStream: true });
+      if (hadDeletableData) {
+        this.lifecycle.rebuildRenderedStreams({ syncActiveStream: true });
+      }
       return deletion;
     }
+    if (!hadDeletableData) return undefined;
 
     this.lifecycle.cleanupDeletedStream(stream);
     this.webviewBridge.clearStream(stream);

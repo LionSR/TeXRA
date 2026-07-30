@@ -34,28 +34,11 @@ export function registerCommands(context: vscode.ExtensionContext) {
   registerOpenFileCommands(context);
   registerMainViewCommands(context);
 
-  // The shared registry now owns the no-arg housekeeping (cleanOutput,
-  // cleanBuild, indentTeX), auth (signIn/signOut/viewProfile), system
-  // entry points (runSetupAssistant, openGettingStarted, createSampleProject,
-  // testConnection, testAgentLoading, loadSpecificAgent, openProgressViewInTab,
-  // downloadArXivSource), batch-2 host-context entry points (parseXml,
-  // parseYaml, testTextEditor, indentCurrentTeX,
-  // applyReplacements, fixCompilation, getTeXCount, countPdfPages,
-  // showLinterMessages, countLinterMessages, extractFigurePaths), the
-  // typed-arg handlers for openDoc/stopAgent/compactResponse, and the
-  // batch-4 (#3781) follow-ups (removeApiKey, showImportOptions,
-  // toggleView, showProgressView, setApiKey, createAgentWithAI, execute),
-  // and the typed pack/clean/compare file-operation families
-  // — all alongside the original settings/main-view routes via the same
-  // dispatch path as the desktop registry. See
-  // `extensionCommandSurface.ts` for the handler map.
-  //
-  // FOLLOW_UP (#3781): the remaining per-command registrations carry
-  // VS Code-specific arguments (TextEditor, Range, Uri, agent execution
-  // payloads). Commands whose handlers capture VS Code state directly
-  // (e.g. `vscode.window.activeTextEditor`) stay on per-command registration.
-  // Host-exclusive commands like `texra.showGitSettings` follow the same
-  // `Exclude<>` pattern desktop already uses.
+  // The shared registry owns every command whose handler map lives in
+  // `extensionCommandSurface.ts`, dispatched the same way as the desktop
+  // registry. The per-command registrations above stay separate because
+  // their handlers carry VS Code-specific arguments (TextEditor, Range,
+  // Uri, agent execution payloads) or capture VS Code state directly.
   registerExtensionCommandRegistry(
     context,
     createExtensionCommandActions(context, settingsViewProvider),

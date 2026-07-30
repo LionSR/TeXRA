@@ -12,7 +12,7 @@ import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 
 // Third-party imports
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports - agent
 import {
@@ -63,23 +63,45 @@ class FsAgentDirectoryStorage implements AgentDirectoryStorage {
   }
 }
 
+function createSync(
+  storage: AgentDirectoryStorage,
+  bundleSource: AgentDirectoryBundleSource,
+  hooks: {
+    onVersion?: (version: string | undefined) => void;
+    onWarn?: (message: string) => void;
+  } = {},
+): BundledAgentDirectorySync {
+  return new BundledAgentDirectorySync({
+    bundleSource,
+    storage,
+    versionStore: {
+      get: () => undefined,
+      update: async (version) => hooks.onVersion?.(version),
+    },
+    logger: {
+      info: () => undefined,
+      warn: (message) => hooks.onWarn?.(message),
+    },
+  });
+}
+
 describe('BundledAgentDirectorySync', () => {
-  let tempDir: string | undefined;
+  let tempDir: string;
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'texra-agent-sync-'));
+  });
 
   afterEach(async () => {
-    if (tempDir == null) return;
     await rm(tempDir, { recursive: true, force: true });
-    tempDir = undefined;
   });
 
   it('serializes concurrent copies into the same storage root', async () => {
-    tempDir = await mkdtemp(join(tmpdir(), 'texra-agent-sync-'));
-    const storage = new FsAgentDirectoryStorage(tempDir);
     const copied: BundledAgentDirectoryName[] = [];
     let activeCopies = 0;
     let maxActiveCopies = 0;
 
-    const bundleSource: AgentDirectoryBundleSource = {
+    const sync = createSync(new FsAgentDirectoryStorage(tempDir), {
       async copyDirectory(directoryName, destinationPath) {
         activeCopies += 1;
         maxActiveCopies = Math.max(maxActiveCopies, activeCopies);
@@ -91,18 +113,6 @@ describe('BundledAgentDirectorySync', () => {
         } finally {
           activeCopies -= 1;
         }
-      },
-    };
-    const sync = new BundledAgentDirectorySync({
-      bundleSource,
-      storage,
-      versionStore: {
-        get: () => undefined,
-        update: async () => undefined,
-      },
-      logger: {
-        info: () => undefined,
-        warn: () => undefined,
       },
     });
 
@@ -125,8 +135,6 @@ describe('BundledAgentDirectorySync', () => {
   });
 
   it('skips a recent same-version sync from another process', async () => {
-    tempDir = await mkdtemp(join(tmpdir(), 'texra-agent-sync-'));
-    const storage = new FsAgentDirectoryStorage(tempDir);
     const copied: BundledAgentDirectoryName[] = [];
     let storedVersion: string | undefined;
     await writeFile(
@@ -138,24 +146,19 @@ describe('BundledAgentDirectorySync', () => {
       })}\n`,
     );
 
-    const sync = new BundledAgentDirectorySync({
-      bundleSource: {
+    const sync = createSync(
+      new FsAgentDirectoryStorage(tempDir),
+      {
         async copyDirectory(directoryName) {
           copied.push(directoryName);
         },
       },
-      storage,
-      versionStore: {
-        get: () => undefined,
-        update: async (version) => {
+      {
+        onVersion: (version) => {
           storedVersion = version;
         },
       },
-      logger: {
-        info: () => undefined,
-        warn: () => undefined,
-      },
-    });
+    );
 
     await sync.reconcile('1.0.0');
 
@@ -165,22 +168,9 @@ describe('BundledAgentDirectorySync', () => {
   });
 
   it('clears the reconcile lock after copy failure', async () => {
-    tempDir = await mkdtemp(join(tmpdir(), 'texra-agent-sync-'));
-    const storage = new FsAgentDirectoryStorage(tempDir);
-    const sync = new BundledAgentDirectorySync({
-      bundleSource: {
-        async copyDirectory() {
-          throw new Error('copy failed');
-        },
-      },
-      storage,
-      versionStore: {
-        get: () => undefined,
-        update: async () => undefined,
-      },
-      logger: {
-        info: () => undefined,
-        warn: () => undefined,
+    const sync = createSync(new FsAgentDirectoryStorage(tempDir), {
+      async copyDirectory() {
+        throw new Error('copy failed');
       },
     });
 
@@ -190,7 +180,6 @@ describe('BundledAgentDirectorySync', () => {
   });
 
   it('does not fail reconciliation when the marker write fails', async () => {
-    tempDir = await mkdtemp(join(tmpdir(), 'texra-agent-sync-'));
     const storage = new (class extends FsAgentDirectoryStorage {
       override write(relativePath: string, content: string): Promise<void> {
         if (relativePath === '.bundled-agent-sync.json') {
@@ -202,25 +191,21 @@ describe('BundledAgentDirectorySync', () => {
     const copied: BundledAgentDirectoryName[] = [];
     let storedVersion: string | undefined;
     const warnings: string[] = [];
-    const sync = new BundledAgentDirectorySync({
-      bundleSource: {
+    const sync = createSync(
+      storage,
+      {
         async copyDirectory(directoryName, destinationPath) {
           await mkdir(destinationPath, { recursive: true });
           copied.push(directoryName);
         },
       },
-      storage,
-      versionStore: {
-        get: () => undefined,
-        update: async (version) => {
+      {
+        onVersion: (version) => {
           storedVersion = version;
         },
+        onWarn: (message) => warnings.push(message),
       },
-      logger: {
-        info: () => undefined,
-        warn: (message) => warnings.push(message),
-      },
-    });
+    );
 
     await expect(sync.reconcile('1.0.0')).resolves.toBe(true);
 

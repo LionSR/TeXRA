@@ -47,22 +47,16 @@ function launchAs(category: AgentCategory, entry: AgentEntry | undefined) {
  */
 describe('cross-category agent resolution', () => {
   beforeAll(async () => {
-    const customDir = await mkdtemp(resolve(tmpdir(), 'texra-custom-agent-'));
-    await writeFile(
-      resolve(customDir, 'assistant.yaml'),
-      [
+    const customAgents: Record<string, string[]> = {
+      'assistant.yaml': [
         'name: assistant',
         'description: Custom workflow agent that shadows a built-in name.',
         'settings:',
         '  agentCategory: workflow',
         'prompts:',
         '  systemPrompt: Custom workflow assistant.',
-        '',
-      ].join('\n'),
-    );
-    await writeFile(
-      resolve(customDir, 'secretAgent.yaml'),
-      [
+      ],
+      'secretAgent.yaml': [
         'name: secretAgent',
         'description: Internal tool-use agent hidden from dropdowns.',
         'settings:',
@@ -70,21 +64,20 @@ describe('cross-category agent resolution', () => {
         '  internal: true',
         'prompts:',
         '  systemPrompt: Internal agent.',
-        '',
-      ].join('\n'),
-    );
-    await writeFile(
-      resolve(customDir, 'review.yaml'),
-      [
+      ],
+      'review.yaml': [
         'name: review',
         'description: Custom tool-use agent that shadows a built-in name.',
         'settings:',
         '  agentCategory: toolUse',
         'prompts:',
         '  systemPrompt: Custom review agent.',
-        '',
-      ].join('\n'),
-    );
+      ],
+    };
+    const customDir = await mkdtemp(resolve(tmpdir(), 'texra-custom-agent-'));
+    for (const [fileName, lines] of Object.entries(customAgents)) {
+      await writeFile(resolve(customDir, fileName), `${lines.join('\n')}\n`);
+    }
 
     const { initPlatform } = await import('@platform/platform');
     initPlatform(

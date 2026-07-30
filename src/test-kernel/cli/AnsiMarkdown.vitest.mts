@@ -15,10 +15,8 @@ import {
 } from '@cli/chat/tui/render/ansiMarkdown';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 
-const ANSI_SGR_PATTERN = new RegExp(
-  `${String.fromCharCode(27)}\\[[0-9;]*m`,
-  'u',
-);
+const ESC = String.fromCharCode(27);
+const ANSI_SGR_PATTERN = new RegExp(`${ESC}\\[[0-9;]*m`, 'u');
 
 function displayWidthForTest(line: string): number {
   let width = 0;
@@ -40,6 +38,15 @@ function displayWidthForTest(line: string): number {
     }
   }
   return width;
+}
+
+/** Strips ANSI, asserts every line fits `width`, and returns the plain lines. */
+function plainLinesWithinWidth(rendered: string, width: number): string[] {
+  const lines = stripAnsi(rendered).split('\n');
+  for (const line of lines) {
+    expect(displayWidthForTest(line)).toBeLessThanOrEqual(width);
+  }
+  return lines;
 }
 
 describe('renderAnsiMarkdown', () => {
@@ -209,92 +216,63 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('wraps rendered markdown at display-cell boundaries', () => {
-    const out = renderAnsiMarkdown('你好🙂abcdef', { width: 6 });
-    const lines = stripAnsi(out).split('\n');
+    const lines = plainLinesWithinWidth(
+      renderAnsiMarkdown('你好🙂abcdef', { width: 6 }),
+      6,
+    );
     expect(lines.length).toBeGreaterThan(1);
-    for (const line of lines) {
-      expect(displayWidthForTest(line)).toBeLessThanOrEqual(6);
-    }
   });
 
   it('keeps blockquote gutters on wrapped continuation lines', () => {
-    const out = renderAnsiMarkdown('> abcdef ghijkl mnopqr', { width: 10 });
-    const plain = stripAnsi(out);
-    const lines = plain.split('\n');
+    const lines = plainLinesWithinWidth(
+      renderAnsiMarkdown('> abcdef ghijkl mnopqr', { width: 10 }),
+      10,
+    );
     expect(lines.length).toBeGreaterThan(1);
     for (const line of lines) {
       expect(line).toMatch(/^│ /);
-      expect(displayWidthForTest(line)).toBeLessThanOrEqual(10);
     }
   });
 
   it('keeps list indentation on wrapped continuation lines', () => {
-    const out = renderAnsiMarkdown('- abcdef ghijkl mnopqr', { width: 10 });
-    const plain = stripAnsi(out);
-    const lines = plain.split('\n');
+    const lines = plainLinesWithinWidth(
+      renderAnsiMarkdown('- abcdef ghijkl mnopqr', { width: 10 }),
+      10,
+    );
     expect(lines[0]).toMatch(/^ {2}• /);
     expect(lines.slice(1).every((line) => line.startsWith('    '))).toBe(true);
-    for (const line of lines) {
-      expect(displayWidthForTest(line)).toBeLessThanOrEqual(10);
-    }
   });
 
-  it('keeps quoted list prefixes aligned across ANSI charset escapes', () => {
-    const esc = String.fromCharCode(27);
-    const line = `${esc}(0│ ${esc}(B  • abcdef ghijkl mnopqr`;
-    const out = wrapAnsiToWidth(line, 10, true);
-    const plain = stripAnsi(out);
-    const lines = plain.split('\n');
+  it.each([
+    {
+      name: 'ANSI charset escapes',
+      input: `${ESC}(0│ ${ESC}(B  • abcdef ghijkl mnopqr`,
+      absent: ['0│', 'B  •'],
+    },
+    {
+      name: 'C1-ST OSC hyperlinks',
+      input: `${ESC}]8;;https://example.test${String.fromCharCode(
+        0x9c,
+      )}│   • abcdef ghijkl mnopqr`,
+      absent: [],
+    },
+    {
+      name: 'C1 CSI styles',
+      input: `${String.fromCharCode(0x9b)}31m│ ${String.fromCharCode(
+        0x9b,
+      )}39m  • abcdef ghijkl mnopqr`,
+      absent: ['31m', '39m'],
+    },
+  ])('keeps quoted list prefixes aligned across $name', ({ input, absent }) => {
+    const lines = plainLinesWithinWidth(wrapAnsiToWidth(input, 10, true), 10);
 
     expect(lines.length).toBeGreaterThan(1);
     expect(lines[0]).toBe('│   • abcd');
     expect(lines.slice(1).every((line) => line.startsWith('│     '))).toBe(
       true,
     );
-    expect(plain).not.toContain('0│');
-    expect(plain).not.toContain('B  •');
-    for (const wrappedLine of lines) {
-      expect(displayWidthForTest(wrappedLine)).toBeLessThanOrEqual(10);
-    }
-  });
-
-  it('wraps quoted list prefixes after C1-ST OSC hyperlinks', () => {
-    const esc = String.fromCharCode(27);
-    const c1StringTerminator = String.fromCharCode(0x9c);
-    const link = `${esc}]8;;https://example.test${c1StringTerminator}`;
-    const out = wrapAnsiToWidth(`${link}│   • abcdef ghijkl mnopqr`, 10, true);
-    const plain = stripAnsi(out);
-    const lines = plain.split('\n');
-
-    expect(lines.length).toBeGreaterThan(1);
-    expect(lines[0]).toBe('│   • abcd');
-    expect(lines.slice(1).every((line) => line.startsWith('│     '))).toBe(
-      true,
-    );
-    for (const wrappedLine of lines) {
-      expect(displayWidthForTest(wrappedLine)).toBeLessThanOrEqual(10);
-    }
-  });
-
-  it('wraps quoted list prefixes after C1 CSI styles', () => {
-    const c1Csi = String.fromCharCode(0x9b);
-    const out = wrapAnsiToWidth(
-      `${c1Csi}31m│ ${c1Csi}39m  • abcdef ghijkl mnopqr`,
-      10,
-      true,
-    );
-    const plain = stripAnsi(out);
-    const lines = plain.split('\n');
-
-    expect(lines.length).toBeGreaterThan(1);
-    expect(lines[0]).toBe('│   • abcd');
-    expect(lines.slice(1).every((line) => line.startsWith('│     '))).toBe(
-      true,
-    );
-    expect(plain).not.toContain('31m');
-    expect(plain).not.toContain('39m');
-    for (const wrappedLine of lines) {
-      expect(displayWidthForTest(wrappedLine)).toBeLessThanOrEqual(10);
+    for (const marker of absent) {
+      expect(lines.join('\n')).not.toContain(marker);
     }
   });
 
@@ -306,18 +284,14 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('keeps OSC hyperlinks balanced when wrapping ANSI text', () => {
-    const esc = String.fromCharCode(27);
     const bel = String.fromCharCode(7);
-    const open = `${esc}]8;;https://example.com${esc}\\`;
-    const close = `${esc}]8;;${esc}\\`;
-    const closeWithBel = `${esc}]8;;${bel}`;
+    const open = `${ESC}]8;;https://example.com${ESC}\\`;
+    const close = `${ESC}]8;;${ESC}\\`;
+    const closeWithBel = `${ESC}]8;;${bel}`;
     const out = wrapAnsiToWidth(`${open}hello world${close}`, 5);
-    const plain = stripAnsi(out);
-    expect(plain.replaceAll('\n', '')).toBe('hello world');
-    for (const line of plain.split('\n')) {
-      expect(displayWidthForTest(line)).toBeLessThanOrEqual(5);
-    }
-    const openCount = out.split(`${esc}]8;;https://example.com`).length - 1;
+    const lines = plainLinesWithinWidth(out, 5);
+    expect(lines.join('')).toBe('hello world');
+    const openCount = out.split(`${ESC}]8;;https://example.com`).length - 1;
     const closeCount =
       out.split(close).length - 1 + (out.split(closeWithBel).length - 1);
     expect(openCount).toBe(closeCount);
@@ -326,12 +300,8 @@ describe('renderAnsiMarkdown', () => {
   });
 
   it('wraps diff lines with the same ANSI-aware width helper', () => {
-    const out = wrapAnsiToWidth('+你好🙂abcdef', 6);
-    const lines = stripAnsi(out).split('\n');
+    const lines = plainLinesWithinWidth(wrapAnsiToWidth('+你好🙂abcdef', 6), 6);
     expect(lines.length).toBeGreaterThan(1);
-    for (const line of lines) {
-      expect(displayWidthForTest(line)).toBeLessThanOrEqual(6);
-    }
   });
 
   it('renders GFM pipe tables as a box-drawing table, not raw HTML', () => {
@@ -352,10 +322,7 @@ describe('renderAnsiMarkdown', () => {
     const md =
       '| Col A | Col B | Col C |\n|---|---|---|\n' +
       '| a fairly long cell value | another long one | third column here |';
-    const out = renderAnsiMarkdown(md, { width: 40 });
-    for (const line of stripAnsi(out).split('\n')) {
-      expect(displayWidthForTest(line)).toBeLessThanOrEqual(40);
-    }
+    plainLinesWithinWidth(renderAnsiMarkdown(md, { width: 40 }), 40);
   });
 
   it('sizes a small table to its content instead of stretching to full width', () => {

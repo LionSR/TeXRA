@@ -11,34 +11,6 @@ import {
 } from '@controllers/settingsView/SettingsAgentVisibilityController';
 import type { AgentCategory } from '@shared/schemas/agent';
 
-describe('SettingsAgentVisibilityController', () => {
-  it('delegates individual toggles to the canonical roster state', async () => {
-    let received:
-      | Parameters<SettingsAgentVisibilityController['setAgentEnabled']>[0]
-      | undefined;
-    const controller = new SettingsAgentVisibilityController({
-      state: {
-        getEnabledAgentKeys: () => undefined,
-        setAgentEnabled: async (input) => {
-          received = input;
-        },
-        setEnabledAgentKeys: async () => undefined,
-        getAgents: () => [],
-      },
-    });
-
-    const input = {
-      category: 'workflow',
-      source: 'builtInWorkflow',
-      name: 'criticize',
-      enabled: false,
-    } as const;
-    await controller.setAgentEnabled(input);
-
-    expect(received).toEqual(input);
-  });
-});
-
 const AGENTS: Record<AgentCategory, SettingsAgentVisibilityEntry[]> = {
   workflow: [
     { source: 'builtInWorkflow', name: 'correct' },
@@ -51,20 +23,28 @@ const AGENTS: Record<AgentCategory, SettingsAgentVisibilityEntry[]> = {
   ],
 };
 
+type AgentToggle = Parameters<
+  SettingsAgentVisibilityController['setAgentEnabled']
+>[0];
+
 function createController(options?: {
   enabled?: Partial<Record<AgentCategory, string[] | undefined>>;
 }): {
   controller: SettingsAgentVisibilityController;
   enabled: Partial<Record<AgentCategory, string[] | undefined>>;
   writes: string[][];
+  toggles: AgentToggle[];
 } {
   const enabled = { ...(options?.enabled ?? {}) };
   const writes: string[][] = [];
+  const toggles: AgentToggle[] = [];
   return {
     controller: new SettingsAgentVisibilityController({
       state: {
         getEnabledAgentKeys: (category) => enabled[category],
-        setAgentEnabled: async () => undefined,
+        setAgentEnabled: async (input) => {
+          toggles.push(input);
+        },
         setEnabledAgentKeys: async (category, enabledKeys) => {
           writes.push(enabledKeys);
           enabled[category] = enabledKeys;
@@ -74,10 +54,25 @@ function createController(options?: {
     }),
     enabled,
     writes,
+    toggles,
   };
 }
 
 describe('SettingsAgentVisibilityController', () => {
+  it('delegates individual toggles to the canonical roster state', async () => {
+    const { controller, toggles } = createController();
+
+    const input = {
+      category: 'workflow',
+      source: 'builtInWorkflow',
+      name: 'criticize',
+      enabled: false,
+    } as const;
+    await controller.setAgentEnabled(input);
+
+    expect(toggles).toEqual([input]);
+  });
+
   it('disables every agent from a source while preserving other sources', async () => {
     const { controller, enabled } = createController({
       enabled: {

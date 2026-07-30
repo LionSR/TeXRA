@@ -69,25 +69,21 @@ export function extractTextFromTag(
 }
 
 /**
- * Extract LaTeX content from a markdown fenced code block.
- * Internal helper for extractDocument cascade.
+ * Extract `<document name="...">` children from any content string.
+ * Case-sensitive to match CDATA wrapping behavior.
  */
-function extractLatexFromMarkdown(content: string): string | null {
-  const match = content.match(/```(?:latex|tex)\n([\s\S]*?)\n```/i);
-  return match?.[1] ?? null;
-}
+function extractNamedDocuments(
+  content: string,
+): Array<{ content: string; name: string }> {
+  const documentRegex = new RegExp(
+    `<${OUTPUT_DOCUMENT_TAG}[^>]*name="([^"]*)"[^>]*>(.*?)<\/${OUTPUT_DOCUMENT_TAG}>`,
+    'gs',
+  );
 
-/**
- * Extract LaTeX document starting at \documentclass and ending at \end{document}.
- * Internal helper for extractDocument cascade.
- */
-function extractLatexBetweenDocumentClass(content: string): string | null {
-  const match = content.match(/\\documentclass[\s\S]*?\\end{document}/);
-  if (!match) {
-    return null;
-  }
-  // Use centralized CDATA removal
-  return removeCDATA(match[0]);
+  return [...content.matchAll(documentRegex)].map((match) => ({
+    name: match[1] || 'unnamed',
+    content: removeCDATA(match[2] ?? ''),
+  }));
 }
 
 /**
@@ -98,22 +94,6 @@ export function extractMultipleTextFromTag(
   inputContent: string,
   containerTag?: string,
 ): Array<{ content: string; name: string }> {
-  // Define function to extract documents from any content string
-  const extractNamedDocuments = (
-    content: string,
-  ): Array<{ content: string; name: string }> => {
-    // Full extraction pattern - case-sensitive to match CDATA wrapping behavior
-    const documentRegex = new RegExp(
-      `<${OUTPUT_DOCUMENT_TAG}[^>]*name="([^"]*)"[^>]*>(.*?)<\/${OUTPUT_DOCUMENT_TAG}>`,
-      'gs',
-    );
-
-    return [...content.matchAll(documentRegex)].map((match) => ({
-      name: match[1] || 'unnamed',
-      content: removeCDATA(match[2] ?? ''),
-    }));
-  };
-
   // If containerTag is provided, try to extract content from within that container
   if (containerTag) {
     const containerRegex = new RegExp(
@@ -192,51 +172,9 @@ export async function extractScratchpad(
   return extractedContent ? await formatContent(extractedContent) : null;
 }
 
-// ============================================================================
-// Extraction Result Schemas
-// ============================================================================
-
-interface ExtractionResult {
-  content: string | null;
-  method: 'simple' | 'markdown' | 'latex' | 'none';
-}
-
 export interface MultipleExtractionResult {
   documents: { content: string; name: string }[] | null;
   method: 'simple' | 'latex_document' | 'markdown' | 'latex' | 'none';
-}
-
-/**
- * Extract document content using a consolidated cascade of fallback methods.
- * Tries in order: simple tag -> markdown block -> latex document
- *
- * @param outputContent The raw output content to extract from
- * @param tagName The XML tag to look for
- * @returns Extraction result with content and method used
- */
-function extractDocument(
-  outputContent: string,
-  tagName: string,
-): ExtractionResult {
-  // Try simple tag extraction
-  const fallbackContent = extractTextFromTag(outputContent, tagName);
-  if (fallbackContent) {
-    return { content: fallbackContent, method: 'simple' };
-  }
-
-  // Try markdown code block
-  const markdownFallback = extractLatexFromMarkdown(outputContent);
-  if (markdownFallback) {
-    return { content: markdownFallback, method: 'markdown' };
-  }
-
-  // Try LaTeX document class extraction
-  const latexFallback = extractLatexBetweenDocumentClass(outputContent);
-  if (latexFallback) {
-    return { content: latexFallback, method: 'latex' };
-  }
-
-  return { content: null, method: 'none' };
 }
 
 /**
@@ -262,18 +200,32 @@ export function extractDocuments(
   preferredName?: string,
 ): MultipleExtractionResult {
   const documents = extractMultipleTextFromTag(outputContent, containerTag);
-  if (documents && documents.length > 0) {
+  if (documents.length > 0) {
     return { documents, method: 'simple' };
   }
 
   if (preferredName) {
-    const single = extractDocument(outputContent, 'latex_document');
-    if (single.content && single.method !== 'none') {
-      const method: MultipleExtractionResult['method'] =
-        single.method === 'simple' ? 'latex_document' : single.method;
+    const tagged = extractTextFromTag(outputContent, 'latex_document');
+    if (tagged) {
       return {
-        documents: [{ content: single.content, name: preferredName }],
-        method,
+        documents: [{ content: tagged, name: preferredName }],
+        method: 'latex_document',
+      };
+    }
+
+    const fenced = outputContent.match(/```(?:latex|tex)\n([\s\S]*?)\n```/i);
+    if (fenced?.[1]) {
+      return {
+        documents: [{ content: fenced[1], name: preferredName }],
+        method: 'markdown',
+      };
+    }
+
+    const bare = outputContent.match(/\\documentclass[\s\S]*?\\end{document}/);
+    if (bare) {
+      return {
+        documents: [{ content: removeCDATA(bare[0]), name: preferredName }],
+        method: 'latex',
       };
     }
   }

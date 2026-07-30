@@ -16,10 +16,6 @@ type AccountTabElement = HTMLElement & {
   updateComplete: Promise<boolean>;
 };
 
-async function loadAccountTab(): Promise<void> {
-  await import('@settingsView/frontend/tabs/AccountTab');
-}
-
 async function mountAccountTab(): Promise<AccountTabElement> {
   const element = document.createElement('account-tab') as AccountTabElement;
   element.authenticated = true;
@@ -29,7 +25,9 @@ async function mountAccountTab(): Promise<AccountTabElement> {
 }
 
 describe('account usage status', () => {
-  useLitComponentTestDom(loadAccountTab);
+  useLitComponentTestDom(
+    () => import('@settingsView/frontend/tabs/AccountTab'),
+  );
 
   it('explains that spend-check failures disable included access', async () => {
     const element = await mountAccountTab();

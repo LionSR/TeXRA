@@ -294,7 +294,7 @@ export class ToolUseDispatchNode<C> extends Node<
 
     this.services.workspace.interactions.recordToolCall();
 
-    return this.executeToolCall(call, this.services, batchSignal);
+    return this.executeToolCall(call, batchSignal);
   }
 
   /**
@@ -342,7 +342,6 @@ export class ToolUseDispatchNode<C> extends Node<
     call: SdkToolCall,
     tool: { call(input: unknown): Promise<ToolResult> } | undefined,
     parsedInput: unknown,
-    options: ToolUseRoundServices<C>,
     onExecutionReady?: () => void,
     onToolOutput?: (chunk: string) => void,
     signal?: AbortSignal,
@@ -354,6 +353,7 @@ export class ToolUseDispatchNode<C> extends Node<
       };
     }
 
+    const options = this.services;
     try {
       return await withToolFileInteractionContext(
         {
@@ -392,9 +392,9 @@ export class ToolUseDispatchNode<C> extends Node<
   /** Execute a single tool call and return the result with metadata. */
   private async executeToolCall(
     call: SdkToolCall,
-    options: ToolUseRoundServices<C>,
     batchSignal: AbortSignal | null,
   ): Promise<ToolExecutionResult | null> {
+    const options = this.services;
     const parsedInput = parseToolInput(call.input, call.callId, options.logger);
     const tool = options.toolRegistry.get(call.name);
     const isDeferred = tool?.deferLogUntilApproval === true;
@@ -468,7 +468,6 @@ export class ToolUseDispatchNode<C> extends Node<
         call,
         tool,
         parsedInput,
-        options,
         onExecutionReady,
         onToolOutput,
         controller.signal,

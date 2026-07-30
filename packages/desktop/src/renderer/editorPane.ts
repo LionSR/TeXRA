@@ -201,15 +201,6 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     }
   }
 
-  function handleDirectoryLazyLoad(
-    event: Event,
-    directory: EditorTreeDirectory,
-  ): void {
-    if (event.target !== event.currentTarget) return;
-    expandedDirectories.add(directory.path);
-    void loadDirectory(directory);
-  }
-
   async function loadDirectory(directory: EditorTreeDirectory): Promise<void> {
     if (
       directoryChildren.has(directory.path) ||
@@ -257,7 +248,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
           .lazy=${!loaded}
           title=${node.path}
           @wa-lazy-load=${(event: Event) =>
-            handleDirectoryLazyLoad(event, node)}
+            handleDirectoryToggle(event, node, true)}
           @wa-expand=${(event: Event) =>
             handleDirectoryToggle(event, node, true)}
           @wa-collapse=${(event: Event) =>

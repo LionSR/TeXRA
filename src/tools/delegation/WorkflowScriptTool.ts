@@ -384,10 +384,10 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
       // the deterministic run lease is held, so a throw here must release the
       // lease — otherwise it survives to its heartbeat timeout and a prompt
       // relaunch is refused.
+      const runStore = getExecutionStore(runExecutionId);
       let runChildStreamId: StreamTabId;
       let runCompletion: Promise<void>;
       try {
-        const runStore = getExecutionStore(runExecutionId);
         // A deterministic execution id may retain the prior attempt's report.
         // Clear it before starting this attempt so an interruption before
         // delivery cannot be mistaken for a newly persisted result.
@@ -471,7 +471,6 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
 
       if (parent.stopAfterCycle) {
         await runCompletion;
-        const runStore = getExecutionStore(runExecutionId);
         const [report, runMeta] = await Promise.all([
           runStore.readReport(),
           runStore.readMeta(),

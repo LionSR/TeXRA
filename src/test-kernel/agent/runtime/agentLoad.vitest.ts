@@ -1,5 +1,3 @@
-// Third-party imports
-
 // Standard library imports
 import { strict as assert } from 'node:assert';
 import { mkdtemp, writeFile } from 'node:fs/promises';
@@ -90,13 +88,6 @@ describe('validateAgentYamlContent', () => {
 });
 
 describe('loadAgentSettingAndPrompts', () => {
-  const absoluteFsAny = AbsoluteFS as unknown as {
-    exists: (filePath: string) => Promise<boolean>;
-    read: (filePath: string) => Promise<string>;
-  };
-  const originalExists = absoluteFsAny.exists;
-  const originalRead = absoluteFsAny.read;
-
   const fileContents = new Map<string, string>();
 
   function normalize(filePath: string): string {
@@ -118,22 +109,23 @@ describe('loadAgentSettingAndPrompts', () => {
   beforeEach(() => {
     fileContents.clear();
 
-    absoluteFsAny.exists = async (filePath: string) =>
-      fileContents.has(normalize(filePath));
+    vi.spyOn(AbsoluteFS, 'exists').mockImplementation(
+      async (filePath: string) => fileContents.has(normalize(filePath)),
+    );
 
-    absoluteFsAny.read = async (filePath: string) => {
-      const normalized = normalize(filePath);
-      const content = fileContents.get(normalized);
-      if (!content) {
-        throw new Error(`File not found: ${filePath}`);
-      }
-      return content;
-    };
+    vi.spyOn(AbsoluteFS, 'read').mockImplementation(
+      async (filePath: string) => {
+        const content = fileContents.get(normalize(filePath));
+        if (!content) {
+          throw new Error(`File not found: ${filePath}`);
+        }
+        return content;
+      },
+    );
   });
 
   afterEach(() => {
-    absoluteFsAny.exists = originalExists;
-    absoluteFsAny.read = originalRead;
+    vi.restoreAllMocks();
   });
 
   it('loads settings and prompts from the given definition path', async () => {

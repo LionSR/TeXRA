@@ -80,21 +80,18 @@ const bannerFrameStyles: CSSResult = css`
   }
 `;
 
-const bannerVisibilityStyles: CSSResult = css`
+export const bannerStyles: CSSResult = css`
   :host {
     display: block;
   }
 
-  /* Stateful banners reflect a boolean \`visible\` property to the host. Keep
-     this separate from the reusable frame styles so ordinary settings tabs can
-     use the same banner chrome without disappearing. */
+  /* Stateful banners reflect a boolean \`visible\` property to the host. The
+     frame styles stay separate so ordinary settings tabs can use the same
+     banner chrome without disappearing. */
   :host(:not([visible])) {
     display: none;
   }
-`;
 
-export const bannerStyles: CSSResult = css`
-  ${bannerVisibilityStyles}
   ${bannerFrameStyles}
 `;
 

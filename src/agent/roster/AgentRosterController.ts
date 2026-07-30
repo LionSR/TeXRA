@@ -161,10 +161,15 @@ export class AgentRosterController<
 > {
   constructor(private readonly deps: AgentRosterControllerDeps<Entry>) {}
 
+  /** Host-supplied presets, added to the built-ins by {@link allPresets}. */
+  private extraPresets(): readonly AgentModePreset[] {
+    return this.deps.getPresets?.() ?? [];
+  }
+
   getSelection(): AgentRosterSelection {
     return readAgentRosterSelection(
       this.deps.workspaceState,
-      this.deps.getPresets?.() ?? [],
+      this.extraPresets(),
     );
   }
 
@@ -182,7 +187,7 @@ export class AgentRosterController<
     const identifiers = selectedIdentifiers(
       effective,
       category,
-      this.deps.getPresets?.() ?? [],
+      this.extraPresets(),
     );
     if (identifiers === undefined) return this.deps.getAgents(category);
 
@@ -202,7 +207,7 @@ export class AgentRosterController<
   snapshot(): AgentRosterSnapshot<Entry> {
     const selection = this.getSelection();
     const effectiveSelection = this.resolveEffectiveSelection(selection);
-    const presets = this.deps.getPresets?.() ?? [];
+    const presets = this.extraPresets();
     const unresolvedNames = (['workflow', 'toolUse'] as const).flatMap(
       (category) => {
         const identifiers = selectedIdentifiers(
@@ -234,7 +239,7 @@ export class AgentRosterController<
     const identifiers = selectedIdentifiers(
       selection,
       category,
-      this.deps.getPresets?.() ?? [],
+      this.extraPresets(),
     );
     if (identifiers === undefined) return undefined;
 
@@ -274,7 +279,7 @@ export class AgentRosterController<
     }
     if (
       selection.kind === 'team' &&
-      !allPresets(this.deps.getPresets?.() ?? []).some(
+      !allPresets(this.extraPresets()).some(
         (preset) => preset.id === selection.teamId,
       )
     ) {
@@ -293,7 +298,7 @@ export class AgentRosterController<
       teamId = undefined;
     }
     if (!teamId) return undefined;
-    return allPresets(this.deps.getPresets?.() ?? []).some(
+    return allPresets(this.extraPresets()).some(
       (preset) => preset.id === teamId,
     )
       ? undefined
@@ -394,7 +399,7 @@ export class AgentRosterController<
   }
 
   async setTeam(teamId: string): Promise<void> {
-    const preset = allPresets(this.deps.getPresets?.() ?? []).find(
+    const preset = allPresets(this.extraPresets()).find(
       (candidate) => candidate.id === teamId,
     );
     if (!preset)

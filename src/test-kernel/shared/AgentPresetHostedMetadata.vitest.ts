@@ -34,8 +34,8 @@ describe('parseAgentModePresets icon degradation', () => {
     vi.restoreAllMocks();
   });
 
-  const customPreset = (icon: string): unknown => ({
-    id: 'custom-1',
+  const customPreset = (icon: string, id = 'custom-1'): unknown => ({
+    id,
     name: 'My Team',
     description: 'Hand-saved roster',
     icon,
@@ -65,7 +65,7 @@ describe('parseAgentModePresets icon degradation', () => {
 
     const presets = parseAgentModePresets([
       customPreset('rocket'),
-      { ...(customPreset('bogus') as object), id: 'custom-2' },
+      customPreset('bogus', 'custom-2'),
     ]);
 
     expect(presets.map((preset) => preset.id)).toEqual([

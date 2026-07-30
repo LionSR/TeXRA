@@ -12,16 +12,6 @@ import { AbsoluteFS } from '@utils/files';
 import { extractScratchpad } from '@utils/text/xmlExtraction';
 
 /**
- * Result of preparing file content for a model handler.
- */
-interface PreparedFileContent {
-  /** The cleaned file content */
-  fileContent: string;
-  /** Whether a scratchpad was found and logged */
-  hadScratchpad: boolean;
-}
-
-/**
  * Prepares existing output file content for model processing.
  *
  * This is the shared implementation for the pattern that appears in:
@@ -39,23 +29,20 @@ interface PreparedFileContent {
  * @param outputLocation - Location of the output file
  * @param workspaceState - Workspace state to update with file content
  * @param logger - Logger for scratchpad output
- * @returns The prepared file content and metadata
+ * @returns The prepared file content
  */
 export async function prepareExistingOutputContent(
   outputLocation: FileLocation,
   workspaceState: AgentWorkspaceState,
   logger: AgentTrace,
   postProcessResponse: ResponseTextPostProcessor,
-): Promise<PreparedFileContent> {
-  // Read and clean the file content
-  let content = await AbsoluteFS.read(outputLocation.absolutePath);
-  content = postProcessResponse(content);
+): Promise<{ fileContent: string }> {
+  const raw = await AbsoluteFS.read(outputLocation.absolutePath);
+  const content = postProcessResponse(raw);
 
-  // Extract any existing scratchpad content and log it
   const scratchpad = await extractScratchpad(content, 'scratchpad');
   if (scratchpad) logger.domain({ key: 'scratchpad', text: scratchpad });
 
-  // Write cleaned content back to file
   await AbsoluteFS.write(outputLocation.absolutePath, content);
 
   // Update workspace state - critical for multi-round agents on resume
@@ -63,8 +50,5 @@ export async function prepareExistingOutputContent(
   workspaceState.assembly.accumulatedOutput = content;
   workspaceState.assembly.lastResponse = content;
 
-  return {
-    fileContent: content,
-    hadScratchpad: Boolean(scratchpad),
-  };
+  return { fileContent: content };
 }

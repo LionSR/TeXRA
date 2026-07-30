@@ -117,11 +117,11 @@ export function createStartupTeamPanel({
   let step: TourStep = 'work';
   let chosenPresetId: string | undefined;
 
-  const closePanel = (): void => {
+  function closePanel(): void {
     visible = false;
     if (hideAtStartup) postDismissed();
     onVisibilityChanged();
-  };
+  }
 
   function goTo(next: TourStep): void {
     step = next;

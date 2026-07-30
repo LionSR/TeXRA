@@ -47,7 +47,6 @@ vi.mock('@agent/storage/executionLease', () => ({
 import { noopTrace } from '@agent/trace';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import {
   executeAgent,
   resumeToolUseFromResumeData,
@@ -63,11 +62,7 @@ import { createTestSession } from '@test/support/sessionTestUtils';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 
 // Local file imports
-import {
-  createRecordingHost,
-  recordSessionEvents,
-  sessionFactPayloads,
-} from '../progressTestUtils';
+import { recordSessionEvents, sessionFactPayloads } from '../progressTestUtils';
 
 const LAUNCH_FAILURE = new Error('stop after stream activation');
 const MODEL_HANDLER_KEY = 'ModelHandlerOpenAIResponse' as const;

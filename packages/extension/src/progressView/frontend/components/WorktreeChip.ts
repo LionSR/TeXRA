@@ -221,7 +221,7 @@ export class WorktreeChip extends LitElement {
   }
 
   private renderPRDetails(pr: NonNullable<WorktreeInfo['pr']>): TemplateResult {
-    const ci = pr.ciState ?? WORKTREE_CI_STATE.UNKNOWN;
+    const ci = pr.ciState;
     const showStats = pr.additions != null || pr.deletions != null;
     return html`
       <span class="pr-number">#${pr.number}</span>
@@ -249,7 +249,7 @@ export class WorktreeChip extends LitElement {
           : nothing
       }
       ${
-        pr.ciState
+        ci
           ? html`${waIcon(CI_ICON[ci], { id: 'worktree-ci-status', className: `ci-icon ci-${ci}`, label: CI_LABEL[ci] })}
               <wa-tooltip for="worktree-ci-status">${CI_LABEL[ci]}</wa-tooltip>`
           : nothing

@@ -6,7 +6,7 @@
 // follow-up path.
 
 import pDefer from 'p-defer';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type {
   ChildRunPorts,
@@ -113,14 +113,7 @@ async function* streamMessages(messages: unknown[]): AsyncGenerator<unknown> {
 }
 
 describe('claude_agent tool — resume fallback for a torn-down registry', () => {
-  afterEach(() => {
-    vi.clearAllMocks();
-    // Clear anything a test registered into the real (module-level) registry.
-    ClaudeAgentSessions.releaseByExecutionId(executionId);
-    ClaudeAgentSessions.release('stale-session');
-  });
-
-  function setupCommonMocks(): void {
+  beforeEach(() => {
     mocks.startChildRunLoop.mockReset();
     mocks.startChildRunLoop.mockReturnValue(completedChildRunLoop());
     mocks.buildClaudeAgentEnv.mockReset();
@@ -146,10 +139,16 @@ describe('claude_agent tool — resume fallback for a torn-down registry', () =>
     mocks.currentSession.mockReturnValue({
       followUps: { acquire: () => ({ enqueue: vi.fn() }) },
     });
-  }
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    // Clear anything a test registered into the real (module-level) registry.
+    ClaudeAgentSessions.releaseByExecutionId(executionId);
+    ClaudeAgentSessions.release('stale-session');
+  });
 
   it('resolves the Claude binary before child creation and then tracks startup synchronously', async () => {
-    setupCommonMocks();
     const binaryPath = pDefer<string | undefined>();
     const executions = { getAgentHandleByStream: () => undefined } as any;
     const startupEvents: string[] = [];
@@ -205,7 +204,6 @@ describe('claude_agent tool — resume fallback for a torn-down registry', () =>
   });
 
   it('does not create an execution when Claude binary discovery fails', async () => {
-    setupCommonMocks();
     mocks.findClaudeBinaryPath.mockRejectedValue(
       new Error('Claude binary lookup failed'),
     );
@@ -221,7 +219,6 @@ describe('claude_agent tool — resume fallback for a torn-down registry', () =>
   });
 
   it('logs a detached run-loop rejection through the child trace', async () => {
-    setupCommonMocks();
     const childStream = createFakeAgentCliChildStream(childStreamId);
     const error = vi
       .spyOn(childStream.logger, 'error')
@@ -244,7 +241,6 @@ describe('claude_agent tool — resume fallback for a torn-down registry', () =>
   });
 
   it('seeds the fallback launch with the stale session_id so the SDK resumes from disk', async () => {
-    setupCommonMocks();
     mocks.query.mockReturnValue(
       streamMessages([
         {
@@ -277,7 +273,6 @@ describe('claude_agent tool — resume fallback for a torn-down registry', () =>
   });
 
   it('launches one fallback loop when concurrent calls use the same stale session_id', async () => {
-    setupCommonMocks();
     const envStarted = pDefer<void>();
     const envReady = pDefer<NodeJS.ProcessEnv>();
     const executions = { getAgentHandleByStream: () => undefined } as any;
@@ -331,7 +326,6 @@ describe('claude_agent tool — resume fallback for a torn-down registry', () =>
   });
 
   it('exposes an in-flight initial turn to the shared shutdown drain', async () => {
-    setupCommonMocks();
     const interrupt = vi.fn();
     let strategy: ChildRunStrategy<unknown> | undefined;
     mocks.startChildRunLoop.mockImplementation(
@@ -356,7 +350,6 @@ describe('claude_agent tool — resume fallback for a torn-down registry', () =>
   });
 
   it('lets a waiting caller own the fallback after the first launch fails', async () => {
-    setupCommonMocks();
     const firstEnvStarted = pDefer<void>();
     const firstEnv = pDefer<NodeJS.ProcessEnv>();
     let strategy: ChildRunStrategy<unknown> | undefined;
@@ -399,7 +392,6 @@ describe('claude_agent tool — resume fallback for a torn-down registry', () =>
   });
 
   it('still enqueues a follow-up (no fresh launch) when session_id IS active in the registry', async () => {
-    setupCommonMocks();
     ClaudeAgentSessions.register('sess-resumed', {
       childStreamId,
       parentStreamId,

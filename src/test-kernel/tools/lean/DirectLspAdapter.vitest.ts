@@ -9,7 +9,7 @@ import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createDirectLspLeanAdapter } from '@tools/lean/direct/directLspAdapter';
 import { fileUriToPath, LeanSession } from '@tools/lean/direct/leanSession';
@@ -89,8 +89,6 @@ let projectRoot: string;
 let fakeLakePath: string;
 let countPath: string;
 let filePath: string;
-let previousCountEnv: string | undefined;
-let previousSuppressDiagnosticsEnv: string | undefined;
 
 beforeEach(() => {
   tempRoot = mkdtempSync(path.join(tmpdir(), 'texra-direct-lsp-'));
@@ -103,25 +101,12 @@ beforeEach(() => {
   writeFileSync(fakeLakePath, FAKE_LAKE);
   chmodSync(fakeLakePath, 0o755);
   countPath = path.join(tempRoot, 'starts.txt');
-  previousCountEnv = process.env.TEXRA_FAKE_LEAN_COUNT;
-  process.env.TEXRA_FAKE_LEAN_COUNT = countPath;
-  previousSuppressDiagnosticsEnv =
-    process.env.TEXRA_FAKE_LEAN_SUPPRESS_DIAGNOSTICS;
-  delete process.env.TEXRA_FAKE_LEAN_SUPPRESS_DIAGNOSTICS;
+  vi.stubEnv('TEXRA_FAKE_LEAN_COUNT', countPath);
+  vi.stubEnv('TEXRA_FAKE_LEAN_SUPPRESS_DIAGNOSTICS', undefined);
 });
 
 afterEach(() => {
-  if (previousCountEnv == null) {
-    delete process.env.TEXRA_FAKE_LEAN_COUNT;
-  } else {
-    process.env.TEXRA_FAKE_LEAN_COUNT = previousCountEnv;
-  }
-  if (previousSuppressDiagnosticsEnv == null) {
-    delete process.env.TEXRA_FAKE_LEAN_SUPPRESS_DIAGNOSTICS;
-  } else {
-    process.env.TEXRA_FAKE_LEAN_SUPPRESS_DIAGNOSTICS =
-      previousSuppressDiagnosticsEnv;
-  }
+  vi.unstubAllEnvs();
   rmSync(tempRoot, { recursive: true, force: true });
 });
 
@@ -155,7 +140,7 @@ describe('createDirectLspLeanAdapter', () => {
   });
 
   fakeLakeIt('settles diagnostic waiters during disposal', async () => {
-    process.env.TEXRA_FAKE_LEAN_SUPPRESS_DIAGNOSTICS = '1';
+    vi.stubEnv('TEXRA_FAKE_LEAN_SUPPRESS_DIAGNOSTICS', '1');
     const session = new LeanSession({
       workspaceRoot: projectRoot,
       lakeCommand: fakeLakePath,

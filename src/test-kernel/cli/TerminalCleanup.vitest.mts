@@ -29,6 +29,14 @@ vi.mock('node:fs', async (importOriginal) => ({
   writeSync: vi.fn(),
 }));
 
+const NO_TERMINAL_CAPABILITIES = {
+  kittyKeyboard: false,
+  graphemeClusters: false,
+  bracketedPaste: false,
+  oscColorReports: false,
+  discovered: false,
+};
+
 afterEach(() => {
   clearApprovals();
   resetCliState();
@@ -39,13 +47,7 @@ afterEach(() => {
   // clear it explicitly or a later test's `not.toHaveBeenCalled()` sees an
   // earlier test's call.
   vi.mocked(writeSync).mockClear();
-  terminalCapabilities.set({
-    kittyKeyboard: false,
-    graphemeClusters: false,
-    bracketedPaste: false,
-    oscColorReports: false,
-    discovered: false,
-  });
+  terminalCapabilities.set(NO_TERMINAL_CAPABILITIES);
 });
 
 describe('terminalTitleText', () => {
@@ -79,9 +81,7 @@ describe('terminalTitleText', () => {
 describe('installTerminalTitleUpdates', () => {
   const enableOscTitles = (): void => {
     terminalCapabilities.set({
-      kittyKeyboard: false,
-      graphemeClusters: false,
-      bracketedPaste: false,
+      ...NO_TERMINAL_CAPABILITIES,
       oscColorReports: true,
       discovered: true,
     });

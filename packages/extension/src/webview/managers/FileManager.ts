@@ -103,12 +103,6 @@ const UPDATE_TO_SET_COMMAND = {
   [MAIN_VIEW_COMMANDS.UPDATE_OUTPUT_FILES]: MAIN_VIEW_COMMANDS.SET_OUTPUT_FILES,
 } as const satisfies Record<UpdateFilesMessage['command'], SetFilesCommand>;
 
-type FileUpdateOptions = {
-  notifyWhenEmpty?: boolean;
-  /** Only meaningful for `fileType: 'Base'` — see `SET_BASE_FILE`. */
-  preserveBaseFile?: boolean;
-};
-
 export class FileManager extends BaseWebviewManager {
   protected readonly channel = CHANNEL;
 
@@ -136,14 +130,12 @@ export class FileManager extends BaseWebviewManager {
     const files = message.baseFile
       ? await getFileLister().listEditedFiles(getFileStem(message.baseFile))
       : [];
-    this.postFileUpdate('Edited', files, {
-      notifyWhenEmpty: Boolean(message.notifyWhenEmpty),
-    });
+    this.postEditedFiles(files, Boolean(message.notifyWhenEmpty));
   }
 
   async handleRequestBaseFile(message: RequestBaseFileMessage): Promise<void> {
     const files = await getFileLister().list('input');
-    this.postFileUpdate('Base', files, {
+    this.postBaseFiles(files, {
       notifyWhenEmpty: Boolean(message.notifyWhenEmpty),
       preserveBaseFile: message.preserveBaseFile,
     });
@@ -194,7 +186,7 @@ export class FileManager extends BaseWebviewManager {
   // refresh the still-single-slot base-file dropdown and the empty-workspace banner.
   async handleRefreshAllFiles(): Promise<void> {
     const inputFiles = await getFileLister().list('input');
-    this.postBaseFileSelect(inputFiles);
+    this.postBaseFiles(inputFiles, { preserveBaseFile: true });
     this.postGettingStartedBanner(inputFiles.length === 0);
   }
 
@@ -274,12 +266,12 @@ export class FileManager extends BaseWebviewManager {
   }
 
   private async maybeSelectCommitFromDiffFile(filePath: string): Promise<void> {
-    const fileName = path.basename(filePath);
     const parsed = parseVersionControlDiffFilename(filePath);
     if (!parsed) {
       return;
     }
 
+    const fileName = path.basename(filePath);
     const { commitHash } = parsed;
     const commitLabel = await vscode.commands.executeCommand<string | null>(
       'texra.findCommitInHistory',
@@ -306,7 +298,7 @@ export class FileManager extends BaseWebviewManager {
   async handleAddOpenedFiles(
     fileType: ExtendedDocumentFileType,
   ): Promise<void> {
-    const openedFiles = await this.getOpenedFiles();
+    const openedFiles = this.getOpenedFiles();
     const allowedExtensions = new Set(
       getIncludedExtensions(fileType as ExtensionCategory).map(
         normalizeMainViewFileExtension,
@@ -392,26 +384,25 @@ export class FileManager extends BaseWebviewManager {
     }
   }
 
-  private postFileUpdate(
-    fileType: 'Edited' | 'Base',
-    files: string[],
-    options: FileUpdateOptions = {},
-  ): void {
-    if (options.notifyWhenEmpty && files.length === 0) {
-      logger.debug(
-        CHANNEL,
-        `No ${fileType.toLowerCase()} files were found during refresh.`,
-      );
-    }
-    if (fileType === 'Base') {
-      this.postMessage({
-        command: MAIN_VIEW_COMMANDS.SET_BASE_FILE,
-        files,
-        ...(options.preserveBaseFile ? { preserveBaseFile: true } : {}),
-      });
-      return;
+  private postEditedFiles(files: string[], notifyWhenEmpty: boolean): void {
+    if (notifyWhenEmpty && files.length === 0) {
+      logger.debug(CHANNEL, 'No edited files were found during refresh.');
     }
     this.postMessage({ command: MAIN_VIEW_COMMANDS.SET_EDITED_FILE, files });
+  }
+
+  private postBaseFiles(
+    files: string[],
+    options: { notifyWhenEmpty?: boolean; preserveBaseFile?: boolean } = {},
+  ): void {
+    if (options.notifyWhenEmpty && files.length === 0) {
+      logger.debug(CHANNEL, 'No base files were found during refresh.');
+    }
+    this.postMessage({
+      command: MAIN_VIEW_COMMANDS.SET_BASE_FILE,
+      files,
+      ...(options.preserveBaseFile ? { preserveBaseFile: true } : {}),
+    });
   }
 
   /** Post show/hide getting started banner based on condition and setting */
@@ -425,11 +416,7 @@ export class FileManager extends BaseWebviewManager {
     });
   }
 
-  private postBaseFileSelect(baseFiles: string[]): void {
-    this.postFileUpdate('Base', baseFiles, { preserveBaseFile: true });
-  }
-
-  private async getOpenedFiles(): Promise<string[]> {
+  private getOpenedFiles(): string[] {
     if (!WorkspaceFS.getPath()) {
       logger.warn(CHANNEL, 'No workspace path found for opened files');
       return [];

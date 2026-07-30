@@ -99,7 +99,7 @@ const TOOL: ToolDefinition = {
 };
 
 function betasFrom(call: unknown): string[] {
-  return ((call as { betas?: string[] }).betas ?? []) as string[];
+  return (call as { betas?: string[] }).betas ?? [];
 }
 
 function firstCompactionCacheControlFrom(call: unknown): unknown {

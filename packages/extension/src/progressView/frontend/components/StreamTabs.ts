@@ -148,6 +148,7 @@ export class StreamTab extends LitElement {
     const tooltip = this._tooltip;
     const streamDecorator = this._streamDecorator;
     const hasChildren = this.childCount > 0 && !this.compact;
+    const showCompactChildHint = this.childCount > 0 && this.compact;
     const childStreamLabel = formatResultCount(this.childCount, 'child stream');
     const childToggleLabel = this.expanded
       ? 'Collapse child streams'
@@ -194,13 +195,17 @@ export class StreamTab extends LitElement {
             <span id="stream-tab-title" class="tab-title"
               >${
                 stream.parentStreamId
-                  ? html`${waIcon('chevron-right', { className: 'nested-stream-icon' })}`
+                  ? waIcon('chevron-right', { className: 'nested-stream-icon' })
                   : nothing
               }${stream.label || stream.name}</span
             >
             ${
-              this.childCount > 0 && this.compact
-                ? html`${waIcon('chevron-right', { id: 'stream-tab-compact-children', className: 'compact-subagent-hint', label: childStreamLabel })}`
+              showCompactChildHint
+                ? waIcon('chevron-right', {
+                    id: 'stream-tab-compact-children',
+                    className: 'compact-subagent-hint',
+                    label: childStreamLabel,
+                  })
                 : nothing
             }
           </div>
@@ -254,7 +259,7 @@ export class StreamTab extends LitElement {
           }
         </button>
         ${
-          this.childCount > 0 && this.compact
+          showCompactChildHint
             ? html`<wa-tooltip for="stream-tab-compact-children"
                 >${childStreamLabel}</wa-tooltip
               >`

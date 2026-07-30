@@ -14,7 +14,10 @@ import { commonViewStyles, designTokens } from '@shared/styles';
 import { getLightweightMd } from '@shared/highlighting/lightweightMd';
 import { markdownStyles } from '@shared/styles/markdownStyles';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
-import { renderIconActionButton } from '@shared/wa/actionButtons';
+import {
+  renderIconActionButton,
+  type IconActionButtonOptions,
+} from '@shared/wa/actionButtons';
 import { metaStripStyles, renderDotMeta } from '@shared/wa/metaStrip';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
@@ -47,6 +50,82 @@ const HISTORY_ACTION_COMMANDS: Record<string, string> = {
   'export-tex': SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_TEX,
   'export-html': SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_HTML,
 };
+
+/** Per-item action buttons, in render order. */
+const HISTORY_ACTION_BUTTONS: ReadonlyArray<{
+  readonly button: IconActionButtonOptions;
+  /**
+   * Hidden when the host's registry declares this settings-view command
+   * unsupported, instead of leaving a control visible that can only produce
+   * an unavailable-command toast.
+   */
+  readonly requiresCommand?: string;
+  /** Rendered only for tool-use runs. */
+  readonly toolUseOnly?: boolean;
+}> = [
+  {
+    button: {
+      id: 'history-delete-button',
+      icon: 'trash',
+      label: 'Delete',
+      tooltip: 'Delete this history item',
+      action: 'delete',
+    },
+  },
+  {
+    button: {
+      id: 'history-setup-button',
+      icon: 'reply',
+      label: 'Setup',
+      tooltip: "Restore this run's setup",
+      action: 'restore',
+    },
+    requiresCommand: SETTINGS_VIEW_COMMANDS.RESTORE_AGENT,
+  },
+  {
+    button: {
+      id: 'history-rerun-button',
+      icon: 'rotate-right',
+      label: 'Rerun',
+      tooltip: 'Rerun this task',
+      action: 'rerun',
+    },
+    requiresCommand: SETTINGS_VIEW_COMMANDS.RERUN_AGENT,
+  },
+  {
+    button: {
+      id: 'history-export-md-button',
+      icon: 'file-lines',
+      label: 'Export Markdown',
+      tooltip: 'Export as Markdown',
+      action: 'export-md',
+    },
+    requiresCommand: SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_MD,
+    toolUseOnly: true,
+  },
+  {
+    button: {
+      id: 'history-export-pdf-button',
+      icon: 'file-pdf',
+      label: 'Export PDF',
+      tooltip: 'Export as LaTeX/PDF',
+      action: 'export-tex',
+    },
+    requiresCommand: SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_TEX,
+    toolUseOnly: true,
+  },
+  {
+    button: {
+      id: 'history-export-html-button',
+      icon: 'globe',
+      label: 'Export HTML',
+      tooltip: 'Export as shareable HTML webpage',
+      action: 'export-html',
+    },
+    requiresCommand: SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_HTML,
+    toolUseOnly: true,
+  },
+];
 
 @customElement('history-item')
 export class HistoryItemElement extends LitElement {
@@ -341,89 +420,15 @@ export class HistoryItemElement extends LitElement {
             class="history-actions action-button-group"
             @click=${this.handleActionClick}
           >
-            ${renderIconActionButton({
-              id: 'history-delete-button',
-              icon: 'trash',
-              label: 'Delete',
-              tooltip: 'Delete this history item',
-              action: 'delete',
-            })}
-            ${
-              isKnownUnsupported(
-                this.unsupportedCommands,
-                SETTINGS_VIEW_COMMANDS.RESTORE_AGENT,
-              )
-                ? nothing
-                : renderIconActionButton({
-                    id: 'history-setup-button',
-                    icon: 'reply',
-                    label: 'Setup',
-                    tooltip: "Restore this run's setup",
-                    action: 'restore',
-                  })
-            }
-            ${
-              isKnownUnsupported(
-                this.unsupportedCommands,
-                SETTINGS_VIEW_COMMANDS.RERUN_AGENT,
-              )
-                ? nothing
-                : renderIconActionButton({
-                    id: 'history-rerun-button',
-                    icon: 'rotate-right',
-                    label: 'Rerun',
-                    tooltip: 'Rerun this task',
-                    action: 'rerun',
-                  })
-            }
-            ${
-              presentation.isToolUse
-                ? html`
-                    ${
-                      isKnownUnsupported(
-                        this.unsupportedCommands,
-                        SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_MD,
-                      )
-                        ? nothing
-                        : renderIconActionButton({
-                            id: 'history-export-md-button',
-                            icon: 'file-lines',
-                            label: 'Export Markdown',
-                            tooltip: 'Export as Markdown',
-                            action: 'export-md',
-                          })
-                    }
-                    ${
-                      isKnownUnsupported(
-                        this.unsupportedCommands,
-                        SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_TEX,
-                      )
-                        ? nothing
-                        : renderIconActionButton({
-                            id: 'history-export-pdf-button',
-                            icon: 'file-pdf',
-                            label: 'Export PDF',
-                            tooltip: 'Export as LaTeX/PDF',
-                            action: 'export-tex',
-                          })
-                    }
-                    ${
-                      isKnownUnsupported(
-                        this.unsupportedCommands,
-                        SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_HTML,
-                      )
-                        ? nothing
-                        : renderIconActionButton({
-                            id: 'history-export-html-button',
-                            icon: 'globe',
-                            label: 'Export HTML',
-                            tooltip: 'Export as shareable HTML webpage',
-                            action: 'export-html',
-                          })
-                    }
-                  `
-                : nothing
-            }
+            ${HISTORY_ACTION_BUTTONS.filter(
+              (entry) =>
+                (!entry.toolUseOnly || presentation.isToolUse) &&
+                (entry.requiresCommand === undefined ||
+                  !isKnownUnsupported(
+                    this.unsupportedCommands,
+                    entry.requiresCommand,
+                  )),
+            ).map((entry) => renderIconActionButton(entry.button))}
           </div>
         </div>
         ${this.renderInstructionBlock(

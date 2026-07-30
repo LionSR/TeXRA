@@ -9,11 +9,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { CODEX_DEVICE_VERIFICATION_URL } from './codexConstants';
 import { type CodexSessionCoordinator } from './CodexSessionCoordinator';
 import { CodexAuthError, type CodexSession } from './codexSessionTypes';
-import {
-  deviceUserCode,
-  pollDeviceToken,
-  requestDeviceUserCode,
-} from './codexOAuthClient';
+import { pollDeviceToken, requestDeviceUserCode } from './codexOAuthClient';
 
 const DEVICE_TIMEOUT_MS = 15 * 60 * 1000;
 
@@ -41,7 +37,7 @@ export async function loginWithDeviceCode(
   options: CodexDeviceLoginOptions,
 ): Promise<CodexSession> {
   const userCodeResponse = await requestDeviceUserCode(options.signal);
-  const userCode = deviceUserCode(userCodeResponse);
+  const userCode = userCodeResponse.user_code ?? userCodeResponse.usercode;
   if (!userCode) {
     throw new Error('ChatGPT did not return a device code. Try again.');
   }

@@ -375,13 +375,12 @@ async function assembleAgentLaunchContext(
   // Tell the user when attached images will be dropped because the chosen model
   // lacks vision. The downstream initializeMessages/addMediaToUserMessage guards
   // drop them silently otherwise.
-  const visionMediaCount = countMediaFilesNeedingVision(config.mediaFiles);
   if (
     shouldWarnMediaNeedsVision(config.mediaFiles, modelHandler.capabilities)
   ) {
     agentLogger.warn(
       formatMediaNeedsVisionWarning(
-        visionMediaCount,
+        countMediaFilesNeedingVision(config.mediaFiles),
         'attached',
         fullConfig.model,
       ),

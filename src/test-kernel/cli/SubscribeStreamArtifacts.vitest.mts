@@ -20,10 +20,12 @@ const STREAM_B = 'workflow#b' as StreamTabId;
 
 function snapshot(
   streamId: StreamTabId,
-  artifacts: Pick<
-    StreamSnapshot,
-    'outputFilesByRound' | 'missingOutputsByRound' | 'compileFailuresByRound'
-  >,
+  artifacts: Partial<
+    Pick<
+      StreamSnapshot,
+      'outputFilesByRound' | 'missingOutputsByRound' | 'compileFailuresByRound'
+    >
+  > = {},
 ): StreamSnapshot {
   return {
     schemaVersion: 1,
@@ -34,7 +36,33 @@ function snapshot(
     runUsage: {},
     conversationProgress: { toolCallCount: 0 },
     subagents: [],
+    outputFilesByRound: {},
+    missingOutputsByRound: {},
+    compileFailuresByRound: {},
     ...artifacts,
+  };
+}
+
+function stubReader(
+  read: (streamId: StreamTabId) => Promise<StreamSnapshot>,
+): StreamArtifactReader {
+  return {
+    preload: vi.fn(async () => undefined),
+    read: vi.fn(read),
+  } as StreamArtifactReader;
+}
+
+function deferredReader(): {
+  reader: StreamArtifactReader;
+  resolveRead: (value: StreamSnapshot) => void;
+} {
+  let resolveRead: (value: StreamSnapshot) => void = () => undefined;
+  const readPromise = new Promise<StreamSnapshot>((resolve) => {
+    resolveRead = resolve;
+  });
+  return {
+    reader: stubReader(() => readPromise),
+    resolveRead: (value) => resolveRead(value),
   };
 }
 
@@ -49,14 +77,7 @@ afterEach(() => {
 
 describe('subscribeStreamArtifacts', () => {
   it('preloads the focused stream and lets newer live rounds win', async () => {
-    let resolveRead: (value: StreamSnapshot) => void = () => undefined;
-    const readPromise = new Promise<StreamSnapshot>((resolve) => {
-      resolveRead = resolve;
-    });
-    const reader = {
-      preload: vi.fn(async () => undefined),
-      read: vi.fn(() => readPromise),
-    } as StreamArtifactReader;
+    const { reader, resolveRead } = deferredReader();
 
     patchStream(STREAM_A, (slice) => slice);
     activeStreamId.set(STREAM_A);
@@ -69,9 +90,7 @@ describe('subscribeStreamArtifacts', () => {
     }));
     resolveRead(
       snapshot(STREAM_A, {
-        outputFilesByRound: {},
         missingOutputsByRound: { 0: ['stale.tex'], 1: ['disk.tex'] },
-        compileFailuresByRound: {},
       }),
     );
     await flushSignals();
@@ -85,14 +104,7 @@ describe('subscribeStreamArtifacts', () => {
   });
 
   it('does not restore disk warnings after a live clear during hydration', async () => {
-    let resolveRead: (value: StreamSnapshot) => void = () => undefined;
-    const readPromise = new Promise<StreamSnapshot>((resolve) => {
-      resolveRead = resolve;
-    });
-    const reader = {
-      preload: vi.fn(async () => undefined),
-      read: vi.fn(() => readPromise),
-    } as StreamArtifactReader;
+    const { reader, resolveRead } = deferredReader();
     const hub = new SessionEventHub();
 
     patchStream(STREAM_A, (slice) => ({
@@ -113,9 +125,7 @@ describe('subscribeStreamArtifacts', () => {
     });
     resolveRead(
       snapshot(STREAM_A, {
-        outputFilesByRound: {},
         missingOutputsByRound: { 0: ['stale-disk.tex'] },
-        compileFailuresByRound: {},
       }),
     );
     await flushSignals();
@@ -130,20 +140,9 @@ describe('subscribeStreamArtifacts', () => {
     const readA = new Promise<StreamSnapshot>((resolve) => {
       resolveA = resolve;
     });
-    const reader = {
-      preload: vi.fn(async () => undefined),
-      read: vi.fn((streamId: StreamTabId) =>
-        streamId === STREAM_A
-          ? readA
-          : Promise.resolve(
-              snapshot(STREAM_B, {
-                outputFilesByRound: {},
-                missingOutputsByRound: {},
-                compileFailuresByRound: {},
-              }),
-            ),
-      ),
-    } as StreamArtifactReader;
+    const reader = stubReader((streamId) =>
+      streamId === STREAM_A ? readA : Promise.resolve(snapshot(STREAM_B)),
+    );
 
     activeStreamId.set(STREAM_A);
     const dispose = subscribeStreamArtifacts(reader);
@@ -152,9 +151,7 @@ describe('subscribeStreamArtifacts', () => {
     await flushSignals();
     resolveA(
       snapshot(STREAM_A, {
-        outputFilesByRound: {},
         missingOutputsByRound: { 0: ['late.tex'] },
-        compileFailuresByRound: {},
       }),
     );
     await flushSignals();
@@ -166,22 +163,13 @@ describe('subscribeStreamArtifacts', () => {
 
   it('discards the first read when a completed stream is refocused', async () => {
     const pendingA: Array<(value: StreamSnapshot) => void> = [];
-    const reader = {
-      preload: vi.fn(async () => undefined),
-      read: vi.fn((streamId: StreamTabId) =>
-        streamId === STREAM_A
-          ? new Promise<StreamSnapshot>((resolve) => {
-              pendingA.push(resolve);
-            })
-          : Promise.resolve(
-              snapshot(STREAM_B, {
-                outputFilesByRound: {},
-                missingOutputsByRound: {},
-                compileFailuresByRound: {},
-              }),
-            ),
-      ),
-    } as StreamArtifactReader;
+    const reader = stubReader((streamId) =>
+      streamId === STREAM_A
+        ? new Promise<StreamSnapshot>((resolve) => {
+            pendingA.push(resolve);
+          })
+        : Promise.resolve(snapshot(STREAM_B)),
+    );
 
     patchStream(STREAM_A, (slice) => ({ ...slice }));
     activeStreamId.set(STREAM_A);
@@ -200,9 +188,7 @@ describe('subscribeStreamArtifacts', () => {
 
     resolveStale(
       snapshot(STREAM_A, {
-        outputFilesByRound: {},
         missingOutputsByRound: { 0: ['stale.tex'] },
-        compileFailuresByRound: {},
       }),
     );
     await flushSignals();
@@ -210,9 +196,7 @@ describe('subscribeStreamArtifacts', () => {
 
     resolveFresh(
       snapshot(STREAM_A, {
-        outputFilesByRound: {},
         missingOutputsByRound: { 0: ['fresh.tex'] },
-        compileFailuresByRound: {},
       }),
     );
     await flushSignals();
@@ -227,14 +211,7 @@ describe('subscribeStreamArtifacts', () => {
       () => removeStream(STREAM_A),
       () => resetCliState(),
     ]) {
-      let resolveRead: (value: StreamSnapshot) => void = () => undefined;
-      const readPromise = new Promise<StreamSnapshot>((resolve) => {
-        resolveRead = resolve;
-      });
-      const reader = {
-        preload: vi.fn(async () => undefined),
-        read: vi.fn(() => readPromise),
-      } as StreamArtifactReader;
+      const { reader, resolveRead } = deferredReader();
 
       activeStreamId.set(STREAM_A);
       const dispose = subscribeStreamArtifacts(reader);
@@ -242,9 +219,7 @@ describe('subscribeStreamArtifacts', () => {
       retire();
       resolveRead(
         snapshot(STREAM_A, {
-          outputFilesByRound: {},
           missingOutputsByRound: { 0: ['late.tex'] },
-          compileFailuresByRound: {},
         }),
       );
       await flushSignals();

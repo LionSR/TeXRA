@@ -21,8 +21,8 @@ const AUDIO_MIME_TYPE_OVERRIDES: Readonly<Record<string, string>> = {
  */
 function getExtension(pathOrExtension: string): string {
   const normalized = normalizeFilePath(pathOrExtension);
-  const hasPathSeparator = normalized.includes('/');
-  const fileName = normalized.split('/').at(-1) ?? normalized;
+  const separatorIndex = normalized.lastIndexOf('/');
+  const fileName = normalized.slice(separatorIndex + 1);
 
   // Dotfile with no further dot (e.g. `.opus`) — treat the whole name as the extension.
   if (fileName.startsWith('.') && !fileName.slice(1).includes('.')) {
@@ -33,7 +33,7 @@ function getExtension(pathOrExtension: string): string {
   if (ext) return ext.toLowerCase();
 
   // Bare extension string like `opus` (no separator, no dot) → `.opus`.
-  if (!hasPathSeparator) return `.${fileName.toLowerCase()}`;
+  if (separatorIndex === -1) return `.${fileName.toLowerCase()}`;
 
   return '';
 }

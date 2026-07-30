@@ -1,34 +1,12 @@
 /**
- * Shared helpers for the `unset_api_key` tool.
- *
- * Provider validation and credential-cache refresh remain here so the tool's
- * execution path stays focused on the single delete operation.
+ * Credential-cache refresh shared by the `unset_api_key` tool and the
+ * extension's manual API-key commands.
  */
 
-import {
-  API_PROVIDERS,
-  invalidateApiKeyCache,
-  isApiProvider,
-  type ApiProvider,
-} from '@model/apiProviders';
+import { invalidateApiKeyCache } from '@model/apiProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
-import { ToolError } from '@shared/schemas/toolResult';
 
 import type { SetupPlatform } from './platform';
-
-/**
- * Trim and validate a provider name, throwing a `ToolError` with the supported
- * list when it isn't a known provider.
- */
-export function requireApiProvider(raw: string): ApiProvider {
-  const provider = raw.trim();
-  if (!isApiProvider(provider)) {
-    throw new ToolError(
-      `Unknown provider "${provider}". Supported: ${API_PROVIDERS.join(', ')}.`,
-    );
-  }
-  return provider;
-}
 
 /**
  * Drop cached model availability and key-origin lookups, then refresh the

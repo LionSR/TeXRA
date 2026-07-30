@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import type * as childProcess from 'node:child_process';
 
 const spawnSyncMock =
@@ -37,12 +38,9 @@ describe('pageStdout', () => {
     stdout = '';
     spawnSyncMock.mockReset();
     spawnSyncMock.mockReturnValue({ status: 0 });
-    stdoutSpy = vi
-      .spyOn(process.stdout, 'write')
-      .mockImplementation((chunk: unknown) => {
-        stdout += String(chunk);
-        return true;
-      }) as unknown as ReturnType<typeof vi.spyOn>;
+    stdoutSpy = spyOnStreamWrite(process.stdout, (chunk) => {
+      stdout += chunk;
+    });
   });
 
   afterEach(() => {

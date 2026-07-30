@@ -548,12 +548,10 @@ export async function resumeToolUseFromResumeData(
   resume: ToolUseResumeData,
   options: ResumeToolUseFromResumeDataOptions = {},
 ): Promise<AgentRuntimeFlowResult> {
-  const lease = options.canAcquireResumeLease
-    ? await acquireResumedExecutionLease(
-        resume.executionId,
-        options.canAcquireResumeLease,
-      )
-    : await acquireResumedExecutionLease(resume.executionId);
+  const lease = await acquireResumedExecutionLease(
+    resume.executionId,
+    options.canAcquireResumeLease,
+  );
   if (lease === 'cancelled') {
     throw new ResumeAdmissionCancelledError(resume.executionId);
   }

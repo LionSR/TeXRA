@@ -12,12 +12,10 @@ import {
 // Local imports - test DOM
 import { useLitComponentTestDom } from './litComponentTestUtils';
 
-async function loadShortcutsTab() {
-  return import('@settingsView/frontend/tabs/ShortcutsTab');
-}
-
 describe('shortcuts-tab', () => {
-  useLitComponentTestDom(loadShortcutsTab);
+  useLitComponentTestDom(
+    () => import('@settingsView/frontend/tabs/ShortcutsTab'),
+  );
 
   it('normalizes customizable desktop key chords', () => {
     expect(
@@ -76,7 +74,6 @@ describe('shortcuts-tab', () => {
     };
     const uninstall = installDesktopShortcutService(service);
     try {
-      await loadShortcutsTab();
       const element = document.createElement('shortcuts-tab');
       element.desktopHost = true;
       document.body.append(element);

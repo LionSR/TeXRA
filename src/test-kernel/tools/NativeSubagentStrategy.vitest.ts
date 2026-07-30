@@ -1,9 +1,5 @@
 // Test composition imports
-
-// Local imports
 import '@test/support/defaultSessionTestSetup';
-
-// Test support imports
 
 // Node imports
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -75,6 +71,28 @@ const ownedSessions = new Set<SessionHandle>();
 
 function fakePorts() {
   return { notify: vi.fn(), recordCost: vi.fn() };
+}
+
+/**
+ * Stubs the next `executeAgent` so it publishes `handle` through `onRun` and
+ * settles with a terminal tool-use turn. `afterRun` runs while the launch is
+ * still in flight.
+ */
+function mockLaunchPublishing(
+  handle: unknown,
+  outcome: 'cancelled' | 'completed',
+  afterRun?: () => void,
+): void {
+  mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
+    options.onRun?.(handle);
+    afterRun?.();
+    return {
+      category: 'toolUse',
+      outcome,
+      executionId: 'exec-1',
+      streamId: 'child-stream',
+    };
+  });
 }
 
 function baseParams(
@@ -254,15 +272,7 @@ describe('NativeSubagentStrategy', () => {
     turn.abort();
     const interrupt = vi.fn();
     const strategy = createNativeSubagentStrategy(baseParams());
-    mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
-      options.onRun?.({ interrupt } as never);
-      return {
-        category: 'toolUse',
-        outcome: 'cancelled',
-        executionId: 'exec-1',
-        streamId: 'child-stream',
-      };
-    });
+    mockLaunchPublishing({ interrupt }, 'cancelled');
 
     await strategy.launch(fakePorts(), turn);
 
@@ -277,15 +287,7 @@ describe('NativeSubagentStrategy', () => {
       ...baseParams(),
       signal: external.signal,
     });
-    mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
-      options.onRun?.({ interrupt } as never);
-      return {
-        category: 'toolUse',
-        outcome: 'cancelled',
-        executionId: 'exec-1',
-        streamId: 'child-stream',
-      };
-    });
+    mockLaunchPublishing({ interrupt }, 'cancelled');
 
     await strategy.launch(fakePorts(), new AbortController());
 
@@ -299,16 +301,7 @@ describe('NativeSubagentStrategy', () => {
       ...baseParams(),
       signal: controller.signal,
     });
-    mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
-      options.onRun?.({ interrupt } as never);
-      controller.abort();
-      return {
-        category: 'toolUse',
-        outcome: 'cancelled',
-        executionId: 'exec-1',
-        streamId: 'child-stream',
-      };
-    });
+    mockLaunchPublishing({ interrupt }, 'cancelled', () => controller.abort());
 
     await strategy.launch(fakePorts(), controller);
 
@@ -321,15 +314,7 @@ describe('NativeSubagentStrategy', () => {
     const removeListener = vi.spyOn(controller.signal, 'removeEventListener');
     const interrupt = vi.fn();
     const strategy = createNativeSubagentStrategy(baseParams());
-    mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
-      options.onRun?.({ interrupt } as never);
-      return {
-        category: 'toolUse',
-        outcome: 'completed',
-        executionId: 'exec-1',
-        streamId: 'child-stream',
-      };
-    });
+    mockLaunchPublishing({ interrupt }, 'completed');
 
     await strategy.launch(fakePorts(), controller);
     controller.abort();

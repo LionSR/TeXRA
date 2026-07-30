@@ -30,6 +30,8 @@ import {
 } from '@cli/chat/tui/input/inputKeys';
 
 const ESC = String.fromCharCode(27);
+const NEWLINE_MODE = { shiftEnter: 'newline' } as const;
+const PRESERVE_MODE = { shiftEnter: 'preserve' } as const;
 
 describe('CLI TUI text input editing', () => {
   it('recognizes normalized and raw Enter without stealing Ctrl-J', () => {
@@ -65,120 +67,99 @@ describe('CLI TUI text input editing', () => {
   });
 
   it('recognizes Kitty Enter sequences for raw re-dispatch', () => {
-    expect(
-      rewriteKittyEnterInput(`${ESC}[57414u`, { shiftEnter: 'newline' }),
-    ).toBe('\r');
-    expect(
-      rewriteKittyEnterInput(`${ESC}[57414;1u`, { shiftEnter: 'newline' }),
-    ).toBe('\r');
+    expect(rewriteKittyEnterInput(`${ESC}[57414u`, NEWLINE_MODE)).toBe('\r');
+    expect(rewriteKittyEnterInput(`${ESC}[57414;1u`, NEWLINE_MODE)).toBe('\r');
     // Ink reports the semicolon CSI-u spelling as shifted Return, so the raw
     // shim must not emit a second synthetic newline for that exact chunk.
     expect(
-      rewriteKittyEnterInput(`${ESC}[13;2u`, { shiftEnter: 'newline' }),
+      rewriteKittyEnterInput(`${ESC}[13;2u`, NEWLINE_MODE),
     ).toBeUndefined();
     // The colon spelling is not parsed by Ink; normalize it at the raw-event
     // layer so Shift+Enter still inserts a newline.
-    expect(
-      rewriteKittyEnterInput(`${ESC}[13:2u`, { shiftEnter: 'newline' }),
-    ).toBe(SYNTHETIC_SHIFT_RETURN_INPUT);
+    expect(rewriteKittyEnterInput(`${ESC}[13:2u`, NEWLINE_MODE)).toBe(
+      SYNTHETIC_SHIFT_RETURN_INPUT,
+    );
     // Main Enter, plain CR, and modified keypad Enter must not match.
+    expect(rewriteKittyEnterInput('\r', NEWLINE_MODE)).toBeUndefined();
+    expect(rewriteKittyEnterInput(`${ESC}[13u`, NEWLINE_MODE)).toBeUndefined();
     expect(
-      rewriteKittyEnterInput('\r', { shiftEnter: 'newline' }),
+      rewriteKittyEnterInput(`${ESC}[57414;5u`, NEWLINE_MODE),
     ).toBeUndefined();
     expect(
-      rewriteKittyEnterInput(`${ESC}[13u`, { shiftEnter: 'newline' }),
-    ).toBeUndefined();
-    expect(
-      rewriteKittyEnterInput(`${ESC}[57414;5u`, { shiftEnter: 'newline' }),
-    ).toBeUndefined();
-    expect(
-      rewriteKittyEnterInput(`${ESC}[13;5u`, { shiftEnter: 'newline' }),
+      rewriteKittyEnterInput(`${ESC}[13;5u`, NEWLINE_MODE),
     ).toBeUndefined();
   });
 
   it('rewrites batched Kitty Shift+Enter chunks before text editing', () => {
-    const rewritten = rewriteKittyEnterInput(`alpha${ESC}[13;2ubeta`, {
-      shiftEnter: 'newline',
-    });
-
-    expect(rewritten).toBe(`alpha${SYNTHETIC_SHIFT_RETURN_INPUT}beta`);
-    expect(applyTerminalInputChunk('', 0, rewritten ?? '')).toEqual({
+    const batched = `alpha${SYNTHETIC_SHIFT_RETURN_INPUT}beta`;
+    const insertedNewline = {
       value: 'alpha\nbeta',
       cursor: 10,
       submit: false,
-    });
+    };
 
-    const colonRewritten = rewriteKittyEnterInput(`alpha${ESC}[13:2ubeta`, {
-      shiftEnter: 'newline',
-    });
+    const rewritten = rewriteKittyEnterInput(
+      `alpha${ESC}[13;2ubeta`,
+      NEWLINE_MODE,
+    );
 
-    expect(colonRewritten).toBe(`alpha${SYNTHETIC_SHIFT_RETURN_INPUT}beta`);
-    expect(applyTerminalInputChunk('', 0, colonRewritten ?? '')).toEqual({
-      value: 'alpha\nbeta',
-      cursor: 10,
-      submit: false,
-    });
+    expect(rewritten).toBe(batched);
+    expect(applyTerminalInputChunk('', 0, rewritten ?? '')).toEqual(
+      insertedNewline,
+    );
+
+    const colonRewritten = rewriteKittyEnterInput(
+      `alpha${ESC}[13:2ubeta`,
+      NEWLINE_MODE,
+    );
+
+    expect(colonRewritten).toBe(batched);
+    expect(applyTerminalInputChunk('', 0, colonRewritten ?? '')).toEqual(
+      insertedNewline,
+    );
 
     const associatedTextRewritten = rewriteKittyEnterInput(
       `alpha${ESC}[13;2;13ubeta`,
-      { shiftEnter: 'newline' },
+      NEWLINE_MODE,
     );
 
-    expect(associatedTextRewritten).toBe(
-      `alpha${SYNTHETIC_SHIFT_RETURN_INPUT}beta`,
-    );
+    expect(associatedTextRewritten).toBe(batched);
     expect(
       applyTerminalInputChunk('', 0, associatedTextRewritten ?? ''),
-    ).toEqual({
-      value: 'alpha\nbeta',
-      cursor: 10,
-      submit: false,
-    });
+    ).toEqual(insertedNewline);
 
     const pressEventRewritten = rewriteKittyEnterInput(
       `alpha${ESC}[13;2:1ubeta`,
-      { shiftEnter: 'newline' },
+      NEWLINE_MODE,
     );
 
-    expect(pressEventRewritten).toBe(
-      `alpha${SYNTHETIC_SHIFT_RETURN_INPUT}beta`,
-    );
+    expect(pressEventRewritten).toBe(batched);
   });
 
   it('preserves Shift+Enter while still rewriting keypad Enter', () => {
     expect(
-      rewriteKittyEnterInput(`${ESC}[13:2u`, { shiftEnter: 'preserve' }),
+      rewriteKittyEnterInput(`${ESC}[13:2u`, PRESERVE_MODE),
     ).toBeUndefined();
-    expect(
-      rewriteKittyEnterInput(`pick${ESC}[57414;1u`, {
-        shiftEnter: 'preserve',
-      }),
-    ).toBe('pick\r');
+    expect(rewriteKittyEnterInput(`pick${ESC}[57414;1u`, PRESERVE_MODE)).toBe(
+      'pick\r',
+    );
   });
 
   it('does not rewrite Kitty Enter forms that Ink can handle or should ignore', () => {
     expect(
-      rewriteKittyEnterInput(`${ESC}[13;2;13u`, { shiftEnter: 'newline' }),
+      rewriteKittyEnterInput(`${ESC}[13;2;13u`, NEWLINE_MODE),
     ).toBeUndefined();
     expect(
-      rewriteKittyEnterInput(`alpha${ESC}[13;2:3ubeta`, {
-        shiftEnter: 'newline',
-      }),
+      rewriteKittyEnterInput(`alpha${ESC}[13;2:3ubeta`, NEWLINE_MODE),
     ).toBeUndefined();
     expect(
-      rewriteKittyEnterInput(`alpha${ESC}[13;6ubeta`, {
-        shiftEnter: 'newline',
-      }),
+      rewriteKittyEnterInput(`alpha${ESC}[13;6ubeta`, NEWLINE_MODE),
     ).toBeUndefined();
     expect(
-      rewriteKittyEnterInput(`alpha${ESC}[57414;5ubeta`, {
-        shiftEnter: 'newline',
-      }),
+      rewriteKittyEnterInput(`alpha${ESC}[57414;5ubeta`, NEWLINE_MODE),
     ).toBeUndefined();
     expect(
-      rewriteKittyEnterInput(`alpha${ESC}[57414;1:3ubeta`, {
-        shiftEnter: 'newline',
-      }),
+      rewriteKittyEnterInput(`alpha${ESC}[57414;1:3ubeta`, NEWLINE_MODE),
     ).toBeUndefined();
   });
 

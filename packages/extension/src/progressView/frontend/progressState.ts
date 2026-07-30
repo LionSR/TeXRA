@@ -327,14 +327,12 @@ export const streamContext$ = new Signal.Computed((): StreamContextValue => {
     return { ...EMPTY_STREAM_CONTEXT, hasStreams, unsupportedCommands };
   }
 
-  const streamState = activeStreamState$.get();
-  const isToolUse = streamState ? isToolUseState(streamState) : false;
   const followupOptions =
     followupOptions$.get().get(activeStreamInfo.name) ?? null;
   return {
     streamInfo: activeStreamInfo,
-    streamState,
-    isToolUse,
+    streamState: activeStreamState$.get(),
+    isToolUse: activeIsToolUse$.get(),
     hasStreams,
     followupOptions,
     unsupportedCommands,

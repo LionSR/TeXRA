@@ -28,30 +28,27 @@ export const FREE_TIER = 'free';
 // Types
 // =============================================================================
 
-export interface TierModelsConfig {
+interface TierModelsConfig {
   /** Model access: "*" for all models, or array of specific model short names */
   models: '*' | string[];
 }
 
 /** Monthly spending limits by tier (in USD) */
-export interface TierSpendingLimits {
+interface TierSpendingLimits {
   free: number;
   Max: number;
   Ultra: number;
 }
 
 /** Per-user request gates enforced by the relay edge function. */
-export interface TierRequestLimit {
+interface TierRequestLimit {
   /** Per clock-minute request count. */
   ratePerMinute: number;
   /** In-flight upstream requests for this user. */
   concurrent: number;
 }
 
-export type TierRequestLimits = Record<
-  'free' | 'Max' | 'Ultra',
-  TierRequestLimit
->;
+type TierRequestLimits = Record<'free' | 'Max' | 'Ultra', TierRequestLimit>;
 
 export interface TierModelConfig {
   /** All supported providers (same for all tiers) */
@@ -64,7 +61,7 @@ export interface TierModelConfig {
   };
 }
 
-export type MinTier = 'free' | 'Max' | 'Ultra';
+type MinTier = 'free' | 'Max' | 'Ultra';
 
 type AuthType = 'bearer' | 'x-api-key' | 'x-goog-api-key';
 
@@ -260,7 +257,7 @@ export const TIER_SPENDING_LIMITS: TierSpendingLimits = {
  * Server-side fairness gates. These are deliberately loose enough for normal
  * interactive use while blocking bulk free-tier fanout before costs are logged.
  */
-export const TIER_REQUEST_LIMITS: TierRequestLimits = {
+const TIER_REQUEST_LIMITS: TierRequestLimits = {
   free: { ratePerMinute: 20, concurrent: 4 },
   Max: { ratePerMinute: 60, concurrent: 8 },
   Ultra: { ratePerMinute: 120, concurrent: 16 },

@@ -1,15 +1,10 @@
 // Test composition imports
-
-// Local imports
 import '@test/support/defaultSessionTestSetup';
-
-// Test support imports
 
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import {
   AgentExecutionHandle,
@@ -97,7 +92,7 @@ describe('tool-use follow-up progress events', () => {
   }
 
   it('publishes sent follow-up events through the owning session fact hub', async () => {
-    const { events, interactions } = createRecordingHost();
+    const { events } = createRecordingHost();
     const session = createTestSession();
     sessions.add(session);
     const facts: unknown[] = [];
@@ -234,7 +229,6 @@ describe('tool-use follow-up progress events', () => {
   });
 
   it('notifies local follow-up observers through onFollowUpSent', async () => {
-    const { interactions } = createRecordingHost();
     const observed: StreamTabId[] = [];
     unsubscribeFollowUpObservers.push(
       onFollowUpSent((observedStreamId) => {
@@ -290,7 +284,6 @@ describe('tool-use follow-up progress events', () => {
   });
 
   it('does not append through stale active contexts after final status', async () => {
-    const { interactions } = createRecordingHost();
     const appendFollowUp = vi.fn();
 
     seedStreamStatusForTest(

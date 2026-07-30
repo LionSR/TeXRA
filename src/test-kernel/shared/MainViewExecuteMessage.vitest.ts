@@ -1,35 +1,61 @@
 import { describe, expect, it } from 'vitest';
 
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import { buildMainViewExecuteMessage } from '@shared/mainView/executeMessage';
+import {
+  buildMainViewExecuteMessage,
+  type MainViewExecutionFormState,
+} from '@shared/mainView/executeMessage';
 import {
   MainViewExecuteInboundMessageSchema,
   MainViewExecuteMessageSchema,
 } from '@shared/schemas/mainView';
 
+function formState(
+  overrides: Partial<MainViewExecutionFormState>,
+): MainViewExecutionFormState {
+  return {
+    sessionType: 'toolUse',
+    workflowAgent: 'correct',
+    toolUseAgent: 'orchestrator',
+    model: 'gpt-5.4',
+    instruction: 'Solve a small enumeration problem.',
+    singleFiles: { baseFile: '', editedFile: '' },
+    multiFiles: {
+      inputFiles: [],
+      contextFiles: [],
+      mediaFiles: [],
+      outputFiles: [],
+    },
+    checkboxValues: {
+      autoExtractFigure: false,
+      autoExtractTikzFigure: false,
+      autoCompileInputPdf: false,
+      attachTeXCount: false,
+    },
+    ...overrides,
+  };
+}
+
 describe('MainView execute message builder', () => {
   it('builds tool-use execute messages from form state', () => {
     expect(
-      buildMainViewExecuteMessage({
-        sessionType: 'toolUse',
-        workflowAgent: 'correct',
-        toolUseAgent: 'orchestrator',
-        model: 'gpt-5.4',
-        instruction: 'Solve a small enumeration problem.',
-        singleFiles: { baseFile: 'old.tex', editedFile: 'new.tex' },
-        multiFiles: {
-          inputFiles: ['main.tex'],
-          contextFiles: ['refs.bib'],
-          mediaFiles: ['figure.png'],
-          outputFiles: ['stale-output.tex'],
-        },
-        checkboxValues: {
-          autoExtractFigure: true,
-          autoExtractTikzFigure: false,
-          autoCompileInputPdf: true,
-          attachTeXCount: false,
-        },
-      }),
+      buildMainViewExecuteMessage(
+        formState({
+          singleFiles: { baseFile: 'old.tex', editedFile: 'new.tex' },
+          multiFiles: {
+            inputFiles: ['main.tex'],
+            contextFiles: ['refs.bib'],
+            mediaFiles: ['figure.png'],
+            outputFiles: ['stale-output.tex'],
+          },
+          checkboxValues: {
+            autoExtractFigure: true,
+            autoExtractTikzFigure: false,
+            autoCompileInputPdf: true,
+            attachTeXCount: false,
+          },
+        }),
+      ),
     ).toMatchObject({
       agent: 'orchestrator',
       model: 'gpt-5.4',
@@ -55,26 +81,18 @@ describe('MainView execute message builder', () => {
   });
 
   it('builds workflow execute messages with the workflow agent', () => {
-    const message = buildMainViewExecuteMessage({
-      sessionType: 'workflow',
-      workflowAgent: 'correct',
-      toolUseAgent: 'orchestrator',
-      model: 'gpt-5.4',
-      instruction: 'Correct this file.',
-      singleFiles: { baseFile: '', editedFile: '' },
-      multiFiles: {
-        inputFiles: [],
-        contextFiles: [],
-        mediaFiles: [],
-        outputFiles: [],
-      },
-      checkboxValues: {
-        autoExtractFigure: false,
-        autoExtractTikzFigure: false,
-        autoCompileInputPdf: false,
-        attachTeXCount: true,
-      },
-    });
+    const message = buildMainViewExecuteMessage(
+      formState({
+        sessionType: 'workflow',
+        instruction: 'Correct this file.',
+        checkboxValues: {
+          autoExtractFigure: false,
+          autoExtractTikzFigure: false,
+          autoCompileInputPdf: false,
+          attachTeXCount: true,
+        },
+      }),
+    );
 
     expect(message.agent).toBe('correct');
     expect(message.isToolUseAgent).toBe(false);
@@ -82,30 +100,15 @@ describe('MainView execute message builder', () => {
   });
 
   it('preserves the selected workspace root in the execute session', () => {
-    const message = buildMainViewExecuteMessage({
-      sessionType: 'toolUse',
-      workflowAgent: 'correct',
-      toolUseAgent: 'orchestrator',
-      model: 'gpt-5.4',
-      instruction: 'Inspect the selected project.',
-      singleFiles: { baseFile: '', editedFile: '' },
-      multiFiles: {
-        inputFiles: [],
-        contextFiles: [],
-        mediaFiles: [],
-        outputFiles: [],
-      },
-      checkboxValues: {
-        autoExtractFigure: false,
-        autoExtractTikzFigure: false,
-        autoCompileInputPdf: false,
-        attachTeXCount: false,
-      },
-      session: {
-        launchTarget: 'agent',
-        workingDirectory: '/workspace/paper',
-      },
-    });
+    const message = buildMainViewExecuteMessage(
+      formState({
+        instruction: 'Inspect the selected project.',
+        session: {
+          launchTarget: 'agent',
+          workingDirectory: '/workspace/paper',
+        },
+      }),
+    );
 
     expect(message.session).toEqual({
       launchTarget: 'agent',
@@ -114,26 +117,17 @@ describe('MainView execute message builder', () => {
   });
 
   it('derives execute payload validation from the shared schema', () => {
-    const message = buildMainViewExecuteMessage({
-      sessionType: 'toolUse',
-      workflowAgent: 'correct',
-      toolUseAgent: 'orchestrator',
-      model: 'gpt-5.4',
-      instruction: 'Search for a short proof.',
-      singleFiles: { baseFile: '', editedFile: '' },
-      multiFiles: {
-        inputFiles: [],
-        contextFiles: [],
-        mediaFiles: ['diagram.png'],
-        outputFiles: [],
-      },
-      checkboxValues: {
-        autoExtractFigure: false,
-        autoExtractTikzFigure: false,
-        autoCompileInputPdf: false,
-        attachTeXCount: false,
-      },
-    });
+    const message = buildMainViewExecuteMessage(
+      formState({
+        instruction: 'Search for a short proof.',
+        multiFiles: {
+          inputFiles: [],
+          contextFiles: [],
+          mediaFiles: ['diagram.png'],
+          outputFiles: [],
+        },
+      }),
+    );
 
     expect(MainViewExecuteMessageSchema.parse(message)).toEqual(message);
     expect(

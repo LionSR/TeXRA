@@ -27,8 +27,40 @@ import {
   lookupApiKey,
 } from '@model/apiProviders';
 import { platform } from '@platform/platform';
+import type { RetryPermission } from '@shared/schemas';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { installPlatform } from '@test/support/setupPlatform';
+
+function interactions(): ReturnType<typeof createTuiHostInteractions> {
+  return createTuiHostInteractions(
+    {
+      emit: vi.fn(),
+      close: vi.fn(async () => undefined),
+    } as unknown as CliRuntimeHost,
+    createTestCliContext({
+      cwd: '/work',
+      mode: 'interactive',
+      approvalPolicy: 'ask',
+      version: 'test',
+      resourcesPath: '/resources',
+    }),
+  );
+}
+
+function relayLimitRetry(requestId: string, streamId: string): RetryPermission {
+  return {
+    requestId,
+    streamId,
+    operation: 'model request',
+    errorMessage: 'Relay monthly limit reached.',
+    errorDetails: {
+      message: 'Relay monthly limit reached.',
+      exhaustionReason: 'relay-limit',
+      isRelayError: true,
+      provider: 'openai',
+    },
+  };
+}
 
 describe('TUI retry API-key cache boundary', () => {
   beforeEach(async () => {
@@ -61,32 +93,9 @@ describe('TUI retry API-key cache boundary', () => {
     );
 
     const preparedKeys: Array<string | undefined> = [];
-    const interactions = createTuiHostInteractions(
-      {
-        emit: vi.fn(),
-        close: vi.fn(async () => undefined),
-      } as unknown as CliRuntimeHost,
-      createTestCliContext({
-        cwd: '/work',
-        mode: 'interactive',
-        approvalPolicy: 'ask',
-        version: 'test',
-        resourcesPath: '/resources',
-      }),
-    );
-    const result = interactions.requestRetry?.(
-      {
-        requestId: 'retry-rotated-key',
-        streamId: 'rotated-key',
-        operation: 'model request',
-        errorMessage: 'Relay monthly limit reached.',
-        errorDetails: {
-          message: 'Relay monthly limit reached.',
-          exhaustionReason: 'relay-limit',
-          isRelayError: true,
-          provider: 'openai',
-        },
-      },
+    const tui = interactions();
+    const result = tui.requestRetry?.(
+      relayLimitRetry('retry-rotated-key', 'rotated-key'),
       {
         prepareRetry: async (selection) => {
           expect(selection).toBe('personal');
@@ -101,7 +110,7 @@ describe('TUI retry API-key cache boundary', () => {
     });
     expect(preparedKeys).toEqual(['sk-rotated-current-key']);
     expect(mocks.apiMode).toBe('personal');
-    interactions.dispose?.();
+    tui.dispose?.();
   });
 
   it('rejects a deleted key even when presentation cached it as present', async () => {
@@ -111,35 +120,10 @@ describe('TUI retry API-key cache boundary', () => {
     await platform().secrets.delete(apiKeySecretName('openai'));
 
     const prepareRetry = vi.fn(async () => undefined);
-    const interactions = createTuiHostInteractions(
-      {
-        emit: vi.fn(),
-        close: vi.fn(async () => undefined),
-      } as unknown as CliRuntimeHost,
-      createTestCliContext({
-        cwd: '/work',
-        mode: 'interactive',
-        approvalPolicy: 'ask',
-        version: 'test',
-        resourcesPath: '/resources',
-      }),
-    );
-    const result = interactions.requestRetry?.(
-      {
-        requestId: 'retry-deleted-key',
-        streamId: 'deleted-key',
-        operation: 'model request',
-        errorMessage: 'Relay monthly limit reached.',
-        errorDetails: {
-          message: 'Relay monthly limit reached.',
-          exhaustionReason: 'relay-limit',
-          isRelayError: true,
-          provider: 'openai',
-        },
-      },
-      {
-        prepareRetry,
-      },
+    const tui = interactions();
+    const result = tui.requestRetry?.(
+      relayLimitRetry('retry-deleted-key', 'deleted-key'),
+      { prepareRetry },
     );
 
     await expect(result).resolves.toEqual({
@@ -149,6 +133,6 @@ describe('TUI retry API-key cache boundary', () => {
     });
     expect(mocks.setCliApiMode).not.toHaveBeenCalled();
     expect(prepareRetry).not.toHaveBeenCalled();
-    interactions.dispose?.();
+    tui.dispose?.();
   });
 });

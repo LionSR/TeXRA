@@ -6,13 +6,26 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { CliSecrets, cliSecretsPath } from '@cli/runtime/cliSecrets';
 
+async function withSecretsRoot(
+  run: (paths: {
+    root: string;
+    storageRoot: string;
+    secretsPath: string;
+  }) => Promise<void>,
+): Promise<void> {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-secrets-'));
+  const storageRoot = path.join(root, 'storage');
+
+  try {
+    await run({ root, storageRoot, secretsPath: cliSecretsPath(storageRoot) });
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+}
+
 describe('CLI secrets', () => {
   it('stores secrets under the configured storage root', async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-secrets-'));
-    const storageRoot = path.join(root, 'storage');
-    const secretsPath = cliSecretsPath(storageRoot);
-
-    try {
+    await withSecretsRoot(async ({ storageRoot, secretsPath }) => {
       const secrets = new CliSecrets(secretsPath);
       await secrets.set('TEXRA_CLI_SECRETS_TEST_KEY', 'test-key');
 
@@ -21,17 +34,11 @@ describe('CLI secrets', () => {
         'TEXRA_CLI_SECRETS_TEST_KEY',
       );
       expect(path.dirname(secretsPath)).toBe(storageRoot);
-    } finally {
-      await fs.rm(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('aborts a write instead of wiping the file when the read fails for a reason other than a missing file', async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-secrets-'));
-    const storageRoot = path.join(root, 'storage');
-    const secretsPath = cliSecretsPath(storageRoot);
-
-    try {
+    await withSecretsRoot(async ({ secretsPath }) => {
       const secrets = new CliSecrets(secretsPath);
       await secrets.set('EXISTING_KEY', 'existing-value');
 
@@ -55,17 +62,11 @@ describe('CLI secrets', () => {
       await secrets.set('ANOTHER_KEY', 'another-value');
       expect(await secrets.get('EXISTING_KEY')).toBe('existing-value');
       expect(await secrets.get('ANOTHER_KEY')).toBe('another-value');
-    } finally {
-      await fs.rm(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('merges overlapping set() calls instead of one silently dropping the other', async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-secrets-'));
-    const storageRoot = path.join(root, 'storage');
-    const secretsPath = cliSecretsPath(storageRoot);
-
-    try {
+    await withSecretsRoot(async ({ secretsPath }) => {
       const secrets = new CliSecrets(secretsPath);
 
       // Two overlapping mutations on the same instance, started before
@@ -82,17 +83,11 @@ describe('CLI secrets', () => {
       expect(await secrets.get('KEY_A')).toBe('value-a');
       expect(await secrets.get('KEY_B')).toBe('value-b');
       expect(await secrets.get('ORDERED_KEY')).toBe('new-value');
-    } finally {
-      await fs.rm(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('ignores a non-string stored value instead of returning it as a key', async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-secrets-'));
-    const storageRoot = path.join(root, 'storage');
-    const secretsPath = cliSecretsPath(storageRoot);
-
-    try {
+    await withSecretsRoot(async ({ secretsPath }) => {
       const secrets = new CliSecrets(secretsPath);
       await secrets.set('GOOD_KEY', 'good-value');
       await fs.writeFile(
@@ -103,49 +98,41 @@ describe('CLI secrets', () => {
 
       expect(await secrets.getStored('GOOD_KEY')).toBe('good-value');
       expect(await secrets.getStored('BAD_KEY')).toBeUndefined();
-    } finally {
-      await fs.rm(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('serves env-provided secrets when the storage directory cannot be created', async () => {
     if (process.platform === 'win32') return; // POSIX modes don't apply.
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-secrets-'));
-    // `storage/` does not exist and its parent is unwritable, so any
-    // open-time `mkdir`/`chmod` on the read path throws (#8220). Reads must
-    // degrade to "nothing stored" and let env vars keep working.
-    const storageRoot = path.join(root, 'storage');
-    const secretsPath = cliSecretsPath(storageRoot);
-    await fs.chmod(root, 0o500);
-    vi.stubEnv('TEXRA_CLI_SECRETS_ENV_ONLY_KEY', 'env-value');
+    await withSecretsRoot(async ({ root, secretsPath }) => {
+      // `storage/` does not exist and its parent is unwritable, so any
+      // open-time `mkdir`/`chmod` on the read path throws (#8220). Reads must
+      // degrade to "nothing stored" and let env vars keep working.
+      await fs.chmod(root, 0o500);
+      vi.stubEnv('TEXRA_CLI_SECRETS_ENV_ONLY_KEY', 'env-value');
 
-    try {
-      const secrets = new CliSecrets(secretsPath);
+      try {
+        const secrets = new CliSecrets(secretsPath);
 
-      await expect(secrets.get('TEXRA_CLI_SECRETS_ENV_ONLY_KEY')).resolves.toBe(
-        'env-value',
-      );
-      await expect(
-        secrets.getStored('TEXRA_CLI_SECRETS_ENV_ONLY_KEY'),
-      ).resolves.toBeUndefined();
-      await expect(
-        secrets.get('TEXRA_CLI_SECRETS_MISSING_KEY'),
-      ).resolves.toBeUndefined();
-      await expect(secrets.listStoredKeys()).resolves.toEqual([]);
-    } finally {
-      vi.unstubAllEnvs();
-      await fs.chmod(root, 0o700);
-      await fs.rm(root, { recursive: true, force: true });
-    }
+        await expect(
+          secrets.get('TEXRA_CLI_SECRETS_ENV_ONLY_KEY'),
+        ).resolves.toBe('env-value');
+        await expect(
+          secrets.getStored('TEXRA_CLI_SECRETS_ENV_ONLY_KEY'),
+        ).resolves.toBeUndefined();
+        await expect(
+          secrets.get('TEXRA_CLI_SECRETS_MISSING_KEY'),
+        ).resolves.toBeUndefined();
+        await expect(secrets.listStoredKeys()).resolves.toEqual([]);
+      } finally {
+        vi.unstubAllEnvs();
+        await fs.chmod(root, 0o700);
+      }
+    });
   });
 
   it('restricts the secrets file and its directory to the owner', async () => {
     if (process.platform === 'win32') return; // POSIX modes don't apply.
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-secrets-'));
-    const storageRoot = path.join(root, 'storage');
-    const secretsPath = cliSecretsPath(storageRoot);
-
-    try {
+    await withSecretsRoot(async ({ secretsPath }) => {
       const secrets = new CliSecrets(secretsPath);
       await secrets.set('TEXRA_CLI_SECRETS_TEST_KEY', 'test-key');
 
@@ -153,27 +140,20 @@ describe('CLI secrets', () => {
       const dirStat = await fs.stat(path.dirname(secretsPath));
       expect(fileStat.mode & 0o777).toBe(0o600);
       expect(dirStat.mode & 0o777).toBe(0o700);
-    } finally {
-      await fs.rm(root, { recursive: true, force: true });
-    }
+    });
   });
 
   it('keeps one process-wide secrets store after the first root is selected', async () => {
     vi.resetModules();
     const { getCliSecrets } = await import('@cli/runtime/cliSecrets');
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-secrets-'));
-    const storageRoot = path.join(root, 'storage');
-    const otherStorageRoot = path.join(root, 'other-storage');
 
-    try {
+    await withSecretsRoot(async ({ root, storageRoot }) => {
       const first = getCliSecrets(storageRoot);
       const second = getCliSecrets();
-      const third = getCliSecrets(otherStorageRoot);
+      const third = getCliSecrets(path.join(root, 'other-storage'));
 
       expect(second).toBe(first);
       expect(third).toBe(first);
-    } finally {
-      await fs.rm(root, { recursive: true, force: true });
-    }
+    });
   });
 });

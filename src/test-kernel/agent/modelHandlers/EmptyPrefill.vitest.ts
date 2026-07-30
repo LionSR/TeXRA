@@ -23,7 +23,7 @@ import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/mo
 import type { FileLocation } from '@shared/schemas';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
-// Third-party imports
+// Type imports
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import type { ChatMessages } from '@openrouter/sdk/models';
 

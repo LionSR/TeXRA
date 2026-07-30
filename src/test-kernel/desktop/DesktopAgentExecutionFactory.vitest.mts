@@ -15,6 +15,7 @@ import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { RUN_OUTCOME, type StreamTabId } from '@shared/schemas';
+import { createDeferred } from '@test/support/asyncTestUtils';
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { cleanupTempDirs } from '@test/support/tempDirPlatform';
 import { DIAGNOSTICS_READ_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
@@ -72,9 +73,7 @@ function serializeLegacyRows(rows: LegacyRow[]): string {
 }
 
 async function createPersistentHarness(
-  options: {
-    fs?: FileSystemProvider;
-  } = {},
+  fs: FileSystemProvider = nodeFilesystem,
 ): Promise<{ legacyFilePath: string; platform: Platform }> {
   const tempDir = await mkdtemp(path.join(os.tmpdir(), 'texra-factory-8544-'));
   tempDirs.push(tempDir);
@@ -85,7 +84,7 @@ async function createPersistentHarness(
     platform: createFakePlatform(
       { workspacePath: workspaceDir },
       {
-        fs: options.fs ?? nodeFilesystem,
+        fs,
         workspace: createNodeWorkspace(() => workspaceDir),
         storage: new WorkspaceStorageProvider(storageRoot, workspaceDir),
         globalState: new MemoryStateStore(),
@@ -95,33 +94,23 @@ async function createPersistentHarness(
   };
 }
 
-function createMigrationFailureFilesystem(
-  failurePoint: 'transcript-flush' | 'canonical-load',
+function createTranscriptFlushFailureFilesystem(
   failure: Error,
 ): FileSystemProvider {
-  let streamLogDirectoryReads = 0;
   return {
     ...nodeFilesystem,
     async writeFileAtomic(target, content) {
-      if (
-        failurePoint === 'transcript-flush' &&
-        path.basename(path.dirname(target)) === 'streamLogs'
-      ) {
-        throw failure;
-      }
+      if (path.basename(path.dirname(target)) === 'streamLogs') throw failure;
       await nodeFilesystem.writeFileAtomic(target, content);
     },
-    async readDirectory(target) {
-      if (
-        failurePoint === 'canonical-load' &&
-        path.basename(target) === 'streamLogs' &&
-        ++streamLogDirectoryReads === 2
-      ) {
-        throw failure;
-      }
-      return nodeFilesystem.readDirectory(target);
-    },
   };
+}
+
+function prepareValidRequest(): (message: unknown) => unknown {
+  return vi.fn(() => ({
+    valid: true,
+    request: { agentName: 'default', filePath: 'main.tex', prompt: 'run' },
+  }));
 }
 
 async function persistSidecarRegistration(
@@ -317,19 +306,13 @@ describe('createDesktopAgentExecution', () => {
 
   it('never attaches a presentation when its window closes during repair', async () => {
     const controller = new AbortController();
-    let finishLoad!: () => void;
-    const loadGate = new Promise<void>((resolve) => {
-      finishLoad = resolve;
-    });
-    let markDetectionStarted!: () => void;
-    const detectionStarted = new Promise<void>((resolve) => {
-      markDetectionStarted = resolve;
-    });
+    const loadGate = createDeferred();
+    const detectionStarted = createDeferred();
     const attached = vi.fn();
     const detached = vi.fn();
     const detectWaitingStreams = vi.fn(async () => {
-      markDetectionStarted();
-      await loadGate;
+      detectionStarted.resolve();
+      await loadGate.promise;
       return new Set<StreamTabId>();
     });
     const creation = createExecution({
@@ -351,13 +334,13 @@ describe('createDesktopAgentExecution', () => {
       },
     });
 
-    await detectionStarted;
+    await detectionStarted.promise;
     expect(detectWaitingStreams).toHaveBeenCalledOnce();
     controller.abort();
     expect(attached).not.toHaveBeenCalled();
     expect(detached).not.toHaveBeenCalled();
 
-    finishLoad();
+    loadGate.resolve();
     await expect(creation).rejects.toMatchObject({ name: 'AbortError' });
   });
 
@@ -464,35 +447,28 @@ describe('createDesktopAgentExecution', () => {
     expect(await readFile(legacyFilePath, 'utf8')).toBe(malformed);
   });
 
-  it.each([['transcript-flush', 'Transcript flush failed']] as const)(
-    'retains legacy state when %s fails before migration commit',
-    async (failurePoint, expectedMessage) => {
-      const streamId = `proofreader@gpt#${failurePoint}8544` as StreamTabId;
-      const failure = new Error(
-        failurePoint === 'transcript-flush'
-          ? 'transcript registration write failed'
-          : expectedMessage,
-      );
-      const fs = createMigrationFailureFilesystem(failurePoint, failure);
-      const { legacyFilePath, platform } = await createPersistentHarness({
-        fs,
-      });
-      const original = serializeLegacyRows([makeLegacyRow(streamId)]);
-      await writeFile(legacyFilePath, original);
+  it('retains legacy state when the transcript flush fails before migration commit', async () => {
+    const streamId = 'proofreader@gpt#transcript-flush8544' as StreamTabId;
+    const { legacyFilePath, platform } = await createPersistentHarness(
+      createTranscriptFlushFailureFilesystem(
+        new Error('transcript registration write failed'),
+      ),
+    );
+    const original = serializeLegacyRows([makeLegacyRow(streamId)]);
+    await writeFile(legacyFilePath, original);
 
-      await expect(
-        createExecution({
-          platform,
-          useRealStorage: true,
-          legacyStreamFilePath: legacyFilePath,
-          prepareSnapshotStore: (snapshots) =>
-            persistSidecarRegistration(snapshots, streamId),
-          prepareMainViewExecutionRequest: vi.fn(),
-        }),
-      ).rejects.toThrow(expectedMessage);
-      expect(await readFile(legacyFilePath, 'utf8')).toBe(original);
-    },
-  );
+    await expect(
+      createExecution({
+        platform,
+        useRealStorage: true,
+        legacyStreamFilePath: legacyFilePath,
+        prepareSnapshotStore: (snapshots) =>
+          persistSidecarRegistration(snapshots, streamId),
+        prepareMainViewExecutionRequest: vi.fn(),
+      }),
+    ).rejects.toThrow('Transcript flush failed');
+    expect(await readFile(legacyFilePath, 'utf8')).toBe(original);
+  });
 
   it('retains the legacy source when cleanup fails but keeps canonical startup usable', async () => {
     const streamId = 'proofreader@gpt#cleanup8544' as StreamTabId;
@@ -590,14 +566,7 @@ describe('createDesktopAgentExecution', () => {
       runAgent: vi.fn(async () => {
         throw failure;
       }),
-      prepareMainViewExecutionRequest: vi.fn(() => ({
-        valid: true,
-        request: {
-          agentName: 'default',
-          filePath: 'main.tex',
-          prompt: 'run',
-        },
-      })),
+      prepareMainViewExecutionRequest: prepareValidRequest(),
     });
 
     await expect(
@@ -645,14 +614,7 @@ describe('createDesktopAgentExecution', () => {
     const execution = await createExecution({
       opener,
       runAgent,
-      prepareMainViewExecutionRequest: vi.fn(() => ({
-        valid: true,
-        request: {
-          agentName: 'default',
-          filePath: 'main.tex',
-          prompt: 'run',
-        },
-      })),
+      prepareMainViewExecutionRequest: prepareValidRequest(),
     });
 
     await execution.handleExecute({ command: 'execute' });
@@ -661,17 +623,11 @@ describe('createDesktopAgentExecution', () => {
 
   it('replays one workflow output open when its window closes before completion', async () => {
     let session!: SessionHandle;
-    let finishRun!: () => void;
-    let markRunStarted!: () => void;
-    const runStarted = new Promise<void>((resolve) => {
-      markRunStarted = resolve;
-    });
-    const runGate = new Promise<void>((resolve) => {
-      finishRun = resolve;
-    });
+    const runStarted = createDeferred();
+    const runGate = createDeferred();
     const runAgent = vi.fn(async (_request, options) => {
-      markRunStarted();
-      await runGate;
+      runStarted.resolve();
+      await runGate.promise;
       await options.openWorkflowOutput({
         outcome: RUN_OUTCOME.COMPLETED,
         outputs: [{ absolutePath: '/tmp/headless-result.pdf', round: 0 }],
@@ -682,20 +638,13 @@ describe('createDesktopAgentExecution', () => {
         session = value;
       },
       runAgent,
-      prepareMainViewExecutionRequest: vi.fn(() => ({
-        valid: true,
-        request: {
-          agentName: 'default',
-          filePath: 'main.tex',
-          prompt: 'run',
-        },
-      })),
+      prepareMainViewExecutionRequest: prepareValidRequest(),
     });
 
     const run = execution.handleExecute({ command: 'execute' });
-    await runStarted;
+    await runStarted.promise;
     execution.dispose();
-    finishRun();
+    runGate.resolve();
     await run;
 
     const firstEmit = vi.fn();
@@ -741,14 +690,7 @@ describe('createDesktopAgentExecution', () => {
     const execution = await createExecution({
       runAgent,
       onRunCompleted,
-      prepareMainViewExecutionRequest: vi.fn(() => ({
-        valid: true,
-        request: {
-          agentName: 'default',
-          filePath: 'main.tex',
-          prompt: 'run',
-        },
-      })),
+      prepareMainViewExecutionRequest: prepareValidRequest(),
     });
 
     await execution.handleExecute({ command: 'execute' });
@@ -773,14 +715,7 @@ describe('createDesktopAgentExecution', () => {
     const execution = await createExecution({
       runAgent,
       onRunCompleted,
-      prepareMainViewExecutionRequest: vi.fn(() => ({
-        valid: true,
-        request: {
-          agentName: 'default',
-          filePath: 'main.tex',
-          prompt: 'run',
-        },
-      })),
+      prepareMainViewExecutionRequest: prepareValidRequest(),
     });
 
     await execution.handleExecute({ command: 'execute' });
@@ -798,14 +733,7 @@ describe('createDesktopAgentExecution', () => {
     const execution = await createExecution({
       opener,
       runAgent,
-      prepareMainViewExecutionRequest: vi.fn(() => ({
-        valid: true,
-        request: {
-          agentName: 'default',
-          filePath: 'main.tex',
-          prompt: 'run',
-        },
-      })),
+      prepareMainViewExecutionRequest: prepareValidRequest(),
     });
 
     await execution.handleExecute({ command: 'execute' });

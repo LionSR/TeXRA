@@ -45,6 +45,14 @@ const STRUCTURED_DELIVERY_PATTERN = new RegExp(
   `^\\s*<(${STRUCTURED_DELIVERY_TAGS.join('|')})(\\s|>)`,
 );
 
+type DisplayState = {
+  isStructuredDelivery: boolean;
+  hasRawMessage: boolean;
+  displayText: string;
+  workflowSummary: string;
+  structuredMarkdownHtml: string;
+};
+
 function getStructuredDeliveryTag(text: string): DeliveryTagName | null {
   // Safe cast: the pattern's only alternation group is STRUCTURED_DELIVERY_TAGS
   // (DeliveryTagName[]), so a match can only capture one of those values.
@@ -197,7 +205,7 @@ export class UserMessage extends LitElement {
     defaultTitle: 'Copy raw message',
   });
 
-  private displayCache = {
+  private displayCache: DisplayState & { text: string } = {
     text: '',
     isStructuredDelivery: false,
     hasRawMessage: false,
@@ -206,13 +214,7 @@ export class UserMessage extends LitElement {
     structuredMarkdownHtml: '',
   };
 
-  private getDisplayState(): {
-    isStructuredDelivery: boolean;
-    hasRawMessage: boolean;
-    displayText: string;
-    workflowSummary: string;
-    structuredMarkdownHtml: string;
-  } {
+  private getDisplayState(): DisplayState {
     if (this.displayCache.text === this.text) {
       return this.displayCache;
     }

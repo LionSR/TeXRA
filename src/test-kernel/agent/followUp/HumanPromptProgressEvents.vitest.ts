@@ -7,7 +7,6 @@ import '@test/support/defaultSessionTestSetup';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports
-import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
@@ -55,7 +54,6 @@ function installTestPlatform(): Promise<void> {
 }
 
 async function inToolContext<T>(
-  host: SessionHostInteractions,
   interactions: ReturnType<typeof createRecordingHost>['interactions'],
   streamId: StreamTabId,
   run: () => T,
@@ -91,15 +89,11 @@ describe('human prompt progress events', () => {
     const explicit = createRecordingHost();
     const streamId = 'stream:bash-approval' as StreamTabId;
 
-    const approval = inToolContext(
-      explicit.host,
-      explicit.interactions,
-      streamId,
-      () =>
-        requestBashApproval({
-          command: 'echo hello',
-          cwd: '/tmp/texra-project',
-        }),
+    const approval = inToolContext(explicit.interactions, streamId, () =>
+      requestBashApproval({
+        command: 'echo hello',
+        cwd: '/tmp/texra-project',
+      }),
     );
 
     const show = await waitForRecordedEvent(
@@ -146,21 +140,17 @@ describe('human prompt progress events', () => {
     const streamId = 'stream:user-question' as StreamTabId;
     const tool = new AskUserQuestionTool();
 
-    const result = inToolContext(
-      explicit.host,
-      explicit.interactions,
-      streamId,
-      () =>
-        tool.call({
-          context: 'Choose the next step.',
-          questions: [
-            {
-              question: 'Which path should the agent take?',
-              header: 'Path',
-              options: [{ label: 'Inspect logs' }, { label: 'Run the build' }],
-            },
-          ],
-        }),
+    const result = inToolContext(explicit.interactions, streamId, () =>
+      tool.call({
+        context: 'Choose the next step.',
+        questions: [
+          {
+            question: 'Which path should the agent take?',
+            header: 'Path',
+            options: [{ label: 'Inspect logs' }, { label: 'Run the build' }],
+          },
+        ],
+      }),
     );
 
     const show = await waitForRecordedEvent(
@@ -260,11 +250,8 @@ describe('human prompt progress events', () => {
         silent: true,
       });
 
-      const approval = inToolContext(
-        explicit.host,
-        explicit.interactions,
-        streamId,
-        () => requestBashApproval({ command: 'echo still asks' }),
+      const approval = inToolContext(explicit.interactions, streamId, () =>
+        requestBashApproval({ command: 'echo still asks' }),
       );
 
       const show = await waitForRecordedEvent(
@@ -286,7 +273,6 @@ describe('human prompt progress events', () => {
       });
 
       const bypassed = await inToolContext(
-        explicit.host,
         explicit.interactions,
         streamId,
         () => requestBashApproval({ command: 'echo bypassed' }),

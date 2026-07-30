@@ -375,6 +375,22 @@ async function persistResultMetaBestEffort(
 }
 
 /**
+ * Where this turn's output goes. A strategy without `resolveDeliveryTarget`
+ * (agent-CLI) always delivers to the run's static parent. A strategy that HAS
+ * one (native) may return `undefined` — meaning the child was detached from its
+ * orchestrator (see `AgentExecutionHandle.detach`) — which must skip delivery
+ * entirely, not silently fall back to the old parent.
+ */
+function resolveDeliveryTarget<TTurn>(
+  strategy: ChildRunStrategy<TTurn>,
+  parentStreamId: StreamTabId,
+): StreamTabId | undefined {
+  return strategy.resolveDeliveryTarget
+    ? strategy.resolveDeliveryTarget()
+    : parentStreamId;
+}
+
+/**
  * A turn's parent-follow-up enqueue, still pending its wake step. Waking can
  * await the resumed parent's entire turn (`agentResume.tryResumeStream` → …
  * → `resumeToolUseFromResumeData`), so callers that are about to finalize this
@@ -435,14 +451,7 @@ async function deliverTurn<TTurn>(params: {
 
   if (strategy.deliveryMode === 'persistOnly') return undefined;
 
-  // A strategy without `resolveDeliveryTarget` (agent-CLI) always delivers to
-  // the run's static parent. A strategy that HAS one (native) may return
-  // `undefined` — meaning the child was detached from its orchestrator (see
-  // `AgentExecutionHandle.detach`) — which must skip delivery entirely, not
-  // silently fall back to the old parent.
-  const targetStreamId = strategy.resolveDeliveryTarget
-    ? strategy.resolveDeliveryTarget()
-    : parentStreamId;
+  const targetStreamId = resolveDeliveryTarget(strategy, parentStreamId);
   if (!targetStreamId) {
     logger.warn(
       'Turn result not delivered: child was detached from its orchestrator. The result remains in the execution report.',
@@ -597,10 +606,8 @@ export function startChildRunLoop<TTurn>(
   const ports: ChildRunPorts = {
     notify: (update) => {
       if (strategy.deliveryMode === 'persistOnly') return;
-      const targetStreamId = strategy.resolveDeliveryTarget
-        ? strategy.resolveDeliveryTarget()
-        : parentStreamId;
-      if (!targetStreamId) return; // Detached — see deliverTurn for the same guard.
+      const targetStreamId = resolveDeliveryTarget(strategy, parentStreamId);
+      if (!targetStreamId) return;
       const msg = formatSubagentProgress(executionId, agentName, update);
       void deliverChildRunFollowUp({
         targetStreamId,

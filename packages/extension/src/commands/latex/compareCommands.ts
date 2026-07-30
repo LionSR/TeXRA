@@ -17,6 +17,7 @@ import {
   commitAcceptedFile,
   getAcceptedFileTarget,
   siblingLocation,
+  type CommitAcceptedFilePorts,
 } from '@latex/acceptedFileTarget';
 import * as logger from '@logger/logUtils';
 import type { AcceptCopyMeta, FileLocation } from '@shared/schemas';
@@ -49,6 +50,21 @@ async function deleteDiffFileNonFatal(location: FileLocation): Promise<void> {
     // Non-fatal: diff file may not exist or may be locked.
   }
 }
+
+/** VS Code bindings for the host-neutral accept-edited commit sequence,
+ *  shared by the replace and save-as-copy paths. */
+const COMMIT_PORTS: CommitAcceptedFilePorts = {
+  readFile: (location) => AbsoluteFS.read(location.absolutePath),
+  writeFile: (location, content) =>
+    AbsoluteFS.write(location.absolutePath, content),
+  emitWritten: (absolutePath) =>
+    appSignals.emit('workspaceFilesWritten', { absolutePaths: [absolutePath] }),
+  showInfo: (message) => {
+    vscode.window.showInformationMessage(message);
+    logger.info(CHANNEL, message);
+  },
+  deleteFile: deleteDiffFileNonFatal,
+};
 
 async function validateFilesExist(
   baseLocation: FileLocation,
@@ -221,10 +237,8 @@ export async function handleAcceptEdited(
     // No run metadata: single-confirm replace flow shared with the desktop host.
     if (!copyMeta) {
       return await acceptEditedFileReplace(fileToUseLocation, editedLocation, {
+        ...COMMIT_PORTS,
         exists: (location) => AbsoluteFS.exists(location.absolutePath),
-        readFile: (location) => AbsoluteFS.read(location.absolutePath),
-        writeFile: (location, content) =>
-          AbsoluteFS.write(location.absolutePath, content),
         confirm: async (message) => {
           const answer = await vscode.window.showWarningMessage(
             message,
@@ -234,15 +248,6 @@ export async function handleAcceptEdited(
           );
           return answer === 'Yes';
         },
-        emitWritten: (absolutePath) =>
-          appSignals.emit('workspaceFilesWritten', {
-            absolutePaths: [absolutePath],
-          }),
-        showInfo: (message) => {
-          vscode.window.showInformationMessage(message);
-          logger.info(CHANNEL, message);
-        },
-        deleteFile: deleteDiffFileNonFatal,
       });
     }
 
@@ -264,20 +269,7 @@ export async function handleAcceptEdited(
       editedLocation,
       resolved,
       targetExisted,
-      {
-        readFile: (location) => AbsoluteFS.read(location.absolutePath),
-        writeFile: (location, content) =>
-          AbsoluteFS.write(location.absolutePath, content),
-        emitWritten: (absolutePath) =>
-          appSignals.emit('workspaceFilesWritten', {
-            absolutePaths: [absolutePath],
-          }),
-        showInfo: (message) => {
-          vscode.window.showInformationMessage(message);
-          logger.info(CHANNEL, message);
-        },
-        deleteFile: deleteDiffFileNonFatal,
-      },
+      COMMIT_PORTS,
     );
     return true;
   } catch (err) {

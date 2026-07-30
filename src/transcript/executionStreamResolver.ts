@@ -47,34 +47,6 @@ function findSuffixMatch(
   return streams.find((id) => id.endsWith(suffix));
 }
 
-interface MetaMatchDataPresence {
-  readonly hasLog: boolean;
-  readonly hasWorkPlan: boolean;
-}
-
-/**
- * Whether a meta-matched candidate actually holds durable data for this
- * execution, as opposed to a bare `meta.json` record, broken out by kind so
- * callers can rank a log-backed candidate ahead of a workPlan-only one.
- * Checked cheaply: an already-loaded `StreamLogStore.has()` lookup is O(1)
- * in-memory, and `hasPersistedWorkPlan()` is a single stat, so this never
- * re-reads the full per-stream sidecar set.
- */
-async function readMetaMatchDataPresence(
-  snapshotStore: StreamSnapshotStore,
-  streamId: StreamTabId,
-  streamLogStore: Pick<StreamLogStore, 'keys' | 'has'> | undefined,
-): Promise<MetaMatchDataPresence> {
-  const hasLog = streamLogStore?.has(streamId) ?? false;
-  return {
-    hasLog,
-    // hasWorkPlan is irrelevant once hasLog is true (log rank always wins in
-    // pickBestMetaMatch) — skip the disk stat in that case, since this runs
-    // on the hot path #7299 already had to bound for fd pressure.
-    hasWorkPlan: hasLog || (await snapshotStore.hasPersistedWorkPlan(streamId)),
-  };
-}
-
 /**
  * Disambiguate multiple persisted streams whose sidecar `meta.json` all
  * reference the same `executionId` (e.g. a parent orchestrator tab and a
@@ -83,6 +55,10 @@ async function readMetaMatchDataPresence(
  * which in turn outranks a bare metadata match (scan order only breaks ties
  * within the same rank), so a log-backed candidate is never shadowed by an
  * earlier-ordered workPlan-only one.
+ *
+ * Data presence is checked cheaply: an already-loaded `StreamLogStore.has()`
+ * lookup is O(1) in-memory, and `hasPersistedWorkPlan()` is a single stat, so
+ * this never re-reads the full per-stream sidecar set.
  */
 async function pickBestMetaMatch(
   candidates: readonly MetaMatchCandidate[],
@@ -93,19 +69,23 @@ async function pickBestMetaMatch(
 
   const withData = await pMap(
     candidates,
-    async (candidate) => ({
-      candidate,
-      ...(await readMetaMatchDataPresence(
-        snapshotStore,
-        candidate.streamId,
-        streamLogStore,
-      )),
-    }),
+    async ({ streamId }) => {
+      const hasLog = streamLogStore?.has(streamId) ?? false;
+      return {
+        streamId,
+        hasLog,
+        // hasWorkPlan is irrelevant once hasLog is true (log rank always
+        // wins below) — skip the disk stat in that case, since this runs on
+        // the hot path #7299 already had to bound for fd pressure.
+        hasWorkPlan:
+          hasLog || (await snapshotStore.hasPersistedWorkPlan(streamId)),
+      };
+    },
     { concurrency: META_SCAN_CONCURRENCY },
   );
   return (
-    withData.find((entry) => entry.hasLog)?.candidate.streamId ??
-    withData.find((entry) => entry.hasWorkPlan)?.candidate.streamId ??
+    withData.find((entry) => entry.hasLog)?.streamId ??
+    withData.find((entry) => entry.hasWorkPlan)?.streamId ??
     candidates[0].streamId
   );
 }

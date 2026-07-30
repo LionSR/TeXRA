@@ -44,14 +44,11 @@ export interface ProgressWorkflowFileActionsControllerDeps {
   sendFollowUp(stream: StreamTabId, text: string): Promise<void>;
 }
 
-type ModelOutputBackup = {
-  content: string;
-};
-
 export class ProgressWorkflowFileActionsController {
+  /** Per-stream snapshot of each output file's content at compare time. */
   private readonly modelOutputBackups = new Map<
     StreamTabId,
-    Map<string, ModelOutputBackup>
+    Map<string, string>
   >();
 
   constructor(
@@ -124,7 +121,7 @@ export class ProgressWorkflowFileActionsController {
         : undefined;
     let currentContent: string | undefined;
 
-    if (backup) {
+    if (backup !== undefined) {
       try {
         currentContent = await this.deps.host.readFile(file);
       } catch (error) {
@@ -133,7 +130,6 @@ export class ProgressWorkflowFileActionsController {
           `Could not read current content of ${file} before accept`,
           { data: error },
         );
-        currentContent = undefined;
       }
     }
 
@@ -151,9 +147,9 @@ export class ProgressWorkflowFileActionsController {
     if (!accepted) return;
 
     if (
-      backup &&
+      backup !== undefined &&
       currentContent !== undefined &&
-      currentContent !== backup.content
+      currentContent !== backup
     ) {
       const fileName = path.basename(file);
       await this.deps.sendFollowUp(
@@ -162,7 +158,7 @@ export class ProgressWorkflowFileActionsController {
       );
     }
 
-    if (backup && activeStream) {
+    if (backup !== undefined && activeStream) {
       const streamBackups = this.modelOutputBackups.get(activeStream);
       streamBackups?.delete(file);
       if (streamBackups?.size === 0) {
@@ -228,7 +224,7 @@ export class ProgressWorkflowFileActionsController {
     try {
       const content = await this.deps.host.readFile(file);
       const streamBackups = this.modelOutputBackups.get(streamId) ?? new Map();
-      streamBackups.set(file, { content });
+      streamBackups.set(file, content);
       this.modelOutputBackups.set(streamId, streamBackups);
     } catch {
       // Best-effort: backup only informs the accepted-edit follow-up.
@@ -253,9 +249,12 @@ export class ProgressWorkflowFileActionsController {
       .filter((info) => info.location.absolutePath === file)
       .map((info) => info.round);
     if (rounds.length === 0) return undefined;
-    const round = rounds.reduce((max, r) => Math.max(max, r));
 
-    return { agent: config.agent, model: config.model, round };
+    return {
+      agent: config.agent,
+      model: config.model,
+      round: Math.max(...rounds),
+    };
   }
 
   private findOutputDirectory(

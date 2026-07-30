@@ -89,32 +89,52 @@ function createAnthropicHandler(
   );
 }
 
-function createAnthropicPricingHandler(): ModelHandlerAnthropic {
-  return new ModelHandlerAnthropic(
-    buildTestModelConfig({
-      name: 'test-anthropic',
-      label: 'Test Anthropic',
-      fullName: 'claude-test',
-      shortName: 'claude-test',
-      provider: ModelProvider.ANTHROPIC,
-      maxOutputTokens: 1024,
-      inputPrice: 3,
-      outputPrice: 15,
-      contextWindow: 200000,
-      capabilities: {
-        supportsPromptCaching: true,
-      },
-      openRouterOnly: false,
-    }),
-  );
-}
-
 /** A minimal single-turn "hello" user message, the shape most tests need. */
 function helloMessages(): MessageParam[] {
   return [
     {
       role: 'user',
       content: [{ type: 'text', text: 'hello', citations: null }],
+    },
+  ];
+}
+
+/** The content blocks for a user turn carrying an inline base64 PDF. */
+function base64PdfContent(title = 'sample.pdf'): ContentBlockParam[] {
+  return [
+    { type: 'text', text: `Document: ${title}`, citations: null },
+    {
+      type: 'document',
+      source: {
+        type: 'base64',
+        media_type: 'application/pdf',
+        data: 'ZHVtbXk=',
+      },
+      title,
+    },
+  ];
+}
+
+function base64PdfMessages(title = 'sample.pdf'): MessageParam[] {
+  return [{ role: 'user', content: base64PdfContent(title) }];
+}
+
+/** A user turn referencing a PDF that already lives in the Files API. */
+function uploadedPdfMessages(
+  fileId: string,
+  title = 'sample.pdf',
+): MessageParam[] {
+  return [
+    {
+      role: 'user',
+      content: [
+        { type: 'text', text: `Document: ${title}`, citations: null },
+        {
+          type: 'document',
+          source: { type: 'file', file_id: fileId },
+          title,
+        },
+      ] as unknown as ContentBlockParam[],
     },
   ];
 }
@@ -177,7 +197,13 @@ describe('ModelHandlerAnthropic cache pricing', () => {
       expected: (1000 * 3) / 1e6 + (100 * 15) / 1e6 + (30 * 3 * 1.25) / 1e6,
     },
   ])('$name', ({ cacheCreation, expected }) => {
-    const price = createAnthropicPricingHandler().computePrice({
+    const handler = new ModelHandlerAnthropic(
+      buildTestModelConfig(ANTHROPIC_TEST_CONFIG, {
+        inputPrice: 3,
+        outputPrice: 15,
+      }),
+    );
+    const price = handler.computePrice({
       input_tokens: 1000,
       output_tokens: 100,
       cache_read_input_tokens: 0,
@@ -283,6 +309,23 @@ function stubHandlerForTest(
   (handler as any).getStreamingConfig = () => false;
 }
 
+/** A minimal successful Anthropic message response. */
+function anthropicMessage(
+  model: string,
+  overrides: Record<string, unknown> = {},
+): any {
+  return {
+    id: 'msg',
+    type: 'message',
+    role: 'assistant',
+    model,
+    content: [{ type: 'text', text: 'ok' }],
+    stop_reason: 'end_turn',
+    usage: { input_tokens: 1, output_tokens: 1 },
+    ...overrides,
+  };
+}
+
 /**
  * Build a client whose beta.messages.create records each request and returns a
  * minimal successful message, capturing the recorded options for assertions.
@@ -297,20 +340,30 @@ function createCapturingAnthropicClient(model: string): {
       messages: {
         create: async (opts: any) => {
           messageOptions.push(opts);
-          return {
-            id: 'msg',
-            type: 'message',
-            role: 'assistant',
-            model,
-            content: [{ type: 'text', text: 'ok' }],
-            stop_reason: 'end_turn',
-            usage: { input_tokens: 1, output_tokens: 1 },
-          };
+          return anthropicMessage(model);
         },
       },
     },
   } as any;
   return { client, messageOptions };
+}
+
+/** Record `context_compaction` activity states emitted through the logger. */
+function captureCompactionActivity(handler: ModelHandlerAnthropic): string[] {
+  const activityStates: string[] = [];
+  stubHandlerForTest(handler, {
+    info: (_message: string, options?: { data?: unknown }) => {
+      const data = options?.data as
+        { activity?: unknown; state?: unknown } | undefined;
+      if (
+        data?.activity === 'context_compaction' &&
+        typeof data.state === 'string'
+      ) {
+        activityStates.push(data.state);
+      }
+    },
+  });
+  return activityStates;
 }
 
 interface AnthropicFileEstimateTarget {
@@ -366,18 +419,7 @@ describe('ModelHandlerAnthropic message guards', () => {
       }),
     );
 
-    handler.setMediaContent([
-      { type: 'text', text: 'Document: sample.pdf', citations: null },
-      {
-        type: 'document',
-        source: {
-          type: 'base64',
-          media_type: 'application/pdf',
-          data: 'ZHVtbXk=',
-        },
-        title: 'sample.pdf',
-      },
-    ] as ContentBlockParam[]);
+    handler.setMediaContent(base64PdfContent());
 
     const messages = await handler.initializeMessages('', 'request text', [
       pathToLocation('/tmp/sample.pdf'),
@@ -681,51 +723,18 @@ describe('ModelHandlerAnthropic message guards', () => {
     const handler = createAnthropicHandler({ supportsNativePdf: true });
     stubHandlerForTest(handler);
 
-    const messages: MessageParam[] = [
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: 'Document: sample.pdf', citations: null },
-          {
-            type: 'document',
-            source: {
-              type: 'base64',
-              media_type: 'application/pdf',
-              data: 'ZHVtbXk=',
-            },
-            title: 'sample.pdf',
-          },
-        ],
-      },
-    ];
+    const messages = base64PdfMessages();
 
     const uploadArgs: any[] = [];
-    const messageOptions: any[] = [];
-
-    const client = {
-      beta: {
-        files: {
-          upload: async (params: any) => {
-            uploadArgs.push(params);
-            return { id: 'file_uploaded' };
-          },
-        },
-        messages: {
-          create: async (opts: any) => {
-            messageOptions.push(opts);
-            return {
-              id: 'msg',
-              type: 'message',
-              role: 'assistant',
-              model: 'claude-test',
-              content: [{ type: 'text', text: 'ok' }],
-              stop_reason: 'end_turn',
-              usage: { input_tokens: 1, output_tokens: 1 },
-            } as any;
-          },
-        },
+    const { client, messageOptions } =
+      createCapturingAnthropicClient('claude-test');
+    client.beta.files = {
+      upload: async (params: any) => {
+        uploadArgs.push(params);
+        return { id: 'file_uploaded' };
       },
-    } as any;
+    };
+
     const response = await handler.createResponse({
       client,
       messages,
@@ -755,52 +764,16 @@ describe('ModelHandlerAnthropic message guards', () => {
     const handler = createAnthropicHandler({ supportsNativePdf: true });
     stubHandlerForTest(handler);
 
-    const messages: MessageParam[] = [
-      {
-        role: 'user',
-        content: [
-          {
-            type: 'text',
-            text: 'Document: nested/diagram?.pdf',
-            citations: null,
-          },
-          {
-            type: 'document',
-            source: {
-              type: 'base64',
-              media_type: 'application/pdf',
-              data: 'ZHVtbXk=',
-            },
-            title: 'nested/diagram?.pdf',
-          },
-        ],
-      },
-    ];
+    const messages = base64PdfMessages('nested/diagram?.pdf');
 
     const uploadArgs: any[] = [];
-
-    const client = {
-      beta: {
-        files: {
-          upload: async (params: any) => {
-            uploadArgs.push(params);
-            return { id: 'file_uploaded' };
-          },
-        },
-        messages: {
-          create: async () =>
-            ({
-              id: 'msg',
-              type: 'message',
-              role: 'assistant',
-              model: 'claude-test',
-              content: [{ type: 'text', text: 'ok' }],
-              stop_reason: 'end_turn',
-              usage: { input_tokens: 1, output_tokens: 1 },
-            }) as any,
-        },
+    const { client } = createCapturingAnthropicClient('claude-test');
+    client.beta.files = {
+      upload: async (params: any) => {
+        uploadArgs.push(params);
+        return { id: 'file_uploaded' };
       },
-    } as any;
+    };
 
     await handler.createResponse({ client, messages, temperature: 0 });
 
@@ -819,48 +792,15 @@ describe('ModelHandlerAnthropic message guards', () => {
     const handler = createAnthropicHandler({ supportsNativePdf: true });
     stubHandlerForTest(handler);
 
-    const messages: MessageParam[] = [
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: 'Document: sample.pdf', citations: null },
-          {
-            type: 'document',
-            source: {
-              type: 'file',
-              file_id: 'file_existing',
-            },
-            title: 'sample.pdf',
-          },
-        ] as unknown as ContentBlockParam[],
-      },
-    ];
+    const messages = uploadedPdfMessages('file_existing');
 
-    const messageOptions: any[] = [];
-
-    const client = {
-      beta: {
-        files: {
-          upload: async () => {
-            throw new Error('should not upload when file_id already provided');
-          },
-        },
-        messages: {
-          create: async (opts: any) => {
-            messageOptions.push(opts);
-            return {
-              id: 'msg',
-              type: 'message',
-              role: 'assistant',
-              model: 'claude-test',
-              content: [{ type: 'text', text: 'ok' }],
-              stop_reason: 'end_turn',
-              usage: { input_tokens: 1, output_tokens: 1 },
-            } as any;
-          },
-        },
+    const { client, messageOptions } =
+      createCapturingAnthropicClient('claude-test');
+    client.beta.files = {
+      upload: async () => {
+        throw new Error('should not upload when file_id already provided');
       },
-    } as any;
+    };
 
     const response = await handler.createResponse({
       client,
@@ -891,52 +831,20 @@ describe('ModelHandlerAnthropic message guards', () => {
     });
     stubHandlerForTest(handler);
 
-    const messages: MessageParam[] = [
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: 'Document: sample.pdf', citations: null },
-          {
-            type: 'document',
-            source: {
-              type: 'file',
-              file_id: 'file_existing',
-            },
-            title: 'sample.pdf',
-          },
-        ] as unknown as ContentBlockParam[],
-      },
-    ];
+    const messages = uploadedPdfMessages('file_existing');
 
     const countTokenCalls: string[] = [];
 
-    const client = {
-      beta: {
-        files: {
-          upload: async () => {
-            throw new Error('should not upload existing file sources');
-          },
-        },
-        messages: {
-          countTokens: async () => {
-            countTokenCalls.push('countTokens');
-            throw new Error(
-              'countTokens should not be invoked for file sources',
-            );
-          },
-          create: async () =>
-            ({
-              id: 'msg',
-              type: 'message',
-              role: 'assistant',
-              model: 'claude-test',
-              content: [{ type: 'text', text: 'ok' }],
-              stop_reason: 'end_turn',
-              usage: { input_tokens: 1, output_tokens: 1 },
-            }) as any,
-        },
+    const { client } = createCapturingAnthropicClient('claude-test');
+    client.beta.files = {
+      upload: async () => {
+        throw new Error('should not upload existing file sources');
       },
-    } as any;
+    };
+    client.beta.messages.countTokens = async () => {
+      countTokenCalls.push('countTokens');
+      throw new Error('countTokens should not be invoked for file sources');
+    };
 
     const response = await handler.createResponse({
       client,
@@ -959,23 +867,7 @@ describe('ModelHandlerAnthropic message guards', () => {
     });
     stubHandlerForTest(handler);
 
-    const messages: MessageParam[] = [
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: 'Document: sample.pdf', citations: null },
-          {
-            type: 'document',
-            source: {
-              type: 'base64',
-              media_type: 'application/pdf',
-              data: 'ZHVtbXk=',
-            },
-            title: 'sample.pdf',
-          },
-        ],
-      },
-    ];
+    const messages = base64PdfMessages();
 
     const callOrder: string[] = [];
     const countTokensOptions: any[] = [];
@@ -996,15 +888,7 @@ describe('ModelHandlerAnthropic message guards', () => {
           },
           create: async () => {
             callOrder.push('create');
-            return {
-              id: 'msg',
-              type: 'message',
-              role: 'assistant',
-              model: 'claude-test',
-              content: [{ type: 'text', text: 'ok' }],
-              stop_reason: 'end_turn',
-              usage: { input_tokens: 1, output_tokens: 1 },
-            } as any;
+            return anthropicMessage('claude-test');
           },
         },
       },
@@ -1034,23 +918,7 @@ describe('ModelHandlerAnthropic message guards', () => {
     });
     stubHandlerForTest(handler);
 
-    const messages: MessageParam[] = [
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: 'Document: sample.pdf', citations: null },
-          {
-            type: 'document',
-            source: {
-              type: 'base64',
-              media_type: 'application/pdf',
-              data: 'ZHVtbXk=',
-            },
-            title: 'sample.pdf',
-          },
-        ],
-      },
-    ];
+    const messages = base64PdfMessages();
     const controller = new AbortController();
     const upload = vi.fn(async () => ({ id: 'file_uploaded' }));
     const create = vi.fn(async () => {
@@ -1098,39 +966,13 @@ describe('ModelHandlerAnthropic message guards', () => {
       },
     });
 
-    const messages: MessageParam[] = [
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: 'hello', citations: null },
-        ] as ContentBlockParam[],
-      },
-    ];
-
-    const messageOptions: any[] = [];
-    const client = {
-      beta: {
-        messages: {
-          countTokens: async () => ({ input_tokens: 900000 }),
-          create: async (opts: any) => {
-            messageOptions.push(opts);
-            return {
-              id: 'msg',
-              type: 'message',
-              role: 'assistant',
-              model: 'claude-sonnet-4-6',
-              content: [{ type: 'text', text: 'ok' }],
-              stop_reason: 'end_turn',
-              usage: { input_tokens: 1, output_tokens: 1 },
-            } as any;
-          },
-        },
-      },
-    } as any;
+    const { client, messageOptions } =
+      createCapturingAnthropicClient('claude-sonnet-4-6');
+    client.beta.messages.countTokens = async () => ({ input_tokens: 900000 });
 
     const response = await handler.createResponse({
       client,
-      messages,
+      messages: helloMessages(),
       temperature: 0,
     });
     assert.equal(response.response.stop_reason, 'end_turn');
@@ -1149,154 +991,98 @@ describe('ModelHandlerAnthropic message guards', () => {
     );
   });
 
-  it('adds native compaction context edit for Claude Opus 4.6 tool-use runs', async () => {
-    const handler = createAnthropicHandler({
-      supportsTokenCounting: false,
-      supportsReasoning: false,
-    });
-    handler.config.fullName = 'claude-opus-4-6';
-    handler.setAgentCategory(AgentCategory.ToolUse);
+  it.each(['claude-opus-4-6', 'claude-opus-4-8'])(
+    'adds native compaction context edit for %s tool-use runs',
+    async (fullName) => {
+      const handler = createAnthropicHandler({
+        supportsTokenCounting: false,
+        supportsReasoning: false,
+      });
+      handler.config.fullName = fullName;
+      handler.setAgentCategory(AgentCategory.ToolUse);
 
-    stubHandlerForTest(handler);
+      stubHandlerForTest(handler);
 
-    const messages = helloMessages();
-    const { client, messageOptions } =
-      createCapturingAnthropicClient('claude-opus-4-6');
+      const messages = helloMessages();
+      const { client, messageOptions } =
+        createCapturingAnthropicClient(fullName);
 
-    stubCompactionThresholdPercent(75);
+      stubCompactionThresholdPercent(75);
 
-    await handler.createResponse({ client, messages, temperature: 0 });
+      await handler.createResponse({ client, messages, temperature: 0 });
 
-    const options = messageOptions[0] ?? {};
-    const betas: string[] = options.betas ?? [];
-    assert.ok(
-      betas.includes('compact-2026-01-12'),
-      'should include compaction beta header',
-    );
+      const options = messageOptions[0] ?? {};
+      const betas: string[] = options.betas ?? [];
+      assert.ok(
+        betas.includes('compact-2026-01-12'),
+        'should include compaction beta header',
+      );
 
-    const edits = options.context_management?.edits ?? [];
-    const compactionEdit = edits.find(
-      (edit: { type: string }) => edit.type === 'compact_20260112',
-    );
-    assert.ok(compactionEdit, 'should configure compact_20260112 context edit');
-    assert.equal(compactionEdit.pause_after_compaction, false);
-    assert.equal(compactionEdit.trigger?.type, 'input_tokens');
-    assert.equal(
-      compactionEdit.trigger?.value,
-      150000,
-      'should trigger compaction at configured threshold (75%) of 200K context window',
-    );
-    assert.equal(
-      compactionEdit.instructions,
-      undefined,
-      'should rely on Anthropic default compaction instructions',
-    );
-  });
+      const edits = options.context_management?.edits ?? [];
+      const compactionEdit = edits.find(
+        (edit: { type: string }) => edit.type === 'compact_20260112',
+      );
+      assert.ok(
+        compactionEdit,
+        'should configure compact_20260112 context edit',
+      );
+      assert.equal(compactionEdit.pause_after_compaction, false);
+      assert.equal(compactionEdit.trigger?.type, 'input_tokens');
+      assert.equal(
+        compactionEdit.trigger?.value,
+        150000,
+        'should trigger compaction at configured threshold (75%) of 200K context window',
+      );
+      assert.equal(
+        compactionEdit.instructions,
+        undefined,
+        'should rely on Anthropic default compaction instructions',
+      );
+    },
+  );
 
-  it('adds native compaction context edit for Claude Opus 4.8 tool-use runs', async () => {
-    const handler = createAnthropicHandler({
-      supportsTokenCounting: false,
-      supportsReasoning: false,
-    });
-    handler.config.fullName = 'claude-opus-4-8';
-    handler.setAgentCategory(AgentCategory.ToolUse);
+  it.each([
+    { reasoningEffort: ReasoningEffort.XHIGH, expectedEffort: 'xhigh' },
+    { reasoningEffort: ReasoningEffort.MAX, expectedEffort: 'max' },
+  ])(
+    'uses adaptive thinking with $expectedEffort effort for Opus 4.8 $expectedEffort reasoning',
+    async ({ reasoningEffort, expectedEffort }) => {
+      const handler = createAnthropicHandler({
+        supportsReasoning: true,
+        supportsReasoningEffort: true,
+        supportsAdaptiveThinking: true,
+        supportedReasoningEfforts: [
+          ReasoningEffort.LOW,
+          ReasoningEffort.MEDIUM,
+          ReasoningEffort.HIGH,
+          ReasoningEffort.XHIGH,
+          ReasoningEffort.MAX,
+        ],
+        reasoningEffort,
+      });
+      handler.config.fullName = 'claude-opus-4-8';
 
-    stubHandlerForTest(handler);
+      stubHandlerForTest(handler);
 
-    const messages = helloMessages();
-    const { client, messageOptions } =
-      createCapturingAnthropicClient('claude-opus-4-8');
+      const messages = helloMessages();
+      const { client, messageOptions } =
+        createCapturingAnthropicClient('claude-opus-4-8');
 
-    stubCompactionThresholdPercent(75);
+      await handler.createResponse({ client, messages, temperature: 0 });
 
-    await handler.createResponse({ client, messages, temperature: 0 });
-
-    const options = messageOptions[0] ?? {};
-    const betas: string[] = options.betas ?? [];
-    assert.ok(
-      betas.includes('compact-2026-01-12'),
-      'should include compaction beta header',
-    );
-
-    const edits = options.context_management?.edits ?? [];
-    const compactionEdit = edits.find(
-      (edit: { type: string }) => edit.type === 'compact_20260112',
-    );
-    assert.ok(compactionEdit, 'should configure compact_20260112 context edit');
-    assert.equal(compactionEdit.pause_after_compaction, false);
-    assert.equal(compactionEdit.trigger?.type, 'input_tokens');
-    assert.equal(compactionEdit.trigger?.value, 150000);
-    assert.equal(compactionEdit.instructions, undefined);
-  });
-
-  it('uses adaptive thinking with xhigh effort for Opus 4.8 xhigh reasoning', async () => {
-    const handler = createAnthropicHandler({
-      supportsReasoning: true,
-      supportsReasoningEffort: true,
-      supportsAdaptiveThinking: true,
-      supportedReasoningEfforts: [
-        ReasoningEffort.LOW,
-        ReasoningEffort.MEDIUM,
-        ReasoningEffort.HIGH,
-        ReasoningEffort.XHIGH,
-        ReasoningEffort.MAX,
-      ],
-      reasoningEffort: ReasoningEffort.XHIGH,
-    });
-    handler.config.fullName = 'claude-opus-4-8';
-
-    stubHandlerForTest(handler);
-
-    const messages = helloMessages();
-    const { client, messageOptions } =
-      createCapturingAnthropicClient('claude-opus-4-8');
-
-    await handler.createResponse({ client, messages, temperature: 0 });
-
-    const options = messageOptions[0] ?? {};
-    assert.deepEqual(
-      options.thinking,
-      { type: 'adaptive', display: 'summarized' },
-      'Opus 4.8 should request adaptive thinking with display: summarized so reasoning still streams',
-    );
-    assert.equal(
-      options.output_config?.effort,
-      'xhigh',
-      "xhigh reasoning effort should map to the 'xhigh' (extra) tier on Opus 4.8",
-    );
-  });
-
-  it('uses adaptive thinking with max effort for Opus 4.8 max reasoning', async () => {
-    const handler = createAnthropicHandler({
-      supportsReasoning: true,
-      supportsReasoningEffort: true,
-      supportsAdaptiveThinking: true,
-      supportedReasoningEfforts: [
-        ReasoningEffort.LOW,
-        ReasoningEffort.MEDIUM,
-        ReasoningEffort.HIGH,
-        ReasoningEffort.XHIGH,
-        ReasoningEffort.MAX,
-      ],
-      reasoningEffort: ReasoningEffort.MAX,
-    });
-    handler.config.fullName = 'claude-opus-4-8';
-
-    stubHandlerForTest(handler);
-
-    const messages = helloMessages();
-    const { client, messageOptions } =
-      createCapturingAnthropicClient('claude-opus-4-8');
-
-    await handler.createResponse({ client, messages, temperature: 0 });
-
-    const options = messageOptions[0] ?? {};
-    assert.equal(
-      options.output_config?.effort,
-      'max',
-      "max reasoning effort should map to the top 'max' tier on Opus 4.8",
-    );
-  });
+      const options = messageOptions[0] ?? {};
+      assert.deepEqual(
+        options.thinking,
+        { type: 'adaptive', display: 'summarized' },
+        'Opus 4.8 should request adaptive thinking with display: summarized so reasoning still streams',
+      );
+      assert.equal(
+        options.output_config?.effort,
+        expectedEffort,
+        `${expectedEffort} reasoning effort should map to the '${expectedEffort}' tier on Opus 4.8`,
+      );
+    },
+  );
 
   it('uses paired Opus 5 entry capabilities instead of their shared fullName', async () => {
     const baseHandler = new ModelHandlerAnthropic(
@@ -1417,14 +1203,11 @@ describe('ModelHandlerAnthropic message guards', () => {
             messageOptions.push(options);
             const response = responses.shift();
             assert.ok(response);
-            return {
+            return anthropicMessage('claude-opus-4-6', {
               id: `msg-${messageOptions.length}`,
-              type: 'message',
-              role: 'assistant',
-              model: 'claude-opus-4-6',
               usage: { input_tokens: 100_000, output_tokens: 10 },
               ...response,
-            };
+            });
           },
         },
       },
@@ -1595,15 +1378,7 @@ describe('ModelHandlerAnthropic message guards', () => {
       if (messageOptions.length === 1) {
         throw new Error('transient failure');
       }
-      return {
-        id: 'msg',
-        type: 'message',
-        role: 'assistant',
-        model: 'claude-opus-4-6',
-        content: [{ type: 'text', text: 'ok' }],
-        stop_reason: 'end_turn',
-        usage: { input_tokens: 1, output_tokens: 1 },
-      };
+      return anthropicMessage('claude-opus-4-6');
     });
     const client = { beta: { messages: { create } } } as any;
     const request = {
@@ -1646,15 +1421,7 @@ describe('ModelHandlerAnthropic message guards', () => {
     const firstResponse = new Promise<any>((resolve) => {
       resolveFirstResponse = resolve;
     });
-    const successfulResponse = {
-      id: 'msg',
-      type: 'message',
-      role: 'assistant',
-      model: 'claude-opus-4-6',
-      content: [{ type: 'text', text: 'ok' }],
-      stop_reason: 'end_turn',
-      usage: { input_tokens: 1, output_tokens: 1 },
-    };
+    const successfulResponse = anthropicMessage('claude-opus-4-6');
     const create = vi.fn(async (options: any) => {
       messageOptions.push(options);
       if (messageOptions.length === 1) {
@@ -1742,19 +1509,7 @@ describe('ModelHandlerAnthropic message guards', () => {
     handler.config.fullName = 'claude-opus-4-6';
     handler.setAgentCategory(AgentCategory.ToolUse);
 
-    const activityStates: string[] = [];
-    stubHandlerForTest(handler, {
-      info: (_message: string, options?: { data?: unknown }) => {
-        const data = options?.data as
-          { activity?: unknown; state?: unknown } | undefined;
-        if (
-          data?.activity === 'context_compaction' &&
-          typeof data.state === 'string'
-        ) {
-          activityStates.push(data.state);
-        }
-      },
-    });
+    const activityStates = captureCompactionActivity(handler);
     stubCompactionThresholdPercent(75);
 
     const client = {
@@ -1767,18 +1522,13 @@ describe('ModelHandlerAnthropic message guards', () => {
               ['started'],
               'start marker should precede the non-streaming SDK request',
             );
-            return {
-              id: 'msg',
-              type: 'message',
-              role: 'assistant',
-              model: 'claude-opus-4-6',
+            return anthropicMessage('claude-opus-4-6', {
               content: [
                 { type: 'compaction', content: '<summary>state</summary>' },
                 { type: 'text', text: 'ok' },
               ],
-              stop_reason: 'end_turn',
               usage: { input_tokens: 20_000, output_tokens: 1 },
-            };
+            });
           },
         },
       },
@@ -1907,19 +1657,7 @@ describe('ModelHandlerAnthropic message guards', () => {
         );
       }
 
-      const activityStates: string[] = [];
-      stubHandlerForTest(handler, {
-        info: (_message: string, options?: { data?: unknown }) => {
-          const data = options?.data as
-            { activity?: unknown; state?: unknown } | undefined;
-          if (
-            data?.activity === 'context_compaction' &&
-            typeof data.state === 'string'
-          ) {
-            activityStates.push(data.state);
-          }
-        },
-      });
+      const activityStates = captureCompactionActivity(handler);
       stubCompactionThresholdPercent(75);
 
       const client = {
@@ -1932,18 +1670,13 @@ describe('ModelHandlerAnthropic message guards', () => {
                 expectedAtRequest,
                 'fallback estimate should decide before the SDK request',
               );
-              return {
-                id: 'msg',
-                type: 'message',
-                role: 'assistant',
-                model: 'claude-opus-4-6',
+              return anthropicMessage('claude-opus-4-6', {
                 content: [
                   { type: 'compaction', content: '<summary>state</summary>' },
                   { type: 'text', text: 'ok' },
                 ],
-                stop_reason: 'end_turn',
                 usage: { input_tokens: 20_000, output_tokens: 1 },
-              };
+              });
             },
           },
         },
@@ -2002,19 +1735,7 @@ describe('ModelHandlerAnthropic message guards', () => {
     handler.config.fullName = 'claude-opus-4-6';
     handler.setAgentCategory(AgentCategory.ToolUse);
 
-    const activityStates: string[] = [];
-    stubHandlerForTest(handler, {
-      info: (_message: string, options?: { data?: unknown }) => {
-        const data = options?.data as
-          { activity?: unknown; state?: unknown } | undefined;
-        if (
-          data?.activity === 'context_compaction' &&
-          typeof data.state === 'string'
-        ) {
-          activityStates.push(data.state);
-        }
-      },
-    });
+    const activityStates = captureCompactionActivity(handler);
     stubCompactionThresholdPercent(75);
 
     const messages: MessageParam[] = [
@@ -2049,15 +1770,9 @@ describe('ModelHandlerAnthropic message guards', () => {
           },
           create: async () => {
             assert.deepEqual(activityStates, ['started']);
-            return {
-              id: 'msg',
-              type: 'message',
-              role: 'assistant',
-              model: 'claude-opus-4-6',
-              content: [{ type: 'text', text: 'ok' }],
-              stop_reason: 'end_turn',
+            return anthropicMessage('claude-opus-4-6', {
               usage: { input_tokens: 20_000, output_tokens: 1 },
-            };
+            });
           },
         },
       },
@@ -2604,10 +2319,12 @@ describe('ModelHandlerAnthropic pre-message_start error handling', () => {
     };
   }
 
-  it('preserves AnthropicUserAbortError thrown before message_start (does not wrap it)', async () => {
-    // The stream-failure debug log resolves relay routing via the server-side
-    // key service; stub it so this isolated suite doesn't need the singleton
-    // that extension activation normally initializes.
+  /**
+   * The stream-failure debug log resolves relay routing via the server-side
+   * key service; stub it so this isolated suite doesn't need the singleton
+   * that extension activation normally initializes.
+   */
+  function stubDirectServerKeyService(): void {
     vi.spyOn(serverKeysModule, 'getServerSideKeyService').mockReturnValue({
       shouldUseServerSideKeysSync: () => false,
       getUseIncludedModelAccess: () => false,
@@ -2617,6 +2334,10 @@ describe('ModelHandlerAnthropic pre-message_start error handling', () => {
     } as unknown as ReturnType<
       typeof serverKeysModule.getServerSideKeyService
     >);
+  }
+
+  it('preserves AnthropicUserAbortError thrown before message_start (does not wrap it)', async () => {
+    stubDirectServerKeyService();
 
     const handler = createAnthropicHandler({
       supportsTokenCounting: false,
@@ -2667,15 +2388,7 @@ describe('ModelHandlerAnthropic pre-message_start error handling', () => {
   });
 
   it('preserves the original error message once message_start was received (does not mislabel a post-start stream failure)', async () => {
-    vi.spyOn(serverKeysModule, 'getServerSideKeyService').mockReturnValue({
-      shouldUseServerSideKeysSync: () => false,
-      getUseIncludedModelAccess: () => false,
-      canUseServerSideKeys: async () => false,
-      getRelayBaseUrl: (provider: string) =>
-        `https://relay.example.com/functions/v1/relay/${provider}/v1`,
-    } as unknown as ReturnType<
-      typeof serverKeysModule.getServerSideKeyService
-    >);
+    stubDirectServerKeyService();
 
     const handler = createAnthropicHandler({
       supportsTokenCounting: false,
@@ -2726,15 +2439,7 @@ describe('ModelHandlerAnthropic pre-message_start error handling', () => {
   });
 
   it('keeps raw stream failures out of visible warning logs', async () => {
-    vi.spyOn(serverKeysModule, 'getServerSideKeyService').mockReturnValue({
-      shouldUseServerSideKeysSync: () => false,
-      getUseIncludedModelAccess: () => false,
-      canUseServerSideKeys: async () => false,
-      getRelayBaseUrl: (provider: string) =>
-        `https://relay.example.com/functions/v1/relay/${provider}/v1`,
-    } as unknown as ReturnType<
-      typeof serverKeysModule.getServerSideKeyService
-    >);
+    stubDirectServerKeyService();
 
     const handler = createAnthropicHandler({
       supportsTokenCounting: false,

@@ -1,6 +1,6 @@
 // Sign-up policy checks enforced at user creation (existing users are never re-checked).
 
-export const MIN_GITHUB_ACCOUNT_AGE_DAYS = 30;
+const MIN_GITHUB_ACCOUNT_AGE_DAYS = 30;
 
 // Disposable mailbox providers observed farming the Researcher Access Program.
 const DISPOSABLE_EMAIL_DOMAINS: ReadonlySet<string> = new Set([
@@ -47,7 +47,7 @@ const PRIVACY_RELAY_EMAIL_DOMAINS: ReadonlySet<string> = new Set([
   'pm.me',
 ]);
 
-export type EmailPolicyDecision =
+type EmailPolicyDecision =
   { allowed: true } | { allowed: false; reason: string; userMessage: string };
 
 function normalizeDomain(email: string): string | null {

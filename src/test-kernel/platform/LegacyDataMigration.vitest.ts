@@ -1,6 +1,5 @@
 // Node imports
-import { mkdir, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 // Third-party imports
@@ -13,7 +12,7 @@ import {
   moveEntryIfAbsent,
 } from '@platform/defaults/legacyDataMigration';
 import type { LegacyDataMigrationLogger } from '@platform/defaults/legacyDataMigration';
-import { cleanupTempDirs } from '@test/support/tempDirPlatform';
+import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 
 async function pathExists(path: string): Promise<boolean> {
   try {
@@ -41,19 +40,13 @@ function fakeLogger(): LegacyDataMigrationLogger & {
 
 const tempDirs: string[] = [];
 
-async function makeTempDir(prefix: string): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), prefix));
-  tempDirs.push(dir);
-  return dir;
-}
-
 afterEach(async () => {
   await cleanupTempDirs(tempDirs);
 });
 
 describe('mergeLegacyStorageBucket (#8622 vscode → ~/.texra migration)', () => {
   it('is a no-op when the legacy bucket does not exist', async () => {
-    const target = await makeTempDir('texra-bucket-target-fresh-');
+    const target = await makeTempDir('texra-bucket-target-fresh-', tempDirs);
     const logger = fakeLogger();
 
     await mergeLegacyStorageBucket(join(target, 'missing'), target, {
@@ -67,8 +60,8 @@ describe('mergeLegacyStorageBucket (#8622 vscode → ~/.texra migration)', () =>
   });
 
   it('moves whole entries into an empty target bucket', async () => {
-    const legacy = await makeTempDir('texra-bucket-legacy-');
-    const target = await makeTempDir('texra-bucket-target-');
+    const legacy = await makeTempDir('texra-bucket-legacy-', tempDirs);
+    const target = await makeTempDir('texra-bucket-target-', tempDirs);
     const logger = fakeLogger();
 
     await mkdir(join(legacy, 'executions', 'run-a'), { recursive: true });
@@ -93,8 +86,8 @@ describe('mergeLegacyStorageBucket (#8622 vscode → ~/.texra migration)', () =>
   });
 
   it('merges id-keyed collections per child when the target already has runs', async () => {
-    const legacy = await makeTempDir('texra-bucket-legacy-merge-');
-    const target = await makeTempDir('texra-bucket-target-merge-');
+    const legacy = await makeTempDir('texra-bucket-legacy-merge-', tempDirs);
+    const target = await makeTempDir('texra-bucket-target-merge-', tempDirs);
     const logger = fakeLogger();
 
     // Target bucket already holds a CLI-written run.
@@ -120,8 +113,8 @@ describe('mergeLegacyStorageBucket (#8622 vscode → ~/.texra migration)', () =>
   });
 
   it('never clobbers a colliding target entry and keeps the legacy copy', async () => {
-    const legacy = await makeTempDir('texra-bucket-legacy-collide-');
-    const target = await makeTempDir('texra-bucket-target-collide-');
+    const legacy = await makeTempDir('texra-bucket-legacy-collide-', tempDirs);
+    const target = await makeTempDir('texra-bucket-target-collide-', tempDirs);
     const logger = fakeLogger();
 
     await mkdir(join(legacy, 'memories'), { recursive: true });
@@ -147,8 +140,8 @@ describe('mergeLegacyStorageBucket (#8622 vscode → ~/.texra migration)', () =>
 
 describe('mergeLegacyWorkspaceStorageBucket', () => {
   it('merges every shared workspace collection per child', async () => {
-    const legacy = await makeTempDir('texra-workspace-legacy-');
-    const target = await makeTempDir('texra-workspace-target-');
+    const legacy = await makeTempDir('texra-workspace-legacy-', tempDirs);
+    const target = await makeTempDir('texra-workspace-target-', tempDirs);
     const logger = fakeLogger();
     const collections = [
       'executions',
@@ -186,8 +179,8 @@ describe('mergeLegacyWorkspaceStorageBucket', () => {
 
 describe('moveEntryIfAbsent', () => {
   it('moves files as well as directories', async () => {
-    const legacy = await makeTempDir('texra-move-legacy-');
-    const target = await makeTempDir('texra-move-target-');
+    const legacy = await makeTempDir('texra-move-legacy-', tempDirs);
+    const target = await makeTempDir('texra-move-target-', tempDirs);
     const logger = fakeLogger();
 
     await writeFile(join(legacy, 'state.json'), '{"a":1}');
@@ -206,8 +199,8 @@ describe('moveEntryIfAbsent', () => {
   });
 
   it('does not overwrite a file created by a concurrent migration', async () => {
-    const legacy = await makeTempDir('texra-move-race-legacy-');
-    const target = await makeTempDir('texra-move-race-target-');
+    const legacy = await makeTempDir('texra-move-race-legacy-', tempDirs);
+    const target = await makeTempDir('texra-move-race-target-', tempDirs);
     const logger = fakeLogger();
     const first = join(legacy, 'first.md');
     const second = join(legacy, 'second.md');

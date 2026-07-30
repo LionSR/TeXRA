@@ -36,7 +36,7 @@ export function effectiveCliApiMode(source: {
 }
 
 export function shortCliApiMode(mode: CliApiMode): string {
-  return mode === 'included' ? 'included' : 'personal';
+  return mode;
 }
 
 export function parseCliApiMode(input: string): CliApiMode | undefined {

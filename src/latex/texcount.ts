@@ -4,7 +4,7 @@ import { z } from 'zod';
 import * as logger from '@logger/logUtils';
 import type { FileLocation } from '@shared/schemas';
 import { AbsoluteFS, pathToLocation } from '@utils/files';
-import { filterNotNull, ensureArray } from '@utils/core';
+import { filterNotNull, filterNotNullish, ensureArray } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { hasExtension } from '@utils/core/pathCore';
 import { runToolWithCheck } from '@utils/system/toolUtils';
@@ -62,27 +62,25 @@ const TexcountResultSchema = z.object({
 });
 export type TexcountResult = z.infer<typeof TexcountResultSchema>;
 
-/** Internal validation result - simple discriminated union */
-type ValidationResult = { valid: true } | { valid: false; reason: string };
-
-async function validateTexFile(
+/** Returns why the file cannot be counted, or null when it is countable. */
+async function rejectionReason(
   fileLocation: FileLocation,
   channel: string,
-): Promise<ValidationResult> {
+): Promise<string | null> {
   const filePath = fileLocation.absolutePath;
-  if (!(await AbsoluteFS.exists(fileLocation.absolutePath))) {
+  if (!(await AbsoluteFS.exists(filePath))) {
     const reason = `File ${filePath} does not exist.`;
     logger.warn(channel, reason);
-    return { valid: false, reason };
+    return reason;
   }
 
   if (!hasExtension(filePath, '.tex')) {
     const reason = `Error: File ${filePath} is not a LaTeX file. Skipping.`;
     logger.warn(channel, reason);
-    return { valid: false, reason };
+    return reason;
   }
 
-  return { valid: true };
+  return null;
 }
 
 async function runTexcount(
@@ -135,11 +133,9 @@ async function getIndividualCounts(
   const results = await Promise.all(
     paths.map(async (filePath) => {
       const fileLocation = pathToLocation(filePath);
-      const localErrors: string[] = [];
-      const validation = await validateTexFile(fileLocation, channel);
-      if (!validation.valid) {
-        localErrors.push(validation.reason);
-        return { output: null, errors: localErrors };
+      const reason = await rejectionReason(fileLocation, channel);
+      if (reason) {
+        return { output: null, error: reason };
       }
 
       const args: string[] = [];
@@ -157,23 +153,16 @@ async function getIndividualCounts(
         filePath,
         signal,
       );
-      if (stdout) {
-        return {
-          output: `TeX Count Results for ${filePath}:\n${stdout}`,
-          errors: localErrors,
-        };
-      }
-      if (error) {
-        localErrors.push(error);
-      }
-      return { output: null, errors: localErrors };
+      return stdout
+        ? { output: `TeX Count Results for ${filePath}:\n${stdout}`, error }
+        : { output: null, error };
     }),
   );
 
-  const outputs = results.map((result) => result.output).filter(filterNotNull);
-  const errors = results.flatMap((result) => result.errors);
-
-  return { outputs, errors };
+  return {
+    outputs: results.map((result) => result.output).filter(filterNotNull),
+    errors: results.map((result) => result.error).filter(filterNotNullish),
+  };
 }
 
 async function getSummedCount(
@@ -187,9 +176,9 @@ async function getSummedCount(
 
   for (const filePath of paths) {
     const fileLocation = pathToLocation(filePath);
-    const validation = await validateTexFile(fileLocation, channel);
-    if (!validation.valid) {
-      errors.push(validation.reason);
+    const reason = await rejectionReason(fileLocation, channel);
+    if (reason) {
+      errors.push(reason);
       continue;
     }
 

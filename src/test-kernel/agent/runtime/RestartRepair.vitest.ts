@@ -50,6 +50,21 @@ function createDurableFinalizer() {
   }));
 }
 
+/** Lease hook that treats the execution as inactive and runs the repair. */
+async function performInactiveLease<T>(
+  _executionId: ExecutionId,
+  operation: () => Promise<T>,
+): Promise<{ status: 'performed'; value: T }> {
+  return { status: 'performed', value: await operation() };
+}
+
+/** Group closer that only reports closures for the expected outcome. */
+function closeGroupsOn(expected: RunOutcome) {
+  return vi.fn(async (streamIds: readonly StreamTabId[], status: RunOutcome) =>
+    status === expected ? [...streamIds] : [],
+  );
+}
+
 describe('repairRestartedStreams', () => {
   it('keeps only one delayed lease retry and cancels it on disposal', () => {
     vi.useFakeTimers();
@@ -137,10 +152,7 @@ describe('repairRestartedStreams', () => {
         executionIds: new Map([[streamId, executionId]]),
         closeRunningGroups,
         finalizeExecution,
-        runWithInactiveExecutionLease: vi.fn(async (_id, operation) => ({
-          status: 'performed' as const,
-          value: await operation(),
-        })),
+        runWithInactiveExecutionLease: performInactiveLease,
       });
 
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.COMPLETED);
@@ -177,10 +189,7 @@ describe('repairRestartedStreams', () => {
           waitingStreams: new Set(),
           executionIds: new Map([[streamId, executionId]]),
           closeRunningGroups: vi.fn(async () => []),
-          runWithInactiveExecutionLease: vi.fn(async (_id, operation) => ({
-            status: 'performed' as const,
-            value: await operation(),
-          })),
+          runWithInactiveExecutionLease: performInactiveLease,
         }),
       ).rejects.toThrow('metadata temporarily unreadable');
       expect(readMetaStrict).toHaveBeenCalledOnce();
@@ -211,10 +220,7 @@ describe('repairRestartedStreams', () => {
         executionIds: new Map([[streamId, executionId]]),
         closeRunningGroups,
         finalizeExecution,
-        runWithInactiveExecutionLease: vi.fn(async (_id, operation) => ({
-          status: 'performed' as const,
-          value: await operation(),
-        })),
+        runWithInactiveExecutionLease: performInactiveLease,
       });
 
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.FAILED);
@@ -265,10 +271,7 @@ describe('repairRestartedStreams', () => {
     const executionId = 'execution-waiting' as ExecutionId;
     const streamStatus = new StreamStatusMachine();
     seedRunning(streamStatus, streamId);
-    const closeRunningGroups = vi.fn(
-      async (streamIds: readonly StreamTabId[], status: RunOutcome) =>
-        status === RUN_OUTCOME.CANCELLED ? [...streamIds] : [],
-    );
+    const closeRunningGroups = closeGroupsOn(RUN_OUTCOME.CANCELLED);
     const finalizeExecution = createDurableFinalizer();
 
     const result = await repairRestartedStreams({
@@ -300,10 +303,7 @@ describe('repairRestartedStreams', () => {
     const streamId = 'stream-waiting-without-phase' as StreamTabId;
     const executionId = 'execution-waiting-without-phase' as ExecutionId;
     const streamStatus = new StreamStatusMachine();
-    const closeRunningGroups = vi.fn(
-      async (streamIds: readonly StreamTabId[], status: RunOutcome) =>
-        status === RUN_OUTCOME.CANCELLED ? [...streamIds] : [],
-    );
+    const closeRunningGroups = closeGroupsOn(RUN_OUTCOME.CANCELLED);
     const finalizeExecution = createDurableFinalizer();
 
     const result = await repairRestartedStreams({
@@ -330,10 +330,7 @@ describe('repairRestartedStreams', () => {
     const streamId = 'stream-without-phase' as StreamTabId;
     const executionId = 'execution-without-phase' as ExecutionId;
     const streamStatus = new StreamStatusMachine();
-    const closeRunningGroups = vi.fn(
-      async (streamIds: readonly StreamTabId[], status: RunOutcome) =>
-        status === RUN_OUTCOME.FAILED ? [...streamIds] : [],
-    );
+    const closeRunningGroups = closeGroupsOn(RUN_OUTCOME.FAILED);
     const finalizeExecution = createDurableFinalizer();
 
     const result = await repairRestartedStreams({
@@ -372,10 +369,7 @@ describe('repairRestartedStreams', () => {
       STREAM_PHASE.CANCELLED,
       STREAM_TRANSITION_CAUSE.LIFECYCLE,
     );
-    const closeRunningGroups = vi.fn(
-      async (streamIds: readonly StreamTabId[], status: RunOutcome) =>
-        status === RUN_OUTCOME.CANCELLED ? [...streamIds] : [],
-    );
+    const closeRunningGroups = closeGroupsOn(RUN_OUTCOME.CANCELLED);
     const finalizeExecution = createDurableFinalizer();
 
     const result = await repairRestartedStreams({
@@ -409,10 +403,7 @@ describe('repairRestartedStreams', () => {
     const executionId = 'execution-failed' as ExecutionId;
     const streamStatus = new StreamStatusMachine();
     seedRunning(streamStatus, streamId);
-    const closeRunningGroups = vi.fn(
-      async (streamIds: readonly StreamTabId[], status: RunOutcome) =>
-        status === RUN_OUTCOME.FAILED ? [...streamIds] : [],
-    );
+    const closeRunningGroups = closeGroupsOn(RUN_OUTCOME.FAILED);
     const finalizeExecution = createDurableFinalizer();
     const synchronizeResultOutcome = vi.fn(async () => undefined);
 
@@ -501,10 +492,7 @@ describe('repairRestartedStreams', () => {
       finalizeExecution,
       synchronizeResultOutcome,
       signal: abort.signal,
-      runWithInactiveExecutionLease: vi.fn(async (_id, operation) => ({
-        status: 'performed' as const,
-        value: await operation(),
-      })),
+      runWithInactiveExecutionLease: performInactiveLease,
     });
 
     expect(streamStatus.get(firstStream)).toBe(STREAM_PHASE.FAILED);
@@ -543,10 +531,7 @@ describe('repairRestartedStreams', () => {
     expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.FAILED);
     expect(finalizeExecution).not.toHaveBeenCalled();
 
-    const closeRunningGroups = vi.fn(
-      async (streamIds: readonly StreamTabId[], status: RunOutcome) =>
-        status === RUN_OUTCOME.FAILED ? [...streamIds] : [],
-    );
+    const closeRunningGroups = closeGroupsOn(RUN_OUTCOME.FAILED);
 
     const result = await repairRestartedStreams({
       streamStatus,

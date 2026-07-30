@@ -213,9 +213,9 @@ export function formatCliAgentDetails(entry: AgentEntry): string {
     ['defaultOutputFiles', entry.defaultOutputFiles],
     ['visibility', entry.visibility],
   ];
-  const metadataLines = metadataFields
-    .filter(([, values]) => values && values.length > 0)
-    .map(([label, values]) => `${label}: ${values!.join(', ')}`);
+  const metadataLines = metadataFields.flatMap(([label, values]) =>
+    values && values.length > 0 ? [`${label}: ${values.join(', ')}`] : [],
+  );
   if (metadataLines.length > 0) {
     lines.push('');
     lines.push(...metadataLines);

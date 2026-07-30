@@ -28,8 +28,8 @@ import {
   includedModelAccess,
   setIncludedModelAccess,
 } from '@model/includedModelAccess';
-import type { StateStore } from '@platform/interfaces';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
+import { FakeStateStore } from '@test/support/FakePlatform';
 import { installPlatform } from '@test/support/setupPlatform';
 
 const OPENAI_CONFIG = Object.freeze({
@@ -47,19 +47,6 @@ class ExposedHandler extends ModelHandlerOpenAI {
   ): Promise<ResolvedClientCredential> {
     return this.resolveClientCredential(selection);
   }
-}
-
-/** A state store that answers every read with its caller-supplied default. */
-function fakeStateStore(): StateStore {
-  const values = new Map<string, unknown>();
-  return {
-    get: <T>(key: string, defaultValue?: T) =>
-      (values.has(key) ? (values.get(key) as T) : defaultValue) as T,
-    update: async (key: string, value: unknown) => {
-      values.set(key, value);
-    },
-    keys: () => [...values.keys()],
-  } as unknown as StateStore;
 }
 
 describe('bring-your-own-key is the model layer default', () => {
@@ -123,7 +110,8 @@ describe('bring-your-own-key is the model layer default', () => {
   });
 
   it('stays off even though a state store defaults the preference on', async () => {
-    const globalState = fakeStateStore();
+    // An empty store answers every read with its caller-supplied default.
+    const globalState = new FakeStateStore();
     // The app-side service, given a store, defaults included access ON — the
     // behavior this ruling deliberately does not let a library inherit.
     const service = new ServerSideKeyService(

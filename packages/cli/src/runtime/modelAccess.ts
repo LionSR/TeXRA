@@ -158,7 +158,7 @@ function startSentence(text: string): string {
 }
 
 function cliModelRecoveryActions(
-  options: CliNoAvailableModelsRecoveryOptions = {},
+  options: CliNoAvailableModelsRecoveryOptions,
 ): Required<CliNoAvailableModelsRecoveryOptions> {
   return {
     includedModeAction:
@@ -531,10 +531,6 @@ export function formatCliModelDetails(
   return lines.join('\n');
 }
 
-function modelIds(models: readonly CliModelAccess[]): string[] {
-  return models.map((entry) => entry.model.value);
-}
-
 function withModelAccess(
   models: readonly CliModelAccess[],
   entry: CliModelAccess | undefined,
@@ -676,7 +672,7 @@ export async function selectCliRunnableModel(
     modelsWithHiddenEntry,
     options.apiMode,
   );
-  const availableIds = modelIds(runnableEntries);
+  const availableIds = runnableEntries.map((entry) => entry.model.value);
   const decision = decideRunModel(
     [
       ...requestedCandidates,

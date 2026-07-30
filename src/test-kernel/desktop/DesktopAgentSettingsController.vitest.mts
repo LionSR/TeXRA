@@ -6,7 +6,7 @@ import { DefaultDesktopAgentSettingsController } from '@desktop/main/desktopAgen
 import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { TeamOptionDataSchema } from '@shared/schemas/mainView/state';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { isUnsupported } from '@shared/utils/dispatcher';
+import { assertSupported, isUnsupported } from '@shared/utils/dispatcher';
 
 import type { AgentCategory, AgentSource } from '@shared/schemas/agent';
 import { isStored } from '@test/support/settingsStoresFake';
@@ -114,13 +114,6 @@ function messageCommand(message: unknown): string | undefined {
   return (message as { command?: string }).command;
 }
 
-function requireAction(action: unknown): (...args: never[]) => unknown {
-  if (typeof action !== 'function') {
-    throw new Error('Expected a supported desktop agent settings action.');
-  }
-  return action as (...args: never[]) => unknown;
-}
-
 function physicistCatalog(): AgentCatalog {
   const workflow = ['correct', 'polish'].map((name): AgentEntry => ({
     source: 'builtInWorkflow',
@@ -185,12 +178,7 @@ describe('DefaultDesktopAgentSettingsController', () => {
     const { controller, posted, workspaceState } = createControllerFixture({
       catalog: physicistCatalog(),
     });
-    const setEnabled = requireAction(controller.actions.setEnabled) as (input: {
-      category: AgentCategory;
-      source: AgentSource;
-      name: string;
-      enabled: boolean;
-    }) => Promise<void>;
+    const setEnabled = assertSupported(controller.actions.setEnabled);
 
     await setEnabled({
       category: 'workflow',
@@ -247,9 +235,7 @@ describe('DefaultDesktopAgentSettingsController', () => {
       catalog: physicistCatalog(),
       selectCustomAgentDirectory: async () => '/agents/selected',
     });
-    const setCustomDir = requireAction(
-      controller.actions.setCustomDir,
-    ) as () => Promise<void>;
+    const setCustomDir = assertSupported(controller.actions.setCustomDir);
 
     await setCustomDir();
 
@@ -268,9 +254,7 @@ describe('DefaultDesktopAgentSettingsController', () => {
         catalog: physicistCatalog(),
         chooseTeamAvailability: async () => 'continue',
       });
-    const applyPreset = requireAction(controller.actions.applyModePreset) as (
-      presetId: string,
-    ) => Promise<void>;
+    const applyPreset = assertSupported(controller.actions.applyModePreset);
 
     await applyPreset('physicist');
 
@@ -354,9 +338,7 @@ describe('DefaultDesktopAgentSettingsController', () => {
       refreshAgents,
     });
     update.mockClear();
-    const applyPreset = requireAction(controller.actions.applyModePreset) as (
-      presetId: string,
-    ) => Promise<void>;
+    const applyPreset = assertSupported(controller.actions.applyModePreset);
 
     await applyPreset('remote-team');
 
@@ -400,9 +382,7 @@ describe('DefaultDesktopAgentSettingsController', () => {
       refreshAgents,
     });
     update.mockClear();
-    const applyPreset = requireAction(controller.actions.applyModePreset) as (
-      presetId: string,
-    ) => Promise<void>;
+    const applyPreset = assertSupported(controller.actions.applyModePreset);
 
     await applyPreset('remote-team');
 
@@ -428,9 +408,7 @@ describe('DefaultDesktopAgentSettingsController', () => {
         visibleCatalog,
         promptText: async () => '  Paper Team  ',
       });
-    const savePreset = requireAction(
-      controller.actions.saveModePreset,
-    ) as () => Promise<void>;
+    const savePreset = assertSupported(controller.actions.saveModePreset);
 
     await savePreset();
 
@@ -469,9 +447,7 @@ describe('DefaultDesktopAgentSettingsController', () => {
     const { controller, errorMessages, posted } = createControllerFixture({
       workspaceState,
     });
-    const deletePreset = requireAction(controller.actions.deleteModePreset) as (
-      presetId: string,
-    ) => Promise<void>;
+    const deletePreset = assertSupported(controller.actions.deleteModePreset);
 
     await deletePreset('custom-team');
 
@@ -497,11 +473,12 @@ describe('DefaultDesktopAgentSettingsController', () => {
     const { controller, opened } = createControllerFixture({
       getCustomAgentDirectory: async () => '/agents/custom',
     });
-    const openFolder = requireAction(
-      controller.actions.openFolder,
-    ) as () => Promise<void>;
+    const openFolder = assertSupported(controller.actions.openFolder);
 
-    await openFolder();
+    await openFolder({
+      command: SETTINGS_VIEW_COMMANDS.OPEN_AGENT_FOLDER,
+      folderType: 'custom',
+    });
 
     expect(opened).toEqual(['/agents/custom']);
   });
@@ -509,9 +486,7 @@ describe('DefaultDesktopAgentSettingsController', () => {
   it('reports unknown presets without writing roster state', async () => {
     const { controller, errorMessages, workspaceState } =
       createControllerFixture();
-    const applyPreset = requireAction(controller.actions.applyModePreset) as (
-      presetId: string,
-    ) => Promise<void>;
+    const applyPreset = assertSupported(controller.actions.applyModePreset);
 
     await applyPreset('missing-team');
 

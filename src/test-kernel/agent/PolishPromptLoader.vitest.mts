@@ -2,7 +2,6 @@
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 // Third-party imports
 import { describe, expect, it } from 'vitest';
@@ -13,17 +12,13 @@ import {
   renderPolishPrompt,
 } from '@agent/runtime/polishModel';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { createFakePlatform } from '@test/support/FakePlatform';
-
-const REPO_ROOT = resolve(
-  fileURLToPath(new URL('.', import.meta.url)),
-  '../../..',
-);
+import { REPO_ROOT } from '@test/support/repoScan';
+import { setupPlatform } from '@test/support/setupPlatform';
 
 describe('polish prompt loader', () => {
+  setupPlatform({}, { fs: nodeFilesystem });
+
   it('loads the host-provided polish YAML path directly', async () => {
-    const { initPlatform } = await import('@platform/platform');
-    initPlatform(createFakePlatform({}, { fs: nodeFilesystem }));
     initializePolishModel(
       resolve(
         REPO_ROOT,
@@ -38,9 +33,6 @@ describe('polish prompt loader', () => {
   });
 
   it('rejects with a wrapped error for malformed polish prompt YAML', async () => {
-    const { initPlatform } = await import('@platform/platform');
-    initPlatform(createFakePlatform({}, { fs: nodeFilesystem }));
-
     const dir = await mkdtemp(resolve(tmpdir(), 'texra-polish-'));
     const brokenPath = resolve(dir, 'broken.yaml');
     await writeFile(brokenPath, 'prompts:\n  userRequest: "unterminated\n');

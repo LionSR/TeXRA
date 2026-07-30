@@ -472,9 +472,7 @@ class AgentReviewServiceImpl {
     }
 
     this.issues = [...this.issues, issue];
-    this.updateDiagnostics();
-    void this.syncContextKeys();
-    this.emitter.fire();
+    this.publishIssues();
     return { accepted: true };
   }
 
@@ -483,9 +481,7 @@ class AgentReviewServiceImpl {
     if (!issue) return;
     this.dismissed.add(fingerprint(issue));
     this.issues = this.issues.filter((entry) => entry.id !== id);
-    this.updateDiagnostics();
-    void this.syncContextKeys();
-    this.emitter.fire();
+    this.publishIssues();
   }
 
   /**
@@ -501,9 +497,7 @@ class AgentReviewServiceImpl {
     this.activeReview = undefined;
     this.pendingCommitReview = undefined;
     this.reviewGeneration++;
-    this.updateDiagnostics();
-    void this.syncContextKeys();
-    this.emitter.fire();
+    this.publishIssues();
   }
 
   /** Stop the active review while preserving any findings already reported. */
@@ -552,6 +546,13 @@ class AgentReviewServiceImpl {
     void vscode.window.showInformationMessage(
       `Launched the ${FIX_AGENT} agent to fix ${formatResultCount(targets.length, 'review issue')}. Run the review again once it finishes.`,
     );
+  }
+
+  /** Republish the current issue set to diagnostics, context keys, and the tree. */
+  private publishIssues(): void {
+    this.updateDiagnostics();
+    void this.syncContextKeys();
+    this.emitter.fire();
   }
 
   private updateDiagnostics(): void {

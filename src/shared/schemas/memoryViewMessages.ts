@@ -64,16 +64,6 @@ const MemoryPathMessageSchema = z.object({
   storagePath: z.string().min(1),
 });
 
-/** Memory delete message with display path for confirmation (reusable field schema) */
-const MemoryDeleteMessageSchema = MemoryPathMessageSchema.extend({
-  displayPath: z.string().min(1),
-});
-
-/** Memory enabled toggle message (reusable field schema) */
-const MemoryEnabledMessageSchema = z.object({
-  enabled: z.boolean(),
-});
-
 // Inbound messages with command literals
 export const GetMemoryDataMessageSchema = commandOnly(
   MEMORY_VIEW_COMMANDS.GET_MEMORY_DATA,
@@ -91,12 +81,15 @@ export const OpenMemoryFolderMessageSchema = commandOnly(
   MEMORY_VIEW_COMMANDS.OPEN_MEMORY_FOLDER,
 );
 
-export const DeleteMemoryMessageSchema = MemoryDeleteMessageSchema.extend({
+/** Carries the display path so the host can confirm before deleting. */
+export const DeleteMemoryMessageSchema = MemoryPathMessageSchema.extend({
   command: z.literal(MEMORY_VIEW_COMMANDS.DELETE_MEMORY),
+  displayPath: z.string().min(1),
 });
 
-export const SetMemoryEnabledMessageSchema = MemoryEnabledMessageSchema.extend({
+export const SetMemoryEnabledMessageSchema = z.object({
   command: z.literal(MEMORY_VIEW_COMMANDS.SET_MEMORY_ENABLED),
+  enabled: z.boolean(),
 });
 
 export const PinMemoryMessageSchema = MemoryPathMessageSchema.extend({

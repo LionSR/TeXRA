@@ -1,7 +1,6 @@
 import { Buffer } from 'node:buffer';
 
 import { GoogleGenAI, type File } from '@google/genai';
-import { ReasoningEffort, type ModelCapabilities } from 'llm-zoo';
 
 import type { AgentTrace } from '@agent/trace';
 import type {
@@ -18,29 +17,10 @@ import type { MediaFileResult } from '../support/MediaAttachmentProcessor';
 /**
  * Shared helpers for the two Google handlers (generateContent chat handler and
  * the Interactions handler). Both use the SAME `GoogleGenAI` SDK, so client
- * setup, Gemini-3 detection, and reasoning->thinking-level mapping are identical
- * in shape and were previously copy-pasted across the two files.
- *
- * The mapping helpers are generic over the per-handler value space: the chat
- * handler emits SDK `ThinkingLevel` enums while the Interactions handler emits
- * lowercase string literals, so callers supply their own level values and the
- * matching message labels to keep log output byte-identical.
+ * setup and the media-attachment pipeline are identical in shape and were
+ * previously copy-pasted across the two files. Capability getters that differ
+ * only by a per-SDK literal map live on `GoogleModelHandlerBase` instead.
  */
-
-/** Whether the model is a Gemini 3 variant (different thinking/media rules). */
-export function isGemini3Model(fullName: string): boolean {
-  return /^gemini-3[\.\-]/.test(fullName);
-}
-
-/** Whether the model can accept file attachments (image/video or native audio). */
-export function supportsGoogleFileUploads(
-  capabilities: Pick<
-    ModelCapabilities,
-    'supportsVision' | 'supportsNativeAudio'
-  >,
-): boolean {
-  return capabilities.supportsVision || capabilities.supportsNativeAudio;
-}
 
 export interface GoogleClientCache {
   readonly client: GoogleGenAI;
@@ -109,65 +89,9 @@ export async function resolveGoogleClient(
     return cached.client;
   }
 
-  const client = await createClient(false);
+  const client = createClient(false);
   setCached({ client, credential });
   return client;
-}
-
-interface ResolveGeminiThinkingLevelParams<T> {
-  reasoningEffort: ReasoningEffort | undefined;
-  isGemini3: boolean;
-  /** Whether the model is a `-pro` variant (only supports low/high). */
-  isPro: boolean;
-  logger: AgentTrace;
-  /** Per-handler level values (SDK enum vs lowercase string literals). */
-  levels: { low: T; medium: T; high: T };
-  /** Human-readable level names used in log messages (casing differs per SDK). */
-  labels: { low: string; medium: string; high: string };
-}
-
-/**
- * Map the model's reasoning effort to a Gemini `thinking_level`.
- *
- * Returns `levels.low` (not `undefined`) for `NONE` so the API does not fall back
- * to its default medium/high — that would defeat the user's intent. Gemini tops
- * out at HIGH thinking, so xhigh/max both map to it; Gemini 3 Pro only supports
- * low/high, so MEDIUM falls back to HIGH for Pro.
- */
-export function resolveGeminiThinkingLevel<T>(
-  params: ResolveGeminiThinkingLevelParams<T>,
-): T | undefined {
-  const { reasoningEffort, isGemini3, isPro, logger, levels, labels } = params;
-
-  switch (reasoningEffort) {
-    case ReasoningEffort.NONE:
-      if (isGemini3) {
-        logger.warn(
-          `Gemini 3 models can't fully disable thinking. Using thinking_level '${labels.low}'.`,
-        );
-      }
-      return levels.low;
-
-    case ReasoningEffort.LOW:
-      return levels.low;
-
-    case ReasoningEffort.MEDIUM:
-      if (isGemini3 && isPro) {
-        logger.debug(
-          `Gemini 3 Pro does not support ${labels.medium} thinking level. Using ${labels.high}.`,
-        );
-        return levels.high;
-      }
-      return levels.medium;
-
-    case ReasoningEffort.HIGH:
-    case ReasoningEffort.XHIGH:
-    case ReasoningEffort.MAX:
-      return levels.high;
-
-    default:
-      return undefined;
-  }
 }
 
 interface UploadGoogleMediaEntriesOptions<T> {

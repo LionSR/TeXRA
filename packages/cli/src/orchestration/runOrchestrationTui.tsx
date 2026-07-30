@@ -132,11 +132,6 @@ const ORCHESTRATION_SELECT_MARGIN_ROWS = 1;
 const ORCHESTRATION_KEY_HINT_ROWS = 2;
 const ORCHESTRATION_TARGET_VISIBLE_ITEMS = 4;
 
-// Shared between the wrapped-row layout measurement (`headerLines`) and the
-// rendered launcher header so the measured and displayed subtitle can't drift.
-const ORCHESTRATION_LAUNCHER_SUBTITLE =
-  'Start a session or configure model access.';
-
 function orchestrationLinesRowCost(
   lines: readonly string[],
   columns: number,
@@ -263,25 +258,13 @@ export function OrchestrationApp(
 ): React.JSX.Element {
   const app = useApp();
   const { columns, rows } = useWindowSize();
-  const modelAccessView = orchestrationModelAccessView(
-    props.items,
-    props.models,
-    props.apiMode,
-    { allowDefaultModelLaunch: props.allowDefaultModelLaunch },
-  );
-  const { items, modelItems } = modelAccessView;
-  const agentItems = orchestrationModelAccessView(
-    props.agentItems ?? [],
-    props.models,
-    props.apiMode,
-    { allowDefaultModelLaunch: props.allowDefaultModelLaunch },
-  ).items;
-  const teamItems = orchestrationModelAccessView(
-    props.teamItems ?? [],
-    props.models,
-    props.apiMode,
-    { allowDefaultModelLaunch: props.allowDefaultModelLaunch },
-  ).items;
+  const accessView = (source: readonly CliOrchestrationItem[]) =>
+    orchestrationModelAccessView(source, props.models, props.apiMode, {
+      allowDefaultModelLaunch: props.allowDefaultModelLaunch,
+    });
+  const { items, modelItems } = accessView(props.items);
+  const agentItems = accessView(props.agentItems ?? []).items;
+  const teamItems = accessView(props.teamItems ?? []).items;
   const listFooterHints = orchestrationFooterHints(items);
   const statusLines = props.statusLines ?? [];
   const [step, setStep] = useState<OrchestrationLauncherStep>({
@@ -300,45 +283,53 @@ export function OrchestrationApp(
       })
     : [];
   const isPendingTeam = pending?.kind === 'preset';
-  // Model-step header text, shared between the wrapped-row measurement in
-  // `headerLines` and the styled render in the `pending` branch below.
-  const modelStepTitle = isPendingTeam ? 'Lead model' : 'Model';
-  const modelStepSubtitle = isPendingTeam
-    ? 'Runs the orchestrator agent and is the model it can choose for delegation.'
-    : 'Model for the first message.';
-  let headerLines: readonly string[];
-  if (modelAccessOpen) {
-    headerLines = ['Model access', CLI_MODEL_ACCESS_DESCRIPTION];
-  } else if (resumeOpen) {
-    headerLines = ['Resume', 'Choose a previous session to continue.'];
-  } else if (agentOpen) {
-    headerLines = ['Agent', 'Choose one agent for this session.'];
-  } else if (teamOpen) {
-    headerLines = ['Team', 'Choose a team for this session.'];
-  } else if (accountOpen) {
-    headerLines = ['Account', 'Log in or log out.'];
-  } else if (pending) {
-    headerLines = [modelStepTitle, modelStepSubtitle];
-  } else {
-    headerLines = [`TeXRA v${props.version}`, ORCHESTRATION_LAUNCHER_SUBTITLE];
-  }
-
+  // One header per step, shared between the wrapped-row measurement below and
+  // the styled render further down so the measured and displayed text can't
+  // drift.
+  let title: string;
+  let subtitle: string;
   let itemCount: number;
-  if (modelAccessOpen) {
-    itemCount = modelAccessItems.length;
-  } else if (resumeOpen) {
-    itemCount = props.resumeItems?.length ?? 0;
-  } else if (agentOpen) {
-    itemCount = agentItems.length;
-  } else if (teamOpen) {
-    itemCount = teamItems.length;
-  } else if (accountOpen) {
-    itemCount = props.accountItems?.length ?? 0;
-  } else if (pending) {
-    itemCount = modelItems.length;
-  } else {
-    itemCount = items.length;
+  switch (step.kind) {
+    case 'model-access':
+      title = 'Model access';
+      subtitle = CLI_MODEL_ACCESS_DESCRIPTION;
+      itemCount = modelAccessItems.length;
+      break;
+    case 'resume':
+      title = 'Resume';
+      subtitle = 'Choose a previous session to continue.';
+      itemCount = props.resumeItems?.length ?? 0;
+      break;
+    case 'agent':
+      title = 'Agent';
+      subtitle = 'Choose one agent for this session.';
+      itemCount = agentItems.length;
+      break;
+    case 'team':
+      title = 'Team';
+      subtitle = 'Choose a team for this session.';
+      itemCount = teamItems.length;
+      break;
+    case 'account':
+      title = 'Account';
+      subtitle = 'Sign in, change account, or sign out.';
+      itemCount = props.accountItems?.length ?? 0;
+      break;
+    case 'model':
+      title = isPendingTeam ? 'Lead model' : 'Model';
+      subtitle = isPendingTeam
+        ? 'Runs the orchestrator agent and is the model it can choose for delegation.'
+        : 'Model for the first message.';
+      itemCount = modelItems.length;
+      break;
+    case 'launcher':
+      // The launcher renders its own branded header; measure the same rows.
+      title = `TeXRA v${props.version}`;
+      subtitle = 'Start a session or configure model access.';
+      itemCount = items.length;
+      break;
   }
+  const headerLines: readonly string[] = [title, subtitle];
 
   let footerHints: readonly string[];
   if (teamOpen) {
@@ -416,9 +407,9 @@ export function OrchestrationApp(
     return (
       <Box flexDirection="column" paddingX={1}>
         <Text bold color="cyan">
-          Model access
+          {title}
         </Text>
-        <Text dimColor>{CLI_MODEL_ACCESS_DESCRIPTION}</Text>
+        <Text dimColor>{subtitle}</Text>
         <Box marginTop={1}>
           <Select
             key="orchestration-model-access-picker"
@@ -441,9 +432,9 @@ export function OrchestrationApp(
     return (
       <Box flexDirection="column" paddingX={1}>
         <Text bold color="cyan">
-          Resume
+          {title}
         </Text>
-        <Text dimColor>Choose a previous session to continue.</Text>
+        <Text dimColor>{subtitle}</Text>
         <Box marginTop={1}>
           <Select
             key="orchestration-resume-picker"
@@ -462,40 +453,24 @@ export function OrchestrationApp(
   }
 
   if (agentOpen || teamOpen || accountOpen) {
-    let picker: {
-      readonly title: string;
-      readonly subtitle: string;
-      readonly items: readonly CliOrchestrationItem[];
-    };
+    let pickerItems: readonly CliOrchestrationItem[];
     if (agentOpen) {
-      picker = {
-        title: 'Agent',
-        subtitle: 'Choose one agent for this session.',
-        items: agentItems,
-      };
+      pickerItems = agentItems;
     } else if (teamOpen) {
-      picker = {
-        title: 'Team',
-        subtitle: 'Choose a team for this session.',
-        items: teamItems,
-      };
+      pickerItems = teamItems;
     } else {
-      picker = {
-        title: 'Account',
-        subtitle: 'Sign in, change account, or sign out.',
-        items: props.accountItems ?? [],
-      };
+      pickerItems = props.accountItems ?? [];
     }
     return (
       <Box flexDirection="column" paddingX={1}>
         <Text bold color="cyan">
-          {picker.title}
+          {title}
         </Text>
-        <Text dimColor>{picker.subtitle}</Text>
+        <Text dimColor>{subtitle}</Text>
         <Box marginTop={1}>
           <Select
             key={`orchestration-${step.kind}-picker`}
-            items={picker.items}
+            items={pickerItems}
             maxVisibleItems={layout.maxVisibleItems}
             showOverflow={layout.showOverflow}
             onSelect={onItemSelect}
@@ -522,9 +497,9 @@ export function OrchestrationApp(
     return (
       <Box flexDirection="column" paddingX={1}>
         <Text bold color="cyan">
-          {modelStepTitle}
+          {title}
         </Text>
-        <Text dimColor>{modelStepSubtitle}</Text>
+        <Text dimColor>{subtitle}</Text>
         <Box marginTop={1}>
           <Select
             key="orchestration-model-picker"
@@ -550,7 +525,7 @@ export function OrchestrationApp(
         </Text>
         <Text dimColor>v{props.version}</Text>
       </Box>
-      <Text dimColor>{ORCHESTRATION_LAUNCHER_SUBTITLE}</Text>
+      <Text dimColor>{subtitle}</Text>
       {layout.statusLines.length > 0 ? (
         <Box marginTop={1} flexDirection="column">
           {layout.statusLines.map((line, index) => (

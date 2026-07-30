@@ -8,7 +8,11 @@ import {
   resetProgressState,
 } from '@progressView/frontend/progressState';
 import { createInitialState } from '@progressView/frontend/store';
-import { AgentCategory, type StreamTabInfo } from '@shared/schemas';
+import {
+  AgentCategory,
+  type StreamTabId,
+  type StreamTabInfo,
+} from '@shared/schemas';
 
 const parent: StreamTabInfo = {
   kind: 'agent',
@@ -49,18 +53,24 @@ const completedWorkflowScript: StreamTabInfo = {
   parentStreamId: 'parent',
 };
 
+function seedStreams(
+  activeStreamId: StreamTabId,
+  streams: StreamTabInfo[],
+): void {
+  appState.set({
+    ...createInitialState(),
+    activeStreamId,
+    streamById: new Map(
+      streams.map((stream) => [stream.name as StreamTabId, stream]),
+    ),
+  });
+}
+
 afterEach(resetProgressState);
 
 describe('progress executions labels', () => {
   it('retains child-stream identities after the active roster is empty', () => {
-    appState.set({
-      ...createInitialState(),
-      activeStreamId: 'parent',
-      streamById: new Map<string, StreamTabInfo>([
-        ['parent', parent],
-        ['reviewer#sub-1', completedChild],
-      ]),
-    });
+    seedStreams('parent' as StreamTabId, [parent, completedChild]);
 
     expect(logContext$.get().subagentExecutionLabels?.get('sub-1')).toBe(
       'reviewer',
@@ -68,15 +78,11 @@ describe('progress executions labels', () => {
   });
 
   it('exposes sibling identities while a subagent tab is active', () => {
-    appState.set({
-      ...createInitialState(),
-      activeStreamId: completedChild.name,
-      streamById: new Map<string, StreamTabInfo>([
-        ['parent', parent],
-        [completedChild.name, completedChild],
-        [completedSibling.name, completedSibling],
-      ]),
-    });
+    seedStreams(completedChild.name as StreamTabId, [
+      parent,
+      completedChild,
+      completedSibling,
+    ]);
 
     expect(logContext$.get().subagentExecutionLabels?.get('sub-2')).toBe(
       'leanSolver',
@@ -92,27 +98,13 @@ describe('progress executions labels', () => {
       agent: 'bash',
       executionId: 'process-1',
     };
-    appState.set({
-      ...createInitialState(),
-      activeStreamId: 'parent',
-      streamById: new Map<string, StreamTabInfo>([
-        ['parent', parent],
-        ['bash#process-1', process],
-      ]),
-    });
+    seedStreams('parent' as StreamTabId, [parent, process]);
 
     expect(logContext$.get().subagentExecutionLabels?.size).toBe(0);
   });
 
   it('labels child workflow-script executions with the script name', () => {
-    appState.set({
-      ...createInitialState(),
-      activeStreamId: 'parent',
-      streamById: new Map<string, StreamTabInfo>([
-        ['parent', parent],
-        [completedWorkflowScript.name, completedWorkflowScript],
-      ]),
-    });
+    seedStreams('parent' as StreamTabId, [parent, completedWorkflowScript]);
 
     expect(logContext$.get().subagentExecutionLabels?.get('workflow-1')).toBe(
       'repo-cleanup-readonly-pilot-2026-07-24',

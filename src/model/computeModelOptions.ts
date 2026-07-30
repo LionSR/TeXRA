@@ -327,9 +327,7 @@ async function resolveModelAvailability(
   }
 
   const personalAccess = await getPersonalAccessKindForModel(config, ctx);
-  return personalAccess
-    ? availabilityStatus(personalAccess)
-    : availabilityStatus('missing-key');
+  return availabilityStatus(personalAccess ?? 'missing-key');
 }
 
 async function buildAvailabilityContext(

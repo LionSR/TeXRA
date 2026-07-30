@@ -22,6 +22,7 @@ import {
 import {
   appendStaticTranscriptItems,
   sessionHeaderIdentityLine,
+  type StaticTranscriptItem,
 } from '@cli/chat/tui/panes/StaticConversationTranscript';
 import { staticScrollbackTarget } from '@cli/chat/tui/appLayout';
 import { transcriptViewportKey } from '@cli/chat/tui/state/transcriptViewportMode';
@@ -46,6 +47,7 @@ import {
   createTranscriptPrintRequest,
   formatTranscriptForScrollback,
   transcriptToLines,
+  type TranscriptPrintRequest,
 } from '@cli/chat/tui/state/transcriptLines';
 import {
   CLI_LOCAL_STREAM_ID,
@@ -534,16 +536,14 @@ describe('CLI conversation transcript splitting', () => {
   });
 
   it('keeps bounded rich display rows unwrapped', () => {
-    const baseTool = toolEntry('t1', TOOL_USE_STATUS.COMPLETED, 'x'.repeat(40));
+    const tool = toolEntry('t1', TOOL_USE_STATUS.COMPLETED, 'x'.repeat(40));
+    const live = transcriptEntryLayout(tool, { mode: 'live', width: 20 });
+    const bounded = boundedTranscriptEntryLayout(
+      transcriptEntryLayout(tool, { mode: 'bounded', width: 20 }),
+      10,
+    );
 
-    for (const item of [baseTool]) {
-      const live = transcriptEntryLayout(item, { mode: 'live', width: 20 });
-      const bounded = boundedTranscriptEntryLayout(
-        transcriptEntryLayout(item, { mode: 'bounded', width: 20 }),
-        10,
-      );
-      expect(bounded.lines).toEqual(live.lines);
-    }
+    expect(bounded.lines).toEqual(live.lines);
   });
 
   it('budgets live user prompt bands with their margin rows', () => {
@@ -572,21 +572,13 @@ describe('CLI conversation transcript splitting', () => {
       ).entries.map((item) => item.id),
     ).toEqual(['t1']);
 
-    const staticItems = appendStaticTranscriptItems({
-      scrollbackStreamId: STREAM_ID,
-      currentItems: [],
-      streams: streamsFromEntries(STREAM_ID, [
+    expect(
+      staticItemIds([
         user,
         { ...emptyAssistant, finalized: true },
         { ...tool, finalized: true },
       ]),
-      meta: SESSION_META,
-    });
-    expect(staticItems.map((item) => item.id)).toEqual([
-      'session-header',
-      'u1',
-      't1',
-    ]);
+    ).toEqual(['session-header', 'u1', 't1']);
 
     expect(
       transcriptToLines(
@@ -611,13 +603,13 @@ describe('CLI conversation transcript splitting', () => {
     expect(split.finalized).toEqual([]);
     expect(split.pending.map((item) => item.id)).toEqual(['u1']);
 
-    const staticItems = appendStaticTranscriptItems({
+    const items = appendStaticTranscriptItems({
       scrollbackStreamId: STREAM_ID,
       currentItems: [],
       streams,
       meta: SESSION_META,
     });
-    expect(staticItems.map((item) => item.id)).toEqual(['session-header']);
+    expect(items.map((item) => item.id)).toEqual(['session-header']);
   });
 
   it('prints a deferred live prompt compactly once a tool continuation exists', () => {
@@ -636,17 +628,14 @@ describe('CLI conversation transcript splitting', () => {
     expect(split.finalized.map((item) => item.id)).toEqual(['u1']);
     expect(split.pending.map((item) => item.id)).toEqual(['t1']);
 
-    const staticItems = appendStaticTranscriptItems({
+    const items = appendStaticTranscriptItems({
       scrollbackStreamId: STREAM_ID,
       currentItems: [],
       streams,
       meta: SESSION_META,
     });
-    expect(staticItems.map((item) => item.id)).toEqual([
-      'session-header',
-      'u1',
-    ]);
-    expect(staticItems[1]).toMatchObject({ kind: 'entry' });
+    expect(items.map((item) => item.id)).toEqual(['session-header', 'u1']);
+    expect(items[1]).toMatchObject({ kind: 'entry' });
   });
 
   it('keeps inquiry continuations on the finalized transcript path', () => {
@@ -718,24 +707,13 @@ describe('CLI conversation transcript splitting', () => {
     const user = entry('u1', 'user', 'What is a tensor network?', true);
     const assistant = entry('a1', 'assistant', 'A decomposition.', false);
 
-    const first = appendStaticTranscriptItems({
-      scrollbackStreamId: STREAM_ID,
-      currentItems: [],
-      streams: streamsFromEntries(STREAM_ID, [user, assistant]),
-      meta: SESSION_META,
-    });
+    const first = staticItems([user, assistant]);
     expect(first).toHaveLength(2);
     expect(first[0]?.kind).toBe('header');
     expect(first.slice(1).map((item) => item.id)).toEqual(['u1']);
 
-    const second = appendStaticTranscriptItems({
-      scrollbackStreamId: STREAM_ID,
+    const second = staticItems([user, { ...assistant, finalized: true }], {
       currentItems: first,
-      streams: streamsFromEntries(STREAM_ID, [
-        user,
-        { ...assistant, finalized: true },
-      ]),
-      meta: SESSION_META,
     });
     expect(second).toHaveLength(3);
     expect(second.slice(1).map((item) => item.id)).toEqual(['u1', 'a1']);
@@ -754,18 +732,10 @@ describe('CLI conversation transcript splitting', () => {
       ]),
       title: 'assistant',
     });
-    const beforePrint = appendStaticTranscriptItems({
-      currentItems: [],
-      meta: SESSION_META,
-      scrollbackStreamId: STREAM_ID,
-      streams: streamsFromEntries(STREAM_ID, [user]),
-    });
-    const first = appendStaticTranscriptItems({
+    const beforePrint = staticItems([user]);
+    const first = staticItems([user, assistant], {
       currentItems: beforePrint,
-      meta: SESSION_META,
       printRequests: [request],
-      scrollbackStreamId: STREAM_ID,
-      streams: streamsFromEntries(STREAM_ID, [user, assistant]),
     });
 
     expect(first.map((item) => item.id)).toEqual([
@@ -779,12 +749,9 @@ describe('CLI conversation transcript splitting', () => {
       request: { title: 'assistant' },
     });
     expect(
-      appendStaticTranscriptItems({
+      staticItems([user, assistant], {
         currentItems: first,
-        meta: SESSION_META,
         printRequests: [request],
-        scrollbackStreamId: STREAM_ID,
-        streams: streamsFromEntries(STREAM_ID, [user, assistant]),
       }),
     ).toBe(first);
   });
@@ -801,13 +768,9 @@ describe('CLI conversation transcript splitting', () => {
       ]),
       title: 'assistant',
     });
-    const compact = appendStaticTranscriptItems({
-      currentItems: [],
+    const compact = staticItems([user, assistant], {
       maxRows: 0,
-      meta: SESSION_META,
       printRequests: [request],
-      scrollbackStreamId: STREAM_ID,
-      streams: streamsFromEntries(STREAM_ID, [user, assistant]),
       width: 80,
     });
     expect(compact.map((item) => item.id)).toEqual([
@@ -816,35 +779,25 @@ describe('CLI conversation transcript splitting', () => {
       'a1',
     ]);
 
-    const restored = appendStaticTranscriptItems({
-      currentItems: [],
-      meta: SESSION_META,
-      printRequests: [request],
-      scrollbackStreamId: STREAM_ID,
-      streams: streamsFromEntries(STREAM_ID, [user, assistant]),
-      width: 80,
-    });
-    expect(restored.map((item) => item.id)).toEqual([
+    const withHeader = [
       'session-header',
       'u1',
       'printed-transcript:root',
       'a1',
-    ]);
-
-    const expanded = appendStaticTranscriptItems({
-      currentItems: compact,
-      meta: SESSION_META,
-      printRequests: [request],
-      scrollbackStreamId: STREAM_ID,
-      streams: streamsFromEntries(STREAM_ID, [user, assistant]),
-      width: 80,
-    });
-    expect(expanded.map((item) => item.id)).toEqual([
-      'session-header',
-      'u1',
-      'printed-transcript:root',
-      'a1',
-    ]);
+    ];
+    expect(
+      staticItemIds([user, assistant], {
+        printRequests: [request],
+        width: 80,
+      }),
+    ).toEqual(withHeader);
+    expect(
+      staticItemIds([user, assistant], {
+        currentItems: compact,
+        printRequests: [request],
+        width: 80,
+      }),
+    ).toEqual(withHeader);
   });
 
   it('shows the session header exactly once', () => {
@@ -869,14 +822,7 @@ describe('CLI conversation transcript splitting', () => {
     const user = entry('u1', 'user', 'What is a tensor network?', true);
     const assistant = entry('a1', 'assistant', 'A decomposition.', true);
 
-    const compact = appendStaticTranscriptItems({
-      scrollbackStreamId: STREAM_ID,
-      currentItems: [],
-      streams: streamsFromEntries(STREAM_ID, [user, assistant]),
-      meta: SESSION_META,
-      maxRows: 2,
-      width: 80,
-    });
+    const compact = staticItems([user, assistant], { maxRows: 2, width: 80 });
 
     expect(compact).toHaveLength(3);
     expect(compact[0]).toMatchObject({
@@ -886,43 +832,19 @@ describe('CLI conversation transcript splitting', () => {
     });
     expect(compact.slice(1).map((item) => item.id)).toEqual(['u1', 'a1']);
 
-    expect(
-      appendStaticTranscriptItems({
-        scrollbackStreamId: STREAM_ID,
-        currentItems: [],
-        streams: streamsFromEntries(STREAM_ID, [user, assistant]),
-        meta: SESSION_META,
-        maxRows: 0,
-        width: 80,
-      }).map((item) => item.id),
-    ).toEqual(['u1', 'a1']);
+    expect(staticItemIds([user, assistant], { maxRows: 0, width: 80 })).toEqual(
+      ['u1', 'a1'],
+    );
   });
 
   it('inserts a newly eligible header before existing compact transcript entries', () => {
     const user = entry('u1', 'user', 'What is a tensor network?', true);
     const assistant = entry('a1', 'assistant', 'A decomposition.', true);
-    const compact = appendStaticTranscriptItems({
-      scrollbackStreamId: STREAM_ID,
-      currentItems: [],
-      streams: streamsFromEntries(STREAM_ID, [user, assistant]),
-      meta: SESSION_META,
-      maxRows: 0,
-      width: 80,
-    });
+    const compact = staticItems([user, assistant], { maxRows: 0, width: 80 });
 
-    const expanded = appendStaticTranscriptItems({
-      scrollbackStreamId: STREAM_ID,
-      currentItems: compact,
-      streams: streamsFromEntries(STREAM_ID, [user, assistant]),
-      meta: SESSION_META,
-      width: 80,
-    });
-
-    expect(expanded.map((item) => item.id)).toEqual([
-      'session-header',
-      'u1',
-      'a1',
-    ]);
+    expect(
+      staticItemIds([user, assistant], { currentItems: compact, width: 80 }),
+    ).toEqual(['session-header', 'u1', 'a1']);
   });
 
   it('keeps full tool output as the conservative static-header budget', () => {
@@ -945,96 +867,44 @@ describe('CLI conversation transcript splitting', () => {
     );
     expect(budgetRows).toBeGreaterThan(renderedRows);
 
-    const withoutHeader = appendStaticTranscriptItems({
-      scrollbackStreamId: STREAM_ID,
-      currentItems: [],
-      streams: streamsFromEntries(STREAM_ID, [tool]),
-      meta: SESSION_META,
-      maxRows: 0,
-      width: 80,
-    });
+    const withoutHeader = staticItems([tool], { maxRows: 0, width: 80 });
     expect(withoutHeader.map((item) => item.id)).toEqual(['t1']);
     expect(
-      appendStaticTranscriptItems({
-        scrollbackStreamId: STREAM_ID,
+      staticItemIds([tool], {
         currentItems: withoutHeader,
-        streams: streamsFromEntries(STREAM_ID, [tool]),
-        meta: SESSION_META,
         maxRows: renderedRows + 4,
         width: 80,
-      }).map((item) => item.id),
+      }),
     ).toEqual(['t1']);
   });
 
   it('budgets user band margins before inserting compact static headers', () => {
     const band = entry('u1', 'user', 'short prompt', true);
-    const compact = appendStaticTranscriptItems({
-      scrollbackStreamId: STREAM_ID,
-      currentItems: [],
-      streams: streamsFromEntries(STREAM_ID, [band]),
-      meta: SESSION_META,
-      maxRows: 0,
-      width: 80,
-    });
+    const compact = staticItems([band], { maxRows: 0, width: 80 });
 
     expect(compact.map((item) => item.id)).toEqual(['u1']);
     // One text row plus the band's top and bottom margin rows = 3; the full
     // header needs 4 more.
     expect(
-      appendStaticTranscriptItems({
-        scrollbackStreamId: STREAM_ID,
-        currentItems: compact,
-        streams: streamsFromEntries(STREAM_ID, [band]),
-        meta: SESSION_META,
-        maxRows: 6,
-        width: 80,
-      }).map((item) => item.id),
+      staticItemIds([band], { currentItems: compact, maxRows: 6, width: 80 }),
     ).toEqual(['u1']);
     expect(
-      appendStaticTranscriptItems({
-        scrollbackStreamId: STREAM_ID,
-        currentItems: compact,
-        streams: streamsFromEntries(STREAM_ID, [band]),
-        meta: SESSION_META,
-        maxRows: 7,
-        width: 80,
-      }).map((item) => item.id),
+      staticItemIds([band], { currentItems: compact, maxRows: 7, width: 80 }),
     ).toEqual(['session-header', 'u1']);
   });
 
   it('budgets static error rows at the padded wrap width', () => {
     const error = entry('e1', 'error', 'x'.repeat(77), true);
-    const compact = appendStaticTranscriptItems({
-      scrollbackStreamId: STREAM_ID,
-      currentItems: [],
-      streams: streamsFromEntries(STREAM_ID, [error]),
-      meta: SESSION_META,
-      maxRows: 0,
-      width: 80,
-    });
+    const compact = staticItems([error], { maxRows: 0, width: 80 });
 
     expect(compact.map((item) => item.id)).toEqual(['e1']);
     // 77 chars wraps to two rows at the padded width (80 - 4 = 76);
     // the full header needs 4 more.
     expect(
-      appendStaticTranscriptItems({
-        scrollbackStreamId: STREAM_ID,
-        currentItems: compact,
-        streams: streamsFromEntries(STREAM_ID, [error]),
-        meta: SESSION_META,
-        maxRows: 5,
-        width: 80,
-      }).map((item) => item.id),
+      staticItemIds([error], { currentItems: compact, maxRows: 5, width: 80 }),
     ).toEqual(['e1']);
     expect(
-      appendStaticTranscriptItems({
-        scrollbackStreamId: STREAM_ID,
-        currentItems: compact,
-        streams: streamsFromEntries(STREAM_ID, [error]),
-        meta: SESSION_META,
-        maxRows: 6,
-        width: 80,
-      }).map((item) => item.id),
+      staticItemIds([error], { currentItems: compact, maxRows: 6, width: 80 }),
     ).toEqual(['session-header', 'e1']);
   });
 
@@ -1045,36 +915,23 @@ describe('CLI conversation transcript splitting', () => {
       '[inquiry] ei_123 answered.',
       true,
     );
-    const compact = appendStaticTranscriptItems({
-      scrollbackStreamId: STREAM_ID,
-      currentItems: [],
-      streams: streamsFromEntries(STREAM_ID, [continuation]),
-      meta: SESSION_META,
-      maxRows: 0,
-      width: 80,
-    });
+    const compact = staticItems([continuation], { maxRows: 0, width: 80 });
 
     expect(compact.map((item) => item.id)).toEqual(['u1']);
     // One text row and no margin rows; the full header needs 4 more.
     expect(
-      appendStaticTranscriptItems({
-        scrollbackStreamId: STREAM_ID,
+      staticItemIds([continuation], {
         currentItems: compact,
-        streams: streamsFromEntries(STREAM_ID, [continuation]),
-        meta: SESSION_META,
         maxRows: 4,
         width: 80,
-      }).map((item) => item.id),
+      }),
     ).toEqual(['u1']);
     expect(
-      appendStaticTranscriptItems({
-        scrollbackStreamId: STREAM_ID,
+      staticItemIds([continuation], {
         currentItems: compact,
-        streams: streamsFromEntries(STREAM_ID, [continuation]),
-        meta: SESSION_META,
         maxRows: 5,
         width: 80,
-      }).map((item) => item.id),
+      }),
     ).toEqual(['session-header', 'u1']);
   });
 
@@ -1083,21 +940,9 @@ describe('CLI conversation transcript splitting', () => {
     const large = entry('a1', 'assistant', 'line 1\nline 2\nline 3', true);
     const later = entry('u2', 'user', 'later', true);
 
-    const compact = appendStaticTranscriptItems({
-      scrollbackStreamId: STREAM_ID,
-      currentItems: [],
-      streams: streamsFromEntries(STREAM_ID, [first, large, later]),
-      meta: SESSION_META,
-      maxRows: 2,
-      width: 80,
-    });
-
-    expect(compact.map((item) => item.id)).toEqual([
-      'session-header',
-      'u1',
-      'a1',
-      'u2',
-    ]);
+    expect(
+      staticItemIds([first, large, later], { maxRows: 2, width: 80 }),
+    ).toEqual(['session-header', 'u1', 'a1', 'u2']);
   });
 
   it('labels preset-launched sessions with team and root identity', () => {
@@ -1529,4 +1374,32 @@ function streamsFromEntries(
   entries: readonly ConversationEntry[],
 ): ReadonlyMap<StreamTabId, StreamSlice> {
   return new Map([[streamId, sliceWithEntries(streamId, entries)]]);
+}
+
+/** Static scrollback for a single-stream transcript of `entries`. */
+function staticItems(
+  entries: readonly ConversationEntry[],
+  options: {
+    readonly currentItems?: readonly StaticTranscriptItem[];
+    readonly maxRows?: number;
+    readonly printRequests?: readonly TranscriptPrintRequest[];
+    readonly width?: number;
+  } = {},
+): readonly StaticTranscriptItem[] {
+  return appendStaticTranscriptItems({
+    currentItems: options.currentItems ?? [],
+    maxRows: options.maxRows,
+    meta: SESSION_META,
+    printRequests: options.printRequests,
+    scrollbackStreamId: STREAM_ID,
+    streams: streamsFromEntries(STREAM_ID, entries),
+    width: options.width,
+  });
+}
+
+function staticItemIds(
+  entries: readonly ConversationEntry[],
+  options: Parameters<typeof staticItems>[1] = {},
+): readonly string[] {
+  return staticItems(entries, options).map((item) => item.id);
 }

@@ -1,6 +1,3 @@
-// Node imports
-import * as path from 'node:path';
-
 // Third-party imports
 import { z } from 'zod';
 
@@ -124,13 +121,18 @@ export class ReadFileTool extends defineTool({
 
     recordToolFileRead(filePath);
 
+    const range = input.range;
     const totalLines = lines.length;
-    const requestedStartLine = input.range?.start ?? 1;
-    const requestedEndLine = this.computeRequestedEndLine(
-      input.range,
-      requestedStartLine,
-      totalLines,
-    );
+    const requestedStartLine = range?.start ?? 1;
+    let requestedEndLine = totalLines;
+    if (range?.end != null) {
+      requestedEndLine = range.end;
+    } else if (range) {
+      requestedEndLine = Math.min(
+        requestedStartLine + READ_FILE_MAX_LINES - 1,
+        totalLines,
+      );
+    }
 
     // Clamp the 1-based range to the file bounds so callers can safely
     // request windows beyond the file length.
@@ -141,8 +143,7 @@ export class ReadFileTool extends defineTool({
     );
 
     // Append a range-exceeded warning when the caller asked beyond EOF
-    const rangeEndExceeded =
-      input.range?.end != null && input.range.end > totalLines;
+    const rangeEndExceeded = range?.end != null && range.end > totalLines;
     const suffix = rangeEndExceeded
       ? ` (requested end ${requestedEndLine} exceeds file length ${totalLines})`
       : '';
@@ -150,7 +151,7 @@ export class ReadFileTool extends defineTool({
     const result = formatFileView({
       path: displayPath,
       lines,
-      viewRange: input.range ? [startLine, endLine] : null,
+      viewRange: range ? [startLine, endLine] : null,
       summarySuffix: suffix,
     });
 
@@ -173,17 +174,6 @@ export class ReadFileTool extends defineTool({
     }
 
     return result;
-  }
-
-  private computeRequestedEndLine(
-    range: ReadInput['range'],
-    requestedStartLine: number,
-    totalLines: number,
-  ): number {
-    if (range?.end != null) return range.end;
-    if (range?.start != null)
-      return Math.min(requestedStartLine + READ_FILE_MAX_LINES - 1, totalLines);
-    return totalLines;
   }
 
   private getAttachmentConfig(filePath: string): AttachmentKind | null {

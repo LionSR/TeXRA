@@ -172,6 +172,22 @@ function mockConfig(
   vi.spyOn(providerConfigModule, 'getGlobalStreaming').mockReturnValue(false);
 }
 
+/** Shorthand for the `createResponse` call every test makes (the fake `client`
+ * never matches the SDK client type, hence the `as never` cast). */
+function respond(
+  handler: ModelHandlerGoogleInteractions,
+  client: unknown,
+  messages: Step[],
+  signal?: AbortSignal,
+) {
+  return handler.createResponse({
+    client: client as never,
+    messages,
+    temperature: 0,
+    signal,
+  });
+}
+
 /** Run a createResponse while draining the fake-timer poll waits. */
 async function runWithPolls<T>(promise: Promise<T>, ticks: number): Promise<T> {
   for (let i = 0; i < ticks; i += 1) {
@@ -197,11 +213,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
       getSequence: [completedInteraction('int_1')],
     });
 
-    const promise = handler.createResponse({
-      client: client as never,
-      messages: [userStep('a')],
-      temperature: 0,
-    });
+    const promise = respond(handler, client, [userStep('a')]);
     const result = await runWithPolls(promise, 2);
 
     expect(calls.create[0].background).toBe(true);
@@ -223,11 +235,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
       ],
     });
 
-    const promise = handler.createResponse({
-      client: client as never,
-      messages: [userStep('a')],
-      temperature: 0,
-    });
+    const promise = respond(handler, client, [userStep('a')]);
     const result = await runWithPolls(promise, 4);
 
     expect(calls.get.length).toBeGreaterThanOrEqual(3);
@@ -245,14 +253,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
     });
 
     const messages: Step[] = [userStep('a')];
-    await runWithPolls(
-      handler.createResponse({
-        client: client as never,
-        messages,
-        temperature: 0,
-      }),
-      2,
-    );
+    await runWithPolls(respond(handler, client, messages), 2);
 
     // Second turn: chained submit is immediately completed (no polling needed).
     const { client: client2, calls: calls2 } = bgClient({
@@ -260,14 +261,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
       getSequence: [completedInteraction('int_done2')],
     });
     messages.push(userStep('b'));
-    await runWithPolls(
-      handler.createResponse({
-        client: client2 as never,
-        messages,
-        temperature: 0,
-      }),
-      1,
-    );
+    await runWithPolls(respond(handler, client2, messages), 1);
 
     expect(calls.create[0].previousId).toBeUndefined();
     expect(calls2.create[0].previousId).toBe('int_done'); // NOT 'int_submit'
@@ -284,12 +278,12 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
       getSequence: [{ id: 'int_1', status: 'in_progress' }],
     });
 
-    const promise = handler.createResponse({
-      client: client as never,
-      messages: [userStep('a')],
-      temperature: 0,
-      signal: controller.signal,
-    });
+    const promise = respond(
+      handler,
+      client,
+      [userStep('a')],
+      controller.signal,
+    );
     const rejection = expect(promise).rejects.toThrow();
 
     // Allow the submit + first poll wait to begin, then abort.
@@ -313,14 +307,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
       getSequence: [completedInteraction('int_2')],
     });
     await expect(
-      runWithPolls(
-        handler.createResponse({
-          client: client2 as never,
-          messages: [userStep('b')],
-          temperature: 0,
-        }),
-        1,
-      ),
+      runWithPolls(respond(handler, client2, [userStep('b')]), 1),
     ).resolves.toBeDefined();
   });
 
@@ -333,14 +320,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
       getSequence: [completedInteraction('int_1')],
     });
 
-    await runWithPolls(
-      handler.createResponse({
-        client: client as never,
-        messages: [userStep('a')],
-        temperature: 0,
-      }),
-      1,
-    );
+    await runWithPolls(respond(handler, client, [userStep('a')]), 1);
 
     expect(calls.create[0].background).toBeFalsy();
     expect(calls.create[0].store).toBe(false);
@@ -356,14 +336,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
       getSequence: [completedInteraction('int_1')],
     });
 
-    await runWithPolls(
-      handler.createResponse({
-        client: client as never,
-        messages: [userStep('a')],
-        temperature: 0,
-      }),
-      1,
-    );
+    await runWithPolls(respond(handler, client, [userStep('a')]), 1);
 
     expect(calls.create[0].background).toBeFalsy();
     expect(calls.create[0].store).toBe(true); // still stateful, just not background
@@ -379,11 +352,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
       getSequence: [{ id: 'int_1', status: 'failed' }],
     });
 
-    const promise = handler.createResponse({
-      client: client as never,
-      messages: [userStep('a')],
-      temperature: 0,
-    });
+    const promise = respond(handler, client, [userStep('a')]);
     const rejection = expect(promise).rejects.toThrow(/status "failed"/);
     await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
     await rejection;
@@ -394,11 +363,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
       getSequence: [completedInteraction('int_2')],
     });
     await runWithPolls(
-      handler.createResponse({
-        client: client2 as never,
-        messages: [userStep('a'), userStep('b')],
-        temperature: 0,
-      }),
+      respond(handler, client2, [userStep('a'), userStep('b')]),
       1,
     );
     expect(calls2.create[0].previousId).toBeUndefined();
@@ -424,11 +389,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
 
     // Polling stops on requires_action and returns it — no throw, no hang.
     const result = await runWithPolls(
-      handler.createResponse({
-        client: client as never,
-        messages: [userStep('a')],
-        temperature: 0,
-      }),
+      respond(handler, client, [userStep('a')]),
       1,
     );
 
@@ -447,11 +408,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
       getSequence: [{ id: 'int_1', status: 'in_progress' }], // never completes
     });
 
-    const promise = handler.createResponse({
-      client: client as never,
-      messages: [userStep('a')],
-      temperature: 0,
-    });
+    const promise = respond(handler, client, [userStep('a')]);
     // Assert the cap value too, so a regression in BACKGROUND_MAX_DURATION_MS
     // (3h) is caught, not just the presence of a timeout message.
     const rejection = expect(promise).rejects.toThrow(
@@ -493,14 +450,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
     });
 
     const messages: Step[] = [userStep('a'), userStep('b'), userStep('c')];
-    const result = await runWithPolls(
-      handler.createResponse({
-        client: client as never,
-        messages,
-        temperature: 0,
-      }),
-      1,
-    );
+    const result = await runWithPolls(respond(handler, client, messages), 1);
 
     // Compaction ran on the non-background path; updatedMessages surfaced.
     expect(result.updatedMessages).toBeDefined();
@@ -545,11 +495,7 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
       models: {},
     };
 
-    const result = await handler.createResponse({
-      client: client as never,
-      messages: [userStep('a')],
-      temperature: 0,
-    });
+    const result = await respond(handler, client, [userStep('a')]);
 
     // First create attempted background; the retry ran foreground (no background).
     expect(createParams).toHaveLength(2);

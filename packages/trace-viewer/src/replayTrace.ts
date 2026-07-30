@@ -66,16 +66,12 @@ const NESTED_STAGE_KINDS = new Set(['round', 'phase', 'session']);
 function findRootStageId(
   entries: TraceDocument['entries'],
 ): string | undefined {
-  for (const entry of entries) {
-    if (entry.groupId !== undefined) continue;
-    if (
-      entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_START ||
-      entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_END
-    ) {
-      return entry.id;
-    }
-  }
-  return undefined;
+  return entries.find(
+    (entry) =>
+      entry.groupId === undefined &&
+      (entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_START ||
+        entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_END),
+  )?.id;
 }
 
 /**

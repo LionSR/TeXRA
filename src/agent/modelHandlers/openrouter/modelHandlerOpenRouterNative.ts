@@ -283,13 +283,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
         const finalOutput = response.choices?.[0]?.message?.content ?? '';
         output.finalize(typeof finalOutput === 'string' ? finalOutput : '');
 
-        if (response.usage?.promptTokens) {
-          this.lastKnownInputTokens = response.usage.promptTokens;
-        } else {
-          this.logger.warn(
-            'No usage data in streaming response — token tracking and compaction may be affected',
-          );
-        }
+        this.trackInputTokens(response.usage, 'streaming response');
         return { response, updatedMessages };
       } catch (err) {
         return handleStreamingFailure(err, {
@@ -324,14 +318,22 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       );
     }
 
-    if (response.usage?.promptTokens) {
-      this.lastKnownInputTokens = response.usage.promptTokens;
-    } else {
-      this.logger.warn(
-        'No usage data in response — token tracking and compaction may be affected',
-      );
-    }
+    this.trackInputTokens(response.usage, 'response');
     return { response, updatedMessages };
+  }
+
+  /** Records the prompt-token count that drives client-side compaction. */
+  private trackInputTokens(
+    usage: ChatUsage | undefined,
+    responseLabel: string,
+  ): void {
+    if (usage?.promptTokens) {
+      this.lastKnownInputTokens = usage.promptTokens;
+      return;
+    }
+    this.logger.warn(
+      `No usage data in ${responseLabel} — token tracking and compaction may be affected`,
+    );
   }
 
   /**
@@ -471,40 +473,39 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
 
   createMediaContent(mediaMessage: MediaEntry[]): ChatContentItems[] {
     return mediaMessage.flatMap((media): ChatContentItems[] => {
-      if (media.media_category === 'image') {
-        return [
-          { type: 'text', text: `Image: ${media.file_name}` },
-          {
-            type: 'image_url',
-            imageUrl: {
-              url: toDataUrl(media.media_type, media.data),
-              detail: 'high',
-            },
-          } as ChatContentItems,
-        ];
-      } else if (
-        media.media_category === 'audio' &&
-        this.capabilities.supportsNativeAudio
-      ) {
-        const audioFormat = extractMimeSubtype(media.media_type).toLowerCase();
-        return [
-          { type: 'text', text: `Audio: ${media.file_name}` },
-          {
-            type: 'input_audio',
-            inputAudio: {
-              data: media.data,
-              format: audioFormat,
-            },
-          } as ChatContentItems,
-        ];
-      } else if (media.media_category === 'audio') {
-        this.logger.warn(
-          `Audio input received (${media.file_name}) but native audio is not supported by this model. Skipping.`,
-        );
-        return [];
+      switch (media.media_category) {
+        case 'image':
+          return [
+            { type: 'text', text: `Image: ${media.file_name}` },
+            {
+              type: 'image_url',
+              imageUrl: {
+                url: toDataUrl(media.media_type, media.data),
+                detail: 'high',
+              },
+            } as ChatContentItems,
+          ];
+        case 'audio':
+          if (!this.capabilities.supportsNativeAudio) {
+            this.logger.warn(
+              `Audio input received (${media.file_name}) but native audio is not supported by this model. Skipping.`,
+            );
+            return [];
+          }
+          return [
+            { type: 'text', text: `Audio: ${media.file_name}` },
+            {
+              type: 'input_audio',
+              inputAudio: {
+                data: media.data,
+                format: extractMimeSubtype(media.media_type).toLowerCase(),
+              },
+            } as ChatContentItems,
+          ];
+        default:
+          this.logger.warn(`Unknown media category: ${media.media_category}`);
+          return [];
       }
-      this.logger.warn(`Unknown media category: ${media.media_category}`);
-      return [];
     });
   }
 

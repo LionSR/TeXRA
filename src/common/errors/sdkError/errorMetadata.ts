@@ -1,7 +1,7 @@
 import { type ProviderError, type StreamDiagnostics } from '@shared/schemas';
 import { isObject, isString } from '@utils/core';
 
-import { findInCauseChain } from '../errorPredicates';
+import { causeChain } from '../errorPredicates';
 import { type SdkErrorMetadata, isSdkErrorMetadata } from './sdkErrorKinds';
 
 /** Factory for symbol-keyed error metadata. Creates matched attach/detect
@@ -82,10 +82,8 @@ export function attachContextWindowError(err: unknown): void {
 }
 
 export function hasContextWindowErrorMarker(err: unknown): boolean {
-  return (
-    findInCauseChain(err, (current) =>
-      contextWindowErrorMetadata.detect(current) === true ? true : undefined,
-    ) ?? false
+  return causeChain(err).some(
+    (current) => contextWindowErrorMetadata.detect(current) === true,
   );
 }
 

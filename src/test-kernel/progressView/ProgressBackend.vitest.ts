@@ -30,10 +30,6 @@ import {
 } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
-import {
-  type RunFactEventName,
-  type RunFactPayloads,
-} from '@agent/runtime/runFactEvents';
 import type { TaskState } from '@agent/core/state/TaskState';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import { buildStreamInfos } from '@controllers/progressView/backend/streamInfoUtils';
@@ -164,6 +160,18 @@ async function createPersistentRecordingBackend(): Promise<
   );
 }
 
+interface ExecutionDeleter {
+  deleteExecution(
+    executionId: ExecutionId,
+    options?: DeleteExecutionOptions,
+  ): Promise<DeleteExecutionResult>;
+}
+
+/** `SessionStores.deleteExecution` is private; tests spy on it directly. */
+function executionDeleter(backend: ProgressBackend): ExecutionDeleter {
+  return backend.state.stores as unknown as ExecutionDeleter;
+}
+
 async function writeExecutionConfig(executionId: ExecutionId): Promise<void> {
   await getExecutionStore(executionId).writeConfig(
     toolUseTaskState('search', 'deepseekproT').agentConfig,
@@ -186,6 +194,14 @@ async function writeForeignExecutionLease(
   );
 }
 
+function emitRunEvent(
+  target: { session: SessionHandle },
+  streamId: StreamTabId,
+  event: AgentEvent,
+): void {
+  target.session.events.emit({ scope: 'run', streamId, event });
+}
+
 function emitActiveStream(
   target: { session: SessionHandle },
   payload: SetActiveStreamPayload,
@@ -205,15 +221,11 @@ function emitRunConfig(
   executionId: ExecutionId,
   taskState: TaskState,
 ): void {
-  target.session.events.emit({
-    scope: 'run',
+  emitRunEvent(target, streamId, {
+    type: 'run.config',
     streamId,
-    event: {
-      type: 'run.config',
-      streamId,
-      executionId,
-      config: taskState.agentConfig,
-    },
+    executionId,
+    config: taskState.agentConfig,
   });
 }
 
@@ -227,19 +239,6 @@ function emitStreamDescription(
       type: 'updateStreamDescription',
       payload,
     },
-  });
-}
-
-function emitRunFact<K extends RunFactEventName>(
-  target: { session: SessionHandle },
-  streamId: StreamTabId,
-  factName: K,
-  payload: RunFactPayloads[K],
-): void {
-  target.session.events.emit({
-    scope: 'run',
-    streamId,
-    event: { type: factName, ...payload } as Extract<AgentEvent, { type: K }>,
   });
 }
 
@@ -704,13 +703,7 @@ describe('ProgressBackend', () => {
   });
 
   it('constructs the shared progress backend service graph', () => {
-    const backend = new ProgressBackend({
-      storage: new FakeStateStore(),
-      sendMessage: vi.fn(() => true),
-      hasTarget: () => true,
-      approvals: createApprovalOptions(),
-      lifecycle: createLifecycleOptions(),
-    });
+    const { backend } = createRecordingBackend();
 
     expect(backend.approvalHandlers).toBeDefined();
 
@@ -782,13 +775,10 @@ describe('ProgressBackend', () => {
     const subscription = backend.setupEventListeners();
 
     try {
-      session.events.emit({
-        scope: 'session',
-        event: {
-          type: 'setActiveStream',
-          payload: { streamId, agentCategory: AgentCategory.Workflow },
-        },
-      });
+      emitActiveStream(
+        { session },
+        { streamId, agentCategory: AgentCategory.Workflow },
+      );
 
       expect(backend.state.activeStream).toBe(streamId);
       expect(backend.state.streamLogs.has(streamId)).toBe(true);
@@ -852,18 +842,13 @@ describe('ProgressBackend', () => {
   });
 
   it('routes removeStream session facts through the shared lifecycle delete path', async () => {
-    const session = createTestSession();
     const deletedStreams: StreamTabId[] = [];
-    const backend = new ProgressBackend({
-      storage: new FakeStateStore(),
-      session,
-      sendMessage: vi.fn(() => true),
-      hasTarget: () => true,
-      approvals: createApprovalOptions(),
-      lifecycle: createLifecycleOptions({
+    const { backend, session } = createIsolatedRecordingBackend(
+      createTestSession(),
+      createLifecycleOptions({
         cleanupDeletedStream: (stream) => deletedStreams.push(stream),
       }),
-    });
+    );
     const subscription = backend.setupEventListeners();
     const streamId = 'desktop-child-stream' as StreamTabId;
 
@@ -888,15 +873,7 @@ describe('ProgressBackend', () => {
   });
 
   it('handles removeStream session facts before backend load', async () => {
-    const session = createTestSession();
-    const backend = new ProgressBackend({
-      storage: new FakeStateStore(),
-      session,
-      sendMessage: vi.fn(() => true),
-      hasTarget: () => true,
-      approvals: createApprovalOptions(),
-      lifecycle: createLifecycleOptions(),
-    });
+    const { backend, session } = createIsolatedRecordingBackend();
     const clearStream = vi.spyOn(backend.state, 'clearStream');
     const subscription = backend.setupEventListeners();
     const streamId = 'preload-child-stream' as StreamTabId;
@@ -985,20 +962,8 @@ describe('ProgressBackend', () => {
   });
 
   it('deletes an active stream and activates the next visible stream', async () => {
-    const session = createTestSession();
-    const messages: ProgressViewOutboundMessage[] = [];
-    const lifecycle = createLifecycleOptions();
-    const backend = new ProgressBackend({
-      storage: new FakeStateStore(),
-      session,
-      sendMessage: (message) => {
-        messages.push(message);
-        return true;
-      },
-      hasTarget: () => true,
-      approvals: createApprovalOptions(),
-      lifecycle,
-    });
+    const { backend, lifecycle, messages, session } =
+      createIsolatedRecordingBackend();
     const first = 'first-visible' as StreamTabId;
     const second = 'second-visible' as StreamTabId;
 
@@ -1460,17 +1425,13 @@ describe('ProgressBackend', () => {
       );
       messages.length = 0;
 
-      target.session.events.emit({
-        scope: 'run',
-        streamId: run,
-        event: {
-          type: 'stage.start',
-          id: 'phase-2',
-          label: 'Reduce',
-          kind: 'phase',
-          index: 1,
-          total: 3,
-        },
+      emitRunEvent(target, run, {
+        type: 'stage.start',
+        id: 'phase-2',
+        label: 'Reduce',
+        kind: 'phase',
+        index: 1,
+        total: 3,
       });
 
       // The parent's viewport reads this row, so the push must reach a stream
@@ -1618,15 +1579,9 @@ describe('ProgressBackend', () => {
     const secondStream = 'session:second' as StreamTabId;
 
     try {
-      first.session.events.emit({
-        scope: 'session',
-        event: {
-          type: 'setActiveStream',
-          payload: {
-            streamId: firstStream,
-            agentCategory: AgentCategory.Workflow,
-          },
-        },
+      emitActiveStream(first, {
+        streamId: firstStream,
+        agentCategory: AgentCategory.Workflow,
       });
 
       await vi.waitFor(() =>
@@ -1635,15 +1590,9 @@ describe('ProgressBackend', () => {
       expect(second.backend.state.activeStream).not.toBe(firstStream);
       expect(JSON.stringify(second.messages)).not.toContain(firstStream);
 
-      second.session.events.emit({
-        scope: 'session',
-        event: {
-          type: 'setActiveStream',
-          payload: {
-            streamId: secondStream,
-            agentCategory: AgentCategory.ToolUse,
-          },
-        },
+      emitActiveStream(second, {
+        streamId: secondStream,
+        agentCategory: AgentCategory.ToolUse,
       });
 
       await vi.waitFor(() =>
@@ -1693,23 +1642,15 @@ describe('ProgressBackend', () => {
       await first.backend.state.snapshots.load([]);
       await second.backend.state.snapshots.load([]);
 
-      first.session.events.emit({
-        scope: 'run',
+      emitRunEvent(first, streamId, {
+        type: 'updateTodos',
         streamId,
-        event: {
-          type: 'updateTodos',
-          streamId,
-          todos: [firstTodo],
-        },
+        todos: [firstTodo],
       });
-      first.session.events.emit({
-        scope: 'run',
+      emitRunEvent(first, streamId, {
+        type: 'addOutputFiles',
         streamId,
-        event: {
-          type: 'addOutputFiles',
-          streamId,
-          filesByRound: { 1: [firstOutput] },
-        },
+        filesByRound: { 1: [firstOutput] },
       });
 
       expect(first.backend.state.snapshots.getWorkPlan(streamId).todos).toEqual(
@@ -1729,14 +1670,10 @@ describe('ProgressBackend', () => {
       );
       expect(JSON.stringify(second.messages)).not.toContain('first.pdf');
 
-      second.session.events.emit({
-        scope: 'run',
+      emitRunEvent(second, streamId, {
+        type: 'updateTodos',
         streamId,
-        event: {
-          type: 'updateTodos',
-          streamId,
-          todos: [secondTodo],
-        },
+        todos: [secondTodo],
       });
 
       expect(first.backend.state.snapshots.getWorkPlan(streamId).todos).toEqual(
@@ -1772,25 +1709,13 @@ describe('ProgressBackend', () => {
       await first.backend.state.snapshots.load([]);
       await second.backend.state.snapshots.load([]);
 
-      first.session.events.emit({
-        scope: 'session',
-        event: {
-          type: 'setActiveStream',
-          payload: {
-            streamId: firstStream,
-            agentCategory: AgentCategory.ToolUse,
-          },
-        },
+      emitActiveStream(first, {
+        streamId: firstStream,
+        agentCategory: AgentCategory.ToolUse,
       });
-      second.session.events.emit({
-        scope: 'session',
-        event: {
-          type: 'setActiveStream',
-          payload: {
-            streamId: secondStream,
-            agentCategory: AgentCategory.Workflow,
-          },
-        },
+      emitActiveStream(second, {
+        streamId: secondStream,
+        agentCategory: AgentCategory.Workflow,
       });
 
       emitRunConfig(
@@ -1975,71 +1900,43 @@ describe('ProgressBackend', () => {
       updateTodos.mockClear();
       updatePlan.mockClear();
 
-      session.events.emit({
-        scope: 'run',
+      emitRunEvent({ session }, streamId, {
+        type: 'addOutputFiles',
         streamId,
-        event: {
-          type: 'addOutputFiles',
-          streamId,
-          filesByRound: { 1: [outputFile] },
-        },
+        filesByRound: { 1: [outputFile] },
       });
-      session.events.emit({
-        scope: 'run',
+      emitRunEvent({ session }, streamId, {
+        type: 'updateMissingOutputs',
         streamId,
-        event: {
-          type: 'updateMissingOutputs',
-          streamId,
-          filesByRound: { 1: ['paper.pdf'] },
-        },
+        filesByRound: { 1: ['paper.pdf'] },
       });
-      session.events.emit({
-        scope: 'run',
+      emitRunEvent({ session }, streamId, {
+        type: 'updateCompileFailures',
         streamId,
-        event: {
-          type: 'updateCompileFailures',
-          streamId,
-          filesByRound: { 1: [compileFailure] },
-        },
+        filesByRound: { 1: [compileFailure] },
       });
-      session.events.emit({
-        scope: 'run',
+      emitRunEvent({ session }, streamId, {
+        type: 'updateTodos',
         streamId,
-        event: {
-          type: 'updateTodos',
-          streamId,
-          todos,
-        },
+        todos,
       });
-      session.events.emit({
-        scope: 'run',
+      emitRunEvent({ session }, streamId, {
+        type: 'updatePlan',
         streamId,
-        event: {
-          type: 'updatePlan',
-          streamId,
-          plan,
-        },
+        plan,
       });
-      session.events.emit({
-        scope: 'run',
-        streamId,
-        event: {
-          type: 'usage',
-          payload: {
-            streamId,
-            storageKey,
-            usage: { inputTokens: 10, outputTokens: 5, cost: 0.01 },
-          },
-          recordTranscript: false,
-        },
-      });
-      session.events.emit({
-        scope: 'run',
-        streamId,
-        event: {
-          type: 'goalPaused',
+      emitRunEvent({ session }, streamId, {
+        type: 'usage',
+        payload: {
           streamId,
+          storageKey,
+          usage: { inputTokens: 10, outputTokens: 5, cost: 0.01 },
         },
+        recordTranscript: false,
+      });
+      emitRunEvent({ session }, streamId, {
+        type: 'goalPaused',
+        streamId,
       });
 
       expect(handleRunFact).toHaveBeenCalledTimes(7);
@@ -2121,23 +2018,15 @@ describe('ProgressBackend', () => {
       updateTodos.mockClear();
       updatePlan.mockClear();
 
-      session.events.emit({
-        scope: 'run',
-        streamId,
-        event: {
-          type: 'domain',
-          key: 'runFact.updateTodos',
-          data: { streamId, todos: 'not-an-array' },
-        },
+      emitRunEvent({ session }, streamId, {
+        type: 'domain',
+        key: 'runFact.updateTodos',
+        data: { streamId, todos: 'not-an-array' },
       });
-      session.events.emit({
-        scope: 'run',
-        streamId,
-        event: {
-          type: 'domain',
-          key: 'runFact.updatePlan',
-          data: { streamId, plan: { steps: ['legacy shape'] } },
-        },
+      emitRunEvent({ session }, streamId, {
+        type: 'domain',
+        key: 'runFact.updatePlan',
+        data: { streamId, plan: { steps: ['legacy shape'] } },
       });
 
       expect(updateTodos).not.toHaveBeenCalled();
@@ -2182,14 +2071,10 @@ describe('ProgressBackend', () => {
       updateFiles.mockClear();
       backend.dispose();
 
-      session.events.emit({
-        scope: 'run',
+      emitRunEvent({ session }, streamId, {
+        type: 'addOutputFiles',
         streamId,
-        event: {
-          type: 'addOutputFiles',
-          streamId,
-          filesByRound: { 1: [outputFile] },
-        },
+        filesByRound: { 1: [outputFile] },
       });
 
       expect(handleRunFact).not.toHaveBeenCalled();
@@ -2241,15 +2126,11 @@ describe('ProgressBackend', () => {
         streamId: parentStreamId,
         agentCategory: AgentCategory.ToolUse,
       });
-      target.session.events.emit({
-        scope: 'run',
+      emitRunEvent(target, parentStreamId, {
+        type: 'status',
         streamId: parentStreamId,
-        event: {
-          type: 'status',
-          streamId: parentStreamId,
-          phase: STREAM_PHASE.RUNNING,
-          cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
-        },
+        phase: STREAM_PHASE.RUNNING,
+        cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
       });
       const followUpLease = target.session.followUps.claimLive(
         parentStreamId,
@@ -2258,7 +2139,8 @@ describe('ProgressBackend', () => {
       target.session.followUps.queue(followUpLease).enqueue({
         text: 'continue with the local calculation',
       });
-      emitRunFact(target, parentStreamId, 'updateMissingOutputs', {
+      emitRunEvent(target, parentStreamId, {
+        type: 'updateMissingOutputs',
         streamId: parentStreamId,
         filesByRound: { 0: ['missing-output.tex'] },
       });
@@ -2268,27 +2150,19 @@ describe('ProgressBackend', () => {
       );
       target.messages.length = 0;
 
-      target.session.events.emit({
-        scope: 'run',
-        streamId: parentStreamId,
-        event: {
-          type: 'stage.start',
-          id: 'round-2',
-          label: 'round 2',
-          kind: 'round',
-          index: 2,
-          total: 4,
-        },
+      emitRunEvent(target, parentStreamId, {
+        type: 'stage.start',
+        id: 'round-2',
+        label: 'round 2',
+        kind: 'round',
+        index: 2,
+        total: 4,
       });
 
-      target.session.events.emit({
-        scope: 'run',
-        streamId: parentStreamId,
-        event: {
-          type: 'child.activity',
-          parentStreamId,
-          items: [child],
-        },
+      emitRunEvent(target, parentStreamId, {
+        type: 'child.activity',
+        parentStreamId,
+        items: [child],
       });
 
       target.session.events.emit({
@@ -2729,11 +2603,7 @@ describe('ProgressBackend', () => {
 
     try {
       backend.state.streamLogs.ensureStream(stream);
-      session.events.emit({
-        scope: 'run',
-        streamId: stream,
-        event: { type: 'run.start', descriptor },
-      });
+      emitRunEvent(target, stream, { type: 'run.start', descriptor });
       emitRunConfig(
         target,
         stream,
@@ -2881,14 +2751,8 @@ describe('ProgressBackend', () => {
     const { backend, session } = createIsolatedRecordingBackend();
     const stream = 'tool@deepseek#a6966e' as StreamTabId;
     const executionId = 'a6966e' as ExecutionId;
-    const stores = backend.state.stores as unknown as {
-      deleteExecution(
-        id: ExecutionId,
-        options?: DeleteExecutionOptions,
-      ): Promise<DeleteExecutionResult>;
-    };
     const deleteExecutionSpy = vi
-      .spyOn(stores, 'deleteExecution')
+      .spyOn(executionDeleter(backend), 'deleteExecution')
       .mockImplementation(async (_id, options) => {
         await options?.beforeDelete?.();
         throw new Error('execution directory is locked');
@@ -3113,14 +2977,8 @@ describe('ProgressBackend', () => {
       toolUseTaskState('search', 'deepseekproT'),
       deletedExecution,
     );
-    const stores = backend.state.stores as unknown as {
-      deleteExecution(
-        executionId: ExecutionId,
-        options?: DeleteExecutionOptions,
-      ): Promise<DeleteExecutionResult>;
-    };
     const deleteExecutionSpy = vi
-      .spyOn(stores, 'deleteExecution')
+      .spyOn(executionDeleter(backend), 'deleteExecution')
       .mockImplementation(async (executionId, options) => {
         if (executionId === failedExecution) {
           throw new Error('execution directory is locked');
@@ -3506,15 +3364,8 @@ describe('ProgressBackend', () => {
     await seed.flush();
 
     const { backend, session } = await createPersistentRecordingBackend();
-    const stores = backend.state.stores as unknown as {
-      deleteExecution(
-        executionId: ExecutionId,
-        options?: DeleteExecutionOptions,
-      ): Promise<DeleteExecutionResult>;
-    };
-    const originalDeleteExecution = stores.deleteExecution.bind(
-      backend.state.stores,
-    );
+    const stores = executionDeleter(backend);
+    const originalDeleteExecution = stores.deleteExecution.bind(stores);
     const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
     const deleteExecutionSpy = vi
       .spyOn(stores, 'deleteExecution')

@@ -10,8 +10,6 @@ import {
   BUILTIN_TOOL_USE_AGENTS_DIR,
 } from './BundledAgentDirectories';
 
-const DEFAULT_CUSTOM_AGENTS_DIR_NAME = CUSTOM_AGENTS_STORAGE_DIR;
-
 export interface AgentDirectoryPathStorage {
   ensureDir(relativePath: string): Promise<void>;
   fullPath(relativePath: string): string;
@@ -57,7 +55,7 @@ export class AgentDirectoryService {
 
   constructor(private readonly options: AgentDirectoryServiceOptions) {
     this.defaultCustomDirectoryName =
-      options.defaultCustomDirectoryName ?? DEFAULT_CUSTOM_AGENTS_DIR_NAME;
+      options.defaultCustomDirectoryName ?? CUSTOM_AGENTS_STORAGE_DIR;
   }
 
   async builtIn(): Promise<string> {
@@ -74,11 +72,7 @@ export class AgentDirectoryService {
     ).trim();
 
     const resolvedPath = await this.resolveConfiguredCustomDir(configuredPath);
-    if (resolvedPath) {
-      return resolvedPath;
-    }
-
-    return this.ensureDefaultCustomDir();
+    return resolvedPath ?? this.ensureDefaultCustomDir();
   }
 
   async getDirectory(source: AgentSource): Promise<string | undefined> {

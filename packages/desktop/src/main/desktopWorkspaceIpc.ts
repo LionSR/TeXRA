@@ -67,13 +67,11 @@ export interface DesktopWorkspaceIpc extends DesktopMessageHandler {
   disposeRendererResources(): void;
 }
 
-/**
- * Resolves a renderer-supplied path inside the workspace, or throws.
- *
- * The lexical check rejects `..` traversal first. Canonical paths are then
- * compared so a workspace symlink cannot lead the editor outside the project.
- */
-async function resolveWorkspacePath(inputPath: string): Promise<string> {
+/** Lexical workspace containment check: rejects `..` traversal, or throws. */
+function locateWorkspaceTarget(inputPath: string): {
+  absolutePath: string;
+  root: string;
+} {
   const located = WorkspaceFS.locatePath(inputPath);
   if (located.kind !== 'workspace') {
     throw new Error('Only files inside the workspace folder can be opened.');
@@ -83,9 +81,20 @@ async function resolveWorkspacePath(inputPath: string): Promise<string> {
   if (!root) {
     throw new Error('Workspace path is not available.');
   }
+  return { absolutePath: located.absolutePath, root };
+}
+
+/**
+ * Resolves a renderer-supplied path inside the workspace, or throws.
+ *
+ * The lexical check rejects `..` traversal first. Canonical paths are then
+ * compared so a workspace symlink cannot lead the editor outside the project.
+ */
+async function resolveWorkspacePath(inputPath: string): Promise<string> {
+  const { absolutePath, root } = locateWorkspaceTarget(inputPath);
   const [canonicalRoot, canonicalTarget] = await Promise.all([
     platform().fs.realPath(root),
-    platform().fs.realPath(located.absolutePath),
+    platform().fs.realPath(absolutePath),
   ]);
   if (!isPathWithin(canonicalRoot, canonicalTarget)) {
     throw new Error('Only files inside the workspace folder can be opened.');
@@ -105,19 +114,12 @@ async function resolveWorkspaceWritePath(inputPath: string): Promise<string> {
     if (!isFileNotFoundError(error)) throw error;
   }
 
-  const located = WorkspaceFS.locatePath(inputPath);
-  if (located.kind !== 'workspace') {
-    throw new Error('Only files inside the workspace folder can be opened.');
-  }
-  const root = WorkspaceFS.getPath();
-  if (!root) {
-    throw new Error('Workspace path is not available.');
-  }
+  const { absolutePath, root } = locateWorkspaceTarget(inputPath);
 
   // A dangling symlink also makes realPath fail with ENOENT. It must remain
   // rejected: writing through it could create a target outside the workspace.
   try {
-    if (await platform().fs.isSymlink(located.absolutePath)) {
+    if (await platform().fs.isSymlink(absolutePath)) {
       throw new Error('Symbolic links cannot be recreated by the editor.');
     }
   } catch (error) {
@@ -129,7 +131,7 @@ async function resolveWorkspaceWritePath(inputPath: string): Promise<string> {
   try {
     [canonicalRoot, canonicalParent] = await Promise.all([
       platform().fs.realPath(root),
-      platform().fs.realPath(dirname(located.absolutePath)),
+      platform().fs.realPath(dirname(absolutePath)),
     ]);
   } catch (error) {
     if (isFileNotFoundError(error)) {
@@ -139,7 +141,7 @@ async function resolveWorkspaceWritePath(inputPath: string): Promise<string> {
     }
     throw error;
   }
-  const canonicalTarget = join(canonicalParent, basename(located.absolutePath));
+  const canonicalTarget = join(canonicalParent, basename(absolutePath));
   if (!isPathWithin(canonicalRoot, canonicalTarget)) {
     throw new Error('Only files inside the workspace folder can be opened.');
   }

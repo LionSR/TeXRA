@@ -19,16 +19,9 @@ describe('nodeFileLocks compromise boundary', () => {
     const alreadyReleased = Object.assign(new Error('lock already released'), {
       code: 'ERELEASED',
     });
-    mocks.lock.mockImplementationOnce(
-      async (
-        _path: string,
-        _options: { onCompromised: (error: Error) => void },
-      ) => {
-        return async () => {
-          throw alreadyReleased;
-        };
-      },
-    );
+    mocks.lock.mockImplementationOnce(async () => async () => {
+      throw alreadyReleased;
+    });
 
     const result = nodeFileLocks.runExclusive(
       join(tmpdir(), 'texra-file-lock-compromise'),

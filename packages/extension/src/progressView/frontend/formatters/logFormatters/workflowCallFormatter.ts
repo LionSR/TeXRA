@@ -15,28 +15,24 @@ import {
   formatWorkflowCallMetadataParts,
   workflowCallDetail,
 } from '@shared/copy/workflowCall';
-import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { assertNever } from '@utils/core';
 
 function statusIcon(call: WorkflowCallProgress): TemplateResult {
-  const icon: TeXRAIconName = (() => {
-    switch (call.status) {
-      case 'planned':
-      case 'running':
-        return 'circle';
-      case 'completed':
-      case 'cached':
-        return 'check';
-      case 'skipped':
-        return 'circle-stop';
-      case 'failed':
-        return 'circle-exclamation';
-      default:
-        return assertNever(call, 'Unhandled workflow call status');
-    }
-  })();
-  return waIcon(icon);
+  switch (call.status) {
+    case 'planned':
+    case 'running':
+      return waIcon('circle');
+    case 'completed':
+    case 'cached':
+      return waIcon('check');
+    case 'skipped':
+      return waIcon('circle-stop');
+    case 'failed':
+      return waIcon('circle-exclamation');
+    default:
+      return assertNever(call, 'Unhandled workflow call status');
+  }
 }
 
 function terminalMetadata(

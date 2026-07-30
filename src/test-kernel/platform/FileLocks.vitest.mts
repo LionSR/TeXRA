@@ -1,24 +1,21 @@
-import { mkdtemp, rm, stat } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { nodeFileLocks } from '@platform/defaults/fileLocks';
+import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 
 const tempDirs: string[] = [];
 
 afterEach(async () => {
-  await Promise.all(
-    tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })),
-  );
+  await cleanupTempDirs(tempDirs);
 });
 
 describe('nodeFileLocks', () => {
   it('refreshes a lock while a long critical section is still held', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'texra-file-lock-refresh-'));
-    tempDirs.push(root);
+    const root = await makeTempDir('texra-file-lock-refresh-', tempDirs);
     const lockPath = join(root, 'executionLocks', 'a8644b');
 
     await nodeFileLocks.runExclusive(lockPath, async () => {
@@ -30,8 +27,7 @@ describe('nodeFileLocks', () => {
   });
 
   it('serializes independent callers using the same shared path', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'texra-file-lock-'));
-    tempDirs.push(root);
+    const root = await makeTempDir('texra-file-lock-', tempDirs);
     const lockPath = join(root, 'executionLocks', 'a8644a');
     let releaseFirst: (() => void) | undefined;
     const firstPaused = new Promise<void>((resolve) => {

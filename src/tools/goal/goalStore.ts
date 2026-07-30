@@ -39,10 +39,6 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
-function generateGoalId(): string {
-  return `goal_${hexId12()}`;
-}
-
 function emitGoalStateChanged(
   streamId: StreamTabId,
   session?: SessionHandle,
@@ -85,19 +81,17 @@ async function writeRaw(goal: Goal): Promise<void> {
   await platform().workspaceState.update(streamKey(goal.streamId), goal);
 }
 
-function parseIndex(raw: unknown): StreamTabId[] {
-  return Array.isArray(raw)
-    ? raw.filter((v): v is StreamTabId => typeof v === 'string')
-    : [];
-}
-
 function readIndex(): StreamTabId[] {
   const state = tryWorkspaceState();
   if (!state) return [];
+  const raw = state.get<unknown>(INDEX_KEY);
+  const entries = Array.isArray(raw)
+    ? raw.filter((v): v is StreamTabId => typeof v === 'string')
+    : [];
   // Dedupe defensively — a corrupt or hand-edited workspaceState could
   // contain duplicate entries, which would otherwise surface as duplicate
   // goals in list() and cause redundant readRaw() calls.
-  return unique(parseIndex(state.get<unknown>(INDEX_KEY)));
+  return unique(entries);
 }
 
 async function addToIndex(streamId: StreamTabId): Promise<void> {
@@ -106,18 +100,11 @@ async function addToIndex(streamId: StreamTabId): Promise<void> {
   );
 }
 
-async function removeFromIndex(streamId: StreamTabId): Promise<void> {
-  await mutateIndex((index) => {
-    const next = index.filter((id) => id !== streamId);
-    return next.length === index.length ? index : next;
-  });
-}
-
 /**
  * Mutate callbacks must return the same array reference (`index`, unchanged)
  * when nothing actually changed, so this can skip the write via reference
- * equality — all current callers (`addToIndex`, `removeFromIndex`,
- * `forgetMany`'s inline callback) already follow this contract.
+ * equality — all current callers (`addToIndex` and `forgetMany`'s inline
+ * callback) already follow this contract.
  */
 async function mutateIndex(
   mutate: (index: StreamTabId[]) => StreamTabId[],
@@ -225,7 +212,7 @@ export const GoalStore = Object.freeze({
     }
     const now = nowIso();
     const goal: Goal = {
-      goalId: generateGoalId(),
+      goalId: `goal_${hexId12()}`,
       streamId,
       objective: trimmed,
       status: 'active',
@@ -286,19 +273,9 @@ export const GoalStore = Object.freeze({
    *  Bootstrap-tolerant — cleanup paths shouldn't fail loudly if state isn't
    *  wired yet. */
   async forget(streamId: StreamTabId, session?: SessionHandle): Promise<void> {
-    const state = tryWorkspaceState();
-    if (!state) return;
-    // Gate on raw key presence, not parse success, so explicit cleanup can
-    // still remove an invalid record without first reading it.
-    const existed = state.get<unknown>(streamKey(streamId)) != null;
-    if (!existed) return;
-    await Promise.all([
-      state.update(streamKey(streamId), undefined),
-      removeFromIndex(streamId),
-    ]);
     // Dual-context: PlanTool forgets in-run (→ run session via ALS); hosts
     // pass their owning session for non-default windows.
-    emitGoalStateChanged(streamId, session);
+    await GoalStore.forgetMany([streamId], session);
   },
 
   /**
@@ -313,7 +290,8 @@ export const GoalStore = Object.freeze({
   ): Promise<void> {
     const state = tryWorkspaceState();
     if (!state) return;
-    // Same raw-presence gate as `forget` so unparseable blobs are cleaned.
+    // Gate on raw key presence, not parse success, so explicit cleanup can
+    // still remove an invalid record without first reading it.
     const toRemove = streamIds.filter(
       (id) => state.get<unknown>(streamKey(id)) != null,
     );

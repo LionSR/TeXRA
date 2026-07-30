@@ -95,16 +95,12 @@ export function selectPreferredLegacyInstruction(
   }
 
   let selected: LegacyInstructionEntry | null = null;
+  let selectedTimestamp = Number.NEGATIVE_INFINITY;
   for (const entry of Object.values(record)) {
-    if (!selected) {
+    const timestamp = entry.timestamp ?? Number.NEGATIVE_INFINITY;
+    if (selected === null || timestamp >= selectedTimestamp) {
       selected = entry;
-      continue;
-    }
-
-    const nextTimestamp = entry.timestamp ?? Number.NEGATIVE_INFINITY;
-    const currentTimestamp = selected.timestamp ?? Number.NEGATIVE_INFINITY;
-    if (nextTimestamp >= currentTimestamp) {
-      selected = entry;
+      selectedTimestamp = timestamp;
     }
   }
 

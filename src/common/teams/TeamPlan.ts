@@ -235,8 +235,8 @@ export function buildTeamOptions(
   const builtInOrder = new Map(
     AGENT_MODE_PRESETS.map((preset, index) => [preset.id, index]),
   );
-  return [...plans]
-    .sort((left, right) => {
+  return plans
+    .toSorted((left, right) => {
       if (left.preset.source !== right.preset.source) {
         return left.preset.source === 'built-in' ? -1 : 1;
       }

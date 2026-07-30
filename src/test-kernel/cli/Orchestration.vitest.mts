@@ -17,6 +17,8 @@ import {
   buildCliResumeItems,
   buildCliTeamItems,
   orchestrationModelAccessView,
+  type BuildCliOrchestrationItemsInput,
+  type CliOrchestrationItem,
 } from '@cli/runtime/orchestration';
 import { buildCliModelAccessItems } from '@cli/runtime/modelAccessRoute';
 
@@ -125,6 +127,17 @@ function readyPresetPlan(
       ],
     },
   );
+}
+
+function orchestrationItems(
+  overrides: Partial<BuildCliOrchestrationItemsInput> = {},
+): CliOrchestrationItem[] {
+  return buildCliOrchestrationItems({
+    presetPlans: [],
+    history: [],
+    toolUseAgents: [],
+    ...overrides,
+  });
 }
 
 const ORCHESTRATION_TEST_HEADER_LINES = [
@@ -352,11 +365,7 @@ describe('CLI orchestration items', () => {
   });
 
   it('starts with new chat and keeps help as the final active item', () => {
-    const items = buildCliOrchestrationItems({
-      presetPlans: [],
-      history: [],
-      toolUseAgents: [],
-    });
+    const items = orchestrationItems();
 
     expect(items.at(0)).toMatchObject({
       label: 'New chat',
@@ -375,12 +384,7 @@ describe('CLI orchestration items', () => {
       chatGptSignedIn: true,
       chatGptAccountLabel: 'researcher@example.com',
     };
-    const items = buildCliOrchestrationItems({
-      presetPlans: [],
-      history: [],
-      toolUseAgents: [],
-      modelAccess: status,
-    });
+    const items = orchestrationItems({ modelAccess: status });
 
     expect(items[1]).toEqual({
       label: 'Model access',
@@ -422,12 +426,7 @@ describe('CLI orchestration items', () => {
   });
 
   it('presents agent skills as an independent launcher switch', () => {
-    const items = buildCliOrchestrationItems({
-      presetPlans: [],
-      history: [],
-      toolUseAgents: [],
-      agentSkillsEnabled: true,
-    });
+    const items = orchestrationItems({ agentSkillsEnabled: true });
 
     expect(items.find((item) => item.label === 'Agent skills')).toEqual({
       label: 'Agent skills',
@@ -469,10 +468,7 @@ describe('CLI orchestration items', () => {
       })[1].description,
     ).toBe('On · key configured');
 
-    const items = buildCliOrchestrationItems({
-      presetPlans: [],
-      history: [],
-      toolUseAgents: [],
+    const items = orchestrationItems({
       modelAccess: {
         apiFallback: 'personal',
         preferences: { chatGpt: 'off', kimiCode: 'on' },
@@ -511,12 +507,7 @@ describe('CLI orchestration items', () => {
       texraAccountLabel: 'researcher@example.com',
       chatGptSignedIn: false,
     };
-    const items = buildCliOrchestrationItems({
-      presetPlans: [],
-      history: [],
-      toolUseAgents: [],
-      account,
-    });
+    const items = orchestrationItems({ account });
 
     expect(items.map((item) => item.label)).toEqual([
       'New chat',
@@ -595,7 +586,7 @@ describe('CLI orchestration items', () => {
         status: CLI_HISTORY_RESUMABLE_STATUS,
       }),
     ];
-    const items = buildCliOrchestrationItems({
+    const items = orchestrationItems({
       presetPlans: [readyPresetPlan()],
       history,
       toolUseAgents: [
@@ -621,8 +612,7 @@ describe('CLI orchestration items', () => {
   });
 
   it('hides delegated child executions from the resume menu', () => {
-    const items = buildCliOrchestrationItems({
-      presetPlans: [],
+    const items = orchestrationItems({
       history: [
         historyEntry('aaaaaaaaaaaa', {
           agent: 'search',
@@ -657,8 +647,7 @@ describe('CLI orchestration items', () => {
   });
 
   it('does not list completed executions as resume launcher rows', () => {
-    const items = buildCliOrchestrationItems({
-      presetPlans: [],
+    const items = orchestrationItems({
       history: [
         historyEntry('aaaaaaaaaaaa', { agent: 'review' }),
         historyEntry('bbbbbbbbbbbb', { agent: 'orchestrator' }),
@@ -744,10 +733,8 @@ describe('CLI orchestration items', () => {
   });
 
   it('disables team presets when the approval policy blocks delegation', () => {
-    const launcherItems = buildCliOrchestrationItems({
+    const launcherItems = orchestrationItems({
       presetPlans: [readyPresetPlan()],
-      history: [],
-      toolUseAgents: [],
       presetLaunchBlockReason: 'delegation-denied',
     });
     const teamItems = buildCliTeamItems([readyPresetPlan()], {
@@ -774,11 +761,7 @@ describe('CLI orchestration items', () => {
       readyPresetPlan({ id: 'physicist', name: 'Physicist' }),
       readyPresetPlan({ id: 'mathematician', name: 'Mathematician' }),
     ];
-    const items = buildCliOrchestrationItems({
-      presetPlans: plans,
-      history: [],
-      toolUseAgents: [],
-    });
+    const items = orchestrationItems({ presetPlans: plans });
 
     expect(items.map((item) => item.label)).toEqual([
       'New chat',
@@ -877,7 +860,7 @@ describe('CLI orchestration items', () => {
 
   it('disables model-dependent launcher rows when no personal model can run', () => {
     const view = orchestrationModelAccessView(
-      buildCliOrchestrationItems({
+      orchestrationItems({
         presetPlans: [readyPresetPlan()],
         history: [
           historyEntry('aaaaaaaaaaaa', {
@@ -936,7 +919,7 @@ describe('CLI orchestration items', () => {
   });
 
   it('scopes startup model choices to the active API mode', () => {
-    const items = buildCliOrchestrationItems({
+    const items = orchestrationItems({
       presetPlans: [readyPresetPlan()],
       history: [historyEntry('aaaaaaaaaaaa', { agent: 'review' })],
       toolUseAgents: [toolUseAgent('review')],
@@ -971,11 +954,7 @@ describe('CLI orchestration items', () => {
   it('names Kimi Code subscription access in model rows', () => {
     const kimi = modelAccess('kimi3', 'provider-key', true, 'api key set');
     const view = orchestrationModelAccessView(
-      buildCliOrchestrationItems({
-        presetPlans: [readyPresetPlan()],
-        history: [],
-        toolUseAgents: [],
-      }),
+      orchestrationItems({ presetPlans: [readyPresetPlan()] }),
       [
         {
           ...kimi,
@@ -999,11 +978,7 @@ describe('CLI orchestration items', () => {
 
   it('keeps launcher rows active when model registry state is unknown', () => {
     const view = orchestrationModelAccessView(
-      buildCliOrchestrationItems({
-        presetPlans: [readyPresetPlan()],
-        history: [],
-        toolUseAgents: [],
-      }),
+      orchestrationItems({ presetPlans: [readyPresetPlan()] }),
       [],
       'personal',
     );
@@ -1013,11 +988,7 @@ describe('CLI orchestration items', () => {
 
   it('keeps launcher rows active when a hidden runtime default can launch', () => {
     const view = orchestrationModelAccessView(
-      buildCliOrchestrationItems({
-        presetPlans: [readyPresetPlan()],
-        history: [],
-        toolUseAgents: [],
-      }),
+      orchestrationItems({ presetPlans: [readyPresetPlan()] }),
       [modelAccess('deepseekT', 'provider-key', false)],
       'personal',
       { allowDefaultModelLaunch: true },
@@ -1029,11 +1000,7 @@ describe('CLI orchestration items', () => {
 
   it('uses relay-specific disabled text when included access needs login', () => {
     const view = orchestrationModelAccessView(
-      buildCliOrchestrationItems({
-        presetPlans: [],
-        history: [],
-        toolUseAgents: [],
-      }),
+      orchestrationItems(),
       [modelAccess('sonnet46T', 'included-login-required', false)],
       'included',
     );

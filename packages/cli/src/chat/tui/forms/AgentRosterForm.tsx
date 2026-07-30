@@ -344,11 +344,14 @@ export function AgentRosterForm(
     ),
   );
   return frame(
-    agents.map((agent) => ({
-      value: agentKeyOf(agent),
-      label: `${selected.has(agentKeyOf(agent)) ? `${TICK} ` : ''}${agent.name}`,
-      description: agent.description,
-    })),
+    agents.map((agent) => {
+      const key = agentKeyOf(agent);
+      return {
+        value: key,
+        label: `${selected.has(key) ? `${TICK} ` : ''}${agent.name}`,
+        description: agent.description,
+      };
+    }),
     (value) => {
       const agent = agents.find((candidate) => agentKeyOf(candidate) === value);
       if (!agent) return;

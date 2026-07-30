@@ -119,7 +119,6 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
     });
   }
 
-  const { model } = options;
   return Object.freeze({
     kind: 'bare',
     ...commonRunContextFields(options),
@@ -128,9 +127,7 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
     agentName: options.agentName,
     workingDirectory: options.workingDirectory,
     session: options.session,
-    get model() {
-      return model;
-    },
+    model: options.model,
   } satisfies BareRunContext);
 }
 

@@ -120,26 +120,17 @@ export function installCliShutdownSignalHandlers(
   if (shutdownHandlersInstalled) return;
   shutdownHandlersInstalled = true;
 
-  const exitCodeForSignal = (signal: CliShutdownSignal): number => {
-    switch (signal) {
-      case 'SIGINT':
-        return CliExitCode.Interrupted;
-      case 'SIGTERM':
-        return CliExitCode.Terminated;
-    }
-  };
-
-  const install = (signal: CliShutdownSignal) => {
+  const install = (signal: CliShutdownSignal, exitCode: number) => {
     const handler = async () => {
       await runCliPlatformShutdownSequence(lifecycle);
-      process.exit(exitCodeForSignal(signal));
+      process.exit(exitCode);
     };
     installedShutdownHandlers[signal] = handler;
     process.once(signal, handler);
   };
 
-  install('SIGINT');
-  install('SIGTERM');
+  install('SIGINT', CliExitCode.Interrupted);
+  install('SIGTERM', CliExitCode.Terminated);
 }
 
 /**

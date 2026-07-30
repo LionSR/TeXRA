@@ -402,23 +402,21 @@ interface WriteCompileFailureArgs {
  * persistence errors are logged and swallowed so a failure is always counted
  * even when the log itself couldn't be written to disk.
  */
-async function writeCompileFailure(args: WriteCompileFailureArgs): Promise<{
+async function writeCompileFailure({
+  ctx,
+  opts,
+  displayName,
+  currentRound,
+  outputFile,
+  logDest,
+  logRelativePath,
+  executionId,
+  failureLogExcerpt,
+}: WriteCompileFailureArgs): Promise<{
   failure: CompileFailure;
   failureLogExcerpt: string;
   artifact: null;
 }> {
-  const {
-    ctx,
-    opts,
-    displayName,
-    currentRound,
-    outputFile,
-    logDest,
-    logRelativePath,
-    executionId,
-    failureLogExcerpt,
-  } = args;
-
   try {
     await AbsoluteFS.ensureDir(opts.compileRoot);
     await AbsoluteFS.write(logDest.absolutePath, `${failureLogExcerpt}\n`);
@@ -463,20 +461,16 @@ interface TryPublishArtifactArgs {
  * compile. A failure here (e.g. copying the PDF into run storage) must not
  * turn a document that genuinely compiled into a reported compile failure.
  */
-async function tryPublishArtifact(
-  args: TryPublishArtifactArgs,
-): Promise<CompiledPdfArtifact | null> {
-  const {
-    ctx,
-    opts,
-    displayName,
-    currentRound,
-    outputFile,
-    compiledBasename,
-    buildDir,
-    executionId,
-  } = args;
-
+async function tryPublishArtifact({
+  ctx,
+  opts,
+  displayName,
+  currentRound,
+  outputFile,
+  compiledBasename,
+  buildDir,
+  executionId,
+}: TryPublishArtifactArgs): Promise<CompiledPdfArtifact | null> {
   const compiledPdfPath = path.join(
     buildDir,
     `${compiledBasename.replace(/\.tex$/i, '')}.pdf`,

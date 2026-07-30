@@ -161,6 +161,11 @@ async function setMtime(filePath: string, epochMs: number): Promise<void> {
   await utimes(filePath, new Date(epochMs), new Date(epochMs));
 }
 
+/** The legacy `conversation.json` projection under the active temp storage. */
+function legacyConversationPath(): Promise<string> {
+  return findFile(tempDirs.at(-1)!, 'conversation.json');
+}
+
 describe('completedRunArchive facade', () => {
   setupPlatform(buildArchivePlatform);
 
@@ -312,7 +317,7 @@ describe('completedRunArchive facade', () => {
     ]);
 
     const storageDir = tempDirs.at(-1)!;
-    const legacyPath = await findFile(storageDir, 'conversation.json');
+    const legacyPath = await legacyConversationPath();
     const sidecarPath = await findFile(
       path.dirname(await findFile(storageDir, 'workPlan.json')),
       'meta.json',
@@ -351,7 +356,7 @@ describe('completedRunArchive facade', () => {
     // log — under pure mtime arbitration this would win and hide the full
     // transcript. The non-empty rule orders legacy first but falls through.
     await getExecutionStore(executionId).writeConversation([]);
-    const legacyPath = await findFile(tempDirs.at(-1)!, 'conversation.json');
+    const legacyPath = await legacyConversationPath();
     await setMtime(legacyPath, Date.now() + 60_000);
 
     const result = await readCompletedRunConversation(executionId);
@@ -423,7 +428,7 @@ describe('completedRunArchive facade', () => {
     ]);
     // The sidecar exists and is fresher, but reconstructs to zero messages —
     // the facade must not report an empty conversation over real legacy data.
-    const legacyPath = await findFile(tempDirs.at(-1)!, 'conversation.json');
+    const legacyPath = await legacyConversationPath();
     await setMtime(legacyPath, Date.now() - 60_000);
 
     const result = await readCompletedRunConversation(executionId);

@@ -221,12 +221,10 @@ export function chatTuiFocusedChildFollowUpRoute(): ChatTuiFocusedChildFollowUpR
 }
 
 function stoppedFocusedChildFollowUpMessage(streamId: StreamTabId): string {
-  const parentStream = parentStreamSignal.get();
-  const streams = streamsSignal.get();
   return focusedChildStoppedMessage({
-    parentStream,
+    parentStream: parentStreamSignal.get(),
     streamId,
-    streams,
+    streams: streamsSignal.get(),
   });
 }
 
@@ -661,10 +659,6 @@ export async function runChat(
     return started;
   };
 
-  const handleSubmit = (line: string, mediaFiles?: readonly string[]): void => {
-    void handleSubmittedLine(line, mediaFiles);
-  };
-
   const handleSubmittedLine = async (
     line: string,
     mediaFiles?: readonly string[],
@@ -802,7 +796,9 @@ export async function runChat(
   const viewportController = createTuiViewportController(inkRef);
   const ink = render(
     <App
-      onSubmit={handleSubmit}
+      onSubmit={(line, mediaFiles) =>
+        void handleSubmittedLine(line, mediaFiles)
+      }
       canInterruptActiveRun={canInterruptActiveRun}
       canInterruptStream={(streamId) =>
         (streamId === session.streamId && canInterruptActiveRun()) ||

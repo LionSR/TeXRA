@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   AgentRosterController,
   readAgentRosterSelection,
+  type AgentRosterControllerDeps,
   type AgentRosterEntry,
 } from '@agent/roster/AgentRosterController';
 import type { StateStore } from '@platform/interfaces';
@@ -47,14 +48,15 @@ const preset: AgentModePreset = {
 
 function controller(
   workspaceState: StateStore,
-  globalState: StateStore = memoryStore(),
+  overrides: Partial<AgentRosterControllerDeps> = {},
 ): AgentRosterController {
   return new AgentRosterController({
     workspaceState,
-    globalState,
+    globalState: memoryStore(),
     getAgents: (category) => agents[category],
     getPresets: () => [preset],
     fallbackTeamId: null,
+    ...overrides,
   });
 }
 
@@ -100,10 +102,11 @@ describe('AgentRosterController', () => {
 
   it('uses the user default only for inherited workspaces', () => {
     const workspaceState = memoryStore();
-    const globalState = memoryStore({
-      [GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID]: 'test-team',
+    const roster = controller(workspaceState, {
+      globalState: memoryStore({
+        [GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID]: 'test-team',
+      }),
     });
-    const roster = controller(workspaceState, globalState);
 
     expect(roster.getSelection()).toEqual({ kind: 'inherit' });
     expect(roster.getEffectiveSelection()).toEqual({
@@ -117,7 +120,7 @@ describe('AgentRosterController', () => {
 
   it('refreshes compatibility mirrors when an inherited default changes', async () => {
     const workspaceState = memoryStore();
-    const roster = controller(workspaceState, memoryStore());
+    const roster = controller(workspaceState);
 
     await roster.setDefaultTeam(STARTER_AGENT_MODE_PRESET.id);
 
@@ -179,12 +182,11 @@ describe('AgentRosterController', () => {
 
   it('preserves symbolic roster semantics when a toggle changes nothing', async () => {
     const inheritedState = memoryStore();
-    const inherited = controller(
-      inheritedState,
-      memoryStore({
+    const inherited = controller(inheritedState, {
+      globalState: memoryStore({
         [GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID]: 'test-team',
       }),
-    );
+    });
     await inherited.setAgentEnabled({
       category: 'workflow',
       source: 'builtInWorkflow',
@@ -227,12 +229,8 @@ describe('AgentRosterController', () => {
       workflowAgents: ['write', 'future-reviewer'],
     };
     const workspaceState = memoryStore();
-    const roster = new AgentRosterController({
-      workspaceState,
-      globalState: memoryStore(),
-      getAgents: (category) => agents[category],
+    const roster = controller(workspaceState, {
       getPresets: () => [unavailablePreset],
-      fallbackTeamId: null,
     });
     await roster.setTeam(unavailablePreset.id);
 
@@ -260,13 +258,9 @@ describe('AgentRosterController', () => {
       [WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS]: ['builtInToolUse:lead'],
     });
     const workflowAgents = [...agents.workflow];
-    const roster = new AgentRosterController({
-      workspaceState,
-      globalState: memoryStore(),
+    const roster = controller(workspaceState, {
       getAgents: (category) =>
         category === 'workflow' ? workflowAgents : agents.toolUse,
-      getPresets: () => [preset],
-      fallbackTeamId: null,
     });
 
     workflowAgents.push({
@@ -303,13 +297,7 @@ describe('AgentRosterController', () => {
   it('materializes an active custom team before deleting its preset', async () => {
     let presets: AgentModePreset[] = [preset];
     const workspaceState = memoryStore();
-    const roster = new AgentRosterController({
-      workspaceState,
-      globalState: memoryStore(),
-      getAgents: (category) => agents[category],
-      getPresets: () => presets,
-      fallbackTeamId: null,
-    });
+    const roster = controller(workspaceState, { getPresets: () => presets });
     await roster.setTeam(preset.id);
 
     await roster.removeTeamPreset(preset.id, async () => {
@@ -331,18 +319,16 @@ describe('AgentRosterController', () => {
         { category: 'toolUse', source: 'remote', name: 'review' },
       ],
     };
-    const roster = new AgentRosterController({
-      workspaceState: memoryStore({
+    const roster = controller(
+      memoryStore({
         [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: {
           kind: 'custom',
           workflowAgentKeys: [],
           toolUseAgentKeys: ['remote:review'],
         },
       }),
-      globalState: memoryStore(),
-      getAgents: (category) => duplicateAgents[category],
-      fallbackTeamId: null,
-    });
+      { getAgents: (category) => duplicateAgents[category] },
+    );
 
     expect(roster.getVisibleAgents('toolUse')).toEqual([
       { category: 'toolUse', source: 'remote', name: 'review' },
@@ -360,20 +346,20 @@ describe('AgentRosterController', () => {
       source: 'remote',
       name: 'review',
     };
-    const roster = new AgentRosterController({
-      workspaceState: memoryStore({
+    const roster = controller(
+      memoryStore({
         [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: {
           kind: 'custom',
           workflowAgentKeys: [],
           toolUseAgentKeys: ['remote:review'],
         },
       }),
-      globalState: memoryStore(),
-      getAgents: (category) => (category === 'toolUse' ? [custom] : []),
-      resolveAgent: (_category, identifier) =>
-        identifier === 'remote:review' ? remote : undefined,
-      fallbackTeamId: null,
-    });
+      {
+        getAgents: (category) => (category === 'toolUse' ? [custom] : []),
+        resolveAgent: (_category, identifier) =>
+          identifier === 'remote:review' ? remote : undefined,
+      },
+    );
 
     expect(roster.getVisibleAgents('toolUse')).toEqual([remote]);
   });

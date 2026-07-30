@@ -9,39 +9,10 @@ import type {
 } from '@platform/interfaces';
 import { configKeyVariants } from '@shared/config/configKeys';
 
-interface VscodeConfigInspection<T> {
-  defaultValue?: T;
-  globalValue?: T;
-  workspaceValue?: T;
-  workspaceFolderValue?: T;
-}
-
 function workspaceConfiguration(
   section?: string,
 ): vscode.WorkspaceConfiguration {
   return vscode.workspace.getConfiguration(section, null);
-}
-
-function toConfigurationTarget(
-  target: ConfigTarget,
-): vscode.ConfigurationTarget {
-  return target === 'global'
-    ? vscode.ConfigurationTarget.Global
-    : vscode.ConfigurationTarget.Workspace;
-}
-
-function normalizeInspection<T>(
-  inspection: VscodeConfigInspection<T> | undefined,
-  effectiveValue: T,
-): ConfigInspection<T> | undefined {
-  if (!inspection) return undefined;
-  return {
-    defaultValue: inspection.defaultValue,
-    globalValue: inspection.globalValue,
-    workspaceValue: inspection.workspaceValue,
-    workspaceFolderValue: inspection.workspaceFolderValue,
-    effectiveValue,
-  };
 }
 
 /**
@@ -77,7 +48,9 @@ export class VscodeConfigProvider implements ConfigProvider {
     await workspaceConfiguration().update(
       key,
       value,
-      toConfigurationTarget(target),
+      target === 'global'
+        ? vscode.ConfigurationTarget.Global
+        : vscode.ConfigurationTarget.Workspace,
     );
   }
 
@@ -85,7 +58,14 @@ export class VscodeConfigProvider implements ConfigProvider {
     const inspection = configKeyVariants(key)
       .map((item) => workspaceConfiguration().inspect<T>(item))
       .find((item) => item !== undefined);
-    return normalizeInspection(inspection, this.get<T>(key));
+    if (!inspection) return undefined;
+    return {
+      defaultValue: inspection.defaultValue,
+      globalValue: inspection.globalValue,
+      workspaceValue: inspection.workspaceValue,
+      workspaceFolderValue: inspection.workspaceFolderValue,
+      effectiveValue: this.get<T>(key),
+    };
   }
 
   isExplicitlySet(key: string): boolean {
@@ -102,33 +82,22 @@ export class VscodeConfigProvider implements ConfigProvider {
     key: string | readonly string[] | RegExp,
     listener: () => void,
   ): vscode.Disposable {
-    return vscode.workspace.onDidChangeConfiguration((event) => {
-      if (typeof key === 'string') {
-        if (
-          configKeyVariants(key).some((item) =>
-            event.affectsConfiguration(item),
-          )
-        ) {
-          listener();
-        }
-        return;
-      }
-      if (Array.isArray(key)) {
-        if (
-          key.some((item) =>
-            configKeyVariants(item).some((candidate) =>
-              event.affectsConfiguration(candidate),
-            ),
-          )
-        ) {
-          listener();
-        }
-        return;
-      }
-
+    if (key instanceof RegExp) {
       // VS Code does not expose changed keys. Regex watchers are rare and
       // should conservatively refresh on any configuration change.
-      listener();
+      return vscode.workspace.onDidChangeConfiguration(() => listener());
+    }
+
+    const keys = typeof key === 'string' ? [key] : key;
+    return vscode.workspace.onDidChangeConfiguration((event) => {
+      const affected = keys.some((item) =>
+        configKeyVariants(item).some((candidate) =>
+          event.affectsConfiguration(candidate),
+        ),
+      );
+      if (affected) {
+        listener();
+      }
     });
   }
 }

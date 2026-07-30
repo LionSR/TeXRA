@@ -29,24 +29,11 @@ export function scrollStatusText(
   return moreRowsText(hiddenAfter);
 }
 
-/** Core "+N earlier, +N more" arithmetic shared by inline overflow
- *  indicators. Returns undefined when nothing is hidden on either side. */
-function inlineOverflowCountText(
-  hiddenBefore: number,
-  hiddenAfter: number,
-): string | undefined {
-  if (hiddenBefore <= 0 && hiddenAfter <= 0) return undefined;
-  if (hiddenBefore > 0 && hiddenAfter > 0) {
-    return `+${hiddenBefore} earlier, +${hiddenAfter} more`;
-  }
-  if (hiddenBefore > 0) return `+${hiddenBefore} earlier`;
-  return `+${hiddenAfter} more`;
-}
-
-/** Select's inline overflow suffix on the focused row. Suppressed when there
- *  are no visible items to attach the suffix to, or when the list already
- *  shows dedicated `... N earlier` / `... N more` marker rows (`showOverflow`),
- *  since that would double up the count. */
+/** Select's inline "+N earlier, +N more" suffix on the focused row.
+ *  Suppressed when there are no visible items to attach the suffix to, when
+ *  nothing is hidden on either side, or when the list already shows dedicated
+ *  `... N earlier` / `... N more` marker rows (`showOverflow`), since that
+ *  would double up the count. */
 export function selectVisibleInlineOverflowText({
   hiddenAfter,
   hiddenBefore,
@@ -59,5 +46,10 @@ export function selectVisibleInlineOverflowText({
   readonly visibleItemCount: number;
 }): string | undefined {
   if (visibleItemCount <= 0 || showOverflow) return undefined;
-  return inlineOverflowCountText(hiddenBefore, hiddenAfter);
+  if (hiddenBefore > 0 && hiddenAfter > 0) {
+    return `+${hiddenBefore} earlier, +${hiddenAfter} more`;
+  }
+  if (hiddenBefore > 0) return `+${hiddenBefore} earlier`;
+  if (hiddenAfter > 0) return `+${hiddenAfter} more`;
+  return undefined;
 }

@@ -165,20 +165,14 @@ export async function submitFollowUp(
     admission = 'existing_recoverable';
   }
   const submission = ownerSession.followUps.submit(streamId, item, admission);
-  if (submission.kind === 'unavailable') return { status: 'dropped' };
-  if (submission.kind === 'queued') {
-    return { status: 'queued', reason, continuation: 'live' };
+  if (submission.kind === 'unavailable' || submission.kind === 'not_owned') {
+    return { status: 'dropped' };
   }
-  if (submission.kind === 'not_owned') return { status: 'dropped' };
-  if (
-    submission.kind === 'live' ||
-    submission.kind === 'live_flow' ||
-    submission.kind === 'recovering'
-  ) {
+  if (submission.kind !== 'recovery') {
     return {
       status: 'queued',
       reason,
-      continuation: submission.kind === 'live_flow' ? 'live' : submission.kind,
+      continuation: submission.kind === 'recovering' ? 'recovering' : 'live',
     };
   }
 

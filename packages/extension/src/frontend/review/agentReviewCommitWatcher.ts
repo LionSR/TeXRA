@@ -107,16 +107,14 @@ function watchRepository(
     // triggers. This also skips a repo's very first commit — acceptable, as
     // that commit has no base to diff against anyway.
     const previousCommit = lastCommit;
-    const hadCommit = previousCommit !== undefined;
     lastCommit = commit;
-    if (!hadCommit) return;
+    if (previousCommit === undefined) return;
     if (!getConfig<boolean>('agentReview.runOnCommit', false)) return;
 
     // Rapid commits (amend, rebase replays) coalesce into one review; keep
     // the OLDEST pending base so the combined run still covers every commit
     // since the last completed review.
     pendingBaseRef ??= previousCommit;
-    if (!pendingBaseRef) return;
     pendingBranchName = name;
     reviewDebounce.schedule();
   });

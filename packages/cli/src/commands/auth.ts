@@ -76,7 +76,7 @@ export function loginInitFromArgs(args: LoginCommandArgs): CliLoginInit {
     providerExplicit: provider.explicit,
     noBrowser:
       readBooleanArg(args, 'no-browser', 'noBrowser') || args.browser === false,
-    device: readBooleanArg(args, 'device', 'device'),
+    device: args.device === true,
     selectAccount: readBooleanArg(args, 'select-account', 'selectAccount'),
     loginHint: optString(args['login-hint']) ?? optString(args.loginHint),
   };

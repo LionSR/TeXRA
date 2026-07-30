@@ -355,26 +355,22 @@ export function SubagentList(
     (input, key) => {
       if (key.ctrl || key.meta) return;
       const streamId = childListStreamId(props.selectedValue);
+      if (!streamId) return;
       const pressed = input.toLowerCase();
-      if (pressed === 'v' && streamId) {
+      if (pressed === 'v') {
         props.onPrintStream?.(streamId);
         return;
       }
-      // Skip/retry target only a focused subagent stream (a workflow-script
-      // grandchild); the session control registry no-ops for any execution id
-      // that is not an in-flight grandchild, so non-workflow rows are inert.
-      if ((pressed === 's' || pressed === 'r') && streamId) {
-        const executionId = props.activeSubagentExecutionIds?.get(streamId);
-        if (!executionId) return;
-        if (pressed === 's') props.onSkipExecution?.(executionId);
-        else props.onRetryExecution?.(executionId);
-        return;
-      }
-      if (pressed !== 'k') return;
-      const executionId = streamId
-        ? props.activeSubagentExecutionIds?.get(streamId)
-        : undefined;
-      if (executionId) props.onKillExecution?.(executionId);
+      // Kill/skip/retry target only a focused subagent stream (a
+      // workflow-script grandchild); the session control registry no-ops for
+      // any execution id that is not an in-flight grandchild, so non-workflow
+      // rows are inert.
+      if (pressed !== 'k' && pressed !== 's' && pressed !== 'r') return;
+      const executionId = props.activeSubagentExecutionIds?.get(streamId);
+      if (!executionId) return;
+      if (pressed === 'k') props.onKillExecution?.(executionId);
+      else if (pressed === 's') props.onSkipExecution?.(executionId);
+      else props.onRetryExecution?.(executionId);
     },
     { isActive: props.keyboardActive ?? false },
   );

@@ -64,6 +64,14 @@ function resultMeta(outcome: string, response: string) {
   };
 }
 
+function executionMeta(overrides: Record<string, unknown> = {}) {
+  return {
+    schemaVersion: 1,
+    timestamp: '2026-07-10T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
 describe('execution lifecycle', () => {
   setupPlatform({ workspacePath: '/workspace/root' });
 
@@ -135,12 +143,12 @@ describe('execution lifecycle', () => {
 
   it('does not relabel a turn-owned result while persisting terminal metadata', async () => {
     const executionId = 'abc123' as ExecutionId;
-    mocks.readMeta.mockResolvedValue({
-      schemaVersion: 1,
-      timestamp: '2026-07-10T00:00:00.000Z',
-      terminalStatus: EXECUTION_STATUS.COMPLETED,
-      outcome: 'completed',
-    });
+    mocks.readMeta.mockResolvedValue(
+      executionMeta({
+        terminalStatus: EXECUTION_STATUS.COMPLETED,
+        outcome: 'completed',
+      }),
+    );
     mocks.readResultMeta.mockResolvedValue(
       resultMeta('completed', 'Interim result.'),
     );
@@ -159,12 +167,12 @@ describe('execution lifecycle', () => {
 
   it('aligns an interim result after a suspended run terminates between turns', async () => {
     const executionId = 'suspended-terminal-result' as ExecutionId;
-    mocks.readMeta.mockResolvedValue({
-      schemaVersion: 1,
-      timestamp: '2026-07-10T00:00:00.000Z',
-      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
-      outcome: RUN_OUTCOME.CANCELLED,
-    });
+    mocks.readMeta.mockResolvedValue(
+      executionMeta({
+        terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+        outcome: RUN_OUTCOME.CANCELLED,
+      }),
+    );
     mocks.readResultMeta.mockResolvedValue(
       resultMeta(RUN_OUTCOME.COMPLETED, 'Interim result.'),
     );
@@ -192,12 +200,12 @@ describe('execution lifecycle', () => {
   });
 
   it('rejects when terminal metadata cannot be written', async () => {
-    mocks.readMeta.mockResolvedValue({
-      schemaVersion: 1,
-      timestamp: '2026-07-10T00:00:00.000Z',
-      terminalStatus: EXECUTION_STATUS.COMPLETED,
-      outcome: 'completed',
-    });
+    mocks.readMeta.mockResolvedValue(
+      executionMeta({
+        terminalStatus: EXECUTION_STATUS.COMPLETED,
+        outcome: 'completed',
+      }),
+    );
     mocks.readResultMeta.mockResolvedValue(
       resultMeta('completed', 'Finished.'),
     );
@@ -214,10 +222,7 @@ describe('execution lifecycle', () => {
 
   it('finalizes durably while preserving the flow record', async () => {
     const executionId = 'preserved-flow' as ExecutionId;
-    mocks.readMeta.mockResolvedValue({
-      schemaVersion: 1,
-      timestamp: '2026-07-10T00:00:00.000Z',
-    });
+    mocks.readMeta.mockResolvedValue(executionMeta());
 
     const result = await finalizeExecution({
       executionId,
@@ -235,10 +240,7 @@ describe('execution lifecycle', () => {
 
   it('finalizes durably after deleting the flow record', async () => {
     const executionId = 'deleted-flow' as ExecutionId;
-    mocks.readMeta.mockResolvedValue({
-      schemaVersion: 1,
-      timestamp: '2026-07-10T00:00:00.000Z',
-    });
+    mocks.readMeta.mockResolvedValue(executionMeta());
 
     const result = await finalizeExecution({
       executionId,
@@ -297,10 +299,7 @@ describe('execution lifecycle', () => {
   it('reports durable terminal metadata when flow deletion fails', async () => {
     const executionId = 'flow-delete-failed' as ExecutionId;
     const error = new Error('flow delete failed');
-    mocks.readMeta.mockResolvedValue({
-      schemaVersion: 1,
-      timestamp: '2026-07-10T00:00:00.000Z',
-    });
+    mocks.readMeta.mockResolvedValue(executionMeta());
     mocks.delete.mockRejectedValueOnce(error);
 
     const result = await finalizeExecution({
@@ -328,11 +327,9 @@ describe('execution lifecycle', () => {
     const executionId = 'result-sync-failed' as ExecutionId;
     const error = new Error('result disk full');
     const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
-    mocks.readMeta.mockResolvedValue({
-      schemaVersion: 1,
-      timestamp: '2026-07-10T00:00:00.000Z',
-      outcome: RUN_OUTCOME.CANCELLED,
-    });
+    mocks.readMeta.mockResolvedValue(
+      executionMeta({ outcome: RUN_OUTCOME.CANCELLED }),
+    );
     mocks.readResultMeta.mockResolvedValue(
       resultMeta('completed', 'Interim result.'),
     );

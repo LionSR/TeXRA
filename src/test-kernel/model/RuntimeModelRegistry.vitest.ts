@@ -61,6 +61,23 @@ function languageModelPort(
   };
 }
 
+async function installModels(
+  ...models: readonly LanguageModelInfo[]
+): Promise<LanguageModelPort> {
+  const port = languageModelPort(models);
+  await installPlatform({}, { languageModel: port });
+  return port;
+}
+
+function failingDiscoveryPort(): LanguageModelPort {
+  return {
+    ...languageModelPort([]),
+    selectModels: async () => {
+      throw new Error('native discovery failed');
+    },
+  };
+}
+
 function modelOptionsAccess(): ModelOptionsAccess {
   return {
     visibleModels: [],
@@ -95,8 +112,7 @@ describe('runtime model registry', () => {
   });
 
   it('projects a known native Copilot model onto shared TeXRA metadata', async () => {
-    const port = languageModelPort([SONNET]);
-    await installPlatform({}, { languageModel: port });
+    const port = await installModels(SONNET);
 
     await refreshRuntimeModelRegistry();
 
@@ -137,7 +153,7 @@ describe('runtime model registry', () => {
   });
 
   it('marks direct fallbacks that could route through ChatGPT subscription', async () => {
-    await installPlatform({}, { languageModel: languageModelPort([GPT_56]) });
+    await installModels(GPT_56);
 
     await refreshRuntimeModelRegistry();
 
@@ -149,14 +165,7 @@ describe('runtime model registry', () => {
   });
 
   it('keeps unavailable models resolvable without advertising them as available', async () => {
-    await installPlatform(
-      {},
-      {
-        languageModel: languageModelPort([
-          { ...SONNET, access: 'unavailable' },
-        ]),
-      },
-    );
+    await installModels({ ...SONNET, access: 'unavailable' });
 
     await refreshRuntimeModelRegistry();
 
@@ -166,7 +175,7 @@ describe('runtime model registry', () => {
   });
 
   it('adds accessible native models to the ordinary model options', async () => {
-    await installPlatform({}, { languageModel: languageModelPort([SONNET]) });
+    await installModels(SONNET);
 
     const options = await computeModelOptionsData(
       undefined,
@@ -187,14 +196,7 @@ describe('runtime model registry', () => {
   });
 
   it('shows an unavailable persisted Copilot selection', async () => {
-    await installPlatform(
-      {},
-      {
-        languageModel: languageModelPort([
-          { ...SONNET, access: 'unavailable' },
-        ]),
-      },
-    );
+    await installModels({ ...SONNET, access: 'unavailable' });
 
     const [option] = await computeModelOptionsData(
       ['copilot:sonnet46'],
@@ -210,14 +212,7 @@ describe('runtime model registry', () => {
   });
 
   it('distinguishes models awaiting consent from unavailable models', async () => {
-    await installPlatform(
-      {},
-      {
-        languageModel: languageModelPort([
-          { ...SONNET, access: 'consent-required' },
-        ]),
-      },
-    );
+    await installModels({ ...SONNET, access: 'consent-required' });
 
     const [option] = await computeModelOptionsData(
       ['copilot:sonnet46'],
@@ -233,8 +228,10 @@ describe('runtime model registry', () => {
   });
 
   it('requests consent only for a model awaiting the native prompt', async () => {
-    const port = languageModelPort([{ ...SONNET, access: 'consent-required' }]);
-    await installPlatform({}, { languageModel: port });
+    const port = await installModels({
+      ...SONNET,
+      access: 'consent-required',
+    });
 
     await expect(requestRuntimeModelAccess('copilot:sonnet46')).resolves.toBe(
       'requested',
@@ -257,10 +254,10 @@ describe('runtime model registry', () => {
     );
 
     invalidateRuntimeModelRegistry();
-    const unavailablePort = languageModelPort([
-      { ...SONNET, access: 'unavailable' },
-    ]);
-    await installPlatform({}, { languageModel: unavailablePort });
+    const unavailablePort = await installModels({
+      ...SONNET,
+      access: 'unavailable',
+    });
     await expect(requestRuntimeModelAccess('copilot:sonnet46')).resolves.toBe(
       'unavailable',
     );
@@ -268,19 +265,12 @@ describe('runtime model registry', () => {
   });
 
   it('omits native models whose capabilities TeXRA cannot establish', async () => {
-    await installPlatform(
-      {},
-      {
-        languageModel: languageModelPort([
-          {
-            ...SONNET,
-            id: 'future-model',
-            family: 'future-model',
-            name: 'Future model',
-          },
-        ]),
-      },
-    );
+    await installModels({
+      ...SONNET,
+      id: 'future-model',
+      family: 'future-model',
+      name: 'Future model',
+    });
 
     await refreshRuntimeModelRegistry();
 
@@ -289,13 +279,13 @@ describe('runtime model registry', () => {
   });
 
   it('replaces native model state after invalidation', async () => {
-    await installPlatform({}, { languageModel: languageModelPort([SONNET]) });
+    await installModels(SONNET);
     await refreshRuntimeModelRegistry();
     expect(availableRuntimeModelIds()).toEqual(['copilot:sonnet46']);
 
     invalidateRuntimeModelRegistry();
     expect(getRuntimeModelConfig('copilot:sonnet46')).toBeDefined();
-    await installPlatform({}, { languageModel: languageModelPort([]) });
+    await installModels();
     await refreshRuntimeModelRegistry();
 
     expect(availableRuntimeModelIds()).toEqual([]);
@@ -303,38 +293,18 @@ describe('runtime model registry', () => {
   });
 
   it('does not make static models depend on native discovery', async () => {
-    await installPlatform(
-      {},
-      {
-        languageModel: {
-          ...languageModelPort([]),
-          selectModels: async () => {
-            throw new Error('native discovery failed');
-          },
-        },
-      },
-    );
+    await installPlatform({}, { languageModel: failingDiscoveryPort() });
 
     await expect(resolveRuntimeModelConfig('gpt55')).resolves.toBeDefined();
   });
 
   it('keeps static model options available when native discovery fails', async () => {
-    await installPlatform({}, { languageModel: languageModelPort([SONNET]) });
+    await installModels(SONNET);
     await refreshRuntimeModelRegistry();
     expect(availableRuntimeModelIds()).toEqual(['copilot:sonnet46']);
 
     invalidateRuntimeModelRegistry();
-    await installPlatform(
-      {},
-      {
-        languageModel: {
-          ...languageModelPort([]),
-          selectModels: async () => {
-            throw new Error('native discovery failed');
-          },
-        },
-      },
-    );
+    await installPlatform({}, { languageModel: failingDiscoveryPort() });
 
     const options = await computeModelOptionsData(
       ['gpt55'],
@@ -352,21 +322,11 @@ describe('runtime model registry', () => {
   });
 
   it('returns an empty discovered catalogue when native discovery fails', async () => {
-    await installPlatform({}, { languageModel: languageModelPort([SONNET]) });
+    await installModels(SONNET);
     await refreshRuntimeModelRegistry();
 
     invalidateRuntimeModelRegistry();
-    await installPlatform(
-      {},
-      {
-        languageModel: {
-          ...languageModelPort([]),
-          selectModels: async () => {
-            throw new Error('native discovery failed');
-          },
-        },
-      },
-    );
+    await installPlatform({}, { languageModel: failingDiscoveryPort() });
 
     await expect(discoveredRuntimeModelConfigEntries()).resolves.toEqual([]);
     expect(

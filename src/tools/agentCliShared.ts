@@ -56,12 +56,9 @@ interface ResumableAgentCliSession {
   executionId: ExecutionId;
 }
 
-interface ResumableAgentCliStore {
-  waitForActive(id: string): Promise<ResumableAgentCliSession | undefined>;
-}
-
-interface ClaimableAgentCliStore extends ResumableAgentCliStore {
+interface ClaimableAgentCliStore {
   claim(id: string): (() => void) | undefined;
+  waitForActive(id: string): Promise<ResumableAgentCliSession | undefined>;
 }
 
 export interface AgentCliResumeLabels {

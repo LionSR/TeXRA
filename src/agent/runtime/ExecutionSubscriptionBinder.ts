@@ -12,7 +12,10 @@
  */
 
 import { createChannelTrace } from '@agent/trace';
-import type { ExecutionHandle } from '@agent/runtime/ExecutionHandle';
+import type {
+  ExecutionHandle,
+  ExecutionStatusInfo,
+} from '@agent/runtime/ExecutionHandle';
 import type { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import type { StreamTabId } from '@shared/schemas';
@@ -24,11 +27,7 @@ const logger = createChannelTrace('ExecutionSubscriptionBinder');
 
 const TAG = DELIVERY_TAG.executionActivity;
 
-interface Disposable {
-  dispose: () => void;
-}
-
-type PerStream = Map<string, Disposable>;
+type PerStream = Map<string, ExecutionSubscription>;
 
 interface ReleaseSource {
   onRelease(observer: (streamId: StreamTabId) => void): () => void;
@@ -46,38 +45,11 @@ interface ExecutionSubscriptionBinderOptions {
   session?: SessionHandle;
 }
 
-interface SnapshotState {
-  status: string;
-  elapsed: string | null;
-}
-
-function snapshot(
-  registry: Pick<ExecutionRegistry, 'getStatus'>,
-  handle: ExecutionHandle,
-): SnapshotState {
-  const info = registry.getStatus(handle);
-  return {
-    status: info.status,
-    elapsed: info.elapsed,
-  };
-}
-
-function emitQueuedFollowUpsChanged(
-  streamId: StreamTabId,
-  session?: SessionHandle,
-): void {
-  const target = session ?? currentSession();
-  target.events.emit({
-    scope: 'session',
-    event: { type: 'updateQueuedFollowUps', payload: { streamId } },
-  });
-}
-
-class ExecutionSubscription implements Disposable {
+class ExecutionSubscription {
   private readonly executionId: string;
   private readonly agentName: string;
   private readonly category: ExecutionHandle['category'];
-  private last: SnapshotState | null;
+  private last: ExecutionStatusInfo;
   private removeListener: (() => void) | null = null;
   private disposed = false;
 
@@ -95,7 +67,7 @@ class ExecutionSubscription implements Disposable {
     this.executionId = handle.executionId;
     this.agentName = handle.agentName;
     this.category = handle.category;
-    this.last = snapshot(this.registry, handle);
+    this.last = this.registry.getStatus(handle);
   }
 
   bind(): boolean {
@@ -131,27 +103,24 @@ class ExecutionSubscription implements Disposable {
       return;
     }
 
-    const current = snapshot(this.registry, handle);
-    const statusChanged = !this.last || this.last.status !== current.status;
-    if (!statusChanged) {
+    const current = this.registry.getStatus(handle);
+    const previous = this.last;
+    if (previous.status === current.status) {
       this.last = current;
       return;
     }
 
-    const transition = this.last
-      ? `${this.last.status} → ${current.status}`
-      : current.status;
     const elapsed = current.elapsed ? ` (${current.elapsed} elapsed)` : '';
     this.send(
-      `${this.executionId} (${this.agentName}, ${this.category}) ${transition}${elapsed}`,
+      `${this.executionId} (${this.agentName}, ${this.category}) ` +
+        `${previous.status} → ${current.status}${elapsed}`,
     );
     this.last = current;
   }
 
   private sendFinished(): void {
-    const previous = this.last?.status ?? 'unknown';
     this.send(
-      `${this.executionId} (${this.agentName}, ${this.category}) finished. Last known status: ${previous}. Use executions { path: '/executions/${this.executionId}/report' } for the result.`,
+      `${this.executionId} (${this.agentName}, ${this.category}) finished. Last known status: ${this.last.status}. Use executions { path: '/executions/${this.executionId}/report' } for the result.`,
     );
   }
 
@@ -161,9 +130,14 @@ class ExecutionSubscription implements Disposable {
       mode: 'live_notification',
     })
       .then((result) => {
-        if (result.status === 'sent' || result.status === 'queued') {
-          emitQueuedFollowUpsChanged(this.streamId, this.session);
-        }
+        if (result.status !== 'sent' && result.status !== 'queued') return;
+        (this.session ?? currentSession()).events.emit({
+          scope: 'session',
+          event: {
+            type: 'updateQueuedFollowUps',
+            payload: { streamId: this.streamId },
+          },
+        });
       })
       .catch((err: unknown) => {
         this.logger.warn('Failed to deliver execution subscription follow-up', {

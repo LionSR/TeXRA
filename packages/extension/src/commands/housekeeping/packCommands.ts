@@ -14,11 +14,8 @@ import {
   type FileOpResult,
 } from '@shared/schemas/opResults';
 import { WorkspaceFS } from '@utils/files';
-import { type FileOpParams, type PackConfig } from './fileOpSchemas';
-import {
-  emitClearMissingOutputs,
-  type ClearMissingOutputsOptions,
-} from './streamEventUtils';
+import { type PackConfig } from './fileOpSchemas';
+import { emitClearMissingOutputs } from './streamEventUtils';
 
 const CHANNEL = 'packCommands';
 
@@ -55,59 +52,56 @@ function showPackResult(result: FileOpResult, inputFile: string): void {
   }
 }
 
-async function executePackOperation<T extends FileOpParams>(
-  data: T,
-  runOperation: (data: T) => Promise<FileOpResult>,
-  getClearOptions: (data: T) => ClearMissingOutputsOptions | null,
-): Promise<void> {
-  const result = await runOperation(data);
-  showPackResult(result, data.inputFile);
-
-  const clearOptions = getClearOptions(data);
-  if (clearOptions) {
-    emitClearMissingOutputs(clearOptions);
-  }
-}
-
 export async function handlePack(config: PackConfig): Promise<void> {
-  return executePackOperation(
-    config,
-    async (data) => {
-      const runWorkspacePack = (): Promise<FileOpResult> =>
-        runPack(data.model, data.inputFile, data.agent, data.outputFiles);
+  const {
+    agent,
+    model,
+    inputFile,
+    outputFiles,
+    streamId,
+    executionId,
+    skipProgressViewClear,
+  } = config;
 
-      // Toolbar-driven invocations pass an executionId: snapshot the runDir
-      // AND the workspace. The workspace pass is a no-op for new runs (their
-      // outputs live only inside the runDir), but it catches legacy runs
-      // whose outputs still sit beside the source — those runs also
-      // produce a runDir via `ensureRunDir`, so keying solely off
-      // `runPackRunDir` returning non-noFiles skips real workspace
-      // artifacts and would produce an empty snapshot.
-      if (data.executionId) {
-        const runDirResult = await runPackRunDir(
-          data.executionId,
-          data.agent,
-          data.model,
-          data.inputFile,
-        );
-        const workspaceResult = await runWorkspacePack();
-        return mergeRunDirAndWorkspaceResult(runDirResult, workspaceResult);
-      }
-      return runWorkspacePack();
-    },
-    (data) => {
-      if (data.skipProgressViewClear) return null;
-      if (data.streamId) return { streamIdOverride: data.streamId };
-      return {
-        streamConfig: {
-          agent: data.agent,
-          model: data.model,
-          inputFile: data.inputFile,
-          outputFiles: data.outputFiles,
-        },
-      };
-    },
-  );
+  const runWorkspacePack = (): Promise<FileOpResult> =>
+    runPack(model, inputFile, agent, outputFiles);
+
+  // Toolbar-driven invocations pass an executionId: snapshot the runDir
+  // AND the workspace. The workspace pass is a no-op for new runs (their
+  // outputs live only inside the runDir), but it catches legacy runs
+  // whose outputs still sit beside the source — those runs also
+  // produce a runDir via `ensureRunDir`, so keying solely off
+  // `runPackRunDir` returning non-noFiles skips real workspace
+  // artifacts and would produce an empty snapshot.
+  let result: FileOpResult;
+  if (executionId) {
+    const runDirResult = await runPackRunDir(
+      executionId,
+      agent,
+      model,
+      inputFile,
+    );
+    const workspaceResult = await runWorkspacePack();
+    result = mergeRunDirAndWorkspaceResult(runDirResult, workspaceResult);
+  } else {
+    result = await runWorkspacePack();
+  }
+  showPackResult(result, inputFile);
+
+  if (!skipProgressViewClear) {
+    emitClearMissingOutputs(
+      streamId
+        ? { streamIdOverride: streamId }
+        : {
+            streamConfig: {
+              agent,
+              model,
+              inputFile,
+              outputFiles,
+            },
+          },
+    );
+  }
 }
 
 export async function handlePackSingle(
@@ -115,18 +109,11 @@ export async function handlePackSingle(
   agent: string,
   model: string,
 ): Promise<void> {
-  return executePackOperation(
-    { inputFile, agent, model },
-    (data) => runPackSingle(data.model, data.inputFile, data.agent),
-    (data) => ({
-      streamConfig: {
-        agent: data.agent,
-        model: data.model,
-        inputFile: data.inputFile,
-        outputFiles: [],
-      },
-    }),
-  );
+  const result = await runPackSingle(model, inputFile, agent);
+  showPackResult(result, inputFile);
+  emitClearMissingOutputs({
+    streamConfig: { agent, model, inputFile, outputFiles: [] },
+  });
 }
 
 export async function handlePackMultiple(
@@ -135,17 +122,9 @@ export async function handlePackMultiple(
   model: string,
   inputFiles: string[] = [],
 ): Promise<void> {
-  return executePackOperation(
-    { inputFile, agent, model, inputFiles },
-    (data) =>
-      runPackMultiple(data.model, data.inputFile, data.agent, data.inputFiles),
-    (data) => ({
-      streamConfig: {
-        agent: data.agent,
-        model: data.model,
-        inputFile: data.inputFile,
-        outputFiles: data.inputFiles,
-      },
-    }),
-  );
+  const result = await runPackMultiple(model, inputFile, agent, inputFiles);
+  showPackResult(result, inputFile);
+  emitClearMissingOutputs({
+    streamConfig: { agent, model, inputFile, outputFiles: inputFiles },
+  });
 }

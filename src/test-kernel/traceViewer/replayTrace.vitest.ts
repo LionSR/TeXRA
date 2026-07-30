@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { getExecutionStore } from '@agent/storage';
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import type { Platform } from '@platform/platform';
 import {
   appState,
   resetProgressState,
@@ -33,11 +32,7 @@ import { replayTrace } from '../../../packages/trace-viewer/src/replayTrace';
 
 const tempDirs: string[] = [];
 
-function buildStoragePlatform(): Promise<Platform> {
-  return createTempDirPlatform('texra-replay-trace-', tempDirs);
-}
-
-setupPlatform(buildStoragePlatform);
+setupPlatform(() => createTempDirPlatform('texra-replay-trace-', tempDirs));
 
 beforeEach(() => {
   // replayTrace's slices write the shared progressState singletons directly;
@@ -77,12 +72,11 @@ function legacyTrace(
 
 describe('replayTrace legacy-status fallback (issue #7188)', () => {
   it('replays workflow content without tool-use state', () => {
-    const getState = () => appState.get();
     const trace = legacyTrace(undefined);
 
     replayTrace(trace);
 
-    const replayed = getState().streamStates.get(trace.streamId);
+    const replayed = appState.get().streamStates.get(trace.streamId);
     expect(replayed).toMatchObject({
       kind: AgentCategory.Workflow,
       files: {},
@@ -93,7 +87,6 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
   });
 
   it('replays tool-use content without workflow output state', () => {
-    const getState = () => appState.get();
     const workflow = legacyTrace(undefined);
     const trace: TraceDocument = {
       ...workflow,
@@ -116,7 +109,7 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
 
     replayTrace(trace);
 
-    const replayed = getState().streamStates.get(trace.streamId);
+    const replayed = appState.get().streamStates.get(trace.streamId);
     expect(replayed).toMatchObject({
       kind: AgentCategory.ToolUse,
       todos: [{ content: 'Replay the plan' }],
@@ -162,15 +155,13 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
     expect(result.trace.terminalStatus).toBeNull();
     expect(result.trace.snapshot.status).toBeUndefined();
 
-    const getState = () => appState.get();
     replayTrace(result.trace);
 
-    const replayed = getState().streamStates.get(result.trace.streamId);
+    const replayed = appState.get().streamStates.get(result.trace.streamId);
     expect(replayed?.status).toBe('failed');
   });
 
   it('ignores nested group-end status when the root run stage never closed', () => {
-    const getState = () => appState.get();
     const trace: TraceDocument = {
       ...legacyTrace(undefined),
       entries: [
@@ -211,7 +202,7 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
 
     replayTrace(trace);
 
-    const replayed = getState().streamStates.get(trace.streamId);
+    const replayed = appState.get().streamStates.get(trace.streamId);
     expect(replayed?.status).toBe(STREAM_STATUS.READY);
   });
 
@@ -222,7 +213,6 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
     // `groupId: undefined`, the same "no parent" shape as the root run
     // stage's own GROUP_END. Only `data.kind` (preserved through the
     // stage.end merge by TexraTranscriptRecorder) tells them apart.
-    const getState = () => appState.get();
     const trace: TraceDocument = {
       ...legacyTrace(undefined),
       config: AgentConfigSchema.parse({
@@ -260,7 +250,7 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
 
     replayTrace(trace);
 
-    const replayed = getState().streamStates.get(trace.streamId);
+    const replayed = appState.get().streamStates.get(trace.streamId);
     expect(replayed?.status).toBe(STREAM_STATUS.READY);
   });
 
@@ -277,7 +267,6 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
     // only starts after the root run stage has already opened. Labels are
     // deliberately non-canonical ("Legacy run" / "Round 0", not "Run: ...")
     // to prove the fallback doesn't key on label text either.
-    const getState = () => appState.get();
     const trace: TraceDocument = {
       ...legacyTrace(undefined),
       config: AgentConfigSchema.parse({
@@ -322,28 +311,26 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
 
     replayTrace(trace);
 
-    const replayed = getState().streamStates.get(trace.streamId);
+    const replayed = appState.get().streamStates.get(trace.streamId);
     expect(replayed?.status).toBe(STREAM_STATUS.READY);
   });
 
   it('derives "failed" from snapshot.status "error" instead of defaulting to ready', () => {
-    const getState = () => appState.get();
     const trace = legacyTrace('error');
 
     replayTrace(trace);
 
-    const replayed = getState().streamStates.get(trace.streamId);
+    const replayed = appState.get().streamStates.get(trace.streamId);
     expect(replayed?.status).not.toBe(STREAM_STATUS.READY);
     expect(replayed?.status).toBe('failed');
   });
 
   it('derives a non-ready status from snapshot.status "stopped" instead of defaulting to ready', () => {
-    const getState = () => appState.get();
     const trace = legacyTrace('stopped');
 
     replayTrace(trace);
 
-    const replayed = getState().streamStates.get(trace.streamId);
+    const replayed = appState.get().streamStates.get(trace.streamId);
     // STOPPED folds into the canonical COMPLETED phase (the same collapse
     // `streamStatusToLifecycleStatus` performs everywhere else in the app) —
     // the point of this regression is that it must not silently become
@@ -353,12 +340,11 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
   });
 
   it('still reports READY when neither terminalStatus nor snapshot.status is set', () => {
-    const getState = () => appState.get();
     const trace = legacyTrace(undefined);
 
     replayTrace(trace);
 
-    const replayed = getState().streamStates.get(trace.streamId);
+    const replayed = appState.get().streamStates.get(trace.streamId);
     expect(replayed?.status).toBe(STREAM_STATUS.READY);
   });
 });

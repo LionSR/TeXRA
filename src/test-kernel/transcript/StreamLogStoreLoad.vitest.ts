@@ -16,10 +16,12 @@ import {
   STREAM_PHASE,
   type StreamLogEntry,
 } from '@shared/schemas';
+import { createDeferred, waitForCondition } from '@test/support/asyncTestUtils';
 import {
   StreamLogStore,
   STREAM_LOGS_DIR,
   STREAM_LOG_SUMMARIES_DIR,
+  type StreamLogAppendInput,
 } from '@transcript';
 import { StorageFS } from '@utils/files';
 import { delay } from '@utils/core';
@@ -64,20 +66,60 @@ function notFound(): NodeJS.ErrnoException {
   return error;
 }
 
+function namedEntry(
+  id: string,
+  timestamp: number,
+  text: string,
+): StreamLogAppendInput {
+  return {
+    id,
+    type: STREAM_LOG_ENTRY_TYPES.LOG,
+    level: LOG_LEVELS.INFO,
+    timestamp,
+    messageType: MESSAGE_TYPES.DEFAULT,
+    text,
+  };
+}
+
 function logEntry(
   streamId: string,
   seqNo: number,
   timestamp: number,
 ): StreamLogEntry {
   return {
+    ...namedEntry(
+      `${streamId}-${seqNo}`,
+      timestamp,
+      `${streamId} entry ${seqNo}`,
+    ),
     seqNo,
-    id: `${streamId}-${seqNo}`,
-    type: STREAM_LOG_ENTRY_TYPES.LOG,
-    level: LOG_LEVELS.INFO,
-    timestamp,
-    messageType: MESSAGE_TYPES.DEFAULT,
-    text: `${streamId} entry ${seqNo}`,
   };
+}
+
+function summary(
+  firstTimestamp: number,
+  lastTimestamp: number,
+  rest: Record<string, boolean> = {},
+): Record<string, unknown> {
+  return { firstTimestamp, lastTimestamp, ...rest };
+}
+
+/** The summary a settled stream writes back after every orphan is closed. */
+function settledSummary(
+  firstTimestamp: number,
+  lastTimestamp: number,
+): Record<string, unknown> {
+  return summary(firstTimestamp, lastTimestamp, {
+    hasRunningGroup: false,
+    hasRunningStreamingText: false,
+  });
+}
+
+function writtenSummary(
+  writes: ReadonlyMap<string, unknown>,
+  streamId: string,
+): unknown {
+  return writes.get(storageFile(STREAM_LOG_SUMMARIES_DIR, streamId));
 }
 
 function runningGroupEntry(
@@ -171,14 +213,8 @@ function mockStorage({
 } {
   let fullLogReads = 0;
   let pausedLogWriteUsed = false;
-  let releasePausedWriteImpl = (): void => {};
-  let markPausedWriteStarted = (): void => {};
-  const waitForPausedWrite =
-    pauseLogWriteKey == null
-      ? Promise.resolve()
-      : new Promise<void>((resolve) => {
-          markPausedWriteStarted = resolve;
-        });
+  const pausedWriteStarted = createDeferred();
+  const pausedWriteRelease = createDeferred();
   const deletes: string[] = [];
   const ensuredDirs: string[] = [];
   const writes = new Map<string, unknown>();
@@ -259,10 +295,8 @@ function mockStorage({
       target === storageFile(STREAM_LOGS_DIR, pauseLogWriteKey)
     ) {
       pausedLogWriteUsed = true;
-      markPausedWriteStarted();
-      await new Promise<void>((resolve) => {
-        releasePausedWriteImpl = resolve;
-      });
+      pausedWriteStarted.resolve();
+      await pausedWriteRelease.promise;
     }
     if (target.startsWith(`${STREAM_LOGS_DIR}${path.sep}`)) {
       await onLogWrite?.(streamKeyFromFile(target));
@@ -295,21 +329,11 @@ function mockStorage({
     deletes,
     ensuredDirs,
     fullLogReads: () => fullLogReads,
-    releasePausedWrite: () => releasePausedWriteImpl(),
-    waitForPausedWrite: () => waitForPausedWrite,
+    releasePausedWrite: () => pausedWriteRelease.resolve(),
+    waitForPausedWrite: () =>
+      pauseLogWriteKey == null ? Promise.resolve() : pausedWriteStarted.promise,
     writes,
   };
-}
-
-async function waitForCondition(
-  condition: () => boolean,
-  message: string,
-): Promise<void> {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    if (condition()) return;
-    await delay(0);
-  }
-  throw new Error(message);
 }
 
 describe('StreamLogStore load', () => {
@@ -432,26 +456,16 @@ describe('StreamLogStore load', () => {
   });
 
   it('reserves a writer across rehydration and a concurrent eviction', async () => {
-    let markReadStarted = (): void => undefined;
-    const readStarted = new Promise<void>((resolve) => {
-      markReadStarted = resolve;
-    });
-    let releaseRead = (): void => undefined;
-    const readGate = new Promise<void>((resolve) => {
-      releaseRead = resolve;
-    });
+    const readStarted = createDeferred();
+    const readGate = createDeferred();
     mockStorage({
       logs: { alpha: [logEntry('alpha', 1, 100)] },
       summaries: {
-        alpha: {
-          firstTimestamp: 100,
-          lastTimestamp: 100,
-          hasRunningGroup: false,
-        },
+        alpha: summary(100, 100, { hasRunningGroup: false }),
       },
       onLogRead: async () => {
-        markReadStarted();
-        await readGate;
+        readStarted.resolve();
+        await readGate.promise;
       },
     });
     const store = await StreamLogStore.open();
@@ -459,10 +473,10 @@ describe('StreamLogStore load', () => {
       'alpha',
       'execution-alpha',
     );
-    await readStarted;
+    await readStarted.promise;
 
     store.requestEviction('alpha');
-    releaseRead();
+    readGate.resolve();
     const writer = await writerPromise;
 
     expect(store.get('alpha')?.size).toBe(1);
@@ -666,11 +680,7 @@ describe('StreamLogStore load', () => {
     mockStorage({
       logs,
       summaries: {
-        alpha: {
-          firstTimestamp: 100,
-          lastTimestamp: 100,
-          hasRunningGroup: false,
-        },
+        alpha: summary(100, 100, { hasRunningGroup: false }),
       },
     });
     const store = await StreamLogStore.open();
@@ -700,11 +710,7 @@ describe('StreamLogStore load', () => {
         alpha: [logEntry('alpha', 1, 100)],
       },
       summaries: {
-        alpha: {
-          firstTimestamp: 100,
-          lastTimestamp: 100,
-          hasRunningGroup: false,
-        },
+        alpha: summary(100, 100, { hasRunningGroup: false }),
       },
     });
     const store = await StreamLogStore.open();
@@ -745,16 +751,8 @@ describe('StreamLogStore load', () => {
         beta: [logEntry('beta', 1, 100), logEntry('beta', 2, 160)],
       },
       summaries: {
-        alpha: {
-          firstTimestamp: 200,
-          lastTimestamp: 250,
-          hasRunningGroup: false,
-        },
-        beta: {
-          firstTimestamp: 100,
-          lastTimestamp: 160,
-          hasRunningGroup: false,
-        },
+        alpha: summary(200, 250, { hasRunningGroup: false }),
+        beta: summary(100, 160, { hasRunningGroup: false }),
       },
     });
 
@@ -814,14 +812,9 @@ describe('StreamLogStore load', () => {
       'StreamLogStore',
       expect.stringContaining('Ignoring corrupt summary cache for alpha'),
     );
-    expect(
-      storage.writes.get(storageFile(STREAM_LOG_SUMMARIES_DIR, 'alpha')),
-    ).toEqual({
-      firstTimestamp: 200,
-      lastTimestamp: 250,
-      hasRunningGroup: false,
-      hasRunningStreamingText: false,
-    });
+    expect(writtenSummary(storage.writes, 'alpha')).toEqual(
+      settledSummary(200, 250),
+    );
   });
 
   it('falls back once for missing summaries and writes the sidecar cache', async () => {
@@ -838,14 +831,9 @@ describe('StreamLogStore load', () => {
     expect(store.keys()).toEqual(['alpha']);
     expect(store.get('alpha')).toBeUndefined();
     expect(store.getFirstTimestamp('alpha')).toBe(200);
-    expect(
-      storage.writes.get(storageFile(STREAM_LOG_SUMMARIES_DIR, 'alpha')),
-    ).toEqual({
-      firstTimestamp: 200,
-      lastTimestamp: 250,
-      hasRunningGroup: false,
-      hasRunningStreamingText: false,
-    });
+    expect(writtenSummary(storage.writes, 'alpha')).toEqual(
+      settledSummary(200, 250),
+    );
   });
 
   it('rebuilds stale summaries before trusting them', async () => {
@@ -854,11 +842,7 @@ describe('StreamLogStore load', () => {
         alpha: [logEntry('alpha', 1, 200), logEntry('alpha', 2, 250)],
       },
       summaries: {
-        alpha: {
-          firstTimestamp: 1,
-          lastTimestamp: 1,
-          hasRunningGroup: false,
-        },
+        alpha: summary(1, 1, { hasRunningGroup: false }),
       },
       logMtimes: { alpha: 20 },
       summaryMtimes: { alpha: 10 },
@@ -868,14 +852,9 @@ describe('StreamLogStore load', () => {
 
     expect(storage.fullLogReads()).toBe(1);
     expect(store.getFirstTimestamp('alpha')).toBe(200);
-    expect(
-      storage.writes.get(storageFile(STREAM_LOG_SUMMARIES_DIR, 'alpha')),
-    ).toEqual({
-      firstTimestamp: 200,
-      lastTimestamp: 250,
-      hasRunningGroup: false,
-      hasRunningStreamingText: false,
-    });
+    expect(writtenSummary(storage.writes, 'alpha')).toEqual(
+      settledSummary(200, 250),
+    );
   });
 
   it('rehydrates summarized streams with stale running groups', async () => {
@@ -884,11 +863,7 @@ describe('StreamLogStore load', () => {
         alpha: [runningGroupEntry('alpha', 1, 100)],
       },
       summaries: {
-        alpha: {
-          firstTimestamp: 100,
-          lastTimestamp: 100,
-          hasRunningGroup: true,
-        },
+        alpha: summary(100, 100, { hasRunningGroup: true }),
       },
     });
 
@@ -908,14 +883,9 @@ describe('StreamLogStore load', () => {
     // orphan sweep's caller-classified default, not the folded 'error'
     // EndGroupStatus string.
     expect(entry?.data).toEqual({ status: RUN_OUTCOME.FAILED, endTime: 300 });
-    expect(
-      storage.writes.get(storageFile(STREAM_LOG_SUMMARIES_DIR, 'alpha')),
-    ).toEqual({
-      firstTimestamp: 100,
-      lastTimestamp: 100,
-      hasRunningGroup: false,
-      hasRunningStreamingText: false,
-    });
+    expect(writtenSummary(storage.writes, 'alpha')).toEqual(
+      settledSummary(100, 100),
+    );
   });
 
   it('reports unfinished streams from summaries without loading transcripts', async () => {
@@ -926,24 +896,18 @@ describe('StreamLogStore load', () => {
         complete: [logEntry('complete', 1, 120)],
       },
       summaries: {
-        group: {
-          firstTimestamp: 100,
-          lastTimestamp: 100,
+        group: summary(100, 100, {
           hasRunningGroup: true,
           hasRunningStreamingText: false,
-        },
-        streaming: {
-          firstTimestamp: 110,
-          lastTimestamp: 110,
+        }),
+        streaming: summary(110, 110, {
           hasRunningGroup: false,
           hasRunningStreamingText: true,
-        },
-        complete: {
-          firstTimestamp: 120,
-          lastTimestamp: 120,
+        }),
+        complete: summary(120, 120, {
           hasRunningGroup: false,
           hasRunningStreamingText: false,
-        },
+        }),
       },
     });
 
@@ -960,16 +924,8 @@ describe('StreamLogStore load', () => {
         beta: [runningGroupEntry('beta', 1, 110)],
       },
       summaries: {
-        alpha: {
-          firstTimestamp: 100,
-          lastTimestamp: 100,
-          hasRunningGroup: true,
-        },
-        beta: {
-          firstTimestamp: 110,
-          lastTimestamp: 110,
-          hasRunningGroup: true,
-        },
+        alpha: summary(100, 100, { hasRunningGroup: true }),
+        beta: summary(110, 110, { hasRunningGroup: true }),
       },
     });
 
@@ -984,17 +940,10 @@ describe('StreamLogStore load', () => {
     const entry = writtenLog(storage.writes, 'alpha').at(0);
     expect(entry?.type).toBe(STREAM_LOG_ENTRY_TYPES.GROUP_END);
     expect(store.get('beta')).toBeUndefined();
-    expect(
-      storage.writes.get(storageFile(STREAM_LOG_SUMMARIES_DIR, 'alpha')),
-    ).toEqual({
-      firstTimestamp: 100,
-      lastTimestamp: 100,
-      hasRunningGroup: false,
-      hasRunningStreamingText: false,
-    });
-    expect(
-      storage.writes.get(storageFile(STREAM_LOG_SUMMARIES_DIR, 'beta')),
-    ).toBeUndefined();
+    expect(writtenSummary(storage.writes, 'alpha')).toEqual(
+      settledSummary(100, 100),
+    );
+    expect(writtenSummary(storage.writes, 'beta')).toBeUndefined();
   });
 
   it('keeps already-resident streams after repairing their running groups', async () => {
@@ -1003,11 +952,7 @@ describe('StreamLogStore load', () => {
         alpha: [runningGroupEntry('alpha', 1, 100)],
       },
       summaries: {
-        alpha: {
-          firstTimestamp: 100,
-          lastTimestamp: 100,
-          hasRunningGroup: true,
-        },
+        alpha: summary(100, 100, { hasRunningGroup: true }),
       },
     });
     const store = await StreamLogStore.open();
@@ -1032,12 +977,10 @@ describe('StreamLogStore load', () => {
         gamma: [runningStreamingTextEntry('gamma', 1, 100)],
       },
       summaries: {
-        gamma: {
-          firstTimestamp: 100,
-          lastTimestamp: 100,
+        gamma: summary(100, 100, {
           hasRunningGroup: false,
           hasRunningStreamingText: true,
-        },
+        }),
       },
     });
 
@@ -1053,14 +996,9 @@ describe('StreamLogStore load', () => {
 
     expect(affected).toEqual(['gamma']);
     expect(entry?.data).toEqual({ status: 'completed' });
-    expect(
-      storage.writes.get(storageFile(STREAM_LOG_SUMMARIES_DIR, 'gamma')),
-    ).toEqual({
-      firstTimestamp: 100,
-      lastTimestamp: 100,
-      hasRunningGroup: false,
-      hasRunningStreamingText: false,
-    });
+    expect(writtenSummary(storage.writes, 'gamma')).toEqual(
+      settledSummary(100, 100),
+    );
   });
 
   it('settles every orphaned nonterminal workflow call during cold recovery', async () => {
@@ -1072,11 +1010,7 @@ describe('StreamLogStore load', () => {
         ],
       },
       summaries: {
-        workflow: {
-          firstTimestamp: 100,
-          lastTimestamp: 101,
-          hasNonterminalWorkflowTask: true,
-        },
+        workflow: summary(100, 101, { hasNonterminalWorkflowTask: true }),
       },
     });
     const store = await StreamLogStore.open();
@@ -1105,14 +1039,9 @@ describe('StreamLogStore load', () => {
         reason: 'not-reached',
       },
     });
-    expect(
-      storage.writes.get(storageFile(STREAM_LOG_SUMMARIES_DIR, 'workflow')),
-    ).toEqual({
-      firstTimestamp: 100,
-      lastTimestamp: 101,
-      hasRunningGroup: false,
-      hasRunningStreamingText: false,
-    });
+    expect(writtenSummary(storage.writes, 'workflow')).toEqual(
+      settledSummary(100, 101),
+    );
   });
 
   it('can close selected running groups with a caller-supplied RunOutcome', async () => {
@@ -1121,11 +1050,7 @@ describe('StreamLogStore load', () => {
         alpha: [runningGroupEntry('alpha', 1, 100)],
       },
       summaries: {
-        alpha: {
-          firstTimestamp: 100,
-          lastTimestamp: 100,
-          hasRunningGroup: true,
-        },
+        alpha: summary(100, 100, { hasRunningGroup: true }),
       },
     });
 
@@ -1219,16 +1144,8 @@ describe('StreamLogStore load', () => {
         beta: [runningGroupEntry('beta', 1, 110)],
       },
       summaries: {
-        alpha: {
-          firstTimestamp: 100,
-          lastTimestamp: 100,
-          hasRunningGroup: false,
-        },
-        beta: {
-          firstTimestamp: 110,
-          lastTimestamp: 110,
-          hasRunningGroup: true,
-        },
+        alpha: summary(100, 100, { hasRunningGroup: false }),
+        beta: summary(110, 110, { hasRunningGroup: true }),
       },
     });
 
@@ -1254,10 +1171,7 @@ describe('StreamLogStore load', () => {
       { length: 20 },
       (_, index) => `stream-${index}`,
     );
-    let releaseReads: () => void = () => {};
-    const readGate = new Promise<void>((resolve) => {
-      releaseReads = resolve;
-    });
+    const readGate = createDeferred();
     let activeReads = 0;
     let maxActiveReads = 0;
 
@@ -1281,7 +1195,7 @@ describe('StreamLogStore load', () => {
       onLogRead: async () => {
         activeReads += 1;
         maxActiveReads = Math.max(maxActiveReads, activeReads);
-        await readGate;
+        await readGate.promise;
         activeReads -= 1;
       },
     });
@@ -1289,14 +1203,14 @@ describe('StreamLogStore load', () => {
     const store = await StreamLogStore.open();
 
     const endRunningGroups = store.endRunningGroups(300);
-    await waitForCondition(
-      () => storage.fullLogReads() === 8,
-      'Expected stale stream rehydrate reads to reach the concurrency cap',
-    );
+    await waitForCondition(() => storage.fullLogReads() === 8, {
+      timeoutMessage:
+        'Expected stale stream rehydrate reads to reach the concurrency cap',
+    });
 
     expect(maxActiveReads).toBe(8);
 
-    releaseReads();
+    readGate.resolve();
     const affected = await endRunningGroups;
     await store.flush();
 
@@ -1306,44 +1220,30 @@ describe('StreamLogStore load', () => {
   });
 
   it('settles save waiters when dirty streams are still rehydrating', async () => {
-    let releaseRead: () => void = () => {};
-    let markReadStarted: () => void = () => {};
-    const readGate = new Promise<void>((resolve) => {
-      releaseRead = resolve;
-    });
-    const readStarted = new Promise<void>((resolve) => {
-      markReadStarted = resolve;
-    });
+    const readGate = createDeferred();
+    const readStarted = createDeferred();
     mockStorage({
       logs: {
         alpha: [logEntry('alpha', 1, 100)],
       },
       summaries: {
-        alpha: {
-          firstTimestamp: 100,
-          lastTimestamp: 100,
-          hasRunningGroup: false,
-        },
+        alpha: summary(100, 100, { hasRunningGroup: false }),
       },
       onLogRead: async () => {
-        markReadStarted();
-        await readGate;
+        readStarted.resolve();
+        await readGate.promise;
       },
     });
     const store = await StreamLogStore.open();
     const load = store.ensureLoaded('alpha');
-    await readStarted;
+    await readStarted.promise;
 
     vi.useFakeTimers();
     try {
-      store.append('alpha', {
-        id: 'alpha-live-entry',
-        type: STREAM_LOG_ENTRY_TYPES.LOG,
-        level: LOG_LEVELS.INFO,
-        timestamp: 200,
-        messageType: MESSAGE_TYPES.DEFAULT,
-        text: 'live while loading',
-      });
+      store.append(
+        'alpha',
+        namedEntry('alpha-live-entry', 200, 'live while loading'),
+      );
       const save = store.save();
       const settled = vi.fn();
       save.then(settled);
@@ -1353,7 +1253,7 @@ describe('StreamLogStore load', () => {
 
       expect(settled).toHaveBeenCalledOnce();
     } finally {
-      releaseRead();
+      readGate.resolve();
       await load;
       await store.flush();
       vi.useRealTimers();
@@ -1368,14 +1268,10 @@ describe('StreamLogStore load', () => {
     });
     const store = await StreamLogStore.open();
 
-    store.append('delete-me', {
-      id: 'delete-me-entry',
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      level: LOG_LEVELS.INFO,
-      timestamp: 500,
-      messageType: MESSAGE_TYPES.DEFAULT,
-      text: 'soon deleted',
-    });
+    store.append(
+      'delete-me',
+      namedEntry('delete-me-entry', 500, 'soon deleted'),
+    );
 
     const flush = store.flush();
     await storage.waitForPausedWrite();
@@ -1406,14 +1302,7 @@ describe('StreamLogStore load', () => {
 
     vi.useFakeTimers();
     try {
-      store.append('alpha', {
-        id: 'alpha-entry',
-        type: STREAM_LOG_ENTRY_TYPES.LOG,
-        level: LOG_LEVELS.INFO,
-        timestamp: 500,
-        messageType: MESSAGE_TYPES.DEFAULT,
-        text: 'must persist',
-      });
+      store.append('alpha', namedEntry('alpha-entry', 500, 'must persist'));
       const save = store.save();
       const settled = vi.fn();
       save.then(settled);
@@ -1441,14 +1330,7 @@ describe('StreamLogStore load', () => {
     });
     const store = await StreamLogStore.open();
 
-    store.append('reuse-me', {
-      id: 'old-entry',
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      level: LOG_LEVELS.INFO,
-      timestamp: 500,
-      messageType: MESSAGE_TYPES.DEFAULT,
-      text: 'old entry',
-    });
+    store.append('reuse-me', namedEntry('old-entry', 500, 'old entry'));
 
     const flush = store.flush();
     await storage.waitForPausedWrite();
@@ -1456,14 +1338,7 @@ describe('StreamLogStore load', () => {
     storage.releasePausedWrite();
     await Promise.all([flush, deletion]);
 
-    store.append('reuse-me', {
-      id: 'new-entry',
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      level: LOG_LEVELS.INFO,
-      timestamp: 700,
-      messageType: MESSAGE_TYPES.DEFAULT,
-      text: 'new entry',
-    });
+    store.append('reuse-me', namedEntry('new-entry', 700, 'new entry'));
     await store.flush();
 
     expect(
@@ -1474,41 +1349,27 @@ describe('StreamLogStore load', () => {
         text: 'new entry',
       }),
     ]);
-    expect(
-      storage.writes.get(storageFile(STREAM_LOG_SUMMARIES_DIR, 'reuse-me')),
-    ).toEqual({
-      firstTimestamp: 700,
-      lastTimestamp: 700,
-      hasRunningGroup: false,
-      hasRunningStreamingText: false,
-    });
+    expect(writtenSummary(storage.writes, 'reuse-me')).toEqual(
+      settledSummary(700, 700),
+    );
   });
 
   it('writes stream summaries with dirty log flushes', async () => {
     const storage = mockStorage({ logs: {}, summaries: {} });
     const store = await StreamLogStore.open();
 
-    store.append('new-stream', {
-      id: 'new-stream-entry',
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      level: LOG_LEVELS.INFO,
-      timestamp: 500,
-      messageType: MESSAGE_TYPES.DEFAULT,
-      text: 'new entry',
-    });
+    store.append(
+      'new-stream',
+      namedEntry('new-stream-entry', 500, 'new entry'),
+    );
     await store.flush();
 
     expect(
       storage.writes.get(storageFile(STREAM_LOGS_DIR, 'new-stream')),
     ).toHaveLength(1);
-    expect(
-      storage.writes.get(storageFile(STREAM_LOG_SUMMARIES_DIR, 'new-stream')),
-    ).toEqual({
-      firstTimestamp: 500,
-      lastTimestamp: 500,
-      hasRunningGroup: false,
-      hasRunningStreamingText: false,
-    });
+    expect(writtenSummary(storage.writes, 'new-stream')).toEqual(
+      settledSummary(500, 500),
+    );
   });
 
   it('preserves unparseable persisted entries when appending after rehydrate', async () => {
@@ -1537,11 +1398,7 @@ describe('StreamLogStore load', () => {
         ],
       },
       summaries: {
-        alpha: {
-          firstTimestamp: 100,
-          lastTimestamp: 200,
-          hasRunningGroup: false,
-        },
+        alpha: summary(100, 200, { hasRunningGroup: false }),
       },
     });
     const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
@@ -1563,14 +1420,7 @@ describe('StreamLogStore load', () => {
       ),
     );
 
-    store.append('alpha', {
-      id: 'alpha-new',
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      level: LOG_LEVELS.INFO,
-      timestamp: 400,
-      messageType: MESSAGE_TYPES.DEFAULT,
-      text: 'new entry',
-    });
+    store.append('alpha', namedEntry('alpha-new', 400, 'new entry'));
     await store.flush();
 
     expect(storage.writes.get(storageFile(STREAM_LOGS_DIR, 'alpha'))).toEqual([
@@ -1603,14 +1453,7 @@ describe('StreamLogStore load', () => {
     expect(store.get('beta')).toBeUndefined();
 
     await store.ensureLoaded('beta');
-    store.append('beta', {
-      id: 'beta-new',
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      level: LOG_LEVELS.INFO,
-      timestamp: 200,
-      messageType: MESSAGE_TYPES.DEFAULT,
-      text: 'new entry',
-    });
+    store.append('beta', namedEntry('beta-new', 200, 'new entry'));
     await store.flush();
 
     expect(storage.writes.get(storageFile(STREAM_LOGS_DIR, 'beta'))).toEqual([
@@ -1623,11 +1466,7 @@ describe('StreamLogStore load', () => {
     const storage = mockStorage({
       logs: { gamma: { corrupted: 'not an array' } },
       summaries: {
-        gamma: {
-          firstTimestamp: 100,
-          lastTimestamp: 200,
-          hasRunningGroup: false,
-        },
+        gamma: summary(100, 200, { hasRunningGroup: false }),
       },
     });
     const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
@@ -1645,14 +1484,7 @@ describe('StreamLogStore load', () => {
     );
 
     expect(() =>
-      store.append('gamma', {
-        id: 'gamma-new',
-        type: STREAM_LOG_ENTRY_TYPES.LOG,
-        level: LOG_LEVELS.INFO,
-        timestamp: 400,
-        messageType: MESSAGE_TYPES.DEFAULT,
-        text: 'new entry',
-      }),
+      store.append('gamma', namedEntry('gamma-new', 400, 'new entry')),
     ).toThrow('failed to load');
 
     expect(
@@ -1665,24 +1497,20 @@ describe('StreamLogStore load', () => {
     const storage = mockStorage({
       logs: { gamma: { corrupted: 'not an array' } },
       summaries: {
-        gamma: {
-          firstTimestamp: 100,
-          lastTimestamp: 100,
-          hasRunningGroup: false,
-        },
+        gamma: summary(100, 100, { hasRunningGroup: false }),
       },
     });
     const store = await StreamLogStore.open();
     const load = store.ensureLoaded('gamma');
 
-    store.append('gamma', {
-      id: 'gamma-concurrent',
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      level: LOG_LEVELS.INFO,
-      timestamp: 200,
-      messageType: MESSAGE_TYPES.DEFAULT,
-      text: 'arrived while the persisted transcript was being read',
-    });
+    store.append(
+      'gamma',
+      namedEntry(
+        'gamma-concurrent',
+        200,
+        'arrived while the persisted transcript was being read',
+      ),
+    );
 
     await expect(load).rejects.toThrow('persisted log is not an array');
     await expect(store.flush()).rejects.toThrow(

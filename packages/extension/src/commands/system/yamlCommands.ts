@@ -19,6 +19,13 @@ import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'TestCommands';
 
+function logInheritanceChain(agentName: string, rawYaml: unknown): void {
+  const { inherits } = (rawYaml ?? {}) as { inherits?: string };
+  if (inherits) {
+    logger.info(CHANNEL, `\nInheritance chain: ${agentName} -> ${inherits}`);
+  }
+}
+
 export async function handleTestAgentLoading(): Promise<void> {
   try {
     logger.info(CHANNEL, 'Testing agent loading from registry:');
@@ -49,13 +56,7 @@ export async function handleTestAgentLoading(): Promise<void> {
     logger.info(CHANNEL, '\nProcessed prompts:');
     logger.info(CHANNEL, JSON.stringify(prompts, null, 2));
 
-    const config = rawYaml as { inherits?: string };
-    if (config?.inherits) {
-      logger.info(
-        CHANNEL,
-        `\nInheritance chain: ${testAgent.name} -> ${config.inherits}`,
-      );
-    }
+    logInheritanceChain(testAgent.name, rawYaml);
 
     vscode.window.showInformationMessage(
       'Agent loading tests completed. Check Debug Console for results.',
@@ -98,15 +99,7 @@ export async function handleLoadSpecificAgent(): Promise<void> {
     logger.info(CHANNEL, '\nAgent prompts loaded:');
     logger.info(CHANNEL, JSON.stringify(prompts, null, 2));
 
-    const config = (await loadYaml(agentPath.definitionPath)) as {
-      inherits?: string;
-    };
-    if (config?.inherits) {
-      logger.info(
-        CHANNEL,
-        `\nInheritance chain: ${agentName} -> ${config.inherits}`,
-      );
-    }
+    logInheritanceChain(agentName, await loadYaml(agentPath.definitionPath));
 
     vscode.window.showInformationMessage(
       `Successfully loaded agent "${agentName}". Check Debug Console for details.`,

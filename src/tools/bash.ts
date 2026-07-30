@@ -83,12 +83,6 @@ const SHELL_BACKGROUNDING_MESSAGE =
   'This command uses shell-level backgrounding (`nohup ... &`) inside a foreground bash tool call. ' +
   'Do not emulate background execution inside the shell; call the bash tool again with `run_in_background: true` and the command without `nohup` or a trailing `&`.';
 
-function backgroundBashTerminalStatus(success: boolean) {
-  return projectRunOutcome(
-    deriveRunOutcome({ failed: !success, cancelled: false }),
-  ).executionStatus;
-}
-
 interface BoundedOutputCapture {
   append(chunk: string): void;
   text(streamName: 'stdout' | 'stderr'): string | null;
@@ -196,6 +190,29 @@ function createBoundedOutputCapture(
         ? `${head}\n\n[... ${elidedChars.toLocaleString()} characters elided from ${streamName} ...]\n\n${nonOverlappingTail}`
         : head + nonOverlappingTail;
     },
+  };
+}
+
+/**
+ * Only surface the head when the tail actually dropped earlier content —
+ * otherwise the tail already holds the full stream and a separate head block
+ * would just repeat it. When it did, also report how many characters sit in
+ * the gap between head and tail, mirroring the foreground
+ * `checkToolResultTextLimit` elision note.
+ */
+function toDeliveryExcerpt(
+  capture: BoundedOutputCapture,
+): BashDeliveryStreamExcerpt {
+  const truncated = capture.totalChars > capture.tail.length;
+  return {
+    tail: capture.tail,
+    head: truncated ? capture.head : '',
+    elidedChars: truncated
+      ? Math.max(
+          0,
+          capture.totalChars - capture.head.length - capture.tail.length,
+        )
+      : 0,
   };
 }
 
@@ -506,7 +523,9 @@ export class BashTool extends defineTool({
       try {
         const finalization = await finalizeExecution({
           executionId,
-          terminalStatus: backgroundBashTerminalStatus(success),
+          terminalStatus: projectRunOutcome(
+            deriveRunOutcome({ failed: !success, cancelled: false }),
+          ).executionStatus,
           flowRecord: 'delete',
         });
         if (finalization.status === 'failed') throw finalization.error;
@@ -560,40 +579,13 @@ export class BashTool extends defineTool({
                 `Background bash failed with exit code ${result.exitCode ?? 'unknown'}.`,
               );
 
-          // Only surface the head when the tail actually dropped earlier
-          // content — otherwise the tail already holds the full stream and a
-          // separate head block would just repeat it. When it did, also
-          // report how many characters sit in the gap between head and tail,
-          // mirroring the foreground `checkToolResultTextLimit` elision note.
-          const stdoutTruncated = stdout.totalChars > stdout.tail.length;
-          const stderrTruncated = stderr.totalChars > stderr.tail.length;
-          const stdoutExcerpt: BashDeliveryStreamExcerpt = {
-            tail: stdout.tail,
-            head: stdoutTruncated ? stdout.head : '',
-            elidedChars: stdoutTruncated
-              ? Math.max(
-                  0,
-                  stdout.totalChars - stdout.head.length - stdout.tail.length,
-                )
-              : 0,
-          };
-          const stderrExcerpt: BashDeliveryStreamExcerpt = {
-            tail: stderr.tail,
-            head: stderrTruncated ? stderr.head : '',
-            elidedChars: stderrTruncated
-              ? Math.max(
-                  0,
-                  stderr.totalChars - stderr.head.length - stderr.tail.length,
-                )
-              : 0,
-          };
           const msg = formatBashDelivery(
             executionId,
             command,
             wallTimeMs,
             result,
-            stdoutExcerpt,
-            stderrExcerpt,
+            toDeliveryExcerpt(stdout),
+            toDeliveryExcerpt(stderr),
           );
 
           const store = getExecutionStore(executionId);

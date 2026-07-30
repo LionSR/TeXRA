@@ -6,6 +6,7 @@ import { expect, test } from '@playwright/test';
 
 import {
   closeTexraApp,
+  dismissStartupPanel,
   launchTexraApp,
   type LaunchedApp,
 } from './electronApp.js';
@@ -28,19 +29,7 @@ test.afterAll(async () => {
 test('keeps onboarding readable inside a narrow conversation split', async () => {
   const { app, page } = launched;
 
-  await page.waitForFunction(() => {
-    const panel = document.querySelector('.desktop-startup-panel');
-    return Array.from(panel?.querySelectorAll('wa-button') ?? []).some(
-      (button) => button.textContent?.trim() === 'Skip for now',
-    );
-  });
-  await page.evaluate(() => {
-    const panel = document.querySelector('.desktop-startup-panel');
-    const skip = Array.from(panel?.querySelectorAll('wa-button') ?? []).find(
-      (button) => button.textContent?.trim() === 'Skip for now',
-    );
-    if (skip instanceof HTMLElement) skip.click();
-  });
+  await dismissStartupPanel(page, { required: true });
   await page.waitForFunction(
     () =>
       document

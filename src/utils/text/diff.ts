@@ -45,18 +45,6 @@ export interface PatchApplyResult {
   results: boolean[];
 }
 
-function createDiffMatcher(): DiffMatchPatch {
-  return new diff_match_patch();
-}
-
-function applySemanticCleanup(
-  dmp: DiffMatchPatch,
-  diffs: TextDiff[],
-): TextDiff[] {
-  dmp.diff_cleanupSemantic(diffs);
-  return diffs;
-}
-
 /**
  * Compute a character diff. By default this is the raw diff-match-patch
  * `diff_main(oldText, newText, false)` behavior.
@@ -66,10 +54,10 @@ export function diffTextByChar(
   newText: string,
   options: CharDiffOptions = {},
 ): TextDiff[] {
-  const dmp = createDiffMatcher();
+  const dmp = new diff_match_patch();
   const diffs = dmp.diff_main(oldText, newText, options.checkLines ?? false);
   if (options.cleanupSemantic === true) {
-    applySemanticCleanup(dmp, diffs);
+    dmp.diff_cleanupSemantic(diffs);
   }
   return diffs;
 }
@@ -83,14 +71,14 @@ export function diffTextByLine(
   newText: string,
   options: TextDiffOptions = {},
 ): TextDiff[] {
-  const dmp = createDiffMatcher();
+  const dmp = new diff_match_patch();
   const { chars1, chars2, lineArray } = dmp.diff_linesToChars_(
     oldText,
     newText,
   );
   const diffs = dmp.diff_main(chars1, chars2, false);
   if (options.cleanupSemantic === true) {
-    applySemanticCleanup(dmp, diffs);
+    dmp.diff_cleanupSemantic(diffs);
   }
   dmp.diff_charsToLines_(diffs, lineArray);
   return diffs;
@@ -105,21 +93,7 @@ export function diffTextLevenshtein(
   options: CharDiffOptions = {},
 ): number {
   const diffs = diffTextByChar(oldText, newText, options);
-  return createDiffMatcher().diff_levenshtein(diffs);
-}
-
-/** Count added and removed lines from a diff. */
-function countDiffLineChanges(diffs: TextDiff[]): DiffLineChanges {
-  let added = 0;
-  let removed = 0;
-  for (const [op, text] of diffs) {
-    if (op === DIFF_INSERT) {
-      added += countLines(text);
-    } else if (op === DIFF_DELETE) {
-      removed += countLines(text);
-    }
-  }
-  return { added, removed };
+  return new diff_match_patch().diff_levenshtein(diffs);
 }
 
 /**
@@ -131,7 +105,16 @@ export function diffLineChanges(
   newText: string,
   options: CharDiffOptions = {},
 ): DiffLineChanges {
-  return countDiffLineChanges(diffTextByChar(oldText, newText, options));
+  let added = 0;
+  let removed = 0;
+  for (const [op, text] of diffTextByChar(oldText, newText, options)) {
+    if (op === DIFF_INSERT) {
+      added += countLines(text);
+    } else if (op === DIFF_DELETE) {
+      removed += countLines(text);
+    }
+  }
+  return { added, removed };
 }
 
 /** Build a diff-match-patch patch text, or undefined when there is no patch. */
@@ -139,7 +122,7 @@ export function makePatchText(
   oldText: string,
   newText: string,
 ): string | undefined {
-  const dmp = createDiffMatcher();
+  const dmp = new diff_match_patch();
   const patches = dmp.patch_make(oldText, newText);
   return patches.length > 0 ? dmp.patch_toText(patches) : undefined;
 }
@@ -150,7 +133,7 @@ export function applyPatchToText(
   newText: string,
   targetText: string,
 ): PatchApplyResult {
-  const dmp = createDiffMatcher();
+  const dmp = new diff_match_patch();
   const patches = dmp.patch_make(oldText, newText);
   const [content, results] = dmp.patch_apply(patches, targetText);
   return { content, results };

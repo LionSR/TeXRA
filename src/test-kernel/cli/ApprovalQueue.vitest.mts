@@ -25,6 +25,11 @@ import {
 import { enqueueTuiApproval } from '@cli/chat/tui/state/subscribeApprovals';
 import type { StreamTabId } from '@shared/schemas';
 
+const INTERRUPTED = {
+  accepted: false,
+  userMessage: 'Session interrupted.',
+};
+
 function bashPayload(streamId: string): ApprovalPayload {
   return {
     kind: 'bash',
@@ -147,12 +152,8 @@ describe('CLI approval queue', () => {
 
     clearApprovals();
 
-    const interrupted = {
-      accepted: false,
-      userMessage: 'Session interrupted.',
-    };
-    await expect(firstResult).resolves.toEqual(interrupted);
-    await expect(secondResult).resolves.toEqual(interrupted);
+    await expect(firstResult).resolves.toEqual(INTERRUPTED);
+    await expect(secondResult).resolves.toEqual(INTERRUPTED);
     expect(currentApproval.get()).toBeUndefined();
     expect(approvalQueueStatus.get()).toEqual({
       depth: 0,
@@ -172,7 +173,7 @@ describe('CLI approval queue', () => {
       bashPayload('child-4'),
       { onPresent: clearApprovals },
     );
-    await expect(cancelledDuringPresentation).resolves.toEqual(interrupted);
+    await expect(cancelledDuringPresentation).resolves.toEqual(INTERRUPTED);
     expect(currentApproval.get()).toBeUndefined();
   });
 
@@ -281,12 +282,8 @@ describe('CLI approval queue', () => {
       (payload) => approvalPayloadStreamId(payload) === 'stream-a',
     );
 
-    const interrupted = {
-      accepted: false,
-      userMessage: 'Session interrupted.',
-    };
-    await expect(planResult).resolves.toEqual(interrupted);
-    await expect(staleResult).resolves.toEqual(interrupted);
+    await expect(planResult).resolves.toEqual(INTERRUPTED);
+    await expect(staleResult).resolves.toEqual(INTERRUPTED);
 
     // stream-b was never touched and now becomes the foreground modal.
     await vi.waitFor(() => {

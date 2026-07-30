@@ -73,11 +73,11 @@ export function formatWebSearchTemplate(
   // web_search tool result must never reach the `<a href>` below.
   const { query, results, provider, status } =
     WebSearchPayloadSchema.parse(data);
-  const resultCount = Array.isArray(results) ? results.length : 0;
-  const providerKey = typeof provider === 'string' ? provider : 'web';
-  const statusKey = typeof status === 'string' ? status : '';
+  const searchResults = results ?? [];
+  const resultCount = searchResults.length;
+  const statusKey = status ?? '';
 
-  const providerLabel = PROVIDER_LABELS[providerKey] ?? 'Web';
+  const providerLabel = PROVIDER_LABELS[provider ?? 'web'] ?? 'Web';
   const statusSuffix = STATUS_SUFFIXES[statusKey] ?? '';
   const iconName = STATUS_ICONS[statusKey] ?? 'globe';
 
@@ -94,7 +94,7 @@ export function formatWebSearchTemplate(
     // real href (an empty/missing href is not itself dangerous, but a
     // result with no safe URL should read as inert text, not a dead link).
     // prettier-ignore
-    const resultItems = (results ?? []).map(
+    const resultItems = searchResults.map(
       (r) => html`<li class="detail-item">${waIcon('link')} ${r.url ? html`<a href=${r.url} class="web-search-link" target="_blank" rel="noopener noreferrer">${r.title ?? r.domain ?? r.url}</a>` : html`<span class="web-search-link">${r.title ?? r.domain ?? ''}</span>`}${r.domain ? html` <span class="file-source">(${r.domain})</span>` : ''}</li>`,
     );
     // prettier-ignore
@@ -148,8 +148,7 @@ export function formatWebFetchTemplate(
   // `url` — a `javascript:`/`data:` scheme from a web_fetch tool result must
   // never reach the `<a href>` below.
   const { url, title, status, errorCode } = WebFetchPayloadSchema.parse(data);
-  const statusKey = typeof status === 'string' ? status : '';
-  const isFailed = statusKey === 'failed';
+  const isFailed = status === 'failed';
 
   const iconName = isFailed ? 'circle-exclamation' : 'cloud-arrow-down';
 

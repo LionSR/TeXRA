@@ -4,6 +4,7 @@ import { MODEL_CONFIGS, type ModelConfig } from 'llm-zoo';
 import { MAX_TIER } from '@auth/config';
 import {
   SettingsModelSelectionController,
+  type SettingsModelSelectionControllerDeps,
   type SettingsModelSelectionState,
 } from '@controllers/settingsView/SettingsModelSelectionController';
 import { buildBasicModelOptionsData } from '@model/modelOptionsBasic';
@@ -61,14 +62,22 @@ function createState(
   };
 }
 
+function createController(
+  overrides: Partial<SettingsModelSelectionControllerDeps> = {},
+): SettingsModelSelectionController {
+  return new SettingsModelSelectionController({
+    state: createState(),
+    resolveModelOptions,
+    getRuntimeModelEntries: NO_RUNTIME_MODELS,
+    ...overrides,
+  });
+}
+
 describe('SettingsModelSelectionController', () => {
   it('uses canonical tier constants for included-access reasoning caps', async () => {
-    const controller = new SettingsModelSelectionController({
-      state: createState(),
+    const controller = createController({
       useIncludedAccess: () => true,
       getUserTier: () => MAX_TIER,
-      resolveModelOptions,
-      getRuntimeModelEntries: NO_RUNTIME_MODELS,
     });
 
     const { models } = await controller.buildSelectionData();
@@ -81,10 +90,8 @@ describe('SettingsModelSelectionController', () => {
   });
 
   it('does not expose a reasoning selector for Kimi K3 fixed max effort', async () => {
-    const controller = new SettingsModelSelectionController({
+    const controller = createController({
       state: createState({ reasoningLevelOverrides: { kimi3: 'low' } }),
-      resolveModelOptions,
-      getRuntimeModelEntries: NO_RUNTIME_MODELS,
     });
 
     const { models } = await controller.buildSelectionData();
@@ -99,11 +106,7 @@ describe('SettingsModelSelectionController', () => {
   });
 
   it('groups membership models under Kimi Code rather than Moonshot', async () => {
-    const controller = new SettingsModelSelectionController({
-      state: createState(),
-      resolveModelOptions,
-      getRuntimeModelEntries: NO_RUNTIME_MODELS,
-    });
+    const controller = createController();
 
     const { models } = await controller.buildSelectionData();
 
@@ -114,8 +117,7 @@ describe('SettingsModelSelectionController', () => {
   });
 
   it('keeps Kimi K3 under Moonshot while preserving its effective route', async () => {
-    const controller = new SettingsModelSelectionController({
-      state: createState(),
+    const controller = createController({
       resolveModelOptions: async (models) =>
         (await resolveModelOptions(models)).map((option) =>
           option.value === 'kimi3'
@@ -126,7 +128,6 @@ describe('SettingsModelSelectionController', () => {
               }
             : option,
         ),
-      getRuntimeModelEntries: NO_RUNTIME_MODELS,
     });
 
     expect(
@@ -144,11 +145,7 @@ describe('SettingsModelSelectionController', () => {
       enabledModels: ['gpt55', 'sonnet46T'],
       helperModel: 'removed-model',
     });
-    const controller = new SettingsModelSelectionController({
-      state,
-      resolveModelOptions,
-      getRuntimeModelEntries: NO_RUNTIME_MODELS,
-    });
+    const controller = createController({ state });
 
     expect((await controller.buildSelectionData()).helperModel).toBe('gpt55');
 
@@ -159,10 +156,8 @@ describe('SettingsModelSelectionController', () => {
   });
 
   it('falls back to default models when the persisted enabled list is empty', async () => {
-    const controller = new SettingsModelSelectionController({
+    const controller = createController({
       state: createState({ enabledModels: [] }),
-      resolveModelOptions,
-      getRuntimeModelEntries: NO_RUNTIME_MODELS,
     });
 
     const { models } = await controller.buildSelectionData();
@@ -173,12 +168,8 @@ describe('SettingsModelSelectionController', () => {
   });
 
   it('uses the runtime helper default when no helper model is configured', async () => {
-    const controller = new SettingsModelSelectionController({
-      state: createState({
-        enabledModels: ['gpt55', 'sonnet46T'],
-      }),
-      resolveModelOptions,
-      getRuntimeModelEntries: NO_RUNTIME_MODELS,
+    const controller = createController({
+      state: createState({ enabledModels: ['gpt55', 'sonnet46T'] }),
     });
 
     expect((await controller.buildSelectionData()).helperModel).toBe(
@@ -198,8 +189,7 @@ describe('SettingsModelSelectionController', () => {
       retired: false,
       capabilities: {},
     } as ModelConfig;
-    const controller = new SettingsModelSelectionController({
-      state: createState(),
+    const controller = createController({
       getRuntimeModelEntries: async () => [
         ['copilot:sonnet46', runtimeConfig] as const,
       ],

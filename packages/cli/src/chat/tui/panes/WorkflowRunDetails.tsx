@@ -108,41 +108,36 @@ function workflowRunDetailGroups(
   if (!facts) return [];
 
   const groups: WorkflowRunDetailGroup[] = [];
-  for (const group of facts.taskGroups) {
-    const indexedRound = group.kind === 'round' && group.index !== undefined;
-    if (group.kind !== 'phase' && !indexedRound) {
-      groups.push({
-        key: `lifecycle:${group.id}`,
-        lines: [
-          taskGroupLine(
-            group,
-            group.name || (group.kind === 'run' ? 'Workflow' : group.id),
-          ),
-        ],
-        priority: lifecyclePriority(group.status, false, false) + 1,
-        planned: false,
-      });
-    }
-  }
-
   const roundGroups = new Map<number, TaskGroup>();
   const rounds = new Set<number>();
   for (const group of facts.taskGroups) {
     const index = group.kind === 'round' ? group.index : undefined;
-    if (index === undefined) continue;
-    roundGroups.set(index, group);
-    rounds.add(index);
-    if (group.total !== undefined) {
-      for (let round = 0; round < group.total; round += 1) rounds.add(round);
+    if (index !== undefined) {
+      roundGroups.set(index, group);
+      rounds.add(index);
+      if (group.total !== undefined) {
+        for (let round = 0; round < group.total; round += 1) rounds.add(round);
+      }
+      continue;
     }
+    if (group.kind === 'phase') continue;
+    groups.push({
+      key: `lifecycle:${group.id}`,
+      lines: [
+        taskGroupLine(
+          group,
+          group.name || (group.kind === 'run' ? 'Workflow' : group.id),
+        ),
+      ],
+      priority: lifecyclePriority(group.status, false, false) + 1,
+      planned: false,
+    });
   }
-  for (const [round] of roundIndexedEntries(facts.outputFilesByRound)) {
-    rounds.add(round);
-  }
-  for (const [round] of roundIndexedEntries(facts.missingOutputsByRound)) {
-    rounds.add(round);
-  }
-  for (const [round] of roundIndexedEntries(facts.compileFailuresByRound)) {
+  for (const [round] of [
+    ...roundIndexedEntries(facts.outputFilesByRound),
+    ...roundIndexedEntries(facts.missingOutputsByRound),
+    ...roundIndexedEntries(facts.compileFailuresByRound),
+  ]) {
     rounds.add(round);
   }
 

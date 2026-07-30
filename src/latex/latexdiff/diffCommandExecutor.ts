@@ -19,19 +19,6 @@ const BIBLIOGRAPHY_ERROR_PATTERNS = [
   'Running bibtex to generate',
 ] as const;
 
-const ERROR_MESSAGES = {
-  TIMEOUT: (commandType: string, timeoutMs: number) =>
-    `${commandType} operation timed out after ${timeoutMs}ms`,
-  TIMEOUT_RETRY: (commandType: string, timeoutMs: number) =>
-    `${commandType} operation timed out after ${timeoutMs}ms (retry)`,
-  FAILED_BOTH: (commandType: string) =>
-    `Failed to run ${commandType} (both with and without --flatten)`,
-  FAILED_GENERAL: (commandType: string, detail?: string | null) =>
-    detail
-      ? `Failed to run ${commandType}: ${detail}`
-      : `Failed to run ${commandType}`,
-} as const;
-
 export const LATEXDIFF_CITATION_TEXT_COMMAND_EXCLUSIONS = Object.freeze([
   'cite\\*?',
   'citep\\*?',
@@ -217,12 +204,16 @@ export class DiffCommandExecutor {
     }
 
     if (result.timedOut) {
-      throw new Error(ERROR_MESSAGES.TIMEOUT(commandType, timeoutMs));
+      throw new Error(
+        `${commandType} operation timed out after ${timeoutMs}ms`,
+      );
     }
 
     if (!this.isBibliographyError(result.stderr ?? '')) {
       throw new Error(
-        ERROR_MESSAGES.FAILED_GENERAL(commandType, result.stderr),
+        result.stderr
+          ? `Failed to run ${commandType}: ${result.stderr}`
+          : `Failed to run ${commandType}`,
       );
     }
 
@@ -247,12 +238,14 @@ export class DiffCommandExecutor {
 
     if (result.timedOut) {
       throw new Error(
-        ERROR_MESSAGES.TIMEOUT_RETRY(commandType, execOptions.timeout),
+        `${commandType} operation timed out after ${execOptions.timeout}ms (retry)`,
       );
     }
 
     if (!result.success) {
-      throw new Error(ERROR_MESSAGES.FAILED_BOTH(commandType));
+      throw new Error(
+        `Failed to run ${commandType} (both with and without --flatten)`,
+      );
     }
 
     logger.debug(
