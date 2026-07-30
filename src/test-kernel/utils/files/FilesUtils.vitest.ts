@@ -172,6 +172,8 @@ describe('pathUtils Test Suite', () => {
 // ---------------------------------------------------------------------------
 
 describe('AbsoluteFS.write', () => {
+  setupPlatform();
+
   it('propagates ELOOP without deleting the path or retrying', async () => {
     const location = pathToLocation('file.tex');
     const expectedPath = WorkspaceFS.toAbsolute('file.tex');
@@ -182,7 +184,12 @@ describe('AbsoluteFS.write', () => {
     loopError.code = 'ELOOP';
     loopError.path = expectedPath;
 
-    const write = vi.spyOn(AbsoluteFS, 'write').mockRejectedValue(loopError);
+    // Mock the platform fs layer underneath AbsoluteFS.write, not
+    // AbsoluteFS.write itself, so this exercises the real BaseFS.write/delete
+    // code path rather than asserting on a stub of the method under test.
+    const writeFile = vi
+      .spyOn(platform().fs, 'writeFile')
+      .mockRejectedValue(loopError);
     const deletePath = vi.spyOn(AbsoluteFS, 'delete').mockResolvedValue();
 
     try {
@@ -200,11 +207,10 @@ describe('AbsoluteFS.write', () => {
         },
       );
 
-      expect(write).toHaveBeenCalledOnce();
-      expect(write).toHaveBeenCalledWith(expectedPath, 'content');
+      expect(writeFile).toHaveBeenCalledOnce();
       expect(deletePath).not.toHaveBeenCalled();
     } finally {
-      write.mockRestore();
+      writeFile.mockRestore();
       deletePath.mockRestore();
     }
   });
