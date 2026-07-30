@@ -2082,7 +2082,7 @@
     "prettier": "^3.9.6",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.65.0",
-    "vite": "^8.1.5",
+    "vite": "^8.2.0",
     "vitest": "^4.1.10",
     "zod-v3-to-v4": "^1.21.3"
   },
