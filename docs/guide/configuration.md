@@ -372,8 +372,8 @@ stays opted out even where `texra.telemetry.enabled` is `true`. The override
 only goes one way — neither variable can turn logging back on — and the
 plan-accounting carve-out above still applies.
 
-Any value counts as "on" except `0`, `false`, `no`, and `off`, which read the
-same as leaving the variable unset. TeXRA reads every `TEXRA_*` on/off variable
+Any value counts as "on" except `0`, `false`, `no`, `off`, and the empty
+string, which read the same as leaving the variable unset. TeXRA reads every `TEXRA_*` on/off variable
 this way.
 
 `texra doctor` reports whether usage logging is currently on, and which of the
