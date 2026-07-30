@@ -822,14 +822,14 @@ describe('CLI StatusBar display model', () => {
       }),
     );
     expect(childDisplay.left.map(statusBarSegmentText)).toContain(
-      'Waiting for follow-up',
+      'waiting for you',
     );
     expect(childDisplay.left.map(statusBarSegmentText)).not.toContain('idle');
   });
 
   it.each([
-    [STREAM_PHASE.FAILED, 'Failed'],
-    [STREAM_PHASE.CANCELLED, 'Cancelled'],
+    [STREAM_PHASE.FAILED, 'error'],
+    [STREAM_PHASE.CANCELLED, 'stopped'],
   ] as const)(
     'uses the canonical %s label for a focused child',
     (status, label) => {

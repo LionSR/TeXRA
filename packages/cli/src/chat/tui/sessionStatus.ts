@@ -3,17 +3,9 @@ import {
   type CliModelAccessRoute,
 } from '@cli/runtime/modelAccessRoute';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
-import {
-  STREAM_PHASE,
-  STREAM_STATUS,
-  WORKFLOW_TASK_STATUS_LABEL,
-  type StreamSubstate,
-} from '@shared/schemas';
+import type { StreamSubstate } from '@shared/schemas';
 import { summarizeFollowupMessage } from '@shared/subagentFollowup';
-import {
-  formatStreamStatusLabel,
-  streamStatusDisplayKey,
-} from '@shared/streams/streamStatusDisplay';
+import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
 import { truncateSummary } from '@utils/text/stringUtils';
 
 import { formatResumeCommand } from './state/resumeHint';
@@ -52,21 +44,14 @@ export function formatCliStatusLabel(
   substate?: StreamSubstate,
   isChildStream?: boolean,
 ): string {
-  if (isChildStream) {
-    if (status === STREAM_STATUS.STOPPED) {
-      return WORKFLOW_TASK_STATUS_LABEL[STREAM_PHASE.CANCELLED];
-    }
-    const statusKey = streamStatusDisplayKey(status, substate);
-    if (statusKey === undefined) return '';
-    if (Object.hasOwn(WORKFLOW_TASK_STATUS_LABEL, statusKey)) {
-      return WORKFLOW_TASK_STATUS_LABEL[
-        statusKey as keyof typeof WORKFLOW_TASK_STATUS_LABEL
-      ];
-    }
-  }
+  // `formatStreamStatusLabel`'s 'cli' style already covers the child-stream
+  // vocabulary end to end, including the WAITING -> "waiting for you"
+  // override (`CLI_CHILD_WAITING_LABEL`) — no separate probe is needed here.
+  // A blank status renders as '' for a child row (no status column yet) and
+  // as '—' for the root session (an established placeholder slot).
   return formatStreamStatusLabel(status, {
     style: 'cli',
-    missingLabel: '—',
+    missingLabel: isChildStream ? '' : '—',
     ...(substate ? { substate } : {}),
     ...(isChildStream ? { isChildStream } : {}),
   });
