@@ -25,6 +25,32 @@ import {
 
 const nativeFetch = globalThis.fetch;
 
+interface ComposedDispatcherStub {
+  readonly baseDispatch: Dispatcher['dispatch'];
+  composed?: Dispatcher;
+}
+
+function stubComposedDispatcher(): ComposedDispatcherStub {
+  const stub: ComposedDispatcherStub = {
+    baseDispatch: vi.fn(() => true) as unknown as Dispatcher['dispatch'],
+  };
+  transportMocks.getGlobalDispatcher.mockReturnValue({
+    compose: vi.fn(
+      (
+        interceptor: (
+          dispatch: Dispatcher['dispatch'],
+        ) => Dispatcher['dispatch'],
+      ) => {
+        stub.composed = {
+          dispatch: interceptor(stub.baseDispatch),
+        } as Dispatcher;
+        return stub.composed;
+      },
+    ),
+  } as unknown as Dispatcher);
+  return stub;
+}
+
 describe('long-running model transport', () => {
   afterEach(() => {
     globalThis.fetch = nativeFetch;
@@ -32,23 +58,7 @@ describe('long-running model transport', () => {
   });
 
   it('applies long timeouts through the host dispatcher for a native Request', async () => {
-    const baseDispatch = vi.fn(() => true);
-    let timeoutDispatcher: Dispatcher | undefined;
-    const dispatcher = {
-      compose: vi.fn(
-        (
-          interceptor: (
-            dispatch: Dispatcher['dispatch'],
-          ) => Dispatcher['dispatch'],
-        ) => {
-          timeoutDispatcher = {
-            dispatch: interceptor(baseDispatch as Dispatcher['dispatch']),
-          } as Dispatcher;
-          return timeoutDispatcher;
-        },
-      ),
-    } as unknown as Dispatcher;
-    transportMocks.getGlobalDispatcher.mockReturnValue(dispatcher);
+    const stub = stubComposedDispatcher();
     const response = new Response(null, { status: 204 });
     transportMocks.undiciFetch.mockResolvedValueOnce(response);
     const request = new Request('https://openrouter.example/v1/chat', {
@@ -64,16 +74,16 @@ describe('long-running model transport', () => {
     expect(init).toMatchObject({
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-test': 'value' },
-      dispatcher: timeoutDispatcher,
+      dispatcher: stub.composed,
     });
     expect(new TextDecoder().decode(init?.body as ArrayBuffer)).toBe(
       JSON.stringify({ prompt: 'hello' }),
     );
-    timeoutDispatcher?.dispatch(
+    stub.composed?.dispatch(
       { method: 'GET', origin: 'https://example.test', path: '/' },
       {} as never,
     );
-    expect(baseDispatch).toHaveBeenCalledWith(
+    expect(stub.baseDispatch).toHaveBeenCalledWith(
       expect.objectContaining({
         bodyTimeout: 30 * 60 * 1000,
         headersTimeout: 10 * 60 * 1000,
@@ -107,22 +117,7 @@ describe('long-running model transport', () => {
   });
 
   it('routes classic streamGenerateContent through the timeout-aware transport', async () => {
-    const baseDispatch = vi.fn(() => true);
-    let timeoutDispatcher: Dispatcher | undefined;
-    transportMocks.getGlobalDispatcher.mockReturnValue({
-      compose: vi.fn(
-        (
-          interceptor: (
-            dispatch: Dispatcher['dispatch'],
-          ) => Dispatcher['dispatch'],
-        ) => {
-          timeoutDispatcher = {
-            dispatch: interceptor(baseDispatch as Dispatcher['dispatch']),
-          } as Dispatcher;
-          return timeoutDispatcher;
-        },
-      ),
-    } as unknown as Dispatcher);
+    const stub = stubComposedDispatcher();
     const priorFetch = vi.fn();
     globalThis.fetch = priorFetch as typeof fetch;
     const response = new Response(null, { status: 200 });
@@ -137,11 +132,11 @@ describe('long-running model transport', () => {
     expect(result).toBe(response);
     expect(priorFetch).not.toHaveBeenCalled();
     expect(transportMocks.undiciFetch).toHaveBeenCalledOnce();
-    timeoutDispatcher?.dispatch(
+    stub.composed?.dispatch(
       { method: 'GET', origin: 'https://example.test', path: '/' },
       {} as never,
     );
-    expect(baseDispatch).toHaveBeenCalledWith(
+    expect(stub.baseDispatch).toHaveBeenCalledWith(
       expect.objectContaining({
         bodyTimeout: 30 * 60 * 1000,
         headersTimeout: 10 * 60 * 1000,

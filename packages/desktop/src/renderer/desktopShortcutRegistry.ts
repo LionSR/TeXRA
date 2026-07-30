@@ -96,7 +96,8 @@ export function createDesktopShortcutRegistry(
       ...overrides,
       [id]: accelerator ?? null,
     };
-    invalidRaw = writeOverrides(view?.localStorage, overrides, invalidRaw);
+    writeOverrides(view?.localStorage, overrides, invalidRaw);
+    invalidRaw = undefined;
     notify();
   }
 
@@ -200,10 +201,9 @@ function writeOverrides(
   storage: Storage | undefined,
   overrides: DesktopShortcutOverrides,
   invalidRaw: string | undefined,
-): undefined {
+): void {
   if (invalidRaw) {
     storage?.setItem(DESKTOP_SHORTCUT_INVALID_BACKUP_KEY, invalidRaw);
   }
   storage?.setItem(DESKTOP_SHORTCUT_STORAGE_KEY, JSON.stringify(overrides));
-  return undefined;
 }

@@ -38,31 +38,42 @@ function agentKey(agent: AgentSelectionItem): string {
   return agentKeyFromSourceName(agent.source, agent.name);
 }
 
-/** Source display names for agent origins */
-const SOURCE_DISPLAY_NAMES: Record<string, string> = {
-  [AGENT_SOURCE.BUILT_IN_WORKFLOW]: 'Built-in',
-  [AGENT_SOURCE.BUILT_IN_TOOL_USE]: 'Built-in',
-  [AGENT_SOURCE.CUSTOM]: 'Custom',
-  [AGENT_SOURCE.REMOTE]: 'Remote',
-  [AGENT_SOURCE.INLINE]: 'Inline',
+/**
+ * Per-source presentation: section heading name, list-row tone, and the badge
+ * (icon + label) shown for non-built-in origins in both list and detail panes.
+ */
+const SOURCE_META: Record<
+  AgentSourceType,
+  {
+    displayName: string;
+    tone: 'builtin' | 'custom' | 'remote' | 'inline';
+    badge?: { icon: TeXRAIconName; label: string };
+  }
+> = {
+  [AGENT_SOURCE.BUILT_IN_WORKFLOW]: {
+    displayName: 'Built-in',
+    tone: 'builtin',
+  },
+  [AGENT_SOURCE.BUILT_IN_TOOL_USE]: {
+    displayName: 'Built-in',
+    tone: 'builtin',
+  },
+  [AGENT_SOURCE.CUSTOM]: {
+    displayName: 'Custom',
+    tone: 'custom',
+    badge: { icon: 'star', label: 'Custom' },
+  },
+  [AGENT_SOURCE.REMOTE]: {
+    displayName: 'Remote',
+    tone: 'remote',
+    badge: { icon: 'cloud', label: 'Remote' },
+  },
+  [AGENT_SOURCE.INLINE]: {
+    displayName: 'Inline',
+    tone: 'inline',
+    badge: { icon: 'bolt', label: 'Inline' },
+  },
 };
-
-function isBuiltIn(source: string): boolean {
-  return (
-    source === AGENT_SOURCE.BUILT_IN_WORKFLOW ||
-    source === AGENT_SOURCE.BUILT_IN_TOOL_USE
-  );
-}
-
-/** Icon + label for the non-built-in source badge shown in both the list and detail panes. */
-function sourceBadgeMeta(
-  source: AgentSourceType,
-): { icon: TeXRAIconName; label: string } | undefined {
-  if (source === AGENT_SOURCE.CUSTOM) return { icon: 'star', label: 'Custom' };
-  if (source === AGENT_SOURCE.REMOTE) return { icon: 'cloud', label: 'Remote' };
-  if (source === AGENT_SOURCE.INLINE) return { icon: 'bolt', label: 'Inline' };
-  return undefined;
-}
 
 @customElement('agent-selection-panel')
 export class AgentSelectionPanel extends LitElement {
@@ -242,23 +253,12 @@ export class AgentSelectionPanel extends LitElement {
   private renderListItem(agent: AgentSelectionItem): TemplateResult {
     const key = agentKey(agent);
     const isSelected = this.selectedKey === key;
-    const badge = sourceBadgeMeta(agent.source);
-
-    let sourceTone: 'builtin' | 'custom' | 'remote' | 'inline';
-    if (agent.source === AGENT_SOURCE.CUSTOM) {
-      sourceTone = 'custom';
-    } else if (agent.source === AGENT_SOURCE.REMOTE) {
-      sourceTone = 'remote';
-    } else if (agent.source === AGENT_SOURCE.INLINE) {
-      sourceTone = 'inline';
-    } else {
-      sourceTone = 'builtin';
-    }
+    const { tone, badge } = SOURCE_META[agent.source];
 
     return html`
       <div
         class=${classMap({ 'agent-list-item': true, selected: isSelected })}
-        data-source=${sourceTone}
+        data-source=${tone}
         role="option"
         aria-selected=${isSelected}
         tabindex=${isSelected ? '0' : '-1'}
@@ -314,7 +314,7 @@ export class AgentSelectionPanel extends LitElement {
         ${orderedSources.map((source) => {
           const agents = groups.get(source)!;
           const enabledInGroup = agents.filter((a) => a.enabled).length;
-          const sourceName = SOURCE_DISPLAY_NAMES[source] ?? source;
+          const sourceName = SOURCE_META[source].displayName;
           return html`
             <div class="agent-list-section-header">
               <span>${sourceName}</span>
@@ -367,11 +367,11 @@ export class AgentSelectionPanel extends LitElement {
       `;
     }
 
-    const builtIn = isBuiltIn(agent.source);
+    const { tone, badge } = SOURCE_META[agent.source];
+    const builtIn = tone === 'builtin';
     const isCustom = agent.source === AGENT_SOURCE.CUSTOM;
     const showDeleteConfirm =
       isCustom && this.pendingDeleteKey === agentKey(agent);
-    const badge = sourceBadgeMeta(agent.source);
 
     return html`
       <div class="agent-detail-pane">

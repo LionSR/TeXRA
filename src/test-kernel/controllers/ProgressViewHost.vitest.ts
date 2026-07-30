@@ -12,13 +12,9 @@ import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 // Local file imports
 import { createWorkflowTaskState } from '../support/ProgressControllerHarnesses';
 
-function createTaskState(): TaskState {
-  return createWorkflowTaskState();
-}
-
 describe('ProgressViewHost', () => {
   it('constructs shared controllers and command handlers from host adapters', async () => {
-    const taskState = createTaskState();
+    const taskState: TaskState = createWorkflowTaskState();
     const executed: unknown[] = [];
     const openedLabels: string[] = [];
     const infoMessages: string[] = [];

@@ -53,6 +53,13 @@ interface DesktopToolEditApprovalModule {
   };
 }
 
+type ApprovalControllerOptions = Parameters<
+  DesktopToolEditApprovalModule['createDesktopToolEditApprovalController']
+>[0];
+type ApprovalController = ReturnType<
+  DesktopToolEditApprovalModule['createDesktopToolEditApprovalController']
+>;
+
 interface RecordingRuntimeHost extends Pick<SessionHostInteractions, 'emit'> {
   shownToolEditPermissions: ToolEditPermission[];
   resolvedToolEditPermissions: Array<{ requestId: string }>;
@@ -62,11 +69,30 @@ let activeToolEditApproval:
   | ((request: ToolEditApprovalRequest) => Promise<ToolEditApprovalResult>)
   | undefined;
 const testSessions: SessionHandle[] = [];
+const testControllers: ApprovalController[] = [];
+const testTempRoots: string[] = [];
 
 function createTestSession(): SessionHandle {
   const session = createIsolatedTestSession();
   testSessions.push(session);
   return session;
+}
+
+/** Controllers are disposed after each test; `dispose` is idempotent. */
+function createApprovalController(
+  desktopModule: DesktopToolEditApprovalModule,
+  options: ApprovalControllerOptions,
+): ApprovalController {
+  const controller =
+    desktopModule.createDesktopToolEditApprovalController(options);
+  testControllers.push(controller);
+  return controller;
+}
+
+async function createTempRoot(prefix = 'texra-approval-'): Promise<string> {
+  const dir = await mkdtemp(path.join(tmpdir(), prefix));
+  testTempRoots.push(dir);
+  return dir;
 }
 
 function recordSessionEvents(session: SessionHandle): SessionEvent[] {
@@ -234,9 +260,13 @@ async function loadApprovalModules(workspacePath = '/workspace') {
 }
 
 describe('desktop tool edit approval', () => {
-  afterEach(() => {
+  afterEach(async () => {
     activeToolEditApproval = undefined;
+    for (const controller of testControllers.splice(0)) controller.dispose();
     for (const session of testSessions.splice(0)) session.dispose();
+    for (const dir of testTempRoots.splice(0)) {
+      await rm(dir, { recursive: true, force: true });
+    }
     vi.doUnmock('@utils/config/configUtils');
     vi.doUnmock('@agent/runtime/RunContext');
     vi.doUnmock('@tools/approval/latexPreview');
@@ -247,74 +277,69 @@ describe('desktop tool edit approval', () => {
   approvalTest(
     'approves pending edits only in the selected stream',
     async () => {
-      const tempRoot = await mkdtemp(path.join(tmpdir(), 'texra-approval-'));
+      const tempRoot = await createTempRoot();
       const { desktopModule } = await loadApprovalModules();
       const interactions = createRecordingRuntimeHost();
       const session = createTestSession();
-      const controller = desktopModule.createDesktopToolEditApprovalController({
-        interactions: interactions,
+      const controller = createApprovalController(desktopModule, {
+        interactions,
         ...controllerHostCallbacks(interactions),
         session,
         ui: createStubDesktopAgentExecutionHost(),
         tempRoot,
       });
 
-      try {
-        const target = controller.requestApproval({
-          path: '/workspace/target.txt',
-          originalContent: 'old target\n',
-          proposedContent: 'new target\n',
-          sourceTool: 'write_file',
-          streamId: 'stream-target',
-        });
-        const other = controller.requestApproval({
-          path: '/workspace/other.txt',
-          originalContent: 'old other\n',
-          proposedContent: 'new other\n',
-          sourceTool: 'write_file',
-          streamId: 'stream-other',
-        });
-        await vi.waitFor(() =>
-          expect(interactions.shownToolEditPermissions).toHaveLength(2),
-        );
+      const target = controller.requestApproval({
+        path: '/workspace/target.txt',
+        originalContent: 'old target\n',
+        proposedContent: 'new target\n',
+        sourceTool: 'write_file',
+        streamId: 'stream-target',
+      });
+      const other = controller.requestApproval({
+        path: '/workspace/other.txt',
+        originalContent: 'old other\n',
+        proposedContent: 'new other\n',
+        sourceTool: 'write_file',
+        streamId: 'stream-other',
+      });
+      await vi.waitFor(() =>
+        expect(interactions.shownToolEditPermissions).toHaveLength(2),
+      );
 
-        let targetSettled = false;
-        void target.then(() => {
-          targetSettled = true;
-        });
-        await controller.approvePendingForStream('stream-target');
-        expect(targetSettled).toBe(true);
-        await expect(target).resolves.toMatchObject({
-          accepted: true,
-          appliedContent: 'new target\n',
-        });
+      let targetSettled = false;
+      void target.then(() => {
+        targetSettled = true;
+      });
+      await controller.approvePendingForStream('stream-target');
+      expect(targetSettled).toBe(true);
+      await expect(target).resolves.toMatchObject({
+        accepted: true,
+        appliedContent: 'new target\n',
+      });
 
-        const otherRequest = interactions.shownToolEditPermissions.find(
-          (request) => request.streamId === 'stream-other',
-        );
-        expect(otherRequest).toBeDefined();
-        controller.handleAction({
-          requestId: otherRequest!.requestId,
-          action: 'reject',
-        });
-        await expect(other).resolves.toMatchObject({ accepted: false });
-      } finally {
-        controller.dispose();
-        await rm(tempRoot, { recursive: true, force: true });
-      }
+      const otherRequest = interactions.shownToolEditPermissions.find(
+        (request) => request.streamId === 'stream-other',
+      );
+      expect(otherRequest).toBeDefined();
+      controller.handleAction({
+        requestId: otherRequest!.requestId,
+        action: 'reject',
+      });
+      await expect(other).resolves.toMatchObject({ accepted: false });
     },
   );
 
   approvalTest(
     'isolates host-local prompt failures from the approval result',
     async () => {
-      const tempRoot = await mkdtemp(path.join(tmpdir(), 'texra-approval-'));
+      const tempRoot = await createTempRoot();
       const { desktopModule } = await loadApprovalModules();
       const interactions = createRecordingRuntimeHost();
       const session = createTestSession();
       let shown: ToolEditPermission | undefined;
-      const controller = desktopModule.createDesktopToolEditApprovalController({
-        interactions: interactions,
+      const controller = createApprovalController(desktopModule, {
+        interactions,
         session,
         ui: createStubDesktopAgentExecutionHost(),
         tempRoot,
@@ -327,33 +352,28 @@ describe('desktop tool edit approval', () => {
         },
       });
 
-      try {
-        const approval = controller.requestApproval({
-          path: '/workspace/isolated.txt',
-          originalContent: 'old\n',
-          proposedContent: 'new\n',
-          sourceTool: 'write_file',
-          streamId: 'stream-isolated',
-        });
-        await vi.waitFor(() => expect(shown).toBeDefined());
+      const approval = controller.requestApproval({
+        path: '/workspace/isolated.txt',
+        originalContent: 'old\n',
+        proposedContent: 'new\n',
+        sourceTool: 'write_file',
+        streamId: 'stream-isolated',
+      });
+      await vi.waitFor(() => expect(shown).toBeDefined());
 
-        controller.handleAction({
-          requestId: shown!.requestId,
-          action: 'reject',
-        });
+      controller.handleAction({
+        requestId: shown!.requestId,
+        action: 'reject',
+      });
 
-        await expect(approval).resolves.toMatchObject({ accepted: false });
-      } finally {
-        controller.dispose();
-        await rm(tempRoot, { recursive: true, force: true });
-      }
+      await expect(approval).resolves.toMatchObject({ accepted: false });
     },
   );
 
   approvalTest(
     'routes proposed-file previews through desktop temp files before rejection',
     async () => {
-      const tempRoot = await mkdtemp(path.join(tmpdir(), 'texra-approval-'));
+      const tempRoot = await createTempRoot();
       const { requestToolEditApproval, desktopModule } =
         await loadApprovalModules();
       const interactions = createRecordingRuntimeHost();
@@ -361,8 +381,8 @@ describe('desktop tool edit approval', () => {
       const session = createTestSession();
       const sessionEvents = recordSessionEvents(session);
       const opened: string[] = [];
-      const controller = desktopModule.createDesktopToolEditApprovalController({
-        interactions: interactions,
+      const controller = createApprovalController(desktopModule, {
+        interactions,
         ...controllerHostCallbacks(interactions),
         session,
         tempRoot,
@@ -375,65 +395,60 @@ describe('desktop tool edit approval', () => {
       useControllerApproval(controller);
       const { shownToolEditPermissions: shown } = interactions;
 
-      try {
-        const resultPromise = requestToolEditApproval({
-          path: '/workspace/notes.txt',
-          originalContent: 'alpha\n',
-          proposedContent: 'beta\n',
-          sourceTool: 'write_file',
-          streamId: 'stream-2',
-        });
-        await vi.waitFor(() => expect(shown).toHaveLength(1));
-        expect(sessionEvents).toContainEqual({
-          scope: 'session',
-          event: {
-            type: 'setActiveStream',
-            payload: {
-              streamId: 'stream-2',
-              suppressViewSwitch: true,
-              ensureVisible: true,
-            },
+      const resultPromise = requestToolEditApproval({
+        path: '/workspace/notes.txt',
+        originalContent: 'alpha\n',
+        proposedContent: 'beta\n',
+        sourceTool: 'write_file',
+        streamId: 'stream-2',
+      });
+      await vi.waitFor(() => expect(shown).toHaveLength(1));
+      expect(sessionEvents).toContainEqual({
+        scope: 'session',
+        event: {
+          type: 'setActiveStream',
+          payload: {
+            streamId: 'stream-2',
+            suppressViewSwitch: true,
+            ensureVisible: true,
           },
-        });
-        expect(emitSpy).toHaveBeenCalledWith('requestEnsureProgressView', {});
-        expect(shown[0]).toMatchObject({
-          path: '/workspace/notes.txt',
-          relativePath: 'notes.txt',
-          sourceTool: 'write_file',
-          streamId: 'stream-2',
-        });
+        },
+      });
+      expect(emitSpy).toHaveBeenCalledWith('requestEnsureProgressView', {});
+      expect(shown[0]).toMatchObject({
+        path: '/workspace/notes.txt',
+        relativePath: 'notes.txt',
+        sourceTool: 'write_file',
+        streamId: 'stream-2',
+      });
 
-        controller.handleAction({
-          requestId: shown[0].requestId,
-          action: 'previewProposed',
-        });
-        await vi.waitFor(() => expect(opened).toHaveLength(1));
-        expect(path.basename(opened[0])).toContain('proposed');
-        await expect(pathExists(opened[0])).resolves.toBe(true);
+      controller.handleAction({
+        requestId: shown[0].requestId,
+        action: 'previewProposed',
+      });
+      await vi.waitFor(() => expect(opened).toHaveLength(1));
+      expect(path.basename(opened[0])).toContain('proposed');
+      await expect(pathExists(opened[0])).resolves.toBe(true);
 
-        controller.handleAction({
-          requestId: shown[0].requestId,
-          action: 'reject',
-          feedback: 'not yet',
-        });
-        await expect(resultPromise).resolves.toMatchObject({
-          accepted: false,
-          userMessage: 'not yet',
-        });
-        await vi.waitFor(async () => {
-          await expect(pathExists(opened[0])).resolves.toBe(false);
-        });
-      } finally {
-        controller.dispose();
-        await rm(tempRoot, { recursive: true, force: true });
-      }
+      controller.handleAction({
+        requestId: shown[0].requestId,
+        action: 'reject',
+        feedback: 'not yet',
+      });
+      await expect(resultPromise).resolves.toMatchObject({
+        accepted: false,
+        userMessage: 'not yet',
+      });
+      await vi.waitFor(async () => {
+        await expect(pathExists(opened[0])).resolves.toBe(false);
+      });
     },
   );
 
   approvalTest(
     'routes diff actions through the required desktop diff host',
     async () => {
-      const tempRoot = await mkdtemp(path.join(tmpdir(), 'texra-approval-'));
+      const tempRoot = await createTempRoot();
       const { requestToolEditApproval, desktopModule } =
         await loadApprovalModules();
       const interactions = createRecordingRuntimeHost();
@@ -446,8 +461,8 @@ describe('desktop tool edit approval', () => {
           _options?: DiffOptions,
         ): Promise<DiffSession> => ({ original, proposed, title }),
       );
-      const controller = desktopModule.createDesktopToolEditApprovalController({
-        interactions: interactions,
+      const controller = createApprovalController(desktopModule, {
+        interactions,
         ...controllerHostCallbacks(interactions),
         session: createTestSession(),
         tempRoot,
@@ -456,51 +471,46 @@ describe('desktop tool edit approval', () => {
       useControllerApproval(controller);
       const { shownToolEditPermissions: shown } = interactions;
 
-      try {
-        const resultPromise = requestToolEditApproval({
-          path: '/workspace/main.tex',
-          originalContent: 'old\n',
-          proposedContent: 'new\n',
-          sourceTool: 'write_file',
-        });
-        await vi.waitFor(() => expect(shown).toHaveLength(1));
-        await vi.waitFor(() => expect(openDiff).toHaveBeenCalledOnce());
+      const resultPromise = requestToolEditApproval({
+        path: '/workspace/main.tex',
+        originalContent: 'old\n',
+        proposedContent: 'new\n',
+        sourceTool: 'write_file',
+      });
+      await vi.waitFor(() => expect(shown).toHaveLength(1));
+      await vi.waitFor(() => expect(openDiff).toHaveBeenCalledOnce());
 
-        controller.handleAction({
-          requestId: shown[0].requestId,
-          action: 'openDiff',
-        });
+      controller.handleAction({
+        requestId: shown[0].requestId,
+        action: 'openDiff',
+      });
 
-        await vi.waitFor(() => expect(openDiff).toHaveBeenCalledTimes(2));
-        expect(openPath).not.toHaveBeenCalled();
-        const [original, proposed, title, options] = openDiff.mock.calls[0];
-        expect(title).toBe('Tool edit: main.tex');
-        expect(options).toEqual({ preserveFocus: true });
-        await expect(pathExists(original.filePath)).resolves.toBe(true);
-        await expect(pathExists(proposed.filePath)).resolves.toBe(true);
+      await vi.waitFor(() => expect(openDiff).toHaveBeenCalledTimes(2));
+      expect(openPath).not.toHaveBeenCalled();
+      const [original, proposed, title, options] = openDiff.mock.calls[0];
+      expect(title).toBe('Tool edit: main.tex');
+      expect(options).toEqual({ preserveFocus: true });
+      await expect(pathExists(original.filePath)).resolves.toBe(true);
+      await expect(pathExists(proposed.filePath)).resolves.toBe(true);
 
-        controller.handleAction({
-          requestId: shown[0].requestId,
-          action: 'reject',
-        });
-        await expect(resultPromise).resolves.toMatchObject({ accepted: false });
-      } finally {
-        controller.dispose();
-        await rm(tempRoot, { recursive: true, force: true });
-      }
+      controller.handleAction({
+        requestId: shown[0].requestId,
+        action: 'reject',
+      });
+      await expect(resultPromise).resolves.toMatchObject({ accepted: false });
     },
   );
 
   approvalTest(
     'applies user edits made in the proposed preview file',
     async () => {
-      const tempRoot = await mkdtemp(path.join(tmpdir(), 'texra-approval-'));
+      const tempRoot = await createTempRoot();
       const { requestToolEditApproval, desktopModule } =
         await loadApprovalModules();
       const interactions = createRecordingRuntimeHost();
       const opened: string[] = [];
-      const controller = desktopModule.createDesktopToolEditApprovalController({
-        interactions: interactions,
+      const controller = createApprovalController(desktopModule, {
+        interactions,
         ...controllerHostCallbacks(interactions),
         session: createTestSession(),
         tempRoot,
@@ -513,40 +523,35 @@ describe('desktop tool edit approval', () => {
       useControllerApproval(controller);
       const { shownToolEditPermissions: shown } = interactions;
 
-      try {
-        const resultPromise = requestToolEditApproval({
-          path: '/workspace/notes.txt',
-          originalContent: 'alpha\n',
-          proposedContent: 'beta\n',
-          sourceTool: 'write_file',
-          streamId: 'stream-edited-preview',
-        });
-        await vi.waitFor(() => expect(shown).toHaveLength(1));
+      const resultPromise = requestToolEditApproval({
+        path: '/workspace/notes.txt',
+        originalContent: 'alpha\n',
+        proposedContent: 'beta\n',
+        sourceTool: 'write_file',
+        streamId: 'stream-edited-preview',
+      });
+      await vi.waitFor(() => expect(shown).toHaveLength(1));
 
-        controller.handleAction({
-          requestId: shown[0].requestId,
-          action: 'previewProposed',
-        });
-        await vi.waitFor(() => expect(opened).toHaveLength(1));
-        await writeFile(opened[0], 'beta\nwith user edits\nand more\n', 'utf8');
+      controller.handleAction({
+        requestId: shown[0].requestId,
+        action: 'previewProposed',
+      });
+      await vi.waitFor(() => expect(opened).toHaveLength(1));
+      await writeFile(opened[0], 'beta\nwith user edits\nand more\n', 'utf8');
 
-        controller.handleAction({
-          requestId: shown[0].requestId,
-          action: 'approve',
-        });
+      controller.handleAction({
+        requestId: shown[0].requestId,
+        action: 'approve',
+      });
 
-        await expect(resultPromise).resolves.toMatchObject({
-          accepted: true,
-          appliedContent: 'beta\nwith user edits\nand more\n',
-          lineChanges: { added: 3, removed: 1 },
-        });
-        await vi.waitFor(async () => {
-          await expect(pathExists(opened[0])).resolves.toBe(false);
-        });
-      } finally {
-        controller.dispose();
-        await rm(tempRoot, { recursive: true, force: true });
-      }
+      await expect(resultPromise).resolves.toMatchObject({
+        accepted: true,
+        appliedContent: 'beta\nwith user edits\nand more\n',
+        lineChanges: { added: 3, removed: 1 },
+      });
+      await vi.waitFor(async () => {
+        await expect(pathExists(opened[0])).resolves.toBe(false);
+      });
     },
   );
 
@@ -561,13 +566,13 @@ describe('desktop tool edit approval', () => {
         return { ...actual, runLatexdiff };
       });
 
-      const tempRoot = await mkdtemp(path.join(tmpdir(), 'texra-approval-'));
+      const tempRoot = await createTempRoot();
       const { requestToolEditApproval, desktopModule } =
         await loadApprovalModules();
       const interactions = createRecordingRuntimeHost();
       const openBuildDisplay = vi.fn(async () => {});
-      const controller = desktopModule.createDesktopToolEditApprovalController({
-        interactions: interactions,
+      const controller = createApprovalController(desktopModule, {
+        interactions,
         ...controllerHostCallbacks(interactions),
         session: createTestSession(),
         tempRoot,
@@ -576,53 +581,46 @@ describe('desktop tool edit approval', () => {
       useControllerApproval(controller);
       const { shownToolEditPermissions: shown } = interactions;
 
-      try {
-        const resultPromise = requestToolEditApproval({
-          path: '/workspace/main.tex',
-          originalContent: 'old\n',
-          proposedContent: 'new\n',
-          sourceTool: 'write_file',
-        });
-        await vi.waitFor(() => expect(shown).toHaveLength(1));
-        let settled = false;
-        void resultPromise.then(() => {
-          settled = true;
-        });
+      const resultPromise = requestToolEditApproval({
+        path: '/workspace/main.tex',
+        originalContent: 'old\n',
+        proposedContent: 'new\n',
+        sourceTool: 'write_file',
+      });
+      await vi.waitFor(() => expect(shown).toHaveLength(1));
+      let settled = false;
+      void resultPromise.then(() => {
+        settled = true;
+      });
 
-        controller.handleAction({
-          requestId: shown[0].requestId,
-          action: 'showLatexdiff',
-        });
+      controller.handleAction({
+        requestId: shown[0].requestId,
+        action: 'showLatexdiff',
+      });
 
-        await vi.waitFor(() => expect(runLatexdiff).toHaveBeenCalledOnce());
-        expect(runLatexdiff).toHaveBeenCalledWith(
-          expect.objectContaining({ requestId: shown[0].requestId }),
-          {
-            subtype: 'ONLYCHANGEDPAGE',
-            openBuildDisplay,
-          },
-        );
-        expect(settled).toBe(false);
+      await vi.waitFor(() => expect(runLatexdiff).toHaveBeenCalledOnce());
+      expect(runLatexdiff).toHaveBeenCalledWith(
+        expect.objectContaining({ requestId: shown[0].requestId }),
+        {
+          subtype: 'ONLYCHANGEDPAGE',
+          openBuildDisplay,
+        },
+      );
+      expect(settled).toBe(false);
 
-        controller.handleAction({
-          requestId: shown[0].requestId,
-          action: 'reject',
-        });
-        await expect(resultPromise).resolves.toMatchObject({ accepted: false });
-      } finally {
-        controller.dispose();
-        await rm(tempRoot, { recursive: true, force: true });
-      }
+      controller.handleAction({
+        requestId: shown[0].requestId,
+        action: 'reject',
+      });
+      await expect(resultPromise).resolves.toMatchObject({ accepted: false });
     },
   );
 
   approvalTest(
     'uses the injected desktop build display callback for LaTeX preview',
     async () => {
-      const workspaceRoot = await mkdtemp(
-        path.join(tmpdir(), 'texra-workspace-'),
-      );
-      const tempRoot = await mkdtemp(path.join(tmpdir(), 'texra-approval-'));
+      const workspaceRoot = await createTempRoot('texra-workspace-');
+      const tempRoot = await createTempRoot();
       const { requestToolEditApproval, desktopModule } =
         await loadApprovalModules(workspaceRoot);
       const interactions = createRecordingRuntimeHost();
@@ -631,8 +629,8 @@ describe('desktop tool edit approval', () => {
         options?: { preserveFocus?: boolean };
       }> = [];
       const messages: string[] = [];
-      const controller = desktopModule.createDesktopToolEditApprovalController({
-        interactions: interactions,
+      const controller = createApprovalController(desktopModule, {
+        interactions,
         ...controllerHostCallbacks(interactions),
         session: createTestSession(),
         tempRoot,
@@ -648,56 +646,50 @@ describe('desktop tool edit approval', () => {
       useControllerApproval(controller);
       const { shownToolEditPermissions: shown } = interactions;
 
-      try {
-        const resultPromise = requestToolEditApproval({
-          path: path.join(workspaceRoot, 'main.tex'),
-          originalContent:
-            '\\documentclass{article}\\begin{document}old\\end{document}\n',
-          proposedContent:
-            '\\documentclass{article}\\begin{document}new\\end{document}\n',
-          sourceTool: 'write_file',
-        });
-        await vi.waitFor(() => expect(shown).toHaveLength(1));
+      const resultPromise = requestToolEditApproval({
+        path: path.join(workspaceRoot, 'main.tex'),
+        originalContent:
+          '\\documentclass{article}\\begin{document}old\\end{document}\n',
+        proposedContent:
+          '\\documentclass{article}\\begin{document}new\\end{document}\n',
+        sourceTool: 'write_file',
+      });
+      await vi.waitFor(() => expect(shown).toHaveLength(1));
 
-        controller.handleAction({
-          requestId: shown[0].requestId,
-          action: 'previewProposed',
-        });
+      controller.handleAction({
+        requestId: shown[0].requestId,
+        action: 'previewProposed',
+      });
 
-        await vi.waitFor(() => {
-          expect([...displayed, ...messages]).toHaveLength(1);
-        });
-        expect(messages).toEqual([]);
-        expect(displayed[0].options).toEqual({ preserveFocus: true });
-        expect(path.basename(displayed[0].absolutePath)).toMatch(
-          /^main_preview-[\w-]{8}\.tex$/,
+      await vi.waitFor(() => {
+        expect([...displayed, ...messages]).toHaveLength(1);
+      });
+      expect(messages).toEqual([]);
+      expect(displayed[0].options).toEqual({ preserveFocus: true });
+      expect(path.basename(displayed[0].absolutePath)).toMatch(
+        /^main_preview-[\w-]{8}\.tex$/,
+      );
+      await expect(pathExists(displayed[0].absolutePath)).resolves.toBe(true);
+
+      controller.dispose();
+      await expect(resultPromise).resolves.toMatchObject({ accepted: false });
+      await vi.waitFor(async () => {
+        await expect(pathExists(displayed[0].absolutePath)).resolves.toBe(
+          false,
         );
-        await expect(pathExists(displayed[0].absolutePath)).resolves.toBe(true);
-
-        controller.dispose();
-        await expect(resultPromise).resolves.toMatchObject({ accepted: false });
-        await vi.waitFor(async () => {
-          await expect(pathExists(displayed[0].absolutePath)).resolves.toBe(
-            false,
-          );
-        });
-      } finally {
-        controller.dispose();
-        await rm(tempRoot, { recursive: true, force: true });
-        await rm(workspaceRoot, { recursive: true, force: true });
-      }
+      });
     },
   );
 
   approvalTest(
     'does not present a stream approval cancelled during initialization',
     async () => {
-      const tempRoot = await mkdtemp(path.join(tmpdir(), 'texra-approval-'));
+      const tempRoot = await createTempRoot();
       const { requestToolEditApproval, desktopModule } =
         await loadApprovalModules();
       const interactions = createRecordingRuntimeHost();
-      const controller = desktopModule.createDesktopToolEditApprovalController({
-        interactions: interactions,
+      const controller = createApprovalController(desktopModule, {
+        interactions,
         ...controllerHostCallbacks(interactions),
         session: createTestSession(),
         ui: createStubDesktopAgentExecutionHost(),
@@ -705,43 +697,38 @@ describe('desktop tool edit approval', () => {
       });
       useControllerApproval(controller);
 
-      try {
-        const resultPromise = requestToolEditApproval({
-          path: '/workspace/cancel-during-init.tex',
-          originalContent: 'old\n',
-          proposedContent: 'new\n',
-          sourceTool: 'write_file',
-          streamId: 'stream-cancel-during-init',
-        });
-        controller.cancel({
-          kind: 'toolEdit',
-          streamId: 'stream-cancel-during-init',
-          cause: 'Owning execution ended.',
-        });
+      const resultPromise = requestToolEditApproval({
+        path: '/workspace/cancel-during-init.tex',
+        originalContent: 'old\n',
+        proposedContent: 'new\n',
+        sourceTool: 'write_file',
+        streamId: 'stream-cancel-during-init',
+      });
+      controller.cancel({
+        kind: 'toolEdit',
+        streamId: 'stream-cancel-during-init',
+        cause: 'Owning execution ended.',
+      });
 
-        await expect(resultPromise).resolves.toMatchObject({
-          accepted: false,
-          userMessage: 'Owning execution ended.',
-        });
-        expect(interactions.shownToolEditPermissions).toEqual([]);
-        expect(interactions.resolvedToolEditPermissions).toEqual([]);
-        await waitForEmptyDir(tempRoot);
-      } finally {
-        controller.dispose();
-        await rm(tempRoot, { recursive: true, force: true });
-      }
+      await expect(resultPromise).resolves.toMatchObject({
+        accepted: false,
+        userMessage: 'Owning execution ended.',
+      });
+      expect(interactions.shownToolEditPermissions).toEqual([]);
+      expect(interactions.resolvedToolEditPermissions).toEqual([]);
+      await waitForEmptyDir(tempRoot);
     },
   );
 
   approvalTest(
     'does not present an approval when disposed during initialization',
     async () => {
-      const tempRoot = await mkdtemp(path.join(tmpdir(), 'texra-approval-'));
+      const tempRoot = await createTempRoot();
       const { requestToolEditApproval, desktopModule } =
         await loadApprovalModules();
       const interactions = createRecordingRuntimeHost();
-      const controller = desktopModule.createDesktopToolEditApprovalController({
-        interactions: interactions,
+      const controller = createApprovalController(desktopModule, {
+        interactions,
         ...controllerHostCallbacks(interactions),
         session: createTestSession(),
         ui: createStubDesktopAgentExecutionHost(),
@@ -749,39 +736,34 @@ describe('desktop tool edit approval', () => {
       });
       useControllerApproval(controller);
 
-      try {
-        const resultPromise = requestToolEditApproval({
-          path: '/workspace/dispose-during-init.tex',
-          originalContent: 'old\n',
-          proposedContent: 'new\n',
-          sourceTool: 'write_file',
-          streamId: 'stream-dispose-during-init',
-        });
-        controller.dispose();
+      const resultPromise = requestToolEditApproval({
+        path: '/workspace/dispose-during-init.tex',
+        originalContent: 'old\n',
+        proposedContent: 'new\n',
+        sourceTool: 'write_file',
+        streamId: 'stream-dispose-during-init',
+      });
+      controller.dispose();
 
-        await expect(resultPromise).resolves.toMatchObject({
-          accepted: false,
-          userMessage: 'Desktop presentation detached.',
-        });
-        expect(interactions.shownToolEditPermissions).toEqual([]);
-        expect(interactions.resolvedToolEditPermissions).toEqual([]);
-        await waitForEmptyDir(tempRoot);
-      } finally {
-        controller.dispose();
-        await rm(tempRoot, { recursive: true, force: true });
-      }
+      await expect(resultPromise).resolves.toMatchObject({
+        accepted: false,
+        userMessage: 'Desktop presentation detached.',
+      });
+      expect(interactions.shownToolEditPermissions).toEqual([]);
+      expect(interactions.resolvedToolEditPermissions).toEqual([]);
+      await waitForEmptyDir(tempRoot);
     },
   );
 
   approvalTest(
     'cancels only tool-edit approvals selected for the owning stream',
     async () => {
-      const tempRoot = await mkdtemp(path.join(tmpdir(), 'texra-approval-'));
+      const tempRoot = await createTempRoot();
       const { requestToolEditApproval, desktopModule } =
         await loadApprovalModules();
       const interactions = createRecordingRuntimeHost();
-      const controller = desktopModule.createDesktopToolEditApprovalController({
-        interactions: interactions,
+      const controller = createApprovalController(desktopModule, {
+        interactions,
         ...controllerHostCallbacks(interactions),
         session: createTestSession(),
         ui: createStubDesktopAgentExecutionHost(),
@@ -791,71 +773,66 @@ describe('desktop tool edit approval', () => {
       const { shownToolEditPermissions: shown } = interactions;
       const { resolvedToolEditPermissions: resolved } = interactions;
 
-      try {
-        const cancelledPromise = requestToolEditApproval({
-          path: '/workspace/cancelled.tex',
-          originalContent: 'old\n',
-          proposedContent: 'new\n',
-          sourceTool: 'write_file',
-          streamId: 'stream-cancelled',
-        });
-        const retainedPromise = requestToolEditApproval({
-          path: '/workspace/retained.tex',
-          originalContent: 'old\n',
-          proposedContent: 'new\n',
-          sourceTool: 'write_file',
-          streamId: 'stream-retained',
-        });
-        await vi.waitFor(() => expect(shown).toHaveLength(2));
-        const cancelledRequest = shown.find(
-          (request) => request.streamId === 'stream-cancelled',
-        );
-        const retainedRequest = shown.find(
-          (request) => request.streamId === 'stream-retained',
-        );
-        if (!cancelledRequest || !retainedRequest) {
-          throw new Error('Expected both stream-scoped approval prompts.');
-        }
-
-        controller.cancel({
-          kind: 'toolEdit',
-          streamId: 'stream-cancelled',
-          cause: 'Owning execution ended.',
-        });
-
-        await expect(cancelledPromise).resolves.toMatchObject({
-          accepted: false,
-          userMessage: 'Owning execution ended.',
-        });
-        expect(resolved).toEqual([{ requestId: cancelledRequest.requestId }]);
-
-        controller.handleAction({
-          requestId: retainedRequest.requestId,
-          action: 'reject',
-          feedback: 'Retained request resolved normally.',
-        });
-        await expect(retainedPromise).resolves.toMatchObject({
-          accepted: false,
-          userMessage: 'Retained request resolved normally.',
-        });
-        await waitForEmptyDir(tempRoot);
-      } finally {
-        controller.dispose();
-        await rm(tempRoot, { recursive: true, force: true });
+      const cancelledPromise = requestToolEditApproval({
+        path: '/workspace/cancelled.tex',
+        originalContent: 'old\n',
+        proposedContent: 'new\n',
+        sourceTool: 'write_file',
+        streamId: 'stream-cancelled',
+      });
+      const retainedPromise = requestToolEditApproval({
+        path: '/workspace/retained.tex',
+        originalContent: 'old\n',
+        proposedContent: 'new\n',
+        sourceTool: 'write_file',
+        streamId: 'stream-retained',
+      });
+      await vi.waitFor(() => expect(shown).toHaveLength(2));
+      const cancelledRequest = shown.find(
+        (request) => request.streamId === 'stream-cancelled',
+      );
+      const retainedRequest = shown.find(
+        (request) => request.streamId === 'stream-retained',
+      );
+      if (!cancelledRequest || !retainedRequest) {
+        throw new Error('Expected both stream-scoped approval prompts.');
       }
+
+      controller.cancel({
+        kind: 'toolEdit',
+        streamId: 'stream-cancelled',
+        cause: 'Owning execution ended.',
+      });
+
+      await expect(cancelledPromise).resolves.toMatchObject({
+        accepted: false,
+        userMessage: 'Owning execution ended.',
+      });
+      expect(resolved).toEqual([{ requestId: cancelledRequest.requestId }]);
+
+      controller.handleAction({
+        requestId: retainedRequest.requestId,
+        action: 'reject',
+        feedback: 'Retained request resolved normally.',
+      });
+      await expect(retainedPromise).resolves.toMatchObject({
+        accepted: false,
+        userMessage: 'Retained request resolved normally.',
+      });
+      await waitForEmptyDir(tempRoot);
     },
   );
 
   approvalTest(
     'cleans pending entries and temp files when stream cleanup rejects a request',
     async () => {
-      const tempRoot = await mkdtemp(path.join(tmpdir(), 'texra-approval-'));
+      const tempRoot = await createTempRoot();
       const { cleanupApprovalsForStream, desktopModule } =
         await loadApprovalModules();
       const interactions = createRecordingRuntimeHost();
       const session = createTestSession();
-      const controller = desktopModule.createDesktopToolEditApprovalController({
-        interactions: interactions,
+      const controller = createApprovalController(desktopModule, {
+        interactions,
         ...controllerHostCallbacks(interactions),
         session,
         ui: createStubDesktopAgentExecutionHost(),
@@ -870,30 +847,25 @@ describe('desktop tool edit approval', () => {
       const { shownToolEditPermissions: shown } = interactions;
       const { resolvedToolEditPermissions: resolved } = interactions;
 
-      try {
-        const resultPromise = session.interactions.requestToolEditApproval({
-          path: '/workspace/cleanup.tex',
-          originalContent: 'old\n',
-          proposedContent: 'new\n',
-          sourceTool: 'write_file',
-          streamId: 'stream-cleanup',
-        });
-        await vi.waitFor(() => expect(shown).toHaveLength(1));
+      const resultPromise = session.interactions.requestToolEditApproval({
+        path: '/workspace/cleanup.tex',
+        originalContent: 'old\n',
+        proposedContent: 'new\n',
+        sourceTool: 'write_file',
+        streamId: 'stream-cleanup',
+      });
+      await vi.waitFor(() => expect(shown).toHaveLength(1));
 
-        // Pending interactions are session-owned: sweep the owning session.
-        cleanupApprovalsForStream('stream-cleanup', session);
+      // Pending interactions are session-owned: sweep the owning session.
+      cleanupApprovalsForStream('stream-cleanup', session);
 
-        await expect(resultPromise).resolves.toMatchObject({
-          accepted: false,
-          userMessage: 'Stream resources released.',
-        });
-        expect(resolved).toEqual([{ requestId: shown[0].requestId }]);
-        await waitForEmptyDir(tempRoot);
-        expect(await readdir(tempRoot)).toEqual([]);
-      } finally {
-        controller.dispose();
-        await rm(tempRoot, { recursive: true, force: true });
-      }
+      await expect(resultPromise).resolves.toMatchObject({
+        accepted: false,
+        userMessage: 'Stream resources released.',
+      });
+      expect(resolved).toEqual([{ requestId: shown[0].requestId }]);
+      await waitForEmptyDir(tempRoot);
+      expect(await readdir(tempRoot)).toEqual([]);
     },
   );
 });

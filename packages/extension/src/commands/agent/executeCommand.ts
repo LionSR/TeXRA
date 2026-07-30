@@ -12,6 +12,14 @@ import type { ExecutionId } from '@shared/schemas';
 
 const CHANNEL = 'ExecuteCommand';
 
+interface WrappedExecuteInput {
+  config: unknown;
+  executionId?: ExecutionId;
+  preferHelperModel?: boolean;
+  modelHandlerCompatibilityKey?: unknown;
+  onRun?: () => void;
+}
+
 /**
  * Execute an agent with the given configuration.
  *
@@ -25,21 +33,13 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
   try {
     const wrapped =
       input !== null && typeof input === 'object' && 'config' in input
-        ? (input as {
-            config: unknown;
-            executionId?: ExecutionId;
-            preferHelperModel?: boolean;
-            modelHandlerCompatibilityKey?: unknown;
-            onRun?: () => void;
-          })
+        ? (input as WrappedExecuteInput)
         : null;
     const config = AgentConfigSchema.parse(wrapped ? wrapped.config : input);
     const modelHandlerCompatibilityKey =
-      wrapped && 'modelHandlerCompatibilityKey' in wrapped
-        ? ModelHandlerCompatibilityKeySchema.nullish().parse(
-            wrapped.modelHandlerCompatibilityKey,
-          )
-        : undefined;
+      ModelHandlerCompatibilityKeySchema.nullish().parse(
+        wrapped?.modelHandlerCompatibilityKey,
+      );
 
     await runAgent(
       { config, executionId: wrapped?.executionId },

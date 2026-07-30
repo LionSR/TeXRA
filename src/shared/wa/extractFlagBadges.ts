@@ -9,14 +9,6 @@ import type { ToolConfig } from '@shared/schemas/toolConfig';
 // Local imports - Web Awesome
 import { waIcon } from './webAwesomeIcons';
 
-/** User-visible labels for a workflow proposal's media-extraction flags. */
-function workflowExtractFlagLabels(toolConfig: ToolConfig): string[] {
-  const flags: string[] = [];
-  if (toolConfig.autoExtractFigure) flags.push('Extract Figures');
-  if (toolConfig.autoExtractTikzFigure) flags.push('Extract TikZ');
-  return flags;
-}
-
 /**
  * Render the badge row for a workflow proposal's media-extraction flags.
  * Returns `nothing` when no flag is set; callers wrap the badges in their
@@ -25,7 +17,9 @@ function workflowExtractFlagLabels(toolConfig: ToolConfig): string[] {
 export function renderWorkflowExtractFlagBadges(
   toolConfig: ToolConfig,
 ): TemplateResult | typeof nothing {
-  const flags = workflowExtractFlagLabels(toolConfig);
+  const flags: string[] = [];
+  if (toolConfig.autoExtractFigure) flags.push('Extract Figures');
+  if (toolConfig.autoExtractTikzFigure) flags.push('Extract TikZ');
   if (flags.length === 0) return nothing;
   return html`${repeat(
     flags,

@@ -90,9 +90,6 @@ const deferredAuthLog: LogBackend = {
   warn: (channel, message) => activeAuthLog?.warn(channel, message),
   error: (channel, message) => activeAuthLog?.error(channel, message),
 };
-function getCliSupabaseAuthCoordinator(): SupabaseSessionCoordinator {
-  return initializeCliSupabaseAuth();
-}
 
 export function initializeCliSupabaseAuth(
   log?: LogBackend,
@@ -114,7 +111,7 @@ export async function signInCliSupabase(
   options: CliLoginOptions = {},
 ): Promise<SupabaseSession> {
   const provider = options.provider ?? DEFAULT_OAUTH_PROVIDER;
-  const authCoordinator = getCliSupabaseAuthCoordinator();
+  const authCoordinator = initializeCliSupabaseAuth();
   const callbackServer = await startLoopbackCallbackServer(authCoordinator);
   const redirectTo = callbackServer.redirectTo;
   const queryParams = buildOAuthQueryParams(provider, options);
@@ -186,7 +183,7 @@ export interface CliDeviceLoginOptions {
 export async function signInCliSupabaseDeviceCode(
   options: CliDeviceLoginOptions = {},
 ): Promise<SupabaseSession> {
-  const authCoordinator = getCliSupabaseAuthCoordinator();
+  const authCoordinator = initializeCliSupabaseAuth();
   const authorization = await requestDeviceAuthorization({
     signal: options.signal,
   });
@@ -207,7 +204,7 @@ export async function signInCliSupabaseDeviceCode(
 }
 
 export async function signOutCliSupabase(): Promise<void> {
-  const authCoordinator = getCliSupabaseAuthCoordinator();
+  const authCoordinator = initializeCliSupabaseAuth();
   await authCoordinator.clearSession();
   const serverSideKeyService = getServerSideKeyService();
   // A configured TEXRA_RELAY_TOKEN keeps authenticating relay calls after
@@ -243,30 +240,20 @@ export function relayTokenStillActiveNotice(
  * with a real user session — a CI token cannot mint or revoke tokens.
  */
 export async function getCliSessionAccessToken(): Promise<string | null> {
-  return getCliSupabaseAuthCoordinator().ensureFreshToken();
+  return initializeCliSupabaseAuth().ensureFreshToken();
 }
 
 /**
- * Tier of the stored session's account, ignoring any configured
- * TEXRA_RELAY_TOKEN. Usage reads run on the session JWT, so their spending
- * limit must use this tier — `getCliAuthProfile().tier` may describe the
- * env token's account instead.
- */
-async function getCliSessionTier(): Promise<string> {
-  return SupabaseClient.getSessionTier();
-}
-
-/**
- * Resolves the tier that should back relay usage queries: the session tier
- * for a CI relay token (the token's own tier may describe a different
- * account than the session reading its usage), and the profile's own tier
- * otherwise.
+ * Resolves the tier that should back relay usage queries: the stored
+ * session's own tier for a CI relay token (the token's tier may describe a
+ * different account than the session reading its usage, and usage reads run
+ * on the session JWT), and the profile's own tier otherwise.
  */
 export async function resolveCliUsageTier(
   profile: Pick<CliAuthProfile, 'credentialSource' | 'tier'>,
 ): Promise<string | undefined> {
   return profile.credentialSource === 'relayToken'
-    ? getCliSessionTier()
+    ? SupabaseClient.getSessionTier()
     : profile.tier;
 }
 
@@ -312,7 +299,7 @@ export async function getCliAuthProfile(): Promise<CliAuthProfile> {
     };
   }
 
-  const session = await getCliSupabaseAuthCoordinator().loadSession();
+  const session = await initializeCliSupabaseAuth().loadSession();
   let tier = 'free';
   try {
     tier = await SupabaseClient.getUserTier();

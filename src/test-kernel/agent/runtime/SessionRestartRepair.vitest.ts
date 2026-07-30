@@ -35,20 +35,37 @@ const validFlowRecord = {
   nodes: [],
 };
 
+function appendRunningGroup(
+  transcripts: StreamLogStore,
+  stream: StreamTabId,
+  id: string,
+  timestamp = 1_000,
+): void {
+  transcripts.append(stream, {
+    id,
+    type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
+    level: LOG_LEVELS.INFO,
+    timestamp,
+    data: { status: STREAM_PHASE.RUNNING },
+  });
+}
+
+function openDeferredSession(transcripts: StreamLogStore): SessionHandle {
+  return new SessionHandle({ transcripts, restartRepair: 'deferred' });
+}
+
 afterEach(async () => {
   vi.restoreAllMocks();
-  await StorageFS.delete('executionLeases', { recursive: true }).catch(
-    () => undefined,
-  );
-  await StorageFS.delete('executions', { recursive: true }).catch(
-    () => undefined,
-  );
-  await StorageFS.delete('streamLogs', { recursive: true }).catch(
-    () => undefined,
-  );
-  await StorageFS.delete('streamLogSummaries', { recursive: true }).catch(
-    () => undefined,
-  );
+  for (const directory of [
+    'executionLeases',
+    'executions',
+    'streamLogs',
+    'streamLogSummaries',
+  ]) {
+    await StorageFS.delete(directory, { recursive: true }).catch(
+      () => undefined,
+    );
+  }
   clearStoreCache();
   resetExecutionLeaseCoordinationForTests();
 });
@@ -56,13 +73,7 @@ afterEach(async () => {
 describe('SessionHandle restart repair', () => {
   it('stops in-flight restart repair when the session is disposed', async () => {
     const transcripts = await StreamLogStore.open();
-    transcripts.append(streamId, {
-      id: 'disposed-running-group',
-      type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
-      level: LOG_LEVELS.INFO,
-      timestamp: 1_000,
-      data: { status: STREAM_PHASE.RUNNING },
-    });
+    appendRunningGroup(transcripts, streamId, 'disposed-running-group');
     await transcripts.flush();
 
     let finishDetection: ((streams: Set<StreamTabId>) => void) | undefined;
@@ -73,10 +84,7 @@ describe('SessionHandle restart repair', () => {
       detectionBlocked,
     );
 
-    const session = new SessionHandle({
-      transcripts,
-      restartRepair: 'deferred',
-    });
+    const session = openDeferredSession(transcripts);
     const readiness = session.waitUntilReady();
     await vi.waitFor(() => {
       expect(waitingDetection.detectWaitingStreams).toHaveBeenCalledOnce();
@@ -93,13 +101,7 @@ describe('SessionHandle restart repair', () => {
 
   it('repairs a crashed run before a host is attached', async () => {
     const transcripts = await StreamLogStore.open();
-    transcripts.append(streamId, {
-      id: 'crashed-running-group',
-      type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
-      level: LOG_LEVELS.INFO,
-      timestamp: 1_000,
-      data: { status: STREAM_PHASE.RUNNING },
-    });
+    appendRunningGroup(transcripts, streamId, 'crashed-running-group');
     await transcripts.flush();
 
     const executionStore = getExecutionStore(executionId);
@@ -121,10 +123,7 @@ describe('SessionHandle restart repair', () => {
       }),
     );
 
-    const session = new SessionHandle({
-      transcripts,
-      restartRepair: 'deferred',
-    });
+    const session = openDeferredSession(transcripts);
     try {
       await session.waitUntilReady();
 
@@ -146,13 +145,7 @@ describe('SessionHandle restart repair', () => {
 
   it('preserves recovery state when present execution metadata is malformed', async () => {
     const transcripts = await StreamLogStore.open();
-    transcripts.append(streamId, {
-      id: 'malformed-meta-running-group',
-      type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
-      level: LOG_LEVELS.INFO,
-      timestamp: 1_000,
-      data: { status: STREAM_PHASE.RUNNING },
-    });
+    appendRunningGroup(transcripts, streamId, 'malformed-meta-running-group');
     await transcripts.flush();
 
     const executionStore = getExecutionStore(executionId);
@@ -160,10 +153,7 @@ describe('SessionHandle restart repair', () => {
     await executionStore.write('meta', malformedMeta);
     await executionStore.write(flowKey(executionId), validFlowRecord);
 
-    const session = new SessionHandle({
-      transcripts,
-      restartRepair: 'deferred',
-    });
+    const session = openDeferredSession(transcripts);
     try {
       await expect(session.waitUntilReady()).rejects.toThrow();
 
@@ -179,13 +169,7 @@ describe('SessionHandle restart repair', () => {
 
   it('ignores malformed metadata for settled historical streams', async () => {
     const transcripts = await StreamLogStore.open();
-    transcripts.append(streamId, {
-      id: 'settled-history-running-group',
-      type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
-      level: LOG_LEVELS.INFO,
-      timestamp: 1_000,
-      data: { status: STREAM_PHASE.RUNNING },
-    });
+    appendRunningGroup(transcripts, streamId, 'settled-history-running-group');
     await transcripts.endRunningGroupsForStreams(
       [streamId],
       2_000,
@@ -196,10 +180,7 @@ describe('SessionHandle restart repair', () => {
     const malformedMeta = { timestamp: null };
     await executionStore.write('meta', malformedMeta);
 
-    const session = new SessionHandle({
-      transcripts,
-      restartRepair: 'deferred',
-    });
+    const session = openDeferredSession(transcripts);
     try {
       await expect(session.waitUntilReady()).resolves.toBeUndefined();
       await expect(executionStore.read('meta')).resolves.toEqual(malformedMeta);
@@ -213,13 +194,11 @@ describe('SessionHandle restart repair', () => {
     const completedStreamId =
       `completed#${completedExecutionId}` as StreamTabId;
     const transcripts = await StreamLogStore.open();
-    transcripts.append(completedStreamId, {
-      id: 'completed-running-group',
-      type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
-      level: LOG_LEVELS.INFO,
-      timestamp: 1_000,
-      data: { status: STREAM_PHASE.RUNNING },
-    });
+    appendRunningGroup(
+      transcripts,
+      completedStreamId,
+      'completed-running-group',
+    );
     await transcripts.flush();
 
     const executionStore = getExecutionStore(completedExecutionId);
@@ -228,10 +207,7 @@ describe('SessionHandle restart repair', () => {
       terminalStatus: EXECUTION_STATUS.COMPLETED,
     });
 
-    const session = new SessionHandle({
-      transcripts,
-      restartRepair: 'deferred',
-    });
+    const session = openDeferredSession(transcripts);
     try {
       await session.waitUntilReady();
 
@@ -257,13 +233,11 @@ describe('SessionHandle restart repair', () => {
     const resumableStreamId =
       `resumable#${resumableExecutionId}` as StreamTabId;
     const transcripts = await StreamLogStore.open();
-    transcripts.append(resumableStreamId, {
-      id: 'resumable-running-group',
-      type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
-      level: LOG_LEVELS.INFO,
-      timestamp: 1_000,
-      data: { status: STREAM_PHASE.RUNNING },
-    });
+    appendRunningGroup(
+      transcripts,
+      resumableStreamId,
+      'resumable-running-group',
+    );
     await transcripts.flush();
 
     const executionStore = getExecutionStore(resumableExecutionId);
@@ -273,10 +247,7 @@ describe('SessionHandle restart repair', () => {
     });
     await executionStore.write(flowKey(resumableExecutionId), validFlowRecord);
 
-    const session = new SessionHandle({
-      transcripts,
-      restartRepair: 'deferred',
-    });
+    const session = openDeferredSession(transcripts);
     try {
       await session.waitUntilReady();
 
@@ -302,13 +273,7 @@ describe('SessionHandle restart repair', () => {
     const degradedExecutionId = 'decade123' as ExecutionId;
     const degradedStreamId = `degraded#${degradedExecutionId}` as StreamTabId;
     const transcripts = await StreamLogStore.open();
-    transcripts.append(degradedStreamId, {
-      id: 'degraded-running-group',
-      type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
-      level: LOG_LEVELS.INFO,
-      timestamp: 1_000,
-      data: { status: STREAM_PHASE.RUNNING },
-    });
+    appendRunningGroup(transcripts, degradedStreamId, 'degraded-running-group');
     await transcripts.flush();
 
     const executionStore = getExecutionStore(degradedExecutionId);
@@ -320,10 +285,7 @@ describe('SessionHandle restart repair', () => {
       new Error('resumability read failed'),
     );
 
-    const session = new SessionHandle({
-      transcripts,
-      restartRepair: 'deferred',
-    });
+    const session = openDeferredSession(transcripts);
     try {
       await session.waitUntilReady();
 
@@ -347,10 +309,7 @@ describe('SessionHandle restart repair', () => {
 
   it('replaces stores and status only at the workspace-root boundary', async () => {
     const transcripts = await StreamLogStore.open();
-    const session = new SessionHandle({
-      transcripts,
-      restartRepair: 'deferred',
-    });
+    const session = openDeferredSession(transcripts);
     const reload = vi.spyOn(transcripts, 'reload').mockResolvedValue();
     const loadSnapshots = vi.spyOn(session.snapshots, 'load');
     session.status.transition(
@@ -375,10 +334,7 @@ describe('SessionHandle restart repair', () => {
   it('waits for execution artifacts before replacing workspace stores', async () => {
     const liveExecutionId = 'workspace-live' as ExecutionId;
     const transcripts = await StreamLogStore.open();
-    const session = new SessionHandle({
-      transcripts,
-      restartRepair: 'deferred',
-    });
+    const session = openDeferredSession(transcripts);
     await acquireFreshExecutionLease(liveExecutionId);
     const reload = vi.spyOn(transcripts, 'reload').mockResolvedValue();
 
@@ -400,10 +356,7 @@ describe('SessionHandle restart repair', () => {
   it('keeps the old storage root pinned until execution artifacts finish', async () => {
     const liveExecutionId = 'workspace-root-pinned' as ExecutionId;
     const transcripts = await StreamLogStore.open();
-    const session = new SessionHandle({
-      transcripts,
-      restartRepair: 'deferred',
-    });
+    const session = openDeferredSession(transcripts);
     const storage = platform().storage;
     let activeRoot = '/workspace/old-storage';
     vi.spyOn(storage, 'getStoragePath').mockImplementation(() => activeRoot);
@@ -437,10 +390,7 @@ describe('SessionHandle restart repair', () => {
 
   it('flushes old-root stores before committing the new storage root', async () => {
     const transcripts = await StreamLogStore.open();
-    const session = new SessionHandle({
-      transcripts,
-      restartRepair: 'deferred',
-    });
+    const session = openDeferredSession(transcripts);
     const storage = platform().storage;
     const order: string[] = [];
     Object.assign(storage, {
@@ -479,10 +429,7 @@ describe('SessionHandle restart repair', () => {
 
   it('does not commit a new root when the old transcript flush fails', async () => {
     const transcripts = await StreamLogStore.open();
-    const session = new SessionHandle({
-      transcripts,
-      restartRepair: 'deferred',
-    });
+    const session = openDeferredSession(transcripts);
     const storage = platform().storage;
     const commitWorkspaceStorageChange = vi.fn(() => true);
     Object.assign(storage, {
@@ -507,10 +454,7 @@ describe('SessionHandle restart repair', () => {
 
   it('does not commit a new root after disposal during the old-root flush', async () => {
     const transcripts = await StreamLogStore.open();
-    const session = new SessionHandle({
-      transcripts,
-      restartRepair: 'deferred',
-    });
+    const session = openDeferredSession(transcripts);
     const commitWorkspaceStorageChange = vi.fn(() => true);
     Object.assign(platform().storage, {
       hasPendingWorkspaceStorageChange: () => true,
@@ -540,10 +484,7 @@ describe('SessionHandle restart repair', () => {
 
   it('rolls back a failed new-root load and permits retry', async () => {
     const transcripts = await StreamLogStore.open();
-    const session = new SessionHandle({
-      transcripts,
-      restartRepair: 'deferred',
-    });
+    const session = openDeferredSession(transcripts);
     const storage = platform().storage;
     let activeRoot = '/workspace/old-storage';
     const finalizeWorkspaceStorageChange = vi.fn();
@@ -618,13 +559,12 @@ describe('SessionHandle restart repair', () => {
       },
     });
     const transcripts = await StreamLogStore.open();
-    transcripts.append(rollbackStreamId, {
-      id: 'rollback-running-group',
-      type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
-      level: LOG_LEVELS.INFO,
-      timestamp: Date.now(),
-      data: { status: STREAM_PHASE.RUNNING },
-    });
+    appendRunningGroup(
+      transcripts,
+      rollbackStreamId,
+      'rollback-running-group',
+      Date.now(),
+    );
     await transcripts.flush();
     const executionStore = getExecutionStore(rollbackExecutionId);
     await executionStore.writeMeta({
@@ -645,10 +585,7 @@ describe('SessionHandle restart repair', () => {
       }),
     );
 
-    const session = new SessionHandle({
-      transcripts,
-      restartRepair: 'deferred',
-    });
+    const session = openDeferredSession(transcripts);
 
     try {
       await session.waitUntilReady();
@@ -688,10 +625,7 @@ describe('SessionHandle restart repair', () => {
 
   it('skips replacement when the workspace storage root is unchanged', async () => {
     const transcripts = await StreamLogStore.open();
-    const session = new SessionHandle({
-      transcripts,
-      restartRepair: 'deferred',
-    });
+    const session = openDeferredSession(transcripts);
     const storage = platform().storage;
     const commitWorkspaceStorageChange = vi.fn(() => false);
     Object.assign(storage, {
@@ -713,10 +647,7 @@ describe('SessionHandle restart repair', () => {
   it('does not resume a root replacement after session disposal', async () => {
     const liveExecutionId = 'workspace-disposed' as ExecutionId;
     const transcripts = await StreamLogStore.open();
-    const session = new SessionHandle({
-      transcripts,
-      restartRepair: 'deferred',
-    });
+    const session = openDeferredSession(transcripts);
     const commitWorkspaceStorageChange = vi.fn(() => true);
     Object.assign(platform().storage, {
       hasPendingWorkspaceStorageChange: () => true,
@@ -743,10 +674,7 @@ describe('SessionHandle restart repair', () => {
   it('holds new root executions outside the workspace replacement', async () => {
     const queuedExecutionId = 'workspace-queued' as ExecutionId;
     const transcripts = await StreamLogStore.open();
-    const session = new SessionHandle({
-      transcripts,
-      restartRepair: 'deferred',
-    });
+    const session = openDeferredSession(transcripts);
     let finishReload: (() => void) | undefined;
     const reloadBlocked = new Promise<void>((resolve) => {
       finishReload = resolve;
@@ -777,22 +705,13 @@ describe('SessionHandle restart repair', () => {
 
   it('surfaces a repair write failure at the readiness boundary', async () => {
     const transcripts = await StreamLogStore.open();
-    transcripts.append(streamId, {
-      id: 'failing-running-group',
-      type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
-      level: LOG_LEVELS.INFO,
-      timestamp: 1_000,
-      data: { status: STREAM_PHASE.RUNNING },
-    });
+    appendRunningGroup(transcripts, streamId, 'failing-running-group');
     const repairError = new Error('restart repair write failed');
     vi.spyOn(transcripts, 'endRunningGroupsForStreams').mockRejectedValue(
       repairError,
     );
 
-    const session = new SessionHandle({
-      transcripts,
-      restartRepair: 'deferred',
-    });
+    const session = openDeferredSession(transcripts);
     try {
       await expect(session.waitUntilReady()).rejects.toBe(repairError);
     } finally {

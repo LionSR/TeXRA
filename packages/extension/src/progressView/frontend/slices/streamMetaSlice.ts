@@ -15,7 +15,7 @@ import {
 } from '@shared/schemas';
 import { compareByNewestCreationTime } from '@shared/streams/streamOrdering';
 
-import { getStreamState, isToolUseState } from '../store';
+import { isToolUseState } from '../store';
 import {
   mergeBackendOwnedState,
   metadataToStreamStatePartial,
@@ -103,33 +103,22 @@ export const streamMetaHandlers = {
 
   [PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS]: (data) => {
     const { stream, status, lastTimestamp, substate } = data;
-    const prev = appState.get();
-    const isActiveStream = stream === prev.activeStreamId;
-    const shouldFocus = isActiveStream && status === STREAM_PHASE.WAITING;
+    const shouldFocus =
+      stream === appState.get().activeStreamId &&
+      status === STREAM_PHASE.WAITING;
 
-    // Single atomic update: stream state + tab metadata in one appState.set,
-    // avoiding two Map copies and two Lit re-render triggers.
-    const streamInfo = prev.streamById.get(stream);
-    if (!streamInfo) return;
-
-    const current = getStreamState(prev, stream, streamInfo.agentCategory);
-    const resolvedTimestamp = lastTimestamp ?? current.lastTimestamp;
-    const updatedState = create(current, (draft) => {
-      draft.status = status;
-      if (substate) {
-        draft.substate = substate;
-      } else {
-        delete draft.substate;
-      }
-      draft.lastTimestamp = resolvedTimestamp;
-      if (isToolUseState(current) && shouldFocus) {
-        (draft as typeof current).ui.shouldFocusFollowUp = true;
-      }
-    });
-
-    appState.set(
-      create(prev, (draft) => {
-        draft.streamStates.set(stream, updatedState);
+    setStreamStateForId(stream, (current) =>
+      create(current, (draft) => {
+        draft.status = status;
+        if (substate) {
+          draft.substate = substate;
+        } else {
+          delete draft.substate;
+        }
+        draft.lastTimestamp = lastTimestamp ?? current.lastTimestamp;
+        if (isToolUseState(current) && shouldFocus) {
+          (draft as typeof current).ui.shouldFocusFollowUp = true;
+        }
       }),
     );
   },

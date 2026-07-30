@@ -78,9 +78,7 @@ function collectLeadingGlobalFlags(
   let i = 0;
   while (i < rawArgs.length) {
     const arg = rawArgs[i];
-    if (arg === undefined) break;
-    if (!arg.startsWith('-')) break;
-    if (arg === '--') break;
+    if (arg === undefined || arg === '--' || !arg.startsWith('-')) break;
 
     const tokenCount = knownGlobalFlagTokenCount(rawArgs, i);
     if (tokenCount !== undefined) {
@@ -296,25 +294,24 @@ export function reorderNestedGlobalFlags(
 export function normalizeRootShortcuts(rawArgs: readonly string[]): string[] {
   const { leadingGlobals, restIndex } = collectLeadingGlobalFlags(rawArgs);
   const shortcut = rawArgs[restIndex];
+  const rest = rawArgs.slice(restIndex + 1);
   if (shortcut === '--version' || shortcut === '-v' || shortcut === '-V') {
-    return ['version', ...leadingGlobals, ...rawArgs.slice(restIndex + 1)];
+    return ['version', ...leadingGlobals, ...rest];
   }
   if (shortcut === '--logout') {
-    return ['logout', ...leadingGlobals, ...rawArgs.slice(restIndex + 1)];
+    return ['logout', ...leadingGlobals, ...rest];
   }
   if (shortcut === '--resume') {
-    const id = rawArgs[restIndex + 1];
+    const id = rest[0];
     if (!id || id.startsWith('-')) {
-      return ['resume', ...leadingGlobals, ...rawArgs.slice(restIndex + 1)];
+      return ['resume', ...leadingGlobals, ...rest];
     }
-    return ['resume', id, ...leadingGlobals, ...rawArgs.slice(restIndex + 2)];
+    return ['resume', id, ...leadingGlobals, ...rest.slice(1)];
   }
   if (shortcut?.startsWith('--resume=')) {
     const id = shortcut.slice('--resume='.length);
-    if (!id) {
-      return ['resume', ...leadingGlobals, ...rawArgs.slice(restIndex + 1)];
-    }
-    return ['resume', id, ...leadingGlobals, ...rawArgs.slice(restIndex + 1)];
+    if (!id) return ['resume', ...leadingGlobals, ...rest];
+    return ['resume', id, ...leadingGlobals, ...rest];
   }
   return [...rawArgs];
 }
@@ -523,10 +520,15 @@ function inlineFlagBase(token: string): string {
   return equalsIndex === -1 ? token : token.slice(0, equalsIndex);
 }
 
+interface FlagValidation {
+  readonly unknownFlag?: string;
+  readonly skipNext: boolean;
+}
+
 function validateLongFlag(
   specs: CommandFlagSpecs,
   token: string,
-): { readonly unknownFlag?: string; readonly skipNext: boolean } {
+): FlagValidation {
   const baseFlag = inlineFlagBase(token);
   const spec = specs.long.get(baseFlag);
   if (!spec) return { unknownFlag: baseFlag, skipNext: false };
@@ -536,7 +538,7 @@ function validateLongFlag(
 function validateShortFlag(
   specs: CommandFlagSpecs,
   token: string,
-): { readonly unknownFlag?: string; readonly skipNext: boolean } {
+): FlagValidation {
   for (let i = 1; i < token.length; i += 1) {
     const flag = `-${token[i]}`;
     const spec = specs.short.get(flag);

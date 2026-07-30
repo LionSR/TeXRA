@@ -59,6 +59,10 @@ export abstract class BaseTool<T> implements ITool {
    */
   async call(rawInput: unknown): Promise<ToolResult> {
     try {
+      // Synchronous validation must stay synchronous: awaiting unconditionally
+      // would defer execute() by a microtask, so a tool that dispatches a host
+      // interaction before its first await would no longer do so in the
+      // caller's synchronous turn.
       const validated = this.validate(rawInput);
       const input = validated instanceof Promise ? await validated : validated;
       // await is required here - without it, rejections bypass the catch block

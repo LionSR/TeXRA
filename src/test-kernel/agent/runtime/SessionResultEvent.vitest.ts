@@ -37,9 +37,6 @@ import { setupPlatform } from '@test/support/setupPlatform';
 import { clearStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
 import { createTestSession } from '@test/support/sessionTestUtils';
 
-// Local file imports
-import { createRecordingHost } from '../progressTestUtils';
-
 const storageMocks = vi.hoisted(() => ({
   finalizeExecution: vi.fn().mockResolvedValue({
     status: 'durable',
@@ -54,11 +51,19 @@ vi.mock('@agent/storage', () => ({
 
 let counter = 0;
 
-function createCtx(overrides?: { logger?: TraceEmitter }): {
+/** Fresh logger + result collector + launch context, wired together. */
+function setupResultCase(): {
+  logger: TraceEmitter;
+  results: ResultEvent[];
   ctx: AgentLaunchContext;
   streamStatus: StreamStatusMachine;
 } {
-  const explicit = createRecordingHost();
+  const logger = new TraceEmitter();
+  const results: ResultEvent[] = [];
+  logger.subscribe((event) => {
+    if (event.type === 'result') results.push(event);
+  });
+
   const n = counter++;
   const executionId = `a${n.toString(16).padStart(5, '0')}` as ExecutionId;
   const streamId = `stream:result-${n}` as StreamTabId;
@@ -72,7 +77,6 @@ function createCtx(overrides?: { logger?: TraceEmitter }): {
   });
   const prompt = AgentPromptSchema.parse({});
   const storageKey = executionId as unknown as StorageKey;
-  const logger = overrides?.logger ?? new TraceEmitter();
   const session = defaultSession();
   const streamStatus = session.status;
   const runScope = createRunScope({
@@ -118,27 +122,6 @@ function createCtx(overrides?: { logger?: TraceEmitter }): {
     } as unknown as AgentLaunchContext['modelHandler'],
     disposeTrace: vi.fn(),
   };
-  return { ctx, streamStatus };
-}
-
-function collectResults(logger: TraceEmitter): ResultEvent[] {
-  const results: ResultEvent[] = [];
-  logger.subscribe((event) => {
-    if (event.type === 'result') results.push(event);
-  });
-  return results;
-}
-
-/** Fresh logger + result collector + launch context, wired together. */
-function setupResultCase(): {
-  logger: TraceEmitter;
-  results: ResultEvent[];
-  ctx: AgentLaunchContext;
-  streamStatus: StreamStatusMachine;
-} {
-  const logger = new TraceEmitter();
-  const results = collectResults(logger);
-  const { ctx, streamStatus } = createCtx({ logger });
   return { logger, results, ctx, streamStatus };
 }
 
@@ -472,9 +455,8 @@ describe('terminal result event (SDK Step 7d PR 6)', () => {
 
   it('marks subagent runs and bridges results to session.onResult', async () => {
     const session = createTestSession();
-    const logger = new TraceEmitter();
     const onResult = vi.fn();
-    const { ctx, streamStatus } = createCtx({ logger });
+    const { logger, ctx, streamStatus } = setupResultCase();
     const detach = session.attachRunTrace(logger, ctx.runScope.streamId);
     session.onResult(onResult);
     try {

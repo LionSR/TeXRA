@@ -692,6 +692,27 @@ export class LaTeXTab extends LitElement {
     `;
   }
 
+  /** Shared row scaffold for the storage-backed compile and diff settings. */
+  private renderConfigRow(opts: {
+    label: string;
+    description: string;
+    statusIcon: TemplateResult;
+    control: TemplateResult;
+    reset: TemplateResult | typeof nothing;
+  }): TemplateResult {
+    return html`
+      <div class="settings-row">
+        <div class="settings-row-text">
+          <span class="settings-row-label">${opts.label}</span>
+          <span class="settings-row-help">${opts.description}</span>
+        </div>
+        <div class="settings-row-control">
+          ${opts.statusIcon} ${opts.control} ${opts.reset}
+        </div>
+      </div>
+    `;
+  }
+
   private renderBooleanSetting(opts: {
     field:
       | 'workflowAutoCompile'
@@ -706,35 +727,26 @@ export class LaTeXTab extends LitElement {
   }): TemplateResult {
     const effective = opts.currentValue ?? opts.defaultValue;
     const isCustom = opts.currentValue !== undefined;
-    return html`
-      <div class="settings-row">
-        <div class="settings-row-text">
-          <span class="settings-row-label">${opts.label}</span>
-          <span class="settings-row-help">${opts.description}</span>
-        </div>
-        <div class="settings-row-control">
-          ${waIcon(effective ? 'check' : 'circle-xmark', {
-            className: `setting-status-icon ${effective ? 'is-set' : 'not-set'}`,
-          })}
-          <wa-switch
-            aria-label=${opts.label}
-            ?checked=${effective}
-            @change=${(e: Event) => {
-              const checked = (e.target as WaSwitch).checked;
-              this.dispatchSetConfigValue(opts.field, checked);
-            }}
-          ></wa-switch>
-          ${
-            isCustom
-              ? this.renderResetButton(
-                  opts.field,
-                  opts.defaultValue ? 'On' : 'Off',
-                )
-              : nothing
-          }
-        </div>
-      </div>
-    `;
+    return this.renderConfigRow({
+      label: opts.label,
+      description: opts.description,
+      statusIcon: waIcon(effective ? 'check' : 'circle-xmark', {
+        className: `setting-status-icon ${effective ? 'is-set' : 'not-set'}`,
+      }),
+      control: html`
+        <wa-switch
+          aria-label=${opts.label}
+          ?checked=${effective}
+          @change=${(e: Event) => {
+            const checked = (e.target as WaSwitch).checked;
+            this.dispatchSetConfigValue(opts.field, checked);
+          }}
+        ></wa-switch>
+      `,
+      reset: isCustom
+        ? this.renderResetButton(opts.field, opts.defaultValue ? 'On' : 'Off')
+        : nothing,
+    });
   }
 
   /**
@@ -777,42 +789,36 @@ export class LaTeXTab extends LitElement {
   }): TemplateResult {
     const effective = opts.currentValue ?? opts.defaultValue;
     const isCustom = opts.currentValue !== undefined;
-    return html`
-      <div class="settings-row">
-        <div class="settings-row-text">
-          <span class="settings-row-label">${opts.label}</span>
-          <span class="settings-row-help">${opts.description}</span>
-        </div>
-        <div class="settings-row-control">
-          ${this.renderSettingStatusIcon(isCustom)}
-          <wa-input
-            type="number"
-            min=${opts.min}
-            max=${opts.max ?? nothing}
-            .value=${String(effective)}
-            @change=${(e: Event) => {
-              const value = (e.target as WaInput).value;
-              // Treat a cleared field as "no change" — `Number('')` would
-              // silently coerce to 0/min and overwrite the saved value.
-              if (typeof value !== 'string' || value.trim() === '') return;
-              const raw = Number(value);
-              if (Number.isNaN(raw)) return;
-              // Coerce to integer first — paste / spinner can produce decimals
-              // that the backend `.int()` schema would silently reject.
-              const integer = Math.round(raw);
-              const clamped = clampOptional(integer, opts.min, opts.max);
-              this.dispatchSetConfigValue(opts.field, clamped);
-            }}
-            class="setting-number-input"
-          ></wa-input>
-          ${
-            isCustom
-              ? this.renderResetButton(opts.field, String(opts.defaultValue))
-              : nothing
-          }
-        </div>
-      </div>
-    `;
+    return this.renderConfigRow({
+      label: opts.label,
+      description: opts.description,
+      statusIcon: this.renderSettingStatusIcon(isCustom),
+      control: html`
+        <wa-input
+          type="number"
+          min=${opts.min}
+          max=${opts.max ?? nothing}
+          .value=${String(effective)}
+          @change=${(e: Event) => {
+            const value = (e.target as WaInput).value;
+            // Treat a cleared field as "no change" — `Number('')` would
+            // silently coerce to 0/min and overwrite the saved value.
+            if (typeof value !== 'string' || value.trim() === '') return;
+            const raw = Number(value);
+            if (Number.isNaN(raw)) return;
+            // Coerce to integer first — paste / spinner can produce decimals
+            // that the backend `.int()` schema would silently reject.
+            const integer = Math.round(raw);
+            const clamped = clampOptional(integer, opts.min, opts.max);
+            this.dispatchSetConfigValue(opts.field, clamped);
+          }}
+          class="setting-number-input"
+        ></wa-input>
+      `,
+      reset: isCustom
+        ? this.renderResetButton(opts.field, String(opts.defaultValue))
+        : nothing,
+    });
   }
 
   private renderEnumSetting<
@@ -827,36 +833,29 @@ export class LaTeXTab extends LitElement {
   }): TemplateResult {
     const effective = opts.currentValue ?? opts.defaultValue;
     const isCustom = opts.currentValue !== undefined;
-    return html`
-      <div class="settings-row">
-        <div class="settings-row-text">
-          <span class="settings-row-label">${opts.label}</span>
-          <span class="settings-row-help">${opts.description}</span>
-        </div>
-        <div class="settings-row-control">
-          ${this.renderSettingStatusIcon(isCustom)}
-          <wa-select
-            .value=${String(effective)}
-            @change=${(e: Event) => {
-              const v = (e.target as WaSelect).value as LatexConfigValueFor<F>;
-              this.dispatchSetConfigValue(opts.field, v);
-            }}
-            class="setting-enum-select"
-          >
-            ${opts.options.map(
-              (o) => html`
-                <wa-option value=${String(o.value)}>${o.label}</wa-option>
-              `,
-            )}
-          </wa-select>
-          ${
-            isCustom
-              ? this.renderResetButton(opts.field, String(opts.defaultValue))
-              : nothing
-          }
-        </div>
-      </div>
-    `;
+    return this.renderConfigRow({
+      label: opts.label,
+      description: opts.description,
+      statusIcon: this.renderSettingStatusIcon(isCustom),
+      control: html`
+        <wa-select
+          .value=${String(effective)}
+          @change=${(e: Event) => {
+            const v = (e.target as WaSelect).value as LatexConfigValueFor<F>;
+            this.dispatchSetConfigValue(opts.field, v);
+          }}
+          class="setting-enum-select"
+        >
+          ${opts.options.map(
+            (o) =>
+              html`<wa-option value=${String(o.value)}>${o.label}</wa-option>`,
+          )}
+        </wa-select>
+      `,
+      reset: isCustom
+        ? this.renderResetButton(opts.field, String(opts.defaultValue))
+        : nothing,
+    });
   }
 }
 

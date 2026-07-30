@@ -16,13 +16,6 @@ export class ToggleStateStore {
     return this.states.get(id);
   }
 
-  clearSelection(ids: string[]): void {
-    for (const id of ids) {
-      if (id) this.states.delete(id);
-    }
-    this.saveCallback?.();
-  }
-
   clearAll(): void {
     this.states.clear();
     this.saveCallback?.();

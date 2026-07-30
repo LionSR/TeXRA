@@ -63,7 +63,13 @@ export class LatexRecommendedSettingsController {
     field?: LatexRecommendedSettingField;
     reset: boolean;
   }): LatexRecommendedSettingUpdate[] {
-    return this.getTargets(input.field).map((setting) => ({
+    const targets = input.field
+      ? LATEX_RECOMMENDED_SETTINGS.filter(
+          (setting) => setting.field === input.field,
+        )
+      : LATEX_RECOMMENDED_SETTINGS;
+
+    return targets.map((setting) => ({
       key: setting.key,
       value: this.resolveUpdateValue(setting, input.reset),
     }));
@@ -90,14 +96,6 @@ export class LatexRecommendedSettingsController {
       (setting.legacyKeys?.some((key) => currentObject[key] !== undefined) ??
         false)
     );
-  }
-
-  private getTargets(
-    field?: LatexRecommendedSettingField,
-  ): LatexRecommendedSetting[] {
-    return field
-      ? LATEX_RECOMMENDED_SETTINGS.filter((setting) => setting.field === field)
-      : LATEX_RECOMMENDED_SETTINGS;
   }
 
   private resolveUpdateValue(

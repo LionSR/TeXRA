@@ -50,11 +50,13 @@ function matchingBaseModel(
     [info.id, info.family].map((name) => name.trim().toLowerCase()),
   );
   return Object.entries(MODEL_CONFIGS)
-    .filter(([, config]) => !config.retired && !config.deprecated)
-    .filter(([, config]) =>
-      modelRouteNames(config).some((name) =>
-        nativeNames.has(name.trim().toLowerCase()),
-      ),
+    .filter(
+      ([, config]) =>
+        !config.retired &&
+        !config.deprecated &&
+        modelRouteNames(config).some((name) =>
+          nativeNames.has(name.trim().toLowerCase()),
+        ),
     )
     .toSorted(([, left], [, right]) => {
       const byReasoning =
@@ -170,7 +172,14 @@ export function staticModelConfigEntries(): readonly (readonly [
   string,
   ModelConfig,
 ])[] {
-  return [...Object.entries(MODEL_CONFIGS)];
+  return Object.entries(MODEL_CONFIGS);
+}
+
+function discoveredModelConfigEntries(): readonly (readonly [
+  string,
+  ModelConfig,
+])[] {
+  return [...runtimeModels].map(([id, entry]) => [id, entry.config] as const);
 }
 
 /** Resolve a model after ensuring native discovery has run in this host. */
@@ -266,10 +275,7 @@ export function runtimeModelConfigEntries(): readonly (readonly [
   string,
   ModelConfig,
 ])[] {
-  return [
-    ...staticModelConfigEntries(),
-    ...[...runtimeModels].map(([id, entry]) => [id, entry.config] as const),
-  ];
+  return [...staticModelConfigEntries(), ...discoveredModelConfigEntries()];
 }
 
 /** Refresh and return only the editor-discovered model catalogue. */
@@ -283,5 +289,5 @@ export async function discoveredRuntimeModelConfigEntries(): Promise<
     // failures; consumers receive an empty catalogue instead of stale entries.
     return [];
   }
-  return [...runtimeModels].map(([id, entry]) => [id, entry.config] as const);
+  return discoveredModelConfigEntries();
 }

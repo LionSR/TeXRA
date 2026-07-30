@@ -1,11 +1,8 @@
-import type { StreamPhase, StreamTabId } from '@shared/schemas';
+import type { StreamTabId } from '@shared/schemas';
 
 import { isChildStreamRemoved } from './childExecutions';
 import { syncStreamLog } from './subscribeStreamLog';
-import {
-  finalizeAssistantTranscriptEntries,
-  isFinalTranscriptStatus,
-} from './transcript';
+import { finalizeAssistantTranscriptEntries } from './transcript';
 
 export interface ProjectStreamTranscriptOptions {
   /** Promote all deferred assistant/tool rows into static scrollback. */
@@ -28,14 +25,4 @@ export function projectStreamTranscript(
   if (options.finalize) {
     finalizeAssistantTranscriptEntries(streamId);
   }
-}
-
-/** Project a stream after a status transition. Final statuses promote rows. */
-export function projectStreamTranscriptForStatus(
-  streamId: StreamTabId,
-  status: StreamPhase,
-): void {
-  projectStreamTranscript(streamId, {
-    finalize: isFinalTranscriptStatus(status),
-  });
 }

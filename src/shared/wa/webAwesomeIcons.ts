@@ -280,10 +280,6 @@ const icons = {
 
 let isRegistered = false;
 
-function dataUri(svg: string): string {
-  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
-}
-
 /**
  * Legacy codicon-to-canonical aliases for backward compatibility with persisted
  * icon names (e.g. in localStorage, settings files, or telemetry events that
@@ -304,14 +300,10 @@ export const LEGACY_ICON_ALIASES: Readonly<Record<string, keyof typeof icons>> =
     warning: 'triangle-exclamation',
   });
 
-function resolveIcon(name: string): FontAwesomeIconDefinition | undefined {
-  const canonical = LEGACY_ICON_ALIASES[name] ?? name;
-  return icons[canonical as keyof typeof icons];
-}
-
 function texraIconResolver(name: string): string {
-  const icon = resolveIcon(name);
-  return icon ? dataUri(iconSvg(icon)) : '';
+  const canonical = LEGACY_ICON_ALIASES[name] ?? name;
+  const icon = icons[canonical as keyof typeof icons];
+  return icon ? `data:image/svg+xml,${encodeURIComponent(iconSvg(icon))}` : '';
 }
 
 export function registerTeXRAWebAwesomeIcons(): void {

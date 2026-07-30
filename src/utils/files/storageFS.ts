@@ -18,8 +18,6 @@ export class StorageFS extends RelativeFS {
   protected static override getBasePath(): string {
     return platform().storage.getStoragePath();
   }
-
-  // Inherit file operations from RelativeFS
 }
 
 /**

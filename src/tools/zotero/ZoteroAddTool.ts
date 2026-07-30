@@ -373,20 +373,23 @@ export class ZoteroAddTool extends defineTool({
 
       let result: ConnectorResult;
 
-      if (item.doi) {
-        // Resolve DOI metadata via Crossref, then use saveItems
-        const resolvedItem = await resolveDOI(item.doi);
-        if (resolvedItem) {
+      if (!item.doi && item.url) {
+        result = await callZoteroConnector(
+          'saveSnapshot',
+          { url: item.url, ...collectionBody },
+          port,
+        );
+      } else {
+        // A DOI resolves its metadata via Crossref; manual metadata is the
+        // fallback when that lookup fails.
+        const resolved = item.doi
+          ? await resolveDOI(item.doi)
+          : toZoteroItem(item);
+        const zoteroItem = resolved ?? (item.title ? toZoteroItem(item) : null);
+        if (zoteroItem) {
           result = await callZoteroConnector(
             'saveItems',
-            { items: [resolvedItem], ...collectionBody },
-            port,
-          );
-        } else if (item.title) {
-          // Crossref failed but we have manual metadata to fall back on
-          result = await callZoteroConnector(
-            'saveItems',
-            { items: [toZoteroItem(item)], ...collectionBody },
+            { items: [zoteroItem], ...collectionBody },
             port,
           );
         } else {
@@ -396,19 +399,6 @@ export class ZoteroAddTool extends defineTool({
               'Crossref lookup failed and no title provided to fall back on',
           };
         }
-      } else if (item.url) {
-        result = await callZoteroConnector(
-          'saveSnapshot',
-          { url: item.url, ...collectionBody },
-          port,
-        );
-      } else {
-        const zoteroItem = toZoteroItem(item);
-        result = await callZoteroConnector(
-          'saveItems',
-          { items: [zoteroItem], ...collectionBody },
-          port,
-        );
       }
 
       results.push({ item: itemLabel, ...result });

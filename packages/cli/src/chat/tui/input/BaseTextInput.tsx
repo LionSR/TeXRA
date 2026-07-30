@@ -275,15 +275,16 @@ export function textInputDisplayWindow({
   const sourceCursor = clampCursor(cursor, value.length);
   const rows = textInputDisplayRows(value, columnCount);
   const cursorRowIndex = cursorDisplayRowIndex(rows, sourceCursor);
-  const keepRowsAfterCursor =
-    rows.length <= rowCount
-      ? rows.length - cursorRowIndex - 1
-      : Math.min(rows.length - cursorRowIndex - 1, Math.floor(rowCount / 4));
-  const endRow =
-    rows.length <= rowCount
-      ? rows.length
-      : Math.min(rows.length, cursorRowIndex + keepRowsAfterCursor + 1);
-  const startRow = rows.length <= rowCount ? 0 : Math.max(0, endRow - rowCount);
+  let startRow = 0;
+  let endRow = rows.length;
+  if (rows.length > rowCount) {
+    const keepRowsAfterCursor = Math.min(
+      rows.length - cursorRowIndex - 1,
+      Math.floor(rowCount / 4),
+    );
+    endRow = Math.min(rows.length, cursorRowIndex + keepRowsAfterCursor + 1);
+    startRow = Math.max(0, endRow - rowCount);
+  }
   const visibleRows = rows.slice(startRow, endRow);
   const clipped = startRow > 0 || endRow < rows.length;
   const rowTexts = visibleRows.map((row) =>
@@ -292,7 +293,7 @@ export function textInputDisplayWindow({
   const displayCursorRow = Math.max(0, cursorRowIndex - startRow);
   const cursorRowTextLength = rowTexts[displayCursorRow]?.length ?? 0;
   let firstRowEllipsisRemovedPrefixCodeUnits = 0;
-  if (clipped && startRow > 0) {
+  if (startRow > 0) {
     const firstRow = leadingEllipsisDisplay(rowTexts[0] ?? '', columnCount);
     firstRowEllipsisRemovedPrefixCodeUnits = firstRow.removedPrefixCodeUnits;
     rowTexts[0] = firstRow.text;
@@ -303,14 +304,12 @@ export function textInputDisplayWindow({
     cursorRow === undefined
       ? 0
       : clampCursor(sourceCursor - cursorRow.start, cursorRowTextLength);
-  let ellipsisCursorColumn: number;
-  if (clipped && startRow > 0 && displayCursorRow === 0) {
+  let ellipsisCursorColumn = cursorColumn;
+  if (startRow > 0 && displayCursorRow === 0) {
     ellipsisCursorColumn =
       firstRowEllipsisRemovedPrefixCodeUnits > 0
         ? Math.max(1, cursorColumn - firstRowEllipsisRemovedPrefixCodeUnits + 1)
         : cursorColumn + 1;
-  } else {
-    ellipsisCursorColumn = cursorColumn;
   }
   const cursorPrefixLength = rowTexts
     .slice(0, displayCursorRow)

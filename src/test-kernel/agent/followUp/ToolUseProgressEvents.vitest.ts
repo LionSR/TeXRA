@@ -88,28 +88,51 @@ function createPrepResult(
   };
 }
 
+function setRoundFlowState(state: Partial<typeof roundFlowState>): void {
+  Object.assign(roundFlowState, {
+    shouldStop: false,
+    endTurn: false,
+    lastError: undefined,
+    finalTool: undefined,
+    ...state,
+  });
+}
+
+function createCycleNode(
+  streamId: StreamTabId,
+  host: ReturnType<typeof createRecordingHost>['host'],
+  logger: TraceEmitter,
+  overrides: Record<string, unknown> = {},
+): ToolUseCycleNode<unknown> {
+  return new ToolUseCycleNode<unknown>().setServices({
+    streamId,
+    runScope: testRunScope(streamId, { interactions: host }),
+    logger,
+    modelHandler: { getClient: vi.fn() },
+    onRoundFinalized: vi.fn(),
+    config: { model: 'test-model', agent: 'test-agent' },
+    setting: { tools: [] },
+    ...overrides,
+  } as unknown as ToolUseServices);
+}
+
 describe('tool-use progress events', () => {
+  const forcedToolOverrides = (tools: { name: string }[]) => ({
+    modelHandler: { getClient: vi.fn(), supportsForcedToolChoice: true },
+    finalTool: { name: 'submit_output' },
+    setting: { tools },
+  });
+
   it('collapses a run whose only tool is the terminal tool to one forced round', async () => {
-    roundFlowState.shouldStop = false;
-    roundFlowState.endTurn = true;
-    roundFlowState.lastError = undefined;
-    roundFlowState.finalTool = undefined;
+    setRoundFlowState({ endTurn: true });
     const { host } = createRecordingHost();
-    const logger = new TraceEmitter();
     const streamId = 'stream:single-shot-final-tool' as StreamTabId;
-    const node = new ToolUseCycleNode().setServices({
+    const node = createCycleNode(
       streamId,
-      runScope: testRunScope(streamId, { interactions: host }),
-      logger,
-      modelHandler: {
-        getClient: vi.fn(),
-        supportsForcedToolChoice: true,
-      },
-      finalTool: { name: 'submit_output' },
-      onRoundFinalized: vi.fn(),
-      config: { model: 'test-model', agent: 'test-agent' },
-      setting: { tools: [{ name: 'submit_output' }] },
-    } as unknown as ToolUseServices);
+      host,
+      new TraceEmitter(),
+      forcedToolOverrides([{ name: 'submit_output' }]),
+    );
 
     await withTestRunContext(host, streamId, () =>
       node.exec(createPrepResult(AgentWorkspaceState.create(), false)),
@@ -119,28 +142,15 @@ describe('tool-use progress events', () => {
   });
 
   it('does not force the first round of a headless run with exploration tools', async () => {
-    roundFlowState.shouldStop = false;
-    roundFlowState.endTurn = true;
-    roundFlowState.lastError = undefined;
-    roundFlowState.finalTool = undefined;
+    setRoundFlowState({ endTurn: true });
     const { host } = createRecordingHost();
-    const logger = new TraceEmitter();
     const streamId = 'stream:headless-final-tool' as StreamTabId;
-    const node = new ToolUseCycleNode().setServices({
+    const node = createCycleNode(
       streamId,
-      runScope: testRunScope(streamId, { interactions: host }),
-      logger,
-      modelHandler: {
-        getClient: vi.fn(),
-        supportsForcedToolChoice: true,
-      },
-      finalTool: { name: 'submit_output' },
-      onRoundFinalized: vi.fn(),
-      config: { model: 'test-model', agent: 'test-agent' },
-      setting: {
-        tools: [{ name: 'read_file' }, { name: 'submit_output' }],
-      },
-    } as unknown as ToolUseServices);
+      host,
+      new TraceEmitter(),
+      forcedToolOverrides([{ name: 'read_file' }, { name: 'submit_output' }]),
+    );
 
     await withTestRunContext(
       host,
@@ -165,15 +175,7 @@ describe('tool-use progress events', () => {
     workspaceState.workPlan.updateTodos([todo]);
     workspaceState.workPlan.updatePlan(plan);
 
-    const node = new ToolUseCycleNode().setServices({
-      streamId,
-      runScope: testRunScope(streamId, { interactions: host }),
-      logger,
-      modelHandler: { getClient: vi.fn() },
-      onRoundFinalized: vi.fn(),
-      config: { model: 'test-model', agent: 'test-agent' },
-      setting: { tools: [] },
-    } as unknown as ToolUseServices);
+    const node = createCycleNode(streamId, host, logger);
 
     try {
       const result = await withTestRunContext(host, streamId, () =>
@@ -296,9 +298,7 @@ describe('tool-use round outcome persistence (#8023)', () => {
       expectedOutcome,
       expectedStatus,
     }) => {
-      roundFlowState.shouldStop = shouldStop;
-      roundFlowState.endTurn = endTurn;
-      roundFlowState.lastError = lastError;
+      setRoundFlowState({ shouldStop, endTurn, lastError });
 
       const { host } = createRecordingHost();
       const logger = new TraceEmitter();
@@ -309,15 +309,7 @@ describe('tool-use round outcome persistence (#8023)', () => {
         logger,
         store.acquireWriter(streamId, streamId),
       );
-      const node = new ToolUseCycleNode().setServices({
-        streamId,
-        runScope: testRunScope(streamId, { interactions: host }),
-        logger,
-        modelHandler: { getClient: vi.fn() },
-        onRoundFinalized: vi.fn(),
-        config: { model: 'test-model', agent: 'test-agent' },
-        setting: { tools: [] },
-      } as unknown as ToolUseServices);
+      const node = createCycleNode(streamId, host, logger);
 
       try {
         const result = await withTestRunContext(host, streamId, () =>

@@ -93,8 +93,11 @@ function createDrainState(runs: GhCheckRun[]): AnnotationDrainState {
   };
 }
 
-function keepTestStatesActive(source: AnnotationDrainSource): void {
+/** A source whose subscription states stay active for the whole drain. */
+function createDrainSource(): AnnotationDrainSource {
+  const source = new PRPollingSource() as unknown as AnnotationDrainSource;
   source.has = vi.fn().mockReturnValue(true);
+  return source;
 }
 
 describe('PRPollingSource annotation drain', () => {
@@ -103,8 +106,7 @@ describe('PRPollingSource annotation drain', () => {
   });
 
   it('applies the base poller backoff path for annotation rate limits', async () => {
-    const source = new PRPollingSource() as unknown as AnnotationDrainSource;
-    keepTestStatesActive(source);
+    const source = createDrainSource();
     const run = createCheckRun(42);
     const state = createDrainState([run]);
     const rateLimit = new GitHubRateLimitError(1_800_000_000);
@@ -123,8 +125,7 @@ describe('PRPollingSource annotation drain', () => {
   });
 
   it('drains annotation queues in fair passes across subscriptions', async () => {
-    const source = new PRPollingSource() as unknown as AnnotationDrainSource;
-    keepTestStatesActive(source);
+    const source = createDrainSource();
     const firstState = createDrainState([
       createCheckRun(1),
       createCheckRun(2),
@@ -163,8 +164,7 @@ describe('PRPollingSource annotation drain', () => {
   });
 
   it('filters check annotations by each listener minimum level', async () => {
-    const source = new PRPollingSource() as unknown as AnnotationDrainSource;
-    keepTestStatesActive(source);
+    const source = createDrainSource();
     const run = createCheckRun(12);
     const state = createDrainState([run]);
     const defaultListener = vi.fn();

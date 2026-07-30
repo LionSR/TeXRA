@@ -15,75 +15,42 @@ describe('model handler compatibility inference', () => {
     info.mockClear();
   });
 
-  it('infers the legacy Google GenAI handler from Content transcripts', () => {
+  it.each([
+    {
+      name: 'infers the legacy Google GenAI handler from Content transcripts',
+      model: 'gemini35f',
+      message: { role: 'user', parts: [{ text: 'continue' }] },
+      expected: 'ModelHandlerGoogleGenAI',
+    },
+    {
+      name: 'infers OpenRouter for Google chat transcripts without a stored key',
+      model: 'gemini35f',
+      message: {
+        role: 'user',
+        content: [{ type: 'text', text: 'continue' }],
+      },
+      expected: 'ModelHandlerOpenRouterNative',
+    },
+    {
+      name: 'keeps keyless legacy Copilot transcripts on OpenRouter',
+      model: 'copilot4o',
+      message: {
+        role: 'user',
+        content: [{ type: 'text', text: 'continue' }],
+      },
+      expected: 'ModelHandlerOpenRouterNative',
+    },
+  ])('$name', ({ model, message, expected }) => {
     expect(
       inferAndLogPersistedModelHandlerCompatibilityKey(
-        'gemini35f',
-        [
-          {
-            role: 'user',
-            parts: [{ text: 'continue' }],
-          } as ProviderMessage,
-        ],
+        model,
+        [message as ProviderMessage],
         logger,
       ),
-    ).toBe('ModelHandlerGoogleGenAI');
+    ).toBe(expected);
     expect(info).toHaveBeenCalledWith(
       'Inferred model-handler compatibility for keyless persisted run',
-      {
-        data: {
-          model: 'gemini35f',
-          compatibilityKey: 'ModelHandlerGoogleGenAI',
-        },
-      },
-    );
-  });
-
-  it('infers OpenRouter for Google chat transcripts without a stored key', () => {
-    expect(
-      inferAndLogPersistedModelHandlerCompatibilityKey(
-        'gemini35f',
-        [
-          {
-            role: 'user',
-            content: [{ type: 'text', text: 'continue' }],
-          } as ProviderMessage,
-        ],
-        logger,
-      ),
-    ).toBe('ModelHandlerOpenRouterNative');
-    expect(info).toHaveBeenCalledWith(
-      'Inferred model-handler compatibility for keyless persisted run',
-      {
-        data: {
-          model: 'gemini35f',
-          compatibilityKey: 'ModelHandlerOpenRouterNative',
-        },
-      },
-    );
-  });
-
-  it('keeps keyless legacy Copilot transcripts on OpenRouter', () => {
-    expect(
-      inferAndLogPersistedModelHandlerCompatibilityKey(
-        'copilot4o',
-        [
-          {
-            role: 'user',
-            content: [{ type: 'text', text: 'continue' }],
-          } as ProviderMessage,
-        ],
-        logger,
-      ),
-    ).toBe('ModelHandlerOpenRouterNative');
-    expect(info).toHaveBeenCalledWith(
-      'Inferred model-handler compatibility for keyless persisted run',
-      {
-        data: {
-          model: 'copilot4o',
-          compatibilityKey: 'ModelHandlerOpenRouterNative',
-        },
-      },
+      { data: { model, compatibilityKey: expected } },
     );
   });
 

@@ -66,6 +66,19 @@ function createMessageHandler(
   return new ProgressViewMessageHandler(provider, host, interactions);
 }
 
+/** `executeValidatedUntilStarted` is private; TS-private is not enforced at runtime. */
+function executeValidatedUntilStarted(
+  handler: ProgressViewMessageHandler,
+): Promise<boolean> {
+  return (
+    handler as unknown as {
+      executeValidatedUntilStarted(request: {
+        config: Record<string, never>;
+      }): Promise<boolean>;
+    }
+  ).executeValidatedUntilStarted({ config: {} });
+}
+
 function createProgressViewProvider(): ProgressViewProviderFake {
   const snapshots = {
     getTaskState: vi.fn(),
@@ -170,13 +183,7 @@ describe('progress-view onboarding refresh wiring', () => {
         }),
     );
     const handler = createMessageHandler(createProgressViewProvider());
-    const start = (
-      handler as unknown as {
-        executeValidatedUntilStarted(request: {
-          config: Record<string, never>;
-        }): Promise<boolean>;
-      }
-    ).executeValidatedUntilStarted({ config: {} });
+    const start = executeValidatedUntilStarted(handler);
 
     const commandInput = mocks.safeExecuteCommand.mock.calls[0]?.[1]?.[0] as
       { onRun?: () => void } | undefined;
@@ -191,30 +198,14 @@ describe('progress-view onboarding refresh wiring', () => {
     mocks.safeExecuteCommand.mockResolvedValue(false);
     const handler = createMessageHandler(createProgressViewProvider());
 
-    await expect(
-      (
-        handler as unknown as {
-          executeValidatedUntilStarted(request: {
-            config: Record<string, never>;
-          }): Promise<boolean>;
-        }
-      ).executeValidatedUntilStarted({ config: {} }),
-    ).resolves.toBe(false);
+    await expect(executeValidatedUntilStarted(handler)).resolves.toBe(false);
   });
 
   it('settles a replacement launch when command error handling rejects', async () => {
     mocks.safeExecuteCommand.mockRejectedValue(new Error('command failed'));
     const handler = createMessageHandler(createProgressViewProvider());
 
-    await expect(
-      (
-        handler as unknown as {
-          executeValidatedUntilStarted(request: {
-            config: Record<string, never>;
-          }): Promise<boolean>;
-        }
-      ).executeValidatedUntilStarted({ config: {} }),
-    ).resolves.toBe(false);
+    await expect(executeValidatedUntilStarted(handler)).resolves.toBe(false);
   });
 
   it.each([

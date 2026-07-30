@@ -17,23 +17,27 @@ async function createTempRoot(): Promise<string> {
 async function writeSkill(
   root: string,
   dirName: string,
-  frontmatter: string,
+  frontmatter: { name: string; description?: string },
   body = 'Use this skill carefully.',
 ): Promise<string> {
   const skillDir = path.join(root, dirName);
   await fs.mkdir(skillDir, { recursive: true });
+  const lines = [`name: ${frontmatter.name}`];
+  if (frontmatter.description !== undefined) {
+    lines.push(`description: ${frontmatter.description}`);
+  }
   await fs.writeFile(
     path.join(skillDir, 'SKILL.md'),
-    `---\n${frontmatter.trim()}\n---\n\n${body}\n`,
+    `---\n${lines.join('\n')}\n---\n\n${body}\n`,
   );
   return skillDir;
 }
 
 afterEach(async () => {
   await Promise.all(
-    tempRoots.splice(0).map((root) => {
-      return fs.rm(root, { recursive: true, force: true });
-    }),
+    tempRoots
+      .splice(0)
+      .map((root) => fs.rm(root, { recursive: true, force: true })),
   );
 });
 
@@ -43,10 +47,11 @@ describe('discoverSkills', () => {
     await writeSkill(
       root,
       'manuscript-review',
-      `
-name: manuscript-review
-description: Reviews mathematical manuscripts for correctness and exposition.
-`,
+      {
+        name: 'manuscript-review',
+        description:
+          'Reviews mathematical manuscripts for correctness and exposition.',
+      },
       'Read the paper and report substantial mathematical issues.',
     );
 
@@ -64,7 +69,9 @@ description: Reviews mathematical manuscripts for correctness and exposition.
 
   it('rejects skills without descriptions', async () => {
     const root = await createTempRoot();
-    await writeSkill(root, 'missing-description', 'name: missing-description');
+    await writeSkill(root, 'missing-description', {
+      name: 'missing-description',
+    });
 
     const result = await discoverSkills(root);
 
@@ -79,14 +86,10 @@ description: Reviews mathematical manuscripts for correctness and exposition.
 
   it('loads name-mismatched skills with a warning', async () => {
     const root = await createTempRoot();
-    await writeSkill(
-      root,
-      'directory-name',
-      `
-name: frontmatter-name
-description: A skill whose declared name differs from its directory.
-`,
-    );
+    await writeSkill(root, 'directory-name', {
+      name: 'frontmatter-name',
+      description: 'A skill whose declared name differs from its directory.',
+    });
 
     const result = await discoverSkills(root);
 
@@ -104,14 +107,10 @@ description: A skill whose declared name differs from its directory.
 
   it('reports invalid YAML frontmatter without aborting discovery', async () => {
     const root = await createTempRoot();
-    await writeSkill(
-      root,
-      'valid-skill',
-      `
-name: valid-skill
-description: A valid skill.
-`,
-    );
+    await writeSkill(root, 'valid-skill', {
+      name: 'valid-skill',
+      description: 'A valid skill.',
+    });
     const invalidDir = path.join(root, 'invalid-skill');
     await fs.mkdir(invalidDir);
     await fs.writeFile(
@@ -132,14 +131,10 @@ description: A valid skill.
 
   it('deduplicates symlinked skill packages by real path', async () => {
     const root = await createTempRoot();
-    const actualDir = await writeSkill(
-      root,
-      'actual-skill',
-      `
-name: actual-skill
-description: A skill reached through a real directory and a symlink.
-`,
-    );
+    const actualDir = await writeSkill(root, 'actual-skill', {
+      name: 'actual-skill',
+      description: 'A skill reached through a real directory and a symlink.',
+    });
     await fs.symlink(actualDir, path.join(root, 'linked-skill'), 'dir');
 
     const result = await discoverSkills(root);
@@ -155,22 +150,14 @@ description: A skill reached through a real directory and a symlink.
 
   it('keeps the first skill when names collide', async () => {
     const root = await createTempRoot();
-    await writeSkill(
-      root,
-      'alpha',
-      `
-name: repeated-name
-description: The first skill with this name.
-`,
-    );
-    await writeSkill(
-      root,
-      'beta',
-      `
-name: repeated-name
-description: The second skill with this name.
-`,
-    );
+    await writeSkill(root, 'alpha', {
+      name: 'repeated-name',
+      description: 'The first skill with this name.',
+    });
+    await writeSkill(root, 'beta', {
+      name: 'repeated-name',
+      description: 'The second skill with this name.',
+    });
 
     const result = await discoverSkills(root);
 
@@ -191,30 +178,18 @@ describe('discoverSkillSources', () => {
   it('keeps source precedence across multiple roots', async () => {
     const bundled = await createTempRoot();
     const project = await createTempRoot();
-    await writeSkill(
-      bundled,
-      'shared-skill',
-      `
-name: shared-skill
-description: The bundled version.
-`,
-    );
-    await writeSkill(
-      project,
-      'shared-skill',
-      `
-name: shared-skill
-description: The project version.
-`,
-    );
-    await writeSkill(
-      project,
-      'project-only',
-      `
-name: project-only
-description: A project-specific skill.
-`,
-    );
+    await writeSkill(bundled, 'shared-skill', {
+      name: 'shared-skill',
+      description: 'The bundled version.',
+    });
+    await writeSkill(project, 'shared-skill', {
+      name: 'shared-skill',
+      description: 'The project version.',
+    });
+    await writeSkill(project, 'project-only', {
+      name: 'project-only',
+      description: 'A project-specific skill.',
+    });
 
     const result = await discoverSkillSources([
       { scope: 'bundled', path: bundled },

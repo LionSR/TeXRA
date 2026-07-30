@@ -1,5 +1,5 @@
 // Node imports
-import { execFileSync, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import {
   mkdirSync,
   mkdtempSync,
@@ -73,7 +73,9 @@ describe('desktop package native CLI payload', () => {
   it('passes when no Codex or Claude Code CLI payload is bundled', () => {
     const { packageRoot } = createFakeDesktopPackage();
 
-    expect(runVerifier(packageRoot)).toContain(
+    const result = runVerifier(packageRoot);
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain(
       '- no bundled Codex or Claude Code CLI payload',
     );
   });
@@ -85,7 +87,7 @@ describe('desktop package native CLI payload', () => {
     const { packageRoot, resourcesDir } = createFakeDesktopPackage();
     writeNativeCliPlatformPackage(resourcesDir, cli);
 
-    const result = runVerifierResult(packageRoot);
+    const result = runVerifier(packageRoot);
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('bundles native CLI payloads');
     expect(result.stderr).toContain(label);
@@ -98,7 +100,7 @@ describe('desktop package native CLI payload', () => {
       const { packageRoot, resourcesDir } = createFakeDesktopPackage();
       writeNativeCliPnpmStorePackage(resourcesDir, cli);
 
-      const result = runVerifierResult(packageRoot);
+      const result = runVerifier(packageRoot);
       expect(result.status).toBe(1);
       expect(result.stderr).toContain('bundles native CLI payloads');
     },
@@ -129,7 +131,7 @@ describe('desktop package native CLI payload', () => {
       join(resourcesDir, 'resources', 'traceViewerStandalone', 'index.html'),
     );
 
-    const result = runVerifierResult(packageRoot);
+    const result = runVerifier(packageRoot);
     expect(result.status).toBe(1);
     expect(result.stderr).toContain(
       'Missing trace-viewer standalone HTML template: resources/traceViewerStandalone/index.html',
@@ -159,7 +161,7 @@ describe('desktop package native CLI payload', () => {
       },
     });
 
-    const result = runVerifierResult(packageRoot);
+    const result = runVerifier(packageRoot);
     expect(result.status).toBe(1);
     expect(result.stderr).toContain(
       'Packaged desktop startup graph eagerly includes provider SDK code (OpenAI SDK)',
@@ -189,9 +191,10 @@ function createFakeDesktopPackage(
     'app',
   );
 
+  const desktopDependencies = readDesktopDependencies();
   writeJson(join(appRoot, 'package.json'), {
     main: './dist/main/index.js',
-    dependencies: readDesktopDependencies(),
+    dependencies: desktopDependencies,
   });
   writeText(join(appRoot, 'dist/main/index.js'), "import './bootstrap.js';\n");
   writeText(join(appRoot, 'dist/main/bootstrap.js'), 'export {};\n');
@@ -245,7 +248,7 @@ function createFakeDesktopPackage(
     '<!doctype html>\n',
   );
 
-  for (const dependencyName of Object.keys(readDesktopDependencies())) {
+  for (const dependencyName of Object.keys(desktopDependencies)) {
     writeJson(join(appRoot, 'node_modules', dependencyName, 'package.json'), {
       name: dependencyName,
       version: '0.0.0',
@@ -293,18 +296,7 @@ function writeNativeCliPnpmStorePackage(
   writeBinary(join(packageDir, ...info.pnpmBinaryPath));
 }
 
-function runVerifier(packageRoot: string): string {
-  return execFileSync(process.execPath, [verifierPath], {
-    cwd: repoPath('.'),
-    encoding: 'utf8',
-    env: {
-      ...process.env,
-      TEXRA_DESKTOP_PACKAGE_ROOT: packageRoot,
-    },
-  });
-}
-
-function runVerifierResult(packageRoot: string): {
+function runVerifier(packageRoot: string): {
   status: number | null;
   stderr: string;
   stdout: string;

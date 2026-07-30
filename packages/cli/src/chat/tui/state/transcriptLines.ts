@@ -83,7 +83,7 @@ function transcriptEntryLines(
   const cachedByEntry = entryLinesCache.get(entry);
   const cached = cachedByEntry?.get(key);
   if (cached) return cached;
-  const lines = computeTranscriptEntryLines(entry, cols, executionLabels);
+  const lines = fullTranscriptEntryLayout(entry, cols, executionLabels).lines;
   if (cachedByEntry) {
     if (cachedByEntry.size >= MAX_LINES_PER_ENTRY) {
       const oldestKey = cachedByEntry.keys().next().value;
@@ -94,14 +94,6 @@ function transcriptEntryLines(
     entryLinesCache.set(entry, new Map([[key, lines]]));
   }
   return lines;
-}
-
-function computeTranscriptEntryLines(
-  entry: ConversationEntry,
-  cols: number,
-  executionLabels: ExecutionLabels,
-): readonly string[] {
-  return fullTranscriptEntryLayout(entry, cols, executionLabels).lines;
 }
 
 function isCompactToolEntry(

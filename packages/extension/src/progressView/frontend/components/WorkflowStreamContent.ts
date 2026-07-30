@@ -11,8 +11,6 @@ import { conversationContentStyles } from './ConversationContent.styles';
 import { renderStreamHeader } from './streamHeaderView';
 import { isWorkflowState, type WorkflowStreamState } from '../store';
 
-// Local imports - components
-
 // Side-effect imports - sibling components
 import './TaskGroupList';
 import './LogList';

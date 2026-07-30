@@ -71,20 +71,15 @@ export function installCliPipeErrorHandlers(): void {
   if (pipeErrorHandlersInstalled) return;
   pipeErrorHandlersInstalled = true;
 
-  process.stdout.on('error', (error) => {
-    if (isCliPipeClosureError(error)) {
-      closed.stdout = true;
-      return;
-    }
-    throw error;
-  });
-  process.stderr.on('error', (error) => {
-    if (isCliPipeClosureError(error)) {
-      closed.stderr = true;
-      return;
-    }
-    throw error;
-  });
+  for (const key of ['stdout', 'stderr'] as const) {
+    process[key].on('error', (error) => {
+      if (isCliPipeClosureError(error)) {
+        closed[key] = true;
+        return;
+      }
+      throw error;
+    });
+  }
 }
 
 // CLI output is best effort: throwing from an async write callback would bypass

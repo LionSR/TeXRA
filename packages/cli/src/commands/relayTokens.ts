@@ -131,6 +131,26 @@ async function requireSessionAccessToken(
   return getCliSessionAccessToken();
 }
 
+/**
+ * Initialize the platform, resolve a session token, and run one relay-token
+ * operation. Returns undefined once the failure (no session, or a network /
+ * edge-function error) has been reported on stderr.
+ */
+async function withRelayTokenSession<T>(
+  context: CliContext,
+  operation: (accessToken: string) => Promise<T>,
+): Promise<{ value: T } | undefined> {
+  await initCliPlatform({ ...context, quietLogs: true });
+  try {
+    const accessToken = await requireSessionAccessToken(context);
+    if (!accessToken) return undefined;
+    return { value: await operation(accessToken) };
+  } catch (error) {
+    writeErrorStderr(error);
+    return undefined;
+  }
+}
+
 export const setupTokenCommand = defineCliCommand({
   meta: {
     name: 'setup-token',
@@ -161,19 +181,14 @@ export const setupTokenCommand = defineCliCommand({
       ctx.args['print-env'] === true ||
       (ctx.args as Record<string, unknown>).printEnv === true;
 
-    await initCliPlatform({ ...context, quietLogs: true });
-    let minted: MintedRelayToken;
-    try {
-      const accessToken = await requireSessionAccessToken(context);
-      if (!accessToken) return CliExitCode.ModelOrNetworkError;
-      minted = await mintRelayToken(accessToken, {
+    const session = await withRelayTokenSession(context, (accessToken) =>
+      mintRelayToken(accessToken, {
         name: optString(ctx.args.name),
         expiresInDays: expires.days,
-      });
-    } catch (error) {
-      writeErrorStderr(error);
-      return CliExitCode.ModelOrNetworkError;
-    }
+      }),
+    );
+    if (!session) return CliExitCode.ModelOrNetworkError;
+    const minted = session.value;
 
     if (printEnv && context.outputFormat === 'text') {
       // Keep stdout to exactly the env line so `>> "$GITHUB_ENV"` and
@@ -210,16 +225,11 @@ const authTokenListCommand = defineCliCommand({
     ...GLOBAL_ARGS,
   },
   async run(context) {
-    await initCliPlatform({ ...context, quietLogs: true });
-    let tokens: readonly RelayTokenInfo[];
-    try {
-      const accessToken = await requireSessionAccessToken(context);
-      if (!accessToken) return CliExitCode.ModelOrNetworkError;
-      tokens = await listRelayTokens(accessToken);
-    } catch (error) {
-      writeErrorStderr(error);
-      return CliExitCode.ModelOrNetworkError;
-    }
+    const session = await withRelayTokenSession(context, (accessToken) =>
+      listRelayTokens(accessToken),
+    );
+    if (!session) return CliExitCode.ModelOrNetworkError;
+    const tokens = session.value;
 
     emitCliResult(context, {
       json: { tokens },
@@ -249,16 +259,11 @@ const authTokenRevokeCommand = defineCliCommand({
       return CliExitCode.Usage;
     }
 
-    await initCliPlatform({ ...context, quietLogs: true });
-    let revoked: { id: string; name: string };
-    try {
-      const accessToken = await requireSessionAccessToken(context);
-      if (!accessToken) return CliExitCode.ModelOrNetworkError;
-      revoked = await revokeRelayToken(accessToken, id);
-    } catch (error) {
-      writeErrorStderr(error);
-      return CliExitCode.ModelOrNetworkError;
-    }
+    const session = await withRelayTokenSession(context, (accessToken) =>
+      revokeRelayToken(accessToken, id),
+    );
+    if (!session) return CliExitCode.ModelOrNetworkError;
+    const revoked = session.value;
 
     emitCliResult(context, {
       json: { revoked },

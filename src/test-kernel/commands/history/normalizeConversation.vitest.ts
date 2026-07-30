@@ -312,50 +312,29 @@ describe('Google GenAI', () => {
     expect(results).toHaveLength(1);
   });
 
-  it('handles inlineData parts (image)', () => {
-    const nodes = normalize([
-      {
-        role: 'user',
-        parts: [{ inlineData: { mimeType: 'image/png', data: 'base64...' } }],
-      },
-    ]);
+  it.each([
+    {
+      shape: 'inlineData parts (image)',
+      part: { inlineData: { mimeType: 'image/png', data: 'base64...' } },
+      attachmentType: 'image',
+    },
+    {
+      shape: 'inlineData parts (document)',
+      part: { inlineData: { mimeType: 'application/pdf', data: 'base64...' } },
+      attachmentType: 'document',
+    },
+    {
+      shape: 'fileData parts (URI-based uploaded files)',
+      part: { fileData: { mimeType: 'image/jpeg', fileUri: 'gs://...' } },
+      attachmentType: 'image',
+    },
+  ])('handles $shape', ({ part, attachmentType }) => {
+    const nodes = normalize([{ role: 'user', parts: [part] }]);
 
     expect(nodesOfKind(nodes, 'user-message')).toHaveLength(1);
     expect(nodes[0]).toMatchObject({
       kind: 'user-message',
-      parts: [{ type: 'attachment', attachmentType: 'image' }],
-    });
-  });
-
-  it('handles inlineData parts (document)', () => {
-    const nodes = normalize([
-      {
-        role: 'user',
-        parts: [
-          { inlineData: { mimeType: 'application/pdf', data: 'base64...' } },
-        ],
-      },
-    ]);
-
-    expect(nodesOfKind(nodes, 'user-message')).toHaveLength(1);
-    expect(nodes[0]).toMatchObject({
-      kind: 'user-message',
-      parts: [{ type: 'attachment', attachmentType: 'document' }],
-    });
-  });
-
-  it('handles fileData parts (URI-based uploaded files)', () => {
-    const nodes = normalize([
-      {
-        role: 'user',
-        parts: [{ fileData: { mimeType: 'image/jpeg', fileUri: 'gs://...' } }],
-      },
-    ]);
-
-    expect(nodesOfKind(nodes, 'user-message')).toHaveLength(1);
-    expect(nodes[0]).toMatchObject({
-      kind: 'user-message',
-      parts: [{ type: 'attachment', attachmentType: 'image' }],
+      parts: [{ type: 'attachment', attachmentType }],
     });
   });
 });

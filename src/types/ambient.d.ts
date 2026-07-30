@@ -245,7 +245,7 @@ declare module 'sortablejs' {
     group?: string | Record<string, unknown>;
     draggable?: string;
     handle?: string;
-    onEnd?: (event: unknown) => void;
+    onEnd?: (event: { oldIndex?: number; newIndex?: number }) => void;
   }
 
   export default class Sortable {

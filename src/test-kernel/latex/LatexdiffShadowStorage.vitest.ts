@@ -1,5 +1,4 @@
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
-import * as os from 'node:os';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -10,7 +9,7 @@ import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import type { ExecutionId, OutputFileInfo } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
-import { cleanupTempDirs } from '@test/support/tempDirPlatform';
+import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 import {
   createExternalLocation,
   createRunStorageLocation,
@@ -33,12 +32,6 @@ vi.mock('@utils/config/configUtils', () => ({
 
 describe('LaTeXdiffService shadow output', () => {
   const tempDirs: string[] = [];
-
-  async function makeTempDir(prefix: string): Promise<string> {
-    const tempDir = await mkdtemp(path.join(os.tmpdir(), prefix));
-    tempDirs.push(tempDir);
-    return tempDir;
-  }
 
   function installNodeBackedPlatform(
     workspaceDir: string,
@@ -66,7 +59,7 @@ describe('LaTeXdiffService shadow output', () => {
     baseContent: string,
     revisedContent: string,
   ): Promise<{ sourceDir: string; shadowDir: string }> {
-    const tempDir = await makeTempDir(prefix);
+    const tempDir = await makeTempDir(prefix, tempDirs);
     const sourceDir = path.join(tempDir, 'workspace');
     const shadowDir = path.join(tempDir, 'executions', 'run-1', 'diff', 'r1');
     await mkdir(sourceDir, { recursive: true });
@@ -123,7 +116,7 @@ describe('LaTeXdiffService shadow output', () => {
   });
 
   it('generates between-round diffs for modern run-storage paths', async () => {
-    const tempDir = await makeTempDir('texra-latexdiff-rounds-');
+    const tempDir = await makeTempDir('texra-latexdiff-rounds-', tempDirs);
     const workspaceDir = path.join(tempDir, 'workspace');
     const executionId: ExecutionId = 'abcdef';
     const firstDir = path.join(tempDir, 'executions', executionId, 'r1');
@@ -248,7 +241,10 @@ describe('LaTeXdiffService shadow output', () => {
   it('sanitizes latexdiff markers from flattened bibliography macro preambles', async () => {
     const { DiffFileProcessor } =
       await import('@latex/latexdiff/diffFileProcessor');
-    const tempDir = await makeTempDir('texra-latexdiff-bbl-preamble-');
+    const tempDir = await makeTempDir(
+      'texra-latexdiff-bbl-preamble-',
+      tempDirs,
+    );
     const sourceDir = path.join(tempDir, 'workspace');
     await mkdir(sourceDir, { recursive: true });
     await installNodeBackedPlatform(sourceDir, path.join(tempDir, 'storage'));
@@ -296,7 +292,7 @@ describe('LaTeXdiffService shadow output', () => {
   });
 
   it('mirrors workspace dependencies into diff round storage', async () => {
-    const tempDir = await makeTempDir('texra-diff-mirror-');
+    const tempDir = await makeTempDir('texra-diff-mirror-', tempDirs);
     const workspaceDir = path.join(tempDir, 'workspace');
     const storageRoot = path.join(tempDir, 'storage');
     const dependencyPath = path.join(workspaceDir, 'refs', 'macros.sty');

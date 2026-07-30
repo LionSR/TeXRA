@@ -155,12 +155,12 @@ export class RoundPersistedFlow<
       this.createStage(currentShared.currentRound, currentShared);
 
       // Execute all nodes for the current round
-      currentShared = await this.executeRoundSteps(currentShared);
+      currentShared = await this.executeRoundSteps();
 
       // After each round, decide whether to continue to the next round.
       while (this.shouldContinueNextRound(currentShared)) {
         await this.transitionToNextRound(currentShared);
-        currentShared = await this.executeRoundSteps(currentShared);
+        currentShared = await this.executeRoundSteps();
       }
 
       // Determine final outcome
@@ -177,15 +177,12 @@ export class RoundPersistedFlow<
    * Execute all nodes in the current round, checking for interruption
    * between each step. Returns the final shared state.
    */
-  private async executeRoundSteps(shared: S): Promise<S> {
-    let currentShared = shared;
+  private async executeRoundSteps(): Promise<S> {
     let stepResult = await this.inStage(() => this.stepWithResult());
 
     while (stepResult.hasMore) {
-      currentShared = stepResult.shared;
-
       if (this.callbacks.checkInterruption?.()) {
-        currentShared.continueRounds = false;
+        stepResult.shared.continueRounds = false;
         break;
       }
 

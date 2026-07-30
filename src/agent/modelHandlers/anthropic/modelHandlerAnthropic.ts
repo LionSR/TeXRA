@@ -165,6 +165,10 @@ const isAnyThinkingBlockParam = (
 const isBetaToolUseBlock = (block: BetaContentBlock): block is ToolUseBlock =>
   block.type === 'tool_use';
 
+/** Type guard for text blocks in request content */
+const isTextBlockParam = (block: ContentBlockParam): block is TextBlockParam =>
+  block.type === 'text';
+
 /** Type guard for text blocks in Beta API responses */
 const isBetaTextBlock = (
   block: BetaContentBlock,
@@ -253,14 +257,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
   private pruneTrackedFileMetadata(messages: MessageParam[]): void {
     const liveFileIds = collectFileReferenceCounts(messages);
 
-    for (const fileId of this.uploadedPdfPageCounts.keys()) {
-      if (!liveFileIds.has(fileId)) {
-        this.uploadedPdfPageCounts.delete(fileId);
-      }
-    }
-    for (const fileId of this.fileTokenEstimates.keys()) {
-      if (!liveFileIds.has(fileId)) {
-        this.fileTokenEstimates.delete(fileId);
+    for (const cache of [this.uploadedPdfPageCounts, this.fileTokenEstimates]) {
+      for (const fileId of cache.keys()) {
+        if (!liveFileIds.has(fileId)) {
+          cache.delete(fileId);
+        }
       }
     }
   }
@@ -966,20 +967,15 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     // Add user request with optional caching
     if (trimmedRequest) {
-      const requestBlock: ContentBlockParam = {
+      userMessageContent.push({
         type: 'text',
         text: trimmedRequest,
         citations: null,
-      };
-      userMessageContent.push(requestBlock);
+      });
     }
 
     // Note: Anthropic handles system prompts differently via createResponse()
-    const messages: MessageParam[] = [
-      { role: 'user', content: userMessageContent },
-    ];
-
-    return messages;
+    return [{ role: 'user', content: userMessageContent }];
   }
 
   /** Creates message array for subsequent rounds, managing cache control and image content. */
@@ -1003,12 +999,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
     // Add message text with optional caching
     const trimmedMessage = userMessage.trim();
     if (trimmedMessage) {
-      const messageBlock: ContentBlockParam = {
+      roundContent.push({
         type: 'text',
         text: trimmedMessage,
         citations: null,
-      };
-      roundContent.push(messageBlock);
+      });
     }
 
     if (roundContent.length === 0) {
@@ -1034,10 +1029,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
       this.logger.error(errMsg);
       throw new Error(errMsg);
     }
-    const content: ContentBlockParam[] = [
-      { type: 'text', text: trimmedMessage, citations: null },
-    ];
-    messages.push({ role: 'user', content });
+    messages.push({
+      role: 'user',
+      content: [{ type: 'text', text: trimmedMessage, citations: null }],
+    });
 
     return messages;
   }
@@ -1092,12 +1087,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     if (typeof message.content === 'string') return message.content;
     if (!Array.isArray(message.content)) return undefined;
     return joinNonEmpty(
-      message.content
-        .filter(
-          (b): b is { type: 'text'; text: string } =>
-            (b as { type?: string }).type === 'text',
-        )
-        .map((b) => b.text),
+      message.content.filter(isTextBlockParam).map((b) => b.text),
     );
   }
 
@@ -1241,24 +1231,13 @@ export class ModelHandlerAnthropic extends ModelHandler<
     text: string,
     placement: 'last-user' | 'continuation',
   ): void {
-    if (placement === 'continuation') {
-      messages.push({
-        role: 'user',
-        content: [textBlock(text)],
-      });
-      return;
-    }
-
-    const lastMessage = messages.at(-1);
+    const lastMessage = placement === 'last-user' ? messages.at(-1) : undefined;
     if (lastMessage && Array.isArray(lastMessage.content)) {
       lastMessage.content.push(textBlock(text));
       return;
     }
 
-    messages.push({
-      role: 'user',
-      content: [textBlock(text)],
-    });
+    messages.push({ role: 'user', content: [textBlock(text)] });
   }
 
   protected appendTextToLastAssistantMessage(
@@ -1458,9 +1437,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
       return [];
     }
 
-    const toolUseBlocks = responseObject.content.filter(isBetaToolUseBlock);
-
-    return toolUseBlocks
+    return responseObject.content
+      .filter(isBetaToolUseBlock)
       .filter((b) => b.id && b.name)
       .map(
         (toolUseBlock) =>
@@ -1717,9 +1695,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     if (typeof lastUserMsg.content === 'string') {
       lastUserMsg.content = text + lastUserMsg.content;
     } else if (Array.isArray(lastUserMsg.content)) {
-      const firstTextBlock = lastUserMsg.content.find(
-        (block): block is TextBlockParam => block.type === 'text',
-      );
+      const firstTextBlock = lastUserMsg.content.find(isTextBlockParam);
       if (firstTextBlock) {
         firstTextBlock.text = text + firstTextBlock.text;
       } else {

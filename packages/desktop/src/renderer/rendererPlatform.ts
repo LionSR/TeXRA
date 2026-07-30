@@ -4,10 +4,6 @@ export function getRendererPlatform(view: Window | null): NodeJS.Platform {
   if (platform.includes('mac')) return 'darwin';
   if (platform.includes('win')) return 'win32';
   if (platform.includes('linux')) return 'linux';
-  return getDefaultPlatform();
-}
-
-/** Returns the host platform when the browser navigator is inconclusive. */
-function getDefaultPlatform(): NodeJS.Platform {
+  // Fall back to the host platform when the browser navigator is inconclusive.
   return typeof process === 'undefined' ? 'linux' : process.platform;
 }

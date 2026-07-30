@@ -104,29 +104,49 @@ function dispatchHarness(opts: HarnessOptions) {
   return { node, trace: runTrace.trace, dispose: () => runTrace.dispose() };
 }
 
+interface DispatchInternals {
+  prep(shared: unknown): Promise<SdkToolCall[]>;
+  _exec(items: unknown[]): Promise<unknown[]>;
+  post(
+    shared: unknown,
+    dispatched: SdkToolCall[],
+    results: unknown[],
+  ): Promise<string | undefined>;
+}
+
+function internals(node: ToolUseDispatchNode<unknown>): DispatchInternals {
+  return node as unknown as DispatchInternals;
+}
+
+function execPrepped(
+  node: ToolUseDispatchNode<unknown>,
+  prepped: SdkToolCall[],
+): Promise<unknown[]> {
+  return withTestRunContext(
+    new SessionHostInteractions(),
+    'dispatch-test',
+    () => internals(node)._exec(prepped),
+  );
+}
+
 /** prep() then the batch executor, mirroring Node's _run sequence. */
 async function runDispatch(
   node: ToolUseDispatchNode<unknown>,
   calls: SdkToolCall[],
   currentUserInstruction?: string,
 ): Promise<unknown[]> {
-  const shared = {
+  const prepped = await internals(node).prep({
     toolCalls: calls,
     shouldStop: false,
     messages: [],
     currentUserInstruction,
-  };
-  const prepped = await (
-    node as unknown as { prep(s: unknown): Promise<SdkToolCall[]> }
-  ).prep(shared);
-  return await withTestRunContext(
-    new SessionHostInteractions(),
-    'dispatch-test',
-    () =>
-      (
-        node as unknown as { _exec(items: unknown[]): Promise<unknown[]> }
-      )._exec(prepped),
-  );
+  });
+  return await execPrepped(node, prepped);
+}
+
+function countStarts(probe: DispatchProbe, toolName = ''): number {
+  return probe.events.filter((event) => event.startsWith(`start ${toolName}`))
+    .length;
 }
 
 type ExecResult = {
@@ -249,28 +269,9 @@ describe('ToolUseDispatchNode parallel dispatch', () => {
     };
 
     try {
-      const prepped = await (
-        node as unknown as { prep(s: unknown): Promise<SdkToolCall[]> }
-      ).prep(shared);
-      const results = await withTestRunContext(
-        new SessionHostInteractions(),
-        'dispatch-test',
-        () =>
-          (
-            node as unknown as {
-              _exec(items: unknown[]): Promise<unknown[]>;
-            }
-          )._exec(prepped),
-      );
-      const transition = await (
-        node as unknown as {
-          post(
-            state: typeof shared,
-            dispatched: SdkToolCall[],
-            result: unknown[],
-          ): Promise<string | undefined>;
-        }
-      ).post(shared, prepped, results);
+      const prepped = await internals(node).prep(shared);
+      const results = await execPrepped(node, prepped);
+      const transition = await internals(node).post(shared, prepped, results);
 
       assert.deepEqual(probe.events, [
         'start submit_output:{"title":"done"}',
@@ -296,9 +297,7 @@ describe('ToolUseDispatchNode parallel dispatch', () => {
         makeCall('c3', 'grep', { pattern: 'other' }),
       ])) as ExecResult[];
 
-      const startCount = probe.events.filter((e) =>
-        e.startsWith('start '),
-      ).length;
+      const startCount = countStarts(probe);
       assert.equal(startCount, 2, 'duplicate must not execute the tool again');
 
       assert.equal(results[1]?.call.callId, 'c2');
@@ -376,9 +375,7 @@ describe('ToolUseDispatchNode parallel dispatch', () => {
         makeCall('c3', 'read_file', { path: 'x' }),
       ])) as ExecResult[];
 
-      const readStarts = probe.events.filter((e) =>
-        e.startsWith('start read_file'),
-      ).length;
+      const readStarts = countStarts(probe, 'read_file');
       // The post-barrier read must execute again — the write may have
       // changed what it returns, so sharing the pre-barrier result would
       // feed the model stale contents.
@@ -402,19 +399,10 @@ describe('ToolUseDispatchNode parallel dispatch', () => {
         makeCall('c2', 'write_file', { path: 'a', content: 'x' }),
       ];
       const shared = { toolCalls: calls, shouldStop: false, messages: [] };
-      const prepped = await (
-        node as unknown as { prep(s: unknown): Promise<SdkToolCall[]> }
-      ).prep(shared);
+      const prepped = await internals(node).prep(shared);
       // Interrupt lands after planning but before anything executes.
       interrupted = true;
-      const results = (await withTestRunContext(
-        new SessionHostInteractions(),
-        'dispatch-test',
-        () =>
-          (
-            node as unknown as { _exec(items: unknown[]): Promise<unknown[]> }
-          )._exec(prepped),
-      )) as ExecResult[];
+      const results = (await execPrepped(node, prepped)) as ExecResult[];
 
       assert.equal(probe.events.length, 0, 'nothing should execute');
       // The duplicate must not claim a "side effects" skip when no effect
@@ -442,9 +430,7 @@ describe('ToolUseDispatchNode parallel dispatch', () => {
 
       // The edit changed state, so re-issuing the identical write is a
       // plausible restore — it must execute, not be rejected as a glitch.
-      const writeStarts = probe.events.filter((e) =>
-        e.startsWith('start write_file'),
-      ).length;
+      const writeStarts = countStarts(probe, 'write_file');
       assert.equal(writeStarts, 2, 'post-mutation identical write must run');
       assert.equal(results[2]?.result.status, 'executed');
     } finally {
@@ -463,9 +449,7 @@ describe('ToolUseDispatchNode parallel dispatch', () => {
         makeCall('c2', 'write_file', { path: 'a', content: 'x' }),
       ])) as ExecResult[];
 
-      const startCount = probe.events.filter((e) =>
-        e.startsWith('start '),
-      ).length;
+      const startCount = countStarts(probe);
       assert.equal(startCount, 1, 'the side effect must run exactly once');
       assert.equal(results[0]?.result.status, 'executed');
       // The duplicate must NOT claim the effect ran twice.

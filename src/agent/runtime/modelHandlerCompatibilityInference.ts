@@ -65,8 +65,9 @@ export function inferPersistedModelHandlerCompatibilityKey(
   model: string,
   messages: readonly ProviderMessage[],
 ): ModelHandlerCompatibilityKey | undefined {
-  const modelConfig = getRuntimeModelConfig(model);
   if (isRuntimeModel(model)) return 'ModelHandlerVscodeLm';
+
+  const modelConfig = getRuntimeModelConfig(model);
 
   // Copilot had no direct handler before ModelHandlerVscodeLm. Its only
   // runnable legacy route was OpenRouter, so a keyless persisted transcript
@@ -116,11 +117,9 @@ function currentModelFromRawSharedState(
 ): string | undefined {
   const userChannels = asRecord(asRecord(shared.stateSlices)?.userChannels);
   if (!userChannels) return undefined;
-  const transient = asRecord(userChannels.transient);
-  const input = asRecord(userChannels.input);
   return (
-    (transient ? stringValue(transient.MODEL) : undefined) ??
-    (input ? stringValue(input.MODEL) : undefined)
+    stringValue(asRecord(userChannels.transient)?.MODEL) ??
+    stringValue(asRecord(userChannels.input)?.MODEL)
   );
 }
 

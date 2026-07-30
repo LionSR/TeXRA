@@ -190,22 +190,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         await this.applyFollowUpPolishResult(result);
       },
       onPolishError: (stream, error) => {
-        const errorMsg = toErrorMessage(error);
-        this.postToActiveView({
-          command: PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT,
-          stream,
-          kind: 'polishError',
-          text: null,
-          error: errorMsg,
-        });
-        void this.host.error(`Error polishing follow-up: ${errorMsg}`);
-        this.logger.error(
-          this.channel,
-          `Error polishing follow-up: ${errorMsg}`,
-          {
-            data: error instanceof Error ? error : undefined,
-          },
-        );
+        void this.reportPolishError(stream, error);
       },
       loadFollowUpOptions: async () => {
         const { agentOptions, modelOptions } = await loadOptions();
@@ -828,25 +813,34 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           });
           await this.applyFollowUpPolishResult(result);
         } catch (error) {
-          const errorMsg = toErrorMessage(error);
-          this.postToActiveView({
-            command: PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT,
-            stream: data.stream,
-            kind: 'polishError',
-            text: null,
-            error: errorMsg,
-          });
-          await this.host.error(`Error polishing follow-up: ${errorMsg}`);
-          this.logger.error(
-            this.channel,
-            `Error polishing follow-up: ${errorMsg}`,
-            {
-              data: error instanceof Error ? error : undefined,
-            },
-          );
+          await this.reportPolishError(data.stream, error);
         }
       },
     );
+  }
+
+  /**
+   * Post the polish failure to the renderer, surface it, and log it. Returns
+   * the notification promise so callers can either await the dialog or let it
+   * run in the background.
+   */
+  private reportPolishError(
+    stream: StreamTabId,
+    error: unknown,
+  ): Promise<unknown> {
+    const errorMsg = toErrorMessage(error);
+    this.postToActiveView({
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT,
+      stream,
+      kind: 'polishError',
+      text: null,
+      error: errorMsg,
+    });
+    const shown = this.host.error(`Error polishing follow-up: ${errorMsg}`);
+    this.logger.error(this.channel, `Error polishing follow-up: ${errorMsg}`, {
+      data: error instanceof Error ? error : undefined,
+    });
+    return shown;
   }
 
   private async applyFollowUpPolishResult(

@@ -309,7 +309,40 @@ describe('formatSubagentDelivery', () => {
       }),
     ).toContain('status="cancelled"');
   });
+});
 
+describe('formatSubagentError', () => {
+  // Exact-string pin for the native error shape, byte-identical to the
+  // pre-merge output (retryable attr, wall-time, context lines, message last).
+  it('pins the exact native error XML', () => {
+    const xml = formatSubagentError(
+      'abc123',
+      'reviewer',
+      new Error('subagent exploded <&>'),
+      {
+        wallTimeMs: 65000,
+        workingDirectory: '/ws/project',
+        memoryMisses: [
+          { path: '/memories/missing.md', reason: 'Path is missing' },
+        ],
+      },
+    );
+    expect(xml).toBe(
+      [
+        '<subagent-error id="abc123" agent="reviewer" retryable="true">',
+        '<wall-time>1m 5s</wall-time>',
+        '<working-directory>/ws/project</working-directory>',
+        '<memory-misses>',
+        '<memory-miss path="/memories/missing.md" reason="Path is missing" />',
+        '</memory-misses>',
+        '<message>subagent exploded &lt;&amp;></message>',
+        '</subagent-error>',
+      ].join('\n'),
+    );
+  });
+});
+
+describe('formatBashDelivery', () => {
   it('keeps all content lines when a background output tail ends at the preview limit', () => {
     const outputTail = Array.from(
       { length: 20 },
@@ -376,35 +409,6 @@ describe('formatSubagentDelivery', () => {
 
     expect(delivery).not.toContain('output-head');
     expect(delivery).not.toContain('elided');
-  });
-
-  // Exact-string pin for the native error shape, byte-identical to the
-  // pre-merge output (retryable attr, wall-time, context lines, message last).
-  it('pins the exact native error XML', () => {
-    const xml = formatSubagentError(
-      'abc123',
-      'reviewer',
-      new Error('subagent exploded <&>'),
-      {
-        wallTimeMs: 65000,
-        workingDirectory: '/ws/project',
-        memoryMisses: [
-          { path: '/memories/missing.md', reason: 'Path is missing' },
-        ],
-      },
-    );
-    expect(xml).toBe(
-      [
-        '<subagent-error id="abc123" agent="reviewer" retryable="true">',
-        '<wall-time>1m 5s</wall-time>',
-        '<working-directory>/ws/project</working-directory>',
-        '<memory-misses>',
-        '<memory-miss path="/memories/missing.md" reason="Path is missing" />',
-        '</memory-misses>',
-        '<message>subagent exploded &lt;&amp;></message>',
-        '</subagent-error>',
-      ].join('\n'),
-    );
   });
 
   it('normalizes CRLF when truncating background output previews', () => {

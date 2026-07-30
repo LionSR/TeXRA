@@ -102,11 +102,7 @@ export class CodexSessionCoordinator {
     if (parsedJson.isErr()) {
       return null;
     }
-    const result = CodexSessionSchema.safeParse(parsedJson.value);
-    if (!result.success) {
-      return null;
-    }
-    return result.data;
+    return CodexSessionSchema.safeParse(parsedJson.value).data ?? null;
   }
 
   private async storeSession(session: CodexSession): Promise<void> {

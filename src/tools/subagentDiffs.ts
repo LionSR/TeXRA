@@ -25,6 +25,12 @@ const LARGE_CHANGE_DIFF_LINES = 80;
  */
 const LARGE_CHANGE_RATIO = 0.4;
 
+const DIFF_LINE_PREFIX: Readonly<Record<number, string>> = Object.freeze({
+  [DIFF_INSERT]: '+',
+  [DIFF_DELETE]: '-',
+  [DIFF_EQUAL]: ' ',
+});
+
 /**
  * Compute a human-readable line-level diff between two strings.
  * Uses diff-match-patch's line-mode diffing (diff_linesToChars_ /
@@ -42,22 +48,14 @@ function computeReadableDiff(
   // Check if there are any actual changes.
   if (diffs.every(([op]) => op === DIFF_EQUAL)) return null;
 
-  const PREFIX: Record<number, string> = {
-    [DIFF_INSERT]: '+',
-    [DIFF_DELETE]: '-',
-    [DIFF_EQUAL]: ' ',
-  };
   const lines: string[] = [];
   for (const [op, text] of diffs) {
-    const prefix = PREFIX[op] ?? ' ';
+    const prefix = DIFF_LINE_PREFIX[op] ?? ' ';
     // Each chunk is one or more complete lines (with trailing \n).
     // Split and prefix each line, dropping the trailing empty entry from split.
     const chunkLines = text.split('\n');
-    for (const [i, line] of chunkLines.entries()) {
-      // Skip the empty string after the final \n
-      if (i === chunkLines.length - 1 && line === '') continue;
-      lines.push(`${prefix}${line}`);
-    }
+    if (chunkLines.at(-1) === '') chunkLines.pop();
+    for (const line of chunkLines) lines.push(`${prefix}${line}`);
   }
   return lines.join('\n');
 }

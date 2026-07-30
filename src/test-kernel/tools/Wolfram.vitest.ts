@@ -4,7 +4,6 @@ import '@test/support/defaultSessionTestSetup';
 // Suites for src/tools/wolfram (WolframTool approval gating +
 // wolframScriptUtils argument handling).
 
-import { strict as assert } from 'node:assert';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import type { StreamTabId } from '@shared/schemas';
@@ -182,20 +181,18 @@ describe('wolframScriptUtils', () => {
       expectedTimeout: 60000,
     },
   ])('$name', async ({ run, stdout, expectedArgs, expectedTimeout }) => {
-    const calls: any[] = [];
     vi.spyOn(toolUtils, 'checkToolInstalled').mockResolvedValue(true);
-    vi.spyOn(execUtils, 'executeCommand').mockImplementation(
-      async (command, opts) => {
-        calls.push(command, opts);
-        return { success: true, stdout, stderr: '' } as any;
-      },
-    );
+    const executeCommand = vi
+      .spyOn(execUtils, 'executeCommand')
+      .mockResolvedValue({ success: true, stdout, stderr: '' });
 
     const result = await run();
 
-    assert.deepStrictEqual(calls[0], expectedArgs);
-    assert.strictEqual(calls[1].timeout, expectedTimeout);
-    assert.ok(result.success);
-    assert.strictEqual(result.output, stdout);
+    expect(executeCommand).toHaveBeenCalledWith(
+      expectedArgs,
+      expect.objectContaining({ timeout: expectedTimeout }),
+    );
+    expect(result.success).toBe(true);
+    expect(result.output).toBe(stdout);
   });
 });

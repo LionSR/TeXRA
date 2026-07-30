@@ -563,9 +563,8 @@ export function finalizeSettledPrefix(
 ): ConversationEntry[] {
   let result: ConversationEntry[] | undefined;
   let sealed = false; // hit the first still-pending entry in this round
-  for (let index = 0; index < entries.length; index += 1) {
-    const entry = entries[index];
-    if (!entry || entry.finalized) continue;
+  for (const [index, entry] of entries.entries()) {
+    if (entry.finalized) continue;
     const settled = isSettledEntry(entry, index, entries);
     if (
       sealed ||
@@ -840,42 +839,20 @@ export function syncStreamLog(
       slice.status !== undefined &&
       !isActivePhase(slice.status);
 
-    if (!projectFullTranscript) {
-      const compactEntries = syntheticEntries;
-      if (
-        slice.entries.length === compactEntries.length &&
-        slice.entries.every(
-          (entry, index) => entry === compactEntries[index],
-        ) &&
-        slice.description === description &&
-        slice.thinkingActive === thinkingActive &&
-        slice.compactingActive === compactingActive &&
-        isDeepStrictEqual(slice.taskGroups, taskGroups)
-      ) {
-        return slice;
-      }
-      return {
-        ...slice,
-        description,
-        entries: compactEntries,
-        thinkingActive,
-        compactingActive,
-        taskGroups,
-      };
-    }
-
-    const changed =
-      slice.entries.length !== next.length ||
-      slice.entries.some((entry, index) => {
-        const candidate = next[index];
-        return (
-          !candidate ||
-          entry.id !== candidate.id ||
-          !entriesEqual(entry, candidate)
-        );
+    // A stream projected compactly keeps only its synthetic rows, which are
+    // carried over untouched, so identity settles whether anything moved. The
+    // full projection rebuilds entries, so it compares content field by field.
+    const nextEntries = projectFullTranscript ? next : syntheticEntries;
+    const entriesUnchanged =
+      slice.entries.length === nextEntries.length &&
+      slice.entries.every((entry, index) => {
+        const candidate = nextEntries[index];
+        return projectFullTranscript
+          ? entry.id === candidate.id && entriesEqual(entry, candidate)
+          : entry === candidate;
       });
     if (
-      !changed &&
+      entriesUnchanged &&
       slice.description === description &&
       slice.thinkingActive === thinkingActive &&
       slice.compactingActive === compactingActive &&
@@ -886,7 +863,7 @@ export function syncStreamLog(
     return {
       ...slice,
       description,
-      entries: next,
+      entries: nextEntries,
       thinkingActive,
       compactingActive,
       taskGroups,

@@ -356,16 +356,12 @@ function readExplicitLegacyValue(
   key: WorkspaceStateKey,
 ): unknown {
   const inspection = cfg.inspect(key);
-  if (inspection) {
-    const explicit =
-      inspection.workspaceFolderValue ??
-      inspection.workspaceValue ??
-      inspection.globalValue;
-    if (explicit !== undefined) return explicit;
-  }
-  if (!inspection || inspection.defaultValue === undefined) {
-    return cfg.get(key);
-  }
+  const explicit =
+    inspection?.workspaceFolderValue ??
+    inspection?.workspaceValue ??
+    inspection?.globalValue;
+  if (explicit !== undefined) return explicit;
+  if (inspection?.defaultValue === undefined) return cfg.get(key);
   return undefined;
 }
 

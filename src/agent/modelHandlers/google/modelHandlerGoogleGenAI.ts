@@ -514,19 +514,16 @@ export class ModelHandlerGoogleGenAI extends GoogleModelHandlerBase<
               response?: { promptFeedback?: unknown };
             };
             const promptFeedback = errorWithResponse.response?.promptFeedback;
-            const blockReason =
+            let safetyDetail: string | undefined;
+            if (
               promptFeedback &&
               typeof promptFeedback === 'object' &&
               'blockReason' in promptFeedback
-                ? String(
-                    (promptFeedback as { blockReason?: unknown }).blockReason,
-                  )
-                : undefined;
-            const safetyDetail =
-              blockReason ??
-              (promptFeedback === undefined
-                ? undefined
-                : JSON.stringify(promptFeedback));
+            ) {
+              safetyDetail = String(promptFeedback.blockReason);
+            } else if (promptFeedback !== undefined) {
+              safetyDetail = JSON.stringify(promptFeedback);
+            }
             this.logger.warn(
               `Content blocked by safety filter${safetyDetail ? `: ${safetyDetail}` : ''}.`,
               {
@@ -540,6 +537,32 @@ export class ModelHandlerGoogleGenAI extends GoogleModelHandlerBase<
     }
   }
 
+  /** Labelled media parts for a round, or empty when there is nothing to attach. */
+  private async buildLabelledMediaParts(
+    mediaFiles: FileLocation[] | undefined,
+    context: 'initial' | 'followUp',
+  ): Promise<Part[]> {
+    if (!mediaFiles?.length || !this.supportsFileUploads()) {
+      return [];
+    }
+
+    const formattedMedia = await this.createMediaForRound(mediaFiles, context);
+    if (formattedMedia.length === 0) {
+      return [];
+    }
+
+    const attachmentLabel = mediaFiles
+      .map((loc) => getShortDisplayPath(loc))
+      .join(', ');
+    const verb = context === 'initial' ? 'Attached' : 'Processing';
+    return [
+      createPartFromText(
+        `\n${verb} ${pluralize(mediaFiles.length, 'file')}: ${attachmentLabel}`,
+      ),
+      ...formattedMedia,
+    ];
+  }
+
   /** Initializes the message array for Google GenAI chat models with user prefix, request, and optional media. */
   async initializeMessages(
     userPrefix: string,
@@ -547,29 +570,13 @@ export class ModelHandlerGoogleGenAI extends GoogleModelHandlerBase<
     mediaFiles?: FileLocation[],
     _systemPrompt?: string,
   ): Promise<Content[]> {
-    const userContentParts: Part[] = [createPartFromText(userPrefix)];
-
-    if (mediaFiles?.length && this.supportsFileUploads()) {
-      const formattedMedia = await this.createMediaForRound(
-        mediaFiles,
-        'initial',
-      );
-      if (formattedMedia.length > 0) {
-        const attachmentLabel = mediaFiles
-          .map((loc) => getShortDisplayPath(loc))
-          .join(', ');
-        userContentParts.push(
-          createPartFromText(
-            `\nAttached ${pluralize(mediaFiles.length, 'file')}: ${attachmentLabel}`,
-          ),
-        );
-        userContentParts.push(...formattedMedia);
-      }
-    }
-
-    userContentParts.push(createPartFromText(`\n${userRequest}`));
-
-    return [createUserContent(userContentParts)];
+    return [
+      createUserContent([
+        createPartFromText(userPrefix),
+        ...(await this.buildLabelledMediaParts(mediaFiles, 'initial')),
+        createPartFromText(`\n${userRequest}`),
+      ]),
+    ];
   }
 
   /** Creates message array for subsequent rounds, managing image content and message structure. */
@@ -578,29 +585,12 @@ export class ModelHandlerGoogleGenAI extends GoogleModelHandlerBase<
     userMessage: string,
     mediaFiles?: FileLocation[],
   ): Promise<Content[]> {
-    const roundParts: Part[] = [];
-
-    if (mediaFiles?.length && this.supportsFileUploads()) {
-      const formattedMedia = await this.createMediaForRound(
-        mediaFiles,
-        'followUp',
-      );
-      if (formattedMedia.length > 0) {
-        const attachmentLabel = mediaFiles
-          .map((loc) => getShortDisplayPath(loc))
-          .join(', ');
-        roundParts.push(
-          createPartFromText(
-            `\nProcessing ${pluralize(mediaFiles.length, 'file')}: ${attachmentLabel}`,
-          ),
-        );
-        roundParts.push(...formattedMedia);
-      }
-    }
-
-    roundParts.push(createPartFromText(userMessage));
-
-    messages.push(createUserContent(roundParts));
+    messages.push(
+      createUserContent([
+        ...(await this.buildLabelledMediaParts(mediaFiles, 'followUp')),
+        createPartFromText(userMessage),
+      ]),
+    );
     return messages;
   }
 

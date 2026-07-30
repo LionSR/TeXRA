@@ -62,10 +62,6 @@ export class TaskRunFileService {
     this.runDirectory = getRunDir(executionId);
   }
 
-  private async ensureRunDirectory(): Promise<void> {
-    await ensureRunDir(this.executionId);
-  }
-
   /**
    * Prepare run storage before processing begins by capturing the original
    * versions of the selected base files and mirroring any declared dependencies.
@@ -86,7 +82,7 @@ export class TaskRunFileService {
   ): Promise<void> {
     if (this.hasPreparedSnapshot) return;
 
-    await this.ensureRunDirectory();
+    await ensureRunDir(this.executionId);
 
     const linkTargets = new Set<FileLocation>(
       options.mirrorBaseFiles !== false ? baseFiles : [],
@@ -199,7 +195,7 @@ export class TaskRunFileService {
       return location;
     }
 
-    await this.ensureRunDirectory();
+    await ensureRunDir(this.executionId);
     const runAbsolute = getRunStorageAbsolutePath(
       this.executionId,
       location.relativePath,

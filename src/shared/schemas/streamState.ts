@@ -264,30 +264,18 @@ export function isWorkflowState(
 
 // Factory Functions
 
-function createToolUseStreamState(
-  partial?: Partial<ToolUseStreamState>,
-): ToolUseStreamState {
-  return ToolUseStreamStateSchema.parse({
-    kind: AgentCategory.ToolUse,
-    ...partial,
-  });
-}
-
-function createWorkflowStreamState(
-  partial?: Partial<WorkflowStreamState>,
-): WorkflowStreamState {
-  return WorkflowStreamStateSchema.parse({
-    kind: AgentCategory.Workflow,
-    ...partial,
-  });
-}
-
 export function createStreamState(
   agentCategory: AgentCategory,
   partial?: Partial<StreamState>,
 ): StreamState {
   if (agentCategory === AgentCategory.ToolUse) {
-    return createToolUseStreamState(partial as Partial<ToolUseStreamState>);
+    return ToolUseStreamStateSchema.parse({
+      kind: AgentCategory.ToolUse,
+      ...partial,
+    });
   }
-  return createWorkflowStreamState(partial as Partial<WorkflowStreamState>);
+  return WorkflowStreamStateSchema.parse({
+    kind: AgentCategory.Workflow,
+    ...partial,
+  });
 }

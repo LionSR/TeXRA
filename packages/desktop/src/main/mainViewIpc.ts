@@ -63,7 +63,6 @@ export function installDesktopMainViewIpc(
   options: DesktopMainViewIpcOptions,
 ): DesktopMainViewIpc {
   let disposed = false;
-  let messageHandlers: DesktopMessageHandler[] = [];
 
   function handleRendererMessage(message: unknown) {
     if (!isDesktopCommandMessage(message)) return;
@@ -95,7 +94,7 @@ export function installDesktopMainViewIpc(
     loadOptions: options.loadStartupOptions,
     onAsyncError: options.onAsyncError,
   });
-  messageHandlers = [
+  const messageHandlers: DesktopMessageHandler[] = [
     startup,
     options.fileSelection,
     options.prompt,

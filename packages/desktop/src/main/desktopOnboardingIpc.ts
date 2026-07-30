@@ -185,10 +185,6 @@ export function createDesktopOnboardingIpc(
     await refreshOnboardingFunnel();
   }
 
-  async function openGettingStarted(): Promise<void> {
-    await options.openGettingStarted();
-  }
-
   return {
     ...createCommandHandler(
       {
@@ -215,7 +211,7 @@ export function createDesktopOnboardingIpc(
         // getting-started walkthrough, so this opens the desktop docs externally
         // (the host wires `openGettingStarted`).
         [MAIN_VIEW_COMMANDS.ONBOARDING_OPEN_GETTING_STARTED]: () =>
-          openGettingStarted(),
+          options.openGettingStarted(),
       },
       { onAsyncError: options.onAsyncError },
     ),

@@ -13,48 +13,58 @@ import { WorkspaceFS } from '@utils/files';
 
 const CHANNEL = 'fileSelectionCommands';
 
-interface PickerOptions<Many extends boolean> {
-  allowMany: Many;
+interface PickerOptions {
   openLabel: string;
   filters: () => { [name: string]: string[] };
 }
 
-/** Conditional return type for file picker functions */
-type PickerResult<Many extends boolean> = Many extends true
-  ? string[] | null
-  : string | null;
+/** Run a dialog, announce what was picked, and report failures once. */
+async function announceSelection<T extends string | string[]>(
+  select: () => Promise<T | null>,
+): Promise<T | null> {
+  try {
+    const result = await select();
+    if (!result) {
+      return null;
+    }
 
-function createPicker<Many extends boolean>(options: PickerOptions<Many>) {
-  return async (currentFile?: string): Promise<PickerResult<Many>> => {
-    // TypeScript cannot narrow conditional types at runtime, so we need this cast
-    const nullResult = null as PickerResult<Many>;
+    const message = Array.isArray(result)
+      ? `Selected files: ${result.join(', ')}`
+      : `Selected file: ${result}`;
+    vscode.window.showInformationMessage(message);
+    logger.info(CHANNEL, message);
+    return result;
+  } catch (err) {
+    await showLoggedErrorMessage(CHANNEL, 'Error selecting files', err);
+    return null;
+  }
+}
 
-    try {
-      const baseOpts = {
+function createMultiPicker(
+  options: PickerOptions,
+): (currentFile?: string) => Promise<string[] | null> {
+  return (currentFile) =>
+    announceSelection(() =>
+      selectFiles({
         currentFile,
         openLabel: options.openLabel,
         filters: options.filters(),
-      };
+        allowMany: true,
+      }),
+    );
+}
 
-      const result = options.allowMany
-        ? await selectFiles({ ...baseOpts, allowMany: true })
-        : await selectFile(baseOpts);
-
-      if (!result) {
-        return nullResult;
-      }
-
-      const message = Array.isArray(result)
-        ? `Selected files: ${result.join(', ')}`
-        : `Selected file: ${result}`;
-      vscode.window.showInformationMessage(message);
-      logger.info(CHANNEL, message);
-      return result as PickerResult<Many>;
-    } catch (err) {
-      await showLoggedErrorMessage(CHANNEL, 'Error selecting files', err);
-      return nullResult;
-    }
-  };
+function createSinglePicker(
+  options: PickerOptions,
+): (currentFile?: string) => Promise<string | null> {
+  return (currentFile) =>
+    announceSelection(() =>
+      selectFile({
+        currentFile,
+        openLabel: options.openLabel,
+        filters: options.filters(),
+      }),
+    );
 }
 
 export function registerFileSelectionCommands(
@@ -94,24 +104,21 @@ export function registerFileSelectionCommands(
   ]);
 }
 
-const selectInputFiles = createPicker({
-  allowMany: true,
+const selectInputFiles = createMultiPicker({
   openLabel: 'Select Files',
   filters: () => ({
     'Text files': getFilterExtensions('input'),
   }),
 });
 
-const selectContextFiles = createPicker({
-  allowMany: true,
+const selectContextFiles = createMultiPicker({
   openLabel: 'Select Context Files',
   filters: () => ({
     'Text files': getFilterExtensions('context'),
   }),
 });
 
-const selectMediaFiles = createPicker({
-  allowMany: true,
+const selectMediaFiles = createMultiPicker({
   openLabel: 'Select Media',
   filters: () => ({
     'Image files': getFilterExtensions('media'),
@@ -119,14 +126,12 @@ const selectMediaFiles = createPicker({
   }),
 });
 
-const selectOutputFiles = createPicker({
-  allowMany: true,
+const selectOutputFiles = createMultiPicker({
   openLabel: 'Select Output Files',
   filters: () => ({ 'Text files': ['tex', 'txt', 'md'] }),
 });
 
-const selectEditedFile = createPicker({
-  allowMany: false,
+const selectEditedFile = createSinglePicker({
   openLabel: 'Select Edited File',
   filters: () => ({}),
 });
@@ -148,8 +153,7 @@ async function getCurrentFile(): Promise<string | null> {
   return isFileInput ? WorkspaceFS.relativePath(input.uri.fsPath) : null;
 }
 
-const selectBaseFile = createPicker({
-  allowMany: false,
+const selectBaseFile = createSinglePicker({
   openLabel: 'Select Base File',
   filters: () => ({
     'Text files': getFilterExtensions('input'),

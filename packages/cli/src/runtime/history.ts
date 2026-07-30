@@ -81,28 +81,18 @@ export interface CliHistoryFile {
 
 export const CLI_HISTORY_RESUMABLE_STATUS = 'resumable';
 
-function isCliHistoryEntryResumable(
-  entry: Pick<CliHistoryEntry, 'status'>,
-): boolean {
-  return entry.status === CLI_HISTORY_RESUMABLE_STATUS;
-}
-
 export function resumableCliHistoryEntries<
   T extends Pick<CliHistoryEntry, 'status'>,
 >(entries: readonly T[]): T[] {
-  return entries.filter(isCliHistoryEntryResumable);
-}
-
-function isCliHistoryEntryUserStarted(
-  entry: Pick<CliHistoryEntry, 'parentExecutionId'>,
-): boolean {
-  return entry.parentExecutionId === undefined;
+  return entries.filter(
+    (entry) => entry.status === CLI_HISTORY_RESUMABLE_STATUS,
+  );
 }
 
 export function userStartedCliHistoryEntries<
   T extends Pick<CliHistoryEntry, 'parentExecutionId'>,
 >(entries: readonly T[]): T[] {
-  return entries.filter(isCliHistoryEntryUserStarted);
+  return entries.filter((entry) => entry.parentExecutionId === undefined);
 }
 
 export type CliHistoryDeleteResult =

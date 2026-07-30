@@ -159,11 +159,10 @@ export function createSessionExitController(
   // writes so the tail of the session isn't lost (SAVE_DEBOUNCE_MS window).
   // Persistent flushes have bounded retries; an explicitly ephemeral session
   // has no disk work to drain.
-  const drainPersistence = (): Promise<void> => ctx.flushArtifacts();
   const persistAndReleaseResumableIdleLease = async (
     resumableIdle: boolean,
   ): Promise<void> => {
-    await drainPersistence();
+    await ctx.flushArtifacts();
     if (resumableIdle && session.executionId) {
       // WAITING deliberately keeps its flow record, but this CLI process is
       // about to exit and can no longer own the execution. Relinquish the

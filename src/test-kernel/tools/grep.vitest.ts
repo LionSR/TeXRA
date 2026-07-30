@@ -1,8 +1,8 @@
-// Third-party imports
-import { strict as assert } from 'node:assert';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-
 // Standard library imports
+import { strict as assert } from 'node:assert';
+
+// Third-party imports
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';

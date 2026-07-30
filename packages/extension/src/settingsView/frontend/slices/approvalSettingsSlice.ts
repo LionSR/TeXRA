@@ -14,12 +14,6 @@ import {
   codexSandboxMode,
 } from '../settingsState';
 
-// `SettingsViewOutboundHandlerRegistry` is now exhaustive (every SettingsView
-// outbound command needs a real handler or `unsupported(...)` — see
-// `@shared/utils/dispatcher`). This slice only owns the approval-settings
-// command, so it's typed as a `satisfies Partial<...>` subset rather than
-// the full registry; `messageDispatcher.ts` spreads all slices together and
-// is the actual exhaustiveness checkpoint TypeScript enforces.
 export const approvalSettingsHandlers = {
   [SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS]: (data) => {
     bashApprovalEnabled.set(data.bashApprovalEnabled);

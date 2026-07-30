@@ -311,11 +311,22 @@ export class StreamLogStore {
     return [...this.dirtyIds];
   }
 
-  private hasPendingLoads(): boolean {
+  /** In-flight `ensureLoaded` promises across every resident stream. */
+  private pendingLoads(): Promise<void>[] {
+    const loads: Promise<void>[] = [];
     for (const state of this.streams.values()) {
-      if (state.pendingLoad) return true;
+      if (state.pendingLoad) loads.push(state.pendingLoad);
     }
-    return false;
+    return loads;
+  }
+
+  /**
+   * True when a stream's persisted entries are not usable in memory: either
+   * never rehydrated, or rehydrated into a log whose disk read failed.
+   */
+  private needsReload(streamId: StreamTabId): boolean {
+    const state = this.streams.get(streamId);
+    return state?.log === undefined || state.loadFailed === true;
   }
 
   /** Open and validate the persistent transcript store before exposing it. */
@@ -818,17 +829,10 @@ export class StreamLogStore {
     this.assertWritableStore('finalize running transcript groups');
     const streamsToLoad = new Set<StreamTabId>();
     for (const streamId of streamIds) {
-      const state = this.streams.get(streamId);
-      if (state?.log === undefined || state.loadFailed === true) {
-        streamsToLoad.add(streamId);
-      }
+      if (this.needsReload(streamId)) streamsToLoad.add(streamId);
     }
     for (const [streamId, summary] of this.summaries) {
-      if (
-        hasSomethingRunning(summary) &&
-        (this.streams.get(streamId)?.log === undefined ||
-          this.streams.get(streamId)?.loadFailed === true)
-      ) {
+      if (hasSomethingRunning(summary) && this.needsReload(streamId)) {
         streamsToLoad.add(streamId);
       }
     }
@@ -861,9 +865,7 @@ export class StreamLogStore {
     if (streamIds.length === 0) return [];
     const streamsToLoad = streamIds.filter(
       (id) =>
-        (this.streams.get(id)?.log === undefined ||
-          this.streams.get(id)?.loadFailed === true) &&
-        hasSomethingRunning(this.summaries.get(id)),
+        this.needsReload(id) && hasSomethingRunning(this.summaries.get(id)),
     );
     if (streamsToLoad.length > 0) {
       await pMap(streamsToLoad, (id) => this.ensureLoaded(id), {
@@ -1013,17 +1015,14 @@ export class StreamLogStore {
     const MAX_WRITE_RETRIES = 3;
     let writeAttempts = 0;
     while (true) {
+      const loads = this.pendingLoads();
       if (this.debouncedSave.isPending()) {
         this.debouncedSave.cancel();
         await this.executeWrite();
         writeAttempts++;
       } else if (this.inFlightWrite) {
         await this.inFlightWrite;
-      } else if (this.hasPendingLoads()) {
-        const loads: Promise<void>[] = [];
-        for (const state of this.streams.values()) {
-          if (state.pendingLoad) loads.push(state.pendingLoad);
-        }
+      } else if (loads.length > 0) {
         await Promise.allSettled(loads);
       } else {
         // No in-flight work. Decide whether anything deferred can still
@@ -1122,7 +1121,7 @@ export class StreamLogStore {
 
     const revision = this.stateRevision;
     const summaries = await this.readPersistentSummaries();
-    if (revision !== this.stateRevision || this.hasPendingLoads()) {
+    if (revision !== this.stateRevision || this.pendingLoads().length > 0) {
       throw new Error(
         'Transcript state changed during reload; preserving the live state.',
       );

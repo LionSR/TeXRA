@@ -18,7 +18,6 @@
  * barrel focused on schemas and message contracts.
  */
 export {
-  MULTIPLE_DOCUMENT_FILE_TYPES,
   type DocumentFileType,
   type MultipleDocumentFileType,
 } from '../fileTypes';

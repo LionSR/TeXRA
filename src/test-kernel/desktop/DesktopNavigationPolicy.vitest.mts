@@ -6,18 +6,14 @@ interface DesktopNavigationPolicyModule {
   isAllowedExternalUrl(url: string): boolean;
 }
 
-async function loadNavigationPolicy(): Promise<DesktopNavigationPolicyModule> {
-  return import(
-    moduleFileUrl(desktopSourcePath('main', 'desktopNavigationPolicy.ts'))
-  ) as Promise<DesktopNavigationPolicyModule>;
-}
-
 describe('desktop navigation policy', () => {
   describe('isAllowedExternalUrl', () => {
     let isAllowedExternalUrl: (url: string) => boolean;
 
     beforeAll(async () => {
-      ({ isAllowedExternalUrl } = await loadNavigationPolicy());
+      ({ isAllowedExternalUrl } = (await import(
+        moduleFileUrl(desktopSourcePath('main', 'desktopNavigationPolicy.ts'))
+      )) as DesktopNavigationPolicyModule);
     });
 
     it('allows the texra.ai apex and subdomains over https', () => {

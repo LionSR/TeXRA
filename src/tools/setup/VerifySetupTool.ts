@@ -4,6 +4,7 @@ import { z } from 'zod';
 // Local imports
 import {
   CORE_LATEX_TOOLS,
+  IMAGE_TOOLS,
   LATEX_WORKSHOP_EXT_ID,
 } from '@shared/constants/latex';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
@@ -79,18 +80,16 @@ export class VerifySetupTool extends defineTool({
     const auth = await getSetupAuthStatus().catch(() => ({
       authenticated: false as const,
     }));
-    const [coreResults, hasMagick, hasGm, hasUsableCredential] =
-      await Promise.all([
-        Promise.all(CORE_LATEX_TOOLS.map(isToolPresent)),
-        isToolPresent('magick'),
-        isToolPresent('gm'),
-        setupSecrets.anyUsableCredentialExists(),
-      ]);
+    const [coreResults, imageResults, hasUsableCredential] = await Promise.all([
+      Promise.all(CORE_LATEX_TOOLS.map(isToolPresent)),
+      Promise.all(IMAGE_TOOLS.map(isToolPresent)),
+      setupSecrets.anyUsableCredentialExists(),
+    ]);
 
     const missingCore: string[] = CORE_LATEX_TOOLS.filter(
       (_, i) => !coreResults[i],
     );
-    if (!hasMagick && !hasGm) missingCore.push('gm/magick');
+    if (!imageResults.some(Boolean)) missingCore.push('gm/magick');
 
     const latexWorkshopInstalled = platform.extensions?.isInstalled(
       LATEX_WORKSHOP_EXT_ID,

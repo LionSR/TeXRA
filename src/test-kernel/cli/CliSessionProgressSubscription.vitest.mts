@@ -298,6 +298,23 @@ function progressRecord(event: string, payload: unknown) {
   });
 }
 
+function withProjection(
+  run: (context: {
+    events: SessionEventHub;
+    writeRecord: CliNdjsonProgressRecordWriter;
+    detach: () => void;
+  }) => void,
+): void {
+  const events = new SessionEventHub();
+  const writeRecord = recordWriter();
+  const detach = attachCliSessionProgressProjection(events, writeRecord);
+  try {
+    run({ events, writeRecord, detach });
+  } finally {
+    detach();
+  }
+}
+
 function setupTraceProjection() {
   const events = new SessionEventHub();
   const writeRecord = recordWriter();
@@ -346,12 +363,9 @@ function emitSessionStatus(
 
 describe('attachCliSessionProgressProjection', () => {
   it('projects every public NDJSON progress event with its typed payload', () => {
-    const events = new SessionEventHub();
-    const writeRecord = recordWriter();
-    const detach = attachCliSessionProgressProjection(events, writeRecord);
     const cases = Object.entries(PROGRESS_PROJECTION_CASES);
 
-    try {
+    withProjection(({ events, writeRecord }) => {
       for (const projection of Object.values(PROGRESS_PROJECTION_CASES)) {
         events.emit(projection.source);
       }
@@ -363,17 +377,11 @@ describe('attachCliSessionProgressProjection', () => {
           progressRecord(event, projection.payload),
         );
       }
-    } finally {
-      detach();
-    }
+    });
   });
 
   it('writes retained session facts as public NDJSON progress records', () => {
-    const events = new SessionEventHub();
-    const writeRecord = recordWriter();
-    const detach = attachCliSessionProgressProjection(events, writeRecord);
-
-    try {
+    withProjection(({ events, writeRecord, detach }) => {
       events.emit({
         scope: 'session',
         event: {
@@ -396,17 +404,11 @@ describe('attachCliSessionProgressProjection', () => {
       });
 
       expect(writeRecord).toHaveBeenCalledTimes(1);
-    } finally {
-      detach();
-    }
+    });
   });
 
   it('keeps followUpSent session-local', () => {
-    const events = new SessionEventHub();
-    const writeRecord = recordWriter();
-    const detach = attachCliSessionProgressProjection(events, writeRecord);
-
-    try {
+    withProjection(({ events, writeRecord }) => {
       events.emit({
         scope: 'session',
         event: {
@@ -416,34 +418,22 @@ describe('attachCliSessionProgressProjection', () => {
       });
 
       expect(writeRecord).not.toHaveBeenCalled();
-    } finally {
-      detach();
-    }
+    });
   });
 
   it('projects status facts to the public stream-status event', () => {
-    const events = new SessionEventHub();
-    const writeRecord = recordWriter();
-    const detach = attachCliSessionProgressProjection(events, writeRecord);
-
-    try {
+    withProjection(({ events, writeRecord }) => {
       emitSessionStatus(events, resumingStatusPayload);
 
       expect(writeRecord).toHaveBeenCalledTimes(1);
       expect(writeRecord).toHaveBeenCalledWith(
         progressRecord('updateStreamStatus', resumingStatusPayload),
       );
-    } finally {
-      detach();
-    }
+    });
   });
 
   it('ignores run-scope status trace events', () => {
-    const events = new SessionEventHub();
-    const writeRecord = recordWriter();
-    const detach = attachCliSessionProgressProjection(events, writeRecord);
-
-    try {
+    withProjection(({ events, writeRecord }) => {
       // `status` is no longer a projected run fact: `StreamStatusMachine` owns
       // the single `updateStreamStatus` rail, so a stray run-scope status event
       // must never reach the public NDJSON stream.
@@ -461,21 +451,16 @@ describe('attachCliSessionProgressProjection', () => {
       });
 
       expect(writeRecord).not.toHaveBeenCalled();
-    } finally {
-      detach();
-    }
+    });
   });
 
   it('writes one record per published status fact without renderer dedup', () => {
-    const events = new SessionEventHub();
-    const writeRecord = recordWriter();
-    const detach = attachCliSessionProgressProjection(events, writeRecord);
     const startingPayload: RunStatusProjectionPayload = {
       ...resumingStatusPayload,
       substate: STREAM_SUBSTATE.STARTING,
     };
 
-    try {
+    withProjection(({ events, writeRecord }) => {
       emitSessionStatus(events, resumingStatusPayload);
       emitSessionStatus(events, startingPayload);
 
@@ -488,9 +473,7 @@ describe('attachCliSessionProgressProjection', () => {
         2,
         progressRecord('updateStreamStatus', startingPayload),
       );
-    } finally {
-      detach();
-    }
+    });
   });
 
   it('returns no record for an unknown event that reaches the run projection callback', () => {

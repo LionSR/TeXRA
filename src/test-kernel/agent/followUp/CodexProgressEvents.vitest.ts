@@ -18,8 +18,6 @@ import { createRunTrace, StreamLogStore } from '@transcript';
 
 // Local file imports
 import { recordSessionEvents, runEventsOfType } from '../progressTestUtils';
-
-// Third-party imports
 import type {
   CommandExecutionItem,
   Thread,
@@ -49,6 +47,26 @@ async function* streamEvents(
   for (const event of events) {
     yield event;
   }
+}
+
+async function createLogStore(): Promise<StreamLogStore> {
+  const store = StreamLogStore.ephemeral('test');
+  await store.clear();
+  return store;
+}
+
+function threadOf(events: ThreadEvent[]): Thread {
+  return {
+    runStreamed: async () => ({ events: streamEvents(events) }),
+  } as unknown as Thread;
+}
+
+function toolLogs(store: StreamLogStore): Record<string, unknown>[] {
+  const log = store.get(streamId);
+  const entries = log?.getRange(0, log.head) ?? [];
+  return entries
+    .filter((entry) => entry.messageType === MESSAGE_TYPES.TOOL_USE)
+    .map((entry) => entry.data as Record<string, unknown>);
 }
 
 describe('codex progress events', () => {
@@ -85,9 +103,7 @@ describe('codex progress events', () => {
   });
 
   it('updates in-flight Codex command items in place', async () => {
-    const store = StreamLogStore.ephemeral('test');
-    await store.clear();
-
+    const store = await createLogStore();
     const logger = createRunTrace(streamId, store).trace;
     const startedCommand: CommandExecutionItem = {
       id: 'cmd-1',
@@ -106,33 +122,29 @@ describe('codex progress events', () => {
       exit_code: 0,
       status: 'completed',
     };
-    const thread = {
-      runStreamed: async () => ({
-        events: streamEvents([
-          { type: 'item.started', item: startedCommand },
-          { type: 'item.updated', item: updatedCommand },
-          { type: 'item.completed', item: completedCommand },
-          {
-            type: 'item.completed',
-            item: {
-              id: 'msg-1',
-              type: 'agent_message',
-              text: 'Build succeeded.',
-            },
-          },
-          {
-            type: 'turn.completed',
-            usage: {
-              input_tokens: 12,
-              cached_input_tokens: 0,
-              cache_write_input_tokens: 0,
-              output_tokens: 4,
-              reasoning_output_tokens: 0,
-            },
-          },
-        ]),
-      }),
-    } as unknown as Thread;
+    const thread = threadOf([
+      { type: 'item.started', item: startedCommand },
+      { type: 'item.updated', item: updatedCommand },
+      { type: 'item.completed', item: completedCommand },
+      {
+        type: 'item.completed',
+        item: {
+          id: 'msg-1',
+          type: 'agent_message',
+          text: 'Build succeeded.',
+        },
+      },
+      {
+        type: 'turn.completed',
+        usage: {
+          input_tokens: 12,
+          cached_input_tokens: 0,
+          cache_write_input_tokens: 0,
+          output_tokens: 4,
+          reasoning_output_tokens: 0,
+        },
+      },
+    ]);
 
     const result = await runStreamedTurn(
       thread,
@@ -143,14 +155,10 @@ describe('codex progress events', () => {
 
     expect(result.finalResponse).toBe('Build succeeded.');
 
-    const log = store.get(streamId);
-    const entries = log?.getRange(0, log.head) ?? [];
-    const toolEntries = entries.filter(
-      (entry) => entry.messageType === MESSAGE_TYPES.TOOL_USE,
-    );
+    const logs = toolLogs(store);
 
-    expect(toolEntries).toHaveLength(1);
-    expect(toolEntries[0].data).toMatchObject({
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toMatchObject({
       toolName: 'bash',
       summary: 'npm run build',
       input: { command: 'npm run build' },
@@ -160,32 +168,26 @@ describe('codex progress events', () => {
   });
 
   it('emits Codex thread and turn cards across the turn lifecycle', async () => {
-    const store = StreamLogStore.ephemeral('test');
-    await store.clear();
-
+    const store = await createLogStore();
     const logger = createRunTrace(streamId, store).trace;
-    const thread = {
-      runStreamed: async () => ({
-        events: streamEvents([
-          { type: 'thread.started', thread_id: 'thread_abc' },
-          { type: 'turn.started' },
-          {
-            type: 'item.completed',
-            item: { id: 'msg-1', type: 'agent_message', text: 'Done.' },
-          },
-          {
-            type: 'turn.completed',
-            usage: {
-              input_tokens: 5,
-              cached_input_tokens: 0,
-              cache_write_input_tokens: 0,
-              output_tokens: 2,
-              reasoning_output_tokens: 0,
-            },
-          },
-        ]),
-      }),
-    } as unknown as Thread;
+    const thread = threadOf([
+      { type: 'thread.started', thread_id: 'thread_abc' },
+      { type: 'turn.started' },
+      {
+        type: 'item.completed',
+        item: { id: 'msg-1', type: 'agent_message', text: 'Done.' },
+      },
+      {
+        type: 'turn.completed',
+        usage: {
+          input_tokens: 5,
+          cached_input_tokens: 0,
+          cache_write_input_tokens: 0,
+          output_tokens: 2,
+          reasoning_output_tokens: 0,
+        },
+      },
+    ]);
 
     const result = await runStreamedTurn(
       thread,
@@ -196,50 +198,37 @@ describe('codex progress events', () => {
 
     expect(result.finalResponse).toBe('Done.');
 
-    const log = store.get(streamId);
-    const entries = log?.getRange(0, log.head) ?? [];
-    const toolEntries = entries.filter(
-      (entry) => entry.messageType === MESSAGE_TYPES.TOOL_USE,
-    );
+    const logs = toolLogs(store);
 
     // A one-shot thread card, then a running->completed turn card.
-    expect(
-      toolEntries.map(
-        (entry) => (entry.data as { toolName?: string }).toolName,
-      ),
-    ).toEqual([CODEX_THREAD_TOOL, CODEX_TURN_TOOL]);
+    expect(logs.map((data) => data.toolName)).toEqual([
+      CODEX_THREAD_TOOL,
+      CODEX_TURN_TOOL,
+    ]);
 
-    expect(toolEntries[0].data).toMatchObject({
+    expect(logs[0]).toMatchObject({
       toolName: CODEX_THREAD_TOOL,
       input: { threadId: 'thread_abc' },
       status: 'completed',
     });
 
-    expect(toolEntries[1].data).toMatchObject({
+    expect(logs[1]).toMatchObject({
       toolName: CODEX_TURN_TOOL,
       input: { state: 'completed' },
       status: 'completed',
     });
 
-    const turnInput = (
-      toolEntries[1].data as { input?: { wallTimeMs?: number } }
-    ).input;
+    const turnInput = (logs[1] as { input?: { wallTimeMs?: number } }).input;
     expect(typeof turnInput?.wallTimeMs).toBe('number');
   });
 
   it('finalizes the running turn card when the stream errors', async () => {
-    const store = StreamLogStore.ephemeral('test');
-    await store.clear();
-
+    const store = await createLogStore();
     const logger = createRunTrace(streamId, store).trace;
-    const thread = {
-      runStreamed: async () => ({
-        events: streamEvents([
-          { type: 'turn.started' },
-          { type: 'error', message: 'boom' },
-        ]),
-      }),
-    } as unknown as Thread;
+    const thread = threadOf([
+      { type: 'turn.started' },
+      { type: 'error', message: 'boom' },
+    ]);
 
     await expect(
       runStreamedTurn(thread, 'Do the thing', streamId, logger),
@@ -255,16 +244,10 @@ describe('codex progress events', () => {
   });
 
   it('finalizes the running turn card when the stream ends without a terminal turn event', async () => {
-    const store = StreamLogStore.ephemeral('test');
-    await store.clear();
-
+    const store = await createLogStore();
     const logger = createRunTrace(streamId, store).trace;
-    const thread = {
-      runStreamed: async () => ({
-        // No turn.completed / turn.failed — the loop exits with the card open.
-        events: streamEvents([{ type: 'turn.started' }]),
-      }),
-    } as unknown as Thread;
+    // No turn.completed / turn.failed — the loop exits with the card open.
+    const thread = threadOf([{ type: 'turn.started' }]);
 
     await runStreamedTurn(thread, 'Do the thing', streamId, logger);
 
@@ -283,10 +266,5 @@ describe('codex progress events', () => {
 function findTurnEntry(
   store: StreamLogStore,
 ): Record<string, unknown> | undefined {
-  const log = store.get(streamId);
-  const entries = log?.getRange(0, log.head) ?? [];
-  return entries
-    .filter((entry) => entry.messageType === MESSAGE_TYPES.TOOL_USE)
-    .map((entry) => entry.data as Record<string, unknown>)
-    .find((data) => data.toolName === CODEX_TURN_TOOL);
+  return toolLogs(store).find((data) => data.toolName === CODEX_TURN_TOOL);
 }

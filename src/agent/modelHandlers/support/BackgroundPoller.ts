@@ -244,12 +244,13 @@ export class BackgroundPoller<TResponse> {
 
         current = await retrieve(responseId, signal);
 
+        const polledStatus = extractStatus(current);
         logger().debug(
-          `${providerLabel} poll ${pollCount} for ${resourceLabel} ${responseId}: status=${extractStatus(current)}`,
+          `${providerLabel} poll ${pollCount} for ${resourceLabel} ${responseId}: status=${polledStatus}`,
           {
             data: {
               responseId,
-              status: extractStatus(current),
+              status: polledStatus,
               pollCount,
             },
           },

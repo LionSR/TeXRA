@@ -48,6 +48,16 @@ const INLINEABLE_FILE_MIME_TYPES: ReadonlySet<string> = new Set([
   ...OFFICE_MIME_TYPES,
 ]);
 
+/** Largest attachment inlined as base64 when uploads are unavailable. */
+const MAX_INLINE_BYTES = 20 * 1024 * 1024;
+
+/** Upload filename for an attachment, falling back when it has no path. */
+function attachmentFilename(attachment: ToolFileAttachment): string {
+  return isNonEmptyString(attachment.path)
+    ? path.basename(attachment.path)
+    : 'attachment';
+}
+
 /** Options shared by upload helpers that must bypass uploads on OpenRouter. */
 interface FileUploadOptions {
   /** Whether requests are routed through OpenRouter (uploads unavailable). */
@@ -176,13 +186,12 @@ export async function uploadToolAttachments(
     }
 
     try {
-      const filename = isNonEmptyString(attachment.path)
-        ? path.basename(attachment.path)
-        : 'attachment';
       const mimeType = attachment.mimeType ?? 'application/octet-stream';
 
       const uploadedFile = await client.files.create({
-        file: await toFile(buffer!, filename, { type: mimeType }),
+        file: await toFile(buffer!, attachmentFilename(attachment), {
+          type: mimeType,
+        }),
         purpose: 'assistants',
       });
 
@@ -220,7 +229,6 @@ export async function buildInlineAttachmentParts(
   inlined: ToolFileAttachment[];
   skipped: ToolFileAttachment[];
 }> {
-  const MAX_INLINE_BYTES = 20 * 1024 * 1024; // 20 MiB cap per attachment
   const parts: ResponseFunctionCallOutputItemList = [];
   const inlined: ToolFileAttachment[] = [];
   const skipped: ToolFileAttachment[] = [];
@@ -256,13 +264,10 @@ export async function buildInlineAttachmentParts(
         });
       } else {
         // PDF, office documents, and other file types accepted by input_file
-        const filename = isNonEmptyString(attachment.path)
-          ? path.basename(attachment.path)
-          : 'attachment';
         parts.push({
           type: 'input_file',
           file_data: toDataUrl(mimeType, base64),
-          filename,
+          filename: attachmentFilename(attachment),
         });
       }
       inlined.push(attachment);

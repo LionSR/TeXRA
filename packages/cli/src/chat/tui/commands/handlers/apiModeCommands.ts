@@ -24,6 +24,7 @@ import type { ApiProvider } from '@model/apiProviders';
 import { collapseWhitespace } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
+  abortableSlashCommand,
   CHAT_API_MODE_MODEL_RECOVERY,
   type SlashCommandOutput,
   type SlashCommandContext,
@@ -137,48 +138,9 @@ export function applyCliModelAccessSelection(
   context: SlashCommandContext | undefined,
   output: SlashCommandOutput = transcriptSlashCommandOutput,
 ): Promise<void> & { readonly abort: () => void } {
-  const controller = new AbortController();
-  return Object.assign(
-    applyCliModelAccessSelectionWithSignal(
-      selection,
-      context,
-      output,
-      controller.signal,
-    ),
-    { abort: () => controller.abort() },
+  return abortableSlashCommand((signal) =>
+    applyCliModelAccessSelectionWithSignal(selection, context, output, signal),
   );
-}
-
-async function applyCliModelAccessInputWithSignal(
-  routeInput: string,
-  context: SlashCommandContext,
-  output: SlashCommandOutput,
-  signal: AbortSignal,
-): Promise<void> {
-  const normalized = routeInput.trim().toLowerCase();
-
-  if (!normalized || normalized === 'status') {
-    const apiMode = sessionMeta.get().apiMode;
-    const lines = await loadCliAccountStatusLines({
-      apiMode,
-      includeApiDetails: true,
-    });
-    output.appendOutcome(lines.join('\n'));
-    return;
-  }
-
-  const selection = parseCliModelAccessSelection(normalized);
-  if (selection) {
-    await applyCliModelAccessSelectionWithSignal(
-      selection,
-      context,
-      output,
-      signal,
-    );
-    return;
-  }
-
-  output.setNotice(MODEL_ACCESS_USAGE);
 }
 
 export function applyCliModelAccessInput(
@@ -186,16 +148,31 @@ export function applyCliModelAccessInput(
   context: SlashCommandContext,
   output: SlashCommandOutput = transcriptSlashCommandOutput,
 ): Promise<void> & { readonly abort: () => void } {
-  const controller = new AbortController();
-  return Object.assign(
-    applyCliModelAccessInputWithSignal(
-      routeInput,
+  return abortableSlashCommand(async (signal) => {
+    const normalized = routeInput.trim().toLowerCase();
+
+    if (!normalized || normalized === 'status') {
+      const lines = await loadCliAccountStatusLines({
+        apiMode: sessionMeta.get().apiMode,
+        includeApiDetails: true,
+      });
+      output.appendOutcome(lines.join('\n'));
+      return;
+    }
+
+    const selection = parseCliModelAccessSelection(normalized);
+    if (!selection) {
+      output.setNotice(MODEL_ACCESS_USAGE);
+      return;
+    }
+
+    await applyCliModelAccessSelectionWithSignal(
+      selection,
       context,
       output,
-      controller.signal,
-    ),
-    { abort: () => controller.abort() },
-  );
+      signal,
+    );
+  });
 }
 
 export async function showCliAuthStatus(): Promise<void> {

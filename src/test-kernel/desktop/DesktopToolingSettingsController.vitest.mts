@@ -50,7 +50,12 @@ type ControllerOptions = ConstructorParameters<
   typeof DefaultDesktopToolingSettingsController
 >[0];
 
-function createFixture(overrides: Partial<ControllerOptions> = {}) {
+/** Dashboard members not listed fall back to the fixture defaults below. */
+type FixtureOverrides = Partial<Omit<ControllerOptions, 'dashboard'>> & {
+  readonly dashboard?: Partial<ControllerOptions['dashboard']>;
+};
+
+function createFixture(overrides: FixtureOverrides = {}) {
   const posted: unknown[] = [];
   const reportedErrors: unknown[] = [];
   const commands: string[] = [];
@@ -133,7 +138,6 @@ describe('DefaultDesktopToolingSettingsController', () => {
         },
         getCachedCheckResults: async () => undefined,
         refreshAvailability: () => refreshPending,
-        refreshDisabledCache: async () => undefined,
         findCommand: async () => undefined,
       },
     });
@@ -163,12 +167,9 @@ describe('DefaultDesktopToolingSettingsController', () => {
     const refreshError = new Error('tool probe failed');
     const { controller, reportedErrors } = createFixture({
       dashboard: {
-        buildItems: async () => [DASHBOARD_ITEM],
-        getCachedCheckResults: async () => [],
         refreshAvailability: async () => {
           throw refreshError;
         },
-        refreshDisabledCache: async () => undefined,
         findCommand: async () => undefined,
       },
     });
@@ -201,7 +202,6 @@ describe('DefaultDesktopToolingSettingsController', () => {
           events.push('dashboard:cached');
           return cachedResults;
         },
-        refreshAvailability: async () => undefined,
         refreshDisabledCache: async () => {
           events.push('dashboard:disabled');
         },
@@ -239,7 +239,6 @@ describe('DefaultDesktopToolingSettingsController', () => {
         refreshAvailability: async () => {
           events.push('dashboard:refresh');
         },
-        refreshDisabledCache: async () => undefined,
         findCommand: async () => undefined,
       },
     });
@@ -262,9 +261,6 @@ describe('DefaultDesktopToolingSettingsController', () => {
     const { controller, commands } = createFixture({
       dashboard: {
         buildItems: async () => [],
-        getCachedCheckResults: async () => [],
-        refreshAvailability: async () => undefined,
-        refreshDisabledCache: async () => undefined,
         findCommand,
       },
     });

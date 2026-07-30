@@ -45,15 +45,15 @@ import {
 
 const MAX_REPORTED_VALIDATION_ISSUES = 20;
 
-const UsageDestinations = {
-  paid: {
+const usageDestinations = [
+  {
     table: 'usage_logs',
     rpc: 'usage_logs_upsert',
     accepts: (entry: UsageLogEntry) =>
       subscriptionSourceForUsage(entry) === undefined,
     toRows: toDbRows,
   },
-  subscription: {
+  {
     table: 'subscription_usage_logs',
     rpc: 'subscription_usage_logs_upsert',
     accepts: (entry: UsageLogEntry) =>
@@ -68,11 +68,9 @@ const UsageDestinations = {
         source: subscriptionSourceForUsage(entries[index]) ?? 'chatgpt',
       })),
   },
-} as const;
+] as const;
 
-type UsageDestination =
-  (typeof UsageDestinations)[keyof typeof UsageDestinations];
-const usageDestinations = Object.values(UsageDestinations);
+type UsageDestination = (typeof usageDestinations)[number];
 
 // =============================================================================
 // Helpers
@@ -98,7 +96,8 @@ function errorResponse(
   req: Request,
   error: string,
   status: number,
-  options?: {
+  // Absent details stay absent in the body: JSON.stringify drops undefined values.
+  details?: {
     retryable?: boolean;
     errorCode?: string;
     issues?: readonly {
@@ -111,21 +110,7 @@ function errorResponse(
 ): Response {
   return jsonResponse(
     req,
-    {
-      success: false,
-      accepted: 0,
-      error,
-      ...(options?.retryable === undefined
-        ? {}
-        : { retryable: options.retryable }),
-      ...(options?.errorCode === undefined
-        ? {}
-        : { errorCode: options.errorCode }),
-      ...(options?.issues === undefined ? {} : { issues: options.issues }),
-      ...(options?.issueCount === undefined
-        ? {}
-        : { issueCount: options.issueCount }),
-    },
+    { success: false, accepted: 0, error, ...details },
     status,
   );
 }

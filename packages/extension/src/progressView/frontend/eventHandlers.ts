@@ -226,6 +226,22 @@ function postWithOptionalBypass(
   postPermissionMessage(message);
 }
 
+/**
+ * Build the edit/bash session-bypass enable that accompanies the broader
+ * approve action. Set-on (not toggle) is inversion-proof: edit and bash bypass
+ * can be decoupled on a delegated child stream. The button only renders with a
+ * real stream (see canBypass), but guard anyway.
+ */
+function approvalBypassMessage(
+  streamId: string | undefined,
+): ProgressViewInboundMessage | undefined {
+  if (!streamId) return undefined;
+  return {
+    command: PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS,
+    stream: streamId,
+  };
+}
+
 export function handlePermissionAction(
   event: CustomEvent<PermissionActionDetail>,
 ): void {
@@ -239,16 +255,9 @@ export function handlePermissionAction(
       // mirroring the toolbar shield and the CLI's broader `a` action. It never
       // reaches the backend approval protocol.
       const isYolo = decision.action === APPROVE_SESSION_ACTION;
-      // Set-on (not toggle) is inversion-proof: edit and bash bypass can be
-      // decoupled on a delegated child stream. The button only renders with
-      // a real stream (see canBypass), but guard anyway.
-      const bypassMessage =
-        isYolo && data.streamId
-          ? ({
-              command: PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS,
-              stream: data.streamId,
-            } satisfies ProgressViewInboundMessage)
-          : undefined;
+      const bypassMessage = isYolo
+        ? approvalBypassMessage(data.streamId)
+        : undefined;
       const action = isYolo ? 'approve' : decision.action;
       postWithOptionalBypass(
         bypassMessage,
@@ -276,13 +285,9 @@ export function handlePermissionAction(
     case PERMISSION_KIND.BASH: {
       const { data, decision } = detail;
       const isYolo = decision.action === APPROVE_SESSION_ACTION;
-      const bypassMessage =
-        isYolo && data.streamId
-          ? ({
-              command: PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS,
-              stream: data.streamId,
-            } satisfies ProgressViewInboundMessage)
-          : undefined;
+      const bypassMessage = isYolo
+        ? approvalBypassMessage(data.streamId)
+        : undefined;
       postWithOptionalBypass(
         bypassMessage,
         decision.action === 'reject'

@@ -20,12 +20,6 @@ import {
   prSubscriptions,
 } from '../settingsState';
 
-// `SettingsViewOutboundHandlerRegistry` is now exhaustive (every SettingsView
-// outbound command needs a real handler or `unsupported(...)` — see
-// `@shared/utils/dispatcher`). This slice only owns git/integrations
-// commands, so it's typed as a `satisfies Partial<...>` subset rather than
-// the full registry; `messageDispatcher.ts` spreads all slices together and
-// is the actual exhaustiveness checkpoint TypeScript enforces.
 export const gitHandlers = {
   [SETTINGS_VIEW_COMMANDS.UPDATE_GIT_AUTHOR_SETTINGS]: (data) => {
     gitMarkCommits.set(data.markCommits);

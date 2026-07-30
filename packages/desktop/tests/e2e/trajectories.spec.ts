@@ -69,6 +69,20 @@ async function waitForActiveSettingsPanel(panel: string): Promise<void> {
   );
 }
 
+/** True while the lazy-created PDF overlay dialog is open. */
+async function pdfOverlayIsOpen(): Promise<boolean> {
+  return launched.page.evaluate(() => {
+    const dialog = document.querySelector('wa-dialog.desktop-pdf-overlay');
+    if (dialog == null) return false;
+    // The overlay is created lazily, so there is a window where the custom
+    // element is not upgraded yet and only the reflected attribute is visible.
+    return (
+      (dialog as unknown as { open: boolean }).open === true ||
+      dialog.hasAttribute('open')
+    );
+  });
+}
+
 /**
  * Trajectory 1 — first launch on an empty workspace.
  * The launcher (main route) must mount without crashing the renderer.
@@ -348,16 +362,7 @@ test('desktop:showPdf opens the in-app PDF overlay', async () => {
     window.postMessage(message, '*');
   }, payload);
 
-  await launched.page.waitForFunction(
-    () => {
-      const dialog = document.querySelector('wa-dialog.desktop-pdf-overlay');
-      if (!dialog) return false;
-      const open = (dialog as unknown as { open: boolean }).open === true;
-      return open || dialog.hasAttribute('open');
-    },
-    undefined,
-    { timeout: 5000 },
-  );
+  await expect.poll(pdfOverlayIsOpen).toBe(true);
 
   const dialog = launched.page.locator('wa-dialog.desktop-pdf-overlay');
   await expect(dialog).toHaveCount(1);
@@ -385,17 +390,7 @@ test('desktop:showPdf opens the in-app PDF overlay', async () => {
     const dialog = document.querySelector('wa-dialog.desktop-pdf-overlay');
     if (dialog) (dialog as unknown as { open: boolean }).open = false;
   });
-  await launched.page.waitForFunction(
-    () => {
-      const dialog = document.querySelector('wa-dialog.desktop-pdf-overlay');
-      return (
-        dialog == null ||
-        (dialog as unknown as { open: boolean }).open === false
-      );
-    },
-    undefined,
-    { timeout: 5000 },
-  );
+  await expect.poll(pdfOverlayIsOpen).toBe(false);
   await launched.page.evaluate(() => {
     window.postMessage(
       {
@@ -409,13 +404,7 @@ test('desktop:showPdf opens the in-app PDF overlay', async () => {
   // Give the message handler a chance to run; the dialog must NOT
   // open because the path was rejected.
   await launched.page.waitForTimeout(200);
-  const stillClosed = await launched.page.evaluate(() => {
-    const dialog = document.querySelector('wa-dialog.desktop-pdf-overlay');
-    return (
-      dialog == null || (dialog as unknown as { open: boolean }).open === false
-    );
-  });
-  expect(stillClosed).toBe(true);
+  expect(await pdfOverlayIsOpen()).toBe(false);
 
   // Re-open with a valid path to verify the close pathway.
   await launched.page.evaluate((path) => {
@@ -428,27 +417,11 @@ test('desktop:showPdf opens the in-app PDF overlay', async () => {
       '*',
     );
   }, pdfPath);
-  await launched.page.waitForFunction(
-    () => {
-      const dialog = document.querySelector('wa-dialog.desktop-pdf-overlay');
-      if (!dialog) return false;
-      return (dialog as unknown as { open: boolean }).open === true;
-    },
-    undefined,
-    { timeout: 5000 },
-  );
+  await expect.poll(pdfOverlayIsOpen).toBe(true);
 
   // Close via desktop:closePdf — the dialog should close.
   await launched.page.evaluate(() => {
     window.postMessage({ command: 'desktop:closePdf' }, '*');
   });
-  await launched.page.waitForFunction(
-    () => {
-      const dialog = document.querySelector('wa-dialog.desktop-pdf-overlay');
-      if (!dialog) return true;
-      return (dialog as unknown as { open: boolean }).open === false;
-    },
-    undefined,
-    { timeout: 5000 },
-  );
+  await expect.poll(pdfOverlayIsOpen).toBe(false);
 });

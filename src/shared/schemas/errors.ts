@@ -23,25 +23,6 @@ const StreamDiagnosticsSchema = z.object({
 
 export type StreamDiagnostics = z.infer<typeof StreamDiagnosticsSchema>;
 
-function normalizeProviderErrorRetryFlag(value: unknown): unknown {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return value;
-  }
-  const data = value as Record<string, unknown>;
-  if ('userRetryable' in data || typeof data.retryable !== 'boolean') {
-    return value;
-  }
-  // Drop the legacy key rather than merely adding `userRetryable` alongside
-  // it: callers that use this migration directly (not just as a
-  // z.preprocess step ahead of an object schema that would otherwise strip
-  // it) must not see a stale `retryable` field on the result.
-  const { retryable, ...rest } = data;
-  return {
-    ...rest,
-    userRetryable: retryable,
-  };
-}
-
 /** Reason a credential/quota is exhausted, requiring user action before an
  *  identical retry can succeed. The reasons are mutually
  *  exclusive — a single error is classified as exactly one — which is why
@@ -63,29 +44,46 @@ export const ExhaustionReasonSchema = z.enum([
 ]);
 export type ExhaustionReason = z.infer<typeof ExhaustionReasonSchema>;
 
-/** Migrates the pre-refactor independent `isCredentialExhausted` /
- *  `isUpstreamCreditDepleted` / `isChatGptSubscriptionLimited` booleans (still
- *  present in error data persisted to disk by older TeXRA versions — stream
- *  logs are unversioned JSON reparsed on later loads) into `exhaustionReason`.
- *  Priority mirrors the original derivation order in `formatProviderHttpError`:
- *  ChatGPT-subscription and upstream-credit were independently detected and
- *  OR'd into `isCredentialExhausted` alongside the relay-limit condition, so a
- *  legacy record with only `isCredentialExhausted: true` set reconstructs as
- *  `'relay-limit'`. */
-function normalizeLegacyExhaustionFlags(value: unknown): unknown {
+/**
+ * Migrates the legacy `retryable`/exhaustion-boolean fields on a raw provider
+ * error value into the canonical `userRetryable`/`exhaustionReason` shape.
+ * Used both as the `z.preprocess` step for schemas below and directly by
+ * `normalizeProviderError` (`@common/errors/sdkError/providerErrorFormat`) so
+ * a cached `ProviderError` — attached before this migration ran, e.g. from a
+ * resumed flow's raw persisted state — is normalized the same way a freshly
+ * formatted error is, instead of being returned with legacy fields intact.
+ *
+ * The pre-refactor independent `isCredentialExhausted` /
+ * `isUpstreamCreditDepleted` / `isChatGptSubscriptionLimited` booleans are
+ * still present in error data persisted to disk by older TeXRA versions (stream
+ * logs are unversioned JSON reparsed on later loads). Priority mirrors the
+ * original derivation order in `formatProviderHttpError`: ChatGPT-subscription
+ * and upstream-credit were independently detected and OR'd into
+ * `isCredentialExhausted` alongside the relay-limit condition, so a legacy
+ * record with only `isCredentialExhausted: true` set reconstructs as
+ * `'relay-limit'`.
+ */
+export function normalizeLegacyProviderErrorFields(value: unknown): unknown {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return value;
   }
-  const data = value as Record<string, unknown>;
-  if ('exhaustionReason' in data) {
-    return value;
+  let data = value as Record<string, unknown>;
+
+  if (!('userRetryable' in data) && typeof data.retryable === 'boolean') {
+    // Drop the legacy key rather than merely adding `userRetryable` alongside
+    // it: callers that use this migration directly (not just as a
+    // z.preprocess step ahead of an object schema that would otherwise strip
+    // it) must not see a stale `retryable` field on the result.
+    const { retryable, ...rest } = data;
+    data = { ...rest, userRetryable: retryable };
   }
-  const hasLegacyFlags =
+
+  const hasLegacyExhaustionFlags =
     'isCredentialExhausted' in data ||
     'isUpstreamCreditDepleted' in data ||
     'isChatGptSubscriptionLimited' in data;
-  if (!hasLegacyFlags) {
-    return value;
+  if ('exhaustionReason' in data || !hasLegacyExhaustionFlags) {
+    return data;
   }
   const {
     isCredentialExhausted,
@@ -102,19 +100,6 @@ function normalizeLegacyExhaustionFlags(value: unknown): unknown {
     exhaustionReason = 'relay-limit';
   }
   return exhaustionReason === undefined ? rest : { ...rest, exhaustionReason };
-}
-
-/**
- * Migrates the legacy `retryable`/exhaustion-boolean fields on a raw provider
- * error value into the canonical `userRetryable`/`exhaustionReason` shape.
- * Used both as the `z.preprocess` step for schemas below and directly by
- * `normalizeProviderError` (`@common/errors/sdkError/providerErrorFormat`) so
- * a cached `ProviderError` — attached before this migration ran, e.g. from a
- * resumed flow's raw persisted state — is normalized the same way a freshly
- * formatted error is, instead of being returned with legacy fields intact.
- */
-export function normalizeLegacyProviderErrorFields(value: unknown): unknown {
-  return normalizeLegacyExhaustionFlags(normalizeProviderErrorRetryFlag(value));
 }
 
 /** Core error details from a provider/SDK */

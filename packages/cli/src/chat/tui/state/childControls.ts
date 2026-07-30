@@ -21,21 +21,13 @@ export interface ChildListTarget {
   readonly streamId: StreamTabId | undefined;
 }
 
-function hasLiveChildElapsed(
-  child: Pick<ActiveChildInfo, 'startedAt' | 'status'>,
-): boolean {
-  return (
-    child.startedAt !== undefined &&
-    (child.status === undefined || child.status === STREAM_PHASE.RUNNING)
-  );
-}
-
 export function childElapsed(
   child: Pick<ActiveChildInfo, 'elapsed' | 'startedAt' | 'status'>,
   nowMs = Date.now(),
 ): string | null | undefined {
-  const startedAt = child.startedAt;
-  if (startedAt === undefined || !hasLiveChildElapsed(child)) {
+  const { startedAt, status } = child;
+  if (startedAt === undefined) return child.elapsed;
+  if (status !== undefined && status !== STREAM_PHASE.RUNNING) {
     return child.elapsed;
   }
   return formatCompactDuration(nowMs - startedAt);

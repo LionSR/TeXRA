@@ -168,7 +168,6 @@ describe('emitToolUseCard', () => {
 describe('logFileCategory', () => {
   let logger: AgentTrace;
   let disposeTrace: () => void;
-  let capturedMessages: any[];
   let store: StreamLogStore;
 
   beforeEach(async () => {
@@ -177,7 +176,6 @@ describe('logFileCategory', () => {
     const runTrace = createRunTrace('TestFileListLogger', store);
     logger = runTrace.trace;
     disposeTrace = runTrace.dispose;
-    capturedMessages = [];
   });
 
   afterEach(() => {
@@ -186,22 +184,14 @@ describe('logFileCategory', () => {
     disposeTrace();
   });
 
-  const refreshCaptured = (): void => {
+  const capturedMessages = (): any[] => {
     const log = store.get('TestFileListLogger');
-    capturedMessages = (log?.getRange(0, log.head) ?? []).map((entry) => ({
-      id: entry.id,
-      text: entry.text ?? '',
-      level: entry.level,
-      timestamp: entry.timestamp,
-      messageType: entry.messageType,
-      data: entry.data,
-    }));
+    return log?.getRange(0, log.head) ?? [];
   };
 
   it('handles empty file array gracefully (no-op)', () => {
     logFileCategory(logger, 'Input Files', []);
-    refreshCaptured();
-    assert.equal(capturedMessages.length, 0);
+    assert.equal(capturedMessages().length, 0);
   });
 
   // Only files with `ok === true` count as loaded; missing/false/undefined
@@ -244,10 +234,10 @@ describe('logFileCategory', () => {
   ])('logs "$expected"', ({ label, files, expected }) => {
     logFileCategory(logger, label, files);
 
-    refreshCaptured();
-    assert.equal(capturedMessages.length, 1);
-    assert.equal(capturedMessages[0].messageType, MESSAGE_TYPES.FILE_LIST);
-    assert.equal(capturedMessages[0].text, expected);
+    const messages = capturedMessages();
+    assert.equal(messages.length, 1);
+    assert.equal(messages[0].messageType, MESSAGE_TYPES.FILE_LIST);
+    assert.equal(messages[0].text, expected);
   });
 
   it('includes source and sourceDisplay in entry data', () => {
@@ -255,8 +245,7 @@ describe('logFileCategory', () => {
       { path: '/path/file.tex', ok: true },
     ]);
 
-    refreshCaptured();
-    const entries = capturedMessages[0].data;
+    const entries = capturedMessages()[0].data;
     assert.equal(entries.length, 1);
     assert.equal(entries[0].source, 'Input Files');
     assert.equal(entries[0].sourceDisplay, 'Input Files');
@@ -271,8 +260,7 @@ describe('logFileCategory', () => {
       { path: '/c' }, // undefined
     ]);
 
-    refreshCaptured();
-    const entries = capturedMessages[0].data;
+    const entries = capturedMessages()[0].data;
     assert.equal(entries[0].ok, true);
     assert.equal(entries[1].ok, false);
     assert.equal(entries[2].ok, false);

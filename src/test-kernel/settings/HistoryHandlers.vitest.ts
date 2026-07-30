@@ -20,6 +20,18 @@ vi.mock('@agent/storage', async () => {
   };
 });
 
+const toolUseExecution = {
+  kind: 'agent',
+  id: 'abc123',
+  timestamp: '2026-05-31T12:00:00.000Z',
+  agentConfig: {
+    agent: 'chat',
+    model: 'deepseekT',
+    instruction: 'Check a proof.',
+    agentCategory: AgentCategory.ToolUse,
+  },
+};
+
 describe('settings history handlers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -27,19 +39,7 @@ describe('settings history handlers', () => {
   });
 
   it('includes persisted edited files for tool-use history items', async () => {
-    mocks.listExecutions.mockResolvedValue([
-      {
-        kind: 'agent',
-        id: 'abc123',
-        timestamp: '2026-05-31T12:00:00.000Z',
-        agentConfig: {
-          agent: 'chat',
-          model: 'deepseekT',
-          instruction: 'Check a proof.',
-          agentCategory: AgentCategory.ToolUse,
-        },
-      },
-    ]);
+    mocks.listExecutions.mockResolvedValue([toolUseExecution]);
     mocks.readWorkspaceFiles.mockResolvedValue(['proofs/lemma.md']);
 
     const message = await buildHistoryMessage();
@@ -62,17 +62,7 @@ describe('settings history handlers', () => {
 
   it('hides internal process-bookkeeping and configless entries', async () => {
     mocks.listExecutions.mockResolvedValue([
-      {
-        kind: 'agent',
-        id: 'abc123',
-        timestamp: '2026-05-31T12:00:00.000Z',
-        agentConfig: {
-          agent: 'chat',
-          model: 'deepseekT',
-          instruction: 'Check a proof.',
-          agentCategory: AgentCategory.ToolUse,
-        },
-      },
+      toolUseExecution,
       {
         kind: 'process',
         id: 'bash-process',

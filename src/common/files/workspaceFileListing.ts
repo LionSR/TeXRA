@@ -10,14 +10,6 @@ import {
   type FileListConfig,
 } from './fileListingRules';
 
-interface WorkspaceTreeNode {
-  name: string;
-  path: string;
-  type: 'directory' | 'file';
-  children?: WorkspaceTreeNode[];
-  categories?: string[];
-}
-
 export interface WorkspaceFileListingOptions {
   root: string;
   config: FileListConfig;

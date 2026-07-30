@@ -145,10 +145,7 @@ function getExtraDirs(): string[] {
     for (const root of msysRoots) {
       for (const sub of MSYS_SUBDIRS) {
         const dir = path.join(root, sub);
-        if (
-          AbsoluteFS.existsSync(path.join(dir, 'perl.exe')) &&
-          !dirs.includes(dir)
-        ) {
+        if (AbsoluteFS.existsSync(path.join(dir, 'perl.exe'))) {
           dirs.push(dir);
         }
       }
@@ -170,10 +167,7 @@ function getExtraDirs(): string[] {
     }
     for (const pattern of tlperlPatterns) {
       for (const dir of globDescending(pattern)) {
-        if (
-          AbsoluteFS.existsSync(path.join(dir, 'perl.exe')) &&
-          !dirs.includes(dir)
-        ) {
+        if (AbsoluteFS.existsSync(path.join(dir, 'perl.exe'))) {
           dirs.push(dir);
         }
       }
@@ -198,42 +192,42 @@ function getExtraDirs(): string[] {
     }
   }
 
-  const texDistPatterns =
+  const texBinPatterns =
     platform === 'win32'
       ? ['C:/texlive/*/bin/*']
       : ['/usr/local/texlive/*/bin/*'];
-  const texScriptPatterns: string[] = [];
-  if (platform === 'win32') {
-    for (const tool of TEX_TOOLS) {
-      texScriptPatterns.push(`C:/texlive/*/texmf-dist/scripts/${tool}`);
-    }
-  } else {
-    for (const tool of TEX_TOOLS) {
-      texScriptPatterns.push(`/usr/local/texlive/*/texmf-dist/scripts/${tool}`);
-      texScriptPatterns.push(`/usr/share/texlive/texmf-dist/scripts/${tool}`);
-      // Additional Debian/Ubuntu paths
-      texScriptPatterns.push(`/usr/share/texmf/scripts/${tool}`);
-      texScriptPatterns.push(`/usr/share/texmf-dist/scripts/${tool}`);
-    }
-  }
+  const texScriptRoots =
+    platform === 'win32'
+      ? ['C:/texlive/*/texmf-dist/scripts']
+      : [
+          '/usr/local/texlive/*/texmf-dist/scripts',
+          '/usr/share/texlive/texmf-dist/scripts',
+          // Additional Debian/Ubuntu paths
+          '/usr/share/texmf/scripts',
+          '/usr/share/texmf-dist/scripts',
+        ];
 
   const homeDir = process.env.HOME || process.env.USERPROFILE;
   if (homeDir) {
     const normalized = normalizeFilePath(homeDir);
-    texDistPatterns.push(`${normalized}/texlive/*/bin/*`);
-    texDistPatterns.push(`${normalized}/TinyTeX/bin/*`);
-    for (const tool of TEX_TOOLS) {
-      texScriptPatterns.push(
-        `${normalized}/texlive/*/texmf-dist/scripts/${tool}`,
-      );
-      texScriptPatterns.push(
-        `${normalized}/TinyTeX/texmf-dist/scripts/${tool}`,
-      );
-    }
+    texBinPatterns.push(
+      `${normalized}/texlive/*/bin/*`,
+      `${normalized}/TinyTeX/bin/*`,
+    );
+    texScriptRoots.push(
+      `${normalized}/texlive/*/texmf-dist/scripts`,
+      `${normalized}/TinyTeX/texmf-dist/scripts`,
+    );
   }
 
   // Collect matches from all TeX-related patterns
-  for (const pattern of [...texDistPatterns, ...texScriptPatterns]) {
+  const texPatterns = [
+    ...texBinPatterns,
+    ...TEX_TOOLS.flatMap((tool) =>
+      texScriptRoots.map((root) => `${root}/${tool}`),
+    ),
+  ];
+  for (const pattern of texPatterns) {
     dirs.push(...globDescending(pattern));
   }
 

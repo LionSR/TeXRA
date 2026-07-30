@@ -32,6 +32,15 @@ function host(): CliRuntimeHost {
   return { emit: vi.fn() } as unknown as CliRuntimeHost;
 }
 
+async function waitForApproval(
+  kind: string,
+  payload: Record<string, unknown>,
+): Promise<void> {
+  await vi.waitFor(() => {
+    expect(currentApproval.get()?.payload).toMatchObject({ kind, payload });
+  });
+}
+
 const plan: Plan = { objective: 'Ship the fix.' };
 const proposal: AgentProposal = {
   agentCategory: AgentCategory.ToolUse,
@@ -75,12 +84,7 @@ describe('createTuiHostInteractions', () => {
         goalEnabled: false,
       });
 
-      await vi.waitFor(() => {
-        expect(currentApproval.get()?.payload).toMatchObject({
-          kind: 'plan',
-          payload: { streamId: 'stream-a' },
-        });
-      });
+      await waitForApproval('plan', { streamId: 'stream-a' });
 
       interactions.cancel({ streamId: 'stream-a' });
 
@@ -91,12 +95,7 @@ describe('createTuiHostInteractions', () => {
 
       // stream-b's request was never touched and now becomes the foreground
       // modal instead of being left permanently pending.
-      await vi.waitFor(() => {
-        expect(currentApproval.get()?.payload).toMatchObject({
-          kind: 'plan',
-          payload: { streamId: 'stream-b' },
-        });
-      });
+      await waitForApproval('plan', { streamId: 'stream-b' });
       currentApproval.get()?.decide({ accepted: true });
       await expect(otherStreamResult).resolves.toEqual({ action: 'approve' });
     } finally {
@@ -113,12 +112,7 @@ describe('createTuiHostInteractions', () => {
         ...proposal,
       });
 
-      await vi.waitFor(() => {
-        expect(currentApproval.get()?.payload).toMatchObject({
-          kind: 'proposal',
-          payload: { streamId: 'stream-a' },
-        });
-      });
+      await waitForApproval('proposal', { streamId: 'stream-a' });
 
       interactions.cancel({ streamId: 'stream-a' });
 
@@ -140,12 +134,7 @@ describe('createTuiHostInteractions', () => {
         streamId: 'stream-a',
       });
 
-      await vi.waitFor(() => {
-        expect(currentApproval.get()?.payload).toMatchObject({
-          kind: 'bash',
-          payload: { streamId: 'stream-a' },
-        });
-      });
+      await waitForApproval('bash', { streamId: 'stream-a' });
 
       interactions.cancel({ streamId: 'stream-a' });
 
@@ -171,12 +160,7 @@ describe('createTuiHostInteractions', () => {
         operation: 'Model invocation',
       });
 
-      await vi.waitFor(() => {
-        expect(currentApproval.get()?.payload).toMatchObject({
-          kind: 'retry',
-          payload: { streamId: 'stream-a' },
-        });
-      });
+      await waitForApproval('retry', { streamId: 'stream-a' });
 
       interactions.cancel({ cause: 'All approvals cleared.' });
 
@@ -190,11 +174,7 @@ describe('createTuiHostInteractions', () => {
         streamId: 'stream-a',
         operation: 'Model invocation',
       });
-      await vi.waitFor(() => {
-        expect(currentApproval.get()?.payload).toMatchObject({
-          kind: 'retry',
-        });
-      });
+      await waitForApproval('retry', {});
       interactions.cancel({ streamId: 'stream-a', kind: 'retry' });
       await expect(second).resolves.toEqual({ action: 'cancel' });
     } finally {
@@ -212,12 +192,7 @@ describe('createTuiHostInteractions', () => {
         goalEnabled: false,
       });
 
-      await vi.waitFor(() => {
-        expect(currentApproval.get()?.payload).toMatchObject({
-          kind: 'plan',
-          payload: { streamId: 'stream-a' },
-        });
-      });
+      await waitForApproval('plan', { streamId: 'stream-a' });
 
       interactions.cancel({ streamId: 'stream-a', kind: 'retry' });
 

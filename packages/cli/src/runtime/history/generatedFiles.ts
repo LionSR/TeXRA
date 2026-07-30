@@ -70,14 +70,9 @@ export async function listWorkspaceToolFiles(
   persistedPaths: readonly string[],
   conversation: readonly unknown[] | null,
 ): Promise<CliHistoryFile[]> {
-  let filePaths: readonly string[];
-  if (persistedPaths.length) {
-    filePaths = persistedPaths;
-  } else if (conversation?.length) {
-    filePaths = extractWorkspaceFileToolPaths(conversation);
-  } else {
-    filePaths = [];
-  }
+  const filePaths = persistedPaths.length
+    ? persistedPaths
+    : extractWorkspaceFileToolPaths(conversation ?? []);
   const workspaceFiles = await listExecutionWorkspaceFiles(config, filePaths);
   return workspaceFiles.map((file) => ({
     path: file.displayPath,

@@ -482,6 +482,16 @@ function toggleRecording(): void {
   );
 }
 
+const SINGLE_FILE_PACK_COMMANDS = {
+  pack: MAIN_VIEW_COMMANDS.PACK_SINGLE,
+  clean: MAIN_VIEW_COMMANDS.CLEAN_SINGLE,
+} as const;
+
+const MULTI_FILE_PACK_COMMANDS = {
+  pack: MAIN_VIEW_COMMANDS.PACK_MULTIPLE,
+  clean: MAIN_VIEW_COMMANDS.CLEAN_MULTIPLE,
+} as const;
+
 export function runPanelAction(action: ActionDetail['action']): void {
   switch (action) {
     case 'pack':
@@ -499,16 +509,9 @@ export function runPanelAction(action: ActionDetail['action']): void {
       const additionalInputFiles = filteredInputs.slice(1);
       const useMultiple = additionalInputFiles.length > 0;
 
-      let command: string;
-      if (action === 'pack') {
-        command = useMultiple
-          ? MAIN_VIEW_COMMANDS.PACK_MULTIPLE
-          : MAIN_VIEW_COMMANDS.PACK_SINGLE;
-      } else {
-        command = useMultiple
-          ? MAIN_VIEW_COMMANDS.CLEAN_MULTIPLE
-          : MAIN_VIEW_COMMANDS.CLEAN_SINGLE;
-      }
+      const command = useMultiple
+        ? MULTI_FILE_PACK_COMMANDS[action]
+        : SINGLE_FILE_PACK_COMMANDS[action];
 
       const isToolUse = sessionType$.get() === SESSION_TYPES.TOOL_USE;
       postMessage(command, {

@@ -29,13 +29,10 @@ export function configKeyVariants(key: string): string[] {
   return [`${TEXRA_PREFIX}${unprefixed}`, unprefixed];
 }
 
-function matchesConfigKey(candidate: string, changedKey: string): boolean {
-  return changedKey === candidate || changedKey.startsWith(`${candidate}.`);
-}
-
 function keyMatchesChange(key: string, changedKey: string): boolean {
-  return configKeyVariants(key).some((candidate) =>
-    matchesConfigKey(candidate, changedKey),
+  return configKeyVariants(key).some(
+    (candidate) =>
+      changedKey === candidate || changedKey.startsWith(`${candidate}.`),
   );
 }
 

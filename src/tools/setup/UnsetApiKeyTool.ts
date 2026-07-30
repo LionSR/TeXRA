@@ -2,13 +2,17 @@
 import { z } from 'zod';
 
 // Local imports
-import { apiKeyEnvName } from '@model/apiProviders';
-import { type ToolResult } from '@shared/schemas/toolResult';
+import {
+  API_PROVIDERS,
+  apiKeyEnvName,
+  isApiProvider,
+} from '@model/apiProviders';
+import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 
 // Local file imports
 import { defineTool } from '../core/define';
 import { getSetupPlatform, setupSecrets } from './platform';
-import { refreshApiKeyCaches, requireApiProvider } from './apiKeyHelpers';
+import { refreshApiKeyCaches } from './apiKeyHelpers';
 
 const UnsetApiKeyInputSchema = z.strictObject({
   provider: z
@@ -27,7 +31,12 @@ export class UnsetApiKeyTool extends defineTool({
 }) {
   protected async execute(input: UnsetApiKeyInput): Promise<ToolResult> {
     const platform = getSetupPlatform();
-    const provider = requireApiProvider(input.provider);
+    const provider = input.provider.trim();
+    if (!isApiProvider(provider)) {
+      throw new ToolError(
+        `Unknown provider "${provider}". Supported: ${API_PROVIDERS.join(', ')}.`,
+      );
+    }
     const envVar = apiKeyEnvName(provider);
 
     const storedExists = await setupSecrets.storedApiKeyExists(provider);

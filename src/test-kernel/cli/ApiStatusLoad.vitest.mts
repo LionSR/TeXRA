@@ -51,22 +51,20 @@ const { loadCliAccountStatusLines } =
 describe('loadCliApiStatusLines', () => {
   beforeEach(() => {
     mocks.fetchRelayUsageSummary.mockReset();
-    mocks.getCliApiMode.mockReset();
-    mocks.getCliAuthProfile.mockReset();
-    mocks.getCliSessionAccessToken.mockReset();
-    mocks.readCliModelAccessStatus.mockReset();
-    mocks.resolveCliUsageTier.mockReset();
-    mocks.lookupApiKeyOrigin.mockReset();
-    mocks.getCliApiMode.mockReturnValue('personal');
-    mocks.getCliAuthProfile.mockResolvedValue({ authenticated: false });
-    mocks.getCliSessionAccessToken.mockResolvedValue('session-token');
-    mocks.resolveCliUsageTier.mockResolvedValue('free');
-    mocks.readCliModelAccessStatus.mockResolvedValue({
+    mocks.getCliApiMode.mockReset().mockReturnValue('personal');
+    mocks.getCliAuthProfile.mockReset().mockResolvedValue({
+      authenticated: false,
+    });
+    mocks.getCliSessionAccessToken
+      .mockReset()
+      .mockResolvedValue('session-token');
+    mocks.resolveCliUsageTier.mockReset().mockResolvedValue('free');
+    mocks.readCliModelAccessStatus.mockReset().mockResolvedValue({
       apiFallback: 'personal',
       preferences: { chatGpt: 'off', kimiCode: 'off' },
       chatGptSignedIn: false,
     });
-    mocks.lookupApiKeyOrigin.mockResolvedValue('none');
+    mocks.lookupApiKeyOrigin.mockReset().mockResolvedValue('none');
   });
 
   it.each([

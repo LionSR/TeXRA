@@ -84,8 +84,9 @@ export class RecordingButtonController implements ReactiveController {
    * Bind this to the button's @click handler in templates.
    */
   handleClick = (): void => {
-    const nextState = !this._recording;
-    postMessage(nextState ? this.config.startCommand : this.config.stopCommand);
+    postMessage(
+      this._recording ? this.config.stopCommand : this.config.startCommand,
+    );
   };
 
   /**

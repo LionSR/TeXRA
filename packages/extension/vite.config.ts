@@ -7,11 +7,23 @@ import { aliases } from '../../scripts/aliases.mjs';
 const webviews = ['progressView', 'settingsView', 'webview'] as const;
 
 /**
- * Build configuration for a single webview.
+ * Builds a single webview, named by VITE_WEBVIEW.
+ * Usage: VITE_WEBVIEW=progressView vite build
+ *
  * Each webview is built independently to produce a self-contained bundle
  * that works with VS Code's nonce-only CSP (no external chunk imports).
  */
-function createWebviewConfig(webviewName: string, isDev: boolean) {
+export default defineConfig(({ mode }) => {
+  const isDev = mode === 'development';
+  const webviewName = process.env.VITE_WEBVIEW;
+  if (!webviewName || !(webviews as readonly string[]).includes(webviewName)) {
+    throw new Error(
+      `VITE_WEBVIEW must name a webview (${webviews.join(', ')}), got: ${
+        webviewName ?? '<unset>'
+      }`,
+    );
+  }
+
   return {
     // Use relative paths for assets (required for VS Code webviews)
     base: './',
@@ -43,49 +55,5 @@ function createWebviewConfig(webviewName: string, isDev: boolean) {
       ),
     },
     esbuild: { keepNames: true, target: 'es2022' },
-  };
-}
-
-/**
- * Get the webview to build from VITE_WEBVIEW env var.
- * Usage: VITE_WEBVIEW=progressView npm run vite:build
- * If not specified, defaults to building all webviews sequentially via npm script.
- */
-const targetWebview = process.env.VITE_WEBVIEW as
-  (typeof webviews)[number] | undefined;
-
-export default defineConfig(({ mode }) => {
-  const isDev = mode === 'development';
-
-  // If a specific webview is targeted, build just that one
-  if (targetWebview && webviews.includes(targetWebview)) {
-    return createWebviewConfig(targetWebview, isDev);
-  }
-
-  // Default config (used when no specific webview is targeted)
-  // Note: For production builds, use the npm script that builds each webview separately
-  return {
-    build: {
-      outDir: 'dist',
-      emptyOutDir: false,
-      sourcemap: isDev ? 'inline' : false,
-      minify: isDev ? false : 'esbuild',
-      target: 'es2022',
-      // Disable asset inlining - CSP font-src doesn't allow data: URIs
-      assetsInlineLimit: 0,
-    },
-
-    resolve: { alias: aliases },
-    define: {
-      'process.env.NODE_ENV': JSON.stringify(
-        isDev ? 'development' : 'production',
-      ),
-    },
-    css: { devSourcemap: isDev },
-    esbuild: { keepNames: true, target: 'es2022' },
-    optimizeDeps: {
-      include: ['lit', 'zod', 'katex'],
-      exclude: ['vscode'],
-    },
   };
 });

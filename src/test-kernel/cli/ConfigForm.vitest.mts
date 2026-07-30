@@ -1,3 +1,5 @@
+import { setTimeout as sleep } from 'node:timers/promises';
+
 import stripAnsi from 'strip-ansi';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
@@ -141,6 +143,19 @@ async function renderInkElement(element: unknown): Promise<{
   return { stdin, stdout, instance };
 }
 
+async function renderCliConfigForm(
+  onError?: (error: unknown) => void,
+): Promise<Awaited<ReturnType<typeof renderInkElement>>> {
+  const { React } = await loadInk();
+  return renderInkElement(
+    React.createElement(CliConfigForm, {
+      stores: makeFakeSettingsStores().stores,
+      onClose: () => undefined,
+      onError,
+    }),
+  );
+}
+
 async function submitOpenAiApiKey(
   stdin: FakeStdin,
   stdout: FakeStdout,
@@ -194,6 +209,14 @@ function renderConfigFormProps(): {
     }) as ReturnType<typeof renderConfigFormProps>;
   }
   return (rendered.props ?? {}) as ReturnType<typeof renderConfigFormProps>;
+}
+
+function openConfigFormProps(
+  stores = makeFakeSettingsStores().stores,
+): ReturnType<typeof renderConfigFormProps> {
+  registerBuiltinSlashCommands({ getConfigStores: () => stores });
+  openCliSlashCommandForm('config', '');
+  return renderConfigFormProps();
 }
 
 describe('ConfigForm helpers', () => {
@@ -478,13 +501,7 @@ describe('CliConfigForm API-key status lifecycle', () => {
   it('renders initial loading and then configured status from the resolved request', async () => {
     const initial = deferred<Record<ApiProvider, ApiKeyStatus>>();
     providerApiKeyRuntime.load.mockReturnValueOnce(initial.promise);
-    const { React } = await loadInk();
-    const rendered = await renderInkElement(
-      React.createElement(CliConfigForm, {
-        stores: makeFakeSettingsStores().stores,
-        onClose: () => undefined,
-      }),
-    );
+    const rendered = await renderCliConfigForm();
 
     try {
       await waitFor(() =>
@@ -504,14 +521,7 @@ describe('CliConfigForm API-key status lifecycle', () => {
     const initial = deferred<Record<ApiProvider, ApiKeyStatus>>();
     const onError = vi.fn();
     providerApiKeyRuntime.load.mockReturnValueOnce(initial.promise);
-    const { React } = await loadInk();
-    const rendered = await renderInkElement(
-      React.createElement(CliConfigForm, {
-        stores: makeFakeSettingsStores().stores,
-        onClose: () => undefined,
-        onError,
-      }),
-    );
+    const rendered = await renderCliConfigForm(onError);
 
     try {
       await waitFor(() =>
@@ -534,13 +544,7 @@ describe('CliConfigForm API-key status lifecycle', () => {
     providerApiKeyRuntime.load
       .mockResolvedValueOnce(apiKeyStatuses())
       .mockReturnValueOnce(refreshed.promise);
-    const { React } = await loadInk();
-    const rendered = await renderInkElement(
-      React.createElement(CliConfigForm, {
-        stores: makeFakeSettingsStores().stores,
-        onClose: () => undefined,
-      }),
-    );
+    const rendered = await renderCliConfigForm();
 
     try {
       await waitFor(() =>
@@ -569,14 +573,7 @@ describe('CliConfigForm API-key status lifecycle', () => {
     providerApiKeyRuntime.load
       .mockResolvedValueOnce(apiKeyStatuses({ openai: 'not-set' }))
       .mockReturnValueOnce(refreshed.promise);
-    const { React } = await loadInk();
-    const rendered = await renderInkElement(
-      React.createElement(CliConfigForm, {
-        stores: makeFakeSettingsStores().stores,
-        onClose: () => undefined,
-        onError,
-      }),
-    );
+    const rendered = await renderCliConfigForm(onError);
 
     try {
       await waitFor(() =>
@@ -611,13 +608,7 @@ describe('CliConfigForm API-key status lifecycle', () => {
     providerApiKeyRuntime.load
       .mockReturnValueOnce(initial.promise)
       .mockReturnValueOnce(refreshed.promise);
-    const { React } = await loadInk();
-    const rendered = await renderInkElement(
-      React.createElement(CliConfigForm, {
-        stores: makeFakeSettingsStores().stores,
-        onClose: () => undefined,
-      }),
-    );
+    const rendered = await renderCliConfigForm();
 
     try {
       await waitFor(() =>
@@ -631,7 +622,7 @@ describe('CliConfigForm API-key status lifecycle', () => {
       );
       rendered.stdout.output = '';
       initial.resolve(apiKeyStatuses());
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      await sleep(20);
       expect(stripAnsi(rendered.stdout.output)).toBe('');
     } finally {
       rendered.instance.unmount();
@@ -642,20 +633,13 @@ describe('CliConfigForm API-key status lifecycle', () => {
     const initial = deferred<Record<ApiProvider, ApiKeyStatus>>();
     const onError = vi.fn();
     providerApiKeyRuntime.load.mockReturnValueOnce(initial.promise);
-    const { React } = await loadInk();
-    const rendered = await renderInkElement(
-      React.createElement(CliConfigForm, {
-        stores: makeFakeSettingsStores().stores,
-        onClose: () => undefined,
-        onError,
-      }),
-    );
+    const rendered = await renderCliConfigForm(onError);
 
     await waitFor(() => providerApiKeyRuntime.load.mock.calls.length === 1);
     rendered.instance.unmount();
     rendered.stdout.output = '';
     initial.resolve(apiKeyStatuses({ openai: 'set' }));
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await sleep(20);
     expect(stripAnsi(rendered.stdout.output)).toBe('');
     expect(onError).not.toHaveBeenCalled();
   });
@@ -726,10 +710,7 @@ describe('/config slash command wiring', () => {
 
   it('persists writes through the accessor to the CLI store', async () => {
     const { stores, config } = makeFakeSettingsStores();
-    registerBuiltinSlashCommands({ getConfigStores: () => stores });
-    openCliSlashCommandForm('config', '');
-
-    const props = renderConfigFormProps();
+    const props = openConfigFormProps(stores);
     const markCommits = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
     await props.writeValue?.(markCommits, false);
 
@@ -756,10 +737,7 @@ describe('/config slash command wiring', () => {
 
   it('re-applies git author config so a toggle takes effect this session', async () => {
     const { stores } = makeFakeSettingsStores();
-    registerBuiltinSlashCommands({ getConfigStores: () => stores });
-    openCliSlashCommandForm('config', '');
-
-    const props = renderConfigFormProps();
+    const props = openConfigFormProps(stores);
     const markCommits = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
 
     await props.writeValue?.(markCommits, true);
@@ -771,10 +749,7 @@ describe('/config slash command wiring', () => {
 
   it('resets a git setting (delete) and re-applies the identity', async () => {
     const { stores, config } = makeFakeSettingsStores();
-    registerBuiltinSlashCommands({ getConfigStores: () => stores });
-    openCliSlashCommandForm('config', '');
-
-    const props = renderConfigFormProps();
+    const props = openConfigFormProps(stores);
     const authorName = entryByKey(WorkspaceStateKey.GIT_AUTHOR_NAME);
 
     await props.writeValue?.(authorName, 'someone-else');
@@ -828,10 +803,7 @@ describe('/config slash command wiring', () => {
 
   it('invalidates model options when OpenRouter routing is disabled or reset', async () => {
     const { stores } = makeFakeSettingsStores();
-    registerBuiltinSlashCommands({ getConfigStores: () => stores });
-    openCliSlashCommandForm('config', '');
-
-    const props = renderConfigFormProps();
+    const props = openConfigFormProps(stores);
     const openRouter = entryByKey(GlobalStateKey.USE_OPENROUTER);
 
     await props.writeValue?.(openRouter, false);
@@ -844,10 +816,7 @@ describe('/config slash command wiring', () => {
   it('turns OpenRouter off when Prefer Kimi Code is enabled', async () => {
     const { stores, globalState } = makeFakeSettingsStores();
     await globalState.update(GlobalStateKey.USE_OPENROUTER, true);
-    registerBuiltinSlashCommands({ getConfigStores: () => stores });
-    openCliSlashCommandForm('config', '');
-
-    const props = renderConfigFormProps();
+    const props = openConfigFormProps(stores);
     const preferKimiCode = entryByKey(GlobalStateKey.KIMI_CODE_PREFER);
     await props.writeValue?.(preferKimiCode, true);
 
@@ -864,34 +833,23 @@ describe('/config slash command wiring', () => {
   });
 
   it('delegates catalog form rows through the slash form registry', () => {
-    registerBuiltinSlashCommands({
-      getConfigStores: () => makeFakeSettingsStores().stores,
-    });
-    openCliSlashCommandForm('config', '');
-
-    const props = renderConfigFormProps();
+    const props = openConfigFormProps();
     props.openForm?.('tools');
 
     expect(activeForm.get()?.commandName).toBe('tools');
   });
 
   it('provides native linked forms with the shared terminal row budget', () => {
-    registerBuiltinSlashCommands({
-      getConfigStores: () => makeFakeSettingsStores().stores,
-    });
-    openCliSlashCommandForm('config', '');
-
-    const props = renderConfigFormProps();
-    const tools = props.formRenderers?.tools?.(() => undefined) as
-      { props?: { availableRows?: number } } | undefined;
-    const agents = props.formRenderers?.agents?.(() => undefined) as
-      { props?: { availableRows?: number } } | undefined;
-    const apiKeys = props.formRenderers?.['api-keys']?.(() => undefined) as
-      { props?: { availableRows?: number } } | undefined;
+    const props = openConfigFormProps();
+    const linkedRows = (name: string): number | undefined =>
+      (
+        props.formRenderers?.[name]?.(() => undefined) as
+          { props?: { availableRows?: number } } | undefined
+      )?.props?.availableRows;
 
     expect(props.availableRows).toBe(20);
-    expect(tools?.props?.availableRows).toBe(20);
-    expect(agents?.props?.availableRows).toBe(20);
-    expect(apiKeys?.props?.availableRows).toBe(20);
+    expect(linkedRows('tools')).toBe(20);
+    expect(linkedRows('agents')).toBe(20);
+    expect(linkedRows('api-keys')).toBe(20);
   });
 });

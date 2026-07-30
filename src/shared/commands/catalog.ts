@@ -553,15 +553,10 @@ const commandKeybindingOrder = [
   'texra.execute',
 ] as const satisfies readonly CommandId[];
 
-function keybindingForCommand(id: CommandId): CommandKeybinding {
-  const entry = commandCatalogById.get(id);
-  if (!entry?.keybinding) {
+export const commandKeybindings = commandKeybindingOrder.map((id) => {
+  const keybinding = commandCatalogById.get(id)?.keybinding;
+  if (!keybinding) {
     throw new Error(`Command has no keybinding: ${id}`);
   }
-  return entry.keybinding;
-}
-
-export const commandKeybindings = commandKeybindingOrder.map((id) => ({
-  command: id,
-  ...keybindingForCommand(id),
-}));
+  return { command: id, ...keybinding };
+});

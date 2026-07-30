@@ -19,7 +19,6 @@ import {
   type PermissionActionDetail,
   type PermissionDecision,
 } from '@progressView/frontend/events';
-import type { PermissionState } from '@progressView/frontend/permissionState';
 import {
   permissions$,
   resetProgressState,
@@ -191,18 +190,18 @@ const actionCases: PermissionCase[] = [
       remains: true,
     }),
   ),
-  ...(['approve', 'reject'] as const).map((action): PermissionCase => ({
-    name: `bash ${action}`,
-    detail: detail.bash(
-      action === 'reject'
-        ? { action, feedback: 'Use a safer command.' }
-        : { action },
-    ),
+  ...(
+    [
+      { action: 'approve' },
+      { action: 'reject', feedback: 'Use a safer command.' },
+    ] as const
+  ).map((decision): PermissionCase => ({
+    name: `bash ${decision.action}`,
+    detail: detail.bash(decision),
     calls: [
       call(PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION, {
         requestId: 'bash-1',
-        action,
-        ...(action === 'reject' ? { feedback: 'Use a safer command.' } : {}),
+        ...decision,
       }),
     ],
   })),
@@ -284,41 +283,34 @@ const actionCases: PermissionCase[] = [
   },
   ...(
     [
-      [{ action: 'setup' }, { proposalId: 'proposal-1', action: 'setup' }],
-      [
-        { action: 'reject', feedback: 'Use the existing agent.' },
-        {
-          proposalId: 'proposal-1',
-          action: 'reject',
-          feedback: 'Use the existing agent.',
-        },
-      ],
+      { action: 'setup' },
+      { action: 'reject', feedback: 'Use the existing agent.' },
     ] as const
-  ).map(([decision, payload]): PermissionCase => ({
+  ).map((decision): PermissionCase => ({
     name: `proposal ${decision.action}`,
     detail: detail.proposal(decision),
-    calls: [call(PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION, payload)],
+    calls: [
+      call(PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION, {
+        proposalId: 'proposal-1',
+        ...decision,
+      }),
+    ],
   })),
   ...(
     [
-      [{ action: 'approve' }, { approvalId: 'plan-1', action: 'approve' }],
-      [
-        { action: 'approve_and_goal' },
-        { approvalId: 'plan-1', action: 'approve_and_goal' },
-      ],
-      [
-        { action: 'reject', feedback: 'Add verification.' },
-        {
-          approvalId: 'plan-1',
-          action: 'reject',
-          feedback: 'Add verification.',
-        },
-      ],
+      { action: 'approve' },
+      { action: 'approve_and_goal' },
+      { action: 'reject', feedback: 'Add verification.' },
     ] as const
-  ).map(([decision, payload]): PermissionCase => ({
+  ).map((decision): PermissionCase => ({
     name: `plan ${decision.action}`,
     detail: detail.plan(decision),
-    calls: [call(PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION, payload)],
+    calls: [
+      call(PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION, {
+        approvalId: 'plan-1',
+        ...decision,
+      }),
+    ],
   })),
   {
     name: 'external inquiry submit',
@@ -367,11 +359,6 @@ const actionCases: PermissionCase[] = [
   })),
 ];
 
-function permissionFrom(detail: PermissionActionDetail): PermissionState {
-  const { decision: _decision, ...permission } = detail;
-  return permission;
-}
-
 describe('permission action event handler', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -379,7 +366,7 @@ describe('permission action event handler', () => {
   });
 
   it.each(actionCases)('$name', ({ detail, calls, remains, clearedDraft }) => {
-    const permission = permissionFrom(detail);
+    const { decision: _decision, ...permission } = detail;
     permissions$.set([permission]);
 
     handlePermissionAction({ detail } as CustomEvent<PermissionActionDetail>);

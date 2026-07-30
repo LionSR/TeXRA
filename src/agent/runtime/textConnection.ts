@@ -33,12 +33,6 @@ function buildPrompt(str1: string, str2: string): string {
 const SYSTEM_PROMPT =
   'You are an assistant trained to determine the most grammatically correct string in a LaTeX document context.';
 
-function logConnectionError(label: string, err: unknown): void {
-  const log =
-    classifyAgentError(err) === 'missing-api-key' ? logger.debug : logger.error;
-  log(CHANNEL, `Error in ${label}: ${getSdkErrorMessage(err)}`);
-}
-
 function getMajorityChoice(choices: string[]): ConnectionResult {
   const counts = new Map<string, number>();
   for (const choice of choices) {
@@ -60,34 +54,6 @@ function getMajorityChoice(choices: string[]): ConnectionResult {
   return { connector, choice: majorityChoice };
 }
 
-async function bestConnectionMethodWithHelperModel(
-  str1: string,
-  str2: string,
-  n: number,
-): Promise<ConnectionResult> {
-  const helperResult = await createHelperModelKit();
-  if (!helperResult.kit) {
-    logger.debug(
-      CHANNEL,
-      `Skipping bestConnectionMethod helper call: ${helperResult.reason}`,
-    );
-    return DEFAULT_RESULT;
-  }
-
-  const prompt = buildPrompt(str1, str2);
-  const choices: string[] = [];
-
-  for (let i = 0; i < Math.max(1, n); i += 1) {
-    const text = await runHelperModelCompletion(helperResult.kit, {
-      userPrompt: prompt,
-      systemPrompt: SYSTEM_PROMPT,
-    });
-    choices.push(text.trim());
-  }
-
-  return getMajorityChoice(choices);
-}
-
 /**
  * Determines the best way to connect two strings in a LaTeX context, using
  * the configured helper model.
@@ -98,9 +64,32 @@ export async function bestConnectionMethod(
   n: number = 1,
 ): Promise<ConnectionResult> {
   try {
-    return await bestConnectionMethodWithHelperModel(str1, str2, n);
+    const helperResult = await createHelperModelKit();
+    if (!helperResult.kit) {
+      logger.debug(
+        CHANNEL,
+        `Skipping bestConnectionMethod helper call: ${helperResult.reason}`,
+      );
+      return DEFAULT_RESULT;
+    }
+
+    const prompt = buildPrompt(str1, str2);
+    const choices: string[] = [];
+    for (let i = 0; i < Math.max(1, n); i += 1) {
+      const text = await runHelperModelCompletion(helperResult.kit, {
+        userPrompt: prompt,
+        systemPrompt: SYSTEM_PROMPT,
+      });
+      choices.push(text.trim());
+    }
+
+    return getMajorityChoice(choices);
   } catch (err) {
-    logConnectionError('bestConnectionMethod', err);
+    const log =
+      classifyAgentError(err) === 'missing-api-key'
+        ? logger.debug
+        : logger.error;
+    log(CHANNEL, `Error in bestConnectionMethod: ${getSdkErrorMessage(err)}`);
     return DEFAULT_RESULT;
   }
 }

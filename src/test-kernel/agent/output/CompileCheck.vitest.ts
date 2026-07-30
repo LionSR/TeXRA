@@ -5,8 +5,15 @@ import * as path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { runCompileCheck } from '@agent/output/compileCheck';
-import { createOutputState, ensureRoundData } from '@agent/output/outputState';
+import {
+  runCompileCheck,
+  type CompileCheckContext,
+} from '@agent/output/compileCheck';
+import {
+  createOutputState,
+  ensureRoundData,
+  type OutputState,
+} from '@agent/output/outputState';
 import type { CompileLatex2PdfResult } from '@latex/texTools';
 import type {
   ExecutionId,
@@ -86,6 +93,18 @@ function seedMainTexOutput(executionId: ExecutionId) {
   return outputState;
 }
 
+function compileContext(
+  executionId: ExecutionId,
+  outputState: OutputState,
+): CompileCheckContext {
+  return {
+    fileService: new TaskRunFileService(executionId),
+    outputState,
+    logger: spiedTrace(),
+    streamId: 'compile-stream',
+  };
+}
+
 function initLatexPlatform(files: Record<string, string>): Promise<void> {
   return installPlatform({
     files,
@@ -115,12 +134,7 @@ describe('runCompileCheck', () => {
     const outputState = seedMainTexOutput(executionId);
 
     const result = await runCompileCheck(
-      {
-        fileService: new TaskRunFileService(executionId),
-        outputState,
-        logger: spiedTrace(),
-        streamId: 'compile-stream',
-      },
+      compileContext(executionId, outputState),
       0,
     );
 
@@ -155,12 +169,7 @@ describe('runCompileCheck', () => {
     ];
 
     const result = await runCompileCheck(
-      {
-        fileService: new TaskRunFileService(executionId),
-        outputState,
-        logger: spiedTrace(),
-        streamId: 'compile-stream',
-      },
+      compileContext(executionId, outputState),
       0,
     );
 
@@ -193,12 +202,7 @@ describe('runCompileCheck', () => {
     const outputState = seedMainTexOutput(executionId);
 
     const result = await runCompileCheck(
-      {
-        fileService: new TaskRunFileService(executionId),
-        outputState,
-        logger: spiedTrace(),
-        streamId: 'compile-stream',
-      },
+      compileContext(executionId, outputState),
       0,
     );
 
@@ -236,12 +240,7 @@ describe('runCompileCheck', () => {
     const outputState = seedMainTexOutput(executionId);
 
     const result = await runCompileCheck(
-      {
-        fileService: new TaskRunFileService(executionId),
-        outputState,
-        logger: spiedTrace(),
-        streamId: 'compile-stream',
-      },
+      compileContext(executionId, outputState),
       0,
     );
 
@@ -270,12 +269,7 @@ describe('runCompileCheck', () => {
     });
 
     const outputState = seedMainTexOutput(executionId);
-    const ctx = {
-      fileService: new TaskRunFileService(executionId),
-      outputState,
-      logger: spiedTrace(),
-      streamId: 'compile-stream',
-    };
+    const ctx = compileContext(executionId, outputState);
 
     const firstResult = await runCompileCheck(ctx, 0);
     expect(firstResult.compileResult?.status).toBe('failed');
@@ -315,12 +309,7 @@ describe('runCompileCheck', () => {
     const outputState = seedMainTexOutput(executionId);
 
     const result = await runCompileCheck(
-      {
-        fileService: new TaskRunFileService(executionId),
-        outputState,
-        logger: spiedTrace(),
-        streamId: 'compile-stream',
-      },
+      compileContext(executionId, outputState),
       0,
     );
 
@@ -355,12 +344,7 @@ describe('runCompileCheck', () => {
     ];
 
     const result = await runCompileCheck(
-      {
-        fileService: new TaskRunFileService(executionId),
-        outputState,
-        logger: spiedTrace(),
-        streamId: 'compile-stream',
-      },
+      compileContext(executionId, outputState),
       0,
     );
 
@@ -403,12 +387,7 @@ describe('runCompileCheck', () => {
       ];
 
       const result = await runCompileCheck(
-        {
-          fileService: new TaskRunFileService(executionId),
-          outputState,
-          logger: spiedTrace(),
-          streamId: 'compile-stream',
-        },
+        compileContext(executionId, outputState),
         0,
       );
 

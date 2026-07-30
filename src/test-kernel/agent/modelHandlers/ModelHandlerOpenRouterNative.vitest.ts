@@ -29,6 +29,60 @@ const OPENROUTER_TEST_CONFIG = Object.freeze({
   openrouterFullName: 'openai/gpt-5.5',
 });
 
+type TestModelConfigOverrides = Parameters<typeof buildTestModelConfig>[1];
+
+/** A logged handler pinned to the non-streaming path. */
+function createHandler(
+  configOverrides: TestModelConfigOverrides = {},
+): ModelHandlerOpenRouterNative {
+  const handler = new ModelHandlerOpenRouterNative(
+    buildTestModelConfig(OPENROUTER_TEST_CONFIG, configOverrides),
+  );
+  (handler as any).setLogger({ ...noopTrace });
+  (handler as any).getStreamingConfig = () => false;
+  return handler;
+}
+
+/** Internals of the auxiliary compaction request path. */
+type CompactionInternals = {
+  runClientCompaction: (
+    messages: unknown[],
+    inputTokens: number,
+    summarize: (
+      messages: ChatMessages[],
+      systemPrompt: string,
+    ) => Promise<unknown>,
+  ) => Promise<{ compactedMessages: ChatMessages[]; didCompact: boolean }>;
+  compactConversation: (
+    client: OpenRouter,
+    messages: ChatMessages[],
+  ) => Promise<{ compactedMessages: ChatMessages[]; didCompact: boolean }>;
+};
+
+/** Reduces compaction to the single auxiliary summarize request under test. */
+function stubClientCompaction(
+  handler: ModelHandlerOpenRouterNative,
+): CompactionInternals {
+  const target = handler as unknown as CompactionInternals;
+  target.runClientCompaction = async (_messages, _inputTokens, summarize) => {
+    await summarize([], 'Summarize the conversation.');
+    return { compactedMessages: [], didCompact: true };
+  };
+  return target;
+}
+
+class CompactionProbeHandler extends ModelHandlerOpenRouterNative {
+  compactForTest(
+    messages: ChatMessages[],
+    compact: () => Promise<{
+      compactedMessages: ChatMessages[];
+      didCompact: boolean;
+    }>,
+  ) {
+    return this.maybeCompactByInputTokens(messages, 1, compact);
+  }
+}
+
 function stubServerSideKeyService(): void {
   vi.spyOn(serverKeysModule, 'getServerSideKeyService').mockReturnValue({
     shouldUseServerSideKeysSync: () => true,
@@ -126,21 +180,17 @@ describe('ModelHandlerOpenRouterNative Moonshot fixed temperature', () => {
     // Same rule as the direct Moonshot path: K3 fixes sampling server-side
     // and requires requests to omit temperature. OpenRouter forwards to the
     // same backend, so the field must not survive this route either.
-    const handler = new ModelHandlerOpenRouterNative(
-      buildTestModelConfig(OPENROUTER_TEST_CONFIG, {
-        name: 'kimi3',
-        fullName: 'kimi-k3',
-        openrouterFullName: 'moonshotai/kimi-k3',
-        provider: ModelProvider.MOONSHOT,
-        capabilities: {
-          supportsReasoning: true,
-          supportsReasoningEffort: true,
-          reasoningEffort: ReasoningEffort.MAX,
-        },
-      }),
-    );
-    (handler as any).setLogger({ ...noopTrace });
-    (handler as any).getStreamingConfig = () => false;
+    const handler = createHandler({
+      name: 'kimi3',
+      fullName: 'kimi-k3',
+      openrouterFullName: 'moonshotai/kimi-k3',
+      provider: ModelProvider.MOONSHOT,
+      capabilities: {
+        supportsReasoning: true,
+        supportsReasoningEffort: true,
+        reasoningEffort: ReasoningEffort.MAX,
+      },
+    });
 
     const { client, sendCalls } = createSendStub();
     await handler.createResponse({
@@ -153,14 +203,10 @@ describe('ModelHandlerOpenRouterNative Moonshot fixed temperature', () => {
   });
 
   it('keeps the caller temperature outside Moonshot', async () => {
-    const handler = new ModelHandlerOpenRouterNative(
-      buildTestModelConfig(OPENROUTER_TEST_CONFIG, {
-        fullName: 'kimi-k3',
-        provider: ModelProvider.OPENAI,
-      }),
-    );
-    (handler as any).setLogger({ ...noopTrace });
-    (handler as any).getStreamingConfig = () => false;
+    const handler = createHandler({
+      fullName: 'kimi-k3',
+      provider: ModelProvider.OPENAI,
+    });
 
     const { client, sendCalls } = createSendStub();
     await handler.createResponse({
@@ -173,11 +219,7 @@ describe('ModelHandlerOpenRouterNative Moonshot fixed temperature', () => {
   });
 
   it('maps finalTool to a named OpenRouter function choice', async () => {
-    const handler = new ModelHandlerOpenRouterNative(
-      buildTestModelConfig(OPENROUTER_TEST_CONFIG),
-    );
-    (handler as any).setLogger({ ...noopTrace });
-    (handler as any).getStreamingConfig = () => false;
+    const handler = createHandler();
     const { client, sendCalls } = createSendStub();
 
     await handler.createResponse({
@@ -230,10 +272,7 @@ describe('ModelHandlerOpenRouterNative forced tool choice', () => {
 
 describe('ModelHandlerOpenRouterNative response mode discrimination', () => {
   it('rejects a non-streaming response on the streaming path', async () => {
-    const handler = new ModelHandlerOpenRouterNative(
-      buildTestModelConfig(OPENROUTER_TEST_CONFIG),
-    );
-    (handler as any).setLogger({ ...noopTrace });
+    const handler = createHandler();
     (handler as any).getStreamingConfig = () => true;
 
     const client = {
@@ -260,11 +299,7 @@ describe('ModelHandlerOpenRouterNative response mode discrimination', () => {
   });
 
   it('rejects a streaming response on the non-streaming path', async () => {
-    const handler = new ModelHandlerOpenRouterNative(
-      buildTestModelConfig(OPENROUTER_TEST_CONFIG),
-    );
-    (handler as any).setLogger({ ...noopTrace });
-    (handler as any).getStreamingConfig = () => false;
+    const handler = createHandler();
 
     const client = {
       chat: {
@@ -442,27 +477,11 @@ describe('ModelHandlerOpenRouterNative compaction retries', () => {
 
   it('retries a transient auxiliary compaction request twice', async () => {
     vi.useFakeTimers();
-    const handler = new ModelHandlerOpenRouterNative(
-      buildTestModelConfig(OPENROUTER_TEST_CONFIG),
+    const target = stubClientCompaction(
+      new ModelHandlerOpenRouterNative(
+        buildTestModelConfig(OPENROUTER_TEST_CONFIG),
+      ),
     );
-    const target = handler as unknown as {
-      runClientCompaction: (
-        messages: unknown[],
-        inputTokens: number,
-        summarize: (
-          messages: ChatMessages[],
-          systemPrompt: string,
-        ) => Promise<unknown>,
-      ) => Promise<{ compactedMessages: ChatMessages[]; didCompact: boolean }>;
-      compactConversation: (
-        client: OpenRouter,
-        messages: ChatMessages[],
-      ) => Promise<{ compactedMessages: ChatMessages[]; didCompact: boolean }>;
-    };
-    target.runClientCompaction = async (_messages, _inputTokens, summarize) => {
-      await summarize([], 'Summarize the conversation.');
-      return { compactedMessages: [], didCompact: true };
-    };
     const transient = Object.assign(new Error('provider unavailable'), {
       status: 503,
     });
@@ -489,27 +508,11 @@ describe('ModelHandlerOpenRouterNative compaction retries', () => {
   });
 
   it('does not retry a compaction credential failure', async () => {
-    const handler = new ModelHandlerOpenRouterNative(
-      buildTestModelConfig(OPENROUTER_TEST_CONFIG),
+    const target = stubClientCompaction(
+      new ModelHandlerOpenRouterNative(
+        buildTestModelConfig(OPENROUTER_TEST_CONFIG),
+      ),
     );
-    const target = handler as unknown as {
-      runClientCompaction: (
-        messages: unknown[],
-        inputTokens: number,
-        summarize: (
-          messages: ChatMessages[],
-          systemPrompt: string,
-        ) => Promise<unknown>,
-      ) => Promise<{ compactedMessages: ChatMessages[]; didCompact: boolean }>;
-      compactConversation: (
-        client: OpenRouter,
-        messages: ChatMessages[],
-      ) => Promise<{ compactedMessages: ChatMessages[]; didCompact: boolean }>;
-    };
-    target.runClientCompaction = async (_messages, _inputTokens, summarize) => {
-      await summarize([], 'Summarize the conversation.');
-      return { compactedMessages: [], didCompact: true };
-    };
     const credentialFailure = Object.assign(new Error('invalid credential'), {
       status: 401,
     });
@@ -525,19 +528,7 @@ describe('ModelHandlerOpenRouterNative compaction retries', () => {
   });
 
   it('reuses successful compaction until generation succeeds', async () => {
-    class TestableHandler extends ModelHandlerOpenRouterNative {
-      compactForTest(
-        messages: ChatMessages[],
-        compact: () => Promise<{
-          compactedMessages: ChatMessages[];
-          didCompact: boolean;
-        }>,
-      ) {
-        return this.maybeCompactByInputTokens(messages, 1, compact);
-      }
-    }
-
-    const handler = new TestableHandler(
+    const handler = new CompactionProbeHandler(
       buildTestModelConfig(OPENROUTER_TEST_CONFIG),
     );
     handler.setAgentCategory(AgentCategory.ToolUse);
@@ -601,19 +592,7 @@ describe('ModelHandlerOpenRouterNative compaction retries', () => {
     // identity alone would replay the stale pre-follow-up payload and
     // silently drop the follow-up from the request and — via the flow's
     // in-place commit — from the conversation history.
-    class TestableHandler extends ModelHandlerOpenRouterNative {
-      compactForTest(
-        messages: ChatMessages[],
-        compact: () => Promise<{
-          compactedMessages: ChatMessages[];
-          didCompact: boolean;
-        }>,
-      ) {
-        return this.maybeCompactByInputTokens(messages, 1, compact);
-      }
-    }
-
-    const handler = new TestableHandler(
+    const handler = new CompactionProbeHandler(
       buildTestModelConfig(OPENROUTER_TEST_CONFIG),
     );
     handler.setAgentCategory(AgentCategory.ToolUse);

@@ -69,23 +69,9 @@ vi.mock('@model/computeModelOptions', async (importOriginal) => ({
 type ControllerOptions = ConstructorParameters<
   typeof DefaultDesktopCredentialSettingsController
 >[0];
+type Fixture = Awaited<ReturnType<typeof createFixture>>;
 
-async function createFixture(
-  overrides: Partial<ControllerOptions> = {},
-): Promise<{
-  controller: DefaultDesktopCredentialSettingsController;
-  globalState: FakeStateStore;
-  secrets: FakeSecrets;
-  posted: unknown[];
-  events: string[];
-  confirms: string[];
-  infos: string[];
-  errors: string[];
-  signIn: ReturnType<typeof vi.fn>;
-  signOut: ReturnType<typeof vi.fn>;
-  onCredentialChanged: ReturnType<typeof vi.fn>;
-  setUseIncludedModelAccess: ReturnType<typeof vi.fn>;
-}> {
+async function createFixture(overrides: Partial<ControllerOptions> = {}) {
   const globalState =
     (overrides.globalState as FakeStateStore | undefined) ??
     new FakeStateStore();
@@ -330,7 +316,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
   it.each([
     {
       name: 'provider streaming',
-      run: (fixture: Awaited<ReturnType<typeof createFixture>>) =>
+      run: (fixture: Fixture) =>
         requireAction(fixture.controller.profileActions.setProviderStreaming)(
           'openai',
           false,
@@ -338,7 +324,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     },
     {
       name: 'provider endpoint',
-      run: (fixture: Awaited<ReturnType<typeof createFixture>>) =>
+      run: (fixture: Fixture) =>
         requireAction(fixture.controller.profileActions.setProviderEndpoint)(
           'openai',
           'https://example.com/v1',
@@ -346,7 +332,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     },
     {
       name: 'global streaming',
-      run: (fixture: Awaited<ReturnType<typeof createFixture>>) =>
+      run: (fixture: Fixture) =>
         requireAction(fixture.controller.profileActions.setGlobalStreaming)(
           false,
         ),

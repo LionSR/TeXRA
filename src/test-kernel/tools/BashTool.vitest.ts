@@ -48,6 +48,7 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import type { ExecResult } from '@shared/schemas/opResults';
+import type { ToolResult } from '@shared/schemas/toolResult';
 import {
   clearStreamStatusForTest,
   seedStreamStatusForTest,
@@ -60,7 +61,6 @@ import * as execUtils from '@utils/system/execUtils';
 
 // Local file imports
 import {
-  createRecordingHost,
   recordSessionEvents,
   testRunScope,
   withTestRunContext,
@@ -212,6 +212,50 @@ function freshRoundShared(messages: ProviderMessage[]): ToolUseRoundShared {
   };
 }
 
+type ExecuteCommandOptions = NonNullable<
+  Parameters<typeof execUtils.executeCommand>[1]
+>;
+
+/**
+ * Stub `executeCommand` so it emits streamed chunks through the callbacks the
+ * tool passes in, then settles with a successful zero-exit result unless the
+ * case overrides part of it.
+ */
+function mockStreamingCommand(
+  stream: (options: ExecuteCommandOptions) => void,
+  result: Partial<ExecResult> = {},
+): void {
+  vi.spyOn(execUtils, 'executeCommand').mockImplementation(
+    async (_command, options = {}) => {
+      stream(options);
+      return {
+        success: true,
+        stdout: null,
+        stderr: null,
+        timedOut: false,
+        exitCode: 0,
+        ...result,
+      };
+    },
+  );
+}
+
+function launchBackgroundBash(
+  parentStreamId: StreamTabId,
+): Promise<ToolResult> {
+  return withToolEnvironment(
+    {
+      run: { streamId: parentStreamId, session: defaultSession() },
+      call: { tracker: new FileInteractionState() },
+    },
+    () =>
+      new BashTool().call({
+        command: 'make build',
+        run_in_background: true,
+      }),
+  );
+}
+
 describe('BashTool', () => {
   setupPlatform({
     workspacePath: '/workspace',
@@ -292,19 +336,10 @@ describe('BashTool', () => {
     { name: '52,000 characters', text: 'c'.repeat(52_000) },
     { name: 'exactly 54,000 characters', text: 'd'.repeat(54_000) },
   ])('reconstructs $name exactly without a marker', async ({ text }) => {
-    vi.spyOn(execUtils, 'executeCommand').mockImplementation(
-      async (_command, options = {}) => {
-        options.onStdout?.(text.slice(0, 777));
-        options.onStdout?.(text.slice(777));
-        return {
-          success: true,
-          stdout: null,
-          stderr: null,
-          timedOut: false,
-          exitCode: 0,
-        };
-      },
-    );
+    mockStreamingCommand((options) => {
+      options.onStdout?.(text.slice(0, 777));
+      options.onStdout?.(text.slice(777));
+    });
 
     const result = await new BashTool().call({ command: 'boundary-output' });
     assert.equal(result.output, text);
@@ -313,18 +348,7 @@ describe('BashTool', () => {
 
   it('marks exactly one character elided at 54,001 normalized characters', async () => {
     const text = 'h'.repeat(4_000) + 'X' + 't'.repeat(50_000);
-    vi.spyOn(execUtils, 'executeCommand').mockImplementation(
-      async (_command, options = {}) => {
-        options.onStdout?.(text);
-        return {
-          success: true,
-          stdout: null,
-          stderr: null,
-          timedOut: false,
-          exitCode: 0,
-        };
-      },
-    );
+    mockStreamingCommand((options) => options.onStdout?.(text));
 
     const result = await new BashTool().call({ command: 'one-elided' });
     assert.equal(
@@ -350,18 +374,9 @@ describe('BashTool', () => {
       expected: `alpha${' '.repeat(20_000)}omega`,
     },
   ])('matches full-stream trim for $name', async ({ chunks, expected }) => {
-    vi.spyOn(execUtils, 'executeCommand').mockImplementation(
-      async (_command, options = {}) => {
-        for (const chunk of chunks) options.onStdout?.(chunk);
-        return {
-          success: true,
-          stdout: null,
-          stderr: null,
-          timedOut: false,
-          exitCode: 0,
-        };
-      },
-    );
+    mockStreamingCommand((options) => {
+      for (const chunk of chunks) options.onStdout?.(chunk);
+    });
 
     const result = await new BashTool().call({ command: 'whitespace-output' });
     assert.equal(result.output, expected);
@@ -369,19 +384,10 @@ describe('BashTool', () => {
 
   it('counts only normalized internal whitespace as elided', async () => {
     const internalWhitespace = ' '.repeat(60_000);
-    vi.spyOn(execUtils, 'executeCommand').mockImplementation(
-      async (_command, options = {}) => {
-        options.onStdout?.(`  A${internalWhitespace}`);
-        options.onStdout?.(`B${' '.repeat(100_000)}`);
-        return {
-          success: true,
-          stdout: null,
-          stderr: null,
-          timedOut: false,
-          exitCode: 0,
-        };
-      },
-    );
+    mockStreamingCommand((options) => {
+      options.onStdout?.(`  A${internalWhitespace}`);
+      options.onStdout?.(`B${' '.repeat(100_000)}`);
+    });
 
     const result = await new BashTool().call({ command: 'whitespace-gap' });
     const output = String(result.output);
@@ -404,18 +410,7 @@ describe('BashTool', () => {
       text: `${'a'.repeat(4_001)}🙂${'b'.repeat(50_000)}`,
     },
   ])('does not split surrogate pairs at the $name', async ({ text }) => {
-    vi.spyOn(execUtils, 'executeCommand').mockImplementation(
-      async (_command, options = {}) => {
-        options.onStdout?.(text);
-        return {
-          success: true,
-          stdout: null,
-          stderr: null,
-          timedOut: false,
-          exitCode: 0,
-        };
-      },
-    );
+    mockStreamingCommand((options) => options.onStdout?.(text));
 
     const result = await new BashTool().call({ command: 'unicode-boundary' });
     const output = String(result.output);
@@ -428,22 +423,13 @@ describe('BashTool', () => {
     const tailMarker = 'TAIL🙂';
     const emoji = '🙂';
 
-    vi.spyOn(execUtils, 'executeCommand').mockImplementation(
-      async (_command, options = {}) => {
-        assert.equal(options.buffer, false);
-        options.onStdout?.(`HEAD${emoji[0]}`);
-        options.onStdout?.(`${emoji[1]}\n`);
-        options.onStdout?.('x'.repeat(100_000));
-        options.onStdout?.(`\n${tailMarker}\n`);
-        return {
-          success: true,
-          stdout: null,
-          stderr: null,
-          timedOut: false,
-          exitCode: 0,
-        };
-      },
-    );
+    mockStreamingCommand((options) => {
+      assert.equal(options.buffer, false);
+      options.onStdout?.(`HEAD${emoji[0]}`);
+      options.onStdout?.(`${emoji[1]}\n`);
+      options.onStdout?.('x'.repeat(100_000));
+      options.onStdout?.(`\n${tailMarker}\n`);
+    });
 
     const result = await new BashTool().call({ command: 'large-output' });
     assert.equal(result.status, 'executed');
@@ -457,22 +443,16 @@ describe('BashTool', () => {
   });
 
   it('keeps bounded stderr and stdout separate and ordered on large failures', async () => {
-    vi.spyOn(execUtils, 'executeCommand').mockImplementation(
-      async (_command, options = {}) => {
+    mockStreamingCommand(
+      (options) => {
         options.onStdout?.('STDOUT_HEAD\n');
         options.onStdout?.('o'.repeat(100_000));
         options.onStdout?.('\nSTDOUT_TAIL');
         options.onStderr?.('STDERR_HEAD\n');
         options.onStderr?.('e'.repeat(100_000));
         options.onStderr?.('\nSTDERR_TAIL');
-        return {
-          success: false,
-          stdout: null,
-          stderr: null,
-          timedOut: false,
-          exitCode: 9,
-        };
       },
+      { success: false, exitCode: 9 },
     );
 
     const result = await new BashTool().call({ command: 'large-failure' });
@@ -579,18 +559,10 @@ describe('BashTool', () => {
       'x'.repeat(MAX_TOOL_RESULT_TEXT_LENGTH) +
       'TAIL_ERROR_DETAIL '.repeat(5000);
 
-    vi.spyOn(execUtils, 'executeCommand').mockImplementation(
-      async (_command, options = {}) => {
-        options.onStderr?.(hugeStderr);
-        return {
-          success: false,
-          stdout: null,
-          stderr: null,
-          timedOut: false,
-          exitCode: 1,
-        };
-      },
-    );
+    mockStreamingCommand((options) => options.onStderr?.(hugeStderr), {
+      success: false,
+      exitCode: 1,
+    });
 
     const result = await new BashTool().call({ command: 'latexmk -pdf p.tex' });
     assert.equal(result.status, 'error');
@@ -623,19 +595,13 @@ describe('BashTool', () => {
       `${tailMarker}\n`,
     ];
 
-    vi.spyOn(execUtils, 'executeCommand').mockImplementation(
-      async (_command, options = {}) => {
+    mockStreamingCommand(
+      (options) => {
         for (const chunk of chunks) {
           options.onStdout?.(chunk);
         }
-        return {
-          success: false,
-          stdout: null,
-          stderr: null,
-          timedOut: false,
-          exitCode: 1,
-        };
       },
+      { success: false, exitCode: 1 },
     );
 
     const submitFollowUpSpy = vi
@@ -643,22 +609,10 @@ describe('BashTool', () => {
       .mockResolvedValue({ status: 'sent' });
 
     const parentStreamId = 'bash-tool-bg-parent' as StreamTabId;
-    const { host } = createRecordingHost();
-    const bashTool = new BashTool();
     const recorded = recordSessionEvents(defaultSession().events);
 
     try {
-      const launchResult = await withToolEnvironment(
-        {
-          run: { streamId: parentStreamId, session: defaultSession() },
-          call: { tracker: new FileInteractionState() },
-        },
-        () =>
-          bashTool.call({
-            command: 'make build',
-            run_in_background: true,
-          }),
-      );
+      const launchResult = await launchBackgroundBash(parentStreamId);
       assert.equal(launchResult.status, 'executed');
 
       // The background run delivers its result asynchronously as a follow-up
@@ -723,22 +677,10 @@ describe('BashTool', () => {
       STREAM_STATUS.WAITING,
     );
 
-    const { host } = createRecordingHost();
-    const bashTool = new BashTool();
     const recorded = recordSessionEvents(defaultSession().events);
 
     try {
-      const launchResult = await withToolEnvironment(
-        {
-          run: { streamId: parentStreamId, session: defaultSession() },
-          call: { tracker: new FileInteractionState() },
-        },
-        () =>
-          bashTool.call({
-            command: 'make build',
-            run_in_background: true,
-          }),
-      );
+      const launchResult = await launchBackgroundBash(parentStreamId);
       assert.equal(launchResult.status, 'executed');
 
       // The background run's completion must queue the follow-up AND wake
@@ -800,22 +742,10 @@ describe('BashTool', () => {
       STREAM_STATUS.WAITING,
     );
 
-    const { host } = createRecordingHost();
-    const bashTool = new BashTool();
     const recorded = recordSessionEvents(defaultSession().events);
 
     try {
-      const launchResult = await withToolEnvironment(
-        {
-          run: { streamId: parentStreamId, session: defaultSession() },
-          call: { tracker: new FileInteractionState() },
-        },
-        () =>
-          bashTool.call({
-            command: 'make build',
-            run_in_background: true,
-          }),
-      );
+      const launchResult = await launchBackgroundBash(parentStreamId);
       assert.equal(launchResult.status, 'executed');
       const executionIdMatch = /Execution ID: (\S+)/.exec(
         String(launchResult.output ?? ''),
@@ -861,20 +791,9 @@ describe('BashTool', () => {
       config: { 'texra.toolUse.requireBashApproval': false },
     });
     const parentStreamId = 'bash-result-meta-failure' as StreamTabId;
-    const { host } = createRecordingHost();
     const recorded = recordSessionEvents(defaultSession().events);
 
-    const launchResult = await withToolEnvironment(
-      {
-        run: { streamId: parentStreamId, session: defaultSession() },
-        call: { tracker: new FileInteractionState() },
-      },
-      () =>
-        new BashTool().call({
-          command: 'make build',
-          run_in_background: true,
-        }),
-    );
+    const launchResult = await launchBackgroundBash(parentStreamId);
     const executionId = /Execution ID: (\S+)/.exec(
       String(launchResult.output ?? ''),
     )?.[1];
@@ -924,18 +843,12 @@ describe('BashTool', () => {
   });
 
   it('keeps bounded streamed stdout and stderr in timeout feedback', async () => {
-    vi.spyOn(execUtils, 'executeCommand').mockImplementation(
-      async (_command, options = {}) => {
+    mockStreamingCommand(
+      (options) => {
         options.onStdout?.(`STDOUT_HEAD${'o'.repeat(100_000)}STDOUT_TAIL`);
         options.onStderr?.(`STDERR_HEAD${'e'.repeat(100_000)}STDERR_TAIL`);
-        return {
-          success: false,
-          stdout: null,
-          stderr: null,
-          timedOut: true,
-          exitCode: 1,
-        };
       },
+      { success: false, timedOut: true, exitCode: 1 },
     );
 
     const result = await new BashTool().call({
@@ -960,18 +873,16 @@ describe('BashTool', () => {
     let activeController: AbortController | null = null;
     let receivedSignal: AbortSignal | undefined;
 
-    vi.spyOn(execUtils, 'executeCommand').mockImplementation(
-      async (_command, options = {}) => {
+    mockStreamingCommand(
+      (options) => {
         receivedSignal = options.signal;
         options.onStdout?.('started\n');
         activeController?.abort();
-        return {
-          success: false,
-          stdout: null,
-          stderr: 'Command aborted by user',
-          timedOut: false,
-          exitCode: 130,
-        };
+      },
+      {
+        success: false,
+        stderr: 'Command aborted by user',
+        exitCode: 130,
       },
     );
 

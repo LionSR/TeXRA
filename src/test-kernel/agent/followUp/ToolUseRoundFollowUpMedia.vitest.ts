@@ -241,77 +241,42 @@ describe('ToolUseRoundFlow queued follow-ups', () => {
     return { createResponse, createUserFollowUpMessages, services };
   }
 
-  it('continues when the model returns blank text after a tool result', async () => {
-    const { createResponse, createUserFollowUpMessages, services } =
-      createBlankTurnServices([
-        { id: 'blank', text: '' },
-        { id: 'final', text: 'Final answer: 3842.' },
-      ]);
-    const shared = createShared([toolResultMessage('executions-1')]);
+  it.each([
+    { name: 'a tool result', createToolResult: toolResultMessage },
+    {
+      name: 'an Interactions function_result step',
+      createToolResult: interactionsFunctionResultMessage,
+    },
+    {
+      name: 'a VS Code language model tool result',
+      createToolResult: vscodeLmToolResultMessage,
+    },
+  ])(
+    'continues when the model returns blank text after $name',
+    async ({ createToolResult }) => {
+      const { createResponse, createUserFollowUpMessages, services } =
+        createBlankTurnServices([
+          { id: 'blank', text: '' },
+          { id: 'final', text: 'Final answer: 3842.' },
+        ]);
+      const toolResult = createToolResult('executions-1');
+      const shared = createShared([toolResult]);
 
-    await runRound(services, shared);
+      await runRound(services, shared);
 
-    expect(createResponse).toHaveBeenCalledTimes(2);
-    expect(createUserFollowUpMessages).toHaveBeenCalledWith(
-      [expect.objectContaining({ type: 'function_call_output' })],
-      expect.stringContaining('previous assistant turn after a tool result'),
-    );
-    expect(shared.messages.at(-1)).toEqual({
-      type: 'message',
-      role: 'assistant',
-      content: 'Final answer: 3842.',
-    });
-    expect(shared.endTurn).toBe(true);
-  });
-
-  it('continues when the model returns blank text after an Interactions function_result step', async () => {
-    const { createResponse, createUserFollowUpMessages, services } =
-      createBlankTurnServices([
-        { id: 'blank', text: '' },
-        { id: 'final', text: 'Final answer: 3842.' },
-      ]);
-    const shared = createShared([
-      interactionsFunctionResultMessage('executions-1'),
-    ]);
-
-    await runRound(services, shared);
-
-    expect(createResponse).toHaveBeenCalledTimes(2);
-    expect(createUserFollowUpMessages).toHaveBeenCalledWith(
-      [expect.objectContaining({ type: 'function_result' })],
-      expect.stringContaining('previous assistant turn after a tool result'),
-    );
-    expect(shared.messages.at(-1)).toEqual({
-      type: 'message',
-      role: 'assistant',
-      content: 'Final answer: 3842.',
-    });
-    expect(shared.endTurn).toBe(true);
-  });
-
-  it('continues when a VS Code language model returns blank text after a tool result', async () => {
-    const { createResponse, createUserFollowUpMessages, services } =
-      createBlankTurnServices([
-        { id: 'blank', text: '' },
-        { id: 'final', text: 'Final answer: 3842.' },
-      ]);
-    const toolResult = vscodeLmToolResultMessage('executions-1');
-    const shared = createShared([toolResult]);
-
-    await runRound(services, shared);
-
-    expect(createResponse).toHaveBeenCalledTimes(2);
-    expect(createUserFollowUpMessages).toHaveBeenCalledWith(
-      [toolResult],
-      expect.stringContaining('previous assistant turn after a tool result'),
-    );
-    expect(shared.messages.at(-1)).toEqual({
-      type: 'message',
-      role: 'assistant',
-      content: 'Final answer: 3842.',
-    });
-    expect(shared.endTurn).toBe(true);
-  });
+      expect(createResponse).toHaveBeenCalledTimes(2);
+      expect(createUserFollowUpMessages).toHaveBeenCalledWith(
+        [toolResult],
+        expect.stringContaining('previous assistant turn after a tool result'),
+      );
+      expect(shared.messages.at(-1)).toEqual({
+        type: 'message',
+        role: 'assistant',
+        content: 'Final answer: 3842.',
+      });
+      expect(shared.endTurn).toBe(true);
+    },
+  );
 
   it('does not retry repeatedly for the same blank tool result', async () => {
     const { createResponse, createUserFollowUpMessages, services } =

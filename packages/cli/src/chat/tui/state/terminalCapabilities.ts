@@ -14,7 +14,7 @@
 // consumed by the notifier (capability-gating OSC 9 / 99 / BEL) and future
 // input-layer features (Kitty keyboard, bracketed paste).
 
-import { signal, type Signal } from '@lit-labs/signals';
+import { signal } from '@lit-labs/signals';
 
 export interface TerminalCapabilities {
   /** Kitty keyboard progressive enhancement protocol (`CSI ? u`). */
@@ -37,9 +37,7 @@ const NONE: TerminalCapabilities = {
   discovered: false,
 };
 
-const CAPS = signal<TerminalCapabilities>(NONE);
-
-export const terminalCapabilities = CAPS as Signal.State<TerminalCapabilities>;
+export const terminalCapabilities = signal<TerminalCapabilities>(NONE);
 
 // Queries to write — each must produce a response before DA1 if supported.
 // The order matches the response order so we can scan for response markers.
@@ -92,7 +90,7 @@ export async function discoverTerminalCapabilities(
   streams: DiscoveryStreams,
 ): Promise<TerminalCapabilities> {
   if (!streams.stdin.isTTY || !streams.stdout.isTTY) {
-    CAPS.set(NONE);
+    terminalCapabilities.set(NONE);
     return NONE;
   }
 
@@ -138,6 +136,6 @@ export async function discoverTerminalCapabilities(
     bracketedPaste: RESPONSE_MARKERS.bracketedPaste.test(result),
     oscColorReports: RESPONSE_MARKERS.oscColorReports.test(result),
   };
-  CAPS.set(caps);
+  terminalCapabilities.set(caps);
   return caps;
 }

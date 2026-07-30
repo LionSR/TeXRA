@@ -7,7 +7,10 @@ import '@test/support/defaultSessionTestSetup';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { ProgressFactApplier } from '@controllers/progressView/backend/events/ProgressFactApplier';
+import {
+  ProgressFactApplier,
+  type GetProgressStreamControls,
+} from '@controllers/progressView/backend/events/ProgressFactApplier';
 import { ProgressViewState } from '@controllers/progressView/backend/state/ProgressViewState';
 import type { WebviewUpdater } from '@controllers/progressView/backend/WebviewUpdater';
 import type { WebviewBridge } from '@controllers/progressView/backend/WebviewBridge';
@@ -80,19 +83,18 @@ const compileFailure: CompileFailure = {
   logRelativePath: 'paper.log',
 };
 
-async function createLoadedState(): Promise<ProgressViewState> {
+interface SyncHarness {
+  state: ProgressViewState;
+  messages: SyncStreamContentPayload[];
+  bridge: WebviewBridge;
+  handler: ProgressFactApplier;
+}
+
+async function createSyncHarness(
+  getControls?: GetProgressStreamControls,
+): Promise<SyncHarness> {
   const state = new ProgressViewState(new FakeStateStore());
   await state.snapshots.load([]);
-  return state;
-}
-
-interface SyncCapture {
-  messages: SyncStreamContentPayload[];
-  updater: WebviewUpdater;
-  bridge: WebviewBridge;
-}
-
-function createSyncCapture(): SyncCapture {
   const messages: SyncStreamContentPayload[] = [];
   const updater = {
     isAvailable: () => true,
@@ -104,20 +106,20 @@ function createSyncCapture(): SyncCapture {
     syncStream: vi.fn(),
     clearAll: vi.fn(),
   } as unknown as WebviewBridge;
-  return { messages, updater, bridge };
+  const handler = new ProgressFactApplier(
+    state,
+    updater,
+    bridge,
+    () => false,
+    vi.fn(),
+    getControls,
+  );
+  return { state, messages, bridge, handler };
 }
 
 describe('progress view stream-content projection', () => {
   it('projects the tool-use snapshot and active state', async () => {
-    const state = await createLoadedState();
-    const { messages, updater, bridge } = createSyncCapture();
-    const handler = new ProgressFactApplier(
-      state,
-      updater,
-      bridge,
-      () => false,
-      vi.fn(),
-    );
+    const { state, messages, bridge, handler } = await createSyncHarness();
 
     state.snapshots.addUsage(stream, runId, usage);
     state.snapshots.setTodos(stream, [todo]);
@@ -171,15 +173,7 @@ describe('progress view stream-content projection', () => {
   });
 
   it('projects workflow outputs without tool-use capabilities', async () => {
-    const state = await createLoadedState();
-    const { messages, updater, bridge } = createSyncCapture();
-    const handler = new ProgressFactApplier(
-      state,
-      updater,
-      bridge,
-      () => false,
-      vi.fn(),
-    );
+    const { state, messages, handler } = await createSyncHarness();
 
     state.updateStreamMetadata(stream, {
       agentCategory: AgentCategory.Workflow,
@@ -208,15 +202,7 @@ describe('progress view stream-content projection', () => {
   });
 
   it('preserves a provisional tool-use execution across metadata reset', async () => {
-    const state = await createLoadedState();
-    const { messages, updater, bridge } = createSyncCapture();
-    const handler = new ProgressFactApplier(
-      state,
-      updater,
-      bridge,
-      () => false,
-      vi.fn(),
-    );
+    const { state, messages, handler } = await createSyncHarness();
 
     state.updateStreamMetadata(stream, {
       agentCategory: AgentCategory.ToolUse,
@@ -248,15 +234,7 @@ describe('progress view stream-content projection', () => {
   });
 
   it('projects clear without placeholder stream content', async () => {
-    const state = await createLoadedState();
-    const { messages, updater, bridge } = createSyncCapture();
-    const handler = new ProgressFactApplier(
-      state,
-      updater,
-      bridge,
-      () => false,
-      vi.fn(),
-    );
+    const { messages, handler } = await createSyncHarness();
 
     handler.syncStreamContent('');
 
@@ -264,27 +242,18 @@ describe('progress view stream-content projection', () => {
   });
 
   it('includes host-provided stream controls in synced content', async () => {
-    const state = await createLoadedState();
-    const { messages, updater, bridge } = createSyncCapture();
     const controlledStream = 'stream:controls' as StreamTabId;
-    const handler = new ProgressFactApplier(
-      state,
-      updater,
-      bridge,
-      () => false,
-      vi.fn(),
-      (streamId) => {
-        expect(streamId).toBe(controlledStream);
-        return {
-          bashBypass: true,
-          toolEditBypass: true,
-          superYoloBypass: true,
-          goalActive: true,
-          goalStatus: 'active',
-          goalObjective: 'Keep making progress.',
-        };
-      },
-    );
+    const { state, messages, handler } = await createSyncHarness((streamId) => {
+      expect(streamId).toBe(controlledStream);
+      return {
+        bashBypass: true,
+        toolEditBypass: true,
+        superYoloBypass: true,
+        goalActive: true,
+        goalStatus: 'active',
+        goalObjective: 'Keep making progress.',
+      };
+    });
 
     state.updateStreamMetadata(controlledStream, {
       agentCategory: AgentCategory.ToolUse,

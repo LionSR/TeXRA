@@ -4,6 +4,7 @@ import type { ITool } from '@agent/core/tools/ToolTypes';
 import { resumeQueuedToolUseFromResumeData } from '@agent/runtime/resumeQueuedToolUse';
 import type { StreamTabId } from '@shared/schemas';
 import { RUN_OUTCOME } from '@shared/schemas';
+import { createDeferred } from '@test/support/asyncTestUtils';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 
@@ -86,12 +87,9 @@ describe('resumeQueuedToolUseFromResumeData ownership', () => {
   it('rejects a competing recovery consumer deterministically', async () => {
     const session = createTestSession();
     seedRecoverable(session, 'once');
-    let unblock!: () => void;
-    const barrier = new Promise<void>((resolve) => {
-      unblock = resolve;
-    });
+    const barrier = createDeferred();
     resumeToolUseFromResumeDataMock.mockImplementationOnce(async () => {
-      await barrier;
+      await barrier.promise;
       return completed;
     });
 
@@ -109,7 +107,7 @@ describe('resumeQueuedToolUseFromResumeData ownership', () => {
           onError: vi.fn(),
         }),
       ).resolves.toBe(false);
-      unblock();
+      barrier.resolve();
       await first;
       expect(resumeToolUseFromResumeDataMock).toHaveBeenCalledOnce();
     } finally {

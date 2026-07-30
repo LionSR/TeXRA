@@ -40,6 +40,30 @@ const FORBIDDEN_SCHEMA_PROPERTY_KEYS = [
   'prototype',
 ];
 
+// Schema keywords the walker recurses into, grouped by the shape of their
+// value: a single subschema, an array of subschemas, or a record of them.
+const SUBSCHEMA_KEYS = [
+  'additionalItems',
+  'additionalProperties',
+  'contains',
+  'else',
+  'if',
+  'items',
+  'not',
+  'propertyNames',
+  'then',
+  'unevaluatedItems',
+  'unevaluatedProperties',
+];
+const SUBSCHEMA_LIST_KEYS = ['allOf', 'anyOf', 'oneOf', 'prefixItems'];
+const SUBSCHEMA_RECORD_KEYS = [
+  '$defs',
+  'definitions',
+  'dependentSchemas',
+  'dependencies',
+  'properties',
+];
+
 /**
  * Guard a JSON Schema authored inside a workflow sandbox (untrusted) before it
  * crosses into host Zod compilation via z.fromJSONSchema. Walking the schema it
@@ -87,34 +111,16 @@ function assertSafeSandboxSchema(schema: unknown): void {
       );
     }
 
-    for (const key of [
-      'additionalItems',
-      'additionalProperties',
-      'contains',
-      'else',
-      'if',
-      'items',
-      'not',
-      'propertyNames',
-      'then',
-      'unevaluatedItems',
-      'unevaluatedProperties',
-    ]) {
+    for (const key of SUBSCHEMA_KEYS) {
       walk(record[key], depth + 1);
     }
-    for (const key of ['allOf', 'anyOf', 'oneOf', 'prefixItems']) {
+    for (const key of SUBSCHEMA_LIST_KEYS) {
       const branches = record[key];
       if (Array.isArray(branches)) {
         for (const branch of branches) walk(branch, depth + 1);
       }
     }
-    for (const key of [
-      '$defs',
-      'definitions',
-      'dependentSchemas',
-      'dependencies',
-      'properties',
-    ]) {
+    for (const key of SUBSCHEMA_RECORD_KEYS) {
       const schemas = record[key];
       if (schemas !== null && typeof schemas === 'object') {
         for (const name of Object.keys(schemas)) {

@@ -165,6 +165,29 @@ function firstQualifiedName(name: ts.EntityName): string {
   return ts.isIdentifier(name) ? name.text : firstQualifiedName(name.left);
 }
 
+/**
+ * `import(…)`, `require(…)`, `module.require(…)`, `require.resolve(…)` or
+ * `import.meta.resolve(…)`.
+ */
+function isModuleLoadingCallee(expression: ts.LeftHandSideExpression): boolean {
+  if (expression.kind === ts.SyntaxKind.ImportKeyword) return true;
+  if (ts.isIdentifier(expression)) return expression.text === 'require';
+  if (!ts.isPropertyAccessExpression(expression)) return false;
+
+  const { expression: target, name } = expression;
+  if (ts.isIdentifier(target)) {
+    return (
+      (target.text === 'module' && name.text === 'require') ||
+      (target.text === 'require' && name.text === 'resolve')
+    );
+  }
+  return (
+    ts.isMetaProperty(target) &&
+    target.keywordToken === ts.SyntaxKind.ImportKeyword &&
+    name.text === 'resolve'
+  );
+}
+
 /** Find every syntactic form that can reach into a schema leaf. */
 function deepImportReferences(
   sourceFile: ts.SourceFile,
@@ -217,43 +240,18 @@ function deepImportReferences(
             ],
         true,
       );
-    } else if (ts.isCallExpression(node)) {
-      const isDynamicImport =
-        node.expression.kind === ts.SyntaxKind.ImportKeyword;
-      const isRequire =
-        ts.isIdentifier(node.expression) && node.expression.text === 'require';
-      const isModuleRequire =
-        ts.isPropertyAccessExpression(node.expression) &&
-        ts.isIdentifier(node.expression.expression) &&
-        node.expression.expression.text === 'module' &&
-        node.expression.name.text === 'require';
-      const isRequireResolve =
-        ts.isPropertyAccessExpression(node.expression) &&
-        ts.isIdentifier(node.expression.expression) &&
-        node.expression.expression.text === 'require' &&
-        node.expression.name.text === 'resolve';
-      const isImportMetaResolve =
-        ts.isPropertyAccessExpression(node.expression) &&
-        ts.isMetaProperty(node.expression.expression) &&
-        node.expression.expression.keywordToken ===
-          ts.SyntaxKind.ImportKeyword &&
-        node.expression.name.text === 'resolve';
-      if (
-        isDynamicImport ||
-        isRequire ||
-        isModuleRequire ||
-        isRequireResolve ||
-        isImportMetaResolve
-      ) {
-        const [argument] = node.arguments;
-        add(
-          argument != null && ts.isStringLiteralLike(argument)
-            ? argument.text
-            : undefined,
-          undefined,
-          false,
-        );
-      }
+    } else if (
+      ts.isCallExpression(node) &&
+      isModuleLoadingCallee(node.expression)
+    ) {
+      const [argument] = node.arguments;
+      add(
+        argument != null && ts.isStringLiteralLike(argument)
+          ? argument.text
+          : undefined,
+        undefined,
+        false,
+      );
     }
     ts.forEachChild(node, visit);
   };

@@ -167,6 +167,19 @@ interface RoundOverlay<T> {
 }
 
 /**
+ * The overlay patch each accumulator records while its stream is unseeded,
+ * keyed by accumulator. One map keyed by field name lets
+ * {@link StreamSnapshotStore.mutateWithOverlay} take the field name instead of
+ * a getter/setter pair per call site.
+ */
+interface OverlayPatches {
+  outputFiles: OutputFilesPatch;
+  missingOutputs: RoundOverlay<string>;
+  compileFailures: Map<number, CompileFailure[] | null>;
+  usage: Map<StorageKey, TokenUsageStats>;
+}
+
+/**
  * Merge {@link RoundOverlay} patches in call order so `clearMissingOutputs`
  * interleaved with `updateMissingOutputs` on the same unseeded stream
  * replays correctly regardless of which fired first: a reset (`clear`)
@@ -285,10 +298,7 @@ interface StreamRecord {
   // the freshly-read disk state — an eager write racing ahead of its own seed
   // is never clobbered by that seed's raw disk read. See `mutateWithOverlay`.
   metaOverlay: boolean;
-  outputFileOverlay: OutputFilesPatch | undefined;
-  missingOutputsOverlay: RoundOverlay<string> | undefined;
-  compileFailuresOverlay: Map<number, CompileFailure[] | null> | undefined;
-  usageOverlay: Map<StorageKey, TokenUsageStats> | undefined;
+  overlays: Partial<OverlayPatches>;
 
   // -- Cached KVStore handle for this stream's sidecar directory. ----------
   kv: KVStore | undefined;
@@ -355,10 +365,7 @@ export class StreamSnapshotStore {
         seeded: false,
         seedChain: undefined,
         metaOverlay: false,
-        outputFileOverlay: undefined,
-        missingOutputsOverlay: undefined,
-        compileFailuresOverlay: undefined,
-        usageOverlay: undefined,
+        overlays: {},
         kv: undefined,
         writeKv: undefined,
       };
@@ -691,7 +698,7 @@ export class StreamSnapshotStore {
    * always runs immediately, so a caller can read its own write back
    * synchronously whether or not the stream is seeded yet. A seeded stream
    * also persists immediately (`persist`). An unseeded stream instead
-   * records `overlayPatch` on the stream's record via `setOverlay` (merged
+   * records `overlayPatch` under `overlayKey` on the stream's record (merged
    * with anything still pending from an earlier unseeded mutation via
    * `mergePatch`), leaving `overlayPatch` `undefined` to skip recording
    * (used for effectively-empty patches). `applyStreamData`'s post-seed
@@ -702,12 +709,14 @@ export class StreamSnapshotStore {
    * every round/usage mutator now shares it here, so a future one inherits
    * it by construction instead of needing its own bespoke overlay block.
    */
-  private mutateWithOverlay<T, P>(
+  private mutateWithOverlay<T, K extends keyof OverlayPatches>(
     stream: StreamTabId,
-    overlayPatch: P | undefined,
-    getOverlay: (record: StreamRecord) => P | undefined,
-    setOverlay: (record: StreamRecord, value: P) => void,
-    mergePatch: (existing: P | undefined, patch: P) => P,
+    overlayKey: K,
+    overlayPatch: OverlayPatches[K] | undefined,
+    mergePatch: (
+      existing: OverlayPatches[K] | undefined,
+      patch: OverlayPatches[K],
+    ) => OverlayPatches[K],
     applyToMemory: () => T,
     persist: () => void,
   ): { result: T; pending: Promise<void> | undefined } {
@@ -720,8 +729,8 @@ export class StreamSnapshotStore {
 
     const version = this.streamVersion(stream);
     if (overlayPatch !== undefined) {
-      const record = this.getOrCreateRecord(stream);
-      setOverlay(record, mergePatch(getOverlay(record), overlayPatch));
+      const { overlays } = this.getOrCreateRecord(stream);
+      overlays[overlayKey] = mergePatch(overlays[overlayKey], overlayPatch);
     }
     return {
       result,
@@ -743,11 +752,8 @@ export class StreamSnapshotStore {
 
     this.mutateWithOverlay(
       stream,
+      'outputFiles',
       patch,
-      (record) => record.outputFileOverlay,
-      (record, value) => {
-        record.outputFileOverlay = value;
-      },
       mergeRoundPatch,
       () =>
         this.applyRoundPatch(
@@ -770,11 +776,8 @@ export class StreamSnapshotStore {
 
     this.mutateWithOverlay(
       stream,
+      'missingOutputs',
       { reset: false, patch },
-      (record) => record.missingOutputsOverlay,
-      (record, value) => {
-        record.missingOutputsOverlay = value;
-      },
       mergeMissingOutputsOverlay,
       () =>
         this.applyRoundPatch(
@@ -803,11 +806,8 @@ export class StreamSnapshotStore {
 
     this.mutateWithOverlay(
       stream,
+      'compileFailures',
       patch,
-      (record) => record.compileFailuresOverlay,
-      (record, value) => {
-        record.compileFailuresOverlay = value;
-      },
       mergeRoundPatch,
       () =>
         this.applyRoundPatch(
@@ -852,11 +852,8 @@ export class StreamSnapshotStore {
 
     const { result: accumulated, pending } = this.mutateWithOverlay(
       stream,
+      'usage',
       overlayPatch,
-      (record) => record.usageOverlay,
-      (record, value) => {
-        record.usageOverlay = value;
-      },
       mergeUsagePatch,
       () =>
         this.applyUsageDeltaMemory(
@@ -946,11 +943,8 @@ export class StreamSnapshotStore {
     let existed = false;
     this.mutateWithOverlay(
       stream,
+      'missingOutputs',
       { reset: true, patch: new Map<number, string[] | null>() },
-      (record) => record.missingOutputsOverlay,
-      (record, value) => {
-        record.missingOutputsOverlay = value;
-      },
       mergeMissingOutputsOverlay,
       () => {
         const record = this.records.get(stream);
@@ -1811,14 +1805,22 @@ export class StreamSnapshotStore {
    * stream, such as a display-only read that was never resumed, hits disk.
    */
   async read(streamId: StreamTabId): Promise<StreamSnapshot> {
+    if (await this.awaitSeeded(streamId)) {
+      return this.snapshotFromMemory(streamId);
+    }
+    return assembleSnapshot(streamId, await readStreamData(this.kv(streamId)));
+  }
+
+  /**
+   * Await any in-flight seed for a stream and report whether its in-memory
+   * accumulators are authoritative afterward.
+   */
+  private async awaitSeeded(streamId: StreamTabId): Promise<boolean> {
     const seedChain = this.records.get(streamId)?.seedChain;
     if (seedChain) {
       await seedChain;
     }
-    if (this.records.get(streamId)?.seeded) {
-      return this.snapshotFromMemory(streamId);
-    }
-    return assembleSnapshot(streamId, await readStreamData(this.kv(streamId)));
+    return this.records.get(streamId)?.seeded ?? false;
   }
 
   /**
@@ -1853,11 +1855,7 @@ export class StreamSnapshotStore {
   async readOutputFiles(
     streamId: StreamTabId,
   ): Promise<RoundIndexed<OutputFileInfo>> {
-    const seedChain = this.records.get(streamId)?.seedChain;
-    if (seedChain) {
-      await seedChain;
-    }
-    if (this.records.get(streamId)?.seeded) {
+    if (await this.awaitSeeded(streamId)) {
       return this.getOutputFiles(streamId);
     }
     return (await readStreamData(this.kv(streamId))).outputFiles;
@@ -1998,7 +1996,7 @@ export class StreamSnapshotStore {
       metaOverlay !== undefined ? record.runConfig : undefined;
     const runDescriptorOverlay =
       metaOverlay !== undefined ? record.runDescriptor : undefined;
-    const usageOverlayToReplay = new Map(record.usageOverlay);
+    const usageOverlayToReplay = new Map(record.overlays.usage);
     // Seeded with `data.legacyKeys` unconditionally (unlike the overlay
     // additions below, which are gated on that overlay actually being
     // present): a legacy key with no corresponding overlay data still gets
@@ -2060,40 +2058,37 @@ export class StreamSnapshotStore {
     if (runDescriptor) record.runDescriptor = runDescriptor;
     record.metaOverlay = false;
 
-    const outputFileOverlay = record.outputFileOverlay;
-    const missingOutputsOverlay = record.missingOutputsOverlay;
-    const compileFailuresOverlay = record.compileFailuresOverlay;
-    const usageOverlay = record.usageOverlay;
-    if (outputFileOverlay) {
-      this.applyRoundPatch((r) => r.outputFiles, record, outputFileOverlay);
+    const { overlays } = record;
+    if (overlays.outputFiles) {
+      this.applyRoundPatch((r) => r.outputFiles, record, overlays.outputFiles);
       sidecarsToWrite.add(STREAM_DATA_KEYS.OUTPUT_FILES);
-      record.outputFileOverlay = undefined;
+      overlays.outputFiles = undefined;
     }
-    if (missingOutputsOverlay) {
-      if (missingOutputsOverlay.reset) record.missingOutputs = {};
+    if (overlays.missingOutputs) {
+      if (overlays.missingOutputs.reset) record.missingOutputs = {};
       this.applyRoundPatch(
         (r) => r.missingOutputs,
         record,
-        missingOutputsOverlay.patch,
+        overlays.missingOutputs.patch,
       );
       sidecarsToWrite.add(STREAM_DATA_KEYS.MISSING_OUTPUTS);
-      record.missingOutputsOverlay = undefined;
+      overlays.missingOutputs = undefined;
     }
-    if (compileFailuresOverlay) {
+    if (overlays.compileFailures) {
       this.applyRoundPatch(
         (r) => r.compileFailures,
         record,
-        compileFailuresOverlay,
+        overlays.compileFailures,
       );
       sidecarsToWrite.add(STREAM_DATA_KEYS.COMPILE_FAILURES);
-      record.compileFailuresOverlay = undefined;
+      overlays.compileFailures = undefined;
     }
-    if (usageOverlay) {
+    if (overlays.usage) {
       for (const [storageKey, delta] of usageOverlayToReplay) {
         this.applyUsageDeltaMemory(record, storageKey, delta);
       }
       sidecarsToWrite.add(STREAM_DATA_KEYS.USAGE_STATS);
-      record.usageOverlay = undefined;
+      overlays.usage = undefined;
     }
     record.seeded = true;
     this.writeMergedSidecars(stream, record, sidecarsToWrite);

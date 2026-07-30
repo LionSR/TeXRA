@@ -170,8 +170,14 @@ export class ToolUseProcessNode<C> extends BaseNode<
     prepRes: ToolUseProcessPrepResult,
     execRes: ToolUseProcessExecResult,
   ): Promise<string | undefined> {
-    const { run, workspace, onRoundFinalized, modelHandler, logger } =
-      this.services;
+    const {
+      run,
+      workspace,
+      onRoundFinalized,
+      modelHandler,
+      logger,
+      finalTool,
+    } = this.services;
 
     if (execRes.kind === 'skipped') {
       return FlowTransition.COMPLETE;
@@ -251,7 +257,7 @@ export class ToolUseProcessNode<C> extends BaseNode<
       workspace.resetServerToolContent();
       workspace.resetReasoning();
 
-      if (this.services.finalTool && !shared.finalToolAttempted) {
+      if (finalTool && !shared.finalToolAttempted) {
         const result = await appendFollowUpAsUserMessage(
           shared.messages,
           { text: FINAL_TOOL_INSTRUCTION, origin: 'synthetic' },
@@ -259,7 +265,7 @@ export class ToolUseProcessNode<C> extends BaseNode<
         );
         shared.messages = result.messages;
         if (modelHandler.supportsForcedToolChoice) {
-          shared.finalTool = this.services.finalTool;
+          shared.finalTool = finalTool;
         }
         shared.finalToolAttempted = true;
         shared.toolCalls = undefined;

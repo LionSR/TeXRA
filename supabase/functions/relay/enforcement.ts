@@ -110,11 +110,9 @@ export async function checkSpendingLimit(
 
   const currentSpend = parseCurrentSpend(result.data);
   if (currentSpend === undefined) {
-    const responseType = Array.isArray(result.data)
-      ? 'array'
-      : result.data === null
-        ? 'null'
-        : typeof result.data;
+    let responseType: string = typeof result.data;
+    if (Array.isArray(result.data)) responseType = 'array';
+    else if (result.data === null) responseType = 'null';
     console.error(
       `[RELAY] Monthly spending RPC returned invalid ${responseType} data`,
     );

@@ -12,7 +12,7 @@ export function bearerToken(req: Request): string | null {
   return authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
 }
 
-export interface AuthenticatedUser {
+interface AuthenticatedUser {
   user: User;
   /**
    * User-scoped client (anon key + the user's JWT), so RLS applies to

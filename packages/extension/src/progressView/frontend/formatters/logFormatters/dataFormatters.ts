@@ -47,22 +47,22 @@ export function formatFileListTemplate(
   const shouldOpen = options?.defaultOpen ?? false;
 
   // Raw fallback when parsing fails
-  if (!parseResult.success) {
-    // prettier-ignore
-    return html`<wa-details appearance="plain" icon-placement="start" class="banner-details file-list-details" ?open=${shouldOpen}>${buildDetailsSummary({
-      iconName: 'file',
-      label: 'Files (raw)',
-      labelClass: 'summary-text',
-    })}<ul class="file-list-content" data-log-id=${ifDefined(id)}><pre>${text ?? ''}</pre></ul></wa-details>`;
-  }
+  const renderData = parseResult.success
+    ? buildFileListRender(parseResult.data)
+    : undefined;
+  const label = parseResult.success
+    ? (renderData?.summary ?? 'Files')
+    : 'Files (raw)';
+  const listContent = parseResult.success
+    ? (renderData?.items ?? '')
+    : html`<pre>${text ?? ''}</pre>`;
 
-  const renderData = buildFileListRender(parseResult.data);
   // prettier-ignore
   return html`<wa-details appearance="plain" icon-placement="start" class="banner-details file-list-details" ?open=${shouldOpen}>${buildDetailsSummary({
     iconName: 'file',
-    label: renderData?.summary ?? 'Files',
+    label,
     labelClass: 'summary-text',
-  })}<ul class="file-list-content" data-log-id=${ifDefined(id)}>${renderData?.items ?? ''}</ul></wa-details>`;
+  })}<ul class="file-list-content" data-log-id=${ifDefined(id)}>${listContent}</ul></wa-details>`;
 }
 
 /** Render XML link template. */

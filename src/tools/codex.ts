@@ -164,7 +164,6 @@ function formatCodexDelivery(
 // Stream tab helpers
 // ============================================================================
 
-type CodexToolLogRef = ToolUseCardRef;
 type ToolUseStatus = NonNullable<ToolUseLog['status']>;
 
 export function publishCodexTodos(
@@ -244,7 +243,7 @@ function buildCodexLiveToolLog(
 
 function updateCodexLiveToolLog(
   logger: AgentTrace,
-  refs: Map<string, CodexToolLogRef>,
+  refs: Map<string, ToolUseCardRef>,
   item: ThreadItem,
   toolLog: ToolUseLog,
 ): void {
@@ -263,7 +262,7 @@ function publishCodexItemProgress(params: {
   status: ToolUseStatus;
   childStreamId: StreamTabId;
   logger: AgentTrace;
-  refs: Map<string, CodexToolLogRef>;
+  refs: Map<string, ToolUseCardRef>;
 }): boolean {
   const { item, status, childStreamId, logger, refs } = params;
 
@@ -294,14 +293,14 @@ export async function runStreamedTurn(
   const { events } = await thread.runStreamed(prompt, { signal });
   const responseParts: string[] = [];
   let usage: RunResult['usage'] = null;
-  const itemLogRefs = new Map<string, CodexToolLogRef>();
+  const itemLogRefs = new Map<string, ToolUseCardRef>();
 
   // The live "Codex Turn" card is opened on turn.started and closed on
   // turn.completed / turn.failed with the measured wall time. The finally
   // below closes it on any other exit (stream error, abort, or an early stream
   // end) so the progress view never keeps a spinning Running card after the
   // turn is already dead. finalizeTurnCard is a no-op once the card is closed.
-  let turnLogRef: CodexToolLogRef | null = null;
+  let turnLogRef: ToolUseCardRef | null = null;
   let turnStartedMs = Date.now();
   const finalizeTurnCard = (state: 'completed' | 'failed', error?: string) => {
     if (!turnLogRef) return;

@@ -9,7 +9,8 @@ import {
 
 import { parentStream } from './childExecutions';
 import { activeStreamId, setStreamStatusInCliState } from './cliState';
-import { projectStreamTranscriptForStatus } from './transcriptProjection';
+import { isFinalTranscriptStatus } from './transcript';
+import { projectStreamTranscript } from './transcriptProjection';
 
 export function subscribeStreamStatus(): () => void {
   return defaultSession().status.onDidChange((change) => {
@@ -24,7 +25,9 @@ export function subscribeStreamStatus(): () => void {
       ...(change.substate ? { substate: change.substate } : {}),
     });
     if (recognized) {
-      projectStreamTranscriptForStatus(change.streamId, change.status);
+      projectStreamTranscript(change.streamId, {
+        finalize: isFinalTranscriptStatus(change.status),
+      });
     }
 
     // A completed or user-stopped child returns manual focus to that child's

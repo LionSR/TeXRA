@@ -81,32 +81,29 @@ function reflectionShared(): ReflectionFlowShared {
   };
 }
 
-function makeNode(
-  checkInterruption: () => boolean,
-  logger: {
+function makeNode(options: {
+  checkInterruption: () => boolean;
+  logger?: {
     error: ReturnType<typeof vi.fn>;
     debug: ReturnType<typeof vi.fn>;
-  } = {
-    error: vi.fn(),
-    debug: vi.fn(),
-  },
-  clearCompactionRequest: () => void = vi.fn(),
-): ResponseCycleNode {
+  };
+  clearCompactionRequest?: () => void;
+}): ResponseCycleNode {
   return new ResponseCycleNode().setServices({
     getOutputFileLocation: async () => outputLocation,
-    checkInterruption,
+    checkInterruption: options.checkInterruption,
     modelHandler: {
       initializeOutputAndPrefill: async () => [false, []],
-      clearCompactionRequest,
+      clearCompactionRequest: options.clearCompactionRequest ?? vi.fn(),
     },
     config: {},
     setting: {},
-    logger,
+    logger: options.logger ?? { error: vi.fn(), debug: vi.fn() },
   } as unknown as ReflectionServices);
 }
 
 async function runCycle(checkInterruption: () => boolean) {
-  const node = makeNode(checkInterruption);
+  const node = makeNode({ checkInterruption });
   const prep = await node.prep(reflectionShared());
   return node.exec(prep);
 }
@@ -161,11 +158,10 @@ describe('ResponseCycleNode outcome classification', () => {
     flowState.contextWindowRecoveryRequestId = 7;
     const clearCompactionRequest = vi.fn();
 
-    const node = makeNode(
-      () => true,
-      { error: vi.fn(), debug: vi.fn() },
+    const node = makeNode({
+      checkInterruption: () => true,
       clearCompactionRequest,
-    );
+    });
     const prep = await node.prep(reflectionShared());
 
     const result = await node.exec(prep);
@@ -183,11 +179,10 @@ describe('ResponseCycleNode outcome classification', () => {
       userRetryable: true,
     };
     const clearCompactionRequest = vi.fn();
-    const node = makeNode(
-      () => false,
-      { error: vi.fn(), debug: vi.fn() },
+    const node = makeNode({
+      checkInterruption: () => false,
       clearCompactionRequest,
-    );
+    });
     const prep = await node.prep(reflectionShared());
 
     const result = await node.exec(prep);
@@ -204,7 +199,7 @@ describe('ResponseCycleNode outcome classification', () => {
     };
     flowState.failureLogEmitted = true;
     const logger = { error: vi.fn(), debug: vi.fn() };
-    const node = makeNode(() => false, logger);
+    const node = makeNode({ checkInterruption: () => false, logger });
     const shared = reflectionShared();
     const prep = await node.prep(shared);
 
@@ -226,7 +221,7 @@ describe('ResponseCycleNode outcome classification', () => {
       userRetryable: false,
     };
     const logger = { error: vi.fn(), debug: vi.fn() };
-    const node = makeNode(() => false, logger);
+    const node = makeNode({ checkInterruption: () => false, logger });
     const shared = reflectionShared();
     const prep = await node.prep(shared);
 

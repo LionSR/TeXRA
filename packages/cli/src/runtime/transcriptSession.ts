@@ -83,13 +83,10 @@ export async function initializeInteractiveTranscriptSession(
   const existing = tryDefaultSession();
   if (existing) {
     await existing.waitUntilReady();
-    if (existing.transcripts.mode.kind === 'persistent') {
-      return { session: existing, canResume: true };
-    }
-    if (existing.transcripts.mode.kind === 'read-only') {
-      return persistentSession(existing);
-    }
-    if (policy.onPersistentOpenFailure === 'fail') {
+    if (
+      existing.transcripts.mode.kind !== 'ephemeral' ||
+      policy.onPersistentOpenFailure === 'fail'
+    ) {
       return persistentSession(existing);
     }
     const warning = formatEphemeralWarning(existing.transcripts.mode.reason);

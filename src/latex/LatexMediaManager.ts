@@ -508,9 +508,6 @@ export class LatexMediaManager {
     supportsVision: boolean,
     {
       figureMode,
-      mirrorFileDependencies,
-      includeTikzCompilation,
-      includePdfCompilation,
       extraMediaFiles = [],
       logTikzSummary = false,
     }: {
@@ -518,13 +515,9 @@ export class LatexMediaManager {
        * How to handle \includegraphics figures:
        *  - 'extract': discover + add to vision context + mirror into run storage
        *  - 'mirror':  discover + mirror only (no vision)
-       *  - 'none':    skip
-       * All modes are additionally gated by `cfg.autoExtractFigure`.
+       * Both modes are additionally gated by `cfg.autoExtractFigure`.
        */
-      figureMode: 'extract' | 'mirror' | 'none';
-      mirrorFileDependencies: boolean;
-      includeTikzCompilation: boolean;
-      includePdfCompilation: boolean;
+      figureMode: 'extract' | 'mirror';
       extraMediaFiles?: PathInput[];
       logTikzSummary?: boolean;
     },
@@ -559,16 +552,14 @@ export class LatexMediaManager {
     if (cfg.autoExtractFigure) {
       if (figureMode === 'extract') {
         await this.extractFiguresFromFiles(existingFiles, workspaceState);
-      } else if (figureMode === 'mirror') {
+      } else {
         await this.mirrorFiguresForFiles(existingFiles);
       }
     }
 
-    if (mirrorFileDependencies) {
-      await this.mirrorLatexFileDependencies(existingFiles);
-    }
+    await this.mirrorLatexFileDependencies(existingFiles);
 
-    if (includeTikzCompilation && cfg.autoExtractTikzFigure) {
+    if (cfg.autoExtractTikzFigure) {
       await this.compileTikzFigures(
         existingFiles,
         workspaceState,
@@ -576,7 +567,7 @@ export class LatexMediaManager {
       );
     }
 
-    if (includePdfCompilation && cfg.autoCompileInputPdf) {
+    if (cfg.autoCompileInputPdf) {
       await this.compilePdfs(existingFiles, workspaceState);
     }
   }
@@ -598,9 +589,6 @@ export class LatexMediaManager {
   ): Promise<void> {
     await this.processFiles(inputFiles, workspaceState, cfg, supportsVision, {
       figureMode: 'extract',
-      mirrorFileDependencies: true,
-      includeTikzCompilation: true,
-      includePdfCompilation: true,
       extraMediaFiles,
       logTikzSummary: true,
     });
@@ -621,9 +609,6 @@ export class LatexMediaManager {
   ): Promise<void> {
     await this.processFiles(outputFiles, workspaceState, cfg, supportsVision, {
       figureMode: 'mirror',
-      mirrorFileDependencies: true,
-      includeTikzCompilation: true,
-      includePdfCompilation: true,
     });
   }
 }

@@ -418,30 +418,7 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
         const hotkey = selectHotkeyForIndex(i);
         const shortcut = hotkey ? `${hotkey}.` : '  ';
         const showInlineOverflow = focused && inlineOverflowText;
-        if (props.renderItem) {
-          return (
-            <Box
-              key={selectItemRenderKey(item, i)}
-              minWidth={0}
-              aria-role="option"
-              aria-state={{
-                selected: focused,
-                checked: active,
-                disabled: item.disabled,
-              }}
-            >
-              {props.renderItem(item, {
-                active,
-                focused,
-                hiddenItemCount: hiddenBefore + hiddenAfter,
-                index: i,
-                ...(showInlineOverflow
-                  ? { overflowText: inlineOverflowText }
-                  : {}),
-              })}
-            </Box>
-          );
-        }
+        const focusColor = focused ? COLOR_HINT : undefined;
         return (
           <Box
             key={selectItemRenderKey(item, i)}
@@ -453,40 +430,54 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
               disabled: item.disabled,
             }}
           >
-            {/* Pointer/tick glyphs are decorative for screen readers — the
-                option role + state above already announce focus/active. The
-                hotkey stays audible because it is actionable. */}
-            <Box flexShrink={0}>
-              <Text aria-hidden color={focused ? COLOR_HINT : undefined}>
-                {pointer} {tick}{' '}
-              </Text>
-              <Text color={focused ? COLOR_HINT : undefined}>{shortcut} </Text>
-            </Box>
-            <Box
-              flexShrink={0}
-              maxWidth={props.labelMaxCols ?? SELECT_LABEL_MAX_COLS}
-            >
-              <Text
-                color={focused ? COLOR_HINT : undefined}
-                dimColor={item.disabled}
-                wrap="truncate-end"
-              >
-                {item.label}
-              </Text>
-            </Box>
-            {showInlineOverflow ? (
-              <Box flexShrink={0}>
-                <Text dimColor>{` — ${inlineOverflowText}`}</Text>
-              </Box>
-            ) : null}
-            {item.description && !showInlineOverflow ? (
-              <Box minWidth={0} flexShrink={1}>
-                <Text
-                  dimColor
-                  wrap="truncate-end"
-                >{` — ${item.description}`}</Text>
-              </Box>
-            ) : null}
+            {props.renderItem ? (
+              props.renderItem(item, {
+                active,
+                focused,
+                hiddenItemCount: hiddenBefore + hiddenAfter,
+                index: i,
+                ...(showInlineOverflow
+                  ? { overflowText: inlineOverflowText }
+                  : {}),
+              })
+            ) : (
+              <>
+                {/* Pointer/tick glyphs are decorative for screen readers — the
+                    option role + state above already announce focus/active. The
+                    hotkey stays audible because it is actionable. */}
+                <Box flexShrink={0}>
+                  <Text aria-hidden color={focusColor}>
+                    {pointer} {tick}{' '}
+                  </Text>
+                  <Text color={focusColor}>{shortcut} </Text>
+                </Box>
+                <Box
+                  flexShrink={0}
+                  maxWidth={props.labelMaxCols ?? SELECT_LABEL_MAX_COLS}
+                >
+                  <Text
+                    color={focusColor}
+                    dimColor={item.disabled}
+                    wrap="truncate-end"
+                  >
+                    {item.label}
+                  </Text>
+                </Box>
+                {showInlineOverflow ? (
+                  <Box flexShrink={0}>
+                    <Text dimColor>{` — ${inlineOverflowText}`}</Text>
+                  </Box>
+                ) : null}
+                {item.description && !showInlineOverflow ? (
+                  <Box minWidth={0} flexShrink={1}>
+                    <Text
+                      dimColor
+                      wrap="truncate-end"
+                    >{` — ${item.description}`}</Text>
+                  </Box>
+                ) : null}
+              </>
+            )}
           </Box>
         );
       })}

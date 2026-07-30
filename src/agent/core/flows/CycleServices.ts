@@ -21,6 +21,15 @@ import type { RetryErrorInfo } from '@shared/schemas';
 import type { TaskRunFileService } from '@utils/files';
 
 /**
+ * Re-fetches the provider client, e.g. after a mid-run model switch or a relay
+ * token refresh.
+ */
+export type RefreshModelClient = (
+  selection?: ModelCredentialSelection,
+  signal?: AbortSignal,
+) => Promise<void>;
+
+/**
  * The live model-client contract every cycle/round flow shares because each
  * runs a `ModelInvocationNode`.
  *
@@ -37,10 +46,7 @@ import type { TaskRunFileService } from '@utils/files';
 export interface ModelClientServices<C = unknown> {
   readonly client: C;
   readonly clientCredentialRoute?: ModelCredentialRoute | undefined;
-  readonly refreshClient?: (
-    selection?: ModelCredentialSelection,
-    signal?: AbortSignal,
-  ) => Promise<void>;
+  readonly refreshClient?: RefreshModelClient;
 }
 
 /**

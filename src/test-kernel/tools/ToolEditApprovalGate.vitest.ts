@@ -1,6 +1,4 @@
 // Test composition imports
-
-// Local imports
 import '@test/support/defaultSessionTestSetup';
 
 // Node imports
@@ -8,7 +6,7 @@ import * as assert from 'node:assert';
 
 // Third-party imports
 import pDefer from 'p-defer';
-import { describe, it, beforeEach, afterEach } from 'vitest';
+import { describe, it, beforeEach, afterEach, vi } from 'vitest';
 
 // Local imports
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
@@ -72,26 +70,22 @@ async function callTextEditorInRun(
   );
 }
 
-describe('Tool edit approval gating', () => {
-  let originalExists: typeof WorkspaceFS.exists;
-  let originalRead: typeof WorkspaceFS.read;
-  let originalWrite: typeof WorkspaceFS.write;
-  let originalAppend: typeof WorkspaceFS.appendFile;
+// Spies the workspace reads a tool performs before proposing an edit and
+// returns the write spy so a test can inspect what was applied.
+function stubWorkspaceFile(options: { exists: boolean; content: string }) {
+  vi.spyOn(WorkspaceFS, 'exists').mockResolvedValue(options.exists);
+  vi.spyOn(WorkspaceFS, 'read').mockResolvedValue(options.content);
+  return vi.spyOn(WorkspaceFS, 'write').mockResolvedValue(undefined);
+}
 
+describe('Tool edit approval gating', () => {
   beforeEach(async () => {
-    originalExists = WorkspaceFS.exists;
-    originalRead = WorkspaceFS.read;
-    originalWrite = WorkspaceFS.write;
-    originalAppend = WorkspaceFS.appendFile;
     await installPlatform();
     cleanupAllApprovals();
   });
 
   afterEach(() => {
-    WorkspaceFS.exists = originalExists;
-    WorkspaceFS.read = originalRead;
-    WorkspaceFS.write = originalWrite;
-    WorkspaceFS.appendFile = originalAppend;
+    vi.restoreAllMocks();
     testApprovalHandler = undefined;
     detachHostInteractions();
     detachHostInteractions = () => {};
@@ -101,13 +95,8 @@ describe('Tool edit approval gating', () => {
   it('write_file applies changes after approval', async () => {
     const tool = new WriteFileTool();
     let capturedRequest: ToolEditApprovalRequest | undefined;
-    let writtenContent: string | undefined;
 
-    WorkspaceFS.exists = async () => true;
-    WorkspaceFS.read = async () => 'old content';
-    WorkspaceFS.write = async (_path: string, content: string) => {
-      writtenContent = content;
-    };
+    const write = stubWorkspaceFile({ exists: true, content: 'old content' });
 
     testApprovalHandler = async (request) => {
       capturedRequest = request;
@@ -120,19 +109,14 @@ describe('Tool edit approval gating', () => {
     assert.strictEqual(capturedRequest?.originalContent, 'old content');
     assert.strictEqual(capturedRequest?.proposedContent, 'new content');
     assert.strictEqual(capturedRequest?.sourceTool, 'write_file');
-    assert.strictEqual(writtenContent, 'new content');
+    assert.strictEqual(write.mock.lastCall?.[1], 'new content');
     assert.strictEqual(result.output, 'written');
   });
 
   it('write_file reports the content adjusted during approval', async () => {
     const tool = new WriteFileTool();
-    let writtenContent: string | undefined;
 
-    WorkspaceFS.exists = async () => true;
-    WorkspaceFS.read = async () => 'old content';
-    WorkspaceFS.write = async (_path: string, content: string) => {
-      writtenContent = content;
-    };
+    const write = stubWorkspaceFile({ exists: true, content: 'old content' });
     testApprovalHandler = async () => ({
       accepted: true,
       appliedContent: 'reviewed content',
@@ -140,7 +124,7 @@ describe('Tool edit approval gating', () => {
 
     const result = await tool.call({ path: 'doc.txt', content: 'new content' });
 
-    assert.strictEqual(writtenContent, 'reviewed content');
+    assert.strictEqual(write.mock.lastCall?.[1], 'reviewed content');
     assert.match(result.output ?? '', /User adjustments to doc\.txt/);
     assert.ok(result.userPatch);
     assert.strictEqual(result.edits?.[0]?.path, 'doc.txt');
@@ -149,13 +133,8 @@ describe('Tool edit approval gating', () => {
 
   it('write_file rejects when user denies approval', async () => {
     const tool = new WriteFileTool();
-    let writeCalled = false;
 
-    WorkspaceFS.exists = async () => true;
-    WorkspaceFS.read = async () => 'base';
-    WorkspaceFS.write = async () => {
-      writeCalled = true;
-    };
+    const write = stubWorkspaceFile({ exists: true, content: 'base' });
 
     testApprovalHandler = async () => ({
       accepted: false,
@@ -167,7 +146,7 @@ describe('Tool edit approval gating', () => {
       content: 'new content',
     });
 
-    assert.strictEqual(writeCalled, false);
+    assert.strictEqual(write.mock.calls.length, 0);
     assert.strictEqual(result.status, 'error');
     assert.strictEqual(
       result.error,
@@ -181,13 +160,8 @@ describe('Tool edit approval gating', () => {
 
     const tool = new WriteFileTool();
     let handlerCalled = false;
-    let writtenContent: string | undefined;
 
-    WorkspaceFS.exists = async () => false;
-    WorkspaceFS.read = async () => '';
-    WorkspaceFS.write = async (_path: string, content: string) => {
-      writtenContent = content;
-    };
+    const write = stubWorkspaceFile({ exists: false, content: '' });
 
     testApprovalHandler = async () => {
       handlerCalled = true;
@@ -197,20 +171,15 @@ describe('Tool edit approval gating', () => {
     const result = await tool.call({ path: 'doc.txt', content: 'new content' });
 
     assert.strictEqual(handlerCalled, false);
-    assert.strictEqual(writtenContent, 'new content');
+    assert.strictEqual(write.mock.lastCall?.[1], 'new content');
     assert.strictEqual(result.output, 'written');
   });
 
   it('session bypass auto-approves pending requests', async () => {
     const tool = new WriteFileTool();
     let handlerCalled = false;
-    let writtenContent: string | undefined;
 
-    WorkspaceFS.exists = async () => false;
-    WorkspaceFS.read = async () => '';
-    WorkspaceFS.write = async (_path: string, content: string) => {
-      writtenContent = content;
-    };
+    const write = stubWorkspaceFile({ exists: false, content: '' });
 
     testApprovalHandler = async () => {
       handlerCalled = true;
@@ -229,7 +198,7 @@ describe('Tool edit approval gating', () => {
     );
 
     assert.strictEqual(handlerCalled, false);
-    assert.strictEqual(writtenContent, 'auto');
+    assert.strictEqual(write.mock.lastCall?.[1], 'auto');
     assert.strictEqual(result.output, 'written');
   });
 

@@ -59,13 +59,14 @@ export async function checkExpectedOutputs(
         return { storageKey, currRound, missing: [], xmlExists: false };
       }
 
-      const checks = expected.map(async (file) => ({
-        file,
-        exists: await AbsoluteFS.exists(
-          deps.fileService.createLocation(file).absolutePath,
-        ),
-      }));
-      const results = await Promise.all(checks);
+      const results = await Promise.all(
+        expected.map(async (file) => ({
+          file,
+          exists: await AbsoluteFS.exists(
+            deps.fileService.createLocation(file).absolutePath,
+          ),
+        })),
+      );
       const missing = results.filter((r) => !r.exists).map((r) => r.file);
       const xmlExists = await AbsoluteFS.exists(outputLocation.absolutePath);
 

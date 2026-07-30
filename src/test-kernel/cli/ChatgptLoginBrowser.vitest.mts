@@ -31,6 +31,14 @@ function loopbackSession() {
   };
 }
 
+/** Drive the loopback transport through the sign-in URL it would publish. */
+function publishLoopbackUrl(url: string): void {
+  mocks.loginWithLoopback.mockImplementation(async ({ openBrowser }) => {
+    await openBrowser(url);
+    return loopbackSession();
+  });
+}
+
 describe('signInCliChatGpt browser choice', () => {
   afterEach(() => {
     vi.clearAllMocks();
@@ -38,10 +46,7 @@ describe('signInCliChatGpt browser choice', () => {
 
   it('prints the sign-in link even after a successful browser launch', async () => {
     mocks.tryOpenBrowser.mockResolvedValue(true);
-    mocks.loginWithLoopback.mockImplementation(async ({ openBrowser }) => {
-      await openBrowser('https://auth.openai.com/authorize?x=1');
-      return loopbackSession();
-    });
+    publishLoopbackUrl('https://auth.openai.com/authorize?x=1');
     const progress: string[] = [];
 
     await signInCliChatGpt(
@@ -58,10 +63,7 @@ describe('signInCliChatGpt browser choice', () => {
 
   it('prints only the URL when the browser fails to launch', async () => {
     mocks.tryOpenBrowser.mockResolvedValue(false);
-    mocks.loginWithLoopback.mockImplementation(async ({ openBrowser }) => {
-      await openBrowser('https://auth.openai.com/authorize?x=2');
-      return loopbackSession();
-    });
+    publishLoopbackUrl('https://auth.openai.com/authorize?x=2');
     const progress: string[] = [];
 
     await signInCliChatGpt(
@@ -76,10 +78,7 @@ describe('signInCliChatGpt browser choice', () => {
   });
 
   it('skips the launch attempt and prints the URL with --no-browser', async () => {
-    mocks.loginWithLoopback.mockImplementation(async ({ openBrowser }) => {
-      await openBrowser('https://auth.openai.com/authorize?x=3');
-      return loopbackSession();
-    });
+    publishLoopbackUrl('https://auth.openai.com/authorize?x=3');
     const progress: string[] = [];
 
     await signInCliChatGpt(
@@ -100,10 +99,7 @@ describe('signInCliChatGpt browser choice', () => {
         finishLaunch = resolve;
       }),
     );
-    mocks.loginWithLoopback.mockImplementation(async ({ openBrowser }) => {
-      await openBrowser('https://auth.openai.com/authorize?x=slow');
-      return loopbackSession();
-    });
+    publishLoopbackUrl('https://auth.openai.com/authorize?x=slow');
     const progress: string[] = [];
 
     const signIn = signInCliChatGpt(

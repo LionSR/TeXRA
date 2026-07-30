@@ -177,11 +177,9 @@ export function createDesktopSupabaseAuth(
 ): DesktopSupabaseAuth {
   const { callbackState, coordinator, host, log, oauthClient, router } =
     options;
-  const callbackQueue: Array<{
-    callback: DesktopProtocolCallback;
-    nonce: string;
-    generation: number;
-  }> = [];
+  // Serialized so a second deeplink cannot commit a session while the first is
+  // still storing one.
+  const callbackQueue = new PQueue({ concurrency: 1 });
   const pendingCompletions = new Map<
     string,
     { settle(success: boolean): void }
@@ -233,46 +231,38 @@ export function createDesktopSupabaseAuth(
         },
       });
     });
-  let isProcessingCallbacks = false;
-  const processCallbackQueue = async (): Promise<void> => {
-    if (isProcessingCallbacks) return;
-    isProcessingCallbacks = true;
+  const runQueuedCallback = async (queued: {
+    callback: DesktopProtocolCallback;
+    nonce: string;
+    generation: number;
+  }): Promise<void> => {
     try {
-      while (callbackQueue.length > 0) {
-        const queued = callbackQueue.shift();
-        if (!queued) continue;
-        try {
-          const success = await processProtocolCallback(
-            coordinator,
-            queued.callback,
-            host,
-            log,
-            () => ownsAttempt(queued.generation, queued.nonce),
-            runAuthCommit,
-          );
-          settleCompletion(queued.nonce, success);
-          if (ownsAttempt(queued.generation, queued.nonce)) {
-            activeAttempt = undefined;
-          }
-        } catch (error) {
-          settleCompletion(queued.nonce, false);
-          if (ownsAttempt(queued.generation, queued.nonce)) {
-            activeAttempt = undefined;
-          }
-          const message = toErrorMessage(error);
-          log.error(`Desktop auth callback failed: ${message}`);
-          try {
-            await host.showErrorMessage(`Sign-in failed: ${message}`);
-          } catch (notificationError) {
-            log.warn(
-              `Desktop sign-in error notification failed: ${toErrorMessage(notificationError)}`,
-            );
-          }
-        }
+      const success = await processProtocolCallback(
+        coordinator,
+        queued.callback,
+        host,
+        log,
+        () => ownsAttempt(queued.generation, queued.nonce),
+        runAuthCommit,
+      );
+      settleCompletion(queued.nonce, success);
+      if (ownsAttempt(queued.generation, queued.nonce)) {
+        activeAttempt = undefined;
       }
-    } finally {
-      isProcessingCallbacks = false;
-      if (callbackQueue.length > 0) void processCallbackQueue();
+    } catch (error) {
+      settleCompletion(queued.nonce, false);
+      if (ownsAttempt(queued.generation, queued.nonce)) {
+        activeAttempt = undefined;
+      }
+      const message = toErrorMessage(error);
+      log.error(`Desktop auth callback failed: ${message}`);
+      try {
+        await host.showErrorMessage(`Sign-in failed: ${message}`);
+      } catch (notificationError) {
+        log.warn(
+          `Desktop sign-in error notification failed: ${toErrorMessage(notificationError)}`,
+        );
+      }
     }
   };
   const subscription = router.subscribe((callback) => {
@@ -303,17 +293,18 @@ export function createDesktopSupabaseAuth(
           `Desktop auth callback state clear failed: ${toErrorMessage(error)}`,
         );
       });
-    callbackQueue.push({
-      callback,
-      nonce: callbackNonce,
-      generation: claimedAttempt.generation,
-    });
-    if (isProcessingCallbacks) {
+    if (callbackQueue.pending > 0) {
       log.debug(
         'Desktop auth callback queued while another callback is being processed',
       );
     }
-    void processCallbackQueue();
+    void callbackQueue.add(() =>
+      runQueuedCallback({
+        callback,
+        nonce: callbackNonce,
+        generation: claimedAttempt.generation,
+      }),
+    );
   });
 
   const startSignIn = async (

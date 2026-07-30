@@ -18,6 +18,10 @@ import {
 import { getSetupPlatform } from '@tools/setup/platform';
 
 type SignalSpyEvent = 'SIGINT' | 'SIGTERM';
+type SignalRegistration = {
+  event: SignalSpyEvent;
+  kind: 'once' | 'on' | 'removed';
+};
 
 /** Records every SIGINT/SIGTERM registration without touching the live
  *  process's real listeners, distinguishing `process.once` (the platform
@@ -28,48 +32,26 @@ type SignalSpyEvent = 'SIGINT' | 'SIGTERM';
  *  restore would strip their `vi.hoisted` implementations instead of
  *  reverting them. */
 function spyOnSignalRegistration(): {
-  registered: Array<{ event: SignalSpyEvent; kind: 'once' | 'on' | 'removed' }>;
+  registered: SignalRegistration[];
   restore: () => void;
 } {
-  const registered: Array<{
-    event: SignalSpyEvent;
-    kind: 'once' | 'on' | 'removed';
-  }> = [];
-  const onceSpy = vi.spyOn(process, 'once').mockImplementation(((
-    event: string | symbol,
-    _listener: (...args: unknown[]) => void,
-  ) => {
-    if (event === 'SIGINT' || event === 'SIGTERM') {
-      registered.push({ event, kind: 'once' });
-    }
-    return process;
-  }) as typeof process.once);
-  const onSpy = vi.spyOn(process, 'on').mockImplementation(((
-    event: string | symbol,
-    _listener: (...args: unknown[]) => void,
-  ) => {
-    if (event === 'SIGINT' || event === 'SIGTERM') {
-      registered.push({ event, kind: 'on' });
-    }
-    return process;
-  }) as typeof process.on);
-  const removeListenerSpy = vi
-    .spyOn(process, 'removeListener')
-    .mockImplementation(((
-      event: string | symbol,
-      _listener: (...args: unknown[]) => void,
-    ) => {
+  const registered: SignalRegistration[] = [];
+  const record = (kind: SignalRegistration['kind']) =>
+    ((event: string | symbol) => {
       if (event === 'SIGINT' || event === 'SIGTERM') {
-        registered.push({ event, kind: 'removed' });
+        registered.push({ event, kind });
       }
       return process;
-    }) as typeof process.removeListener);
+    }) as typeof process.once;
+  const spies = [
+    vi.spyOn(process, 'once').mockImplementation(record('once')),
+    vi.spyOn(process, 'on').mockImplementation(record('on')),
+    vi.spyOn(process, 'removeListener').mockImplementation(record('removed')),
+  ];
   return {
     registered,
     restore: () => {
-      onceSpy.mockRestore();
-      onSpy.mockRestore();
-      removeListenerSpy.mockRestore();
+      for (const spy of spies) spy.mockRestore();
     },
   };
 }
@@ -525,6 +507,12 @@ describe('CLI platform interactive signal ownership', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.tryPlatform.mockReset();
+    // First call drives the once-per-process first-init block; later calls see
+    // an initialized platform.
+    mocks.tryPlatform.mockReturnValueOnce(undefined);
+    mocks.tryPlatform.mockReturnValue({
+      globalState: { get: vi.fn(), update: vi.fn() },
+    });
     mocks.bootstrapNodeAgentDirectories.mockResolvedValue(undefined);
     isAuthenticatedSpy.mockResolvedValue(false);
   });
@@ -533,11 +521,6 @@ describe('CLI platform interactive signal ownership', () => {
     vi.resetModules();
     const { registered, restore } = spyOnSignalRegistration();
     try {
-      mocks.tryPlatform.mockReturnValueOnce(undefined);
-      mocks.tryPlatform.mockReturnValue({
-        globalState: { get: vi.fn(), update: vi.fn() },
-      });
-
       const { initInteractiveCliPlatform, handOffCliShutdownSignalHandlers } =
         await import('@cli/runtime/initPlatform');
       // The await-suspension point from the finding: runChat() awaits this
@@ -577,11 +560,6 @@ describe('CLI platform interactive signal ownership', () => {
     vi.resetModules();
     const { registered, restore } = spyOnSignalRegistration();
     try {
-      mocks.tryPlatform.mockReturnValueOnce(undefined);
-      mocks.tryPlatform.mockReturnValue({
-        globalState: { get: vi.fn(), update: vi.fn() },
-      });
-
       const { initCliPlatform: freshInitCliPlatform } =
         await import('@cli/runtime/initPlatform');
       await freshInitCliPlatform(cliContext());
@@ -599,11 +577,6 @@ describe('CLI platform interactive signal ownership', () => {
     vi.resetModules();
     const { registered, restore } = spyOnSignalRegistration();
     try {
-      mocks.tryPlatform.mockReturnValueOnce(undefined);
-      mocks.tryPlatform.mockReturnValue({
-        globalState: { get: vi.fn(), update: vi.fn() },
-      });
-
       // A call site that used plain initCliPlatform (pre-fix behavior at
       // every interactive entry point) installs the platform handler...
       const { initCliPlatform: freshInitCliPlatform } =

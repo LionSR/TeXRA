@@ -250,12 +250,20 @@ export function boundedUserQuestionPromptLines({
   ];
 }
 
-interface QuestionShellProps {
+interface QuestionVariantProps {
   readonly availableRows?: number;
-  readonly controlRows: number;
   readonly payload: UserQuestionPermission;
   readonly question: UserQuestionPrompt;
   readonly index: number;
+  readonly onSubmit: (answer: string | string[] | undefined) => void;
+  readonly onCancel: () => void;
+}
+
+interface QuestionShellProps extends Omit<
+  QuestionVariantProps,
+  'onSubmit' | 'onCancel'
+> {
+  readonly controlRows: number;
   readonly children: React.ReactNode;
   readonly hints: readonly KeyHint[];
 }
@@ -311,18 +319,7 @@ function QuestionShell(props: QuestionShellProps): React.JSX.Element {
   );
 }
 
-interface MultiSelectQuestionProps {
-  readonly availableRows?: number;
-  readonly payload: UserQuestionPermission;
-  readonly question: UserQuestionPrompt;
-  readonly index: number;
-  readonly onSubmit: (answer: string[]) => void;
-  readonly onCancel: () => void;
-}
-
-function MultiSelectQuestion(
-  props: MultiSelectQuestionProps,
-): React.JSX.Element {
+function MultiSelectQuestion(props: QuestionVariantProps): React.JSX.Element {
   const [selected, setSelected] = useState<readonly string[]>([]);
   const options = props.question.options;
   const maxVisibleOptions = userQuestionChoiceRowsBudget({
@@ -367,16 +364,7 @@ function MultiSelectQuestion(
   );
 }
 
-interface FreeTextQuestionProps {
-  readonly availableRows?: number;
-  readonly payload: UserQuestionPermission;
-  readonly question: UserQuestionPrompt;
-  readonly index: number;
-  readonly onSubmit: (answer: string | string[] | undefined) => void;
-  readonly onCancel: () => void;
-}
-
-function FreeTextQuestion(props: FreeTextQuestionProps): React.JSX.Element {
+function FreeTextQuestion(props: QuestionVariantProps): React.JSX.Element {
   const { columns } = useWindowSize();
   const [answer, setAnswer] = useState('');
   const contentWidth = clampModalWidth(
@@ -446,18 +434,7 @@ function FreeTextQuestion(props: FreeTextQuestionProps): React.JSX.Element {
   );
 }
 
-interface SingleSelectQuestionProps {
-  readonly availableRows?: number;
-  readonly payload: UserQuestionPermission;
-  readonly question: UserQuestionPrompt;
-  readonly index: number;
-  readonly onSubmit: (answer: string) => void;
-  readonly onCancel: () => void;
-}
-
-function SingleSelectQuestion(
-  props: SingleSelectQuestionProps,
-): React.JSX.Element {
+function SingleSelectQuestion(props: QuestionVariantProps): React.JSX.Element {
   const optionRows = userQuestionChoiceRowsBudget({
     availableRows: props.availableRows,
     optionCount: props.question.options.length,
@@ -521,40 +498,16 @@ export function UserQuestion(props: UserQuestionProps): React.JSX.Element {
     return <Text />;
   }
 
-  if (question.multiSelect) {
-    return (
-      <MultiSelectQuestion
-        availableRows={props.availableRows}
-        payload={props.payload}
-        question={question}
-        index={index}
-        onSubmit={submitAnswer}
-        onCancel={cancel}
-      />
-    );
-  }
+  const variantProps: QuestionVariantProps = {
+    availableRows: props.availableRows,
+    payload: props.payload,
+    question,
+    index,
+    onSubmit: submitAnswer,
+    onCancel: cancel,
+  };
 
-  if (question.allowFreeText) {
-    return (
-      <FreeTextQuestion
-        availableRows={props.availableRows}
-        payload={props.payload}
-        question={question}
-        index={index}
-        onSubmit={submitAnswer}
-        onCancel={cancel}
-      />
-    );
-  }
-
-  return (
-    <SingleSelectQuestion
-      availableRows={props.availableRows}
-      payload={props.payload}
-      question={question}
-      index={index}
-      onSubmit={submitAnswer}
-      onCancel={cancel}
-    />
-  );
+  if (question.multiSelect) return <MultiSelectQuestion {...variantProps} />;
+  if (question.allowFreeText) return <FreeTextQuestion {...variantProps} />;
+  return <SingleSelectQuestion {...variantProps} />;
 }

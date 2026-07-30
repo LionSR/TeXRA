@@ -22,7 +22,7 @@
  */
 
 import { type Context as HonoContext, Hono } from '@hono/hono';
-import type { Session, SupabaseClient } from '@supabase/supabase-js';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { handleCors } from '../_shared/cors.ts';
 import {
   checkEmailDomain,
@@ -105,11 +105,6 @@ type Context = HonoContext<{ Variables: Variables }>;
 
 function errorResponse(c: Context, error: string, status: number) {
   return jsonResponse(c.req.raw, { error }, status);
-}
-
-/** Session payload returned by both exchange and refresh. */
-function sessionResponse(c: Context, session: Session) {
-  return jsonResponse(c.req.raw, sessionResponseBody(session), 200);
 }
 
 function githubAppMetadata(
@@ -403,7 +398,7 @@ app.post('/exchange', async (c) => {
 
     console.log(`[AUTH] Exchange successful for user ${userId}`);
 
-    return sessionResponse(c, session);
+    return jsonResponse(c.req.raw, sessionResponseBody(session), 200);
   } catch (error) {
     console.error('[AUTH] Exchange error:', error);
     return errorResponse(c, 'Internal server error', 500);
@@ -430,7 +425,7 @@ app.post('/refresh', async (c) => {
 
     console.log(`[AUTH] Refresh successful for user ${data.session.user.id}`);
 
-    return sessionResponse(c, data.session);
+    return jsonResponse(c.req.raw, sessionResponseBody(data.session), 200);
   } catch (error) {
     console.error('[AUTH] Refresh error:', error);
     return errorResponse(c, 'Internal server error', 500);

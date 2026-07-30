@@ -67,6 +67,35 @@ async function renderStaticTranscript(): Promise<string> {
   );
 }
 
+type StaticItems = ReturnType<typeof appendStaticTranscriptItems>;
+
+function appendItems(
+  currentItems: StaticItems = [],
+  overrides: Partial<Parameters<typeof appendStaticTranscriptItems>[0]> = {},
+): StaticItems {
+  return appendStaticTranscriptItems({
+    currentItems,
+    meta: SESSION_META,
+    scrollbackStreamId: STREAM_ID,
+    streams: streams.get(),
+    ...overrides,
+  });
+}
+
+function staticEntries(items: StaticItems): readonly ConversationEntry[] {
+  return items
+    .filter((item) => item.kind === 'entry')
+    .map((item) => item.entry);
+}
+
+function entryIds(items: StaticItems): string[] {
+  return staticEntries(items).map((entry) => entry.id);
+}
+
+function entryTexts(items: StaticItems): string[] {
+  return staticEntries(items).map((entry) => entry.text);
+}
+
 beforeEach(async () => {
   resetCliState();
   clearAllStreamStatusesForTest(defaultSession().status);
@@ -141,15 +170,8 @@ describe('CLI workflow-script child-stream transcript', () => {
         },
       ]);
 
-      const plannedItems = appendStaticTranscriptItems({
-        currentItems: [],
-        meta: SESSION_META,
-        scrollbackStreamId: STREAM_ID,
-        streams: streams.get(),
-      });
-      expect(plannedItems.filter((item) => item.kind === 'entry')).toHaveLength(
-        0,
-      );
+      const plannedItems = appendItems();
+      expect(staticEntries(plannedItems)).toHaveLength(0);
 
       runTrace.trace.emit({
         type: 'workflow.task',
@@ -179,17 +201,10 @@ describe('CLI workflow-script child-stream transcript', () => {
         },
       ]);
 
-      const updatedItems = appendStaticTranscriptItems({
-        currentItems: plannedItems,
-        meta: SESSION_META,
-        scrollbackStreamId: STREAM_ID,
-        streams: streams.get(),
-      });
-      expect(
-        updatedItems
-          .filter((item) => item.kind === 'entry')
-          .map((item) => item.entry.text),
-      ).toEqual(['Finished: Audit core · deepseekT']);
+      const updatedItems = appendItems(plannedItems);
+      expect(entryTexts(updatedItems)).toEqual([
+        'Finished: Audit core · deepseekT',
+      ]);
     } finally {
       runTrace.dispose();
     }
@@ -222,13 +237,8 @@ describe('CLI workflow-script child-stream transcript', () => {
         text: 'Running: Audit cancellation',
         task: { status: 'running' },
       });
-      let staticItems = appendStaticTranscriptItems({
-        currentItems: [],
-        meta: SESSION_META,
-        scrollbackStreamId: STREAM_ID,
-        streams: streams.get(),
-      });
-      expect(staticItems.filter((item) => item.kind === 'entry')).toEqual([]);
+      let staticItems = appendItems();
+      expect(staticEntries(staticItems)).toEqual([]);
 
       runTrace.trace.emit({
         type: 'workflow.task',
@@ -254,32 +264,14 @@ describe('CLI workflow-script child-stream transcript', () => {
           },
         },
       ]);
-      staticItems = appendStaticTranscriptItems({
-        currentItems: staticItems,
-        meta: SESSION_META,
-        scrollbackStreamId: STREAM_ID,
-        streams: streams.get(),
-      });
+      staticItems = appendItems(staticItems);
       projectStreamTranscript(STREAM_ID, { finalize: true });
       syncStreamLog(STREAM_ID);
-      staticItems = appendStaticTranscriptItems({
-        currentItems: staticItems,
-        meta: SESSION_META,
-        scrollbackStreamId: STREAM_ID,
-        streams: streams.get(),
-      });
-      expect(
-        staticItems
-          .filter((item) => item.kind === 'entry')
-          .map((item) => item.entry.text),
-      ).toEqual([
+      staticItems = appendItems(staticItems);
+      expect(entryTexts(staticItems)).toEqual([
         'Failed: Audit cancellation — The workflow ended before this call completed.',
       ]);
-      expect(
-        staticItems
-          .filter((item) => item.kind === 'entry')
-          .map((item) => item.entry.id),
-      ).toEqual(['cancelled-running-task']);
+      expect(entryIds(staticItems)).toEqual(['cancelled-running-task']);
       const output = await renderStaticTranscript();
       expect(output).toContain('Failed: Audit cancellation');
       expect(output).not.toContain('Running: Audit cancellation');
@@ -316,13 +308,8 @@ describe('CLI workflow-script child-stream transcript', () => {
         text: 'Planned: Audit later',
         task: { status: 'planned' },
       });
-      let staticItems = appendStaticTranscriptItems({
-        currentItems: [],
-        meta: SESSION_META,
-        scrollbackStreamId: STREAM_ID,
-        streams: streams.get(),
-      });
-      expect(staticItems.filter((item) => item.kind === 'entry')).toEqual([]);
+      let staticItems = appendItems();
+      expect(staticEntries(staticItems)).toEqual([]);
 
       runTrace.trace.emit({
         type: 'workflow.task',
@@ -349,32 +336,14 @@ describe('CLI workflow-script child-stream transcript', () => {
           },
         },
       ]);
-      staticItems = appendStaticTranscriptItems({
-        currentItems: staticItems,
-        meta: SESSION_META,
-        scrollbackStreamId: STREAM_ID,
-        streams: streams.get(),
-      });
+      staticItems = appendItems(staticItems);
       projectStreamTranscript(STREAM_ID, { finalize: true });
       syncStreamLog(STREAM_ID, { forceFull: true });
-      staticItems = appendStaticTranscriptItems({
-        currentItems: staticItems,
-        meta: SESSION_META,
-        scrollbackStreamId: STREAM_ID,
-        streams: streams.get(),
-      });
-      expect(
-        staticItems
-          .filter((item) => item.kind === 'entry')
-          .map((item) => item.entry.text),
-      ).toEqual([
+      staticItems = appendItems(staticItems);
+      expect(entryTexts(staticItems)).toEqual([
         'Skipped: Audit later — The workflow ended before this call was reached.',
       ]);
-      expect(
-        staticItems
-          .filter((item) => item.kind === 'entry')
-          .map((item) => item.entry.id),
-      ).toEqual(['cancelled-planned-task']);
+      expect(entryIds(staticItems)).toEqual(['cancelled-planned-task']);
       const output = await renderStaticTranscript();
       // The skipped marker distinguishes the row from a finished or failed one.
       expect(output).toContain('⊘ Skipped: Audit later');
@@ -397,18 +366,7 @@ describe('CLI workflow-script child-stream transcript', () => {
         STREAM_ID,
       );
       syncStreamLog(STREAM_ID);
-      const entryIds = (
-        items: ReturnType<typeof appendStaticTranscriptItems>,
-      ): string[] =>
-        items
-          .filter((item) => item.kind === 'entry')
-          .map((item) => item.entry.id);
-      let liveItems = appendStaticTranscriptItems({
-        currentItems: [],
-        meta: SESSION_META,
-        scrollbackStreamId: STREAM_ID,
-        streams: streams.get(),
-      });
+      let liveItems = appendItems();
       expect(entryIds(liveItems)).toEqual([
         'cancel-phase',
         expect.stringMatching(/^local:/),
@@ -450,12 +408,7 @@ describe('CLI workflow-script child-stream transcript', () => {
       }));
       projectStreamTranscript(STREAM_ID, { finalize: true });
 
-      liveItems = appendStaticTranscriptItems({
-        currentItems: liveItems,
-        meta: SESSION_META,
-        scrollbackStreamId: STREAM_ID,
-        streams: streams.get(),
-      });
+      liveItems = appendItems(liveItems);
       expect(entryIds(liveItems)).toEqual([
         'cancel-phase',
         expect.stringMatching(/^local:/),
@@ -519,12 +472,7 @@ describe('CLI workflow-script child-stream transcript', () => {
       phase.end('cancelled');
       syncStreamLog(STREAM_ID);
 
-      liveItems = appendStaticTranscriptItems({
-        currentItems: liveItems,
-        meta: SESSION_META,
-        scrollbackStreamId: STREAM_ID,
-        streams: streams.get(),
-      });
+      liveItems = appendItems(liveItems);
       expect(entryIds(liveItems)).toEqual([
         'cancel-phase',
         expect.stringMatching(/^local:/),
@@ -543,12 +491,7 @@ describe('CLI workflow-script child-stream transcript', () => {
         entries: syntheticEntry ? [syntheticEntry] : [],
       }));
       syncStreamLog(STREAM_ID, { forceFull: true });
-      const coldItems = appendStaticTranscriptItems({
-        currentItems: [],
-        meta: SESSION_META,
-        scrollbackStreamId: STREAM_ID,
-        streams: streams.get(),
-      });
+      const coldItems = appendItems();
 
       expect(entryIds(coldItems)).toEqual(entryIds(liveItems));
       const coldOutput = await renderStaticTranscript();
@@ -603,17 +546,8 @@ describe('CLI workflow-script child-stream transcript', () => {
       });
       syncStreamLog(STREAM_ID);
 
-      let incrementalItems = appendStaticTranscriptItems({
-        currentItems: [],
-        meta: SESSION_META,
-        scrollbackStreamId: STREAM_ID,
-        streams: streams.get(),
-      });
-      expect(
-        incrementalItems
-          .filter((item) => item.kind === 'entry')
-          .map((item) => item.entry.id),
-      ).toEqual([
+      let incrementalItems = appendItems();
+      expect(entryIds(incrementalItems)).toEqual([
         expect.stringMatching(/.+/),
         expect.stringMatching(/^local:/),
         'audit-phase',
@@ -638,17 +572,8 @@ describe('CLI workflow-script child-stream transcript', () => {
         },
       });
       syncStreamLog(STREAM_ID);
-      incrementalItems = appendStaticTranscriptItems({
-        currentItems: incrementalItems,
-        meta: SESSION_META,
-        scrollbackStreamId: STREAM_ID,
-        streams: streams.get(),
-      });
-      expect(
-        incrementalItems
-          .filter((item) => item.kind === 'entry')
-          .map((item) => item.entry.id),
-      ).toEqual([
+      incrementalItems = appendItems(incrementalItems);
+      expect(entryIds(incrementalItems)).toEqual([
         expect.stringMatching(/.+/),
         expect.stringMatching(/^local:/),
         'audit-phase',
@@ -667,12 +592,7 @@ describe('CLI workflow-script child-stream transcript', () => {
 
       phase.end('completed');
       syncStreamLog(STREAM_ID);
-      incrementalItems = appendStaticTranscriptItems({
-        currentItems: incrementalItems,
-        meta: SESSION_META,
-        scrollbackStreamId: STREAM_ID,
-        streams: streams.get(),
-      });
+      incrementalItems = appendItems(incrementalItems);
 
       const settledSlice = streams.get().get(STREAM_ID);
       expect(
@@ -692,27 +612,11 @@ describe('CLI workflow-script child-stream transcript', () => {
         slice: settledSlice,
         title: 'repository audit',
       });
-      incrementalItems = appendStaticTranscriptItems({
-        currentItems: incrementalItems,
-        meta: SESSION_META,
+      incrementalItems = appendItems(incrementalItems, {
         printRequests: [printRequest],
-        scrollbackStreamId: STREAM_ID,
-        streams: streams.get(),
       });
 
-      const coldItems = appendStaticTranscriptItems({
-        currentItems: [],
-        meta: SESSION_META,
-        printRequests: [printRequest],
-        scrollbackStreamId: STREAM_ID,
-        streams: streams.get(),
-      });
-      const entryIds = (
-        items: ReturnType<typeof appendStaticTranscriptItems>,
-      ): string[] =>
-        items
-          .filter((item) => item.kind === 'entry')
-          .map((item) => item.entry.id);
+      const coldItems = appendItems([], { printRequests: [printRequest] });
 
       const incrementalEntryIds = entryIds(incrementalItems);
       expect(incrementalEntryIds.at(-2)).toBe('audit-phase');
@@ -830,45 +734,18 @@ describe('CLI workflow-script child-stream transcript', () => {
       ...slice,
       entries: [beforeLoad],
     }));
-    let incrementalItems = appendStaticTranscriptItems({
-      currentItems: [],
-      meta: SESSION_META,
-      scrollbackStreamId: STREAM_ID,
-      streams: streams.get(),
-    });
+    let incrementalItems = appendItems();
     patchStream(STREAM_ID, (slice) => ({
       ...slice,
       entries: [beforeLoad, legacyA, legacyB],
     }));
-    incrementalItems = appendStaticTranscriptItems({
-      currentItems: incrementalItems,
-      meta: SESSION_META,
-      scrollbackStreamId: STREAM_ID,
-      streams: streams.get(),
-    });
+    incrementalItems = appendItems(incrementalItems);
     patchStream(STREAM_ID, (slice) => ({
       ...slice,
       entries: [beforeLoad, legacyA, legacyB, afterLoad],
     }));
-    incrementalItems = appendStaticTranscriptItems({
-      currentItems: incrementalItems,
-      meta: SESSION_META,
-      scrollbackStreamId: STREAM_ID,
-      streams: streams.get(),
-    });
-    const coldItems = appendStaticTranscriptItems({
-      currentItems: [],
-      meta: SESSION_META,
-      scrollbackStreamId: STREAM_ID,
-      streams: streams.get(),
-    });
-    const entryIds = (
-      items: ReturnType<typeof appendStaticTranscriptItems>,
-    ): string[] =>
-      items
-        .filter((item) => item.kind === 'entry')
-        .map((item) => item.entry.id);
-
+    incrementalItems = appendItems(incrementalItems);
+    const coldItems = appendItems();
     expect(entryIds(incrementalItems)).toEqual([
       'local-before-load',
       'legacy-a',
@@ -908,17 +785,8 @@ describe('CLI workflow-script child-stream transcript', () => {
       });
       syncStreamLog(STREAM_ID);
 
-      let incrementalItems = appendStaticTranscriptItems({
-        currentItems: [],
-        meta: SESSION_META,
-        scrollbackStreamId: STREAM_ID,
-        streams: streams.get(),
-      });
-      expect(
-        incrementalItems
-          .filter((item) => item.kind === 'entry')
-          .map((item) => item.entry.id),
-      ).not.toContain('audit-tool');
+      let incrementalItems = appendItems();
+      expect(entryIds(incrementalItems)).not.toContain('audit-tool');
 
       runTrace.trace.toolEnd({
         logId: 'audit-tool',
@@ -930,24 +798,8 @@ describe('CLI workflow-script child-stream transcript', () => {
         },
       });
       syncStreamLog(STREAM_ID);
-      incrementalItems = appendStaticTranscriptItems({
-        currentItems: incrementalItems,
-        meta: SESSION_META,
-        scrollbackStreamId: STREAM_ID,
-        streams: streams.get(),
-      });
-      const coldItems = appendStaticTranscriptItems({
-        currentItems: [],
-        meta: SESSION_META,
-        scrollbackStreamId: STREAM_ID,
-        streams: streams.get(),
-      });
-      const entryIds = (
-        items: ReturnType<typeof appendStaticTranscriptItems>,
-      ): string[] =>
-        items
-          .filter((item) => item.kind === 'entry')
-          .map((item) => item.entry.id);
+      incrementalItems = appendItems(incrementalItems);
+      const coldItems = appendItems();
 
       expect(entryIds(incrementalItems).at(-1)).toBe('audit-tool');
       expect(entryIds(coldItems)).toEqual(entryIds(incrementalItems));
@@ -987,16 +839,10 @@ describe('CLI workflow-script child-stream transcript', () => {
       });
       syncStreamLog(STREAM_ID);
 
-      let incrementalItems = appendStaticTranscriptItems({
-        currentItems: [],
-        meta: SESSION_META,
-        scrollbackStreamId: STREAM_ID,
-        streams: streams.get(),
-      });
-      const firstEntries = incrementalItems.filter(
-        (item) => item.kind === 'entry',
-      );
-      expect(firstEntries.map((item) => item.entry.role)).toEqual(['media']);
+      let incrementalItems = appendItems();
+      expect(
+        staticEntries(incrementalItems).map((entry) => entry.role),
+      ).toEqual(['media']);
 
       runTrace.trace.toolEnd({
         logId: 'audit-tool',
@@ -1008,30 +854,12 @@ describe('CLI workflow-script child-stream transcript', () => {
         },
       });
       syncStreamLog(STREAM_ID);
-      incrementalItems = appendStaticTranscriptItems({
-        currentItems: incrementalItems,
-        meta: SESSION_META,
-        scrollbackStreamId: STREAM_ID,
-        streams: streams.get(),
-      });
-      const coldItems = appendStaticTranscriptItems({
-        currentItems: [],
-        meta: SESSION_META,
-        scrollbackStreamId: STREAM_ID,
-        streams: streams.get(),
-      });
-      const entries = (
-        items: ReturnType<typeof appendStaticTranscriptItems>,
-      ): readonly ConversationEntry[] =>
-        items.filter((item) => item.kind === 'entry').map((item) => item.entry);
-
-      expect(entries(incrementalItems).map((entry) => entry.role)).toEqual([
-        'media',
-        'tool',
-      ]);
-      expect(entries(coldItems).map((entry) => entry.id)).toEqual(
-        entries(incrementalItems).map((entry) => entry.id),
-      );
+      incrementalItems = appendItems(incrementalItems);
+      const coldItems = appendItems();
+      expect(
+        staticEntries(incrementalItems).map((entry) => entry.role),
+      ).toEqual(['media', 'tool']);
+      expect(entryIds(coldItems)).toEqual(entryIds(incrementalItems));
       const output = await renderStaticTranscript();
       expect(output.indexOf('[image] /private/tmp/loaded.png')).toBeLessThan(
         output.indexOf('bash'),
@@ -1053,27 +881,10 @@ describe('CLI workflow-script child-stream transcript', () => {
       });
       syncStreamLog(STREAM_ID);
 
-      const incrementalItems = appendStaticTranscriptItems({
-        currentItems: [],
-        meta: SESSION_META,
-        scrollbackStreamId: STREAM_ID,
-        streams: streams.get(),
-      });
+      const incrementalItems = appendItems();
       round.end('completed');
       syncStreamLog(STREAM_ID);
-      const coldItems = appendStaticTranscriptItems({
-        currentItems: [],
-        meta: SESSION_META,
-        scrollbackStreamId: STREAM_ID,
-        streams: streams.get(),
-      });
-      const entryTexts = (
-        items: ReturnType<typeof appendStaticTranscriptItems>,
-      ): string[] =>
-        items
-          .filter((item) => item.kind === 'entry')
-          .map((item) => item.entry.text);
-
+      const coldItems = appendItems();
       expect(entryTexts(incrementalItems)).toEqual(['Round work completed']);
       expect(entryTexts(coldItems)).toEqual(entryTexts(incrementalItems));
       expect(streams.get().get(STREAM_ID)?.taskGroups).toMatchObject([
@@ -1180,7 +991,7 @@ describe('CLI workflow-script child-stream transcript', () => {
         splitTranscriptEntries(finalized, STREAM_PHASE.COMPLETED).pending,
       ).toEqual([]);
 
-      const staticItems = appendStaticTranscriptItems({
+      const staticItems = appendItems([], {
         childStreamEntries: new Map([
           [
             STREAM_ID,
@@ -1200,11 +1011,7 @@ describe('CLI workflow-script child-stream transcript', () => {
             },
           ],
         ]),
-        currentItems: [],
-        meta: SESSION_META,
         parentStream: new Map([[STREAM_ID, PARENT_STREAM_ID]]),
-        scrollbackStreamId: STREAM_ID,
-        streams: streams.get(),
       });
       expect(staticItems.at(0)).toMatchObject({
         identityLine:

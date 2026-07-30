@@ -93,15 +93,20 @@ export class StreamLog {
 
     for (const [i, entry] of this.entries.entries()) {
       this.indexById.set(entry.id, i);
-      if (isRunningGroupEntry(entry)) {
-        this.runningGroupCount += 1;
-      }
-      if (isRunningStreamingTextEntry(entry)) {
-        this.runningStreamingTextCount += 1;
-      }
-      if (isNonterminalWorkflowCallEntry(entry)) {
-        this.nonterminalWorkflowCallCount += 1;
-      }
+      this.countEntry(entry, 1);
+    }
+  }
+
+  /** Fold an entry into (`1`) or out of (`-1`) the running-state counters. */
+  private countEntry(entry: StreamLogEntry, delta: 1 | -1): void {
+    if (isRunningGroupEntry(entry)) {
+      this.runningGroupCount += delta;
+    }
+    if (isRunningStreamingTextEntry(entry)) {
+      this.runningStreamingTextCount += delta;
+    }
+    if (isNonterminalWorkflowCallEntry(entry)) {
+      this.nonterminalWorkflowCallCount += delta;
     }
   }
 
@@ -160,15 +165,7 @@ export class StreamLog {
     if (settled) this.settlementSeqCounter += 1;
     this.indexById.set(fullEntry.id, this.entries.length);
     this.entries.push(fullEntry);
-    if (isRunningGroupEntry(fullEntry)) {
-      this.runningGroupCount += 1;
-    }
-    if (isRunningStreamingTextEntry(fullEntry)) {
-      this.runningStreamingTextCount += 1;
-    }
-    if (isNonterminalWorkflowCallEntry(fullEntry)) {
-      this.nonterminalWorkflowCallCount += 1;
-    }
+    this.countEntry(fullEntry, 1);
     return fullEntry;
   }
 
@@ -216,30 +213,8 @@ export class StreamLog {
       this.settlementSeqCounter += 1;
     }
 
-    const wasRunningGroup = isRunningGroupEntry(current);
-    const isNowRunningGroup = isRunningGroupEntry(updated);
-    if (wasRunningGroup && !isNowRunningGroup) {
-      this.runningGroupCount -= 1;
-    } else if (!wasRunningGroup && isNowRunningGroup) {
-      this.runningGroupCount += 1;
-    }
-
-    const wasRunningStreamingText = isRunningStreamingTextEntry(current);
-    const isNowRunningStreamingText = isRunningStreamingTextEntry(updated);
-    if (wasRunningStreamingText && !isNowRunningStreamingText) {
-      this.runningStreamingTextCount -= 1;
-    } else if (!wasRunningStreamingText && isNowRunningStreamingText) {
-      this.runningStreamingTextCount += 1;
-    }
-
-    const wasNonterminalWorkflowCall = isNonterminalWorkflowCallEntry(current);
-    const isNowNonterminalWorkflowCall =
-      isNonterminalWorkflowCallEntry(updated);
-    if (wasNonterminalWorkflowCall && !isNowNonterminalWorkflowCall) {
-      this.nonterminalWorkflowCallCount -= 1;
-    } else if (!wasNonterminalWorkflowCall && isNowNonterminalWorkflowCall) {
-      this.nonterminalWorkflowCallCount += 1;
-    }
+    this.countEntry(current, -1);
+    this.countEntry(updated, 1);
 
     this.entries[index] = updated;
     this.dirtyUpdates.add(id);
@@ -329,22 +304,14 @@ export class StreamLog {
   clearDirtyUpdates(maxSeqInclusive: number = this.seqCounter): void {
     for (const id of this.dirtyUpdates) {
       const index = this.indexById.get(id);
-      if (index === undefined) {
-        this.dirtyUpdates.delete(id);
-        continue;
-      }
-      if (this.entries[index].seqNo <= maxSeqInclusive) {
+      if (index === undefined || this.entries[index].seqNo <= maxSeqInclusive) {
         this.dirtyUpdates.delete(id);
       }
     }
 
     for (const id of this.dirtyTextDeltas.keys()) {
       const index = this.indexById.get(id);
-      if (index === undefined) {
-        this.dirtyTextDeltas.delete(id);
-        continue;
-      }
-      if (this.entries[index].seqNo <= maxSeqInclusive) {
+      if (index === undefined || this.entries[index].seqNo <= maxSeqInclusive) {
         this.dirtyTextDeltas.delete(id);
       }
     }
@@ -353,11 +320,7 @@ export class StreamLog {
   ackDirtyUpdates(updates: readonly StreamLogEntry[]): void {
     for (const update of updates) {
       const index = this.indexById.get(update.id);
-      if (index === undefined) {
-        this.dirtyUpdates.delete(update.id);
-        continue;
-      }
-      if (this.entries[index] === update) {
+      if (index === undefined || this.entries[index] === update) {
         this.dirtyUpdates.delete(update.id);
       }
     }
@@ -369,12 +332,7 @@ export class StreamLog {
   ): void {
     for (const entry of fullEntries) {
       const index = this.indexById.get(entry.id);
-      if (index === undefined) {
-        this.dirtyTextDeltas.delete(entry.id);
-        continue;
-      }
-
-      if (this.entries[index] === entry) {
+      if (index === undefined || this.entries[index] === entry) {
         this.dirtyTextDeltas.delete(entry.id);
         continue;
       }

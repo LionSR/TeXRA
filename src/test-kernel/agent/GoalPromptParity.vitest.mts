@@ -3,7 +3,6 @@ import { readFileSync } from 'node:fs';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 // Third-party imports
 import { describe, expect, it } from 'vitest';
@@ -15,45 +14,41 @@ import {
   initializeGoalPrompts,
 } from '@agent/goal/promptLoader';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { createFakePlatform } from '@test/support/FakePlatform';
-
-const REPO_ROOT = resolve(
-  fileURLToPath(new URL('.', import.meta.url)),
-  '../../..',
-);
+import { REPO_ROOT } from '@test/support/repoScan';
+import { setupPlatform } from '@test/support/setupPlatform';
 
 interface GoalPromptsYaml {
   continuation: { template: string };
 }
 
-function readYaml(): GoalPromptsYaml {
-  const text = readFileSync(
-    resolve(REPO_ROOT, 'packages/extension/resources/goal/goal.yaml'),
-    'utf8',
-  );
-  return yaml.parse(text) as GoalPromptsYaml;
-}
+const GOAL_YAML_PATH = resolve(
+  REPO_ROOT,
+  'packages/extension/resources/goal/goal.yaml',
+);
 
-function readInlineFallbackSource(): string {
-  return readFileSync(
-    resolve(REPO_ROOT, 'src/agent/goal/promptLoader.ts'),
-    'utf8',
-  );
-}
+const goalYaml = yaml.parse(
+  readFileSync(GOAL_YAML_PATH, 'utf8'),
+) as GoalPromptsYaml;
 
 // The inline fallback in promptLoader.ts ships verbatim to hosts that
 // haven't called initializeGoalPrompts (tests, partial wiring, file-read
 // errors). Drift between the two paths would silently disable the
 // completion-audit discipline. Both must render the same template.
 describe('Goal prompt parity (YAML ↔ inline fallback)', () => {
+  setupPlatform({}, { fs: nodeFilesystem });
+
   it('continuation template in YAML is fully reflected in the inline fallback', () => {
-    const ymlTemplate = readYaml().continuation.template;
-    const loader = readInlineFallbackSource();
+    const loader = readFileSync(
+      resolve(REPO_ROOT, 'src/agent/goal/promptLoader.ts'),
+      'utf8',
+    );
 
     // The fallback is built from string-array `.join('\n')` literals, so
     // we can't compare full bytes. Instead require that every non-trivial
     // line of the YAML template appears verbatim in the loader source.
-    const lines = ymlTemplate.split('\n').filter((l) => l.trim().length >= 4);
+    const lines = goalYaml.continuation.template
+      .split('\n')
+      .filter((l) => l.trim().length >= 4);
     for (const line of lines) {
       expect(
         loader,
@@ -63,23 +58,14 @@ describe('Goal prompt parity (YAML ↔ inline fallback)', () => {
   });
 
   it('loads the host-provided goal YAML path directly', async () => {
-    const { initPlatform } = await import('@platform/platform');
-    initPlatform(createFakePlatform({}, { fs: nodeFilesystem }));
-    const yamlPath = resolve(
-      REPO_ROOT,
-      'packages/extension/resources/goal/goal.yaml',
-    );
-    initializeGoalPrompts(yamlPath);
+    initializeGoalPrompts(GOAL_YAML_PATH);
 
     await expect(getContinuationTemplate()).resolves.toBe(
-      readYaml().continuation.template,
+      goalYaml.continuation.template,
     );
   });
 
   it('falls back to the inline template instead of throwing on malformed goal YAML', async () => {
-    const { initPlatform } = await import('@platform/platform');
-    initPlatform(createFakePlatform({}, { fs: nodeFilesystem }));
-
     const dir = await mkdtemp(resolve(tmpdir(), 'texra-goal-'));
     const brokenPath = resolve(dir, 'broken.yaml');
     await writeFile(brokenPath, 'continuation:\n  template: "unterminated\n');

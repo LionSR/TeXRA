@@ -32,7 +32,11 @@ import {
   finalizeRunTerminal,
   runFlowWithLifecycle,
 } from '@agent/runtime/AgentRunLifecycle';
-import { AgentFlowError } from '@agent/runtime/AgentFlowResult';
+import {
+  AgentFlowError,
+  type ToolUseFlowResult,
+  type WaitingToolUseFlowResult,
+} from '@agent/runtime/AgentFlowResult';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { platform } from '@platform/platform';
@@ -43,6 +47,7 @@ import {
   STREAM_PHASE,
   STREAM_STATUS,
   type ExecutionId,
+  type RunOutcome,
   type StorageKey,
   type StreamTabId,
 } from '@shared/schemas';
@@ -209,6 +214,52 @@ function lifecycleFixture(
   return { executionId, streamId, streamStatus, ctx, explicit };
 }
 
+function toolUseResult(
+  executionId: ExecutionId,
+  streamId: StreamTabId,
+  outcome: RunOutcome,
+): ToolUseFlowResult {
+  return { category: 'toolUse', outcome, executionId, streamId };
+}
+
+function waitingResult(
+  executionId: ExecutionId,
+  streamId: StreamTabId,
+): WaitingToolUseFlowResult {
+  return {
+    category: 'toolUse',
+    outcome: STREAM_PHASE.WAITING,
+    executionId,
+    streamId,
+  };
+}
+
+/**
+ * Returns the suspended handle for a run that reported WAITING.
+ *
+ * `terminateWaitingHandle` requires the stream to have genuinely reached
+ * WAITING (belt-and-suspenders confirmation the handle is really parked, not
+ * mid-flight; see #7324 review discussion). The fake runners below return the
+ * WAITING outcome directly without driving the real `transitionToWaiting()`,
+ * so the phase is seeded explicitly here.
+ */
+function takeWaitingHandle(
+  executionId: ExecutionId,
+  streamId: StreamTabId,
+): AgentExecutionHandle {
+  seedStreamStatusForTest(
+    defaultSession().status,
+    streamId,
+    STREAM_STATUS.WAITING,
+  );
+  const handle = defaultSession().executions.getHandle(executionId);
+  expect(handle).toBeInstanceOf(AgentExecutionHandle);
+  if (!(handle instanceof AgentExecutionHandle)) {
+    throw new Error('Expected a suspended agent execution handle.');
+  }
+  return handle;
+}
+
 describe('runFlowWithLifecycle', () => {
   it('interrupts and suppresses terminal persistence after lease takeover', async () => {
     vi.useFakeTimers();
@@ -235,12 +286,7 @@ describe('runFlowWithLifecycle', () => {
 
         expect(handle.executionLeaseLost).toBe(true);
         expect(handle.hasPendingInterrupt).toBe(true);
-        return {
-          category: 'toolUse',
-          outcome: RUN_OUTCOME.COMPLETED,
-          executionId,
-          streamId,
-        };
+        return toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED);
       });
 
       expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
@@ -282,12 +328,9 @@ describe('runFlowWithLifecycle', () => {
       );
 
       try {
-        await runFlowWithLifecycle(ctx, async () => ({
-          category: 'toolUse',
-          outcome: RUN_OUTCOME.COMPLETED,
-          executionId,
-          streamId,
-        }));
+        await runFlowWithLifecycle(ctx, async () =>
+          toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED),
+        );
 
         expect(
           fake.globalState.get(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE),
@@ -308,12 +351,9 @@ describe('runFlowWithLifecycle', () => {
     storageMocks.finalizeExecution.mockClear();
 
     try {
-      await runFlowWithLifecycle(ctx, async () => ({
-        category: 'toolUse',
-        outcome: RUN_OUTCOME.COMPLETED,
-        executionId,
-        streamId,
-      }));
+      await runFlowWithLifecycle(ctx, async () =>
+        toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED),
+      );
 
       expect(storageMocks.finalizeExecution).toHaveBeenCalledOnce();
       expect(updateOnboarding).toHaveBeenCalledWith(
@@ -340,12 +380,9 @@ describe('runFlowWithLifecycle', () => {
       // The lifecycle owns the whole transition (RUNNING on entry, terminal
       // on exit) against the run session's one status machine.
       expect(streamStatus).toBe(ctx.runScope.session.status);
-      await runFlowWithLifecycle(ctx, async () => ({
-        category: 'toolUse',
-        outcome: RUN_OUTCOME.COMPLETED,
-        executionId,
-        streamId,
-      }));
+      await runFlowWithLifecycle(ctx, async () =>
+        toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED),
+      );
 
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.COMPLETED);
     } finally {
@@ -366,12 +403,9 @@ describe('runFlowWithLifecycle', () => {
     ctx.disposeTrace = detachTrace;
 
     try {
-      await runFlowWithLifecycle(ctx, async () => ({
-        category: 'toolUse',
-        outcome: RUN_OUTCOME.COMPLETED,
-        executionId,
-        streamId,
-      }));
+      await runFlowWithLifecycle(ctx, async () =>
+        toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED),
+      );
 
       const runConfigIndex = recorded.events.findIndex(
         (event) => event.scope === 'run' && event.event.type === 'run.config',
@@ -406,12 +440,7 @@ describe('runFlowWithLifecycle', () => {
 
       await runFlowWithLifecycle(ctx, async () => {
         expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.RUNNING);
-        return {
-          category: 'toolUse',
-          outcome: RUN_OUTCOME.COMPLETED,
-          executionId,
-          streamId,
-        };
+        return toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED);
       });
 
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.COMPLETED);
@@ -431,12 +460,7 @@ describe('runFlowWithLifecycle', () => {
       await runFlowWithLifecycle(ctx, async () => {
         expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.RUNNING);
         expect(streamStatus.getSubstate(streamId)).toBeUndefined();
-        return {
-          category: 'toolUse',
-          outcome: RUN_OUTCOME.COMPLETED,
-          executionId,
-          streamId,
-        };
+        return toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED);
       });
 
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.COMPLETED);
@@ -460,12 +484,7 @@ describe('runFlowWithLifecycle', () => {
             (entry) => entry.event === 'updateStreamStatus',
           ),
         ).toEqual([]);
-        return {
-          category: 'toolUse',
-          outcome: RUN_OUTCOME.COMPLETED,
-          executionId,
-          streamId,
-        };
+        return toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED);
       });
 
       expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.COMPLETED);
@@ -547,12 +566,7 @@ describe('runFlowWithLifecycle', () => {
           expect(
             streamStatus.transition(streamId, STREAM_PHASE.WAITING, 'wait'),
           ).toBe(true);
-          return {
-            category: 'toolUse',
-            outcome: STREAM_PHASE.WAITING,
-            executionId,
-            streamId,
-          };
+          return waitingResult(executionId, streamId);
         },
         { isSubagent: true, onError },
       );
@@ -584,12 +598,7 @@ describe('runFlowWithLifecycle', () => {
       // caller, then the run completing normally without ever suspending.
       const result = await runFlowWithLifecycle(
         ctx,
-        async () => ({
-          category: 'toolUse',
-          outcome: RUN_OUTCOME.COMPLETED,
-          executionId,
-          streamId,
-        }),
+        async () => toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED),
         {
           isSubagent: true,
           onRun: (handle) => {
@@ -627,12 +636,7 @@ describe('runFlowWithLifecycle', () => {
     try {
       await runFlowWithLifecycle(
         ctx,
-        async () => ({
-          category: 'toolUse',
-          outcome: RUN_OUTCOME.COMPLETED,
-          executionId,
-          streamId,
-        }),
+        async () => toolUseResult(executionId, streamId, RUN_OUTCOME.COMPLETED),
         {
           isSubagent: true,
           parentStreamId,
@@ -685,12 +689,7 @@ describe('runFlowWithLifecycle', () => {
         handle.attachToolUseFlow(flowContext);
         expect(interrupt).toHaveBeenCalledOnce();
         handle.detachToolUseFlow(flowContext);
-        return {
-          category: 'toolUse',
-          outcome: RUN_OUTCOME.CANCELLED,
-          executionId,
-          streamId,
-        };
+        return toolUseResult(executionId, streamId, RUN_OUTCOME.CANCELLED);
       },
       {
         onRun: () => {
@@ -719,12 +718,7 @@ describe('runFlowWithLifecycle', () => {
     try {
       const result = await runFlowWithLifecycle(
         ctx,
-        async () => ({
-          category: 'toolUse',
-          outcome: STREAM_PHASE.WAITING,
-          executionId,
-          streamId,
-        }),
+        async () => waitingResult(executionId, streamId),
         { isSubagent: true },
       );
 
@@ -736,21 +730,7 @@ describe('runFlowWithLifecycle', () => {
       // as its trace channel.
       const traceEmit = vi.spyOn(noopTrace, 'emit');
 
-      // terminateWaitingHandle now requires the stream to have genuinely
-      // reached WAITING (belt-and-suspenders confirmation the handle is
-      // really parked, not mid-flight — see #7324 review discussion); this
-      // fake runner returns the WAITING outcome directly but doesn't drive
-      // the real transitionToWaiting() call, so seed it explicitly.
-      seedStreamStatusForTest(
-        defaultSession().status,
-        streamId,
-        STREAM_STATUS.WAITING,
-      );
-      const waitingHandle = defaultSession().executions.getHandle(executionId);
-      expect(waitingHandle).toBeInstanceOf(AgentExecutionHandle);
-      if (!(waitingHandle instanceof AgentExecutionHandle)) {
-        throw new Error('Expected a suspended agent execution handle.');
-      }
+      const waitingHandle = takeWaitingHandle(executionId, streamId);
 
       // runToolUseFlow's finally detaches this stream's interrupt handler but
       // (post #7286) preserves the follow-up queue for WAITING — it does not
@@ -844,25 +824,11 @@ describe('runFlowWithLifecycle', () => {
     try {
       const result = await runFlowWithLifecycle(
         ctx,
-        async () => ({
-          category: 'toolUse',
-          outcome: STREAM_PHASE.WAITING,
-          executionId,
-          streamId,
-        }),
+        async () => waitingResult(executionId, streamId),
         { isSubagent: true },
       );
       expect(result.outcome).toBe(STREAM_PHASE.WAITING);
-      seedStreamStatusForTest(
-        defaultSession().status,
-        streamId,
-        STREAM_STATUS.WAITING,
-      );
-      const waitingHandle = defaultSession().executions.getHandle(executionId);
-      expect(waitingHandle).toBeInstanceOf(AgentExecutionHandle);
-      if (!(waitingHandle instanceof AgentExecutionHandle)) {
-        throw new Error('Expected a suspended agent execution handle.');
-      }
+      const waitingHandle = takeWaitingHandle(executionId, streamId);
 
       expect(defaultSession().executions.kill(executionId)).toBe(true);
       await writerLoadStarted;
@@ -913,12 +879,9 @@ describe('runFlowWithLifecycle', () => {
       storageMocks.finalizeExecution.mockClear();
 
       try {
-        const result = await runFlowWithLifecycle(ctx, async () => ({
-          category: 'toolUse',
-          outcome: expected.outcome,
-          executionId,
-          streamId,
-        }));
+        const result = await runFlowWithLifecycle(ctx, async () =>
+          toolUseResult(executionId, streamId, expected.outcome),
+        );
 
         expect(result.outcome).toBe(expected.outcome);
         expect(storageMocks.finalizeExecution).toHaveBeenCalledWith({

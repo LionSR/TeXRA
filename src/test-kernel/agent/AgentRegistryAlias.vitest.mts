@@ -1,7 +1,7 @@
 // Node imports
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // Third-party imports
@@ -29,18 +29,20 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { createDeferred } from '@test/support/asyncTestUtils';
 
-const listRemoteAgents = vi.hoisted(() =>
-  vi.fn(async () => [
-    {
-      id: 'remote-orchestrator',
-      name: 'orchestrator',
-      description: 'Remote team root',
-      visibility: ['researcher'],
-      tools: ['delegate_agent'],
-      agentCategory: 'toolUse',
-    },
-  ]),
-);
+const { listRemoteAgents, ORCHESTRATOR_AGENT } = vi.hoisted(() => {
+  const ORCHESTRATOR_AGENT = {
+    id: 'remote-orchestrator',
+    name: 'orchestrator',
+    description: 'Remote team root',
+    visibility: ['researcher'],
+    tools: ['delegate_agent'],
+    agentCategory: 'toolUse',
+  };
+  return {
+    ORCHESTRATOR_AGENT,
+    listRemoteAgents: vi.fn(async () => [ORCHESTRATOR_AGENT]),
+  };
+});
 
 vi.mock('@agent/remote/remoteAgentList', () => ({
   listRemoteAgents,
@@ -98,6 +100,25 @@ async function initPlatformWithState(
   );
 }
 
+/** Create a temp custom-agent directory holding the given YAML files. */
+async function createCustomAgentDir(
+  files: Record<string, readonly string[]>,
+): Promise<string> {
+  const customDir = await mkdtemp(resolve(tmpdir(), 'texra-custom-agent-'));
+  for (const [relativePath, lines] of Object.entries(files)) {
+    const filePath = resolve(customDir, relativePath);
+    await mkdir(dirname(filePath), { recursive: true });
+    await writeFile(filePath, `${lines.join('\n')}\n`);
+  }
+  return customDir;
+}
+
+function enabledToolUseAgents(): string[] | undefined {
+  return platform().workspaceState.get<string[]>(
+    WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
+  );
+}
+
 describe('agent registry legacy aliases', () => {
   beforeAll(async () => {
     // Real bundled agent YAMLs on disk, so the test exercises the actual
@@ -149,13 +170,10 @@ describe('agent registry legacy aliases', () => {
   it('keeps the current cache visible while a refresh is pending', async () => {
     expect(getAgent('assistant')?.name).toBe('assistant');
 
-    let releaseBuiltInToolUseDir: (() => void) | undefined;
-    const waitForBuiltInToolUseDir = new Promise<void>((resolveWait) => {
-      releaseBuiltInToolUseDir = resolveWait;
-    });
+    const builtInToolUseDir = createDeferred<void>();
     useAgentDirectories({
       builtInToolUse: async () => {
-        await waitForBuiltInToolUseDir;
+        await builtInToolUseDir.promise;
         return BUILTIN_TOOL_USE_AGENTS_DIR;
       },
     });
@@ -165,7 +183,7 @@ describe('agent registry legacy aliases', () => {
 
     expect(getAgent('assistant')?.name).toBe('assistant');
 
-    releaseBuiltInToolUseDir?.();
+    builtInToolUseDir.resolve();
     await pendingRefresh;
   });
 
@@ -173,15 +191,12 @@ describe('agent registry legacy aliases', () => {
     useAgentDirectories();
     await refresh({ includeRemote: false });
 
-    let releaseStaleLoad: (() => void) | undefined;
-    const staleLoadGate = new Promise<void>((resolveLoad) => {
-      releaseStaleLoad = resolveLoad;
-    });
+    const staleLoadGate = createDeferred<void>();
     let remoteCall = 0;
     listRemoteAgents.mockImplementation(async () => {
       remoteCall += 1;
       if (remoteCall === 1) {
-        await staleLoadGate;
+        await staleLoadGate.promise;
         return [
           {
             id: 'stale-agent',
@@ -209,7 +224,7 @@ describe('agent registry legacy aliases', () => {
     await vi.waitFor(() => expect(listRemoteAgents).toHaveBeenCalledOnce());
     const forcedRefresh = refresh({ includeRemote: true });
 
-    releaseStaleLoad?.();
+    staleLoadGate.resolve();
     await staleInitialization;
     await forcedRefresh;
 
@@ -218,16 +233,7 @@ describe('agent registry legacy aliases', () => {
     expect(getAgent('staleAgent')).toBeUndefined();
 
     listRemoteAgents.mockReset();
-    listRemoteAgents.mockResolvedValue([
-      {
-        id: 'remote-orchestrator',
-        name: 'orchestrator',
-        description: 'Remote team root',
-        visibility: ['researcher'],
-        tools: ['delegate_agent'],
-        agentCategory: 'toolUse',
-      },
-    ]);
+    listRemoteAgents.mockResolvedValue([ORCHESTRATOR_AGENT]);
     await refresh({ includeRemote: false });
   });
 
@@ -329,9 +335,7 @@ describe('agent registry legacy aliases', () => {
   });
 
   it('includes remote agents in launcher options after local-only startup load', async () => {
-    const originalEnabledToolUseAgents = platform().workspaceState.get<
-      string[]
-    >(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS);
+    const originalEnabledToolUseAgents = enabledToolUseAgents();
 
     try {
       await platform().workspaceState.update(
@@ -359,14 +363,9 @@ describe('agent registry legacy aliases', () => {
   });
 
   it('includes remote agents in launcher options after pending local-only startup load', async () => {
-    const originalEnabledToolUseAgents = platform().workspaceState.get<
-      string[]
-    >(WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS);
+    const originalEnabledToolUseAgents = enabledToolUseAgents();
 
-    let releaseBuiltInToolUseDir: (() => void) | undefined;
-    const waitForBuiltInToolUseDir = new Promise<void>((resolveWait) => {
-      releaseBuiltInToolUseDir = resolveWait;
-    });
+    const builtInToolUseDir = createDeferred<void>();
 
     try {
       await platform().workspaceState.update(
@@ -375,7 +374,7 @@ describe('agent registry legacy aliases', () => {
       );
       useAgentDirectories({
         builtInToolUse: async () => {
-          await waitForBuiltInToolUseDir;
+          await builtInToolUseDir.promise;
           return BUILTIN_TOOL_USE_AGENTS_DIR;
         },
       });
@@ -384,7 +383,7 @@ describe('agent registry legacy aliases', () => {
       await new Promise((resolveNextTick) => setTimeout(resolveNextTick, 0));
       const optionsPromise = computeAgentOptionsData();
 
-      releaseBuiltInToolUseDir?.();
+      builtInToolUseDir.resolve();
       await pendingRefresh;
       const options = await optionsPromise;
 
@@ -392,7 +391,7 @@ describe('agent registry legacy aliases', () => {
         'orchestrator',
       );
     } finally {
-      releaseBuiltInToolUseDir?.();
+      builtInToolUseDir.resolve();
       await platform().workspaceState.update(
         WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
         originalEnabledToolUseAgents,
@@ -405,10 +404,11 @@ describe('agent registry legacy aliases', () => {
   it('migrates persisted legacy keys at load time', () => {
     // Stale chat keys would desync the Agents settings UI (which matches
     // keys literally) from picker visibility — loadAgents rewrites them.
-    const stored = platform().workspaceState.get<string[]>(
-      WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
-    );
-    expect(stored).toEqual(['assistant', 'builtInToolUse:assistant', 'review']);
+    expect(enabledToolUseAgents()).toEqual([
+      'assistant',
+      'builtInToolUse:assistant',
+      'review',
+    ]);
   });
 
   it('keeps assistant visible for workspaces that opted into chat', async () => {
@@ -435,10 +435,8 @@ describe('agent registry legacy aliases', () => {
   });
 
   it('preserves bare custom chat while migrating qualified built-in chat keys', async () => {
-    const customDir = await mkdtemp(resolve(tmpdir(), 'texra-custom-agent-'));
-    await writeFile(
-      resolve(customDir, 'chat.yaml'),
-      [
+    const customDir = await createCustomAgentDir({
+      'chat.yaml': [
         'name: chat',
         'description: Custom chat agent',
         'settings:',
@@ -446,9 +444,8 @@ describe('agent registry legacy aliases', () => {
         '  tools: []',
         'prompts:',
         '  systemPrompt: Custom chat agent.',
-        '',
-      ].join('\n'),
-    );
+      ],
+    });
 
     await initPlatformWithState({
       [WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS]: [
@@ -460,11 +457,10 @@ describe('agent registry legacy aliases', () => {
 
     await refresh({ includeRemote: false });
 
-    expect(
-      platform().workspaceState.get<string[]>(
-        WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
-      ),
-    ).toEqual(['chat', 'builtInToolUse:assistant']);
+    expect(enabledToolUseAgents()).toEqual([
+      'chat',
+      'builtInToolUse:assistant',
+    ]);
     expect(getAgent('chat')?.source).toBe('custom');
     expect(getAgent('builtInToolUse:chat')?.name).toBe('assistant');
 
@@ -489,9 +485,7 @@ describe('agent registry legacy aliases', () => {
 
     await refresh({ includeRemote: false });
 
-    const migrated = platform().workspaceState.get<string[]>(
-      WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
-    );
+    const migrated = enabledToolUseAgents();
     expect(migrated).toEqual(['builtInToolUse:assistant']);
     // The migrated key must resolve — no dangling enabled entry.
     expect(getAgent(migrated![0]!)?.name).toBe('assistant');
@@ -502,19 +496,16 @@ describe('agent registry legacy aliases', () => {
     // `assistant`. A category-blind fallback would pick the custom workflow
     // entry by source priority and wrongly persist `custom:assistant` into the
     // tool-use list. Migration must resolve within each list's own category.
-    const customDir = await mkdtemp(resolve(tmpdir(), 'texra-custom-agent-'));
-    await writeFile(
-      resolve(customDir, 'assistant.yaml'),
-      [
+    const customDir = await createCustomAgentDir({
+      'assistant.yaml': [
         'name: assistant',
         'description: Custom workflow agent shadowing a built-in name.',
         'settings:',
         '  agentCategory: workflow',
         'prompts:',
         '  systemPrompt: Custom workflow assistant.',
-        '',
-      ].join('\n'),
-    );
+      ],
+    });
 
     await initPlatformWithState({
       [WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS]: ['builtInWorkflow:chat'],
@@ -525,11 +516,7 @@ describe('agent registry legacy aliases', () => {
     await refresh({ includeRemote: false });
 
     // Tool-use list → the tool-use assistant, never the custom workflow shadow.
-    expect(
-      platform().workspaceState.get<string[]>(
-        WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
-      ),
-    ).toEqual(['builtInToolUse:assistant']);
+    expect(enabledToolUseAgents()).toEqual(['builtInToolUse:assistant']);
     // Workflow list → the custom workflow assistant (its own category).
     expect(
       platform().workspaceState.get<string[]>(WorkspaceStateKey.ENABLED_AGENTS),
@@ -537,10 +524,8 @@ describe('agent registry legacy aliases', () => {
   });
 
   it('migrates persisted filename-based custom agent keys to YAML names', async () => {
-    const customDir = await mkdtemp(resolve(tmpdir(), 'texra-custom-agent-'));
-    await writeFile(
-      resolve(customDir, 'Readable Helper.yaml'),
-      [
+    const customDir = await createCustomAgentDir({
+      'Readable Helper.yaml': [
         'name: helper',
         'description: Custom helper agent',
         'settings:',
@@ -548,9 +533,8 @@ describe('agent registry legacy aliases', () => {
         '  tools: []',
         'prompts:',
         '  systemPrompt: Custom helper agent.',
-        '',
-      ].join('\n'),
-    );
+      ],
+    });
 
     await initPlatformWithState({
       [WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS]: [
@@ -563,11 +547,11 @@ describe('agent registry legacy aliases', () => {
 
     await refresh({ includeRemote: false });
 
-    expect(
-      platform().workspaceState.get<string[]>(
-        WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
-      ),
-    ).toEqual(['custom:helper', 'helper', 'review']);
+    expect(enabledToolUseAgents()).toEqual([
+      'custom:helper',
+      'helper',
+      'review',
+    ]);
     expect(getAgent('custom:helper')?.path).toBe(
       resolve(customDir, 'Readable Helper.yaml'),
     );
@@ -577,14 +561,8 @@ describe('agent registry legacy aliases', () => {
   });
 
   it('leaves ambiguous filename-based custom keys unmigrated', async () => {
-    const customDir = await mkdtemp(resolve(tmpdir(), 'texra-custom-agent-'));
-    const firstDir = resolve(customDir, 'first');
-    const secondDir = resolve(customDir, 'second');
-    await mkdir(firstDir);
-    await mkdir(secondDir);
-    await writeFile(
-      resolve(firstDir, 'Readable Helper.yaml'),
-      [
+    const customDir = await createCustomAgentDir({
+      'first/Readable Helper.yaml': [
         'name: helper-one',
         'description: First custom helper agent',
         'settings:',
@@ -592,12 +570,8 @@ describe('agent registry legacy aliases', () => {
         '  tools: []',
         'prompts:',
         '  systemPrompt: First custom helper agent.',
-        '',
-      ].join('\n'),
-    );
-    await writeFile(
-      resolve(secondDir, 'Readable Helper.yaml'),
-      [
+      ],
+      'second/Readable Helper.yaml': [
         'name: helper-two',
         'description: Second custom helper agent',
         'settings:',
@@ -605,9 +579,10 @@ describe('agent registry legacy aliases', () => {
         '  tools: []',
         'prompts:',
         '  systemPrompt: Second custom helper agent.',
-        '',
-      ].join('\n'),
-    );
+      ],
+    });
+    const firstDir = resolve(customDir, 'first');
+    const secondDir = resolve(customDir, 'second');
 
     await initPlatformWithState({
       [WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS]: [
@@ -620,11 +595,11 @@ describe('agent registry legacy aliases', () => {
 
     await refresh({ includeRemote: false });
 
-    expect(
-      platform().workspaceState.get<string[]>(
-        WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
-      ),
-    ).toEqual(['custom:Readable Helper', 'Readable Helper', 'review']);
+    expect(enabledToolUseAgents()).toEqual([
+      'custom:Readable Helper',
+      'Readable Helper',
+      'review',
+    ]);
     expect(getAgent('custom:helper-one')?.path).toBe(
       resolve(firstDir, 'Readable Helper.yaml'),
     );

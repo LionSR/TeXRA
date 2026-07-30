@@ -1,10 +1,12 @@
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { _electron as electron } from 'playwright';
 import type { ElectronApplication, Page } from 'playwright';
+
+import { cleanupDirectory } from './workspaceStorageFixture.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PACKAGE_ROOT = resolve(HERE, '..', '..');
@@ -133,51 +135,52 @@ export async function closeTexraApp(launched: LaunchedApp): Promise<void> {
   await launched.app.close();
   // Clean up only auto-allocated directories. Caller-supplied workspace and
   // profile paths may be reused across relaunches and remain caller-owned.
-  const ownedPaths = [
-    launched.ownsWorkspace ? launched.workspacePath : undefined,
-    launched.ownsUserData ? launched.userDataPath : undefined,
-  ];
-  for (const path of ownedPaths) {
-    if (!path) continue;
-    try {
-      rmSync(path, { recursive: true, force: true });
-    } catch {
-      // Best-effort cleanup. A stale temp dir is preferable to a noisy
-      // teardown failure that masks the real test outcome.
-    }
+  if (launched.ownsWorkspace) cleanupDirectory(launched.workspacePath);
+  if (launched.ownsUserData) cleanupDirectory(launched.userDataPath);
+}
+
+/**
+ * Dismiss the shell's first-run startup panel when one is present. Resolves
+ * without acting on profiles that never show it, so callers that only need the
+ * launcher can share this step. Pass `required` when the panel is part of what
+ * the test asserts, so a missing one fails here instead of silently changing
+ * what the rest of the test measures.
+ */
+export async function dismissStartupPanel(
+  page: Page,
+  options: { required?: boolean } = {},
+): Promise<void> {
+  const waitForDismissButton = page.waitForFunction(() => {
+    const panel = document.querySelector('.desktop-startup-panel');
+    const btn = Array.from(panel?.querySelectorAll('wa-button') ?? []).find(
+      (button) => button.textContent?.trim() === 'Skip for now',
+    );
+    return btn instanceof HTMLElement;
+  });
+  if (options.required) {
+    await waitForDismissButton;
+  } else if (
+    !(await waitForDismissButton.then(() => true).catch(() => false))
+  ) {
+    return;
   }
+
+  await page.evaluate(() => {
+    const panel = document.querySelector('.desktop-startup-panel');
+    const btn = Array.from(panel?.querySelectorAll('wa-button') ?? []).find(
+      (button) => button.textContent?.trim() === 'Skip for now',
+    );
+    if (btn instanceof HTMLElement) btn.click();
+  });
+  await page.waitForFunction(
+    () => document.querySelector('.desktop-startup-panel') == null,
+    undefined,
+    { timeout: 5000 },
+  );
 }
 
 export async function dismissOnboarding(page: Page): Promise<void> {
-  const hasDismissButton = await page
-    .waitForFunction(
-      () => {
-        const panel = document.querySelector('.desktop-startup-panel');
-        const btn = Array.from(panel?.querySelectorAll('wa-button') ?? []).find(
-          (button) => button.textContent?.trim() === 'Skip for now',
-        );
-        return btn instanceof HTMLElement;
-      },
-      undefined,
-      { timeout: 10_000 },
-    )
-    .then(() => true)
-    .catch(() => false);
-
-  if (hasDismissButton) {
-    await page.evaluate(() => {
-      const panel = document.querySelector('.desktop-startup-panel');
-      const btn = Array.from(panel?.querySelectorAll('wa-button') ?? []).find(
-        (button) => button.textContent?.trim() === 'Skip for now',
-      );
-      if (btn instanceof HTMLElement) btn.click();
-    });
-    await page.waitForFunction(
-      () => document.querySelector('.desktop-startup-panel') == null,
-      undefined,
-      { timeout: 5000 },
-    );
-  }
+  await dismissStartupPanel(page);
 
   // A fresh profile can also show the credential welcome card inside
   // <main-app>'s shadow tree. Skipping it is separate from dismissing the shell

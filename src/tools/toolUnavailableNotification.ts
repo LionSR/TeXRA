@@ -55,38 +55,34 @@ export function notifyUnavailableTools(
   for (const g of fresh) notifiedGroups.add(g.name);
 
   // Coalesce hidden-from-dashboard groups (no action).
-  const hiddenGroups = fresh.filter((g) => g.hideFromDashboard);
-  if (hiddenGroups.length > 0) {
-    const label = formatGroupLabel(hiddenGroups.map((g) => g.name));
-    notify(`${label} excluded — external dependencies not installed.`);
+  const hiddenNames = fresh
+    .filter((g) => g.hideFromDashboard)
+    .map((g) => g.name);
+  if (hiddenNames.length > 0) {
+    notify(formatExclusionMessage(hiddenNames));
   }
 
   // Coalesce dashboard-visible groups by their action target. Groups with
   // the default target share one toast; a group with an override (e.g.
   // github-pr-subscription → Git tab) gets its own.
-  const byAction = new Map<string, typeof fresh>();
+  const byAction = new Map<
+    string,
+    { cmd: string; label: string; names: string[] }
+  >();
   for (const g of fresh) {
     if (g.hideFromDashboard) continue;
     const cmd = g.installActionCommand ?? DEFAULT_ACTION_COMMAND;
     const label = g.installActionLabel ?? DEFAULT_ACTION_LABEL;
-    const bucketKey = `${cmd}\0${label}`;
-    const bucket = byAction.get(bucketKey);
-    if (bucket) bucket.push(g);
-    else byAction.set(bucketKey, [g]);
+    const bucket = byAction.get(`${cmd}\0${label}`);
+    if (bucket) bucket.names.push(g.name);
+    else byAction.set(`${cmd}\0${label}`, { cmd, label, names: [g.name] });
   }
-  for (const [bucketKey, bucket] of byAction) {
-    const [cmd, label] = bucketKey.split('\0');
-    const names = formatGroupLabel(bucket.map((g) => g.name));
-    notify(
-      `${names} excluded — external dependencies not installed.`,
-      cmd,
-      label,
-    );
+  for (const { cmd, label, names } of byAction.values()) {
+    notify(formatExclusionMessage(names), cmd, label);
   }
 }
 
-function formatGroupLabel(names: string[]): string {
-  return names.length === 1
-    ? `"${names[0]}" tools were`
-    : `${names.map((n) => `"${n}"`).join(', ')} tools were`;
+function formatExclusionMessage(names: string[]): string {
+  const quoted = names.map((n) => `"${n}"`).join(', ');
+  return `${quoted} tools were excluded — external dependencies not installed.`;
 }

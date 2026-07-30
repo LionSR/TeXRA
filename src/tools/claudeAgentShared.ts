@@ -159,13 +159,9 @@ function describeToolInput(toolName: string, input: unknown): string {
       }
       break;
     case 'Glob':
-      if (typeof record.pattern === 'string') {
-        return `Glob ${record.pattern}`;
-      }
-      break;
     case 'Grep':
       if (typeof record.pattern === 'string') {
-        return `Grep ${record.pattern}`;
+        return `${toolName} ${record.pattern}`;
       }
       break;
     case 'WebFetch':

@@ -9,10 +9,8 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - skill parsing
 import { type SkillLoadIssue, issue, loadSkillDirectory } from './skillLoader';
-import type { Skill } from './SkillSchema';
-
-// Local imports - utilities
 import type { Dirent } from 'node:fs';
+import type { Skill } from './SkillSchema';
 
 export { type SkillLoadIssue } from './skillLoader';
 
@@ -142,37 +140,23 @@ async function validateRequiredSource(
 ): Promise<SkillLoadIssue | undefined> {
   try {
     const sourceStat = await fs.stat(source.path);
-    if (!sourceStat.isDirectory()) {
-      return issue(
-        'error',
-        'invalid_source',
-        'Skill source is not a directory',
-        {
-          path: source.path,
-        },
-      );
-    }
-    return undefined;
+    if (sourceStat.isDirectory()) return undefined;
   } catch (err) {
     if (isFileNotFoundError(err)) {
       return issue('error', 'missing_source', 'Skill source does not exist', {
         path: source.path,
       });
     }
-    if (isNotADirectoryError(err)) {
-      return issue(
-        'error',
-        'invalid_source',
-        'Skill source is not a directory',
-        {
-          path: source.path,
-        },
-      );
+    if (!isNotADirectoryError(err)) {
+      return issue('error', 'source_read_error', toErrorMessage(err), {
+        path: source.path,
+      });
     }
-    return issue('error', 'source_read_error', toErrorMessage(err), {
-      path: source.path,
-    });
   }
+
+  return issue('error', 'invalid_source', 'Skill source is not a directory', {
+    path: source.path,
+  });
 }
 
 /**

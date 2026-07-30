@@ -18,7 +18,6 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   dispatchSettingsViewInbound,
   SettingsViewInboundMessageSchema,
-  type ReasoningLevel,
 } from '@shared/schemas/settingsViewMessages';
 import { unsupported, unsupportedCommands } from '@shared/utils/dispatcher';
 import {
@@ -136,40 +135,6 @@ export function createDesktopSettingsIpc(
     options.postToRenderer(buildGitAuthorSettingsMessage(settings));
   }
 
-  async function postModelSelectionData(): Promise<void> {
-    await settingsHost.sendModelSelectionData();
-  }
-
-  async function postMemoryData(): Promise<void> {
-    await settingsHost.sendMemoryData();
-  }
-
-  async function postMemoryPreview(storagePath: string): Promise<void> {
-    await settingsHost.sendMemoryPreview({ storagePath }, { onError });
-  }
-
-  async function postMemoryEnabled(): Promise<void> {
-    await settingsHost.sendMemoryEnabled();
-  }
-
-  async function deleteMemory(input: {
-    storagePath: string;
-    displayPath: string;
-  }): Promise<void> {
-    await settingsHost.deleteMemory(input);
-  }
-
-  async function setMemoryEnabled(enabled: boolean): Promise<void> {
-    await settingsHost.setMemoryEnabled(enabled);
-  }
-
-  async function setMemoryPinned(
-    storagePath: string,
-    pinned: boolean,
-  ): Promise<void> {
-    await settingsHost.setMemoryPinned(storagePath, pinned);
-  }
-
   async function openMemoryFile(input: { storagePath: string }): Promise<void> {
     const resolvedPath = resolveMemoryStoragePath(input.storagePath);
     await options.ui.openPath(StorageFS.fullPath(resolvedPath));
@@ -230,15 +195,15 @@ export function createDesktopSettingsIpc(
     postGitAuthorSettings();
     options.toolingSettingsController.postLatexConfigValues();
     const goalListPosted = postGoalList();
-    const memoryEnabledPosted = postMemoryEnabled();
-    const modelSelectionDataPosted = postModelSelectionData();
+    const memoryEnabledPosted = settingsHost.sendMemoryEnabled();
+    const modelSelectionDataPosted = settingsHost.sendModelSelectionData();
     postSuperYoloEnabled();
     postApprovalSettings();
     postAgentSkillsSettings();
     await Promise.all([
       goalListPosted,
       memoryEnabledPosted,
-      postMemoryData(),
+      settingsHost.sendMemoryData(),
       options.historySettingsController.postHistoryData(),
       modelSelectionDataPosted,
       options.credentialSettingsController.postStartupData(),
@@ -265,21 +230,6 @@ export function createDesktopSettingsIpc(
       afterPost: () =>
         options.credentialSettingsController.postMainModelOptionsData(),
     });
-  }
-
-  async function updateModelReasoningLevel(input: {
-    modelName: string;
-    level: ReasoningLevel | null;
-  }): Promise<void> {
-    await settingsHost.setReasoningLevel(input);
-  }
-
-  async function updateHelperModel(modelName: string): Promise<void> {
-    await settingsHost.setHelperModel(modelName);
-  }
-
-  async function updatePreferShortModelNames(enabled: boolean): Promise<void> {
-    await settingsHost.setPreferShortModelNames(enabled);
   }
 
   async function refreshAuthDependentData(
@@ -409,8 +359,6 @@ export function createDesktopSettingsIpc(
     await postGitHubSubscriptions();
   }
 
-  const StateKeys = WorkspaceStateKey;
-
   const settingsActions: SettingsViewCommandActions = {
     // WEBVIEW_READY is intercepted in handleMessage below, before reaching
     // the dispatcher, so this entry is never actually invoked — it exists
@@ -423,36 +371,37 @@ export function createDesktopSettingsIpc(
       ),
     },
     memory: {
-      getData: () => postMemoryData(),
-      getPreview: (storagePath) => postMemoryPreview(storagePath),
+      getData: () => settingsHost.sendMemoryData(),
+      getPreview: (storagePath) =>
+        settingsHost.sendMemoryPreview({ storagePath }, { onError }),
       openFile: (data) => openMemoryFile(data),
       openFolder: () => openMemoryFolder(),
-      delete: (data) => deleteMemory(data),
-      setEnabled: (enabled) => setMemoryEnabled(enabled),
-      pin: (storagePath) => setMemoryPinned(storagePath, true),
-      unpin: (storagePath) => setMemoryPinned(storagePath, false),
+      delete: (data) => settingsHost.deleteMemory(data),
+      setEnabled: (enabled) => settingsHost.setMemoryEnabled(enabled),
+      pin: (storagePath) => settingsHost.setMemoryPinned(storagePath, true),
+      unpin: (storagePath) => settingsHost.setMemoryPinned(storagePath, false),
     },
     history: options.historySettingsController.actions,
     profile: options.credentialSettingsController.profileActions,
     modelSelection: {
       setEnabled: (modelName, enabled) =>
         updateModelEnabled({ modelName, enabled }),
-      setHelperModel: (modelName) => updateHelperModel(modelName),
+      setHelperModel: (modelName) => settingsHost.setHelperModel(modelName),
       setReasoningLevel: (modelName, level) =>
-        updateModelReasoningLevel({ modelName, level }),
+        settingsHost.setReasoningLevel({ modelName, level }),
       setPreferShortModelNames: (enabled) =>
-        updatePreferShortModelNames(enabled),
+        settingsHost.setPreferShortModelNames(enabled),
       requestAccess: unsupported('Copilot models require VS Code.'),
     },
     orchestration: {
       setAllowOrchestratorKill: (enabled) =>
         updateBooleanWorkspaceSetting(
-          StateKeys.ALLOW_ORCHESTRATOR_KILL,
+          WorkspaceStateKey.ALLOW_ORCHESTRATOR_KILL,
           enabled,
         ),
       setDetachSubagentsOnStop: (enabled) =>
         updateBooleanWorkspaceSetting(
-          StateKeys.DETACH_SUBAGENTS_ON_STOP,
+          WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
           enabled,
         ),
     },

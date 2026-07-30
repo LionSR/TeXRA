@@ -16,10 +16,6 @@ type Module = typeof import('@desktop/main/desktopLegacyStreamImporter');
 
 type LegacyRow = Record<string, unknown> & { streamId: string };
 
-async function loadModule(): Promise<Module> {
-  return import('@desktop/main/desktopLegacyStreamImporter');
-}
-
 function makeLegacyRow(
   streamId: string,
   overrides: Record<string, unknown> = {},
@@ -64,7 +60,8 @@ describe('DesktopLegacyStreamImporter', () => {
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'texra-legacy-stream-import-'));
     filePath = join(tempDir, 'streams.json');
-    ({ prepareDesktopLegacyStreamImport } = await loadModule());
+    ({ prepareDesktopLegacyStreamImport } =
+      await import('@desktop/main/desktopLegacyStreamImporter'));
     writeFileAtomicMock.mockReset().mockImplementation(async (target, data) => {
       await writeFile(target, data);
     });

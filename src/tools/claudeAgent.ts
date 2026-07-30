@@ -609,11 +609,8 @@ async function launchClaudeAgentSession(
   // sibling files. Out-of-workspace cwds run isolated (matches codex). The
   // claude-agent-sdk's `Options` type names these fields `cwd` /
   // `additionalDirectories`, unlike codex's `workingDirectory`.
-  const resolvedWorkspace = buildAgentWorkspaceOptions(workingDir);
-  const workspace = {
-    cwd: resolvedWorkspace.workingDirectory,
-    additionalDirectories: resolvedWorkspace.additionalDirectories,
-  };
+  const { workingDirectory, additionalDirectories } =
+    buildAgentWorkspaceOptions(workingDir);
   const env = await config.buildClaudeAgentEnv();
   const pathToClaudeCodeExecutable = await findClaudeBinaryPath();
   const agentConfig = config.buildClaudeAgentConfig(input.prompt);
@@ -636,8 +633,8 @@ async function launchClaudeAgentSession(
         model,
         permissionMode,
         effort,
-        cwd: workspace.cwd,
-        additionalDirectories: workspace.additionalDirectories,
+        cwd: workingDirectory,
+        additionalDirectories,
         env,
         pathToClaudeCodeExecutable,
         resumeSessionId: input.session_id ?? undefined,

@@ -118,10 +118,6 @@ export class FileSelectGroup extends LitElement {
     }
   }
 
-  private handleCheckboxChange(id: string, checked: boolean): void {
-    this.dispatchEvent(MainViewEvents.checkboxChange({ id, checked }));
-  }
-
   private get currentCheckboxValues(): CheckboxValues {
     return this.fileState?.checkboxValues ?? DEFAULT_CHECKBOX_VALUES;
   }
@@ -148,7 +144,9 @@ export class FileSelectGroup extends LitElement {
       (HTMLElement & { value?: string; checked?: boolean }) | undefined;
     const id = item?.value;
     if (!id) return;
-    this.handleCheckboxChange(id, Boolean(item?.checked));
+    this.dispatchEvent(
+      MainViewEvents.checkboxChange({ id, checked: Boolean(item?.checked) }),
+    );
   };
 
   /** Shared wa-dropdown chrome (trigger button + tooltip) for the checkbox menus. */

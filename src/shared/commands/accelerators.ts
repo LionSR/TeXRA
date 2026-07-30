@@ -78,8 +78,8 @@ function toDisplayAcceleratorPart(
   part: string,
   platform: NodeJS.Platform,
 ): string {
-  const mapped = DISPLAY_ACCELERATOR_PARTS[part.trim().toLowerCase()];
-  if (mapped) return platform === 'darwin' ? mapped[0] : mapped[1];
   const trimmed = part.trim();
+  const mapped = DISPLAY_ACCELERATOR_PARTS[trimmed.toLowerCase()];
+  if (mapped) return platform === 'darwin' ? mapped[0] : mapped[1];
   return trimmed.length === 1 ? trimmed.toUpperCase() : trimmed;
 }

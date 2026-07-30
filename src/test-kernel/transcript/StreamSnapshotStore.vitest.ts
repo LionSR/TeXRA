@@ -110,6 +110,52 @@ function toolUseTaskState(agent = 'search', model = 'deepseekproT'): TaskState {
   });
 }
 
+type StagedDeletion = Awaited<
+  ReturnType<StreamSnapshotStore['stageDeleteStream']>
+>;
+type WorkPlan = ReturnType<StreamSnapshotStore['getWorkPlan']>;
+
+async function writeStreamFile(
+  stream: StreamTabId,
+  name: string,
+  contents: unknown,
+): Promise<void> {
+  const dir = streamDataDir(stream);
+  await StorageFS.ensureDir(dir);
+  await StorageFS.write(path.join(dir, name), JSON.stringify(contents));
+}
+
+function readStreamFile(stream: StreamTabId, name: string): Promise<unknown> {
+  return StorageFS.readJson(path.join(streamDataDir(stream), name));
+}
+
+/** A store whose plan for STREAM is already persisted to disk. */
+async function storeWithPersistedPlan(): Promise<StreamSnapshotStore> {
+  const store = new StreamSnapshotStore();
+  await store.load([]);
+  store.setPlan(STREAM, PLAN);
+  await store.flush();
+  return store;
+}
+
+/** Persisted plan, a staged deletion, and a buffered clear of that plan. */
+async function stageDeletionWithBufferedClear(): Promise<{
+  store: StreamSnapshotStore;
+  deletion: StagedDeletion;
+}> {
+  const store = await storeWithPersistedPlan();
+  const deletion = await store.stageDeleteStream(STREAM);
+  store.setPlan(STREAM, null);
+  return { store, deletion };
+}
+
+/** The work plan a fresh store reads back from disk. */
+async function reloadWorkPlan(stream: StreamTabId = STREAM): Promise<WorkPlan> {
+  const reloaded = new StreamSnapshotStore();
+  await reloaded.load([stream]);
+  return reloaded.getWorkPlan(stream);
+}
+
 function injectDuringExecutionConfigHydration(
   executionId: ExecutionId,
   inject: () => void | Promise<void>,
@@ -426,15 +472,10 @@ describe('StreamSnapshotStore', () => {
 
   it('degrades a structurally unreadable work plan to empty LOUDLY (not via a silent .catch)', async () => {
     const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
-    const dir = streamDataDir(STREAM);
-    await StorageFS.ensureDir(dir);
     // A non-object top-level shape survives the `!raw` guard but fails the
     // object parse — the exact corruption the old whole-object `.catch`
     // swallowed without a trace.
-    await StorageFS.write(
-      path.join(dir, 'workPlan.json'),
-      JSON.stringify(['not', 'a', 'work plan']),
-    );
+    await writeStreamFile(STREAM, 'workPlan.json', ['not', 'a', 'work plan']);
 
     const snap = await new StreamSnapshotStore().read(STREAM);
 
@@ -449,12 +490,9 @@ describe('StreamSnapshotStore', () => {
   });
 
   it('migrates the legacy nested {runId:{round}} shape to flat ONCE at the load entry', async () => {
-    const dir = streamDataDir(STREAM);
-    await StorageFS.ensureDir(dir);
-    await StorageFS.write(
-      path.join(dir, 'missingOutputs.json'),
-      JSON.stringify({ 'run-1': { '0': ['a.tex'], '1': ['b.tex'] } }),
-    );
+    await writeStreamFile(STREAM, 'missingOutputs.json', {
+      'run-1': { '0': ['a.tex'], '1': ['b.tex'] },
+    });
 
     const store = new StreamSnapshotStore();
     await store.load([STREAM]);
@@ -462,7 +500,7 @@ describe('StreamSnapshotStore', () => {
 
     // The on-disk file is now FLAT — migrated once at the load entry, never
     // re-resolved on subsequent reads.
-    const raw = await StorageFS.readJson(path.join(dir, 'missingOutputs.json'));
+    const raw = await readStreamFile(STREAM, 'missingOutputs.json');
     expect(raw).toEqual({ '0': ['a.tex'], '1': ['b.tex'] });
     // …and a fresh read sees the flattened data.
     const snap = await new StreamSnapshotStore().read(STREAM);
@@ -473,13 +511,10 @@ describe('StreamSnapshotStore', () => {
   });
 
   it('seeds existing disk data before an unloaded usage mutation, so it is not erased', async () => {
-    const dir = streamDataDir(STREAM);
-    await StorageFS.ensureDir(dir);
     // A prior session persisted usage for run-1.
-    await StorageFS.write(
-      path.join(dir, 'usageStats.json'),
-      JSON.stringify({ 'run-1': usage(100, 20, 0.5) }),
-    );
+    await writeStreamFile(STREAM, 'usageStats.json', {
+      'run-1': usage(100, 20, 0.5),
+    });
 
     // A fresh store (NOT load()ed) handles a delta for a NEW run.
     const store = new StreamSnapshotStore();
@@ -487,7 +522,7 @@ describe('StreamSnapshotStore', () => {
     await store.flush();
 
     // run-1 (prior) survives — the unseeded write did not clobber it.
-    const raw = await StorageFS.readJson(path.join(dir, 'usageStats.json'));
+    const raw = await readStreamFile(STREAM, 'usageStats.json');
     expect(raw).toMatchObject({
       'run-1': { inputTokens: 100, outputTokens: 20, cost: 0.5 },
       'run-2': { inputTokens: 50, outputTokens: 10, cost: 0.25 },
@@ -499,15 +534,10 @@ describe('StreamSnapshotStore', () => {
     // corrupted or future-shaped value) must be logged loudly and carried
     // through unchanged, rather than silently zeroed and then permanently
     // deleted from disk by the next writeUsage().
-    const dir = streamDataDir(STREAM);
-    await StorageFS.ensureDir(dir);
-    await StorageFS.write(
-      path.join(dir, 'usageStats.json'),
-      JSON.stringify({
-        [RUN]: usage(100, 20, 0.5),
-        'run-corrupt': 'this-is-not-a-usage-object',
-      }),
-    );
+    await writeStreamFile(STREAM, 'usageStats.json', {
+      [RUN]: usage(100, 20, 0.5),
+      'run-corrupt': 'this-is-not-a-usage-object',
+    });
 
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const store = new StreamSnapshotStore();
@@ -520,7 +550,7 @@ describe('StreamSnapshotStore', () => {
     expect(warnSpy).toHaveBeenCalled();
     warnSpy.mockRestore();
 
-    const raw = await StorageFS.readJson(path.join(dir, 'usageStats.json'));
+    const raw = await readStreamFile(STREAM, 'usageStats.json');
     expect(raw).toMatchObject({
       [RUN]: { inputTokens: 100, outputTokens: 20, cost: 0.5 },
       [RUN_2]: { inputTokens: 50, outputTokens: 10, cost: 0.25 },
@@ -533,12 +563,9 @@ describe('StreamSnapshotStore', () => {
   });
 
   it('resolves pre-seed usage after merging existing disk usage', async () => {
-    const dir = streamDataDir(STREAM);
-    await StorageFS.ensureDir(dir);
-    await StorageFS.write(
-      path.join(dir, 'usageStats.json'),
-      JSON.stringify({ [RUN]: usage(100, 20, 0.5) }),
-    );
+    await writeStreamFile(STREAM, 'usageStats.json', {
+      [RUN]: usage(100, 20, 0.5),
+    });
 
     const store = new StreamSnapshotStore();
     const pending = store.addUsage(STREAM, RUN_2, usage(50, 10, 0.25));
@@ -554,7 +581,7 @@ describe('StreamSnapshotStore', () => {
     });
     await store.flush();
 
-    const raw = await StorageFS.readJson(path.join(dir, 'usageStats.json'));
+    const raw = await readStreamFile(STREAM, 'usageStats.json');
     expect(raw).toMatchObject({
       [RUN]: { inputTokens: 100, outputTokens: 20, cost: 0.5 },
       [RUN_2]: { inputTokens: 50, outputTokens: 10, cost: 0.25 },
@@ -562,12 +589,9 @@ describe('StreamSnapshotStore', () => {
   });
 
   it('returns pre-seed usage only after a partial preload baseline is merged', async () => {
-    const dir = streamDataDir(OTHER_STREAM);
-    await StorageFS.ensureDir(dir);
-    await StorageFS.write(
-      path.join(dir, 'usageStats.json'),
-      JSON.stringify({ [RUN]: usage(100, 20, 0.5) }),
-    );
+    await writeStreamFile(OTHER_STREAM, 'usageStats.json', {
+      [RUN]: usage(100, 20, 0.5),
+    });
 
     const store = new StreamSnapshotStore();
     await store.preload([STREAM]);
@@ -585,7 +609,7 @@ describe('StreamSnapshotStore', () => {
     });
     await store.flush();
 
-    const raw = await StorageFS.readJson(path.join(dir, 'usageStats.json'));
+    const raw = await readStreamFile(OTHER_STREAM, 'usageStats.json');
     expect(raw).toMatchObject({
       [RUN]: { inputTokens: 100, outputTokens: 20, cost: 0.5 },
       [RUN_2]: { inputTokens: 50, outputTokens: 10, cost: 0.25 },
@@ -593,12 +617,9 @@ describe('StreamSnapshotStore', () => {
   });
 
   it('includes the disk baseline in a pre-seed usage result for the same run', async () => {
-    const dir = streamDataDir(OTHER_STREAM);
-    await StorageFS.ensureDir(dir);
-    await StorageFS.write(
-      path.join(dir, 'usageStats.json'),
-      JSON.stringify({ [RUN]: usage(100, 20, 0.5) }),
-    );
+    await writeStreamFile(OTHER_STREAM, 'usageStats.json', {
+      [RUN]: usage(100, 20, 0.5),
+    });
 
     const store = new StreamSnapshotStore();
     await store.preload([STREAM]);
@@ -616,21 +637,16 @@ describe('StreamSnapshotStore', () => {
     });
     await store.flush();
 
-    const raw = await StorageFS.readJson(path.join(dir, 'usageStats.json'));
+    const raw = await readStreamFile(OTHER_STREAM, 'usageStats.json');
     expect(raw).toMatchObject({
       [RUN]: { inputTokens: 150, outputTokens: 30, cost: 0.75 },
     });
   });
 
   it('returns output files immediately for streams outside a partial preload without erasing disk outputs', async () => {
-    const dir = streamDataDir(OTHER_STREAM);
-    await StorageFS.ensureDir(dir);
     const prior = outputFile('prior.tex', 0);
     const next = outputFile('next.tex', 1);
-    await StorageFS.write(
-      path.join(dir, 'outputFiles.json'),
-      JSON.stringify({ '0': [prior] }),
-    );
+    await writeStreamFile(OTHER_STREAM, 'outputFiles.json', { '0': [prior] });
 
     const store = new StreamSnapshotStore();
     await store.preload([STREAM]);
@@ -641,7 +657,7 @@ describe('StreamSnapshotStore', () => {
     expect(store.getOutputFiles(OTHER_STREAM)[1]).toEqual([next]);
     await store.flush();
 
-    const raw = await StorageFS.readJson(path.join(dir, 'outputFiles.json'));
+    const raw = await readStreamFile(OTHER_STREAM, 'outputFiles.json');
     expect(raw).toMatchObject({
       '0': [prior],
       '1': [next],
@@ -649,14 +665,11 @@ describe('StreamSnapshotStore', () => {
   });
 
   it('keeps output overlays when flattening legacy output files after preload', async () => {
-    const dir = streamDataDir(OTHER_STREAM);
-    await StorageFS.ensureDir(dir);
     const prior = outputFile('prior.tex', 0);
     const next = outputFile('next.tex', 1);
-    await StorageFS.write(
-      path.join(dir, 'outputFiles.json'),
-      JSON.stringify({ [RUN]: { '0': [prior] } }),
-    );
+    await writeStreamFile(OTHER_STREAM, 'outputFiles.json', {
+      [RUN]: { '0': [prior] },
+    });
 
     const store = new StreamSnapshotStore();
     await store.preload([STREAM]);
@@ -665,7 +678,7 @@ describe('StreamSnapshotStore', () => {
     expect(store.getOutputFiles(OTHER_STREAM)[1]).toEqual([next]);
     await store.flush();
 
-    const raw = await StorageFS.readJson(path.join(dir, 'outputFiles.json'));
+    const raw = await readStreamFile(OTHER_STREAM, 'outputFiles.json');
     expect(raw).toEqual({
       '0': [prior],
       '1': [next],
@@ -679,12 +692,9 @@ describe('StreamSnapshotStore', () => {
     // the caller's read of its own write. Regression for the "half-fixed"
     // eager-apply overlay gap (missingOutputs/compileFailures lacked the
     // guarantee addOutputFiles/addUsage already had).
-    const dir = streamDataDir(OTHER_STREAM);
-    await StorageFS.ensureDir(dir);
-    await StorageFS.write(
-      path.join(dir, 'missingOutputs.json'),
-      JSON.stringify({ '0': ['prior.tex'] }),
-    );
+    await writeStreamFile(OTHER_STREAM, 'missingOutputs.json', {
+      '0': ['prior.tex'],
+    });
 
     const store = new StreamSnapshotStore();
     await store.preload([STREAM]);
@@ -695,7 +705,7 @@ describe('StreamSnapshotStore', () => {
     expect(store.getMissingOutputs(OTHER_STREAM)[1]).toEqual(['next.tex']);
     await store.flush();
 
-    const raw = await StorageFS.readJson(path.join(dir, 'missingOutputs.json'));
+    const raw = await readStreamFile(OTHER_STREAM, 'missingOutputs.json');
     expect(raw).toMatchObject({
       '0': ['prior.tex'],
       '1': ['next.tex'],
@@ -703,7 +713,6 @@ describe('StreamSnapshotStore', () => {
   });
 
   it('rejects malformed missing-output patches before mutating memory or persisted state', async () => {
-    const dir = streamDataDir(STREAM);
     const store = new StreamSnapshotStore();
     await store.load([STREAM]);
 
@@ -718,9 +727,9 @@ describe('StreamSnapshotStore', () => {
 
     expect(store.getMissingOutputs(STREAM)).toEqual({ 0: ['prior.tex'] });
     await store.flush();
-    expect(
-      await StorageFS.readJson(path.join(dir, 'missingOutputs.json')),
-    ).toEqual({ '0': ['prior.tex'] });
+    expect(await readStreamFile(STREAM, 'missingOutputs.json')).toEqual({
+      '0': ['prior.tex'],
+    });
 
     store.updateMissingOutputs(STREAM, { 1: ['next.tex'] });
     expect(store.getMissingOutputs(STREAM)).toEqual({
@@ -728,9 +737,7 @@ describe('StreamSnapshotStore', () => {
       1: ['next.tex'],
     });
     await store.flush();
-    expect(
-      await StorageFS.readJson(path.join(dir, 'missingOutputs.json')),
-    ).toEqual({
+    expect(await readStreamFile(STREAM, 'missingOutputs.json')).toEqual({
       '0': ['prior.tex'],
       '1': ['next.tex'],
     });
@@ -743,12 +750,9 @@ describe('StreamSnapshotStore', () => {
     // (queued behind the same seed) run afterward and wipe it out regardless
     // of call order. Here the clear fires first, so the later update must
     // survive.
-    const dir = streamDataDir(OTHER_STREAM);
-    await StorageFS.ensureDir(dir);
-    await StorageFS.write(
-      path.join(dir, 'missingOutputs.json'),
-      JSON.stringify({ '0': ['stale.tex'] }),
-    );
+    await writeStreamFile(OTHER_STREAM, 'missingOutputs.json', {
+      '0': ['stale.tex'],
+    });
 
     const store = new StreamSnapshotStore();
     await store.preload([STREAM]);
@@ -758,17 +762,14 @@ describe('StreamSnapshotStore', () => {
     expect(store.getMissingOutputs(OTHER_STREAM)).toEqual({ 1: ['next.tex'] });
     await store.flush();
 
-    const raw = await StorageFS.readJson(path.join(dir, 'missingOutputs.json'));
+    const raw = await readStreamFile(OTHER_STREAM, 'missingOutputs.json');
     expect(raw).toEqual({ '1': ['next.tex'] });
   });
 
   it('replays a later clearMissingOutputs over an earlier updateMissingOutputs on an unseeded stream', async () => {
-    const dir = streamDataDir(OTHER_STREAM);
-    await StorageFS.ensureDir(dir);
-    await StorageFS.write(
-      path.join(dir, 'missingOutputs.json'),
-      JSON.stringify({ '0': ['stale.tex'] }),
-    );
+    await writeStreamFile(OTHER_STREAM, 'missingOutputs.json', {
+      '0': ['stale.tex'],
+    });
 
     const store = new StreamSnapshotStore();
     await store.preload([STREAM]);
@@ -778,19 +779,16 @@ describe('StreamSnapshotStore', () => {
     expect(store.getMissingOutputs(OTHER_STREAM)).toEqual({});
     await store.flush();
 
-    const raw = await StorageFS.readJson(path.join(dir, 'missingOutputs.json'));
+    const raw = await readStreamFile(OTHER_STREAM, 'missingOutputs.json');
     expect(raw).toEqual({});
   });
 
   it('returns compile failures immediately for streams outside a partial preload without erasing disk markers', async () => {
-    const dir = streamDataDir(OTHER_STREAM);
-    await StorageFS.ensureDir(dir);
     const prior = compileFailure('prior.tex', 0);
     const next = compileFailure('next.tex', 1);
-    await StorageFS.write(
-      path.join(dir, 'compileFailures.json'),
-      JSON.stringify({ '0': [prior] }),
-    );
+    await writeStreamFile(OTHER_STREAM, 'compileFailures.json', {
+      '0': [prior],
+    });
 
     const store = new StreamSnapshotStore();
     await store.preload([STREAM]);
@@ -800,9 +798,7 @@ describe('StreamSnapshotStore', () => {
     expect(store.getCompileFailures(OTHER_STREAM)[1]).toEqual([next]);
     await store.flush();
 
-    const raw = await StorageFS.readJson(
-      path.join(dir, 'compileFailures.json'),
-    );
+    const raw = await readStreamFile(OTHER_STREAM, 'compileFailures.json');
     expect(raw).toMatchObject({
       '0': [prior],
       '1': [next],
@@ -810,12 +806,9 @@ describe('StreamSnapshotStore', () => {
   });
 
   it('makes task state readable immediately while preserving later seeded sidecars', async () => {
-    const dir = streamDataDir(STREAM);
-    await StorageFS.ensureDir(dir);
-    await StorageFS.write(
-      path.join(dir, 'usageStats.json'),
-      JSON.stringify({ [RUN]: usage(100, 20, 0.5) }),
-    );
+    await writeStreamFile(STREAM, 'usageStats.json', {
+      [RUN]: usage(100, 20, 0.5),
+    });
 
     const store = new StreamSnapshotStore();
     const taskState = toolUseTaskState();
@@ -835,7 +828,7 @@ describe('StreamSnapshotStore', () => {
 
     expect(store.getTaskState(STREAM)).toEqual(taskState);
     expect(store.getExecutionId(STREAM)).toBe(executionId);
-    const raw = await StorageFS.readJson(path.join(dir, 'usageStats.json'));
+    const raw = await readStreamFile(STREAM, 'usageStats.json');
     expect(raw).toMatchObject({
       [RUN]: { inputTokens: 100, outputTokens: 20, cost: 0.5 },
       [RUN_2]: { inputTokens: 50, outputTokens: 10, cost: 0.25 },
@@ -869,23 +862,18 @@ describe('StreamSnapshotStore', () => {
 
   it('preserves legacy meta taskState when unrelated meta patches are written', async () => {
     await installPlatform();
-    const dir = streamDataDir(STREAM);
     const taskState = toolUseTaskState('legacy-search');
-    await StorageFS.ensureDir(dir);
-    await StorageFS.write(
-      path.join(dir, 'meta.json'),
-      JSON.stringify({
-        schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
-        taskState,
-      }),
-    );
+    await writeStreamFile(STREAM, 'meta.json', {
+      schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+      taskState,
+    });
 
     const store = new StreamSnapshotStore();
     await store.load([STREAM]);
     store.setDescription(STREAM, 'Prior session');
     await store.flush();
 
-    const raw = (await StorageFS.readJson(path.join(dir, 'meta.json'))) as {
+    const raw = (await readStreamFile(STREAM, 'meta.json')) as {
       schemaVersion?: unknown;
       taskState?: unknown;
       description?: unknown;
@@ -897,18 +885,13 @@ describe('StreamSnapshotStore', () => {
 
   it('falls back to legacy taskState when an execution config is unreadable', async () => {
     await installPlatform();
-    const dir = streamDataDir(STREAM);
     const executionId = 'abc123' as ExecutionId;
     const taskState = toolUseTaskState('legacy-search');
-    await StorageFS.ensureDir(dir);
-    await StorageFS.write(
-      path.join(dir, 'meta.json'),
-      JSON.stringify({
-        schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
-        executionId,
-        taskState,
-      }),
-    );
+    await writeStreamFile(STREAM, 'meta.json', {
+      schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+      executionId,
+      taskState,
+    });
     await StorageFS.ensureDir(resolveRunStoragePath(executionId));
     await StorageFS.write(
       path.join(resolveRunStoragePath(executionId), 'config.json'),
@@ -924,19 +907,14 @@ describe('StreamSnapshotStore', () => {
 
   it('keeps a runtime run-config update that arrives during async hydration', async () => {
     await installPlatform();
-    const dir = streamDataDir(STREAM);
     const oldExecutionId = 'abc123' as ExecutionId;
     const newExecutionId = 'def456' as ExecutionId;
     const oldTaskState = toolUseTaskState('old-search');
     const newTaskState = toolUseTaskState('new-search');
-    await StorageFS.ensureDir(dir);
-    await StorageFS.write(
-      path.join(dir, 'meta.json'),
-      JSON.stringify({
-        schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
-        executionId: oldExecutionId,
-      }),
-    );
+    await writeStreamFile(STREAM, 'meta.json', {
+      schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+      executionId: oldExecutionId,
+    });
     await getExecutionStore(oldExecutionId).writeConfig(
       oldTaskState.agentConfig,
     );
@@ -953,7 +931,7 @@ describe('StreamSnapshotStore', () => {
     expect(store.getExecutionId(STREAM)).toBe(newExecutionId);
 
     await store.flush();
-    const raw = (await StorageFS.readJson(path.join(dir, 'meta.json'))) as {
+    const raw = (await readStreamFile(STREAM, 'meta.json')) as {
       executionId?: unknown;
       runDescriptor?: { executionId?: unknown; agent?: unknown };
     };
@@ -970,17 +948,11 @@ describe('StreamSnapshotStore', () => {
     const executionId = 'c0ffee' as ExecutionId;
     await StorageFS.ensureDir(dir);
     await Promise.all([
-      StorageFS.write(
-        path.join(dir, 'meta.json'),
-        JSON.stringify({
-          schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
-          executionId,
-        }),
-      ),
-      StorageFS.write(
-        path.join(dir, 'missingOutputs.json'),
-        JSON.stringify({ '0': ['stale.tex'] }),
-      ),
+      writeStreamFile(STREAM, 'meta.json', {
+        schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+        executionId,
+      }),
+      writeStreamFile(STREAM, 'missingOutputs.json', { '0': ['stale.tex'] }),
       getExecutionStore(executionId).writeConfig(
         toolUseTaskState().agentConfig,
       ),
@@ -1003,8 +975,8 @@ describe('StreamSnapshotStore', () => {
     await store.flush();
 
     const [missingOutputs, usageStats] = await Promise.all([
-      StorageFS.readJson(path.join(dir, 'missingOutputs.json')),
-      StorageFS.readJson(path.join(dir, 'usageStats.json')),
+      readStreamFile(STREAM, 'missingOutputs.json'),
+      readStreamFile(STREAM, 'usageStats.json'),
     ]);
     expect(missingOutputs).toEqual({ '1': ['late.tex'] });
     expect(usageStats).toMatchObject({ [RUN]: usage(10, 2, 0.1) });
@@ -1016,18 +988,14 @@ describe('StreamSnapshotStore', () => {
     const executionId = 'deadbeef' as ExecutionId;
     await StorageFS.ensureDir(dir);
     await Promise.all([
-      StorageFS.write(
-        path.join(dir, 'meta.json'),
-        JSON.stringify({
-          schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
-          executionId,
-          activeRunId: RUN,
-        }),
-      ),
-      StorageFS.write(
-        path.join(dir, 'missingOutputs.json'),
-        JSON.stringify({ [RUN]: { '0': ['legacy.tex'] } }),
-      ),
+      writeStreamFile(STREAM, 'meta.json', {
+        schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+        executionId,
+        activeRunId: RUN,
+      }),
+      writeStreamFile(STREAM, 'missingOutputs.json', {
+        [RUN]: { '0': ['legacy.tex'] },
+      }),
       getExecutionStore(executionId).writeConfig(
         toolUseTaskState().agentConfig,
       ),
@@ -1052,12 +1020,9 @@ describe('StreamSnapshotStore', () => {
   });
 
   it('load refreshes already-seeded streams from disk instead of keeping stale memory', async () => {
-    const dir = streamDataDir(STREAM);
-    await StorageFS.ensureDir(dir);
-    await StorageFS.write(
-      path.join(dir, 'usageStats.json'),
-      JSON.stringify({ [RUN]: usage(100, 20, 0.5) }),
-    );
+    await writeStreamFile(STREAM, 'usageStats.json', {
+      [RUN]: usage(100, 20, 0.5),
+    });
 
     const store = new StreamSnapshotStore();
     await store.load([STREAM]);
@@ -1067,10 +1032,9 @@ describe('StreamSnapshotStore', () => {
       cost: 0.5,
     });
 
-    await StorageFS.write(
-      path.join(dir, 'usageStats.json'),
-      JSON.stringify({ [RUN]: usage(3, 4, 0.01) }),
-    );
+    await writeStreamFile(STREAM, 'usageStats.json', {
+      [RUN]: usage(3, 4, 0.01),
+    });
     await store.load([STREAM]);
 
     expect(store.getRunUsage(STREAM).get(RUN)).toMatchObject({
@@ -1125,9 +1089,7 @@ describe('StreamSnapshotStore', () => {
       planSummary: PLAN_SUMMARY,
     });
 
-    const reloaded = new StreamSnapshotStore();
-    await reloaded.load([STREAM]);
-    expect(reloaded.getWorkPlan(STREAM)).toMatchObject({
+    expect(await reloadWorkPlan()).toMatchObject({
       todos: [TODO],
       plan: PLAN,
       planSummary: PLAN_SUMMARY,
@@ -1167,10 +1129,7 @@ describe('StreamSnapshotStore', () => {
   });
 
   it('buffers sidecar writes until a staged deletion rolls back', async () => {
-    const store = new StreamSnapshotStore();
-    await store.load([]);
-    store.setPlan(STREAM, PLAN);
-    await store.flush();
+    const store = await storeWithPersistedPlan();
 
     const deletion = await store.stageDeleteStream(STREAM);
     store.setPlan(STREAM, null);
@@ -1181,9 +1140,7 @@ describe('StreamSnapshotStore', () => {
     await deletion.rollback();
     await store.flush();
 
-    const reloaded = new StreamSnapshotStore();
-    await reloaded.load([STREAM]);
-    expect(reloaded.getWorkPlan(STREAM)).toMatchObject({
+    expect(await reloadWorkPlan()).toMatchObject({
       todos: [],
       plan: null,
       planSummary: null,
@@ -1191,12 +1148,7 @@ describe('StreamSnapshotStore', () => {
   });
 
   it('drains writes that arrive as rollback replay returns', async () => {
-    const store = new StreamSnapshotStore();
-    await store.load([]);
-    store.setPlan(STREAM, PLAN);
-    await store.flush();
-    const deletion = await store.stageDeleteStream(STREAM);
-    store.setPlan(STREAM, null);
+    const { store, deletion } = await stageDeletionWithBufferedClear();
     type ReplayHarness = {
       replayStagedWrites: (
         stream: StreamTabId,
@@ -1216,9 +1168,7 @@ describe('StreamSnapshotStore', () => {
     await deletion.rollback();
 
     replaySpy.mockRestore();
-    const reloaded = new StreamSnapshotStore();
-    await reloaded.load([STREAM]);
-    expect(reloaded.getWorkPlan(STREAM)).toMatchObject({
+    expect(await reloadWorkPlan()).toMatchObject({
       plan: null,
       todos: [TODO],
     });
@@ -1226,10 +1176,7 @@ describe('StreamSnapshotStore', () => {
   });
 
   it('serializes overlapping staged deletions for one stream', async () => {
-    const store = new StreamSnapshotStore();
-    await store.load([]);
-    store.setPlan(STREAM, PLAN);
-    await store.flush();
+    const store = await storeWithPersistedPlan();
 
     const firstDeletion = await store.stageDeleteStream(STREAM);
     store.setPlan(STREAM, null);
@@ -1247,21 +1194,14 @@ describe('StreamSnapshotStore', () => {
     expect(secondStarted).toBe(true);
     await deletion.rollback();
 
-    const reloaded = new StreamSnapshotStore();
-    await reloaded.load([STREAM]);
-    expect(reloaded.getWorkPlan(STREAM)).toMatchObject({
+    expect(await reloadWorkPlan()).toMatchObject({
       plan: null,
       planSummary: null,
     });
   });
 
   it('allows retry after staged rollback fails', async () => {
-    const store = new StreamSnapshotStore();
-    await store.load([]);
-    store.setPlan(STREAM, PLAN);
-    await store.flush();
-    const deletion = await store.stageDeleteStream(STREAM);
-    store.setPlan(STREAM, null);
+    const { store, deletion } = await stageDeletionWithBufferedClear();
     await store.flush();
     const rollbackError = new Error('snapshot directory is still locked');
     const renameSpy = vi
@@ -1275,19 +1215,12 @@ describe('StreamSnapshotStore', () => {
     await retry.rollback();
     await store.flush();
 
-    const reloaded = new StreamSnapshotStore();
-    await reloaded.load([STREAM]);
-    expect(reloaded.getWorkPlan(STREAM).plan).toBeNull();
+    expect((await reloadWorkPlan()).plan).toBeNull();
     await store.deleteStream(STREAM);
   });
 
   it('retains buffered writes when rollback persistence fails', async () => {
-    const store = new StreamSnapshotStore();
-    await store.load([]);
-    store.setPlan(STREAM, PLAN);
-    await store.flush();
-    const deletion = await store.stageDeleteStream(STREAM);
-    store.setPlan(STREAM, null);
+    const { store, deletion } = await stageDeletionWithBufferedClear();
     const writeError = new Error('snapshot disk is full');
     const writeAtomic = StorageFS.writeAtomic.bind(StorageFS);
     const writeSpy = vi
@@ -1303,25 +1236,16 @@ describe('StreamSnapshotStore', () => {
     writeSpy.mockRestore();
     store.setPlan(STREAM, revisedPlan);
     await store.flush();
-    const beforeRetry = new StreamSnapshotStore();
-    await beforeRetry.load([STREAM]);
-    expect(beforeRetry.getWorkPlan(STREAM).plan).toEqual(revisedPlan);
+    expect((await reloadWorkPlan()).plan).toEqual(revisedPlan);
 
     const retry = await store.stageDeleteStream(STREAM);
     await retry.rollback();
-    const reloaded = new StreamSnapshotStore();
-    await reloaded.load([STREAM]);
-    expect(reloaded.getWorkPlan(STREAM).plan).toEqual(revisedPlan);
+    expect((await reloadWorkPlan()).plan).toEqual(revisedPlan);
     await store.deleteStream(STREAM);
   });
 
   it('retries retained live rollback writes during flush', async () => {
-    const store = new StreamSnapshotStore();
-    await store.load([]);
-    store.setPlan(STREAM, PLAN);
-    await store.flush();
-    const deletion = await store.stageDeleteStream(STREAM);
-    store.setPlan(STREAM, null);
+    const { store, deletion } = await stageDeletionWithBufferedClear();
     const writeError = new Error('snapshot disk is full');
     const writeSpy = vi
       .spyOn(StorageFS, 'writeAtomic')
@@ -1331,19 +1255,12 @@ describe('StreamSnapshotStore', () => {
 
     writeSpy.mockRestore();
     await store.flush();
-    const reloaded = new StreamSnapshotStore();
-    await reloaded.load([STREAM]);
-    expect(reloaded.getWorkPlan(STREAM).plan).toBeNull();
+    expect((await reloadWorkPlan()).plan).toBeNull();
     await store.deleteStream(STREAM);
   });
 
   it('waits unrelated writes before flush reports a recovery failure', async () => {
-    const store = new StreamSnapshotStore();
-    await store.load([]);
-    store.setPlan(STREAM, PLAN);
-    await store.flush();
-    const deletion = await store.stageDeleteStream(STREAM);
-    store.setPlan(STREAM, null);
+    const { store, deletion } = await stageDeletionWithBufferedClear();
     const initialWriteError = new Error('snapshot disk is full');
     const initialWriteSpy = vi
       .spyOn(StorageFS, 'writeAtomic')
@@ -1384,9 +1301,7 @@ describe('StreamSnapshotStore', () => {
     releaseUnrelatedWrite();
     await expect(flushing).rejects.toBe(recoveryError);
     writeSpy.mockRestore();
-    const reloaded = new StreamSnapshotStore();
-    await reloaded.load([OTHER_STREAM]);
-    expect(reloaded.getWorkPlan(OTHER_STREAM).plan).toEqual(PLAN);
+    expect((await reloadWorkPlan(OTHER_STREAM)).plan).toEqual(PLAN);
 
     await store.flush();
     await store.deleteStream(STREAM);
@@ -1394,10 +1309,7 @@ describe('StreamSnapshotStore', () => {
   });
 
   it('does not recreate live storage while setup residue is staged', async () => {
-    const store = new StreamSnapshotStore();
-    await store.load([]);
-    store.setPlan(STREAM, PLAN);
-    await store.flush();
+    const store = await storeWithPersistedPlan();
     const liveDir = streamDataDir(STREAM);
     const stagedDir = stagedStreamDataDir(STREAM);
     await StorageFS.ensureDir(STREAM_DATA_DELETION_DIR);
@@ -1420,17 +1332,12 @@ describe('StreamSnapshotStore', () => {
     expect(await StorageFS.exists(stagedDir)).toBe(true);
     const retry = await store.stageDeleteStream(STREAM);
     await retry.rollback();
-    const reloaded = new StreamSnapshotStore();
-    await reloaded.load([STREAM]);
-    expect(reloaded.getWorkPlan(STREAM).plan).toBeNull();
+    expect((await reloadWorkPlan()).plan).toBeNull();
     await store.deleteStream(STREAM);
   });
 
   it('keeps writes buffered when a staging rename fails after moving data', async () => {
-    const store = new StreamSnapshotStore();
-    await store.load([]);
-    store.setPlan(STREAM, PLAN);
-    await store.flush();
+    const store = await storeWithPersistedPlan();
     const renameError = new Error('snapshot rename acknowledgement failed');
     const rename = StorageFS.rename.bind(StorageFS);
     const renameSpy = vi
@@ -1448,19 +1355,12 @@ describe('StreamSnapshotStore', () => {
     renameSpy.mockRestore();
     const retry = await store.stageDeleteStream(STREAM);
     await retry.rollback();
-    const reloaded = new StreamSnapshotStore();
-    await reloaded.load([STREAM]);
-    expect(reloaded.getWorkPlan(STREAM).plan).toEqual(PLAN);
+    expect((await reloadWorkPlan()).plan).toEqual(PLAN);
     await store.deleteStream(STREAM);
   });
 
   it('mirrors writes when rollback moved data before reporting failure', async () => {
-    const store = new StreamSnapshotStore();
-    await store.load([]);
-    store.setPlan(STREAM, PLAN);
-    await store.flush();
-    const deletion = await store.stageDeleteStream(STREAM);
-    store.setPlan(STREAM, null);
+    const { store, deletion } = await stageDeletionWithBufferedClear();
     const renameError = new Error('snapshot rename acknowledgement failed');
     const rename = StorageFS.rename.bind(StorageFS);
     const renameSpy = vi
@@ -1487,9 +1387,7 @@ describe('StreamSnapshotStore', () => {
     expect(writeSpy).toHaveBeenCalledTimes(1);
     writeSpy.mockRestore();
 
-    const reloaded = new StreamSnapshotStore();
-    await reloaded.load([STREAM]);
-    expect(reloaded.getWorkPlan(STREAM)).toMatchObject({
+    expect(await reloadWorkPlan()).toMatchObject({
       plan: null,
       todos: [TODO],
     });
@@ -1498,12 +1396,7 @@ describe('StreamSnapshotStore', () => {
   });
 
   it('retains prior rollback writes when retry setup also fails', async () => {
-    const store = new StreamSnapshotStore();
-    await store.load([]);
-    store.setPlan(STREAM, PLAN);
-    await store.flush();
-    const deletion = await store.stageDeleteStream(STREAM);
-    store.setPlan(STREAM, null);
+    const { store, deletion } = await stageDeletionWithBufferedClear();
     const rollbackError = new Error('snapshot directory is still locked');
     const renameSpy = vi
       .spyOn(StorageFS, 'rename')
@@ -1522,9 +1415,7 @@ describe('StreamSnapshotStore', () => {
     store.setTodos(STREAM, [TODO]);
     const retry = await store.stageDeleteStream(STREAM);
     await retry.rollback();
-    const reloaded = new StreamSnapshotStore();
-    await reloaded.load([STREAM]);
-    expect(reloaded.getWorkPlan(STREAM)).toMatchObject({
+    expect(await reloadWorkPlan()).toMatchObject({
       plan: null,
       todos: [TODO],
     });
@@ -1532,12 +1423,7 @@ describe('StreamSnapshotStore', () => {
   });
 
   it('revalidates storage during setup recovery before returning', async () => {
-    const store = new StreamSnapshotStore();
-    await store.load([]);
-    store.setPlan(STREAM, PLAN);
-    await store.flush();
-    const deletion = await store.stageDeleteStream(STREAM);
-    store.setPlan(STREAM, null);
+    const { store, deletion } = await stageDeletionWithBufferedClear();
     const writeError = new Error('snapshot disk is full');
     const writeSpy = vi
       .spyOn(StorageFS, 'writeAtomic')
@@ -1556,9 +1442,7 @@ describe('StreamSnapshotStore', () => {
     await expect(store.stageDeleteStream(STREAM)).rejects.toBe(renameError);
 
     renameSpy.mockRestore();
-    const reloaded = new StreamSnapshotStore();
-    await reloaded.load([STREAM]);
-    expect(reloaded.getWorkPlan(STREAM)).toMatchObject({
+    expect(await reloadWorkPlan()).toMatchObject({
       plan: null,
       todos: [TODO],
     });
@@ -1566,12 +1450,7 @@ describe('StreamSnapshotStore', () => {
   });
 
   it('retries buffered writes after staged-directory reconciliation', async () => {
-    const store = new StreamSnapshotStore();
-    await store.load([]);
-    store.setPlan(STREAM, PLAN);
-    await store.flush();
-    const deletion = await store.stageDeleteStream(STREAM);
-    store.setPlan(STREAM, null);
+    const { store, deletion } = await stageDeletionWithBufferedClear();
     const rollbackError = new Error('snapshot directory is still locked');
     const renameSpy = vi
       .spyOn(StorageFS, 'rename')
@@ -1596,9 +1475,7 @@ describe('StreamSnapshotStore', () => {
       pendingCleanup: [],
       discarded: [],
     });
-    const reloaded = new StreamSnapshotStore();
-    await reloaded.load([STREAM]);
-    expect(reloaded.getWorkPlan(STREAM).plan).toBeNull();
+    expect((await reloadWorkPlan()).plan).toBeNull();
     await store.deleteStream(STREAM);
   });
 
@@ -1682,12 +1559,7 @@ describe('StreamSnapshotStore', () => {
   });
 
   it('does not restore staged residue after a live base disappears', async () => {
-    const store = new StreamSnapshotStore();
-    await store.load([]);
-    store.setPlan(STREAM, PLAN);
-    await store.flush();
-    const deletion = await store.stageDeleteStream(STREAM);
-    store.setPlan(STREAM, null);
+    const { store, deletion } = await stageDeletionWithBufferedClear();
     const writeError = new Error('snapshot disk is full');
     const writeSpy = vi
       .spyOn(StorageFS, 'writeAtomic')
@@ -1716,20 +1588,13 @@ describe('StreamSnapshotStore', () => {
       pendingCleanup: [],
       discarded: [STREAM],
     });
-    const reloaded = new StreamSnapshotStore();
-    await reloaded.load([STREAM]);
-    expect(reloaded.getWorkPlan(STREAM).plan).toBeNull();
+    expect((await reloadWorkPlan()).plan).toBeNull();
     expect(await StorageFS.exists(stagedDir)).toBe(false);
     await store.deleteStream(STREAM);
   });
 
   it('recreates live storage from buffered writes when both bases vanish', async () => {
-    const store = new StreamSnapshotStore();
-    await store.load([]);
-    store.setPlan(STREAM, PLAN);
-    await store.flush();
-    const deletion = await store.stageDeleteStream(STREAM);
-    store.setPlan(STREAM, null);
+    const { store, deletion } = await stageDeletionWithBufferedClear();
     const rollbackError = new Error('snapshot directory is still locked');
     const renameSpy = vi
       .spyOn(StorageFS, 'rename')
@@ -1740,20 +1605,13 @@ describe('StreamSnapshotStore', () => {
     renameSpy.mockRestore();
     await StorageFS.delete(stagedStreamDataDir(STREAM), { recursive: true });
     await store.flush();
-    const reloaded = new StreamSnapshotStore();
-    await reloaded.load([STREAM]);
-    expect(reloaded.getWorkPlan(STREAM).plan).toBeNull();
+    expect((await reloadWorkPlan()).plan).toBeNull();
     expect(await StorageFS.exists(streamDataDir(STREAM))).toBe(true);
     await store.deleteStream(STREAM);
   });
 
   it('serializes a staging retry behind failed rollback reconciliation', async () => {
-    const store = new StreamSnapshotStore();
-    await store.load([]);
-    store.setPlan(STREAM, PLAN);
-    await store.flush();
-    const deletion = await store.stageDeleteStream(STREAM);
-    store.setPlan(STREAM, null);
+    const { store, deletion } = await stageDeletionWithBufferedClear();
     const rollbackError = new Error('snapshot directory is still locked');
     const rollbackSpy = vi
       .spyOn(StorageFS, 'rename')
@@ -1795,17 +1653,12 @@ describe('StreamSnapshotStore', () => {
     await retry.rollback();
     recoverySpy.mockRestore();
 
-    const reloaded = new StreamSnapshotStore();
-    await reloaded.load([STREAM]);
-    expect(reloaded.getWorkPlan(STREAM).plan).toBeNull();
+    expect((await reloadWorkPlan()).plan).toBeNull();
     await store.deleteStream(STREAM);
   });
 
   it('restores committed residue for complete orphan cleanup', async () => {
-    const store = new StreamSnapshotStore();
-    await store.load([]);
-    store.setPlan(STREAM, PLAN);
-    await store.flush();
+    const store = await storeWithPersistedPlan();
     await store.stageDeleteStream(STREAM);
 
     const recovered = new StreamSnapshotStore();
@@ -1822,10 +1675,7 @@ describe('StreamSnapshotStore', () => {
   });
 
   it('does not treat storage errors as an absent snapshot directory', async () => {
-    const store = new StreamSnapshotStore();
-    await store.load([]);
-    store.setPlan(STREAM, PLAN);
-    await store.flush();
+    const store = await storeWithPersistedPlan();
     const liveDir = streamDataDir(STREAM);
     const stat = StorageFS.stat.bind(StorageFS);
     const statError = Object.assign(new Error('snapshot directory is locked'), {
@@ -1846,10 +1696,7 @@ describe('StreamSnapshotStore', () => {
   });
 
   it('settles staging and retains writes when setup recovery fails', async () => {
-    const store = new StreamSnapshotStore();
-    await store.load([]);
-    store.setPlan(STREAM, PLAN);
-    await store.flush();
+    const store = await storeWithPersistedPlan();
     const setupError = new Error('staging directory is locked');
     const writeError = new Error('snapshot disk is full');
     const writeSpy = vi
@@ -1873,9 +1720,7 @@ describe('StreamSnapshotStore', () => {
     writeSpy.mockRestore();
     const retry = await store.stageDeleteStream(STREAM);
     await retry.rollback();
-    const reloaded = new StreamSnapshotStore();
-    await reloaded.load([STREAM]);
-    expect(reloaded.getWorkPlan(STREAM).plan).toBeNull();
+    expect((await reloadWorkPlan()).plan).toBeNull();
     await store.deleteStream(STREAM);
   });
 
@@ -1928,9 +1773,7 @@ describe('StreamSnapshotStore', () => {
     const retry = await retrying;
     await retry.rollback();
 
-    const reloaded = new StreamSnapshotStore();
-    await reloaded.load([STREAM]);
-    expect(reloaded.getWorkPlan(STREAM).plan).toBeNull();
+    expect((await reloadWorkPlan()).plan).toBeNull();
     await store.deleteStream(STREAM);
   });
 
@@ -1969,9 +1812,7 @@ describe('StreamSnapshotStore', () => {
     expect(store.getWorkPlan(STREAM).todos).toEqual([TODO]);
     await store.flush();
 
-    const reloaded = new StreamSnapshotStore();
-    await reloaded.load([STREAM]);
-    expect(reloaded.getWorkPlan(STREAM).todos).toEqual([TODO]);
+    expect((await reloadWorkPlan()).todos).toEqual([TODO]);
   });
 
   it('does not resurrect a deleted sidecar dir when deleteStream lands during hydration', async () => {
@@ -1985,19 +1826,15 @@ describe('StreamSnapshotStore', () => {
     const executionId = 'dead01' as ExecutionId;
     await StorageFS.ensureDir(dir);
     await Promise.all([
-      StorageFS.write(
-        path.join(dir, 'meta.json'),
-        JSON.stringify({
-          schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
-          executionId,
-        }),
-      ),
+      writeStreamFile(STREAM, 'meta.json', {
+        schemaVersion: RUN_DESCRIPTOR_SCHEMA_VERSION,
+        executionId,
+      }),
       // Legacy nested shape → `missingOutputs` lands in `data.legacyKeys`,
       // arming the merged-sidecar rewrite regardless of overlays.
-      StorageFS.write(
-        path.join(dir, 'missingOutputs.json'),
-        JSON.stringify({ 'run-1': { '0': ['stale.tex'] } }),
-      ),
+      writeStreamFile(STREAM, 'missingOutputs.json', {
+        'run-1': { '0': ['stale.tex'] },
+      }),
       getExecutionStore(executionId).writeConfig(
         toolUseTaskState().agentConfig,
       ),
@@ -2082,50 +1919,38 @@ describe('StreamSnapshotStore', () => {
   });
 
   it('degrades gracefully when workPlan.json is valid JSON but the wrong shape', async () => {
-    const dir = streamDataDir(STREAM);
-    await StorageFS.ensureDir(dir);
     // Corrupt-but-parseable payload must NOT throw and abort read()/resume.
-    await StorageFS.write(
-      path.join(dir, 'workPlan.json'),
-      JSON.stringify({ todos: 'not-an-array', plan: 42 }),
-    );
+    await writeStreamFile(STREAM, 'workPlan.json', {
+      todos: 'not-an-array',
+      plan: 42,
+    });
     const snap = await new StreamSnapshotStore().read(STREAM);
     expect(snap.todos).toEqual([]);
     expect(snap.plan).toBeNull();
   });
 
   it('ignores a workPlan.json stamped with a newer schemaVersion (forward-compat gate)', async () => {
-    const dir = streamDataDir(STREAM);
-    await StorageFS.ensureDir(dir);
     // A file from a FUTURE schema must be read as empty, not have its unknown
     // shape consumed as v1 (the single forward-compat gate).
-    await StorageFS.write(
-      path.join(dir, 'workPlan.json'),
-      JSON.stringify({
-        schemaVersion: 999,
-        todos: [TODO],
-        plan: PLAN,
-        planSummary: PLAN_SUMMARY,
-      }),
-    );
+    await writeStreamFile(STREAM, 'workPlan.json', {
+      schemaVersion: 999,
+      todos: [TODO],
+      plan: PLAN,
+      planSummary: PLAN_SUMMARY,
+    });
     const snap = await new StreamSnapshotStore().read(STREAM);
     expect(snap.todos).toEqual([]);
     expect(snap.plan).toBeNull();
   });
 
   it('drops a malformed executionId at the read entry without aborting the snapshot', async () => {
-    const dir = streamDataDir(STREAM);
-    await StorageFS.ensureDir(dir);
     // A legacy/corrupt executionId would trip the strict ExecutionIdSchema in
     // assembleSnapshot; validating at the read entry drops just the bad pointer
     // so the rest of meta (description) still surfaces and resume never throws.
-    await StorageFS.write(
-      path.join(dir, 'meta.json'),
-      JSON.stringify({
-        executionId: 'not-hex!!',
-        description: 'Prior session',
-      }),
-    );
+    await writeStreamFile(STREAM, 'meta.json', {
+      executionId: 'not-hex!!',
+      description: 'Prior session',
+    });
     const snap = await new StreamSnapshotStore().read(STREAM);
     expect(snap.executionId).toBeUndefined();
     expect(snap.description).toBe('Prior session');
@@ -2143,14 +1968,9 @@ describe('StreamSnapshotStore', () => {
     });
 
     it('reads the canonical legacyInstructions.json', async () => {
-      const dir = streamDataDir(STREAM);
-      await StorageFS.ensureDir(dir);
-      await StorageFS.write(
-        path.join(dir, 'legacyInstructions.json'),
-        JSON.stringify({
-          'run-1': { text: 'Polish the introduction', timestamp: 100 },
-        }),
-      );
+      await writeStreamFile(STREAM, 'legacyInstructions.json', {
+        'run-1': { text: 'Polish the introduction', timestamp: 100 },
+      });
 
       const legacy = await new StreamSnapshotStore().readLegacyInstruction(
         STREAM,
@@ -2160,11 +1980,9 @@ describe('StreamSnapshotStore', () => {
 
     it('falls back to the older runInstructions.json key, unmodified', async () => {
       const dir = streamDataDir(STREAM);
-      await StorageFS.ensureDir(dir);
-      await StorageFS.write(
-        path.join(dir, 'runInstructions.json'),
-        JSON.stringify({ 'run-1': { text: 'Rewrite the abstract' } }),
-      );
+      await writeStreamFile(STREAM, 'runInstructions.json', {
+        'run-1': { text: 'Rewrite the abstract' },
+      });
 
       const legacy = await new StreamSnapshotStore().readLegacyInstruction(
         STREAM,
@@ -2180,19 +1998,11 @@ describe('StreamSnapshotStore', () => {
     });
 
     it('prefers meta.activeRunId when multiple archived runs exist', async () => {
-      const dir = streamDataDir(STREAM);
-      await StorageFS.ensureDir(dir);
-      await StorageFS.write(
-        path.join(dir, 'legacyInstructions.json'),
-        JSON.stringify({
-          older: { text: 'older instruction', timestamp: 100 },
-          active: { text: 'active instruction', timestamp: 50 },
-        }),
-      );
-      await StorageFS.write(
-        path.join(dir, 'meta.json'),
-        JSON.stringify({ activeRunId: 'active' }),
-      );
+      await writeStreamFile(STREAM, 'legacyInstructions.json', {
+        older: { text: 'older instruction', timestamp: 100 },
+        active: { text: 'active instruction', timestamp: 50 },
+      });
+      await writeStreamFile(STREAM, 'meta.json', { activeRunId: 'active' });
 
       const legacy = await new StreamSnapshotStore().readLegacyInstruction(
         STREAM,

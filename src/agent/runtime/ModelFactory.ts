@@ -55,8 +55,8 @@ type ModelHandlerConstructor = new (
 type ProviderHandlerLoader = () => Promise<ModelHandlerConstructor>;
 
 interface ProviderHandlerRoute {
-  readonly load: ProviderHandlerLoader | null;
-  readonly compatibilityKey: ModelHandlerCompatibilityKey | null;
+  readonly load: ProviderHandlerLoader;
+  readonly compatibilityKey: ModelHandlerCompatibilityKey;
 }
 
 const MODEL_HANDLER_COMPATIBILITY_PROPERTY =
@@ -69,7 +69,6 @@ type ModelHandlerCompatibilityTagged = object & {
 
 // Record (not Map) so TypeScript enforces exhaustiveness over ModelProvider.
 // A new enum value in llm-zoo without an entry here will fail typecheck.
-// `null` route fields mark providers that have no direct handler.
 const PROVIDER_HANDLER_ROUTES: Record<ModelProvider, ProviderHandlerRoute> = {
   [ModelProvider.ANTHROPIC]: {
     load: async () =>
@@ -170,28 +169,6 @@ function withReasoningOverride<T extends ModelHandler>(handler: T): T {
   return handler;
 }
 
-function requiresOpenAIResponsesAPI(
-  config: ModelConfig,
-  useOpenRouter: boolean,
-): boolean {
-  if (config.provider !== ModelProvider.OPENAI || config.openRouterOnly) {
-    return false;
-  }
-  if (config.requiresResponsesAPI) return true;
-
-  // The gpt-5 reasoning + function-calling heuristic only applies when we are
-  // talking to OpenAI directly. OpenRouter proxies these models on
-  // /v1/chat/completions and rejects Responses-shaped payloads.
-  if (useOpenRouter) return false;
-
-  const { capabilities } = config;
-  return (
-    isGpt5ModelName(config.fullName) &&
-    capabilities.supportsReasoningEffort !== false &&
-    capabilities.supportsFunctionCalling !== false
-  );
-}
-
 /**
  * Whether a model is pinned to the Interactions API. `requiresInteractionsAPI`
  * is a future per-model opt-in (parallel to `requiresResponsesAPI`); it is not
@@ -259,15 +236,24 @@ export function shouldUseResponsesAPI(
   if (config.provider !== ModelProvider.OPENAI || config.openRouterOnly) {
     return false;
   }
+  if (config.requiresResponsesAPI) return true;
+
+  // Everything below only applies when we are talking to OpenAI directly.
+  // OpenRouter proxies these models on /v1/chat/completions and rejects
+  // Responses-shaped payloads.
+  if (useOpenRouter) return false;
+
+  const { capabilities } = config;
   return (
-    requiresOpenAIResponsesAPI(config, useOpenRouter) ||
-    (!useOpenRouter &&
-      (config.fullName.startsWith('gpt-oss') ||
-        (config.capabilities.supportsFunctionCalling !== false &&
-          getConfig<boolean>(
-            'texra.model.useOpenAIResponsesAPI',
-            DEFAULT_CORE_SETTINGS.model.useOpenAIResponsesAPI,
-          ))))
+    (isGpt5ModelName(config.fullName) &&
+      capabilities.supportsReasoningEffort !== false &&
+      capabilities.supportsFunctionCalling !== false) ||
+    config.fullName.startsWith('gpt-oss') ||
+    (capabilities.supportsFunctionCalling !== false &&
+      getConfig<boolean>(
+        'texra.model.useOpenAIResponsesAPI',
+        DEFAULT_CORE_SETTINGS.model.useOpenAIResponsesAPI,
+      ))
   );
 }
 
@@ -325,7 +311,7 @@ export function modelHandlerCompatibilityKey(
   if (shouldRouteModelThroughOpenRouter(config, useOpenRouter)) {
     return 'ModelHandlerOpenRouterNative';
   }
-  return PROVIDER_HANDLER_ROUTES[config.provider].compatibilityKey ?? undefined;
+  return PROVIDER_HANDLER_ROUTES[config.provider].compatibilityKey;
 }
 
 export function activeModelHandlerCompatibilityKey(
@@ -650,7 +636,7 @@ async function createModelHandlerForResolvedCompatibilityKey(
       // Direct provider handler. The key is the provider's registered route key.
       assertGoogleInteractionsRoutable(config, useOpenRouter);
       const route = PROVIDER_HANDLER_ROUTES[config.provider];
-      if (!route.load || !route.compatibilityKey) {
+      if (!route) {
         throw new Error(`Unsupported model provider: ${config.provider}`);
       }
       const HandlerClass = await route.load();

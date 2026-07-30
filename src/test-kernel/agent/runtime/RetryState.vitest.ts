@@ -26,16 +26,16 @@ import {
   handleInvocationResult,
 } from '@agent/core/flows/RetryState';
 import { tagOpenAISdkError } from '@agent/modelHandlers/openai/openAISdkError';
-import type {
-  HostRetryInteractionOptions,
-  HostRetryRequest,
-  RetryResult,
+import {
+  SessionHostInteractions,
+  type HostRetryInteractionOptions,
+  type HostRetryRequest,
+  type RetryResult,
 } from '@agent/runtime/HostInteractions';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { createRunScope, type RunScope } from '@agent/runtime/RunScope';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
-import { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import type { ModelCredentialRoute } from '@agent/types/ModelHandlerContracts';
 import {
   RELAY_CI_TOKEN_PREFIX,
@@ -176,24 +176,6 @@ async function withRetryRunContext<T>(
   return await withRunContext(context, fn);
 }
 
-async function withSessionRetryRunContext<T>(
-  streamId: StreamTabId,
-  session: SessionHandle,
-  fn: () => T | Promise<T>,
-): Promise<T> {
-  const context = createRunContext({
-    modelSource: 'live',
-    getModel: () => undefined,
-    runScope: createRunScope({
-      streamId,
-      executionId: `${streamId}-execution` as ExecutionId,
-      agentName: 'retry-test',
-      session,
-    }),
-  });
-  return await withRunContext(context, fn);
-}
-
 function createModelInvocationNode(): ModelInvocationNode<BaseCycleFields> {
   return new ModelInvocationNode<BaseCycleFields>({
     operationName: 'Model call',
@@ -230,7 +212,6 @@ interface CapturedModelRetry {
 async function captureModelRetry(
   endpoint = 'https://api.example/v1',
   credentialRoute: ModelCredentialRoute = 'api-key',
-  refreshClient?: () => Promise<void>,
   model = 'openai:test',
   clientCredentialIdentity = 'credential-a',
 ): Promise<CapturedModelRetry> {
@@ -272,7 +253,6 @@ async function captureModelRetry(
     setAbortController: vi.fn(),
     client,
     clientCredentialRoute: credentialRoute,
-    refreshClient,
   } as never);
 
   try {
@@ -621,13 +601,11 @@ describe('RetryState', () => {
     const first = await captureModelRetry(
       'https://api.example/v1',
       'api-key',
-      undefined,
       'openai:model-a',
     );
     const second = await captureModelRetry(
       'https://api.example/v1',
       'api-key',
-      undefined,
       'openai:model-b',
     );
     const rateLimit = Object.assign(new Error('rate limited'), {
@@ -647,7 +625,6 @@ describe('RetryState', () => {
     const first = await captureModelRetry(
       'https://api.example/v1',
       'api-key',
-      undefined,
       'openai:model-a',
     );
     const rateLimit = new Error('model rate limited') as Error & {
@@ -672,7 +649,6 @@ describe('RetryState', () => {
     const first = await captureModelRetry(
       'https://api.example/v1',
       'api-key',
-      undefined,
       'openai:model-a',
     );
     const exhausted = new Error('quota exhausted') as Error & {
@@ -698,7 +674,6 @@ describe('RetryState', () => {
     const first = await captureModelRetry(
       'https://api.example/v1',
       'relay',
-      undefined,
       'openai:model-a',
     );
     const limited = new Error('relay request rate limit reached') as Error & {
@@ -717,7 +692,6 @@ describe('RetryState', () => {
     const second = await captureModelRetry(
       'https://other.example/v1',
       'relay',
-      undefined,
       'anthropic:model-b',
     );
     const modelLimited = new Error('provider model rate limit') as Error & {
@@ -778,7 +752,6 @@ describe('RetryState', () => {
     const retry = await captureModelRetry(
       'https://api.example/v1',
       'relay',
-      undefined,
       'openai:model-a',
     );
     const monthlyLimited = new Error(
@@ -807,21 +780,18 @@ describe('RetryState', () => {
     const first = await captureModelRetry(
       'https://api.example/v1',
       'api-key',
-      undefined,
       'openai:model-a',
       'credential-a',
     );
     const sameCredential = await captureModelRetry(
       'https://api.example/v1',
       'api-key',
-      undefined,
       'openai:model-a',
       'credential-a',
     );
     const replacement = await captureModelRetry(
       'https://api.example/v1',
       'api-key',
-      undefined,
       'openai:model-a',
       'credential-b',
     );
@@ -1068,7 +1038,7 @@ describe('RetryState', () => {
     try {
       seedStreamStatusForTest(streamStatus, streamId, STREAM_STATUS.RUNNING);
 
-      const prompt = withSessionRetryRunContext(streamId, session, () =>
+      const prompt = withRetryRunContext(streamId, session, () =>
         node.promptFor(new Error('temporary provider failure')),
       );
 

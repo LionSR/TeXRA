@@ -338,17 +338,19 @@ export class MainViewProvider
     super.cleanupView();
   }
 
-  private async setupInitialState(webviewView: vscode.WebviewView) {
+  private setupInitialState(webviewView: vscode.WebviewView): void {
     webviewView.webview.postMessage({
       command: MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE,
     });
 
-    let pendingData = consumePendingState();
-    while (pendingData) {
+    for (
+      let pendingData = consumePendingState();
+      pendingData;
+      pendingData = consumePendingState()
+    ) {
       const parsed = MainViewPersistedStateSchema.safeParse(pendingData.state);
       if (!parsed.success) {
         console.warn('Invalid pending state restore payload', parsed.error);
-        pendingData = consumePendingState();
         continue;
       }
       webviewView.webview.postMessage({
@@ -356,7 +358,6 @@ export class MainViewProvider
         state: parsed.data,
         executeImmediately: pendingData.executeImmediately,
       });
-      pendingData = consumePendingState();
     }
   }
 

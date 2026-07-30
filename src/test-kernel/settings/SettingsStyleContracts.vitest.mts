@@ -6,6 +6,8 @@ import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const SETTINGS_TABS_ROOT = 'packages/extension/src/settingsView/frontend/tabs';
+const SETTINGS_PROFILE_ROOT =
+  'packages/extension/src/settingsView/frontend/components/profile';
 const SETTINGS_BANNER_TABS = [
   'AccountTab.ts',
   'GoalTab.ts',
@@ -74,12 +76,7 @@ describe('settings style contracts', () => {
       'ProviderKeyList.ts',
       'ReliabilitySettingsSection.ts',
     ]) {
-      const source = read(
-        path.join(
-          'packages/extension/src/settingsView/frontend/components/profile',
-          component,
-        ),
-      );
+      const source = read(path.join(SETTINGS_PROFILE_ROOT, component));
       expect(source).toContain('renderSettingsSectionHeading');
       expect(source).not.toMatch(/<h[1-6][\s>]/);
     }
@@ -100,27 +97,20 @@ describe('settings style contracts', () => {
     );
 
     for (const component of ['ProviderKeyList.ts', 'ModelSelectionList.ts']) {
-      const source = read(
-        path.join(
-          'packages/extension/src/settingsView/frontend/components/profile',
-          component,
-        ),
-      );
+      const source = read(path.join(SETTINGS_PROFILE_ROOT, component));
       expect(source).toContain('settings-disclosure-list');
       expect(source).toContain('settings-disclosure-summary');
       expect(source).toContain('settings-disclosure-toggle');
     }
 
     expect(
-      read(
-        'packages/extension/src/settingsView/frontend/components/profile/ProviderKeyList.ts',
-      ),
+      read(path.join(SETTINGS_PROFILE_ROOT, 'ProviderKeyList.ts')),
     ).not.toContain('<table');
   });
 
   it('keeps selected agent labels readable and uses only the panel divider', () => {
     const styles = read(
-      'packages/extension/src/settingsView/frontend/components/profile/AgentSelectionPanel.styles.ts',
+      path.join(SETTINGS_PROFILE_ROOT, 'AgentSelectionPanel.styles.ts'),
     );
 
     expect(styles).toMatch(
