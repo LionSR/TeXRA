@@ -5,10 +5,8 @@ import {
   matchesCancelSelector,
   SessionHostInteractions,
   type BashSettlement,
-  type HostBashApprovalResult,
   type HostInteractionCancelSelector,
   type HostInteractions,
-  type HostUserQuestionResult,
   type PendingInteractionKind,
   type PlanApprovalResult,
   type ProposalResult,
@@ -125,11 +123,11 @@ export function createRecordingHost(): {
   >();
   const pendingBashes = new Map<
     string,
-    { streamId?: string; settle: (result: HostBashApprovalResult) => void }
+    { streamId?: string; settle: (result: BashSettlement) => void }
   >();
   const pendingUserQuestions = new Map<
     string,
-    { streamId?: string; settle: (result: HostUserQuestionResult) => void }
+    { streamId?: string; settle: (result: UserQuestionSettlement) => void }
   >();
   // Mirrors the host contract: interaction requests register the stream
   // without switching the active tab (#8246).
@@ -155,11 +153,7 @@ export function createRecordingHost(): {
         event: 'resolveBashPermission',
         payload: { requestId },
       });
-      pending.settle({
-        accepted: decision.action === 'approve',
-        userMessage:
-          decision.action === 'reject' ? decision.feedback?.trim() : undefined,
-      });
+      pending.settle(decision);
       return true;
     },
     submitPlan(requestId, decision) {
@@ -203,11 +197,7 @@ export function createRecordingHost(): {
         event: 'resolveUserQuestion',
         payload: { requestId },
       });
-      pending.settle(
-        decision.action === 'submit'
-          ? { submitted: true, answers: decision.answers }
-          : { submitted: false, feedback: decision.feedback },
-      );
+      pending.settle(decision);
       return true;
     },
   };
@@ -301,7 +291,7 @@ export function createRecordingHost(): {
         event: 'resolveBashPermission',
         payload: { requestId },
       });
-      pending.settle({ accepted: false });
+      pending.settle({ action: 'reject' });
     }
     for (const [approvalId, pending] of pendingPlans) {
       if (!match('plan', pending.streamId)) continue;
@@ -337,7 +327,7 @@ export function createRecordingHost(): {
         event: 'resolveUserQuestion',
         payload: { requestId },
       });
-      pending.settle({ submitted: false });
+      pending.settle({ action: 'reject' });
     }
   }
   const host = new SessionHostInteractions() as SessionHostInteractions &

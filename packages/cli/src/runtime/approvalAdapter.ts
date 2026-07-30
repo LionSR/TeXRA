@@ -3,16 +3,16 @@
 // stable surface for command modules, the TUI, and tests.
 
 import type {
+  BashSettlement,
   HostAgentProposalRequest,
   HostApprovalBypassStateUpdate,
-  HostBashApprovalResult,
   HostInteractions,
   HostRetryRequest,
   HostUserQuestionRequest,
-  HostUserQuestionResult,
   PlanApprovalResult,
   ProposalResult,
   RetryResult,
+  UserQuestionSettlement,
 } from '@agent/runtime/HostInteractions';
 import type {
   BashPermission,
@@ -127,10 +127,10 @@ async function decideApprovalEvent<K extends CliDecisionApprovalEvent>(
   return decision;
 }
 
-function toBashResult(decision: ApprovalDecision): HostBashApprovalResult {
+function toBashResult(decision: ApprovalDecision): BashSettlement {
   return decision.accepted
-    ? { accepted: true }
-    : { accepted: false, userMessage: decision.userMessage };
+    ? { action: 'approve' }
+    : { action: 'reject', feedback: decision.userMessage };
 }
 
 function toPlanResult(decision: ApprovalDecision): PlanApprovalResult {
@@ -168,7 +168,7 @@ async function askHeadlessUserQuestion(
   payload: HostUserQuestionRequest,
   context: CliContext,
   hooks: CliApprovalPromptHooks,
-): Promise<HostUserQuestionResult> {
+): Promise<UserQuestionSettlement> {
   const denial = askUserQuestionDenial(context);
   if (denial) return denial;
 
@@ -192,15 +192,15 @@ async function askHeadlessUserQuestion(
   } catch {
     markApprovalDenied(context);
     return {
-      submitted: false,
+      action: 'reject',
       feedback: 'CLI user question prompt failed.',
     };
   }
 
   if (Object.keys(answers).length === 0) {
-    return { submitted: false, feedback: 'User question skipped by user.' };
+    return { action: 'skip', feedback: 'User question skipped by user.' };
   }
-  return { submitted: true, answers };
+  return { action: 'submit', answers };
 }
 
 export function createHeadlessCliHostInteractions(

@@ -18,17 +18,17 @@ import PQueue from 'p-queue';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   matchesCancelSelector,
+  type BashSettlement,
   type HostBashApprovalRequest,
-  type HostBashApprovalResult,
   type HostInteractionCancelSelector,
   type HostInteractions,
   type HostRetryInteractionOptions,
   type HostRetryRequest,
   type HostUserQuestionRequest,
-  type HostUserQuestionResult,
   type PlanApprovalResult,
   type ProposalResult,
   type RetryResult,
+  type UserQuestionSettlement,
 } from '@agent/runtime/HostInteractions';
 import { getCliApiMode, setCliApiMode } from '@cli/runtime/apiAccessMode';
 import {
@@ -378,7 +378,7 @@ async function requestBashInteraction(
   context: CliContext,
   host: CliRuntimeHost,
   requestId: string,
-): Promise<HostBashApprovalResult> {
+): Promise<BashSettlement> {
   const payload: BashPermission = {
     requestId,
     command: request.command,
@@ -390,10 +390,10 @@ async function requestBashInteraction(
   if (decision.accepted && decision.bypass === 'bash' && request.streamId) {
     setBashApprovalSessionBypass(request.streamId, true);
   }
-  return {
-    accepted: decision.accepted,
-    userMessage: feedbackOnReject(decision),
-  };
+  const feedback = feedbackOnReject(decision);
+  return decision.accepted
+    ? { action: 'approve' }
+    : { action: 'reject', ...(feedback ? { feedback } : {}) };
 }
 
 async function requestPlanInteraction(
@@ -536,16 +536,16 @@ async function requestRetryInteraction(
 async function requestUserQuestionInteraction(
   payload: HostUserQuestionRequest,
   context: CliContext,
-): Promise<HostUserQuestionResult> {
+): Promise<UserQuestionSettlement> {
   const denial = askUserQuestionDenial(context);
   if (denial) return denial;
 
   const decision = await enqueueTuiApproval({ kind: 'userQuestion', payload });
   markIfRejected(context, decision);
   return decision.accepted && decision.userQuestionAnswers
-    ? { submitted: true, answers: decision.userQuestionAnswers }
+    ? { action: 'submit', answers: decision.userQuestionAnswers }
     : {
-        submitted: false,
+        action: 'skip',
         feedback: decision.userMessage || 'User question skipped by user.',
       };
 }

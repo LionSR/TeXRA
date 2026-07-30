@@ -6,8 +6,6 @@ import { describe, expect, it, vi } from 'vitest';
 // Local imports
 import type {
   BashSettlement,
-  HostBashApprovalResult,
-  HostUserQuestionResult,
   PlanApprovalResult,
   ProposalResult,
   RetryResult,
@@ -47,7 +45,7 @@ interface DesktopHostInteractions {
   requestBashApproval(request: {
     command: string;
     streamId?: StreamTabId;
-  }): Promise<{ accepted: boolean; userMessage?: string }>;
+  }): Promise<BashSettlement>;
   requestPlanApproval(request: {
     approvalId: string;
     streamId: StreamTabId;
@@ -131,7 +129,7 @@ function handler<
 
 function createHandlers(): RecordingApprovalHandlerSet {
   const toolEdit = handler<ToolEditPermission, 'requestId'>('requestId');
-  const bash = handler<BashPermission, 'requestId', HostBashApprovalResult>(
+  const bash = handler<BashPermission, 'requestId', BashSettlement>(
     'requestId',
   );
   const retry = handler<RetryPermission, 'streamId', RetryResult>('streamId');
@@ -151,7 +149,7 @@ function createHandlers(): RecordingApprovalHandlerSet {
   const userQuestion = handler<
     UserQuestionPermission,
     'requestId',
-    HostUserQuestionResult
+    UserQuestionSettlement
   >('requestId');
 
   return {
@@ -261,10 +259,7 @@ describe('createDesktopHostInteractions', () => {
     await approval;
 
     await expect(parallel).resolves.toEqual({ action: 'approve' });
-    await expect(bash).resolves.toEqual({
-      accepted: true,
-      userMessage: undefined,
-    });
+    await expect(bash).resolves.toEqual({ action: 'approve' });
     expect(handlers.transport.agentProposal.dismiss).toHaveBeenCalledWith(
       'proposal-parallel',
     );
@@ -286,10 +281,7 @@ describe('createDesktopHostInteractions', () => {
       }),
     ).toBe(true);
     await expect(current).resolves.toEqual({ action: 'approve' });
-    await expect(other).resolves.toEqual({
-      accepted: false,
-      userMessage: undefined,
-    });
+    await expect(other).resolves.toEqual({ action: 'reject' });
   });
 
   it('delegates tool edit approvals to the window controller', async () => {
@@ -328,7 +320,7 @@ describe('createDesktopHostInteractions', () => {
     expect(
       interactions.submitBashDecision(requestId, { action: 'approve' }),
     ).toBe(true);
-    await expect(resultPromise).resolves.toEqual({ accepted: true });
+    await expect(resultPromise).resolves.toEqual({ action: 'approve' });
     expect(presentationSink.emit).toHaveBeenCalledWith(
       'requestEnsureProgressView',
       {},
@@ -368,8 +360,8 @@ describe('createDesktopHostInteractions', () => {
     });
 
     await expect(resultPromise).resolves.toEqual({
-      accepted: false,
-      userMessage: 'Stream resources released.',
+      action: 'reject',
+      feedback: 'Stream resources released.',
     });
     expect(handlers.transport.bash.dismiss).toHaveBeenCalled();
     expect(toolEditApprovals.cancel).toHaveBeenCalledWith({
@@ -395,8 +387,8 @@ describe('createDesktopHostInteractions', () => {
     });
 
     await expect(result).resolves.toEqual({
-      accepted: false,
-      userMessage: 'Stopped during presentation.',
+      action: 'reject',
+      feedback: 'Stopped during presentation.',
     });
   });
 
@@ -463,8 +455,8 @@ describe('createDesktopHostInteractions', () => {
     interactions.dispose?.();
 
     await expect(bashPromise).resolves.toEqual({
-      accepted: false,
-      userMessage: 'Desktop presentation detached.',
+      action: 'reject',
+      feedback: 'Desktop presentation detached.',
     });
     await expect(planPromise).resolves.toEqual({
       action: 'reject',

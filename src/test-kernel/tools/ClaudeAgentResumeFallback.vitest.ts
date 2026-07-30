@@ -125,7 +125,7 @@ describe('claude_agent tool — resume fallback for a torn-down registry', () =>
     mocks.startChildRunLoop.mockReturnValue(completedChildRunLoop());
     mocks.buildClaudeAgentEnv.mockReset();
     mocks.findClaudeBinaryPath.mockReset();
-    mocks.requestBashApproval.mockResolvedValue({ accepted: true });
+    mocks.requestBashApproval.mockResolvedValue({ action: 'approve' });
     mocks.getCurrentToolContexts.mockReturnValue({
       runContext: {
         streamId: parentStreamId,

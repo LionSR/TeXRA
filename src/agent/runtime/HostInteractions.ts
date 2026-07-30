@@ -114,11 +114,6 @@ export interface HostBashApprovalRequest {
   readonly streamId?: StreamTabId | null;
 }
 
-export interface HostBashApprovalResult {
-  readonly accepted: boolean;
-  readonly userMessage?: string;
-}
-
 export type HostAgentProposalRequest = AgentProposal & {
   readonly proposalId: string;
   readonly streamId: StreamTabId;
@@ -135,24 +130,12 @@ export interface HostRetryRequest {
 
 export type HostUserQuestionRequest = UserQuestionPermission;
 
-export type HostUserQuestionResult =
-  | {
-      readonly submitted: true;
-      readonly answers: UserQuestionAnswers;
-      readonly feedback?: never;
-    }
-  | {
-      readonly submitted: false;
-      readonly feedback?: string;
-      readonly answers?: never;
-    };
-
 export interface HostInteractionResultByKind {
-  readonly bash: HostBashApprovalResult;
+  readonly bash: BashSettlement;
   readonly plan: PlanApprovalResult;
   readonly proposal: ProposalResult;
   readonly retry: RetryResult;
-  readonly userQuestion: HostUserQuestionResult;
+  readonly userQuestion: UserQuestionSettlement;
 }
 
 export type HostExternalInquiryRequest = ExternalInquiryPermission;
@@ -195,14 +178,11 @@ type CancellationResultFactories = {
 };
 
 const cancellationResultFactories: CancellationResultFactories = {
-  bash: (feedback) => ({
-    accepted: false,
-    userMessage: feedback?.trim(),
-  }),
+  bash: (feedback) => ({ action: 'reject', feedback: feedback?.trim() }),
   plan: (feedback) => ({ action: 'reject', feedback }),
   proposal: (feedback) => ({ action: 'reject', feedback }),
   retry: () => ({ action: 'cancel' }),
-  userQuestion: (feedback) => ({ submitted: false, feedback }),
+  userQuestion: (feedback) => ({ action: 'reject', feedback }),
 };
 
 /** Typed cancellation result shared by every presenting host. */
@@ -290,7 +270,7 @@ export interface HostInteractions {
   requestBashApproval?(
     request: HostBashApprovalRequest,
     options?: HostInteractionOptions,
-  ): Promise<HostBashApprovalResult> | undefined;
+  ): Promise<BashSettlement> | undefined;
   requestPlanApproval?(
     request: HostPlanApprovalRequest,
     options?: HostInteractionOptions,
@@ -306,7 +286,7 @@ export interface HostInteractions {
   askUserQuestion?(
     request: HostUserQuestionRequest,
     options?: HostInteractionOptions,
-  ): Promise<HostUserQuestionResult> | undefined;
+  ): Promise<UserQuestionSettlement> | undefined;
   openExternalInquiry?(
     request: HostExternalInquiryRequest,
   ): Promise<HostExternalInquiryHandle> | undefined;
@@ -440,8 +420,8 @@ export class SessionHostInteractions implements HostInteractions {
   requestBashApproval(
     request: HostBashApprovalRequest,
     options?: HostInteractionOptions,
-  ): Promise<HostBashApprovalResult> {
-    return this.enqueue<HostBashApprovalResult>(
+  ): Promise<BashSettlement> {
+    return this.enqueue<BashSettlement>(
       'bash',
       request.streamId ?? undefined,
       (interactions) => interactions.requestBashApproval?.(request, options),
@@ -488,8 +468,8 @@ export class SessionHostInteractions implements HostInteractions {
   askUserQuestion(
     request: HostUserQuestionRequest,
     options?: HostInteractionOptions,
-  ): Promise<HostUserQuestionResult> {
-    return this.enqueue<HostUserQuestionResult>(
+  ): Promise<UserQuestionSettlement> {
+    return this.enqueue<UserQuestionSettlement>(
       'userQuestion',
       request.streamId || undefined,
       (interactions) => interactions.askUserQuestion?.(request, options),

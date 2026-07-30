@@ -64,7 +64,7 @@ The tool returns a JSON object whose keys are the original question texts and wh
     const session = getRunContextSession(context) ?? defaultSession();
     const result = await session.interactions.askUserQuestion(permission);
 
-    if (!result.submitted) {
+    if (result.action !== 'submit') {
       return {
         status: 'executed',
         output: result.feedback

@@ -113,7 +113,7 @@ describe('codex tool - atomic resume fallback', () => {
     mocks.startChildRunLoop.mockReturnValue(completedChildRunLoop());
     mocks.importCodexClass.mockReset();
     mocks.findCodexBinaryPath.mockReset();
-    mocks.requestBashApproval.mockResolvedValue({ accepted: true });
+    mocks.requestBashApproval.mockResolvedValue({ action: 'approve' });
     mocks.getCurrentToolContexts.mockReturnValue({
       runContext: {
         streamId: parentStreamId,
