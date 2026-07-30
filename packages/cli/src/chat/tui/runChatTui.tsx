@@ -51,6 +51,11 @@ import {
 } from '@cli/runtime/terminalRequirements';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import { formatCliApprovalPolicy } from '@cli/runtime/approvalPolicyText';
+import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
+import {
+  clearTerminalScrollback,
+  installTerminalRestoreOnExit,
+} from '@cli/tui/terminalCleanup';
 import { platform } from '@platform/platform';
 import {
   STREAM_PHASE,
@@ -92,7 +97,6 @@ import {
 import { registerBuiltinSlashCommands } from './commands/registerBuiltins';
 import { loadInputHistory } from './history/inputHistory';
 import { notify } from './notifications/terminalNotifier';
-import { tuiOutputStreamForColor } from './render/noColorOutput';
 import { createTuiViewportController } from './render/tuiViewportController';
 import { clearApprovals } from './state/approvalQueue';
 import {
@@ -117,10 +121,6 @@ import {
   appendLocalErrorTranscript,
   appendLocalUserTranscript,
 } from './state/transcript';
-import {
-  clearTerminalScrollback,
-  installTerminalRestoreOnExit,
-} from './terminalCleanup';
 import { installTerminalTitleUpdates } from './terminalTitle';
 import {
   chatTuiCanInterruptActiveRun,

@@ -3,20 +3,20 @@
 import { Box, Text, useInput } from 'ink';
 import { useState, useEffect } from 'react';
 
-import { clamp } from '@utils/core';
 
+
+import { COLOR_HINT } from '@cli/tui/ui/colors';
+import { KeyHints } from '@cli/tui/ui/KeyHints';
+import { POINTER } from '@cli/tui/ui/glyphs';
+import { nextWrappingHighlightIndex } from '@cli/tui/ui/Select';
+import { clamp } from '@utils/core';
+import { isEscapeInput, isPlainReturnInput } from '../input/inputKeys';
 import {
   matchSlashCommands,
   slashPickIntent,
   type SlashCommand,
   type SlashPickIntent,
 } from './slashRegistry';
-
-import { isEscapeInput, isPlainReturnInput } from '../input/inputKeys';
-import { COLOR_HINT } from '../ui/colors';
-import { KeyHints } from '../ui/KeyHints';
-import { POINTER } from '../ui/glyphs';
-import { nextWrappingHighlightIndex } from '../ui/Select';
 
 export interface SlashPaletteProps {
   /** The current input value (excluding the leading `/`, after the slash). */

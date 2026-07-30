@@ -14,12 +14,12 @@
 import { Box, Text } from 'ink';
 import { Component, type ReactNode } from 'react';
 
+import { COLOR_ERROR } from '@cli/tui/ui/colors';
+import { WARNING } from '@cli/tui/ui/glyphs';
 import * as logUtils from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
-import { COLOR_ERROR } from '../ui/colors';
-import { WARNING } from '../ui/glyphs';
 
 interface EntryErrorBoundaryProps {
   // Names the failed entry in the inline marker and the log line (e.g. its

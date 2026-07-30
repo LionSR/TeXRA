@@ -7,8 +7,8 @@
 import { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 
-import { COLOR_ACCENT } from '../ui/colors';
-import { KeyHints } from '../ui/KeyHints';
+import { COLOR_ACCENT } from '@cli/tui/ui/colors';
+import { KeyHints } from '@cli/tui/ui/KeyHints';
 import { BaseTextInput } from './BaseTextInput';
 import { isCtrlInput, isEscapeInput } from './inputKeys';
 import type { InputHistory } from '../history/inputHistory';

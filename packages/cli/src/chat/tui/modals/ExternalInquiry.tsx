@@ -2,17 +2,19 @@ import { useEffect, useMemo, useState } from 'react';
 import { Box, Text, useInput, useWindowSize } from 'ink';
 
 import { writeClipboardText } from '@cli/runtime/clipboardText';
-import type { ExternalInquiryPermission } from '@shared/schemas';
-import { clamp } from '@utils/core';
-
-import { COLOR_SUCCESS, COLOR_WARNING } from '../ui/colors';
+import { COLOR_SUCCESS, COLOR_WARNING } from '@cli/tui/ui/colors';
 import {
   clampModalWidth,
   CONFIRM_CARD_HORIZONTAL_DECORATION,
-} from '../ui/theme';
+} from '@cli/tui/ui/theme';
+import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
+import { KEY_HINT_SEPARATOR, KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
+import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
+import type { ExternalInquiryPermission } from '@shared/schemas';
+import { clamp } from '@utils/core';
+
 import { BaseTextInput } from '../input/BaseTextInput';
 import { isEscapeInput } from '../input/inputKeys';
-import { wrapAnsiToWidth } from '../render/ansiWrap';
 import {
   moreRowsText,
   previousRowsText,
@@ -22,8 +24,6 @@ import {
   maxScrollableRowOffset,
   scrollBoundedRows,
 } from '../render/scrollBounds';
-import { KEY_HINT_SEPARATOR, KeyHints, type KeyHint } from '../ui/KeyHints';
-import { BorderedPanel } from '../ui/BorderedPanel';
 import type { ApprovalDecision } from '../state/approvalQueue';
 
 export interface ExternalInquiryProps {

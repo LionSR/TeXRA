@@ -1,10 +1,10 @@
-import { clamp } from '@utils/core';
 
 import {
   clampModalWidth,
   CONFIRM_CARD_HORIZONTAL_DECORATION,
-} from '../ui/theme';
-import { wrapAnsiToWidth } from '../render/ansiWrap';
+} from '@cli/tui/ui/theme';
+import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
+import { clamp } from '@utils/core';
 import { confirmCardPulsedTitle } from './ConfirmCardState';
 
 /**

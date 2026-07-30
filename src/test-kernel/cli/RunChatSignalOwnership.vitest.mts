@@ -130,9 +130,9 @@ vi.mock('@cli/chat/tui/state/terminalCapabilities', async (importOriginal) => {
   };
 });
 
-vi.mock('@cli/chat/tui/terminalCleanup', async (importOriginal) => {
+vi.mock('@cli/tui/terminalCleanup', async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import('@cli/chat/tui/terminalCleanup')>();
+    await importOriginal<typeof import('@cli/tui/terminalCleanup')>();
   return {
     ...actual,
     cleanupTerminalModes: mocks.cleanupTerminalModes,
@@ -151,9 +151,9 @@ vi.mock('@cli/chat/tui/terminalTitle', async (importOriginal) => {
   };
 });
 
-vi.mock('@cli/chat/tui/render/noColorOutput', async (importOriginal) => {
+vi.mock('@cli/tui/noColorOutput', async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import('@cli/chat/tui/render/noColorOutput')>();
+    await importOriginal<typeof import('@cli/tui/noColorOutput')>();
   return {
     ...actual,
     tuiOutputStreamForColor: mocks.tuiOutputStreamForColor,

@@ -3,7 +3,7 @@
 // fixed number of chrome rows (border, title, description, key hints). The only
 // per-form difference is that chrome-row count, so the policy lives here once.
 
-import { isCompactRows } from '@cli/chat/tui/ui/theme';
+import { isCompactRows } from '@cli/tui/ui/theme';
 
 export interface SelectWindowSize {
   readonly maxVisibleItems: number | undefined;

@@ -1,18 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Text, useWindowSize } from 'ink';
 
-import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
-import { formatResultCount } from '@utils/text/stringUtils';
-
-import { ConfirmCard } from './ConfirmCard';
-import { COLOR_HINT } from '../ui/colors';
+import { COLOR_HINT } from '@cli/tui/ui/colors';
 import {
   clampModalWidth,
   CONFIRM_CARD_HORIZONTAL_DECORATION,
   EDIT_DIFF_PADDING,
   isCompactRows,
   MIN_MODAL_CONTENT_WIDTH,
-} from '../ui/theme';
+} from '@cli/tui/ui/theme';
+import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
+import { KeyHints } from '@cli/tui/ui/KeyHints';
+import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
+import { formatResultCount } from '@utils/text/stringUtils';
+
+import { ConfirmCard } from './ConfirmCard';
 import { confirmCardContentRowsBudget } from './confirmCardRowsBudget';
 import {
   buildHunks,
@@ -23,8 +25,6 @@ import {
   maxDiffScrollOffset,
   statsFromHunks,
 } from '../render/DiffView';
-import { wrapAnsiToWidth } from '../render/ansiWrap';
-import { KeyHints } from '../ui/KeyHints';
 import { useScrollableOffset } from '../state/useScrollableOffset';
 import type { ApprovalDecision } from '../state/approvalQueue';
 

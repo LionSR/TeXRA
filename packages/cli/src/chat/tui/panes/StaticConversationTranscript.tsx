@@ -10,6 +10,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Box, Static, Text } from 'ink';
 
 import { shortCliApiMode } from '@cli/runtime/apiAccessMode';
+import { COLOR_HINT } from '@cli/tui/ui/colors';
 import type { StreamTabId } from '@shared/schemas';
 import { DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME } from '@shared/constants/delegationTools';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
@@ -33,7 +34,6 @@ import {
   type TranscriptPrintRequest,
 } from '../state/transcriptLines';
 import { useSignal } from '../state/useSignal';
-import { COLOR_HINT } from '../ui/colors';
 import { EntryErrorBoundary } from './EntryErrorBoundary';
 import { orderedStaticTranscriptEntries } from './transcriptEntries';
 import { TranscriptEntry } from './TranscriptEntry';

@@ -1,9 +1,9 @@
 import { Box, Text } from 'ink';
 
+import { COLOR_WARNING } from '@cli/tui/ui/colors';
 import { summarizeFollowupMessage } from '@shared/subagentFollowup';
 import { pluralize } from '@utils/text/stringUtils';
 
-import { COLOR_WARNING } from '../ui/colors';
 import { hiddenRowsText } from '../render/overflowText';
 import {
   textDisplayWidth,

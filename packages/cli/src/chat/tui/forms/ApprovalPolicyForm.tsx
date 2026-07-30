@@ -3,8 +3,8 @@ import { Text } from 'ink';
 import { formatCliApprovalPolicy } from '@cli/runtime/approvalPolicyText';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 
+import type { SelectItem } from '@cli/tui/ui/Select';
 import { ListForm } from './_shared/ListForm';
-import type { SelectItem } from '../ui/Select';
 
 export interface ApprovalPolicyFormProps {
   readonly currentPolicy: CliApprovalPolicy;

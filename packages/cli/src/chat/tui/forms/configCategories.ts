@@ -1,7 +1,7 @@
+import type { SelectItem } from '@cli/tui/ui/Select';
 import type { StateSettingEntry } from '@shared/schemas/stateSettings';
 import { formatResultCount } from '@utils/text/stringUtils';
 
-import type { SelectItem } from '../ui/Select';
 
 const CONFIG_CATEGORY_LABELS: Readonly<Record<string, string>> = {
   git: 'Git and worktrees',

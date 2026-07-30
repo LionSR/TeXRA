@@ -1,7 +1,7 @@
 import { Text } from 'ink';
 
+import type { SelectItem } from '@cli/tui/ui/Select';
 import { ListForm } from './_shared/ListForm';
-import type { SelectItem } from '../ui/Select';
 
 export type LoginFormValue =
   'texra' | 'chatgpt' | 'texra --device' | 'chatgpt --device';

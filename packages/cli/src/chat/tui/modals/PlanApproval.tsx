@@ -1,6 +1,13 @@
 import { useState } from 'react';
 import { Box, Text, useWindowSize } from 'ink';
 
+import { COLOR_INFO } from '@cli/tui/ui/colors';
+import {
+  clampModalWidth,
+  CONFIRM_CARD_HORIZONTAL_DECORATION,
+  isCompactRows,
+} from '@cli/tui/ui/theme';
+import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import type { PlanApprovalPermission } from '@shared/schemas';
 
 import { ConfirmCard } from './ConfirmCard';
@@ -8,14 +15,7 @@ import {
   ScrollableModalText,
   scrollableModalTextRowsBudget,
 } from './ScrollableModalText';
-import { COLOR_INFO } from '../ui/colors';
-import {
-  clampModalWidth,
-  CONFIRM_CARD_HORIZONTAL_DECORATION,
-  isCompactRows,
-} from '../ui/theme';
 import { confirmCardCompactChromeRows } from './ConfirmCardState';
-import { wrapAnsiToWidth } from '../render/ansiWrap';
 import { fillRows, truncateToWidth } from '../render/terminalText';
 import type { ApprovalDecision } from '../state/approvalQueue';
 

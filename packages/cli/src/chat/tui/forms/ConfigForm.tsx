@@ -10,6 +10,11 @@
 import { Box, Text, useInput } from 'ink';
 import { useState } from 'react';
 
+import { COLOR_ERROR } from '@cli/tui/ui/colors';
+import { KeyHints } from '@cli/tui/ui/KeyHints';
+import { POINTER } from '@cli/tui/ui/glyphs';
+import { Select, type SelectItem } from '@cli/tui/ui/Select';
+import { computeSelectWindowSize } from '@cli/tui/selectWindow';
 import { stripPrefix } from '@shared/config/configKeys';
 import { settingDefault, settingSlot } from '@shared/config/settingsAccess';
 import {
@@ -22,16 +27,11 @@ import {
 
 import { BaseTextInput } from '../input/BaseTextInput';
 import { isCtrlInput, type ReturnKeyInput } from '../input/inputKeys';
-import { COLOR_ERROR } from '../ui/colors';
-import { KeyHints } from '../ui/KeyHints';
-import { POINTER } from '../ui/glyphs';
-import { Select, type SelectItem } from '../ui/Select';
 import {
   buildConfigCategoryItems,
   configCategoryLabel,
 } from './configCategories';
 import { FormFrame } from './_shared/FormFrame';
-import { computeSelectWindowSize } from './_shared/selectWindow';
 
 export type SettingEditKind =
   'form' | 'boolean' | 'enum' | 'string' | 'number' | 'readonly';
