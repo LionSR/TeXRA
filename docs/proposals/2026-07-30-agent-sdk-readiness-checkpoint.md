@@ -214,17 +214,24 @@ pass; none are applied here.
   highest-value dedup in the observability surface, and `conversation.progress`
   (already single-rail via a session projector, `helpers.ts:200-215`) is the
   pattern to follow.
-- **[NEW] §New-10 — `polishModel.ts` is `textEnhancement`'s private template
-  loader in its own file. (S; lowest-risk placement cleanup.)**
-  `renderPolishPrompt`'s one real consumer is `textEnhancement.ts:6`;
-  `initializePolishModel`'s one caller is host init (`extension.ts`). Merging
-  `polishModel.ts` into `textEnhancement.ts` removes a file and two exports with
-  no loss (host init imports from `textEnhancement`). Pairs with the broader
-  observation that the runtime's "content helpers" cluster
-  (`sessionDescription`, `polishModel`, `textEnhancement`, `mediaVisionWarning`)
-  is one-shot content generation, not run orchestration — it sits in `runtime/`
-  only because it shares the helper-model core, and an SDK boundary would likely
-  lift it out of the launch layer.
+- **[NEW → RETRACTED] §New-10 — `polishModel.ts` is *not* a naked single-caller
+  extraction; do not merge it. (Corrected 2026-07-30 by a live-authorized census
+  — see "Follow-up" below.)** The `-07-29` framing and the runtime deep-dive both
+  read this as "`renderPolishPrompt` has one consumer (`textEnhancement`), so
+  inline it and delete the file." A full census (including `.mts` tests, which a
+  `*.ts` grep misses) shows `renderPolishPrompt`/`initializePolishModel` have a
+  **dedicated unit suite** — `src/test-kernel/agent/PolishPromptLoader.vitest.mts`
+  — that exercises the loader in isolation (real-YAML happy path + malformed-YAML
+  error-wrapping), and `TextEnhancementSession.vitest.ts` additionally uses
+  `polishModel` as a **mock seam** to keep the filesystem out of the session test.
+  `polishModel` is therefore a cohesive, independently-tested prompt-loader unit,
+  not a naked extraction; merging it either drops a real test seam or keeps
+  `renderPolishPrompt` exported anyway (no surface gain) while scattering a
+  separately-tested concern into its consumer. **Net-neutral-to-negative churn —
+  leave `polishModel.ts` as its own file.** The broader placement observation (the
+  runtime "content helpers" cluster is one-shot content generation that an SDK
+  boundary would lift out of the launch layer) still stands as a *directional*
+  note, but it is a deliberate relocation, not a file merge.
 - **[NEW] §New-11 — `setLogger` mutable injection could be ambient trace via
   `RunScope`. (M; pairs with §New-4.)** The run trace is pushed into the model
   handler through `setLogger` at two production sites (`AgentLaunchContext.ts:329`
@@ -340,9 +347,53 @@ revert is the worked example: a grep-justified "obviously safe" change can hide 
 incomplete caller census, and only an out-of-pass reviewer reliably catches it.
 §New-7 (redaction) and §New-9 (status rail) are respectively security-sensitive
 and a considered-duplication requiring intent confirmation, and stay recorded.
+(A subsequent live-authorized attempt to apply the two smallest candidates was
+made and reverted on census — see "Follow-up: live-authorized safe-refactor
+diligence" below.)
 `MapToolRegistry` re-checked and still `Map | Record` with the `instanceof Map`
 branch — **do not re-attempt the narrowing without a deliberate compatibility
 boundary for `Map` inputs.**
+
+## Follow-up: live-authorized safe-refactor diligence (2026-07-30)
+
+After this checkpoint was first written, a maintainer authorized applying "the
+things we can already do" and opening a PR — the out-of-pass review the unattended
+pass lacked. Under that authorization, the two smallest candidates were taken to
+a full caller/test census and a working branch, then **both were reverted** as
+not-yet-clean. The census is the deliverable:
+
+- **§New-10 (`polishModel` → `textEnhancement` merge) — reverted.** The merge was
+  implemented and the targeted session test passed, but `typecheck` surfaced a
+  second, dedicated test suite (`PolishPromptLoader.vitest.mts`, a `.mts` file the
+  original `*.ts` grep missed) that imports `renderPolishPrompt`/`initializePolishModel`
+  from `@agent/runtime/polishModel` and tests the loader in isolation. That makes
+  `polishModel` an independently-tested unit, not a single-caller extraction — see
+  the retraction under §New-10 above. Reverted to a clean tree.
+- **§New-5 (collapse the two `createModelHandler` entrypoints) — not attempted,
+  declined on census.** The two functions differ semantically (`useOpenRouter`
+  derivation: `getUseOpenRouter()` vs `key === 'ModelHandlerOpenRouterNative'`;
+  `allowCodexSubscriptionOverride`: always vs only for `ModelHandlerOpenAIResponse`;
+  `withCompatibilityRoutingMode` applied only on the key path), and
+  `ModelFactoryRouting.vitest.ts` locks a **drift invariant** between the key
+  predicate and the dispatch (the "routing precedence" describe block) plus tests
+  `createModelHandlerForCompatibilityKey` directly at five sites. Collapsing them
+  is a lateral move (the caller's ternary becomes an internal branch) that removes
+  one export at the cost of resume-path routing-test churn and non-trivial
+  behavior-preservation risk — a judgment refactor, not a mechanical one.
+- **`createChannelTrace` → functional-logger conversion — out of scope for a
+  drive-by.** Behavior-preserving but 23 core files, each rewriting every
+  `logger.x(msg)` call to add a channel argument, and it is a standing PRD item
+  (`logger-surface-cleanup`) that wants deliberate sequencing, not a piecemeal grab.
+
+**Outcome:** no code refactor lands from this pass either — not by the unattended
+"no change" rule this time, but because a live-authorized census found the "already
+do" subset empty of clean mechanical wins. This is the strongest available
+confirmation of the standing verdict: the remaining items are design-judgment or
+deliberate-sequencing work, not drive-by simplifications. The genuinely safe next
+steps are the *additive* SDK-surface exposures the subagent-boundaries section names
+(publish `ChildRunStrategy`; expose the helper-model one-shots as a headless
+sub-task API), which add capability without touching the tested invariants above —
+those are the right candidates for the next attended change.
 
 ## Coverage gaps (honest scope of this pass)
 
