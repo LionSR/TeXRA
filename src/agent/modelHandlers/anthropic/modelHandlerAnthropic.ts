@@ -1229,10 +1229,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
     };
   }
 
-  protected createPseudoPrefillPrompt(prefill: string): string {
-    return `Start your response with:\n${prefill}`;
-  }
-
   protected createAssistantMessageForPrefillText(text: string): MessageParam {
     return {
       role: 'assistant',

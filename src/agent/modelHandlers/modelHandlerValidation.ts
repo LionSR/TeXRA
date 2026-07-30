@@ -1,7 +1,6 @@
 // Third-party imports
 
 // Local imports - agent
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentSetting } from '@agent/core/definition/AgentDataclass';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
@@ -243,17 +242,6 @@ export class ModelHandlerValidation extends ModelHandler<
     _agentSetting: AgentSetting,
   ): void {
     // The validation model always produces a complete response.
-  }
-
-  async initializeOutputAndPrefill(
-    _agentConfig: AgentConfig,
-    _agentSetting: AgentSetting,
-    messages: ChatCompletionMessageParam[],
-    _workspaceState: AgentWorkspaceState,
-    _outputLocation: FileLocation,
-    _prefill: string,
-  ): Promise<[boolean, ChatCompletionMessageParam[]]> {
-    return [false, messages];
   }
 
   computePrice(_responseUsage: ValidationResponse['usage']): number {
