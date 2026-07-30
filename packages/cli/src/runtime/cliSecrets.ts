@@ -1,6 +1,8 @@
 // Node imports
 import path from 'node:path';
 
+import PQueue from 'p-queue';
+
 // Local imports
 import type { PlatformSecrets } from '@platform/secrets';
 import { JsonStore } from '@platform/defaults/jsonStore';
@@ -24,13 +26,13 @@ const SECRETS_FILE_MODE = 0o600;
  *
  * Each operation opens its own `JsonStore` rather than caching one for the
  * lifetime of this instance, so reads (`get`/`getStored`/`listStoredKeys`)
- * always observe the current on-disk file. Mutations are linked at call time
- * through {@link mutationQueue}, before the asynchronous open, so same-key
- * writes preserve caller order. `JsonStore` handles cross-instance and
- * cross-process exclusion while flushing.
+ * always observe the current on-disk file. Mutations are serialized at call
+ * time through {@link mutationQueue}, before the asynchronous open, so
+ * same-key writes preserve caller order. `JsonStore` handles cross-instance
+ * and cross-process exclusion while flushing.
  */
 export class CliSecrets implements PlatformSecrets {
-  private mutationQueue: Promise<void> = Promise.resolve();
+  private readonly mutationQueue = new PQueue({ concurrency: 1 });
 
   constructor(private readonly filePath = cliSecretsPath()) {}
 
@@ -62,12 +64,10 @@ export class CliSecrets implements PlatformSecrets {
   }
 
   private mutate(op: (store: JsonStore) => Promise<void>): Promise<void> {
-    const mutation = this.mutationQueue.then(async () => {
+    return this.mutationQueue.add(async () => {
       const store = await this.openStore();
       await op(store);
     });
-    this.mutationQueue = mutation.catch(() => {});
-    return mutation;
   }
 
   private openStore(): Promise<JsonStore> {
