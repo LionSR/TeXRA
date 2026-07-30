@@ -11,7 +11,7 @@ import type { ProviderStopReason } from '@agent/types/StopReasonTypes';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { MESSAGE_TYPES } from '@shared/schemas';
 import { isNonEmptyString, isObject } from '@utils/core';
-import { formatContent } from '@utils/text/xmlUtils';
+import { formatContent } from '@utils/text/xmlConversion';
 
 // Local file imports
 import { FlowTransition } from '../FlowTransitions';

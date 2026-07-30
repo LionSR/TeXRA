@@ -22,7 +22,7 @@ import {
   midEraWorkflowOutputStem,
   parseWorkflowOutputRoundDir,
 } from '@shared/constants/workflowOutput';
-import { WorkspaceFS, FlexibleFS, pathToLocation } from '@utils/files';
+import { WorkspaceFS, AbsoluteFS, pathToLocation } from '@utils/files';
 import { hasExtension } from '@utils/core/pathCore';
 import { isDirectory, isFile, isSymlink } from '@utils/files/fsEntryType';
 
@@ -54,8 +54,10 @@ async function executeDiffOperations(
       message: `Running ${operation.type} diff for ${operation.description}`,
     });
 
-    const baseExists = await FlexibleFS.exists(operation.base);
-    const revisedExists = await FlexibleFS.exists(operation.revised);
+    const baseExists = await AbsoluteFS.exists(operation.base.absolutePath);
+    const revisedExists = await AbsoluteFS.exists(
+      operation.revised.absolutePath,
+    );
 
     if (!baseExists || !revisedExists) {
       results.push({

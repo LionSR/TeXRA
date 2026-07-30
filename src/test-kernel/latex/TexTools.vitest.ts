@@ -9,7 +9,7 @@ import {
 } from '@latex/texTools';
 import type { ExecResult } from '@shared/schemas/opResults';
 import { installPlatform } from '@test/support/setupPlatform';
-import { FlexibleFS, pathToLocation } from '@utils/files';
+import { AbsoluteFS, pathToLocation } from '@utils/files';
 
 // ---------------------------------------------------------------------------
 // TexTools
@@ -64,9 +64,9 @@ describe('compileLatex2Pdf structured return', () => {
       { length: totalLines },
       (_, i) => `L${String(i + 1).padStart(4, '0')}`,
     );
-    await FlexibleFS.ensureDir(pathToLocation(outputDirectory));
-    await FlexibleFS.write(
-      pathToLocation(path.join(outputDirectory, 'main.log')),
+    await AbsoluteFS.ensureDir(outputDirectory);
+    await AbsoluteFS.write(
+      path.join(outputDirectory, 'main.log'),
       lines.join('\n'),
     );
 
@@ -89,11 +89,11 @@ describe('compileLatex2Pdf structured return', () => {
       mocks.runToolWithCheck.mockResolvedValue(execResult(false));
 
       const outputDirectory = path.join(workspacePath, `build${ext}`);
-      await FlexibleFS.ensureDir(pathToLocation(outputDirectory));
+      await AbsoluteFS.ensureDir(outputDirectory);
       // The engine always names the log after the source with ITS OWN
       // extension stripped, regardless of which LaTeX extension was used.
-      await FlexibleFS.write(
-        pathToLocation(path.join(outputDirectory, 'main.log')),
+      await AbsoluteFS.write(
+        path.join(outputDirectory, 'main.log'),
         'engine log content',
       );
 

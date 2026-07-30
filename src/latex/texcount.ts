@@ -3,7 +3,7 @@ import { z } from 'zod';
 // Local imports - log
 import * as logger from '@logger/logUtils';
 import type { FileLocation } from '@shared/schemas';
-import { FlexibleFS, pathToLocation } from '@utils/files';
+import { AbsoluteFS, pathToLocation } from '@utils/files';
 import { filterNotNull, ensureArray } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { hasExtension } from '@utils/core/pathCore';
@@ -20,7 +20,7 @@ async function hasChinesePackages(
   fileLocation: FileLocation,
 ): Promise<boolean> {
   try {
-    const content = await FlexibleFS.read(fileLocation);
+    const content = await AbsoluteFS.read(fileLocation.absolutePath);
     const chinesePackages = [
       'xeCJK',
       'ctexart',
@@ -70,7 +70,7 @@ async function validateTexFile(
   channel: string,
 ): Promise<ValidationResult> {
   const filePath = fileLocation.absolutePath;
-  if (!(await FlexibleFS.exists(fileLocation))) {
+  if (!(await AbsoluteFS.exists(fileLocation.absolutePath))) {
     const reason = `File ${filePath} does not exist.`;
     logger.warn(channel, reason);
     return { valid: false, reason };

@@ -25,7 +25,7 @@ import {
   type ToolEditApprovalResult,
 } from '@tools/approval';
 import { AcceptRunFilesTool } from '@tools/AcceptRunFilesTool';
-import { AbsoluteFS, FlexibleFS, StorageFS, WorkspaceFS } from '@utils/files';
+import { AbsoluteFS, StorageFS, WorkspaceFS } from '@utils/files';
 
 // Local file imports
 import { createRecordingHost } from '../progressTestUtils';
@@ -110,7 +110,6 @@ describe('accept_run_files progress events', () => {
   let originalWorkspaceDelete: typeof WorkspaceFS.delete;
   let originalAbsoluteIsFile: typeof AbsoluteFS.isFile;
   let originalAbsoluteRead: typeof AbsoluteFS.read;
-  let originalFlexibleRead: typeof FlexibleFS.read;
 
   beforeEach(async () => {
     originalStorageExists = StorageFS.exists;
@@ -123,7 +122,6 @@ describe('accept_run_files progress events', () => {
     originalWorkspaceDelete = WorkspaceFS.delete;
     originalAbsoluteIsFile = AbsoluteFS.isFile;
     originalAbsoluteRead = AbsoluteFS.read;
-    originalFlexibleRead = FlexibleFS.read;
     testApprovalHandler = undefined;
     await installTestPlatform();
     cleanupAllApprovals();
@@ -149,7 +147,6 @@ describe('accept_run_files progress events', () => {
     WorkspaceFS.delete = originalWorkspaceDelete;
     AbsoluteFS.isFile = originalAbsoluteIsFile;
     AbsoluteFS.read = originalAbsoluteRead;
-    FlexibleFS.read = originalFlexibleRead;
     testApprovalHandler = undefined;
     detachHostInteractions();
     detachHostInteractions = () => {};
@@ -175,7 +172,7 @@ describe('accept_run_files progress events', () => {
     WorkspaceFS.read = async () => '';
     WorkspaceFS.write = async () => undefined;
     WorkspaceFS.delete = async () => undefined;
-    FlexibleFS.read = async () => 'accepted content';
+    AbsoluteFS.read = async () => 'accepted content';
 
     testApprovalHandler = async () => ({ accepted: true });
 
@@ -213,7 +210,7 @@ describe('accept_run_files progress events', () => {
       writes++;
     };
     WorkspaceFS.delete = async () => undefined;
-    FlexibleFS.read = async () => 'accepted content';
+    AbsoluteFS.read = async () => 'accepted content';
     testApprovalHandler = async () => ({ accepted: true });
 
     const result = await tool.call({
@@ -243,8 +240,10 @@ describe('accept_run_files progress events', () => {
     WorkspaceFS.delete = async () => undefined;
     AbsoluteFS.isFile = async (target) =>
       target === `${storagePath}/executions/${executionId}/original/draft.tex`;
-    AbsoluteFS.read = async () => 'old content';
-    FlexibleFS.read = async () => 'new content';
+    AbsoluteFS.read = async (target) =>
+      target === `${storagePath}/executions/${executionId}/original/draft.tex`
+        ? 'old content'
+        : 'new content';
     testApprovalHandler = async (request) => {
       approvalOriginal = request.originalContent;
       approvalProposed = request.proposedContent;
@@ -279,7 +278,7 @@ describe('accept_run_files progress events', () => {
     };
     WorkspaceFS.delete = async () => undefined;
     AbsoluteFS.isFile = async () => false;
-    FlexibleFS.read = async () => 'same content';
+    AbsoluteFS.read = async () => 'same content';
     testApprovalHandler = async () => {
       approvals++;
       return { accepted: true };

@@ -15,8 +15,8 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { LATEX_CONFIG_RANGES } from '@shared/constants/latex';
 import { parseWorkflowOutputRoundDir } from '@shared/constants/workflowOutput';
 import {
+  AbsoluteFS,
   createRunStorageLocation,
-  FlexibleFS,
   getComparablePath,
   pathToLocation,
   WorkspaceFS,
@@ -288,13 +288,13 @@ async function compileOne(
 
   const clearStaleLogs = (): Promise<void[]> =>
     Promise.all([
-      FlexibleFS.delete(logDest).catch(() => undefined),
-      FlexibleFS.delete(legacyLogDest).catch(() => undefined),
+      AbsoluteFS.delete(logDest.absolutePath).catch(() => undefined),
+      AbsoluteFS.delete(legacyLogDest.absolutePath).catch(() => undefined),
     ]);
 
   let compileResult: CompileLatex2PdfResult;
   try {
-    const content = await FlexibleFS.read(outputFile.location);
+    const content = await AbsoluteFS.read(outputFile.location.absolutePath);
     if (!/\\documentclass/.test(content)) {
       ctx.logger.debug(
         `Compile check: ${displayName} has no \\documentclass, skipping`,
@@ -420,8 +420,8 @@ async function writeCompileFailure(args: WriteCompileFailureArgs): Promise<{
   } = args;
 
   try {
-    await FlexibleFS.ensureDir(pathToLocation(opts.compileRoot));
-    await FlexibleFS.write(logDest, `${failureLogExcerpt}\n`);
+    await AbsoluteFS.ensureDir(opts.compileRoot);
+    await AbsoluteFS.write(logDest.absolutePath, `${failureLogExcerpt}\n`);
   } catch (writeErr) {
     ctx.logger.warn(
       `Compile check: failed to persist log for ${displayName}: ${toErrorMessage(writeErr)}`,

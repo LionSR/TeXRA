@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import * as logger from '@logger/logUtils';
 import type { FileLocation } from '@shared/schemas';
 import { renderPrompt } from '@utils/prompt';
-import { FlexibleFS, TaskRunFileService, pathToLocation } from '@utils/files';
+import { AbsoluteFS, TaskRunFileService, pathToLocation } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 
 // Local imports - latex utils
@@ -69,7 +69,7 @@ class TikzPictureManagerImpl {
    * @returns Array of [label, tikzpictures] tuples
    */
   async extract(latexFile: FileLocation): Promise<[string, string[]][]> {
-    const content = await FlexibleFS.read(latexFile);
+    const content = await AbsoluteFS.read(latexFile.absolutePath);
 
     // Match each figure block first, then inspect labels inside the block. This
     // prevents an unlabeled figure from consuming a later figure's label.
@@ -130,7 +130,7 @@ class TikzPictureManagerImpl {
       path.join(buildDirLocation.absolutePath, filename),
     );
 
-    await FlexibleFS.write(texLocation, standaloneContent);
+    await AbsoluteFS.write(texLocation.absolutePath, standaloneContent);
     logger.debug(
       this.channel,
       `Created standalone LaTeX file: ${texLocation.absolutePath}`,
@@ -154,7 +154,7 @@ class TikzPictureManagerImpl {
       path.join(path.dirname(latexFile.absolutePath), 'build', inputName),
     );
 
-    await FlexibleFS.ensureDir(buildDirLocation);
+    await AbsoluteFS.ensureDir(buildDirLocation.absolutePath);
 
     logger.debug(
       this.channel,
@@ -210,7 +210,7 @@ class TikzPictureManagerImpl {
           path.join(path.dirname(texLocation.absolutePath), pdfFilename),
         );
 
-        if (await FlexibleFS.exists(pdfLocation)) {
+        if (await AbsoluteFS.exists(pdfLocation.absolutePath)) {
           compiledFiles.push(pdfLocation);
           logger.debug(
             this.channel,

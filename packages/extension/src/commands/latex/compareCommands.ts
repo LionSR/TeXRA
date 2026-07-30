@@ -22,7 +22,7 @@ import * as logger from '@logger/logUtils';
 import type { AcceptCopyMeta, FileLocation } from '@shared/schemas';
 import { DIFF_REGISTRATION_DELAY_MS } from '@shared/constants/latex';
 import { legacyWorkflowOutputStem } from '@shared/constants/workflowOutput';
-import { FlexibleFS } from '@utils/files';
+import { AbsoluteFS } from '@utils/files';
 
 const CHANNEL = 'CompareCommands';
 
@@ -44,7 +44,7 @@ function validateFileLocations(
  *  diff-file cleanup is a best-effort side effect of accepting a file. */
 async function deleteDiffFileNonFatal(location: FileLocation): Promise<void> {
   try {
-    await FlexibleFS.delete(location);
+    await AbsoluteFS.delete(location.absolutePath);
   } catch {
     // Non-fatal: diff file may not exist or may be locked.
   }
@@ -54,7 +54,7 @@ async function validateFilesExist(
   baseLocation: FileLocation,
   editedLocation: FileLocation,
 ): Promise<boolean> {
-  if (!(await FlexibleFS.exists(baseLocation))) {
+  if (!(await AbsoluteFS.exists(baseLocation.absolutePath))) {
     void showLoggedMessage(
       CHANNEL,
       `Base file not found: ${baseLocation.absolutePath}`,
@@ -62,7 +62,7 @@ async function validateFilesExist(
     return false;
   }
 
-  if (!(await FlexibleFS.exists(editedLocation))) {
+  if (!(await AbsoluteFS.exists(editedLocation.absolutePath))) {
     void showLoggedMessage(
       CHANNEL,
       `Edited file not found: ${editedLocation.absolutePath}`,
@@ -221,9 +221,10 @@ export async function handleAcceptEdited(
     // No run metadata: single-confirm replace flow shared with the desktop host.
     if (!copyMeta) {
       return await acceptEditedFileReplace(fileToUseLocation, editedLocation, {
-        exists: (location) => FlexibleFS.exists(location),
-        readFile: (location) => FlexibleFS.read(location),
-        writeFile: (location, content) => FlexibleFS.write(location, content),
+        exists: (location) => AbsoluteFS.exists(location.absolutePath),
+        readFile: (location) => AbsoluteFS.read(location.absolutePath),
+        writeFile: (location, content) =>
+          AbsoluteFS.write(location.absolutePath, content),
         confirm: async (message) => {
           const answer = await vscode.window.showWarningMessage(
             message,
@@ -254,7 +255,9 @@ export async function handleAcceptEdited(
     );
     if (!resolved) return false;
 
-    const targetExisted = await FlexibleFS.exists(resolved.targetLocation);
+    const targetExisted = await AbsoluteFS.exists(
+      resolved.targetLocation.absolutePath,
+    );
 
     await commitAcceptedFile(
       fileToUseLocation,
@@ -262,8 +265,9 @@ export async function handleAcceptEdited(
       resolved,
       targetExisted,
       {
-        readFile: (location) => FlexibleFS.read(location),
-        writeFile: (location, content) => FlexibleFS.write(location, content),
+        readFile: (location) => AbsoluteFS.read(location.absolutePath),
+        writeFile: (location, content) =>
+          AbsoluteFS.write(location.absolutePath, content),
         emitWritten: (absolutePath) =>
           appSignals.emit('workspaceFilesWritten', {
             absolutePaths: [absolutePath],
