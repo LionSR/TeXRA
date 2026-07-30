@@ -15,7 +15,7 @@ import { formatBytes, formatRelativeTime } from '@shared/utils/string';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 import { replaceLiteralMatches } from '@tools/fileEditFlow';
 import {
-  countPinnedMemories,
+  setMemoryPinned,
   walkMemoryDirectory,
 } from '@tools/memory/memoryFileSystem';
 import { StorageFS } from '@utils/files';
@@ -47,7 +47,6 @@ import {
   buildFile,
   createMeta,
   formatAttribution,
-  setPinnedMeta,
   type MemoryFileMeta,
 } from './memoryMeta';
 
@@ -489,29 +488,24 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     const { display: inputPath, storage: resolvedPath } = loc;
     await this.requireEditableFile(resolvedPath, inputPath);
 
-    const { meta, content } = await this.readMemoryFile(resolvedPath);
-    if (meta?.pinned) {
+    const result = await setMemoryPinned(resolvedPath, true);
+    if (result.status === 'already') {
       return {
         status: 'executed',
         summary: `Already pinned: ${inputPath}`,
         output: `The memory file ${inputPath} is already pinned.`,
       };
     }
-
-    const pinnedCount = await countPinnedMemories(MAX_PINNED_MEMORIES);
-    if (pinnedCount >= MAX_PINNED_MEMORIES) {
+    if (result.status === 'cap-reached') {
       throw new ToolError(
         `Cannot pin ${inputPath}: maximum of ${MAX_PINNED_MEMORIES} pinned memories reached. Unpin an existing memory first.`,
       );
     }
 
-    const updatedMeta = setPinnedMeta(meta, true);
-    await StorageFS.write(resolvedPath, buildFile(content, updatedMeta));
-
     return {
       status: 'executed',
       summary: `Pinned memory: ${inputPath}`,
-      output: `Successfully pinned ${inputPath} as a core long-term memory. (${pinnedCount + 1}/${MAX_PINNED_MEMORIES} pinned)`,
+      output: `Successfully pinned ${inputPath} as a core long-term memory. (${result.pinnedCount}/${MAX_PINNED_MEMORIES} pinned)`,
     };
   }
 
@@ -519,17 +513,14 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     const { display: inputPath, storage: resolvedPath } = loc;
     await this.requireEditableFile(resolvedPath, inputPath);
 
-    const { meta, content } = await this.readMemoryFile(resolvedPath);
-    if (!meta?.pinned) {
+    const result = await setMemoryPinned(resolvedPath, false);
+    if (result.status === 'already') {
       return {
         status: 'executed',
         summary: `Not pinned: ${inputPath}`,
         output: `The memory file ${inputPath} is not pinned.`,
       };
     }
-
-    const updatedMeta = setPinnedMeta(meta, false);
-    await StorageFS.write(resolvedPath, buildFile(content, updatedMeta));
 
     return {
       status: 'executed',
