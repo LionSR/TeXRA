@@ -1,4 +1,4 @@
-import { finalizeExecution, type FinalizeExecutionInput } from '@agent/storage';
+import type { FinalizeExecutionInput } from '@agent/storage';
 import {
   logSdkError,
   type AgentTrace,
@@ -7,7 +7,6 @@ import {
 } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import {
-  markOwnedExecutionLeaseUndurable,
   onOwnedExecutionLeaseLost,
   captureOwnedExecutionLeaseIfPresent,
 } from '@agent/storage/executionLease';
@@ -25,7 +24,6 @@ import {
   STREAM_PHASE,
   buildRunDescriptor,
   toRetryErrorInfo,
-  type ExecutionId,
   type RunOutcome,
   type StreamTabId,
 } from '@shared/schemas';
@@ -35,7 +33,6 @@ import {
 } from '@shared/state/onboardingState';
 import { agentName as baseAgentName } from '@shared/schemas/agent';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
-import { projectRunOutcome } from '@shared/streams/streamStatus';
 
 import { AgentExecutionHandle, type AgentRunHandle } from './ExecutionHandle';
 import { persistTerminalExecution } from './persistTerminalExecution';
