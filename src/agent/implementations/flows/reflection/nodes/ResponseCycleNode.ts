@@ -6,12 +6,14 @@ import {
   createResponseCycleFlow,
   type ResponseCycleShared,
 } from '@agent/core/flows/ResponseCycleFlow';
-import { withModelClient } from '@agent/core/flows/CycleServices';
+import {
+  buildFailedCycleOutcome,
+  withModelClient,
+} from '@agent/core/flows/CycleServices';
 import type {
   AgentRunStateSnapshot,
   ConversationRoundStateSnapshot,
 } from '@agent/core/state/AgentState';
-import { buildFailedRetryInfo } from '@common/errors';
 import type { AgentFileLocation, RetryErrorInfo } from '@shared/schemas';
 import { getDefaultToolRegistry } from '@tools/registry';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -145,12 +147,8 @@ export class ResponseCycleNode<C = unknown> extends Node<
     } catch (error) {
       recordRound(prepRes.run, prepRes.round);
       await this.services.onRoundFinalized(prepRes.run);
-      return {
-        outcome: 'failed',
-        error: ensureError(error),
-        failureLogEmitted: false,
-        ...buildFailedRetryInfo(error),
-      };
+      const err = ensureError(error);
+      return { outcome: 'failed', error: err, ...buildFailedCycleOutcome(err) };
     } finally {
       if (cycleShared.contextWindowRecoveryRequestId !== undefined) {
         modelHandler.clearCompactionRequest(
@@ -164,12 +162,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
     _prepRes: CyclePrepInput,
     error: Error,
   ): Promise<CycleOutcome> {
-    return {
-      outcome: 'failed',
-      error,
-      failureLogEmitted: false,
-      ...buildFailedRetryInfo(error),
-    };
+    return { outcome: 'failed', error, ...buildFailedCycleOutcome(error) };
   }
 
   async post(
