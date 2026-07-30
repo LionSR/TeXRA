@@ -126,8 +126,8 @@ describe('approval cleanup scope (SDK Step 7d residue #5)', () => {
           userMessage: 'Streamless approval cleanup.',
         },
         {
-          accepted: false,
-          userMessage: 'Streamless approval cleanup.',
+          action: 'reject',
+          feedback: 'Streamless approval cleanup.',
         },
       ]);
       expect(sessionBSettled).toBe(false);
@@ -144,8 +144,8 @@ describe('approval cleanup scope (SDK Step 7d residue #5)', () => {
           userMessage: 'Streamless approval cleanup.',
         },
         {
-          accepted: false,
-          userMessage: 'Streamless approval cleanup.',
+          action: 'reject',
+          feedback: 'Streamless approval cleanup.',
         },
       ]);
       expect(cancelB).toHaveBeenCalledWith({

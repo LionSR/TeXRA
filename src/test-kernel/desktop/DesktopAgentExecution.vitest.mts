@@ -2233,8 +2233,8 @@ describe('DesktopProgressBridge', () => {
     // This promise must settle through releaseStreamResources, which owns
     // stream-scoped interaction cleanup.
     await expect(result).resolves.toEqual({
-      accepted: false,
-      userMessage: 'Stream resources released.',
+      action: 'reject',
+      feedback: 'Stream resources released.',
     });
   });
 

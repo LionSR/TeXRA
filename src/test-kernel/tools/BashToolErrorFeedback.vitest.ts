@@ -184,8 +184,8 @@ describe('BashTool error feedback', () => {
 
   it('reports an explicit approval rejection to the agent', async () => {
     vi.mocked(requestBashApproval).mockResolvedValueOnce({
-      accepted: false,
-      userMessage: 'No thanks.',
+      action: 'reject',
+      feedback: 'No thanks.',
     });
     const rejected = await new BashTool().call({ command: 'echo rejected' });
     expect(rejected.status).toBe('error');

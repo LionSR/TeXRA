@@ -6,12 +6,12 @@ import * as vscode from 'vscode';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionEvent } from '@agent/runtime/SessionEventHub';
 import type {
+  BashSettlement,
   HostApprovalBypassStateUpdate,
-  HostBashApprovalResult,
-  HostUserQuestionResult,
   PlanApprovalResult,
   ProposalResult,
   RetryResult,
+  UserQuestionSettlement,
 } from '@agent/runtime/HostInteractions';
 import { ApprovalRequestHandler } from '@controllers/progressView/backend/ApprovalRequestHandler';
 import type { ApprovalRequestHandlerSet } from '@controllers/progressView/backend/progressBackendUiConfig';
@@ -97,7 +97,7 @@ function handler<
 
 function createHandlers(): RecordingApprovalHandlerSet {
   const toolEdit = handler<ToolEditPermission, 'requestId'>('requestId');
-  const bash = handler<BashPermission, 'requestId', HostBashApprovalResult>(
+  const bash = handler<BashPermission, 'requestId', BashSettlement>(
     'requestId',
   );
   const retry = handler<RetryPermission, 'streamId', RetryResult>('streamId');
@@ -117,7 +117,7 @@ function createHandlers(): RecordingApprovalHandlerSet {
   const userQuestion = handler<
     UserQuestionPermission,
     'requestId',
-    HostUserQuestionResult
+    UserQuestionSettlement
   >('requestId');
 
   return {
@@ -333,10 +333,7 @@ describe('createExtensionHostInteractions', () => {
       ),
     ).resolves.toBeUndefined();
     await expect(parallelProposal).resolves.toEqual({ action: 'approve' });
-    await expect(parallelBash).resolves.toEqual({
-      accepted: true,
-      userMessage: undefined,
-    });
+    await expect(parallelBash).resolves.toEqual({ action: 'approve' });
     expect(handlers.transport.agentProposal.dismiss).toHaveBeenCalledWith(
       'proposal-parallel',
     );
@@ -367,10 +364,7 @@ describe('createExtensionHostInteractions', () => {
       }),
     ).toBe(true);
     await expect(initiatingProposal).resolves.toEqual({ action: 'approve' });
-    await expect(otherStream).resolves.toEqual({
-      accepted: false,
-      userMessage: undefined,
-    });
+    await expect(otherStream).resolves.toEqual({ action: 'reject' });
   });
 
   it('shows and resolves plan approvals through existing handlers', async () => {
@@ -599,8 +593,8 @@ describe('createExtensionHostInteractions', () => {
     });
 
     await expect(resultPromise).resolves.toEqual({
-      accepted: false,
-      userMessage: 'Stream resources released.',
+      action: 'reject',
+      feedback: 'Stream resources released.',
     });
     expect(handlers.transport.bash.dismiss).toHaveBeenCalled();
   });
@@ -629,7 +623,7 @@ describe('createExtensionHostInteractions', () => {
     expect(
       interactions.submitBashDecision(requestId, { action: 'approve' }),
     ).toBe(true);
-    await expect(resultPromise).resolves.toEqual({ accepted: true });
+    await expect(resultPromise).resolves.toEqual({ action: 'approve' });
   });
 
   it('a retry-kind cancel clears only the retry, leaving the plan approval pending', async () => {
@@ -732,7 +726,7 @@ describe('createExtensionHostInteractions', () => {
     // Cancellation forwards `cause` as agent-visible feedback, matching how
     // a live UI rejection settles (see the desktop host, which does the same).
     await expect(resultPromise).resolves.toEqual({
-      submitted: false,
+      action: 'reject',
       feedback: 'No stream owns this question.',
     });
     expect(handlers.transport.userQuestion.dismiss).toHaveBeenCalledWith(
@@ -775,7 +769,7 @@ describe('createExtensionHostInteractions', () => {
     ).toBe(true);
 
     await expect(resultPromise).resolves.toEqual({
-      submitted: true,
+      action: 'submit',
       answers,
     });
     expect(handlers.transport.userQuestion.dismiss).toHaveBeenCalledWith(

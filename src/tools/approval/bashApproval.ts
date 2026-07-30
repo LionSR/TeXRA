@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import type { BashSettlement } from '@agent/runtime/HostInteractions';
 import {
   currentSession,
   defaultSession,
@@ -23,12 +24,6 @@ const BashApprovalRequestSchema = z.object({
   streamId: StreamTabIdSchema.nullish(),
 });
 type BashApprovalRequest = z.infer<typeof BashApprovalRequestSchema>;
-
-const BashApprovalResultSchema = z.object({
-  accepted: z.boolean(),
-  userMessage: z.string().optional(),
-});
-type BashApprovalResult = z.infer<typeof BashApprovalResultSchema>;
 
 const DEFAULT_BASH_REJECTION_INSTRUCTION =
   'Do not retry this rejected command or another approval-gated shell command for the same check. ' +
@@ -55,7 +50,7 @@ export function isBashApprovalBypassedForStream(
 
 export async function requestBashApproval(
   request: BashApprovalRequest,
-): Promise<BashApprovalResult> {
+): Promise<BashSettlement> {
   const approvalsEnabled = getConfig<boolean>(BASH_APPROVAL_CONFIG_KEY, true);
 
   const context = tryUseRunContext();
@@ -66,7 +61,7 @@ export async function requestBashApproval(
     !approvalsEnabled ||
     (streamId && session.approvals.bash.bypass.isBypassed(streamId))
   ) {
-    return { accepted: true };
+    return { action: 'approve' };
   }
 
   requireInteractions('bash approval', context);
@@ -80,9 +75,9 @@ async function showApprovalPrompt(
   request: BashApprovalRequest,
   streamId: StreamTabId | undefined,
   session: SessionHandle,
-): Promise<BashApprovalResult> {
+): Promise<BashSettlement> {
   if (streamId && session.approvals.bash.bypass.isBypassed(streamId)) {
-    return { accepted: true };
+    return { action: 'approve' };
   }
 
   return session.interactions.requestBashApproval({
