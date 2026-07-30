@@ -20,6 +20,10 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Long-running sessions use less memory after recovering interrupted runs** —
+  transcript history loaded only to repair stale run state is released again
+  after the repair is saved, instead of remaining in memory for the rest of
+  the session.
 - **Install in Terminal now offers a command your machine can run** — the Codex
   and Claude Code cards offer the Homebrew command where Homebrew is present
   and Claude Code's Windows installer on Windows, instead of a global npm
