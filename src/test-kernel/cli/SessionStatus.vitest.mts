@@ -288,7 +288,7 @@ describe('CLI session status formatter', () => {
   it('uses the footer label for an idle waiting stream', () => {
     expect(formatCliStatusLabel(STREAM_PHASE.WAITING)).toBe('idle');
     expect(formatCliStatusLabel(undefined, undefined, true)).toBe('');
-    expect(formatCliStatusLabel('stopped', undefined, true)).toBe('Cancelled');
+    expect(formatCliStatusLabel('stopped', undefined, true)).toBe('stopped');
     expect(
       formatCliSessionStatus({
         agent: 'research',
@@ -299,6 +299,24 @@ describe('CLI session status formatter', () => {
         queuedFollowUpMessages: [],
       }),
     ).toContain('status: idle');
+  });
+
+  it('uses the distinct child-stream label for a subagent stalled on follow-up', () => {
+    expect(formatCliStatusLabel(STREAM_PHASE.WAITING, undefined, true)).toBe(
+      'waiting for you',
+    );
+  });
+
+  it('keeps a single lowercase register across child-stream status labels', () => {
+    expect(formatCliStatusLabel(STREAM_PHASE.RUNNING, undefined, true)).toBe(
+      'running',
+    );
+    expect(formatCliStatusLabel(STREAM_PHASE.CANCELLED, undefined, true)).toBe(
+      'stopped',
+    );
+    expect(formatCliStatusLabel(STREAM_PHASE.FAILED, undefined, true)).toBe(
+      'error',
+    );
   });
 
   it('reads queued follow-ups from the queue manager for status details', () => {
