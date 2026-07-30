@@ -13,6 +13,11 @@ import {
 } from '@latex/latexToolchain';
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import {
+  TELEMETRY_ENABLED_KEY,
+  usageLoggingOptOut,
+  type UsageLoggingOptOut,
+} from '@telemetry/UsageLogService';
+import {
   TEXRA_CLI_SUPPORTED_NODE_RANGE,
   TEXRA_CLI_SUPPORTED_NODE_RANGE_DISPLAY,
 } from '@tools/externalToolDefs';
@@ -65,6 +70,7 @@ interface DoctorDependencies {
   readonly latexToolchain?: () => Promise<LatexToolchainProbe>;
   readonly pathStat?: (filePath: string) => Promise<DirectoryStat>;
   readonly pathAccess?: (filePath: string, mode?: number) => Promise<void>;
+  readonly usageLoggingOptOut?: () => UsageLoggingOptOut;
 }
 
 type ResolvedDoctorDependencies = Required<DoctorDependencies>;
@@ -324,6 +330,52 @@ async function checkConfig(context: CliContext): Promise<DoctorCheck> {
   }
 }
 
+/**
+ * What TeXRA reports about the user's own usage, and how to stop it.
+ *
+ * `doctor` is where a user goes to see what the CLI is doing, and usage logging
+ * is the one thing it does that leaves the machine without being asked for. The
+ * wording states the two facts that decide whether someone cares: what is in a
+ * record, and what stays on after opting out.
+ */
+function checkTelemetry(deps: ResolvedDoctorDependencies): DoctorCheck {
+  let optOut: UsageLoggingOptOut;
+  try {
+    optOut = deps.usageLoggingOptOut();
+  } catch (error) {
+    return failFromError(
+      'telemetry',
+      'Usage logging',
+      'Could not read the usage-logging setting.',
+      error,
+    );
+  }
+
+  if (optOut?.source === 'environment') {
+    return skip(
+      'telemetry',
+      'Usage logging',
+      `Off (${optOut.envVar} is set).`,
+      'Rounds that used included hosted access or a subscription are still recorded, because they meter your plan.',
+    );
+  }
+  if (optOut?.source === 'setting') {
+    return skip(
+      'telemetry',
+      'Usage logging',
+      `Off (${TELEMETRY_ENABLED_KEY}).`,
+      'Rounds that used included hosted access or a subscription are still recorded, because they meter your plan.',
+    );
+  }
+  return check(
+    'telemetry',
+    'Usage logging',
+    'pass',
+    'On: model, token counts, and cost per round, sent while signed in. No prompt or document text.',
+    `Turn it off with TEXRA_NO_TELEMETRY=1, or "${TELEMETRY_ENABLED_KEY}": false in .texra/config.json.`,
+  );
+}
+
 export async function buildDoctorReport(
   context: CliContext,
   deps: DoctorDependencies = {},
@@ -335,6 +387,7 @@ export async function buildDoctorReport(
     latexToolchain: deps.latexToolchain ?? probeLatexToolchain,
     pathStat: deps.pathStat ?? stat,
     pathAccess: deps.pathAccess ?? access,
+    usageLoggingOptOut: deps.usageLoggingOptOut ?? usageLoggingOptOut,
   };
   const checks: DoctorCheck[] = [
     checkNode(resolved.nodeVersion),
@@ -349,6 +402,7 @@ export async function buildDoctorReport(
     await checkModels(resolved),
     ...(await checkLatex(resolved)),
     await checkConfig(context),
+    checkTelemetry(resolved),
   ];
   return {
     ok: !checks.some((check) => check.status === 'fail'),

@@ -359,6 +359,31 @@ The value must be a JSON boolean. A quoted `"false"` is not a boolean, so TeXRA
 logs a warning and treats the setting as off rather than silently reading it as
 `true`.
 
+You can also opt out from the environment, which needs no config file and works
+in every host:
+
+```bash
+export TEXRA_NO_TELEMETRY=1   # or the cross-tool convention:
+export DO_NOT_TRACK=1
+```
+
+Either variable overrides the setting, so a machine or CI job that exports one
+stays opted out even where `texra.telemetry.enabled` is `true`. The override
+only goes one way — neither variable can turn logging back on — and the
+plan-accounting carve-out above still applies.
+
+Any value counts as "on" except `0`, `false`, `no`, and `off`, which read the
+same as leaving the variable unset. TeXRA reads every `TEXRA_*` on/off variable
+this way.
+
+`texra doctor` reports whether usage logging is currently on, and which of the
+two switches turned it off:
+
+```
+SKIP Usage logging: Off (TEXRA_NO_TELEMETRY is set).
+     Rounds that used included hosted access or a subscription are still recorded, because they meter your plan.
+```
+
 ## Logger Configuration
 
 Control logging behavior:

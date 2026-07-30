@@ -22,5 +22,8 @@ export function isNewerSemverVersion(latest: string, current: string): boolean {
 /** Poll for updates at most once per day. */
 export const DAILY_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
-/** Env var that disables both the CLI's and desktop's update checks. */
+/**
+ * Env var that disables both the CLI's and desktop's update checks. Read with
+ * `isEnvFlagEnabled` (see `envFlags.ts`), so `=0` / `=false` leave the check on.
+ */
 export const UPDATE_CHECK_SKIP_ENV = 'TEXRA_NO_UPDATE_CHECK';

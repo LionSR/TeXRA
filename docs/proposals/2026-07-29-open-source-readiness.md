@@ -215,8 +215,20 @@ in `config/ratchets/architecture-edges-baseline.json`. Host config is reached
 through the `platform()` port; `src/tools/goal/goalFeatureFlag.ts` uses the same
 edge for its feature flag.
 
-User documentation is in `docs/guide/configuration.md` under "Usage Logging",
-including that disabling it also stops hosted spend accounting.
+Rounds that ran through the relay or a subscription are exempt from the opt-out:
+the relay enforces the monthly spend cap from the aggregate those records
+populate, so suppressing them would let hosted calls run against a stale total.
+What the opt-out governs is `api-key` rounds, which cost TeXRA nothing.
+
+`TEXRA_NO_TELEMETRY=1` and the cross-tool `DO_NOT_TRACK=1` do the same thing
+from the environment, overriding the setting in one direction only — neither can
+turn logging back on. Both go through `isEnvFlagEnabled`
+(`src/utils/system/envFlags.ts`), which is now also how `TEXRA_NO_UPDATE_CHECK`
+and `TEXRA_DISABLE_KEYCHAIN` are read, so `=0` means off everywhere instead of
+only in the hosts that happened to test for it.
+
+User documentation is in `docs/guide/configuration.md` under "Usage Logging"
+and in `docs/guide/texra-cli.md` under the environment-only switches.
 
 ### 4.3 `npm test` was not green on a clean checkout
 

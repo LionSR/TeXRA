@@ -5,6 +5,7 @@ import {
   isNewerSemverVersion,
   UPDATE_CHECK_SKIP_ENV,
 } from '@utils/system/semverUpdateCheck';
+import { isEnvFlagEnabled } from '@utils/system/envFlags';
 
 /**
  * Lightweight desktop update check (issue #7682, decision: arm b).
@@ -115,7 +116,7 @@ async function runDesktopUpdateCheck({
   env = process.env,
 }: CheckForDesktopUpdateOptions): Promise<void> {
   if (!isPackaged) return;
-  if (env[UPDATE_CHECK_SKIP_ENV]) return;
+  if (isEnvFlagEnabled(UPDATE_CHECK_SKIP_ENV, env)) return;
 
   const lastCheckedAt = globalState.get<number>(
     GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_CHECKED_AT,
