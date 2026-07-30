@@ -1,6 +1,9 @@
 // Local imports
-import { invalidateRemoteAgentsAfterSignOut } from '@agent/index';
 import { DEFAULT_OAUTH_PROVIDER, type OAuthProvider } from '@auth/config';
+import {
+  refreshRemoteAgentCatalogAfterSignOut,
+  requireOAuthRedirectUrl,
+} from '@auth/authFlowEffects';
 import { createHostAuthCoordinator } from '@auth/SupabaseAuthCoordinator';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import {
@@ -128,18 +131,14 @@ export async function signInCliSupabase(
           ...(queryParams && { queryParams }),
         },
       });
-    if (error || !data.url) {
-      throw new Error(
-        `OAuth initialization failed: ${error?.message || 'missing auth URL'}`,
-      );
-    }
+    const authUrl = requireOAuthRedirectUrl(data, error);
 
     options.signal?.throwIfAborted();
     const sessionPromise = callbackServer.waitForSession(options.signal);
-    options.onAuthUrl?.(data.url);
+    options.onAuthUrl?.(authUrl);
     if (options.openBrowser ?? true) {
       const browserLaunch = openBrowser(
-        data.url,
+        authUrl,
         options.log,
         options.manualBrowserHint ?? 'texra login --no-browser',
       );
@@ -218,12 +217,9 @@ export async function signOutCliSupabase(): Promise<void> {
     await serverSideKeyService.setUseIncludedModelAccess(false);
   }
   serverSideKeyService.clearAllCaches({ resetQuotaFlip: true });
-  await invalidateRemoteAgentsAfterSignOut().catch((error: unknown) => {
-    activeAuthLog?.warn(
-      'cli-auth',
-      `Local agent catalog refresh failed after sign-out: ${String(error)}`,
-    );
-  });
+  await refreshRemoteAgentCatalogAfterSignOut((message) =>
+    activeAuthLog?.warn('cli-auth', message),
+  );
 }
 
 /**

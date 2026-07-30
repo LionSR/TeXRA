@@ -3,12 +3,15 @@ import { randomBytes } from 'node:crypto';
 import PQueue from 'p-queue';
 import { z } from 'zod';
 
-import { invalidateRemoteAgentsAfterSignOut } from '@agent/index';
 import {
   DEFAULT_OAUTH_PROVIDER,
   getAuthCallbackUri,
   type OAuthProvider,
 } from '@auth/config';
+import {
+  refreshRemoteAgentCatalogAfterSignOut,
+  requireOAuthRedirectUrl,
+} from '@auth/authFlowEffects';
 import { createHostAuthCoordinator } from '@auth/SupabaseAuthCoordinator';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import {
@@ -339,14 +342,10 @@ export function createDesktopSupabaseAuth(
         provider,
         options: { redirectTo },
       });
-      if (error || !data.url) {
-        throw new Error(
-          `OAuth initialization failed: ${error?.message || 'missing auth URL'}`,
-        );
-      }
+      const authUrl = requireOAuthRedirectUrl(data, error);
       if (!ownsAttempt(generation, nonce)) return;
 
-      await host.openExternalUrl(data.url);
+      await host.openExternalUrl(authUrl);
       await host.showInfoMessage(
         'Complete sign-in in your browser. TeXRA updates automatically when it finishes.',
       );
@@ -393,11 +392,9 @@ export function createDesktopSupabaseAuth(
       });
       SupabaseClient.setTokenExpiry(null);
       clearDesktopServerSideKeyCaches(log);
-      await invalidateRemoteAgentsAfterSignOut().catch((error: unknown) => {
-        log.warn(
-          `Local agent catalog refresh failed after sign-out: ${toErrorMessage(error)}`,
-        );
-      });
+      await refreshRemoteAgentCatalogAfterSignOut((message) =>
+        log.warn(message),
+      );
       await host.onSessionChanged();
     },
 
