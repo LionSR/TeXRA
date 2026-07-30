@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   invokeModelOrTool: vi.fn(),
   runFlowWithLifecycle: vi.fn(),
   runToolUseFlow: vi.fn(),
+  getToolUseFlowErrorResult: vi.fn(() => undefined as unknown),
   acquireResumedExecutionLease: vi.fn(),
   renewOwnedExecutionLease: vi.fn(),
   runWithExecutionLeaseWriteFence: vi.fn(
@@ -57,7 +58,7 @@ vi.mock('@agent/implementations/flows/reflection/runReflectionFlow', () => ({
 }));
 
 vi.mock('@agent/implementations/flows/tooluse/runToolUseFlow', () => ({
-  getToolUseFlowErrorResult: () => undefined,
+  getToolUseFlowErrorResult: mocks.getToolUseFlowErrorResult,
   runToolUseFlow: mocks.runToolUseFlow,
 }));
 
@@ -66,6 +67,7 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
+import { AgentFlowError } from '@agent/runtime/AgentFlowResult';
 import { resumeToolUseFromResumeData } from '@agent/runtime/executeAgent';
 import { ResumeAdmissionCancelledError } from '@agent/runtime/resumeAdmission';
 import {
@@ -85,6 +87,47 @@ interface InterruptibleFlowInput {
 interface TestFlowContext {
   readonly session: { appendFollowUp(item: unknown): void };
   interrupt(): void;
+}
+
+interface ModelSwitchingFlowInput {
+  onModelChanged?: (
+    modelHandler: {
+      capabilities: Record<string, unknown>;
+      config: Record<string, unknown>;
+    },
+    model: string,
+  ) => void;
+}
+
+/** Minimal launch context for a resumed tool-use run that reaches the flow. */
+function buildResumeContext(
+  executionId: ExecutionId,
+  streamId: StreamTabId,
+  usageMonitor: { setModelInfo: ReturnType<typeof vi.fn> },
+): AgentLaunchContext {
+  return {
+    setting: { agentCategory: AgentCategory.ToolUse },
+    runScope: {
+      executionId,
+      streamId,
+      session: {
+        status: {},
+        transcripts: { ensureLoaded: vi.fn(async () => {}) },
+        flushArtifacts: vi.fn(async () => {}),
+      },
+    },
+    config: { agent: 'test-agent', model: 'test-model' },
+    attachedMemoryMisses: [],
+    usageMonitor: { recordUsage: vi.fn(), ...usageMonitor },
+  } as unknown as AgentLaunchContext;
+}
+
+/** Handle stub for tests that only need the flow to run to completion. */
+function noopFlowHandle(): unknown {
+  return {
+    attachToolUseFlow: vi.fn(),
+    detachToolUseFlow: vi.fn(),
+  };
 }
 
 describe('resumeToolUseFromResumeData cancellation handoff', () => {
@@ -259,5 +302,79 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
       'take',
       'detach',
     ]);
+  });
+
+  it('reports a mid-run model switch to the usage monitor', async () => {
+    const executionId = 'e9421-model' as ExecutionId;
+    const streamId = 'stream-9421-model' as StreamTabId;
+    const setModelInfo = vi.fn();
+    mocks.buildAgentLaunchContext.mockResolvedValueOnce(
+      buildResumeContext(executionId, streamId, { setModelInfo }),
+    );
+    mocks.hasPersistedParent.mockResolvedValueOnce(false);
+    mocks.runFlowWithLifecycle.mockImplementationOnce(
+      async (
+        _context: unknown,
+        run: (liveHandle: unknown) => Promise<unknown>,
+      ) => run(noopFlowHandle()),
+    );
+    mocks.runToolUseFlow.mockImplementationOnce(
+      async (input: ModelSwitchingFlowInput) => {
+        input.onModelChanged?.(
+          {
+            capabilities: { supportsVision: true },
+            config: { provider: 'anthropic' },
+          },
+          'next-model',
+        );
+        return { outcome: RUN_OUTCOME.COMPLETED };
+      },
+    );
+
+    await resumeToolUseFromResumeData(
+      createToolUseResumeData({ executionId, streamId }),
+    );
+
+    expect(setModelInfo).toHaveBeenCalledWith({
+      capabilities: { supportsVision: true },
+      config: { provider: 'anthropic' },
+    });
+  });
+
+  it('wraps a failed resumed flow so the partial result reaches the lifecycle', async () => {
+    const executionId = 'e9421-error' as ExecutionId;
+    const streamId = 'stream-9421-error' as StreamTabId;
+    const cause = new Error('provider failed mid-resume');
+    mocks.buildAgentLaunchContext.mockResolvedValueOnce(
+      buildResumeContext(executionId, streamId, { setModelInfo: vi.fn() }),
+    );
+    mocks.hasPersistedParent.mockResolvedValueOnce(true);
+    mocks.runFlowWithLifecycle.mockImplementationOnce(
+      async (
+        _context: unknown,
+        run: (liveHandle: unknown) => Promise<unknown>,
+      ) => run(noopFlowHandle()),
+    );
+    mocks.runToolUseFlow.mockRejectedValueOnce(cause);
+    mocks.getToolUseFlowErrorResult.mockReturnValueOnce({
+      outcome: RUN_OUTCOME.FAILED,
+      lastResponse: 'partial answer',
+      totalCostUsd: 0.25,
+    });
+
+    const error = await resumeToolUseFromResumeData(
+      createToolUseResumeData({ executionId, streamId }),
+    ).catch((err: unknown) => err);
+
+    expect(error).toBeInstanceOf(AgentFlowError);
+    expect((error as AgentFlowError).cause).toBe(cause);
+    expect((error as AgentFlowError).result).toMatchObject({
+      category: 'toolUse',
+      outcome: RUN_OUTCOME.FAILED,
+      lastResponse: 'partial answer',
+      totalCostUsd: 0.25,
+      executionId,
+      streamId,
+    });
   });
 });
