@@ -28,6 +28,16 @@ const XAI_TEST_CONFIG = Object.freeze({
   capabilities: NO_VISION_CAPABILITIES,
 });
 
+const SINGLE_TURN = [{ role: 'user', content: 'think' }];
+const COMPACTION_TURN = [
+  { role: 'user', content: 'first' },
+  { role: 'assistant', content: 'second' },
+  { role: 'user', content: 'third' },
+];
+
+type CompatibleHandler = ModelHandlerGLM | ModelHandlerKimi | ModelHandlerXAI;
+type ConfigOverrides = Parameters<typeof buildTestModelConfig>[1];
+
 function createClientStub() {
   const createCalls: any[] = [];
   const createOptions: any[] = [];
@@ -68,6 +78,41 @@ function createClientStub() {
   };
 }
 
+function configureHandler<Handler extends CompatibleHandler>(
+  handler: Handler,
+): Handler {
+  handler.setLogger({ ...noopTrace });
+  (handler as any).getStreamingConfig = () => false;
+  return handler;
+}
+
+/** Kimi additionally bypasses the pre-flight token count, which hits the API. */
+function configureKimiHandler<Handler extends ModelHandlerKimi>(
+  handler: Handler,
+): Handler {
+  (handler as any).estimateTokenCount = async () => 100;
+  return configureHandler(handler);
+}
+
+function createKimiHandler(overrides: ConfigOverrides): ModelHandlerKimi {
+  return configureKimiHandler(
+    new ModelHandlerKimi(buildTestModelConfig(MOONSHOT_TEST_CONFIG, overrides)),
+  );
+}
+
+async function sendRequest(
+  handler: CompatibleHandler,
+  messages: any[] = SINGLE_TURN,
+) {
+  const stub = createClientStub();
+  await handler.createResponse({
+    client: stub.client as any,
+    messages,
+    temperature: 0,
+  });
+  return stub;
+}
+
 class KimiUsageRouteProbe extends ModelHandlerKimi {
   tagApiKeyClient<Candidate extends object>(client: Candidate): Candidate {
     return this.rememberClientCredentialRoute(
@@ -80,17 +125,16 @@ class KimiUsageRouteProbe extends ModelHandlerKimi {
 
 describe('OpenAI-compatible provider request params', () => {
   it('records coding-endpoint Kimi requests as subscription usage', async () => {
-    const handler = new KimiUsageRouteProbe(
-      buildTestModelConfig(MOONSHOT_TEST_CONFIG, {
-        name: 'kimi27codeT',
-        fullName: 'kimi-for-coding',
-        kimiSubscription: true,
-        baseUrl: KIMI_CODE_BASE_URL,
-      }),
+    const handler = configureKimiHandler(
+      new KimiUsageRouteProbe(
+        buildTestModelConfig(MOONSHOT_TEST_CONFIG, {
+          name: 'kimi27codeT',
+          fullName: 'kimi-for-coding',
+          kimiSubscription: true,
+          baseUrl: KIMI_CODE_BASE_URL,
+        }),
+      ),
     );
-    handler.setLogger({ ...noopTrace });
-    (handler as any).getStreamingConfig = () => false;
-    (handler as any).estimateTokenCount = async () => 100;
 
     const { client } = createClientStub();
     await handler.createResponse({
@@ -108,26 +152,16 @@ describe('OpenAI-compatible provider request params', () => {
   it.each(['kimi-k2.7-code', 'kimi-for-coding', 'kimi-for-coding-highspeed'])(
     'keeps Kimi K2.7 Code alias %s on required defaults',
     async (fullName) => {
-      const handler = new ModelHandlerKimi(
-        buildTestModelConfig(MOONSHOT_TEST_CONFIG, {
-          name: 'kimi27codeT',
-          fullName,
-          capabilities: {
-            supportsReasoning: true,
-            supportsVision: true,
-          },
-        }),
-      );
-      handler.setLogger({ ...noopTrace });
-      (handler as any).getStreamingConfig = () => false;
-      (handler as any).estimateTokenCount = async () => 100;
-
-      const { client, createCalls } = createClientStub();
-      await handler.createResponse({
-        client: client as any,
-        messages: [{ role: 'user', content: 'think' }],
-        temperature: 0,
+      const handler = createKimiHandler({
+        name: 'kimi27codeT',
+        fullName,
+        capabilities: {
+          supportsReasoning: true,
+          supportsVision: true,
+        },
       });
+
+      const { createCalls } = await sendRequest(handler);
 
       assert.equal(createCalls[0].temperature, 1);
       assert.equal(createCalls[0].thinking, undefined);
@@ -137,33 +171,21 @@ describe('OpenAI-compatible provider request params', () => {
   it.each(['kimi-k2.7-code', 'kimi-for-coding', 'kimi-for-coding-highspeed'])(
     'does not disable Kimi K2.7 alias %s during compaction',
     async (fullName) => {
-      const handler = new ModelHandlerKimi(
-        buildTestModelConfig(MOONSHOT_TEST_CONFIG, {
-          name: 'kimi27codeT',
-          fullName,
-          capabilities: {
-            supportsReasoning: true,
-            supportsVision: true,
-          },
-        }),
-      );
-      handler.setLogger({ ...noopTrace });
+      const handler = createKimiHandler({
+        name: 'kimi27codeT',
+        fullName,
+        capabilities: {
+          supportsReasoning: true,
+          supportsVision: true,
+        },
+      });
       handler.setAgentCategory(AgentCategory.ToolUse);
       handler.requestCompaction();
-      (handler as any).getStreamingConfig = () => false;
-      (handler as any).estimateTokenCount = async () => 100;
 
-      const { client, createCalls, createOptions, withOptions } =
-        createClientStub();
-      await handler.createResponse({
-        client: client as any,
-        messages: [
-          { role: 'user', content: 'first' },
-          { role: 'assistant', content: 'second' },
-          { role: 'user', content: 'third' },
-        ],
-        temperature: 0,
-      });
+      const { createCalls, createOptions, withOptions } = await sendRequest(
+        handler,
+        COMPACTION_TURN,
+      );
 
       assert.equal(createCalls.length, 2);
       // Compaction retries ride per-request options, not a client clone.
@@ -175,81 +197,49 @@ describe('OpenAI-compatible provider request params', () => {
   );
 
   it('uses the fixed Kimi K2.5 temperature during client-side compaction', async () => {
-    const handler = new ModelHandlerKimi(
-      buildTestModelConfig(MOONSHOT_TEST_CONFIG, {
-        name: 'kimi25T',
-        fullName: 'kimi-k2.5',
-        capabilities: {
-          supportsReasoning: true,
-        },
-      }),
-    );
-    handler.setLogger({ ...noopTrace });
+    const handler = createKimiHandler({
+      name: 'kimi25T',
+      fullName: 'kimi-k2.5',
+      capabilities: {
+        supportsReasoning: true,
+      },
+    });
     handler.setAgentCategory(AgentCategory.ToolUse);
     handler.requestCompaction();
-    (handler as any).getStreamingConfig = () => false;
-    (handler as any).estimateTokenCount = async () => 100;
 
-    const { client, createCalls } = createClientStub();
-    await handler.createResponse({
-      client: client as any,
-      messages: [
-        { role: 'user', content: 'first' },
-        { role: 'assistant', content: 'second' },
-        { role: 'user', content: 'third' },
-      ],
-      temperature: 0,
-    });
+    const { createCalls } = await sendRequest(handler, COMPACTION_TURN);
 
     assert.equal(createCalls.length, 2);
     assert.equal(createCalls[0].temperature, 1);
   });
 
   it('pins Kimi K2.5 non-reasoning chat requests to temperature 0.6 and disables thinking (#7081)', async () => {
-    const handler = new ModelHandlerKimi(
-      buildTestModelConfig(MOONSHOT_TEST_CONFIG, {
-        name: 'kimi25',
-        fullName: 'kimi-k2.5',
-        capabilities: {
-          supportsReasoning: false,
-        },
-      }),
-    );
-    handler.setLogger({ ...noopTrace });
-    (handler as any).getStreamingConfig = () => false;
-    (handler as any).estimateTokenCount = async () => 100;
-
-    const { client, createCalls } = createClientStub();
-    await handler.createResponse({
-      client: client as any,
-      messages: [{ role: 'user', content: 'hi' }],
-      temperature: 0,
+    const handler = createKimiHandler({
+      name: 'kimi25',
+      fullName: 'kimi-k2.5',
+      capabilities: {
+        supportsReasoning: false,
+      },
     });
+
+    const { createCalls } = await sendRequest(handler, [
+      { role: 'user', content: 'hi' },
+    ]);
 
     assert.equal(createCalls[0].temperature, 0.6);
     assert.deepEqual(createCalls[0].thinking, { type: 'disabled' });
   });
 
   it('pins Kimi K2.5 thinking chat requests to temperature 1 and leaves the API default (#7081)', async () => {
-    const handler = new ModelHandlerKimi(
-      buildTestModelConfig(MOONSHOT_TEST_CONFIG, {
-        name: 'kimi25T',
-        fullName: 'kimi-k2.5',
-        capabilities: {
-          supportsReasoning: true,
-        },
-      }),
-    );
-    handler.setLogger({ ...noopTrace });
-    (handler as any).getStreamingConfig = () => false;
-    (handler as any).estimateTokenCount = async () => 100;
-
-    const { client, createCalls } = createClientStub();
-    await handler.createResponse({
-      client: client as any,
-      messages: [{ role: 'user', content: 'think' }],
-      temperature: 0,
+    const handler = createKimiHandler({
+      name: 'kimi25T',
+      fullName: 'kimi-k2.5',
+      capabilities: {
+        supportsReasoning: true,
+      },
     });
+
+    const { createCalls } = await sendRequest(handler);
 
     assert.equal(createCalls[0].temperature, 1);
     assert.equal(createCalls[0].thinking, undefined);
@@ -261,28 +251,18 @@ describe('OpenAI-compatible provider request params', () => {
       // Moonshot fixes K3 sampling server-side (docs say omit temperature), and
       // its reasoning_effort field accepts only 'max' — the shared OpenAI clamp
       // would otherwise lower our MAX tier to 'xhigh', which Moonshot rejects.
-      const handler = new ModelHandlerKimi(
-        buildTestModelConfig(MOONSHOT_TEST_CONFIG, {
-          name: 'kimi3',
-          fullName,
-          capabilities: {
-            supportsReasoning: true,
-            supportsReasoningEffort: true,
-            reasoningEffort: ReasoningEffort.MAX,
-            supportsVision: true,
-          },
-        }),
-      );
-      handler.setLogger({ ...noopTrace });
-      (handler as any).getStreamingConfig = () => false;
-      (handler as any).estimateTokenCount = async () => 100;
-
-      const { client, createCalls } = createClientStub();
-      await handler.createResponse({
-        client: client as any,
-        messages: [{ role: 'user', content: 'think' }],
-        temperature: 0,
+      const handler = createKimiHandler({
+        name: 'kimi3',
+        fullName,
+        capabilities: {
+          supportsReasoning: true,
+          supportsReasoningEffort: true,
+          reasoningEffort: ReasoningEffort.MAX,
+          supportsVision: true,
+        },
       });
+
+      const { createCalls } = await sendRequest(handler);
 
       assert.equal('temperature' in createCalls[0], false);
       assert.equal(createCalls[0].reasoning_effort, 'max');
@@ -293,34 +273,20 @@ describe('OpenAI-compatible provider request params', () => {
   it.each(['kimi-k3', 'k3'])(
     'preserves thinking in Kimi K3 alias %s compaction summaries',
     async (fullName) => {
-      const handler = new ModelHandlerKimi(
-        buildTestModelConfig(MOONSHOT_TEST_CONFIG, {
-          name: 'kimi3',
-          fullName,
-          capabilities: {
-            supportsReasoning: true,
-            supportsReasoningEffort: true,
-            reasoningEffort: ReasoningEffort.MAX,
-            supportsVision: true,
-          },
-        }),
-      );
-      handler.setLogger({ ...noopTrace });
+      const handler = createKimiHandler({
+        name: 'kimi3',
+        fullName,
+        capabilities: {
+          supportsReasoning: true,
+          supportsReasoningEffort: true,
+          reasoningEffort: ReasoningEffort.MAX,
+          supportsVision: true,
+        },
+      });
       handler.setAgentCategory(AgentCategory.ToolUse);
       handler.requestCompaction();
-      (handler as any).getStreamingConfig = () => false;
-      (handler as any).estimateTokenCount = async () => 100;
 
-      const { client, createCalls } = createClientStub();
-      await handler.createResponse({
-        client: client as any,
-        messages: [
-          { role: 'user', content: 'first' },
-          { role: 'assistant', content: 'second' },
-          { role: 'user', content: 'third' },
-        ],
-        temperature: 0,
-      });
+      const { createCalls } = await sendRequest(handler, COMPACTION_TURN);
 
       assert.equal(createCalls.length, 2);
       assert.equal('temperature' in createCalls[0], false);
@@ -333,25 +299,17 @@ describe('OpenAI-compatible provider request params', () => {
     // registry — the same shared-fullName ambiguity as K2.5 — but before
     // this fix only 'kimi-k2.5' was hardcoded here, so this non-reasoning
     // entry silently kept thinking on at the Moonshot API default.
-    const handler = new ModelHandlerKimi(
-      buildTestModelConfig(MOONSHOT_TEST_CONFIG, {
-        name: 'kimi26',
-        fullName: 'kimi-k2.6',
-        capabilities: {
-          supportsReasoning: false,
-        },
-      }),
-    );
-    handler.setLogger({ ...noopTrace });
-    (handler as any).getStreamingConfig = () => false;
-    (handler as any).estimateTokenCount = async () => 100;
-
-    const { client, createCalls } = createClientStub();
-    await handler.createResponse({
-      client: client as any,
-      messages: [{ role: 'user', content: 'hi' }],
-      temperature: 0,
+    const handler = createKimiHandler({
+      name: 'kimi26',
+      fullName: 'kimi-k2.6',
+      capabilities: {
+        supportsReasoning: false,
+      },
     });
+
+    const { createCalls } = await sendRequest(handler, [
+      { role: 'user', content: 'hi' },
+    ]);
 
     assert.deepEqual(createCalls[0].thinking, { type: 'disabled' });
     // K2.6 has no fixed-temperature requirement, so the caller's temperature
@@ -360,126 +318,100 @@ describe('OpenAI-compatible provider request params', () => {
   });
 
   it('leaves Kimi K2.6 thinking requests on the API default (#7081)', async () => {
-    const handler = new ModelHandlerKimi(
-      buildTestModelConfig(MOONSHOT_TEST_CONFIG, {
-        name: 'kimi26T',
-        fullName: 'kimi-k2.6',
-        capabilities: {
-          supportsReasoning: true,
-        },
-      }),
-    );
-    handler.setLogger({ ...noopTrace });
-    (handler as any).getStreamingConfig = () => false;
-    (handler as any).estimateTokenCount = async () => 100;
-
-    const { client, createCalls } = createClientStub();
-    await handler.createResponse({
-      client: client as any,
-      messages: [{ role: 'user', content: 'think' }],
-      temperature: 0,
+    const handler = createKimiHandler({
+      name: 'kimi26T',
+      fullName: 'kimi-k2.6',
+      capabilities: {
+        supportsReasoning: true,
+      },
     });
+
+    const { createCalls } = await sendRequest(handler);
 
     assert.equal(createCalls[0].thinking, undefined);
   });
 
   it('maps GLM low reasoning effort to the provider minimum', async () => {
-    const handler = new ModelHandlerGLM(
-      buildTestModelConfig(GLM_TEST_CONFIG, {
-        name: 'glm52',
-        fullName: 'glm-5.2',
-        capabilities: {
-          supportsReasoning: true,
-          supportsReasoningEffort: true,
-          reasoningEffort: ReasoningEffort.LOW,
-        },
-      }),
+    const handler = configureHandler(
+      new ModelHandlerGLM(
+        buildTestModelConfig(GLM_TEST_CONFIG, {
+          name: 'glm52',
+          fullName: 'glm-5.2',
+          capabilities: {
+            supportsReasoning: true,
+            supportsReasoningEffort: true,
+            reasoningEffort: ReasoningEffort.LOW,
+          },
+        }),
+      ),
     );
-    handler.setLogger({ ...noopTrace });
-    (handler as any).getStreamingConfig = () => false;
 
-    const { client, createCalls } = createClientStub();
-    await handler.createResponse({
-      client: client as any,
-      messages: [{ role: 'user', content: 'think' }],
-      temperature: 0,
-    });
+    const { createCalls } = await sendRequest(handler);
 
     assert.deepEqual(createCalls[0].thinking, { type: 'enabled' });
     assert.equal(createCalls[0].reasoning_effort, 'high');
   });
 
   it('maps GLM max reasoning effort to the provider maximum', async () => {
-    const handler = new ModelHandlerGLM(
-      buildTestModelConfig(GLM_TEST_CONFIG, {
-        name: 'glm52',
-        fullName: 'glm-5.2',
-        capabilities: {
-          supportsReasoning: true,
-          supportsReasoningEffort: true,
-          reasoningEffort: ReasoningEffort.MAX,
-        },
-      }),
+    const handler = configureHandler(
+      new ModelHandlerGLM(
+        buildTestModelConfig(GLM_TEST_CONFIG, {
+          name: 'glm52',
+          fullName: 'glm-5.2',
+          capabilities: {
+            supportsReasoning: true,
+            supportsReasoningEffort: true,
+            reasoningEffort: ReasoningEffort.MAX,
+          },
+        }),
+      ),
     );
-    handler.setLogger({ ...noopTrace });
-    (handler as any).getStreamingConfig = () => false;
 
-    const { client, createCalls } = createClientStub();
-    await handler.createResponse({
-      client: client as any,
-      messages: [{ role: 'user', content: 'think harder' }],
-      temperature: 0,
-    });
+    const { createCalls } = await sendRequest(handler, [
+      { role: 'user', content: 'think harder' },
+    ]);
 
     assert.equal(createCalls[0].reasoning_effort, 'max');
   });
 
   it('passes medium reasoning effort through for current Grok models', async () => {
-    const handler = new ModelHandlerXAI(
-      buildTestModelConfig(XAI_TEST_CONFIG, {
-        name: 'grok45',
-        fullName: 'grok-4.5',
-        capabilities: {
-          supportsReasoning: true,
-          supportsReasoningEffort: true,
-          reasoningEffort: ReasoningEffort.MEDIUM,
-        },
-      }),
+    const handler = configureHandler(
+      new ModelHandlerXAI(
+        buildTestModelConfig(XAI_TEST_CONFIG, {
+          name: 'grok45',
+          fullName: 'grok-4.5',
+          capabilities: {
+            supportsReasoning: true,
+            supportsReasoningEffort: true,
+            reasoningEffort: ReasoningEffort.MEDIUM,
+          },
+        }),
+      ),
     );
-    handler.setLogger({ ...noopTrace });
-    (handler as any).getStreamingConfig = () => false;
 
-    const { client, createCalls } = createClientStub();
-    await handler.createResponse({
-      client: client as any,
-      messages: [{ role: 'user', content: 'think' }],
-      temperature: 0,
-    });
+    const { createCalls } = await sendRequest(handler);
 
     assert.equal(createCalls[0].reasoning_effort, 'medium');
   });
 
   it('clamps above-high reasoning effort to high for Grok models', async () => {
-    const handler = new ModelHandlerXAI(
-      buildTestModelConfig(XAI_TEST_CONFIG, {
-        name: 'grok45',
-        fullName: 'grok-4.5',
-        capabilities: {
-          supportsReasoning: true,
-          supportsReasoningEffort: true,
-          reasoningEffort: ReasoningEffort.XHIGH,
-        },
-      }),
+    const handler = configureHandler(
+      new ModelHandlerXAI(
+        buildTestModelConfig(XAI_TEST_CONFIG, {
+          name: 'grok45',
+          fullName: 'grok-4.5',
+          capabilities: {
+            supportsReasoning: true,
+            supportsReasoningEffort: true,
+            reasoningEffort: ReasoningEffort.XHIGH,
+          },
+        }),
+      ),
     );
-    handler.setLogger({ ...noopTrace });
-    (handler as any).getStreamingConfig = () => false;
 
-    const { client, createCalls } = createClientStub();
-    await handler.createResponse({
-      client: client as any,
-      messages: [{ role: 'user', content: 'think harder' }],
-      temperature: 0,
-    });
+    const { createCalls } = await sendRequest(handler, [
+      { role: 'user', content: 'think harder' },
+    ]);
 
     assert.equal(createCalls[0].reasoning_effort, 'high');
   });

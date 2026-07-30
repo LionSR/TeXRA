@@ -4,7 +4,7 @@
 // enqueue through the ordinary follow-up path.
 
 import pDefer from 'p-defer';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
@@ -102,13 +102,7 @@ function completedChildRunLoop(): { completion: Promise<void> } {
 }
 
 describe('codex tool - atomic resume fallback', () => {
-  afterEach(() => {
-    vi.clearAllMocks();
-    CodexThreads.releaseByExecutionId(executionId);
-    CodexThreads.release('stale-thread');
-  });
-
-  function setupCommonMocks(): void {
+  beforeEach(() => {
     mocks.startChildRunLoop.mockReset();
     mocks.startChildRunLoop.mockReturnValue(completedChildRunLoop());
     mocks.importCodexClass.mockReset();
@@ -133,10 +127,15 @@ describe('codex tool - atomic resume fallback', () => {
     mocks.currentSession.mockReturnValue({
       followUps: { acquire: () => ({ enqueue: vi.fn() }) },
     });
-  }
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    CodexThreads.releaseByExecutionId(executionId);
+    CodexThreads.release('stale-thread');
+  });
 
   it('logs a detached run-loop rejection through the child trace', async () => {
-    setupCommonMocks();
     const childStream = createFakeAgentCliChildStream(childStreamId);
     const error = vi
       .spyOn(childStream.logger, 'error')
@@ -171,7 +170,6 @@ describe('codex tool - atomic resume fallback', () => {
   });
 
   it('launches one fallback loop when concurrent calls use the same stale thread_id', async () => {
-    setupCommonMocks();
     const sdkImportStarted = pDefer<void>();
     const sdkReady = pDefer<any>();
     const thread = {
@@ -239,7 +237,6 @@ describe('codex tool - atomic resume fallback', () => {
   });
 
   it('exposes an in-flight initial turn to the shared shutdown drain', async () => {
-    setupCommonMocks();
     const interrupt = vi.fn();
     const thread = { id: undefined, runStreamed: vi.fn() };
     let strategy: ChildRunStrategy<unknown> | undefined;
@@ -273,7 +270,6 @@ describe('codex tool - atomic resume fallback', () => {
   });
 
   it('lets a waiting caller own the fallback after the first launch fails', async () => {
-    setupCommonMocks();
     const firstImportStarted = pDefer<void>();
     const firstImport = pDefer<any>();
     const thread = { id: 'stale-thread', runStreamed: vi.fn() };

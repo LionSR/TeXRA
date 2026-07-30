@@ -35,13 +35,13 @@ const deepseekModel: ModelSelectionItem = {
 };
 
 async function renderModelSelectionList(
-  configure: (list: ModelSelectionListElement) => void,
+  props: Partial<ModelSelectionListElement> = {},
 ): Promise<ModelSelectionListElement> {
   const list = document.createElement(
     'model-selection-list',
   ) as ModelSelectionListElement;
   list.models = [deepseekModel];
-  configure(list);
+  Object.assign(list, props);
   document.body.append(list);
   await list.updateComplete;
   return list;
@@ -58,9 +58,7 @@ describe('ModelSelectionList provider key status', () => {
   });
 
   it('shows a read-only API-key status in model provider groups before profile load', async () => {
-    const list = await renderModelSelectionList((el) => {
-      el.providerKeyStatuses = [];
-    });
+    const list = await renderModelSelectionList({ providerKeyStatuses: [] });
 
     const shadow = list.shadowRoot!;
     expect(shadow.textContent).toContain('Not set');
@@ -78,9 +76,7 @@ describe('ModelSelectionList provider key status', () => {
   });
 
   it('shows helper model labels together with short ids', async () => {
-    const list = await renderModelSelectionList((el) => {
-      el.helperModel = 'deepseek';
-    });
+    const list = await renderModelSelectionList({ helperModel: 'deepseek' });
 
     const helperOption = list.shadowRoot!.querySelector(
       '.helper-model-select wa-option',
@@ -92,7 +88,7 @@ describe('ModelSelectionList provider key status', () => {
   });
 
   it('renders the per-model enabled toggle as wa-switch and posts setModelEnabled on change', async () => {
-    const list = await renderModelSelectionList(() => {});
+    const list = await renderModelSelectionList();
 
     const providerToggle = list.shadowRoot!.querySelector<HTMLElement>(
       '.provider-group-toggle',
@@ -121,8 +117,8 @@ describe('ModelSelectionList provider key status', () => {
   });
 
   it('shows an effective route without changing the provider group', async () => {
-    const list = await renderModelSelectionList((el) => {
-      el.models = [
+    const list = await renderModelSelectionList({
+      models: [
         {
           ...deepseekModel,
           name: 'kimi3',
@@ -130,7 +126,7 @@ describe('ModelSelectionList provider key status', () => {
           provider: 'moonshot',
           routeLabel: 'Via Kimi Code',
         },
-      ];
+      ],
     });
 
     list

@@ -4,7 +4,6 @@ import { getExecutionStore } from '@agent/storage';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { getStreamTabId } from '@agent/runtime/streamTab';
-import type { Platform } from '@platform/platform';
 import {
   EXECUTION_STATUS,
   LOG_LEVELS,
@@ -22,8 +21,21 @@ import { assembleTrace, StreamLogStore } from '@transcript';
 
 const tempDirs: string[] = [];
 
-function buildStoragePlatform(): Promise<Platform> {
-  return createTempDirPlatform('texra-trace-', tempDirs);
+/** Persists a single stream-log entry so the stream is discoverable on disk. */
+async function appendLogEntry(
+  streamId: ReturnType<typeof getStreamTabId>,
+  text: string,
+): Promise<void> {
+  const store = await StreamLogStore.open();
+  store.append(streamId, {
+    id: 'entry-1',
+    type: STREAM_LOG_ENTRY_TYPES.LOG,
+    level: LOG_LEVELS.INFO,
+    timestamp: 100,
+    messageType: MESSAGE_TYPES.DEFAULT,
+    text,
+  });
+  await store.flush();
 }
 
 function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
@@ -48,7 +60,7 @@ function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
 }
 
 describe('assembleTrace', () => {
-  setupPlatform(buildStoragePlatform);
+  setupPlatform(() => createTempDirPlatform('texra-trace-', tempDirs));
 
   afterEach(async () => {
     await cleanupTempDirs(tempDirs);
@@ -65,16 +77,7 @@ describe('assembleTrace', () => {
     });
 
     const streamId = getStreamTabId('review', 'sonnet46T', { executionId });
-    const store = await StreamLogStore.open();
-    store.append(streamId, {
-      id: 'entry-1',
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      level: LOG_LEVELS.INFO,
-      timestamp: 100,
-      messageType: MESSAGE_TYPES.DEFAULT,
-      text: 'hello',
-    });
-    await store.flush();
+    await appendLogEntry(streamId, 'hello');
 
     const result = await assembleTrace(executionId);
 
@@ -129,16 +132,10 @@ describe('assembleTrace', () => {
     const actualChildStreamId = `bash@tool#${executionId}`;
     expect(actualChildStreamId).not.toBe(derivedId);
 
-    const store = await StreamLogStore.open();
-    store.append(actualChildStreamId as ReturnType<typeof getStreamTabId>, {
-      id: 'entry-1',
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      level: LOG_LEVELS.INFO,
-      timestamp: 100,
-      messageType: MESSAGE_TYPES.DEFAULT,
-      text: 'child stream output',
-    });
-    await store.flush();
+    await appendLogEntry(
+      actualChildStreamId as ReturnType<typeof getStreamTabId>,
+      'child stream output',
+    );
 
     const result = await assembleTrace(executionId);
 
@@ -161,16 +158,7 @@ describe('assembleTrace', () => {
       executionConfig.model,
       { executionId },
     );
-    const store = await StreamLogStore.open();
-    store.append(streamId, {
-      id: 'entry-1',
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      level: LOG_LEVELS.INFO,
-      timestamp: 100,
-      messageType: MESSAGE_TYPES.DEFAULT,
-      text: 'hello',
-    });
-    await store.flush();
+    await appendLogEntry(streamId, 'hello');
 
     const result = await assembleTrace(executionId);
 

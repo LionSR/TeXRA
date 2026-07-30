@@ -19,16 +19,18 @@ import {
   stripCriticizeAnnotations,
   wrapCritiqueInAlign,
 } from '@replacement/advanced';
+import type { ReplacementCategory } from '@replacement/types';
+
+function apply(
+  input: string,
+  rules: ReplacementCategory | ReplacementCategory[],
+): string {
+  return applyReplacements(input, rules, { processMathUnicode: false });
+}
 
 // ---------------------------------------------------------------------------
 // captionSpacing
 // ---------------------------------------------------------------------------
-
-function convert(input: string): string {
-  return applyReplacements(input, EQUATION_STYLE_REPLACEMENTS, {
-    processMathUnicode: false,
-  });
-}
 
 const multiLineCaption = [
   '\\caption{',
@@ -82,7 +84,7 @@ describe('caption spacing normalization', () => {
       expected: embeddedNewlineCaption,
     },
   ])('$name', ({ input, expected }) => {
-    assert.strictEqual(convert(input), expected);
+    assert.strictEqual(apply(input, EQUATION_STYLE_REPLACEMENTS), expected);
   });
 });
 
@@ -129,19 +131,13 @@ x = y\\
 \\end{eqnarray}`,
     },
   ])('$name', ({ input, expected }) => {
-    assert.strictEqual(convert(input), expected);
+    assert.strictEqual(apply(input, EQUATION_STYLE_REPLACEMENTS), expected);
   });
 });
 
 // ---------------------------------------------------------------------------
 // equationMacros
 // ---------------------------------------------------------------------------
-
-function applyMacros(input: string): string {
-  return applyReplacements(input, EQUATION_MACRO_REPLACEMENTS, {
-    processMathUnicode: false,
-  });
-}
 
 describe('equation macro replacements', () => {
   it.each([
@@ -196,19 +192,13 @@ x = y
       expected: String.raw`\BE`,
     },
   ])('$name', ({ input, expected }) => {
-    assert.strictEqual(applyMacros(input), expected);
+    assert.strictEqual(apply(input, EQUATION_MACRO_REPLACEMENTS), expected);
   });
 });
 
 // ---------------------------------------------------------------------------
 // fencedLatexBlocksRegex
 // ---------------------------------------------------------------------------
-
-function convertFencedLatexBlocksRegex(input: string): string {
-  return applyReplacements(input, FENCED_LATEX_BLOCK_REPLACEMENTS, {
-    processMathUnicode: false,
-  });
-}
 
 describe('FENCED_LATEX_BLOCK_REPLACEMENTS', () => {
   it.each([
@@ -309,7 +299,7 @@ content
 `,
     },
   ])('$name', ({ input, expected }) => {
-    assert.strictEqual(convertFencedLatexBlocksRegex(input), expected);
+    assert.strictEqual(apply(input, FENCED_LATEX_BLOCK_REPLACEMENTS), expected);
   });
 
   it('is idempotent when applied repeatedly', () => {
@@ -317,8 +307,8 @@ content
 &= 0
 :::
 `;
-    const once = convertFencedLatexBlocksRegex(input);
-    assert.strictEqual(convertFencedLatexBlocksRegex(once), once);
+    const once = apply(input, FENCED_LATEX_BLOCK_REPLACEMENTS);
+    assert.strictEqual(apply(once, FENCED_LATEX_BLOCK_REPLACEMENTS), once);
   });
 });
 
@@ -333,11 +323,10 @@ describe('html entity replacements', () => {
     const input = '&lt;response&gt;Great job&lt;/response&gt;';
     const expected = '\\begin{response}Great job\\end{response}';
 
-    const result = applyReplacements(
-      input,
-      [HTML_ENTITY_REPLACEMENTS, LATEX_XML_REPLACEMENTS],
-      { processMathUnicode: false },
-    );
+    const result = apply(input, [
+      HTML_ENTITY_REPLACEMENTS,
+      LATEX_XML_REPLACEMENTS,
+    ]);
 
     assert.strictEqual(result, expected);
   });
@@ -346,9 +335,7 @@ describe('html entity replacements', () => {
     const input = 'Usage&nbsp;&amp;&nbsp;limits remain &le; 10';
     const expected = 'Usage~\\&~limits remain \\leq 10';
 
-    const result = applyReplacements(input, HTML_ENTITY_REPLACEMENTS, {
-      processMathUnicode: false,
-    });
+    const result = apply(input, HTML_ENTITY_REPLACEMENTS);
 
     assert.strictEqual(result, expected);
   });
@@ -359,9 +346,7 @@ describe('html entity replacements', () => {
     const expected =
       'Angles \\neq 0 \\alpha\\Rightarrow\\infty \\sum=1 45^{\\circ} "quoted" \\frac{1}{2}~items \\Delta\\theta';
 
-    const result = applyReplacements(input, HTML_ENTITY_REPLACEMENTS, {
-      processMathUnicode: false,
-    });
+    const result = apply(input, HTML_ENTITY_REPLACEMENTS);
 
     assert.strictEqual(result, expected);
   });
@@ -370,12 +355,6 @@ describe('html entity replacements', () => {
 // ---------------------------------------------------------------------------
 // latexForbiddenCommands
 // ---------------------------------------------------------------------------
-
-function convertLatexForbiddenCommands(input: string): string {
-  return applyReplacements(input, LATEX_FORBIDDEN_REPLACEMENTS, {
-    processMathUnicode: false,
-  });
-}
 
 describe('latex forbidden commands replacements', () => {
   it.each([
@@ -415,13 +394,13 @@ describe('latex forbidden commands replacements', () => {
       expected: '\\section{A}\n\nText\n\\section{B}\n',
     },
   ])('$name', ({ input, expected }) => {
-    assert.strictEqual(convertLatexForbiddenCommands(input), expected);
+    assert.strictEqual(apply(input, LATEX_FORBIDDEN_REPLACEMENTS), expected);
   });
 
   it('removes invalid endings for all section types', () => {
     const input =
       '\\chapter{Ch}\n\\end{chapter}\n\\section{S}\n\\end{section}\n\\subsubsection{SS}\n\\end{subsubsection}';
-    const result = convertLatexForbiddenCommands(input);
+    const result = apply(input, LATEX_FORBIDDEN_REPLACEMENTS);
     assert.strictEqual(result.includes('\\end{chapter}'), false);
     assert.strictEqual(result.includes('\\end{section}'), false);
     assert.strictEqual(result.includes('\\end{subsubsection}'), false);
@@ -488,7 +467,7 @@ describe('reference underscore replacements', () => {
       expected: '\\textit{some\\_text} \\ref{valid_ref}',
     },
   ])('$name', ({ input, expected }) => {
-    assert.strictEqual(convert(input), expected);
+    assert.strictEqual(apply(input, EQUATION_STYLE_REPLACEMENTS), expected);
   });
 });
 
@@ -581,9 +560,7 @@ describe('escapeTextttUnderscores integration', () => {
   it('runs as part of applyReplacements', () => {
     const input = 'See \\texttt{file_name} for details';
     const expected = 'See \\texttt{file\\_name} for details';
-    const result = applyReplacements(input, EQUATION_STYLE_REPLACEMENTS, {
-      processMathUnicode: false,
-    });
+    const result = apply(input, EQUATION_STYLE_REPLACEMENTS);
     assert.strictEqual(result, expected);
   });
 });

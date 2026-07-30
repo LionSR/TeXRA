@@ -1,8 +1,8 @@
-// Third-party imports
-import { strict as assert } from 'node:assert';
-import { describe, it } from 'vitest';
-
 // Standard library imports
+import { strict as assert } from 'node:assert';
+
+// Third-party imports
+import { describe, it } from 'vitest';
 
 // Local imports
 import { getStreamTabId } from '@agent/runtime/streamTab';

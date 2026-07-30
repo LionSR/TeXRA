@@ -32,7 +32,10 @@ import {
   FakeStdout,
   loadInk,
 } from '@test/support/inkTestHarness.mts';
-import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
+import {
+  createDeferred,
+  waitForCondition as waitFor,
+} from '@test/support/asyncTestUtils';
 
 const clipboardMock = vi.hoisted(() => ({
   attachClipboardImage: vi.fn(),
@@ -40,31 +43,29 @@ const clipboardMock = vi.hoisted(() => ({
 
 vi.mock('@cli/runtime/clipboardImage', () => clipboardMock);
 
-function deferred(): {
-  readonly promise: Promise<void>;
-  readonly resolve: () => void;
-} {
-  let resolve!: () => void;
-  const promise = new Promise<void>((done) => {
-    resolve = done;
-  });
-  return { promise, resolve };
-}
-
-function deferredValue<T>(): {
-  readonly promise: Promise<T>;
-  readonly resolve: (value: T) => void;
-} {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => {
-    resolve = done;
-  });
-  return { promise, resolve };
-}
-
 async function flushPromiseQueue(): Promise<void> {
   await Promise.resolve();
   await Promise.resolve();
+}
+
+function renderInteractive(
+  ink: any,
+  node: any,
+): {
+  readonly instance: any;
+  readonly stdin: FakeStdin;
+  readonly stdout: FakeStdout;
+} {
+  const stdin = new FakeStdin();
+  const stdout = new FakeStdout();
+  const instance = ink.render(node, {
+    stdin,
+    stdout,
+    interactive: true,
+    exitOnCtrlC: false,
+    patchConsole: false,
+  });
+  return { instance, stdin, stdout };
 }
 
 function fakeHistory(entries: readonly string[]): InputHistory {
@@ -84,19 +85,9 @@ describe('InputBar arrow-key child-list focus', () => {
     const { ink, React } = await loadInk();
     const onFocusChildList = vi.fn();
 
-    const stdin = new FakeStdin();
-    const instance = ink.render(
-      React.createElement(InputBar, {
-        onSubmit: vi.fn(),
-        onFocusChildList,
-      }),
-      {
-        stdin,
-        stdout: new FakeStdout(),
-        interactive: true,
-        exitOnCtrlC: false,
-        patchConsole: false,
-      },
+    const { instance, stdin } = renderInteractive(
+      ink,
+      React.createElement(InputBar, { onSubmit: vi.fn(), onFocusChildList }),
     );
 
     try {
@@ -115,21 +106,13 @@ describe('InputBar arrow-key child-list focus', () => {
     const onFocusChildList = vi.fn();
     const history = fakeHistory(['first command', 'second command']);
 
-    const stdin = new FakeStdin();
-    const stdout = new FakeStdout();
-    const instance = ink.render(
+    const { instance, stdin, stdout } = renderInteractive(
+      ink,
       React.createElement(InputBar, {
         onSubmit: vi.fn(),
         onFocusChildList,
         history,
       }),
-      {
-        stdin,
-        stdout,
-        interactive: true,
-        exitOnCtrlC: false,
-        patchConsole: false,
-      },
     );
 
     try {
@@ -157,17 +140,9 @@ describe('InputBar slash submit', () => {
       echo: 'ifPersists',
       formComponent: () => null,
     });
-    const stdin = new FakeStdin();
-    const stdout = new FakeStdout();
-    const instance = ink.render(
+    const { instance, stdin, stdout } = renderInteractive(
+      ink,
       React.createElement(InputBar, { onSubmit: vi.fn() }),
-      {
-        stdin,
-        stdout,
-        interactive: true,
-        exitOnCtrlC: false,
-        patchConsole: false,
-      },
     );
 
     try {
@@ -238,7 +213,7 @@ describe('InputBar slash submit', () => {
 
   it('waits for pending image pastes and submits the latest draft', async () => {
     const imagePasteQueue = new ImagePasteQueue();
-    const paste = deferred();
+    const paste = createDeferred();
     const submitted: string[] = [];
     let draft = '/h';
 
@@ -268,7 +243,7 @@ describe('InputBar slash submit', () => {
 
   it('keeps an image chip attached to the typed slash prefix', async () => {
     const imagePasteQueue = new ImagePasteQueue();
-    const paste = deferred();
+    const paste = createDeferred();
     const submitted: string[] = [];
     let draft = '/h';
 
@@ -328,15 +303,10 @@ describe('InputBar draft discard', () => {
       );
     }
 
-    const stdin = new FakeStdin();
-    const stdout = new FakeStdout();
-    const instance = ink.render(React.createElement(Harness), {
-      stdin,
-      stdout,
-      interactive: true,
-      exitOnCtrlC: false,
-      patchConsole: false,
-    });
+    const { instance, stdin } = renderInteractive(
+      ink,
+      React.createElement(Harness),
+    );
 
     try {
       await waitFor(() => stdin.listenerCount('readable') > 0);
@@ -352,7 +322,7 @@ describe('InputBar draft discard', () => {
   it('invalidates an image paste that resolves after the draft is cleared', async () => {
     const imagePasteQueue = new ImagePasteQueue();
     const attempt = imagePasteQueue.beginAttempt();
-    const paste = deferredValue<string>();
+    const paste = createDeferred<string>();
     const inserted: string[] = [];
 
     imagePasteQueue.track(
@@ -371,7 +341,7 @@ describe('InputBar draft discard', () => {
 
   it('cancels a deferred submit when its pending paste is discarded', async () => {
     const imagePasteQueue = new ImagePasteQueue();
-    const paste = deferred();
+    const paste = createDeferred();
     const submitted: string[] = [];
 
     imagePasteQueue.track(paste.promise);
@@ -388,7 +358,7 @@ describe('InputBar draft discard', () => {
 
   it('discards a pending image submit from an otherwise empty mounted input', async () => {
     const { ink, React } = await loadInk();
-    const firstPaste = deferredValue<{
+    const firstPaste = createDeferred<{
       readonly ok: true;
       readonly path: string;
       readonly mediaType: string;
@@ -407,21 +377,13 @@ describe('InputBar draft discard', () => {
     const controlRef = React.createRef() as {
       current: InputBarHandle | null;
     };
-    const stdin = new FakeStdin();
-    const stdout = new FakeStdout();
-    const instance = ink.render(
+    const { instance, stdin, stdout } = renderInteractive(
+      ink,
       React.createElement(InputBar, {
         controlRef,
         onSubmit: (value: string, mediaFiles?: readonly string[]) =>
           submitted.push([value, mediaFiles]),
       }),
-      {
-        stdin,
-        stdout,
-        interactive: true,
-        exitOnCtrlC: false,
-        patchConsole: false,
-      },
     );
 
     try {

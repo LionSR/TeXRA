@@ -221,16 +221,10 @@ const missingIconUri = svgDataUri(
  * Lucide's question marker so a package rename cannot create a blank control
  * or silently introduce a different visual family.
  */
-function createDesktopIconResolver(): IconLibraryResolver {
-  return (name) => {
-    const svg = lucideSvg(resolveLucideName(name));
-    return svg ? svgDataUri(svg) : missingIconUri;
-  };
-}
+const desktopIconResolver: IconLibraryResolver = (name) => {
+  const svg = lucideSvg(resolveLucideName(name));
+  return svg ? svgDataUri(svg) : missingIconUri;
+};
 
-registerIconLibrary(TEXRA_ICON_LIBRARY, {
-  resolver: createDesktopIconResolver(),
-});
-registerIconLibrary('default', {
-  resolver: createDesktopIconResolver(),
-});
+registerIconLibrary(TEXRA_ICON_LIBRARY, { resolver: desktopIconResolver });
+registerIconLibrary('default', { resolver: desktopIconResolver });

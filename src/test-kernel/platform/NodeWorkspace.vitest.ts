@@ -1,5 +1,5 @@
 // Node imports
-import { mkdir, mkdtemp, realpath, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, realpath, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 
@@ -11,7 +11,7 @@ import {
   canonicalizeWorkspacePath,
   createNodeWorkspace,
 } from '@platform/defaults/nodeWorkspace';
-import { cleanupTempDirs } from '@test/support/tempDirPlatform';
+import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 
 describe('Node workspace identity', () => {
   const tempDirs: string[] = [];
@@ -21,8 +21,7 @@ describe('Node workspace identity', () => {
   });
 
   it('uses the physical directory for a symlinked workspace', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'texra-node-workspace-'));
-    tempDirs.push(root);
+    const root = await makeTempDir('texra-node-workspace-', tempDirs);
     const target = join(root, 'target');
     const link = join(root, 'link');
     await mkdir(target);
@@ -47,9 +46,8 @@ describe('Node workspace identity', () => {
   });
 
   it('keeps a path through a child symlink relative to the workspace', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'texra-child-link-workspace-'));
-    const outside = await mkdtemp(join(tmpdir(), 'texra-child-link-target-'));
-    tempDirs.push(root, outside);
+    const root = await makeTempDir('texra-child-link-workspace-', tempDirs);
+    const outside = await makeTempDir('texra-child-link-target-', tempDirs);
     const link = join(root, 'linked');
     await symlink(outside, link, 'dir');
 

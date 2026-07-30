@@ -36,12 +36,6 @@ class RecoverableCallbackRequestError extends Error {
   }
 }
 
-function isRecoverableCallbackRequestError(
-  error: unknown,
-): error is RecoverableCallbackRequestError {
-  return error instanceof RecoverableCallbackRequestError;
-}
-
 export interface LoopbackCallbackServer {
   readonly redirectTo: string;
   waitForSession(signal?: AbortSignal): Promise<SupabaseSession>;
@@ -74,7 +68,7 @@ export async function startLoopbackCallbackServer(
         if (session) resolveSession(session);
       })
       .catch((error: unknown) => {
-        const recoverable = isRecoverableCallbackRequestError(error);
+        const recoverable = error instanceof RecoverableCallbackRequestError;
         const message = toErrorMessage(error);
         if (!recoverable) {
           rejectSession(error instanceof Error ? error : new Error(message));
@@ -230,25 +224,22 @@ const CallbackBodySchema = z.object({
   nonce: z.string().nullish().catch(undefined),
 });
 
-function parseCallbackBody(rawBody: string): {
-  query?: string;
-  fragment?: string;
-  nonce?: string;
-} {
+function parseCallbackBody(
+  rawBody: string,
+): z.infer<typeof CallbackBodySchema> {
   const parsed = parseJsonWith(rawBody, CallbackBodySchema);
   if (parsed.isErr()) {
     throw new RecoverableCallbackRequestError(
       'Authentication callback request was malformed.',
     );
   }
-  return {
-    query: parsed.value.query ?? undefined,
-    fragment: parsed.value.fragment ?? undefined,
-    nonce: parsed.value.nonce ?? undefined,
-  };
+  return parsed.value;
 }
 
-function trimUrlMarker(value: string | undefined, marker: '?' | '#'): string {
+function trimUrlMarker(
+  value: string | null | undefined,
+  marker: '?' | '#',
+): string {
   return value?.startsWith(marker) ? value.slice(1) : (value ?? '');
 }
 

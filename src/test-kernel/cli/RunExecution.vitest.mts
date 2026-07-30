@@ -120,11 +120,18 @@ function cliContext(overrides: Partial<CliContext> = {}): CliContext {
   return createTestCliContext(overrides);
 }
 
-function baseRequest(): Parameters<typeof executeCliRequest>[0] {
-  return {
-    config: {},
-    executionId: 'exec-1',
-  } as Parameters<typeof executeCliRequest>[0];
+type CliRequest = Parameters<typeof executeCliRequest>[0];
+
+/** Result shape the default `runAgent` stub resolves with. */
+const COMPLETED_RUN = {
+  category: 'toolUse',
+  executionId: 'exec-1',
+  outcome: 'completed',
+  streamId: 'stream-1',
+} as const;
+
+function baseRequest(): CliRequest {
+  return { config: {}, executionId: 'exec-1' } as CliRequest;
 }
 
 function toolUseConfig() {
@@ -173,12 +180,7 @@ function stubRunExecutionDeps(): void {
     options.onExecutionLeaseAcquired?.((operation: () => unknown) =>
       operation(),
     );
-    return {
-      category: 'toolUse',
-      executionId: 'exec-1',
-      outcome: 'completed',
-      streamId: 'stream-1',
-    };
+    return COMPLETED_RUN;
   });
 }
 
@@ -232,7 +234,7 @@ describe('executeCliRequest', () => {
     const request = {
       config: toolUseConfig(),
       executionId: 'abcdef',
-    } as Parameters<typeof executeCliRequest>[0];
+    } as CliRequest;
 
     await executeCliRequest(
       request,
@@ -263,7 +265,7 @@ describe('executeCliRequest', () => {
         agentCategory: 'workflow',
       },
       executionId: 'abcdef',
-    } as Parameters<typeof executeCliRequest>[0];
+    } as CliRequest;
 
     await executeCliRequest(
       request,
@@ -760,12 +762,7 @@ describe('executeCliRequest', () => {
       terminalStatus: EXECUTION_STATUS.INTERRUPTED,
       flowRecord: 'preserve',
     });
-    resolveRun?.({
-      category: 'toolUse',
-      executionId: 'exec-1',
-      outcome: 'completed',
-      streamId: 'stream-1',
-    });
+    resolveRun?.(COMPLETED_RUN);
     mocks.readCliRunOutcome.mockResolvedValueOnce('cancelled');
     await expect(run).resolves.toEqual({
       ok: true,
@@ -808,12 +805,7 @@ describe('executeCliRequest', () => {
     await platform.lifecycle.runShutdown();
     expect(mocks.finalizeExecution).not.toHaveBeenCalled();
 
-    resolveRun?.({
-      category: 'toolUse',
-      executionId: 'exec-1',
-      outcome: 'completed',
-      streamId: 'stream-1',
-    });
+    resolveRun?.(COMPLETED_RUN);
     await run;
     expect(mocks.finalizeExecution).not.toHaveBeenCalled();
   });
@@ -851,12 +843,7 @@ describe('executeCliRequest', () => {
       message:
         'Failed to persist interrupted status for execution exec-1: terminal metadata disk full',
     });
-    resolveRun?.({
-      category: 'toolUse',
-      executionId: 'exec-1',
-      outcome: 'completed',
-      streamId: 'stream-1',
-    });
+    resolveRun?.(COMPLETED_RUN);
     mocks.readCliRunOutcome.mockResolvedValueOnce('cancelled');
 
     await expect(run).resolves.toEqual({

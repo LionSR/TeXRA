@@ -159,21 +159,15 @@ export class SettingsModelSelectionController {
       ...runtimeEntries,
     ]);
     const candidates = [
-      ...staticEntries
-        .filter(
-          ([, config]) =>
-            config.provider !== ModelProvider.COPILOT &&
-            this.modelSources.has(
-              resolveModelSource(config) ?? config.provider,
-            ),
-        )
-        .map(([name]) => name),
-      ...runtimeEntries
-        .filter(([, config]) =>
-          this.modelSources.has(resolveModelSource(config) ?? config.provider),
-        )
-        .map(([name]) => name),
-    ];
+      ...staticEntries.filter(
+        ([, config]) => config.provider !== ModelProvider.COPILOT,
+      ),
+      ...runtimeEntries,
+    ]
+      .filter(([, config]) =>
+        this.modelSources.has(resolveModelSource(config) ?? config.provider),
+      )
+      .map(([name]) => name);
     const resolveModelOptions =
       this.deps.resolveModelOptions ?? computeModelOptionsData;
     const optionsData = await resolveModelOptions(candidates);

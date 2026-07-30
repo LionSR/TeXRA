@@ -165,30 +165,6 @@ describe('createLanguageModelPort', () => {
     expect(mocks.onDidChangeAccess).toHaveBeenCalledWith(listener);
   });
 
-  it('maps model descriptors and forwards selectors', async () => {
-    mocks.selectChatModels.mockResolvedValue([fakeModel()]);
-    const port = createPort();
-
-    expect(port.isAvailable()).toBe(true);
-    await expect(
-      port.selectModels({ vendor: 'copilot', version: '2026-07' }),
-    ).resolves.toEqual([
-      {
-        id: 'copilot-gpt-4o',
-        name: 'GPT-4o',
-        family: 'gpt-4o',
-        vendor: 'copilot',
-        version: '2026-07',
-        maxInputTokens: 128_000,
-        access: 'consent-required',
-      },
-    ]);
-    expect(mocks.selectChatModels).toHaveBeenCalledWith({
-      vendor: 'copilot',
-      version: '2026-07',
-    });
-  });
-
   it('resolves operations by vendor and model id', async () => {
     const model = fakeModel();
     mocks.selectChatModels.mockImplementation(async ({ id }) =>

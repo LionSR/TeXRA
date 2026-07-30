@@ -7,7 +7,11 @@ import {
   WorkflowScriptPersistenceError,
   writeWorkflowScriptCheckpoint,
 } from '@agent/workflowScript';
-import { clearStoreCache, getExecutionStore } from '@agent/storage';
+import {
+  clearStoreCache,
+  getExecutionStore,
+  type ExecutionKVStore,
+} from '@agent/storage';
 import { workflowScriptCheckpointKvKey } from '@agent/workflowScript/checkpointKey';
 import type { ExecutionId } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -51,6 +55,21 @@ async function writeLegacyPresentationCheckpoint(
       ],
     },
   );
+}
+
+// Runs `onFirstEntry` while the checkpoint holding exactly one journal entry
+// is being written; throwing from it leaves that write unperformed.
+function interceptFirstEntryWrite(
+  store: ExecutionKVStore,
+  onFirstEntry: () => Promise<void>,
+): void {
+  const originalWrite = store.write.bind(store);
+  vi.spyOn(store, 'write').mockImplementation(async (key, value) => {
+    if ((value as { journal?: unknown[] }).journal?.length === 1) {
+      await onFirstEntry();
+    }
+    await originalWrite(key, value);
+  });
 }
 
 describe('workflow-script persistence', () => {
@@ -573,12 +592,7 @@ throw new Error('script stopped')`;
 
   it('serializes parallel checkpoint writes before a later script failure', async () => {
     const store = getExecutionStore(executionId);
-    const originalWrite = store.write.bind(store);
-    vi.spyOn(store, 'write').mockImplementation(async (key, value) => {
-      const journal = (value as { journal?: unknown[] }).journal ?? [];
-      if (journal.length === 1) await delay(25);
-      await originalWrite(key, value);
-    });
+    interceptFirstEntryWrite(store, () => delay(25));
     const parallelScript = `export const meta = {
   name: 'parallel-checkpoint',
   description: 'tests checkpoint ordering',
@@ -605,13 +619,9 @@ throw new Error('stop after fan-out')`;
 
   it('aborts when a completed result cannot be checkpointed', async () => {
     const store = getExecutionStore(executionId);
-    const originalWrite = store.write.bind(store);
-    vi.spyOn(store, 'write').mockImplementation(async (key, value) => {
-      if ((value as { journal?: unknown[] }).journal?.length === 1) {
-        throw new Error('storage unavailable');
-      }
-      await originalWrite(key, value);
-    });
+    interceptFirstEntryWrite(store, () =>
+      Promise.reject(new Error('storage unavailable')),
+    );
 
     const runner = vi.fn(async () => 'completed child');
     await expect(
@@ -646,13 +656,9 @@ throw new Error('stop after fan-out')`;
 
   it('does not let script code suppress a checkpoint failure', async () => {
     const store = getExecutionStore(executionId);
-    const originalWrite = store.write.bind(store);
-    vi.spyOn(store, 'write').mockImplementation(async (key, value) => {
-      if ((value as { journal?: unknown[] }).journal?.length === 1) {
-        throw new Error('checkpoint rejected');
-      }
-      await originalWrite(key, value);
-    });
+    interceptFirstEntryWrite(store, () =>
+      Promise.reject(new Error('checkpoint rejected')),
+    );
     const catchesErrors = `export const meta = {
   name: 'catch-errors',
   description: 'tries to catch a checkpoint failure',

@@ -63,16 +63,16 @@ const {
   resolveSetupLaunchModel,
 } = await import('@controllers/onboarding/setupLaunch');
 
-describe('selectSetupCredentialModelExcludingOpenRouter', () => {
-  beforeEach(() => {
-    mocks.isCodexSubscriptionActive.mockReset().mockResolvedValue(false);
-    mocks.canUseServerSideKeys.mockReset().mockResolvedValue(false);
-    mocks.canUseServerSideKeysForModel.mockReset().mockResolvedValue(false);
-    mocks.canUseModelSync.mockReset().mockReturnValue(false);
-    mocks.lookupApiKey.mockReset().mockResolvedValue(undefined);
-    mocks.getUseOpenRouter.mockReset().mockReturnValue(false);
-  });
+beforeEach(() => {
+  mocks.isCodexSubscriptionActive.mockReset().mockResolvedValue(false);
+  mocks.canUseServerSideKeys.mockReset().mockResolvedValue(false);
+  mocks.canUseServerSideKeysForModel.mockReset().mockResolvedValue(false);
+  mocks.canUseModelSync.mockReset().mockReturnValue(false);
+  mocks.lookupApiKey.mockReset().mockResolvedValue(undefined);
+  mocks.getUseOpenRouter.mockReset().mockReturnValue(false);
+});
 
+describe('selectSetupCredentialModelExcludingOpenRouter', () => {
   it('prefers an active ChatGPT subscription over every other credential', async () => {
     mocks.isCodexSubscriptionActive.mockResolvedValue(true);
     mocks.canUseServerSideKeysForModel.mockResolvedValue(true);
@@ -153,15 +153,6 @@ describe('selectSetupCredentialModelExcludingOpenRouter', () => {
 });
 
 describe('selectDesktopSetupModel', () => {
-  beforeEach(() => {
-    mocks.isCodexSubscriptionActive.mockReset().mockResolvedValue(false);
-    mocks.canUseServerSideKeys.mockReset().mockResolvedValue(false);
-    mocks.canUseServerSideKeysForModel.mockReset().mockResolvedValue(false);
-    mocks.canUseModelSync.mockReset().mockReturnValue(false);
-    mocks.lookupApiKey.mockReset().mockResolvedValue(undefined);
-    mocks.getUseOpenRouter.mockReset().mockReturnValue(false);
-  });
-
   it('routes through OpenRouter only when the flag is on and a key exists', async () => {
     mocks.getUseOpenRouter.mockReturnValue(true);
     mocks.lookupApiKey.mockImplementation(async (_secrets, provider) =>
@@ -208,15 +199,6 @@ describe('selectDesktopSetupModel', () => {
  * actually diverge where intended.
  */
 describe('resolveSetupLaunchModel', () => {
-  beforeEach(() => {
-    mocks.isCodexSubscriptionActive.mockReset().mockResolvedValue(false);
-    mocks.canUseServerSideKeys.mockReset().mockResolvedValue(false);
-    mocks.canUseServerSideKeysForModel.mockReset().mockResolvedValue(false);
-    mocks.canUseModelSync.mockReset().mockReturnValue(false);
-    mocks.lookupApiKey.mockReset().mockResolvedValue(undefined);
-    mocks.getUseOpenRouter.mockReset().mockReturnValue(false);
-  });
-
   it('falls back to the OpenRouter access-list model when no credential is available and the caller opts in', async () => {
     mocks.lookupApiKey.mockImplementation(async (_secrets, provider) =>
       provider === 'openRouter' ? 'or-test' : undefined,

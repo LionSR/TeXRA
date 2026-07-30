@@ -12,7 +12,7 @@ export function repoPath(...segments: string[]): string {
 }
 
 export function desktopSourcePath(...segments: string[]): string {
-  return repoPath('packages', 'desktop', 'src', ...segments);
+  return resolve(DESKTOP_SRC_DIR, ...segments);
 }
 
 export function moduleFileUrl(path: string): string {

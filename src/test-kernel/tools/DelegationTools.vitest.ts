@@ -40,22 +40,8 @@ import { AgentCategory, type StreamTabId } from '@shared/schemas';
 import {
   DelegateAgentTool,
   rejectOversizedBibAttachments,
-  type WorkflowAgentInput,
 } from '@tools/DelegationTools';
 import { WorkspaceFS } from '@utils/files';
-
-const BASE_INPUT: WorkflowAgentInput = {
-  agent: 'criticize',
-  model: 'opus48T',
-  instruction: 'Review the manuscript.',
-  inputFiles: ['main.tex'],
-  contextFiles: [],
-  mediaFiles: [],
-  extractFigures: null,
-  extractTikz: null,
-  outputFiles: [],
-  memories: [],
-};
 
 function stat(size: number): FileStat {
   return {

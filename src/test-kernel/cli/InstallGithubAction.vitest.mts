@@ -3,11 +3,12 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { runCli } from '@cli/commands/root';
 import { defaultBranch, parseGitHubSlug } from '@cli/runtime/gitOps';
 import { CliExitCode } from '@cli/runtime/exitCodes';
+import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 
 const repos: string[] = [];
 
@@ -40,13 +41,15 @@ afterEach(() => {
 });
 
 describe('install-github-action command', () => {
+  beforeEach(() => {
+    spyOnStreamWrite(process.stdout);
+    spyOnStreamWrite(process.stderr);
+  });
+
   it('commits only the generated workflow file', async () => {
     const repo = makeRepo();
     writeFileSync(path.join(repo, 'already-staged.txt'), 'keep staged\n');
     git(repo, 'add', 'already-staged.txt');
-
-    vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
-    vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
     const result = await runCli([
       '--cwd',
@@ -72,9 +75,6 @@ describe('install-github-action command', () => {
     git(repo, 'add', 'feature.txt');
     git(repo, 'commit', '-m', 'feature work');
 
-    vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
-    vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-
     const result = await runCli([
       '--cwd',
       repo,
@@ -95,9 +95,6 @@ describe('install-github-action command', () => {
 
   it('reuses an existing branch under --force without resetting its commits', async () => {
     const repo = makeRepo();
-    vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
-    vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-
     await expect(
       runCli(['--cwd', repo, 'install-github-action', '--no-pr', '--no-color']),
     ).resolves.toEqual({ exitCode: CliExitCode.Success });

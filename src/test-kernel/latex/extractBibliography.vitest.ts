@@ -1,7 +1,7 @@
 import * as assert from 'node:assert';
 import * as path from 'node:path';
 
-import { afterEach, describe, it } from 'vitest';
+import { afterEach, describe, it, vi } from 'vitest';
 
 import {
   extractBibliographyContext,
@@ -10,38 +10,34 @@ import {
 } from '@latex/extractBibliography';
 import { WorkspaceFS } from '@utils/files';
 
+const BIB_CONTENT = `@article{alpha,
+  title = {Alpha Paper},
+}
+
+@book{beta,
+  title = {Beta Book},
+}`;
+
 describe('extractBibliography helpers', () => {
-  const originalRead = WorkspaceFS.read;
-  const originalExists = WorkspaceFS.exists;
-
-  function stubRead(impl: typeof originalRead): void {
-    (WorkspaceFS as unknown as { read: typeof originalRead }).read = impl;
-  }
-
-  function stubExists(impl: typeof originalExists): void {
-    (WorkspaceFS as unknown as { exists: typeof originalExists }).exists = impl;
-  }
-
   afterEach(() => {
-    stubRead(originalRead);
-    stubExists(originalExists);
+    vi.restoreAllMocks();
   });
 
   it('collects bibliography paths and citation keys', async () => {
     const texPath = path.join('chapters', 'main.tex');
     const expectedBibPath = path.join('chapters', 'references.bib');
 
-    stubRead(
-      async () => `
+    vi.spyOn(WorkspaceFS, 'read').mockResolvedValue(`
       % comment
       \\documentclass{article}
       \\addbibresource[location=local]{references}
       Some text \\cite{alpha , beta}
       More citations \\nocite{gamma}
       % \\cite{ignored}
-    `,
+    `);
+    vi.spyOn(WorkspaceFS, 'exists').mockImplementation(
+      async (file) => file === expectedBibPath,
     );
-    stubExists(async (file: string) => file === expectedBibPath);
 
     const result = await extractBibliographyContext(texPath);
 
@@ -56,15 +52,14 @@ describe('extractBibliography helpers', () => {
   it('handles wildcard nocite directives consistently across runs', async () => {
     const texPath = 'paper.tex';
     const expectedBibPath = 'refs.bib';
-    const texContent = `
+
+    vi.spyOn(WorkspaceFS, 'read').mockResolvedValue(`
       % bibliographies
       \\bibliography{refs}
       Intro text
       \\nocite{*}
-    `;
-
-    stubRead(async () => texContent);
-    stubExists(async () => true);
+    `);
+    vi.spyOn(WorkspaceFS, 'exists').mockResolvedValue(true);
 
     const first = await extractBibliographyContext(texPath);
     const second = await extractBibliographyContext(texPath);
@@ -81,13 +76,13 @@ describe('extractBibliography helpers', () => {
   it('marks missing bibliography files and ignores empty citations', async () => {
     const texPath = 'paper.tex';
 
-    stubRead(
-      async () => `
+    vi.spyOn(WorkspaceFS, 'read').mockResolvedValue(`
       \\bibliography{bib/one, bib/two.bib, } % trailing comma
       \\cite{first} \\cite{second, third}
-    `,
+    `);
+    vi.spyOn(WorkspaceFS, 'exists').mockImplementation(
+      async (file) => file === path.join('bib', 'two.bib'),
     );
-    stubExists(async (file: string) => file === path.join('bib', 'two.bib'));
 
     const result = await extractBibliographyContext(texPath);
 
@@ -104,15 +99,7 @@ describe('extractBibliography helpers', () => {
   });
 
   it('loads requested bibliography entries and reports missing keys', async () => {
-    const expectedContent = `@article{alpha,
-  title = {Alpha Paper},
-}
-
-@book{beta,
-  title = {Beta Book},
-}`;
-
-    stubRead(async () => expectedContent);
+    vi.spyOn(WorkspaceFS, 'read').mockResolvedValue(BIB_CONTENT);
 
     const { entries, missingKeys } = await loadBibliographyEntries(
       ['references.bib'],
@@ -134,15 +121,7 @@ describe('extractBibliography helpers', () => {
   });
 
   it('loads all entries when nocite wildcard is present', async () => {
-    const expectedContent = `@article{alpha,
-  title = {Alpha Paper},
-}
-
-@book{beta,
-  title = {Beta Book},
-}`;
-
-    stubRead(async () => expectedContent);
+    vi.spyOn(WorkspaceFS, 'read').mockResolvedValue(BIB_CONTENT);
 
     const { entries, missingKeys } = await loadBibliographyEntries(
       ['references.bib'],

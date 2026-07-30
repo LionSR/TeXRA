@@ -25,7 +25,11 @@
  */
 import OpenAI from 'openai';
 
-import type { ModelCredentialSelection } from '@agent/types/ModelHandlerContracts';
+import type {
+  ModelCredentialRoute,
+  ModelCredentialSelection,
+} from '@agent/types/ModelHandlerContracts';
+import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import {
   CODEX_ACCOUNT_ID_HEADER,
   CODEX_BACKEND_BASE_URL,
@@ -205,23 +209,23 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
     return this.longRunningModelFetch(input, init);
   };
 
+  /** Capabilities for a captured route, or the configured preference when no
+   *  route has been captured yet. */
+  private capabilitiesForRoute(
+    route: ModelCredentialRoute | NormalizedUsage['usageRoute'],
+  ): ProviderCapabilityProfile | null {
+    if (route === undefined) return this.configuredSubscriptionCapabilities();
+    return route === 'chatgpt-subscription'
+      ? this.subscriptionCapabilities()
+      : null;
+  }
+
   protected override getActiveProviderCapabilities(): ProviderCapabilityProfile | null {
-    if (this.activeCredentialRoute !== undefined) {
-      return this.activeCredentialRoute === 'chatgpt-subscription'
-        ? this.subscriptionCapabilities()
-        : null;
-    }
-    return this.configuredSubscriptionCapabilities();
+    return this.capabilitiesForRoute(this.activeCredentialRoute);
   }
 
   protected override getUsageProviderCapabilities(): ProviderCapabilityProfile | null {
-    const usageRoute = this.getLastCredentialUsageRoute();
-    if (usageRoute !== undefined) {
-      return usageRoute === 'chatgpt-subscription'
-        ? this.subscriptionCapabilities()
-        : null;
-    }
-    return this.configuredSubscriptionCapabilities();
+    return this.capabilitiesForRoute(this.getLastCredentialUsageRoute());
   }
 
   private subscriptionCapabilities(): ProviderCapabilityProfile | null {

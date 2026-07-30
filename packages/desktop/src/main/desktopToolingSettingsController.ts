@@ -52,18 +52,14 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
   readonly toolsActions: SettingsViewCommandActions['tools'];
   readonly latexActions: SettingsViewCommandActions['latex'];
 
-  private readonly latexConfigPersistenceController: LatexConfigPersistenceController;
-
   constructor(
     private readonly options: DefaultDesktopToolingSettingsControllerOptions,
   ) {
-    this.latexConfigPersistenceController =
-      options.latexConfigPersistenceController;
     this.toolsActions = {
       openInstallUrl: (url) => options.navigation.openExternal(url),
       installExtension: (extensionId) =>
         options.navigation.presentExtensionInstall(extensionId),
-      recheckStatus: () => this.recheckToolStatus(),
+      recheckStatus: () => this.refreshToolDashboard(),
       toggle: (toolId, enabled) => this.setToolEnabled(toolId, enabled),
       runCommand: (input) => this.runToolCommand(input),
     };
@@ -78,7 +74,7 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
 
   postLatexConfigValues(): void {
     this.options.renderer.postToRenderer(
-      this.latexConfigPersistenceController.buildConfigMessage((key) =>
+      this.options.latexConfigPersistenceController.buildConfigMessage((key) =>
         this.options.workspaceState.get(key),
       ),
     );
@@ -133,10 +129,6 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
     await this.postToolDashboardData(true);
   }
 
-  private async recheckToolStatus(): Promise<void> {
-    await this.refreshToolDashboard();
-  }
-
   private async refreshToolDashboard(): Promise<void> {
     await this.options.dashboard.refreshAvailability();
     await this.postToolDashboardData(true);
@@ -165,7 +157,8 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
     field: LatexConfigField;
     value: unknown;
   }): Promise<void> {
-    const plan = this.latexConfigPersistenceController.planUpdate(input);
+    const plan =
+      this.options.latexConfigPersistenceController.planUpdate(input);
     if (!plan.ok) {
       throw new Error(`Invalid LaTeX config value for ${input.field}`, {
         cause: plan.error,

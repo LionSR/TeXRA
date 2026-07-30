@@ -5,7 +5,6 @@ import {
   ContextStateDataSchema,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
-  type ContextStateData,
   type LogMessageData,
   type ProgressViewOutboundHandlerRegistry,
   type StreamLogEntry,
@@ -15,10 +14,6 @@ import { upsertTaskGroupFromStreamLog } from '@shared/streams/taskGroupProjectio
 
 import { appState } from '../progressState';
 import type { StreamLogs, StreamState } from '../store';
-
-function asContextStateData(data: unknown): ContextStateData | undefined {
-  return ContextStateDataSchema.optional().catch(undefined).parse(data);
-}
 
 function toLogMessage(entry: StreamLogEntry): LogMessageData {
   return {
@@ -33,11 +28,18 @@ function toLogMessage(entry: StreamLogEntry): LogMessageData {
   };
 }
 
+interface EntryResult {
+  logChanged: boolean;
+  stateChanged: boolean;
+  /** Index of an existing log replaced in place; absent for appends. */
+  updatedIndex?: number;
+}
+
 function applyEntry(
   entry: StreamLogEntry,
   streamLogs: StreamLogs,
   streamState: StreamState,
-): { logChanged: boolean; stateChanged: boolean } {
+): EntryResult {
   // This is a live CLI/TUI signal, not progress history. Drop it before
   // indexing so invisible lifecycle markers cannot consume timeline windows.
   if (entry.messageType === MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY) {
@@ -51,7 +53,9 @@ function applyEntry(
   );
 
   if (entry.messageType === MESSAGE_TYPES.CONTEXT_STATE) {
-    const contextState = asContextStateData(entry.data);
+    const contextState = ContextStateDataSchema.optional()
+      .catch(undefined)
+      .parse(entry.data);
     if (contextState) {
       streamState.contextState = contextState;
       stateChanged = true;
@@ -71,7 +75,7 @@ function applyEntry(
   }
 
   streamLogs.logs[existingIndex] = nextLog;
-  return { logChanged: true, stateChanged };
+  return { logChanged: true, stateChanged, updatedIndex: existingIndex };
 }
 
 function applyTextDelta(
@@ -123,12 +127,11 @@ export const logHandlers = {
         const updatedMessageBaseGeneration = streamLogs.generation;
 
         const processEntry = (entry: StreamLogEntry) => {
-          const existingIndex = streamLogs.logIndex.get(entry.id);
-          const changed = applyEntry(entry, streamLogs, streamState);
-          logChanged ||= changed.logChanged;
-          stateChanged ||= changed.stateChanged;
-          if (changed.logChanged && existingIndex !== undefined) {
-            updatedMessageIndices.add(existingIndex);
+          const result = applyEntry(entry, streamLogs, streamState);
+          logChanged ||= result.logChanged;
+          stateChanged ||= result.stateChanged;
+          if (result.updatedIndex !== undefined) {
+            updatedMessageIndices.add(result.updatedIndex);
           }
         };
 

@@ -17,7 +17,7 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
 }));
 
 // Local imports
-import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { ExecutionSubscriptionBinder } from '@agent/runtime/ExecutionSubscriptionBinder';
@@ -28,16 +28,13 @@ import type { StreamTabId } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
 
 // Local file imports
-import { createRecordingHost, recordSessionEvents } from '../progressTestUtils';
+import { recordSessionEvents } from '../progressTestUtils';
 
 const streamId = 'stream:subscription-session' as StreamTabId;
 const childStreamId = 'child:subscription-session' as StreamTabId;
 
 /** Builds a toolUse `search` handle on the shared stream/child stream. */
-function createSearchHandle(
-  executionId: string,
-  interactions: SessionHostInteractions,
-): AgentExecutionHandle {
+function createSearchHandle(executionId: string): AgentExecutionHandle {
   return new AgentExecutionHandle(
     executionId,
     streamId,
@@ -74,19 +71,53 @@ function createLogger() {
   };
 }
 
-function setupBinder(executionId: string) {
+function setupBinder(executionId: string, session?: SessionHandle) {
   const registry = new ExecutionRegistry();
   const releaseSource = createReleaseSource();
   const logger = createLogger();
-  const explicit = createRecordingHost();
   const binder = new ExecutionSubscriptionBinder({
     registry,
     releaseSource: releaseSource.source,
     logger,
+    session,
   });
-  registry.track(createSearchHandle(executionId, explicit.host));
-  return { registry, releaseSource, logger, binder, executionId };
+  registry.track(createSearchHandle(executionId));
+  return {
+    registry,
+    releaseSource,
+    logger,
+    binder,
+    executionId,
+    dispose(): void {
+      binder.dispose();
+      registry.dispose();
+    },
+  };
 }
+
+function setupSessionBinder(executionId: string, attachSession = true) {
+  const session = createTestSession();
+  const recorded = recordSessionEvents(session.events, { scope: 'session' });
+  const bound = setupBinder(executionId, attachSession ? session : undefined);
+  return {
+    ...bound,
+    session,
+    recorded,
+    dispose(): void {
+      recorded.detach();
+      bound.dispose();
+      session.dispose();
+    },
+  };
+}
+
+const QUEUED_FOLLOW_UPS_EVENT = {
+  scope: 'session',
+  event: {
+    type: 'updateQueuedFollowUps',
+    payload: { streamId },
+  },
+};
 
 async function settleDelivery(): Promise<void> {
   await new Promise((resolve) => setImmediate(resolve));
@@ -94,7 +125,7 @@ async function settleDelivery(): Promise<void> {
 
 describe('ExecutionSubscriptionBinder lifecycle', () => {
   it('owns bind and unbind state per stream/execution pair', () => {
-    const { registry, logger, binder, executionId } = setupBinder(
+    const { logger, binder, executionId, dispose } = setupBinder(
       'exec-subscription-bind-test',
     );
 
@@ -106,13 +137,12 @@ describe('ExecutionSubscriptionBinder lifecycle', () => {
       expect(binder.unbind(streamId, executionId)).toBe(false);
       expect(logger.info).toHaveBeenCalledTimes(1);
     } finally {
-      binder.dispose();
-      registry.dispose();
+      dispose();
     }
   });
 
   it('disposes stream subscriptions when the follow-up queue is released', () => {
-    const { registry, releaseSource, binder, executionId } = setupBinder(
+    const { releaseSource, binder, executionId, dispose } = setupBinder(
       'exec-subscription-release-test',
     );
 
@@ -123,13 +153,12 @@ describe('ExecutionSubscriptionBinder lifecycle', () => {
 
       expect(binder.unbind(streamId, executionId)).toBe(false);
     } finally {
-      binder.dispose();
-      registry.dispose();
+      dispose();
     }
   });
 
   it('unregisters the release observer when disposed', () => {
-    const { registry, releaseSource, binder, executionId } = setupBinder(
+    const { releaseSource, binder, executionId, dispose } = setupBinder(
       'exec-subscription-dispose-test',
     );
 
@@ -142,7 +171,7 @@ describe('ExecutionSubscriptionBinder lifecycle', () => {
       expect(releaseSource.hasObserver()).toBe(false);
       expect(binder.unbind(streamId, executionId)).toBe(false);
     } finally {
-      registry.dispose();
+      dispose();
     }
   });
 });
@@ -154,21 +183,10 @@ describe('ExecutionSubscriptionBinder session routing', () => {
   });
 
   it('passes the owning session to subscription follow-ups', async () => {
-    const registry = new ExecutionRegistry();
-    const session = createTestSession();
-    const recorded = recordSessionEvents(session.events, { scope: 'session' });
-    const explicit = createRecordingHost();
-    const binder = new ExecutionSubscriptionBinder({
-      registry,
-      releaseSource: createReleaseSource().source,
-      logger: createLogger(),
-      session,
-    });
-    const executionId = 'exec-subscription-session-test';
-    const handle = createSearchHandle(executionId, explicit.host);
+    const { registry, session, recorded, binder, executionId, dispose } =
+      setupSessionBinder('exec-subscription-session-test');
 
     try {
-      registry.track(handle);
       binder.bind(streamId, executionId);
 
       registry.untrack(executionId);
@@ -179,20 +197,9 @@ describe('ExecutionSubscriptionBinder session routing', () => {
         expect.stringContaining(executionId),
         { session, mode: 'live_notification' },
       );
-      expect(recorded.events).toEqual([
-        {
-          scope: 'session',
-          event: {
-            type: 'updateQueuedFollowUps',
-            payload: { streamId },
-          },
-        },
-      ]);
+      expect(recorded.events).toEqual([QUEUED_FOLLOW_UPS_EVENT]);
     } finally {
-      recorded.detach();
-      binder.dispose();
-      registry.dispose();
-      session.dispose();
+      dispose();
     }
   });
 
@@ -203,114 +210,50 @@ describe('ExecutionSubscriptionBinder session routing', () => {
   ])(
     'emits the queued-follow-up fact only for delivered follow-ups: %o',
     async (sendResult, shouldEmit) => {
-      const registry = new ExecutionRegistry();
-      const session = createTestSession();
-      const recorded = recordSessionEvents(session.events, {
-        scope: 'session',
-      });
-      const explicit = createRecordingHost();
-      const binder = new ExecutionSubscriptionBinder({
-        registry,
-        releaseSource: createReleaseSource().source,
-        logger: createLogger(),
-        session,
-      });
-      const executionId = `exec-subscription-${sendResult.status}-event-test`;
-      const handle = createSearchHandle(executionId, explicit.host);
+      const { registry, recorded, binder, executionId, dispose } =
+        setupSessionBinder(`exec-subscription-${sendResult.status}-event-test`);
       submitFollowUpMock.mockResolvedValueOnce(sendResult);
 
       try {
-        registry.track(handle);
         binder.bind(streamId, executionId);
 
         registry.untrack(executionId);
         await settleDelivery();
 
         expect(recorded.events).toEqual(
-          shouldEmit
-            ? [
-                {
-                  scope: 'session',
-                  event: {
-                    type: 'updateQueuedFollowUps',
-                    payload: { streamId },
-                  },
-                },
-              ]
-            : [],
+          shouldEmit ? [QUEUED_FOLLOW_UPS_EVENT] : [],
         );
       } finally {
-        recorded.detach();
-        binder.dispose();
-        registry.dispose();
-        session.dispose();
+        dispose();
       }
     },
   );
 
   it('falls back to the current session when the binder has no explicit session', async () => {
-    const registry = new ExecutionRegistry();
-    const session = createTestSession();
-    const recorded = recordSessionEvents(session.events, { scope: 'session' });
-    const explicit = createRecordingHost();
-    const binder = new ExecutionSubscriptionBinder({
-      registry,
-      releaseSource: createReleaseSource().source,
-      logger: createLogger(),
-    });
-    const executionId = 'exec-subscription-current-session-test';
-    const handle = createSearchHandle(executionId, explicit.host);
+    const { registry, session, recorded, binder, executionId, dispose } =
+      setupSessionBinder('exec-subscription-current-session-test', false);
 
     try {
-      registry.track(handle);
-      withRunContext(
-        createRunContext({
-          session,
-        }),
-        () => {
-          binder.bind(streamId, executionId);
-          registry.untrack(executionId);
-        },
-      );
+      withRunContext(createRunContext({ session }), () => {
+        binder.bind(streamId, executionId);
+        registry.untrack(executionId);
+      });
       await settleDelivery();
 
-      expect(recorded.events).toEqual([
-        {
-          scope: 'session',
-          event: {
-            type: 'updateQueuedFollowUps',
-            payload: { streamId },
-          },
-        },
-      ]);
+      expect(recorded.events).toEqual([QUEUED_FOLLOW_UPS_EVENT]);
     } finally {
-      recorded.detach();
-      binder.dispose();
-      registry.dispose();
-      session.dispose();
+      dispose();
     }
   });
 
   it('warns instead of leaking an unhandled rejection when delivery fails', async () => {
-    const registry = new ExecutionRegistry();
-    const explicit = createRecordingHost();
-    const logger = createLogger();
-    const session = createTestSession();
-    const recorded = recordSessionEvents(session.events, { scope: 'session' });
-    const binder = new ExecutionSubscriptionBinder({
-      registry,
-      releaseSource: createReleaseSource().source,
-      logger,
-      session,
-    });
-    const executionId = 'exec-subscription-rejection-test';
-    const handle = createSearchHandle(executionId, explicit.host);
+    const { registry, recorded, logger, binder, executionId, dispose } =
+      setupSessionBinder('exec-subscription-rejection-test');
     const unhandledRejection = vi.fn();
     submitFollowUpMock.mockRejectedValueOnce(new Error('delivery failed'));
 
     try {
       process.once('unhandledRejection', unhandledRejection);
-      registry.track(handle);
       binder.bind(streamId, executionId);
 
       registry.untrack(executionId);
@@ -326,10 +269,7 @@ describe('ExecutionSubscriptionBinder session routing', () => {
       );
     } finally {
       process.off('unhandledRejection', unhandledRejection);
-      recorded.detach();
-      binder.dispose();
-      registry.dispose();
-      session.dispose();
+      dispose();
     }
   });
 });

@@ -1,6 +1,4 @@
 // Test composition imports
-
-// Local imports
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
@@ -59,7 +57,7 @@ async function installPlatform(flagOn: boolean): Promise<Platform> {
 }
 
 function startPlanUpdate(streamId: StreamTabId, objective: string) {
-  const { decisions, events, host, interactions } = createRecordingHost();
+  const { decisions, events, interactions } = createRecordingHost();
   const session = sessionWithInteractions(interactions);
   const workPlanState = new WorkPlanState();
   const tool = new PlanTool();
@@ -125,7 +123,7 @@ describe('PlanTool — update (plan approval)', () => {
   it('keeps a later plan gated after delegated work approval is granted', async () => {
     await installPlatform(false);
     const streamId = 'stream:plan-after-delegation-grant' as StreamTabId;
-    const { decisions, events, host, interactions } = createRecordingHost();
+    const { decisions, events, interactions } = createRecordingHost();
     const session = sessionWithInteractions(interactions);
     const workPlanState = new WorkPlanState();
 
@@ -294,7 +292,6 @@ describe('PlanTool — pause/complete (goal lifecycle)', () => {
   });
 
   async function callTool(input: unknown) {
-    const { host } = createRecordingHost();
     const tool = new PlanTool();
     return withToolEnvironment(
       {

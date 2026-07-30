@@ -19,7 +19,6 @@ export const MainViewExecuteFilesSchema = z.object({
   contextFilesActive: z.boolean().optional(),
   mediaFilesActive: z.boolean().optional(),
 });
-export type MainViewExecuteFiles = z.infer<typeof MainViewExecuteFilesSchema>;
 
 const MainViewExecuteSessionSchema = z.object({
   workingDirectory: z.string().nullish(),

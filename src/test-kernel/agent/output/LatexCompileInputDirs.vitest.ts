@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
+import type { AgentTrace } from '@agent/trace';
 import {
   AgentCategory,
   AgentWorkflowSettingSchema,
@@ -13,8 +14,13 @@ import { LatexDiffManager } from '@agent/output/LatexDiffManager';
 import {
   resolveWorkspaceSourceDir,
   runCompileCheck,
+  type CompileCheckContext,
 } from '@agent/output/compileCheck';
-import { createOutputState, ensureRoundData } from '@agent/output/outputState';
+import {
+  createOutputState,
+  ensureRoundData,
+  type OutputState,
+} from '@agent/output/outputState';
 import type {
   ExecutionId,
   FileLocation,
@@ -93,7 +99,30 @@ function initLatexPlatform(files: Record<string, string>): Promise<void> {
   });
 }
 
-function diffCompiler(manager: LatexDiffManager) {
+function compileContext(
+  executionId: ExecutionId,
+  outputState: OutputState,
+): CompileCheckContext {
+  return {
+    fileService: new TaskRunFileService(executionId),
+    outputState,
+    logger: spiedTrace(),
+    streamId: 'compile-stream',
+  };
+}
+
+function createDiffCompiler(executionId: ExecutionId, logger: AgentTrace) {
+  const manager = new LatexDiffManager(
+    AgentWorkflowSettingSchema.parse({
+      agentCategory: AgentCategory.Workflow,
+    }),
+    () => ({}),
+    [],
+    logger,
+    'diff-stream',
+    new TaskRunFileService(executionId),
+  );
+
   return manager as unknown as {
     compileDiffIfSuccessful(
       result: { success: boolean; diffFileName?: string },
@@ -129,15 +158,7 @@ describe('workflow LaTeX compile input directories', () => {
       outputFile(executionId, path.join('r1', 'main.tex'), 'Draft/main.tex', 1),
     ];
 
-    await runCompileCheck(
-      {
-        fileService: new TaskRunFileService(executionId),
-        outputState,
-        logger: spiedTrace(),
-        streamId: 'compile-stream',
-      },
-      1,
-    );
+    await runCompileCheck(compileContext(executionId, outputState), 1);
 
     expect(mocks.compileLatex2Pdf).toHaveBeenCalledWith(
       expect.objectContaining({ absolutePath: texPath }),
@@ -166,15 +187,7 @@ describe('workflow LaTeX compile input directories', () => {
         ),
       ];
 
-      await runCompileCheck(
-        {
-          fileService: new TaskRunFileService(executionId),
-          outputState,
-          logger: spiedTrace(),
-          streamId: 'compile-stream',
-        },
-        2,
-      );
+      await runCompileCheck(compileContext(executionId, outputState), 2);
 
       expect(mocks.compileLatex2Pdf).toHaveBeenCalledWith(
         expect.objectContaining({ absolutePath: texPath }),
@@ -248,17 +261,6 @@ describe('workflow LaTeX compile input directories', () => {
     const executionId = 'latexdiff-input-dir';
     await initLatexPlatform({});
 
-    const manager = new LatexDiffManager(
-      AgentWorkflowSettingSchema.parse({
-        agentCategory: AgentCategory.Workflow,
-      }),
-      () => ({}),
-      [],
-      spiedTrace(),
-      'diff-stream',
-      new TaskRunFileService(executionId),
-    );
-
     const referenceLocation = runStorageFile(
       executionId,
       path.join('r1', 'Draft', 'main.tex'),
@@ -267,7 +269,7 @@ describe('workflow LaTeX compile input directories', () => {
       executionId,
       path.join('r2', 'Draft', 'main.tex'),
     );
-    const compileDiff = diffCompiler(manager);
+    const compileDiff = createDiffCompiler(executionId, spiedTrace());
 
     await compileDiff.compileDiffIfSuccessful(
       { success: true, diffFileName: 'main-diff.tex' },
@@ -303,21 +305,11 @@ describe('workflow LaTeX compile input directories', () => {
   it('keeps an external latexdiff reference in its own directory', async () => {
     const executionId = 'latexdiff-external-input-dir';
     await initLatexPlatform({});
-    const manager = new LatexDiffManager(
-      AgentWorkflowSettingSchema.parse({
-        agentCategory: AgentCategory.Workflow,
-      }),
-      () => ({}),
-      [],
-      spiedTrace(),
-      'diff-stream',
-      new TaskRunFileService(executionId),
-    );
     const referenceLocation = createExternalLocation(
       '/external/project/main.tex',
     );
 
-    await diffCompiler(manager).compileDiffIfSuccessful(
+    await createDiffCompiler(executionId, spiedTrace()).compileDiffIfSuccessful(
       { success: true, diffFileName: 'main-diff.tex' },
       referenceLocation,
       {
@@ -345,20 +337,13 @@ describe('workflow LaTeX compile input directories', () => {
     const executionId = 'latexdiff-publish-failure';
     await initLatexPlatform({});
     const trace = spiedTrace();
-    const manager = new LatexDiffManager(
-      AgentWorkflowSettingSchema.parse({
-        agentCategory: AgentCategory.Workflow,
-      }),
-      () => ({}),
-      [],
-      trace,
-      'diff-stream',
-      new TaskRunFileService(executionId),
-    );
     const publishError = new Error('artifact storage unavailable');
     mocks.publishCompiledPdfArtifact.mockRejectedValueOnce(publishError);
 
-    const result = await diffCompiler(manager).compileDiffIfSuccessful(
+    const result = await createDiffCompiler(
+      executionId,
+      trace,
+    ).compileDiffIfSuccessful(
       { success: true, diffFileName: 'main-diff.tex' },
       runStorageFile(executionId, path.join('r1', 'main.tex')),
       {

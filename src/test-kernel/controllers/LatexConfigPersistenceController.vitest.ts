@@ -1,14 +1,12 @@
-// Third-party imports
+// Standard library imports
 import { strict as assert } from 'node:assert';
+
+// Third-party imports
 import { beforeEach, describe, it } from 'vitest';
 
-// Standard library imports
-
-// Local imports - state keys
+// Local imports - controllers and state keys
 import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-
-// Local imports - controllers
 
 describe('LatexConfigPersistenceController', () => {
   let controller: LatexConfigPersistenceController;

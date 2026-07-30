@@ -103,11 +103,8 @@ export function wrapAnsiToWidth(
   width?: number,
   preserveMarkdownPrefix = false,
 ): string {
-  const columns =
-    width == null || !Number.isFinite(width)
-      ? undefined
-      : Math.max(MIN_WRAP_WIDTH, Math.floor(width));
-  if (columns == null) return text;
+  if (width == null || !Number.isFinite(width)) return text;
+  const columns = Math.max(MIN_WRAP_WIDTH, Math.floor(width));
 
   return text
     .split('\n')

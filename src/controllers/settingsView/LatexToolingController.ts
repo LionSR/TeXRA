@@ -44,16 +44,12 @@ const ALLOWED_INSTALL_COMMANDS: ReadonlySet<string> = new Set([
   ),
 ]);
 
-function isAllowedLatexInstallCommand(command: string): boolean {
-  return ALLOWED_INSTALL_COMMANDS.has(command);
-}
-
 /** Builds the LaTeX settings status from tool probes and host-provided facts. */
 export class LatexToolingController {
   constructor(private readonly deps: LatexToolingControllerDeps) {}
 
   isAllowedInstallCommand(command: string): boolean {
-    return isAllowedLatexInstallCommand(command);
+    return ALLOWED_INSTALL_COMMANDS.has(command);
   }
 
   async detectStatus(): Promise<LatexSettingsStatus> {

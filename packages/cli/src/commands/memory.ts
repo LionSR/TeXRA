@@ -65,7 +65,7 @@ const memoryListCommand = defineCliCommand({
   meta: { name: 'list', description: 'List stored memories' },
   args: { ...GLOBAL_ARGS },
   catchExitCode: CliExitCode.AgentError,
-  run: (context) => runMemoryList(context),
+  run: runMemoryList,
 });
 
 const memoryShowCommand = defineCliCommand({

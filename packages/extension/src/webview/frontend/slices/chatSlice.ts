@@ -27,8 +27,9 @@ export const chatHandlers = {
 
   [MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISH_ERROR]: (message) => {
     isPolishing$.set(false);
-    const errorText = message.error ?? '';
-    showInformation(`Error polishing text: ${errorText || 'Unknown error'}`);
+    showInformation(
+      `Error polishing text: ${message.error || 'Unknown error'}`,
+    );
   },
 
   [MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_TRANSCRIBED]: (message) => {

@@ -72,9 +72,10 @@ export function stringifyConversationValue(value: unknown): string {
 function truncate(
   str: string,
   maxLen: number | undefined,
-  marker: string,
+  options: ConversationFormatOptions,
 ): string {
   if (maxLen === undefined || str.length <= maxLen) return str;
+  const marker = options.truncationMarker ?? DEFAULT_TRUNCATION_MARKER;
   return `${str.slice(0, Math.max(maxLen - marker.length, 0))}${marker}`;
 }
 
@@ -109,11 +110,10 @@ function formatToolUseMarker(
 ): string {
   if (options.includeToolUseMarkers === false) return '';
   if (options.includeToolUseInput === false) return `[tool_use: ${name}]`;
-  const marker = options.truncationMarker ?? DEFAULT_TRUNCATION_MARKER;
   const inputJson = truncate(
     typeof input === 'string' ? input : stringifyConversationValue(input ?? {}),
     options.toolBlockLimit,
-    marker,
+    options,
   );
   return `[tool_use: ${name}(${inputJson})]`;
 }
@@ -122,7 +122,6 @@ function formatToolResultMarker(
   content: unknown,
   options: ConversationFormatOptions,
 ): string {
-  const marker = options.truncationMarker ?? DEFAULT_TRUNCATION_MARKER;
   let inner: string;
   if (Array.isArray(content)) {
     inner = content
@@ -134,7 +133,7 @@ function formatToolResultMarker(
   } else {
     inner = stringifyConversationValue(content);
   }
-  return `[tool_result: ${truncate(inner, options.toolBlockLimit, marker)}]`;
+  return `[tool_result: ${truncate(inner, options.toolBlockLimit, options)}]`;
 }
 
 /**
@@ -150,7 +149,6 @@ function formatWebSearchResultMarker(
   options: ConversationFormatOptions,
 ): string {
   if (!Array.isArray(content)) return formatToolResultMarker(content, options);
-  const marker = options.truncationMarker ?? DEFAULT_TRUNCATION_MARKER;
   const entries = content
     .filter(isObject)
     .map((entry) => {
@@ -159,7 +157,7 @@ function formatWebSearchResultMarker(
       return url ? `${title} (${url})` : title;
     })
     .filter(Boolean);
-  return `[tool_result: ${truncate(entries.join(', '), options.toolBlockLimit, marker)}]`;
+  return `[tool_result: ${truncate(entries.join(', '), options.toolBlockLimit, options)}]`;
 }
 
 /**
@@ -180,13 +178,12 @@ function formatWebFetchResultMarker(
   block: Record<string, unknown>,
   options: ConversationFormatOptions,
 ): string {
-  const marker = options.truncationMarker ?? DEFAULT_TRUNCATION_MARKER;
   const result = extractWebFetchResultFields(block);
   if (result) {
     const { title = '', url = '' } = result;
     const label =
       title && url ? `${title} (${url})` : title || url || 'web_fetch_result';
-    return `[tool_result: ${truncate(label, options.toolBlockLimit, marker)}]`;
+    return `[tool_result: ${truncate(label, options.toolBlockLimit, options)}]`;
   }
   return formatToolResultMarker(block.content, options);
 }
@@ -202,20 +199,19 @@ function formatConversationBlock(
   block: unknown,
   options: ConversationFormatOptions = {},
 ): string {
-  const marker = options.truncationMarker ?? DEFAULT_TRUNCATION_MARKER;
   if (typeof block === 'string') {
-    return truncate(block, options.textLimit, marker);
+    return truncate(block, options.textLimit, options);
   }
   if (!isObject(block)) {
     return truncate(
       stringifyConversationValue(block),
       options.toolBlockLimit,
-      marker,
+      options,
     );
   }
   switch (block.kind) {
     case 'text':
-      return truncate(asText(block.text), options.textLimit, marker);
+      return truncate(asText(block.text), options.textLimit, options);
     case 'toolCall':
       return formatToolUseMarker(
         asText(block.name) || 'unknown',
@@ -228,7 +224,7 @@ function formatConversationBlock(
   // Google's `parts` entries have no `type` discriminator at all — a plain
   // `text` field is the only signal, so check it before the `type` switch.
   if (typeof block.text === 'string') {
-    return truncate(block.text, options.textLimit, marker);
+    return truncate(block.text, options.textLimit, options);
   }
 
   if (
@@ -277,7 +273,7 @@ function formatConversationBlock(
     case 'text':
       // A recognized text block whose `text` failed the duck-type check
       // above (missing/non-string) — render empty, not its JSON form.
-      return truncate(asText(block.text), options.textLimit, marker);
+      return truncate(asText(block.text), options.textLimit, options);
     case CONVERSATION_BLOCK_TYPES.image:
     case CONVERSATION_BLOCK_TYPES.imageUrl:
     case CONVERSATION_BLOCK_TYPES.inputImage:
@@ -293,7 +289,7 @@ function formatConversationBlock(
         : truncate(
             stringifyConversationValue(block),
             options.toolBlockLimit,
-            marker,
+            options,
           );
     case CONVERSATION_BLOCK_TYPES.toolUse:
       return formatToolUseMarker(
@@ -319,7 +315,7 @@ function formatConversationBlock(
       return truncate(
         stringifyConversationValue(block),
         options.toolBlockLimit,
-        marker,
+        options,
       );
   }
 }
@@ -334,10 +330,9 @@ export function formatConversationContent(
   content: unknown,
   options: ConversationFormatOptions = {},
 ): string {
-  const marker = options.truncationMarker ?? DEFAULT_TRUNCATION_MARKER;
   if (content == null) return '';
   if (typeof content === 'string') {
-    return truncate(content, options.textLimit, marker);
+    return truncate(content, options.textLimit, options);
   }
   if (Array.isArray(content)) {
     return content
@@ -348,7 +343,7 @@ export function formatConversationContent(
   return truncate(
     stringifyConversationValue(content),
     options.textLimit,
-    marker,
+    options,
   );
 }
 
@@ -400,11 +395,10 @@ function formatTopLevelToolCall(
   options: ConversationFormatOptions,
 ): string {
   if (!isObject(toolCall)) {
-    const marker = options.truncationMarker ?? DEFAULT_TRUNCATION_MARKER;
     return `[tool_use: ${truncate(
       stringifyConversationValue(toolCall),
       options.toolBlockLimit,
-      marker,
+      options,
     )}]`;
   }
   const nestedFunction = isObject(toolCall.function)

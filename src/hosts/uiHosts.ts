@@ -81,13 +81,10 @@ export interface PromptHost {
   input(options: PromptInputOptions): Promise<string | undefined>;
 }
 
-interface TerminalOptions {
+export interface TerminalRunRequest {
   name: string;
   cwd?: string;
   env?: Record<string, string | undefined>;
-}
-
-export interface TerminalRunRequest extends TerminalOptions {
   command: string;
   /** Hard cap on how long to wait for captured execution. */
   timeoutMs: number;

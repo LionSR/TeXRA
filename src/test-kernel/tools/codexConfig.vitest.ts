@@ -1,7 +1,7 @@
-// Third-party imports
-
 // Standard library imports
 import { strict as assert } from 'node:assert';
+
+// Third-party imports
 import { describe, it } from 'vitest';
 
 // Local imports
@@ -170,6 +170,7 @@ describe('buildCodexCommandToolLog', () => {
       status: 'completed',
     });
   });
+
   it('keeps running commands in progress while streaming output', () => {
     const log = buildCodexCommandToolLog({
       command: 'lake build',

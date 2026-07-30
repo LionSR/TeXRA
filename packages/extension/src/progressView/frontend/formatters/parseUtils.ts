@@ -35,9 +35,7 @@ export function stringifyWithLanguage(value: unknown): StringifyResult {
   }
 
   try {
-    const yamlString = yaml.stringify(value);
-    const text = typeof yamlString === 'string' ? yamlString.trimEnd() : '';
-    return { text, language: 'yaml' };
+    return { text: yaml.stringify(value).trimEnd(), language: 'yaml' };
   } catch {
     return { text: String(value), language: 'plaintext' };
   }

@@ -166,21 +166,27 @@ function hasBlockType(value: unknown, type: string): boolean {
 export function isAnthropicServerToolUse(
   block: unknown,
 ): block is ServerToolUseBlock {
-  return hasBlockType(block, 'server_tool_use');
+  return hasBlockType(block, ANTHROPIC_SERVER_TOOL_BLOCK_TYPES.serverToolUse);
 }
 
 /** Type guard for Anthropic web search result block. */
 export function isAnthropicWebSearchResult(
   block: unknown,
 ): block is WebSearchToolResultBlock {
-  return hasBlockType(block, 'web_search_tool_result');
+  return hasBlockType(
+    block,
+    ANTHROPIC_SERVER_TOOL_BLOCK_TYPES.webSearchToolResult,
+  );
 }
 
 /** Type guard for Anthropic web fetch result block. */
 export function isAnthropicWebFetchResult(
   block: unknown,
 ): block is WebFetchToolResultBlock {
-  return hasBlockType(block, 'web_fetch_tool_result');
+  return hasBlockType(
+    block,
+    ANTHROPIC_SERVER_TOOL_BLOCK_TYPES.webFetchToolResult,
+  );
 }
 
 /** Type guard for OpenAI web search call. */
@@ -268,6 +274,30 @@ export function mapAnthropicWebSearchEntries(
 }
 
 /**
+ * Map tool_use_id to one input field of the matching `server_tool_use` calls,
+ * so a result block can be correlated back to the query or URL that produced
+ * it. Blocks whose field is absent or empty are left out of the map.
+ */
+function serverToolInputMap(
+  content: unknown[],
+  toolName: string,
+  field: 'query' | 'url',
+): Map<string, string> {
+  const inputs = new Map<string, string>();
+  for (const block of content) {
+    if (isAnthropicServerToolUse(block) && block.name === toolName) {
+      const input = block.input as
+        Record<string, string | undefined> | undefined;
+      const value = input?.[field];
+      if (value) {
+        inputs.set(block.id, value);
+      }
+    }
+  }
+  return inputs;
+}
+
+/**
  * Extract web search results from Anthropic response content.
  * Uses SDK's WebSearchToolResultBlock and WebSearchResultBlock types.
  * Correlates server_tool_use blocks (which contain the query) with
@@ -276,38 +306,26 @@ export function mapAnthropicWebSearchEntries(
 export function extractAnthropicWebSearchResults(
   content: unknown[],
 ): WebSearchResult[] {
+  const queryMap = serverToolInputMap(content, 'web_search', 'query');
   const results: WebSearchResult[] = [];
 
-  // First pass: build a map of tool_use_id -> query from server_tool_use blocks
-  const queryMap = new Map<string, string>();
-  for (const block of content) {
-    if (isAnthropicServerToolUse(block) && block.name === 'web_search') {
-      const input = block.input as { query?: string } | undefined;
-      if (input?.query) {
-        queryMap.set(block.id, input.query);
-      }
-    }
-  }
-
-  // Second pass: extract results and match with queries
   for (const block of content) {
     if (!isAnthropicWebSearchResult(block)) {
       continue;
     }
 
     const entries = mapAnthropicWebSearchEntries(block.content);
-
-    if (entries.length > 0) {
-      // Look up the query from the corresponding server_tool_use block
-      const query = queryMap.get(block.tool_use_id) ?? '';
-      results.push({
-        query,
-        results: entries,
-        provider: 'anthropic',
-        callId: block.tool_use_id,
-        status: 'completed',
-      });
+    if (entries.length === 0) {
+      continue;
     }
+
+    results.push({
+      query: queryMap.get(block.tool_use_id) ?? '',
+      results: entries,
+      provider: 'anthropic',
+      callId: block.tool_use_id,
+      status: 'completed',
+    });
   }
 
   return results;
@@ -406,20 +424,9 @@ export function extractWebFetchResultFields(
 export function extractAnthropicWebFetchResults(
   content: unknown[],
 ): WebFetchResult[] {
+  const urlMap = serverToolInputMap(content, 'web_fetch', 'url');
   const results: WebFetchResult[] = [];
 
-  // First pass: build a map of tool_use_id → url from server_tool_use blocks
-  const urlMap = new Map<string, string>();
-  for (const block of content) {
-    if (isAnthropicServerToolUse(block) && block.name === 'web_fetch') {
-      const input = block.input as { url?: string } | undefined;
-      if (input?.url) {
-        urlMap.set(block.id, input.url);
-      }
-    }
-  }
-
-  // Second pass: extract results from web_fetch_tool_result blocks
   for (const block of content) {
     if (!isAnthropicWebFetchResult(block)) {
       continue;
@@ -538,17 +545,7 @@ export function hasOpenAIWebSearchData(
 export function extractOpenAIWebSearchResults(
   output: unknown[],
 ): WebSearchResult[] {
-  const results: WebSearchResult[] = [];
-
-  for (const item of output) {
-    if (!isOpenAIWebSearchCall(item)) {
-      continue;
-    }
-
-    results.push(buildOpenAIWebSearchResult(item));
-  }
-
-  return results;
+  return output.filter(isOpenAIWebSearchCall).map(buildOpenAIWebSearchResult);
 }
 
 // ============================================================================

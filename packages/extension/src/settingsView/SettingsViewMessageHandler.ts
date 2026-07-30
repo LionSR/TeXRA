@@ -263,12 +263,16 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       void this.withActiveWebview((w) =>
         this.githubHandlers.sendPRSubscriptions(w),
       );
-    appSignals.on('prSubscriptionsChanged', refreshSubscriptions);
-    appSignals.on('prSubscriptionBindingsChanged', refreshSubscriptions);
-    appSignals.on('repoSubscriptionsChanged', refreshSubscriptions);
-    appSignals.on('repoSubscriptionBindingsChanged', refreshSubscriptions);
-    appSignals.on('issueSubscriptionsChanged', refreshSubscriptions);
-    appSignals.on('issueSubscriptionBindingsChanged', refreshSubscriptions);
+    for (const signal of [
+      'prSubscriptionsChanged',
+      'prSubscriptionBindingsChanged',
+      'repoSubscriptionsChanged',
+      'repoSubscriptionBindingsChanged',
+      'issueSubscriptionsChanged',
+      'issueSubscriptionBindingsChanged',
+    ] as const) {
+      appSignals.on(signal, refreshSubscriptions);
+    }
     appSignals.on('toolAvailabilityChanged', () => {
       void this.withActiveWebview((w) =>
         this.sendToolDashboardData(w, { skipChecks: true }),
@@ -1036,10 +1040,9 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_API_ACCESS_MODE>,
   ): Promise<void> {
     const update = await this.profileController.setApiAccessMode(data.mode);
-    await this.withActiveWebview(async (webview) => {
-      await this.sendProfileData(webview);
-      await this.sendModelSelectionData(webview);
-    });
+    await this.withActiveWebview((w) =>
+      this.sendProfileAndModelSelectionData(w),
+    );
     const modeLabel =
       update.mode === 'included' ? 'Included Access' : 'My Own Keys';
     const suffix = update.openRouterDisabled

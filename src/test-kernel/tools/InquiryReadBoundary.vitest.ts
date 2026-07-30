@@ -14,6 +14,7 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
 }));
 
 import { ExternalInquiryRequestHandler } from '@controllers/progressView/backend/ExternalInquiryRequestHandler';
+import { platform } from '@platform/platform';
 import {
   type ExternalInquiryPermission,
   type ExternalInquiryThreadId,
@@ -32,10 +33,10 @@ async function seedThread(
   manifest: Record<string, unknown>,
   answers: Record<string, string>,
 ): Promise<void> {
-  const { platform } = await import('@platform/platform');
+  const fs = platform().fs;
   const storage = platform().storage.getGlobalStoragePath();
   const threadDir = `${storage}/ei_threads/${threadId}`;
-  await platform().fs.createDirectory(threadDir);
+  await fs.createDirectory(threadDir);
 
   for (const [relativePath, content] of Object.entries(answers)) {
     const segments = relativePath.split('/');
@@ -44,15 +45,12 @@ async function seedThread(
     let current = threadDir;
     for (const segment of segments) {
       current = `${current}/${segment}`;
-      await platform().fs.createDirectory(current);
+      await fs.createDirectory(current);
     }
-    await platform().fs.writeFile(
-      `${current}/${filename}`,
-      Buffer.from(content, 'utf8'),
-    );
+    await fs.writeFile(`${current}/${filename}`, Buffer.from(content, 'utf8'));
   }
 
-  await platform().fs.writeFile(
+  await fs.writeFile(
     `${threadDir}/manifest.json`,
     Buffer.from(JSON.stringify(manifest), 'utf8'),
   );
@@ -104,7 +102,12 @@ function openFollowUpLegacyManifest(): Record<string, unknown> {
   };
 }
 
-function createProgressProviderShell(): {
+/**
+ * Builds a progress-view shell over the inquiry request handler. With
+ * `pendingInquiry`, the handler already holds a shown request so replay has
+ * warm pending state to reconcile against.
+ */
+function createReplayShell(pendingInquiry = false): {
   replay: () => Promise<void>;
   show: ReturnType<typeof vi.fn>;
   syncThreads: ReturnType<typeof vi.fn>;
@@ -118,39 +121,25 @@ function createProgressProviderShell(): {
     canSend: () => true,
     logger: { debug: vi.fn() },
   });
+
+  if (pendingInquiry) {
+    handler.show({
+      requestId: OPEN_THREAD,
+      threadId: OPEN_THREAD,
+      question: 'Stale question',
+      allowBypass: false,
+      streamId: STREAM,
+      sessionLinks: [],
+      transcript: [],
+      mode: 'new',
+    });
+    show.mockClear();
+  }
+
   return {
     replay: () => handler.replay(),
     show,
     syncThreads,
-  };
-}
-
-function createReplayShellWithPendingInquiry(): {
-  replay: () => Promise<void>;
-  show: ReturnType<typeof vi.fn>;
-} {
-  const show = vi.fn<(permission: ExternalInquiryPermission) => void>();
-  const handler = new ExternalInquiryRequestHandler({
-    show,
-    dismiss: vi.fn(),
-    syncThreads: vi.fn(),
-    canSend: () => true,
-    logger: { debug: vi.fn() },
-  });
-  handler.show({
-    requestId: OPEN_THREAD,
-    threadId: OPEN_THREAD,
-    question: 'Stale question',
-    allowBypass: false,
-    streamId: STREAM,
-    sessionLinks: [],
-    transcript: [],
-    mode: 'new',
-  });
-  show.mockClear();
-  return {
-    replay: () => handler.replay(),
-    show,
   };
 }
 
@@ -197,7 +186,7 @@ describe('external inquiry read boundary', () => {
     await seedThread(OPEN_THREAD, openFollowUpLegacyManifest(), {
       't1/answer.txt': 'Legacy A',
     });
-    const { replay, show, syncThreads } = createProgressProviderShell();
+    const { replay, show, syncThreads } = createReplayShell();
 
     await replay();
 
@@ -222,7 +211,7 @@ describe('external inquiry read boundary', () => {
     await seedThread(OPEN_THREAD, openFollowUpLegacyManifest(), {
       't1/answer.txt': 'Legacy A',
     });
-    const { replay, show } = createReplayShellWithPendingInquiry();
+    const { replay, show } = createReplayShell(true);
 
     await replay();
 

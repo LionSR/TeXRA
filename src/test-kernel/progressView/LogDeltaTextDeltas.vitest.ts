@@ -27,16 +27,23 @@ import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { projectTaskGroupsFromStreamLog } from '@shared/streams/taskGroupProjection';
 import { assertSupported } from '@shared/utils/dispatcher';
 
-/** Seed the shared appState singleton and return a live reader over it. */
-function seedState(initialState: ProgressState): () => ProgressState {
-  appState.set(initialState);
+const STREAM_ID = 'stream-a' as StreamTabId;
+
+/**
+ * Seed the shared appState singleton with an active workflow stream and return
+ * a live reader over it.
+ */
+function seedWorkflowStream(): () => ProgressState {
+  const state = createInitialState();
+  state.activeStreamId = STREAM_ID;
+  state.streamStates.set(STREAM_ID, createStreamState(AgentCategory.Workflow));
+  appState.set(state);
   return () => appState.get();
 }
 
-function dispatch(
-  handlers: Partial<ProgressViewOutboundHandlerRegistry>,
-  message: ProgressViewOutboundMessage,
-) {
+const handlers: Partial<ProgressViewOutboundHandlerRegistry> = logHandlers;
+
+function dispatch(message: ProgressViewOutboundMessage) {
   const handler = handlers[message.command];
   expect(handler).toBeDefined();
   assertSupported(handler!)(message as never);
@@ -64,60 +71,52 @@ describe('LOG_DELTA text deltas', () => {
   });
 
   it('accepts legacy logDelta messages with no textDeltas field', () => {
-    const streamId = 'stream-a' as StreamTabId;
-    const state = createInitialState();
-    state.activeStreamId = streamId;
-    state.streamStates.set(streamId, createStreamState(AgentCategory.Workflow));
-    const getState = seedState(state);
+    const getState = seedWorkflowStream();
 
-    dispatch(logHandlers, {
+    dispatch({
       command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
-      streamId,
+      streamId: STREAM_ID,
       entries: [modelResponseEntry('hello', 'running')],
       updates: [],
     } as unknown as ProgressViewOutboundMessage);
 
-    expect(getState().streamLogs.get(streamId)?.logs[0]?.text).toBe('hello');
+    expect(getState().streamLogs.get(STREAM_ID)?.logs[0]?.text).toBe('hello');
   });
 
   it('appends streamed text without whole-entry replacement and finalizes via full update', () => {
-    const streamId = 'stream-a' as StreamTabId;
-    const state = createInitialState();
-    state.activeStreamId = streamId;
-    state.streamStates.set(streamId, createStreamState(AgentCategory.Workflow));
-    const getState = seedState(state);
+    const getState = seedWorkflowStream();
 
-    dispatch(logHandlers, {
+    dispatch({
       command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
-      streamId,
+      streamId: STREAM_ID,
       entries: [modelResponseEntry('hello', 'running')],
       updates: [],
       textDeltas: [],
     });
 
-    dispatch(logHandlers, {
+    dispatch({
       command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
-      streamId,
+      streamId: STREAM_ID,
       entries: [],
       updates: [],
       textDeltas: [{ id: 'model-response', appendText: ' world' }],
     });
 
-    const streamedLogs = getState().streamLogs.get(streamId);
+    const streamedLogs = getState().streamLogs.get(STREAM_ID);
     const streamed = streamedLogs?.logs[0];
     expect(streamed?.text).toBe('hello world');
     expect(streamedLogs?.updatedMessageIndices).toEqual([0]);
     expect(streamed && isStreamingTextLogMessage(streamed)).toBe(true);
 
-    dispatch(logHandlers, {
+    dispatch({
       command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
-      streamId,
+      streamId: STREAM_ID,
       entries: [],
       updates: [modelResponseEntry('hello world', 'completed')],
       textDeltas: [],
     });
 
-    const finalizedLogs = getState().streamLogs.get(streamId);
+    const finalizedLogs = getState().streamLogs.get(STREAM_ID);
     const finalized = finalizedLogs?.logs[0];
     expect(finalized?.text).toBe('hello world');
     expect(finalizedLogs?.updatedMessageIndices).toEqual([0]);
@@ -125,11 +124,7 @@ describe('LOG_DELTA text deltas', () => {
   });
 
   it('drops compaction activity before progress-log indexing', () => {
-    const streamId = 'stream-a' as StreamTabId;
-    const state = createInitialState();
-    state.activeStreamId = streamId;
-    state.streamStates.set(streamId, createStreamState(AgentCategory.Workflow));
-    const getState = seedState(state);
+    const getState = seedWorkflowStream();
     const activityEntry = (
       id: string,
       activityState: 'started' | 'finished',
@@ -147,9 +142,9 @@ describe('LOG_DELTA text deltas', () => {
       },
     });
 
-    dispatch(logHandlers, {
+    dispatch({
       command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
-      streamId,
+      streamId: STREAM_ID,
       entries: [
         activityEntry('compaction-start', 'started'),
         modelResponseEntry('visible', 'completed'),
@@ -159,7 +154,7 @@ describe('LOG_DELTA text deltas', () => {
       textDeltas: [],
     });
 
-    const streamLogs = getState().streamLogs.get(streamId);
+    const streamLogs = getState().streamLogs.get(STREAM_ID);
     expect(streamLogs?.logs.map(({ id }) => id)).toEqual(['model-response']);
     expect([...(streamLogs?.logIndex.keys() ?? [])]).toEqual([
       'model-response',
@@ -167,15 +162,11 @@ describe('LOG_DELTA text deltas', () => {
   });
 
   it('keeps valid group-start fields when status is unrecognized', () => {
-    const streamId = 'stream-a' as StreamTabId;
-    const state = createInitialState();
-    state.activeStreamId = streamId;
-    state.streamStates.set(streamId, createStreamState(AgentCategory.Workflow));
-    const getState = seedState(state);
+    const getState = seedWorkflowStream();
 
-    dispatch(logHandlers, {
+    dispatch({
       command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
-      streamId,
+      streamId: STREAM_ID,
       entries: [
         {
           seqNo: 1,
@@ -191,7 +182,7 @@ describe('LOG_DELTA text deltas', () => {
       textDeltas: [],
     });
 
-    const group = getState().streamStates.get(streamId)?.taskGroups[0];
+    const group = getState().streamStates.get(STREAM_ID)?.taskGroups[0];
     expect(group?.status).toBe(STREAM_PHASE.RUNNING);
     expect(group?.kind).toBe('round');
     expect(group?.index).toBe(1);
@@ -262,49 +253,38 @@ describe('LOG_DELTA GROUP_END task-group status (#7993 step 3)', () => {
   ] as const)(
     'maps GROUP_END data.status %s to task-group status %s',
     (wireStatus, expectedStatus) => {
-      const streamId = 'stream-a' as StreamTabId;
-      const state = createInitialState();
-      state.activeStreamId = streamId;
-      state.streamStates.set(
-        streamId,
-        createStreamState(AgentCategory.Workflow),
-      );
-      const getState = seedState(state);
+      const getState = seedWorkflowStream();
 
-      dispatch(logHandlers, {
+      dispatch({
         command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
-        streamId,
+        streamId: STREAM_ID,
         entries: [groupStartEntry('run-0'), groupEndEntry('run-0', wireStatus)],
         updates: [],
         textDeltas: [],
       });
 
-      const taskGroups = getState().streamStates.get(streamId)?.taskGroups;
+      const taskGroups = getState().streamStates.get(STREAM_ID)?.taskGroups;
       expect(taskGroups?.[0]?.status).toBe(expectedStatus);
     },
   );
 
   it('preserves an ambiguous Round N group identically to the shared cold reader', () => {
-    const streamId = 'stream-a' as StreamTabId;
-    const state = createInitialState();
-    state.activeStreamId = streamId;
-    state.streamStates.set(streamId, createStreamState(AgentCategory.Workflow));
-    const getState = seedState(state);
+    const getState = seedWorkflowStream();
     const legacyRound = {
       ...groupEndEntry('legacy-round', 'stopped'),
       text: 'Round 2',
     };
 
-    dispatch(logHandlers, {
+    dispatch({
       command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
-      streamId,
+      streamId: STREAM_ID,
       entries: [legacyRound],
       updates: [],
       textDeltas: [],
     });
 
     const extensionTaskGroups =
-      getState().streamStates.get(streamId)?.taskGroups;
+      getState().streamStates.get(STREAM_ID)?.taskGroups;
     expect(extensionTaskGroups).toEqual(
       projectTaskGroupsFromStreamLog([legacyRound]),
     );

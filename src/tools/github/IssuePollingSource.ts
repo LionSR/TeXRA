@@ -138,7 +138,7 @@ class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
         GhIssueSchema,
         `Skipping issue-state check for ${state.slug}#${issue.issueNumber}: malformed issue payload`,
       );
-      if (parsedIssue?.status === 200) {
+      if (parsedIssue) {
         const issueData = parsedIssue.data;
         state.etags.issue = issueRes.etag;
         const newState = issueData.state;
@@ -147,37 +147,29 @@ class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
         // close event but stay subscribed so a later reopen surfaces too.
         // Slot release is via explicit unsubscribe or the 24 h unreachable
         // failsafe. Bound by `maxConcurrent` (10).
-        if (
-          state.initialized &&
-          state.state === 'open' &&
-          newState === 'closed'
-        ) {
-          this.emit(
-            state,
-            formatIssueClosed(state.slug, issue.issueNumber, issueData),
-          );
-        }
-        if (
-          state.initialized &&
-          state.state === 'closed' &&
-          newState === 'open'
-        ) {
-          this.emit(
-            state,
-            formatIssueReopened(state.slug, issue.issueNumber, issueData),
-          );
+        if (state.initialized && state.state !== newState) {
+          if (state.state === 'open' && newState === 'closed') {
+            this.emit(
+              state,
+              formatIssueClosed(state.slug, issue.issueNumber, issueData),
+            );
+          } else if (state.state === 'closed') {
+            this.emit(
+              state,
+              formatIssueReopened(state.slug, issue.issueNumber, issueData),
+            );
+          }
         }
         state.state = newState;
       }
     }
 
-    // Parse the comments array once; both the seeding and diff branches below
-    // consume `comments`. Non-throwing: on a malformed payload, log + skip this
-    // tick. state.etags.comments and the comments cursor are advanced only inside
-    // the guarded branches, so a skip re-fetches next tick (no If-None-Match)
-    // and lastSuccessAt still advances → no 24 h detach. A bad single element
-    // triggers a whole-array skip instead of a mid-loop TypeError throw.
-    let comments: GhIssueComment[] | undefined;
+    // Validate the comments array non-throwingly: on a malformed payload, log
+    // + skip this tick. state.etags.comments and the comments cursor are
+    // advanced only after a successful parse, so a skip re-fetches next tick
+    // (no If-None-Match) and lastSuccessAt still advances → no 24 h detach. A
+    // bad single element triggers a whole-array skip instead of a mid-loop
+    // TypeError throw. The first tick only seeds so we never replay history.
     if (commentsRes.status === 200) {
       const parsedComments = this.validateOrSkip(
         commentsRes,
@@ -185,25 +177,21 @@ class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
         `Skipping comments tick for ${state.slug}#${issue.issueNumber}: malformed comments payload`,
       );
       if (!parsedComments) return;
-      comments = parsedComments.data;
-    }
-
-    if (!state.initialized) {
-      if (commentsRes.status === 200 && comments) {
-        state.etags.comments = commentsRes.etag;
-        state.comments.seed(comments);
-      }
-      state.initialized = true;
-      return;
-    }
-
-    if (commentsRes.status === 200 && comments) {
       state.etags.comments = commentsRes.etag;
-      state.comments.diff(comments, (c) => {
-        if (shouldDropBotEvent(c.user)) return;
-        this.emit(state, formatIssueComment(state.slug, issue.issueNumber, c));
-      });
+      if (state.initialized) {
+        state.comments.diff(parsedComments.data, (c) => {
+          if (shouldDropBotEvent(c.user)) return;
+          this.emit(
+            state,
+            formatIssueComment(state.slug, issue.issueNumber, c),
+          );
+        });
+      } else {
+        state.comments.seed(parsedComments.data);
+      }
     }
+
+    state.initialized = true;
   }
 }
 

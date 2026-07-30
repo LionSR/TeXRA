@@ -25,7 +25,6 @@ import {
 } from './state';
 
 const FileListSchema = z.array(z.string());
-const SingleFileSelectedSchema = z.object({ filePath: z.string() });
 
 const SetModelOptionsMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS),
@@ -59,35 +58,16 @@ const SetWorkspaceRootsMessageSchema = z.object({
   optionsData: z.array(WorkspaceRootOptionDataSchema).prefault([]),
 });
 
-const SetEditedFileMessageSchema = withFilesArray(
-  MAIN_VIEW_COMMANDS.SET_EDITED_FILE,
-);
-
 const SetBaseFileMessageSchema = withFilesArray(
   MAIN_VIEW_COMMANDS.SET_BASE_FILE,
 ).extend({
   preserveBaseFile: z.boolean().nullish(),
 });
 
-const EditedFileSelectedMessageSchema = SingleFileSelectedSchema.extend({
+const EditedFileSelectedMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED),
+  filePath: z.string(),
 });
-
-const SetInputFilesMessageSchema = withFilesArray(
-  MAIN_VIEW_COMMANDS.SET_INPUT_FILES,
-);
-
-const SetContextFilesMessageSchema = withFilesArray(
-  MAIN_VIEW_COMMANDS.SET_CONTEXT_FILES,
-);
-
-const SetMediaFilesMessageSchema = withFilesArray(
-  MAIN_VIEW_COMMANDS.SET_MEDIA_FILES,
-);
-
-const SetOutputFilesMessageSchema = withFilesArray(
-  MAIN_VIEW_COMMANDS.SET_OUTPUT_FILES,
-);
 
 const AddMediaFileMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.ADD_MEDIA_FILE),
@@ -151,18 +131,6 @@ const ShowDependencyBannerMessageSchema = z.object({
   missingTools: z.array(z.string()).nullish(),
 });
 
-const ShowGettingStartedBannerMessageSchema = z.object({
-  command: z.literal(MAIN_VIEW_COMMANDS.SHOW_GETTING_STARTED_BANNER),
-});
-
-const ShowOrchestratorBannerMessageSchema = z.object({
-  command: z.literal(MAIN_VIEW_COMMANDS.SHOW_ORCHESTRATOR_BANNER),
-});
-
-const ShowLoginBannerMessageSchema = z.object({
-  command: z.literal(MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER),
-});
-
 const SetSelectedAgentMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.SET_SELECTED_AGENT),
   agentId: z.string().nullish(),
@@ -180,13 +148,13 @@ export const MainViewMessageSchema = z.discriminatedUnion('command', [
   SetAgentOptionsMessageSchema,
   SetTeamOptionsMessageSchema,
   SetWorkspaceRootsMessageSchema,
-  SetEditedFileMessageSchema,
+  withFilesArray(MAIN_VIEW_COMMANDS.SET_EDITED_FILE),
   SetBaseFileMessageSchema,
   EditedFileSelectedMessageSchema,
-  SetInputFilesMessageSchema,
-  SetContextFilesMessageSchema,
-  SetMediaFilesMessageSchema,
-  SetOutputFilesMessageSchema,
+  withFilesArray(MAIN_VIEW_COMMANDS.SET_INPUT_FILES),
+  withFilesArray(MAIN_VIEW_COMMANDS.SET_CONTEXT_FILES),
+  withFilesArray(MAIN_VIEW_COMMANDS.SET_MEDIA_FILES),
+  withFilesArray(MAIN_VIEW_COMMANDS.SET_OUTPUT_FILES),
   AddMediaFileMessageSchema,
   SetRecentCommitsMessageSchema,
   SetCurrentFileMessageSchema,
@@ -204,11 +172,11 @@ export const MainViewMessageSchema = z.discriminatedUnion('command', [
   commandOnly(MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER),
   ShowDependencyBannerMessageSchema,
   commandOnly(MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER),
-  ShowGettingStartedBannerMessageSchema,
+  commandOnly(MAIN_VIEW_COMMANDS.SHOW_GETTING_STARTED_BANNER),
   commandOnly(MAIN_VIEW_COMMANDS.HIDE_GETTING_STARTED_BANNER),
-  ShowOrchestratorBannerMessageSchema,
+  commandOnly(MAIN_VIEW_COMMANDS.SHOW_ORCHESTRATOR_BANNER),
   commandOnly(MAIN_VIEW_COMMANDS.HIDE_ORCHESTRATOR_BANNER),
-  ShowLoginBannerMessageSchema,
+  commandOnly(MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER),
   commandOnly(MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER),
   SetSelectedAgentMessageSchema,
   SetOnboardingFunnelMessageSchema,

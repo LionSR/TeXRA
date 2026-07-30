@@ -301,6 +301,13 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
     }
   });
 
+  // A form-backed setting renders inline when this host supplied a renderer;
+  // otherwise the host opens the standalone form itself.
+  const openNamedForm = (name: string): void => {
+    if (props.formRenderers?.[name]) setMode({ kind: 'linked-form', name });
+    else props.openForm?.(name);
+  };
+
   if (mode.kind === 'linked-form') {
     return (
       props.formRenderers?.[mode.name]?.(() =>
@@ -413,10 +420,7 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
           showOverflow={window.showOverflow}
           onSelect={(category) => {
             if (category.startsWith('form:')) {
-              const name = category.slice('form:'.length);
-              if (props.formRenderers?.[name]) {
-                setMode({ kind: 'linked-form', name });
-              } else props.openForm?.(name);
+              openNamedForm(category.slice('form:'.length));
               return;
             }
             setMode({ kind: 'list', category });
@@ -437,8 +441,9 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
     );
   }
 
+  const { category } = mode;
   const categoryEntries = props.entries.filter(
-    (entry) => entry.category === mode.category,
+    (entry) => entry.category === category,
   );
   // `mode.category` always comes from `buildConfigCategoryItems(props.entries)`,
   // so a selected category always has at least one entry — no empty-list guard
@@ -454,39 +459,31 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
   const handleSelect = (key: string): void => {
     const entry = categoryEntries.find((candidate) => candidate.key === key);
     if (!entry) return;
-    const kind = settingEditKind(entry);
-    if (kind === 'boolean') {
-      commit(entry, !(effective(entry) as boolean));
-    } else if (kind === 'form') {
-      const formName = entry.openForm;
-      if (formName) {
-        if (props.formRenderers?.[formName]) {
-          setMode({ kind: 'linked-form', name: formName });
-        } else props.openForm?.(formName);
-      }
-    } else if (kind === 'enum') {
-      setMode({ kind: 'enum', entry, category: mode.category });
-    } else if (kind === 'string') {
-      setMode({
-        kind: 'text',
-        entry,
-        isNumber: false,
-        category: mode.category,
-      });
-    } else if (kind === 'number') {
-      setMode({
-        kind: 'text',
-        entry,
-        isNumber: true,
-        category: mode.category,
-      });
+    switch (settingEditKind(entry)) {
+      case 'boolean':
+        commit(entry, !(effective(entry) as boolean));
+        return;
+      case 'form':
+        if (entry.openForm) openNamedForm(entry.openForm);
+        return;
+      case 'enum':
+        setMode({ kind: 'enum', entry, category });
+        return;
+      case 'string':
+        setMode({ kind: 'text', entry, isNumber: false, category });
+        return;
+      case 'number':
+        setMode({ kind: 'text', entry, isNumber: true, category });
+        return;
+      case 'readonly':
+        // Read-only rows are disabled in the list and never reach here.
+        return;
     }
-    // 'readonly' rows are disabled in the list and never reach here.
   };
 
   return (
     <FormFrame
-      title={`/config · ${configCategoryLabel(mode.category)}`}
+      title={`/config · ${configCategoryLabel(category)}`}
       showCloseHint={false}
     >
       <Select

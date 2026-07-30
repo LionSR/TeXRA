@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import * as logger from '@logger/logUtils';
 import type { FileLocation } from '@shared/schemas';
 import { renderPrompt } from '@utils/prompt';
-import { AbsoluteFS, TaskRunFileService, pathToLocation } from '@utils/files';
+import { AbsoluteFS, pathToLocation } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 
 // Local imports - latex utils
@@ -13,33 +13,7 @@ import { compileLatex2Pdf } from './texTools';
 
 const CHANNEL = 'LaTeXCommands';
 
-/**
- * Pick the run-storage-relative path for a location, falling back to its
- * absolute path for external (non-run-storage) locations.
- */
-function runStoragePath(loc: FileLocation): string {
-  return loc.kind !== 'external' ? loc.relativePath : loc.absolutePath;
-}
-
 class TikzPictureManagerImpl {
-  constructor(
-    private readonly channel: string = CHANNEL,
-    private readonly fileService?: TaskRunFileService,
-  ) {}
-
-  /**
-   * Create a FileLocation, using fileService if available (run-storage aware),
-   * otherwise falling back to a simple path-based location.
-   */
-  private createLocation(
-    relativePath: string,
-    absoluteFallback: string,
-  ): FileLocation {
-    return this.fileService
-      ? this.fileService.createLocation(relativePath)
-      : pathToLocation(absoluteFallback);
-  }
-
   /**
    * Get the TikZ template from configuration or use default
    * @returns The TikZ template string
@@ -94,7 +68,7 @@ class TikzPictureManagerImpl {
 
       if (tikzMatches.length > 0) {
         labeledTikzPictures.push([label, tikzMatches]);
-        logger.debug(this.channel, `Found TikZ picture with label: ${label}`);
+        logger.debug(CHANNEL, `Found TikZ picture with label: ${label}`);
       }
     }
 
@@ -105,14 +79,14 @@ class TikzPictureManagerImpl {
    * Create a standalone LaTeX file for a TikZ picture
    * @param tikzpictures TikZ picture content
    * @param label Label for the figure
-   * @param buildDirLocation Build directory FileLocation
+   * @param buildDir Absolute build directory path
    * @param suffix Optional suffix for multiple pictures with same label
    * @returns FileLocation of created LaTeX file
    */
-  async createStandalone(
+  private async createStandalone(
     tikzpictures: string,
     label: string,
-    buildDirLocation: FileLocation,
+    buildDir: string,
     suffix?: string,
   ): Promise<FileLocation> {
     const standaloneContent = await renderPrompt(this.getTikzTemplate(), {
@@ -120,19 +94,11 @@ class TikzPictureManagerImpl {
     });
 
     const filename = suffix ? `${label}_${suffix}.tex` : `${label}.tex`;
-    const fileRelativePath = path.join(
-      runStoragePath(buildDirLocation),
-      filename,
-    );
-
-    const texLocation = this.createLocation(
-      fileRelativePath,
-      path.join(buildDirLocation.absolutePath, filename),
-    );
+    const texLocation = pathToLocation(path.join(buildDir, filename));
 
     await AbsoluteFS.write(texLocation.absolutePath, standaloneContent);
     logger.debug(
-      this.channel,
+      CHANNEL,
       `Created standalone LaTeX file: ${texLocation.absolutePath}`,
     );
 
@@ -145,24 +111,22 @@ class TikzPictureManagerImpl {
    * @returns Array of FileLocations for compiled PDF files
    */
   async compile(latexFile: FileLocation): Promise<FileLocation[]> {
-    const inputName = path.parse(path.basename(latexFile.absolutePath)).name;
-    const inputDir = path.dirname(runStoragePath(latexFile));
-    const buildRelativePath = path.join(inputDir, 'build', inputName);
-
-    const buildDirLocation = this.createLocation(
-      buildRelativePath,
-      path.join(path.dirname(latexFile.absolutePath), 'build', inputName),
+    const inputName = path.parse(latexFile.absolutePath).name;
+    const buildDir = path.join(
+      path.dirname(latexFile.absolutePath),
+      'build',
+      inputName,
     );
 
-    await AbsoluteFS.ensureDir(buildDirLocation.absolutePath);
+    await AbsoluteFS.ensureDir(buildDir);
 
     logger.debug(
-      this.channel,
+      CHANNEL,
       `Extracting TikZ pictures from ${latexFile.absolutePath}`,
     );
     const labeledTikzPictures = await this.extract(latexFile);
     logger.debug(
-      this.channel,
+      CHANNEL,
       `Found ${labeledTikzPictures.length} labeled TikZ pictures`,
     );
 
@@ -178,16 +142,16 @@ class TikzPictureManagerImpl {
         const texLocation = await this.createStandalone(
           tikzpictures,
           label,
-          buildDirLocation,
+          buildDir,
           suffix,
         );
         const compiled = await compileLatex2Pdf(texLocation, {
-          channel: this.channel,
+          channel: CHANNEL,
           compiler: 'pdflatex',
         });
         if (!compiled.ok) {
           logger.warn(
-            this.channel,
+            CHANNEL,
             `Failed to compile TikZ picture ${texLocation.absolutePath}:\n${compiled.logTail}`,
             {
               data: {
@@ -199,21 +163,14 @@ class TikzPictureManagerImpl {
         }
 
         // Derive PDF location from tex location
-        const pdfFilename = path
-          .basename(texLocation.absolutePath)
-          .replace(/\.tex$/, '.pdf');
-        const texDir = path.dirname(runStoragePath(texLocation));
-        const pdfRelativePath = path.join(texDir, pdfFilename);
-
-        const pdfLocation = this.createLocation(
-          pdfRelativePath,
-          path.join(path.dirname(texLocation.absolutePath), pdfFilename),
+        const pdfLocation = pathToLocation(
+          texLocation.absolutePath.replace(/\.tex$/, '.pdf'),
         );
 
         if (await AbsoluteFS.exists(pdfLocation.absolutePath)) {
           compiledFiles.push(pdfLocation);
           logger.debug(
-            this.channel,
+            CHANNEL,
             `Successfully compiled: ${pdfLocation.absolutePath}`,
           );
         }

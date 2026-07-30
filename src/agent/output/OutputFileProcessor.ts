@@ -5,6 +5,7 @@ import { replaceInputCommands } from '@agent/output/fileMapping';
 import {
   type FileLocation,
   type OutputFileInfo,
+  type OutputXmlSummary,
   type RoundOutput,
 } from '@shared/schemas';
 import { OUTPUT_DOCUMENTS_TAG } from '@shared/schemas/output';
@@ -182,15 +183,22 @@ export class OutputFileProcessor {
     const singleFile =
       processed.length === 1 ? processed[0].location.absolutePath : null;
 
-    const emptySummary = {
-      tagContents: {},
-      documents: [] as string[],
+    // `documents` used to hold the same text again, re-wrapped in its XML
+    // tags — pure duplication of `tagContents[OUTPUT_DOCUMENTS_TAG]` with
+    // nothing reading either the tag-wrapped or bare form downstream. Every
+    // full-text round summary was cloned per node step (see persistedFlow.ts),
+    // so the duplicate copy cost grew with every round of every run.
+    const buildSummary = (
+      tagContents: Record<string, string[]> = {},
+    ): OutputXmlSummary => ({
+      tagContents,
+      documents: [],
       singleOutputFile: singleFile,
       sourceLocation: rawOutput,
-    };
+    });
 
     if (!rawOutput?.absolutePath) {
-      data.xmlSummary = emptySummary;
+      data.xmlSummary = buildSummary();
       return;
     }
 
@@ -225,25 +233,14 @@ export class OutputFileProcessor {
           tagContents.scratchpad = [scratchpadContent];
         }
 
-        // `documents` used to hold the same text again, re-wrapped in its
-        // XML tags — pure duplication of `tagContents[OUTPUT_DOCUMENTS_TAG]`
-        // with nothing reading either the tag-wrapped or bare form
-        // downstream. Every full-text round summary was cloned per node
-        // step (see persistedFlow.ts), so the duplicate copy cost grew with
-        // every round of every run.
-        data.xmlSummary = {
-          tagContents,
-          documents: [],
-          singleOutputFile: singleFile,
-          sourceLocation: rawOutput,
-        };
+        data.xmlSummary = buildSummary(tagContents);
       },
       {
         logger: this.ctx.logger,
         level: 'debug',
         label: `Failed to collect XML summary for round ${round}`,
         recover: () => {
-          data.xmlSummary = { ...emptySummary };
+          data.xmlSummary = buildSummary();
         },
       },
     );

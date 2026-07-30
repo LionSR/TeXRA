@@ -1,16 +1,13 @@
 // Node imports
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 import * as yaml from 'yaml';
 
-const REPO_ROOT = resolve(
-  fileURLToPath(new URL('.', import.meta.url)),
-  '../../..',
-);
+// Local imports
+import { REPO_ROOT } from '@test/support/repoScan';
 
 interface EngineerAgentYaml {
   name: string;
@@ -18,25 +15,23 @@ interface EngineerAgentYaml {
   prompts: { systemPrompt: string };
 }
 
-function readEngineerAgent(): EngineerAgentYaml {
-  const text = readFileSync(
+const agent = yaml.parse(
+  readFileSync(
     resolve(
       REPO_ROOT,
       'packages/extension/resources/tool_use_agents/engineer.yaml',
     ),
     'utf8',
-  );
-  return yaml.parse(text) as EngineerAgentYaml;
-}
+  ),
+) as EngineerAgentYaml;
+const systemPrompt = agent.prompts.systemPrompt;
 
 describe('engineer agent prompt', () => {
   it('can delegate to tool-use agents', () => {
-    expect(readEngineerAgent().settings.tools).toContain('delegate_agent');
+    expect(agent.settings.tools).toContain('delegate_agent');
   });
 
   it('grounds its delegation targets in the live Available agents roster', () => {
-    const systemPrompt = readEngineerAgent().prompts.systemPrompt;
-
     // The fix for #6655: the engineer must defer to the agents the delegate_agent
     // tool currently lists, not assume its hardcoded specialists are reachable.
     expect(systemPrompt).toContain('Available agents');
@@ -47,8 +42,6 @@ describe('engineer agent prompt', () => {
   });
 
   it('handles a specialist that is absent from the active roster', () => {
-    const systemPrompt = readEngineerAgent().prompts.systemPrompt;
-
     // No silent capability degradation: a missing specialist is done in-house or
     // surfaced to the user, never handed to an unrelated agent.
     expect(systemPrompt).toMatch(/no match/i);
@@ -59,8 +52,6 @@ describe('engineer agent prompt', () => {
   });
 
   it('still documents its ideal software specialist roles', () => {
-    const systemPrompt = readEngineerAgent().prompts.systemPrompt;
-
     for (const role of [
       'coder',
       'codeReviewer',

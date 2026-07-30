@@ -232,39 +232,6 @@ function extractModelFromPath(apiPath: string): string | null {
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /**
- * Calculate access status for a user based on their tier and expiration date.
- */
-function calculateAccessStatus(
-  tier: string | null,
-  accessExpiresAt: string | null,
-): {
-  tier: string | null;
-  accessExpiresAt: string | null;
-  isExpired: boolean;
-  daysRemaining: number | null;
-} {
-  if (!accessExpiresAt) {
-    return {
-      tier,
-      accessExpiresAt: null,
-      isExpired: false,
-      daysRemaining: null,
-    };
-  }
-
-  const daysRemaining = Math.ceil(
-    (new Date(accessExpiresAt).getTime() - Date.now()) / MS_PER_DAY,
-  );
-
-  return {
-    tier,
-    accessExpiresAt,
-    isExpired: daysRemaining <= 0,
-    daysRemaining,
-  };
-}
-
-/**
  * Create a JSON error response with relay metadata.
  *
  * Uses nested error format compatible with both OpenAI and Anthropic SDKs.
@@ -388,30 +355,32 @@ app.get('/tier-config', async (c) => {
         if (profile) {
           const now = new Date();
           const tier = profile.tier || FREE_TIER;
+          const accessExpiresAt: string | null =
+            profile.access_expires_at || null;
+          const daysRemaining =
+            accessExpiresAt === null
+              ? null
+              : Math.ceil(
+                  (new Date(accessExpiresAt).getTime() - now.getTime()) /
+                    MS_PER_DAY,
+                );
           const userStatus = {
-            ...calculateAccessStatus(profile.tier, profile.access_expires_at),
+            tier: profile.tier,
+            accessExpiresAt,
+            isExpired: daysRemaining !== null && daysRemaining <= 0,
+            daysRemaining,
             isBanned: isFutureTimestamp(profile.banned_until, now),
           };
 
           const enforcement = requireRelayEnforcementClient(adminClient);
-          if (!enforcement.ok) {
-            return c.json({
-              ...config,
-              userStatus,
-              spendingStatus: null,
-              spendingStatusError: {
-                spendCheckFailed: true,
-                failureReason: enforcement.reason,
+          const spending = enforcement.ok
+            ? await checkSpendingLimit(enforcement.client, userId, tier)
+            : {
+                status: 'unavailable' as const,
+                reason: enforcement.reason,
                 limit: getSpendingLimit(tier),
-              },
-            });
-          }
+              };
 
-          const spending = await checkSpendingLimit(
-            enforcement.client,
-            userId,
-            tier,
-          );
           if (spending.status === 'unavailable') {
             return c.json({
               ...config,
@@ -425,19 +394,18 @@ app.get('/tier-config', async (c) => {
             });
           }
 
-          const spendingStatus = {
-            currentSpend: spending.currentSpend,
-            limit: spending.limit,
-            remaining: spending.remaining,
-            percentUsed:
-              spending.limit > 0
-                ? Math.round((spending.currentSpend / spending.limit) * 100)
-                : 100,
-          };
           return c.json({
             ...config,
             userStatus,
-            spendingStatus,
+            spendingStatus: {
+              currentSpend: spending.currentSpend,
+              limit: spending.limit,
+              remaining: spending.remaining,
+              percentUsed:
+                spending.limit > 0
+                  ? Math.round((spending.currentSpend / spending.limit) * 100)
+                  : 100,
+            },
           });
         }
       }

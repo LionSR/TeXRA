@@ -22,8 +22,6 @@ const FileOpParamsSchema = z.object({
   model: RequiredString,
 });
 
-export type FileOpParams = z.infer<typeof FileOpParamsSchema>;
-
 /** Positional arguments shared by the single-file pack and clean commands. */
 export const FileOpCommandArgsSchema = z.tuple([
   FileOpParamsSchema.shape.inputFile,

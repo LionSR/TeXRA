@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FakeStateStore } from '@test/support/FakePlatform';
@@ -41,10 +41,15 @@ describe('desktop update checker', () => {
     const release: DesktopLatestRelease = {
       version: '0.40.0',
     };
+    let checkForDesktopUpdate: DesktopUpdateCheckerModule['checkForDesktopUpdate'];
+    let globalState: FakeStateStore;
+
+    beforeEach(async () => {
+      ({ checkForDesktopUpdate } = await loadDesktopUpdateChecker());
+      globalState = new FakeStateStore();
+    });
 
     it('skips entirely for unpackaged (dev) runs', async () => {
-      const { checkForDesktopUpdate } = await loadDesktopUpdateChecker();
-      const globalState = new FakeStateStore();
       let fetchCalls = 0;
       let notifyCalls = 0;
 
@@ -66,8 +71,6 @@ describe('desktop update checker', () => {
     });
 
     it('skips entirely when TEXRA_NO_UPDATE_CHECK is set', async () => {
-      const { checkForDesktopUpdate } = await loadDesktopUpdateChecker();
-      const globalState = new FakeStateStore();
       let fetchCalls = 0;
 
       await checkForDesktopUpdate({
@@ -86,8 +89,6 @@ describe('desktop update checker', () => {
     });
 
     it('notifies once when a newer release is found, and persists the notified version', async () => {
-      const { checkForDesktopUpdate } = await loadDesktopUpdateChecker();
-      const globalState = new FakeStateStore();
       const notified: DesktopLatestRelease[] = [];
 
       await checkForDesktopUpdate({
@@ -110,8 +111,6 @@ describe('desktop update checker', () => {
     });
 
     it('does not notify when the latest release is not newer', async () => {
-      const { checkForDesktopUpdate } = await loadDesktopUpdateChecker();
-      const globalState = new FakeStateStore();
       let notifyCalls = 0;
 
       await checkForDesktopUpdate({
@@ -129,8 +128,6 @@ describe('desktop update checker', () => {
     });
 
     it('throttles repeated checks within the same day', async () => {
-      const { checkForDesktopUpdate } = await loadDesktopUpdateChecker();
-      const globalState = new FakeStateStore();
       let fetchCalls = 0;
       // A realistic epoch timestamp: on the very first check ever,
       // `lastCheckedAt` defaults to 0, and this must be far enough past that
@@ -166,8 +163,6 @@ describe('desktop update checker', () => {
     });
 
     it('does not re-notify for a release version already notified', async () => {
-      const { checkForDesktopUpdate } = await loadDesktopUpdateChecker();
-      const globalState = new FakeStateStore();
       let notifyCalls = 0;
       let nowMs = Date.UTC(2026, 0, 1);
 
@@ -195,8 +190,6 @@ describe('desktop update checker', () => {
     });
 
     it('does not persist the throttle stamp on a failed fetch, so the next launch retries', async () => {
-      const { checkForDesktopUpdate } = await loadDesktopUpdateChecker();
-      const globalState = new FakeStateStore();
       let fetchCalls = 0;
       const nowMs = Date.UTC(2026, 0, 1);
 
@@ -240,8 +233,6 @@ describe('desktop update checker', () => {
     });
 
     it('does not persist the throttle stamp when notification fails', async () => {
-      const { checkForDesktopUpdate } = await loadDesktopUpdateChecker();
-      const globalState = new FakeStateStore();
       const nowMs = Date.UTC(2026, 0, 1);
       let notifyCalls = 0;
 
@@ -276,8 +267,6 @@ describe('desktop update checker', () => {
     });
 
     it('coalesces concurrent checks into one fetch and notification', async () => {
-      const { checkForDesktopUpdate } = await loadDesktopUpdateChecker();
-      const globalState = new FakeStateStore();
       let fetchCalls = 0;
       let firstNotifyCalls = 0;
       let secondNotifyCalls = 0;

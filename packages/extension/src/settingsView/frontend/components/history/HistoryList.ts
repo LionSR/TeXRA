@@ -154,7 +154,9 @@ export class HistoryList extends LitElement {
     ++this.searchVersion;
     this.state?.setSearchIndex(-1);
     this.state?.setTotalMatches(0);
-    this.clearItemMarks();
+    for (const item of this.historyItemElements ?? []) {
+      void item.applySearch?.('');
+    }
     this.updateMatchCount();
   }
 
@@ -222,21 +224,11 @@ export class HistoryList extends LitElement {
     this.matchOffsets = nextOffsets;
     this.matchCounts = nextCounts;
     this.state?.setTotalMatches(total);
+    this.state?.setSearchIndex(total > 0 ? 0 : -1);
+    this.updateMatchCount();
     if (total > 0) {
-      this.state?.setSearchIndex(0);
-      this.updateMatchCount();
       this.requestUpdate();
-    } else {
-      this.state?.setSearchIndex(-1);
-      this.updateMatchCount();
     }
-  }
-
-  private clearItemMarks(): void {
-    const items = [...(this.historyItemElements ?? [])];
-    void Promise.all(
-      items.map((item) => item.applySearch?.('') ?? Promise.resolve(0)),
-    );
   }
 
   private handleToggle(

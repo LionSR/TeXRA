@@ -219,9 +219,9 @@ export async function countPdfPages(pdfPath: string): Promise<number> {
 /** Convert a single page of a PDF to a base64 encoded PNG image. */
 async function singlePagePdf2Png(
   pdfPath: string,
-  pageNum: number = 1,
-  quality: number = DEFAULT_PDF_QUALITY,
-  maxSize: [number, number] = DEFAULT_PDF_MAX_SIZE,
+  pageNum: number,
+  quality: number,
+  maxSize: [number, number],
 ): Promise<string> {
   try {
     // Check for GraphicsMagick/ImageMagick installation
@@ -278,11 +278,11 @@ async function singlePagePdf2Png(
 /** Convert multiple pages of a PDF to base64 encoded PNG images. */
 async function multiPagePdf2Png(
   pdfPath: string,
-  quality: number = DEFAULT_PDF_QUALITY,
-  maxSize: [number, number] = DEFAULT_PDF_MAX_SIZE,
+  pageCount: number,
+  quality: number,
+  maxSize: [number, number],
   maxPages: number = 100,
 ): Promise<string[]> {
-  const pageCount = await countPdfPages(pdfPath);
   const pagesToConvert = Math.min(pageCount, maxPages);
 
   const base64Images: string[] = [];
@@ -307,8 +307,8 @@ async function multiPagePdf2Png(
 export async function processPdf2Png(
   pdfPath: string,
   maxPages?: number,
-  quality?: number,
-  maxSize?: [number, number],
+  quality: number = DEFAULT_PDF_QUALITY,
+  maxSize: [number, number] = DEFAULT_PDF_MAX_SIZE,
 ): Promise<string | string[] | null> {
   try {
     const absolutePath = await resolveFile(pdfPath);
@@ -322,16 +322,14 @@ export async function processPdf2Png(
       return null;
     }
 
-    const finalQuality = quality ?? DEFAULT_PDF_QUALITY;
-    const finalMaxSize: [number, number] = maxSize ?? DEFAULT_PDF_MAX_SIZE;
-
     if (pageCount === 1) {
-      return await singlePagePdf2Png(pdfPath, 1, finalQuality, finalMaxSize);
+      return await singlePagePdf2Png(pdfPath, 1, quality, maxSize);
     }
     return await multiPagePdf2Png(
       pdfPath,
-      finalQuality,
-      finalMaxSize,
+      pageCount,
+      quality,
+      maxSize,
       maxPages,
     );
   } catch (err) {

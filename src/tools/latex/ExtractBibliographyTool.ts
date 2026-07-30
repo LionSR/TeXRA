@@ -96,9 +96,7 @@ export class ExtractBibliographyTool extends defineTool({
         `BibTeX entries in ${display}`,
         `No citation commands found in ${display}.`,
       );
-      return missingNote
-        ? { ...result, output: `${result.output}${missingNote}` }
-        : result;
+      return { ...result, output: `${result.output}${missingNote}` };
     }
 
     const { entries, missingKeys } = await loadBibliographyEntries(
@@ -132,7 +130,7 @@ export class ExtractBibliographyTool extends defineTool({
         `Missing bibliography files: ${formatPathList(missingBibliographyFiles)}.`,
       missingKeys.length > 0 &&
         `Missing citation keys: ${missingKeys.map((k) => `\`${k}\``).join(', ')}.`,
-      entries.size > DEFAULT_MAX_ENTRIES &&
+      entryCount > DEFAULT_MAX_ENTRIES &&
         `Limited output to ${DEFAULT_MAX_ENTRIES} entries.`,
     ].filter((x): x is string => Boolean(x));
 

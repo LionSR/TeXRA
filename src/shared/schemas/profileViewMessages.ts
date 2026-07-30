@@ -127,17 +127,12 @@ export type UpdateProfileMessage = z.infer<typeof UpdateProfileMessageSchema>;
 // Inbound message schemas (frontend → backend)
 // ============================================================
 
-/** API access mode message (reusable field schema) */
-const SetApiAccessModeMessageSchema = z.object({
-  mode: ApiAccessModeSchema,
-});
-
 // Inbound messages with command literals
 export const SignInMessageSchema = commandOnly(PROFILE_VIEW_COMMANDS.SIGN_IN);
 
 export const SignOutMessageSchema = commandOnly(PROFILE_VIEW_COMMANDS.SIGN_OUT);
 
-export const SetApiAccessModeInboundMessageSchema =
-  SetApiAccessModeMessageSchema.extend({
-    command: z.literal(PROFILE_VIEW_COMMANDS.SET_API_ACCESS_MODE),
-  });
+export const SetApiAccessModeInboundMessageSchema = z.object({
+  command: z.literal(PROFILE_VIEW_COMMANDS.SET_API_ACCESS_MODE),
+  mode: ApiAccessModeSchema,
+});

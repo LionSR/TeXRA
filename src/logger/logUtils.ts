@@ -52,22 +52,6 @@ let outputSinksTrusted = false;
 
 const redactingSinks = new WeakMap<OutputSink, OutputSink>();
 
-function getKey(channel: string, isAgent: boolean): string {
-  return `${channel}::${isAgent ? 'agent' : 'shared'}`;
-}
-
-function getTimestamp(): string {
-  return format(new Date(), 'yyyy-MM-dd HH:mm:ss.SSS');
-}
-
-function createConsoleSink(channel: string): OutputSink {
-  return {
-    appendLine(message: string) {
-      console.info(`[${channel}] ${message}`);
-    },
-  };
-}
-
 function createRedactingSink(sink: OutputSink): OutputSink {
   const existing = redactingSinks.get(sink);
   if (existing) return existing;
@@ -86,12 +70,16 @@ function createRedactingSink(sink: OutputSink): OutputSink {
 
 function createOutputChannel(channel: string, isAgent: boolean): OutputSink {
   const name = isAgent ? `TeXRA ${channel}` : 'TeXRA';
-  const sink = outputChannelFactory?.(name) ?? createConsoleSink(name);
+  const sink = outputChannelFactory?.(name) ?? {
+    appendLine(message: string) {
+      console.info(`[${name}] ${message}`);
+    },
+  };
   return outputSinksTrusted ? sink : createRedactingSink(sink);
 }
 
 function ensureChannel(channel: string, isAgent: boolean): OutputSink {
-  const key = getKey(channel, isAgent);
+  const key = `${channel}::${isAgent ? 'agent' : 'shared'}`;
   const existing = channels.get(key);
   if (existing) return existing;
 
@@ -124,10 +112,9 @@ function writeLine(
   data: unknown,
 ): void {
   const sink = ensureChannel(channel, isAgent);
+  const timestamp = format(new Date(), 'yyyy-MM-dd HH:mm:ss.SSS');
   const prefix = isAgent ? '' : `[${channel}] `;
-  sink.appendLine(
-    `${LEVEL_TAG[level]} [${getTimestamp()}] ${prefix}${message}`,
-  );
+  sink.appendLine(`${LEVEL_TAG[level]} [${timestamp}] ${prefix}${message}`);
 
   if (data === null || data === undefined) return;
   if (!isDebugModeEnabled()) return;
@@ -169,16 +156,6 @@ function normalizeLogData(data: unknown): string {
   );
 }
 
-function logAt(
-  level: LogLevel,
-  channel: string,
-  message: string,
-  options: LogUtilsOptions,
-): void {
-  // Functional callers write to the shared output channel.
-  writeLine(level, channel, /* isAgent */ false, message, options.data);
-}
-
 /**
  * Replace the host sink factory and dispose all cached sinks. New sinks redact
  * secrets unless the host explicitly identifies a local operator terminal as
@@ -204,10 +181,10 @@ type LogFn = (
   options?: LogUtilsOptions,
 ) => void;
 
-/** Build a level-bound forwarder onto {@link logAt}. */
+/** Build a level-bound writer onto the shared output channel. */
 function makeLogFn(level: LogLevel): LogFn {
   return (channel, message, options = {}) =>
-    logAt(level, channel, message, options);
+    writeLine(level, channel, /* isAgent */ false, message, options.data);
 }
 
 export const debug = makeLogFn(LOG_LEVELS.DEBUG);

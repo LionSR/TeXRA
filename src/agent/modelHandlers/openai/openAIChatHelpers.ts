@@ -12,18 +12,14 @@ import type { ChatCompletionSnapshot } from 'openai/lib/ChatCompletionStream';
 // Reasoning content type for DeepSeek, o1 models (not in SDK)
 type ReasoningContent = string | { type: string; text?: string }[];
 
-function extractReasoningText(content: ReasoningContent | undefined): string {
-  if (!content) return '';
-  if (typeof content === 'string') return content;
-  return content.map((item) => item.text ?? '').join('');
-}
-
 /** Extracts `reasoning_content` from a streaming chunk delta. */
 export function extractReasoningDelta(chunk: ChatCompletionChunk): string {
   const delta = chunk.choices[0]?.delta as
     { reasoning_content?: ReasoningContent } | undefined;
-  if (!delta || !('reasoning_content' in delta)) return '';
-  return extractReasoningText(delta.reasoning_content);
+  const content = delta?.reasoning_content;
+  if (!content) return '';
+  if (typeof content === 'string') return content;
+  return content.map((item) => item.text ?? '').join('');
 }
 
 /**

@@ -33,6 +33,60 @@ function makeSession(
   };
 }
 
+type SessionUser = { id: string; email: string | null };
+
+function makeNativeSession(
+  overrides: Partial<{ expires_at: number; user: SessionUser }> = {},
+): SupabaseNativeSession {
+  return {
+    access_token: 'access-token',
+    refresh_token: 'refresh-token',
+    expires_at: 123,
+    user: { id: 'user-id', email: 'user@example.com' },
+    ...overrides,
+  } as unknown as SupabaseNativeSession;
+}
+
+function makeExchangeResponse(
+  overrides: Partial<{ expires_at: number; user: SessionUser }> = {},
+): {
+  access_token: string;
+  refresh_token: string;
+  expires_at?: number;
+  token_type: string;
+  user: SessionUser;
+} {
+  return {
+    access_token: 'access-token',
+    refresh_token: 'refresh-token',
+    token_type: 'bearer',
+    user: { id: 'user-id', email: null },
+    ...overrides,
+  };
+}
+
+// A refresh endpoint reply that migrates a custom-refresh session back onto the
+// native path.
+const REFRESHED_SESSION_BODY = JSON.stringify({
+  access_token: 'new-access',
+  refresh_token: 'new-refresh',
+  expires_at: 789,
+  token_type: 'bearer',
+  user: {
+    id: 'user-id',
+    email: 'new@example.com',
+  },
+});
+
+function expiredCustomSession(): SupabaseSession {
+  return makeSession({
+    accessToken: 'old-access',
+    refreshToken: 'old-refresh',
+    expiresAt: Date.now() - 1_000,
+    useCustomRefresh: true,
+  });
+}
+
 function createMemoryStorage(initial?: SupabaseSession): {
   storage: SupabaseSessionStorage;
   read: () => SupabaseSession | null;
@@ -149,17 +203,7 @@ describe('SupabaseSession', () => {
 
   describe('toStorableSupabaseSession', () => {
     it('converts Supabase native sessions into the stored shape', () => {
-      const nativeSession = {
-        access_token: 'access-token',
-        refresh_token: 'refresh-token',
-        expires_at: 123,
-        user: {
-          id: 'user-id',
-          email: 'user@example.com',
-        },
-      } as unknown as SupabaseNativeSession;
-
-      const session = toStorableSupabaseSession(nativeSession, {
+      const session = toStorableSupabaseSession(makeNativeSession(), {
         useCustomRefresh: true,
       });
 
@@ -175,15 +219,9 @@ describe('SupabaseSession', () => {
     });
 
     it('trims whitespace from the native session email label', () => {
-      const nativeSession = {
-        access_token: 'access-token',
-        refresh_token: 'refresh-token',
-        expires_at: 123,
-        user: {
-          id: 'user-id',
-          email: '  native@example.com  ',
-        },
-      } as unknown as SupabaseNativeSession;
+      const nativeSession = makeNativeSession({
+        user: { id: 'user-id', email: '  native@example.com  ' },
+      });
 
       assert.equal(
         toStorableSupabaseSession(nativeSession).account.label,
@@ -192,15 +230,9 @@ describe('SupabaseSession', () => {
     });
 
     it('falls back to the user id when email is missing', () => {
-      const nativeSession = {
-        access_token: 'access-token',
-        refresh_token: 'refresh-token',
-        expires_at: 123,
-        user: {
-          id: 'user-id',
-          email: '',
-        },
-      } as unknown as SupabaseNativeSession;
+      const nativeSession = makeNativeSession({
+        user: { id: 'user-id', email: '' },
+      });
 
       assert.equal(
         toStorableSupabaseSession(nativeSession).account.label,
@@ -209,14 +241,7 @@ describe('SupabaseSession', () => {
     });
 
     it('uses the default expiry when native sessions omit expires_at', () => {
-      const nativeSession = {
-        access_token: 'access-token',
-        refresh_token: 'refresh-token',
-        user: {
-          id: 'user-id',
-          email: 'user@example.com',
-        },
-      } as unknown as SupabaseNativeSession;
+      const nativeSession = makeNativeSession({ expires_at: undefined });
       const earliestExpiry = Date.now() + DEFAULT_SUPABASE_SESSION_EXPIRY_MS;
 
       const session = toStorableSupabaseSession(nativeSession);
@@ -231,16 +256,10 @@ describe('SupabaseSession', () => {
   describe('toStorableSupabaseSession exchange responses', () => {
     it('converts token exchange responses into the stored shape', () => {
       const session = toStorableSupabaseSession(
-        {
-          access_token: 'access-token',
-          refresh_token: 'refresh-token',
+        makeExchangeResponse({
           expires_at: 123,
-          token_type: 'bearer',
-          user: {
-            id: 'user-id',
-            email: 'user@example.com',
-          },
-        },
+          user: { id: 'user-id', email: 'user@example.com' },
+        }),
         {
           fallbackLabel: 'fallback@example.com',
           defaultExpiryMs: DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
@@ -260,42 +279,20 @@ describe('SupabaseSession', () => {
     });
 
     it('trims whitespace from the exchange fallback label', () => {
-      const session = toStorableSupabaseSession(
-        {
-          access_token: 'access-token',
-          refresh_token: 'refresh-token',
-          token_type: 'bearer',
-          user: {
-            id: 'user-id',
-            email: null,
-          },
-        },
-        {
-          fallbackLabel: '  github@example.com  ',
-          defaultExpiryMs: DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
-        },
-      );
+      const session = toStorableSupabaseSession(makeExchangeResponse(), {
+        fallbackLabel: '  github@example.com  ',
+        defaultExpiryMs: DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
+      });
 
       assert.equal(session.account.label, 'github@example.com');
     });
 
     it('falls back to the supplied label and default expiry', () => {
       const earliestExpiry = Date.now() + DEFAULT_SUPABASE_SESSION_EXPIRY_MS;
-      const session = toStorableSupabaseSession(
-        {
-          access_token: 'access-token',
-          refresh_token: 'refresh-token',
-          token_type: 'bearer',
-          user: {
-            id: 'user-id',
-            email: null,
-          },
-        },
-        {
-          fallbackLabel: 'fallback@example.com',
-          defaultExpiryMs: DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
-        },
-      );
+      const session = toStorableSupabaseSession(makeExchangeResponse(), {
+        fallbackLabel: 'fallback@example.com',
+        defaultExpiryMs: DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
+      });
 
       assert.equal(session.account.label, 'fallback@example.com');
       assert.ok(session.expiresAt >= earliestExpiry);
@@ -437,28 +434,10 @@ describe('SupabaseSession', () => {
     });
 
     it('refreshes custom sessions through the injected fetch boundary', async () => {
-      const initialSession = makeSession({
-        accessToken: 'old-access',
-        refreshToken: 'old-refresh',
-        expiresAt: Date.now() - 1_000,
-        useCustomRefresh: true,
-      });
       const { coordinator, read, getReadCount } = createCoordinator({
-        initialSession,
+        initialSession: expiredCustomSession(),
         fetch: async () =>
-          new Response(
-            JSON.stringify({
-              access_token: 'new-access',
-              refresh_token: 'new-refresh',
-              expires_at: 789,
-              token_type: 'bearer',
-              user: {
-                id: 'user-id',
-                email: 'new@example.com',
-              },
-            }),
-            { status: 200 },
-          ),
+          new Response(REFRESHED_SESSION_BODY, { status: 200 }),
       });
 
       assert.equal(await coordinator.ensureFreshToken(), 'new-access');
@@ -495,28 +474,10 @@ describe('SupabaseSession', () => {
     });
 
     it('returns refreshed session tokens without reloading storage', async () => {
-      const initialSession = makeSession({
-        accessToken: 'old-access',
-        refreshToken: 'old-refresh',
-        expiresAt: Date.now() - 1_000,
-        useCustomRefresh: true,
-      });
       const { coordinator, getReadCount } = createCoordinator({
-        initialSession,
+        initialSession: expiredCustomSession(),
         fetch: async () =>
-          new Response(
-            JSON.stringify({
-              access_token: 'new-access',
-              refresh_token: 'new-refresh',
-              expires_at: 789,
-              token_type: 'bearer',
-              user: {
-                id: 'user-id',
-                email: 'new@example.com',
-              },
-            }),
-            { status: 200 },
-          ),
+          new Response(REFRESHED_SESSION_BODY, { status: 200 }),
       });
 
       assert.deepEqual(await coordinator.getSessionTokens(), {
@@ -620,31 +581,14 @@ describe('SupabaseSession', () => {
     });
 
     it('does not resurrect a cleared session when refresh finishes later', async () => {
-      const initialSession = makeSession({
-        accessToken: 'old-access',
-        refreshToken: 'old-refresh',
-        expiresAt: Date.now() - 1_000,
-        useCustomRefresh: true,
-      });
       const refreshStarted = createDeferred();
       const allowRefresh = createDeferred();
       const { coordinator, read } = createCoordinator({
-        initialSession,
+        initialSession: expiredCustomSession(),
         fetch: async () => {
           refreshStarted.resolve();
           await allowRefresh.promise;
-          return new Response(
-            JSON.stringify({
-              access_token: 'new-access',
-              refresh_token: 'new-refresh',
-              expires_at: 123,
-              token_type: 'bearer',
-              user: {
-                id: 'user-id',
-                email: 'user@example.com',
-              },
-            }),
-          );
+          return new Response(REFRESHED_SESSION_BODY);
         },
       });
 
@@ -658,16 +602,10 @@ describe('SupabaseSession', () => {
     });
 
     it('reclassifies when a new session replaces one whose refresh failed', async () => {
-      const initialSession = makeSession({
-        accessToken: 'old-access',
-        refreshToken: 'old-refresh',
-        expiresAt: Date.now() - 1_000,
-        useCustomRefresh: true,
-      });
       const refreshStarted = createDeferred();
       const allowRefreshFailure = createDeferred();
       const { coordinator, read } = createCoordinator({
-        initialSession,
+        initialSession: expiredCustomSession(),
         fetch: async () => {
           refreshStarted.resolve();
           await allowRefreshFailure.promise;
@@ -714,14 +652,8 @@ describe('SupabaseSession', () => {
     });
 
     it('does not return expired session tokens when refresh fails', async () => {
-      const initialSession = makeSession({
-        accessToken: 'old-access',
-        refreshToken: 'old-refresh',
-        expiresAt: Date.now() - 1_000,
-        useCustomRefresh: true,
-      });
       const { coordinator } = createCoordinator({
-        initialSession,
+        initialSession: expiredCustomSession(),
         fetch: async () =>
           new Response(JSON.stringify({ error: 'invalid refresh token' }), {
             status: 401,
@@ -732,36 +664,11 @@ describe('SupabaseSession', () => {
       assert.equal(coordinator.getLastRefreshFailure(), 'invalid');
     });
 
-    it('classifies a refresh service outage as transient', async () => {
-      const initialSession = makeSession({
-        accessToken: 'old-access',
-        refreshToken: 'old-refresh',
-        expiresAt: Date.now() - 1_000,
-        useCustomRefresh: true,
-      });
-      const { coordinator } = createCoordinator({
-        initialSession,
-        fetch: async () =>
-          new Response(JSON.stringify({ error: 'service unavailable' }), {
-            status: 503,
-          }),
-      });
-
-      assert.equal(await coordinator.ensureFreshToken(), null);
-      assert.equal(coordinator.getLastRefreshFailure(), 'transient');
-    });
-
-    it.each([408, 429])(
+    it.each([408, 429, 503])(
       'classifies custom refresh HTTP %i as transient',
       async (status) => {
-        const initialSession = makeSession({
-          accessToken: 'old-access',
-          refreshToken: 'old-refresh',
-          expiresAt: Date.now() - 1_000,
-          useCustomRefresh: true,
-        });
         const { coordinator } = createCoordinator({
-          initialSession,
+          initialSession: expiredCustomSession(),
           fetch: async () =>
             new Response(JSON.stringify({ error: 'try again later' }), {
               status,

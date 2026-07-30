@@ -8,7 +8,7 @@ import { LRUCache } from 'lru-cache';
 
 import type { PlatformSecrets } from '@platform/secrets';
 import { API_KEY_PROVIDER_IDS } from '@shared/constants/providers';
-import { isNonEmptyString } from '@utils/core';
+import { coalesceAsync, isNonEmptyString } from '@utils/core';
 
 export const API_PROVIDERS = API_KEY_PROVIDER_IDS;
 
@@ -55,14 +55,8 @@ const lookupCache = new LRUCache<ApiProvider, ResolvedApiKey>({
   ttl: LOOKUP_CACHE_TTL_MS,
 });
 const lookupPending = new Map<ApiProvider, Promise<ResolvedApiKey>>();
-// Generation counter: in-flight lookups capture the generation at start,
-// then refuse to cache their result if invalidation bumped it during the
-// await. Without this, a stale secrets read could re-poison the cache
-// after the user already deleted the key.
-let lookupCacheGeneration = 0;
 
 export function invalidateApiKeyCache(): void {
-  lookupCacheGeneration += 1;
   lookupCache.clear();
   lookupPending.clear();
 }
@@ -83,28 +77,21 @@ async function resolveApiKeyUncached(
   return { value: undefined, origin: 'none' };
 }
 
-async function resolveApiKey(
+/**
+ * Cached secret → env lookup. Invalidation clears the in-flight map too, so a
+ * read that was already awaiting refuses to cache its now-stale result rather
+ * than re-poisoning the cache after the user deleted the key.
+ */
+function resolveApiKey(
   secrets: PlatformSecrets,
   provider: ApiProvider,
 ): Promise<ResolvedApiKey> {
-  const cached = lookupCache.get(provider);
-  if (cached) return cached;
-
-  const inFlight = lookupPending.get(provider);
-  if (inFlight) return inFlight;
-
-  const requestGeneration = lookupCacheGeneration;
-  const request = resolveApiKeyUncached(secrets, provider);
-  lookupPending.set(provider, request);
-  try {
-    const value = await request;
-    if (lookupCacheGeneration === requestGeneration) {
-      lookupCache.set(provider, value);
-    }
-    return value;
-  } finally {
-    if (lookupPending.get(provider) === request) lookupPending.delete(provider);
-  }
+  return coalesceAsync<ApiProvider, ResolvedApiKey>(
+    lookupCache,
+    lookupPending,
+    provider,
+    () => resolveApiKeyUncached(secrets, provider),
+  );
 }
 
 /**

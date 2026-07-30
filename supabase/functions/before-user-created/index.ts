@@ -86,12 +86,12 @@ async function fetchGitHubCreatedAt(login: string): Promise<string | null> {
 function extractGitHubLogin(
   meta: Record<string, unknown> | undefined,
 ): string | null {
-  if (!meta) return null;
-  const candidates = [meta.user_name, meta.preferred_username];
-  for (const c of candidates) {
-    if (typeof c === 'string' && c.length > 0) return c;
-  }
-  return null;
+  const candidates = [meta?.user_name, meta?.preferred_username];
+  return (
+    candidates.find(
+      (value): value is string => typeof value === 'string' && value.length > 0,
+    ) ?? null
+  );
 }
 
 Deno.serve(async (req) => {

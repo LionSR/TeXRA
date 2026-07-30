@@ -1,11 +1,6 @@
-// Third-party imports
 import type { ExtractResponseResult } from '@agent/types/ModelHandlerContracts';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import type { ChatCompletion } from 'openai/resources/chat/completions';
-
-// Local file imports
-
-// Type imports
 
 /**
  * Handler for xAI models using OpenAI-compatible API.

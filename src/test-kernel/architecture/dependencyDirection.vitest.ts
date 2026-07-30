@@ -1,6 +1,6 @@
 // Node imports
 import { readFileSync } from 'node:fs';
-import { dirname, relative, resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 
 // Third-party imports
 import { describe, expect, it } from 'vitest';
@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import {
   REPO_ROOT,
   sourceFilesUnder as sharedSourceFilesUnder,
+  toRepoPath,
 } from '../support/repoScan';
 
 /**
@@ -96,29 +97,25 @@ function stripComments(source: string): string {
     .join('\n');
 }
 
-function sourceFilesUnder(zone: string): string[] {
+function sourceFilesUnder(
+  zone: string,
+  opts?: { readonly excludeTestKernel?: boolean },
+): string[] {
   // A renamed/removed zone surfaces as the file-count guard below failing,
   // not as a silently green ratchet.
   return sharedSourceFilesUnder(resolve(REPO_ROOT, zone), {
     missingDirReturnsEmpty: true,
+    excludeTestKernel: opts?.excludeTestKernel,
   });
 }
 
 function productionSrcFiles(): string[] {
-  return sourceFilesUnder('src').filter((file) => {
-    const repoRelative = relative(REPO_ROOT, file).replaceAll('\\', '/');
-    return !repoRelative.startsWith('src/test-kernel/');
-  });
+  return sourceFilesUnder('src', { excludeTestKernel: true });
 }
 
-function importsVscode(file: string): boolean {
+function importsMatching(file: string, patterns: readonly RegExp[]): boolean {
   const source = stripComments(readFileSync(file, 'utf8'));
-  return VSCODE_IMPORT_PATTERNS.some((pattern) => pattern.test(source));
-}
-
-function importsAgent(file: string): boolean {
-  const source = stripComments(readFileSync(file, 'utf8'));
-  return AGENT_IMPORT_PATTERNS.some((pattern) => pattern.test(source));
+  return patterns.some((pattern) => pattern.test(source));
 }
 
 function importSpecifiers(file: string): string[] {
@@ -150,11 +147,7 @@ function importsAgentModelHandlers(file: string): boolean {
       return false;
     }
 
-    const resolvedImport = resolve(dirname(file), specifier);
-    const repoRelative = relative(REPO_ROOT, resolvedImport).replaceAll(
-      '\\',
-      '/',
-    );
+    const repoRelative = toRepoPath(resolve(dirname(file), specifier));
     return (
       repoRelative === 'src/agent/modelHandlers' ||
       repoRelative.startsWith('src/agent/modelHandlers/')
@@ -166,8 +159,8 @@ describe('VS Code-free zones never import vscode', () => {
   for (const zone of VSCODE_FREE_ZONES) {
     it(`${zone} has no vscode imports`, () => {
       const offenders = sourceFilesUnder(zone)
-        .filter(importsVscode)
-        .map((file) => relative(REPO_ROOT, file));
+        .filter((file) => importsMatching(file, VSCODE_IMPORT_PATTERNS))
+        .map(toRepoPath);
       expect(offenders).toEqual([]);
     });
   }
@@ -184,8 +177,8 @@ describe('VS Code-free zones never import vscode', () => {
 describe('Shared layer dependency direction', () => {
   it('does not grow shared-to-agent imports', () => {
     const offenders = sourceFilesUnder('src/shared')
-      .filter(importsAgent)
-      .map((file) => relative(REPO_ROOT, file).replaceAll('\\', '/'))
+      .filter((file) => importsMatching(file, AGENT_IMPORT_PATTERNS))
+      .map(toRepoPath)
       .filter((file) => !SHARED_AGENT_IMPORT_ALLOWLIST_SET.has(file))
       .toSorted();
 
@@ -197,7 +190,7 @@ describe('Production core never imports host layers', () => {
   it('has no imports from extension, CLI, or desktop aliases', () => {
     const offenders = productionSrcFiles()
       .filter(importsHostLayer)
-      .map((file) => relative(REPO_ROOT, file).replaceAll('\\', '/'))
+      .map(toRepoPath)
       .toSorted();
 
     expect(offenders).toEqual([]);
@@ -212,7 +205,7 @@ describe('Agent core dependency direction', () => {
   it('does not import model handler implementations', () => {
     const offenders = sourceFilesUnder('src/agent/core')
       .filter(importsAgentModelHandlers)
-      .map((file) => relative(REPO_ROOT, file).replaceAll('\\', '/'))
+      .map(toRepoPath)
       .toSorted();
 
     expect(offenders).toEqual([]);

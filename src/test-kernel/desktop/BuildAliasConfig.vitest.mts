@@ -14,14 +14,12 @@ interface TsconfigJson {
   };
 }
 
-function readTsconfig(relativePath: string): TsconfigJson {
-  return JSON.parse(
-    readFileSync(repoPath(relativePath), 'utf8'),
-  ) as TsconfigJson;
-}
-
 function readText(relativePath: string): string {
   return readFileSync(repoPath(relativePath), 'utf8');
+}
+
+function readTsconfig(relativePath: string): TsconfigJson {
+  return JSON.parse(readText(relativePath)) as TsconfigJson;
 }
 
 describe('build alias configuration', () => {

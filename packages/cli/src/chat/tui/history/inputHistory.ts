@@ -33,10 +33,6 @@ export interface InputHistory {
   length(): number;
 }
 
-function parseRecord(raw: string): HistoryRecord | undefined {
-  return parseJsonWith(raw, HistoryRecordSchema).unwrapOr(undefined);
-}
-
 /** Serialise the in-memory ring back to JSONL. Records keep their original
  *  timestamp so a compaction doesn't collapse the entire history to "now"
  *  in case anything ever reads the file externally. */
@@ -45,14 +41,14 @@ function serializeRecords(records: readonly HistoryRecord[]): string {
 }
 
 export async function loadInputHistory(): Promise<InputHistory> {
-  // Each record keeps its original timestamp so compactions don't rewrite
-  // every entry's `t` to `now`.
   let records: HistoryRecord[] = [];
   if (await GlobalStorageFS.exists(HISTORY_PATH)) {
     try {
       const raw = await GlobalStorageFS.read(HISTORY_PATH);
       for (const line of raw.split('\n')) {
-        const rec = parseRecord(line);
+        const rec = parseJsonWith(line, HistoryRecordSchema).unwrapOr(
+          undefined,
+        );
         if (rec && rec.v.length > 0) records.push(rec);
       }
     } catch {

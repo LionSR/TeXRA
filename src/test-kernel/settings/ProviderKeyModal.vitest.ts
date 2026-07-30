@@ -14,8 +14,8 @@ type WaDialogElement = HTMLElement & { open: boolean };
 // wa-dialog's show/hide flow chains a few requestAnimationFrame and
 // animateWithClass ticks before settling; flushing several macrotasks lets
 // those promise/timer callbacks resolve in jsdom (which has no real raf).
-async function flushDialogTicks(times = 5): Promise<void> {
-  for (let i = 0; i < times; i += 1) {
+async function flushDialogTicks(): Promise<void> {
+  for (let i = 0; i < 5; i += 1) {
     await delay(0);
   }
 }

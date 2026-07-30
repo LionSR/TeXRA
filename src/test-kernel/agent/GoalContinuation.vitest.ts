@@ -1,6 +1,4 @@
 // Test composition imports
-
-// Local imports
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
@@ -21,10 +19,6 @@ import { GoalStore, isGoalEnabled } from '@tools/goal';
 const STREAM_ID = 'stream:goal-cont' as StreamTabId;
 // Pre-rename canonical key, still honored read-only for back-compat.
 const LEGACY_GOAL_FEATURE_FLAG_KEY = LEGACY_GOAL_FEATURE_FLAG_KEYS[0];
-
-async function installPlatform(flagOn: boolean): Promise<Platform> {
-  return installPlatformWithConfig({ [GOAL_FEATURE_FLAG_KEY]: flagOn });
-}
 
 async function installPlatformWithConfig(
   config: Record<string, unknown>,
@@ -79,10 +73,12 @@ describe('isGoalEnabled', () => {
 });
 
 describe('maybeBuildGoalContinuation', () => {
-  let platform: Platform;
+  let activePlatform: Platform;
 
   beforeEach(async () => {
-    platform = await installPlatform(true);
+    activePlatform = await installPlatformWithConfig({
+      [GOAL_FEATURE_FLAG_KEY]: true,
+    });
   });
 
   afterEach(async () => {
@@ -146,7 +142,10 @@ describe('maybeBuildGoalContinuation', () => {
     await GoalStore.start(STREAM_ID, 'objective');
     // Flip just the flag — keep the same workspaceState so the active
     // goal is still on disk. Otherwise the test passes trivially.
-    (platform.config as FakeConfigProvider).set(GOAL_FEATURE_FLAG_KEY, false);
+    (activePlatform.config as FakeConfigProvider).set(
+      GOAL_FEATURE_FLAG_KEY,
+      false,
+    );
     const out = await maybeBuildGoalContinuation(STREAM_ID);
     expect(out).toBeNull();
     // Sanity: the record still exists; only the flag stopped the loop.

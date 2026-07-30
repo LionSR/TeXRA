@@ -2,8 +2,6 @@
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
-// Node.js built-in imports
-
 // Local imports
 import { AUTH_COMMANDS } from '@auth/constants';
 import { InvokeCommandTool } from '@tools/setup/InvokeCommandTool';

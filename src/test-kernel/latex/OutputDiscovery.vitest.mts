@@ -1,12 +1,11 @@
 // Standard library imports
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
-import * as os from 'node:os';
+import { mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Third-party imports
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { cleanupTempDirs } from '@test/support/tempDirPlatform';
+import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 
 // `discoverLatestExecutionOutputs` matches a run by agent/model/input and then
 // reads its per-round outputs. Headless `texra run` executions persist those
@@ -60,12 +59,6 @@ function matchingExecution(id: string) {
 describe('discoverLatestExecutionOutputs', () => {
   const tempDirs: string[] = [];
 
-  async function makeTempDir(): Promise<string> {
-    const dir = await mkdtemp(path.join(os.tmpdir(), 'texra-latexdiff-'));
-    tempDirs.push(dir);
-    return dir;
-  }
-
   beforeEach(async () => {
     vi.clearAllMocks();
     const [{ initPlatform }, { nodeFilesystem }, { createFakePlatform }] =
@@ -84,7 +77,7 @@ describe('discoverLatestExecutionOutputs', () => {
   });
 
   it('falls back to an on-disk run-dir scan when the stream-tab snapshot is empty', async () => {
-    const runDir = await makeTempDir();
+    const runDir = await makeTempDir('texra-latexdiff-', tempDirs);
     for (const round of ['r0', 'r1']) {
       await mkdir(path.join(runDir, round), { recursive: true });
       await writeFile(
@@ -114,7 +107,7 @@ describe('discoverLatestExecutionOutputs', () => {
   });
 
   it('returns null when neither the snapshot nor the run directory has outputs', async () => {
-    const emptyDir = await makeTempDir();
+    const emptyDir = await makeTempDir('texra-latexdiff-', tempDirs);
 
     mocks.listExecutions.mockResolvedValue([matchingExecution('exec-empty')]);
     mocks.findRunDir.mockResolvedValue(emptyDir);

@@ -54,6 +54,16 @@ export const CHAT_API_MODE_MODEL_RECOVERY = {
   configureKeyAction: 'configure a provider API key',
 } satisfies CliNoAvailableModelsRecoveryOptions;
 
+/** Start an abortable slash-command action and expose `abort` on its promise. */
+export function abortableSlashCommand(
+  run: (signal: AbortSignal) => Promise<void>,
+): Promise<void> & { readonly abort: () => void } {
+  const controller = new AbortController();
+  return Object.assign(run(controller.signal), {
+    abort: () => controller.abort(),
+  });
+}
+
 /** Open a command's registered inline form, falling back to the generic form. */
 export function openCanonicalSlashForm(
   commandName: string,

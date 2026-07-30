@@ -238,39 +238,36 @@ export class TraceEmitter implements AgentTrace {
 
   openStream(kind: StreamKind, options: StreamOptions = {}): StreamHandle {
     const id = options.id ?? generateShortId();
-    const progressEnabled = options.progressViewEnabled ?? true;
-
-    if (!progressEnabled) {
-      // Local-only buffering — chunks never emit. `finalize` returns the
-      // text but nothing reaches subscribers.
-      return new BufferOnlyStreamHandle(id);
-    }
-
     const phaseOnly = options.phaseOnly === true;
 
+    if (options.progressViewEnabled === false) {
+      // Local-only buffering — chunks never emit. `finalize` returns the
+      // text but nothing reaches subscribers.
+      return new StreamHandleImpl(NO_EMIT, id, phaseOnly, null);
+    }
+
+    const emit: TraceEmitFn = (event) => {
+      this.emit(event);
+    };
+    // Resolve the stage now so a deferred start lands in the same group an
+    // eager start would have used, not whatever scope is active when the
+    // first chunk finally arrives.
+    const stageId = options.stageId ?? this.activeStageId();
+    const emitStart = () => emit({ type: 'stream.start', id, kind, stageId });
+
     if (options.deferStart) {
-      // Capture the stage now so the deferred start lands in the same group
-      // an eager start would have used, not whatever scope is active when
-      // the first chunk finally arrives.
-      const stageId = options.stageId ?? this.activeStageId();
-      return new StreamHandleImpl(this, id, phaseOnly, () =>
-        this.emit({ type: 'stream.start', id, kind, stageId }),
-      );
+      return new StreamHandleImpl(emit, id, phaseOnly, emitStart);
     }
 
-    // Open inside the explicit stage scope so the start event carries the
-    // right stageId without forcing the caller to await.
-    if (options.stageId && options.stageId !== this.activeStageId()) {
-      void this.withStage(options.stageId, () =>
-        this.emit({ type: 'stream.start', id, kind }),
-      );
-      return new StreamHandleImpl(this, id, phaseOnly, null);
-    }
-
-    this.emit({ type: 'stream.start', id, kind });
-    return new StreamHandleImpl(this, id, phaseOnly, null);
+    emitStart();
+    return new StreamHandleImpl(emit, id, phaseOnly, null);
   }
 }
+
+/** Sink a stream handle writes through; `NO_EMIT` mutes it entirely. */
+type TraceEmitFn = (event: AgentEvent) => void;
+
+const NO_EMIT: TraceEmitFn = () => undefined;
 
 class StageHandleImpl implements StageHandle {
   private ended = false;
@@ -298,7 +295,7 @@ class StageHandleImpl implements StageHandle {
   async run<T>(fn: () => Promise<T> | T): Promise<T> {
     try {
       const result = await this.within(fn);
-      this.end(this.defaultStatus);
+      this.end();
       return result;
     } catch (err) {
       this.end(RUN_OUTCOME.FAILED);
@@ -313,14 +310,12 @@ class StageHandleImpl implements StageHandle {
 
 /** Stage handle used when `skip: true` — propagates parent context but emits nothing. */
 class SkippedStageHandle implements StageHandle {
-  readonly id: string | undefined;
+  readonly id: string | undefined = undefined;
 
   constructor(
     private readonly trace: TraceEmitter,
     private readonly parentId: string | undefined,
-  ) {
-    this.id = undefined;
-  }
+  ) {}
 
   end(_status?: RunOutcome): void {
     // Skipped stages never opened a group; nothing to end.
@@ -357,7 +352,7 @@ class StreamHandleImpl implements StreamHandle {
   private pendingStart: (() => void) | null;
 
   constructor(
-    private readonly trace: TraceEmitter,
+    private readonly emit: TraceEmitFn,
     readonly id: string,
     private readonly phaseOnly: boolean,
     pendingStart: (() => void) | null,
@@ -376,7 +371,7 @@ class StreamHandleImpl implements StreamHandle {
     this.start();
     this.chunks.push(text);
     if (this.phaseOnly) return;
-    this.trace.emit({ type: 'stream.chunk', id: this.id, text });
+    this.emit({ type: 'stream.chunk', id: this.id, text });
   }
 
   finalize(finalText?: string): string {
@@ -389,7 +384,7 @@ class StreamHandleImpl implements StreamHandle {
       return this.finalText;
     }
     this.start();
-    this.trace.emit({
+    this.emit({
       type: 'stream.end',
       id: this.id,
       finalText:
@@ -397,30 +392,6 @@ class StreamHandleImpl implements StreamHandle {
           ? finalText
           : undefined,
     });
-    return this.finalText;
-  }
-}
-
-/**
- * Local-buffer-only stream — used when `progressViewEnabled: false`.
- * Chunks never reach subscribers; `finalize` returns the accumulated text
- * so callers can still read it back.
- */
-class BufferOnlyStreamHandle implements StreamHandle {
-  private readonly chunks: string[] = [];
-  private finalText: string | undefined;
-
-  constructor(readonly id: string) {}
-
-  append(text: string): void {
-    if (this.finalText !== undefined || !text) return;
-    this.chunks.push(text);
-  }
-
-  finalize(finalText?: string): string {
-    if (this.finalText !== undefined) return this.finalText;
-    this.finalText =
-      typeof finalText === 'string' ? finalText : this.chunks.join('');
     return this.finalText;
   }
 }

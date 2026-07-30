@@ -266,6 +266,47 @@ const PROVIDER_ENDPOINT_SETTINGS = PROVIDER_ENDPOINT_STATE_ENTRIES.map(
     }) satisfies StateSettingEntry,
 );
 
+/**
+ * Region/routing toggles resolved by `ProxyConfigResolver`. Same idiom as
+ * {@link PROVIDER_ENDPOINT_SETTINGS}: the rows differ only in key, default, and
+ * the provider-setting const supplying label/description, so the shared fields
+ * are written once. See the catalog comment at the spread site.
+ */
+const PROVIDER_ROUTING_SETTINGS = (
+  [
+    [
+      GlobalStateKey.MOONSHOT_USE_CHINA,
+      MOONSHOT_USE_CHINA_PROVIDER_SETTING,
+      true,
+    ],
+    [
+      GlobalStateKey.DASHSCOPE_USE_CHINA,
+      DASHSCOPE_USE_CHINA_PROVIDER_SETTING,
+      false,
+    ],
+    [
+      GlobalStateKey.MINIMAX_USE_CHINA,
+      MINIMAX_USE_CHINA_PROVIDER_SETTING,
+      false,
+    ],
+    [GlobalStateKey.GLM_USE_CHINA, GLM_USE_CHINA_PROVIDER_SETTING, true],
+    [GlobalStateKey.GLM_CODING_PLAN, GLM_CODING_PLAN_PROVIDER_SETTING, false],
+  ] as const
+).map(
+  ([key, setting, defaultValue]) =>
+    ({
+      key,
+      schema: z.boolean().prefault(defaultValue),
+      title: setting.label,
+      description: setting.description,
+      category: 'model',
+      store: 'globalState',
+      hosts: ['cli'],
+      cliConsumer: PROXY_CONFIG_CONSUMER,
+      cliRuntimeReachability: PROVIDER_REGION_RUNTIME_REACHABILITY,
+    }) satisfies StateSettingEntry,
+);
+
 export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   // --- Git commit author marking ---------------------------------------------
   // Stored in worktree-shared WorkspaceState by the extension; read from
@@ -606,61 +647,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     cliConsumer: 'src/agent/runtime/ModelFactory.ts',
     cliRuntimeReachability: KIMI_CODE_ROUTING_RUNTIME_REACHABILITY,
   },
-  {
-    key: GlobalStateKey.MOONSHOT_USE_CHINA,
-    schema: z.boolean().prefault(true),
-    title: MOONSHOT_USE_CHINA_PROVIDER_SETTING.label,
-    description: MOONSHOT_USE_CHINA_PROVIDER_SETTING.description,
-    category: 'model',
-    store: 'globalState',
-    hosts: ['cli'],
-    cliConsumer: PROXY_CONFIG_CONSUMER,
-    cliRuntimeReachability: PROVIDER_REGION_RUNTIME_REACHABILITY,
-  },
-  {
-    key: GlobalStateKey.DASHSCOPE_USE_CHINA,
-    schema: z.boolean().prefault(false),
-    title: DASHSCOPE_USE_CHINA_PROVIDER_SETTING.label,
-    description: DASHSCOPE_USE_CHINA_PROVIDER_SETTING.description,
-    category: 'model',
-    store: 'globalState',
-    hosts: ['cli'],
-    cliConsumer: PROXY_CONFIG_CONSUMER,
-    cliRuntimeReachability: PROVIDER_REGION_RUNTIME_REACHABILITY,
-  },
-  {
-    key: GlobalStateKey.MINIMAX_USE_CHINA,
-    schema: z.boolean().prefault(false),
-    title: MINIMAX_USE_CHINA_PROVIDER_SETTING.label,
-    description: MINIMAX_USE_CHINA_PROVIDER_SETTING.description,
-    category: 'model',
-    store: 'globalState',
-    hosts: ['cli'],
-    cliConsumer: PROXY_CONFIG_CONSUMER,
-    cliRuntimeReachability: PROVIDER_REGION_RUNTIME_REACHABILITY,
-  },
-  {
-    key: GlobalStateKey.GLM_USE_CHINA,
-    schema: z.boolean().prefault(true),
-    title: GLM_USE_CHINA_PROVIDER_SETTING.label,
-    description: GLM_USE_CHINA_PROVIDER_SETTING.description,
-    category: 'model',
-    store: 'globalState',
-    hosts: ['cli'],
-    cliConsumer: PROXY_CONFIG_CONSUMER,
-    cliRuntimeReachability: PROVIDER_REGION_RUNTIME_REACHABILITY,
-  },
-  {
-    key: GlobalStateKey.GLM_CODING_PLAN,
-    schema: z.boolean().prefault(false),
-    title: GLM_CODING_PLAN_PROVIDER_SETTING.label,
-    description: GLM_CODING_PLAN_PROVIDER_SETTING.description,
-    category: 'model',
-    store: 'globalState',
-    hosts: ['cli'],
-    cliConsumer: PROXY_CONFIG_CONSUMER,
-    cliRuntimeReachability: PROVIDER_REGION_RUNTIME_REACHABILITY,
-  },
+  ...PROVIDER_ROUTING_SETTINGS,
 
   // --- External tool integrations ------------------------------------------
   // This is a list-backed global-state domain. `/config` delegates editing to

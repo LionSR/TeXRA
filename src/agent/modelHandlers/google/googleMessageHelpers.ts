@@ -18,9 +18,10 @@ export function extractNonThinkingText(parts: Part[], trim = false): string {
   const text = parts
     .filter(
       (part): part is Part & { text: string } =>
-        isTextPart(part) && !part.thought,
+        isTextPart(part) &&
+        !part.thought &&
+        !GOOGLE_TOOL_CALL_CONTROL_TEXT.has(part.text.trim()),
     )
-    .filter((part) => !GOOGLE_TOOL_CALL_CONTROL_TEXT.has(part.text.trim()))
     .map((part) => part.text)
     .join('');
   return trim ? text.trim() : text;

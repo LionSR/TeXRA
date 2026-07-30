@@ -34,21 +34,61 @@ export async function loadRemoteAgent(
   logger.info(CHANNEL, `Loading remote agent: ${agentName}`);
 
   try {
-    const config = await fetchAgentConfig(agentName);
+    const token = await SupabaseClient.getAccessToken();
+    if (!token) {
+      throw new Error(
+        'Authentication token unavailable. Try signing in again.',
+      );
+    }
 
-    const registryId = `remote:${agentName}`;
-    updateAgentMeta(registryId, {
-      description: config.description,
-      tools: config.tools,
-      defaultOutputFiles: config.defaultOutputFiles,
+    const configYaml = await fetchRemoteAgentConfigYaml(agentName, token);
+
+    logger.debug(CHANNEL, `Parsing YAML for remote agent: ${agentName}`);
+    const parsedYaml = parseYamlWith(configYaml, AgentDefinitionSchema);
+    if (parsedYaml.isErr()) {
+      throw new Error(
+        `Failed to parse YAML for remote agent "${agentName}": ${parsedYaml.error.message}`,
+        { cause: parsedYaml.error },
+      );
+    }
+    const validated = parsedYaml.value;
+
+    // Extract metadata before resolving tools to full definitions (for registry cache)
+    const settings: AgentSettingInput = validated.settings;
+    const toolNames = extractToolNames(settings.tools);
+    const defaultOutputFiles = settings.defaultOutputFiles;
+
+    // Process tool definitions (remote agents are self-contained)
+    const resolvedSettings = Array.isArray(settings.tools)
+      ? {
+          ...settings,
+          tools: resolveToolDefinitions(
+            settings.tools as RawToolConfig[],
+            (name, reason) =>
+              logger.warn(
+                CHANNEL,
+                `Tool "${name}" ${reason ?? 'not found in registry'}`,
+              ),
+          ),
+        }
+      : settings;
+
+    const config: RemoteAgentConfig = {
+      settings: AgentSettingSchema.parse(resolvedSettings),
+      prompts: AgentPromptSchema.parse(validated.prompts),
+    };
+
+    updateAgentMeta(`remote:${agentName}`, {
+      description: validated.description,
+      tools: toolNames?.length ? toolNames : undefined,
+      defaultOutputFiles: defaultOutputFiles?.length
+        ? defaultOutputFiles
+        : undefined,
     });
 
     logger.info(CHANNEL, `Successfully loaded remote agent: ${agentName}`);
 
-    return {
-      settings: config.settings,
-      prompts: config.prompts,
-    };
+    return config;
   } catch (error) {
     const lastError = ensureError(error);
     logger.error(
@@ -57,60 +97,4 @@ export async function loadRemoteAgent(
     );
     throw lastError;
   }
-}
-
-/** Fetch and parse agent config from edge function. */
-async function fetchAgentConfig(agentName: string): Promise<{
-  settings: RemoteAgentConfig['settings'];
-  prompts: RemoteAgentConfig['prompts'];
-  description?: string;
-  tools?: string[];
-  defaultOutputFiles?: string[];
-}> {
-  const token = await SupabaseClient.getAccessToken();
-  if (!token) {
-    throw new Error('Authentication token unavailable. Try signing in again.');
-  }
-
-  const configYaml = await fetchRemoteAgentConfigYaml(agentName, token);
-
-  logger.debug(CHANNEL, `Parsing YAML for remote agent: ${agentName}`);
-  const parsedYaml = parseYamlWith(configYaml, AgentDefinitionSchema);
-  if (parsedYaml.isErr()) {
-    throw new Error(
-      `Failed to parse YAML for remote agent "${agentName}": ${parsedYaml.error.message}`,
-      { cause: parsedYaml.error },
-    );
-  }
-  const validated = parsedYaml.value;
-
-  // Extract metadata before resolving tools to full definitions (for registry cache)
-  const settings: AgentSettingInput = validated.settings;
-  const toolNames = extractToolNames(settings.tools);
-  const defaultOutputFiles = settings.defaultOutputFiles;
-
-  // Process tool definitions (remote agents are self-contained)
-  const resolvedSettings = Array.isArray(settings.tools)
-    ? {
-        ...settings,
-        tools: resolveToolDefinitions(
-          settings.tools as RawToolConfig[],
-          (name, reason) =>
-            logger.warn(
-              CHANNEL,
-              `Tool "${name}" ${reason ?? 'not found in registry'}`,
-            ),
-        ),
-      }
-    : settings;
-
-  return {
-    settings: AgentSettingSchema.parse(resolvedSettings),
-    prompts: AgentPromptSchema.parse(validated.prompts),
-    description: validated.description,
-    tools: toolNames?.length ? toolNames : undefined,
-    defaultOutputFiles: defaultOutputFiles?.length
-      ? defaultOutputFiles
-      : undefined,
-  };
 }

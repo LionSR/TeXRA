@@ -276,6 +276,17 @@ export async function runPersistedWorkflowScriptWithProgress(
     const projected = projectedCalls.get(call.id);
     return projected ? projected.definition.phase : call.phase;
   };
+  /**
+   * A recorded undefined means the live call started outside any phase; only
+   * cached end-only events may use the phase active at replay time.
+   */
+  const liveCallPhase = (event: {
+    readonly progressId: WorkflowScriptProgressId;
+    readonly phase?: string;
+  }): string | undefined =>
+    callPhases.has(event.progressId)
+      ? callPhases.get(event.progressId)
+      : (event.phase ?? currentPhase);
   const markPhaseFailed = (
     title: string | undefined,
     index?: number,
@@ -323,9 +334,7 @@ export async function runPersistedWorkflowScriptWithProgress(
         break;
       }
       case 'agent:stream': {
-        const phaseTitle = callPhases.has(event.progressId)
-          ? callPhases.get(event.progressId)
-          : (event.phase ?? currentPhase);
+        const phaseTitle = liveCallPhase(event);
         emitCall({
           id: event.progressId,
           label: event.label,
@@ -336,103 +345,67 @@ export async function runPersistedWorkflowScriptWithProgress(
         break;
       }
       case 'agent:end': {
-        // A recorded undefined means the live call started outside any phase;
-        // only cached end-only events may use the phase active at replay time.
-        const phaseTitle = callPhases.has(event.progressId)
-          ? callPhases.get(event.progressId)
-          : (event.phase ?? currentPhase);
+        const phaseTitle = liveCallPhase(event);
         callPhases.delete(event.progressId);
         callIndexes.delete(event.progressId);
         // A cached replay has no agent:start, so this is where its phase opens.
         openPhaseStage(phaseTitle, event.phaseIndex, event.phaseTotal);
-        // Cached replays spend nothing, so their lines stay cost-free; live
-        // onCost settles before agent:end, so the call cost here is current.
-        const spent =
-          event.outcome === 'completed' ||
-          event.outcome === 'failed' ||
-          event.outcome === 'skipped'
-            ? getCallCostUsd?.(event.index)
-            : undefined;
-        // Live terminal events carry all attempt metadata known by the engine.
-        // Cached replays report none because they perform no live attempt.
-        const terminalMetadata = (source: {
-          readonly model?: string;
-          readonly durationMs?: number;
-        }) => ({
-          ...(source.model !== undefined ? { model: source.model } : {}),
-          ...(source.durationMs !== undefined
-            ? { durationMs: source.durationMs }
+        const identity = {
+          id: event.progressId,
+          label: event.label,
+          ...(phaseTitle !== undefined ? { phase: phaseTitle } : {}),
+          ...(event.childStreamId !== undefined
+            ? { childStreamId: event.childStreamId }
+            : {}),
+        };
+        // Cached replays perform no live attempt, so they carry neither
+        // attempt metadata nor cost.
+        if (event.outcome === 'cached') {
+          emitCall({ ...identity, status: 'cached' });
+          onActivity?.(`Using saved result: ${event.label}`);
+          break;
+        }
+        // Live onCost settles before agent:end, so the call cost here is
+        // current, as is the rest of the attempt metadata the engine knows.
+        const spent = getCallCostUsd?.(event.index);
+        const metadata = {
+          ...(event.model !== undefined ? { model: event.model } : {}),
+          ...(event.durationMs !== undefined
+            ? { durationMs: event.durationMs }
             : {}),
           ...(spent !== undefined ? { totalCostUsd: spent } : {}),
-        });
+        };
+        let call: WorkflowCallProgress;
         switch (event.outcome) {
-          case 'failed': {
-            const call: WorkflowCallProgress = {
-              id: event.progressId,
-              label: event.label,
-              ...(phaseTitle !== undefined ? { phase: phaseTitle } : {}),
+          case 'failed':
+            call = {
+              ...identity,
               status: 'failed',
               error: event.error,
-              ...(event.childStreamId !== undefined
-                ? { childStreamId: event.childStreamId }
-                : {}),
-              ...terminalMetadata(event),
+              ...metadata,
             };
             markPhaseFailed(
               recordedCallPhase(call),
               event.phaseIndex,
               event.phaseTotal,
             );
-            emitCall(call);
-            recordTerminalActivity(call);
             break;
-          }
-          case 'cached':
-            emitCall({
-              id: event.progressId,
-              label: event.label,
-              ...(phaseTitle !== undefined ? { phase: phaseTitle } : {}),
-              status: 'cached',
-              ...(event.childStreamId !== undefined
-                ? { childStreamId: event.childStreamId }
-                : {}),
-            });
-            onActivity?.(`Using saved result: ${event.label}`);
-            break;
-          case 'skipped': {
-            const call: WorkflowCallProgress = {
-              id: event.progressId,
-              label: event.label,
-              ...(phaseTitle !== undefined ? { phase: phaseTitle } : {}),
+          case 'skipped':
+            call = {
+              ...identity,
               status: 'skipped',
               reason: event.reason,
-              ...(event.childStreamId !== undefined
-                ? { childStreamId: event.childStreamId }
-                : {}),
-              ...terminalMetadata(event),
+              ...metadata,
             };
-            emitCall(call);
-            recordTerminalActivity(call);
             break;
-          }
-          case 'completed': {
-            const call: WorkflowCallProgress = {
-              id: event.progressId,
-              label: event.label,
-              ...(phaseTitle !== undefined ? { phase: phaseTitle } : {}),
-              status: 'completed',
-              ...(event.childStreamId !== undefined
-                ? { childStreamId: event.childStreamId }
-                : {}),
-              ...terminalMetadata(event),
-            };
-            emitCall(call);
-            recordTerminalActivity(call);
+          case 'completed':
+            call = { ...identity, status: 'completed', ...metadata };
             break;
-          }
           default:
             return assertNever(event, 'Unhandled agent:end outcome');
         }
+        emitCall(call);
+        recordTerminalActivity(call);
         break;
       }
     }

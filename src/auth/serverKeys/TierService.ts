@@ -309,14 +309,11 @@ export class TierService {
   }
 
   /**
-   * Get tier-specific config from cached or provided config.
+   * Get tier-specific config from the cached snapshot.
    * Returns null if config or tier config not available.
    */
-  private getTierConfig(
-    tier: UserTier,
-    config?: TierModelConfig | null,
-  ): TierModelsConfig | null {
-    return (config ?? this.configSnapshot)?.tiers[tier] ?? null;
+  private getTierConfig(tier: UserTier): TierModelsConfig | null {
+    return this.configSnapshot?.tiers[tier] ?? null;
   }
 
   /**
@@ -324,14 +321,9 @@ export class TierService {
    *
    * @param tier - User's tier (free, Max, Ultra)
    * @param modelName - The model SHORT NAME to check
-   * @param config - Optional config override (uses cached if not provided)
    */
-  isModelAvailable(
-    tier: UserTier,
-    modelName: string,
-    config?: TierModelConfig | null,
-  ): boolean {
-    const tierConfig = this.getTierConfig(tier, config);
+  isModelAvailable(tier: UserTier, modelName: string): boolean {
+    const tierConfig = this.getTierConfig(tier);
     if (!tierConfig) return false;
     if (tierConfig.models === '*') return true;
     return tierConfig.models.includes(modelName);
@@ -341,18 +333,15 @@ export class TierService {
    * Get the list of supported providers from the tier config.
    * All tiers have access to the same providers.
    */
-  getProviders(config?: TierModelConfig | null): string[] {
-    return (config ?? this.configSnapshot)?.providers ?? [];
+  getProviders(): string[] {
+    return this.configSnapshot?.providers ?? [];
   }
 
   /**
    * Get a user-friendly description of what's included in a tier.
    */
-  getAccessDescription(
-    tier: UserTier,
-    config?: TierModelConfig | null,
-  ): string {
-    const tierConfig = this.getTierConfig(tier, config);
+  getAccessDescription(tier: UserTier): string {
+    const tierConfig = this.getTierConfig(tier);
     if (!tierConfig) return 'No included model access';
     if (tierConfig.models === '*') return 'All models included';
     const modelCount = tierConfig.models.length;

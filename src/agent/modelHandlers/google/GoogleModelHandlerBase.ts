@@ -1,14 +1,10 @@
+// Third-party imports
+import { ReasoningEffort } from 'llm-zoo';
+
 // Local imports
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import type { SdkToolCall } from '@agent/types/ModelHandlerContracts';
-
-// Local file imports
-import {
-  isGemini3Model,
-  resolveGeminiThinkingLevel,
-  supportsGoogleFileUploads,
-} from './googleHandlerShared';
 
 /**
  * Shared base for the two Google handlers ({@link ModelHandlerGoogleGenAI} chat
@@ -37,12 +33,16 @@ export abstract class GoogleModelHandlerBase<
    */
   private static readonly INLINE_MEDIA_LIMIT_BYTES = 20 * 1024 * 1024;
 
+  /** Whether the model can accept file attachments (image/video or native audio). */
   protected supportsFileUploads(): boolean {
-    return supportsGoogleFileUploads(this.capabilities);
+    return (
+      this.capabilities.supportsVision || this.capabilities.supportsNativeAudio
+    );
   }
 
+  /** Whether the model is a Gemini 3 variant (different thinking/media rules). */
   protected isGemini3Model(): boolean {
-    return isGemini3Model(this.config.fullName);
+    return /^gemini-3[\.\-]/.test(this.config.fullName);
   }
 
   protected getInlineUploadLimitBytes(): number {
@@ -60,15 +60,46 @@ export abstract class GoogleModelHandlerBase<
     labels: { low: string; medium: string; high: string };
   };
 
+  /**
+   * Map the model's reasoning effort to a Gemini `thinking_level`.
+   *
+   * Returns `levels.low` (not `undefined`) for `NONE` so the API does not fall
+   * back to its default medium/high — that would defeat the user's intent.
+   * Gemini tops out at HIGH thinking, so xhigh/max both map to it; Gemini 3 Pro
+   * only supports low/high, so MEDIUM falls back to HIGH for Pro.
+   */
   protected getThinkingLevel(): TLevel | undefined {
     const { levels, labels } = this.thinkingLevelConfig;
-    return resolveGeminiThinkingLevel<TLevel>({
-      reasoningEffort: this.capabilities.reasoningEffort,
-      isGemini3: this.isGemini3Model(),
-      isPro: this.config.fullName.includes('-pro'),
-      logger: this.logger,
-      levels,
-      labels,
-    });
+    const isGemini3 = this.isGemini3Model();
+
+    switch (this.capabilities.reasoningEffort) {
+      case ReasoningEffort.NONE:
+        if (isGemini3) {
+          this.logger.warn(
+            `Gemini 3 models can't fully disable thinking. Using thinking_level '${labels.low}'.`,
+          );
+        }
+        return levels.low;
+
+      case ReasoningEffort.LOW:
+        return levels.low;
+
+      case ReasoningEffort.MEDIUM:
+        if (isGemini3 && this.config.fullName.includes('-pro')) {
+          this.logger.debug(
+            `Gemini 3 Pro does not support ${labels.medium} thinking level. Using ${labels.high}.`,
+          );
+          return levels.high;
+        }
+        return levels.medium;
+
+      case ReasoningEffort.HIGH:
+      case ReasoningEffort.XHIGH:
+      case ReasoningEffort.MAX:
+        return levels.high;
+
+      default:
+        return undefined;
+    }
   }
 }

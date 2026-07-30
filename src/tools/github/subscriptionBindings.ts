@@ -106,14 +106,7 @@ export function unbindAllForRepo(key: string): number {
 
 const issueSubscriptions = new StreamSubscriptionRegistry<string, IssueKey>({
   name: 'IssueStreamSubscriptionRegistry',
-  source: {
-    has: (key) => SharedIssuePollingSource.has(key),
-    activeKeys: () => SharedIssuePollingSource.activeKeys(),
-    onKeysChanged: (listener) =>
-      SharedIssuePollingSource.onKeysChanged(listener),
-    subscribe: (input, listener) =>
-      SharedIssuePollingSource.subscribe(input, listener),
-  },
+  source: SharedIssuePollingSource,
   keyOf: issueKeyToString,
   bindingsChangedEvent: 'issueSubscriptionBindingsChanged',
 });

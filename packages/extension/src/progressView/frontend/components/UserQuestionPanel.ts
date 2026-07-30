@@ -26,7 +26,6 @@ import type {
 // Local imports - shared utilities
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 
-// Local imports - progress view events
 // Local imports - base class
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
 

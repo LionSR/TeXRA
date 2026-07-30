@@ -1,7 +1,4 @@
-import type {
-  MainViewExecuteFiles,
-  MainViewExecuteMessage,
-} from '../schemas/mainView/executeMessage';
+import type { MainViewExecuteMessage } from '../schemas/mainView/executeMessage';
 import type {
   CheckboxValues,
   LaunchTarget,
@@ -30,20 +27,12 @@ export interface MainViewExecutionFormState {
   };
 }
 
-type MainViewMultipleFileSelections = Pick<
-  MainViewExecuteFiles,
-  | 'inputFiles'
-  | 'inputFilesActive'
-  | 'contextFiles'
-  | 'contextFilesActive'
-  | 'mediaFiles'
-  | 'mediaFilesActive'
->;
-
+/** Output files aren't user-selectable at execute time, so that list is always empty. */
 export function buildMainViewExecuteMessage(
   state: MainViewExecutionFormState,
 ): MainViewExecuteMessage {
   const isToolUseAgent = state.sessionType === 'toolUse';
+  const { inputFiles, contextFiles, mediaFiles } = state.multiFiles;
   return {
     agent: isToolUseAgent ? state.toolUseAgent : state.workflowAgent,
     model: state.model,
@@ -52,23 +41,14 @@ export function buildMainViewExecuteMessage(
     files: {
       editedFile: state.singleFiles.editedFile,
       baseFile: state.singleFiles.baseFile,
-      ...buildMainViewMultipleFileSelections(state.multiFiles),
+      inputFiles,
+      inputFilesActive: inputFiles.length > 0,
+      contextFiles,
+      contextFilesActive: contextFiles.length > 0,
+      mediaFiles,
+      mediaFilesActive: mediaFiles.length > 0,
     },
     session: state.session,
     toolConfig: state.checkboxValues,
-  };
-}
-
-/** Output files aren't user-selectable at execute time, so that list is always empty. */
-function buildMainViewMultipleFileSelections(
-  multiFiles: MultiFiles,
-): MainViewMultipleFileSelections {
-  return {
-    inputFiles: multiFiles.inputFiles,
-    inputFilesActive: multiFiles.inputFiles.length > 0,
-    contextFiles: multiFiles.contextFiles,
-    contextFilesActive: multiFiles.contextFiles.length > 0,
-    mediaFiles: multiFiles.mediaFiles,
-    mediaFilesActive: multiFiles.mediaFiles.length > 0,
   };
 }

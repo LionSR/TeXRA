@@ -15,11 +15,10 @@ const originalGlobals = {
   window: globalThis.window,
 };
 
-function installDom(url: string): JSDOM {
+function installDom(url: string): void {
   const dom = new JSDOM('<!doctype html><body></body>', { url });
   globalThis.window = dom.window as unknown as Window & typeof globalThis;
   globalThis.document = dom.window.document;
-  return dom;
 }
 
 function restoreDom(): void {

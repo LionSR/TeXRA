@@ -9,6 +9,7 @@ import {
   type CodexSessionStorage,
   type CodexTokenResponse,
 } from '@auth/codex';
+import { delay } from '@utils/core';
 
 const NOW = 1_900_000_000_000;
 const FIVE_MIN = 5 * 60 * 1000;
@@ -169,7 +170,7 @@ describe('CodexSessionCoordinator', () => {
     const a = coordinator.getFreshAccessToken();
     const b = coordinator.getFreshAccessToken();
     // Let both callers reach the shared refresh before it resolves.
-    await new Promise((r) => setTimeout(r, 0));
+    await delay(0);
     expect(refreshTokens).toHaveBeenCalledOnce();
 
     resolve(tokenResponse());
@@ -187,7 +188,7 @@ describe('CodexSessionCoordinator', () => {
     const coordinator = makeCoordinator(storage, { refreshTokens });
 
     const token = coordinator.getFreshAccessToken();
-    await new Promise((r) => setTimeout(r, 0));
+    await delay(0);
     expect(refreshTokens).toHaveBeenCalledOnce();
 
     await coordinator.signOut();
@@ -237,7 +238,7 @@ describe('CodexSessionCoordinator', () => {
     const login = completeLogin(coordinator);
     // Let the login run as far as it can before the delete unblocks, so an
     // unserialized store would land first and be erased by the stale delete.
-    await new Promise((r) => setTimeout(r, 0));
+    await delay(0);
     storage.release();
 
     await expect(token).rejects.toMatchObject({ kind: 'fatal' });
@@ -320,7 +321,7 @@ describe('CodexSessionCoordinator', () => {
     });
 
     const token = coordinator.getFreshAccessToken();
-    await new Promise((r) => setTimeout(r, 0));
+    await delay(0);
     expect(refreshTokens).toHaveBeenCalledOnce();
 
     await completeLogin(coordinator);

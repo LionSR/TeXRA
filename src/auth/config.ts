@@ -95,9 +95,7 @@ export type OAuthProvider = (typeof OAUTH_PROVIDERS)[number];
 export function isOAuthProvider(
   value: string | undefined,
 ): value is OAuthProvider {
-  return (
-    value !== undefined && OAUTH_PROVIDERS.includes(value as OAuthProvider)
-  );
+  return OAUTH_PROVIDERS.includes(value as OAuthProvider);
 }
 
 /**
@@ -145,9 +143,8 @@ export function getRelaySpendingLimit(tier: string | undefined): number {
  */
 export function isSupabaseConfigured(): boolean {
   return (
-    SUPABASE_CONFIG.url !== `placeholder-url` &&
-    SUPABASE_CONFIG.publicKey !== 'placeholder-public-key' &&
-    !SUPABASE_CONFIG.url.includes('placeholder')
+    !SUPABASE_CONFIG.url.includes('placeholder') &&
+    SUPABASE_CONFIG.publicKey !== 'placeholder-public-key'
   );
 }
 

@@ -5,7 +5,6 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
 import { registerExecution } from '@agent/storage/executionLifecycle';
 import { releaseOwnedExecutionLease } from '@agent/storage/executionLease';
-import type { Platform } from '@platform/platform';
 import {
   LOG_LEVELS,
   MESSAGE_TYPES,
@@ -42,22 +41,22 @@ const MINIMAL_CONFIG: AgentConfig = {
   toolConfig: DEFAULT_TOOL_CONFIG,
 };
 
-/** Reads the stream id cached by a completed resolver write-through. */
-async function waitForCachedStreamId(
-  executionId: ExecutionId,
-): Promise<StreamTabId | undefined> {
-  let streamId: StreamTabId | undefined;
-  await vi.waitFor(async () => {
-    streamId = (await getExecutionStore(executionId).readMeta())?.streamId;
-    expect(streamId).toBeDefined();
-  });
-  return streamId;
-}
-
 const tempDirs: string[] = [];
 
-function buildResolverPlatform(): Promise<Platform> {
-  return createTempDirPlatform('texra-resolver-', tempDirs);
+/** Appends a single stream-log entry so a candidate stream is log-backed. */
+async function appendLogEntry(
+  logStore: StreamLogStore,
+  streamId: StreamTabId,
+): Promise<void> {
+  logStore.append(streamId, {
+    id: 'entry-1',
+    type: STREAM_LOG_ENTRY_TYPES.LOG,
+    level: LOG_LEVELS.INFO,
+    timestamp: 100,
+    messageType: MESSAGE_TYPES.DEFAULT,
+    text: 'child stream output',
+  });
+  await logStore.flush();
 }
 
 function taskState(agent: string, model = 'deepseekproT'): TaskState {
@@ -73,7 +72,7 @@ const TODO: TodoItem = {
 };
 
 describe('resolvePersistedStreamIdForExecution', () => {
-  setupPlatform(buildResolverPlatform);
+  setupPlatform(() => createTempDirPlatform('texra-resolver-', tempDirs));
 
   afterEach(async () => {
     vi.restoreAllMocks();
@@ -149,15 +148,7 @@ describe('resolvePersistedStreamIdForExecution', () => {
       await snapshotWriter.flush();
 
       const logStore = await StreamLogStore.open();
-      logStore.append(childStream, {
-        id: 'entry-1',
-        type: STREAM_LOG_ENTRY_TYPES.LOG,
-        level: LOG_LEVELS.INFO,
-        timestamp: 100,
-        messageType: MESSAGE_TYPES.DEFAULT,
-        text: 'child stream output',
-      });
-      await logStore.flush();
+      await appendLogEntry(logStore, childStream);
 
       const resolved = await resolvePersistedStreamIdForExecution(executionId, {
         snapshotStore: new StreamSnapshotStore(),
@@ -200,15 +191,7 @@ describe('resolvePersistedStreamIdForExecution', () => {
       await snapshotWriter.flush();
 
       const logStore = await StreamLogStore.open();
-      logStore.append(logBackedStream, {
-        id: 'entry-1',
-        type: STREAM_LOG_ENTRY_TYPES.LOG,
-        level: LOG_LEVELS.INFO,
-        timestamp: 100,
-        messageType: MESSAGE_TYPES.DEFAULT,
-        text: 'child stream output',
-      });
-      await logStore.flush();
+      await appendLogEntry(logStore, logBackedStream);
 
       const resolved = await resolvePersistedStreamIdForExecution(executionId, {
         snapshotStore: new StreamSnapshotStore(),
@@ -300,8 +283,11 @@ describe('resolvePersistedStreamIdForExecution', () => {
     });
     expect(first).toEqual({ streamId, source: 'streamDataMeta' });
 
-    const cachedStreamId = await waitForCachedStreamId(executionId);
-    expect(cachedStreamId).toBe(streamId);
+    // Wait for the resolver's write-through to land on the execution meta.
+    await vi.waitFor(async () => {
+      const meta = await getExecutionStore(executionId).readMeta();
+      expect(meta?.streamId).toBe(streamId);
+    });
 
     const second = await resolvePersistedStreamIdForExecution(executionId, {
       snapshotStore: new StreamSnapshotStore(),
@@ -329,15 +315,7 @@ describe('resolvePersistedStreamIdForExecution', () => {
       await snapshotWriter.flush();
 
       const logStore = await StreamLogStore.open();
-      logStore.append(childStream, {
-        id: 'entry-1',
-        type: STREAM_LOG_ENTRY_TYPES.LOG,
-        level: LOG_LEVELS.INFO,
-        timestamp: 100,
-        messageType: MESSAGE_TYPES.DEFAULT,
-        text: 'child stream output',
-      });
-      await logStore.flush();
+      await appendLogEntry(logStore, childStream);
 
       // First call has no streamLogStore, so pickBestMetaMatch can't see the
       // child's log and falls back to the first candidate (the parent).

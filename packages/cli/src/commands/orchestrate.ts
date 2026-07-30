@@ -172,6 +172,10 @@ async function runOrchestration(context: CliContext): Promise<number> {
       context,
       launcherApiModeOverride,
     );
+    const presetLaunchBlockReason =
+      launchContext.approvalPolicy === 'never'
+        ? 'delegation-denied'
+        : undefined;
     const [modelAccess, authProfile] = await Promise.all([
       readCliModelAccessStatus(apiMode),
       getCliAuthProfile(),
@@ -196,10 +200,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
       modelAccess: launcherModelAccess,
       account: accountStatus,
       agentSkillsEnabled: readAgentSkillsEnabled(platform().config),
-      presetLaunchBlockReason:
-        launchContext.approvalPolicy === 'never'
-          ? 'delegation-denied'
-          : undefined,
+      presetLaunchBlockReason,
     });
     // Load the model registry up front so the launcher can offer a model pick
     // after an agent/team choice. Best-effort: an unavailable registry just
@@ -226,10 +227,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
         includeLoginHint: !presetPlanSet.remoteAgentLoadAttempted,
         remoteAgentCatalogAvailable:
           await SupabaseClient.canAccessRemoteAgentCatalog(),
-        launchBlockReason:
-          launchContext.approvalPolicy === 'never'
-            ? 'delegation-denied'
-            : undefined,
+        launchBlockReason: presetLaunchBlockReason,
       }),
       accountItems: buildCliAccountItems(accountStatus),
       apiMode,
@@ -293,8 +291,12 @@ async function runOrchestration(context: CliContext): Promise<number> {
           refresh: async () =>
             (await loadCliMultiAgentRunPlan({ preset: action.preset })).plan,
         });
-        if (preflight.status === 'choice-required') continue launcher;
-        if (preflight.status === 'cancelled') continue launcher;
+        if (
+          preflight.status === 'choice-required' ||
+          preflight.status === 'cancelled'
+        ) {
+          continue launcher;
+        }
         if (preflight.status === 'unavailable') {
           writeTextStderr(
             `Team ${action.preset} is still unavailable after refreshing the TeXRA agent catalog: ${preflight.unavailableNames.join(', ')}.`,

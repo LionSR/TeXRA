@@ -1,8 +1,7 @@
 // Suites for packages/desktop protocol callbacks (registration lifecycle +
 // callback behavior).
 
-import { strict as assert } from 'node:assert';
-import { describe, expect, it, vi } from 'vitest';
+import { type Mock, describe, expect, it, vi } from 'vitest';
 import {
   createDesktopProtocolCallbackRouter,
   type DesktopProtocolApp,
@@ -11,36 +10,30 @@ import {
   parseDesktopProtocolCallback,
 } from '@desktop/main/desktopProtocolCallbacks';
 
-// ---------------------------------------------------------------------------
-// DesktopProtocolCallbacks
-// ---------------------------------------------------------------------------
+interface ProtocolListeners {
+  secondInstance?: (
+    event: unknown,
+    argv: string[],
+    workingDirectory: string,
+  ) => void;
+  openUrl?: (event: { preventDefault(): void }, url: string) => void;
+}
 
-function createFakeProtocolApp(
-  overrides: Partial<DesktopProtocolApp> = {},
-): DesktopProtocolApp & {
-  listeners: {
-    secondInstance?: (
-      event: unknown,
-      argv: string[],
-      workingDirectory: string,
-    ) => void;
-    openUrl?: (event: { preventDefault(): void }, url: string) => void;
-  };
-} {
-  const listeners: {
-    secondInstance?: (
-      event: unknown,
-      argv: string[],
-      workingDirectory: string,
-    ) => void;
-    openUrl?: (event: { preventDefault(): void }, url: string) => void;
-  } = {};
+type FakeProtocolApp = DesktopProtocolApp & {
+  listeners: ProtocolListeners;
+  setAsDefaultProtocolClient: Mock<(protocol: string) => boolean>;
+  requestSingleInstanceLock: Mock<() => boolean>;
+  quit: Mock<() => void>;
+};
+
+function createFakeProtocolApp(lockAvailable = true): FakeProtocolApp {
+  const listeners: ProtocolListeners = {};
 
   return {
     isPackaged: true,
     listeners,
-    setAsDefaultProtocolClient: vi.fn(() => true),
-    requestSingleInstanceLock: vi.fn(() => true),
+    setAsDefaultProtocolClient: vi.fn((_protocol: string) => true),
+    requestSingleInstanceLock: vi.fn(() => lockAvailable),
     quit: vi.fn(),
     on: vi.fn((event: 'second-instance' | 'open-url', listener) => {
       if (event === 'second-instance') {
@@ -49,7 +42,6 @@ function createFakeProtocolApp(
         listeners.openUrl = listener as typeof listeners.openUrl;
       }
     }),
-    ...overrides,
   };
 }
 
@@ -230,9 +222,7 @@ describe('desktop protocol callbacks', () => {
   });
 
   it('quits when another desktop instance owns the protocol lifecycle', () => {
-    const app = createFakeProtocolApp({
-      requestSingleInstanceLock: vi.fn(() => false),
-    });
+    const app = createFakeProtocolApp(false);
 
     const lifecycle = installDesktopProtocolCallbackLifecycle({
       app,
@@ -243,64 +233,6 @@ describe('desktop protocol callbacks', () => {
     expect(app.quit).toHaveBeenCalled();
   });
 });
-
-// ---------------------------------------------------------------------------
-// desktopProtocolCallbacks
-// ---------------------------------------------------------------------------
-
-type SecondInstanceListener = (
-  event: unknown,
-  argv: string[],
-  workingDirectory: string,
-  additionalData?: unknown,
-) => void;
-
-type OpenUrlListener = (event: { preventDefault(): void }, url: string) => void;
-
-class FakeDesktopProtocolApp implements DesktopProtocolApp {
-  readonly isPackaged = true;
-  requestCount = 0;
-  quitCount = 0;
-  protocolRegistrations: string[] = [];
-  private readonly secondInstanceListeners: SecondInstanceListener[] = [];
-  private readonly lockAvailable: boolean;
-
-  constructor(options: { lockAvailable: boolean }) {
-    this.lockAvailable = options.lockAvailable;
-  }
-
-  setAsDefaultProtocolClient(protocol: string): boolean {
-    this.protocolRegistrations.push(protocol);
-    return true;
-  }
-
-  requestSingleInstanceLock(): boolean {
-    this.requestCount += 1;
-    return this.lockAvailable;
-  }
-
-  quit(): void {
-    this.quitCount += 1;
-  }
-
-  on(event: 'second-instance', listener: SecondInstanceListener): void;
-  on(event: 'open-url', listener: OpenUrlListener): void;
-  on(
-    event: 'second-instance' | 'open-url',
-    listener: SecondInstanceListener | OpenUrlListener,
-  ): void {
-    if (event === 'second-instance') {
-      this.secondInstanceListeners.push(listener as SecondInstanceListener);
-      return;
-    }
-  }
-
-  emitSecondInstance(argv: string[]): void {
-    for (const listener of this.secondInstanceListeners) {
-      listener({}, argv, process.cwd());
-    }
-  }
-}
 
 describe('desktop protocol callback lifecycle', () => {
   it.each([
@@ -341,36 +273,41 @@ describe('desktop protocol callback lifecycle', () => {
       quitCount,
       protocolRegistrations,
     }) => {
-      const app = new FakeDesktopProtocolApp({ lockAvailable });
+      const app = createFakeProtocolApp(lockAvailable);
 
       const lifecycle = installDesktopProtocolCallbackLifecycle({ app, argv });
 
-      assert.equal(lifecycle.shouldContinue, shouldContinue);
-      assert.equal(app.requestCount, requestCount);
-      assert.equal(app.quitCount, quitCount);
-      assert.deepEqual(app.protocolRegistrations, protocolRegistrations);
+      expect(lifecycle.shouldContinue).toBe(shouldContinue);
+      expect(app.requestSingleInstanceLock).toHaveBeenCalledTimes(requestCount);
+      expect(app.quit).toHaveBeenCalledTimes(quitCount);
+      expect(
+        app.setAsDefaultProtocolClient.mock.calls.map(([protocol]) => protocol),
+      ).toEqual(protocolRegistrations);
     },
   );
 
   it('focuses the primary window for every second-instance launch', () => {
-    const app = new FakeDesktopProtocolApp({ lockAvailable: true });
-    let focusCount = 0;
+    const app = createFakeProtocolApp();
+    const focusMainWindow = vi.fn();
 
     installDesktopProtocolCallbackLifecycle({
       app,
       argv: [],
-      focusMainWindow: () => {
-        focusCount += 1;
-      },
+      focusMainWindow,
     });
 
-    app.emitSecondInstance([
-      '--texra-new-window',
-      '--texra-workspace-path=/Users/ray/paper',
-    ]);
-    assert.equal(focusCount, 1);
+    app.listeners.secondInstance?.(
+      {},
+      ['--texra-new-window', '--texra-workspace-path=/Users/ray/paper'],
+      process.cwd(),
+    );
+    expect(focusMainWindow).toHaveBeenCalledTimes(1);
 
-    app.emitSecondInstance(['--texra-workspace-path=/Users/ray/other-paper']);
-    assert.equal(focusCount, 2);
+    app.listeners.secondInstance?.(
+      {},
+      ['--texra-workspace-path=/Users/ray/other-paper'],
+      process.cwd(),
+    );
+    expect(focusMainWindow).toHaveBeenCalledTimes(2);
   });
 });

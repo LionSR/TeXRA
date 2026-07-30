@@ -10,7 +10,7 @@ import {
   settingsBannerStyles,
 } from '@shared/styles';
 import { formatGoalTime, isGoalInFlight, goalElapsedMs } from '@shared/schemas';
-import type { Goal, GoalStatus } from '@shared/schemas';
+import type { Goal } from '@shared/schemas';
 import { metaStripStyles, renderDotMeta } from '@shared/wa/metaStrip';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderSettingsBanner } from '@shared/wa/settingsBanner';
@@ -22,11 +22,6 @@ import { capitalize } from '@utils/text/stringUtils';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/badge/badge.js';
-
-/** Map a Goal status to a wa-badge variant. */
-function statusVariant(status: GoalStatus): 'success' | 'warning' {
-  return status === 'active' ? 'success' : 'warning';
-}
 
 @customElement('goal-tab')
 export class GoalTab extends LitElement {
@@ -146,7 +141,7 @@ export class GoalTab extends LitElement {
       >
         <wa-badge
           class="status-chip"
-          variant=${statusVariant(item.status)}
+          variant=${item.status === 'active' ? 'success' : 'warning'}
           appearance="filled"
           >${capitalize(item.status)}</wa-badge
         >

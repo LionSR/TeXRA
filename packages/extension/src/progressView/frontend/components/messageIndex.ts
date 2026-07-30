@@ -20,6 +20,35 @@ interface MessageLocation {
 }
 
 /**
+ * Insert into a time-sorted array in place and return the insertion index.
+ * O(1) push when appending (common case — times increase), O(n) splice
+ * otherwise.
+ */
+function insertByTime<T>(
+  target: T[],
+  entry: T,
+  timeOf: (item: T) => number,
+): number {
+  const time = timeOf(entry);
+  const lastTime = target.length > 0 ? timeOf(target.at(-1)!) : -Infinity;
+  if (time >= lastTime) {
+    target.push(entry);
+    return target.length - 1;
+  }
+  const idx = target.findIndex((item) => timeOf(item) > time);
+  if (idx >= 0) {
+    target.splice(idx, 0, entry);
+    return idx;
+  }
+  target.push(entry);
+  return target.length - 1;
+}
+
+function messageTime(message: LogMessageData): number {
+  return message.timestamp ?? 0;
+}
+
+/**
  * Owns the derived data structures for the non-terminal render path:
  * the hierarchical group tree, the ungrouped message list, the interleaved
  * timeline, and the lookup indices that keep incremental updates O(1) per
@@ -162,9 +191,7 @@ export class MessageIndex {
     this.timeline = timeline;
     for (const item of timeline) {
       if ('msg' in item) {
-        const location = this.messageLocations.get(item.key) ?? {};
-        location.timelineEntry = item;
-        this.messageLocations.set(item.key, location);
+        this.locationFor(item.key).timelineEntry = item;
       }
     }
   }
@@ -183,9 +210,9 @@ export class MessageIndex {
       const node = msg.groupId ? this.groupNodeIndex.get(msg.groupId) : null;
       if (node) {
         this.removeUngroupedEntry(msg.id);
-        this.insertMessageInPlace(node.messages, msg);
+        insertByTime(node.messages, msg, messageTime);
       } else {
-        const index = this.insertMessageInPlace(this.ungrouped, msg);
+        const index = insertByTime(this.ungrouped, msg, messageTime);
         this.reindexUngroupedFrom(index);
       }
     }
@@ -211,24 +238,11 @@ export class MessageIndex {
       if (inGroupNode) continue;
       const entry: MessageTimelineEntry = {
         key: m.id,
-        time: m.timestamp ?? 0,
+        time: messageTime(m),
         msg: m,
       };
-      const lastTime =
-        this.timeline.length > 0 ? this.timeline.at(-1)!.time : -Infinity;
-      if (entry.time >= lastTime) {
-        this.timeline.push(entry);
-      } else {
-        const idx = this.timeline.findIndex((e) => e.time > entry.time);
-        if (idx >= 0) {
-          this.timeline.splice(idx, 0, entry);
-        } else {
-          this.timeline.push(entry);
-        }
-      }
-      const location = this.messageLocations.get(entry.key) ?? {};
-      location.timelineEntry = entry;
-      this.messageLocations.set(entry.key, location);
+      insertByTime(this.timeline, entry, (item) => item.time);
+      this.locationFor(entry.key).timelineEntry = entry;
     }
   }
 
@@ -331,43 +345,22 @@ export class MessageIndex {
     const idx = this.ungrouped.findIndex((m) => m.id === msg.id);
     if (idx >= 0) {
       this.ungrouped[idx] = msg;
-      const location = this.messageLocations.get(msg.id) ?? {};
-      location.ungroupedIndex = idx;
-      this.messageLocations.set(msg.id, location);
+      this.locationFor(msg.id).ungroupedIndex = idx;
     }
   }
 
-  /**
-   * Insert a message into a sorted array in-place.
-   * O(1) push when appending (common case — timestamps increase), O(n) splice
-   * otherwise.
-   */
-  private insertMessageInPlace(
-    target: LogMessageData[],
-    message: LogMessageData,
-  ): number {
-    const msgTime = message.timestamp ?? 0;
-    const lastTs =
-      target.length > 0 ? (target.at(-1)!.timestamp ?? 0) : -Infinity;
-    if (msgTime >= lastTs) {
-      target.push(message);
-      return target.length - 1;
-    }
-    const idx = target.findIndex((e) => (e.timestamp ?? 0) > msgTime);
-    if (idx >= 0) {
-      target.splice(idx, 0, message);
-      return idx;
-    }
-    target.push(message);
-    return target.length - 1;
+  /** The mutable location record for a message, created on first use. */
+  private locationFor(id: string): MessageLocation {
+    const existing = this.messageLocations.get(id);
+    if (existing) return existing;
+    const created: MessageLocation = {};
+    this.messageLocations.set(id, created);
+    return created;
   }
 
   private reindexUngroupedFrom(startIndex: number): void {
     for (let i = startIndex; i < this.ungrouped.length; i++) {
-      const message = this.ungrouped[i];
-      const location = this.messageLocations.get(message.id) ?? {};
-      location.ungroupedIndex = i;
-      this.messageLocations.set(message.id, location);
+      this.locationFor(this.ungrouped[i].id).ungroupedIndex = i;
     }
   }
 

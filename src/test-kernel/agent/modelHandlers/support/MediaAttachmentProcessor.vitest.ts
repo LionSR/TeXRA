@@ -28,11 +28,8 @@ interface MediaLogRecorder extends AgentTrace {
   fileListEntries: MediaFileResult[][];
 }
 
-function createMediaLogRecorder(): {
-  logger: AgentTrace;
-  stub: MediaLogRecorder;
-} {
-  const stub: MediaLogRecorder = {
+function createMediaLogRecorder(): MediaLogRecorder {
+  return {
     ...noopTrace,
     debugMessages: [],
     warnMessages: [],
@@ -54,8 +51,6 @@ function createMediaLogRecorder(): {
       }
     },
   };
-
-  return { logger: stub, stub };
 }
 
 describe('MediaAttachmentProcessor', () => {
@@ -176,8 +171,8 @@ describe('MediaAttachmentProcessor', () => {
     const pdfPath = await createPdfFixture();
     const pdfLocation = pathToLocation(pdfPath);
     const displayPath = getComparablePath(pdfLocation);
-    const { logger, stub } = createMediaLogRecorder();
-    const processor = createProcessor(logger, {
+    const stub = createMediaLogRecorder();
+    const processor = createProcessor(stub, {
       supportsVision: true,
       supportsNativePdf: true,
     });
@@ -222,9 +217,9 @@ describe('MediaAttachmentProcessor', () => {
     const audioPath = createAudioFixture();
     const audioLocation = pathToLocation(audioPath);
     const displayPath = getComparablePath(audioLocation);
-    const { logger, stub } = createMediaLogRecorder();
+    const stub = createMediaLogRecorder();
     const processor = createProcessor(
-      logger,
+      stub,
       {
         supportsNativeAudio: true,
       },
@@ -266,8 +261,8 @@ describe('MediaAttachmentProcessor', () => {
       absolutePath: mediaPath,
       relativePath,
     } as const;
-    const { logger, stub } = createMediaLogRecorder();
-    const processor = createProcessor(logger, {
+    const stub = createMediaLogRecorder();
+    const processor = createProcessor(stub, {
       supportsVision: true,
       supportsNativePdf: true,
     });
@@ -298,9 +293,9 @@ describe('MediaAttachmentProcessor', () => {
       const audioPath = createRawAudioFixture(extension);
       const audioLocation = pathToLocation(audioPath);
       const displayPath = getComparablePath(audioLocation);
-      const { logger } = createMediaLogRecorder();
+      const stub = createMediaLogRecorder();
       const processor = createProcessor(
-        logger,
+        stub,
         {
           supportsNativeAudio: true,
         },
@@ -335,8 +330,8 @@ describe('MediaAttachmentProcessor', () => {
     const emptyPath = createEmptyFixture();
     const emptyLocation = pathToLocation(emptyPath);
     const displayPath = getComparablePath(emptyLocation);
-    const { logger, stub } = createMediaLogRecorder();
-    const processor = createProcessor(logger, { supportsVision: true });
+    const stub = createMediaLogRecorder();
+    const processor = createProcessor(stub, { supportsVision: true });
 
     const { entries, results } = await processor.loadEntries([emptyLocation]);
 
@@ -359,8 +354,8 @@ describe('MediaAttachmentProcessor', () => {
     const mediaPath = createTempFile('sdk-error.png', Buffer.from('not-png'));
     const mediaLocation = pathToLocation(mediaPath);
     const displayPath = getComparablePath(mediaLocation);
-    const { logger, stub } = createMediaLogRecorder();
-    const processor = createProcessor(logger, { supportsVision: true });
+    const stub = createMediaLogRecorder();
+    const processor = createProcessor(stub, { supportsVision: true });
     const originalExists = absoluteFsAny.exists;
 
     const error = new Error('plain fallback');

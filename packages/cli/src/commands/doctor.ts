@@ -47,5 +47,5 @@ export const doctorCommand = defineCliCommand({
   args: {
     ...GLOBAL_ARGS,
   },
-  run: (context) => runDoctor(context),
+  run: runDoctor,
 });

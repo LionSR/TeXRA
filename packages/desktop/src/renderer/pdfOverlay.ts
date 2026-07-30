@@ -35,17 +35,21 @@ export interface PdfOverlayController {
   close(): void;
 }
 
+interface PdfOverlayElements {
+  readonly dialog: WaDialog;
+  readonly frame: HTMLIFrameElement;
+  readonly titleEl?: HTMLElement;
+  readonly subtitleEl?: HTMLElement;
+}
+
 export function createPdfOverlay(appRoot: HTMLElement): PdfOverlayController {
-  let dialog: WaDialog | null = null;
-  let frameEl: HTMLIFrameElement | null = null;
-  let titleEl: HTMLElement | null = null;
-  let subtitleEl: HTMLElement | null = null;
+  let overlay: PdfOverlayElements | undefined;
   // Intent across the async hide animation: distinguishes a genuine close from
   // a reopen that lands while the previous close is still animating.
   let wantOpen = false;
 
-  function ensure(): WaDialog {
-    if (dialog) return dialog;
+  function ensure(): PdfOverlayElements {
+    if (overlay) return overlay;
     // Use an `<iframe>` (not `<webview>`) — `<webview>` requires
     // `webviewTag: true` in webPreferences which we don't enable.
     // Electron's main BrowserWindow renders PDFs in iframes via the
@@ -56,7 +60,6 @@ export function createPdfOverlay(appRoot: HTMLElement): PdfOverlayController {
     // sandbox: allow same-origin so the PDF viewer's controls work; deny
     // scripts so a malformed PDF can't run JS into our renderer.
     frame.setAttribute('sandbox', 'allow-same-origin');
-    frameEl = frame;
 
     const shell = createOverlayDialog({
       appRoot,
@@ -66,8 +69,6 @@ export function createPdfOverlay(appRoot: HTMLElement): PdfOverlayController {
       title: 'Preview',
       content: frame,
     });
-    titleEl = shell.titleEl ?? null;
-    subtitleEl = shell.subtitleEl ?? null;
     const d = shell.dialog;
 
     // `createOverlayDialog` already appended `d` to `appRoot` above, before
@@ -93,11 +94,16 @@ export function createPdfOverlay(appRoot: HTMLElement): PdfOverlayController {
         d.open = true;
         return;
       }
-      if (frameEl) frameEl.removeAttribute('src');
+      frame.removeAttribute('src');
     });
 
-    dialog = d;
-    return d;
+    overlay = {
+      dialog: d,
+      frame,
+      titleEl: shell.titleEl,
+      subtitleEl: shell.subtitleEl,
+    };
+    return overlay;
   }
 
   function open(payload: DesktopShowPdfMessage): void {
@@ -110,16 +116,16 @@ export function createPdfOverlay(appRoot: HTMLElement): PdfOverlayController {
       );
       return;
     }
-    const d = ensure();
+    const { dialog, frame, titleEl, subtitleEl } = ensure();
     if (titleEl) titleEl.textContent = payload.title;
     if (subtitleEl) subtitleEl.textContent = payload.pdfPath;
-    if (frameEl) frameEl.src = pdfPathToFileUrl(payload.pdfPath);
+    frame.src = pdfPathToFileUrl(payload.pdfPath);
     wantOpen = true;
-    d.open = true;
+    dialog.open = true;
   }
 
   function close(): void {
-    if (dialog) dialog.open = false;
+    if (overlay) overlay.dialog.open = false;
   }
 
   return { open, close };

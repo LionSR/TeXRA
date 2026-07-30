@@ -17,7 +17,7 @@ import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import type { FileLocation } from '@shared/schemas';
 import type { ToolConfig } from '@shared/schemas/toolConfig';
-import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
+import { installPlatform } from '@test/support/setupPlatform';
 import { spiedTrace } from '@test/support/spiedTrace';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 import {
@@ -63,13 +63,6 @@ const compilePdfConfig: ToolConfig = {
 const logger = spiedTrace();
 
 const tempDirs: string[] = [];
-
-function installPlatform(workspaceDir: string): Promise<void> {
-  return installFakePlatform(
-    { workspacePath: workspaceDir },
-    { fs: nodeFilesystem },
-  );
-}
 
 function processLineByLine(content: string): string {
   return (
@@ -125,7 +118,10 @@ describe('LatexMediaManager PDF compilation', () => {
 
   it('filters nullish compile results before adding media files', async () => {
     const workspaceDir = await makeTempDir('texra-latex-media-', tempDirs);
-    await installPlatform(workspaceDir);
+    await installPlatform(
+      { workspacePath: workspaceDir },
+      { fs: nodeFilesystem },
+    );
 
     const inputPaths = [
       path.join(workspaceDir, 'compiled.tex'),
@@ -176,20 +172,6 @@ type LatexMediaManagerFigureInternals = {
 };
 
 describe('LatexMediaManager figure baseDir resolution (issue #7228)', () => {
-  function installRunStoragePlatform(
-    workspaceDir: string,
-    storageRoot: string,
-  ): Promise<void> {
-    return installFakePlatform(
-      { workspacePath: workspaceDir },
-      {
-        fs: nodeFilesystem,
-        workspace: createNodeWorkspace(() => workspaceDir),
-        storage: new WorkspaceStorageProvider(storageRoot, workspaceDir),
-      },
-    );
-  }
-
   async function writeFixture(): Promise<{
     workspaceDir: string;
     storageRoot: string;
@@ -223,7 +205,14 @@ describe('LatexMediaManager figure baseDir resolution (issue #7228)', () => {
     );
     await writeFile(figurePath, 'fake-png-bytes');
 
-    await installRunStoragePlatform(workspaceDir, storageRoot);
+    await installPlatform(
+      { workspacePath: workspaceDir },
+      {
+        fs: nodeFilesystem,
+        workspace: createNodeWorkspace(() => workspaceDir),
+        storage: new WorkspaceStorageProvider(storageRoot, workspaceDir),
+      },
+    );
     return { workspaceDir, storageRoot, texPath, figurePath };
   }
 

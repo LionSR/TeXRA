@@ -17,8 +17,32 @@ import {
 } from '@test/support/inkTestHarness.mts';
 import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
 
+const root = 'root' as StreamTabId;
+const child = 'child' as StreamTabId;
+
 function session(id: StreamTabId, active = false): StreamView {
   return { id, label: id, slice: undefined, active };
+}
+
+/** Mount an interactive Ink tree wired to fake TTYs the test can drive. */
+function renderInteractive(
+  ink: any,
+  node: any,
+): {
+  readonly instance: any;
+  readonly stdin: FakeStdin;
+  readonly stdout: FakeStdout;
+} {
+  const stdin = new FakeStdin();
+  const stdout = new FakeStdout(100);
+  const instance = ink.render(node, {
+    stdin,
+    stdout,
+    interactive: true,
+    exitOnCtrlC: false,
+    patchConsole: false,
+  });
+  return { instance, stdin, stdout };
 }
 
 describe('CLI child list interaction', () => {
@@ -41,8 +65,6 @@ describe('CLI child list interaction', () => {
 
   it('prints and kills only the selected active session, then focuses it', async () => {
     const { ink, React } = await loadInk();
-    const root = 'root' as StreamTabId;
-    const child = 'child' as StreamTabId;
     const onFocusStream = vi.fn();
     const onKillExecution = vi.fn();
     const onPrintStream = vi.fn();
@@ -71,14 +93,10 @@ describe('CLI child list interaction', () => {
       });
     }
 
-    const stdin = new FakeStdin();
-    const instance = ink.render(React.createElement(Harness), {
-      stdin,
-      stdout: new FakeStdout(100),
-      interactive: true,
-      exitOnCtrlC: false,
-      patchConsole: false,
-    });
+    const { instance, stdin } = renderInteractive(
+      ink,
+      React.createElement(Harness),
+    );
 
     try {
       await waitFor(() => stdin.listenerCount('readable') > 0);
@@ -104,13 +122,11 @@ describe('CLI child list interaction', () => {
 
   it('skips and retries the focused subagent grandchild by execution id', async () => {
     const { ink, React } = await loadInk();
-    const root = 'root' as StreamTabId;
-    const child = 'child' as StreamTabId;
     const onSkipExecution = vi.fn();
     const onRetryExecution = vi.fn();
 
-    const stdin = new FakeStdin();
-    const instance = ink.render(
+    const { instance, stdin } = renderInteractive(
+      ink,
       React.createElement(SubagentList, {
         activeSubagentExecutionIds: new Map([[child, 'child-exec']]),
         keyboardActive: true,
@@ -122,13 +138,6 @@ describe('CLI child list interaction', () => {
         selectedValue: childStreamListValue(child),
         sessions: [session(root, true), session(child)],
       }),
-      {
-        stdin,
-        stdout: new FakeStdout(100),
-        interactive: true,
-        exitOnCtrlC: false,
-        patchConsole: false,
-      },
     );
 
     try {
@@ -147,8 +156,6 @@ describe('CLI child list interaction', () => {
 
   it('skips disabled phase headers during arrow navigation', async () => {
     const { ink, React } = await loadInk();
-    const root = 'root' as StreamTabId;
-    const child = 'child' as StreamTabId;
     const onFocusStream = vi.fn();
     let selected = childStreamListValue(root);
 
@@ -179,15 +186,10 @@ describe('CLI child list interaction', () => {
       });
     }
 
-    const stdin = new FakeStdin();
-    const stdout = new FakeStdout(100);
-    const instance = ink.render(React.createElement(Harness), {
-      stdin,
-      stdout,
-      interactive: true,
-      exitOnCtrlC: false,
-      patchConsole: false,
-    });
+    const { instance, stdin, stdout } = renderInteractive(
+      ink,
+      React.createElement(Harness),
+    );
 
     try {
       await waitFor(
@@ -209,8 +211,6 @@ describe('CLI child list interaction', () => {
 
   it('keeps a controlled phase-header selection inert', async () => {
     const { ink, React } = await loadInk();
-    const root = 'root' as StreamTabId;
-    const child = 'child' as StreamTabId;
     const callbacks = {
       onFocusStream: vi.fn(),
       onKillExecution: vi.fn(),
@@ -218,8 +218,8 @@ describe('CLI child list interaction', () => {
       onRetryExecution: vi.fn(),
       onSkipExecution: vi.fn(),
     };
-    const stdin = new FakeStdin();
-    const instance = ink.render(
+    const { instance, stdin } = renderInteractive(
+      ink,
       React.createElement(SubagentList, {
         activeSubagentExecutionIds: new Map([[child, 'child-exec']]),
         keyboardActive: true,
@@ -233,13 +233,6 @@ describe('CLI child list interaction', () => {
         ],
         ...callbacks,
       }),
-      {
-        stdin,
-        stdout: new FakeStdout(100),
-        interactive: true,
-        exitOnCtrlC: false,
-        patchConsole: false,
-      },
     );
 
     try {
@@ -257,13 +250,11 @@ describe('CLI child list interaction', () => {
 
   it('hands focus back to the input instead of wrapping past the last row', async () => {
     const { ink, React } = await loadInk();
-    const root = 'root' as StreamTabId;
-    const child = 'child' as StreamTabId;
     const onCancel = vi.fn();
     const onSelectionChange = vi.fn();
 
-    const stdin = new FakeStdin();
-    const instance = ink.render(
+    const { instance, stdin } = renderInteractive(
+      ink,
       React.createElement(SubagentList, {
         keyboardActive: true,
         maxRows: 5,
@@ -272,13 +263,6 @@ describe('CLI child list interaction', () => {
         selectedValue: childStreamListValue(child),
         sessions: [session(root, true), session(child)],
       }),
-      {
-        stdin,
-        stdout: new FakeStdout(100),
-        interactive: true,
-        exitOnCtrlC: false,
-        patchConsole: false,
-      },
     );
 
     try {
@@ -294,13 +278,11 @@ describe('CLI child list interaction', () => {
 
   it('clamps instead of wrapping when ↑ is pressed at the first row', async () => {
     const { ink, React } = await loadInk();
-    const root = 'root' as StreamTabId;
-    const child = 'child' as StreamTabId;
     const onCancel = vi.fn();
     const onSelectionChange = vi.fn();
 
-    const stdin = new FakeStdin();
-    const instance = ink.render(
+    const { instance, stdin } = renderInteractive(
+      ink,
       React.createElement(SubagentList, {
         keyboardActive: true,
         maxRows: 5,
@@ -309,13 +291,6 @@ describe('CLI child list interaction', () => {
         selectedValue: childStreamListValue(root),
         sessions: [session(root, true), session(child)],
       }),
-      {
-        stdin,
-        stdout: new FakeStdout(100),
-        interactive: true,
-        exitOnCtrlC: false,
-        patchConsole: false,
-      },
     );
 
     try {

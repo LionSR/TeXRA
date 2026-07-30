@@ -26,6 +26,7 @@ import {
   type ProgressViewOutboundHandlerRegistry,
   type ProgressViewOutboundMessage,
   type StreamTabId,
+  type StreamTabInfo,
 } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { assertSupported } from '@shared/utils/dispatcher';
@@ -45,16 +46,18 @@ function dispatch(
   assertSupported(handler!)(message as never);
 }
 
-function registerWorkflowStream(
+function registerStream(
   state: ProgressState,
   streamId: StreamTabId,
+  overrides: Partial<Extract<StreamTabInfo, { kind: 'agent' }>> = {},
 ): void {
   state.streamById.set(streamId, {
     kind: 'agent',
     name: streamId,
-    label: 'stream-a',
+    label: streamId,
     agentCategory: AgentCategory.Workflow,
     creationTimestamp: 1,
+    ...overrides,
   });
 }
 
@@ -69,18 +72,12 @@ describe('stream meta frontend state', () => {
     const childId = 'child' as StreamTabId;
     const state = createInitialState();
     state.streamFilter = 'workflow';
-    registerWorkflowStream(state, workflowId);
-    state.streamById.set(toolUseId, {
-      kind: 'agent',
-      name: toolUseId,
-      label: 'tool-use',
+    registerStream(state, workflowId);
+    registerStream(state, toolUseId, {
       agentCategory: AgentCategory.ToolUse,
       creationTimestamp: 2,
     });
-    state.streamById.set(childId, {
-      kind: 'agent',
-      name: childId,
-      label: 'child',
+    registerStream(state, childId, {
       agentCategory: AgentCategory.ToolUse,
       creationTimestamp: 3,
       parentStreamId: workflowId,
@@ -102,14 +99,12 @@ describe('stream meta frontend state', () => {
     const state = createInitialState();
     state.activeStreamId = streamId;
     state.streamFilter = 'workflow';
-    state.streamById.set(siblingId, {
-      kind: 'agent',
-      name: siblingId,
+    registerStream(state, siblingId, {
       label: 'old sibling',
       agentCategory: AgentCategory.ToolUse,
       creationTimestamp: 2,
     });
-    registerWorkflowStream(state, streamId);
+    registerStream(state, streamId);
     state.streamStates.set(streamId, createStreamState(AgentCategory.Workflow));
     state.streamStates.set(
       siblingId,
@@ -174,7 +169,7 @@ describe('stream meta frontend state', () => {
   it('updates and clears stream substate with status changes', () => {
     const streamId = 'stream-a' as StreamTabId;
     const state = createInitialState();
-    registerWorkflowStream(state, streamId);
+    registerStream(state, streamId);
     state.streamStates.set(
       streamId,
       createStreamState(AgentCategory.Workflow, {
@@ -211,7 +206,7 @@ describe('stream meta frontend state', () => {
     const state = createInitialState();
     state.activeStreamId = streamId;
     state.streamFilter = 'workflow';
-    registerWorkflowStream(state, streamId);
+    registerStream(state, streamId);
     state.streamStates.set(
       streamId,
       createStreamState(AgentCategory.Workflow, {
@@ -257,7 +252,7 @@ describe('stream meta frontend state', () => {
   it('clears round stage from a transport-safe metadata patch', () => {
     const streamId = 'stream-a' as StreamTabId;
     const state = createInitialState();
-    registerWorkflowStream(state, streamId);
+    registerStream(state, streamId);
     state.streamStates.set(
       streamId,
       createStreamState(AgentCategory.Workflow, {
@@ -296,7 +291,7 @@ describe('stream meta frontend state', () => {
   it('merges and clears a phase stage from a transport-safe metadata patch', () => {
     const streamId = 'stream-a' as StreamTabId;
     const state = createInitialState();
-    registerWorkflowStream(state, streamId);
+    registerStream(state, streamId);
     const getState = seedState(state);
 
     const patch = (
@@ -343,8 +338,8 @@ describe('stream meta frontend state', () => {
     const streamId = 'stream-a' as StreamTabId;
     const otherId = 'stream-b' as StreamTabId;
     const state = createInitialState();
-    registerWorkflowStream(state, streamId);
-    registerWorkflowStream(state, otherId);
+    registerStream(state, streamId);
+    registerStream(state, otherId);
     state.streamStates.set(
       streamId,
       createStreamState(AgentCategory.Workflow, {
@@ -394,7 +389,7 @@ describe('stream meta frontend state', () => {
   it('clears round stage when synced content explicitly clears it', () => {
     const streamId = 'stream-a' as StreamTabId;
     const state = createInitialState();
-    registerWorkflowStream(state, streamId);
+    registerStream(state, streamId);
     state.streamStates.set(
       streamId,
       createStreamState(AgentCategory.Workflow, {
@@ -431,7 +426,7 @@ describe('stream meta frontend state', () => {
     const streamId = 'stream-a' as StreamTabId;
     const state = createInitialState();
     state.activeStreamId = streamId;
-    registerWorkflowStream(state, streamId);
+    registerStream(state, streamId);
     const getState = seedState(state);
 
     dispatch(streamLifecycleHandlers, {
@@ -446,17 +441,8 @@ describe('stream meta frontend state', () => {
     const parent = 'stream-parent' as StreamTabId;
     const child = 'stream-child' as StreamTabId;
     const state = createInitialState();
-    state.streamById.set(parent, {
-      kind: 'agent',
-      name: parent,
-      label: 'parent',
-      agentCategory: AgentCategory.Workflow,
-      creationTimestamp: 1,
-    });
-    state.streamById.set(child, {
-      kind: 'agent',
-      name: child,
-      label: 'child',
+    registerStream(state, parent);
+    registerStream(state, child, {
       agentCategory: AgentCategory.ToolUse,
       creationTimestamp: 2,
       parentStreamId: parent,

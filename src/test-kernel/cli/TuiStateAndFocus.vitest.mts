@@ -11,6 +11,7 @@ import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   activeStreamId,
   closeInfoPane,
+  type ConversationEntry,
   infoPane,
   openInfoPane,
   rootRunPending,
@@ -95,6 +96,7 @@ import {
   type StorageKey,
   type StreamPhase,
   type StreamTabId,
+  type SubagentChildInfo,
   type TodoItem,
 } from '@shared/schemas';
 import { clearAllStreamStatusesForTest } from '@test/helpers/streamStatusTestUtils';
@@ -110,6 +112,54 @@ function orderedSessionDescendants(parent: StreamTabId): StreamTabId[] {
   return [
     ...focusOrderDescendants(parent, childStreamEntries.get(), streams.get()),
   ];
+}
+
+function activeRows(parent: StreamTabId): readonly SubagentChildInfo[] {
+  return activeSubagentsFor(parent, childStreamEntries.get(), streams.get());
+}
+
+function retainedRows(parent: StreamTabId): readonly SubagentChildInfo[] {
+  return retainedChildStreamsFor(
+    parent,
+    childStreamEntries.get(),
+    streams.get(),
+  );
+}
+
+function visibleRows(parent: StreamTabId): readonly SubagentChildInfo[] {
+  return visibleSubagentRows(parent, childStreamEntries.get(), streams.get());
+}
+
+function streamEntries(streamId: StreamTabId): readonly ConversationEntry[] {
+  return streams.get().get(streamId)?.entries ?? [];
+}
+
+function entryTexts(streamId: StreamTabId): string[] {
+  return streamEntries(streamId).map((entry) => entry.text);
+}
+
+/** Run `body` with a TUI run-fact subscription attached to a fresh hub. */
+function withRunFacts(
+  body: (hub: SessionEventHub) => void,
+  missingOutputTargets?: Parameters<typeof attachTuiRunFactSubscription>[1],
+): void {
+  const hub = new SessionEventHub();
+  const detach = attachTuiRunFactSubscription(hub, missingOutputTargets);
+  try {
+    body(hub);
+  } finally {
+    detach();
+  }
+}
+
+/** Run `body` with the stream-status subscription attached. */
+function withStreamStatus(body: () => void): void {
+  const dispose = subscribeStreamStatus();
+  try {
+    body();
+  } finally {
+    dispose();
+  }
 }
 
 afterEach(() => {
@@ -155,9 +205,7 @@ describe('cliState Phase 4 fields', () => {
     patchStream(root, (s) => ({ ...s, status: 'running' }));
     const slice = streams.get().get(root);
     expect(slice).toBeDefined();
-    expect(
-      activeSubagentsFor(root, childStreamEntries.get(), streams.get()),
-    ).toEqual([]);
+    expect(activeRows(root)).toEqual([]);
     expect(slice?.todos).toEqual([]);
     expect(slice?.plan).toBeNull();
     expect(slice?.bypass).toEqual({
@@ -205,22 +253,15 @@ describe('cliState Phase 4 fields', () => {
 
     removeStream(child1);
 
-    expect(
-      retainedChildStreamsFor(root, childStreamEntries.get(), streams.get()),
-    ).toEqual([]);
-    expect(
-      activeSubagentsFor(root, childStreamEntries.get(), streams.get()),
-    ).toEqual([]);
-    expect(
-      visibleSubagentRows(root, childStreamEntries.get(), streams.get()),
-    ).toEqual([]);
+    expect(retainedRows(root)).toEqual([]);
+    expect(activeRows(root)).toEqual([]);
+    expect(visibleRows(root)).toEqual([]);
     expect(isChildStreamRemoved(child1)).toBe(true);
     expect(orderedSessionDescendants(root)[0]).toBeUndefined();
   });
 
   it('updates retained child rows when a failed subagent leaves the active list', () => {
-    const dispose = subscribeStreamStatus();
-    try {
+    withStreamStatus(() => {
       applySubagentRoster(root, [
         {
           kind: 'subagent',
@@ -242,13 +283,9 @@ describe('cliState Phase 4 fields', () => {
         'restart-repair',
       );
 
-      expect(
-        activeSubagentsFor(root, childStreamEntries.get(), streams.get()),
-      ).toEqual([]);
+      expect(activeRows(root)).toEqual([]);
       expect(streams.get().get(child1)?.status).toBe(STREAM_PHASE.FAILED);
-      expect(
-        visibleSubagentRows(root, childStreamEntries.get(), streams.get()),
-      ).toMatchObject([
+      expect(visibleRows(root)).toMatchObject([
         {
           kind: 'subagent',
           executionId: 'agent-1',
@@ -256,9 +293,7 @@ describe('cliState Phase 4 fields', () => {
           status: STREAM_PHASE.FAILED,
         },
       ]);
-    } finally {
-      dispose();
-    }
+    });
   });
 
   it('treats a null-parent update as child promotion to top-level', () => {
@@ -271,10 +306,7 @@ describe('cliState Phase 4 fields', () => {
   });
 
   it('projects phase stages onto the run slice and leaves rounds alone', () => {
-    const hub = new SessionEventHub();
-    const detach = attachTuiRunFactSubscription(hub);
-
-    try {
+    withRunFacts((hub) => {
       hub.emit({
         scope: 'run',
         streamId: child1,
@@ -313,16 +345,11 @@ describe('cliState Phase 4 fields', () => {
         total: 4,
       });
       expect(streams.get().get(root)?.phaseStage).toBeUndefined();
-    } finally {
-      detach();
-    }
+    });
   });
 
   it('keeps a dynamically opened phase positionless', () => {
-    const hub = new SessionEventHub();
-    const detach = attachTuiRunFactSubscription(hub);
-
-    try {
+    withRunFacts((hub) => {
       hub.emit({
         scope: 'run',
         streamId: child1,
@@ -337,16 +364,11 @@ describe('cliState Phase 4 fields', () => {
       expect(streams.get().get(child1)?.phaseStage).toEqual({
         label: 'Cleanup',
       });
-    } finally {
-      detach();
-    }
+    });
   });
 
   it('registers subagent parent edges when active child rows arrive', () => {
-    const hub = new SessionEventHub();
-    const detach = attachTuiRunFactSubscription(hub);
-
-    try {
+    withRunFacts((hub) => {
       activeStreamId.set(root);
       patchStream(child1, (s) => ({
         ...s,
@@ -385,9 +407,7 @@ describe('cliState Phase 4 fields', () => {
           parentStream: parentStream.get(),
         }),
       ).toBe('root-scrollback');
-    } finally {
-      detach();
-    }
+    });
   });
 });
 
@@ -1129,21 +1149,20 @@ describe('CLI TUI row allocation', () => {
   });
 
   it('mirrors running child status events into focused child routing', () => {
-    const dispose = subscribeStreamStatus();
-    patchStream(root, (s) => ({ ...s, status: STREAM_PHASE.WAITING }));
-    applySubagentRoster(root, [
-      {
-        kind: 'subagent',
-        executionId: 'child-exec-1',
-        agentName: 'critic',
-        childStreamId: child1,
-        status: STREAM_PHASE.COMPLETED,
-      },
-    ]);
-    patchStream(child1, (s) => ({ ...s, status: STREAM_PHASE.CANCELLED }));
-    setParentStream(child1, root);
+    withStreamStatus(() => {
+      patchStream(root, (s) => ({ ...s, status: STREAM_PHASE.WAITING }));
+      applySubagentRoster(root, [
+        {
+          kind: 'subagent',
+          executionId: 'child-exec-1',
+          agentName: 'critic',
+          childStreamId: child1,
+          status: STREAM_PHASE.COMPLETED,
+        },
+      ]);
+      patchStream(child1, (s) => ({ ...s, status: STREAM_PHASE.CANCELLED }));
+      setParentStream(child1, root);
 
-    try {
       defaultSession().status.transition(
         child1,
         STREAM_PHASE.RUNNING,
@@ -1152,38 +1171,29 @@ describe('CLI TUI row allocation', () => {
 
       activeStreamId.set(child1);
       expect(streams.get().get(child1)?.status).toBe(STREAM_PHASE.RUNNING);
-      expect(
-        retainedChildStreamsFor(
-          root,
-          childStreamEntries.get(),
-          streams.get(),
-        )[0]?.status,
-      ).toBe(STREAM_PHASE.RUNNING);
+      expect(retainedRows(root)[0]?.status).toBe(STREAM_PHASE.RUNNING);
       expect(chatTuiFocusedChildFollowUpRoute()).toEqual({
         kind: 'accept',
         streamId: child1,
       });
-    } finally {
-      dispose();
-    }
+    });
   });
 
   it('mirrors stopped child status events into focused child routing', () => {
-    const dispose = subscribeStreamStatus();
-    patchStream(root, (s) => ({ ...s, status: STREAM_PHASE.WAITING }));
-    applySubagentRoster(root, [
-      {
-        kind: 'subagent',
-        executionId: 'child-exec-1',
-        agentName: 'critic',
-        childStreamId: child1,
-        status: STREAM_PHASE.RUNNING,
-      },
-    ]);
-    patchStream(child1, (s) => ({ ...s, status: STREAM_PHASE.RUNNING }));
-    setParentStream(child1, root);
+    withStreamStatus(() => {
+      patchStream(root, (s) => ({ ...s, status: STREAM_PHASE.WAITING }));
+      applySubagentRoster(root, [
+        {
+          kind: 'subagent',
+          executionId: 'child-exec-1',
+          agentName: 'critic',
+          childStreamId: child1,
+          status: STREAM_PHASE.RUNNING,
+        },
+      ]);
+      patchStream(child1, (s) => ({ ...s, status: STREAM_PHASE.RUNNING }));
+      setParentStream(child1, root);
 
-    try {
       defaultSession().status.transition(
         child1,
         STREAM_PHASE.CANCELLED,
@@ -1192,28 +1202,19 @@ describe('CLI TUI row allocation', () => {
 
       activeStreamId.set(child1);
       expect(streams.get().get(child1)?.status).toBe(STREAM_PHASE.CANCELLED);
-      expect(
-        retainedChildStreamsFor(
-          root,
-          childStreamEntries.get(),
-          streams.get(),
-        )[0]?.status,
-      ).toBe(STREAM_PHASE.CANCELLED);
+      expect(retainedRows(root)[0]?.status).toBe(STREAM_PHASE.CANCELLED);
       expect(chatTuiFocusedChildFollowUpRoute()).toEqual({
         kind: 'reject',
         streamId: child1,
       });
-    } finally {
-      dispose();
-    }
+    });
   });
 
   it('returns a focused attached child to its immediate owner on lifecycle completion', () => {
-    const dispose = subscribeStreamStatus();
-    setParentStream(child1, root);
-    activeStreamId.set(child1);
+    withStreamStatus(() => {
+      setParentStream(child1, root);
+      activeStreamId.set(child1);
 
-    try {
       expect(
         defaultSession().status.transition(
           child1,
@@ -1229,17 +1230,14 @@ describe('CLI TUI row allocation', () => {
         ),
       ).toBe(true);
       expect(activeStreamId.get()).toBe(root);
-    } finally {
-      dispose();
-    }
+    });
   });
 
   it('returns a user-stopped focused child to its immediate owner', () => {
-    const dispose = subscribeStreamStatus();
-    setParentStream(child1, root);
-    activeStreamId.set(child1);
+    withStreamStatus(() => {
+      setParentStream(child1, root);
+      activeStreamId.set(child1);
 
-    try {
       expect(
         defaultSession().status.transition(
           child1,
@@ -1255,17 +1253,14 @@ describe('CLI TUI row allocation', () => {
         ),
       ).toBe(true);
       expect(activeStreamId.get()).toBe(root);
-    } finally {
-      dispose();
-    }
+    });
   });
 
   it('does not auto-return for WAITING, repair, unrelated, or detached status events', () => {
-    const dispose = subscribeStreamStatus();
-    const detachedChild = 'detached-child' as StreamTabId;
-    setParentStream(child1, root);
+    withStreamStatus(() => {
+      const detachedChild = 'detached-child' as StreamTabId;
+      setParentStream(child1, root);
 
-    try {
       defaultSession().status.transition(
         child1,
         STREAM_PHASE.RUNNING,
@@ -1306,9 +1301,7 @@ describe('CLI TUI row allocation', () => {
         'lifecycle',
       );
       expect(activeStreamId.get()).toBe(detachedChild);
-    } finally {
-      dispose();
-    }
+    });
   });
 
   it('clears stale resume ids when clearing chat session run state', () => {
@@ -1493,7 +1486,7 @@ describe('CLI transcript state', () => {
     syncStreamLog(root);
     syncStreamLog(root);
 
-    const entries = streams.get().get(root)?.entries ?? [];
+    const entries = streamEntries(root);
     expect(entries).toHaveLength(1);
     expect(entries[0]).toMatchObject({
       role: 'media',
@@ -1521,7 +1514,7 @@ describe('CLI transcript state', () => {
 
     syncStreamLog(root);
 
-    const entries = streams.get().get(root)?.entries ?? [];
+    const entries = streamEntries(root);
     expect(entries.map((entry) => entry.text)).toEqual([
       'Please solve the problem.',
       '✓ review completed',
@@ -1543,7 +1536,7 @@ describe('CLI transcript state', () => {
 
     syncStreamLog(root);
 
-    const entries = streams.get().get(root)?.entries ?? [];
+    const entries = streamEntries(root);
     expect(entries.map((entry) => entry.text)).toEqual([
       [
         'Waiting for the child.',
@@ -1563,7 +1556,7 @@ describe('CLI transcript state', () => {
 
     syncStreamLog(root);
 
-    const entries = streams.get().get(root)?.entries ?? [];
+    const entries = streamEntries(root);
     expect(entries.map((entry) => entry.text)).toEqual([
       '### Verification Report\n\nThe proof is **fully verified**.',
     ]);
@@ -1592,7 +1585,7 @@ describe('CLI transcript state', () => {
 
     syncStreamLog(root);
 
-    const entries = streams.get().get(root)?.entries ?? [];
+    const entries = streamEntries(root);
     expect(entries).toHaveLength(1);
     expect(entries[0]?.text).toContain('✓ prover completed · 2m');
     expect(entries[0]?.text).toContain('proof line 12');
@@ -1611,7 +1604,7 @@ describe('CLI transcript state', () => {
 
     syncStreamLog(root);
 
-    const entries = streams.get().get(root)?.entries ?? [];
+    const entries = streamEntries(root);
     expect(entries).toHaveLength(1);
     expect(entries[0]).toMatchObject({
       role: 'error',
@@ -1634,7 +1627,7 @@ describe('CLI transcript state', () => {
 
     syncStreamLog(root);
 
-    const entries = streams.get().get(root)?.entries ?? [];
+    const entries = streamEntries(root);
     expect(entries).toHaveLength(1);
     expect(entries[0]).toMatchObject({
       role: 'error',
@@ -1664,7 +1657,7 @@ describe('CLI transcript state', () => {
 
     syncStreamLog(root);
 
-    const entries = streams.get().get(root)?.entries ?? [];
+    const entries = streamEntries(root);
     expect(entries[0]?.text).toBe('Model request failed');
   });
 
@@ -1681,7 +1674,7 @@ describe('CLI transcript state', () => {
 
     syncStreamLog(root);
 
-    const text = streams.get().get(root)?.entries[0]?.text ?? '';
+    const text = streamEntries(root)[0]?.text ?? '';
     expect(text).toBe('Model request failed\n⎿ Provider failed retry later');
     expect(text).not.toContain('\u001b');
     expect(text).not.toContain('\u0007');
@@ -1702,7 +1695,7 @@ describe('CLI transcript state', () => {
 
     syncStreamLog(root);
 
-    const text = streams.get().get(root)?.entries[0]?.text ?? '';
+    const text = streamEntries(root)[0]?.text ?? '';
     expect(text).toContain('Model request failed with Bearer [redacted]');
     expect(text).toContain('API_KEY=[redacted]');
     expect(text).toContain('Bearer [redacted]');
@@ -1721,7 +1714,7 @@ describe('CLI transcript state', () => {
 
     syncStreamLog(root);
 
-    const entries = streams.get().get(root)?.entries ?? [];
+    const entries = streamEntries(root);
     const lines = entries[0]?.text.split('\n') ?? [];
     expect(lines).toHaveLength(2);
     expect(lines[1]).toMatch(/^⎿ First line second line x+…$/);
@@ -1742,7 +1735,7 @@ describe('CLI transcript state', () => {
     syncStreamLog(root);
     syncStreamLog(root);
 
-    const text = streams.get().get(root)?.entries[0]?.text ?? '';
+    const text = streamEntries(root)[0]?.text ?? '';
     expect(text).toContain('\n⎿ ');
     expect(text).not.toContain('Monthly spending limit reached.');
     expect(text.match(/\/api personal/g)).toHaveLength(1);
@@ -1763,7 +1756,7 @@ describe('CLI transcript state', () => {
 
     syncStreamLog(root);
 
-    const entries = streams.get().get(root)?.entries ?? [];
+    const entries = streamEntries(root);
     expect(entries).toHaveLength(1);
     expect(entries[0]).toMatchObject({
       role: 'tool',
@@ -2115,7 +2108,7 @@ describe('CLI transcript state', () => {
 
     syncStreamLog(root);
 
-    const entries = streams.get().get(root)?.entries ?? [];
+    const entries = streamEntries(root);
     expect(entries.map((entry) => entry.text)).toEqual([
       'Why?',
       '  The answer starts here.',
@@ -2146,7 +2139,7 @@ describe('CLI transcript state', () => {
     // A second sync after finalize must not regress the flag.
     syncStreamLog(root);
 
-    const entries = streams.get().get(root)?.entries ?? [];
+    const entries = streamEntries(root);
     expect(entries).toHaveLength(1);
     expect(entries[0]).toMatchObject({
       role: 'assistant',
@@ -2171,7 +2164,7 @@ describe('CLI transcript state', () => {
 
     syncStreamLog(root);
 
-    const entries = streams.get().get(root)?.entries ?? [];
+    const entries = streamEntries(root);
     expect(entries).toHaveLength(1);
     expect(entries[0]).toMatchObject({
       role: 'assistant',
@@ -2186,7 +2179,7 @@ describe('CLI transcript state', () => {
 
     syncStreamLog(root);
 
-    const entries = streams.get().get(root)?.entries ?? [];
+    const entries = streamEntries(root);
     expect(entries).toHaveLength(1);
     expect(entries[0]).toMatchObject({
       role: 'assistant',
@@ -2236,10 +2229,7 @@ describe('CLI transcript state', () => {
     syncStreamLog(child1, { forceFull: true });
 
     expect(
-      streams
-        .get()
-        .get(child1)
-        ?.entries.map((entry) => [entry.role, entry.text]),
+      streamEntries(child1).map((entry) => [entry.role, entry.text]),
     ).toEqual([
       ['user', 'Check the second lemma.'],
       ['assistant', 'The second lemma is valid.'],
@@ -2262,7 +2252,7 @@ describe('CLI transcript state', () => {
 
     syncStreamLog(root);
 
-    const entries = streams.get().get(root)?.entries ?? [];
+    const entries = streamEntries(root);
     expect(entries.map((entry) => entry.text)).toEqual([
       'Let me check that.',
       'Final answer.',
@@ -2279,7 +2269,7 @@ describe('CLI transcript state', () => {
 
     projectStreamTranscript(root, { finalize: true });
 
-    const entries = streams.get().get(root)?.entries ?? [];
+    const entries = streamEntries(root);
     expect(entries.map((entry) => entry.text)).toEqual(['What is 1 + 1?', '2']);
     expect(entries.map((entry) => entry.finalized)).toEqual([true, true]);
     expect(entries.every((entry) => !entry.synthetic)).toBe(true);
@@ -2291,7 +2281,7 @@ describe('CLI transcript state', () => {
     appendLocalAssistantTranscript('Available commands: /help');
     appendLocalAssistantTranscript('Available commands: /help');
 
-    const entries = streams.get().get(root)?.entries ?? [];
+    const entries = streamEntries(root);
     expect(entries.map((entry) => entry.text)).toEqual([
       'Available commands: /help',
       'Available commands: /help',
@@ -2303,7 +2293,7 @@ describe('CLI transcript state', () => {
 
     appendLocalUserTranscript('literal \\checkmark');
 
-    const entries = streams.get().get(root)?.entries ?? [];
+    const entries = streamEntries(root);
     expect(entries.map((entry) => [entry.role, entry.text])).toEqual([
       ['user', 'literal \\checkmark'],
     ]);
@@ -2314,13 +2304,8 @@ describe('CLI transcript state', () => {
 
     appendLocalAssistantTranscript('Child stream note.', child1);
 
-    expect(streams.get().get(root)?.entries ?? []).toEqual([]);
-    expect(
-      streams
-        .get()
-        .get(child1)
-        ?.entries.map((entry) => entry.text),
-    ).toEqual(['Child stream note.']);
+    expect(streamEntries(root)).toEqual([]);
+    expect(entryTexts(child1)).toEqual(['Child stream note.']);
   });
 
   it('keeps root local notices out of a focused child stream', () => {
@@ -2332,15 +2317,12 @@ describe('CLI transcript state', () => {
     appendLocalErrorTranscript('Model claude-opus-4-7 not found');
 
     expect(
-      streams
-        .get()
-        .get(root)
-        ?.entries.map((entry) => [entry.role, entry.text]),
+      streamEntries(root).map((entry) => [entry.role, entry.text]),
     ).toEqual([
       ['assistant', 'Available commands: /help'],
       ['error', 'Model claude-opus-4-7 not found'],
     ]);
-    expect(streams.get().get(child1)?.entries ?? []).toEqual([]);
+    expect(streamEntries(child1)).toEqual([]);
     expect(activeStreamId.get()).toBe(child1);
   });
 
@@ -2350,13 +2332,8 @@ describe('CLI transcript state', () => {
 
     appendLocalAssistantTranscript('Slash command output.');
 
-    expect(
-      streams
-        .get()
-        .get(root)
-        ?.entries.map((entry) => entry.text),
-    ).toEqual(['Slash command output.']);
-    expect(streams.get().get(child1)?.entries ?? []).toEqual([]);
+    expect(entryTexts(root)).toEqual(['Slash command output.']);
+    expect(streamEntries(child1)).toEqual([]);
     expect(activeStreamId.get()).toBe(child1);
   });
 
@@ -2394,7 +2371,7 @@ describe('CLI transcript state', () => {
 
     appendLocalErrorTranscript('Model claude-opus-4-7 not found');
 
-    const entries = streams.get().get(root)?.entries ?? [];
+    const entries = streamEntries(root);
     expect(entries).toHaveLength(1);
     expect(entries[0]).toMatchObject({
       role: 'error',
@@ -2412,7 +2389,7 @@ describe('CLI transcript state', () => {
 
     syncStreamLog(root);
 
-    const entries = streams.get().get(root)?.entries ?? [];
+    const entries = streamEntries(root);
     expect(entries.map((entry) => entry.text)).toEqual([
       'A short final answer.',
     ]);
@@ -2430,7 +2407,7 @@ describe('CLI transcript state', () => {
 
     syncStreamLog(root);
 
-    const entries = streams.get().get(root)?.entries ?? [];
+    const entries = streamEntries(root);
     expect(entries).toHaveLength(1);
     expect(entries[0]).toMatchObject({
       role: 'assistant',
@@ -2457,7 +2434,7 @@ describe('CLI transcript state', () => {
     appendLocalAssistantTranscript('Available commands: /help');
     syncStreamLog(root);
 
-    const entries = streams.get().get(root)?.entries ?? [];
+    const entries = streamEntries(root);
     expect(
       entries
         .filter((entry) => entry.syntheticKind === 'local')
@@ -2581,25 +2558,20 @@ describe('CLI transcript state', () => {
   it('moves pre-session local slash-command output onto the resolved stream', () => {
     appendLocalAssistantTranscript('Available commands: /help');
 
-    expect(streams.get().get(CLI_LOCAL_STREAM_ID)?.entries).toHaveLength(1);
+    expect(streamEntries(CLI_LOCAL_STREAM_ID)).toHaveLength(1);
 
     moveLocalTranscriptToStream(root);
 
     expect(streams.get().has(CLI_LOCAL_STREAM_ID)).toBe(false);
     expect(activeStreamId.get()).toBe(root);
-    expect(
-      streams
-        .get()
-        .get(root)
-        ?.entries.map((entry) => entry.text),
-    ).toEqual(['Available commands: /help']);
+    expect(entryTexts(root)).toEqual(['Available commands: /help']);
   });
 
   it('can discard pre-resume local slash-command output', () => {
     appendLocalAssistantTranscript('/resume exec-1');
 
     expect(activeStreamId.get()).toBe(CLI_LOCAL_STREAM_ID);
-    expect(streams.get().get(CLI_LOCAL_STREAM_ID)?.entries).toHaveLength(1);
+    expect(streamEntries(CLI_LOCAL_STREAM_ID)).toHaveLength(1);
 
     clearLocalTranscript();
 
@@ -2616,7 +2588,7 @@ describe('CLI transcript state', () => {
     logger.info('next prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
     syncStreamLog(root);
 
-    const entries = streams.get().get(root)?.entries ?? [];
+    const entries = streamEntries(root);
     expect(entries.map((entry) => entry.text)).toEqual([
       '1+1',
       'The answer is 2.',
@@ -2639,7 +2611,7 @@ describe('CLI transcript state', () => {
     logger.info('third prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
     syncStreamLog(root);
 
-    const entries = streams.get().get(root)?.entries ?? [];
+    const entries = streamEntries(root);
     expect(entries.map((entry) => entry.text)).toEqual([
       'first prompt',
       'first answer',
@@ -2653,18 +2625,16 @@ describe('CLI transcript state', () => {
 
 describe('subscribeRuntimeHost run facts', () => {
   it('keeps a session-scoped fact subscription live after state reset', () => {
-    const hub = new SessionEventHub();
-    const detach = attachTuiRunFactSubscription(hub);
-    const nextRoot = 'root-after-clear' as StreamTabId;
-    const todos: TodoItem[] = [
-      {
-        content: 'Continue after clear',
-        status: TODO_STATUS.PENDING,
-        activeForm: 'Continuing after clear',
-      },
-    ];
+    withRunFacts((hub) => {
+      const nextRoot = 'root-after-clear' as StreamTabId;
+      const todos: TodoItem[] = [
+        {
+          content: 'Continue after clear',
+          status: TODO_STATUS.PENDING,
+          activeForm: 'Continuing after clear',
+        },
+      ];
 
-    try {
       resetCliState();
       hub.emit({
         scope: 'run',
@@ -2677,23 +2647,19 @@ describe('subscribeRuntimeHost run facts', () => {
       });
 
       expect(streams.get().get(nextRoot)?.todos).toEqual(todos);
-    } finally {
-      detach();
-    }
+    });
   });
 
   it('applies typed updateTodos run facts without host emission', () => {
-    const hub = new SessionEventHub();
-    const detach = attachTuiRunFactSubscription(hub);
-    const todos: TodoItem[] = [
-      {
-        content: 'State the compactness lemma',
-        status: TODO_STATUS.PENDING,
-        activeForm: 'Stating the compactness lemma',
-      },
-    ];
+    withRunFacts((hub) => {
+      const todos: TodoItem[] = [
+        {
+          content: 'State the compactness lemma',
+          status: TODO_STATUS.PENDING,
+          activeForm: 'Stating the compactness lemma',
+        },
+      ];
 
-    try {
       hub.emit({
         scope: 'run',
         streamId: root,
@@ -2705,19 +2671,16 @@ describe('subscribeRuntimeHost run facts', () => {
       });
 
       expect(streams.get().get(root)?.todos).toEqual(todos);
-    } finally {
-      detach();
-    }
+    });
   });
 
   it('applies typed updatePlan run facts without host emission', () => {
-    const hub = new SessionEventHub();
-    const detach = attachTuiRunFactSubscription(hub);
-    const plan: Plan = {
-      objective: 'Prove the local estimate and record the stopping criterion.',
-    };
+    withRunFacts((hub) => {
+      const plan: Plan = {
+        objective:
+          'Prove the local estimate and record the stopping criterion.',
+      };
 
-    try {
       hub.emit({
         scope: 'run',
         streamId: root,
@@ -2729,16 +2692,11 @@ describe('subscribeRuntimeHost run facts', () => {
       });
 
       expect(streams.get().get(root)?.plan).toEqual(plan);
-    } finally {
-      detach();
-    }
+    });
   });
 
   it('applies typed goalPaused run facts without host emission', () => {
-    const hub = new SessionEventHub();
-    const detach = attachTuiRunFactSubscription(hub);
-
-    try {
+    withRunFacts((hub) => {
       hub.emit({
         scope: 'run',
         streamId: root,
@@ -2748,22 +2706,12 @@ describe('subscribeRuntimeHost run facts', () => {
         },
       });
 
-      expect(
-        streams
-          .get()
-          .get(root)
-          ?.entries.map((entry) => entry.text),
-      ).toEqual([GOAL_PAUSED_TRANSCRIPT_NOTICE]);
-    } finally {
-      detach();
-    }
+      expect(entryTexts(root)).toEqual([GOAL_PAUSED_TRANSCRIPT_NOTICE]);
+    });
   });
 
   it('applies direct stage.start(kind: round) events without host emission', () => {
-    const hub = new SessionEventHub();
-    const detach = attachTuiRunFactSubscription(hub);
-
-    try {
+    withRunFacts((hub) => {
       hub.emit({
         scope: 'run',
         streamId: root,
@@ -2781,16 +2729,11 @@ describe('subscribeRuntimeHost run facts', () => {
         index: 1,
         total: 3,
       });
-    } finally {
-      detach();
-    }
+    });
   });
 
   it('ignores direct non-round stage.start events without host emission', () => {
-    const hub = new SessionEventHub();
-    const detach = attachTuiRunFactSubscription(hub);
-
-    try {
+    withRunFacts((hub) => {
       hub.emit({
         scope: 'run',
         streamId: root,
@@ -2804,23 +2747,19 @@ describe('subscribeRuntimeHost run facts', () => {
       });
 
       expect(streams.get().get(root)?.roundStage).toBeUndefined();
-    } finally {
-      detach();
-    }
+    });
   });
 
   it('applies direct child activity and parent-link facts without host emission', () => {
-    const hub = new SessionEventHub();
-    const detach = attachTuiRunFactSubscription(hub);
-    const child: ActiveChildInfo = {
-      kind: 'subagent',
-      executionId: 'agent-1',
-      agentName: 'critic',
-      childStreamId: child1,
-      status: STREAM_PHASE.RUNNING,
-    };
+    withRunFacts((hub) => {
+      const child: ActiveChildInfo = {
+        kind: 'subagent',
+        executionId: 'agent-1',
+        agentName: 'critic',
+        childStreamId: child1,
+        status: STREAM_PHASE.RUNNING,
+      };
 
-    try {
       // The child's own status is the single owner the roster selectors read
       // from (rule 8: the roster's copied status is discarded).
       patchStream(child1, (s) => ({ ...s, status: STREAM_PHASE.RUNNING }));
@@ -2844,34 +2783,26 @@ describe('subscribeRuntimeHost run facts', () => {
         },
       });
 
-      expect(
-        activeSubagentsFor(root, childStreamEntries.get(), streams.get()),
-      ).toEqual([child]);
-      expect(
-        retainedChildStreamsFor(root, childStreamEntries.get(), streams.get()),
-      ).toEqual([child]);
+      expect(activeRows(root)).toEqual([child]);
+      expect(retainedRows(root)).toEqual([child]);
       expect(parentStream.get().get(child1)).toBe(root);
       expect(parentStream.get().get(child2)).toBe(root);
-    } finally {
-      detach();
-    }
+    });
   });
 
   it('applies direct usage events without host emission', () => {
-    const hub = new SessionEventHub();
-    const detach = attachTuiRunFactSubscription(hub);
-    const storageKey = 'root-direct-run' as StorageKey;
-    const usage = {
-      inputTokens: 100,
-      outputTokens: 20,
-      cost: 1,
-      cacheReadInputTokens: 30,
-      elapsedTime: 1.5,
-      percentageCached: 25,
-      reasoningTokens: 7,
-    };
+    withRunFacts((hub) => {
+      const storageKey = 'root-direct-run' as StorageKey;
+      const usage = {
+        inputTokens: 100,
+        outputTokens: 20,
+        cost: 1,
+        cacheReadInputTokens: 30,
+        elapsedTime: 1.5,
+        percentageCached: 25,
+        reasoningTokens: 7,
+      };
 
-    try {
       hub.emit({
         scope: 'run',
         streamId: root,
@@ -2896,16 +2827,11 @@ describe('subscribeRuntimeHost run facts', () => {
         cacheCreationInputTokens: 0,
         reasoningTokens: 7,
       });
-    } finally {
-      detach();
-    }
+    });
   });
 
   it('applies direct session stream facts without host emission', () => {
-    const hub = new SessionEventHub();
-    const detach = attachTuiRunFactSubscription(hub);
-
-    try {
+    withRunFacts((hub) => {
       activeStreamId.set(root);
       hub.emit({
         scope: 'session',
@@ -2944,16 +2870,11 @@ describe('subscribeRuntimeHost run facts', () => {
       });
 
       expect(streams.get().has(child1)).toBe(false);
-    } finally {
-      detach();
-    }
+    });
   });
 
   it('applies direct run config and conversation progress without host emission', () => {
-    const hub = new SessionEventHub();
-    const detach = attachTuiRunFactSubscription(hub);
-
-    try {
+    withRunFacts((hub) => {
       hub.emit({
         scope: 'run',
         streamId: root,
@@ -2998,17 +2919,13 @@ describe('subscribeRuntimeHost run facts', () => {
         },
         conversation: { toolCallCount: 3 },
       });
-    } finally {
-      detach();
-    }
+    });
   });
 
   it('streams every workflow output round into selected-agent state', () => {
-    const hub = new SessionEventHub();
-    const detach = attachTuiRunFactSubscription(hub);
-    const executionId = 'exec-output' as ExecutionId;
+    withRunFacts((hub) => {
+      const executionId = 'exec-output' as ExecutionId;
 
-    try {
       hub.emit({
         scope: 'run',
         streamId: root,
@@ -3078,135 +2995,127 @@ describe('subscribeRuntimeHost run facts', () => {
           }),
         ],
       });
-    } finally {
-      detach();
-    }
+    });
   });
 
   it('projects missing-output and compile facts and clears matching warnings', () => {
-    const hub = new SessionEventHub();
-    const detach = attachTuiRunFactSubscription(hub, {
-      findWorkflowStreamsMatching: () => [root],
-    });
-
-    try {
-      hub.emit({
-        scope: 'run',
-        streamId: root,
-        event: {
-          type: 'updateMissingOutputs',
+    withRunFacts(
+      (hub) => {
+        hub.emit({
+          scope: 'run',
           streamId: root,
-          filesByRound: { 0: ['missing.tex'] },
-        },
-      });
-      hub.emit({
-        scope: 'run',
-        streamId: root,
-        event: {
-          type: 'updateCompileFailures',
-          streamId: root,
-          filesByRound: {
-            0: [
-              {
-                round: 0,
-                displayName: 'paper.pdf',
-                output: {
-                  kind: 'external',
-                  absolutePath: '/tmp/paper.pdf',
-                },
-                log: {
-                  kind: 'external',
-                  absolutePath: '/tmp/paper.log',
-                },
-                logRelativePath: 'paper.log',
-              },
-            ],
+          event: {
+            type: 'updateMissingOutputs',
+            streamId: root,
+            filesByRound: { 0: ['missing.tex'] },
           },
-        },
-      });
-
-      expect(streams.get().get(root)).toMatchObject({
-        missingOutputsByRound: { 0: ['missing.tex'] },
-        compileFailuresByRound: {
-          0: [expect.objectContaining({ displayName: 'paper.pdf' })],
-        },
-      });
-
-      hub.emit({
-        scope: 'session',
-        event: {
-          type: 'clearMissingOutputs',
-          payload: { streamId: root },
-        },
-      });
-      expect(streams.get().get(root)?.missingOutputsByRound).toEqual({});
-
-      hub.emit({
-        scope: 'run',
-        streamId: root,
-        event: {
-          type: 'updateMissingOutputs',
+        });
+        hub.emit({
+          scope: 'run',
           streamId: root,
-          filesByRound: { 1: ['again.tex'] },
-        },
-      });
-      hub.emit({
-        scope: 'session',
-        event: {
-          type: 'clearMissingOutputs',
-          payload: {
-            streamConfig: {
-              agent: 'correct',
-              model: 'deepseekT',
-              inputFile: 'paper.tex',
+          event: {
+            type: 'updateCompileFailures',
+            streamId: root,
+            filesByRound: {
+              0: [
+                {
+                  round: 0,
+                  displayName: 'paper.pdf',
+                  output: {
+                    kind: 'external',
+                    absolutePath: '/tmp/paper.pdf',
+                  },
+                  log: {
+                    kind: 'external',
+                    absolutePath: '/tmp/paper.log',
+                  },
+                  logRelativePath: 'paper.log',
+                },
+              ],
             },
           },
-        },
-      });
+        });
 
-      expect(streams.get().get(root)?.missingOutputsByRound).toEqual({});
-      expect(streams.get().get(root)?.compileFailuresByRound[0]).toHaveLength(
-        1,
-      );
-    } finally {
-      detach();
-    }
+        expect(streams.get().get(root)).toMatchObject({
+          missingOutputsByRound: { 0: ['missing.tex'] },
+          compileFailuresByRound: {
+            0: [expect.objectContaining({ displayName: 'paper.pdf' })],
+          },
+        });
+
+        hub.emit({
+          scope: 'session',
+          event: {
+            type: 'clearMissingOutputs',
+            payload: { streamId: root },
+          },
+        });
+        expect(streams.get().get(root)?.missingOutputsByRound).toEqual({});
+
+        hub.emit({
+          scope: 'run',
+          streamId: root,
+          event: {
+            type: 'updateMissingOutputs',
+            streamId: root,
+            filesByRound: { 1: ['again.tex'] },
+          },
+        });
+        hub.emit({
+          scope: 'session',
+          event: {
+            type: 'clearMissingOutputs',
+            payload: {
+              streamConfig: {
+                agent: 'correct',
+                model: 'deepseekT',
+                inputFile: 'paper.tex',
+              },
+            },
+          },
+        });
+
+        expect(streams.get().get(root)?.missingOutputsByRound).toEqual({});
+        expect(streams.get().get(root)?.compileFailuresByRound[0]).toHaveLength(
+          1,
+        );
+      },
+      { findWorkflowStreamsMatching: () => [root] },
+    );
   });
 
   it('applies direct usage sequences exactly once', () => {
-    const hub = new SessionEventHub();
-    const detach = attachTuiRunFactSubscription(hub);
-    const storageKey = 'root-direct-sequence-run' as StorageKey;
-    const payload = {
-      streamId: root,
-      storageKey,
-      executionId: 'exec-direct-sequence',
-      usage: {
-        inputTokens: 100,
-        outputTokens: 20,
-        cost: 1,
-        cacheReadInputTokens: 30,
-        elapsedTime: 1.5,
-        percentageCached: 25,
-        reasoningTokens: 7,
-      },
-    };
-    const secondPayload = {
-      streamId: root,
-      storageKey,
-      executionId: 'exec-direct-sequence',
-      usage: {
-        inputTokens: 50,
-        outputTokens: 10,
-        cost: 0.5,
-        cacheReadInputTokens: 5,
-        elapsedTime: 0.8,
-        percentageCached: 10,
-        reasoningTokens: 3,
-      },
-    };
+    withRunFacts((hub) => {
+      const storageKey = 'root-direct-sequence-run' as StorageKey;
+      const payload = {
+        streamId: root,
+        storageKey,
+        executionId: 'exec-direct-sequence',
+        usage: {
+          inputTokens: 100,
+          outputTokens: 20,
+          cost: 1,
+          cacheReadInputTokens: 30,
+          elapsedTime: 1.5,
+          percentageCached: 25,
+          reasoningTokens: 7,
+        },
+      };
+      const secondPayload = {
+        streamId: root,
+        storageKey,
+        executionId: 'exec-direct-sequence',
+        usage: {
+          inputTokens: 50,
+          outputTokens: 10,
+          cost: 0.5,
+          cacheReadInputTokens: 5,
+          elapsedTime: 0.8,
+          percentageCached: 10,
+          reasoningTokens: 3,
+        },
+      };
 
-    try {
       hub.emit({
         scope: 'run',
         streamId: root,
@@ -3234,17 +3143,13 @@ describe('subscribeRuntimeHost run facts', () => {
         cacheCreationInputTokens: 0,
         reasoningTokens: 10,
       });
-    } finally {
-      detach();
-    }
+    });
   });
 
   it('registers suppressed child streams without switching away from the parent page', () => {
-    const hub = new SessionEventHub();
-    const detach = attachTuiRunFactSubscription(hub);
-    activeStreamId.set(root);
+    withRunFacts((hub) => {
+      activeStreamId.set(root);
 
-    try {
       hub.emit({
         scope: 'session',
         event: {
@@ -3258,16 +3163,11 @@ describe('subscribeRuntimeHost run facts', () => {
 
       expect(activeStreamId.get()).toBe(root);
       expect(streams.get().has(child1)).toBe(true);
-    } finally {
-      detach();
-    }
+    });
   });
 
   it('captures per-stream model identity from task state', () => {
-    const hub = new SessionEventHub();
-    const detach = attachTuiRunFactSubscription(hub);
-
-    try {
+    withRunFacts((hub) => {
       hub.emit({
         scope: 'run',
         streamId: child1,
@@ -3297,9 +3197,7 @@ describe('subscribeRuntimeHost run facts', () => {
         model: 'kimi26T',
         category: AgentCategory.ToolUse,
       });
-    } finally {
-      detach();
-    }
+    });
   });
 
   it('refreshes queued follow-up display when an active follow-up is sent', () => {
@@ -3342,11 +3240,9 @@ describe('subscribeRuntimeHost run facts', () => {
   });
 
   it('keeps latest usage separate from cumulative resume usage', () => {
-    const hub = new SessionEventHub();
-    const detach = attachTuiRunFactSubscription(hub);
-    const storageKey = 'root-run' as StorageKey;
+    withRunFacts((hub) => {
+      const storageKey = 'root-run' as StorageKey;
 
-    try {
       hub.emit({
         scope: 'run',
         streamId: root,
@@ -3398,9 +3294,7 @@ describe('subscribeRuntimeHost run facts', () => {
         cacheMissInputTokens: 0,
         cacheCreationInputTokens: 7,
       });
-    } finally {
-      detach();
-    }
+    });
   });
 
   it('classifies child-execution error statuses', () => {
@@ -3470,18 +3364,6 @@ describe('child-stream ordered transition matrix', () => {
       status,
       elapsed,
     };
-  }
-
-  function activeRows(parent: StreamTabId) {
-    return activeSubagentsFor(parent, childStreamEntries.get(), streams.get());
-  }
-
-  function retainedRows(parent: StreamTabId) {
-    return retainedChildStreamsFor(
-      parent,
-      childStreamEntries.get(),
-      streams.get(),
-    );
   }
 
   it('1. canonical order: A, S(running), R_P+, E_P+', () => {
@@ -3714,11 +3596,10 @@ describe('child-stream ordered transition matrix', () => {
       kidA,
       kidB,
     ]);
-    expect(
-      visibleSubagentRows(parentP, childStreamEntries.get(), streams.get()).map(
-        (r) => r.status,
-      ),
-    ).toEqual([STREAM_PHASE.COMPLETED, STREAM_PHASE.RUNNING]);
+    expect(visibleRows(parentP).map((r) => r.status)).toEqual([
+      STREAM_PHASE.COMPLETED,
+      STREAM_PHASE.RUNNING,
+    ]);
   });
 
   it('11. parent removal with late facts: P -> child, X(P), R_P+, E_P+', () => {

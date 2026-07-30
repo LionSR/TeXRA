@@ -36,7 +36,7 @@ export async function sha256Hex(value: string): Promise<string> {
   ).join('');
 }
 
-export type CiTokenAuthResult =
+type CiTokenAuthResult =
   { ok: true; userId: string } | { ok: false; status: number; message: string };
 
 /**

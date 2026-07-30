@@ -634,14 +634,6 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
     return totalTokens;
   }
 
-  private toCountableMediaResolution(
-    resolution: MediaResolution | undefined,
-  ): PartMediaResolutionLevel | undefined {
-    return resolution
-      ? COUNTABLE_MEDIA_RESOLUTION_BY_LEVEL[resolution]
-      : undefined;
-  }
-
   private contentToCountablePart(content: Content): Part | null {
     if (isTextContent(content)) return createPartFromText(content.text);
 
@@ -650,8 +642,8 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
         ? (content.mime_type ?? DEFAULT_ATTACHMENT_MIME_TYPE)
         : DEFAULT_ATTACHMENT_MIME_TYPE;
     const resolution =
-      content.type === 'image'
-        ? this.toCountableMediaResolution(content.resolution)
+      content.type === 'image' && content.resolution
+        ? COUNTABLE_MEDIA_RESOLUTION_BY_LEVEL[content.resolution]
         : undefined;
 
     if ('data' in content && isNonEmptyString(content.data)) {
@@ -749,6 +741,30 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
   // Message construction (typed Content + Step[], not chat parts)
   // ===========================================================================
 
+  /** Labelled media content for a round, or empty when there is nothing to attach. */
+  private async buildLabelledMediaContent(
+    mediaFiles: FileLocation[] | undefined,
+    context: 'initial' | 'followUp',
+  ): Promise<Content[]> {
+    if (!mediaFiles?.length || !this.supportsFileUploads()) {
+      return [];
+    }
+
+    const media = await this.createMediaForRound(mediaFiles, context);
+    if (media.length === 0) {
+      return [];
+    }
+
+    const label = mediaFiles.map((loc) => getShortDisplayPath(loc)).join(', ');
+    const verb = context === 'initial' ? 'Attached' : 'Processing';
+    return [
+      this.textContent(
+        `\n${verb} ${pluralize(mediaFiles.length, 'file')}: ${label}`,
+      ),
+      ...media,
+    ];
+  }
+
   async initializeMessages(
     userPrefix: string,
     userRequest: string,
@@ -757,24 +773,11 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
   ): Promise<Step[]> {
     // System prompt is NOT a step — it rides on request-level system_instruction
     // (resent on every create, spec §6.2).
-    const content: Content[] = [this.textContent(userPrefix)];
-
-    if (mediaFiles?.length && this.supportsFileUploads()) {
-      const media = await this.createMediaForRound(mediaFiles, 'initial');
-      if (media.length > 0) {
-        const label = mediaFiles
-          .map((loc) => getShortDisplayPath(loc))
-          .join(', ');
-        content.push(
-          this.textContent(
-            `\nAttached ${pluralize(mediaFiles.length, 'file')}: ${label}`,
-          ),
-        );
-        content.push(...media);
-      }
-    }
-
-    content.push(this.textContent(`\n${userRequest}`));
+    const content: Content[] = [
+      this.textContent(userPrefix),
+      ...(await this.buildLabelledMediaContent(mediaFiles, 'initial')),
+      this.textContent(`\n${userRequest}`),
+    ];
 
     return [{ type: 'user_input', content } satisfies UserInputStep];
   }
@@ -784,24 +787,10 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
     userMessage: string,
     mediaFiles?: FileLocation[],
   ): Promise<Step[]> {
-    const content: Content[] = [];
-
-    if (mediaFiles?.length && this.supportsFileUploads()) {
-      const media = await this.createMediaForRound(mediaFiles, 'followUp');
-      if (media.length > 0) {
-        const label = mediaFiles
-          .map((loc) => getShortDisplayPath(loc))
-          .join(', ');
-        content.push(
-          this.textContent(
-            `\nProcessing ${pluralize(mediaFiles.length, 'file')}: ${label}`,
-          ),
-        );
-        content.push(...media);
-      }
-    }
-
-    content.push(this.textContent(userMessage));
+    const content: Content[] = [
+      ...(await this.buildLabelledMediaContent(mediaFiles, 'followUp')),
+      this.textContent(userMessage),
+    ];
 
     messages.push({ type: 'user_input', content } satisfies UserInputStep);
     return messages;
@@ -1420,7 +1409,8 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
       }
     }
 
-    const base = this.compactionResult?.compactedMessages ?? messages;
+    const updatedMessages = this.compactionResult?.compactedMessages;
+    const base = updatedMessages ?? messages;
 
     // First request OR post-compaction OR stateless ⇒ full resend with no chain.
     // Continuation ⇒ send only the CLIENT-INPUT Steps appended since the last
@@ -1450,7 +1440,6 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
     const useStreaming = !useBackground && super.getStreamingConfig();
     let aggregatedText = '';
 
-    const updatedMessages = this.compactionResult?.compactedMessages;
     const withUpdated = (
       result: CreateResponseResult<GoogleGenAIInteraction, Step>,
     ): CreateResponseResult<GoogleGenAIInteraction, Step> =>

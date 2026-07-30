@@ -212,6 +212,16 @@ const INTERACTIVE_CONTEXT: CliContext = createTestCliContext({
   resourcesPath: '/tmp/resources',
 });
 
+function inkInstance() {
+  return {
+    clear: vi.fn(),
+    repaint: vi.fn(),
+    rerender: vi.fn(),
+    unmount: mocks.unmount,
+    waitUntilExit: mocks.waitUntilExit,
+  };
+}
+
 function deferred(): { readonly promise: Promise<void>; resolve(): void } {
   let resolvePromise = (): void => undefined;
   const promise = new Promise<void>((resolve) => {
@@ -294,13 +304,7 @@ describe('runChat signal ownership wiring', () => {
     });
     mocks.render.mockImplementation(() => {
       mocks.callOrder.push('ink.render');
-      return {
-        clear: vi.fn(),
-        repaint: vi.fn(),
-        rerender: vi.fn(),
-        unmount: mocks.unmount,
-        waitUntilExit: mocks.waitUntilExit,
-      };
+      return inkInstance();
     });
   });
 
@@ -335,13 +339,7 @@ describe('runChat signal ownership wiring', () => {
       }) => {
         mocks.callOrder.push('ink.render');
         onSubmit = element.props?.onSubmit;
-        return {
-          clear: vi.fn(),
-          repaint: vi.fn(),
-          rerender: vi.fn(),
-          unmount: mocks.unmount,
-          waitUntilExit: mocks.waitUntilExit,
-        };
+        return inkInstance();
       },
     );
     process.on('newListener', observeNewListener);
@@ -469,13 +467,7 @@ describe('runChat signal ownership wiring', () => {
         readonly props?: { readonly onSubmit?: typeof onSubmit };
       }) => {
         onSubmit = element.props?.onSubmit;
-        return {
-          clear: vi.fn(),
-          repaint: vi.fn(),
-          rerender: vi.fn(),
-          unmount: mocks.unmount,
-          waitUntilExit: mocks.waitUntilExit,
-        };
+        return inkInstance();
       },
     );
     const agents = await import('@agent/index');
@@ -492,19 +484,17 @@ describe('runChat signal ownership wiring', () => {
     const mediaFiles = ['/tmp/diagram.png'];
     const activationPrompt = '<skill_activation>hidden</skill_activation>';
     const streamId = 'stream-resume' as StreamTabId;
-    const resolution: CliToolUseResumeResolution = {
-      ...createToolUseResumeData({
-        executionId: 'exec-resume' as ExecutionId,
-        streamId,
-        agentConfig: AgentConfigSchema.parse({
-          agent: 'orchestrator',
-          model: 'gpt-test',
-          agentCategory: 'toolUse',
-          cliMultiAgentPresetId: 'physicist',
-          delegationAgentScope,
-        }),
+    const resolution: CliToolUseResumeResolution = createToolUseResumeData({
+      executionId: 'exec-resume' as ExecutionId,
+      streamId,
+      agentConfig: AgentConfigSchema.parse({
+        agent: 'orchestrator',
+        model: 'gpt-test',
+        agentCategory: 'toolUse',
+        cliMultiAgentPresetId: 'physicist',
+        delegationAgentScope,
       }),
-    };
+    });
     const { runChat } = await import('@cli/chat/tui/runChatTui');
     const runPromise = runChat(INTERACTIVE_CONTEXT, {
       initialResume: {

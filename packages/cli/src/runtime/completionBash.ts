@@ -108,6 +108,29 @@ function genericFlagValueCases(commands: readonly CompletionCommand[]): string {
   return cases.join('\n    ');
 }
 
+// Positional completions keyed by command path, with the `compgen -W` word list
+// each one offers. Emitted in order after the flag-value cases.
+const POSITIONAL_COMPLETIONS: readonly {
+  readonly commandPath: string;
+  readonly words: string;
+}[] = [
+  { commandPath: 'run', words: '"$(_texra_workflow_agents)"' },
+  { commandPath: 'agents run', words: '"$(_texra_tool_use_agents)"' },
+  { commandPath: 'completion', words: `'${CLI_COMPLETION_SHELLS.join(' ')}'` },
+  { commandPath: 'agents show', words: '"$(_texra_agents)"' },
+  { commandPath: 'models show', words: '"$(_texra_models)"' },
+];
+
+function positionalCompletionBlocks(): string {
+  return POSITIONAL_COMPLETIONS.map(
+    ({ commandPath, words }) =>
+      `  if [[ "$path" == '${commandPath}' && "$cur" != -* ]]; then
+    COMPREPLY=( $(compgen -W ${words} -- "$cur") )
+    return
+  fi`,
+  ).join('\n\n');
+}
+
 function commandCaseBlock(command: CompletionCommand): string {
   const key = commandKey(command.path);
   const subcommands = command.subcommands.join(' ');
@@ -207,30 +230,7 @@ _texra() {
     *) subcommands='${root?.subcommands.join(' ') ?? ''}'; flags='' ;;
   esac
 
-  if [[ "$path" == 'run' && "$cur" != -* ]]; then
-    COMPREPLY=( $(compgen -W "$(_texra_workflow_agents)" -- "$cur") )
-    return
-  fi
-
-  if [[ "$path" == 'agents run' && "$cur" != -* ]]; then
-    COMPREPLY=( $(compgen -W "$(_texra_tool_use_agents)" -- "$cur") )
-    return
-  fi
-
-  if [[ "$path" == 'completion' && "$cur" != -* ]]; then
-    COMPREPLY=( $(compgen -W '${CLI_COMPLETION_SHELLS.join(' ')}' -- "$cur") )
-    return
-  fi
-
-  if [[ "$path" == 'agents show' && "$cur" != -* ]]; then
-    COMPREPLY=( $(compgen -W "$(_texra_agents)" -- "$cur") )
-    return
-  fi
-
-  if [[ "$path" == 'models show' && "$cur" != -* ]]; then
-    COMPREPLY=( $(compgen -W "$(_texra_models)" -- "$cur") )
-    return
-  fi
+${positionalCompletionBlocks()}
 
   if [[ "$cur" == -* ]]; then
     COMPREPLY=( $(compgen -W "$flags" -- "$cur") )

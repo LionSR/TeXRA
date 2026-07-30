@@ -6,8 +6,6 @@ import type { DeepSeekToolCall } from '@agent/types/ModelHandlerContracts';
 import { clampReasoningEffortToHighOrMax } from '@agent/modelHandlers/support/reasoningEffort';
 import { ReasoningModelHandlerOpenAI } from './reasoningModelHandlerOpenAI';
 
-// Type imports
-
 // DeepSeek usage format includes prompt_cache_hit_tokens which the base class
 // already handles via rawUsage.prompt_cache_hit_tokens in normalizeUsage().
 

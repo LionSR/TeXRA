@@ -63,6 +63,17 @@ function createStreamingHandler(
   return handler;
 }
 
+function modelChunk(
+  parts: unknown[],
+  finishReason?: FinishReason,
+): GenerateContentResponse {
+  const chunk = new GenerateContentResponse();
+  chunk.candidates = [
+    { content: { role: 'model', parts }, finishReason } as any,
+  ];
+  return chunk;
+}
+
 function createFakeClient(...chunks: GenerateContentResponse[]): any {
   return {
     chats: {
@@ -83,6 +94,14 @@ function createFakeClient(...chunks: GenerateContentResponse[]): any {
     models: {},
   };
 }
+
+const EXECUTIONS_CALL = {
+  functionCall: {
+    id: 'google-call-1',
+    name: 'executions',
+    args: { action: 'wait', path: '/executions/example' },
+  },
+};
 
 describe('ModelHandlerGoogleGenAI streaming text extraction', () => {
   it('maps finalTool to an ANY function allow-list', async () => {
@@ -124,25 +143,19 @@ describe('ModelHandlerGoogleGenAI streaming text extraction', () => {
     const handler = createStreamingHandler(streamRecords);
 
     const visibleText = 'I need to inspect files.';
-    const chunk = new GenerateContentResponse();
-    chunk.candidates = [
-      {
-        content: {
-          role: 'model',
-          parts: [
-            createPartFromText(visibleText),
-            {
-              functionCall: {
-                id: 'google-call-1',
-                name: 'list_files',
-                args: { path: '.' },
-              },
-            },
-          ],
+    const chunk = modelChunk(
+      [
+        createPartFromText(visibleText),
+        {
+          functionCall: {
+            id: 'google-call-1',
+            name: 'list_files',
+            args: { path: '.' },
+          },
         },
-        finishReason: FinishReason.STOP,
-      } as any,
-    ];
+      ],
+      FinishReason.STOP,
+    );
     Object.defineProperty(chunk, 'text', {
       configurable: true,
       get() {
@@ -172,92 +185,33 @@ describe('ModelHandlerGoogleGenAI streaming text extraction', () => {
     expect(toolInfo?.input).toEqual({ path: '.' });
   });
 
-  it('drops Google tool-call control glyphs from visible streamed text', async () => {
+  it.each([
+    {
+      label: 'from visible streamed text',
+      chunks: () => [
+        modelChunk(
+          [createPartFromText('\u25c4'), EXECUTIONS_CALL],
+          FinishReason.STOP,
+        ),
+      ],
+    },
+    {
+      label: 'split before streamed function calls',
+      chunks: () => [
+        modelChunk([createPartFromText('\u25c4')]),
+        modelChunk([EXECUTIONS_CALL], FinishReason.STOP),
+      ],
+    },
+  ])('drops Google tool-call control glyphs $label', async ({ chunks }) => {
     const streamRecords: StreamRecord[] = [];
     const handler = createStreamingHandler(streamRecords);
-
-    const chunk = new GenerateContentResponse();
-    chunk.candidates = [
-      {
-        content: {
-          role: 'model',
-          parts: [
-            createPartFromText('\u25c4'),
-            {
-              functionCall: {
-                id: 'google-call-1',
-                name: 'executions',
-                args: { action: 'wait', path: '/executions/example' },
-              },
-            },
-          ],
-        },
-        finishReason: FinishReason.STOP,
-      } as any,
-    ];
 
     const messages: Content[] = [
       { role: 'user', parts: [createPartFromText('wait for subagent')] },
     ];
 
     const response = await handler.createResponse({
-      client: createFakeClient(chunk),
-      messages,
-      temperature: 0,
-    });
-
-    expect(handler.extractResponse(response.response, '').text).toBe('');
-    expect(streamRecords[1]?.appends).toEqual([]);
-    expect(streamRecords[1]?.finalized).toBe('');
-
-    const [toolInfo] = handler.extractToolUse(response.response);
-    expect(toolInfo?.callId).toBe('google-call-1');
-    expect(toolInfo?.name).toBe('executions');
-    expect(toolInfo?.input).toEqual({
-      action: 'wait',
-      path: '/executions/example',
-    });
-  });
-
-  it('drops Google tool-call control glyphs split before streamed function calls', async () => {
-    const streamRecords: StreamRecord[] = [];
-    const handler = createStreamingHandler(streamRecords);
-
-    const glyphChunk = new GenerateContentResponse();
-    glyphChunk.candidates = [
-      {
-        content: {
-          role: 'model',
-          parts: [createPartFromText('\u25c4')],
-        },
-      } as any,
-    ];
-
-    const toolChunk = new GenerateContentResponse();
-    toolChunk.candidates = [
-      {
-        content: {
-          role: 'model',
-          parts: [
-            {
-              functionCall: {
-                id: 'google-call-1',
-                name: 'executions',
-                args: { action: 'wait', path: '/executions/example' },
-              },
-            },
-          ],
-        },
-        finishReason: FinishReason.STOP,
-      } as any,
-    ];
-
-    const messages: Content[] = [
-      { role: 'user', parts: [createPartFromText('wait for subagent')] },
-    ];
-
-    const response = await handler.createResponse({
-      client: createFakeClient(glyphChunk, toolChunk),
+      client: createFakeClient(...chunks()),
       messages,
       temperature: 0,
     });

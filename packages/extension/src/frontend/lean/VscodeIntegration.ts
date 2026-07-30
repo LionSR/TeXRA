@@ -65,10 +65,6 @@ const LEAN_FEATURE_PROJECT_COMMANDS = new Set<LeanProjectCommand>([
 
 const knownExtensionServers = new Set<string>();
 
-function vscodeServerId(workspaceRoot: string): string {
-  return `vscode:${workspaceRoot}`;
-}
-
 /**
  * Record a workspace folder as having an active VS Code-mediated Lean
  * server. Idempotent — called from every code path that successfully
@@ -76,7 +72,7 @@ function vscodeServerId(workspaceRoot: string): string {
  * actual usage rather than a one-shot snapshot.
  */
 function noteVscodeLeanServer(workspaceRoot: string): void {
-  const id = vscodeServerId(workspaceRoot);
+  const id = `vscode:${workspaceRoot}`;
   if (knownExtensionServers.has(id)) {
     updateLeanServer(id, { status: 'running' });
     return;
@@ -193,16 +189,11 @@ function getDiagnostics(filePath: string): LeanDiagnostic[] {
     return directLookup.map(toLeanDiagnostic);
   }
 
-  // Fallback: search by path in case URI format differs
-  return findDiagnosticsByPath(uri.fsPath).map(toLeanDiagnostic);
-}
-
-/** Find diagnostics by matching file path (case-insensitive). */
-function findDiagnosticsByPath(targetPath: string): vscode.Diagnostic[] {
-  const normalizedTarget = targetPath.toLowerCase();
+  // Fallback: match by path (case-insensitive) in case URI format differs
+  const normalizedTarget = uri.fsPath.toLowerCase();
   for (const [diagUri, diags] of vscode.languages.getDiagnostics()) {
     if (diagUri.fsPath.toLowerCase() === normalizedTarget && diags.length > 0) {
-      return diags;
+      return diags.map(toLeanDiagnostic);
     }
   }
   return [];
@@ -394,13 +385,16 @@ export async function getHoverInfo(
 export async function fetchDiagnosticsForFile(
   file: string,
 ): Promise<LeanDiagnostic[] | null> {
-  const uri = vscode.Uri.file(WorkspaceFS.toAbsolute(file));
-  const diagnosticsWait = waitForDiagnosticsChange(uri, 10000);
+  const absolutePath = WorkspaceFS.toAbsolute(file);
+  const diagnosticsWait = waitForDiagnosticsChange(
+    vscode.Uri.file(absolutePath),
+    10000,
+  );
 
   const openedPath = await openFileInEditor(file, { preserveFocus: true });
   if (!openedPath) return null;
 
-  noteVscodeLeanServer(workspaceRootForFile(WorkspaceFS.toAbsolute(file)));
+  noteVscodeLeanServer(workspaceRootForFile(absolutePath));
 
   await diagnosticsWait;
   return getDiagnostics(openedPath);

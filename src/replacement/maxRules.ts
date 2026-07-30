@@ -9,10 +9,8 @@ import {
   generateMathCommandShortcuts,
   generateDecoratedMathShortcuts,
   generateMathFontShortcuts,
-  generateBoldBackslashFixes,
   generateDecoratorShortcuts,
   generateNestedDecoratorShortcuts,
-  generateVectorShortcuts,
   generateDifferentialSpacing,
   generateCommandShortcuts,
   generateArrowRelationShortcuts,
@@ -45,16 +43,12 @@ const GREEK_LETTER_SHORTCUTS: { [key: string]: string } = {
 };
 
 // Automatically generated replacement patterns
-const MAX_AUTO_REPLACEMENTS: NonRegexReplacementCategory = {
-  name: 'max_auto',
-  description: 'Automatically generated maximum style replacements for LaTeX',
-  isRegex: false,
-  patterns: (() => {
-    // ====================================================================
-    // Backslash and command fixes
-    // ====================================================================
-    // prettier-ignore
-    const backslashFixCommands = [
+const MAX_AUTO_PATTERNS: Record<string, string> = (() => {
+  // ====================================================================
+  // Backslash and command fixes
+  // ====================================================================
+  // prettier-ignore
+  const backslashFixCommands = [
       // Common custom shortcuts (max-specific only)
       'bet', 'bze', 'cP', 'Om', 'bbf', 'al', 'bt', 'ga', 'de', 'eps', 'ta', 'Ta',
       'ka', 'la', 'sg', 'Sig', 'vphi', 'sha', 'ha', 'Id', 'bzero', 'bone', 'dd',
@@ -63,24 +57,24 @@ const MAX_AUTO_REPLACEMENTS: NonRegexReplacementCategory = {
       'ddt', 'dddt', 'nn', 'da', 'bksl', 'Ra', 'tauf', 'beps'
     ];
 
-    // ====================================================================
-    // Specialized handling for math operators and text commands
-    // ====================================================================
+  // ====================================================================
+  // Specialized handling for math operators and text commands
+  // ====================================================================
 
-    // 1. Math Operators (defined with \DeclareMathOperator*)
-    // These require _{\op} and ^{\op} format
-    // prettier-ignore
-    const mathOperators = [
+  // 1. Math Operators (defined with \DeclareMathOperator*)
+  // These require _{\op} and ^{\op} format
+  // prettier-ignore
+  const mathOperators = [
       'argmin','argmax','tr','Tr','sign','sort','argsort','Cov','Cat','Bern','Unif','ReLU','Concat','Skip','Upsample','Softmax','Conv','BatchNorm','LayerNorm','MaxPool','Dropout','TransformerEncoder','Attention','MultiHead','AdaLN',
     ];
 
-    // 2. Text Commands (defined with \newcommand{\cmd}{{\text{name}}})
-    // These allow direct subscript/superscript like P_\cmd
-    // prettier-ignore
-    const textCommands = ['sys', 'bath', 'tot', 'const', 'discrete', 'decoder', 'encoder', 'pool', 'data', 'mar', 'model', 'prior', 'target', 'full', 'observed', 'accept', 'aux', 'eq', 'st', 'nc', 'irr', 'rev', 'hkp', 'adi', 'nadi', 'exc', 'pos', 'head', 'PE', 'class', 'window', 'Output', 'FFN', 'Strat', 'Ito', 'diss'];
+  // 2. Text Commands (defined with \newcommand{\cmd}{{\text{name}}})
+  // These allow direct subscript/superscript like P_\cmd
+  // prettier-ignore
+  const textCommands = ['sys', 'bath', 'tot', 'const', 'discrete', 'decoder', 'encoder', 'pool', 'data', 'mar', 'model', 'prior', 'target', 'full', 'observed', 'accept', 'aux', 'eq', 'st', 'nc', 'irr', 'rev', 'hkp', 'adi', 'nadi', 'exc', 'pos', 'head', 'PE', 'class', 'window', 'Output', 'FFN', 'Strat', 'Ito', 'diss'];
 
-    // prettier-ignore
-    const symbolOperators = [
+  // prettier-ignore
+  const symbolOperators = [
       'infty', 'top',
       'N', 'M', 'S',
       '0','1','2',
@@ -88,379 +82,359 @@ const MAX_AUTO_REPLACEMENTS: NonRegexReplacementCategory = {
       'bu', 'ta'
     ];
 
-    // ====================================================================
-    // Auto-generated differential notation patterns
-    // ====================================================================
-    // prettier-ignore
-    const differentialVariables = ['x', 't', 'tau', 'ttau', 'beta', 'bx', 'bz', 'bze', 'bxi', 'tbx'];
-    // prettier-ignore
-    const fractionDiffVariables = ['t', 'x', 'tau', 'ttau', 'beta', 'bx', 'bz', 'bze', 'bxi', 'S'];
+  // ====================================================================
+  // Auto-generated differential notation patterns
+  // ====================================================================
+  // prettier-ignore
+  const differentialVariables = ['x', 't', 'tau', 'ttau', 'beta', 'bx', 'bz', 'bze', 'bxi', 'tbx'];
+  // prettier-ignore
+  const fractionDiffVariables = ['t', 'x', 'tau', 'ttau', 'beta', 'bx', 'bz', 'bze', 'bxi', 'S'];
 
-    // Arrows and Relations
-    // Examples: \rightarrow -> \ra, \Leftrightarrow -> \LRa
-    const arrowRelationMap = {
-      rightarrow: 'ra',
-      leftarrow: 'lar',
-      leftrightarrow: 'lra',
-      Leftarrow: 'La',
-      Rightarrow: 'Ra',
-      Leftrightarrow: 'LRa',
-      Longleftrightarrow: 'LRa',
-    };
+  // Arrows and Relations
+  // Examples: \rightarrow -> \ra, \Leftrightarrow -> \LRa
+  const arrowRelationMap = {
+    rightarrow: 'ra',
+    leftarrow: 'lar',
+    leftrightarrow: 'lra',
+    Leftarrow: 'La',
+    Rightarrow: 'Ra',
+    Leftrightarrow: 'LRa',
+    Longleftrightarrow: 'LRa',
+  };
 
-    // Calculus command shortcuts: \partial -> \der, \nabla -> \na
-    const calculusCommandMap = {
-      partial: 'der',
-      nabla: 'na',
-    };
+  // Calculus command shortcuts: \partial -> \der, \nabla -> \na
+  const calculusCommandMap = {
+    partial: 'der',
+    nabla: 'na',
+  };
 
-    // Vector Variables: \vec{p} -> \vp, \vec{x} -> \vx
-    const vectorLetters = [...'pqvxyz'];
+  // Vector Variables: \vec{p} -> \vp, \vec{x} -> \vx
+  const vectorLetters = [...'pqvxyz'];
 
-    // Greek Letters (Regular): exclude Delta to prevent it from being shortened to De
-    const { Delta: _, ...greekShortcuts } = GREEK_LETTER_SHORTCUTS;
+  // Greek Letters (Regular): exclude Delta to prevent it from being shortened to De
+  const { Delta: _, ...greekShortcuts } = GREEK_LETTER_SHORTCUTS;
 
-    // Greek Letters (Bold): bold Greek letters with \b prefix
-    // prettier-ignore
-    const commonGreekSet = new Set(['alpha', 'beta', 'gamma', 'epsilon', 'eta', 'theta', 'mu', 'nu', 'omega', 'phi', 'sigma', 'xi', 'zeta']);
-    const commonGreekLetters = GREEK_LETTERS.filter((letter) =>
-      commonGreekSet.has(letter),
-    );
-    // prettier-ignore
-    const greekBoldLetters = [...commonGreekLetters, 'chi', 'pi', 'varphi', 'Sigma', 'lambda', 'Gamma', 'Lambda'];
+  // Greek Letters (Bold): bold Greek letters with \b prefix
+  // prettier-ignore
+  const commonGreekSet = new Set(['alpha', 'beta', 'gamma', 'epsilon', 'eta', 'theta', 'mu', 'nu', 'omega', 'phi', 'sigma', 'xi', 'zeta']);
+  const commonGreekLetters = GREEK_LETTERS.filter((letter) =>
+    commonGreekSet.has(letter),
+  );
+  // prettier-ignore
+  const greekBoldLetters = [...commonGreekLetters, 'chi', 'pi', 'varphi', 'Sigma', 'lambda', 'Gamma', 'Lambda'];
 
-    // Math font letter sets
-    const upperLetters = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'];
-    const mathbbLetters = [...'CEINPQRTV'];
-    const lowerLetters = [...'abcdefghjnpqrsuvwxyz'];
-    const mathbfUpperLetters = [...'ABCDEFGIJKMQRUVWXYZ'];
-    const alphabetLetters = [
-      ...'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz',
-    ];
+  // Math font letter sets
+  const upperLetters = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'];
+  const mathbbLetters = [...'CEINPQRTV'];
+  const lowerLetters = [...'abcdefghjnpqrsuvwxyz'];
+  const mathbfUpperLetters = [...'ABCDEFGIJKMQRUVWXYZ'];
+  const alphabetLetters = [
+    ...'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz',
+  ];
 
-    // Tilde variables
-    const tildeLetters = [...'xzpqBFJMPTZ'];
-    const tildeLettersMathbf = [...'axpvwz'];
-    const tildeLettersMathbfUppercase = [...'MTX'];
-    const tildeLettersMathcal = [...'HQSW'];
-    const tildeGreekLetters = 'gamma lambda phi psi rho Sigma mu tau'.split(
-      ' ',
-    );
-    const tildeGreekBoldLetters = 'zeta gamma lambda pi xi eta Gamma'.split(
-      ' ',
-    );
+  // Tilde variables
+  const tildeLetters = [...'xzpqBFJMPTZ'];
+  const tildeLettersMathbf = [...'axpvwz'];
+  const tildeLettersMathbfUppercase = [...'MTX'];
+  const tildeLettersMathcal = [...'HQSW'];
+  const tildeGreekLetters = 'gamma lambda phi psi rho Sigma mu tau'.split(' ');
+  const tildeGreekBoldLetters = 'zeta gamma lambda pi xi eta Gamma'.split(' ');
 
-    // Hat variables
-    const hatLetters = [...'HFP'];
-    const hatGreekLetters = 'sigma Sigma pi rho'.split(' ');
-    const hatMathbfLetters = [...'nv'];
-    const hatBoldsymbolLetters = ['zeta'];
+  // Hat variables
+  const hatLetters = [...'HFP'];
+  const hatGreekLetters = 'sigma Sigma pi rho'.split(' ');
+  const hatMathbfLetters = [...'nv'];
+  const hatBoldsymbolLetters = ['zeta'];
 
-    // Function names: \F_ -> F_, \G( -> G(
-    const functionNames = ['F', 'G'];
+  // Function names: \F_ -> F_, \G( -> G(
+  const functionNames = ['F', 'G'];
 
-    return {
-      ...generateBackslashFixes(backslashFixCommands),
-      // Math Operators: \mathrm{op} -> \op and \text{op} -> \op
-      ...Object.fromEntries(
-        mathOperators.flatMap((op) => [
-          [`\\mathrm{${op}}`, `\\${op}`],
-          [`\\text{${op}}`, `\\${op}`],
-          [`\\mbox{${op}}`, `\\${op}`],
-          [`\\textrm{${op}}`, `\\${op}`],
-          [`{\\rm ${op}}`, `\\${op}`],
-          [`_\\op`, `_{\\${op}}`],
-          [`^\\op`, `^{\\${op}}`],
-        ]),
-      ),
-      // Text Commands: \text{cmd} -> \cmd
-      ...Object.fromEntries(
-        textCommands.flatMap((cmd) => [
-          [`\\text{${cmd}}`, `\\${cmd}`],
-          [`\\mathrm{${cmd}}`, `\\${cmd}`],
-          [`\\mbox{${cmd}}`, `\\${cmd}`],
-          [`\\textrm{${cmd}}`, `\\${cmd}`],
-          [`{\\rm ${cmd}}`, `\\${cmd}`],
-          [`_{\\${cmd}}`, `_\\${cmd}`],
-          [`^{\\${cmd}}`, `^\\${cmd}`],
-          [`_{${cmd}}`, `_\\${cmd}`],
-          [`^{${cmd}}`, `^\\${cmd}`],
-        ]),
-      ),
-      // Symbol operators: _{op} -> _\op (no braces needed)
-      ...Object.fromEntries(
-        symbolOperators.flatMap((op) => [
-          [`_{\\${op}}`, `_\\${op}`],
-          [`^{\\${op}}`, `^\\${op}`],
-        ]),
-      ),
-      ...generateDifferentialSpacing(differentialVariables, '~'),
-      ...Object.fromEntries(
-        fractionDiffVariables.flatMap((variable) => [
-          // Handle cases like {dx} -> {\\dd x}
-          [`{d${variable}}`, `{\\dd${variable}}`],
-          // Handle cases like \\frac{dx} -> \\frac{\\dd x}
-          [`\\frac{d${variable}`, `\\frac{\\dd${variable}`],
-          // Handle cases like \\frac{d}{dx} -> \\frac{\\dd}{\\dd x}
-          [`\\frac{d}{d${variable}}`, `\\frac{\\dd}{\\dd${variable}}`],
-        ]),
-      ),
-      '\\int d\\': '\\int \\dd\\',
-      '\\int \\dd \\bx \\': '\\int \\dd \\bx~ \\',
-      ...generateArrowRelationShortcuts(arrowRelationMap),
-      ...generateCommandShortcuts(calculusCommandMap),
-      ...generateVectorShortcuts(vectorLetters),
-      ...generateMathCommandShortcuts(greekShortcuts),
-      ...generateDecoratedMathShortcuts(['boldsymbol'], greekBoldLetters, 'b'),
-      // Mathcal: \mathcal{X} -> \cX
-      ...generateMathFontShortcuts(upperLetters, 'mathcal', 'c'),
-      // Mathbb: \mathbb{X} -> \eX
-      ...generateMathFontShortcuts(mathbbLetters, 'mathbb', 'e'),
-      // Mathbf lowercase: \mathbf{x} -> \bx
-      ...generateMathFontShortcuts(lowerLetters, 'mathbf', 'b'),
-      // Mathbf uppercase: \mathbf{X} -> \bX
-      ...generateMathFontShortcuts(mathbfUpperLetters, 'mathbf', 'b'),
-      // Normalize legacy font commands {\rm X}, {\bf X}, {\cal X}
-      ...generateLegacyTextCommandNormalization(
-        alphabetLetters,
-        'mathrm',
-        'rm',
-      ),
-      ...generateLegacyTextCommandNormalization(
-        alphabetLetters,
-        'mathbf',
-        'bf',
-      ),
-      ...generateLegacyTextCommandNormalization(
-        alphabetLetters,
-        'mathcal',
-        'cal',
-      ),
-      // Tilde variables: \tilde{x} -> \tx, \tilde{B} -> \tB
-      ...generateDecoratorShortcuts('tilde', tildeLetters, 't'),
-      // Tilde with mathbf lowercase: \tilde{\mathbf{x}} -> \tbx
-      ...generateNestedDecoratorShortcuts(
-        'tilde',
-        'mathbf',
-        tildeLettersMathbf,
-        't',
-        'b',
-      ),
-      // Tilde with mathbf uppercase: \tilde{\mathbf{M}} -> \tbM
-      ...generateNestedDecoratorShortcuts(
-        'tilde',
-        'mathbf',
-        tildeLettersMathbfUppercase,
-        't',
-        'b',
-      ),
-      // Tilde with mathcal: \tilde{\mathcal{H}} -> \tcH
-      ...generateNestedDecoratorShortcuts(
-        'tilde',
-        'mathcal',
-        tildeLettersMathcal,
-        't',
-        'c',
-      ),
-      // Tilde with Greek: \tilde{\gamma} -> \tga
-      ...Object.fromEntries(
-        tildeGreekLetters.map((letter) => [
-          `\\tilde{\\${letter}}`,
-          `\\t${GREEK_LETTER_SHORTCUTS[letter] ?? letter}`,
-        ]),
-      ),
-      // Tilde with boldsymbol+Greek: \tilde{\boldsymbol{\zeta}} -> \tbze
-      ...Object.fromEntries(
-        tildeGreekBoldLetters.map((letter) => [
-          `\\tilde{\\boldsymbol{\\${letter}}}`,
-          `\\tb${GREEK_LETTER_SHORTCUTS[letter] ?? letter}`,
-        ]),
-      ),
-      // Hat variables: \hat{H} -> \hH
-      ...generateDecoratorShortcuts('hat', hatLetters, 'h'),
-      // Hat with Greek: \hat{\sigma} -> \hsg
-      ...Object.fromEntries(
-        hatGreekLetters.map((letter) => [
-          `\\hat{\\${letter}}`,
-          `\\h${GREEK_LETTER_SHORTCUTS[letter] ?? letter}`,
-        ]),
-      ),
-      // Hat with mathbf: \hat{\mathbf{n}} -> \hbn
-      ...generateNestedDecoratorShortcuts(
-        'hat',
-        'mathbf',
-        hatMathbfLetters,
-        'h',
-        'b',
-      ),
-      // Hat with boldsymbol+Greek: \hat{\boldsymbol{\zeta}} -> \hbze
-      ...Object.fromEntries(
-        hatBoldsymbolLetters.map((letter) => [
-          `\\hat{\\boldsymbol{\\${letter}}}`,
-          `\\hb${GREEK_LETTER_SHORTCUTS[letter] ?? letter}`,
-        ]),
-      ),
-      // Bold backslash fixes: \\ba -> \ba (lowercase), \\bA -> \bA (uppercase)
-      ...generateBoldBackslashFixes('b', lowerLetters),
-      ...generateBoldBackslashFixes('b', mathbfUpperLetters),
-      ...Object.fromEntries(
-        functionNames.flatMap((name) => [
-          [`\\${name}_`, `${name}_`],
-          [`\\${name}^`, `${name}^`],
-          [`\\${name}(`, `${name}(`],
-        ]),
-      ),
-    };
-  })(),
-};
+  return {
+    ...generateBackslashFixes(backslashFixCommands),
+    // Math Operators: \mathrm{op} -> \op and \text{op} -> \op
+    ...Object.fromEntries(
+      mathOperators.flatMap((op) => [
+        [`\\mathrm{${op}}`, `\\${op}`],
+        [`\\text{${op}}`, `\\${op}`],
+        [`\\mbox{${op}}`, `\\${op}`],
+        [`\\textrm{${op}}`, `\\${op}`],
+        [`{\\rm ${op}}`, `\\${op}`],
+        [`_\\op`, `_{\\${op}}`],
+        [`^\\op`, `^{\\${op}}`],
+      ]),
+    ),
+    // Text Commands: \text{cmd} -> \cmd
+    ...Object.fromEntries(
+      textCommands.flatMap((cmd) => [
+        [`\\text{${cmd}}`, `\\${cmd}`],
+        [`\\mathrm{${cmd}}`, `\\${cmd}`],
+        [`\\mbox{${cmd}}`, `\\${cmd}`],
+        [`\\textrm{${cmd}}`, `\\${cmd}`],
+        [`{\\rm ${cmd}}`, `\\${cmd}`],
+        [`_{\\${cmd}}`, `_\\${cmd}`],
+        [`^{\\${cmd}}`, `^\\${cmd}`],
+        [`_{${cmd}}`, `_\\${cmd}`],
+        [`^{${cmd}}`, `^\\${cmd}`],
+      ]),
+    ),
+    // Symbol operators: _{op} -> _\op (no braces needed)
+    ...Object.fromEntries(
+      symbolOperators.flatMap((op) => [
+        [`_{\\${op}}`, `_\\${op}`],
+        [`^{\\${op}}`, `^\\${op}`],
+      ]),
+    ),
+    ...generateDifferentialSpacing(differentialVariables, '~'),
+    ...Object.fromEntries(
+      fractionDiffVariables.flatMap((variable) => [
+        // Handle cases like {dx} -> {\\dd x}
+        [`{d${variable}}`, `{\\dd${variable}}`],
+        // Handle cases like \\frac{dx} -> \\frac{\\dd x}
+        [`\\frac{d${variable}`, `\\frac{\\dd${variable}`],
+        // Handle cases like \\frac{d}{dx} -> \\frac{\\dd}{\\dd x}
+        [`\\frac{d}{d${variable}}`, `\\frac{\\dd}{\\dd${variable}}`],
+      ]),
+    ),
+    '\\int d\\': '\\int \\dd\\',
+    '\\int \\dd \\bx \\': '\\int \\dd \\bx~ \\',
+    ...generateArrowRelationShortcuts(arrowRelationMap),
+    ...generateCommandShortcuts(calculusCommandMap),
+    // Vector variables: \vec{x} -> \vx
+    ...generateDecoratorShortcuts('vec', vectorLetters, 'v'),
+    ...generateMathCommandShortcuts(greekShortcuts),
+    ...generateDecoratedMathShortcuts(['boldsymbol'], greekBoldLetters, 'b'),
+    // Mathcal: \mathcal{X} -> \cX
+    ...generateMathFontShortcuts(upperLetters, 'mathcal', 'c'),
+    // Mathbb: \mathbb{X} -> \eX
+    ...generateMathFontShortcuts(mathbbLetters, 'mathbb', 'e'),
+    // Mathbf lowercase: \mathbf{x} -> \bx
+    ...generateMathFontShortcuts(lowerLetters, 'mathbf', 'b'),
+    // Mathbf uppercase: \mathbf{X} -> \bX
+    ...generateMathFontShortcuts(mathbfUpperLetters, 'mathbf', 'b'),
+    // Normalize legacy font commands {\rm X}, {\bf X}, {\cal X}
+    ...generateLegacyTextCommandNormalization(alphabetLetters, 'mathrm', 'rm'),
+    ...generateLegacyTextCommandNormalization(alphabetLetters, 'mathbf', 'bf'),
+    ...generateLegacyTextCommandNormalization(
+      alphabetLetters,
+      'mathcal',
+      'cal',
+    ),
+    // Tilde variables: \tilde{x} -> \tx, \tilde{B} -> \tB
+    ...generateDecoratorShortcuts('tilde', tildeLetters, 't'),
+    // Tilde with mathbf lowercase: \tilde{\mathbf{x}} -> \tbx
+    ...generateNestedDecoratorShortcuts(
+      'tilde',
+      'mathbf',
+      tildeLettersMathbf,
+      't',
+      'b',
+    ),
+    // Tilde with mathbf uppercase: \tilde{\mathbf{M}} -> \tbM
+    ...generateNestedDecoratorShortcuts(
+      'tilde',
+      'mathbf',
+      tildeLettersMathbfUppercase,
+      't',
+      'b',
+    ),
+    // Tilde with mathcal: \tilde{\mathcal{H}} -> \tcH
+    ...generateNestedDecoratorShortcuts(
+      'tilde',
+      'mathcal',
+      tildeLettersMathcal,
+      't',
+      'c',
+    ),
+    // Tilde with Greek: \tilde{\gamma} -> \tga
+    ...Object.fromEntries(
+      tildeGreekLetters.map((letter) => [
+        `\\tilde{\\${letter}}`,
+        `\\t${GREEK_LETTER_SHORTCUTS[letter] ?? letter}`,
+      ]),
+    ),
+    // Tilde with boldsymbol+Greek: \tilde{\boldsymbol{\zeta}} -> \tbze
+    ...Object.fromEntries(
+      tildeGreekBoldLetters.map((letter) => [
+        `\\tilde{\\boldsymbol{\\${letter}}}`,
+        `\\tb${GREEK_LETTER_SHORTCUTS[letter] ?? letter}`,
+      ]),
+    ),
+    // Hat variables: \hat{H} -> \hH
+    ...generateDecoratorShortcuts('hat', hatLetters, 'h'),
+    // Hat with Greek: \hat{\sigma} -> \hsg
+    ...Object.fromEntries(
+      hatGreekLetters.map((letter) => [
+        `\\hat{\\${letter}}`,
+        `\\h${GREEK_LETTER_SHORTCUTS[letter] ?? letter}`,
+      ]),
+    ),
+    // Hat with mathbf: \hat{\mathbf{n}} -> \hbn
+    ...generateNestedDecoratorShortcuts(
+      'hat',
+      'mathbf',
+      hatMathbfLetters,
+      'h',
+      'b',
+    ),
+    // Hat with boldsymbol+Greek: \hat{\boldsymbol{\zeta}} -> \hbze
+    ...Object.fromEntries(
+      hatBoldsymbolLetters.map((letter) => [
+        `\\hat{\\boldsymbol{\\${letter}}}`,
+        `\\hb${GREEK_LETTER_SHORTCUTS[letter] ?? letter}`,
+      ]),
+    ),
+    // Bold backslash fixes: \\ba -> \ba (lowercase), \\bA -> \bA (uppercase)
+    ...generateBackslashFixes(
+      [...lowerLetters, ...mathbfUpperLetters].map((letter) => `b${letter}`),
+    ),
+    ...Object.fromEntries(
+      functionNames.flatMap((name) => [
+        [`\\${name}_`, `${name}_`],
+        [`\\${name}^`, `${name}^`],
+        [`\\${name}(`, `${name}(`],
+      ]),
+    ),
+  };
+})();
 
 // Manually specified replacement patterns
-const MAX_MANUAL_REPLACEMENTS: NonRegexReplacementCategory = {
-  name: 'max_manual',
-  description: 'Manually specified maximum style replacements for LaTeX',
-  isRegex: false,
-  patterns: {
-    // equation labels:
-    '\\label{eq:': '\\label{eqn:',
+const MAX_MANUAL_PATTERNS: Record<string, string> = {
+  // equation labels:
+  '\\label{eq:': '\\label{eqn:',
 
-    // Subscript/superscript formatting
-    '_{tot}': '_{\\tot}',
-    '^{tot}': '^{\\tot}',
-    '^\\intercal': '^\\top',
-    '^{\\intercal}': '^\\top',
+  // Subscript/superscript formatting
+  '_{tot}': '_{\\tot}',
+  '^{tot}': '^{\\tot}',
+  '^\\intercal': '^\\top',
+  '^{\\intercal}': '^\\top',
 
-    // Common Math Shortcuts
-    '\\frac{1}{2}\\': '\\ha\\',
-    '\\frac{1}{2} ': '\\ha ',
-    '\\frac12': '\\ha',
-    '\\frac{1}{\\sqrt{2}}\\': '\\sha\\',
-    '\\frac{1}{\\sqrt{2}} ': '\\sha ',
-    // For the special case \frac{1}{2}a -> \haa which is wrong
-    '\\mathds{1}': '\\Id',
-    '\\boldsymbol{0}': '\\bzero',
-    '\\boldsymbol{1}': '\\bone',
-    '\\mathrm{d}': '\\dd',
+  // Common Math Shortcuts
+  '\\frac{1}{2}\\': '\\ha\\',
+  '\\frac{1}{2} ': '\\ha ',
+  '\\frac12': '\\ha',
+  '\\frac{1}{\\sqrt{2}}\\': '\\sha\\',
+  '\\frac{1}{\\sqrt{2}} ': '\\sha ',
+  // For the special case \frac{1}{2}a -> \haa which is wrong
+  '\\mathds{1}': '\\Id',
+  '\\boldsymbol{0}': '\\bzero',
+  '\\boldsymbol{1}': '\\bone',
+  '\\mathrm{d}': '\\dd',
 
-    // Fix specific cases
-    '\\boldsymbol{\\Sigma}': '\\bSig',
-    '\\bSigma': '\\bSig',
+  // Fix specific cases
+  '\\boldsymbol{\\Sigma}': '\\bSig',
+  '\\bSigma': '\\bSig',
 
-    // Special case for 'f' which uses 'bbf' instead of 'bf'
-    '\\mathbf{f}': '\\bbf',
+  // Special case for 'f' which uses 'bbf' instead of 'bf'
+  '\\mathbf{f}': '\\bbf',
 
-    // Bar Variables
-    '\\bar{\\rho}': '\\barrho',
-    '\\bar{H}': '\\barH',
-    '\\bar{S}': '\\barS',
-    '\\bar{\\alpha}': '\\baral',
-    '\\bar{\\mathbf{v}}': '\\barbv',
+  // Bar Variables
+  '\\bar{\\rho}': '\\barrho',
+  '\\bar{H}': '\\barH',
+  '\\bar{S}': '\\barS',
+  '\\bar{\\alpha}': '\\baral',
+  '\\bar{\\mathbf{v}}': '\\barbv',
 
-    // Special tilde cases - constants
-    '\\tilde{0}': '\\tzero',
-    '\\tilde{1}': '\\tone',
-    '\\tilde{t}': '\\tit',
-    '\\tilde{f}': '\\tif',
+  // Special tilde cases - constants
+  '\\tilde{0}': '\\tzero',
+  '\\tilde{1}': '\\tone',
+  '\\tilde{t}': '\\tit',
+  '\\tilde{f}': '\\tif',
 
-    // Physics and Statistical Mechanics
-    'H^{\\text{eff}}': '\\effH',
-    '\\mathcal{H}^{\\text{eff}}': '\\ceffH',
-    'p^{\\text{eq}}': '\\peq',
-    'q^{\\text{eq}}': '\\qeq',
-    'p^{\\text{st}}': '\\pst',
-    'q^{\\text{st}}': '\\qst',
-    'p^{\\text{ss}}': '\\pst',
-    'q^{\\text{ss}}': '\\qst',
+  // Physics and Statistical Mechanics
+  'H^{\\text{eff}}': '\\effH',
+  '\\mathcal{H}^{\\text{eff}}': '\\ceffH',
+  'p^{\\text{eq}}': '\\peq',
+  'q^{\\text{eq}}': '\\qeq',
+  'p^{\\text{st}}': '\\pst',
+  'q^{\\text{st}}': '\\qst',
+  'p^{\\text{ss}}': '\\pst',
+  'q^{\\text{ss}}': '\\qst',
 
-    // Special cases that don't fit the auto-generated patterns
-    '\\not\\implies': '\\nimplies',
-    '\\boldsymbol{\\nabla}': '\\bna',
-    '\\text{div}': '\\bdiv',
-    '\\frac{\\partial}{\\partial t}': '\\ddt',
-    '\\frac{\\mathrm{d}}{\\mathrm{d} t}': '\\dddt',
+  // Special cases that don't fit the auto-generated patterns
+  '\\not\\implies': '\\nimplies',
+  '\\boldsymbol{\\nabla}': '\\bna',
+  '\\text{div}': '\\bdiv',
+  '\\frac{\\partial}{\\partial t}': '\\ddt',
+  '\\frac{\\mathrm{d}}{\\mathrm{d} t}': '\\dddt',
 
-    // Miscellaneous
-    '\\nonumber': '\\nn',
-    '\\dagger': '\\da',
-    '\\backslash': '\\bksl',
+  // Miscellaneous
+  '\\nonumber': '\\nn',
+  '\\dagger': '\\da',
+  '\\backslash': '\\bksl',
 
-    // Arrow spacing
-    '\\quad\\Ra': '~~~\\Ra',
-    '    &\\quad ': '    &~~~ ',
-    '\\Ra\,': '\\Ra~',
+  // Arrow spacing
+  '\\quad\\Ra': '~~~\\Ra',
+  '    &\\quad ': '    &~~~ ',
+  '\\Ra\,': '\\Ra~',
 
-    '{\\ddt}': '{\\dd t}',
-    '\\int_0^\\tauf dt': '\\int_0^{\\tauf} \\ddt',
+  '{\\ddt}': '{\\dd t}',
+  '\\int_0^\\tauf dt': '\\int_0^{\\tauf} \\ddt',
 
-    // Other replacements
-    '\\tau_f': '\\tauf',
+  // Other replacements
+  '\\tau_f': '\\tauf',
 
-    // Equilibrium and steady state notation
-    '\\rho^{\\text{eq}}': '\\rhoeq',
-    '\\rho^{\\text{st}}': '\\rhost',
-    '\\rho^{\\text{ss}}': '\\rhost',
-    '\\rho^{\\text{sst}}': '\\rhost',
-    '\\rho_{\\text{eq}}': '\\rhoeq',
-    '\\rho_{\\text{ss}}': '\\rhost',
-    '\\rho_{\\text{st}}': '\\rhost',
-    '\\rho_{\\text{sst}}': '\\rhost',
-    '{\\text{ss}}': '{\\text{st}}',
-    '{\\text{sst}}': '{\\text{st}}',
-    '\\rho^{st}': '\\rhost',
-    '\\rho^{eq}': '\\rhoeq',
-    '\\rho^{\\eq}': '\\rhoeq',
-    '\\rho^{\\st}': '\\rhoeq',
-    '\\rho^{ss}': '\\rhost',
-    '\\rho_{ss}': '\\rhost',
-    '\\ln': '\\log',
-    '\\rhost^R': '\\rhost_R',
-    '\\bepsilon': '\\beps',
-    '_{ex}': '_\\exc',
-    '^{ex}': '^{\\exc}',
-    '_{hk}': '_\\hkp',
-    '^{hk}': '^{\\hkp}',
-    '_{na}': '_\\nadi',
-    '^{na}': '^{\\nadi}',
+  // Equilibrium and steady state notation
+  '\\rho^{\\text{eq}}': '\\rhoeq',
+  '\\rho^{\\text{st}}': '\\rhost',
+  '\\rho^{\\text{ss}}': '\\rhost',
+  '\\rho^{\\text{sst}}': '\\rhost',
+  '\\rho_{\\text{eq}}': '\\rhoeq',
+  '\\rho_{\\text{ss}}': '\\rhost',
+  '\\rho_{\\text{st}}': '\\rhost',
+  '\\rho_{\\text{sst}}': '\\rhost',
+  '{\\text{ss}}': '{\\text{st}}',
+  '{\\text{sst}}': '{\\text{st}}',
+  '\\rho^{st}': '\\rhost',
+  '\\rho^{eq}': '\\rhoeq',
+  '\\rho^{\\eq}': '\\rhoeq',
+  '\\rho^{\\st}': '\\rhoeq',
+  '\\rho^{ss}': '\\rhost',
+  '\\rho_{ss}': '\\rhost',
+  '\\ln': '\\log',
+  '\\rhost^R': '\\rhost_R',
+  '\\bepsilon': '\\beps',
+  '_{ex}': '_\\exc',
+  '^{ex}': '^{\\exc}',
+  '_{hk}': '_\\hkp',
+  '^{hk}': '^{\\hkp}',
+  '_{na}': '_\\nadi',
+  '^{na}': '^{\\nadi}',
 
-    // cleveref notation:
-    '\\cref{ch:': 'Chapter~\\ref{ch:',
-    '\\crefs': '\\cref',
-    '  \\cref': ' \\cref',
-    '  \\ref': ' \\ref',
-    '\\eqref{eqn:': '\\cref{eqn:',
+  // cleveref notation:
+  '\\cref{ch:': 'Chapter~\\ref{ch:',
+  '\\crefs': '\\cref',
+  '  \\cref': ' \\cref',
+  '  \\ref': ' \\ref',
+  '\\eqref{eqn:': '\\cref{eqn:',
 
-    '\\log\\': '\\log \\',
+  '\\log\\': '\\log \\',
 
-    // '\\mathbf{I}': '\\bI',
+  // '\\mathbf{I}': '\\bI',
 
-    // Specialized replacements
-    '+ O(': '+ \\cO(',
+  // Specialized replacements
+  '+ O(': '+ \\cO(',
 
-    // However, use a hyphen when closing up the word might lead to confusion, where the closed-up word would be cumbersome, or where the second element begins with a capital letter or number, e.g. un-ionized, pre-loss, pseudo-objectivity, sub-Gaussian.
-    unionized: 'uni-ionized',
-    preloss: 'pre-loss',
-    subgaussian: 'sub-gaussian',
-    nongaussian: 'non-gaussian',
-    nonGaussian: 'non-Gaussian',
-    pseudoobjectivity: 'pseudo-objectivity',
-    nonnegati: 'non-negati',
-    antiIto: 'anti-Ito',
-  },
+  // However, use a hyphen when closing up the word might lead to confusion, where the closed-up word would be cumbersome, or where the second element begins with a capital letter or number, e.g. un-ionized, pre-loss, pseudo-objectivity, sub-Gaussian.
+  unionized: 'uni-ionized',
+  preloss: 'pre-loss',
+  subgaussian: 'sub-gaussian',
+  nongaussian: 'non-gaussian',
+  nonGaussian: 'non-Gaussian',
+  pseudoobjectivity: 'pseudo-objectivity',
+  nonnegati: 'non-negati',
+  antiIto: 'anti-Ito',
 };
 
-// Combined replacements for backward compatibility
 export const MAX_STYLE_REPLACEMENTS: NonRegexReplacementCategory = {
   name: 'max_style' satisfies NonRegexReplacementCategoryName,
   description: 'Maximum style replacements for LaTeX commands and symbols',
   isRegex: false,
-  patterns: {
-    ...MAX_AUTO_REPLACEMENTS.patterns,
-    ...MAX_MANUAL_REPLACEMENTS.patterns,
-  },
+  patterns: { ...MAX_AUTO_PATTERNS, ...MAX_MANUAL_PATTERNS },
 };
 
 // prettier-ignore
 // Define the comprehensive list of all trigger words
-const _fullWordsArrayInternal = [
+const FULL_WORDS = [
   'apply', 'Apply', 'applies', 'Applies', 'applying', 'Applying', 'base', 'Base', 'based', 'Based', 'bases', 'Bases', 'basing', 'Basing', 'but', 'But', 'by', 'By', 
   'between', 'Between', 'betweening', 'Betweening', 'betweened', 'Betweened', 'betweenes', 'Betweenes',
   'compare', 'Compare', 'compares', 'Compares', 'comparing', 'Comparing', 'condition', 'Condition', 'conditions', 'Conditions', 
@@ -501,7 +475,7 @@ const _fullWordsArrayInternal = [
 
 // Define the "special" words that don't get 'eqn.~' prefix
 // prettier-ignore
-const _sepWordsArrayInternal = [
+const SPECIAL_WORDS = [
   'equation',
   'Equation',
   'equations',
@@ -540,23 +514,22 @@ const _sepWordsArrayInternal = [
 ];
 
 // Define "general" words (full list minus special words)
-const _gepWordsArrayInternal = _fullWordsArrayInternal.filter(
-  (word) => !_sepWordsArrayInternal.includes(word),
+const GENERAL_WORDS = FULL_WORDS.filter(
+  (word) => !SPECIAL_WORDS.includes(word),
 );
 
-// Create regex parts for use in the patterns object
-const SEP_WORDS_REGEX_PART_INTERNAL = _sepWordsArrayInternal.join('|');
-const GEP_WORDS_REGEX_PART_INTERNAL = _gepWordsArrayInternal.join('|');
-const FULL_WORDS_REGEX_PART_INTERNAL = _fullWordsArrayInternal.join('|');
+/**
+ * Regex matching one of `words`, an optional comma, and a reference pattern.
+ */
+function wordsBefore(words: string[], reference: string): string {
+  return `(${words.join('|')})(?:,)?\\s+${reference}`;
+}
 
-// Pre-construct the regex patterns
-const SEP_WORDS_CREF_EQN_PATTERN = `(${SEP_WORDS_REGEX_PART_INTERNAL})(?:,)?\\s+\\\\cref\\{(eqn:[^,}]+)\\}`;
-const GEP_WORDS_CREF_EQN_PATTERN = `(${GEP_WORDS_REGEX_PART_INTERNAL})(?:,)?\\s+\\\\cref\\{(eqn:[^,}]+)\\}`;
-const GEP_WORDS_EQREF_EQN_PATTERN = `(${GEP_WORDS_REGEX_PART_INTERNAL})(?:,)?\\s+\\\\eqref\\{(eqn:[^,}]+)\\}`;
-const SEP_WORDS_PAREN_CREF_EQN_PATTERN = `(${SEP_WORDS_REGEX_PART_INTERNAL})(?:,)?\\s+\\(\\\\cref\\{(eqn:[^,}]+)\\}\\)`;
-const GEP_WORDS_PAREN_CREF_EQN_PATTERN = `(${GEP_WORDS_REGEX_PART_INTERNAL})(?:,)?\\s+\\(\\\\cref\\{(eqn:[^,}]+)\\}\\)`;
-const GEP_WORDS_PAREN_EQREF_EQN_PATTERN = `(${GEP_WORDS_REGEX_PART_INTERNAL})(?:,)?\\s+\\(\\\\eqref\\{(eqn:[^,}]+)\\}\\)`;
-const FULL_WORDS_CREF_FIG_PATTERN = `(${FULL_WORDS_REGEX_PART_INTERNAL})(?:,)?\\s+\\\\cref\\{(fig:[^,}]+)\\}`;
+const CREF_EQN = '\\\\cref\\{(eqn:[^,}]+)\\}';
+const EQREF_EQN = '\\\\eqref\\{(eqn:[^,}]+)\\}';
+const PAREN_CREF_EQN = `\\(${CREF_EQN}\\)`;
+const PAREN_EQREF_EQN = `\\(${EQREF_EQN}\\)`;
+const CREF_FIG = '\\\\cref\\{(fig:[^,}]+)\\}';
 
 export const MAX_REGEX_REPLACEMENTS: RegexReplacementCategory = {
   name: 'max_style_regex' satisfies RegexReplacementCategoryName,
@@ -593,25 +566,25 @@ export const MAX_REGEX_REPLACEMENTS: RegexReplacementCategory = {
 
     // --- Custom word list based \cref{eqn:...} replacements ---
     // Special words (equation, SDE, formula) before non-parenthesized \cref{eqn:...}
-    [SEP_WORDS_CREF_EQN_PATTERN]: '$1~\\ref{$2}',
+    [wordsBefore(SPECIAL_WORDS, CREF_EQN)]: '$1~\\ref{$2}',
 
     // General words before non-parenthesized \cref{eqn:...}
-    [GEP_WORDS_CREF_EQN_PATTERN]: '$1 eqn.~\\ref{$2}',
+    [wordsBefore(GENERAL_WORDS, CREF_EQN)]: '$1 eqn.~\\ref{$2}',
 
     // General
-    [GEP_WORDS_EQREF_EQN_PATTERN]: '$1 eqn.~\\ref{$2}',
+    [wordsBefore(GENERAL_WORDS, EQREF_EQN)]: '$1 eqn.~\\ref{$2}',
 
     // Special pattern for "and \cref"
     'and\\s+\\\\cref\\{(eqn:[^,}]+)\\}': 'and eqn.~\\ref{$1}',
 
     // Special words (equation, SDE, formula) before parenthesized \cref{eqn:...}
-    [SEP_WORDS_PAREN_CREF_EQN_PATTERN]: '$1~(\\ref{$2})',
+    [wordsBefore(SPECIAL_WORDS, PAREN_CREF_EQN)]: '$1~(\\ref{$2})',
 
     // General words before parenthesized \cref{eqn:...}
-    [GEP_WORDS_PAREN_CREF_EQN_PATTERN]: '$1 eqn.~(\\ref{$2})',
+    [wordsBefore(GENERAL_WORDS, PAREN_CREF_EQN)]: '$1 eqn.~(\\ref{$2})',
 
     // General words before \eqref{eqn:...}
-    [GEP_WORDS_PAREN_EQREF_EQN_PATTERN]: '$1 eqn.~\\ref{$2}',
+    [wordsBefore(GENERAL_WORDS, PAREN_EQREF_EQN)]: '$1 eqn.~\\ref{$2}',
 
     // --- End of custom word list based \cref{eqn:...} replacements ---
 
@@ -627,7 +600,7 @@ export const MAX_REGEX_REPLACEMENTS: RegexReplacementCategory = {
 
     // --- Custom word list based \cref{fig:...} replacements ---
     // Common phrases (full word list) followed by \cref{fig:...}
-    [FULL_WORDS_CREF_FIG_PATTERN]: '$1 Figure~\\ref{$2}',
+    [wordsBefore(FULL_WORDS, CREF_FIG)]: '$1 Figure~\\ref{$2}',
     // --- End of custom word list based \cref{fig:...} replacements ---
 
     '\\(see\\s+\\\\cref\\{(fig:[^,}]+)\\}\\)': '(see Figure~\\ref{$1})',

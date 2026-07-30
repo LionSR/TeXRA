@@ -138,6 +138,7 @@ export async function runAgent(
       } catch (error) {
         runFailure = { error };
         if (shouldRegister && !lifecycleStarted) {
+          let finalizationFailure: { error: unknown } | undefined;
           try {
             const finalization = await finalizeExecution({
               executionId,
@@ -145,19 +146,16 @@ export async function runAgent(
               flowRecord: 'delete',
             });
             if (finalization.status === 'failed') {
-              markOwnedExecutionLeaseUndurable(executionId);
-              runFailure = {
-                error: new AggregateError(
-                  [error, finalization.error],
-                  `Execution ${executionId} failed before lifecycle startup and its error status could not be persisted`,
-                ),
-              };
+              finalizationFailure = { error: finalization.error };
             }
           } catch (finalizationError) {
+            finalizationFailure = { error: finalizationError };
+          }
+          if (finalizationFailure) {
             markOwnedExecutionLeaseUndurable(executionId);
             runFailure = {
               error: new AggregateError(
-                [error, finalizationError],
+                [error, finalizationFailure.error],
                 `Execution ${executionId} failed before lifecycle startup and its error status could not be persisted`,
               ),
             };
@@ -177,24 +175,24 @@ export async function runAgent(
         artifactFailures.push(error);
       }
       artifactsDurable = artifactFailures.length === 0;
-      const artifactFailure =
-        artifactFailures.length === 1
-          ? artifactFailures[0]
-          : new AggregateError(
-              artifactFailures,
-              `Execution ${executionId} has multiple final artifact failures`,
-            );
 
-      if (runFailure) {
-        if (artifactFailures.length > 0) {
+      if (artifactFailures.length > 0) {
+        const artifactFailure =
+          artifactFailures.length === 1
+            ? artifactFailures[0]
+            : new AggregateError(
+                artifactFailures,
+                `Execution ${executionId} has multiple final artifact failures`,
+              );
+        if (runFailure) {
           throw new AggregateError(
             [runFailure.error, artifactFailure],
             `Execution ${executionId} failed and its final artifacts could not be persisted`,
           );
         }
-        throw runFailure.error;
+        throw artifactFailure;
       }
-      if (artifactFailures.length > 0) throw artifactFailure;
+      if (runFailure) throw runFailure.error;
       if (!runResult) {
         throw new Error(`Execution ${executionId} finished without a result.`);
       }

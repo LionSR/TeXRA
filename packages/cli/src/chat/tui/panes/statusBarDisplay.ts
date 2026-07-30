@@ -264,6 +264,17 @@ function queuedFollowUpsCountSegment(
     : undefined;
 }
 
+function subagentsSegment(subagents: number): StatusBarSegment | undefined {
+  return subagents > 0
+    ? {
+        text: `${subagents} subagent${subagents === 1 ? '' : 's'}`,
+        compactText: `${subagents} sub`,
+        color: 'dim',
+        compactPriority: STATUS_BAR_COMPACT_PRIORITY.activeSubagent,
+      }
+    : undefined;
+}
+
 function pendingInteractionSegment({
   depth,
   kind = 'approval',
@@ -480,14 +491,16 @@ let lastBindingsKey: string | undefined;
 let lastBindingsText = '';
 
 function statusBarBindingsText(
-  agentSelectionAvailable = false,
-  childNavigationAvailable = false,
-  streamFocusAvailable = false,
-  modifierLabel = defaultShortcutModifierLabel(),
-  shiftEnterNewline = false,
-  transcriptAvailable = false,
-  ctrlCAction: CtrlCAction = 'exit',
-  maxColumns?: number,
+  {
+    agentSelectionAvailable = false,
+    childNavigationAvailable = false,
+    streamFocusAvailable = false,
+    modifierLabel = defaultShortcutModifierLabel(),
+    shiftEnterNewline = false,
+    transcriptAvailable = false,
+  }: StatusBarShortcutsInput,
+  ctrlCAction: CtrlCAction,
+  maxColumns: number | undefined,
 ): string {
   const memoKey = [
     agentSelectionAvailable,
@@ -588,11 +601,13 @@ function foregroundBindingsText(
 }
 
 function childListBindingsText(
+  {
+    selectionKind,
+    selectionKillable = false,
+    selectionWorkflowControllable = false,
+  }: StatusBarChildListInput,
   ctrlCAction: CtrlCAction,
-  selectionKind: 'stream' | undefined,
-  selectionKillable: boolean,
-  selectionWorkflowControllable: boolean,
-  maxColumns?: number,
+  maxColumns: number | undefined,
 ): string {
   const ctrlCBinding = keyHintText({ key: 'Ctrl-C', action: ctrlCAction });
   const enterBinding = keyHintText({ key: 'Enter', action: 'focus' });
@@ -804,13 +819,7 @@ function resolveStatusBarBindings(input: StatusBarDisplayInput): string {
     );
   }
   if (input.childList.focused) {
-    return childListBindingsText(
-      ctrlCAction,
-      input.childList.selectionKind,
-      input.childList.selectionKillable ?? false,
-      input.childList.selectionWorkflowControllable ?? false,
-      maxColumns,
-    );
+    return childListBindingsText(input.childList, ctrlCAction, maxColumns);
   }
   if (input.foreground.shortcutsActive === false) {
     return foregroundBindingsText(
@@ -819,16 +828,7 @@ function resolveStatusBarBindings(input: StatusBarDisplayInput): string {
       input.foreground.escapeAction,
     );
   }
-  return statusBarBindingsText(
-    input.shortcuts.agentSelectionAvailable ?? false,
-    input.shortcuts.childNavigationAvailable,
-    input.shortcuts.streamFocusAvailable,
-    input.shortcuts.modifierLabel,
-    input.shortcuts.shiftEnterNewline,
-    input.shortcuts.transcriptAvailable,
-    ctrlCAction,
-    maxColumns,
-  );
+  return statusBarBindingsText(input.shortcuts, ctrlCAction, maxColumns);
 }
 
 export function buildStatusBarDisplay(
@@ -919,35 +919,21 @@ export function buildStatusBarDisplay(
     }
   }
 
-  const rootActive = rootActiveSegment(input);
-  if (rootActive) left.push(rootActive);
-
-  left.push(accessModeSegment(input.modelAccess));
-  const policy = approvalPolicySegment(input.approvalPolicy);
-  if (policy) left.push(policy);
-
-  const round = roundSegment(input.roundStage);
-  if (round) left.push(round);
-
-  const usage = formatUsage(input.usage, input.model);
-  if (usage) left.push(usage);
-
-  const queued = queuedFollowUpsCountSegment(input.queuedFollowUpMessages);
-  if (queued) left.push(queued);
-
-  if (input.subagents > 0) {
-    left.push({
-      text: `${input.subagents} subagent${input.subagents === 1 ? '' : 's'}`,
-      compactText: `${input.subagents} sub`,
-      color: 'dim',
-      compactPriority: STATUS_BAR_COMPACT_PRIORITY.activeSubagent,
-    });
-  }
-  const pendingInteraction = pendingInteractionSegment({
-    depth: input.approvalDepth,
-    kind: input.approvalKind,
-  });
-  if (pendingInteraction) left.push(pendingInteraction);
+  left.push(
+    ...[
+      rootActiveSegment(input),
+      accessModeSegment(input.modelAccess),
+      approvalPolicySegment(input.approvalPolicy),
+      roundSegment(input.roundStage),
+      formatUsage(input.usage, input.model),
+      queuedFollowUpsCountSegment(input.queuedFollowUpMessages),
+      subagentsSegment(input.subagents),
+      pendingInteractionSegment({
+        depth: input.approvalDepth,
+        kind: input.approvalKind,
+      }),
+    ].filter(filterNotNullish),
+  );
   for (const badge of BYPASS_BADGES) {
     if (input.bypass[badge.field]) {
       left.push({

@@ -55,20 +55,17 @@ export class WorktreeMemento implements vscode.Memento {
     return defaultValue;
   }
 
-  update(key: string, value: unknown): Thenable<void> {
+  async update(key: string, value: unknown): Promise<void> {
     if (!this.sharedKeys.has(key)) {
-      return this.workspaceState.update(key, value);
+      await this.workspaceState.update(key, value);
+      return;
     }
 
-    return this.updateSharedKey(key, value);
+    await this.globalState.update(this.namespacedKey(key), value);
+    await this.workspaceState.update(key, undefined);
   }
 
   private namespacedKey(key: string): string {
     return `worktree:${this.repoRoot}:${key}`;
-  }
-
-  private async updateSharedKey(key: string, value: unknown): Promise<void> {
-    await this.globalState.update(this.namespacedKey(key), value);
-    await this.workspaceState.update(key, undefined);
   }
 }

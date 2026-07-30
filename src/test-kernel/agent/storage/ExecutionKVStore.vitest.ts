@@ -1,4 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type MockInstance,
+} from 'vitest';
 
 import {
   clearStoreCache,
@@ -24,6 +32,22 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
 });
+
+function mockWarn(): MockInstance<typeof logger.warn> {
+  return vi.spyOn(logger, 'warn').mockImplementation(() => {});
+}
+
+function expectParseWarning(
+  warnSpy: MockInstance<typeof logger.warn>,
+  id: ExecutionId,
+  fileName: string,
+): void {
+  expect(warnSpy).toHaveBeenCalledWith(
+    'ExecutionKVStore',
+    expect.stringContaining(`Failed to parse execution ${id} ${fileName}`),
+    { data: expect.any(Error) },
+  );
+}
 
 // Regression for the executionKvFiles leak fix: isReservedKvKeyName is now
 // the single owner of the reserved single-value-key + `child-` prefix
@@ -372,7 +396,7 @@ describe('ExecutionKVStore meta read shims', () => {
 
   it('rejects a minimal legacy subagent result without category or outcome context', async () => {
     const id = 'legacy-result-insufficient-context' as ExecutionId;
-    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    const warnSpy = mockWarn();
     await getExecutionStore(id).write('result-meta', {
       producer: 'subagent',
       agentName: 'reviewer',
@@ -380,13 +404,7 @@ describe('ExecutionKVStore meta read shims', () => {
     });
 
     await expect(getExecutionStore(id).readResultMeta()).resolves.toBeNull();
-    expect(warnSpy).toHaveBeenCalledWith(
-      'ExecutionKVStore',
-      expect.stringContaining(
-        `Failed to parse execution ${id} result-meta.json`,
-      ),
-      { data: expect.any(Error) },
-    );
+    expectParseWarning(warnSpy, id, 'result-meta.json');
   });
 
   it('normalizes legacy flat background bash result metadata', async () => {
@@ -411,23 +429,17 @@ describe('ExecutionKVStore meta read shims', () => {
 
   it('rejects empty result metadata instead of inventing a workflow result', async () => {
     const id = 'bad-result-empty' as ExecutionId;
-    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    const warnSpy = mockWarn();
 
     await getExecutionStore(id).write('result-meta', {});
 
     await expect(getExecutionStore(id).readResultMeta()).resolves.toBeNull();
-    expect(warnSpy).toHaveBeenCalledWith(
-      'ExecutionKVStore',
-      expect.stringContaining(
-        `Failed to parse execution ${id} result-meta.json`,
-      ),
-      { data: expect.any(Error) },
-    );
+    expectParseWarning(warnSpy, id, 'result-meta.json');
   });
 
   it('rejects unknown result metadata producers', async () => {
     const id = 'bad-result-producer' as ExecutionId;
-    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    const warnSpy = mockWarn();
 
     await getExecutionStore(id).write('result-meta', {
       producer: 'unknown',
@@ -436,18 +448,12 @@ describe('ExecutionKVStore meta read shims', () => {
     });
 
     await expect(getExecutionStore(id).readResultMeta()).resolves.toBeNull();
-    expect(warnSpy).toHaveBeenCalledWith(
-      'ExecutionKVStore',
-      expect.stringContaining(
-        `Failed to parse execution ${id} result-meta.json`,
-      ),
-      { data: expect.any(Error) },
-    );
+    expectParseWarning(warnSpy, id, 'result-meta.json');
   });
 
   it('does not erase unknown fields by reclassifying a canonical record as legacy', async () => {
     const id = 'bad-result-canonical-field' as ExecutionId;
-    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    const warnSpy = mockWarn();
 
     await getExecutionStore(id).write('result-meta', {
       producer: 'subagent',
@@ -464,18 +470,12 @@ describe('ExecutionKVStore meta read shims', () => {
     });
 
     await expect(getExecutionStore(id).readResultMeta()).resolves.toBeNull();
-    expect(warnSpy).toHaveBeenCalledWith(
-      'ExecutionKVStore',
-      expect.stringContaining(
-        `Failed to parse execution ${id} result-meta.json`,
-      ),
-      { data: expect.any(Error) },
-    );
+    expectParseWarning(warnSpy, id, 'result-meta.json');
   });
 
   it('rejects a CLI workflow record with an explicit tool-use category', async () => {
     const id = 'bad-result-cli-category' as ExecutionId;
-    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    const warnSpy = mockWarn();
     await getExecutionStore(id).write('result-meta', {
       producer: 'cliWorkflow',
       category: 'toolUse',
@@ -484,13 +484,7 @@ describe('ExecutionKVStore meta read shims', () => {
     });
 
     await expect(getExecutionStore(id).readResultMeta()).resolves.toBeNull();
-    expect(warnSpy).toHaveBeenCalledWith(
-      'ExecutionKVStore',
-      expect.stringContaining(
-        `Failed to parse execution ${id} result-meta.json`,
-      ),
-      { data: expect.any(Error) },
-    );
+    expectParseWarning(warnSpy, id, 'result-meta.json');
   });
 
   it('reads legacy conversation wrappers as provider messages', async () => {
@@ -512,7 +506,7 @@ describe('ExecutionKVStore meta read shims', () => {
 
   it('warns when conversation storage is malformed instead of silently dropping it', async () => {
     const id = 'bad-conversation-wrapper' as ExecutionId;
-    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    const warnSpy = mockWarn();
 
     await getExecutionStore(id).write('conversation', { messages: ['text'] });
 
@@ -527,35 +521,27 @@ describe('ExecutionKVStore meta read shims', () => {
 
   it('warns when execution meta is malformed instead of silently dropping it', async () => {
     const id = 'bad-meta' as ExecutionId;
-    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    const warnSpy = mockWarn();
 
     await getExecutionStore(id).write('meta', { timestamp: 123 });
 
     await expect(getExecutionStore(id).readMeta()).resolves.toBeNull();
-    expect(warnSpy).toHaveBeenCalledWith(
-      'ExecutionKVStore',
-      expect.stringContaining(`Failed to parse execution ${id} meta.json`),
-      { data: expect.any(Error) },
-    );
+    expectParseWarning(warnSpy, id, 'meta.json');
   });
 
   it('rejects malformed execution meta for durable repair callers', async () => {
     const id = 'bad-meta-strict' as ExecutionId;
-    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    const warnSpy = mockWarn();
 
     await getExecutionStore(id).write('meta', { timestamp: 123 });
 
     await expect(getExecutionStore(id).readMetaStrict()).rejects.toThrow();
-    expect(warnSpy).toHaveBeenCalledWith(
-      'ExecutionKVStore',
-      expect.stringContaining(`Failed to parse execution ${id} meta.json`),
-      { data: expect.any(Error) },
-    );
+    expectParseWarning(warnSpy, id, 'meta.json');
   });
 
   it('rejects persisted null metadata for durable repair callers', async () => {
     const id = 'null-meta-strict' as ExecutionId;
-    vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    mockWarn();
 
     await getExecutionStore(id).write('meta', null);
 
@@ -566,35 +552,27 @@ describe('ExecutionKVStore meta read shims', () => {
 describe('ExecutionKVStore loud typed reads (#6966 bullet 5)', () => {
   it('warns when config is malformed instead of silently returning null', async () => {
     const id = 'bad-config' as ExecutionId;
-    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    const warnSpy = mockWarn();
 
     await getExecutionStore(id).write('config', { outputFiles: 'not-a-list' });
 
     await expect(getExecutionStore(id).readConfig()).resolves.toBeNull();
-    expect(warnSpy).toHaveBeenCalledWith(
-      'ExecutionKVStore',
-      expect.stringContaining(`Failed to parse execution ${id} config.json`),
-      { data: expect.any(Error) },
-    );
+    expectParseWarning(warnSpy, id, 'config.json');
   });
 
   it('warns when todos are malformed instead of silently defaulting to []', async () => {
     const id = 'bad-todos' as ExecutionId;
-    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    const warnSpy = mockWarn();
 
     await getExecutionStore(id).write('todos', { not: 'an array' });
 
     await expect(getExecutionStore(id).readTodos()).resolves.toEqual([]);
-    expect(warnSpy).toHaveBeenCalledWith(
-      'ExecutionKVStore',
-      expect.stringContaining(`Failed to parse execution ${id} todos.json`),
-      { data: expect.any(Error) },
-    );
+    expectParseWarning(warnSpy, id, 'todos.json');
   });
 
   it('stays quiet for genuinely missing todos (missing != corrupt)', async () => {
     const id = 'no-todos' as ExecutionId;
-    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    const warnSpy = mockWarn();
 
     await expect(getExecutionStore(id).readTodos()).resolves.toEqual([]);
     expect(warnSpy).not.toHaveBeenCalled();
@@ -602,27 +580,21 @@ describe('ExecutionKVStore loud typed reads (#6966 bullet 5)', () => {
 
   it('warns when workspace files are malformed instead of silently defaulting to []', async () => {
     const id = 'bad-wsfiles' as ExecutionId;
-    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    const warnSpy = mockWarn();
 
     await getExecutionStore(id).write('workspace-files', [42]);
 
     await expect(getExecutionStore(id).readWorkspaceFiles()).resolves.toEqual(
       [],
     );
-    expect(warnSpy).toHaveBeenCalledWith(
-      'ExecutionKVStore',
-      expect.stringContaining(
-        `Failed to parse execution ${id} workspace-files.json`,
-      ),
-      { data: expect.any(Error) },
-    );
+    expectParseWarning(warnSpy, id, 'workspace-files.json');
   });
 
   it('warns and omits a malformed child record', async () => {
     const id = 'bad-child-record' as ExecutionId;
     const childId = 'valid-child' as ExecutionId;
     const store = getExecutionStore(id);
-    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    const warnSpy = mockWarn();
 
     await store.writeChild(childId, {
       agent: 'reviewer',

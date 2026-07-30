@@ -127,7 +127,13 @@ export class FileInteractionState {
       const added = entry.lineChanges?.added ?? 0;
       const removed = entry.lineChanges?.removed ?? 0;
 
-      this.updateEditMap(this.edits, path, added, removed);
+      const existing = this.edits.get(path);
+      if (existing) {
+        existing.added += added;
+        existing.removed += removed;
+      } else {
+        this.edits.set(path, { added, removed });
+      }
       touchedPaths.add(path);
 
       totalAdded += added;
@@ -141,21 +147,6 @@ export class FileInteractionState {
           ? { added: totalAdded, removed: totalRemoved }
           : undefined,
     };
-  }
-
-  private updateEditMap(
-    map: Map<string, LineChanges>,
-    path: string,
-    added: number,
-    removed: number,
-  ): void {
-    const existing = map.get(path);
-    if (existing) {
-      existing.added += added;
-      existing.removed += removed;
-    } else {
-      map.set(path, { added, removed });
-    }
   }
 }
 

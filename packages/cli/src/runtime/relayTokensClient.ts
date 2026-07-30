@@ -64,13 +64,12 @@ async function relayTokensRequest(
   );
   const body: unknown = await response.json().catch(() => null);
   if (!response.ok) {
-    const message =
-      typeof body === 'object' &&
-      body !== null &&
-      typeof (body as { error?: unknown }).error === 'string'
-        ? (body as { error: string }).error
-        : `CI token request failed (HTTP ${response.status})`;
-    throw new Error(message);
+    const errorBody = z.object({ error: z.string() }).safeParse(body);
+    throw new Error(
+      errorBody.success
+        ? errorBody.data.error
+        : `CI token request failed (HTTP ${response.status})`,
+    );
   }
   return body;
 }

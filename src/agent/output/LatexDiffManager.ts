@@ -287,7 +287,17 @@ export class LatexDiffManager {
     }
   }
 
-  private async runSingleDiff(params: {
+  private async runSingleDiff({
+    outputPath,
+    baseLocation,
+    outputByPath,
+    originalLocation,
+    baseRound,
+    runDiff,
+    label,
+    pdfStemSuffix,
+    diffDirectory,
+  }: {
     outputPath: string;
     baseLocation: FileLocation;
     outputByPath: Map<string, OutputFileInfo>;
@@ -302,18 +312,6 @@ export class LatexDiffManager {
     pdfStemSuffix: string;
     diffDirectory: DiffOutputDirectory;
   }): Promise<SingleDiffOutcome | null> {
-    const {
-      outputPath,
-      baseLocation,
-      outputByPath,
-      originalLocation,
-      baseRound,
-      runDiff,
-      label,
-      pdfStemSuffix,
-      diffDirectory,
-    } = params;
-
     const revisedFile = outputByPath.get(outputPath);
     if (!revisedFile) {
       this.logger.debug(

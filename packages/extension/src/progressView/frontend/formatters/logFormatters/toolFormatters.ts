@@ -185,7 +185,7 @@ export function formatToolUseTemplate(
   // Fallback: show raw YAML
   const contentTemplate =
     sections.length === 0
-      ? buildCodeBlock(stringifyWithLanguage(parsed).text ?? '', {
+      ? buildCodeBlock(stringifyWithLanguage(parsed).text, {
           language: 'yaml',
           showLanguage: true,
           showCopy: true,

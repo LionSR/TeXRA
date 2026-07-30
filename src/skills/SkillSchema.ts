@@ -16,7 +16,7 @@ export const SkillNameSchema = z
     `Skill name must be at most ${SKILL_NAME_MAX_LENGTH} characters`,
   )
   .refine(
-    (name) => /^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$/.test(name),
+    (name) => /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(name),
     'Skill name must contain only lowercase letters, digits, and hyphens',
   )
   .refine(

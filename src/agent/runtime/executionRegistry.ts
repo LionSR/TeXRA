@@ -616,11 +616,6 @@ export class ExecutionRegistry {
     this.cancelStreamStatus(streamId);
   }
 
-  /** Get active subagent children for a parent stream. */
-  getActiveChildren(parentStreamId: StreamTabId): ActiveChildInfo[] {
-    return this.collectChildSummary(parentStreamId);
-  }
-
   /**
    * Add a persistent listener invoked on every change to `executionId` (status
    * transition, progress update, kill, untrack). Returns a disposer.
@@ -692,7 +687,7 @@ export class ExecutionRegistry {
       event: {
         type: 'child.activity',
         parentStreamId,
-        items: this.collectChildSummary(parentStreamId),
+        items: this.getActiveChildren(parentStreamId),
       },
     });
   }
@@ -722,7 +717,8 @@ export class ExecutionRegistry {
     return this.events;
   }
 
-  private collectChildSummary(parentStreamId: StreamTabId): ActiveChildInfo[] {
+  /** Get active subagent children for a parent stream. */
+  getActiveChildren(parentStreamId: StreamTabId): ActiveChildInfo[] {
     const result: ActiveChildInfo[] = [];
     for (const handle of this.handles.values()) {
       if (

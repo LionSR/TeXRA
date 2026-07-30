@@ -187,22 +187,26 @@ async function runInstallGithubAction(
     return CliExitCode.AgentError;
   }
 
+  // Report the failure, put the user back on the branch they started from, and
+  // hand back the error exit code.
+  const abort = (message: string): number => {
+    writeTextStderr(message);
+    restoreBranch(root, startBranch);
+    return CliExitCode.AgentError;
+  };
+
   try {
     await mkdir(path.dirname(workflowAbsPath), { recursive: true });
     await writeFile(workflowAbsPath, WORKFLOW_TEMPLATE, 'utf8');
   } catch (error) {
-    writeTextStderr(
+    return abort(
       `Failed to write ${WORKFLOW_RELATIVE_PATH}: ${toErrorMessage(error)}`,
     );
-    restoreBranch(root, startBranch);
-    return CliExitCode.AgentError;
   }
 
   const add = git(root, 'add', '--', WORKFLOW_RELATIVE_PATH);
   if (!add.success) {
-    writeTextStderr(`Failed to stage the workflow: ${add.stderr ?? ''}`);
-    restoreBranch(root, startBranch);
-    return CliExitCode.AgentError;
+    return abort(`Failed to stage the workflow: ${add.stderr ?? ''}`);
   }
 
   const diff = git(
@@ -214,11 +218,9 @@ async function runInstallGithubAction(
     WORKFLOW_RELATIVE_PATH,
   );
   if (diff.exitCode !== 0 && diff.exitCode !== 1) {
-    writeTextStderr(
+    return abort(
       `Failed to inspect staged workflow changes: ${diff.stderr ?? ''}`,
     );
-    restoreBranch(root, startBranch);
-    return CliExitCode.AgentError;
   }
 
   const hasWorkflowChanges = diff.exitCode === 1;
@@ -232,9 +234,7 @@ async function runInstallGithubAction(
       WORKFLOW_RELATIVE_PATH,
     );
     if (!commit.success) {
-      writeTextStderr(`Failed to commit the workflow: ${commit.stderr ?? ''}`);
-      restoreBranch(root, startBranch);
-      return CliExitCode.AgentError;
+      return abort(`Failed to commit the workflow: ${commit.stderr ?? ''}`);
     }
     writeTextStdout(`Created ${WORKFLOW_RELATIVE_PATH} on branch "${branch}".`);
   } else {

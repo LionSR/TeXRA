@@ -306,34 +306,19 @@ export class BackgroundTasksPanel extends LitElement {
     `;
     if (!withHeader) return content;
 
-    let openCount = 0;
-    let answeredCount = 0;
-    let droppedCount = 0;
-    for (const t of this.inquiries) {
-      if (t.status === 'open') openCount += 1;
-      else if (t.status === 'answered') answeredCount += 1;
-      else if (t.status === 'dropped') droppedCount += 1;
-    }
-
-    return html`
-      <wa-details class="collapsible-quiet" open>
-        <div slot="summary" class="section-label">
-          ${waIcon('comments')}
-          <span
-            >Inquiries${
-              openCount ? html` &middot; ${openCount} open` : nothing
-            }${
-              answeredCount
-                ? html` &middot; ${answeredCount} answered`
-                : nothing
-            }${
-              droppedCount ? html` &middot; ${droppedCount} dropped` : nothing
-            }</span
-          >
-        </div>
-        ${content}
-      </wa-details>
-    `;
+    return renderSectionDetails({
+      icon: 'comments',
+      label: 'Inquiries',
+      counts: (['open', 'answered', 'dropped'] as const)
+        .map((status) => ({
+          status,
+          count: this.inquiries.filter((t) => t.status === status).length,
+        }))
+        .filter(({ count }) => count > 0)
+        .map(({ status, count }) => `${count} ${status}`),
+      open: true,
+      content,
+    });
   }
 
   private renderInquiryItem(
@@ -392,21 +377,16 @@ export class BackgroundTasksPanel extends LitElement {
     ).length;
     const finishedCount = children.length - activeCount;
 
-    return html`
-      <wa-details class="collapsible-quiet">
-        <div slot="summary" class="section-label">
-          ${waIcon('server')}
-          <span
-            >Subagents${
-              activeCount ? html` &middot; ${activeCount} active` : nothing
-            }${
-              finishedCount ? html` &middot; ${finishedCount} done` : nothing
-            }</span
-          >
-        </div>
-        ${content}
-      </wa-details>
-    `;
+    return renderSectionDetails({
+      icon: 'server',
+      label: 'Subagents',
+      counts: [
+        ...(activeCount ? [`${activeCount} active`] : []),
+        ...(finishedCount ? [`${finishedCount} done`] : []),
+      ],
+      open: false,
+      content,
+    });
   }
 
   private renderTaskItem(
@@ -443,14 +423,16 @@ export class BackgroundTasksPanel extends LitElement {
           role=${isClickable ? 'link' : 'text'}
           tabindex=${isClickable ? '0' : '-1'}
           @click=${
-            isClickable ? () => this.navigateToStream(childStreamId!) : nothing
+            childStreamId !== undefined
+              ? () => this.navigateToStream(childStreamId)
+              : nothing
           }
           @keydown=${
-            isClickable
+            childStreamId !== undefined
               ? (e: KeyboardEvent) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
-                    this.navigateToStream(childStreamId!);
+                    this.navigateToStream(childStreamId);
                   }
                 }
               : nothing
@@ -502,6 +484,29 @@ export class BackgroundTasksPanel extends LitElement {
   private navigateToStream(streamId: string): void {
     this.dispatchEvent(ProgressEvents.streamSwitch({ streamId }));
   }
+}
+
+/** Nested quiet disclosure wrapping one section's rows, with a counted label. */
+function renderSectionDetails(options: {
+  icon: TeXRAIconName;
+  label: string;
+  counts: readonly string[];
+  open: boolean;
+  content: TemplateResult;
+}): TemplateResult {
+  return html`
+    <wa-details class="collapsible-quiet" ?open=${options.open}>
+      <div slot="summary" class="section-label">
+        ${waIcon(options.icon)}
+        <span
+          >${options.label}${options.counts.map(
+            (count) => html` &middot; ${count}`,
+          )}</span
+        >
+      </div>
+      ${options.content}
+    </wa-details>
+  `;
 }
 
 /** True when the child is an AI agent (codex, delegation) rather than a plain shell tool. */

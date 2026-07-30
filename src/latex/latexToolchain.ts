@@ -63,16 +63,14 @@ export async function probeLatexToolchain(): Promise<LatexToolchainProbe> {
       purpose: TOOL_PURPOSES[name],
     })),
   );
+  const installed = new Set(
+    tools.filter((tool) => tool.installed).map((tool) => tool.name),
+  );
   return {
     tools,
-    hasCompiler: tools.some(
-      (tool) => tool.installed && COMPILER_TOOLS.includes(tool.name),
-    ),
-    hasBibliographyTool: tools.some(
-      (tool) =>
-        tool.installed && (tool.name === 'bibtex' || tool.name === 'biber'),
-    ),
-    hasLatexmk: tools.some((tool) => tool.name === 'latexmk' && tool.installed),
+    hasCompiler: COMPILER_TOOLS.some((name) => installed.has(name)),
+    hasBibliographyTool: installed.has('bibtex') || installed.has('biber'),
+    hasLatexmk: installed.has('latexmk'),
   };
 }
 

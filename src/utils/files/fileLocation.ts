@@ -44,17 +44,6 @@ export function createExternalLocation(
 }
 
 /**
- * Get directory path from a FileLocation.
- * Returns relativePath's directory for workspace/runStorage, absolutePath's for external.
- */
-export function getFileDirectory(location: FileLocation): string {
-  if (location.kind === 'workspace' || location.kind === 'runStorage') {
-    return path.dirname(location.relativePath);
-  }
-  return path.dirname(location.absolutePath);
-}
-
-/**
  * Get a comparable path for file matching and mapping.
  * Returns relativePath for workspace/runStorage files, absolutePath for external files.
  */
@@ -62,6 +51,14 @@ export function getComparablePath(location: FileLocation): string {
   return location.kind === 'external'
     ? location.absolutePath
     : location.relativePath;
+}
+
+/**
+ * Get directory path from a FileLocation.
+ * Returns relativePath's directory for workspace/runStorage, absolutePath's for external.
+ */
+export function getFileDirectory(location: FileLocation): string {
+  return path.dirname(getComparablePath(location));
 }
 
 /**

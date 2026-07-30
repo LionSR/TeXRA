@@ -137,22 +137,20 @@ function outputCopyRelativePathForExpectedOutput(
 
 function commonDirectory(paths: readonly string[]): string {
   if (paths.length === 0) return '';
-  const root = path.parse(paths[0]!).root;
   const [first, ...rest] = paths.map((file) =>
     path.resolve(file).split(path.sep),
   );
-  let sharedLength = first.length;
-  for (const parts of rest) {
-    sharedLength = Math.min(sharedLength, parts.length);
-    while (
-      sharedLength > 0 &&
-      first.slice(0, sharedLength).join(path.sep) !==
-        parts.slice(0, sharedLength).join(path.sep)
-    ) {
-      sharedLength -= 1;
-    }
+  let sharedLength = 0;
+  while (
+    sharedLength < first.length &&
+    rest.every((parts) => parts[sharedLength] === first[sharedLength])
+  ) {
+    sharedLength += 1;
   }
-  return first.slice(0, Math.max(1, sharedLength)).join(path.sep) || root;
+  return (
+    first.slice(0, Math.max(1, sharedLength)).join(path.sep) ||
+    path.parse(paths[0]!).root
+  );
 }
 
 function expectedInputOutputFiles(

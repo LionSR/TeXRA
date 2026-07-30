@@ -1,10 +1,10 @@
-// Third-party imports
+// Standard library imports
 import { strict as assert } from 'node:assert';
+
+// Third-party imports
 import { describe, it } from 'vitest';
 
-// Standard library imports
-
-// Local imports - shared constants
+// Local imports - controllers, shared constants and schemas
 import {
   LatexToolingController,
   type LatexPathTool,
@@ -14,11 +14,7 @@ import {
   HOMEBREW_INSTALL_COMMAND,
   type OSPlatform,
 } from '@shared/constants/latex';
-
-// Local imports - shared schemas
 import { DEFAULT_LATEX_SETTINGS_STATUS } from '@shared/schemas/settingsViewMessages';
-
-// Local imports - controllers
 
 const INSTALLED_TOOLS = {
   pdflatex: false,

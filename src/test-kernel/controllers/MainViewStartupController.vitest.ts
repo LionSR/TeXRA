@@ -1,42 +1,40 @@
-// Third-party imports
+// Node imports
 import { strict as assert } from 'node:assert';
+
+// Third-party imports
 import { describe, it } from 'vitest';
 
-// Standard library imports
-
-// Local imports - common
-import { MainViewStartupController } from '@controllers/mainView/MainViewStartupController';
+// Local imports
+import {
+  MainViewStartupController,
+  type MainViewStartupControllerDeps,
+} from '@controllers/mainView/MainViewStartupController';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 
-// Local imports - controllers
+function createController(
+  overrides: Partial<MainViewStartupControllerDeps> = {},
+): MainViewStartupController {
+  return new MainViewStartupController({
+    getConfig: (_key, defaultValue) => defaultValue,
+    loadOptions: async () => ({
+      modelOptions: [],
+      agentOptions: {},
+      teamOptions: [],
+    }),
+    getAuthStatus: async () => ({ authenticated: false }),
+    ...overrides,
+  });
+}
 
 describe('MainViewStartupController', () => {
   it('uses config to choose the orchestrator banner message', () => {
-    const controller = new MainViewStartupController({
-      getConfig: (_key, defaultValue) => defaultValue,
-      loadOptions: async () => ({
-        modelOptions: [],
-        agentOptions: {},
-        teamOptions: [],
-      }),
-      getAuthStatus: async () => ({ authenticated: false }),
-    });
-
-    assert.deepEqual(controller.getOrchestratorBannerMessage(), {
+    assert.deepEqual(createController().getOrchestratorBannerMessage(), {
       command: MAIN_VIEW_COMMANDS.SHOW_ORCHESTRATOR_BANNER,
     });
   });
 
   it('hides the orchestrator banner when disabled', () => {
-    const controller = new MainViewStartupController({
-      getConfig: <T>() => false as T,
-      loadOptions: async () => ({
-        modelOptions: [],
-        agentOptions: {},
-        teamOptions: [],
-      }),
-      getAuthStatus: async () => ({ authenticated: false }),
-    });
+    const controller = createController({ getConfig: <T>() => false as T });
 
     assert.deepEqual(controller.getOrchestratorBannerMessage(), {
       command: MAIN_VIEW_COMMANDS.HIDE_ORCHESTRATOR_BANNER,
@@ -44,8 +42,7 @@ describe('MainViewStartupController', () => {
   });
 
   it('loads options and shows the login banner for signed-out users', async () => {
-    const controller = new MainViewStartupController({
-      getConfig: (_key, defaultValue) => defaultValue,
+    const controller = createController({
       loadOptions: async () => ({
         modelOptions: [{ value: 'gemini', label: 'Gemini' }],
         modelOptionsByCategory: {
@@ -68,7 +65,6 @@ describe('MainViewStartupController', () => {
           },
         ],
       }),
-      getAuthStatus: async () => ({ authenticated: false }),
     });
 
     assert.deepEqual(await controller.getOptionsAndLoginMessages(), [
@@ -106,13 +102,7 @@ describe('MainViewStartupController', () => {
   });
 
   it('hides the login banner for signed-in users', async () => {
-    const controller = new MainViewStartupController({
-      getConfig: (_key, defaultValue) => defaultValue,
-      loadOptions: async () => ({
-        modelOptions: [],
-        agentOptions: {},
-        teamOptions: [],
-      }),
+    const controller = createController({
       getAuthStatus: async () => ({ authenticated: true }),
     });
 

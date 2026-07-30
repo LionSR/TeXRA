@@ -22,13 +22,35 @@ vi.mock('@latex/texFormatter', () => ({
   runLatexFormatter: formatterMocks.runLatexFormatter,
 }));
 
-function initFakePlatform(files: Record<string, string> = {}) {
-  return installPlatform({ files, workspacePath: '/workspace' });
-}
-
 interface XmlManagerOptions {
   outputFiles?: string[];
+  /** Run-relative names of the files a similarity fallback may match against. */
+  baseFiles?: string[];
   logger?: AgentTrace;
+}
+
+function createTraceStub(): AgentTrace {
+  return {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    domain: vi.fn(),
+  } as unknown as AgentTrace;
+}
+
+function createRoundData(round: number): RoundOutput {
+  return {
+    round,
+    rawOutput: null,
+    outputs: [],
+    compileFailures: [],
+    xmlSummary: {
+      tagContents: {},
+      documents: [],
+      singleOutputFile: null,
+      sourceLocation: null,
+    },
+  };
 }
 
 function createXmlManager(
@@ -40,12 +62,7 @@ function createXmlManager(
       inputFiles,
       outputFiles: options.outputFiles ?? [],
     } as unknown as AgentConfig,
-    options.logger ??
-      ({
-        debug: vi.fn(),
-        info: vi.fn(),
-        domain: vi.fn(),
-      } as unknown as AgentTrace),
+    options.logger ?? createTraceStub(),
     new TaskRunFileService('xml-output-manager-test'),
   );
 }
@@ -62,6 +79,10 @@ async function writeAndSplitDocuments(
   return createXmlManager(inputFiles, options).splitScratchpadMultipleOutputXml(
     createExternalLocation('/tmp/run/output.xml'),
     0,
+    'scratchpad',
+    options.baseFiles?.map((name) =>
+      createExternalLocation(`/tmp/run/${name}`),
+    ),
   );
 }
 
@@ -76,7 +97,10 @@ const RECOVERED_DOCUMENT_CONTENT = [...RECOVERED_DOCUMENT_LINES, ''].join('\n');
 describe('XmlOutputManager', () => {
   beforeEach(async () => {
     formatterMocks.runLatexFormatter.mockReset();
-    await initFakePlatform({ '/tmp/run/output.xml': '<documents />' });
+    await installPlatform({
+      files: { '/tmp/run/output.xml': '<documents />' },
+      workspacePath: '/workspace',
+    });
   });
 
   it('writes extracted full-document outputs with one final newline', async () => {
@@ -779,23 +803,12 @@ Appendix.
     );
     const manager = createXmlManager();
     let roundOutputs: OutputFileInfo[] = [];
-    const roundData: RoundOutput = {
-      round: 0,
-      rawOutput: null,
-      outputs: [],
-      compileFailures: [],
-      xmlSummary: {
-        tagContents: {},
-        documents: [],
-        singleOutputFile: null,
-        sourceLocation: null,
-      },
-    };
+    const roundData = createRoundData(0);
     const processor = new OutputFileProcessor({
       baseFiles: [],
       streamId: 'stream',
       interactions: { emit: vi.fn() } as unknown as SessionHostInteractions,
-      logger: { debug: vi.fn() } as unknown as AgentTrace,
+      logger: createTraceStub(),
       xmlManager: manager,
       setRoundOutputs: (_round, outputs) => {
         roundOutputs = outputs;
@@ -1195,8 +1208,7 @@ Appendix.
     // Response order is deliberately swapped relative to inputFiles, and
     // neither fence carries any filename label, to prove the match is
     // driven by content rather than declaration or response order.
-    await AbsoluteFS.write(
-      '/tmp/run/output.xml',
+    const outputs = await writeAndSplitDocuments(
       [
         '# Phase 2: Revised Documents',
         '',
@@ -1211,19 +1223,9 @@ Appendix.
         '\\section{Agent architecture}',
         'The formalization system uses a multi-agent architecture with a persistent shared memory.',
         '```',
-      ].join('\n'),
-    );
-
-    const manager = createXmlManager(['appendices.tex', 'cost_section.tex']);
-
-    const outputs = await manager.splitScratchpadMultipleOutputXml(
-      createExternalLocation('/tmp/run/output.xml'),
-      0,
-      'scratchpad',
-      [
-        createExternalLocation('/tmp/run/appendices.tex'),
-        createExternalLocation('/tmp/run/cost_section.tex'),
       ],
+      ['appendices.tex', 'cost_section.tex'],
+      { baseFiles: ['appendices.tex', 'cost_section.tex'] },
     );
 
     expect(outputs.map((output) => output.source).sort()).toEqual([
@@ -1242,41 +1244,22 @@ Appendix.
   // accepting several attached input files. runReflectionFlow.ts then builds
   // baseFiles from outputFiles, not inputFiles, so baseFiles[i] no longer
   // corresponds to inputFiles[i].
-  function createSingleArtifactManager(
-    inputFiles: string[] = ['page1.png', 'page2.png'],
-  ): XmlOutputManager {
-    return new XmlOutputManager(
-      {
-        inputFiles,
-        outputFiles: ['ocr_result.tex'],
-      } as unknown as AgentConfig,
-      {
-        debug: vi.fn(),
-        info: vi.fn(),
-        warn: vi.fn(),
-        domain: vi.fn(),
-      } as unknown as AgentTrace,
-      new TaskRunFileService('xml-single-artifact-test'),
-    );
-  }
+  const singleArtifactOptions: XmlManagerOptions = {
+    outputFiles: ['ocr_result.tex'],
+    baseFiles: ['ocr_result.tex'],
+  };
+  const singleArtifactInputs = ['page1.png', 'page2.png'];
 
   it('recovers an unlabeled fence under the declared output name for single-artifact agents', async () => {
     // Content-similarity matching against inputFiles must not run in this
     // shape (it would label the block with an input media name); instead the
     // single-document recovery names the block after the sole declared
     // output.
-    await AbsoluteFS.write(
-      '/tmp/run/output.xml',
-      ['```latex', 'Unlabeled recovered content.', '```'].join('\n'),
+    const outputs = await writeAndSplitDocuments(
+      ['```latex', 'Unlabeled recovered content.', '```'],
+      singleArtifactInputs,
+      singleArtifactOptions,
     );
-
-    const outputs =
-      await createSingleArtifactManager().splitScratchpadMultipleOutputXml(
-        createExternalLocation('/tmp/run/output.xml'),
-        0,
-        'scratchpad',
-        [createExternalLocation('/tmp/run/ocr_result.tex')],
-      );
 
     expect(outputs.map((output) => output.source)).toEqual(['ocr_result.tex']);
     await expect(AbsoluteFS.read('/tmp/run/ocr_result.tex')).resolves.toBe(
@@ -1289,18 +1272,11 @@ Appendix.
     // mentions in prose; a `page1.png:` line must never become a document
     // named after the input. The fenced content is still recovered, but
     // under the sole declared output name.
-    await AbsoluteFS.write(
-      '/tmp/run/output.xml',
-      ['page1.png:', '```latex', 'Transcribed content.', '```'].join('\n'),
+    const outputs = await writeAndSplitDocuments(
+      ['page1.png:', '```latex', 'Transcribed content.', '```'],
+      singleArtifactInputs,
+      singleArtifactOptions,
     );
-
-    const outputs =
-      await createSingleArtifactManager().splitScratchpadMultipleOutputXml(
-        createExternalLocation('/tmp/run/output.xml'),
-        0,
-        'scratchpad',
-        [createExternalLocation('/tmp/run/ocr_result.tex')],
-      );
 
     expect(outputs.map((output) => output.source)).toEqual(['ocr_result.tex']);
     await expect(AbsoluteFS.read('/tmp/run/ocr_result.tex')).resolves.toBe(
@@ -1309,20 +1285,10 @@ Appendix.
   });
 
   it('synthesizes an unlabeled prefix under the declared output name, not the input', async () => {
-    await AbsoluteFS.write(
-      '/tmp/run/output.xml',
-      ['\\section{Transcription}', 'Intro.', 'ocr_result.tex:', 'More.'].join(
-        '\n',
-      ),
-    );
-
-    const outputs = await createSingleArtifactManager([
-      'paper.tex',
-    ]).splitScratchpadMultipleOutputXml(
-      createExternalLocation('/tmp/run/output.xml'),
-      0,
-      'scratchpad',
-      [createExternalLocation('/tmp/run/ocr_result.tex')],
+    const outputs = await writeAndSplitDocuments(
+      ['\\section{Transcription}', 'Intro.', 'ocr_result.tex:', 'More.'],
+      ['paper.tex'],
+      singleArtifactOptions,
     );
 
     expect(outputs.map((output) => output.source)).toEqual(['ocr_result.tex']);
@@ -1332,18 +1298,11 @@ Appendix.
   });
 
   it('recovers a bare label naming a declared output file', async () => {
-    await AbsoluteFS.write(
-      '/tmp/run/output.xml',
-      ['ocr_result.tex:', '```latex', 'Transcribed content.', '```'].join('\n'),
+    const outputs = await writeAndSplitDocuments(
+      ['ocr_result.tex:', '```latex', 'Transcribed content.', '```'],
+      singleArtifactInputs,
+      singleArtifactOptions,
     );
-
-    const outputs =
-      await createSingleArtifactManager().splitScratchpadMultipleOutputXml(
-        createExternalLocation('/tmp/run/output.xml'),
-        0,
-        'scratchpad',
-        [createExternalLocation('/tmp/run/ocr_result.tex')],
-      );
 
     expect(outputs.map((output) => output.source)).toEqual(['ocr_result.tex']);
     await expect(AbsoluteFS.read('/tmp/run/ocr_result.tex')).resolves.toBe(
@@ -1352,8 +1311,7 @@ Appendix.
   });
 
   it('coalesces repeated labels for the sole declared output', async () => {
-    await AbsoluteFS.write(
-      '/tmp/run/output.xml',
+    const outputs = await writeAndSplitDocuments(
       [
         'ocr_result.tex:',
         '```latex',
@@ -1364,16 +1322,10 @@ Appendix.
         '```latex',
         'Page two transcription.',
         '```',
-      ].join('\n'),
+      ],
+      singleArtifactInputs,
+      singleArtifactOptions,
     );
-
-    const outputs =
-      await createSingleArtifactManager().splitScratchpadMultipleOutputXml(
-        createExternalLocation('/tmp/run/output.xml'),
-        0,
-        'scratchpad',
-        [createExternalLocation('/tmp/run/ocr_result.tex')],
-      );
 
     expect(outputs.map((output) => output.source)).toEqual(['ocr_result.tex']);
     await expect(AbsoluteFS.read('/tmp/run/ocr_result.tex')).resolves.toBe(
@@ -1385,8 +1337,7 @@ Appendix.
   });
 
   it('coalesces unlabeled chunks after a sole-output header chunk', async () => {
-    await AbsoluteFS.write(
-      '/tmp/run/output.xml',
+    const outputs = await writeAndSplitDocuments(
       [
         'ocr_result.tex:',
         '```latex',
@@ -1397,16 +1348,10 @@ Appendix.
         '```latex',
         'Page two transcription.',
         '```',
-      ].join('\n'),
+      ],
+      singleArtifactInputs,
+      singleArtifactOptions,
     );
-
-    const outputs =
-      await createSingleArtifactManager().splitScratchpadMultipleOutputXml(
-        createExternalLocation('/tmp/run/output.xml'),
-        0,
-        'scratchpad',
-        [createExternalLocation('/tmp/run/ocr_result.tex')],
-      );
 
     expect(outputs.map((output) => output.source)).toEqual(['ocr_result.tex']);
     await expect(AbsoluteFS.read('/tmp/run/ocr_result.tex')).resolves.toBe(
@@ -1415,8 +1360,7 @@ Appendix.
   });
 
   it('does not coalesce explanatory fences after a sole-output header chunk', async () => {
-    await AbsoluteFS.write(
-      '/tmp/run/output.xml',
+    const outputs = await writeAndSplitDocuments(
       [
         'ocr_result.tex:',
         '```latex',
@@ -1427,16 +1371,10 @@ Appendix.
         '```latex',
         '\\LaTeX{} example, not output.',
         '```',
-      ].join('\n'),
+      ],
+      singleArtifactInputs,
+      singleArtifactOptions,
     );
-
-    const outputs =
-      await createSingleArtifactManager().splitScratchpadMultipleOutputXml(
-        createExternalLocation('/tmp/run/output.xml'),
-        0,
-        'scratchpad',
-        [createExternalLocation('/tmp/run/ocr_result.tex')],
-      );
 
     expect(outputs.map((output) => output.source)).toEqual(['ocr_result.tex']);
     await expect(AbsoluteFS.read('/tmp/run/ocr_result.tex')).resolves.toBe(
@@ -1466,8 +1404,7 @@ Appendix.
   });
 
   it('concatenates multiple unlabeled fences under the sole declared output', async () => {
-    await AbsoluteFS.write(
-      '/tmp/run/output.xml',
+    const outputs = await writeAndSplitDocuments(
       [
         'page1.png:',
         '```latex',
@@ -1478,16 +1415,10 @@ Appendix.
         '```latex',
         'Page two transcription.',
         '```',
-      ].join('\n'),
+      ],
+      singleArtifactInputs,
+      singleArtifactOptions,
     );
-
-    const outputs =
-      await createSingleArtifactManager().splitScratchpadMultipleOutputXml(
-        createExternalLocation('/tmp/run/output.xml'),
-        0,
-        'scratchpad',
-        [createExternalLocation('/tmp/run/ocr_result.tex')],
-      );
 
     expect(outputs.map((output) => output.source)).toEqual(['ocr_result.tex']);
     await expect(AbsoluteFS.read('/tmp/run/ocr_result.tex')).resolves.toBe(
@@ -1499,25 +1430,16 @@ Appendix.
     const stub = '\\section{Stub}\nShared template content.\n';
     await AbsoluteFS.write('/tmp/run/a.tex', stub);
     await AbsoluteFS.write('/tmp/run/b.tex', stub);
-    await AbsoluteFS.write(
-      '/tmp/run/output.xml',
+
+    const outputs = await writeAndSplitDocuments(
       [
         '```latex',
         '\\section{Stub}',
         'Shared template content, revised.',
         '```',
-      ].join('\n'),
-    );
-    const manager = createXmlManager(['a.tex', 'b.tex']);
-
-    const outputs = await manager.splitScratchpadMultipleOutputXml(
-      createExternalLocation('/tmp/run/output.xml'),
-      0,
-      'scratchpad',
-      [
-        createExternalLocation('/tmp/run/a.tex'),
-        createExternalLocation('/tmp/run/b.tex'),
       ],
+      ['a.tex', 'b.tex'],
+      { baseFiles: ['a.tex', 'b.tex'] },
     );
 
     // Both base files score identically, so there is no evidence which one
@@ -1532,8 +1454,8 @@ Appendix.
       '\\appendix\n\\section{Agent architecture}\nThe formalization system uses a multi-agent architecture.\n';
     await AbsoluteFS.write('/tmp/run/cost.tex', costOriginal);
     await AbsoluteFS.write('/tmp/run/arch.tex', archOriginal);
-    await AbsoluteFS.write(
-      '/tmp/run/output.xml',
+
+    const outputs = await writeAndSplitDocuments(
       [
         'The original cost section for reference:',
         '```latex',
@@ -1552,18 +1474,9 @@ Appendix.
         '\\section{Agent architecture}',
         'The formalization system uses a revised multi-agent architecture.',
         '```',
-      ].join('\n'),
-    );
-    const manager = createXmlManager(['cost.tex', 'arch.tex']);
-
-    const outputs = await manager.splitScratchpadMultipleOutputXml(
-      createExternalLocation('/tmp/run/output.xml'),
-      0,
-      'scratchpad',
-      [
-        createExternalLocation('/tmp/run/cost.tex'),
-        createExternalLocation('/tmp/run/arch.tex'),
       ],
+      ['cost.tex', 'arch.tex'],
+      { baseFiles: ['cost.tex', 'arch.tex'] },
     );
 
     expect(outputs.map((output) => output.source).sort()).toEqual([
@@ -1614,18 +1527,7 @@ Appendix.
     const ensureRound = (round: number): RoundOutput => {
       const existing = roundDataByRound.get(round);
       if (existing) return existing;
-      const data: RoundOutput = {
-        round,
-        rawOutput: null,
-        outputs: [],
-        compileFailures: [],
-        xmlSummary: {
-          tagContents: {},
-          documents: [],
-          singleOutputFile: null,
-          sourceLocation: null,
-        },
-      };
+      const data = createRoundData(round);
       roundDataByRound.set(round, data);
       return data;
     };
@@ -1653,12 +1555,7 @@ Appendix.
       ],
       streamId: 'stream',
       interactions: { emit: vi.fn() } as unknown as SessionHostInteractions,
-      logger: {
-        debug: vi.fn(),
-        info: vi.fn(),
-        warn: vi.fn(),
-        domain: vi.fn(),
-      } as unknown as AgentTrace,
+      logger: createTraceStub(),
       xmlManager: manager,
       setRoundOutputs: (_round, outputs) => {
         roundOutputs = outputs;
@@ -1688,36 +1585,23 @@ Appendix.
       '\\appendix\n\\section{Agent architecture}\nThe formalization system uses a multi-agent architecture.\n';
     await AbsoluteFS.write('/tmp/run/cost.tex', costOriginal);
     await AbsoluteFS.write('/tmp/run/arch.tex', archOriginal);
-    await AbsoluteFS.write(
-      '/tmp/run/output.xml',
+
+    const outputs = await writeAndSplitDocuments(
       [
         '```latex',
         '\\section{Computational cost}',
         'Final numbers from the local interactive logs.',
         '```',
-      ].join('\n'),
-    );
-    const manager = createXmlManager(['cost.tex', 'arch.tex']);
-
-    const outputs = await manager.splitScratchpadMultipleOutputXml(
-      createExternalLocation('/tmp/run/output.xml'),
-      0,
-      'scratchpad',
-      [
-        createExternalLocation('/tmp/run/cost.tex'),
-        createExternalLocation('/tmp/run/arch.tex'),
       ],
+      ['cost.tex', 'arch.tex'],
+      { baseFiles: ['cost.tex', 'arch.tex'] },
     );
 
     expect(outputs.map((output) => output.source)).toEqual(['cost.tex']);
   });
 
   it('reports expected files left unmatched by filename-header recovery', async () => {
-    const logger = {
-      debug: vi.fn(),
-      info: vi.fn(),
-      domain: vi.fn(),
-    } as unknown as AgentTrace;
+    const logger = createTraceStub();
     const outputs = await writeAndSplitDocuments(
       [
         'main.tex:',
@@ -1743,29 +1627,14 @@ Appendix.
   });
 
   it('logs discarded unclosed latex fences during similarity recovery', async () => {
-    const logger = {
-      debug: vi.fn(),
-      info: vi.fn(),
-      domain: vi.fn(),
-    } as unknown as AgentTrace;
+    const logger = createTraceStub();
     await AbsoluteFS.write('/tmp/run/a.tex', 'Original A.');
     await AbsoluteFS.write('/tmp/run/b.tex', 'Original B.');
-    await AbsoluteFS.write(
-      '/tmp/run/output.xml',
-      ['```latex', 'Unclosed revised content.'].join('\n'),
-    );
-    const manager = createXmlManager(['a.tex', 'b.tex'], {
-      logger,
-    });
 
-    const outputs = await manager.splitScratchpadMultipleOutputXml(
-      createExternalLocation('/tmp/run/output.xml'),
-      0,
-      'scratchpad',
-      [
-        createExternalLocation('/tmp/run/a.tex'),
-        createExternalLocation('/tmp/run/b.tex'),
-      ],
+    const outputs = await writeAndSplitDocuments(
+      ['```latex', 'Unclosed revised content.'],
+      ['a.tex', 'b.tex'],
+      { logger, baseFiles: ['a.tex', 'b.tex'] },
     );
 
     expect(outputs).toEqual([]);

@@ -4,17 +4,35 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 // Third-party imports
-import { describe, expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 // Local imports - desktop test paths
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
 
-async function loadDesktopDiffHost(): Promise<
-  typeof import('../../../packages/desktop/src/main/desktopDiffHost')
-> {
-  return (await import(
-    moduleFileUrl(desktopSourcePath('main', 'desktopDiffHost.ts'))
-  )) as typeof import('../../../packages/desktop/src/main/desktopDiffHost');
+type DesktopDiffHostModule = typeof import('@desktop/main/desktopDiffHost');
+type DiffHostOptions = Parameters<
+  DesktopDiffHostModule['createDesktopDiffHost']
+>[0];
+
+let createDesktopDiffHost: DesktopDiffHostModule['createDesktopDiffHost'];
+
+// Every case needs the external-editor fallback observable, so the harness owns
+// `openPath` and the paths it received.
+function createHost(overrides: Partial<DiffHostOptions> = {}) {
+  const openedPaths: string[] = [];
+  const openPath = vi.fn(async (filePath: string) => {
+    openedPaths.push(filePath);
+  });
+  return {
+    host: createDesktopDiffHost({ openPath, ...overrides }),
+    openPath,
+    openedPaths,
+  };
+}
+
+function expectOpenedPatchFile(openedPaths: readonly string[]): void {
+  expect(openedPaths).toHaveLength(1);
+  expect(path.extname(openedPaths[0])).toBe('.diff');
 }
 
 async function writeDiffPair(
@@ -34,6 +52,12 @@ async function writeDiffPair(
 }
 
 describe('createDesktopDiffHost', () => {
+  beforeAll(async () => {
+    ({ createDesktopDiffHost } = (await import(
+      moduleFileUrl(desktopSourcePath('main', 'desktopDiffHost.ts'))
+    )) as DesktopDiffHostModule);
+  });
+
   it('falls back to a generated patch file when no renderer is wired', async () => {
     const { originalPath, proposedPath } = await writeDiffPair(
       'original.txt',
@@ -41,14 +65,7 @@ describe('createDesktopDiffHost', () => {
       'hello\nold\n',
       'hello\nnew\n',
     );
-    const openedPaths: string[] = [];
-    const { createDesktopDiffHost } = await loadDesktopDiffHost();
-
-    const host = createDesktopDiffHost({
-      openPath: vi.fn(async (filePath: string) => {
-        openedPaths.push(filePath);
-      }),
-    });
+    const { host, openedPaths } = createHost();
 
     await host.openDiff(
       { filePath: originalPath },
@@ -56,8 +73,7 @@ describe('createDesktopDiffHost', () => {
       'Compare',
     );
 
-    expect(openedPaths).toHaveLength(1);
-    expect(path.extname(openedPaths[0])).toBe('.diff');
+    expectOpenedPatchFile(openedPaths);
     await expect(readFile(openedPaths[0], 'utf8')).resolves.toContain('-old');
     await expect(readFile(openedPaths[0], 'utf8')).resolves.toContain('+new');
   });
@@ -70,13 +86,8 @@ describe('createDesktopDiffHost', () => {
       'hello\nnew\n',
     );
     const posted: unknown[] = [];
-    const openPath = vi.fn(async () => {
-      // External fallback should not be invoked when postToRenderer is set.
-    });
-
-    const { createDesktopDiffHost } = await loadDesktopDiffHost();
-    const host = createDesktopDiffHost({
-      openPath,
+    // External fallback should not be invoked when postToRenderer is set.
+    const { host, openPath } = createHost({
       postToRenderer: (message) => {
         posted.push(message);
         return true;
@@ -114,14 +125,7 @@ describe('createDesktopDiffHost', () => {
       'a.tex',
       'b.tex',
     );
-    const openedPaths: string[] = [];
-    const { createDesktopDiffHost } = await loadDesktopDiffHost();
-    const host = createDesktopDiffHost({
-      openPath: vi.fn(async (filePath: string) => {
-        openedPaths.push(filePath);
-      }),
-      postToRenderer: () => false,
-    });
+    const { host, openedPaths } = createHost({ postToRenderer: () => false });
 
     await host.openDiff(
       { filePath: originalPath },
@@ -129,8 +133,7 @@ describe('createDesktopDiffHost', () => {
       'Compare',
     );
 
-    expect(openedPaths).toHaveLength(1);
-    expect(path.extname(openedPaths[0])).toBe('.diff');
+    expectOpenedPatchFile(openedPaths);
   });
 
   it('falls back to the external editor when postToRenderer throws', async () => {
@@ -138,18 +141,12 @@ describe('createDesktopDiffHost', () => {
       'a.tex',
       'b.tex',
     );
-    const openedPaths: string[] = [];
-    const { createDesktopDiffHost } = await loadDesktopDiffHost();
     // Suppress the deliberate console.error from the host so the test
     // output stays clean.
     const consoleSpy = vi
       .spyOn(console, 'error')
       .mockImplementation(() => undefined);
-
-    const host = createDesktopDiffHost({
-      openPath: vi.fn(async (filePath: string) => {
-        openedPaths.push(filePath);
-      }),
+    const { host, openedPaths } = createHost({
       postToRenderer: () => {
         throw new Error('renderer destroyed');
       },
@@ -161,8 +158,7 @@ describe('createDesktopDiffHost', () => {
       'Compare',
     );
 
-    expect(openedPaths).toHaveLength(1);
-    expect(path.extname(openedPaths[0])).toBe('.diff');
+    expectOpenedPatchFile(openedPaths);
     expect(consoleSpy).toHaveBeenCalled();
     consoleSpy.mockRestore();
   });
@@ -173,13 +169,7 @@ describe('createDesktopDiffHost', () => {
       'b.txt',
     );
     const posted: unknown[] = [];
-    const openedPaths: string[] = [];
-    const { createDesktopDiffHost } = await loadDesktopDiffHost();
-
-    const host = createDesktopDiffHost({
-      openPath: vi.fn(async (filePath: string) => {
-        openedPaths.push(filePath);
-      }),
+    const { host, openedPaths } = createHost({
       postToRenderer: (message) => {
         posted.push(message);
         return true;
@@ -194,7 +184,6 @@ describe('createDesktopDiffHost', () => {
     );
 
     expect(posted).toHaveLength(0);
-    expect(openedPaths).toHaveLength(1);
-    expect(path.extname(openedPaths[0])).toBe('.diff');
+    expectOpenedPatchFile(openedPaths);
   });
 });

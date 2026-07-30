@@ -26,6 +26,12 @@ let ContextProviderCtor: typeof ContextProvider;
 let inquiryThreadsContext: typeof InquiryThreadsContext;
 let phaseStagesContext: typeof PhaseStagesContext;
 
+function createPanel(): BackgroundTasksPanel {
+  return document.createElement(
+    'background-tasks-panel',
+  ) as BackgroundTasksPanel;
+}
+
 describe('background-tasks-panel', () => {
   useLitComponentTestDom(async () => {
     ({ ContextProvider: ContextProviderCtor } = await import('@lit/context'));
@@ -35,9 +41,7 @@ describe('background-tasks-panel', () => {
   });
 
   it('strips the redundant Web Awesome card around its contents', () => {
-    const element = document.createElement(
-      'background-tasks-panel',
-    ) as BackgroundTasksPanel;
+    const element = createPanel();
     const constructor =
       element.constructor as StyledBackgroundTasksPanelConstructor;
     const styleText = constructor.elementStyles
@@ -64,9 +68,7 @@ describe('background-tasks-panel', () => {
   });
 
   it('lists a retained finished subagent as a named row, not a count', async () => {
-    const element = document.createElement(
-      'background-tasks-panel',
-    ) as BackgroundTasksPanel;
+    const element = createPanel();
     element.subagents = [
       {
         kind: 'subagent',
@@ -115,9 +117,7 @@ describe('background-tasks-panel', () => {
   });
 
   it('labels a running workflow-script row with its current phase', async () => {
-    const element = document.createElement(
-      'background-tasks-panel',
-    ) as BackgroundTasksPanel;
+    const element = createPanel();
     element.subagents = [
       {
         kind: 'subagent',
@@ -163,9 +163,7 @@ describe('background-tasks-panel', () => {
   });
 
   it('does not show success while a retained subagent status still lags', async () => {
-    const element = document.createElement(
-      'background-tasks-panel',
-    ) as BackgroundTasksPanel;
+    const element = createPanel();
     element.subagents = [
       {
         kind: 'subagent',
@@ -187,9 +185,7 @@ describe('background-tasks-panel', () => {
   });
 
   it('shows inquiries without workflow subagents in inquiry scope', async () => {
-    const element = document.createElement(
-      'background-tasks-panel',
-    ) as BackgroundTasksPanel;
+    const element = createPanel();
     element.scope = 'inquiries';
     element.subagents = [
       {

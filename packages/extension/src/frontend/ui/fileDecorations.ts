@@ -4,7 +4,6 @@ import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { appSignals } from '@eventBus/AppSignals';
 import { subscribeAddOutputFilesRunFact } from '@frontend/events/runFactSubscriptions';
-import type { OutputFileInfo } from '@shared/schemas/output';
 
 // Session-scoped: the touched set is not persisted across window reloads so
 // the badges clear on restart and track only the current session's activity.
@@ -49,18 +48,6 @@ class TeXRAFileDecorationProvider implements vscode.FileDecorationProvider {
   }
 }
 
-// Only mark the primary output location. Lineage entries (original, diffBase,
-// diffFile) are reference points — marking them would badge the source file as
-// "Modified by TeXRA" before the user has actually accepted the workflow output.
-function collectWorkspacePaths(
-  target: Set<string>,
-  info: OutputFileInfo,
-): void {
-  if (info.location.kind === 'workspace') {
-    target.add(info.location.absolutePath);
-  }
-}
-
 export function registerFileDecorations(
   context: vscode.ExtensionContext,
   events: SessionEventHub = defaultSession().events,
@@ -70,10 +57,16 @@ export function registerFileDecorations(
   const unsubscribeOutputFiles = subscribeAddOutputFilesRunFact(
     events,
     ({ filesByRound }) => {
+      // Only mark the primary output location. Lineage entries (original,
+      // diffBase, diffFile) are reference points; marking them would badge the
+      // source file as "Modified by TeXRA" before the user has actually
+      // accepted the workflow output.
       const paths = new Set<string>();
       for (const roundFiles of Object.values(filesByRound)) {
         for (const info of roundFiles) {
-          collectWorkspacePaths(paths, info);
+          if (info.location.kind === 'workspace') {
+            paths.add(info.location.absolutePath);
+          }
         }
       }
       if (paths.size > 0) {

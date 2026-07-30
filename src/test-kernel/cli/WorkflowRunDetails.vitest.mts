@@ -9,6 +9,7 @@ import {
 } from '@cli/chat/tui/state/cliState';
 import {
   AgentCategory,
+  type CompileFailure,
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
@@ -19,6 +20,20 @@ import { projectTaskGroupsFromStreamLog } from '@shared/streams/taskGroupProject
 import { loadInk } from '@test/support/inkTestHarness.mts';
 
 const STREAM_ID = 'workflow#details' as StreamTabId;
+
+const COMPILE_FAILURE: CompileFailure = {
+  round: 0,
+  displayName: 'paper.pdf',
+  output: {
+    kind: 'external',
+    absolutePath: '/tmp/paper.pdf',
+  },
+  log: {
+    kind: 'external',
+    absolutePath: '/tmp/paper.log',
+  },
+  logRelativePath: 'paper.log',
+};
 
 function workflowRunDetailLines(
   facts: Parameters<typeof selectWorkflowRunDetailLines>[0],
@@ -70,21 +85,7 @@ describe('workflowRunDetailLines', () => {
       },
       missingOutputsByRound: { 0: ['appendix.tex'] },
       compileFailuresByRound: {
-        0: [
-          {
-            round: 0,
-            displayName: 'paper.pdf',
-            output: {
-              kind: 'external',
-              absolutePath: '/tmp/paper.pdf',
-            },
-            log: {
-              kind: 'external',
-              absolutePath: '/tmp/paper.log',
-            },
-            logRelativePath: 'paper.log',
-          },
-        ],
+        0: [COMPILE_FAILURE],
       },
     });
 
@@ -149,21 +150,7 @@ describe('workflowRunDetailLines', () => {
         outputFilesByRound: {},
         missingOutputsByRound: { 0: ['missing.tex'] },
         compileFailuresByRound: {
-          0: [
-            {
-              round: 0,
-              displayName: 'paper.pdf',
-              output: {
-                kind: 'external',
-                absolutePath: '/tmp/paper.pdf',
-              },
-              log: {
-                kind: 'external',
-                absolutePath: '/tmp/paper.log',
-              },
-              logRelativePath: 'paper.log',
-            },
-          ],
+          0: [COMPILE_FAILURE],
         },
       },
       1,
@@ -279,21 +266,7 @@ describe('workflowRunDetailLines', () => {
         },
         missingOutputsByRound: {},
         compileFailuresByRound: {
-          0: [
-            {
-              round: 0,
-              displayName: 'paper.pdf',
-              output: {
-                kind: 'external',
-                absolutePath: '/tmp/paper.pdf',
-              },
-              log: {
-                kind: 'external',
-                absolutePath: '/tmp/paper.log',
-              },
-              logRelativePath: 'paper.log',
-            },
-          ],
+          0: [COMPILE_FAILURE],
         },
       },
       3,

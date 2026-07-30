@@ -46,6 +46,54 @@ function cliContext(overrides: Partial<CliContext> = {}): CliContext {
   });
 }
 
+const LEAN_AGENT = {
+  name: 'lean',
+  source: 'builtInToolUse',
+  path: '/tmp/resources/tool_use_agents/lean.yaml',
+  category: AgentCategory.ToolUse,
+  description: 'Lean 4 proof assistant.',
+};
+
+const CHAT_AGENT = {
+  name: 'chat',
+  source: 'builtInToolUse',
+  path: '/tmp/resources/tool_use_agents/chat.yaml',
+  category: AgentCategory.ToolUse,
+  description: 'Interactive assistant.',
+};
+
+const POLISH_AGENT = {
+  name: 'polish',
+  source: 'builtInWorkflow',
+  path: '/tmp/resources/agents/polish.yaml',
+  category: AgentCategory.Workflow,
+  description: 'Polishes prose.',
+};
+
+const CORRECT_AGENT = {
+  name: 'correct',
+  source: 'builtInWorkflow',
+  path: '/tmp/resources/agents/correct.yaml',
+  category: AgentCategory.Workflow,
+  description: 'Corrects LaTeX.',
+};
+
+type CategoryCatalog = Partial<
+  Record<
+    AgentCategory,
+    { visible?: readonly unknown[]; all: readonly unknown[] }
+  >
+>;
+
+function stubCatalog(catalog: CategoryCatalog): void {
+  mocks.getVisibleAgents.mockImplementation(
+    (category: AgentCategory) => catalog[category]?.visible ?? [],
+  );
+  mocks.getAgentsByCategory.mockImplementation(
+    (category: AgentCategory) => catalog[category]?.all ?? [],
+  );
+}
+
 describe('CLI agents command', () => {
   // Warm the module graph so the first test isn't charged the import cost,
   // which can exceed the per-test timeout on slow machines.
@@ -73,26 +121,12 @@ describe('CLI agents command', () => {
   });
 
   it('lists visible agents by default and reports hidden agents', async () => {
-    const visibleAgent = {
-      name: 'lean',
-      source: 'builtInToolUse',
-      path: '/tmp/resources/tool_use_agents/lean.yaml',
-      category: AgentCategory.ToolUse,
-      description: 'Lean 4 proof assistant.',
-    };
-    const hiddenAgent = {
-      name: 'chat',
-      source: 'builtInToolUse',
-      path: '/tmp/resources/tool_use_agents/chat.yaml',
-      category: AgentCategory.ToolUse,
-      description: 'Interactive assistant.',
-    };
-    mocks.getVisibleAgents.mockImplementation((category: AgentCategory) =>
-      category === AgentCategory.ToolUse ? [visibleAgent] : [],
-    );
-    mocks.getAgentsByCategory.mockImplementation((category: AgentCategory) =>
-      category === AgentCategory.ToolUse ? [visibleAgent, hiddenAgent] : [],
-    );
+    stubCatalog({
+      [AgentCategory.ToolUse]: {
+        visible: [LEAN_AGENT],
+        all: [LEAN_AGENT, CHAT_AGENT],
+      },
+    });
     const { listAgents } = await import('@cli/commands/agents');
 
     const exitCode = await listAgents(cliContext());
@@ -102,8 +136,8 @@ describe('CLI agents command', () => {
     expect(mocks.emitCliResult).toHaveBeenCalledWith(
       expect.anything(),
       {
-        json: [visibleAgent],
-        ndjson: [{ kind: 'agent', agent: visibleAgent }],
+        json: [LEAN_AGENT],
+        ndjson: [{ kind: 'agent', agent: LEAN_AGENT }],
         text: 'toolUse\tlean\tLean 4 proof assistant.',
       },
       { paged: true },
@@ -114,16 +148,7 @@ describe('CLI agents command', () => {
   });
 
   it('reports hidden agents in json mode without changing stdout payload', async () => {
-    const hiddenWorkflowAgent = {
-      name: 'correct',
-      source: 'builtInWorkflow',
-      path: '/tmp/resources/agents/correct.yaml',
-      category: AgentCategory.Workflow,
-      description: 'Corrects LaTeX.',
-    };
-    mocks.getAgentsByCategory.mockImplementation((category: AgentCategory) =>
-      category === AgentCategory.Workflow ? [hiddenWorkflowAgent] : [],
-    );
+    stubCatalog({ [AgentCategory.Workflow]: { all: [CORRECT_AGENT] } });
     const { listAgents } = await import('@cli/commands/agents');
 
     const exitCode = await listAgents(cliContext({ outputFormat: 'json' }), {
@@ -146,16 +171,7 @@ describe('CLI agents command', () => {
   });
 
   it('shows a text empty state when no workflow agents are visible', async () => {
-    const hiddenWorkflowAgent = {
-      name: 'correct',
-      source: 'builtInWorkflow',
-      path: '/tmp/resources/agents/correct.yaml',
-      category: AgentCategory.Workflow,
-      description: 'Corrects LaTeX.',
-    };
-    mocks.getAgentsByCategory.mockImplementation((category: AgentCategory) =>
-      category === AgentCategory.Workflow ? [hiddenWorkflowAgent] : [],
-    );
+    stubCatalog({ [AgentCategory.Workflow]: { all: [CORRECT_AGENT] } });
     const { listAgents } = await import('@cli/commands/agents');
 
     const exitCode = await listAgents(cliContext(), {
@@ -178,16 +194,7 @@ describe('CLI agents command', () => {
   });
 
   it('keeps quiet empty agent lists byte-empty for shell completion', async () => {
-    const hiddenWorkflowAgent = {
-      name: 'correct',
-      source: 'builtInWorkflow',
-      path: '/tmp/resources/agents/correct.yaml',
-      category: AgentCategory.Workflow,
-      description: 'Corrects LaTeX.',
-    };
-    mocks.getAgentsByCategory.mockImplementation((category: AgentCategory) =>
-      category === AgentCategory.Workflow ? [hiddenWorkflowAgent] : [],
-    );
+    stubCatalog({ [AgentCategory.Workflow]: { all: [CORRECT_AGENT] } });
     const { listAgents } = await import('@cli/commands/agents');
 
     const exitCode = await listAgents(cliContext({ quietLogs: true }), {
@@ -208,26 +215,12 @@ describe('CLI agents command', () => {
   });
 
   it('suppresses hidden-agent notices in quiet text mode', async () => {
-    const visibleAgent = {
-      name: 'polish',
-      source: 'builtInWorkflow',
-      path: '/tmp/resources/agents/polish.yaml',
-      category: AgentCategory.Workflow,
-      description: 'Polishes prose.',
-    };
-    const hiddenAgent = {
-      name: 'correct',
-      source: 'builtInWorkflow',
-      path: '/tmp/resources/agents/correct.yaml',
-      category: AgentCategory.Workflow,
-      description: 'Corrects LaTeX.',
-    };
-    mocks.getVisibleAgents.mockImplementation((category: AgentCategory) =>
-      category === AgentCategory.Workflow ? [visibleAgent] : [],
-    );
-    mocks.getAgentsByCategory.mockImplementation((category: AgentCategory) =>
-      category === AgentCategory.Workflow ? [visibleAgent, hiddenAgent] : [],
-    );
+    stubCatalog({
+      [AgentCategory.Workflow]: {
+        visible: [POLISH_AGENT],
+        all: [POLISH_AGENT, CORRECT_AGENT],
+      },
+    });
     const { listAgents } = await import('@cli/commands/agents');
 
     const exitCode = await listAgents(cliContext({ quietLogs: true }), {
@@ -238,8 +231,8 @@ describe('CLI agents command', () => {
     expect(mocks.emitCliResult).toHaveBeenCalledWith(
       expect.anything(),
       {
-        json: [visibleAgent],
-        ndjson: [{ kind: 'agent', agent: visibleAgent }],
+        json: [POLISH_AGENT],
+        ndjson: [{ kind: 'agent', agent: POLISH_AGENT }],
         text: 'workflow\tpolish\tPolishes prose.',
       },
       { paged: true },
@@ -248,31 +241,17 @@ describe('CLI agents command', () => {
   });
 
   it('filters agents by category and reports hidden agents in that category', async () => {
-    const visibleToolUseAgent = {
-      name: 'lean',
-      source: 'builtInToolUse',
-      path: '/tmp/resources/tool_use_agents/lean.yaml',
-      category: AgentCategory.ToolUse,
-      description: 'Lean 4 proof assistant.',
-    };
-    const hiddenToolUseAgent = {
-      name: 'chat',
-      source: 'builtInToolUse',
-      path: '/tmp/resources/tool_use_agents/chat.yaml',
-      category: AgentCategory.ToolUse,
-      description: 'Interactive assistant.',
-    };
     mocks.getVisibleAgents.mockImplementation((category: AgentCategory) => {
       if (category !== AgentCategory.ToolUse) {
         throw new Error('workflow agents should not be loaded');
       }
-      return [visibleToolUseAgent];
+      return [LEAN_AGENT];
     });
     mocks.getAgentsByCategory.mockImplementation((category: AgentCategory) => {
       if (category !== AgentCategory.ToolUse) {
         throw new Error('workflow agents should not be loaded');
       }
-      return [visibleToolUseAgent, hiddenToolUseAgent];
+      return [LEAN_AGENT, CHAT_AGENT];
     });
     const { listAgents } = await import('@cli/commands/agents');
 
@@ -287,8 +266,8 @@ describe('CLI agents command', () => {
     expect(mocks.emitCliResult).toHaveBeenCalledWith(
       expect.anything(),
       {
-        json: [visibleToolUseAgent],
-        ndjson: [{ kind: 'agent', agent: visibleToolUseAgent }],
+        json: [LEAN_AGENT],
+        ndjson: [{ kind: 'agent', agent: LEAN_AGENT }],
         text: 'toolUse\tlean\tLean 4 proof assistant.',
       },
       { paged: true },
@@ -299,28 +278,12 @@ describe('CLI agents command', () => {
   });
 
   it('keeps the workflow category in the hidden-agent notice', async () => {
-    const visibleWorkflowAgent = {
-      name: 'polish',
-      source: 'builtInWorkflow',
-      path: '/tmp/resources/agents/polish.yaml',
-      category: AgentCategory.Workflow,
-      description: 'Polishes prose.',
-    };
-    const hiddenWorkflowAgent = {
-      name: 'correct',
-      source: 'builtInWorkflow',
-      path: '/tmp/resources/agents/correct.yaml',
-      category: AgentCategory.Workflow,
-      description: 'Corrects LaTeX.',
-    };
-    mocks.getVisibleAgents.mockImplementation((category: AgentCategory) =>
-      category === AgentCategory.Workflow ? [visibleWorkflowAgent] : [],
-    );
-    mocks.getAgentsByCategory.mockImplementation((category: AgentCategory) =>
-      category === AgentCategory.Workflow
-        ? [visibleWorkflowAgent, hiddenWorkflowAgent]
-        : [],
-    );
+    stubCatalog({
+      [AgentCategory.Workflow]: {
+        visible: [POLISH_AGENT],
+        all: [POLISH_AGENT, CORRECT_AGENT],
+      },
+    });
     const { listAgents } = await import('@cli/commands/agents');
 
     const exitCode = await listAgents(cliContext(), {
@@ -331,8 +294,8 @@ describe('CLI agents command', () => {
     expect(mocks.emitCliResult).toHaveBeenCalledWith(
       expect.anything(),
       {
-        json: [visibleWorkflowAgent],
-        ndjson: [{ kind: 'agent', agent: visibleWorkflowAgent }],
+        json: [POLISH_AGENT],
+        ndjson: [{ kind: 'agent', agent: POLISH_AGENT }],
         text: 'workflow\tpolish\tPolishes prose.',
       },
       { paged: true },
@@ -344,23 +307,14 @@ describe('CLI agents command', () => {
 
   it('lists the full catalog with --all semantics', async () => {
     const workflowAgent = {
-      name: 'correct',
-      source: 'builtInWorkflow',
-      path: '/tmp/resources/agents/correct.yaml',
-      category: AgentCategory.Workflow,
+      ...CORRECT_AGENT,
       description: 'Fixes typos.',
       rounds: 1,
     };
-    const toolUseAgent = {
-      name: 'chat',
-      source: 'builtInToolUse',
-      path: '/tmp/resources/tool_use_agents/chat.yaml',
-      category: AgentCategory.ToolUse,
-      description: 'Interactive assistant.',
-    };
-    mocks.getAgentsByCategory.mockImplementation((category: AgentCategory) =>
-      category === AgentCategory.Workflow ? [workflowAgent] : [toolUseAgent],
-    );
+    stubCatalog({
+      [AgentCategory.Workflow]: { all: [workflowAgent] },
+      [AgentCategory.ToolUse]: { all: [CHAT_AGENT] },
+    });
     const { listAgents } = await import('@cli/commands/agents');
 
     const exitCode = await listAgents(cliContext(), { includeHidden: true });
@@ -372,10 +326,10 @@ describe('CLI agents command', () => {
     expect(mocks.emitCliResult).toHaveBeenCalledWith(
       expect.anything(),
       {
-        json: [workflowAgent, toolUseAgent],
+        json: [workflowAgent, CHAT_AGENT],
         ndjson: [
           { kind: 'agent', agent: workflowAgent },
-          { kind: 'agent', agent: toolUseAgent },
+          { kind: 'agent', agent: CHAT_AGENT },
         ],
         text: [
           'workflow\tcorrect\tFixes typos.',
@@ -387,14 +341,7 @@ describe('CLI agents command', () => {
   });
 
   it('uses the CLI agent resolver for agent details', async () => {
-    const localAgent = {
-      name: 'lean',
-      source: 'builtInToolUse',
-      path: '/tmp/resources/tool_use_agents/lean.yaml',
-      category: AgentCategory.ToolUse,
-      description: 'Lean 4 proof assistant.',
-      tools: ['lean_diagnostics'],
-    };
+    const localAgent = { ...LEAN_AGENT, tools: ['lean_diagnostics'] };
     mocks.resolveCliAgent.mockResolvedValue(localAgent);
     const { showAgent } = await import('@cli/commands/agents');
 
@@ -412,14 +359,7 @@ describe('CLI agents command', () => {
   });
 
   it('renders workflow round counts in agent details', async () => {
-    const workflowAgent = {
-      name: 'polish',
-      source: 'builtInWorkflow',
-      path: '/tmp/resources/agents/polish.yaml',
-      category: AgentCategory.Workflow,
-      description: 'Polishes prose.',
-      rounds: 2,
-    };
+    const workflowAgent = { ...POLISH_AGENT, rounds: 2 };
     mocks.resolveCliAgent.mockResolvedValue(workflowAgent);
     const { showAgent } = await import('@cli/commands/agents');
 

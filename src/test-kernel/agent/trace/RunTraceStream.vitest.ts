@@ -6,9 +6,13 @@ import {
   startToolUseCard,
   type AgentTrace,
 } from '@agent/trace';
-import { MESSAGE_TYPES } from '@shared/schemas';
+import { MESSAGE_TYPES, type StreamLogEntry } from '@shared/schemas';
 import { createRunTrace, StreamLogStore } from '@transcript';
 import type { RunTraceFlushEntry } from '@transcript/runTrace';
+
+function streamEntries(store: StreamLogStore): StreamLogEntry[] {
+  return store.get('stream')?.getRange(0) ?? [];
+}
 
 /** Run against a fresh, test-local store. */
 function withStore(
@@ -38,31 +42,31 @@ describe('AgentTrace stream output', () => {
       const stream = logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
 
       stream.append('a');
-      let entries = store.get('stream')?.getRange(0) ?? [];
+      let entries = streamEntries(store);
       expect(entries).toHaveLength(1);
       expect(entries[0]?.text).toBe('a');
 
       stream.append('b');
       stream.append('c');
-      entries = store.get('stream')?.getRange(0) ?? [];
+      entries = streamEntries(store);
       expect(entries[0]?.text).toBe('a');
 
       vi.advanceTimersByTime(49);
-      entries = store.get('stream')?.getRange(0) ?? [];
+      entries = streamEntries(store);
       expect(entries[0]?.text).toBe('a');
 
       vi.advanceTimersByTime(1);
-      entries = store.get('stream')?.getRange(0) ?? [];
+      entries = streamEntries(store);
       expect(entries[0]?.text).toBe('abc');
 
       stream.append('d');
-      expect((store.get('stream')?.getRange(0) ?? [])[0]?.text).toBe('abc');
+      expect(streamEntries(store)[0]?.text).toBe('abc');
 
       expect(stream.finalize()).toBe('abcd');
-      expect((store.get('stream')?.getRange(0) ?? [])[0]?.text).toBe('abcd');
+      expect(streamEntries(store)[0]?.text).toBe('abcd');
 
       vi.runOnlyPendingTimers();
-      expect((store.get('stream')?.getRange(0) ?? [])[0]?.text).toBe('abcd');
+      expect(streamEntries(store)[0]?.text).toBe('abcd');
     });
   });
 
@@ -74,10 +78,10 @@ describe('AgentTrace stream output', () => {
 
       stream.append('a');
       stream.append('b');
-      expect((store.get('stream')?.getRange(0) ?? [])[0]?.text).toBe('a');
+      expect(streamEntries(store)[0]?.text).toBe('a');
 
       flushPending();
-      expect((store.get('stream')?.getRange(0) ?? [])[0]?.text).toBe('ab');
+      expect(streamEntries(store)[0]?.text).toBe('ab');
       expect(vi.getTimerCount()).toBe(0);
 
       expect(stream.finalize()).toBe('ab');
@@ -91,14 +95,14 @@ describe('AgentTrace stream output', () => {
       // The running entry exists immediately — the CLI keys its "model is
       // thinking" indicator off it, and hidden reasoning may never emit a
       // first chunk.
-      let entries = store.get('stream')?.getRange(0) ?? [];
+      let entries = streamEntries(store);
       expect(entries).toHaveLength(1);
       expect(entries[0]?.messageType).toBe(MESSAGE_TYPES.THINKING);
       expect(entries[0]?.text).toBe('');
       expect(entries[0]?.data).toEqual({ status: 'running' });
 
       thinking.finalize();
-      entries = store.get('stream')?.getRange(0) ?? [];
+      entries = streamEntries(store);
       expect(entries).toHaveLength(1);
       expect(entries[0]?.data).toEqual({ status: 'completed' });
     });
@@ -115,13 +119,13 @@ describe('AgentTrace stream output', () => {
       thinking.append('reasoning delta');
       flushPending();
 
-      const entries = store.get('stream')?.getRange(0) ?? [];
+      const entries = streamEntries(store);
       expect(entries).toHaveLength(1);
       expect(entries[0]?.messageType).toBe(MESSAGE_TYPES.THINKING);
       expect(entries[0]?.text).toBe('reasoning delta');
 
       expect(thinking.finalize()).toBe('reasoning delta');
-      expect((store.get('stream')?.getRange(0) ?? [])[0]?.data).toEqual({
+      expect(streamEntries(store)[0]?.data).toEqual({
         status: 'completed',
       });
     });
@@ -147,7 +151,7 @@ describe('AgentTrace stream output', () => {
       // Mirrors providers that only return reasoning in the final response.
       expect(thinking.finalize('final reasoning')).toBe('final reasoning');
 
-      const entries = store.get('stream')?.getRange(0) ?? [];
+      const entries = streamEntries(store);
       expect(entries).toHaveLength(1);
       expect(entries[0]?.text).toBe('final reasoning');
       expect(entries[0]?.data).toEqual({ status: 'completed' });
@@ -167,7 +171,7 @@ describe('AgentTrace stream output', () => {
 
       output.append('hidden partial output');
 
-      let entries = store.get('stream')?.getRange(0) ?? [];
+      let entries = streamEntries(store);
       expect(entries).toHaveLength(1);
       expect(entries[0]?.messageType).toBe(MESSAGE_TYPES.MODEL_RESPONSE);
       expect(entries[0]?.text).toBe('');
@@ -175,7 +179,7 @@ describe('AgentTrace stream output', () => {
 
       // finalize returns the locally buffered text but never publishes it.
       expect(output.finalize('full output')).toBe('full output');
-      entries = store.get('stream')?.getRange(0) ?? [];
+      entries = streamEntries(store);
       expect(entries[0]?.text).toBe('');
       expect(entries[0]?.data).toEqual({ status: 'completed' });
     });
@@ -213,7 +217,7 @@ describe('tool-use card groupId resolution', () => {
         status: 'completed',
       });
 
-      const entries = store.get('stream')?.getRange(0) ?? [];
+      const entries = streamEntries(store);
       const toolEntry = entries.find((e) => e.id === ref.logId);
 
       expect(toolEntry?.data).toMatchObject({
@@ -244,7 +248,7 @@ describe('tool-use card groupId resolution', () => {
       output: 'ok',
     });
 
-    const entries = store.get('stream')?.getRange(0) ?? [];
+    const entries = streamEntries(store);
     const toolEntry = entries.find((e) => e.id === ref.logId);
     expect(toolEntry?.groupId).toBe(ref.groupId);
   });

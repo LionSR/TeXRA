@@ -27,11 +27,6 @@ export interface SkillActivation {
   readonly activationPrompt: string;
 }
 
-function formatSkillDescriptionForTui(skill: SourcedSkill): string {
-  const record = skillListRecord(skill);
-  return `${record.sourceLabel} · ${record.description}`;
-}
-
 export function formatSkillActivationPrompt(skill: SourcedSkill): string {
   const activationInstruction = [
     `The user selected the ${escapeText(skill.skill.name)} skill.`,
@@ -46,37 +41,31 @@ export function formatSkillActivationPrompt(skill: SourcedSkill): string {
   ].join('\n');
 }
 
-function skillActivationForTui(skill: SourcedSkill): SkillActivation {
-  const record = skillListRecord(skill);
-  return {
-    name: record.name,
-    activationPrompt: formatSkillActivationPrompt(skill),
-  };
-}
-
 export function skillSelectItemsForTui(
   skills: readonly SourcedSkill[],
 ): SelectItem<SkillActivation>[] {
   return skills.map((skill) => {
     const record = skillListRecord(skill);
     return {
-      value: skillActivationForTui(skill),
+      value: {
+        name: record.name,
+        activationPrompt: formatSkillActivationPrompt(skill),
+      },
       label: record.name,
-      description: formatSkillDescriptionForTui(skill),
+      description: `${record.sourceLabel} · ${record.description}`,
     };
   });
-}
-
-function skillImportIssueSummary(issueCount: number): string | undefined {
-  if (issueCount === 0) return undefined;
-  return formatResultCount(issueCount, 'import issue');
 }
 
 function skillIssueSummaryDetail(
   result: DiscoverSkillSourcesResult,
 ): React.JSX.Element | undefined {
-  const summary = skillImportIssueSummary(result.errors.length);
-  return summary ? <Text dimColor>{summary}</Text> : undefined;
+  if (result.errors.length === 0) return undefined;
+  return (
+    <Text dimColor>
+      {formatResultCount(result.errors.length, 'import issue')}
+    </Text>
+  );
 }
 
 export function SkillsListForm(props: SkillsListFormProps): React.JSX.Element {

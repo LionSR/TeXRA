@@ -775,20 +775,15 @@ export class PRPollingSource extends PollingSourceBase<
     } catch (err) {
       if (err instanceof AnnotationFetchBudgetExhaustedError) return false;
       if (err instanceof GitHubRateLimitError) throw err;
-      if (err instanceof GitHubPermanentError) {
+      if (
+        err instanceof GitHubPermanentError ||
+        err instanceof GitHubAuthError
+      ) {
+        const reason =
+          err instanceof GitHubAuthError ? 'forbidden' : 'unavailable';
         this.logger.warn(
-          `Annotations for check ${run.id} unavailable; dropping.`,
+          `Annotations for check ${run.id} ${reason}; dropping.`,
           { data: err },
-        );
-        this.removePendingAnnotationRun(state, run.id);
-        return true;
-      }
-      if (err instanceof GitHubAuthError) {
-        this.logger.warn(
-          `Annotations for check ${run.id} forbidden; dropping.`,
-          {
-            data: err,
-          },
         );
         this.removePendingAnnotationRun(state, run.id);
         return true;

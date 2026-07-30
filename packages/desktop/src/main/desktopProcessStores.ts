@@ -50,10 +50,11 @@ export async function initializeDesktopProcessStores(options: {
     }
   }
 
-  for (const streamId of legacyImport?.claims ?? []) {
+  const claims = legacyImport?.claims ?? [];
+  for (const streamId of claims) {
     transcripts.ensureStream(streamId);
   }
-  if ((legacyImport?.claims.length ?? 0) > 0) {
+  if (claims.length > 0) {
     await transcripts.flush();
   }
 
@@ -73,7 +74,7 @@ export async function initializeDesktopProcessStores(options: {
   await stores.sweepOrphanedStreams(new Set(canonicalStreamIds));
   if (legacyImport) {
     try {
-      await legacyImport.commit(legacyImport.claims);
+      await legacyImport.commit(claims);
     } catch (error) {
       logger.warn(
         'Retaining legacy desktop stream state after cleanup failed',

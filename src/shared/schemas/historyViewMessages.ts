@@ -63,43 +63,46 @@ export const UpdateHistoryMessageSchema = z.object({
 });
 export type UpdateHistoryMessage = z.infer<typeof UpdateHistoryMessageSchema>;
 
-export const HistoryClearedMessageSchema = z.object({
-  command: z.literal(HISTORY_VIEW_COMMANDS.HISTORY_CLEARED),
-});
+export const HistoryClearedMessageSchema = commandOnly(
+  HISTORY_VIEW_COMMANDS.HISTORY_CLEARED,
+);
 
 // ============================================================
 // Inbound message schemas (frontend → backend)
 // ============================================================
 
-/** History ID field for operations on specific items */
-const HistoryIdMessageSchema = z.object({
-  historyId: z.string().min(1),
-});
+/** Schema with `command` + the history ID of the item being operated on. */
+function withHistoryId<T extends string>(command: T) {
+  return z.object({
+    command: z.literal(command),
+    historyId: z.string().min(1),
+  });
+}
 
-export const RerunAgentMessageSchema = HistoryIdMessageSchema.extend({
-  command: z.literal(HISTORY_VIEW_COMMANDS.RERUN_AGENT),
-});
+export const RerunAgentMessageSchema = withHistoryId(
+  HISTORY_VIEW_COMMANDS.RERUN_AGENT,
+);
 
-export const RestoreAgentMessageSchema = HistoryIdMessageSchema.extend({
-  command: z.literal(HISTORY_VIEW_COMMANDS.RESTORE_AGENT),
-});
+export const RestoreAgentMessageSchema = withHistoryId(
+  HISTORY_VIEW_COMMANDS.RESTORE_AGENT,
+);
 
-export const DeleteAgentMessageSchema = HistoryIdMessageSchema.extend({
-  command: z.literal(HISTORY_VIEW_COMMANDS.DELETE_AGENT),
-});
+export const DeleteAgentMessageSchema = withHistoryId(
+  HISTORY_VIEW_COMMANDS.DELETE_AGENT,
+);
 
 export const ClearHistoryMessageSchema = commandOnly(
   HISTORY_VIEW_COMMANDS.CLEAR_HISTORY,
 );
 
-export const ExportChatMdMessageSchema = HistoryIdMessageSchema.extend({
-  command: z.literal(HISTORY_VIEW_COMMANDS.EXPORT_CHAT_MD),
-});
+export const ExportChatMdMessageSchema = withHistoryId(
+  HISTORY_VIEW_COMMANDS.EXPORT_CHAT_MD,
+);
 
-export const ExportChatTexMessageSchema = HistoryIdMessageSchema.extend({
-  command: z.literal(HISTORY_VIEW_COMMANDS.EXPORT_CHAT_TEX),
-});
+export const ExportChatTexMessageSchema = withHistoryId(
+  HISTORY_VIEW_COMMANDS.EXPORT_CHAT_TEX,
+);
 
-export const ExportChatHtmlMessageSchema = HistoryIdMessageSchema.extend({
-  command: z.literal(HISTORY_VIEW_COMMANDS.EXPORT_CHAT_HTML),
-});
+export const ExportChatHtmlMessageSchema = withHistoryId(
+  HISTORY_VIEW_COMMANDS.EXPORT_CHAT_HTML,
+);

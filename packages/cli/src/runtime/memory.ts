@@ -13,14 +13,9 @@ import {
 export const CLI_MEMORY_LIST_LIMIT = 50;
 const MEMORY_DESCRIPTION_MAX = 72;
 
-function parseIsoTimestamp(value: string): number | undefined {
-  const timestamp = Date.parse(value);
-  return Number.isNaN(timestamp) ? undefined : timestamp;
-}
-
 function formatModifiedDate(value: string): string {
-  const timestamp = parseIsoTimestamp(value);
-  if (timestamp == null) return 'modified: unknown';
+  const timestamp = Date.parse(value);
+  if (Number.isNaN(timestamp)) return 'modified: unknown';
   return `modified: ${formatLocaleTimestamp(timestamp)}`;
 }
 

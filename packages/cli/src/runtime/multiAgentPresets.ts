@@ -20,6 +20,7 @@ import {
 import { platform } from '@platform/platform';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { filterNotNullish } from '@utils/core';
 import { formatResultCount, pluralize } from '@utils/text/stringUtils';
 
 export type CliMultiAgentPreset = TeamPreset;
@@ -65,10 +66,6 @@ const MULTI_AGENT_LAUNCHER_LOGIN_HINT =
   'Researcher Access sign-in may unlock more remote team agents.';
 const MULTI_AGENT_LAUNCHER_NO_TEAM_ROOT_REASON = 'no team root';
 
-function formatCliMultiAgentShowCommand(preset: string): string {
-  return `texra multi-agent show ${preset}`;
-}
-
 export function readCliMultiAgentPresets(): CliMultiAgentPreset[] {
   const customRaw = platform().workspaceState.get<unknown>(
     WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
@@ -98,7 +95,7 @@ function cliMultiAgentPresetAvailabilityParts(
       availability.workflow,
     ),
     formatCliMultiAgentPresetAvailabilityPart('tool-use', availability.toolUse),
-  ].filter((part): part is string => part != null);
+  ].filter(filterNotNullish);
   if (availability.status !== 'available') parts.push(availability.status);
   return parts;
 }
@@ -193,7 +190,7 @@ export function formatCliMultiAgentTeamLaunchBlockMessage(
   }
   const parts = [
     `Multi-agent preset "${preset}" cannot start as a team: ${reason}.`,
-    `Run \`${formatCliMultiAgentShowCommand(plan.preset.id)}\` to see missing agents.`,
+    `Run \`texra multi-agent show ${plan.preset.id}\` to see missing agents.`,
     options.followUpAdvice,
   ];
   return parts.filter((part): part is string => !!part).join(' ');
@@ -251,7 +248,7 @@ export function formatCliMultiAgentPresetLauncherHints(
     cliMultiAgentPresetShouldIncludeLoginHint(plan, options)
       ? MULTI_AGENT_LAUNCHER_LOGIN_HINT
       : undefined,
-  ].filter((hint): hint is string => hint !== undefined);
+  ].filter(filterNotNullish);
 }
 
 export const cliMultiAgentPresetAvailability = teamAvailability;
@@ -286,7 +283,7 @@ function formatPresetAvailabilityForLauncher(
     formatPresetAgentCountForLauncher('tool-use', availability.toolUse, {
       countStyle,
     }),
-  ].filter((part): part is string => part != null);
+  ].filter(filterNotNullish);
 
   if (parts.length > 0) details.push(parts.join('; '));
   return details.length > 0 ? details.join('; ') : undefined;
@@ -308,14 +305,11 @@ function formatPresetAgentCountForLauncher(
     options.countStyle === 'total'
       ? String(availability.total)
       : `${availability.available}/${availability.total}`;
-  return `${count} ${launcherAgentKindLabel(kind, availability.total)}`;
-}
-
-function launcherAgentKindLabel(
-  kind: 'workflow' | 'tool-use',
-  count: number,
-): string {
-  return pluralize(count, kind === 'tool-use' ? 'tool' : 'workflow');
+  const label = pluralize(
+    availability.total,
+    kind === 'tool-use' ? 'tool' : 'workflow',
+  );
+  return `${count} ${label}`;
 }
 
 function availablePresetAgents(
@@ -345,7 +339,7 @@ function cliMultiAgentPresetListHint(
     )
       ? MULTI_AGENT_LOGIN_HINT
       : undefined,
-  ].filter((hint): hint is string => hint !== undefined);
+  ].filter(filterNotNullish);
   return hints.length > 0 ? hints.join('\n') : undefined;
 }
 
@@ -353,9 +347,9 @@ function cliMultiAgentPresetShouldIncludeLoginHint(
   plan: CliMultiAgentPresetRunPlan,
   options: CliMultiAgentPresetFormatOptions,
 ): boolean {
-  return (options.includeLoginHint ?? true) && builtInPresetHasGaps(plan);
-}
-
-function builtInPresetHasGaps(plan: CliMultiAgentPresetRunPlan): boolean {
-  return plan.preset.source === 'built-in' && cliMultiAgentPlanHasGaps(plan);
+  return (
+    (options.includeLoginHint ?? true) &&
+    plan.preset.source === 'built-in' &&
+    cliMultiAgentPlanHasGaps(plan)
+  );
 }

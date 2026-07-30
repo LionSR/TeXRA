@@ -71,13 +71,11 @@ export const PROVIDER_KEY_REDACTION_RULES = {
 } as const satisfies Record<ApiKeyProviderId, ProviderKeyRedactionRule>;
 
 const PROVIDER_KEY_PATTERNS = [
-  ...new Map(
-    Object.values(PROVIDER_KEY_REDACTION_RULES)
-      .flatMap((rule) => rule.patterns)
-      .map(
-        (pattern) => [`${pattern.source}/${pattern.flags}`, pattern] as const,
-      ),
-  ).values(),
+  ...new Set(
+    Object.values(PROVIDER_KEY_REDACTION_RULES).flatMap(
+      (rule) => rule.patterns,
+    ),
+  ),
 ];
 
 export interface LogRedactionOptions {

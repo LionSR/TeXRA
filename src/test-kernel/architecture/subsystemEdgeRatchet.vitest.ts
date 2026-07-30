@@ -148,41 +148,56 @@ function importEqualsSpecifier(
   node: ts.ImportEqualsDeclaration,
 ): string | null {
   const ref = node.moduleReference;
-  if (
-    ts.isExternalModuleReference(ref) &&
-    ref.expression != null &&
-    ts.isStringLiteralLike(ref.expression)
-  ) {
-    return ref.expression.text;
-  }
-  return null;
+  return ts.isExternalModuleReference(ref) && ref.expression != null
+    ? stringLiteralText(ref.expression)
+    : null;
 }
 
 function importTypeSpecifier(node: ts.ImportTypeNode): string | null {
   const { argument } = node;
-  if (
-    ts.isLiteralTypeNode(argument) &&
-    ts.isStringLiteralLike(argument.literal)
-  ) {
-    return argument.literal.text;
-  }
-  return null;
+  return ts.isLiteralTypeNode(argument)
+    ? stringLiteralText(argument.literal)
+    : null;
 }
 
 function callExpressionSpecifier(node: ts.CallExpression): string | null {
   const [argument] = node.arguments;
-  if (
-    node.arguments.length !== 1 ||
-    argument == null ||
-    !ts.isStringLiteralLike(argument)
-  ) {
+  if (node.arguments.length !== 1 || argument == null) {
     return null;
   }
-  if (node.expression.kind === ts.SyntaxKind.ImportKeyword) {
-    return argument.text;
+  const loadsModule =
+    node.expression.kind === ts.SyntaxKind.ImportKeyword ||
+    (ts.isIdentifier(node.expression) && node.expression.text === 'require');
+  return loadsModule ? stringLiteralText(argument) : null;
+}
+
+/** The module a node loads, together with the edge kind it implies. */
+function moduleReference(
+  node: ts.Node,
+): { specifier: string | null; kind: EdgeKind } | null {
+  if (ts.isImportDeclaration(node)) {
+    return {
+      specifier: stringLiteralText(node.moduleSpecifier),
+      kind: importDeclarationKind(node),
+    };
   }
-  if (ts.isIdentifier(node.expression) && node.expression.text === 'require') {
-    return argument.text;
+  if (ts.isExportDeclaration(node) && node.moduleSpecifier != null) {
+    return {
+      specifier: stringLiteralText(node.moduleSpecifier),
+      kind: exportDeclarationKind(node),
+    };
+  }
+  if (ts.isImportEqualsDeclaration(node)) {
+    return {
+      specifier: importEqualsSpecifier(node),
+      kind: node.isTypeOnly ? 'type-only' : 'value',
+    };
+  }
+  if (ts.isImportTypeNode(node)) {
+    return { specifier: importTypeSpecifier(node), kind: 'type-only' };
+  }
+  if (ts.isCallExpression(node)) {
+    return { specifier: callExpressionSpecifier(node), kind: 'value' };
   }
   return null;
 }
@@ -212,46 +227,13 @@ function visitImports(
   edges: Map<string, EdgeKind>,
 ): void {
   const visit = (node: ts.Node): void => {
-    if (ts.isImportDeclaration(node)) {
+    const reference = moduleReference(node);
+    if (reference?.specifier != null) {
       addEdge(
         edges,
         from,
-        resolveImportedSubsystem(
-          file,
-          stringLiteralText(node.moduleSpecifier) ?? '',
-        ),
-        importDeclarationKind(node),
-      );
-    } else if (ts.isExportDeclaration(node) && node.moduleSpecifier != null) {
-      addEdge(
-        edges,
-        from,
-        resolveImportedSubsystem(
-          file,
-          stringLiteralText(node.moduleSpecifier) ?? '',
-        ),
-        exportDeclarationKind(node),
-      );
-    } else if (ts.isImportEqualsDeclaration(node)) {
-      addEdge(
-        edges,
-        from,
-        resolveImportedSubsystem(file, importEqualsSpecifier(node) ?? ''),
-        node.isTypeOnly ? 'type-only' : 'value',
-      );
-    } else if (ts.isImportTypeNode(node)) {
-      addEdge(
-        edges,
-        from,
-        resolveImportedSubsystem(file, importTypeSpecifier(node) ?? ''),
-        'type-only',
-      );
-    } else if (ts.isCallExpression(node)) {
-      addEdge(
-        edges,
-        from,
-        resolveImportedSubsystem(file, callExpressionSpecifier(node) ?? ''),
-        'value',
+        resolveImportedSubsystem(file, reference.specifier),
+        reference.kind,
       );
     }
 
@@ -259,6 +241,14 @@ function visitImports(
   };
 
   visit(sourceFile);
+}
+
+function compareEdges(a: SubsystemEdge, b: SubsystemEdge): number {
+  return (
+    a.from.localeCompare(b.from) ||
+    a.to.localeCompare(b.to) ||
+    a.kind.localeCompare(b.kind)
+  );
 }
 
 function collectSubsystemEdges(): SubsystemEdge[] {
@@ -288,12 +278,7 @@ function collectSubsystemEdges(): SubsystemEdge[] {
       }
       return { from, to, kind };
     })
-    .toSorted(
-      (a, b) =>
-        a.from.localeCompare(b.from) ||
-        a.to.localeCompare(b.to) ||
-        a.kind.localeCompare(b.kind),
-    );
+    .toSorted(compareEdges);
 }
 
 function readBaseline(): EdgeBaseline {
@@ -358,12 +343,7 @@ describe('LAY-1 subsystem edge ratchet', () => {
 
   it('keeps the baseline non-empty and ordered', () => {
     const baseline = readBaseline();
-    const sortedEdges = baseline.edges.toSorted(
-      (a, b) =>
-        a.from.localeCompare(b.from) ||
-        a.to.localeCompare(b.to) ||
-        a.kind.localeCompare(b.kind),
-    );
+    const sortedEdges = baseline.edges.toSorted(compareEdges);
 
     expect(baseline.edges.length).toBeGreaterThan(90);
     expect(baseline.edges).toEqual(sortedEdges);

@@ -168,8 +168,7 @@ export class MemoryItem extends LitElement {
 
   protected override willUpdate(changedProperties: PropertyValues<this>): void {
     if (!changedProperties.has('item')) return;
-    const previous = changedProperties.get('item') as
-      MemoryViewItem | undefined;
+    const previous = changedProperties.get('item');
     if (previous?.storagePath === this.item?.storagePath) {
       if (previous !== this.item && this.item?.preview === undefined) {
         this.requestedPreviewFor = null;

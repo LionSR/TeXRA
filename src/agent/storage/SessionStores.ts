@@ -18,17 +18,21 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'SessionStores';
 
+type DeleteExecutionFn = (
+  executionId: ExecutionId,
+  options?: DeleteExecutionOptions,
+) => Promise<DeleteExecutionResult>;
+
+interface GoalEntryStore {
+  forget(stream: StreamTabId): Promise<void>;
+  forgetMany(streams: readonly StreamTabId[]): Promise<void>;
+}
+
 export interface SessionStoresOptions {
   streamLogs: StreamLogStore;
   snapshots: StreamSnapshotStore;
-  deleteExecution?: (
-    executionId: ExecutionId,
-    options?: DeleteExecutionOptions,
-  ) => Promise<DeleteExecutionResult>;
-  goalEntries?: {
-    forget(stream: StreamTabId): Promise<void>;
-    forgetMany(streams: readonly StreamTabId[]): Promise<void>;
-  };
+  deleteExecution?: DeleteExecutionFn;
+  goalEntries?: GoalEntryStore;
   /** Runs after a canonical transcript stream is committed as deleted. */
   onCanonicalStreamDeleted?: (stream: StreamTabId) => void | Promise<void>;
 }
@@ -57,16 +61,8 @@ export type DeleteStreamResult = 'deleted' | 'active' | 'failed';
 export class SessionStores {
   private readonly streamLogs: StreamLogStore;
   private readonly snapshots: StreamSnapshotStore;
-  private readonly deleteExecution: (
-    executionId: ExecutionId,
-    options?: DeleteExecutionOptions,
-  ) => Promise<DeleteExecutionResult>;
-  private readonly goalEntries:
-    | {
-        forget(stream: StreamTabId): Promise<void>;
-        forgetMany(streams: readonly StreamTabId[]): Promise<void>;
-      }
-    | undefined;
+  private readonly deleteExecution: DeleteExecutionFn;
+  private readonly goalEntries: GoalEntryStore | undefined;
   private readonly onCanonicalStreamDeleted:
     ((stream: StreamTabId) => void | Promise<void>) | undefined;
   private readonly pendingStreamDeletions = new Map<
@@ -175,6 +171,21 @@ export class SessionStores {
         { data: error },
       );
     }
+  }
+
+  /** Notify for streams that had a canonical transcript and were not retained. */
+  private async notifyCanonicalDeletions(
+    streams: readonly StreamTabId[],
+    canonicalStreams: ReadonlySet<StreamTabId>,
+    retained?: ReadonlySet<StreamTabId>,
+  ): Promise<void> {
+    await Promise.all(
+      streams
+        .filter(
+          (stream) => canonicalStreams.has(stream) && !retained?.has(stream),
+        )
+        .map((stream) => this.notifyDeleted(stream)),
+    );
   }
 
   private async deleteStreamOnce(
@@ -333,11 +344,7 @@ export class SessionStores {
           if (result.status === 'active') {
             for (const stream of streams) active.add(stream);
           } else {
-            await Promise.all(
-              streams
-                .filter((stream) => canonicalStreams.has(stream))
-                .map((stream) => this.notifyDeleted(stream)),
-            );
+            await this.notifyCanonicalDeletions(streams, canonicalStreams);
           }
         } catch (error) {
           if (adjacentCleanupCompleted) {
@@ -346,11 +353,7 @@ export class SessionStores {
               `Streams for execution ${executionId} were deleted, but execution cleanup was incomplete: ${toErrorMessage(error)}`,
               { data: error },
             );
-            await Promise.all(
-              streams
-                .filter((stream) => canonicalStreams.has(stream))
-                .map((stream) => this.notifyDeleted(stream)),
-            );
+            await this.notifyCanonicalDeletions(streams, canonicalStreams);
             return;
           }
           logger.warn(
@@ -364,14 +367,10 @@ export class SessionStores {
               : streams.filter((stream) => this.streamLogs.has(stream));
           for (const stream of retainedStreams) failed.add(stream);
           if (failedAdjacentStreams.size > 0) {
-            await Promise.all(
-              streams
-                .filter(
-                  (stream) =>
-                    canonicalStreams.has(stream) &&
-                    !failedAdjacentStreams.has(stream),
-                )
-                .map((stream) => this.notifyDeleted(stream)),
+            await this.notifyCanonicalDeletions(
+              streams,
+              canonicalStreams,
+              failedAdjacentStreams,
             );
           }
         }

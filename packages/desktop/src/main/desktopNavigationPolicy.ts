@@ -1,6 +1,8 @@
 import { shell, type WebContents } from 'electron';
 import { tryParseUrl } from '@utils/core';
 
+import { createDesktopErrorReporter } from './desktopIpcTypes.js';
+
 const ALLOWED_HTTPS_HOSTS = new Set<string>([
   'github.com',
   'www.github.com',
@@ -36,7 +38,7 @@ export function installDesktopNavigationPolicy(
   webContents: WebContents,
   options: DesktopNavigationPolicyOptions = {},
 ): void {
-  const reportAsyncError = options.onAsyncError ?? defaultReportError;
+  const reportAsyncError = createDesktopErrorReporter(options.onAsyncError);
 
   webContents.setWindowOpenHandler(({ url }) => {
     routeOrDeny(url, reportAsyncError);
@@ -56,8 +58,4 @@ export function installDesktopNavigationPolicy(
   webContents.on('will-attach-webview', (event) => {
     event.preventDefault();
   });
-}
-
-function defaultReportError(error: unknown): void {
-  console.error(error);
 }

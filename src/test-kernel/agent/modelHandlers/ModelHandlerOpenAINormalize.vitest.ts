@@ -66,16 +66,13 @@ type NormalizingHandler =
   ModelHandlerDeepSeek | ModelHandlerKimi | ModelHandlerDashScope;
 
 async function runNormalize(handler: NormalizingHandler) {
-  const debugMessages: string[] = [];
   const debugLogs: Array<{ message: string; options: unknown }> = [];
   const infoMessages: string[] = [];
   const loggerStub = {
     ...noopTrace,
-    debugMessages,
     debugLogs,
     infoMessages,
     debug: (message: string, options?: unknown) => {
-      debugMessages.push(message);
       debugLogs.push({ message, options });
     },
     info: (message: string) => {

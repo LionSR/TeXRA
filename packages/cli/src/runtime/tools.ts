@@ -3,10 +3,7 @@ import {
   EXTERNAL_TOOL_DEFS,
   type ExternalToolDef,
 } from '@tools/externalToolDefs';
-import {
-  runExternalToolChecks,
-  type ExternalToolCheckResult,
-} from '@tools/toolAvailability';
+import { runExternalToolChecks } from '@tools/toolAvailability';
 import { getDisabledToolIds, setToolEnabled } from '@utils/config/constants';
 
 export interface CliToolStatusRecord {
@@ -43,12 +40,6 @@ function detectedFromStatus(status: string): boolean | null {
   return null;
 }
 
-function detectedForCheck(
-  check: ExternalToolCheckResult | undefined,
-): boolean | null {
-  return check?.detected ?? detectedFromStatus(check?.status ?? 'unknown');
-}
-
 function noteForTool(
   def: ExternalToolDef,
   detected: boolean | null,
@@ -69,7 +60,7 @@ export async function readCliToolStatuses(): Promise<CliToolStatusRecord[]> {
     const comingSoon = def.comingSoon === true;
     const toggleable = def.toggleable === true;
     const status = check?.status ?? (comingSoon ? 'coming-soon' : 'unknown');
-    const detected = detectedForCheck(check);
+    const detected = check?.detected ?? detectedFromStatus(status);
     return {
       id: def.id,
       name: def.name,

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
+import {
+  createSettingsAgentControllers,
+  type SettingsAgentControllers,
+} from '@controllers/settingsView/SettingsAgentControllerFactory';
 import type { StateStore } from '@platform/interfaces';
 import type { AgentCategory } from '@shared/schemas/agent';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -39,19 +42,25 @@ const agents = {
   ],
 } as const;
 
+function createControllers(
+  workspaceState: StateStore,
+): SettingsAgentControllers {
+  return createSettingsAgentControllers({
+    workspaceState,
+    globalState: memoryStore(),
+    getCustomAgentDirectory: async () => '/agents/custom',
+    getSourceDirectory: async () => undefined,
+    getAgents: (category: AgentCategory) => [...agents[category]],
+    getVisibleAgents: (category: AgentCategory) => [...agents[category]],
+  });
+}
+
 describe('createSettingsAgentControllers', () => {
   it('preserves a symbolic roster when an individual toggle is a no-op', async () => {
     const workspaceState = memoryStore({
       [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: { kind: 'all' },
     });
-    const controllers = createSettingsAgentControllers({
-      workspaceState,
-      globalState: memoryStore(),
-      getCustomAgentDirectory: async () => '/agents/custom',
-      getSourceDirectory: async () => undefined,
-      getAgents: (category: AgentCategory) => [...agents[category]],
-      getVisibleAgents: (category: AgentCategory) => [...agents[category]],
-    });
+    const controllers = createControllers(workspaceState);
 
     await controllers.visibility.setAgentEnabled({
       category: 'toolUse',
@@ -67,14 +76,7 @@ describe('createSettingsAgentControllers', () => {
 
   it('writes visibility changes through the canonical roster controller', async () => {
     const workspaceState = memoryStore();
-    const controllers = createSettingsAgentControllers({
-      workspaceState,
-      globalState: memoryStore(),
-      getCustomAgentDirectory: async () => '/agents/custom',
-      getSourceDirectory: async () => undefined,
-      getAgents: (category: AgentCategory) => [...agents[category]],
-      getVisibleAgents: (category: AgentCategory) => [...agents[category]],
-    });
+    const controllers = createControllers(workspaceState);
 
     await controllers.state.setEnabledAgentKeys('toolUse', [
       'builtInToolUse:assistant',
@@ -97,14 +99,7 @@ describe('createSettingsAgentControllers', () => {
         toolUseAgentKeys: ['builtInToolUse:assistant', 'future-assistant'],
       },
     });
-    const controllers = createSettingsAgentControllers({
-      workspaceState,
-      globalState: memoryStore(),
-      getCustomAgentDirectory: async () => '/agents/custom',
-      getSourceDirectory: async () => undefined,
-      getAgents: (category: AgentCategory) => [...agents[category]],
-      getVisibleAgents: (category: AgentCategory) => [...agents[category]],
-    });
+    const controllers = createControllers(workspaceState);
 
     await controllers.visibility.setAgentEnabled({
       category: 'toolUse',

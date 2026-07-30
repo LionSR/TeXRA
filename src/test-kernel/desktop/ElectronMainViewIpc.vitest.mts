@@ -1,6 +1,12 @@
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+// Local imports - shared host bridge
+import {
+  ELECTRON_WEBVIEW_MESSAGE_CHANNEL,
+  ELECTRON_WEBVIEW_PUSH_CHANNEL,
+} from '@desktop/hostBridgeChannels';
+
 // Local imports - webview command constants
 import {
   COMMON_COMMANDS,
@@ -77,11 +83,6 @@ interface MainViewIpcModule {
   };
 }
 
-interface HostBridgeModule {
-  ELECTRON_WEBVIEW_MESSAGE_CHANNEL: string;
-  ELECTRON_WEBVIEW_PUSH_CHANNEL: string;
-}
-
 async function loadDesktopMainViewIpcModule(electron: {
   ipcMain: {
     on(
@@ -99,16 +100,12 @@ async function loadDesktopMainViewIpcModule(electron: {
     on(event: 'updated', listener: () => void): void;
     off(event: 'updated', listener: () => void): void;
   };
-}): Promise<MainViewIpcModule & HostBridgeModule> {
+}): Promise<MainViewIpcModule> {
   vi.resetModules();
   vi.doMock('electron', () => electron);
-  const hostBridge = (await import(
-    moduleFileUrl(desktopSourcePath('hostBridgeChannels.ts'))
-  )) as HostBridgeModule;
-  const mainViewIpc = (await import(
+  return import(
     moduleFileUrl(desktopSourcePath('main', 'mainViewIpc.ts'))
-  )) as MainViewIpcModule;
-  return { ...mainViewIpc, ...hostBridge };
+  ) as Promise<MainViewIpcModule>;
 }
 
 function flushAsyncWork(): Promise<void> {
@@ -201,6 +198,60 @@ function createMainViewCommandCapabilities() {
   };
 }
 
+type RendererSend = { channel: string; message: unknown };
+
+function commandOf(message: unknown): string | undefined {
+  return (message as { command?: string }).command;
+}
+
+function pushedCommands(sends: RendererSend[]): Array<string | undefined> {
+  return sends
+    .filter(({ channel }) => channel === ELECTRON_WEBVIEW_PUSH_CHANNEL)
+    .map(({ message }) => commandOf(message));
+}
+
+function findPush(
+  sends: RendererSend[],
+  command: string,
+): RendererSend | undefined {
+  return sends.find(
+    ({ channel, message }) =>
+      channel === ELECTRON_WEBVIEW_PUSH_CHANNEL &&
+      commandOf(message) === command,
+  );
+}
+
+async function createMainViewHarness(
+  themeOptions: Parameters<typeof createNativeThemeMock>[0] = {},
+) {
+  let rendererListener: RendererListener | undefined;
+  const ipcMain = createIpcMainMock((listener) => {
+    rendererListener = listener;
+  });
+  const nativeTheme = createNativeThemeMock(themeOptions);
+  const { installDesktopMainViewIpc } = await loadDesktopMainViewIpcModule({
+    ipcMain,
+    nativeTheme,
+  });
+  const sends: RendererSend[] = [];
+  const closedListeners: Array<() => void> = [];
+  const { window, webContents } = createWindowMock(sends, (listener) => {
+    closedListeners.push(listener);
+  });
+  return {
+    installDesktopMainViewIpc,
+    ipcMain,
+    nativeTheme,
+    sends,
+    window,
+    closedListeners,
+    getRendererListener: () => rendererListener,
+    sendFromRenderer(message: unknown, sender: unknown = webContents) {
+      rendererListener?.({ sender }, message);
+    },
+  };
+}
+
 describe('desktop main-view IPC', () => {
   afterEach(() => {
     vi.doUnmock('electron');
@@ -212,23 +263,22 @@ describe('desktop main-view IPC', () => {
   });
 
   it('pushes theme and debug state over the fixed host bridge channel', async () => {
-    let rendererListener: RendererListener | undefined;
     let themeListener: (() => void) | undefined;
-    const ipcMain = createIpcMainMock((listener) => {
-      rendererListener = listener;
-    });
-    const nativeTheme = createNativeThemeMock({
+    const {
+      installDesktopMainViewIpc,
+      ipcMain,
+      nativeTheme,
+      sends,
+      window,
+      closedListeners,
+      getRendererListener,
+      sendFromRenderer,
+    } = await createMainViewHarness({
       shouldUseDarkColors: true,
       onUpdated: (listener) => {
         themeListener = listener;
       },
     });
-    const {
-      ELECTRON_WEBVIEW_MESSAGE_CHANNEL,
-      ELECTRON_WEBVIEW_PUSH_CHANNEL,
-      installDesktopMainViewIpc,
-    } = await loadDesktopMainViewIpcModule({ ipcMain, nativeTheme });
-    const sends: Array<{ channel: string; message: unknown }> = [];
     const fileSelection = {
       handleMessage: vi.fn(
         (message: { command: string }) =>
@@ -248,10 +298,6 @@ describe('desktop main-view IPC', () => {
       ),
     };
     const executeAgent = vi.fn(async (_message: unknown) => {});
-    const closedListeners: Array<() => void> = [];
-    const { window, webContents } = createWindowMock(sends, (listener) => {
-      closedListeners.push(listener);
-    });
 
     const capabilities = createMainViewCommandCapabilities();
     const ipc = installDesktopMainViewIpc(window, {
@@ -272,30 +318,27 @@ describe('desktop main-view IPC', () => {
 
     expect(ipcMain.on).toHaveBeenCalledWith(
       ELECTRON_WEBVIEW_MESSAGE_CHANNEL,
-      rendererListener,
+      getRendererListener(),
     );
-    rendererListener?.(
-      { sender: {} },
-      { command: MAIN_VIEW_COMMANDS.GET_THEME },
-    );
+    sendFromRenderer({ command: MAIN_VIEW_COMMANDS.GET_THEME }, {});
     expect(sends).toEqual([]);
 
-    rendererListener?.(
-      { sender: webContents },
-      { command: MAIN_VIEW_COMMANDS.WEBVIEW_READY, view: 'progress' },
-    );
+    sendFromRenderer({
+      command: MAIN_VIEW_COMMANDS.WEBVIEW_READY,
+      view: 'progress',
+    });
     expect(sends).toEqual([]);
 
-    rendererListener?.(
-      { sender: webContents },
-      { command: MAIN_VIEW_COMMANDS.WEBVIEW_READY, view: 'main' },
-    );
+    sendFromRenderer({
+      command: MAIN_VIEW_COMMANDS.WEBVIEW_READY,
+      view: 'main',
+    });
     // Filter to the theme/debug-mode pushes: WEBVIEW_READY(view:'main') is a
     // broadcast, so sibling handlers (e.g. main-view startup) also react.
     expect(
       sends.filter(({ message }) =>
         [COMMON_COMMANDS.THEME_SET, COMMON_COMMANDS.DEBUG_MODE_SET].includes(
-          (message as { command?: string }).command as never,
+          commandOf(message) as never,
         ),
       ),
     ).toEqual([
@@ -309,51 +352,39 @@ describe('desktop main-view IPC', () => {
       },
     ]);
 
-    rendererListener?.(
-      { sender: webContents },
-      { command: MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE },
-    );
+    sendFromRenderer({ command: MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE });
     expect(fileSelection.handleMessage).toHaveBeenCalledWith({
       command: MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE,
     });
 
-    rendererListener?.(
-      { sender: webContents },
-      {
-        command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
-        key: WorkspaceStateKey.GIT_AUTHOR_NAME,
-        value: 'TeXRA Bot',
-      },
-    );
+    sendFromRenderer({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
+      key: WorkspaceStateKey.GIT_AUTHOR_NAME,
+      value: 'TeXRA Bot',
+    });
     expect(settings.handleMessage).toHaveBeenCalledWith({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
       key: WorkspaceStateKey.GIT_AUTHOR_NAME,
       value: 'TeXRA Bot',
     });
 
-    rendererListener?.(
-      { sender: webContents },
-      { command: PROGRESS_VIEW_COMMANDS.SWITCH_STREAM, stream: 'run-1' },
-    );
+    sendFromRenderer({
+      command: PROGRESS_VIEW_COMMANDS.SWITCH_STREAM,
+      stream: 'run-1',
+    });
     expect(progress.handleMessage).toHaveBeenCalledWith({
       command: PROGRESS_VIEW_COMMANDS.SWITCH_STREAM,
       stream: 'run-1',
     });
 
     sends.length = 0;
-    rendererListener?.(
-      { sender: webContents },
-      { command: MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS },
-    );
+    sendFromRenderer({ command: MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS });
     expect(capabilities.shellActions.sendRecentCommits).toHaveBeenCalledOnce();
     expect(sends).toEqual([]);
 
     sends.length = 0;
     nativeTheme.shouldUseDarkColors = false;
-    rendererListener?.(
-      { sender: webContents },
-      { command: MAIN_VIEW_COMMANDS.GET_THEME },
-    );
+    sendFromRenderer({ command: MAIN_VIEW_COMMANDS.GET_THEME });
     expect(sends).toEqual([
       {
         channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
@@ -362,10 +393,7 @@ describe('desktop main-view IPC', () => {
     ]);
 
     sends.length = 0;
-    rendererListener?.(
-      { sender: webContents },
-      { command: MAIN_VIEW_COMMANDS.GET_DEBUG_MODE },
-    );
+    sendFromRenderer({ command: MAIN_VIEW_COMMANDS.GET_DEBUG_MODE });
     expect(sends).toEqual([
       {
         channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
@@ -374,39 +402,27 @@ describe('desktop main-view IPC', () => {
     ]);
 
     sends.length = 0;
-    rendererListener?.(
-      { sender: webContents },
-      { command: COMMON_COMMANDS.SWITCH_VIEW, view: 'progress' },
-    );
+    sendFromRenderer({
+      command: COMMON_COMMANDS.SWITCH_VIEW,
+      view: 'progress',
+    });
     expect(capabilities.shellActions.showRoute).toHaveBeenCalledWith(
       'progress',
     );
     expect(sends).toEqual([]);
 
     sends.length = 0;
-    rendererListener?.(
-      { sender: webContents },
-      { command: COMMON_COMMANDS.SWITCH_VIEW, view: 'dashboard' },
-    );
-    rendererListener?.(
-      { sender: webContents },
-      { command: MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS },
-    );
-    rendererListener?.(
-      { sender: webContents },
-      {
-        command: MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS,
-        sessionType: AgentCategory.ToolUse,
-      },
-    );
-    rendererListener?.(
-      { sender: webContents },
-      { command: MAIN_VIEW_COMMANDS.OPEN_MULTI_AGENT_SETTINGS },
-    );
-    rendererListener?.(
-      { sender: webContents },
-      { command: MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY },
-    );
+    sendFromRenderer({
+      command: COMMON_COMMANDS.SWITCH_VIEW,
+      view: 'dashboard',
+    });
+    sendFromRenderer({ command: MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS });
+    sendFromRenderer({
+      command: MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS,
+      sessionType: AgentCategory.ToolUse,
+    });
+    sendFromRenderer({ command: MAIN_VIEW_COMMANDS.OPEN_MULTI_AGENT_SETTINGS });
+    sendFromRenderer({ command: MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY });
     expect(capabilities.shellActions.showRoute).toHaveBeenCalledWith(
       'settings',
     );
@@ -429,10 +445,10 @@ describe('desktop main-view IPC', () => {
     expect(sends).toEqual([]);
 
     sends.length = 0;
-    rendererListener?.(
-      { sender: webContents },
-      { command: MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY, customDirSet: true },
-    );
+    sendFromRenderer({
+      command: MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY,
+      customDirSet: true,
+    });
     expect(capabilities.shellActions.openAgentDirectory).toHaveBeenCalledWith(
       true,
     );
@@ -443,7 +459,7 @@ describe('desktop main-view IPC', () => {
       agent: 'direct-agent',
       model: 'gpt-5.4',
     };
-    rendererListener?.({ sender: webContents }, executeMessage);
+    sendFromRenderer(executeMessage);
     await Promise.resolve();
     expect(executeAgent).toHaveBeenCalledWith(executeMessage);
 
@@ -473,15 +489,8 @@ describe('desktop main-view IPC', () => {
   });
 
   it('uses desktop auth status when posting main-view startup login state', async () => {
-    let rendererListener: RendererListener | undefined;
-    const ipcMain = createIpcMainMock((listener) => {
-      rendererListener = listener;
-    });
-    const nativeTheme = createNativeThemeMock();
-    const { ELECTRON_WEBVIEW_PUSH_CHANNEL, installDesktopMainViewIpc } =
-      await loadDesktopMainViewIpcModule({ ipcMain, nativeTheme });
-    const sends: Array<{ channel: string; message: unknown }> = [];
-    const { window, webContents } = createWindowMock(sends);
+    const { installDesktopMainViewIpc, sends, window, sendFromRenderer } =
+      await createMainViewHarness();
 
     installDesktopMainViewIpc(window, {
       ...createMainViewCommandCapabilities(),
@@ -494,10 +503,10 @@ describe('desktop main-view IPC', () => {
         modelOptions: [],
       }),
     });
-    rendererListener?.(
-      { sender: webContents },
-      { command: MAIN_VIEW_COMMANDS.WEBVIEW_READY, view: 'main' },
-    );
+    sendFromRenderer({
+      command: MAIN_VIEW_COMMANDS.WEBVIEW_READY,
+      view: 'main',
+    });
     await flushAsyncWork();
 
     await vi.waitFor(
@@ -521,18 +530,12 @@ describe('desktop main-view IPC', () => {
     expect(
       sends.some(
         ({ message }) =>
-          (message as { command?: string }).command ===
-          MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER,
+          commandOf(message) === MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER,
       ),
     ).toBe(false);
   });
 
   it('waits for desktop model-list refresh before posting main-view model options', async () => {
-    let rendererListener: RendererListener | undefined;
-    const ipcMain = createIpcMainMock((listener) => {
-      rendererListener = listener;
-    });
-    const nativeTheme = createNativeThemeMock();
     const modelListRefresh = createDeferred();
     // desktopMainViewStartup resolves the whole startup catalog through the
     // `@agent/index` barrel (agent options plus the team-option loader's
@@ -560,8 +563,8 @@ describe('desktop main-view IPC', () => {
         { value: 'fresh-model', label: 'Fresh Model' },
       ]),
     }));
-    const { ELECTRON_WEBVIEW_PUSH_CHANNEL, installDesktopMainViewIpc } =
-      await loadDesktopMainViewIpcModule({ ipcMain, nativeTheme });
+    const { installDesktopMainViewIpc, sends, window, sendFromRenderer } =
+      await createMainViewHarness();
     // The default startup loader reads custom team presets through the
     // platform workspace state; re-init the fresh module instance that
     // loadDesktopMainViewIpcModule's vi.resetModules() just produced.
@@ -570,52 +573,39 @@ describe('desktop main-view IPC', () => {
       import('@test/support/FakePlatform'),
     ]);
     initPlatform(createFakePlatform({}));
-    const sends: Array<{ channel: string; message: unknown }> = [];
-    const { window, webContents } = createWindowMock(sends);
 
     installDesktopMainViewIpc(window, {
       ...createMainViewCommandCapabilities(),
       modelListRefresh: modelListRefresh.promise,
     });
-    rendererListener?.(
-      { sender: webContents },
-      { command: MAIN_VIEW_COMMANDS.WEBVIEW_READY, view: 'main' },
-    );
+    sendFromRenderer({
+      command: MAIN_VIEW_COMMANDS.WEBVIEW_READY,
+      view: 'main',
+    });
     await flushAsyncWork();
 
     expect(
       sends.some(
         ({ message }) =>
-          (message as { command?: string }).command ===
-          MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
+          commandOf(message) === MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
       ),
     ).toBe(false);
 
     modelListRefresh.resolve();
     await flushAsyncWork();
 
-    expect(
-      sends.find(
-        ({ channel, message }) =>
-          channel === ELECTRON_WEBVIEW_PUSH_CHANNEL &&
-          (message as { command?: string }).command ===
-            MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-      ),
-    ).toMatchObject({
-      message: {
-        command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-        optionsData: [{ value: 'fresh-model' }],
+    expect(findPush(sends, MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS)).toMatchObject(
+      {
+        message: {
+          command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
+          optionsData: [{ value: 'fresh-model' }],
+        },
       },
-    });
+    );
 
     // The default loader also resolves team options: every built-in team is
     // listed (disabled while its roster cannot resolve in this environment).
-    const teamPush = sends.find(
-      ({ channel, message }) =>
-        channel === ELECTRON_WEBVIEW_PUSH_CHANNEL &&
-        (message as { command?: string }).command ===
-          MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS,
-    );
+    const teamPush = findPush(sends, MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS);
     expect(teamPush).toBeDefined();
     const teamOptions = (teamPush!.message as { optionsData: unknown[] })
       .optionsData;
@@ -630,15 +620,8 @@ describe('desktop main-view IPC', () => {
   });
 
   it('posts the injected startup team options on main-view ready', async () => {
-    let rendererListener: RendererListener | undefined;
-    const ipcMain = createIpcMainMock((listener) => {
-      rendererListener = listener;
-    });
-    const nativeTheme = createNativeThemeMock();
-    const { ELECTRON_WEBVIEW_PUSH_CHANNEL, installDesktopMainViewIpc } =
-      await loadDesktopMainViewIpcModule({ ipcMain, nativeTheme });
-    const sends: Array<{ channel: string; message: unknown }> = [];
-    const { window, webContents } = createWindowMock(sends);
+    const { installDesktopMainViewIpc, sends, window, sendFromRenderer } =
+      await createMainViewHarness();
 
     const teamOptions = [
       {
@@ -668,18 +651,13 @@ describe('desktop main-view IPC', () => {
         teamOptions,
       }),
     });
-    rendererListener?.(
-      { sender: webContents },
-      { command: MAIN_VIEW_COMMANDS.WEBVIEW_READY, view: 'main' },
-    );
+    sendFromRenderer({
+      command: MAIN_VIEW_COMMANDS.WEBVIEW_READY,
+      view: 'main',
+    });
     await flushAsyncWork();
 
-    const teamPush = sends.find(
-      ({ channel, message }) =>
-        channel === ELECTRON_WEBVIEW_PUSH_CHANNEL &&
-        (message as { command?: string }).command ===
-          MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS,
-    );
+    const teamPush = findPush(sends, MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS);
     expect(teamPush).toMatchObject({
       message: {
         command: MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS,
@@ -687,9 +665,7 @@ describe('desktop main-view IPC', () => {
       },
     });
     // Startup pushes land in controller order: model, agent, team, login.
-    const startupCommands = sends
-      .filter(({ channel }) => channel === ELECTRON_WEBVIEW_PUSH_CHANNEL)
-      .map(({ message }) => (message as { command?: string }).command);
+    const startupCommands = pushedCommands(sends);
     const teamIndex = startupCommands.indexOf(
       MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS,
     );

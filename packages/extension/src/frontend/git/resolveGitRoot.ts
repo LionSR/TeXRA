@@ -5,11 +5,9 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 // Local imports
-import { getGitAPI } from './gitExtensionTypes';
+import { isDirectory, isFile } from '@utils/files/fsEntryType';
 
-function hasFileType(stat: vscode.FileStat, type: vscode.FileType): boolean {
-  return (stat.type & type) !== 0;
-}
+import { getGitAPI } from './gitExtensionTypes';
 
 export function resolveCommonRootFromGitdir(
   repoRoot: string,
@@ -51,11 +49,11 @@ export async function resolveGitCommonRoot(
     // A stat failure is handled by the function-level catch below.
     const stat = await vscode.workspace.fs.stat(gitEntryUri);
 
-    if (hasFileType(stat, vscode.FileType.Directory)) {
+    if (isDirectory(stat.type)) {
       return repo.rootUri.fsPath;
     }
 
-    if (!hasFileType(stat, vscode.FileType.File)) {
+    if (!isFile(stat.type)) {
       return undefined;
     }
 

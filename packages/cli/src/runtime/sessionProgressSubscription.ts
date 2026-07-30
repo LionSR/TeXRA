@@ -58,109 +58,87 @@ function projectCliRunFact(
   streamId: StreamTabId,
   event: AgentEvent,
 ): CliProjectedNdjsonProgressEvent | undefined {
-  if (event.type === 'usage') {
-    return { event: 'updateStreamUsage', payload: event.payload };
-  }
-
-  if (event.type === 'run.config') {
-    return {
-      event: 'setTaskState',
-      payload: {
-        streamId: event.streamId,
-        executionId: event.executionId,
-        taskState: agentConfigToTaskState(event.config),
-      },
-    };
-  }
-
-  if (event.type === 'conversation.progress') {
-    return {
-      event: 'updateConversationProgress',
-      payload: {
-        streamId,
-        progress: event.progress,
-      },
-    };
-  }
-
-  if (event.type === 'updateTodos') {
-    return {
-      event: 'updateTodos',
-      payload: { streamId: event.streamId, todos: event.todos },
-    };
-  }
-
-  if (event.type === 'updatePlan') {
-    return {
-      event: 'updatePlan',
-      payload: { streamId: event.streamId, plan: event.plan },
-    };
-  }
-
-  if (event.type === 'addOutputFiles') {
-    return {
-      event: 'addOutputFiles',
-      payload: {
-        streamId: event.streamId,
-        ...(event.executionId ? { executionId: event.executionId } : {}),
-        filesByRound: event.filesByRound,
-      },
-    };
-  }
-
-  if (event.type === 'updateMissingOutputs') {
-    return {
-      event: 'updateMissingOutputs',
-      payload: {
-        streamId: event.streamId,
-        ...(event.executionId ? { executionId: event.executionId } : {}),
-        filesByRound: event.filesByRound,
-      },
-    };
-  }
-
-  if (event.type === 'updateCompileFailures') {
-    return {
-      event: 'updateCompileFailures',
-      payload: {
-        streamId: event.streamId,
-        ...(event.executionId ? { executionId: event.executionId } : {}),
-        filesByRound: event.filesByRound,
-      },
-    };
-  }
-
-  if (event.type === 'goalPaused') {
-    return { event: 'goalPaused', payload: { streamId: event.streamId } };
-  }
-
-  if (event.type === 'stage.start') {
-    if (event.kind !== 'round') return undefined;
-    return {
-      event: 'updateRoundStage',
-      payload: {
-        streamId,
-        roundStage: {
-          index: event.index ?? 0,
-          ...(event.total !== undefined && event.total > 0
-            ? { total: event.total }
-            : {}),
+  switch (event.type) {
+    case 'usage':
+      return { event: 'updateStreamUsage', payload: event.payload };
+    case 'run.config':
+      return {
+        event: 'setTaskState',
+        payload: {
+          streamId: event.streamId,
+          executionId: event.executionId,
+          taskState: agentConfigToTaskState(event.config),
         },
-      },
-    };
+      };
+    case 'conversation.progress':
+      return {
+        event: 'updateConversationProgress',
+        payload: { streamId, progress: event.progress },
+      };
+    case 'updateTodos':
+      return {
+        event: 'updateTodos',
+        payload: { streamId: event.streamId, todos: event.todos },
+      };
+    case 'updatePlan':
+      return {
+        event: 'updatePlan',
+        payload: { streamId: event.streamId, plan: event.plan },
+      };
+    case 'addOutputFiles':
+      return {
+        event: 'addOutputFiles',
+        payload: {
+          streamId: event.streamId,
+          ...(event.executionId ? { executionId: event.executionId } : {}),
+          filesByRound: event.filesByRound,
+        },
+      };
+    case 'updateMissingOutputs':
+      return {
+        event: 'updateMissingOutputs',
+        payload: {
+          streamId: event.streamId,
+          ...(event.executionId ? { executionId: event.executionId } : {}),
+          filesByRound: event.filesByRound,
+        },
+      };
+    case 'updateCompileFailures':
+      return {
+        event: 'updateCompileFailures',
+        payload: {
+          streamId: event.streamId,
+          ...(event.executionId ? { executionId: event.executionId } : {}),
+          filesByRound: event.filesByRound,
+        },
+      };
+    case 'goalPaused':
+      return { event: 'goalPaused', payload: { streamId: event.streamId } };
+    case 'stage.start':
+      if (event.kind !== 'round') return undefined;
+      return {
+        event: 'updateRoundStage',
+        payload: {
+          streamId,
+          roundStage: {
+            index: event.index ?? 0,
+            ...(event.total !== undefined && event.total > 0
+              ? { total: event.total }
+              : {}),
+          },
+        },
+      };
+    case 'child.activity':
+      return {
+        event: 'updateActiveSubagents',
+        payload: {
+          parentStreamId: event.parentStreamId,
+          children: [...event.items],
+        },
+      };
+    default:
+      return undefined;
   }
-
-  if (event.type === 'child.activity') {
-    return {
-      event: 'updateActiveSubagents',
-      payload: {
-        parentStreamId: event.parentStreamId,
-        children: [...event.items],
-      },
-    };
-  }
-
-  return undefined;
 }
 
 /**

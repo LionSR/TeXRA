@@ -84,33 +84,21 @@ export class VscodeDiffViewHost implements DiffViewHost {
     }
 
     await new Promise<void>((resolve) => {
-      let resolved = false;
-      let timer: ReturnType<typeof setTimeout> | undefined;
+      const finish = () => {
+        clearTimeout(timer);
+        disposable.dispose();
+        resolve();
+      };
 
       const disposable = vscode.window.onDidChangeVisibleTextEditors(() => {
-        if (!resolved && tryReveal()) {
-          resolved = true;
-          disposeAll();
-          resolve();
+        if (tryReveal()) {
+          finish();
         }
       });
 
-      function disposeAll() {
-        if (timer) {
-          clearTimeout(timer);
-          timer = undefined;
-        }
-        disposable.dispose();
-      }
-
-      timer = setTimeout(() => {
-        if (resolved) {
-          return;
-        }
-        resolved = true;
-        disposeAll();
+      const timer = setTimeout(() => {
         tryReveal();
-        resolve();
+        finish();
       }, REVEAL_TIMEOUT_MS);
     });
   }

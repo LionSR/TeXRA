@@ -37,15 +37,23 @@ async function flushDialogTicks(times = 5): Promise<void> {
 
 const REQUEST_ID = '87db1d8b-81ed-4407-9414-984168ed4890';
 
+async function mountOverlay(): Promise<{
+  appRoot: HTMLElement;
+  overlay: DesktopPromptOverlay;
+  send: ReturnType<typeof vi.fn>;
+}> {
+  const { createDesktopPromptOverlay } = await loadDesktopPromptOverlay();
+  const appRoot = document.createElement('main');
+  document.body.append(appRoot);
+  const send = vi.fn();
+  return { appRoot, overlay: createDesktopPromptOverlay(appRoot, send), send };
+}
+
 describe('desktop prompt overlay', () => {
   useLitComponentTestDom(loadDesktopPromptOverlay);
 
   it('opens a focused password input and submits its value', async () => {
-    const { createDesktopPromptOverlay } = await loadDesktopPromptOverlay();
-    const appRoot = document.createElement('main');
-    document.body.append(appRoot);
-    const send = vi.fn();
-    const overlay = createDesktopPromptOverlay(appRoot, send);
+    const { appRoot, overlay, send } = await mountOverlay();
 
     overlay.open({
       command: 'desktop:showPrompt',
@@ -82,11 +90,7 @@ describe('desktop prompt overlay', () => {
   });
 
   it('settles cancel and replacement requests exactly once', async () => {
-    const { createDesktopPromptOverlay } = await loadDesktopPromptOverlay();
-    const appRoot = document.createElement('main');
-    document.body.append(appRoot);
-    const send = vi.fn();
-    const overlay = createDesktopPromptOverlay(appRoot, send);
+    const { appRoot, overlay, send } = await mountOverlay();
     overlay.open({
       command: 'desktop:showPrompt',
       requestId: REQUEST_ID,

@@ -125,16 +125,6 @@ export interface StreamExecutionState {
  */
 export type StreamBadgeSnapshot = Pick<StreamExecutionState, 'subagents'>;
 
-function createExecutionState(
-  kind: (typeof AgentCategory)[keyof typeof AgentCategory],
-): StreamExecutionState {
-  return {
-    kind,
-    conversationProgress: { toolCallCount: 0 },
-    subagents: [],
-  };
-}
-
 /**
  * Core state management for the progress view.
  *
@@ -376,7 +366,11 @@ export class ProgressViewState {
   ): StreamExecutionState {
     const existing = this._streamStates.get(stream);
     if (!existing || existing.kind !== agentCategory) {
-      const state = createExecutionState(agentCategory);
+      const state: StreamExecutionState = {
+        kind: agentCategory,
+        conversationProgress: { toolCallCount: 0 },
+        subagents: [],
+      };
       this._streamStates.set(stream, state);
       return state;
     }

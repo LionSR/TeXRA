@@ -4,20 +4,28 @@ import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManage
 import {
   formatCliStatusLabel,
   formatCliSessionStatus,
+  type CliSessionStatusInput,
 } from '@cli/chat/tui/sessionStatus';
 import { STREAM_PHASE } from '@shared/schemas';
 
 const STREAM_ID = 'status-queued-followups-test-stream';
 
+function sessionStatus(overrides: Partial<CliSessionStatusInput> = {}): string {
+  return formatCliSessionStatus({
+    agent: 'chat',
+    model: 'harness-model',
+    modelAccess: 'personal',
+    approval: 'ask',
+    status: 'running',
+    queuedFollowUpMessages: [],
+    ...overrides,
+  });
+}
+
 describe('CLI session status formatter', () => {
   it('lists queued follow-up messages in the details output', () => {
     expect(
-      formatCliSessionStatus({
-        agent: 'chat',
-        model: 'harness-model',
-        modelAccess: 'personal',
-        approval: 'ask',
-        status: 'running',
+      sessionStatus({
         queuedFollowUpMessages: [
           'First queued follow-up is to re-run the narrow layout proof check.',
           'Second queued message asks for the theorem statement cleanup.',
@@ -38,12 +46,7 @@ describe('CLI session status formatter', () => {
   });
 
   it('keeps multiline queued follow-ups readable as one-line summaries', () => {
-    const status = formatCliSessionStatus({
-      agent: 'chat',
-      model: 'harness-model',
-      modelAccess: 'personal',
-      approval: 'ask',
-      status: 'running',
+    const status = sessionStatus({
       queuedFollowUpMessages: [
         [
           'Please inspect the generated diff.',
@@ -58,12 +61,7 @@ describe('CLI session status formatter', () => {
   });
 
   it('summarizes queued subagent follow-up payloads', () => {
-    const status = formatCliSessionStatus({
-      agent: 'chat',
-      model: 'harness-model',
-      modelAccess: 'personal',
-      approval: 'ask',
-      status: 'running',
+    const status = sessionStatus({
       queuedFollowUpMessages: [
         '<orchestrator-followup><subagent-result id="child-q" agent="reviewer" category="toolUse" status="completed"><response>All good &lt;ok&gt;</response></subagent-result></orchestrator-followup>',
       ],
@@ -75,12 +73,7 @@ describe('CLI session status formatter', () => {
   });
 
   it('keeps malformed queued follow-up entries from breaking status details', () => {
-    const status = formatCliSessionStatus({
-      agent: 'chat',
-      model: 'harness-model',
-      modelAccess: 'personal',
-      approval: 'ask',
-      status: 'running',
+    const status = sessionStatus({
       queuedFollowUpMessages: [undefined as unknown as string],
     });
 
@@ -89,14 +82,8 @@ describe('CLI session status formatter', () => {
   });
 
   it('surfaces the session id and resume command once a run has started', () => {
-    const status = formatCliSessionStatus({
-      agent: 'chat',
-      model: 'harness-model',
-      modelAccess: 'personal',
-      approval: 'ask',
-      status: 'running',
+    const status = sessionStatus({
       sessionId: 'abc123',
-      queuedFollowUpMessages: [],
     });
 
     expect(status).toContain('session: abc123');
@@ -104,32 +91,20 @@ describe('CLI session status formatter', () => {
   });
 
   it('uses the provided command name in the resume status line', () => {
-    const status = formatCliSessionStatus({
-      agent: 'chat',
-      model: 'harness-model',
-      modelAccess: 'personal',
-      approval: 'ask',
-      status: 'running',
+    const status = sessionStatus({
       sessionId: 'abc123',
       commandName: 'texra-local',
-      queuedFollowUpMessages: [],
     });
 
     expect(status).toContain('resume later with: texra-local resume abc123');
   });
 
   it('includes cwd in the resume status line when the session uses another workspace', () => {
-    const status = formatCliSessionStatus({
-      agent: 'chat',
-      model: 'harness-model',
-      modelAccess: 'personal',
-      approval: 'ask',
-      status: 'running',
+    const status = sessionStatus({
       sessionId: 'abc123',
       commandName: 'texra-local',
       cwd: '/tmp/paper',
       processCwd: '/tmp/launcher',
-      queuedFollowUpMessages: [],
     });
 
     expect(status).toContain(
@@ -138,16 +113,12 @@ describe('CLI session status formatter', () => {
   });
 
   it('includes the active non-default approval policy in the resume status line', () => {
-    const status = formatCliSessionStatus({
-      agent: 'chat',
-      model: 'harness-model',
-      modelAccess: 'personal',
+    const status = sessionStatus({
       approval: 'deny privileged actions',
       approvalPolicy: 'never',
       status: 'waiting',
       sessionId: 'abc123',
       commandName: 'texra-local',
-      queuedFollowUpMessages: [],
     });
 
     expect(status).toContain(
@@ -156,10 +127,7 @@ describe('CLI session status formatter', () => {
   });
 
   it('includes cwd and approval policy when both affect the resume status line', () => {
-    const status = formatCliSessionStatus({
-      agent: 'chat',
-      model: 'harness-model',
-      modelAccess: 'personal',
+    const status = sessionStatus({
       approval: 'deny privileged actions',
       approvalPolicy: 'never',
       status: 'waiting',
@@ -167,7 +135,6 @@ describe('CLI session status formatter', () => {
       commandName: 'texra-local',
       cwd: '/tmp/paper',
       processCwd: '/tmp/launcher',
-      queuedFollowUpMessages: [],
     });
 
     expect(status).toContain(
@@ -176,13 +143,8 @@ describe('CLI session status formatter', () => {
   });
 
   it('omits session lines before the first run starts', () => {
-    const status = formatCliSessionStatus({
-      agent: 'chat',
-      model: 'harness-model',
-      modelAccess: 'personal',
-      approval: 'ask',
+    const status = sessionStatus({
       status: 'not started',
-      queuedFollowUpMessages: [],
     });
 
     expect(status).not.toContain('session:');
@@ -191,26 +153,17 @@ describe('CLI session status formatter', () => {
 
   it('reports an empty follow-up queue explicitly', () => {
     expect(
-      formatCliSessionStatus({
-        agent: 'chat',
-        model: 'harness-model',
-        modelAccess: 'personal',
-        approval: 'ask',
+      sessionStatus({
         status: 'waiting',
-        queuedFollowUpMessages: [],
       }),
     ).toContain('queued follow-ups: 0');
   });
 
   it('reports active session approval bypasses', () => {
-    const status = formatCliSessionStatus({
-      agent: 'chat',
-      model: 'harness-model',
-      modelAccess: 'personal',
+    const status = sessionStatus({
       approval: 'ask before privileged actions',
       approvalBypasses: { superYolo: true, bash: true, toolEdit: true },
       status: 'waiting',
-      queuedFollowUpMessages: [],
     });
 
     expect(status).toContain(
@@ -220,9 +173,7 @@ describe('CLI session status formatter', () => {
   });
 
   it('surfaces an active goal in status details', () => {
-    const status = formatCliSessionStatus({
-      agent: 'chat',
-      model: 'harness-model',
+    const status = sessionStatus({
       modelAccess: 'included',
       approval: 'ask before privileged actions',
       status: 'stopped',
@@ -232,7 +183,6 @@ describe('CLI session status formatter', () => {
           'Solve the autonomous goal problem and produce a verifier before stopping.',
       },
       sessionId: 'goal123',
-      queuedFollowUpMessages: [],
     });
 
     expect(status).toContain('status: stopped');
@@ -243,13 +193,9 @@ describe('CLI session status formatter', () => {
   });
 
   it('reports ChatGPT as the selected model access', () => {
-    const status = formatCliSessionStatus({
-      agent: 'chat',
+    const status = sessionStatus({
       model: 'gpt55',
       modelAccess: 'chatgpt',
-      approval: 'ask',
-      status: 'running',
-      queuedFollowUpMessages: [],
     });
 
     expect(status).toContain(
@@ -258,13 +204,9 @@ describe('CLI session status formatter', () => {
   });
 
   it('reports included TeXRA model access without a subscription line', () => {
-    const status = formatCliSessionStatus({
-      agent: 'chat',
+    const status = sessionStatus({
       model: 'gpt55',
       modelAccess: 'included',
-      approval: 'ask',
-      status: 'running',
-      queuedFollowUpMessages: [],
     });
 
     expect(status).toContain('model access: Included TeXRA access');
@@ -273,14 +215,9 @@ describe('CLI session status formatter', () => {
 
   it('includes team identity when a chat was launched from a preset', () => {
     expect(
-      formatCliSessionStatus({
+      sessionStatus({
         agent: 'orchestrator',
-        model: 'harness-model',
         teamName: 'Physicist',
-        modelAccess: 'personal',
-        approval: 'ask',
-        status: 'running',
-        queuedFollowUpMessages: [],
       }),
     ).toContain(['team: Physicist', 'agent: orchestrator'].join('\n'));
   });
@@ -290,13 +227,12 @@ describe('CLI session status formatter', () => {
     expect(formatCliStatusLabel(undefined, undefined, true)).toBe('');
     expect(formatCliStatusLabel('stopped', undefined, true)).toBe('stopped');
     expect(
-      formatCliSessionStatus({
+      sessionStatus({
         agent: 'research',
         model: 'deepseekT',
         modelAccess: 'included',
         approval: 'ask before privileged actions',
         status: STREAM_PHASE.WAITING,
-        queuedFollowUpMessages: [],
       }),
     ).toContain('status: idle');
   });
