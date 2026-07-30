@@ -1369,3 +1369,56 @@ not have to rediscover them): CLI TUI's `src/test-kernel/cli/
 TuiStateAndFocus.vitest.mts` (references `STREAM_STATUS` per §8.1's census);
 the extension's `TaskGroupListIndex.vitest.ts`, which builds `TaskGroup`
 fixtures directly from `STREAM_STATUS` literals.
+
+### 8.6 Step 4 execution record (2026-07-29): what was deleted, and what is permanent
+
+§8.4 step 3 (the parent issue's goal item 4) named one deletion list. On
+execution the list split cleanly in three, and only the first part is a
+deletion — recorded here so a future sweep does not re-open the other two as
+outstanding debt.
+
+**Deleted — provably dead, no released-data dependency.**
+
+- `STREAM_STATUS_TRAITS` and everything derived from it:
+  `streamStatusesWithTrait`, `StreamStatusTrait`,
+  `LIVE_ELAPSED_STREAM_STATUSES` (`src/shared/schemas/stream.ts`). Membership
+  questions are answered exclusively by the `StreamPhase` predicates
+  (`isActivePhase`/`isInFlightPhase`/`isTerminalOutcomePhase`,
+  `@shared/streams/streamStatus`) after steps 2-3. The last non-test consumer
+  was `packages/cli/scripts/tui-harness.tsx`, migrated in the same change:
+  the harness now seeds child rosters with `STREAM_PHASE` values, which is
+  what production has written since #8317, so the harness is a faithful
+  mirror again rather than the repo's last legacy-vocabulary producer.
+- `groupEndStatusForOutcome` (`@shared/streams/streamStatus`) — the
+  `'ok' | 'error'` intermediate hop. Its only caller was
+  `legacyEndGroupStatusForOutcome` in the same file; the fold is now stated
+  once, there.
+- The trait-table pin in `RunOutcomeAlgebra.vitest.ts`, replaced by an
+  exhaustive pin of the three `StreamPhase` predicates over
+  `StreamPhaseSchema.options` — the membership fact keeps its coverage, on
+  the canonical vocabulary.
+
+**Permanent, not debt.** `STREAM_STATUS`/`StreamStatusSchema`/`StreamStatus`
+and `END_GROUP_STATUS`/`EndGroupStatusSchema` stay, as §8.3 already ruled,
+because two read boundaries never age out:
+
+1. `StreamLogStore.parsePersistedEntries`'s group-status normalization —
+   released transcripts are never rewritten.
+2. The standalone trace-viewer's file import (`replayTrace.ts`'s
+   `StreamLifecycleStatusSchema` parse and `StreamSnapshot.status`, plus
+   `GroupLogPayloadSchema`'s legacy `EndGroupStatus` union member, which
+   serves the raw `trace.entries` this boundary forwards into `logSlice.ts`)
+   — a static exported `trace.json` stays legacy-shaped forever.
+
+Their doc comments now say this in the enum's own definition, so the next
+reader does not have to reconstruct it from the ledger.
+
+**Still dated, deliberately not touched.** The remaining legacy _reads_ are
+released-data compatibility with live removal triggers in the #6981 ledger,
+not dead code: the frozen CLI headless JSON `endGroupStatus` projection
+(`packages/cli/src/runtime/terminalStatus.ts`, v0.41 / 2026-08-04 whichever
+is later — the only remaining caller of `legacyEndGroupStatusForOutcome`),
+`streamStatusDisplay.ts`'s legacy display arm and
+`sessionStatus.ts`'s legacy child-`stopped` label, and the `terminalStatus`
+and `meta.json.taskState` tier-3 shims. These are what keep #7993's last
+checkbox open; nothing above unblocks them.

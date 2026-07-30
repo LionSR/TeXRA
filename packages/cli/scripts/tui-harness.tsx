@@ -32,13 +32,10 @@ import { platform, tryPlatform } from '@platform/platform';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import {
   AgentCategory,
-  LIVE_ELAPSED_STREAM_STATUSES,
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_PHASE,
-  STREAM_STATUS,
   STREAM_LOG_ENTRY_TYPES,
-  streamStatusToPhase,
   TODO_STATUS,
   TOOL_USE_STATUS,
   type ActiveChildInfo,
@@ -53,6 +50,7 @@ import {
 } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
+  isActivePhase,
   isInFlightPhase,
   STREAM_TRANSITION_CAUSE,
 } from '@shared/streams/streamStatus';
@@ -1726,7 +1724,7 @@ if (SHOW_CHILDREN) {
     executionId: 'harness-nested-local-checker',
     agentName: 'localChecker',
     childStreamId: 'harness-nested-local-checker-stream',
-    status: STREAM_STATUS.RUNNING,
+    status: STREAM_PHASE.RUNNING,
     startedAt: nestedStartedAt,
   };
   const childStreams = [
@@ -1735,7 +1733,7 @@ if (SHOW_CHILDREN) {
       executionId: 'harness-child-strategy',
       agentName: 'strategy',
       childStreamId: 'harness-child-strategy-stream',
-      status: STREAM_STATUS.RUNNING,
+      status: STREAM_PHASE.RUNNING,
       startedAt,
     },
     {
@@ -1743,7 +1741,7 @@ if (SHOW_CHILDREN) {
       executionId: 'harness-child-lean',
       agentName: 'leanSolver',
       childStreamId: 'harness-child-lean-stream',
-      status: STREAM_STATUS.WAITING,
+      status: STREAM_PHASE.WAITING,
       elapsed: '2m 3s',
     },
     {
@@ -1751,21 +1749,21 @@ if (SHOW_CHILDREN) {
       executionId: 'harness-child-review',
       agentName: 'reviewer',
       childStreamId: 'harness-child-review-stream',
-      status: STREAM_STATUS.RUNNING,
+      status: STREAM_PHASE.RUNNING,
       startedAt: startedAt + 12_000,
     },
   ].map((child) =>
     child.agentName === FAILED_CHILD_AGENT
       ? {
           ...child,
-          status: STREAM_STATUS.ERROR,
+          status: STREAM_PHASE.FAILED,
           startedAt: undefined,
           elapsed: null,
         }
       : child,
   );
   const activeSubagents = childStreams.filter(
-    (child) => child.status !== STREAM_STATUS.ERROR,
+    (child) => child.status !== STREAM_PHASE.FAILED,
   );
   // Seed through the real transition functions rather than poking StreamSlice
   // fields directly: register the complete roster first (so the errored
@@ -1788,11 +1786,11 @@ if (SHOW_CHILDREN) {
     if (addNestedChildren) applySubagentRoster(streamId, [nestedStrategyChild]);
     patchStream(streamId, (slice) => ({
       ...slice,
-      status: streamStatusToPhase(child.status),
+      status: child.status,
       description: `${child.agentName} sub-workflow`,
       entries: makeChildEntries(child.agentName, child.executionId),
       runStartedAt:
-        child.status === STREAM_STATUS.RUNNING ? child.startedAt : undefined,
+        child.status === STREAM_PHASE.RUNNING ? child.startedAt : undefined,
       // One child carries usage so scenarios pin the row metadata column's
       // generated-token figure (`↓40k`).
       cumulativeUsage:
@@ -2081,9 +2079,7 @@ function appendHarnessChildSubmitAck(
   text: string,
   streamId: StreamTabId,
 ): void {
-  const status = streams.get().get(streamId)?.status;
-  const isLive =
-    status !== undefined && LIVE_ELAPSED_STREAM_STATUSES.has(status);
+  const isLive = isActivePhase(streams.get().get(streamId)?.status);
   appendHarnessTranscript('assistant', text, streamId, { finalized: !isLive });
 }
 
