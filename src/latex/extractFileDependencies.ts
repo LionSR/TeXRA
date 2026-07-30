@@ -13,7 +13,7 @@ import pMap from 'p-map';
 // Local imports
 import type { FileLocation } from '@shared/schemas';
 import { filterNotNull, unique } from '@utils/core';
-import { FlexibleFS } from '@utils/files';
+import { AbsoluteFS } from '@utils/files';
 import { ensureExtension, joinLatexPath } from '@utils/core/pathCore';
 
 // Local file imports
@@ -67,7 +67,7 @@ export async function extractLatexFileDependencies(
   // Follow symlinks so run-storage paths resolve against the workspace
   const latexDir = await resolveLatexDir(latexFileLocation.absolutePath);
 
-  const content = await FlexibleFS.read(latexFileLocation);
+  const content = await AbsoluteFS.read(latexFileLocation.absolutePath);
   const uncommented = stripLatexComments(content);
 
   const texInputPaths = [INPUT_PATTERN, INCLUDE_PATTERN].flatMap((pattern) =>

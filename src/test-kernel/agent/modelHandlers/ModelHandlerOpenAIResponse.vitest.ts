@@ -44,7 +44,7 @@ import type {
   ResponseUsage,
 } from 'openai/resources/responses/responses';
 
-// pathToLocation and FlexibleFS resolve through platform services, so this
+// pathToLocation and AbsoluteFS resolve through platform services, so this
 // suite needs the real node fs rather than the in-memory default.
 setupPlatform({}, { fs: nodeFilesystem });
 

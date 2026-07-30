@@ -6,7 +6,7 @@ import { formatError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import type { FileLocation } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { FlexibleFS, pathToLocation } from '@utils/files';
+import { AbsoluteFS, pathToLocation } from '@utils/files';
 import { executeCommand } from '@utils/system/execUtils';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 import { runLatexFormatter } from './texFormatter';
@@ -80,8 +80,8 @@ export class LaTeXdiffService {
   ): Promise<string[] | null> {
     try {
       return await Promise.all([
-        FlexibleFS.read(inputLocation),
-        FlexibleFS.read(editedLocation),
+        AbsoluteFS.read(inputLocation.absolutePath),
+        AbsoluteFS.read(editedLocation.absolutePath),
       ]);
     } catch {
       return null;
@@ -147,9 +147,9 @@ export class LaTeXdiffService {
       }
 
       // Write and process output
-      await FlexibleFS.ensureDir(pathToLocation(outputDirectory));
+      await AbsoluteFS.ensureDir(outputDirectory);
       const outputLocation = pathToLocation(outputPath);
-      await FlexibleFS.write(outputLocation, result.stdout);
+      await AbsoluteFS.write(outputLocation.absolutePath, result.stdout);
       await this.fileProcessor.processDiffFile(outputLocation, editedLocation);
 
       logger.debug(
@@ -279,7 +279,7 @@ export class LaTeXdiffService {
   private async validateDocumentStructure(
     file: FileLocation,
   ): Promise<boolean> {
-    return hasDocumentEnvironment(await FlexibleFS.read(file));
+    return hasDocumentEnvironment(await AbsoluteFS.read(file.absolutePath));
   }
 
   private async bothFilesExist(
@@ -287,8 +287,8 @@ export class LaTeXdiffService {
     second: FileLocation,
   ): Promise<boolean> {
     const [firstExists, secondExists] = await Promise.all([
-      FlexibleFS.exists(first),
-      FlexibleFS.exists(second),
+      AbsoluteFS.exists(first.absolutePath),
+      AbsoluteFS.exists(second.absolutePath),
     ]);
     return firstExists && secondExists;
   }

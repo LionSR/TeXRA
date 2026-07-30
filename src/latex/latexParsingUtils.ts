@@ -10,7 +10,7 @@ import * as path from 'node:path';
 
 import * as logger from '@logger/logUtils';
 import { platform } from '@platform/platform';
-import { FlexibleFS } from '@utils/files';
+import { AbsoluteFS } from '@utils/files';
 import { ensureExtension, joinLatexPath } from '@utils/core/pathCore';
 
 /** Strips everything after an unescaped % on each line. */
@@ -50,13 +50,13 @@ export async function resolveLatexDir(absolutePath: string): Promise<string> {
 
 /**
  * Return `absolutePath` if it exists on disk, otherwise null. Centralizes
- * the `FlexibleFS.exists({ kind: 'external', ... })` boilerplate used by
- * the various LaTeX dependency resolvers.
+ * the `AbsoluteFS.exists(...)` boilerplate used by the various LaTeX
+ * dependency resolvers.
  */
 export async function existingExternalPath(
   absolutePath: string,
 ): Promise<string | null> {
-  if (await FlexibleFS.exists({ kind: 'external', absolutePath })) {
+  if (await AbsoluteFS.exists(absolutePath)) {
     return absolutePath;
   }
   return null;

@@ -6,7 +6,6 @@ export { StorageFS, GlobalStorageFS } from './storageFS';
 // Heavily-used utilities (re-exported for convenience)
 export * from './mimeUtils';
 export * from './taskRunStorage';
-export * from './flexibleFS';
 
 // Note: pastedImageName, pastedImageUtils, rulesUtils, and varsUtils are NOT
 // re-exported.
