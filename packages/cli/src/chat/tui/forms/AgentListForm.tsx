@@ -253,7 +253,10 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
         </Box>
       ) : null}
       <Box marginTop={1}>
-        <PickerKeyHints selectable={props.selectable} hasItems />
+        <PickerKeyHints
+          selectable={props.selectable}
+          hasItems={items.length > 0}
+        />
       </Box>
     </FormFrame>
   );
