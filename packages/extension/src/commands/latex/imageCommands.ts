@@ -13,6 +13,7 @@ import {
   getBase64EncodedMedia,
   processPdf2Png,
 } from '@utils/media/img';
+import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 const CHANNEL = 'TestCommands';
 
@@ -67,7 +68,7 @@ export async function handleEncodeImageToBase64(): Promise<string | undefined> {
     const base64String = await getBase64EncodedMedia(selection.relativePath);
     logger.debug(
       CHANNEL,
-      `Truncated base64 string (first 100 chars): ${base64String.slice(0, 100)}...`,
+      `Truncated base64 string (first 100 chars): ${truncateWithEllipsis(base64String, 100)}`,
     );
     return base64String;
   } catch (err) {

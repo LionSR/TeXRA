@@ -1,5 +1,4 @@
 import {
-  currentSession,
   defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
@@ -19,6 +18,7 @@ import type { ToolEditApprovalAction } from '@shared/schemas/prompts';
 import type { LineChanges } from '@shared/schemas/lineChanges';
 import { type ToolResult } from '@shared/schemas/toolResult';
 import { recordToolFileRead } from '@tools/fileInteractions';
+import { createSessionBypassAccessors } from '@tools/approval/sessionBypassAccessors';
 import { WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 import {
@@ -38,24 +38,13 @@ const TOOL_EDIT_APPROVAL_CONFIG_KEY = 'texra.toolUse.requireEditApproval';
 
 export const REVEAL_TIMEOUT_MS = 1500;
 
-export function setToolEditApprovalSessionBypass(
-  streamId: StreamTabId,
-  enabled: boolean,
-  options?: { silent?: boolean; session?: SessionHandle },
-): void {
-  (options?.session ?? currentSession()).approvals.toolEdit.bypass.setBypass(
-    streamId,
-    enabled,
-    options,
-  );
-}
-
-export function isApprovalBypassedForStream(
-  streamId: StreamTabId,
-  session: SessionHandle = currentSession(),
-): boolean {
-  return session.approvals.toolEdit.bypass.isBypassed(streamId);
-}
+const {
+  setSessionBypass: setToolEditApprovalSessionBypass,
+  isBypassedForStream: isApprovalBypassedForStream,
+} = createSessionBypassAccessors(
+  (session) => session.approvals.toolEdit.bypass,
+);
+export { setToolEditApprovalSessionBypass, isApprovalBypassedForStream };
 
 /**
  * Prepare a tool-edit approval prompt for the host: register the
