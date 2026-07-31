@@ -76,7 +76,7 @@ export interface SessionEventSubscriptionFilter {
   readonly types?: readonly AgentEvent['type'][];
 }
 
-export type SessionEventSubscriber = (event: SessionEvent) => void;
+type SessionEventSubscriber = (event: SessionEvent) => void;
 
 interface SubscriberRegistration {
   readonly subscriber: SessionEventSubscriber;

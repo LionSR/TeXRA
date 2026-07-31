@@ -17,6 +17,7 @@ import {
 import { getGitAuthorEnv, setGitAuthorEnv } from '@utils/system/gitAuthorEnv';
 
 import {
+  commandOf,
   createStubDesktopAgentSettingsController,
   createStubDesktopCrashReportingSettingsController,
   createStubDesktopCredentialSettingsController,
@@ -168,10 +169,6 @@ function flushAsyncWork(): Promise<void> {
   return new Promise((resolve) =>
     setImmediate(() => setImmediate(() => resolve())),
   );
-}
-
-function commandOf(message: unknown): string | undefined {
-  return (message as { command?: string }).command;
 }
 
 describe('desktop settings IPC', () => {

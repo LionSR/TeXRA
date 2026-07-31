@@ -7,7 +7,6 @@ import { create } from 'mutative';
 
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
-  createStreamState,
   STREAM_PHASE,
   type ProgressViewOutboundHandlerRegistry,
   type StreamTabId,
@@ -16,10 +15,7 @@ import {
 import { compareByNewestCreationTime } from '@shared/streams/streamOrdering';
 
 import { isToolUseState } from '../store';
-import {
-  mergeBackendOwnedState,
-  metadataToStreamStatePartial,
-} from './streamStateMerge';
+import { mergeBackendOwnedState } from './streamStateMerge';
 import { appState, setStreamStateForId } from '../progressState';
 
 /**
@@ -70,13 +66,10 @@ export const streamMetaHandlers = {
       description !== data.streamInfo.description
         ? { ...data.streamInfo, description }
         : data.streamInfo;
-    const existingState = prev.streamStates.get(name);
-    const mergedState = existingState
-      ? mergeBackendOwnedState(existingState, data.streamState)
-      : createStreamState(
-          data.streamState.kind,
-          metadataToStreamStatePartial(data.streamState),
-        );
+    const mergedState = mergeBackendOwnedState(
+      prev.streamStates.get(name),
+      data.streamState,
+    );
 
     appState.set(
       create(prev, (draft) => {

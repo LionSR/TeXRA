@@ -10,12 +10,14 @@ import { AgentDelegationScopeSchema } from '@shared/schemas/agentRoster';
 import { ToolConfigSchema } from '@shared/schemas/toolConfig';
 import { AgentCategory } from './AgentDataclass';
 
-const DEFAULT_AGENT_NAME = 'correct';
+/** Agent assumed when a config omits `agent`, and sorted first in the workflow dropdown. */
+export const DEFAULT_WORKFLOW_AGENT = 'correct';
+
 const DEFAULT_AGENT_INSTRUCTION = '';
 
 /** Fields shared by both category-specific config variants. */
 const AgentConfigSharedFieldsSchema = NullableFileFieldsSchema.extend({
-  agent: z.string().prefault(DEFAULT_AGENT_NAME),
+  agent: z.string().prefault(DEFAULT_WORKFLOW_AGENT),
   /**
    * Resolved source of `agent`, captured once when the delegation is validated
    * (`getVisibleAgent`). Launch resolves the exact `(source, name)` entry by key

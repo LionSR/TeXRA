@@ -16,7 +16,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readCliHistoryConfig } from './history';
 import { readCliToolUseResumeData } from './toolUseResumeData';
 
-export type CliResumeResolution =
+type CliResumeResolution =
   | ToolUseResumeData
   /** A workflow execution — not continuable via the tool-use resume path. */
   | { readonly type: 'workflow' }

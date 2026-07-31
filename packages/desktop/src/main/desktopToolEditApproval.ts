@@ -117,15 +117,15 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
     this.initializing.delete(requestId);
     if (initialization.earlyResolution) {
       this.cleanupEntry(entry);
-      return {
-        ...initialization.earlyResolution,
-        lineChanges: initialization.earlyResolution.lineChanges ?? lineChanges,
-      };
+      return initialization.earlyResolution;
     }
     entry.cancellationScope = initialization.cancellationScope;
     let settled = false;
 
-    const result = await new Promise<ToolEditApprovalResult>((resolve) => {
+    // `requestToolEditApproval` derives userPatch, lineChanges, and startLine
+    // from the content this returns, so an accepted result only owes it the
+    // content the user actually approved.
+    return new Promise<ToolEditApprovalResult>((resolve) => {
       entry.settle = (value) => {
         if (settled) return;
         settled = true;
@@ -141,9 +141,6 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
       );
       void this.runAction(requestId, () => this.openDiffPatch(entry));
     });
-
-    if (result.accepted && result.appliedContent != null) return result;
-    return { ...result, lineChanges: result.lineChanges ?? lineChanges };
   }
 
   handleAction(payload: {

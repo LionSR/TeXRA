@@ -1,29 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { SettingsMemoryController } from '@controllers/settingsView/SettingsMemoryController';
 import { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
 import { SettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
 import { buildBasicModelOptionsData } from '@model/modelOptionsBasic';
 import type { ModelOptionData } from '@shared/schemas';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FakeStateStore } from '@test/support/FakePlatform';
-
-function createMemoryController() {
-  let enabled = true;
-  return {
-    controller: new SettingsMemoryController({
-      prompt: {
-        confirm: async () => true,
-        warning: async () => undefined,
-      },
-      isMemoryEnabled: () => enabled,
-      setMemoryEnabled: async (next) => {
-        enabled = next;
-      },
-    }),
-    isEnabled: () => enabled,
-  };
-}
 
 function createModelSelectionController() {
   const state = {
@@ -71,14 +54,14 @@ function createModelSelectionController() {
 
 describe('SettingsViewHost', () => {
   it('posts memory and model-selection messages through shared host wiring', async () => {
-    const memory = createMemoryController();
     const modelSelection = createModelSelectionController();
+    const globalState = new FakeStateStore();
     const messages: unknown[] = [];
     let modelRefreshes = 0;
     const host = new SettingsViewHost({
       state: {
         workspaceState: new FakeStateStore(),
-        globalState: new FakeStateStore(),
+        globalState,
       },
       memoryPrompt: {
         confirm: async () => true,
@@ -91,7 +74,6 @@ describe('SettingsViewHost', () => {
         modelRefreshes += 1;
       },
       controllers: {
-        memory: memory.controller,
         modelSelection: modelSelection.controller,
       },
     });
@@ -110,7 +92,7 @@ describe('SettingsViewHost', () => {
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED,
       enabled: false,
     });
-    expect(memory.isEnabled()).toBe(false);
+    expect(globalState.get(GlobalStateKey.MEMORY_ENABLED)).toBe(false);
 
     expect(messages.at(2)).toMatchObject({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,

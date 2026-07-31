@@ -1,6 +1,7 @@
 import { html, nothing, type TemplateResult } from 'lit';
 import type { ConversationProgress, RoundStage } from '@shared/schemas';
 import { formatRoundStageLabel } from '@shared/streams/streamStatusDisplay';
+import { formatResultCount } from '@utils/text/stringUtils';
 
 /**
  * Render progress badge with conversation turns and tool call count.
@@ -12,9 +13,10 @@ export function renderProgressBadgeContent(
 ): TemplateResult | typeof nothing {
   const round = formatRoundStageLabel(roundStage);
   const tools = progress?.toolCallCount ?? 0;
-  const parts = [round ?? '', tools > 0 ? `${tools} tool calls` : ''].filter(
-    Boolean,
-  );
+  const parts = [
+    round ?? '',
+    tools > 0 ? formatResultCount(tools, 'tool call') : '',
+  ].filter(Boolean);
   if (parts.length === 0) return nothing;
   return html`${parts.join(', ')}`;
 }

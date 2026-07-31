@@ -101,7 +101,7 @@ export const WorkflowAgentInputSchema = z.strictObject({
 export type WorkflowAgentInput = z.infer<typeof WorkflowAgentInputSchema>;
 
 const WORKTREE_DISABLED_MESSAGE =
-  "git worktree support is disabled in this workspace. Omit working_directory, or enable 'Allow agents to work in git worktrees' on the Multi-Agent settings tab.";
+  "git worktree support is disabled in this workspace. Omit working_directory, or ask the user to turn on `texra.git.worktreeSupport` ('Allow agents to work in git worktrees' on the Multi-Agent settings tab).";
 const TOOL_USE_SUBAGENT_HANDOFF_INSTRUCTION = [
   'Delegated task handoff:',
   '- Treat the delegated instruction as your full task contract.',
@@ -159,7 +159,7 @@ export const workingDirectoryField = z
   .string()
   .nullish()
   .describe(
-    'Absolute path for the subagent to operate in (e.g. a git worktree). All tool calls within the subagent will automatically use this as their root directory. Defaults to workspace root. Only accepted when git worktree support is enabled on the Multi-Agent settings tab.',
+    'Absolute path for the subagent to operate in (e.g. a git worktree). All tool calls within the subagent will automatically use this as their root directory. Defaults to workspace root. Only accepted when git worktree support (`texra.git.worktreeSupport`) is enabled for this workspace.',
   )
   .transform((value, ctx): string | undefined => {
     const fail = (message: string): typeof z.NEVER => {

@@ -6,7 +6,7 @@ import {
 
 type Callback = () => void | Promise<void>;
 
-export interface CreateLifecycleHostOptions {
+interface CreateLifecycleHostOptions {
   onError?: (phase: ShutdownPhase, error: unknown) => void;
 }
 

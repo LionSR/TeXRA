@@ -140,7 +140,7 @@ describe('extension command registry — catalog-driven registration', () => {
   );
 });
 
-describe('extension command surface — newly migrated commands (#3771, #3775, #3781)', () => {
+describe('extension command surface — catalog-tagged command dispatch', () => {
   it.each([
     ['texra.showDashboard', 'showSettings'],
     ['texra.showSettingsView', 'showSettings'],
@@ -159,7 +159,6 @@ describe('extension command surface — newly migrated commands (#3771, #3775, #
     ['texra.testAgentLoading', 'testAgentLoading'],
     ['texra.loadSpecificAgent', 'loadSpecificAgent'],
     ['texra.openProgressViewInTab', 'openProgressViewInTab'],
-    // Batch 2 (#3775)
     ['texra.parseXml', 'parseXml'],
     ['texra.parseYaml', 'parseYaml'],
     ['texra.testTextEditor', 'testTextEditor'],
@@ -171,13 +170,11 @@ describe('extension command surface — newly migrated commands (#3771, #3775, #
     ['texra.showLinterMessages', 'showLinterMessages'],
     ['texra.countLinterMessages', 'countLinterMessages'],
     ['texra.extractFigurePaths', 'extractFigurePaths'],
-    // Batch 3 (#3781)
     ['texra.encodeImageToBase64', 'encodeImageToBase64'],
     ['texra.convertPdfToImages', 'convertPdfToImages'],
     ['texra.extractTikzFigures', 'extractTikzFigures'],
     ['texra.compileTikzFigures', 'compileTikzFigures'],
     ['texra.cloneOverleafProject', 'cloneOverleafProject'],
-    // Batch 4 (#3781)
     ['texra.removeApiKey', 'removeApiKey'],
     ['texra.showImportOptions', 'showImportOptions'],
     ['texra.toggleView', 'toggleView'],
@@ -253,7 +250,7 @@ describe('extension command surface — newly migrated commands (#3771, #3775, #
     expect(actions.compactResponse).not.toHaveBeenCalled();
   });
 
-  describe('typed file-operation arguments (#9090)', () => {
+  describe('typed file-operation arguments', () => {
     it('normalizes and forwards pack/clean config objects', async () => {
       const actions = makeActions();
       const config = {
@@ -473,7 +470,6 @@ describe('extension command surface — newly migrated commands (#3771, #3775, #
     });
   });
 
-  // Batch 4 (#3781) typed-arg coverage.
   it('texra.showProgressView with no arg defaults to inPlace=false', async () => {
     const actions = makeActions();
     await expect(

@@ -16,10 +16,7 @@ import {
   deleteExecution,
   deleteAllExecutions,
 } from '@agent/storage';
-import {
-  AgentConfigSchema,
-  type AgentConfig,
-} from '@agent/core/definition/AgentConfig';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import { runExecuteCommand } from '@commands/agent/executeCommand';
 import {
@@ -265,17 +262,19 @@ export class HistoryHandlers {
     action: (config: AgentConfig) => Promise<void>,
   ): Promise<void> {
     await withHandlerErrorHandling(this.ctx, errorPrefix, async () => {
-      const raw = await getExecutionStore(
+      // readConfig() validates against AgentConfigSchema and returns null for
+      // both missing and corrupt configs; distinguishing them belongs to the
+      // storage layer, not here.
+      const config = await getExecutionStore(
         historyId as ExecutionId,
       ).readConfig();
-      if (!raw) {
+      if (!config) {
         await showLoggedMessage(
           this.ctx.channel,
           HISTORY_ITEM_NOT_FOUND_MESSAGE,
         );
         return;
       }
-      const config = AgentConfigSchema.parse(raw);
       await action(config);
     });
   }

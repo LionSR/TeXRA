@@ -1,3 +1,4 @@
+import type { ApprovalBypassKind } from '@agent/runtime/HostInteractions';
 import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
 import {
   type ActiveStreamId,
@@ -174,7 +175,7 @@ export class WebviewUpdater {
 
   updateBypassState(
     stream: StreamTabId,
-    type: 'bash' | 'toolEdit' | 'superYolo',
+    type: ApprovalBypassKind,
     bypassActive: boolean,
   ): void {
     this.sendMessage({

@@ -39,7 +39,6 @@ import {
 import { writeApprovalTempFiles } from '@tools/approval/tempFileManager';
 import {
   computeLineChangeSummary,
-  computeUserPatch,
   prepareToolEditApprovalPrompt,
   firstChangedLine,
   type ToolEditApprovalRequest,
@@ -206,7 +205,9 @@ async function showProgressViewApprovalPrompt(
   relativePath: string,
   lineChanges: LineChanges,
 ): Promise<void> {
-  // Best-effort: don't let a command failure prevent the approval prompt
+  // Best-effort: don't let a command failure prevent the approval prompt.
+  // Awaiting the reveal is also what keeps a request cancelled while the view
+  // is opening from flashing a prompt that is immediately dismissed.
   await Promise.resolve(
     vscode.commands.executeCommand('texra.showProgressView'),
   ).catch(() => {});
@@ -317,10 +318,7 @@ export async function nativeRequestApproval(
   if (initialization.earlyResolution) {
     initializingApprovals.delete(requestId);
     await cleanupApprovalSources();
-    return {
-      ...initialization.earlyResolution,
-      lineChanges: initialization.earlyResolution.lineChanges ?? lineChanges,
-    };
+    return initialization.earlyResolution;
   }
   const originalSource: DiffSource = { filePath: originalPath };
   const proposedSource: DiffSource = { filePath: proposedPath };
@@ -338,7 +336,6 @@ export async function nativeRequestApproval(
     ? ` · ${changeParts.join(' / ')} ${lineWord}`
     : '';
   const title = `Tool edit (${sourceTool}): ${description}${changeSuffix}`;
-  let result: ToolEditApprovalResult = { accepted: false };
   let diffSession: DiffSession | undefined;
   let tabCloseDisposable: vscode.Disposable | undefined;
   try {
@@ -351,11 +348,7 @@ export async function nativeRequestApproval(
     diffSession = openedSession;
 
     if (initialization.earlyResolution) {
-      result = initialization.earlyResolution;
-      return {
-        ...result,
-        lineChanges: result.lineChanges ?? lineChanges,
-      };
+      return initialization.earlyResolution;
     }
 
     let approvalSettled = false;
@@ -444,27 +437,18 @@ export async function nativeRequestApproval(
       );
     }
 
-    result = await approvalPromise;
+    const result = await approvalPromise;
 
-    if (result.accepted) {
-      const appliedContent = result.appliedContent;
-      if (appliedContent == null) {
-        throw new Error(
-          'Tool edit approval settled without the current proposed content.',
-        );
-      }
-      const userPatch = computeUserPatch(proposedContent, appliedContent);
-      result = {
-        ...result,
-        appliedContent,
-        userPatch,
-      };
+    // `requestToolEditApproval` derives userPatch, lineChanges, and startLine
+    // from the content this returns, so an accepted result only owes it the
+    // content the user actually approved.
+    if (result.accepted && result.appliedContent == null) {
+      throw new Error(
+        'Tool edit approval settled without the current proposed content.',
+      );
     }
 
-    return {
-      ...result,
-      lineChanges: result.lineChanges ?? lineChanges,
-    };
+    return result;
   } finally {
     initializingApprovals.delete(requestId);
     // Stop listening for tab closes before we programmatically close the diff.

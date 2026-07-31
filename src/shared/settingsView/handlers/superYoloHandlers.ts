@@ -24,7 +24,6 @@ export function buildSuperYoloMessage(
   const { workspaceState } = ports;
   return {
     command: SETTINGS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_ENABLED,
-    enabled: true,
     reliabilitySettings: ports.getReliabilitySettings(),
     allowOrchestratorKill: workspaceState.get<boolean>(
       WorkspaceStateKey.ALLOW_ORCHESTRATOR_KILL,

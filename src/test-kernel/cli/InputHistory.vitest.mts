@@ -1,30 +1,26 @@
 // Persistent ↑/↓ + Ctrl-R input history for the chat TUI input bar.
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { loadInputHistory } from '@cli/chat/tui/history/inputHistory';
+import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { createFakePlatform } from '@test/support/FakePlatform';
+import { setupPlatform } from '@test/support/setupPlatform';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 
 const tempDirs: string[] = [];
 
 describe('CLI TUI input history', () => {
-  beforeEach(async () => {
-    // GlobalStorageFS resolves paths through the platform but writes with the
-    // real node fs, so the fake platform needs a real temp directory.
-    const storageDir = await makeTempDir('texra-input-history-', tempDirs);
-    const [{ initPlatform }, { nodeFilesystem }, { createFakePlatform }] =
-      await Promise.all([
-        import('@platform/platform'),
-        import('@platform/defaults/nodeFilesystem'),
-        import('@test/support/FakePlatform'),
-      ]);
-    initPlatform(
-      createFakePlatform(
-        { globalStoragePath: storageDir },
-        { fs: nodeFilesystem },
-      ),
-    );
-  });
+  // GlobalStorageFS resolves paths through the platform but writes with the
+  // real node fs, so the fake platform needs a real temp directory.
+  setupPlatform(async () =>
+    createFakePlatform(
+      {
+        globalStoragePath: await makeTempDir('texra-input-history-', tempDirs),
+      },
+      { fs: nodeFilesystem },
+    ),
+  );
 
   afterEach(async () => {
     await cleanupTempDirs(tempDirs);

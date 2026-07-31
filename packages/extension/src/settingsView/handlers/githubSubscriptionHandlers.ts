@@ -8,6 +8,7 @@
 import * as vscode from 'vscode';
 
 import {
+  GITHUB_TOKEN_CREATE_URL,
   listGitHubSubscriptionEntries,
   unsubscribeGitHubKey,
 } from '@controllers/settingsView/githubSubscriptions';
@@ -72,11 +73,7 @@ export class GitHubSubscriptionHandlers {
   }
 
   async openGitHubTokenUrl(): Promise<void> {
-    await vscode.env.openExternal(
-      vscode.Uri.parse(
-        'https://github.com/settings/tokens/new?description=TeXRA%20PR%20subscription&scopes=repo',
-      ),
-    );
+    await vscode.env.openExternal(vscode.Uri.parse(GITHUB_TOKEN_CREATE_URL));
   }
 
   async sendPRSubscriptions(webview: vscode.Webview): Promise<void> {

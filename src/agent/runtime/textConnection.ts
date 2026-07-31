@@ -7,7 +7,7 @@ import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'LaTeXCommands';
 
-export interface ConnectionResult {
+interface ConnectionResult {
   connector: string;
   choice: string;
 }

@@ -18,6 +18,6 @@ const OPENAI_SDK_ERROR_MAPPINGS: readonly SdkErrorClassMapping[] = [
   { ctor: OpenAIAPIUserAbortError, kind: 'user_abort' },
 ];
 
-export function tagOpenAISdkError(err: unknown, provider = 'openai'): void {
+export function tagOpenAISdkError(err: unknown, provider: string): void {
   matchMappedSdkError(err, provider, OPENAI_SDK_ERROR_MAPPINGS, OpenAIAPIError);
 }

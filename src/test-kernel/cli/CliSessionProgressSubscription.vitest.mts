@@ -10,7 +10,6 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   SessionEventHub,
   type SessionEvent,
-  type SessionEventSubscriber,
   type SessionFact,
 } from '@agent/runtime/SessionEventHub';
 import type {
@@ -479,7 +478,7 @@ describe('attachCliSessionProgressProjection', () => {
   it('returns no record for an unknown event that reaches the run projection callback', () => {
     const events = new SessionEventHub();
     const writeRecord = recordWriter();
-    let runSubscriber: SessionEventSubscriber | undefined;
+    let runSubscriber: ((event: SessionEvent) => void) | undefined;
     vi.spyOn(events, 'subscribe').mockImplementation(
       (subscriber, filter = {}) => {
         if (filter.scope === 'run') runSubscriber = subscriber;

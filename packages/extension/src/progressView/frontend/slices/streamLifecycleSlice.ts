@@ -2,7 +2,7 @@
  * Stream lifecycle handlers: UPDATE_STREAMS, SET_ACTIVE_STREAM,
  * DELETE_STREAM, DELETE_ALL, UPDATE_PARENT_STREAM.
  *
- * Owns updateStreamInfo and mergeBackendOwnedState helpers.
+ * Owns the updateStreamInfo helper.
  */
 
 import { create } from 'mutative';
@@ -29,10 +29,7 @@ import {
 } from '../progressState';
 import { clearResolvedProposalIds } from './permissionSlice';
 import { pendingDescriptions, takePendingDescription } from './streamMetaSlice';
-import {
-  mergeBackendOwnedState,
-  metadataToStreamStatePartial,
-} from './streamStateMerge';
+import { mergeBackendOwnedState } from './streamStateMerge';
 import {
   clearCopyContentStore,
   clearProposalInputStore,
@@ -66,15 +63,7 @@ function updateStreamInfo(
     const existing = state.streamStates.get(stream.name);
     const metadata = backendMetadata?.[stream.name];
     if (metadata) {
-      mergedStates.set(
-        stream.name,
-        existing
-          ? mergeBackendOwnedState(existing, metadata)
-          : createStreamState(
-              stream.agentCategory,
-              metadataToStreamStatePartial(metadata),
-            ),
-      );
+      mergedStates.set(stream.name, mergeBackendOwnedState(existing, metadata));
     } else if (!existing) {
       mergedStates.set(stream.name, createStreamState(stream.agentCategory));
     }

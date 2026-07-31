@@ -57,11 +57,21 @@ import {
   DEFAULT_GIT_AUTHOR_NAME,
   DEFAULT_GIT_AUTHOR_EMAIL,
   DEFAULT_GIT_MARK_COMMITS,
+  DEFAULT_GIT_WORKTREE_SUPPORT,
+  DEFAULT_TOOL_PATH_PROTECTION_ENABLED,
 } from '@shared/schemas/stateSettings';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import type { AgentCategory } from '@shared/schemas/agent';
+import { AGENT_SKILLS_ENABLED_DEFAULT } from '@shared/schemas/agentSkills';
 import type { AgentModePreset } from '@shared/schemas/agentPresets';
-import { CLAUDE_AGENT_DEFAULT_MODEL } from '@shared/schemas/agentCliSettings';
+import {
+  CLAUDE_AGENT_DEFAULT_EFFORT,
+  CLAUDE_AGENT_DEFAULT_MODEL,
+  CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
+  CODEX_APPROVAL_POLICY_DEFAULT,
+  CODEX_REASONING_EFFORT_DEFAULT,
+  CODEX_SANDBOX_MODE_DEFAULT,
+} from '@shared/schemas/agentCliSettings';
 
 /** Target for the desktop-host "set provider key" modal. */
 export interface ProviderKeyModalTarget {
@@ -162,17 +172,31 @@ export const detachSubagentsOnStop = trackedSignal(() => false);
 // Approval and tool-safety settings state
 // ---------------------------------------------------------------------------
 export const bashApprovalEnabled = trackedSignal(() => true);
-export const toolPathProtectionEnabled = trackedSignal(() => true);
-export const agentSkillsEnabled = trackedSignal(() => true);
-export const codexSandboxMode = trackedSignal<string>(() => 'workspace-write');
-export const codexReasoningEffort = trackedSignal<string>(() => 'high');
-export const codexApprovalPolicy = trackedSignal<string>(() => 'never');
+export const toolPathProtectionEnabled = trackedSignal(
+  () => DEFAULT_TOOL_PATH_PROTECTION_ENABLED,
+);
+export const agentSkillsEnabled = trackedSignal(
+  () => AGENT_SKILLS_ENABLED_DEFAULT,
+);
+export const codexSandboxMode = trackedSignal<string>(
+  () => CODEX_SANDBOX_MODE_DEFAULT,
+);
+export const codexReasoningEffort = trackedSignal<string>(
+  () => CODEX_REASONING_EFFORT_DEFAULT,
+);
+export const codexApprovalPolicy = trackedSignal<string>(
+  () => CODEX_APPROVAL_POLICY_DEFAULT,
+);
 export const claudeAgentModel = trackedSignal<ClaudeAgentModel>(
   () => CLAUDE_AGENT_DEFAULT_MODEL,
 );
 export const claudeAgentPermissionMode =
-  trackedSignal<ClaudeAgentPermissionMode>(() => 'acceptEdits');
-export const claudeAgentEffort = trackedSignal<ClaudeAgentEffort>(() => 'high');
+  trackedSignal<ClaudeAgentPermissionMode>(
+    () => CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
+  );
+export const claudeAgentEffort = trackedSignal<ClaudeAgentEffort>(
+  () => CLAUDE_AGENT_DEFAULT_EFFORT,
+);
 
 // ---------------------------------------------------------------------------
 // Tool dashboard state
@@ -186,7 +210,9 @@ export const toolDashboardLoaded = trackedSignal(() => false);
 export const gitMarkCommits = trackedSignal(() => DEFAULT_GIT_MARK_COMMITS);
 export const gitAuthorName = trackedSignal(() => DEFAULT_GIT_AUTHOR_NAME);
 export const gitAuthorEmail = trackedSignal(() => DEFAULT_GIT_AUTHOR_EMAIL);
-export const gitWorktreeSupport = trackedSignal(() => false);
+export const gitWorktreeSupport = trackedSignal(
+  () => DEFAULT_GIT_WORKTREE_SUPPORT,
+);
 export const gitSettingsLoaded = trackedSignal(() => false);
 export const githubTokenStatus = trackedSignal<'secret' | 'env' | 'none'>(
   () => 'none',

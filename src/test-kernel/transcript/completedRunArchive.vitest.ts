@@ -19,7 +19,6 @@ import { clearStoreCache, getExecutionStore } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { TaskStateSchema, type TaskState } from '@agent/core/state/TaskState';
 import { loadChatExportInput } from '@agent/export/loadChatExportInput';
-import type { Platform } from '@platform/platform';
 import {
   LOG_LEVELS,
   MESSAGE_TYPES,
@@ -41,10 +40,6 @@ import {
 } from '@transcript';
 
 const tempDirs: string[] = [];
-
-function buildArchivePlatform(): Promise<Platform> {
-  return createTempDirPlatform('texra-archive-', tempDirs);
-}
 
 function taskState(agent: string, model = 'deepseekproT'): TaskState {
   return TaskStateSchema.parse({
@@ -167,7 +162,7 @@ function legacyConversationPath(): Promise<string> {
 }
 
 describe('completedRunArchive facade', () => {
-  setupPlatform(buildArchivePlatform);
+  setupPlatform(() => createTempDirPlatform('texra-archive-', tempDirs));
 
   beforeEach(() => {
     clearStoreCache();

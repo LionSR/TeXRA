@@ -5,6 +5,7 @@ import {
   type SettingsViewCommandActions,
 } from '@controllers/settingsView/SettingsViewCommandHandlers';
 import {
+  GITHUB_TOKEN_CREATE_URL,
   listGitHubSubscriptionEntries,
   unsubscribeGitHubKey,
 } from '@controllers/settingsView/githubSubscriptions';
@@ -334,9 +335,7 @@ export function createDesktopSettingsIpc(
   }
 
   async function openGitHubTokenUrl(): Promise<void> {
-    await options.ui.openExternal?.(
-      'https://github.com/settings/tokens/new?description=TeXRA%20PR%20subscription&scopes=repo',
-    );
+    await options.ui.openExternal?.(GITHUB_TOKEN_CREATE_URL);
   }
 
   async function postGitHubSubscriptions(): Promise<void> {
