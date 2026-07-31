@@ -41,18 +41,24 @@ export interface UseAsyncListFormOptions<T> {
    * actionable can omit this.
    */
   readonly isEmpty?: (data: T) => boolean;
+  /** Also close an empty picker on Enter when its footer advertises that key. */
+  readonly closeEmptyOnEnter?: boolean;
 }
 
 export function shouldCloseAsyncListFormOnInput(args: {
   readonly input: string;
-  readonly key: Pick<ReturnKeyInput, 'escape'>;
+  readonly key: Pick<ReturnKeyInput, 'escape' | 'return'>;
   readonly loading: boolean;
   readonly error: string | undefined;
   readonly empty: boolean;
+  readonly closeEmptyOnEnter?: boolean;
 }): boolean {
   return (
-    (args.loading || args.error !== undefined || args.empty) &&
-    isEscapeInput(args.input, args.key)
+    ((args.loading || args.error !== undefined || args.empty) &&
+      isEscapeInput(args.input, args.key)) ||
+    (args.empty &&
+      args.closeEmptyOnEnter === true &&
+      isPlainReturnInput(args.input, args.key))
   );
 }
 
@@ -106,6 +112,7 @@ export function useAsyncListForm<T>(
         loading,
         error,
         empty,
+        closeEmptyOnEnter: options.closeEmptyOnEnter,
       })
     ) {
       options.onClose();

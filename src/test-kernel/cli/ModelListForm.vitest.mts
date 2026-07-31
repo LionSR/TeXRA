@@ -79,6 +79,28 @@ describe('CLI async list form close input', () => {
       }),
     ).toBe(false);
   });
+
+  it('closes an empty picker on Enter only when its footer advertises it', () => {
+    expect(
+      shouldCloseAsyncListFormOnInput({
+        input: '\r',
+        key: { return: true },
+        loading: false,
+        error: undefined,
+        empty: true,
+        closeEmptyOnEnter: true,
+      }),
+    ).toBe(true);
+    expect(
+      shouldCloseAsyncListFormOnInput({
+        input: '\r',
+        key: { return: true },
+        loading: false,
+        error: undefined,
+        empty: true,
+      }),
+    ).toBe(false);
+  });
 });
 
 describe('CLI async list form buffered input', () => {
