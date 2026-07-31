@@ -101,53 +101,41 @@ function convertHtmlToMarkdown(html: string): string {
 }
 
 /**
- * Reference type patterns for Pandoc normalization.
- * Each entry maps reference type to the LaTeX command.
+ * Pandoc reference rewrites, compiled once at module load.
+ *
+ * Pandoc emits references in three shapes, each carrying the same
+ * `{reference-type="..." reference="label"}` suffix:
+ * - `[\[label\]](#anchor){...}`: markdown link with escaped brackets
+ * - `[label](#anchor){...}`: plain markdown link
+ * - `[label]{...}`: bare
+ * All three become the canonical `\ref{label}` / `\eqref{label}` /
+ * `\cref{label}`.
  */
-const REFERENCE_PATTERNS: Array<{ type: string; command: string }> = [
-  { type: 'ref', command: 'ref' },
-  { type: 'eqref', command: 'eqref' },
-  { type: '[Cc]ref', command: 'cref' },
-];
+const PANDOC_REFERENCE_REWRITES: ReadonlyArray<readonly [RegExp, string]> = (
+  [
+    { type: 'ref', command: 'ref' },
+    { type: 'eqref', command: 'eqref' },
+    { type: '[Cc]ref', command: 'cref' },
+  ] as const
+).flatMap(({ type, command }) => {
+  const suffix = `\\{reference-type="${type}"\\s+reference="([^"]+)"\\}`;
+  const replacement = `\\${command}{$2}`;
+  return [
+    [
+      new RegExp(`\\[\\\\?\\[([^\\]]+)\\\\?\\]\\]\\(#[^)]*\\)${suffix}`, 'g'),
+      replacement,
+    ],
+    [new RegExp(`\\[([^\\[\\]]+)\\]\\(#[^)]*\\)${suffix}`, 'g'), replacement],
+    [new RegExp(`\\[([^\\]]+)\\]${suffix}`, 'g'), replacement],
+  ] as const;
+});
 
-/**
- * Normalize Pandoc reference syntax to canonical LaTeX format.
- * Pandoc outputs references in formats like:
- * - [label]{reference-type="ref" reference="label"}
- * - [\[label\]](#anchor){reference-type="ref" reference="label"}
- * These are converted to standard \ref{label}, \cref{label}, \eqref{label}
- */
+/** Normalize Pandoc reference syntax to canonical LaTeX commands. */
 function normalizePandocReferences(text: string): string {
-  for (const { type, command } of REFERENCE_PATTERNS) {
-    // Handle markdown-link format: [\[label\]](#anchor){reference-type="ref" reference="label"}
-    text = text.replaceAll(
-      new RegExp(
-        `\\[\\\\?\\[([^\\]]+)\\\\?\\]\\]\\(#[^)]*\\)\\{reference-type="${type}"\\s+reference="([^"]+)"\\}`,
-        'g',
-      ),
-      `\\${command}{$2}`,
-    );
-
-    // Handle plain markdown-link format: [label](#anchor){reference-type="ref" reference="label"}
-    text = text.replaceAll(
-      new RegExp(
-        `\\[([^\\[\\]]+)\\]\\(#[^)]*\\)\\{reference-type="${type}"\\s+reference="([^"]+)"\\}`,
-        'g',
-      ),
-      `\\${command}{$2}`,
-    );
-
-    // Handle simple Pandoc format: [label]{reference-type="ref" reference="label"}
-    text = text.replaceAll(
-      new RegExp(
-        `\\[([^\\]]+)\\]\\{reference-type="${type}"\\s+reference="([^"]+)"\\}`,
-        'g',
-      ),
-      `\\${command}{$2}`,
-    );
-  }
-
-  return text;
+  return PANDOC_REFERENCE_REWRITES.reduce(
+    (result, [pattern, replacement]) => result.replaceAll(pattern, replacement),
+    text,
+  );
 }
 
 /**

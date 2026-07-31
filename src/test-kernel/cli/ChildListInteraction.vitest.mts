@@ -1,3 +1,5 @@
+import { setTimeout as sleep } from 'node:timers/promises';
+
 import { describe, expect, it, vi } from 'vitest';
 
 import { SubagentList } from '@cli/chat/tui/panes/SubagentList';
@@ -238,7 +240,7 @@ describe('CLI child list interaction', () => {
     try {
       await waitFor(() => stdin.listenerCount('readable') > 0);
       for (const input of ['v', 'k', 's', 'r', '\r']) stdin.write(input);
-      await new Promise((resolve) => setTimeout(resolve, 30));
+      await sleep(30);
 
       for (const callback of Object.values(callbacks)) {
         expect(callback).not.toHaveBeenCalled();
@@ -297,7 +299,7 @@ describe('CLI child list interaction', () => {
       await waitFor(() => stdin.listenerCount('readable') > 0);
       stdin.write('[A');
       // No state change to await for a no-op; give the event loop a turn.
-      await new Promise((resolve) => setTimeout(resolve, 30));
+      await sleep(30);
 
       expect(onCancel).not.toHaveBeenCalled();
       expect(onSelectionChange).not.toHaveBeenCalled();

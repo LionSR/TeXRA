@@ -281,13 +281,9 @@ export class DesktopProgressBridge {
     });
     this.state = this.backend.state;
     this.streamLogs = this.state.streamLogs;
-    const detachCompletedResult = this.session.onResult((event) => {
+    this.detachCompletedResult = this.session.onResult((event) => {
       if (event.outcome === 'completed') this.options.host.onRunCompleted();
     });
-    this.detachCompletedResult = () => {
-      detachCompletedResult();
-      this.detachCompletedResult = () => undefined;
-    };
     this.initialization = this.initializeCanonicalState(presentationHost);
   }
 

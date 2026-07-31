@@ -329,11 +329,14 @@ export async function checkToolInstalled(
 
     return isInstalled;
   } catch (err) {
+    // The user-facing message is always the tool's own install guidance, so
+    // log the underlying cause instead of dropping it.
+    logger.warn(
+      CHANNEL,
+      `Tool check for '${toolName ?? 'custom config'}' failed: ${toErrorMessage(err)}`,
+    );
     if (showError) {
-      const errorMessage =
-        config.errorMessage ||
-        `Failed to check tool installation: ${toErrorMessage(err)}`;
-      await reportMissingTool(errorMessage);
+      await reportMissingTool(config.errorMessage);
     }
     return false;
   }
@@ -456,33 +459,26 @@ export const SYSTEM_PACKAGE_MANAGERS = ['brew', 'apt', 'scoop'] as const;
 
 export type SystemPackageManager = (typeof SYSTEM_PACKAGE_MANAGERS)[number];
 
-let cachedPackageManager: SystemPackageManager | undefined;
+// Platform-aware probe order: check the platform's native PM first so that
+// cross-platform installs (e.g. Linuxbrew on Linux) don't shadow the PM that
+// DEPENDENCY_INSTALL_COMMANDS actually uses for that platform.
+const PREFERRED_PACKAGE_MANAGER: Readonly<
+  Partial<Record<NodeJS.Platform, SystemPackageManager>>
+> = Object.freeze({ darwin: 'brew', linux: 'apt', win32: 'scoop' });
 
 /**
  * Detect the first available package manager on the system.
- * Returns 'brew', 'apt', 'scoop', or null if none found.
+ * Returns 'brew', 'apt', 'scoop', or null if none found. Each answer comes
+ * from {@link hasPackageManager}, which owns the probe cache.
  */
 export function detectPackageManager(): SystemPackageManager | null {
-  if (cachedPackageManager !== undefined) return cachedPackageManager;
-
-  // Platform-aware order: check the platform's native PM first so that
-  // cross-platform installs (e.g. Linuxbrew on Linux) don't shadow the
-  // PM that DEPENDENCY_INSTALL_COMMANDS actually uses for that platform.
-  const preferred: Partial<Record<NodeJS.Platform, SystemPackageManager>> = {
-    darwin: 'brew',
-    linux: 'apt',
-    win32: 'scoop',
-  };
-  const first = preferred[process.platform];
+  const first = PREFERRED_PACKAGE_MANAGER[process.platform];
   const managers = first
     ? [first, ...SYSTEM_PACKAGE_MANAGERS.filter((name) => name !== first)]
     : SYSTEM_PACKAGE_MANAGERS;
 
   for (const name of managers) {
-    if (hasPackageManager(name)) {
-      cachedPackageManager = name;
-      return name;
-    }
+    if (hasPackageManager(name)) return name;
   }
 
   logger.debug(CHANNEL, 'No package manager detected');

@@ -9,7 +9,7 @@ import '@test/support/defaultSessionTestSetup';
 import * as path from 'node:path';
 
 // Third-party imports
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@tools/goal', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tools/goal')>();
@@ -75,6 +75,23 @@ import {
 } from '@transcript/streamDataPaths';
 import { StorageFS } from '@utils/files';
 
+/**
+ * Everything a test creates that needs releasing. One owner tears them down in
+ * reverse creation order, so no test carries its own `finally` teardown.
+ */
+const testDisposables: { dispose(): void }[] = [];
+
+afterEach(() => {
+  for (const disposable of testDisposables.splice(0).reverse()) {
+    disposable.dispose();
+  }
+});
+
+function track<T extends { dispose(): void }>(disposable: T): T {
+  testDisposables.push(disposable);
+  return disposable;
+}
+
 function createApprovalOptions() {
   return {
     canSend: () => true,
@@ -100,6 +117,14 @@ function createLifecycleOptions(
   };
 }
 
+/** A live-store session with restart repair deferred, as the hosts open it. */
+async function createLiveStoreSession(): Promise<SessionHandle> {
+  return new SessionHandle({
+    transcripts: await StreamLogStore.open(),
+    restartRepair: 'deferred',
+  });
+}
+
 function toolUseTaskState(agent: string, model: string): TaskState {
   return {
     agentConfig: {
@@ -115,16 +140,18 @@ function createRecordingBackend(): {
   messages: ProgressViewOutboundMessage[];
 } {
   const messages: ProgressViewOutboundMessage[] = [];
-  const backend = new ProgressBackend({
-    storage: new FakeStateStore(),
-    sendMessage: (message) => {
-      messages.push(message);
-      return true;
-    },
-    hasTarget: () => true,
-    approvals: createApprovalOptions(),
-    lifecycle: createLifecycleOptions(),
-  });
+  const backend = track(
+    new ProgressBackend({
+      storage: new FakeStateStore(),
+      sendMessage: (message) => {
+        messages.push(message);
+        return true;
+      },
+      hasTarget: () => true,
+      approvals: createApprovalOptions(),
+      lifecycle: createLifecycleOptions(),
+    }),
+  );
   return { backend, messages };
 }
 
@@ -138,17 +165,20 @@ function createIsolatedRecordingBackend(
   lifecycle: ProgressBackendOptions['lifecycle'];
 } {
   const messages: ProgressViewOutboundMessage[] = [];
-  const backend = new ProgressBackend({
-    storage: new FakeStateStore(),
-    session,
-    sendMessage: (message) => {
-      messages.push(message);
-      return true;
-    },
-    hasTarget: () => true,
-    approvals: createApprovalOptions(),
-    lifecycle,
-  });
+  track(session);
+  const backend = track(
+    new ProgressBackend({
+      storage: new FakeStateStore(),
+      session,
+      sendMessage: (message) => {
+        messages.push(message);
+        return true;
+      },
+      hasTarget: () => true,
+      approvals: createApprovalOptions(),
+      lifecycle,
+    }),
+  );
   return { backend, lifecycle, messages, session };
 }
 
@@ -245,11 +275,7 @@ function emitStreamDescription(
 async function expectDeletionBeforeStorageRootReplacement(
   deletionKind: 'one-stream' | 'all-streams',
 ): Promise<void> {
-  const transcripts = await StreamLogStore.open();
-  const session = new SessionHandle({
-    transcripts,
-    restartRepair: 'deferred',
-  });
+  const session = await createLiveStoreSession();
   const { backend } = createIsolatedRecordingBackend(session);
   const stream = `${deletionKind}-before-root-move` as StreamTabId;
   const operations: string[] = [];
@@ -299,8 +325,6 @@ async function expectDeletionBeforeStorageRootReplacement(
     expect(operations).toEqual(['delete:start', 'delete:end', 'reload']);
   } finally {
     finishDeletion?.();
-    backend.dispose();
-    session.dispose();
   }
 }
 
@@ -367,8 +391,6 @@ async function expectDeletionReleasesEarlierRootReplacement(
     expect(operations).toEqual(['reload:start', 'stop', 'reload:end']);
   } finally {
     releaseReload?.();
-    backend.dispose();
-    session.dispose();
   }
 }
 
@@ -416,45 +438,30 @@ async function expectRetentionNoticeDoesNotBlockStorageRootReplacement(
     await workspaceMove;
   } finally {
     finishNotice?.();
-    backend.dispose();
-    session.dispose();
   }
 }
 
 describe('ProgressBackend', () => {
   it('loads an unfiltered presentation without reloading its live transcript', async () => {
-    const transcripts = await StreamLogStore.open();
-    const session = new SessionHandle({
-      transcripts,
-      restartRepair: 'deferred',
-    });
+    const session = await createLiveStoreSession();
     const waitUntilReady = vi.spyOn(session, 'waitUntilReady');
-    const reload = vi.spyOn(transcripts, 'reload');
+    const reload = vi.spyOn(session.transcripts, 'reload');
     const { backend } = createIsolatedRecordingBackend(session);
     backend.state.agentCategoryFilter = AgentCategory.Workflow;
 
-    try {
-      await backend.load();
+    await backend.load();
 
-      expect(waitUntilReady).toHaveBeenCalledOnce();
-      expect(reload).not.toHaveBeenCalled();
-      expect(backend.state.agentCategoryFilter).toBe('all');
-    } finally {
-      backend.dispose();
-      session.dispose();
-    }
+    expect(waitUntilReady).toHaveBeenCalledOnce();
+    expect(reload).not.toHaveBeenCalled();
+    expect(backend.state.agentCategoryFilter).toBe('all');
   });
 
   it('uses the session-owned replacement boundary after a workspace move', async () => {
-    const transcripts = await StreamLogStore.open();
-    const session = new SessionHandle({
-      transcripts,
-      restartRepair: 'deferred',
-    });
+    const session = await createLiveStoreSession();
     const reloadAfterStorageRootChange = vi
       .spyOn(session, 'reloadAfterStorageRootChange')
       .mockResolvedValue(true);
-    const transcriptReload = vi.spyOn(transcripts, 'reload');
+    const transcriptReload = vi.spyOn(session.transcripts, 'reload');
     const { backend } = createIsolatedRecordingBackend(session);
     const resetPresentation = vi.spyOn(
       backend.state,
@@ -463,26 +470,17 @@ describe('ProgressBackend', () => {
     const clearBridge = vi.spyOn(backend.webviewBridge, 'clearAll');
     backend.state.agentCategoryFilter = AgentCategory.Workflow;
 
-    try {
-      await backend.reloadAfterStorageRootChange();
+    await backend.reloadAfterStorageRootChange();
 
-      expect(reloadAfterStorageRootChange).toHaveBeenCalledOnce();
-      expect(resetPresentation).toHaveBeenCalledOnce();
-      expect(clearBridge).toHaveBeenCalledOnce();
-      expect(transcriptReload).not.toHaveBeenCalled();
-      expect(backend.state.agentCategoryFilter).toBe('all');
-    } finally {
-      backend.dispose();
-      session.dispose();
-    }
+    expect(reloadAfterStorageRootChange).toHaveBeenCalledOnce();
+    expect(resetPresentation).toHaveBeenCalledOnce();
+    expect(clearBridge).toHaveBeenCalledOnce();
+    expect(transcriptReload).not.toHaveBeenCalled();
+    expect(backend.state.agentCategoryFilter).toBe('all');
   });
 
   it('keeps presentation caches when the effective storage root is unchanged', async () => {
-    const transcripts = await StreamLogStore.open();
-    const session = new SessionHandle({
-      transcripts,
-      restartRepair: 'deferred',
-    });
+    const session = await createLiveStoreSession();
     vi.spyOn(session, 'reloadAfterStorageRootChange').mockResolvedValue(false);
     const { backend } = createIsolatedRecordingBackend(session);
     const resetPresentation = vi.spyOn(
@@ -492,24 +490,15 @@ describe('ProgressBackend', () => {
     const clearBridge = vi.spyOn(backend.webviewBridge, 'clearAll');
     const loadPresentation = vi.spyOn(backend.state, 'load');
 
-    try {
-      await backend.reloadAfterStorageRootChange();
+    await backend.reloadAfterStorageRootChange();
 
-      expect(resetPresentation).not.toHaveBeenCalled();
-      expect(clearBridge).not.toHaveBeenCalled();
-      expect(loadPresentation).not.toHaveBeenCalled();
-    } finally {
-      backend.dispose();
-      session.dispose();
-    }
+    expect(resetPresentation).not.toHaveBeenCalled();
+    expect(clearBridge).not.toHaveBeenCalled();
+    expect(loadPresentation).not.toHaveBeenCalled();
   });
 
   it('reconciles presentation caches after a partial session reload', async () => {
-    const transcripts = await StreamLogStore.open();
-    const session = new SessionHandle({
-      transcripts,
-      restartRepair: 'deferred',
-    });
+    const session = await createLiveStoreSession();
     const reloadError = new Error('snapshot hydration failed');
     vi.spyOn(session, 'reloadAfterStorageRootChange').mockRejectedValue(
       reloadError,
@@ -524,26 +513,17 @@ describe('ProgressBackend', () => {
       .spyOn(backend.state, 'load')
       .mockResolvedValue();
 
-    try {
-      await expect(backend.reloadAfterStorageRootChange()).rejects.toBe(
-        reloadError,
-      );
+    await expect(backend.reloadAfterStorageRootChange()).rejects.toBe(
+      reloadError,
+    );
 
-      expect(resetPresentation).toHaveBeenCalledOnce();
-      expect(clearBridge).toHaveBeenCalledOnce();
-      expect(loadPresentation).toHaveBeenCalledOnce();
-    } finally {
-      backend.dispose();
-      session.dispose();
-    }
+    expect(resetPresentation).toHaveBeenCalledOnce();
+    expect(clearBridge).toHaveBeenCalledOnce();
+    expect(loadPresentation).toHaveBeenCalledOnce();
   });
 
   it('retries presentation loading after the storage root already moved', async () => {
-    const transcripts = await StreamLogStore.open();
-    const session = new SessionHandle({
-      transcripts,
-      restartRepair: 'deferred',
-    });
+    const session = await createLiveStoreSession();
     vi.spyOn(session, 'reloadAfterStorageRootChange')
       .mockResolvedValueOnce(true)
       .mockResolvedValue(false);
@@ -554,27 +534,18 @@ describe('ProgressBackend', () => {
       .mockRejectedValueOnce(presentationError)
       .mockResolvedValue();
 
-    try {
-      await expect(backend.reloadAfterStorageRootChange()).rejects.toBe(
-        presentationError,
-      );
-      await expect(
-        backend.reloadAfterStorageRootChange(),
-      ).resolves.toBeUndefined();
+    await expect(backend.reloadAfterStorageRootChange()).rejects.toBe(
+      presentationError,
+    );
+    await expect(
+      backend.reloadAfterStorageRootChange(),
+    ).resolves.toBeUndefined();
 
-      expect(loadPresentation).toHaveBeenCalledTimes(2);
-    } finally {
-      backend.dispose();
-      session.dispose();
-    }
+    expect(loadPresentation).toHaveBeenCalledTimes(2);
   });
 
   it('serializes complete presentation reloads across rapid workspace moves', async () => {
-    const transcripts = await StreamLogStore.open();
-    const session = new SessionHandle({
-      transcripts,
-      restartRepair: 'deferred',
-    });
+    const session = await createLiveStoreSession();
     let finishFirstReload: ((replaced: boolean) => void) | undefined;
     const firstReload = new Promise<boolean>((resolve) => {
       finishFirstReload = resolve;
@@ -585,29 +556,20 @@ describe('ProgressBackend', () => {
       .mockResolvedValue(true);
     const { backend } = createIsolatedRecordingBackend(session);
 
-    try {
-      const first = backend.reloadAfterStorageRootChange();
-      const second = backend.reloadAfterStorageRootChange();
-      await Promise.resolve();
+    const first = backend.reloadAfterStorageRootChange();
+    const second = backend.reloadAfterStorageRootChange();
+    await Promise.resolve();
 
-      expect(reloadAfterStorageRootChange).toHaveBeenCalledOnce();
-      finishFirstReload?.(true);
-      await first;
-      await second;
+    expect(reloadAfterStorageRootChange).toHaveBeenCalledOnce();
+    finishFirstReload?.(true);
+    await first;
+    await second;
 
-      expect(reloadAfterStorageRootChange).toHaveBeenCalledTimes(2);
-    } finally {
-      backend.dispose();
-      session.dispose();
-    }
+    expect(reloadAfterStorageRootChange).toHaveBeenCalledTimes(2);
   });
 
   it('finishes the initial presentation load before a workspace move', async () => {
-    const transcripts = await StreamLogStore.open();
-    const session = new SessionHandle({
-      transcripts,
-      restartRepair: 'deferred',
-    });
+    const session = await createLiveStoreSession();
     vi.spyOn(session, 'waitUntilReady').mockResolvedValue();
     const reloadAfterStorageRootChange = vi
       .spyOn(session, 'reloadAfterStorageRootChange')
@@ -621,24 +583,19 @@ describe('ProgressBackend', () => {
       .mockReturnValueOnce(initialLoadBlocked)
       .mockResolvedValue();
 
-    try {
-      const initialLoad = backend.load();
-      await vi.waitFor(() => {
-        expect(backend.state.load).toHaveBeenCalledOnce();
-      });
-      const workspaceMove = backend.reloadAfterStorageRootChange();
-      await Promise.resolve();
+    const initialLoad = backend.load();
+    await vi.waitFor(() => {
+      expect(backend.state.load).toHaveBeenCalledOnce();
+    });
+    const workspaceMove = backend.reloadAfterStorageRootChange();
+    await Promise.resolve();
 
-      expect(reloadAfterStorageRootChange).not.toHaveBeenCalled();
-      finishInitialLoad?.();
-      await initialLoad;
-      await workspaceMove;
+    expect(reloadAfterStorageRootChange).not.toHaveBeenCalled();
+    finishInitialLoad?.();
+    await initialLoad;
+    await workspaceMove;
 
-      expect(reloadAfterStorageRootChange).toHaveBeenCalledOnce();
-    } finally {
-      backend.dispose();
-      session.dispose();
-    }
+    expect(reloadAfterStorageRootChange).toHaveBeenCalledOnce();
   });
 
   it('finishes a one-stream deletion before replacing the storage root', async () => {
@@ -698,123 +655,97 @@ describe('ProgressBackend', () => {
         bypassActive: true,
       },
     ]);
-
-    backend.dispose();
   });
 
   it('constructs the shared progress backend service graph', () => {
     const { backend } = createRecordingBackend();
 
     expect(backend.approvalHandlers).toBeDefined();
-
-    backend.dispose();
   });
 
   it('handles session facts through its local subscription', () => {
     const target = createIsolatedRecordingBackend();
     const { backend, session } = target;
-    const subscription = backend.setupEventListeners();
+    track(backend.setupEventListeners());
     const streamId = 'desktop-local-stream' as StreamTabId;
 
-    try {
-      emitActiveStream(target, {
-        streamId,
-        agentCategory: AgentCategory.Workflow,
-      });
+    emitActiveStream(target, {
+      streamId,
+      agentCategory: AgentCategory.Workflow,
+    });
 
-      expect(backend.state.activeStream).toBe(streamId);
-      expect(backend.state.streamLogs.has(streamId)).toBe(true);
-    } finally {
-      subscription.dispose();
-      backend.dispose();
-      session.dispose();
-    }
+    expect(backend.state.activeStream).toBe(streamId);
+    expect(backend.state.streamLogs.has(streamId)).toBe(true);
   });
 
   it('attaches snapshot events before run-fact projection', () => {
     const target = createIsolatedRecordingBackend();
-    const { backend, session } = target;
-    const subscription = backend.setupEventListeners();
+    const { backend } = target;
+    track(backend.setupEventListeners());
     const streamId = 'snapshot-before-projection' as StreamTabId;
 
-    try {
-      emitRunConfig(
-        target,
-        streamId,
-        'c40001' as ExecutionId,
-        toolUseTaskState('search', 'deepseekproT'),
-      );
+    emitRunConfig(
+      target,
+      streamId,
+      'c40001' as ExecutionId,
+      toolUseTaskState('search', 'deepseekproT'),
+    );
 
-      expect(backend.state.getStreamMetadata(streamId).run).toMatchObject({
-        kind: 'agent',
-        agent: 'search',
-        model: 'deepseekproT',
-      });
-    } finally {
-      subscription.dispose();
-      backend.dispose();
-      session.dispose();
-    }
+    expect(backend.state.getStreamMetadata(streamId).run).toMatchObject({
+      kind: 'agent',
+      agent: 'search',
+      model: 'deepseekproT',
+    });
   });
 
   it('applies active-stream facts before host navigation callbacks', () => {
-    const session = createTestSession();
+    const session = track(createTestSession());
     const streamId = 'fact-before-route' as StreamTabId;
     const onSetActiveStream = vi.fn(() => {
       throw new Error('closed renderer');
     });
-    const backend = new ProgressBackend({
-      storage: new FakeStateStore(),
-      session,
-      sendMessage: vi.fn(() => true),
-      hasTarget: () => true,
-      approvals: createApprovalOptions(),
-      lifecycle: createLifecycleOptions(),
-      onSetActiveStream,
-    });
-    const subscription = backend.setupEventListeners();
+    const backend = track(
+      new ProgressBackend({
+        storage: new FakeStateStore(),
+        session,
+        sendMessage: vi.fn(() => true),
+        hasTarget: () => true,
+        approvals: createApprovalOptions(),
+        lifecycle: createLifecycleOptions(),
+        onSetActiveStream,
+      }),
+    );
+    track(backend.setupEventListeners());
 
-    try {
-      emitActiveStream(
-        { session },
-        { streamId, agentCategory: AgentCategory.Workflow },
-      );
+    emitActiveStream(
+      { session },
+      { streamId, agentCategory: AgentCategory.Workflow },
+    );
 
-      expect(backend.state.activeStream).toBe(streamId);
-      expect(backend.state.streamLogs.has(streamId)).toBe(true);
-      expect(onSetActiveStream).toHaveBeenCalledOnce();
-    } finally {
-      subscription.dispose();
-      backend.dispose();
-      session.dispose();
-    }
+    expect(backend.state.activeStream).toBe(streamId);
+    expect(backend.state.streamLogs.has(streamId)).toBe(true);
+    expect(onSetActiveStream).toHaveBeenCalledOnce();
   });
 
   it('clears an empty active-stream selection through the shared fact path', async () => {
     const target = createIsolatedRecordingBackend();
-    const { backend, messages, session } = target;
-    const subscription = backend.setupEventListeners();
+    const { backend, messages } = target;
+    track(backend.setupEventListeners());
 
-    try {
-      backend.state.activeStream = 'previous-stream';
-      emitActiveStream(target, { streamId: null });
+    backend.state.activeStream = 'previous-stream';
+    emitActiveStream(target, { streamId: null });
 
-      await vi.waitFor(() => expect(backend.state.activeStream).toBe(''));
-      expect(messages).toContainEqual({
-        command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
-        activeStream: '',
-      });
-    } finally {
-      subscription.dispose();
-      backend.dispose();
-      session.dispose();
-    }
+    await vi.waitFor(() => expect(backend.state.activeStream).toBe(''));
+    expect(messages).toContainEqual({
+      command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+      activeStream: '',
+    });
   });
 
   it('projects goal-state changes through the shared fact path', async () => {
     const target = createIsolatedRecordingBackend();
     const { backend, messages, session } = target;
-    const subscription = backend.setupEventListeners();
+    track(backend.setupEventListeners());
     const stream = 'goal-projection' as StreamTabId;
 
     try {
@@ -835,9 +766,6 @@ describe('ProgressBackend', () => {
       );
     } finally {
       await GoalStore.forget(stream);
-      subscription.dispose();
-      backend.dispose();
-      session.dispose();
     }
   });
 
@@ -849,7 +777,7 @@ describe('ProgressBackend', () => {
         cleanupDeletedStream: (stream) => deletedStreams.push(stream),
       }),
     );
-    const subscription = backend.setupEventListeners();
+    track(backend.setupEventListeners());
     const streamId = 'desktop-child-stream' as StreamTabId;
 
     try {
@@ -865,66 +793,45 @@ describe('ProgressBackend', () => {
       expect(backend.state.streamLogs.has(streamId)).toBe(false);
       expect(backend.state.getStreamState(streamId)).toBeUndefined();
     } finally {
-      subscription.dispose();
       await backend.state.clearAll();
-      backend.dispose();
-      session.dispose();
     }
   });
 
   it('handles removeStream session facts before backend load', async () => {
     const { backend, session } = createIsolatedRecordingBackend();
     const clearStream = vi.spyOn(backend.state, 'clearStream');
-    const subscription = backend.setupEventListeners();
+    track(backend.setupEventListeners());
     const streamId = 'preload-child-stream' as StreamTabId;
 
-    try {
-      session.events.emit({
-        scope: 'session',
-        event: { type: 'removeStream', payload: { streamId } },
-      });
+    session.events.emit({
+      scope: 'session',
+      event: { type: 'removeStream', payload: { streamId } },
+    });
 
-      await vi.waitFor(() =>
-        expect(clearStream).toHaveBeenCalledWith(streamId),
-      );
-    } finally {
-      subscription.dispose();
-      backend.dispose();
-      session.dispose();
-    }
+    await vi.waitFor(() => expect(clearStream).toHaveBeenCalledWith(streamId));
   });
 
   it('refuses reserved stream identifiers before durable cleanup', async () => {
-    const { backend, session } = createIsolatedRecordingBackend();
+    const { backend } = createIsolatedRecordingBackend();
     const clearStream = vi.spyOn(backend.state, 'clearStream');
 
-    try {
-      await backend.deleteStream('' as StreamTabId);
-      await backend.deleteStream('.' as StreamTabId);
-      await backend.deleteStream('..' as StreamTabId);
+    await backend.deleteStream('' as StreamTabId);
+    await backend.deleteStream('.' as StreamTabId);
+    await backend.deleteStream('..' as StreamTabId);
 
-      expect(clearStream).not.toHaveBeenCalled();
-    } finally {
-      backend.dispose();
-      session.dispose();
-    }
+    expect(clearStream).not.toHaveBeenCalled();
   });
 
   it('clears retry UI when stopping without deleting', async () => {
-    const { backend, lifecycle, session } = createIsolatedRecordingBackend();
+    const { backend, lifecycle } = createIsolatedRecordingBackend();
     const stream = 'standalone-stop' as StreamTabId;
 
-    try {
-      await backend.stopStream(stream);
+    await backend.stopStream(stream);
 
-      expect(lifecycle.stopStream).toHaveBeenCalledWith(stream, {
-        clearRetryRequest: true,
-      });
-      expect(lifecycle.cleanupDeletedStream).not.toHaveBeenCalled();
-    } finally {
-      backend.dispose();
-      session.dispose();
-    }
+    expect(lifecycle.stopStream).toHaveBeenCalledWith(stream, {
+      clearRetryRequest: true,
+    });
+    expect(lifecycle.cleanupDeletedStream).not.toHaveBeenCalled();
   });
 
   it('waits for a terminal child lease after its handle is untracked', async () => {
@@ -956,39 +863,31 @@ describe('ProgressBackend', () => {
       expect(backend.state.streamLogs.has(stream)).toBe(false);
     } finally {
       releaseLease();
-      backend.dispose();
-      session.dispose();
     }
   });
 
   it('deletes an active stream and activates the next visible stream', async () => {
-    const { backend, lifecycle, messages, session } =
-      createIsolatedRecordingBackend();
+    const { backend, lifecycle, messages } = createIsolatedRecordingBackend();
     const first = 'first-visible' as StreamTabId;
     const second = 'second-visible' as StreamTabId;
 
-    try {
-      backend.state.streamLogs.ensureStream(first);
-      backend.state.streamLogs.ensureStream(second);
-      backend.state.activeStream = second;
+    backend.state.streamLogs.ensureStream(first);
+    backend.state.streamLogs.ensureStream(second);
+    backend.state.activeStream = second;
 
-      await backend.deleteStream(second);
+    await backend.deleteStream(second);
 
-      expect(lifecycle.cleanupDeletedStream).toHaveBeenCalledWith(second);
-      expect(lifecycle.activateStream).toHaveBeenCalledWith(first);
-      expect(messages).toContainEqual({
-        command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
-        stream: second,
-      });
-    } finally {
-      backend.dispose();
-      session.dispose();
-    }
+    expect(lifecycle.cleanupDeletedStream).toHaveBeenCalledWith(second);
+    expect(lifecycle.activateStream).toHaveBeenCalledWith(first);
+    expect(messages).toContainEqual({
+      command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
+      stream: second,
+    });
   });
 
   it('skips hidden fallbacks after deleting the active stream', async () => {
     const target = createIsolatedRecordingBackend();
-    const { backend, lifecycle, session } = target;
+    const { backend, lifecycle } = target;
     const active = 'active-workflow' as StreamTabId;
     const hidden = 'hidden-tool-use' as StreamTabId;
     const visible = 'visible-workflow' as StreamTabId;
@@ -997,69 +896,59 @@ describe('ProgressBackend', () => {
       'requestEviction',
     );
 
-    try {
-      // The unfiltered durable fallback selects the last stream (`hidden`),
-      // then the progress filter replaces it with `visible`.
-      for (const stream of [active, visible, hidden]) {
-        backend.state.streamLogs.ensureStream(stream);
-      }
-      backend.state.updateStreamMetadata(active, {
-        agentCategory: AgentCategory.Workflow,
-      });
-      backend.state.updateStreamMetadata(hidden, {
-        agentCategory: AgentCategory.ToolUse,
-      });
-      backend.state.updateStreamMetadata(visible, {
-        agentCategory: AgentCategory.Workflow,
-      });
-      backend.state.agentCategoryFilter = AgentCategory.Workflow;
-      backend.state.activeStream = active;
-
-      await backend.deleteStream(active);
-
-      expect(backend.state.activeStream).toBe(visible);
-      expect(lifecycle.activateStream).toHaveBeenCalledWith(visible);
-      expect(requestEviction).toHaveBeenCalledWith(hidden);
-    } finally {
-      backend.dispose();
-      session.dispose();
+    // The unfiltered durable fallback selects the last stream (`hidden`),
+    // then the progress filter replaces it with `visible`.
+    for (const stream of [active, visible, hidden]) {
+      backend.state.streamLogs.ensureStream(stream);
     }
+    backend.state.updateStreamMetadata(active, {
+      agentCategory: AgentCategory.Workflow,
+    });
+    backend.state.updateStreamMetadata(hidden, {
+      agentCategory: AgentCategory.ToolUse,
+    });
+    backend.state.updateStreamMetadata(visible, {
+      agentCategory: AgentCategory.Workflow,
+    });
+    backend.state.agentCategoryFilter = AgentCategory.Workflow;
+    backend.state.activeStream = active;
+
+    await backend.deleteStream(active);
+
+    expect(backend.state.activeStream).toBe(visible);
+    expect(lifecycle.activateStream).toHaveBeenCalledWith(visible);
+    expect(requestEviction).toHaveBeenCalledWith(hidden);
   });
 
   it('clears selection when deleting the last visible stream', async () => {
     const target = createIsolatedRecordingBackend();
-    const { backend, lifecycle, session } = target;
+    const { backend, lifecycle } = target;
     const active = 'active-workflow' as StreamTabId;
     const hidden = 'hidden-tool-use' as StreamTabId;
 
-    try {
-      backend.state.streamLogs.ensureStream(active);
-      backend.state.streamLogs.ensureStream(hidden);
-      backend.state.updateStreamMetadata(active, {
-        agentCategory: AgentCategory.Workflow,
-      });
-      backend.state.updateStreamMetadata(hidden, {
-        agentCategory: AgentCategory.ToolUse,
-      });
-      backend.state.agentCategoryFilter = AgentCategory.Workflow;
-      backend.state.activeStream = active;
+    backend.state.streamLogs.ensureStream(active);
+    backend.state.streamLogs.ensureStream(hidden);
+    backend.state.updateStreamMetadata(active, {
+      agentCategory: AgentCategory.Workflow,
+    });
+    backend.state.updateStreamMetadata(hidden, {
+      agentCategory: AgentCategory.ToolUse,
+    });
+    backend.state.agentCategoryFilter = AgentCategory.Workflow;
+    backend.state.activeStream = active;
 
-      await backend.deleteStream(active);
+    await backend.deleteStream(active);
 
-      expect(backend.state.activeStream).toBe('');
-      expect(lifecycle.activateStream).not.toHaveBeenCalled();
-      expect(
-        lifecycle.refreshRenderedStreamsAfterDeletion,
-      ).toHaveBeenCalledOnce();
-    } finally {
-      backend.dispose();
-      session.dispose();
-    }
+    expect(backend.state.activeStream).toBe('');
+    expect(lifecycle.activateStream).not.toHaveBeenCalled();
+    expect(
+      lifecycle.refreshRenderedStreamsAfterDeletion,
+    ).toHaveBeenCalledOnce();
   });
 
   it('preserves a stream switch during active-stream deletion', async () => {
     const target = createIsolatedRecordingBackend();
-    const { backend, lifecycle, session } = target;
+    const { backend, lifecycle } = target;
     const active = 'active-stream' as StreamTabId;
     const fallback = 'fallback-stream' as StreamTabId;
     const selected = 'selected-during-delete' as StreamTabId;
@@ -1075,28 +964,22 @@ describe('ProgressBackend', () => {
       },
     );
 
-    try {
-      for (const stream of [active, fallback, selected]) {
-        backend.state.streamLogs.ensureStream(stream);
-      }
-      backend.state.activeStream = active;
-
-      const deletion = backend.deleteStream(active);
-      backend.state.activeStream = selected;
-      releaseClear();
-      await deletion;
-
-      expect(backend.state.activeStream).toBe(selected);
-      expect(lifecycle.activateStream).toHaveBeenCalledWith(selected);
-    } finally {
-      backend.dispose();
-      session.dispose();
+    for (const stream of [active, fallback, selected]) {
+      backend.state.streamLogs.ensureStream(stream);
     }
+    backend.state.activeStream = active;
+
+    const deletion = backend.deleteStream(active);
+    backend.state.activeStream = selected;
+    releaseClear();
+    await deletion;
+
+    expect(backend.state.activeStream).toBe(selected);
+    expect(lifecycle.activateStream).toHaveBeenCalledWith(selected);
   });
 
   it('cleans every stream and emits one bulk deletion', async () => {
-    const { backend, lifecycle, messages, session } =
-      createIsolatedRecordingBackend();
+    const { backend, lifecycle, messages } = createIsolatedRecordingBackend();
     const first = 'bulk-first' as StreamTabId;
     const second = 'bulk-second' as StreamTabId;
     backend.state.streamLogs.ensureStream(first);
@@ -1106,25 +989,20 @@ describe('ProgressBackend', () => {
       failed: new Set(),
     });
 
-    try {
-      await backend.deleteAllStreams();
+    await backend.deleteAllStreams();
 
-      expect(lifecycle.cleanupDeletedStream).toHaveBeenCalledWith(first);
-      expect(lifecycle.cleanupDeletedStream).toHaveBeenCalledWith(second);
-      expect(lifecycle.cleanupDeletedStreams).toHaveBeenCalledWith({
-        allDeleted: true,
-      });
-      expect(messages).toContainEqual({
-        command: PROGRESS_VIEW_COMMANDS.DELETE_ALL,
-      });
-      expect(lifecycle.rebuildRenderedStreams).toHaveBeenCalledWith({
-        syncActiveStream: false,
-      });
-      expect(lifecycle.notifyDeletionRetained).not.toHaveBeenCalled();
-    } finally {
-      backend.dispose();
-      session.dispose();
-    }
+    expect(lifecycle.cleanupDeletedStream).toHaveBeenCalledWith(first);
+    expect(lifecycle.cleanupDeletedStream).toHaveBeenCalledWith(second);
+    expect(lifecycle.cleanupDeletedStreams).toHaveBeenCalledWith({
+      allDeleted: true,
+    });
+    expect(messages).toContainEqual({
+      command: PROGRESS_VIEW_COMMANDS.DELETE_ALL,
+    });
+    expect(lifecycle.rebuildRenderedStreams).toHaveBeenCalledWith({
+      syncActiveStream: false,
+    });
+    expect(lifecycle.notifyDeletionRetained).not.toHaveBeenCalled();
   });
 
   it('stops locally owned streams before bulk cleanup', async () => {
@@ -1154,17 +1032,12 @@ describe('ProgressBackend', () => {
       failed: new Set(),
     });
 
-    try {
-      await backend.deleteAllStreams();
+    await backend.deleteAllStreams();
 
-      expect(lifecycle.stopStream).toHaveBeenCalledWith(first);
-      expect(lifecycle.stopStream).toHaveBeenCalledWith(second);
-      expect(waitForRelease).toHaveBeenCalledWith(first);
-      expect(waitForRelease).toHaveBeenCalledWith(second);
-    } finally {
-      backend.dispose();
-      session.dispose();
-    }
+    expect(lifecycle.stopStream).toHaveBeenCalledWith(first);
+    expect(lifecycle.stopStream).toHaveBeenCalledWith(second);
+    expect(waitForRelease).toHaveBeenCalledWith(first);
+    expect(waitForRelease).toHaveBeenCalledWith(second);
   });
 
   it('aborts bulk cleanup when stopping an owned stream fails', async () => {
@@ -1192,23 +1065,17 @@ describe('ProgressBackend', () => {
     );
     const clearAll = vi.spyOn(backend.state, 'clearAll');
 
-    try {
-      await expect(backend.deleteAllStreams()).rejects.toBe(stopError);
+    await expect(backend.deleteAllStreams()).rejects.toBe(stopError);
 
-      expect(lifecycle.stopStream).toHaveBeenCalledWith(stream);
-      expect(waitForRelease).not.toHaveBeenCalled();
-      expect(clearAll).not.toHaveBeenCalled();
-      expect(lifecycle.cleanupDeletedStream).not.toHaveBeenCalled();
-      expect(lifecycle.cleanupDeletedStreams).not.toHaveBeenCalled();
-    } finally {
-      backend.dispose();
-      session.dispose();
-    }
+    expect(lifecycle.stopStream).toHaveBeenCalledWith(stream);
+    expect(waitForRelease).not.toHaveBeenCalled();
+    expect(clearAll).not.toHaveBeenCalled();
+    expect(lifecycle.cleanupDeletedStream).not.toHaveBeenCalled();
+    expect(lifecycle.cleanupDeletedStreams).not.toHaveBeenCalled();
   });
 
   it('retains protected streams during bulk cleanup', async () => {
-    const { backend, lifecycle, messages, session } =
-      createIsolatedRecordingBackend();
+    const { backend, lifecycle, messages } = createIsolatedRecordingBackend();
     const deleted = 'bulk-deleted' as StreamTabId;
     const retained = 'bulk-retained' as StreamTabId;
     backend.state.streamLogs.ensureStream(deleted);
@@ -1218,70 +1085,64 @@ describe('ProgressBackend', () => {
       failed: new Set(),
     });
 
-    try {
-      await backend.deleteAllStreams();
+    await backend.deleteAllStreams();
 
-      expect(lifecycle.cleanupDeletedStream).toHaveBeenCalledWith(deleted);
-      expect(lifecycle.cleanupDeletedStream).not.toHaveBeenCalledWith(retained);
-      expect(lifecycle.cleanupDeletedStreams).toHaveBeenCalledWith({
-        allDeleted: false,
-      });
-      expect(messages).toContainEqual({
-        command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
-        stream: deleted,
-      });
-      expect(messages).not.toContainEqual({
-        command: PROGRESS_VIEW_COMMANDS.DELETE_ALL,
-      });
-      expect(lifecycle.rebuildRenderedStreams).toHaveBeenCalledWith({
-        syncActiveStream: true,
-      });
-      expect(lifecycle.notifyDeletionRetained).toHaveBeenCalledWith(1, 0);
-    } finally {
-      backend.dispose();
-      session.dispose();
-    }
+    expect(lifecycle.cleanupDeletedStream).toHaveBeenCalledWith(deleted);
+    expect(lifecycle.cleanupDeletedStream).not.toHaveBeenCalledWith(retained);
+    expect(lifecycle.cleanupDeletedStreams).toHaveBeenCalledWith({
+      allDeleted: false,
+    });
+    expect(messages).toContainEqual({
+      command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
+      stream: deleted,
+    });
+    expect(messages).not.toContainEqual({
+      command: PROGRESS_VIEW_COMMANDS.DELETE_ALL,
+    });
+    expect(lifecycle.rebuildRenderedStreams).toHaveBeenCalledWith({
+      syncActiveStream: true,
+    });
+    expect(lifecycle.notifyDeletionRetained).toHaveBeenCalledWith(1, 0);
   });
 
   it('retains rendered state when durable stream cleanup fails', async () => {
-    const session = createTestSession();
+    const session = track(createTestSession());
     const lifecycle = createLifecycleOptions();
-    const backend = new ProgressBackend({
-      storage: new FakeStateStore(),
-      session,
-      sendMessage: vi.fn(),
-      hasTarget: () => true,
-      approvals: createApprovalOptions(),
-      lifecycle,
-    });
+    const backend = track(
+      new ProgressBackend({
+        storage: new FakeStateStore(),
+        session,
+        sendMessage: vi.fn(),
+        hasTarget: () => true,
+        approvals: createApprovalOptions(),
+        lifecycle,
+      }),
+    );
     const stream = 'retained-stream' as StreamTabId;
     backend.state.streamLogs.ensureStream(stream);
     vi.spyOn(backend.state, 'clearStream').mockResolvedValueOnce('failed');
 
-    try {
-      await backend.deleteStream(stream);
+    await backend.deleteStream(stream);
 
-      expect(lifecycle.cleanupDeletedStream).not.toHaveBeenCalled();
-      expect(lifecycle.rebuildRenderedStreams).toHaveBeenCalledWith({
-        syncActiveStream: true,
-      });
-      expect(lifecycle.notifyDeletionRetained).toHaveBeenCalledWith(0, 1);
-    } finally {
-      backend.dispose();
-      session.dispose();
-    }
+    expect(lifecycle.cleanupDeletedStream).not.toHaveBeenCalled();
+    expect(lifecycle.rebuildRenderedStreams).toHaveBeenCalledWith({
+      syncActiveStream: true,
+    });
+    expect(lifecycle.notifyDeletionRetained).toHaveBeenCalledWith(0, 1);
   });
 
   it('uses the injected target predicate before sending messages', () => {
     const sent = vi.fn(() => true);
     let hasTarget = false;
-    const backend = new ProgressBackend({
-      storage: new FakeStateStore(),
-      sendMessage: sent,
-      hasTarget: () => hasTarget,
-      approvals: createApprovalOptions(),
-      lifecycle: createLifecycleOptions(),
-    });
+    const backend = track(
+      new ProgressBackend({
+        storage: new FakeStateStore(),
+        sendMessage: sent,
+        hasTarget: () => hasTarget,
+        approvals: createApprovalOptions(),
+        lifecycle: createLifecycleOptions(),
+      }),
+    );
 
     backend.webviewUpdater.updateStreams([], '', 'all');
     expect(sent).not.toHaveBeenCalled();
@@ -1295,8 +1156,6 @@ describe('ProgressBackend', () => {
       agentFilter: 'all',
       streamStates: undefined,
     });
-
-    backend.dispose();
   });
 
   it('contains updater transport failures', async () => {
@@ -1307,13 +1166,15 @@ describe('ProgressBackend', () => {
       })
       .mockRejectedValueOnce(new Error('closed transport'));
 
-    const backend = new ProgressBackend({
-      storage: new FakeStateStore(),
-      sendMessage: sent,
-      hasTarget: () => true,
-      approvals: createApprovalOptions(),
-      lifecycle: createLifecycleOptions(),
-    });
+    const backend = track(
+      new ProgressBackend({
+        storage: new FakeStateStore(),
+        sendMessage: sent,
+        hasTarget: () => true,
+        approvals: createApprovalOptions(),
+        lifecycle: createLifecycleOptions(),
+      }),
+    );
 
     expect(() =>
       backend.webviewUpdater.updateStreams([], '', 'all'),
@@ -1322,8 +1183,6 @@ describe('ProgressBackend', () => {
     await Promise.resolve();
 
     expect(sent).toHaveBeenCalledTimes(2);
-
-    backend.dispose();
   });
 
   it('sends the full metadata set once for full-view sync', () => {
@@ -1358,263 +1217,232 @@ describe('ProgressBackend', () => {
     } else {
       throw new Error('Expected full stream metadata sync');
     }
-
-    backend.dispose();
   });
 
   it('keeps a filtered interaction stream reachable without switching', async () => {
     const target = createIsolatedRecordingBackend();
     const { backend, messages } = target;
-    const subscription = backend.setupEventListeners();
+    track(backend.setupEventListeners());
 
-    try {
-      emitActiveStream(target, {
-        streamId: 'root',
-        agentCategory: AgentCategory.Workflow,
-      });
-      await vi.waitFor(() => expect(backend.state.activeStream).toBe('root'));
-      backend.state.agentCategoryFilter = AgentCategory.Workflow;
-      messages.length = 0;
+    emitActiveStream(target, {
+      streamId: 'root',
+      agentCategory: AgentCategory.Workflow,
+    });
+    await vi.waitFor(() => expect(backend.state.activeStream).toBe('root'));
+    backend.state.agentCategoryFilter = AgentCategory.Workflow;
+    messages.length = 0;
 
-      emitActiveStream(target, {
-        streamId: 'hidden-approval',
-        agentCategory: AgentCategory.ToolUse,
-        suppressViewSwitch: true,
-        ensureVisible: true,
-      });
+    emitActiveStream(target, {
+      streamId: 'hidden-approval',
+      agentCategory: AgentCategory.ToolUse,
+      suppressViewSwitch: true,
+      ensureVisible: true,
+    });
 
-      await vi.waitFor(() =>
-        expect(backend.state.agentCategoryFilter).toBe('all'),
-      );
-      expect(backend.state.activeStream).toBe('root');
-      expect(messages).toContainEqual(
-        expect.objectContaining({
-          command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
-          activeStream: 'root',
-          agentFilter: 'all',
-          streams: expect.arrayContaining([
-            expect.objectContaining({ name: 'hidden-approval' }),
-          ]),
-        }),
-      );
-    } finally {
-      subscription.dispose();
-      backend.dispose();
-    }
+    await vi.waitFor(() =>
+      expect(backend.state.agentCategoryFilter).toBe('all'),
+    );
+    expect(backend.state.activeStream).toBe('root');
+    expect(messages).toContainEqual(
+      expect.objectContaining({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
+        activeStream: 'root',
+        agentFilter: 'all',
+        streams: expect.arrayContaining([
+          expect.objectContaining({ name: 'hidden-approval' }),
+        ]),
+      }),
+    );
   });
 
   it('projects a workflow-script phase onto a non-active run stream', async () => {
     const target = createIsolatedRecordingBackend();
     const { backend, messages } = target;
-    const subscription = backend.setupEventListeners();
+    track(backend.setupEventListeners());
     const run = 'workflow-run' as StreamTabId;
 
-    try {
-      emitActiveStream(target, {
-        streamId: 'root',
-        agentCategory: AgentCategory.ToolUse,
-      });
-      await vi.waitFor(() => expect(backend.state.activeStream).toBe('root'));
-      emitActiveStream(target, {
-        streamId: run,
-        agentCategory: AgentCategory.Workflow,
-        suppressViewSwitch: true,
-      });
-      await vi.waitFor(() =>
-        expect(backend.state.getStreamState(run)).toBeDefined(),
-      );
-      messages.length = 0;
+    emitActiveStream(target, {
+      streamId: 'root',
+      agentCategory: AgentCategory.ToolUse,
+    });
+    await vi.waitFor(() => expect(backend.state.activeStream).toBe('root'));
+    emitActiveStream(target, {
+      streamId: run,
+      agentCategory: AgentCategory.Workflow,
+      suppressViewSwitch: true,
+    });
+    await vi.waitFor(() =>
+      expect(backend.state.getStreamState(run)).toBeDefined(),
+    );
+    messages.length = 0;
 
-      emitRunEvent(target, run, {
-        type: 'stage.start',
-        id: 'phase-2',
-        label: 'Reduce',
-        kind: 'phase',
-        index: 1,
-        total: 3,
-      });
+    emitRunEvent(target, run, {
+      type: 'stage.start',
+      id: 'phase-2',
+      label: 'Reduce',
+      kind: 'phase',
+      index: 1,
+      total: 3,
+    });
 
-      // The parent's viewport reads this row, so the push must reach a stream
-      // that is not the active one.
-      expect(backend.state.activeStream).toBe('root');
-      await vi.waitFor(() =>
-        expect(backend.state.getStreamState(run)).toMatchObject({
-          phaseStage: { label: 'Reduce', index: 1, total: 3 },
-        }),
-      );
-      const patch = messages.find(
-        (message) =>
-          message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA &&
-          message.streamInfo.name === run,
-      );
-      if (patch?.command !== PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA) {
-        throw new Error('Expected a metadata patch for the run stream');
-      }
-      expect(patch.streamState).toMatchObject({
+    // The parent's viewport reads this row, so the push must reach a stream
+    // that is not the active one.
+    expect(backend.state.activeStream).toBe('root');
+    await vi.waitFor(() =>
+      expect(backend.state.getStreamState(run)).toMatchObject({
         phaseStage: { label: 'Reduce', index: 1, total: 3 },
-        roundStage: null,
-      });
-    } finally {
-      subscription.dispose();
-      backend.dispose();
-      target.session.dispose();
+      }),
+    );
+    const patch = messages.find(
+      (message) =>
+        message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA &&
+        message.streamInfo.name === run,
+    );
+    if (patch?.command !== PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA) {
+      throw new Error('Expected a metadata patch for the run stream');
     }
+    expect(patch.streamState).toMatchObject({
+      phaseStage: { label: 'Reduce', index: 1, total: 3 },
+      roundStage: null,
+    });
   });
 
   it('patches one stream for subagent registration and run-start metadata', async () => {
     const target = createIsolatedRecordingBackend();
-    const { backend, messages, session } = target;
-    const subscription = backend.setupEventListeners();
+    const { backend, messages } = target;
+    track(backend.setupEventListeners());
 
-    try {
-      for (let i = 0; i < 20; i += 1) {
-        backend.state.streamLogs.ensureStream(`history-${i}`);
-      }
+    for (let i = 0; i < 20; i += 1) {
+      backend.state.streamLogs.ensureStream(`history-${i}`);
+    }
 
-      emitActiveStream(target, {
-        streamId: 'root',
-        agentCategory: AgentCategory.Workflow,
-      });
-      await vi.waitFor(() =>
-        expect(
-          messages.some(
-            (message) =>
-              message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
-          ),
-        ).toBe(true),
-      );
-      messages.length = 0;
-
-      emitActiveStream(target, {
-        streamId: 'child',
-        agentCategory: AgentCategory.ToolUse,
-        suppressViewSwitch: true,
-      });
-      await vi.waitFor(() =>
-        expect(
-          messages.find(
-            (message) =>
-              message.command ===
-                PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA &&
-              message.streamInfo.name === 'child',
-          ),
-        ).toBeDefined(),
-      );
+    emitActiveStream(target, {
+      streamId: 'root',
+      agentCategory: AgentCategory.Workflow,
+    });
+    await vi.waitFor(() =>
       expect(
         messages.some(
           (message) =>
-            message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
+            message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
         ),
-      ).toBe(false);
-      messages.length = 0;
+      ).toBe(true),
+    );
+    messages.length = 0;
 
-      emitRunConfig(
-        target,
-        'child' as StreamTabId,
-        'c41111' as ExecutionId,
-        toolUseTaskState('search', 'deepseekproT'),
-      );
-
-      await vi.waitFor(() =>
-        expect(
-          messages.find(
-            (message) =>
-              message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
-          ),
-        ).toMatchObject({
-          streamInfo: {
-            name: 'child',
-            label: 'search',
-            agent: 'search',
-            model: 'deepseekproT',
-            executionId: 'c41111',
-          },
-        }),
-      );
+    emitActiveStream(target, {
+      streamId: 'child',
+      agentCategory: AgentCategory.ToolUse,
+      suppressViewSwitch: true,
+    });
+    await vi.waitFor(() =>
       expect(
-        messages.some(
+        messages.find(
           (message) =>
-            message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
+            message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA &&
+            message.streamInfo.name === 'child',
         ),
-      ).toBe(false);
-
-      const patch = messages.find(
-        (message) =>
-          message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
-      );
-      messages.length = 0;
-
-      backend.webviewUpdater.sendStreamMetadata(
-        backend.state,
-        backend.factApplier.getAllStreamStates(),
-      );
-      const fullSync = messages.find(
+      ).toBeDefined(),
+    );
+    expect(
+      messages.some(
         (message) => message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
-      );
+      ),
+    ).toBe(false);
+    messages.length = 0;
 
-      if (
-        patch?.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA &&
-        fullSync?.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS
-      ) {
-        expect(
-          fullSync.streams.find((stream) => stream.name === 'child'),
-        ).toEqual(patch.streamInfo);
-        expect(fullSync.streamStates?.child).toEqual(patch.streamState);
-      } else {
-        throw new Error('Expected patch and full sync messages');
-      }
-    } finally {
-      subscription.dispose();
-      backend.dispose();
-      session.dispose();
+    emitRunConfig(
+      target,
+      'child' as StreamTabId,
+      'c41111' as ExecutionId,
+      toolUseTaskState('search', 'deepseekproT'),
+    );
+
+    await vi.waitFor(() =>
+      expect(
+        messages.find(
+          (message) =>
+            message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
+        ),
+      ).toMatchObject({
+        streamInfo: {
+          name: 'child',
+          label: 'search',
+          agent: 'search',
+          model: 'deepseekproT',
+          executionId: 'c41111',
+        },
+      }),
+    );
+    expect(
+      messages.some(
+        (message) => message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
+      ),
+    ).toBe(false);
+
+    const patch = messages.find(
+      (message) =>
+        message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
+    );
+    messages.length = 0;
+
+    backend.webviewUpdater.sendStreamMetadata(
+      backend.state,
+      backend.factApplier.getAllStreamStates(),
+    );
+    const fullSync = messages.find(
+      (message) => message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
+    );
+
+    if (
+      patch?.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA &&
+      fullSync?.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS
+    ) {
+      expect(
+        fullSync.streams.find((stream) => stream.name === 'child'),
+      ).toEqual(patch.streamInfo);
+      expect(fullSync.streamStates?.child).toEqual(patch.streamState);
+    } else {
+      throw new Error('Expected patch and full sync messages');
     }
   });
 
   it('scopes direct session events to each backend session', async () => {
     const first = createIsolatedRecordingBackend();
     const second = createIsolatedRecordingBackend();
-    const firstSubscription = first.backend.setupEventListeners();
-    const secondSubscription = second.backend.setupEventListeners();
+    track(first.backend.setupEventListeners());
+    track(second.backend.setupEventListeners());
     const firstStream = 'session:first' as StreamTabId;
     const secondStream = 'session:second' as StreamTabId;
 
-    try {
-      emitActiveStream(first, {
-        streamId: firstStream,
-        agentCategory: AgentCategory.Workflow,
-      });
+    emitActiveStream(first, {
+      streamId: firstStream,
+      agentCategory: AgentCategory.Workflow,
+    });
 
-      await vi.waitFor(() =>
-        expect(first.backend.state.activeStream).toBe(firstStream),
-      );
-      expect(second.backend.state.activeStream).not.toBe(firstStream);
-      expect(JSON.stringify(second.messages)).not.toContain(firstStream);
+    await vi.waitFor(() =>
+      expect(first.backend.state.activeStream).toBe(firstStream),
+    );
+    expect(second.backend.state.activeStream).not.toBe(firstStream);
+    expect(JSON.stringify(second.messages)).not.toContain(firstStream);
 
-      emitActiveStream(second, {
-        streamId: secondStream,
-        agentCategory: AgentCategory.ToolUse,
-      });
+    emitActiveStream(second, {
+      streamId: secondStream,
+      agentCategory: AgentCategory.ToolUse,
+    });
 
-      await vi.waitFor(() =>
-        expect(second.backend.state.activeStream).toBe(secondStream),
-      );
-      expect(first.backend.state.activeStream).toBe(firstStream);
-      expect(JSON.stringify(first.messages)).not.toContain(secondStream);
-    } finally {
-      firstSubscription.dispose();
-      secondSubscription.dispose();
-      first.backend.dispose();
-      second.backend.dispose();
-      first.session.dispose();
-      second.session.dispose();
-    }
+    await vi.waitFor(() =>
+      expect(second.backend.state.activeStream).toBe(secondStream),
+    );
+    expect(first.backend.state.activeStream).toBe(firstStream);
+    expect(JSON.stringify(first.messages)).not.toContain(secondStream);
   });
 
   it('isolates same-stream run facts across simultaneous backend sessions', async () => {
     const first = createIsolatedRecordingBackend();
     const second = createIsolatedRecordingBackend();
-    const firstSubscription = first.backend.setupEventListeners();
-    const secondSubscription = second.backend.setupEventListeners();
+    track(first.backend.setupEventListeners());
+    track(second.backend.setupEventListeners());
     const streamId = 'window:shared-stream-id' as StreamTabId;
     const firstTodo: TodoItem = {
       content: 'from first window',
@@ -1638,198 +1466,170 @@ describe('ProgressBackend', () => {
       diff: null,
     };
 
-    try {
-      await first.backend.state.snapshots.load([]);
-      await second.backend.state.snapshots.load([]);
+    await first.backend.state.snapshots.load([]);
+    await second.backend.state.snapshots.load([]);
 
-      emitRunEvent(first, streamId, {
-        type: 'updateTodos',
-        streamId,
-        todos: [firstTodo],
-      });
-      emitRunEvent(first, streamId, {
-        type: 'addOutputFiles',
-        streamId,
-        filesByRound: { 1: [firstOutput] },
-      });
+    emitRunEvent(first, streamId, {
+      type: 'updateTodos',
+      streamId,
+      todos: [firstTodo],
+    });
+    emitRunEvent(first, streamId, {
+      type: 'addOutputFiles',
+      streamId,
+      filesByRound: { 1: [firstOutput] },
+    });
 
-      expect(first.backend.state.snapshots.getWorkPlan(streamId).todos).toEqual(
-        [firstTodo],
-      );
-      expect(first.backend.state.snapshots.getOutputFiles(streamId)).toEqual({
-        1: [firstOutput],
-      });
-      expect(
-        second.backend.state.snapshots.getWorkPlan(streamId).todos,
-      ).toEqual([]);
-      expect(second.backend.state.snapshots.getOutputFiles(streamId)).toEqual(
-        {},
-      );
-      expect(JSON.stringify(second.messages)).not.toContain(
-        'from first window',
-      );
-      expect(JSON.stringify(second.messages)).not.toContain('first.pdf');
+    expect(first.backend.state.snapshots.getWorkPlan(streamId).todos).toEqual([
+      firstTodo,
+    ]);
+    expect(first.backend.state.snapshots.getOutputFiles(streamId)).toEqual({
+      1: [firstOutput],
+    });
+    expect(second.backend.state.snapshots.getWorkPlan(streamId).todos).toEqual(
+      [],
+    );
+    expect(second.backend.state.snapshots.getOutputFiles(streamId)).toEqual({});
+    expect(JSON.stringify(second.messages)).not.toContain('from first window');
+    expect(JSON.stringify(second.messages)).not.toContain('first.pdf');
 
-      emitRunEvent(second, streamId, {
-        type: 'updateTodos',
-        streamId,
-        todos: [secondTodo],
-      });
+    emitRunEvent(second, streamId, {
+      type: 'updateTodos',
+      streamId,
+      todos: [secondTodo],
+    });
 
-      expect(first.backend.state.snapshots.getWorkPlan(streamId).todos).toEqual(
-        [firstTodo],
-      );
-      expect(
-        second.backend.state.snapshots.getWorkPlan(streamId).todos,
-      ).toEqual([secondTodo]);
-      expect(JSON.stringify(first.messages)).not.toContain(
-        'from second window',
-      );
-    } finally {
-      firstSubscription.dispose();
-      secondSubscription.dispose();
-      first.backend.dispose();
-      second.backend.dispose();
-      first.session.dispose();
-      second.session.dispose();
-    }
+    expect(first.backend.state.snapshots.getWorkPlan(streamId).todos).toEqual([
+      firstTodo,
+    ]);
+    expect(second.backend.state.snapshots.getWorkPlan(streamId).todos).toEqual([
+      secondTodo,
+    ]);
+    expect(JSON.stringify(first.messages)).not.toContain('from second window');
   });
 
   it('isolates simultaneous window sessions across view state, status, snapshots, and transcripts', async () => {
     const first = createIsolatedRecordingBackend();
     const second = createIsolatedRecordingBackend();
-    const firstSubscription = first.backend.setupEventListeners();
-    const secondSubscription = second.backend.setupEventListeners();
+    track(first.backend.setupEventListeners());
+    track(second.backend.setupEventListeners());
     const firstStream = 'window:first' as StreamTabId;
     const secondStream = 'window:second' as StreamTabId;
     const firstExecution = 'f41111' as ExecutionId;
     const secondExecution = 'f42222' as ExecutionId;
 
-    try {
-      await first.backend.state.snapshots.load([]);
-      await second.backend.state.snapshots.load([]);
+    await first.backend.state.snapshots.load([]);
+    await second.backend.state.snapshots.load([]);
 
-      emitActiveStream(first, {
-        streamId: firstStream,
-        agentCategory: AgentCategory.ToolUse,
-      });
-      emitActiveStream(second, {
-        streamId: secondStream,
-        agentCategory: AgentCategory.Workflow,
-      });
+    emitActiveStream(first, {
+      streamId: firstStream,
+      agentCategory: AgentCategory.ToolUse,
+    });
+    emitActiveStream(second, {
+      streamId: secondStream,
+      agentCategory: AgentCategory.Workflow,
+    });
 
-      emitRunConfig(
-        first,
-        firstStream,
-        firstExecution,
-        toolUseTaskState('search', 'deepseekproT'),
-      );
-      emitRunConfig(
-        second,
-        secondStream,
-        secondExecution,
-        toolUseTaskState('revise', 'gpt-4o'),
-      );
-      first.session.status.transition(
-        firstStream,
-        STREAM_PHASE.RUNNING,
-        'lifecycle',
-      );
-      second.session.status.transition(
-        secondStream,
-        STREAM_PHASE.RUNNING,
-        'lifecycle',
-      );
-      second.session.status.transitionToWaiting(secondStream, 'wait');
-      emitStreamDescription(first, {
-        streamId: firstStream,
-        description: 'first window run',
-      });
-      emitStreamDescription(second, {
-        streamId: secondStream,
-        description: 'second window run',
-      });
-      first.backend.state.streamLogs.append(firstStream, {
-        id: 'first-window-log',
-        type: STREAM_LOG_ENTRY_TYPES.LOG,
-        level: LOG_LEVELS.INFO,
-        timestamp: 1_700_000_000_001,
-        messageType: MESSAGE_TYPES.DEFAULT,
-        text: 'first transcript entry',
-      });
-      second.backend.state.streamLogs.append(secondStream, {
-        id: 'second-window-log',
-        type: STREAM_LOG_ENTRY_TYPES.LOG,
-        level: LOG_LEVELS.INFO,
-        timestamp: 1_700_000_000_002,
-        messageType: MESSAGE_TYPES.DEFAULT,
-        text: 'second transcript entry',
-      });
+    emitRunConfig(
+      first,
+      firstStream,
+      firstExecution,
+      toolUseTaskState('search', 'deepseekproT'),
+    );
+    emitRunConfig(
+      second,
+      secondStream,
+      secondExecution,
+      toolUseTaskState('revise', 'gpt-4o'),
+    );
+    first.session.status.transition(
+      firstStream,
+      STREAM_PHASE.RUNNING,
+      'lifecycle',
+    );
+    second.session.status.transition(
+      secondStream,
+      STREAM_PHASE.RUNNING,
+      'lifecycle',
+    );
+    second.session.status.transitionToWaiting(secondStream, 'wait');
+    emitStreamDescription(first, {
+      streamId: firstStream,
+      description: 'first window run',
+    });
+    emitStreamDescription(second, {
+      streamId: secondStream,
+      description: 'second window run',
+    });
+    first.backend.state.streamLogs.append(firstStream, {
+      id: 'first-window-log',
+      type: STREAM_LOG_ENTRY_TYPES.LOG,
+      level: LOG_LEVELS.INFO,
+      timestamp: 1_700_000_000_001,
+      messageType: MESSAGE_TYPES.DEFAULT,
+      text: 'first transcript entry',
+    });
+    second.backend.state.streamLogs.append(secondStream, {
+      id: 'second-window-log',
+      type: STREAM_LOG_ENTRY_TYPES.LOG,
+      level: LOG_LEVELS.INFO,
+      timestamp: 1_700_000_000_002,
+      messageType: MESSAGE_TYPES.DEFAULT,
+      text: 'second transcript entry',
+    });
 
-      await vi.waitFor(() =>
-        expect(first.backend.state.activeStream).toBe(firstStream),
-      );
-      await vi.waitFor(() =>
-        expect(second.backend.state.activeStream).toBe(secondStream),
-      );
+    await vi.waitFor(() =>
+      expect(first.backend.state.activeStream).toBe(firstStream),
+    );
+    await vi.waitFor(() =>
+      expect(second.backend.state.activeStream).toBe(secondStream),
+    );
 
-      expect(first.backend.state.streamStatus.get(firstStream)).toBe(
-        STREAM_PHASE.RUNNING,
-      );
-      expect(
-        first.backend.state.streamStatus.get(secondStream),
-      ).toBeUndefined();
-      expect(second.backend.state.streamStatus.get(secondStream)).toBe(
-        STREAM_PHASE.WAITING,
-      );
-      expect(
-        second.backend.state.streamStatus.get(firstStream),
-      ).toBeUndefined();
+    expect(first.backend.state.streamStatus.get(firstStream)).toBe(
+      STREAM_PHASE.RUNNING,
+    );
+    expect(first.backend.state.streamStatus.get(secondStream)).toBeUndefined();
+    expect(second.backend.state.streamStatus.get(secondStream)).toBe(
+      STREAM_PHASE.WAITING,
+    );
+    expect(second.backend.state.streamStatus.get(firstStream)).toBeUndefined();
 
-      expect(first.backend.state.snapshots.getExecutionId(firstStream)).toBe(
-        firstExecution,
-      );
-      expect(
-        first.backend.state.snapshots.getExecutionId(secondStream),
-      ).toBeUndefined();
-      expect(second.backend.state.snapshots.getExecutionId(secondStream)).toBe(
-        secondExecution,
-      );
-      expect(
-        second.backend.state.snapshots.getExecutionId(firstStream),
-      ).toBeUndefined();
-      expect(first.backend.state.snapshots.getDescription(firstStream)).toBe(
-        'first window run',
-      );
-      expect(
-        first.backend.state.snapshots.getDescription(secondStream),
-      ).toBeUndefined();
-      expect(second.backend.state.snapshots.getDescription(secondStream)).toBe(
-        'second window run',
-      );
-      expect(
-        second.backend.state.snapshots.getDescription(firstStream),
-      ).toBeUndefined();
+    expect(first.backend.state.snapshots.getExecutionId(firstStream)).toBe(
+      firstExecution,
+    );
+    expect(
+      first.backend.state.snapshots.getExecutionId(secondStream),
+    ).toBeUndefined();
+    expect(second.backend.state.snapshots.getExecutionId(secondStream)).toBe(
+      secondExecution,
+    );
+    expect(
+      second.backend.state.snapshots.getExecutionId(firstStream),
+    ).toBeUndefined();
+    expect(first.backend.state.snapshots.getDescription(firstStream)).toBe(
+      'first window run',
+    );
+    expect(
+      first.backend.state.snapshots.getDescription(secondStream),
+    ).toBeUndefined();
+    expect(second.backend.state.snapshots.getDescription(secondStream)).toBe(
+      'second window run',
+    );
+    expect(
+      second.backend.state.snapshots.getDescription(firstStream),
+    ).toBeUndefined();
 
-      expect(first.backend.state.streamLogs.get(firstStream)?.size).toBe(1);
-      expect(first.backend.state.streamLogs.get(secondStream)).toBeUndefined();
-      expect(second.backend.state.streamLogs.get(secondStream)?.size).toBe(1);
-      expect(second.backend.state.streamLogs.get(firstStream)).toBeUndefined();
-      expect(JSON.stringify(first.messages)).not.toContain(secondStream);
-      expect(JSON.stringify(second.messages)).not.toContain(firstStream);
-    } finally {
-      firstSubscription.dispose();
-      secondSubscription.dispose();
-      first.backend.dispose();
-      second.backend.dispose();
-      first.session.dispose();
-      second.session.dispose();
-    }
+    expect(first.backend.state.streamLogs.get(firstStream)?.size).toBe(1);
+    expect(first.backend.state.streamLogs.get(secondStream)).toBeUndefined();
+    expect(second.backend.state.streamLogs.get(secondStream)?.size).toBe(1);
+    expect(second.backend.state.streamLogs.get(firstStream)).toBeUndefined();
+    expect(JSON.stringify(first.messages)).not.toContain(secondStream);
+    expect(JSON.stringify(second.messages)).not.toContain(firstStream);
   });
 
   it('applies session run facts through the fact-native handler', async () => {
     const { backend, session } = createIsolatedRecordingBackend();
-    const subscription = backend.setupEventListeners();
+    track(backend.setupEventListeners());
     const handleRunFact = vi.spyOn(backend.factApplier, 'handleRunFact');
     const updateFiles = vi.spyOn(backend.webviewUpdater, 'updateFiles');
     const updateMissingOutputs = vi.spyOn(
@@ -1992,16 +1792,13 @@ describe('ProgressBackend', () => {
         ]),
       );
     } finally {
-      subscription.dispose();
       await backend.state.clearAll();
-      backend.dispose();
-      session.dispose();
     }
   });
 
   it('drops malformed updateTodos/updatePlan run facts instead of forwarding them unchecked (#7562)', async () => {
     const { backend, session } = createIsolatedRecordingBackend();
-    const subscription = backend.setupEventListeners();
+    track(backend.setupEventListeners());
     const updateTodos = vi.spyOn(backend.webviewUpdater, 'updateTodos');
     const updatePlan = vi.spyOn(backend.webviewUpdater, 'updatePlan');
     const streamId = 'session:malformed-todos-plan' as StreamTabId;
@@ -2032,16 +1829,13 @@ describe('ProgressBackend', () => {
       expect(updateTodos).not.toHaveBeenCalled();
       expect(updatePlan).not.toHaveBeenCalled();
     } finally {
-      subscription.dispose();
       await backend.state.clearAll();
-      backend.dispose();
-      session.dispose();
     }
   });
 
   it('no-ops session output-file run facts after dispose', async () => {
     const { backend, session } = createIsolatedRecordingBackend();
-    const subscription = backend.setupEventListeners();
+    track(backend.setupEventListeners());
     const handleRunFact = vi.spyOn(backend.factApplier, 'handleRunFact');
     const updateFiles = vi.spyOn(backend.webviewUpdater, 'updateFiles');
     const streamId = 'session:output-files-after-dispose' as StreamTabId;
@@ -2088,16 +1882,13 @@ describe('ProgressBackend', () => {
         1: [outputFile],
       });
     } finally {
-      subscription.dispose();
       await backend.state.clearAll();
-      backend.dispose();
-      session.dispose();
     }
   });
 
   it('handles session facts directly', async () => {
     const target = createIsolatedRecordingBackend();
-    const subscription = target.backend.setupEventListeners();
+    track(target.backend.setupEventListeners());
     const parentStreamId = 'session:parent' as StreamTabId;
     const childStreamId = 'session:child' as StreamTabId;
     const executionId = 'exec:direct-session' as ExecutionId;
@@ -2216,119 +2007,103 @@ describe('ProgressBackend', () => {
         ),
       ).toBe(true);
     } finally {
-      subscription.dispose();
       await target.backend.state.clearAll();
-      target.backend.dispose();
-      target.session.dispose();
     }
   });
 
   it('does not switch category filters for unknown-category status streams', async () => {
     const { backend, messages } = createRecordingBackend();
 
-    try {
-      backend.state.streamLogs.ensureStream('tool-stream');
-      backend.state.updateStreamMetadata('tool-stream', {
-        agentCategory: AgentCategory.ToolUse,
-      });
-      backend.state.getOrCreateStreamState(
-        'tool-stream',
-        AgentCategory.ToolUse,
-      );
-      backend.state.activeStream = 'tool-stream';
-      backend.state.agentCategoryFilter = 'toolUse';
+    backend.state.streamLogs.ensureStream('tool-stream');
+    backend.state.updateStreamMetadata('tool-stream', {
+      agentCategory: AgentCategory.ToolUse,
+    });
+    backend.state.getOrCreateStreamState('tool-stream', AgentCategory.ToolUse);
+    backend.state.activeStream = 'tool-stream';
+    backend.state.agentCategoryFilter = 'toolUse';
 
-      await backend.factApplier.setStreamStatus(
-        'unknown-stream',
-        STREAM_PHASE.RUNNING,
-      );
+    await backend.factApplier.setStreamStatus(
+      'unknown-stream',
+      STREAM_PHASE.RUNNING,
+    );
 
-      const patch = messages.find(
-        (message) =>
-          message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA &&
-          message.streamInfo.name === 'unknown-stream',
-      );
-      expect(backend.state.agentCategoryFilter).toBe('toolUse');
-      expect(backend.state.activeStream).toBe('tool-stream');
-      expect(patch).toMatchObject({
-        agentFilter: 'toolUse',
-        activeStream: undefined,
-        streamInfo: {
-          name: 'unknown-stream',
-          agentCategory: AgentCategory.Workflow,
-        },
-      });
-    } finally {
-      backend.dispose();
-    }
+    const patch = messages.find(
+      (message) =>
+        message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA &&
+        message.streamInfo.name === 'unknown-stream',
+    );
+    expect(backend.state.agentCategoryFilter).toBe('toolUse');
+    expect(backend.state.activeStream).toBe('tool-stream');
+    expect(patch).toMatchObject({
+      agentFilter: 'toolUse',
+      activeStream: undefined,
+      streamInfo: {
+        name: 'unknown-stream',
+        agentCategory: AgentCategory.Workflow,
+      },
+    });
   });
 
   it('clears retained finished children when an existing stream re-enters running', async () => {
     const { backend, messages } = createRecordingBackend();
     const stream = 'tool-stream' as StreamTabId;
 
-    try {
-      await backend.state.snapshots.load([]);
-      backend.state.streamLogs.ensureStream(stream);
-      // Simulate persistence receiving run.config before progress state sees
-      // the RUNNING transition. The transition boundary must refresh the
-      // durable category before replacing stale execution state.
-      backend.state.snapshots.setTaskState(
-        stream,
-        toolUseTaskState('search', 'deepseekproT'),
-        'abc123' as ExecutionId,
-      );
-      backend.state.getOrCreateStreamState(stream, AgentCategory.Workflow);
-      backend.state.updateStreamState(stream, (prev) => ({
-        ...prev,
-        conversationProgress: { toolCallCount: 7 },
-        roundStage: { index: 2 },
-        subagents: [
-          {
-            kind: 'subagent',
-            childStreamId: 'child-stream',
-            executionId: 'finished-child',
-            agentName: 'reviewer',
-            finishedAt: 1,
-          },
-        ],
-      }));
+    await backend.state.snapshots.load([]);
+    backend.state.streamLogs.ensureStream(stream);
+    // Simulate persistence receiving run.config before progress state sees
+    // the RUNNING transition. The transition boundary must refresh the
+    // durable category before replacing stale execution state.
+    backend.state.snapshots.setTaskState(
+      stream,
+      toolUseTaskState('search', 'deepseekproT'),
+      'abc123' as ExecutionId,
+    );
+    backend.state.getOrCreateStreamState(stream, AgentCategory.Workflow);
+    backend.state.updateStreamState(stream, (prev) => ({
+      ...prev,
+      conversationProgress: { toolCallCount: 7 },
+      roundStage: { index: 2 },
+      subagents: [
+        {
+          kind: 'subagent',
+          childStreamId: 'child-stream',
+          executionId: 'finished-child',
+          agentName: 'reviewer',
+          finishedAt: 1,
+        },
+      ],
+    }));
 
-      await backend.factApplier.setStreamStatus(
-        stream,
-        STREAM_PHASE.RUNNING,
-        STREAM_PHASE.COMPLETED,
-      );
+    await backend.factApplier.setStreamStatus(
+      stream,
+      STREAM_PHASE.RUNNING,
+      STREAM_PHASE.COMPLETED,
+    );
 
-      expect(
-        messages.some(
-          (message) =>
-            message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS,
-        ),
-      ).toBe(false);
-
-      const patch = messages.find(
+    expect(
+      messages.some(
         (message) =>
-          message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA &&
-          message.streamInfo.name === stream,
-      );
-      if (patch?.command !== PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA) {
-        throw new Error('Expected existing stream metadata patch');
-      }
+          message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS,
+      ),
+    ).toBe(false);
 
-      expect(patch.streamState).toMatchObject({
-        kind: AgentCategory.ToolUse,
-        status: STREAM_PHASE.RUNNING,
-        conversationProgress: { toolCallCount: 0 },
-        roundStage: null,
-        subagents: [],
-      });
-      expect(
-        JSON.parse(JSON.stringify(patch)).streamState.roundStage,
-      ).toBeNull();
-    } finally {
-      backend.dispose();
+    const patch = messages.find(
+      (message) =>
+        message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA &&
+        message.streamInfo.name === stream,
+    );
+    if (patch?.command !== PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA) {
+      throw new Error('Expected existing stream metadata patch');
     }
+
+    expect(patch.streamState).toMatchObject({
+      kind: AgentCategory.ToolUse,
+      status: STREAM_PHASE.RUNNING,
+      conversationProgress: { toolCallCount: 0 },
+      roundStage: null,
+      subagents: [],
+    });
+    expect(JSON.parse(JSON.stringify(patch)).streamState.roundStage).toBeNull();
   });
 
   it('keeps resident background entries during an in-flight status update', async () => {
@@ -2336,30 +2111,26 @@ describe('ProgressBackend', () => {
     const stream = 'background-stream' as StreamTabId;
     const releaseSpy = vi.spyOn(backend.state.streamLogs, 'requestEviction');
 
-    try {
-      backend.state.streamLogs.ensureStream(stream);
-      backend.state.updateStreamMetadata(stream, {
-        agentCategory: AgentCategory.ToolUse,
-      });
-      backend.state.getOrCreateStreamState(stream, AgentCategory.ToolUse);
+    backend.state.streamLogs.ensureStream(stream);
+    backend.state.updateStreamMetadata(stream, {
+      agentCategory: AgentCategory.ToolUse,
+    });
+    backend.state.getOrCreateStreamState(stream, AgentCategory.ToolUse);
 
-      await backend.factApplier.setStreamStatus(
-        stream,
-        STREAM_PHASE.RUNNING,
-        STREAM_PHASE.RUNNING,
-      );
+    await backend.factApplier.setStreamStatus(
+      stream,
+      STREAM_PHASE.RUNNING,
+      STREAM_PHASE.RUNNING,
+    );
 
-      expect(releaseSpy).not.toHaveBeenCalled();
-      expect(backend.state.streamLogs.get(stream)).toBeDefined();
-    } finally {
-      backend.dispose();
-    }
+    expect(releaseSpy).not.toHaveBeenCalled();
+    expect(backend.state.streamLogs.get(stream)).toBeDefined();
   });
 
   it('drops buffered conversation progress when an existing stream re-enters running', async () => {
     vi.useFakeTimers();
     const { backend, messages } = createRecordingBackend();
-    const subscription = backend.setupEventListeners();
+    track(backend.setupEventListeners());
     const stream = 'tool-stream' as StreamTabId;
 
     try {
@@ -2410,8 +2181,6 @@ describe('ProgressBackend', () => {
         ),
       ).toBe(false);
     } finally {
-      subscription.dispose();
-      backend.dispose();
       vi.useRealTimers();
     }
   });
@@ -2440,83 +2209,72 @@ describe('ProgressBackend', () => {
       tracking as Promise<void>,
     );
 
-    try {
-      backend.factApplier.handleSessionFact({
-        type: 'updateStreamStatus',
-        payload: { streamId: stream, status: STREAM_PHASE.RUNNING },
-      });
+    backend.factApplier.handleSessionFact({
+      type: 'updateStreamStatus',
+      payload: { streamId: stream, status: STREAM_PHASE.RUNNING },
+    });
 
-      // Thenable adoption runs on a microtask; flush before asserting.
-      await new Promise((resolve) => setImmediate(resolve));
+    // Thenable adoption runs on a microtask; flush before asserting.
+    await new Promise((resolve) => setImmediate(resolve));
 
-      expect(adopted).toBe(1);
-    } finally {
-      backend.dispose();
-    }
+    expect(adopted).toBe(1);
   });
 
   it('revalidates and syncs the active stream when status registration changes the filter', async () => {
     const { backend, messages } = createRecordingBackend();
 
-    try {
-      backend.state.streamLogs.ensureStream('tool-stream');
-      backend.state.updateStreamMetadata('tool-stream', {
-        agentCategory: AgentCategory.ToolUse,
-      });
-      backend.state.getOrCreateStreamState(
-        'tool-stream',
-        AgentCategory.ToolUse,
-      );
-      backend.state.activeStream = 'tool-stream';
-      backend.state.agentCategoryFilter = 'toolUse';
-      backend.state.streamLogs.ensureStream('workflow-existing');
-      backend.state.updateStreamMetadata('workflow-existing', {
-        agentCategory: AgentCategory.Workflow,
-      });
-      backend.state.getOrCreateStreamState(
-        'workflow-existing',
-        AgentCategory.Workflow,
-      );
-      backend.state.updateStreamMetadata('workflow-stream', {
-        agentCategory: AgentCategory.Workflow,
-      });
-      vi.spyOn(backend.state, 'pickValidActiveStream').mockReturnValue(
-        'workflow-existing',
-      );
+    backend.state.streamLogs.ensureStream('tool-stream');
+    backend.state.updateStreamMetadata('tool-stream', {
+      agentCategory: AgentCategory.ToolUse,
+    });
+    backend.state.getOrCreateStreamState('tool-stream', AgentCategory.ToolUse);
+    backend.state.activeStream = 'tool-stream';
+    backend.state.agentCategoryFilter = 'toolUse';
+    backend.state.streamLogs.ensureStream('workflow-existing');
+    backend.state.updateStreamMetadata('workflow-existing', {
+      agentCategory: AgentCategory.Workflow,
+    });
+    backend.state.getOrCreateStreamState(
+      'workflow-existing',
+      AgentCategory.Workflow,
+    );
+    backend.state.updateStreamMetadata('workflow-stream', {
+      agentCategory: AgentCategory.Workflow,
+    });
+    vi.spyOn(backend.state, 'pickValidActiveStream').mockReturnValue(
+      'workflow-existing',
+    );
 
-      await backend.factApplier.setStreamStatus(
-        'workflow-stream',
-        STREAM_PHASE.RUNNING,
-      );
+    await backend.factApplier.setStreamStatus(
+      'workflow-stream',
+      STREAM_PHASE.RUNNING,
+    );
 
-      const patch = messages.find(
+    const patch = messages.find(
+      (message) =>
+        message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA &&
+        message.streamInfo.name === 'workflow-stream',
+    );
+    expect(backend.state.agentCategoryFilter).toBe('workflow');
+    expect(backend.state.activeStream).toBe('workflow-existing');
+    expect(patch).toMatchObject({
+      agentFilter: 'workflow',
+      activeStream: 'workflow-existing',
+      streamInfo: {
+        name: 'workflow-stream',
+        agentCategory: AgentCategory.Workflow,
+      },
+    });
+    expect(
+      messages.find(
         (message) =>
-          message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA &&
-          message.streamInfo.name === 'workflow-stream',
-      );
-      expect(backend.state.agentCategoryFilter).toBe('workflow');
-      expect(backend.state.activeStream).toBe('workflow-existing');
-      expect(patch).toMatchObject({
-        agentFilter: 'workflow',
-        activeStream: 'workflow-existing',
-        streamInfo: {
-          name: 'workflow-stream',
-          agentCategory: AgentCategory.Workflow,
-        },
-      });
-      expect(
-        messages.find(
-          (message) =>
-            message.command === PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
-        ),
-      ).toMatchObject({
-        stream: 'workflow-existing',
-        action: 'render',
-        kind: AgentCategory.Workflow,
-      });
-    } finally {
-      backend.dispose();
-    }
+          message.command === PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
+      ),
+    ).toMatchObject({
+      stream: 'workflow-existing',
+      action: 'render',
+      kind: AgentCategory.Workflow,
+    });
   });
 
   it('keeps task-state metadata canonical across filtering, rendering, and sync content', () => {
@@ -2524,73 +2282,69 @@ describe('ProgressBackend', () => {
     const stream = 'search@deepseek#de5711c' as StreamTabId;
     const executionId = 'de5711c' as ExecutionId;
 
-    try {
-      backend.state.streamLogs.ensureStream(stream);
-      // Provisional patches only ever carry agentCategory/isRemote in
-      // production (see ProgressFactApplier.handleSetActiveStream). Identity
-      // comes from the immutable descriptor; input/model details come from
-      // RunConfig and are assembled atomically by applySnapshotMetadata.
-      backend.state.updateStreamMetadata(stream, {
-        agentCategory: AgentCategory.Workflow,
-        isRemote: true,
-        creationTimestamp: 123,
-      });
-      backend.state.snapshots.setTaskState(
-        stream,
-        toolUseTaskState('search', 'deepseekproT'),
-        executionId,
-      );
-      backend.state.refreshStreamMetadataFromSnapshot(stream);
-      // A late provisional event cannot replace task-state authority.
-      backend.state.updateStreamMetadata(stream, {
-        agentCategory: AgentCategory.Workflow,
-      });
+    backend.state.streamLogs.ensureStream(stream);
+    // Provisional patches only ever carry agentCategory/isRemote in
+    // production (see ProgressFactApplier.handleSetActiveStream). Identity
+    // comes from the immutable descriptor; input/model details come from
+    // RunConfig and are assembled atomically by applySnapshotMetadata.
+    backend.state.updateStreamMetadata(stream, {
+      agentCategory: AgentCategory.Workflow,
+      isRemote: true,
+      creationTimestamp: 123,
+    });
+    backend.state.snapshots.setTaskState(
+      stream,
+      toolUseTaskState('search', 'deepseekproT'),
+      executionId,
+    );
+    backend.state.refreshStreamMetadataFromSnapshot(stream);
+    // A late provisional event cannot replace task-state authority.
+    backend.state.updateStreamMetadata(stream, {
+      agentCategory: AgentCategory.Workflow,
+    });
 
-      expect(backend.state.getStreamMetadata(stream)).toMatchObject({
-        agentCategory: AgentCategory.ToolUse,
-        isRemote: true,
-        creationTimestamp: 123,
-        executionId,
-        run: expect.objectContaining({
-          kind: 'agent',
-          agent: 'search',
-          model: 'deepseekproT',
-        }),
-      });
-
-      const toolUseInfos = buildStreamInfos(backend.state, 'toolUse');
-      expect(toolUseInfos.map((info) => info.name)).toContain(stream);
-      expect(toolUseInfos.find((info) => info.name === stream)).toMatchObject({
+    expect(backend.state.getStreamMetadata(stream)).toMatchObject({
+      agentCategory: AgentCategory.ToolUse,
+      isRemote: true,
+      creationTimestamp: 123,
+      executionId,
+      run: expect.objectContaining({
+        kind: 'agent',
         agent: 'search',
-        agentCategory: AgentCategory.ToolUse,
         model: 'deepseekproT',
-        isRemote: true,
-        creationTimestamp: 123,
-        executionId,
-      });
+      }),
+    });
 
-      const workflowInfos = buildStreamInfos(backend.state, 'workflow');
-      expect(workflowInfos.map((info) => info.name)).not.toContain(stream);
+    const toolUseInfos = buildStreamInfos(backend.state, 'toolUse');
+    expect(toolUseInfos.map((info) => info.name)).toContain(stream);
+    expect(toolUseInfos.find((info) => info.name === stream)).toMatchObject({
+      agent: 'search',
+      agentCategory: AgentCategory.ToolUse,
+      model: 'deepseekproT',
+      isRemote: true,
+      creationTimestamp: 123,
+      executionId,
+    });
 
-      backend.factApplier.syncStreamContent(stream);
-      const sync = messages.find(
-        (message) =>
-          message.command === PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
-      );
-      expect(sync).toMatchObject({
-        stream,
-        action: 'render',
-        kind: AgentCategory.ToolUse,
-      });
-    } finally {
-      backend.dispose();
-    }
+    const workflowInfos = buildStreamInfos(backend.state, 'workflow');
+    expect(workflowInfos.map((info) => info.name)).not.toContain(stream);
+
+    backend.factApplier.syncStreamContent(stream);
+    const sync = messages.find(
+      (message) =>
+        message.command === PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
+    );
+    expect(sync).toMatchObject({
+      stream,
+      action: 'render',
+      kind: AgentCategory.ToolUse,
+    });
   });
 
   it('models a workflow-script container from the extension event subscription', async () => {
     const target = createIsolatedRecordingBackend();
-    const { backend, session } = target;
-    const subscription = backend.setupEventListeners();
+    const { backend } = target;
+    track(backend.setupEventListeners());
     const stream = 'workflow-script#f10a11' as StreamTabId;
     const executionId = 'f10a11' as ExecutionId;
     const descriptor = buildRunDescriptor({
@@ -2601,87 +2355,72 @@ describe('ProgressBackend', () => {
       kind: 'workflowScript',
     });
 
-    try {
-      backend.state.streamLogs.ensureStream(stream);
-      emitRunEvent(target, stream, { type: 'run.start', descriptor });
-      emitRunConfig(
-        target,
-        stream,
-        executionId,
-        agentConfigToTaskState(
-          AgentConfigSchema.parse({
-            agent: 'generic',
-            model: 'gpt-5.6-sol',
-            agentCategory: AgentCategory.Workflow,
-            instruction:
-              "Workflow script 'repo-cleanup-readonly-pilot-2026-07-24'",
-          }),
-        ),
-      );
-
-      await vi.waitFor(() =>
-        expect(backend.state.getStreamMetadata(stream).run).toEqual({
-          kind: 'workflowScript',
-          workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
+    backend.state.streamLogs.ensureStream(stream);
+    emitRunEvent(target, stream, { type: 'run.start', descriptor });
+    emitRunConfig(
+      target,
+      stream,
+      executionId,
+      agentConfigToTaskState(
+        AgentConfigSchema.parse({
+          agent: 'generic',
+          model: 'gpt-5.6-sol',
+          agentCategory: AgentCategory.Workflow,
           instruction:
             "Workflow script 'repo-cleanup-readonly-pilot-2026-07-24'",
         }),
-      );
-      const workflowInfos = buildStreamInfos(backend.state, 'workflow');
-      expect(workflowInfos).toContainEqual(
-        expect.objectContaining({
-          name: stream,
-          label: 'repo-cleanup-readonly-pilot-2026-07-24',
-          kind: 'workflowScript',
-          workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
-          agentCategory: AgentCategory.Workflow,
-        }),
-      );
-      const workflowScript = workflowInfos.find((info) => info.name === stream);
-      expect(workflowScript).not.toHaveProperty('agent');
-      expect(workflowScript).not.toHaveProperty('model');
-    } finally {
-      subscription.dispose();
-      backend.dispose();
-      session.dispose();
-    }
+      ),
+    );
+
+    await vi.waitFor(() =>
+      expect(backend.state.getStreamMetadata(stream).run).toEqual({
+        kind: 'workflowScript',
+        workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
+        instruction: "Workflow script 'repo-cleanup-readonly-pilot-2026-07-24'",
+      }),
+    );
+    const workflowInfos = buildStreamInfos(backend.state, 'workflow');
+    expect(workflowInfos).toContainEqual(
+      expect.objectContaining({
+        name: stream,
+        label: 'repo-cleanup-readonly-pilot-2026-07-24',
+        kind: 'workflowScript',
+        workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
+        agentCategory: AgentCategory.Workflow,
+      }),
+    );
+    const workflowScript = workflowInfos.find((info) => info.name === stream);
+    expect(workflowScript).not.toHaveProperty('agent');
+    expect(workflowScript).not.toHaveProperty('model');
   });
 
   it('promotes the transcript first timestamp into canonical metadata', () => {
     const { backend } = createRecordingBackend();
     const stream = 'timestamp-stream' as StreamTabId;
 
-    try {
-      backend.state.streamLogs.ensureStream(stream);
-      backend.state.updateStreamMetadata(stream, { creationTimestamp: 500 });
-      expect(backend.state.getStreamMetadata(stream).creationTimestamp).toBe(
-        500,
-      );
+    backend.state.streamLogs.ensureStream(stream);
+    backend.state.updateStreamMetadata(stream, { creationTimestamp: 500 });
+    expect(backend.state.getStreamMetadata(stream).creationTimestamp).toBe(500);
 
-      backend.state.streamLogs.append(stream, {
-        id: 'first-entry',
-        type: STREAM_LOG_ENTRY_TYPES.LOG,
-        level: LOG_LEVELS.INFO,
-        timestamp: 100,
-        messageType: MESSAGE_TYPES.DEFAULT,
-        text: 'first transcript entry',
-      });
+    backend.state.streamLogs.append(stream, {
+      id: 'first-entry',
+      type: STREAM_LOG_ENTRY_TYPES.LOG,
+      level: LOG_LEVELS.INFO,
+      timestamp: 100,
+      messageType: MESSAGE_TYPES.DEFAULT,
+      text: 'first transcript entry',
+    });
 
-      expect(backend.state.getStreamMetadata(stream).creationTimestamp).toBe(
-        100,
-      );
-      expect(
-        buildStreamInfos(backend.state, 'all').find(
-          (streamInfo) => streamInfo.name === stream,
-        ),
-      ).toMatchObject({ name: stream, creationTimestamp: 100 });
-    } finally {
-      backend.dispose();
-    }
+    expect(backend.state.getStreamMetadata(stream).creationTimestamp).toBe(100);
+    expect(
+      buildStreamInfos(backend.state, 'all').find(
+        (streamInfo) => streamInfo.name === stream,
+      ),
+    ).toMatchObject({ name: stream, creationTimestamp: 100 });
   });
 
   it('deletes the execution directory named by stream metadata when a stream is cleared', async () => {
-    const { backend, session } = createIsolatedRecordingBackend();
+    const { backend } = createIsolatedRecordingBackend();
     const stream = 'tool@deepseek#a6966a' as StreamTabId;
     const executionId = 'a6966a' as ExecutionId;
 
@@ -2708,13 +2447,11 @@ describe('ProgressBackend', () => {
     } finally {
       await GoalStore.forget(stream);
       await backend.state.clearAll();
-      backend.dispose();
-      session.dispose();
     }
   });
 
   it('retains stream state and execution config when adjacent cleanup fails', async () => {
-    const { backend, session } = createIsolatedRecordingBackend();
+    const { backend } = createIsolatedRecordingBackend();
     const stream = 'tool@deepseek#a6966f' as StreamTabId;
     const executionId = 'a6966f' as ExecutionId;
     const snapshotDeleteSpy = vi
@@ -2742,13 +2479,11 @@ describe('ProgressBackend', () => {
     } finally {
       snapshotDeleteSpy.mockRestore();
       await backend.state.clearAll();
-      backend.dispose();
-      session.dispose();
     }
   });
 
   it('commits stream deletion when only final execution cleanup fails', async () => {
-    const { backend, session } = createIsolatedRecordingBackend();
+    const { backend } = createIsolatedRecordingBackend();
     const stream = 'tool@deepseek#a6966e' as StreamTabId;
     const executionId = 'a6966e' as ExecutionId;
     const deleteExecutionSpy = vi
@@ -2777,13 +2512,11 @@ describe('ProgressBackend', () => {
       deleteExecutionSpy.mockRestore();
       await getExecutionStore(executionId).clear();
       await backend.state.clearAll();
-      backend.dispose();
-      session.dispose();
     }
   });
 
   it('does not retain a stream after the transcript commit point', async () => {
-    const { backend, session } = createIsolatedRecordingBackend();
+    const { backend } = createIsolatedRecordingBackend();
     const stream = 'tool@deepseek#a69660' as StreamTabId;
     const executionId = 'a69660' as ExecutionId;
     const forgetSpy = vi
@@ -2808,13 +2541,11 @@ describe('ProgressBackend', () => {
     } finally {
       forgetSpy.mockRestore();
       await backend.state.clearAll();
-      backend.dispose();
-      session.dispose();
     }
   });
 
   it('retains execution sidecars and goals for an externally active run', async () => {
-    const { backend, session } = createIsolatedRecordingBackend();
+    const { backend } = createIsolatedRecordingBackend();
     const stream = 'tool@deepseek#a6966b' as StreamTabId;
     const executionId = 'a6966b' as ExecutionId;
 
@@ -2843,13 +2574,11 @@ describe('ProgressBackend', () => {
       await GoalStore.forget(stream);
       await getExecutionStore(executionId).clear();
       await backend.state.clearAll();
-      backend.dispose();
-      session.dispose();
     }
   });
 
   it('derives an active execution from the stream id when snapshot mapping is absent', async () => {
-    const { backend, session } = createIsolatedRecordingBackend();
+    const { backend } = createIsolatedRecordingBackend();
     const stream = 'tool@deepseek#a6966c' as StreamTabId;
     const executionId = 'a6966c' as ExecutionId;
 
@@ -2874,13 +2603,11 @@ describe('ProgressBackend', () => {
       await GoalStore.forget(stream);
       await getExecutionStore(executionId).clear();
       await backend.state.clearAll();
-      backend.dispose();
-      session.dispose();
     }
   });
 
   it('retains a log-only stream during bulk cleanup when its execution is active', async () => {
-    const { backend, session } = createIsolatedRecordingBackend();
+    const { backend } = createIsolatedRecordingBackend();
     const stream = 'tool@deepseek#a6966d' as StreamTabId;
     const executionId = 'a6966d' as ExecutionId;
 
@@ -2906,13 +2633,11 @@ describe('ProgressBackend', () => {
       await GoalStore.forget(stream);
       await getExecutionStore(executionId).clear();
       await backend.state.clearAll();
-      backend.dispose();
-      session.dispose();
     }
   });
 
   it('serializes bulk cleanup behind an existing staged deletion', async () => {
-    const { backend, session } = createIsolatedRecordingBackend();
+    const { backend } = createIsolatedRecordingBackend();
     const stream = 'tool@deepseek#a6966e' as StreamTabId;
     const executionId = 'a6966e' as ExecutionId;
     let stagedDeletion:
@@ -2946,8 +2671,6 @@ describe('ProgressBackend', () => {
       await stagedDeletion?.rollback();
       await getExecutionStore(executionId).clear();
       await backend.state.clearAll();
-      backend.dispose();
-      session.dispose();
     }
   });
 
@@ -2958,7 +2681,7 @@ describe('ProgressBackend', () => {
     const failedExecution = 'fa11ed6966' as ExecutionId;
     const incompleteExecution = 'faded6966' as ExecutionId;
     const deletedExecution = 'de1e7ed6966' as ExecutionId;
-    const { backend, session } = createIsolatedRecordingBackend();
+    const { backend } = createIsolatedRecordingBackend();
     backend.state.streamLogs.ensureStream(failedStream);
     backend.state.streamLogs.ensureStream(incompleteStream);
     backend.state.streamLogs.ensureStream(deletedStream);
@@ -3003,15 +2726,13 @@ describe('ProgressBackend', () => {
     } finally {
       deleteExecutionSpy.mockRestore();
       await backend.state.clearAll();
-      backend.dispose();
-      session.dispose();
     }
   });
 
   it('does not retain bulk-deleted streams after the transcript commit point', async () => {
     const stream = 'tool@deepseek#b69660' as StreamTabId;
     const executionId = 'b69660' as ExecutionId;
-    const { backend, session } = createIsolatedRecordingBackend();
+    const { backend } = createIsolatedRecordingBackend();
     backend.state.streamLogs.ensureStream(stream);
     backend.state.snapshots.setTaskState(
       stream,
@@ -3035,8 +2756,6 @@ describe('ProgressBackend', () => {
     } finally {
       forgetManySpy.mockRestore();
       await backend.state.clearAll();
-      backend.dispose();
-      session.dispose();
     }
   });
 
@@ -3044,7 +2763,7 @@ describe('ProgressBackend', () => {
     const failedStream = 'restored-override-stream' as StreamTabId;
     const deletedStream = 'workflow@deepseek#f00baa6966' as StreamTabId;
     const executionId = 'f00baa6966' as ExecutionId;
-    const { backend, session } = createIsolatedRecordingBackend();
+    const { backend } = createIsolatedRecordingBackend();
     backend.state.streamLogs.ensureStream(failedStream);
     backend.state.streamLogs.ensureStream(deletedStream);
     backend.state.snapshots.setTaskState(
@@ -3093,14 +2812,12 @@ describe('ProgressBackend', () => {
     } finally {
       deleteTranscriptSpy.mockRestore();
       await backend.state.clearAll();
-      backend.dispose();
-      session.dispose();
     }
   });
 
   it('forgets goal entries when clearing never-registered streams', async () => {
     const stream = 'tool@deepseek#missing' as StreamTabId;
-    const { backend, session } = createIsolatedRecordingBackend();
+    const { backend } = createIsolatedRecordingBackend();
 
     try {
       await GoalStore.start(stream, 'forget this unregistered goal');
@@ -3111,8 +2828,6 @@ describe('ProgressBackend', () => {
     } finally {
       await GoalStore.forget(stream);
       await backend.state.clearAll();
-      backend.dispose();
-      session.dispose();
     }
   });
 
@@ -3121,7 +2836,7 @@ describe('ProgressBackend', () => {
     await StorageFS.ensureDir(STREAM_DATA_DIR);
     await StorageFS.write(sentinel, '{}');
 
-    const { backend, session } = createIsolatedRecordingBackend();
+    const { backend } = createIsolatedRecordingBackend();
     try {
       await backend.state.clearStream('' as StreamTabId);
       await backend.state.clearStream('.' as StreamTabId);
@@ -3130,14 +2845,12 @@ describe('ProgressBackend', () => {
       expect(await StorageFS.exists(sentinel)).toBe(true);
     } finally {
       await backend.state.clearAll();
-      backend.dispose();
-      session.dispose();
     }
   });
 
   it('forgets goal entries when clearing all streams', async () => {
     const stream = 'tool@deepseek#b6966b' as StreamTabId;
-    const { backend, session } = createIsolatedRecordingBackend();
+    const { backend } = createIsolatedRecordingBackend();
 
     try {
       backend.state.streamLogs.ensureStream(stream);
@@ -3149,8 +2862,6 @@ describe('ProgressBackend', () => {
     } finally {
       await GoalStore.forget(stream);
       await backend.state.clearAll();
-      backend.dispose();
-      session.dispose();
     }
   });
 
@@ -3159,7 +2870,7 @@ describe('ProgressBackend', () => {
     const orphanExecution = 'b6966b' as ExecutionId;
     const historyExecution = 'c6966c' as ExecutionId;
 
-    const { backend, session } = await createPersistentRecordingBackend();
+    const { backend } = await createPersistentRecordingBackend();
     try {
       const seed = new StreamSnapshotStore();
       await seed.load([orphanStream]);
@@ -3195,8 +2906,6 @@ describe('ProgressBackend', () => {
       await GoalStore.forget(orphanStream);
       await getExecutionStore(historyExecution).clear();
       await backend.state.clearAll();
-      backend.dispose();
-      session.dispose();
     }
   });
 
@@ -3215,7 +2924,7 @@ describe('ProgressBackend', () => {
     await GoalStore.start(stream, 'finish this interrupted deletion');
     await seed.stageDeleteStream(stream);
 
-    const { backend, session } = await createPersistentRecordingBackend();
+    const { backend } = await createPersistentRecordingBackend();
     try {
       expect(await StorageFS.exists(streamDataDir(stream))).toBe(false);
       expect(await seed.listStagedDeletions()).toContain(stream);
@@ -3230,8 +2939,6 @@ describe('ProgressBackend', () => {
     } finally {
       await GoalStore.forget(stream);
       await backend.state.clearAll();
-      backend.dispose();
-      session.dispose();
     }
   });
 
@@ -3276,8 +2983,6 @@ describe('ProgressBackend', () => {
       deleteSpy.mockRestore();
       await GoalStore.forget(stream);
       await backend.state.clearAll();
-      backend.dispose();
-      session.dispose();
     }
   });
 
@@ -3302,7 +3007,7 @@ describe('ProgressBackend', () => {
     await writeExecutionConfig(sweptExecution);
     await seed.flush();
 
-    const { backend, session } = await createPersistentRecordingBackend();
+    const { backend } = await createPersistentRecordingBackend();
     const originalStageDeleteStream =
       backend.state.snapshots.stageDeleteStream.bind(backend.state.snapshots);
     const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
@@ -3337,8 +3042,6 @@ describe('ProgressBackend', () => {
       await getExecutionStore(failingExecution).clear();
       await getExecutionStore(sweptExecution).clear();
       await backend.state.clearAll();
-      backend.dispose();
-      session.dispose();
     }
   });
 
@@ -3363,7 +3066,7 @@ describe('ProgressBackend', () => {
     await writeExecutionConfig(sweptExecution);
     await seed.flush();
 
-    const { backend, session } = await createPersistentRecordingBackend();
+    const { backend } = await createPersistentRecordingBackend();
     const stores = executionDeleter(backend);
     const originalDeleteExecution = stores.deleteExecution.bind(stores);
     const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
@@ -3398,8 +3101,6 @@ describe('ProgressBackend', () => {
       await getExecutionStore(failingExecution).clear();
       await getExecutionStore(sweptExecution).clear();
       await backend.state.clearAll();
-      backend.dispose();
-      session.dispose();
     }
   });
 
@@ -3418,6 +3119,8 @@ describe('ProgressBackend', () => {
       await writeExecutionConfig(executionId);
       await first.backend.state.flush();
     } finally {
+      // The second backend reopens the same durable store, so the first one
+      // has to be released here rather than at shared teardown.
       first.backend.dispose();
       first.session.dispose();
     }
@@ -3434,8 +3137,6 @@ describe('ProgressBackend', () => {
       expect(await StorageFS.exists(`executions/${executionId}`)).toBe(true);
     } finally {
       await second.backend.state.clearAll();
-      second.backend.dispose();
-      second.session.dispose();
     }
   });
 
@@ -3466,7 +3167,7 @@ describe('ProgressBackend', () => {
     it('hydrates the initial user message from legacyInstructions.json', async () => {
       const stream = 'polish@gpt#legacy01' as StreamTabId;
       const legacyText = 'Polish the introduction section for clarity.';
-      const { backend, session } = await createPersistentRecordingBackend();
+      const { backend } = await createPersistentRecordingBackend();
 
       try {
         await seedPersistedLogWithoutUserMessage(backend, stream);
@@ -3494,15 +3195,13 @@ describe('ProgressBackend', () => {
         ).toBe(true);
       } finally {
         await backend.state.clearAll();
-        backend.dispose();
-        session.dispose();
       }
     });
 
     it('falls back to the older runInstructions.json key (never migrated on disk)', async () => {
       const stream = 'polish@gpt#legacy02' as StreamTabId;
       const legacyText = 'Rewrite the abstract to lead with the contribution.';
-      const { backend, session } = await createPersistentRecordingBackend();
+      const { backend } = await createPersistentRecordingBackend();
 
       try {
         await seedPersistedLogWithoutUserMessage(backend, stream);
@@ -3535,15 +3234,13 @@ describe('ProgressBackend', () => {
         ).toBe(true);
       } finally {
         await backend.state.clearAll();
-        backend.dispose();
-        session.dispose();
       }
     });
 
     it('does not duplicate the backfilled message on a second load()', async () => {
       const stream = 'polish@gpt#legacy03' as StreamTabId;
       const legacyText = 'Tighten the related-work section.';
-      const { backend, session } = await createPersistentRecordingBackend();
+      const { backend } = await createPersistentRecordingBackend();
 
       try {
         await seedPersistedLogWithoutUserMessage(backend, stream);
@@ -3569,8 +3266,6 @@ describe('ProgressBackend', () => {
         expect(matches).toHaveLength(1);
       } finally {
         await backend.state.clearAll();
-        backend.dispose();
-        session.dispose();
       }
     });
   });
@@ -3601,176 +3296,156 @@ describe('retained finished children', () => {
 
   it('keeps a vanished child as a row stamped with finishedAt', () => {
     const { backend } = createRecordingBackend();
-    try {
-      seedParent(backend);
+    seedParent(backend);
 
-      backend.factApplier.updateChildRoster(PARENT, [
-        subagent('a'),
-        subagent('b'),
-      ]);
-      backend.factApplier.updateChildRoster(PARENT, [subagent('a')]);
+    backend.factApplier.updateChildRoster(PARENT, [
+      subagent('a'),
+      subagent('b'),
+    ]);
+    backend.factApplier.updateChildRoster(PARENT, [subagent('a')]);
 
-      const roster = backend.state.getStreamState(PARENT)?.subagents ?? [];
-      expect(roster).toHaveLength(2);
-      expect(roster.find((c) => c.executionId === 'a')?.finishedAt).toBe(
-        undefined,
-      );
-      expect(
-        roster.find((c) => c.executionId === 'b')?.finishedAt,
-      ).toBeGreaterThan(0);
-    } finally {
-      backend.dispose();
-    }
+    const roster = backend.state.getStreamState(PARENT)?.subagents ?? [];
+    expect(roster).toHaveLength(2);
+    expect(roster.find((c) => c.executionId === 'a')?.finishedAt).toBe(
+      undefined,
+    );
+    expect(
+      roster.find((c) => c.executionId === 'b')?.finishedAt,
+    ).toBeGreaterThan(0);
   });
 
   it('promotes a retained child back to one live row when it reappears', () => {
     const { backend } = createRecordingBackend();
-    try {
-      seedParent(backend);
-      const child = subagent('resumed');
+    seedParent(backend);
+    const child = subagent('resumed');
 
-      backend.factApplier.updateChildRoster(PARENT, [child]);
-      let roster = backend.state.getStreamState(PARENT)?.subagents ?? [];
-      expect(roster).toHaveLength(1);
-      expect(roster[0]?.finishedAt).toBeUndefined();
+    backend.factApplier.updateChildRoster(PARENT, [child]);
+    let roster = backend.state.getStreamState(PARENT)?.subagents ?? [];
+    expect(roster).toHaveLength(1);
+    expect(roster[0]?.finishedAt).toBeUndefined();
 
-      backend.factApplier.updateChildRoster(PARENT, []);
-      roster = backend.state.getStreamState(PARENT)?.subagents ?? [];
-      expect(roster).toHaveLength(1);
-      expect(roster[0]?.finishedAt).toBeGreaterThan(0);
+    backend.factApplier.updateChildRoster(PARENT, []);
+    roster = backend.state.getStreamState(PARENT)?.subagents ?? [];
+    expect(roster).toHaveLength(1);
+    expect(roster[0]?.finishedAt).toBeGreaterThan(0);
 
-      backend.factApplier.updateChildRoster(PARENT, [child]);
-      roster = backend.state.getStreamState(PARENT)?.subagents ?? [];
-      expect(roster).toHaveLength(1);
-      expect(roster[0]?.finishedAt).toBeUndefined();
+    backend.factApplier.updateChildRoster(PARENT, [child]);
+    roster = backend.state.getStreamState(PARENT)?.subagents ?? [];
+    expect(roster).toHaveLength(1);
+    expect(roster[0]?.finishedAt).toBeUndefined();
 
-      backend.factApplier.updateChildRoster(PARENT, []);
-      roster = backend.state.getStreamState(PARENT)?.subagents ?? [];
-      expect(roster).toHaveLength(1);
-      expect(roster[0]?.finishedAt).toBeGreaterThan(0);
-      expect(new Set(roster.map((entry) => entry.executionId)).size).toBe(1);
-    } finally {
-      backend.dispose();
-    }
+    backend.factApplier.updateChildRoster(PARENT, []);
+    roster = backend.state.getStreamState(PARENT)?.subagents ?? [];
+    expect(roster).toHaveLength(1);
+    expect(roster[0]?.finishedAt).toBeGreaterThan(0);
+    expect(new Set(roster.map((entry) => entry.executionId)).size).toBe(1);
   });
 
   it('never marks anything finished from a first roster', () => {
     const { backend } = createRecordingBackend();
-    try {
-      seedParent(backend);
+    seedParent(backend);
 
-      backend.factApplier.updateChildRoster(PARENT, [subagent('a')]);
+    backend.factApplier.updateChildRoster(PARENT, [subagent('a')]);
 
-      const roster = backend.state.getStreamState(PARENT)?.subagents ?? [];
-      expect(roster.map((c) => c.executionId)).toEqual(['a']);
-      expect(roster[0]?.finishedAt).toBeUndefined();
-    } finally {
-      backend.dispose();
-    }
+    const roster = backend.state.getStreamState(PARENT)?.subagents ?? [];
+    expect(roster.map((c) => c.executionId)).toEqual(['a']);
+    expect(roster[0]?.finishedAt).toBeUndefined();
   });
 
   it('shows a terminal status that lands after the roster drop', async () => {
     const { backend, messages } = createRecordingBackend();
-    try {
-      seedParent(backend);
-      const child = subagent('late');
-      const childStreamId = 'late-stream' as StreamTabId;
-      backend.state.snapshots.setParentStream(childStreamId, PARENT);
+    seedParent(backend);
+    const child = subagent('late');
+    const childStreamId = 'late-stream' as StreamTabId;
+    backend.state.snapshots.setParentStream(childStreamId, PARENT);
 
-      // Roster drop first — the child is still `running` at this point.
-      backend.factApplier.updateChildRoster(PARENT, [child]);
-      backend.factApplier.updateChildRoster(PARENT, []);
-      messages.length = 0;
+    // Roster drop first — the child is still `running` at this point.
+    backend.factApplier.updateChildRoster(PARENT, [child]);
+    backend.factApplier.updateChildRoster(PARENT, []);
+    messages.length = 0;
 
-      // Terminal status arrives afterwards.
-      backend.state.streamStatus.transitionToTerminal(
-        childStreamId,
-        STREAM_PHASE.COMPLETED,
-      );
-      await backend.factApplier.setStreamStatus(
-        childStreamId,
-        STREAM_PHASE.COMPLETED,
-      );
+    // Terminal status arrives afterwards.
+    backend.state.streamStatus.transitionToTerminal(
+      childStreamId,
+      STREAM_PHASE.COMPLETED,
+    );
+    await backend.factApplier.setStreamStatus(
+      childStreamId,
+      STREAM_PHASE.COMPLETED,
+    );
 
-      const badges = messages.filter(
-        (message) =>
-          message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES,
-      );
-      expect(badges.at(-1)).toMatchObject({
-        stream: PARENT,
-        subagents: [
-          expect.objectContaining({
-            executionId: 'late',
-            status: STREAM_PHASE.COMPLETED,
-          }),
-        ],
-      });
-    } finally {
-      backend.dispose();
-    }
+    const badges = messages.filter(
+      (message) =>
+        message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES,
+    );
+    expect(badges.at(-1)).toMatchObject({
+      stream: PARENT,
+      subagents: [
+        expect.objectContaining({
+          executionId: 'late',
+          status: STREAM_PHASE.COMPLETED,
+        }),
+      ],
+    });
   });
 
   it('keeps the resolved terminal status on a later structural sync', async () => {
     const { backend, messages } = createRecordingBackend();
-    try {
-      seedParent(backend);
-      const childStreamId = 'doomed-stream' as StreamTabId;
-      backend.state.snapshots.setParentStream(childStreamId, PARENT);
+    seedParent(backend);
+    const childStreamId = 'doomed-stream' as StreamTabId;
+    backend.state.snapshots.setParentStream(childStreamId, PARENT);
 
-      // Roster drop first, so the retained row is stamped `running` forever.
-      backend.factApplier.updateChildRoster(PARENT, [
-        subagent('doomed', { childStreamId }),
-      ]);
-      backend.factApplier.updateChildRoster(PARENT, []);
-      // Transition only the authoritative status machine. Deliberately avoid
-      // `setStreamStatus`, which also caches the terminal status into the
-      // retained row and would let this test pass without the projection.
-      backend.state.streamStatus.transitionToTerminal(
-        childStreamId,
-        STREAM_PHASE.FAILED,
-      );
-      expect(backend.state.getStreamState(PARENT)?.subagents?.[0]?.status).toBe(
-        STREAM_PHASE.RUNNING,
-      );
-      expect(backend.state.streamStatus.get(childStreamId)).toBe(
-        STREAM_PHASE.FAILED,
-      );
-      messages.length = 0;
+    // Roster drop first, so the retained row is stamped `running` forever.
+    backend.factApplier.updateChildRoster(PARENT, [
+      subagent('doomed', { childStreamId }),
+    ]);
+    backend.factApplier.updateChildRoster(PARENT, []);
+    // Transition only the authoritative status machine. Deliberately avoid
+    // `setStreamStatus`, which also caches the terminal status into the
+    // retained row and would let this test pass without the projection.
+    backend.state.streamStatus.transitionToTerminal(
+      childStreamId,
+      STREAM_PHASE.FAILED,
+    );
+    expect(backend.state.getStreamState(PARENT)?.subagents?.[0]?.status).toBe(
+      STREAM_PHASE.RUNNING,
+    );
+    expect(backend.state.streamStatus.get(childStreamId)).toBe(
+      STREAM_PHASE.FAILED,
+    );
+    messages.length = 0;
 
-      // A structural rebuild (view reopen, theme change, filter switch) is the
-      // frontend's other writer of `subagents`; it must overlay the stale row
-      // with the authoritative status-machine outcome.
-      backend.webviewUpdater.sendStreamMetadata(
-        backend.state,
-        backend.factApplier.getAllStreamStates(),
-      );
-      backend.webviewUpdater.updateStreamMetadata(
-        backend.state,
-        PARENT,
-        backend.factApplier.getAllStreamStates(),
-      );
+    // A structural rebuild (view reopen, theme change, filter switch) is the
+    // frontend's other writer of `subagents`; it must overlay the stale row
+    // with the authoritative status-machine outcome.
+    backend.webviewUpdater.sendStreamMetadata(
+      backend.state,
+      backend.factApplier.getAllStreamStates(),
+    );
+    backend.webviewUpdater.updateStreamMetadata(
+      backend.state,
+      PARENT,
+      backend.factApplier.getAllStreamStates(),
+    );
 
-      const rosters = messages.flatMap((message) => {
-        if (message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS) {
-          return [message.streamStates?.[PARENT]?.subagents ?? []];
-        }
-        if (message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA) {
-          return [message.streamState.subagents];
-        }
-        return [];
-      });
-
-      expect(rosters).toHaveLength(2);
-      for (const roster of rosters) {
-        expect(roster).toEqual([
-          expect.objectContaining({
-            executionId: 'doomed',
-            status: STREAM_PHASE.FAILED,
-          }),
-        ]);
+    const rosters = messages.flatMap((message) => {
+      if (message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS) {
+        return [message.streamStates?.[PARENT]?.subagents ?? []];
       }
-    } finally {
-      backend.dispose();
+      if (message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA) {
+        return [message.streamState.subagents];
+      }
+      return [];
+    });
+
+    expect(rosters).toHaveLength(2);
+    for (const roster of rosters) {
+      expect(roster).toEqual([
+        expect.objectContaining({
+          executionId: 'doomed',
+          status: STREAM_PHASE.FAILED,
+        }),
+      ]);
     }
   });
 
@@ -3779,54 +3454,46 @@ describe('retained finished children', () => {
     // Mirrors RETAINED_FINISHED_CHILDREN_CAP in ProgressFactApplier.
     const cap = 200;
     const overflow = 5;
-    try {
-      seedParent(backend);
-      const live = subagent('live');
+    seedParent(backend);
+    const live = subagent('live');
 
-      for (let i = 0; i < cap + overflow; i += 1) {
-        vi.spyOn(Date, 'now').mockReturnValue(1_000 + i);
-        backend.factApplier.updateChildRoster(PARENT, [
-          live,
-          subagent(`child-${i}`),
-        ]);
-        backend.factApplier.updateChildRoster(PARENT, [live]);
-      }
-      vi.restoreAllMocks();
-
-      const roster = backend.state.getStreamState(PARENT)?.subagents ?? [];
-      const retained = roster.filter((c) => c.finishedAt !== undefined);
-      expect(roster.filter((c) => c.finishedAt === undefined)).toEqual([live]);
-      expect(retained).toHaveLength(cap);
-      // The five oldest are evicted; the newest survives.
-      const ids = retained.map((c) => c.executionId);
-      expect(ids).not.toContain('child-0');
-      expect(ids).not.toContain(`child-${overflow - 1}`);
-      expect(retained[0]?.executionId).toBe(`child-${overflow}`);
-      expect(retained.at(-1)?.executionId).toBe(`child-${cap + overflow - 1}`);
-    } finally {
-      backend.dispose();
+    for (let i = 0; i < cap + overflow; i += 1) {
+      vi.spyOn(Date, 'now').mockReturnValue(1_000 + i);
+      backend.factApplier.updateChildRoster(PARENT, [
+        live,
+        subagent(`child-${i}`),
+      ]);
+      backend.factApplier.updateChildRoster(PARENT, [live]);
     }
+    vi.restoreAllMocks();
+
+    const roster = backend.state.getStreamState(PARENT)?.subagents ?? [];
+    const retained = roster.filter((c) => c.finishedAt !== undefined);
+    expect(roster.filter((c) => c.finishedAt === undefined)).toEqual([live]);
+    expect(retained).toHaveLength(cap);
+    // The five oldest are evicted; the newest survives.
+    const ids = retained.map((c) => c.executionId);
+    expect(ids).not.toContain('child-0');
+    expect(ids).not.toContain(`child-${overflow - 1}`);
+    expect(retained[0]?.executionId).toBe(`child-${overflow}`);
+    expect(retained.at(-1)?.executionId).toBe(`child-${cap + overflow - 1}`);
   });
 
   it('clears retained rows when the stream re-enters running', async () => {
     const { backend } = createRecordingBackend();
-    try {
-      seedParent(backend);
-      const live = subagent('live');
+    seedParent(backend);
+    const live = subagent('live');
 
-      backend.factApplier.updateChildRoster(PARENT, [live, subagent('done')]);
-      backend.factApplier.updateChildRoster(PARENT, [live]);
-      expect(backend.state.getStreamState(PARENT)?.subagents).toHaveLength(2);
+    backend.factApplier.updateChildRoster(PARENT, [live, subagent('done')]);
+    backend.factApplier.updateChildRoster(PARENT, [live]);
+    expect(backend.state.getStreamState(PARENT)?.subagents).toHaveLength(2);
 
-      await backend.factApplier.setStreamStatus(
-        PARENT,
-        STREAM_PHASE.RUNNING,
-        STREAM_PHASE.COMPLETED,
-      );
+    await backend.factApplier.setStreamStatus(
+      PARENT,
+      STREAM_PHASE.RUNNING,
+      STREAM_PHASE.COMPLETED,
+    );
 
-      expect(backend.state.getStreamState(PARENT)?.subagents).toEqual([live]);
-    } finally {
-      backend.dispose();
-    }
+    expect(backend.state.getStreamState(PARENT)?.subagents).toEqual([live]);
   });
 });

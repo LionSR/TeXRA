@@ -126,8 +126,8 @@ export async function uploadGoogleMediaEntries<T>(
   const failures: string[] = [];
 
   for (const entry of entries) {
-    const fileName = entry.file_name ?? 'unnamed-file';
-    const mimeType = entry.media_type ?? DEFAULT_ATTACHMENT_MIME_TYPE;
+    const fileName = entry.file_name;
+    const mimeType = entry.media_type;
     const inlinePayload = isNonEmptyString(entry.data) ? entry.data : null;
 
     if (inlinePayload) {

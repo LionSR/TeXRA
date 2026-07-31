@@ -91,6 +91,7 @@ describe('runAgent execution ownership', () => {
     expect(mocks.registerExecution).not.toHaveBeenCalled();
     expect(mocks.acquireResumedExecutionLease).toHaveBeenCalledWith(
       EXECUTION_ID,
+      undefined,
     );
     expect(mocks.completeOwnedExecutionLease).toHaveBeenCalledWith(
       EXECUTION_ID,

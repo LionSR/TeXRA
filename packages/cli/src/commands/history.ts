@@ -48,7 +48,7 @@ export function parseHistoryListLimit(
 
 async function runHistoryList(
   context: CliContext,
-  options: { limit?: number } = {},
+  options: { limit?: number },
 ): Promise<number> {
   await initLocalCliPlatform(context);
   const entries = await listCliHistoryEntries();
@@ -72,7 +72,7 @@ async function runHistoryList(
 async function runHistoryShow(
   context: CliContext,
   id: ExecutionId,
-  options: { full?: boolean } = {},
+  options: { full?: boolean },
 ): Promise<number> {
   await initLocalCliPlatform(context);
   const details = await readCliHistoryDetails(id, {
@@ -113,7 +113,7 @@ export async function runHistoryExport(
   context: CliContext,
   id: ExecutionId,
   format: 'html' | 'md',
-  options: { assetsDir?: string } = {},
+  options: { assetsDir?: string },
 ): Promise<number> {
   await initLocalCliPlatform(context);
 

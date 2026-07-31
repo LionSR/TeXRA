@@ -293,9 +293,9 @@ export class PersistedFlow<
     while (step.hasMore) {
       step = await this.stepWithResult();
     }
-    return (step.action ??
-      this.cachedRecord?.cursor?.lastAction ??
-      this.cachedRecord?.nodes.at(-1)?.action) as Action | undefined;
+    // The loop only exits on a suspension (which always carries an action) or
+    // on the terminal step, which already resolves the record's last action.
+    return step.action;
   }
 
   /**

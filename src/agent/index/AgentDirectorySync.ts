@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import { isFileNotFoundError } from '@common/errors/errorPredicates';
 import { platform } from '@platform/platform';
+import { KeyedMutex } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { GlobalStorageFS } from '@utils/files/storageFS';
 
@@ -107,32 +108,15 @@ export class GlobalStorageAgentDirectoryStorage implements AgentDirectoryStorage
 }
 
 export class BundledAgentDirectorySync {
-  private static readonly reconcileByStorageRoot = new Map<
-    string,
-    Promise<boolean>
-  >();
+  private static readonly reconcileByStorageRoot = new KeyedMutex<string>();
 
   constructor(private readonly options: BundledAgentDirectorySyncOptions) {}
 
-  async reconcile(currentVersion: string | undefined): Promise<boolean> {
-    const storageRoot = this.options.storage.fullPath('');
-    const previous =
-      BundledAgentDirectorySync.reconcileByStorageRoot.get(storageRoot) ??
-      Promise.resolve(true);
-    const current = previous
-      .catch(() => true)
-      .then(() => this.reconcileUnlocked(currentVersion));
-    const tracked = current.finally(() => {
-      if (
-        BundledAgentDirectorySync.reconcileByStorageRoot.get(storageRoot) ===
-        tracked
-      ) {
-        BundledAgentDirectorySync.reconcileByStorageRoot.delete(storageRoot);
-      }
-    });
-    tracked.catch(() => undefined);
-    BundledAgentDirectorySync.reconcileByStorageRoot.set(storageRoot, tracked);
-    return current;
+  reconcile(currentVersion: string | undefined): Promise<boolean> {
+    return BundledAgentDirectorySync.reconcileByStorageRoot.runExclusive(
+      this.options.storage.fullPath(''),
+      () => this.reconcileUnlocked(currentVersion),
+    );
   }
 
   private async reconcileUnlocked(

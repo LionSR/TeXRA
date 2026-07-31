@@ -890,21 +890,17 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       return false;
     }
 
+    // Whichever of `onRun` and the command's own settlement lands first wins:
+    // a promise ignores every resolve after the first.
     return new Promise<boolean>((resolve) => {
-      let settled = false;
-      const settle = (started: boolean): void => {
-        if (settled) return;
-        settled = true;
-        resolve(started);
-      };
       void this.runViewCommand<boolean>('texra.execute', [
         {
           ...validation.request,
-          onRun: () => settle(true),
+          onRun: () => resolve(true),
         },
       ]).then(
-        (completed) => settle(completed === true),
-        () => settle(false),
+        (completed) => resolve(completed === true),
+        () => resolve(false),
       );
     });
   }

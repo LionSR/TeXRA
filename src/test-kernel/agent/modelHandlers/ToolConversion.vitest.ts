@@ -43,6 +43,17 @@ type ToolDescriptionCase = {
   readonly nestedFields?: readonly DescriptionPath[];
 };
 
+/** A plain JSON-schema function tool, the baseline shape every provider gets. */
+const READ_FILE_DEF: ToolDefinition = {
+  name: 'read_file',
+  description: 'Read a file',
+  parameters: {
+    type: 'object',
+    properties: { path: { type: 'string' } },
+    required: ['path'],
+  },
+};
+
 function propertySchema(
   schema: JsonSchemaWithProperties | undefined,
   field: string,
@@ -544,15 +555,7 @@ describe('toOpenAIResponseTools', () => {
 
   it('filters out function tools when supportsFunctionCalling is false', () => {
     const defs: ToolDefinition[] = [
-      {
-        name: 'read_file',
-        description: 'Read a file',
-        parameters: {
-          type: 'object',
-          properties: { path: { type: 'string' } },
-          required: ['path'],
-        },
-      },
+      READ_FILE_DEF,
       {
         name: 'write_file',
         description: 'Write a file',
@@ -582,17 +585,7 @@ describe('toGoogleTools', () => {
   it.each([
     {
       label: 'converts function declarations to single tool object',
-      defs: [
-        {
-          name: 'read_file',
-          description: 'Read a file',
-          parameters: {
-            type: 'object',
-            properties: { path: { type: 'string' } },
-            required: ['path'],
-          },
-        },
-      ],
+      defs: [READ_FILE_DEF],
       names: ['read_file'],
     },
     {
@@ -605,15 +598,7 @@ describe('toGoogleTools', () => {
       label: 'converts all tools to function declarations',
       defs: [
         { name: 'web_search', description: 'Search the web' },
-        {
-          name: 'read_file',
-          description: 'Read a file',
-          parameters: {
-            type: 'object',
-            properties: { path: { type: 'string' } },
-            required: ['path'],
-          },
-        },
+        READ_FILE_DEF,
         {
           name: 'write_file',
           description: 'Write a file',

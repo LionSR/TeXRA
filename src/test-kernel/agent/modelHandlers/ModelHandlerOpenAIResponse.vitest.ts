@@ -208,6 +208,36 @@ function withSdkOptions<T extends { responses: object }>(client: T) {
   });
 }
 
+/**
+ * A client whose pre-flight token count answers `inputTokensPerCall` (keyed by
+ * the 1-based call index) and whose `responses.create` records every request,
+ * answering each with a sequentially numbered completed response.
+ */
+function createPreflightCountingClient(
+  inputTokensPerCall: (call: number) => number,
+) {
+  const requests: any[] = [];
+  const tokenCounts: number[] = [];
+  const client = withSdkOptions({
+    responses: {
+      inputTokens: {
+        count: async () => {
+          const inputTokens = inputTokensPerCall(tokenCounts.length + 1);
+          tokenCounts.push(inputTokens);
+          return { input_tokens: inputTokens };
+        },
+      },
+      create: async (params: any) => {
+        requests.push(params);
+        return createResponse(`resp-${requests.length}`, {
+          input_tokens: 100000,
+        });
+      },
+    },
+  });
+  return { client, requests, tokenCounts };
+}
+
 function createBackgroundAbortHandler(): ModelHandlerOpenAIResponse {
   const handler = new ModelHandlerOpenAIResponse(
     buildTestModelConfig({
@@ -1117,27 +1147,12 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     const compactCalls = stubCompactionToLastMessage(handler, {
       tokensAfter: 1000,
     });
-    const requests: any[] = [];
-    let tokenCountCalls = 0;
-    const client = withSdkOptions({
-      responses: {
-        inputTokens: {
-          count: async () => {
-            tokenCountCalls += 1;
-            // Turn 2's live count lands between the 75% threshold (150k) and
-            // the 200k window: the stale cumulative from turn 1 (100k) would
-            // never have triggered, but the live count must.
-            return { input_tokens: tokenCountCalls === 2 ? 180000 : 1000 };
-          },
-        },
-        create: async (params: any) => {
-          requests.push(params);
-          return createResponse(`resp-${requests.length}`, {
-            input_tokens: 100000,
-          });
-        },
-      },
-    });
+    // Turn 2's live count lands between the 75% threshold (150k) and the 200k
+    // window: the stale cumulative from turn 1 (100k) would never have
+    // triggered, but the live count must.
+    const { client, requests, tokenCounts } = createPreflightCountingClient(
+      (call) => (call === 2 ? 180000 : 1000),
+    );
 
     await handler.createResponse({
       client: client as any,
@@ -1155,7 +1170,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     assert.equal(result.response.id, 'resp-2');
     assert.equal(requests.length, 2);
     assert.equal(compactCalls.length, 1);
-    assert.equal(tokenCountCalls, 3);
+    assert.equal(tokenCounts.length, 3);
     assert.deepEqual(requests[1].input, secondTurn.slice(-1));
   });
 
@@ -1165,27 +1180,12 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
       contextWindow: 200000,
     });
     const compactCalls = stubCompactionToLastMessage(handler);
-    const requests: any[] = [];
-    let tokenCountCalls = 0;
-    const client = withSdkOptions({
-      responses: {
-        inputTokens: {
-          count: async () => {
-            tokenCountCalls += 1;
-            // Turn 2's pre-flight count overflows the 200k window (the count
-            // includes server-side chained history); the internal retry after
-            // dropping the chain and compacting fits again.
-            return { input_tokens: tokenCountCalls === 2 ? 300000 : 1000 };
-          },
-        },
-        create: async (params: any) => {
-          requests.push(params);
-          return createResponse(`resp-${requests.length}`, {
-            input_tokens: 100000,
-          });
-        },
-      },
-    });
+    // Turn 2's pre-flight count overflows the 200k window (the count includes
+    // server-side chained history); the internal retry after dropping the
+    // chain and compacting fits again.
+    const { client, requests, tokenCounts } = createPreflightCountingClient(
+      (call) => (call === 2 ? 300000 : 1000),
+    );
 
     await handler.createResponse({
       client: client as any,
@@ -1207,7 +1207,7 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     assert.equal(requests.length, 2);
     assert.equal(requests[1].previous_response_id, undefined);
     assert.equal(compactCalls.length, 1);
-    assert.equal(tokenCountCalls, 3);
+    assert.equal(tokenCounts.length, 3);
     assert.deepEqual(requests[1].input, secondTurn.slice(-1));
   });
 
@@ -1223,24 +1223,9 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     const compactCalls = stubCompactionToLastMessage(handler, {
       tokensAfter: 1000,
     });
-    const requests: any[] = [];
-    let tokenCountCalls = 0;
-    const client = withSdkOptions({
-      responses: {
-        inputTokens: {
-          count: async () => {
-            tokenCountCalls += 1;
-            return { input_tokens: tokenCountCalls === 2 ? 300000 : 1000 };
-          },
-        },
-        create: async (params: any) => {
-          requests.push(params);
-          return createResponse(`resp-${requests.length}`, {
-            input_tokens: 100000,
-          });
-        },
-      },
-    });
+    const { client, requests } = createPreflightCountingClient((call) =>
+      call === 2 ? 300000 : 1000,
+    );
 
     await handler.createResponse({
       client: client as any,

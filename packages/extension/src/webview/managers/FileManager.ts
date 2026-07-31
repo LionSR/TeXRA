@@ -44,10 +44,6 @@ type MessageFor<C extends MainViewInboundMessage['command']> = Extract<
   { command: C }
 >;
 
-type EditedFileSelectionMessage = MessageFor<
-  typeof MAIN_VIEW_COMMANDS.SELECT_EDITED_FILE
->;
-
 type EditedFileSelectedMessage = MessageFor<
   typeof MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED
 >;
@@ -104,9 +100,7 @@ const UPDATE_TO_SET_COMMAND = {
 export class FileManager extends BaseWebviewManager {
   protected readonly channel = CHANNEL;
 
-  async handleEditedFileSelection(
-    _message?: EditedFileSelectionMessage,
-  ): Promise<void> {
+  async handleEditedFileSelection(): Promise<void> {
     const editedFile = await vscode.commands.executeCommand<string>(
       FILE_SELECTION_COMMAND_IDS.selectEditedFile,
     );

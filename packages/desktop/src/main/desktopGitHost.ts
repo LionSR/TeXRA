@@ -13,7 +13,6 @@
  * extension.
  */
 
-import { clamp } from '@utils/core';
 import {
   COMMIT_LABEL_FORMAT,
   splitCommitLines,
@@ -29,11 +28,9 @@ import {
 /**
  * Maximum number of commits the renderer will display in the launcher banner.
  * Mirrors the extension's `texra.git.numberOfCommitsToShow` default (20). The
- * desktop currently has no per-user override; if/when one is wired the cap
- * stays here as a defence-in-depth bound.
+ * desktop has no per-user override.
  */
-const DEFAULT_COMMIT_LIMIT = 20;
-const MAX_COMMIT_LIMIT = 1000;
+const COMMIT_LIMIT = 20;
 
 /**
  * Hard upper bound on git output bytes (8 MiB). 20 commits with subjects
@@ -67,11 +64,6 @@ export interface CreateDesktopGitHostOptions {
    * picks up workspace switches without needing to be re-instantiated.
    */
   getWorkspacePath: () => string | undefined;
-  /**
-   * Hard cap on the number of commits returned. Defaults to 20 to match
-   * `texra.git.numberOfCommitsToShow`.
-   */
-  commitLimit?: number;
   /** Hook for surfacing unexpected errors (logging, telemetry). */
   onError?: (error: unknown) => void;
 }
@@ -88,8 +80,6 @@ export interface CreateDesktopGitHostOptions {
 export function createDesktopGitHost(
   options: CreateDesktopGitHostOptions,
 ): DesktopGitHost {
-  const limit = clampCommitLimit(options.commitLimit ?? DEFAULT_COMMIT_LIMIT);
-
   async function readGit(
     workspace: string,
     args: readonly string[],
@@ -137,7 +127,7 @@ export function createDesktopGitHost(
         '--no-pager',
         'log',
         '-n',
-        String(limit),
+        String(COMMIT_LIMIT),
         `--pretty=format:${COMMIT_LABEL_FORMAT}`,
       ]);
       // rev-parse already passed, so a failed log is still a git repo. The
@@ -227,11 +217,4 @@ function parseDivergence(output: string | undefined): [number, number] {
 function parseGitCount(value: string): number {
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
-}
-
-function clampCommitLimit(value: number): number {
-  if (!Number.isFinite(value)) return DEFAULT_COMMIT_LIMIT;
-  const rounded = Math.floor(value);
-  if (rounded <= 0) return DEFAULT_COMMIT_LIMIT;
-  return clamp(rounded, 1, MAX_COMMIT_LIMIT);
 }

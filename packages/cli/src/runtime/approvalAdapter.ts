@@ -3,14 +3,11 @@
 // stable surface for command modules, the TUI, and tests.
 
 import type {
-  BashSettlement,
   HostAgentProposalRequest,
   HostApprovalBypassStateUpdate,
   HostInteractions,
   HostRetryRequest,
   HostUserQuestionRequest,
-  PlanApprovalResult,
-  ProposalResult,
   RetryResult,
   UserQuestionSettlement,
 } from '@agent/runtime/HostInteractions';
@@ -127,19 +124,11 @@ async function decideApprovalEvent<K extends CliDecisionApprovalEvent>(
   return decision;
 }
 
-function toBashResult(decision: ApprovalDecision): BashSettlement {
-  return decision.accepted
-    ? { action: 'approve' }
-    : { action: 'reject', feedback: decision.userMessage };
-}
-
-function toPlanResult(decision: ApprovalDecision): PlanApprovalResult {
-  return decision.accepted
-    ? { action: 'approve' }
-    : { action: 'reject', feedback: decision.userMessage };
-}
-
-function toProposalResult(decision: ApprovalDecision): ProposalResult {
+/** Approve/reject settlement shared by the bash, plan, and proposal ports —
+ *  none of them offers the extra actions their result unions allow. */
+function toApprovalSettlement(
+  decision: ApprovalDecision,
+): { action: 'approve' } | { action: 'reject'; feedback?: string } {
   return decision.accepted
     ? { action: 'approve' }
     : { action: 'reject', feedback: decision.userMessage };
@@ -227,7 +216,7 @@ export function createHeadlessCliHostInteractions(
         context,
         hooks,
       );
-      return toBashResult(decision);
+      return toApprovalSettlement(decision);
     },
     async requestPlanApproval(request) {
       const decision = await decideApprovalEvent(
@@ -236,7 +225,7 @@ export function createHeadlessCliHostInteractions(
         context,
         hooks,
       );
-      return toPlanResult(decision);
+      return toApprovalSettlement(decision);
     },
     async requestAgentProposal(request: HostAgentProposalRequest) {
       const decision = await decideApprovalEvent(
@@ -245,7 +234,7 @@ export function createHeadlessCliHostInteractions(
         context,
         hooks,
       );
-      return toProposalResult(decision);
+      return toApprovalSettlement(decision);
     },
     async requestRetry(request: HostRetryRequest) {
       const payload: RetryPermission = {

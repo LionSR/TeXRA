@@ -14,12 +14,7 @@ import {
 } from '@agent/runtime/SessionHandle';
 import { classifyAgentError } from '@common/errors';
 import { RUN_OUTCOME, STREAM_PHASE, buildRunDescriptor } from '@shared/schemas';
-import type {
-  ExecutionId,
-  RunKind,
-  StreamTabId,
-  StorageKey,
-} from '@shared/schemas';
+import type { ExecutionId, RunKind, StreamTabId } from '@shared/schemas';
 import { deriveRunOutcome } from '@shared/streams/streamStatus';
 import { createRunTrace } from '@transcript';
 import type { TranscriptWriter } from '@transcript/StreamLogStore';

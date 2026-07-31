@@ -79,14 +79,6 @@ function recordSessionEvents(session: SessionHandle): SessionEvent[] {
   return events;
 }
 
-function useControllerApproval(controller: {
-  requestApproval(
-    request: ToolEditApprovalRequest,
-  ): Promise<ToolEditApprovalResult>;
-}): void {
-  activeToolEditApproval = (request) => controller.requestApproval(request);
-}
-
 function createRecordingRuntimeHost(): RecordingRuntimeHost {
   const shownToolEditPermissions: ToolEditPermission[] = [];
   const resolvedToolEditPermissions: Array<{ requestId: string }> = [];
@@ -233,6 +225,38 @@ async function loadApprovalModules(workspacePath = '/workspace') {
   };
 }
 
+/**
+ * Standard approval wiring: a fresh temp root, recording interactions, an
+ * isolated session, and a controller registered as the active approval handler.
+ */
+async function createApprovalFixture(
+  options: {
+    ui?: ApprovalControllerOptions['ui'];
+    workspacePath?: string;
+  } = {},
+): Promise<
+  Awaited<ReturnType<typeof loadApprovalModules>> & {
+    controller: ApprovalController;
+    interactions: RecordingRuntimeHost;
+    session: SessionHandle;
+    tempRoot: string;
+  }
+> {
+  const tempRoot = await createTempRoot();
+  const modules = await loadApprovalModules(options.workspacePath);
+  const interactions = createRecordingRuntimeHost();
+  const session = createTestSession();
+  const controller = createApprovalController(modules.desktopModule, {
+    interactions,
+    ...controllerHostCallbacks(interactions),
+    session,
+    ui: options.ui ?? createStubDesktopAgentExecutionHost(),
+    tempRoot,
+  });
+  activeToolEditApproval = (request) => controller.requestApproval(request);
+  return { ...modules, controller, interactions, session, tempRoot };
+}
+
 describe('desktop tool edit approval', () => {
   afterEach(async () => {
     activeToolEditApproval = undefined;
@@ -347,26 +371,17 @@ describe('desktop tool edit approval', () => {
   approvalTest(
     'routes proposed-file previews through desktop temp files before rejection',
     async () => {
-      const tempRoot = await createTempRoot();
-      const { requestToolEditApproval, desktopModule } =
-        await loadApprovalModules();
-      const interactions = createRecordingRuntimeHost();
-      const emitSpy = vi.spyOn(interactions, 'emit');
-      const session = createTestSession();
-      const sessionEvents = recordSessionEvents(session);
       const opened: string[] = [];
-      const controller = createApprovalController(desktopModule, {
-        interactions,
-        ...controllerHostCallbacks(interactions),
-        session,
-        tempRoot,
-        ui: createStubDesktopAgentExecutionHost({
-          openPath: async (filePath) => {
-            opened.push(filePath);
-          },
-        }),
-      });
-      useControllerApproval(controller);
+      const { requestToolEditApproval, controller, interactions, session } =
+        await createApprovalFixture({
+          ui: createStubDesktopAgentExecutionHost({
+            openPath: async (filePath) => {
+              opened.push(filePath);
+            },
+          }),
+        });
+      const emitSpy = vi.spyOn(interactions, 'emit');
+      const sessionEvents = recordSessionEvents(session);
       const { shownToolEditPermissions: shown } = interactions;
 
       const resultPromise = requestToolEditApproval({
@@ -422,10 +437,6 @@ describe('desktop tool edit approval', () => {
   approvalTest(
     'routes diff actions through the required desktop diff host',
     async () => {
-      const tempRoot = await createTempRoot();
-      const { requestToolEditApproval, desktopModule } =
-        await loadApprovalModules();
-      const interactions = createRecordingRuntimeHost();
       const openPath = vi.fn(async (_filePath: string) => {});
       const openDiff = vi.fn(
         async (
@@ -435,14 +446,10 @@ describe('desktop tool edit approval', () => {
           _options?: DiffOptions,
         ): Promise<DiffSession> => ({ original, proposed, title }),
       );
-      const controller = createApprovalController(desktopModule, {
-        interactions,
-        ...controllerHostCallbacks(interactions),
-        session: createTestSession(),
-        tempRoot,
-        ui: createStubDesktopAgentExecutionHost({ openPath, openDiff }),
-      });
-      useControllerApproval(controller);
+      const { requestToolEditApproval, controller, interactions } =
+        await createApprovalFixture({
+          ui: createStubDesktopAgentExecutionHost({ openPath, openDiff }),
+        });
       const { shownToolEditPermissions: shown } = interactions;
 
       const resultPromise = requestToolEditApproval({
@@ -478,23 +485,15 @@ describe('desktop tool edit approval', () => {
   approvalTest(
     'applies user edits made in the proposed preview file',
     async () => {
-      const tempRoot = await createTempRoot();
-      const { requestToolEditApproval, desktopModule } =
-        await loadApprovalModules();
-      const interactions = createRecordingRuntimeHost();
       const opened: string[] = [];
-      const controller = createApprovalController(desktopModule, {
-        interactions,
-        ...controllerHostCallbacks(interactions),
-        session: createTestSession(),
-        tempRoot,
-        ui: createStubDesktopAgentExecutionHost({
-          openPath: async (filePath) => {
-            opened.push(filePath);
-          },
-        }),
-      });
-      useControllerApproval(controller);
+      const { requestToolEditApproval, controller, interactions } =
+        await createApprovalFixture({
+          ui: createStubDesktopAgentExecutionHost({
+            openPath: async (filePath) => {
+              opened.push(filePath);
+            },
+          }),
+        });
       const { shownToolEditPermissions: shown } = interactions;
 
       const resultPromise = requestToolEditApproval({
@@ -540,19 +539,11 @@ describe('desktop tool edit approval', () => {
         return { ...actual, runLatexdiff };
       });
 
-      const tempRoot = await createTempRoot();
-      const { requestToolEditApproval, desktopModule } =
-        await loadApprovalModules();
-      const interactions = createRecordingRuntimeHost();
       const openBuildDisplay = vi.fn(async () => {});
-      const controller = createApprovalController(desktopModule, {
-        interactions,
-        ...controllerHostCallbacks(interactions),
-        session: createTestSession(),
-        tempRoot,
-        ui: createStubDesktopAgentExecutionHost({ openBuildDisplay }),
-      });
-      useControllerApproval(controller);
+      const { requestToolEditApproval, controller, interactions } =
+        await createApprovalFixture({
+          ui: createStubDesktopAgentExecutionHost({ openBuildDisplay }),
+        });
       const { shownToolEditPermissions: shown } = interactions;
 
       const resultPromise = requestToolEditApproval({
@@ -594,30 +585,23 @@ describe('desktop tool edit approval', () => {
     'uses the injected desktop build display callback for LaTeX preview',
     async () => {
       const workspaceRoot = await createTempRoot('texra-workspace-');
-      const tempRoot = await createTempRoot();
-      const { requestToolEditApproval, desktopModule } =
-        await loadApprovalModules(workspaceRoot);
-      const interactions = createRecordingRuntimeHost();
       const displayed: Array<{
         absolutePath: string;
         options?: { preserveFocus?: boolean };
       }> = [];
       const messages: string[] = [];
-      const controller = createApprovalController(desktopModule, {
-        interactions,
-        ...controllerHostCallbacks(interactions),
-        session: createTestSession(),
-        tempRoot,
-        ui: createStubDesktopAgentExecutionHost({
-          openBuildDisplay: async (location, options) => {
-            displayed.push({ absolutePath: location.absolutePath, options });
-          },
-          showErrorMessage: (message) => {
-            messages.push(message);
-          },
-        }),
-      });
-      useControllerApproval(controller);
+      const { requestToolEditApproval, controller, interactions } =
+        await createApprovalFixture({
+          workspacePath: workspaceRoot,
+          ui: createStubDesktopAgentExecutionHost({
+            openBuildDisplay: async (location, options) => {
+              displayed.push({ absolutePath: location.absolutePath, options });
+            },
+            showErrorMessage: (message) => {
+              messages.push(message);
+            },
+          }),
+        });
       const { shownToolEditPermissions: shown } = interactions;
 
       const resultPromise = requestToolEditApproval({
@@ -658,18 +642,8 @@ describe('desktop tool edit approval', () => {
   approvalTest(
     'does not present a stream approval cancelled during initialization',
     async () => {
-      const tempRoot = await createTempRoot();
-      const { requestToolEditApproval, desktopModule } =
-        await loadApprovalModules();
-      const interactions = createRecordingRuntimeHost();
-      const controller = createApprovalController(desktopModule, {
-        interactions,
-        ...controllerHostCallbacks(interactions),
-        session: createTestSession(),
-        ui: createStubDesktopAgentExecutionHost(),
-        tempRoot,
-      });
-      useControllerApproval(controller);
+      const { requestToolEditApproval, controller, interactions, tempRoot } =
+        await createApprovalFixture();
 
       const resultPromise = requestToolEditApproval({
         path: '/workspace/cancel-during-init.tex',
@@ -697,18 +671,8 @@ describe('desktop tool edit approval', () => {
   approvalTest(
     'does not present an approval when disposed during initialization',
     async () => {
-      const tempRoot = await createTempRoot();
-      const { requestToolEditApproval, desktopModule } =
-        await loadApprovalModules();
-      const interactions = createRecordingRuntimeHost();
-      const controller = createApprovalController(desktopModule, {
-        interactions,
-        ...controllerHostCallbacks(interactions),
-        session: createTestSession(),
-        ui: createStubDesktopAgentExecutionHost(),
-        tempRoot,
-      });
-      useControllerApproval(controller);
+      const { requestToolEditApproval, controller, interactions, tempRoot } =
+        await createApprovalFixture();
 
       const resultPromise = requestToolEditApproval({
         path: '/workspace/dispose-during-init.tex',
@@ -732,18 +696,8 @@ describe('desktop tool edit approval', () => {
   approvalTest(
     'cancels only tool-edit approvals selected for the owning stream',
     async () => {
-      const tempRoot = await createTempRoot();
-      const { requestToolEditApproval, desktopModule } =
-        await loadApprovalModules();
-      const interactions = createRecordingRuntimeHost();
-      const controller = createApprovalController(desktopModule, {
-        interactions,
-        ...controllerHostCallbacks(interactions),
-        session: createTestSession(),
-        ui: createStubDesktopAgentExecutionHost(),
-        tempRoot,
-      });
-      useControllerApproval(controller);
+      const { requestToolEditApproval, controller, interactions, tempRoot } =
+        await createApprovalFixture();
       const { shownToolEditPermissions: shown } = interactions;
       const { resolvedToolEditPermissions: resolved } = interactions;
 
@@ -800,19 +754,13 @@ describe('desktop tool edit approval', () => {
   approvalTest(
     'cleans pending entries and temp files when stream cleanup rejects a request',
     async () => {
-      const tempRoot = await createTempRoot();
-      const { cleanupApprovalsForStream, desktopModule } =
-        await loadApprovalModules();
-      const interactions = createRecordingRuntimeHost();
-      const session = createTestSession();
-      const controller = createApprovalController(desktopModule, {
+      const {
+        cleanupApprovalsForStream,
+        controller,
         interactions,
-        ...controllerHostCallbacks(interactions),
         session,
-        ui: createStubDesktopAgentExecutionHost(),
         tempRoot,
-      });
-      useControllerApproval(controller);
+      } = await createApprovalFixture();
       session.useHostInteractions({
         requestToolEditApproval: (request) =>
           controller.requestApproval(request),

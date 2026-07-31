@@ -41,19 +41,30 @@ function deferredBoolean(): {
 }
 
 describe('WebviewBridge', () => {
+  const bridges: WebviewBridge[] = [];
+
   beforeEach(() => {
     vi.useFakeTimers();
   });
 
   afterEach(() => {
+    for (const bridge of bridges.splice(0)) bridge.dispose();
     vi.useRealTimers();
   });
+
+  /** Registers a bridge for the shared teardown above. */
+  function track(bridge: WebviewBridge): WebviewBridge {
+    bridges.push(bridge);
+    return bridge;
+  }
 
   it('flushes active stream log deltas', async () => {
     const store = StreamLogStore.ephemeral('test');
     const activeStream = 'active' as StreamTabId;
     const sendMessage = vi.fn(() => true);
-    const bridge = new WebviewBridge(store, sendMessage, () => activeStream);
+    const bridge = track(
+      new WebviewBridge(store, sendMessage, () => activeStream),
+    );
 
     bridge.syncStream(activeStream);
     store.append(activeStream, logEntry('active-1', 'active log', 100));
@@ -71,15 +82,15 @@ describe('WebviewBridge', () => {
       updates: [],
       textDeltas: [],
     });
-
-    bridge.dispose();
   });
 
   it('pushes restart-repair group settlements through log deltas', async () => {
     const store = StreamLogStore.ephemeral('test');
     const activeStream = 'active-repair' as StreamTabId;
     const sendMessage = vi.fn(() => true);
-    const bridge = new WebviewBridge(store, sendMessage, () => activeStream);
+    const bridge = track(
+      new WebviewBridge(store, sendMessage, () => activeStream),
+    );
 
     store.append(activeStream, {
       id: 'running-group',
@@ -112,15 +123,15 @@ describe('WebviewBridge', () => {
       ],
       textDeltas: [],
     });
-
-    bridge.dispose();
   });
 
   it('does not queue inactive stream flushes that race with tab switches', async () => {
     const store = StreamLogStore.ephemeral('test');
     let activeStream = 'active' as StreamTabId;
     const sendMessage = vi.fn(() => true);
-    const bridge = new WebviewBridge(store, sendMessage, () => activeStream);
+    const bridge = track(
+      new WebviewBridge(store, sendMessage, () => activeStream),
+    );
 
     store.append(
       'inactive' as StreamTabId,
@@ -130,15 +141,15 @@ describe('WebviewBridge', () => {
     await vi.advanceTimersByTimeAsync(20);
 
     expect(sendMessage).not.toHaveBeenCalled();
-
-    bridge.dispose();
   });
 
   it('syncs inactive stream history explicitly on tab switch', async () => {
     const store = StreamLogStore.ephemeral('test');
     let activeStream = 'active' as StreamTabId;
     const sendMessage = vi.fn(() => true);
-    const bridge = new WebviewBridge(store, sendMessage, () => activeStream);
+    const bridge = track(
+      new WebviewBridge(store, sendMessage, () => activeStream),
+    );
 
     store.append(
       'inactive' as StreamTabId,
@@ -161,15 +172,15 @@ describe('WebviewBridge', () => {
       updates: [],
       textDeltas: [],
     });
-
-    bridge.dispose();
   });
 
   it('replays full streamed text when a webview syncs mid-stream', async () => {
     const store = StreamLogStore.ephemeral('test');
     const activeStream = 'active' as StreamTabId;
     const sendMessage = vi.fn(() => true);
-    const bridge = new WebviewBridge(store, sendMessage, () => activeStream);
+    const bridge = track(
+      new WebviewBridge(store, sendMessage, () => activeStream),
+    );
 
     store.append(activeStream, logEntry('active-1', '', 100));
     store.appendText(activeStream, 'active-1', 'hello ');
@@ -190,8 +201,6 @@ describe('WebviewBridge', () => {
       updates: [],
       textDeltas: [],
     });
-
-    bridge.dispose();
   });
 
   it('keeps the cursor and dirty updates when no target accepts a log delta', async () => {
@@ -202,7 +211,9 @@ describe('WebviewBridge', () => {
       .mockReturnValueOnce(true)
       .mockReturnValueOnce(false)
       .mockReturnValueOnce(true);
-    const bridge = new WebviewBridge(store, sendMessage, () => activeStream);
+    const bridge = track(
+      new WebviewBridge(store, sendMessage, () => activeStream),
+    );
 
     bridge.syncStream(activeStream);
     store.append(activeStream, logEntry('active-1', 'active log', 100));
@@ -235,8 +246,6 @@ describe('WebviewBridge', () => {
       ],
       textDeltas: [],
     });
-
-    bridge.dispose();
   });
 
   it('serializes async flushes and preserves updates made during delivery', async () => {
@@ -247,7 +256,9 @@ describe('WebviewBridge', () => {
       .fn()
       .mockReturnValueOnce(firstDelivery.promise)
       .mockResolvedValue(true);
-    const bridge = new WebviewBridge(store, sendMessage, () => activeStream);
+    const bridge = track(
+      new WebviewBridge(store, sendMessage, () => activeStream),
+    );
 
     bridge.syncStream(activeStream);
     store.append(activeStream, logEntry('active-1', 'active log', 100));
@@ -276,8 +287,6 @@ describe('WebviewBridge', () => {
       ],
       textDeltas: [],
     });
-
-    bridge.dispose();
   });
 
   it('does not resend streamed text already covered by an in-flight full entry', async () => {
@@ -288,7 +297,9 @@ describe('WebviewBridge', () => {
       .fn()
       .mockReturnValueOnce(firstDelivery.promise)
       .mockResolvedValue(true);
-    const bridge = new WebviewBridge(store, sendMessage, () => activeStream);
+    const bridge = track(
+      new WebviewBridge(store, sendMessage, () => activeStream),
+    );
 
     bridge.syncStream(activeStream);
     store.append(activeStream, logEntry('active-1', '', 100));
@@ -324,8 +335,6 @@ describe('WebviewBridge', () => {
       updates: [],
       textDeltas: [{ id: 'active-1', appendText: ' world' }],
     });
-
-    bridge.dispose();
   });
 
   it('ships streamed text as O(L) append deltas instead of full updates', async () => {
@@ -336,7 +345,9 @@ describe('WebviewBridge', () => {
       deliveredBytes += JSON.stringify(message).length;
       return true;
     });
-    const bridge = new WebviewBridge(store, sendMessage, () => activeStream);
+    const bridge = track(
+      new WebviewBridge(store, sendMessage, () => activeStream),
+    );
     const chunk = 'x'.repeat(1024);
 
     bridge.syncStream(activeStream);
@@ -361,7 +372,5 @@ describe('WebviewBridge', () => {
 
     expect(streamedFrames).toHaveLength(40);
     expect(deliveredBytes).toBeLessThan(90_000);
-
-    bridge.dispose();
   });
 });

@@ -40,6 +40,18 @@ beforeAll(async () => {
   ({ render } = await import('lit'));
 });
 
+/** The shared shell of an INFO-level tool-use log entry. */
+function toolUseMessage(id: string, data: unknown): LogMessageData {
+  return {
+    id,
+    text: '',
+    level: LOG_LEVELS.INFO,
+    timestamp: 1,
+    messageType: 'toolUse',
+    data,
+  };
+}
+
 describe('tool-use formatter', () => {
   it('renders workflow-script delegation details without proposal or journal data', () => {
     const script = `export const meta = {
@@ -53,35 +65,28 @@ const papers = await parallel(
   ),
 );
 return { papers, question: args.question };`;
-    const message: LogMessageData = {
-      id: 'workflow-script',
-      text: '',
-      level: LOG_LEVELS.INFO,
-      timestamp: 1,
-      messageType: 'toolUse',
-      data: {
-        toolName: 'delegate_workflow_script',
-        input: {
-          agent: 'research',
-          script,
-          args: {
-            paperIds: ['2401.00001', '2401.00002'],
-            question: 'Which assumptions differ?',
-          },
-          files: {
-            inputFiles: ['paper.tex'],
-            contextFiles: ['references.bib'],
-            mediaFiles: ['figure.pdf'],
-          },
+    const message = toolUseMessage('workflow-script', {
+      toolName: 'delegate_workflow_script',
+      input: {
+        agent: 'research',
+        script,
+        args: {
+          paperIds: ['2401.00001', '2401.00002'],
+          question: 'Which assumptions differ?',
         },
-        output: {
-          status: 'executed',
-          summary:
-            "Completed workflow script 'Literature synthesis' (2 agent calls)",
-          output: JSON.stringify({ compared: 2 }),
+        files: {
+          inputFiles: ['paper.tex'],
+          contextFiles: ['references.bib'],
+          mediaFiles: ['figure.pdf'],
         },
       },
-    };
+      output: {
+        status: 'executed',
+        summary:
+          "Completed workflow script 'Literature synthesis' (2 agent calls)",
+        output: JSON.stringify({ compared: 2 }),
+      },
+    });
 
     const container = document.createElement('div');
     render(formatToolUseTemplate(message, { defaultOpen: true }), container);
@@ -119,21 +124,14 @@ return { papers, question: args.question };`;
   });
 
   it('shows explicit null workflow-script arguments as JSON', () => {
-    const message: LogMessageData = {
-      id: 'workflow-script-null-args',
-      text: '',
-      level: LOG_LEVELS.INFO,
-      timestamp: 1,
-      messageType: 'toolUse',
-      data: {
-        toolName: 'delegate_workflow_script',
-        input: {
-          agent: 'research',
-          script: 'export const meta = { name: "One call" };\nreturn null;',
-          args: null,
-        },
+    const message = toolUseMessage('workflow-script-null-args', {
+      toolName: 'delegate_workflow_script',
+      input: {
+        agent: 'research',
+        script: 'export const meta = { name: "One call" };\nreturn null;',
+        args: null,
       },
-    };
+    });
 
     const container = document.createElement('div');
     render(formatToolUseTemplate(message), container);
@@ -186,18 +184,11 @@ return { papers, question: args.question };`;
   });
 
   it('renders write_file cards even when compact logs omit content', () => {
-    const message: LogMessageData = {
-      id: 'write-file-compact',
-      text: '',
-      level: LOG_LEVELS.INFO,
-      timestamp: 1,
-      messageType: 'toolUse',
-      data: {
-        toolName: 'write_file',
-        input: { path: 'src/main.ts' },
-        output: 'Wrote src/main.ts',
-      },
-    };
+    const message = toolUseMessage('write-file-compact', {
+      toolName: 'write_file',
+      input: { path: 'src/main.ts' },
+      output: 'Wrote src/main.ts',
+    });
 
     const container = document.createElement('div');
     render(formatLogEntry(message), container);
@@ -213,17 +204,10 @@ return { papers, question: args.question };`;
       action: 'wait',
       timeout: 3600,
     };
-    const message: LogMessageData = {
-      id: 'executions-timeout',
-      text: '',
-      level: LOG_LEVELS.INFO,
-      timestamp: 1,
-      messageType: 'toolUse',
-      data: {
-        toolName: 'executions',
-        input,
-      },
-    };
+    const message = toolUseMessage('executions-timeout', {
+      toolName: 'executions',
+      input,
+    });
 
     expect(getToolTimeoutMs('executions', input)).toBe(1_800_000);
     expect(getToolTimeoutMs('executions', { ...input, timeout: 30 })).toBe(
@@ -238,21 +222,14 @@ return { papers, question: args.question };`;
   });
 
   it('labels executions targets when the display model knows the subagents', () => {
-    const message: LogMessageData = {
-      id: 'executions-subagents',
-      text: '',
-      level: LOG_LEVELS.INFO,
-      timestamp: 1,
-      messageType: 'toolUse',
-      data: {
-        toolName: 'executions',
-        input: {
-          action: 'wait',
-          path: '/executions',
-          ids: ['sub-1', 'sub-2'],
-        },
+    const message = toolUseMessage('executions-subagents', {
+      toolName: 'executions',
+      input: {
+        action: 'wait',
+        path: '/executions',
+        ids: ['sub-1', 'sub-2'],
       },
-    };
+    });
 
     const container = document.createElement('div');
     render(
@@ -271,19 +248,12 @@ return { papers, question: args.question };`;
   });
 
   it('keeps the resource path when labeling an executions target', () => {
-    const message: LogMessageData = {
-      id: 'executions-subagent-resource',
-      text: '',
-      level: LOG_LEVELS.INFO,
-      timestamp: 1,
-      messageType: 'toolUse',
-      data: {
-        toolName: 'executions',
-        input: {
-          path: '/executions/sub-1/workspace-files/review.md',
-        },
+    const message = toolUseMessage('executions-subagent-resource', {
+      toolName: 'executions',
+      input: {
+        path: '/executions/sub-1/workspace-files/review.md',
       },
-    };
+    });
 
     const container = document.createElement('div');
     render(
@@ -299,20 +269,13 @@ return { papers, question: args.question };`;
   });
 
   it('keeps the existing executions title for a background process', () => {
-    const message: LogMessageData = {
-      id: 'executions-process',
-      text: '',
-      level: LOG_LEVELS.INFO,
-      timestamp: 1,
-      messageType: 'toolUse',
-      data: {
-        toolName: 'executions',
-        input: {
-          action: 'view',
-          path: '/executions/process-1',
-        },
+    const message = toolUseMessage('executions-process', {
+      toolName: 'executions',
+      input: {
+        action: 'view',
+        path: '/executions/process-1',
       },
-    };
+    });
 
     const container = document.createElement('div');
     render(
@@ -397,18 +360,11 @@ const SUMMARY_CONTROL_CASES = [
 
 describe('wa-details summary controls: activation does not toggle the panel', () => {
   it('clicking the proposal-restore-link ("Setup") button does not toggle the panel, and the click still bubbles to an outer delegated handler', async () => {
-    const message: LogMessageData = {
-      id: 'proposal-1',
-      text: '',
-      level: LOG_LEVELS.INFO,
-      timestamp: 1,
-      messageType: 'toolUse',
-      data: {
-        toolName: 'propose_agent',
-        input: { agent: 'assistant', instruction: 'do the thing' },
-        output: 'proposed',
-      },
-    };
+    const message = toolUseMessage('proposal-1', {
+      toolName: 'propose_agent',
+      input: { agent: 'assistant', instruction: 'do the thing' },
+      output: 'proposed',
+    });
 
     const container = document.createElement('div');
     document.body.appendChild(container);

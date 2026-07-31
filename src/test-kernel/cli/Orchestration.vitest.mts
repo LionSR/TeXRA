@@ -145,6 +145,23 @@ const ORCHESTRATION_TEST_HEADER_LINES = [
   'Start a session or configure model access.',
 ] as const;
 
+type LauncherLayoutInput = Parameters<typeof orchestrationLauncherLayout>[0];
+
+/** Lay out the seven-item launcher under the test header, so each case only
+ *  states the row budget and the status/footer text it is about. */
+function launcherLayout(
+  overrides: Partial<LauncherLayoutInput> & { readonly rows: number },
+): ReturnType<typeof orchestrationLauncherLayout> {
+  return orchestrationLauncherLayout({
+    columns: 80,
+    itemCount: 7,
+    headerLines: ORCHESTRATION_TEST_HEADER_LINES,
+    statusLines: [],
+    footerHints: [],
+    ...overrides,
+  });
+}
+
 describe('CLI orchestration items', () => {
   it('returns from model selection to the agent or team picker that opened it', () => {
     const action = { kind: 'chat' as const, agent: 'assistant' };
@@ -189,12 +206,8 @@ describe('CLI orchestration items', () => {
   });
 
   it('keeps compact launcher orientation before advisory footer text', () => {
-    const layout = orchestrationLauncherLayout({
+    const layout = launcherLayout({
       rows: 10,
-      columns: 80,
-      itemCount: 7,
-      headerLines: ORCHESTRATION_TEST_HEADER_LINES,
-      statusLines: [],
       footerHints: [
         'Team setup: run `texra multi-agent show <team-id>` using the team id shown in each row.',
         'Researcher Access sign-in may unlock more remote team agents.',
@@ -215,14 +228,7 @@ describe('CLI orchestration items', () => {
       'Team setup: run `texra multi-agent show <team-id>` using the team id shown in each row.',
     ];
 
-    const layout = orchestrationLauncherLayout({
-      rows: 13,
-      columns: 80,
-      itemCount: 7,
-      headerLines: ORCHESTRATION_TEST_HEADER_LINES,
-      statusLines,
-      footerHints,
-    });
+    const layout = launcherLayout({ rows: 13, statusLines, footerHints });
 
     expect(layout).toEqual({
       statusLines,
@@ -233,14 +239,7 @@ describe('CLI orchestration items', () => {
   });
 
   it('budgets wrapped launcher header rows before growing the list', () => {
-    const layout = orchestrationLauncherLayout({
-      rows: 12,
-      columns: 30,
-      itemCount: 7,
-      headerLines: ORCHESTRATION_TEST_HEADER_LINES,
-      statusLines: [],
-      footerHints: [],
-    });
+    const layout = launcherLayout({ rows: 12, columns: 30 });
 
     expect(layout).toEqual({
       statusLines: [],
@@ -257,14 +256,7 @@ describe('CLI orchestration items', () => {
       'actions: `texra login` unlocks included models',
     ];
 
-    const layout = orchestrationLauncherLayout({
-      rows: 14,
-      columns: 80,
-      itemCount: 7,
-      headerLines: ORCHESTRATION_TEST_HEADER_LINES,
-      statusLines,
-      footerHints: [],
-    });
+    const layout = launcherLayout({ rows: 14, statusLines });
 
     expect(layout).toEqual({
       statusLines: statusLines.slice(0, 2),
@@ -280,14 +272,7 @@ describe('CLI orchestration items', () => {
       'auth: signed in as researcher@example.com · tier: Ultra · included usage this month: 25% used, 75% remaining',
     ];
 
-    const layout = orchestrationLauncherLayout({
-      rows: 14,
-      columns: 80,
-      itemCount: 7,
-      headerLines: ORCHESTRATION_TEST_HEADER_LINES,
-      statusLines,
-      footerHints: [],
-    });
+    const layout = launcherLayout({ rows: 14, statusLines });
 
     expect(layout).toEqual({
       statusLines: [
@@ -307,14 +292,7 @@ describe('CLI orchestration items', () => {
     ];
     const footerHints = ['Team settings are available from the launcher.'];
 
-    const layout = orchestrationLauncherLayout({
-      rows: 16,
-      columns: 80,
-      itemCount: 7,
-      headerLines: ORCHESTRATION_TEST_HEADER_LINES,
-      statusLines,
-      footerHints,
-    });
+    const layout = launcherLayout({ rows: 16, statusLines, footerHints });
 
     expect(layout.statusLines).toEqual([
       'api: included TeXRA access',
@@ -330,14 +308,7 @@ describe('CLI orchestration items', () => {
       'auth: signed in as researcher@example.com · tier: Ultra · included usage this month: 25% used, 75% remaining',
     ];
 
-    const layout = orchestrationLauncherLayout({
-      rows: 16,
-      columns: 40,
-      itemCount: 7,
-      headerLines: ORCHESTRATION_TEST_HEADER_LINES,
-      statusLines,
-      footerHints: [],
-    });
+    const layout = launcherLayout({ rows: 16, columns: 40, statusLines });
 
     expect(layout.statusLines).toEqual([
       'api: personal API keys',
@@ -347,14 +318,7 @@ describe('CLI orchestration items', () => {
   });
 
   it('keeps visible choices instead of overflow-only output on tiny row budgets', () => {
-    const layout = orchestrationLauncherLayout({
-      rows: 7,
-      columns: 80,
-      itemCount: 7,
-      headerLines: ORCHESTRATION_TEST_HEADER_LINES,
-      statusLines: [],
-      footerHints: [],
-    });
+    const layout = launcherLayout({ rows: 7 });
 
     expect(layout).toEqual({
       statusLines: [],

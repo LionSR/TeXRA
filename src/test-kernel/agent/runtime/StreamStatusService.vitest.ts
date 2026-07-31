@@ -106,9 +106,10 @@ describe('StreamStatusMachine', () => {
     expect(machine.tryAcquire(streamId)).toBe(true);
     expect(machine.get(streamId)).toBe(STREAM_PHASE.RUNNING);
     expect(machine.getSubstate(streamId)).toBe(STREAM_SUBSTATE.STARTING);
-    expect(machine.getAllSubstates().get(streamId)).toBe(
-      STREAM_SUBSTATE.STARTING,
-    );
+    expect(machine.getAllStreamStates().get(streamId)).toEqual({
+      phase: STREAM_PHASE.RUNNING,
+      substate: STREAM_SUBSTATE.STARTING,
+    });
     expect(machine.tryAcquire(streamId)).toBe(false);
 
     machine.releaseIfReserved(streamId);

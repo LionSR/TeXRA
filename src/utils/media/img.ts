@@ -205,24 +205,18 @@ export async function countPdfPages(pdfPath: string): Promise<number> {
   }
 }
 
-/** Convert a single page of a PDF to a base64 encoded PNG image. */
+/**
+ * Convert a single page of an already-resolved PDF to a base64 encoded PNG.
+ * The caller owns resolving the path and verifying the image tool once per
+ * conversion, so neither is re-probed per page.
+ */
 async function singlePagePdf2Png(
-  pdfPath: string,
+  absolutePath: string,
   pageNum: number,
   quality: number,
   maxSize: [number, number],
 ): Promise<string> {
   try {
-    // Check for GraphicsMagick/ImageMagick installation
-    if (!(await detectImageTool())) {
-      throw new Error('GraphicsMagick/ImageMagick is not installed.');
-    }
-
-    const absolutePath = await resolveFile(pdfPath);
-    if (!absolutePath) {
-      throw new Error(`PDF file not found: ${pdfPath}`);
-    }
-
     ensureTempDir();
 
     const tempFilePattern = `temp_${Date.now()}`;
@@ -252,7 +246,7 @@ async function singlePagePdf2Png(
     const imageBuffer = AbsoluteFS.readBytesSync(result.path);
     logger.debug(
       CHANNEL,
-      `Successfully converted page ${pageNum} of ${pdfPath} to PNG`,
+      `Successfully converted page ${pageNum} of ${absolutePath} to PNG`,
     );
     return imageBuffer.toString('base64');
   } finally {
@@ -260,33 +254,8 @@ async function singlePagePdf2Png(
   }
 }
 
-/** Convert multiple pages of a PDF to base64 encoded PNG images. */
-async function multiPagePdf2Png(
-  pdfPath: string,
-  pageCount: number,
-  quality: number,
-  maxSize: [number, number],
-  maxPages: number = 100,
-): Promise<string[]> {
-  const pagesToConvert = Math.min(pageCount, maxPages);
-
-  const base64Images: string[] = [];
-  for (let pageNum = 1; pageNum <= pagesToConvert; pageNum++) {
-    const base64Image = await singlePagePdf2Png(
-      pdfPath,
-      pageNum,
-      quality,
-      maxSize,
-    );
-    base64Images.push(base64Image);
-  }
-
-  logger.debug(
-    CHANNEL,
-    `Successfully converted ${base64Images.length} pages from ${pdfPath}`,
-  );
-  return base64Images;
-}
+/** Pages converted when the caller does not cap the count. */
+const DEFAULT_PDF_MAX_PAGES = 100;
 
 /** Process a PDF file and return base64 encoded PNG image(s). Returns null on error. */
 export async function processPdf2Png(
@@ -307,16 +276,31 @@ export async function processPdf2Png(
       return null;
     }
 
-    if (pageCount === 1) {
-      return await singlePagePdf2Png(pdfPath, 1, quality, maxSize);
+    if (!(await detectImageTool())) {
+      throw new Error('GraphicsMagick/ImageMagick is not installed.');
     }
-    return await multiPagePdf2Png(
-      pdfPath,
+
+    if (pageCount === 1) {
+      return await singlePagePdf2Png(absolutePath, 1, quality, maxSize);
+    }
+
+    // `??` on purpose: a null maxPages (e.g. from a .nullish() tool field)
+    // means "no limit requested" and gets the default cap, same as undefined.
+    const pagesToConvert = Math.min(
       pageCount,
-      quality,
-      maxSize,
-      maxPages,
+      maxPages ?? DEFAULT_PDF_MAX_PAGES,
     );
+    const base64Images: string[] = [];
+    for (let pageNum = 1; pageNum <= pagesToConvert; pageNum++) {
+      base64Images.push(
+        await singlePagePdf2Png(absolutePath, pageNum, quality, maxSize),
+      );
+    }
+    logger.debug(
+      CHANNEL,
+      `Successfully converted ${base64Images.length} pages from ${pdfPath}`,
+    );
+    return base64Images;
   } catch (err) {
     logger.error(CHANNEL, `Error processing PDF input: ${toErrorMessage(err)}`);
     return null;

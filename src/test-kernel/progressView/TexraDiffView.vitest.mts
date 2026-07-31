@@ -52,7 +52,7 @@ class MockWorker {
   terminate = vi.fn();
 }
 
-function installDom(): JSDOM {
+function installDom(): void {
   const dom = new JSDOM('<!doctype html><body class="vscode-dark"></body>', {
     url: 'http://localhost',
   });
@@ -68,7 +68,6 @@ function installDom(): JSDOM {
   globalThis.ResizeObserver =
     MockResizeObserver as unknown as typeof ResizeObserver;
   globalThis.self = dom.window as unknown as Window & typeof globalThis;
-  return dom;
 }
 
 function restoreDom(): void {

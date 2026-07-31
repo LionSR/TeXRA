@@ -405,10 +405,7 @@ export type LaunchTargetChangeDetail = z.infer<
   typeof LaunchTargetChangeDetailSchema
 >;
 
-const TeamChangeDetailSchema = z.object({
-  value: z.string(),
-});
-export type TeamChangeDetail = z.infer<typeof TeamChangeDetailSchema>;
+export type TeamChangeDetail = StringValueDetail;
 
 const ActionDetailSchema = z.object({
   action: z.string(),
