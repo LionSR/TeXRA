@@ -5,11 +5,8 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 // Local imports
-import {
-  showLoggedErrorMessage,
-  showLoggedInfoMessage,
-} from '@frontend/ui/errorHandlingUtils';
-import { withLaTeXGuard } from '@frontend/editor/activeFileGuards';
+import { runGuardedLatexCommand } from '@commands/_shared/latexCommandGuard';
+import { showLoggedInfoMessage } from '@frontend/ui/errorHandlingUtils';
 import { extractFigurePathsFromLatex } from '@latex/extractFigure';
 import { TikzPictureManager } from '@latex/TikzPictureManager';
 import * as logger from '@logger/logUtils';
@@ -18,22 +15,13 @@ import { pluralize } from '@utils/text/stringUtils';
 
 const CHANNEL = 'TestCommands';
 
-async function runLaTeXCommand(
-  action: string,
-  commandName: string,
-  operation: (context: { relativePath: string }) => Promise<void>,
-): Promise<void> {
-  try {
-    await withLaTeXGuard({ channel: CHANNEL, action }, operation);
-  } catch (err) {
-    await showLoggedErrorMessage(CHANNEL, `${commandName} command failed`, err);
-  }
-}
-
 export async function handleExtractFigurePaths(): Promise<void> {
-  await runLaTeXCommand(
-    'extract figure paths',
-    'extractFigurePaths',
+  await runGuardedLatexCommand(
+    {
+      channel: CHANNEL,
+      action: 'extract figure paths',
+      errorMessage: 'extractFigurePaths command failed',
+    },
     async ({ relativePath: filePath }) => {
       logger.debug(CHANNEL, `Processing LaTeX file: ${filePath}`);
 
@@ -66,9 +54,12 @@ export async function handleExtractFigurePaths(): Promise<void> {
 }
 
 export async function handleExtractTikzFigures(): Promise<void> {
-  await runLaTeXCommand(
-    'extract TikZ figures',
-    'extractTikzFigures',
+  await runGuardedLatexCommand(
+    {
+      channel: CHANNEL,
+      action: 'extract TikZ figures',
+      errorMessage: 'extractTikzFigures command failed',
+    },
     async ({ relativePath: filePath }) => {
       logger.debug(
         CHANNEL,
@@ -108,9 +99,12 @@ export async function handleExtractTikzFigures(): Promise<void> {
 }
 
 export async function handleCompileTikzFigures(): Promise<void> {
-  await runLaTeXCommand(
-    'compile TikZ figures',
-    'compileTikzFigures',
+  await runGuardedLatexCommand(
+    {
+      channel: CHANNEL,
+      action: 'compile TikZ figures',
+      errorMessage: 'compileTikzFigures command failed',
+    },
     async ({ relativePath: filePath }) => {
       logger.debug(
         CHANNEL,

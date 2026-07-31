@@ -12,6 +12,8 @@ import { getConfig } from '@utils/config/configUtils';
 
 const CHANNEL = 'LaTeXCommands';
 
+export const LATEXINDENT_CONFIG_KEY = 'texra.latex.latexindentConfig';
+
 async function cleanupIndentLog(logPath: string): Promise<void> {
   try {
     await AbsoluteFS.delete(logPath);
@@ -69,9 +71,7 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
         ? filePath
         : path.join(workspacePath, filePath);
 
-    const latexindentConfig = getConfig<string>(
-      'texra.latex.latexindentConfig',
-    );
+    const latexindentConfig = getConfig<string>(LATEXINDENT_CONFIG_KEY);
 
     const args = ['-w', '-s'];
     if (latexindentConfig) {

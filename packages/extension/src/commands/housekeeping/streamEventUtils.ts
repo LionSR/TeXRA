@@ -1,42 +1,35 @@
 import { defaultSession } from '@agent/runtime/SessionHandle';
 
 /**
- * How to identify the workflow tab(s) whose missing-outputs marker should be
- * cleared. Exactly one strategy must be specified:
- * - `streamIdOverride` targets one specific tab (toolbar invocations).
- * - `streamConfig` broadcasts to every workflow tab whose taskState matches
- *   the given agent/model/inputFile (command-palette invocations).
+ * Identity of a pack/clean operation, as far as the missing-outputs marker is
+ * concerned. Structurally satisfied by both `PackConfig` and `CleanConfig`.
  */
-type ClearMissingOutputsOptions =
-  | { streamIdOverride: string; streamConfig?: undefined }
-  | {
-      streamIdOverride?: undefined;
-      streamConfig: {
-        agent: string;
-        model: string;
-        inputFile: string;
-        outputFiles?: readonly string[];
-      };
-    };
+interface FileOpTarget {
+  agent: string;
+  model: string;
+  inputFile: string;
+  outputFiles: readonly string[];
+  /** Toolbar invocations target one tab; palette invocations have none. */
+  streamId?: string;
+  skipProgressViewClear?: boolean;
+}
 
-export function emitClearMissingOutputs(
-  options: ClearMissingOutputsOptions,
-): void {
-  if (options.streamIdOverride !== undefined) {
-    defaultSession().events.emit({
-      scope: 'session',
-      event: {
-        type: 'clearMissingOutputs',
-        payload: { streamId: options.streamIdOverride },
-      },
-    });
-    return;
-  }
+/**
+ * Clear the missing-outputs marker for the workflow tab(s) a pack/clean
+ * operation touched. With a `streamId` the marker is cleared on that tab
+ * alone; without one it is broadcast to every workflow tab whose taskState
+ * matches the agent/model/inputFile identity.
+ */
+export function emitClearMissingOutputs(target: FileOpTarget): void {
+  if (target.skipProgressViewClear) return;
+  const { agent, model, inputFile, outputFiles, streamId } = target;
   defaultSession().events.emit({
     scope: 'session',
     event: {
       type: 'clearMissingOutputs',
-      payload: { streamConfig: options.streamConfig },
+      payload: streamId
+        ? { streamId }
+        : { streamConfig: { agent, model, inputFile, outputFiles } },
     },
   });
 }

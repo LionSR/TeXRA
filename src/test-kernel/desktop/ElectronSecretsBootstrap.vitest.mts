@@ -4,28 +4,13 @@ import { readFileSync } from 'node:fs';
 // Third-party imports
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+// Local imports - platform
+import type { ElectronSecrets as ElectronSecretsInstance } from '@desktop/main/platform/electronSecrets';
+import type { JsonStore } from '@platform/defaults/jsonStore';
+
 // Local imports - test support
 import { repoPath } from './desktopTestPaths.mjs';
-
-type SecretStorageMode = 'encrypted' | 'basic_text' | 'unavailable';
-
-interface ElectronSecretsModule {
-  ElectronSecrets: new (
-    store: {
-      get<T>(key: string): T | undefined;
-      set?(key: string, value: unknown): Promise<void>;
-    },
-    options?: {
-      showWarningMessage?: (message: string) => Promise<void> | void;
-    },
-  ) => {
-    get(key: string): Promise<string | undefined>;
-    set(key: string, value: string): Promise<void>;
-  };
-  __resetKeychainStateForTests: () => void;
-  KEYCHAIN_DENIED_WARNING_MESSAGE: string;
-  getSecretStorageMode: () => SecretStorageMode;
-}
+import { loadSourceModule } from './loadSourceModule.mjs';
 
 interface SafeStorageMethods {
   decryptString: (value: Buffer) => string;
@@ -33,10 +18,10 @@ interface SafeStorageMethods {
   isEncryptionAvailable: () => boolean;
 }
 
-async function loadElectronSecrets(): Promise<ElectronSecretsModule> {
-  return (await import(
-    repoPath('packages/desktop/src/main/platform/electronSecrets.ts')
-  )) as ElectronSecretsModule;
+function loadElectronSecrets(): Promise<
+  typeof import('@desktop/main/platform/electronSecrets')
+> {
+  return loadSourceModule('@desktop/main/platform/electronSecrets');
 }
 
 async function safeStorageStub(): Promise<SafeStorageMethods> {
@@ -52,21 +37,29 @@ async function resetKeychainState(): Promise<void> {
   vi.restoreAllMocks();
 }
 
+/** A store whose reads are driven by the test, standing in for a JsonStore. */
+function stubStore(store: {
+  get<T>(key: string): T | undefined;
+  set?(key: string, value: unknown): Promise<void>;
+}): JsonStore {
+  return store as unknown as JsonStore;
+}
+
 // A persisted store record for one encrypted secret, as ElectronSecrets.set() writes it.
-function encryptedRecordStore(): { get<T>(key: string): T | undefined } {
-  return {
+function encryptedRecordStore(): JsonStore {
+  return stubStore({
     get<T>(_key: string): T | undefined {
       return {
         encrypted: true,
         value: Buffer.from('encrypted:value').toString('base64'),
       } as unknown as T;
     },
-  };
+  });
 }
 
 /** An ElectronSecrets over one encrypted record, with its warnings captured. */
 async function secretsWithWarningLog(): Promise<{
-  secrets: InstanceType<ElectronSecretsModule['ElectronSecrets']>;
+  secrets: ElectronSecretsInstance;
   warnings: string[];
 }> {
   const { ElectronSecrets } = await loadElectronSecrets();
@@ -204,11 +197,13 @@ describe('TEXRA_DISABLE_KEYCHAIN env var (Playwright e2e shim)', () => {
     process.env.SOME_TEST_KEY = 'from-env';
 
     const { ElectronSecrets } = await loadElectronSecrets();
-    const secrets = new ElectronSecrets({
-      get<T>(_key: string): T | undefined {
-        return undefined;
-      },
-    });
+    const secrets = new ElectronSecrets(
+      stubStore({
+        get<T>(_key: string): T | undefined {
+          return undefined;
+        },
+      }),
+    );
 
     expect(await secrets.get('SOME_TEST_KEY')).toBe('from-env');
     delete process.env.SOME_TEST_KEY;
@@ -220,14 +215,16 @@ describe('TEXRA_DISABLE_KEYCHAIN env var (Playwright e2e shim)', () => {
 
     const { ElectronSecrets } = await loadElectronSecrets();
     const writes: Array<[string, unknown]> = [];
-    const secrets = new ElectronSecrets({
-      get<T>(_key: string): T | undefined {
-        return undefined;
-      },
-      async set(key: string, value: unknown): Promise<void> {
-        writes.push([key, value]);
-      },
-    });
+    const secrets = new ElectronSecrets(
+      stubStore({
+        get<T>(_key: string): T | undefined {
+          return undefined;
+        },
+        async set(key: string, value: unknown): Promise<void> {
+          writes.push([key, value]);
+        },
+      }),
+    );
 
     await expect(secrets.set('a', 'b')).resolves.toBeUndefined();
     expect(writes).toEqual([]);

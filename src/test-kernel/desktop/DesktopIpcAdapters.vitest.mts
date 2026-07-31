@@ -10,6 +10,7 @@ import {
 import { AgentCategory } from '@shared/schemas/agent';
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { createDeferred } from '@test/support/asyncTestUtils';
 
 // Local imports - desktop test paths
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
@@ -636,17 +637,14 @@ describe('desktop IPC adapters', () => {
   });
 
   it('defers the first funnel derivation until the readyGate resolves', async () => {
-    let openGate: () => void = () => {};
-    const readyGate = new Promise<void>((resolve) => {
-      openGate = resolve;
-    });
+    const readyGate = createDeferred();
     // A returning veteran: credential present but firstRunDone not yet written.
     // Before the backfill settles this derives 'setup'; the gate must hold the
     // first derivation so the renderer never sees the transient State 1.
     const selectSetupAgent = vi.fn(async () => {});
     const { onboarding, postToRenderer, values } =
       await createOnboardingHarness({
-        readyGate,
+        readyGate: readyGate.promise,
         hasCredential: () => true,
         selectSetupAgent,
       });
@@ -664,7 +662,7 @@ describe('desktop IPC adapters', () => {
 
     // Backfill marks the veteran done, then opens the gate.
     values.set(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE, true);
-    openGate();
+    readyGate.resolve();
     await flushAsync();
 
     expectLastFunnelState(postToRenderer, 'done');

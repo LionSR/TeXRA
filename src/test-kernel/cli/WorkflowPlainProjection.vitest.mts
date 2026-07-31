@@ -43,6 +43,24 @@ function startWorkflow(
   );
 }
 
+function readTask(
+  status: 'planned' | 'running' | 'completed',
+  childStreamId?: StreamTabId,
+): AgentEvent {
+  return {
+    type: 'workflow.task',
+    stageId: 'phase-map',
+    logId: 'task-read',
+    task: {
+      id: 'read',
+      label: 'Read the argument',
+      phase: 'Map',
+      status,
+      ...(childStreamId ? { childStreamId } : {}),
+    },
+  };
+}
+
 function completeWorkflow(
   events: SessionEventHub,
   status:
@@ -59,28 +77,27 @@ function completeWorkflow(
   });
 }
 
+function startProjection(beforeWrite?: () => void): {
+  readonly events: SessionEventHub;
+  readonly lines: readonly string[];
+  readonly detach: () => void;
+} {
+  const events = new SessionEventHub();
+  const lines: string[] = [];
+  const detach = attachWorkflowPlainProjection(events, {
+    writeLine: (line) => lines.push(line),
+    beforeWrite,
+  });
+  return { events, lines, detach };
+}
+
 describe('attachWorkflowPlainProjection', () => {
   it('writes phase, call, log, and completion lines in stable order', () => {
-    const events = new SessionEventHub();
-    const lines: string[] = [];
     const beforeWrite = vi.fn();
-    const detach = attachWorkflowPlainProjection(events, {
-      writeLine: (line) => lines.push(line),
-      beforeWrite,
-    });
+    const { events, lines, detach } = startProjection(beforeWrite);
     startWorkflow(events);
 
-    emit(events, {
-      type: 'workflow.task',
-      stageId: 'phase-map',
-      logId: 'task-read',
-      task: {
-        id: 'read',
-        label: 'Read the argument',
-        phase: 'Map',
-        status: 'planned',
-      },
-    });
+    emit(events, readTask('planned'));
     emit(events, {
       type: 'stage.start',
       id: 'phase-map',
@@ -89,31 +106,10 @@ describe('attachWorkflowPlainProjection', () => {
       index: 0,
       total: 2,
     });
-    emit(events, {
-      type: 'workflow.task',
-      stageId: 'phase-map',
-      logId: 'task-read',
-      task: {
-        id: 'read',
-        label: 'Read the argument',
-        phase: 'Map',
-        status: 'running',
-      },
-    });
+    emit(events, readTask('running'));
     // Resolving the navigation target updates the structured card but does not
     // change its human-readable line.
-    emit(events, {
-      type: 'workflow.task',
-      stageId: 'phase-map',
-      logId: 'task-read',
-      task: {
-        id: 'read',
-        label: 'Read the argument',
-        phase: 'Map',
-        status: 'running',
-        childStreamId: otherStreamId,
-      },
-    });
+    emit(events, readTask('running', otherStreamId));
     emit(events, {
       type: 'log',
       stageId: 'phase-map',
@@ -133,18 +129,7 @@ describe('attachWorkflowPlainProjection', () => {
       messageType: MESSAGE_TYPES.INTERNAL,
       message: 'hidden internal detail',
     });
-    emit(events, {
-      type: 'workflow.task',
-      stageId: 'phase-map',
-      logId: 'task-read',
-      task: {
-        id: 'read',
-        label: 'Read the argument',
-        phase: 'Map',
-        status: 'completed',
-        childStreamId: otherStreamId,
-      },
-    });
+    emit(events, readTask('completed', otherStreamId));
     emit(
       events,
       {
@@ -178,11 +163,7 @@ describe('attachWorkflowPlainProjection', () => {
   });
 
   it('ignores ordinary workflow-agent streams', () => {
-    const events = new SessionEventHub();
-    const lines: string[] = [];
-    const detach = attachWorkflowPlainProjection(events, {
-      writeLine: (line) => lines.push(line),
-    });
+    const { events, lines, detach } = startProjection();
 
     emit(events, {
       type: 'run.start',
@@ -206,11 +187,7 @@ describe('attachWorkflowPlainProjection', () => {
   });
 
   it('prints phase-less calls immediately and flushes an unopened phase', () => {
-    const events = new SessionEventHub();
-    const lines: string[] = [];
-    const detach = attachWorkflowPlainProjection(events, {
-      writeLine: (line) => lines.push(line),
-    });
+    const { events, lines, detach } = startProjection();
     startWorkflow(events);
 
     emit(events, {

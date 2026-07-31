@@ -5,6 +5,8 @@ import * as path from 'node:path';
 // Third-party imports
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { installPlatform } from '@test/support/setupPlatform';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 
 // `discoverLatestExecutionOutputs` matches a run by agent/model/input and then
@@ -61,13 +63,7 @@ describe('discoverLatestExecutionOutputs', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    const [{ initPlatform }, { nodeFilesystem }, { createFakePlatform }] =
-      await Promise.all([
-        import('@platform/platform'),
-        import('@platform/defaults/nodeFilesystem'),
-        import('@test/support/FakePlatform'),
-      ]);
-    initPlatform(createFakePlatform({}, { fs: nodeFilesystem }));
+    await installPlatform({}, { fs: nodeFilesystem });
     // No stream-tab snapshot exists for headless runs.
     mocks.readOutputFiles.mockResolvedValue(undefined);
   });

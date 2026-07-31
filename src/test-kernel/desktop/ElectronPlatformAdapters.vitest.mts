@@ -6,6 +6,9 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - platform
+import type { ElectronSecrets } from '@desktop/main/platform/electronSecrets';
+import type { JsonStore } from '@platform/defaults/jsonStore';
+import type { LegacyDataMigrationLogger } from '@platform/defaults/legacyDataMigration';
 import {
   resolveWorkspaceStoragePath,
   WorkspaceStorageProvider,
@@ -24,61 +27,15 @@ import {
   safeStorage as electronSafeStorage,
 } from './electronTestStub.mjs';
 import { REPO_ROOT } from './desktopTestPaths.mjs';
-import { loadDesktopPlatformModule } from './loadDesktopPlatformModule.mjs';
-import { loadPlatformDefaultsModule } from './loadPlatformDefaultsModule.mjs';
+import { loadSourceModule } from './loadSourceModule.mjs';
 
-interface JsonStore {
-  get<T>(key: string, defaultValue?: T): T;
-  set(key: string, value: unknown): Promise<void>;
-  update(key: string, value: unknown): Promise<void>;
-  snapshot(): Record<string, unknown>;
-}
+type ElectronSecretsModule =
+  typeof import('@desktop/main/platform/electronSecrets');
 
-interface JsonStoreModule {
-  JsonStore: {
-    open(filePath: string): Promise<JsonStore>;
-  };
-}
-
-interface ElectronSecrets {
-  delete(key: string): Promise<void>;
-  get(key: string): Promise<string | undefined>;
-  set(key: string, value: string): Promise<void>;
-}
-
-interface DataRootMigrationLogger {
-  info(message: string): void;
-  warn(message: string): void;
-}
-
-interface DataRootMigrationModule {
-  migrateLegacyDesktopDataRoot(
-    legacyRoot: string,
-    targetRoot: string,
-    logger?: DataRootMigrationLogger,
-  ): Promise<void>;
-  migrateLegacyDesktopWorkspaceBucket(
-    dataRoot: string,
-    legacyWorkspacePath: string | undefined,
-    workspacePath: string | undefined,
-    logger?: DataRootMigrationLogger,
-  ): Promise<void>;
-}
-
-interface ElectronSecretsModule {
-  getSecretStorageMode: () => 'encrypted' | 'basic_text' | 'unavailable';
-  LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE: string;
-  ElectronSecrets: new (
-    store: JsonStore,
-    options?: {
-      showWarningMessage?: (message: string) => Promise<void> | void;
-    },
-  ) => ElectronSecrets;
-}
-
-async function loadJsonStore(): Promise<JsonStoreModule['JsonStore']> {
-  const { JsonStore } =
-    await loadPlatformDefaultsModule<JsonStoreModule>('jsonStore.ts');
+async function loadJsonStore(): Promise<
+  typeof import('@platform/defaults/jsonStore').JsonStore
+> {
+  const { JsonStore } = await loadSourceModule('@platform/defaults/jsonStore');
   return JsonStore;
 }
 
@@ -120,7 +77,7 @@ describe('desktop platform adapters', () => {
     secrets: ElectronSecrets;
   }> {
     const [secretsModule, JsonStore] = await Promise.all([
-      loadDesktopPlatformModule<ElectronSecretsModule>('electronSecrets.ts'),
+      loadSourceModule('@desktop/main/platform/electronSecrets'),
       loadJsonStore(),
     ]);
     const root = await makeTempDir('texra-electron-secrets-');
@@ -185,7 +142,7 @@ describe('desktop platform adapters', () => {
     await expect(pathExists(noWorkspace.getStoragePath())).resolves.toBe(true);
   });
 
-  function fakeMigrationLogger(): DataRootMigrationLogger & {
+  function fakeMigrationLogger(): LegacyDataMigrationLogger & {
     infoMessages: string[];
     warnMessages: string[];
   } {
@@ -201,12 +158,11 @@ describe('desktop platform adapters', () => {
 
   describe('legacy userData data-root migration (#7987)', () => {
     async function loadMigration(): Promise<
-      DataRootMigrationModule['migrateLegacyDesktopDataRoot']
+      typeof import('@desktop/main/platform/dataRootMigration').migrateLegacyDesktopDataRoot
     > {
-      const { migrateLegacyDesktopDataRoot } =
-        await loadDesktopPlatformModule<DataRootMigrationModule>(
-          'dataRootMigration.ts',
-        );
+      const { migrateLegacyDesktopDataRoot } = await loadSourceModule(
+        '@desktop/main/platform/dataRootMigration',
+      );
       return migrateLegacyDesktopDataRoot;
     }
 
@@ -395,10 +351,9 @@ describe('desktop platform adapters', () => {
     });
 
     it('merges a pre-canonical workspace bucket into the physical-path bucket', async () => {
-      const { migrateLegacyDesktopWorkspaceBucket } =
-        await loadDesktopPlatformModule<DataRootMigrationModule>(
-          'dataRootMigration.ts',
-        );
+      const { migrateLegacyDesktopWorkspaceBucket } = await loadSourceModule(
+        '@desktop/main/platform/dataRootMigration',
+      );
       const dataRoot = await makeTempDir('texra-workspace-alias-');
       const legacyPath = '/workspace/symlink-spelling';
       const canonicalPath = '/physical/workspace';

@@ -5,7 +5,7 @@
  */
 
 // Third-party imports
-import { LitElement, css, type PropertyValues } from 'lit';
+import { LitElement, type PropertyValues } from 'lit';
 import { consume } from '@lit/context';
 import { state } from 'lit/decorators.js';
 
@@ -22,12 +22,6 @@ import {
 import type { PermissionState } from '../permissionState';
 
 export abstract class BaseStreamContent extends LitElement {
-  static override styles = css`
-    :host {
-      display: contents;
-    }
-  `;
-
   @consume({ context: streamStateContext, subscribe: true })
   @state()
   protected streamContext: StreamContextValue = EMPTY_STREAM_CONTEXT;

@@ -4,28 +4,10 @@ import { DESKTOP_THEME_KIND } from '@shared/schemas/commonViewMessages';
 
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 
-interface ReviewPaneController {
-  readonly element: HTMLElement;
-  clear(): void;
-  open(payload: {
-    command: 'desktop:showDiff';
-    title: string;
-    displayPath?: string;
-    originalText: string;
-    proposedText: string;
-    additions: number;
-    deletions: number;
-    language: string;
-  }): void;
-  setTheme(theme: string): void;
-}
-
-interface ReviewPaneModule {
-  createReviewPane(): ReviewPaneController;
-}
+type ReviewPaneModule = typeof import('@desktop/renderer/reviewPane');
 
 async function loadReviewPane(): Promise<ReviewPaneModule> {
-  return import('@desktop/renderer/reviewPane') as Promise<ReviewPaneModule>;
+  return import('@desktop/renderer/reviewPane');
 }
 
 function reviewPayload(path: string, additions = 1, deletions = 1) {

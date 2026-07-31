@@ -11,10 +11,13 @@ import { unique } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
-import { TEMP_EXTENSIONS, PACK_EXTENSIONS, HISTORY_DIR } from './constants';
+import {
+  TEMP_EXTENSIONS,
+  PACK_EXTENSIONS,
+  HISTORY_DIR,
+  CHANNEL,
+} from './constants';
 import { findFilesFromPatterns, resolveHousekeepingTargets } from './utils';
-
-const CHANNEL = 'Housekeeping';
 
 function toIgnoreGlobs(dirs: Iterable<string>): string[] {
   return [...dirs].map((dir) => `**/${dir}/**`);

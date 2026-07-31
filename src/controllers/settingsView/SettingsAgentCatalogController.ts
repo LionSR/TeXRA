@@ -17,7 +17,7 @@ import {
   parseAgentModePresets,
 } from '@shared/schemas/agentPresets';
 import {
-  agentKeyOf,
+  agentKey,
   agentMatchesIdentifier,
   type AgentCategory,
   type AgentSource,
@@ -62,20 +62,6 @@ export type SettingsAgentPresetApplyResult =
       unresolvedNames: string[];
     }
   | { ok: false; reason: 'unknownPreset' };
-
-/**
- * True when a persisted enabled-keys list marks this agent enabled. The list
- * stores each agent as its resolved `source:name` key, but older workspaces
- * persisted bare agent names — match either so a legacy roster keeps working.
- */
-function enabledKeysIncludeAgent(
-  enabledKeys: readonly string[],
-  entry: { source: AgentSource; name: string },
-): boolean {
-  return (
-    enabledKeys.includes(agentKeyOf(entry)) || enabledKeys.includes(entry.name)
-  );
-}
 
 export class SettingsAgentCatalogController {
   constructor(private readonly deps: SettingsAgentCatalogControllerDeps) {}
@@ -260,9 +246,11 @@ export class SettingsAgentCatalogController {
       filePath: entry.path || undefined,
       tools: entry.tools,
       // undefined = never configured -> all enabled; [] = explicitly none enabled.
+      // A stored list holds resolved `source:name` keys, but older workspaces
+      // persisted bare names, which `agentMatchesIdentifier` still matches.
       enabled:
         enabledKeys === undefined ||
-        enabledKeysIncludeAgent(enabledKeys, entry),
+        enabledKeys.some((key) => agentMatchesIdentifier(entry, key)),
     };
   }
 
@@ -291,7 +279,7 @@ export class SettingsAgentCatalogController {
           !catalogAgents.some(
             (agent) =>
               agentMatchesIdentifier(agent, name) ||
-              agentMatchesIdentifier(agent, `builtInToolUse:${name}`),
+              agentMatchesIdentifier(agent, agentKey('builtInToolUse', name)),
           ),
       )
       .map((name): SettingsAgentCatalogEntry => ({

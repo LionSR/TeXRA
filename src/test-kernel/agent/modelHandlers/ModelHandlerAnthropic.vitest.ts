@@ -718,7 +718,9 @@ describe('ModelHandlerAnthropic message guards', () => {
       },
     );
   });
+});
 
+describe('ModelHandlerAnthropic PDF uploads and token counting', () => {
   it('uploads base64 PDF documents before creating responses', async () => {
     const handler = createAnthropicHandler({ supportsNativePdf: true });
     stubHandlerForTest(handler);
@@ -950,7 +952,9 @@ describe('ModelHandlerAnthropic message guards', () => {
     assert.equal(upload.mock.calls.length, 0);
     assert.equal(create.mock.calls.length, 0);
   });
+});
 
+describe('ModelHandlerAnthropic model capabilities', () => {
   it('does not warn about context overflow for models with native 1M context', async () => {
     const handler = createAnthropicHandler({ supportsTokenCounting: true });
     handler.config.fullName = 'claude-sonnet-4-6';
@@ -1165,7 +1169,9 @@ describe('ModelHandlerAnthropic message guards', () => {
     assert.equal(messageOptions[0]?.output_config?.effort, 'max');
     assert.equal(messageOptions[0]?.temperature, undefined);
   });
+});
 
+describe('ModelHandlerAnthropic forced compaction', () => {
   it('round-trips forced compaction state into the next workflow invocation', async () => {
     const handler = createAnthropicHandler({
       supportsAssistantPrefill: false,
@@ -1542,7 +1548,9 @@ describe('ModelHandlerAnthropic message guards', () => {
 
     assert.deepEqual(activityStates, ['started', 'finished']);
   });
+});
 
+describe('ModelHandlerAnthropic file-reference token estimation', () => {
   it('drops tracked file metadata covered by the latest compaction block', () => {
     const handler = createAnthropicHandler({ supportsNativePdf: true });
     const target = handler as unknown as {
@@ -1979,7 +1987,9 @@ describe('ModelHandlerAnthropic message guards', () => {
     );
     assert.equal(retrieveMetadata.mock.calls.length, 1);
   });
+});
 
+describe('ModelHandlerAnthropic usage and server-side compaction reporting', () => {
   it('does not add native compaction context edit for non-Opus models', async () => {
     const handler = createAnthropicHandler({
       supportsTokenCounting: false,

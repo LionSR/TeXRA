@@ -6,6 +6,34 @@ import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import { clamp } from '@utils/core';
 import { confirmCardPulsedTitle } from './ConfirmCardState';
 
+const FEEDBACK_MARGIN_ROWS = 1;
+const FEEDBACK_PREFIX_COLUMNS = 2;
+
+/**
+ * Rows the rejection-feedback input occupies inside a ConfirmCard: its blank
+ * margin plus the wrapped height of whatever it currently shows (the typed
+ * value, or the placeholder while it is empty).
+ */
+export function confirmCardFeedbackRows({
+  columns,
+  placeholder,
+  value,
+}: {
+  readonly columns: number;
+  readonly placeholder: string;
+  readonly value: string;
+}): number {
+  const text = value.length > 0 ? value : placeholder;
+  const width = Math.max(
+    1,
+    columns - CONFIRM_CARD_HORIZONTAL_DECORATION - FEEDBACK_PREFIX_COLUMNS,
+  );
+  return (
+    FEEDBACK_MARGIN_ROWS +
+    Math.max(1, wrapAnsiToWidth(text, width).split('\n').length)
+  );
+}
+
 /**
  * Rows budget for the scrollable content region of a ConfirmCard modal
  * (bash command, edit diff, proposal instruction).

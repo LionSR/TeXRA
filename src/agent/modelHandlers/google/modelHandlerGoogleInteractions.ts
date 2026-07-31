@@ -15,10 +15,8 @@ import {
 import { logProgressStatus } from '@agent/trace';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { reportMediaAttachmentFailure } from '@agent/modelHandlers/support/mediaAttachmentPolicy';
-import type { ModelCredentialSelection } from '@agent/types/ModelHandlerContracts';
 import { parseToolInputAsObject } from '@agent/core/flows/toolUseRound/toolCallParsing';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
-import type { MediaEntry } from '@agent/utils/mediaTypes';
 import { K_SLICE } from '@agent/core/constants';
 import { GOOGLE_FINISH } from '@agent/types/StopReasonTypes';
 import type { ProviderStopReason } from '@agent/types/StopReasonTypes';
@@ -42,18 +40,12 @@ import type {
   ToolFileAttachment,
   ToolResult,
 } from '@shared/schemas/toolResult';
-import { getShortDisplayPath } from '@utils/files';
 import { filterNotNull, generateShortId, isNonEmptyString } from '@utils/core';
-import { joinNonEmpty, pluralize } from '@utils/text/stringUtils';
+import { joinNonEmpty } from '@utils/text/stringUtils';
 import { getConfig } from '@utils/config/configUtils';
 
 // Local file imports
 import { GoogleModelHandlerBase } from './GoogleModelHandlerBase';
-import {
-  type GoogleClientCache,
-  resolveGoogleClient,
-  uploadGoogleMediaEntries,
-} from './googleHandlerShared';
 import {
   computeGoogleInteractionsPrice,
   normalizeGoogleInteractionsUsage,
@@ -63,7 +55,6 @@ import {
   type BackgroundPollStats,
 } from '../support/BackgroundPoller';
 import { CLIENT_COMPACTION_SUMMARY_MAX_TOKENS } from '../contextManagementConstants';
-import { tagGoogleSdkError } from './googleSdkError';
 import {
   DEFAULT_ATTACHMENT_MIME_TYPE,
   formatAttachmentSummary,
@@ -71,6 +62,7 @@ import {
   loadAttachmentBuffer,
 } from '../utils/toolAttachmentUtils';
 import { convertToolSchema, toGoogleTools } from '../toolConversion';
+import type { GoogleMediaSource } from './googleHandlerShared';
 
 // Interactions SDK aliases (public surface; the SDK re-exports these under the
 // `Interactions` namespace — the internal `_2`-suffixed types are not exported).
@@ -286,7 +278,6 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
   Step,
   Usage | null,
   GoogleToolCall,
-  GoogleGenAI,
   GoogleGenAIInteraction,
   Content,
   ThinkingLevel
@@ -353,8 +344,6 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
   private clearPendingBackgroundInteraction(): void {
     this.pendingBackgroundInteractionId = null;
   }
-
-  private googleClient: GoogleClientCache | null = null;
 
   // ===========================================================================
   // STATEFUL chaining state (store:true + previous_interaction_id)
@@ -492,6 +481,11 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
   // Capability getters / auth (REUSE / PORT from the chat handler)
   // ===========================================================================
 
+  /** `apiVersion` is left unset for v0 — see spec §6.4. */
+  protected get sdkLabel(): string {
+    return 'Interactions';
+  }
+
   protected get thinkingLevelConfig(): {
     levels: { low: ThinkingLevel; medium: ThinkingLevel; high: ThinkingLevel };
     labels: { low: string; medium: string; high: string };
@@ -518,31 +512,6 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
     return {};
   }
 
-  async getClient(
-    selection: ModelCredentialSelection = 'configured',
-  ): Promise<GoogleGenAI> {
-    // `apiVersion` left unset for v0 — see spec §6.4.
-    const credential = await this.resolveClientCredential(selection);
-    return resolveGoogleClient({
-      sdkLabel: 'Interactions',
-      credential,
-      logger: this.logger,
-      cached: this.googleClient,
-      setCached: (cache) => {
-        this.googleClient = cache;
-      },
-      rememberRoute: (client, route, credentialSecret) =>
-        this.rememberClientCredentialRoute(client, route, credentialSecret),
-    });
-  }
-
-  override async refreshClient(
-    selection: ModelCredentialSelection = 'configured',
-  ): Promise<GoogleGenAI> {
-    this.googleClient = null;
-    return this.getClient(selection);
-  }
-
   /**
    * The handler implements client-side compaction (see `compactConversation`),
    * so manual (user-requested) compaction is supported. Always true: the
@@ -551,37 +520,6 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
    */
   override get supportsManualCompaction(): boolean {
     return true;
-  }
-
-  /**
-   * Group parallel tool calls into one follow-up so the handler rebuilds the
-   * model-generated steps (thought steps with their signatures + all
-   * function-call steps) verbatim ahead of the function_result steps, in the
-   * order the model emitted them. The tool-use flow only records the assistant
-   * turn through the follow-up methods (see `ToolUseDispatchNode`), so — exactly
-   * like the chat handler — they must rebuild it; otherwise the function_result's
-   * `call_id` would reference a call absent from the local transcript and the
-   * thought signature would be lost (spec §6.1). These steps are appended to the
-   * transcript in both modes; stateless resends them, chained mode leaves them
-   * server-side once sent. Unconditional (not gated on
-   * `capabilities.supportsReasoning`) — see the base getter's doc comment
-   * (#7101 triage).
-   */
-  override get requiresBatchedParallelToolResults(): boolean {
-    return true;
-  }
-
-  /**
-   * Google passes the system prompt per-call (as `system_instruction`)
-   * rather than storing it in `messages` (see `initializeMessages` below) —
-   * the round flow must resupply it on every invocation.
-   */
-  override get requiresPerCallSystemPrompt(): boolean {
-    return true;
-  }
-
-  protected override get sdkErrorTagger() {
-    return tagGoogleSdkError;
   }
 
   // ===========================================================================
@@ -741,30 +679,6 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
   // Message construction (typed Content + Step[], not chat parts)
   // ===========================================================================
 
-  /** Labelled media content for a round, or empty when there is nothing to attach. */
-  private async buildLabelledMediaContent(
-    mediaFiles: FileLocation[] | undefined,
-    context: 'initial' | 'followUp',
-  ): Promise<Content[]> {
-    if (!mediaFiles?.length || !this.supportsFileUploads()) {
-      return [];
-    }
-
-    const media = await this.createMediaForRound(mediaFiles, context);
-    if (media.length === 0) {
-      return [];
-    }
-
-    const label = mediaFiles.map((loc) => getShortDisplayPath(loc)).join(', ');
-    const verb = context === 'initial' ? 'Attached' : 'Processing';
-    return [
-      this.textContent(
-        `\n${verb} ${pluralize(mediaFiles.length, 'file')}: ${label}`,
-      ),
-      ...media,
-    ];
-  }
-
   async initializeMessages(
     userPrefix: string,
     userRequest: string,
@@ -774,9 +688,9 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
     // System prompt is NOT a step — it rides on request-level system_instruction
     // (resent on every create, spec §6.2).
     const content: Content[] = [
-      this.textContent(userPrefix),
-      ...(await this.buildLabelledMediaContent(mediaFiles, 'initial')),
-      this.textContent(`\n${userRequest}`),
+      this.textMedia(userPrefix),
+      ...(await this.buildLabelledMedia(mediaFiles, 'initial')),
+      this.textMedia(`\n${userRequest}`),
     ];
 
     return [{ type: 'user_input', content } satisfies UserInputStep];
@@ -788,8 +702,8 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
     mediaFiles?: FileLocation[],
   ): Promise<Step[]> {
     const content: Content[] = [
-      ...(await this.buildLabelledMediaContent(mediaFiles, 'followUp')),
-      this.textContent(userMessage),
+      ...(await this.buildLabelledMedia(mediaFiles, 'followUp')),
+      this.textMedia(userMessage),
     ];
 
     messages.push({ type: 'user_input', content } satisfies UserInputStep);
@@ -802,11 +716,11 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
   ): Promise<Step[]> {
     const last = messages.at(-1);
     if (last?.type === 'user_input') {
-      (last.content ??= []).push(this.textContent(userMessage));
+      (last.content ??= []).push(this.textMedia(userMessage));
     } else {
       messages.push({
         type: 'user_input',
-        content: [this.textContent(userMessage)],
+        content: [this.textMedia(userMessage)],
       } satisfies UserInputStep);
     }
     return messages;
@@ -815,7 +729,7 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
   createAssistantMessage(text: string): Step {
     return {
       type: 'model_output',
-      content: [this.textContent(text)],
+      content: [this.textMedia(text)],
     } satisfies ModelOutputStep;
   }
 
@@ -826,37 +740,7 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
     );
   }
 
-  protected override async createMediaMessage(
-    mediaFiles: FileLocation[],
-  ): Promise<Content[]> {
-    if (!mediaFiles?.length || !this.supportsFileUploads()) {
-      return [];
-    }
-    const { entries, results } =
-      await this.mediaProcessor.loadEntries(mediaFiles);
-    this.mediaProcessor.logResults(results);
-    if (entries.length === 0) return [];
-    return this.uploadMediaEntries(entries);
-  }
-
-  /** Build typed Content for media entries (inline ≤20 MB; uploaded uri otherwise). */
-  private async uploadMediaEntries(entries: MediaEntry[]): Promise<Content[]> {
-    const insertedEntries: MediaEntry[] = [];
-    const content = await uploadGoogleMediaEntries<Content>(entries, {
-      getClient: () => this.getClient(),
-      inlineLimit: this.getInlineUploadLimitBytes(),
-      logger: this.logger,
-      buildInline: (data, mimeType) =>
-        this.buildMediaContent({ data }, mimeType),
-      buildUploaded: (uri, mimeType) =>
-        this.buildMediaContent({ uri }, mimeType),
-      onInsertedEntry: (entry) => insertedEntries.push(entry),
-    });
-    this.setCreatedMediaEntriesForAttachmentLog(insertedEntries);
-    return content;
-  }
-
-  private textContent(text: string): TextContent {
+  protected textMedia(text: string): TextContent {
     return { type: 'text', text };
   }
 
@@ -865,10 +749,7 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
    * uploaded File API `uri`, dispatching on the mime type. (Single builder for
    * both sources — the only difference is the data/uri field.)
    */
-  private buildMediaContent(
-    source: { data: string } | { uri: string },
-    mimeType: string,
-  ): Content {
+  protected buildMedia(source: GoogleMediaSource, mimeType: string): Content {
     if (mimeType.startsWith('image/')) {
       return {
         type: 'image',
@@ -1024,13 +905,13 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
   ): void {
     const last = messages.at(-1);
     if (placement === 'last-user' && last?.type === 'user_input') {
-      (last.content ??= []).push(this.textContent(text));
+      (last.content ??= []).push(this.textMedia(text));
       return;
     }
 
     messages.push({
       type: 'user_input',
-      content: [this.textContent(text)],
+      content: [this.textMedia(text)],
     } satisfies UserInputStep);
   }
 
@@ -1062,7 +943,7 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
     if (lastText) {
       lastText.text = (lastText.text ?? '') + text;
     } else {
-      content.push(this.textContent(text));
+      content.push(this.textMedia(text));
       this.logger.warn(
         'Added new text content to last model_output step as none existed.',
       );
@@ -1073,29 +954,6 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
   // ===========================================================================
   // Tool round-trip (REWRITE — verbatim Step[] + a function_result step)
   // ===========================================================================
-
-  async createToolUseFollowUpMessages(
-    _client: GoogleGenAI | undefined,
-    call: GoogleToolCall,
-    result: ToolResult,
-    attachments: ToolFileAttachment[],
-    workspaceState?: AgentWorkspaceState,
-    text?: string,
-  ): Promise<Step[]> {
-    if (!call.callId) {
-      throw new Error('Function call id is required for follow-up messages');
-    }
-
-    // The single-call path is batched-of-one: identical assistant-turn step
-    // reconstruction (thoughts + function_call) followed by the function_result
-    // step, and identical reasoning/server-tool reset. The callId guard above
-    // preserves this method's specific error message.
-    return this.createBatchedToolUseFollowUpMessages(
-      [{ call, result, attachments }],
-      workspaceState,
-      text,
-    );
-  }
 
   /**
    * Follow-up for MULTIPLE parallel tool calls. All model-generated steps
@@ -1281,7 +1139,7 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
       (s): s is UserInputStep => s.type === 'user_input',
     );
     if (lastUser) {
-      (lastUser.content ??= []).unshift(this.textContent(text));
+      (lastUser.content ??= []).unshift(this.textMedia(text));
     }
   }
 
@@ -1326,10 +1184,6 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
     } finally {
       this.inFlight = false;
     }
-  }
-
-  override get supportsForcedToolChoice(): boolean {
-    return true;
   }
 
   protected override async createResponseImpl(
@@ -1809,7 +1663,7 @@ export class ModelHandlerGoogleInteractions extends GoogleModelHandlerBase<
       },
       (summary): Step => ({
         type: 'user_input',
-        content: [this.textContent(summary)],
+        content: [this.textMedia(summary)],
       }),
     );
   }

@@ -3,26 +3,14 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { computeAgentOptionsData, refresh } from '@agent/index';
-import { arXivCommands } from '@commands/latex/arXivCommands';
 import { registerCommands } from '@commands/_shared/registerCommands';
-import { gitCommands } from '@commands/git/gitCommands';
 import { loadMainViewModelOptions } from '@frontend/agents/optionsLoader';
 import { loadMainViewTeamOptions } from '@frontend/agents/teamOptionsLoader';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 
-import { sampleProjectCommands } from './sampleProjectCommands';
-
 const CHANNEL = 'mainViewCommands';
-
-const mainViewCommands = {
-  reset: 'texra.mainView.reset',
-  refreshModelOptions: 'texra.refreshModelOptions',
-  refreshAgentOptions: 'texra.refreshAgentOptions',
-  refreshAllOptions: 'texra.refreshAllOptions',
-  showImportOptions: 'texra.showImportOptions',
-};
 
 type ModelOptionsByCategory = Awaited<
   ReturnType<typeof loadMainViewModelOptions>
@@ -88,14 +76,14 @@ export function registerMainViewCommands(
 ): void {
   registerCommands(context, [
     {
-      id: mainViewCommands.refreshModelOptions,
+      id: 'texra.refreshModelOptions',
       handler: () =>
         runRefresh('model options', async (webview) => {
           postModelOptions(webview, await loadMainViewModelOptions());
         }),
     },
     {
-      id: mainViewCommands.refreshAgentOptions,
+      id: 'texra.refreshAgentOptions',
       handler: () =>
         runRefresh('agent options', async (webview) => {
           await refresh();
@@ -104,7 +92,7 @@ export function registerMainViewCommands(
         }),
     },
     {
-      id: mainViewCommands.refreshAllOptions,
+      id: 'texra.refreshAllOptions',
       handler: (args?: RefreshAllOptionsArgs) =>
         runRefresh('options', async (webview) => {
           if (!args?.agentCatalogAlreadyFresh) await refresh();
@@ -134,17 +122,17 @@ export async function showImportOptions(): Promise<void> {
       {
         label: '$(repo-clone) Pull from Overleaf',
         description: 'Import an existing Overleaf/ShareLaTeX project',
-        command: gitCommands.cloneOverleafProject,
+        command: 'texra.cloneOverleafProject',
       },
       {
         label: '$(cloud-download) Grab from arXiv',
         description: "Download a paper's source files",
-        command: arXivCommands.downloadArXivSource,
+        command: 'texra.downloadArXivSource',
       },
       {
         label: '$(file-add) Try the sample project',
         description: 'Create a sample project to play around risk-free',
-        command: sampleProjectCommands.createSampleProject,
+        command: 'texra.createSampleProject',
       },
       {
         label: '$(rocket) Run the setup assistant agent',

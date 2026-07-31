@@ -10,7 +10,10 @@ import {
   ConversationPane,
   workflowRunStatusSummary,
 } from '@cli/chat/tui/panes/ConversationPane';
-import { SubagentList } from '@cli/chat/tui/panes/SubagentList';
+import {
+  SubagentList,
+  type SubagentListProps,
+} from '@cli/chat/tui/panes/SubagentList';
 import { textDisplayWidth } from '@cli/chat/tui/render/terminalText';
 import { childStreamListValue } from '@cli/chat/tui/state/childListSelection';
 import {
@@ -73,6 +76,20 @@ function workflowAgentSlice(
     compileFailuresByRound: overrides.compileFailuresByRound ?? {},
     taskGroups: overrides.taskGroups ?? [],
   };
+}
+
+async function renderSubagentList(
+  props: SubagentListProps,
+  columns: number,
+  options: { readonly until?: (frame: string) => boolean } = {},
+): Promise<string> {
+  const { ink, React } = await loadInk();
+  return renderOutputAtTerminalSize(
+    ink,
+    React.createElement(SubagentList, props),
+    columns,
+    options,
+  );
 }
 
 describe('CLI child list display model', () => {
@@ -500,7 +517,6 @@ describe('CLI child list display model', () => {
   });
 
   it('renders agent row metadata correctly at an explicit terminal width', async () => {
-    const { ink, React } = await loadInk();
     const run = 'run' as StreamTabId;
     const bash = 'bash-1' as StreamTabId;
     const agent = 'agent-1' as StreamTabId;
@@ -560,14 +576,13 @@ describe('CLI child list display model', () => {
       rootStreamId: run,
       streams,
     });
-    const output = await renderOutputAtTerminalSize(
-      ink,
-      React.createElement(SubagentList, {
+    const output = await renderSubagentList(
+      {
         listRootStreamId: run,
         maxRows: 6,
         keyboardActive: false,
         sessions,
-      }),
+      },
       100,
       { until: (frame) => frame.includes('5 tool calls') },
     );
@@ -582,11 +597,9 @@ describe('CLI child list display model', () => {
   });
 
   it('keeps run-file metadata out of the compact row', async () => {
-    const { ink, React } = await loadInk();
     const run = 'run' as StreamTabId;
-    const output = await renderOutputAtTerminalSize(
-      ink,
-      React.createElement(SubagentList, {
+    const output = await renderSubagentList(
+      {
         maxRows: 3,
         sessions: [
           {
@@ -603,7 +616,7 @@ describe('CLI child list display model', () => {
             }),
           },
         ],
-      }),
+      },
       100,
     );
 
@@ -613,17 +626,16 @@ describe('CLI child list display model', () => {
   });
 
   it('uses canonical task status labels for child rows', async () => {
-    const { ink, React } = await loadInk();
     const root = 'root' as StreamTabId;
-    const output = await renderOutputAtTerminalSize(
-      ink,
-      React.createElement(SubagentList, {
+    const output = await renderSubagentList(
+      {
         maxRows: 5,
         sessions: [
           {
             id: 'done' as StreamTabId,
             label: 'reviewer',
             parentId: root,
+            active: false,
             slice: workflowAgentSlice('done', {
               status: STREAM_PHASE.COMPLETED,
             }),
@@ -632,6 +644,7 @@ describe('CLI child list display model', () => {
             id: 'failed' as StreamTabId,
             label: 'critic',
             parentId: root,
+            active: false,
             slice: workflowAgentSlice('failed', {
               status: STREAM_PHASE.FAILED,
             }),
@@ -640,6 +653,7 @@ describe('CLI child list display model', () => {
             id: 'waiting' as StreamTabId,
             label: 'editor',
             parentId: root,
+            active: false,
             slice: workflowAgentSlice('waiting', {
               status: STREAM_PHASE.WAITING,
             }),
@@ -648,9 +662,11 @@ describe('CLI child list display model', () => {
             id: 'attached' as StreamTabId,
             label: 'attached',
             parentId: root,
+            active: false,
+            slice: undefined,
           },
         ],
-      }),
+      },
       100,
     );
 
@@ -664,12 +680,10 @@ describe('CLI child list display model', () => {
   it.each([120, 80, 64, 56])(
     'shows a run its phase and a reflection stream its round at %i columns',
     async (columns) => {
-      const { ink, React } = await loadInk();
       const run = 'run' as StreamTabId;
       const reflection = 'reflect' as StreamTabId;
-      const output = await renderOutputAtTerminalSize(
-        ink,
-        React.createElement(SubagentList, {
+      const output = await renderSubagentList(
+        {
           maxRows: 4,
           sessions: [
             {
@@ -691,7 +705,7 @@ describe('CLI child list display model', () => {
               }),
             },
           ],
-        }),
+        },
         columns,
         { until: (frame) => frame.includes('r2/3') },
       );
@@ -715,7 +729,6 @@ describe('CLI child list display model', () => {
   // `streamTreeViews`, the one owner of row order, rather than a hand-ordered
   // `sessions` array, so it guards the production path.
   it('never renders a phase-less row beneath a phase header', async () => {
-    const { ink, React } = await loadInk();
     const run = 'run' as StreamTabId;
     const mapAgent = 'map-agent' as StreamTabId;
     const looseAgent = 'loose-agent' as StreamTabId;
@@ -768,13 +781,12 @@ describe('CLI child list display model', () => {
       rootStreamId: run,
       streams,
     });
-    const output = await renderOutputAtTerminalSize(
-      ink,
-      React.createElement(SubagentList, {
+    const output = await renderSubagentList(
+      {
         listRootStreamId: run,
         maxRows: 10,
         sessions,
-      }),
+      },
       100,
       { until: (frame) => frame.includes('◆ Reduce') },
     );
@@ -802,12 +814,10 @@ describe('CLI child list display model', () => {
   });
 
   it('does not group a list root by its inherited workflow phase', async () => {
-    const { ink, React } = await loadInk();
     const run = 'nested-workflow' as StreamTabId;
     const child = 'ordinary-child' as StreamTabId;
-    const output = await renderOutputAtTerminalSize(
-      ink,
-      React.createElement(SubagentList, {
+    const output = await renderSubagentList(
+      {
         listRootStreamId: run,
         maxRows: 5,
         sessions: [
@@ -820,7 +830,7 @@ describe('CLI child list display model', () => {
           },
           { ...session(child), parentId: run },
         ],
-      }),
+      },
       100,
       { until: (frame) => frame.includes('ordinary-child') },
     );
@@ -831,13 +841,11 @@ describe('CLI child list display model', () => {
   });
 
   it('keeps the selected stream visible when headers consume row slots', async () => {
-    const { ink, React } = await loadInk();
     const run = 'windowed-run' as StreamTabId;
     const map = 'map-agent' as StreamTabId;
     const reduce = 'reduce-agent' as StreamTabId;
-    const output = await renderOutputAtTerminalSize(
-      ink,
-      React.createElement(SubagentList, {
+    const output = await renderSubagentList(
+      {
         listRootStreamId: run,
         maxRows: 3,
         selectedValue: childStreamListValue(reduce),
@@ -859,7 +867,7 @@ describe('CLI child list display model', () => {
             workflowPhase: 'Reduce',
           },
         ],
-      }),
+      },
       100,
       { until: (frame) => frame.includes('reduce-agent') },
     );
@@ -871,7 +879,6 @@ describe('CLI child list display model', () => {
   });
 
   it('switches phase progress layout at the exact width boundary', async () => {
-    const { ink, React } = await loadInk();
     const run = 'run' as StreamTabId;
     const mapRetry = 'map-retry' as StreamTabId;
     const mapAttempt = 'map-attempt' as StreamTabId;
@@ -958,13 +965,12 @@ describe('CLI child list display model', () => {
     ];
 
     async function renderAtColumns(columns: number): Promise<string> {
-      return renderOutputAtTerminalSize(
-        ink,
-        React.createElement(SubagentList, {
+      return renderSubagentList(
+        {
           listRootStreamId: run,
           maxRows: 10,
           sessions,
-        }),
+        },
         columns,
         { until: (frame) => frame.includes(freeFormPhase) },
       );
@@ -1005,11 +1011,9 @@ describe('CLI child list display model', () => {
   });
 
   it('never shows both a phase and a round on one row', async () => {
-    const { ink, React } = await loadInk();
     const run = 'run' as StreamTabId;
-    const output = await renderOutputAtTerminalSize(
-      ink,
-      React.createElement(SubagentList, {
+    const output = await renderSubagentList(
+      {
         maxRows: 3,
         sessions: [
           {
@@ -1023,7 +1027,7 @@ describe('CLI child list display model', () => {
             }),
           },
         ],
-      }),
+      },
       100,
       { until: (frame) => frame.includes('workflow-script') },
     );
@@ -1045,12 +1049,10 @@ describe('CLI child list display model', () => {
   ])(
     'renders the row metadata column at $columns columns: $metadataColumn',
     async ({ columns, metadataColumn }) => {
-      const { ink, React } = await loadInk();
       const run = 'run' as StreamTabId;
       const child = 'child' as StreamTabId;
-      const output = await renderOutputAtTerminalSize(
-        ink,
-        React.createElement(SubagentList, {
+      const output = await renderSubagentList(
+        {
           listRootStreamId: run,
           maxRows: 4,
           sessions: [
@@ -1078,7 +1080,7 @@ describe('CLI child list display model', () => {
               }),
             },
           ],
-        }),
+        },
         columns,
         { until: (frame) => frame.includes('writer') },
       );

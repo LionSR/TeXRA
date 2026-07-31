@@ -151,7 +151,7 @@ export function listFormShortcutLabel(itemCount: number): string {
   return '1-9/a-z/Enter';
 }
 
-export function usePendingListFormSelection<T>(args: {
+function usePendingListFormSelection<T>(args: {
   readonly loading: boolean;
   readonly error: string | undefined;
   readonly pendingInput: string | undefined;
@@ -195,6 +195,76 @@ interface AsyncListFormControls<TData> {
   readonly setData: (next: TData) => void;
 }
 
+export interface AsyncPickerForm<TData, TValue> {
+  readonly data: TData | undefined;
+  readonly items: ReadonlyArray<SelectItem<TValue>>;
+  /** Apply a selection: the caller's handler, or a close for a read-only list. */
+  readonly select: (value: TValue) => void;
+  /** Loading / error frame to return before the form's own layout, else null. */
+  readonly transient: React.JSX.Element | null;
+}
+
+/**
+ * The async lifecycle every `/`-form picker runs: load once, buffer keystrokes
+ * typed before the list mounts, render the loading/error frame, and turn a
+ * selection into the caller's handler (or a close, for a read-only list).
+ * Forms whose layout is the plain picker use {@link AsyncListForm}; `/agent`
+ * and `/model` render their own sections on top of this hook.
+ */
+export function useAsyncPickerForm<TData, TValue>(args: {
+  readonly title: string;
+  readonly loadingLabel: string;
+  readonly showTransientCloseHint?: boolean;
+  readonly load: () => Promise<TData>;
+  readonly isEmpty?: (data: TData) => boolean;
+  readonly items: (data: TData) => ReadonlyArray<SelectItem<TValue>>;
+  /** `false` renders a read-only list where selecting closes the form. */
+  readonly selectable?: boolean;
+  readonly onSelect?: (
+    value: TValue,
+    controls: AsyncListFormControls<TData>,
+  ) => void;
+  readonly onClose: () => void;
+}): AsyncPickerForm<TData, TValue> {
+  const { data, loading, error, pendingInput, clearPendingInput, setData } =
+    useAsyncListForm<TData>({
+      load: args.load,
+      onClose: args.onClose,
+      isEmpty: args.isEmpty,
+    });
+  const selectable = args.selectable !== false;
+  const items = data === undefined ? [] : args.items(data);
+  const select = (value: TValue): void => {
+    if (!selectable) {
+      args.onClose();
+      return;
+    }
+    if (data !== undefined) args.onSelect?.(value, { data, setData });
+  };
+  usePendingListFormSelection({
+    loading,
+    error,
+    pendingInput,
+    clearPendingInput,
+    items,
+    enabled: selectable,
+    onSelect: select,
+  });
+
+  return {
+    data,
+    items,
+    select,
+    transient: renderAsyncListFormTransient({
+      loading,
+      error,
+      title: args.title,
+      loadingLabel: args.loadingLabel,
+      showCloseHint: args.showTransientCloseHint,
+    }),
+  };
+}
+
 export interface AsyncListFormProps<TData, TValue> extends Omit<
   ListFormProps<TValue>,
   'items' | 'onSelect'
@@ -231,33 +301,19 @@ export function AsyncListForm<TData, TValue>(
     onSelect,
     ...listProps
   } = props;
-  const { data, loading, error, pendingInput, clearPendingInput, setData } =
-    useAsyncListForm<TData>({
-      load,
-      onClose: listProps.onCancel,
-      isEmpty: isEmpty ?? ((loaded) => itemsFor(loaded).length === 0),
-    });
-  const items = data === undefined ? [] : itemsFor(data);
-  const handleSelect = (value: TValue): void => {
-    if (data !== undefined) onSelect(value, { data, setData });
-  };
-  usePendingListFormSelection({
-    loading,
-    error,
-    pendingInput,
-    clearPendingInput,
-    items,
-    onSelect: handleSelect,
-  });
-
-  const transient = renderAsyncListFormTransient({
-    loading,
-    error,
+  const picker = useAsyncPickerForm<TData, TValue>({
     title: listProps.title,
     loadingLabel,
-    showCloseHint: showTransientCloseHint,
+    showTransientCloseHint,
+    load,
+    isEmpty: isEmpty ?? ((loaded) => itemsFor(loaded).length === 0),
+    items: itemsFor,
+    onSelect,
+    onClose: listProps.onCancel,
   });
-  if (transient) return transient;
+
+  if (picker.transient) return picker.transient;
+  const { data } = picker;
   if (data === undefined) {
     throw new Error(`${listProps.title} list finished loading without data.`);
   }
@@ -265,12 +321,12 @@ export function AsyncListForm<TData, TValue>(
   return (
     <ListForm
       {...listProps}
-      items={items}
+      items={picker.items}
       description={descriptionFor?.(data) ?? listProps.description}
       detail={detailFor?.(data) ?? listProps.detail}
       detailRows={detailRowsFor?.(data) ?? listProps.detailRows}
       compactDetail={compactDetailFor?.(data) ?? listProps.compactDetail}
-      onSelect={handleSelect}
+      onSelect={picker.select}
     />
   );
 }

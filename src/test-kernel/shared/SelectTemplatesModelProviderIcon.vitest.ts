@@ -1,8 +1,19 @@
-import { JSDOM } from 'jsdom';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import type { ModelOptionData } from '@shared/schemas';
+import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 import type { TemplateResult } from 'lit';
+
+let templates: typeof import('@shared/utils/selectTemplates');
+let renderTemplate: typeof import('lit').render;
+
+// `lit` and the module under test are imported through the harness callback,
+// after the DOM globals are patched onto globalThis: lit-html caches its
+// DOM-creation helpers off `global.document` when it is first evaluated.
+useLitComponentTestDom(async () => {
+  templates = await import('@shared/utils/selectTemplates');
+  ({ render: renderTemplate } = await import('lit'));
+});
 
 /**
  * Regression coverage for #8157: the model-option dropdown used to bake a
@@ -13,35 +24,11 @@ import type { TemplateResult } from 'lit';
  * `renderAgentOption` — never a unicode glyph baked into the label text.
  */
 describe('renderModelOption uses wa-icon, matching renderAgentOption', () => {
-  let dom: JSDOM;
-  let templates: typeof import('@shared/utils/selectTemplates');
-  let renderTemplate: typeof import('lit').render;
-
   function renderOptions(template: TemplateResult): HTMLElement {
     const container = document.createElement('div');
     renderTemplate(template, container);
     return container;
   }
-
-  beforeAll(async () => {
-    dom = new JSDOM('<!doctype html><html><body></body></html>');
-    Object.assign(globalThis, {
-      window: dom.window,
-      document: dom.window.document,
-      Node: dom.window.Node,
-      Element: dom.window.Element,
-      DocumentFragment: dom.window.DocumentFragment,
-      customElements: dom.window.customElements,
-      HTMLElement: dom.window.HTMLElement,
-    });
-
-    templates = await import('@shared/utils/selectTemplates');
-    ({ render: renderTemplate } = await import('lit'));
-  });
-
-  afterAll(() => {
-    dom.window.close();
-  });
 
   it('renders a wa-icon for the provider, not a unicode glyph in the label text', () => {
     const options: ModelOptionData[] = [

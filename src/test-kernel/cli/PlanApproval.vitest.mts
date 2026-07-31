@@ -2,13 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import {
   COMPACT_PLAN_APPROVAL_MAX_ROWS,
+  PLAN_APPROVAL_FEEDBACK_PLACEHOLDER,
   PLAN_APPROVAL_GOAL_NOTICE,
   isCompactPlanApprovalRows,
   isPlanApprovalGoalActionVisible,
   planApprovalCompactBodyRowsBudget,
-  planApprovalFeedbackRows,
   planApprovalGoalNoticeLine,
 } from '@cli/chat/tui/modals/PlanApproval';
+import { confirmCardFeedbackRows } from '@cli/chat/tui/modals/confirmCardRowsBudget';
 import { textDisplayWidth } from '@cli/chat/tui/render/terminalText';
 
 describe('CLI plan approval layout', () => {
@@ -112,10 +113,17 @@ describe('CLI plan approval layout', () => {
   });
 
   it('budgets feedback input rows by visible input width', () => {
-    expect(planApprovalFeedbackRows({ columns: 80, value: '' })).toBe(2);
     expect(
-      planApprovalFeedbackRows({
+      confirmCardFeedbackRows({
+        columns: 80,
+        placeholder: PLAN_APPROVAL_FEEDBACK_PLACEHOLDER,
+        value: '',
+      }),
+    ).toBe(2);
+    expect(
+      confirmCardFeedbackRows({
         columns: 44,
+        placeholder: PLAN_APPROVAL_FEEDBACK_PLACEHOLDER,
         value:
           'This rejection note is intentionally long enough to wrap on a narrow card.',
       }),

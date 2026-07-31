@@ -3,28 +3,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type {
-  BashSettlement,
-  PlanApprovalResult,
-  ProposalResult,
-  RetryResult,
-  UserQuestionSettlement,
-} from '@agent/runtime/HostInteractions';
 import { ApprovalRequestHandler } from '@controllers/progressView/backend/ApprovalRequestHandler';
-import type { ApprovalRequestHandlerSet } from '@controllers/progressView/backend/progressBackendUiConfig';
 import { createAgentPresentationHost } from '@frontend/events/agentEventListeners';
 import { createExtensionHostInteractions } from '@progressView/extensionHostInteractions';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
-import type {
-  AgentProposalPermission,
-  BashPermission,
-  ExternalInquiryPermission,
-  PlanApprovalPermission,
-  RetryPermission,
-  ToolEditPermission,
-  UserQuestionPermission,
-} from '@shared/schemas';
+import type { ToolEditPermission } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
+
+// Local file imports
+import { createRecordingApprovalHandlers } from './approvalHandlerSetHarness';
 
 /**
  * #9251 behavioral gate: the extension's `HostInteractions.emit` now routes
@@ -65,58 +52,6 @@ vi.mock('@frontend/latex/linter', () => ({
 vi.mock('@frontend/latex/inlineCriticism', () => ({
   pushManualCriticism: mocks.pushManualCriticism,
 }));
-
-function noopHandler<
-  T extends { streamId: string },
-  K extends keyof T,
-  Result = never,
->(idField: K): ApprovalRequestHandler<T, K, Result> {
-  return new ApprovalRequestHandler<T, K, Result>(
-    idField,
-    () => {},
-    () => {},
-    () => true,
-  );
-}
-
-/**
- * A full seven-kind handler set with harmless no-op transports for the six
- * kinds these tests don't exercise. `HostInteractions.cancel()` (run on
- * session disposal, via `afterEach`) reaches every kind unconditionally, so
- * each must be a real `ApprovalRequestHandler`. `toolEdit` defaults to a
- * fresh handler; pass the one under test to keep disposal cancelling the
- * same instance a test observed.
- */
-function createApprovalHandlers(
-  toolEdit: ApprovalRequestHandlerSet['toolEdit'] = noopHandler<
-    ToolEditPermission,
-    'requestId'
-  >('requestId'),
-): ApprovalRequestHandlerSet {
-  return {
-    toolEdit,
-    bash: noopHandler<BashPermission, 'requestId', BashSettlement>('requestId'),
-    retry: noopHandler<RetryPermission, 'streamId', RetryResult>('streamId'),
-    agentProposal: noopHandler<
-      AgentProposalPermission,
-      'proposalId',
-      ProposalResult
-    >('proposalId'),
-    planApproval: noopHandler<
-      PlanApprovalPermission,
-      'approvalId',
-      PlanApprovalResult
-    >('approvalId'),
-    externalInquiry: noopHandler<ExternalInquiryPermission, 'requestId'>(
-      'requestId',
-    ),
-    userQuestion: noopHandler<
-      UserQuestionPermission,
-      'requestId',
-      UserQuestionSettlement
-    >('requestId'),
-  };
-}
 
 function toolEditPermission(requestId: string): ToolEditPermission {
   return {
@@ -198,7 +133,7 @@ describe('extension presentation-event emit port (#9251 replay gate)', () => {
       const interactions = createExtensionHostInteractions({
         interactions: presentationHost,
         session,
-        getApprovalHandlers: () => createApprovalHandlers(),
+        getApprovalHandlers: () => createRecordingApprovalHandlers(),
         setApprovalBypassState: vi.fn(),
       });
       const detach = session.useHostInteractions(interactions);

@@ -1,59 +1,23 @@
 // Third-party imports
-import { JSDOM } from 'jsdom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const originalGlobals = {
-  document: globalThis.document,
-  window: globalThis.window,
-  Element: globalThis.Element,
-  HTMLElement: globalThis.HTMLElement,
-  MouseEvent: globalThis.MouseEvent,
-  requestAnimationFrame: globalThis.requestAnimationFrame,
-};
+// Local imports - test utilities
+import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 
-function installDom(): void {
-  const dom = new JSDOM('<!doctype html><body></body>', {
-    url: 'http://localhost',
-  });
+let installToolbarTooltips: (typeof import('@shared/litControllers/TooltipController'))['installToolbarTooltips'];
 
-  globalThis.window = dom.window as unknown as Window & typeof globalThis;
-  globalThis.document = dom.window.document;
-  globalThis.Element = dom.window.Element;
-  globalThis.HTMLElement = dom.window.HTMLElement;
-  globalThis.MouseEvent = dom.window.MouseEvent;
-  globalThis.requestAnimationFrame = ((callback: FrameRequestCallback) => {
-    callback(0);
-    return 1;
-  }) as typeof requestAnimationFrame;
-}
-
-function restoreDom(): void {
-  globalThis.document = originalGlobals.document;
-  globalThis.window = originalGlobals.window;
-  globalThis.Element = originalGlobals.Element;
-  globalThis.HTMLElement = originalGlobals.HTMLElement;
-  globalThis.MouseEvent = originalGlobals.MouseEvent;
-  if (originalGlobals.requestAnimationFrame === undefined) {
-    delete (globalThis as { requestAnimationFrame?: unknown })
-      .requestAnimationFrame;
-  } else {
-    globalThis.requestAnimationFrame = originalGlobals.requestAnimationFrame;
-  }
-}
+useLitComponentTestDom(async () => {
+  ({ installToolbarTooltips } =
+    await import('@shared/litControllers/TooltipController'));
+});
 
 afterEach(() => {
   vi.useRealTimers();
-  vi.resetModules();
-  restoreDom();
 });
 
 describe('toolbar tooltip controller', () => {
-  it('does not clobber a wa-button title that changes while hovered', async () => {
+  it('does not clobber a wa-button title that changes while hovered', () => {
     vi.useFakeTimers();
-    installDom();
-
-    const { installToolbarTooltips } =
-      await import('@shared/litControllers/TooltipController');
     installToolbarTooltips();
 
     const button = document.createElement('wa-button');

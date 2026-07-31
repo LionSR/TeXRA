@@ -132,8 +132,10 @@ export function formatStreamStatusLabel(
   if (status == null) return options.missingLabel;
   const state = streamStatusDisplayState(status, options.substate);
   const style = options.style ?? 'progressHeader';
+  // Legacy `stopped` phases to COMPLETED but must keep reading as "stopped",
+  // which is exactly the CANCELLED wording every style already declares.
   if (state.legacyStatus === STREAM_STATUS.STOPPED) {
-    return style === 'progressHeader' ? 'Stopped' : 'stopped';
+    return STREAM_STATUS_LABELS[style][STREAM_PHASE.CANCELLED];
   }
   const key = state.key;
   if (!key) return status;

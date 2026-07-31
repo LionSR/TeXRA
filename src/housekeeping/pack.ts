@@ -22,6 +22,7 @@ import {
   TEMP_EXTENSIONS,
   HISTORY_DIR,
   DEFAULT_MAX_ROUNDS,
+  CHANNEL,
 } from './constants';
 import {
   generateTimestamp,
@@ -29,8 +30,6 @@ import {
   findFilesFromPatterns,
   resolveHousekeepingTargets,
 } from './utils';
-
-const CHANNEL = 'Housekeeping';
 
 export async function runPackSingle(
   model: string,

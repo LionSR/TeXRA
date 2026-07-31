@@ -5,6 +5,7 @@ import {
   type SupabaseClient,
   type User,
 } from '@supabase/supabase-js';
+import { SUPABASE_ANON_KEY, SUPABASE_URL } from './edgeClients.ts';
 
 /** Extract the bearer token from the Authorization header. */
 export function bearerToken(req: Request): string | null {
@@ -21,9 +22,6 @@ interface AuthenticatedUser {
   client: SupabaseClient;
 }
 
-const supabaseUrl = Deno.env.get('SUPABASE_URL');
-const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
-
 /**
  * Validate a user JWT and return the user plus a user-scoped client.
  * Returns null when the JWT is missing, invalid, or expired (callers should
@@ -33,9 +31,9 @@ const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
 export async function authenticateJwt(
   jwt: string | null,
 ): Promise<AuthenticatedUser | null> {
-  if (!jwt || !supabaseUrl || !supabaseAnonKey) return null;
+  if (!jwt || !SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
 
-  const client = createClient(supabaseUrl, supabaseAnonKey, {
+  const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     global: { headers: { Authorization: `Bearer ${jwt}` } },
     auth: { autoRefreshToken: false, persistSession: false },
   });

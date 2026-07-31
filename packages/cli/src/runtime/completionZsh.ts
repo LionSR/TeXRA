@@ -2,16 +2,20 @@ import { quote } from 'shell-quote';
 
 import {
   CLI_COMPLETION_SHELLS,
+  COMPLETION_SOURCES,
   commandKey,
   completionFlagVariants,
+  completionSourceListing,
   type CompletionCommand,
   type CompletionFlag,
   type CompletionFlagVariant,
 } from './completionCommandTree';
 
+const { agents, models, toolUseAgents, workflowAgents } = COMPLETION_SOURCES;
+
 const DYNAMIC_FLAG_VALUE_SOURCES: ReadonlyMap<string, string> = new Map([
-  ['agent', '_texra_tool_use_agents'],
-  ['model', '_texra_models'],
+  ['agent', toolUseAgents.shellFunction],
+  ['model', models.shellFunction],
 ]);
 
 function zshFlagValueSuffix(
@@ -27,11 +31,23 @@ function zshFlagValueSuffix(
 
 const POSITIONAL_SPECS: Readonly<Record<string, string>> = {
   completion: `1:shell:(${CLI_COMPLETION_SHELLS.join(' ')})`,
-  run: `1:agent:($(_texra_workflow_agents))`,
-  'agents show': `1:agent:($(_texra_agents))`,
-  'agents run': `1:agent:($(_texra_tool_use_agents))`,
-  'models show': `1:model:($(_texra_models))`,
+  run: `1:agent:($(${workflowAgents.shellFunction}))`,
+  'agents show': `1:agent:($(${agents.shellFunction}))`,
+  'agents run': `1:agent:($(${toolUseAgents.shellFunction}))`,
+  'models show': `1:model:($(${models.shellFunction}))`,
 };
+
+function dynamicSourceFunctions(): string {
+  return Object.values(COMPLETION_SOURCES)
+    .map(
+      (source) =>
+        `${source.shellFunction}() {
+  [[ "\${TEXRA_COMPLETION_DYNAMIC:-1}" == "0" ]] && return
+  ${completionSourceListing(source)}
+}`,
+    )
+    .join('\n\n');
+}
 
 function zshFlagSpec(flag: CompletionFlag): string[] {
   return completionFlagVariants(flag).flatMap((variant) => {
@@ -68,25 +84,7 @@ export function zshCompletion(commands: readonly CompletionCommand[]): string {
   ];
   return `#compdef texra
 
-_texra_agents() {
-  [[ "\${TEXRA_COMPLETION_DYNAMIC:-1}" == "0" ]] && return
-  texra agents list --quiet 2>/dev/null | awk '{print $2}'
-}
-
-_texra_workflow_agents() {
-  [[ "\${TEXRA_COMPLETION_DYNAMIC:-1}" == "0" ]] && return
-  texra agents list --quiet --all --category workflow 2>/dev/null | awk '{print $2}'
-}
-
-_texra_tool_use_agents() {
-  [[ "\${TEXRA_COMPLETION_DYNAMIC:-1}" == "0" ]] && return
-  texra agents list --quiet --all --category toolUse 2>/dev/null | awk '{print $2}'
-}
-
-_texra_models() {
-  [[ "\${TEXRA_COMPLETION_DYNAMIC:-1}" == "0" ]] && return
-  texra models list --quiet 2>/dev/null | awk '{print $1}'
-}
+${dynamicSourceFunctions()}
 
 _texra() {
   local path

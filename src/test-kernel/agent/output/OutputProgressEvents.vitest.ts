@@ -24,7 +24,11 @@ import type {
   RoundOutput,
   StreamTabId,
 } from '@shared/schemas';
-import { AbsoluteFS } from '@utils/files';
+import {
+  AbsoluteFS,
+  createExternalLocation,
+  createWorkspaceLocation,
+} from '@utils/files';
 import {
   createRecordingHost,
   recordSessionEvents,
@@ -34,11 +38,11 @@ import {
 } from '../progressTestUtils';
 
 function createLocation(path: string): FileLocation {
-  return { kind: 'external', absolutePath: path };
+  return createExternalLocation(path);
 }
 
 function createAgentLocation(path: string): AgentFileLocation {
-  return { kind: 'workspace', absolutePath: path, relativePath: path };
+  return createWorkspaceLocation(path, path);
 }
 
 const emptyXmlSummary: OutputXmlSummary = {

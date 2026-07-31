@@ -1,5 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { expect, test } from '@playwright/test';
@@ -11,6 +10,7 @@ import {
 } from './electronApp.js';
 import {
   cleanupDirectory,
+  createIsolatedProfile,
   findWorkspaceStoragePath,
 } from './workspaceStorageFixture.js';
 
@@ -147,8 +147,7 @@ test('macOS window close detaches and activation reopens in the same process', a
 });
 
 test('a new desktop process repairs canonical waiting and orphaned streams', async () => {
-  const workspacePath = mkdtempSync(join(tmpdir(), 'texra-e2e-workspace-'));
-  const userDataPath = mkdtempSync(join(tmpdir(), 'texra-e2e-user-data-'));
+  const { workspacePath, userDataPath } = createIsolatedProfile();
   let currentLaunch: LaunchedApp | undefined;
 
   try {

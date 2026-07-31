@@ -21,9 +21,10 @@
  * - Service role key for user management; sign-up policy enforced for new users
  */
 
-import { type Context as HonoContext, Hono } from '@hono/hono';
+import { Hono } from '@hono/hono';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { handleCors } from '../_shared/cors.ts';
+import { adminClient, anonClient } from '../_shared/edgeClients.ts';
 import {
   checkEmailDomain,
   checkGitHubAccountAge,
@@ -32,18 +33,7 @@ import {
   mintGoTrueSession,
   sessionResponseBody,
 } from '../_shared/goTrueSession.ts';
-import { createEdgeClient, jsonResponse } from '../_shared/responses.ts';
-
-// =============================================================================
-// Environment
-// =============================================================================
-
-const supabaseUrl = Deno.env.get('SUPABASE_URL');
-const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
-
-const adminSupabase = createEdgeClient(supabaseUrl, supabaseServiceKey);
-const anonSupabase = createEdgeClient(supabaseUrl, supabaseAnonKey);
+import { errorResponse, jsonResponse } from '../_shared/responses.ts';
 
 // =============================================================================
 // Types
@@ -83,16 +73,12 @@ app.use('*', async (c, next) => {
 
 // Initialize Supabase client
 app.use('*', async (c, next) => {
-  if (!adminSupabase || !anonSupabase) {
-    return jsonResponse(
-      c.req.raw,
-      { error: 'Server configuration error' },
-      500,
-    );
+  if (!adminClient || !anonClient) {
+    return errorResponse(c.req.raw, 'Server configuration error', 500);
   }
 
-  c.set('supabase', adminSupabase);
-  c.set('authClient', anonSupabase);
+  c.set('supabase', adminClient);
+  c.set('authClient', anonClient);
 
   await next();
 });
@@ -100,12 +86,6 @@ app.use('*', async (c, next) => {
 // =============================================================================
 // Helpers
 // =============================================================================
-
-type Context = HonoContext<{ Variables: Variables }>;
-
-function errorResponse(c: Context, error: string, status: number) {
-  return jsonResponse(c.req.raw, { error }, status);
-}
 
 function githubAppMetadata(
   existing: MetadataRecord | null | undefined,
@@ -223,12 +203,12 @@ app.post('/exchange', async (c) => {
   try {
     const body = await c.req.json().catch(() => null);
     if (!body?.github_token) {
-      return errorResponse(c, 'github_token required', 400);
+      return errorResponse(c.req.raw, 'github_token required', 400);
     }
 
     const githubResult = await validateGitHubToken(body.github_token);
     if ('error' in githubResult) {
-      return errorResponse(c, githubResult.error, 401);
+      return errorResponse(c.req.raw, githubResult.error, 401);
     }
 
     const { user: githubUser, email } = githubResult;
@@ -260,7 +240,7 @@ app.post('/exchange', async (c) => {
         await supabase.auth.admin.getUserById(userId);
       if (userError || !userData?.user) {
         console.error('[AUTH] Failed to load linked user:', userError?.message);
-        return errorResponse(c, 'Failed to load linked user', 500);
+        return errorResponse(c.req.raw, 'Failed to load linked user', 500);
       }
       const storedEmail = userData.user.email?.trim();
       const identityUpdate: MetadataRecord = githubProfileUpdate(
@@ -281,14 +261,18 @@ app.post('/exchange', async (c) => {
           '[AUTH] Failed to update linked GitHub user:',
           updateError.message,
         );
-        return errorResponse(c, 'Failed to update linked GitHub user', 500);
+        return errorResponse(
+          c.req.raw,
+          'Failed to update linked GitHub user',
+          500,
+        );
       }
       if (!storedEmail) {
         const boundEmail = updatedUser?.user?.email?.trim();
         if (!boundEmail) {
           console.error('[AUTH] GitHub email bind produced no stored email');
           return errorResponse(
-            c,
+            c.req.raw,
             'Failed to bind verified GitHub email to linked account',
             500,
           );
@@ -320,7 +304,7 @@ app.post('/exchange', async (c) => {
             '[AUTH] Failed to update email-matched GitHub user:',
             updateError.message,
           );
-          return errorResponse(c, 'Failed to update GitHub user', 500);
+          return errorResponse(c.req.raw, 'Failed to update GitHub user', 500);
         }
       } else {
         // New user — enforce sign-up policy (existing users are never re-checked).
@@ -329,7 +313,7 @@ app.post('/exchange', async (c) => {
           console.warn(
             `[AUTH] Sign-up rejected for GitHub ${githubUser.login} (${email}): ${emailDecision.reason}`,
           );
-          return errorResponse(c, emailDecision.userMessage, 403);
+          return errorResponse(c.req.raw, emailDecision.userMessage, 403);
         }
 
         const ageDecision = checkGitHubAccountAge(githubUser.created_at);
@@ -337,7 +321,7 @@ app.post('/exchange', async (c) => {
           console.warn(
             `[AUTH] Sign-up rejected for GitHub ${githubUser.login} (${email}): ${ageDecision.reason}`,
           );
-          return errorResponse(c, ageDecision.userMessage, 403);
+          return errorResponse(c.req.raw, ageDecision.userMessage, 403);
         }
 
         // Create new user
@@ -349,7 +333,7 @@ app.post('/exchange', async (c) => {
         });
 
         if (error || !newUser?.user) {
-          return errorResponse(c, 'Failed to create user', 500);
+          return errorResponse(c.req.raw, 'Failed to create user', 500);
         }
         userId = newUser.user.id;
         userEmail = newUser.user.email ?? email;
@@ -385,15 +369,11 @@ app.post('/exchange', async (c) => {
       supabase,
       c.get('authClient'),
       userEmail,
+      userId,
+      '[AUTH]',
     );
     if (!session) {
-      return errorResponse(c, 'Failed to create session', 500);
-    }
-    if (session.user.id !== userId) {
-      console.error(
-        `[AUTH] Session user mismatch: resolved ${userId}, minted ${session.user.id}`,
-      );
-      return errorResponse(c, 'Failed to create session', 500);
+      return errorResponse(c.req.raw, 'Failed to create session', 500);
     }
 
     console.log(`[AUTH] Exchange successful for user ${userId}`);
@@ -401,7 +381,7 @@ app.post('/exchange', async (c) => {
     return jsonResponse(c.req.raw, sessionResponseBody(session), 200);
   } catch (error) {
     console.error('[AUTH] Exchange error:', error);
-    return errorResponse(c, 'Internal server error', 500);
+    return errorResponse(c.req.raw, 'Internal server error', 500);
   }
 });
 
@@ -412,7 +392,7 @@ app.post('/refresh', async (c) => {
   try {
     const body = await c.req.json().catch(() => null);
     if (!body?.refresh_token) {
-      return errorResponse(c, 'refresh_token required', 400);
+      return errorResponse(c.req.raw, 'refresh_token required', 400);
     }
 
     const { data, error } = await c.get('authClient').auth.refreshSession({
@@ -420,7 +400,7 @@ app.post('/refresh', async (c) => {
     });
 
     if (error || !data.session) {
-      return errorResponse(c, 'Invalid refresh token', 401);
+      return errorResponse(c.req.raw, 'Invalid refresh token', 401);
     }
 
     console.log(`[AUTH] Refresh successful for user ${data.session.user.id}`);
@@ -428,11 +408,11 @@ app.post('/refresh', async (c) => {
     return jsonResponse(c.req.raw, sessionResponseBody(data.session), 200);
   } catch (error) {
     console.error('[AUTH] Refresh error:', error);
-    return errorResponse(c, 'Internal server error', 500);
+    return errorResponse(c.req.raw, 'Internal server error', 500);
   }
 });
 
 // 404 for other routes
-app.all('*', (c) => errorResponse(c, 'Not found', 404));
+app.all('*', (c) => errorResponse(c.req.raw, 'Not found', 404));
 
 Deno.serve(app.fetch);

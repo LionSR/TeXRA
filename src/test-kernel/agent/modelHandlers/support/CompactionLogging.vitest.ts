@@ -1,26 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { logCompactionActivity, type AgentTrace } from '@agent/trace';
+import { logCompactionActivity } from '@agent/trace';
 import { logCompactionEvent } from '@agent/modelHandlers/support/compactionLogging';
-
-function captureTrace(): {
-  trace: AgentTrace;
-  events: Array<{ key: string; text?: string; data?: unknown }>;
-} {
-  const events: Array<{ key: string; text?: string; data?: unknown }> = [];
-  return {
-    events,
-    trace: {
-      domain(event: { key: string; text?: string; data?: unknown }) {
-        events.push(event);
-      },
-    } as AgentTrace,
-  };
-}
+import { spiedTrace } from '@test/support/spiedTrace';
 
 describe('logCompactionEvent', () => {
   it('marks client-side compaction token counts as estimated', () => {
-    const { trace, events } = captureTrace();
+    const events: Array<{ key: string; text?: string; data?: unknown }> = [];
+    const trace = spiedTrace({ domain: (event) => events.push(event) });
 
     logCompactionEvent({
       logger: trace,
@@ -49,7 +36,8 @@ describe('logCompactionEvent', () => {
   });
 
   it('logs measured compaction token counts without an estimate marker', () => {
-    const { trace, events } = captureTrace();
+    const events: Array<{ key: string; text?: string; data?: unknown }> = [];
+    const trace = spiedTrace({ domain: (event) => events.push(event) });
 
     logCompactionEvent({
       logger: trace,
@@ -74,8 +62,8 @@ describe('logCompactionEvent', () => {
 
 describe('logCompactionActivity', () => {
   it('emits typed start and finish progress markers', () => {
-    const info = vi.fn();
-    const trace = { info } as unknown as AgentTrace;
+    const trace = spiedTrace();
+    const info = vi.mocked(trace.info);
 
     logCompactionActivity(trace, 'started');
     logCompactionActivity(trace, 'finished');

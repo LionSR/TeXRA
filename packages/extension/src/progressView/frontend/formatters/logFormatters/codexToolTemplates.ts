@@ -21,6 +21,8 @@ import { formatDuration } from '@utils/core';
 
 // Local imports - formatter helpers
 import {
+  buildFileLinkSpan,
+  buildStatusBadge,
   buildToolUseSection,
   wrapInPre,
   SPINNER_ICON_NAME,
@@ -48,15 +50,6 @@ type CodexInputDisplay = z.infer<typeof CodexInputDisplaySchema>;
 type CodexFileChangeToolInput = z.infer<typeof CodexFileChangeToolInputSchema>;
 type CodexTodoToolInput = z.infer<typeof CodexTodoToolInputSchema>;
 
-function renderBadge({ iconName, label }: BadgeData): TemplateResult {
-  const iconTemplate =
-    iconName === SPINNER_ICON_NAME
-      ? html`<wa-spinner></wa-spinner>`
-      : waIcon(iconName);
-  // prettier-ignore
-  return html`<wa-badge variant="neutral" appearance="filled">${iconTemplate} ${label}</wa-badge>`;
-}
-
 function renderBadgeSection(
   label: string,
   badges: BadgeData[],
@@ -70,7 +63,7 @@ function renderBadgeSection(
     html`${repeat(
       badges,
       (badge) => `${badge.iconName}:${badge.label}`,
-      renderBadge,
+      (badge) => buildStatusBadge(badge.iconName, badge.label),
     )}`,
   );
 }
@@ -139,14 +132,7 @@ function renderCodexFileChangeItem(
 ): TemplateResult {
   return html`
     <li class="detail-item">
-      ${waIcon('file')}
-      <span
-        class="file-link clickable-link"
-        data-file=${change.path}
-        role="button"
-        tabindex="0"
-        >${change.path}</span
-      >
+      ${waIcon('file')} ${buildFileLinkSpan(change.path, change.path)}
       <span class="file-source">(${change.kind})</span>
     </li>
   `;

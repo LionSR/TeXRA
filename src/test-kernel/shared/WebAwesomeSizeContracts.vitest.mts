@@ -5,6 +5,9 @@ import * as path from 'node:path';
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
+// Local imports - test utilities
+import { REPO_ROOT } from '@test/support/repoScan';
+
 const UI_ROOTS = [
   'packages/desktop/src',
   'packages/extension/src/progressView/frontend',
@@ -26,7 +29,7 @@ function collectSourceFiles(directory: string): string[] {
 describe('Web Awesome size contracts', () => {
   it('uses the current xs/s/m/l/xl size scale throughout shared UI code', () => {
     for (const root of UI_ROOTS) {
-      for (const file of collectSourceFiles(path.join(process.cwd(), root))) {
+      for (const file of collectSourceFiles(path.join(REPO_ROOT, root))) {
         expect(readFileSync(file, 'utf8'), file).not.toMatch(DEPRECATED_SIZE);
       }
     }

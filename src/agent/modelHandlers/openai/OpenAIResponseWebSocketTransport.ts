@@ -20,10 +20,7 @@ import {
 } from '@common/errors/sdkErrorUtils';
 
 import { ResponseStreamProcessor } from './ResponseStreamProcessor';
-import {
-  getStreamEventResponseId,
-  isTextDeltaEvent,
-} from './responseStreamEvents';
+import { getStreamEventResponseId } from './responseStreamEvents';
 import type {
   Response,
   ResponseCompletedEvent,
@@ -59,19 +56,15 @@ interface OpenAIResponseWebSocketTransportDeps {
   createStreamProcessor(): ResponseStreamProcessor;
 }
 
-/** Result of {@link OpenAIResponseWebSocketTransport.execute}: the API response plus its stream processor for deferred finalization. */
+/**
+ * Result of {@link OpenAIResponseWebSocketTransport.execute}: the API response
+ * plus its stream processor, which holds the deferred finalization state and
+ * the accumulated output items/text the caller needs to rebuild a sparse
+ * completed response.
+ */
 interface WebSocketExecutionResult {
   response: Response;
   processor: ResponseStreamProcessor;
-  /**
-   * Output items collected from `response.output_item.done` events, and text
-   * from the deltas. Some backends (the Codex subscription endpoint) leave the
-   * completed response's `output`/`output_text` empty, so the caller rebuilds
-   * them from these — otherwise the whole turn, tool calls included, is dropped.
-   * Mirrors the HTTP streaming path.
-   */
-  streamedItems: Response['output'];
-  streamedText: string;
 }
 
 export class OpenAIResponseWebSocketTransport {
@@ -220,14 +213,6 @@ export class OpenAIResponseWebSocketTransport {
 
     const processor = this.deps.createStreamProcessor();
     this.activeRequestSocket = ws;
-    // Accumulate text deltas so we can attach a tail to the error on reject,
-    // mirroring the HTTP streaming path. Without this, a WebSocket failure
-    // mid-response would lose any text that had already been generated.
-    let streamedText = '';
-    // Each `output_item.done` carries one complete output item (message, tool
-    // call, or reasoning). The Codex subscription endpoint leaves the completed
-    // response's `output` empty, so we keep these to rebuild it in the caller.
-    const streamedItems: Response['output'] = [];
 
     return new Promise<WebSocketExecutionResult>((resolve, reject) => {
       let settled = false;
@@ -278,11 +263,6 @@ export class OpenAIResponseWebSocketTransport {
         }
 
         processor.process(e);
-        if (isTextDeltaEvent(e)) {
-          streamedText += e.delta;
-        } else if (e.type === 'response.output_item.done') {
-          streamedItems.push(e.item);
-        }
       };
 
       /**
@@ -305,6 +285,10 @@ export class OpenAIResponseWebSocketTransport {
           this.closeWebSocket();
         }
         processor.abort();
+        // Attach the tail the processor accumulated, mirroring the HTTP
+        // streaming path. Without it, a WebSocket failure mid-response would
+        // lose any text that had already been generated.
+        const { streamedText } = processor;
         if (streamedText) {
           attachPartialText(err, takeTail(streamedText, PARTIAL_TEXT_TAIL_MAX));
         }
@@ -317,7 +301,7 @@ export class OpenAIResponseWebSocketTransport {
         cleanup();
         // Stream finalization is deferred to the caller so that background
         // polling (if needed) can replace the response before streams close.
-        resolve({ response, processor, streamedItems, streamedText });
+        resolve({ response, processor });
       };
 
       const onCompleted = (event: ResponseCompletedEvent): void =>

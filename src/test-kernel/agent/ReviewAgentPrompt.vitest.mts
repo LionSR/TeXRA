@@ -1,16 +1,13 @@
 // Node imports
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 import * as yaml from 'yaml';
 
-const REPO_ROOT = resolve(
-  fileURLToPath(new URL('.', import.meta.url)),
-  '../../..',
-);
+// Local imports
+import { REPO_ROOT } from '@test/support/repoScan';
 
 interface ReviewAgentYaml {
   settings: {
@@ -21,19 +18,17 @@ interface ReviewAgentYaml {
   };
 }
 
-function readReviewAgent(): ReviewAgentYaml {
-  const text = readFileSync(
+const agent = yaml.parse(
+  readFileSync(
     resolve(
       REPO_ROOT,
       'packages/extension/resources/tool_use_agents/review.yaml',
     ),
     'utf8',
-  );
-  return yaml.parse(text) as ReviewAgentYaml;
-}
+  ),
+) as ReviewAgentYaml;
 
 describe('review agent prompt', () => {
-  const agent = readReviewAgent();
   const systemPrompt = agent.prompts.systemPrompt;
 
   it('returns audit reports in-band unless the user requested a file', () => {

@@ -2,16 +2,12 @@
 import * as vscode from 'vscode';
 
 // Local imports
+import { runGuardedLatexCommand } from '@commands/_shared/latexCommandGuard';
 import {
   showLoggedErrorMessage,
   showLoggedInfoMessage,
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
-import {
-  withLaTeXGuard,
-  type ActiveFileGuardSuccess,
-  type LaTeXGuardOptions,
-} from '@frontend/editor/activeFileGuards';
 import { runLatexFormatter } from '@latex/texFormatter';
 import {
   getTeXCount,
@@ -25,26 +21,12 @@ import replacementEngine from '@replacement/engine';
 import { AgentCategory } from '@shared/schemas';
 import { delay } from '@utils/core';
 
-import { getIndentTeXNotification } from './latexHousekeepingNotifications';
+import {
+  getIndentTeXNotification,
+  showLatexHousekeepingNotification,
+} from './latexHousekeepingNotifications';
 
 const CHANNEL = 'LaTeXCommands';
-
-/**
- * Run a LaTeX entry-point command under the active-file guard, surfacing any
- * thrown error through the shared channel logger. Centralizes the
- * `try/withLaTeXGuard/catch` boilerplate every guarded command repeats.
- */
-async function runGuardedLatexCommand(
-  guard: Omit<LaTeXGuardOptions, 'channel'>,
-  errorMessage: string,
-  operation: (guardResult: ActiveFileGuardSuccess) => Promise<void>,
-): Promise<void> {
-  try {
-    await withLaTeXGuard({ channel: CHANNEL, ...guard }, operation);
-  } catch (err) {
-    await showLoggedErrorMessage(CHANNEL, errorMessage, err);
-  }
-}
 
 export async function handleIndentTeX(): Promise<void> {
   try {
@@ -52,16 +34,7 @@ export async function handleIndentTeX(): Promise<void> {
       await indentLatexFilesInDirectory(),
     );
     if (!notification) return;
-
-    if (notification.severity === 'error') {
-      await showLoggedErrorMessage(
-        CHANNEL,
-        notification.message,
-        notification.error,
-      );
-    } else {
-      await showLoggedMessage(CHANNEL, notification.message);
-    }
+    await showLatexHousekeepingNotification(CHANNEL, notification);
   } catch (err) {
     await showLoggedErrorMessage(CHANNEL, 'Error in indentTeX command', err);
   }
@@ -69,8 +42,12 @@ export async function handleIndentTeX(): Promise<void> {
 
 export async function handleFixCompilation(): Promise<void> {
   await runGuardedLatexCommand(
-    { action: 'fix compilation', saveDocument: true },
-    'Error launching LaTeX compilation fixer',
+    {
+      channel: CHANNEL,
+      action: 'fix compilation',
+      saveDocument: true,
+      errorMessage: 'Error launching LaTeX compilation fixer',
+    },
     async ({ editor, relativePath }) => {
       logger.info(
         CHANNEL,
@@ -97,8 +74,12 @@ export async function handleFixCompilation(): Promise<void> {
 
 export async function handleApplyReplacements(): Promise<void> {
   await runGuardedLatexCommand(
-    { action: 'apply replacements', saveDocument: true },
-    'Error applying LaTeX replacements',
+    {
+      channel: CHANNEL,
+      action: 'apply replacements',
+      saveDocument: true,
+      errorMessage: 'Error applying LaTeX replacements',
+    },
     async ({ editor }) => {
       const document = editor.document;
       const text = document.getText();
@@ -123,8 +104,12 @@ export async function handleApplyReplacements(): Promise<void> {
 
 export async function handleIndentCurrentTeX(): Promise<void> {
   await runGuardedLatexCommand(
-    { action: 'indent LaTeX document', saveDocument: true },
-    'Error in indentTeX command',
+    {
+      channel: CHANNEL,
+      action: 'indent LaTeX document',
+      saveDocument: true,
+      errorMessage: 'Error in indentTeX command',
+    },
     async ({ relativePath }) => {
       logger.debug(CHANNEL, `Indenting LaTeX file: ${relativePath}`);
 
@@ -145,8 +130,11 @@ export async function handleIndentCurrentTeX(): Promise<void> {
 
 export async function handleGetTeXCount(): Promise<void> {
   await runGuardedLatexCommand(
-    { action: 'get TeX count' },
-    'Error getting tex count',
+    {
+      channel: CHANNEL,
+      action: 'get TeX count',
+      errorMessage: 'Error getting tex count',
+    },
     async ({ relativePath }) => {
       logger.debug(CHANNEL, `Getting tex count for: ${relativePath}`);
 

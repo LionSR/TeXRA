@@ -9,6 +9,9 @@
 // and disposed by the renderer; this module only describes what is visible.
 
 import type { TeXRAIconName } from '@shared/wa/iconNames';
+import { getBasename } from '@utils/core';
+
+import type { DesktopRoute } from './desktopShellMessages.js';
 
 export const WORKBENCH_KINDS = [
   'editor',
@@ -162,11 +165,6 @@ function activateWorkbenchTab(
   return { ...state, activeWorkbenchTabIds };
 }
 
-function basename(filePath: string): string {
-  const normalized = filePath.replaceAll('\\', '/').replace(/\/+$/, '');
-  return normalized.split('/').findLast(Boolean) ?? filePath;
-}
-
 function tabId(kind: WorkbenchKind, target?: string): string {
   if (WORKBENCH_KIND_META[kind].singleton) return `workbench:${kind}`;
   return target ? `workbench:${kind}:${target}` : `workbench:${kind}`;
@@ -174,7 +172,7 @@ function tabId(kind: WorkbenchKind, target?: string): string {
 
 function titleFor(kind: WorkbenchKind, target?: string): string {
   return kind === 'editor' && target
-    ? basename(target)
+    ? getBasename(target)
     : WORKBENCH_KIND_META[kind].label;
 }
 
@@ -464,7 +462,7 @@ export function setWorkbenchWidth(
 }
 
 export function workbenchKindForRoute(
-  route: 'main' | 'progress' | 'settings' | 'logs',
+  route: DesktopRoute,
 ): WorkbenchKind | undefined {
   if (route === 'settings') return 'settings';
   if (route === 'logs') return 'logs';
@@ -473,8 +471,7 @@ export function workbenchKindForRoute(
 
 export function workspaceInitials(workspacePath: string | undefined): string {
   if (!workspacePath) return 'TX';
-  const normalized = workspacePath.replaceAll('\\', '/').replace(/\/+$/, '');
-  const name = normalized.split('/').findLast(Boolean);
+  const name = getBasename(workspacePath);
   if (!name) return 'TX';
   const words = name.split(/[\s._-]+/).filter(Boolean);
   const initials = words
@@ -486,5 +483,5 @@ export function workspaceInitials(workspacePath: string | undefined): string {
 
 export function workspaceName(workspacePath: string | undefined): string {
   if (!workspacePath) return 'No project open';
-  return basename(workspacePath);
+  return getBasename(workspacePath);
 }

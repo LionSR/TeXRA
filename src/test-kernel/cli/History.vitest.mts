@@ -119,6 +119,30 @@ const config = {
 
 const tempDirs: string[] = [];
 
+function mockToolUseWorkspace(workspace: string): void {
+  mocks.readConfig.mockResolvedValue({
+    ...config,
+    agentCategory: 'toolUse',
+    workingDirectory: workspace,
+  });
+}
+
+// Provider-shaped assistant turn carrying tool calls. `args` is passed through
+// verbatim so callers can cover both JSON-string and object argument encodings.
+function mockToolCallConversation(
+  ...calls: ReadonlyArray<{ name: string; args: unknown }>
+): void {
+  mocks.readConversation.mockResolvedValue([
+    {
+      role: 'assistant',
+      tool_calls: calls.map(({ name, args }) => ({
+        type: 'function',
+        function: { name, arguments: args },
+      })),
+    },
+  ]);
+}
+
 describe('CLI history runtime', () => {
   beforeEach(async () => {
     const [{ initPlatform }, { nodeFilesystem }, { createFakePlatform }] =
@@ -789,26 +813,12 @@ describe('CLI history runtime', () => {
   it('surfaces persisted workspace files without parsing provider messages', async () => {
     const workspace = await makeTempDir('texra-history-', tempDirs);
     await writeFile(path.join(workspace, 'durable.md'), '# durable');
-    mocks.readConfig.mockResolvedValue({
-      ...config,
-      agentCategory: 'toolUse',
-      workingDirectory: workspace,
-    });
+    mockToolUseWorkspace(workspace);
     mocks.readWorkspaceFiles.mockResolvedValue(['durable.md']);
-    mocks.readConversation.mockResolvedValue([
-      {
-        role: 'assistant',
-        tool_calls: [
-          {
-            type: 'function',
-            function: {
-              name: 'write_file',
-              arguments: JSON.stringify({ path: 'legacy.md' }),
-            },
-          },
-        ],
-      },
-    ]);
+    mockToolCallConversation({
+      name: 'write_file',
+      args: JSON.stringify({ path: 'legacy.md' }),
+    });
 
     const details = await readCliHistoryDetails('a1' as ExecutionId);
 
@@ -822,11 +832,7 @@ describe('CLI history runtime', () => {
     await mkdir(path.join(workspace, 'workspace'));
     await writeFile(path.join(workspace, 'review.md'), 'wrong');
     await writeFile(path.join(workspace, 'workspace', 'review.md'), 'nested');
-    mocks.readConfig.mockResolvedValue({
-      ...config,
-      agentCategory: 'toolUse',
-      workingDirectory: workspace,
-    });
+    mockToolUseWorkspace(workspace);
     mocks.readWorkspaceFiles.mockResolvedValue(['workspace/review.md']);
 
     const details = await readCliHistoryDetails('a1' as ExecutionId);
@@ -840,39 +846,17 @@ describe('CLI history runtime', () => {
     const workspace = await makeTempDir('texra-history-', tempDirs);
     await writeFile(path.join(workspace, 'review.md'), '# report');
     await writeFile(path.join(workspace, 'draft.tex'), 'old text');
-    mocks.readConfig.mockResolvedValue({
-      ...config,
-      agentCategory: 'toolUse',
-      workingDirectory: workspace,
-    });
-    mocks.readConversation.mockResolvedValue([
+    mockToolUseWorkspace(workspace);
+    mockToolCallConversation(
       {
-        role: 'assistant',
-        tool_calls: [
-          {
-            type: 'function',
-            function: {
-              name: 'write_file',
-              arguments: JSON.stringify({
-                path: 'review.md',
-                content: '# report',
-              }),
-            },
-          },
-          {
-            type: 'function',
-            function: {
-              name: 'edit_file',
-              arguments: {
-                path: 'draft.tex',
-                old_str: 'old',
-                new_str: 'new',
-              },
-            },
-          },
-        ],
+        name: 'write_file',
+        args: JSON.stringify({ path: 'review.md', content: '# report' }),
       },
-    ]);
+      {
+        name: 'edit_file',
+        args: { path: 'draft.tex', old_str: 'old', new_str: 'new' },
+      },
+    );
 
     const details = await readCliHistoryDetails('a1' as ExecutionId);
 
@@ -888,11 +872,7 @@ describe('CLI history runtime', () => {
   it('surfaces workspace files from Responses function call records', async () => {
     const workspace = await makeTempDir('texra-history-', tempDirs);
     await writeFile(path.join(workspace, 'response.md'), 'response');
-    mocks.readConfig.mockResolvedValue({
-      ...config,
-      agentCategory: 'toolUse',
-      workingDirectory: workspace,
-    });
+    mockToolUseWorkspace(workspace);
     mocks.readConversation.mockResolvedValue([
       {
         type: 'function_call',
@@ -913,11 +893,7 @@ describe('CLI history runtime', () => {
     const workspace = await makeTempDir('texra-history-', tempDirs);
     await mkdir(path.join(workspace, 'subdir'));
     await writeFile(path.join(workspace, 'subdir', 'gemini.md'), 'gemini');
-    mocks.readConfig.mockResolvedValue({
-      ...config,
-      agentCategory: 'toolUse',
-      workingDirectory: workspace,
-    });
+    mockToolUseWorkspace(workspace);
     mocks.readConversation.mockResolvedValue([
       {
         role: 'model',
@@ -946,39 +922,12 @@ describe('CLI history runtime', () => {
     const outsidePath = path.join(root, 'outside.md');
     await mkdir(workspace);
     await writeFile(outsidePath, 'outside');
-    mocks.readConfig.mockResolvedValue({
-      ...config,
-      agentCategory: 'toolUse',
-      workingDirectory: workspace,
-    });
-    mocks.readConversation.mockResolvedValue([
-      {
-        role: 'assistant',
-        tool_calls: [
-          {
-            type: 'function',
-            function: {
-              name: 'write_file',
-              arguments: JSON.stringify({ path: '../outside.md' }),
-            },
-          },
-          {
-            type: 'function',
-            function: {
-              name: 'edit_file',
-              arguments: JSON.stringify({ path: outsidePath }),
-            },
-          },
-          {
-            type: 'function',
-            function: {
-              name: 'write_file',
-              arguments: JSON.stringify({ path: 'missing.md' }),
-            },
-          },
-        ],
-      },
-    ]);
+    mockToolUseWorkspace(workspace);
+    mockToolCallConversation(
+      { name: 'write_file', args: JSON.stringify({ path: '../outside.md' }) },
+      { name: 'edit_file', args: JSON.stringify({ path: outsidePath }) },
+      { name: 'write_file', args: JSON.stringify({ path: 'missing.md' }) },
+    );
 
     const details = await readCliHistoryDetails('a1' as ExecutionId);
 

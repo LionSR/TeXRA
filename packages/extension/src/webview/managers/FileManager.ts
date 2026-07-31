@@ -21,10 +21,7 @@ import {
   MULTIPLE_FILE_COMMANDS,
 } from '@frontend/files/fileSelectionRegistry';
 import { selectFiles } from '@frontend/ui/dialogs';
-import {
-  showLoggedErrorMessage,
-  toErrorMessage,
-} from '@frontend/ui/errorHandlingUtils';
+import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
 import * as logger from '@logger/logUtils';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
@@ -36,6 +33,7 @@ import {
 } from '@shared/schemas/fileTypes';
 import { getFileStem } from '@utils/core';
 import { WorkspaceFS } from '@utils/files';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';
 import { formatResultCount } from '@utils/text/stringUtils';
 

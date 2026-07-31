@@ -7,12 +7,15 @@
  */
 
 import { html, type TemplateResult } from 'lit';
+import { classMap, type ClassInfo } from 'lit/directives/class-map.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
 import { TOOL_OUTPUT_LANGUAGES } from '@progressView/frontend/formatters/constants';
 import {
   buildToolUseSection,
+  buildDetailsSummary,
   wrapInPre,
   buildCodeBlock,
+  SPINNER_ICON_NAME,
 } from '@progressView/frontend/formatters/htmlBuilders';
 import type { LogMessageData } from '@shared/schemas';
 import {
@@ -21,6 +24,7 @@ import {
   EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS,
   EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS,
 } from '@shared/toolUse';
+import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { clamp, isObject } from '@utils/core';
 import {
   collapseWhitespace,
@@ -33,6 +37,7 @@ import '@progressView/frontend/components/TerminalOutput';
 
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/badge/badge.js';
+import '@awesome.me/webawesome/dist/components/details/details.js';
 
 /** Known per-tool default timeouts (ms) for display in the running timer. */
 const TOOL_DEFAULT_TIMEOUTS: Record<string, number> = {
@@ -95,13 +100,39 @@ export function truncateHeaderSummary(text: string, maxLength: number): string {
 }
 
 /** Build the banner content wrapper shared by tool-use and web-search entries. */
-export function buildBannerContent(
+function buildBannerContent(
   message: Pick<LogMessageData, 'id' | 'groupId' | 'timestamp'>,
   contentTemplate: TemplateResult,
 ): TemplateResult {
   const fullTimestamp = new Date(message.timestamp).toISOString();
   // prettier-ignore
   return html`<div class="banner-content log-entry-content" data-log-id=${ifDefined(message.id)} data-group-id=${ifDefined(message.groupId)} data-timestamp=${ifDefined(fullTimestamp)}>${contentTemplate}</div>`;
+}
+
+/**
+ * Wrap formatted tool content in the collapsible banner shell shared by the
+ * tool-use, web-search, and web-fetch entries. `extraClasses` and
+ * `extraContent` carry the tool-use-only state flags and summary-row controls.
+ */
+export function buildToolUseDetails(opts: {
+  message: Pick<LogMessageData, 'id' | 'groupId' | 'timestamp'>;
+  iconName: TeXRAIconName | typeof SPINNER_ICON_NAME;
+  label: string;
+  isError: boolean;
+  content: TemplateResult;
+  defaultOpen?: boolean;
+  extraClasses?: ClassInfo;
+  extraContent?: TemplateResult;
+}): TemplateResult {
+  const bannerContentTemplate = buildBannerContent(opts.message, opts.content);
+  const classes: ClassInfo = {
+    'banner-details': true,
+    'tool-use-details': true,
+    'tool-use-error': opts.isError,
+    ...opts.extraClasses,
+  };
+  // prettier-ignore
+  return html`<wa-details appearance="plain" icon-placement="start" class=${classMap(classes)} ?open=${opts.defaultOpen ?? false}>${buildDetailsSummary({ iconName: opts.iconName, label: opts.label, labelClass: 'tool-use-title', extraContent: opts.extraContent })}${bannerContentTemplate}</wa-details>`;
 }
 
 /** Extract typed edits array from parsed tool output, if present. */

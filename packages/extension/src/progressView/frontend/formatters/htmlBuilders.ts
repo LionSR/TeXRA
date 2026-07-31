@@ -7,6 +7,9 @@
  * templates with `// prettier-ignore` to prevent whitespace issues.
  */
 
+// Side-effect imports - register WA components
+import '@awesome.me/webawesome/dist/components/badge/badge.js';
+
 // Third-party imports - use optimized hljs with only TeXRA-relevant languages
 import { html, nothing, type TemplateResult } from 'lit';
 import { classMap } from 'lit/directives/class-map.js';
@@ -129,6 +132,30 @@ function buildCopyButton(
  */
 export const SPINNER_ICON_NAME = '__spinner__';
 
+/**
+ * Render a `<wa-icon>`, or a `<wa-spinner>` when the sentinel
+ * {@link SPINNER_ICON_NAME} is passed.
+ */
+function renderIconOrSpinner(
+  iconName: TeXRAIconName | typeof SPINNER_ICON_NAME,
+  className?: string,
+): TemplateResult {
+  if (iconName === SPINNER_ICON_NAME) {
+    // prettier-ignore
+    return html`<wa-spinner class=${ifDefined(className)}></wa-spinner>`;
+  }
+  return waIcon(iconName, { className });
+}
+
+/** Build a neutral filled badge with a leading icon (or spinner). */
+export function buildStatusBadge(
+  iconName: TeXRAIconName | typeof SPINNER_ICON_NAME,
+  label: string,
+): TemplateResult {
+  // prettier-ignore
+  return html`<wa-badge variant="neutral" appearance="filled">${renderIconOrSpinner(iconName)} ${label}</wa-badge>`;
+}
+
 /** Options for building a details summary header. */
 export interface DetailsSummaryOptions {
   /** wa-icon name (codicon-style aliases supported), or {@link SPINNER_ICON_NAME}. */
@@ -162,10 +189,7 @@ export function buildDetailsSummary(
     copyButton,
     extraContent,
   } = options;
-  const iconTemplate =
-    iconName === SPINNER_ICON_NAME
-      ? html`<wa-spinner class="icon"></wa-spinner>`
-      : waIcon(iconName, { className: 'icon' });
+  const iconTemplate = renderIconOrSpinner(iconName, 'icon');
   // prettier-ignore
   const timestampTemplate = timestamp
     ? html` <span class="timestamp" title=${timestamp.tooltip}>${timestamp.display}</span>`
@@ -176,6 +200,20 @@ export function buildDetailsSummary(
   const extraTemplate = extraContent ?? nothing;
   // prettier-ignore
   return html`<div slot="summary" class="details-summary">${iconTemplate} <span class=${labelClass}>${label}</span>${extraTemplate}${timestampTemplate}${copyTemplate}</div>`;
+}
+
+/**
+ * Build the clickable file-path span the webview's delegated click handler
+ * turns into an editor navigation. `content` is the visible label; pass
+ * `startLine` to target a line within the file.
+ */
+export function buildFileLinkSpan(
+  filePath: string,
+  content: unknown,
+  options: { startLine?: number } = {},
+): TemplateResult {
+  // prettier-ignore
+  return html`<span class="file-link clickable-link" data-file=${filePath} data-file-line=${ifDefined(options.startLine)} role="button" tabindex="0">${content}</span>`;
 }
 
 /** Build rendered templates for file list. */
@@ -196,7 +234,7 @@ export function buildFileListRender(files: FileListEntry[]): {
     const sourceText = file.sourceDisplay ?? source;
 
     // prettier-ignore
-    return html`<li class="detail-item" title=${filePath}>${waIcon(iconName)} <span class="file-link clickable-link" data-file=${filePath} role="button" tabindex="0">${fileName}</span>${file.varName ? html` <span class="file-var">[${file.varName}]</span>` : ''}${showSource ? html` <span class="file-source">(${sourceText})</span>` : ''}</li>`;
+    return html`<li class="detail-item" title=${filePath}>${waIcon(iconName)} ${buildFileLinkSpan(filePath, fileName)}${file.varName ? html` <span class="file-var">[${file.varName}]</span>` : ''}${showSource ? html` <span class="file-source">(${sourceText})</span>` : ''}</li>`;
   })}`;
 
   const loadedFiles = files.filter((file) => file.ok).length;
@@ -303,8 +341,9 @@ export function buildFileLinkWithLines(
         : `:${startLine}`;
   }
 
-  // prettier-ignore
-  return html`<span class="file-link clickable-link" data-file=${filePath} data-file-line=${ifDefined(startLine)} role="button" tabindex="0">${waIcon('file')} ${displayText}</span>`;
+  return buildFileLinkSpan(filePath, html`${waIcon('file')} ${displayText}`, {
+    startLine,
+  });
 }
 
 // ============================================================================

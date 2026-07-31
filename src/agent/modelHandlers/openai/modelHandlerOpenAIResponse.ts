@@ -2071,7 +2071,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       signal,
     );
     let response = wsResult.response;
-    const processor = wsResult.processor;
+    const { processor } = wsResult;
 
     // Safety net: handle unexpected pending status (shouldn't happen without background mode)
     response = await this.awaitPendingResponse(
@@ -2095,8 +2095,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // returns a fully-populated response.)
     this.rebuildSparseResponseOutput(
       response,
-      wsResult.streamedItems,
-      wsResult.streamedText,
+      processor.streamedItems,
+      processor.streamedText,
     );
 
     // Finalize streams after background polling so the final text
@@ -2112,10 +2112,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   }
 
   /**
-   * Streaming path. Accumulates `output_text.delta` events so a mid-stream
-   * failure can surface the partial tail as structured error metadata (the
-   * Responses stream has no native currentMessage accessor). Polls to
-   * completion if the stream ends before the response finishes.
+   * Streaming path. The processor accumulates the streamed output items and
+   * text, so a mid-stream failure can surface the partial tail as structured
+   * error metadata (the Responses stream has no native currentMessage
+   * accessor). Polls to completion if the stream ends before the response
+   * finishes.
    */
   private async executeStreamingPath(
     params: ResponseCreateParamsBase,
@@ -2123,16 +2124,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     signal: AbortSignal | undefined,
     ctx: ResponseFinalizeContext,
   ): Promise<CreateResponseResult<Response, ResponseInputItem>> {
-    // Text accumulated from `response.output_text.delta` events; surfaced as
-    // partial text if the stream fails mid-flight.
-    let streamedText = '';
-    // Each `output_item.done` carries one complete output item (message, tool
-    // call, or reasoning). Some backends (the Codex subscription endpoint) leave
-    // the completed response's `output` empty, so we keep the items to rebuild
-    // it below — otherwise the whole turn, tool calls included, is dropped.
-    const streamedItems: Response['output'] = [];
     // Hoisted so the catch can finalize the progress streams on a mid-stream
-    // failure (otherwise the progress view hangs in a loading state).
+    // failure (otherwise the progress view hangs in a loading state) and read
+    // back the partial text.
     let processor: ResponseStreamProcessor | undefined;
     // Captured from `response.created` so a stream event outside the SDK's
     // typed union (see isUnhandledStreamEventError) can fall back to polling
@@ -2195,11 +2189,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
             responseId = event.response.id;
           }
           streamProcessor.process(event);
-          if (event.type === 'response.output_text.delta') {
-            streamedText += event.delta;
-          } else if (event.type === 'response.output_item.done') {
-            streamedItems.push(event.item);
-          }
         }
       } catch (streamError) {
         response = await retrieveAfterUnhandledStreamEvent(streamError);
@@ -2232,7 +2221,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         },
       );
 
-      this.rebuildSparseResponseOutput(response, streamedItems, streamedText);
+      this.rebuildSparseResponseOutput(
+        response,
+        processor.streamedItems,
+        processor.streamedText,
+      );
 
       processor.finalize(response);
 
@@ -2254,8 +2247,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         finalizeOnError: () => processor?.abort(),
         // Attach a capped tail of any streamed text before it propagates so
         // the retry UI receives the same structured error shape downstream.
-        partialTail: () =>
-          streamedText ? takeTail(streamedText, PARTIAL_TEXT_TAIL_MAX) : '',
+        partialTail: () => {
+          const streamedText = processor?.streamedText ?? '';
+          return streamedText
+            ? takeTail(streamedText, PARTIAL_TEXT_TAIL_MAX)
+            : '';
+        },
       });
     }
   }

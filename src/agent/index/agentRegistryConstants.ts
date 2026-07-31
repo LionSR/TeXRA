@@ -1,10 +1,6 @@
-/** Source priorities and preferred-agent lists for the agent registry. */
+/** Source priorities and legacy aliases for the agent registry. */
 
 import type { AgentSource } from '@shared/schemas/agent';
-export {
-  BUILTIN_TEAM_ROOT_AGENT_NAMES,
-  PREFERRED_TOOL_USE_AGENTS,
-} from '@shared/constants/agents';
 
 /**
  * Source priority for lookups (higher priority first).

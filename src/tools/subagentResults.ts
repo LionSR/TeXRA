@@ -379,9 +379,7 @@ export function formatBashDelivery(
   stdout: BashDeliveryStreamExcerpt,
   stderr: BashDeliveryStreamExcerpt,
 ): string {
-  const tag = DELIVERY_TAG.backgroundResult;
   const lines = [
-    `<${tag} id="${escapeAttr(executionId)}" command="${escapeAttr(command)}">`,
     `<exit-code>${result.exitCode ?? 'unknown'}</exit-code>`,
     `<wall-time>${formatDuration(wallTimeMs)}</wall-time>`,
   ];
@@ -404,8 +402,14 @@ export function formatBashDelivery(
       lines.push(`<${name}-preview>${escapeText(preview)}</${name}-preview>`);
     }
   }
-  lines.push(`</${tag}>`);
-  return lines.join('\n');
+  return formatChildRunDelivery(
+    {
+      tag: DELIVERY_TAG.backgroundResult,
+      executionId,
+      attributes: [{ name: 'command', value: command }],
+    },
+    { lines },
+  );
 }
 
 /**
@@ -416,13 +420,14 @@ export function formatBashError(
   command: string,
   err: unknown,
 ): string {
-  const message = toErrorMessage(err);
-  const tag = DELIVERY_TAG.backgroundError;
-  return [
-    `<${tag} id="${escapeAttr(executionId)}" command="${escapeAttr(command)}">`,
-    `<message>${escapeText(message)}</message>`,
-    `</${tag}>`,
-  ].join('\n');
+  return formatChildRunError(
+    {
+      tag: DELIVERY_TAG.backgroundError,
+      executionId,
+      attributes: [{ name: 'command', value: command }],
+    },
+    { message: toErrorMessage(err) },
+  );
 }
 
 // ============================================================================

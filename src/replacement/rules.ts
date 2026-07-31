@@ -488,13 +488,11 @@ export const LATEX_XML_REPLACEMENTS: NonRegexReplacementCategory = {
       // =================================================================
 
       // ===== 1. LATEX TAG ENDING FIXES =====
-      // Fix LaTeX tags with incorrect XML-style ending (with '>')
+      // Fix LaTeX tags closed as XML-style end tags with a trailing '>'; the
+      // plain `\end{env>}`/`\end{env>` spellings already come from
+      // generateXmlLatexConversions above.
       ...Object.fromEntries(
-        LATEX_ENVIRONMENTS.flatMap((env) => [
-          [`\\end{${env}>}`, `\\end{${env}}`],
-          [`\\end{${env}>`, `\\end{${env}}`],
-          [`</end{${env}>`, `\\end{${env}}`],
-        ]),
+        LATEX_ENVIRONMENTS.map((env) => [`</end{${env}>`, `\\end{${env}}`]),
       ),
 
       // ===== 2. XML BRACE FIXES =====

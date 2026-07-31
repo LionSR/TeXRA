@@ -27,7 +27,7 @@ import {
 } from '../agent';
 import { AgentModePresetSchema } from '../agentPresets';
 import { AgentSkillsEnabledSchema } from '../agentSkills';
-import { ModelAvailabilityFieldsSchema } from '../mainView';
+import { ModelAvailabilityFieldsSchema } from '../mainView/state';
 import {
   NumberVscodeSettingSchema,
   UpdateProfileMessageSchema,

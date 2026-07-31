@@ -338,6 +338,27 @@ function createWindow(options: {
   const showInfoMessage = async (message: string) => {
     await dialog.showMessageBox(window, { type: 'info', message });
   };
+  // Shared shape for the "confirm this action" dialog: a warning with a
+  // confirm button (defaulted, id 0) and a 'Cancel' button (id 1), collapsed
+  // to a boolean. Used by confirmAcceptFile, the agent-settings confirm
+  // prompt, the credential-settings confirm prompt, and settingsUi.confirmAction.
+  const confirmDialog = async (options: {
+    message: string;
+    title?: string;
+    detail?: string;
+    confirmLabel?: string;
+  }): Promise<boolean> => {
+    const result = await dialog.showMessageBox(window, {
+      type: 'warning',
+      title: options.title,
+      message: options.message,
+      detail: options.detail,
+      buttons: [options.confirmLabel ?? 'OK', 'Cancel'],
+      defaultId: 0,
+      cancelId: 1,
+    });
+    return result.response === 0;
+  };
   /**
    * Sole owner of the "team has unavailable hosted members" prompt. Both the
    * main-view launch path and the settings path route here so the two can't
@@ -551,16 +572,8 @@ function createWindow(options: {
         return true;
       },
     }).openDiff,
-    confirmAcceptFile: async (message) => {
-      const result = await dialog.showMessageBox(window, {
-        type: 'warning',
-        message,
-        buttons: ['Yes', 'Cancel'],
-        defaultId: 0,
-        cancelId: 1,
-      });
-      return result.response === 0;
-    },
+    confirmAcceptFile: (message) =>
+      confirmDialog({ message, confirmLabel: 'Yes' }),
     chooseTeamAvailability: (unavailableNames) =>
       chooseTeamAvailability(unavailableNames),
     signInForRemoteAgentCatalog,
@@ -676,17 +689,8 @@ function createWindow(options: {
     },
     prompts: {
       promptText: (input) => promptController.request(input),
-      confirm: async ({ title, message }) => {
-        const result = await dialog.showMessageBox(window, {
-          type: 'warning',
-          title,
-          message,
-          buttons: ['Continue', 'Cancel'],
-          defaultId: 0,
-          cancelId: 1,
-        });
-        return result.response === 0;
-      },
+      confirm: ({ title, message }) =>
+        confirmDialog({ title, message, confirmLabel: 'Continue' }),
       chooseTeamAvailability: ({ presetName, unavailableNames }) =>
         chooseTeamAvailability(unavailableNames, presetName),
     },
@@ -713,17 +717,12 @@ function createWindow(options: {
             prompt: input.prompt ?? 'Enter API key',
             password: input.password,
           }),
-        confirm: async (message, promptOptions) => {
-          const result = await dialog.showMessageBox(window, {
-            type: 'warning',
+        confirm: (message, promptOptions) =>
+          confirmDialog({
             message,
             detail: promptOptions?.detail,
-            buttons: [promptOptions?.confirmLabel ?? 'OK', 'Cancel'],
-            defaultId: 0,
-            cancelId: 1,
-          });
-          return result.response === 0;
-        },
+            confirmLabel: promptOptions?.confirmLabel,
+          }),
       },
       externalOpener: {
         openExternal: previewHost.openExternal,
@@ -831,16 +830,8 @@ function createWindow(options: {
   const settingsUi: DesktopSettingsUiHost = {
     showInfoMessage,
     showErrorMessage,
-    confirmAction: async (message, confirmLabel = 'OK') => {
-      const result = await dialog.showMessageBox(window, {
-        type: 'warning',
-        message,
-        buttons: [confirmLabel, 'Cancel'],
-        defaultId: 0,
-        cancelId: 1,
-      });
-      return result.response === 0;
-    },
+    confirmAction: (message, confirmLabel) =>
+      confirmDialog({ message, confirmLabel }),
     openPath: previewHost.openPath,
     revealStream: async (streamId) => {
       try {

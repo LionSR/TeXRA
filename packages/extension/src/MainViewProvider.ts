@@ -158,7 +158,7 @@ export class MainViewProvider
    * Refresh both agent and model options.
    * Called when auth state changes (login/logout affects both).
    */
-  async refreshOptionsAndView() {
+  private async refreshOptionsAndView(): Promise<void> {
     await refresh();
     const view = this.getMainModeView();
     if (view) {
@@ -233,7 +233,7 @@ export class MainViewProvider
    * Refresh agent options only.
    * Called when agent visibility changes.
    */
-  async refreshAgentOptions() {
+  private async refreshAgentOptions(): Promise<void> {
     const view = this.getMainModeView();
     if (!view) return;
 
@@ -253,7 +253,7 @@ export class MainViewProvider
    * Refresh model options only.
    * Called via texra.refreshAllOptions when model selection changes in Settings View.
    */
-  async refreshModelOptions() {
+  private async refreshModelOptions(): Promise<void> {
     const view = this.getMainModeView();
     if (!view) return;
 

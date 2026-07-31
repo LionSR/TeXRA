@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { TaskStateSchema, type TaskState } from '@agent/core/state/TaskState';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import {
+  AgentConfigSchema,
+  type AgentConfig,
+} from '@agent/core/definition/AgentConfig';
 import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
 import { registerExecution } from '@agent/storage/executionLifecycle';
 import { releaseOwnedExecutionLease } from '@agent/storage/executionLease';
@@ -14,7 +17,6 @@ import {
   type TodoItem,
 } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas/agent';
-import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 import {
   cleanupTempDirs,
   createTempDirPlatform,
@@ -26,20 +28,12 @@ import {
   StreamSnapshotStore,
 } from '@transcript';
 
-const MINIMAL_CONFIG: AgentConfig = {
+const MINIMAL_CONFIG: AgentConfig = AgentConfigSchema.parse({
   agent: 'chat',
   model: 'deepseekproT',
   instruction: 'Check the proof.',
   agentCategory: AgentCategory.ToolUse,
-  inputFiles: [],
-  outputFiles: [],
-  contextFiles: [],
-  mediaFiles: [],
-  editedFile: null,
-  editedFiles: [],
-  memories: [],
-  toolConfig: DEFAULT_TOOL_CONFIG,
-};
+});
 
 const tempDirs: string[] = [];
 

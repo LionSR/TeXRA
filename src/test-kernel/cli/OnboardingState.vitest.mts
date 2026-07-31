@@ -7,7 +7,7 @@ import {
   describeSavedKeyLocation,
   formatSavedKeySummary,
 } from '@cli/onboarding/onboardingState';
-import type { StateStore } from '@platform/interfaces';
+import { MemoryStateStore } from '@platform/defaults/memoryState';
 import {
   getOnboardingDeclined,
   setOnboardingDeclined,
@@ -16,21 +16,9 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 
 const ONBOARDING_DECLINED_KEY = GlobalStateKey.ONBOARDING_DECLINED;
 
-function fakeStateStore(initial: Record<string, unknown> = {}): StateStore {
-  const store = new Map<string, unknown>(Object.entries(initial));
-  return {
-    get<T>(key: string, defaultValue?: T): T {
-      return (store.has(key) ? store.get(key) : defaultValue) as T;
-    },
-    async update(key: string, value: unknown): Promise<void> {
-      store.set(key, value);
-    },
-  };
-}
-
 describe('onboarding decline flag', () => {
   it('defaults to false and round-trips through global state', async () => {
-    const state = fakeStateStore();
+    const state = new MemoryStateStore();
     expect(getOnboardingDeclined(state)).toBe(false);
 
     await setOnboardingDeclined(state, true);
@@ -41,12 +29,11 @@ describe('onboarding decline flag', () => {
     expect(getOnboardingDeclined(state)).toBe(false);
   });
 
-  it('treats a non-boolean stored value as not-declined', () => {
-    expect(
-      getOnboardingDeclined(
-        fakeStateStore({ [ONBOARDING_DECLINED_KEY]: 'yes' }),
-      ),
-    ).toBe(false);
+  it('treats a non-boolean stored value as not-declined', async () => {
+    const state = new MemoryStateStore();
+    await state.update(ONBOARDING_DECLINED_KEY, 'yes');
+
+    expect(getOnboardingDeclined(state)).toBe(false);
   });
 });
 

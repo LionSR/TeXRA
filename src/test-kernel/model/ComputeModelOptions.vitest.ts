@@ -27,6 +27,7 @@ import type { ModelOptionData } from '@shared/schemas';
 import { FAST_FIRST_RESPONSE_HINT } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { AgentCategory } from '@shared/schemas/agent';
+import { FakeSecrets } from '@test/support/FakePlatform';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 
 function createServerSideKeyService(options: {
@@ -70,14 +71,7 @@ function createModelOptionsAccess(
 ): ModelOptionsAccess {
   return {
     visibleModels: ['gpt55'],
-    secrets: {
-      get: async (key) => secrets[key],
-      getStored: async (key) => secrets[key],
-      set: async () => {},
-      delete: async () => {},
-      listStoredKeys: async () => Object.keys(secrets),
-      getEnv: () => undefined,
-    },
+    secrets: new FakeSecrets(secrets),
     useOpenRouter: false,
     serverSideKeyService: createServerSideKeyService(options),
   };

@@ -6,11 +6,7 @@ import * as path from 'node:path';
 import { z } from 'zod';
 
 // Local imports
-import {
-  CORE_LATEX_TOOLS,
-  IMAGE_TOOLS,
-  LATEX_WORKSHOP_EXT_ID,
-} from '@shared/constants/latex';
+import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latex';
 import { type ToolResult } from '@shared/schemas/toolResult';
 import { detectPackageManager } from '@utils/system/toolUtils';
 import { extendEnvPath, safeHomedir } from '@utils/system/platformPaths';
@@ -23,7 +19,7 @@ import {
   getSetupPlatform,
   setupSecrets,
 } from './platform';
-import { locateTool } from './toolProbing';
+import { locateTool, missingCoreTools, PROBED_CORE_TOOLS } from './toolProbing';
 
 const ProbeEnvironmentInputSchema = z
   .strictObject({})
@@ -33,23 +29,7 @@ const ProbeEnvironmentInputSchema = z
 
 type ProbeInput = z.infer<typeof ProbeEnvironmentInputSchema>;
 
-interface ToolStatus {
-  name: string;
-  installed: boolean;
-  path?: string;
-}
-
-/** Tools probed by `probe_environment`: LaTeX toolchain + both image-tool
- *  candidates. The image tool is satisfied by either; `missingCore` logic
- *  below reports a single `gm/magick` entry when both are absent. */
-const PROBED_CORE_TOOLS = [...CORE_LATEX_TOOLS, ...IMAGE_TOOLS] as const;
-
 const OPTIONAL_TOOLS = ['git', 'node', 'python3'] as const;
-
-async function checkTool(name: string): Promise<ToolStatus> {
-  const located = await locateTool(name);
-  return { name, ...located };
-}
 
 /**
  * Read-only probe of the host environment.
@@ -87,8 +67,8 @@ export class ProbeEnvironmentTool extends defineTool({
       githubToken,
       chatGptStatus,
     ] = await Promise.all([
-      Promise.all(PROBED_CORE_TOOLS.map(checkTool)),
-      Promise.all(OPTIONAL_TOOLS.map(checkTool)),
+      Promise.all(PROBED_CORE_TOOLS.map((name) => locateTool(name))),
+      Promise.all(OPTIONAL_TOOLS.map((name) => locateTool(name))),
       Promise.all(
         setupSecrets.providers.map(async (provider) => {
           const origin = await setupSecrets
@@ -108,13 +88,7 @@ export class ProbeEnvironmentTool extends defineTool({
       })),
     ]);
 
-    const missingCore = coreTools
-      .filter((t) => !t.installed && t.name !== 'gm' && t.name !== 'magick')
-      .map((t) => t.name);
-    const hasImageTool = coreTools.some(
-      (t) => (t.name === 'gm' || t.name === 'magick') && t.installed,
-    );
-    if (!hasImageTool) missingCore.push('gm/magick');
+    const missingCore = missingCoreTools(coreTools);
 
     const latexWorkshopInstalled = platform.extensions?.isInstalled(
       LATEX_WORKSHOP_EXT_ID,

@@ -49,26 +49,6 @@ test.afterAll(async () => {
   if (launched) await closeTexraApp(launched);
 });
 
-/**
- * Wait until the named settings panel (or its tab) reports `active`. Without
- * this confirmation a test can catch the previous tab's render and report a
- * false positive.
- */
-async function waitForActiveSettingsPanel(panel: string): Promise<void> {
-  await launched.page.waitForFunction(
-    (name) => {
-      const settingsApp = document.querySelector('settings-app');
-      const root = settingsApp?.shadowRoot;
-      const activePage = root?.querySelector(
-        `.settings-page-button[data-panel="${name}"][data-active="true"]`,
-      );
-      return activePage != null;
-    },
-    panel,
-    { timeout: 10_000 },
-  );
-}
-
 /** True while the lazy-created PDF overlay dialog is open. */
 async function pdfOverlayIsOpen(): Promise<boolean> {
   return launched.page.evaluate(() => {
@@ -116,10 +96,9 @@ test('first launch shows a usable launcher chrome', async () => {
  * home for configuring model access and provider credentials.
  */
 test('settings → models tab mounts and provider settings are reachable', async () => {
-  await setSettingsTab(launched, SETTINGS_TAB_INDEX.MODELS);
   // Confirm the Models panel actually activated; without this we may catch
   // the previous tab's render and report a false positive.
-  await waitForActiveSettingsPanel('models');
+  await setSettingsTab(launched, SETTINGS_TAB_INDEX.MODELS, 'models');
   // Sanity: the panel mounted its child custom element. The provider list lives
   // another shadow root deep, so structural presence is sufficient here.
   const panelHasChild = await launched.page.evaluate(() => {
@@ -130,8 +109,7 @@ test('settings → models tab mounts and provider settings are reachable', async
 });
 
 test('account and usage lives in its own settings panel', async () => {
-  await setSettingsTab(launched, SETTINGS_TAB_INDEX.ACCOUNT);
-  await waitForActiveSettingsPanel('account');
+  await setSettingsTab(launched, SETTINGS_TAB_INDEX.ACCOUNT, 'account');
 
   const structure = await launched.page.evaluate(() => {
     const root = document.querySelector('settings-app')?.shadowRoot;
@@ -154,8 +132,7 @@ test('account and usage lives in its own settings panel', async () => {
  * the desktop app on a shared Electron user-data directory.
  */
 test('settings → memory tab mounts', async () => {
-  await setSettingsTab(launched, SETTINGS_TAB_INDEX.MEMORY);
-  await waitForActiveSettingsPanel('memory');
+  await setSettingsTab(launched, SETTINGS_TAB_INDEX.MEMORY, 'memory');
 });
 
 /**
@@ -223,8 +200,7 @@ test('logs route renders the desktop log viewer', async () => {
  * surfaces a copy-the-command dialog rather than running it for the user).
  */
 test('settings → tools tab mounts', async () => {
-  await setSettingsTab(launched, SETTINGS_TAB_INDEX.TOOLS);
-  await waitForActiveSettingsPanel('tools');
+  await setSettingsTab(launched, SETTINGS_TAB_INDEX.TOOLS, 'tools');
 });
 
 /**

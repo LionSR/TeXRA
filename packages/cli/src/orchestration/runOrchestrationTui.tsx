@@ -583,43 +583,37 @@ export async function runOrchestrationTui(
   items: readonly CliOrchestrationItem[],
   options: RunOrchestrationTuiOptions,
 ): Promise<CliOrchestrationAction> {
-  return new Promise((resolve) => {
-    let chosen: CliOrchestrationAction | undefined;
-    const record = (action: CliOrchestrationAction): void => {
-      if (chosen) return;
-      chosen = action;
-    };
+  let chosen: CliOrchestrationAction | undefined;
+  const instance = render(
+    <OrchestrationApp
+      items={items}
+      resumeItems={options.resumeItems}
+      agentItems={options.agentItems}
+      teamItems={options.teamItems}
+      accountItems={options.accountItems}
+      models={options.models}
+      apiMode={options.apiMode}
+      modelAccess={options.modelAccess}
+      version={options.version}
+      statusLines={options.statusLines}
+      allowDefaultModelLaunch={options.allowDefaultModelLaunch}
+      onResolve={(action) => {
+        chosen ??= action;
+      }}
+    />,
+    {
+      stdout: tuiOutputStreamForColor(
+        process.stdout,
+        options.colorEnabled ?? true,
+      ),
+      stderr: process.stderr,
+      stdin: process.stdin,
+    },
+  );
 
-    const instance = render(
-      <OrchestrationApp
-        items={items}
-        resumeItems={options.resumeItems}
-        agentItems={options.agentItems}
-        teamItems={options.teamItems}
-        accountItems={options.accountItems}
-        models={options.models}
-        apiMode={options.apiMode}
-        modelAccess={options.modelAccess}
-        version={options.version}
-        statusLines={options.statusLines}
-        allowDefaultModelLaunch={options.allowDefaultModelLaunch}
-        onResolve={record}
-      />,
-      {
-        stdout: tuiOutputStreamForColor(
-          process.stdout,
-          options.colorEnabled ?? true,
-        ),
-        stderr: process.stderr,
-        stdin: process.stdin,
-      },
-    );
-
-    // Wipe the picker out of the visible screen once Ink has finished
-    // unmounting without erasing the user's primary-buffer scrollback.
-    void instance.waitUntilExit().then(() => {
-      clearTerminalVisibleScreen();
-      resolve(chosen ?? { kind: 'exit' });
-    });
-  });
+  await instance.waitUntilExit();
+  // Wipe the picker out of the visible screen once Ink has finished
+  // unmounting without erasing the user's primary-buffer scrollback.
+  clearTerminalVisibleScreen();
+  return chosen ?? { kind: 'exit' };
 }
