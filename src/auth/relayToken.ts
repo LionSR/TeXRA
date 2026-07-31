@@ -48,6 +48,21 @@ export function getConfiguredRelayToken(
   return raw;
 }
 
+/**
+ * Sign-out notice for the GUI hosts when a CI relay token stays configured.
+ * Clearing the stored session does not unset the environment TeXRA was
+ * launched with, so relay access survives sign-out and the user keeps working
+ * with no login banner and no explanation. The CLI reports the same fact with
+ * terminal-specific advice (`relayTokenStillActiveNotice`); a GUI app cannot
+ * point at "this shell", so it names the launch environment instead.
+ */
+export function relayTokenSignOutNotice(
+  env: NodeJS.ProcessEnv = process.env,
+): string | undefined {
+  if (!getConfiguredRelayToken(env)) return undefined;
+  return `The ${RELAY_TOKEN_ENV_VAR} environment variable still authenticates relay access; remove it from the environment TeXRA was launched with to fully sign out.`;
+}
+
 const TierConfigUserStatusSchema = z.object({
   userStatus: z
     // A present malformed tier is a relay contract failure, not a free tier.

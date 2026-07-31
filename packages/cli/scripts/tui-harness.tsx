@@ -55,6 +55,7 @@ import {
   isInFlightPhase,
   STREAM_TRANSITION_CAUSE,
 } from '@shared/streams/streamStatus';
+import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
 import { GoalStore } from '@tools/goal';
 import { buildContinuationText } from '@tools/inquiry/inquiryContinuation';
 import { createRunTrace, StreamLogStore } from '@transcript';
@@ -120,7 +121,7 @@ import { subscribeStreamStatus } from '../src/chat/tui/state/subscribeStreamStat
 import { resolveLocalTranscriptStreamId } from '../src/chat/tui/state/transcript';
 import { defaultShortcutModifierLabel } from '../src/runtime/shortcutLabels';
 import { OrchestrationApp } from '../src/orchestration/runOrchestrationTui';
-import { parseCliApiMode, type CliApiMode } from '../src/runtime/apiAccessMode';
+import { parseCliApiMode } from '../src/runtime/apiAccessMode';
 import {
   formatCliModelAccessRouteInline,
   resolveCliModelAccessRoute,
@@ -222,7 +223,7 @@ const SHOW_NO_RUNNABLE_ORCHESTRATION_MODELS =
 const HARNESS_API_MODE_FROM_ENV = parseCliApiMode(
   process.env.HARNESS_API_MODE ?? '',
 );
-const HARNESS_API_MODE: CliApiMode = HARNESS_API_MODE_FROM_ENV ?? 'personal';
+const HARNESS_API_MODE: ApiAccessMode = HARNESS_API_MODE_FROM_ENV ?? 'personal';
 const HARNESS_AUTHENTICATED = process.env.HARNESS_AUTHENTICATED?.trim();
 const BASH_APPROVAL_COMMAND =
   process.env.HARNESS_BASH_APPROVAL_COMMAND ?? 'npm run compile:safe';
@@ -588,7 +589,7 @@ const HARNESS_ORCHESTRATION_MODEL_FIXTURES: readonly HarnessModelFixture[] = [
 
 function isHarnessModelAvailable(
   availability: HarnessModelFixture['availability'],
-  apiMode: CliApiMode,
+  apiMode: ApiAccessMode,
 ): boolean {
   return apiMode === 'included'
     ? availability === 'included-access'
@@ -612,7 +613,7 @@ function harnessModelStatus(
 
 function harnessModel(
   fixture: HarnessModelFixture,
-  apiMode: CliApiMode,
+  apiMode: ApiAccessMode,
 ): CliModelAccess {
   return {
     model: fixture,
@@ -622,7 +623,7 @@ function harnessModel(
 }
 
 function harnessOrchestrationModels(
-  apiMode: CliApiMode,
+  apiMode: ApiAccessMode,
 ): readonly CliModelAccess[] {
   const models = HARNESS_ORCHESTRATION_MODEL_FIXTURES.map((fixture) =>
     harnessModel(fixture, apiMode),
@@ -1936,7 +1937,7 @@ if (SHOW_USER_QUESTION) {
 
 if (SHOW_PLAN_APPROVAL) {
   enqueueHarnessApproval(
-    { kind: 'plan', payload: makePlanApprovalPayload() },
+    { kind: 'planApproval', payload: makePlanApprovalPayload() },
     appendHarnessPlanDecision,
   );
 }

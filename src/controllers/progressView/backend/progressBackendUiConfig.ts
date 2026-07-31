@@ -5,6 +5,7 @@ import {
   matchesCancelSelector,
   type HostInteractionCancelSelector,
   type UserQuestionSettlement,
+  type PendingInteractionKind,
   type PlanApprovalResult,
   type ProposalResult,
   type RetryResult,
@@ -21,7 +22,6 @@ import type {
   UserQuestionPermission,
 } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
-import { assertNever } from '@utils/core';
 
 import { ApprovalRequestHandler } from './ApprovalRequestHandler';
 import { ExternalInquiryRequestHandler } from './ExternalInquiryRequestHandler';
@@ -37,7 +37,7 @@ export interface ApprovalRequestHandlerSet {
   toolEdit: ApprovalRequestHandler<ToolEditPermission, 'requestId'>;
   bash: ApprovalRequestHandler<BashPermission, 'requestId', BashSettlement>;
   retry: ApprovalRequestHandler<RetryPermission, 'streamId', RetryResult>;
-  agentProposal: ApprovalRequestHandler<
+  proposal: ApprovalRequestHandler<
     AgentProposalPermission,
     'proposalId',
     ProposalResult
@@ -58,27 +58,16 @@ export interface ApprovalRequestHandlerSet {
   >;
 }
 
-function cancelHandler<
-  T extends { streamId: string },
-  K extends keyof T,
-  Result,
->(
-  handler: ApprovalRequestHandler<T, K, Result>,
-  kind: SettledInteractionKind,
-  selector: HostInteractionCancelSelector,
-): number {
-  return handler.cancelWhere(
-    (item, cancellationScope) =>
-      matchesCancelSelector(
-        {
-          kind,
-          streamId: item.streamId || undefined,
-          cancellationScope,
-        },
-        selector,
-      ),
-    selector.cause,
-  );
+/** Everything the cancellation sweep needs from one handler, so the set can be
+ *  indexed by interaction kind without narrowing to a concrete payload type. */
+interface CancellableApprovalRequestHandler {
+  cancelWhere(
+    predicate: (
+      item: { readonly streamId: string },
+      cancellationScope?: object,
+    ) => boolean,
+    cause?: string,
+  ): number;
 }
 
 /** Cancel the response-bearing progress interactions supported by one host. */
@@ -89,25 +78,19 @@ export function cancelApprovalRequestHandlers(
 ): number {
   let cancelled = 0;
   for (const kind of kinds) {
-    switch (kind) {
-      case 'bash':
-        cancelled += cancelHandler(handlers.bash, kind, selector);
-        break;
-      case 'plan':
-        cancelled += cancelHandler(handlers.planApproval, kind, selector);
-        break;
-      case 'proposal':
-        cancelled += cancelHandler(handlers.agentProposal, kind, selector);
-        break;
-      case 'retry':
-        cancelled += cancelHandler(handlers.retry, kind, selector);
-        break;
-      case 'userQuestion':
-        cancelled += cancelHandler(handlers.userQuestion, kind, selector);
-        break;
-      default:
-        assertNever(kind, 'Unhandled progress interaction kind');
-    }
+    const handler: CancellableApprovalRequestHandler = handlers[kind];
+    cancelled += handler.cancelWhere(
+      (item, cancellationScope) =>
+        matchesCancelSelector(
+          {
+            kind,
+            streamId: item.streamId || undefined,
+            cancellationScope,
+          },
+          selector,
+        ),
+      selector.cause,
+    );
   }
   return cancelled;
 }
@@ -121,19 +104,22 @@ type ReplayableApprovalRequestHandlerSet = {
 
 /**
  * The full key set of {@link ApprovalRequestHandlerSet}, enforced exhaustive
- * via `satisfies`: adding or renaming a handler kind fails this map until
- * it's updated here, which keeps both {@link replayApprovalRequestHandlers}
- * and the `hasPendingPermissions` guard below in sync with the interface.
+ * via `satisfies` against both the interface and the shared interaction-kind
+ * vocabulary: the handler keys are the kinds, so renaming either side fails
+ * here instead of silently dropping a kind. It also keeps
+ * {@link replayApprovalRequestHandlers} and the `hasPendingPermissions` guard
+ * below in sync with the interface.
  */
 const APPROVAL_REQUEST_HANDLER_KEY_MAP = {
   toolEdit: true,
   bash: true,
   externalInquiry: true,
   retry: true,
-  agentProposal: true,
+  proposal: true,
   planApproval: true,
   userQuestion: true,
-} satisfies Record<keyof ApprovalRequestHandlerSet, true>;
+} satisfies Record<keyof ApprovalRequestHandlerSet, true> &
+  Record<PendingInteractionKind, true>;
 
 const APPROVAL_REQUEST_HANDLER_KEYS = Object.keys(
   APPROVAL_REQUEST_HANDLER_KEY_MAP,
@@ -151,7 +137,7 @@ interface ApprovalHandlerTransport<T> {
 
 interface ApprovalRequestHandlerOverrides {
   retry: ApprovalHandlerTransport<RetryPermission>;
-  agentProposal?: ApprovalHandlerTransport<AgentProposalPermission>;
+  proposal?: ApprovalHandlerTransport<AgentProposalPermission>;
 }
 
 export interface BuildApprovalRequestHandlerSetParams {
@@ -233,15 +219,15 @@ export function buildApprovalRequestHandlerSet(
       overrides.retry.dismiss,
       canSend,
     ),
-    agentProposal: overrides.agentProposal
+    proposal: overrides.proposal
       ? new ApprovalRequestHandler<
           AgentProposalPermission,
           'proposalId',
           ProposalResult
         >(
           'proposalId',
-          overrides.agentProposal.show,
-          overrides.agentProposal.dismiss,
+          overrides.proposal.show,
+          overrides.proposal.dismiss,
           canSend,
         )
       : webviewPermissionHandler<

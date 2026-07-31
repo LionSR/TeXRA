@@ -1,9 +1,13 @@
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { platform } from '@platform/platform';
+import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
-export type CliApiMode = 'included' | 'personal';
+export interface CliApiModeUpdate {
+  readonly mode: ApiAccessMode;
+  readonly openRouterDisabled: boolean;
+}
 
 // Two canonical names per mode: the descriptive `included`/`personal` (used in
 // labels and config) plus the common shorthand `relay`/`byok` (accepted as
@@ -15,7 +19,7 @@ const CLI_API_MODE_BY_INPUT = {
   relay: 'included',
   personal: 'personal',
   byok: 'personal',
-} as const satisfies Record<string, CliApiMode>;
+} as const satisfies Record<string, ApiAccessMode>;
 
 type CliApiModeInput = keyof typeof CLI_API_MODE_BY_INPUT;
 
@@ -23,40 +27,45 @@ export const CLI_API_MODE_INPUTS = Object.keys(
   CLI_API_MODE_BY_INPUT,
 ) as readonly CliApiModeInput[];
 
-export function getCliApiMode(): CliApiMode {
+export function getCliApiMode(): ApiAccessMode {
   return getServerSideKeyService().getUseIncludedModelAccess()
     ? 'included'
     : 'personal';
 }
 
 export function effectiveCliApiMode(source: {
-  readonly apiMode?: CliApiMode;
-}): CliApiMode {
+  readonly apiMode?: ApiAccessMode;
+}): ApiAccessMode {
   return source.apiMode ?? getCliApiMode();
 }
 
-export function shortCliApiMode(mode: CliApiMode): string {
+export function shortCliApiMode(mode: ApiAccessMode): string {
   return mode;
 }
 
-export function parseCliApiMode(input: string): CliApiMode | undefined {
+export function parseCliApiMode(input: string): ApiAccessMode | undefined {
   const normalized = input.trim().toLowerCase();
   return Object.hasOwn(CLI_API_MODE_BY_INPUT, normalized)
     ? CLI_API_MODE_BY_INPUT[normalized as CliApiModeInput]
     : undefined;
 }
 
-export async function enableCliIncludedModelAccess(): Promise<void> {
-  await platform().globalState.update(GlobalStateKey.USE_OPENROUTER, false);
-  await getServerSideKeyService().setUseIncludedModelAccess(true);
-  invalidateModelOptionsCache();
-}
+export async function setCliApiMode(
+  mode: ApiAccessMode,
+): Promise<CliApiModeUpdate> {
+  const includedAccess = mode === 'included';
+  await getServerSideKeyService().setUseIncludedModelAccess(includedAccess);
 
-export async function setCliApiMode(mode: CliApiMode): Promise<void> {
-  if (mode === 'included') {
-    await enableCliIncludedModelAccess();
-    return;
+  let openRouterDisabled = false;
+  if (
+    includedAccess &&
+    platform().globalState.get<boolean>(GlobalStateKey.USE_OPENROUTER, false)
+  ) {
+    // Included Access routes through the TeXRA relay; OpenRouter bypasses it.
+    await platform().globalState.update(GlobalStateKey.USE_OPENROUTER, false);
+    openRouterDisabled = true;
   }
-  await getServerSideKeyService().setUseIncludedModelAccess(false);
+
   invalidateModelOptionsCache();
+  return { mode, openRouterDisabled };
 }

@@ -18,7 +18,11 @@
 
 import escapeRegExp from 'escape-string-regexp';
 import { safeParseJson } from '@common/parsing/safeParseJson';
-import { DELIVERY_TAG, DELIVERY_TAGS } from '@shared/deliveryTags';
+import {
+  DELIVERY_TAG,
+  DELIVERY_TAGS,
+  type DeliveryTagName,
+} from '@shared/deliveryTags';
 import { WorkflowScriptDeliverySummarySchema } from '@shared/schemas';
 import { isObject } from '@utils/core';
 import {
@@ -27,10 +31,9 @@ import {
   formatResultCount,
 } from '@utils/text/stringUtils';
 
-// Derived from the single owned DELIVERY_TAGS list (@shared/deliveryTags),
-// same derivation pattern UserMessage.ts uses for its structured-delivery
-// recognizer — so a future child-run kind only needs one entry there. Before
-// this, a bare `subagent-(?:progress|result|error)` recognizer let
+// Derived from the single owned DELIVERY_TAGS list (@shared/deliveryTags), so
+// a future child-run kind only needs one entry there. Before this, a bare
+// `subagent-(?:progress|result|error)` recognizer let
 // `claude-agent-result`/`claude-agent-error`/`codex-result`/`codex-error`
 // leak as raw XML into the CLI transcript and queued follow-ups panel.
 const DELIVERY_TAG_NAMES = DELIVERY_TAGS.map((entry) => entry.tag);
@@ -66,6 +69,19 @@ const EMBEDDED_DELIVERY_OPEN_RE = new RegExp(
 const EMPTY_FOLLOW_UP_SUMMARY = '(empty follow-up)';
 const RESULT_RESPONSE_PREVIEW_LINES = 12;
 const RESULT_RESPONSE_PREVIEW_CHARS = 1400;
+
+/**
+ * The delivery-envelope tag `text` opens with, or undefined when the text is
+ * not one of these blocks. The single recognizer for "is this a child-run
+ * delivery envelope", shared by the CLI transcript, the queued follow-ups
+ * panel, and the progress-view message bubble. Leading whitespace is allowed
+ * because producers hand blocks to the render surfaces untrimmed.
+ */
+export function deliveryTagOf(text: string): DeliveryTagName | undefined {
+  // Safe cast: the pattern's only alternation group is the DELIVERY_TAGS tag
+  // names, so a match can only capture one of those values.
+  return SUBAGENT_TAG_RE.exec(text.trim())?.[1] as DeliveryTagName | undefined;
+}
 
 function followupText(text: unknown): string | undefined {
   return typeof text === 'string' ? text : undefined;
@@ -214,7 +230,7 @@ export function workflowScriptDeliverySummary(xml: string): string | undefined {
   const status = summary.outcome === 'completed' ? 'completed' : 'failed';
   const facts = [
     `${formatResultCount(summary.phaseCount, 'phase')}`,
-    `${summary.taskDone}/${summary.taskTotal} tasks`,
+    `${summary.taskDone}/${summary.taskTotal} tasks succeeded`,
     formatCostUsd(summary.costUsd),
     formatCompactDuration(summary.durationMs),
   ];
@@ -247,7 +263,7 @@ export function summarizeSubagentFollowup(text: unknown): string {
   if (normalized === undefined) return EMPTY_FOLLOW_UP_SUMMARY;
 
   const trimmed = normalized.trim();
-  const tag = SUBAGENT_TAG_RE.exec(trimmed)?.[1];
+  const tag = deliveryTagOf(trimmed);
   if (!tag) return normalized;
 
   if (tag === DELIVERY_TAG.subagentProgress) {

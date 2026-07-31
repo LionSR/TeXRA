@@ -28,7 +28,15 @@ export interface WorkflowDeliverySummaryCollector {
   ) => string;
 }
 
-/** Collect presentation facts without changing the model-facing run report. */
+/**
+ * Collect presentation facts without changing the model-facing run report.
+ *
+ * `taskDone` counts the tasks that produced a result (completed or cached),
+ * which is deliberately narrower than the phase header's `done/total`
+ * (workflowPhaseCallProgress), where every settled call counts, failures and
+ * skips included. The two answer different questions, so the delivery line
+ * labels its count "succeeded".
+ */
 export function createWorkflowDeliverySummaryCollector(
   name: string,
   scriptPath: string,

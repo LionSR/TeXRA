@@ -6,6 +6,7 @@ import { access, stat } from 'node:fs/promises';
 import { satisfies as semverSatisfies } from 'semver';
 
 // Local imports
+import type { StoredSessionState } from '@auth/TokenProvider';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import {
   probeLatexToolchain,
@@ -55,6 +56,7 @@ export interface DoctorReport {
 
 interface CliAuthProfile {
   readonly authenticated: boolean;
+  readonly sessionState?: StoredSessionState;
   readonly accountLabel?: string;
   readonly tier?: string;
 }
@@ -210,6 +212,14 @@ async function checkAuth(
         'auth',
         'Included access',
         `Signed in as ${accountLabel}${tier}.`,
+      );
+    }
+    if (profile.sessionState === 'transient') {
+      return warn(
+        'auth',
+        'Included access',
+        'The authentication service is temporarily unavailable.',
+        'Your stored session is intact; retry once the service is reachable rather than signing in again.',
       );
     }
     return warn(

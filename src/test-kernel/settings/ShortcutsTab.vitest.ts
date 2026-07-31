@@ -77,9 +77,10 @@ describe('shortcuts-tab', () => {
     };
     const uninstall = installDesktopShortcutService(service);
     try {
-      const element = await mountComponent<
-        HTMLElementTagNameMap['shortcuts-tab']
-      >('shortcuts-tab', { desktopHost: true });
+      const element =
+        await mountComponent<HTMLElementTagNameMap['shortcuts-tab']>(
+          'shortcuts-tab',
+        );
 
       expect(element.shadowRoot?.textContent).toContain('Show Commands');
       const recorder =

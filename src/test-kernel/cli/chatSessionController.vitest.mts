@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   stopAgentStream: vi.fn(),
   cancelInteractions: vi.fn(),
   workspaceGet: vi.fn(),
+  globalGet: vi.fn(),
   getExecutionStore: vi.fn(),
   setCliHelperModel: vi.fn(),
   createCliRuntimeHost: vi.fn(),
@@ -78,10 +79,16 @@ vi.mock('@platform/platform', () => ({
     workspaceState: {
       get: mocks.workspaceGet,
     },
+    globalState: {
+      get: mocks.globalGet,
+    },
   }),
   tryPlatform: () => ({
     workspaceState: {
       get: mocks.workspaceGet,
+    },
+    globalState: {
+      get: mocks.globalGet,
     },
   }),
 }));
@@ -492,7 +499,15 @@ describe('createChatSessionController', () => {
         return mocks.executeAgent(request.config, request.executionId, options);
       },
     );
-    mocks.workspaceGet.mockReturnValue(false);
+    // Return the caller-provided default (false for DETACH_SUBAGENTS_ON_STOP,
+    // undefined for roster keys) — a blanket `false` is not a valid persisted
+    // value for AGENT_ROSTER_SELECTION, which agent resolution now reads.
+    mocks.workspaceGet.mockImplementation(
+      (_key: unknown, defaultValue?: unknown) => defaultValue,
+    );
+    mocks.globalGet.mockImplementation(
+      (_key: unknown, defaultValue?: unknown) => defaultValue,
+    );
     mocks.setCliHelperModel.mockResolvedValue(undefined);
     mocks.presentationHostClose.mockResolvedValue(undefined);
     mocks.createCliRuntimeHost.mockReturnValue({

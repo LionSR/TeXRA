@@ -465,16 +465,15 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     }
   }
 
-  /** Remove authentication session. */
+  /**
+   * Remove the authentication session. Sign-out clears local storage only,
+   * matching the desktop and CLI hosts: the shared client runs with
+   * `persistSession: false`, so `auth.signOut()` has no session of this
+   * provider's to revoke and would target whatever session was last handed to
+   * the client, revoking every device's refresh tokens with its default
+   * global scope.
+   */
   async removeSession(sessionId: string): Promise<void> {
-    try {
-      await SupabaseClient.getClient().auth.signOut();
-    } catch (error) {
-      logger.error(
-        CHANNEL,
-        `Remote sign-out failed; clearing local session: ${toErrorMessage(error)}`,
-      );
-    }
     await this.clearLocalSession(sessionId);
   }
 
@@ -492,7 +491,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     return this.clearLocalSessionIfCurrent(session);
   }
 
-  /** Revoke and remove the currently stored session without resolving it. */
+  /** Remove the currently stored session without resolving it. */
   async removeStoredSession(): Promise<boolean> {
     const session = await this.sessionCoordinator.loadSession();
     if (!session) return false;

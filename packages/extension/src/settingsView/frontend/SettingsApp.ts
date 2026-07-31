@@ -463,9 +463,7 @@ export class SettingsApp extends SettingsAppBase {
           ></git-tab>
         `;
       case 'shortcuts':
-        return html`
-          <shortcuts-tab .desktopHost=${desktopHost}></shortcuts-tab>
-        `;
+        return html`<shortcuts-tab></shortcuts-tab>`;
       case 'history':
         return html`
           <history-tab

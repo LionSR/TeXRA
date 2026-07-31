@@ -282,6 +282,22 @@ export const logoutCommand = defineCliCommand({
   },
 });
 
+/**
+ * Headline line for `texra auth status`. A transient session state means the
+ * authentication service could not be reached, not that the user is signed
+ * out: the stored session survives, so reporting "Not signed in." would send
+ * the user through a sign-in they do not need.
+ */
+function formatAuthStatusLine(profile: CliAuthProfile): string {
+  if (profile.authenticated) {
+    return `Signed in as ${profile.accountLabel || 'unknown'} (${profile.tier ?? 'unknown'}).`;
+  }
+  if (profile.sessionState === 'transient') {
+    return 'The authentication service is temporarily unavailable. Your stored session is intact; try again later.';
+  }
+  return 'Not signed in.';
+}
+
 const authStatusCommand = defineCliCommand({
   meta: { name: 'status', description: 'Show TeXRA sign-in status' },
   args: {
@@ -301,9 +317,7 @@ const authStatusCommand = defineCliCommand({
       json: profile,
       ndjson: { kind: 'auth-status', ...profile },
       text: [
-        profile.authenticated
-          ? `Signed in as ${profile.accountLabel || 'unknown'} (${profile.tier ?? 'unknown'}).`
-          : 'Not signed in.',
+        formatAuthStatusLine(profile),
         ...(profile.note ? [profile.note] : []),
       ].join('\n'),
     });

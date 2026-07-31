@@ -98,7 +98,7 @@ function createActions(
       sendFollowUp: vi.fn(),
       reportImageSaveError: vi.fn(),
     },
-    bypass: {},
+    bypass: { showInfo: vi.fn() },
     approval: {
       approvePendingDelegatedWork: vi.fn(async () => undefined),
       handleToolEditApprovalAction: vi.fn(),
@@ -407,7 +407,7 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
     cleanupAllApprovals();
   });
 
-  it('keeps tool-edit and bash bypass symmetric behind the edit shield', async () => {
+  it('sets tool-edit and bash together from the shield preset', async () => {
     const stream = 'stream:edit-bypass';
     const session = createTestSession();
     const setApprovalBypassState = vi.fn();
@@ -461,31 +461,85 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
     session.dispose();
   });
 
-  it('forces edit and bash bypass on without inverting a decoupled stream', async () => {
-    // Reproduces the inline run-approval path on a delegated child
-    // stream where edit-YOLO was granted but bash stayed gated. A toggle would
-    // flip edit OFF; ENABLE_APPROVAL_BYPASS must force both ON.
-    const stream = 'stream:yolo-enable';
+  it('grants only tool-edit bypass from an edit prompt', async () => {
+    const stream = 'stream:edit-prompt-grant';
     const showInfo = vi.fn();
     const handlers = createProgressViewCommandHandlers(
       createActions({ bypass: { showInfo } }),
     );
 
-    setToolEditApprovalSessionBypass(stream, true);
-    expect(isApprovalBypassedForStream(stream)).toBe(true);
-    expect(isBashApprovalBypassedForStream(stream)).toBe(false);
-
     expectDispatched(
-      { command: PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS, stream },
+      {
+        command: PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS,
+        stream,
+        kind: 'toolEdit',
+      },
       handlers,
     );
     await Promise.resolve();
 
     expect(isApprovalBypassedForStream(stream)).toBe(true);
+    expect(isBashApprovalBypassedForStream(stream)).toBe(false);
+    expect(showInfo).toHaveBeenCalledWith(
+      'File edits will be auto-approved for this run.',
+    );
+  });
+
+  it('grants only bash bypass from a command prompt', async () => {
+    const stream = 'stream:bash-prompt-grant';
+    const showInfo = vi.fn();
+    const handlers = createProgressViewCommandHandlers(
+      createActions({ bypass: { showInfo } }),
+    );
+
+    expectDispatched(
+      {
+        command: PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS,
+        stream,
+        kind: 'bash',
+      },
+      handlers,
+    );
+    await Promise.resolve();
+
+    expect(isApprovalBypassedForStream(stream)).toBe(false);
     expect(isBashApprovalBypassedForStream(stream)).toBe(true);
     expect(showInfo).toHaveBeenCalledWith(
-      'File edits and shell commands will be auto-approved for this run.',
+      'Shell commands will be auto-approved for this run.',
     );
+  });
+
+  it('rejects a bypass enable that does not name its kind', () => {
+    expect(
+      ProgressViewInboundMessageSchema.safeParse({
+        command: PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS,
+        stream: 'stream:no-kind',
+      }).success,
+    ).toBe(false);
+  });
+
+  it('leaves an existing grant of its own kind untouched', async () => {
+    // Set-on, never toggle: the shield or delegated inheritance can already
+    // have granted edit bypass while this prompt was open.
+    const stream = 'stream:yolo-enable';
+    const handlers = createProgressViewCommandHandlers(
+      createActions({ bypass: { showInfo: vi.fn() } }),
+    );
+
+    setToolEditApprovalSessionBypass(stream, true);
+
+    expectDispatched(
+      {
+        command: PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS,
+        stream,
+        kind: 'toolEdit',
+      },
+      handlers,
+    );
+    await Promise.resolve();
+
+    expect(isApprovalBypassedForStream(stream)).toBe(true);
+    expect(isBashApprovalBypassedForStream(stream)).toBe(false);
   });
 
   it('makes delegated task bypass enable edit and bash bypasses', async () => {
@@ -952,6 +1006,61 @@ describe('createProgressViewSecondTierHandlers', () => {
       'stream-1',
       polishFailure,
     );
+  });
+
+  it('reports polish stages around the controller call', async () => {
+    const order: string[] = [];
+    const polishResult = { kind: 'skipped' };
+    const actions = createSecondTierActions({
+      getTaskState: vi.fn().mockReturnValue({}),
+      followUpPolish: {
+        polishFollowUp: vi.fn(async () => {
+          order.push('polish');
+          return polishResult;
+        }),
+      } as unknown as ProgressViewSecondTierActions['followUpPolish'],
+      applyPolishResult: vi.fn(async () => {
+        order.push('apply');
+      }),
+      onPolishProgress: vi.fn((message: string) => {
+        order.push(`progress:${message}`);
+      }),
+    });
+    const handlers = createProgressViewSecondTierHandlers(actions);
+
+    await assertSupported(handlers[PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP])({
+      command: PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP,
+      stream: 'stream-1',
+      text: 'Improve this',
+    });
+
+    expect(order).toEqual([
+      'progress:Sending to AI for polishing...',
+      'polish',
+      'progress:Applying changes...',
+      'apply',
+    ]);
+    expect(actions.applyPolishResult).toHaveBeenCalledWith(polishResult);
+  });
+
+  it('polishes without a progress reporter when the host has none', async () => {
+    const polishResult = { kind: 'skipped' };
+    const actions = createSecondTierActions({
+      getTaskState: vi.fn().mockReturnValue({}),
+      followUpPolish: {
+        polishFollowUp: vi.fn().mockResolvedValue(polishResult),
+      } as unknown as ProgressViewSecondTierActions['followUpPolish'],
+    });
+    const handlers = createProgressViewSecondTierHandlers(actions);
+
+    await assertSupported(handlers[PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP])({
+      command: PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP,
+      stream: 'stream-1',
+      text: 'Improve this',
+    });
+
+    expect(actions.applyPolishResult).toHaveBeenCalledWith(polishResult);
+    expect(actions.onPolishError).not.toHaveBeenCalled();
   });
 });
 

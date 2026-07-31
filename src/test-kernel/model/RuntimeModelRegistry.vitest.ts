@@ -87,6 +87,7 @@ function modelOptionsAccess(): ModelOptionsAccess {
     serverSideKeyService: {
       canUseServerSideKeys: async () => false,
       getUseIncludedModelAccess: () => false,
+      isAuthenticated: async () => false,
       wasQuotaAutoSwitched: () => false,
       isRelayQuotaExceeded: () => false,
       isProviderOnServer: () => false,

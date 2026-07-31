@@ -159,6 +159,9 @@ describe('progress view stream-content projection', () => {
       activeState: {
         conversationProgress: { toolCallCount: 5 },
         roundStage: { index: 2 },
+        // All-or-nothing: a tool-use run has no phase, and the slot is still
+        // sent so a tab switch clears whatever the frontend had cached.
+        phaseStage: null,
         badges: {
           subagents: [activeSubagent],
         },
@@ -169,6 +172,31 @@ describe('progress view stream-content projection', () => {
       todos: [todo],
       plan,
       planSummary: 'Hydrate plan and todo state from one backend owner.',
+    });
+  });
+
+  it('projects the phase stage of a workflow-script run', async () => {
+    const { state, messages, handler } = await createSyncHarness();
+
+    state.updateStreamMetadata(stream, {
+      agentCategory: AgentCategory.Workflow,
+    });
+    state.getOrCreateStreamState(stream, AgentCategory.Workflow);
+    state.updateStreamState(stream, (prev) => ({
+      ...prev,
+      phaseStage: { label: 'Reduce', index: 1, total: 3 },
+    }));
+
+    handler.syncStreamContent(stream, { includeActiveState: true });
+
+    expect(messages.at(-1)).toMatchObject({
+      stream,
+      action: 'render',
+      kind: AgentCategory.Workflow,
+      activeState: {
+        roundStage: null,
+        phaseStage: { label: 'Reduce', index: 1, total: 3 },
+      },
     });
   });
 

@@ -135,6 +135,31 @@ describe('codex tool - atomic resume fallback', () => {
     CodexThreads.release('stale-thread');
   });
 
+  it('refuses a one-shot run whose follow-up could never be collected', async () => {
+    mocks.getCurrentToolContexts.mockReturnValue({
+      runContext: {
+        streamId: parentStreamId,
+        executionId,
+        stopAfterCycle: true,
+        interactions: { name: 'fake-runtime-host' },
+      },
+      callContext: { tracker: {}, hooks: {} },
+    });
+
+    await expect(
+      new CodexTool().call({
+        prompt: 'launch Codex',
+        sandbox_mode: 'workspace-write',
+      }),
+    ).resolves.toMatchObject({
+      status: 'error',
+      error: expect.stringContaining('codex is unavailable in one-shot runs'),
+    });
+    expect(mocks.requestBashApproval).not.toHaveBeenCalled();
+    expect(mocks.registerExecution).not.toHaveBeenCalled();
+    expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
+  });
+
   it('logs a detached run-loop rejection through the child trace', async () => {
     const childStream = createFakeAgentCliChildStream(childStreamId);
     const error = vi

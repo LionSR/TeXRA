@@ -1,6 +1,7 @@
 import { getVisibleAgents, loadAgents } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
+import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
 
 import { CLI_BUILTIN_DEFAULT_MODEL } from '../runtime/cliConfig';
 import {
@@ -10,7 +11,7 @@ import {
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
-import { effectiveCliApiMode, type CliApiMode } from '../runtime/apiAccessMode';
+import { effectiveCliApiMode } from '../runtime/apiAccessMode';
 import {
   formatCliNoAvailableModelsRecovery,
   getCliModelAccessList,
@@ -43,7 +44,7 @@ export function defaultInitAgentOptions(
   }));
 }
 
-async function gatherOptions(apiMode: CliApiMode): Promise<{
+async function gatherOptions(apiMode: ApiAccessMode): Promise<{
   agents: InitAgentOption[];
   models: CliModelAccess[];
 }> {
@@ -93,7 +94,7 @@ interface InitSummary {
 function initWarning(
   answers: InitAnswers,
   models: readonly CliModelAccess[],
-  apiMode: CliApiMode,
+  apiMode: ApiAccessMode,
 ): InitSummary['warning'] {
   const chosen = models.find((model) => model.model.value === answers.model);
   if (chosen?.available === true) return undefined;
@@ -144,7 +145,7 @@ function emitInitSummary(
   config: InitConfigShape,
   models: readonly CliModelAccess[],
   gitignore: GitignoreOutcome | undefined,
-  apiMode: CliApiMode,
+  apiMode: ApiAccessMode,
 ): void {
   const warning = initWarning(answers, models, apiMode);
   const summary: InitSummary = {

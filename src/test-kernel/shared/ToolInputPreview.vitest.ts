@@ -32,6 +32,12 @@ describe('deriveToolInputPreview', () => {
     ).toBe('view /executions/abc');
   });
 
+  it('normalizes a provider-namespaced name before the lookup', () => {
+    expect(deriveToolInputPreview('claude:Bash', { command: 'npm test' })).toBe(
+      'npm test',
+    );
+  });
+
   it('returns an empty string for unmapped tools', () => {
     expect(deriveToolInputPreview('read_file', { path: 'paper.tex' })).toBe('');
   });

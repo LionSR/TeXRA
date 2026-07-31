@@ -8,6 +8,8 @@ import {
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
+import { WORKSPACE_SIDECAR_FILE } from '../../../../src/common/storage/storageLayout.js';
+
 /** Remove a temporary E2E directory without hiding the primary assertion. */
 export function cleanupDirectory(path: string): void {
   try {
@@ -64,7 +66,7 @@ export function findWorkspaceStoragePath(input: {
 
       const candidatePath = join(storageRootPath, candidate.name);
       if (
-        tryReadWorkspaceSidecar(join(candidatePath, '_workspace.json')) ===
+        tryReadWorkspaceSidecar(join(candidatePath, WORKSPACE_SIDECAR_FILE)) ===
         targetWorkspacePath
       ) {
         return candidatePath;

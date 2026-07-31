@@ -6,11 +6,13 @@ import {
   historySearchTextMatches,
 } from '@settingsView/frontend/components/history/historySearch';
 import type { HistoryItem } from '@shared/schemas';
+import { HISTORY_RUN_STATUS } from '@shared/schemas/historyViewMessages';
 
 const workflowHistoryItem: HistoryItem = {
   id: 'execution-1',
   timestamp: '2026-01-01T00:00:00.000Z',
   description: 'Improve memory listing responsiveness near the café example',
+  status: HISTORY_RUN_STATUS.RESUMABLE,
   agentConfig: {
     agentCategory: 'workflow',
     agent: 'orchestrator',
@@ -33,6 +35,7 @@ const workflowHistoryItem: HistoryItem = {
 const minimalWorkflowHistoryItem: HistoryItem = {
   id: 'execution-2',
   timestamp: '2026-01-02T00:00:00.000Z',
+  status: HISTORY_RUN_STATUS.UNKNOWN,
   agentConfig: {
     agentCategory: 'workflow',
   },
@@ -41,6 +44,7 @@ const minimalWorkflowHistoryItem: HistoryItem = {
 const toolUseHistoryItem: HistoryItem = {
   id: 'execution-3',
   timestamp: '2026-01-03T00:00:00.000Z',
+  status: HISTORY_RUN_STATUS.FAILED,
   agentConfig: {
     agentCategory: 'toolUse',
     agent: 'researcher',
@@ -63,6 +67,13 @@ describe('history search prefilter', () => {
     expect(matches(workflowHistoryItem, 'diagnostics')).toBe(true);
     expect(matches(workflowHistoryItem, 'cafe')).toBe(true);
     expect(matches(workflowHistoryItem, 'absent')).toBe(false);
+  });
+
+  it('matches the rendered run-status badge text', () => {
+    expect(matches(workflowHistoryItem, 'resumable')).toBe(true);
+    expect(matches(toolUseHistoryItem, 'failed')).toBe(true);
+    expect(matches(minimalWorkflowHistoryItem, 'unknown')).toBe(true);
+    expect(matches(toolUseHistoryItem, 'resumable')).toBe(false);
   });
 
   it('does not match workflow labels that are not rendered for an item', () => {
@@ -88,6 +99,7 @@ describe('history search prefilter', () => {
     const midMonthItem: HistoryItem = {
       id: 'execution-4',
       timestamp: '2026-05-15T12:00:00.000Z',
+      status: HISTORY_RUN_STATUS.COMPLETED,
       agentConfig: { agentCategory: 'workflow' },
     };
     // Derive the expected month token from the same locale-aware

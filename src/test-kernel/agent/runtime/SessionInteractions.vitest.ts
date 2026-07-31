@@ -14,12 +14,11 @@ import {
   type RetryResult,
   type UserQuestionSettlement,
 } from '@agent/runtime/HostInteractions';
+import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
 import { ApprovalRequestHandler } from '@controllers/progressView/backend/ApprovalRequestHandler';
 import type { ApprovalRequestHandlerSet } from '@controllers/progressView/backend/progressBackendUiConfig';
-import {
-  createDesktopHostInteractions,
-  type DesktopHostInteractions,
-} from '@desktop/main/desktopHostInteractions';
+import type { ProgressHostInteractions } from '@controllers/progressView/backend/progressHostInteractions';
+import { createDesktopHostInteractions } from '@desktop/main/desktopHostInteractions';
 import { setOutputChannelFactory } from '@logger/logUtils';
 import {
   AgentCategory,
@@ -34,6 +33,7 @@ import {
   type ToolEditPermission,
   type UserQuestionPermission,
 } from '@shared/schemas';
+import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
 
@@ -87,16 +87,15 @@ function createHandlerSet(events: UiEvent[]): ApprovalRequestHandlerSet {
       'retry',
       'streamId',
     ),
-    agentProposal: handler<
-      AgentProposalPermission,
+    proposal: handler<AgentProposalPermission, 'proposalId', ProposalResult>(
+      'proposal',
       'proposalId',
-      ProposalResult
-    >('proposal', 'proposalId'),
+    ),
     planApproval: handler<
       PlanApprovalPermission,
       'approvalId',
       PlanApprovalResult
-    >('plan', 'approvalId'),
+    >('planApproval', 'approvalId'),
     externalInquiry: handler<ExternalInquiryPermission, 'requestId'>(
       'externalInquiry',
       'requestId',
@@ -114,7 +113,7 @@ function createPortSession(): {
   uiEvents: UiEvent[];
   emitted: string[];
   setApprovalBypassState: ReturnType<typeof vi.fn>;
-  interactions: DesktopHostInteractions;
+  interactions: ProgressHostInteractions;
 } {
   const uiEvents: UiEvent[] = [];
   const emitted: string[] = [];
@@ -124,21 +123,31 @@ function createPortSession(): {
   const handlers = createHandlerSet(uiEvents);
   const session = createTestSession();
   const setApprovalBypassState = vi.fn();
+  // Real controller with an inert host: tool-edit approvals are not exercised
+  // by these tests, but the port contract requires a full controller.
+  const toolEditApprovals = new ToolEditApprovalController({
+    interactions: presentationSink,
+    session,
+    host: {
+      stagePreview: async () => {
+        throw new Error('tool-edit approvals are not exercised here');
+      },
+      relativeDisplayPath: (filePath) => filePath,
+      revealApprovalSurface: async () => {},
+      openBuildDisplay: async () => {},
+      reportError: () => {},
+    },
+    showToolEditPermission: () => {},
+    resolveToolEditPermission: () => {},
+    detachCause: 'Test session detached.',
+  });
   const interactions = createDesktopHostInteractions({
     interactions: presentationSink,
     session,
     setApprovalBypassState,
     showInfoMessage: vi.fn(),
     getApprovalHandlers: () => handlers,
-    getToolEditApprovals: () => ({
-      approvePendingForStream: async () => {},
-      cancel: () => {},
-      dispose: () => {},
-      handleAction: () => false,
-      requestApproval: async () => {
-        throw new Error('tool-edit approvals are not exercised here');
-      },
-    }),
+    getToolEditApprovals: () => toolEditApprovals,
   });
   session.useHostInteractions(interactions);
   return {
@@ -183,7 +192,7 @@ function createControllablePlanAdapter(
         if (
           !matchesCancelSelector(
             {
-              kind: 'plan',
+              kind: 'planApproval',
               streamId: entry.request.streamId,
               cancellationScope: entry.cancellationScope,
             },
@@ -515,7 +524,7 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
 
       expect(parkWarnings()).toHaveLength(1);
       expect(parkWarnings()[0]).toContain('WARN');
-      expect(parkWarnings()[0]).toContain('plan');
+      expect(parkWarnings()[0]).toContain('planApproval');
       expect(parkWarnings()[0]).toContain(streamId);
 
       // Parking stays load-bearing: a host attaching later still replays the
@@ -835,7 +844,7 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
 
     await expect(pending).resolves.toEqual({
       action: 'reject',
-      feedback: 'Session disposed.',
+      feedback: SESSION_DISPOSED_CAUSE,
     });
   });
 
@@ -858,7 +867,7 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
 
     await expect(pending).resolves.toEqual({
       action: 'reject',
-      feedback: 'Session disposed.',
+      feedback: SESSION_DISPOSED_CAUSE,
     });
     expect(pendingCounts).toEqual([1, 0]);
   });
@@ -880,7 +889,7 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
 
     await expect(pending).resolves.toEqual({
       action: 'reject',
-      feedback: 'Session disposed.',
+      feedback: SESSION_DISPOSED_CAUSE,
     });
   });
 
@@ -898,7 +907,7 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
       // layer used to duplicate.
       expect(emitted).toContain('requestEnsureProgressView');
       expect(uiEvents).toContainEqual({
-        event: 'show:plan',
+        event: 'show:planApproval',
         id: 'approval:first-wins',
       });
 
@@ -938,7 +947,7 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
 
       await expect(first).resolves.toMatchObject({ action: 'reject' });
       expect(
-        uiEvents.filter((entry) => entry.event === 'show:plan'),
+        uiEvents.filter((entry) => entry.event === 'show:planApproval'),
       ).toHaveLength(2);
 
       expect(
@@ -1020,7 +1029,7 @@ describe('session.interactions request bookkeeping (coordinator fold)', () => {
 
       session.interactions.cancel({
         streamId,
-        kind: 'plan',
+        kind: 'planApproval',
         cause: 'Plan approval cleared.',
       });
 

@@ -27,9 +27,14 @@ export const groupStyles = css`
       border-left-color: var(--wa-color-danger-on-quiet);
     }
 
-    &.is-completed,
-    &.is-cancelled {
+    &.is-completed {
       border-left-color: var(--wa-color-success-fill-loud);
+    }
+
+    /* A user stop is neither success nor error, so the rail reads neutral,
+       matching the shared status dot and the CLI row marker. */
+    &.is-cancelled {
+      border-left-color: var(--wa-color-text-quiet);
     }
   }
 

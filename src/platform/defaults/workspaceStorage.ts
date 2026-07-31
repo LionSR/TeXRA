@@ -3,7 +3,10 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import { basename, join, normalize, relative } from 'node:path';
 
-import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
+import {
+  WORKSPACE_SIDECAR_FILE,
+  WORKSPACE_STORAGE_LAYOUT,
+} from '@common/storage/storageLayout';
 import * as logger from '@logger/logUtils';
 import { isPathWithin } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -139,7 +142,7 @@ function writeWorkspaceSidecar(
   storagePath: string,
   workspacePath: string | undefined,
 ): void {
-  const sidecarPath = join(storagePath, '_workspace.json');
+  const sidecarPath = join(storagePath, WORKSPACE_SIDECAR_FILE);
   if (existsSync(sidecarPath)) return;
 
   writeFileSync(

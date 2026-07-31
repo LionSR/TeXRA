@@ -99,7 +99,6 @@ function createActions(): SettingsViewCommandActions {
       signIn: action(),
       signOut: action(),
       setPreferSubscription: action(),
-      setSubscriptionToolUseOnly: action(),
     },
     approval: {
       setBashApprovalEnabled: action(),

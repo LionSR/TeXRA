@@ -174,10 +174,15 @@ function SessionRow({
         toolCallCount: session.slice?.conversation?.toolCallCount,
       })
     : undefined;
-  // Child rows summarize what the subagent last said; the list-root row is
-  // the conversation itself — echoing its own last exchange there is noise
-  // (and the root can itself be a nested subagent when focus is scoped).
-  const summary = isListRoot ? undefined : session.slice?.description;
+  // Child rows summarize what the subagent is doing: the runtime's own
+  // description (delegated task, or the generated session one-liner) when it
+  // has one, otherwise the latest transcript line as live status. The
+  // list-root row is the conversation itself — echoing its own last exchange
+  // there is noise (and the root can itself be a nested subagent when focus
+  // is scoped).
+  const summary = isListRoot
+    ? undefined
+    : (session.slice?.description ?? session.slice?.latestLine);
   return (
     <Box
       flexDirection="row"

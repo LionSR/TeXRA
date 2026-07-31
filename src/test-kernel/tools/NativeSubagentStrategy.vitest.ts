@@ -444,6 +444,32 @@ describe('NativeSubagentStrategy', () => {
     });
   });
 
+  it('stamps parent lineage onto both success and failure manifests', async () => {
+    const params = {
+      ...baseParams(),
+      parentExecutionId: 'parent-exec' as ExecutionId,
+    };
+    const strategy = createNativeSubagentStrategy(params);
+
+    await expect(
+      strategy.buildResultMeta?.(null, true, 10),
+    ).resolves.toMatchObject({ parentExecutionId: 'parent-exec' });
+
+    await expect(
+      strategy.buildResultMeta?.(
+        {
+          category: 'toolUse',
+          outcome: 'completed',
+          lastResponse: 'done',
+          executionId: params.executionId,
+          streamId: 'child-stream' as StreamTabId,
+        },
+        false,
+        10,
+      ),
+    ).resolves.toMatchObject({ parentExecutionId: 'parent-exec' });
+  });
+
   it('runTurn hands its consumed batch directly to the persisted flow cursor', async () => {
     const params = {
       ...baseParams(),

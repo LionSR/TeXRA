@@ -1,7 +1,9 @@
-import { getAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { defaultSession } from '@agent/runtime/SessionHandle';
-import { assertCliAgentLaunch } from '@cli/runtime/agents';
+import {
+  assertCliAgentLaunch,
+  resolveCliAgentInCategory,
+} from '@cli/runtime/agents';
 import { CliUsageError } from '@cli/runtime/cliContext';
 import { setCliHelperModel } from '@cli/runtime/initPlatform';
 import {
@@ -26,8 +28,8 @@ import {
 
 export function chatAgentSupportsDelegation(agentName: string): boolean {
   return (
-    getAgent(agentName, AgentCategory.ToolUse)?.tools?.some((toolName) =>
-      DELEGATION_TOOLS.has(toolName),
+    resolveCliAgentInCategory(agentName, AgentCategory.ToolUse)?.tools?.some(
+      (toolName) => DELEGATION_TOOLS.has(toolName),
     ) ?? false
   );
 }
@@ -38,7 +40,7 @@ export function chatToolUseAgentUsageError(
   try {
     assertCliAgentLaunch(
       agentName,
-      getAgent(agentName, AgentCategory.ToolUse),
+      resolveCliAgentInCategory(agentName, AgentCategory.ToolUse),
       'chat',
     );
     return undefined;

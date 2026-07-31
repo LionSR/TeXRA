@@ -15,6 +15,7 @@ import type {
   ProgressViewInboundMessage,
   ProgressViewOutboundMessage,
 } from '@shared/schemas/progressView';
+import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import {
   isApprovalBypassedForStream,
   proposalApprovals,
@@ -64,7 +65,7 @@ export interface ProgressViewLifecycleCommandActions {
   stopStream(stream: StreamTabId): Promise<void> | void;
 }
 
-export interface ProgressViewRunCommandActions {
+interface ProgressViewRunCommandActions {
   resumeStream(stream: StreamTabId): Promise<void> | void;
   runNewStream(stream: StreamTabId): Promise<void> | void;
 }
@@ -98,7 +99,8 @@ export interface ProgressViewBypassCommandOptions {
    * window session; the extension omits it so the default session applies.
    */
   session?: SessionHandle;
-  showInfo?(message: string): void | PromiseLike<unknown>;
+  /** Confirms the new auto-approval state to the user after a toggle. */
+  showInfo(message: string): void | PromiseLike<unknown>;
 }
 
 export interface ProgressViewApprovalCommandActions {
@@ -159,7 +161,7 @@ export interface ProgressViewCommandActions {
  * Host-only commands stay with each host; this factory owns the command
  * routing that should not drift across hosts. Lifecycle, run, and file
  * commands are plain action plumbing; follow-up image persistence, the
- * bypass-toggle symmetry rules, and approval routing carry shared policy so
+ * per-kind bypass grant rules, and approval routing carry shared policy so
  * hosts do not each reimplement them.
  *
  * Returns only the subset of commands this factory owns (not the full
@@ -176,31 +178,10 @@ export function createProgressViewCommandHandlers(
   const { lifecycle, run, file, followUp, approval, externalInquiry } = actions;
   const { session, showInfo } = actions.bypass;
 
-  // Single source of truth for the coupled edit + bash session bypass behind
-  // the one edit/command approval concept. The shield toolbar button flips it;
-  // the inline prompt button forces it on. Bash rides along silently (the
-  // shield reflects tool-edit state), so both surfaces stay in lockstep.
-  const applyCoupledBypass = async (
-    stream: StreamTabId,
-    enabled: boolean,
-  ): Promise<void> => {
-    setToolEditApprovalSessionBypass(stream, enabled, {
-      session,
-    });
-    setBashApprovalSessionBypass(stream, enabled, {
-      session,
-    });
-    await showInfo?.(
-      enabled
-        ? 'File edits and shell commands will be auto-approved for this run.'
-        : 'File edits and shell commands will require approval for this run.',
-    );
-  };
-
   const reportDelegatedWorkApproval = async (
     enabled: boolean,
   ): Promise<void> => {
-    await showInfo?.(
+    await showInfo(
       enabled
         ? 'Agent tasks, file edits, and shell commands will be auto-approved for this run.'
         : 'Agent tasks, file edits, and shell commands will require approval for this run.',
@@ -251,20 +232,32 @@ export function createProgressViewCommandHandlers(
       });
     },
 
-    // The UI exposes one shield for file edits + bash and one stronger
-    // delegated task auto-approval; keep the cross-approval side effects
-    // symmetric here.
-    [PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS]: (data) =>
-      applyCoupledBypass(
-        data.stream,
-        !isApprovalBypassedForStream(data.stream, session),
-      ),
-    // Inline edit/command approval button: force bypass ON. Unlike the
-    // shield toggle this is idempotent, so it can never invert an already-on
-    // edit bypass on a stream whose bash is still gated (e.g. a delegated child
-    // where edit and bash inheritance were granted independently).
-    [PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS]: (data) =>
-      applyCoupledBypass(data.stream, true),
+    // The shield is the explicit both-kinds preset: one click sets file edits
+    // and shell commands together, and its label says so. Its on/off reading
+    // comes from the tool-edit state.
+    [PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS]: async (data) => {
+      const enabled = !isApprovalBypassedForStream(data.stream, session);
+      setToolEditApprovalSessionBypass(data.stream, enabled, { session });
+      setBashApprovalSessionBypass(data.stream, enabled, { session });
+      await showInfo(
+        enabled
+          ? 'File edits and shell commands will be auto-approved for this run.'
+          : 'File edits and shell commands will require approval for this run.',
+      );
+    },
+    // Inline prompt button: force the prompt's own kind ON and nothing else.
+    // Approving always from an edit prompt leaves shell commands gated, and
+    // vice versa. Set-on (not toggle) keeps it from inverting a grant the
+    // shield or an inherited delegated child already made.
+    [PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS]: async (data) => {
+      if (data.kind === PERMISSION_KIND.TOOL_EDIT) {
+        setToolEditApprovalSessionBypass(data.stream, true, { session });
+        await showInfo('File edits will be auto-approved for this run.');
+        return;
+      }
+      setBashApprovalSessionBypass(data.stream, true, { session });
+      await showInfo('Shell commands will be auto-approved for this run.');
+    },
     [PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS]: (data) => {
       const enabled = !proposalApprovals(session).isBypassed(data.stream);
       setDelegatedWorkApprovalBypasses(data.stream, enabled, session);
@@ -343,6 +336,12 @@ export interface ProgressViewSecondTierActions {
   readonly applyPolishResult: (
     result: ProgressFollowUpPolishResult,
   ) => Promise<void>;
+  /**
+   * Report a polish stage to the user. Hosts with a progress surface (the
+   * extension feeds a `vscode.window.withProgress` notification) implement it;
+   * hosts without one leave it unset.
+   */
+  readonly onPolishProgress?: (message: string) => void;
   /** Handle a polish controller exception (post error to renderer + log + host message). */
   readonly onPolishError: (
     stream: StreamTabId,
@@ -503,11 +502,13 @@ export function createProgressViewSecondTierHandlers(
       const taskState = deps.getTaskState(data.stream);
       if (!taskState) return;
       try {
+        deps.onPolishProgress?.('Sending to AI for polishing...');
         const result = await deps.followUpPolish.polishFollowUp({
           stream: data.stream,
           text: data.text,
           taskState,
         });
+        deps.onPolishProgress?.('Applying changes...');
         await deps.applyPolishResult(result);
       } catch (error) {
         await deps.onPolishError(data.stream, error);

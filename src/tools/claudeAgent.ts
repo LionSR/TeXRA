@@ -558,6 +558,7 @@ export class ClaudeAgentTool extends defineTool({
     const effort = input.effort ?? config.getClaudeAgentEffort();
 
     return withAgentCliApproval(
+      CLAUDE_AGENT_NAME,
       `[${CLAUDE_AGENT_NAME} ${permissionMode}] ${input.prompt}`,
       (runContext) => {
         return resumeOrLaunchAgentCliSession(ClaudeAgentSessions, {

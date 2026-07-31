@@ -125,7 +125,7 @@ export type RoundStage = z.infer<typeof RoundStageSchema>;
 // are projected from the same `stage.start` fact, discriminated by its `kind`,
 // and a stream that opens phases never opens rounds.
 
-const PhaseStageSchema = z.object({
+export const PhaseStageSchema = z.object({
   /** Phase title, free-form text from the workflow script. */
   label: z.string(),
   /** Zero-based position in the declared phase list. Absent for a phase the

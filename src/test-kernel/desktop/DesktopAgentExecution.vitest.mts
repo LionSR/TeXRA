@@ -102,14 +102,13 @@ type TestableBridge = Bridge & {
   handlePresentationEvent(event: string, payload: unknown): void;
   syncFullView(): void;
   completeWebviewReady(): Promise<void>;
-  tryResumeStream(streamId: StreamTabId): Promise<boolean>;
   sendFollowUp(
     streamId: StreamTabId,
     text: string,
     mediaFiles?: readonly string[],
   ): Promise<void>;
   setActiveStream(streamId: StreamTabId): void;
-  revealStream(streamId: StreamTabId): Promise<void>;
+  revealStream(streamId: StreamTabId): Promise<'revealed' | 'missing'>;
   deleteStream(streamId: StreamTabId): Promise<void>;
   deleteAllStreams(): Promise<void>;
   progressViewInboundHandlers: ProgressViewInboundHandlerRegistry;
@@ -546,6 +545,16 @@ async function createBridge(
   return bridge;
 }
 
+/**
+ * Resume moved off the bridge: desktop stream resumption is owned by the
+ * process resume owner reached through `platform().agentResume`, which the
+ * harness attaches to the same session the bridge runs on.
+ */
+async function tryResumeStream(streamId: string): Promise<boolean> {
+  const { platform } = await import('@platform/platform');
+  return platform().agentResume.tryResumeStream(streamId as StreamTabId);
+}
+
 function progressMessages(
   messages: unknown[],
   command: string,
@@ -843,7 +852,11 @@ describe('DesktopProgressBridge', () => {
   it('keeps desktop runtime host app events on the window-local bridge path', async () => {
     const messages: unknown[] = [];
     const showErrorMessage = vi.fn();
-    const bridge = await createBridge(messages, { showErrorMessage });
+    const showInfoMessage = vi.fn();
+    const bridge = await createBridge(messages, {
+      showErrorMessage,
+      showInfoMessage,
+    });
     messages.length = 0;
 
     bridge.handlePresentationEvent('requestEnsureProgressView', {});
@@ -879,12 +892,13 @@ describe('DesktopProgressBridge', () => {
     });
     expect(messages).toHaveLength(2);
     expect(showErrorMessage).toHaveBeenCalledWith('Root run failed');
-    // Folded into the same dialog surface as requestShowError — no second
-    // subscribe surface or dialog for instructions.
-    expect(showErrorMessage).toHaveBeenCalledWith(
-      'API key not found. Set your API key in Settings and run again.',
+    expect(showErrorMessage).toHaveBeenCalledTimes(1);
+    // Instructions are actionable guidance, not failures: they use the info
+    // dialog, with action tokens rendered as trailing hint text.
+    expect(showInfoMessage).toHaveBeenCalledWith(
+      'API key not found. Set your API key in Settings and run again. ' +
+        '(set your API key in Settings, see the configuration guide)',
     );
-    expect(showErrorMessage).toHaveBeenCalledTimes(2);
   });
 
   it('ignores late runtime presentation events after disposal', async () => {
@@ -1675,8 +1689,11 @@ describe('DesktopProgressBridge', () => {
     const messages: unknown[] = [];
     const bridge = await createBridge(messages);
 
-    await bridge.revealStream('missing-goal-stream');
-
+    // Reported so the settings panel can say the run is gone instead of
+    // leaving the click with no visible effect.
+    await expect(bridge.revealStream('missing-goal-stream')).resolves.toBe(
+      'missing',
+    );
     expect(messages).toEqual([]);
   });
 
@@ -1952,7 +1969,7 @@ describe('DesktopProgressBridge', () => {
 
     await bridge.deleteStream('stream-1');
     emitRunConfigFact(bridge, runConfig);
-    await expect(bridge.tryResumeStream('stream-1')).resolves.toBe(false);
+    await expect(tryResumeStream('stream-1')).resolves.toBe(false);
     expect(retrieveSessionResumeData).not.toHaveBeenCalled();
   });
 
@@ -2168,7 +2185,7 @@ describe('DesktopProgressBridge', () => {
     });
 
     try {
-      await expect(bridge.tryResumeStream('stream-1')).resolves.toBe(true);
+      await expect(tryResumeStream('stream-1')).resolves.toBe(true);
       expect(kvRead).toHaveBeenCalledWith('meta');
       expect(retrieveSessionResumeData).toHaveBeenCalledWith(
         'stream-1',
@@ -2247,7 +2264,7 @@ describe('DesktopProgressBridge', () => {
       expect(snapshots?.getRunConfig(streamId)).toMatchObject(
         taskState.agentConfig,
       );
-      await expect(bridge.tryResumeStream(streamId)).resolves.toBe(true);
+      await expect(tryResumeStream(streamId)).resolves.toBe(true);
       expect(retrieveSessionResumeData).toHaveBeenCalledWith(
         streamId,
         executionId,
@@ -2307,7 +2324,7 @@ describe('DesktopProgressBridge', () => {
       });
       seedBridgeFollowUp(bridge, 'stream-1' as StreamTabId, 'queued follow-up');
 
-      await expect(bridge.tryResumeStream('stream-1')).resolves.toBe(true);
+      await expect(tryResumeStream('stream-1')).resolves.toBe(true);
       expect(retrieveSessionResumeData).toHaveBeenCalledWith(
         'stream-1',
         'ec1001',
@@ -2369,7 +2386,7 @@ describe('DesktopProgressBridge', () => {
       });
       seedBridgeFollowUp(bridge, 'stream-1' as StreamTabId, 'queued follow-up');
 
-      await expect(bridge.tryResumeStream('stream-1')).resolves.toBe(false);
+      await expect(tryResumeStream('stream-1')).resolves.toBe(false);
       expect(bridgeFollowUps(bridge).getAll('stream-1')).toEqual([
         'queued follow-up',
       ]);
@@ -2394,7 +2411,7 @@ describe('DesktopProgressBridge', () => {
         STREAM_STATUS.RUNNING,
       );
 
-      await expect(bridge.tryResumeStream('stream-1')).resolves.toBe(false);
+      await expect(tryResumeStream('stream-1')).resolves.toBe(false);
       expect(retrieveSessionResumeData).not.toHaveBeenCalled();
     } finally {
       bridgeStatus(bridge).clearStream('stream-1');
@@ -2425,9 +2442,9 @@ describe('DesktopProgressBridge', () => {
         taskState: { agentConfig: SEARCH_TOOL_USE_AGENT_CONFIG },
       });
 
-      const firstResume = bridge.tryResumeStream('stream-1');
+      const firstResume = tryResumeStream('stream-1');
       await retrieveStarted.promise;
-      await expect(bridge.tryResumeStream('stream-1')).resolves.toBe(false);
+      await expect(tryResumeStream('stream-1')).resolves.toBe(false);
       retrieveGate.resolve();
       await expect(firstResume).resolves.toBe(true);
       expect(retrieveSessionResumeData).toHaveBeenCalledTimes(1);
@@ -3209,13 +3226,15 @@ describe('DesktopProgressBridge', () => {
         await enableBypass({
           command: PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS,
           stream: streamId,
+          kind: 'toolEdit',
         });
         expect(
           isApprovalBypassedForStream(streamId, owner.bridgeA.session),
         ).toBe(true);
+        // Per-kind grant: an edit prompt leaves shell commands gated.
         expect(
           isBashApprovalBypassedForStream(streamId, owner.bridgeA.session),
-        ).toBe(true);
+        ).toBe(false);
         expect(isApprovalBypassedForStream(streamId, bridgeB.session)).toBe(
           true,
         );

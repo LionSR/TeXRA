@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
+import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
 import type { SkillSourceOptions } from '@skills/skillSources';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isNonEmptyString } from '@utils/text/stringUtils';
@@ -14,11 +15,7 @@ import {
   type CliApprovalPolicy,
   type CliOutputFormat,
 } from '../schemas/cliSettings';
-import {
-  CLI_API_MODE_INPUTS,
-  parseCliApiMode,
-  type CliApiMode,
-} from './apiAccessMode';
+import { CLI_API_MODE_INPUTS, parseCliApiMode } from './apiAccessMode';
 import {
   isCliSupportedModelId,
   loadWorkspaceCliConfig,
@@ -42,7 +39,7 @@ export interface CliContext {
   readonly approvalPolicy: CliApprovalPolicy;
   readonly helperModel?: string;
   /** Absent until the invocation or initialized platform selects a mode. */
-  readonly apiMode?: CliApiMode;
+  readonly apiMode?: ApiAccessMode;
   readonly quietLogs: boolean;
   readonly renderRunProgress?: boolean;
   readonly stdoutIsTty: boolean;
@@ -345,7 +342,7 @@ function pickCliApiMode(
     readonly strict?: boolean;
   }[],
   warnings: string[],
-): CliApiMode | undefined {
+): ApiAccessMode | undefined {
   for (const candidate of candidates) {
     if (!candidate.value) continue;
     const apiMode = parseCliApiMode(candidate.value);

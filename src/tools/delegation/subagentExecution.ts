@@ -173,6 +173,7 @@ export async function executeSubagent(
       config,
       agentCategoryExplicit: childConfigPayload.agentCategory !== undefined,
       executionId,
+      parentExecutionId,
       agentName,
       orchestratorStreamId,
       parentSession,

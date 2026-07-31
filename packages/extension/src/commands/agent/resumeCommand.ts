@@ -11,7 +11,6 @@ import { defaultSession } from '@agent/runtime/SessionHandle';
 import { registerCommands } from '@commands/_shared/registerCommands';
 import { logErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import type { RecoveryContinuation } from '@platform/interfaces';
-import { getToolUsePersistenceEnabled } from '@utils/config/constants';
 
 interface ResumeAgentResult {
   success: boolean;
@@ -41,19 +40,12 @@ async function showResumeError(error: unknown): Promise<void> {
  * {@link resumeQueuedToolUseFromResumeData}: it supplies the extension runtime host
  * and surfaces failures as a warning toast.
  * Used by both the `texra.resumeAgent` command and the resume orchestrator.
- *
- * The tool-use persistence gate is applied here (extension-only): the desktop
- * never honored this setting, so it stays out of the shared leaf and lives in
- * this adapter to preserve each host's pre-unification resume behavior.
  */
 export function resumeExtensionToolUseFromResumeData(
   resume: ToolUseResumeData,
   recovery?: RecoveryContinuation,
   followUp?: string,
 ): Promise<boolean> {
-  if (!getToolUsePersistenceEnabled()) {
-    return Promise.resolve(false);
-  }
   return resumeQueuedToolUseFromResumeData(resume.streamId, resume, {
     recovery,
     ...(followUp !== undefined && {
@@ -79,7 +71,6 @@ export function registerResumeAgentCommand(
         if (defaultSession().status.isActiveOrResuming(identity.streamId)) {
           return { success: false };
         }
-        if (!getToolUsePersistenceEnabled()) return { success: false };
 
         let resume;
         try {

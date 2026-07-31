@@ -28,6 +28,7 @@ interface ControllerFixtureOptions {
     includeRemote?: boolean;
   }) => Promise<void>;
   readonly promptText?: () => Promise<string | undefined>;
+  readonly confirm?: () => Promise<boolean>;
   readonly chooseTeamAvailability?: () => Promise<
     'cancel' | 'continue' | 'sign-in'
   >;
@@ -45,6 +46,7 @@ function createControllerFixture(options: ControllerFixtureOptions = {}) {
   const revealed: string[] = [];
   const infoMessages: string[] = [];
   const errorMessages: string[] = [];
+  const confirmed: string[] = [];
   const emptyCatalog: AgentCatalog = { workflow: [], toolUse: [] };
   const catalog = options.catalog ?? emptyCatalog;
   const visibleCatalog = options.visibleCatalog ?? catalog;
@@ -83,6 +85,10 @@ function createControllerFixture(options: ControllerFixtureOptions = {}) {
     renderer: { postToRenderer: (message) => posted.push(message) },
     prompts: {
       promptText: options.promptText ?? (async () => undefined),
+      confirm: async (input) => {
+        confirmed.push(input.message);
+        return (await options.confirm?.()) ?? true;
+      },
       chooseTeamAvailability:
         options.chooseTeamAvailability ?? (async () => 'cancel'),
     },
@@ -101,6 +107,7 @@ function createControllerFixture(options: ControllerFixtureOptions = {}) {
     resourcesPath: '/test/resources',
   });
   return {
+    confirmed,
     controller,
     errorMessages,
     globalState,
@@ -289,7 +296,36 @@ describe('DefaultDesktopAgentSettingsController', () => {
           commandOf(message) === SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
       ),
     ).toBe(true);
-    expect(infoMessages).toEqual(['Applied "Physicist" team']);
+    // The fixture catalog is missing the preset's hosted members, so the
+    // notification must say the team is only partially applied.
+    expect(infoMessages).toEqual([
+      'Applied "Physicist" with 7 members still unavailable',
+    ]);
+  });
+
+  it('reports a fully applied team without an unavailable-member suffix', async () => {
+    const catalog = physicistCatalog();
+    const workspaceState = new FakeStateStore({
+      [WorkspaceStateKey.CUSTOM_AGENT_PRESETS]: [
+        {
+          id: 'paper-team',
+          name: 'Paper Team',
+          description: 'Every member resolves locally',
+          icon: 'screwdriver-wrench',
+          workflowAgents: ['correct'],
+          toolUseAgents: ['review'],
+        },
+      ],
+    });
+    const { controller, infoMessages } = createControllerFixture({
+      catalog,
+      workspaceState,
+    });
+    const applyPreset = assertSupported(controller.actions.applyModePreset);
+
+    await applyPreset('paper-team');
+
+    expect(infoMessages).toEqual(['Applied "Paper Team" team']);
   });
 
   it('signs in before one forced remote refresh and commits the team once', async () => {
@@ -426,8 +462,8 @@ describe('DefaultDesktopAgentSettingsController', () => {
     );
   });
 
-  it('deletes custom teams and reports unknown team ids', async () => {
-    const workspaceState = new FakeStateStore({
+  function customTeamState(): FakeStateStore {
+    return new FakeStateStore({
       [WorkspaceStateKey.CUSTOM_AGENT_PRESETS]: [
         {
           id: 'custom-team',
@@ -439,6 +475,26 @@ describe('DefaultDesktopAgentSettingsController', () => {
         },
       ],
     });
+  }
+
+  it('keeps a custom team when its delete confirmation is declined', async () => {
+    const workspaceState = customTeamState();
+    const { confirmed, controller } = createControllerFixture({
+      workspaceState,
+      confirm: async () => false,
+    });
+    const deletePreset = assertSupported(controller.actions.deleteModePreset);
+
+    await deletePreset('custom-team');
+
+    expect(confirmed).toEqual(['Delete team "Custom Team"?']);
+    expect(
+      workspaceState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS),
+    ).toHaveLength(1);
+  });
+
+  it('deletes custom teams and reports unknown team ids', async () => {
+    const workspaceState = customTeamState();
     const { controller, errorMessages, posted } = createControllerFixture({
       workspaceState,
     });

@@ -195,6 +195,10 @@ export function createChatSessionController(
     followUpQueue,
     snapshotStore,
   } = init;
+  // The controller owns exactly one runtime session for its whole lifetime;
+  // resolve it once here so every path below propagates that owner instead of
+  // re-resolving the process default.
+  const runtimeSession = defaultSession();
   let interruptedContinuation: InterruptedContinuationBatch | undefined;
   let pendingInterruptedFollowUps: InterruptedFollowUp[] = [];
   const executionInteractionOwners = new Map<string, object>();
@@ -206,7 +210,7 @@ export function createChatSessionController(
   // promise settles. Installing this once also avoids duplicate projections
   // when another root starts while an earlier detached child is still alive.
   disposers.push(
-    attachTuiRunFactSubscription(defaultSession().events, snapshotStore),
+    attachTuiRunFactSubscription(runtimeSession.events, snapshotStore),
   );
 
   const activateAgentConfig = (
@@ -265,9 +269,9 @@ export function createChatSessionController(
     recovery: SupersededInterruptedRecovery | undefined,
     lease: FollowUpRecoveryLease,
   ): void => {
-    defaultSession().followUps.restore(lease, recovery?.followUps ?? []);
+    runtimeSession.followUps.restore(lease, recovery?.followUps ?? []);
     if (recovery?.followUps.length) {
-      defaultSession().events.emit({
+      runtimeSession.events.emit({
         scope: 'session',
         event: {
           type: 'updateQueuedFollowUps',
@@ -297,7 +301,7 @@ export function createChatSessionController(
     clearApprovals();
     if (!session.streamId) return;
     session.interruptedStreamId = session.streamId;
-    defaultSession().executions.stopAgentStream(session.streamId, {
+    runtimeSession.executions.stopAgentStream(session.streamId, {
       detachActiveChildren: detachSubagentsOnStop(),
     });
   };
@@ -331,12 +335,12 @@ export function createChatSessionController(
     const ownedExecutionIds = new Set<string>();
     const pendingActivationIds = new Set<string>();
     const presentationHost = createCliRuntimeHost(sessionContext);
-    const detachHostInteractions = defaultSession().useHostInteractions(
+    const detachHostInteractions = runtimeSession.useHostInteractions(
       createTuiHostInteractions(presentationHost, sessionContext),
     );
     const detachResultToast = attachTerminalResultToast(
-      defaultSession(),
-      defaultSession().interactions,
+      runtimeSession,
+      runtimeSession.interactions,
     );
     let resultToastAttached = true;
     const detachResultToastOnce = (): void => {
@@ -347,7 +351,7 @@ export function createChatSessionController(
     let released = false;
     let rootFinalized = false;
     let rootExecutionId: ExecutionId | undefined;
-    const executions = defaultSession().executions;
+    const executions = runtimeSession.executions;
     const releaseIfUnused = (): void => {
       if (
         rootFinalized &&
@@ -515,7 +519,7 @@ export function createChatSessionController(
                 previousRootStreamId &&
                 previousRootStreamId !== resolvedStreamId
               ) {
-                defaultSession().approvals.registerStreamParent(
+                runtimeSession.approvals.registerStreamParent(
                   resolvedStreamId,
                   previousRootStreamId,
                 );
@@ -599,7 +603,7 @@ export function createChatSessionController(
         'history',
       );
 
-      await defaultSession().transcripts.ensureLoaded(resolution.streamId);
+      await runtimeSession.transcripts.ensureLoaded(resolution.streamId);
       await snapshotStore.load([resolution.streamId]);
       const restored = await snapshotStore.read(resolution.streamId);
       patchStream(resolution.streamId, (slice) => {
@@ -752,8 +756,8 @@ export function createChatSessionController(
           resolveAndResumeStream(
             streamId,
             {
-              interactions: defaultSession().interactions,
-              streamStatus: defaultSession().status,
+              interactions: runtimeSession.interactions,
+              streamStatus: runtimeSession.status,
               isCancellationRequested: () => session.stopRequested,
               resolveResumeState: async () => ({
                 runState: config,
@@ -762,7 +766,7 @@ export function createChatSessionController(
               }),
               resumeToolUse: (resume, claimedRecovery) =>
                 resumeQueuedToolUseFromResumeData(streamId, resume, {
-                  session: defaultSession(),
+                  session: runtimeSession,
                   recovery: claimedRecovery,
                   approvalPromptsUnavailable: approvalsUnavailable,
                   runtimeUnavailableTools: CLI_UNAVAILABLE_TOOLS,
@@ -884,8 +888,7 @@ export function createChatSessionController(
   };
 
   const stopStream = (streamId: StreamTabId): void => {
-    const current = defaultSession();
-    current.interactions.cancel({
+    runtimeSession.interactions.cancel({
       streamId,
       cause: 'Run interrupted.',
     });
@@ -893,7 +896,7 @@ export function createChatSessionController(
       session.stopRequested = true;
       session.interruptedStreamId = streamId;
     }
-    current.executions.stopAgentStream(streamId, {
+    runtimeSession.executions.stopAgentStream(streamId, {
       detachActiveChildren: true,
     });
   };

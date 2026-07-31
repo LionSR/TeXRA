@@ -1,6 +1,7 @@
 import type { UsageRoute } from '@shared/schemas';
+import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
 
-import { parseCliApiMode, type CliApiMode } from './apiAccessMode';
+import { parseCliApiMode } from './apiAccessMode';
 
 export const CLI_MODEL_ACCESS_DESCRIPTION =
   'Toggle subscription preferences or choose the API fallback.';
@@ -24,7 +25,7 @@ export type CliModelAccessSelection =
     }
   | {
       readonly kind: 'api-fallback';
-      readonly apiMode: CliApiMode;
+      readonly apiMode: ApiAccessMode;
     };
 
 type CliApiFallbackSelection = Extract<
@@ -41,10 +42,10 @@ const cliApiFallbackSelections = Object.freeze({
     kind: 'api-fallback',
     apiMode: 'personal',
   }),
-} as const satisfies Record<CliApiMode, CliApiFallbackSelection>);
+} as const satisfies Record<ApiAccessMode, CliApiFallbackSelection>);
 
 export interface CliModelAccessStatus {
-  readonly apiFallback: CliApiMode;
+  readonly apiFallback: ApiAccessMode;
   /** Independent provider preferences; either, both, or neither may be on. */
   readonly preferences: CliSubscriptionPreferences;
   readonly chatGptSignedIn: boolean;
@@ -72,7 +73,7 @@ type CliModelAccessItemsInput =
 
 /** Return the stable selection object for one API fallback. */
 export function cliApiFallbackSelection(
-  apiMode: CliApiMode,
+  apiMode: ApiAccessMode,
 ): CliApiFallbackSelection {
   return cliApiFallbackSelections[apiMode];
 }
@@ -111,7 +112,7 @@ export function resolveCliModelAccessRoute({
   kimiCodeActive,
   usageRoute,
 }: {
-  readonly apiMode: CliApiMode;
+  readonly apiMode: ApiAccessMode;
   readonly subscriptionActive: boolean;
   readonly kimiCodeActive?: boolean;
   readonly usageRoute?: UsageRoute;

@@ -24,11 +24,14 @@ import {
   describeLatexExportResult,
   exportedFileMessage,
   exportInputErrorMessage,
+  HISTORY_CLEARED_MESSAGE,
+  HISTORY_CONFIG_UNREADABLE_MESSAGE,
   htmlExportErrorMessage,
 } from '@controllers/settingsView/HistoryActionOutcomes';
 import type { SettingsViewCommandActions } from '@controllers/settingsView/SettingsViewCommandHandlers';
 import type { ExecutionId } from '@shared/schemas';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { GoalStore } from '@tools/goal';
 
 type HistoryExportFormat = 'md' | 'tex' | 'html';
 
@@ -43,12 +46,11 @@ export interface DesktopHistoryOptions {
   readonly postToRenderer: (message: unknown) => void;
   readonly openPath: (filePath: string) => Promise<void>;
   readonly showInfoMessage: (message: string) => Promise<void>;
+  /** Surface for an action that did not happen, such as a refused delete. */
+  readonly showWarningMessage: (message: string) => Promise<void>;
   readonly showErrorMessage: (message: string) => Promise<void>;
   readonly onError: (error: unknown) => void;
 }
-
-const HISTORY_CONFIG_UNREADABLE_MESSAGE =
-  'History item not found or unreadable (missing, corrupt, or from an incompatible version)';
 
 export interface DesktopHistorySettingsController {
   readonly actions: SettingsViewCommandActions['history'];
@@ -78,18 +80,20 @@ export class DesktopHistoryHandlers implements DesktopHistorySettingsController 
   }
 
   private async deleteItem(historyId: string): Promise<void> {
-    const result = await deleteExecution(historyId as ExecutionId);
+    const executionId = historyId as ExecutionId;
+    const result = await deleteExecution(executionId);
     const outcome = describeDeleteExecutionResult(result);
     switch (outcome.kind) {
       case 'active':
-        await this.dependencies.showInfoMessage(
+        await this.dependencies.showWarningMessage(
           ACTIVE_EXECUTION_DELETE_BLOCKED_MESSAGE,
         );
         return;
       case 'not-found':
-        await this.dependencies.showInfoMessage(outcome.message);
+        await this.dependencies.showWarningMessage(outcome.message);
         return;
       case 'deleted':
+        await GoalStore.forgetByExecutionIds([executionId]);
         await this.postHistoryData();
         return;
     }
@@ -97,8 +101,10 @@ export class DesktopHistoryHandlers implements DesktopHistorySettingsController 
 
   private async clear(): Promise<void> {
     const result = await deleteAllExecutions();
+    await GoalStore.forgetByExecutionIds(result.deleted);
     const outcome = describeClearHistoryResult(result);
     if (outcome.kind === 'cleared') {
+      await this.dependencies.showInfoMessage(HISTORY_CLEARED_MESSAGE);
       this.dependencies.postToRenderer({
         command: SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED,
       });

@@ -29,34 +29,17 @@ import {
   captureOwnedExecutionLeaseIfPresent,
   waitForOwnedExecutionLeaseRelease,
 } from '@agent/storage/executionLease';
+import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { platform } from '@platform/platform';
 import { EXECUTION_STATUS, type ExecutionId } from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
+import {
+  executionLeasePath,
+  writeForeignLease,
+} from '@test/support/executionLeaseFixtures';
 import { StorageFS } from '@utils/files';
 
 const ownedExecutionIds = new Set<ExecutionId>();
-
-function leasePath(executionId: ExecutionId): string {
-  return `executionLeases/${executionId}.json`;
-}
-
-async function writeForeignLease(
-  executionId: ExecutionId,
-  heartbeatAt: number,
-  ownerToken = '00000000-0000-4000-8000-000000000001',
-): Promise<void> {
-  await StorageFS.ensureDir('executionLeases');
-  await StorageFS.writeAtomic(
-    leasePath(executionId),
-    JSON.stringify({
-      version: 1,
-      executionId,
-      ownerToken,
-      acquiredAt: heartbeatAt,
-      heartbeatAt,
-    }),
-  );
-}
 
 async function writeExecution(executionId: ExecutionId): Promise<void> {
   await getExecutionStore(executionId).writeMeta({
@@ -73,9 +56,9 @@ afterEach(async () => {
   vi.restoreAllMocks();
   await Promise.all([...ownedExecutionIds].map(releaseOwnedExecutionLease));
   ownedExecutionIds.clear();
-  await StorageFS.delete('executionLeases', { recursive: true }).catch(
-    () => {},
-  );
+  await StorageFS.delete(WORKSPACE_STORAGE_LAYOUT.executionLeases, {
+    recursive: true,
+  }).catch(() => {});
   await StorageFS.delete('executions', { recursive: true }).catch(() => {});
   clearStoreCache();
   resetExecutionLeaseCoordinationForTests();
@@ -113,8 +96,11 @@ describe('cross-process execution leases', () => {
   it('fails closed when present lease state is malformed', async () => {
     const executionId = 'c8644c' as ExecutionId;
     await writeExecution(executionId);
-    await StorageFS.ensureDir('executionLeases');
-    await StorageFS.writeAtomic(leasePath(executionId), '{"version":1}');
+    await StorageFS.ensureDir(WORKSPACE_STORAGE_LAYOUT.executionLeases);
+    await StorageFS.writeAtomic(
+      executionLeasePath(executionId),
+      '{"version":1}',
+    );
 
     await expect(deleteExecution(executionId)).rejects.toThrow(
       'Failed to parse JSON',
@@ -181,7 +167,7 @@ describe('cross-process execution leases', () => {
       ownedExecutionIds.add(executionId);
 
       const persisted = JSON.parse(
-        await StorageFS.read(leasePath(executionId)),
+        await StorageFS.read(executionLeasePath(executionId)),
       ) as { acquiredAt: number; heartbeatAt: number };
       expect(persisted).toMatchObject({
         acquiredAt: expectedHeartbeat,
@@ -496,7 +482,7 @@ describe('cross-process execution leases', () => {
 
     const acquisition = acquire(executionId);
     await Promise.resolve();
-    expect(await StorageFS.exists(leasePath(executionId))).toBe(false);
+    expect(await StorageFS.exists(executionLeasePath(executionId))).toBe(false);
 
     deletionPaused.resolve();
     await expect(deletion).resolves.toEqual({
@@ -513,7 +499,7 @@ describe('cross-process execution leases', () => {
     const executionId = 'f86440' as ExecutionId;
     await acquire(executionId);
     const persisted = JSON.parse(
-      await StorageFS.read(leasePath(executionId)),
+      await StorageFS.read(executionLeasePath(executionId)),
     ) as { ownerToken: string };
     await writeForeignLease(
       executionId,
@@ -565,8 +551,11 @@ describe('cross-process execution leases', () => {
     const malformedId = 'a86443' as ExecutionId;
     await writeExecution(validId);
     await writeExecution(malformedId);
-    await StorageFS.ensureDir('executionLeases');
-    await StorageFS.writeAtomic(leasePath(malformedId), '{"version":1}');
+    await StorageFS.ensureDir(WORKSPACE_STORAGE_LAYOUT.executionLeases);
+    await StorageFS.writeAtomic(
+      executionLeasePath(malformedId),
+      '{"version":1}',
+    );
 
     await expect(deleteAllExecutions()).rejects.toThrow('Failed to parse JSON');
     expect(await StorageFS.exists(`executions/${validId}`)).toBe(true);

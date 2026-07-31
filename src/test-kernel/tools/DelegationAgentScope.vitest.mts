@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { agentMatchesIdentifier } from '@shared/schemas/agent';
+import {
+  agentKeyOf,
+  agentMatchesIdentifier,
+  agentName,
+} from '@shared/schemas/agent';
 
 const remoteReview = {
   category: 'toolUse',
@@ -30,35 +34,49 @@ vi.mock('@agent/runtime/RunContext', () => ({
   tryUseRunContext: () => mocks.context,
 }));
 
-// `resolveDelegationScopeAgents` is the single source of truth for scope
-// resolution (agentRegistry.ts) — this test only exercises how
-// delegationAgentAvailability.ts consumes its result, so the mock reproduces
-// just this scope's expected resolution rather than re-implementing
-// priority/dedup logic that belongs to agentRegistry's own tests.
-vi.mock('@agent/index/agentRegistry', () => ({
-  findAgentByIdentifier: (
-    entries: Array<{ source: string; name: string }>,
-    identifier: string,
-  ) => entries.find((entry) => agentMatchesIdentifier(entry, identifier)),
-  getAgent: (identifier: string) => {
+// `resolveDelegationScopeAgents` and `resolveWithinCategory` are the single
+// sources of truth for scope resolution and identity matching (agentRegistry.ts)
+// — this test only exercises which candidate set and resolver
+// delegationAgentAvailability.ts feeds them, so the mock reproduces just this
+// scope's expected resolution rather than re-implementing priority/dedup logic
+// that belongs to agentRegistry's own tests.
+vi.mock('@agent/index/agentRegistry', () => {
+  const aliasTarget = (identifier: string) => {
     if (identifier === 'remote:review') return remoteReview;
     if (identifier === 'builtInToolUse:internalReview') return internalReview;
     if (identifier === 'custom:review' || identifier === 'review') {
       return customReview;
     }
     return undefined;
-  },
-  getVisibleAgent: () => customReview,
-  resolveDelegationScopeAgents: (
-    scope: { toolUseAgentKeys: readonly string[] } | undefined,
-    category: string,
-  ) =>
-    scope &&
-    category === 'toolUse' &&
-    scope.toolUseAgentKeys.includes('remote:review')
-      ? [remoteReview]
-      : [],
-}));
+  };
+  return {
+    getVisibleAgent: () => customReview,
+    resolveDelegationScopeAgents: (
+      scope: { toolUseAgentKeys: readonly string[] } | undefined,
+      category: string,
+    ) =>
+      scope &&
+      category === 'toolUse' &&
+      scope.toolUseAgentKeys.includes('remote:review')
+        ? [remoteReview]
+        : [],
+    resolveWithinCategory: (
+      entries: Array<{ source: string; name: string }>,
+      _category: string,
+      identifier: string,
+    ) => {
+      const exact = entries.find((entry) =>
+        agentMatchesIdentifier(entry, identifier),
+      );
+      if (exact) return exact;
+      const alias = aliasTarget(identifier);
+      if (!alias) return undefined;
+      const mapped =
+        identifier === agentName(identifier) ? alias.name : agentKeyOf(alias);
+      return entries.find((entry) => agentMatchesIdentifier(entry, mapped));
+    },
+  };
+});
 
 const { getDelegationAgent, getDelegationAgentForScope, getDelegationAgents } =
   await import('@tools/delegationAgentAvailability');

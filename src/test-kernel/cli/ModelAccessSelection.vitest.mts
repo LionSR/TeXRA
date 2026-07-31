@@ -71,8 +71,6 @@ vi.mock('@cli/runtime/apiAccessMode', async (importOriginal) => {
 });
 
 vi.mock('@cli/runtime/chatgptLogin', () => ({
-  chatGptAccountLabel: (session: { email?: string }) =>
-    session.email ?? 'your ChatGPT account',
   shouldUseChatGptDeviceCode: mocks.shouldUseChatGptDeviceCode,
   signInCliChatGpt: mocks.signInCliChatGpt,
 }));
@@ -94,7 +92,10 @@ beforeEach(() => {
     effective: false,
     target: 'global',
   });
-  mocks.setCliApiMode.mockResolvedValue(undefined);
+  mocks.setCliApiMode.mockImplementation(async (mode: string) => ({
+    mode,
+    openRouterDisabled: false,
+  }));
   mocks.shouldUseChatGptDeviceCode.mockReturnValue(false);
   mocks.apiKeyExists.mockResolvedValue(false);
   mocks.getPreferKimiCode.mockReturnValue(false);
@@ -351,6 +352,20 @@ describe('CLI model access routes', () => {
     expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
     expect(mocks.setPreferKimiCode).not.toHaveBeenCalled();
     expect(mocks.setCliApiMode).toHaveBeenCalledWith('included');
+  });
+
+  it('announces the OpenRouter routing that included access turned off', async () => {
+    mocks.setCliApiMode.mockResolvedValue({
+      mode: 'included',
+      openRouterDisabled: true,
+    });
+
+    const result = await updateCliModelAccess(
+      context,
+      cliApiFallbackSelection('included'),
+    );
+
+    expect(result.message).toContain('OpenRouter has been turned off');
   });
 
   it('does not report an API route as selected when persistence fails', async () => {

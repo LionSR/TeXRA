@@ -115,6 +115,46 @@ describe('default session lifecycle', () => {
     }
   });
 
+  it('throws from the sanctioned fallback in a no-default process', async () => {
+    // Explicit-session migration ratchet (#7694). currentSession() is the
+    // `?? defaultSession()` fallback every other run-scoped site resolves
+    // through, and the desktop host deliberately installs no process default,
+    // so the fallback must stay loud there. Silencing it — by installing a
+    // default for the desktop or by inventing an implicit memory-only session
+    // — would make the remaining migration sites work by accident.
+    const { currentSession, tryDefaultSession } =
+      await import('@agent/runtime/SessionHandle');
+
+    expect(tryDefaultSession()).toBeUndefined();
+    expect(() => currentSession()).toThrow(
+      'The default session has not been initialized',
+    );
+    expect(tryDefaultSession()).toBeUndefined();
+  });
+
+  it('resolves an explicitly threaded session without a process default', async () => {
+    const { SessionHandle, currentSession, tryDefaultSession } =
+      await import('@agent/runtime/SessionHandle');
+    const { createRunContext, withRunContext } =
+      await import('@agent/runtime/RunContext');
+    const { StreamLogStore } = await import('@transcript');
+    const owned = new SessionHandle({
+      transcripts: StreamLogStore.ephemeral('explicitly threaded session'),
+    });
+
+    try {
+      const resolved = withRunContext(
+        createRunContext({ session: owned }),
+        () => currentSession(),
+      );
+
+      expect(resolved).toBe(owned);
+      expect(tryDefaultSession()).toBeUndefined();
+    } finally {
+      owned.dispose();
+    }
+  });
+
   it('can initialize again only after explicit teardown', async () => {
     const {
       defaultSession,

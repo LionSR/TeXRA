@@ -13,7 +13,6 @@ import {
   type CliNoRunnableModelsMessageOptions,
   type GetModelSwitchDisabledReason,
 } from '@cli/runtime/modelAccess';
-import type { CliApiMode } from '@cli/runtime/apiAccessMode';
 import { formatCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import { Select } from '@cli/tui/ui/Select';
 import {
@@ -22,6 +21,7 @@ import {
   type SelectWindowSize,
 } from '@cli/tui/selectWindow';
 import type { AgentCategory } from '@shared/schemas/agent';
+import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
 import {
   CompactPickerKeyHints,
   FormFrame,
@@ -39,7 +39,7 @@ const TUI_MODEL_EMPTY_RECOVERY = {
 
 export interface ModelListFormProps {
   readonly currentModel: string;
-  readonly apiMode: CliApiMode;
+  readonly apiMode: ApiAccessMode;
   readonly agentCategory?: AgentCategory;
   readonly availableRows?: number;
   readonly selectable: boolean;
@@ -71,7 +71,7 @@ export function modelListDescription({
 
 function EmptyModelListState(props: {
   readonly models: readonly CliModelAccess[];
-  readonly apiMode: CliApiMode;
+  readonly apiMode: ApiAccessMode;
   readonly onClose: () => void;
 }): React.JSX.Element {
   useInput((input, key) => {

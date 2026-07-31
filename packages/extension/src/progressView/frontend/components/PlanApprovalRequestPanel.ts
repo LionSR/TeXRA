@@ -13,6 +13,7 @@ import {
 } from '@shared/styles';
 
 // Local imports - shared utilities
+import { PLAN_GOAL_COPY } from '@shared/copy/delegationApproval';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 
 // Local imports - base class
@@ -69,10 +70,8 @@ export class PlanApprovalRequestPanel extends BaseApprovalPanel<'planApproval'> 
         ${
           goalEnabled
             ? html`<div class="plan-approval-request__goal-explanation">
-                <strong>Run as Goal</strong> keeps the agent working across
-                turns until it completes the plan, needs your input, or you stop
-                it. Only Bash commands are auto-approved; edits and other
-                actions still ask.
+                <strong>${PLAN_GOAL_COPY.action}</strong>
+                ${PLAN_GOAL_COPY.progressViewExplanation}
               </div>`
             : nothing
         }
@@ -82,7 +81,7 @@ export class PlanApprovalRequestPanel extends BaseApprovalPanel<'planApproval'> 
       middleActions: goalEnabled
         ? renderLabeledActionButton({
             icon: 'rocket',
-            text: 'Run as Goal',
+            text: PLAN_GOAL_COPY.action,
             title:
               'Approve this plan and keep working across turns until it completes or needs your input (r)',
             action: 'approve_and_goal',

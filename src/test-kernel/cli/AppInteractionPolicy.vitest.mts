@@ -187,7 +187,7 @@ describe('app interaction policy', () => {
       [{ kind: 'infoPane' }, undefined],
     ] satisfies readonly (readonly [ForegroundRowsInput, number | undefined])[];
     const expectedByKind = {
-      plan: undefined,
+      planApproval: undefined,
       retry: undefined,
       userQuestion: undefined,
       bash: 18,

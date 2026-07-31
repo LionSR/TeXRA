@@ -478,6 +478,7 @@ async function executeInBand(
         config,
         agentCategoryExplicit: true,
         executionId,
+        parentExecutionId: options.parentExecutionId,
         agentName: options.agentName,
         orchestratorStreamId: options.parentStreamId,
         parentSession: options.session,

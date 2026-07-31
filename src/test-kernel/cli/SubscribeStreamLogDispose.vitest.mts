@@ -79,7 +79,7 @@ describe('subscribeStreamLog batching and dispose', () => {
         ?.entries.map((e) => e.text),
     ).toEqual(['hello']);
     expect(streams.get().get(streamB)).toMatchObject({
-      description: 'world',
+      latestLine: 'world',
       entries: [],
     });
 
@@ -153,7 +153,7 @@ describe('subscribeStreamLog batching and dispose', () => {
     await Promise.resolve();
 
     expect(streams.get().get(streamA)).toMatchObject({
-      description: 'loaded late',
+      latestLine: 'loaded late',
       entries: [],
     });
     expect(requestEviction).toHaveBeenCalledWith(streamA);
@@ -170,7 +170,7 @@ describe('subscribeStreamLog batching and dispose', () => {
     syncStreamLog(streamB);
 
     expect(streams.get().get(streamB)).toMatchObject({
-      description: 'starting',
+      latestLine: 'starting',
       entries: [],
       status: undefined,
     });

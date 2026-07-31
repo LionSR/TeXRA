@@ -47,10 +47,7 @@ import {
   resolveProviderCapabilities,
   type ProviderCapabilityProfile,
 } from '@model/providerCapabilities';
-import {
-  isCodexSubscriptionToolUseOnly,
-  isPreferCodexSubscription,
-} from '@model/codex/codexPreference';
+import { isPreferCodexSubscription } from '@model/codex/codexPreference';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { ModelHandlerOpenAIResponse } from './modelHandlerOpenAIResponse';
@@ -237,7 +234,6 @@ export class ModelHandlerCodex extends ModelHandlerOpenAIResponse {
 
   private configuredSubscriptionCapabilities(): ProviderCapabilityProfile | null {
     if (!isPreferCodexSubscription()) return null;
-    if (isCodexSubscriptionToolUseOnly() && !this.isToolUseMode()) return null;
     return this.subscriptionCapabilities();
   }
 

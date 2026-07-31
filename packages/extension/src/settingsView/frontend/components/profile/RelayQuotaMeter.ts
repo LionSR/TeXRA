@@ -6,29 +6,22 @@ import '@awesome.me/webawesome/dist/components/progress-bar/progress-bar.js';
 
 import { designTokens } from '@shared/styles';
 import {
-  isSpendingQuotaExceeded,
+  spendingQuotaRemainingPercent,
+  spendingQuotaState,
+  type SpendingQuotaState,
   type SpendingStatus,
 } from '@shared/schemas/spendingStatus';
 import { clamp } from '@utils/core';
 import { formatPercent } from '@utils/text/stringUtils';
 
-const WARNING_THRESHOLD_PCT = 80;
 const USD_FORMATTER = new Intl.NumberFormat(undefined, {
   style: 'currency',
   currency: 'USD',
   maximumFractionDigits: 2,
 });
 
-type QuotaState = 'ok' | 'warning' | 'exhausted';
-
-function quotaState(status: SpendingStatus): QuotaState {
-  if (isSpendingQuotaExceeded(status)) return 'exhausted';
-  if (status.percentUsed >= WARNING_THRESHOLD_PCT) return 'warning';
-  return 'ok';
-}
-
 function quotaNote(
-  state: QuotaState,
+  state: SpendingQuotaState,
   autoSwitched: boolean,
   remainingPercent: number,
 ): string | null {
@@ -116,9 +109,12 @@ export class RelayQuotaMeter extends LitElement {
     if (!s) return nothing;
 
     const percent = clamp(s.percentUsed, 0, 100);
-    const remainingPercent = Math.max(0, Math.round(100 - percent));
-    const state = quotaState(s);
-    const note = quotaNote(state, this.autoSwitched, remainingPercent);
+    const state = spendingQuotaState(s);
+    const note = quotaNote(
+      state,
+      this.autoSwitched,
+      spendingQuotaRemainingPercent(s),
+    );
 
     return html`
       <div class="quota-meter" data-state=${state}>

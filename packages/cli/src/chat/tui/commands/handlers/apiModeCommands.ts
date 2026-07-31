@@ -1,5 +1,4 @@
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { type CliApiMode } from '@cli/runtime/apiAccessMode';
 import { setCliHelperModel } from '@cli/runtime/initPlatform';
 import { refreshCodexPreferenceViews } from '@cli/chat/tui/state/codexSubscription';
 import {
@@ -21,6 +20,7 @@ import {
 import { patchSessionMeta, sessionMeta } from '@cli/chat/tui/state/cliState';
 import { chatTuiCanStartRootRun } from '@cli/chat/tui/state/sessionRunState';
 import type { ApiProvider } from '@model/apiProviders';
+import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
 import { collapseWhitespace } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -37,7 +37,7 @@ const MODEL_ACCESS_USAGE =
 
 async function reconcileRootModelAfterApiModeChange(
   context: SlashCommandContext | undefined,
-  apiMode: CliApiMode,
+  apiMode: ApiAccessMode,
 ): Promise<string | undefined> {
   if (!context) return undefined;
   if (!chatTuiCanStartRootRun(context.session)) {
@@ -110,7 +110,7 @@ export async function applyCliProviderApiKey(
 }
 
 /** Set the session API mode and refresh access-dependent TUI views. */
-export function setCliSessionApiMode(apiMode: CliApiMode): void {
+export function setCliSessionApiMode(apiMode: ApiAccessMode): void {
   patchSessionMeta({ apiMode });
   refreshCodexPreferenceViews();
 }

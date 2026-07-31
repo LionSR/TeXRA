@@ -13,6 +13,7 @@ import {
   type SupabaseSession,
   type SupabaseSessionCoordinator,
 } from '@auth/SupabaseSession';
+import type { StoredSessionState } from '@auth/TokenProvider';
 import {
   RELAY_TOKEN_ENV_VAR,
   fetchRelayTokenStatus,
@@ -32,7 +33,6 @@ import {
   requestDeviceAuthorization,
   type DeviceAuthorization,
 } from './supabaseAuthDeviceCode';
-import { enableCliIncludedModelAccess } from './apiAccessMode';
 
 /**
  * Channel-logger contract used by the CLI auth coordinator and supporting
@@ -50,6 +50,13 @@ export interface LogBackend {
 
 export interface CliAuthProfile {
   authenticated: boolean;
+  /**
+   * Health of the stored GoTrue session. Absent when a usable CI relay token
+   * supplies access and the session is never classified. `transient` means the
+   * authentication service could not be reached, so the stored session is
+   * intact and signing in again would be premature.
+   */
+  sessionState?: StoredSessionState;
   credentialSource?: 'session' | 'relayToken';
   accountLabel?: string;
   tier?: string;
@@ -147,7 +154,6 @@ export async function signInCliSupabase(
 
     const session = await sessionPromise;
     getServerSideKeyService().clearAllCaches({ resetQuotaFlip: true });
-    await enableCliIncludedModelAccess();
     return session;
   } finally {
     await callbackServer.close();
@@ -199,22 +205,18 @@ export async function signInCliSupabaseDeviceCode(
   });
   await authCoordinator.storeSession(session);
   getServerSideKeyService().clearAllCaches({ resetQuotaFlip: true });
-  await enableCliIncludedModelAccess();
   return session;
 }
 
 export async function signOutCliSupabase(): Promise<void> {
   const authCoordinator = initializeCliSupabaseAuth();
   await authCoordinator.clearSession();
-  const serverSideKeyService = getServerSideKeyService();
-  // A configured TEXRA_RELAY_TOKEN keeps authenticating relay calls after
-  // the session is gone (see relayTokenStillActiveNotice), so leave included
-  // access enabled — disabling it would contradict the credential that
-  // remains and silently break relay access for CI environments.
-  if (!getConfiguredRelayToken(readCliEnv())) {
-    await serverSideKeyService.setUseIncludedModelAccess(false);
-  }
-  serverSideKeyService.clearAllCaches({ resetQuotaFlip: true });
+  // Included access is a user preference, not a record of who is signed in.
+  // Sign-out drops the credential and clears the caches derived from it; the
+  // access decision is re-resolved against the remaining credentials on the
+  // next request, so a configured TEXRA_RELAY_TOKEN keeps working and a
+  // preference the user set by hand survives the round trip.
+  getServerSideKeyService().clearAllCaches({ resetQuotaFlip: true });
   await refreshRemoteAgentCatalogAfterSignOut(
     invalidateRemoteAgentsAfterSignOut,
     (message) => activeAuthLog?.warn('cli-auth', message),
@@ -288,10 +290,14 @@ export async function getCliAuthProfile(): Promise<CliAuthProfile> {
     }
   }
 
-  const authenticated = await SupabaseClient.isAuthenticated();
-  if (!authenticated) {
+  // Classify the stored session instead of asking "is there a token": a
+  // GoTrue outage leaves the session stored and usable once the service
+  // recovers, so reporting it as signed out invites a needless re-login.
+  const sessionState = await SupabaseClient.getStoredSessionState();
+  if (sessionState !== 'authenticated') {
     return {
       authenticated: false,
+      sessionState,
       ...(rejectedTokenNote && {
         credentialSource: 'relayToken' as const,
         note: rejectedTokenNote,
@@ -308,6 +314,7 @@ export async function getCliAuthProfile(): Promise<CliAuthProfile> {
   }
   return {
     authenticated: true,
+    sessionState,
     credentialSource: 'session',
     accountLabel: session?.account.label,
     tier,

@@ -54,10 +54,6 @@ export function shouldUseChatGptDeviceCode(
   );
 }
 
-export function chatGptAccountLabel(session: CodexSession): string {
-  return session.email ?? session.accountId ?? 'your ChatGPT account';
-}
-
 export async function signInCliChatGpt(
   init: CliChatGptLoginInit,
   options: CliChatGptLoginOptions,

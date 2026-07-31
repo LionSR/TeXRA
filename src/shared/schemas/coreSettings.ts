@@ -6,9 +6,6 @@ import {
   AgentSkillsSettingsSchema,
 } from './agentSkills';
 
-export const CHATGPT_TOOL_USE_ONLY_DESCRIPTION =
-  'Use your ChatGPT subscription for tool-use agents while workflow agents continue through your OpenAI API key or relay.';
-
 /**
  * Core (host-neutral) TeXRA settings.
  *
@@ -100,7 +97,6 @@ export const DEFAULT_CORE_SETTINGS = {
   },
   chatgptCodex: {
     preferSubscription: false,
-    subscriptionToolUseOnly: false,
   },
   files: {
     included: {
@@ -272,7 +268,6 @@ export const DEFAULT_CORE_SETTINGS = {
     requireEditApproval: true,
     requireBashApproval: true,
     persistence: {
-      enabled: true,
       ttlHours: 336,
     },
   },
@@ -417,10 +412,6 @@ export const CoreSettingsShape = {
       preferSubscription: boolField(
         DEFAULT_CORE_SETTINGS.chatgptCodex.preferSubscription,
         'Prefer your signed-in ChatGPT subscription for Codex-eligible OpenAI models instead of API-key routing. Experimental. Subscription routing currently uses a 272,000-token Codex context cap, not the full 1,000,000-token API context.',
-      ),
-      subscriptionToolUseOnly: boolField(
-        DEFAULT_CORE_SETTINGS.chatgptCodex.subscriptionToolUseOnly,
-        CHATGPT_TOOL_USE_ONLY_DESCRIPTION,
       ),
     })
     .prefault(DEFAULT_CORE_SETTINGS.chatgptCodex),
@@ -656,10 +647,6 @@ export const CoreSettingsShape = {
       ),
       persistence: z
         .strictObject({
-          enabled: boolField(
-            DEFAULT_CORE_SETTINGS.toolUse.persistence.enabled,
-            'Persist tool-use conversations across VS Code restarts',
-          ),
           ttlHours: numberField(
             DEFAULT_CORE_SETTINGS.toolUse.persistence.ttlHours,
             'Maximum age (in hours) to keep saved tool-use sessions before automatic cleanup',
@@ -739,7 +726,6 @@ export const CORE_SETTING_PATHS = [
   'model.retry.maxAttempts',
   'model.retry.backoffMs',
   'chatgptCodex.preferSubscription',
-  'chatgptCodex.subscriptionToolUseOnly',
   'files.included.mediaExtensions',
   'files.included.inputExtensions',
   'files.included.contextExtensions',
@@ -781,7 +767,6 @@ export const CORE_SETTING_PATHS = [
   'skills.enabled',
   'toolUse.requireEditApproval',
   'toolUse.requireBashApproval',
-  'toolUse.persistence.enabled',
   'toolUse.persistence.ttlHours',
 ] as const satisfies readonly LeafPaths<CoreSettings>[];
 

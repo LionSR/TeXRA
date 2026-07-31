@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { invalidateRemoteAgentsAfterSignOut } from '@agent/index';
 import {
+  AUTH_CALLBACK_TIMEOUT_MS,
   DEFAULT_OAUTH_PROVIDER,
   getAuthCallbackUri,
   type OAuthProvider,
@@ -32,7 +33,6 @@ import type {
 } from './desktopProtocolCallbacks.js';
 
 const DESKTOP_PENDING_OAUTH_STATE_KEY = 'texra.desktop.pendingOAuthState';
-const DESKTOP_PENDING_OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 
 const DesktopPendingOAuthStateSchema = z.object({
   createdAt: z.number(),
@@ -168,7 +168,7 @@ function readPendingOAuthState(
 }
 
 function isPendingOAuthStateExpired(state: DesktopPendingOAuthState): boolean {
-  return Date.now() - state.createdAt > DESKTOP_PENDING_OAUTH_STATE_TTL_MS;
+  return Date.now() - state.createdAt > AUTH_CALLBACK_TIMEOUT_MS;
 }
 
 export function createDesktopSupabaseAuth(
@@ -365,7 +365,7 @@ export function createDesktopSupabaseAuth(
           completion = waitForCompletion(
             attempt.nonce,
             attempt.generation,
-            waitOptions.timeoutMs ?? DESKTOP_PENDING_OAUTH_STATE_TTL_MS,
+            waitOptions.timeoutMs ?? AUTH_CALLBACK_TIMEOUT_MS,
           );
         });
       } catch (error) {

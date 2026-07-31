@@ -121,20 +121,18 @@ describe('repair-round progress badge (PR #7290 follow-up)', () => {
       // total widened to 3 via Math.max(totalRounds, roundIndex + 1).
       const repairRoundStage: RoundStage = { index: 2, total: 3 };
 
+      const stage = {
+        phaseStage: undefined,
+        roundStage: repairRoundStage,
+      };
+
       const container = document.createElement('div');
-      render(
-        renderProgressBadgeContent(undefined, repairRoundStage),
-        container,
-      );
+      render(renderProgressBadgeContent(undefined, stage), container);
       expect(container.textContent).toBe('r3/3');
       expect(container.textContent).not.toBe('r3/2');
 
-      expect(getProgressBadgeTitle(undefined, repairRoundStage)).toBe(
-        'Round 3 of 3',
-      );
-      expect(getProgressBadgeTitle(undefined, repairRoundStage)).not.toBe(
-        'Round 3 of 2',
-      );
+      expect(getProgressBadgeTitle(undefined, stage)).toBe('Round 3 of 3');
+      expect(getProgressBadgeTitle(undefined, stage)).not.toBe('Round 3 of 2');
     });
   });
 });

@@ -19,6 +19,7 @@ import {
   ProgressFollowUpController,
   type ProgressFollowUpPlan,
 } from '@controllers/progressView/ProgressFollowUpController';
+import type { ProgressHostInteractions } from '@controllers/progressView/backend/progressHostInteractions';
 import { ProgressWorkflowActionsController } from '@controllers/progressView/ProgressWorkflowActionsController';
 import { ProgressViewHost } from '@controllers/progressView/ProgressViewHost';
 import {
@@ -27,7 +28,6 @@ import {
 } from '@controllers/progressView/ProgressViewCommandHandlers';
 import { SecretManager } from '@frontend/secretManager';
 import { loadOptions } from '@frontend/agents/optionsLoader';
-import { handleProgressViewToolEditApprovalAction } from '@frontend/approval/nativeToolEditApproval';
 import { RecordingManager } from '@frontend/media/RecordingManager';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import type { PromptHost } from '@hosts/uiHosts';
@@ -55,7 +55,6 @@ import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import type { ProgressViewProvider } from './ProgressViewProvider';
-import type { ExtensionHostInteractions } from './extensionHostInteractions';
 
 // Type helper for extracting specific message types
 type MessageFor<C extends ProgressViewInboundMessage['command']> = Extract<
@@ -98,7 +97,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   constructor(
     private readonly provider: ProgressViewProvider,
     private readonly host: PromptHost,
-    private readonly interactions: ExtensionHostInteractions,
+    private readonly interactions: ProgressHostInteractions,
   ) {
     super('ProgressView', { trackActiveView: true });
 
@@ -175,6 +174,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       };
     };
 
+    // Set for the duration of a POLISH_FOLLOW_UP notification below, so the
+    // shared handler's stage reports land in the open progress notification.
+    let polishProgress: vscode.Progress<{ message?: string }> | undefined;
+
     const secondTierActions: ProgressViewSecondTierActions = {
       workflowActions: this.workflowActionsController,
       apiKeyRetry: this.apiKeyRetryController,
@@ -195,6 +198,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       },
       applyPolishResult: async (result) => {
         await this.applyFollowUpPolishResult(result);
+      },
+      onPolishProgress: (message) => {
+        polishProgress?.report({ message });
       },
       onPolishError: (stream, error) => {
         void this.reportPolishError(stream, error);
@@ -271,11 +277,28 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         }
         await secondTierHandlers[PROGRESS_VIEW_COMMANDS.USE_OWN_API_KEY](data);
       },
-      // Override POLISH_FOLLOW_UP: the shared factory does the core
-      // controller call and result dispatch; the extension adds a VS Code
-      // progress notification (`vscode.window.withProgress`) around it.
-      [PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP]: (data) =>
-        this.handlePolishFollowUp(data),
+      // Override POLISH_FOLLOW_UP: the shared handler owns the whole flow; the
+      // extension only wraps it in a VS Code progress notification and feeds
+      // the shared handler's stage reports into it.
+      [PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP]: async (data) => {
+        await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: 'Polishing follow-up message',
+            cancellable: false,
+          },
+          async (progress) => {
+            polishProgress = progress;
+            try {
+              await secondTierHandlers[PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP](
+                data,
+              );
+            } finally {
+              if (polishProgress === progress) polishProgress = undefined;
+            }
+          },
+        );
+      },
 
       // Recording (host-specific: extension wraps in a webview-bound
       // RecordingManager that posts status internally)
@@ -529,8 +552,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
               stream,
               initiatingProposalId,
             ),
-          handleToolEditApprovalAction:
-            handleProgressViewToolEditApprovalAction,
+          handleToolEditApprovalAction: (message) =>
+            this.provider.toolEditApprovals.handleAction(message),
           handleBashApprovalAction: (message) =>
             this.handleBashApprovalAction(message),
           handlePlanApprovalAction: (message) =>
@@ -761,41 +784,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     });
   }
 
-  private async handlePolishFollowUp(
-    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP>,
-  ): Promise<void> {
-    const taskState = this.getTaskState(data.stream);
-    if (!taskState) return;
-
-    await vscode.window.withProgress(
-      {
-        location: vscode.ProgressLocation.Notification,
-        title: 'Polishing follow-up message',
-        cancellable: false,
-      },
-      async (progress) => {
-        try {
-          progress.report({
-            message: 'Sending to AI for polishing...',
-            increment: 30,
-          });
-          const result = await this.followUpPolishController.polishFollowUp({
-            stream: data.stream,
-            text: data.text,
-            taskState,
-          });
-          progress.report({
-            message: 'Applying changes...',
-            increment: 60,
-          });
-          await this.applyFollowUpPolishResult(result);
-        } catch (error) {
-          await this.reportPolishError(data.stream, error);
-        }
-      },
-    );
-  }
-
   /**
    * Post the polish failure to the renderer, surface it, and log it. Returns
    * the notification promise so callers can either await the dialog or let it
@@ -835,10 +823,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         return;
       case 'exception':
         this.postToActiveView(result.update);
-        await this.host.error(result.userMessage);
         this.logger.error(this.channel, result.logMessage, {
           data: result.logData,
         });
+        await this.host.error(result.userMessage);
         return;
     }
   }

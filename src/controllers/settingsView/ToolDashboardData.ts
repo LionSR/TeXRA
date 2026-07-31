@@ -8,6 +8,7 @@
 
 // Local imports
 import type {
+  ToolCommandKind,
   ToolDashboardItem,
   ToolInfo,
 } from '@shared/schemas/settingsViewMessages';
@@ -18,6 +19,42 @@ import {
   type ExternalToolCheckResult,
 } from '@tools/toolAvailability';
 import { getDisabledToolIds } from '@utils/config/constants';
+
+// ============================================================
+// Tool terminal actions
+// ============================================================
+
+export type ToolTerminalAction =
+  | {
+      readonly kind: 'terminal';
+      readonly name: string;
+      readonly command: string;
+    }
+  | {
+      readonly kind: 'none';
+      readonly reason: 'unknownTool' | 'missingCommand';
+    };
+
+/**
+ * Plan the terminal command for a tool-dashboard install/auth action.
+ *
+ * Hosts re-look up the command from the shared tool definitions rather than
+ * trusting a command string supplied by the webview, and report which of the
+ * two failure reasons applies instead of silently doing nothing.
+ */
+export function planToolTerminalAction(input: {
+  readonly toolId: string;
+  readonly commandKind: ToolCommandKind;
+}): ToolTerminalAction {
+  const def = findExternalToolDef(input.toolId);
+  if (!def) return { kind: 'none', reason: 'unknownTool' };
+
+  const command =
+    input.commandKind === 'install' ? def.installCommand : def.authCommand;
+  if (!command) return { kind: 'none', reason: 'missingCommand' };
+
+  return { kind: 'terminal', name: `TeXRA: ${def.name}`, command };
+}
 
 // ============================================================
 // Tool description enrichment

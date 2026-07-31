@@ -111,6 +111,24 @@ export type OutputFileSummary = z.infer<typeof OutputFileSummarySchema>;
 export type CompileFailure = z.infer<typeof CompileFailureSchema>;
 
 /**
+ * The output a finished run treats as final: the first output of the highest
+ * round. Multi-document workflows emit the primary document first, so the
+ * first entry of the final round is the one every host opens, copies, or
+ * reports.
+ */
+export function finalWorkflowOutput(
+  outputs: readonly OutputFileSummary[],
+): OutputFileSummary | undefined {
+  if (outputs.length === 0) return undefined;
+
+  const finalRound = Math.max(...outputs.map((output) => output.round));
+  // Last entry of the final round, not the first: the CLI's prior pickers both
+  // kept the later element on a round tie, and callers' output order is not
+  // guaranteed to lead with the primary document.
+  return outputs.findLast((output) => output.round === finalRound);
+}
+
+/**
  * Flattened projection of {@link CompileFailure} for agent results and
  * execution metadata.
  */
