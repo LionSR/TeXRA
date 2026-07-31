@@ -17,7 +17,10 @@ import { classMap } from 'lit/directives/class-map.js';
 import { commonViewStyles, designTokens } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
-import { renderLabeledActionButton } from '@shared/wa/actionButtons';
+import {
+  renderLabeledActionButton,
+  type LabeledActionButtonOptions,
+} from '@shared/wa/actionButtons';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
@@ -354,6 +357,93 @@ export class AgentSelectionPanel extends LitElement {
     `;
   }
 
+  private supportsCommand(command: string): boolean {
+    return !isKnownUnsupported(this.unsupportedCommands, command);
+  }
+
+  /** Detail-pane actions in render order, each with the condition that shows it. */
+  private renderDetailActions(agent: AgentSelectionItem): TemplateResult[] {
+    const builtIn = SOURCE_META[agent.source].tone === 'builtin';
+    const isCustom = agent.source === AGENT_SOURCE.CUSTOM;
+    const actions: ReadonlyArray<{
+      readonly when: boolean;
+      readonly button: LabeledActionButtonOptions;
+    }> = [
+      {
+        when: agent.hasPath,
+        button: {
+          icon: 'file-lines',
+          text: 'Open YAML',
+          label: 'Open agent YAML definition',
+          className: 'agent-action-btn',
+          kind: 'ghost',
+          onClick: () => this.handleOpenYaml(agent),
+        },
+      },
+      {
+        when:
+          agent.source === AGENT_SOURCE.REMOTE &&
+          this.userTier === 'Ultra' &&
+          !agent.hasPath &&
+          this.supportsCommand(SETTINGS_VIEW_COMMANDS.VIEW_REMOTE_AGENT_PROMPT),
+        button: {
+          icon: 'file-lines',
+          text: 'View Prompt',
+          label: "View the remote agent's prompt definition",
+          title: "View the remote agent's prompt definition (read-only)",
+          className: 'agent-action-btn',
+          kind: 'ghost',
+          onClick: () => this.handleViewRemotePrompt(agent),
+        },
+      },
+      {
+        when: agent.hasPath,
+        button: {
+          icon: 'folder-open',
+          text: 'Reveal in File Explorer',
+          title: 'Show this file in your system file explorer',
+          className: 'agent-action-btn',
+          kind: 'ghost',
+          onClick: () => this.handleRevealAgentFile(agent),
+        },
+      },
+      {
+        when:
+          builtIn &&
+          this.supportsCommand(SETTINGS_VIEW_COMMANDS.CUSTOMIZE_AGENT),
+        button: {
+          icon: 'pencil',
+          text: 'Customize',
+          label: 'Customize agent',
+          title: 'Create an editable copy in your custom agents folder',
+          className: 'agent-action-btn',
+          appearance: 'filled',
+          variant: 'brand',
+          kind: 'primary',
+          onClick: () => this.handleCustomizeAgent(agent),
+        },
+      },
+      {
+        when:
+          isCustom &&
+          this.supportsCommand(SETTINGS_VIEW_COMMANDS.DELETE_CUSTOM_AGENT),
+        button: {
+          icon: 'trash',
+          text: 'Delete',
+          label: 'Delete custom agent',
+          title: 'Delete this custom agent',
+          className: 'agent-action-btn',
+          kind: 'danger',
+          onClick: () => this.handleDeleteCustomAgent(agent),
+        },
+      },
+    ];
+
+    return actions
+      .filter((action) => action.when)
+      .map((action) => renderLabeledActionButton(action.button));
+  }
+
   private renderDetail(): TemplateResult {
     const agent = this.selectedAgent;
 
@@ -438,97 +528,7 @@ export class AgentSelectionPanel extends LitElement {
         </div>
 
         <div class="agent-detail-actions">
-          ${
-            agent.hasPath
-              ? html`
-                  ${renderLabeledActionButton({
-                    icon: 'file-lines',
-                    text: 'Open YAML',
-                    label: 'Open agent YAML definition',
-                    className: 'agent-action-btn',
-                    kind: 'ghost',
-                    onClick: () => this.handleOpenYaml(agent),
-                  })}
-                `
-              : nothing
-          }
-          ${
-            agent.source === AGENT_SOURCE.REMOTE &&
-            this.userTier === 'Ultra' &&
-            !agent.hasPath &&
-            !isKnownUnsupported(
-              this.unsupportedCommands,
-              SETTINGS_VIEW_COMMANDS.VIEW_REMOTE_AGENT_PROMPT,
-            )
-              ? html`
-                  ${renderLabeledActionButton({
-                    icon: 'file-lines',
-                    text: 'View Prompt',
-                    label: "View the remote agent's prompt definition",
-                    title:
-                      "View the remote agent's prompt definition (read-only)",
-                    className: 'agent-action-btn',
-                    kind: 'ghost',
-                    onClick: () => this.handleViewRemotePrompt(agent),
-                  })}
-                `
-              : nothing
-          }
-          ${
-            agent.hasPath
-              ? html`
-                  ${renderLabeledActionButton({
-                    icon: 'folder-open',
-                    text: 'Reveal in File Explorer',
-                    title: 'Show this file in your system file explorer',
-                    className: 'agent-action-btn',
-                    kind: 'ghost',
-                    onClick: () => this.handleRevealAgentFile(agent),
-                  })}
-                `
-              : nothing
-          }
-          ${
-            builtIn &&
-            !isKnownUnsupported(
-              this.unsupportedCommands,
-              SETTINGS_VIEW_COMMANDS.CUSTOMIZE_AGENT,
-            )
-              ? html`
-                  ${renderLabeledActionButton({
-                    icon: 'pencil',
-                    text: 'Customize',
-                    label: 'Customize agent',
-                    title:
-                      'Create an editable copy in your custom agents folder',
-                    className: 'agent-action-btn',
-                    appearance: 'filled',
-                    variant: 'brand',
-                    kind: 'primary',
-                    onClick: () => this.handleCustomizeAgent(agent),
-                  })}
-                `
-              : nothing
-          }
-          ${
-            isCustom &&
-            !isKnownUnsupported(
-              this.unsupportedCommands,
-              SETTINGS_VIEW_COMMANDS.DELETE_CUSTOM_AGENT,
-            )
-              ? html`
-                  ${renderLabeledActionButton({
-                    icon: 'trash',
-                    text: 'Delete',
-                    label: 'Delete custom agent',
-                    title: 'Delete this custom agent',
-                    className: 'agent-action-btn',
-                    kind: 'danger',
-                    onClick: () => this.handleDeleteCustomAgent(agent),
-                  })}
-                `
-              : nothing
-          }
+          ${this.renderDetailActions(agent)}
         </div>
 
         ${

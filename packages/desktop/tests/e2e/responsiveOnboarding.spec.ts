@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -10,6 +10,7 @@ import {
   launchTexraApp,
   type LaunchedApp,
 } from './electronApp.js';
+import { cleanupDirectory } from './workspaceStorageFixture.js';
 
 let launched: LaunchedApp;
 let userDataPath = '';
@@ -21,9 +22,7 @@ test.beforeAll(async () => {
 
 test.afterAll(async () => {
   if (launched) await closeTexraApp(launched);
-  if (userDataPath) {
-    rmSync(userDataPath, { recursive: true, force: true });
-  }
+  if (userDataPath) cleanupDirectory(userDataPath);
 });
 
 test('keeps onboarding readable inside a narrow conversation split', async () => {

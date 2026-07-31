@@ -2,7 +2,7 @@
 
 // Node imports
 import { strict as assert } from 'node:assert';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -15,6 +15,7 @@ import { afterEach, describe, expect, expectTypeOf, it } from 'vitest';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 import { executeCommand, executeCommandSync } from '@utils/system/execUtils';
 import { buildWorkspaceInfoBlock } from '@utils/system/workspaceInfo';
 import { BinaryResolverService } from '@utils/system/binaryResolver';
@@ -82,10 +83,8 @@ describe('executeCommand', () => {
   // platform at a directory that exists on disk so spawning succeeds.
   setupPlatform({ workspacePath: process.cwd() });
 
-  afterEach(() => {
-    for (const dir of tempDirs.splice(0)) {
-      rmSync(dir, { recursive: true, force: true });
-    }
+  afterEach(async () => {
+    await cleanupTempDirs(tempDirs);
   });
 
   // Runs SLEEPER_SCRIPT in a scratch directory and resolves once the
@@ -98,8 +97,7 @@ describe('executeCommand', () => {
     promise: ReturnType<typeof executeCommand>;
     childPid: number;
   }> {
-    const dir = mkdtempSync(join(tmpdir(), 'texra-exec-sleeper-'));
-    tempDirs.push(dir);
+    const dir = await makeTempDir('texra-exec-sleeper-', tempDirs);
     const pidFile = join(dir, 'sleep.pid');
     const promise = executeCommand(command, {
       ...options,
@@ -342,25 +340,22 @@ describe('executeCommand', () => {
 // ---------------------------------------------------------------------------
 
 describe('executeCommandSync', () => {
-  let platformStorageRoot = '';
+  const tempDirs: string[] = [];
 
   setupPlatform(async () => {
-    platformStorageRoot = await mkdtemp(join(tmpdir(), 'texra-exec-utils-'));
+    const storageRoot = await makeTempDir('texra-exec-utils-', tempDirs);
     return createFakePlatform(
       {
         workspacePath: process.cwd(),
-        storagePath: join(platformStorageRoot, 'storage'),
-        globalStoragePath: join(platformStorageRoot, 'global-storage'),
+        storagePath: join(storageRoot, 'storage'),
+        globalStoragePath: join(storageRoot, 'global-storage'),
       },
       { fs: nodeFilesystem },
     );
   });
 
   afterEach(async () => {
-    if (platformStorageRoot) {
-      await rm(platformStorageRoot, { recursive: true, force: true });
-      platformStorageRoot = '';
-    }
+    await cleanupTempDirs(tempDirs);
   });
 
   it('returns normalized stdout for successful commands', () => {

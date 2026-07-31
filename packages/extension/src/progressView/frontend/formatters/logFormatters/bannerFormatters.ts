@@ -1,5 +1,6 @@
 /**
- * Banner-style formatters for thinking, scratchpad, and model response messages.
+ * Banner-style formatter for thinking, scratchpad, and model response messages:
+ * one collapsible `<wa-details>` shell driven by a per-message-type config.
  * Uses Lit templates with unsafeHTML for markdown content rendering.
  *
  * IMPORTANT: Lit templates preserve whitespace literally. Multi-line templates with
@@ -25,46 +26,79 @@ import { processMarkdownContent } from '../markdownRenderer';
 import { buildDetailsSummary } from '../htmlBuilders';
 import type { FormatResult } from '../baseLogFormatter';
 
+type BannerConfig = {
+  iconName: TeXRAIconName;
+  labelText: string;
+  copyTitle: string;
+  /** Prefix for the stable copy-content id, so ids stay unique per banner kind. */
+  copyIdPrefix: string;
+  contentClass: string;
+  /** Whether the content also carries the entry's `message-{level}` class. */
+  levelClass: boolean;
+  /** Whether a verbose entry shows its timestamp in the summary row. */
+  showTimestamp: boolean;
+  defaultOpen: boolean;
+};
+
 // Banner configuration by messageType
-const BANNER_CONFIG: Record<
-  string,
-  {
-    iconName: TeXRAIconName;
-    labelText: string;
-    copyTitle: string;
-    contentClass: string;
-  }
-> = {
+const BANNER_CONFIG: Record<string, BannerConfig> = {
   thinking: {
     iconName: 'lightbulb',
     labelText: 'Thinking',
     copyTitle: 'Copy thinking',
+    copyIdPrefix: 'banner',
     contentClass: 'banner-content--thinking',
+    levelClass: false,
+    showTimestamp: false,
+    defaultOpen: false,
   },
   scratchpad: {
     iconName: 'pencil',
     labelText: 'Scratchpad',
     copyTitle: 'Copy scratchpad',
+    copyIdPrefix: 'banner',
     contentClass: 'banner-content--scratchpad',
+    levelClass: false,
+    showTimestamp: false,
+    defaultOpen: false,
+  },
+  modelResponse: {
+    iconName: 'wand-magic-sparkles',
+    labelText: 'Assistant',
+    copyTitle: 'Copy model output',
+    copyIdPrefix: 'model',
+    contentClass: 'banner-content--model',
+    levelClass: true,
+    showTimestamp: true,
+    defaultOpen: true,
   },
 };
 
-/** Format thinking or scratchpad banner content as TemplateResult. */
+/**
+ * Format thinking, scratchpad, or model-response banner content as a
+ * TemplateResult.
+ */
 export function formatBannerContentTemplate(
   message: LogMessageData,
   options?: { defaultOpen?: boolean; isRunning?: boolean },
 ): FormatResult {
-  const { id, groupId, timestamp, text, messageType } = message;
+  const { id, groupId, timestamp, verbose, text, level, messageType } = message;
   const trimmedContent = (text ?? '').trim();
   if (!trimmedContent) return null;
 
   const config = BANNER_CONFIG[messageType ?? ''] ?? BANNER_CONFIG.thinking;
-  const { fullTimestamp } = formatDisplayTimestamp(new Date(timestamp));
+  const { fullTimestamp, timeDisplay, tooltipTimestamp } =
+    formatDisplayTimestamp(new Date(timestamp));
   // Auto-expand while streaming in, so the block is visibly "live" instead
   // of hiding the growing text behind a closed summary row; collapses back
   // once finalized unless the caller pins it open (mirrors the "thought for
   // Xs, tap to expand" pattern other chat UIs use for reasoning output).
-  const shouldOpen = options?.isRunning || (options?.defaultOpen ?? false);
+  // Model responses stay open by default once finalized.
+  const shouldOpen =
+    options?.isRunning || (options?.defaultOpen ?? config.defaultOpen);
+  const contentClass = config.levelClass
+    ? `${config.contentClass} message-${level}`
+    : config.contentClass;
   // While still streaming in, skip the markdown parse on every chunk and
   // show the raw text — the banner shell (icon/label/chevron) stays the
   // same either way; only the content upgrades to rendered markdown once
@@ -72,54 +106,20 @@ export function formatBannerContentTemplate(
   // (raw text has no <p>/<br> tags to do it for us, unlike markdown HTML).
   // prettier-ignore
   const contentTemplate = options?.isRunning
-    ? html`<div class="banner-content banner-content--streaming log-entry-content ${config.contentClass}">${trimmedContent}</div>`
-    : html`<div class="banner-content markdown-content log-entry-content ${config.contentClass}">${unsafeHTML(processMarkdownContent(trimmedContent))}</div>`;
+    ? html`<div class="banner-content banner-content--streaming log-entry-content ${contentClass}">${trimmedContent}</div>`
+    : html`<div class="banner-content markdown-content log-entry-content ${contentClass}">${unsafeHTML(processMarkdownContent(trimmedContent))}</div>`;
 
   // prettier-ignore
   return html`<wa-details appearance="plain" icon-placement="start" class="banner-details" ?open=${shouldOpen} data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)} data-timestamp=${ifDefined(fullTimestamp)}>${buildDetailsSummary({
     iconName: config.iconName,
     label: config.labelText,
-    copyButton: {
-      title: config.copyTitle,
-      content: trimmedContent,
-      contentId: id ? `banner:${id}` : undefined,
-    },
-  })}${contentTemplate}</wa-details>`;
-}
-
-/** Format a model response as TemplateResult. */
-export function formatModelResponseTemplate(
-  message: LogMessageData,
-  options?: { defaultOpen?: boolean; isRunning?: boolean },
-): FormatResult {
-  const { id, groupId, timestamp, verbose, text, level } = message;
-  const trimmedContent = (text ?? '').trim();
-  if (!trimmedContent) return null;
-
-  const { fullTimestamp, timeDisplay, tooltipTimestamp } =
-    formatDisplayTimestamp(new Date(timestamp));
-  // Model response defaults to open (was hardcoded open before); also forced
-  // open while streaming, same rationale as formatBannerContentTemplate.
-  const shouldOpen = options?.isRunning || (options?.defaultOpen ?? true);
-  // While still streaming in, skip the markdown parse on every chunk (see
-  // formatBannerContentTemplate above for the same tradeoff, including the
-  // banner-content--streaming whitespace note).
-  // prettier-ignore
-  const contentTemplate = options?.isRunning
-    ? html`<div class="banner-content banner-content--streaming log-entry-content banner-content--model message-${level}">${trimmedContent}</div>`
-    : html`<div class="banner-content markdown-content log-entry-content banner-content--model message-${level}">${unsafeHTML(processMarkdownContent(trimmedContent))}</div>`;
-
-  // prettier-ignore
-  return html`<wa-details appearance="plain" icon-placement="start" class="banner-details" ?open=${shouldOpen} data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)} data-timestamp=${ifDefined(fullTimestamp)}>${buildDetailsSummary({
-    iconName: 'wand-magic-sparkles',
-    label: 'Assistant',
-    timestamp: verbose
+    timestamp: config.showTimestamp && verbose
       ? { display: `[${timeDisplay}]`, tooltip: tooltipTimestamp }
       : undefined,
     copyButton: {
-      title: 'Copy model output',
+      title: config.copyTitle,
       content: trimmedContent,
-      contentId: id ? `model:${id}` : undefined,
+      contentId: id ? `${config.copyIdPrefix}:${id}` : undefined,
     },
   })}${contentTemplate}</wa-details>`;
 }

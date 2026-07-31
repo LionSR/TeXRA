@@ -7,12 +7,8 @@ import {
   createFileMapping,
   replaceInputCommands,
 } from '@agent/output/fileMapping';
-import type { FileLocation } from '@shared/schemas';
+import { createExternalLocation as externalLocation } from '@utils/files';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
-
-function externalLocation(absolutePath: string): FileLocation {
-  return { kind: 'external', absolutePath };
-}
 
 afterEach(() => {
   vi.restoreAllMocks();

@@ -2,7 +2,6 @@
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 // Third-party imports
 import { beforeAll, describe, expect, it, vi } from 'vitest';
@@ -28,6 +27,7 @@ import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { createDeferred } from '@test/support/asyncTestUtils';
+import { REPO_ROOT } from '@test/support/repoScan';
 
 const { listRemoteAgents, ORCHESTRATOR_AGENT } = vi.hoisted(() => {
   const ORCHESTRATOR_AGENT = {
@@ -48,10 +48,6 @@ vi.mock('@agent/remote/remoteAgentList', () => ({
   listRemoteAgents,
 }));
 
-const REPO_ROOT = resolve(
-  fileURLToPath(new URL('.', import.meta.url)),
-  '../../..',
-);
 const BUILTIN_AGENTS_DIR = resolve(
   REPO_ROOT,
   'packages/extension/resources/agents',

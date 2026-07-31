@@ -16,7 +16,10 @@ import { AgentCategory } from '../agent';
 
 import { StreamTabIdSchema } from '../identifiers';
 import { StreamLogEntrySchema, StreamLogTextDeltaSchema } from '../log';
-import { AgentOptionDataSchema, ModelOptionDataSchema } from '../mainView';
+import {
+  AgentOptionDataSchema,
+  ModelOptionDataSchema,
+} from '../mainView/state';
 import { CompileFailureSchema, OutputFileInfoSchema } from '../output';
 import { roundIndexedRecord } from '../roundIndexed';
 import { InquiryThreadUpdatedEventSchema } from '../inquiry';

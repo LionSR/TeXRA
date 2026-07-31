@@ -1,16 +1,14 @@
 import * as path from 'node:path';
 
 import * as logger from '@logger/logUtils';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { EXCLUDED_DIRS } from '@shared/constants/latex';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { readPlatformSetting } from '@utils/config/platformSettings';
 import { isDirectory, isFile, isSymlink } from '@utils/files/fsEntryType';
 import { hasExtension } from '@utils/core/pathCore';
 
-import { runLatexFormatter } from '../texFormatter';
+import { resolveLatexFormatter } from '../texFormatter';
 
 const CHANNEL = 'LaTeXCommands';
 
@@ -53,19 +51,14 @@ export async function indentLatexFilesInDirectory(
     `Starting LaTeX indentation process for directory: ${directory}`,
   );
 
-  const formatter = readPlatformSetting<string>(
-    WorkspaceStateKey.LATEX_FORMATTER,
-  );
-  if (formatter === 'none') {
+  const formatter = resolveLatexFormatter();
+  if (!formatter) {
     logger.debug(CHANNEL, 'LaTeX formatter disabled; skipping indentation');
     return { status: 'disabled', directory, count: 0 };
   }
-  const configKey =
-    formatter === 'tex-fmt'
-      ? 'texra.latex.texfmtConfig'
-      : 'texra.latex.latexindentConfig';
+  const { id, configKey, run: runFormatter } = formatter;
   const config = getConfig<string>(configKey, '');
-  logger.debug(CHANNEL, `Formatter: ${formatter}, Config: ${config}`);
+  logger.debug(CHANNEL, `Formatter: ${id}, Config: ${config}`);
 
   if (config && !(await AbsoluteFS.exists(config))) {
     logger.error(CHANNEL, `Formatter config file not found at ${config}`);
@@ -106,7 +99,7 @@ export async function indentLatexFilesInDirectory(
       logger.debug(CHANNEL, `Processing file: ${fullPath}`);
 
       try {
-        if (await runLatexFormatter(fullPath)) {
+        if (await runFormatter(fullPath)) {
           logger.info(CHANNEL, `Successfully formatted: ${fullPath}`);
           indentedCount++;
         } else {

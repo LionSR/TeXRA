@@ -2,17 +2,13 @@
 import { z } from 'zod';
 
 // Local imports
-import {
-  CORE_LATEX_TOOLS,
-  IMAGE_TOOLS,
-  LATEX_WORKSHOP_EXT_ID,
-} from '@shared/constants/latex';
+import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latex';
 import { ToolError, type ToolResult } from '@shared/schemas/toolResult';
 
 // Local file imports
 import { defineTool } from '../core/define';
 import { getSetupAuthStatus, getSetupPlatform, setupSecrets } from './platform';
-import { isToolPresent } from './toolProbing';
+import { locateTool, missingCoreTools, PROBED_CORE_TOOLS } from './toolProbing';
 
 const VerifySetupInputSchema = z.strictObject({
   tool: z
@@ -44,15 +40,15 @@ export class VerifySetupTool extends defineTool({
       // reports a missing image tool; the agent naturally reuses that token.
       if (name === 'gm/magick') {
         const [gm, magick] = await Promise.all([
-          isToolPresent('gm'),
-          isToolPresent('magick'),
+          locateTool('gm'),
+          locateTool('magick'),
         ]);
-        const ok = gm || magick;
+        const ok = gm.installed || magick.installed;
         return {
           status: 'executed',
           summary: `Verify gm/magick: ${ok ? 'ok' : 'missing'}`,
           output: ok
-            ? `Verified: ${gm ? '"gm"' : '"magick"'} is installed and on PATH.`
+            ? `Verified: ${gm.installed ? '"gm"' : '"magick"'} is installed and on PATH.`
             : `Not found: neither "gm" nor "magick" is on PATH. The install may not have completed, or the shell PATH needs to be refreshed.`,
         };
       }
@@ -65,7 +61,7 @@ export class VerifySetupTool extends defineTool({
           `Invalid tool name "${name}". Must start with an alphanumeric character; only \`A-Za-z0-9._+-\` are allowed thereafter (or the alias "gm/magick").`,
         );
       }
-      const ok = await isToolPresent(name);
+      const { installed: ok } = await locateTool(name);
       return {
         status: 'executed',
         summary: `Verify ${name}: ${ok ? 'ok' : 'missing'}`,
@@ -80,16 +76,12 @@ export class VerifySetupTool extends defineTool({
     const auth = await getSetupAuthStatus().catch(() => ({
       authenticated: false as const,
     }));
-    const [coreResults, imageResults, hasUsableCredential] = await Promise.all([
-      Promise.all(CORE_LATEX_TOOLS.map(isToolPresent)),
-      Promise.all(IMAGE_TOOLS.map(isToolPresent)),
+    const [coreStatuses, hasUsableCredential] = await Promise.all([
+      Promise.all(PROBED_CORE_TOOLS.map((name) => locateTool(name))),
       setupSecrets.anyUsableCredentialExists(),
     ]);
 
-    const missingCore: string[] = CORE_LATEX_TOOLS.filter(
-      (_, i) => !coreResults[i],
-    );
-    if (!imageResults.some(Boolean)) missingCore.push('gm/magick');
+    const missingCore = missingCoreTools(coreStatuses);
 
     const latexWorkshopInstalled = platform.extensions?.isInstalled(
       LATEX_WORKSHOP_EXT_ID,

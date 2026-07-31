@@ -16,10 +16,7 @@ import {
   type FormatOptions,
   type FormatResult,
 } from './baseLogFormatter';
-import {
-  formatBannerContentTemplate,
-  formatModelResponseTemplate,
-} from './logFormatters/bannerFormatters';
+import { formatBannerContentTemplate } from './logFormatters/bannerFormatters';
 import { formatContextManagementTemplate } from './logFormatters/contextManagementFormatters';
 import {
   formatFileListTemplate,
@@ -119,7 +116,7 @@ const TEMPLATE_FORMATTERS: Partial<Record<MessageType, TemplateFormatterFn>> = {
 
   // Model response
   modelResponse: wrapWithErrorHandling(
-    formatModelResponseTemplate,
+    formatBannerContentTemplate,
     'Assistant',
   ),
 

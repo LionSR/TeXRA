@@ -85,6 +85,39 @@ const INTERACTIVE_RECOVERY = {
   configureKeyAction: 'configure a provider API key',
 } as const;
 
+// One included-access model and one provider-key model, so a resolution is
+// runnable in exactly one API mode.
+const API_MODE_SPLIT_ENTRIES: CliModelAccess[] = [
+  model('sonnet46T', {
+    model: modelOption('sonnet46T', { availability: 'included-access' }),
+    status: 'included access',
+  }),
+  model('deepseekT', {
+    model: modelOption('deepseekT', { availability: 'provider-key' }),
+    status: 'api key set',
+  }),
+];
+
+const MISSING_KEY_ONLY_ENTRIES: CliModelAccess[] = [
+  model('gemini31p', {
+    available: false,
+    status: 'missing api key',
+    model: modelOption('gemini31p', {
+      availability: 'missing-key',
+      disabled: true,
+      requiresKey: true,
+    }),
+  }),
+];
+
+const RETIRED_HAIKU3_OPTION = modelOption('haiku3', {
+  label: 'Haiku 3',
+  availability: 'retired',
+  availabilityLabel: 'Retired',
+  disabled: true,
+  requiresKey: false,
+});
+
 describe('CLI model access resolution', () => {
   beforeEach(() => {
     computeModelOptionsDataMock.mockReset();
@@ -704,24 +737,10 @@ describe('CLI model access resolution', () => {
 
   it('rejects personal-key models in included TeXRA mode', async () => {
     await expect(
-      resolveModelFromAccessList(
-        [
-          model('sonnet46T', {
-            model: modelOption('sonnet46T', {
-              availability: 'included-access',
-            }),
-            status: 'included access',
-          }),
-          model('deepseekT', {
-            model: modelOption('deepseekT', {
-              availability: 'provider-key',
-            }),
-            status: 'api key set',
-          }),
-        ],
-        'deepseekT',
-        { fallbackReason: 'explicit-override', apiMode: 'included' },
-      ),
+      resolveModelFromAccessList(API_MODE_SPLIT_ENTRIES, 'deepseekT', {
+        fallbackReason: 'explicit-override',
+        apiMode: 'included',
+      }),
     ).rejects.toThrow(
       'Model "deepseekT" is not available in the active API mode (api key set). Available models: sonnet46T.',
     );
@@ -729,24 +748,10 @@ describe('CLI model access resolution', () => {
 
   it('falls back from included TeXRA models in personal API mode', async () => {
     await expect(
-      resolveModelFromAccessList(
-        [
-          model('sonnet46T', {
-            model: modelOption('sonnet46T', {
-              availability: 'included-access',
-            }),
-            status: 'included access',
-          }),
-          model('deepseekT', {
-            model: modelOption('deepseekT', {
-              availability: 'provider-key',
-            }),
-            status: 'api key set',
-          }),
-        ],
-        'sonnet46T',
-        { fallbackReason: 'command-config', apiMode: 'personal' },
-      ),
+      resolveModelFromAccessList(API_MODE_SPLIT_ENTRIES, 'sonnet46T', {
+        fallbackReason: 'command-config',
+        apiMode: 'personal',
+      }),
     ).resolves.toEqual({
       model: 'deepseekT',
       notice:
@@ -756,21 +761,9 @@ describe('CLI model access resolution', () => {
 
   it('reports when no fallback model is runnable', async () => {
     await expect(
-      resolveModelFromAccessList(
-        [
-          model('gemini31p', {
-            available: false,
-            status: 'missing api key',
-            model: modelOption('gemini31p', {
-              availability: 'missing-key',
-              disabled: true,
-              requiresKey: true,
-            }),
-          }),
-        ],
-        'gemini31p',
-        { fallbackReason: 'command-config' },
-      ),
+      resolveModelFromAccessList(MISSING_KEY_ONLY_ENTRIES, 'gemini31p', {
+        fallbackReason: 'command-config',
+      }),
     ).rejects.toThrow(
       'Model "gemini31p" is not available in the active API mode (missing api key). No models are currently available. Run `texra login` for included TeXRA access, retry with `--api-mode included`, or add a provider API key with `texra setup`.',
     );
@@ -781,21 +774,10 @@ describe('CLI model access resolution', () => {
       'Add a provider API key with `texra setup` for personal mode, or retry with `--api-mode included` and run `texra login` for included TeXRA access.',
     );
     await expect(
-      resolveModelFromAccessList(
-        [
-          model('gemini31p', {
-            available: false,
-            status: 'missing api key',
-            model: modelOption('gemini31p', {
-              availability: 'missing-key',
-              disabled: true,
-              requiresKey: true,
-            }),
-          }),
-        ],
-        'gemini31p',
-        { fallbackReason: 'command-config', apiMode: 'personal' },
-      ),
+      resolveModelFromAccessList(MISSING_KEY_ONLY_ENTRIES, 'gemini31p', {
+        fallbackReason: 'command-config',
+        apiMode: 'personal',
+      }),
     ).rejects.toThrow(
       'Model "gemini31p" is not available in the active API mode (missing api key). No models are currently available. Add a provider API key with `texra setup` for personal mode, or retry with `--api-mode included` and run `texra login` for included TeXRA access.',
     );
@@ -803,103 +785,18 @@ describe('CLI model access resolution', () => {
 
   it('can format command-specific recovery hints for interactive chat', async () => {
     await expect(
-      resolveModelFromAccessList(
-        [
-          model('gemini31p', {
-            available: false,
-            status: 'missing api key',
-            model: modelOption('gemini31p', {
-              availability: 'missing-key',
-              disabled: true,
-              requiresKey: true,
-            }),
-          }),
-        ],
-        'gemini31p',
-        {
-          fallbackReason: 'command-config',
-          noAvailableModelsMessage:
-            'Run `texra login` for included TeXRA access.',
-        },
-      ),
+      resolveModelFromAccessList(MISSING_KEY_ONLY_ENTRIES, 'gemini31p', {
+        fallbackReason: 'command-config',
+        noAvailableModelsMessage:
+          'Run `texra login` for included TeXRA access.',
+      }),
     ).rejects.toThrow(
       'Model "gemini31p" is not available in the active API mode (missing api key). No models are currently available. Run `texra login` for included TeXRA access.',
     );
   });
 
-  it('shows a recovery hint for not-included models in model details', () => {
-    const text = formatCliModelDetails(
-      model('glm52', {
-        available: false,
-        status: 'not included',
-        model: modelOption('glm52', {
-          label: 'GLM-5.2',
-          availability: 'not-included',
-          availabilityLabel: 'Not included',
-          disabled: true,
-        }),
-      }),
-      'included',
-    );
-
-    expect(text).toContain('status: not included');
-    expect(text).toContain(
-      'recovery: Add a provider API key with `texra setup`, then retry with `--api-mode personal`.',
-    );
-  });
-
-  it('does not suggest included mode for not-included models in personal mode', () => {
-    const text = formatCliModelDetails(
-      model('glm52', {
-        available: false,
-        status: 'not included',
-        model: modelOption('glm52', {
-          label: 'GLM-5.2',
-          availability: 'not-included',
-          availabilityLabel: 'Not included',
-          disabled: true,
-        }),
-      }),
-      'personal',
-    );
-
-    expect(text).toContain(
-      'recovery: Add a provider API key with `texra setup` for personal mode.',
-    );
-    expect(text).not.toContain('`--api-mode included`');
-  });
-
-  it('shows terminal recovery text for retired models in model details', () => {
-    const text = formatCliModelDetails(
-      model('haiku3', {
-        available: false,
-        status: 'retired',
-        model: modelOption('haiku3', {
-          label: 'Haiku 3',
-          availability: 'retired',
-          availabilityLabel: 'Retired',
-          disabled: true,
-        }),
-      }),
-      'included',
-    );
-
-    expect(text).toContain('status: retired');
-    expect(text).toContain('availability: Retired');
-    expect(text).toContain('recovery: Choose an active model.');
-    expect(text).not.toContain('texra setup');
-  });
-
   it('rejects explicit retired hidden models before fallback', async () => {
-    computeModelOptionsDataMock.mockResolvedValueOnce([
-      modelOption('haiku3', {
-        label: 'Haiku 3',
-        availability: 'retired',
-        availabilityLabel: 'Retired',
-        disabled: true,
-        requiresKey: false,
-      }),
-    ]);
+    computeModelOptionsDataMock.mockResolvedValueOnce([RETIRED_HAIKU3_OPTION]);
 
     await expect(
       selectCliRunnableModel('haiku3', {
@@ -914,15 +811,7 @@ describe('CLI model access resolution', () => {
 
   it('does not mask explicit retired models behind included login', async () => {
     isAuthenticatedSpy.mockResolvedValue(false);
-    computeModelOptionsDataMock.mockResolvedValueOnce([
-      modelOption('haiku3', {
-        label: 'Haiku 3',
-        availability: 'retired',
-        availabilityLabel: 'Retired',
-        disabled: true,
-        requiresKey: false,
-      }),
-    ]);
+    computeModelOptionsDataMock.mockResolvedValueOnce([RETIRED_HAIKU3_OPTION]);
 
     await expect(
       selectCliRunnableModel('haiku3', {
@@ -935,9 +824,67 @@ describe('CLI model access resolution', () => {
     );
   });
 
-  it('shows a recovery hint for missing provider-key models in model details', () => {
-    const text = formatCliModelDetails(
-      model('glm52', {
+  it.each([
+    {
+      name: 'shows a recovery hint for not-included models in model details',
+      entry: model('glm52', {
+        available: false,
+        status: 'not included',
+        model: modelOption('glm52', {
+          label: 'GLM-5.2',
+          availability: 'not-included',
+          availabilityLabel: 'Not included',
+          disabled: true,
+        }),
+      }),
+      apiMode: 'included' as const,
+      contains: [
+        'status: not included',
+        'recovery: Add a provider API key with `texra setup`, then retry with `--api-mode personal`.',
+      ],
+      excludes: [],
+    },
+    {
+      name: 'does not suggest included mode for not-included models in personal mode',
+      entry: model('glm52', {
+        available: false,
+        status: 'not included',
+        model: modelOption('glm52', {
+          label: 'GLM-5.2',
+          availability: 'not-included',
+          availabilityLabel: 'Not included',
+          disabled: true,
+        }),
+      }),
+      apiMode: 'personal' as const,
+      contains: [
+        'recovery: Add a provider API key with `texra setup` for personal mode.',
+      ],
+      excludes: ['`--api-mode included`'],
+    },
+    {
+      name: 'shows terminal recovery text for retired models in model details',
+      entry: model('haiku3', {
+        available: false,
+        status: 'retired',
+        model: modelOption('haiku3', {
+          label: 'Haiku 3',
+          availability: 'retired',
+          availabilityLabel: 'Retired',
+          disabled: true,
+        }),
+      }),
+      apiMode: 'included' as const,
+      contains: [
+        'status: retired',
+        'availability: Retired',
+        'recovery: Choose an active model.',
+      ],
+      excludes: ['texra setup'],
+    },
+    {
+      name: 'shows a recovery hint for missing provider-key models in model details',
+      entry: model('glm52', {
         available: false,
         status: 'missing api key',
         model: modelOption('glm52', {
@@ -948,18 +895,16 @@ describe('CLI model access resolution', () => {
           requiresKey: true,
         }),
       }),
-      'personal',
-    );
-
-    expect(text).toContain('status: missing api key');
-    expect(text).toContain(
-      'recovery: Add a provider API key with `texra setup` for personal mode, or run `texra login` and retry with `--api-mode included` if this model is included.',
-    );
-  });
-
-  it('tells included-mode users to switch modes after adding a missing key', () => {
-    const text = formatCliModelDetails(
-      model('glm52', {
+      apiMode: 'personal' as const,
+      contains: [
+        'status: missing api key',
+        'recovery: Add a provider API key with `texra setup` for personal mode, or run `texra login` and retry with `--api-mode included` if this model is included.',
+      ],
+      excludes: [],
+    },
+    {
+      name: 'tells included-mode users to switch modes after adding a missing key',
+      entry: model('glm52', {
         available: false,
         status: 'missing api key',
         model: modelOption('glm52', {
@@ -970,17 +915,15 @@ describe('CLI model access resolution', () => {
           requiresKey: true,
         }),
       }),
-      'included',
-    );
-
-    expect(text).toContain(
-      'recovery: Add a provider API key with `texra setup`, then retry with `--api-mode personal`.',
-    );
-  });
-
-  it('does not ask users to configure a key that is already present', () => {
-    const text = formatCliModelDetails(
-      model('deepseekT', {
+      apiMode: 'included' as const,
+      contains: [
+        'recovery: Add a provider API key with `texra setup`, then retry with `--api-mode personal`.',
+      ],
+      excludes: [],
+    },
+    {
+      name: 'does not ask users to configure a key that is already present',
+      entry: model('deepseekT', {
         available: false,
         status: 'api key set',
         model: modelOption('deepseekT', {
@@ -988,16 +931,13 @@ describe('CLI model access resolution', () => {
           availabilityLabel: 'API key set',
         }),
       }),
-      'included',
-    );
-
-    expect(text).toContain('recovery: Retry with `--api-mode personal`.');
-    expect(text).not.toContain('configuring a provider API key');
-  });
-
-  it('shows the included-mode recovery hint for included models in personal mode', () => {
-    const text = formatCliModelDetails(
-      model('sonnet46T', {
+      apiMode: 'included' as const,
+      contains: ['recovery: Retry with `--api-mode personal`.'],
+      excludes: ['configuring a provider API key'],
+    },
+    {
+      name: 'shows the included-mode recovery hint for included models in personal mode',
+      entry: model('sonnet46T', {
         available: false,
         status: 'included: available',
         model: modelOption('sonnet46T', {
@@ -1005,16 +945,13 @@ describe('CLI model access resolution', () => {
           availabilityLabel: 'Included access',
         }),
       }),
-      'personal',
-    );
-
-    expect(text).toContain('recovery: Retry with `--api-mode included`.');
-    expect(text).not.toContain('texra login');
-  });
-
-  it('does not repeat personal-mode advice when showing login-required models', () => {
-    const text = formatCliModelDetails(
-      model('sonnet46T', {
+      apiMode: 'personal' as const,
+      contains: ['recovery: Retry with `--api-mode included`.'],
+      excludes: ['texra login'],
+    },
+    {
+      name: 'does not repeat personal-mode advice when showing login-required models',
+      entry: model('sonnet46T', {
         available: false,
         status: 'login required',
         model: modelOption('sonnet46T', {
@@ -1023,18 +960,15 @@ describe('CLI model access resolution', () => {
           disabled: true,
         }),
       }),
-      'personal',
-    );
-
-    expect(text).toContain(
-      'recovery: Run `texra login` for included TeXRA access, then retry with `--api-mode included`.',
-    );
-    expect(text).not.toContain('retry with `--api-mode personal`');
-  });
-
-  it('does not repeat personal-mode advice for quota-exhausted models', () => {
-    const text = formatCliModelDetails(
-      model('sonnet46T', {
+      apiMode: 'personal' as const,
+      contains: [
+        'recovery: Run `texra login` for included TeXRA access, then retry with `--api-mode included`.',
+      ],
+      excludes: ['retry with `--api-mode personal`'],
+    },
+    {
+      name: 'does not repeat personal-mode advice for quota-exhausted models',
+      entry: model('sonnet46T', {
         available: false,
         status: 'relay quota exhausted',
         model: modelOption('sonnet46T', {
@@ -1043,11 +977,15 @@ describe('CLI model access resolution', () => {
           disabled: true,
         }),
       }),
-      'personal',
-    );
+      apiMode: 'personal' as const,
+      contains: ['recovery: Retry later.'],
+      excludes: ['use `--api-mode personal`'],
+    },
+  ])('$name', ({ entry, apiMode, contains, excludes }) => {
+    const text = formatCliModelDetails(entry, apiMode);
 
-    expect(text).toContain('recovery: Retry later.');
-    expect(text).not.toContain('use `--api-mode personal`');
+    for (const expected of contains) expect(text).toContain(expected);
+    for (const absent of excludes) expect(text).not.toContain(absent);
   });
 
   it('marks explicitly included-mode models as login-required when signed out', async () => {

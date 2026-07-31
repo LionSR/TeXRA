@@ -9,6 +9,7 @@ import {
   ExternalInquirySessionLinksSchema,
   ExternalInquiryThreadIdSchema,
 } from './inquiry';
+import { LineCountSchema } from './lineChanges';
 import { PlanSchema } from './plan';
 import {
   BaseProposalFieldsSchema,
@@ -29,8 +30,8 @@ export const ToolEditPermissionSchema = PermissionBaseSchema.extend({
   path: z.string(),
   relativePath: z.string(),
   sourceTool: z.string(),
-  addedLines: z.int().nonnegative(),
-  removedLines: z.int().nonnegative(),
+  addedLines: LineCountSchema,
+  removedLines: LineCountSchema,
   isLatex: z.boolean(),
   originalContent: z.string().optional(),
   proposedContent: z.string().optional(),

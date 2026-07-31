@@ -234,15 +234,8 @@ export class ProgressBackend {
     const hasVisibleActive =
       activeAfterClear !== '' && visibleStreams.includes(activeAfterClear);
     if (activeAfterClear === stream || (wasActive && !hasVisibleActive)) {
-      const nextActive =
-        visibleStreams.length === 0
-          ? ''
-          : this.state.pickValidActiveStream(visibleStreams);
-      if (activeAfterClear && activeAfterClear !== nextActive) {
-        this.state.releasePreviousActive(activeAfterClear);
-      }
-      this.state.activeStream = nextActive;
-      shouldActivateStream = nextActive !== '';
+      shouldActivateStream =
+        this.state.rotateActiveStream(visibleStreams) !== '';
     } else if (wasActive && hasVisibleActive) {
       shouldActivateStream = true;
     }

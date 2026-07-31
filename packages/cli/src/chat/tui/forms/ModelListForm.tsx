@@ -16,7 +16,6 @@ import {
 import type { CliApiMode } from '@cli/runtime/apiAccessMode';
 import { formatCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import { Select } from '@cli/tui/ui/Select';
-import { KeyHints } from '@cli/tui/ui/KeyHints';
 import {
   computeSelectWindowSize,
   isCompactFormRows,
@@ -24,12 +23,11 @@ import {
 } from '@cli/tui/selectWindow';
 import type { AgentCategory } from '@shared/schemas/agent';
 import {
-  CompactFormKeyHints,
+  CompactPickerKeyHints,
   FormFrame,
-  renderAsyncListFormTransient,
+  PickerKeyHints,
 } from './_shared/FormFrame';
-import { useAsyncListForm } from './_shared/useAsyncListForm';
-import { usePendingListFormSelection } from './_shared/ListForm';
+import { useAsyncPickerForm } from './_shared/ListForm';
 import { isPlainReturnInput } from '../input/inputKeys';
 
 const TUI_MODEL_EMPTY_RECOVERY = {
@@ -92,22 +90,27 @@ function EmptyModelListState(props: {
 }
 
 export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
-  const { data, loading, error, pendingInput, clearPendingInput } =
-    useAsyncListForm<readonly CliModelAccess[]>({
-      load: () =>
-        getCliModelAccessList({
-          apiMode: props.apiMode,
-          agentCategory: props.agentCategory,
-        }),
-      onClose: props.onClose,
-      isEmpty: (models) => !models.some((model) => model.available),
-    });
-  const models = data ?? [];
-  const items = modelSelectItemsForCliMode(
-    models,
-    props.apiMode,
-    props.getModelSwitchDisabledReason,
-  );
+  const picker = useAsyncPickerForm<readonly CliModelAccess[], string>({
+    title: '/model',
+    loadingLabel: 'Loading model registry...',
+    load: () =>
+      getCliModelAccessList({
+        apiMode: props.apiMode,
+        agentCategory: props.agentCategory,
+      }),
+    isEmpty: (models) => !models.some((model) => model.available),
+    items: (models) =>
+      modelSelectItemsForCliMode(
+        models,
+        props.apiMode,
+        props.getModelSwitchDisabledReason,
+      ),
+    selectable: props.selectable,
+    onSelect: (value) => props.onSelect?.(value),
+    onClose: props.onClose,
+  });
+  const models = picker.data ?? [];
+  const items = picker.items;
   const selectWindow = modelSelectWindow({
     availableRows: props.availableRows,
     itemCount: items.length,
@@ -117,31 +120,7 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
     selectable: props.selectable,
   });
 
-  function handleSelect(value: string): void {
-    if (props.selectable) {
-      props.onSelect?.(value);
-      return;
-    }
-    props.onClose();
-  }
-
-  usePendingListFormSelection({
-    loading,
-    error,
-    pendingInput,
-    clearPendingInput,
-    items,
-    enabled: props.selectable,
-    onSelect: handleSelect,
-  });
-
-  const transient = renderAsyncListFormTransient({
-    loading,
-    error,
-    title: '/model',
-    loadingLabel: 'Loading model registry...',
-  });
-  if (transient) return transient;
+  if (picker.transient) return picker.transient;
 
   if (isCompactFormRows(props.availableRows) && items.length > 0) {
     return (
@@ -155,51 +134,11 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
           activeValue={props.currentModel}
           maxVisibleItems={1}
           showOverflow={false}
-          onSelect={handleSelect}
+          onSelect={picker.select}
           onCancel={props.onClose}
         />
-        <CompactFormKeyHints
-          primary={
-            props.selectable
-              ? { key: '1-9/a-z/Enter', action: 'select' }
-              : { key: 'Enter', action: 'close' }
-          }
-        />
+        <CompactPickerKeyHints selectable={props.selectable} />
       </FormFrame>
-    );
-  }
-
-  function footerHints(): React.JSX.Element {
-    if (props.selectable && items.length > 0) {
-      return (
-        <KeyHints
-          hints={[
-            { key: '↑/↓', action: 'navigate' },
-            { key: '1-9/a-z', action: 'select' },
-          ]}
-        />
-      );
-    }
-    if (items.length > 0) {
-      return (
-        <KeyHints
-          hints={[
-            { key: '↑/↓', action: 'navigate' },
-            { key: 'Enter', action: 'close' },
-            { key: 'Esc', action: 'close' },
-          ]}
-          confirmCancel={false}
-        />
-      );
-    }
-    return (
-      <KeyHints
-        hints={[
-          { key: 'Enter', action: 'close' },
-          { key: 'Esc', action: 'close' },
-        ]}
-        confirmCancel={false}
-      />
     );
   }
 
@@ -222,12 +161,17 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
             activeValue={props.currentModel}
             maxVisibleItems={selectWindow.maxVisibleItems}
             showOverflow={selectWindow.showOverflow}
-            onSelect={handleSelect}
+            onSelect={picker.select}
             onCancel={props.onClose}
           />
         </Box>
       )}
-      <Box marginTop={1}>{footerHints()}</Box>
+      <Box marginTop={1}>
+        <PickerKeyHints
+          selectable={props.selectable}
+          hasItems={items.length > 0}
+        />
+      </Box>
     </FormFrame>
   );
 }

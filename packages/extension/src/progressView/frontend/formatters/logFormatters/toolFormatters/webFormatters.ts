@@ -5,16 +5,11 @@
  * single-line templates with `// prettier-ignore` to prevent whitespace issues.
  */
 
-// Side-effect imports - register WA components
-import '@awesome.me/webawesome/dist/components/details/details.js';
-
 import { html, type TemplateResult } from 'lit';
-import { classMap } from 'lit/directives/class-map.js';
 
 import {
   buildToolUseSection,
   wrapInPre,
-  buildDetailsSummary,
   SPINNER_ICON_NAME,
 } from '@progressView/frontend/formatters/htmlBuilders';
 import type { FormatResult } from '@progressView/frontend/formatters/baseLogFormatter';
@@ -26,21 +21,7 @@ import {
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { tryParseUrl } from '@utils/core';
-import { buildBannerContent } from './helpers';
-
-/** Wrap formatted tool content in the shared collapsible banner shell. */
-function buildToolUseDetails(opts: {
-  message: LogMessageData;
-  iconName: TeXRAIconName | typeof SPINNER_ICON_NAME;
-  label: string;
-  isError: boolean;
-  content: TemplateResult;
-  defaultOpen?: boolean;
-}): TemplateResult {
-  const bannerContentTemplate = buildBannerContent(opts.message, opts.content);
-  // prettier-ignore
-  return html`<wa-details appearance="plain" icon-placement="start" class=${classMap({ 'banner-details': true, 'tool-use-details': true, 'tool-use-error': opts.isError })} ?open=${opts.defaultOpen ?? false}>${buildDetailsSummary({ iconName: opts.iconName, label: opts.label, labelClass: 'tool-use-title' })}${bannerContentTemplate}</wa-details>`;
-}
+import { buildToolUseDetails } from './helpers';
 
 // Web search provider display names
 const PROVIDER_LABELS: Record<string, string> = {

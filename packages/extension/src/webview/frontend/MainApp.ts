@@ -112,7 +112,7 @@ import {
   scheduleInstructionSave,
 } from './persistence';
 import { mainViewMessageHandlers } from './messageDispatcher';
-import { FILE_SELECT_CONFIGS, FILE_TYPE_TO_KEY } from './store';
+import { FILE_SELECT_CONFIGS, MULTI_FILE_LISTS } from './store';
 import { mainViewStyles } from './styles';
 
 registerTeXRAWebAwesomeIcons();
@@ -377,7 +377,8 @@ export class MainApp extends MainAppBase {
     const fo = fileOptions$.get();
     const files = multiFiles$.get();
     const visibleFileCount = visibleFileConfigs.reduce(
-      (count, config) => count + files[FILE_TYPE_TO_KEY[config.type]].length,
+      (count, config) =>
+        count + files[MULTI_FILE_LISTS[config.type].key].length,
       0,
     );
 

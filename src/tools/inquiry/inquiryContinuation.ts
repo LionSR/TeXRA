@@ -176,14 +176,15 @@ async function deliverContinuation(params: {
   return outcome;
 }
 
-export async function injectContinuationForAnsweredThread(
+/**
+ * Shared body of the answered / dropped injectors: resolve the manifest,
+ * archive when there is nothing to continue (missing thread, an `answered`
+ * event whose last turn is no longer answered, or no parent stream), then
+ * build and deliver the continuation.
+ */
+async function injectContinuation(
+  event: 'answered' | 'dropped',
   threadId: ExternalInquiryThreadId,
-  /**
-   * Manifest snapshot from the writer (action handler) — pass it to
-   * avoid a re-read race: a concurrent follow-up `ask` from another
-   * stream could flip `answered → open` between the write and the
-   * re-read, which would otherwise drop the continuation as archived.
-   */
   manifestHint?: ExternalInquiryThreadManifest,
   session?: SessionHandle,
 ): Promise<InjectionOutcome> {
@@ -191,7 +192,7 @@ export async function injectContinuationForAnsweredThread(
   if (!manifest) return 'archived';
 
   const lastTurn = manifest.turns.at(-1);
-  if (!lastTurn || lastTurn.kind !== 'answered') return 'archived';
+  if (event === 'answered' && lastTurn?.kind !== 'answered') return 'archived';
   if (manifest.parentStreamId == null) {
     await emitInquiryThreadUpdate(
       threadId,
@@ -205,10 +206,13 @@ export async function injectContinuationForAnsweredThread(
 
   const stillOpen = await listOpenThreadsForStream(manifest.parentStreamId);
   const text = buildContinuationText({
-    event: 'answered',
+    event,
     threadId,
-    question: lastTurn.question,
-    answer: lastTurn.answer,
+    question: lastTurn?.question ?? '',
+    answer:
+      event === 'answered' && lastTurn?.kind === 'answered'
+        ? lastTurn.answer
+        : undefined,
     stillOpen,
   });
 
@@ -220,7 +224,21 @@ export async function injectContinuationForAnsweredThread(
   });
 }
 
-export async function injectContinuationForDroppedThread(
+export function injectContinuationForAnsweredThread(
+  threadId: ExternalInquiryThreadId,
+  /**
+   * Manifest snapshot from the writer (action handler) — pass it to
+   * avoid a re-read race: a concurrent follow-up `ask` from another
+   * stream could flip `answered → open` between the write and the
+   * re-read, which would otherwise drop the continuation as archived.
+   */
+  manifestHint?: ExternalInquiryThreadManifest,
+  session?: SessionHandle,
+): Promise<InjectionOutcome> {
+  return injectContinuation('answered', threadId, manifestHint, session);
+}
+
+export function injectContinuationForDroppedThread(
   threadId: ExternalInquiryThreadId,
   /**
    * Manifest snapshot from `markDropped` — same race-avoidance pattern
@@ -231,33 +249,5 @@ export async function injectContinuationForDroppedThread(
   manifestHint?: ExternalInquiryThreadManifest,
   session?: SessionHandle,
 ): Promise<InjectionOutcome> {
-  const manifest = manifestHint ?? (await readExternalInquiryThread(threadId));
-  if (!manifest) return 'archived';
-  if (manifest.parentStreamId == null) {
-    await emitInquiryThreadUpdate(
-      threadId,
-      {
-        resumeOutcome: 'parent_finished',
-      },
-      session,
-    );
-    return 'archived';
-  }
-
-  const lastTurn = manifest.turns.at(-1);
-  const question = lastTurn?.question ?? '';
-  const stillOpen = await listOpenThreadsForStream(manifest.parentStreamId);
-  const text = buildContinuationText({
-    event: 'dropped',
-    threadId,
-    question,
-    stillOpen,
-  });
-
-  return deliverContinuation({
-    parentStreamId: manifest.parentStreamId,
-    text,
-    threadId,
-    session,
-  });
+  return injectContinuation('dropped', threadId, manifestHint, session);
 }

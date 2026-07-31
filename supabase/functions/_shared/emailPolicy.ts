@@ -47,6 +47,37 @@ const PRIVACY_RELAY_EMAIL_DOMAINS: ReadonlySet<string> = new Set([
   'pm.me',
 ]);
 
+/**
+ * Blocked-domain categories, checked in order. Each carries its own reason
+ * prefix and user message so a category can be added, reworded, or moved to
+ * soft-review without touching the matching logic.
+ */
+const BLOCKED_DOMAIN_POLICIES: readonly {
+  domains: ReadonlySet<string>;
+  reasonPrefix: string;
+  userMessage: (domain: string) => string;
+}[] = [
+  {
+    domains: DISPOSABLE_EMAIL_DOMAINS,
+    reasonPrefix: 'disposable-domain',
+    userMessage: (domain) =>
+      `Sign-up is restricted: "${domain}" is a disposable / temporary email provider. ` +
+      'Please sign in with a GitHub account that uses your primary institutional, ' +
+      'employer, or long-term personal email address. ' +
+      'If you believe this is in error, contact contact@texra.ai.',
+  },
+  {
+    domains: PRIVACY_RELAY_EMAIL_DOMAINS,
+    reasonPrefix: 'privacy-relay-domain',
+    userMessage: (domain) =>
+      `Sign-up via "${domain}" is currently not accepted for the Researcher ` +
+      'Access Program due to repeated abuse. Please sign in with a GitHub ' +
+      'account that uses your primary institutional or long-term personal ' +
+      'email address. If this is your only email and you are a legitimate ' +
+      'researcher, contact contact@texra.ai for an exception.',
+  },
+];
+
 type EmailPolicyDecision =
   { allowed: true } | { allowed: false; reason: string; userMessage: string };
 
@@ -87,34 +118,15 @@ export function checkEmailDomain(email: string): EmailPolicyDecision {
     };
   }
 
-  const disposableDomain = findBlockedDomain(domain, DISPOSABLE_EMAIL_DOMAINS);
-  if (disposableDomain) {
-    return {
-      allowed: false,
-      reason: `disposable-domain:${disposableDomain}`,
-      userMessage:
-        `Sign-up is restricted: "${disposableDomain}" is a disposable / temporary email provider. ` +
-        'Please sign in with a GitHub account that uses your primary institutional, ' +
-        'employer, or long-term personal email address. ' +
-        'If you believe this is in error, contact contact@texra.ai.',
-    };
-  }
-
-  const privacyRelayDomain = findBlockedDomain(
-    domain,
-    PRIVACY_RELAY_EMAIL_DOMAINS,
-  );
-  if (privacyRelayDomain) {
-    return {
-      allowed: false,
-      reason: `privacy-relay-domain:${privacyRelayDomain}`,
-      userMessage:
-        `Sign-up via "${privacyRelayDomain}" is currently not accepted for the Researcher ` +
-        'Access Program due to repeated abuse. Please sign in with a GitHub ' +
-        'account that uses your primary institutional or long-term personal ' +
-        'email address. If this is your only email and you are a legitimate ' +
-        'researcher, contact contact@texra.ai for an exception.',
-    };
+  for (const policy of BLOCKED_DOMAIN_POLICIES) {
+    const blockedDomain = findBlockedDomain(domain, policy.domains);
+    if (blockedDomain) {
+      return {
+        allowed: false,
+        reason: `${policy.reasonPrefix}:${blockedDomain}`,
+        userMessage: policy.userMessage(blockedDomain),
+      };
+    }
   }
 
   return { allowed: true };

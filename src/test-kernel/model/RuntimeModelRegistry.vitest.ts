@@ -22,6 +22,7 @@ import type {
   LanguageModelInfo,
   LanguageModelPort,
 } from '@platform/languageModel';
+import { FakeSecrets } from '@test/support/FakePlatform';
 import { installPlatform } from '@test/support/setupPlatform';
 
 const SONNET: LanguageModelInfo = {
@@ -81,14 +82,7 @@ function failingDiscoveryPort(): LanguageModelPort {
 function modelOptionsAccess(): ModelOptionsAccess {
   return {
     visibleModels: [],
-    secrets: {
-      get: async () => undefined,
-      getStored: async () => undefined,
-      set: async () => {},
-      delete: async () => {},
-      listStoredKeys: async () => [],
-      getEnv: () => undefined,
-    },
+    secrets: new FakeSecrets(),
     useOpenRouter: false,
     serverSideKeyService: {
       canUseServerSideKeys: async () => false,

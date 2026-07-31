@@ -68,20 +68,16 @@ export function emptyUsageStats(): EmptyUsageStats {
   };
 }
 
-function hasUsageActivity(usage: TokenUsageStats): boolean {
-  return (
-    usage.inputTokens !== 0 ||
-    usage.outputTokens !== 0 ||
-    usage.cost !== 0 ||
-    (usage.cacheReadInputTokens ?? 0) !== 0 ||
-    (usage.cacheMissInputTokens ?? 0) !== 0 ||
-    (usage.cacheCreationInputTokens ?? 0) !== 0
-  );
-}
-
 /** Whether usage stats are all zeros (effectively empty). */
 export function isEmptyUsage(usage: TokenUsageStats): boolean {
-  return !hasUsageActivity(usage);
+  return (
+    usage.inputTokens === 0 &&
+    usage.outputTokens === 0 &&
+    usage.cost === 0 &&
+    (usage.cacheReadInputTokens ?? 0) === 0 &&
+    (usage.cacheMissInputTokens ?? 0) === 0 &&
+    (usage.cacheCreationInputTokens ?? 0) === 0
+  );
 }
 
 /** Accumulates usage stats from an iterable into a single total. */
@@ -95,14 +91,10 @@ export function sumUsageStats(
     total.inputTokens += usage.inputTokens;
     total.outputTokens += usage.outputTokens;
     total.cost += usage.cost;
-    total.cacheReadInputTokens =
-      (total.cacheReadInputTokens ?? 0) + (usage.cacheReadInputTokens ?? 0);
-    total.cacheMissInputTokens =
-      (total.cacheMissInputTokens ?? 0) + (usage.cacheMissInputTokens ?? 0);
-    total.cacheCreationInputTokens =
-      (total.cacheCreationInputTokens ?? 0) +
-      (usage.cacheCreationInputTokens ?? 0);
-    if (hasUsageActivity(usage)) {
+    total.cacheReadInputTokens += usage.cacheReadInputTokens ?? 0;
+    total.cacheMissInputTokens += usage.cacheMissInputTokens ?? 0;
+    total.cacheCreationInputTokens += usage.cacheCreationInputTokens ?? 0;
+    if (!isEmptyUsage(usage)) {
       const usageRoute = usage.usageRoute;
       if (usageRoute == null) {
         hasMixedOrMissingUsageRoute = true;

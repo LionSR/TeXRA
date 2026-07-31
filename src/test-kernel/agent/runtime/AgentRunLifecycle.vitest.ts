@@ -4,7 +4,6 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
-import { ModelProvider } from 'llm-zoo';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
@@ -15,18 +14,11 @@ import {
   inspectExecutionLease,
   releaseOwnedExecutionLease,
 } from '@agent/storage/executionLease';
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import {
-  AgentCategory,
-  AgentPromptSchema,
-  AgentSettingSchema,
-} from '@agent/core/definition/AgentDataclass';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import {
   AgentExecutionHandle,
   type LiveToolUseFlowContext,
 } from '@agent/runtime/ExecutionHandle';
-import { createRunScope } from '@agent/runtime/RunScope';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   finalizeRunTerminal,
@@ -38,7 +30,6 @@ import {
   type WaitingToolUseFlowResult,
 } from '@agent/runtime/AgentFlowResult';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
-import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { platform } from '@platform/platform';
 import {
   EXECUTION_STATUS,
@@ -48,7 +39,6 @@ import {
   STREAM_STATUS,
   type ExecutionId,
   type RunOutcome,
-  type StorageKey,
   type StreamTabId,
 } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -67,6 +57,7 @@ import {
   recordSessionEvents,
   runEventsOfType,
 } from '../progressTestUtils';
+import { createTestLaunchContext } from './launchContextTestUtils';
 
 const storageMocks = vi.hoisted(() => ({
   finalizeExecution: vi.fn(
@@ -110,91 +101,11 @@ async function initLifecycleTestPlatform(firstRunDone: boolean) {
   return platform();
 }
 
-function createLifecycleContext({
-  executionId,
-  streamId,
-  agent = 'test-agent',
-}: {
-  executionId: ExecutionId;
-  streamId: StreamTabId;
-  agent?: string;
-}): {
-  ctx: AgentLaunchContext;
-  explicit: ReturnType<typeof createRecordingHost>;
-} {
-  const explicit = createRecordingHost();
-  const config = AgentConfigSchema.parse({
-    agent,
-    model: 'test-model',
-    agentCategory: AgentCategory.ToolUse,
-  });
-  const setting = AgentSettingSchema.parse({
-    agentCategory: AgentCategory.ToolUse,
-  });
-  const prompt = AgentPromptSchema.parse({});
-  const storageKey = executionId as StorageKey;
-  const session = defaultSession();
-  const runScope = createRunScope({
-    streamId,
-    executionId,
-    agentName: config.agent,
-    session,
-  });
-  const modelInfo = {
-    capabilities: {
-      supportsPromptCaching: false,
-      supportsAutoPromptCaching: false,
-      supportsReasoning: false,
-      cacheDiscountFactor: 0,
-    },
-    config: {
-      provider: ModelProvider.OPENAI,
-      name: 'test-model',
-      fullName: 'Test Model',
-      inputPrice: 0,
-      openRouterOnly: false,
-      requiresResponsesAPI: false,
-    },
-  };
-
-  const ctx: AgentLaunchContext = {
-    config,
-    setting,
-    prompt,
-    runScope,
-    logger: noopTrace,
-    parentStage: noopTrace.openStage('Run: test-agent'),
-    storageKey,
-    userVarChannels: {
-      input: Object.freeze({}),
-      transient: {},
-    },
-    attachedMemoryMisses: [],
-    usageMonitor: new UsageMonitor(
-      modelInfo,
-      {
-        logger: noopTrace,
-        storageKey,
-        streamId,
-      },
-      {
-        agentName: config.agent,
-        agentCategory: setting.agentCategory,
-      },
-    ),
-    modelHandler: {
-      dispose: vi.fn(),
-    } as unknown as AgentLaunchContext['modelHandler'],
-    disposeTrace: vi.fn(),
-  };
-  return { ctx, explicit };
-}
-
 let lifecycleFixtureCounter = 0;
 
 function lifecycleFixture(
   slug: string,
-  agent?: string,
+  agent = 'test-agent',
 ): {
   executionId: ExecutionId;
   streamId: StreamTabId;
@@ -205,13 +116,13 @@ function lifecycleFixture(
   const executionId =
     `e${(lifecycleFixtureCounter++).toString(16).padStart(5, '0')}` as ExecutionId;
   const streamId = `stream-${slug}` as StreamTabId;
-  const streamStatus = defaultSession().status;
-  const { ctx, explicit } = createLifecycleContext({
+  return {
     executionId,
     streamId,
-    agent,
-  });
-  return { executionId, streamId, streamStatus, ctx, explicit };
+    streamStatus: defaultSession().status,
+    ctx: createTestLaunchContext({ executionId, streamId, agent }),
+    explicit: createRecordingHost(),
+  };
 }
 
 function toolUseResult(

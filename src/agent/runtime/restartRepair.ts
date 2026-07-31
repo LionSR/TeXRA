@@ -172,20 +172,9 @@ function synchronizeSettledPhase(
 ): void {
   const current = streamStatus.get(streamId);
   if (current == null || !RESTART_REPAIR_PHASES.has(current)) return;
-  if (current === STREAM_PHASE.WAITING) {
-    streamStatus.transition(
-      streamId,
-      STREAM_PHASE.RUNNING,
-      STREAM_TRANSITION_CAUSE.RESUME,
-      statusEmitOptions,
-    );
-  }
-  streamStatus.transition(
-    streamId,
-    outcome,
-    STREAM_TRANSITION_CAUSE.LIFECYCLE,
-    statusEmitOptions,
-  );
+  // The machine owns the WAITING -> RUNNING(resume) -> terminal(lifecycle)
+  // escalation; only the in-flight-phase guard above is repair-specific.
+  streamStatus.transitionToTerminal(streamId, outcome, statusEmitOptions);
 }
 
 /** Repair one stream back to WAITING, logging the outcome. */

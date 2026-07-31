@@ -68,9 +68,10 @@ function getPlatformLabel(): string {
 async function getGitInfo(workspacePath: string): Promise<GitInfo | null> {
   const opts = { cwd: workspacePath, timeout: GIT_TIMEOUT_MS } as const;
 
-  // Check if inside a git repo. executeCommand swallows spawn errors (e.g.
-  // git missing from PATH) and reports them as a failed result, so this also
-  // covers the "git not installed" case.
+  // Deliberately not isGitRepository(): that also requires stdout === 'true',
+  // which excludes bare repos and paths inside .git, where `git rev-parse`
+  // exits 0 but prints false. Those still have a usable branch and history, so
+  // gate on exit status only and let the branch/status calls below decide.
   const insideWorkTree = await executeCommand(
     ['git', 'rev-parse', '--is-inside-work-tree'],
     opts,

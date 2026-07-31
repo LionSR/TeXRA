@@ -1375,12 +1375,19 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
 });
 
 describe('ModelHandlerOpenAIResponse.extractResponse', () => {
-  it('fills missing output_text from output message parts', () => {
-    const handler = createHandler();
-    const result = handler.extractResponse(
-      {
+  const USAGE = {
+    input_tokens: 1,
+    output_tokens: 2,
+    total_tokens: 3,
+    input_tokens_details: { cached_tokens: 0 },
+    output_tokens_details: { reasoning_tokens: 0 },
+  };
+
+  it.each([
+    {
+      name: 'fills missing output_text from output message parts',
+      response: {
         id: 'resp-output-fallback',
-        status: 'completed',
         output: [
           {
             type: 'message',
@@ -1391,69 +1398,30 @@ describe('ModelHandlerOpenAIResponse.extractResponse', () => {
             ],
           },
         ],
-        usage: {
-          input_tokens: 1,
-          output_tokens: 2,
-          total_tokens: 3,
-          input_tokens_details: { cached_tokens: 0 },
-          output_tokens_details: { reasoning_tokens: 0 },
-        },
-      } as any,
-      '',
-    );
-
-    assert.equal(result.text, 'alpha beta');
-  });
-
-  it('preserves top-level output_text when output has no message text', () => {
-    const handler = createHandler();
-    const result = handler.extractResponse(
-      {
+      },
+      endTag: '',
+      expected: 'alpha beta',
+    },
+    {
+      name: 'preserves top-level output_text when output has no message text',
+      response: {
         id: 'resp-top-level-text',
-        status: 'completed',
         output_text: 'relay text',
         output: [{ type: 'reasoning', id: 'rs_1', summary: [] }],
-        usage: {
-          input_tokens: 1,
-          output_tokens: 2,
-          total_tokens: 3,
-          input_tokens_details: { cached_tokens: 0 },
-          output_tokens_details: { reasoning_tokens: 0 },
-        },
-      } as any,
-      '',
-    );
-
-    assert.equal(result.text, 'relay text');
-  });
-
-  it('uses top-level output_text when output is absent', () => {
-    const handler = createHandler();
-    const result = handler.extractResponse(
-      {
-        id: 'resp-output-missing',
-        status: 'completed',
-        output_text: 'relay text',
-        usage: {
-          input_tokens: 1,
-          output_tokens: 2,
-          total_tokens: 3,
-          input_tokens_details: { cached_tokens: 0 },
-          output_tokens_details: { reasoning_tokens: 0 },
-        },
-      } as any,
-      '',
-    );
-
-    assert.equal(result.text, 'relay text');
-  });
-
-  it('fills blank output_text from output message parts', () => {
-    const handler = createHandler();
-    const result = handler.extractResponse(
-      {
+      },
+      endTag: '',
+      expected: 'relay text',
+    },
+    {
+      name: 'uses top-level output_text when output is absent',
+      response: { id: 'resp-output-missing', output_text: 'relay text' },
+      endTag: '',
+      expected: 'relay text',
+    },
+    {
+      name: 'fills blank output_text from output message parts',
+      response: {
         id: 'resp-blank-output-text',
-        status: 'completed',
         output_text: '   ',
         output: [
           {
@@ -1462,42 +1430,29 @@ describe('ModelHandlerOpenAIResponse.extractResponse', () => {
             content: [{ type: 'output_text', text: 'fallback text' }],
           },
         ],
-        usage: {
-          input_tokens: 1,
-          output_tokens: 2,
-          total_tokens: 3,
-          input_tokens_details: { cached_tokens: 0 },
-          output_tokens_details: { reasoning_tokens: 0 },
-        },
-      } as any,
-      '',
-    );
-
-    assert.equal(result.text, 'fallback text');
-  });
-
-  it('does not forge a missing end tag onto a completed response', () => {
-    // The Responses API has no `stop` parameter, so a "completed" status
-    // never implies the provider stripped the end tag from the output.
-    // Forging it here would mask genuinely incomplete output as done.
-    const handler = createHandler();
-    const result = handler.extractResponse(
-      {
+      },
+      endTag: '',
+      expected: 'fallback text',
+    },
+    {
+      // The Responses API has no `stop` parameter, so a "completed" status
+      // never implies the provider stripped the end tag from the output.
+      // Forging it here would mask genuinely incomplete output as done.
+      name: 'does not forge a missing end tag onto a completed response',
+      response: {
         id: 'resp-no-end-tag',
-        status: 'completed',
         output_text: 'the document body without a closing tag',
-        usage: {
-          input_tokens: 1,
-          output_tokens: 2,
-          total_tokens: 3,
-          input_tokens_details: { cached_tokens: 0 },
-          output_tokens_details: { reasoning_tokens: 0 },
-        },
-      } as any,
-      '</documents>',
+      },
+      endTag: '</documents>',
+      expected: 'the document body without a closing tag',
+    },
+  ])('$name', ({ response, endTag, expected }) => {
+    const result = createHandler().extractResponse(
+      { ...response, status: 'completed', usage: USAGE } as any,
+      endTag,
     );
 
-    assert.equal(result.text, 'the document body without a closing tag');
+    assert.equal(result.text, expected);
   });
 });
 

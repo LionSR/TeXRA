@@ -7,6 +7,7 @@ import {
   dismissOnboarding,
   launchTexraApp,
   setRoute,
+  setSettingsTab,
   type LaunchedApp,
 } from './electronApp.js';
 
@@ -34,31 +35,6 @@ test.afterAll(async () => {
     await closeTexraApp(launched);
   }
 });
-
-async function selectSettingsPage(
-  panelName: string,
-  tabIndex: number,
-): Promise<void> {
-  await launched.page.evaluate((index) => {
-    window.postMessage({ command: 'setTab', tabIndex: index }, '*');
-  }, tabIndex);
-  await launched.page.waitForFunction(
-    (panel) => {
-      const settingsApp = document.querySelector(
-        'settings-app[data-desktop-view="settings"]',
-      );
-      const root = settingsApp?.shadowRoot;
-      if (!root) return false;
-      return (
-        root.querySelector(
-          `.settings-page-button[data-panel="${panel}"][data-active="true"]`,
-        ) != null
-      );
-    },
-    panelName,
-    { timeout: 10000 },
-  );
-}
 
 /** Count the actionable entries of the command palette, or -1 when unopened. */
 async function commandPaletteEntryCount(): Promise<number> {
@@ -118,9 +94,8 @@ test('progress screenshot', async ({}, testInfo) => {
 });
 
 test('settings screenshot', async ({}, testInfo) => {
-  await setRoute(launched, 'settings');
   // Open the Multi-Agent settings page — the most visually rich area.
-  await selectSettingsPage('multi-agent', 4);
+  await setSettingsTab(launched, 4, 'multi-agent');
   await launched.page.screenshot({
     path: getScreenshotPath(testInfo, 'settings.png'),
     fullPage: false,

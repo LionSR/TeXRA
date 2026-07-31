@@ -1,5 +1,11 @@
 // Local imports
 import type { AgentEvent } from '@agent/trace';
+import {
+  AgentRunStateSnapshotSchema,
+  ConversationRoundStateSnapshotSchema,
+} from '@agent/core/state/AgentState';
+import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
+import type { ReflectionFlowShared } from '@agent/implementations/flows/reflection/ReflectionFlowState';
 import type { ToolUseRunShared } from '@agent/implementations/flows/tooluse/nodes/types';
 import {
   matchesCancelSelector,
@@ -88,6 +94,36 @@ export function toolUseRunShared(
     messages: [],
     shouldSkipCycle: false,
     stateSlices: null,
+    ...overrides,
+  };
+}
+
+/**
+ * The `ReflectionFlowShared` baseline reflection-node tests start from: round
+ * zero of a two-round run, an empty workspace and no resolved output location.
+ * The round context tracks `currentRound` unless an override replaces it.
+ */
+export function reflectionFlowShared(
+  overrides: Partial<ReflectionFlowShared> = {},
+): ReflectionFlowShared {
+  const currentRound = overrides.currentRound ?? 0;
+  return {
+    currentRound,
+    totalRounds: 2,
+    workspaceSnapshot: AgentWorkspaceState.emptySnapshot(),
+    context: {
+      messages: [],
+      stateRoundSnapshot: ConversationRoundStateSnapshotSchema.parse({
+        roundIndex: currentRound,
+      }),
+    },
+    outputLocation: null,
+    conversation: [],
+    runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
+    roundStateSnapshots: [],
+    roundOutputs: [],
+    continueRounds: true,
+    endTurn: false,
     ...overrides,
   };
 }

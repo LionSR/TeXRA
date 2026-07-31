@@ -3,35 +3,9 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import { ResponseCycleNode } from '@agent/implementations/flows/reflection/nodes/ResponseCycleNode';
-import type { ReflectionFlowShared } from '@agent/implementations/flows/reflection/ReflectionFlowState';
 import type { ReflectionServices } from '@agent/implementations/flows/reflection/ReflectionServices';
-import {
-  AgentRunStateSnapshotSchema,
-  ConversationRoundStateSnapshotSchema,
-} from '@agent/core/state/AgentState';
-import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { AgentFileLocation } from '@shared/schemas';
-
-function reflectionShared(): ReflectionFlowShared {
-  return {
-    currentRound: 1,
-    totalRounds: 2,
-    workspaceSnapshot: AgentWorkspaceState.emptySnapshot(),
-    context: {
-      messages: [],
-      stateRoundSnapshot: ConversationRoundStateSnapshotSchema.parse({
-        roundIndex: 1,
-      }),
-    },
-    outputLocation: null,
-    conversation: [],
-    runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
-    roundStateSnapshots: [],
-    roundOutputs: [],
-    continueRounds: true,
-    endTurn: false,
-  };
-}
+import { reflectionFlowShared } from './progressTestUtils';
 
 describe('reflection output location resolution', () => {
   it('awaits async output location resolvers before initializing a round', async () => {
@@ -41,7 +15,7 @@ describe('reflection output location resolution', () => {
       relativePath: 'output.xml',
     };
     let resolvedRound: number | undefined;
-    const shared = reflectionShared();
+    const shared = reflectionFlowShared({ currentRound: 1 });
     const node = new ResponseCycleNode().setServices({
       getOutputFileLocation: async (round: number) => {
         resolvedRound = round;

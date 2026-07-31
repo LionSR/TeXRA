@@ -81,6 +81,7 @@ import {
   DesktopSaveFileMessageSchema,
   DesktopSetRouteMessageSchema,
   DesktopToggleLayoutMessageSchema,
+  type DesktopLayoutPanel,
   type DesktopRoute,
 } from '../desktopShellMessages';
 import { DesktopSetLogMessageSchema } from '../desktopLogMessages';
@@ -167,6 +168,7 @@ import { createReviewPane } from './reviewPane';
 import { createDesktopPromptOverlay } from './promptOverlay';
 import { createLogsPane } from './logsPane';
 import type { EditorFileEntry } from './editorTree';
+import type { ZodType } from 'zod';
 
 const root = document.querySelector<HTMLElement>('#app');
 
@@ -254,26 +256,27 @@ function updateShell(next: DesktopTaskShellState): void {
   }
 }
 
-function toggleBottomBarVisibility(): void {
+/** Toggles a workbench pane, opening `emptyKind` when it holds no tabs yet. */
+function togglePlacementVisibility(
+  placement: WorkbenchPlacement,
+  emptyKind: WorkbenchKind,
+): void {
   if (
-    !activeWorkbenchTab(shellState, 'bottom') &&
-    workbenchTabsForPlacement(shellState, 'bottom').length === 0
+    !activeWorkbenchTab(shellState, placement) &&
+    workbenchTabsForPlacement(shellState, placement).length === 0
   ) {
-    openKind('terminal');
+    openKind(emptyKind);
     return;
   }
-  updateShell(toggleWorkbench(shellState, 'bottom'));
+  updateShell(toggleWorkbench(shellState, placement));
+}
+
+function toggleBottomBarVisibility(): void {
+  togglePlacementVisibility('bottom', 'terminal');
 }
 
 function toggleSidePanelVisibility(): void {
-  if (
-    !activeWorkbenchTab(shellState, 'right') &&
-    workbenchTabsForPlacement(shellState, 'right').length === 0
-  ) {
-    openKind('settings');
-    return;
-  }
-  updateShell(toggleWorkbench(shellState, 'right'));
+  togglePlacementVisibility('right', 'settings');
 }
 
 function toggleSummaryBarVisibility(): void {
@@ -1431,177 +1434,130 @@ function setRoute(route: DesktopRoute): void {
   if (kind) openKind(kind);
 }
 
-window.addEventListener('message', (event) => {
-  const saveParsed = DesktopSaveFileMessageSchema.safeParse(event.data);
-  if (saveParsed.success) {
+const LAYOUT_PANEL_TOGGLES: Record<DesktopLayoutPanel, () => void> = {
+  bottomBar: toggleBottomBarVisibility,
+  sidePanel: toggleSidePanelVisibility,
+  summaryBar: toggleSummaryBarVisibility,
+};
+
+function messageRoute<T>(
+  schema: ZodType<T>,
+  handle: (message: T) => void,
+): (data: unknown) => boolean {
+  return (data) => {
+    const parsed = schema.safeParse(data);
+    if (!parsed.success) return false;
+    handle(parsed.data);
+    return true;
+  };
+}
+
+/**
+ * Every inbound window message the shell claims, in match order: the first
+ * route whose schema parses handles it. Shell routes come first, then the
+ * main-process replies for the editor, terminal, and browser panes.
+ */
+const MESSAGE_ROUTES: ReadonlyArray<(data: unknown) => boolean> = [
+  messageRoute(DesktopSaveFileMessageSchema, () => {
     void editorPane.save();
-    return;
-  }
-  const routeParsed = DesktopSetRouteMessageSchema.safeParse(event.data);
-  if (routeParsed.success) {
-    setRoute(routeParsed.data.route);
-    return;
-  }
-  const layoutParsed = DesktopToggleLayoutMessageSchema.safeParse(event.data);
-  if (layoutParsed.success) {
-    switch (layoutParsed.data.panel) {
-      case 'bottomBar':
-        toggleBottomBarVisibility();
-        break;
-      case 'sidePanel':
-        toggleSidePanelVisibility();
-        break;
-      case 'summaryBar':
-        toggleSummaryBarVisibility();
-        break;
-    }
-    return;
-  }
-  const onboardingParsed = DesktopOnboardingSetStateMessageSchema.safeParse(
-    event.data,
-  );
-  if (onboardingParsed.success) {
-    if (onboardingParsed.data.shouldShow) {
+  }),
+  messageRoute(DesktopSetRouteMessageSchema, (message) =>
+    setRoute(message.route),
+  ),
+  messageRoute(DesktopToggleLayoutMessageSchema, (message) => {
+    LAYOUT_PANEL_TOGGLES[message.panel]();
+  }),
+  messageRoute(DesktopOnboardingSetStateMessageSchema, (message) => {
+    if (message.shouldShow) {
       startupTeamPanel.show();
     } else {
       startupTeamPanel.hide();
     }
-    return;
-  }
-  const themeParsed = SetThemeMessageSchema.safeParse(event.data);
-  if (themeParsed.success) {
-    applyDesktopTheme(themeParsed.data.theme);
-    return;
-  }
-  const logParsed = DesktopSetLogMessageSchema.safeParse(event.data);
-  if (logParsed.success) {
-    logsController.applySnapshot(logParsed.data);
-    return;
-  }
-  const diffParsed = DesktopShowDiffMessageSchema.safeParse(event.data);
-  if (diffParsed.success) {
-    reviewPane.open(diffParsed.data);
+  }),
+  messageRoute(SetThemeMessageSchema, (message) =>
+    applyDesktopTheme(message.theme),
+  ),
+  messageRoute(DesktopSetLogMessageSchema, (message) =>
+    logsController.applySnapshot(message),
+  ),
+  messageRoute(DesktopShowDiffMessageSchema, (message) => {
+    reviewPane.open(message);
     openKind('review');
-    return;
-  }
-  if (DesktopCloseDiffMessageSchema.safeParse(event.data).success) {
+  }),
+  messageRoute(DesktopCloseDiffMessageSchema, () => {
     reviewPane.clear();
     disposeWorkbenchTab('workbench:review');
-    return;
+  }),
+  messageRoute(DesktopShowPdfMessageSchema, (message) =>
+    pdfOverlay.open(message),
+  ),
+  messageRoute(DesktopClosePdfMessageSchema, () => pdfOverlay.close()),
+  messageRoute(DesktopShowPromptMessageSchema, (message) =>
+    promptOverlay.open(message),
+  ),
+  messageRoute(DesktopFilesListedMessageSchema, (message) => {
+    pendingFileLists.get(message.directory)?.resolve(message.files);
+    pendingFileLists.delete(message.directory);
+  }),
+  messageRoute(DesktopFilesListErrorMessageSchema, (message) => {
+    pendingFileLists.get(message.directory)?.reject(new Error(message.message));
+    pendingFileLists.delete(message.directory);
+  }),
+  messageRoute(DesktopFileReadMessageSchema, (message) => {
+    settlePending(pendingFileReads, message.path, (request) =>
+      request.resolve(message.contents),
+    );
+  }),
+  messageRoute(DesktopFileWrittenMessageSchema, (message) => {
+    settlePending(pendingFileWrites, message.path, (request) =>
+      request.resolve(''),
+    );
+  }),
+  messageRoute(DesktopFileErrorMessageSchema, (message) => {
+    const error = new Error(message.message);
+    // Reject both queues for this path: only one will be populated, and leaving
+    // the other pending would hang the editor.
+    settlePending(pendingFileReads, message.path, (request) =>
+      request.reject(error),
+    );
+    settlePending(pendingFileWrites, message.path, (request) =>
+      request.reject(error),
+    );
+  }),
+  messageRoute(DesktopTerminalDataMessageSchema, (message) =>
+    terminalPane.write(message.sessionId, message.data),
+  ),
+  messageRoute(DesktopTerminalOpenCommandMessageSchema, (message) =>
+    openTerminalCommand(message.initialCommand),
+  ),
+  messageRoute(DesktopTerminalExitMessageSchema, (message) =>
+    terminalPane.reportExit(message.sessionId, message.exitCode),
+  ),
+  messageRoute(DesktopTerminalErrorMessageSchema, (message) =>
+    terminalPane.reportError(message.sessionId, message.message),
+  ),
+  // Only the title is surfaced today: it renames the document so a browser tab
+  // reads as its page rather than a generic "Browser".
+  messageRoute(DesktopBrowserStateMessageSchema, (message) =>
+    updateShell(renameWorkbenchTab(shellState, message.tabId, message.title)),
+  ),
+  messageRoute(DesktopEnvironmentStateMessageSchema, (message) => {
+    environmentSummary = message.environment;
+    environmentLoading = false;
+    rerenderShell();
+  }),
+];
+
+window.addEventListener('message', (event) => {
+  for (const route of MESSAGE_ROUTES) {
+    if (route(event.data)) return;
   }
-  const pdfParsed = DesktopShowPdfMessageSchema.safeParse(event.data);
-  if (pdfParsed.success) {
-    pdfOverlay.open(pdfParsed.data);
-    return;
-  }
-  if (DesktopClosePdfMessageSchema.safeParse(event.data).success) {
-    pdfOverlay.close();
-    return;
-  }
-  const promptParsed = DesktopShowPromptMessageSchema.safeParse(event.data);
-  if (promptParsed.success) {
-    promptOverlay.open(promptParsed.data);
-    return;
-  }
-  if (handleWorkspaceMessage(event.data)) return;
   // Progress view messages: dispatch directly into the shared messageDispatcher
   // — no need to mount <progress-app> for plumbing. PRD § 7.C.
   if (isProgressOutboundMessage(event.data)) {
     dispatchMessage(event.data);
-    return;
   }
 });
-
-/**
- * Handles main-process replies for the editor, terminal, and browser panes.
- * Returns true when the message was claimed, so the caller stops dispatching.
- */
-function handleWorkspaceMessage(data: unknown): boolean {
-  const listed = DesktopFilesListedMessageSchema.safeParse(data);
-  if (listed.success) {
-    pendingFileLists.get(listed.data.directory)?.resolve(listed.data.files);
-    pendingFileLists.delete(listed.data.directory);
-    return true;
-  }
-  const listError = DesktopFilesListErrorMessageSchema.safeParse(data);
-  if (listError.success) {
-    pendingFileLists
-      .get(listError.data.directory)
-      ?.reject(new Error(listError.data.message));
-    pendingFileLists.delete(listError.data.directory);
-    return true;
-  }
-  const read = DesktopFileReadMessageSchema.safeParse(data);
-  if (read.success) {
-    settlePending(pendingFileReads, read.data.path, (request) =>
-      request.resolve(read.data.contents),
-    );
-    return true;
-  }
-  const written = DesktopFileWrittenMessageSchema.safeParse(data);
-  if (written.success) {
-    settlePending(pendingFileWrites, written.data.path, (request) =>
-      request.resolve(''),
-    );
-    return true;
-  }
-  const fileError = DesktopFileErrorMessageSchema.safeParse(data);
-  if (fileError.success) {
-    const error = new Error(fileError.data.message);
-    // Reject both queues for this path: only one will be populated, and leaving
-    // the other pending would hang the editor.
-    settlePending(pendingFileReads, fileError.data.path, (request) =>
-      request.reject(error),
-    );
-    settlePending(pendingFileWrites, fileError.data.path, (request) =>
-      request.reject(error),
-    );
-    return true;
-  }
-  const terminalData = DesktopTerminalDataMessageSchema.safeParse(data);
-  if (terminalData.success) {
-    terminalPane.write(terminalData.data.sessionId, terminalData.data.data);
-    return true;
-  }
-  const terminalCommand =
-    DesktopTerminalOpenCommandMessageSchema.safeParse(data);
-  if (terminalCommand.success) {
-    openTerminalCommand(terminalCommand.data.initialCommand);
-    return true;
-  }
-  const terminalExit = DesktopTerminalExitMessageSchema.safeParse(data);
-  if (terminalExit.success) {
-    terminalPane.reportExit(
-      terminalExit.data.sessionId,
-      terminalExit.data.exitCode,
-    );
-    return true;
-  }
-  const terminalError = DesktopTerminalErrorMessageSchema.safeParse(data);
-  if (terminalError.success) {
-    terminalPane.reportError(
-      terminalError.data.sessionId,
-      terminalError.data.message,
-    );
-    return true;
-  }
-  const browserState = DesktopBrowserStateMessageSchema.safeParse(data);
-  if (browserState.success) {
-    // Only the title is surfaced today: it renames the document so a browser
-    // tab reads as its page rather than a generic "Browser".
-    const { tabId, title } = browserState.data;
-    updateShell(renameWorkbenchTab(shellState, tabId, title));
-    return true;
-  }
-  const environment = DesktopEnvironmentStateMessageSchema.safeParse(data);
-  if (environment.success) {
-    environmentSummary = environment.data.environment;
-    environmentLoading = false;
-    rerenderShell();
-    return true;
-  }
-  return false;
-}
 
 // Keep the embedded browser aligned when the window resizes: its view is
 // positioned in absolute window coordinates, not renderer layout.

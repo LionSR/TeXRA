@@ -1,10 +1,11 @@
 // Streaming-event aggregator for the OpenAI Responses API.
 //
 // Encapsulates the per-request streaming state (thinking/output streams,
-// emitted web-search IDs) and the event state-machine shared by the WebSocket
-// transport and the HTTP streaming loop. The handler creates one processor per
-// request, feeds it events via `process()`, and calls `finalize()` once the
-// terminal response is known (after any background polling).
+// emitted web-search IDs, accumulated output items and text) and the event
+// state-machine shared by the WebSocket transport and the HTTP streaming loop.
+// The handler creates one processor per request, feeds it events via
+// `process()`, and calls `finalize()` once the terminal response is known
+// (after any background polling).
 
 import type { AgentTrace, StreamHandle } from '@agent/trace';
 import {
@@ -12,15 +13,6 @@ import {
   hasOpenAIWebSearchData,
   type WebSearchResult,
 } from '@agent/types/ServerToolTypes';
-import {
-  isFunctionCallArgumentsDoneEvent,
-  isOutputItemDoneEvent,
-  isReasoningDeltaEvent,
-  isReasoningItemAddedEvent,
-  isTextDeltaEvent,
-  isWebSearchInProgressEvent,
-  isWebSearchItem,
-} from './responseStreamEvents';
 import type {
   Response,
   ResponseFunctionWebSearch,
@@ -50,6 +42,8 @@ export class ResponseStreamProcessor {
   private thinkingStream: StreamHandle | null = null;
   private readonly outputStream: StreamHandle;
   private readonly emittedWebSearchIds = new Set<string>();
+  private readonly outputItems: Response['output'] = [];
+  private outputText = '';
 
   constructor(private readonly deps: ResponseStreamProcessorDeps) {
     // Deferred start: announces the response phase at the first text delta.
@@ -59,29 +53,59 @@ export class ResponseStreamProcessor {
   }
 
   /**
+   * Complete output items seen on `response.output_item.done` (message, tool
+   * call, or reasoning). Some backends (the Codex subscription endpoint) leave
+   * the completed response's `output` empty, so the handler rebuilds it from
+   * these — otherwise the whole turn, tool calls included, is dropped.
+   */
+  get streamedItems(): Response['output'] {
+    return this.outputItems;
+  }
+
+  /**
+   * Text accumulated from the output deltas: rebuilds a sparse completed
+   * response's `output_text`, and surfaces the partial tail when a stream
+   * fails mid-flight (the Responses stream has no native currentMessage
+   * accessor).
+   */
+  get streamedText(): string {
+    return this.outputText;
+  }
+
+  /**
    * Process a single streaming event, updating the streaming state.
    * Shared by both WebSocket and HTTP streaming paths for consistent behavior.
    */
   process(event: ResponseStreamEvent): void {
-    if (isReasoningDeltaEvent(event)) {
+    if (
+      event.type === 'response.reasoning_text.delta' ||
+      event.type === 'response.reasoning_summary_text.delta'
+    ) {
       this.openThinkingStream().append(event.delta);
-    } else if (isReasoningItemAddedEvent(event)) {
+    } else if (
+      // Fires even when no reasoning summary text will ever stream (e.g. gpt-5
+      // with summaries disabled), so it is the reliable "started thinking" signal.
+      event.type === 'response.output_item.added' &&
+      event.item.type === 'reasoning'
+    ) {
       this.openThinkingStream();
-    } else if (isTextDeltaEvent(event)) {
+    } else if (event.type === 'response.output_text.delta') {
+      this.outputText += event.delta;
       this.outputStream.append(event.delta);
-    } else if (isWebSearchInProgressEvent(event)) {
+    } else if (event.type === 'response.web_search_call.in_progress') {
       this.closeThinkingStream();
-    } else if (isFunctionCallArgumentsDoneEvent(event)) {
+    } else if (event.type === 'response.function_call_arguments.done') {
       // Function call arguments complete - finalize the thinking stream since
       // no more thinking deltas will arrive after tool calls begin.
       this.closeThinkingStream();
       this.deps.logger.debug(`Tool call ready during streaming: ${event.name}`);
-    } else if (isOutputItemDoneEvent(event)) {
+    } else if (event.type === 'response.output_item.done') {
       const item = event.item;
+      this.outputItems.push(item);
       if (item.type === 'reasoning') {
         this.closeThinkingStream();
       } else if (
-        isWebSearchItem(item) &&
+        item.type === 'web_search_call' &&
         !this.emittedWebSearchIds.has(item.id) &&
         hasOpenAIWebSearchData(item)
       ) {
@@ -153,7 +177,7 @@ export class ResponseStreamProcessor {
     }
 
     for (const item of output) {
-      if (isWebSearchItem(item)) {
+      if (item.type === 'web_search_call') {
         this.emitWebSearchOnce(item);
       }
     }

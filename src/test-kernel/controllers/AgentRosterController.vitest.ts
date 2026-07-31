@@ -13,18 +13,7 @@ import {
   type AgentModePreset,
 } from '@shared/schemas/agentPresets';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
-
-function memoryStore(initial: Record<string, unknown> = {}): StateStore {
-  const values = new Map(Object.entries(initial));
-  return {
-    get: <T>(key: string, fallback?: T): T =>
-      (values.has(key) ? values.get(key) : fallback) as T,
-    update: async (key, value) => {
-      if (value === undefined) values.delete(key);
-      else values.set(key, value);
-    },
-  };
-}
+import { FakeStateStore } from '@test/support/FakePlatform';
 
 const agents: Record<AgentCategory, AgentRosterEntry[]> = {
   workflow: [
@@ -52,7 +41,7 @@ function controller(
 ): AgentRosterController {
   return new AgentRosterController({
     workspaceState,
-    globalState: memoryStore(),
+    globalState: new FakeStateStore(),
     getAgents: (category) => agents[category],
     getPresets: () => [preset],
     fallbackTeamId: null,
@@ -62,7 +51,7 @@ function controller(
 
 describe('AgentRosterController', () => {
   it('derives a named team from legacy arrays without writing during read', () => {
-    const workspaceState = memoryStore({
+    const workspaceState = new FakeStateStore({
       [WorkspaceStateKey.ENABLED_AGENTS]: ['builtInWorkflow:write'],
       [WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS]: ['lead'],
     });
@@ -77,7 +66,7 @@ describe('AgentRosterController', () => {
   });
 
   it('preserves legacy all-agents semantics for an unset category', () => {
-    const workspaceState = memoryStore({
+    const workspaceState = new FakeStateStore({
       [WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS]: [],
     });
     const roster = controller(workspaceState);
@@ -92,7 +81,7 @@ describe('AgentRosterController', () => {
 
   it('rejects malformed canonical state instead of treating corruption as inheritance', () => {
     const roster = controller(
-      memoryStore({
+      new FakeStateStore({
         [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: { kind: 'invalid' },
       }),
     );
@@ -101,9 +90,9 @@ describe('AgentRosterController', () => {
   });
 
   it('uses the user default only for inherited workspaces', () => {
-    const workspaceState = memoryStore();
+    const workspaceState = new FakeStateStore();
     const roster = controller(workspaceState, {
-      globalState: memoryStore({
+      globalState: new FakeStateStore({
         [GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID]: 'test-team',
       }),
     });
@@ -119,7 +108,7 @@ describe('AgentRosterController', () => {
   });
 
   it('refreshes compatibility mirrors when an inherited default changes', async () => {
-    const workspaceState = memoryStore();
+    const workspaceState = new FakeStateStore();
     const roster = controller(workspaceState);
 
     await roster.setDefaultTeam(STARTER_AGENT_MODE_PRESET.id);
@@ -142,7 +131,7 @@ describe('AgentRosterController', () => {
   });
 
   it('persists one canonical team selection and legacy mirrors', async () => {
-    const workspaceState = memoryStore();
+    const workspaceState = new FakeStateStore();
     const roster = controller(workspaceState);
 
     await roster.setTeam('test-team');
@@ -162,7 +151,7 @@ describe('AgentRosterController', () => {
   });
 
   it('turns an individual toggle into an exact custom roster', async () => {
-    const workspaceState = memoryStore();
+    const workspaceState = new FakeStateStore();
     const roster = controller(workspaceState);
     await roster.setAll();
 
@@ -181,9 +170,9 @@ describe('AgentRosterController', () => {
   });
 
   it('preserves symbolic roster semantics when a toggle changes nothing', async () => {
-    const inheritedState = memoryStore();
+    const inheritedState = new FakeStateStore();
     const inherited = controller(inheritedState, {
-      globalState: memoryStore({
+      globalState: new FakeStateStore({
         [GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID]: 'test-team',
       }),
     });
@@ -198,7 +187,7 @@ describe('AgentRosterController', () => {
       inheritedState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
     ).toBeUndefined();
 
-    const team = controller(memoryStore());
+    const team = controller(new FakeStateStore());
     await team.setTeam('test-team');
     await team.setAgentEnabled({
       category: 'toolUse',
@@ -211,7 +200,7 @@ describe('AgentRosterController', () => {
       teamId: 'test-team',
     });
 
-    const all = controller(memoryStore());
+    const all = controller(new FakeStateStore());
     await all.setAll();
     await all.setAgentEnabled({
       category: 'toolUse',
@@ -228,7 +217,7 @@ describe('AgentRosterController', () => {
       id: 'partly-unavailable',
       workflowAgents: ['write', 'future-reviewer'],
     };
-    const workspaceState = memoryStore();
+    const workspaceState = new FakeStateStore();
     const roster = controller(workspaceState, {
       getPresets: () => [unavailablePreset],
     });
@@ -254,7 +243,7 @@ describe('AgentRosterController', () => {
   });
 
   it('keeps an unset legacy category open to agents loaded later', async () => {
-    const workspaceState = memoryStore({
+    const workspaceState = new FakeStateStore({
       [WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS]: ['builtInToolUse:lead'],
     });
     const workflowAgents = [...agents.workflow];
@@ -281,7 +270,7 @@ describe('AgentRosterController', () => {
   });
 
   it('falls back to all agents for a missing symbolic team', () => {
-    const workspaceState = memoryStore({
+    const workspaceState = new FakeStateStore({
       [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: {
         kind: 'team',
         teamId: 'deleted-team',
@@ -296,7 +285,7 @@ describe('AgentRosterController', () => {
 
   it('materializes an active custom team before deleting its preset', async () => {
     let presets: AgentModePreset[] = [preset];
-    const workspaceState = memoryStore();
+    const workspaceState = new FakeStateStore();
     const roster = controller(workspaceState, { getPresets: () => presets });
     await roster.setTeam(preset.id);
 
@@ -320,7 +309,7 @@ describe('AgentRosterController', () => {
       ],
     };
     const roster = controller(
-      memoryStore({
+      new FakeStateStore({
         [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: {
           kind: 'custom',
           workflowAgentKeys: [],
@@ -347,7 +336,7 @@ describe('AgentRosterController', () => {
       name: 'review',
     };
     const roster = controller(
-      memoryStore({
+      new FakeStateStore({
         [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: {
           kind: 'custom',
           workflowAgentKeys: [],
@@ -365,7 +354,7 @@ describe('AgentRosterController', () => {
   });
 
   it('serializes concurrent category changes through one workspace owner', async () => {
-    const workspaceState = memoryStore();
+    const workspaceState = new FakeStateStore();
     const first = controller(workspaceState);
     const second = controller(workspaceState);
     await first.setAll();
@@ -400,7 +389,7 @@ describe('AgentRosterController', () => {
       workflowAgentKeys: ['builtInWorkflow:write'],
       toolUseAgentKeys: ['builtInToolUse:lead'],
     };
-    const storedState = memoryStore({
+    const storedState = new FakeStateStore({
       [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: initialSelection,
       [WorkspaceStateKey.ENABLED_AGENTS]: initialSelection.workflowAgentKeys,
       [WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS]:

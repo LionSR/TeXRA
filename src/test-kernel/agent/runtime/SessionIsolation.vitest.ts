@@ -6,38 +6,25 @@ import '@test/support/defaultSessionTestSetup';
 // Test support imports
 
 // Third-party imports
-import { ModelProvider } from 'llm-zoo';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { noopTrace } from '@agent/trace';
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import {
-  AgentCategory,
-  AgentPromptSchema,
-  AgentSettingSchema,
-} from '@agent/core/definition/AgentDataclass';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import { createRunScope } from '@agent/runtime/RunScope';
-import {
-  SessionHandle,
-  currentSession,
-  defaultSession,
-} from '@agent/runtime/SessionHandle';
+import { currentSession, defaultSession } from '@agent/runtime/SessionHandle';
 import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
-import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
-import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import {
   RUN_OUTCOME,
   type ExecutionId,
-  type StorageKey,
   type StreamTabId,
 } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { installPlatform } from '@test/support/setupPlatform';
 import { clearStreamStatusForTest } from '@test/helpers/streamStatusTestUtils';
 import { createTestSession } from '@test/support/sessionTestUtils';
+
+// Local file imports
+import { createTestLaunchContext } from './launchContextTestUtils';
 
 const storageMocks = vi.hoisted(() => ({
   finalizeExecution: vi.fn().mockResolvedValue({
@@ -55,70 +42,6 @@ function initTestPlatform(): Promise<void> {
   return installPlatform({
     globalState: { [GlobalStateKey.ONBOARDING_FIRST_RUN_DONE]: true },
   });
-}
-
-function createLifecycleContext(
-  executionId: ExecutionId,
-  streamId: StreamTabId,
-  session: SessionHandle,
-): AgentLaunchContext {
-  const config = AgentConfigSchema.parse({
-    agent: 'assistant',
-    model: 'test-model',
-    agentCategory: AgentCategory.ToolUse,
-  });
-  const setting = AgentSettingSchema.parse({
-    agentCategory: AgentCategory.ToolUse,
-  });
-  const prompt = AgentPromptSchema.parse({});
-  const storageKey = executionId as StorageKey;
-  const runScope = createRunScope({
-    streamId,
-    executionId,
-    agentName: config.agent,
-    session,
-  });
-  const modelInfo = {
-    capabilities: {
-      supportsPromptCaching: false,
-      supportsAutoPromptCaching: false,
-      supportsReasoning: false,
-      cacheDiscountFactor: 0,
-    },
-    config: {
-      provider: ModelProvider.OPENAI,
-      name: 'test-model',
-      fullName: 'Test Model',
-      inputPrice: 0,
-      openRouterOnly: false,
-      requiresResponsesAPI: false,
-    },
-  };
-
-  return {
-    config,
-    setting,
-    prompt,
-    runScope,
-    logger: noopTrace,
-    parentStage: noopTrace.openStage('Run: assistant'),
-    storageKey,
-    userVarChannels: { input: Object.freeze({}), transient: {} },
-    attachedMemoryMisses: [],
-    usageMonitor: new UsageMonitor(
-      modelInfo,
-      {
-        logger: noopTrace,
-        storageKey,
-        streamId,
-      },
-      { agentName: config.agent, agentCategory: setting.agentCategory },
-    ),
-    modelHandler: {
-      dispose: vi.fn(),
-    } as unknown as AgentLaunchContext['modelHandler'],
-    disposeTrace: vi.fn(),
-  };
 }
 
 describe('session isolation (SDK Step 7d PR 2)', () => {
@@ -170,7 +93,11 @@ describe('session isolation (SDK Step 7d PR 2)', () => {
     const executionId = 'e15001' as ExecutionId;
     const streamId = 'stream:iso-track' as StreamTabId;
     const sessionB = createTestSession();
-    const ctx = createLifecycleContext(executionId, streamId, sessionB);
+    const ctx = createTestLaunchContext({
+      executionId,
+      streamId,
+      session: sessionB,
+    });
 
     try {
       await runFlowWithLifecycle(ctx, async () => {

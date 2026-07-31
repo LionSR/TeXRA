@@ -15,7 +15,7 @@ import {
 // Local imports - shared runtime
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
-import { AgentCategory, type StreamTabId } from '@shared/schemas';
+import type { StreamTabId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - TUI surfaces and state
@@ -29,6 +29,8 @@ import {
   foregroundEscapeAction,
   foregroundMaxRowsForKind,
   foregroundSurfaceKind,
+  groupPendingApprovalsByRow,
+  selectedChildRowWorkflowControllable,
   shouldDeferEscapeInterruptForMetaChord,
   triggerAppCtrlC,
   triggerEscapeInterrupt,
@@ -44,8 +46,6 @@ import {
   currentApproval,
   pendingApprovalSummaries,
   promoteApprovalsForStream,
-  ROOT_APPROVAL_STREAM_KEY,
-  type PendingApprovalKind,
 } from './state/approvalQueue';
 import {
   isEscapeInput,
@@ -274,24 +274,10 @@ export function App(props: AppProps): React.JSX.Element {
       streams,
     ],
   );
-  // Group the flat FIFO summaries per row, folding stream-less (session-wide)
-  // approvals onto the root/main row. Grouping from the flat list keeps each
-  // row's first shown kind the first-to-present even when the root's own and
-  // session-wide items interleave in the global queue.
-  const pendingApprovalsForRows = useMemo(() => {
-    const grouped = new Map<string, PendingApprovalKind[]>();
-    for (const summary of pendingSummaries) {
-      const key =
-        summary.streamKey === ROOT_APPROVAL_STREAM_KEY
-          ? rootStreamId
-          : summary.streamKey;
-      if (key === undefined) continue;
-      const kinds = grouped.get(key);
-      if (kinds) kinds.push(summary.kind);
-      else grouped.set(key, [summary.kind]);
-    }
-    return grouped;
-  }, [pendingSummaries, rootStreamId]);
+  const pendingApprovalsForRows = useMemo(
+    () => groupPendingApprovalsByRow(pendingSummaries, rootStreamId),
+    [pendingSummaries, rootStreamId],
+  );
   const activeSubagentExecutionIds = useMemo(() => {
     const executionIds = new Map<StreamTabId, string>();
     const parentIds = new Set(
@@ -321,21 +307,13 @@ export function App(props: AppProps): React.JSX.Element {
   const selectedChildKillable =
     selectedChildStreamId !== undefined &&
     activeSubagentExecutionIds.has(selectedChildStreamId);
-  // A workflow-script grandchild `agent()` call is the only interactively
-  // skip/retry-able row: it is a Workflow-category subagent whose parent
-  // stream is itself the Workflow run (the run stream's parent is the
-  // orchestrator, a non-Workflow category), which excludes the run stream
-  // itself so its row never shows a control that would silently no-op.
-  const parentOfSelectedChild =
-    selectedChildStreamId !== undefined
-      ? parentStream.get(selectedChildStreamId)
-      : undefined;
   const selectedChildWorkflowControllable =
-    selectedChildKillable &&
-    selectedChildStreamId !== undefined &&
-    streams.get(selectedChildStreamId)?.category === AgentCategory.Workflow &&
-    parentOfSelectedChild !== undefined &&
-    streams.get(parentOfSelectedChild)?.category === AgentCategory.Workflow;
+    selectedChildRowWorkflowControllable({
+      parentStream,
+      selectedChildKillable,
+      selectedChildStreamId,
+      streams,
+    });
   useEffect(() => {
     dispatchChildListSelection({
       kind: 'reconcile',

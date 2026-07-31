@@ -1,11 +1,9 @@
 import {
   chmod,
   mkdir,
-  mkdtemp,
   readFile as nodeReadFile,
   writeFile,
 } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import path, { join } from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -23,6 +21,7 @@ import {
   setWorkspaceCliChatAgent,
 } from '@cli/runtime/cliConfig';
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
+import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
@@ -31,8 +30,11 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 
 const mockedReadFile = vi.mocked(nodeReadFile);
 
-afterEach(() => {
+const tempDirs: string[] = [];
+
+afterEach(async () => {
   mockedReadFile.mockClear();
+  await cleanupTempDirs(tempDirs);
 });
 
 const ANSWERS: InitAnswers = {
@@ -72,7 +74,7 @@ describe('workspaceTexraConfigPath', () => {
 
 describe('setWorkspaceCliChatAgent', () => {
   it('updates only chat.agent and preserves other workspace defaults', async () => {
-    const workspace = await mkdtemp(join(tmpdir(), 'texra-chat-default-'));
+    const workspace = await makeTempDir('texra-chat-default-', tempDirs);
     const configPath = workspaceTexraConfigPath(workspace);
     await writeInitConfig(configPath, buildInitConfig(ANSWERS));
 
@@ -98,7 +100,7 @@ describe('setWorkspaceCliChatAgent', () => {
   });
 
   it('clears current and legacy chat-agent defaults together', async () => {
-    const workspace = await mkdtemp(join(tmpdir(), 'texra-chat-default-'));
+    const workspace = await makeTempDir('texra-chat-default-', tempDirs);
     const configPath = workspaceTexraConfigPath(workspace);
     await mkdir(path.dirname(configPath), { recursive: true });
     await writeFile(
@@ -124,7 +126,7 @@ describe('setWorkspaceCliChatAgent', () => {
   });
 
   it('removes a stale legacy chat-agent default when setting the current key', async () => {
-    const workspace = await mkdtemp(join(tmpdir(), 'texra-chat-default-'));
+    const workspace = await makeTempDir('texra-chat-default-', tempDirs);
     const configPath = workspaceTexraConfigPath(workspace);
     await mkdir(path.dirname(configPath), { recursive: true });
     await writeFile(
@@ -175,7 +177,7 @@ describe('ensureTexraGitignored', () => {
       'node_modules\n.texra/\n',
     ],
   ] as const)('%s', async (_case, existing, outcome, expected) => {
-    const workspace = await mkdtemp(join(tmpdir(), 'texra-gitignore-'));
+    const workspace = await makeTempDir('texra-gitignore-', tempDirs);
     const gitignorePath = join(workspace, '.gitignore');
     if (existing !== undefined)
       await writeFile(gitignorePath, existing, 'utf8');
@@ -190,7 +192,7 @@ describe('ensureTexraGitignored', () => {
   (skipPermissionTest ? it.skip : it)(
     'does not atomically replace a read-only .gitignore',
     async () => {
-      const workspace = await mkdtemp(join(tmpdir(), 'texra-gitignore-'));
+      const workspace = await makeTempDir('texra-gitignore-', tempDirs);
       const gitignorePath = join(workspace, '.gitignore');
       await writeFile(gitignorePath, 'node_modules\n', 'utf8');
       await chmod(gitignorePath, 0o444);
@@ -211,7 +213,7 @@ describe('ensureTexraGitignored', () => {
   (skipPermissionTest ? it.skip : it)(
     'still atomically replaces a write-only config',
     async () => {
-      const workspace = await mkdtemp(join(tmpdir(), 'texra-config-'));
+      const workspace = await makeTempDir('texra-config-', tempDirs);
       const configPath = workspaceTexraConfigPath(workspace);
       await writeInitConfig(configPath, buildInitConfig(ANSWERS));
       await chmod(configPath, 0o200);
@@ -235,7 +237,7 @@ describe('ensureTexraGitignored', () => {
     // Reproduces #7470: a transient EACCES (or any non-missing-file error)
     // must not be treated as "file absent" — that would fall through to the
     // write below and clobber the user's existing .gitignore content.
-    const workspace = await mkdtemp(join(tmpdir(), 'texra-gitignore-'));
+    const workspace = await makeTempDir('texra-gitignore-', tempDirs);
     const gitignorePath = join(workspace, '.gitignore');
     await writeFile(gitignorePath, 'node_modules\ndist\n', 'utf8');
 

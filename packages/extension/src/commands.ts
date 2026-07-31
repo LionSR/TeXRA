@@ -21,7 +21,9 @@ import { registerAgentReviewCommands } from '@commands/review/agentReviewCommand
 import { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
 import { MainViewProvider } from './MainViewProvider';
 
-export function registerCommands(context: vscode.ExtensionContext) {
+export function registerCommands(context: vscode.ExtensionContext): {
+  mainViewProvider: MainViewProvider;
+} {
   registerFileSelectionCommands(context);
   registerLatexdiffCommands(context);
   registerGitCommands(context);
@@ -57,5 +59,5 @@ export function registerCommands(context: vscode.ExtensionContext) {
     ),
   );
 
-  return { mainViewProvider, settingsViewProvider };
+  return { mainViewProvider };
 }

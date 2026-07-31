@@ -1,10 +1,14 @@
 /**
- * Better BibTeX JSON-RPC client for Zotero integration.
+ * Client for the local Zotero server used by every Zotero tool.
  *
- * Provides typed access to the Better BibTeX JSON-RPC API at
- * http://localhost:23119/better-bibtex/json-rpc
+ * Two endpoints share one host and port: the Better BibTeX JSON-RPC API at
+ * http://localhost:23119/better-bibtex/json-rpc (search, export, collections)
+ * and the Zotero Connector API at http://localhost:23119/connector/* (adding
+ * items). Both live here so the base URL and the "Zotero is not reachable"
+ * guidance have one definition.
  *
  * See: https://retorque.re/zotero-better-bibtex/exporting/json-rpc/
+ * See: https://www.zotero.org/support/dev/client_coding/connector_http_server
  */
 
 // Third-party imports
@@ -20,6 +24,8 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';
 
 const ZOTERO_BBT_TIMEOUT_MS = 10_000; // 10 s
+const ZOTERO_PING_TIMEOUT_MS = 2_000; // 2 s
+const ZOTERO_CONNECTOR_TIMEOUT_MS = 30_000; // 30 s
 
 /**
  * Get the configured Zotero port.
@@ -27,6 +33,17 @@ const ZOTERO_BBT_TIMEOUT_MS = 10_000; // 10 s
  */
 export function getZoteroPort(): number {
   return getConfig<number>('texra.bib.zoteroPort', 23119);
+}
+
+function zoteroUrl(port: number, pathname: string): string {
+  return `http://127.0.0.1:${port}${pathname}`;
+}
+
+function zoteroUnreachableError(port: number): ToolError {
+  return new ToolError(
+    `Zotero is not reachable on port ${port}. ` +
+      `Ask the user to start Zotero or verify the port (setting: texra.bib.zoteroPort).`,
+  );
 }
 
 // ============================================================================
@@ -202,7 +219,7 @@ export async function callBetterBibTeX<T>(
   resultSchema: z.ZodType<T>,
   timeout: number = ZOTERO_BBT_TIMEOUT_MS,
 ): Promise<T> {
-  const url = `http://127.0.0.1:${port}/better-bibtex/json-rpc`;
+  const url = zoteroUrl(port, '/better-bibtex/json-rpc');
 
   // Cancellation for the owning agent run — a cancelled parallel batch must
   // abort a hung Zotero request instead of waiting out its timeout.
@@ -237,10 +254,7 @@ export async function callBetterBibTeX<T>(
     // localhost endpoint this is always a connection failure. This try block
     // wraps only the ky.post call, so no programmer TypeError can reach here.
     if (error instanceof TypeError) {
-      throw new ToolError(
-        `Zotero is not reachable on port ${port}. ` +
-          `Ask the user to start Zotero or verify the port (setting: texra.bib.zoteroPort).`,
-      );
+      throw zoteroUnreachableError(port);
     }
     throw new ToolError(`Better BibTeX API error: ${toErrorMessage(error)}`);
   }
@@ -268,4 +282,77 @@ export async function callBetterBibTeX<T>(
     );
   }
   return parsed.data.result;
+}
+
+// ============================================================================
+// Zotero Connector API — the endpoints `zotero_add` writes through. Requires
+// Zotero desktop to be running; no authentication (purely local).
+// ============================================================================
+
+export interface ConnectorResult {
+  status: 'success' | 'error';
+  message?: string;
+}
+
+/**
+ * Check if Zotero is running by pinging the connector.
+ * Throws a user-friendly ToolError if not reachable.
+ */
+export async function checkZoteroRunning(port: number): Promise<void> {
+  try {
+    await ky.get(zoteroUrl(port, '/connector/ping'), {
+      timeout: false,
+      signal: AbortSignal.timeout(ZOTERO_PING_TIMEOUT_MS),
+      retry: 0,
+    });
+  } catch {
+    throw zoteroUnreachableError(port);
+  }
+}
+
+/**
+ * Call a Zotero Connector endpoint with unified error handling.
+ */
+export async function callZoteroConnector(
+  endpoint: string,
+  body: object,
+  port: number,
+): Promise<ConnectorResult> {
+  let response: Response;
+  try {
+    response = await ky.post(zoteroUrl(port, `/connector/${endpoint}`), {
+      json: body,
+      timeout: false,
+      signal: AbortSignal.timeout(ZOTERO_CONNECTOR_TIMEOUT_MS),
+      retry: 0,
+      throwHttpErrors: false,
+    });
+  } catch (error: unknown) {
+    if (isTimeoutError(error)) {
+      return {
+        status: 'error',
+        message:
+          `Zotero Connector request timed out after ${ZOTERO_CONNECTOR_TIMEOUT_MS / 1000}s. ` +
+          `Retry the request. If it persists, ask the user to check that Zotero is responsive.`,
+      };
+    }
+    return { status: 'error', message: toErrorMessage(error) };
+  }
+
+  if (
+    response.status === StatusCodes.OK ||
+    response.status === StatusCodes.CREATED
+  ) {
+    return { status: 'success' };
+  }
+
+  // Try to extract a machine-readable error message from the response body.
+  let errorMessage = `Unexpected response status: ${response.status}`;
+  try {
+    const data = (await response.json()) as { error?: string };
+    if (data?.error) errorMessage = String(data.error);
+  } catch {
+    // Body is not JSON or is empty; use the generic status message.
+  }
+  return { status: 'error', message: errorMessage };
 }

@@ -68,16 +68,22 @@ const DEFAULT_MAX_AGENT_CALLS = 200;
 const MAX_FANOUT = 512;
 const DRAIN_GRACE_MS = 5_000;
 const LABEL_EXCERPT_LENGTH = 48;
-const WORKFLOW_AGENT_OPTION_FIELDS = new Set([
+const STRING_AGENT_OPTION_FIELDS = [
   'id',
   'label',
   'phase',
   'agentName',
   'model',
-  'schema',
+] as const;
+const FILE_AGENT_OPTION_FIELDS = [
   'inputFiles',
   'contextFiles',
   'mediaFiles',
+] as const;
+const WORKFLOW_AGENT_OPTION_FIELDS = new Set<string>([
+  ...STRING_AGENT_OPTION_FIELDS,
+  'schema',
+  ...FILE_AGENT_OPTION_FIELDS,
 ]);
 
 type WorkflowScriptFailedEvent = Extract<
@@ -799,7 +805,7 @@ function normalizeAgentOptions(raw: unknown): WorkflowAgentCallOptions {
     agentName?: string;
     model?: string;
   } = {};
-  for (const field of ['id', 'label', 'phase', 'agentName', 'model'] as const) {
+  for (const field of STRING_AGENT_OPTION_FIELDS) {
     const value = source[field];
     if (value === undefined) continue;
     const requiresContent =
@@ -838,17 +844,14 @@ function normalizeAgentOptions(raw: unknown): WorkflowAgentCallOptions {
     }
   }
 
-  const requestedFiles = {
-    ...(source.inputFiles !== undefined && {
-      inputFiles: source.inputFiles,
-    }),
-    ...(source.contextFiles !== undefined && {
-      contextFiles: source.contextFiles,
-    }),
-    ...(source.mediaFiles !== undefined && {
-      mediaFiles: source.mediaFiles,
-    }),
-  };
+  // Only the fields the call actually supplied travel onward: the schema
+  // prefaults the other lists to [], and a spurious empty list would change
+  // the journal key of an otherwise identical call.
+  const presentFileFields = FILE_AGENT_OPTION_FIELDS.filter(
+    (field) => source[field] !== undefined,
+  );
+  const requestedFiles: Record<string, unknown> = {};
+  for (const field of presentFileFields) requestedFiles[field] = source[field];
   let files: WorkflowScriptFiles;
   try {
     files = WorkflowScriptFilesSchema.parse(requestedFiles);
@@ -857,10 +860,9 @@ function normalizeAgentOptions(raw: unknown): WorkflowAgentCallOptions {
       `agent() options "inputFiles", "contextFiles", and "mediaFiles" must be arrays of non-empty strings: ${toErrorMessage(error)}`,
     );
   }
-  const hasFileOptions = Object.keys(requestedFiles).length > 0;
 
   if (schema !== undefined) {
-    if (hasFileOptions) {
+    if (presentFileFields.length > 0) {
       throw new Error(
         'agent() structured-output calls cannot use file options; inputFiles, contextFiles, and mediaFiles belong to workflow-agent calls.',
       );
@@ -876,12 +878,9 @@ function normalizeAgentOptions(raw: unknown): WorkflowAgentCallOptions {
       schema,
     };
   }
-  return {
-    ...common,
-    ...(source.inputFiles !== undefined && { inputFiles: files.inputFiles }),
-    ...(source.contextFiles !== undefined && {
-      contextFiles: files.contextFiles,
-    }),
-    ...(source.mediaFiles !== undefined && { mediaFiles: files.mediaFiles }),
-  };
+  const fileOptions: {
+    [K in (typeof FILE_AGENT_OPTION_FIELDS)[number]]?: WorkflowScriptFiles[K];
+  } = {};
+  for (const field of presentFileFields) fileOptions[field] = files[field];
+  return { ...common, ...fileOptions };
 }

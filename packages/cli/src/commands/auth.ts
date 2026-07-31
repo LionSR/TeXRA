@@ -40,13 +40,13 @@ import { interactiveTerminalFailure } from '../runtime/terminalRequirements';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { withUsageSections } from './_helpers/dispatch';
-import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
-import { emitCliResult } from './_helpers/output';
+import { booleanArg, GLOBAL_ARGS, optString } from './_helpers/globalArgs';
+import { cliProgressWriter, emitCliResult } from './_helpers/output';
 import { chatgptAuthCommand } from './chatgptAuth';
 import { authTokenCommand } from './relayTokens';
 import { CliUsageError, type CliContext } from '../runtime/cliContext';
 
-interface LoginCommandArgs {
+type LoginCommandArgs = {
   readonly provider?: string;
   readonly providerArg?: string;
   readonly 'no-browser'?: boolean;
@@ -57,15 +57,7 @@ interface LoginCommandArgs {
   readonly selectAccount?: boolean;
   readonly 'login-hint'?: string;
   readonly loginHint?: string;
-}
-
-function readBooleanArg(
-  args: LoginCommandArgs,
-  hyphenKey: keyof LoginCommandArgs,
-  camelKey: keyof LoginCommandArgs,
-): boolean {
-  return args[hyphenKey] === true || args[camelKey] === true;
-}
+};
 
 export function loginInitFromArgs(args: LoginCommandArgs): CliLoginInit {
   const positional = optString(args.providerArg);
@@ -74,10 +66,9 @@ export function loginInitFromArgs(args: LoginCommandArgs): CliLoginInit {
   return {
     provider: provider.provider,
     providerExplicit: provider.explicit,
-    noBrowser:
-      readBooleanArg(args, 'no-browser', 'noBrowser') || args.browser === false,
+    noBrowser: booleanArg(args, 'no-browser'),
     device: args.device === true,
-    selectAccount: readBooleanArg(args, 'select-account', 'selectAccount'),
+    selectAccount: booleanArg(args, 'select-account'),
     loginHint: optString(args['login-hint']) ?? optString(args.loginHint),
   };
 }
@@ -112,8 +103,7 @@ async function runDeviceLogin(context: CliContext): Promise<number> {
   await initCliPlatform({ ...context, quietLogs: true });
   // Human-facing progress goes to stdout only in text mode so the JSON/NDJSON
   // result stream stays machine-readable (same convention as --no-browser).
-  const writeProgress =
-    context.outputFormat === 'text' ? writeTextStdout : writeTextStderr;
+  const writeProgress = cliProgressWriter(context);
   let session: SupabaseSession;
   try {
     session = await signInCliSupabaseDeviceCode({
@@ -169,9 +159,7 @@ async function runLogin(
       manualBrowserHint: 'texra login --no-browser',
       onAuthUrl: (url) => {
         if (init.noBrowser) {
-          const writeAuthUrl =
-            context.outputFormat === 'text' ? writeTextStdout : writeTextStderr;
-          writeAuthUrl(formatCliManualAuthUrlMessage(url));
+          cliProgressWriter(context)(formatCliManualAuthUrlMessage(url));
         }
       },
     });

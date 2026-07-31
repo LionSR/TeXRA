@@ -157,10 +157,8 @@ export class HistoryItemElement extends LitElement {
   private previousHighlightedIndex: number | null = null;
   private previousItemId: string | undefined = undefined;
 
-  /** Cached markdown render to avoid re-parsing on every Lit update cycle. */
-  private cachedInstructionSource: string | null = null;
-  private cachedInstructionHtml = '';
-  private readonly cachedValueMarkdown = new Map<string, string>();
+  /** Cached markdown renders to avoid re-parsing on every Lit update cycle. */
+  private readonly cachedMarkdown = new Map<string, string>();
 
   @queryAll('mark')
   private markElements!: HTMLElement[];
@@ -192,20 +190,18 @@ export class HistoryItemElement extends LitElement {
   }
 
   private renderMarkdown(text: string): string {
-    if (text !== this.cachedInstructionSource) {
-      this.cachedInstructionSource = text;
-      this.cachedInstructionHtml = getLightweightMd().render(text);
+    let rendered = this.cachedMarkdown.get(text);
+    if (rendered == null) {
+      rendered = getLightweightMd().render(text);
+      this.cachedMarkdown.set(text, rendered);
     }
-    return this.cachedInstructionHtml;
+    return rendered;
   }
 
   private renderMarkdownValue(value: string): TemplateResult {
-    let rendered = this.cachedValueMarkdown.get(value);
-    if (rendered == null) {
-      rendered = getLightweightMd().render(value);
-      this.cachedValueMarkdown.set(value, rendered);
-    }
-    return html`<span class="markdown-content">${unsafeHTML(rendered)}</span>`;
+    return html`<span class="markdown-content"
+      >${unsafeHTML(this.renderMarkdown(value))}</span
+    >`;
   }
 
   private handleAction(action: string): void {

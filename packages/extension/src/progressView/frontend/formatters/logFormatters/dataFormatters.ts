@@ -33,7 +33,11 @@ import { formatCompactTokenCount, getBasename } from '@utils/core';
 import { formatCostUsd } from '@utils/text/stringUtils';
 
 // Local imports - formatter helpers
-import { buildFileListRender, buildDetailsSummary } from '../htmlBuilders';
+import {
+  buildDetailsSummary,
+  buildFileLinkSpan,
+  buildFileListRender,
+} from '../htmlBuilders';
 import type { FormatResult } from '../baseLogFormatter';
 
 /** Format file list entry as TemplateResult. */
@@ -69,7 +73,7 @@ export function formatFileListTemplate(
 function renderXmlLink(xmlFile: string) {
   const xmlFileName = getBasename(xmlFile);
   // prettier-ignore
-  return html`<div class="xml-link-container">${waIcon('file-code')} <span>Open XML to check tag consistency:</span> <span class="file-link clickable-link" data-file=${xmlFile} role="button" tabindex="0">${xmlFileName}</span> <span class="document-tag">(Expected &lt;${OUTPUT_DOCUMENTS_TAG}&gt; block)</span></div>`;
+  return html`<div class="xml-link-container">${waIcon('file-code')} <span>Open XML to check tag consistency:</span> ${buildFileLinkSpan(xmlFile, xmlFileName)} <span class="document-tag">(Expected &lt;${OUTPUT_DOCUMENTS_TAG}&gt; block)</span></div>`;
 }
 
 /** Format missing outputs entry as TemplateResult. */
@@ -96,7 +100,7 @@ export function formatMissingOutputsTemplate(
   const listItems = missing.map((f) => {
     const filePath = String(f);
     const basename = getBasename(filePath);
-    return html`<li class="detail-item" title=${filePath}>${waIcon('triangle-exclamation')} <span class="file-link clickable-link" data-file=${filePath} role="button" tabindex="0">${basename}</span></li>`;
+    return html`<li class="detail-item" title=${filePath}>${waIcon('triangle-exclamation')} ${buildFileLinkSpan(filePath, basename)}</li>`;
   });
   // prettier-ignore
   return html`<wa-details appearance="plain" icon-placement="start" class="banner-details file-list-details" ?open=${shouldOpen}>${buildDetailsSummary({

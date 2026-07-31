@@ -3,6 +3,7 @@
 import * as path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  buildKpathseaSearchPath,
   buildLatexInputEnv,
   buildLatexSearchParts,
   compileLatex2Pdf,
@@ -140,6 +141,27 @@ describe('compileLatex2Pdf structured return', () => {
 // ---------------------------------------------------------------------------
 
 const D = path.delimiter;
+
+describe('buildKpathseaSearchPath', () => {
+  it('prepends BIBINPUTS and BSTINPUTS paths while preserving kpathsea defaults', () => {
+    expect(buildKpathseaSearchPath(['/workspace'], undefined, ':')).toBe(
+      '/workspace:',
+    );
+    expect(buildKpathseaSearchPath(['/workspace'], '/custom', ':')).toBe(
+      '/workspace:/custom:',
+    );
+  });
+
+  it('uses the platform delimiter for TeX search paths', () => {
+    expect(
+      buildKpathseaSearchPath(['C:\\work', 'D:\\shared'], 'E:\\texmf', ';'),
+    ).toBe('C:\\work;D:\\shared;E:\\texmf;');
+  });
+
+  it('omits empty TeX search paths', () => {
+    expect(buildKpathseaSearchPath(['', '  '], undefined, ':')).toBeUndefined();
+  });
+});
 
 describe('buildLatexInputEnv', () => {
   it('omits TEXINPUTS when only the implicit "." part is present and none inherited', () => {

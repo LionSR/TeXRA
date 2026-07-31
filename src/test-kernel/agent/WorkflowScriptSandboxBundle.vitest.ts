@@ -7,12 +7,10 @@ import { promisify } from 'node:util';
 import { build } from 'esbuild';
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { REPO_ROOT } from '@test/support/repoScan';
+
 const execFileAsync = promisify(execFile);
-const repositoryRoot = path.resolve(import.meta.dirname, '../../..');
-const sandboxPath = path.join(
-  repositoryRoot,
-  'src/agent/workflowScript/sandbox.ts',
-);
+const sandboxPath = path.join(REPO_ROOT, 'src/agent/workflowScript/sandbox.ts');
 const temporaryDirectories: string[] = [];
 
 afterEach(async () => {
@@ -40,7 +38,7 @@ describe('workflow sandbox host bundles', () => {
         stdin: {
           contents: smokeEntrySource(),
           loader: 'ts',
-          resolveDir: repositoryRoot,
+          resolveDir: REPO_ROOT,
           sourcefile: 'workflow-sandbox-smoke.ts',
         },
         bundle: true,
@@ -57,7 +55,7 @@ describe('workflow sandbox host bundles', () => {
         outfile,
         platform: 'node',
         target: 'node22',
-        tsconfig: path.join(repositoryRoot, 'tsconfig.json'),
+        tsconfig: path.join(REPO_ROOT, 'tsconfig.json'),
       });
 
       const execution = await execFileAsync(process.execPath, [outfile], {

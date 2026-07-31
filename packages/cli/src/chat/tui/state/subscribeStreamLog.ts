@@ -101,6 +101,15 @@ const CHILD_STREAM_LOG_MESSAGE_TYPES = new Set<string>([
   MESSAGE_TYPES.WORKFLOW_TASK,
 ]);
 
+// Roles a workflow-agent stream keeps when it projects an operational feed
+// instead of a model transcript.
+const WORKFLOW_OPERATIONAL_ROLES = new Set<ConversationEntry['role']>([
+  'error',
+  'media',
+  'phase',
+  'tool',
+]);
+
 const LIVE_ACTIVITY_MESSAGE_TYPES = new Set<string>([
   MESSAGE_TYPES.THINKING,
   MESSAGE_TYPES.MODEL_RESPONSE,
@@ -736,10 +745,7 @@ export function syncStreamLog(
       (entry) =>
         entry.synthetic &&
         (!workflowOperationalOnly ||
-          entry.role === 'tool' ||
-          entry.role === 'phase' ||
-          entry.role === 'media' ||
-          entry.role === 'error'),
+          WORKFLOW_OPERATIONAL_ROLES.has(entry.role)),
     );
     const streamFinal = isFinalTranscriptStatus(slice.status);
     const logCandidates: TranscriptCandidate[] = [];
@@ -778,10 +784,7 @@ export function syncStreamLog(
       // uses the DEFAULT message type, but remains an operational row.
       if (
         workflowOperationalOnly &&
-        rendered.role !== 'tool' &&
-        rendered.role !== 'phase' &&
-        rendered.role !== 'media' &&
-        rendered.role !== 'error' &&
+        !WORKFLOW_OPERATIONAL_ROLES.has(rendered.role) &&
         !workflowDefaultLog
       ) {
         continue;

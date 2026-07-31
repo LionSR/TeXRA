@@ -8,6 +8,7 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { AgentRosterController } from '@agent/roster/AgentRosterController';
 import * as logger from '@logger/logUtils';
 import { platform } from '@platform/platform';
+import { PREFERRED_TOOL_USE_AGENTS } from '@shared/constants/agents';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { parseAgentModePresets } from '@shared/schemas/agentPresets';
 import type {
@@ -26,7 +27,6 @@ import {
   DEFAULT_WORKFLOW_AGENT,
   LEGACY_AGENT_ALIASES,
   LOOKUP_PRIORITY,
-  PREFERRED_TOOL_USE_AGENTS,
   TOOL_USE_LOOKUP_PRIORITY,
 } from './agentRegistryConstants';
 import { scanDirectory } from './agentYamlScanner';
@@ -49,7 +49,6 @@ const CHANNEL = 'agentRegistry';
 // Re-exports kept stable for external consumers.
 export type { AgentEntry, ResolvedAgent } from './agentEntry';
 export { extractToolNames } from './agentYamlScanner';
-export { BUILTIN_TEAM_ROOT_AGENT_NAMES } from './agentRegistryConstants';
 export { createKey };
 
 /** Legacy prefix from pre-rename era (builtIn → builtInWorkflow). */

@@ -319,6 +319,11 @@ async function finishWorkflowInputExpansion(
   return deduped;
 }
 
+export interface ExpandedRunInputs {
+  readonly inputFiles: string[];
+  readonly contextFiles: string[];
+}
+
 /**
  * Expand the `--input` and `--context` specs a headless run accepts. `--input`
  * requires at least one resolved file unless `allowEmptyInput` is set.
@@ -334,7 +339,7 @@ export async function expandRunInputs(
     readonly requireWorkspaceFiles?: boolean;
     readonly stdinInputFile?: () => Promise<string>;
   } = {},
-): Promise<{ inputFiles: string[]; contextFiles: string[] }> {
+): Promise<ExpandedRunInputs> {
   if (
     inputSpecs.some(isStdinWorkflowInputSpec) &&
     contextSpecs.some(isStdinWorkflowInputSpec)
@@ -371,11 +376,6 @@ export async function expandRunInputs(
     { ...shared, allowEmpty: true },
   );
   return { inputFiles, contextFiles };
-}
-
-export interface ExpandedRunInputs {
-  readonly inputFiles: string[];
-  readonly contextFiles: string[];
 }
 
 /**

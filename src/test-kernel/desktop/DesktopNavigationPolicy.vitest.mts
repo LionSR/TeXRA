@@ -2,9 +2,8 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
 
-interface DesktopNavigationPolicyModule {
-  isAllowedExternalUrl(url: string): boolean;
-}
+type DesktopNavigationPolicyModule =
+  typeof import('@desktop/main/desktopNavigationPolicy');
 
 describe('desktop navigation policy', () => {
   describe('isAllowedExternalUrl', () => {

@@ -104,31 +104,3 @@ export function formatBuiltSubagentDelivery(
     workingDirectory,
   });
 }
-
-/** Build both representations for asynchronous child-delivery strategies. */
-export async function subagentDeliveryMessage(
-  executionId: ExecutionId,
-  agentName: string,
-  result: AgentFlowResult,
-  options: {
-    readonly startedAt: number;
-    readonly workingDirectory?: string;
-  },
-): Promise<{ msg: string; resultMeta: SubagentResultMeta }> {
-  const built = await buildSubagentResult(
-    executionId,
-    agentName,
-    result,
-    options,
-  );
-  return {
-    msg: formatBuiltSubagentDelivery(
-      executionId,
-      agentName,
-      result,
-      built,
-      options.workingDirectory,
-    ),
-    resultMeta: built.resultMeta,
-  };
-}

@@ -174,7 +174,7 @@ export function buildCliOrchestrationItems(
       description: formatResultCount(resumeItems.length, 'resumable session'),
     });
   }
-  if (buildCliAgentItems(input.toolUseAgents).length > 0) {
+  if (implicitDefaultToolUseAgents(input.toolUseAgents).length > 0) {
     items.push({
       value: { kind: 'browse-agents' },
       label: 'Agent',

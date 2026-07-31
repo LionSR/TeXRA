@@ -6,14 +6,17 @@ import { Box, Text, useWindowSize, type BoxProps } from 'ink';
 import { useInput } from 'ink';
 
 import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '@cli/tui/ui/theme';
-import { KEY_HINT_SEPARATOR, KeyHints } from '@cli/tui/ui/KeyHints';
+import {
+  KEY_HINT_SEPARATOR,
+  KeyHints,
+  type KeyHint,
+} from '@cli/tui/ui/KeyHints';
 import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
 import {
   confirmCardCompactHintLayout,
   confirmCardFeedbackHints,
   confirmCardKeyAction,
   confirmCardKeyHintsForWidth,
-  type ConfirmCardHintAction,
   confirmCardPulsedTitle,
   type ConfirmCardRejectionMode,
 } from './ConfirmCardState';
@@ -159,7 +162,7 @@ export function ConfirmCard({
           columns,
         })
       : undefined;
-  let hints: readonly ConfirmCardHintAction[];
+  let hints: readonly KeyHint[];
   if (feedbackMode) {
     hints = confirmCardFeedbackHints();
   } else if (compact) {

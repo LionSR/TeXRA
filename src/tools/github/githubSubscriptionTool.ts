@@ -34,6 +34,7 @@ import {
   DEFAULT_CHECK_ANNOTATION_LEVEL,
   type GitHubCheckAnnotationLevel,
 } from './checkAnnotationLevels';
+import { issueRef, prRef } from './formatUtils';
 import { getGitHubToken } from './githubAuth';
 import { ghGet } from './githubClient';
 import { MAX_CONCURRENT_PR_SUBSCRIPTIONS } from './prSubscriptionConstants';
@@ -131,6 +132,11 @@ async function requireToken(): Promise<void> {
   }
 }
 
+/** `owner/repo` for any parsed target. */
+function slugOf(target: { owner: string; repo: string }): string {
+  return `${target.owner}/${target.repo}`;
+}
+
 function requirePath(input: GitHubSubscriptionInput): ParsedPath {
   if (!input.path) {
     throw new ToolError(
@@ -168,7 +174,7 @@ async function execSubscribe(
     ANNOTATION_LEVEL_DESCRIPTIONS[minAnnotationLevel];
   if (target.kind === 'repo') {
     const created = bindRepoSubscription(streamId, target);
-    const slug = `${target.owner}/${target.repo}`;
+    const slug = slugOf(target);
     return {
       status: 'executed',
       summary: created
@@ -184,7 +190,7 @@ async function execSubscribe(
       ...target,
       minAnnotationLevel,
     });
-    const slug = `${target.owner}/${target.repo}/pulls/${target.pullNumber}`;
+    const slug = prRef(slugOf(target), target.pullNumber);
     return {
       status: 'executed',
       summary: created
@@ -205,8 +211,8 @@ async function execSubscribe(
   // directly. The bind itself MUST still run — it's per-stream and the
   // binder dedupes the (streamId, key) pair correctly. Mirrors GitHub's
   // own /issues/N → /pull/N redirect behavior on github.com.
-  const issueSlug = `${target.owner}/${target.repo}/issues/${target.issueNumber}`;
-  const prSlug = `${target.owner}/${target.repo}/pulls/${target.issueNumber}`;
+  const issueSlug = issueRef(slugOf(target), target.issueNumber);
+  const prSlug = prRef(slugOf(target), target.issueNumber);
   const knownPR = SharedPRPollingSource.has(prSlug);
   const knownIssue = !knownPR && SharedIssuePollingSource.has(issueSlug);
   const isPR =
@@ -272,41 +278,32 @@ async function resolveIssueIsPR(
 function execUnsubscribe(input: GitHubSubscriptionInput): ToolResult {
   const { streamId } = requireRunStream('github_subscription');
   const target = requirePath(input);
+  const slug = slugOf(target);
+  let removed: boolean;
+  let label: string;
   if (target.kind === 'repo') {
-    const removed = unbindRepoSubscription(streamId, target);
-    const slug = `${target.owner}/${target.repo}`;
-    return {
-      status: 'executed',
-      summary: removed
-        ? `Unsubscribed from repo ${slug}`
-        : `Was not subscribed to repo ${slug}`,
-    };
+    removed = unbindRepoSubscription(streamId, target);
+    label = `repo ${slug}`;
+  } else if (target.kind === 'pr') {
+    removed = unbindPRSubscription(streamId, target);
+    label = prRef(slug, target.pullNumber);
+  } else {
+    // Symmetric to subscribe: a /issues/N path may have been re-routed to a
+    // PR subscription. Try both — whichever owns it wins.
+    const issueRemoved = unbindIssueSubscription(streamId, target);
+    const prRemoved = unbindPRSubscription(streamId, {
+      owner: target.owner,
+      repo: target.repo,
+      pullNumber: target.issueNumber,
+    });
+    removed = issueRemoved || prRemoved;
+    label = issueRef(slug, target.issueNumber);
   }
-  if (target.kind === 'pr') {
-    const removed = unbindPRSubscription(streamId, target);
-    const slug = `${target.owner}/${target.repo}/pulls/${target.pullNumber}`;
-    return {
-      status: 'executed',
-      summary: removed
-        ? `Unsubscribed from ${slug}`
-        : `Was not subscribed to ${slug}`,
-    };
-  }
-  // Symmetric to subscribe: a /issues/N path may have been re-routed to a
-  // PR subscription. Try both — whichever owns it wins.
-  const issueRemoved = unbindIssueSubscription(streamId, target);
-  const prRemoved = unbindPRSubscription(streamId, {
-    owner: target.owner,
-    repo: target.repo,
-    pullNumber: target.issueNumber,
-  });
-  const slug = `${target.owner}/${target.repo}/issues/${target.issueNumber}`;
   return {
     status: 'executed',
-    summary:
-      issueRemoved || prRemoved
-        ? `Unsubscribed from ${slug}`
-        : `Was not subscribed to ${slug}`,
+    summary: removed
+      ? `Unsubscribed from ${label}`
+      : `Was not subscribed to ${label}`,
   };
 }
 
@@ -412,7 +409,7 @@ async function listOpenPullSuggestions(
   const lines = res.data.map((pr) => {
     const title = pr.title ? ` - ${pr.title}` : '';
     const head = pr.head?.ref ? ` (${pr.head.ref})` : '';
-    return `- ${owner}/${repo}/pulls/${pr.number}${head}${title}`;
+    return `- ${prRef(slugOf({ owner, repo }), pr.number)}${head}${title}`;
   });
   return `\n\nOpen PRs you can subscribe to directly:\n${lines.join('\n')}`;
 }
@@ -494,7 +491,7 @@ async function execFindCurrent(
       `No open PR found for ${remote.owner}/${remote.repo} head ${branch}. Push this branch and open a PR, or pass command="subscribe" with an explicit path for an existing PR.${suggestions}`,
     );
   }
-  const path = `${remote.owner}/${remote.repo}/pulls/${pr.number}`;
+  const path = prRef(slugOf(remote), pr.number);
   return {
     status: 'executed',
     summary: path,
