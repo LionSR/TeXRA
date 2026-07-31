@@ -87,7 +87,8 @@ import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { migrateLegacyGlobalBashApprovalOverride } from '@shared/settingsView/handlers/approvalHandlers';
 import { backfillFirstRunDone } from '@shared/state/onboardingState';
-import { defaultSkillSources, setRuntimeSkillSources } from '@skills/index';
+import { defaultSkillSources } from '@skills/skillSources';
+import { setRuntimeSkillSources } from '@skills/runtimeSkills';
 import { UsageLogService } from '@telemetry/UsageLogService';
 import {
   SharedPRPollingSource,
