@@ -2477,30 +2477,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     return usageRoute == null ? usage : { ...usage, usageRoute };
   }
 
-  protected appendUserText(
-    messages: ResponseInputItem[],
-    text: string,
-    placement: 'last-user' | 'continuation',
-  ): void {
-    if (placement === 'continuation') {
-      const role = this.capabilities.supportsIntermDevMsgs ? 'system' : 'user';
-      messages.push({
-        type: 'message',
-        role,
-        content: [createInputText(text)],
-      });
-      return;
-    }
-
-    const lastMessage = messages.at(-1);
-    if (lastMessage) {
-      this.appendInputText(lastMessage, text);
-      return;
-    }
-
+  protected appendUserText(messages: ResponseInputItem[], text: string): void {
+    const role = this.capabilities.supportsIntermDevMsgs ? 'system' : 'user';
     messages.push({
       type: 'message',
-      role: 'user',
+      role,
       content: [createInputText(text)],
     });
   }

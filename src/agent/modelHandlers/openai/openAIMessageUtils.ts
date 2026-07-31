@@ -395,34 +395,14 @@ export function extractChatAssistantText<T extends MessageLike>(
 }
 
 /**
- * Appends `text` to the conversation as a user turn: for a continuation
- * prompt, a fresh message (routed to "system" when the model requires
- * intermediate messages in that role); otherwise merged into the trailing
- * message's content.
+ * Appends a fresh continuation prompt, routed to "system" when the model
+ * requires intermediate messages in that role.
  */
 export function appendUserTextToChatMessages<T extends MessageLike>(
   messages: T[],
   text: string,
-  placement: 'last-user' | 'continuation',
   supportsIntermDevMsgs: boolean,
 ): void {
-  if (placement === 'continuation') {
-    const role = supportsIntermDevMsgs ? 'system' : 'user';
-    messages.push({ role, content: [{ type: 'text', text }] } as T);
-    return;
-  }
-
-  const lastMessage = messages.at(-1);
-  if (lastMessage && Array.isArray(lastMessage.content)) {
-    lastMessage.content.push({ type: 'text', text });
-    return;
-  }
-  if (lastMessage && typeof lastMessage.content === 'string') {
-    lastMessage.content = [
-      { type: 'text', text: lastMessage.content },
-      { type: 'text', text },
-    ];
-    return;
-  }
-  messages.push({ role: 'user', content: [{ type: 'text', text }] } as T);
+  const role = supportsIntermDevMsgs ? 'system' : 'user';
+  messages.push({ role, content: [{ type: 'text', text }] } as T);
 }
