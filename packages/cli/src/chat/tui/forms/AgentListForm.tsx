@@ -152,6 +152,8 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
       const options = await computeAgentOptionsData();
       return { toolUse: options.toolUse, workflow: options.workflow };
     },
+    isEmpty: (groups) => groups.toolUse.length === 0,
+    closeEmptyOnEnter: true,
     items: (groups) =>
       groups.toolUse.map((agent) => ({
         value: agent.value,
@@ -196,7 +198,7 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
     </Text>
   ) : null;
 
-  if (isCompactFormRows(props.availableRows)) {
+  if (isCompactFormRows(props.availableRows) && items.length > 0) {
     return (
       <FormFrame title="/agent" showCloseHint={false}>
         {currentAgentHintRow}
