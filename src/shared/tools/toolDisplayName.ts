@@ -34,7 +34,9 @@ export function isMcpToolName(toolName: string): boolean {
 }
 
 /** Drop provider/handler and MCP namespaces: `claude:Edit` -> `Edit`,
- *  `mcp:terminal/bash` -> `bash`. Case is preserved for display. */
+ *  `mcp:terminal/bash` -> `bash`. Case is preserved for display. The `/` cut
+ *  is deliberate MCP `server/tool` unwrapping, not general path splitting; no
+ *  registry tool name contains a bare `/`. */
 function lastNameSegment(toolName: string): string {
   const cut = Math.max(toolName.lastIndexOf(':'), toolName.lastIndexOf('/'));
   return cut >= 0 ? toolName.slice(cut + 1) : toolName;
