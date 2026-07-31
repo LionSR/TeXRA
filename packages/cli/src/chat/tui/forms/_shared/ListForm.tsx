@@ -217,6 +217,7 @@ export function useAsyncPickerForm<TData, TValue>(args: {
   readonly showTransientCloseHint?: boolean;
   readonly load: () => Promise<TData>;
   readonly isEmpty?: (data: TData) => boolean;
+  readonly closeEmptyOnEnter?: boolean;
   readonly items: (data: TData) => ReadonlyArray<SelectItem<TValue>>;
   /** `false` renders a read-only list where selecting closes the form. */
   readonly selectable?: boolean;
@@ -231,6 +232,7 @@ export function useAsyncPickerForm<TData, TValue>(args: {
       load: args.load,
       onClose: args.onClose,
       isEmpty: args.isEmpty,
+      closeEmptyOnEnter: args.closeEmptyOnEnter,
     });
   const selectable = args.selectable !== false;
   const items = data === undefined ? [] : args.items(data);
