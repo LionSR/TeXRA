@@ -10,11 +10,43 @@ import { HISTORY_VIEW_COMMANDS } from '@shared/ipc';
 import { commandOnly } from './messageFactories';
 
 import { AgentCategory } from './agent';
+import { RUN_OUTCOME, type RunOutcome } from './stream';
 import { ToolConfigSchema } from './toolConfig';
 
 // ============================================================
 // Data schemas
 // ============================================================
+
+/**
+ * Status of a persisted run as shown in a history list.
+ *
+ * `unknown` is load-bearing: a run whose terminal write never landed (crash,
+ * kill, or a build that predates the write) has no outcome to report, and
+ * reporting `completed` for it would mask the crash.
+ */
+export const HISTORY_RUN_STATUS = {
+  RESUMABLE: 'resumable',
+  COMPLETED: RUN_OUTCOME.COMPLETED,
+  CANCELLED: RUN_OUTCOME.CANCELLED,
+  FAILED: RUN_OUTCOME.FAILED,
+  UNKNOWN: 'unknown',
+} as const;
+
+const HistoryRunStatusSchema = z.enum(HISTORY_RUN_STATUS);
+export type HistoryRunStatus = z.infer<typeof HistoryRunStatusSchema>;
+
+/**
+ * Project a storage resumability decision onto the history status vocabulary.
+ * Resumability outranks the terminal outcome: what a user can continue is the
+ * fact the list acts on.
+ */
+export function resolveHistoryRunStatus(decision: {
+  readonly resumable: boolean;
+  readonly outcome?: RunOutcome;
+}): HistoryRunStatus {
+  if (decision.resumable) return HISTORY_RUN_STATUS.RESUMABLE;
+  return decision.outcome ?? HISTORY_RUN_STATUS.UNKNOWN;
+}
 
 /** Fields shared by all agent categories. */
 const BaseConfigSummarySchema = z.object({
@@ -48,6 +80,7 @@ const HistoryItemSchema = z.object({
   id: z.string(),
   timestamp: z.string(),
   agentConfig: AgentConfigSummarySchema,
+  status: HistoryRunStatusSchema,
   /** AI-generated summary of what the session aimed to accomplish. */
   description: z.string().optional(),
 });

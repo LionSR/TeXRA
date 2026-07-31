@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 // Local imports
+import { MAX_TIER } from '@auth/config';
+import { RELAY_CI_TOKEN_PREFIX, RELAY_TOKEN_ENV_VAR } from '@auth/relayToken';
 import * as serverKeysModule from '@auth/serverKeys';
 import { refreshDesktopModelListStateIfNeeded } from '@desktop/main/desktopModelListRefresh';
 import { DefaultDesktopCredentialSettingsController } from '@desktop/main/desktopCredentialSettingsController';
@@ -24,13 +26,9 @@ const codexMocks = vi.hoisted(() => ({
   getStatus: vi.fn(async () => ({
     signedIn: false,
     preferSubscription: false,
-    subscriptionToolUseOnly: false,
   })),
   login: vi.fn(async () => ({ email: 'user@example.com' })),
   setPreferSubscription: vi.fn(async (enabled: boolean) => ({
-    effective: enabled,
-  })),
-  setSubscriptionToolUseOnly: vi.fn(async (enabled: boolean) => ({
     effective: enabled,
   })),
   signOut: vi.fn(async () => undefined),
@@ -54,13 +52,9 @@ vi.mock('@controllers/modelAccess/chatGptAuthStatus', () => ({
 }));
 
 vi.mock('@model/codex/codexPreference', () => ({
-  isCodexSubscriptionToolUseOnly: () => false,
   isPreferCodexSubscription: () => false,
-  setCodexSubscriptionToolUseOnly: codexMocks.setSubscriptionToolUseOnly,
   setPreferCodexSubscription: codexMocks.setPreferSubscription,
   CODEX_PREFER_SUBSCRIPTION_KEY: 'texra.chatgptCodex.preferSubscription',
-  CODEX_SUBSCRIPTION_TOOL_USE_ONLY_KEY:
-    'texra.chatgptCodex.subscriptionToolUseOnly',
 }));
 
 vi.mock('@model/computeModelOptions', async (importOriginal) => ({
@@ -87,6 +81,7 @@ async function createFixture(overrides: Partial<ControllerOptions> = {}) {
   const events: string[] = [];
   const confirms: string[] = [];
   const infos: string[] = [];
+  const warnings: string[] = [];
   const errors: string[] = [];
   const signIn = vi.fn(async () => undefined);
   const signOut = vi.fn(async () => undefined);
@@ -136,6 +131,9 @@ async function createFixture(overrides: Partial<ControllerOptions> = {}) {
       showInfoMessage: async (message) => {
         infos.push(message);
       },
+      showWarningMessage: async (message) => {
+        warnings.push(message);
+      },
       showErrorMessage: async (message) => {
         errors.push(message);
       },
@@ -145,6 +143,10 @@ async function createFixture(overrides: Partial<ControllerOptions> = {}) {
       signOut,
     },
     setUseIncludedModelAccess,
+    modelSelectionExtras: {
+      useIncludedAccess: () => false,
+      getUserTier: () => undefined,
+    },
     modelListRefresh: Promise.resolve(),
     onCredentialChanged,
     onError: () => undefined,
@@ -159,6 +161,7 @@ async function createFixture(overrides: Partial<ControllerOptions> = {}) {
     events,
     confirms,
     infos,
+    warnings,
     errors,
     signIn,
     signOut,
@@ -172,21 +175,18 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     codexMocks.getStatus.mockResolvedValue({
       signedIn: false,
       preferSubscription: false,
-      subscriptionToolUseOnly: false,
     });
     codexMocks.login.mockResolvedValue({ email: 'user@example.com' });
     codexMocks.setPreferSubscription.mockImplementation(async (enabled) => ({
       effective: enabled,
     }));
-    codexMocks.setSubscriptionToolUseOnly.mockImplementation(
-      async (enabled) => ({ effective: enabled }),
-    );
     codexMocks.signOut.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
     vi.clearAllMocks();
+    vi.unstubAllEnvs();
   });
 
   it('preserves a provider key when removal is cancelled', async () => {
@@ -385,6 +385,21 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     );
   });
 
+  it('warns when a more specific setting overrides the requested subscription toggle', async () => {
+    const fixture = await createFixture();
+    codexMocks.setPreferSubscription.mockResolvedValueOnce({
+      effective: false,
+    });
+
+    await assertSupported(
+      fixture.controller.chatGptActions.setPreferSubscription,
+    )(true);
+    expect(fixture.warnings).toEqual([
+      'A more specific setting still keeps ChatGPT subscription disabled.',
+    ]);
+    expect(fixture.infos).toEqual([]);
+  });
+
   it('refreshes ChatGPT preferences and reports authentication outcomes', async () => {
     const fixture = await createFixture();
 
@@ -402,29 +417,72 @@ describe('DefaultDesktopCredentialSettingsController', () => {
       ]),
     );
 
-    await fixture.controller.signInChatGpt({ enableSubscription: true });
+    await fixture.controller.signInChatGpt();
     expect(codexMocks.login).toHaveBeenCalledOnce();
     expect(codexMocks.setPreferSubscription).toHaveBeenLastCalledWith(true);
     expect(fixture.infos).toContain(
       'Signed in with ChatGPT as user@example.com.',
     );
 
-    await assertSupported(
-      fixture.controller.chatGptActions.setSubscriptionToolUseOnly,
-    )(false);
-    expect(codexMocks.setSubscriptionToolUseOnly).toHaveBeenCalledWith(false);
-
     await assertSupported(fixture.controller.chatGptActions.signOut)();
     expect(codexMocks.signOut).toHaveBeenCalledOnce();
     expect(fixture.infos).toContain('Signed out of ChatGPT.');
 
     codexMocks.login.mockRejectedValueOnce(new Error('authorization denied'));
-    await fixture.controller.signInChatGpt({ enableSubscription: true });
+    await fixture.controller.signInChatGpt();
 
     expect(fixture.errors).toEqual([
       'ChatGPT sign-in failed: authorization denied',
     ]);
-    expect(fixture.onCredentialChanged).toHaveBeenCalledTimes(5);
+    expect(fixture.onCredentialChanged).toHaveBeenCalledTimes(4);
+  });
+
+  it('routes Codex through the subscription for a Settings-panel sign-in', async () => {
+    const fixture = await createFixture();
+
+    await assertSupported(fixture.controller.chatGptActions.signIn)();
+
+    expect(codexMocks.login).toHaveBeenCalledOnce();
+    expect(codexMocks.setPreferSubscription).toHaveBeenCalledWith(true);
+  });
+
+  it('reports after sign-out that a configured relay token still authenticates', async () => {
+    vi.stubEnv(RELAY_TOKEN_ENV_VAR, `${RELAY_CI_TOKEN_PREFIX}ci-token`);
+    const fixture = await createFixture();
+
+    await assertSupported(fixture.controller.profileActions.signOut)();
+
+    expect(fixture.signOut).toHaveBeenCalledOnce();
+    expect(fixture.infos).toEqual([
+      expect.stringContaining(RELAY_TOKEN_ENV_VAR),
+    ]);
+  });
+
+  it('stays silent after sign-out when no relay token is configured', async () => {
+    vi.stubEnv(RELAY_TOKEN_ENV_VAR, '');
+    const fixture = await createFixture();
+
+    await assertSupported(fixture.controller.profileActions.signOut)();
+
+    expect(fixture.signOut).toHaveBeenCalledOnce();
+    expect(fixture.infos).toEqual([]);
+  });
+
+  it('applies the Included-Access reasoning cap to the model list', async () => {
+    const fixture = await createFixture({
+      modelSelectionExtras: {
+        useIncludedAccess: () => true,
+        getUserTier: () => MAX_TIER,
+      },
+    });
+
+    const { models } =
+      await fixture.controller.modelSelectionController.buildSelectionData();
+
+    expect(models.find((model) => model.name === 'gpt55')).toMatchObject({
+      supportsReasoningLevel: true,
+      includedAccessReasoningCap: 'high',
+    });
   });
 
   it('awaits the production model-list migration before model data', async () => {

@@ -231,20 +231,33 @@ export async function launchAgentCliSession(
 }
 
 /**
- * Run the shared agent-CLI execute() prelude: request bash approval for the
- * labelled command, fire the post-approval in-progress hook, then dispatch to
- * the resume/launch branch with the active run context.
+ * Run the shared agent-CLI execute() prelude: refuse a run that cannot collect
+ * the result, request bash approval for the labelled command, fire the
+ * post-approval in-progress hook, then dispatch to the resume/launch branch
+ * with the active run context.
+ *
+ * Both agent-CLI tools deliver every turn as a follow-up message. A run with
+ * `stopAfterCycle` ends after the current cycle, so that follow-up would land
+ * in a turn that never happens and the child's result is stranded. Fail before
+ * prompting for approval rather than launching work nobody collects.
  */
 export async function withAgentCliApproval(
+  toolName: string,
   approvalLabel: string,
   run: (runContext: RunContext | undefined) => ToolResult | Promise<ToolResult>,
 ): Promise<ToolResult> {
+  const contexts = getCurrentToolContexts();
+  if (contexts?.runContext?.stopAfterCycle) {
+    throw new ToolError(
+      `${toolName} is unavailable in one-shot runs: it delivers its result as a follow-up message, and this run ends after the current cycle so no follow-up can be collected. Delegate with delegate_agent, which returns the child's result directly.`,
+    );
+  }
+
   const approval = await requestBashApproval({ command: approvalLabel });
   if (approval.action !== 'approve') {
     return buildBashApprovalRejectedResult(approvalLabel, approval.feedback);
   }
 
-  const contexts = getCurrentToolContexts();
   contexts?.callContext?.hooks?.onExecutionReady?.();
   return run(contexts?.runContext);
 }

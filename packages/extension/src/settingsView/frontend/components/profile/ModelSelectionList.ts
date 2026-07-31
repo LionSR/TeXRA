@@ -195,9 +195,13 @@ export class ModelSelectionList extends LitElement {
   ): TemplateResult | typeof nothing {
     if (!model.disabled) return nothing;
 
-    const title = model.requiresKey
-      ? `${model.availabilityLabel ?? 'Missing API key'} — configure it in API Configuration`
-      : (model.availabilityLabel ?? 'Unavailable');
+    // The backend resolves the label alongside `disabled`; the Models tab
+    // shows that verdict verbatim rather than inventing a reason.
+    const { availabilityLabel } = model;
+    const title =
+      model.requiresKey && availabilityLabel
+        ? `${availabilityLabel} — configure it in API Configuration`
+        : availabilityLabel;
     const iconName = model.requiresKey ? 'key' : 'triangle-exclamation';
     const className = model.requiresKey
       ? 'model-row-icon'

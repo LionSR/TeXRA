@@ -14,8 +14,8 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { EXECUTION_LEASE_STALE_MS } from '@agent/storage/executionLease';
 import { platform } from '@platform/platform';
 import type { ExecutionId } from '@shared/schemas';
+import { writeForeignLease } from '@test/support/executionLeaseFixtures';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
-import { StorageFS } from '@utils/files';
 
 function config(agent: string): AgentConfig {
   return AgentConfigSchema.parse({
@@ -32,9 +32,10 @@ async function writeExecution(
   timestamp: string,
   agentConfig?: AgentConfig,
   category?: string,
+  parentExecutionId?: ExecutionId,
 ): Promise<void> {
   const store = getExecutionStore(id);
-  await store.writeMeta({ timestamp, category });
+  await store.writeMeta({ timestamp, category, parentExecutionId });
   if (agentConfig) await store.writeConfig(agentConfig);
 }
 
@@ -134,24 +135,11 @@ describe('execution listing normalization', () => {
       workspaceState: { [legacyKey]: [legacyEntry] },
     });
     clearStoreCache();
-    await StorageFS.ensureDir('executionLeases');
-    const writeLease = (heartbeatAt: number) =>
-      StorageFS.writeAtomic(
-        `executionLeases/${id}.json`,
-        JSON.stringify({
-          version: 1,
-          executionId: id,
-          ownerToken: '00000000-0000-4000-8000-000000000008',
-          acquiredAt: heartbeatAt,
-          heartbeatAt,
-        }),
-      );
-
-    await writeLease(Date.now());
+    await writeForeignLease(id, Date.now());
     expect(await listExecutions()).toEqual([]);
     expect(platform().workspaceState.get(legacyKey, [])).toEqual([legacyEntry]);
 
-    await writeLease(Date.now() - EXECUTION_LEASE_STALE_MS - 1);
+    await writeForeignLease(id, Date.now() - EXECUTION_LEASE_STALE_MS - 1);
     expect(await listExecutions()).toEqual([
       expect.objectContaining({ id, kind: 'agent' }),
     ]);
@@ -228,5 +216,32 @@ describe('execution listing normalization', () => {
       runtimeCategory: 'legacy',
     });
     expect(entries.filter(isUserVisibleExecution)).toEqual([entries[1]]);
+  });
+
+  it('keeps agent-spawned child runs out of history listings', async () => {
+    const rootId = 'eee111' as ExecutionId;
+    const childId = 'fff222' as ExecutionId;
+    await writeExecution(
+      rootId,
+      '2026-07-15T10:00:00.000Z',
+      config('orchestrator'),
+      AgentCategory.ToolUse,
+    );
+    await writeExecution(
+      childId,
+      '2026-07-15T10:05:00.000Z',
+      config('search'),
+      AgentCategory.ToolUse,
+      rootId,
+    );
+
+    const entries = await listExecutions();
+
+    // The raw listing still carries the child so tool-facing callers can walk
+    // the lineage; only the history-listing filter drops it.
+    expect(entries.map(({ id }) => id)).toEqual([childId, rootId]);
+    expect(entries.filter(isUserVisibleExecution).map(({ id }) => id)).toEqual([
+      rootId,
+    ]);
   });
 });

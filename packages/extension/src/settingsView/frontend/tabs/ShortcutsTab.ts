@@ -1,7 +1,7 @@
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/input/input.js';
 import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { customElement, state } from 'lit/decorators.js';
 
 import {
   commonViewStyles,
@@ -82,7 +82,6 @@ export class ShortcutsTab extends LitElement {
     `,
   ];
 
-  @property({ type: Boolean }) desktopHost = false;
   @state() private entries: readonly DesktopShortcutEntry[] = [];
   @state() private recordingId: string | undefined;
   @state() private query = '';
@@ -226,13 +225,6 @@ export class ShortcutsTab extends LitElement {
   }
 
   override render(): TemplateResult {
-    if (!this.desktopHost) {
-      return html`
-        <div class="tab-content-container settings-unavailable">
-          Keyboard shortcuts are configured by VS Code in the extension host.
-        </div>
-      `;
-    }
     const entries = this.visibleEntries();
     const groups = new Map<string, DesktopShortcutEntry[]>();
     for (const entry of entries) {

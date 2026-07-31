@@ -5,7 +5,6 @@
  */
 import { computed, signal, type Signal } from '@lit-labs/signals';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
-import type { CliApiMode } from '@cli/runtime/apiAccessMode';
 import type { RunModelDecisionReason } from '@model/runModelDecision';
 import {
   AgentCategory,
@@ -28,6 +27,7 @@ import {
 } from '@shared/schemas';
 import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
 import { isActivePhase } from '@shared/streams/streamStatus';
+import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
 import {
   applyChildStreamRemoval,
   isChildStreamRemoved,
@@ -128,7 +128,7 @@ export interface SessionMeta {
   readonly model: string;
   readonly modelSource: RunModelDecisionReason;
   readonly cwd: string;
-  readonly apiMode: CliApiMode;
+  readonly apiMode: ApiAccessMode;
   readonly approvalPolicy: CliApprovalPolicy;
   readonly canDelegate: boolean;
   readonly transcriptMode: 'persistent' | 'ephemeral';
@@ -176,7 +176,16 @@ export interface StreamSlice {
    *  status. Drives the StatusBar's live elapsed-time segment so a long
    *  token-less "thinking" turn still shows liveness. */
   readonly runStartedAt: number | undefined;
+  /** Authoritative one-line description of what this stream is doing, owned by
+   *  the runtime (`updateStreamDescription`): the generated session
+   *  description for a tool-use run, or the delegated task for a child stream.
+   *  The same value the progress view shows; never derived from the
+   *  transcript. */
   readonly description: string | undefined;
+  /** CLI-only live status: the newest meaningful transcript line for this
+   *  stream, recomputed on every log sync. Fills the stream-list summary slot
+   *  until the runtime supplies a `description`. */
+  readonly latestLine: string | undefined;
   /** Latest model usage snapshot. The StatusBar treats this as current context
    *  occupancy, so it must not be accumulated across turns. */
   readonly usage: TokenUsageStats | undefined;
@@ -240,6 +249,7 @@ function emptySlice(streamId: StreamTabId): StreamSlice {
     substate: undefined,
     runStartedAt: undefined,
     description: undefined,
+    latestLine: undefined,
     outputFilesByRound: {},
     missingOutputsByRound: {},
     compileFailuresByRound: {},

@@ -37,9 +37,9 @@
       "name": "LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE"
     },
     {
-      "file": "packages/desktop/src/main/platform/secretStorageWarningDialog.ts",
+      "file": "packages/desktop/src/main/platform/warningDialog.ts",
       "category": "exports",
-      "name": "getSecretStorageWarningParentWindow"
+      "name": "getDesktopWarningParentWindow"
     },
     {
       "file": "packages/extension/src/frontend/lean/VscodeIntegration.ts",

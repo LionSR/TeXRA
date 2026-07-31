@@ -133,7 +133,7 @@ describe('CLI tool display lines', () => {
 
   it('keeps bash semantics ahead of generic MCP presentation', () => {
     const entry = toolUse(
-      'mcp:terminal:bash',
+      'mcp:terminal/bash',
       { command: 'false' },
       {
         errorText: 'Command failed (exit 7)',
@@ -143,7 +143,7 @@ describe('CLI tool display lines', () => {
     );
 
     expect(toolUseDisplayLines(entry)).toEqual([
-      '● terminal/bash (false)',
+      '● MCP terminal/bash (false)',
       '⎿ exit 7',
       '⎿ Command failed (exit 7)',
     ]);
@@ -359,19 +359,28 @@ describe('CLI tool display lines', () => {
     expect(full.at(-1)).toBe('  line 12');
   });
 
-  it('preserves MCP server names as server/tool labels', () => {
+  it('labels MCP calls with their server/tool provenance', () => {
     const entry = toolUse(
-      'mcp:slack:send',
+      'mcp:slack/send',
       { channel: '#drafts', text: 'done' },
       { outputText: 'sent' },
     );
 
     expect(toolUseDisplayLines(entry)).toMatchInlineSnapshot(`
       [
-        "● slack/send ({"channel":"#drafts","text":"done"})",
+        "● MCP slack/send ({"channel":"#drafts","text":"done"})",
         "⎿ sent",
       ]
     `);
+  });
+
+  it('gives a delegated sub-agent tool the same treatment as the name it wraps', () => {
+    const entry = toolUse('claude:Bash', { command: 'npm test' });
+
+    expect(toolUseDisplayLines(entry)).toEqual([
+      '● Bash (npm test)',
+      '⎿ (no output)',
+    ]);
   });
 
   it('keeps unregistered tools on the universal renderer', () => {

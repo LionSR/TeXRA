@@ -6,10 +6,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { SessionStores, type DeleteExecutionOptions } from '@agent/storage';
+import * as logUtils from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { releaseStreamResources } from '@tools/approval';
-import { StreamSnapshotStore } from '@transcript';
+import { StreamLogStore, StreamSnapshotStore } from '@transcript';
 
 describe('SessionStores deletion coordination', () => {
   it('tracks lease-gated deletion without blocking its artifact flush', async () => {
@@ -124,5 +125,48 @@ describe('SessionStores deletion coordination', () => {
     } finally {
       session.dispose();
     }
+  });
+});
+
+describe('SessionStores orphan sweep', () => {
+  const orphan = 'orphaned-sidecar' as StreamTabId;
+
+  function orphanedSnapshots(): StreamSnapshotStore {
+    const snapshots = new StreamSnapshotStore();
+    vi.spyOn(snapshots, 'listPersistedStreams').mockResolvedValue([orphan]);
+    return snapshots;
+  }
+
+  it('removes persisted state a persistent transcript index no longer lists', async () => {
+    const snapshots = orphanedSnapshots();
+    const stageDeleteStream = vi.spyOn(snapshots, 'stageDeleteStream');
+    const stores = new SessionStores({
+      streamLogs: await StreamLogStore.open(),
+      snapshots,
+    });
+
+    const result = await stores.sweepOrphanedStreams(new Set());
+
+    expect(result.streams).toEqual([orphan]);
+    expect(stageDeleteStream).toHaveBeenCalledWith(orphan);
+  });
+
+  it('skips the sweep when a degraded host runs on an ephemeral transcript index', async () => {
+    const snapshots = orphanedSnapshots();
+    const stageDeleteStream = vi.spyOn(snapshots, 'stageDeleteStream');
+    const warn = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
+    const stores = new SessionStores({
+      streamLogs: StreamLogStore.ephemeral('transcript open failed'),
+      snapshots,
+    });
+
+    const result = await stores.sweepOrphanedStreams(new Set());
+
+    expect(result).toEqual({ streams: [], executionIds: [] });
+    expect(stageDeleteStream).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith(
+      'SessionStores',
+      'Skipped the orphaned-stream sweep: the transcript index is ephemeral and cannot say which persisted streams are still live.',
+    );
   });
 });

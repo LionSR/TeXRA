@@ -32,6 +32,7 @@ import {
   getLanguageFromPath,
 } from '@progressView/frontend/formatters/constants';
 import { toolDisplayKind } from '@shared/tools/toolKind';
+import { isMcpToolName } from '@shared/tools/toolDisplayName';
 import { EXECUTIONS_DEFAULT_ACTION } from '@shared/tools/executionsDisplay';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
@@ -557,7 +558,7 @@ const TOOL_SECTION_BUILDERS: Array<{
     match: (ctx) => Object.hasOwn(codexToolRenderers, ctx.toolName),
     build: buildSpecializedSections,
   },
-  { match: (ctx) => ctx.toolName.startsWith('mcp:'), build: buildMcpSections },
+  { match: (ctx) => isMcpToolName(ctx.toolName), build: buildMcpSections },
 ];
 
 export function dispatchToolSections(

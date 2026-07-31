@@ -30,13 +30,7 @@ export type BuildDisplayFn = (
 ) => Promise<void>;
 
 interface LatexPreviewDisplayOptions {
-  openBuildDisplay?: BuildDisplayFn;
-}
-
-let openBuildDisplayIfTex: BuildDisplayFn = async () => {};
-/** Inject the VS Code LaTeX build+display function. Default: no-op. */
-export function setOpenBuildDisplay(fn: BuildDisplayFn): void {
-  openBuildDisplayIfTex = fn;
+  openBuildDisplay: BuildDisplayFn;
 }
 
 /** Interface for entries that support LaTeX preview operations */
@@ -209,7 +203,7 @@ function tempPathToLocation(tempPath: string): FileLocation {
 /** Preview the proposed LaTeX document by creating a temp file and building it */
 export async function previewProposedLatex(
   entry: LatexPreviewEntry,
-  options: LatexPreviewDisplayOptions = {},
+  options: LatexPreviewDisplayOptions,
 ): Promise<void> {
   await withLatexOperation(entry, 'Preview', async () => {
     const content = await readFileWithFallback(
@@ -224,12 +218,9 @@ export async function previewProposedLatex(
 
     if (entry.isSettled()) return;
 
-    await (options.openBuildDisplay ?? openBuildDisplayIfTex)(
-      tempPathToLocation(tempPath),
-      {
-        preserveFocus: true,
-      },
-    );
+    await options.openBuildDisplay(tempPathToLocation(tempPath), {
+      preserveFocus: true,
+    });
   });
 }
 
@@ -243,7 +234,7 @@ interface LatexdiffOptions extends LatexPreviewDisplayOptions {
  */
 export async function runLatexdiff(
   entry: LatexPreviewEntry,
-  options?: LatexdiffOptions,
+  options: LatexdiffOptions,
 ): Promise<void> {
   await withLatexOperation(entry, 'LaTeXdiff', async () => {
     const [originalContent, proposedContent] = await Promise.all([
@@ -270,7 +261,7 @@ export async function runLatexdiff(
       'coarse',
       {
         cwd: WorkspaceFS.getPath() ?? path.dirname(originalPath),
-        subtype: options?.subtype,
+        subtype: options.subtype,
       },
     );
 
@@ -300,11 +291,8 @@ export async function runLatexdiff(
 
     if (entry.isSettled()) return;
 
-    await (options?.openBuildDisplay ?? openBuildDisplayIfTex)(
-      tempPathToLocation(diffFilePath),
-      {
-        preserveFocus: true,
-      },
-    );
+    await options.openBuildDisplay(tempPathToLocation(diffFilePath), {
+      preserveFocus: true,
+    });
   });
 }

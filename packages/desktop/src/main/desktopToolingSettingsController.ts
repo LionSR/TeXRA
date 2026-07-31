@@ -2,13 +2,17 @@
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
 import type { SettingsViewCommandActions } from '@controllers/settingsView/SettingsViewCommandHandlers';
+import type { ToolTerminalAction } from '@controllers/settingsView/ToolDashboardData';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   LATEX_WORKSHOP_EXT_ID,
   type LatexConfigField,
 } from '@shared/constants/latex';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
-import type { ToolDashboardItem } from '@shared/schemas/settingsViewMessages';
+import type {
+  ToolCommandKind,
+  ToolDashboardItem,
+} from '@shared/schemas/settingsViewMessages';
 import type { ExternalToolCheckResult } from '@tools/toolAvailability';
 import { setToolEnabled } from '@utils/config/constants';
 
@@ -24,10 +28,10 @@ interface DefaultDesktopToolingSettingsControllerOptions extends SettingsStatePo
     getCachedCheckResults(): Promise<ExternalToolCheckResult[] | undefined>;
     refreshAvailability(): Promise<void>;
     refreshDisabledCache(): Promise<void>;
-    findCommand(
+    planTerminalAction(
       toolId: string,
-      kind: 'install' | 'auth',
-    ): Promise<string | undefined>;
+      kind: ToolCommandKind,
+    ): Promise<ToolTerminalAction>;
   };
   readonly navigation: {
     openExternal(url: string): Promise<void>;
@@ -90,7 +94,7 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
 
   private async postToolDashboardData(useCachedResults = false): Promise<void> {
     const cachedResults = useCachedResults
-      ? ((await this.options.dashboard.getCachedCheckResults()) ?? [])
+      ? await this.options.dashboard.getCachedCheckResults()
       : undefined;
     const items = await this.options.dashboard.buildItems(cachedResults);
     this.options.renderer.postToRenderer({
@@ -120,14 +124,21 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
 
   private async runToolCommand(input: {
     toolId: string;
-    kind: 'install' | 'auth';
+    kind: ToolCommandKind;
   }): Promise<void> {
-    const command = await this.options.dashboard.findCommand(
+    const action = await this.options.dashboard.planTerminalAction(
       input.toolId,
       input.kind,
     );
-    if (!command) return;
-    await this.options.commands.run(command);
+    if (action.kind === 'none') {
+      this.options.onError(
+        new Error(
+          `No ${input.kind} command for tool "${input.toolId}" (${action.reason})`,
+        ),
+      );
+      return;
+    }
+    await this.options.commands.run(action.command);
   }
 
   private async runLatexInstallCommand(command: string): Promise<void> {

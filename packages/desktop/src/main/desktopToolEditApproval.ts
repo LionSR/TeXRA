@@ -1,34 +1,25 @@
+/**
+ * Desktop preview port for {@link ToolEditApprovalController}.
+ *
+ * Each request gets its own temp directory; the renderer opens the staged
+ * copies through the window's diff and file viewers, and the user's edits are
+ * read back from the proposed copy on disk.
+ */
+
 import { readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 
-import { nanoid } from 'nanoid';
-
-import {
-  matchesCancelSelector,
-  type HostInteractionCancelSelector,
-  type HostInteractionOptions,
-  type HostInteractions,
-} from '@agent/runtime/HostInteractions';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { isLatexFile } from '@common/files/fileTypeUtils';
-import { withEventErrorHandling } from '@controllers/progressView/backend/events/errorHandling';
-import type { StreamTabId, ToolEditPermission } from '@shared/schemas';
-import type { ToolEditApprovalAction } from '@shared/schemas/prompts';
-import {
-  previewProposedLatex,
-  runLatexdiff,
-  type LatexPreviewEntry,
-} from '@tools/approval/latexPreview';
+import type {
+  ToolEditApprovalHost,
+  ToolEditPreview,
+  ToolEditPreviewContext,
+} from '@controllers/approval/ToolEditApprovalController';
+import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import { writeApprovalTempFiles } from '@tools/approval/tempFileManager';
-import {
-  computeLineChangeSummary,
-  prepareToolEditApprovalPrompt,
-  type ToolEditApprovalRequest,
-  type ToolEditApprovalResult,
-} from '@tools/approval/toolEditApproval';
+import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { WorkspaceFS } from '@utils/files';
-import { normalizeLineEndings } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+
 import { createTexraTempDir } from './desktopTempDir.js';
 import type { DesktopAgentExecutionHost } from './desktopAgentExecutionHost.js';
 
@@ -37,227 +28,23 @@ type DesktopToolEditApprovalUi = Pick<
   'openPath' | 'openBuildDisplay' | 'openDiff' | 'showErrorMessage'
 >;
 
-export interface DesktopToolEditApprovalOptions {
-  interactions: Required<Pick<HostInteractions, 'emit'>>;
-  session: SessionHandle;
+interface DesktopToolEditApprovalHostOptions {
   ui: DesktopToolEditApprovalUi;
-  showToolEditPermission(payload: ToolEditPermission): void;
-  resolveToolEditPermission(requestId: string): void;
+  /** Parent directory for per-request temp directories; defaults to the OS temp dir. */
   tempRoot?: string;
 }
 
-export interface DesktopToolEditApprovalController {
-  approvePendingForStream(streamId: StreamTabId): Promise<void>;
-  cancel(selector?: HostInteractionCancelSelector): void;
-  handleAction(payload: {
-    requestId: string;
-    action: ToolEditApprovalAction;
-    feedback?: string;
-  }): void;
-  requestApproval(
+export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
+  constructor(private readonly options: DesktopToolEditApprovalHostOptions) {}
+
+  get openBuildDisplay(): BuildDisplayFn {
+    return this.options.ui.openBuildDisplay;
+  }
+
+  async stagePreview(
     request: ToolEditApprovalRequest,
-    options?: HostInteractionOptions,
-  ): Promise<ToolEditApprovalResult>;
-  dispose(): void;
-}
-
-interface DesktopPendingToolEditApproval extends LatexPreviewEntry {
-  requestId: string;
-  request: ToolEditApprovalRequest;
-  tempDir: string;
-  originalUri: { fsPath: string };
-  proposedUri: { fsPath: string };
-  originalContent: string;
-  proposedContent: string;
-  settle: (result: ToolEditApprovalResult) => void;
-  cancellationScope?: object;
-}
-
-interface InitializingToolEditApproval {
-  readonly request: ToolEditApprovalRequest;
-  readonly cancellationScope?: object;
-  earlyResolution?: ToolEditApprovalResult;
-}
-
-class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalController {
-  private readonly initializing = new Map<
-    string,
-    InitializingToolEditApproval
-  >();
-  private readonly pending = new Map<string, DesktopPendingToolEditApproval>();
-  private disposed = false;
-
-  constructor(private readonly options: DesktopToolEditApprovalOptions) {}
-
-  async requestApproval(
-    request: ToolEditApprovalRequest,
-    options?: HostInteractionOptions,
-  ): Promise<ToolEditApprovalResult> {
-    if (this.disposed) {
-      throw new Error('Desktop tool edit approval controller is disposed.');
-    }
-
-    const requestId = `desktop-approval-${nanoid()}`;
-    const lineChanges = computeLineChangeSummary(
-      request.originalContent,
-      request.proposedContent,
-    );
-    const initialization: InitializingToolEditApproval = {
-      request,
-      cancellationScope: options?.cancellationScope,
-    };
-    this.initializing.set(requestId, initialization);
-    let entry: DesktopPendingToolEditApproval;
-    try {
-      entry = await this.createPendingEntry(requestId, request);
-    } catch (error) {
-      this.initializing.delete(requestId);
-      throw error;
-    }
-    this.initializing.delete(requestId);
-    if (initialization.earlyResolution) {
-      this.cleanupEntry(entry);
-      return initialization.earlyResolution;
-    }
-    entry.cancellationScope = initialization.cancellationScope;
-    let settled = false;
-
-    // `requestToolEditApproval` derives userPatch, lineChanges, and startLine
-    // from the content this returns, so an accepted result only owes it the
-    // content the user actually approved.
-    return new Promise<ToolEditApprovalResult>((resolve) => {
-      entry.settle = (value) => {
-        if (settled) return;
-        settled = true;
-        resolve(value);
-      };
-      entry.isSettled = () => settled;
-      this.pending.set(requestId, entry);
-      this.showProgressPermission(
-        this.options.session,
-        requestId,
-        request,
-        lineChanges,
-      );
-      void this.runAction(requestId, () => this.openDiffPatch(entry));
-    });
-  }
-
-  handleAction(payload: {
-    requestId: string;
-    action: ToolEditApprovalAction;
-    feedback?: string;
-  }): void {
-    const entry = this.pending.get(payload.requestId);
-    if (!entry || entry.isSettled()) return;
-
-    switch (payload.action) {
-      case 'approve':
-        void this.runAction(payload.requestId, () =>
-          this.approveProposedEdit(payload.requestId, entry),
-        );
-        return;
-      case 'reject':
-        this.settle(payload.requestId, {
-          accepted: false,
-          userMessage: payload.feedback?.trim() || undefined,
-        });
-        return;
-      case 'openDiff':
-        void this.runAction(payload.requestId, () => this.openDiffPatch(entry));
-        return;
-      case 'previewProposed':
-        void this.runAction(payload.requestId, () =>
-          this.previewProposed(entry),
-        );
-        return;
-      case 'showLatexdiff':
-        void this.runAction(payload.requestId, () =>
-          runLatexdiff(entry, {
-            subtype: 'ONLYCHANGEDPAGE',
-            openBuildDisplay: this.options.ui.openBuildDisplay,
-          }),
-        );
-        return;
-    }
-    payload.action satisfies never;
-  }
-
-  async approvePendingForStream(streamId: StreamTabId): Promise<void> {
-    for (const initialization of this.initializing.values()) {
-      if (
-        initialization.earlyResolution ||
-        initialization.request.streamId !== streamId
-      ) {
-        continue;
-      }
-      initialization.earlyResolution = {
-        accepted: true,
-        appliedContent: initialization.request.proposedContent,
-      };
-    }
-    const pending = [...this.pending].filter(
-      ([, entry]) => entry.request.streamId === streamId && !entry.isSettled(),
-    );
-    await Promise.all(
-      pending.map(([requestId, entry]) =>
-        this.runAction(requestId, () =>
-          this.approveProposedEdit(requestId, entry),
-        ),
-      ),
-    );
-  }
-
-  cancel(selector: HostInteractionCancelSelector = {}): void {
-    for (const initialization of this.initializing.values()) {
-      if (
-        initialization.earlyResolution ||
-        !matchesCancelSelector(
-          {
-            kind: 'toolEdit',
-            streamId: initialization.request.streamId ?? undefined,
-            cancellationScope: initialization.cancellationScope,
-          },
-          selector,
-        )
-      ) {
-        continue;
-      }
-      initialization.earlyResolution = {
-        accepted: false,
-        userMessage: selector.cause,
-      };
-    }
-    for (const [requestId, entry] of [...this.pending.entries()]) {
-      if (
-        !matchesCancelSelector(
-          {
-            kind: 'toolEdit',
-            streamId: entry.request.streamId ?? undefined,
-            cancellationScope: entry.cancellationScope,
-          },
-          selector,
-        )
-      ) {
-        continue;
-      }
-      this.settle(requestId, {
-        accepted: false,
-        userMessage: selector.cause,
-      });
-    }
-  }
-
-  dispose(): void {
-    if (this.disposed) return;
-    this.disposed = true;
-    this.cancel({ cause: 'Desktop presentation detached.' });
-  }
-
-  private async createPendingEntry(
-    requestId: string,
-    request: ToolEditApprovalRequest,
-  ): Promise<DesktopPendingToolEditApproval> {
+    context: ToolEditPreviewContext,
+  ): Promise<ToolEditPreview> {
     const tempDir = await createTexraTempDir(
       'texra-tool-edit-',
       this.options.tempRoot,
@@ -268,48 +55,14 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
       originalContent: request.originalContent,
       proposedContent: request.proposedContent,
     });
-
-    return {
-      requestId,
-      request,
+    return new DesktopToolEditPreview(this.options.ui, context, {
       tempDir,
-      originalUri: { fsPath: originalPath },
-      proposedUri: { fsPath: proposedPath },
-      originalContent: request.originalContent,
-      proposedContent: request.proposedContent,
-      isSettled: () => false,
-      settle: () => {},
-      workspaceTempCleanup: [],
-      latexOperationInProgress: false,
-      onError: (message) => this.report(message),
-    };
+      originalPath,
+      proposedPath,
+    });
   }
 
-  private showProgressPermission(
-    session: SessionHandle,
-    requestId: string,
-    request: ToolEditApprovalRequest,
-    lineChanges: { added: number; removed: number },
-  ): void {
-    // Activate the stream that needs approval and post the prompt (shared with
-    // the VS Code host); the desktop host has no workspace API, so it falls
-    // back to a basename when computing the relative display path.
-    withEventErrorHandling(
-      'DesktopToolEditApproval',
-      'failed to show approval prompt',
-      () =>
-        this.options.showToolEditPermission(
-          prepareToolEditApprovalPrompt(this.options.interactions, session, {
-            requestId,
-            request,
-            relativePath: this.relativeDisplayPath(request.path),
-            lineChanges,
-          }),
-        ),
-    );
-  }
-
-  private relativeDisplayPath(filePath: string): string {
+  relativeDisplayPath(filePath: string): string {
     try {
       return WorkspaceFS.relativePath(filePath);
     } catch {
@@ -317,84 +70,67 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
     }
   }
 
-  private settle(requestId: string, result: ToolEditApprovalResult): void {
-    const entry = this.pending.get(requestId);
-    if (!entry || entry.isSettled()) return;
-
-    this.pending.delete(requestId);
-    entry.settle(result);
-    withEventErrorHandling(
-      'DesktopToolEditApproval',
-      'failed to resolve approval prompt',
-      () => this.options.resolveToolEditPermission(requestId),
-    );
-    this.cleanupEntry(entry);
+  /**
+   * The prompt itself routes the window to the progress view, so nothing has
+   * to open ahead of it.
+   */
+  revealApprovalSurface(): Promise<void> {
+    return Promise.resolve();
   }
 
-  private async runAction(
-    requestId: string,
-    action: () => Promise<void>,
-  ): Promise<void> {
-    try {
-      await action();
-    } catch (error) {
-      if (this.pending.has(requestId)) {
-        await this.report(toErrorMessage(error));
-      }
-    }
+  reportError(message: string): void {
+    void this.options.ui.showErrorMessage(message);
+  }
+}
+
+interface DesktopStagedFiles {
+  readonly tempDir: string;
+  readonly originalPath: string;
+  readonly proposedPath: string;
+}
+
+class DesktopToolEditPreview implements ToolEditPreview {
+  constructor(
+    private readonly ui: DesktopToolEditApprovalUi,
+    private readonly context: ToolEditPreviewContext,
+    private readonly staged: DesktopStagedFiles,
+  ) {}
+
+  get originalPath(): string {
+    return this.staged.originalPath;
   }
 
-  private async previewProposed(
-    entry: DesktopPendingToolEditApproval,
-  ): Promise<void> {
-    if (isLatexFile(entry.request.path)) {
-      await previewProposedLatex(entry, {
-        openBuildDisplay: this.options.ui.openBuildDisplay,
-      });
-      return;
-    }
-
-    await this.options.ui.openPath(entry.proposedUri.fsPath);
+  get proposedPath(): string {
+    return this.staged.proposedPath;
   }
 
-  private async approveProposedEdit(
-    requestId: string,
-    entry: DesktopPendingToolEditApproval,
-  ): Promise<void> {
-    // Normalize: this read bypasses BaseFS so may contain CRLF.
-    const appliedContent = normalizeLineEndings(
-      await readFile(entry.proposedUri.fsPath, 'utf8'),
-    );
-    this.settle(requestId, { accepted: true, appliedContent });
+  /** The prompt carries the request on its own, so the diff opens alongside it. */
+  present(): Promise<void> {
+    void this.showDiff().catch((error: unknown) => {
+      if (this.context.isSettled()) return;
+      void this.ui.showErrorMessage(toErrorMessage(error));
+    });
+    return Promise.resolve();
   }
 
-  private async openDiffPatch(
-    entry: DesktopPendingToolEditApproval,
-  ): Promise<void> {
-    await this.options.ui.openDiff(
-      { filePath: entry.originalUri.fsPath },
-      { filePath: entry.proposedUri.fsPath },
-      `Tool edit: ${this.relativeDisplayPath(entry.request.path)}`,
+  async showDiff(): Promise<void> {
+    await this.ui.openDiff(
+      { filePath: this.staged.originalPath },
+      { filePath: this.staged.proposedPath },
+      `Tool edit: ${this.context.relativePath}`,
       { preserveFocus: true },
     );
   }
 
-  private cleanupEntry(entry: DesktopPendingToolEditApproval): void {
-    void Promise.all([
-      ...entry.workspaceTempCleanup.map((cleanup) =>
-        cleanup().catch(() => undefined),
-      ),
-      rm(entry.tempDir, { recursive: true, force: true }),
-    ]);
+  async openProposed(): Promise<void> {
+    await this.ui.openPath(this.staged.proposedPath);
   }
 
-  private async report(message: string): Promise<void> {
-    await this.options.ui.showErrorMessage(message);
+  async readProposedContent(): Promise<string> {
+    return readFile(this.staged.proposedPath, 'utf8');
   }
-}
 
-export function createDesktopToolEditApprovalController(
-  options: DesktopToolEditApprovalOptions,
-): DesktopToolEditApprovalController {
-  return new DesktopToolEditApprovalControllerImpl(options);
+  async dispose(): Promise<void> {
+    await rm(this.staged.tempDir, { recursive: true, force: true });
+  }
 }

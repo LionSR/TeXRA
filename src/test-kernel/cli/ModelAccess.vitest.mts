@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { SupabaseClient } from '@auth/SupabaseClient';
 import {
   emptyModelListMessageForCliMode,
   findCliModelAccessEntry,
@@ -41,7 +40,6 @@ vi.mock('llm-zoo', async (importOriginal) => {
 });
 
 const computeModelOptionsDataMock = vi.mocked(computeModelOptionsData);
-const isAuthenticatedSpy = vi.spyOn(SupabaseClient, 'isAuthenticated');
 
 function model(
   value: string,
@@ -121,8 +119,6 @@ const RETIRED_HAIKU3_OPTION = modelOption('haiku3', {
 describe('CLI model access resolution', () => {
   beforeEach(() => {
     computeModelOptionsDataMock.mockReset();
-    isAuthenticatedSpy.mockReset();
-    isAuthenticatedSpy.mockResolvedValue(true);
   });
 
   it('keeps the requested model when it is currently runnable', async () => {
@@ -809,21 +805,6 @@ describe('CLI model access resolution', () => {
     );
   });
 
-  it('does not mask explicit retired models behind included login', async () => {
-    isAuthenticatedSpy.mockResolvedValue(false);
-    computeModelOptionsDataMock.mockResolvedValueOnce([RETIRED_HAIKU3_OPTION]);
-
-    await expect(
-      selectCliRunnableModel('haiku3', {
-        fallbackReason: 'explicit-override',
-        apiMode: 'included',
-        accessList: [],
-      }),
-    ).rejects.toThrow(
-      'Model "haiku3" is not available in the active API mode (retired).',
-    );
-  });
-
   it.each([
     {
       name: 'shows a recovery hint for not-included models in model details',
@@ -988,16 +969,15 @@ describe('CLI model access resolution', () => {
     for (const absent of excludes) expect(text).not.toContain(absent);
   });
 
-  it('marks explicitly included-mode models as login-required when signed out', async () => {
+  it('carries the login-required verdict resolved by the model layer', async () => {
     computeModelOptionsDataMock.mockResolvedValueOnce([
       modelOption('deepseekT', {
-        availability: 'missing-key',
-        availabilityLabel: 'Missing API key',
-        requiresKey: true,
+        availability: 'included-login-required',
+        availabilityLabel: 'Login required',
+        requiresKey: false,
         disabled: true,
       }),
     ]);
-    isAuthenticatedSpy.mockResolvedValueOnce(false);
 
     await expect(
       getCliModelAccessList({ apiMode: 'included' }),
@@ -1025,7 +1005,6 @@ describe('CLI model access resolution', () => {
         disabled: false,
       }),
     ]);
-    isAuthenticatedSpy.mockResolvedValueOnce(false);
 
     await expect(
       getCliModelAccessList({ apiMode: 'included' }),
@@ -1051,7 +1030,6 @@ describe('CLI model access resolution', () => {
         disabled: true,
       }),
     ]);
-    isAuthenticatedSpy.mockResolvedValueOnce(true);
 
     await expect(
       getCliModelAccessList({ apiMode: 'included' }),

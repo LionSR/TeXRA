@@ -7,16 +7,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
-  approveNativeToolEditApprovals,
-  cancelNativeToolEditApprovals,
-  handleProgressViewToolEditApprovalAction,
-  initializeNativeToolEditApproval,
-  nativeRequestApproval,
-} from '@frontend/approval/nativeToolEditApproval';
+  ToolEditApprovalController,
+  type ToolEditApprovalControllerOptions,
+} from '@controllers/approval/ToolEditApprovalController';
+import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
 import type { ToolEditPermission } from '@shared/schemas';
+import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import type { ToolEditApprovalResult } from '@tools/approval/toolEditApproval';
-import type * as VSCode from 'vscode';
 
 interface TestUri {
   readonly fsPath: string;
@@ -39,6 +37,7 @@ const vscodeMocks = vi.hoisted(() => ({
   closeTabs: vi.fn(async () => undefined),
   executeCommand: vi.fn(async (..._args: unknown[]) => undefined),
   showErrorMessage: vi.fn(async (..._args: unknown[]) => undefined),
+  showTextDocument: vi.fn(async (..._args: unknown[]) => undefined),
   textDocuments: [] as TestTextDocument[],
   visibleTextEditors: [] as TestTextEditor[],
 }));
@@ -83,6 +82,7 @@ vi.mock('vscode', () => {
     window: {
       onDidChangeVisibleTextEditors: () => ({ dispose: vi.fn() }),
       showErrorMessage: vscodeMocks.showErrorMessage,
+      showTextDocument: vscodeMocks.showTextDocument,
       tabGroups: {
         all: [],
         close: vscodeMocks.closeTabs,
@@ -107,6 +107,7 @@ interface RecordingRuntimeHost extends Pick<SessionHostInteractions, 'emit'> {
 }
 
 interface ApprovalHarness {
+  readonly controller: ToolEditApprovalController;
   readonly interactions: RecordingRuntimeHost;
   readonly session: SessionHandle;
 }
@@ -116,7 +117,10 @@ interface StartedApproval extends ApprovalHarness {
   readonly requestId: string;
 }
 
-type ApprovalPrompts = Parameters<typeof initializeNativeToolEditApproval>[2];
+type ApprovalPrompts = Pick<
+  ToolEditApprovalControllerOptions,
+  'showToolEditPermission' | 'resolveToolEditPermission'
+>;
 
 const sessions: SessionHandle[] = [];
 const activeApprovals: Promise<ToolEditApprovalResult>[] = [];
@@ -130,6 +134,7 @@ function recordingPrompts(interactions: RecordingRuntimeHost): ApprovalPrompts {
   };
 }
 
+/** One controller per session, exactly as `ProgressViewProvider` wires it. */
 function createApprovalHarness(
   prompts: (
     interactions: RecordingRuntimeHost,
@@ -142,32 +147,28 @@ function createApprovalHarness(
   };
   const session = createTestSession();
   sessions.push(session);
-  initializeNativeToolEditApproval(
-    {
-      storageUri: { fsPath: storageRoot },
-      globalStorageUri: { fsPath: storageRoot },
-    } as unknown as VSCode.ExtensionContext,
+  const controller = new ToolEditApprovalController({
     interactions,
-    prompts(interactions),
-  );
-  return { interactions, session };
+    session,
+    host: new VscodeToolEditApprovalHost(storageRoot),
+    ...prompts(interactions),
+    detachCause: SESSION_DISPOSED_CAUSE,
+  });
+  return { controller, interactions, session };
 }
 
 function requestApproval(
-  session: SessionHandle,
+  controller: ToolEditApprovalController,
   filePath: string,
   streamId: string,
 ): Promise<ToolEditApprovalResult> {
-  const approval = nativeRequestApproval(
-    {
-      path: filePath,
-      originalContent: 'old\n',
-      proposedContent: 'new\n',
-      sourceTool: 'write_file',
-      streamId,
-    },
-    { session },
-  );
+  const approval = controller.requestApproval({
+    path: filePath,
+    originalContent: 'old\n',
+    proposedContent: 'new\n',
+    sourceTool: 'write_file',
+    streamId,
+  });
   activeApprovals.push(approval);
   return approval;
 }
@@ -204,17 +205,16 @@ function currentProposedUri(): TestUri {
 }
 
 async function startApproval(): Promise<StartedApproval> {
-  const { interactions, session } = createApprovalHarness();
+  const harness = createApprovalHarness();
   const approval = requestApproval(
-    session,
+    harness.controller,
     '/workspace/notes.txt',
     'stream-approval',
   );
   return {
+    ...harness,
     approval,
-    requestId: await firstRequestId(interactions),
-    interactions,
-    session,
+    requestId: await firstRequestId(harness.interactions),
   };
 }
 
@@ -239,17 +239,17 @@ afterEach(async () => {
   await rm(storageRoot, { recursive: true, force: true });
 });
 
-describe('native tool edit approval', () => {
+describe('VS Code tool edit approval', () => {
   it('approves a matching edit while its preview is still initializing', async () => {
-    const { interactions, session } = createApprovalHarness();
+    const { controller, interactions } = createApprovalHarness();
     const approval = requestApproval(
-      session,
+      controller,
       '/workspace/approve-initializing.txt',
       'stream-initializing',
     );
 
     await expect(
-      approveNativeToolEditApprovals(session, 'stream-initializing'),
+      controller.approvePendingForStream('stream-initializing'),
     ).resolves.toBeUndefined();
     await expect(approval).resolves.toMatchObject({
       accepted: true,
@@ -258,11 +258,30 @@ describe('native tool edit approval', () => {
     expect(interactions.shown).toEqual([]);
   });
 
+  it('publishes line changes derived from the request content', async () => {
+    const { approval, controller, requestId, interactions } =
+      await startApproval();
+
+    expect(interactions.shown[0]).toMatchObject({
+      requestId,
+      path: '/workspace/notes.txt',
+      relativePath: 'notes.txt',
+      sourceTool: 'write_file',
+      streamId: 'stream-approval',
+      addedLines: 1,
+      removedLines: 1,
+      isLatex: false,
+    });
+
+    controller.handleAction({ requestId, action: 'reject' });
+    await expect(approval).resolves.toMatchObject({ accepted: false });
+  });
+
   it('approves a matching edit whose preview is already pending', async () => {
-    const { approval, session } = await startApproval();
+    const { approval, controller } = await startApproval();
 
     await expect(
-      approveNativeToolEditApprovals(session, 'stream-approval'),
+      controller.approvePendingForStream('stream-approval'),
     ).resolves.toBeUndefined();
     await expect(approval).resolves.toMatchObject({
       accepted: true,
@@ -270,36 +289,32 @@ describe('native tool edit approval', () => {
     });
   });
 
-  it('keeps pending edit approval scoped to both session and stream', async () => {
-    const { interactions, session: targetSession } = createApprovalHarness();
-    const otherSession = createTestSession();
-    sessions.push(otherSession);
-    const target = requestApproval(
-      targetSession,
+  it('keeps each session controller scoped to its own requests', async () => {
+    const target = createApprovalHarness();
+    const other = createApprovalHarness();
+    const targetStream = requestApproval(
+      target.controller,
       '/workspace/target.txt',
       'stream-target',
     );
     const otherStream = requestApproval(
-      targetSession,
+      target.controller,
       '/workspace/other-stream.txt',
       'stream-other',
     );
     const otherSessionRequest = requestApproval(
-      otherSession,
+      other.controller,
       '/workspace/other-session.txt',
       'stream-target',
     );
-    await vi.waitFor(() => expect(interactions.shown).toHaveLength(3));
+    await vi.waitFor(() => expect(target.interactions.shown).toHaveLength(2));
+    await vi.waitFor(() => expect(other.interactions.shown).toHaveLength(1));
 
-    await approveNativeToolEditApprovals(targetSession, 'stream-target');
-    await expect(target).resolves.toMatchObject({ accepted: true });
+    await target.controller.approvePendingForStream('stream-target');
+    await expect(targetStream).resolves.toMatchObject({ accepted: true });
 
-    cancelNativeToolEditApprovals(targetSession, {
-      streamId: 'stream-other',
-    });
-    cancelNativeToolEditApprovals(otherSession, {
-      streamId: 'stream-target',
-    });
+    target.controller.cancel({ streamId: 'stream-other' });
+    other.controller.cancel({ streamId: 'stream-target' });
     await expect(otherStream).resolves.toMatchObject({ accepted: false });
     await expect(otherSessionRequest).resolves.toMatchObject({
       accepted: false,
@@ -307,14 +322,14 @@ describe('native tool edit approval', () => {
   });
 
   it('does not present an approval cancelled during initialization', async () => {
-    const { interactions, session } = createApprovalHarness();
+    const { controller, interactions } = createApprovalHarness();
     const approval = requestApproval(
-      session,
+      controller,
       '/workspace/cancel-initializing.txt',
       'stream-initializing',
     );
 
-    cancelNativeToolEditApprovals(session, {
+    controller.cancel({
       kind: 'toolEdit',
       streamId: 'stream-initializing',
       cause: 'Run ended.',
@@ -339,15 +354,15 @@ describe('native tool edit approval', () => {
         }
       },
     );
-    const { interactions, session } = createApprovalHarness();
+    const { controller, interactions } = createApprovalHarness();
     const approval = requestApproval(
-      session,
+      controller,
       '/workspace/cancel-reveal.txt',
       'stream-reveal',
     );
     await vi.waitFor(() => expect(revealProgress).toBeTypeOf('function'));
 
-    cancelNativeToolEditApprovals(session, {
+    controller.cancel({
       kind: 'toolEdit',
       streamId: 'stream-reveal',
       cause: 'Run ended.',
@@ -360,10 +375,10 @@ describe('native tool edit approval', () => {
   });
 
   it('cancels and cleans a selected session approval', async () => {
-    const { approval, requestId, interactions, session } =
+    const { approval, controller, requestId, interactions } =
       await startApproval();
 
-    cancelNativeToolEditApprovals(session, {
+    controller.cancel({
       kind: 'toolEdit',
       streamId: 'stream-approval',
       cause: 'Stream resources released.',
@@ -377,7 +392,7 @@ describe('native tool edit approval', () => {
   });
 
   it('isolates host-local prompt failures from the approval result', async () => {
-    const { interactions, session } = createApprovalHarness((recorder) => ({
+    const { controller, interactions } = createApprovalHarness((recorder) => ({
       showToolEditPermission: (payload) => {
         recorder.shown.push(payload);
         throw new Error('show failed');
@@ -387,12 +402,12 @@ describe('native tool edit approval', () => {
       },
     }));
     const approval = requestApproval(
-      session,
+      controller,
       '/workspace/isolated.txt',
       'stream-isolated',
     );
 
-    await handleProgressViewToolEditApprovalAction({
+    controller.handleAction({
       requestId: await firstRequestId(interactions),
       action: 'reject',
     });
@@ -401,29 +416,24 @@ describe('native tool edit approval', () => {
   });
 
   it('restores a failed approval prompt and accepts a later retry', async () => {
-    const { approval, requestId, interactions } = await startApproval();
+    const { approval, controller, requestId, interactions } =
+      await startApproval();
     const proposedUri = currentProposedUri();
     await rm(proposedUri.fsPath);
 
-    await handleProgressViewToolEditApprovalAction({
-      requestId,
-      action: 'approve',
-    });
+    controller.handleAction({ requestId, action: 'approve' });
 
+    await vi.waitFor(() => expect(interactions.shown).toHaveLength(2));
     expect(vscodeMocks.showErrorMessage).toHaveBeenCalledOnce();
     expect(vscodeMocks.showErrorMessage).toHaveBeenCalledWith(
       expect.stringContaining('edited document could not be read'),
     );
     expect(interactions.resolved).toEqual([{ requestId }]);
-    expect(interactions.shown).toHaveLength(2);
     expect(interactions.shown[1]).toEqual(interactions.shown[0]);
 
     const getText = vi.fn(() => 'beta after retry\r\n');
     vscodeMocks.textDocuments.push({ uri: proposedUri, getText });
-    await handleProgressViewToolEditApprovalAction({
-      requestId,
-      action: 'approve',
-    });
+    controller.handleAction({ requestId, action: 'approve' });
 
     await expect(approval).resolves.toMatchObject({
       accepted: true,
@@ -434,17 +444,15 @@ describe('native tool edit approval', () => {
   });
 
   it('accepts the current edited document content', async () => {
-    const { approval, requestId, interactions } = await startApproval();
+    const { approval, controller, requestId, interactions } =
+      await startApproval();
     const getText = vi.fn(() => 'beta edited\r\n');
     vscodeMocks.textDocuments.push({
       uri: currentProposedUri(),
       getText,
     });
 
-    await handleProgressViewToolEditApprovalAction({
-      requestId,
-      action: 'approve',
-    });
+    controller.handleAction({ requestId, action: 'approve' });
 
     await expect(approval).resolves.toMatchObject({
       accepted: true,
@@ -453,5 +461,23 @@ describe('native tool edit approval', () => {
     expect(getText).toHaveBeenCalledOnce();
     expect(vscodeMocks.showErrorMessage).not.toHaveBeenCalled();
     expect(interactions.resolved).toHaveLength(1);
+  });
+
+  it('previews a non-LaTeX proposal by opening the proposed file', async () => {
+    const { approval, controller, requestId } = await startApproval();
+    const proposedUri = currentProposedUri();
+
+    controller.handleAction({ requestId, action: 'previewProposed' });
+
+    await vi.waitFor(() =>
+      expect(vscodeMocks.showTextDocument).toHaveBeenCalledWith(
+        expect.objectContaining({ fsPath: proposedUri.fsPath }),
+        { preview: true, preserveFocus: true },
+      ),
+    );
+    expect(vscodeMocks.showErrorMessage).not.toHaveBeenCalled();
+
+    controller.handleAction({ requestId, action: 'reject' });
+    await expect(approval).resolves.toMatchObject({ accepted: false });
   });
 });

@@ -7,9 +7,9 @@ import '@test/support/defaultSessionTestSetup';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
+import type { ProgressHostInteractions } from '@controllers/progressView/backend/progressHostInteractions';
 import { ProgressViewMessageHandler } from '@progressView/ProgressViewMessageHandler';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
-import type { ExtensionHostInteractions } from '@progressView/extensionHostInteractions';
 import type { StreamTabId } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 
@@ -42,8 +42,8 @@ type ProgressViewProviderFake = ProgressViewProvider & {
 };
 
 function createHostInteractions(
-  overrides: Partial<ExtensionHostInteractions> = {},
-): ExtensionHostInteractions {
+  overrides: Partial<ProgressHostInteractions> = {},
+): ProgressHostInteractions {
   return {
     approvePendingDelegatedWork: vi.fn(async () => undefined),
     isRetryPending: vi.fn(() => false),

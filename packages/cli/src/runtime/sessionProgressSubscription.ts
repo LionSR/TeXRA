@@ -22,6 +22,12 @@ type CliProjectedNdjsonProgressEvent = {
 
 export type CliNdjsonProgressRecordWriter = (record: CliNdjsonRecord) => void;
 
+/** The run-fact vocabulary this projection's subscription filter admits. */
+type CliRunFactEvent = Extract<
+  AgentEvent,
+  { type: (typeof RUN_FACT_EVENT_TYPES)[number] }
+>;
+
 /**
  * Project session facts onto the frozen NDJSON progress-event vocabulary.
  * `followUpSent` is intentionally session-local.
@@ -54,11 +60,18 @@ function projectCliSessionFact(
   assertNever(fact, 'Unhandled CLI NDJSON session fact');
 }
 
+/**
+ * Project run facts onto the frozen NDJSON progress-event vocabulary.
+ * `run.start` is intentionally unprojected: the wire shape carries no
+ * run-descriptor event.
+ */
 function projectCliRunFact(
   streamId: StreamTabId,
-  event: AgentEvent,
+  event: CliRunFactEvent,
 ): CliProjectedNdjsonProgressEvent | undefined {
   switch (event.type) {
+    case 'run.start':
+      return undefined;
     case 'usage':
       return { event: 'updateStreamUsage', payload: event.payload };
     case 'run.config':
@@ -136,9 +149,8 @@ function projectCliRunFact(
           children: [...event.items],
         },
       };
-    default:
-      return undefined;
   }
+  assertNever(event, 'Unhandled CLI NDJSON run fact');
 }
 
 /**
@@ -172,7 +184,9 @@ export function attachCliSessionProgressProjection(
       if (sessionEvent.scope !== 'run') return;
       const projected = projectCliRunFact(
         sessionEvent.streamId,
-        sessionEvent.event,
+        // Narrowed by the subscription filter below, which admits only
+        // `RUN_FACT_EVENT_TYPES`.
+        sessionEvent.event as CliRunFactEvent,
       );
       if (projected) emitProjected(projected);
     },

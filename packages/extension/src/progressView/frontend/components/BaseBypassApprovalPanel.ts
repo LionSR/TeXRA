@@ -3,6 +3,9 @@
 // Third-party imports
 import { html, type TemplateResult } from 'lit';
 
+// Local imports - shared copy
+import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
+
 // Local imports - base class
 import { BaseApprovalPanel } from './BaseApprovalPanel';
 
@@ -28,6 +31,13 @@ function canBypassSession({ data }: BypassPermission): boolean {
   return Boolean(data.allowBypass && data.streamId);
 }
 
+/** Per-kind grant wording: the menu item names only the kind it enables. */
+function bypassActionLabel({ kind }: BypassPermission): string {
+  return kind === 'toolEdit'
+    ? DELEGATION_APPROVAL_COPY.progressViewEditAction
+    : DELEGATION_APPROVAL_COPY.progressViewCommandAction;
+}
+
 export abstract class BaseBypassApprovalPanel<
   K extends BypassPermissionKind,
 > extends BaseApprovalPanel<K> {
@@ -51,6 +61,7 @@ export abstract class BaseBypassApprovalPanel<
       <approve-split-button
         .approveTitle=${approveTitle}
         .canBypass=${this.canBypass}
+        .bypassAction=${bypassActionLabel(this.permission)}
         .disabled=${this.archived}
         @approve=${() => this.emitAction(this.approvalDecision)}
         @approve-session=${() => this.emitAction(this.sessionApprovalDecision)}

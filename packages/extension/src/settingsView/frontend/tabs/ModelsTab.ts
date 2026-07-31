@@ -3,6 +3,9 @@
 import { LitElement, html, nothing, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
+// Local imports - shared auth
+import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
+
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
@@ -24,7 +27,6 @@ import type {
   NumberVscodeSetting,
   ProviderKeyStatus,
 } from '@shared/schemas/settingsViewMessages';
-import { CHATGPT_TOOL_USE_ONLY_DESCRIPTION } from '@shared/schemas/coreSettings';
 
 // Local imports - utilities
 import { pluralize } from '@utils/text/stringUtils';
@@ -112,15 +114,6 @@ export class ModelsTab extends LitElement {
     });
   };
 
-  private readonly handleSubscriptionToolUseOnlyChange = (
-    event: Event,
-  ): void => {
-    const enabled = (event.target as WaSwitch).checked;
-    postMessage(SETTINGS_VIEW_COMMANDS.SET_CHATGPT_SUBSCRIPTION_TOOL_USE_ONLY, {
-      enabled,
-    });
-  };
-
   private renderSectionLinks(): TemplateResult {
     const copilotAvailable = this.modelSelectionItems.some(
       (model) => model.provider === 'copilot',
@@ -204,10 +197,7 @@ export class ModelsTab extends LitElement {
   private renderChatGptSection(): TemplateResult {
     const signedIn = this.chatgptAuth?.signedIn ?? false;
     const preferSubscription = this.chatgptAuth?.preferSubscription ?? false;
-    const subscriptionToolUseOnly =
-      this.chatgptAuth?.subscriptionToolUseOnly ?? false;
-    const account =
-      this.chatgptAuth?.email ?? this.chatgptAuth?.accountId ?? 'your account';
+    const account = codexAccountLabel(this.chatgptAuth);
     return html`
       <section id="chatgpt-subscription">
         ${renderSettingsSectionHeading({
@@ -240,23 +230,6 @@ export class ModelsTab extends LitElement {
               aria-label="Prefer ChatGPT subscription"
               ?checked=${preferSubscription}
               @change=${this.handlePreferSubscriptionChange}
-            ></wa-switch>
-          </div>
-          <div class="settings-row">
-            <div class="settings-row-text">
-              <span class="settings-row-label">
-                Use subscription for tool-use agents only
-              </span>
-              <span class="settings-row-help">
-                ${CHATGPT_TOOL_USE_ONLY_DESCRIPTION}
-              </span>
-            </div>
-            <wa-switch
-              class="settings-row-control"
-              aria-label="Use subscription for tool-use agents only"
-              ?checked=${subscriptionToolUseOnly}
-              ?disabled=${!preferSubscription}
-              @change=${this.handleSubscriptionToolUseOnlyChange}
             ></wa-switch>
           </div>
           <div class="settings-row">

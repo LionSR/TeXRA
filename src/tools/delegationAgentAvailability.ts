@@ -17,16 +17,14 @@
  */
 
 import {
-  findAgentByIdentifier,
-  getAgent,
   getVisibleAgent as getWorkspaceVisibleAgent,
   resolveDelegationScopeAgents,
+  resolveWithinCategory,
   type AgentEntry,
 } from '@agent/index/agentRegistry';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
 import type { ToolDefinition } from '@model';
 import type { AgentCategory } from '@shared/schemas/agent';
-import { agentKeyOf } from '@shared/schemas/agent';
 import type { AgentDelegationScope } from '@shared/schemas/agentRoster';
 import { replaceDelegationDescriptionBlock } from '@tools/delegationDescriptionBlock';
 
@@ -96,28 +94,13 @@ export function getDelegationAgentsForScope(
   return resolveDelegationScopeAgents(scope, category);
 }
 
-function findDelegationAgent(
-  agents: readonly AgentEntry[],
-  category: AgentCategory,
-  identifier: string,
-): AgentEntry | undefined {
-  const exact = findAgentByIdentifier(agents, identifier);
-  if (exact) return exact;
-  const alias = getAgent(identifier, category);
-  if (!alias) return undefined;
-  return findAgentByIdentifier(
-    agents,
-    identifier.includes(':') ? agentKeyOf(alias) : alias.name,
-  );
-}
-
 /** Resolve one target from an explicitly captured run scope. */
 export function getDelegationAgentForScope(
   category: AgentCategory,
   identifier: string,
   scope: AgentDelegationScope,
 ): AgentEntry | undefined {
-  return findDelegationAgent(
+  return resolveWithinCategory(
     getDelegationAgentsForScope(category, scope),
     category,
     identifier,

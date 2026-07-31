@@ -39,7 +39,6 @@ export interface SettingsViewHostOptions {
   readonly state: SettingsStatePorts;
   readonly memoryPrompt: MemoryControllerOptions['prompt'];
   readonly respond?: SettingsRespond;
-  readonly setMemoryEnabled?: MemoryControllerOptions['setMemoryEnabled'];
   readonly modelSelectionExtras?: ModelSelectionExtras;
   readonly beforeModelSelectionMessage?: () => Awaitable<void>;
   readonly controllers?: {
@@ -67,14 +66,12 @@ export class SettingsViewHost {
             GlobalStateKey.MEMORY_ENABLED,
             true,
           ),
-        setMemoryEnabled:
-          options.setMemoryEnabled ??
-          (async (enabled) => {
-            await options.state.globalState.update(
-              GlobalStateKey.MEMORY_ENABLED,
-              enabled,
-            );
-          }),
+        setMemoryEnabled: async (enabled) => {
+          await options.state.globalState.update(
+            GlobalStateKey.MEMORY_ENABLED,
+            enabled,
+          );
+        },
       });
     this.modelSelectionController =
       options.controllers?.modelSelection ??

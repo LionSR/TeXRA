@@ -1,12 +1,12 @@
-import type { CliApiMode } from '@cli/runtime/apiAccessMode';
 import {
   loadCliApiStatus,
   loadCliModelAccessOverview,
 } from '@cli/runtime/apiStatus';
+import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
 
 /** Load the canonical account snapshot used by TUI account commands. */
 export async function loadCliAccountStatusLines(options: {
-  readonly apiMode: CliApiMode;
+  readonly apiMode: ApiAccessMode;
   readonly includeApiDetails?: boolean;
 }): Promise<string[]> {
   const [overview, apiStatus] = await Promise.all([

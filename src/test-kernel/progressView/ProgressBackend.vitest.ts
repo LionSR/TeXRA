@@ -61,6 +61,10 @@ import {
 } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
+import {
+  executionLeasePath,
+  writeForeignLease,
+} from '@test/support/executionLeaseFixtures';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { GoalStore } from '@tools/goal';
@@ -97,7 +101,7 @@ function createApprovalOptions() {
     canSend: () => true,
     overrides: {
       retry: { show: vi.fn(), dismiss: vi.fn() },
-      agentProposal: { show: vi.fn(), dismiss: vi.fn() },
+      proposal: { show: vi.fn(), dismiss: vi.fn() },
     },
   };
 }
@@ -110,7 +114,6 @@ function createLifecycleOptions(
     cleanupDeletedStream: vi.fn(),
     cleanupDeletedStreams: vi.fn(),
     rebuildRenderedStreams: vi.fn(),
-    refreshRenderedStreamsAfterDeletion: vi.fn(),
     activateStream: vi.fn(),
     notifyDeletionRetained: vi.fn(),
     ...overrides,
@@ -205,22 +208,6 @@ function executionDeleter(backend: ProgressBackend): ExecutionDeleter {
 async function writeExecutionConfig(executionId: ExecutionId): Promise<void> {
   await getExecutionStore(executionId).writeConfig(
     toolUseTaskState('search', 'deepseekproT').agentConfig,
-  );
-}
-
-async function writeForeignExecutionLease(
-  executionId: ExecutionId,
-): Promise<void> {
-  await StorageFS.ensureDir('executionLeases');
-  await StorageFS.writeAtomic(
-    `executionLeases/${executionId}.json`,
-    JSON.stringify({
-      version: 1,
-      executionId,
-      ownerToken: '00000000-0000-4000-8000-000000000003',
-      acquiredAt: Date.now(),
-      heartbeatAt: Date.now(),
-    }),
   );
 }
 
@@ -941,9 +928,10 @@ describe('ProgressBackend', () => {
 
     expect(backend.state.activeStream).toBe('');
     expect(lifecycle.activateStream).not.toHaveBeenCalled();
-    expect(
-      lifecycle.refreshRenderedStreamsAfterDeletion,
-    ).toHaveBeenCalledOnce();
+    // No stream was activated, so only the stream list is resent.
+    expect(lifecycle.rebuildRenderedStreams).toHaveBeenCalledWith({
+      syncActiveStream: false,
+    });
   });
 
   it('preserves a stream switch during active-stream deletion', async () => {
@@ -2560,7 +2548,7 @@ describe('ProgressBackend', () => {
       await writeExecutionConfig(executionId);
       await backend.state.flush();
       await GoalStore.start(stream, 'preserve the active execution');
-      await writeForeignExecutionLease(executionId);
+      await writeForeignLease(executionId);
 
       await backend.state.clearStream(stream);
 
@@ -2568,9 +2556,7 @@ describe('ProgressBackend', () => {
       expect(await StorageFS.exists(streamDataDir(stream))).toBe(true);
       expect(GoalStore.getForStream(stream)).not.toBeNull();
     } finally {
-      await StorageFS.delete(`executionLeases/${executionId}.json`).catch(
-        () => {},
-      );
+      await StorageFS.delete(executionLeasePath(executionId)).catch(() => {});
       await GoalStore.forget(stream);
       await getExecutionStore(executionId).clear();
       await backend.state.clearAll();
@@ -2589,7 +2575,7 @@ describe('ProgressBackend', () => {
       await backend.state.flush();
       await StorageFS.ensureDir(streamDataDir(stream));
       await GoalStore.start(stream, 'preserve the unmapped active execution');
-      await writeForeignExecutionLease(executionId);
+      await writeForeignLease(executionId);
 
       await backend.state.clearStream(stream);
 
@@ -2597,9 +2583,7 @@ describe('ProgressBackend', () => {
       expect(await StorageFS.exists(streamDataDir(stream))).toBe(true);
       expect(GoalStore.getForStream(stream)).not.toBeNull();
     } finally {
-      await StorageFS.delete(`executionLeases/${executionId}.json`).catch(
-        () => {},
-      );
+      await StorageFS.delete(executionLeasePath(executionId)).catch(() => {});
       await GoalStore.forget(stream);
       await getExecutionStore(executionId).clear();
       await backend.state.clearAll();
@@ -2615,7 +2599,7 @@ describe('ProgressBackend', () => {
       backend.state.streamLogs.ensureStream(stream);
       await writeExecutionConfig(executionId);
       await GoalStore.start(stream, 'preserve the log-only active execution');
-      await writeForeignExecutionLease(executionId);
+      await writeForeignLease(executionId);
 
       const retained = await backend.state.clearAll();
 
@@ -2627,9 +2611,7 @@ describe('ProgressBackend', () => {
       expect(await StorageFS.exists(`executions/${executionId}`)).toBe(true);
       expect(GoalStore.getForStream(stream)).not.toBeNull();
     } finally {
-      await StorageFS.delete(`executionLeases/${executionId}.json`).catch(
-        () => {},
-      );
+      await StorageFS.delete(executionLeasePath(executionId)).catch(() => {});
       await GoalStore.forget(stream);
       await getExecutionStore(executionId).clear();
       await backend.state.clearAll();

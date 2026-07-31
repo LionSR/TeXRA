@@ -25,6 +25,7 @@ function slice(overrides: Partial<StreamSlice> = {}): StreamSlice {
     status: undefined,
     runStartedAt: undefined,
     description: undefined,
+    latestLine: undefined,
     thinkingActive: false,
     compactingActive: false,
     usage: undefined,

@@ -25,6 +25,11 @@ import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { toolDisplayKind } from '@shared/tools/toolKind';
 import { deriveToolInputPreview } from '@shared/tools/toolInputPreview';
 import {
+  displayToolName,
+  isMcpToolName,
+  normalizeToolName,
+} from '@shared/tools/toolDisplayName';
+import {
   executionsSubagentSummary,
   type ExecutionLabels,
 } from '@shared/tools/executionsDisplay';
@@ -42,7 +47,7 @@ import {
 } from '../htmlBuilders';
 import { registerProposalInput } from '../contentStore';
 import { stringifyWithLanguage } from '../parseUtils';
-import { TOOL_LABEL_MAP, TRIVIAL_WRITE_OUTPUT } from '../constants';
+import { TRIVIAL_WRITE_OUTPUT } from '../constants';
 
 import {
   buildTerminalSection,
@@ -83,18 +88,17 @@ export function formatToolUseTemplate(
   // Determine display state
   const isInProgress = status === 'in_progress';
   const showAsError = normalizedToolLog.isError && !isUserFeedback;
+  const normalizedToolName = normalizeToolName(toolName);
   let iconName: TeXRAIconName | typeof SPINNER_ICON_NAME;
   if (isUserFeedback) {
     iconName = 'comment';
   } else if (isInProgress) {
     iconName = SPINNER_ICON_NAME;
   } else {
-    iconName = getToolIconName(toolName, showAsError);
+    iconName = getToolIconName(normalizedToolName, showAsError);
   }
 
-  const titleBase = toolName.startsWith('mcp:')
-    ? `MCP ${toolName.slice(4)}`
-    : (TOOL_LABEL_MAP[toolName] ?? toolName) || 'tool';
+  const titleBase = displayToolName(toolName);
 
   // Surface action + path for executions tool so it's visible without expanding
   let headerSummary = normalizedToolLog.headerSummary || '';
@@ -146,12 +150,12 @@ export function formatToolUseTemplate(
     outputText &&
     !isOutputInTitle &&
     toolName !== DELEGATE_WORKFLOW_SCRIPT_TOOL_NAME &&
-    !toolName.startsWith('mcp:') &&
+    !isMcpToolName(toolName) &&
     toolDisplayKind(toolName) !== 'read' &&
     !isTrivialWriteOutput
   ) {
     sections.push(
-      toolName === 'bash' || toolName === 'codex'
+      toolDisplayKind(toolName) === 'bash' || normalizedToolName === 'codex'
         ? buildTerminalSection('', outputText)
         : buildToolSection('', outputText, {
             toolName,

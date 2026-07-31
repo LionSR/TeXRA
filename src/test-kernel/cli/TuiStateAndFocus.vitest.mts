@@ -1890,7 +1890,7 @@ describe('CLI transcript state', () => {
     expect(JSON.stringify(slice)).not.toContain('raw workflow model response');
     expect(JSON.stringify(slice)).not.toContain('synthetic workflow prompt');
     expect(JSON.stringify(slice)).not.toContain('synthetic workflow response');
-    expect(slice?.description).toBe('synthetic workflow error');
+    expect(slice?.latestLine).toBe('synthetic workflow error');
   });
 
   it('admits ordinary workflow logs without exposing unsafe terminal text', () => {
@@ -1915,10 +1915,10 @@ describe('CLI transcript state', () => {
     syncStreamLog(child1);
 
     let slice = streams.get().get(child1);
-    expect(slice?.description).toBe('Preparing proof audit API_KEY=[redacted]');
-    expect(slice?.description).not.toContain(secret);
-    expect(slice?.description).not.toContain('\u001b');
-    expect(slice?.description).not.toContain('\u0007');
+    expect(slice?.latestLine).toBe('Preparing proof audit API_KEY=[redacted]');
+    expect(slice?.latestLine).not.toContain(secret);
+    expect(slice?.latestLine).not.toContain('\u001b');
+    expect(slice?.latestLine).not.toContain('\u0007');
     expect(slice?.entries).toMatchObject([
       {
         role: 'assistant',
@@ -1941,7 +1941,7 @@ describe('CLI transcript state', () => {
       },
     });
     syncStreamLog(child1);
-    const toolDescription = streams.get().get(child1)?.description;
+    const toolDescription = streams.get().get(child1)?.latestLine;
     expect(toolDescription).toBe('Checking with Bearer [redacted]');
     expect(toolDescription).not.toContain(secret);
     expect(toolDescription).not.toContain('\u001b');
@@ -1958,7 +1958,7 @@ describe('CLI transcript state', () => {
       },
     });
     syncStreamLog(child1);
-    expect(streams.get().get(child1)?.description).toBe('read_file');
+    expect(streams.get().get(child1)?.latestLine).toBe('read_file');
 
     logger.openStage('Review lemmas', {
       id: 'review-phase',
@@ -1967,7 +1967,7 @@ describe('CLI transcript state', () => {
       total: 2,
     });
     syncStreamLog(child1);
-    expect(streams.get().get(child1)?.description).toBe('Review lemmas');
+    expect(streams.get().get(child1)?.latestLine).toBe('Review lemmas');
 
     logger.error('Proof audit failed', {
       messageType: MESSAGE_TYPES.ERROR,
@@ -1975,7 +1975,7 @@ describe('CLI transcript state', () => {
     syncStreamLog(child1);
 
     slice = streams.get().get(child1);
-    expect(slice?.description).toBe('Proof audit failed');
+    expect(slice?.latestLine).toBe('Proof audit failed');
     expect(slice?.entries.map(({ role }) => role)).toEqual([
       'assistant',
       'tool',
@@ -1991,7 +1991,7 @@ describe('CLI transcript state', () => {
     expect(JSON.stringify(slice)).not.toContain('raw workflow model response');
   });
 
-  it('updates dormant workflow descriptions while keeping entries compact', () => {
+  it('updates dormant workflow latest lines while keeping entries compact', () => {
     activeStreamId.set(root);
     patchStream(child1, (slice) => ({
       ...slice,
@@ -2008,7 +2008,7 @@ describe('CLI transcript state', () => {
     syncStreamLog(child1);
 
     expect(streams.get().get(child1)).toMatchObject({
-      description: 'Preparing dormant audit',
+      latestLine: 'Preparing dormant audit',
       entries: [],
     });
 
@@ -2025,7 +2025,7 @@ describe('CLI transcript state', () => {
     syncStreamLog(child1);
 
     expect(streams.get().get(child1)).toMatchObject({
-      description: 'Scanning proof obligations',
+      latestLine: 'Scanning proof obligations',
       entries: [],
     });
 
@@ -2036,7 +2036,7 @@ describe('CLI transcript state', () => {
     syncStreamLog(child1);
 
     expect(streams.get().get(child1)).toMatchObject({
-      description: 'Checking dormant lemmas',
+      latestLine: 'Checking dormant lemmas',
       entries: [],
     });
 
@@ -2047,10 +2047,40 @@ describe('CLI transcript state', () => {
 
     const slice = streams.get().get(child1);
     expect(slice).toMatchObject({
-      description: 'Dormant audit failed',
+      latestLine: 'Dormant audit failed',
       entries: [],
     });
     expect(JSON.stringify(slice)).not.toContain('raw dormant workflow prose');
+  });
+
+  it('keeps the runtime description while the latest line follows the transcript', () => {
+    withRunFacts((hub) => {
+      activeStreamId.set(root);
+      hub.emit({
+        scope: 'session',
+        event: {
+          type: 'updateStreamDescription',
+          payload: {
+            streamId: child1,
+            description: 'Audit the compactness lemma.',
+          },
+        },
+      });
+      const logger = runTrace(child1);
+      logger.info('Check the second lemma.', {
+        messageType: MESSAGE_TYPES.USER_MESSAGE,
+      });
+      logger.info('The second lemma is valid.', {
+        messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+      });
+
+      syncStreamLog(child1);
+
+      expect(streams.get().get(child1)).toMatchObject({
+        description: 'Audit the compactness lemma.',
+        latestLine: 'The second lemma is valid.',
+      });
+    });
   });
 
   it('tracks context compaction activity without adding transcript rows', () => {
@@ -2213,7 +2243,7 @@ describe('CLI transcript state', () => {
     syncStreamLog(child1);
 
     expect(streams.get().get(child1)).toMatchObject({
-      description: 'The second lemma is valid.',
+      latestLine: 'The second lemma is valid.',
       entries: [],
       status: STREAM_PHASE.WAITING,
     });
@@ -3653,5 +3683,43 @@ describe('child-stream ordered transition matrix', () => {
     expect(parentStream.get().get(kid)).toBe(parentP);
     expect(activeRows(parentP)).toMatchObject([{ agentName: 'kid-agent' }]);
     expect(activeRows(parentQ)).toEqual([]);
+  });
+
+  it('14. tombstones stay bounded: oldest removals are evicted, live entries kept', () => {
+    patchStream(kid, (s) => ({ ...s, status: STREAM_PHASE.RUNNING }));
+    applySubagentRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
+
+    for (let index = 0; index < 250; index += 1) {
+      removeStream(`gone-${index}` as StreamTabId);
+    }
+
+    const entries = childStreamEntries.get();
+    const tombstones = [...entries.values()].filter(
+      (entry) => entry.kind === 'removed',
+    );
+    expect(tombstones).toHaveLength(200);
+    expect(isChildStreamRemoved('gone-0' as StreamTabId)).toBe(false);
+    expect(isChildStreamRemoved('gone-49' as StreamTabId)).toBe(false);
+    expect(isChildStreamRemoved('gone-50' as StreamTabId)).toBe(true);
+    expect(isChildStreamRemoved('gone-249' as StreamTabId)).toBe(true);
+    // Eviction never touches live relationship state.
+    expect(activeRows(parentP)).toMatchObject([{ childStreamId: kid }]);
+  });
+
+  it('15. a removed parent survives eviction while an orphaned child is still live', () => {
+    patchStream(kid, (s) => ({ ...s, status: STREAM_PHASE.RUNNING }));
+    applySubagentRoster(parentP, [rosterRow(STREAM_PHASE.RUNNING)]);
+    setParentStream(kid, parentP);
+
+    removeStream(parentP);
+    for (let index = 0; index < 250; index += 1) {
+      removeStream(`gone-${index}` as StreamTabId);
+    }
+
+    // The child that lost this parent is still live, so the parent tombstone
+    // is pinned and a late edge fact cannot re-attach the removed ancestor.
+    expect(isChildStreamRemoved(parentP)).toBe(true);
+    setParentStream(kid, parentP);
+    expect(parentStream.get().has(kid)).toBe(false);
   });
 });

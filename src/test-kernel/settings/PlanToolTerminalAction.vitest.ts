@@ -4,7 +4,7 @@ import '@test/support/defaultSessionTestSetup';
 import { strict as assert } from 'node:assert';
 import { beforeEach, describe, it, vi } from 'vitest';
 
-import { planToolTerminalAction } from '@settingsView/SettingsViewMessageHandler';
+import { planToolTerminalAction } from '@controllers/settingsView/ToolDashboardData';
 
 const mocks = vi.hoisted(() => ({
   packageManager: null as 'brew' | 'apt' | 'scoop' | null,

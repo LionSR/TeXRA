@@ -11,15 +11,18 @@ import type {
   SessionEventHub,
   SessionFact,
 } from '@agent/runtime/SessionEventHub';
-import {
-  STREAM_PHASE,
-  type ActiveChildInfo,
-  type ConversationProgress,
-  type RoundStage,
-  type StreamPhase,
-  type StreamTabId,
+import type {
+  ActiveChildInfo,
+  ConversationProgress,
+  RoundStage,
+  StreamPhase,
+  StreamTabId,
 } from '@shared/schemas';
 import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
+import {
+  formatRoundStageLabel,
+  formatStreamStatusLabel,
+} from '@shared/streams/streamStatusDisplay';
 import { assertNever } from '@utils/core';
 import { pluralize } from '@utils/text/stringUtils';
 
@@ -281,7 +284,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     if (this.rootStreamStatus === status) return;
 
     this.rootStreamStatus = status;
-    this.state.phase = formatRunProgressStatus(status);
+    this.state.phase = formatStreamStatusLabel(status, { style: 'cli' });
     if (this.rootStreamTerminal) {
       this.state.activeSubagents = undefined;
     }
@@ -348,8 +351,12 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   private formatLine(now: number): string {
     const parts: string[] = [];
     if (this.state.round != null) {
+      const plannedRounds = this.state.plannedRounds;
       parts.push(
-        formatRoundProgress(this.state.round, this.state.plannedRounds),
+        `[${formatRoundStageLabel({
+          index: this.state.round - 1,
+          ...(isMultiRound(plannedRounds) ? { total: plannedRounds } : {}),
+        })}]`,
       );
     }
 
@@ -372,13 +379,6 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   }
 }
 
-function formatRunProgressStatus(status: StreamPhase): string {
-  if (status === STREAM_PHASE.COMPLETED) return 'done';
-  if (status === STREAM_PHASE.CANCELLED) return 'interrupted';
-  if (status === STREAM_PHASE.FAILED) return 'error';
-  return status;
-}
-
 function formatInputLabel(files: readonly string[]): string | undefined {
   const first = files.at(0);
   if (!first) return undefined;
@@ -398,16 +398,6 @@ function formatActiveChildren(
   const suffix =
     namedChildren.length > 1 ? ` +${namedChildren.length - 1}` : '';
   return `${label}: ${first}${suffix}`;
-}
-
-function formatRoundProgress(
-  round: number,
-  plannedRounds: number | undefined,
-): string {
-  if (isMultiRound(plannedRounds) && round <= plannedRounds) {
-    return `[r${round}/${plannedRounds}]`;
-  }
-  return `[r${round}]`;
 }
 
 function isMultiRound(rounds: number | undefined): rounds is number {

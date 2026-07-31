@@ -6,6 +6,7 @@ import { KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
 import { renderCliPrompt } from '@cli/tui/renderCliPrompt';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import { computeSelectWindowSize } from '@cli/tui/selectWindow';
+import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
 import {
   isCliOrchestrationModelPickAction,
   orchestrationModelAccessView,
@@ -19,7 +20,6 @@ import {
   CLI_MODEL_ACCESS_DESCRIPTION,
   type CliModelAccessStatus,
 } from '../runtime/modelAccessRoute';
-import type { CliApiMode } from '../runtime/apiAccessMode';
 import type { CliModelAccess } from '../runtime/modelAccess';
 
 export interface OrchestrationAppProps {
@@ -32,7 +32,7 @@ export interface OrchestrationAppProps {
    *  registry state, so the launcher still starts chats with runtime defaults;
    *  a known list with no runnable model disables chat/team starts. */
   readonly models: readonly CliModelAccess[];
-  readonly apiMode: CliApiMode;
+  readonly apiMode: ApiAccessMode;
   readonly modelAccess?: CliModelAccessStatus;
   /** CLI version, shown in the launcher header (matches the chat session
    *  header) so a directly-launched `texra` reports which build is running. */
@@ -570,7 +570,7 @@ export interface RunOrchestrationTuiOptions {
   readonly agentItems?: readonly CliOrchestrationItem[];
   readonly teamItems?: readonly CliOrchestrationItem[];
   readonly accountItems?: readonly CliOrchestrationItem[];
-  readonly apiMode: CliApiMode;
+  readonly apiMode: ApiAccessMode;
   readonly modelAccess?: CliModelAccessStatus;
   readonly version: string;
   readonly statusLines?: readonly string[];

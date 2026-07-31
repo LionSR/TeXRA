@@ -227,18 +227,22 @@ function postWithOptionalBypass(
 }
 
 /**
- * Build the edit/bash session-bypass enable that accompanies the broader
- * approve action. Set-on (not toggle) is inversion-proof: edit and bash bypass
- * can be decoupled on a delegated child stream. The button only renders with a
- * real stream (see canBypass), but guard anyway.
+ * Build the session-bypass enable that accompanies the broader approve action.
+ * The grant covers only the prompt's own kind, so an edit prompt never
+ * auto-approves shell commands. Set-on (not toggle) is inversion-proof: a
+ * stream can already carry that kind's bypass from the shield or from
+ * delegated inheritance. The button only renders with a real stream (see
+ * canBypass), but guard anyway.
  */
 function approvalBypassMessage(
   streamId: string | undefined,
+  kind: typeof PERMISSION_KIND.TOOL_EDIT | typeof PERMISSION_KIND.BASH,
 ): ProgressViewInboundMessage | undefined {
   if (!streamId) return undefined;
   return {
     command: PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS,
     stream: streamId,
+    kind,
   };
 }
 
@@ -251,12 +255,12 @@ export function handlePermissionAction(
     case PERMISSION_KIND.TOOL_EDIT: {
       const { data, decision } = detail;
       // The broader action approves the current request like a normal approve
-      // and enables auto-approval (edits + bash) for the rest of the run —
-      // mirroring the toolbar shield and the CLI's broader `a` action. It never
-      // reaches the backend approval protocol.
+      // and enables auto-approval of file edits for the rest of the run,
+      // mirroring the CLI's broader `a` action. Shell commands keep asking.
+      // It never reaches the backend approval protocol.
       const isYolo = decision.action === APPROVE_SESSION_ACTION;
       const bypassMessage = isYolo
-        ? approvalBypassMessage(data.streamId)
+        ? approvalBypassMessage(data.streamId, PERMISSION_KIND.TOOL_EDIT)
         : undefined;
       const action = isYolo ? 'approve' : decision.action;
       postWithOptionalBypass(
@@ -284,9 +288,10 @@ export function handlePermissionAction(
     }
     case PERMISSION_KIND.BASH: {
       const { data, decision } = detail;
+      // Grants shell-command auto-approval only; file edits keep asking.
       const isYolo = decision.action === APPROVE_SESSION_ACTION;
       const bypassMessage = isYolo
-        ? approvalBypassMessage(data.streamId)
+        ? approvalBypassMessage(data.streamId, PERMISSION_KIND.BASH)
         : undefined;
       postWithOptionalBypass(
         bypassMessage,

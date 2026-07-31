@@ -1,12 +1,16 @@
-import type { ToolDashboardItem } from '@shared/schemas/settingsViewMessages';
+import type { ToolTerminalAction } from '@controllers/settingsView/ToolDashboardData';
+import type {
+  ToolCommandKind,
+  ToolDashboardItem,
+} from '@shared/schemas/settingsViewMessages';
 import type { ExternalToolCheckResult } from '@tools/toolAvailability';
 
 /**
  * Module-level helpers for the desktop settings IPC. These have no closure
  * dependencies on the IPC instance, so they live here to keep the factory in
  * `desktopSettingsIpc.ts` focused on request wiring. Each tool-availability
- * helper defers its `@tools` import so the heavy module only loads when a tool
- * dashboard request actually arrives.
+ * helper defers its tool-layer import so the heavy module only loads when a
+ * tool dashboard request actually arrives.
  */
 
 export async function buildDefaultToolDashboardItems(
@@ -34,11 +38,11 @@ export async function refreshDefaultToolAvailability(): Promise<void> {
   await refreshToolAvailability();
 }
 
-export async function findToolCommand(
+export async function planDefaultToolTerminalAction(
   toolId: string,
-  kind: 'install' | 'auth',
-): Promise<string | undefined> {
-  const { findExternalToolDef } = await import('@tools/externalToolDefs');
-  const def = findExternalToolDef(toolId);
-  return kind === 'install' ? def?.installCommand : def?.authCommand;
+  kind: ToolCommandKind,
+): Promise<ToolTerminalAction> {
+  const { planToolTerminalAction } =
+    await import('@controllers/settingsView/ToolDashboardData');
+  return planToolTerminalAction({ toolId, commandKind: kind });
 }

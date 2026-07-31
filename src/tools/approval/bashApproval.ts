@@ -1,6 +1,10 @@
+import { nanoid } from 'nanoid';
 import { z } from 'zod';
 
-import type { BashSettlement } from '@agent/runtime/HostInteractions';
+import type {
+  BashSettlement,
+  HostBashApprovalRequest,
+} from '@agent/runtime/HostInteractions';
 import {
   defaultSession,
   type SessionHandle,
@@ -10,7 +14,11 @@ import {
   getRunContextStreamId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
-import { StreamTabIdSchema, type StreamTabId } from '@shared/schemas';
+import {
+  StreamTabIdSchema,
+  type BashPermission,
+  type StreamTabId,
+} from '@shared/schemas';
 import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas/agentCliSettings';
 import { type ToolResult } from '@shared/schemas/toolResult';
 import { requireInteractions } from '@tools/contextHelpers';
@@ -34,6 +42,34 @@ const {
   isBypassedForStream: isBashApprovalBypassedForStream,
 } = createSessionBypassAccessors((session) => session.approvals.bash.bypass);
 export { setBashApprovalSessionBypass, isBashApprovalBypassedForStream };
+
+/**
+ * Build the bash permission payload every host publishes to its approval
+ * surface, the bash counterpart of `prepareToolEditApprovalPrompt`.
+ *
+ * Owning it here keeps one request-id scheme, derives the bypass affordance
+ * from the stream's current bypass state instead of asserting it, and drops a
+ * blank working directory so no renderer has to decide what an empty `cwd`
+ * means. Pass `session` when the host owns one (extension, desktop); the CLI
+ * hosts run on the default session.
+ */
+export function prepareBashApprovalPrompt(
+  request: HostBashApprovalRequest,
+  session?: SessionHandle,
+): BashPermission {
+  const streamId = request.streamId ?? undefined;
+  const isBypassed = streamId
+    ? isBashApprovalBypassedForStream(streamId, session)
+    : false;
+  const cwd = request.cwd?.trim();
+  return {
+    requestId: `bash-${nanoid()}`,
+    command: request.command,
+    ...(cwd ? { cwd } : {}),
+    allowBypass: !isBypassed,
+    streamId: streamId ?? '',
+  };
+}
 
 export async function requestBashApproval(
   request: BashApprovalRequest,

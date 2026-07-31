@@ -15,10 +15,12 @@ import {
 
 function activeStateFields(data: StreamContentRenderPayload) {
   if (!data.activeState) return {};
-  const { conversationProgress, roundStage, badges } = data.activeState;
+  const { conversationProgress, roundStage, phaseStage, badges } =
+    data.activeState;
   return {
     conversationProgress,
     roundStage: roundStage ?? undefined,
+    phaseStage: phaseStage ?? undefined,
     subagents: badges.subagents,
   };
 }

@@ -239,6 +239,30 @@ describe('CLI history runtime', () => {
     expect(entries.map((entry) => entry.id)).toEqual(['visible']);
   });
 
+  it('hides agent-spawned child runs from the history list', async () => {
+    mocks.listExecutions.mockResolvedValue([
+      {
+        kind: 'agent',
+        id: 'root' as ExecutionId,
+        timestamp: '2026-05-18T08:00:00.000Z',
+        agentConfig: config,
+        terminalStatus: 'completed',
+      },
+      {
+        kind: 'agent',
+        id: 'delegated-child' as ExecutionId,
+        timestamp: '2026-05-18T08:01:00.000Z',
+        agentConfig: config,
+        terminalStatus: 'completed',
+        parentExecutionId: 'root' as ExecutionId,
+      },
+    ]);
+
+    const entries = await listCliHistoryEntries();
+
+    expect(entries.map((entry) => entry.id)).toEqual(['root']);
+  });
+
   it('labels multi-agent team runs by preset in history lists', async () => {
     const teamConfig = AgentConfigSchema.parse({
       ...config,
@@ -793,6 +817,21 @@ describe('CLI history runtime', () => {
     expect(text).toContain('[model #4]\nFinal answer: (9, 4) and (-9, 4).');
   });
 
+  it('still shows a child run asked for by explicit id', async () => {
+    mocks.readMeta.mockResolvedValue({
+      timestamp: '2026-05-18T08:01:00.000Z',
+      parentExecutionId: 'root',
+      terminalStatus: 'completed',
+    });
+
+    const details = await readCliHistoryDetails(
+      'delegated-child' as ExecutionId,
+    );
+
+    expect(details?.id).toBe('delegated-child');
+    expect(formatCliHistoryDetailsText(details!)).toContain('Parent: root');
+  });
+
   it('uses the stored report instead of duplicating conversation preview text', async () => {
     mocks.readReport.mockResolvedValue('Structured report.');
     mocks.readConversation.mockResolvedValue([
@@ -910,6 +949,23 @@ describe('CLI history runtime', () => {
     expect(details?.files).toEqual([
       { path: 'workspace/subdir/gemini.md', size: 6, isDirectory: false },
     ]);
+  });
+
+  it('does not derive workspace files for workflow runs', async () => {
+    const workspace = await makeTempDir('texra-history-', tempDirs);
+    await writeFile(path.join(workspace, 'review.md'), '# report');
+    mocks.readConfig.mockResolvedValue({
+      ...config,
+      workingDirectory: workspace,
+    });
+    mockToolCallConversation({
+      name: 'write_file',
+      args: JSON.stringify({ path: 'review.md' }),
+    });
+
+    const details = await readCliHistoryDetails('a1' as ExecutionId);
+
+    expect(details?.files).toEqual([]);
   });
 
   it('does not surface missing files or tool paths outside the workspace', async () => {

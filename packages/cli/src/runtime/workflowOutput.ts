@@ -6,7 +6,7 @@ import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { getSafeDocumentRelativePath } from '@agent/utils/outputFileUtils';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
-import { RUN_OUTCOME } from '@shared/schemas';
+import { finalWorkflowOutput, RUN_OUTCOME } from '@shared/schemas';
 import { runOutcomeToExecutionStatus } from '@shared/streams/streamStatus';
 import type { OutputFileSummary } from '@shared/schemas/output';
 import { parseWorkflowOutputRoundDir } from '@shared/constants/workflowOutput';
@@ -180,17 +180,6 @@ export function expectedOutputFilesForOutputDir(
     : expectedInputOutputFiles(inputFiles);
 }
 
-function latestWorkflowOutput(
-  outputs: readonly OutputFileSummary[],
-): OutputFileSummary | undefined {
-  // `>=` keeps the later element on a round tie, matching the prior loop.
-  return outputs.reduce<OutputFileSummary | undefined>(
-    (latest, output) =>
-      latest == null || output.round >= latest.round ? output : latest,
-    undefined,
-  );
-}
-
 export async function resolveWorkflowOutput(
   outputFile: string | undefined,
   outputDir: string | undefined,
@@ -261,7 +250,7 @@ export async function resolveWorkflowOutput(
     };
   }
 
-  const finalOutput = latestWorkflowOutput(result.outputs);
+  const finalOutput = finalWorkflowOutput(result.outputs);
   if (!outputFile || !finalOutput) {
     return {
       ...result,
@@ -292,7 +281,7 @@ export function formatWorkflowTextResult(result: CliWorkflowRunResult): string {
     return result.copiedOutput;
   }
 
-  const finalOutput = result.outputs.at(-1);
+  const finalOutput = finalWorkflowOutput(result.outputs);
   return (
     finalOutput?.absolutePath ??
     result.runDirectory ??

@@ -16,6 +16,7 @@
 import { isObject } from '@utils/core';
 
 import { executionsAction } from './executionsDisplay';
+import { normalizeToolName } from './toolDisplayName';
 
 function executionsInputPreview(input: Record<string, unknown>): string {
   const path = typeof input.path === 'string' ? input.path : '';
@@ -29,20 +30,19 @@ const TOOL_PREVIEW_INPUT_KEY: Readonly<Record<string, string>> = {
   codex: 'prompt',
 };
 
-/** Derive a one-line preview of `input` for the named tool. `toolName` must
- *  already be normalized (lowercased, provider prefix stripped, e.g.
- *  `claude:Bash` -> `bash`) — callers own that normalization since it's
- *  host-specific (see `lastSegmentToolName` in the CLI TUI). Returns `''`
- *  when the tool isn't one of the ones with a known preview field — callers
- *  fall back to their own host-specific default (a generic key search, or
- *  nothing at all). */
+/** Derive a one-line preview of `input` for the named tool. The name is
+ *  normalized here (`claude:Bash` -> `bash`), so hosts pass whatever name the
+ *  log carries. Returns `''` when the tool isn't one of the ones with a known
+ *  preview field — callers fall back to their own host-specific default (a
+ *  generic key search, or nothing at all). */
 export function deriveToolInputPreview(
   toolName: string,
   input: unknown,
 ): string {
   if (!isObject(input)) return '';
-  if (toolName === 'executions') return executionsInputPreview(input);
-  const key = TOOL_PREVIEW_INPUT_KEY[toolName];
+  const name = normalizeToolName(toolName);
+  if (name === 'executions') return executionsInputPreview(input);
+  const key = TOOL_PREVIEW_INPUT_KEY[name];
   if (!key) return '';
   const value = input[key];
   return typeof value === 'string' ? value : '';

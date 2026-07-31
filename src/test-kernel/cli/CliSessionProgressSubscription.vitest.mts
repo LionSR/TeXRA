@@ -475,7 +475,7 @@ describe('attachCliSessionProgressProjection', () => {
     });
   });
 
-  it('returns no record for an unknown event that reaches the run projection callback', () => {
+  it('refuses an event outside the run-fact vocabulary instead of dropping it', () => {
     const events = new SessionEventHub();
     const writeRecord = recordWriter();
     let runSubscriber: ((event: SessionEvent) => void) | undefined;
@@ -489,16 +489,21 @@ describe('attachCliSessionProgressProjection', () => {
 
     try {
       if (!runSubscriber) throw new Error('Run subscriber was not attached');
-      runSubscriber({
-        scope: 'run',
-        streamId,
-        event: {
-          type: 'log',
-          level: 'info',
-          message: 'not a progress fact',
-        },
-      });
+      const project = (): void =>
+        runSubscriber?.({
+          scope: 'run',
+          streamId,
+          event: {
+            type: 'log',
+            level: 'info',
+            message: 'not a progress fact',
+          },
+        });
 
+      // The subscription filter admits only RUN_FACT_EVENT_TYPES, so this can
+      // only happen if the filter and the projection drift apart. SessionEventHub
+      // contains a throwing subscriber, so the failure is loud, not fatal.
+      expect(project).toThrow('Unhandled CLI NDJSON run fact');
       expect(writeRecord).not.toHaveBeenCalled();
     } finally {
       detach();

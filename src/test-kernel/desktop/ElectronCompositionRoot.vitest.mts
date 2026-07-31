@@ -77,7 +77,9 @@ describe('desktop composition root and launch environment', () => {
     );
 
     expect(source.match(/new SessionHandle\(/gu)).toHaveLength(1);
-    expect(source.match(/StreamLogStore\.open\(\)/gu)).toHaveLength(1);
+    expect(source.match(/StreamLogStore\.openOrEphemeral\(\)/gu)).toHaveLength(
+      1,
+    );
     expect(source).toMatch(
       /createWindow\(\{[\s\S]*?\bprocessSession,[\s\S]*?\}\)/u,
     );

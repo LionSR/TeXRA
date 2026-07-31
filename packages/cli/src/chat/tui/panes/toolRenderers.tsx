@@ -16,6 +16,11 @@ import {
   executionsSubagentSummary,
   type ExecutionLabels,
 } from '@shared/tools/executionsDisplay';
+import {
+  displayToolName,
+  isMcpToolName,
+  normalizeToolName,
+} from '@shared/tools/toolDisplayName';
 import { deriveToolInputPreview } from '@shared/tools/toolInputPreview';
 import { toolDisplayKind } from '@shared/tools/toolKind';
 import { isObject } from '@utils/core';
@@ -155,32 +160,10 @@ function row(spans: readonly ToolDisplaySpan[]): ToolDisplayLine {
   });
 }
 
-function lastSegmentToolName(toolName: string): string {
-  // Drop provider/handler prefixes like `claude:Bash` so non-MCP tools
-  // keep the historical compact label.
-  const lastColon = toolName.lastIndexOf(':');
-  return lastColon >= 0 ? toolName.slice(lastColon + 1) : toolName;
-}
-
-function displayMcpToolName(toolName: string): string | undefined {
-  const parts = toolName.split(':').filter(Boolean);
-  if (parts.length < 3 || parts[0].toLowerCase() !== 'mcp') {
-    return undefined;
-  }
-  return `${parts[1]}/${parts.slice(2).join(':')}`;
-}
-
-function displayToolName(toolName: string): string {
-  return displayMcpToolName(toolName) ?? lastSegmentToolName(toolName);
-}
-
 function previewInput(toolName: string, input: unknown): string {
   if (typeof input === 'string') return input;
   if (input === undefined || input === null) return '';
-  const namedPreview = deriveToolInputPreview(
-    lastSegmentToolName(toolName).toLowerCase(),
-    input,
-  );
+  const namedPreview = deriveToolInputPreview(toolName, input);
   if (namedPreview) return namedPreview;
   if (isObject(input)) {
     for (const key of PRIMARY_INPUT_KEYS) {
@@ -204,8 +187,8 @@ function statusColor(
 }
 
 function isEditLikeTool(toolName: string): boolean {
-  const name = lastSegmentToolName(toolName).toLowerCase();
-  if (toolDisplayKind(name) === 'edit') return true;
+  if (toolDisplayKind(toolName) === 'edit') return true;
+  const name = normalizeToolName(toolName);
   // Beyond TeXRA's own tool registry: a delegated Claude Code sub-agent
   // reports its own built-in tool names (`edit`, `multiedit`) verbatim, and
   // some provider tool-use variants carry a `str_replace`/`text_editor`
@@ -362,7 +345,7 @@ function toolRowOptions(
   readonly showOutput: boolean;
 } {
   const plain = {
-    displayName: displayToolName(toolUse.toolName) || 'tool',
+    displayName: displayToolName(toolUse.toolName),
     preferInputPreview: false,
     previewColor: undefined,
     showExitCode: false,
@@ -370,19 +353,16 @@ function toolRowOptions(
   };
   // Edit-like tools show their patch preview instead of raw output.
   if (hasPatch) return plain;
-  const isBash =
-    toolDisplayKind(lastSegmentToolName(toolUse.toolName).toLowerCase()) ===
-    'bash';
-  if (isBash) {
+  if (toolDisplayKind(toolUse.toolName) === 'bash') {
     return {
-      displayName: displayToolName(toolUse.toolName) || 'bash',
+      ...plain,
       preferInputPreview: true,
       previewColor: COLOR_HINT,
       showExitCode: true,
       showOutput: true,
     };
   }
-  if (displayMcpToolName(toolUse.toolName) !== undefined) {
+  if (isMcpToolName(toolUse.toolName)) {
     return { ...plain, showOutput: true };
   }
   // Every other tool keeps the compact header-only row (plus error and

@@ -68,19 +68,25 @@ export type ExecutionListingEntry =
     });
 
 /**
- * True for executions a user should see in a history list — excludes
- * internal bookkeeping entries: the `category: 'process'` rows
- * `registerExecution` writes for background bash/process invocations (see
- * `src/tools/bash.ts` — these do carry a synthetic `AgentConfig`, but don't
- * represent a user-visible run or conversation), and entries with no
- * `agentConfig` at all. Every host's history listing must apply this filter;
- * `listExecutions()` itself stays unfiltered because tool-facing callers
- * like `ExecutionsTool` need the raw listing to manage background processes.
+ * True for executions a user should see in a history list, meaning the runs a
+ * user started themselves. Excludes internal bookkeeping entries: the
+ * `category: 'process'` rows `registerExecution` writes for background
+ * bash/process invocations (see `src/tools/bash.ts` — these do carry a
+ * synthetic `AgentConfig`, but don't represent a user-visible run or
+ * conversation), entries with no `agentConfig` at all, and runs an agent
+ * spawned (delegated subagents, workflow-script children, team members), which
+ * belong to their parent's transcript rather than to the history list.
+ *
+ * Every host's history listing must apply this filter. Lookups by explicit id
+ * (`texra history show <id>`, export, resume) must not: naming a child run is
+ * an explicit request to see it. `listExecutions()` itself stays unfiltered
+ * because tool-facing callers like `ExecutionsTool` need the raw listing to
+ * manage background processes and child runs.
  */
 export function isUserVisibleExecution(
   entry: ExecutionListingEntry,
 ): entry is Extract<ExecutionListingEntry, { kind: 'agent' }> {
-  return entry.kind === 'agent';
+  return entry.kind === 'agent' && entry.parentExecutionId === undefined;
 }
 
 // ============================================================================

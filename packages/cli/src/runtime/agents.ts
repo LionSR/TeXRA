@@ -3,10 +3,12 @@ import {
   getAgentsByCategory,
   getVisibleAgents,
   loadAgents,
+  resolveAgentForLaunch,
 } from '@agent/index';
 import type { AgentEntry } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { SupabaseClient } from '@auth/SupabaseClient';
+import { AgentSourceSchema, agentName } from '@shared/schemas/agent';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import { CliUsageError } from './cliContext';
@@ -100,17 +102,49 @@ export function missingMultiAgentPresetMessage(name: string): string {
   return `Multi-agent preset not found: ${name}. ${MULTI_AGENT_PRESET_LOOKUP_HINT}`;
 }
 
+/**
+ * Resolve an identifier the way launch resolves it: scoped to `category`, with
+ * a valid `source:name` prefix carried as the pinned source so a name shadowed
+ * by a higher-priority source still lands on the entry the user named. Returns
+ * undefined when the identifier resolves outside `category` — including through
+ * the pinned-source tier, which is category-blind by design.
+ */
+export function resolveCliAgentInCategory(
+  identifier: string,
+  category: AgentCategory,
+): AgentEntry | undefined {
+  const name = agentName(identifier);
+  const pinned = AgentSourceSchema.safeParse(
+    identifier === name
+      ? undefined
+      : identifier.slice(0, identifier.length - name.length - 1),
+  );
+  const entry = resolveAgentForLaunch(
+    category,
+    identifier,
+    pinned.success ? pinned.data : undefined,
+  )?.entry;
+  return entry?.category === category ? entry : undefined;
+}
+
 export function assertCliAgentLaunch(
   name: string,
   agent: AgentEntry | undefined,
   mode: CliAgentLaunchMode,
 ): AgentEntry {
   const target = CLI_AGENT_LAUNCH_TARGETS[mode];
-  if (!agent) throw new CliUsageError(target.missing(name));
-  if (agent.category !== target.requiredCategory) {
-    throw new CliUsageError(target.mismatch(name, agent.category));
-  }
-  return agent;
+  if (agent?.category === target.requiredCategory) return agent;
+
+  // Category-scoped resolution yields nothing for a wrong-category name, so
+  // probe the other category to keep telling "wrong kind of agent" apart from
+  // "no such agent".
+  const otherCategory =
+    target.requiredCategory === AgentCategory.ToolUse
+      ? AgentCategory.Workflow
+      : AgentCategory.ToolUse;
+  const found = agent ?? resolveCliAgentInCategory(name, otherCategory);
+  if (!found) throw new CliUsageError(target.missing(name));
+  throw new CliUsageError(target.mismatch(name, found.category));
 }
 
 /**
@@ -120,17 +154,21 @@ export function assertCliAgentLaunch(
  * auth/network work. Missing agents still get a remote-inclusive fallback, and
  * authenticated relay sessions reload bare names so the registry's normal
  * source priority can prefer remote definitions.
+ *
+ * A launch category resolves through the launch resolver, so validation lands
+ * on the exact entry the launch will load; without one this is a display
+ * lookup and stays category-blind.
  */
 export async function resolveCliAgent(
   name: string,
   lookupCategory?: AgentCategory,
 ): Promise<AgentEntry | undefined> {
   await loadAgents({ includeRemote: false });
-  const agent = getAgent(name, lookupCategory);
+  const agent = lookupCliAgent(name, lookupCategory);
 
   if (!agent) {
     await loadAgents();
-    return getAgent(name, lookupCategory);
+    return lookupCliAgent(name, lookupCategory);
   }
 
   if (
@@ -141,7 +179,16 @@ export async function resolveCliAgent(
   }
 
   await loadAgents();
-  return getAgent(name, lookupCategory);
+  return lookupCliAgent(name, lookupCategory);
+}
+
+function lookupCliAgent(
+  identifier: string,
+  category: AgentCategory | undefined,
+): AgentEntry | undefined {
+  return category
+    ? resolveCliAgentInCategory(identifier, category)
+    : getAgent(identifier);
 }
 
 /**

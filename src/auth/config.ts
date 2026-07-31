@@ -97,6 +97,12 @@ export const RELAY_TIER_CONFIG_URL = relayTierConfigUrl(SUPABASE_CONFIG.url);
 export const OAUTH_PROVIDERS = ['github', 'google'] as const;
 export type OAuthProvider = (typeof OAUTH_PROVIDERS)[number];
 
+/** Display names every host's sign-in picker shows for {@link OAUTH_PROVIDERS}. */
+export const OAUTH_PROVIDER_LABELS = {
+  github: 'GitHub',
+  google: 'Google',
+} as const satisfies Record<OAuthProvider, string>;
+
 /**
  * Return whether a string is one of TeXRA's supported OAuth providers.
  */
@@ -261,8 +267,18 @@ export async function getExternalAuthCallbackUri(): Promise<string> {
   return info.fullUrl;
 }
 
-/** Timeout for waiting for OAuth callback (2 minutes in ms) */
-export const AUTH_CALLBACK_TIMEOUT_MS = 2 * 60 * 1000;
+/**
+ * How long an interactive browser sign-in may take before the host stops
+ * waiting for the callback (10 minutes). Shared by every loopback/deeplink
+ * wait so one abandoned sign-in behaves the same in every host. Generous on
+ * purpose: an OAuth round-trip with 2FA and account switching outlasts a
+ * couple of minutes, and each flow is user-cancellable, so a long deadline
+ * only delays the failure message for attempts nobody is waiting on.
+ *
+ * Device-code flows do not use this: RFC 8628 makes the server's `expires_in`
+ * authoritative there.
+ */
+export const AUTH_CALLBACK_TIMEOUT_MS = 10 * 60 * 1000;
 
 /** Refresh token proactively if it expires within this threshold (30 minutes). */
 export const TOKEN_REFRESH_THRESHOLD_MS = 30 * 60 * 1000;

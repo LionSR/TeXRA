@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import {
   COMPACT_PLAN_APPROVAL_MAX_ROWS,
   PLAN_APPROVAL_FEEDBACK_PLACEHOLDER,
-  PLAN_APPROVAL_GOAL_NOTICE,
   isCompactPlanApprovalRows,
   isPlanApprovalGoalActionVisible,
   planApprovalCompactBodyRowsBudget,
@@ -11,6 +10,7 @@ import {
 } from '@cli/chat/tui/modals/PlanApproval';
 import { confirmCardFeedbackRows } from '@cli/chat/tui/modals/confirmCardRowsBudget';
 import { textDisplayWidth } from '@cli/chat/tui/render/terminalText';
+import { PLAN_GOAL_COPY } from '@shared/copy/delegationApproval';
 
 describe('CLI plan approval layout', () => {
   it('switches to compact rendering before the bordered card clips plan text', () => {
@@ -131,9 +131,9 @@ describe('CLI plan approval layout', () => {
   });
 
   it('explains goal continuation and approval scope concisely', () => {
-    expect(PLAN_APPROVAL_GOAL_NOTICE).toContain('until done');
-    expect(PLAN_APPROVAL_GOAL_NOTICE).toContain('only Bash');
-    expect(PLAN_APPROVAL_GOAL_NOTICE.length).toBeLessThanOrEqual(40);
+    expect(PLAN_GOAL_COPY.cliNotice).toContain('until done');
+    expect(PLAN_GOAL_COPY.cliNotice).toContain('only Bash');
+    expect(PLAN_GOAL_COPY.cliNotice.length).toBeLessThanOrEqual(40);
   });
 
   it('keeps the goal explanation to one display row on narrow cards', () => {

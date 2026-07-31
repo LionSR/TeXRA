@@ -1,11 +1,14 @@
 // Local imports
 import { codexCoordinator, loginWithLoopback } from '@auth/codex';
+import { relayTokenSignOutNotice } from '@auth/relayToken';
+import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
 import { getChatGptAuthStatus } from '@controllers/modelAccess/chatGptAuthStatus';
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
 import {
   buildModelSelectionMessage,
   createModelSelectionController,
+  type ModelSelectionExtras,
 } from '@controllers/settingsView/SettingsModelSelectionControllerFactory';
 import type { SettingsViewCommandActions } from '@controllers/settingsView/SettingsViewCommandHandlers';
 import type { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
@@ -21,10 +24,7 @@ import {
   isApiProvider,
   loadApiKeyStatusMap,
 } from '@model/apiProviders';
-import {
-  setCodexSubscriptionToolUseOnly,
-  setPreferCodexSubscription,
-} from '@model/codex/codexPreference';
+import { setPreferCodexSubscription } from '@model/codex/codexPreference';
 import type { ConfigProvider } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
@@ -61,6 +61,7 @@ interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts 
   };
   readonly notifications: {
     showInfoMessage(message: string): Promise<void>;
+    showWarningMessage(message: string): Promise<void>;
     showErrorMessage(message: string): Promise<void>;
   };
   readonly auth: {
@@ -68,6 +69,12 @@ interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts 
     signOut(): Promise<void>;
   };
   readonly setUseIncludedModelAccess: (enabled: boolean) => Promise<void>;
+  /**
+   * Included-Access entitlement readers. Injected rather than imported so the
+   * controller stays unit-testable; without them the model list would omit the
+   * reasoning cap the entitlement actually enforces.
+   */
+  readonly modelSelectionExtras: ModelSelectionExtras;
   readonly modelListRefresh: PromiseLike<void>;
   readonly onCredentialChanged: () => Promise<void>;
   readonly onError: (error: unknown) => void;
@@ -81,7 +88,7 @@ export interface DesktopCredentialSettingsController {
   postMainModelOptionsData(): Promise<void>;
   postStartupData(): Promise<void>;
   refreshAuthDependentData(): Promise<void>;
-  signInChatGpt(options?: { enableSubscription?: boolean }): Promise<void>;
+  signInChatGpt(): Promise<void>;
 }
 
 /** Owns desktop credential mutation, authentication, and dependent refreshes. */
@@ -96,7 +103,10 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
   constructor(
     private readonly options: DesktopCredentialSettingsControllerOptions,
   ) {
-    this.modelSelectionController = createModelSelectionController(options);
+    this.modelSelectionController = createModelSelectionController(
+      options,
+      options.modelSelectionExtras,
+    );
     this.profileController = new SettingsProfileController({
       globalState: options.globalState,
       providerIds: API_PROVIDERS,
@@ -141,7 +151,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     });
     this.profileActions = {
       signIn: () => options.auth.signIn(),
-      signOut: () => options.auth.signOut(),
+      signOut: () => this.signOut(),
       setApiAccessMode: (mode) => this.setApiAccessMode(mode),
       setProviderKey: (provider, apiKey) =>
         this.setProviderKey(provider, apiKey),
@@ -163,8 +173,6 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       signOut: () => this.signOutChatGpt(),
       setPreferSubscription: (enabled) =>
         this.setChatGptPreferSubscription(enabled),
-      setSubscriptionToolUseOnly: (enabled) =>
-        this.setChatGptSubscriptionToolUseOnly(enabled),
     };
   }
 
@@ -203,9 +211,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     await this.postProfileData();
   }
 
-  async signInChatGpt(signInOptions?: {
-    enableSubscription?: boolean;
-  }): Promise<void> {
+  async signInChatGpt(): Promise<void> {
     try {
       const session = await loginWithLoopback({
         coordinator: codexCoordinator(),
@@ -218,11 +224,11 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
           ).catch(this.options.onError);
         },
       });
-      if (signInOptions?.enableSubscription) {
-        await setPreferCodexSubscription(true);
-      }
+      // Signing in with ChatGPT exists to route Codex models through the
+      // subscription, so every host enables the preference on success.
+      await setPreferCodexSubscription(true);
       await this.options.notifications.showInfoMessage(
-        `Signed in with ChatGPT as ${session.email ?? session.accountId ?? 'your account'}.`,
+        `Signed in with ChatGPT as ${codexAccountLabel(session)}.`,
       );
     } catch (error) {
       await this.options.notifications.showErrorMessage(
@@ -311,6 +317,14 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     await this.options.onCredentialChanged();
   }
 
+  private async signOut(): Promise<void> {
+    await this.options.auth.signOut();
+    const relayNotice = relayTokenSignOutNotice();
+    if (relayNotice) {
+      await this.options.notifications.showInfoMessage(relayNotice);
+    }
+  }
+
   private async signOutChatGpt(): Promise<void> {
     try {
       await codexCoordinator().signOut();
@@ -331,33 +345,13 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     try {
       const update = await setPreferCodexSubscription(enabled);
       if (update.effective !== enabled) {
-        await this.options.notifications.showInfoMessage(
+        await this.options.notifications.showWarningMessage(
           `A more specific setting still keeps ChatGPT subscription ${update.effective ? 'enabled' : 'disabled'}.`,
         );
       }
     } catch (error) {
       await this.options.notifications.showErrorMessage(
         `ChatGPT subscription preference update failed: ${toErrorMessage(error)}`,
-      );
-      this.options.onError(error);
-    } finally {
-      await this.refreshAfterChatGptAuthChange();
-    }
-  }
-
-  private async setChatGptSubscriptionToolUseOnly(
-    enabled: boolean,
-  ): Promise<void> {
-    try {
-      const update = await setCodexSubscriptionToolUseOnly(enabled);
-      if (update.effective !== enabled) {
-        await this.options.notifications.showInfoMessage(
-          `The effective "subscription for tool-use only" setting remains ${update.effective ? 'enabled' : 'disabled'}.`,
-        );
-      }
-    } catch (error) {
-      await this.options.notifications.showErrorMessage(
-        `ChatGPT subscription scope update failed: ${toErrorMessage(error)}`,
       );
       this.options.onError(error);
     } finally {

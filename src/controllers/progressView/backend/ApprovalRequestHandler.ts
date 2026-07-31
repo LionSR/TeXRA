@@ -1,3 +1,5 @@
+import { APPROVAL_REPLACED_CAUSE } from '@shared/copy/interactionCancellation';
+
 type PendingPresentation<T> = {
   readonly mode: 'presentation';
   readonly item: T;
@@ -24,8 +26,6 @@ type InteractionPredicate<T> = (
   cancellationScope: object | undefined,
 ) => boolean;
 
-const REPLACED_CAUSE = 'Approval request was replaced.';
-
 /**
  * Owns the complete lifecycle of one progress-view request kind: payload,
  * delivery state, replay, optional response callback, cancellation metadata,
@@ -50,7 +50,7 @@ export class ApprovalRequestHandler<
   /** Present an item that has no response-bearing promise. */
   show(item: T): void {
     const id = this.idFor(item);
-    this.removeExisting(id, REPLACED_CAUSE);
+    this.removeExisting(id, APPROVAL_REPLACED_CAUSE);
     this.register(id, { mode: 'presentation', item });
   }
 
@@ -60,7 +60,7 @@ export class ApprovalRequestHandler<
     options: ApprovalInteractionOptions<Result>,
   ): Promise<Result> {
     const id = this.idFor(item);
-    this.removeExisting(id, REPLACED_CAUSE);
+    this.removeExisting(id, APPROVAL_REPLACED_CAUSE);
 
     return new Promise<Result>((complete, reject) => {
       try {
@@ -85,7 +85,7 @@ export class ApprovalRequestHandler<
       this.completeEntry(
         id,
         existing,
-        existing.cancellationResult(REPLACED_CAUSE),
+        existing.cancellationResult(APPROVAL_REPLACED_CAUSE),
         false,
       );
     }

@@ -49,7 +49,6 @@ import { subscribeStatusBarSessionEvents } from '@frontend/statusBar/statusBarSe
 import { disposeDiffRefresh } from '@frontend/ui/diffView';
 import { registerFileDecorations } from '@frontend/ui/fileDecorations';
 import { registerWelcomeView } from '@frontend/ui/welcomeView';
-import { initializeNativeToolEditApproval } from '@frontend/approval/nativeToolEditApproval';
 import { SupabaseAuthProvider } from '@frontend/auth/SupabaseAuthProvider';
 import { SupabaseUriHandler } from '@frontend/auth/UriHandler';
 import { createLanguageModelPort } from '@frontend/lm/createLanguageModelPort';
@@ -63,7 +62,6 @@ import {
   getInlineCommentProvider,
   registerInlineComments,
 } from '@frontend/comments/inlineComments';
-import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { migrateLegacyVscodeStorage } from '@frontend/vscode/sharedStorageRoot';
 import { VscodeSecrets } from '@frontend/vscode/vscodeSecrets';
 import { VscodeConfigProvider } from '@frontend/vscode/vscodeConfig';
@@ -101,10 +99,9 @@ import {
 } from '@tools/toolAvailability';
 import { setOpenPdfOpener } from '@tools/OpenPdfTool';
 import { killActiveRecording } from '@tools/media/audio';
-import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
 import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { setInlineCommentProvider } from '@tools/comment/InlineCommentTool';
-import { StreamLogStore } from '@transcript';
+import { ephemeralTranscriptWarning, StreamLogStore } from '@transcript';
 import { StorageFS } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -194,7 +191,6 @@ export async function activate(context: vscode.ExtensionContext) {
   await setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
   const gitRepoRoot = await resolveGitCommonRoot(workspaceRoot);
 
-  SecretManager.initialize(context);
   agentDirectories.initialize(context);
   logger.setOutputChannelFactory((name) =>
     vscode.window.createOutputChannel(name),
@@ -271,8 +267,18 @@ export async function activate(context: vscode.ExtensionContext) {
     languageModel.onDidChangeModels(invalidateLanguageModels),
     languageModel.onDidChangeAccess(invalidateLanguageModels),
   );
+  // A broken transcript directory must not abort activation: degrade to an
+  // in-memory store and say so, exactly as the CLI TUI does. The degraded
+  // session also cannot resume — nothing is persisted for a later run to pick
+  // up, and `SessionHandle` skips restart repair on a non-persistent store.
+  const transcripts = await StreamLogStore.openOrEphemeral();
+  if (transcripts.mode.kind === 'ephemeral') {
+    void vscode.window.showWarningMessage(
+      ephemeralTranscriptWarning(transcripts.mode.reason),
+    );
+  }
   const runtimeSession = initializeDefaultSession({
-    transcripts: await StreamLogStore.open(),
+    transcripts,
     responseTextProcessing: texraResponseTextProcessing,
   });
   await runtimeSession.waitUntilReady();
@@ -297,7 +303,7 @@ export async function activate(context: vscode.ExtensionContext) {
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => killActiveRecording());
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => UsageLogService.dispose());
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
-    ProgressViewProvider.getInstance()?.flushState(),
+    runtimeSession.flushArtifacts(),
   );
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => clearStoreCache());
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () =>
@@ -404,6 +410,7 @@ export async function activate(context: vscode.ExtensionContext) {
           );
           logger.info('extension', 'Model list refresh completed successfully');
           if (added.length > 0 || removed.length > 0) {
+            invalidateModelOptionsCache();
             logger.info(
               'extension',
               `Refreshed enabled models: added [${added.join(', ')}], removed [${removed.join(', ')}]`,
@@ -523,12 +530,6 @@ export async function activate(context: vscode.ExtensionContext) {
   const mainViewProvider = registerCommands(context);
   registerFileDecorations(context);
 
-  initializeNativeToolEditApproval(context, defaultSession().interactions, {
-    showToolEditPermission: (payload) =>
-      progressViewProvider.backend.approvalHandlers.toolEdit.show(payload),
-    resolveToolEditPermission: (requestId) =>
-      progressViewProvider.backend.approvalHandlers.toolEdit.dismiss(requestId),
-  });
   setLeanLanguageServices(leanVscodeIntegration);
   setOpenPdfOpener(async ({ location, preserveFocus }) => {
     await vscode.commands.executeCommand(
@@ -611,7 +612,6 @@ export async function activate(context: vscode.ExtensionContext) {
     },
   );
   context.subscriptions.push({ dispose: disposeGitHubAuthListener });
-  setOpenBuildDisplay(openBuildDisplayIfTex);
   registerInlineCriticism(context);
   registerInlineComments(context);
   setInlineCommentProvider(getInlineCommentProvider());

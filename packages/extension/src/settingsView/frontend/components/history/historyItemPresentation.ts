@@ -1,5 +1,9 @@
 import type { HistoryItem } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas/agent';
+import {
+  HISTORY_RUN_STATUS,
+  type HistoryRunStatus,
+} from '@shared/schemas/historyViewMessages';
 import { getAgentCategoryDecorator } from '@shared/utils/icons';
 import { formatShortDateTime } from '@shared/utils/string';
 
@@ -11,6 +15,24 @@ interface HistoryConfigSection {
   readonly icon?: 'screwdriver-wrench';
   readonly entries: Array<[string, HistoryConfigValue]>;
 }
+
+interface HistoryStatusBadge {
+  readonly label: string;
+  readonly variant: 'brand' | 'neutral' | 'success' | 'warning' | 'danger';
+}
+
+/**
+ * `unknown` gets its own badge instead of being softened into "completed":
+ * a run whose terminal write never landed did not finish, and a success
+ * badge would hide that crash from the list.
+ */
+const HISTORY_STATUS_BADGES: Record<HistoryRunStatus, HistoryStatusBadge> = {
+  [HISTORY_RUN_STATUS.RESUMABLE]: { label: 'Resumable', variant: 'warning' },
+  [HISTORY_RUN_STATUS.COMPLETED]: { label: 'Completed', variant: 'success' },
+  [HISTORY_RUN_STATUS.CANCELLED]: { label: 'Cancelled', variant: 'neutral' },
+  [HISTORY_RUN_STATUS.FAILED]: { label: 'Failed', variant: 'danger' },
+  [HISTORY_RUN_STATUS.UNKNOWN]: { label: 'Unknown', variant: 'neutral' },
+};
 
 /** The one presentation model shared by history rendering and search. */
 export function getHistoryItemPresentation(item: HistoryItem) {
@@ -44,6 +66,7 @@ export function getHistoryItemPresentation(item: HistoryItem) {
     rawTimestamp: item.timestamp,
     timestamp: formatShortDateTime(item.timestamp) ?? 'Unknown',
     decorator: getAgentCategoryDecorator(config.agentCategory),
+    status: HISTORY_STATUS_BADGES[item.status],
     isToolUse,
     agent: config.agent ?? 'Unknown',
     model: config.model ?? 'Unknown',

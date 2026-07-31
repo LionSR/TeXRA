@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { ApprovalRequestHandler } from '@controllers/progressView/backend/ApprovalRequestHandler';
+import type { ProgressHostInteractionsOptions } from '@controllers/progressView/backend/progressHostInteractions';
 import { createAgentPresentationHost } from '@frontend/events/agentEventListeners';
 import { createExtensionHostInteractions } from '@progressView/extensionHostInteractions';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
@@ -32,17 +33,8 @@ import { createRecordingApprovalHandlers } from './approvalHandlerSetHarness';
  */
 
 const mocks = vi.hoisted(() => ({
-  nativeRequestApproval: vi.fn(),
-  cancelNativeToolEditApprovals: vi.fn(),
-  approveNativeToolEditApprovals: vi.fn(async () => undefined),
   getLinterMessages: vi.fn(async () => []),
   pushManualCriticism: vi.fn(() => true),
-}));
-
-vi.mock('@frontend/approval/nativeToolEditApproval', () => ({
-  nativeRequestApproval: mocks.nativeRequestApproval,
-  cancelNativeToolEditApprovals: mocks.cancelNativeToolEditApprovals,
-  approveNativeToolEditApprovals: mocks.approveNativeToolEditApprovals,
 }));
 
 vi.mock('@frontend/latex/linter', () => ({
@@ -134,6 +126,14 @@ describe('extension presentation-event emit port (#9251 replay gate)', () => {
         interactions: presentationHost,
         session,
         getApprovalHandlers: () => createRecordingApprovalHandlers(),
+        getToolEditApprovals: () =>
+          ({
+            approvePendingForStream: vi.fn(async () => undefined),
+            cancel: vi.fn(),
+            requestApproval: vi.fn(),
+          }) as unknown as ReturnType<
+            ProgressHostInteractionsOptions['getToolEditApprovals']
+          >,
         setApprovalBypassState: vi.fn(),
       });
       const detach = session.useHostInteractions(interactions);

@@ -1,3 +1,5 @@
+// Local imports - shared schemas
+
 // Local imports - shared formatting
 import {
   COLOR_BORDER,
@@ -6,6 +8,7 @@ import {
   COLOR_WARNING,
 } from '@cli/tui/ui/colors';
 import { STATUS_DOT, TOKENS_GENERATED } from '@cli/tui/ui/glyphs';
+import { STREAM_PHASE } from '@shared/schemas';
 import { formatCompactTokenCount } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';
 
@@ -13,15 +16,28 @@ import { formatResultCount } from '@utils/text/stringUtils';
 import { isChildExecutionErrorStatus } from '../state/childExecutionStatus';
 import type { PendingApprovalKind } from '../state/approvalQueue';
 
+/** Row-dot color for a child stream's phase.
+ *
+ * Failed (red) and cancelled (neutral) read the same here and in the webview
+ * status dot; completed and waiting deliberately do not. A terminal row scrolls
+ * away and carries no other affordance, so the CLI spends color on "this one
+ * finished" (green) and "this one wants you" (yellow), where the webview keeps
+ * both quiet and lets its own chrome carry that. A user stop is neither success
+ * nor error, so it stays neutral in both. `stopped` and `idle` remain accepted
+ * for historical snapshots of the retired live-status vocabulary. */
 export function childStatusColor(status: string | undefined): string {
-  if (!status) return COLOR_SUCCESS;
-  if (status === 'waiting' || status === 'idle') return COLOR_WARNING;
+  if (status === STREAM_PHASE.WAITING || status === 'idle') {
+    return COLOR_WARNING;
+  }
   if (isChildExecutionErrorStatus(status)) return COLOR_ERROR;
-  // A user stop is neither success nor error — show it neutral, matching the
-  // progress view / webview (gray), not green (which reads as completed).
-  // `stopped` remains accepted for historical snapshots.
-  if (status === 'cancelled' || status === 'stopped') return COLOR_BORDER;
-  return COLOR_SUCCESS;
+  if (status === STREAM_PHASE.RUNNING || status === STREAM_PHASE.COMPLETED) {
+    return COLOR_SUCCESS;
+  }
+  // Everything else is neutral: a user stop (`cancelled`, or `stopped` in a
+  // historical snapshot), a stream that has not reported a phase yet, and any
+  // phase a future build adds. Green would report success for a state nobody
+  // established.
+  return COLOR_BORDER;
 }
 
 // A steady marker — intentionally NOT animated. A blinking dot forced the whole
@@ -35,7 +51,7 @@ export const CHILD_STATUS_MARKER = `${STATUS_DOT} `;
 const PENDING_APPROVAL_ROW_LABELS: Record<PendingApprovalKind, string> = {
   bash: 'bash',
   toolEdit: 'edit',
-  plan: 'plan',
+  planApproval: 'plan',
   proposal: 'proposal',
   retry: 'retry',
   externalInquiry: 'inquiry',
