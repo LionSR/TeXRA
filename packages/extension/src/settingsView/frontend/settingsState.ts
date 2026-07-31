@@ -82,7 +82,6 @@ export interface ProviderKeyModalTarget {
 const DEFAULT_CHATGPT_AUTH: ChatGptAuthStatus = {
   signedIn: false,
   preferSubscription: false,
-  subscriptionToolUseOnly: false,
 };
 
 // ---------------------------------------------------------------------------

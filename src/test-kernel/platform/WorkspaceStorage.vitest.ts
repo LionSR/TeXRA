@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 // Local imports - platform
+import { WORKSPACE_SIDECAR_FILE } from '@common/storage/storageLayout';
 import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
 import {
   LEGACY_RUNS_STORAGE_DIR,
@@ -36,7 +37,10 @@ async function pathExists(path: string): Promise<boolean> {
 async function readWorkspaceMarker(
   storagePath: string,
 ): Promise<{ path: string }> {
-  const marker = await readFile(join(storagePath, '_workspace.json'), 'utf8');
+  const marker = await readFile(
+    join(storagePath, WORKSPACE_SIDECAR_FILE),
+    'utf8',
+  );
   return JSON.parse(marker) as { path: string };
 }
 

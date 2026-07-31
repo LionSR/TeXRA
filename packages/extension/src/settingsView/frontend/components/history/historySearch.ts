@@ -85,6 +85,7 @@ export function getHistorySearchText(item: HistoryItem): string {
   addSearchValue(parts, presentation.description);
 
   parts.push('Category', presentation.decorator.label);
+  parts.push('Status', presentation.status.label);
   parts.push('Agent');
   addSearchValue(parts, presentation.agent);
   parts.push('Model');

@@ -8,6 +8,7 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import { setCliAgentResumeHandler } from '@cli/runtime/agentResume';
 import { initCliPlatform } from '@cli/runtime/initPlatform';
 import { setOutputChannelFactory } from '@logger/logUtils';
+import { MODEL_LIST_VERSION } from '@model/modelOptionsBasic';
 import type { StreamTabId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UsageLogService } from '@telemetry/UsageLogService';
@@ -73,6 +74,7 @@ const mocks = vi.hoisted(() => ({
     setUseIncludedModelAccess: vi.fn(),
   },
   getCliSecrets: vi.fn(() => ({ kind: 'cli-secrets' })),
+  cliGlobalState: { get: vi.fn(), update: vi.fn() },
   invalidateModelOptionsCache: vi.fn(),
   installLongRunningModelFetch: vi.fn(),
   tryPlatform: vi.fn(),
@@ -135,8 +137,8 @@ vi.mock('@telemetry/UsageLogService', () => ({
 }));
 
 // First-init dependencies: only exercised when tryPlatform() returns undefined.
-// The existing auth-probe tests keep tryPlatform truthy and skip this block, so
-// these stubs are inert there and only drive the "first init" test below.
+// Most cases keep tryPlatform truthy and skip this block, so these stubs are
+// inert there and only drive the "first init" tests below.
 vi.mock('@platform/defaults/lifecycleHost', () => ({
   createLifecycleHost: () => ({
     onShutdown: (_phase: unknown, callback: () => unknown) => {
@@ -163,7 +165,7 @@ vi.mock('@platform/defaults/nodeWorkspace', () => ({
 
 vi.mock('@cli/runtime/cliStateStores', () => ({
   createCliStateStores: vi.fn().mockResolvedValue({
-    globalState: { get: vi.fn(), update: vi.fn() },
+    globalState: mocks.cliGlobalState,
     workspaceState: {},
     storage: { getGlobalStoragePath: () => '/tmp/texra-global' },
   }),
@@ -210,7 +212,6 @@ describe('CLI platform init', () => {
       },
     });
     mocks.bootstrapNodeAgentDirectories.mockResolvedValue(undefined);
-    isAuthenticatedSpy.mockResolvedValue(false);
     canAccessRemoteAgentCatalogSpy.mockResolvedValue(false);
     mocks.serverSideKeyService.setUseIncludedModelAccess.mockResolvedValue(
       undefined,
@@ -219,7 +220,6 @@ describe('CLI platform init', () => {
 
   it('uses the configured storage root for CLI secrets', async () => {
     mocks.tryPlatform.mockReturnValueOnce(undefined);
-    isAuthenticatedSpy.mockResolvedValue(false);
 
     await initCliPlatform(
       cliContext({
@@ -246,7 +246,6 @@ describe('CLI platform init', () => {
     };
     mocks.tryPlatform.mockReturnValue({ globalState });
     mocks.tryPlatform.mockReturnValueOnce(undefined);
-    isAuthenticatedSpy.mockResolvedValue(false);
 
     await initCliPlatform(
       cliContext({ version: '1.2.3', installSignalHandlers: false }),
@@ -277,7 +276,6 @@ describe('CLI platform init', () => {
       .spyOn(ClaudeAgentSessions, 'interruptAll')
       .mockImplementation(() => {});
     mocks.tryPlatform.mockReturnValueOnce(undefined);
-    isAuthenticatedSpy.mockResolvedValue(false);
 
     try {
       await initCliPlatform(cliContext({ installSignalHandlers: false }));
@@ -295,9 +293,21 @@ describe('CLI platform init', () => {
     }
   });
 
-  it('marks the operator-terminal console sink as trusted', async () => {
-    isAuthenticatedSpy.mockResolvedValue(false);
+  it('reconciles the enabled-model list on first platform init', async () => {
+    // The enabled-model list lives in shared `~/.texra` state; the CLI used to
+    // be the one host that never reconciled it, so a CLI-only user kept
+    // retired models until some other host ran.
+    mocks.tryPlatform.mockReturnValueOnce(undefined);
 
+    await initCliPlatform(cliContext({ installSignalHandlers: false }));
+
+    expect(mocks.cliGlobalState.update).toHaveBeenCalledWith(
+      GlobalStateKey.MODEL_LIST_VERSION,
+      MODEL_LIST_VERSION,
+    );
+  });
+
+  it('marks the operator-terminal console sink as trusted', async () => {
     await initCliPlatform(cliContext({ quietLogs: false }));
 
     expect(vi.mocked(setOutputChannelFactory)).toHaveBeenCalledWith(null, {
@@ -307,7 +317,6 @@ describe('CLI platform init', () => {
 
   it('installs a CLI agent resume port that delegates to the active handler', async () => {
     mocks.tryPlatform.mockReturnValueOnce(undefined);
-    isAuthenticatedSpy.mockResolvedValue(false);
 
     await initCliPlatform(cliContext({ installSignalHandlers: false }));
 
@@ -365,7 +374,6 @@ describe('CLI platform init', () => {
       update: vi.fn().mockResolvedValue(undefined),
     };
     mocks.tryPlatform.mockReturnValue({ globalState });
-    isAuthenticatedSpy.mockResolvedValueOnce(false);
 
     await initCliPlatform(
       cliContext({
@@ -385,26 +393,6 @@ describe('CLI platform init', () => {
     });
   });
 
-  it('surfaces included-access auth probe failures by default', async () => {
-    isAuthenticatedSpy.mockRejectedValueOnce(new Error('auth offline'));
-
-    await expect(initCliPlatform(cliContext())).rejects.toThrow('auth offline');
-    expect(
-      mocks.serverSideKeyService.setUseIncludedModelAccess,
-    ).not.toHaveBeenCalled();
-  });
-
-  it('lets launcher init treat auth probe failures as no included access', async () => {
-    isAuthenticatedSpy.mockRejectedValueOnce(new Error('auth offline'));
-
-    await expect(
-      initCliPlatform(cliContext({ bestEffortIncludedModelAccess: true })),
-    ).resolves.toBeUndefined();
-    expect(
-      mocks.serverSideKeyService.setUseIncludedModelAccess,
-    ).toHaveBeenCalledWith(false);
-  });
-
   it('keeps included access off when OpenRouter routing is enabled', async () => {
     const globalState = {
       get: vi.fn((key: string, defaultValue: unknown) =>
@@ -413,7 +401,6 @@ describe('CLI platform init', () => {
       update: vi.fn(),
     };
     mocks.tryPlatform.mockReturnValue({ globalState });
-    isAuthenticatedSpy.mockResolvedValueOnce(true);
 
     await initCliPlatform(cliContext());
 
@@ -431,7 +418,6 @@ describe('CLI platform init', () => {
       update: vi.fn().mockResolvedValue(undefined),
     };
     mocks.tryPlatform.mockReturnValue({ globalState });
-    isAuthenticatedSpy.mockResolvedValueOnce(true);
 
     await initCliPlatform(cliContext({ apiMode: 'included' }));
 
@@ -440,15 +426,33 @@ describe('CLI platform init', () => {
       false,
     );
     expect(mocks.invalidateModelOptionsCache).toHaveBeenCalledOnce();
-    expect(isAuthenticatedSpy).toHaveBeenCalledOnce();
     expect(
       mocks.serverSideKeyService.setUseIncludedModelAccess,
     ).toHaveBeenCalledWith(true);
   });
 
-  it('registers CLI runtime skill sources through the shared Node host helper', async () => {
-    isAuthenticatedSpy.mockResolvedValueOnce(false);
+  it('keeps an explicitly requested included mode selected while signed out', async () => {
+    await initCliPlatform(cliContext({ apiMode: 'included' }));
 
+    // The model layer, not startup, decides that these models need a sign-in.
+    expect(
+      mocks.serverSideKeyService.setUseIncludedModelAccess,
+    ).toHaveBeenCalledWith(true);
+  });
+
+  it('leaves the stored included-access preference alone when no mode is requested', async () => {
+    // The preference lives in shared `~/.texra` state, so deriving it from the
+    // current session would let a signed-out CLI launch silently switch other
+    // hosts to personal keys.
+    await initCliPlatform(cliContext());
+
+    expect(
+      mocks.serverSideKeyService.setUseIncludedModelAccess,
+    ).not.toHaveBeenCalled();
+    expect(isAuthenticatedSpy).not.toHaveBeenCalled();
+  });
+
+  it('registers CLI runtime skill sources through the shared Node host helper', async () => {
     await initCliPlatform(
       cliContext({
         skillSourceOptions: {
@@ -469,7 +473,6 @@ describe('CLI platform init', () => {
   });
 
   it('wires setup sign-in to the existing CLI login implementation', async () => {
-    isAuthenticatedSpy.mockResolvedValue(false);
     canAccessRemoteAgentCatalogSpy.mockResolvedValue(true);
     mocks.signInCliSupabase.mockResolvedValue({ account: { label: 'User' } });
 
@@ -514,7 +517,6 @@ describe('CLI platform interactive signal ownership', () => {
       globalState: { get: vi.fn(), update: vi.fn() },
     });
     mocks.bootstrapNodeAgentDirectories.mockResolvedValue(undefined);
-    isAuthenticatedSpy.mockResolvedValue(false);
   });
 
   it('initInteractiveCliPlatform keeps the platform handler live until an explicit handoff', async () => {

@@ -64,6 +64,9 @@ const ModelAvailabilityKindSchema = z.enum([
   'copilot-consent-required',
   'copilot-unavailable',
   'provider-unavailable',
+  // The model id survives in a host's enabled-models list but the live
+  // registry no longer describes it, so nothing can route a request for it.
+  'unknown-model',
 ]);
 export type ModelAvailabilityKind = z.infer<typeof ModelAvailabilityKindSchema>;
 
@@ -89,6 +92,16 @@ export const ModelOptionDataSchema = PickerOptionBaseSchema.extend({
   ...ModelAvailabilityFieldsSchema.shape,
 });
 export type ModelOptionData = z.infer<typeof ModelOptionDataSchema>;
+
+/**
+ * Whether an option row can be run as shipped: `computeModelOptionsData`
+ * already resolved the access question, so a caller only has to read its
+ * verdict. Lives with the type so delegation's model list and the CLI's
+ * picker can never drift apart on what "available" means.
+ */
+export function isModelOptionAvailable(model: ModelOptionData): boolean {
+  return model.disabled !== true && model.requiresKey !== true;
+}
 
 export const AgentOptionDataSchema = PickerOptionBaseSchema.extend({
   isToolUse: z.boolean().optional(),

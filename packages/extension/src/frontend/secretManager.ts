@@ -1,5 +1,4 @@
 // Third-party imports
-import * as vscode from 'vscode';
 
 // Local imports
 import { getServerSideKeyService } from '@auth/serverKeys';
@@ -15,6 +14,7 @@ import {
   GITHUB_TOKEN_STORAGE_KEY,
   resolveGitHubTokenSource,
 } from '@tools/github/githubAuth';
+import type * as vscode from 'vscode';
 
 export type { ApiProvider };
 
@@ -22,30 +22,22 @@ interface ApiProviderQuickPickItem extends vscode.QuickPickItem {
   provider: ApiProvider;
 }
 
+/**
+ * VS Code presentation over the one secrets door, `platform().secrets`. Reads
+ * and writes go through the platform port so environment overrides apply on
+ * every path; only the quick-pick and label helpers live here.
+ */
 export class SecretManager {
-  private static secretStorage: vscode.SecretStorage | undefined;
-
-  public static initialize(context: vscode.ExtensionContext): void {
-    this.secretStorage = context.secrets;
-  }
-
-  private static get storage(): vscode.SecretStorage {
-    if (!this.secretStorage) {
-      throw new Error('Secret storage not initialized');
-    }
-    return this.secretStorage;
-  }
-
   public static async get(key: string): Promise<string | undefined> {
-    return this.storage.get(key);
+    return platform().secrets.get(key);
   }
 
   public static async set(key: string, value: string): Promise<void> {
-    await this.storage.store(key, value);
+    await platform().secrets.set(key, value);
   }
 
   public static async delete(key: string): Promise<void> {
-    await this.storage.delete(key);
+    await platform().secrets.delete(key);
   }
 
   public static readonly API_PROVIDERS = API_PROVIDERS;

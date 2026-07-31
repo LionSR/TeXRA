@@ -23,7 +23,10 @@ import {
   createSettingsViewCommandHandlers,
   type SettingsViewCommandActions,
 } from '@controllers/settingsView/SettingsViewCommandHandlers';
-import { buildToolDashboardItems } from '@controllers/settingsView/ToolDashboardData';
+import {
+  buildToolDashboardItems,
+  planToolTerminalAction,
+} from '@controllers/settingsView/ToolDashboardData';
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
 import { appSignals } from '@eventBus/AppSignals';
@@ -95,7 +98,6 @@ import {
   refreshDisabledToolCache,
 } from '@tools/toolAvailability';
 import { GoalStore, subscribeGoalStateChanges } from '@tools/goal';
-import { findExternalToolDef } from '@tools/externalToolDefs';
 import { StorageFS, WorkspaceFS } from '@utils/files';
 import { debounce } from '@utils/core';
 import { hasExtension } from '@utils/core/pathCore';
@@ -103,10 +105,7 @@ import {
   buildGitAuthorSettingsMessage,
   readGitAuthorSettingsFromState,
 } from '@utils/system/gitAuthorSettings';
-import {
-  DEBOUNCE_OPTIONS_MS,
-  setToolUseMemoryEnabled,
-} from '@utils/config/constants';
+import { DEBOUNCE_OPTIONS_MS } from '@utils/config/constants';
 import {
   setGlobalStreaming,
   getProviderStreaming,
@@ -129,42 +128,6 @@ import type { SettingsHandlerContext } from './handlers/SettingsHandlerContext';
 // Re-use the shared type helper for extracting specific message types.
 type MessageFor<C extends SettingsViewInboundMessage['command']> =
   SettingsMessageFor<C>;
-
-// Plans the terminal command for a tool-dashboard install/auth action.
-// Extension-only: unlike the desktop's tool-command handling, no other
-// host calls this, so it's kept next to its single production caller
-// rather than living in the shared settingsView controllers (exported
-// here only so the Vitest suite can import it directly).
-type ToolTerminalAction =
-  | {
-      readonly kind: 'terminal';
-      readonly name: string;
-      readonly command: string;
-    }
-  | {
-      readonly kind: 'none';
-      readonly reason: 'unknownTool' | 'missingCommand';
-    };
-
-export function planToolTerminalAction(input: {
-  readonly toolId: string;
-  readonly commandKind: MessageFor<
-    typeof SETTINGS_VIEW_CMD.RUN_TOOL_COMMAND
-  >['kind'];
-}): ToolTerminalAction {
-  const def = findExternalToolDef(input.toolId);
-  if (!def) return { kind: 'none', reason: 'unknownTool' };
-
-  const command =
-    input.commandKind === 'install' ? def.installCommand : def.authCommand;
-  if (!command) return { kind: 'none', reason: 'missingCommand' };
-
-  return {
-    kind: 'terminal',
-    name: `TeXRA: ${def.name}`,
-    command,
-  };
-}
 
 export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   vscode.WebviewView | vscode.WebviewPanel
@@ -200,7 +163,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     this.settingsHost = new SettingsViewHost({
       state: { workspaceState: workspaceSM, globalState: globalSM },
       memoryPrompt: new VscodePromptHost(),
-      setMemoryEnabled: setToolUseMemoryEnabled,
       modelSelectionExtras: {
         useIncludedAccess: () =>
           getServerSideKeyService().getUseIncludedModelAccess(),
@@ -554,8 +516,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         signOut: () => this.chatgptHandlers.handleSignOutChatGpt(),
         setPreferSubscription: (enabled) =>
           this.chatgptHandlers.handleSetPreferSubscription(enabled),
-        setSubscriptionToolUseOnly: (enabled) =>
-          this.chatgptHandlers.handleSetSubscriptionToolUseOnly(enabled),
       },
       approval: {
         setBashApprovalEnabled: (enabled) =>

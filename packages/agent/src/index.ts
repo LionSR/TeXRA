@@ -14,6 +14,10 @@ import { SessionHandle as RuntimeSessionHandle } from '@agent/runtime/SessionHan
 import { runAgent as runValidatedAgent } from '@agent/runtime/runAgent';
 import { initPlatform, tryPlatform, type Platform } from '@platform/platform';
 import { initNodeAgentRuntime } from '@platform/defaults/nodeHost';
+import {
+  ClaudeAgentSessions,
+  CodexThreads,
+} from '@tools/agentCliSessionStores';
 import { StreamLogStore } from '@transcript/StreamLogStore';
 
 export type { AgentEvent } from '@agent/trace';
@@ -33,7 +37,7 @@ export interface HostInteractionCancelSelector {
   readonly kind?:
     | 'toolEdit'
     | 'bash'
-    | 'plan'
+    | 'planApproval'
     | 'proposal'
     | 'retry'
     | 'userQuestion'
@@ -280,6 +284,19 @@ export function runAgent(input: RunAgentInput): AgentRun {
       releaseOrWarn(
         'Failed to detach package host interactions',
         detachInteractions,
+      );
+      // The hosts kill agent-spawned children from their own shutdown
+      // handlers, which no embedder of this package ever runs. The package
+      // session dies with the run, so its children have nothing left to
+      // outlive and are stopped here instead.
+      releaseOrWarn('Failed to stop package background processes', () =>
+        session.executions.killBackgroundProcesses(),
+      );
+      releaseOrWarn('Failed to interrupt package Codex threads', () =>
+        CodexThreads.interruptAll(session.executions),
+      );
+      releaseOrWarn('Failed to interrupt package Claude agent sessions', () =>
+        ClaudeAgentSessions.interruptAll(session.executions),
       );
       releaseOrWarn('Failed to dispose package session', () =>
         session.dispose(),

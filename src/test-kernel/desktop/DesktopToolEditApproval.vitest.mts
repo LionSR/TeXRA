@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionEvent } from '@agent/runtime/SessionEventHub';
+import type { DesktopAgentExecutionHost } from '@desktop/main/desktopAgentExecutionHost';
 import type { DiffOptions, DiffSession, DiffSource } from '@hosts/uiHosts';
 
 import type {
@@ -16,6 +17,7 @@ import type {
   ToolEditApprovalResult,
 } from '@platform/interfaces';
 import type { ToolEditPermission } from '@shared/schemas';
+import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
 import type { ToolEditApprovalAction } from '@shared/schemas/prompts';
 import { createTestSession as createIsolatedTestSession } from '@test/support/sessionTestUtils';
 import { delay } from '@utils/core';
@@ -26,15 +28,19 @@ const approvalTest = (name: string, fn: () => Promise<void>): void => {
   it(name, fn, 30_000);
 };
 
-type DesktopToolEditApprovalModule =
-  typeof import('@desktop/main/desktopToolEditApproval');
-
-type ApprovalControllerOptions = Parameters<
-  DesktopToolEditApprovalModule['createDesktopToolEditApprovalController']
->[0];
-type ApprovalController = ReturnType<
-  DesktopToolEditApprovalModule['createDesktopToolEditApprovalController']
+type ApprovalModules = Awaited<ReturnType<typeof loadApprovalModules>>;
+type ApprovalController = InstanceType<
+  ApprovalModules['controllerModule']['ToolEditApprovalController']
 >;
+
+interface ApprovalControllerOptions {
+  interactions: RecordingRuntimeHost;
+  session: SessionHandle;
+  ui: DesktopAgentExecutionHost;
+  tempRoot: string;
+  showToolEditPermission(payload: ToolEditPermission): void;
+  resolveToolEditPermission(requestId: string): void;
+}
 
 interface RecordingRuntimeHost extends Pick<SessionHostInteractions, 'emit'> {
   shownToolEditPermissions: ToolEditPermission[];
@@ -56,11 +62,20 @@ function createTestSession(): SessionHandle {
 
 /** Controllers are disposed after each test; `dispose` is idempotent. */
 function createApprovalController(
-  desktopModule: DesktopToolEditApprovalModule,
+  modules: Pick<ApprovalModules, 'controllerModule' | 'desktopModule'>,
   options: ApprovalControllerOptions,
 ): ApprovalController {
-  const controller =
-    desktopModule.createDesktopToolEditApprovalController(options);
+  const controller = new modules.controllerModule.ToolEditApprovalController({
+    interactions: options.interactions,
+    session: options.session,
+    host: new modules.desktopModule.DesktopToolEditApprovalHost({
+      ui: options.ui,
+      tempRoot: options.tempRoot,
+    }),
+    showToolEditPermission: options.showToolEditPermission,
+    resolveToolEditPermission: options.resolveToolEditPermission,
+    detachCause: SESSION_DISPOSED_CAUSE,
+  });
   testControllers.push(controller);
   return controller;
 }
@@ -212,15 +227,18 @@ async function loadApprovalModules(workspacePath = '/workspace') {
   const [
     { requestToolEditApproval },
     { cleanupApprovalsForStream },
+    controllerModule,
     desktopModule,
   ] = await Promise.all([
     import('@tools/approval/toolEditApproval'),
     import('@tools/approval'),
+    import('@controllers/approval/ToolEditApprovalController'),
     loadSourceModule('@desktop/main/desktopToolEditApproval'),
   ]);
   return {
     requestToolEditApproval,
     cleanupApprovalsForStream,
+    controllerModule,
     desktopModule,
   };
 }
@@ -231,11 +249,11 @@ async function loadApprovalModules(workspacePath = '/workspace') {
  */
 async function createApprovalFixture(
   options: {
-    ui?: ApprovalControllerOptions['ui'];
+    ui?: DesktopAgentExecutionHost;
     workspacePath?: string;
   } = {},
 ): Promise<
-  Awaited<ReturnType<typeof loadApprovalModules>> & {
+  ApprovalModules & {
     controller: ApprovalController;
     interactions: RecordingRuntimeHost;
     session: SessionHandle;
@@ -246,7 +264,7 @@ async function createApprovalFixture(
   const modules = await loadApprovalModules(options.workspacePath);
   const interactions = createRecordingRuntimeHost();
   const session = createTestSession();
-  const controller = createApprovalController(modules.desktopModule, {
+  const controller = createApprovalController(modules, {
     interactions,
     ...controllerHostCallbacks(interactions),
     session,
@@ -276,10 +294,10 @@ describe('desktop tool edit approval', () => {
     'approves pending edits only in the selected stream',
     async () => {
       const tempRoot = await createTempRoot();
-      const { desktopModule } = await loadApprovalModules();
+      const modules = await loadApprovalModules();
       const interactions = createRecordingRuntimeHost();
       const session = createTestSession();
-      const controller = createApprovalController(desktopModule, {
+      const controller = createApprovalController(modules, {
         interactions,
         ...controllerHostCallbacks(interactions),
         session,
@@ -310,11 +328,11 @@ describe('desktop tool edit approval', () => {
         targetSettled = true;
       });
       await controller.approvePendingForStream('stream-target');
-      expect(targetSettled).toBe(true);
       await expect(target).resolves.toMatchObject({
         accepted: true,
         appliedContent: 'new target\n',
       });
+      expect(targetSettled).toBe(true);
 
       const otherRequest = interactions.shownToolEditPermissions.find(
         (request) => request.streamId === 'stream-other',
@@ -332,11 +350,11 @@ describe('desktop tool edit approval', () => {
     'isolates host-local prompt failures from the approval result',
     async () => {
       const tempRoot = await createTempRoot();
-      const { desktopModule } = await loadApprovalModules();
+      const modules = await loadApprovalModules();
       const interactions = createRecordingRuntimeHost();
       const session = createTestSession();
       let shown: ToolEditPermission | undefined;
-      const controller = createApprovalController(desktopModule, {
+      const controller = createApprovalController(modules, {
         interactions,
         session,
         ui: createStubDesktopAgentExecutionHost(),
@@ -409,6 +427,9 @@ describe('desktop tool edit approval', () => {
         relativePath: 'notes.txt',
         sourceTool: 'write_file',
         streamId: 'stream-2',
+        addedLines: 1,
+        removedLines: 1,
+        isLatex: false,
       });
 
       controller.handleAction({
@@ -525,6 +546,58 @@ describe('desktop tool edit approval', () => {
       await vi.waitFor(async () => {
         await expect(pathExists(opened[0])).resolves.toBe(false);
       });
+    },
+  );
+
+  approvalTest(
+    'restores a failed approval prompt and accepts a later retry',
+    async () => {
+      const opened: string[] = [];
+      const messages: string[] = [];
+      const { requestToolEditApproval, controller, interactions } =
+        await createApprovalFixture({
+          ui: createStubDesktopAgentExecutionHost({
+            openPath: async (filePath) => {
+              opened.push(filePath);
+            },
+            showErrorMessage: (message) => {
+              messages.push(message);
+            },
+          }),
+        });
+      const { shownToolEditPermissions: shown } = interactions;
+      const { resolvedToolEditPermissions: resolved } = interactions;
+
+      const resultPromise = requestToolEditApproval({
+        path: '/workspace/notes.txt',
+        originalContent: 'alpha\n',
+        proposedContent: 'beta\n',
+        sourceTool: 'write_file',
+        streamId: 'stream-failed-read',
+      });
+      await vi.waitFor(() => expect(shown).toHaveLength(1));
+      const { requestId } = shown[0];
+
+      controller.handleAction({ requestId, action: 'previewProposed' });
+      await vi.waitFor(() => expect(opened).toHaveLength(1));
+      await rm(opened[0]);
+
+      controller.handleAction({ requestId, action: 'approve' });
+
+      await vi.waitFor(() => expect(shown).toHaveLength(2));
+      expect(messages).toHaveLength(1);
+      expect(messages[0]).toContain('edited document could not be read');
+      expect(resolved).toEqual([{ requestId }]);
+      expect(shown[1]).toEqual(shown[0]);
+
+      await writeFile(opened[0], 'beta after retry\r\n', 'utf8');
+      controller.handleAction({ requestId, action: 'approve' });
+
+      await expect(resultPromise).resolves.toMatchObject({
+        accepted: true,
+        appliedContent: 'beta after retry\n',
+      });
+      expect(resolved).toEqual([{ requestId }, { requestId }]);
     },
   );
 
@@ -685,7 +758,7 @@ describe('desktop tool edit approval', () => {
 
       await expect(resultPromise).resolves.toMatchObject({
         accepted: false,
-        userMessage: 'Desktop presentation detached.',
+        userMessage: SESSION_DISPOSED_CAUSE,
       });
       expect(interactions.shownToolEditPermissions).toEqual([]);
       expect(interactions.resolvedToolEditPermissions).toEqual([]);

@@ -10,9 +10,9 @@ import { hasAnyUsableProviderApiKey } from '@model/setupCredentialAccess';
 import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
 import { platform } from '@platform/platform';
 import { AgentCategory } from '@shared/schemas/agent';
+import type { ApiAccessMode } from '@shared/schemas/profileViewMessages';
 
 import { getCliAuthProfile } from './supabaseAuth';
-import type { CliApiMode } from './apiAccessMode';
 
 async function hasIncludedRelaySignIn(): Promise<boolean> {
   const profile = await getCliAuthProfile().catch(() => undefined);
@@ -20,7 +20,7 @@ async function hasIncludedRelaySignIn(): Promise<boolean> {
 }
 
 export async function hasCliCredentialForApiMode(
-  apiMode: CliApiMode | undefined,
+  apiMode: ApiAccessMode | undefined,
 ): Promise<boolean> {
   const hasChatGptSubscription = await isCodexSubscriptionActive(
     CHATGPT_SETUP_MODEL,

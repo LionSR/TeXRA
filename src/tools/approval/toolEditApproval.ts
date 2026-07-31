@@ -53,10 +53,9 @@ export { setToolEditApprovalSessionBypass, isApprovalBypassedForStream };
  * permission payload with the bypass affordance gated on the stream's current
  * bypass state.
  *
- * Shared host-agnostic logic for the VS Code (`nativeToolEditApproval`) and
- * desktop (`desktopToolEditApproval`) approval surfaces. Each host computes
- * `relativePath` in its own way; opening the view is owned here so a prompt
- * cannot be published to a hidden view on one host and a visible one on
+ * Shared host-agnostic logic behind `ToolEditApprovalController`. Each host
+ * computes `relativePath` in its own way; opening the view is owned here so a
+ * prompt cannot be published to a hidden view on one host and a visible one on
  * another.
  */
 export function prepareToolEditApprovalPrompt(
@@ -66,10 +65,9 @@ export function prepareToolEditApprovalPrompt(
     requestId: string;
     request: ToolEditApprovalRequest;
     relativePath: string;
-    lineChanges: LineChanges;
   },
 ): ToolEditPermission {
-  const { requestId, request, relativePath, lineChanges } = params;
+  const { requestId, request, relativePath } = params;
   const { streamId } = request;
   if (streamId) {
     interactions.emit('requestEnsureProgressView', {});
@@ -88,6 +86,10 @@ export function prepareToolEditApprovalPrompt(
   const isBypassed = streamId
     ? session.approvals.toolEdit.bypass.isBypassed(streamId)
     : false;
+  const lineChanges = computeLineChangeSummary(
+    request.originalContent,
+    request.proposedContent,
+  );
   return {
     requestId,
     path: request.path,

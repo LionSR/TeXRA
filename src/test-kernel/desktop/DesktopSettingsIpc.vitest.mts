@@ -1,4 +1,8 @@
+// Test composition imports
+import '@test/support/defaultSessionTestSetup';
+
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { defaultSession } from '@agent/runtime/SessionHandle';
 import { MODEL_LIST_VERSION } from '@model/modelOptionsBasic';
 import type { StateStore } from '@platform/interfaces';
 import { platform } from '@platform/platform';
@@ -10,6 +14,7 @@ import { DEFAULT_GIT_MARK_COMMITS } from '@shared/schemas/stateSettings';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { createDeferred } from '@test/support/asyncTestUtils';
+import { GoalStore } from '@tools/goal';
 import {
   isWorktreeSupportEnabled,
   setWorktreeSupportEnabled,
@@ -145,6 +150,7 @@ function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
     state: { globalState, workspaceState },
     config,
     ui: createStubDesktopSettingsUiHost(ui),
+    session: overrides.session ?? defaultSession(),
     postToRenderer,
   });
   return { globalState, settings, workspaceState };
@@ -489,6 +495,23 @@ describe('desktop settings IPC', () => {
     });
   });
 
+  describe('goal-state pushes', () => {
+    setupPlatform();
+
+    it('reposts the goal list when a run mutates a goal', async () => {
+      const streamId = 'stream:desktop-settings-goal-push' as StreamTabId;
+      const { posted } = createCapturedSettingsFixture();
+
+      await GoalStore.start(streamId, 'Finish the proof');
+      await flushAsyncWork();
+
+      expect(posted.at(-1)).toMatchObject({
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
+        items: [expect.objectContaining({ objective: 'Finish the proof' })],
+      });
+    });
+  });
+
   it('routes revealGoalStream to the window-owned progress bridge (issue #7751 FS6)', async () => {
     const revealed: string[] = [];
 
@@ -496,6 +519,7 @@ describe('desktop settings IPC', () => {
       ui: {
         revealStream: async (streamId) => {
           revealed.push(streamId);
+          return 'revealed';
         },
       },
     });
@@ -775,6 +799,27 @@ describe('desktop settings IPC', () => {
       command: SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS,
       bashApprovalEnabled: false,
       codexSandboxMode: 'danger-full-access',
+    });
+    // Without these the Git tab renders a permanently "Not set" token status
+    // and an empty subscription list until the user mutates either one.
+    expect(
+      posted.find(
+        (message) =>
+          commandOf(message) ===
+          SETTINGS_VIEW_COMMANDS.UPDATE_GITHUB_TOKEN_STATUS,
+      ),
+    ).toEqual({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_GITHUB_TOKEN_STATUS,
+      status: 'none',
+    });
+    expect(
+      posted.find(
+        (message) =>
+          commandOf(message) === SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS,
+      ),
+    ).toEqual({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS,
+      subscriptions: [],
     });
   });
 

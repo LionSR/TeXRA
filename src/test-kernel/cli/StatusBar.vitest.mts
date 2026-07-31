@@ -1585,4 +1585,76 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).not.toContain('Esc s subagents');
     expect(display.bindings).not.toContain('Option-p tasks');
   });
+
+  it('warns once the included-access relay quota crosses 80 percent', () => {
+    const display = buildStatusBarDisplay(
+      statusInput({
+        modelAccess: 'included',
+        relayQuota: {
+          currentSpend: 8.4,
+          limit: 10,
+          remaining: 1.6,
+          percentUsed: 84,
+        },
+      }),
+    );
+
+    expect(display.left.map(statusBarSegmentText)).toContain('quota 16% left');
+  });
+
+  it('keeps the quota silent below the warning threshold', () => {
+    const display = buildStatusBarDisplay(
+      statusInput({
+        modelAccess: 'included',
+        relayQuota: {
+          currentSpend: 7.9,
+          limit: 10,
+          remaining: 2.1,
+          percentUsed: 79,
+        },
+      }),
+    );
+
+    expect(display.left.map(statusBarSegmentText)).toEqual([
+      '◆',
+      'idle',
+      'included',
+    ]);
+  });
+
+  it('reports an exhausted relay quota rather than dropping the warning', () => {
+    const display = buildStatusBarDisplay(
+      statusInput({
+        modelAccess: 'included',
+        relayQuota: {
+          currentSpend: 10,
+          limit: 10,
+          remaining: 0,
+          percentUsed: 100,
+        },
+      }),
+    );
+
+    expect(display.left.map(statusBarSegmentText)).toContain('quota exhausted');
+  });
+
+  it('hides the relay quota when the route does not spend it', () => {
+    const display = buildStatusBarDisplay(
+      statusInput({
+        modelAccess: 'personal',
+        relayQuota: {
+          currentSpend: 9.5,
+          limit: 10,
+          remaining: 0.5,
+          percentUsed: 95,
+        },
+      }),
+    );
+
+    expect(display.left.map(statusBarSegmentText)).toEqual([
+      '◆',
+      'idle',
+      PERSONAL_API_MODE_LABEL,
+    ]);
+  });
 });

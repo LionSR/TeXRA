@@ -40,7 +40,7 @@ interface RecordingApprovalHandlerSet extends ApprovalRequestHandlerSet {
     toolEdit: RecordingTransport<ToolEditPermission>;
     bash: RecordingTransport<BashPermission>;
     retry: RecordingTransport<RetryPermission>;
-    agentProposal: RecordingTransport<AgentProposalPermission>;
+    proposal: RecordingTransport<AgentProposalPermission>;
     planApproval: RecordingTransport<PlanApprovalPermission>;
     externalInquiry: RecordingTransport<ExternalInquiryPermission>;
     userQuestion: RecordingTransport<UserQuestionPermission>;
@@ -78,7 +78,7 @@ export function createRecordingApprovalHandlers(): RecordingApprovalHandlerSet {
     'requestId',
   );
   const retry = handler<RetryPermission, 'streamId', RetryResult>('streamId');
-  const agentProposal = handler<
+  const proposal = handler<
     AgentProposalPermission,
     'proposalId',
     ProposalResult
@@ -101,7 +101,7 @@ export function createRecordingApprovalHandlers(): RecordingApprovalHandlerSet {
     toolEdit: toolEdit.handler,
     bash: bash.handler,
     retry: retry.handler,
-    agentProposal: agentProposal.handler,
+    proposal: proposal.handler,
     planApproval: planApproval.handler,
     externalInquiry: externalInquiry.handler,
     userQuestion: userQuestion.handler,
@@ -109,7 +109,7 @@ export function createRecordingApprovalHandlers(): RecordingApprovalHandlerSet {
       toolEdit: toolEdit.transport,
       bash: bash.transport,
       retry: retry.transport,
-      agentProposal: agentProposal.transport,
+      proposal: proposal.transport,
       planApproval: planApproval.transport,
       externalInquiry: externalInquiry.transport,
       userQuestion: userQuestion.transport,

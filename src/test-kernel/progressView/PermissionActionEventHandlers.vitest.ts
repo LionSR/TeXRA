@@ -154,11 +154,12 @@ const actionCases: PermissionCase[] = [
     ],
   },
   {
-    name: 'tool session approve enables bypass first',
+    name: 'tool session approve enables tool-edit bypass first',
     detail: detail.tool({ action: APPROVE_SESSION_ACTION }),
     calls: [
       call(PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS, {
         stream: 'stream-1',
+        kind: 'toolEdit',
       }),
       call(PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION, {
         requestId: 'tool-1',
@@ -206,11 +207,12 @@ const actionCases: PermissionCase[] = [
     ],
   })),
   {
-    name: 'bash session approve enables bypass first',
+    name: 'bash session approve enables bash bypass first',
     detail: detail.bash({ action: APPROVE_SESSION_ACTION }),
     calls: [
       call(PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS, {
         stream: 'stream-1',
+        kind: 'bash',
       }),
       call(PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION, {
         requestId: 'bash-1',

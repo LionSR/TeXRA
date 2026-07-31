@@ -9,6 +9,7 @@ import {
   type CodexSessionStorage,
   type CodexTokenResponse,
 } from '@auth/codex';
+import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
 import { delay } from '@utils/core';
 
 const NOW = 1_900_000_000_000;
@@ -404,5 +405,22 @@ describe('CodexSessionCoordinator', () => {
     const coordinator = makeCoordinator(storage);
     await coordinator.signOut();
     expect(storage.peek()).toBeUndefined();
+  });
+});
+
+describe('codexAccountLabel', () => {
+  it('prefers the email, then the account id, then a descriptive fallback', () => {
+    expect(
+      codexAccountLabel({ email: 'person@example.com', accountId: 'acct-1' }),
+    ).toBe('person@example.com');
+    expect(codexAccountLabel({ accountId: 'acct-1' })).toBe('acct-1');
+    expect(codexAccountLabel({})).toBe('your ChatGPT account');
+  });
+
+  it('treats a null wire payload the same as an absent one', () => {
+    expect(codexAccountLabel({ email: null, accountId: null })).toBe(
+      'your ChatGPT account',
+    );
+    expect(codexAccountLabel(null)).toBe('your ChatGPT account');
   });
 });

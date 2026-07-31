@@ -47,8 +47,6 @@ interface ProgressBackendLifecycleOptions {
   cleanupDeletedStream(stream: StreamTabId): void;
   cleanupDeletedStreams(options: { allDeleted: boolean }): void;
   rebuildRenderedStreams(options: { syncActiveStream: boolean }): void;
-  /** Desktop refreshes metadata after deleting an inactive stream. */
-  refreshRenderedStreamsAfterDeletion?(): void;
   activateStream(stream: StreamTabId): Promise<void> | void;
   notifyDeletionRetained(
     activeCount: number,
@@ -249,7 +247,9 @@ export class ProgressBackend {
     if (shouldActivateStream && nextActive) {
       await this.lifecycle.activateStream(nextActive);
     } else {
-      this.lifecycle.refreshRenderedStreamsAfterDeletion?.();
+      // The deleted stream was not the active one, so only the stream list
+      // changed; the active stream's content is still on screen and correct.
+      this.lifecycle.rebuildRenderedStreams({ syncActiveStream: false });
     }
     return undefined;
   }

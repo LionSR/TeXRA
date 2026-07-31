@@ -330,7 +330,7 @@ export function createRecordingHost(): {
       pending.settle({ action: 'reject' });
     }
     for (const [approvalId, pending] of pendingPlans) {
-      if (!match('plan', pending.streamId)) continue;
+      if (!match('planApproval', pending.streamId)) continue;
       pendingPlans.delete(approvalId);
       events.push({
         event: 'resolvePlanApproval',

@@ -66,7 +66,8 @@ export interface ResumeStreamPorts {
   ): Promise<void>;
   /**
    * Surface "this run has no resumable session state" when retrieval succeeds
-   * but finds nothing to resume (desktop shows an info dialog; extension noops).
+   * but finds nothing to resume (an info message on desktop and in the
+   * extension, a transcript line in the CLI).
    */
   reportNoResumableSession?(streamId: StreamTabId): void | Promise<void>;
   /** Surface an unexpected resume failure (desktop dialog; extension log). */

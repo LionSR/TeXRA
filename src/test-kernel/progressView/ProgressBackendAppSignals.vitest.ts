@@ -76,7 +76,7 @@ function createBackend(): ProgressBackend {
         canSend: () => true,
         overrides: {
           retry: { show: vi.fn(), dismiss: vi.fn() },
-          agentProposal: { show: vi.fn(), dismiss: vi.fn() },
+          proposal: { show: vi.fn(), dismiss: vi.fn() },
         },
       },
       lifecycle: {

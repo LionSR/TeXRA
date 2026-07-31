@@ -90,7 +90,6 @@ describe('settingsView notification message builders', () => {
       email: 'user@example.com',
       accountId: 'acct-1',
       preferSubscription: true,
-      subscriptionToolUseOnly: false,
     };
     const getStatus = vi.fn().mockResolvedValue(status);
 

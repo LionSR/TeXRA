@@ -262,4 +262,24 @@ describe('SupabaseAuthProvider model availability', () => {
       providerMocks.invalidateModelOptionsCache.mock.invocationCallOrder[0],
     ).toBeLessThan(fire.mock.invocationCallOrder[0]);
   });
+
+  // The shared client persists no session, so a remote sign-out would revoke
+  // whichever session was last handed to it — at supabase-js's default global
+  // scope, on every device. Sign-out clears local storage only, as on desktop
+  // and the CLI.
+  it('clears the stored session without a remote revocation', async () => {
+    const { provider, session } = createProvider({
+      expiresAt: Date.now() + 60_000,
+    });
+    const coordinator = (
+      provider as unknown as {
+        sessionCoordinator: { clearSession: ReturnType<typeof vi.fn> };
+      }
+    ).sessionCoordinator;
+
+    await provider.removeSession(session.id);
+
+    expect(coordinator.clearSession).toHaveBeenCalledOnce();
+    expect(providerMocks.signOut).not.toHaveBeenCalled();
+  });
 });

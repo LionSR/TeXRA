@@ -68,6 +68,7 @@ export type ModelOptionsServerAccess = Pick<
   IncludedModelAccess,
   | 'canUseServerSideKeys'
   | 'getUseIncludedModelAccess'
+  | 'isAuthenticated'
   | 'wasQuotaAutoSwitched'
   | 'isRelayQuotaExceeded'
   | 'isProviderOnServer'
@@ -163,6 +164,11 @@ const AVAILABILITY_STATUS_FIELDS: Record<
     available: false,
     requiresKey: false,
   },
+  'unknown-model': {
+    label: 'Unknown model',
+    available: false,
+    requiresKey: false,
+  },
 };
 
 /** Resolve a full availability status from its kind. */
@@ -170,6 +176,24 @@ function availabilityStatus(
   kind: ModelAvailabilityKind,
 ): ModelAvailabilityStatus {
   return { kind, ...AVAILABILITY_STATUS_FIELDS[kind] };
+}
+
+/**
+ * Ship the resolved verdict on the option row. Every option leaves this
+ * module with all four fields set, so no renderer ever has to guess a label
+ * for a row that only carries `value` and `label`.
+ */
+function withAvailabilityFields(
+  option: ModelOptionData,
+  availability: ModelAvailabilityStatus,
+): ModelOptionData {
+  return {
+    ...option,
+    availability: availability.kind,
+    availabilityLabel: availability.label,
+    requiresKey: availability.requiresKey,
+    disabled: !availability.available,
+  };
 }
 
 /** Check whether a model is available through a personal provider or OpenRouter key. */
@@ -201,6 +225,12 @@ interface ModelAvailabilityContext {
   relayQuotaExhausted: boolean;
   useOpenRouter: boolean;
   useIncludedAccess: boolean;
+  /**
+   * Whether included access is selected while no account session exists, so
+   * the honest reason a relay-served model cannot run is "sign in" rather
+   * than "missing API key".
+   */
+  includedAccessSignedOut: boolean;
   /** Whether the user is signed in with ChatGPT (only resolved when the
    * "prefer subscription" switch is on). */
   codexSignedIn: boolean;
@@ -329,7 +359,12 @@ async function resolveModelAvailability(
   }
 
   const personalAccess = await getPersonalAccessKindForModel(config, ctx);
-  return availabilityStatus(personalAccess ?? 'missing-key');
+  if (personalAccess) return availabilityStatus(personalAccess);
+
+  if (ctx.includedAccessSignedOut && allowsModelRelay(config)) {
+    return availabilityStatus('included-login-required');
+  }
+  return availabilityStatus('missing-key');
 }
 
 async function buildAvailabilityContext(
@@ -342,18 +377,29 @@ async function buildAvailabilityContext(
       ? apiKeyExists(access.secrets, provider)
       : apiKeyExistsUncached(access.secrets, provider);
   const useIncludedAccess = serverSideKeyService.getUseIncludedModelAccess();
-  const [hasOpenRouter, hasServerAccess, codexSignedIn, kimiCodeKeySet] =
-    await Promise.all([
-      hasApiKey('openRouter'),
-      serverSideKeyService.canUseServerSideKeys(),
-      // Only worth a secrets read when the "prefer subscription" switch is on.
-      isPreferCodexSubscription() ? isCodexSignedIn() : Promise.resolve(false),
-      hasApiKey('kimiCode'),
-    ]);
+  const [
+    hasOpenRouter,
+    hasServerAccess,
+    codexSignedIn,
+    kimiCodeKeySet,
+    includedAccessSignedOut,
+  ] = await Promise.all([
+    hasApiKey('openRouter'),
+    serverSideKeyService.canUseServerSideKeys(),
+    // Only worth a secrets read when the "prefer subscription" switch is on.
+    isPreferCodexSubscription() ? isCodexSignedIn() : Promise.resolve(false),
+    hasApiKey('kimiCode'),
+    // Signed-out is only a distinct availability reason on the included-access
+    // route, so personal mode never pays for this read.
+    useIncludedAccess
+      ? serverSideKeyService.isAuthenticated().then((authed) => !authed)
+      : Promise.resolve(false),
+  ]);
   return {
     apiKeyExists: hasApiKey,
     hasOpenRouter,
     hasServerAccess,
+    includedAccessSignedOut,
     relayQuotaExhausted:
       serverSideKeyService.wasQuotaAutoSwitched() ||
       (useIncludedAccess && serverSideKeyService.isRelayQuotaExceeded()),
@@ -446,6 +492,10 @@ export async function getModelUnavailableReason(
     return `Model "${model}" is not available with your current subscription tier. Upgrade your plan or switch to a different model.`;
   }
 
+  if (availability.kind === 'included-login-required') {
+    return `Model "${model}" is served by included TeXRA model access, which needs an account. Sign in, or provide a provider API key and switch to personal API keys.`;
+  }
+
   if (availability.kind === 'relay-quota-exhausted') {
     return `Model "${model}" is unavailable because your monthly TeXRA relay quota is exhausted. Switch to personal API keys or wait for the next quota period.`;
   }
@@ -478,7 +528,10 @@ async function buildModelOptionData(
 ): Promise<ModelOptionData> {
   const rawConfig = getRuntimeModelConfig(model);
   if (!rawConfig) {
-    return { value: model, label: model };
+    return withAvailabilityFields(
+      { value: model, label: model },
+      availabilityStatus('unknown-model'),
+    );
   }
   // Mirror ModelFactory: a dual-backend Kimi model routed to the coding
   // endpoint runs with the synthesized runtime config, so the row reflects it.
@@ -505,14 +558,13 @@ async function buildModelOptionData(
       routeLabel = `Via ${PROVIDER_DISPLAY_NAMES[source] ?? source}`;
     }
   }
-  return {
-    ...buildBaseModelOption(model, optionConfig, config),
-    ...(routeLabel ? { routeLabel } : {}),
-    availability: availability.kind,
-    availabilityLabel: availability.label,
-    requiresKey: availability.requiresKey,
-    disabled: !availability.available,
-  };
+  return withAvailabilityFields(
+    {
+      ...buildBaseModelOption(model, optionConfig, config),
+      ...(routeLabel ? { routeLabel } : {}),
+    },
+    availability,
+  );
 }
 
 const MODEL_OPTIONS_CACHE_TTL_MS = 5_000;

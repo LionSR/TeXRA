@@ -32,6 +32,7 @@ export function createStubDesktopHistoryOptions(
     postToRenderer: () => undefined,
     openPath: noOp,
     showInfoMessage: noOp,
+    showWarningMessage: noOp,
     showErrorMessage: noOp,
     onError: () => undefined,
     ...overrides,
@@ -61,7 +62,8 @@ export function createStubDesktopSettingsUiHost(
 ): DesktopSettingsUiHost {
   return {
     openPath: noOp,
-    revealStream: noOp,
+    revealStream: async () => 'revealed',
+    getStreamLabel: () => undefined,
     showInfoMessage: noOp,
     showErrorMessage: noOp,
     confirmAction: async () => true,
@@ -131,7 +133,6 @@ export function createStubDesktopCredentialSettingsController(
       signIn: noOp,
       signOut: noOp,
       setPreferSubscription: noOp,
-      setSubscriptionToolUseOnly: noOp,
     },
     modelSelectionController: createModelSelectionController(state),
     prepareModelSelectionData: noOp,

@@ -76,6 +76,14 @@ type StreamLogStoreMode =
   | { readonly kind: 'read-only' }
   | { readonly kind: 'ephemeral'; readonly reason: string };
 
+/**
+ * The user-facing warning an interactive host shows once it is running on an
+ * ephemeral transcript store, built from that store's `mode.reason`.
+ */
+export function ephemeralTranscriptWarning(reason: string): string {
+  return `Transcript persistence is unavailable for this session. Its conversation cannot be resumed. ${reason}`;
+}
+
 export interface TranscriptWriter {
   readonly streamId: StreamTabId;
   append(entry: StreamLogAppendInput): StreamLogEntry;
@@ -343,6 +351,30 @@ export class StreamLogStore {
     const store = new StreamLogStore({ kind: 'read-only' });
     store.replaceSummaries(await store.readPersistentSummaries());
     return store;
+  }
+
+  /**
+   * Open the persistent transcript store, degrading to an in-memory store
+   * when the open fails.
+   *
+   * Interactive hosts (VS Code extension, desktop app, CLI TUI) use this so a
+   * broken transcript directory warns instead of aborting startup. The
+   * degradation is loud: the cause is logged here and recorded in
+   * `mode.reason`, which callers render through
+   * {@link ephemeralTranscriptWarning}. A non-persistent store also disables
+   * resume — `SessionHandle` skips restart repair and nothing was persisted
+   * to resume from.
+   */
+  static async openOrEphemeral(
+    open: () => Promise<StreamLogStore> = () => StreamLogStore.open(),
+  ): Promise<StreamLogStore> {
+    try {
+      return await open();
+    } catch (error) {
+      const reason = `Persistent transcript opening failed: ${toErrorMessage(error)}`;
+      log.warn(LOG_TAG, reason);
+      return StreamLogStore.ephemeral(reason);
+    }
   }
 
   /** Create an explicitly non-persistent transcript store. */

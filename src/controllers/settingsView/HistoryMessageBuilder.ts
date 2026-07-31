@@ -7,14 +7,16 @@
  * export) remain host-specific because they touch host-only UI surfaces.
  */
 import {
+  deriveResumability,
   getExecutionStore,
   isUserVisibleExecution,
   listExecutions,
 } from '@agent/storage';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type {
-  HistoryItem,
-  UpdateHistoryMessage,
+import {
+  resolveHistoryRunStatus,
+  type HistoryItem,
+  type UpdateHistoryMessage,
 } from '@shared/schemas/historyViewMessages';
 
 export async function buildHistoryMessage(): Promise<UpdateHistoryMessage> {
@@ -28,13 +30,16 @@ export async function buildHistoryMessage(): Promise<UpdateHistoryMessage> {
         model: cfg.model,
         instruction: cfg.instruction,
       };
-      const editedFiles =
+      const [editedFiles, resumability] = await Promise.all([
         cfg.agentCategory === 'toolUse'
-          ? await getExecutionStore(entry.id).readWorkspaceFiles()
-          : [];
+          ? getExecutionStore(entry.id).readWorkspaceFiles()
+          : [],
+        deriveResumability(entry.id),
+      ]);
       return {
         id: entry.id,
         timestamp: entry.timestamp,
+        status: resolveHistoryRunStatus(resumability),
         agentConfig:
           cfg.agentCategory === 'toolUse'
             ? {

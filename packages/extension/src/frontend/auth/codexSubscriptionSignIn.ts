@@ -8,6 +8,7 @@ import {
   loginWithLoopback,
   type CodexSession,
 } from '@auth/codex';
+import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { setPreferCodexSubscription } from '@model/codex/codexPreference';
@@ -94,7 +95,7 @@ export async function signInWithChatGptSubscription(
     return false;
   }
 
-  const label = session.email ?? session.accountId ?? 'your account';
+  const label = codexAccountLabel(session);
   let update: Awaited<ReturnType<typeof setPreferCodexSubscription>>;
   try {
     update = await setPreferCodexSubscription(true);

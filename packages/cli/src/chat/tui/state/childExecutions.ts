@@ -50,6 +50,10 @@ interface LiveChildStreamEntry {
 
 interface RemovedChildStreamEntry {
   readonly kind: 'removed';
+  /** Children whose parent edge this removal cleared. They are the only
+   *  streams that can still name this id as a parent, so the tombstone is
+   *  pinned (never evicted) while any of them is still live. */
+  readonly orphanedChildren?: readonly StreamTabId[];
 }
 
 /** One live child relationship or an explicit removal tombstone. */
@@ -58,6 +62,16 @@ export type ChildStreamEntry = LiveChildStreamEntry | RemovedChildStreamEntry;
 export type ChildStreamEntries = ReadonlyMap<StreamTabId, ChildStreamEntry>;
 
 const CHILD_STREAMS = signal<ChildStreamEntries>(new Map());
+
+/**
+ * Memory bound on retained removal tombstones. A long chat session can remove
+ * thousands of child streams; the oldest tombstone is dropped first and live
+ * entries are never evicted. Mirrors the progress view's
+ * `RETAINED_FINISHED_CHILDREN_CAP` (`ProgressFactApplier.ts`) as a value, not
+ * an import: the two containers hold different records and the CLI must not
+ * deep-import controller internals.
+ */
+const REMOVED_STREAM_TOMBSTONE_CAP = 200;
 
 /**
  * Read-only view of the child-stream relationship map for components that
@@ -334,13 +348,16 @@ export function applySubagentRoster(
 export function applyChildStreamRemoval(streamId: StreamTabId): void {
   const current = CHILD_STREAMS.get();
   const out = new Map(current);
-  out.set(streamId, { kind: 'removed' });
+  const orphanedChildren: StreamTabId[] = [];
 
   for (const [childStreamId, entry] of current) {
     if (childStreamId === streamId || entry.kind === 'removed') continue;
     const beforeParent = currentParent(entry);
     const retained = retainedParent(entry);
     const nextRetained = retained?.streamId === streamId ? undefined : retained;
+    if (beforeParent === streamId || retained?.streamId === streamId) {
+      orphanedChildren.push(childStreamId);
+    }
     let parent = entry.parent;
     if (parent?.kind === 'roster' && !nextRetained) {
       parent = { kind: 'explicit', streamId: null };
@@ -369,7 +386,44 @@ export function applyChildStreamRemoval(streamId: StreamTabId): void {
     }
   }
 
+  out.set(streamId, {
+    kind: 'removed',
+    ...(orphanedChildren.length > 0 && { orphanedChildren }),
+  });
+  evictOldestTombstones(out);
   CHILD_STREAMS.set(out);
+}
+
+/**
+ * Drop the oldest tombstones once they exceed `REMOVED_STREAM_TOMBSTONE_CAP`.
+ * Map order is first-seen order for the stream identity, so the oldest
+ * removals go first.
+ *
+ * A tombstone is pinned while any child it orphaned is still live: those
+ * children are the only streams that can still name it as a parent, so
+ * dropping it would let a late edge fact re-attach them to a removed
+ * ancestor. Once such a child is itself removed, its own tombstone refuses
+ * that same late fact and the parent tombstone becomes redundant.
+ */
+function evictOldestTombstones(
+  entries: Map<StreamTabId, ChildStreamEntry>,
+): void {
+  const tombstones = [...entries].filter(
+    (pair): pair is [StreamTabId, RemovedChildStreamEntry] =>
+      pair[1].kind === 'removed',
+  );
+  let excess = tombstones.length - REMOVED_STREAM_TOMBSTONE_CAP;
+  if (excess <= 0) return;
+
+  for (const [streamId, tombstone] of tombstones) {
+    if (excess === 0) break;
+    const pinned = tombstone.orphanedChildren?.some(
+      (childStreamId) => entries.get(childStreamId)?.kind === 'live',
+    );
+    if (pinned) continue;
+    entries.delete(streamId);
+    excess -= 1;
+  }
 }
 
 // ---------------------------------------------------------------------------

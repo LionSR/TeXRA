@@ -49,6 +49,7 @@ vi.mock('@utils/config/configUtils', () => ({
 
 // Local imports
 import { SupabaseClient } from '@auth/SupabaseClient';
+import { RELAY_CI_TOKEN_PREFIX, RELAY_TOKEN_ENV_VAR } from '@auth/relayToken';
 import { signIn, signOut } from '@commands/auth/authCommands';
 
 function mockUnavailableStoredSession(failure: 'invalid' | 'transient'): void {
@@ -60,6 +61,7 @@ describe('auth commands for unavailable stored sessions', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.clearAllMocks();
+    vi.unstubAllEnvs();
   });
 
   it('clears an invalid session before opening the sign-in chooser', async () => {
@@ -132,7 +134,7 @@ describe('auth commands for unavailable stored sessions', () => {
     );
   });
 
-  it('revokes an unavailable stored session without resolving it first', async () => {
+  it('removes an unavailable stored session without resolving it first', async () => {
     mockUnavailableStoredSession('invalid');
     authMocks.showWarningMessage.mockResolvedValue('Sign Out');
 
@@ -142,6 +144,18 @@ describe('auth commands for unavailable stored sessions', () => {
     expect(authMocks.removeStoredSession).toHaveBeenCalledOnce();
     expect(authMocks.showInformationMessage).toHaveBeenCalledWith(
       'Signed out successfully',
+    );
+  });
+
+  it('says a configured relay token keeps authenticating after sign-out', async () => {
+    vi.stubEnv(RELAY_TOKEN_ENV_VAR, `${RELAY_CI_TOKEN_PREFIX}ci-token`);
+    mockUnavailableStoredSession('invalid');
+    authMocks.showWarningMessage.mockResolvedValue('Sign Out');
+
+    await signOut();
+
+    expect(authMocks.showInformationMessage).toHaveBeenCalledWith(
+      expect.stringContaining(RELAY_TOKEN_ENV_VAR),
     );
   });
 });

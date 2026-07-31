@@ -83,6 +83,7 @@ describe('SyncStreamContentMessageSchema', () => {
     activeState: {
       conversationProgress: { toolCallCount: 0 },
       roundStage: null,
+      phaseStage: null,
       badges: {
         subagents: [],
       },
@@ -125,6 +126,17 @@ describe('SyncStreamContentMessageSchema', () => {
     {
       ...workflow,
       activeState: { conversationProgress: { toolCallCount: 1 } },
+    },
+    // Active state is all-or-nothing: a snapshot that omits the phase slot
+    // would leave a stale cached phase on the frontend after a tab switch.
+    {
+      ...workflow,
+      activeState: {
+        conversationProgress: workflow.activeState.conversationProgress,
+        roundStage: null,
+        badges: workflow.activeState.badges,
+        parentStreamId: null,
+      },
     },
     {
       ...toolUse,

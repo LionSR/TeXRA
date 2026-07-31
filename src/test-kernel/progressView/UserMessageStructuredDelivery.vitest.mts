@@ -98,6 +98,15 @@ describe('user-message structured delivery', () => {
     vi.unstubAllGlobals();
   });
 
+  it('renders a bare self-closing envelope as a structured delivery bubble', async () => {
+    const element = await mount('<subagent-progress agent="a"/>');
+
+    const bubble = element.shadowRoot?.querySelector('.user-message');
+    expect(
+      bubble?.classList.contains('user-message--structured-delivery'),
+    ).toBe(true);
+  });
+
   it('renders plain (non-delivery) text as an unstructured message', async () => {
     const element = await mount('hello world');
 

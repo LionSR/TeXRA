@@ -4,11 +4,16 @@ import * as nodePath from 'node:path';
 // Local imports
 import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
 import { registerAgentShutdownHandlers } from '@agent/runtime/agentShutdown';
+import {
+  teardownDefaultSession,
+  tryDefaultSession,
+} from '@agent/runtime/SessionHandle';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { installTexraModelAccess } from '@controllers/modelAccess/installTexraModelAccess';
 import { setOutputChannelFactory } from '@logger/logUtils';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
+import { refreshModelListStateIfNeeded } from '@model/modelListRefresh';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { initPlatform, platform, tryPlatform } from '@platform/platform';
 import type { LifecycleHost } from '@platform/interfaces';
@@ -68,7 +73,6 @@ type CliPlatformInitOptions = Pick<
   | 'skillSourceOptions'
   | 'version'
 > & {
-  readonly bestEffortIncludedModelAccess?: boolean;
   readonly installSignalHandlers?: boolean;
   readonly storageRoot?: string;
 };
@@ -290,6 +294,31 @@ export async function initCliPlatform(
     // this the model layer is bring-your-own-key. See installTexraModelAccess.
     installTexraModelAccess();
 
+    // Reconcile the persisted enabled-models list against the current curated
+    // defaults, as the extension and desktop hosts do at startup. The list
+    // lives in shared `~/.texra` state and the reconciliation is a no-op
+    // unless MODEL_LIST_VERSION changed, so a CLI-only user would otherwise
+    // keep retired models and never see new defaults until another host ran.
+    try {
+      const { added, removed } = await refreshModelListStateIfNeeded(
+        stateStores.globalState,
+      );
+      if (added.length > 0 || removed.length > 0) {
+        invalidateModelOptionsCache();
+        logAt(
+          'info',
+          'cli.models',
+          `Refreshed enabled models: added [${added.join(', ')}], removed [${removed.join(', ')}]`,
+        );
+      }
+    } catch (error) {
+      logAt(
+        'error',
+        'cli.models',
+        `Failed to refresh model list: ${toErrorMessage(error)}`,
+      );
+    }
+
     // Seed first-install defaults (e.g. disabled tools) before anything
     // writes CLI_BUNDLED_AGENTS_LAST_KNOWN_VERSION (the bundled-agent sync
     // below), so upgrading users are not affected. Mirrors the
@@ -315,6 +344,16 @@ export async function initCliPlatform(
     // below so the kills (all synchronous) land first, matching the other
     // hosts' ordering.
     registerAgentShutdownHandlers(lifecycle);
+
+    // Same session teardown the extension and desktop hosts run: drain the
+    // session's durable writers once the agent kills above have landed, then
+    // dispose the session last so pending host interactions settle after
+    // persistence. `tryDefaultSession` because the session is installed later,
+    // by whichever entry point opens transcripts.
+    lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
+      tryDefaultSession()?.flushArtifacts(),
+    );
+    lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => teardownDefaultSession());
 
     // Attribute agent-authored commits to the TeXRA identity by default;
     // configurable via `.texra/config.json` `texra.git.markCommits`.
@@ -353,24 +392,20 @@ export async function initCliPlatform(
     invalidateModelOptionsCache();
   }
 
+  // Only an explicit launch selection writes the preference. Whether a session
+  // actually exists is resolved per request by the model layer, which reports
+  // the sign-in requirement itself; deriving the stored preference from the
+  // current auth state here would clobber a choice the user made in another
+  // host, since the setting lives in shared `~/.texra` state.
   const forcePersonalApiKeys =
     context.skipIncludedModelAccess === true ||
     context.apiMode === 'personal' ||
     (context.apiMode !== 'included' && useOpenRouter);
-  let authed = false;
-  if (!forcePersonalApiKeys) {
-    try {
-      authed = await SupabaseClient.isAuthenticated();
-    } catch (error) {
-      if (context.bestEffortIncludedModelAccess !== true) throw error;
-      logAt(
-        'warn',
-        'cli.auth',
-        `Included model access probe failed: ${toErrorMessage(error)}`,
-      );
-    }
+  if (forcePersonalApiKeys) {
+    await getServerSideKeyService().setUseIncludedModelAccess(false);
+  } else if (context.apiMode === 'included') {
+    await getServerSideKeyService().setUseIncludedModelAccess(true);
   }
-  await getServerSideKeyService().setUseIncludedModelAccess(authed);
   await setCliHelperModel(context.helperModel);
   initializeNodeGoalPrompts(context.resourcesPath);
 

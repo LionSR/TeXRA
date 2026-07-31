@@ -12,7 +12,6 @@
 // Tool-edit is part of this port because it returns a typed
 // Promise<ToolEditApprovalResult>, not a fire-and-forget event.
 
-import { nanoid } from 'nanoid';
 import PQueue from 'p-queue';
 
 import { defaultSession } from '@agent/runtime/SessionHandle';
@@ -38,6 +37,8 @@ import {
   isCliApiSwitchableRetry,
   isCliChatGptSubscriptionRetry,
   markApprovalDenied,
+  toApprovalSettlement,
+  toToolEditResult,
 } from '@cli/runtime/approvalAdapter';
 import { denyExternalInquiryIfNoHumanInput } from '@cli/runtime/approval/humanInputHandlers';
 import type { CliContext } from '@cli/runtime/cliContext';
@@ -54,15 +55,19 @@ import { platform } from '@platform/platform';
 import {
   isUpstreamCreditDepletedError,
   type AgentProposalPermission,
-  type BashPermission,
   type ExternalInquiryPermission,
   type PlanApprovalPermission,
 } from '@shared/schemas';
+import { APPROVAL_REPLACED_CAUSE } from '@shared/copy/interactionCancellation';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
-  setBashApprovalSessionBypass,
   setDelegatedWorkApprovalBypasses,
   setToolEditApprovalSessionBypass,
 } from '@tools/approval';
+import {
+  prepareBashApprovalPrompt,
+  setBashApprovalSessionBypass,
+} from '@tools/approval/bashApproval';
 import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -150,9 +155,7 @@ export function createTuiHostInteractions(
       ) {
         setToolEditApprovalSessionBypass(request.streamId, true);
       }
-      return decision.accepted
-        ? { accepted: true, appliedContent: request.proposedContent }
-        : { accepted: false, userMessage: decision.userMessage };
+      return toToolEditResult(decision, request.proposedContent);
     },
     requestBashApproval(request) {
       return requestBashInteraction(request, context);
@@ -309,11 +312,10 @@ interface RouteWithPolicyOptions<P> {
 
 // Retry carries its own policy lookup (`showRetryRequest`) and route
 // bookkeeping, so it enters through `decideAfterImmediatePolicy` directly.
-async function decideWithPolicy<K extends 'bash' | 'plan' | 'proposal', P>(
-  context: CliContext,
-  kind: K,
-  payload: P,
-): Promise<ApprovalDecision> {
+async function decideWithPolicy<
+  K extends 'bash' | 'planApproval' | 'proposal',
+  P,
+>(context: CliContext, kind: K, payload: P): Promise<ApprovalDecision> {
   const policy = immediateDecision(context);
   if (policy) return policy;
 
@@ -321,7 +323,7 @@ async function decideWithPolicy<K extends 'bash' | 'plan' | 'proposal', P>(
 }
 
 async function decideAfterImmediatePolicy<
-  K extends 'bash' | 'plan' | 'proposal' | 'retry',
+  K extends 'bash' | 'planApproval' | 'proposal' | 'retry',
   P,
 >(
   context: CliContext,
@@ -337,7 +339,7 @@ async function decideAfterImmediatePolicy<
       autoDecision = undefined;
     }
     if (options.isCurrent && !options.isCurrent()) {
-      return { accepted: false, userMessage: 'Approval request was replaced.' };
+      return { accepted: false, userMessage: APPROVAL_REPLACED_CAUSE };
     }
     if (autoDecision) return autoDecision;
   }
@@ -349,7 +351,7 @@ async function decideAfterImmediatePolicy<
     >;
     const decision = await enqueueTuiApproval(queuePayload);
     if (options.isCurrent && !options.isCurrent()) {
-      return { accepted: false, userMessage: 'Approval request was replaced.' };
+      return { accepted: false, userMessage: APPROVAL_REPLACED_CAUSE };
     }
     markIfRejected(context, decision);
     return decision;
@@ -367,32 +369,25 @@ async function requestBashInteraction(
   request: HostBashApprovalRequest,
   context: CliContext,
 ): Promise<BashSettlement> {
-  const payload: BashPermission = {
-    requestId: `bash-${nanoid()}`,
-    command: request.command,
-    ...(request.cwd ? { cwd: request.cwd } : {}),
-    allowBypass: true,
-    streamId: request.streamId ?? '',
-  };
+  const payload = prepareBashApprovalPrompt(request);
   const decision = await decideWithPolicy(context, 'bash', payload);
   if (decision.accepted && decision.bypass === 'bash' && request.streamId) {
     setBashApprovalSessionBypass(request.streamId, true);
   }
-  const feedback = feedbackOnReject(decision);
-  return decision.accepted
-    ? { action: 'approve' }
-    : { action: 'reject', ...(feedback ? { feedback } : {}) };
+  return toApprovalSettlement(decision);
 }
 
 async function requestPlanInteraction(
   request: PlanApprovalPermission,
   context: CliContext,
 ): Promise<PlanApprovalResult> {
-  const decision = await decideWithPolicy(context, 'plan', request);
-  const feedback = feedbackOnReject(decision);
-  return decision.accepted
-    ? { action: decision.planAction ?? 'approve' }
-    : { action: 'reject', ...(feedback ? { feedback } : {}) };
+  const decision = await decideWithPolicy(context, 'planApproval', request);
+  // `approve_and_goal` is a TUI-only plan action; every other outcome is the
+  // shared approve/reject settlement.
+  if (decision.accepted && decision.planAction) {
+    return { action: decision.planAction };
+  }
+  return toApprovalSettlement(decision);
 }
 
 async function requestProposalInteraction(
@@ -408,10 +403,7 @@ async function requestProposalInteraction(
     setDelegatedWorkApprovalBypasses(request.streamId, true);
     approveQueuedDelegatedWorkForStream(request.streamId);
   }
-  const feedback = feedbackOnReject(decision);
-  return decision.accepted
-    ? { action: 'approve' }
-    : { action: 'reject', ...(feedback ? { feedback } : {}) };
+  return toApprovalSettlement(decision);
 }
 
 async function requestRetryInteraction(
@@ -557,10 +549,6 @@ export function enqueueTuiApproval(
   });
 }
 
-function feedbackOnReject(decision: ApprovalDecision): string | undefined {
-  return decision.accepted ? undefined : decision.userMessage;
-}
-
 function markIfRejected(context: CliContext, decision: ApprovalDecision): void {
   if (!decision.accepted) markApprovalDenied(context);
 }
@@ -578,6 +566,13 @@ function setTuiApprovalBypassState({
     ...s,
     bypass: { ...s.bypass, [kind]: bypassActive },
   }));
+}
+
+function cliOpenRouterEnabled(): boolean {
+  return platform().globalState.get<boolean>(
+    GlobalStateKey.USE_OPENROUTER,
+    false,
+  );
 }
 
 async function switchRetryToPersonalCredentials(
@@ -626,6 +621,7 @@ async function switchRetryToPersonalCredentials(
   await options.commitQueue.add(async () => {
     if (!isCurrent()) throw new Error('Retry request was replaced.');
     const previousApiMode = getCliApiMode();
+    const previousOpenRouter = cliOpenRouterEnabled();
     const previousSubscriptionPreference = isPreferCodexSubscription();
     let apiModeWriteStarted = false;
     let subscriptionWriteStarted = false;
@@ -689,6 +685,36 @@ async function switchRetryToPersonalCredentials(
             getCliApiMode() === previousApiMode
               ? 'The previous API mode appears restored in memory, but persistence could not be confirmed'
               : 'Could not restore API mode';
+          rollbackFailures.push(
+            new Error(
+              `${persistenceContext}: ${toErrorMessage(rollbackError)}`,
+              {
+                cause: rollbackError,
+              },
+            ),
+          );
+        }
+      }
+      // After the mode, because restoring included access clears the OpenRouter
+      // toggle: a switch the user never got would otherwise leave their routing
+      // preference silently off.
+      if (
+        apiModeWriteStarted &&
+        previousOpenRouter &&
+        !cliOpenRouterEnabled()
+      ) {
+        try {
+          await platform().globalState.update(
+            GlobalStateKey.USE_OPENROUTER,
+            true,
+          );
+          if (!cliOpenRouterEnabled()) {
+            throw new Error('OpenRouter routing remained disabled.');
+          }
+        } catch (rollbackError) {
+          const persistenceContext = cliOpenRouterEnabled()
+            ? 'The previous OpenRouter routing preference appears restored in memory, but persistence could not be confirmed'
+            : 'Could not restore OpenRouter routing';
           rollbackFailures.push(
             new Error(
               `${persistenceContext}: ${toErrorMessage(rollbackError)}`,

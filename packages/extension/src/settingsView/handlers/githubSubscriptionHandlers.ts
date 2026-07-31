@@ -48,7 +48,7 @@ export class GitHubSubscriptionHandlers {
       placeHolder: 'ghp_…',
       ignoreFocusOut: true,
     });
-    if (!token) return;
+    if (!token?.trim()) return;
     await withHandlerErrorHandling(
       this.ctx,
       'Failed to save GitHub token',

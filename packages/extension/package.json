@@ -311,12 +311,6 @@
             "default": false,
             "description": "Prefer your signed-in ChatGPT subscription for Codex-eligible OpenAI models instead of API-key routing. Experimental. Subscription routing currently uses a 272,000-token Codex context cap, not the full 1,000,000-token API context.",
             "scope": "resource"
-          },
-          "texra.chatgptCodex.subscriptionToolUseOnly": {
-            "type": "boolean",
-            "default": false,
-            "description": "Use your ChatGPT subscription for tool-use agents while workflow agents continue through your OpenAI API key or relay.",
-            "scope": "resource"
           }
         }
       },
@@ -863,12 +857,6 @@
             "type": "boolean",
             "default": true,
             "description": "Require user approval before tool-use agents execute bash commands",
-            "scope": "resource"
-          },
-          "texra.toolUse.persistence.enabled": {
-            "type": "boolean",
-            "default": true,
-            "description": "Persist tool-use conversations across VS Code restarts",
             "scope": "resource"
           },
           "texra.toolUse.persistence.ttlHours": {

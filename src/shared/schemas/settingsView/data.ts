@@ -416,7 +416,6 @@ const ChatGptAuthStatusSchema = z.object({
   email: z.string().nullish(),
   accountId: z.string().nullish(),
   preferSubscription: z.boolean(),
-  subscriptionToolUseOnly: z.boolean(),
 });
 export type ChatGptAuthStatus = z.infer<typeof ChatGptAuthStatusSchema>;
 

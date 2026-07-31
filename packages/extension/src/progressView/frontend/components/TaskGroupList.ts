@@ -18,7 +18,10 @@ import {
   type TaskGroup,
 } from '@shared/schemas';
 import { designTokens } from '@shared/styles';
-import { workflowPhaseCallProgress } from '@shared/copy/workflowCall';
+import {
+  formatWorkflowPhaseHeading,
+  workflowPhaseCallProgress,
+} from '@shared/copy/workflowCall';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 
 // Side-effect imports - register Web Awesome components
@@ -514,21 +517,17 @@ export class TaskGroupList extends LitElement {
       : '';
 
     const statusIcon = getStatusIcon(group.status);
-    // Surface a stage's position in its plan as `(i/n)` when both counts are
-    // present (round stages always carry them; phase stages when the engine
-    // knows the count). `index` is zero-based, so display it one-based — at
-    // parity with the CLI's `(index+1/total)` phase/round headers.
-    const positionText =
-      group.index !== undefined && group.total !== undefined
-        ? ` (${group.index + 1}/${group.total})`
-        : '';
     const title =
       group.kind === 'round' && group.index !== undefined
         ? formatRoundStageLabel({
             index: group.index,
             total: group.total,
           })
-        : `${group.name}${positionText}`;
+        : formatWorkflowPhaseHeading({
+            phaseLabel: group.name,
+            phaseIndex: group.index,
+            phaseTotal: group.total,
+          });
     return html`
       <span class="group-status-icon">
         ${waIcon(statusIcon, {

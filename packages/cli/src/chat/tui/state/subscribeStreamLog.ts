@@ -2,6 +2,11 @@
 // `streams[].entries` (state/cliState.ts). Approval/permission
 // entries land in side panels and modals; tool rows render inline alongside
 // assistant prose.
+//
+// Secrets are redacted at record time by TexraTranscriptRecorder, which is
+// what every host and the HTML export share. The `redactSecrets` calls below
+// remain only to cover rows persisted before that landed; they are idempotent
+// on already-redacted text.
 
 import { isDeepStrictEqual } from 'node:util';
 
@@ -129,20 +134,20 @@ function safeWorkflowOperationalSummary(text: string): string | undefined {
   return sanitized.trim() ? truncateSummary(sanitized, 120) : undefined;
 }
 
-function workflowOperationalDescription(
+function workflowOperationalLatestLine(
   entries: readonly ConversationEntry[],
 ): string | undefined {
   for (const entry of entries.toReversed()) {
     if (entry.role === 'tool') {
-      const description =
+      const line =
         safeWorkflowOperationalSummary(entry.toolUse.headerSummary) ??
         safeWorkflowOperationalSummary(entry.toolUse.toolName);
-      if (description) return description;
+      if (line) return line;
       continue;
     }
     if (entry.role === 'phase') {
-      const description = safeWorkflowOperationalSummary(entry.phaseLabel);
-      if (description) return description;
+      const line = safeWorkflowOperationalSummary(entry.phaseLabel);
+      if (line) return line;
       continue;
     }
     if (
@@ -151,8 +156,8 @@ function workflowOperationalDescription(
       (entry.role === 'assistant' &&
         entry.messageType === MESSAGE_TYPES.DEFAULT)
     ) {
-      const description = safeWorkflowOperationalSummary(entry.text);
-      if (description) return description;
+      const line = safeWorkflowOperationalSummary(entry.text);
+      if (line) return line;
     }
   }
   return undefined;
@@ -749,7 +754,7 @@ export function syncStreamLog(
     );
     const streamFinal = isFinalTranscriptStatus(slice.status);
     const logCandidates: TranscriptCandidate[] = [];
-    const workflowDescriptionCandidates: TranscriptCandidate[] = [];
+    const workflowLatestLineCandidates: TranscriptCandidate[] = [];
     for (const entry of allEntries) {
       const messageType = entry.messageType ?? '';
       const transcriptCandidate = transcriptMessageTypes.has(messageType);
@@ -772,7 +777,7 @@ export function syncStreamLog(
       );
       if (!rendered) continue;
       if (workflowOperationalOnly) {
-        workflowDescriptionCandidates.push({
+        workflowLatestLineCandidates.push({
           rendered,
           sortSeq: entry.seqNo,
           tieBreak: 0,
@@ -805,7 +810,7 @@ export function syncStreamLog(
       };
       candidates.push(candidate);
       if (workflowOperationalOnly) {
-        workflowDescriptionCandidates.push(candidate);
+        workflowLatestLineCandidates.push(candidate);
       }
     }
 
@@ -821,12 +826,14 @@ export function syncStreamLog(
     );
     const latestInstruction =
       latestUserIndex >= 0 ? next[latestUserIndex]?.text : undefined;
-    const description = workflowOperationalOnly
-      ? (workflowOperationalDescription(
-          sortTranscriptCandidatesIfNeeded(workflowDescriptionCandidates).map(
+    // Transcript-derived live status only. `slice.description` is the
+    // runtime's own one-liner and is never written from here.
+    const latestLine = workflowOperationalOnly
+      ? (workflowOperationalLatestLine(
+          sortTranscriptCandidatesIfNeeded(workflowLatestLineCandidates).map(
             (candidate) => candidate.rendered,
           ),
-        ) ?? slice.description)
+        ) ?? slice.latestLine)
       : (next.findLast(
           (entry, index) =>
             index > latestUserIndex &&
@@ -836,7 +843,7 @@ export function syncStreamLog(
             entry.text.trim(),
         )?.text ??
         latestInstruction ??
-        slice.description);
+        slice.latestLine);
     releaseAfterSync =
       !projectFullTranscript &&
       slice.status !== undefined &&
@@ -856,7 +863,7 @@ export function syncStreamLog(
       });
     if (
       entriesUnchanged &&
-      slice.description === description &&
+      slice.latestLine === latestLine &&
       slice.thinkingActive === thinkingActive &&
       slice.compactingActive === compactingActive &&
       isDeepStrictEqual(slice.taskGroups, taskGroups)
@@ -865,7 +872,7 @@ export function syncStreamLog(
     }
     return {
       ...slice,
-      description,
+      latestLine,
       entries: nextEntries,
       thinkingActive,
       compactingActive,

@@ -9,6 +9,7 @@
  */
 import http from 'node:http';
 
+import { AUTH_CALLBACK_TIMEOUT_MS } from '../config';
 import {
   CODEX_CALLBACK_FALLBACK_PORT,
   CODEX_CALLBACK_PATH,
@@ -16,8 +17,6 @@ import {
 } from './codexConstants';
 import { type CodexSessionCoordinator } from './CodexSessionCoordinator';
 import { type CodexSession } from './codexSessionTypes';
-
-const CALLBACK_TIMEOUT_MS = 5 * 60 * 1000;
 
 const SUCCESS_HTML = `<!doctype html><html><head><meta charset="utf-8"><title>Signed in</title></head>
 <body style="font-family:system-ui;text-align:center;padding-top:4rem">
@@ -102,7 +101,7 @@ export async function loginWithLoopback(
   const codePromise = new Promise<string>((resolve, reject) => {
     callbackTimer = setTimeout(() => {
       reject(new Error('Timed out waiting for the ChatGPT sign-in callback.'));
-    }, CALLBACK_TIMEOUT_MS);
+    }, AUTH_CALLBACK_TIMEOUT_MS);
 
     const rejectCallback = (
       res: http.ServerResponse,

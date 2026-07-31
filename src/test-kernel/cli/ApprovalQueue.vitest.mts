@@ -257,7 +257,7 @@ describe('CLI approval queue', () => {
   // (see subscribeApprovals.ts), so this exercises that same multi-kind clear.
   it('clears every pending kind for a stream via clearApprovalsWhere, leaving other streams alone', async () => {
     const planPayload = {
-      kind: 'plan',
+      kind: 'planApproval',
       payload: { approvalId: 'approval-1', streamId: 'stream-a' },
     } as ApprovalPayload;
     const staleForStreamA = bashPayload('stream-a');

@@ -69,6 +69,7 @@ export interface NativeSubagentStrategyParams {
   readonly config: AgentConfig;
   readonly agentCategoryExplicit: boolean;
   readonly executionId: ExecutionId;
+  readonly parentExecutionId?: ExecutionId;
   readonly agentName: string;
   readonly orchestratorStreamId: StreamTabId;
   readonly parentSession: SessionHandle;
@@ -208,6 +209,7 @@ export function createNativeSubagentStrategy(
         {
           startedAt: params.startedAt,
           workingDirectory: params.workingDirectory,
+          parentExecutionId: params.parentExecutionId,
         },
       );
       cachedDelivery = {
@@ -362,6 +364,7 @@ export function createNativeSubagentStrategy(
           params.config.agentCategory,
           result,
           Date.now() - params.startedAt,
+          { parentExecutionId: params.parentExecutionId },
         );
       }
       return (await buildDelivery(turn)).resultMeta;

@@ -38,7 +38,6 @@ import {
   LANGUAGE_MODEL_PORT_ERROR_CODE,
   type LanguageModelPort,
 } from '@platform/languageModel';
-import { AgentCategory } from '@shared/schemas/agent';
 import { installPlatform } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
@@ -292,13 +291,10 @@ describe('OpenAI model handler routing', () => {
     accountId: 'account-id',
   });
 
-  const initializePreferredCodexRelay = async (
-    extraConfig: Record<string, unknown> = {},
-  ): Promise<void> =>
+  const initializePreferredCodexRelay = async (): Promise<void> =>
     installPlatform({
       config: {
         'texra.chatgptCodex.preferSubscription': true,
-        ...extraConfig,
       },
       globalState: { 'texra.useIncludedModelAccess': true },
       secrets: {
@@ -306,13 +302,8 @@ describe('OpenAI model handler routing', () => {
       },
     });
 
-  const createdHandlerName = async (
-    agentCategory?: AgentCategory,
-  ): Promise<string> => {
-    const handler = await createModelHandler(
-      codexEligibleConfig,
-      agentCategory,
-    );
+  const createdHandlerName = async (): Promise<string> => {
+    const handler = await createModelHandler(codexEligibleConfig);
     try {
       return handler.constructor.name;
     } finally {
@@ -438,20 +429,6 @@ describe('OpenAI model handler routing', () => {
         cause: { name: 'CodexAuthError', kind: 'transient', cause: rawError },
       },
     );
-  });
-
-  it('skips subscription preflight for workflows when subscription is tool-use-only', async () => {
-    await initializePreferredCodexRelay({
-      'texra.chatgptCodex.subscriptionToolUseOnly': true,
-    });
-    const refreshSpy = vi
-      .spyOn(codexCoordinator(), 'getFreshAccessToken')
-      .mockRejectedValue(new CodexAuthError('temporary outage', 'transient'));
-
-    expect(await createdHandlerName(AgentCategory.Workflow)).toBe(
-      'ModelHandlerOpenAIResponse',
-    );
-    expect(refreshSpy).not.toHaveBeenCalled();
   });
 
   it('uses the Codex endpoint for a signed-in preferred subscription even when relay access is selected', async () => {

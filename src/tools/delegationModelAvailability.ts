@@ -1,6 +1,6 @@
 import type { ToolDefinition } from '@model';
 import { decideRunModel } from '@model/runModelDecision';
-import type { ModelOptionData } from '@shared/schemas';
+import { isModelOptionAvailable, type ModelOptionData } from '@shared/schemas';
 import { replaceDelegationDescriptionBlock } from '@tools/delegationDescriptionBlock';
 import { unique } from '@utils/core';
 
@@ -12,9 +12,7 @@ const NO_DELEGATION_MODELS_MESSAGE =
 export function availableModelNamesFromOptions(
   models: readonly ModelOptionData[],
 ): string[] {
-  return models
-    .filter((model) => model.disabled !== true && model.requiresKey !== true)
-    .map((model) => model.value);
+  return models.filter(isModelOptionAvailable).map((model) => model.value);
 }
 
 function formatAvailableModelsLine(

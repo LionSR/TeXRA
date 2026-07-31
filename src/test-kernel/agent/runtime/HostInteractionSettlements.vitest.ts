@@ -53,7 +53,7 @@ it('makes contradictory interaction decisions unrepresentable', () => {
 it("returns each interaction kind's exact cancellation result", () => {
   expectTypeOf(cancellationResultFor('bash')).toEqualTypeOf<BashSettlement>();
   expectTypeOf(
-    cancellationResultFor('plan'),
+    cancellationResultFor('planApproval'),
   ).toEqualTypeOf<PlanApprovalResult>();
   expectTypeOf(
     cancellationResultFor('proposal'),

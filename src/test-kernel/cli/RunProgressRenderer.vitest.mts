@@ -447,6 +447,21 @@ describe('CLI run progress renderer', () => {
     );
   });
 
+  it('keeps the planned total when a workflow overruns its rounds', () => {
+    mocks.getAgent.mockReturnValue({
+      rounds: 3,
+    });
+    const output = outputBuffer();
+    const renderer = plainRenderer(output, { minIntervalMs: 0 });
+
+    handleRunConfig(renderer);
+    handleRoundStage(renderer, 'stream-1', { index: 3 });
+
+    expect(output.text).toBe(
+      'polish paper.tex · 3 rounds · 0s\n' + '[r4/3] · polish paper.tex · 0s\n',
+    );
+  });
+
   it('does not add workflow round hints to tool-use progress', () => {
     mocks.getAgent.mockReturnValue({
       rounds: 2,
@@ -496,7 +511,7 @@ describe('CLI run progress renderer', () => {
         '[r1/2] · polish paper.tex · tools: 3 · 0s\n' +
         '[r1/2] · polish paper.tex · drafting · tools: 3 · 0s\n' +
         '[r1/2] · polish paper.tex · drafting · subagent: review · 0s\n' +
-        '[r1/2] · polish paper.tex · done · tools: 3 · 0s\n',
+        '[r1/2] · polish paper.tex · completed · tools: 3 · 0s\n',
     );
   });
 
@@ -611,7 +626,7 @@ describe('CLI run progress renderer', () => {
     );
   });
 
-  it('shows completed terminal stream stops as done', () => {
+  it('shows completed terminal stream stops with the shared cli wording', () => {
     let now = 0;
     const output = outputBuffer();
     const renderer = plainRenderer(output, {
@@ -641,11 +656,11 @@ describe('CLI run progress renderer', () => {
     expect(output.text).toBe(
       'orchestrator · 0s\n' +
         'orchestrator · subagent: review · 0s\n' +
-        'orchestrator · done · 11s\n',
+        'orchestrator · completed · 11s\n',
     );
   });
 
-  it('keeps interrupted terminal stream stops distinct from completion', () => {
+  it('keeps cancelled terminal stream stops distinct from completion', () => {
     const output = outputBuffer();
     const renderer = plainRenderer(output, { minIntervalMs: 0 });
 
@@ -653,7 +668,7 @@ describe('CLI run progress renderer', () => {
     handleStreamStatus(renderer, 'root-stream', STREAM_PHASE.CANCELLED);
 
     expect(output.text).toBe(
-      'orchestrator · 0s\norchestrator · interrupted · 0s\n',
+      'orchestrator · 0s\norchestrator · stopped · 0s\n',
     );
   });
 
@@ -762,7 +777,7 @@ describe('CLI run progress renderer', () => {
     });
 
     expect(output).toBe(
-      'polish paper.tex · 0s\npolish paper.tex · done · 0s\n',
+      'polish paper.tex · 0s\npolish paper.tex · completed · 0s\n',
     );
   });
 

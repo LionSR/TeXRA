@@ -17,6 +17,7 @@ import {
   STREAM_PHASE,
   STREAM_SUBSTATE,
   type ConversationProgress,
+  type PhaseStage,
   type RoundStage,
   type StreamSubstate,
   type StreamTabInfo,
@@ -311,6 +312,7 @@ export class StreamHeader extends LitElement {
   @property({ attribute: false }) substate: StreamSubstate | undefined;
   @property({ attribute: false }) progress: ConversationProgress | undefined;
   @property({ attribute: false }) roundStage: RoundStage | undefined;
+  @property({ attribute: false }) phaseStage: PhaseStage | undefined;
   @property({ attribute: false }) yoloActive = false;
   @property({ attribute: false }) superYoloActive = false;
   @property({ attribute: false }) goalActive = false;
@@ -499,8 +501,14 @@ export class StreamHeader extends LitElement {
   }
 
   private renderProgressBadge(): TemplateResult | typeof nothing {
-    if (!this.roundStage && !this.progress?.toolCallCount) return nothing;
-    const progressTitle = getProgressBadgeTitle(this.progress, this.roundStage);
+    if (!this.phaseStage && !this.roundStage && !this.progress?.toolCallCount) {
+      return nothing;
+    }
+    const stage = {
+      phaseStage: this.phaseStage,
+      roundStage: this.roundStage,
+    };
+    const progressTitle = getProgressBadgeTitle(this.progress, stage);
     return html`<wa-tag
         id=${ELEMENT_IDS.PROGRESS_BADGE}
         class="progress-badge"
@@ -508,7 +516,7 @@ export class StreamHeader extends LitElement {
         size="s"
       >
         ${waIcon('chart-line')}
-        ${renderProgressBadgeContent(this.progress, this.roundStage)}
+        ${renderProgressBadgeContent(this.progress, stage)}
       </wa-tag>
       ${
         progressTitle

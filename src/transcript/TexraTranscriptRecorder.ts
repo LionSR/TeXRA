@@ -13,6 +13,19 @@
  *   - the first content chunk flushes immediately; later chunks are
  *     buffered + flushed on an interval
  *   - finalize flushes any pending chunks immediately
+ *
+ * Secret redaction happens here, at record time. Every text row this recorder
+ * persists passes through `redactSecrets`, along with the diagnostic strings a
+ * host renders beside a row (an error's `data.message`, a failed workflow
+ * call's `error`), so the property holds once for the extension, desktop and
+ * CLI transcripts, for resumed replays, and for the shareable HTML export,
+ * instead of each renderer re-deriving it. Tool inputs and results are the
+ * deliberate exception: they carry whole files and code, where blanket
+ * redaction would corrupt more than it protects, so only known secret-bearing
+ * inputs are scrubbed (see `redactToolInputForLog`).
+ *
+ * Redaction is lossy by construction: a literal `API_KEY=<value>` in a
+ * model-written code sample is scrubbed along with a real key.
  */
 import type {
   AgentEvent,
@@ -21,6 +34,7 @@ import type {
 } from '@agent/trace';
 import { computeUtilizationPercent } from '@agent/modelHandlers/support/contextUtilization';
 import { isDebugModeEnabled } from '@logger/logUtils';
+import { redactSecrets } from '@logger/redaction';
 import {
   MESSAGE_TYPES,
   RUN_OUTCOME,
@@ -37,6 +51,7 @@ import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 import {
   createFlushableDebounce,
   generateShortId,
+  isObject,
   type FlushableDebounce,
 } from '@utils/core';
 
@@ -83,6 +98,43 @@ function redactToolInputForLog(toolName: string, input: unknown): unknown {
     return input;
   }
   return { ...input, key: '[redacted]' };
+}
+
+/**
+ * An error row keeps its provider detail in `data.message` (ErrorLogData), and
+ * every host renders that field next to the row text, so it needs the same
+ * record-time redaction: a provider error body can echo the request URL or an
+ * `Authorization` header.
+ *
+ * Only a plain payload is rebuilt. A caller may pass a raw `Error` as log data,
+ * whose `message` and `stack` are non-enumerable own properties that a spread
+ * would silently drop; such an object serializes to `{}` on the wire and on
+ * disk anyway, so it is left untouched.
+ */
+function redactLogData(data: unknown): unknown {
+  if (
+    !isObject(data) ||
+    Object.getPrototypeOf(data) !== Object.prototype ||
+    typeof data.message !== 'string'
+  ) {
+    return data;
+  }
+  // Every string the hosts render beside an error row: rawMessage and
+  // rawErrorBody carry provider error bodies (which can echo request URLs or
+  // Authorization headers), partialText carries truncated model output.
+  const redacted: Record<string, unknown> = { ...data };
+  for (const key of [
+    'message',
+    'rawMessage',
+    'rawErrorBody',
+    'statusText',
+    'partialText',
+  ]) {
+    if (typeof redacted[key] === 'string') {
+      redacted[key] = redactSecrets(redacted[key] as string);
+    }
+  }
+  return redacted;
 }
 
 interface StreamSinkState {
@@ -162,7 +214,7 @@ export function attachTranscriptRecorder(
         timestamp: Date.now(),
         groupId: state.groupId,
         messageType: state.messageType,
-        text: state.buffer,
+        text: redactSecrets(state.buffer),
         data: { status: state.ended ? 'completed' : 'running' },
         verbose: isDebugModeEnabled(),
       } satisfies StreamLogAppendInput;
@@ -173,13 +225,17 @@ export function attachTranscriptRecorder(
     }
 
     if (!state.ended && pendingText.length > 0) {
-      writer.appendText(id, pendingText);
+      // Mid-stream deltas are redacted on their own: a secret split across two
+      // provider chunks survives here, and the whole-buffer redaction below
+      // scrubs it when the stream settles, which is the text that is persisted,
+      // exported and replayed.
+      writer.appendText(id, redactSecrets(pendingText));
       return;
     }
 
     if (state.ended) {
       writer.settle(id, {
-        text: state.buffer,
+        text: redactSecrets(state.buffer),
         data: { status: 'completed' },
       });
     }
@@ -217,8 +273,8 @@ export function attachTranscriptRecorder(
       timestamp: Date.now(),
       groupId: params.groupId,
       messageType: params.messageType,
-      text: params.text,
-      data: params.data,
+      text: redactSecrets(params.text),
+      data: redactLogData(params.data),
       verbose: params.verbose ?? isDebugModeEnabled(),
     });
   };
@@ -258,7 +314,7 @@ export function attachTranscriptRecorder(
             timestamp: Date.now(),
             groupId: event.parentId,
             messageType: MESSAGE_TYPES.DEFAULT,
-            text: event.label,
+            text: redactSecrets(event.label),
             data: {
               status: STREAM_PHASE.RUNNING,
               ...metadata,
@@ -340,14 +396,25 @@ export function attachTranscriptRecorder(
         case 'workflow.task': {
           const level: LogLevel =
             event.task.status === 'failed' ? 'error' : 'info';
+          // A failed call carries a provider error body in `error`, which
+          // hosts render next to the label, so it needs the same treatment as
+          // an error row's `data.message`.
+          const task: WorkflowCallProgress =
+            event.task.status === 'failed'
+              ? {
+                  ...event.task,
+                  label: redactSecrets(event.task.label),
+                  error: redactSecrets(event.task.error),
+                }
+              : { ...event.task, label: redactSecrets(event.task.label) };
           const entry = {
             level,
             groupId: event.stageId,
             messageType: MESSAGE_TYPES.WORKFLOW_TASK,
-            text: event.task.label,
-            data: event.task satisfies WorkflowCallProgress,
+            text: task.label,
+            data: task,
           };
-          const terminal = isTerminalWorkflowCallProgress(event.task);
+          const terminal = isTerminalWorkflowCallProgress(task);
           if (workflowCallEntries.has(event.logId)) {
             if (terminal) writer.settle(event.logId, entry);
             else writer.update(event.logId, entry);
@@ -508,7 +575,7 @@ export function attachTranscriptRecorder(
           pendingModelResponseId = undefined;
           if (correlatorId) {
             writer.settle(correlatorId, {
-              text: event.text,
+              text: redactSecrets(event.text),
               data: { status: 'completed' },
             });
             return;
