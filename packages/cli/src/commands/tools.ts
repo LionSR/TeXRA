@@ -26,6 +26,15 @@ import type { CliContext } from '../runtime/cliContext';
 
 type ToolGuideOperation = 'install' | 'auth';
 
+const TOOL_ID_ARGS = {
+  ...GLOBAL_ARGS,
+  id: {
+    type: 'positional',
+    required: true,
+    description: 'Tool integration id from `texra tools list`',
+  },
+} as const;
+
 interface CliToolToggleResult {
   readonly id: string;
   readonly enabled: boolean;
@@ -216,14 +225,7 @@ const toolsListCommand = defineCliCommand({
 function toolsShowCommandNamed(name: 'show' | 'status') {
   return defineCliCommand({
     meta: { name, description: 'Show one tool integration' },
-    args: {
-      ...GLOBAL_ARGS,
-      id: {
-        type: 'positional',
-        required: true,
-        description: 'Tool integration id from `texra tools list`',
-      },
-    },
+    args: TOOL_ID_ARGS,
     run: (context, ctx) => showTool(context, ctx.args.id),
   });
 }
@@ -234,14 +236,7 @@ function toggleCommand(name: 'enable' | 'disable', enabled: boolean) {
       name,
       description: `${enabled ? 'Enable' : 'Disable'} a tool integration`,
     },
-    args: {
-      ...GLOBAL_ARGS,
-      id: {
-        type: 'positional',
-        required: true,
-        description: 'Tool integration id from `texra tools list`',
-      },
-    },
+    args: TOOL_ID_ARGS,
     run: (context, ctx) => toggleTool(context, ctx.args.id, enabled),
   });
 }
@@ -249,15 +244,10 @@ function toggleCommand(name: 'enable' | 'disable', enabled: boolean) {
 const toolsInstallCommand = defineCliCommand({
   meta: { name: 'install', description: 'Show install help for a tool' },
   args: {
-    ...GLOBAL_ARGS,
+    ...TOOL_ID_ARGS,
     run: {
       type: 'boolean',
       description: 'Run the registered install command after printing it',
-    },
-    id: {
-      type: 'positional',
-      required: true,
-      description: 'Tool integration id from `texra tools list`',
     },
   },
   run: (context, ctx) =>
@@ -266,14 +256,7 @@ const toolsInstallCommand = defineCliCommand({
 
 const toolsAuthCommand = defineCliCommand({
   meta: { name: 'auth', description: 'Run or show auth help for a tool' },
-  args: {
-    ...GLOBAL_ARGS,
-    id: {
-      type: 'positional',
-      required: true,
-      description: 'Tool integration id from `texra tools list`',
-    },
-  },
+  args: TOOL_ID_ARGS,
   run: (context, ctx) => authTool(context, ctx.args.id),
 });
 

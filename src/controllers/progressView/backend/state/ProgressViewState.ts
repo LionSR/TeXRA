@@ -217,6 +217,33 @@ export class ProgressViewState {
     }
   }
 
+  /**
+   * Move the selection to `next`, releasing the tab left behind. Switching
+   * paths use this rather than assigning `activeStream` so none of them can
+   * forget the release above.
+   */
+  switchActiveStream(next: ActiveStreamId): void {
+    const previous = this._prefs.get('activeStream');
+    if (previous === next) return;
+    this.activeStream = next;
+    if (previous) this.releasePreviousActive(previous);
+  }
+
+  /**
+   * Re-select the active tab from the tabs currently offered, and switch to
+   * it. When nothing is selectable the tab is cleared rather than picked:
+   * `pickValidActiveStream`'s `[] || current` fallback would otherwise sticky
+   * on a stream the caller no longer shows.
+   */
+  rotateActiveStream(selectableStreams: StreamTabId[]): ActiveStreamId {
+    const next =
+      selectableStreams.length === 0
+        ? ''
+        : this.pickValidActiveStream(selectableStreams);
+    this.switchActiveStream(next);
+    return next;
+  }
+
   get agentCategoryFilter(): AgentCategoryFilter {
     return this._prefs.get('agentCategoryFilter');
   }

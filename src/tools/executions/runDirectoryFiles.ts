@@ -11,19 +11,14 @@ import { StorageFS } from '@utils/files';
 import { isDirectory } from '@utils/files/fsEntryType';
 
 import { isKVFile } from './executionKvFiles';
-
-export interface RunDirectoryEntry {
-  readonly path: string;
-  readonly size: number;
-  readonly isDir: boolean;
-}
+import type { SizedEntry } from './fileListingFormat';
 
 async function walkDirectory(
   basePath: string,
   relativePath: string,
   maxDepth: number,
-): Promise<RunDirectoryEntry[]> {
-  const results: RunDirectoryEntry[] = [];
+): Promise<SizedEntry[]> {
+  const results: SizedEntry[] = [];
   const fullPath = relativePath ? path.join(basePath, relativePath) : basePath;
 
   let entries: [string, number][];
@@ -65,7 +60,7 @@ async function walkDirectory(
  */
 export async function listRunDirectoryFiles(
   runDir: string,
-): Promise<RunDirectoryEntry[]> {
+): Promise<SizedEntry[]> {
   const entries = await walkDirectory(runDir, '', 2);
   return entries.filter((entry) => !isKVFile(path.basename(entry.path)));
 }

@@ -19,16 +19,14 @@
  * - Active tokens per user are capped to bound the blast radius of a leak
  */
 
-import { type Context as HonoContext, Hono } from '@hono/hono';
+import { Hono } from '@hono/hono';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { authenticateJwt, bearerToken } from '../_shared/auth.ts';
 import { handleCors } from '../_shared/cors.ts';
-import { RELAY_CI_TOKEN_PREFIX, sha256Hex } from '../_shared/relayCiToken.ts';
-import {
-  createEdgeClient,
-  randomBase64Url,
-  jsonResponse,
-} from '../_shared/responses.ts';
+import { randomBase64Url, sha256Hex } from '../_shared/crypto.ts';
+import { adminClient } from '../_shared/edgeClients.ts';
+import { RELAY_CI_TOKEN_PREFIX } from '../_shared/relayCiToken.ts';
+import { errorResponse, jsonResponse } from '../_shared/responses.ts';
 
 // =============================================================================
 // Constants
@@ -42,15 +40,6 @@ const MAX_NAME_LENGTH = 80;
 const TOKEN_HINT_CHARS = 4;
 const TOKEN_SCOPES = ['relay'];
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
-
-// =============================================================================
-// Environment
-// =============================================================================
-
-const supabaseUrl = Deno.env.get('SUPABASE_URL');
-const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-
-const adminSupabase = createEdgeClient(supabaseUrl, supabaseServiceKey);
 
 // =============================================================================
 // Hono App
@@ -74,22 +63,14 @@ app.use('*', async (c, next) => {
 // Authenticate every route with a user JWT. CI tokens are not JWTs, so they
 // fail here by construction — a leaked CI token cannot mint or revoke tokens.
 app.use('*', async (c, next) => {
-  if (!adminSupabase) {
-    return jsonResponse(
-      c.req.raw,
-      { error: 'Server configuration error' },
-      500,
-    );
+  if (!adminClient) {
+    return errorResponse(c.req.raw, 'Server configuration error', 500);
   }
   const auth = await authenticateJwt(bearerToken(c.req.raw));
   if (!auth) {
-    return jsonResponse(
-      c.req.raw,
-      { error: 'Sign in before managing CI tokens' },
-      401,
-    );
+    return errorResponse(c.req.raw, 'Sign in before managing CI tokens', 401);
   }
-  c.set('supabase', adminSupabase);
+  c.set('supabase', adminClient);
   c.set('userId', auth.user.id);
   await next();
 });
@@ -97,12 +78,6 @@ app.use('*', async (c, next) => {
 // =============================================================================
 // Helpers
 // =============================================================================
-
-type Context = HonoContext<{ Variables: Variables }>;
-
-function errorResponse(c: Context, error: string, status: number) {
-  return jsonResponse(c.req.raw, { error }, status);
-}
 
 function tokenHint(token: string): string {
   return `…${token.slice(-TOKEN_HINT_CHARS)}`;
@@ -135,7 +110,7 @@ app.post('/mint', async (c) => {
       expiresInDays > MAX_EXPIRES_IN_DAYS
     ) {
       return errorResponse(
-        c,
+        c.req.raw,
         `expires_in_days must be an integer between 1 and ${MAX_EXPIRES_IN_DAYS}`,
         400,
       );
@@ -149,11 +124,11 @@ app.post('/mint', async (c) => {
       .gt('expires_at', new Date().toISOString());
     if (countError) {
       console.error('[RELAY_TOKENS] count failed:', countError.message);
-      return errorResponse(c, 'Failed to mint token', 500);
+      return errorResponse(c.req.raw, 'Failed to mint token', 500);
     }
     if ((count ?? 0) >= MAX_ACTIVE_TOKENS_PER_USER) {
       return errorResponse(
-        c,
+        c.req.raw,
         `Active CI token limit reached (${MAX_ACTIVE_TOKENS_PER_USER}). Revoke unused tokens first.`,
         409,
       );
@@ -177,14 +152,14 @@ app.post('/mint', async (c) => {
       .single();
     if (error || !data) {
       console.error('[RELAY_TOKENS] insert failed:', error?.message);
-      return errorResponse(c, 'Failed to mint token', 500);
+      return errorResponse(c.req.raw, 'Failed to mint token', 500);
     }
 
     console.log(`[RELAY_TOKENS] minted token ${data.id} for user ${userId}`);
     return jsonResponse(c.req.raw, { ...data, token }, 200);
   } catch (error) {
     console.error('[RELAY_TOKENS] mint error:', error);
-    return errorResponse(c, 'Internal server error', 500);
+    return errorResponse(c.req.raw, 'Internal server error', 500);
   }
 });
 
@@ -201,12 +176,12 @@ app.get('/list', async (c) => {
       .order('created_at', { ascending: false });
     if (error) {
       console.error('[RELAY_TOKENS] list failed:', error.message);
-      return errorResponse(c, 'Failed to list tokens', 500);
+      return errorResponse(c.req.raw, 'Failed to list tokens', 500);
     }
     return jsonResponse(c.req.raw, { tokens: data ?? [] }, 200);
   } catch (error) {
     console.error('[RELAY_TOKENS] list error:', error);
-    return errorResponse(c, 'Internal server error', 500);
+    return errorResponse(c.req.raw, 'Internal server error', 500);
   }
 });
 
@@ -217,7 +192,7 @@ app.post('/revoke', async (c) => {
     const body = await c.req.json().catch(() => null);
     const id = typeof body?.id === 'string' ? body.id : '';
     if (!id) {
-      return errorResponse(c, 'id required', 400);
+      return errorResponse(c.req.raw, 'id required', 400);
     }
 
     const { data, error } = await c
@@ -230,21 +205,25 @@ app.post('/revoke', async (c) => {
       .select('id, name');
     if (error) {
       console.error('[RELAY_TOKENS] revoke failed:', error.message);
-      return errorResponse(c, 'Failed to revoke token', 500);
+      return errorResponse(c.req.raw, 'Failed to revoke token', 500);
     }
     if (!data?.length) {
-      return errorResponse(c, 'Token not found or already revoked', 404);
+      return errorResponse(
+        c.req.raw,
+        'Token not found or already revoked',
+        404,
+      );
     }
 
     console.log(`[RELAY_TOKENS] revoked token ${id} for user ${userId}`);
     return jsonResponse(c.req.raw, { revoked: data[0] }, 200);
   } catch (error) {
     console.error('[RELAY_TOKENS] revoke error:', error);
-    return errorResponse(c, 'Internal server error', 500);
+    return errorResponse(c.req.raw, 'Internal server error', 500);
   }
 });
 
 // 404 for other routes
-app.all('*', (c) => errorResponse(c, 'Not found', 404));
+app.all('*', (c) => errorResponse(c.req.raw, 'Not found', 404));
 
 Deno.serve(app.fetch);

@@ -45,41 +45,15 @@ vi.mock('@agent/core/flows/CycleServices', () => ({
 
 // Local imports
 import { ResponseCycleNode } from '@agent/implementations/flows/reflection/nodes/ResponseCycleNode';
-import type { ReflectionFlowShared } from '@agent/implementations/flows/reflection/ReflectionFlowState';
 import type { ReflectionServices } from '@agent/implementations/flows/reflection/ReflectionServices';
-import {
-  AgentRunStateSnapshotSchema,
-  ConversationRoundStateSnapshotSchema,
-} from '@agent/core/state/AgentState';
-import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { AgentFileLocation } from '@shared/schemas';
+import { reflectionFlowShared } from './progressTestUtils';
 
 const outputLocation: AgentFileLocation = {
   kind: 'workspace',
   absolutePath: '/tmp/output.xml',
   relativePath: 'output.xml',
 };
-
-function reflectionShared(): ReflectionFlowShared {
-  return {
-    currentRound: 0,
-    totalRounds: 2,
-    workspaceSnapshot: AgentWorkspaceState.emptySnapshot(),
-    context: {
-      messages: [],
-      stateRoundSnapshot: ConversationRoundStateSnapshotSchema.parse({
-        roundIndex: 0,
-      }),
-    },
-    outputLocation: null,
-    conversation: [],
-    runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
-    roundStateSnapshots: [],
-    roundOutputs: [],
-    continueRounds: true,
-    endTurn: false,
-  };
-}
 
 function makeNode(options: {
   checkInterruption: () => boolean;
@@ -104,7 +78,7 @@ function makeNode(options: {
 
 async function runCycle(checkInterruption: () => boolean) {
   const node = makeNode({ checkInterruption });
-  const prep = await node.prep(reflectionShared());
+  const prep = await node.prep(reflectionFlowShared());
   return node.exec(prep);
 }
 
@@ -162,7 +136,7 @@ describe('ResponseCycleNode outcome classification', () => {
       checkInterruption: () => true,
       clearCompactionRequest,
     });
-    const prep = await node.prep(reflectionShared());
+    const prep = await node.prep(reflectionFlowShared());
 
     const result = await node.exec(prep);
 
@@ -183,7 +157,7 @@ describe('ResponseCycleNode outcome classification', () => {
       checkInterruption: () => false,
       clearCompactionRequest,
     });
-    const prep = await node.prep(reflectionShared());
+    const prep = await node.prep(reflectionFlowShared());
 
     const result = await node.exec(prep);
 
@@ -200,7 +174,7 @@ describe('ResponseCycleNode outcome classification', () => {
     flowState.failureLogEmitted = true;
     const logger = { error: vi.fn(), debug: vi.fn() };
     const node = makeNode({ checkInterruption: () => false, logger });
-    const shared = reflectionShared();
+    const shared = reflectionFlowShared();
     const prep = await node.prep(shared);
 
     const result = await node.exec(prep);
@@ -222,7 +196,7 @@ describe('ResponseCycleNode outcome classification', () => {
     };
     const logger = { error: vi.fn(), debug: vi.fn() };
     const node = makeNode({ checkInterruption: () => false, logger });
-    const shared = reflectionShared();
+    const shared = reflectionFlowShared();
     const prep = await node.prep(shared);
 
     const result = await node.exec(prep);

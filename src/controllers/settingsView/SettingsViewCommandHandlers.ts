@@ -18,8 +18,6 @@ type HandlerOrUnsupported<TArgs extends readonly unknown[] = []> =
 type DataAction<C extends Command> = HandlerOrUnsupported<[Message<C>]>;
 type EnabledAction = HandlerOrUnsupported<[boolean]>;
 type StringAction = HandlerOrUnsupported<[string]>;
-type StoragePathAction = HandlerOrUnsupported<[string]>;
-type ProviderAction = HandlerOrUnsupported<[string]>;
 
 export interface SettingsViewCommandActions {
   readonly lifecycle: {
@@ -28,18 +26,18 @@ export interface SettingsViewCommandActions {
   };
   readonly memory: {
     readonly getData: HandlerOrUnsupported;
-    readonly getPreview: StoragePathAction;
+    readonly getPreview: StringAction;
     readonly openFile: DataAction<typeof CMD.OPEN_MEMORY_FILE>;
     readonly openFolder: DataAction<typeof CMD.OPEN_MEMORY_FOLDER>;
     readonly delete: DataAction<typeof CMD.DELETE_MEMORY>;
     readonly setEnabled: EnabledAction;
-    readonly pin: StoragePathAction;
-    readonly unpin: StoragePathAction;
+    readonly pin: StringAction;
+    readonly unpin: StringAction;
   };
   readonly history: {
     readonly rerunAgent: DataAction<typeof CMD.RERUN_AGENT>;
     readonly restoreAgent: DataAction<typeof CMD.RESTORE_AGENT>;
-    readonly deleteAgent: HandlerOrUnsupported<[string]>;
+    readonly deleteAgent: StringAction;
     readonly clear: HandlerOrUnsupported;
     readonly exportChatMd: DataAction<typeof CMD.EXPORT_CHAT_MD>;
     readonly exportChatTex: DataAction<typeof CMD.EXPORT_CHAT_TEX>;
@@ -57,8 +55,8 @@ export interface SettingsViewCommandActions {
         Message<typeof CMD.SET_PROVIDER_KEY>['apiKey'],
       ]
     >;
-    readonly removeProviderKey: ProviderAction;
-    readonly openProviderKeyUrl: ProviderAction;
+    readonly removeProviderKey: StringAction;
+    readonly openProviderKeyUrl: StringAction;
     readonly setProviderStreaming: HandlerOrUnsupported<
       [Message<typeof CMD.SET_PROVIDER_STREAMING>['provider'], boolean]
     >;
@@ -239,24 +237,24 @@ export function createSettingsViewCommandHandlers(
     getMemoryPreview: mapAction(actions.memory.getPreview, (data) => [
       data.storagePath,
     ]),
-    openMemoryFile: mapAction(actions.memory.openFile, (data) => [data]),
+    openMemoryFile: actions.memory.openFile,
     openMemoryFolder: actions.memory.openFolder,
-    deleteMemory: mapAction(actions.memory.delete, (data) => [data]),
+    deleteMemory: actions.memory.delete,
     setMemoryEnabled: mapAction(actions.memory.setEnabled, (data) => [
       data.enabled,
     ]),
     pinMemory: mapAction(actions.memory.pin, (data) => [data.storagePath]),
     unpinMemory: mapAction(actions.memory.unpin, (data) => [data.storagePath]),
 
-    rerunAgent: mapAction(actions.history.rerunAgent, (data) => [data]),
-    restoreAgent: mapAction(actions.history.restoreAgent, (data) => [data]),
+    rerunAgent: actions.history.rerunAgent,
+    restoreAgent: actions.history.restoreAgent,
     deleteAgent: mapAction(actions.history.deleteAgent, (data) => [
       data.historyId,
     ]),
     clearHistory: actions.history.clear,
-    exportChatMd: mapAction(actions.history.exportChatMd, (data) => [data]),
-    exportChatTex: mapAction(actions.history.exportChatTex, (data) => [data]),
-    exportChatHtml: mapAction(actions.history.exportChatHtml, (data) => [data]),
+    exportChatMd: actions.history.exportChatMd,
+    exportChatTex: actions.history.exportChatTex,
+    exportChatHtml: actions.history.exportChatHtml,
 
     signIn: actions.profile.signIn,
     signOut: actions.profile.signOut,
@@ -286,10 +284,7 @@ export function createSettingsViewCommandHandlers(
       actions.profile.setGlobalStreaming,
       (data) => [data.enabled],
     ),
-    setProviderVscodeSetting: mapAction(
-      actions.profile.setProviderVscodeSetting,
-      (data) => [data],
-    ),
+    setProviderVscodeSetting: actions.profile.setProviderVscodeSetting,
     openExternalUrl: mapAction(actions.profile.openExternalUrl, (data) => [
       data.url,
     ]),
@@ -344,24 +339,14 @@ export function createSettingsViewCommandHandlers(
     openAgentYaml: mapAction(actions.agentSelection.openYaml, (data) => [
       { source: data.agentSource, name: data.agentName },
     ]),
-    openAgentFolder: mapAction(actions.agentSelection.openFolder, (data) => [
-      data,
-    ]),
-    createAgent: mapAction(actions.agentSelection.create, (data) => [data]),
-    customizeAgent: mapAction(actions.agentSelection.customize, (data) => [
-      data,
-    ]),
-    deleteCustomAgent: mapAction(
-      actions.agentSelection.deleteCustom,
-      (data) => [data],
-    ),
+    openAgentFolder: actions.agentSelection.openFolder,
+    createAgent: actions.agentSelection.create,
+    customizeAgent: actions.agentSelection.customize,
+    deleteCustomAgent: actions.agentSelection.deleteCustom,
     revealAgentFile: mapAction(actions.agentSelection.revealFile, (data) => [
       { source: data.agentSource, name: data.agentName },
     ]),
-    viewRemoteAgentPrompt: mapAction(
-      actions.agentSelection.viewRemotePrompt,
-      (data) => [data],
-    ),
+    viewRemoteAgentPrompt: actions.agentSelection.viewRemotePrompt,
     setCustomAgentDir: actions.agentSelection.setCustomDir,
     resetCustomAgentDir: actions.agentSelection.resetCustomDir,
     applyAgentModePreset: mapAction(
@@ -379,14 +364,9 @@ export function createSettingsViewCommandHandlers(
     removeGitHubToken: actions.githubSubscriptions.removeToken,
     openGitHubTokenUrl: actions.githubSubscriptions.openTokenUrl,
     getPRSubscriptions: actions.githubSubscriptions.getSubscriptions,
-    unsubscribePR: mapAction(
-      actions.githubSubscriptions.unsubscribe,
-      (data) => [data],
-    ),
-    openPRSubscriptionStream: mapAction(
+    unsubscribePR: actions.githubSubscriptions.unsubscribe,
+    openPRSubscriptionStream:
       actions.githubSubscriptions.openSubscriptionStream,
-      (data) => [data],
-    ),
 
     signInChatGpt: actions.chatGpt.signIn,
     signOutChatGpt: actions.chatGpt.signOut,
@@ -426,9 +406,7 @@ export function createSettingsViewCommandHandlers(
       { toolId: data.toolId, kind: data.kind },
     ]),
 
-    applyLatexSettings: mapAction(actions.latex.applySettings, (data) => [
-      data,
-    ]),
+    applyLatexSettings: actions.latex.applySettings,
     installLatexWorkshop: actions.latex.installLatexWorkshop,
     runInstallCommand: mapAction(actions.latex.runInstallCommand, (data) => [
       data.installCommand,

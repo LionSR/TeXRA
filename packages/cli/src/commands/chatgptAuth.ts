@@ -13,15 +13,11 @@ import {
 } from '../runtime/chatgptLogin';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
-import {
-  writeErrorStderr,
-  writeTextStderr,
-  writeTextStdout,
-} from '../runtime/logSinks';
+import { writeErrorStderr } from '../runtime/logSinks';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
-import { GLOBAL_ARGS } from './_helpers/globalArgs';
-import { emitCliResult } from './_helpers/output';
+import { booleanArg, GLOBAL_ARGS } from './_helpers/globalArgs';
+import { cliProgressWriter, emitCliResult } from './_helpers/output';
 import type { CliContext } from '../runtime/cliContext';
 
 function emitLogin(
@@ -50,8 +46,7 @@ async function runChatgptLogin(
   init: { device: boolean; noBrowser: boolean },
 ): Promise<number> {
   await initCliPlatform({ ...context, quietLogs: true });
-  const writeProgress =
-    context.outputFormat === 'text' ? writeTextStdout : writeTextStderr;
+  const writeProgress = cliProgressWriter(context);
 
   let session: CodexSession;
   try {
@@ -94,10 +89,7 @@ const chatgptLoginCommand = defineCliCommand({
   run: (context, ctx) =>
     runChatgptLogin(context, {
       device: ctx.args.device === true,
-      noBrowser:
-        ctx.args['no-browser'] === true ||
-        ctx.args.noBrowser === true ||
-        ctx.args.browser === false,
+      noBrowser: booleanArg(ctx.args, 'no-browser'),
     }),
 });
 

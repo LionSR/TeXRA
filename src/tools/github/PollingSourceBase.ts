@@ -212,11 +212,23 @@ export abstract class PollingSourceBase<
   /** Emit a text message to every listener attached to a subscription. */
   protected emit(state: S, text: string): void {
     for (const cb of state.listeners) {
-      try {
-        cb(text);
-      } catch (err) {
-        this.logger.warn('Listener threw', { data: err });
-      }
+      this.emitToListener(cb, text);
+    }
+  }
+
+  /**
+   * Deliver one message to one listener. The single guarded delivery point:
+   * subclasses that build per-listener text (e.g. annotation filtering) route
+   * through here instead of calling the listener directly.
+   */
+  protected emitToListener(
+    listener: (text: string) => void,
+    text: string,
+  ): void {
+    try {
+      listener(text);
+    } catch (err) {
+      this.logger.warn('Listener threw', { data: err });
     }
   }
 

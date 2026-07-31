@@ -29,6 +29,14 @@ export function buildBetweenRoundDiffSuffix(
   return `_diffr${newerRound}r${olderRound}`;
 }
 
+/** Recognizer for the suffix {@link buildBetweenRoundDiffSuffix} writes. */
+const BETWEEN_ROUND_DIFF_SUFFIX_PATTERN = /_diffr\d+r\d+$/i;
+
+/** Whether a file stem (no extension) carries a between-round diff suffix. */
+export function hasBetweenRoundDiffSuffix(stem: string): boolean {
+  return BETWEEN_ROUND_DIFF_SUFFIX_PATTERN.test(stem);
+}
+
 /**
  * Generate a diff filename based on input and edited file names.
  * Uses round-based naming only for between-round diffs (same operation chain).
@@ -99,7 +107,10 @@ const GENERATED_LATEXDIFF_ARTIFACT_PATTERNS: {
   regex: RegExp;
 }[] = [
   { kind: 'versionControlDiff', regex: VERSION_CONTROL_DIFF_PATTERN },
-  { kind: 'betweenRoundDiff', regex: /^(.+)_diffr\d+r\d+$/i },
+  {
+    kind: 'betweenRoundDiff',
+    regex: new RegExp(`^(.+)${BETWEEN_ROUND_DIFF_SUFFIX_PATTERN.source}`, 'i'),
+  },
   { kind: 'workspaceDiff', regex: /^(.+)_diff$/i },
 ];
 

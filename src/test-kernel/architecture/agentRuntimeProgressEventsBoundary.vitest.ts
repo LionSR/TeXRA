@@ -24,8 +24,18 @@ const OLD_AGENT_RUNTIME_ALIAS = '@agent/runtime/agentRuntimeProgressEvents';
 const OLD_CLI_ALIAS = '@cli/runtime/cliProgressEvents';
 const CLI_NDJSON_ALIAS = '@cli/runtime/cliNdjsonProgressEvents';
 
-const ALLOWED_PRODUCTION_IMPORTERS = [
-  'packages/cli/src/runtime/sessionProgressSubscription.ts',
+const CLI_PROJECTION_MODULE =
+  'packages/cli/src/runtime/sessionProgressSubscription.ts';
+
+const ALLOWED_PRODUCTION_IMPORTERS = [CLI_PROJECTION_MODULE] as const;
+
+// The projection module is the single production importer of the NDJSON
+// vocabulary, so its own importers are part of the same containment chain.
+const ALLOWED_CLI_PROJECTION_IMPORTERS = [
+  'packages/cli/src/runtime/runExecution.ts',
+  'src/test-kernel/cli/CliSessionProgressSubscription.vitest.mts',
+  'src/test-kernel/cli/RunExecution.vitest.mts',
+  'src/test-kernel/cli/RunProgressRenderer.vitest.mts',
 ] as const;
 
 const SCAN_ROOTS = [
@@ -37,13 +47,18 @@ const SCAN_ROOTS = [
 
 const SOURCE_OR_OUTPUT_EXTENSION = /\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/;
 
-const SOURCE_FILES = SCAN_ROOTS.flatMap((root) =>
-  sourceFilesUnder(resolve(REPO_ROOT, root), {
-    missingDirReturnsEmpty: true,
-    repoRelative: true,
-    excludeTestKernel: true,
-  }),
-);
+function scanFiles(excludeTestKernel: boolean): string[] {
+  return SCAN_ROOTS.flatMap((root) =>
+    sourceFilesUnder(resolve(REPO_ROOT, root), {
+      missingDirReturnsEmpty: true,
+      repoRelative: true,
+      excludeTestKernel,
+    }),
+  );
+}
+
+const PRODUCTION_FILES = scanFiles(true);
+const ALL_SOURCE_FILES = scanFiles(false);
 const SOURCE_TEXT_BY_FILE = new Map<string, string>();
 const MODULE_SPECIFIERS_BY_FILE = new Map<string, string[]>();
 
@@ -167,6 +182,8 @@ describe('agent runtime progress-event vocabulary boundary', () => {
     modulePath: string;
     exists: boolean;
     allowedImporters: readonly string[];
+    /** Test suites are in scope only where they appear in the allowlist. */
+    scanTests?: boolean;
   }>([
     {
       name: 'removes the agent-runtime CLI progress vocabulary module',
@@ -192,12 +209,19 @@ describe('agent runtime progress-event vocabulary boundary', () => {
       exists: true,
       allowedImporters: ALLOWED_PRODUCTION_IMPORTERS,
     },
-  ])('$name', ({ modulePath, exists, allowedImporters }) => {
+    {
+      name: 'keeps the CLI projection scoped to headless NDJSON output',
+      modulePath: CLI_PROJECTION_MODULE,
+      exists: true,
+      allowedImporters: ALLOWED_CLI_PROJECTION_IMPORTERS,
+      scanTests: true,
+    },
+  ])('$name', ({ modulePath, exists, allowedImporters, scanTests }) => {
     expect(existsSync(resolve(REPO_ROOT, modulePath))).toBe(exists);
 
-    const importers = SOURCE_FILES.filter((file) =>
-      importsModule(file, modulePath),
-    ).toSorted();
+    const importers = (scanTests ? ALL_SOURCE_FILES : PRODUCTION_FILES)
+      .filter((file) => importsModule(file, modulePath))
+      .toSorted();
 
     expect(importers).toEqual([...allowedImporters].toSorted());
   });

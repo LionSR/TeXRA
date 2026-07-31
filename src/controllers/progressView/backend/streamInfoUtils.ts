@@ -7,26 +7,6 @@ import { buildStreamTabInfo } from './streamTabInfo';
 import type { ProgressViewState } from './state/ProgressViewState';
 
 /**
- * Check if a session category matches the given filter.
- * Returns the resolved category (defaulting to Workflow) or null if filtered out.
- */
-function matchesFilter(
-  category: AgentCategory | undefined,
-  filter: AgentCategoryFilter,
-): AgentCategory | null {
-  const resolved = category ?? AgentCategory.Workflow;
-
-  if (filter === 'all') {
-    return resolved;
-  }
-
-  const expected =
-    filter === 'toolUse' ? AgentCategory.ToolUse : AgentCategory.Workflow;
-
-  return resolved === expected ? resolved : null;
-}
-
-/**
  * Build a StreamTabInfo object for a single stream ID.
  * Returns null if the stream doesn't match the filter.
  */
@@ -37,9 +17,9 @@ export function buildStreamInfo(
 ): StreamTabInfo | null {
   const metadata = state.getStreamMetadata(id);
 
-  // Determine category and check filter
-  const category = matchesFilter(metadata.agentCategory, filter);
-  if (category === null) return null;
+  // A stream is Workflow until its run config resolves its real category.
+  const category = metadata.agentCategory ?? AgentCategory.Workflow;
+  if (filter !== 'all' && category !== filter) return null;
 
   const workingDirectory = metadata.run?.workingDirectory;
   let worktreeInfo;

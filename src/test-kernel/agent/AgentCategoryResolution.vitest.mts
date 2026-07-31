@@ -2,7 +2,6 @@
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 // Third-party imports
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -22,11 +21,7 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createFakePlatform } from '@test/support/FakePlatform';
-
-const REPO_ROOT = resolve(
-  fileURLToPath(new URL('.', import.meta.url)),
-  '../../..',
-);
+import { REPO_ROOT } from '@test/support/repoScan';
 
 /** Resolve exactly as launch does: through the single launch resolver, by the
  * source the delegation captured at validation time (see `getAgentPath`). */

@@ -57,14 +57,7 @@ async function runCleanCommand(
       ? await runCleanMultiple(model, inputFile, agent, outputFiles)
       : await runCleanSingle(model, inputFile, agent);
   showCleanResult(result, inputFile);
-  emitClearMissingOutputs({
-    streamConfig: {
-      agent,
-      model,
-      inputFile,
-      outputFiles,
-    },
-  });
+  emitClearMissingOutputs({ agent, model, inputFile, outputFiles });
 }
 
 export async function handleCleanSingle(
@@ -85,15 +78,7 @@ export async function handleCleanMultiple(
 }
 
 export async function handleClean(config: CleanConfig): Promise<void> {
-  const {
-    agent,
-    model,
-    inputFile,
-    outputFiles,
-    streamId,
-    executionId,
-    skipProgressViewClear,
-  } = config;
+  const { agent, model, inputFile, outputFiles, executionId } = config;
 
   logger.debug(
     CHANNEL,
@@ -120,19 +105,5 @@ export async function handleClean(config: CleanConfig): Promise<void> {
     result = await runWorkspaceClean();
   }
   showCleanResult(result, inputFile);
-
-  if (!skipProgressViewClear) {
-    emitClearMissingOutputs(
-      streamId
-        ? { streamIdOverride: streamId }
-        : {
-            streamConfig: {
-              agent,
-              model,
-              inputFile,
-              outputFiles,
-            },
-          },
-    );
-  }
+  emitClearMissingOutputs(config);
 }

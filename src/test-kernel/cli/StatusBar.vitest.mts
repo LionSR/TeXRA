@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import {
   buildStatusBarDisplay,
   ctrlCActionForFocus,
-  statusBarSegmentText,
   statusBarStreamTarget,
   type StatusBarDisplayInput,
 } from '@cli/chat/tui/panes/statusBarDisplay';
@@ -19,6 +18,9 @@ import {
 import { AgentCategory, STREAM_PHASE, STREAM_SUBSTATE } from '@shared/schemas';
 
 const PERSONAL_API_MODE_LABEL = shortCliApiMode('personal');
+
+const statusBarSegmentText = (segment: { readonly text: string }): string =>
+  segment.text;
 
 // Flat legacy field names, redistributed by `statusInput` below into
 // `StatusBarDisplayInput`'s `foreground`/`childList`/`shortcuts` groups — kept

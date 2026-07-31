@@ -17,29 +17,18 @@ import { getFilesRecursively } from './listing';
 const CHANNEL = 'FileLister';
 
 export class FileLister {
-  private static instance: FileLister | null = null;
-
   public static initialize(context: vscode.ExtensionContext): void {
-    this.getInstance();
-    watchConfig(context, 'texra.files', () => this.getInstance().refresh());
+    getFileLister();
+    watchConfig(context, 'texra.files', () => getFileLister().refresh());
     context.subscriptions.push(
       vscode.workspace.onDidChangeWorkspaceFolders(() =>
-        this.getInstance().refresh(),
+        getFileLister().refresh(),
       ),
     );
   }
 
-  public static getInstance(): FileLister {
-    if (!this.instance) {
-      this.instance = new FileLister();
-    }
-    return this.instance;
-  }
-
   private workspacePath = WorkspaceFS.getPath();
   private settings = loadFileListSettings(getConfig);
-
-  private constructor() {}
 
   public refresh(): void {
     this.workspacePath = WorkspaceFS.getPath();
@@ -68,10 +57,10 @@ export class FileLister {
   }
 }
 
-/**
- * Lazy accessor — returns the singleton without forcing construction at import time.
- * Direct use of `FileLister.getInstance()` is equivalent; this exists for convenience.
- */
+let instance: FileLister | undefined;
+
+/** Lazy accessor — the singleton is constructed on first use, not at import time. */
 export function getFileLister(): FileLister {
-  return FileLister.getInstance();
+  instance ??= new FileLister();
+  return instance;
 }

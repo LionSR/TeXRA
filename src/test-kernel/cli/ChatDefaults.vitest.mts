@@ -12,6 +12,7 @@ import {
   BUILTIN_DEFAULT_CHAT_MODEL,
   resolveChatDefaults,
 } from '@cli/runtime/chatDefaults';
+import { loadWorkspaceCliConfig } from '@cli/runtime/cliConfig';
 import { BUILTIN_DEFAULT_CHAT_AGENT } from '@cli/runtime/defaultAgents';
 import * as logSinks from '@cli/runtime/logSinks';
 import type { ExecutionId } from '@shared/schemas';
@@ -31,7 +32,19 @@ vi.mock('@agent/storage', async (importOriginal) => ({
   listExecutions: vi.fn(async () => []),
 }));
 
+// Spied, not stubbed: the workspace tiers below still read real `.texra`
+// config files, while the fast-path tests assert the loader is never reached.
+vi.mock('@cli/runtime/cliConfig', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@cli/runtime/cliConfig')>();
+  return {
+    ...actual,
+    loadWorkspaceCliConfig: vi.fn(actual.loadWorkspaceCliConfig),
+  };
+});
+
 const mockedListExecutions = vi.mocked(listExecutions);
+const mockedLoadWorkspaceCliConfig = vi.mocked(loadWorkspaceCliConfig);
 
 function historyEntry(
   agent: string,
@@ -62,6 +75,7 @@ vi.mock('@utils/files/storageFS', () => ({
 const mockedReadJson = vi.mocked(GlobalStorageFS.readJson);
 
 beforeEach(() => {
+  mockedLoadWorkspaceCliConfig.mockClear();
   mockedListExecutions.mockReset();
   mockedListExecutions.mockResolvedValue([]);
   mockedReadJson.mockReset();
@@ -292,7 +306,7 @@ describe('CLI chat defaults', () => {
     });
   });
 
-  it('skips user and history I/O when explicit overrides resolve agent and model', async () => {
+  it('skips workspace, user, and history I/O when explicit overrides resolve agent and model', async () => {
     const workspace = await workspaceWithConfig({
       chat: { agent: 'assistant', model: 'sonnet46T' },
     });
@@ -310,8 +324,25 @@ describe('CLI chat defaults', () => {
       agentSource: 'explicit-override',
       modelSource: 'explicit-override',
     });
+    expect(mockedLoadWorkspaceCliConfig).not.toHaveBeenCalled();
     expect(mockedReadJson).not.toHaveBeenCalled();
     expect(mockedListExecutions).not.toHaveBeenCalled();
+  });
+
+  it('keeps default-tier loading when only the model is directly resolved', async () => {
+    const workspace = await workspaceWithConfig({
+      chat: { agent: 'assistant', model: 'sonnet46T' },
+    });
+
+    await expect(
+      resolveChatDefaults({ cwd: workspace, modelOverride: 'deepseekT' }),
+    ).resolves.toMatchObject({
+      agent: 'assistant',
+      model: 'deepseekT',
+      agentSource: 'workspace-config',
+      modelSource: 'explicit-override',
+    });
+    expect(mockedLoadWorkspaceCliConfig).toHaveBeenCalledOnce();
   });
 
   it('skips user and history I/O when environment resolves agent and model', async () => {

@@ -46,6 +46,7 @@ import {
 } from '@shared/schemas/agentCliSettings';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+import { REPO_ROOT } from '@test/support/repoScan';
 import {
   isStored,
   makeFakeSettingsStores,
@@ -59,6 +60,12 @@ const VALID_STORES: ReadonlySet<SettingStore> = new Set<SettingStore>([
 
 const CLI_RUNTIME_COMMAND_PATTERN =
   /^texra\s+(?:chat|run|agents run|multi-agent run|orchestrate)\b/;
+
+function entryByKey(key: string): StateSettingEntry {
+  const entry = stateSettingByKey(key);
+  assert.ok(entry, `missing catalog entry ${key}`);
+  return entry;
+}
 
 function reachabilitySegments(through: string): string[] {
   return through
@@ -133,7 +140,7 @@ describe('state settings catalog', () => {
         `${entry.key} is surfaced to the CLI but declares no cliConsumer`,
       );
       assert.ok(
-        existsSync(resolve(process.cwd(), entry.cliConsumer as string)),
+        existsSync(resolve(REPO_ROOT, entry.cliConsumer as string)),
         `${entry.key} cliConsumer does not exist: ${entry.cliConsumer}`,
       );
     }
@@ -172,7 +179,7 @@ describe('state settings catalog', () => {
       );
       for (const segment of throughSegments) {
         assert.ok(
-          existsSync(resolve(process.cwd(), segment)),
+          existsSync(resolve(REPO_ROOT, segment)),
           `${entry.key} reachability path segment does not exist: ${segment}`,
         );
       }
@@ -246,10 +253,7 @@ describe('state settings catalog', () => {
     // Locks the catalog wording the extension's LaTeXTab now composes its
     // <wa-select> labels from, so the displayed options stay byte-identical to
     // the previously hand-listed arrays.
-    const mathMarkup = stateSettingByKey(
-      WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
-    );
-    assert.ok(mathMarkup);
+    const mathMarkup = entryByKey(WorkspaceStateKey.LATEXDIFF_MATH_MARKUP);
     const mathMarkupLabels = (settingEnumOptions(mathMarkup) ?? []).map(
       (value, index) => {
         const base = `${value} — ${mathMarkup.enumDescriptions?.[index]}`;
@@ -265,8 +269,7 @@ describe('state settings catalog', () => {
       'fine — small changes inside equations',
     ]);
 
-    const formatter = stateSettingByKey(WorkspaceStateKey.LATEX_FORMATTER);
-    assert.ok(formatter);
+    const formatter = entryByKey(WorkspaceStateKey.LATEX_FORMATTER);
     const formatterLabels = (settingEnumOptions(formatter) ?? []).map(
       (value) =>
         value === LATEX_CONFIG_DEFAULTS.latexFormatter
@@ -281,13 +284,10 @@ describe('state settings catalog', () => {
   });
 
   it('drives the AI Agents tab enum option labels from catalog metadata', () => {
-    const labelsFor = (key: WorkspaceStateKey): string[] => {
-      const entry = stateSettingByKey(key);
-      assert.ok(entry, `missing catalog entry ${key}`);
-      return (settingEnumChoices(entry) ?? []).map(
+    const labelsFor = (key: WorkspaceStateKey): string[] =>
+      (settingEnumChoices(entryByKey(key)) ?? []).map(
         (option) => `${option.value} — ${option.label}`,
       );
-    };
 
     assert.deepEqual(labelsFor(WorkspaceStateKey.CODEX_SANDBOX_MODE), [
       'read-only — Read-only',
@@ -458,12 +458,6 @@ describe('knownKeys derivation', () => {
 });
 
 // --- accessor round-trip ----------------------------------------------------
-
-function entryByKey(key: string): StateSettingEntry {
-  const entry = STATE_SETTINGS.find((e) => e.key === key);
-  assert.ok(entry, `missing catalog entry ${key}`);
-  return entry;
-}
 
 describe('settingsAccess', () => {
   it('reads the default when the key is absent', () => {

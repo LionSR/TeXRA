@@ -13,6 +13,7 @@ import {
 } from '@extensionSchemas/texraSettings';
 import { PROVIDER_VSCODE_SETTINGS } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { REPO_ROOT } from '@test/support/repoScan';
 import {
   getGLMUseChina,
   getMoonshotUseChina,
@@ -36,7 +37,7 @@ interface PackageJson {
   };
 }
 
-const packageRequire = createRequire(`${process.cwd()}/package.json`);
+const packageRequire = createRequire(`${REPO_ROOT}/package.json`);
 const packageJson = packageRequire(
   './packages/extension/package.json',
 ) as PackageJson;

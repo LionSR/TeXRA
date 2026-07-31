@@ -1,13 +1,11 @@
 import { execFile } from 'node:child_process';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { promisify } from 'node:util';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 import { isGitRepository } from '@utils/system/isGitRepository';
 
 const execFileAsync = promisify(execFile);
@@ -16,26 +14,22 @@ describe('isGitRepository', () => {
   const tempDirs: string[] = [];
 
   afterEach(async () => {
-    for (const dir of tempDirs.splice(0)) {
-      await rm(dir, { recursive: true, force: true });
-    }
+    await cleanupTempDirs(tempDirs);
   });
 
-  async function makeTempDir(): Promise<string> {
-    const dir = await mkdtemp(join(tmpdir(), 'texra-is-git-repo-'));
-    tempDirs.push(dir);
-    return dir;
+  function tempRepoDir(): Promise<string> {
+    return makeTempDir('texra-is-git-repo-', tempDirs);
   }
 
   it('returns true for a real git repository', async () => {
-    const dir = await makeTempDir();
+    const dir = await tempRepoDir();
     await execFileAsync('git', ['init'], { cwd: dir });
 
     await expect(isGitRepository(dir)).resolves.toBe(true);
   });
 
   it('returns false for a plain directory that is not a git repository', async () => {
-    const dir = await makeTempDir();
+    const dir = await tempRepoDir();
 
     await expect(isGitRepository(dir)).resolves.toBe(false);
   });
@@ -52,7 +46,7 @@ describe('isGitRepository', () => {
     let dir: string;
 
     beforeEach(async () => {
-      dir = await makeTempDir();
+      dir = await tempRepoDir();
       await execFileAsync('git', ['init'], { cwd: dir });
     });
 

@@ -4,20 +4,9 @@ import { SettingsMemoryController } from '@controllers/settingsView/SettingsMemo
 import { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
 import { SettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
 import { buildBasicModelOptionsData } from '@model/modelOptionsBasic';
-import type { StateStore } from '@platform/interfaces';
 import type { ModelOptionData } from '@shared/schemas';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-
-function createStateStore(): StateStore {
-  const values = new Map<string, unknown>();
-  return {
-    get: (key, defaultValue) =>
-      (values.has(key) ? values.get(key) : defaultValue) as never,
-    update: async (key, value) => {
-      values.set(key, value);
-    },
-  };
-}
+import { FakeStateStore } from '@test/support/FakePlatform';
 
 function createMemoryController() {
   let enabled = true;
@@ -88,8 +77,8 @@ describe('SettingsViewHost', () => {
     let modelRefreshes = 0;
     const host = new SettingsViewHost({
       state: {
-        workspaceState: createStateStore(),
-        globalState: createStateStore(),
+        workspaceState: new FakeStateStore(),
+        globalState: new FakeStateStore(),
       },
       memoryPrompt: {
         confirm: async () => true,

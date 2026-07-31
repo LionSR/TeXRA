@@ -20,25 +20,21 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 // Local imports - test support
 import { moduleFileUrl, repoPath } from './desktopTestPaths.mjs';
-import { loadPlatformDefaultsModule } from './loadPlatformDefaultsModule.mjs';
+import { loadSourceModule } from './loadSourceModule.mjs';
 
 const require = createRequire(import.meta.url);
 
-interface JsonStore {
-  get<T>(key: string, defaultValue?: T): T;
-  set(key: string, value: unknown): Promise<void>;
-  snapshot(): Record<string, unknown>;
-}
+const JSON_STORE_SOURCE = repoPath(
+  'src',
+  'platform',
+  'defaults',
+  'jsonStore.ts',
+);
 
-interface JsonStoreModule {
-  JsonStore: {
-    open(filePath: string, options?: { mode?: number }): Promise<JsonStore>;
-  };
-}
-
-async function loadJsonStore(): Promise<JsonStoreModule['JsonStore']> {
-  const { JsonStore } =
-    await loadPlatformDefaultsModule<JsonStoreModule>('jsonStore.ts');
+async function loadJsonStore(): Promise<
+  typeof import('@platform/defaults/jsonStore').JsonStore
+> {
+  const { JsonStore } = await loadSourceModule('@platform/defaults/jsonStore');
   return JsonStore;
 }
 
@@ -152,7 +148,7 @@ describe('shared JsonStore', () => {
     const outdir = join(tempDir, 'bundle');
     await build({
       entryPoints: {
-        jsonStore: repoPath('src', 'platform', 'defaults', 'jsonStore.ts'),
+        jsonStore: JSON_STORE_SOURCE,
       },
       bundle: true,
       format: 'esm',
@@ -165,7 +161,7 @@ describe('shared JsonStore', () => {
 
     const { JsonStore } = (await import(
       moduleFileUrl(join(outdir, 'jsonStore.mjs'))
-    )) as JsonStoreModule;
+    )) as typeof import('@platform/defaults/jsonStore');
     const filePath = join(tempDir, 'state.json');
     const store = await JsonStore.open(filePath);
 
@@ -198,7 +194,7 @@ describe('shared JsonStore', () => {
       `,
     );
     await build({
-      entryPoints: [repoPath('src', 'platform', 'defaults', 'jsonStore.ts')],
+      entryPoints: [JSON_STORE_SOURCE],
       bundle: true,
       format: 'cjs',
       platform: 'node',

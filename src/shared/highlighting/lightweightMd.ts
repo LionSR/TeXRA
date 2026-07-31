@@ -4,19 +4,17 @@
  * with code highlighting.
  */
 
-import MarkdownIt from 'markdown-it';
+import {
+  createMarkdownRenderer,
+  type MarkdownItInstance,
+} from '@shared/markdown/createMarkdownRenderer';
 
 import { highlightCode } from './highlightCode';
 
-let md: MarkdownIt | null = null;
+let md: MarkdownItInstance | null = null;
 
 /** Returns a shared, lazily-initialized MarkdownIt instance. */
-export function getLightweightMd(): MarkdownIt {
-  md ??= new MarkdownIt({
-    breaks: false,
-    linkify: true,
-    html: false,
-    highlight: highlightCode,
-  });
+export function getLightweightMd(): MarkdownItInstance {
+  md ??= createMarkdownRenderer({ highlight: highlightCode });
   return md;
 }

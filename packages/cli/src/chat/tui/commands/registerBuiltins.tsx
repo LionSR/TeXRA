@@ -527,7 +527,6 @@ export function registerBuiltinSlashCommands(options?: {
     category: 'configuration',
     echo: 'ifPersists',
     argHandler: applyInitialCliAgentSelection,
-    formName: 'agent',
     formComponent: AgentListFormAdapter,
   });
   registerSlashCommand({
@@ -537,7 +536,6 @@ export function registerBuiltinSlashCommands(options?: {
     category: 'configuration',
     echo: 'ifPersists',
     argHandler: applyCliModelSelection,
-    formName: 'model',
     formComponent: ModelListFormAdapter,
   });
   registerSlashCommand({
@@ -547,7 +545,6 @@ export function registerBuiltinSlashCommands(options?: {
     category: 'configuration',
     echo: 'ifPersists',
     argHandler: applyCliModelAccessInput,
-    formName: 'api',
     formComponent: ModelAccessFormAdapter,
   });
   registerSlashCommand({
@@ -556,7 +553,6 @@ export function registerBuiltinSlashCommands(options?: {
     aliases: ['keys'],
     category: 'configuration',
     echo: 'never',
-    formName: 'key',
     formComponent: ProviderApiKeyFormAdapter,
     formEscapeAction: 'close',
     redactInput: true,
@@ -574,7 +570,6 @@ export function registerBuiltinSlashCommands(options?: {
     echo: 'ifPersists',
     argHandler: (remainder, context) =>
       loginFromChat(remainder, context.cliContext),
-    formName: 'login',
     formComponent: LoginFormAdapter,
   });
   registerSlashCommand({
@@ -583,7 +578,6 @@ export function registerBuiltinSlashCommands(options?: {
     category: 'account',
     echo: 'ifPersists',
     argHandler: (remainder) => logoutFromChat(remainder),
-    formName: 'logout',
     formComponent: LogoutFormAdapter,
   });
   registerSlashCommand({
@@ -592,7 +586,6 @@ export function registerBuiltinSlashCommands(options?: {
     category: 'configuration',
     echo: 'ifPersists',
     argHandler: applyCliApprovalPolicySelection,
-    formName: 'approval',
     formRemainders: ['status'],
     formComponent: ApprovalPolicyFormAdapter,
     formEscapeAction: 'cancel',
@@ -626,7 +619,6 @@ export function registerBuiltinSlashCommands(options?: {
       if (!id) throw new Error(`Invalid execution id: ${remainder}`);
       await context.resumeExecution(id);
     },
-    formName: 'resume',
     formComponent: ResumeListFormAdapter,
   });
   registerSlashCommand({
@@ -638,7 +630,6 @@ export function registerBuiltinSlashCommands(options?: {
       if (remainder.toLowerCase() === 'list') await showCliMemoryList();
       else await showCliMemoryPreview(remainder);
     },
-    formName: 'memory',
     formComponent: MemoryListFormAdapter,
   });
   registerSlashCommand({
@@ -647,7 +638,6 @@ export function registerBuiltinSlashCommands(options?: {
     aliases: ['skill'],
     category: 'configuration',
     echo: 'never',
-    formName: 'skills',
     formComponent: SkillsListFormAdapter,
   });
   registerSlashCommand({
@@ -655,7 +645,6 @@ export function registerBuiltinSlashCommands(options?: {
     description: 'List or toggle external integrations',
     category: 'configuration',
     echo: 'never',
-    formName: 'tools',
     formComponent: ToolsListFormAdapter,
   });
   // Only offer /config when the host wired the stores it reads/writes — a
@@ -692,7 +681,6 @@ export function registerBuiltinSlashCommands(options?: {
       aliases: ['settings'],
       category: 'configuration',
       echo: 'never',
-      formName: 'config',
       formComponent: ConfigFormAdapter,
       formEscapeAction: 'close',
     });

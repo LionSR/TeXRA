@@ -54,9 +54,10 @@ function isStoredSecret(value: unknown): value is StoredSecret {
   );
 }
 
+type WarnOnceKind = 'basicText' | 'keychainDenied';
+
 export class ElectronSecrets implements PlatformSecrets {
-  private warnedAboutBasicText = false;
-  private warnedAboutKeychainDenied = false;
+  private readonly warnedOnce = new Set<WarnOnceKind>();
   private keychainDecryptUnavailable = false;
 
   constructor(
@@ -101,7 +102,7 @@ export class ElectronSecrets implements PlatformSecrets {
         `ElectronSecrets: safeStorage.decryptString failed for "${key}"; treating as unset. ` +
           `Cause: ${toErrorMessage(error)}`,
       );
-      await this.warnAboutKeychainDenied();
+      await this.warnOnce('keychainDenied', KEYCHAIN_DENIED_WARNING_MESSAGE);
       return undefined;
     }
   }
@@ -128,7 +129,10 @@ export class ElectronSecrets implements PlatformSecrets {
       case 'unavailable':
         throw new Error(SAFE_STORAGE_UNAVAILABLE_MESSAGE);
       case 'basic_text':
-        await this.warnAboutBasicTextStorage();
+        await this.warnOnce(
+          'basicText',
+          LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE,
+        );
         throw new Error(LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE);
       default:
         assertNever(storageMode, 'Unhandled Electron secret storage mode');
@@ -147,27 +151,19 @@ export class ElectronSecrets implements PlatformSecrets {
     return process.env[name];
   }
 
-  private async warnAboutBasicTextStorage(): Promise<void> {
-    if (this.warnedAboutBasicText) return;
-    this.warnedAboutBasicText = true;
+  /**
+   * Shows a dialog once per kind per instance. Best-effort: a failed dialog
+   * must not affect the outcome of the secret operation that triggered it
+   * (the basic_text write still rejects with the storage-policy error; the
+   * keychain-denied read still resolves to undefined).
+   */
+  private async warnOnce(kind: WarnOnceKind, message: string): Promise<void> {
+    if (this.warnedOnce.has(kind)) return;
+    this.warnedOnce.add(kind);
     try {
-      await this.options.showWarningMessage?.(
-        LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE,
-      );
+      await this.options.showWarningMessage?.(message);
     } catch {
-      // Secret writes must still reject with the storage-policy error even if
-      // the warning dialog itself fails.
-    }
-  }
-
-  private async warnAboutKeychainDenied(): Promise<void> {
-    if (this.warnedAboutKeychainDenied) return;
-    this.warnedAboutKeychainDenied = true;
-    try {
-      await this.options.showWarningMessage?.(KEYCHAIN_DENIED_WARNING_MESSAGE);
-    } catch {
-      // The keychain-denied warning is best-effort. Suppress dialog errors so
-      // the secret read still resolves to undefined and the caller can proceed.
+      // Dialog failures are swallowed; see method doc comment.
     }
   }
 }

@@ -2,12 +2,16 @@ import { quote } from 'shell-quote';
 
 import {
   CLI_COMPLETION_SHELLS,
+  COMPLETION_SOURCES,
   commandKey,
   completionFlagTokens,
   completionFlagVariants,
+  completionSourceListing,
   type CompletionCommand,
   type CompletionFlag,
 } from './completionCommandTree';
+
+const { agents, models, toolUseAgents, workflowAgents } = COMPLETION_SOURCES;
 
 interface FlagValueTokenEntry {
   readonly flag: CompletionFlag;
@@ -54,8 +58,8 @@ function fixedFlagValueCases(commands: readonly CompletionCommand[]): string {
 }
 
 const DYNAMIC_VALUE_FLAG_CASES = [
-  { tokens: ['--model', '-m'], source: '_texra_models' },
-  { tokens: ['--agent'], source: '_texra_tool_use_agents' },
+  { tokens: ['--model', '-m'], source: models.shellFunction },
+  { tokens: ['--agent'], source: toolUseAgents.shellFunction },
 ] as const;
 
 function dynamicFlagValueCases(): string {
@@ -114,11 +118,11 @@ const POSITIONAL_COMPLETIONS: readonly {
   readonly commandPath: string;
   readonly words: string;
 }[] = [
-  { commandPath: 'run', words: '"$(_texra_workflow_agents)"' },
-  { commandPath: 'agents run', words: '"$(_texra_tool_use_agents)"' },
+  { commandPath: 'run', words: `"$(${workflowAgents.shellFunction})"` },
+  { commandPath: 'agents run', words: `"$(${toolUseAgents.shellFunction})"` },
   { commandPath: 'completion', words: `'${CLI_COMPLETION_SHELLS.join(' ')}'` },
-  { commandPath: 'agents show', words: '"$(_texra_agents)"' },
-  { commandPath: 'models show', words: '"$(_texra_models)"' },
+  { commandPath: 'agents show', words: `"$(${agents.shellFunction})"` },
+  { commandPath: 'models show', words: `"$(${models.shellFunction})"` },
 ];
 
 function positionalCompletionBlocks(): string {
@@ -129,6 +133,18 @@ function positionalCompletionBlocks(): string {
     return
   fi`,
   ).join('\n\n');
+}
+
+function dynamicSourceFunctions(): string {
+  return Object.values(COMPLETION_SOURCES)
+    .map(
+      (source) =>
+        `${source.shellFunction}() {
+  _texra_completion_dynamic || return 0
+  ${completionSourceListing(source)}
+}`,
+    )
+    .join('\n\n');
 }
 
 function commandCaseBlock(command: CompletionCommand): string {
@@ -155,25 +171,7 @@ _texra_completion_dynamic() {
   [[ "\${TEXRA_COMPLETION_DYNAMIC:-1}" != "0" ]]
 }
 
-_texra_agents() {
-  _texra_completion_dynamic || return 0
-  texra agents list --quiet 2>/dev/null | awk '{print $2}'
-}
-
-_texra_workflow_agents() {
-  _texra_completion_dynamic || return 0
-  texra agents list --quiet --all --category workflow 2>/dev/null | awk '{print $2}'
-}
-
-_texra_tool_use_agents() {
-  _texra_completion_dynamic || return 0
-  texra agents list --quiet --all --category toolUse 2>/dev/null | awk '{print $2}'
-}
-
-_texra_models() {
-  _texra_completion_dynamic || return 0
-  texra models list --quiet 2>/dev/null | awk '{print $1}'
-}
+${dynamicSourceFunctions()}
 
 _texra_compgen_files() {
   local candidate

@@ -1,9 +1,5 @@
 // Test composition imports
-
-// Local imports
 import '@test/support/defaultSessionTestSetup';
-
-// Test support imports
 
 // Node imports
 import * as assert from 'node:assert';

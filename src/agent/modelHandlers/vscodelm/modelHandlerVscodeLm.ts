@@ -40,10 +40,7 @@ import { getMimeType } from '@utils/files';
 // Local file imports
 import { ModelHandler } from '../ModelHandler';
 import { toVscodeLmTools } from '../toolConversion';
-import {
-  formatAttachmentSummary,
-  formatToolResultAsText,
-} from '../utils/toolAttachmentUtils';
+import { formatToolResultTextWithAttachments } from '../utils/toolAttachmentUtils';
 
 // Third-party imports
 import type { ModelConfig } from 'llm-zoo';
@@ -449,10 +446,7 @@ export class ModelHandlerVscodeLm extends ModelHandler<
       ({ call, result, attachments }) => ({
         kind: 'toolResult',
         callId: call.callId,
-        text: formatToolResultAsText(
-          result,
-          attachments.length ? formatAttachmentSummary(attachments) : undefined,
-        ),
+        text: formatToolResultTextWithAttachments(result, attachments, true),
       }),
     );
 

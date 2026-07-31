@@ -1,7 +1,21 @@
-import { writeNdjsonStdout, writeTextStdout } from '@cli/runtime/logSinks';
+import {
+  writeNdjsonStdout,
+  writeTextStderr,
+  writeTextStdout,
+} from '@cli/runtime/logSinks';
 import { pageStdout } from '@cli/runtime/pager';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
+
+/**
+ * Sink for human-facing progress during a long command: stdout in text mode,
+ * stderr otherwise, so `--output-format json|ndjson` keeps stdout parseable.
+ */
+export function cliProgressWriter(
+  context: Pick<CliContext, 'outputFormat'>,
+): (text: string) => void {
+  return context.outputFormat === 'text' ? writeTextStdout : writeTextStderr;
+}
 
 /**
  * Single home for the `json` / `ndjson` / `text` switch every headless command

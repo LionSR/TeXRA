@@ -1,6 +1,5 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it, vi } from 'vitest';
 import * as yaml from 'yaml';
@@ -12,11 +11,7 @@ import {
   AgentSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
 import { mergeInheritedAgentObject } from '@agent/core/definition/agentDefinitionInheritance';
-
-const REPO_ROOT = resolve(
-  fileURLToPath(new URL('.', import.meta.url)),
-  '../../..',
-);
+import { REPO_ROOT } from '@test/support/repoScan';
 
 describe('AgentSettingSchema', () => {
   it('strips legacy workflow outputExt without exposing it in settings', () => {

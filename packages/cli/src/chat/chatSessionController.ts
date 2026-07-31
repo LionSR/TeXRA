@@ -229,6 +229,22 @@ export function createChatSessionController(
     });
   };
 
+  // Shared prelude of the three run-starting paths (start, resume,
+  // follow-up-wake resume): resolve the model-keyed session context and
+  // activate the config into the session meta signals in one step.
+  const beginRunContext = (
+    config: Pick<
+      AgentConfig,
+      'agent' | 'model' | 'cliMultiAgentPresetId' | 'delegationAgentScope'
+    >,
+    modelSource?: 'history',
+  ): { readonly currentModel: string; readonly sessionContext: CliContext } => {
+    const currentModel = config.model;
+    const sessionContext = getSessionContext(currentModel);
+    activateAgentConfig(config, modelSource);
+    return { currentModel, sessionContext };
+  };
+
   const supersedeInterruptedRecovery = ():
     SupersededInterruptedRecovery | undefined => {
     const streamId = session.interruptedStreamId;
@@ -469,9 +485,7 @@ export function createChatSessionController(
 
   const startRootRun = (config: AgentConfigPayload): void => {
     void supersedeInterruptedRecovery();
-    const currentModel = config.model;
-    const sessionContext = getSessionContext(currentModel);
-    activateAgentConfig(config);
+    const { sessionContext } = beginRunContext(config);
     const { presentationHost, approvalsUnavailable, ownExecution, finalize } =
       setupRunHost(sessionContext);
     const executionId = generateExecutionId();
@@ -580,9 +594,10 @@ export function createChatSessionController(
       publishChatTuiRunState(session);
       rootStreamId.set(resolution.streamId);
 
-      const currentModel = resolution.agentConfig.model;
-      const sessionContext = getSessionContext(currentModel);
-      activateAgentConfig(resolution.agentConfig, 'history');
+      const { currentModel, sessionContext } = beginRunContext(
+        resolution.agentConfig,
+        'history',
+      );
 
       await defaultSession().transcripts.ensureLoaded(resolution.streamId);
       await snapshotStore.load([resolution.streamId]);
@@ -710,9 +725,10 @@ export function createChatSessionController(
         if (session.stopRequested) return false;
         const parentStreamId = snapshotStore.getParentStreamId(streamId);
 
-        const currentModel = config.model;
-        const sessionContext = getSessionContext(currentModel);
-        activateAgentConfig(config, 'history');
+        const { currentModel, sessionContext } = beginRunContext(
+          config,
+          'history',
+        );
 
         const runHost = setupRunHost(sessionContext);
         finalize = runHost.finalize;

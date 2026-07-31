@@ -49,6 +49,15 @@ function storageFile(dir: string, key: string): string {
   return path.join(dir, `${encodeURIComponent(key)}.json`);
 }
 
+/** Which of the two stream-log directories a mocked target file lives in. */
+function areaOf(target: string): 'log' | 'summary' | null {
+  if (target.startsWith(`${STREAM_LOG_SUMMARIES_DIR}${path.sep}`)) {
+    return 'summary';
+  }
+  if (target.startsWith(`${STREAM_LOGS_DIR}${path.sep}`)) return 'log';
+  return null;
+}
+
 function writtenLog(
   writes: ReadonlyMap<string, unknown>,
   streamId: string,
@@ -232,12 +241,12 @@ function mockStorage({
   vi.spyOn(StorageFS, 'read').mockImplementation(async (target) => {
     const key = streamKeyFromFile(target);
 
-    if (target.startsWith(`${STREAM_LOG_SUMMARIES_DIR}${path.sep}`)) {
+    if (areaOf(target) === 'summary') {
       if (!Object.hasOwn(summaries, key)) throw notFound();
       return rawSummaryJson[key] ?? JSON.stringify(summaries[key]);
     }
 
-    if (target.startsWith(`${STREAM_LOGS_DIR}${path.sep}`)) {
+    if (areaOf(target) === 'log') {
       if (!Object.hasOwn(logs, key)) throw notFound();
       fullLogReads += 1;
       if (logReadError) throw logReadError;
@@ -256,21 +265,17 @@ function mockStorage({
   });
   vi.spyOn(StorageFS, 'exists').mockImplementation(async (target) => {
     const key = streamKeyFromFile(target);
-    if (target.startsWith(`${STREAM_LOG_SUMMARIES_DIR}${path.sep}`)) {
-      return Object.hasOwn(summaries, key);
-    }
-    if (target.startsWith(`${STREAM_LOGS_DIR}${path.sep}`)) {
-      return Object.hasOwn(logs, key);
-    }
+    if (areaOf(target) === 'summary') return Object.hasOwn(summaries, key);
+    if (areaOf(target) === 'log') return Object.hasOwn(logs, key);
     throw new Error(`Unexpected exists target: ${target}`);
   });
   vi.spyOn(StorageFS, 'stat').mockImplementation(async (target) => {
     const key = streamKeyFromFile(target);
-    if (target.startsWith(`${STREAM_LOG_SUMMARIES_DIR}${path.sep}`)) {
+    if (areaOf(target) === 'summary') {
       if (!Object.hasOwn(summaries, key)) throw notFound();
       return fileStat(summaryMtimes[key] ?? 2);
     }
-    if (target.startsWith(`${STREAM_LOGS_DIR}${path.sep}`)) {
+    if (areaOf(target) === 'log') {
       if (!Object.hasOwn(logs, key)) throw notFound();
       return fileStat(logMtimes[key] ?? 1);
     }
@@ -280,13 +285,8 @@ function mockStorage({
     target: string,
     content: string | Uint8Array,
   ): Promise<void> => {
-    if (logWriteError && target.startsWith(`${STREAM_LOGS_DIR}${path.sep}`)) {
-      throw logWriteError;
-    }
-    if (
-      summaryWriteError &&
-      target.startsWith(`${STREAM_LOG_SUMMARIES_DIR}${path.sep}`)
-    ) {
+    if (logWriteError && areaOf(target) === 'log') throw logWriteError;
+    if (summaryWriteError && areaOf(target) === 'summary') {
       throw summaryWriteError;
     }
     if (
@@ -298,7 +298,7 @@ function mockStorage({
       pausedWriteStarted.resolve();
       await pausedWriteRelease.promise;
     }
-    if (target.startsWith(`${STREAM_LOGS_DIR}${path.sep}`)) {
+    if (areaOf(target) === 'log') {
       await onLogWrite?.(streamKeyFromFile(target));
     }
 
@@ -311,13 +311,10 @@ function mockStorage({
   vi.spyOn(StorageFS, 'write').mockImplementation(recordWrite);
   vi.spyOn(StorageFS, 'writeAtomic').mockImplementation(recordWrite);
   vi.spyOn(StorageFS, 'delete').mockImplementation(async (target) => {
-    if (logDeleteError && target.startsWith(`${STREAM_LOGS_DIR}${path.sep}`)) {
-      throw logDeleteError;
-    }
+    if (logDeleteError && areaOf(target) === 'log') throw logDeleteError;
     if (
       summaryDeleteError &&
-      (target === STREAM_LOG_SUMMARIES_DIR ||
-        target.startsWith(`${STREAM_LOG_SUMMARIES_DIR}${path.sep}`))
+      (target === STREAM_LOG_SUMMARIES_DIR || areaOf(target) === 'summary')
     ) {
       throw summaryDeleteError;
     }

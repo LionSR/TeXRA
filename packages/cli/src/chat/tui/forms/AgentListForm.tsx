@@ -4,7 +4,6 @@
 import { Box, Text } from 'ink';
 
 import { computeAgentOptionsData } from '@agent/index';
-import { KeyHints } from '@cli/tui/ui/KeyHints';
 import { Select } from '@cli/tui/ui/Select';
 import {
   computeSelectWindowSize,
@@ -14,12 +13,11 @@ import type { AgentOptionData } from '@shared/schemas';
 import { agentName } from '@shared/schemas/agent';
 
 import {
-  CompactFormKeyHints,
+  CompactPickerKeyHints,
   FormFrame,
-  renderAsyncListFormTransient,
+  PickerKeyHints,
 } from './_shared/FormFrame';
-import { useAsyncListForm } from './_shared/useAsyncListForm';
-import { usePendingListFormSelection } from './_shared/ListForm';
+import { useAsyncPickerForm } from './_shared/ListForm';
 
 export interface AgentListFormProps {
   readonly currentAgent: string;
@@ -147,21 +145,26 @@ export function agentSelectWindow({
 }
 
 export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
-  const { data, loading, error, pendingInput, clearPendingInput } =
-    useAsyncListForm<AgentGroups>({
-      load: async () => {
-        const options = await computeAgentOptionsData();
-        return { toolUse: options.toolUse, workflow: options.workflow };
-      },
-      onClose: props.onClose,
-    });
+  const picker = useAsyncPickerForm<AgentGroups, string>({
+    title: '/agent',
+    loadingLabel: 'Loading agent registry...',
+    load: async () => {
+      const options = await computeAgentOptionsData();
+      return { toolUse: options.toolUse, workflow: options.workflow };
+    },
+    items: (groups) =>
+      groups.toolUse.map((agent) => ({
+        value: agent.value,
+        label: agent.label,
+      })),
+    selectable: props.selectable,
+    onSelect: (value) => props.onSelect?.(value),
+    onClose: props.onClose,
+  });
 
-  const agents: AgentGroups = data ?? { toolUse: [], workflow: [] };
+  const agents: AgentGroups = picker.data ?? { toolUse: [], workflow: [] };
   const primarySectionTitle = agentPickerPrimarySectionTitle(agents.toolUse);
-  const items = agents.toolUse.map((agent) => ({
-    value: agent.value,
-    label: agent.label,
-  }));
+  const items = picker.items;
   // The current agent may be stored as a canonical key (`source:name`) or a
   // bare name; rows are keyed by canonical value, so match Select in that same
   // identity space when rendering the ✓ on the active row.
@@ -185,30 +188,7 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
     0,
     selectWindow.maxVisibleWorkflows,
   );
-  const handleSelectItem = (value: string): void => {
-    if (props.selectable) {
-      props.onSelect?.(value);
-      return;
-    }
-    props.onClose();
-  };
-  usePendingListFormSelection({
-    loading,
-    error,
-    pendingInput,
-    clearPendingInput,
-    items,
-    enabled: props.selectable,
-    onSelect: handleSelectItem,
-  });
-
-  const transient = renderAsyncListFormTransient({
-    loading,
-    error,
-    title: '/agent',
-    loadingLabel: 'Loading agent registry...',
-  });
-  if (transient) return transient;
+  if (picker.transient) return picker.transient;
 
   const currentAgentHintRow = currentAgentHint ? (
     <Text dimColor wrap="truncate-end">
@@ -226,16 +206,10 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
           activeValue={activeValue}
           maxVisibleItems={1}
           showOverflow={false}
-          onSelect={handleSelectItem}
+          onSelect={picker.select}
           onCancel={props.onClose}
         />
-        <CompactFormKeyHints
-          primary={
-            props.selectable
-              ? { key: '1-9/a-z/Enter', action: 'select' }
-              : { key: 'Enter', action: 'close' }
-          }
-        />
+        <CompactPickerKeyHints selectable={props.selectable} />
       </FormFrame>
     );
   }
@@ -255,7 +229,7 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
           activeValue={activeValue}
           maxVisibleItems={selectWindow.maxVisibleItems}
           showOverflow={selectWindow.showOverflow}
-          onSelect={handleSelectItem}
+          onSelect={picker.select}
           onCancel={props.onClose}
         />
       </Box>
@@ -279,23 +253,7 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
         </Box>
       ) : null}
       <Box marginTop={1}>
-        {props.selectable ? (
-          <KeyHints
-            hints={[
-              { key: '↑/↓', action: 'navigate' },
-              { key: '1-9/a-z', action: 'select' },
-            ]}
-          />
-        ) : (
-          <KeyHints
-            hints={[
-              { key: '↑/↓', action: 'navigate' },
-              { key: 'Enter', action: 'close' },
-              { key: 'Esc', action: 'close' },
-            ]}
-            confirmCancel={false}
-          />
-        )}
+        <PickerKeyHints selectable={props.selectable} hasItems />
       </Box>
     </FormFrame>
   );

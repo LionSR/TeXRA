@@ -1,47 +1,33 @@
 import { describe, expect, it } from 'vitest';
 
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
-import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
+import {
+  StreamSnapshotSchema,
+  type ExecutionId,
+  type StreamTabId,
+} from '@shared/schemas';
 import { injectStandaloneTrace, type TraceDocument } from '@transcript';
+
+const STREAM_ID = 'orchestrator@deepseekT#exec-1' as StreamTabId;
 
 function trace(overrides: Partial<TraceDocument> = {}): TraceDocument {
   return {
     executionId: 'exec-1' as ExecutionId,
-    streamId: 'orchestrator@deepseekT#exec-1' as StreamTabId,
-    config: {
-      inputFiles: [],
-      contextFiles: [],
-      mediaFiles: [],
-      outputFiles: [],
-      editedFile: null,
+    streamId: STREAM_ID,
+    config: AgentConfigSchema.parse({
       agent: 'orchestrator',
       model: 'deepseekT',
       instruction: 'Solve the problem.',
       agentCategory: AgentCategory.ToolUse,
-      editedFiles: [],
-      toolConfig: DEFAULT_TOOL_CONFIG,
-      memories: [],
       workingDirectory: '/workspace',
-      cliOutputFile: null,
-      cliMultiAgentPresetId: null,
-    },
+    }),
     meta: null,
     entries: [],
-    snapshot: {
-      schemaVersion: 1,
-      streamId: 'orchestrator@deepseekT#exec-1' as StreamTabId,
-      todos: [],
-      plan: null,
-      planSummary: null,
-      outputFilesByRound: {},
-      missingOutputsByRound: {},
-      compileFailuresByRound: {},
-      runUsage: {},
+    snapshot: StreamSnapshotSchema.parse({
+      streamId: STREAM_ID,
       status: 'ready',
-      conversationProgress: { toolCallCount: 0 },
-      subagents: [],
-    },
+    }),
     terminalStatus: null,
     ...overrides,
   };

@@ -1245,17 +1245,7 @@ function seedWorkflowTimeline(): void {
   const executionId = 'harness-workflow-timeline' as ExecutionId;
   const childStreamId =
     'workflow-script#harness-workflow-timeline' as StreamTabId;
-  defaultSession().events.emit({
-    scope: 'session',
-    event: {
-      type: 'setActiveStream',
-      payload: {
-        streamId: childStreamId,
-        agentCategory: AgentCategory.Workflow,
-        suppressViewSwitch: true,
-      },
-    },
-  });
+  emitSetActiveStream(childStreamId, AgentCategory.Workflow);
   emitChildEventOrderRoster(STREAM_ID, [
     {
       kind: 'subagent',
@@ -1368,17 +1358,7 @@ function seedRunningWorkflow(): void {
   const secondAgentStreamId =
     'correct@harness-model#harness-workflow-agent-b' as StreamTabId;
 
-  defaultSession().events.emit({
-    scope: 'session',
-    event: {
-      type: 'setActiveStream',
-      payload: {
-        streamId: childStreamId,
-        agentCategory: AgentCategory.Workflow,
-        suppressViewSwitch: true,
-      },
-    },
-  });
+  emitSetActiveStream(childStreamId, AgentCategory.Workflow);
   emitChildEventOrderRoster(STREAM_ID, [
     {
       kind: 'subagent',
@@ -1452,17 +1432,7 @@ function seedRunningWorkflow(): void {
     },
   ] as const satisfies readonly ActiveChildInfo[];
   for (const child of workflowChildren) {
-    defaultSession().events.emit({
-      scope: 'session',
-      event: {
-        type: 'setActiveStream',
-        payload: {
-          streamId: child.childStreamId,
-          agentCategory: AgentCategory.Workflow,
-          suppressViewSwitch: true,
-        },
-      },
-    });
+    emitSetActiveStream(child.childStreamId, AgentCategory.Workflow);
     emitChildEventOrderEdge(child.childStreamId, childStreamId);
     transitionChildEventOrderRunning(child.childStreamId);
   }
@@ -1554,15 +1524,20 @@ function emitChildEventOrderRemoval(streamId: StreamTabId): void {
   });
 }
 
-// `setActiveStream` session fact ("attachment") — always background-registers
-// (`suppressViewSwitch: true`) so the harness's own active/focused stream
-// never becomes the child (see the wall-clock note above).
-function emitChildEventOrderAttachment(streamId: StreamTabId): void {
+// `setActiveStream` session fact — used both as the child-order fixture's
+// "attachment" step and as the workflow-timeline/running-workflow focus
+// switch. Always background-registers (`suppressViewSwitch: true`) so the
+// harness's own active/focused stream never becomes the child (see the
+// wall-clock note above).
+function emitSetActiveStream(
+  streamId: StreamTabId,
+  agentCategory?: AgentCategory,
+): void {
   defaultSession().events.emit({
     scope: 'session',
     event: {
       type: 'setActiveStream',
-      payload: { streamId, suppressViewSwitch: true },
+      payload: { streamId, agentCategory, suppressViewSwitch: true },
     },
   });
 }
@@ -1617,7 +1592,7 @@ function childEventOrderSteps(order: ChildEventOrder): readonly (() => void)[] {
   const child = CHILD_EVENT_ORDER_STREAM_ID;
   const root = STREAM_ID as StreamTabId;
   const other = CHILD_EVENT_ORDER_OTHER_PARENT_ID;
-  const A = () => emitChildEventOrderAttachment(child);
+  const A = () => emitSetActiveStream(child);
   const Srun = () => transitionChildEventOrderRunning(child);
   const Sterm = () => transitionChildEventOrderTerminal(child);
   const RPlus = (parent: StreamTabId) =>

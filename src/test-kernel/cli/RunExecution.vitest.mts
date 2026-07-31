@@ -5,7 +5,6 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import type { CliContext } from '@cli/runtime/cliContext';
 import type { executeCliRequest } from '@cli/runtime/runExecution';
 import { AgentError } from '@common/errors';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
@@ -20,7 +19,7 @@ import {
   type TodoItem,
 } from '@shared/schemas';
 import { createFakePlatform } from '@test/support/FakePlatform';
-import { createTestCliContext } from '@test/cli/fixtures/cliContext';
+import { createTestCliContext as cliContext } from '@test/cli/fixtures/cliContext';
 import { cleanupTempDirs } from '@test/support/tempDirPlatform';
 import { DIAGNOSTICS_READ_RUNTIME_CAPABILITY } from '@tools/diagnosticsRuntimeCapabilities';
 import { SETUP_PLATFORM_VSCODE_ONLY_TOOL_NAMES } from '@tools/setup/platform';
@@ -115,10 +114,6 @@ vi.mock('@cli/runtime/workflowPlainProjection', () => ({
 vi.mock('@cli/runtime/logSinks', () => ({
   writeTextStderr: mocks.writeTextStderr,
 }));
-
-function cliContext(overrides: Partial<CliContext> = {}): CliContext {
-  return createTestCliContext(overrides);
-}
 
 type CliRequest = Parameters<typeof executeCliRequest>[0];
 

@@ -24,8 +24,8 @@ import {
 import { showInformation, updateMultiFiles } from '../mainViewActions';
 import { saveState } from '../persistence';
 import {
-  FILE_TYPE_TO_KEY,
-  MULTI_FILE_COMMAND_TO_KEY,
+  MULTI_FILE_LIST_BY_SET_COMMAND,
+  MULTI_FILE_LISTS,
   SINGLE_FILE_TYPE_TO_KEY,
 } from '../store';
 
@@ -43,10 +43,10 @@ type SetMultipleFilesMessage =
 
 function handleSetMultipleFiles(message: SetMultipleFilesMessage): void {
   const files = message.files ?? [];
-  const listId = MULTI_FILE_COMMAND_TO_KEY[message.command];
-  if (!listId) return;
+  const list = MULTI_FILE_LIST_BY_SET_COMMAND[message.command];
+  if (!list) return;
 
-  multiFiles$.set({ ...multiFiles$.get(), [listId]: files });
+  multiFiles$.set({ ...multiFiles$.get(), [list.key]: files });
   saveState();
 }
 
@@ -61,11 +61,7 @@ function isDocumentFileType(value: string): value is DocumentFileType {
 /** Check if a commit hash exists in the options array. */
 function hasCommitValue(value: string): boolean {
   if (!value) return false;
-  const commits = fileOptions$.get().commit ?? [];
-  const entries = commits.some((commit) => commit.startsWith('HEAD'))
-    ? commits
-    : ['HEAD', ...commits];
-  return entries.some((commit) => {
+  return (fileOptions$.get().commit ?? []).some((commit) => {
     const [hash] = commit.split(': ');
     return hash === value;
   });
@@ -129,9 +125,14 @@ export const documentHandlers = {
     const gitRepo = message.isGitRepo ?? true;
     isGitRepo$.set(gitRepo);
 
+    // Store the list the picker renders verbatim: `HEAD` is always selectable
+    // in a repository, so it is added here rather than by every reader.
+    const withHead = commits.some((commit) => commit.startsWith('HEAD'))
+      ? commits
+      : ['HEAD', ...commits];
     fileOptions$.set({
       ...fileOptions$.get(),
-      commit: gitRepo ? commits : [],
+      commit: gitRepo ? withHead : [],
     });
 
     const currentCommit = commit$.get();
@@ -150,7 +151,7 @@ export const documentHandlers = {
     // Workflow categories (input/context/media): prepend the active editor's
     // file to the multi-list head so it becomes the "primary" file.
     if (isDocumentFileType(fileType)) {
-      const listId = FILE_TYPE_TO_KEY[fileType];
+      const listId = MULTI_FILE_LISTS[fileType].key;
       const mf = multiFiles$.get();
       const existing = mf[listId] ?? [];
       const next = [filePath, ...existing.filter((f) => f !== filePath)];
@@ -192,7 +193,7 @@ export const documentHandlers = {
 
   [MAIN_VIEW_COMMANDS.SET_OPENED_FILES]: (message) => {
     if (!isMultipleDocumentFileType(message.fileType)) return;
-    const listId = FILE_TYPE_TO_KEY[message.fileType];
+    const listId = MULTI_FILE_LISTS[message.fileType].key;
 
     const mf = multiFiles$.get();
     const filesToAdd = message.files ?? [];

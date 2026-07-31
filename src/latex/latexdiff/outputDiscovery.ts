@@ -36,6 +36,7 @@ import { hasExtension } from '@utils/core/pathCore';
 import { isDirectory, isFile } from '@utils/files/fsEntryType';
 
 // Local file imports
+import { hasBetweenRoundDiffSuffix } from './diffFileNameManager';
 import { CHANNEL } from './service';
 
 /**
@@ -133,7 +134,7 @@ export async function scanRunDirForOutputs(
       // in workspace-side diffs, never here, so a legitimately-named source
       // like "chapter_diff.tex" is not mistakenly dropped.
       const nonArtifact = allTexFiles.filter(
-        (f) => !/_diffr\d+r\d+$/.test(path.parse(f).name),
+        (f) => !hasBetweenRoundDiffSuffix(path.parse(f).name),
       );
       // Raw round output is output.xml (never collected by collectTexFiles).
       // Guard for pre-refactor runs where non-scratchpad agents wrote output.tex

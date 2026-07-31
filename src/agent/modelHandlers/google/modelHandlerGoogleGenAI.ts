@@ -19,9 +19,7 @@ import {
 import type { StreamHandle } from '@agent/trace';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { reportMediaAttachmentFailure } from '@agent/modelHandlers/support/mediaAttachmentPolicy';
-import type { ModelCredentialSelection } from '@agent/types/ModelHandlerContracts';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
-import type { MediaEntry } from '@agent/utils/mediaTypes';
 import { K_SLICE } from '@agent/core/constants';
 import type {
   CreateResponseOptions,
@@ -41,18 +39,11 @@ import type {
   ToolResult,
 } from '@shared/schemas/toolResult';
 import { generateShortId } from '@utils/core';
-import { getShortDisplayPath } from '@utils/files';
-import { joinNonEmpty, pluralize } from '@utils/text/stringUtils';
+import { joinNonEmpty } from '@utils/text/stringUtils';
 
 // Local file imports
 import { GoogleModelHandlerBase } from './GoogleModelHandlerBase';
-import {
-  type GoogleClientCache,
-  resolveGoogleClient,
-  uploadGoogleMediaEntries,
-} from './googleHandlerShared';
 import { computeGooglePrice, normalizeGoogleUsage } from './googleUsage';
-import { tagGoogleSdkError } from './googleSdkError';
 import {
   extractNonThinkingText,
   isTextPart,
@@ -65,6 +56,7 @@ import {
   loadAttachmentBuffer,
 } from '../utils/toolAttachmentUtils';
 import { toGoogleTools } from '../toolConversion';
+import type { GoogleMediaSource } from './googleHandlerShared';
 
 // Third-party imports
 import type {
@@ -93,12 +85,13 @@ export class ModelHandlerGoogleGenAI extends GoogleModelHandlerBase<
   Content,
   GenerateContentResponseUsageMetadata | null,
   GoogleToolCall,
-  GoogleGenAI,
   GenerateContentResponse,
   Part,
   ThinkingLevel
 > {
-  private googleClient: GoogleClientCache | null = null;
+  protected get sdkLabel(): string {
+    return 'Native';
+  }
 
   protected get thinkingLevelConfig(): {
     levels: { low: ThinkingLevel; medium: ThinkingLevel; high: ThinkingLevel };
@@ -135,63 +128,15 @@ export class ModelHandlerGoogleGenAI extends GoogleModelHandlerBase<
     return undefined;
   }
 
-  protected async uploadMediaEntries(entries: MediaEntry[]): Promise<Part[]> {
-    const insertedEntries: MediaEntry[] = [];
-    const parts = await uploadGoogleMediaEntries<Part>(entries, {
-      getClient: () => this.getClient(),
-      inlineLimit: this.getInlineUploadLimitBytes(),
-      logger: this.logger,
-      buildInline: (data, mimeType) =>
-        createPartFromBase64(data, mimeType, this.getMediaResolution(mimeType)),
-      buildUploaded: (uri, mimeType) =>
-        createPartFromUri(uri, mimeType, this.getMediaResolution(mimeType)),
-      onInsertedEntry: (entry) => insertedEntries.push(entry),
-    });
-    this.setCreatedMediaEntriesForAttachmentLog(insertedEntries);
-    return parts;
+  protected buildMedia(source: GoogleMediaSource, mimeType: string): Part {
+    const resolution = this.getMediaResolution(mimeType);
+    return 'data' in source
+      ? createPartFromBase64(source.data, mimeType, resolution)
+      : createPartFromUri(source.uri, mimeType, resolution);
   }
 
-  async getClient(
-    selection: ModelCredentialSelection = 'configured',
-  ): Promise<GoogleGenAI> {
-    const credential = await this.resolveClientCredential(selection);
-    return resolveGoogleClient({
-      sdkLabel: 'Native',
-      credential,
-      logger: this.logger,
-      cached: this.googleClient,
-      setCached: (cache) => {
-        this.googleClient = cache;
-      },
-      rememberRoute: (client, route, credentialSecret) =>
-        this.rememberClientCredentialRoute(client, route, credentialSecret),
-    });
-  }
-
-  override async refreshClient(
-    selection: ModelCredentialSelection = 'configured',
-  ): Promise<GoogleGenAI> {
-    this.googleClient = null;
-    return this.getClient(selection);
-  }
-
-  /**
-   * Gemini carries thought signatures across parallel function calls, which must
-   * be preserved by batching the results into a single follow-up message.
-   * Unconditional (not gated on `capabilities.supportsReasoning`) — see the
-   * base getter's doc comment (#7101 triage).
-   */
-  override get requiresBatchedParallelToolResults(): boolean {
-    return true;
-  }
-
-  /**
-   * Google passes the system prompt per-call (as `systemInstruction`) rather
-   * than storing it in `messages` (see `initializeMessages` below) — the
-   * round flow must resupply it on every invocation.
-   */
-  override get requiresPerCallSystemPrompt(): boolean {
-    return true;
+  protected textMedia(text: string): Part {
+    return createPartFromText(text);
   }
 
   /**
@@ -242,14 +187,6 @@ export class ModelHandlerGoogleGenAI extends GoogleModelHandlerBase<
     this.logger.debug(`Token count of message: ${totalTokens}`);
 
     return totalTokens;
-  }
-
-  protected override get sdkErrorTagger() {
-    return tagGoogleSdkError;
-  }
-
-  override get supportsForcedToolChoice(): boolean {
-    return true;
   }
 
   /** Creates a Google response after SDK-boundary error tagging is installed. */
@@ -537,32 +474,6 @@ export class ModelHandlerGoogleGenAI extends GoogleModelHandlerBase<
     }
   }
 
-  /** Labelled media parts for a round, or empty when there is nothing to attach. */
-  private async buildLabelledMediaParts(
-    mediaFiles: FileLocation[] | undefined,
-    context: 'initial' | 'followUp',
-  ): Promise<Part[]> {
-    if (!mediaFiles?.length || !this.supportsFileUploads()) {
-      return [];
-    }
-
-    const formattedMedia = await this.createMediaForRound(mediaFiles, context);
-    if (formattedMedia.length === 0) {
-      return [];
-    }
-
-    const attachmentLabel = mediaFiles
-      .map((loc) => getShortDisplayPath(loc))
-      .join(', ');
-    const verb = context === 'initial' ? 'Attached' : 'Processing';
-    return [
-      createPartFromText(
-        `\n${verb} ${pluralize(mediaFiles.length, 'file')}: ${attachmentLabel}`,
-      ),
-      ...formattedMedia,
-    ];
-  }
-
   /** Initializes the message array for Google GenAI chat models with user prefix, request, and optional media. */
   async initializeMessages(
     userPrefix: string,
@@ -573,7 +484,7 @@ export class ModelHandlerGoogleGenAI extends GoogleModelHandlerBase<
     return [
       createUserContent([
         createPartFromText(userPrefix),
-        ...(await this.buildLabelledMediaParts(mediaFiles, 'initial')),
+        ...(await this.buildLabelledMedia(mediaFiles, 'initial')),
         createPartFromText(`\n${userRequest}`),
       ]),
     ];
@@ -587,7 +498,7 @@ export class ModelHandlerGoogleGenAI extends GoogleModelHandlerBase<
   ): Promise<Content[]> {
     messages.push(
       createUserContent([
-        ...(await this.buildLabelledMediaParts(mediaFiles, 'followUp')),
+        ...(await this.buildLabelledMedia(mediaFiles, 'followUp')),
         createPartFromText(userMessage),
       ]),
     );
@@ -622,24 +533,6 @@ export class ModelHandlerGoogleGenAI extends GoogleModelHandlerBase<
     if (message.role !== 'model') return undefined;
     if (!Array.isArray(message.parts)) return undefined;
     return joinNonEmpty(message.parts.filter(isTextPart).map((p) => p.text));
-  }
-
-  protected override async createMediaMessage(
-    mediaFiles: FileLocation[],
-  ): Promise<Part[]> {
-    if (!mediaFiles?.length || !this.supportsFileUploads()) {
-      return [];
-    }
-
-    const { entries, results } =
-      await this.mediaProcessor.loadEntries(mediaFiles);
-    this.mediaProcessor.logResults(results);
-
-    if (entries.length === 0) {
-      return [];
-    }
-
-    return this.uploadMediaEntries(entries);
   }
 
   extractResponse(
@@ -947,37 +840,6 @@ export class ModelHandlerGoogleGenAI extends GoogleModelHandlerBase<
       call.name,
       simplifiedResult,
       attachmentParts.length > 0 ? attachmentParts : undefined,
-    );
-  }
-
-  /**
-   * Create follow-up messages for a SINGLE tool call.
-   *
-   * IMPORTANT: For Gemini 3 models with parallel tool calls, use
-   * `createBatchedToolUseFollowUpMessages` instead to properly handle
-   * thought signatures. This method creates separate model/user message
-   * pairs which can cause validation errors when multiple parallel calls
-   * are processed individually.
-   */
-  async createToolUseFollowUpMessages(
-    _client: GoogleGenAI | undefined,
-    call: GoogleToolCall,
-    result: ToolResult,
-    attachments: ToolFileAttachment[],
-    workspaceState?: AgentWorkspaceState,
-    text?: string,
-  ): Promise<Content[]> {
-    if (!call.callId) {
-      throw new Error('Function call id is required for follow-up messages');
-    }
-
-    // The single-call path is batched-of-one: identical function-call/response
-    // part construction and reasoning/server-tool reset. The callId guard above
-    // preserves this method's specific error message.
-    return this.createBatchedToolUseFollowUpMessages(
-      [{ call, result, attachments }],
-      workspaceState,
-      text,
     );
   }
 

@@ -18,54 +18,31 @@ import {
   type DesktopShowDiffMessage,
   monacoLanguageForFilePath,
 } from '../desktopDiffMessages.js';
+import {
+  tryShowInRenderer,
+  type DesktopOverlayPostOptions,
+} from './desktopIpcTypes.js';
 import { createTexraTempDir } from './desktopTempDir.js';
 
-export interface DesktopDiffHostOptions {
+export interface DesktopDiffHostOptions extends DesktopOverlayPostOptions {
   /**
    * Falls back to the OS default editor (writes a `.diff` patch file and
    * calls `openPath`). Used when the renderer overlay is unavailable or
    * `forceExternal === true`.
    */
   openPath(filePath: string): Promise<void>;
-  /**
-   * Posts a `desktop:showDiff` IPC message to the renderer so it can
-   * mount `<texra-diff-view>` inside the Review workbench. Return
-   * `false` (or throw) when the renderer is not reachable — e.g. the
-   * IPC bridge isn't wired yet at startup, or the BrowserWindow has
-   * been destroyed. The host then transparently falls back to the
-   * external-editor flow so the user never gets a silent failure
-   * (caught by Copilot review on PR #3815).
-   *
-   * When undefined, `openDiff` skips the workbench entirely and uses
-   * the external-editor flow — keeps tests and unattended invocations
-   * working.
-   */
-  postToRenderer?(message: unknown): boolean | void;
-  /**
-   * Force the legacy external-editor flow (writes a `.diff` patch file).
-   * Useful for headless tests and as an opt-out if the in-app workbench
-   * misbehaves. Defaults to `false` (prefer the in-app workbench).
-   */
-  forceExternal?: boolean;
 }
 
 export function createDesktopDiffHost(
   options: DesktopDiffHostOptions,
 ): Pick<DiffViewHost, 'openDiff'> {
-  // Try to render the diff in the Review workbench. Returns `false` (so the
-  // caller falls back to the external editor) when the renderer rejects or
-  // throws; mirrors the preview host's contract.
+  // Renders the diff in the Review workbench (`<texra-diff-view>`), or
+  // reports `false` so the caller falls back to the external editor.
   function tryShowDiffInRenderer(message: DesktopShowDiffMessage): boolean {
-    if (!options.postToRenderer || options.forceExternal) return false;
-    try {
-      return options.postToRenderer(message) !== false;
-    } catch (error) {
-      console.error(
-        '[desktop] desktopDiffHost: postToRenderer failed; falling back to external editor',
-        error,
-      );
-      return false;
-    }
+    return tryShowInRenderer(
+      { ...options, source: 'desktopDiffHost', fallback: 'external editor' },
+      message,
+    );
   }
 
   async function openDiff(

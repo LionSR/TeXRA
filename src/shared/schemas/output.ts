@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { DiffStatsSchema } from './lineChanges';
+import { DiffStatsSchema, LineCountSchema } from './lineChanges';
 import { ExecutionIdSchema } from './identifiers';
 import { RoundNumberSchema } from './roundIndexed';
 
@@ -89,17 +89,17 @@ export const OutputFileInfoListSchema = OutputFileInfoSchema.array();
  * the richer file-location internals used while a run is active.
  */
 export const OutputFileSummarySchema = z.object({
-  round: z.int().nonnegative(),
+  round: RoundNumberSchema,
   relativePath: z.string(),
   absolutePath: z.string(),
   location: z.enum(['workspace', 'runStorage', 'external']),
   originalPath: z.string().nullable(),
-  added: z.int().nonnegative().nullable(),
-  removed: z.int().nonnegative().nullable(),
+  added: LineCountSchema.nullable(),
+  removed: LineCountSchema.nullable(),
 });
 
 export const CompileFailureSchema = z.strictObject({
-  round: z.int().nonnegative(),
+  round: RoundNumberSchema,
   displayName: z.string(),
   output: FileLocationSchema,
   log: FileLocationSchema,
@@ -115,7 +115,7 @@ export type CompileFailure = z.infer<typeof CompileFailureSchema>;
  * execution metadata.
  */
 export const CompileFailureSummarySchema = z.object({
-  round: z.int().nonnegative(),
+  round: RoundNumberSchema,
   displayName: z.string(),
   outputPath: z.string(),
   logPath: z.string(),

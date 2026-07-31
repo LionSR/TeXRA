@@ -285,21 +285,32 @@ export async function setRoute(
 /**
  * Route to Settings and activate the tab at `tabIndex`, waiting for the
  * settings-app shadow root to mount so the target panel can be inspected.
+ * Pass `panel` (its `data-panel` value) to additionally wait until that page
+ * button reports `data-active="true"` — callers that assert on which panel
+ * rendered should confirm this instead of racing the previous tab's render.
  */
 export async function setSettingsTab(
   launched: LaunchedApp,
   tabIndex: number,
+  panel?: string,
 ): Promise<void> {
   await setRoute(launched, 'settings');
   await launched.page.evaluate((idx) => {
     window.postMessage({ command: 'setTab', tabIndex: idx }, '*');
   }, tabIndex);
   await launched.page.waitForFunction(
-    () => {
+    (activePanel) => {
       const settingsApp = document.querySelector('settings-app');
-      return settingsApp?.shadowRoot != null;
+      const root = settingsApp?.shadowRoot;
+      if (!root) return false;
+      if (activePanel == null) return true;
+      return (
+        root.querySelector(
+          `.settings-page-button[data-panel="${activePanel}"][data-active="true"]`,
+        ) != null
+      );
     },
-    undefined,
+    panel,
     { timeout: 10_000 },
   );
 }

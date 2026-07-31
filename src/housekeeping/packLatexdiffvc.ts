@@ -5,9 +5,7 @@ import { WorkspaceFS } from '@utils/files';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { collectFilesFromPatterns, generateTimestamp } from './utils';
-import { TEMP_EXTENSIONS } from './constants';
-
-const CHANNEL = 'Housekeeping';
+import { CHANNEL, TEMP_EXTENSIONS } from './constants';
 
 export type LatexdiffPackResult =
   | {

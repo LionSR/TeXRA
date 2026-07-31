@@ -31,11 +31,15 @@ export const DEFAULT_SINGLE_FILES: SingleFiles = {
   editedFile: DEFAULT_STATE.editedFile,
 };
 
-/** Default file options (typed, empty arrays) */
+/**
+ * Default file options. The commit list always carries `HEAD`: it is a valid
+ * selector for any repository, so consumers read the list as-is instead of
+ * synthesizing the entry at use time.
+ */
 export const DEFAULT_FILE_OPTIONS: FileOptions = {
   editedFile: [],
   baseFile: [],
-  commit: [],
+  commit: ['HEAD'],
 };
 
 /** Default multi-files state (typed) */
@@ -55,48 +59,67 @@ export const DEFAULT_CHECKBOX_VALUES: CheckboxValues = {
 };
 
 // =========================================================================
-// Command Mappings
+// Multi-file list registry
 // =========================================================================
 
-/** Maps file types to their update commands */
-export const FILE_UPDATE_COMMANDS: Record<MultipleDocumentFileType, string> = {
-  input: MAIN_VIEW_COMMANDS.UPDATE_INPUT_FILES,
-  context: MAIN_VIEW_COMMANDS.UPDATE_CONTEXT_FILES,
-  media: MAIN_VIEW_COMMANDS.UPDATE_MEDIA_FILES,
-  output: MAIN_VIEW_COMMANDS.UPDATE_OUTPUT_FILES,
-};
-
-// =========================================================================
-// Command-to-Key Mappings (compile-time verifiable)
-// =========================================================================
-
-/** Maps SET_*_FILES commands to their multi-file keys */
-export const MULTI_FILE_COMMAND_TO_KEY: Record<string, keyof MultiFiles> = {
-  [MAIN_VIEW_COMMANDS.SET_INPUT_FILES]: 'inputFiles',
-  [MAIN_VIEW_COMMANDS.SET_CONTEXT_FILES]: 'contextFiles',
-  [MAIN_VIEW_COMMANDS.SET_MEDIA_FILES]: 'mediaFiles',
-  [MAIN_VIEW_COMMANDS.SET_OUTPUT_FILES]: 'outputFiles',
-};
-
-/** Maps a `MultipleDocumentFileType` to its `MultiFiles` key. */
-export const FILE_TYPE_TO_KEY: Record<
-  MultipleDocumentFileType,
-  keyof MultiFiles
-> = {
-  input: 'inputFiles',
-  context: 'contextFiles',
-  media: 'mediaFiles',
-  output: 'outputFiles',
-};
+interface MultiFileList {
+  /** This list's key inside `MultiFiles`. */
+  readonly key: keyof MultiFiles;
+  /** Command the host pushes to replace the whole list. */
+  readonly setCommand: string;
+  /** Command the webview posts after the user edits the list. */
+  readonly updateCommand: string;
+}
 
 /**
- * Reverse of {@link FILE_TYPE_TO_KEY}: maps a `MultiFiles` key back to its file
- * type. Derived from `FILE_TYPE_TO_KEY` rather than listed separately, so a
- * new `MultipleDocumentFileType` only needs updating in one place.
+ * Everything that varies per multi-file list, one row per
+ * `MultipleDocumentFileType`. The `MultiFiles` key, the inbound `SET_*` command
+ * and the outbound `UPDATE_*` command are one relation, so they are written
+ * once here and looked up through the derived maps below rather than through
+ * parallel tables or `${type}Files` string surgery.
  */
-export const KEY_TO_FILE_TYPE = Object.fromEntries(
-  Object.entries(FILE_TYPE_TO_KEY).map(([fileType, key]) => [key, fileType]),
-) as Record<keyof MultiFiles, MultipleDocumentFileType>;
+export const MULTI_FILE_LISTS = {
+  input: {
+    key: 'inputFiles',
+    setCommand: MAIN_VIEW_COMMANDS.SET_INPUT_FILES,
+    updateCommand: MAIN_VIEW_COMMANDS.UPDATE_INPUT_FILES,
+  },
+  context: {
+    key: 'contextFiles',
+    setCommand: MAIN_VIEW_COMMANDS.SET_CONTEXT_FILES,
+    updateCommand: MAIN_VIEW_COMMANDS.UPDATE_CONTEXT_FILES,
+  },
+  media: {
+    key: 'mediaFiles',
+    setCommand: MAIN_VIEW_COMMANDS.SET_MEDIA_FILES,
+    updateCommand: MAIN_VIEW_COMMANDS.UPDATE_MEDIA_FILES,
+  },
+  output: {
+    key: 'outputFiles',
+    setCommand: MAIN_VIEW_COMMANDS.SET_OUTPUT_FILES,
+    updateCommand: MAIN_VIEW_COMMANDS.UPDATE_OUTPUT_FILES,
+  },
+} as const satisfies Record<MultipleDocumentFileType, MultiFileList>;
+
+const MULTI_FILE_LIST_ENTRIES = Object.entries(MULTI_FILE_LISTS) as Array<
+  [MultipleDocumentFileType, MultiFileList]
+>;
+
+/** {@link MULTI_FILE_LISTS} keyed by `MultiFiles` key. */
+export const MULTI_FILE_LIST_BY_KEY = Object.fromEntries(
+  MULTI_FILE_LIST_ENTRIES.map(([fileType, list]) => [
+    list.key,
+    { fileType, ...list },
+  ]),
+) as Record<
+  keyof MultiFiles,
+  MultiFileList & { fileType: MultipleDocumentFileType }
+>;
+
+/** {@link MULTI_FILE_LISTS} keyed by the inbound `SET_*_FILES` command. */
+export const MULTI_FILE_LIST_BY_SET_COMMAND = Object.fromEntries(
+  MULTI_FILE_LIST_ENTRIES.map(([, list]) => [list.setCommand, list]),
+) as Record<string, MultiFileList | undefined>;
 
 /** Maps a single-file selection type (`SET_CURRENT_FILE`'s base/edited slot) to its `FileOptions` key. */
 export const SINGLE_FILE_TYPE_TO_KEY: Record<

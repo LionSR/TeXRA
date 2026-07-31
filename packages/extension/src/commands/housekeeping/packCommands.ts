@@ -53,15 +53,7 @@ function showPackResult(result: FileOpResult, inputFile: string): void {
 }
 
 export async function handlePack(config: PackConfig): Promise<void> {
-  const {
-    agent,
-    model,
-    inputFile,
-    outputFiles,
-    streamId,
-    executionId,
-    skipProgressViewClear,
-  } = config;
+  const { agent, model, inputFile, outputFiles, executionId } = config;
 
   const runWorkspacePack = (): Promise<FileOpResult> =>
     runPack(model, inputFile, agent, outputFiles);
@@ -87,21 +79,7 @@ export async function handlePack(config: PackConfig): Promise<void> {
     result = await runWorkspacePack();
   }
   showPackResult(result, inputFile);
-
-  if (!skipProgressViewClear) {
-    emitClearMissingOutputs(
-      streamId
-        ? { streamIdOverride: streamId }
-        : {
-            streamConfig: {
-              agent,
-              model,
-              inputFile,
-              outputFiles,
-            },
-          },
-    );
-  }
+  emitClearMissingOutputs(config);
 }
 
 export async function handlePackSingle(
@@ -111,9 +89,7 @@ export async function handlePackSingle(
 ): Promise<void> {
   const result = await runPackSingle(model, inputFile, agent);
   showPackResult(result, inputFile);
-  emitClearMissingOutputs({
-    streamConfig: { agent, model, inputFile, outputFiles: [] },
-  });
+  emitClearMissingOutputs({ agent, model, inputFile, outputFiles: [] });
 }
 
 export async function handlePackMultiple(
@@ -125,6 +101,9 @@ export async function handlePackMultiple(
   const result = await runPackMultiple(model, inputFile, agent, inputFiles);
   showPackResult(result, inputFile);
   emitClearMissingOutputs({
-    streamConfig: { agent, model, inputFile, outputFiles: inputFiles },
+    agent,
+    model,
+    inputFile,
+    outputFiles: inputFiles,
   });
 }

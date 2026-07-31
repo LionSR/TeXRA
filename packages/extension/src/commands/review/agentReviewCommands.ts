@@ -37,17 +37,6 @@ import { formatResultCount } from '@utils/text/stringUtils';
 
 const CHANNEL = 'AgentReview';
 
-const agentReviewCommands = {
-  run: 'texra.agentReview.run',
-  runWithOptions: 'texra.agentReview.runWithOptions',
-  stop: 'texra.agentReview.stop',
-  fixAll: 'texra.agentReview.fixAllIssues',
-  fixIssue: 'texra.agentReview.fixIssue',
-  dismissIssue: 'texra.agentReview.dismissIssue',
-  openIssue: 'texra.agentReview.openIssue',
-  clear: 'texra.agentReview.clear',
-};
-
 /** Inline tree actions receive the tree node; code actions pass the issue id. */
 function resolveIssueId(arg: unknown): string | undefined {
   if (typeof arg === 'string') return arg;
@@ -135,26 +124,26 @@ export function registerAgentReviewCommands(
 
   registerCommands(context, [
     {
-      id: agentReviewCommands.run,
+      id: 'texra.agentReview.run',
       handler: () => void AgentReviewService.runReview('manual'),
     },
     {
-      id: agentReviewCommands.runWithOptions,
+      id: 'texra.agentReview.runWithOptions',
       handler: () => void handleRunWithOptions(),
     },
     {
-      id: agentReviewCommands.stop,
+      id: 'texra.agentReview.stop',
       handler: () => AgentReviewService.stop(),
     },
     {
-      id: agentReviewCommands.fixAll,
+      id: 'texra.agentReview.fixAllIssues',
       handler: () => void AgentReviewService.fixIssues(),
     },
-    { id: agentReviewCommands.fixIssue, handler: handleFixIssue },
-    { id: agentReviewCommands.dismissIssue, handler: handleDismissIssue },
-    { id: agentReviewCommands.openIssue, handler: handleOpenIssue },
+    { id: 'texra.agentReview.fixIssue', handler: handleFixIssue },
+    { id: 'texra.agentReview.dismissIssue', handler: handleDismissIssue },
+    { id: 'texra.agentReview.openIssue', handler: handleOpenIssue },
     {
-      id: agentReviewCommands.clear,
+      id: 'texra.agentReview.clear',
       handler: () => AgentReviewService.clear(),
     },
   ]);
