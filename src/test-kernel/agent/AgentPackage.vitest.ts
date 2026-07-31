@@ -87,7 +87,11 @@ vi.mock('@transcript/StreamLogStore', () => ({
 }));
 
 // Local imports - package API under test
-import { runAgent } from '../../../packages/agent/src/index';
+import {
+  runAgent,
+  type HostInteractionCancelSelector,
+  type PendingInteractionKind,
+} from '../../../packages/agent/src/index';
 import { nodePlatform } from '../../../packages/agent/src/node';
 
 const PLATFORM = { lifecycle: {} } as unknown as Platform;
@@ -116,6 +120,13 @@ describe('agent package run lifecycle', () => {
         return RESULT;
       },
     );
+  });
+
+  it('exports the canonical pending interaction kind for cancellation selectors', () => {
+    const kind: PendingInteractionKind = 'planApproval';
+    const selector: HostInteractionCancelSelector = { kind };
+
+    expect(selector.kind).toBe(kind);
   });
 
   it('initializes standard runtime features once for concurrent first runs', async () => {
