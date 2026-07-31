@@ -56,9 +56,6 @@ import { dispatchMessage } from './messageDispatcher';
 // Local imports - progress view components
 import './components/StreamTabs';
 import './components/StreamConversation';
-import './components/UserMessage';
-import './components/LatexdiffResults';
-import './components/ContextManagement';
 
 registerTeXRAWebAwesomeIcons();
 

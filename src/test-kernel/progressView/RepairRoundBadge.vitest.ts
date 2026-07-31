@@ -1,6 +1,5 @@
 // Third-party imports
-import { JSDOM } from 'jsdom';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 // Local imports
 import { BaseNode } from '@agent/node';
@@ -12,6 +11,8 @@ import { computeRoundStageTotal } from '@agent/implementations/flows/reflection/
 import type { ExecutionKVStore } from '@agent/storage/ExecutionKVStore';
 import type { RoundStage } from '@shared/schemas';
 import { createFakeKv } from '@test/support/FakeExecutionKVStore';
+
+import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 
 /**
  * Regression coverage for the reviewer finding on PR #7290 (issue #7077's
@@ -108,22 +109,7 @@ describe('repair-round progress badge (PR #7290 follow-up)', () => {
   });
 
   describe('badge formatters given the repair round stage', () => {
-    let dom: JSDOM;
-
-    beforeAll(async () => {
-      dom = new JSDOM('<!doctype html><html><body></body></html>');
-      Object.assign(globalThis, {
-        window: dom.window,
-        document: dom.window.document,
-        Node: dom.window.Node,
-        Element: dom.window.Element,
-        DocumentFragment: dom.window.DocumentFragment,
-      });
-    });
-
-    afterAll(() => {
-      dom.window.close();
-    });
+    useLitComponentTestDom();
 
     it('renders a sensible, non-over-total badge for the widened repair-round stage', async () => {
       const { renderProgressBadgeContent, getProgressBadgeTitle } =

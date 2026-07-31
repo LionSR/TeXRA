@@ -2,8 +2,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ModelInvocationNode } from '@agent/core/flows/ModelInvocationNode';
 import { responseCycleToolsForModel } from '@agent/core/flows/ResponseCycleFlow';
-import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import { createRunScope } from '@agent/runtime/RunScope';
 import { getDefaultToolRegistry } from '@tools/registry';
 import { testRunScope, withTestRunContext } from './progressTestUtils';
 
@@ -36,29 +34,6 @@ function responseServices({
   };
 }
 
-function withResponseRunContext<T>(
-  options: {
-    approvalPromptsUnavailable?: boolean;
-    runtimeUnavailableTools?: readonly string[];
-  },
-  fn: () => T,
-): T {
-  return withRunContext(
-    createRunContext({
-      runScope: createRunScope({
-        streamId: 'response-cycle-stream',
-        executionId: 'response-cycle-execution',
-        agentName: 'response-agent',
-        session: {} as any,
-      }),
-      modelSource: 'live',
-      getModel: () => 'deepseekT',
-      ...options,
-    }),
-    fn,
-  ) as T;
-}
-
 describe('response cycle tool visibility', () => {
   it.each([
     {
@@ -79,21 +54,27 @@ describe('response cycle tool visibility', () => {
       },
       expected: ['bash', 'grep', 'write_file', 'wolfram'],
     },
-  ])('$name', ({ services, expected }) => {
-    const tools = withResponseRunContext(services, () =>
-      responseCycleToolsForModel(responseServices({}) as any),
+  ])('$name', async ({ services, expected }) => {
+    const tools = await withTestRunContext(
+      { emit: vi.fn() },
+      'response-cycle-stream',
+      async () => responseCycleToolsForModel(responseServices({}) as any),
+      services,
     );
 
     expect(toolNames(tools)).toEqual(expected);
   });
 
-  it('omits workflow tools when the model handler cannot call functions', () => {
-    const tools = withResponseRunContext({}, () =>
-      responseCycleToolsForModel(
-        responseServices({
-          supportsFunctionCalling: false,
-        }) as any,
-      ),
+  it('omits workflow tools when the model handler cannot call functions', async () => {
+    const tools = await withTestRunContext(
+      { emit: vi.fn() },
+      'response-cycle-stream',
+      async () =>
+        responseCycleToolsForModel(
+          responseServices({
+            supportsFunctionCalling: false,
+          }) as any,
+        ),
     );
 
     expect(tools).toBeUndefined();

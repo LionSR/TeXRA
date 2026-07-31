@@ -37,6 +37,7 @@ import {
   selectTranscriptEntriesForViewport,
 } from '@cli/chat/tui/panes/transcriptViewport';
 import {
+  NO_BYPASS,
   resetCliState,
   patchStream,
   streams,
@@ -1360,7 +1361,7 @@ function sliceWithEntries(
     queuedFollowUpMessages: [],
     todos: [],
     plan: null,
-    bypass: { bash: false, toolEdit: false, superYolo: false },
+    bypass: NO_BYPASS,
     ...init,
     outputFilesByRound: init.outputFilesByRound ?? {},
     missingOutputsByRound: init.missingOutputsByRound ?? {},

@@ -1,11 +1,10 @@
-import { render, Box, Text, useApp, useInput, useWindowSize } from 'ink';
+import { Box, Text, useApp, useInput, useWindowSize } from 'ink';
 import { useState } from 'react';
 
 import { Select } from '@cli/tui/ui/Select';
 import { KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
-import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
+import { renderCliPrompt } from '@cli/tui/renderCliPrompt';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
-import { clearTerminalVisibleScreen } from '@cli/tui/terminalCleanup';
 import { computeSelectWindowSize } from '@cli/tui/selectWindow';
 import {
   isCliOrchestrationModelPickAction,
@@ -583,37 +582,28 @@ export async function runOrchestrationTui(
   items: readonly CliOrchestrationItem[],
   options: RunOrchestrationTuiOptions,
 ): Promise<CliOrchestrationAction> {
-  let chosen: CliOrchestrationAction | undefined;
-  const instance = render(
-    <OrchestrationApp
-      items={items}
-      resumeItems={options.resumeItems}
-      agentItems={options.agentItems}
-      teamItems={options.teamItems}
-      accountItems={options.accountItems}
-      models={options.models}
-      apiMode={options.apiMode}
-      modelAccess={options.modelAccess}
-      version={options.version}
-      statusLines={options.statusLines}
-      allowDefaultModelLaunch={options.allowDefaultModelLaunch}
-      onResolve={(action) => {
-        chosen ??= action;
-      }}
-    />,
+  const chosen = await renderCliPrompt<CliOrchestrationAction>(
+    (resolve) => (
+      <OrchestrationApp
+        items={items}
+        resumeItems={options.resumeItems}
+        agentItems={options.agentItems}
+        teamItems={options.teamItems}
+        accountItems={options.accountItems}
+        models={options.models}
+        apiMode={options.apiMode}
+        modelAccess={options.modelAccess}
+        version={options.version}
+        statusLines={options.statusLines}
+        allowDefaultModelLaunch={options.allowDefaultModelLaunch}
+        onResolve={resolve}
+      />
+    ),
     {
-      stdout: tuiOutputStreamForColor(
-        process.stdout,
-        options.colorEnabled ?? true,
-      ),
+      stdout: process.stdout,
       stderr: process.stderr,
-      stdin: process.stdin,
+      colorEnabled: options.colorEnabled,
     },
   );
-
-  await instance.waitUntilExit();
-  // Wipe the picker out of the visible screen once Ink has finished
-  // unmounting without erasing the user's primary-buffer scrollback.
-  clearTerminalVisibleScreen();
   return chosen ?? { kind: 'exit' };
 }

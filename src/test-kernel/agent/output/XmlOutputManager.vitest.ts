@@ -5,9 +5,9 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { assignByContentSimilarity } from '@agent/output/extraction/contentSimilarity';
 import { OutputFileProcessor } from '@agent/output/OutputFileProcessor';
 import { XmlOutputManager } from '@agent/output/XmlOutputManager';
-import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import type { OutputFileInfo, RoundOutput } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
+import { spiedTrace } from '@test/support/spiedTrace';
 import {
   AbsoluteFS,
   TaskRunFileService,
@@ -27,15 +27,6 @@ interface XmlManagerOptions {
   /** Run-relative names of the files a similarity fallback may match against. */
   baseFiles?: string[];
   logger?: AgentTrace;
-}
-
-function createTraceStub(): AgentTrace {
-  return {
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    domain: vi.fn(),
-  } as unknown as AgentTrace;
 }
 
 function createRoundData(round: number): RoundOutput {
@@ -62,7 +53,7 @@ function createXmlManager(
       inputFiles,
       outputFiles: options.outputFiles ?? [],
     } as unknown as AgentConfig,
-    options.logger ?? createTraceStub(),
+    options.logger ?? spiedTrace(),
     new TaskRunFileService('xml-output-manager-test'),
   );
 }
@@ -807,8 +798,7 @@ Appendix.
     const processor = new OutputFileProcessor({
       baseFiles: [],
       streamId: 'stream',
-      interactions: { emit: vi.fn() } as unknown as SessionHostInteractions,
-      logger: createTraceStub(),
+      logger: spiedTrace(),
       xmlManager: manager,
       setRoundOutputs: (_round, outputs) => {
         roundOutputs = outputs;
@@ -1554,8 +1544,7 @@ Appendix.
         createExternalLocation('/tmp/run/cost_section.tex'),
       ],
       streamId: 'stream',
-      interactions: { emit: vi.fn() } as unknown as SessionHostInteractions,
-      logger: createTraceStub(),
+      logger: spiedTrace(),
       xmlManager: manager,
       setRoundOutputs: (_round, outputs) => {
         roundOutputs = outputs;
@@ -1601,7 +1590,7 @@ Appendix.
   });
 
   it('reports expected files left unmatched by filename-header recovery', async () => {
-    const logger = createTraceStub();
+    const logger = spiedTrace();
     const outputs = await writeAndSplitDocuments(
       [
         'main.tex:',
@@ -1627,7 +1616,7 @@ Appendix.
   });
 
   it('logs discarded unclosed latex fences during similarity recovery', async () => {
-    const logger = createTraceStub();
+    const logger = spiedTrace();
     await AbsoluteFS.write('/tmp/run/a.tex', 'Original A.');
     await AbsoluteFS.write('/tmp/run/b.tex', 'Original B.');
 

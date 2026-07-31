@@ -22,9 +22,11 @@
  */
 
 import { Hono } from '@hono/hono';
-import type { SupabaseClient } from '@supabase/supabase-js';
 import { handleCors } from '../_shared/cors.ts';
-import { adminClient, anonClient } from '../_shared/edgeClients.ts';
+import {
+  requireSupabaseClients,
+  type SupabaseClientVariables,
+} from '../_shared/edgeMiddleware.ts';
 import {
   checkEmailDomain,
   checkGitHubAccountAge,
@@ -48,12 +50,6 @@ interface GitHubUser {
   created_at: string;
 }
 
-// `any` schema so `.schema('auth')` queries typecheck (service-role client).
-type Variables = {
-  supabase: SupabaseClient<any>;
-  authClient: SupabaseClient<any>;
-};
-
 type MetadataRecord = Record<string, unknown>;
 
 // =============================================================================
@@ -62,7 +58,9 @@ type MetadataRecord = Record<string, unknown>;
 
 // The edge runtime hands over paths including the function slug
 // (/auth-github/exchange), same as the relay function.
-const app = new Hono<{ Variables: Variables }>().basePath('/auth-github');
+const app = new Hono<{ Variables: SupabaseClientVariables }>().basePath(
+  '/auth-github',
+);
 
 // CORS middleware using shared utilities
 app.use('*', async (c, next) => {
@@ -72,16 +70,7 @@ app.use('*', async (c, next) => {
 });
 
 // Initialize Supabase client
-app.use('*', async (c, next) => {
-  if (!adminClient || !anonClient) {
-    return errorResponse(c.req.raw, 'Server configuration error', 500);
-  }
-
-  c.set('supabase', adminClient);
-  c.set('authClient', anonClient);
-
-  await next();
-});
+app.use('*', requireSupabaseClients);
 
 // =============================================================================
 // Helpers

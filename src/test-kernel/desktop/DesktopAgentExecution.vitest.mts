@@ -70,7 +70,7 @@ import {
   type DesktopAgentExecutionModule,
   type RunExecutionRequest,
 } from './desktopAgentExecutionTestHarness.mjs';
-import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
+import { loadSourceModule } from './loadSourceModule.mjs';
 
 type DesktopProgressBridgeOptions =
   import('@desktop/main/desktopAgentExecution').DesktopProgressBridgeOptions;
@@ -427,9 +427,9 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
   const createProgressSnapshotStore = (): ProgressSnapshotStore =>
     new StreamSnapshotStore();
   const progressSnapshotStore = createProgressSnapshotStore();
-  const bridgeModule = (await import(
-    moduleFileUrl(desktopSourcePath('main', 'desktopAgentExecution.ts'))
-  )) as DesktopAgentExecutionModule;
+  const bridgeModule = await loadSourceModule(
+    '@desktop/main/desktopAgentExecution',
+  );
   const { DesktopProcessResumeOwner } =
     await import('@desktop/main/desktopAgentResume');
   const processResumeOwner = new DesktopProcessResumeOwner();

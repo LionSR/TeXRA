@@ -14,11 +14,8 @@ import { StorageFS } from '@utils/files';
 
 // Local file imports
 import { createStubDesktopHistoryOptions } from './desktopSettingsTestSupport';
-import {
-  desktopSourcePath,
-  moduleFileUrl,
-  repoPath,
-} from './desktopTestPaths.mjs';
+import { repoPath } from './desktopTestPaths.mjs';
+import { loadSourceModule } from './loadSourceModule.mjs';
 
 const chatExportMocks = vi.hoisted(() => ({
   buildExportInput: vi.fn(),
@@ -129,9 +126,9 @@ async function writeForeignLease(executionId: string): Promise<void> {
 
 describe('DesktopHistoryHandlers', () => {
   beforeAll(async () => {
-    ({ DesktopHistoryHandlers } = (await import(
-      moduleFileUrl(desktopSourcePath('main', 'desktopHistoryHandlers.ts'))
-    )) as DesktopHistoryHandlersModule);
+    ({ DesktopHistoryHandlers } = await loadSourceModule(
+      '@desktop/main/desktopHistoryHandlers',
+    ));
   });
 
   beforeEach(() => {

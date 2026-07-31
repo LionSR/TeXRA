@@ -5,7 +5,10 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { LOG_LEVELS, type LogMessageData } from '@shared/schemas';
 
 // Local imports - test utilities
-import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
+import {
+  dispatchKey,
+  useLitComponentTestDom,
+} from '../settings/litComponentTestUtils';
 
 useLitComponentTestDom(() =>
   Promise.all([
@@ -341,17 +344,6 @@ type WaDetailsElement = HTMLElement & {
   updateComplete: Promise<boolean>;
 };
 
-function dispatchActivationKeydown(target: EventTarget, key: 'Enter' | ' ') {
-  target.dispatchEvent(
-    new KeyboardEvent('keydown', {
-      key,
-      bubbles: true,
-      composed: true,
-      cancelable: true,
-    }),
-  );
-}
-
 const ACTIVATION_KEYS = ['Enter', ' '] as const;
 
 const SUMMARY_CONTROL_CASES = [
@@ -469,7 +461,7 @@ describe('wa-details summary controls: activation does not toggle the panel', ()
       if (control!.updateComplete) await control!.updateComplete;
 
       expect(waDetails!.open).toBe(false);
-      dispatchActivationKeydown(control!, key);
+      dispatchKey(control!, key);
       await new Promise((resolve) => setTimeout(resolve, 20));
       expect(waDetails!.open).toBe(false);
     },

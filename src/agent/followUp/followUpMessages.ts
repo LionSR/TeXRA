@@ -1,4 +1,4 @@
-import type { AgentTrace } from '@agent/trace';
+import { logUserMessage, type AgentTrace } from '@agent/trace';
 import type { IModelHandler } from '@agent/types/IModelHandler';
 import type { SdkToolCall } from '@agent/types/ModelHandlerContracts';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
@@ -21,7 +21,7 @@ interface FollowUpMessageServices<C> {
   readonly logger: Pick<AgentTrace, 'warn'>;
 }
 
-export function followUpDisplayText(followUp: FollowUpQueueBatchItem): string {
+function followUpDisplayText(followUp: FollowUpQueueBatchItem): string {
   if (followUp.displayText !== undefined) return followUp.displayText;
   return followUp.origin === 'subagent_result'
     ? summarizeFollowupMessage(followUp.text)
@@ -75,4 +75,60 @@ export async function appendFollowUpAsUserMessage<C>(
     followUp.mediaFiles.map((p) => services.fileService.createLocation(p)),
   );
   return { messages: nextMessages, attachmentKinds };
+}
+
+interface FollowUpBatchServices<C> extends Omit<
+  FollowUpMessageServices<C>,
+  'logger'
+> {
+  readonly logger: AgentTrace;
+  /** Callback when a queued follow-up batch is consumed (clears UI display). */
+  readonly onFollowUpConsumed?: () => void;
+}
+
+/**
+ * Append one drained follow-up batch to `target.messages`.
+ *
+ * A non-synthetic follow-up's transcript row must be logged whether
+ * appendFollowUpAsUserMessage succeeds or throws (e.g. a corrupt/oversized
+ * media file) -- otherwise a failed round or resume leaves no record of what
+ * the user asked for. `finally` preserves the throw so the caller still fails
+ * as before; a throw before any attachment was inserted just yields an empty
+ * attachments list, which is accurate (nothing was actually inserted).
+ * Synthetic follow-ups are never logged, throw or not.
+ *
+ * Consumption is acknowledged only after every item actually landed in
+ * `target.messages`: an append failure must leave the batch unacknowledged so
+ * the resume wrapper restores it for replay instead of treating the lost input
+ * as consumed.
+ */
+export async function applyFollowUpBatch<C>(
+  target: { messages: ProviderMessage[] },
+  followUps: readonly FollowUpQueueBatchItem[],
+  synthetic: boolean | undefined,
+  services: FollowUpBatchServices<C>,
+): Promise<void> {
+  for (const followUp of followUps) {
+    let result: AppendFollowUpResult | undefined;
+    try {
+      result = await appendFollowUpAsUserMessage(
+        target.messages,
+        followUp,
+        services,
+      );
+      target.messages = result.messages;
+    } finally {
+      if (!synthetic) {
+        logUserMessage(
+          services.logger,
+          followUpDisplayText(followUp),
+          result?.attachmentKinds ?? [],
+        );
+      }
+    }
+  }
+
+  if (!synthetic) {
+    services.onFollowUpConsumed?.();
+  }
 }

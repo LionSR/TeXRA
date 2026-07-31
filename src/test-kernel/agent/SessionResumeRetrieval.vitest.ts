@@ -10,7 +10,10 @@ import {
   AgentPromptSchema,
   AgentToolUseSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import {
+  AgentConfigSchema,
+  type AgentConfig,
+} from '@agent/core/definition/AgentConfig';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import {
@@ -47,27 +50,16 @@ import {
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
-import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
 
-const CONFIG: AgentConfig = {
-  inputFiles: [],
-  contextFiles: [],
-  mediaFiles: [],
-  outputFiles: [],
-  editedFile: null,
+const CONFIG = AgentConfigSchema.parse({
   agent: 'chat',
   model: 'gpt54',
   instruction: 'Continue.',
   agentCategory: AgentCategory.ToolUse,
-  editedFiles: [],
-  toolConfig: DEFAULT_TOOL_CONFIG,
-  memories: [],
   workingDirectory: '/workspace',
-  cliOutputFile: null,
-  cliMultiAgentPresetId: null,
-};
+});
 const GOOGLE_CONFIG: AgentConfig = { ...CONFIG, model: 'gemini35f' };
 const GOOGLE_WORKFLOW_CONFIG: AgentConfig = {
   ...GOOGLE_CONFIG,

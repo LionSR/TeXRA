@@ -10,7 +10,10 @@ import {
 } from '@shared/commands/shortcutPreferences';
 
 // Local imports - test DOM
-import { useLitComponentTestDom } from './litComponentTestUtils';
+import {
+  mountComponent,
+  useLitComponentTestDom,
+} from './litComponentTestUtils';
 
 describe('shortcuts-tab', () => {
   useLitComponentTestDom(
@@ -74,10 +77,9 @@ describe('shortcuts-tab', () => {
     };
     const uninstall = installDesktopShortcutService(service);
     try {
-      const element = document.createElement('shortcuts-tab');
-      element.desktopHost = true;
-      document.body.append(element);
-      await element.updateComplete;
+      const element = await mountComponent<
+        HTMLElementTagNameMap['shortcuts-tab']
+      >('shortcuts-tab', { desktopHost: true });
 
       expect(element.shadowRoot?.textContent).toContain('Show Commands');
       const recorder =

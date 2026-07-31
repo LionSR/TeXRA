@@ -13,6 +13,10 @@ import { z } from 'zod';
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/details/details.js';
 
+// Side-effect imports to register the custom elements emitted below
+import '@progressView/frontend/components/ContextManagement';
+import '@progressView/frontend/components/LatexdiffResults';
+
 // Third-party imports - Lit template utilities
 import { html } from 'lit';
 import { ifDefined } from 'lit/directives/if-defined.js';

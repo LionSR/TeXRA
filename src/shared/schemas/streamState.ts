@@ -186,6 +186,11 @@ const BaseStreamStateSchema = BackendOwnedFieldsSchema.extend({
   // Frontend-owned fields — set by frontend handlers, preserved during backend merges.
   taskGroups: z.array(TaskGroupSchema).prefault([]),
   contextState: ContextStateDataSchema.optional(),
+  // Per-run usage for accumulation; sessionUsage is derived as their sum.
+  // Both stream kinds carry it so resume accumulates across the original and
+  // resumed runs.
+  runUsage: RunUsageMapSchema.prefault({}),
+  sessionUsage: TokenUsageStatsSchema.nullable().prefault(null),
 });
 
 // Tool-Use UI State (frontend-only, preserved during backend updates)
@@ -213,9 +218,6 @@ const ToolUseStreamStateSchema = BaseStreamStateSchema.extend({
   goalActive: z.boolean().optional(),
   goalStatus: GoalStatusSchema.optional(),
   goalObjective: z.string().optional(),
-  // Per-run usage for accumulation; sessionUsage is derived as their sum.
-  runUsage: RunUsageMapSchema.prefault({}),
-  sessionUsage: TokenUsageStatsSchema.nullable().prefault(null),
   // Frontend-owned (nested under ui)
   ui: ToolUseUIStateSchema.prefault({}),
 });
@@ -228,10 +230,6 @@ export type ToolUseStreamState = z.infer<typeof ToolUseStreamStateSchema>;
 const WorkflowStreamStateSchema = BaseStreamStateSchema.extend({
   kind: z.literal(AgentCategory.Workflow),
   // Frontend-owned fields updated by targeted progress-view messages.
-  // Per-run usage mirrors tool-use so resume correctly accumulates across
-  // the original and resumed runs; sessionUsage is derived as their sum.
-  runUsage: RunUsageMapSchema.prefault({}),
-  sessionUsage: TokenUsageStatsSchema.nullable().prefault(null),
   files: roundIndexedRecord(OutputFileInfoSchema).prefault({}),
   missingOutputs: roundIndexedRecord(z.string()).prefault({}),
   compileFailures: roundIndexedRecord(CompileFailureSchema).prefault({}),

@@ -103,8 +103,13 @@ const MERGE_CONFLICT_COALESCE_THRESHOLD = 3;
 
 export type RepoKey = `${string}/${string}`;
 
-export function repoKeyOf(owner: string, repo: string): RepoKey {
-  return `${owner}/${repo}` as RepoKey;
+export interface RepoSubscribeInput {
+  owner: string;
+  repo: string;
+}
+
+export function repoKeyToString(repo: RepoSubscribeInput): RepoKey {
+  return `${repo.owner}/${repo.repo}` as RepoKey;
 }
 
 interface SubscriptionState extends BasePollSubscriptionState {
@@ -162,12 +167,11 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
   }
 
   subscribe(
-    owner: string,
-    repo: string,
+    input: RepoSubscribeInput,
     onEvent: (text: string) => void,
   ): Disposable {
-    const key = repoKeyOf(owner, repo);
-    return this.register(key, () => createInitialState(owner, repo), onEvent);
+    const key = repoKeyToString(input);
+    return this.register(key, () => createInitialState(input), onEvent);
   }
 
   protected emitKeysChangedEvent(keys: readonly RepoKey[]): void {
@@ -424,13 +428,13 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
   }
 }
 
-function createInitialState(owner: string, repo: string): SubscriptionState {
+function createInitialState(input: RepoSubscribeInput): SubscriptionState {
   const now = Date.now();
   const seed = new Date(now - SEED_WINDOW_MS).toISOString();
   return {
-    owner,
-    repo,
-    slug: repoKeyOf(owner, repo),
+    owner: input.owner,
+    repo: input.repo,
+    slug: repoKeyToString(input),
     listeners: new Set(),
     initialized: false,
     subscribedAt: new Date(now).toISOString(),

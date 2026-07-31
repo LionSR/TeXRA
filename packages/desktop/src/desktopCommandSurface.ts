@@ -16,9 +16,11 @@ import {
   type CommandHandler,
 } from '@shared/commands/registry';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
+import {
+  buildDesktopSetRouteMessage,
+  type DesktopRoute,
+} from './desktopShellMessages.js';
 import type { MenuItemConstructorOptions } from 'electron';
-
-import type { DesktopRoute } from './desktopShellMessages.js';
 
 export const DESKTOP_LOCAL_COMMANDS = {
   SHOW_LOGS: 'texra.desktop.showLogs',
@@ -446,6 +448,21 @@ export function buildDesktopSettingsTabMessage(
     tabIndex,
     ...(agentSubTab && { agentSubTab }),
   };
+}
+
+/**
+ * Sole owner of the two-message "open the settings surface, then select a tab"
+ * sequence the main process posts. Menu/rail navigation and stream-initiated
+ * navigation both route here so the two cannot drift apart.
+ */
+export function postDesktopSettingsRoute(
+  postToRenderer: (message: unknown) => void,
+  tabIndex?: SettingsTab,
+  agentSubTab?: AgentCategory,
+): void {
+  postToRenderer(buildDesktopSetRouteMessage('settings'));
+  if (tabIndex == null) return;
+  postToRenderer(buildDesktopSettingsTabMessage(tabIndex, agentSubTab));
 }
 
 export function buildDesktopMainViewResetMessage(): DesktopMainViewResetMessage {

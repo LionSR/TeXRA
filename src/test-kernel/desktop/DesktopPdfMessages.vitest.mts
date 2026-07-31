@@ -1,18 +1,12 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
-
-async function loadPdfMessages(): Promise<
-  typeof import('../../../packages/desktop/src/desktopPdfMessages')
-> {
-  return (await import(
-    moduleFileUrl(desktopSourcePath('desktopPdfMessages.ts'))
-  )) as typeof import('../../../packages/desktop/src/desktopPdfMessages');
-}
+import { loadSourceModule } from './loadSourceModule.mjs';
 
 describe('DesktopShowPdfMessageSchema', () => {
   it('round-trips a complete payload', async () => {
-    const { DesktopShowPdfMessageSchema } = await loadPdfMessages();
+    const { DesktopShowPdfMessageSchema } = await loadSourceModule(
+      '@desktop/desktopPdfMessages',
+    );
     const parsed = DesktopShowPdfMessageSchema.parse({
       command: 'desktop:showPdf',
       title: 'paper.pdf',
@@ -23,7 +17,9 @@ describe('DesktopShowPdfMessageSchema', () => {
   });
 
   it('rejects empty pdfPath', async () => {
-    const { DesktopShowPdfMessageSchema } = await loadPdfMessages();
+    const { DesktopShowPdfMessageSchema } = await loadSourceModule(
+      '@desktop/desktopPdfMessages',
+    );
     const result = DesktopShowPdfMessageSchema.safeParse({
       command: 'desktop:showPdf',
       title: 'paper',
@@ -36,7 +32,9 @@ describe('DesktopShowPdfMessageSchema', () => {
 describe('isSafeAbsolutePdfPath', () => {
   let isSafeAbsolutePdfPath: (path: string) => boolean;
   beforeAll(async () => {
-    ({ isSafeAbsolutePdfPath } = await loadPdfMessages());
+    ({ isSafeAbsolutePdfPath } = await loadSourceModule(
+      '@desktop/desktopPdfMessages',
+    ));
   });
 
   it.each<[string, boolean]>([

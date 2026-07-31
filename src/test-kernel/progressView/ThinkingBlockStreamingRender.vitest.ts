@@ -1,11 +1,12 @@
-import { JSDOM } from 'jsdom';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import {
   LOG_LEVELS,
   MESSAGE_TYPES,
   type LogMessageData,
 } from '@shared/schemas';
+
+import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 
 // Loaded after the jsdom globals are installed: lit and the formatters both
 // capture `document` at import time.
@@ -26,23 +27,9 @@ function renderEntry(message: LogMessageData): Element {
  * is visually indistinguishable from an unrelated info log.
  */
 describe('progress view live activity rendering', () => {
-  let dom: JSDOM;
-
-  beforeAll(async () => {
-    dom = new JSDOM('<!doctype html><html><body></body></html>');
-    Object.assign(globalThis, {
-      window: dom.window,
-      document: dom.window.document,
-      Node: dom.window.Node,
-      Element: dom.window.Element,
-      DocumentFragment: dom.window.DocumentFragment,
-    });
+  useLitComponentTestDom(async () => {
     ({ formatLogEntry } = await import('@progressView/frontend/formatters'));
     ({ render } = await import('lit'));
-  });
-
-  afterAll(() => {
-    dom.window.close();
   });
 
   it('renders a banner-details shell, not a plain log line, while the stream is running', () => {

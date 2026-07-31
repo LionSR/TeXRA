@@ -6,16 +6,17 @@ import type { UserMessage } from '@progressView/frontend/components/UserMessage'
 import { DELIVERY_TAGS } from '@shared/deliveryTags';
 
 // Local file imports
-import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
+import {
+  mountComponent,
+  useLitComponentTestDom,
+} from '../settings/litComponentTestUtils';
 
-async function mount(text: string): Promise<UserMessage> {
-  const element = document.createElement('user-message') as UserMessage;
-  element.text = text;
-  element.logId = 'log-1';
-  element.timestamp = Date.now();
-  document.body.append(element);
-  await element.updateComplete;
-  return element;
+function mount(text: string): Promise<UserMessage> {
+  return mountComponent<UserMessage>('user-message', {
+    text,
+    logId: 'log-1',
+    timestamp: Date.now(),
+  });
 }
 
 /**

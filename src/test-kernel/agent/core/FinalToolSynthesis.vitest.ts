@@ -5,13 +5,11 @@ import {
   createToolUseRoundFlow,
   type ToolUseRoundShared,
 } from '@agent/core/flows/ToolUseRoundFlow';
-import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
-import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import type { CreateResponseOptions } from '@agent/types/ModelHandlerContracts';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
-import { createRunTrace, StreamLogStore } from '@transcript';
-import { testRunScope, withTestRunContext } from '../progressTestUtils';
+import { withTestRunContext } from '../progressTestUtils';
+import { baseRoundServices, roundModelHandler } from '../toolUseRoundTestUtils';
 
 function buildRound(supportsForcedToolChoice: boolean) {
   const requests: CreateResponseOptions[] = [];
@@ -19,64 +17,34 @@ function buildRound(supportsForcedToolChoice: boolean) {
     requests.push(options);
     return { response: { turn: requests.length } };
   });
-  const modelHandler = {
-    addMediaToUserMessage: vi.fn(async () => []),
-    capabilities: { supportsVision: true },
-    config: { provider: 'openai', fullName: 'test-model' },
-    createAssistantMessageFromResponse: vi.fn(
-      (_response: unknown, text: string) =>
-        ({ role: 'assistant', content: text }) as ProviderMessage,
-    ),
-    createResponse,
-    createUserFollowUpMessages: vi.fn(
-      async (messages: ProviderMessage[], text: string) => [
-        ...messages,
-        { role: 'user', content: text } as ProviderMessage,
-      ],
-    ),
-    extractAssistantContent: () => [],
-    extractResponse: (response: { turn: number }) => ({
-      text: response.turn === 1 ? 'Draft answer' : '',
-      usage: null,
-      stopReason: 'stop',
-    }),
-    extractServerToolData: () => ({
-      contentBlocks: [],
-      webFetchResults: [],
-      webSearchResults: [],
-    }),
-    extractToolUse: () => [],
-    getWireRouteKey: () => 'openai:test-route',
-    getModelRetryRouteKey: () => 'openai:test-route:model',
-    getStreamingConfig: () => false,
-    isEndTurnStop: () => true,
-    processThinkingBlock: () => null,
-    setOutputStreaming: vi.fn(),
-    supportsForcedToolChoice,
-  };
   const services = {
-    checkInterruption: () => false,
-    client: {},
-    config: { agent: 'test-agent', model: 'test-model' },
-    runScope: testRunScope('final-tool-synthesis'),
-    fileService: {
-      createLocation: (filePath: string) => ({ absolutePath: filePath }),
-    },
+    ...baseRoundServices('FinalToolSynthesis', 'final-tool-synthesis'),
     finalTool: { name: 'submit_output' },
-    logger: createRunTrace(
-      'FinalToolSynthesis',
-      StreamLogStore.ephemeral('test'),
-    ).trace,
-    modelHandler,
-    onRoundFinalized: vi.fn(),
-    run: AgentRunStateSnapshotSchema.parse({}),
+    modelHandler: roundModelHandler({
+      createAssistantMessageFromResponse: vi.fn(
+        (_response: unknown, text: string) =>
+          ({ role: 'assistant', content: text }) as ProviderMessage,
+      ),
+      createResponse,
+      createUserFollowUpMessages: vi.fn(
+        async (messages: ProviderMessage[], text: string) => [
+          ...messages,
+          { role: 'user', content: text } as ProviderMessage,
+        ],
+      ),
+      extractResponse: (response: { turn: number }) => ({
+        text: response.turn === 1 ? 'Draft answer' : '',
+        usage: null,
+        stopReason: 'stop',
+      }),
+      isEndTurnStop: () => true,
+      supportsForcedToolChoice,
+    }),
     session: { hasQueuedFollowUp: () => false },
-    setAbortController: vi.fn(),
     setting: {
       temperature: 0,
       tools: [{ name: 'submit_output', description: 'Submit output' }],
     },
-    workspace: AgentWorkspaceState.create(),
   } as unknown as ToolUseRoundServices;
   const shared: ToolUseRoundShared = {
     messages: [{ role: 'user', content: 'Research this' }],

@@ -79,8 +79,16 @@ export const AUTH_BRIDGE_URL = `https://${SUPABASE_CUSTOM_DOMAIN}/functions/v1/a
  */
 export const RELAY_TOKENS_BASE_URL = `https://${SUPABASE_CUSTOM_DOMAIN}/functions/v1/relay-tokens`;
 
+/**
+ * The relay's tier-config endpoint under a given Supabase base URL. TierService
+ * resolves it against its injected base URL; everything else uses the constant.
+ */
+export function relayTierConfigUrl(baseUrl: string): string {
+  return `${baseUrl}/functions/v1/relay/tier-config`;
+}
+
 /** Public URL of the relay's tier-config endpoint. */
-export const RELAY_TIER_CONFIG_URL = `https://${SUPABASE_CUSTOM_DOMAIN}/functions/v1/relay/tier-config`;
+export const RELAY_TIER_CONFIG_URL = relayTierConfigUrl(SUPABASE_CONFIG.url);
 
 /**
  * Supported OAuth providers for TeXRA authentication.

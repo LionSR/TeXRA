@@ -372,13 +372,29 @@ export async function runToolWithCheck(
  * @param showError Whether to show error messages for missing tools
  * @returns Promise<boolean[]> Array of booleans indicating which tools are installed
  */
-export async function checkMultipleToolsInstalled(
+async function checkMultipleToolsInstalled(
   configs: string[],
   showError: boolean = true,
 ): Promise<boolean[]> {
   return Promise.all(
     configs.map((config) => checkToolInstalled(config, showError)),
   );
+}
+
+/**
+ * Which of the two interchangeable image processors is installed, preferring
+ * ImageMagick, or `null` when neither is. The single owner of the
+ * "magick or gm" alternation that PDF rasterization, image resizing, and the
+ * core-dependency check all decide on.
+ */
+export async function detectImageTool(): Promise<'magick' | 'gm' | null> {
+  const [hasMagick, hasGm] = await checkMultipleToolsInstalled(
+    ['magick', 'gm'],
+    false,
+  );
+  if (hasMagick) return 'magick';
+  if (hasGm) return 'gm';
+  return null;
 }
 
 /**
@@ -408,14 +424,9 @@ export async function checkCoreDependencies(
     );
     const missingBasicTools = basicTools.filter((_, i) => !basicResults[i]);
 
-    // Check for either GraphicsMagick or ImageMagick
-    const [hasMagick, hasGm] = await checkMultipleToolsInstalled(
-      ['magick', 'gm'],
-      false, // Don't show errors since we're checking alternatives
-    );
-
-    // Add image tool to missing list only if neither is installed
-    if (!hasMagick && !hasGm) {
+    // Check for either GraphicsMagick or ImageMagick, and add the image tool
+    // to the missing list only if neither is installed.
+    if (!(await detectImageTool())) {
       missingBasicTools.push('gm/magick');
       if (showError) {
         const errorMsg =

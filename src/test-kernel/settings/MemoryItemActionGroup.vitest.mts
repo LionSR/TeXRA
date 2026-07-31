@@ -15,7 +15,10 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { MemoryViewItem } from '@shared/schemas/memoryViewMessages';
 
 // Local file imports
-import { useLitComponentTestDom } from './litComponentTestUtils';
+import {
+  mountComponent,
+  useLitComponentTestDom,
+} from './litComponentTestUtils';
 
 function makeItem(overrides: Partial<MemoryViewItem> = {}): MemoryViewItem {
   return {
@@ -27,12 +30,8 @@ function makeItem(overrides: Partial<MemoryViewItem> = {}): MemoryViewItem {
   };
 }
 
-async function mount(item: MemoryViewItem): Promise<MemoryItem> {
-  const element = document.createElement('memory-item') as MemoryItem;
-  element.item = item;
-  document.body.append(element);
-  await element.updateComplete;
-  return element;
+function mount(item: MemoryViewItem): Promise<MemoryItem> {
+  return mountComponent<MemoryItem>('memory-item', { item });
 }
 
 /**

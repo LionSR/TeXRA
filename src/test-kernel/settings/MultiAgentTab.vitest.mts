@@ -18,16 +18,14 @@ import {
 } from '@shared/schemas/agentPresets';
 
 // Local file imports
-import { useLitComponentTestDom } from './litComponentTestUtils';
+import {
+  dispatchKey,
+  mountComponent,
+  useLitComponentTestDom,
+} from './litComponentTestUtils';
 
-async function mount(
-  props: Partial<MultiAgentTab> = {},
-): Promise<MultiAgentTab> {
-  const element = document.createElement('multi-agent-tab') as MultiAgentTab;
-  Object.assign(element, props);
-  document.body.append(element);
-  await element.updateComplete;
-  return element;
+function mount(props: Partial<MultiAgentTab> = {}): Promise<MultiAgentTab> {
+  return mountComponent<MultiAgentTab>('multi-agent-tab', props);
 }
 
 const CUSTOM_PRESET: AgentModePreset = {
@@ -38,17 +36,6 @@ const CUSTOM_PRESET: AgentModePreset = {
   workflowAgents: ['polish'],
   toolUseAgents: ['assistant'],
 };
-
-function dispatchKey(target: Element, key: string): void {
-  target.dispatchEvent(
-    new KeyboardEvent('keydown', {
-      key,
-      bubbles: true,
-      composed: true,
-      cancelable: true,
-    }),
-  );
-}
 
 /**
  * Regression coverage for the a11y-clickables audit: the team-preset card

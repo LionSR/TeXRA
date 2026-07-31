@@ -20,38 +20,14 @@ import type { ToolEditApprovalAction } from '@shared/schemas/prompts';
 import { createTestSession as createIsolatedTestSession } from '@test/support/sessionTestUtils';
 import { delay } from '@utils/core';
 import { createStubDesktopAgentExecutionHost } from './desktopAgentExecutionTestHarness.mjs';
-import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
+import { loadSourceModule } from './loadSourceModule.mjs';
 
 const approvalTest = (name: string, fn: () => Promise<void>): void => {
   it(name, fn, 30_000);
 };
 
-interface DesktopToolEditApprovalModule {
-  createDesktopToolEditApprovalController(options: {
-    interactions: Required<Pick<SessionHostInteractions, 'emit'>>;
-    session: SessionHandle;
-    ui: ReturnType<typeof createStubDesktopAgentExecutionHost>;
-    showToolEditPermission(payload: ToolEditPermission): void;
-    resolveToolEditPermission(requestId: string): void;
-    tempRoot?: string;
-  }): {
-    approvePendingForStream(streamId: string): Promise<void>;
-    cancel(selector?: {
-      streamId?: string | null;
-      kind?: string;
-      cause?: string;
-    }): void;
-    handleAction(payload: {
-      requestId: string;
-      action: ToolEditApprovalAction;
-      feedback?: string;
-    }): void;
-    requestApproval(
-      request: ToolEditApprovalRequest,
-    ): Promise<ToolEditApprovalResult>;
-    dispose(): void;
-  };
-}
+type DesktopToolEditApprovalModule =
+  typeof import('@desktop/main/desktopToolEditApproval');
 
 type ApprovalControllerOptions = Parameters<
   DesktopToolEditApprovalModule['createDesktopToolEditApprovalController']
@@ -248,9 +224,7 @@ async function loadApprovalModules(workspacePath = '/workspace') {
   ] = await Promise.all([
     import('@tools/approval/toolEditApproval'),
     import('@tools/approval'),
-    import(
-      moduleFileUrl(desktopSourcePath('main', 'desktopToolEditApproval.ts'))
-    ) as Promise<DesktopToolEditApprovalModule>,
+    loadSourceModule('@desktop/main/desktopToolEditApproval'),
   ]);
   return {
     requestToolEditApproval,

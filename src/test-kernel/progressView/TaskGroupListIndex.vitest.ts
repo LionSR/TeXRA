@@ -18,7 +18,10 @@ import {
 } from '@shared/schemas';
 
 // Local file imports
-import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
+import {
+  mountComponent,
+  useLitComponentTestDom,
+} from '../settings/litComponentTestUtils';
 
 const audio = vi.hoisted(() => ({
   playCompletionSound: vi.fn(),
@@ -81,19 +84,15 @@ function createList(messages: LogMessageData[]): TaskGroupListInternals {
   return element;
 }
 
-async function renderList(
+function renderList(
   groups: TaskGroup[],
   messages: LogMessageData[],
 ): Promise<TaskGroupListInternals> {
-  const element = document.createElement(
-    'task-group-list',
-  ) as unknown as TaskGroupListInternals;
-  element.hasStreams = true;
-  element.groups = groups;
-  element.messages = messages;
-  document.body.append(element);
-  await element.updateComplete;
-  return element;
+  return mountComponent<TaskGroupListInternals>('task-group-list', {
+    hasStreams: true,
+    groups,
+    messages,
+  });
 }
 
 describe('task-group-list ungrouped message indexes', () => {

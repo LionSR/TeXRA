@@ -1,5 +1,5 @@
 /** Optional host policy for text returned by a provider. */
-export type ResponseTextPostProcessor = (text: string) => string;
+type ResponseTextPostProcessor = (text: string) => string;
 
 /**
  * Host policy for provider-output cleanup and joining continued responses.

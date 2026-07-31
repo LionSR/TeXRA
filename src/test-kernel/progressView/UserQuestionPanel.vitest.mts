@@ -7,7 +7,10 @@ import type { UserQuestionPrompt } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
 // Local file imports
-import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
+import {
+  mountComponent,
+  useLitComponentTestDom,
+} from '../settings/litComponentTestUtils';
 
 useLitComponentTestDom(
   () => import('@progressView/frontend/components/UserQuestionPanel'),
@@ -33,16 +36,12 @@ function createPermission(
   };
 }
 
-async function mountPanel(
+function mountPanel(
   permission: UserQuestionPanel['permission'] = createPermission(),
 ): Promise<UserQuestionPanel> {
-  const element = document.createElement(
-    'user-question-panel',
-  ) as UserQuestionPanel;
-  element.permission = permission;
-  document.body.append(element);
-  await element.updateComplete;
-  return element;
+  return mountComponent<UserQuestionPanel>('user-question-panel', {
+    permission,
+  });
 }
 
 function collectActions(

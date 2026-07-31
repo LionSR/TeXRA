@@ -24,7 +24,7 @@ import {
   createStubDesktopSettingsUiHost,
   createStubDesktopToolingSettingsController,
 } from './desktopSettingsTestSupport';
-import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
+import { loadSourceModule } from './loadSourceModule.mjs';
 
 const computeModelOptionsData = vi.hoisted(() =>
   vi.fn(async (models: readonly string[] = []) =>
@@ -105,9 +105,7 @@ class MemoryConfigStore {
 }
 
 async function loadDesktopSettingsIpc(): Promise<DesktopSettingsIpcModule> {
-  return import(
-    moduleFileUrl(desktopSourcePath('main', 'desktopSettingsIpc.ts'))
-  ) as Promise<DesktopSettingsIpcModule>;
+  return loadSourceModule('@desktop/main/desktopSettingsIpc');
 }
 
 let createDesktopSettingsIpc!: DesktopSettingsIpcModule['createDesktopSettingsIpc'];

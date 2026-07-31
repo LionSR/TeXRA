@@ -14,19 +14,9 @@ import { LatexDiffManager } from '@agent/output/LatexDiffManager';
 import {
   resolveWorkspaceSourceDir,
   runCompileCheck,
-  type CompileCheckContext,
 } from '@agent/output/compileCheck';
-import {
-  createOutputState,
-  ensureRoundData,
-  type OutputState,
-} from '@agent/output/outputState';
-import type {
-  ExecutionId,
-  FileLocation,
-  OutputFileInfo,
-} from '@shared/schemas';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { createOutputState, ensureRoundData } from '@agent/output/outputState';
+import type { ExecutionId, FileLocation } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
 import { spiedTrace } from '@test/support/spiedTrace';
 import {
@@ -35,6 +25,17 @@ import {
   createRunStorageLocation,
   createWorkspaceLocation,
 } from '@utils/files';
+
+// Local file imports
+import {
+  compileContext,
+  initLatexPlatform,
+  outputFile,
+  runDir,
+  runStorageFile,
+  storagePath,
+  workspacePath,
+} from './compileCheckTestUtils';
 
 const mocks = vi.hoisted(() => ({
   compileLatex2Pdf: vi.fn(async () => ({ ok: true })),
@@ -53,63 +54,6 @@ vi.mock('@latex/latexToolchain', () => ({
 vi.mock('@agent/output/compiledPdfArtifacts', () => ({
   publishCompiledPdfArtifact: mocks.publishCompiledPdfArtifact,
 }));
-
-const storagePath = '/storage';
-const workspacePath = '/workspace';
-
-function runDir(executionId: ExecutionId): string {
-  return path.join(storagePath, 'executions', executionId);
-}
-
-function runStorageFile(
-  executionId: ExecutionId,
-  relativePath: string,
-): FileLocation {
-  return createRunStorageLocation(
-    path.join(runDir(executionId), relativePath),
-    relativePath,
-    executionId,
-  );
-}
-
-function outputFile(
-  executionId: ExecutionId,
-  relativePath: string,
-  source: string,
-  round: number,
-): OutputFileInfo {
-  return {
-    source,
-    round,
-    location: runStorageFile(executionId, relativePath),
-    lineage: null,
-    diff: null,
-  };
-}
-
-function initLatexPlatform(files: Record<string, string>): Promise<void> {
-  return installPlatform({
-    files,
-    storagePath,
-    workspacePath,
-    workspaceState: {
-      [WorkspaceStateKey.WORKFLOW_AUTO_COMPILE]: true,
-      [WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS]: 30_000,
-    },
-  });
-}
-
-function compileContext(
-  executionId: ExecutionId,
-  outputState: OutputState,
-): CompileCheckContext {
-  return {
-    fileService: new TaskRunFileService(executionId),
-    outputState,
-    logger: spiedTrace(),
-    streamId: 'compile-stream',
-  };
-}
 
 function createDiffCompiler(executionId: ExecutionId, logger: AgentTrace) {
   const manager = new LatexDiffManager(

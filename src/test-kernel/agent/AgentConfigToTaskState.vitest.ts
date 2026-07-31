@@ -13,7 +13,6 @@ import {
   TaskStateSchema,
 } from '@agent/core/state/TaskState';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
-import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 
 describe('agentConfigToTaskState', () => {
   it('derives workflow active files from normalized file lists', () => {
@@ -28,7 +27,6 @@ describe('agentConfigToTaskState', () => {
       outputFiles: [],
       inputFilesActive: false,
       mediaFilesActive: false,
-      toolConfig: DEFAULT_TOOL_CONFIG,
     });
 
     const taskState = agentConfigToTaskState(config);
@@ -52,7 +50,6 @@ describe('agentConfigToTaskState', () => {
       model: 'sonnet46T',
       instruction: 'Check the proof.',
       inputFiles: ['main.tex'],
-      toolConfig: DEFAULT_TOOL_CONFIG,
     });
 
     const taskState = agentConfigToTaskState(config);
@@ -70,7 +67,6 @@ describe('agentConfigToTaskState', () => {
       agent: 'assistant',
       model: 'sonnet46T',
       instruction: 'Check the proof.',
-      toolConfig: DEFAULT_TOOL_CONFIG,
     });
 
     const taskState = TaskStateSchema.parse({

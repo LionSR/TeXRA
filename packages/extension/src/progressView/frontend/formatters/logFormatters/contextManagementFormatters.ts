@@ -9,6 +9,9 @@
 // Third-party imports - Lit template utilities
 import { html } from 'lit';
 
+// Side-effect import to register the <context-management> custom element
+import '@progressView/frontend/components/ContextManagement';
+
 // Local imports - shared schemas and components
 import type {
   ActionConfig,

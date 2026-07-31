@@ -6,25 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 
-import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
+import { loadSourceModule } from './loadSourceModule.mjs';
 
-interface DesktopFileSelectionModule {
-  createDesktopFileSelection(options: {
-    postToRenderer(message: unknown): void;
-    getWorkspacePath?: () => string | undefined;
-    showOpenFileDialog?: (options: {
-      title: string;
-      defaultPath?: string;
-      filters: Array<{ name: string; extensions: string[] }>;
-      allowMultiple?: boolean;
-    }) => Promise<string[] | undefined>;
-    onError?: (error: unknown) => void;
-  }): {
-    handleMessage(
-      message: { command: string } & Record<string, unknown>,
-    ): boolean;
-  };
-}
+type DesktopFileSelectionModule =
+  typeof import('@desktop/main/desktopFileSelection');
 
 async function loadDesktopFileSelection(): Promise<DesktopFileSelectionModule> {
   vi.resetModules();
@@ -33,9 +18,7 @@ async function loadDesktopFileSelection(): Promise<DesktopFileSelectionModule> {
     import('@platform/defaults/nodeFilesystem'),
   ]);
   await installPlatform({}, { fs: nodeFilesystem });
-  return import(
-    moduleFileUrl(desktopSourcePath('main', 'desktopFileSelection.ts'))
-  ) as Promise<DesktopFileSelectionModule>;
+  return loadSourceModule('@desktop/main/desktopFileSelection');
 }
 
 const BASE_FILE_OPTIONS = [
