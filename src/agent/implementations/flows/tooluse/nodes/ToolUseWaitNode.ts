@@ -59,7 +59,13 @@ export class ToolUseWaitNode<C> extends Node<
     // it must not see a failure as a successful completion.
     // In subagent mode, stop immediately: the orchestrator was never
     // notified, so waiting for a follow-up would hang forever.
-    if (prepRes.afterError && isSubagent) {
+    //
+    // A batch the child-run loop already drained is the exception: it is
+    // in hand, so there is nothing to wait for and no hang to avoid.
+    // Stopping here would drop that user input on the floor — and skip the
+    // `post` clear of `lastError`/`userCancelledRetry` that consuming it
+    // performs, which is what makes the error recovered rather than terminal.
+    if (prepRes.afterError && isSubagent && !this.drainedFollowUps?.length) {
       return { kind: 'stop' };
     }
 

@@ -920,6 +920,75 @@ describe('ToolUseWaitNode', () => {
       'please revise the theorem',
     );
   });
+
+  // Regression: #9443. The subagent after-error stop fired before the drained
+  // batch was consumed, dropping user input the child-run loop had already
+  // taken off the queue — and skipping `post`'s error clear with it.
+  it('consumes a drained batch after an error instead of dropping it', async () => {
+    const shared: ToolUseRunShared = toolUseRunShared();
+    shared.lastError = {
+      message: 'stale failure from the previous cycle',
+      userRetryable: false,
+    };
+    const interactions = { emit: vi.fn() };
+    const batch = [{ text: 'try the other lemma', origin: 'user' as const }];
+    const services = createWaitNodeServices({
+      isSubagent: true,
+      modelHandler: {
+        createUserFollowUpMessages: vi.fn(
+          async (
+            _messages: ProviderMessage[],
+            text: string,
+          ): Promise<ProviderMessage[]> => [{ role: 'user', content: text }],
+        ),
+      },
+    });
+    const node = new ToolUseWaitNode(batch).setServices(services);
+
+    const prep = await node.prep(shared);
+    expect(prep.afterError).toBe(true);
+
+    const { exec, transition } = await withTestRunContext(
+      interactions,
+      'test-stream',
+      async () => {
+        const exec = await node.exec(prep);
+        return { exec, transition: await node.post(shared, prep, exec) };
+      },
+    );
+
+    expect(exec).toEqual({
+      kind: 'continue',
+      followUps: batch,
+      synthetic: false,
+    });
+    expect(transition).toBe(FlowTransition.CONTINUE);
+    // Consuming the batch recovers the error rather than stranding it.
+    expect(shared.lastError).toBeUndefined();
+  });
+
+  // Companion to the above: with no drained batch in hand, the after-error
+  // stop must still fire, or a subagent would wait for a follow-up its
+  // orchestrator was never told to send.
+  it('still stops a subagent after an error when no batch was drained', async () => {
+    const shared: ToolUseRunShared = toolUseRunShared();
+    shared.lastError = { message: 'boom', userRetryable: false };
+    const interactions = { emit: vi.fn() };
+    const waitForFollowUp = vi.fn();
+    const services = createWaitNodeServices({
+      isSubagent: true,
+      session: { waitForFollowUp },
+    });
+    const node = new ToolUseWaitNode().setServices(services);
+
+    const prep = await node.prep(shared);
+    const exec = await withTestRunContext(interactions, 'test-stream', () =>
+      node.exec(prep),
+    );
+
+    expect(exec).toEqual({ kind: 'stop' });
+    expect(waitForFollowUp).not.toHaveBeenCalled();
+  });
 });
 
 describe('extractTouchedFiles', () => {

@@ -598,7 +598,14 @@ export async function runToolUseFlow<C = unknown>(
     } else {
       outcome = deriveRunOutcome({
         failed: Boolean(shared.lastError),
-        cancelled: input.checkInterruption(),
+        // A retry the user declined ends the run without leaving a
+        // `lastError` behind. Counting only `checkInterruption()` here
+        // reported that run as COMPLETED while the `finally` below still
+        // preserved its record as resumable — a success that is also
+        // resumable. `userCancelledRetry` survives only when it is why the
+        // run ended: the wait node clears it when a follow-up recovers.
+        cancelled:
+          input.checkInterruption() || Boolean(shared.userCancelledRetry),
       });
     }
     if (outcome === RUN_OUTCOME.CANCELLED && input.checkInterruption()) {
