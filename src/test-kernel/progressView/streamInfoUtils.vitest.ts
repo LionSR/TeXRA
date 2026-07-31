@@ -7,10 +7,6 @@ import { buildStreamTabInfo } from '@controllers/progressView/backend/streamTabI
 import { AgentCategory, type StreamTabInfo } from '@shared/schemas';
 import { compareByNewestCreationTime } from '@shared/streams/streamOrdering';
 
-// ---------------------------------------------------------------------------
-// streamInfoUtils
-// ---------------------------------------------------------------------------
-
 function streamInfo(name: string, creationTimestamp: number): StreamTabInfo {
   return {
     kind: 'agent',
@@ -40,10 +36,6 @@ describe('compareByNewestCreationTime', () => {
     );
   });
 });
-
-// ---------------------------------------------------------------------------
-// StreamTabInfo
-// ---------------------------------------------------------------------------
 
 describe('buildStreamTabInfo', () => {
   it('classifies stream-id-derived bash child streams as process agents', () => {

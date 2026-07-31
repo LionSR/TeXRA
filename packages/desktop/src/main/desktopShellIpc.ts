@@ -55,12 +55,6 @@ export interface DesktopShellActionFactoryOptions {
 export interface DesktopShellActions extends DesktopCommandActions {
   signIn(): void;
   openAgentDirectory(customDirSet?: boolean): void;
-  openDesktopDocs(): void;
-  openLogFolder(): void;
-  openWorkspaceFolder(): void;
-  saveFile(): void;
-  resetMainView(): void;
-  showFirstRunWalkthrough(): void;
   /**
    * Posts the most recent git commits to the renderer in response to
    * `MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS`.

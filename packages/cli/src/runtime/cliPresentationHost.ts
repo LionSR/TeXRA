@@ -48,14 +48,16 @@ const ApprovalBypassNdjsonEvent = {
  * stderr in text mode. Mirrors what the VS Code extension's
  * `INSTRUCTION_ACTION_VIEW` (packages/extension/src/frontend/events/
  * agentEventListeners.ts) conveys via its button titles, translated to CLI
- * phrasing since there's no button to click here. Unknown/future tokens fall
- * back to the raw token rather than failing.
+ * phrasing since there's no button to click here. The `satisfies` clause keeps
+ * the table exhaustive at compile time, but the lookup type stays partial: an
+ * action token can arrive from a newer producer over the wire, and those fall
+ * back to the raw token rather than printing an empty hint.
  */
 const INSTRUCTION_ACTION_HINT: Partial<Record<InstructionAction, string>> = {
   [INSTRUCTION_ACTION.SET_API_KEY]: 'set your API key (texra setup)',
   [INSTRUCTION_ACTION.OPEN_CONFIGURATION_GUIDE]: 'see the configuration guide',
   [INSTRUCTION_ACTION.OPEN_MODELS_DOC]: 'see the model documentation',
-};
+} satisfies Record<InstructionAction, string>;
 
 function writeRuntimePresentationNdjson(
   logger: Logger,

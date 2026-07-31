@@ -6,7 +6,10 @@ import {
   getExecutionStore,
 } from '@agent/storage';
 import { releaseOwnedExecutionLease } from '@agent/storage/executionLease';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import {
+  AgentConfigSchema,
+  type AgentConfig,
+} from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { flowKey } from '@agent/node/persistedFlow';
 import {
@@ -18,32 +21,21 @@ import {
   userStartedCliHistoryEntries,
 } from '@cli/runtime/history';
 import { EXECUTION_STATUS, type ExecutionId } from '@shared/schemas';
-import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 import { setupPlatform } from '@test/support/setupPlatform';
 
-const TOOL_USE_CONFIG: AgentConfig = {
-  inputFiles: [],
-  contextFiles: [],
-  mediaFiles: [],
-  outputFiles: [],
-  editedFile: null,
+const TOOL_USE_CONFIG: AgentConfig = AgentConfigSchema.parse({
   agent: 'orchestrator',
   model: 'deepseekT',
   instruction: 'Continue the session.',
   agentCategory: AgentCategory.ToolUse,
-  editedFiles: [],
-  toolConfig: DEFAULT_TOOL_CONFIG,
-  memories: [],
   workingDirectory: '/workspace',
-  cliOutputFile: null,
-  cliMultiAgentPresetId: null,
-};
-const WORKFLOW_CONFIG: AgentConfig = {
+});
+const WORKFLOW_CONFIG: AgentConfig = AgentConfigSchema.parse({
   ...TOOL_USE_CONFIG,
   agent: 'correct',
   agentCategory: AgentCategory.Workflow,
   instruction: 'Continue the workflow.',
-};
+});
 
 setupPlatform({ workspacePath: '/workspace' });
 

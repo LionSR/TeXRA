@@ -12,6 +12,7 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import * as logger from '@logger/logUtils';
 import { lookupApiKey, apiKeyEnvName } from '@model/apiProviders';
 import { platform } from '@platform/platform';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -26,6 +27,7 @@ import {
   type ClaudeAgentModel,
   type ClaudeAgentPermissionMode,
 } from '@shared/schemas/agentCliSettings';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { safeHomedir } from '@utils/system/platformPaths';
 
 // Local file imports
@@ -34,6 +36,8 @@ import {
   CLAUDE_AGENT_NAME,
   CLAUDE_AGENT_DISPLAY_MODEL,
 } from './claudeAgentShared';
+
+const LOG_CHANNEL = 'claudeAgent';
 
 // ============================================================================
 // Model — defaults to Sonnet 5; users can override per-call or via workspace state
@@ -218,9 +222,17 @@ export async function buildClaudeAgentEnv(
   // 2. Preserve an explicit env key rather than overriding it with the secret.
   if (env[apiKeyVar]) return env;
 
-  // 3. Fall back to the Settings-managed secret.
+  // 3. Fall back to the Settings-managed secret. An unreadable secret store
+  //    leaves the subprocess with no credential at all, so say so rather than
+  //    letting it surface as an opaque "Invalid API key" from Claude Code.
   const managed = await lookupApiKey(platform().secrets, 'anthropic').catch(
-    () => undefined,
+    (error: unknown) => {
+      logger.warn(
+        LOG_CHANNEL,
+        `Failed to read the managed Anthropic API key: ${toErrorMessage(error)}`,
+      );
+      return undefined;
+    },
   );
   if (managed) {
     env[apiKeyVar] = managed;

@@ -187,6 +187,27 @@ describe('desktop file selection', () => {
     await vi.waitFor(() => expect(showOpenFileDialog).not.toHaveBeenCalled());
   });
 
+  // 'output' is a valid MultipleDocumentFileType and the shared webview
+  // frontend's "Select output files" button posts it through this same
+  // command on every host, but MULTI_SET_COMMAND_BY_FILE_TYPE here only
+  // covers input/context/media, so isDesktopMultiFileType rejects it and the
+  // picker never opens. Pinned so a future fix to add output support has to
+  // update this expectation deliberately.
+  it('does not open the multi-file picker for output files', async () => {
+    const showOpenFileDialog = vi.fn();
+    const { files } = await createFileSelection({ showOpenFileDialog });
+
+    expect(
+      files.handleMessage({
+        command: MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES,
+        fileType: 'output',
+        currentFile: 'main.tex',
+      }),
+    ).toBe(true);
+
+    await vi.waitFor(() => expect(showOpenFileDialog).not.toHaveBeenCalled());
+  });
+
   it('leaves recent-commit requests for the main IPC router', async () => {
     const { files } = await createFileSelection();
 

@@ -13,6 +13,12 @@ const SupabaseSessionSchema = z.object({
     label: z.string().transform((label) => label.trim()),
   }),
   expiresAt: z.number(),
+  /**
+   * Present only on sessions stored before VS Code GitHub sign-in moved to
+   * native GoTrue sessions; no sign-in flow sets it today. It keeps those
+   * sessions refreshing through the custom endpoint rather than forcing a
+   * re-sign-in.
+   */
   useCustomRefresh: z.boolean().optional(),
 });
 export type SupabaseSession = z.infer<typeof SupabaseSessionSchema>;

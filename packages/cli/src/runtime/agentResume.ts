@@ -1,7 +1,7 @@
 import type { RecoveryContinuation } from '@platform/interfaces';
 import type { StreamTabId } from '@shared/schemas';
 
-export interface CliAgentResumeHandler {
+interface CliAgentResumeHandler {
   tryResumeStream(
     streamId: StreamTabId,
     recovery?: RecoveryContinuation,

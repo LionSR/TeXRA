@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { type OAuthProvider, getExternalAuthCallbackUri } from '@auth/config';
 import { AUTH_PROVIDER_ID } from '@auth/constants';
+import type { MainViewAuthStatus } from '@controllers/mainView/MainViewTypes';
 import { SupabaseAuthProvider } from '@frontend/auth/SupabaseAuthProvider';
 import {
   showLoggedErrorMessage,
@@ -234,15 +235,11 @@ export async function signOut(): Promise<void> {
   }
 }
 
-export async function getAuthStatus(): Promise<{
-  authenticated: boolean;
-  email?: string;
-  tier?: string;
-}> {
-  const isAuth = await SupabaseClient.isAuthenticated();
-  if (!isAuth) return { authenticated: false };
-
-  const user = await SupabaseClient.getUser();
-  const tier = await SupabaseClient.getUserTier();
-  return { authenticated: true, email: user?.email, tier };
+/**
+ * Login-banner input for the main view. Only the authenticated flag is
+ * consumed, so this deliberately avoids the profile and tier round-trips that
+ * the settings-view profile message makes.
+ */
+export async function getAuthStatus(): Promise<MainViewAuthStatus> {
+  return { authenticated: await SupabaseClient.isAuthenticated() };
 }

@@ -1,9 +1,5 @@
 // Test composition imports
-
-// Local imports
 import '@test/support/defaultSessionTestSetup';
-
-// Test support imports
 
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
@@ -37,12 +33,6 @@ const storageMocks = vi.hoisted(() => ({
 vi.mock('@agent/storage', () => ({
   finalizeExecution: storageMocks.finalizeExecution,
 }));
-
-function initTestPlatform(): Promise<void> {
-  return installPlatform({
-    globalState: { [GlobalStateKey.ONBOARDING_FIRST_RUN_DONE]: true },
-  });
-}
 
 describe('session isolation (SDK Step 7d PR 2)', () => {
   it('currentSession() resolves the active run context session, default otherwise', () => {
@@ -89,7 +79,9 @@ describe('session isolation (SDK Step 7d PR 2)', () => {
   });
 
   it('runFlowWithLifecycle tracks the handle in the run session, not the default', async () => {
-    await initTestPlatform();
+    await installPlatform({
+      globalState: { [GlobalStateKey.ONBOARDING_FIRST_RUN_DONE]: true },
+    });
     const executionId = 'e15001' as ExecutionId;
     const streamId = 'stream:iso-track' as StreamTabId;
     const sessionB = createTestSession();

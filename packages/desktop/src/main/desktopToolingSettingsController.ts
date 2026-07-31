@@ -7,10 +7,10 @@ import {
   LATEX_WORKSHOP_EXT_ID,
   type LatexConfigField,
 } from '@shared/constants/latex';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import type { ToolDashboardItem } from '@shared/schemas/settingsViewMessages';
 import type { ExternalToolCheckResult } from '@tools/toolAvailability';
+import { setToolEnabled } from '@utils/config/constants';
 
 interface DefaultDesktopToolingSettingsControllerOptions extends SettingsStatePorts {
   readonly onError: (error: unknown) => void;
@@ -60,7 +60,7 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
       installExtension: (extensionId) =>
         options.navigation.presentExtensionInstall(extensionId),
       recheckStatus: () => this.refreshToolDashboard(),
-      toggle: (toolId, enabled) => this.setToolEnabled(toolId, enabled),
+      toggle: (toolId, enabled) => this.toggleTool(toolId, enabled),
       runCommand: (input) => this.runToolCommand(input),
     };
     this.latexActions = {
@@ -107,24 +107,8 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
     });
   }
 
-  private async setToolEnabled(
-    toolId: string,
-    enabled: boolean,
-  ): Promise<void> {
-    const current = this.options.globalState.get<string[]>(
-      GlobalStateKey.DISABLED_TOOLS,
-      [],
-    );
-    const disabled = new Set(current);
-    if (enabled) {
-      disabled.delete(toolId);
-    } else {
-      disabled.add(toolId);
-    }
-
-    await this.options.globalState.update(GlobalStateKey.DISABLED_TOOLS, [
-      ...disabled,
-    ]);
+  private async toggleTool(toolId: string, enabled: boolean): Promise<void> {
+    await setToolEnabled(toolId, enabled, this.options.globalState);
     await this.options.dashboard.refreshDisabledCache();
     await this.postToolDashboardData(true);
   }

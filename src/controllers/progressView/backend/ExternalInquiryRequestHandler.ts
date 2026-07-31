@@ -52,8 +52,9 @@ export class ExternalInquiryRequestHandler extends ApprovalRequestHandler<
         limit: MAX_INQUIRY_THREADS,
       });
       this.options.syncThreads(threads);
-    } catch {
+    } catch (error) {
       // Inquiry history is auxiliary state; pending prompts must still replay.
+      this.options.logger?.debug(`Failed to list inquiry threads: ${error}`);
     }
   }
 
@@ -92,8 +93,11 @@ export class ExternalInquiryRequestHandler extends ApprovalRequestHandler<
             ? { ...basePermission, mode: 'followUp' }
             : { ...basePermission, mode: 'new' },
         );
-      } catch {
+      } catch (error) {
         // Skip unreadable manifests; the thread-list read reports valid peers.
+        this.options.logger?.debug(
+          `Failed to replay inquiry thread ${summary.threadId}: ${error}`,
+        );
       }
     }
   }

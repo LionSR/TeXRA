@@ -4,6 +4,7 @@ import * as path from 'node:path';
 
 import PQueue from 'p-queue';
 
+import { DEFAULT_WORKFLOW_AGENT } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { AgentRosterController } from '@agent/roster/AgentRosterController';
 import * as logger from '@logger/logUtils';
@@ -24,7 +25,6 @@ import {
 } from '@shared/schemas/agent';
 import { unique } from '@utils/core';
 import {
-  DEFAULT_WORKFLOW_AGENT,
   LEGACY_AGENT_ALIASES,
   LOOKUP_PRIORITY,
   TOOL_USE_LOOKUP_PRIORITY,

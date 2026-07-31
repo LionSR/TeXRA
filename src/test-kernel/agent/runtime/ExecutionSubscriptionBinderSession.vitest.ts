@@ -33,17 +33,6 @@ import { recordSessionEvents } from '../progressTestUtils';
 const streamId = 'stream:subscription-session' as StreamTabId;
 const childStreamId = 'child:subscription-session' as StreamTabId;
 
-/** Builds a toolUse `search` handle on the shared stream/child stream. */
-function createSearchHandle(executionId: string): AgentExecutionHandle {
-  return new AgentExecutionHandle(
-    executionId,
-    streamId,
-    childStreamId,
-    'search',
-    'toolUse',
-  );
-}
-
 function createReleaseSource() {
   let observer: ((streamId: StreamTabId) => void) | undefined;
   return {
@@ -64,24 +53,25 @@ function createReleaseSource() {
   };
 }
 
-function createLogger() {
-  return {
-    info: vi.fn(),
-    warn: vi.fn(),
-  };
-}
-
 function setupBinder(executionId: string, session?: SessionHandle) {
   const registry = new ExecutionRegistry();
   const releaseSource = createReleaseSource();
-  const logger = createLogger();
+  const logger = { info: vi.fn(), warn: vi.fn() };
   const binder = new ExecutionSubscriptionBinder({
     registry,
     releaseSource: releaseSource.source,
     logger,
     session,
   });
-  registry.track(createSearchHandle(executionId));
+  registry.track(
+    new AgentExecutionHandle(
+      executionId,
+      streamId,
+      childStreamId,
+      'search',
+      'toolUse',
+    ),
+  );
   return {
     registry,
     releaseSource,

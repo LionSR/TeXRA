@@ -31,7 +31,6 @@ import { handleProgressViewToolEditApprovalAction } from '@frontend/approval/nat
 import { RecordingManager } from '@frontend/media/RecordingManager';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import type { PromptHost } from '@hosts/uiHosts';
-import { isApiProvider } from '@model/apiProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { getRuntimeModelDirectFallback } from '@model/runtimeModelRegistry';
 import {
@@ -238,6 +237,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       },
     };
 
+    const secondTierHandlers =
+      createProgressViewSecondTierHandlers(secondTierActions);
+
     return {
       // Common handlers - passthrough to webview
       [PROGRESS_VIEW_COMMANDS.WEBVIEW_READY]: async () => {
@@ -257,13 +259,18 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       ...this.progressHost.commandHandlers,
 
       // Second-tier shared progress command groups
-      ...createProgressViewSecondTierHandlers(secondTierActions),
+      ...secondTierHandlers,
 
-      // Override USE_OWN_API_KEY: the shared factory handles the generic case;
+      // Override USE_OWN_API_KEY: the shared handler owns the generic case;
       // the extension adds VS Code-specific Copilot-subscription fallback
-      // (`startCopilotFallbackRun`) before delegating to the shared controller.
-      [PROGRESS_VIEW_COMMANDS.USE_OWN_API_KEY]: (data) =>
-        this.handleUseOwnApiKey(data),
+      // (`startCopilotFallbackRun`) ahead of it.
+      [PROGRESS_VIEW_COMMANDS.USE_OWN_API_KEY]: async (data) => {
+        if (data.exhaustionReason === 'copilot-subscription') {
+          await this.startCopilotFallbackRun(data);
+          return;
+        }
+        await secondTierHandlers[PROGRESS_VIEW_COMMANDS.USE_OWN_API_KEY](data);
+      },
       // Override POLISH_FOLLOW_UP: the shared factory does the core
       // controller call and result dispatch; the extension adds a VS Code
       // progress notification (`vscode.window.withProgress`) around it.
@@ -649,33 +656,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         ? { action: 'submit', answers: data.answers }
         : { action: data.action, feedback: data.feedback },
     );
-  }
-
-  private async handleUseOwnApiKey(
-    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.USE_OWN_API_KEY>,
-  ): Promise<void> {
-    if (data.exhaustionReason === 'copilot-subscription') {
-      await this.startCopilotFallbackRun(data);
-      return;
-    }
-
-    const providerArg =
-      data.provider !== undefined && isApiProvider(data.provider)
-        ? data.provider
-        : undefined;
-
-    const result = await this.apiKeyRetryController.useOwnApiKey({
-      stream: data.stream,
-      requestId: data.requestId,
-      provider: providerArg,
-      exhaustionReason: data.exhaustionReason,
-      viaRelay: data.viaRelay,
-    });
-    if (result.proceeded && !result.retried) {
-      await this.host.info(
-        'Switched to your own API key. No pending retry to resume — run the agent again when ready.',
-      );
-    }
   }
 
   private async startCopilotFallbackRun(

@@ -91,23 +91,18 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   }
 
   /**
-   * Store session with optional notification.
-   * @param notify - If true, fires session change event and clears caches (for new logins)
+   * Store a newly created session and publish the credential change: clear the
+   * caches that depend on the account and fire the session-change event.
    */
-  private async storeSession(
-    session: SupabaseSession,
-    notify = false,
-  ): Promise<void> {
+  private async storeSession(session: SupabaseSession): Promise<void> {
     await this.sessionCoordinator.storeSession(session);
-    if (notify) {
-      getServerSideKeyService().clearAllCaches({ resetQuotaFlip: true });
-      invalidateModelOptionsCache();
-      this._onDidChangeSessions.fire({
-        added: [this.toVSCodeSession(session)],
-        removed: [],
-        changed: [],
-      });
-    }
+    getServerSideKeyService().clearAllCaches({ resetQuotaFlip: true });
+    invalidateModelOptionsCache();
+    this._onDidChangeSessions.fire({
+      added: [this.toVSCodeSession(session)],
+      removed: [],
+      changed: [],
+    });
   }
 
   /**
@@ -171,7 +166,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         return;
       }
 
-      await this.storeSession(result.session, true);
+      await this.storeSession(result.session);
       this.notifier.showInfo(`Signed in as ${result.session.account.label}`);
       logger.info(
         CHANNEL,
@@ -393,7 +388,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         defaultExpiryMs: DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
       });
 
-      await this.storeSession(session, true);
+      await this.storeSession(session);
       this.notifier.showInfo(`Signed in as ${session.account.label}`);
       logger.info(
         CHANNEL,
@@ -449,7 +444,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
               'Authentication cancelled or timed out. Try again.',
             );
           }
-          await this.storeSession(session, true);
+          await this.storeSession(session);
           return this.toVSCodeSession(session);
         },
       );

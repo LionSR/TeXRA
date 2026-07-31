@@ -1,5 +1,11 @@
 // Third-party imports
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, type Mock } from 'vitest';
+
+// Type imports - desktop command surface
+import type {
+  DesktopCommandActions,
+  DesktopCommandId,
+} from '@desktop/desktopCommandSurface';
 
 // Local imports - command catalog and shared schemas
 import {
@@ -11,6 +17,55 @@ import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
 
 // Local imports - test support
 import { loadSourceModule } from './loadSourceModule.mjs';
+
+type MockedDesktopActions = Record<keyof DesktopCommandActions, Mock>;
+
+/** Every dispatchable desktop command, with the shell action it must reach. */
+const DESKTOP_DISPATCH_CASES: ReadonlyArray<
+  [
+    id: DesktopCommandId,
+    action: keyof DesktopCommandActions,
+    args: readonly unknown[],
+  ]
+> = [
+  ['texra.showMainView', 'showRoute', ['main']],
+  ['texra.showProgressView', 'showRoute', ['progress']],
+  ['texra.desktop.showLogs', 'showRoute', ['logs']],
+  ['texra.openSettings', 'showSettings', []],
+  ['texra.mainView.reset', 'resetMainView', []],
+  ['texra.desktop.toggleBottomBar', 'toggleBottomBar', []],
+  ['texra.desktop.toggleSidePanel', 'toggleSidePanel', []],
+  ['texra.desktop.toggleSummaryBar', 'toggleSummaryBar', []],
+  ['texra.showMemory', 'showSettings', [SETTINGS_TAB.MEMORY]],
+  ['texra.showAgentHistory', 'showSettings', [SETTINGS_TAB.HISTORY]],
+  ['texra.showModels', 'showSettings', [SETTINGS_TAB.MODELS]],
+  ['texra.showAgents', 'showSettings', [SETTINGS_TAB.AGENTS]],
+  ['texra.showTools', 'showSettings', [SETTINGS_TAB.TOOLS]],
+  ['texra.showMultiAgent', 'showSettings', [SETTINGS_TAB.MULTI_AGENT]],
+  ['texra.showGitSettings', 'showSettings', [SETTINGS_TAB.GIT]],
+  ['texra.desktop.openWorkspaceFolder', 'openWorkspaceFolder', []],
+  ['texra.desktop.saveFile', 'saveFile', []],
+  ['texra.desktop.openLogFolder', 'openLogFolder', []],
+  ['texra.desktop.showFirstRunWalkthrough', 'showFirstRunWalkthrough', []],
+  ['texra.desktop.openDesktopDocs', 'openDesktopDocs', []],
+];
+
+function makeDesktopActions(): MockedDesktopActions {
+  return {
+    openDesktopDocs: vi.fn(),
+    openLogFolder: vi.fn(),
+    openWorkspaceFolder: vi.fn(),
+    resetMainView: vi.fn(),
+    saveFile: vi.fn(),
+    showFirstRunWalkthrough: vi.fn(),
+    showRoute: vi.fn(),
+    showSettings: vi.fn(),
+    showStream: vi.fn(),
+    toggleBottomBar: vi.fn(),
+    toggleSidePanel: vi.fn(),
+    toggleSummaryBar: vi.fn(),
+  };
+}
 
 describe('desktop command surface', () => {
   it('builds desktop menu entries from the shared command catalog', async () => {
@@ -141,105 +196,23 @@ describe('desktop command surface', () => {
     expect(formatDesktopAccelerator(undefined, 'darwin')).toBeUndefined();
   });
 
-  it('dispatches supported commands through typed shell actions', async () => {
-    const { DESKTOP_LOCAL_COMMANDS, dispatchDesktopCommand } =
-      await loadSourceModule('@desktop/desktopCommandSurface');
-    const actions = {
-      openDesktopDocs: vi.fn(),
-      openLogFolder: vi.fn(),
-      openWorkspaceFolder: vi.fn(),
-      saveFile: vi.fn(),
-      showFirstRunWalkthrough: vi.fn(),
-      resetMainView: vi.fn(),
-      showRoute: vi.fn(),
-      showSettings: vi.fn(),
-      toggleBottomBar: vi.fn(),
-      toggleSidePanel: vi.fn(),
-      toggleSummaryBar: vi.fn(),
-    };
+  it.each(DESKTOP_DISPATCH_CASES)(
+    '%s dispatches to actions.%s',
+    async (id, action, args) => {
+      const { dispatchDesktopCommand } = await loadSourceModule(
+        '@desktop/desktopCommandSurface',
+      );
+      const actions = makeDesktopActions();
 
-    expect(dispatchDesktopCommand('texra.showMainView', actions)).toBe(true);
-    expect(dispatchDesktopCommand('texra.showProgressView', actions)).toBe(
-      true,
-    );
-    expect(
-      dispatchDesktopCommand(DESKTOP_LOCAL_COMMANDS.SHOW_LOGS, actions),
-    ).toBe(true);
-    expect(dispatchDesktopCommand('texra.openSettings', actions)).toBe(true);
-    expect(dispatchDesktopCommand('texra.mainView.reset', actions)).toBe(true);
-    expect(
-      dispatchDesktopCommand(DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR, actions),
-    ).toBe(true);
-    expect(
-      dispatchDesktopCommand(DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL, actions),
-    ).toBe(true);
-    expect(
-      dispatchDesktopCommand(
-        DESKTOP_LOCAL_COMMANDS.TOGGLE_SUMMARY_BAR,
-        actions,
-      ),
-    ).toBe(true);
-    expect(dispatchDesktopCommand('texra.showModels', actions)).toBe(true);
-    expect(dispatchDesktopCommand('texra.showAgents', actions)).toBe(true);
-    expect(dispatchDesktopCommand('texra.showGitSettings', actions)).toBe(true);
-    expect(
-      dispatchDesktopCommand(
-        DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
-        actions,
-      ),
-    ).toBe(true);
-    expect(
-      dispatchDesktopCommand(DESKTOP_LOCAL_COMMANDS.SAVE_FILE, actions),
-    ).toBe(true);
-    expect(
-      dispatchDesktopCommand(DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER, actions),
-    ).toBe(true);
-    expect(
-      dispatchDesktopCommand(
-        DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH,
-        actions,
-      ),
-    ).toBe(true);
-    expect(
-      dispatchDesktopCommand(DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS, actions),
-    ).toBe(true);
-
-    expect(actions.showRoute).toHaveBeenNthCalledWith(1, 'main');
-    expect(actions.showRoute).toHaveBeenNthCalledWith(2, 'progress');
-    expect(actions.showRoute).toHaveBeenNthCalledWith(3, 'logs');
-    expect(actions.showSettings).toHaveBeenNthCalledWith(1);
-    expect(actions.showSettings).toHaveBeenNthCalledWith(
-      2,
-      SETTINGS_TAB.MODELS,
-    );
-    expect(actions.showSettings).toHaveBeenNthCalledWith(
-      3,
-      SETTINGS_TAB.AGENTS,
-    );
-    expect(actions.showSettings).toHaveBeenNthCalledWith(4, SETTINGS_TAB.GIT);
-    expect(actions.resetMainView).toHaveBeenCalledOnce();
-    expect(actions.toggleBottomBar).toHaveBeenCalledOnce();
-    expect(actions.toggleSidePanel).toHaveBeenCalledOnce();
-    expect(actions.toggleSummaryBar).toHaveBeenCalledOnce();
-    expect(actions.openWorkspaceFolder).toHaveBeenCalledOnce();
-    expect(actions.saveFile).toHaveBeenCalledOnce();
-    expect(actions.openLogFolder).toHaveBeenCalledOnce();
-    expect(actions.showFirstRunWalkthrough).toHaveBeenCalledOnce();
-    expect(
-      commandCatalogById.has(
-        DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH as CommandId,
-      ),
-    ).toBe(false);
-    expect(actions.openDesktopDocs).toHaveBeenCalledOnce();
-  });
+      expect(dispatchDesktopCommand(id, actions)).toBe(true);
+      expect(actions[action]).toHaveBeenCalledExactlyOnceWith(...args);
+    },
+  );
 
   it('marks VS Code-only commands as unavailable instead of clickable no-ops', async () => {
     const { dispatchDesktopCommand, getDesktopCommandMenuEntries } =
       await loadSourceModule('@desktop/desktopCommandSurface');
-    const actions = {
-      showRoute: vi.fn(),
-      showSettings: vi.fn(),
-    };
+    const actions = makeDesktopActions();
     const entries = getDesktopCommandMenuEntries();
     const executeEntry = entries.find((entry) => entry.id === 'texra.execute');
 
@@ -257,15 +230,7 @@ describe('desktop command surface', () => {
     const { buildDesktopMenuTemplate } = await loadSourceModule(
       '@desktop/desktopCommandSurface',
     );
-    const actions = {
-      openDesktopDocs: vi.fn(),
-      openWorkspaceFolder: vi.fn(),
-      saveFile: vi.fn(),
-      resetMainView: vi.fn(),
-      showFirstRunWalkthrough: vi.fn(),
-      showRoute: vi.fn(),
-      showSettings: vi.fn(),
-    };
+    const actions = makeDesktopActions();
     const menu = buildDesktopMenuTemplate(actions, 'darwin');
 
     expect(menu.map((item) => item.label ?? item.role)).toEqual([

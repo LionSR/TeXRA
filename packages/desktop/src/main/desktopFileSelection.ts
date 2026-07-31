@@ -1,5 +1,6 @@
 import { isAbsolute, relative, resolve } from 'node:path';
 
+import { createChannelTrace } from '@agent/trace';
 import {
   getEditedFileListConfig,
   getFileListConfig,
@@ -10,6 +11,7 @@ import {
 } from '@common/files/fileListingRules';
 import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
 import { platform } from '@platform/platform';
+import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { normalizeFilePath } from '@utils/core';
 import { isPathWithin } from '@utils/core/pathCore';
@@ -93,8 +95,18 @@ function resolveWorkspaceFile(workspacePath: string, filePath: string): string {
 
 function toWorkspaceRelative(workspacePath: string, filePath: string): string {
   const absolutePath = resolveWorkspaceFile(workspacePath, filePath);
-  return isPathWithin(workspacePath, absolutePath)
-    ? normalizeFilePath(relative(workspacePath, absolutePath))
+  if (isPathWithin(workspacePath, absolutePath)) {
+    return normalizeFilePath(relative(workspacePath, absolutePath));
+  }
+  // A native file-dialog selection can resolve through a symlink (e.g. a
+  // symlinked folder inside the workspace); retry via the same
+  // canonicalize-then-compare fallback createNodeWorkspace().asRelativePath
+  // uses, so a symlinked pick lands as workspace-relative here too, matching
+  // what WorkspaceFS.relativePath would produce for the same absolute path.
+  const canonicalRoot = canonicalizeWorkspacePath(workspacePath);
+  const canonicalFile = canonicalizeWorkspacePath(absolutePath);
+  return isPathWithin(canonicalRoot, canonicalFile)
+    ? normalizeFilePath(relative(canonicalRoot, canonicalFile))
     : normalizeFilePath(absolutePath);
 }
 
@@ -177,10 +189,14 @@ export function createDesktopFileSelection(
   }
 
   async function selectMultipleFiles(message: DesktopCommandMessage) {
-    if (
-      !options.showOpenFileDialog ||
-      !isDesktopMultiFileType(message.fileType)
-    ) {
+    if (!options.showOpenFileDialog) return;
+    if (!isDesktopMultiFileType(message.fileType)) {
+      // The shared webview posts this for 'output' too, which the desktop has
+      // no picker for. Say so rather than dropping it: handleMessage already
+      // reported the message as handled.
+      createChannelTrace('DesktopFileSelection').warn(
+        `Unsupported multiple file selection: ${String(message.fileType)}`,
+      );
       return;
     }
     const workspacePath = getWorkspacePath();
@@ -204,7 +220,12 @@ export function createDesktopFileSelection(
       filters: [
         {
           name: 'Supported files',
-          extensions: listConfig?.extensions ?? ['*'],
+          // Electron's dialog filter extensions must not include the leading
+          // dot (unlike getFileListConfig's `.tex`-style entries); the VS
+          // Code picker gets this right via getFilterExtensions.
+          extensions: (listConfig?.extensions ?? ['*']).map((ext) =>
+            ext.replace(/^\./, ''),
+          ),
         },
       ],
     });

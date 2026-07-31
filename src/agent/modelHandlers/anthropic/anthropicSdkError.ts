@@ -18,10 +18,7 @@ const ANTHROPIC_SDK_ERROR_MAPPINGS: readonly SdkErrorClassMapping[] = [
   { ctor: AnthropicAPIUserAbortError, kind: 'user_abort' },
 ];
 
-export function tagAnthropicSdkError(
-  err: unknown,
-  provider = 'anthropic',
-): void {
+export function tagAnthropicSdkError(err: unknown, provider: string): void {
   matchMappedSdkError(
     err,
     provider,

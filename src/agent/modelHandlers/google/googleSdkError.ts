@@ -9,6 +9,6 @@ import { matchMappedSdkError } from '../support/sdkErrorMetadata';
  * the shared metadata pipeline reads (via `detectStatusCode`) to derive the kind
  * and surface it like the other providers.
  */
-export function tagGoogleSdkError(err: unknown, provider = 'google'): void {
+export function tagGoogleSdkError(err: unknown, provider: string): void {
   matchMappedSdkError(err, provider, [], GoogleApiError);
 }

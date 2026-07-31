@@ -170,10 +170,7 @@ export async function proposeAndExecute(
   );
   if (nonApproveResult) return nonApproveResult;
 
-  // At this point result.action === 'approve' (all other cases returned above).
-  if (result.action !== 'approve') {
-    throw new Error(`Unexpected non-approve proposal result: ${result.action}`);
-  }
+  // Every non-approve action returned above, so this is the approved path.
   // Route an approved model override through the same availability gate the
   // initial delegation uses (selectAvailableDelegationModel), so a model that
   // is unavailable in the active API mode fails synchronously here instead of

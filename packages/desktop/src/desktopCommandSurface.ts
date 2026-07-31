@@ -140,19 +140,29 @@ export interface DesktopMenuTemplateItem extends Omit<
   submenu?: DesktopMenuTemplateItem[];
 }
 
+/**
+ * Capabilities the desktop registry handlers need from the host. Mirrors
+ * `ExtensionCommandActions` in shape — both register parallel handler maps
+ * over the same `CommandId` union with their host-specific actions, and both
+ * require every action a registered handler can reach, so a miswired host
+ * fails to compile instead of producing a menu item that silently does
+ * nothing. `showStream` is the one genuine option: it is reachable only from
+ * the renderer's palette (stream rows), never from the native menu, so the
+ * main-process action set does not implement it.
+ */
 export interface DesktopCommandActions {
   showRoute(route: DesktopRoute): void;
   showSettings(tabIndex?: SettingsTab, agentSubTab?: AgentCategory): void;
   showStream?(streamId: StreamTabId): void;
-  openDesktopDocs?(): void;
-  openLogFolder?(): void;
-  openWorkspaceFolder?(): void;
-  saveFile?(): void;
-  showFirstRunWalkthrough?(): void;
-  resetMainView?(): void;
-  toggleBottomBar?(): void;
-  toggleSidePanel?(): void;
-  toggleSummaryBar?(): void;
+  openDesktopDocs(): void;
+  openLogFolder(): void;
+  openWorkspaceFolder(): void;
+  saveFile(): void;
+  showFirstRunWalkthrough(): void;
+  resetMainView(): void;
+  toggleBottomBar(): void;
+  toggleSidePanel(): void;
+  toggleSummaryBar(): void;
 }
 
 export interface DesktopSettingsTabMessage {
@@ -332,8 +342,8 @@ export function getDesktopCommandMenuEntries(
 
 type DesktopCommandHandler = CommandHandler<DesktopCommandActions>;
 
-// Run an always-present action and report the command as handled.
-function requiredAction(
+// Run an action and report the command as handled.
+function action(
   run: (actions: DesktopCommandActions) => void,
 ): DesktopCommandHandler {
   return (actions) => {
@@ -342,67 +352,40 @@ function requiredAction(
   };
 }
 
-// Run an optional action when the host wired it. Report the command as
-// unhandled when the action is absent so the dispatcher can fall through.
-function optionalAction(
-  pick: (actions: DesktopCommandActions) => (() => void) | undefined,
-): DesktopCommandHandler {
-  return (actions) => {
-    const run = pick(actions);
-    if (!run) return false;
-    run();
-    return true;
-  };
-}
-
 const DESKTOP_COMMAND_HANDLERS = {
-  'texra.showMainView': requiredAction((a) => a.showRoute('main')),
-  'texra.showProgressView': requiredAction((a) => a.showRoute('progress')),
-  [DESKTOP_LOCAL_COMMANDS.SHOW_LOGS]: requiredAction((a) =>
-    a.showRoute('logs'),
+  'texra.showMainView': action((a) => a.showRoute('main')),
+  'texra.showProgressView': action((a) => a.showRoute('progress')),
+  [DESKTOP_LOCAL_COMMANDS.SHOW_LOGS]: action((a) => a.showRoute('logs')),
+  [DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR]: action((a) =>
+    a.toggleBottomBar(),
   ),
-  [DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR]: optionalAction(
-    (a) => a.toggleBottomBar,
+  [DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL]: action((a) =>
+    a.toggleSidePanel(),
   ),
-  [DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL]: optionalAction(
-    (a) => a.toggleSidePanel,
+  [DESKTOP_LOCAL_COMMANDS.TOGGLE_SUMMARY_BAR]: action((a) =>
+    a.toggleSummaryBar(),
   ),
-  [DESKTOP_LOCAL_COMMANDS.TOGGLE_SUMMARY_BAR]: optionalAction(
-    (a) => a.toggleSummaryBar,
-  ),
-  'texra.openSettings': requiredAction((a) => a.showSettings()),
-  'texra.mainView.reset': optionalAction((a) => a.resetMainView),
-  'texra.showMemory': requiredAction((a) =>
-    a.showSettings(SETTINGS_TAB.MEMORY),
-  ),
-  'texra.showAgentHistory': requiredAction((a) =>
-    a.showSettings(SETTINGS_TAB.HISTORY),
-  ),
-  'texra.showModels': requiredAction((a) =>
-    a.showSettings(SETTINGS_TAB.MODELS),
-  ),
-  'texra.showAgents': requiredAction((a) =>
-    a.showSettings(SETTINGS_TAB.AGENTS),
-  ),
-  'texra.showTools': requiredAction((a) => a.showSettings(SETTINGS_TAB.TOOLS)),
-  'texra.showMultiAgent': requiredAction((a) =>
+  'texra.openSettings': action((a) => a.showSettings()),
+  'texra.mainView.reset': action((a) => a.resetMainView()),
+  'texra.showMemory': action((a) => a.showSettings(SETTINGS_TAB.MEMORY)),
+  'texra.showAgentHistory': action((a) => a.showSettings(SETTINGS_TAB.HISTORY)),
+  'texra.showModels': action((a) => a.showSettings(SETTINGS_TAB.MODELS)),
+  'texra.showAgents': action((a) => a.showSettings(SETTINGS_TAB.AGENTS)),
+  'texra.showTools': action((a) => a.showSettings(SETTINGS_TAB.TOOLS)),
+  'texra.showMultiAgent': action((a) =>
     a.showSettings(SETTINGS_TAB.MULTI_AGENT),
   ),
-  'texra.showGitSettings': requiredAction((a) =>
-    a.showSettings(SETTINGS_TAB.GIT),
+  'texra.showGitSettings': action((a) => a.showSettings(SETTINGS_TAB.GIT)),
+  [DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER]: action((a) => a.openLogFolder()),
+  [DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER]: action((a) =>
+    a.openWorkspaceFolder(),
   ),
-  [DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER]: optionalAction(
-    (a) => a.openLogFolder,
+  [DESKTOP_LOCAL_COMMANDS.SAVE_FILE]: action((a) => a.saveFile()),
+  [DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH]: action((a) =>
+    a.showFirstRunWalkthrough(),
   ),
-  [DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER]: optionalAction(
-    (a) => a.openWorkspaceFolder,
-  ),
-  [DESKTOP_LOCAL_COMMANDS.SAVE_FILE]: optionalAction((a) => a.saveFile),
-  [DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH]: optionalAction(
-    (a) => a.showFirstRunWalkthrough,
-  ),
-  [DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS]: optionalAction(
-    (a) => a.openDesktopDocs,
+  [DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS]: action((a) =>
+    a.openDesktopDocs(),
   ),
 } as const satisfies Record<DesktopAvailableCommandId, DesktopCommandHandler>;
 
